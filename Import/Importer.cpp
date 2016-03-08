@@ -17,6 +17,7 @@
 #include <future>
 #include <mutex>
 #include <boost/algorithm/string.hpp>
+#include <boost/algorithm/string/trim.hpp>
 #include <boost/filesystem.hpp>
 #include <glog/logging.h>
 #include "../Shared/measure.h"
@@ -93,6 +94,15 @@ static const std::string trim_space(const char* field, const size_t len) {
   return std::string(field + i, j - i);
 }
 
+static const bool is_eol(const char& p, const std::string& line_delims) {
+  for (auto i : line_delims) {
+    if (p == i) {
+      return true;
+    }
+  }
+  return false;
+}
+
 static const char* get_row(const char* buf,
                            const char* buf_end,
                            const char* entire_buf_end,
@@ -102,12 +112,14 @@ static const char* get_row(const char* buf,
                            std::vector<std::string>& row) {
   const char* field = buf;
   const char* p;
+  std::string escape_string({copy_params.escape, copy_params.quote});
   bool in_quote = false;
   bool in_array = false;
   bool has_escape = false;
   bool strip_quotes = false;
-  for (p = buf; p < buf_end && *p != copy_params.line_delim; p++) {
-    if (*p == copy_params.escape && p < buf_end - 1 && *(p + 1) == copy_params.quote) {
+  std::string line_endings({copy_params.line_delim, '\r', '\n'});
+  for (p = buf; p < entire_buf_end; p++) {
+    if (*p == copy_params.escape && p < entire_buf_end - 1 && *(p + 1) == copy_params.quote) {
       p++;
       has_escape = true;
     } else if (copy_params.quoted && *p == copy_params.quote) {
@@ -118,99 +130,42 @@ static const char* get_row(const char* buf,
       in_array = true;
     } else if (!in_quote && is_array != nullptr && *p == copy_params.array_end && is_array[row.size()]) {
       in_array = false;
-    } else if (*p == copy_params.delimiter) {
+    } else if (*p == copy_params.delimiter || is_eol(*p, line_endings)) {
       if (!in_quote && !in_array) {
-        if (!has_escape && !strip_quotes) {
-          std::string s = trim_space(field, p - field);
-          row.push_back(s);
-        } else {
-          char field_buf[p - field + 1];
-          int j = 0, i = 0;
-          for (; i < p - field; i++, j++) {
-            if (has_escape && field[i] == copy_params.escape && field[i + 1] == copy_params.quote) {
-              field_buf[j] = copy_params.quote;
-              i++;
-            } else
-              field_buf[j] = field[i];
+          if (!has_escape && !strip_quotes) {
+            std::string s = trim_space(field, p - field);
+            row.push_back(s);
+          } else {
+            char field_buf[p - field + 1];
+            int j = 0, i = 0;
+            for (; i < p - field; i++, j++) {
+              if (has_escape && field[i] == copy_params.escape && field[i + 1] == copy_params.quote) {
+                field_buf[j] = copy_params.quote;
+                i++;
+              } else
+                field_buf[j] = field[i];
+            }
+            std::string s = trim_space(field_buf, j);
+            if (copy_params.quoted && s.front() == copy_params.quote) {
+              s.erase(0, 1);
+            }
+            if (copy_params.quoted && s.back() == copy_params.quote) {
+              s.pop_back();
+            }
+            row.push_back(s);
           }
-          std::string s = trim_space(field_buf, j);
-          if (copy_params.quoted && s.front() == copy_params.quote) {
-            s.erase(0, 1);
-          }
-          if (copy_params.quoted && s.back() == copy_params.quote) {
-            s.pop_back();
-          }
-          row.push_back(s);
-        }
         field = p + 1;
         has_escape = false;
         strip_quotes = false;
-      }
-    }
-  }
-  if (*p == copy_params.line_delim) {
-    std::string s = trim_space(field, p - field);
-    if (copy_params.quoted && s.front() == copy_params.quote) {
-      s.erase(0, 1);
-    }
-    if (copy_params.quoted && s.back() == copy_params.quote) {
-      s.pop_back();
-    }
-    row.push_back(s);
-    return p;
-  }
-  for (; p < entire_buf_end && (in_quote || *p != copy_params.line_delim); p++) {
-    if (*p == copy_params.escape && p < buf_end - 1 && *(p + 1) == copy_params.quote) {
-      p++;
-      has_escape = true;
-    } else if (copy_params.quoted && *p == copy_params.quote) {
-      in_quote = !in_quote;
-      if (in_quote)
-        strip_quotes = true;
-    } else if (is_array != nullptr && *p == copy_params.array_begin && is_array[row.size()]) {
-      in_array = true;
-    } else if (is_array != nullptr && *p == copy_params.array_end && is_array[row.size()]) {
-      in_array = false;
-    } else if (*p == copy_params.delimiter) {
-      if (!in_quote && !in_array) {
-        if (!has_escape && !strip_quotes) {
-          std::string s = trim_space(field, p - field);
-          row.push_back(s);
-        } else {
-          char field_buf[p - field + 1];
-          int j = 0, i = 0;
-          for (; i < p - field; i++, j++) {
-            if (has_escape && field[i] == copy_params.escape && field[i + 1] == copy_params.quote) {
-              field_buf[j] = copy_params.quote;
-              i++;
-            } else
-              field_buf[j] = field[i];
+
+        if (is_eol(*p, line_endings)) {
+          while (p+1 < buf_end && is_eol(*(p+1), line_endings)) {
+            p++;
           }
-          std::string s = trim_space(field_buf, j);
-          if (copy_params.quoted && s.front() == copy_params.quote) {
-            s.erase(0, 1);
-          }
-          if (copy_params.quoted && s.back() == copy_params.quote) {
-            s.pop_back();
-          }
-          row.push_back(s);
+          break;
         }
-        field = p + 1;
-        has_escape = false;
-        strip_quotes = false;
       }
     }
-  }
-  if (*p == copy_params.line_delim) {
-    std::string s = trim_space(field, p - field);
-    if (copy_params.quoted && s.front() == copy_params.quote) {
-      s.erase(0, 1);
-    }
-    if (copy_params.quoted && s.back() == copy_params.quote) {
-      s.pop_back();
-    }
-    row.push_back(s);
-    return p;
   }
   /*
   @TODO(wei) do error handling
