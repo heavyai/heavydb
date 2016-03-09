@@ -94,7 +94,7 @@ public class MetaConnect {
       stmt.close();
     } catch (Exception e) {
       String err = "Error trying to read from metadata table mapd_tables;DB: " + db +
-              " data dir " + dataDir + ", error was " + e.getMessage();;;
+              " data dir " + dataDir + ", error was " + e.getMessage();
       MAPDLOGGER.error(err);
       throw new RuntimeException(err);
     } finally {
