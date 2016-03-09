@@ -1,6 +1,7 @@
 #ifndef QUERYENGINE_RELALGABSTRACTINTERPRETER_H
 #define QUERYENGINE_RELALGABSTRACTINTERPRETER_H
 
+#include "TargetMetaInfo.h"
 #include "../Catalog/Catalog.h"
 
 #include <boost/variant.hpp>
@@ -564,9 +565,11 @@ class Expr;
 
 }  // namespace Analyzer
 
+// For scan inputs, in_metainfo is empty.
 std::shared_ptr<Analyzer::Expr> translate_scalar_rex(const RexScalar* rex,
                                                      const int rte_idx,
-                                                     const Catalog_Namespace::Catalog& cat);
+                                                     const Catalog_Namespace::Catalog& cat,
+                                                     const std::vector<TargetMetaInfo>& in_metainfo);
 
 std::shared_ptr<Analyzer::Expr> translate_aggregate_rex(
     const RexAgg* rex,

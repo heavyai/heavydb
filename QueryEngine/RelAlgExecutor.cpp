@@ -106,10 +106,11 @@ const RexScalar* scalar_at(const size_t i, const RelProject* project) {
 template <class RA>
 std::vector<std::shared_ptr<Analyzer::Expr>> translate_scalar_sources(const RA* ra_node,
                                                                       const Catalog_Namespace::Catalog& cat,
+                                                                      const std::vector<TargetMetaInfo>& in_metainfo,
                                                                       const int rte_idx) {
   std::vector<std::shared_ptr<Analyzer::Expr>> scalar_sources;
   for (size_t i = 0; i < get_scalar_sources_size(ra_node); ++i) {
-    scalar_sources.push_back(translate_scalar_rex(scalar_at(i, ra_node), rte_idx, cat));
+    scalar_sources.push_back(translate_scalar_rex(scalar_at(i, ra_node), rte_idx, cat, in_metainfo));
   }
   return scalar_sources;
 }
@@ -129,9 +130,10 @@ std::list<std::shared_ptr<Analyzer::Expr>> translate_groupby_exprs(
 
 std::list<std::shared_ptr<Analyzer::Expr>> translate_quals(const RelCompound* compound,
                                                            const Catalog_Namespace::Catalog& cat,
+                                                           const std::vector<TargetMetaInfo>& in_metainfo,
                                                            const int rte_idx) {
   const auto filter_rex = compound->getFilterExpr();
-  const auto filter_expr = filter_rex ? translate_scalar_rex(filter_rex, rte_idx, cat) : nullptr;
+  const auto filter_expr = filter_rex ? translate_scalar_rex(filter_rex, rte_idx, cat, in_metainfo) : nullptr;
   std::list<std::shared_ptr<Analyzer::Expr>> quals;
   if (filter_expr) {
     quals.push_back(filter_expr);
@@ -143,6 +145,7 @@ std::vector<Analyzer::Expr*> translate_targets(std::vector<std::shared_ptr<Analy
                                                const std::vector<std::shared_ptr<Analyzer::Expr>>& scalar_sources,
                                                const RelCompound* compound,
                                                const Catalog_Namespace::Catalog& cat,
+                                               const std::vector<TargetMetaInfo>& in_metainfo,
                                                const int rte_idx) {
   std::vector<Analyzer::Expr*> target_exprs;
   for (size_t i = 0; i < compound->size(); ++i) {
@@ -153,7 +156,7 @@ std::vector<Analyzer::Expr*> translate_targets(std::vector<std::shared_ptr<Analy
       target_expr = translate_aggregate_rex(target_rex_agg, rte_idx, cat, scalar_sources);
     } else {
       const auto target_rex_scalar = dynamic_cast<const RexScalar*>(target_rex);
-      target_expr = translate_scalar_rex(target_rex_scalar, rte_idx, cat);
+      target_expr = translate_scalar_rex(target_rex_scalar, rte_idx, cat, in_metainfo);
     }
     CHECK(target_expr);
     target_exprs_owned.push_back(target_expr);
@@ -172,9 +175,8 @@ std::vector<Analyzer::Expr*> get_exprs_not_owned(const std::vector<std::shared_p
 }
 
 template <class RA>
-std::vector<Analyzer::TargetMetaInfo> get_targets_meta(const RA* ra_node,
-                                                       const std::vector<Analyzer::Expr*>& target_exprs) {
-  std::vector<Analyzer::TargetMetaInfo> targets_meta;
+std::vector<TargetMetaInfo> get_targets_meta(const RA* ra_node, const std::vector<Analyzer::Expr*>& target_exprs) {
+  std::vector<TargetMetaInfo> targets_meta;
   for (size_t i = 0; i < ra_node->size(); ++i) {
     CHECK(target_exprs[i]);
     targets_meta.emplace_back(ra_node->getFieldName(i), target_exprs[i]->get_type_info());
@@ -189,11 +191,11 @@ ExecutionResult RelAlgExecutor::executeCompound(const RelCompound* compound, con
   std::vector<ScanDescriptor> scan_descs;
   std::list<ScanColDescriptor> scan_cols;
   std::tie(scan_descs, scan_cols) = get_scan_info(compound, rte_idx);
-  const auto scalar_sources = translate_scalar_sources(compound, cat_, rte_idx);
+  const auto scalar_sources = translate_scalar_sources(compound, cat_, {}, rte_idx);
   const auto groupby_exprs = translate_groupby_exprs(compound, scalar_sources);
-  const auto quals = translate_quals(compound, cat_, rte_idx);
+  const auto quals = translate_quals(compound, cat_, {}, rte_idx);
   std::vector<std::shared_ptr<Analyzer::Expr>> target_exprs_owned;
-  const auto target_exprs = translate_targets(target_exprs_owned, scalar_sources, compound, cat_, rte_idx);
+  const auto target_exprs = translate_targets(target_exprs_owned, scalar_sources, compound, cat_, {}, rte_idx);
   CHECK_EQ(compound->size(), target_exprs.size());
   Executor::RelAlgExecutionUnit rel_alg_exe_unit{
       scan_descs, scan_cols, {}, quals, {}, groupby_exprs, target_exprs, {}, 0};
@@ -206,7 +208,7 @@ ExecutionResult RelAlgExecutor::executeProject(const RelProject* project, const 
   std::vector<ScanDescriptor> scan_descs;
   std::list<ScanColDescriptor> scan_cols;
   std::tie(scan_descs, scan_cols) = get_scan_info(project, rte_idx);
-  const auto target_exprs_owned = translate_scalar_sources(project, cat_, rte_idx);
+  const auto target_exprs_owned = translate_scalar_sources(project, cat_, {}, rte_idx);
   const auto target_exprs = get_exprs_not_owned(target_exprs_owned);
   Executor::RelAlgExecutionUnit rel_alg_exe_unit{scan_descs, scan_cols, {}, {}, {}, {nullptr}, target_exprs, {}, 0};
   const auto targets_meta = get_targets_meta(project, target_exprs);
@@ -215,7 +217,7 @@ ExecutionResult RelAlgExecutor::executeProject(const RelProject* project, const 
 
 ExecutionResult RelAlgExecutor::executeWorkUnit(const Executor::RelAlgExecutionUnit& rel_alg_exe_unit,
                                                 const std::vector<ScanDescriptor>& scan_descs,
-                                                const std::vector<Analyzer::TargetMetaInfo>& targets_meta,
+                                                const std::vector<TargetMetaInfo>& targets_meta,
                                                 const bool is_agg,
                                                 const CompilationOptions& co) {
   size_t max_groups_buffer_entry_guess{2048};

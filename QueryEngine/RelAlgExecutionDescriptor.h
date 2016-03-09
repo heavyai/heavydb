@@ -16,16 +16,16 @@ class ForLoop {
 
 class ExecutionResult {
  public:
-  ExecutionResult(const ResultRows& rows, const std::vector<Analyzer::TargetMetaInfo>& targets_meta)
+  ExecutionResult(const ResultRows& rows, const std::vector<TargetMetaInfo>& targets_meta)
       : rows_(rows), targets_meta_(targets_meta) {}
 
   const ResultRows& getRows() const { return rows_; }
 
-  const std::vector<Analyzer::TargetMetaInfo>& getTargetsMeta() const { return targets_meta_; }
+  const std::vector<TargetMetaInfo>& getTargetsMeta() const { return targets_meta_; }
 
  private:
   ResultRows rows_;
-  std::vector<Analyzer::TargetMetaInfo> targets_meta_;
+  std::vector<TargetMetaInfo> targets_meta_;
 };
 
 class RaExecutionDesc {

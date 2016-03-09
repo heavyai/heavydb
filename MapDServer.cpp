@@ -25,6 +25,7 @@
 #include "Planner/Planner.h"
 #include "QueryEngine/CalciteAdapter.h"
 #include "QueryEngine/Execute.h"
+#include "QueryEngine/TargetMetaInfo.h"
 #include "Shared/mapd_shared_mutex.h"
 #include "Shared/measure.h"
 #include "Shared/scope.h"
@@ -1019,9 +1020,9 @@ class MapDHandler : virtual public MapDIf {
     convert_rows(_return, getTargetMetaInfo(targets), results, column_format);
   }
 
-  static std::vector<Analyzer::TargetMetaInfo> getTargetMetaInfo(
+  static std::vector<TargetMetaInfo> getTargetMetaInfo(
       const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& targets) {
-    std::vector<Analyzer::TargetMetaInfo> result;
+    std::vector<TargetMetaInfo> result;
     for (const auto target : targets) {
       CHECK(target);
       CHECK(target->get_expr());
@@ -1031,7 +1032,7 @@ class MapDHandler : virtual public MapDIf {
   }
 
   static void convert_rows(TQueryResult& _return,
-                           const std::vector<Analyzer::TargetMetaInfo>& targets,
+                           const std::vector<TargetMetaInfo>& targets,
                            const ResultRows& results,
                            const bool column_format) {
     {
