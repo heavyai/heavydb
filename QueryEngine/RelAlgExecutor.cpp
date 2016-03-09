@@ -1,5 +1,7 @@
 #ifdef HAVE_CALCITE
 #include "RelAlgExecutor.h"
+
+#include "DataFetcher.h"
 #include "RexVisitor.h"
 
 ExecutionResult RelAlgExecutor::executeRelAlgSeq(std::vector<RaExecutionDesc>& exec_descs,

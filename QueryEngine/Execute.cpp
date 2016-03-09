@@ -2,6 +2,7 @@
 
 #include "CartesianProduct.h"
 #include "Codec.h"
+#include "DataFetcher.h"
 #include "GpuMemUtils.h"
 #include "GpuSort.h"
 #include "AggregateUtils.h"
