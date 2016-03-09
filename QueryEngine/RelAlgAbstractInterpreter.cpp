@@ -689,10 +689,14 @@ std::shared_ptr<Analyzer::Expr> translate_literal(const RexLiteral* rex_literal)
 
 std::shared_ptr<Analyzer::Expr> translate_input(const RexInput* rex_input,
                                                 const int rte_idx,
-                                                const Catalog_Namespace::Catalog& cat) {
+                                                const Catalog_Namespace::Catalog& cat,
+                                                const std::vector<TargetMetaInfo>& in_metainfo) {
   const auto source = rex_input->getSourceNode();
   const auto scan_source = dynamic_cast<const RelScan*>(source);
   if (scan_source) {
+    // We're at leaf (scan) level and not supposed to have input metadata,
+    // the name and type information come directly from the catalog.
+    CHECK(in_metainfo.empty());
     const auto& field_names = scan_source->getFieldNames();
     CHECK_LT(static_cast<size_t>(rex_input->getIndex()), field_names.size());
     const auto& col_name = field_names[rex_input->getIndex()];
@@ -701,8 +705,12 @@ std::shared_ptr<Analyzer::Expr> translate_input(const RexInput* rex_input,
     CHECK(cd);
     return std::make_shared<Analyzer::ColumnVar>(cd->columnType, table_desc->tableId, cd->columnId, rte_idx);
   }
-  CHECK(false);
-  return nullptr;
+  CHECK(!in_metainfo.empty());
+  CHECK_GE(rte_idx, 0);
+  const size_t col_id = rex_input->getIndex();
+  CHECK_LT(col_id, in_metainfo.size());
+  // TODO(alex): synthesize a unique table id associated with the non-scan input
+  return std::make_shared<Analyzer::ColumnVar>(in_metainfo[col_id].get_type_info(), -1, col_id, rte_idx);
 }
 
 std::shared_ptr<Analyzer::Expr> remove_cast(const std::shared_ptr<Analyzer::Expr> expr) {
@@ -779,7 +787,7 @@ std::shared_ptr<Analyzer::Expr> translate_scalar_rex(const RexScalar* rex,
                                                      const std::vector<TargetMetaInfo>& in_metainfo) {
   const auto rex_input = dynamic_cast<const RexInput*>(rex);
   if (rex_input) {
-    return translate_input(rex_input, rte_idx, cat);
+    return translate_input(rex_input, rte_idx, cat, in_metainfo);
   }
   const auto rex_literal = dynamic_cast<const RexLiteral*>(rex);
   if (rex_literal) {

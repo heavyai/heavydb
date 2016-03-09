@@ -4,16 +4,19 @@
 
 ExecutionResult RelAlgExecutor::executeRelAlgSeq(std::vector<RaExecutionDesc>& exec_descs,
                                                  const CompilationOptions& co) {
+  std::vector<TargetMetaInfo> in_metainfo;
   for (auto& exec_desc : exec_descs) {
     const auto body = exec_desc.getBody();
     const auto compound = dynamic_cast<const RelCompound*>(body);
     if (compound) {
-      exec_desc.setResult(executeCompound(compound, co));
+      exec_desc.setResult(executeCompound(compound, in_metainfo, co));
+      in_metainfo = exec_desc.getResult().getTargetsMeta();
       continue;
     }
     const auto project = dynamic_cast<const RelProject*>(body);
     if (project) {
-      exec_desc.setResult(executeProject(project, co));
+      exec_desc.setResult(executeProject(project, in_metainfo, co));
+      in_metainfo = exec_desc.getResult().getTargetsMeta();
       continue;
     }
     CHECK(false);
@@ -186,16 +189,18 @@ std::vector<TargetMetaInfo> get_targets_meta(const RA* ra_node, const std::vecto
 
 }  // namespace
 
-ExecutionResult RelAlgExecutor::executeCompound(const RelCompound* compound, const CompilationOptions& co) {
+ExecutionResult RelAlgExecutor::executeCompound(const RelCompound* compound,
+                                                const std::vector<TargetMetaInfo>& in_metainfo,
+                                                const CompilationOptions& co) {
   int rte_idx = 0;  // TODO(alex)
   std::vector<ScanDescriptor> scan_descs;
   std::list<ScanColDescriptor> scan_cols;
   std::tie(scan_descs, scan_cols) = get_scan_info(compound, rte_idx);
-  const auto scalar_sources = translate_scalar_sources(compound, cat_, {}, rte_idx);
+  const auto scalar_sources = translate_scalar_sources(compound, cat_, in_metainfo, rte_idx);
   const auto groupby_exprs = translate_groupby_exprs(compound, scalar_sources);
-  const auto quals = translate_quals(compound, cat_, {}, rte_idx);
+  const auto quals = translate_quals(compound, cat_, in_metainfo, rte_idx);
   std::vector<std::shared_ptr<Analyzer::Expr>> target_exprs_owned;
-  const auto target_exprs = translate_targets(target_exprs_owned, scalar_sources, compound, cat_, {}, rte_idx);
+  const auto target_exprs = translate_targets(target_exprs_owned, scalar_sources, compound, cat_, in_metainfo, rte_idx);
   CHECK_EQ(compound->size(), target_exprs.size());
   Executor::RelAlgExecutionUnit rel_alg_exe_unit{
       scan_descs, scan_cols, {}, quals, {}, groupby_exprs, target_exprs, {}, 0};
@@ -203,12 +208,14 @@ ExecutionResult RelAlgExecutor::executeCompound(const RelCompound* compound, con
   return executeWorkUnit(rel_alg_exe_unit, scan_descs, targets_meta, compound->isAggregate(), co);
 }
 
-ExecutionResult RelAlgExecutor::executeProject(const RelProject* project, const CompilationOptions& co) {
+ExecutionResult RelAlgExecutor::executeProject(const RelProject* project,
+                                               const std::vector<TargetMetaInfo>& in_metainfo,
+                                               const CompilationOptions& co) {
   int rte_idx = 0;  // TODO(alex)
   std::vector<ScanDescriptor> scan_descs;
   std::list<ScanColDescriptor> scan_cols;
   std::tie(scan_descs, scan_cols) = get_scan_info(project, rte_idx);
-  const auto target_exprs_owned = translate_scalar_sources(project, cat_, {}, rte_idx);
+  const auto target_exprs_owned = translate_scalar_sources(project, cat_, in_metainfo, rte_idx);
   const auto target_exprs = get_exprs_not_owned(target_exprs_owned);
   Executor::RelAlgExecutionUnit rel_alg_exe_unit{scan_descs, scan_cols, {}, {}, {}, {nullptr}, target_exprs, {}, 0};
   const auto targets_meta = get_targets_meta(project, target_exprs);
