@@ -11,6 +11,8 @@
 #include <string>
 #include <unordered_map>
 
+unsigned RelAlgNode::crt_id_ = 1;
+
 namespace {
 
 class RexRebindInputsVisitor : public RexVisitor<void*> {

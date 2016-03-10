@@ -6,18 +6,21 @@
 
 ExecutionResult RelAlgExecutor::executeRelAlgSeq(std::vector<RaExecutionDesc>& exec_descs,
                                                  const CompilationOptions& co) {
+  decltype(temporary_tables_)().swap(temporary_tables_);
   std::vector<TargetMetaInfo> in_metainfo;
   for (auto& exec_desc : exec_descs) {
     const auto body = exec_desc.getBody();
     const auto compound = dynamic_cast<const RelCompound*>(body);
     if (compound) {
       exec_desc.setResult(executeCompound(compound, in_metainfo, co));
+      addTemporaryTable(-compound->getId(), &exec_desc.getResult().getRows());
       in_metainfo = exec_desc.getResult().getTargetsMeta();
       continue;
     }
     const auto project = dynamic_cast<const RelProject*>(body);
     if (project) {
       exec_desc.setResult(executeProject(project, in_metainfo, co));
+      addTemporaryTable(-project->getId(), &exec_desc.getResult().getRows());
       in_metainfo = exec_desc.getResult().getTargetsMeta();
       continue;
     }
@@ -75,17 +78,19 @@ std::pair<std::vector<ScanDescriptor>, std::list<ScanColDescriptor>> get_scan_in
     const auto input_ra = ra_node->getInput(0);
     const auto scan_ra = dynamic_cast<const RelScan*>(input_ra);
     if (scan_ra) {
-      scan_descs.emplace_back(scan_ra->getTableDescriptor()->tableId, rte_idx);
+      const auto td = scan_ra->getTableDescriptor();
+      CHECK(td);
+      const int table_id = td->tableId;
+      scan_descs.emplace_back(table_id, rte_idx);
       for (const auto used_input : used_inputs) {
         // Physical columns from a scan node are numbered from 1 in our system.
-        scan_cols.emplace_back(used_input + 1, scan_ra->getTableDescriptor(), rte_idx);
+        scan_cols.emplace_back(used_input + 1, table_id, rte_idx);
       }
     } else {
-      const auto execution_desc = static_cast<const RaExecutionDesc*>(input_ra->getContextData());
-      const auto& result_rows = execution_desc->getResult().getRows();
-      scan_descs.emplace_back(&result_rows, rte_idx);
+      const int table_id = -input_ra->getId();
+      scan_descs.emplace_back(table_id, rte_idx);
       for (const auto used_input : used_inputs) {
-        scan_cols.emplace_back(used_input, &result_rows, rte_idx);
+        scan_cols.emplace_back(used_input, table_id, rte_idx);
       }
     }
   }
@@ -234,10 +239,11 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(const Executor::RelAlgExecutionU
   std::lock_guard<std::mutex> lock(executor_->execute_mutex_);
   executor_->row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>();
   executor_->catalog_ = &cat_;
+  executor_->temporary_tables_ = &temporary_tables_;
   return {executor_->executeWorkUnit(&error_code,
                                      max_groups_buffer_entry_guess,
                                      is_agg,
-                                     get_table_infos(scan_descs, cat_),
+                                     get_table_infos(scan_descs, cat_, temporary_tables_),
                                      rel_alg_exe_unit,
                                      co,
                                      {false, true, false, false},

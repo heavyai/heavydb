@@ -1,6 +1,7 @@
 #ifndef QUERYENGINE_EXECUTE_H
 #define QUERYENGINE_EXECUTE_H
 
+#include "DataFetcher.h"
 #include "GroupByAndAggregate.h"
 #include "InValuesBitmap.h"
 #include "JoinHashTable.h"
@@ -780,6 +781,7 @@ class Executor {
 
   const int db_id_;
   const Catalog_Namespace::Catalog* catalog_;
+  const TemporaryTables* temporary_tables_;
 
   static std::map<std::pair<int, ::QueryRenderer::QueryRenderManager*>, std::shared_ptr<Executor>> executors_;
   static std::mutex execute_mutex_;

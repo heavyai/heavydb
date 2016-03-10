@@ -221,12 +221,14 @@ class RexAgg : public Rex {
 
 class RelAlgNode {
  public:
-  RelAlgNode() : context_data_(nullptr) {}
+  RelAlgNode() : id_(crt_id_++), context_data_(nullptr) {}
 
   void setContextData(const void* context_data) const {
     CHECK(!context_data_);
     context_data_ = context_data;
   }
+
+  unsigned getId() const { return id_; }
 
   const void* getContextData() const {
     CHECK(context_data_);
@@ -261,7 +263,11 @@ class RelAlgNode {
 
  protected:
   std::vector<std::unique_ptr<const RelAlgNode>> inputs_;
+  const unsigned id_;
   mutable const void* context_data_;
+
+ private:
+  static unsigned crt_id_;
 };
 
 class RelScan : public RelAlgNode {

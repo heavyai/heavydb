@@ -2,7 +2,6 @@
 
 #include "CartesianProduct.h"
 #include "Codec.h"
-#include "DataFetcher.h"
 #include "GpuMemUtils.h"
 #include "GpuSort.h"
 #include "AggregateUtils.h"
@@ -68,7 +67,8 @@ Executor::Executor(const int db_id,
       debug_dir_(debug_dir),
       debug_file_(debug_file),
       db_id_(db_id),
-      catalog_(nullptr) {
+      catalog_(nullptr),
+      temporary_tables_(nullptr) {
 }
 
 std::shared_ptr<Executor> Executor::getExecutor(const int db_id,
@@ -123,13 +123,12 @@ void collect_scan_cols(std::list<ScanColDescriptor>& scan_cols,
   CHECK(scan_idx == 0 || is_join);
   CHECK(scan_plan);
   const int table_id = scan_plan->get_table_id();
-  const auto table_descriptor = cat.getMetadataForTable(table_id);
   for (const int scan_col_id : scan_plan->get_col_list()) {
     auto cd = get_column_descriptor(scan_col_id, table_id, cat);
     if (cd->isVirtualCol) {
       CHECK_EQ("rowid", cd->columnName);
     } else {
-      scan_cols.emplace_back(scan_col_id, table_descriptor, scan_idx);
+      scan_cols.emplace_back(scan_col_id, table_id, scan_idx);
     }
   }
 }
@@ -238,7 +237,7 @@ ResultRows Executor::executeSelectPlan(const Planner::Plan* plan,
     CHECK(check_plan_sanity(plan));
     const bool is_agg = dynamic_cast<const Planner::AggPlan*>(plan);
     const auto order_entries = sort_plan_in ? sort_plan_in->get_order_entries() : std::list<Analyzer::OrderEntry>{};
-    const auto query_infos = get_table_infos(scan_ids, cat);
+    const auto query_infos = get_table_infos(scan_ids, cat, TemporaryTables{});
     if (query_infos.size() == 1) {
       QueryRewriter query_rewriter(plan, query_infos, this);
       query_rewriter.rewrite();
@@ -939,7 +938,8 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::ColumnVar* col_var,
   // only generate the decoding code once; if a column has been previously
   // fetched in the generated IR, we'll reuse it
   auto col_id = col_var->get_column_id();
-  if (col_var->get_table_id() > 0) {
+  if (col_var->get_table_id()) {
+    CHECK_GT(col_var->get_table_id(), 0);
     auto cd = get_column_descriptor(col_id, col_var->get_table_id(), *catalog_);
     if (cd->isVirtualCol) {
       CHECK(cd->columnName == "rowid");
@@ -2548,7 +2548,7 @@ ResultRows Executor::executeResultPlan(const Planner::Result* result_plan,
   const auto join_quals = join_plan ? join_plan->get_quals() : std::list<std::shared_ptr<Analyzer::Expr>>{};
   CHECK(check_plan_sanity(agg_plan));
   const auto order_entries = sort_plan ? sort_plan->get_order_entries() : std::list<Analyzer::OrderEntry>{};
-  const auto query_infos = get_table_infos(scan_ids, cat);
+  const auto query_infos = get_table_infos(scan_ids, cat, TemporaryTables{});
   if (query_infos.size() == 1) {
     QueryRewriter query_rewriter(agg_plan, query_infos, this);
     query_rewriter.rewrite();
@@ -2631,7 +2631,7 @@ ResultRows Executor::executeResultPlan(const Planner::Result* result_plan,
   CHECK(row_func);
   std::list<ScanColDescriptor> pseudo_scan_cols;
   for (int pseudo_col = 1; pseudo_col <= in_col_count; ++pseudo_col) {
-    pseudo_scan_cols.emplace_back(pseudo_col, static_cast<const TableDescriptor*>(nullptr), -1);
+    pseudo_scan_cols.emplace_back(pseudo_col, 0, -1);
   }
   auto compilation_result =
       compilePlan(false,
@@ -3444,7 +3444,7 @@ std::vector<std::vector<const int8_t*>> Executor::fetchChunks(
   for (const auto& selected_frag_ids : frag_ids_crossjoin) {
     std::vector<const int8_t*> frag_col_buffers(plan_state_->global_to_local_col_ids_.size());
     for (const auto& col_id : col_global_ids) {
-      const int table_id = col_id.getTableDesc()->tableId;
+      const int table_id = col_id.getScanDesc().getTableId();
       const ColumnDescriptor* cd = cat.getMetadataForColumn(table_id, col_id.getColId());
       if (cd->isVirtualCol) {
         CHECK_EQ("rowid", cd->columnName);
@@ -3515,7 +3515,8 @@ void Executor::buildSelectedFragsMapping(std::vector<std::vector<size_t>>& selec
     CHECK(selected_fragments_it != selected_fragments.end());
     selected_fragments_crossjoin.push_back(selected_fragments_it->second);
     for (const auto& col_id : col_global_ids) {
-      if (col_id.getTableDesc()->tableId != table_id || col_id.getScanIdx() != static_cast<int>(scan_idx)) {
+      const auto& scan_desc = col_id.getScanDesc();
+      if (scan_desc.getTableId() != table_id || scan_desc.getScanIdx() != static_cast<int>(scan_idx)) {
         continue;
       }
       auto it = plan_state_->global_to_local_col_ids_.find(col_id);
@@ -5004,8 +5005,7 @@ int Executor::getLocalColumnId(const Analyzer::ColumnVar* col_var, const bool fe
     global_col_id = var->get_varno();
   }
   const int scan_idx = is_nested_ ? -1 : col_var->get_rte_idx();
-  ScanColDescriptor scan_col_desc(
-      global_col_id, is_nested_ ? nullptr : catalog_->getMetadataForTable(table_id), scan_idx);
+  ScanColDescriptor scan_col_desc(global_col_id, table_id, scan_idx);
   const auto it = plan_state_->global_to_local_col_ids_.find(scan_col_desc);
   if (it == plan_state_->global_to_local_col_ids_.end()) {
     CHECK(false);
