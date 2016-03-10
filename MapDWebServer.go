@@ -2,13 +2,10 @@ package main
 
 import (
 	"bytes"
-	crand "crypto/rand"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
 	"io/ioutil"
-	"math/rand"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -32,23 +29,16 @@ import (
 
 var (
 	port        int
-	backendUrl  string
+	backendUrl  *url.URL
 	frontend    string
 	dataDir     string
 	certFile    string
 	keyFile     string
 	readOnly    bool
 	quiet       bool
-	roundRobin  bool
 	enableHttps bool
 	profile     bool
 	compress    bool
-)
-
-var (
-	backendUserMap map[string]string
-	backendUrls    []string
-	sessionCounter int
 )
 
 var (
@@ -87,8 +77,9 @@ func getLogName(lvl string) string {
 }
 
 func init() {
+	var err error
 	pflag.IntP("port", "p", 9092, "frontend server port")
-	pflag.StringP("backend-url", "b", "", "url(s) to http-port on mapd_server, comma-delimited for multiple [http://localhost:9090]")
+	pflag.StringP("backend-url", "b", "", "url to http-port on mapd_server [http://localhost:9090]")
 	pflag.StringP("frontend", "f", "frontend", "path to frontend directory")
 	pflag.StringP("data", "d", "data", "path to MapD data directory")
 	pflag.StringP("config", "c", "", "path to MapD configuration file")
@@ -97,11 +88,9 @@ func init() {
 	pflag.BoolP("enable-https", "", false, "enable HTTPS support")
 	pflag.StringP("cert", "", "cert.pem", "certificate file for HTTPS")
 	pflag.StringP("key", "", "key.pem", "key file for HTTPS")
-	pflag.Bool("round-robin", false, "round-robin between backend urls")
 	pflag.Bool("profile", false, "enable profiling, accessible from /debug/pprof")
 	pflag.Bool("compress", false, "enable gzip compression")
 	pflag.Bool("metrics", false, "enable Thrift call metrics, accessible from /debug/metrics")
-	pflag.CommandLine.MarkHidden("round-robin")
 	pflag.CommandLine.MarkHidden("compress")
 	pflag.CommandLine.MarkHidden("profile")
 	pflag.CommandLine.MarkHidden("metrics")
@@ -111,7 +100,6 @@ func init() {
 	viper.BindPFlag("web.port", pflag.CommandLine.Lookup("port"))
 	viper.BindPFlag("web.backend-url", pflag.CommandLine.Lookup("backend-url"))
 	viper.BindPFlag("web.frontend", pflag.CommandLine.Lookup("frontend"))
-	viper.BindPFlag("web.round-robin", pflag.CommandLine.Lookup("round-robin"))
 	viper.BindPFlag("web.enable-https", pflag.CommandLine.Lookup("enable-https"))
 	viper.BindPFlag("web.cert", pflag.CommandLine.Lookup("cert"))
 	viper.BindPFlag("web.key", pflag.CommandLine.Lookup("key"))
@@ -144,9 +132,7 @@ func init() {
 	}
 
 	port = viper.GetInt("web.port")
-	backendUrl = viper.GetString("web.backend-url")
 	frontend = viper.GetString("web.frontend")
-	roundRobin = viper.GetBool("web.round-robin")
 
 	dataDir = viper.GetString("data")
 	readOnly = viper.GetBool("read-only")
@@ -154,13 +140,15 @@ func init() {
 	profile = viper.GetBool("web.profile")
 	compress = viper.GetBool("web.compress")
 
-	if backendUrl == "" {
-		backendUrl = "http://localhost:" + strconv.Itoa(viper.GetInt("http-port"))
+	backendUrlStr := viper.GetString("web.backend-url")
+	if backendUrlStr == "" {
+		backendUrlStr = "http://localhost:" + strconv.Itoa(viper.GetInt("http-port"))
 	}
 
-	backendUrls = strings.Split(backendUrl, ",")
-	backendUserMap = make(map[string]string)
-	sessionCounter = 0
+	backendUrl, err = url.Parse(backendUrlStr)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	enableHttps = viper.GetBool("web.enable-https")
 	certFile = viper.GetString("web.cert")
@@ -247,43 +235,6 @@ func uploadHandler(rw http.ResponseWriter, r *http.Request) {
 
 func deleteUploadHandler(rw http.ResponseWriter, r *http.Request) {
 	// not yet implemented
-}
-
-func generateRandomBytes(n int) ([]byte, error) {
-	b := make([]byte, n)
-	_, err := crand.Read(b)
-	if err != nil {
-		return nil, err
-	}
-	return b, nil
-}
-
-func generateRandomString(n int) (string, error) {
-	sid := ""
-	sidb, err := generateRandomBytes(n)
-	if err != nil {
-		sid = strconv.Itoa(rand.Int())
-	} else {
-		sid = base64.URLEncoding.EncodeToString(sidb)
-	}
-	return sid, err
-}
-
-func selectBestServerRand() string {
-	return backendUrls[rand.Intn(len(backendUrls))]
-}
-
-func selectBestServerRR() string {
-	sessionCounter++
-	return backendUrls[sessionCounter%len(backendUrls)]
-}
-
-func selectBestServer() string {
-	if roundRobin {
-		return selectBestServerRR()
-	} else {
-		return selectBestServerRand()
-	}
 }
 
 func recordTiming(name string, dur time.Duration) {
@@ -387,26 +338,8 @@ func metricsResetHandler(rw http.ResponseWriter, r *http.Request) {
 func thriftOrFrontendHandler(rw http.ResponseWriter, r *http.Request) {
 	h := http.StripPrefix("/", http.FileServer(http.Dir(frontend)))
 
-	c, err := r.Cookie("session")
-	if err != nil || len(c.Value) < 1 {
-		sid, err := generateRandomString(32)
-		if err != nil {
-			log.Error("failed to generate random string: ", err)
-		}
-		c = &http.Cookie{Name: "session", Value: sid}
-		http.SetCookie(rw, c)
-	}
-	s := c.Value
-
-	be, ok := backendUserMap[s]
-	if !ok {
-		be = selectBestServer()
-		backendUserMap[s] = be
-	}
-
 	if r.Method == "POST" {
-		u, _ := url.Parse(be)
-		h = httputil.NewSingleHostReverseProxy(u)
+		h = httputil.NewSingleHostReverseProxy(backendUrl)
 		rw.Header().Del("Access-Control-Allow-Origin")
 	}
 
@@ -436,11 +369,7 @@ func serversHandler(rw http.ResponseWriter, r *http.Request) {
 	j, err := ioutil.ReadFile(frontend + "/servers.json")
 	if err != nil {
 		s := Server{}
-		if len(backendUrls) == 1 {
-			s.Master = true
-		} else {
-			s.Master = false
-		}
+		s.Master = true
 		s.Username = "mapd"
 		s.Password = "HyperInteractive"
 		s.Database = "mapd"
