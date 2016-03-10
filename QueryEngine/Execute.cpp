@@ -938,8 +938,7 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::ColumnVar* col_var,
   // only generate the decoding code once; if a column has been previously
   // fetched in the generated IR, we'll reuse it
   auto col_id = col_var->get_column_id();
-  if (col_var->get_table_id()) {
-    CHECK_GT(col_var->get_table_id(), 0);
+  if (col_var->get_table_id() > 0) {
     auto cd = get_column_descriptor(col_id, col_var->get_table_id(), *catalog_);
     if (cd->isVirtualCol) {
       CHECK(cd->columnName == "rowid");
@@ -952,7 +951,7 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::ColumnVar* col_var,
     }
   }
   if (col_var->get_rte_idx() >= 0 && !is_nested_) {
-    CHECK_GT(col_id, 0);
+    CHECK(col_id > 0 || temporary_tables_);
   } else {
     CHECK((col_id == 0) || (col_var->get_rte_idx() >= 0 && col_var->get_table_id() > 0));
     const auto var = dynamic_cast<const Analyzer::Var*>(col_var);
@@ -3445,6 +3444,7 @@ std::vector<std::vector<const int8_t*>> Executor::fetchChunks(
     std::vector<const int8_t*> frag_col_buffers(plan_state_->global_to_local_col_ids_.size());
     for (const auto& col_id : col_global_ids) {
       const int table_id = col_id.getScanDesc().getTableId();
+      CHECK_GT(table_id, 0);
       const ColumnDescriptor* cd = cat.getMetadataForColumn(table_id, col_id.getColId());
       if (cd->isVirtualCol) {
         CHECK_EQ("rowid", cd->columnName);

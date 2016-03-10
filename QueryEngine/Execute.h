@@ -76,6 +76,7 @@ inline uint32_t log2_bytes(const uint32_t bytes) {
 inline const ColumnDescriptor* get_column_descriptor(const int col_id,
                                                      const int table_id,
                                                      const Catalog_Namespace::Catalog& cat) {
+  CHECK_GT(table_id, 0);
   const auto col_desc = cat.getMetadataForColumn(table_id, col_id);
   CHECK(col_desc);
   return col_desc;
@@ -724,10 +725,12 @@ class Executor {
       if (!do_not_fetch_column || dynamic_cast<const Analyzer::Var*>(do_not_fetch_column)) {
         return false;
       }
-      auto cd = get_column_descriptor(
-          do_not_fetch_column->get_column_id(), do_not_fetch_column->get_table_id(), *executor_->catalog_);
-      if (cd->isVirtualCol) {
-        return false;
+      if (do_not_fetch_column->get_table_id() > 0) {
+        auto cd = get_column_descriptor(
+            do_not_fetch_column->get_column_id(), do_not_fetch_column->get_table_id(), *executor_->catalog_);
+        if (cd->isVirtualCol) {
+          return false;
+        }
       }
       std::unordered_set<int> intersect;
       std::set_intersection(columns_to_fetch_.begin(),
