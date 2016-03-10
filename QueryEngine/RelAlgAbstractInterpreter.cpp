@@ -711,8 +711,7 @@ std::shared_ptr<Analyzer::Expr> translate_input(const RexInput* rex_input,
   CHECK_GE(rte_idx, 0);
   const size_t col_id = rex_input->getIndex();
   CHECK_LT(col_id, in_metainfo.size());
-  // TODO(alex): synthesize a unique table id associated with the non-scan input
-  return std::make_shared<Analyzer::ColumnVar>(in_metainfo[col_id].get_type_info(), -1, col_id, rte_idx);
+  return std::make_shared<Analyzer::ColumnVar>(in_metainfo[col_id].get_type_info(), -source->getId(), col_id, rte_idx);
 }
 
 std::shared_ptr<Analyzer::Expr> remove_cast(const std::shared_ptr<Analyzer::Expr> expr) {
