@@ -50,7 +50,7 @@ std::pair<const Analyzer::ColumnVar*, const Analyzer::ColumnVar*> get_cols(
 std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(
     const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
     const Catalog_Namespace::Catalog& cat,
-    const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
+    const std::vector<Fragmenter_Namespace::TableInfo>& query_infos,
     const Data_Namespace::MemoryLevel memory_level,
     const int device_count,
     const Executor* executor) {

@@ -237,7 +237,7 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(const Executor::RelAlgExecutionU
   return {executor_->executeWorkUnit(&error_code,
                                      max_groups_buffer_entry_guess,
                                      is_agg,
-                                     get_query_infos(scan_descs, cat_),
+                                     get_table_infos(scan_descs, cat_),
                                      rel_alg_exe_unit,
                                      co,
                                      {false, true, false, false},

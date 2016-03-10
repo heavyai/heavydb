@@ -72,14 +72,14 @@ struct FragmentInfo {
  * ChunkKey)
  */
 
-struct QueryInfo {
+struct TableInfo {
   std::vector<int> chunkKeyPrefix;
   std::deque<FragmentInfo> fragments;
   size_t numTuples;
   mapd_shared_mutex* tableMutex;
   mapd_shared_lock<mapd_shared_mutex> tableLock;
-  QueryInfo() : tableMutex(0) {}
-  QueryInfo(mapd_shared_mutex* tableMutexIn) : tableMutex(tableMutexIn), tableLock(*tableMutex) {}
+  TableInfo() : tableMutex(nullptr) {}
+  TableInfo(mapd_shared_mutex* tableMutexIn) : tableMutex(tableMutexIn), tableLock(*tableMutex) {}
 };
 
 }  // Fragmenter_Namespace

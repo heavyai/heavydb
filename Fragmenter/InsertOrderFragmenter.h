@@ -51,7 +51,7 @@ class InsertOrderFragmenter : public AbstractFragmenter {
    */
 
   // virtual void getFragmentsForQuery(QueryInfo &queryInfo, const void *predicate = 0);
-  virtual QueryInfo getFragmentsForQuery();
+  virtual TableInfo getFragmentsForQuery();
 
   /**
    * @brief appends data onto the most recently occuring

@@ -238,7 +238,7 @@ ResultRows Executor::executeSelectPlan(const Planner::Plan* plan,
     CHECK(check_plan_sanity(plan));
     const bool is_agg = dynamic_cast<const Planner::AggPlan*>(plan);
     const auto order_entries = sort_plan_in ? sort_plan_in->get_order_entries() : std::list<Analyzer::OrderEntry>{};
-    const auto query_infos = get_query_infos(scan_ids, cat);
+    const auto query_infos = get_table_infos(scan_ids, cat);
     if (query_infos.size() == 1) {
       QueryRewriter query_rewriter(plan, query_infos, this);
       query_rewriter.rewrite();
@@ -2548,7 +2548,7 @@ ResultRows Executor::executeResultPlan(const Planner::Result* result_plan,
   const auto join_quals = join_plan ? join_plan->get_quals() : std::list<std::shared_ptr<Analyzer::Expr>>{};
   CHECK(check_plan_sanity(agg_plan));
   const auto order_entries = sort_plan ? sort_plan->get_order_entries() : std::list<Analyzer::OrderEntry>{};
-  const auto query_infos = get_query_infos(scan_ids, cat);
+  const auto query_infos = get_table_infos(scan_ids, cat);
   if (query_infos.size() == 1) {
     QueryRewriter query_rewriter(agg_plan, query_infos, this);
     query_rewriter.rewrite();
@@ -2790,7 +2790,7 @@ ResultRows Executor::executeSortPlan(const Planner::Sort* sort_plan,
 
 namespace {
 
-size_t compute_buffer_entry_guess(const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos) {
+size_t compute_buffer_entry_guess(const std::vector<Fragmenter_Namespace::TableInfo>& query_infos) {
   using Fragmenter_Namespace::FragmentInfo;
   size_t max_groups_buffer_entry_guess = 1;
   for (const auto& query_info : query_infos) {
@@ -2827,7 +2827,7 @@ size_t get_context_count(const ExecutorDeviceType device_type, const size_t cpu_
 ResultRows Executor::executeWorkUnit(int32_t* error_code,
                                      size_t& max_groups_buffer_entry_guess,
                                      const bool is_agg,
-                                     const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
+                                     const std::vector<Fragmenter_Namespace::TableInfo>& query_infos,
                                      const RelAlgExecutionUnit& ra_exe_unit,
                                      const CompilationOptions& co,
                                      const ExecutionOptions& options,
@@ -2974,7 +2974,7 @@ ExecutorDeviceType Executor::getDeviceTypeForTargets(const Executor::RelAlgExecu
 
 Executor::ExecutionDispatch::ExecutionDispatch(Executor* executor,
                                                const RelAlgExecutionUnit& ra_exe_unit,
-                                               const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
+                                               const std::vector<Fragmenter_Namespace::TableInfo>& query_infos,
                                                const Catalog_Namespace::Catalog& cat,
                                                const CompilationOptions& co,
                                                const size_t context_count,
@@ -4077,7 +4077,7 @@ void Executor::nukeOldState(const bool allow_lazy_fetch, const JoinInfo& join_in
 }
 
 Executor::CompilationResult Executor::compilePlan(const bool render_output,
-                                                  const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
+                                                  const std::vector<Fragmenter_Namespace::TableInfo>& query_infos,
                                                   const RelAlgExecutionUnit& ra_exe_unit,
                                                   const CompilationOptions& co,
                                                   const ExecutionOptions& eo,
@@ -4361,7 +4361,7 @@ void Executor::allocateInnerScansIterators(const std::vector<ScanDescriptor>& sc
 }
 
 Executor::JoinInfo Executor::chooseJoinType(const std::list<std::shared_ptr<Analyzer::Expr>>& join_quals,
-                                            const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
+                                            const std::vector<Fragmenter_Namespace::TableInfo>& query_infos,
                                             const ExecutorDeviceType device_type) {
   CHECK(device_type != ExecutorDeviceType::Hybrid);
   const MemoryLevel memory_level{device_type == ExecutorDeviceType::GPU ? MemoryLevel::GPU_LEVEL

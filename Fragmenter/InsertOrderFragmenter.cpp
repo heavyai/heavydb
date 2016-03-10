@@ -228,9 +228,9 @@ FragmentInfo* InsertOrderFragmenter::createNewFragment(const Data_Namespace::Mem
   return &(fragmentInfoVec_.back());
 }
 
-QueryInfo InsertOrderFragmenter::getFragmentsForQuery() {
+TableInfo InsertOrderFragmenter::getFragmentsForQuery() {
   mapd_shared_lock<mapd_shared_mutex> readLock(fragmentInfoMutex_);
-  QueryInfo queryInfo(&tableMutex_);
+  TableInfo queryInfo(&tableMutex_);
   queryInfo.chunkKeyPrefix = chunkKeyPrefix_;
   // right now we don't test predicate, so just return (copy of) all fragments
   queryInfo.fragments = fragmentInfoVec_;  // makes a copy

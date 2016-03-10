@@ -68,34 +68,34 @@ ExpressionRange ExpressionRange::operator||(const ExpressionRange& other) const 
 }
 
 ExpressionRange getExpressionRange(const Analyzer::BinOper* expr,
-                                   const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
+                                   const std::vector<Fragmenter_Namespace::TableInfo>& query_infos,
                                    const Executor*);
 
 ExpressionRange getExpressionRange(const Analyzer::Constant* expr);
 
 ExpressionRange getExpressionRange(const Analyzer::ColumnVar* col_expr,
-                                   const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos);
+                                   const std::vector<Fragmenter_Namespace::TableInfo>& query_infos);
 
 ExpressionRange getExpressionRange(const Analyzer::LikeExpr* like_expr);
 
 ExpressionRange getExpressionRange(const Analyzer::CaseExpr* case_expr,
-                                   const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
+                                   const std::vector<Fragmenter_Namespace::TableInfo>& query_infos,
                                    const Executor*);
 
 ExpressionRange getExpressionRange(const Analyzer::UOper* u_expr,
-                                   const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
+                                   const std::vector<Fragmenter_Namespace::TableInfo>& query_infos,
                                    const Executor*);
 
 ExpressionRange getExpressionRange(const Analyzer::ExtractExpr* extract_expr,
-                                   const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
+                                   const std::vector<Fragmenter_Namespace::TableInfo>& query_infos,
                                    const Executor*);
 
 ExpressionRange getExpressionRange(const Analyzer::DatetruncExpr* datetrunc_expr,
-                                   const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
+                                   const std::vector<Fragmenter_Namespace::TableInfo>& query_infos,
                                    const Executor* executor);
 
 ExpressionRange getExpressionRange(const Analyzer::Expr* expr,
-                                   const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
+                                   const std::vector<Fragmenter_Namespace::TableInfo>& query_infos,
                                    const Executor* executor) {
   auto bin_oper_expr = dynamic_cast<const Analyzer::BinOper*>(expr);
   if (bin_oper_expr) {
@@ -133,7 +133,7 @@ ExpressionRange getExpressionRange(const Analyzer::Expr* expr,
 }
 
 ExpressionRange getExpressionRange(const Analyzer::BinOper* expr,
-                                   const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
+                                   const std::vector<Fragmenter_Namespace::TableInfo>& query_infos,
                                    const Executor* executor) {
   const auto& lhs = getExpressionRange(expr->get_left_operand(), query_infos, executor);
   const auto& rhs = getExpressionRange(expr->get_right_operand(), query_infos, executor);
@@ -235,7 +235,7 @@ inline double extract_max_stat_double(const ChunkStats& stats, const SQLTypeInfo
 }  // namespace
 
 ExpressionRange getExpressionRange(const Analyzer::ColumnVar* col_expr,
-                                   const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos) {
+                                   const std::vector<Fragmenter_Namespace::TableInfo>& query_infos) {
   int col_id = col_expr->get_column_id();
   const auto& col_ti =
       col_expr->get_type_info().is_array() ? col_expr->get_type_info().get_elem_type() : col_expr->get_type_info();
@@ -304,7 +304,7 @@ ExpressionRange getExpressionRange(const Analyzer::LikeExpr* like_expr) {
 }
 
 ExpressionRange getExpressionRange(const Analyzer::CaseExpr* case_expr,
-                                   const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
+                                   const std::vector<Fragmenter_Namespace::TableInfo>& query_infos,
                                    const Executor* executor) {
   const auto& expr_pair_list = case_expr->get_expr_pair_list();
   auto expr_range = ExpressionRange::makeInvalidRange();
@@ -324,7 +324,7 @@ ExpressionRange getExpressionRange(const Analyzer::CaseExpr* case_expr,
 }
 
 ExpressionRange getExpressionRange(const Analyzer::UOper* u_expr,
-                                   const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
+                                   const std::vector<Fragmenter_Namespace::TableInfo>& query_infos,
                                    const Executor* executor) {
   if (u_expr->get_optype() == kUNNEST) {
     return getExpressionRange(u_expr->get_operand(), query_infos, executor);
@@ -372,7 +372,7 @@ ExpressionRange getExpressionRange(const Analyzer::UOper* u_expr,
 }
 
 ExpressionRange getExpressionRange(const Analyzer::ExtractExpr* extract_expr,
-                                   const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
+                                   const std::vector<Fragmenter_Namespace::TableInfo>& query_infos,
                                    const Executor* executor) {
   const int32_t extract_field{extract_expr->get_field()};
   const auto arg_range = getExpressionRange(extract_expr->get_from_expr(), query_infos, executor);
@@ -450,7 +450,7 @@ int64_t get_conservative_datetrunc_bucket(const DatetruncField datetrunc_field) 
 }  // namespace
 
 ExpressionRange getExpressionRange(const Analyzer::DatetruncExpr* datetrunc_expr,
-                                   const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
+                                   const std::vector<Fragmenter_Namespace::TableInfo>& query_infos,
                                    const Executor* executor) {
   const auto arg_range = getExpressionRange(datetrunc_expr->get_from_expr(), query_infos, executor);
   if (arg_range.getType() == ExpressionRangeType::Invalid) {

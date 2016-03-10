@@ -26,7 +26,7 @@ class JoinHashTable {
  public:
   static std::shared_ptr<JoinHashTable> getInstance(const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
                                                     const Catalog_Namespace::Catalog& cat,
-                                                    const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
+                                                    const std::vector<Fragmenter_Namespace::TableInfo>& query_infos,
                                                     const Data_Namespace::MemoryLevel memory_level,
                                                     const int device_count,
                                                     const Executor* executor);
@@ -45,7 +45,7 @@ class JoinHashTable {
   JoinHashTable(const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
                 const Analyzer::ColumnVar* col_var,
                 const Catalog_Namespace::Catalog& cat,
-                const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
+                const std::vector<Fragmenter_Namespace::TableInfo>& query_infos,
                 const Data_Namespace::MemoryLevel memory_level,
                 const ExpressionRange& col_range,
                 const Executor* executor)
@@ -68,7 +68,7 @@ class JoinHashTable {
 
   std::shared_ptr<Analyzer::BinOper> qual_bin_oper_;
   const Catalog_Namespace::Catalog& cat_;
-  const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos_;
+  const std::vector<Fragmenter_Namespace::TableInfo>& query_infos_;
   const Data_Namespace::MemoryLevel memory_level_;
   std::vector<int32_t> cpu_hash_table_buff_;
   std::mutex cpu_hash_table_buff_mutex_;

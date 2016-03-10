@@ -45,7 +45,7 @@ class AbstractFragmenter {
    */
 
   // virtual void getFragmentsForQuery(QueryInfo &queryInfo, const void *predicate = 0) = 0;
-  virtual QueryInfo getFragmentsForQuery() = 0;
+  virtual TableInfo getFragmentsForQuery() = 0;
 
   /**
    * @brief Given data wrapped in an InsertData struct,

@@ -3,26 +3,26 @@
 
 namespace {
 
-Fragmenter_Namespace::QueryInfo synthesize_query_info(const ResultRows* rows) {
+Fragmenter_Namespace::TableInfo synthesize_table_info(const ResultRows* rows) {
   std::deque<Fragmenter_Namespace::FragmentInfo> result(1);
   auto& fragment = result.front();
   fragment.fragmentId = 0;
   fragment.numTuples = rows->rowCount();
   fragment.deviceIds.resize(3);
-  Fragmenter_Namespace::QueryInfo query_info;
-  query_info.fragments = result;
-  query_info.numTuples = fragment.numTuples;
-  return query_info;
+  Fragmenter_Namespace::TableInfo table_info;
+  table_info.fragments = result;
+  table_info.numTuples = fragment.numTuples;
+  return table_info;
 }
 
 }  // namespace
 
-std::vector<Fragmenter_Namespace::QueryInfo> get_query_infos(const std::vector<ScanDescriptor>& scan_ids,
+std::vector<Fragmenter_Namespace::TableInfo> get_table_infos(const std::vector<ScanDescriptor>& scan_ids,
                                                              const Catalog_Namespace::Catalog& cat) {
-  std::vector<Fragmenter_Namespace::QueryInfo> query_infos;
+  std::vector<Fragmenter_Namespace::TableInfo> table_infos;
   for (const auto& scan_id : scan_ids) {
     if (scan_id.getSourceType() == InputSourceType::RESULT) {
-      query_infos.push_back(synthesize_query_info(scan_id.getResultRows()));
+      table_infos.push_back(synthesize_table_info(scan_id.getResultRows()));
       continue;
     }
     CHECK(scan_id.getSourceType() == InputSourceType::TABLE);
@@ -30,7 +30,7 @@ std::vector<Fragmenter_Namespace::QueryInfo> get_query_infos(const std::vector<S
     CHECK(table_descriptor);
     const auto fragmenter = table_descriptor->fragmenter;
     CHECK(fragmenter);
-    query_infos.push_back(fragmenter->getFragmentsForQuery());
+    table_infos.push_back(fragmenter->getFragmentsForQuery());
   }
-  return query_infos;
+  return table_infos;
 }

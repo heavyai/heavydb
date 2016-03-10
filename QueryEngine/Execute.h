@@ -277,7 +277,7 @@ class Executor {
    private:
     Executor* executor_;
     const RelAlgExecutionUnit& ra_exe_unit_;
-    const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos_;
+    const std::vector<Fragmenter_Namespace::TableInfo>& query_infos_;
     const Catalog_Namespace::Catalog& cat_;
     CompilationOptions co_;
     CompilationResult compilation_result_cpu_;
@@ -293,7 +293,7 @@ class Executor {
    public:
     ExecutionDispatch(Executor* executor,
                       const RelAlgExecutionUnit& ra_exe_unit,
-                      const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
+                      const std::vector<Fragmenter_Namespace::TableInfo>& query_infos,
                       const Catalog_Namespace::Catalog& cat,
                       const CompilationOptions& co,
                       const size_t context_count,
@@ -337,7 +337,7 @@ class Executor {
   ResultRows executeWorkUnit(int32_t* error_code,
                              size_t& max_groups_buffer_entry_guess,
                              const bool is_agg,
-                             const std::vector<Fragmenter_Namespace::QueryInfo>&,
+                             const std::vector<Fragmenter_Namespace::TableInfo>&,
                              const RelAlgExecutionUnit&,
                              const CompilationOptions&,
                              const ExecutionOptions& options,
@@ -462,7 +462,7 @@ class Executor {
   void executeSimpleInsert(const Planner::RootPlan* root_plan);
 
   CompilationResult compilePlan(const bool render_output,
-                                const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
+                                const std::vector<Fragmenter_Namespace::TableInfo>& query_infos,
                                 const RelAlgExecutionUnit& ra_exe_unit,
                                 const CompilationOptions& co,
                                 const ExecutionOptions& eo,
@@ -478,7 +478,7 @@ class Executor {
   void allocateInnerScansIterators(const std::vector<ScanDescriptor>& scan_ids, const bool allow_loop_joins);
 
   JoinInfo chooseJoinType(const std::list<std::shared_ptr<Analyzer::Expr>>&,
-                          const std::vector<Fragmenter_Namespace::QueryInfo>&,
+                          const std::vector<Fragmenter_Namespace::TableInfo>&,
                           const ExecutorDeviceType device_type);
 
   void bindInitGroupByBuffer(llvm::Function* query_func,

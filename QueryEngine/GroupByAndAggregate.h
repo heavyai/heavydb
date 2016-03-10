@@ -1008,7 +1008,7 @@ class GroupByAndAggregate {
                       const std::list<std::shared_ptr<Analyzer::Expr>>& groupby_exprs,
                       const std::vector<Analyzer::Expr*>& target_exprs,
                       const bool render_output,
-                      const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
+                      const std::vector<Fragmenter_Namespace::TableInfo>& query_infos,
                       std::shared_ptr<RowSetMemoryOwner>,
                       const size_t max_groups_buffer_entry_count,
                       const size_t small_groups_buffer_entry_count,
@@ -1096,7 +1096,7 @@ class GroupByAndAggregate {
   Executor* executor_;
   const std::list<std::shared_ptr<Analyzer::Expr>> groupby_exprs_;
   const std::vector<Analyzer::Expr*> target_exprs_;
-  const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos_;
+  const std::vector<Fragmenter_Namespace::TableInfo>& query_infos_;
   std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
   const int64_t scan_limit_;
   bool output_columnar_;

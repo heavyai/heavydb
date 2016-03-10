@@ -161,7 +161,7 @@ inline double getMax<double>(const ExpressionRange& e) {
 class Executor;
 
 ExpressionRange getExpressionRange(const Analyzer::Expr*,
-                                   const std::vector<Fragmenter_Namespace::QueryInfo>&,
+                                   const std::vector<Fragmenter_Namespace::TableInfo>&,
                                    const Executor*);
 
 #endif  // QUERYENGINE_EXPRESSIONRANGE_H

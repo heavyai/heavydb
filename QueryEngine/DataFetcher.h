@@ -7,7 +7,7 @@ namespace Catalog_Namespace {
 class Catalog;
 }  // Catalog_Namespace
 
-std::vector<Fragmenter_Namespace::QueryInfo> get_query_infos(const std::vector<ScanDescriptor>& scan_ids,
+std::vector<Fragmenter_Namespace::TableInfo> get_table_infos(const std::vector<ScanDescriptor>& scan_ids,
                                                              const Catalog_Namespace::Catalog& cat);
 
 #endif  // QUERYENGINE_DATAFETCHER_H
