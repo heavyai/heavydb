@@ -206,4 +206,7 @@ service MapD {
   string create_link(1: TSessionId session, 2: string view_state) throws (1: TMapDException e 2: ThriftException te)
   TPixelResult get_rows_for_pixels(1: TSessionId session, 2: i64 widget_id, 3: list<TPixel> pixels, 4: string table_name, 5: list<string> col_names, 6: bool column_format, 7: string nonce) throws (1: TMapDException e 2: ThriftException te)
   i64 get_row_count(1: TSessionId session, 2: string table_name) throws (1: TMapDException e 2: ThriftException te)
+  void start_heap_profile() throws (1: TMapDException e 2: ThriftException te)
+  void stop_heap_profile() throws (1: TMapDException e 2: ThriftException te)
+  string get_heap_profile() throws (1: TMapDException e 2: ThriftException te)
 }

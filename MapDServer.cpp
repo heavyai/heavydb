@@ -1,5 +1,8 @@
 #include "MapDServer.h"
 #include "gen-cpp/MapD.h"
+#ifdef HAVE_PROFILER
+#include <gperftools/heap-profiler.h>
+#endif  // HAVE_PROFILER
 #include <thrift/protocol/TBinaryProtocol.h>
 #include <thrift/protocol/TJSONProtocol.h>
 #include <thrift/server/TThreadedServer.h>
@@ -921,6 +924,41 @@ class MapDHandler : virtual public MapDIf {
     _return.rows_estimated = is.rows_estimated;
   }
 
+  void start_heap_profile() {
+#ifdef HAVE_PROFILER
+    if (IsHeapProfilerRunning()) {
+      throw_profile_exception("Profiler already started");
+    }
+    HeapProfilerStart("mapd");
+#else
+    throw_profile_exception("Profiler not enabled");
+#endif  // HAVE_PROFILER
+  }
+
+  void stop_heap_profile() {
+#ifdef HAVE_PROFILER
+    if (!IsHeapProfilerRunning()) {
+      throw_profile_exception("Profiler not running");
+    }
+    HeapProfilerStop();
+#else
+    throw_profile_exception("Profiler not enabled");
+#endif  // HAVE_PROFILER
+  }
+
+  void get_heap_profile(std::string& profile) {
+#ifdef HAVE_PROFILER
+    if (!IsHeapProfilerRunning()) {
+      throw_profile_exception("Profiler not running");
+    }
+    auto profile_buff = GetHeapProfile();
+    profile = profile_buff;
+    free(profile_buff);
+#else
+    throw_profile_exception("Profiler not enabled");
+#endif  // HAVE_PROFILER
+  }
+
  private:
   typedef std::map<TSessionId, std::shared_ptr<Catalog_Namespace::SessionInfo>> SessionMap;
 
@@ -1256,6 +1294,13 @@ class MapDHandler : virtual public MapDIf {
       }
     });
     LOG(INFO) << "Total: " << _return.total_time_ms << " (ms), Execution: " << _return.execution_time_ms << " (ms)";
+  }
+
+  void throw_profile_exception(const std::string& error_msg) {
+    TMapDException ex;
+    ex.error_msg = error_msg;
+    LOG(ERROR) << ex.error_msg;
+    throw ex;
   }
 
   std::unique_ptr<Catalog_Namespace::SysCatalog> sys_cat_;
