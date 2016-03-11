@@ -139,3 +139,16 @@ void Encoder::getMetadata(ChunkMetadata& chunkMetadata) {
   chunkMetadata.numBytes = buffer_->size();
   chunkMetadata.numElements = numElems;
 }
+
+ChunkMetadata Encoder::getMetadata(const SQLTypeInfo& ti) {
+  CHECK(false);
+  return {};
+}
+
+void Encoder::updateStats(const int64_t, const bool) {
+  CHECK(false);
+}
+
+void Encoder::updateStats(const double, const bool) {
+  CHECK(false);
+}

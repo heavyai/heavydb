@@ -37,6 +37,27 @@ class NoneEncoder : public Encoder {
     chunkMetadata.fillChunkStats(dataMin, dataMax, has_nulls);
   }
 
+  // Only called from the executor for synthesized meta-information.
+  ChunkMetadata getMetadata(const SQLTypeInfo& ti) {
+    ChunkMetadata chunk_metadata{ti, 0, 0, ChunkStats{}};
+    chunk_metadata.fillChunkStats(dataMin, dataMax, has_nulls);
+    return chunk_metadata;
+  }
+
+  // Only called from the executor for synthesized meta-information.
+  void updateStats(const int64_t val, const bool is_null) {
+    const auto data = static_cast<T>(val);
+    dataMin = std::min(dataMin, data);
+    dataMax = std::max(dataMax, data);
+  }
+
+  // Only called from the executor for synthesized meta-information.
+  void updateStats(const double val, const bool is_null) {
+    const auto data = static_cast<T>(val);
+    dataMin = std::min(dataMin, data);
+    dataMax = std::max(dataMax, data);
+  }
+
   void writeMetadata(FILE* f) {
     // assumes pointer is already in right place
     fwrite((int8_t*)&numElems, sizeof(size_t), 1, f);

@@ -24,6 +24,10 @@ class Encoder {
   Encoder(Data_Namespace::AbstractBuffer* buffer) : numElems(0), buffer_(buffer) {}
   virtual ChunkMetadata appendData(int8_t*& srcData, const size_t numAppendElems) = 0;
   virtual void getMetadata(ChunkMetadata& chunkMetadata);
+  // Only called from the executor for synthesized meta-information.
+  virtual ChunkMetadata getMetadata(const SQLTypeInfo& ti);
+  virtual void updateStats(const int64_t val, const bool is_null);
+  virtual void updateStats(const double val, const bool is_null);
   virtual void copyMetadata(const Encoder* copyFromEncoder) = 0;
   virtual void writeMetadata(FILE* f /*, const size_t offset*/) = 0;
   virtual void readMetadata(FILE* f /*, const size_t offset*/) = 0;
