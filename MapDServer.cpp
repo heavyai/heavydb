@@ -129,7 +129,7 @@ class MapDHandler : virtual public MapDIf {
   }
 
   TSessionId connect(const std::string& user, const std::string& passwd, const std::string& dbname) {
-    mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
+    mapd_lock_guard<mapd_shared_mutex> write_lock(sessions_mutex_);
     Catalog_Namespace::UserMetadata user_meta;
     if (!sys_cat_->getMetadataForUser(user, user_meta)) {
       TMapDException ex;
@@ -181,7 +181,7 @@ class MapDHandler : virtual public MapDIf {
   }
 
   void disconnect(const TSessionId session) {
-    mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
+    mapd_lock_guard<mapd_shared_mutex> write_lock(sessions_mutex_);
     auto session_it = get_session_it(session);
     const auto dbname = session_it->second->get_catalog().get_currentDB().dbName;
     LOG(INFO) << "User " << session_it->second->get_currentUser().userName << " disconnected from database " << dbname
@@ -328,6 +328,10 @@ class MapDHandler : virtual public MapDIf {
                    const std::string& query_str,
                    const bool column_format,
                    const std::string& nonce) {
+    std::unique_ptr<std::lock_guard<std::mutex>> render_lock;
+    if (enable_rendering_) {
+      render_lock.reset(new std::lock_guard<std::mutex>(render_mutex_));
+    }
     const auto session_info = get_session(session);
     sql_execute_impl(_return, session_info, query_str, column_format, nonce, true);
   }
@@ -340,7 +344,6 @@ class MapDHandler : virtual public MapDIf {
                            const std::vector<std::string>& col_names,
                            const bool column_format,
                            const std::string& nonce) {
-    mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
     _return.nonce = nonce;
     if (!enable_rendering_) {
       TMapDException ex;
@@ -474,7 +477,7 @@ class MapDHandler : virtual public MapDIf {
   }
 
   void set_execution_mode(const TSessionId session, const TExecuteMode::type mode) {
-    mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
+    mapd_lock_guard<mapd_shared_mutex> write_lock(sessions_mutex_);
     auto session_it = get_session_it(session);
     set_execution_mode_nolock(session_it->second.get(), mode);
   }
@@ -686,7 +689,6 @@ class MapDHandler : virtual public MapDIf {
               const TColumnRenderMap& col_render_properties,
               const std::string& nonce) {
     _return.total_time_ms = measure<>::execution([&]() {
-      mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
       _return.nonce = nonce;
       if (!enable_rendering_) {
         TMapDException ex;
@@ -694,6 +696,8 @@ class MapDHandler : virtual public MapDIf {
         LOG(ERROR) << ex.error_msg;
         throw ex;
       }
+      std::lock_guard<std::mutex> render_lock(render_mutex_);
+      mapd_shared_lock<mapd_shared_mutex> read_lock(sessions_mutex_);
       auto session_it = get_session_it(session);
       auto session_info_ptr = session_it->second.get();
       auto& cat = session_info_ptr->get_catalog();
@@ -933,7 +937,7 @@ class MapDHandler : virtual public MapDIf {
   }
 
   Catalog_Namespace::SessionInfo get_session(const TSessionId session) {
-    mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
+    mapd_shared_lock<mapd_shared_mutex> read_lock(sessions_mutex_);
     return *get_session_it(session)->second;
   }
 
@@ -1270,8 +1274,8 @@ class MapDHandler : virtual public MapDIf {
   const bool allow_loop_joins_;
   bool enable_rendering_;
   bool cpu_mode_only_;
-  mapd_shared_mutex rw_mutex_;
-  std::mutex calcite_mutex_;
+  mapd_shared_mutex sessions_mutex_;
+  std::mutex render_mutex_;
 #ifdef HAVE_CALCITE
   Calcite calcite_;
   const bool legacy_syntax_;
