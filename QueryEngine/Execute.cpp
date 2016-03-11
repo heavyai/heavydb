@@ -3417,6 +3417,32 @@ void Executor::dispatchFragments(const std::function<void(const ExecutorDeviceTy
   }
 }
 
+namespace {
+
+const ColumnDescriptor* get_column_descriptor_maybe(const int col_id,
+                                                    const int table_id,
+                                                    const Catalog_Namespace::Catalog& cat) {
+  CHECK(table_id);
+  return table_id > 0 ? get_column_descriptor(col_id, table_id, cat) : nullptr;
+}
+
+const SQLTypeInfo get_column_type(const int col_id,
+                                  const int table_id,
+                                  const ColumnDescriptor* cd,
+                                  const TemporaryTables* temporary_tables) {
+  CHECK(cd || temporary_tables);
+  if (cd) {
+    return cd->columnType;
+  }
+  const auto it = temporary_tables->find(table_id);
+  CHECK(it != temporary_tables->end());
+  const auto rows = it->second;
+  CHECK(rows);
+  return rows->getColType(col_id);
+}
+
+}  // namespace
+
 std::vector<std::vector<const int8_t*>> Executor::fetchChunks(
     const std::list<ScanColDescriptor>& col_global_ids,
     const int device_id,
@@ -3444,9 +3470,8 @@ std::vector<std::vector<const int8_t*>> Executor::fetchChunks(
     std::vector<const int8_t*> frag_col_buffers(plan_state_->global_to_local_col_ids_.size());
     for (const auto& col_id : col_global_ids) {
       const int table_id = col_id.getScanDesc().getTableId();
-      CHECK_GT(table_id, 0);
-      const ColumnDescriptor* cd = cat.getMetadataForColumn(table_id, col_id.getColId());
-      if (cd->isVirtualCol) {
+      const auto cd = get_column_descriptor_maybe(col_id.getColId(), table_id, cat);
+      if (cd && cd->isVirtualCol) {
         CHECK_EQ("rowid", cd->columnName);
         continue;
       }
@@ -3459,15 +3484,15 @@ std::vector<std::vector<const int8_t*>> Executor::fetchChunks(
       const size_t frag_id = selected_frag_ids[local_col_to_frag_pos[it->second]];
       CHECK_LT(frag_id, fragments->size());
       const auto& fragment = (*fragments)[frag_id];
-      auto chunk_meta_it = fragment.chunkMetadataMap.find(col_id.getColId());
-      CHECK(chunk_meta_it != fragment.chunkMetadataMap.end());
-      ChunkKey chunk_key{cat.get_currentDB().dbId, table_id, col_id.getColId(), fragment.fragmentId};
       auto memory_level_for_column = memory_level;
       if (plan_state_->columns_to_fetch_.find(col_id.getColId()) == plan_state_->columns_to_fetch_.end()) {
         memory_level_for_column = Data_Namespace::CPU_LEVEL;
       }
       std::shared_ptr<Chunk_NS::Chunk> chunk;
-      {
+      auto chunk_meta_it = fragment.chunkMetadataMap.find(col_id.getColId());
+      if (cd) {
+        CHECK(chunk_meta_it != fragment.chunkMetadataMap.end());
+        ChunkKey chunk_key{cat.get_currentDB().dbId, table_id, col_id.getColId(), fragment.fragmentId};
         std::lock_guard<std::mutex> lock(str_dec_mutex);
         chunk = Chunk_NS::Chunk::getChunk(cd,
                                           &cat.get_dataMgr(),
@@ -3478,8 +3503,10 @@ std::vector<std::vector<const int8_t*>> Executor::fetchChunks(
                                           chunk_meta_it->second.numElements);
         chunks.push_back(chunk);
       }
-      const bool is_real_string = cd->columnType.is_string() && cd->columnType.get_compression() == kENCODING_NONE;
-      if (is_real_string || cd->columnType.is_array()) {
+      const auto col_type = get_column_type(col_id.getColId(), table_id, cd, temporary_tables_);
+      const bool is_real_string = col_type.is_string() && col_type.get_compression() == kENCODING_NONE;
+      if (is_real_string || col_type.is_array()) {
+        CHECK(chunk_meta_it != fragment.chunkMetadataMap.end());
         chunk_iterators.push_back(chunk->begin_iterator(chunk_meta_it->second));
         auto& chunk_iter = chunk_iterators.back();
         if (memory_level_for_column == Data_Namespace::CPU_LEVEL) {
