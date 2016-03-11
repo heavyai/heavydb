@@ -3462,6 +3462,7 @@ std::vector<std::vector<const int8_t*>> Executor::fetchChunks(
       const auto col_type = get_column_type(col_id.getColId(), table_id, cd, temporary_tables_);
       const bool is_real_string = col_type.is_string() && col_type.get_compression() == kENCODING_NONE;
       if (is_real_string || col_type.is_array()) {
+        CHECK_GT(table_id, 0);
         CHECK(chunk_meta_it != fragment.chunkMetadataMap.end());
         chunk_iterators.push_back(chunk->begin_iterator(chunk_meta_it->second));
         auto& chunk_iter = chunk_iterators.back();
