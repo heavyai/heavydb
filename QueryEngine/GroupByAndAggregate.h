@@ -5,6 +5,7 @@
 #include "GpuMemUtils.h"
 #include "../Fragmenter/Fragmenter.h"
 #include "../Planner/Planner.h"
+#include "../Shared/checked_alloc.h"
 #include "../Shared/sqltypes.h"
 #include "RuntimeFunctions.h"
 
@@ -337,6 +338,36 @@ inline double inline_fp_null_val(const SQLTypeInfo& ti) {
       return NULL_FLOAT;
     case kDOUBLE:
       return NULL_DOUBLE;
+    default:
+      CHECK(false);
+  }
+}
+
+inline size_t get_bit_width(const SQLTypeInfo& ti) {
+  const auto int_type = ti.is_decimal() ? decimal_to_int_type(ti) : ti.get_type();
+  switch (int_type) {
+    case kBOOLEAN:
+      return 8;
+    case kSMALLINT:
+      return 16;
+    case kINT:
+      return 32;
+    case kBIGINT:
+      return 64;
+    case kFLOAT:
+      return 32;
+    case kDOUBLE:
+      return 64;
+    case kTIME:
+    case kTIMESTAMP:
+    case kDATE:
+      return sizeof(time_t) * 8;
+    case kTEXT:
+    case kVARCHAR:
+    case kCHAR:
+      return 32;
+    case kARRAY:
+      throw std::runtime_error("Projecting on array columns not supported yet.");
     default:
       CHECK(false);
   }
@@ -833,6 +864,75 @@ class ResultRows {
   friend class QueryExecutionContext;
 };
 
+class ColumnarResults {
+ public:
+  ColumnarResults(const ResultRows& rows, const size_t num_columns, const std::vector<SQLTypeInfo>& target_types)
+      : column_buffers_(num_columns), num_rows_(rows.rowCount()) {
+    column_buffers_.resize(num_columns);
+    for (size_t i = 0; i < num_columns; ++i) {
+      CHECK(!target_types[i].is_string() ||
+            (target_types[i].get_compression() == kENCODING_DICT && target_types[i].get_size() == 4));
+      column_buffers_[i] = static_cast<const int8_t*>(checked_malloc(num_rows_ * (get_bit_width(target_types[i]) / 8)));
+    }
+    size_t row_idx{0};
+    while (true) {
+      const auto crt_row = rows.getNextRow(false, false);
+      if (crt_row.empty()) {
+        break;
+      }
+      for (size_t i = 0; i < num_columns; ++i) {
+        const auto col_val = crt_row[i];
+        const auto scalar_col_val = boost::get<ScalarTargetValue>(&col_val);
+        CHECK(scalar_col_val);
+        auto i64_p = boost::get<int64_t>(scalar_col_val);
+        if (i64_p) {
+          switch (get_bit_width(target_types[i])) {
+            case 8:
+              ((int8_t*)column_buffers_[i])[row_idx] = *i64_p;
+              break;
+            case 16:
+              ((int16_t*)column_buffers_[i])[row_idx] = *i64_p;
+              break;
+            case 32:
+              ((int32_t*)column_buffers_[i])[row_idx] = *i64_p;
+              break;
+            case 64:
+              ((int64_t*)column_buffers_[i])[row_idx] = *i64_p;
+              break;
+            default:
+              CHECK(false);
+          }
+        } else {
+          CHECK(target_types[i].is_fp());
+          auto double_p = boost::get<double>(scalar_col_val);
+          switch (target_types[i].get_type()) {
+            case kFLOAT:
+              ((float*)column_buffers_[i])[row_idx] = static_cast<float>(*double_p);
+              break;
+            case kDOUBLE:
+              ((double*)column_buffers_[i])[row_idx] = static_cast<double>(*double_p);
+              break;
+            default:
+              CHECK(false);
+          }
+        }
+      }
+      ++row_idx;
+    }
+  }
+  ~ColumnarResults() {
+    for (const auto column_buffer : column_buffers_) {
+      free((void*)column_buffer);
+    }
+  }
+  const std::vector<const int8_t*>& getColumnBuffers() const { return column_buffers_; }
+  const size_t size() const { return num_rows_; }
+
+ private:
+  std::vector<const int8_t*> column_buffers_;
+  const size_t num_rows_;
+};
+
 namespace {
 
 inline std::string nullable_str_to_string(const NullableString& str) {
@@ -1105,36 +1205,6 @@ class GroupByAndAggregate {
 };
 
 namespace {
-
-inline size_t get_bit_width(const SQLTypeInfo& ti) {
-  const auto int_type = ti.is_decimal() ? decimal_to_int_type(ti) : ti.get_type();
-  switch (int_type) {
-    case kBOOLEAN:
-      return 8;
-    case kSMALLINT:
-      return 16;
-    case kINT:
-      return 32;
-    case kBIGINT:
-      return 64;
-    case kFLOAT:
-      return 32;
-    case kDOUBLE:
-      return 64;
-    case kTIME:
-    case kTIMESTAMP:
-    case kDATE:
-      return sizeof(time_t) * 8;
-    case kTEXT:
-    case kVARCHAR:
-    case kCHAR:
-      return 32;
-    case kARRAY:
-      throw std::runtime_error("Projecting on array columns not supported yet.");
-    default:
-      CHECK(false);
-  }
-}
 
 inline uint64_t exp_to_scale(const unsigned exp) {
   uint64_t res = 1;

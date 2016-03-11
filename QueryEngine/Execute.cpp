@@ -2336,75 +2336,6 @@ ResultRows Executor::reduceMultiDeviceResults(
 
 namespace {
 
-class ColumnarResults {
- public:
-  ColumnarResults(const ResultRows& rows, const size_t num_columns, const std::vector<SQLTypeInfo>& target_types)
-      : column_buffers_(num_columns), num_rows_(rows.rowCount()) {
-    column_buffers_.resize(num_columns);
-    for (size_t i = 0; i < num_columns; ++i) {
-      CHECK(!target_types[i].is_string() ||
-            (target_types[i].get_compression() == kENCODING_DICT && target_types[i].get_size() == 4));
-      column_buffers_[i] = static_cast<const int8_t*>(checked_malloc(num_rows_ * (get_bit_width(target_types[i]) / 8)));
-    }
-    size_t row_idx{0};
-    while (true) {
-      const auto crt_row = rows.getNextRow(false, false);
-      if (crt_row.empty()) {
-        break;
-      }
-      for (size_t i = 0; i < num_columns; ++i) {
-        const auto col_val = crt_row[i];
-        const auto scalar_col_val = boost::get<ScalarTargetValue>(&col_val);
-        CHECK(scalar_col_val);
-        auto i64_p = boost::get<int64_t>(scalar_col_val);
-        if (i64_p) {
-          switch (get_bit_width(target_types[i])) {
-            case 8:
-              ((int8_t*)column_buffers_[i])[row_idx] = *i64_p;
-              break;
-            case 16:
-              ((int16_t*)column_buffers_[i])[row_idx] = *i64_p;
-              break;
-            case 32:
-              ((int32_t*)column_buffers_[i])[row_idx] = *i64_p;
-              break;
-            case 64:
-              ((int64_t*)column_buffers_[i])[row_idx] = *i64_p;
-              break;
-            default:
-              CHECK(false);
-          }
-        } else {
-          CHECK(target_types[i].is_fp());
-          auto double_p = boost::get<double>(scalar_col_val);
-          switch (target_types[i].get_type()) {
-            case kFLOAT:
-              ((float*)column_buffers_[i])[row_idx] = static_cast<float>(*double_p);
-              break;
-            case kDOUBLE:
-              ((double*)column_buffers_[i])[row_idx] = static_cast<double>(*double_p);
-              break;
-            default:
-              CHECK(false);
-          }
-        }
-      }
-      ++row_idx;
-    }
-  }
-  ~ColumnarResults() {
-    for (const auto column_buffer : column_buffers_) {
-      free((void*)column_buffer);
-    }
-  }
-  const std::vector<const int8_t*>& getColumnBuffers() const { return column_buffers_; }
-  const size_t size() const { return num_rows_; }
-
- private:
-  std::vector<const int8_t*> column_buffers_;
-  const size_t num_rows_;
-};
-
 std::pair<llvm::Function*, std::vector<llvm::Value*>> create_row_function(const size_t in_col_count,
                                                                           const size_t agg_col_count,
                                                                           const bool hoist_literals,
@@ -2821,6 +2752,15 @@ size_t get_context_count(const ExecutorDeviceType device_type, const size_t cpu_
                                                                   : static_cast<size_t>(cpu_count);
 }
 
+const ResultRows* get_temporary_table(const TemporaryTables* temporary_tables, const int table_id) {
+  CHECK_LT(table_id, 0);
+  const auto it = temporary_tables->find(table_id);
+  CHECK(it != temporary_tables->end());
+  const auto rows = it->second;
+  CHECK(rows);
+  return rows;
+}
+
 }  // namespace
 
 ResultRows Executor::executeWorkUnit(int32_t* error_code,
@@ -3054,7 +2994,8 @@ void Executor::ExecutionDispatch::run(const ExecutorDeviceType chosen_device_typ
         return;
       }
     }
-    col_buffers = executor_->fetchChunks(ra_exe_unit_.scan_cols,
+    col_buffers = executor_->fetchChunks(*this,
+                                         ra_exe_unit_.scan_cols,
                                          chosen_device_id,
                                          memory_level,
                                          ra_exe_unit_.scan_ids,
@@ -3169,6 +3110,21 @@ void Executor::ExecutionDispatch::run(const ExecutorDeviceType chosen_device_typ
       all_fragment_results_.emplace_back(device_results, frag_ids.begin()->second);
     }
   }
+}
+
+const int8_t* Executor::ExecutionDispatch::getColumn(const ResultRows* rows, const int col_id) const {
+  CHECK(rows);
+  CHECK_GE(col_id, 0);
+  if (!ra_node_input_) {
+    std::vector<SQLTypeInfo> col_types;
+    for (size_t i = 0; i < rows->colCount(); ++i) {
+      col_types.push_back(rows->getColType(i));
+    }
+    ra_node_input_.reset(new ColumnarResults(*rows, rows->colCount(), col_types));
+  }
+  const auto& col_buffers = ra_node_input_->getColumnBuffers();
+  CHECK_LT(static_cast<size_t>(col_id), col_buffers.size());
+  return col_buffers[col_id];
 }
 
 void Executor::ExecutionDispatch::compile(const Executor::JoinInfo& join_info,
@@ -3436,16 +3392,14 @@ const SQLTypeInfo get_column_type(const int col_id,
     CHECK_EQ(table_id, cd->tableId);
     return cd->columnType;
   }
-  const auto it = temporary_tables->find(table_id);
-  CHECK(it != temporary_tables->end());
-  const auto rows = it->second;
-  CHECK(rows);
+  const auto rows = get_temporary_table(temporary_tables, table_id);
   return rows->getColType(col_id);
 }
 
 }  // namespace
 
 std::vector<std::vector<const int8_t*>> Executor::fetchChunks(
+    const ExecutionDispatch& execution_dispatch,
     const std::list<ScanColDescriptor>& col_global_ids,
     const int device_id,
     const Data_Namespace::MemoryLevel memory_level,
@@ -3521,9 +3475,16 @@ std::vector<std::vector<const int8_t*>> Executor::fetchChunks(
           frag_col_buffers[it->second] = reinterpret_cast<int8_t*>(chunk_iter_gpu);
         }
       } else {
-        auto ab = chunk->get_buffer();
-        CHECK(ab->getMemoryPtr());
-        frag_col_buffers[it->second] = ab->getMemoryPtr();  // @TODO(alex) change to use ChunkIter
+        CHECK_NE(table_id < 0, static_cast<bool>(chunk));
+        if (table_id < 0) {
+          CHECK_EQ(size_t(0), frag_id);
+          frag_col_buffers[it->second] =
+              execution_dispatch.getColumn(get_temporary_table(temporary_tables_, table_id), col_id.getColId());
+        } else {
+          auto ab = chunk->get_buffer();
+          CHECK(ab->getMemoryPtr());
+          frag_col_buffers[it->second] = ab->getMemoryPtr();  // @TODO(alex) change to use ChunkIter
+        }
       }
     }
     all_frag_col_buffers.push_back(frag_col_buffers);
