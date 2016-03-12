@@ -3476,8 +3476,9 @@ std::vector<std::vector<const int8_t*>> Executor::fetchChunks(
           frag_col_buffers[it->second] = reinterpret_cast<int8_t*>(chunk_iter_gpu);
         }
       } else {
-        CHECK_NE(table_id < 0, static_cast<bool>(chunk));
-        if (table_id < 0) {
+        const bool input_is_result = col_id.getScanDesc().getSourceType() == InputSourceType::RESULT;
+        CHECK_NE(input_is_result, static_cast<bool>(chunk));
+        if (input_is_result) {
           CHECK_EQ(size_t(0), frag_id);
           frag_col_buffers[it->second] =
               execution_dispatch.getColumn(get_temporary_table(temporary_tables_, table_id), col_id.getColId());
