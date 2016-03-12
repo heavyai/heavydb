@@ -133,10 +133,10 @@ void collect_input_col_descs(std::list<InputColDescriptor>& input_col_descs,
   }
 }
 
-void collect_scan_col_info(std::vector<InputDescriptor>& input_descs,
-                           std::list<InputColDescriptor>& input_col_descs,
-                           const Planner::Plan* plan,
-                           const Catalog_Namespace::Catalog& cat) {
+void collect_input_descs(std::vector<InputDescriptor>& input_descs,
+                         std::list<InputColDescriptor>& input_col_descs,
+                         const Planner::Plan* plan,
+                         const Catalog_Namespace::Catalog& cat) {
   const auto scan_plan = get_scan_child(plan);
   const auto join_plan = get_join_child(plan);
   const Planner::Scan* outer_plan{nullptr};
@@ -228,7 +228,7 @@ ResultRows Executor::executeSelectPlan(const Planner::Plan* plan,
     auto groupby_exprs = agg_plan ? agg_plan->get_groupby_list() : std::list<std::shared_ptr<Analyzer::Expr>>{nullptr};
     std::vector<InputDescriptor> input_descs;
     std::list<InputColDescriptor> input_col_descs;
-    collect_scan_col_info(input_descs, input_col_descs, plan, cat);
+    collect_input_descs(input_descs, input_col_descs, plan, cat);
     const auto join_plan = get_join_child(plan);
     if (join_plan) {
       collect_quals_from_join(simple_quals, quals, join_plan);
@@ -2470,7 +2470,7 @@ ResultRows Executor::executeResultPlan(const Planner::Result* result_plan,
   auto quals = scan_plan ? scan_plan->get_quals() : std::list<std::shared_ptr<Analyzer::Expr>>{};
   std::vector<InputDescriptor> input_descs;
   std::list<InputColDescriptor> input_col_descs;
-  collect_scan_col_info(input_descs, input_col_descs, agg_plan, cat);
+  collect_input_descs(input_descs, input_col_descs, agg_plan, cat);
   const auto join_plan = get_join_child(agg_plan);
   if (join_plan) {
     collect_quals_from_join(simple_quals, quals, join_plan);
