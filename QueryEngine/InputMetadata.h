@@ -1,5 +1,5 @@
-#ifndef QUERYENGINE_DATAFETCHER_H
-#define QUERYENGINE_DATAFETCHER_H
+#ifndef QUERYENGINE_INPUTMETADATA_H
+#define QUERYENGINE_INPUTMETADATA_H
 
 #include "ScanDescriptors.h"
 
@@ -17,4 +17,4 @@ std::vector<Fragmenter_Namespace::TableInfo> get_table_infos(const std::vector<S
                                                              const Catalog_Namespace::Catalog& cat,
                                                              const TemporaryTables& temporary_tables) noexcept;
 
-#endif  // QUERYENGINE_DATAFETCHER_H
+#endif  // QUERYENGINE_INPUTMETADATA_H

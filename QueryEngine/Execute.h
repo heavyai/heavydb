@@ -1,7 +1,7 @@
 #ifndef QUERYENGINE_EXECUTE_H
 #define QUERYENGINE_EXECUTE_H
 
-#include "DataFetcher.h"
+#include "InputMetadata.h"
 #include "GroupByAndAggregate.h"
 #include "InValuesBitmap.h"
 #include "JoinHashTable.h"

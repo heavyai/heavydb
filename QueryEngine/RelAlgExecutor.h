@@ -1,7 +1,7 @@
 #ifndef QUERYENGINE_RELALGEXECUTOR_H
 #define QUERYENGINE_RELALGEXECUTOR_H
 
-#include "DataFetcher.h"
+#include "InputMetadata.h"
 #include "Execute.h"
 #include "RelAlgExecutionDescriptor.h"
 

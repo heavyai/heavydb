@@ -8,13 +8,13 @@ set(query_engine_source_files
     CalciteAdapter.cpp
     CalciteDeserializerUtils.cpp
     Codec.cpp
-    DataFetcher.cpp
     Execute.cpp
     ExpressionRange.cpp
     GpuMemUtils.cpp
     GpuSort.cpp
     GroupByAndAggregate.cpp
     InValuesBitmap.cpp
+    InputMetadata.cpp
     NvidiaKernel.cpp
     QueryRewrite.cpp
     QueryTemplateGenerator.cpp
