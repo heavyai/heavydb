@@ -1,5 +1,6 @@
 #ifdef HAVE_CALCITE
 #include "RelAlgAbstractInterpreter.h"
+#include "RelAlgValidator.h"
 #include "CalciteDeserializerUtils.h"
 #include "RexVisitor.h"
 
@@ -521,6 +522,7 @@ class RaAbstractInterp {
     CHECK(!nodes_.empty());
     bind_inputs(nodes_);
     coalesce_nodes(nodes_);
+    CHECK(is_valid_rel_alg(nodes_.back()));
     return std::unique_ptr<const RelAlgNode>(nodes_.back());
   }
 
