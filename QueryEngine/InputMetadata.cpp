@@ -62,21 +62,21 @@ Fragmenter_Namespace::TableInfo synthesize_table_info(const ResultRows* rows) no
 
 }  // namespace
 
-std::vector<Fragmenter_Namespace::TableInfo> get_table_infos(const std::vector<ScanDescriptor>& scan_descs,
+std::vector<Fragmenter_Namespace::TableInfo> get_table_infos(const std::vector<InputDescriptor>& input_descs,
                                                              const Catalog_Namespace::Catalog& cat,
                                                              const TemporaryTables& temporary_tables) noexcept {
   std::vector<Fragmenter_Namespace::TableInfo> table_infos;
-  for (const auto& scan_desc : scan_descs) {
-    if (scan_desc.getSourceType() == InputSourceType::RESULT) {
-      const int temp_table_id = scan_desc.getTableId();
+  for (const auto& input_desc : input_descs) {
+    if (input_desc.getSourceType() == InputSourceType::RESULT) {
+      const int temp_table_id = input_desc.getTableId();
       CHECK_LT(temp_table_id, 0);
       const auto it = temporary_tables.find(temp_table_id);
       CHECK(it != temporary_tables.end());
       table_infos.push_back(synthesize_table_info(it->second));
       continue;
     }
-    CHECK(scan_desc.getSourceType() == InputSourceType::TABLE);
-    const auto table_descriptor = cat.getMetadataForTable(scan_desc.getTableId());
+    CHECK(input_desc.getSourceType() == InputSourceType::TABLE);
+    const auto table_descriptor = cat.getMetadataForTable(input_desc.getTableId());
     CHECK(table_descriptor);
     const auto fragmenter = table_descriptor->fragmenter;
     CHECK(fragmenter);

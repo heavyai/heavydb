@@ -6,7 +6,7 @@
 #include "InValuesBitmap.h"
 #include "JoinHashTable.h"
 #include "NvidiaKernel.h"
-#include "ScanDescriptors.h"
+#include "InputDescriptors.h"
 #include "../Analyzer/Analyzer.h"
 #include "../Chunk/Chunk.h"
 #include "../Fragmenter/Fragmenter.h"
@@ -232,8 +232,8 @@ class Executor {
                                RenderAllocatorMap* render_allocator_map);
 
   struct RelAlgExecutionUnit {
-    const std::vector<ScanDescriptor> scan_ids;
-    const std::list<ScanColDescriptor> scan_cols;
+    const std::vector<InputDescriptor> input_descs;
+    const std::list<InputColDescriptor> input_col_descs;
     const std::list<std::shared_ptr<Analyzer::Expr>> simple_quals;
     const std::list<std::shared_ptr<Analyzer::Expr>> quals;
     const std::list<std::shared_ptr<Analyzer::Expr>> join_quals;
@@ -378,7 +378,7 @@ class Executor {
                          const ExecutorDeviceType device_type,
                          const bool allow_multifrag,
                          const bool is_agg,
-                         const std::vector<ScanDescriptor>& scan_ids,
+                         const std::vector<InputDescriptor>& input_descs,
                          const std::map<int, const TableFragments*>& all_tables_fragments,
                          const std::list<std::shared_ptr<Analyzer::Expr>>& simple_quals,
                          const std::vector<uint64_t>& all_frag_row_offsets,
@@ -389,10 +389,10 @@ class Executor {
                          int& available_cpus);
 
   std::vector<std::vector<const int8_t*>> fetchChunks(const ExecutionDispatch&,
-                                                      const std::list<ScanColDescriptor>&,
+                                                      const std::list<InputColDescriptor>&,
                                                       const int device_id,
                                                       const Data_Namespace::MemoryLevel,
-                                                      const std::vector<ScanDescriptor>& scan_ids,
+                                                      const std::vector<InputDescriptor>& input_descs,
                                                       const std::map<int, const TableFragments*>&,
                                                       const std::map<int, std::vector<size_t>>& selected_fragments,
                                                       const Catalog_Namespace::Catalog&,
@@ -401,9 +401,9 @@ class Executor {
 
   void buildSelectedFragsMapping(std::vector<std::vector<size_t>>& selected_fragments_crossjoin,
                                  std::vector<size_t>& local_col_to_frag_pos,
-                                 const std::list<ScanColDescriptor>& col_global_ids,
+                                 const std::list<InputColDescriptor>& col_global_ids,
                                  const std::map<int, std::vector<size_t>>& selected_fragments,
-                                 const std::vector<ScanDescriptor>& scan_ids);
+                                 const std::vector<InputDescriptor>& input_descs);
 
   ResultRows executeResultPlan(const Planner::Result* result_plan,
                                const bool hoist_literals,
@@ -481,7 +481,7 @@ class Executor {
 
   void codegenInnerScanNextRow();
 
-  void allocateInnerScansIterators(const std::vector<ScanDescriptor>& scan_ids, const bool allow_loop_joins);
+  void allocateInnerScansIterators(const std::vector<InputDescriptor>& input_descs, const bool allow_loop_joins);
 
   JoinInfo chooseJoinType(const std::list<std::shared_ptr<Analyzer::Expr>>&,
                           const std::vector<Fragmenter_Namespace::TableInfo>&,
@@ -520,7 +520,7 @@ class Executor {
 
   llvm::Value* toDoublePrecision(llvm::Value* val);
 
-  void allocateLocalColumnIds(const std::list<ScanColDescriptor>& global_col_ids);
+  void allocateLocalColumnIds(const std::list<InputColDescriptor>& global_col_ids);
   int getLocalColumnId(const Analyzer::ColumnVar* col_var, const bool fetch_column) const;
 
   std::pair<bool, int64_t> skipFragment(const int table_id,
@@ -676,7 +676,7 @@ class Executor {
     std::unordered_map<int, std::vector<llvm::Value*>> fetch_cache_;
     std::vector<llvm::Value*> group_by_expr_cache_;
     std::vector<llvm::Value*> str_constants_;
-    std::unordered_map<ScanDescriptor, std::pair<llvm::Value*, llvm::Value*>> scan_to_iterator_;
+    std::unordered_map<InputDescriptor, std::pair<llvm::Value*, llvm::Value*>> scan_to_iterator_;
     std::vector<llvm::BasicBlock*> inner_scan_labels_;
     std::unordered_map<int, llvm::Value*> scan_idx_to_hash_pos_;
     std::vector<std::unique_ptr<const InValuesBitmap>> in_values_bitmaps_;
@@ -713,7 +713,7 @@ class Executor {
 
     std::vector<int64_t> init_agg_vals_;
     std::vector<Analyzer::Expr*> target_exprs_;
-    std::unordered_map<ScanColDescriptor, int> global_to_local_col_ids_;
+    std::unordered_map<InputColDescriptor, int> global_to_local_col_ids_;
     std::vector<int> local_to_global_col_ids_;
     std::unordered_set<int> columns_to_fetch_;
     std::unordered_set<int> columns_to_not_fetch_;

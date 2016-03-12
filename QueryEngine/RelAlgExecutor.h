@@ -15,7 +15,7 @@ class RelAlgExecutor {
   ExecutionResult executeProject(const RelProject*, const std::vector<TargetMetaInfo>&, const CompilationOptions&);
 
   ExecutionResult executeWorkUnit(const Executor::RelAlgExecutionUnit& rel_alg_exe_unit,
-                                  const std::vector<ScanDescriptor>& scan_ids,
+                                  const std::vector<InputDescriptor>& scan_ids,
                                   const std::vector<TargetMetaInfo>& targets_meta,
                                   const bool is_agg,
                                   const CompilationOptions& co);

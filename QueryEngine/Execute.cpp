@@ -115,11 +115,11 @@ const Planner::Join* get_join_child(const Planner::Plan* plan) {
   return join_plan ? join_plan : dynamic_cast<const Planner::Join*>(plan->get_child_plan());
 }
 
-void collect_scan_cols(std::list<ScanColDescriptor>& scan_cols,
-                       const Planner::Scan* scan_plan,
-                       const Catalog_Namespace::Catalog& cat,
-                       const bool is_join,
-                       const size_t scan_idx) {
+void collect_input_col_descs(std::list<InputColDescriptor>& input_col_descs,
+                             const Planner::Scan* scan_plan,
+                             const Catalog_Namespace::Catalog& cat,
+                             const bool is_join,
+                             const size_t scan_idx) {
   CHECK(scan_idx == 0 || is_join);
   CHECK(scan_plan);
   const int table_id = scan_plan->get_table_id();
@@ -128,13 +128,13 @@ void collect_scan_cols(std::list<ScanColDescriptor>& scan_cols,
     if (cd->isVirtualCol) {
       CHECK_EQ("rowid", cd->columnName);
     } else {
-      scan_cols.emplace_back(scan_col_id, table_id, scan_idx);
+      input_col_descs.emplace_back(scan_col_id, table_id, scan_idx);
     }
   }
 }
 
-void collect_scan_col_info(std::vector<ScanDescriptor>& scan_ids,
-                           std::list<ScanColDescriptor>& scan_cols,
+void collect_scan_col_info(std::vector<InputDescriptor>& input_descs,
+                           std::list<InputColDescriptor>& input_col_descs,
                            const Planner::Plan* plan,
                            const Catalog_Namespace::Catalog& cat) {
   const auto scan_plan = get_scan_child(plan);
@@ -146,14 +146,14 @@ void collect_scan_col_info(std::vector<ScanDescriptor>& scan_ids,
     CHECK(outer_plan);
     inner_plan = get_scan_child(join_plan->get_innerplan());
     CHECK(inner_plan);
-    scan_ids.emplace_back(outer_plan->get_table_id(), 0);
-    scan_ids.emplace_back(inner_plan->get_table_id(), 1);
-    collect_scan_cols(scan_cols, outer_plan, cat, true, 0);
-    collect_scan_cols(scan_cols, inner_plan, cat, true, 1);
+    input_descs.emplace_back(outer_plan->get_table_id(), 0);
+    input_descs.emplace_back(inner_plan->get_table_id(), 1);
+    collect_input_col_descs(input_col_descs, outer_plan, cat, true, 0);
+    collect_input_col_descs(input_col_descs, inner_plan, cat, true, 1);
   } else {
     CHECK(scan_plan);
-    scan_ids.emplace_back(scan_plan->get_table_id(), 0);
-    collect_scan_cols(scan_cols, scan_plan, cat, false, 0);
+    input_descs.emplace_back(scan_plan->get_table_id(), 0);
+    collect_input_col_descs(input_col_descs, scan_plan, cat, false, 0);
   }
 }
 
@@ -226,9 +226,9 @@ ResultRows Executor::executeSelectPlan(const Planner::Plan* plan,
     auto quals = scan_plan ? scan_plan->get_quals() : std::list<std::shared_ptr<Analyzer::Expr>>{};
     const auto agg_plan = dynamic_cast<const Planner::AggPlan*>(plan);
     auto groupby_exprs = agg_plan ? agg_plan->get_groupby_list() : std::list<std::shared_ptr<Analyzer::Expr>>{nullptr};
-    std::vector<ScanDescriptor> scan_ids;
-    std::list<ScanColDescriptor> scan_cols;
-    collect_scan_col_info(scan_ids, scan_cols, plan, cat);
+    std::vector<InputDescriptor> input_descs;
+    std::list<InputColDescriptor> input_col_descs;
+    collect_scan_col_info(input_descs, input_col_descs, plan, cat);
     const auto join_plan = get_join_child(plan);
     if (join_plan) {
       collect_quals_from_join(simple_quals, quals, join_plan);
@@ -237,7 +237,7 @@ ResultRows Executor::executeSelectPlan(const Planner::Plan* plan,
     CHECK(check_plan_sanity(plan));
     const bool is_agg = dynamic_cast<const Planner::AggPlan*>(plan);
     const auto order_entries = sort_plan_in ? sort_plan_in->get_order_entries() : std::list<Analyzer::OrderEntry>{};
-    const auto query_infos = get_table_infos(scan_ids, cat, TemporaryTables{});
+    const auto query_infos = get_table_infos(input_descs, cat, TemporaryTables{});
     if (query_infos.size() == 1) {
       QueryRewriter query_rewriter(plan, query_infos, this);
       query_rewriter.rewrite();
@@ -249,8 +249,8 @@ ResultRows Executor::executeSelectPlan(const Planner::Plan* plan,
                                   max_groups_buffer_entry_guess_limit,
                                   is_agg,
                                   query_infos,
-                                  {scan_ids,
-                                   scan_cols,
+                                  {input_descs,
+                                   input_col_descs,
                                    simple_quals,
                                    quals,
                                    join_quals,
@@ -274,8 +274,8 @@ ResultRows Executor::executeSelectPlan(const Planner::Plan* plan,
                            max_groups_buffer_entry_guess,
                            is_agg,
                            query_infos,
-                           {scan_ids,
-                            scan_cols,
+                           {input_descs,
+                            input_col_descs,
                             simple_quals,
                             quals,
                             join_quals,
@@ -1051,7 +1051,7 @@ llvm::Value* Executor::posArg(const Analyzer::Expr* expr) const {
       return hash_pos_it->second;
     }
     const auto inner_it =
-        cgen_state_->scan_to_iterator_.find(ScanDescriptor(col_var->get_table_id(), col_var->get_rte_idx()));
+        cgen_state_->scan_to_iterator_.find(InputDescriptor(col_var->get_table_id(), col_var->get_rte_idx()));
     if (inner_it != cgen_state_->scan_to_iterator_.end()) {
       CHECK(inner_it->second.first);
       CHECK(inner_it->second.first->getType()->isIntegerTy(64));
@@ -2468,9 +2468,9 @@ ResultRows Executor::executeResultPlan(const Planner::Result* result_plan,
   const auto scan_plan = dynamic_cast<const Planner::Scan*>(agg_plan->get_child_plan());
   auto simple_quals = scan_plan ? scan_plan->get_simple_quals() : std::list<std::shared_ptr<Analyzer::Expr>>{};
   auto quals = scan_plan ? scan_plan->get_quals() : std::list<std::shared_ptr<Analyzer::Expr>>{};
-  std::vector<ScanDescriptor> scan_ids;
-  std::list<ScanColDescriptor> scan_cols;
-  collect_scan_col_info(scan_ids, scan_cols, agg_plan, cat);
+  std::vector<InputDescriptor> input_descs;
+  std::list<InputColDescriptor> input_col_descs;
+  collect_scan_col_info(input_descs, input_col_descs, agg_plan, cat);
   const auto join_plan = get_join_child(agg_plan);
   if (join_plan) {
     collect_quals_from_join(simple_quals, quals, join_plan);
@@ -2478,7 +2478,7 @@ ResultRows Executor::executeResultPlan(const Planner::Result* result_plan,
   const auto join_quals = join_plan ? join_plan->get_quals() : std::list<std::shared_ptr<Analyzer::Expr>>{};
   CHECK(check_plan_sanity(agg_plan));
   const auto order_entries = sort_plan ? sort_plan->get_order_entries() : std::list<Analyzer::OrderEntry>{};
-  const auto query_infos = get_table_infos(scan_ids, cat, TemporaryTables{});
+  const auto query_infos = get_table_infos(input_descs, cat, TemporaryTables{});
   if (query_infos.size() == 1) {
     QueryRewriter query_rewriter(agg_plan, query_infos, this);
     query_rewriter.rewrite();
@@ -2487,8 +2487,8 @@ ResultRows Executor::executeResultPlan(const Planner::Result* result_plan,
                                      max_groups_buffer_entry_guess,
                                      true,
                                      query_infos,
-                                     {scan_ids,
-                                      scan_cols,
+                                     {input_descs,
+                                      input_col_descs,
                                       simple_quals,
                                       quals,
                                       join_quals,
@@ -2559,15 +2559,15 @@ ResultRows Executor::executeResultPlan(const Planner::Result* result_plan,
   std::tie(row_func, col_heads) = create_row_function(
       in_col_count, in_agg_count, hoist_literals, query_func, cgen_state_->module_, cgen_state_->context_);
   CHECK(row_func);
-  std::list<ScanColDescriptor> pseudo_scan_cols;
+  std::list<InputColDescriptor> pseudo_input_col_descs;
   for (int pseudo_col = 1; pseudo_col <= in_col_count; ++pseudo_col) {
-    pseudo_scan_cols.emplace_back(pseudo_col, 0, -1);
+    pseudo_input_col_descs.emplace_back(pseudo_col, 0, -1);
   }
   auto compilation_result =
       compilePlan(false,
                   {},
                   {{},
-                   pseudo_scan_cols,
+                   pseudo_input_col_descs,
                    result_plan->get_constquals(),
                    result_plan->get_quals(),
                    {},
@@ -2840,9 +2840,9 @@ ResultRows Executor::executeWorkUnit(int32_t* error_code,
   };
 
   std::map<int, const TableFragments*> all_tables_fragments;
-  CHECK_EQ(query_infos.size(), ra_exe_unit.scan_ids.size());
-  for (size_t table_idx = 0; table_idx < ra_exe_unit.scan_ids.size(); ++table_idx) {
-    all_tables_fragments[ra_exe_unit.scan_ids[table_idx].getTableId()] = &query_infos[table_idx].fragments;
+  CHECK_EQ(query_infos.size(), ra_exe_unit.input_descs.size());
+  for (size_t table_idx = 0; table_idx < ra_exe_unit.input_descs.size(); ++table_idx) {
+    all_tables_fragments[ra_exe_unit.input_descs[table_idx].getTableId()] = &query_infos[table_idx].fragments;
   }
   const QueryMemoryDescriptor& query_mem_desc = execution_dispatch.getQueryMemoryDescriptor();
   dispatchFragments(
@@ -2850,7 +2850,7 @@ ResultRows Executor::executeWorkUnit(int32_t* error_code,
       execution_dispatch.getDeviceType(),
       options.allow_multifrag && (ra_exe_unit.groupby_exprs.empty() || query_mem_desc.usesCachedContext()),
       is_agg,
-      ra_exe_unit.scan_ids,
+      ra_exe_unit.input_descs,
       all_tables_fragments,
       ra_exe_unit.simple_quals,
       execution_dispatch.getFragOffsets(),
@@ -2947,7 +2947,7 @@ void Executor::ExecutionDispatch::run(const ExecutorDeviceType chosen_device_typ
       chosen_device_type == ExecutorDeviceType::GPU ? Data_Namespace::GPU_LEVEL : Data_Namespace::CPU_LEVEL;
   std::vector<int64_t> num_rows;
   std::vector<uint64_t> dev_frag_row_offsets;
-  const int outer_table_id = ra_exe_unit_.scan_ids.front().getTableId();
+  const int outer_table_id = ra_exe_unit_.input_descs.front().getTableId();
   const auto outer_it = frag_ids.find(outer_table_id);
   CHECK(outer_it != frag_ids.end());
   for (const auto frag_id : outer_it->second) {
@@ -2956,9 +2956,9 @@ void Executor::ExecutionDispatch::run(const ExecutorDeviceType chosen_device_typ
       chosen_device_id = outer_fragment.deviceIds[static_cast<int>(memory_level)];
     }
     num_rows.push_back(outer_fragment.numTuples);
-    if (ra_exe_unit_.scan_ids.size() > 1) {
-      for (size_t table_idx = 1; table_idx < ra_exe_unit_.scan_ids.size(); ++table_idx) {
-        const int inner_table_id = ra_exe_unit_.scan_ids[table_idx].getTableId();
+    if (ra_exe_unit_.input_descs.size() > 1) {
+      for (size_t table_idx = 1; table_idx < ra_exe_unit_.input_descs.size(); ++table_idx) {
+        const int inner_table_id = ra_exe_unit_.input_descs[table_idx].getTableId();
         const auto inner_it = frag_ids.find(inner_table_id);
         if (inner_it->second.empty()) {
           num_rows.push_back(0);
@@ -2984,8 +2984,8 @@ void Executor::ExecutionDispatch::run(const ExecutorDeviceType chosen_device_typ
   std::vector<std::vector<const int8_t*>> col_buffers;
   try {
     std::map<int, const TableFragments*> all_tables_fragments;
-    for (size_t table_idx = 0; table_idx < ra_exe_unit_.scan_ids.size(); ++table_idx) {
-      int table_id = ra_exe_unit_.scan_ids[table_idx].getTableId();
+    for (size_t table_idx = 0; table_idx < ra_exe_unit_.input_descs.size(); ++table_idx) {
+      int table_id = ra_exe_unit_.input_descs[table_idx].getTableId();
       const auto& fragments = query_infos_[table_idx].fragments;
       auto it_ok = all_tables_fragments.insert(std::make_pair(table_id, &fragments));
       if (!it_ok.second) {
@@ -2995,10 +2995,10 @@ void Executor::ExecutionDispatch::run(const ExecutorDeviceType chosen_device_typ
       }
     }
     col_buffers = executor_->fetchChunks(*this,
-                                         ra_exe_unit_.scan_cols,
+                                         ra_exe_unit_.input_col_descs,
                                          chosen_device_id,
                                          memory_level,
-                                         ra_exe_unit_.scan_ids,
+                                         ra_exe_unit_.input_descs,
                                          all_tables_fragments,
                                          frag_ids,
                                          cat_,
@@ -3080,7 +3080,7 @@ void Executor::ExecutionDispatch::run(const ExecutorDeviceType chosen_device_typ
                                                &cat_.get_dataMgr(),
                                                chosen_device_id,
                                                start_rowid,
-                                               ra_exe_unit_.scan_ids.size(),
+                                               ra_exe_unit_.input_descs.size(),
                                                render_allocator_map_);
   } else {
     err = executor_->executePlanWithGroupBy(compilation_result,
@@ -3098,7 +3098,7 @@ void Executor::ExecutionDispatch::run(const ExecutorDeviceType chosen_device_typ
                                             ra_exe_unit_.scan_limit,
                                             co_.device_type_ == ExecutorDeviceType::Hybrid,
                                             start_rowid,
-                                            ra_exe_unit_.scan_ids.size(),
+                                            ra_exe_unit_.input_descs.size(),
                                             render_allocator_map_);
   }
   {
@@ -3273,7 +3273,7 @@ void Executor::dispatchFragments(const std::function<void(const ExecutorDeviceTy
                                  const ExecutorDeviceType device_type,
                                  const bool allow_multifrag,
                                  const bool is_agg,
-                                 const std::vector<ScanDescriptor>& scan_ids,
+                                 const std::vector<InputDescriptor>& input_descs,
                                  const std::map<int, const TableFragments*>& all_tables_fragments,
                                  const std::list<std::shared_ptr<Analyzer::Expr>>& simple_quals,
                                  const std::vector<uint64_t>& all_frag_row_offsets,
@@ -3285,8 +3285,8 @@ void Executor::dispatchFragments(const std::function<void(const ExecutorDeviceTy
   size_t frag_list_idx{0};
   std::vector<std::thread> query_threads;
   int64_t rowid_lookup_key{-1};
-  CHECK(!scan_ids.empty());
-  const int outer_table_id = scan_ids.front().getTableId();
+  CHECK(!input_descs.empty());
+  const int outer_table_id = input_descs.front().getTableId();
   auto it = all_tables_fragments.find(outer_table_id);
   CHECK(it != all_tables_fragments.end());
   const auto fragments = it->second;
@@ -3400,10 +3400,10 @@ const SQLTypeInfo get_column_type(const int col_id,
 
 std::vector<std::vector<const int8_t*>> Executor::fetchChunks(
     const ExecutionDispatch& execution_dispatch,
-    const std::list<ScanColDescriptor>& col_global_ids,
+    const std::list<InputColDescriptor>& col_global_ids,
     const int device_id,
     const Data_Namespace::MemoryLevel memory_level,
-    const std::vector<ScanDescriptor>& scan_ids,
+    const std::vector<InputDescriptor>& input_descs,
     const std::map<int, const TableFragments*>& all_tables_fragments,
     const std::map<int, std::vector<size_t>>& selected_fragments,
     const Catalog_Namespace::Catalog& cat,
@@ -3416,7 +3416,7 @@ std::vector<std::vector<const int8_t*>> Executor::fetchChunks(
   std::vector<std::vector<size_t>> selected_fragments_crossjoin;
   std::vector<size_t> local_col_to_frag_pos;
   buildSelectedFragsMapping(
-      selected_fragments_crossjoin, local_col_to_frag_pos, col_global_ids, selected_fragments, scan_ids);
+      selected_fragments_crossjoin, local_col_to_frag_pos, col_global_ids, selected_fragments, input_descs);
 
   CartesianProduct<std::vector<std::vector<size_t>>> frag_ids_crossjoin(selected_fragments_crossjoin);
 
@@ -3496,19 +3496,19 @@ std::vector<std::vector<const int8_t*>> Executor::fetchChunks(
 
 void Executor::buildSelectedFragsMapping(std::vector<std::vector<size_t>>& selected_fragments_crossjoin,
                                          std::vector<size_t>& local_col_to_frag_pos,
-                                         const std::list<ScanColDescriptor>& col_global_ids,
+                                         const std::list<InputColDescriptor>& col_global_ids,
                                          const std::map<int, std::vector<size_t>>& selected_fragments,
-                                         const std::vector<ScanDescriptor>& scan_ids) {
+                                         const std::vector<InputDescriptor>& input_descs) {
   local_col_to_frag_pos.resize(plan_state_->global_to_local_col_ids_.size());
   size_t frag_pos{0};
-  for (size_t scan_idx = 0; scan_idx < scan_ids.size(); ++scan_idx) {
-    const int table_id = scan_ids[scan_idx].getTableId();
+  for (size_t scan_idx = 0; scan_idx < input_descs.size(); ++scan_idx) {
+    const int table_id = input_descs[scan_idx].getTableId();
     const auto selected_fragments_it = selected_fragments.find(table_id);
     CHECK(selected_fragments_it != selected_fragments.end());
     selected_fragments_crossjoin.push_back(selected_fragments_it->second);
     for (const auto& col_id : col_global_ids) {
-      const auto& scan_desc = col_id.getScanDesc();
-      if (scan_desc.getTableId() != table_id || scan_desc.getScanIdx() != static_cast<int>(scan_idx)) {
+      const auto& input_desc = col_id.getScanDesc();
+      if (input_desc.getTableId() != table_id || input_desc.getNestLevel() != static_cast<int>(scan_idx)) {
         continue;
       }
       auto it = plan_state_->global_to_local_col_ids_.find(col_id);
@@ -4131,7 +4131,7 @@ Executor::CompilationResult Executor::compilePlan(const bool render_output,
   }
 
   std::vector<llvm::Value*> col_heads;
-  std::tie(cgen_state_->row_func_, col_heads) = create_row_function(ra_exe_unit.scan_cols.size(),
+  std::tie(cgen_state_->row_func_, col_heads) = create_row_function(ra_exe_unit.input_col_descs.size(),
                                                                     is_group_by ? 0 : agg_infos.size(),
                                                                     co.hoist_literals_,
                                                                     query_func,
@@ -4145,10 +4145,10 @@ Executor::CompilationResult Executor::compilePlan(const bool render_output,
   auto bb = llvm::BasicBlock::Create(cgen_state_->context_, "entry", cgen_state_->row_func_);
   cgen_state_->ir_builder_.SetInsertPoint(bb);
 
-  allocateInnerScansIterators(ra_exe_unit.scan_ids, eo.allow_loop_joins);
+  allocateInnerScansIterators(ra_exe_unit.input_descs, eo.allow_loop_joins);
 
   // generate the code for the filter
-  allocateLocalColumnIds(ra_exe_unit.scan_cols);
+  allocateLocalColumnIds(ra_exe_unit.input_col_descs);
 
   std::vector<Analyzer::Expr*> deferred_quals;
   llvm::Value* filter_lv = llvm::ConstantInt::get(llvm::IntegerType::getInt1Ty(cgen_state_->context_), true);
@@ -4310,8 +4310,9 @@ void Executor::codegenInnerScanNextRow() {
   }
 }
 
-void Executor::allocateInnerScansIterators(const std::vector<ScanDescriptor>& scan_ids, const bool allow_loop_joins) {
-  if (scan_ids.size() <= 1) {
+void Executor::allocateInnerScansIterators(const std::vector<InputDescriptor>& input_descs,
+                                           const bool allow_loop_joins) {
+  if (input_descs.size() <= 1) {
     return;
   }
   if (plan_state_->join_info_.join_impl_type_ == JoinImplType::HashOneToOne) {
@@ -4322,8 +4323,8 @@ void Executor::allocateInnerScansIterators(const std::vector<ScanDescriptor>& sc
   }
   CHECK(plan_state_->join_info_.join_impl_type_ == JoinImplType::Loop);
   auto preheader = cgen_state_->ir_builder_.GetInsertBlock();
-  for (auto it = scan_ids.begin() + 1; it != scan_ids.end(); ++it) {
-    const int inner_scan_idx = it - scan_ids.begin();
+  for (auto it = input_descs.begin() + 1; it != input_descs.end(); ++it) {
+    const int inner_scan_idx = it - input_descs.begin();
     auto inner_scan_pos_ptr = cgen_state_->ir_builder_.CreateAlloca(
         get_int_type(64, cgen_state_->context_), nullptr, "inner_scan_" + std::to_string(inner_scan_idx));
     cgen_state_->ir_builder_.CreateStore(ll_int(int64_t(0)), inner_scan_pos_ptr);
@@ -4977,7 +4978,7 @@ llvm::Value* Executor::groupByColumnCodegen(Analyzer::Expr* group_by_col,
   return group_key;
 }
 
-void Executor::allocateLocalColumnIds(const std::list<ScanColDescriptor>& global_col_ids) {
+void Executor::allocateLocalColumnIds(const std::list<InputColDescriptor>& global_col_ids) {
   for (const auto& col_id : global_col_ids) {
     const auto local_col_id = plan_state_->global_to_local_col_ids_.size();
     const auto it_ok = plan_state_->global_to_local_col_ids_.insert(std::make_pair(col_id, local_col_id));
@@ -4997,7 +4998,7 @@ int Executor::getLocalColumnId(const Analyzer::ColumnVar* col_var, const bool fe
     global_col_id = var->get_varno();
   }
   const int scan_idx = is_nested_ ? -1 : col_var->get_rte_idx();
-  ScanColDescriptor scan_col_desc(global_col_id, table_id, scan_idx);
+  InputColDescriptor scan_col_desc(global_col_id, table_id, scan_idx);
   const auto it = plan_state_->global_to_local_col_ids_.find(scan_col_desc);
   if (it == plan_state_->global_to_local_col_ids_.end()) {
     CHECK(false);
