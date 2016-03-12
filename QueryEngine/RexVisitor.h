@@ -20,10 +20,13 @@ class RexVisitor {
       return visitOperator(rex_operator);
     }
     CHECK(false);
-    return T{};
+    return defaultResult();
   }
-  virtual T visitInput(const RexInput*) const { return T{}; }
-  virtual T visitLiteral(const RexLiteral*) const { return T{}; }
+
+  virtual T visitInput(const RexInput*) const { return defaultResult(); }
+
+  virtual T visitLiteral(const RexLiteral*) const { return defaultResult(); }
+
   T visitOperator(const RexOperator* rex_operator) const {
     const size_t operand_count = rex_operator->size();
     T result = defaultResult();
@@ -37,6 +40,7 @@ class RexVisitor {
 
  protected:
   virtual T aggregateResult(const T& aggregate, const T& next_result) const { return next_result; }
+
   virtual T defaultResult() const { return T{}; }
 };
 
