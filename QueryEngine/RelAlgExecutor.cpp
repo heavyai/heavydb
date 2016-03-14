@@ -24,6 +24,13 @@ ExecutionResult RelAlgExecutor::executeRelAlgSeq(std::vector<RaExecutionDesc>& e
       in_metainfo = exec_desc.getResult().getTargetsMeta();
       continue;
     }
+    const auto filter = dynamic_cast<const RelFilter*>(body);
+    if (filter) {
+      exec_desc.setResult(executeFilter(filter, in_metainfo, co));
+      addTemporaryTable(-filter->getId(), &exec_desc.getResult().getRows());
+      in_metainfo = exec_desc.getResult().getTargetsMeta();
+      continue;
+    }
     CHECK(false);
   }
   CHECK(!exec_descs.empty());
@@ -67,34 +74,40 @@ std::unordered_set<unsigned> get_used_inputs(const RelProject* project) {
   return used_inputs;
 }
 
+int table_id_from_ra(const RelAlgNode* ra_node) {
+  const auto scan_ra = dynamic_cast<const RelScan*>(ra_node);
+  if (scan_ra) {
+    const auto td = scan_ra->getTableDescriptor();
+    CHECK(td);
+    return td->tableId;
+  }
+  return -ra_node->getId();
+}
+
+template <class RA>
+std::pair<std::vector<InputDescriptor>, std::list<InputColDescriptor>>
+get_input_desc_impl(const RA* ra_node, const int rte_idx, const std::unordered_set<unsigned>& used_inputs) {
+  std::vector<InputDescriptor> input_descs;
+  std::list<InputColDescriptor> input_col_descs;
+  {
+    CHECK_EQ(size_t(1), ra_node->inputCount());
+    const auto input_ra = ra_node->getInput(0);
+    const int table_id = table_id_from_ra(input_ra);
+    input_descs.emplace_back(table_id, rte_idx);
+    const auto scan_ra = dynamic_cast<const RelScan*>(input_ra);
+    for (const auto used_input : used_inputs) {
+      // Physical columns from a scan node are numbered from 1 in our system.
+      input_col_descs.emplace_back(scan_ra ? used_input + 1 : used_input, table_id, rte_idx);
+    }
+  }
+  return {input_descs, input_col_descs};
+}
+
 template <class RA>
 std::pair<std::vector<InputDescriptor>, std::list<InputColDescriptor>> get_input_desc(const RA* ra_node,
                                                                                       const int rte_idx) {
   const auto used_inputs = get_used_inputs(ra_node);
-  std::vector<InputDescriptor> input_descs;
-  std::list<InputColDescriptor> input_cols;
-  {
-    CHECK_EQ(size_t(1), ra_node->inputCount());
-    const auto input_ra = ra_node->getInput(0);
-    const auto scan_ra = dynamic_cast<const RelScan*>(input_ra);
-    if (scan_ra) {
-      const auto td = scan_ra->getTableDescriptor();
-      CHECK(td);
-      const int table_id = td->tableId;
-      input_descs.emplace_back(table_id, rte_idx);
-      for (const auto used_input : used_inputs) {
-        // Physical columns from a scan node are numbered from 1 in our system.
-        input_cols.emplace_back(used_input + 1, table_id, rte_idx);
-      }
-    } else {
-      const int table_id = -input_ra->getId();
-      input_descs.emplace_back(table_id, rte_idx);
-      for (const auto used_input : used_inputs) {
-        input_cols.emplace_back(used_input, table_id, rte_idx);
-      }
-    }
-  }
-  return {input_descs, input_cols};
+  return get_input_desc_impl(ra_node, rte_idx, used_inputs);
 }
 
 size_t get_scalar_sources_size(const RelCompound* compound) {
@@ -201,8 +214,8 @@ ExecutionResult RelAlgExecutor::executeCompound(const RelCompound* compound,
                                                 const CompilationOptions& co) {
   int rte_idx = 0;  // TODO(alex)
   std::vector<InputDescriptor> input_descs;
-  std::list<InputColDescriptor> input_cols;
-  std::tie(input_descs, input_cols) = get_input_desc(compound, rte_idx);
+  std::list<InputColDescriptor> input_col_descs;
+  std::tie(input_descs, input_col_descs) = get_input_desc(compound, rte_idx);
   const auto scalar_sources = translate_scalar_sources(compound, cat_, in_metainfo, rte_idx);
   const auto groupby_exprs = translate_groupby_exprs(compound, scalar_sources);
   const auto quals = translate_quals(compound, cat_, in_metainfo, rte_idx);
@@ -210,7 +223,7 @@ ExecutionResult RelAlgExecutor::executeCompound(const RelCompound* compound,
   const auto target_exprs = translate_targets(target_exprs_owned, scalar_sources, compound, cat_, in_metainfo, rte_idx);
   CHECK_EQ(compound->size(), target_exprs.size());
   Executor::RelAlgExecutionUnit rel_alg_exe_unit{
-      input_descs, input_cols, {}, quals, {}, groupby_exprs, target_exprs, {}, 0};
+      input_descs, input_col_descs, {}, quals, {}, groupby_exprs, target_exprs, {}, 0};
   const auto targets_meta = get_targets_meta(compound, target_exprs);
   return executeWorkUnit(rel_alg_exe_unit, input_descs, targets_meta, compound->isAggregate(), co);
 }
@@ -220,13 +233,55 @@ ExecutionResult RelAlgExecutor::executeProject(const RelProject* project,
                                                const CompilationOptions& co) {
   int rte_idx = 0;  // TODO(alex)
   std::vector<InputDescriptor> input_descs;
-  std::list<InputColDescriptor> input_cols;
-  std::tie(input_descs, input_cols) = get_input_desc(project, rte_idx);
+  std::list<InputColDescriptor> input_col_descs;
+  std::tie(input_descs, input_col_descs) = get_input_desc(project, rte_idx);
   const auto target_exprs_owned = translate_scalar_sources(project, cat_, in_metainfo, rte_idx);
   const auto target_exprs = get_exprs_not_owned(target_exprs_owned);
-  Executor::RelAlgExecutionUnit rel_alg_exe_unit{input_descs, input_cols, {}, {}, {}, {nullptr}, target_exprs, {}, 0};
+  Executor::RelAlgExecutionUnit rel_alg_exe_unit{
+      input_descs, input_col_descs, {}, {}, {}, {nullptr}, target_exprs, {}, 0};
   const auto targets_meta = get_targets_meta(project, target_exprs);
   return executeWorkUnit(rel_alg_exe_unit, input_descs, targets_meta, false, co);
+}
+
+namespace {
+
+std::vector<std::shared_ptr<Analyzer::Expr>> synthesize_inputs(const RelAlgNode* ra_node,
+                                                               const std::vector<TargetMetaInfo>& in_metainfo,
+                                                               const int rte_idx) {
+  CHECK_EQ(size_t(1), ra_node->inputCount());
+  const auto input = ra_node->getInput(0);
+  const int table_id = table_id_from_ra(input);
+  std::vector<std::shared_ptr<Analyzer::Expr>> inputs;
+  const auto scan_ra = dynamic_cast<const RelScan*>(input);
+  int input_idx = 0;
+  for (const auto& input_meta : in_metainfo) {
+    inputs.push_back(std::make_shared<Analyzer::ColumnVar>(
+        input_meta.get_type_info(), table_id, scan_ra ? input_idx + 1 : input_idx, rte_idx));
+    ++input_idx;
+  }
+  return inputs;
+}
+
+}  // namespace
+
+ExecutionResult RelAlgExecutor::executeFilter(const RelFilter* filter,
+                                              const std::vector<TargetMetaInfo>& in_metainfo,
+                                              const CompilationOptions& co) {
+  int rte_idx = 0;  // TODO(alex)
+  CHECK_EQ(size_t(1), filter->inputCount());
+  std::vector<InputDescriptor> input_descs;
+  std::list<InputColDescriptor> input_col_descs;
+  std::unordered_set<unsigned> used_inputs;
+  for (size_t i = 0; i < in_metainfo.size(); ++i) {
+    used_inputs.insert(i);
+  }
+  std::tie(input_descs, input_col_descs) = get_input_desc_impl(filter, rte_idx, used_inputs);
+  const auto qual = translate_scalar_rex(filter->getCondition(), rte_idx, cat_, in_metainfo);
+  const auto target_exprs_owned = synthesize_inputs(filter, in_metainfo, rte_idx);
+  const auto target_exprs = get_exprs_not_owned(target_exprs_owned);
+  Executor::RelAlgExecutionUnit rel_alg_exe_unit{
+      input_descs, input_col_descs, {}, {qual}, {}, {nullptr}, target_exprs, {}, 0};
+  return executeWorkUnit(rel_alg_exe_unit, input_descs, in_metainfo, false, co);
 }
 
 ExecutionResult RelAlgExecutor::executeWorkUnit(const Executor::RelAlgExecutionUnit& rel_alg_exe_unit,
