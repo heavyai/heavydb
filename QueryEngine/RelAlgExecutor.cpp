@@ -89,9 +89,17 @@ std::pair<std::vector<InputDescriptor>, std::list<InputColDescriptor>>
 get_input_desc_impl(const RA* ra_node, const int rte_idx, const std::unordered_set<unsigned>& used_inputs) {
   std::vector<InputDescriptor> input_descs;
   std::list<InputColDescriptor> input_col_descs;
-  {
-    CHECK_EQ(size_t(1), ra_node->inputCount());
-    const auto input_ra = ra_node->getInput(0);
+  CHECK_EQ(size_t(1), ra_node->inputCount());
+  const auto input_ra = ra_node->getInput(0);
+  const auto join_input = dynamic_cast<const RelJoin*>(input_ra);
+  if (join_input) {
+    CHECK_EQ(size_t(2), join_input->inputCount());
+    const auto outer_ra = join_input->getInput(0);
+    input_descs.emplace_back(table_id_from_ra(outer_ra), 0);
+    const auto inner_ra = join_input->getInput(1);
+    input_descs.emplace_back(table_id_from_ra(inner_ra), 1);
+    CHECK(false);
+  } else {
     const int table_id = table_id_from_ra(input_ra);
     input_descs.emplace_back(table_id, rte_idx);
     const auto scan_ra = dynamic_cast<const RelScan*>(input_ra);
