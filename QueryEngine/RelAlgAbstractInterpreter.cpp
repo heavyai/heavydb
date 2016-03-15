@@ -692,10 +692,13 @@ std::shared_ptr<Analyzer::Expr> translate_literal(const RexLiteral* rex_literal)
 }
 
 std::shared_ptr<Analyzer::Expr> translate_input(const RexInput* rex_input,
-                                                const int rte_idx,
+                                                const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
                                                 const Catalog_Namespace::Catalog& cat,
                                                 const std::vector<TargetMetaInfo>& in_metainfo) {
   const auto source = rex_input->getSourceNode();
+  const auto it_rte_idx = input_to_nest_level.find(source);
+  CHECK(it_rte_idx != input_to_nest_level.end());
+  const int rte_idx = it_rte_idx->second;
   const auto scan_source = dynamic_cast<const RelScan*>(source);
   if (scan_source) {
     // We're at leaf (scan) level and not supposed to have input metadata,
@@ -722,11 +725,11 @@ std::shared_ptr<Analyzer::Expr> remove_cast(const std::shared_ptr<Analyzer::Expr
 }
 
 std::shared_ptr<Analyzer::Expr> translate_uoper(const RexOperator* rex_operator,
-                                                const int rte_idx,
+                                                const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
                                                 const Catalog_Namespace::Catalog& cat,
                                                 const std::vector<TargetMetaInfo>& in_metainfo) {
   CHECK_EQ(size_t(1), rex_operator->size());
-  const auto operand_expr = translate_scalar_rex(rex_operator->getOperand(0), rte_idx, cat, in_metainfo);
+  const auto operand_expr = translate_scalar_rex(rex_operator->getOperand(0), input_to_nest_level, cat, in_metainfo);
   const auto sql_op = rex_operator->getOperator();
   switch (sql_op) {
     case kCAST: {
@@ -762,17 +765,17 @@ std::shared_ptr<Analyzer::Expr> translate_uoper(const RexOperator* rex_operator,
 }
 
 std::shared_ptr<Analyzer::Expr> translate_oper(const RexOperator* rex_operator,
-                                               const int rte_idx,
+                                               const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
                                                const Catalog_Namespace::Catalog& cat,
                                                const std::vector<TargetMetaInfo>& in_metainfo) {
   CHECK_GT(rex_operator->size(), size_t(0));
   if (rex_operator->size() == 1) {
-    return translate_uoper(rex_operator, rte_idx, cat, in_metainfo);
+    return translate_uoper(rex_operator, input_to_nest_level, cat, in_metainfo);
   }
   const auto sql_op = rex_operator->getOperator();
-  auto lhs = translate_scalar_rex(rex_operator->getOperand(0), rte_idx, cat, in_metainfo);
+  auto lhs = translate_scalar_rex(rex_operator->getOperand(0), input_to_nest_level, cat, in_metainfo);
   for (size_t i = 1; i < rex_operator->size(); ++i) {
-    auto rhs = translate_scalar_rex(rex_operator->getOperand(i), rte_idx, cat, in_metainfo);
+    auto rhs = translate_scalar_rex(rex_operator->getOperand(i), input_to_nest_level, cat, in_metainfo);
     if (sql_op == kEQ || sql_op == kNE) {
       lhs = remove_cast(lhs);
       rhs = remove_cast(rhs);
@@ -784,13 +787,14 @@ std::shared_ptr<Analyzer::Expr> translate_oper(const RexOperator* rex_operator,
 
 }  // namespace
 
-std::shared_ptr<Analyzer::Expr> translate_scalar_rex(const RexScalar* rex,
-                                                     const int rte_idx,
-                                                     const Catalog_Namespace::Catalog& cat,
-                                                     const std::vector<TargetMetaInfo>& in_metainfo) {
+std::shared_ptr<Analyzer::Expr> translate_scalar_rex(
+    const RexScalar* rex,
+    const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
+    const Catalog_Namespace::Catalog& cat,
+    const std::vector<TargetMetaInfo>& in_metainfo) {
   const auto rex_input = dynamic_cast<const RexInput*>(rex);
   if (rex_input) {
-    return translate_input(rex_input, rte_idx, cat, in_metainfo);
+    return translate_input(rex_input, input_to_nest_level, cat, in_metainfo);
   }
   const auto rex_literal = dynamic_cast<const RexLiteral*>(rex);
   if (rex_literal) {
@@ -798,7 +802,7 @@ std::shared_ptr<Analyzer::Expr> translate_scalar_rex(const RexScalar* rex,
   }
   const auto rex_operator = dynamic_cast<const RexOperator*>(rex);
   if (rex_operator) {
-    return translate_oper(rex_operator, rte_idx, cat, in_metainfo);
+    return translate_oper(rex_operator, input_to_nest_level, cat, in_metainfo);
   }
   CHECK(false);
   return nullptr;
@@ -806,7 +810,7 @@ std::shared_ptr<Analyzer::Expr> translate_scalar_rex(const RexScalar* rex,
 
 std::shared_ptr<Analyzer::Expr> translate_aggregate_rex(
     const RexAgg* rex,
-    const int rte_idx,
+    const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
     const Catalog_Namespace::Catalog& cat,
     const std::vector<std::shared_ptr<Analyzer::Expr>>& scalar_sources) {
   const auto agg_kind = rex->getKind();

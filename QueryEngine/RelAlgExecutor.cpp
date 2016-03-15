@@ -86,25 +86,40 @@ int table_id_from_ra(const RelAlgNode* ra_node) {
   return -ra_node->getId();
 }
 
-template <class RA>
-std::pair<std::vector<InputDescriptor>, std::list<InputColDescriptor>>
-get_input_desc_impl(const RA* ra_node, const int rte_idx, const std::unordered_set<const RexInput*>& used_inputs) {
-  std::vector<InputDescriptor> input_descs;
-  std::unordered_set<InputColDescriptor> input_col_descs_unique;
+const RelAlgNode* get_data_sink(const RelAlgNode* ra_node) {
   CHECK_EQ(size_t(1), ra_node->inputCount());
   const auto join_input = dynamic_cast<const RelJoin*>(ra_node->getInput(0));
   // If the input node is a join, the data is sourced from it instead of the initial node.
   const auto data_sink_node =
       join_input ? static_cast<const RelAlgNode*>(join_input) : static_cast<const RelAlgNode*>(ra_node);
   CHECK(1 <= data_sink_node->inputCount() && data_sink_node->inputCount() <= 2);
+  return data_sink_node;
+}
+
+std::unordered_map<const RelAlgNode*, int> get_input_nest_levels(const RelAlgNode* ra_node) {
+  const auto data_sink_node = get_data_sink(ra_node);
   std::unordered_map<const RelAlgNode*, int> input_to_nest_level;
   for (size_t nest_level = 0; nest_level < data_sink_node->inputCount(); ++nest_level) {
     const auto input_ra = data_sink_node->getInput(nest_level);
     const auto it_ok = input_to_nest_level.emplace(input_ra, nest_level);
     CHECK(it_ok.second);
+  }
+  return input_to_nest_level;
+}
+
+template <class RA>
+std::pair<std::vector<InputDescriptor>, std::list<InputColDescriptor>> get_input_desc_impl(
+    const RA* ra_node,
+    const std::unordered_set<const RexInput*>& used_inputs,
+    const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level) {
+  std::vector<InputDescriptor> input_descs;
+  const auto data_sink_node = get_data_sink(ra_node);
+  for (size_t nest_level = 0; nest_level < data_sink_node->inputCount(); ++nest_level) {
+    const auto input_ra = data_sink_node->getInput(nest_level);
     const int table_id = table_id_from_ra(input_ra);
     input_descs.emplace_back(table_id, nest_level);
   }
+  std::unordered_set<InputColDescriptor> input_col_descs_unique;
   for (const auto used_input : used_inputs) {
     const auto input_ra = used_input->getSourceNode();
     const auto scan_ra = dynamic_cast<const RelScan*>(input_ra);
@@ -118,10 +133,11 @@ get_input_desc_impl(const RA* ra_node, const int rte_idx, const std::unordered_s
 }
 
 template <class RA>
-std::pair<std::vector<InputDescriptor>, std::list<InputColDescriptor>> get_input_desc(const RA* ra_node,
-                                                                                      const int rte_idx) {
+std::pair<std::vector<InputDescriptor>, std::list<InputColDescriptor>> get_input_desc(
+    const RA* ra_node,
+    const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level) {
   const auto used_inputs = get_used_inputs(ra_node);
-  return get_input_desc_impl(ra_node, rte_idx, used_inputs);
+  return get_input_desc_impl(ra_node, used_inputs, input_to_nest_level);
 }
 
 size_t get_scalar_sources_size(const RelCompound* compound) {
@@ -141,13 +157,14 @@ const RexScalar* scalar_at(const size_t i, const RelProject* project) {
 }
 
 template <class RA>
-std::vector<std::shared_ptr<Analyzer::Expr>> translate_scalar_sources(const RA* ra_node,
-                                                                      const Catalog_Namespace::Catalog& cat,
-                                                                      const std::vector<TargetMetaInfo>& in_metainfo,
-                                                                      const int rte_idx) {
+std::vector<std::shared_ptr<Analyzer::Expr>> translate_scalar_sources(
+    const RA* ra_node,
+    const Catalog_Namespace::Catalog& cat,
+    const std::vector<TargetMetaInfo>& in_metainfo,
+    const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level) {
   std::vector<std::shared_ptr<Analyzer::Expr>> scalar_sources;
   for (size_t i = 0; i < get_scalar_sources_size(ra_node); ++i) {
-    scalar_sources.push_back(translate_scalar_rex(scalar_at(i, ra_node), rte_idx, cat, in_metainfo));
+    scalar_sources.push_back(translate_scalar_rex(scalar_at(i, ra_node), input_to_nest_level, cat, in_metainfo));
   }
   return scalar_sources;
 }
@@ -165,12 +182,14 @@ std::list<std::shared_ptr<Analyzer::Expr>> translate_groupby_exprs(
   return groupby_exprs;
 }
 
-std::list<std::shared_ptr<Analyzer::Expr>> translate_quals(const RelCompound* compound,
-                                                           const Catalog_Namespace::Catalog& cat,
-                                                           const std::vector<TargetMetaInfo>& in_metainfo,
-                                                           const int rte_idx) {
+std::list<std::shared_ptr<Analyzer::Expr>> translate_quals(
+    const RelCompound* compound,
+    const Catalog_Namespace::Catalog& cat,
+    const std::vector<TargetMetaInfo>& in_metainfo,
+    const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level) {
   const auto filter_rex = compound->getFilterExpr();
-  const auto filter_expr = filter_rex ? translate_scalar_rex(filter_rex, rte_idx, cat, in_metainfo) : nullptr;
+  const auto filter_expr =
+      filter_rex ? translate_scalar_rex(filter_rex, input_to_nest_level, cat, in_metainfo) : nullptr;
   std::list<std::shared_ptr<Analyzer::Expr>> quals;
   if (filter_expr) {
     quals.push_back(filter_expr);
@@ -183,17 +202,17 @@ std::vector<Analyzer::Expr*> translate_targets(std::vector<std::shared_ptr<Analy
                                                const RelCompound* compound,
                                                const Catalog_Namespace::Catalog& cat,
                                                const std::vector<TargetMetaInfo>& in_metainfo,
-                                               const int rte_idx) {
+                                               const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level) {
   std::vector<Analyzer::Expr*> target_exprs;
   for (size_t i = 0; i < compound->size(); ++i) {
     const auto target_rex = compound->getTargetExpr(i);
     const auto target_rex_agg = dynamic_cast<const RexAgg*>(target_rex);
     std::shared_ptr<Analyzer::Expr> target_expr;
     if (target_rex_agg) {
-      target_expr = translate_aggregate_rex(target_rex_agg, rte_idx, cat, scalar_sources);
+      target_expr = translate_aggregate_rex(target_rex_agg, input_to_nest_level, cat, scalar_sources);
     } else {
       const auto target_rex_scalar = dynamic_cast<const RexScalar*>(target_rex);
-      target_expr = translate_scalar_rex(target_rex_scalar, rte_idx, cat, in_metainfo);
+      target_expr = translate_scalar_rex(target_rex_scalar, input_to_nest_level, cat, in_metainfo);
     }
     CHECK(target_expr);
     target_exprs_owned.push_back(target_expr);
@@ -226,15 +245,16 @@ std::vector<TargetMetaInfo> get_targets_meta(const RA* ra_node, const std::vecto
 ExecutionResult RelAlgExecutor::executeCompound(const RelCompound* compound,
                                                 const std::vector<TargetMetaInfo>& in_metainfo,
                                                 const CompilationOptions& co) {
-  int rte_idx = 0;  // TODO(alex)
   std::vector<InputDescriptor> input_descs;
   std::list<InputColDescriptor> input_col_descs;
-  std::tie(input_descs, input_col_descs) = get_input_desc(compound, rte_idx);
-  const auto scalar_sources = translate_scalar_sources(compound, cat_, in_metainfo, rte_idx);
+  const auto input_to_nest_level = get_input_nest_levels(compound);
+  std::tie(input_descs, input_col_descs) = get_input_desc(compound, input_to_nest_level);
+  const auto scalar_sources = translate_scalar_sources(compound, cat_, in_metainfo, input_to_nest_level);
   const auto groupby_exprs = translate_groupby_exprs(compound, scalar_sources);
-  const auto quals = translate_quals(compound, cat_, in_metainfo, rte_idx);
+  const auto quals = translate_quals(compound, cat_, in_metainfo, input_to_nest_level);
   std::vector<std::shared_ptr<Analyzer::Expr>> target_exprs_owned;
-  const auto target_exprs = translate_targets(target_exprs_owned, scalar_sources, compound, cat_, in_metainfo, rte_idx);
+  const auto target_exprs =
+      translate_targets(target_exprs_owned, scalar_sources, compound, cat_, in_metainfo, input_to_nest_level);
   CHECK_EQ(compound->size(), target_exprs.size());
   Executor::RelAlgExecutionUnit rel_alg_exe_unit{
       input_descs, input_col_descs, {}, quals, {}, groupby_exprs, target_exprs, {}, 0};
@@ -245,11 +265,11 @@ ExecutionResult RelAlgExecutor::executeCompound(const RelCompound* compound,
 ExecutionResult RelAlgExecutor::executeProject(const RelProject* project,
                                                const std::vector<TargetMetaInfo>& in_metainfo,
                                                const CompilationOptions& co) {
-  int rte_idx = 0;  // TODO(alex)
   std::vector<InputDescriptor> input_descs;
   std::list<InputColDescriptor> input_col_descs;
-  std::tie(input_descs, input_col_descs) = get_input_desc(project, rte_idx);
-  const auto target_exprs_owned = translate_scalar_sources(project, cat_, in_metainfo, rte_idx);
+  const auto input_to_nest_level = get_input_nest_levels(project);
+  std::tie(input_descs, input_col_descs) = get_input_desc(project, input_to_nest_level);
+  const auto target_exprs_owned = translate_scalar_sources(project, cat_, in_metainfo, input_to_nest_level);
   const auto target_exprs = get_exprs_not_owned(target_exprs_owned);
   Executor::RelAlgExecutionUnit rel_alg_exe_unit{
       input_descs, input_col_descs, {}, {}, {}, {nullptr}, target_exprs, {}, 0};
@@ -259,11 +279,15 @@ ExecutionResult RelAlgExecutor::executeProject(const RelProject* project,
 
 namespace {
 
-std::vector<std::shared_ptr<Analyzer::Expr>> synthesize_inputs(const RelAlgNode* ra_node,
-                                                               const std::vector<TargetMetaInfo>& in_metainfo,
-                                                               const int rte_idx) {
+std::vector<std::shared_ptr<Analyzer::Expr>> synthesize_inputs(
+    const RelAlgNode* ra_node,
+    const std::vector<TargetMetaInfo>& in_metainfo,
+    const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level) {
   CHECK_EQ(size_t(1), ra_node->inputCount());
   const auto input = ra_node->getInput(0);
+  const auto it_rte_idx = input_to_nest_level.find(input);
+  CHECK(it_rte_idx != input_to_nest_level.end());
+  const int rte_idx = it_rte_idx->second;
   const int table_id = table_id_from_ra(input);
   std::vector<std::shared_ptr<Analyzer::Expr>> inputs;
   const auto scan_ra = dynamic_cast<const RelScan*>(input);
@@ -281,7 +305,6 @@ std::vector<std::shared_ptr<Analyzer::Expr>> synthesize_inputs(const RelAlgNode*
 ExecutionResult RelAlgExecutor::executeFilter(const RelFilter* filter,
                                               const std::vector<TargetMetaInfo>& in_metainfo,
                                               const CompilationOptions& co) {
-  int rte_idx = 0;  // TODO(alex)
   CHECK_EQ(size_t(1), filter->inputCount());
   std::vector<InputDescriptor> input_descs;
   std::list<InputColDescriptor> input_col_descs;
@@ -292,9 +315,10 @@ ExecutionResult RelAlgExecutor::executeFilter(const RelFilter* filter,
     used_inputs_owned.emplace_back(synthesized_used_input);
     used_inputs.insert(synthesized_used_input);
   }
-  std::tie(input_descs, input_col_descs) = get_input_desc_impl(filter, rte_idx, used_inputs);
-  const auto qual = translate_scalar_rex(filter->getCondition(), rte_idx, cat_, in_metainfo);
-  const auto target_exprs_owned = synthesize_inputs(filter, in_metainfo, rte_idx);
+  const auto input_to_nest_level = get_input_nest_levels(filter);
+  std::tie(input_descs, input_col_descs) = get_input_desc_impl(filter, used_inputs, input_to_nest_level);
+  const auto qual = translate_scalar_rex(filter->getCondition(), input_to_nest_level, cat_, in_metainfo);
+  const auto target_exprs_owned = synthesize_inputs(filter, in_metainfo, input_to_nest_level);
   const auto target_exprs = get_exprs_not_owned(target_exprs_owned);
   Executor::RelAlgExecutionUnit rel_alg_exe_unit{
       input_descs, input_col_descs, {}, {qual}, {}, {nullptr}, target_exprs, {}, 0};

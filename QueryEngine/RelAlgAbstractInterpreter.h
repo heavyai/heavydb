@@ -8,6 +8,7 @@
 #include <rapidjson/document.h>
 
 #include <memory>
+#include <unordered_map>
 
 class Rex {
  public:
@@ -572,14 +573,15 @@ class Expr;
 }  // namespace Analyzer
 
 // For scan inputs, in_metainfo is empty.
-std::shared_ptr<Analyzer::Expr> translate_scalar_rex(const RexScalar* rex,
-                                                     const int rte_idx,
-                                                     const Catalog_Namespace::Catalog& cat,
-                                                     const std::vector<TargetMetaInfo>& in_metainfo);
+std::shared_ptr<Analyzer::Expr> translate_scalar_rex(
+    const RexScalar* rex,
+    const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
+    const Catalog_Namespace::Catalog& cat,
+    const std::vector<TargetMetaInfo>& in_metainfo);
 
 std::shared_ptr<Analyzer::Expr> translate_aggregate_rex(
     const RexAgg* rex,
-    const int rte_idx,
+    const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
     const Catalog_Namespace::Catalog& cat,
     const std::vector<std::shared_ptr<Analyzer::Expr>>& scalar_sources);
 
