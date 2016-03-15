@@ -35,49 +35,37 @@ class RexRebindInputsVisitor : public RexVisitor<void*> {
 
 }  // namespace
 
-bool RelProject::replaceInput(const RelAlgNode* old_input, const RelAlgNode* input) {
-  if (RelAlgNode::replaceInput(old_input, input)) {
-    RexRebindInputsVisitor rebind_inputs(old_input, input);
-    for (const auto& scalar_expr : scalar_exprs_) {
-      rebind_inputs.visit(scalar_expr.get());
-    }
-    return true;
+void RelProject::replaceInput(const RelAlgNode* old_input, const RelAlgNode* input) {
+  RelAlgNode::replaceInput(old_input, input);
+  RexRebindInputsVisitor rebind_inputs(old_input, input);
+  for (const auto& scalar_expr : scalar_exprs_) {
+    rebind_inputs.visit(scalar_expr.get());
   }
-  return false;
 }
 
-bool RelJoin::replaceInput(const RelAlgNode* old_input, const RelAlgNode* input) {
-  if (RelAlgNode::replaceInput(old_input, input)) {
-    RexRebindInputsVisitor rebind_inputs(old_input, input);
-    if (condition_) {
-      rebind_inputs.visit(condition_.get());
-    }
-    return true;
+void RelJoin::replaceInput(const RelAlgNode* old_input, const RelAlgNode* input) {
+  RelAlgNode::replaceInput(old_input, input);
+  RexRebindInputsVisitor rebind_inputs(old_input, input);
+  if (condition_) {
+    rebind_inputs.visit(condition_.get());
   }
-  return false;
 }
 
-bool RelFilter::replaceInput(const RelAlgNode* old_input, const RelAlgNode* input) {
-  if (RelAlgNode::replaceInput(old_input, input)) {
-    RexRebindInputsVisitor rebind_inputs(old_input, input);
-    rebind_inputs.visit(filter_.get());
-    return true;
-  }
-  return false;
+void RelFilter::replaceInput(const RelAlgNode* old_input, const RelAlgNode* input) {
+  RelAlgNode::replaceInput(old_input, input);
+  RexRebindInputsVisitor rebind_inputs(old_input, input);
+  rebind_inputs.visit(filter_.get());
 }
 
-bool RelCompound::replaceInput(const RelAlgNode* old_input, const RelAlgNode* input) {
-  if (RelAlgNode::replaceInput(old_input, input)) {
-    RexRebindInputsVisitor rebind_inputs(old_input, input);
-    for (const auto& scalar_source : scalar_sources_) {
-      rebind_inputs.visit(scalar_source.get());
-    }
-    if (filter_expr_) {
-      rebind_inputs.visit(filter_expr_.get());
-    }
-    return true;
+void RelCompound::replaceInput(const RelAlgNode* old_input, const RelAlgNode* input) {
+  RelAlgNode::replaceInput(old_input, input);
+  RexRebindInputsVisitor rebind_inputs(old_input, input);
+  for (const auto& scalar_source : scalar_sources_) {
+    rebind_inputs.visit(scalar_source.get());
   }
-  return false;
+  if (filter_expr_) {
+    rebind_inputs.visit(filter_expr_.get());
+  }
 }
 
 namespace {
@@ -419,9 +407,7 @@ void create_compound(std::vector<RelAlgNode*>& nodes, const std::vector<size_t>&
     if (!node) {
       continue;
     }
-    if (node->replaceInput(old_node, compound_node)) {
-      break;
-    }
+    node->replaceInput(old_node, compound_node);
   }
 }
 

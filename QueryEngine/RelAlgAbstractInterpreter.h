@@ -250,14 +250,13 @@ class RelAlgNode {
 
   const void addInput(const RelAlgNode* input) { inputs_.emplace_back(input); }
 
-  virtual bool replaceInput(const RelAlgNode* old_input, const RelAlgNode* input) {
+  virtual void replaceInput(const RelAlgNode* old_input, const RelAlgNode* input) {
     for (auto& input_ptr : inputs_) {
       if (input_ptr.get() == old_input) {
         input_ptr.reset(input);
-        return true;
+        break;
       }
     }
-    return false;
   }
 
   virtual std::string toString() const = 0;
@@ -344,7 +343,7 @@ class RelProject : public RelAlgNode {
 
   const std::string getFieldName(const size_t i) const { return fields_[i]; }
 
-  bool replaceInput(const RelAlgNode* old_input, const RelAlgNode* input) override;
+  void replaceInput(const RelAlgNode* old_input, const RelAlgNode* input) override;
 
   std::string toString() const override {
     std::string result = "(RelProject<" + std::to_string(reinterpret_cast<uint64_t>(this)) + ">";
@@ -415,7 +414,7 @@ class RelJoin : public RelAlgNode {
     inputs_.emplace_back(rhs);
   }
 
-  bool replaceInput(const RelAlgNode* old_input, const RelAlgNode* input) override;
+  void replaceInput(const RelAlgNode* old_input, const RelAlgNode* input) override;
 
   std::string toString() const override {
     std::string result = "(RelJoin<" + std::to_string(reinterpret_cast<uint64_t>(this)) + ">(";
@@ -445,7 +444,7 @@ class RelFilter : public RelAlgNode {
     filter_.reset(condition);
   }
 
-  bool replaceInput(const RelAlgNode* old_input, const RelAlgNode* input) override;
+  void replaceInput(const RelAlgNode* old_input, const RelAlgNode* input) override;
 
   std::string toString() const override {
     std::string result = "(RelFilter<" + std::to_string(reinterpret_cast<uint64_t>(this)) + ">(";
@@ -487,7 +486,7 @@ class RelCompound : public RelAlgNode {
     }
   }
 
-  bool replaceInput(const RelAlgNode* old_input, const RelAlgNode* input) override;
+  void replaceInput(const RelAlgNode* old_input, const RelAlgNode* input) override;
 
   size_t size() const { return target_exprs_.size(); }
 
