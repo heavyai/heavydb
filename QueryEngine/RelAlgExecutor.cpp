@@ -39,23 +39,25 @@ ExecutionResult RelAlgExecutor::executeRelAlgSeq(std::vector<RaExecutionDesc>& e
 
 namespace {
 
-class RexUsedInputsVisitor : public RexVisitor<std::unordered_set<unsigned>> {
+class RexUsedInputsVisitor : public RexVisitor<std::unordered_set<const RexInput*>> {
  public:
-  std::unordered_set<unsigned> visitInput(const RexInput* rex_input) const override { return {rex_input->getIndex()}; }
+  std::unordered_set<const RexInput*> visitInput(const RexInput* rex_input) const override { return {rex_input}; }
 
  protected:
-  std::unordered_set<unsigned> aggregateResult(const std::unordered_set<unsigned>& aggregate,
-                                               const std::unordered_set<unsigned>& next_result) const override {
+  std::unordered_set<const RexInput*> aggregateResult(
+      const std::unordered_set<const RexInput*>& aggregate,
+      const std::unordered_set<const RexInput*>& next_result) const override {
     auto result = aggregate;
     result.insert(next_result.begin(), next_result.end());
     return result;
   }
 };
 
-std::unordered_set<unsigned> get_used_inputs(const RelCompound* compound) {
+std::unordered_set<const RexInput*> get_used_inputs(const RelCompound* compound) {
   RexUsedInputsVisitor visitor;
   const auto filter_expr = compound->getFilterExpr();
-  std::unordered_set<unsigned> used_inputs = filter_expr ? visitor.visit(filter_expr) : std::unordered_set<unsigned>{};
+  std::unordered_set<const RexInput*> used_inputs =
+      filter_expr ? visitor.visit(filter_expr) : std::unordered_set<const RexInput*>{};
   const auto sources_size = compound->getScalarSourcesSize();
   for (size_t i = 0; i < sources_size; ++i) {
     const auto source_inputs = visitor.visit(compound->getScalarSource(i));
@@ -64,9 +66,9 @@ std::unordered_set<unsigned> get_used_inputs(const RelCompound* compound) {
   return used_inputs;
 }
 
-std::unordered_set<unsigned> get_used_inputs(const RelProject* project) {
+std::unordered_set<const RexInput*> get_used_inputs(const RelProject* project) {
   RexUsedInputsVisitor visitor;
-  std::unordered_set<unsigned> used_inputs;
+  std::unordered_set<const RexInput*> used_inputs;
   for (size_t i = 0; i < project->size(); ++i) {
     const auto proj_inputs = visitor.visit(project->getProjectAt(i));
     used_inputs.insert(proj_inputs.begin(), proj_inputs.end());
@@ -86,7 +88,7 @@ int table_id_from_ra(const RelAlgNode* ra_node) {
 
 template <class RA>
 std::pair<std::vector<InputDescriptor>, std::list<InputColDescriptor>>
-get_input_desc_impl(const RA* ra_node, const int rte_idx, const std::unordered_set<unsigned>& used_inputs) {
+get_input_desc_impl(const RA* ra_node, const int rte_idx, const std::unordered_set<const RexInput*>& used_inputs) {
   std::vector<InputDescriptor> input_descs;
   std::list<InputColDescriptor> input_col_descs;
   CHECK_EQ(size_t(1), ra_node->inputCount());
@@ -104,8 +106,9 @@ get_input_desc_impl(const RA* ra_node, const int rte_idx, const std::unordered_s
     input_descs.emplace_back(table_id, rte_idx);
     const auto scan_ra = dynamic_cast<const RelScan*>(input_ra);
     for (const auto used_input : used_inputs) {
+      CHECK_EQ(table_id, table_id_from_ra(used_input->getSourceNode()));
       // Physical columns from a scan node are numbered from 1 in our system.
-      input_col_descs.emplace_back(scan_ra ? used_input + 1 : used_input, table_id, rte_idx);
+      input_col_descs.emplace_back(scan_ra ? used_input->getIndex() + 1 : used_input->getIndex(), table_id, rte_idx);
     }
   }
   return {input_descs, input_col_descs};
@@ -279,9 +282,12 @@ ExecutionResult RelAlgExecutor::executeFilter(const RelFilter* filter,
   CHECK_EQ(size_t(1), filter->inputCount());
   std::vector<InputDescriptor> input_descs;
   std::list<InputColDescriptor> input_col_descs;
-  std::unordered_set<unsigned> used_inputs;
+  std::unordered_set<const RexInput*> used_inputs;
+  std::vector<std::unique_ptr<RexInput>> used_inputs_owned;
   for (size_t i = 0; i < in_metainfo.size(); ++i) {
-    used_inputs.insert(i);
+    auto synthesized_used_input = new RexInput(filter->getInput(0), i);
+    used_inputs_owned.emplace_back(synthesized_used_input);
+    used_inputs.insert(synthesized_used_input);
   }
   std::tie(input_descs, input_col_descs) = get_input_desc_impl(filter, rte_idx, used_inputs);
   const auto qual = translate_scalar_rex(filter->getCondition(), rte_idx, cat_, in_metainfo);
