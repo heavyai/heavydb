@@ -90,28 +90,31 @@ template <class RA>
 std::pair<std::vector<InputDescriptor>, std::list<InputColDescriptor>>
 get_input_desc_impl(const RA* ra_node, const int rte_idx, const std::unordered_set<const RexInput*>& used_inputs) {
   std::vector<InputDescriptor> input_descs;
-  std::list<InputColDescriptor> input_col_descs;
+  std::unordered_set<InputColDescriptor> input_col_descs_unique;
   CHECK_EQ(size_t(1), ra_node->inputCount());
-  const auto input_ra = ra_node->getInput(0);
-  const auto join_input = dynamic_cast<const RelJoin*>(input_ra);
-  if (join_input) {
-    CHECK_EQ(size_t(2), join_input->inputCount());
-    const auto outer_ra = join_input->getInput(0);
-    input_descs.emplace_back(table_id_from_ra(outer_ra), 0);
-    const auto inner_ra = join_input->getInput(1);
-    input_descs.emplace_back(table_id_from_ra(inner_ra), 1);
-    CHECK(false);
-  } else {
+  const auto join_input = dynamic_cast<const RelJoin*>(ra_node->getInput(0));
+  // If the input node is a join, the data is sourced from it instead of the initial node.
+  const auto data_sink_node =
+      join_input ? static_cast<const RelAlgNode*>(join_input) : static_cast<const RelAlgNode*>(ra_node);
+  CHECK(1 <= data_sink_node->inputCount() && data_sink_node->inputCount() <= 2);
+  std::unordered_map<const RelAlgNode*, int> input_to_nest_level;
+  for (size_t nest_level = 0; nest_level < data_sink_node->inputCount(); ++nest_level) {
+    const auto input_ra = data_sink_node->getInput(nest_level);
+    const auto it_ok = input_to_nest_level.emplace(input_ra, nest_level);
+    CHECK(it_ok.second);
     const int table_id = table_id_from_ra(input_ra);
-    input_descs.emplace_back(table_id, rte_idx);
-    const auto scan_ra = dynamic_cast<const RelScan*>(input_ra);
-    for (const auto used_input : used_inputs) {
-      CHECK_EQ(table_id, table_id_from_ra(used_input->getSourceNode()));
-      // Physical columns from a scan node are numbered from 1 in our system.
-      input_col_descs.emplace_back(scan_ra ? used_input->getIndex() + 1 : used_input->getIndex(), table_id, rte_idx);
-    }
+    input_descs.emplace_back(table_id, nest_level);
   }
-  return {input_descs, input_col_descs};
+  for (const auto used_input : used_inputs) {
+    const auto input_ra = used_input->getSourceNode();
+    const auto scan_ra = dynamic_cast<const RelScan*>(input_ra);
+    const int table_id = table_id_from_ra(input_ra);
+    const auto it = input_to_nest_level.find(input_ra);
+    CHECK(it != input_to_nest_level.end());
+    // Physical columns from a scan node are numbered from 1 in our system.
+    input_col_descs_unique.emplace(scan_ra ? used_input->getIndex() + 1 : used_input->getIndex(), table_id, it->second);
+  }
+  return {input_descs, std::list<InputColDescriptor>(input_col_descs_unique.begin(), input_col_descs_unique.end())};
 }
 
 template <class RA>
