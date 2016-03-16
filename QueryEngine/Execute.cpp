@@ -3115,12 +3115,16 @@ void Executor::ExecutionDispatch::run(const ExecutorDeviceType chosen_device_typ
 const int8_t* Executor::ExecutionDispatch::getColumn(const ResultRows* rows, const int col_id) const {
   CHECK(rows);
   CHECK_GE(col_id, 0);
-  if (!ra_node_input_) {
-    std::vector<SQLTypeInfo> col_types;
-    for (size_t i = 0; i < rows->colCount(); ++i) {
-      col_types.push_back(rows->getColType(i));
+  static std::mutex columnar_conversion_mutex;
+  {
+    std::lock_guard<std::mutex> columnar_conversion_guard(columnar_conversion_mutex);
+    if (!ra_node_input_) {
+      std::vector<SQLTypeInfo> col_types;
+      for (size_t i = 0; i < rows->colCount(); ++i) {
+        col_types.push_back(rows->getColType(i));
+      }
+      ra_node_input_.reset(new ColumnarResults(*rows, rows->colCount(), col_types));
     }
-    ra_node_input_.reset(new ColumnarResults(*rows, rows->colCount(), col_types));
   }
   const auto& col_buffers = ra_node_input_->getColumnBuffers();
   CHECK_LT(static_cast<size_t>(col_id), col_buffers.size());
