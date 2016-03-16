@@ -7,7 +7,11 @@
 ExecutionResult RelAlgExecutor::executeRelAlgSeq(std::vector<RaExecutionDesc>& exec_descs,
                                                  const CompilationOptions& co,
                                                  const ExecutionOptions& eo) {
+  std::lock_guard<std::mutex> lock(executor_->execute_mutex_);
   decltype(temporary_tables_)().swap(temporary_tables_);
+  executor_->row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>();
+  executor_->catalog_ = &cat_;
+  executor_->temporary_tables_ = &temporary_tables_;
   for (auto& exec_desc : exec_descs) {
     const auto body = exec_desc.getBody();
     const auto compound = dynamic_cast<const RelCompound*>(body);
@@ -330,10 +334,6 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(const Executor::RelAlgExecutionU
                                                 const ExecutionOptions& eo) {
   size_t max_groups_buffer_entry_guess{2048};
   int32_t error_code{0};
-  std::lock_guard<std::mutex> lock(executor_->execute_mutex_);
-  executor_->row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>();
-  executor_->catalog_ = &cat_;
-  executor_->temporary_tables_ = &temporary_tables_;
   return {executor_->executeWorkUnit(&error_code,
                                      max_groups_buffer_entry_guess,
                                      is_agg,
