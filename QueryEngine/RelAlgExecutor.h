@@ -9,20 +9,21 @@ class RelAlgExecutor {
  public:
   RelAlgExecutor(Executor* executor, const Catalog_Namespace::Catalog& cat) : executor_(executor), cat_(cat) {}
 
-  ExecutionResult executeRelAlgSeq(std::vector<RaExecutionDesc>&, const CompilationOptions&);
+  ExecutionResult executeRelAlgSeq(std::vector<RaExecutionDesc>&, const CompilationOptions&, const ExecutionOptions&);
 
  private:
-  ExecutionResult executeCompound(const RelCompound*, const CompilationOptions&);
+  ExecutionResult executeCompound(const RelCompound*, const CompilationOptions&, const ExecutionOptions&);
 
-  ExecutionResult executeProject(const RelProject*, const CompilationOptions&);
+  ExecutionResult executeProject(const RelProject*, const CompilationOptions&, const ExecutionOptions&);
 
-  ExecutionResult executeFilter(const RelFilter*, const CompilationOptions&);
+  ExecutionResult executeFilter(const RelFilter*, const CompilationOptions&, const ExecutionOptions&);
 
   ExecutionResult executeWorkUnit(const Executor::RelAlgExecutionUnit& rel_alg_exe_unit,
                                   const std::vector<InputDescriptor>& scan_ids,
                                   const std::vector<TargetMetaInfo>& targets_meta,
                                   const bool is_agg,
-                                  const CompilationOptions& co);
+                                  const CompilationOptions& co,
+                                  const ExecutionOptions& eo);
 
   void addTemporaryTable(const int table_id, const ResultRows* rows) {
     CHECK_LT(table_id, 0);

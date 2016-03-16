@@ -11,4 +11,11 @@ struct CompilationOptions {
   const ExecutorOptLevel opt_level_;
 };
 
+struct ExecutionOptions {
+  const bool output_columnar_hint;
+  const bool allow_multifrag;
+  const bool just_explain;
+  const bool allow_loop_joins;
+};
+
 #endif  // QUERYENGINE_COMPILATIONOPTIONS_H

@@ -5,25 +5,26 @@
 #include "RexVisitor.h"
 
 ExecutionResult RelAlgExecutor::executeRelAlgSeq(std::vector<RaExecutionDesc>& exec_descs,
-                                                 const CompilationOptions& co) {
+                                                 const CompilationOptions& co,
+                                                 const ExecutionOptions& eo) {
   decltype(temporary_tables_)().swap(temporary_tables_);
   for (auto& exec_desc : exec_descs) {
     const auto body = exec_desc.getBody();
     const auto compound = dynamic_cast<const RelCompound*>(body);
     if (compound) {
-      exec_desc.setResult(executeCompound(compound, co));
+      exec_desc.setResult(executeCompound(compound, co, eo));
       addTemporaryTable(-compound->getId(), &exec_desc.getResult().getRows());
       continue;
     }
     const auto project = dynamic_cast<const RelProject*>(body);
     if (project) {
-      exec_desc.setResult(executeProject(project, co));
+      exec_desc.setResult(executeProject(project, co, eo));
       addTemporaryTable(-project->getId(), &exec_desc.getResult().getRows());
       continue;
     }
     const auto filter = dynamic_cast<const RelFilter*>(body);
     if (filter) {
-      exec_desc.setResult(executeFilter(filter, co));
+      exec_desc.setResult(executeFilter(filter, co, eo));
       addTemporaryTable(-filter->getId(), &exec_desc.getResult().getRows());
       continue;
     }
@@ -234,7 +235,9 @@ std::vector<TargetMetaInfo> get_targets_meta(const RA* ra_node, const std::vecto
 
 }  // namespace
 
-ExecutionResult RelAlgExecutor::executeCompound(const RelCompound* compound, const CompilationOptions& co) {
+ExecutionResult RelAlgExecutor::executeCompound(const RelCompound* compound,
+                                                const CompilationOptions& co,
+                                                const ExecutionOptions& eo) {
   std::vector<InputDescriptor> input_descs;
   std::list<InputColDescriptor> input_col_descs;
   const auto input_to_nest_level = get_input_nest_levels(compound);
@@ -249,10 +252,12 @@ ExecutionResult RelAlgExecutor::executeCompound(const RelCompound* compound, con
       input_descs, input_col_descs, {}, quals, {}, groupby_exprs, target_exprs, {}, 0};
   const auto targets_meta = get_targets_meta(compound, target_exprs);
   compound->setOutputMetainfo(targets_meta);
-  return executeWorkUnit(rel_alg_exe_unit, input_descs, targets_meta, compound->isAggregate(), co);
+  return executeWorkUnit(rel_alg_exe_unit, input_descs, targets_meta, compound->isAggregate(), co, eo);
 }
 
-ExecutionResult RelAlgExecutor::executeProject(const RelProject* project, const CompilationOptions& co) {
+ExecutionResult RelAlgExecutor::executeProject(const RelProject* project,
+                                               const CompilationOptions& co,
+                                               const ExecutionOptions& eo) {
   std::vector<InputDescriptor> input_descs;
   std::list<InputColDescriptor> input_col_descs;
   const auto input_to_nest_level = get_input_nest_levels(project);
@@ -263,7 +268,7 @@ ExecutionResult RelAlgExecutor::executeProject(const RelProject* project, const 
       input_descs, input_col_descs, {}, {}, {}, {nullptr}, target_exprs, {}, 0};
   const auto targets_meta = get_targets_meta(project, target_exprs);
   project->setOutputMetainfo(targets_meta);
-  return executeWorkUnit(rel_alg_exe_unit, input_descs, targets_meta, false, co);
+  return executeWorkUnit(rel_alg_exe_unit, input_descs, targets_meta, false, co, eo);
 }
 
 namespace {
@@ -291,7 +296,9 @@ std::vector<std::shared_ptr<Analyzer::Expr>> synthesize_inputs(
 
 }  // namespace
 
-ExecutionResult RelAlgExecutor::executeFilter(const RelFilter* filter, const CompilationOptions& co) {
+ExecutionResult RelAlgExecutor::executeFilter(const RelFilter* filter,
+                                              const CompilationOptions& co,
+                                              const ExecutionOptions& eo) {
   CHECK_EQ(size_t(1), filter->inputCount());
   std::vector<InputDescriptor> input_descs;
   std::list<InputColDescriptor> input_col_descs;
@@ -312,14 +319,15 @@ ExecutionResult RelAlgExecutor::executeFilter(const RelFilter* filter, const Com
   Executor::RelAlgExecutionUnit rel_alg_exe_unit{
       input_descs, input_col_descs, {}, {qual}, {}, {nullptr}, target_exprs, {}, 0};
   filter->setOutputMetainfo(in_metainfo);
-  return executeWorkUnit(rel_alg_exe_unit, input_descs, in_metainfo, false, co);
+  return executeWorkUnit(rel_alg_exe_unit, input_descs, in_metainfo, false, co, eo);
 }
 
 ExecutionResult RelAlgExecutor::executeWorkUnit(const Executor::RelAlgExecutionUnit& rel_alg_exe_unit,
                                                 const std::vector<InputDescriptor>& input_descs,
                                                 const std::vector<TargetMetaInfo>& targets_meta,
                                                 const bool is_agg,
-                                                const CompilationOptions& co) {
+                                                const CompilationOptions& co,
+                                                const ExecutionOptions& eo) {
   size_t max_groups_buffer_entry_guess{2048};
   int32_t error_code{0};
   std::lock_guard<std::mutex> lock(executor_->execute_mutex_);
@@ -332,7 +340,7 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(const Executor::RelAlgExecutionU
                                      get_table_infos(input_descs, cat_, temporary_tables_),
                                      rel_alg_exe_unit,
                                      co,
-                                     {false, true, false, false},
+                                     eo,
                                      cat_,
                                      executor_->row_set_mem_owner_,
                                      nullptr),
