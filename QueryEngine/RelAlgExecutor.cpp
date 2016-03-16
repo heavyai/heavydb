@@ -256,7 +256,7 @@ ExecutionResult RelAlgExecutor::executeCompound(const RelCompound* compound,
       input_descs, input_col_descs, {}, quals, {}, groupby_exprs, target_exprs, {}, 0};
   const auto targets_meta = get_targets_meta(compound, target_exprs);
   compound->setOutputMetainfo(targets_meta);
-  return executeWorkUnit(rel_alg_exe_unit, input_descs, targets_meta, compound->isAggregate(), co, eo);
+  return executeWorkUnit(rel_alg_exe_unit, targets_meta, compound->isAggregate(), co, eo);
 }
 
 ExecutionResult RelAlgExecutor::executeProject(const RelProject* project,
@@ -272,7 +272,7 @@ ExecutionResult RelAlgExecutor::executeProject(const RelProject* project,
       input_descs, input_col_descs, {}, {}, {}, {nullptr}, target_exprs, {}, 0};
   const auto targets_meta = get_targets_meta(project, target_exprs);
   project->setOutputMetainfo(targets_meta);
-  return executeWorkUnit(rel_alg_exe_unit, input_descs, targets_meta, false, co, eo);
+  return executeWorkUnit(rel_alg_exe_unit, targets_meta, false, co, eo);
 }
 
 namespace {
@@ -323,11 +323,10 @@ ExecutionResult RelAlgExecutor::executeFilter(const RelFilter* filter,
   Executor::RelAlgExecutionUnit rel_alg_exe_unit{
       input_descs, input_col_descs, {}, {qual}, {}, {nullptr}, target_exprs, {}, 0};
   filter->setOutputMetainfo(in_metainfo);
-  return executeWorkUnit(rel_alg_exe_unit, input_descs, in_metainfo, false, co, eo);
+  return executeWorkUnit(rel_alg_exe_unit, in_metainfo, false, co, eo);
 }
 
 ExecutionResult RelAlgExecutor::executeWorkUnit(const Executor::RelAlgExecutionUnit& rel_alg_exe_unit,
-                                                const std::vector<InputDescriptor>& input_descs,
                                                 const std::vector<TargetMetaInfo>& targets_meta,
                                                 const bool is_agg,
                                                 const CompilationOptions& co,
@@ -337,7 +336,7 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(const Executor::RelAlgExecutionU
   return {executor_->executeWorkUnit(&error_code,
                                      max_groups_buffer_entry_guess,
                                      is_agg,
-                                     get_table_infos(input_descs, cat_, temporary_tables_),
+                                     get_table_infos(rel_alg_exe_unit.input_descs, cat_, temporary_tables_),
                                      rel_alg_exe_unit,
                                      co,
                                      eo,
