@@ -229,6 +229,12 @@ class RelAlgNode {
     context_data_ = context_data;
   }
 
+  void setOutputMetainfo(const std::vector<TargetMetaInfo>& targets_metainfo) const {
+    targets_metainfo_ = targets_metainfo;
+  }
+
+  const std::vector<TargetMetaInfo>& getOutputMetainfo() const { return targets_metainfo_; }
+
   unsigned getId() const { return id_; }
 
   const void* getContextData() const {
@@ -264,9 +270,10 @@ class RelAlgNode {
  protected:
   std::vector<std::unique_ptr<const RelAlgNode>> inputs_;
   const unsigned id_;
-  mutable const void* context_data_;
 
  private:
+  mutable const void* context_data_;
+  mutable std::vector<TargetMetaInfo> targets_metainfo_;
   static unsigned crt_id_;
 };
 
@@ -575,8 +582,7 @@ class Expr;
 std::shared_ptr<Analyzer::Expr> translate_scalar_rex(
     const RexScalar* rex,
     const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
-    const Catalog_Namespace::Catalog& cat,
-    const std::vector<TargetMetaInfo>& in_metainfo);
+    const Catalog_Namespace::Catalog& cat);
 
 std::shared_ptr<Analyzer::Expr> translate_aggregate_rex(
     const RexAgg* rex,
