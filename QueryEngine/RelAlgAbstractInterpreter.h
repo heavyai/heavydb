@@ -197,13 +197,18 @@ class RexInput : public RexAbstractInput {
 
 class RexAgg : public Rex {
  public:
-  RexAgg(const SQLAgg agg, const bool distinct, const SQLTypes type, const bool nullable, const ssize_t operand)
-      : agg_(agg), distinct_(distinct), type_(type), nullable_(nullable), operand_(operand){};
+  RexAgg(const SQLAgg agg,
+         const bool distinct,
+         const SQLTypeInfo& type,
+         const ssize_t operand)
+      : agg_(agg),
+        distinct_(distinct),
+        type_(type),
+        operand_(operand){};
 
   std::string toString() const override {
     return "(RexAgg " + std::to_string(agg_) + " " + std::to_string(distinct_) + " " +
-           std::to_string(static_cast<int>(type_)) + " " + std::to_string(static_cast<int>(nullable_)) + " " +
-           std::to_string(operand_) + ")";
+           type_.get_type_name() + " " + type_.get_compression_name() + " " + std::to_string(operand_) + ")";
   }
 
   SQLAgg getKind() const { return agg_; }
@@ -215,8 +220,7 @@ class RexAgg : public Rex {
  private:
   const SQLAgg agg_;
   const bool distinct_;
-  const SQLTypes type_;
-  const bool nullable_;
+  const SQLTypeInfo type_;
   const ssize_t operand_;
 };
 

@@ -174,12 +174,18 @@ RexAgg* parse_aggregate_expr(const rapidjson::Value& expr) {
   const auto agg = to_agg_kind(json_str(field(expr, "agg")));
   const auto distinct = json_bool(field(expr, "distinct"));
   const auto& type_json = field(expr, "type");
-  CHECK(type_json.IsObject() && type_json.MemberCount() == 2);
+  CHECK(type_json.IsObject() && (type_json.MemberCount() == 2 || type_json.MemberCount() == 4));
   const auto type = to_sql_type(json_str(field(type_json, "type")));
   const auto nullable = json_bool(field(type_json, "nullable"));
+  const bool has_precision = type_json.MemberCount() == 4;
+  const int precision = has_precision ? json_i64(field(type_json, "precision")) : 0;
+  const int scale = has_precision ? json_i64(field(type_json, "scale")) : 0;
   const auto operands = indices_from_json_array(field(expr, "operands"));
   CHECK_LE(operands.size(), size_t(1));
-  return new RexAgg(agg, distinct, type, nullable, operands.empty() ? -1 : operands[0]);
+  SQLTypeInfo agg_ti(type, !nullable);
+  agg_ti.set_precision(precision);
+  agg_ti.set_scale(scale);
+  return new RexAgg(agg, distinct, agg_ti, operands.empty() ? -1 : operands[0]);
 }
 
 RexScalar* parse_scalar_expr(const rapidjson::Value& expr) {
