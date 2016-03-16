@@ -546,6 +546,11 @@ class SortField {
   SortField(const size_t field, const SortDirection sort_dir, const NullSortedPosition nulls_pos)
       : field_(field), sort_dir_(sort_dir), nulls_pos_(nulls_pos) {}
 
+  std::string toString() const {
+    return "(" + std::to_string(field_) + " " + (sort_dir_ == SortDirection::Ascending ? "asc" : "desc") + " " +
+           (nulls_pos_ == NullSortedPosition::First ? "nulls_first" : "nulls_last") + ")";
+  }
+
  private:
   const size_t field_;
   const SortDirection sort_dir_;
@@ -554,18 +559,27 @@ class SortField {
 
 class RelSort : public RelAlgNode {
  public:
-  RelSort(const std::vector<SortField>& collation, const RelAlgNode* input) : collation_(collation) {
+  RelSort(const std::vector<SortField>& collation, const int64_t limit, const int64_t offset, const RelAlgNode* input)
+      : collation_(collation), limit_(limit), offset_(offset) {
     inputs_.emplace_back(input);
   }
 
   std::string toString() const override {
     std::string result = "(RelSort<" + std::to_string(reinterpret_cast<uint64_t>(this)) + ">(";
-    // TODO(alex)
+    result += "limit: " + std::to_string(limit_) + " ";
+    result += "offset: " + std::to_string(offset_) + " ";
+    result += "collation: [ ";
+    for (const auto& sort_field : collation_) {
+      result += sort_field.toString() + " ";
+    }
+    result += "]";
     return result + ")";
   }
 
  private:
   const std::vector<SortField> collation_;
+  const int64_t limit_;
+  const int64_t offset_;
 };
 
 std::unique_ptr<const RelAlgNode> ra_interpret(const rapidjson::Value&, const Catalog_Namespace::Catalog&);

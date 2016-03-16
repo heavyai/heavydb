@@ -480,6 +480,18 @@ void coalesce_nodes(std::vector<RelAlgNode*>& nodes) {
   // TODO(alex): wrap-up this function
 }
 
+int64_t get_int_literal_field(const rapidjson::Value& obj, const char field[], const int64_t default_val) {
+  const auto it = obj.FindMember(field);
+  if (it == obj.MemberEnd()) {
+    return default_val;
+  }
+  std::unique_ptr<RexLiteral> lit(parse_literal(it->value));
+  CHECK_EQ(kDECIMAL, lit->getType());
+  CHECK_EQ(unsigned(0), lit->getScale());
+  CHECK_EQ(unsigned(0), lit->getTypeScale());
+  return lit->getVal<int64_t>();
+}
+
 class RaAbstractInterp {
  public:
   RaAbstractInterp(const rapidjson::Value& query_ast, const Catalog_Namespace::Catalog& cat)
@@ -591,7 +603,9 @@ class RaAbstractInterp {
                                               : NullSortedPosition::Last;
       collation.emplace_back(field_idx, sort_dir, null_pos);
     }
-    return new RelSort(collation, prev(sort_ra));
+    const auto limit = get_int_literal_field(sort_ra, "fetch", 0);
+    const auto offset = get_int_literal_field(sort_ra, "offset", 0);
+    return new RelSort(collation, limit, offset, prev(sort_ra));
   }
 
   const TableDescriptor* getTableFromScanNode(const rapidjson::Value& scan_ra) const {
