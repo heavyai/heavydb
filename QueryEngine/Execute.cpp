@@ -2707,7 +2707,7 @@ ResultRows Executor::executeSortPlan(const Planner::Sort* sort_plan,
                                    device_id,
                                    false);
   } else {
-    rows_to_sort.sort(sort_plan, limit + offset);
+    rows_to_sort.sort(sort_plan->get_order_entries(), sort_plan->get_remove_duplicates(), limit + offset);
   }
   if (limit || offset) {
     rows_to_sort.dropFirstN(offset);

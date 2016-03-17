@@ -594,17 +594,16 @@ __attribute__((always_inline)) inline double pair_to_double(const std::pair<int6
 
 }  // namespace
 
-void ResultRows::sort(const Planner::Sort* sort_plan, const int64_t top_n) {
+void ResultRows::sort(const std::list<Analyzer::OrderEntry>& order_entries,
+                      const bool remove_duplicates,
+                      const int64_t top_n) {
   CHECK(!in_place_);
-  const auto& target_list = sort_plan->get_targetlist();
-  const auto& order_entries = sort_plan->get_order_entries();
-  const bool use_heap{order_entries.size() == 1 && !sort_plan->get_remove_duplicates() && top_n};
-  auto compare = [this, &order_entries, &target_list, use_heap](const InternalRow& lhs, const InternalRow& rhs) {
+  const bool use_heap{order_entries.size() == 1 && !remove_duplicates && top_n};
+  auto compare = [this, &order_entries, use_heap](const InternalRow& lhs, const InternalRow& rhs) {
     // NB: The compare function must define a strict weak ordering, otherwise
     // std::sort will trigger a segmentation fault (or corrupt memory).
     for (const auto order_entry : order_entries) {
       CHECK_GE(order_entry.tle_no, 1);
-      CHECK_LE(size_t(order_entry.tle_no), target_list.size());
       const auto& entry_ti = targets_[order_entry.tle_no - 1].sql_type;
       const auto is_dict = entry_ti.is_string() && entry_ti.get_compression() == kENCODING_DICT;
       const auto& lhs_v = lhs[order_entry.tle_no - 1];
@@ -672,7 +671,7 @@ void ResultRows::sort(const Planner::Sort* sort_plan, const int64_t top_n) {
     return;
   }
   target_values_.sort(compare);
-  if (sort_plan->get_remove_duplicates()) {
+  if (remove_duplicates) {
     target_values_.removeDuplicates();
   }
 }
