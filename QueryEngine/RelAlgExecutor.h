@@ -24,6 +24,14 @@ class RelAlgExecutor {
                                   const CompilationOptions& co,
                                   const ExecutionOptions& eo);
 
+  Executor::RelAlgExecutionUnit createWorkUnit(const RelAlgNode*);
+
+  Executor::RelAlgExecutionUnit createCompoundWorkUnit(const RelCompound*);
+
+  Executor::RelAlgExecutionUnit createProjectWorkUnit(const RelProject*);
+
+  Executor::RelAlgExecutionUnit createFilterWorkUnit(const RelFilter*);
+
   void addTemporaryTable(const int table_id, const ResultRows* rows) {
     CHECK_LT(table_id, 0);
     const auto it_ok = temporary_tables_.emplace(table_id, rows);
@@ -33,6 +41,7 @@ class RelAlgExecutor {
   Executor* executor_;
   const Catalog_Namespace::Catalog& cat_;
   TemporaryTables temporary_tables_;
+  std::vector<std::shared_ptr<Analyzer::Expr>> target_exprs_owned_;  // TODO(alex): remove
 };
 
 #endif  // QUERYENGINE_RELALGEXECUTOR_H

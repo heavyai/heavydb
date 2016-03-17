@@ -10,6 +10,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgSeq(std::vector<RaExecutionDesc>& e
                                                  const ExecutionOptions& eo) {
   std::lock_guard<std::mutex> lock(executor_->execute_mutex_);
   decltype(temporary_tables_)().swap(temporary_tables_);
+  decltype(target_exprs_owned_)().swap(target_exprs_owned_);
   executor_->row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>();
   executor_->catalog_ = &cat_;
   executor_->temporary_tables_ = &temporary_tables_;
@@ -243,6 +244,65 @@ std::vector<TargetMetaInfo> get_targets_meta(const RA* ra_node, const std::vecto
 ExecutionResult RelAlgExecutor::executeCompound(const RelCompound* compound,
                                                 const CompilationOptions& co,
                                                 const ExecutionOptions& eo) {
+  const auto rel_alg_exe_unit = createCompoundWorkUnit(compound);
+  return executeWorkUnit(rel_alg_exe_unit, compound->getOutputMetainfo(), compound->isAggregate(), co, eo);
+}
+
+ExecutionResult RelAlgExecutor::executeProject(const RelProject* project,
+                                               const CompilationOptions& co,
+                                               const ExecutionOptions& eo) {
+  const auto rel_alg_exe_unit = createProjectWorkUnit(project);
+  return executeWorkUnit(rel_alg_exe_unit, project->getOutputMetainfo(), false, co, eo);
+}
+
+ExecutionResult RelAlgExecutor::executeFilter(const RelFilter* filter,
+                                              const CompilationOptions& co,
+                                              const ExecutionOptions& eo) {
+  const auto rel_alg_exe_unit = createFilterWorkUnit(filter);
+  return executeWorkUnit(rel_alg_exe_unit, filter->getOutputMetainfo(), false, co, eo);
+}
+
+ExecutionResult RelAlgExecutor::executeWorkUnit(const Executor::RelAlgExecutionUnit& rel_alg_exe_unit,
+                                                const std::vector<TargetMetaInfo>& targets_meta,
+                                                const bool is_agg,
+                                                const CompilationOptions& co,
+                                                const ExecutionOptions& eo) {
+  size_t max_groups_buffer_entry_guess{2048};
+  int32_t error_code{0};
+  ExecutionResult result = {
+      executor_->executeWorkUnit(&error_code,
+                                 max_groups_buffer_entry_guess,
+                                 is_agg,
+                                 get_table_infos(rel_alg_exe_unit.input_descs, cat_, temporary_tables_),
+                                 rel_alg_exe_unit,
+                                 co,
+                                 eo,
+                                 cat_,
+                                 executor_->row_set_mem_owner_,
+                                 nullptr),
+      targets_meta};
+  if (error_code == Executor::ERR_DIV_BY_ZERO) {
+    throw std::runtime_error("Division by zero");
+  }
+  CHECK(!error_code);
+  return result;
+}
+
+Executor::RelAlgExecutionUnit RelAlgExecutor::createWorkUnit(const RelAlgNode* node) {
+  const auto compound = dynamic_cast<const RelCompound*>(node);
+  if (compound) {
+    return createCompoundWorkUnit(compound);
+  }
+  const auto project = dynamic_cast<const RelProject*>(node);
+  if (project) {
+    return createProjectWorkUnit(project);
+  }
+  const auto filter = dynamic_cast<const RelFilter*>(node);
+  CHECK(filter);
+  return createFilterWorkUnit(filter);
+}
+
+Executor::RelAlgExecutionUnit RelAlgExecutor::createCompoundWorkUnit(const RelCompound* compound) {
   std::vector<InputDescriptor> input_descs;
   std::list<InputColDescriptor> input_col_descs;
   const auto input_to_nest_level = get_input_nest_levels(compound);
@@ -250,30 +310,24 @@ ExecutionResult RelAlgExecutor::executeCompound(const RelCompound* compound,
   const auto scalar_sources = translate_scalar_sources(compound, cat_, input_to_nest_level);
   const auto groupby_exprs = translate_groupby_exprs(compound, scalar_sources);
   const auto quals = translate_quals(compound, cat_, input_to_nest_level);
-  std::vector<std::shared_ptr<Analyzer::Expr>> target_exprs_owned;
-  const auto target_exprs = translate_targets(target_exprs_owned, scalar_sources, compound, cat_, input_to_nest_level);
+  const auto target_exprs = translate_targets(target_exprs_owned_, scalar_sources, compound, cat_, input_to_nest_level);
   CHECK_EQ(compound->size(), target_exprs.size());
-  Executor::RelAlgExecutionUnit rel_alg_exe_unit{
-      input_descs, input_col_descs, {}, quals, {}, groupby_exprs, target_exprs, {}, 0};
   const auto targets_meta = get_targets_meta(compound, target_exprs);
   compound->setOutputMetainfo(targets_meta);
-  return executeWorkUnit(rel_alg_exe_unit, targets_meta, compound->isAggregate(), co, eo);
+  return {input_descs, input_col_descs, {}, quals, {}, groupby_exprs, target_exprs, {}, 0};
 }
 
-ExecutionResult RelAlgExecutor::executeProject(const RelProject* project,
-                                               const CompilationOptions& co,
-                                               const ExecutionOptions& eo) {
+Executor::RelAlgExecutionUnit RelAlgExecutor::createProjectWorkUnit(const RelProject* project) {
   std::vector<InputDescriptor> input_descs;
   std::list<InputColDescriptor> input_col_descs;
   const auto input_to_nest_level = get_input_nest_levels(project);
   std::tie(input_descs, input_col_descs) = get_input_desc(project, input_to_nest_level);
   const auto target_exprs_owned = translate_scalar_sources(project, cat_, input_to_nest_level);
+  target_exprs_owned_.insert(target_exprs_owned_.end(), target_exprs_owned.begin(), target_exprs_owned.end());
   const auto target_exprs = get_exprs_not_owned(target_exprs_owned);
-  Executor::RelAlgExecutionUnit rel_alg_exe_unit{
-      input_descs, input_col_descs, {}, {}, {}, {nullptr}, target_exprs, {}, 0};
   const auto targets_meta = get_targets_meta(project, target_exprs);
   project->setOutputMetainfo(targets_meta);
-  return executeWorkUnit(rel_alg_exe_unit, targets_meta, false, co, eo);
+  return {input_descs, input_col_descs, {}, {}, {}, {nullptr}, target_exprs, {}, 0};
 }
 
 namespace {
@@ -301,9 +355,7 @@ std::vector<std::shared_ptr<Analyzer::Expr>> synthesize_inputs(
 
 }  // namespace
 
-ExecutionResult RelAlgExecutor::executeFilter(const RelFilter* filter,
-                                              const CompilationOptions& co,
-                                              const ExecutionOptions& eo) {
+Executor::RelAlgExecutionUnit RelAlgExecutor::createFilterWorkUnit(const RelFilter* filter) {
   CHECK_EQ(size_t(1), filter->inputCount());
   std::vector<InputDescriptor> input_descs;
   std::list<InputColDescriptor> input_col_descs;
@@ -320,37 +372,10 @@ ExecutionResult RelAlgExecutor::executeFilter(const RelFilter* filter,
   std::tie(input_descs, input_col_descs) = get_input_desc_impl(filter, used_inputs, input_to_nest_level);
   const auto qual = translate_scalar_rex(filter->getCondition(), input_to_nest_level, cat_);
   const auto target_exprs_owned = synthesize_inputs(filter, in_metainfo, input_to_nest_level);
+  target_exprs_owned_.insert(target_exprs_owned_.end(), target_exprs_owned.begin(), target_exprs_owned.end());
   const auto target_exprs = get_exprs_not_owned(target_exprs_owned);
-  Executor::RelAlgExecutionUnit rel_alg_exe_unit{
-      input_descs, input_col_descs, {}, {qual}, {}, {nullptr}, target_exprs, {}, 0};
   filter->setOutputMetainfo(in_metainfo);
-  return executeWorkUnit(rel_alg_exe_unit, in_metainfo, false, co, eo);
-}
-
-ExecutionResult RelAlgExecutor::executeWorkUnit(const Executor::RelAlgExecutionUnit& rel_alg_exe_unit,
-                                                const std::vector<TargetMetaInfo>& targets_meta,
-                                                const bool is_agg,
-                                                const CompilationOptions& co,
-                                                const ExecutionOptions& eo) {
-  size_t max_groups_buffer_entry_guess{2048};
-  int32_t error_code{0};
-  ExecutionResult result = {
-      executor_->executeWorkUnit(&error_code,
-                                 max_groups_buffer_entry_guess,
-                                 is_agg,
-                                 get_table_infos(rel_alg_exe_unit.input_descs, cat_, temporary_tables_),
-                                 rel_alg_exe_unit,
-                                 co,
-                                 eo,
-                                 cat_,
-                                 executor_->row_set_mem_owner_,
-                                 nullptr),
-      targets_meta};
-  if (error_code == Executor::ERR_DIV_BY_ZERO) {
-    throw std::runtime_error("Division by zero");
-  }
-  CHECK(!error_code);
-  return result;
+  return {input_descs, input_col_descs, {}, {qual}, {}, {nullptr}, target_exprs, {}, 0};
 }
 
 #endif  // HAVE_CALCITE
