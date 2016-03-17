@@ -356,6 +356,8 @@ class RelProject : public RelAlgNode {
     return true;
   }
 
+  bool isIdentity() const;
+
   size_t size() const { return scalar_exprs_.size(); }
 
   const RexScalar* getProjectAt(const size_t idx) const {
@@ -573,6 +575,10 @@ class SortField {
   SortField(const size_t field, const SortDirection sort_dir, const NullSortedPosition nulls_pos)
       : field_(field), sort_dir_(sort_dir), nulls_pos_(nulls_pos) {}
 
+  bool operator==(const SortField& that) const {
+    return field_ == that.field_ && sort_dir_ == that.sort_dir_ && nulls_pos_ == that.nulls_pos_;
+  }
+
   std::string toString() const {
     return "(" + std::to_string(field_) + " " + (sort_dir_ == SortDirection::Ascending ? "asc" : "desc") + " " +
            (nulls_pos_ == NullSortedPosition::First ? "nulls_first" : "nulls_last") + ")";
@@ -589,6 +595,10 @@ class RelSort : public RelAlgNode {
   RelSort(const std::vector<SortField>& collation, const int64_t limit, const int64_t offset, const RelAlgNode* input)
       : collation_(collation), limit_(limit), offset_(offset) {
     inputs_.emplace_back(input);
+  }
+
+  bool operator==(const RelSort& that) const {
+    return collation_ == that.collation_ && limit_ == that.limit_ && offset_ == that.offset_;
   }
 
   std::string toString() const override {
