@@ -334,17 +334,23 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(const Executor::RelAlgExecutionU
                                                 const ExecutionOptions& eo) {
   size_t max_groups_buffer_entry_guess{2048};
   int32_t error_code{0};
-  return {executor_->executeWorkUnit(&error_code,
-                                     max_groups_buffer_entry_guess,
-                                     is_agg,
-                                     get_table_infos(rel_alg_exe_unit.input_descs, cat_, temporary_tables_),
-                                     rel_alg_exe_unit,
-                                     co,
-                                     eo,
-                                     cat_,
-                                     executor_->row_set_mem_owner_,
-                                     nullptr),
-          targets_meta};
+  ExecutionResult result = {
+      executor_->executeWorkUnit(&error_code,
+                                 max_groups_buffer_entry_guess,
+                                 is_agg,
+                                 get_table_infos(rel_alg_exe_unit.input_descs, cat_, temporary_tables_),
+                                 rel_alg_exe_unit,
+                                 co,
+                                 eo,
+                                 cat_,
+                                 executor_->row_set_mem_owner_,
+                                 nullptr),
+      targets_meta};
+  if (error_code == Executor::ERR_DIV_BY_ZERO) {
+    throw std::runtime_error("Division by zero");
+  }
+  CHECK(!error_code);
+  return result;
 }
 
 #endif  // HAVE_CALCITE
