@@ -137,6 +137,19 @@ RexLiteral* parse_literal(const rapidjson::Value& expr) noexcept {
 
 RexScalar* parse_scalar_expr(const rapidjson::Value& expr);
 
+SQLTypeInfo parse_type(const rapidjson::Value& type_obj) {
+  CHECK(type_obj.IsObject() && (type_obj.MemberCount() == 2 || type_obj.MemberCount() == 4));
+  const auto type = to_sql_type(json_str(field(type_obj, "type")));
+  const auto nullable = json_bool(field(type_obj, "nullable"));
+  const bool has_precision = type_obj.MemberCount() == 4;
+  const int precision = has_precision ? json_i64(field(type_obj, "precision")) : 0;
+  const int scale = has_precision ? json_i64(field(type_obj, "scale")) : 0;
+  SQLTypeInfo ti(type, !nullable);
+  ti.set_precision(precision);
+  ti.set_scale(scale);
+  return ti;
+}
+
 RexOperator* parse_operator(const rapidjson::Value& expr) {
   const auto op = to_sql_op(json_str(field(expr, "op")));
   const auto& operators_json_arr = field(expr, "operands");
@@ -146,7 +159,13 @@ RexOperator* parse_operator(const rapidjson::Value& expr) {
        ++operators_json_arr_it) {
     operands.push_back(parse_scalar_expr(*operators_json_arr_it));
   }
-  return new RexOperator(op, operands);
+  const auto type_it = expr.FindMember("type");
+  CHECK_EQ(op == kCAST, type_it != expr.MemberEnd());
+  SQLTypeInfo ti;
+  if (op == kCAST) {
+    ti = parse_type(type_it->value);
+  }
+  return new RexOperator(op, operands, ti);
 }
 
 std::vector<std::string> strings_from_json_array(const rapidjson::Value& json_str_arr) {
@@ -173,18 +192,9 @@ std::vector<size_t> indices_from_json_array(const rapidjson::Value& json_idx_arr
 RexAgg* parse_aggregate_expr(const rapidjson::Value& expr) {
   const auto agg = to_agg_kind(json_str(field(expr, "agg")));
   const auto distinct = json_bool(field(expr, "distinct"));
-  const auto& type_json = field(expr, "type");
-  CHECK(type_json.IsObject() && (type_json.MemberCount() == 2 || type_json.MemberCount() == 4));
-  const auto type = to_sql_type(json_str(field(type_json, "type")));
-  const auto nullable = json_bool(field(type_json, "nullable"));
-  const bool has_precision = type_json.MemberCount() == 4;
-  const int precision = has_precision ? json_i64(field(type_json, "precision")) : 0;
-  const int scale = has_precision ? json_i64(field(type_json, "scale")) : 0;
+  const auto agg_ti = parse_type(field(expr, "type"));
   const auto operands = indices_from_json_array(field(expr, "operands"));
   CHECK_LE(operands.size(), size_t(1));
-  SQLTypeInfo agg_ti(type, !nullable);
-  agg_ti.set_precision(precision);
-  agg_ti.set_scale(scale);
   return new RexAgg(agg, distinct, agg_ti, operands.empty() ? -1 : operands[0]);
 }
 
@@ -291,7 +301,7 @@ const RexScalar* disambiguate_rex(const RexScalar* rex_scalar, const RANodeOutpu
     for (size_t i = 0; i < rex_operator->size(); ++i) {
       disambiguated_operands.push_back(disambiguate_rex(rex_operator->getOperand(i), ra_output));
     }
-    return new RexOperator(rex_operator->getOperator(), disambiguated_operands);
+    return new RexOperator(rex_operator->getOperator(), disambiguated_operands, rex_operator->getType());
   }
   const auto rex_literal = dynamic_cast<const RexLiteral*>(rex_scalar);
   CHECK(rex_literal);
@@ -739,9 +749,8 @@ std::shared_ptr<Analyzer::Expr> translate_uoper(const RexOperator* rex_operator,
   const auto sql_op = rex_operator->getOperator();
   switch (sql_op) {
     case kCAST: {
-      const auto rex_cast = dynamic_cast<const RexCast*>(rex_operator);
-      CHECK(rex_cast);
-      SQLTypeInfo target_ti(rex_cast->getTargetType(), !rex_cast->getNullable());
+      const auto& target_ti = rex_operator->getType();
+      CHECK_NE(kNULLT, target_ti.get_type());
       if (target_ti.is_time()) {  // TODO(alex): check and unify with the rest of the cases
         return operand_expr->add_cast(target_ti);
       }

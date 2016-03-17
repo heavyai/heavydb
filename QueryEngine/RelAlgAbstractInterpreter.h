@@ -125,7 +125,8 @@ class RexLiteral : public RexScalar {
 
 class RexOperator : public RexScalar {
  public:
-  RexOperator(const SQLOps op, const std::vector<const RexScalar*> operands) : op_(op) {
+  RexOperator(const SQLOps op, const std::vector<const RexScalar*> operands, const SQLTypeInfo& type)
+      : op_(op), type_(type) {
     for (auto operand : operands) {
       operands_.emplace_back(operand);
     }
@@ -140,6 +141,8 @@ class RexOperator : public RexScalar {
 
   SQLOps getOperator() const { return op_; }
 
+  const SQLTypeInfo& getType() const { return type_; }
+
   std::string toString() const override {
     std::string result = "(RexOperator " + std::to_string(op_);
     for (const auto& operand : operands_) {
@@ -151,24 +154,7 @@ class RexOperator : public RexScalar {
  private:
   const SQLOps op_;
   std::vector<std::unique_ptr<const RexScalar>> operands_;
-};
-
-class RexCast : public RexOperator {
- public:
-  RexCast(const RexScalar* operand, const SQLTypes target_type, const bool nullable)
-      : RexOperator(kCAST, {operand}), target_type_(target_type), nullable_(nullable) {}
-
-  SQLTypes getTargetType() const { return target_type_; }
-
-  bool getNullable() const { return nullable_; }
-
-  std::string toString() const override {
-    return "(RexCast " + getOperand(0)->toString() + " to " + std::to_string(target_type_) + ")";
-  }
-
- private:
-  SQLTypes target_type_;
-  const bool nullable_;
+  const SQLTypeInfo type_;
 };
 
 class RelAlgNode;
