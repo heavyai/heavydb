@@ -110,6 +110,7 @@ if(ENABLE_CALCITE)
     add_definitions("-DHAVE_CALCITE")
     find_package(JNI REQUIRED)
     include_directories(${JNI_INCLUDE_DIRS})
+    set(MAPD_PACKAGE_FLAGS "${MAPD_PACKAGE_FLAGS}-calcite")
 endif()
 
 option(ENABLE_RAVM "Enable RA vm" OFF)
