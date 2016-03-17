@@ -21,6 +21,7 @@ set(query_engine_source_files
     RelAlgAbstractInterpreter.cpp
     RelAlgExecutionDescriptor.cpp
     RelAlgExecutor.cpp
+    RelAlgTranslator.cpp
     RelAlgValidator.cpp
     RuntimeFunctions.cpp
     RuntimeFunctions.bc

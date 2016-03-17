@@ -1,5 +1,6 @@
 #ifdef HAVE_CALCITE
 #include "RelAlgExecutor.h"
+#include "RelAlgTranslator.h"
 
 #include "InputMetadata.h"
 #include "RexVisitor.h"
