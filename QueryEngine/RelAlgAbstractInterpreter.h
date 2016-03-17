@@ -181,6 +181,47 @@ class RexInput : public RexAbstractInput {
   mutable const RelAlgNode* node_;
 };
 
+class RexCase : public RexScalar {
+ public:
+  RexCase(const std::vector<std::pair<const RexScalar*, const RexScalar*>>& expr_pair_list, const RexScalar* else_expr)
+      : else_expr_(else_expr) {
+    for (const auto& expr_pair : expr_pair_list) {
+      expr_pair_list_.emplace_back(std::unique_ptr<const RexScalar>(expr_pair.first),
+                                   std::unique_ptr<const RexScalar>(expr_pair.second));
+    }
+  }
+
+  size_t branchCount() const { return expr_pair_list_.size(); }
+
+  const RexScalar* getWhen(const size_t idx) const {
+    CHECK(idx < expr_pair_list_.size());
+    return expr_pair_list_[idx].first.get();
+  }
+
+  const RexScalar* getThen(const size_t idx) const {
+    CHECK(idx < expr_pair_list_.size());
+    return expr_pair_list_[idx].second.get();
+  }
+
+  const RexScalar* getElse() const { return else_expr_.get(); }
+
+  std::string toString() const override {
+    std::string ret = "(RexCase";
+    for (const auto& expr_pair : expr_pair_list_) {
+      ret += " " + expr_pair.first->toString() + " -> " + expr_pair.second->toString();
+    }
+    if (else_expr_) {
+      ret += " else " + else_expr_->toString();
+    }
+    ret += ")";
+    return ret;
+  }
+
+ private:
+  std::vector<std::pair<std::unique_ptr<const RexScalar>, std::unique_ptr<const RexScalar>>> expr_pair_list_;
+  std::unique_ptr<const RexScalar> else_expr_;
+};
+
 class RexAgg : public Rex {
  public:
   RexAgg(const SQLAgg agg, const bool distinct, const SQLTypeInfo& type, const ssize_t operand)

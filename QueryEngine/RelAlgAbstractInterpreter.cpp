@@ -168,6 +168,24 @@ RexOperator* parse_operator(const rapidjson::Value& expr) {
   return new RexOperator(op, operands, ti);
 }
 
+RexCase* parse_case(const rapidjson::Value& expr) {
+  const auto& operands = field(expr, "operands");
+  CHECK(operands.IsArray());
+  CHECK_GE(operands.Size(), unsigned(2));
+  const RexScalar* else_expr{nullptr};
+  std::vector<std::pair<const RexScalar*, const RexScalar*>> expr_pair_list;
+  for (auto operands_it = operands.Begin(); operands_it != operands.End();) {
+    const auto when_expr = parse_scalar_expr(*operands_it++);
+    if (operands_it == operands.End()) {
+      else_expr = when_expr;
+      break;
+    }
+    const auto then_expr = parse_scalar_expr(*operands_it++);
+    expr_pair_list.emplace_back(when_expr, then_expr);
+  }
+  return new RexCase(expr_pair_list, else_expr);
+}
+
 std::vector<std::string> strings_from_json_array(const rapidjson::Value& json_str_arr) {
   CHECK(json_str_arr.IsArray());
   std::vector<std::string> fields;
@@ -207,6 +225,10 @@ RexScalar* parse_scalar_expr(const rapidjson::Value& expr) {
     return parse_literal(expr);
   }
   if (expr.IsObject() && expr.HasMember("op")) {
+    const auto op_str = json_str(field(expr, "op"));
+    if (op_str == std::string("CASE")) {
+      return parse_case(expr);
+    }
     return parse_operator(expr);
   }
   CHECK(false);
@@ -289,6 +311,26 @@ RANodeOutput get_node_output(const RelAlgNode* ra_node) {
   return outputs;
 }
 
+const RexScalar* disambiguate_rex(const RexScalar*, const RANodeOutput&);
+
+const RexOperator* disambiguate_operator(const RexOperator* rex_operator, const RANodeOutput& ra_output) {
+  std::vector<const RexScalar*> disambiguated_operands;
+  for (size_t i = 0; i < rex_operator->size(); ++i) {
+    disambiguated_operands.push_back(disambiguate_rex(rex_operator->getOperand(i), ra_output));
+  }
+  return new RexOperator(rex_operator->getOperator(), disambiguated_operands, rex_operator->getType());
+}
+
+const RexCase* disambiguate_case(const RexCase* rex_case, const RANodeOutput& ra_output) {
+  std::vector<std::pair<const RexScalar*, const RexScalar*>> disambiguated_expr_pair_list;
+  for (size_t i = 0; i < rex_case->branchCount(); ++i) {
+    const auto disambiguated_when = disambiguate_rex(rex_case->getWhen(i), ra_output);
+    const auto disambiguated_then = disambiguate_rex(rex_case->getThen(i), ra_output);
+    disambiguated_expr_pair_list.emplace_back(disambiguated_when, disambiguated_then);
+  }
+  return new RexCase(disambiguated_expr_pair_list, disambiguate_rex(rex_case->getElse(), ra_output));
+}
+
 const RexScalar* disambiguate_rex(const RexScalar* rex_scalar, const RANodeOutput& ra_output) {
   const auto rex_abstract_input = dynamic_cast<const RexAbstractInput*>(rex_scalar);
   if (rex_abstract_input) {
@@ -297,11 +339,11 @@ const RexScalar* disambiguate_rex(const RexScalar* rex_scalar, const RANodeOutpu
   }
   const auto rex_operator = dynamic_cast<const RexOperator*>(rex_scalar);
   if (rex_operator) {
-    std::vector<const RexScalar*> disambiguated_operands;
-    for (size_t i = 0; i < rex_operator->size(); ++i) {
-      disambiguated_operands.push_back(disambiguate_rex(rex_operator->getOperand(i), ra_output));
-    }
-    return new RexOperator(rex_operator->getOperator(), disambiguated_operands, rex_operator->getType());
+    return disambiguate_operator(rex_operator, ra_output);
+  }
+  const auto rex_case = dynamic_cast<const RexCase*>(rex_scalar);
+  if (rex_case) {
+    return disambiguate_case(rex_case, ra_output);
   }
   const auto rex_literal = dynamic_cast<const RexLiteral*>(rex_scalar);
   CHECK(rex_literal);
@@ -799,6 +841,22 @@ std::shared_ptr<Analyzer::Expr> translate_oper(const RexOperator* rex_operator,
   return lhs;
 }
 
+std::shared_ptr<Analyzer::Expr> translate_case(const RexCase* rex_case,
+                                               const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
+                                               const Catalog_Namespace::Catalog& cat) {
+  std::shared_ptr<Analyzer::Expr> else_expr;
+  std::list<std::pair<std::shared_ptr<Analyzer::Expr>, std::shared_ptr<Analyzer::Expr>>> expr_list;
+  for (size_t i = 0; i < rex_case->branchCount(); ++i) {
+    const auto when_expr = translate_scalar_rex(rex_case->getWhen(i), input_to_nest_level, cat);
+    const auto then_expr = translate_scalar_rex(rex_case->getThen(i), input_to_nest_level, cat);
+    expr_list.emplace_back(when_expr, then_expr);
+  }
+  if (rex_case->getElse()) {
+    else_expr = translate_scalar_rex(rex_case->getElse(), input_to_nest_level, cat);
+  }
+  return Parser::CaseExpr::normalize(expr_list, else_expr);
+}
+
 }  // namespace
 
 std::shared_ptr<Analyzer::Expr> translate_scalar_rex(
@@ -816,6 +874,10 @@ std::shared_ptr<Analyzer::Expr> translate_scalar_rex(
   const auto rex_operator = dynamic_cast<const RexOperator*>(rex);
   if (rex_operator) {
     return translate_oper(rex_operator, input_to_nest_level, cat);
+  }
+  const auto rex_case = dynamic_cast<const RexCase*>(rex);
+  if (rex_case) {
+    return translate_case(rex_case, input_to_nest_level, cat);
   }
   CHECK(false);
   return nullptr;
