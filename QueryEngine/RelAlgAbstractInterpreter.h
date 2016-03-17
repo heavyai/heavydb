@@ -598,8 +598,6 @@ std::shared_ptr<Analyzer::Expr> translate_scalar_rex(
 
 std::shared_ptr<Analyzer::Expr> translate_aggregate_rex(
     const RexAgg* rex,
-    const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
-    const Catalog_Namespace::Catalog& cat,
     const std::vector<std::shared_ptr<Analyzer::Expr>>& scalar_sources);
 
 std::string tree_string(const RelAlgNode*, const size_t indent = 0);

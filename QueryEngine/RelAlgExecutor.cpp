@@ -206,7 +206,7 @@ std::vector<Analyzer::Expr*> translate_targets(std::vector<std::shared_ptr<Analy
     const auto target_rex_agg = dynamic_cast<const RexAgg*>(target_rex);
     std::shared_ptr<Analyzer::Expr> target_expr;
     if (target_rex_agg) {
-      target_expr = translate_aggregate_rex(target_rex_agg, input_to_nest_level, cat, scalar_sources);
+      target_expr = translate_aggregate_rex(target_rex_agg, scalar_sources);
     } else {
       const auto target_rex_scalar = dynamic_cast<const RexScalar*>(target_rex);
       target_expr = translate_scalar_rex(target_rex_scalar, input_to_nest_level, cat);
