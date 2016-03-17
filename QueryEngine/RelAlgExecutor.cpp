@@ -158,18 +158,6 @@ const RexScalar* scalar_at(const size_t i, const RelProject* project) {
   return project->getProjectAt(i);
 }
 
-std::shared_ptr<Analyzer::Expr> set_transient_dict(const std::shared_ptr<Analyzer::Expr> expr) {
-  const auto& ti = expr->get_type_info();
-  if (!ti.is_string() || ti.get_compression() != kENCODING_NONE) {
-    return expr;
-  }
-  auto transient_dict_ti = ti;
-  transient_dict_ti.set_compression(kENCODING_DICT);
-  transient_dict_ti.set_comp_param(TRANSIENT_DICT_ID);
-  transient_dict_ti.set_fixed_size();
-  return expr->add_cast(transient_dict_ti);
-}
-
 template <class RA>
 std::vector<std::shared_ptr<Analyzer::Expr>> translate_scalar_sources(
     const RA* ra_node,
@@ -177,7 +165,7 @@ std::vector<std::shared_ptr<Analyzer::Expr>> translate_scalar_sources(
     const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level) {
   std::vector<std::shared_ptr<Analyzer::Expr>> scalar_sources;
   for (size_t i = 0; i < get_scalar_sources_size(ra_node); ++i) {
-    scalar_sources.push_back(set_transient_dict(translate_scalar_rex(scalar_at(i, ra_node), input_to_nest_level, cat)));
+    scalar_sources.push_back(translate_scalar_rex(scalar_at(i, ra_node), input_to_nest_level, cat));
   }
   return scalar_sources;
 }
@@ -222,7 +210,7 @@ std::vector<Analyzer::Expr*> translate_targets(std::vector<std::shared_ptr<Analy
       target_expr = translate_aggregate_rex(target_rex_agg, scalar_sources);
     } else {
       const auto target_rex_scalar = dynamic_cast<const RexScalar*>(target_rex);
-      target_expr = set_transient_dict(translate_scalar_rex(target_rex_scalar, input_to_nest_level, cat));
+      target_expr = translate_scalar_rex(target_rex_scalar, input_to_nest_level, cat);
     }
     CHECK(target_expr);
     target_exprs_owned.push_back(target_expr);
