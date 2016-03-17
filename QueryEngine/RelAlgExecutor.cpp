@@ -165,6 +165,18 @@ const RexScalar* scalar_at(const size_t i, const RelProject* project) {
   return project->getProjectAt(i);
 }
 
+std::shared_ptr<Analyzer::Expr> set_transient_dict(const std::shared_ptr<Analyzer::Expr> expr) {
+  const auto& ti = expr->get_type_info();
+  if (!ti.is_string() || ti.get_compression() != kENCODING_NONE) {
+    return expr;
+  }
+  auto transient_dict_ti = ti;
+  transient_dict_ti.set_compression(kENCODING_DICT);
+  transient_dict_ti.set_comp_param(TRANSIENT_DICT_ID);
+  transient_dict_ti.set_fixed_size();
+  return expr->add_cast(transient_dict_ti);
+}
+
 template <class RA>
 std::vector<std::shared_ptr<Analyzer::Expr>> translate_scalar_sources(
     const RA* ra_node,
@@ -184,8 +196,8 @@ std::list<std::shared_ptr<Analyzer::Expr>> translate_groupby_exprs(
     return {nullptr};
   }
   std::list<std::shared_ptr<Analyzer::Expr>> groupby_exprs;
-  for (const auto group_idx : compound->getGroupIndices()) {
-    groupby_exprs.push_back(scalar_sources[group_idx]);
+  for (size_t group_idx = 0; group_idx < compound->getGroupByCount(); ++group_idx) {
+    groupby_exprs.push_back(set_transient_dict(scalar_sources[group_idx]));
   }
   return groupby_exprs;
 }
@@ -205,6 +217,7 @@ std::list<std::shared_ptr<Analyzer::Expr>> translate_quals(
 
 std::vector<Analyzer::Expr*> translate_targets(std::vector<std::shared_ptr<Analyzer::Expr>>& target_exprs_owned,
                                                const std::vector<std::shared_ptr<Analyzer::Expr>>& scalar_sources,
+                                               const std::list<std::shared_ptr<Analyzer::Expr>>& groupby_exprs,
                                                const RelCompound* compound,
                                                const Catalog_Namespace::Catalog& cat,
                                                const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level) {
@@ -217,7 +230,17 @@ std::vector<Analyzer::Expr*> translate_targets(std::vector<std::shared_ptr<Analy
       target_expr = translate_aggregate_rex(target_rex_agg, scalar_sources);
     } else {
       const auto target_rex_scalar = dynamic_cast<const RexScalar*>(target_rex);
-      target_expr = translate_scalar_rex(target_rex_scalar, input_to_nest_level, cat);
+      const auto target_rex_ref = dynamic_cast<const RexRef*>(target_rex_scalar);
+      if (target_rex_ref) {
+        const auto ref_idx = target_rex_ref->getIndex();
+        CHECK_GE(ref_idx, size_t(1));
+        CHECK_LE(ref_idx, groupby_exprs.size());
+        const auto groupby_expr = *std::next(groupby_exprs.begin(), ref_idx - 1);
+        target_expr =
+            makeExpr<Analyzer::Var>(groupby_expr->get_type_info(), 0, 0, -1, Analyzer::Var::kGROUPBY, ref_idx);
+      } else {
+        target_expr = translate_scalar_rex(target_rex_scalar, input_to_nest_level, cat);
+      }
     }
     CHECK(target_expr);
     target_exprs_owned.push_back(target_expr);
@@ -356,7 +379,8 @@ Executor::RelAlgExecutionUnit RelAlgExecutor::createCompoundWorkUnit(const RelCo
   const auto scalar_sources = translate_scalar_sources(compound, cat_, input_to_nest_level);
   const auto groupby_exprs = translate_groupby_exprs(compound, scalar_sources);
   const auto quals = translate_quals(compound, cat_, input_to_nest_level);
-  const auto target_exprs = translate_targets(target_exprs_owned_, scalar_sources, compound, cat_, input_to_nest_level);
+  const auto target_exprs =
+      translate_targets(target_exprs_owned_, scalar_sources, groupby_exprs, compound, cat_, input_to_nest_level);
   CHECK_EQ(compound->size(), target_exprs.size());
   const auto targets_meta = get_targets_meta(compound, target_exprs);
   compound->setOutputMetainfo(targets_meta);

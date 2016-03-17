@@ -222,6 +222,20 @@ class RexCase : public RexScalar {
   std::unique_ptr<const RexScalar> else_expr_;
 };
 
+// Not a real node created by Calcite. Created by us because targets of a query
+// should reference the group by expressions instead of creating completely new one.
+class RexRef : public RexScalar {
+ public:
+  RexRef(const size_t index) : index_(index) {}
+
+  size_t getIndex() const { return index_; }
+
+  virtual std::string toString() const { return "(RexRef " + std::to_string(index_) + ")"; }
+
+ private:
+  const size_t index_;
+};
+
 class RexAgg : public Rex {
  public:
   RexAgg(const SQLAgg agg, const bool distinct, const SQLTypeInfo& type, const ssize_t operand)
@@ -395,20 +409,20 @@ class RelProject : public RelAlgNode {
 class RelAggregate : public RelAlgNode {
  public:
   // Takes ownership of the aggregate expressions.
-  RelAggregate(const std::vector<size_t>& group_indices,
+  RelAggregate(const size_t groupby_count,
                const std::vector<const RexAgg*>& agg_exprs,
                const std::vector<std::string>& fields,
                const RelAlgNode* input)
-      : group_indices_(group_indices), fields_(fields) {
+      : groupby_count_(groupby_count), fields_(fields) {
     for (auto agg_expr : agg_exprs) {
       agg_exprs_.emplace_back(agg_expr);
     }
     inputs_.emplace_back(input);
   }
 
-  size_t size() const { return group_indices_.size() + agg_exprs_.size(); }
+  size_t size() const { return groupby_count_ + agg_exprs_.size(); }
 
-  const std::vector<size_t>& getGroupIndices() const { return group_indices_; }
+  const size_t getGroupByCount() const { return groupby_count_; }
 
   const std::vector<std::string>& getFields() const { return fields_; }
 
@@ -422,7 +436,7 @@ class RelAggregate : public RelAlgNode {
 
   std::string toString() const override {
     std::string result = "(RelAggregate<" + std::to_string(reinterpret_cast<uint64_t>(this)) + ">(groups: [";
-    for (const auto group_index : group_indices_) {
+    for (size_t group_index = 0; group_index < groupby_count_; ++group_index) {
       result += " " + std::to_string(group_index);
     }
     result += " ] aggs: [";
@@ -433,7 +447,7 @@ class RelAggregate : public RelAlgNode {
   }
 
  private:
-  const std::vector<size_t> group_indices_;
+  const size_t groupby_count_;
   std::vector<std::unique_ptr<const RexAgg>> agg_exprs_;
   const std::vector<std::string> fields_;
 };
@@ -501,14 +515,14 @@ class RelCompound : public RelAlgNode {
   // owned by 'scalar_sources_'.
   RelCompound(const RexScalar* filter_expr,
               const std::vector<const Rex*>& target_exprs,
-              const std::vector<size_t>& group_indices,
+              const size_t groupby_count,
               const std::vector<const RexAgg*>& agg_exprs,
               const std::vector<std::string>& fields,
               const std::vector<const RexScalar*>& scalar_sources,
               const bool is_agg)
       : filter_expr_(filter_expr),
         target_exprs_(target_exprs),
-        group_indices_(group_indices),
+        groupby_count_(groupby_count),
         fields_(fields),
         is_agg_(is_agg) {
     CHECK_EQ(fields.size(), target_exprs.size());
@@ -534,7 +548,7 @@ class RelCompound : public RelAlgNode {
 
   const RexScalar* getScalarSource(const size_t i) const { return scalar_sources_[i].get(); }
 
-  const std::vector<size_t>& getGroupIndices() const { return group_indices_; }
+  const size_t getGroupByCount() const { return groupby_count_; }
 
   bool isAggregate() const { return is_agg_; }
 
@@ -545,7 +559,7 @@ class RelCompound : public RelAlgNode {
       result += target_expr->toString() + " ";
     }
     result += "groups: [";
-    for (const size_t group_index : group_indices_) {
+    for (size_t group_index = 0; group_index < groupby_count_; ++group_index) {
       result += " " + std::to_string(group_index);
     }
     result += " ] sources: [";
@@ -558,7 +572,7 @@ class RelCompound : public RelAlgNode {
  private:
   const std::unique_ptr<const RexScalar> filter_expr_;
   const std::vector<const Rex*> target_exprs_;
-  const std::vector<size_t> group_indices_;
+  const size_t groupby_count_;
   std::vector<std::unique_ptr<const RexAgg>> agg_exprs_;
   const std::vector<std::string> fields_;
   const bool is_agg_;

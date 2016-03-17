@@ -416,7 +416,7 @@ void create_compound(std::vector<RelAlgNode*>& nodes, const std::vector<size_t>&
   CHECK_LE(pattern.size(), size_t(4));
   const RexScalar* filter_rex{nullptr};
   std::vector<const RexScalar*> scalar_sources;
-  std::vector<size_t> group_indices;
+  size_t groupby_count{0};
   std::vector<std::string> fields;
   std::vector<const RexAgg*> agg_exprs;
   std::vector<const Rex*> target_exprs;
@@ -460,11 +460,11 @@ void create_compound(std::vector<RelAlgNode*>& nodes, const std::vector<size_t>&
       is_agg = true;
       fields = ra_aggregate->getFields();
       agg_exprs = ra_aggregate->getAggregatesAndRelease();
-      group_indices = ra_aggregate->getGroupIndices();
+      groupby_count = ra_aggregate->getGroupByCount();
       decltype(target_exprs){}.swap(target_exprs);
-      for (const auto group_idx : group_indices) {
-        CHECK_LT(group_idx, scalar_sources.size());
-        target_exprs.push_back(scalar_sources[group_idx]);
+      CHECK_LE(groupby_count, scalar_sources.size());
+      for (size_t group_idx = 0; group_idx < groupby_count; ++group_idx) {
+        target_exprs.push_back(new RexRef(group_idx + 1));
       }
       for (const auto rex_agg : agg_exprs) {
         target_exprs.push_back(rex_agg);
@@ -473,7 +473,7 @@ void create_compound(std::vector<RelAlgNode*>& nodes, const std::vector<size_t>&
     }
   }
   auto compound_node =
-      new RelCompound(filter_rex, target_exprs, group_indices, agg_exprs, fields, scalar_sources, is_agg);
+      new RelCompound(filter_rex, target_exprs, groupby_count, agg_exprs, fields, scalar_sources, is_agg);
   auto old_node = nodes[pattern.back()];
   nodes[pattern.back()] = compound_node;
   auto first_node = nodes[pattern.front()];
@@ -660,13 +660,16 @@ class RaAbstractInterp {
   RelAggregate* dispatchAggregate(const rapidjson::Value& agg_ra) {
     const auto fields = strings_from_json_array(field(agg_ra, "fields"));
     const auto group = indices_from_json_array(field(agg_ra, "group"));
+    for (size_t i = 0; i < group.size(); ++i) {
+      CHECK_EQ(i, group[i]);
+    }
     const auto& aggs_json_arr = field(agg_ra, "aggs");
     CHECK(aggs_json_arr.IsArray());
     std::vector<const RexAgg*> aggs;
     for (auto aggs_json_arr_it = aggs_json_arr.Begin(); aggs_json_arr_it != aggs_json_arr.End(); ++aggs_json_arr_it) {
       aggs.push_back(parse_aggregate_expr(*aggs_json_arr_it));
     }
-    return new RelAggregate(group, aggs, fields, prev(agg_ra));
+    return new RelAggregate(group.size(), aggs, fields, prev(agg_ra));
   }
 
   RelJoin* dispatchJoin(const rapidjson::Value& join_ra) {
