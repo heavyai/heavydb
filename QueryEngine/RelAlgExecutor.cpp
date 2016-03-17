@@ -34,6 +34,12 @@ ExecutionResult RelAlgExecutor::executeRelAlgSeq(std::vector<RaExecutionDesc>& e
       addTemporaryTable(-filter->getId(), &exec_desc.getResult().getRows());
       continue;
     }
+    const auto sort = dynamic_cast<const RelSort*>(body);
+    if (sort) {
+      exec_desc.setResult(executeSort(sort, co, eo));
+      addTemporaryTable(-sort->getId(), &exec_desc.getResult().getRows());
+      continue;
+    }
     CHECK(false);
   }
   CHECK(!exec_descs.empty());
@@ -260,6 +266,27 @@ ExecutionResult RelAlgExecutor::executeFilter(const RelFilter* filter,
                                               const ExecutionOptions& eo) {
   const auto rel_alg_exe_unit = createFilterWorkUnit(filter);
   return executeWorkUnit(rel_alg_exe_unit, filter->getOutputMetainfo(), false, co, eo);
+}
+
+ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
+                                            const CompilationOptions& co,
+                                            const ExecutionOptions& eo) {
+  CHECK_EQ(size_t(1), sort->inputCount());
+  CHECK_EQ(size_t(0), sort->collationCount());
+  const auto source = sort->getInput(0);
+  CHECK(!dynamic_cast<const RelSort*>(source));
+  auto rel_alg_exe_unit = createWorkUnit(source);
+  const auto compound = dynamic_cast<const RelCompound*>(source);
+  auto source_result = executeWorkUnit(
+      rel_alg_exe_unit, source->getOutputMetainfo(), compound ? compound->isAggregate() : false, co, eo);
+  auto rows = source_result.getRows();
+  if (sort->getLimit() || sort->getOffset()) {
+    rows.dropFirstN(sort->getOffset());
+    if (sort->getLimit()) {
+      rows.keepFirstN(sort->getLimit());
+    }
+  }
+  return {rows, source_result.getTargetsMeta()};
 }
 
 ExecutionResult RelAlgExecutor::executeWorkUnit(const Executor::RelAlgExecutionUnit& rel_alg_exe_unit,

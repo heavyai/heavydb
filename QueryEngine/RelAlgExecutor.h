@@ -18,6 +18,8 @@ class RelAlgExecutor {
 
   ExecutionResult executeFilter(const RelFilter*, const CompilationOptions&, const ExecutionOptions&);
 
+  ExecutionResult executeSort(const RelSort*, const CompilationOptions&, const ExecutionOptions&);
+
   ExecutionResult executeWorkUnit(const Executor::RelAlgExecutionUnit& rel_alg_exe_unit,
                                   const std::vector<TargetMetaInfo>& targets_meta,
                                   const bool is_agg,

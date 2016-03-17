@@ -601,6 +601,17 @@ class RelSort : public RelAlgNode {
     return collation_ == that.collation_ && limit_ == that.limit_ && offset_ == that.offset_;
   }
 
+  size_t collationCount() const { return collation_.size(); }
+
+  SortField getCollation(const size_t i) const {
+    CHECK_LT(i, collation_.size());
+    return collation_[i];
+  }
+
+  int64_t getLimit() const { return limit_; }
+
+  int64_t getOffset() const { return offset_; }
+
   std::string toString() const override {
     std::string result = "(RelSort<" + std::to_string(reinterpret_cast<uint64_t>(this)) + ">(";
     result += "limit: " + std::to_string(limit_) + " ";
