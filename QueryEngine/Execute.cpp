@@ -2637,11 +2637,7 @@ ResultRows Executor::executeSortPlan(const Planner::Sort* sort_plan,
   if (just_explain) {
     return rows_to_sort;
   }
-  if (rows_to_sort.query_mem_desc_.sortOnGpu() && !rows_to_sort.definitelyHasNoRows()) {
-    rows_to_sort.gpuSort(sort_plan->get_order_entries());
-  } else {
-    rows_to_sort.sort(sort_plan->get_order_entries(), sort_plan->get_remove_duplicates(), limit + offset);
-  }
+  rows_to_sort.sort(sort_plan->get_order_entries(), sort_plan->get_remove_duplicates(), limit + offset);
   if (limit || offset) {
     rows_to_sort.dropFirstN(offset);
     if (limit) {
