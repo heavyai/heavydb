@@ -601,7 +601,7 @@ void ResultRows::sort(const std::list<Analyzer::OrderEntry>& order_entries,
     return;
   }
   if (query_mem_desc_.sortOnGpu()) {
-    gpuSort(order_entries, &executor_->catalog_->get_dataMgr());
+    gpuSort(order_entries);
     return;
   }
   if (query_mem_desc_.keyless_hash) {
@@ -688,7 +688,8 @@ void ResultRows::sort(const std::list<Analyzer::OrderEntry>& order_entries,
   }
 }
 
-void ResultRows::gpuSort(const std::list<Analyzer::OrderEntry>& order_entries, Data_Namespace::DataMgr* data_mgr) {
+void ResultRows::gpuSort(const std::list<Analyzer::OrderEntry>& order_entries) {
+  auto data_mgr = &executor_->catalog_->get_dataMgr();
   const int device_id{0};
   CHECK(in_place_);
   CHECK_EQ(size_t(1), in_place_group_by_buffers_.size());

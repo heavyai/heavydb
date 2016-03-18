@@ -823,7 +823,7 @@ class ResultRows {
     }
   }
 
-  void gpuSort(const std::list<Analyzer::OrderEntry>& order_entries, Data_Namespace::DataMgr* data_mgr);
+  void gpuSort(const std::list<Analyzer::OrderEntry>& order_entries);
 
   void setQueueTime(int64_t queue_time) { queue_time_ms_ = queue_time; }
 
