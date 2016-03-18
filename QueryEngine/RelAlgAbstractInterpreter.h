@@ -132,6 +132,10 @@ class RexOperator : public RexScalar {
     }
   }
 
+  virtual const RexOperator* getDisambiguated(const std::vector<const RexScalar*>& operands) const {
+    return new RexOperator(op_, operands, type_);
+  }
+
   size_t size() const { return operands_.size(); }
 
   const RexScalar* getOperand(const size_t idx) const {
@@ -151,7 +155,7 @@ class RexOperator : public RexScalar {
     return result + ")";
   };
 
- private:
+ protected:
   const SQLOps op_;
   std::vector<std::unique_ptr<const RexScalar>> operands_;
   const SQLTypeInfo type_;
@@ -181,6 +185,7 @@ class RexInput : public RexAbstractInput {
   mutable const RelAlgNode* node_;
 };
 
+// Not a real node created by Calcite. Created by us because CaseExpr is a node in our Analyzer.
 class RexCase : public RexScalar {
  public:
   RexCase(const std::vector<std::pair<const RexScalar*, const RexScalar*>>& expr_pair_list, const RexScalar* else_expr)
@@ -220,6 +225,29 @@ class RexCase : public RexScalar {
  private:
   std::vector<std::pair<std::unique_ptr<const RexScalar>, std::unique_ptr<const RexScalar>>> expr_pair_list_;
   std::unique_ptr<const RexScalar> else_expr_;
+};
+
+class RexFunctionOperator : public RexOperator {
+ public:
+  RexFunctionOperator(const std::string& name, const std::vector<const RexScalar*> operands)
+      : RexOperator(kFUNCTION, operands, SQLTypeInfo()), name_(name) {}
+
+  virtual const RexOperator* getDisambiguated(const std::vector<const RexScalar*>& operands) const override {
+    return new RexFunctionOperator(name_, operands);
+  }
+
+  const std::string& getName() const { return name_; }
+
+  std::string toString() const override {
+    auto result = "(RexFunctionOperator " + name_;
+    for (const auto& operand : operands_) {
+      result += (" " + operand->toString());
+    }
+    return result + ")";
+  }
+
+ private:
+  const std::string name_;
 };
 
 // Not a real node created by Calcite. Created by us because targets of a query

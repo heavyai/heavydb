@@ -239,13 +239,17 @@ SQLTypeInfo parse_type(const rapidjson::Value& type_obj) {
 }
 
 RexOperator* parse_operator(const rapidjson::Value& expr) {
-  const auto op = to_sql_op(json_str(field(expr, "op")));
+  const auto op_name = json_str(field(expr, "op"));
+  const auto op = to_sql_op(op_name);
   const auto& operators_json_arr = field(expr, "operands");
   CHECK(operators_json_arr.IsArray());
   std::vector<const RexScalar*> operands;
   for (auto operators_json_arr_it = operators_json_arr.Begin(); operators_json_arr_it != operators_json_arr.End();
        ++operators_json_arr_it) {
     operands.push_back(parse_scalar_expr(*operators_json_arr_it));
+  }
+  if (op == kFUNCTION) {
+    return new RexFunctionOperator(op_name, operands);
   }
   const auto type_it = expr.FindMember("type");
   CHECK_EQ(op == kCAST, type_it != expr.MemberEnd());
@@ -341,7 +345,7 @@ const RexOperator* disambiguate_operator(const RexOperator* rex_operator, const 
   for (size_t i = 0; i < rex_operator->size(); ++i) {
     disambiguated_operands.push_back(disambiguate_rex(rex_operator->getOperand(i), ra_output));
   }
-  return new RexOperator(rex_operator->getOperator(), disambiguated_operands, rex_operator->getType());
+  return rex_operator->getDisambiguated(disambiguated_operands);
 }
 
 const RexCase* disambiguate_case(const RexCase* rex_case, const RANodeOutput& ra_output) {

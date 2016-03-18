@@ -177,6 +177,30 @@ std::shared_ptr<Analyzer::Expr> translate_case(const RexCase* rex_case,
   return Parser::CaseExpr::normalize(expr_list, else_expr);
 }
 
+std::shared_ptr<Analyzer::Expr> translate_like(const RexFunctionOperator* rex_function,
+                                               const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
+                                               const Catalog_Namespace::Catalog& cat) {
+  CHECK(rex_function->size() == 2 || rex_function->size() == 3);
+  const auto arg = translate_scalar_rex(rex_function->getOperand(0), input_to_nest_level, cat);
+  const auto like = translate_scalar_rex(rex_function->getOperand(1), input_to_nest_level, cat);
+  const auto escape = (rex_function->size() == 3)
+                          ? translate_scalar_rex(rex_function->getOperand(2), input_to_nest_level, cat)
+                          : nullptr;
+  const bool is_ilike = rex_function->getName() == std::string("PG_ILIKE");
+  return Parser::LikeExpr::get(arg, like, escape, is_ilike, false);
+}
+
+std::shared_ptr<Analyzer::Expr> translate_function(
+    const RexFunctionOperator* rex_function,
+    const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
+    const Catalog_Namespace::Catalog& cat) {
+  if (rex_function->getName() == std::string("LIKE") || rex_function->getName() == std::string("PG_ILIKE")) {
+    return translate_like(rex_function, input_to_nest_level, cat);
+  }
+  CHECK(false);
+  return nullptr;
+}
+
 }  // namespace
 
 std::shared_ptr<Analyzer::Expr> translate_scalar_rex(
@@ -190,6 +214,10 @@ std::shared_ptr<Analyzer::Expr> translate_scalar_rex(
   const auto rex_literal = dynamic_cast<const RexLiteral*>(rex);
   if (rex_literal) {
     return translate_literal(rex_literal);
+  }
+  const auto rex_function = dynamic_cast<const RexFunctionOperator*>(rex);
+  if (rex_function) {
+    return translate_function(rex_function, input_to_nest_level, cat);
   }
   const auto rex_operator = dynamic_cast<const RexOperator*>(rex);
   if (rex_operator) {
