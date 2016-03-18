@@ -268,25 +268,44 @@ ExecutionResult RelAlgExecutor::executeFilter(const RelFilter* filter,
   return executeWorkUnit(rel_alg_exe_unit, filter->getOutputMetainfo(), false, co, eo);
 }
 
+namespace {
+
+// TODO(alex): Once we're fully migrated to the relational algebra model, change
+// the executor interface to use the collation directly and remove this conversion.
+std::list<Analyzer::OrderEntry> get_order_entries(const RelSort* sort) {
+  std::list<Analyzer::OrderEntry> result;
+  for (size_t i = 0; i < sort->collationCount(); ++i) {
+    const auto sort_field = sort->getCollation(i);
+    result.emplace_back(sort_field.getField() + 1,
+                        sort_field.getSortDir() == SortDirection::Descending,
+                        sort_field.getNullsPosition() == NullSortedPosition::First);
+  }
+  return result;
+}
+
+}  // namespace
+
 ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
                                             const CompilationOptions& co,
                                             const ExecutionOptions& eo) {
   CHECK_EQ(size_t(1), sort->inputCount());
-  CHECK_EQ(size_t(0), sort->collationCount());
   const auto source = sort->getInput(0);
   CHECK(!dynamic_cast<const RelSort*>(source));
   auto rel_alg_exe_unit = createWorkUnit(source);
   const auto compound = dynamic_cast<const RelCompound*>(source);
   auto source_result = executeWorkUnit(
       rel_alg_exe_unit, source->getOutputMetainfo(), compound ? compound->isAggregate() : false, co, eo);
-  auto rows = source_result.getRows();
+  auto rows_to_sort = source_result.getRows();
+  if (sort->collationCount() != 0) {
+    rows_to_sort.sort(get_order_entries(sort), false, sort->getLimit() + sort->getOffset());
+  }
   if (sort->getLimit() || sort->getOffset()) {
-    rows.dropFirstN(sort->getOffset());
+    rows_to_sort.dropFirstN(sort->getOffset());
     if (sort->getLimit()) {
-      rows.keepFirstN(sort->getLimit());
+      rows_to_sort.keepFirstN(sort->getLimit());
     }
   }
-  return {rows, source_result.getTargetsMeta()};
+  return {rows_to_sort, source_result.getTargetsMeta()};
 }
 
 ExecutionResult RelAlgExecutor::executeWorkUnit(const Executor::RelAlgExecutionUnit& rel_alg_exe_unit,

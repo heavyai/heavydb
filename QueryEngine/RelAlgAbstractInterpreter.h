@@ -579,6 +579,12 @@ class SortField {
     return field_ == that.field_ && sort_dir_ == that.sort_dir_ && nulls_pos_ == that.nulls_pos_;
   }
 
+  size_t getField() const { return field_; }
+
+  SortDirection getSortDir() const { return sort_dir_; }
+
+  NullSortedPosition getNullsPosition() const { return nulls_pos_; }
+
   std::string toString() const {
     return "(" + std::to_string(field_) + " " + (sort_dir_ == SortDirection::Ascending ? "asc" : "desc") + " " +
            (nulls_pos_ == NullSortedPosition::First ? "nulls_first" : "nulls_last") + ")";
