@@ -644,7 +644,7 @@ llvm::Function* query_group_by_template(llvm::Module* mod,
           agg_init_val,
           ConstantInt::get(IntegerType::get(mod->getContext(), 32), query_mem_desc.entry_count),
           ConstantInt::get(IntegerType::get(mod->getContext(), 32), query_mem_desc.group_col_widths.size()),
-          ConstantInt::get(IntegerType::get(mod->getContext(), 32), query_mem_desc.agg_col_widths.size()),
+          ConstantInt::get(IntegerType::get(mod->getContext(), 32), query_mem_desc.getRowSize() / sizeof(int64_t)),
       },
       "",
       bb_entry);
