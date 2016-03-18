@@ -597,6 +597,18 @@ __attribute__((always_inline)) inline double pair_to_double(const std::pair<int6
 void ResultRows::sort(const std::list<Analyzer::OrderEntry>& order_entries,
                       const bool remove_duplicates,
                       const int64_t top_n) {
+  if (definitelyHasNoRows()) {
+    return;
+  }
+  if (query_mem_desc_.sortOnGpu()) {
+    gpuSort(order_entries, &executor_->catalog_->get_dataMgr());
+    return;
+  }
+  if (query_mem_desc_.keyless_hash) {
+    addKeylessGroupByBuffer(group_by_buffer_, groups_buffer_entry_count_, min_val_, warp_count_, output_columnar_);
+    in_place_ = false;
+    group_by_buffer_ = nullptr;
+  }
   CHECK(!in_place_);
   const bool use_heap{order_entries.size() == 1 && !remove_duplicates && top_n};
   auto compare = [this, &order_entries, use_heap](const InternalRow& lhs, const InternalRow& rhs) {
@@ -674,6 +686,65 @@ void ResultRows::sort(const std::list<Analyzer::OrderEntry>& order_entries,
   if (remove_duplicates) {
     target_values_.removeDuplicates();
   }
+}
+
+void ResultRows::gpuSort(const std::list<Analyzer::OrderEntry>& order_entries, Data_Namespace::DataMgr* data_mgr) {
+  const int device_id{0};
+  CHECK(in_place_);
+  CHECK_EQ(size_t(1), in_place_group_by_buffers_.size());
+  std::vector<int64_t*> group_by_buffers(executor_->blockSize());
+  group_by_buffers[0] = in_place_group_by_buffers_.front();
+  auto gpu_query_mem = create_dev_group_by_buffers(data_mgr,
+                                                   group_by_buffers,
+                                                   {},
+                                                   query_mem_desc_,
+                                                   executor_->blockSize(),
+                                                   executor_->gridSize(),
+                                                   device_id,
+                                                   true,
+                                                   true,
+                                                   nullptr);
+  ScopedScratchBuffer scratch_buff(query_mem_desc_.entry_count * sizeof(int64_t), data_mgr, device_id);
+  auto tmp_buff = reinterpret_cast<int64_t*>(scratch_buff.getPtr());
+  CHECK_EQ(size_t(1), order_entries.size());
+  CHECK_EQ(size_t(1), order_entries.size());
+  const auto idx_buff = gpu_query_mem.group_by_buffers.second - query_mem_desc_.entry_count * sizeof(int64_t);
+  for (const auto& order_entry : order_entries) {
+    const auto val_buff = gpu_query_mem.group_by_buffers.second +
+                          (order_entry.tle_no - 1 + (query_mem_desc_.keyless_hash ? 0 : 1)) *
+                              query_mem_desc_.entry_count * sizeof(int64_t);
+    sort_groups(reinterpret_cast<int64_t*>(val_buff),
+                reinterpret_cast<int64_t*>(idx_buff),
+                query_mem_desc_.entry_count,
+                order_entry.is_desc);
+    if (!query_mem_desc_.keyless_hash) {
+      apply_permutation(reinterpret_cast<int64_t*>(gpu_query_mem.group_by_buffers.second),
+                        reinterpret_cast<int64_t*>(idx_buff),
+                        query_mem_desc_.entry_count,
+                        tmp_buff);
+    }
+    for (size_t target_idx = 0; target_idx < query_mem_desc_.agg_col_widths.size(); ++target_idx) {
+      if (static_cast<int>(target_idx) == order_entry.tle_no - 1) {
+        continue;
+      }
+      const auto val_buff =
+          gpu_query_mem.group_by_buffers.second +
+          (target_idx + (query_mem_desc_.keyless_hash ? 0 : 1)) * query_mem_desc_.entry_count * sizeof(int64_t);
+      apply_permutation(reinterpret_cast<int64_t*>(val_buff),
+                        reinterpret_cast<int64_t*>(idx_buff),
+                        query_mem_desc_.entry_count,
+                        tmp_buff);
+    }
+  }
+  copy_group_by_buffers_from_gpu(data_mgr,
+                                 group_by_buffers,
+                                 query_mem_desc_.getBufferSizeBytes(ExecutorDeviceType::GPU),
+                                 gpu_query_mem.group_by_buffers.second,
+                                 query_mem_desc_,
+                                 executor_->blockSize(),
+                                 executor_->gridSize(),
+                                 device_id,
+                                 false);
 }
 
 #undef UNLIKELY
