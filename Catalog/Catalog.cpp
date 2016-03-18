@@ -667,9 +667,35 @@ list<const FrontendViewDescriptor*> Catalog::getAllFrontendViewMetadata() const 
   return view_list;
 }
 
-void Catalog::createTable(TableDescriptor& td, const list<ColumnDescriptor>& columns) {
+void Catalog::createTable(TableDescriptor& td, const list<ColumnDescriptor>& cols) {
   list<ColumnDescriptor> cds;
   list<DictDescriptor> dds;
+
+  for (auto cd : cols) {
+    if (cd.columnName == "rowid") {
+      throw std::runtime_error("Cannot create column with name rowid. rowid is a system defined column.");
+    }
+  }
+
+  list<ColumnDescriptor> columns(cols);
+  // add row_id column
+  ColumnDescriptor cd;
+  cd.columnName = "rowid";
+  cd.isSystemCol = true;
+  cd.columnType.set_type(kBIGINT);
+  cd.columnType.set_notnull(true);
+  cd.columnType.set_compression(kENCODING_NONE);
+  cd.columnType.set_comp_param(0);
+#ifdef MATERIALIZED_ROWID
+  cd.isVirtualCol = false;
+#else
+  cd.isVirtualCol = true;
+  cd.virtualExpr = "MAPD_FRAG_ID * MAPD_ROWS_PER_FRAG + MAPD_FRAG_ROW_ID";
+#endif
+  columns.push_back(cd);
+
+  td.nColumns = columns.size();
+
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
     sqliteConnector_.query_with_text_params(

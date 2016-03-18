@@ -1436,21 +1436,6 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     cd.isVirtualCol = false;
     columns.push_back(cd);
   }
-  // add row_id column
-  ColumnDescriptor cd;
-  cd.columnName = "rowid";
-  cd.isSystemCol = true;
-  cd.columnType.set_type(kBIGINT);
-  cd.columnType.set_notnull(true);
-  cd.columnType.set_compression(kENCODING_NONE);
-  cd.columnType.set_comp_param(0);
-#ifdef MATERIALIZED_ROWID
-  cd.isVirtualCol = false;
-#else
-  cd.isVirtualCol = true;
-  cd.virtualExpr = "MAPD_FRAG_ID * MAPD_ROWS_PER_FRAG + MAPD_FRAG_ROW_ID";
-#endif
-  columns.push_back(cd);
 
   TableDescriptor td;
   td.tableName = *table;
