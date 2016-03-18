@@ -225,12 +225,13 @@ RexLiteral* parse_literal(const rapidjson::Value& expr) noexcept {
 RexScalar* parse_scalar_expr(const rapidjson::Value& expr);
 
 SQLTypeInfo parse_type(const rapidjson::Value& type_obj) {
-  CHECK(type_obj.IsObject() && (type_obj.MemberCount() == 2 || type_obj.MemberCount() == 4));
+  CHECK(type_obj.IsObject() && (type_obj.MemberCount() >= 2 && type_obj.MemberCount() <= 4));
   const auto type = to_sql_type(json_str(field(type_obj, "type")));
   const auto nullable = json_bool(field(type_obj, "nullable"));
-  const bool has_precision = type_obj.MemberCount() == 4;
+  const bool has_precision = type_obj.MemberCount() >= 3;
+  const bool has_scale = type_obj.MemberCount() == 4;
   const int precision = has_precision ? json_i64(field(type_obj, "precision")) : 0;
-  const int scale = has_precision ? json_i64(field(type_obj, "scale")) : 0;
+  const int scale = has_scale ? json_i64(field(type_obj, "scale")) : 0;
   SQLTypeInfo ti(type, !nullable);
   ti.set_precision(precision);
   ti.set_scale(scale);
