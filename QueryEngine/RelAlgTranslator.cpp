@@ -190,12 +190,30 @@ std::shared_ptr<Analyzer::Expr> translate_like(const RexFunctionOperator* rex_fu
   return Parser::LikeExpr::get(arg, like, escape, is_ilike, false);
 }
 
+std::shared_ptr<Analyzer::Expr> translate_extract(const RexFunctionOperator* rex_function,
+                                                  const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
+                                                  const Catalog_Namespace::Catalog& cat) {
+  CHECK_EQ(size_t(2), rex_function->size());
+  const auto timeunit = translate_scalar_rex(rex_function->getOperand(0), input_to_nest_level, cat);
+  const auto timeunit_lit = std::dynamic_pointer_cast<Analyzer::Constant>(timeunit);
+  if (!timeunit_lit) {
+    throw std::runtime_error("The time unit parameter must be a literal.");
+  }
+  const auto from_expr = translate_scalar_rex(rex_function->getOperand(1), input_to_nest_level, cat);
+  const bool is_date_trunc = rex_function->getName() == std::string("PG_DATE_TRUNC");
+  return is_date_trunc ? Parser::DatetruncExpr::get(from_expr, *timeunit_lit->get_constval().stringval)
+                       : Parser::ExtractExpr::get(from_expr, *timeunit_lit->get_constval().stringval);
+}
+
 std::shared_ptr<Analyzer::Expr> translate_function(
     const RexFunctionOperator* rex_function,
     const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
     const Catalog_Namespace::Catalog& cat) {
   if (rex_function->getName() == std::string("LIKE") || rex_function->getName() == std::string("PG_ILIKE")) {
     return translate_like(rex_function, input_to_nest_level, cat);
+  }
+  if (rex_function->getName() == std::string("PG_EXTRACT") || rex_function->getName() == std::string("PG_DATE_TRUNC")) {
+    return translate_extract(rex_function, input_to_nest_level, cat);
   }
   CHECK(false);
   return nullptr;
