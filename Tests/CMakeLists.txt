@@ -36,9 +36,6 @@ add_test(StringDictionaryTest StringDictionaryTest ${TEST_ARGS})
 add_test(StorageTest StorageTest ${TEST_ARGS})
 add_test(StoragePerfTest StoragePerfTest ${TEST_ARGS})
 
-install(TARGETS ExecuteTest RunQueryLoop StringDictionaryTest PlanTest
-    UtilTest StorageTest StoragePerfTest DESTINATION Tests)
-
 add_custom_target(sanity_tests
     COMMAND mkdir -p ${TEST_BASE_PATH}
     COMMAND initdb -f ${TEST_BASE_PATH}
