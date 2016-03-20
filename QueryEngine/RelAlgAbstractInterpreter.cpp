@@ -240,7 +240,8 @@ SQLTypeInfo parse_type(const rapidjson::Value& type_obj) {
 
 RexOperator* parse_operator(const rapidjson::Value& expr) {
   const auto op_name = json_str(field(expr, "op"));
-  const auto op = to_sql_op(op_name);
+  const bool is_quantifier = op_name == std::string("PG_ANY") || op_name == std::string("PG_ALL");
+  const auto op = is_quantifier ? kFUNCTION : to_sql_op(op_name);
   const auto& operators_json_arr = field(expr, "operands");
   CHECK(operators_json_arr.IsArray());
   std::vector<const RexScalar*> operands;

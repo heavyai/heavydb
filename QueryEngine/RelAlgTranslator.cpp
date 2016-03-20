@@ -141,6 +141,30 @@ std::shared_ptr<Analyzer::Expr> translate_uoper(const RexOperator* rex_operator,
   return nullptr;
 }
 
+std::pair<std::shared_ptr<Analyzer::Expr>, SQLQualifier> get_quantified_rhs(
+    const RexScalar* rex_scalar,
+    const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
+    const Catalog_Namespace::Catalog& cat) {
+  std::shared_ptr<Analyzer::Expr> rhs;
+  SQLQualifier sql_qual{kONE};
+  const auto rex_operator = dynamic_cast<const RexOperator*>(rex_scalar);
+  if (!rex_operator) {
+    return std::make_pair(rhs, sql_qual);
+  }
+  const auto rex_function = dynamic_cast<const RexFunctionOperator*>(rex_operator);
+  const auto qual_str = rex_function ? rex_function->getName() : "";
+  if (qual_str == std::string("PG_ANY") || qual_str == std::string("PG_ALL")) {
+    CHECK_EQ(size_t(1), rex_function->size());
+    rhs = translate_scalar_rex(rex_function->getOperand(0), input_to_nest_level, cat);
+    sql_qual = qual_str == std::string("PG_ANY") ? kANY : kALL;
+  }
+  if (!rhs && rex_operator->getOperator() == kCAST) {
+    CHECK_EQ(size_t(1), rex_operator->size());
+    std::tie(rhs, sql_qual) = get_quantified_rhs(rex_operator->getOperand(0), input_to_nest_level, cat);
+  }
+  return std::make_pair(rhs, sql_qual);
+}
+
 std::shared_ptr<Analyzer::Expr> translate_oper(const RexOperator* rex_operator,
                                                const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
                                                const Catalog_Namespace::Catalog& cat) {
@@ -151,12 +175,19 @@ std::shared_ptr<Analyzer::Expr> translate_oper(const RexOperator* rex_operator,
   const auto sql_op = rex_operator->getOperator();
   auto lhs = translate_scalar_rex(rex_operator->getOperand(0), input_to_nest_level, cat);
   for (size_t i = 1; i < rex_operator->size(); ++i) {
-    auto rhs = translate_scalar_rex(rex_operator->getOperand(i), input_to_nest_level, cat);
+    std::shared_ptr<Analyzer::Expr> rhs;
+    SQLQualifier sql_qual{kONE};
+    const auto rhs_op = rex_operator->getOperand(i);
+    std::tie(rhs, sql_qual) = get_quantified_rhs(rhs_op, input_to_nest_level, cat);
+    if (!rhs) {
+      rhs = translate_scalar_rex(rhs_op, input_to_nest_level, cat);
+    }
+    CHECK(rhs);
     if (sql_op == kEQ || sql_op == kNE) {
       lhs = remove_cast(lhs);
       rhs = remove_cast(rhs);
     }
-    lhs = Parser::OperExpr::normalize(sql_op, kONE, lhs, rhs);
+    lhs = Parser::OperExpr::normalize(sql_op, sql_qual, lhs, rhs);
   }
   return lhs;
 }
