@@ -214,6 +214,15 @@ std::shared_ptr<Analyzer::Expr> translate_length(const RexFunctionOperator* rex_
                                             rex_function->getName() == std::string("CHAR_LENGTH"));
 }
 
+std::shared_ptr<Analyzer::Expr> translate_item(const RexFunctionOperator* rex_function,
+                                               const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
+                                               const Catalog_Namespace::Catalog& cat) {
+  CHECK_EQ(size_t(2), rex_function->size());
+  const auto base = translate_scalar_rex(rex_function->getOperand(0), input_to_nest_level, cat);
+  const auto index = translate_scalar_rex(rex_function->getOperand(1), input_to_nest_level, cat);
+  return makeExpr<Analyzer::BinOper>(base->get_type_info().get_elem_type(), false, kARRAY_AT, kONE, base, index);
+}
+
 std::shared_ptr<Analyzer::Expr> translate_function(
     const RexFunctionOperator* rex_function,
     const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
@@ -226,6 +235,9 @@ std::shared_ptr<Analyzer::Expr> translate_function(
   }
   if (rex_function->getName() == std::string("LENGTH") || rex_function->getName() == std::string("CHAR_LENGTH")) {
     return translate_length(rex_function, input_to_nest_level, cat);
+  }
+  if (rex_function->getName() == std::string("ITEM")) {
+    return translate_item(rex_function, input_to_nest_level, cat);
   }
   CHECK(false);
   return nullptr;
