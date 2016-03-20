@@ -205,6 +205,15 @@ std::shared_ptr<Analyzer::Expr> translate_extract(const RexFunctionOperator* rex
                        : Parser::ExtractExpr::get(from_expr, *timeunit_lit->get_constval().stringval);
 }
 
+std::shared_ptr<Analyzer::Expr> translate_length(const RexFunctionOperator* rex_function,
+                                                 const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
+                                                 const Catalog_Namespace::Catalog& cat) {
+  CHECK_EQ(size_t(1), rex_function->size());
+  const auto str_arg = translate_scalar_rex(rex_function->getOperand(0), input_to_nest_level, cat);
+  return makeExpr<Analyzer::CharLengthExpr>(str_arg->decompress(),
+                                            rex_function->getName() == std::string("CHAR_LENGTH"));
+}
+
 std::shared_ptr<Analyzer::Expr> translate_function(
     const RexFunctionOperator* rex_function,
     const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
@@ -214,6 +223,9 @@ std::shared_ptr<Analyzer::Expr> translate_function(
   }
   if (rex_function->getName() == std::string("PG_EXTRACT") || rex_function->getName() == std::string("PG_DATE_TRUNC")) {
     return translate_extract(rex_function, input_to_nest_level, cat);
+  }
+  if (rex_function->getName() == std::string("LENGTH") || rex_function->getName() == std::string("CHAR_LENGTH")) {
+    return translate_length(rex_function, input_to_nest_level, cat);
   }
   CHECK(false);
   return nullptr;
