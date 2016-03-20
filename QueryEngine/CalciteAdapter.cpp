@@ -139,20 +139,16 @@ class CalciteAdapter {
     }
     CHECK(rhs_op_it->value.IsString());
     const auto& qual_str = rhs_op_it->value.GetString();
+    const auto rhs_op_operands_it = rhs_op.FindMember("operands");
+    CHECK(rhs_op_operands_it != rhs_op.MemberEnd());
+    const auto& rhs_op_operands = rhs_op_operands_it->value;
+    CHECK(rhs_op_operands.IsArray());
     if (qual_str == std::string("PG_ANY") || qual_str == std::string("PG_ALL")) {
-      const auto rhs_op_operands_it = rhs_op.FindMember("operands");
-      CHECK(rhs_op_operands_it != rhs_op.MemberEnd());
-      const auto& rhs_op_operands = rhs_op_operands_it->value;
-      CHECK(rhs_op_operands.IsArray());
       CHECK_EQ(unsigned(1), rhs_op_operands.Size());
       rhs = getExprFromNode(rhs_op_operands[0], scan_targets);
       sql_qual = qual_str == std::string("PG_ANY") ? kANY : kALL;
     }
     if (!rhs && qual_str == std::string("CAST")) {
-      const auto rhs_op_operands_it = rhs_op.FindMember("operands");
-      CHECK(rhs_op_operands_it != rhs_op.MemberEnd());
-      const auto& rhs_op_operands = rhs_op_operands_it->value;
-      CHECK(rhs_op_operands.IsArray());
       CHECK_EQ(unsigned(1), rhs_op_operands.Size());
       std::tie(rhs, sql_qual) = getQuantifiedRhs(rhs_op_operands[0], scan_targets);
     }
