@@ -110,6 +110,7 @@ if(ENABLE_CALCITE)
     add_definitions("-DHAVE_CALCITE")
     find_package(JNI REQUIRED)
     include_directories(${JNI_INCLUDE_DIRS})
+    set(MAPD_PACKAGE_FLAGS "${MAPD_PACKAGE_FLAGS}-calcite")
 endif()
 
 option(ENABLE_RAVM "Enable RA vm" OFF)
@@ -266,21 +267,22 @@ if(MAPD2_FRONTEND_DOWNLOAD)
   add_custom_command(TARGET frontend COMMAND ${CMAKE_COMMAND} -E copy_directory ${source_dir} frontend)
 endif()
 
-## Go server
+## Go web server
 find_program(GO_EXECUTABLE NAMES go)
-if(GO_EXECUTABLE)
-  # fake GO15VENDOREXPERIMENT since Go 1.5 is not available on all build platforms
-  add_custom_target(mapd_web_server ALL
-    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/ThirdParty/go/src/mapd/vendor/ ${CMAKE_BINARY_DIR}/go/src/
-    COMMAND GOPATH=${CMAKE_BINARY_DIR}/go ${GO_EXECUTABLE} build -o ${CMAKE_BINARY_DIR}/bin/mapd_web_server ${CMAKE_SOURCE_DIR}/MapDWebServer.go
-    SOURCES MapDWebServer.go
-    )
-  install(PROGRAMS ${CMAKE_BINARY_DIR}/bin/mapd_web_server DESTINATION bin)
-  list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/bin/mapd_web_server)
-  list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/go)
-
-  add_subdirectory(ThirdParty/generate_cert)
+if(NOT GO_EXECUTABLE)
+  message(FATAL_ERROR "go not found. Install Go(lang).")
 endif()
+# fake GO15VENDOREXPERIMENT since Go 1.5 is not available on all build platforms
+add_custom_target(mapd_web_server ALL
+  COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/ThirdParty/go/src/mapd/vendor/ ${CMAKE_BINARY_DIR}/go/src/
+  COMMAND GOPATH=${CMAKE_BINARY_DIR}/go ${GO_EXECUTABLE} build -o ${CMAKE_BINARY_DIR}/bin/mapd_web_server ${CMAKE_SOURCE_DIR}/MapDWebServer.go
+  SOURCES MapDWebServer.go
+  )
+install(PROGRAMS ${CMAKE_BINARY_DIR}/bin/mapd_web_server DESTINATION bin)
+list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/bin/mapd_web_server)
+list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/go)
+
+add_subdirectory(ThirdParty/generate_cert)
 
 # Docs
 option(ENABLE_DOCS "Enable compilation of MapD docs" ON)
@@ -325,21 +327,22 @@ endif()
 if(ENABLE_CALCITE)
   ## mvn process for java code
   find_program(MVN_EXECUTABLE NAMES mvn)
-  if(MVN_EXECUTABLE)
-    add_custom_target(mapd_java_components ALL
-      COMMAND MVNPATH=${CMAKE_SOURCE_DIR}/java ${MVN_EXECUTABLE} -q install
-      COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/java/target/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar ${CMAKE_BINARY_DIR}/bin
-      WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/java
-      DEPENDS ${CMAKE_SOURCE_DIR}/java/src/gen/com/mapd/thrift/server/MapD.java  ${CMAKE_SOURCE_DIR}/java/src/gen/com/mapd/thrift/calciteserver/CalciteServer.java
-      SOURCES ${CMAKE_SOURCE_DIR}/java/pom.xml ${CMAKE_SOURCE_DIR}/mapd.thrift
-      )
-    install(FILES ${CMAKE_SOURCE_DIR}/java/target/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar DESTINATION bin)
+  if(NOT MVN_EXECUTABLE)
+    message(FATAL_ERROR "mvn not found. Install Apache Maven.")
   endif()
+  add_custom_target(mapd_java_components ALL
+    COMMAND MVNPATH=${CMAKE_SOURCE_DIR}/java ${MVN_EXECUTABLE} -q install
+    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/java/target/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar ${CMAKE_BINARY_DIR}/bin
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/java
+    DEPENDS ${CMAKE_SOURCE_DIR}/java/src/gen/com/mapd/thrift/server/MapD.java  ${CMAKE_SOURCE_DIR}/java/src/gen/com/mapd/thrift/calciteserver/CalciteServer.java
+    SOURCES ${CMAKE_SOURCE_DIR}/java/pom.xml ${CMAKE_SOURCE_DIR}/mapd.thrift
+    )
+  install(FILES ${CMAKE_SOURCE_DIR}/java/target/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar DESTINATION bin)
 endif()
 
 set_directory_properties(PROPERTIES ADDITIONAL_MAKE_CLEAN_FILES "${ADDITIONAL_MAKE_CLEAN_FILES}")
 
-install(TARGETS initdb mapd mapd_server DESTINATION bin)
+install(TARGETS initdb mapd_server DESTINATION bin)
 install(FILES ${CMAKE_BINARY_DIR}/MAPD_GIT_HASH.txt DESTINATION ".")
 if(ENABLE_CUDA)
   install(FILES ${CMAKE_BINARY_DIR}/QueryEngine/cuda_mapd_rt.a DESTINATION QueryEngine)

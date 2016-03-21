@@ -4,9 +4,6 @@
 #include "CalciteDeserializerUtils.h"
 #include "RexVisitor.h"
 
-#include "../Analyzer/Analyzer.h"
-#include "../Parser/ParserNode.h"
-
 #include <glog/logging.h>
 
 #include <string>
@@ -20,6 +17,7 @@ class RexRebindInputsVisitor : public RexVisitor<void*> {
  public:
   RexRebindInputsVisitor(const RelAlgNode* old_input, const RelAlgNode* new_input)
       : old_input_(old_input), new_input_(new_input) {}
+
   void* visitInput(const RexInput* rex_input) const override {
     const auto old_source = rex_input->getSourceNode();
     if (old_source == old_input_) {
@@ -33,51 +31,129 @@ class RexRebindInputsVisitor : public RexVisitor<void*> {
   const RelAlgNode* new_input_;
 };
 
+// Creates an output with n columns.
+std::vector<RexInput> n_outputs(const RelAlgNode* node, const size_t n) {
+  std::vector<RexInput> outputs;
+  for (size_t i = 0; i < n; ++i) {
+    outputs.emplace_back(node, i);
+  }
+  return outputs;
+}
+
+typedef std::vector<RexInput> RANodeOutput;
+
+RANodeOutput get_node_output(const RelAlgNode* ra_node) {
+  RANodeOutput outputs;
+  const auto scan_node = dynamic_cast<const RelScan*>(ra_node);
+  if (scan_node) {
+    // Scan node has no inputs, output contains all columns in the table.
+    CHECK_EQ(size_t(0), scan_node->inputCount());
+    return n_outputs(scan_node, scan_node->size());
+  }
+  const auto project_node = dynamic_cast<const RelProject*>(ra_node);
+  if (project_node) {
+    // Project output count doesn't depend on the input
+    CHECK_EQ(size_t(1), project_node->inputCount());
+    return n_outputs(project_node, project_node->size());
+  }
+  const auto filter_node = dynamic_cast<const RelFilter*>(ra_node);
+  if (filter_node) {
+    // Filter preserves shape
+    CHECK_EQ(size_t(1), filter_node->inputCount());
+    const auto prev_out = get_node_output(filter_node->getInput(0));
+    return n_outputs(filter_node, prev_out.size());
+  }
+  const auto aggregate_node = dynamic_cast<const RelAggregate*>(ra_node);
+  if (aggregate_node) {
+    // Aggregate output count doesn't depend on the input
+    CHECK_EQ(size_t(1), aggregate_node->inputCount());
+    return n_outputs(aggregate_node, aggregate_node->size());
+  }
+  const auto compound_node = dynamic_cast<const RelCompound*>(ra_node);
+  if (compound_node) {
+    // Compound output count doesn't depend on the input
+    CHECK_EQ(size_t(1), compound_node->inputCount());
+    return n_outputs(compound_node, compound_node->size());
+  }
+  const auto join_node = dynamic_cast<const RelJoin*>(ra_node);
+  if (join_node) {
+    // Join concatenates the outputs from the inputs and the output
+    // directly references the nodes in the input.
+    CHECK_EQ(size_t(2), join_node->inputCount());
+    auto lhs_out = get_node_output(join_node->getInput(0));
+    const auto rhs_out = get_node_output(join_node->getInput(1));
+    lhs_out.insert(lhs_out.end(), rhs_out.begin(), rhs_out.end());
+    return lhs_out;
+  }
+  const auto sort_node = dynamic_cast<const RelSort*>(ra_node);
+  if (sort_node) {
+    // Sort preserves shape
+    CHECK_EQ(size_t(1), sort_node->inputCount());
+    const auto prev_out = get_node_output(sort_node->getInput(0));
+    return n_outputs(sort_node, prev_out.size());
+  }
+  CHECK(false);
+  return outputs;
+}
+
 }  // namespace
 
-bool RelProject::replaceInput(const RelAlgNode* old_input, const RelAlgNode* input) {
-  if (RelAlgNode::replaceInput(old_input, input)) {
-    RexRebindInputsVisitor rebind_inputs(old_input, input);
-    for (const auto& scalar_expr : scalar_exprs_) {
-      rebind_inputs.visit(scalar_expr.get());
-    }
-    return true;
+void RelProject::replaceInput(const RelAlgNode* old_input, const RelAlgNode* input) {
+  RelAlgNode::replaceInput(old_input, input);
+  RexRebindInputsVisitor rebind_inputs(old_input, input);
+  for (const auto& scalar_expr : scalar_exprs_) {
+    rebind_inputs.visit(scalar_expr.get());
   }
-  return false;
 }
 
-bool RelJoin::replaceInput(const RelAlgNode* old_input, const RelAlgNode* input) {
-  if (RelAlgNode::replaceInput(old_input, input)) {
-    RexRebindInputsVisitor rebind_inputs(old_input, input);
-    if (condition_) {
-      rebind_inputs.visit(condition_.get());
-    }
-    return true;
+bool RelProject::isIdentity() const {
+  if (!isSimple()) {
+    return false;
   }
-  return false;
+  CHECK_EQ(size_t(1), inputCount());
+  const auto source = getInput(0);
+  if (dynamic_cast<const RelJoin*>(source)) {
+    return false;
+  }
+  const auto source_shape = get_node_output(source);
+  if (source_shape.size() != scalar_exprs_.size()) {
+    return false;
+  }
+  for (size_t i = 0; i < scalar_exprs_.size(); ++i) {
+    const auto& scalar_expr = scalar_exprs_[i];
+    const auto input = dynamic_cast<const RexInput*>(scalar_expr.get());
+    CHECK(input);
+    CHECK_EQ(source, input->getSourceNode());
+    if (input->getIndex() != source_shape[i].getIndex() || input->getSourceNode() != source_shape[i].getSourceNode()) {
+      return false;
+    }
+  }
+  return true;
 }
 
-bool RelFilter::replaceInput(const RelAlgNode* old_input, const RelAlgNode* input) {
-  if (RelAlgNode::replaceInput(old_input, input)) {
-    RexRebindInputsVisitor rebind_inputs(old_input, input);
-    rebind_inputs.visit(filter_.get());
-    return true;
+void RelJoin::replaceInput(const RelAlgNode* old_input, const RelAlgNode* input) {
+  RelAlgNode::replaceInput(old_input, input);
+  RexRebindInputsVisitor rebind_inputs(old_input, input);
+  if (condition_) {
+    rebind_inputs.visit(condition_.get());
   }
-  return false;
 }
 
-bool RelCompound::replaceInput(const RelAlgNode* old_input, const RelAlgNode* input) {
-  if (RelAlgNode::replaceInput(old_input, input)) {
-    RexRebindInputsVisitor rebind_inputs(old_input, input);
-    for (const auto& scalar_source : scalar_sources_) {
-      rebind_inputs.visit(scalar_source.get());
-    }
-    if (filter_expr_) {
-      rebind_inputs.visit(filter_expr_.get());
-    }
-    return true;
+void RelFilter::replaceInput(const RelAlgNode* old_input, const RelAlgNode* input) {
+  RelAlgNode::replaceInput(old_input, input);
+  RexRebindInputsVisitor rebind_inputs(old_input, input);
+  rebind_inputs.visit(filter_.get());
+}
+
+void RelCompound::replaceInput(const RelAlgNode* old_input, const RelAlgNode* input) {
+  RelAlgNode::replaceInput(old_input, input);
+  RexRebindInputsVisitor rebind_inputs(old_input, input);
+  for (const auto& scalar_source : scalar_sources_) {
+    rebind_inputs.visit(scalar_source.get());
   }
-  return false;
+  if (filter_expr_) {
+    rebind_inputs.visit(filter_expr_.get());
+  }
 }
 
 namespace {
@@ -148,8 +224,24 @@ RexLiteral* parse_literal(const rapidjson::Value& expr) noexcept {
 
 RexScalar* parse_scalar_expr(const rapidjson::Value& expr);
 
+SQLTypeInfo parse_type(const rapidjson::Value& type_obj) {
+  CHECK(type_obj.IsObject() && (type_obj.MemberCount() >= 2 && type_obj.MemberCount() <= 4));
+  const auto type = to_sql_type(json_str(field(type_obj, "type")));
+  const auto nullable = json_bool(field(type_obj, "nullable"));
+  const bool has_precision = type_obj.MemberCount() >= 3;
+  const bool has_scale = type_obj.MemberCount() == 4;
+  const int precision = has_precision ? json_i64(field(type_obj, "precision")) : 0;
+  const int scale = has_scale ? json_i64(field(type_obj, "scale")) : 0;
+  SQLTypeInfo ti(type, !nullable);
+  ti.set_precision(precision);
+  ti.set_scale(scale);
+  return ti;
+}
+
 RexOperator* parse_operator(const rapidjson::Value& expr) {
-  const auto op = to_sql_op(json_str(field(expr, "op")));
+  const auto op_name = json_str(field(expr, "op"));
+  const bool is_quantifier = op_name == std::string("PG_ANY") || op_name == std::string("PG_ALL");
+  const auto op = is_quantifier ? kFUNCTION : to_sql_op(op_name);
   const auto& operators_json_arr = field(expr, "operands");
   CHECK(operators_json_arr.IsArray());
   std::vector<const RexScalar*> operands;
@@ -157,7 +249,34 @@ RexOperator* parse_operator(const rapidjson::Value& expr) {
        ++operators_json_arr_it) {
     operands.push_back(parse_scalar_expr(*operators_json_arr_it));
   }
-  return new RexOperator(op, operands);
+  if (op == kFUNCTION) {
+    return new RexFunctionOperator(op_name, operands);
+  }
+  const auto type_it = expr.FindMember("type");
+  CHECK_EQ(op == kCAST, type_it != expr.MemberEnd());
+  SQLTypeInfo ti;
+  if (op == kCAST) {
+    ti = parse_type(type_it->value);
+  }
+  return new RexOperator(op, operands, ti);
+}
+
+RexCase* parse_case(const rapidjson::Value& expr) {
+  const auto& operands = field(expr, "operands");
+  CHECK(operands.IsArray());
+  CHECK_GE(operands.Size(), unsigned(2));
+  const RexScalar* else_expr{nullptr};
+  std::vector<std::pair<const RexScalar*, const RexScalar*>> expr_pair_list;
+  for (auto operands_it = operands.Begin(); operands_it != operands.End();) {
+    const auto when_expr = parse_scalar_expr(*operands_it++);
+    if (operands_it == operands.End()) {
+      else_expr = when_expr;
+      break;
+    }
+    const auto then_expr = parse_scalar_expr(*operands_it++);
+    expr_pair_list.emplace_back(when_expr, then_expr);
+  }
+  return new RexCase(expr_pair_list, else_expr);
 }
 
 std::vector<std::string> strings_from_json_array(const rapidjson::Value& json_str_arr) {
@@ -184,13 +303,10 @@ std::vector<size_t> indices_from_json_array(const rapidjson::Value& json_idx_arr
 RexAgg* parse_aggregate_expr(const rapidjson::Value& expr) {
   const auto agg = to_agg_kind(json_str(field(expr, "agg")));
   const auto distinct = json_bool(field(expr, "distinct"));
-  const auto& type_json = field(expr, "type");
-  CHECK(type_json.IsObject() && type_json.MemberCount() == 2);
-  const auto type = to_sql_type(json_str(field(type_json, "type")));
-  const auto nullable = json_bool(field(type_json, "nullable"));
+  const auto agg_ti = parse_type(field(expr, "type"));
   const auto operands = indices_from_json_array(field(expr, "operands"));
   CHECK_LE(operands.size(), size_t(1));
-  return new RexAgg(agg, distinct, type, nullable, operands.empty() ? -1 : operands[0]);
+  return new RexAgg(agg, distinct, agg_ti, operands.empty() ? -1 : operands[0]);
 }
 
 RexScalar* parse_scalar_expr(const rapidjson::Value& expr) {
@@ -202,6 +318,10 @@ RexScalar* parse_scalar_expr(const rapidjson::Value& expr) {
     return parse_literal(expr);
   }
   if (expr.IsObject() && expr.HasMember("op")) {
+    const auto op_str = json_str(field(expr, "op"));
+    if (op_str == std::string("CASE")) {
+      return parse_case(expr);
+    }
     return parse_operator(expr);
   }
   CHECK(false);
@@ -219,69 +339,24 @@ RelJoinType to_join_type(const std::string& join_type_name) {
   return RelJoinType::INNER;
 }
 
-// Creates an output with n columns.
-std::vector<RexInput> n_outputs(const RelAlgNode* node, const size_t n) {
-  std::vector<RexInput> outputs;
-  for (size_t i = 0; i < n; ++i) {
-    outputs.emplace_back(node, i);
+const RexScalar* disambiguate_rex(const RexScalar*, const RANodeOutput&);
+
+const RexOperator* disambiguate_operator(const RexOperator* rex_operator, const RANodeOutput& ra_output) {
+  std::vector<const RexScalar*> disambiguated_operands;
+  for (size_t i = 0; i < rex_operator->size(); ++i) {
+    disambiguated_operands.push_back(disambiguate_rex(rex_operator->getOperand(i), ra_output));
   }
-  return outputs;
+  return rex_operator->getDisambiguated(disambiguated_operands);
 }
 
-typedef std::vector<RexInput> RANodeOutput;
-
-RANodeOutput get_node_output(const RelAlgNode* ra_node) {
-  RANodeOutput outputs;
-  const auto scan_node = dynamic_cast<const RelScan*>(ra_node);
-  if (scan_node) {
-    // Scan node has no inputs, output contains all columns in the table.
-    CHECK_EQ(size_t(0), scan_node->inputCount());
-    return n_outputs(scan_node, scan_node->size());
+const RexCase* disambiguate_case(const RexCase* rex_case, const RANodeOutput& ra_output) {
+  std::vector<std::pair<const RexScalar*, const RexScalar*>> disambiguated_expr_pair_list;
+  for (size_t i = 0; i < rex_case->branchCount(); ++i) {
+    const auto disambiguated_when = disambiguate_rex(rex_case->getWhen(i), ra_output);
+    const auto disambiguated_then = disambiguate_rex(rex_case->getThen(i), ra_output);
+    disambiguated_expr_pair_list.emplace_back(disambiguated_when, disambiguated_then);
   }
-  const auto project_node = dynamic_cast<const RelProject*>(ra_node);
-  if (project_node) {
-    // Project output count doesn't depend on the input
-    CHECK_EQ(size_t(1), project_node->inputCount());
-    return n_outputs(project_node, project_node->size());
-  }
-  const auto filter_node = dynamic_cast<const RelFilter*>(ra_node);
-  if (filter_node) {
-    // Filter preserves shape
-    CHECK_EQ(size_t(1), filter_node->inputCount());
-    const auto prev_out = get_node_output(filter_node->getInput(0));
-    return n_outputs(filter_node, prev_out.size());
-  }
-  const auto aggregate_node = dynamic_cast<const RelAggregate*>(ra_node);
-  if (aggregate_node) {
-    // Aggregate output count doesn't depend on the input
-    CHECK_EQ(size_t(1), aggregate_node->inputCount());
-    return n_outputs(aggregate_node, aggregate_node->size());
-  }
-  const auto compound_node = dynamic_cast<const RelCompound*>(ra_node);
-  if (compound_node) {
-    // Compound output count doesn't depend on the input
-    CHECK_EQ(size_t(1), compound_node->inputCount());
-    return n_outputs(compound_node, compound_node->size());
-  }
-  const auto join_node = dynamic_cast<const RelJoin*>(ra_node);
-  if (join_node) {
-    // Join concatenates the outputs from the inputs and the output
-    // directly references the nodes in the input.
-    CHECK_EQ(size_t(2), join_node->inputCount());
-    auto lhs_out = get_node_output(join_node->getInput(0));
-    const auto rhs_out = get_node_output(join_node->getInput(1));
-    lhs_out.insert(lhs_out.end(), rhs_out.begin(), rhs_out.end());
-    return lhs_out;
-  }
-  const auto sort_node = dynamic_cast<const RelSort*>(ra_node);
-  if (sort_node) {
-    // Sort preserves shape
-    CHECK_EQ(size_t(1), sort_node->inputCount());
-    const auto prev_out = get_node_output(sort_node->getInput(0));
-    return n_outputs(sort_node, prev_out.size());
-  }
-  CHECK(false);
-  return outputs;
+  return new RexCase(disambiguated_expr_pair_list, disambiguate_rex(rex_case->getElse(), ra_output));
 }
 
 const RexScalar* disambiguate_rex(const RexScalar* rex_scalar, const RANodeOutput& ra_output) {
@@ -292,11 +367,11 @@ const RexScalar* disambiguate_rex(const RexScalar* rex_scalar, const RANodeOutpu
   }
   const auto rex_operator = dynamic_cast<const RexOperator*>(rex_scalar);
   if (rex_operator) {
-    std::vector<const RexScalar*> disambiguated_operands;
-    for (size_t i = 0; i < rex_operator->size(); ++i) {
-      disambiguated_operands.push_back(disambiguate_rex(rex_operator->getOperand(i), ra_output));
-    }
-    return new RexOperator(rex_operator->getOperator(), disambiguated_operands);
+    return disambiguate_operator(rex_operator, ra_output);
+  }
+  const auto rex_case = dynamic_cast<const RexCase*>(rex_scalar);
+  if (rex_case) {
+    return disambiguate_case(rex_case, ra_output);
   }
   const auto rex_literal = dynamic_cast<const RexLiteral*>(rex_scalar);
   CHECK(rex_literal);
@@ -330,8 +405,6 @@ void bind_inputs(const std::vector<RelAlgNode*>& nodes) {
   }
 }
 
-enum class CoalesceState { Initial, Filter, FirstProject, Aggregate };
-
 std::vector<const Rex*> reproject_targets(const RelProject* simple_project,
                                           const std::vector<const Rex*>& target_exprs) {
   std::vector<const Rex*> result;
@@ -349,7 +422,7 @@ void create_compound(std::vector<RelAlgNode*>& nodes, const std::vector<size_t>&
   CHECK_LE(pattern.size(), size_t(4));
   const RexScalar* filter_rex{nullptr};
   std::vector<const RexScalar*> scalar_sources;
-  std::vector<size_t> group_indices;
+  size_t groupby_count{0};
   std::vector<std::string> fields;
   std::vector<const RexAgg*> agg_exprs;
   std::vector<const Rex*> target_exprs;
@@ -393,11 +466,11 @@ void create_compound(std::vector<RelAlgNode*>& nodes, const std::vector<size_t>&
       is_agg = true;
       fields = ra_aggregate->getFields();
       agg_exprs = ra_aggregate->getAggregatesAndRelease();
-      group_indices = ra_aggregate->getGroupIndices();
+      groupby_count = ra_aggregate->getGroupByCount();
       decltype(target_exprs){}.swap(target_exprs);
-      for (const auto group_idx : group_indices) {
-        CHECK_LT(group_idx, scalar_sources.size());
-        target_exprs.push_back(scalar_sources[group_idx]);
+      CHECK_LE(groupby_count, scalar_sources.size());
+      for (size_t group_idx = 0; group_idx < groupby_count; ++group_idx) {
+        target_exprs.push_back(new RexRef(group_idx + 1));
       }
       for (const auto rex_agg : agg_exprs) {
         target_exprs.push_back(rex_agg);
@@ -406,7 +479,7 @@ void create_compound(std::vector<RelAlgNode*>& nodes, const std::vector<size_t>&
     }
   }
   auto compound_node =
-      new RelCompound(filter_rex, target_exprs, group_indices, agg_exprs, fields, scalar_sources, is_agg);
+      new RelCompound(filter_rex, target_exprs, groupby_count, agg_exprs, fields, scalar_sources, is_agg);
   auto old_node = nodes[pattern.back()];
   nodes[pattern.back()] = compound_node;
   auto first_node = nodes[pattern.front()];
@@ -419,13 +492,12 @@ void create_compound(std::vector<RelAlgNode*>& nodes, const std::vector<size_t>&
     if (!node) {
       continue;
     }
-    if (node->replaceInput(old_node, compound_node)) {
-      break;
-    }
+    node->replaceInput(old_node, compound_node);
   }
 }
 
 void coalesce_nodes(std::vector<RelAlgNode*>& nodes) {
+  enum class CoalesceState { Initial, Filter, FirstProject, Aggregate };
   std::vector<size_t> crt_pattern;
   CoalesceState crt_state{CoalesceState::Initial};
   for (size_t i = 0; i < nodes.size();) {
@@ -443,10 +515,14 @@ void coalesce_nodes(std::vector<RelAlgNode*>& nodes) {
         break;
       }
       case CoalesceState::Filter: {
-        CHECK(dynamic_cast<const RelProject*>(ra_node));  // TODO: is filter always followed by project?
-        crt_pattern.push_back(i);
-        crt_state = CoalesceState::FirstProject;
-        ++i;
+        if (dynamic_cast<const RelProject*>(ra_node)) {
+          crt_pattern.push_back(i);
+          crt_state = CoalesceState::FirstProject;
+          ++i;
+        } else {
+          crt_state = CoalesceState::Initial;
+          decltype(crt_pattern)().swap(crt_pattern);
+        }
         break;
       }
       case CoalesceState::FirstProject: {
@@ -484,7 +560,39 @@ void coalesce_nodes(std::vector<RelAlgNode*>& nodes) {
     }
     CHECK(!crt_pattern.empty());
   }
-  // TODO(alex): wrap-up this function
+}
+
+// For some reason, Calcite generates Sort, Project, Sort sequences where the
+// two Sort nodes are identical and the Project is identity. Simplify this
+// pattern by re-binding the input of the second sort to the input of the first.
+void simplify_sort(std::vector<RelAlgNode*>& nodes) {
+  if (nodes.size() < 3) {
+    return;
+  }
+  for (size_t i = 0; i <= nodes.size() - 3;) {
+    auto first_sort = dynamic_cast<RelSort*>(nodes[i]);
+    const auto project = dynamic_cast<const RelProject*>(nodes[i + 1]);
+    auto second_sort = dynamic_cast<RelSort*>(nodes[i + 2]);
+    if (first_sort && second_sort && project && project->isIdentity() && *first_sort == *second_sort) {
+      second_sort->replaceInput(second_sort->getInput(0), first_sort->getInputAndRelease(0));
+      nodes[i] = nodes[i + 1] = nullptr;
+      i += 3;
+    } else {
+      ++i;
+    }
+  }
+}
+
+int64_t get_int_literal_field(const rapidjson::Value& obj, const char field[], const int64_t default_val) {
+  const auto it = obj.FindMember(field);
+  if (it == obj.MemberEnd()) {
+    return default_val;
+  }
+  std::unique_ptr<RexLiteral> lit(parse_literal(it->value));
+  CHECK_EQ(kDECIMAL, lit->getType());
+  CHECK_EQ(unsigned(0), lit->getScale());
+  CHECK_EQ(unsigned(0), lit->getTypeScale());
+  return lit->getVal<int64_t>();
 }
 
 class RaAbstractInterp {
@@ -522,6 +630,7 @@ class RaAbstractInterp {
     CHECK(!nodes_.empty());
     bind_inputs(nodes_);
     coalesce_nodes(nodes_);
+    simplify_sort(nodes_);
     CHECK(is_valid_rel_alg(nodes_.back()));
     return std::unique_ptr<const RelAlgNode>(nodes_.back());
   }
@@ -561,13 +670,16 @@ class RaAbstractInterp {
   RelAggregate* dispatchAggregate(const rapidjson::Value& agg_ra) {
     const auto fields = strings_from_json_array(field(agg_ra, "fields"));
     const auto group = indices_from_json_array(field(agg_ra, "group"));
+    for (size_t i = 0; i < group.size(); ++i) {
+      CHECK_EQ(i, group[i]);
+    }
     const auto& aggs_json_arr = field(agg_ra, "aggs");
     CHECK(aggs_json_arr.IsArray());
     std::vector<const RexAgg*> aggs;
     for (auto aggs_json_arr_it = aggs_json_arr.Begin(); aggs_json_arr_it != aggs_json_arr.End(); ++aggs_json_arr_it) {
       aggs.push_back(parse_aggregate_expr(*aggs_json_arr_it));
     }
-    return new RelAggregate(group, aggs, fields, prev(agg_ra));
+    return new RelAggregate(group.size(), aggs, fields, prev(agg_ra));
   }
 
   RelJoin* dispatchJoin(const rapidjson::Value& join_ra) {
@@ -598,7 +710,9 @@ class RaAbstractInterp {
                                               : NullSortedPosition::Last;
       collation.emplace_back(field_idx, sort_dir, null_pos);
     }
-    return new RelSort(collation, prev(sort_ra));
+    const auto limit = get_int_literal_field(sort_ra, "fetch", 0);
+    const auto offset = get_int_literal_field(sort_ra, "offset", 0);
+    return new RelSort(collation, limit, offset, prev(sort_ra));
   }
 
   const TableDescriptor* getTableFromScanNode(const rapidjson::Value& scan_ra) const {
@@ -626,203 +740,6 @@ std::unique_ptr<const RelAlgNode> ra_interpret(const rapidjson::Value& query_ast
                                                const Catalog_Namespace::Catalog& cat) {
   RaAbstractInterp interp(query_ast, cat);
   return interp.run();
-}
-
-namespace {
-
-SQLTypeInfo build_adjusted_type_info(const SQLTypes sql_type, const int type_scale, const int type_precision) {
-  SQLTypeInfo type_ti(sql_type, 0, 0, false);
-  type_ti.set_scale(type_scale);
-  type_ti.set_precision(type_precision);
-  if (type_ti.is_number() && !type_scale) {
-    switch (type_precision) {
-      case 5:
-        return SQLTypeInfo(kSMALLINT, false);
-      case 10:
-        return SQLTypeInfo(kINT, false);
-      case 19:
-        return SQLTypeInfo(kBIGINT, false);
-      default:
-        CHECK(false);
-    }
-  }
-  return type_ti;
-}
-
-SQLTypeInfo build_type_info(const SQLTypes sql_type, const int scale, const int precision) {
-  SQLTypeInfo ti(sql_type, 0, 0, false);
-  ti.set_scale(scale);
-  ti.set_precision(precision);
-  return ti;
-}
-
-std::shared_ptr<Analyzer::Expr> translate_literal(const RexLiteral* rex_literal) {
-  const auto lit_ti = build_type_info(rex_literal->getType(), rex_literal->getScale(), rex_literal->getPrecision());
-  const auto target_ti =
-      build_adjusted_type_info(rex_literal->getType(), rex_literal->getTypeScale(), rex_literal->getTypePrecision());
-  switch (rex_literal->getType()) {
-    case kDECIMAL: {
-      const auto val = rex_literal->getVal<int64_t>();
-      const int precision = rex_literal->getPrecision();
-      const int scale = rex_literal->getScale();
-      auto lit_expr =
-          scale ? Parser::FixedPtLiteral::analyzeValue(val, scale, precision) : Parser::IntLiteral::analyzeValue(val);
-      return scale && lit_ti != target_ti ? lit_expr->add_cast(target_ti) : lit_expr;
-    }
-    case kTEXT: {
-      return Parser::StringLiteral::analyzeValue(rex_literal->getVal<std::string>());
-    }
-    case kBOOLEAN: {
-      Datum d;
-      d.boolval = rex_literal->getVal<bool>();
-      return makeExpr<Analyzer::Constant>(kBOOLEAN, false, d);
-    }
-    case kDOUBLE: {
-      Datum d;
-      d.doubleval = rex_literal->getVal<double>();
-      auto lit_expr = makeExpr<Analyzer::Constant>(kDOUBLE, false, d);
-      return lit_ti != target_ti ? lit_expr->add_cast(target_ti) : lit_expr;
-    }
-    case kNULLT: {
-      return makeExpr<Analyzer::Constant>(kNULLT, true);
-    }
-    default: { LOG(FATAL) << "Unexpected literal type " << lit_ti.get_type_name(); }
-  }
-  return nullptr;
-}
-
-std::shared_ptr<Analyzer::Expr> translate_input(const RexInput* rex_input,
-                                                const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
-                                                const Catalog_Namespace::Catalog& cat,
-                                                const std::vector<TargetMetaInfo>& in_metainfo) {
-  const auto source = rex_input->getSourceNode();
-  const auto it_rte_idx = input_to_nest_level.find(source);
-  CHECK(it_rte_idx != input_to_nest_level.end());
-  const int rte_idx = it_rte_idx->second;
-  const auto scan_source = dynamic_cast<const RelScan*>(source);
-  if (scan_source) {
-    // We're at leaf (scan) level and not supposed to have input metadata,
-    // the name and type information come directly from the catalog.
-    CHECK(in_metainfo.empty());
-    const auto& field_names = scan_source->getFieldNames();
-    CHECK_LT(static_cast<size_t>(rex_input->getIndex()), field_names.size());
-    const auto& col_name = field_names[rex_input->getIndex()];
-    const auto table_desc = scan_source->getTableDescriptor();
-    const auto cd = cat.getMetadataForColumn(table_desc->tableId, col_name);
-    CHECK(cd);
-    return std::make_shared<Analyzer::ColumnVar>(cd->columnType, table_desc->tableId, cd->columnId, rte_idx);
-  }
-  CHECK(!in_metainfo.empty());
-  CHECK_GE(rte_idx, 0);
-  const size_t col_id = rex_input->getIndex();
-  CHECK_LT(col_id, in_metainfo.size());
-  return std::make_shared<Analyzer::ColumnVar>(in_metainfo[col_id].get_type_info(), -source->getId(), col_id, rte_idx);
-}
-
-std::shared_ptr<Analyzer::Expr> remove_cast(const std::shared_ptr<Analyzer::Expr> expr) {
-  const auto cast_expr = std::dynamic_pointer_cast<const Analyzer::UOper>(expr);
-  return cast_expr && cast_expr->get_optype() == kCAST ? cast_expr->get_own_operand() : expr;
-}
-
-std::shared_ptr<Analyzer::Expr> translate_uoper(const RexOperator* rex_operator,
-                                                const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
-                                                const Catalog_Namespace::Catalog& cat,
-                                                const std::vector<TargetMetaInfo>& in_metainfo) {
-  CHECK_EQ(size_t(1), rex_operator->size());
-  const auto operand_expr = translate_scalar_rex(rex_operator->getOperand(0), input_to_nest_level, cat, in_metainfo);
-  const auto sql_op = rex_operator->getOperator();
-  switch (sql_op) {
-    case kCAST: {
-      const auto rex_cast = dynamic_cast<const RexCast*>(rex_operator);
-      CHECK(rex_cast);
-      SQLTypeInfo target_ti(rex_cast->getTargetType(), !rex_cast->getNullable());
-      if (target_ti.is_time()) {  // TODO(alex): check and unify with the rest of the cases
-        return operand_expr->add_cast(target_ti);
-      }
-      return std::make_shared<Analyzer::UOper>(target_ti, false, sql_op, operand_expr);
-    }
-    case kNOT:
-    case kISNULL: {
-      return std::make_shared<Analyzer::UOper>(kBOOLEAN, sql_op, operand_expr);
-    }
-    case kISNOTNULL: {
-      auto is_null = std::make_shared<Analyzer::UOper>(kBOOLEAN, kISNULL, operand_expr);
-      return std::make_shared<Analyzer::UOper>(kBOOLEAN, kNOT, is_null);
-    }
-    case kMINUS: {
-      const auto& ti = operand_expr->get_type_info();
-      return std::make_shared<Analyzer::UOper>(ti, false, kUMINUS, operand_expr);
-    }
-    case kUNNEST: {
-      const auto& ti = operand_expr->get_type_info();
-      CHECK(ti.is_array());
-      return makeExpr<Analyzer::UOper>(ti.get_elem_type(), false, kUNNEST, operand_expr);
-    }
-    default:
-      CHECK(false);
-  }
-  return nullptr;
-}
-
-std::shared_ptr<Analyzer::Expr> translate_oper(const RexOperator* rex_operator,
-                                               const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
-                                               const Catalog_Namespace::Catalog& cat,
-                                               const std::vector<TargetMetaInfo>& in_metainfo) {
-  CHECK_GT(rex_operator->size(), size_t(0));
-  if (rex_operator->size() == 1) {
-    return translate_uoper(rex_operator, input_to_nest_level, cat, in_metainfo);
-  }
-  const auto sql_op = rex_operator->getOperator();
-  auto lhs = translate_scalar_rex(rex_operator->getOperand(0), input_to_nest_level, cat, in_metainfo);
-  for (size_t i = 1; i < rex_operator->size(); ++i) {
-    auto rhs = translate_scalar_rex(rex_operator->getOperand(i), input_to_nest_level, cat, in_metainfo);
-    if (sql_op == kEQ || sql_op == kNE) {
-      lhs = remove_cast(lhs);
-      rhs = remove_cast(rhs);
-    }
-    lhs = Parser::OperExpr::normalize(sql_op, kONE, lhs, rhs);
-  }
-  return lhs;
-}
-
-}  // namespace
-
-std::shared_ptr<Analyzer::Expr> translate_scalar_rex(
-    const RexScalar* rex,
-    const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
-    const Catalog_Namespace::Catalog& cat,
-    const std::vector<TargetMetaInfo>& in_metainfo) {
-  const auto rex_input = dynamic_cast<const RexInput*>(rex);
-  if (rex_input) {
-    return translate_input(rex_input, input_to_nest_level, cat, in_metainfo);
-  }
-  const auto rex_literal = dynamic_cast<const RexLiteral*>(rex);
-  if (rex_literal) {
-    return translate_literal(rex_literal);
-  }
-  const auto rex_operator = dynamic_cast<const RexOperator*>(rex);
-  if (rex_operator) {
-    return translate_oper(rex_operator, input_to_nest_level, cat, in_metainfo);
-  }
-  CHECK(false);
-  return nullptr;
-}
-
-std::shared_ptr<Analyzer::Expr> translate_aggregate_rex(
-    const RexAgg* rex,
-    const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
-    const Catalog_Namespace::Catalog& cat,
-    const std::vector<std::shared_ptr<Analyzer::Expr>>& scalar_sources) {
-  const auto agg_kind = rex->getKind();
-  const bool is_distinct = rex->isDistinct();
-  const auto operand = rex->getOperand();
-  const bool takes_arg{operand >= 0};
-  if (takes_arg) {
-    CHECK_LT(operand, static_cast<ssize_t>(scalar_sources.size()));
-  }
-  const auto arg_expr = takes_arg ? scalar_sources[operand] : nullptr;
-  const auto agg_ti = get_agg_type(agg_kind, arg_expr.get());
-  return makeExpr<Analyzer::AggExpr>(agg_ti, agg_kind, arg_expr, is_distinct);
 }
 
 std::string tree_string(const RelAlgNode* ra, const size_t indent) {

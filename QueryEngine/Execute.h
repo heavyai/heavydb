@@ -268,13 +268,6 @@ class Executor {
     std::shared_ptr<JoinHashTable> join_hash_table_;
   };
 
-  struct ExecutionOptions {
-    const bool output_columnar_hint;
-    const bool allow_multifrag;
-    const bool just_explain;
-    const bool allow_loop_joins;
-  };
-
   class ExecutionDispatch {
    private:
     Executor* executor_;

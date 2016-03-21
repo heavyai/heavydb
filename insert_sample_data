@@ -1,57 +1,97 @@
 #!/usr/bin/env bash
 
-BASEURL="http://data.mapd.com/"
+set -e
 
-files[1]="flights-2008.tar.xz"
-files[2]="flights-2008-small.tar.bz2"
+MAPD_TCP_PORT=${MAPD_TCP_PORT:=9091}
 
-tables[1]="flights"
-tables[2]="flights"
+DATA_URL=${DATA_URL:="http://data.mapd.com"}
+
+DATA_PATH=${DATA_PATH:="$PWD/sample_datasets"}
+
+ALLOW_DOWNLOADS=${ALLOW_DOWNLOADS:=true}
 
 if hash wget 2>/dev/null; then
   GETTER="wget --continue"
 elif hash curl 2>/dev/null; then
   GETTER="curl --continue - --remote-name"
 else
-  GETTER="echo 'Please download: '"
+  GETTER="echo Please download: "
 fi
 
 download_and_extract_file() {
   echo "- downloading and extracting $1"
-  $GETTER "$BASEURL/$1"
+  $GETTER "$DATA_URL/$1"
   tar xvf "$1"
 }
 
-echo "Enter number of dataset to download, or 'q' to quit:"
-for key in "${!files[@]}"; do
-  echo " $key) ${files[$key]}"
+while (( $# )); do
+  case "$1" in
+    --port)
+      MAPD_TCP_PORT=$1 ;;
+    --url)
+      DATA_URL=$1 ;;
+    --path)
+      DATA_PATH=$1 ;;
+    --no-download)
+      ALLOW_DOWNLOADS=false
+      ;;
+    *)
+      break ;;
+  esac
+  shift
 done
 
-read idxs
+if [ "$ALLOW_DOWNLOADS" = false ] ; then
+  GETTER="echo Using: "
+fi
+
+mkdir -p "$DATA_PATH"
+pushd "$DATA_PATH"
+
+if [ "$ALLOW_DOWNLOADS" = true ] ; then
+  rm -f manifest.tsv
+  $GETTER "$DATA_URL/manifest.tsv"
+fi
+
+counter=1
+while IFS=$'\t' read -r name size tablename filename ; do
+	names[$counter]=$name
+	sizes[$counter]=$size
+	tables[$counter]=$tablename
+	files[$counter]=$filename
+	counter=$((counter+1))
+done < manifest.tsv
+
+echo "Enter dataset number to download, or 'q' to quit:"
+table=" # | Dataset | Rows | Table Name | File Name"
+for key in "${!files[@]}"; do
+  table="$table
+ $key) | ${names[$key]} | ${sizes[$key]} | ${tables[$key]} | ${files[$key]}"
+done
+
+column -t -s'|' <(echo "$table")
+
+read -r idxs
 
 if [ -z "$idxs" ]; then
   idxs=(${!files[@]})
 fi
 
 for idx in $idxs; do
-  if [ ${files[$idx]} ]; then
+  if [ "${files[$idx]}" ]; then
     filename="${files[$idx]}"
-    download_and_extract_file $filename
+    download_and_extract_file "$filename"
 
     filebase="${filename%%.*}"
 
     echo "- adding schema"
-    ./bin/mapdql mapd -u mapd -p HyperInteractive --port $MAPD_TCP_PORT < $filebase/*.sql
+    ../bin/mapdql mapd -u mapd -p HyperInteractive --port "$MAPD_TCP_PORT" < "$filebase"/*.sql
     table=${tables[$idx]}
     for csv in $PWD/$filebase/*csv; do
       echo "- inserting file: $csv"
-      echo "copy $table from '${csv}' with (quoted='true');" | ./bin/mapdql mapd -u mapd -p HyperInteractive --port $MAPD_TCP_PORT
+      echo "copy $table from '${csv}' with (quoted='true');" | ../bin/mapdql mapd -u mapd -p HyperInteractive --port "$MAPD_TCP_PORT"
     done
-
-    DASH="$PWD/$filebase/$filebase.dash"
-    if [ -f $DASH ]; then
-      MAPDDASH=$(head -n 1 "$DASH")
-      MAPDDASH="&table=${table}${MAPDDASH}"
-    fi
   fi
 done
+
+popd

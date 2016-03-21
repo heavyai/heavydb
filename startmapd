@@ -96,16 +96,13 @@ if [ "$INSERT_SAMPLE_DATA" = true ]; then
     . "$DIR/insert_sample_data"
 fi
 
-if [ -d frontend -a -e ./bin/mapd_web_server ]; then
+if [ -d frontend ] && [ -e ./bin/mapd_web_server ]; then
     ./bin/mapd_web_server $RO --port $MAPD_WEB_PORT --backend-url "http://localhost:${MAPD_HTTP_PORT}" --data $MAPD_DATA $HTTPS $HTTPS_CERT $HTTPS_KEY &
 
     if [ ! -z "$HTTPS" ] ; then
         MAPDFRONTEND="https://localhost:${MAPD_WEB_PORT}"
     else
         MAPDFRONTEND="http://localhost:${MAPD_WEB_PORT}"
-    fi
-    if [ ! -z "$MAPDDASH" ]; then
-        MAPDFRONTEND="${MAPDFRONTEND}/?style=light-style&platform=mapd&host=localhost&port=${MAPD_WEB_PORT}&db=mapd&${MAPDDASH}"
     fi
     if hash open 2>/dev/null; then
         open "$MAPDFRONTEND" 2> /dev/null || true

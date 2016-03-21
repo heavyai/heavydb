@@ -125,10 +125,15 @@ class RexLiteral : public RexScalar {
 
 class RexOperator : public RexScalar {
  public:
-  RexOperator(const SQLOps op, const std::vector<const RexScalar*> operands) : op_(op) {
+  RexOperator(const SQLOps op, const std::vector<const RexScalar*> operands, const SQLTypeInfo& type)
+      : op_(op), type_(type) {
     for (auto operand : operands) {
       operands_.emplace_back(operand);
     }
+  }
+
+  virtual const RexOperator* getDisambiguated(const std::vector<const RexScalar*>& operands) const {
+    return new RexOperator(op_, operands, type_);
   }
 
   size_t size() const { return operands_.size(); }
@@ -140,6 +145,8 @@ class RexOperator : public RexScalar {
 
   SQLOps getOperator() const { return op_; }
 
+  const SQLTypeInfo& getType() const { return type_; }
+
   std::string toString() const override {
     std::string result = "(RexOperator " + std::to_string(op_);
     for (const auto& operand : operands_) {
@@ -148,27 +155,10 @@ class RexOperator : public RexScalar {
     return result + ")";
   };
 
- private:
+ protected:
   const SQLOps op_;
   std::vector<std::unique_ptr<const RexScalar>> operands_;
-};
-
-class RexCast : public RexOperator {
- public:
-  RexCast(const RexScalar* operand, const SQLTypes target_type, const bool nullable)
-      : RexOperator(kCAST, {operand}), target_type_(target_type), nullable_(nullable) {}
-
-  SQLTypes getTargetType() const { return target_type_; }
-
-  bool getNullable() const { return nullable_; }
-
-  std::string toString() const override {
-    return "(RexCast " + getOperand(0)->toString() + " to " + std::to_string(target_type_) + ")";
-  }
-
- private:
-  SQLTypes target_type_;
-  const bool nullable_;
+  const SQLTypeInfo type_;
 };
 
 class RelAlgNode;
@@ -195,15 +185,93 @@ class RexInput : public RexAbstractInput {
   mutable const RelAlgNode* node_;
 };
 
-class RexAgg : public Rex {
+// Not a real node created by Calcite. Created by us because CaseExpr is a node in our Analyzer.
+class RexCase : public RexScalar {
  public:
-  RexAgg(const SQLAgg agg, const bool distinct, const SQLTypes type, const bool nullable, const ssize_t operand)
-      : agg_(agg), distinct_(distinct), type_(type), nullable_(nullable), operand_(operand){};
+  RexCase(const std::vector<std::pair<const RexScalar*, const RexScalar*>>& expr_pair_list, const RexScalar* else_expr)
+      : else_expr_(else_expr) {
+    for (const auto& expr_pair : expr_pair_list) {
+      expr_pair_list_.emplace_back(std::unique_ptr<const RexScalar>(expr_pair.first),
+                                   std::unique_ptr<const RexScalar>(expr_pair.second));
+    }
+  }
+
+  size_t branchCount() const { return expr_pair_list_.size(); }
+
+  const RexScalar* getWhen(const size_t idx) const {
+    CHECK(idx < expr_pair_list_.size());
+    return expr_pair_list_[idx].first.get();
+  }
+
+  const RexScalar* getThen(const size_t idx) const {
+    CHECK(idx < expr_pair_list_.size());
+    return expr_pair_list_[idx].second.get();
+  }
+
+  const RexScalar* getElse() const { return else_expr_.get(); }
 
   std::string toString() const override {
-    return "(RexAgg " + std::to_string(agg_) + " " + std::to_string(distinct_) + " " +
-           std::to_string(static_cast<int>(type_)) + " " + std::to_string(static_cast<int>(nullable_)) + " " +
-           std::to_string(operand_) + ")";
+    std::string ret = "(RexCase";
+    for (const auto& expr_pair : expr_pair_list_) {
+      ret += " " + expr_pair.first->toString() + " -> " + expr_pair.second->toString();
+    }
+    if (else_expr_) {
+      ret += " else " + else_expr_->toString();
+    }
+    ret += ")";
+    return ret;
+  }
+
+ private:
+  std::vector<std::pair<std::unique_ptr<const RexScalar>, std::unique_ptr<const RexScalar>>> expr_pair_list_;
+  std::unique_ptr<const RexScalar> else_expr_;
+};
+
+class RexFunctionOperator : public RexOperator {
+ public:
+  RexFunctionOperator(const std::string& name, const std::vector<const RexScalar*> operands)
+      : RexOperator(kFUNCTION, operands, SQLTypeInfo()), name_(name) {}
+
+  virtual const RexOperator* getDisambiguated(const std::vector<const RexScalar*>& operands) const override {
+    return new RexFunctionOperator(name_, operands);
+  }
+
+  const std::string& getName() const { return name_; }
+
+  std::string toString() const override {
+    auto result = "(RexFunctionOperator " + name_;
+    for (const auto& operand : operands_) {
+      result += (" " + operand->toString());
+    }
+    return result + ")";
+  }
+
+ private:
+  const std::string name_;
+};
+
+// Not a real node created by Calcite. Created by us because targets of a query
+// should reference the group by expressions instead of creating completely new one.
+class RexRef : public RexScalar {
+ public:
+  RexRef(const size_t index) : index_(index) {}
+
+  size_t getIndex() const { return index_; }
+
+  virtual std::string toString() const { return "(RexRef " + std::to_string(index_) + ")"; }
+
+ private:
+  const size_t index_;
+};
+
+class RexAgg : public Rex {
+ public:
+  RexAgg(const SQLAgg agg, const bool distinct, const SQLTypeInfo& type, const ssize_t operand)
+      : agg_(agg), distinct_(distinct), type_(type), operand_(operand){};
+
+  std::string toString() const override {
+    return "(RexAgg " + std::to_string(agg_) + " " + std::to_string(distinct_) + " " + type_.get_type_name() + " " +
+           type_.get_compression_name() + " " + std::to_string(operand_) + ")";
   }
 
   SQLAgg getKind() const { return agg_; }
@@ -215,8 +283,7 @@ class RexAgg : public Rex {
  private:
   const SQLAgg agg_;
   const bool distinct_;
-  const SQLTypes type_;
-  const bool nullable_;
+  const SQLTypeInfo type_;
   const ssize_t operand_;
 };
 
@@ -228,6 +295,12 @@ class RelAlgNode {
     CHECK(!context_data_);
     context_data_ = context_data;
   }
+
+  void setOutputMetainfo(const std::vector<TargetMetaInfo>& targets_metainfo) const {
+    targets_metainfo_ = targets_metainfo;
+  }
+
+  const std::vector<TargetMetaInfo>& getOutputMetainfo() const { return targets_metainfo_; }
 
   unsigned getId() const { return id_; }
 
@@ -250,14 +323,13 @@ class RelAlgNode {
 
   const void addInput(const RelAlgNode* input) { inputs_.emplace_back(input); }
 
-  virtual bool replaceInput(const RelAlgNode* old_input, const RelAlgNode* input) {
+  virtual void replaceInput(const RelAlgNode* old_input, const RelAlgNode* input) {
     for (auto& input_ptr : inputs_) {
       if (input_ptr.get() == old_input) {
         input_ptr.reset(input);
-        return true;
+        break;
       }
     }
-    return false;
   }
 
   virtual std::string toString() const = 0;
@@ -265,9 +337,10 @@ class RelAlgNode {
  protected:
   std::vector<std::unique_ptr<const RelAlgNode>> inputs_;
   const unsigned id_;
-  mutable const void* context_data_;
 
  private:
+  mutable const void* context_data_;
+  mutable std::vector<TargetMetaInfo> targets_metainfo_;
   static unsigned crt_id_;
 };
 
@@ -325,6 +398,8 @@ class RelProject : public RelAlgNode {
     return true;
   }
 
+  bool isIdentity() const;
+
   size_t size() const { return scalar_exprs_.size(); }
 
   const RexScalar* getProjectAt(const size_t idx) const {
@@ -344,7 +419,7 @@ class RelProject : public RelAlgNode {
 
   const std::string getFieldName(const size_t i) const { return fields_[i]; }
 
-  bool replaceInput(const RelAlgNode* old_input, const RelAlgNode* input) override;
+  void replaceInput(const RelAlgNode* old_input, const RelAlgNode* input) override;
 
   std::string toString() const override {
     std::string result = "(RelProject<" + std::to_string(reinterpret_cast<uint64_t>(this)) + ">";
@@ -362,20 +437,20 @@ class RelProject : public RelAlgNode {
 class RelAggregate : public RelAlgNode {
  public:
   // Takes ownership of the aggregate expressions.
-  RelAggregate(const std::vector<size_t>& group_indices,
+  RelAggregate(const size_t groupby_count,
                const std::vector<const RexAgg*>& agg_exprs,
                const std::vector<std::string>& fields,
                const RelAlgNode* input)
-      : group_indices_(group_indices), fields_(fields) {
+      : groupby_count_(groupby_count), fields_(fields) {
     for (auto agg_expr : agg_exprs) {
       agg_exprs_.emplace_back(agg_expr);
     }
     inputs_.emplace_back(input);
   }
 
-  size_t size() const { return group_indices_.size() + agg_exprs_.size(); }
+  size_t size() const { return groupby_count_ + agg_exprs_.size(); }
 
-  const std::vector<size_t>& getGroupIndices() const { return group_indices_; }
+  const size_t getGroupByCount() const { return groupby_count_; }
 
   const std::vector<std::string>& getFields() const { return fields_; }
 
@@ -389,7 +464,7 @@ class RelAggregate : public RelAlgNode {
 
   std::string toString() const override {
     std::string result = "(RelAggregate<" + std::to_string(reinterpret_cast<uint64_t>(this)) + ">(groups: [";
-    for (const auto group_index : group_indices_) {
+    for (size_t group_index = 0; group_index < groupby_count_; ++group_index) {
       result += " " + std::to_string(group_index);
     }
     result += " ] aggs: [";
@@ -400,7 +475,7 @@ class RelAggregate : public RelAlgNode {
   }
 
  private:
-  const std::vector<size_t> group_indices_;
+  const size_t groupby_count_;
   std::vector<std::unique_ptr<const RexAgg>> agg_exprs_;
   const std::vector<std::string> fields_;
 };
@@ -415,7 +490,7 @@ class RelJoin : public RelAlgNode {
     inputs_.emplace_back(rhs);
   }
 
-  bool replaceInput(const RelAlgNode* old_input, const RelAlgNode* input) override;
+  void replaceInput(const RelAlgNode* old_input, const RelAlgNode* input) override;
 
   std::string toString() const override {
     std::string result = "(RelJoin<" + std::to_string(reinterpret_cast<uint64_t>(this)) + ">(";
@@ -445,7 +520,7 @@ class RelFilter : public RelAlgNode {
     filter_.reset(condition);
   }
 
-  bool replaceInput(const RelAlgNode* old_input, const RelAlgNode* input) override;
+  void replaceInput(const RelAlgNode* old_input, const RelAlgNode* input) override;
 
   std::string toString() const override {
     std::string result = "(RelFilter<" + std::to_string(reinterpret_cast<uint64_t>(this)) + ">(";
@@ -468,14 +543,14 @@ class RelCompound : public RelAlgNode {
   // owned by 'scalar_sources_'.
   RelCompound(const RexScalar* filter_expr,
               const std::vector<const Rex*>& target_exprs,
-              const std::vector<size_t>& group_indices,
+              const size_t groupby_count,
               const std::vector<const RexAgg*>& agg_exprs,
               const std::vector<std::string>& fields,
               const std::vector<const RexScalar*>& scalar_sources,
               const bool is_agg)
       : filter_expr_(filter_expr),
         target_exprs_(target_exprs),
-        group_indices_(group_indices),
+        groupby_count_(groupby_count),
         fields_(fields),
         is_agg_(is_agg) {
     CHECK_EQ(fields.size(), target_exprs.size());
@@ -487,7 +562,7 @@ class RelCompound : public RelAlgNode {
     }
   }
 
-  bool replaceInput(const RelAlgNode* old_input, const RelAlgNode* input) override;
+  void replaceInput(const RelAlgNode* old_input, const RelAlgNode* input) override;
 
   size_t size() const { return target_exprs_.size(); }
 
@@ -501,7 +576,7 @@ class RelCompound : public RelAlgNode {
 
   const RexScalar* getScalarSource(const size_t i) const { return scalar_sources_[i].get(); }
 
-  const std::vector<size_t>& getGroupIndices() const { return group_indices_; }
+  const size_t getGroupByCount() const { return groupby_count_; }
 
   bool isAggregate() const { return is_agg_; }
 
@@ -512,7 +587,7 @@ class RelCompound : public RelAlgNode {
       result += target_expr->toString() + " ";
     }
     result += "groups: [";
-    for (const size_t group_index : group_indices_) {
+    for (size_t group_index = 0; group_index < groupby_count_; ++group_index) {
       result += " " + std::to_string(group_index);
     }
     result += " ] sources: [";
@@ -525,7 +600,7 @@ class RelCompound : public RelAlgNode {
  private:
   const std::unique_ptr<const RexScalar> filter_expr_;
   const std::vector<const Rex*> target_exprs_;
-  const std::vector<size_t> group_indices_;
+  const size_t groupby_count_;
   std::vector<std::unique_ptr<const RexAgg>> agg_exprs_;
   const std::vector<std::string> fields_;
   const bool is_agg_;
@@ -542,6 +617,21 @@ class SortField {
   SortField(const size_t field, const SortDirection sort_dir, const NullSortedPosition nulls_pos)
       : field_(field), sort_dir_(sort_dir), nulls_pos_(nulls_pos) {}
 
+  bool operator==(const SortField& that) const {
+    return field_ == that.field_ && sort_dir_ == that.sort_dir_ && nulls_pos_ == that.nulls_pos_;
+  }
+
+  size_t getField() const { return field_; }
+
+  SortDirection getSortDir() const { return sort_dir_; }
+
+  NullSortedPosition getNullsPosition() const { return nulls_pos_; }
+
+  std::string toString() const {
+    return "(" + std::to_string(field_) + " " + (sort_dir_ == SortDirection::Ascending ? "asc" : "desc") + " " +
+           (nulls_pos_ == NullSortedPosition::First ? "nulls_first" : "nulls_last") + ")";
+  }
+
  private:
   const size_t field_;
   const SortDirection sort_dir_;
@@ -550,40 +640,45 @@ class SortField {
 
 class RelSort : public RelAlgNode {
  public:
-  RelSort(const std::vector<SortField>& collation, const RelAlgNode* input) : collation_(collation) {
+  RelSort(const std::vector<SortField>& collation, const int64_t limit, const int64_t offset, const RelAlgNode* input)
+      : collation_(collation), limit_(limit), offset_(offset) {
     inputs_.emplace_back(input);
   }
 
+  bool operator==(const RelSort& that) const {
+    return collation_ == that.collation_ && limit_ == that.limit_ && offset_ == that.offset_;
+  }
+
+  size_t collationCount() const { return collation_.size(); }
+
+  SortField getCollation(const size_t i) const {
+    CHECK_LT(i, collation_.size());
+    return collation_[i];
+  }
+
+  int64_t getLimit() const { return limit_; }
+
+  int64_t getOffset() const { return offset_; }
+
   std::string toString() const override {
     std::string result = "(RelSort<" + std::to_string(reinterpret_cast<uint64_t>(this)) + ">(";
-    // TODO(alex)
+    result += "limit: " + std::to_string(limit_) + " ";
+    result += "offset: " + std::to_string(offset_) + " ";
+    result += "collation: [ ";
+    for (const auto& sort_field : collation_) {
+      result += sort_field.toString() + " ";
+    }
+    result += "]";
     return result + ")";
   }
 
  private:
   const std::vector<SortField> collation_;
+  const int64_t limit_;
+  const int64_t offset_;
 };
 
 std::unique_ptr<const RelAlgNode> ra_interpret(const rapidjson::Value&, const Catalog_Namespace::Catalog&);
-
-namespace Analyzer {
-
-class Expr;
-
-}  // namespace Analyzer
-
-// For scan inputs, in_metainfo is empty.
-std::shared_ptr<Analyzer::Expr> translate_scalar_rex(
-    const RexScalar* rex,
-    const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
-    const Catalog_Namespace::Catalog& cat,
-    const std::vector<TargetMetaInfo>& in_metainfo);
-
-std::shared_ptr<Analyzer::Expr> translate_aggregate_rex(
-    const RexAgg* rex,
-    const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
-    const Catalog_Namespace::Catalog& cat,
-    const std::vector<std::shared_ptr<Analyzer::Expr>>& scalar_sources);
 
 std::string tree_string(const RelAlgNode*, const size_t indent = 0);
 

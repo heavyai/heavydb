@@ -26,6 +26,10 @@ std::vector<RaExecutionDesc> get_execution_descriptors(const RelAlgNode* ra_node
   for_loops.emplace_back(in_node);
   auto next_descriptors =
       dynamic_cast<const RelScan*>(in_node) ? std::vector<RaExecutionDesc>{} : get_execution_descriptors(in_node);
+  if (dynamic_cast<const RelSort*>(ra_node)) {
+    CHECK(!next_descriptors.empty());
+    next_descriptors.pop_back();
+  }
   next_descriptors.emplace_back(for_loops, ra_node);
   return next_descriptors;
 }

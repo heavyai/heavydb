@@ -706,7 +706,7 @@ class ResultRows {
 
   void reduce(const ResultRows& other_results, const QueryMemoryDescriptor& query_mem_desc, const bool output_columnar);
 
-  void sort(const Planner::Sort* sort_plan, const int64_t top_n);
+  void sort(const std::list<Analyzer::OrderEntry>& order_entries, const bool remove_duplicates, const int64_t top_n);
 
   void keepFirstN(const size_t n) {
     CHECK(n);
@@ -822,6 +822,8 @@ class ResultRows {
       as_map_.insert(std::make_pair(multi_keys_[i], target_values_[i]));
     }
   }
+
+  void gpuSort(const std::list<Analyzer::OrderEntry>& order_entries);
 
   void setQueueTime(int64_t queue_time) { queue_time_ms_ = queue_time; }
 

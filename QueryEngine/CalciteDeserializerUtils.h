@@ -64,8 +64,7 @@ inline SQLOps to_sql_op(const std::string& op_str) {
   if (op_str == std::string("PG_ANY") || op_str == std::string("PG_ALL")) {
     throw std::runtime_error("Invalid use of " + op_str + " operator");
   }
-  CHECK(false);
-  return kEQ;
+  return kFUNCTION;
 }
 
 inline SQLAgg to_agg_kind(const std::string& agg_name) {

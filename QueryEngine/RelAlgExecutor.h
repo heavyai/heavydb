@@ -5,23 +5,36 @@
 #include "Execute.h"
 #include "RelAlgExecutionDescriptor.h"
 
+#include <ctime>
+
 class RelAlgExecutor {
  public:
-  RelAlgExecutor(Executor* executor, const Catalog_Namespace::Catalog& cat) : executor_(executor), cat_(cat) {}
-  ExecutionResult executeRelAlgSeq(std::vector<RaExecutionDesc>&, const CompilationOptions&);
+  RelAlgExecutor(Executor* executor, const Catalog_Namespace::Catalog& cat) : executor_(executor), cat_(cat), now_(0) {}
+
+  ExecutionResult executeRelAlgSeq(std::vector<RaExecutionDesc>&, const CompilationOptions&, const ExecutionOptions&);
 
  private:
-  ExecutionResult executeCompound(const RelCompound*, const std::vector<TargetMetaInfo>&, const CompilationOptions&);
+  ExecutionResult executeCompound(const RelCompound*, const CompilationOptions&, const ExecutionOptions&);
 
-  ExecutionResult executeProject(const RelProject*, const std::vector<TargetMetaInfo>&, const CompilationOptions&);
+  ExecutionResult executeProject(const RelProject*, const CompilationOptions&, const ExecutionOptions&);
 
-  ExecutionResult executeFilter(const RelFilter*, const std::vector<TargetMetaInfo>&, const CompilationOptions&);
+  ExecutionResult executeFilter(const RelFilter*, const CompilationOptions&, const ExecutionOptions&);
+
+  ExecutionResult executeSort(const RelSort*, const CompilationOptions&, const ExecutionOptions&);
 
   ExecutionResult executeWorkUnit(const Executor::RelAlgExecutionUnit& rel_alg_exe_unit,
-                                  const std::vector<InputDescriptor>& scan_ids,
                                   const std::vector<TargetMetaInfo>& targets_meta,
                                   const bool is_agg,
-                                  const CompilationOptions& co);
+                                  const CompilationOptions& co,
+                                  const ExecutionOptions& eo);
+
+  Executor::RelAlgExecutionUnit createWorkUnit(const RelAlgNode*);
+
+  Executor::RelAlgExecutionUnit createCompoundWorkUnit(const RelCompound*);
+
+  Executor::RelAlgExecutionUnit createProjectWorkUnit(const RelProject*);
+
+  Executor::RelAlgExecutionUnit createFilterWorkUnit(const RelFilter*);
 
   void addTemporaryTable(const int table_id, const ResultRows* rows) {
     CHECK_LT(table_id, 0);
@@ -32,6 +45,8 @@ class RelAlgExecutor {
   Executor* executor_;
   const Catalog_Namespace::Catalog& cat_;
   TemporaryTables temporary_tables_;
+  time_t now_;
+  std::vector<std::shared_ptr<Analyzer::Expr>> target_exprs_owned_;  // TODO(alex): remove
 };
 
 #endif  // QUERYENGINE_RELALGEXECUTOR_H

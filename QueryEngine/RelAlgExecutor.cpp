@@ -1,34 +1,44 @@
 #ifdef HAVE_CALCITE
 #include "RelAlgExecutor.h"
+#include "RelAlgTranslator.h"
 
 #include "InputMetadata.h"
 #include "RexVisitor.h"
 
 ExecutionResult RelAlgExecutor::executeRelAlgSeq(std::vector<RaExecutionDesc>& exec_descs,
-                                                 const CompilationOptions& co) {
+                                                 const CompilationOptions& co,
+                                                 const ExecutionOptions& eo) {
+  std::lock_guard<std::mutex> lock(executor_->execute_mutex_);
   decltype(temporary_tables_)().swap(temporary_tables_);
-  std::vector<TargetMetaInfo> in_metainfo;
+  decltype(target_exprs_owned_)().swap(target_exprs_owned_);
+  executor_->row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>();
+  executor_->catalog_ = &cat_;
+  executor_->temporary_tables_ = &temporary_tables_;
+  time(&now_);
   for (auto& exec_desc : exec_descs) {
     const auto body = exec_desc.getBody();
     const auto compound = dynamic_cast<const RelCompound*>(body);
     if (compound) {
-      exec_desc.setResult(executeCompound(compound, in_metainfo, co));
+      exec_desc.setResult(executeCompound(compound, co, eo));
       addTemporaryTable(-compound->getId(), &exec_desc.getResult().getRows());
-      in_metainfo = exec_desc.getResult().getTargetsMeta();
       continue;
     }
     const auto project = dynamic_cast<const RelProject*>(body);
     if (project) {
-      exec_desc.setResult(executeProject(project, in_metainfo, co));
+      exec_desc.setResult(executeProject(project, co, eo));
       addTemporaryTable(-project->getId(), &exec_desc.getResult().getRows());
-      in_metainfo = exec_desc.getResult().getTargetsMeta();
       continue;
     }
     const auto filter = dynamic_cast<const RelFilter*>(body);
     if (filter) {
-      exec_desc.setResult(executeFilter(filter, in_metainfo, co));
+      exec_desc.setResult(executeFilter(filter, co, eo));
       addTemporaryTable(-filter->getId(), &exec_desc.getResult().getRows());
-      in_metainfo = exec_desc.getResult().getTargetsMeta();
+      continue;
+    }
+    const auto sort = dynamic_cast<const RelSort*>(body);
+    if (sort) {
+      exec_desc.setResult(executeSort(sort, co, eo));
+      addTemporaryTable(-sort->getId(), &exec_desc.getResult().getRows());
       continue;
     }
     CHECK(false);
@@ -156,15 +166,24 @@ const RexScalar* scalar_at(const size_t i, const RelProject* project) {
   return project->getProjectAt(i);
 }
 
+std::shared_ptr<Analyzer::Expr> set_transient_dict(const std::shared_ptr<Analyzer::Expr> expr) {
+  const auto& ti = expr->get_type_info();
+  if (!ti.is_string() || ti.get_compression() != kENCODING_NONE) {
+    return expr;
+  }
+  auto transient_dict_ti = ti;
+  transient_dict_ti.set_compression(kENCODING_DICT);
+  transient_dict_ti.set_comp_param(TRANSIENT_DICT_ID);
+  transient_dict_ti.set_fixed_size();
+  return expr->add_cast(transient_dict_ti);
+}
+
 template <class RA>
-std::vector<std::shared_ptr<Analyzer::Expr>> translate_scalar_sources(
-    const RA* ra_node,
-    const Catalog_Namespace::Catalog& cat,
-    const std::vector<TargetMetaInfo>& in_metainfo,
-    const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level) {
+std::vector<std::shared_ptr<Analyzer::Expr>> translate_scalar_sources(const RA* ra_node,
+                                                                      const RelAlgTranslator& translator) {
   std::vector<std::shared_ptr<Analyzer::Expr>> scalar_sources;
   for (size_t i = 0; i < get_scalar_sources_size(ra_node); ++i) {
-    scalar_sources.push_back(translate_scalar_rex(scalar_at(i, ra_node), input_to_nest_level, cat, in_metainfo));
+    scalar_sources.push_back(translator.translateScalarRex(scalar_at(i, ra_node)));
   }
   return scalar_sources;
 }
@@ -176,20 +195,16 @@ std::list<std::shared_ptr<Analyzer::Expr>> translate_groupby_exprs(
     return {nullptr};
   }
   std::list<std::shared_ptr<Analyzer::Expr>> groupby_exprs;
-  for (const auto group_idx : compound->getGroupIndices()) {
-    groupby_exprs.push_back(scalar_sources[group_idx]);
+  for (size_t group_idx = 0; group_idx < compound->getGroupByCount(); ++group_idx) {
+    groupby_exprs.push_back(set_transient_dict(scalar_sources[group_idx]));
   }
   return groupby_exprs;
 }
 
-std::list<std::shared_ptr<Analyzer::Expr>> translate_quals(
-    const RelCompound* compound,
-    const Catalog_Namespace::Catalog& cat,
-    const std::vector<TargetMetaInfo>& in_metainfo,
-    const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level) {
+std::list<std::shared_ptr<Analyzer::Expr>> translate_quals(const RelCompound* compound,
+                                                           const RelAlgTranslator& translator) {
   const auto filter_rex = compound->getFilterExpr();
-  const auto filter_expr =
-      filter_rex ? translate_scalar_rex(filter_rex, input_to_nest_level, cat, in_metainfo) : nullptr;
+  const auto filter_expr = filter_rex ? translator.translateScalarRex(filter_rex) : nullptr;
   std::list<std::shared_ptr<Analyzer::Expr>> quals;
   if (filter_expr) {
     quals.push_back(filter_expr);
@@ -199,20 +214,29 @@ std::list<std::shared_ptr<Analyzer::Expr>> translate_quals(
 
 std::vector<Analyzer::Expr*> translate_targets(std::vector<std::shared_ptr<Analyzer::Expr>>& target_exprs_owned,
                                                const std::vector<std::shared_ptr<Analyzer::Expr>>& scalar_sources,
+                                               const std::list<std::shared_ptr<Analyzer::Expr>>& groupby_exprs,
                                                const RelCompound* compound,
-                                               const Catalog_Namespace::Catalog& cat,
-                                               const std::vector<TargetMetaInfo>& in_metainfo,
-                                               const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level) {
+                                               const RelAlgTranslator& translator) {
   std::vector<Analyzer::Expr*> target_exprs;
   for (size_t i = 0; i < compound->size(); ++i) {
     const auto target_rex = compound->getTargetExpr(i);
     const auto target_rex_agg = dynamic_cast<const RexAgg*>(target_rex);
     std::shared_ptr<Analyzer::Expr> target_expr;
     if (target_rex_agg) {
-      target_expr = translate_aggregate_rex(target_rex_agg, input_to_nest_level, cat, scalar_sources);
+      target_expr = RelAlgTranslator::translateAggregateRex(target_rex_agg, scalar_sources);
     } else {
       const auto target_rex_scalar = dynamic_cast<const RexScalar*>(target_rex);
-      target_expr = translate_scalar_rex(target_rex_scalar, input_to_nest_level, cat, in_metainfo);
+      const auto target_rex_ref = dynamic_cast<const RexRef*>(target_rex_scalar);
+      if (target_rex_ref) {
+        const auto ref_idx = target_rex_ref->getIndex();
+        CHECK_GE(ref_idx, size_t(1));
+        CHECK_LE(ref_idx, groupby_exprs.size());
+        const auto groupby_expr = *std::next(groupby_exprs.begin(), ref_idx - 1);
+        target_expr =
+            makeExpr<Analyzer::Var>(groupby_expr->get_type_info(), 0, 0, -1, Analyzer::Var::kGROUPBY, ref_idx);
+      } else {
+        target_expr = translator.translateScalarRex(target_rex_scalar);
+      }
     }
     CHECK(target_expr);
     target_exprs_owned.push_back(target_expr);
@@ -243,38 +267,134 @@ std::vector<TargetMetaInfo> get_targets_meta(const RA* ra_node, const std::vecto
 }  // namespace
 
 ExecutionResult RelAlgExecutor::executeCompound(const RelCompound* compound,
-                                                const std::vector<TargetMetaInfo>& in_metainfo,
-                                                const CompilationOptions& co) {
+                                                const CompilationOptions& co,
+                                                const ExecutionOptions& eo) {
+  const auto rel_alg_exe_unit = createCompoundWorkUnit(compound);
+  return executeWorkUnit(rel_alg_exe_unit, compound->getOutputMetainfo(), compound->isAggregate(), co, eo);
+}
+
+ExecutionResult RelAlgExecutor::executeProject(const RelProject* project,
+                                               const CompilationOptions& co,
+                                               const ExecutionOptions& eo) {
+  const auto rel_alg_exe_unit = createProjectWorkUnit(project);
+  return executeWorkUnit(rel_alg_exe_unit, project->getOutputMetainfo(), false, co, eo);
+}
+
+ExecutionResult RelAlgExecutor::executeFilter(const RelFilter* filter,
+                                              const CompilationOptions& co,
+                                              const ExecutionOptions& eo) {
+  const auto rel_alg_exe_unit = createFilterWorkUnit(filter);
+  return executeWorkUnit(rel_alg_exe_unit, filter->getOutputMetainfo(), false, co, eo);
+}
+
+namespace {
+
+// TODO(alex): Once we're fully migrated to the relational algebra model, change
+// the executor interface to use the collation directly and remove this conversion.
+std::list<Analyzer::OrderEntry> get_order_entries(const RelSort* sort) {
+  std::list<Analyzer::OrderEntry> result;
+  for (size_t i = 0; i < sort->collationCount(); ++i) {
+    const auto sort_field = sort->getCollation(i);
+    result.emplace_back(sort_field.getField() + 1,
+                        sort_field.getSortDir() == SortDirection::Descending,
+                        sort_field.getNullsPosition() == NullSortedPosition::First);
+  }
+  return result;
+}
+
+}  // namespace
+
+ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
+                                            const CompilationOptions& co,
+                                            const ExecutionOptions& eo) {
+  CHECK_EQ(size_t(1), sort->inputCount());
+  const auto source = sort->getInput(0);
+  CHECK(!dynamic_cast<const RelSort*>(source));
+  auto rel_alg_exe_unit = createWorkUnit(source);
+  const auto compound = dynamic_cast<const RelCompound*>(source);
+  auto source_result = executeWorkUnit(
+      rel_alg_exe_unit, source->getOutputMetainfo(), compound ? compound->isAggregate() : false, co, eo);
+  auto rows_to_sort = source_result.getRows();
+  if (sort->collationCount() != 0) {
+    rows_to_sort.sort(get_order_entries(sort), false, sort->getLimit() + sort->getOffset());
+  }
+  if (sort->getLimit() || sort->getOffset()) {
+    rows_to_sort.dropFirstN(sort->getOffset());
+    if (sort->getLimit()) {
+      rows_to_sort.keepFirstN(sort->getLimit());
+    }
+  }
+  return {rows_to_sort, source_result.getTargetsMeta()};
+}
+
+ExecutionResult RelAlgExecutor::executeWorkUnit(const Executor::RelAlgExecutionUnit& rel_alg_exe_unit,
+                                                const std::vector<TargetMetaInfo>& targets_meta,
+                                                const bool is_agg,
+                                                const CompilationOptions& co,
+                                                const ExecutionOptions& eo) {
+  size_t max_groups_buffer_entry_guess{2048};
+  int32_t error_code{0};
+  ExecutionResult result = {
+      executor_->executeWorkUnit(&error_code,
+                                 max_groups_buffer_entry_guess,
+                                 is_agg,
+                                 get_table_infos(rel_alg_exe_unit.input_descs, cat_, temporary_tables_),
+                                 rel_alg_exe_unit,
+                                 co,
+                                 eo,
+                                 cat_,
+                                 executor_->row_set_mem_owner_,
+                                 nullptr),
+      targets_meta};
+  if (error_code == Executor::ERR_DIV_BY_ZERO) {
+    throw std::runtime_error("Division by zero");
+  }
+  CHECK(!error_code);
+  return result;
+}
+
+Executor::RelAlgExecutionUnit RelAlgExecutor::createWorkUnit(const RelAlgNode* node) {
+  const auto compound = dynamic_cast<const RelCompound*>(node);
+  if (compound) {
+    return createCompoundWorkUnit(compound);
+  }
+  const auto project = dynamic_cast<const RelProject*>(node);
+  if (project) {
+    return createProjectWorkUnit(project);
+  }
+  const auto filter = dynamic_cast<const RelFilter*>(node);
+  CHECK(filter);
+  return createFilterWorkUnit(filter);
+}
+
+Executor::RelAlgExecutionUnit RelAlgExecutor::createCompoundWorkUnit(const RelCompound* compound) {
   std::vector<InputDescriptor> input_descs;
   std::list<InputColDescriptor> input_col_descs;
   const auto input_to_nest_level = get_input_nest_levels(compound);
   std::tie(input_descs, input_col_descs) = get_input_desc(compound, input_to_nest_level);
-  const auto scalar_sources = translate_scalar_sources(compound, cat_, in_metainfo, input_to_nest_level);
+  RelAlgTranslator translator(cat_, input_to_nest_level, now_);
+  const auto scalar_sources = translate_scalar_sources(compound, translator);
   const auto groupby_exprs = translate_groupby_exprs(compound, scalar_sources);
-  const auto quals = translate_quals(compound, cat_, in_metainfo, input_to_nest_level);
-  std::vector<std::shared_ptr<Analyzer::Expr>> target_exprs_owned;
-  const auto target_exprs =
-      translate_targets(target_exprs_owned, scalar_sources, compound, cat_, in_metainfo, input_to_nest_level);
+  const auto quals = translate_quals(compound, translator);
+  const auto target_exprs = translate_targets(target_exprs_owned_, scalar_sources, groupby_exprs, compound, translator);
   CHECK_EQ(compound->size(), target_exprs.size());
-  Executor::RelAlgExecutionUnit rel_alg_exe_unit{
-      input_descs, input_col_descs, {}, quals, {}, groupby_exprs, target_exprs, {}, 0};
   const auto targets_meta = get_targets_meta(compound, target_exprs);
-  return executeWorkUnit(rel_alg_exe_unit, input_descs, targets_meta, compound->isAggregate(), co);
+  compound->setOutputMetainfo(targets_meta);
+  return {input_descs, input_col_descs, {}, quals, {}, groupby_exprs, target_exprs, {}, 0};
 }
 
-ExecutionResult RelAlgExecutor::executeProject(const RelProject* project,
-                                               const std::vector<TargetMetaInfo>& in_metainfo,
-                                               const CompilationOptions& co) {
+Executor::RelAlgExecutionUnit RelAlgExecutor::createProjectWorkUnit(const RelProject* project) {
   std::vector<InputDescriptor> input_descs;
   std::list<InputColDescriptor> input_col_descs;
   const auto input_to_nest_level = get_input_nest_levels(project);
   std::tie(input_descs, input_col_descs) = get_input_desc(project, input_to_nest_level);
-  const auto target_exprs_owned = translate_scalar_sources(project, cat_, in_metainfo, input_to_nest_level);
+  RelAlgTranslator translator(cat_, input_to_nest_level, now_);
+  const auto target_exprs_owned = translate_scalar_sources(project, translator);
+  target_exprs_owned_.insert(target_exprs_owned_.end(), target_exprs_owned.begin(), target_exprs_owned.end());
   const auto target_exprs = get_exprs_not_owned(target_exprs_owned);
-  Executor::RelAlgExecutionUnit rel_alg_exe_unit{
-      input_descs, input_col_descs, {}, {}, {}, {nullptr}, target_exprs, {}, 0};
   const auto targets_meta = get_targets_meta(project, target_exprs);
-  return executeWorkUnit(rel_alg_exe_unit, input_descs, targets_meta, false, co);
+  project->setOutputMetainfo(targets_meta);
+  return {input_descs, input_col_descs, {}, {}, {}, {nullptr}, target_exprs, {}, 0};
 }
 
 namespace {
@@ -302,51 +422,28 @@ std::vector<std::shared_ptr<Analyzer::Expr>> synthesize_inputs(
 
 }  // namespace
 
-ExecutionResult RelAlgExecutor::executeFilter(const RelFilter* filter,
-                                              const std::vector<TargetMetaInfo>& in_metainfo,
-                                              const CompilationOptions& co) {
+Executor::RelAlgExecutionUnit RelAlgExecutor::createFilterWorkUnit(const RelFilter* filter) {
   CHECK_EQ(size_t(1), filter->inputCount());
   std::vector<InputDescriptor> input_descs;
   std::list<InputColDescriptor> input_col_descs;
   std::unordered_set<const RexInput*> used_inputs;
   std::vector<std::unique_ptr<RexInput>> used_inputs_owned;
+  const auto source = filter->getInput(0);
+  const auto& in_metainfo = source->getOutputMetainfo();
   for (size_t i = 0; i < in_metainfo.size(); ++i) {
-    auto synthesized_used_input = new RexInput(filter->getInput(0), i);
+    auto synthesized_used_input = new RexInput(source, i);
     used_inputs_owned.emplace_back(synthesized_used_input);
     used_inputs.insert(synthesized_used_input);
   }
   const auto input_to_nest_level = get_input_nest_levels(filter);
   std::tie(input_descs, input_col_descs) = get_input_desc_impl(filter, used_inputs, input_to_nest_level);
-  const auto qual = translate_scalar_rex(filter->getCondition(), input_to_nest_level, cat_, in_metainfo);
+  RelAlgTranslator translator(cat_, input_to_nest_level, now_);
+  const auto qual = translator.translateScalarRex(filter->getCondition());
   const auto target_exprs_owned = synthesize_inputs(filter, in_metainfo, input_to_nest_level);
+  target_exprs_owned_.insert(target_exprs_owned_.end(), target_exprs_owned.begin(), target_exprs_owned.end());
   const auto target_exprs = get_exprs_not_owned(target_exprs_owned);
-  Executor::RelAlgExecutionUnit rel_alg_exe_unit{
-      input_descs, input_col_descs, {}, {qual}, {}, {nullptr}, target_exprs, {}, 0};
-  return executeWorkUnit(rel_alg_exe_unit, input_descs, in_metainfo, false, co);
-}
-
-ExecutionResult RelAlgExecutor::executeWorkUnit(const Executor::RelAlgExecutionUnit& rel_alg_exe_unit,
-                                                const std::vector<InputDescriptor>& input_descs,
-                                                const std::vector<TargetMetaInfo>& targets_meta,
-                                                const bool is_agg,
-                                                const CompilationOptions& co) {
-  size_t max_groups_buffer_entry_guess{2048};
-  int32_t error_code{0};
-  std::lock_guard<std::mutex> lock(executor_->execute_mutex_);
-  executor_->row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>();
-  executor_->catalog_ = &cat_;
-  executor_->temporary_tables_ = &temporary_tables_;
-  return {executor_->executeWorkUnit(&error_code,
-                                     max_groups_buffer_entry_guess,
-                                     is_agg,
-                                     get_table_infos(input_descs, cat_, temporary_tables_),
-                                     rel_alg_exe_unit,
-                                     co,
-                                     {false, true, false, false},
-                                     cat_,
-                                     executor_->row_set_mem_owner_,
-                                     nullptr),
-          targets_meta};
+  filter->setOutputMetainfo(in_metainfo);
+  return {input_descs, input_col_descs, {}, {qual}, {}, {nullptr}, target_exprs, {}, 0};
 }
 
 #endif  // HAVE_CALCITE
