@@ -515,10 +515,14 @@ void coalesce_nodes(std::vector<RelAlgNode*>& nodes) {
         break;
       }
       case CoalesceState::Filter: {
-        CHECK(dynamic_cast<const RelProject*>(ra_node));  // TODO: is filter always followed by project?
-        crt_pattern.push_back(i);
-        crt_state = CoalesceState::FirstProject;
-        ++i;
+        if (dynamic_cast<const RelProject*>(ra_node)) {
+          crt_pattern.push_back(i);
+          crt_state = CoalesceState::FirstProject;
+          ++i;
+        } else {
+          crt_state = CoalesceState::Initial;
+          decltype(crt_pattern)().swap(crt_pattern);
+        }
         break;
       }
       case CoalesceState::FirstProject: {
