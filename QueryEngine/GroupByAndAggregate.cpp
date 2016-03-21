@@ -624,10 +624,10 @@ void ResultRows::sort(const std::list<Analyzer::OrderEntry>& order_entries,
         return false;
       }
       if (UNLIKELY(isNull(entry_ti, lhs_v) && !isNull(entry_ti, rhs_v))) {
-        return !order_entry.nulls_first;
+        return use_heap ? !order_entry.nulls_first : order_entry.nulls_first;
       }
       if (UNLIKELY(isNull(entry_ti, rhs_v) && !isNull(entry_ti, lhs_v))) {
-        return order_entry.nulls_first;
+        return use_heap ? order_entry.nulls_first : !order_entry.nulls_first;
       }
       const bool use_desc_cmp = use_heap ? !order_entry.is_desc : order_entry.is_desc;
       if (LIKELY(lhs_v.isInt())) {
