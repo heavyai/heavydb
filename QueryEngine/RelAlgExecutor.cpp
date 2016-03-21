@@ -178,13 +178,11 @@ std::shared_ptr<Analyzer::Expr> set_transient_dict(const std::shared_ptr<Analyze
 }
 
 template <class RA>
-std::vector<std::shared_ptr<Analyzer::Expr>> translate_scalar_sources(
-    const RA* ra_node,
-    const Catalog_Namespace::Catalog& cat,
-    const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level) {
+std::vector<std::shared_ptr<Analyzer::Expr>> translate_scalar_sources(const RA* ra_node,
+                                                                      const RelAlgTranslator& translator) {
   std::vector<std::shared_ptr<Analyzer::Expr>> scalar_sources;
   for (size_t i = 0; i < get_scalar_sources_size(ra_node); ++i) {
-    scalar_sources.push_back(translate_scalar_rex(scalar_at(i, ra_node), input_to_nest_level, cat));
+    scalar_sources.push_back(translator.translateScalarRex(scalar_at(i, ra_node)));
   }
   return scalar_sources;
 }
@@ -202,12 +200,10 @@ std::list<std::shared_ptr<Analyzer::Expr>> translate_groupby_exprs(
   return groupby_exprs;
 }
 
-std::list<std::shared_ptr<Analyzer::Expr>> translate_quals(
-    const RelCompound* compound,
-    const Catalog_Namespace::Catalog& cat,
-    const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level) {
+std::list<std::shared_ptr<Analyzer::Expr>> translate_quals(const RelCompound* compound,
+                                                           const RelAlgTranslator& translator) {
   const auto filter_rex = compound->getFilterExpr();
-  const auto filter_expr = filter_rex ? translate_scalar_rex(filter_rex, input_to_nest_level, cat) : nullptr;
+  const auto filter_expr = filter_rex ? translator.translateScalarRex(filter_rex) : nullptr;
   std::list<std::shared_ptr<Analyzer::Expr>> quals;
   if (filter_expr) {
     quals.push_back(filter_expr);
@@ -219,15 +215,14 @@ std::vector<Analyzer::Expr*> translate_targets(std::vector<std::shared_ptr<Analy
                                                const std::vector<std::shared_ptr<Analyzer::Expr>>& scalar_sources,
                                                const std::list<std::shared_ptr<Analyzer::Expr>>& groupby_exprs,
                                                const RelCompound* compound,
-                                               const Catalog_Namespace::Catalog& cat,
-                                               const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level) {
+                                               const RelAlgTranslator& translator) {
   std::vector<Analyzer::Expr*> target_exprs;
   for (size_t i = 0; i < compound->size(); ++i) {
     const auto target_rex = compound->getTargetExpr(i);
     const auto target_rex_agg = dynamic_cast<const RexAgg*>(target_rex);
     std::shared_ptr<Analyzer::Expr> target_expr;
     if (target_rex_agg) {
-      target_expr = translate_aggregate_rex(target_rex_agg, scalar_sources);
+      target_expr = RelAlgTranslator::translateAggregateRex(target_rex_agg, scalar_sources);
     } else {
       const auto target_rex_scalar = dynamic_cast<const RexScalar*>(target_rex);
       const auto target_rex_ref = dynamic_cast<const RexRef*>(target_rex_scalar);
@@ -239,7 +234,7 @@ std::vector<Analyzer::Expr*> translate_targets(std::vector<std::shared_ptr<Analy
         target_expr =
             makeExpr<Analyzer::Var>(groupby_expr->get_type_info(), 0, 0, -1, Analyzer::Var::kGROUPBY, ref_idx);
       } else {
-        target_expr = translate_scalar_rex(target_rex_scalar, input_to_nest_level, cat);
+        target_expr = translator.translateScalarRex(target_rex_scalar);
       }
     }
     CHECK(target_expr);
@@ -376,11 +371,11 @@ Executor::RelAlgExecutionUnit RelAlgExecutor::createCompoundWorkUnit(const RelCo
   std::list<InputColDescriptor> input_col_descs;
   const auto input_to_nest_level = get_input_nest_levels(compound);
   std::tie(input_descs, input_col_descs) = get_input_desc(compound, input_to_nest_level);
-  const auto scalar_sources = translate_scalar_sources(compound, cat_, input_to_nest_level);
+  RelAlgTranslator translator(cat_, input_to_nest_level);
+  const auto scalar_sources = translate_scalar_sources(compound, translator);
   const auto groupby_exprs = translate_groupby_exprs(compound, scalar_sources);
-  const auto quals = translate_quals(compound, cat_, input_to_nest_level);
-  const auto target_exprs =
-      translate_targets(target_exprs_owned_, scalar_sources, groupby_exprs, compound, cat_, input_to_nest_level);
+  const auto quals = translate_quals(compound, translator);
+  const auto target_exprs = translate_targets(target_exprs_owned_, scalar_sources, groupby_exprs, compound, translator);
   CHECK_EQ(compound->size(), target_exprs.size());
   const auto targets_meta = get_targets_meta(compound, target_exprs);
   compound->setOutputMetainfo(targets_meta);
@@ -392,7 +387,8 @@ Executor::RelAlgExecutionUnit RelAlgExecutor::createProjectWorkUnit(const RelPro
   std::list<InputColDescriptor> input_col_descs;
   const auto input_to_nest_level = get_input_nest_levels(project);
   std::tie(input_descs, input_col_descs) = get_input_desc(project, input_to_nest_level);
-  const auto target_exprs_owned = translate_scalar_sources(project, cat_, input_to_nest_level);
+  RelAlgTranslator translator(cat_, input_to_nest_level);
+  const auto target_exprs_owned = translate_scalar_sources(project, translator);
   target_exprs_owned_.insert(target_exprs_owned_.end(), target_exprs_owned.begin(), target_exprs_owned.end());
   const auto target_exprs = get_exprs_not_owned(target_exprs_owned);
   const auto targets_meta = get_targets_meta(project, target_exprs);
@@ -440,7 +436,8 @@ Executor::RelAlgExecutionUnit RelAlgExecutor::createFilterWorkUnit(const RelFilt
   }
   const auto input_to_nest_level = get_input_nest_levels(filter);
   std::tie(input_descs, input_col_descs) = get_input_desc_impl(filter, used_inputs, input_to_nest_level);
-  const auto qual = translate_scalar_rex(filter->getCondition(), input_to_nest_level, cat_);
+  RelAlgTranslator translator(cat_, input_to_nest_level);
+  const auto qual = translator.translateScalarRex(filter->getCondition());
   const auto target_exprs_owned = synthesize_inputs(filter, in_metainfo, input_to_nest_level);
   target_exprs_owned_.insert(target_exprs_owned_.end(), target_exprs_owned.begin(), target_exprs_owned.end());
   const auto target_exprs = get_exprs_not_owned(target_exprs_owned);

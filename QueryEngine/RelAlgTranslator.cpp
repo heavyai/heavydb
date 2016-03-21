@@ -35,7 +35,76 @@ SQLTypeInfo build_type_info(const SQLTypes sql_type, const int scale, const int 
   return ti;
 }
 
-std::shared_ptr<Analyzer::Expr> translate_literal(const RexLiteral* rex_literal) {
+std::shared_ptr<Analyzer::Expr> remove_cast(const std::shared_ptr<Analyzer::Expr> expr) {
+  const auto cast_expr = std::dynamic_pointer_cast<const Analyzer::UOper>(expr);
+  return cast_expr && cast_expr->get_optype() == kCAST ? cast_expr->get_own_operand() : expr;
+}
+
+std::pair<std::shared_ptr<Analyzer::Expr>, SQLQualifier> get_quantified_rhs(const RexScalar* rex_scalar,
+                                                                            const RelAlgTranslator& translator) {
+  std::shared_ptr<Analyzer::Expr> rhs;
+  SQLQualifier sql_qual{kONE};
+  const auto rex_operator = dynamic_cast<const RexOperator*>(rex_scalar);
+  if (!rex_operator) {
+    return std::make_pair(rhs, sql_qual);
+  }
+  const auto rex_function = dynamic_cast<const RexFunctionOperator*>(rex_operator);
+  const auto qual_str = rex_function ? rex_function->getName() : "";
+  if (qual_str == std::string("PG_ANY") || qual_str == std::string("PG_ALL")) {
+    CHECK_EQ(size_t(1), rex_function->size());
+    rhs = translator.translateScalarRex(rex_function->getOperand(0));
+    sql_qual = qual_str == std::string("PG_ANY") ? kANY : kALL;
+  }
+  if (!rhs && rex_operator->getOperator() == kCAST) {
+    CHECK_EQ(size_t(1), rex_operator->size());
+    std::tie(rhs, sql_qual) = get_quantified_rhs(rex_operator->getOperand(0), translator);
+  }
+  return std::make_pair(rhs, sql_qual);
+}
+
+}  // namespace
+
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateScalarRex(const RexScalar* rex) const {
+  const auto rex_input = dynamic_cast<const RexInput*>(rex);
+  if (rex_input) {
+    return translateInput(rex_input);
+  }
+  const auto rex_literal = dynamic_cast<const RexLiteral*>(rex);
+  if (rex_literal) {
+    return translateLiteral(rex_literal);
+  }
+  const auto rex_function = dynamic_cast<const RexFunctionOperator*>(rex);
+  if (rex_function) {
+    return translateFunction(rex_function);
+  }
+  const auto rex_operator = dynamic_cast<const RexOperator*>(rex);
+  if (rex_operator) {
+    return translateOper(rex_operator);
+  }
+  const auto rex_case = dynamic_cast<const RexCase*>(rex);
+  if (rex_case) {
+    return translateCase(rex_case);
+  }
+  CHECK(false);
+  return nullptr;
+}
+
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateAggregateRex(
+    const RexAgg* rex,
+    const std::vector<std::shared_ptr<Analyzer::Expr>>& scalar_sources) {
+  const auto agg_kind = rex->getKind();
+  const bool is_distinct = rex->isDistinct();
+  const auto operand = rex->getOperand();
+  const bool takes_arg{operand >= 0};
+  if (takes_arg) {
+    CHECK_LT(operand, static_cast<ssize_t>(scalar_sources.size()));
+  }
+  const auto arg_expr = takes_arg ? scalar_sources[operand] : nullptr;
+  const auto agg_ti = get_agg_type(agg_kind, arg_expr.get());
+  return makeExpr<Analyzer::AggExpr>(agg_ti, agg_kind, arg_expr, is_distinct);
+}
+
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLiteral(const RexLiteral* rex_literal) {
   const auto lit_ti = build_type_info(rex_literal->getType(), rex_literal->getScale(), rex_literal->getPrecision());
   const auto target_ti =
       build_adjusted_type_info(rex_literal->getType(), rex_literal->getTypeScale(), rex_literal->getTypePrecision());
@@ -70,12 +139,10 @@ std::shared_ptr<Analyzer::Expr> translate_literal(const RexLiteral* rex_literal)
   return nullptr;
 }
 
-std::shared_ptr<Analyzer::Expr> translate_input(const RexInput* rex_input,
-                                                const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
-                                                const Catalog_Namespace::Catalog& cat) {
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInput(const RexInput* rex_input) const {
   const auto source = rex_input->getSourceNode();
-  const auto it_rte_idx = input_to_nest_level.find(source);
-  CHECK(it_rte_idx != input_to_nest_level.end());
+  const auto it_rte_idx = input_to_nest_level_.find(source);
+  CHECK(it_rte_idx != input_to_nest_level_.end());
   const int rte_idx = it_rte_idx->second;
   const auto scan_source = dynamic_cast<const RelScan*>(source);
   const auto& in_metainfo = source->getOutputMetainfo();
@@ -87,7 +154,7 @@ std::shared_ptr<Analyzer::Expr> translate_input(const RexInput* rex_input,
     CHECK_LT(static_cast<size_t>(rex_input->getIndex()), field_names.size());
     const auto& col_name = field_names[rex_input->getIndex()];
     const auto table_desc = scan_source->getTableDescriptor();
-    const auto cd = cat.getMetadataForColumn(table_desc->tableId, col_name);
+    const auto cd = cat_.getMetadataForColumn(table_desc->tableId, col_name);
     CHECK(cd);
     return std::make_shared<Analyzer::ColumnVar>(cd->columnType, table_desc->tableId, cd->columnId, rte_idx);
   }
@@ -98,16 +165,9 @@ std::shared_ptr<Analyzer::Expr> translate_input(const RexInput* rex_input,
   return std::make_shared<Analyzer::ColumnVar>(in_metainfo[col_id].get_type_info(), -source->getId(), col_id, rte_idx);
 }
 
-std::shared_ptr<Analyzer::Expr> remove_cast(const std::shared_ptr<Analyzer::Expr> expr) {
-  const auto cast_expr = std::dynamic_pointer_cast<const Analyzer::UOper>(expr);
-  return cast_expr && cast_expr->get_optype() == kCAST ? cast_expr->get_own_operand() : expr;
-}
-
-std::shared_ptr<Analyzer::Expr> translate_uoper(const RexOperator* rex_operator,
-                                                const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
-                                                const Catalog_Namespace::Catalog& cat) {
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUoper(const RexOperator* rex_operator) const {
   CHECK_EQ(size_t(1), rex_operator->size());
-  const auto operand_expr = translate_scalar_rex(rex_operator->getOperand(0), input_to_nest_level, cat);
+  const auto operand_expr = translateScalarRex(rex_operator->getOperand(0));
   const auto sql_op = rex_operator->getOperator();
   switch (sql_op) {
     case kCAST: {
@@ -141,46 +201,20 @@ std::shared_ptr<Analyzer::Expr> translate_uoper(const RexOperator* rex_operator,
   return nullptr;
 }
 
-std::pair<std::shared_ptr<Analyzer::Expr>, SQLQualifier> get_quantified_rhs(
-    const RexScalar* rex_scalar,
-    const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
-    const Catalog_Namespace::Catalog& cat) {
-  std::shared_ptr<Analyzer::Expr> rhs;
-  SQLQualifier sql_qual{kONE};
-  const auto rex_operator = dynamic_cast<const RexOperator*>(rex_scalar);
-  if (!rex_operator) {
-    return std::make_pair(rhs, sql_qual);
-  }
-  const auto rex_function = dynamic_cast<const RexFunctionOperator*>(rex_operator);
-  const auto qual_str = rex_function ? rex_function->getName() : "";
-  if (qual_str == std::string("PG_ANY") || qual_str == std::string("PG_ALL")) {
-    CHECK_EQ(size_t(1), rex_function->size());
-    rhs = translate_scalar_rex(rex_function->getOperand(0), input_to_nest_level, cat);
-    sql_qual = qual_str == std::string("PG_ANY") ? kANY : kALL;
-  }
-  if (!rhs && rex_operator->getOperator() == kCAST) {
-    CHECK_EQ(size_t(1), rex_operator->size());
-    std::tie(rhs, sql_qual) = get_quantified_rhs(rex_operator->getOperand(0), input_to_nest_level, cat);
-  }
-  return std::make_pair(rhs, sql_qual);
-}
-
-std::shared_ptr<Analyzer::Expr> translate_oper(const RexOperator* rex_operator,
-                                               const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
-                                               const Catalog_Namespace::Catalog& cat) {
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateOper(const RexOperator* rex_operator) const {
   CHECK_GT(rex_operator->size(), size_t(0));
   if (rex_operator->size() == 1) {
-    return translate_uoper(rex_operator, input_to_nest_level, cat);
+    return translateUoper(rex_operator);
   }
   const auto sql_op = rex_operator->getOperator();
-  auto lhs = translate_scalar_rex(rex_operator->getOperand(0), input_to_nest_level, cat);
+  auto lhs = translateScalarRex(rex_operator->getOperand(0));
   for (size_t i = 1; i < rex_operator->size(); ++i) {
     std::shared_ptr<Analyzer::Expr> rhs;
     SQLQualifier sql_qual{kONE};
     const auto rhs_op = rex_operator->getOperand(i);
-    std::tie(rhs, sql_qual) = get_quantified_rhs(rhs_op, input_to_nest_level, cat);
+    std::tie(rhs, sql_qual) = get_quantified_rhs(rhs_op, *this);
     if (!rhs) {
-      rhs = translate_scalar_rex(rhs_op, input_to_nest_level, cat);
+      rhs = translateScalarRex(rhs_op);
     }
     CHECK(rhs);
     if (sql_op == kEQ || sql_op == kNE) {
@@ -192,130 +226,70 @@ std::shared_ptr<Analyzer::Expr> translate_oper(const RexOperator* rex_operator,
   return lhs;
 }
 
-std::shared_ptr<Analyzer::Expr> translate_case(const RexCase* rex_case,
-                                               const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
-                                               const Catalog_Namespace::Catalog& cat) {
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateCase(const RexCase* rex_case) const {
   std::shared_ptr<Analyzer::Expr> else_expr;
   std::list<std::pair<std::shared_ptr<Analyzer::Expr>, std::shared_ptr<Analyzer::Expr>>> expr_list;
   for (size_t i = 0; i < rex_case->branchCount(); ++i) {
-    const auto when_expr = translate_scalar_rex(rex_case->getWhen(i), input_to_nest_level, cat);
-    const auto then_expr = translate_scalar_rex(rex_case->getThen(i), input_to_nest_level, cat);
+    const auto when_expr = translateScalarRex(rex_case->getWhen(i));
+    const auto then_expr = translateScalarRex(rex_case->getThen(i));
     expr_list.emplace_back(when_expr, then_expr);
   }
   if (rex_case->getElse()) {
-    else_expr = translate_scalar_rex(rex_case->getElse(), input_to_nest_level, cat);
+    else_expr = translateScalarRex(rex_case->getElse());
   }
   return Parser::CaseExpr::normalize(expr_list, else_expr);
 }
 
-std::shared_ptr<Analyzer::Expr> translate_like(const RexFunctionOperator* rex_function,
-                                               const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
-                                               const Catalog_Namespace::Catalog& cat) {
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLike(const RexFunctionOperator* rex_function) const {
   CHECK(rex_function->size() == 2 || rex_function->size() == 3);
-  const auto arg = translate_scalar_rex(rex_function->getOperand(0), input_to_nest_level, cat);
-  const auto like = translate_scalar_rex(rex_function->getOperand(1), input_to_nest_level, cat);
-  const auto escape = (rex_function->size() == 3)
-                          ? translate_scalar_rex(rex_function->getOperand(2), input_to_nest_level, cat)
-                          : nullptr;
+  const auto arg = translateScalarRex(rex_function->getOperand(0));
+  const auto like = translateScalarRex(rex_function->getOperand(1));
+  const auto escape = (rex_function->size() == 3) ? translateScalarRex(rex_function->getOperand(2)) : nullptr;
   const bool is_ilike = rex_function->getName() == std::string("PG_ILIKE");
   return Parser::LikeExpr::get(arg, like, escape, is_ilike, false);
 }
 
-std::shared_ptr<Analyzer::Expr> translate_extract(const RexFunctionOperator* rex_function,
-                                                  const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
-                                                  const Catalog_Namespace::Catalog& cat) {
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateExtract(const RexFunctionOperator* rex_function) const {
   CHECK_EQ(size_t(2), rex_function->size());
-  const auto timeunit = translate_scalar_rex(rex_function->getOperand(0), input_to_nest_level, cat);
+  const auto timeunit = translateScalarRex(rex_function->getOperand(0));
   const auto timeunit_lit = std::dynamic_pointer_cast<Analyzer::Constant>(timeunit);
   if (!timeunit_lit) {
     throw std::runtime_error("The time unit parameter must be a literal.");
   }
-  const auto from_expr = translate_scalar_rex(rex_function->getOperand(1), input_to_nest_level, cat);
+  const auto from_expr = translateScalarRex(rex_function->getOperand(1));
   const bool is_date_trunc = rex_function->getName() == std::string("PG_DATE_TRUNC");
   return is_date_trunc ? Parser::DatetruncExpr::get(from_expr, *timeunit_lit->get_constval().stringval)
                        : Parser::ExtractExpr::get(from_expr, *timeunit_lit->get_constval().stringval);
 }
 
-std::shared_ptr<Analyzer::Expr> translate_length(const RexFunctionOperator* rex_function,
-                                                 const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
-                                                 const Catalog_Namespace::Catalog& cat) {
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLength(const RexFunctionOperator* rex_function) const {
   CHECK_EQ(size_t(1), rex_function->size());
-  const auto str_arg = translate_scalar_rex(rex_function->getOperand(0), input_to_nest_level, cat);
+  const auto str_arg = translateScalarRex(rex_function->getOperand(0));
   return makeExpr<Analyzer::CharLengthExpr>(str_arg->decompress(),
                                             rex_function->getName() == std::string("CHAR_LENGTH"));
 }
 
-std::shared_ptr<Analyzer::Expr> translate_item(const RexFunctionOperator* rex_function,
-                                               const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
-                                               const Catalog_Namespace::Catalog& cat) {
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateItem(const RexFunctionOperator* rex_function) const {
   CHECK_EQ(size_t(2), rex_function->size());
-  const auto base = translate_scalar_rex(rex_function->getOperand(0), input_to_nest_level, cat);
-  const auto index = translate_scalar_rex(rex_function->getOperand(1), input_to_nest_level, cat);
+  const auto base = translateScalarRex(rex_function->getOperand(0));
+  const auto index = translateScalarRex(rex_function->getOperand(1));
   return makeExpr<Analyzer::BinOper>(base->get_type_info().get_elem_type(), false, kARRAY_AT, kONE, base, index);
 }
 
-std::shared_ptr<Analyzer::Expr> translate_function(
-    const RexFunctionOperator* rex_function,
-    const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
-    const Catalog_Namespace::Catalog& cat) {
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(const RexFunctionOperator* rex_function) const {
   if (rex_function->getName() == std::string("LIKE") || rex_function->getName() == std::string("PG_ILIKE")) {
-    return translate_like(rex_function, input_to_nest_level, cat);
+    return translateLike(rex_function);
   }
   if (rex_function->getName() == std::string("PG_EXTRACT") || rex_function->getName() == std::string("PG_DATE_TRUNC")) {
-    return translate_extract(rex_function, input_to_nest_level, cat);
+    return translateExtract(rex_function);
   }
   if (rex_function->getName() == std::string("LENGTH") || rex_function->getName() == std::string("CHAR_LENGTH")) {
-    return translate_length(rex_function, input_to_nest_level, cat);
+    return translateLength(rex_function);
   }
   if (rex_function->getName() == std::string("ITEM")) {
-    return translate_item(rex_function, input_to_nest_level, cat);
+    return translateItem(rex_function);
   }
   CHECK(false);
   return nullptr;
-}
-
-}  // namespace
-
-std::shared_ptr<Analyzer::Expr> translate_scalar_rex(
-    const RexScalar* rex,
-    const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
-    const Catalog_Namespace::Catalog& cat) {
-  const auto rex_input = dynamic_cast<const RexInput*>(rex);
-  if (rex_input) {
-    return translate_input(rex_input, input_to_nest_level, cat);
-  }
-  const auto rex_literal = dynamic_cast<const RexLiteral*>(rex);
-  if (rex_literal) {
-    return translate_literal(rex_literal);
-  }
-  const auto rex_function = dynamic_cast<const RexFunctionOperator*>(rex);
-  if (rex_function) {
-    return translate_function(rex_function, input_to_nest_level, cat);
-  }
-  const auto rex_operator = dynamic_cast<const RexOperator*>(rex);
-  if (rex_operator) {
-    return translate_oper(rex_operator, input_to_nest_level, cat);
-  }
-  const auto rex_case = dynamic_cast<const RexCase*>(rex);
-  if (rex_case) {
-    return translate_case(rex_case, input_to_nest_level, cat);
-  }
-  CHECK(false);
-  return nullptr;
-}
-
-std::shared_ptr<Analyzer::Expr> translate_aggregate_rex(
-    const RexAgg* rex,
-    const std::vector<std::shared_ptr<Analyzer::Expr>>& scalar_sources) {
-  const auto agg_kind = rex->getKind();
-  const bool is_distinct = rex->isDistinct();
-  const auto operand = rex->getOperand();
-  const bool takes_arg{operand >= 0};
-  if (takes_arg) {
-    CHECK_LT(operand, static_cast<ssize_t>(scalar_sources.size()));
-  }
-  const auto arg_expr = takes_arg ? scalar_sources[operand] : nullptr;
-  const auto agg_ti = get_agg_type(agg_kind, arg_expr.get());
-  return makeExpr<Analyzer::AggExpr>(agg_ti, agg_kind, arg_expr, is_distinct);
 }
 #endif  // HAVE_CALCITE
