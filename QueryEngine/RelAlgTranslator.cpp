@@ -276,6 +276,25 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateItem(const RexFunctio
   return makeExpr<Analyzer::BinOper>(base->get_type_info().get_elem_type(), false, kARRAY_AT, kONE, base, index);
 }
 
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateNow() const {
+  return Parser::TimestampLiteral::get(now_);
+}
+
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDatetime(const RexFunctionOperator* rex_function) const {
+  CHECK_EQ(size_t(1), rex_function->size());
+  const auto arg = translateScalarRex(rex_function->getOperand(0));
+  const auto arg_lit = std::dynamic_pointer_cast<Analyzer::Constant>(arg);
+  const std::string datetime_err{R"(Only DATETIME('NOW') supported for now.)"};
+  if (!arg_lit) {
+    throw std::runtime_error(datetime_err);
+  }
+  CHECK(arg_lit->get_type_info().is_string());
+  if (*arg_lit->get_constval().stringval != std::string("NOW")) {
+    throw std::runtime_error(datetime_err);
+  }
+  return translateNow();
+}
+
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(const RexFunctionOperator* rex_function) const {
   if (rex_function->getName() == std::string("LIKE") || rex_function->getName() == std::string("PG_ILIKE")) {
     return translateLike(rex_function);
@@ -288,6 +307,12 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(const RexFun
   }
   if (rex_function->getName() == std::string("ITEM")) {
     return translateItem(rex_function);
+  }
+  if (rex_function->getName() == std::string("NOW")) {
+    return translateNow();
+  }
+  if (rex_function->getName() == std::string("DATETIME")) {
+    return translateDatetime(rex_function);
   }
   CHECK(false);
   return nullptr;

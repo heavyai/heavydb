@@ -3,6 +3,7 @@
 
 #include "RelAlgAbstractInterpreter.h"
 
+#include <ctime>
 #include <memory>
 #include <unordered_map>
 #include <vector>
@@ -22,8 +23,9 @@ class Catalog;
 class RelAlgTranslator {
  public:
   RelAlgTranslator(const Catalog_Namespace::Catalog& cat,
-                   const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level)
-      : cat_(cat), input_to_nest_level_(input_to_nest_level) {}
+                   const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
+                   const time_t now)
+      : cat_(cat), input_to_nest_level_(input_to_nest_level), now_(now) {}
 
   std::shared_ptr<Analyzer::Expr> translateScalarRex(const RexScalar* rex) const;
 
@@ -50,10 +52,15 @@ class RelAlgTranslator {
 
   std::shared_ptr<Analyzer::Expr> translateItem(const RexFunctionOperator*) const;
 
+  std::shared_ptr<Analyzer::Expr> translateNow() const;
+
+  std::shared_ptr<Analyzer::Expr> translateDatetime(const RexFunctionOperator*) const;
+
   std::shared_ptr<Analyzer::Expr> translateFunction(const RexFunctionOperator*) const;
 
   const Catalog_Namespace::Catalog& cat_;
   const std::unordered_map<const RelAlgNode*, int> input_to_nest_level_;
+  time_t now_;
 };
 
 #endif  // QUERYENGINE_RELALGTRANSLATOR_H

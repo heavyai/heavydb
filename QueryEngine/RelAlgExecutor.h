@@ -5,9 +5,11 @@
 #include "Execute.h"
 #include "RelAlgExecutionDescriptor.h"
 
+#include <ctime>
+
 class RelAlgExecutor {
  public:
-  RelAlgExecutor(Executor* executor, const Catalog_Namespace::Catalog& cat) : executor_(executor), cat_(cat) {}
+  RelAlgExecutor(Executor* executor, const Catalog_Namespace::Catalog& cat) : executor_(executor), cat_(cat), now_(0) {}
 
   ExecutionResult executeRelAlgSeq(std::vector<RaExecutionDesc>&, const CompilationOptions&, const ExecutionOptions&);
 
@@ -43,6 +45,7 @@ class RelAlgExecutor {
   Executor* executor_;
   const Catalog_Namespace::Catalog& cat_;
   TemporaryTables temporary_tables_;
+  time_t now_;
   std::vector<std::shared_ptr<Analyzer::Expr>> target_exprs_owned_;  // TODO(alex): remove
 };
 
