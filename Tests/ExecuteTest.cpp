@@ -1160,6 +1160,19 @@ TEST(Select, JoinsAndArrays) {
   }
 }
 
+TEST(Select, OrRewrite) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT COUNT(*) FROM test WHERE str = 'foo' OR str = 'bar' OR str = 'baz' OR str = 'foo' OR str = 'bar' OR str "
+      "= 'baz' OR str = 'foo' OR str = 'bar' OR str = 'baz' OR str = 'baz' OR str = 'foo' OR str = 'bar' OR str = "
+      "'baz';",
+      dt);
+    c("SELECT COUNT(*) FROM test WHERE x = 7 OR x = 8 OR x = 7 OR x = 8 OR x = 7 OR x = 8 OR x = 7 OR x = 8 OR x = 7 "
+      "OR x = 8 OR x = 7 OR x = 8;",
+      dt);
+  }
+}
+
 #ifdef HAVE_RAVM
 TEST(Select, Subqueries) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {

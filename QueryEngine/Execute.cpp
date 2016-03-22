@@ -2,6 +2,7 @@
 
 #include "CartesianProduct.h"
 #include "Codec.h"
+#include "ExpressionRewrite.h"
 #include "GpuMemUtils.h"
 #include "GpuSort.h"
 #include "AggregateUtils.h"
@@ -186,14 +187,6 @@ bool check_plan_sanity(const Planner::Plan* plan) {
   const auto join_plan = get_join_child(plan);
   const auto scan_plan = get_scan_child(plan);
   return static_cast<bool>(scan_plan) != static_cast<bool>(join_plan);
-}
-
-const Analyzer::Expr* extract_cast_arg(const Analyzer::Expr* expr) {
-  const auto cast_expr = dynamic_cast<const Analyzer::UOper*>(expr);
-  if (!cast_expr || cast_expr->get_optype() != kCAST) {
-    return expr;
-  }
-  return cast_expr->get_operand();
 }
 
 bool is_unnest(const Analyzer::Expr* expr) {
@@ -4102,7 +4095,11 @@ Executor::CompilationResult Executor::compilePlan(const bool render_output,
       deferred_quals.push_back(expr.get());
       continue;
     }
-    filter_lv = cgen_state_->ir_builder_.CreateAnd(filter_lv, toBool(codegen(expr.get(), true, co).front()));
+    auto qual_expr = rewrite_expr(expr.get());
+    if (!qual_expr) {
+      qual_expr = expr;
+    }
+    filter_lv = cgen_state_->ir_builder_.CreateAnd(filter_lv, toBool(codegen(qual_expr.get(), true, co).front()));
   }
 
   if (!deferred_quals.empty()) {
