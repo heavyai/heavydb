@@ -77,9 +77,8 @@ Planner::RootPlan* parse_plan_calcite(const std::string& query_str,
                                             true);
   return translate_query(query_ra, cat);
 }
-#endif  // HAVE_CALCITE
 
-}  // namespace
+#endif  // HAVE_CALCITE
 
 Planner::RootPlan* parse_plan(const std::string& query_str,
                               const std::unique_ptr<Catalog_Namespace::SessionInfo>& session) {
@@ -90,6 +89,8 @@ Planner::RootPlan* parse_plan(const std::string& query_str,
 #endif  // HAVE_CALCITE
   return plan;
 }
+
+}  // namespace
 
 ResultRows run_multiple_agg(const std::string& query_str,
                             const std::unique_ptr<Catalog_Namespace::SessionInfo>& session,
