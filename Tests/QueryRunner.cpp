@@ -7,6 +7,10 @@
 #include "../Calcite/Calcite.h"
 #endif  // HAVE_CALCITE
 
+#ifdef HAVE_RAVM
+#include "../QueryEngine/RelAlgExecutor.h"
+#endif  // HAVE_RAVM
+
 #include <boost/filesystem/operations.hpp>
 
 Catalog_Namespace::SessionInfo* get_session(const char* db_path) {
@@ -90,6 +94,26 @@ Planner::RootPlan* parse_plan(const std::string& query_str,
   return plan;
 }
 
+#ifdef HAVE_RAVM
+
+std::unique_ptr<const RelAlgNode> parse_ravm_plan(const std::string& query_str,
+                                                  const std::unique_ptr<Catalog_Namespace::SessionInfo>& session) {
+  const auto& cat = session->get_catalog();
+  static Calcite calcite_cli(9092, cat.get_basePath());
+  const auto query_ra = calcite_cli.process(session->get_currentUser().userName,
+                                            session->get_currentUser().passwd,
+                                            cat.get_currentDB().dbName,
+                                            pg_shim(query_str),
+                                            true);
+  rapidjson::Document query_ast;
+  query_ast.Parse(query_ra.c_str());
+  CHECK(!query_ast.HasParseError());
+  CHECK(query_ast.IsObject());
+  return ra_interpret(query_ast, cat);
+}
+
+#endif  // HAVE_RAVM
+
 }  // namespace
 
 ResultRows run_multiple_agg(const std::string& query_str,
@@ -97,11 +121,23 @@ ResultRows run_multiple_agg(const std::string& query_str,
                             const ExecutorDeviceType device_type,
                             const bool hoist_literals) {
   const auto& cat = session->get_catalog();
+  auto executor = Executor::getExecutor(cat.get_currentDB().dbId);
+
+#ifdef HAVE_RAVM
+  ParserWrapper pw{query_str};
+  if (!(pw.is_other_explain || pw.is_ddl || pw.is_update_dml)) {
+    const auto ra = parse_ravm_plan(query_str, session);
+    auto ed_list = get_execution_descriptors(ra.get());
+    RelAlgExecutor ra_executor(executor.get(), cat);
+    return ra_executor.executeRelAlgSeq(ed_list,
+                                        {device_type, true, ExecutorOptLevel::LoopStrengthReduction},
+                                        {false, true, false, true}).getRows();
+  }
+#endif  // HAVE_RAVM
 
   Planner::RootPlan* plan = parse_plan(query_str, session);
 
   std::unique_ptr<Planner::RootPlan> plan_ptr(plan);  // make sure it's deleted
-  auto executor = Executor::getExecutor(cat.get_currentDB().dbId);
 #ifdef HAVE_CUDA
   return executor->execute(
       plan, *session, -1, hoist_literals, device_type, ExecutorOptLevel::LoopStrengthReduction, true, true);
