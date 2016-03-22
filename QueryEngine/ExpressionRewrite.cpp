@@ -64,21 +64,63 @@ class ScalarExprVisitor {
 
   virtual T visitConstant(const Analyzer::Constant*) { return defaultResult(); }
 
-  virtual T visitUOper(const Analyzer::UOper*) { return defaultResult(); }
+  virtual T visitUOper(const Analyzer::UOper* uoper) {
+    T result = defaultResult();
+    result = aggregateResult(result, visit(uoper->get_operand()));
+    return result;
+  }
 
-  virtual T visitBinOper(const Analyzer::BinOper*) { return defaultResult(); }
+  virtual T visitBinOper(const Analyzer::BinOper* bin_oper) {
+    T result = defaultResult();
+    result = aggregateResult(result, visit(bin_oper->get_left_operand()));
+    result = aggregateResult(result, visit(bin_oper->get_right_operand()));
+    return result;
+  }
 
-  virtual T visitInValues(const Analyzer::InValues*) { return defaultResult(); }
+  virtual T visitInValues(const Analyzer::InValues* in_values) {
+    T result = defaultResult();
+    const auto& value_list = in_values->get_value_list();
+    for (const auto in_value : value_list) {
+      result = aggregateResult(result, visit(in_value.get()));
+    }
+    return result;
+  }
 
-  virtual T visitCharLength(const Analyzer::CharLengthExpr*) { return defaultResult(); }
+  virtual T visitCharLength(const Analyzer::CharLengthExpr* char_length) {
+    T result = defaultResult();
+    result = aggregateResult(result, visit(char_length->get_arg()));
+    return result;
+  }
 
-  virtual T visitLikeExpr(const Analyzer::LikeExpr*) { return defaultResult(); }
+  virtual T visitLikeExpr(const Analyzer::LikeExpr* like) {
+    T result = defaultResult();
+    result = aggregateResult(result, visit(like->get_arg()));
+    result = aggregateResult(result, visit(like->get_like_expr()));
+    result = aggregateResult(result, visit(like->get_escape_expr()));
+    return result;
+  }
 
-  virtual T visitCaseExpr(const Analyzer::CaseExpr*) { return defaultResult(); }
+  virtual T visitCaseExpr(const Analyzer::CaseExpr* case_) {
+    T result = defaultResult();
+    const auto& expr_pair_list = case_->get_expr_pair_list();
+    for (const auto& expr_pair : expr_pair_list) {
+      result = aggregateResult(result, visit(expr_pair.first.get()));
+      result = aggregateResult(result, visit(expr_pair.second.get()));
+    }
+    return result;
+  }
 
-  virtual T visitDatetruncExpr(const Analyzer::DatetruncExpr*) { return defaultResult(); }
+  virtual T visitDatetruncExpr(const Analyzer::DatetruncExpr* datetrunc) {
+    T result = defaultResult();
+    result = aggregateResult(result, visit(datetrunc->get_from_expr()));
+    return result;
+  }
 
-  virtual T visitExtractExpr(const Analyzer::ExtractExpr*) { return defaultResult(); }
+  virtual T visitExtractExpr(const Analyzer::ExtractExpr* extract) {
+    T result = defaultResult();
+    result = aggregateResult(result, visit(extract->get_from_expr()));
+    return result;
+  }
 
  protected:
   virtual T aggregateResult(const T& aggregate, const T& next_result) const { return next_result; }
