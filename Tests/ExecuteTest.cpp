@@ -132,9 +132,12 @@ class SQLiteComparator {
               const auto mapd_as_str_p = boost::get<NullableString>(scalar_mapd_variant);
               ASSERT_NE(nullptr, mapd_as_str_p);
               const auto mapd_str_notnull = boost::get<std::string>(mapd_as_str_p);
-              CHECK(mapd_str_notnull);
-              const auto mapd_val = *mapd_str_notnull;
-              ASSERT_EQ(ref_val, mapd_val);
+              if (nullptr != mapd_str_notnull) {
+                const auto mapd_val = *mapd_str_notnull;
+                ASSERT_EQ(ref_val, mapd_val);
+              } else {
+                ASSERT_EQ("", ref_val);
+              }
             } else {
               const auto mapd_type = mapd_results.getColType(col_idx).get_type();
               switch (mapd_type) {
@@ -1205,11 +1208,11 @@ int main(int argc, char** argv) {
     const std::string create_test{
         "CREATE TABLE test(x int not null, y int, z smallint, t bigint, b boolean, f float, d double, str text "
         "encoding dict, real_str text, m timestamp(0), n time(0), o date, fx int encoding fixed(16), dd decimal(10, "
-        "2)) WITH (fragment_size=2);"};
+        "2), ss text encoding dict, u int) WITH (fragment_size=2);"};
     run_ddl_statement(create_test);
     g_sqlite_comparator.query(
         "CREATE TABLE test(x int not null, y int, z smallint, t bigint, b boolean, f float, d double, str text, "
-        "real_str text, m timestamp(0), n time(0), o date, fx int, dd decimal(10, 2));");
+        "real_str text, m timestamp(0), n time(0), o date, fx int, dd decimal(10, 2), ss text, u int);");
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'test'";
     return -EEXIST;
@@ -1219,7 +1222,7 @@ int main(int argc, char** argv) {
     const std::string insert_query{
         "INSERT INTO test VALUES(7, 42, 101, 1001, 't', 1.1, 2.2, 'foo', 'real_foo', '2014-12-13 22:23:15', "
         "'15:13:14', "
-        "'1999-09-09', 9, 111.1);"};
+        "'1999-09-09', 9, 111.1, 'fish', null);"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
@@ -1227,7 +1230,7 @@ int main(int argc, char** argv) {
     const std::string insert_query{
         "INSERT INTO test VALUES(8, 43, 102, 1002, 'f', 1.2, 2.4, 'bar', 'real_bar', '2014-12-13 22:23:15', "
         "'15:13:14', "
-        "'1999-09-09', 10, 222.2);"};
+        "'1999-09-09', 10, 222.2, null, null);"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
@@ -1235,7 +1238,7 @@ int main(int argc, char** argv) {
     const std::string insert_query{
         "INSERT INTO test VALUES(7, 43, 102, 1002, 't', 1.3, 2.6, 'baz', 'real_baz', '2014-12-13 22:23:15', "
         "'15:13:14', "
-        "'1999-09-09', 11, 333.3);"};
+        "'1999-09-09', 11, 333.3, 'boat', null);"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
