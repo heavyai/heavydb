@@ -201,15 +201,35 @@ std::list<std::shared_ptr<Analyzer::Expr>> translate_groupby_exprs(
   return groupby_exprs;
 }
 
-std::list<std::shared_ptr<Analyzer::Expr>> translate_quals(const RelCompound* compound,
-                                                           const RelAlgTranslator& translator) {
+struct QualsConjunctiveForm {
+  const std::list<std::shared_ptr<Analyzer::Expr>> simple_quals;
+  const std::list<std::shared_ptr<Analyzer::Expr>> quals;
+};
+
+QualsConjunctiveForm qual_to_conjunctive_form(const std::shared_ptr<Analyzer::Expr> qual_expr) {
+  CHECK(qual_expr);
+  const auto bin_oper = std::dynamic_pointer_cast<const Analyzer::BinOper>(qual_expr);
+  if (!bin_oper) {
+    return {{}, {qual_expr}};
+  }
+  if (bin_oper->get_optype() == kAND) {
+    const auto lhs_cf = qual_to_conjunctive_form(bin_oper->get_own_left_operand());
+    const auto rhs_cf = qual_to_conjunctive_form(bin_oper->get_own_right_operand());
+    auto simple_quals = lhs_cf.simple_quals;
+    simple_quals.insert(simple_quals.end(), rhs_cf.simple_quals.begin(), rhs_cf.simple_quals.end());
+    auto quals = lhs_cf.quals;
+    quals.insert(quals.end(), rhs_cf.quals.begin(), rhs_cf.quals.end());
+    return {simple_quals, quals};
+  }
+  int rte_idx{0};
+  const auto simple_qual = bin_oper->normalize_simple_predicate(rte_idx);
+  return simple_qual ? QualsConjunctiveForm{{simple_qual}, {}} : QualsConjunctiveForm{{}, {qual_expr}};
+}
+
+QualsConjunctiveForm translate_quals(const RelCompound* compound, const RelAlgTranslator& translator) {
   const auto filter_rex = compound->getFilterExpr();
   const auto filter_expr = filter_rex ? translator.translateScalarRex(filter_rex) : nullptr;
-  std::list<std::shared_ptr<Analyzer::Expr>> quals;
-  if (filter_expr) {
-    quals.push_back(filter_expr);
-  }
-  return quals;
+  return filter_expr ? qual_to_conjunctive_form(filter_expr) : QualsConjunctiveForm{};
 }
 
 std::vector<Analyzer::Expr*> translate_targets(std::vector<std::shared_ptr<Analyzer::Expr>>& target_exprs_owned,
@@ -378,12 +398,20 @@ Executor::RelAlgExecutionUnit RelAlgExecutor::createCompoundWorkUnit(
   RelAlgTranslator translator(cat_, input_to_nest_level, now_);
   const auto scalar_sources = translate_scalar_sources(compound, translator);
   const auto groupby_exprs = translate_groupby_exprs(compound, scalar_sources);
-  const auto quals = translate_quals(compound, translator);
+  const auto quals_cf = translate_quals(compound, translator);
   const auto target_exprs = translate_targets(target_exprs_owned_, scalar_sources, groupby_exprs, compound, translator);
   CHECK_EQ(compound->size(), target_exprs.size());
   const auto targets_meta = get_targets_meta(compound, target_exprs);
   compound->setOutputMetainfo(targets_meta);
-  return {input_descs, input_col_descs, {}, quals, {}, groupby_exprs, target_exprs, order_entries, 0};
+  return {input_descs,
+          input_col_descs,
+          quals_cf.simple_quals,
+          quals_cf.quals,
+          {},
+          groupby_exprs,
+          target_exprs,
+          order_entries,
+          0};
 }
 
 Executor::RelAlgExecutionUnit RelAlgExecutor::createProjectWorkUnit(
