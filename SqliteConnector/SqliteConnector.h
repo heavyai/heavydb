@@ -21,25 +21,37 @@ class SqliteConnector {
   void query_with_text_params(const std::string& queryString, const std::vector<std::string>& text_param);
   void query_with_text_param(const std::string& queryString, const std::string& text_param);
 
-  inline size_t getNumRows() { return numRows_; }
-  inline size_t getNumCols() { return numCols_; }
+  size_t getNumRows() const { return numRows_; }
+  size_t getNumCols() const { return numCols_; }
 
   template <typename T>
   T getData(const int row, const int col) {
     assert(row < static_cast<int>(numRows_));
     assert(col < static_cast<int>(numCols_));
-    return boost::lexical_cast<T>(results_[col][row]);
+    return boost::lexical_cast<T>(results_[col][row].result);
   }
+
+  bool isNull(const int row, const int col) const {
+    assert(row < static_cast<int>(numRows_));
+    assert(col < static_cast<int>(numCols_));
+    return results_[col][row].is_null;
+  }
+
   std::vector<std::string> columnNames;  // make this public for easy access
   std::vector<int> columnTypes;
 
  private:
+  struct NullableResult {
+    const std::string result;
+    const bool is_null;
+  };
+
   void throwError();
 
   sqlite3* db_;
   std::string dbName_;
   bool atFirstResult_;
-  std::vector<std::vector<std::string>> results_;
+  std::vector<std::vector<NullableResult>> results_;
   size_t numCols_;
   size_t numRows_;
 };
