@@ -87,14 +87,14 @@ Calcite::Calcite(int port, std::string data_dir) : server_available_(false), jni
   CHECK(processMID_);
 
   // get all the methods we will need to process the calcite results
-  jclass calciteReturnClass_ = env->FindClass("com/mapd/parser/server/CalciteReturn");
-  CHECK(calciteReturnClass_);
+  jclass calcite_return_class = env->FindClass("com/mapd/parser/server/CalciteReturn");
+  CHECK(calcite_return_class);
 
-  hasFailedMID_ = env->GetMethodID(calciteReturnClass_, "hasFailed", "()Z");
+  hasFailedMID_ = env->GetMethodID(calcite_return_class, "hasFailed", "()Z");
   CHECK(hasFailedMID_);
-  getElapsedTimeMID_ = env->GetMethodID(calciteReturnClass_, "getElapsedTime", "()J");
+  getElapsedTimeMID_ = env->GetMethodID(calcite_return_class, "getElapsedTime", "()J");
   CHECK(getElapsedTimeMID_);
-  getTextMID_ = env->GetMethodID(calciteReturnClass_, "getText", "()Ljava/lang/String;");
+  getTextMID_ = env->GetMethodID(calcite_return_class, "getText", "()Ljava/lang/String;");
   CHECK(getTextMID_);
 
   LOG(INFO) << "End of Constructor ";
