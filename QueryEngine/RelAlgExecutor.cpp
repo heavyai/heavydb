@@ -332,7 +332,7 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(const Executor::RelAlgExecutionU
                                                 const bool is_agg,
                                                 const CompilationOptions& co,
                                                 const ExecutionOptions& eo) {
-  size_t max_groups_buffer_entry_guess{2048};
+  size_t max_groups_buffer_entry_guess{16384};
   int32_t error_code{0};
   ExecutionResult result = {
       executor_->executeWorkUnit(&error_code,

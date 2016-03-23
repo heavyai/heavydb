@@ -973,6 +973,25 @@ void import_array_test(const std::string& table_name) {
   loader.checkpoint();
 }
 
+void import_gpu_sort_test() {
+  const std::string drop_old_gpu_sort_test{"DROP TABLE IF EXISTS gpu_sort_test;"};
+  run_ddl_statement(drop_old_gpu_sort_test);
+  g_sqlite_comparator.query(drop_old_gpu_sort_test);
+  const std::string create_gpu_sort_test{"CREATE TABLE gpu_sort_test(x int);"};
+  run_ddl_statement("CREATE TABLE gpu_sort_test(x int) WITH (fragment_size=2);");
+  g_sqlite_comparator.query("CREATE TABLE gpu_sort_test(x int);");
+  for (size_t i = 0; i < 4; ++i) {
+    const std::string insert_query{"INSERT INTO gpu_sort_test VALUES(1);"};
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query);
+  }
+  for (size_t i = 0; i < 6; ++i) {
+    const std::string insert_query{"INSERT INTO gpu_sort_test VALUES(16000);"};
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query);
+  }
+}
+
 }  // namespace
 
 TEST(Select, ArrayUnnest) {
@@ -1176,6 +1195,13 @@ TEST(Select, OrRewrite) {
   }
 }
 
+TEST(Select, GpuSort) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT x, COUNT(*) AS n FROM gpu_sort_test GROUP BY x ORDER BY n DESC;", dt);
+  }
+}
+
 #ifdef HAVE_RAVM
 TEST(Select, Subqueries) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
@@ -1284,6 +1310,12 @@ int main(int argc, char** argv) {
     return -EEXIST;
   }
   import_array_test("array_test_inner");
+  try {
+    import_gpu_sort_test();
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'gpu_sort_test'";
+    return -EEXIST;
+  }
   int err{0};
   try {
     err = RUN_ALL_TESTS();
@@ -1297,6 +1329,9 @@ int main(int argc, char** argv) {
   const std::string drop_test_inner{"DROP TABLE test_inner;"};
   run_ddl_statement(drop_test_inner);
   g_sqlite_comparator.query(drop_test_inner);
+  const std::string drop_gpu_sort_test{"DROP TABLE gpu_sort_test;"};
+  run_ddl_statement(drop_gpu_sort_test);
+  g_sqlite_comparator.query(drop_gpu_sort_test);
   const std::string drop_array_test{"DROP TABLE array_test;"};
   run_ddl_statement(drop_array_test);
   const std::string drop_array_test_inner{"DROP TABLE array_test_inner;"};

@@ -358,7 +358,7 @@ ResultRows Executor::execute(const Planner::RootPlan* root_plan,
   switch (stmt_type) {
     case kSELECT: {
       int32_t error_code{0};
-      size_t max_groups_buffer_entry_guess{2048};
+      size_t max_groups_buffer_entry_guess{16384};
 
       std::unique_ptr<RenderAllocatorMap> render_allocator_map;
       if (root_plan->get_plan_dest() == Planner::RootPlan::kRENDER) {
