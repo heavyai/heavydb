@@ -136,7 +136,7 @@ class SQLiteComparator {
                 const auto mapd_val = *mapd_str_notnull;
                 ASSERT_EQ(ref_val, mapd_val);
               } else {
-                ASSERT_EQ("", ref_val);
+                ASSERT_EQ(true, connector_.isNull(row_idx, col_idx));
               }
             } else {
               const auto mapd_type = mapd_results.getColType(col_idx).get_type();
