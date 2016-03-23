@@ -89,31 +89,31 @@ add_custom_command(
     DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.o
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.a
     COMMAND nvcc
-    ARGS -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS ${MAPD_DEFINITIONS} --std=c++11 -arch sm_30 -lib ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.o -o ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.a)
+    ARGS -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS ${MAPD_DEFINITIONS} -arch sm_30 -lib ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.o -o ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.a)
 
 add_custom_command(
     DEPENDS cuda_mapd_rt.cu GpuInitGroups.cu GroupByRuntime.cpp DateTruncate.cpp ExtractFromTime.cpp ArrayOps.cpp StringFunctions.cpp ${CMAKE_SOURCE_DIR}/Utils/ChunkIter.cpp ${CMAKE_SOURCE_DIR}/Utils/StringLike.cpp
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.o
-     COMMAND nvcc
-    ARGS -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS ${MAPD_DEFINITIONS} --device-link --std=c++11 -arch sm_30 -c ${CMAKE_CURRENT_SOURCE_DIR}/cuda_mapd_rt.cu)
+    COMMAND nvcc
+    ARGS -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS ${MAPD_DEFINITIONS} --device-link -arch sm_30 -c ${CMAKE_CURRENT_SOURCE_DIR}/cuda_mapd_rt.cu)
 
 add_custom_command(
     DEPENDS GpuSortImpl.cu
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/GpuSortImpl.o
     COMMAND nvcc
-    ARGS -O3 ${MAPD_DEFINITIONS} --std=c++11 -arch sm_30 -c ${CMAKE_CURRENT_SOURCE_DIR}/GpuSortImpl.cu)
+    ARGS -O3 ${MAPD_DEFINITIONS} -arch sm_30 -c ${CMAKE_CURRENT_SOURCE_DIR}/GpuSortImpl.cu)
 
 add_custom_command(
     DEPENDS GpuInitGroups.cu
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/GpuInitGroups.o
     COMMAND nvcc
-    ARGS -DEXECUTOR_RT ${MAPD_DEFINITIONS} -O3 --std=c++11 -arch sm_30 -c ${CMAKE_CURRENT_SOURCE_DIR}/GpuInitGroups.cu)
+    ARGS -DEXECUTOR_RT ${MAPD_DEFINITIONS} -O3 -arch sm_30 -c ${CMAKE_CURRENT_SOURCE_DIR}/GpuInitGroups.cu)
 
 add_custom_command(
     DEPENDS HashJoinRuntimeGpu.cu HashJoinRuntime.cpp
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/HashJoinRuntimeGpu.o
     COMMAND nvcc
-    ARGS ${MAPD_DEFINITIONS} -O3 --std=c++11 -arch sm_30 -c ${CMAKE_CURRENT_SOURCE_DIR}/HashJoinRuntimeGpu.cu)
+    ARGS ${MAPD_DEFINITIONS} -O3 -arch sm_30 -c ${CMAKE_CURRENT_SOURCE_DIR}/HashJoinRuntimeGpu.cu)
 
 add_executable(group_by_hash_test ${group_by_hash_test_files})
 target_link_libraries(group_by_hash_test gtest ${Glog_LIBRARIES})

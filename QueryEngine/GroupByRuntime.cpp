@@ -12,16 +12,16 @@ extern "C" NEVER_INLINE DEVICE int64_t* get_group_value(int64_t* groups_buffer,
                                                         const uint32_t groups_buffer_entry_count,
                                                         const int64_t* key,
                                                         const uint32_t key_qw_count,
-                                                        const uint32_t row_size_quad,
+                                                        const uint32_t agg_col_count,
                                                         const int64_t* init_vals) {
   uint32_t h = key_hash(key, key_qw_count) % groups_buffer_entry_count;
-  int64_t* matching_group = get_matching_group_value(groups_buffer, h, key, key_qw_count, row_size_quad, init_vals);
+  int64_t* matching_group = get_matching_group_value(groups_buffer, h, key, key_qw_count, agg_col_count, init_vals);
   if (matching_group) {
     return matching_group;
   }
   uint32_t h_probe = (h + 1) % groups_buffer_entry_count;
   while (h_probe != h) {
-    matching_group = get_matching_group_value(groups_buffer, h_probe, key, key_qw_count, row_size_quad, init_vals);
+    matching_group = get_matching_group_value(groups_buffer, h_probe, key, key_qw_count, agg_col_count, init_vals);
     if (matching_group) {
       return matching_group;
     }
@@ -34,25 +34,16 @@ extern "C" ALWAYS_INLINE DEVICE int64_t* get_group_value_fast(int64_t* groups_bu
                                                               const int64_t key,
                                                               const int64_t min_key,
                                                               const int64_t bucket,
-                                                              const uint32_t row_size_quad) {
+                                                              const uint32_t agg_col_count) {
   int64_t key_diff = key - min_key;
   if (bucket) {
     key_diff /= bucket;
   }
-  int64_t off = key_diff * row_size_quad;
-  if (groups_buffer[off] == EMPTY_KEY_64) {
+  int64_t off = key_diff * (1 + agg_col_count);
+  if (groups_buffer[off] == EMPTY_KEY) {
     groups_buffer[off] = key;
   }
   return groups_buffer + off + 1;
-}
-
-extern "C" ALWAYS_INLINE DEVICE uint32_t
-    get_columnar_group_bin_offset(const int64_t key, const int64_t min_key, const int64_t bucket) {
-  int64_t off = key - min_key;
-  if (bucket) {
-    off /= bucket;
-  }
-  return off;
 }
 
 extern "C" ALWAYS_INLINE DEVICE int64_t* get_columnar_group_value_fast(int64_t* groups_buffer,
@@ -63,7 +54,7 @@ extern "C" ALWAYS_INLINE DEVICE int64_t* get_columnar_group_value_fast(int64_t* 
   if (bucket) {
     off /= bucket;
   }
-  if (groups_buffer[off] == EMPTY_KEY_64) {
+  if (groups_buffer[off] == EMPTY_KEY) {
     groups_buffer[off] = key;
   }
   return groups_buffer + off;
@@ -75,13 +66,13 @@ extern "C" ALWAYS_INLINE DEVICE int64_t* get_group_value_one_key(int64_t* groups
                                                                  const uint32_t small_groups_buffer_qw_count,
                                                                  const int64_t key,
                                                                  const int64_t min_key,
-                                                                 const uint32_t row_size_quad,
+                                                                 const uint32_t agg_col_count,
                                                                  const int64_t* init_vals) {
   int64_t off = key - min_key;
   if (0 <= off && off < small_groups_buffer_qw_count) {
-    return get_group_value_fast(small_groups_buffer, key, min_key, 0, row_size_quad);
+    return get_group_value_fast(small_groups_buffer, key, min_key, 0, agg_col_count);
   }
-  return get_group_value(groups_buffer, groups_buffer_entry_count, &key, 1, row_size_quad, init_vals);
+  return get_group_value(groups_buffer, groups_buffer_entry_count, &key, 1, agg_col_count, init_vals);
 }
 
 extern "C" ALWAYS_INLINE DEVICE int64_t

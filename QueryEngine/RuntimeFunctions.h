@@ -26,47 +26,22 @@ extern "C" void agg_max_double_skip_val(int64_t* agg, const double val, const do
 
 extern "C" void agg_min_double_skip_val(int64_t* agg, const double val, const double skip_val);
 
-extern "C" void agg_sum_int32(int32_t* agg, const int32_t val);
-
-extern "C" void agg_max_int32(int32_t* agg, const int32_t val);
-
-extern "C" void agg_min_int32(int32_t* agg, const int32_t val);
-
-extern "C" void agg_sum_float(int32_t* agg, const float val);
-
-extern "C" void agg_max_float(int32_t* agg, const float val);
-
-extern "C" void agg_min_float(int32_t* agg, const float val);
-
-extern "C" void agg_max_int32_skip_val(int32_t* agg, const int32_t val, const int32_t skip_val);
-
-extern "C" void agg_min_int32_skip_val(int32_t* agg, const int32_t val, const int32_t skip_val);
-
-extern "C" void agg_max_float_skip_val(int32_t* agg, const float val, const float skip_val);
-
-extern "C" void agg_min_float_skip_val(int32_t* agg, const float val, const float skip_val);
-
 extern "C" void agg_count_distinct_bitmap(int64_t* agg, const int64_t val, const int64_t min_val);
 
-#define EMPTY_KEY_64 std::numeric_limits<int64_t>::max()
-#define EMPTY_KEY_32 std::numeric_limits<int32_t>::max()
-#define EMPTY_KEY_16 std::numeric_limits<int16_t>::max()
-#define EMPTY_KEY_8 std::numeric_limits<int8_t>::max()
+#define EMPTY_KEY std::numeric_limits<int64_t>::max()
 
 extern "C" int64_t* get_group_value(int64_t* groups_buffer,
                                     const uint32_t groups_buffer_entry_count,
                                     const int64_t* key,
                                     const uint32_t key_qw_count,
-                                    const uint32_t row_size_quad,
+                                    const uint32_t agg_col_count,
                                     const int64_t* init_val = nullptr);
 
 extern "C" int64_t* get_group_value_fast(int64_t* groups_buffer,
                                          const int64_t key,
                                          const int64_t min_key,
                                          const int64_t bucket,
-                                         const uint32_t row_size_quad);
-
-extern "C" uint32_t get_columnar_group_bin_offset(const int64_t key, const int64_t min_key, const int64_t bucket);
+                                         const uint32_t agg_col_count);
 
 extern "C" int64_t* get_columnar_group_value_fast(int64_t* groups_buffer,
                                                   const int64_t key,
@@ -77,7 +52,7 @@ extern "C" int64_t* get_matching_group_value_perfect_hash(int64_t* groups_buffer
                                                           const uint32_t h,
                                                           const int64_t* key,
                                                           const uint32_t key_qw_count,
-                                                          const uint32_t row_size_quad);
+                                                          const uint32_t agg_col_count);
 
 extern "C" int64_t* get_group_value_one_key(int64_t* groups_buffer,
                                             const uint32_t groups_buffer_entry_count,
@@ -85,7 +60,7 @@ extern "C" int64_t* get_group_value_one_key(int64_t* groups_buffer,
                                             const uint32_t small_groups_buffer_qw_count,
                                             const int64_t key,
                                             const int64_t min_key,
-                                            const uint32_t row_size_quad,
+                                            const uint32_t agg_col_count,
                                             const int64_t* init_vals);
 
 extern "C" int32_t* get_hash_slot(int32_t* buff, const int64_t key, const int64_t min_key);

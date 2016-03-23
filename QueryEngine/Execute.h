@@ -2,7 +2,6 @@
 #define QUERYENGINE_EXECUTE_H
 
 #include "InputMetadata.h"
-#include "BufferCompaction.h"
 #include "GroupByAndAggregate.h"
 #include "InValuesBitmap.h"
 #include "JoinHashTable.h"
@@ -198,6 +197,7 @@ class Executor {
                           const CompilationOptions&);
   llvm::Value* codegenLogical(const Analyzer::BinOper*, const CompilationOptions&);
   llvm::Value* toBool(llvm::Value*);
+  llvm::Value* boolToInt8(llvm::Value*);
   llvm::Value* codegenArith(const Analyzer::BinOper*, const CompilationOptions&);
   llvm::Value* codegenDiv(llvm::Value*,
                           llvm::Value*,
@@ -519,8 +519,7 @@ class Executor {
                                     GroupByAndAggregate::DiamondCodegen&,
                                     std::stack<llvm::BasicBlock*>&);
 
-  llvm::Value* castToTypeIn(llvm::Value* val, const size_t bitWidth);
-  llvm::Value* castToIntPtrTyIn(llvm::Value* val, const size_t bitWidth);
+  llvm::Value* toDoublePrecision(llvm::Value* val);
 
   void allocateLocalColumnIds(const std::list<InputColDescriptor>& global_col_ids);
   int getLocalColumnId(const Analyzer::ColumnVar* col_var, const bool fetch_column) const;

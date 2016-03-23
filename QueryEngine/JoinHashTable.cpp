@@ -274,7 +274,7 @@ llvm::Value* JoinHashTable::codegenSlot(Executor* executor, const bool hoist_lit
   CHECK(executor->plan_state_->join_info_.join_hash_table_);
   auto& hash_ptr = executor->cgen_state_->row_func_->getArgumentList().back();
   std::vector<llvm::Value*> hash_join_idx_args{&hash_ptr,
-                                               executor->castToTypeIn(key_lvs.front(), 64),
+                                               executor->toDoublePrecision(key_lvs.front()),
                                                executor->ll_int(col_range_.getIntMin()),
                                                executor->ll_int(col_range_.getIntMax())};
   if (col_range_.hasNulls()) {

@@ -8,7 +8,6 @@
 #include "../Shared/checked_alloc.h"
 #include "../Shared/sqltypes.h"
 #include "RuntimeFunctions.h"
-#include "AggregateUtils.h"
 
 #include <boost/algorithm/string/join.hpp>
 #include <boost/noncopyable.hpp>
@@ -17,7 +16,6 @@
 #include <boost/version.hpp>
 #include <glog/logging.h>
 #include <llvm/IR/Function.h>
-#include <llvm/IR/Instructions.h>
 #include <llvm/IR/Value.h>
 
 #include <functional>
@@ -141,19 +139,6 @@ struct QueryMemoryDescriptor {
   bool canOutputColumnar() const;
 
   bool sortOnGpu() const;
-
-  size_t getKeyOffInBytes(const size_t bin, const size_t key_idx = 0) const;
-  size_t getNextKeyOffInBytes(const size_t key_idx) const;
-  size_t getColOffInBytes(const size_t bin, const size_t col_idx) const;
-  size_t getColOffInBytesInNextBin(const size_t col_idx) const;
-  size_t getNextColOffInBytes(const int8_t* col_ptr, const size_t bin, const size_t col_idx) const;
-  size_t getColOnlyOffInBytes(const size_t col_idx) const;
-  size_t getRowSize() const;
-  size_t getColsSize() const;
-  size_t getWarpCount() const;
-
- private:
-  inline size_t getTotalBytesOfColumnarBuffers(const std::vector<int8_t>& col_widths) const;
 };
 
 inline int64_t bitmap_set_size(const int64_t bitmap_ptr,
@@ -317,6 +302,78 @@ inline TargetInfo target_info(const PointerType target_expr) {
       skip_null,
       is_distinct};
 }
+
+namespace {
+
+inline int64_t inline_int_null_val(const SQLTypeInfo& ti) {
+  auto type = ti.is_decimal() ? decimal_to_int_type(ti) : ti.get_type();
+  if (ti.is_string()) {
+    CHECK_EQ(kENCODING_DICT, ti.get_compression());
+    CHECK_EQ(4, ti.get_size());
+    type = kINT;
+  }
+  switch (type) {
+    case kBOOLEAN:
+      return std::numeric_limits<int8_t>::min();
+    case kSMALLINT:
+      return std::numeric_limits<int16_t>::min();
+    case kINT:
+      return std::numeric_limits<int32_t>::min();
+    case kBIGINT:
+      return std::numeric_limits<int64_t>::min();
+    case kTIMESTAMP:
+    case kTIME:
+    case kDATE:
+      return std::numeric_limits<int64_t>::min();
+    default:
+      CHECK(false);
+  }
+}
+
+inline double inline_fp_null_val(const SQLTypeInfo& ti) {
+  CHECK(ti.is_fp());
+  const auto type = ti.get_type();
+  switch (type) {
+    case kFLOAT:
+      return NULL_FLOAT;
+    case kDOUBLE:
+      return NULL_DOUBLE;
+    default:
+      CHECK(false);
+  }
+}
+
+inline size_t get_bit_width(const SQLTypeInfo& ti) {
+  const auto int_type = ti.is_decimal() ? decimal_to_int_type(ti) : ti.get_type();
+  switch (int_type) {
+    case kBOOLEAN:
+      return 8;
+    case kSMALLINT:
+      return 16;
+    case kINT:
+      return 32;
+    case kBIGINT:
+      return 64;
+    case kFLOAT:
+      return 32;
+    case kDOUBLE:
+      return 64;
+    case kTIME:
+    case kTIMESTAMP:
+    case kDATE:
+      return sizeof(time_t) * 8;
+    case kTEXT:
+    case kVARCHAR:
+    case kCHAR:
+      return 32;
+    case kARRAY:
+      throw std::runtime_error("Projecting on array columns not supported yet.");
+    default:
+      CHECK(false);
+  }
+}
+
+}  // namespace
 
 struct InternalTargetValue {
   int64_t i1;
@@ -608,9 +665,9 @@ class ResultRows {
     target_values_.beginRow(row_set_mem_owner_.get());
   }
 
-  bool reduceSingleRow(const int8_t* row_ptr,
+  bool reduceSingleRow(const int64_t* group_by_buffer,
                        const int32_t groups_buffer_entry_count,
-                       const size_t bin,
+                       size_t row_base_idx,
                        const int8_t warp_count,
                        const bool is_columnar,
                        const bool keep_cnt_dtnc_buff,
@@ -783,7 +840,7 @@ class ResultRows {
 
   std::vector<int64_t> agg_init_vals_;
   int64_t* group_by_buffer_;
-  size_t groups_buffer_entry_count_;
+  int32_t groups_buffer_entry_count_;
   mutable size_t group_by_buffer_idx_;
   int64_t min_val_;
   int8_t warp_count_;
@@ -1001,17 +1058,11 @@ class QueryExecutionContext : boost::noncopyable {
                                       RenderAllocatorMap* render_allocator_map) const;
 
  private:
-  bool isEmptyBin(const int64_t* group_by_buffer, const size_t bin, const size_t key_idx) const;
   void outputBin(ResultRows& results,
                  const std::vector<Analyzer::Expr*>& targets,
                  int64_t* group_by_buffer,
                  const size_t groups_buffer_entry_count,
                  const size_t bin) const;
-
-  void initColumnPerRow(int8_t* row_ptr,
-                        const size_t bin,
-                        const int64_t* init_vals,
-                        const std::vector<ssize_t>& bitmap_sizes);
 
   void initGroups(int64_t* groups_buffer,
                   const int64_t* init_vals,
@@ -1019,12 +1070,6 @@ class QueryExecutionContext : boost::noncopyable {
                   const bool keyless,
                   const size_t warp_size);
 
-  template <typename T>
-  int8_t* initColumnarBuffer(T* buffer_ptr,
-                             const T init_val,
-                             const uint32_t entry_count,
-                             const ssize_t bitmap_sz = -1,
-                             const bool key_or_col = true);
   void initColumnarGroups(int64_t* groups_buffer,
                           const int64_t* init_vals,
                           const int32_t groups_buffer_entry_count,
@@ -1075,11 +1120,9 @@ class GroupByAndAggregate {
                       const std::list<Analyzer::OrderEntry>& order_entries,
                       const bool output_columnar_hint);
 
-  const QueryMemoryDescriptor& getQueryMemoryDescriptor() const;
+  QueryMemoryDescriptor getQueryMemoryDescriptor() const;
 
   bool outputColumnar() const;
-
-  void patchGroupbyCall(llvm::CallInst* call_site);
 
   // returns true iff checking the error code after every row
   // is required -- slow path group by queries for now
@@ -1119,7 +1162,7 @@ class GroupByAndAggregate {
                                  const bool sort_on_gpu_hint,
                                  const bool render_output);
 
-  std::pair<llvm::Value*, llvm::Value*> codegenGroupBy(const CompilationOptions&, DiamondCodegen&);
+  llvm::Value* codegenGroupBy(const QueryMemoryDescriptor&, const CompilationOptions&, DiamondCodegen&);
 
   llvm::Function* codegenPerfectHashFunction();
 
@@ -1135,9 +1178,12 @@ class GroupByAndAggregate {
 
   KeylessInfo getKeylessInfo(const std::vector<Analyzer::Expr*>& target_expr_list) const;
 
-  void codegenAggCalls(const std::pair<llvm::Value*, llvm::Value*>& agg_out_ptr_w_idx,
+  void codegenAggCalls(llvm::Value* agg_out_start_ptr,
                        const std::vector<llvm::Value*>& agg_out_vec,
+                       const QueryMemoryDescriptor&,
                        const CompilationOptions&);
+
+  uint32_t aggColumnarOff(const uint32_t agg_out_off, const QueryMemoryDescriptor& query_mem_desc);
 
   void codegenCountDistinct(const size_t target_idx,
                             const Analyzer::Expr* target_expr,
@@ -1248,5 +1294,23 @@ inline std::vector<int8_t> get_col_byte_widths(const T& col_expr_list) {
   }
   return col_widths;
 }
+
+namespace {
+
+inline size_t key_columnar_off(const size_t group_by_col_count,
+                               const size_t bin,
+                               const size_t agg_col_count,
+                               const bool output_columnar) {
+  return (output_columnar ? 1 : (group_by_col_count + agg_col_count)) * bin;
+}
+
+inline uint32_t agg_columnar_off(const size_t group_by_col_count,
+                                 const size_t out_vec_idx,
+                                 const size_t groups_buffer_entry_count,
+                                 const bool output_columnar) {
+  return (out_vec_idx + group_by_col_count) * (output_columnar ? groups_buffer_entry_count : 1);
+}
+
+}  // namespace
 
 #endif  // QUERYENGINE_GROUPBYANDAGGREGATE_H
