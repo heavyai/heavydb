@@ -805,7 +805,7 @@ InValuesBitmap* Executor::createInValuesBitmap(const Analyzer::InValues* in_valu
     return nullptr;
   }
   const auto sd = ti.is_string() ? getStringDictionary(ti.get_comp_param(), row_set_mem_owner_) : nullptr;
-  if (value_list.size() > 10) {
+  if (value_list.size() > 3) {
     for (const auto in_val : value_list) {
       const auto in_val_const = dynamic_cast<const Analyzer::Constant*>(extract_cast_arg(in_val.get()));
       if (!in_val_const) {
