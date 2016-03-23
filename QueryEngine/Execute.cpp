@@ -3711,7 +3711,7 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
       case kCHAR: {
         switch (cd->columnType.get_compression()) {
           case kENCODING_NONE:
-            str_col_buffers[col_ids[col_idx]].push_back(*col_datum.stringval);
+            str_col_buffers[col_ids[col_idx]].push_back(col_datum.stringval ? *col_datum.stringval : "");
             break;
           case kENCODING_DICT: {
             auto col_data = reinterpret_cast<int32_t*>(checked_malloc(sizeof(int32_t)));

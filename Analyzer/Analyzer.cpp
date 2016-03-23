@@ -757,7 +757,7 @@ void Constant::set_null_value() {
     case kCHAR:
     case kTEXT:
       //@TODO(wei) use empty string as null for now
-      constval.stringval = new std::string();
+      constval.stringval = nullptr;
       break;
     case kFLOAT:
       constval.floatval = NULL_FLOAT;
