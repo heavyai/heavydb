@@ -66,7 +66,7 @@ class RenderAllocatorMap {
  private:
   ::CudaMgr_Namespace::CudaMgr* cuda_mgr_;
   ::QueryRenderer::QueryRenderManager* render_manager_;
-  std::map<size_t, RenderAllocator> render_allocator_map_;
+  std::vector<RenderAllocator> render_allocator_map_;
 };
 
 CUdeviceptr alloc_gpu_mem(Data_Namespace::DataMgr* data_mgr,

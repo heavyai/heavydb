@@ -36,11 +36,11 @@ RenderAllocator* RenderAllocatorMap::getRenderAllocator(size_t device_id) {
 }
 
 RenderAllocator* RenderAllocatorMap::operator[](size_t device_id) {
-  auto itr = render_allocator_map_.find(device_id);
+  CHECK(device_id < render_allocator_map_.size())
+      << "Device id " << device_id << " not found in RenderAllocatorMap. Only " << render_allocator_map_.size()
+      << " devices available.";
 
-  CHECK(itr != render_allocator_map_.end()) << "Device id " << device_id << " not found in RenderAllocatorMap.";
-
-  return &(itr->second);
+  return &render_allocator_map_[device_id];
 }
 
 void RenderAllocatorMap::prepForRendering() {
