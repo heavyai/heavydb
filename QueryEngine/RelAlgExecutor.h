@@ -28,13 +28,13 @@ class RelAlgExecutor {
                                   const CompilationOptions& co,
                                   const ExecutionOptions& eo);
 
-  Executor::RelAlgExecutionUnit createWorkUnit(const RelAlgNode*);
+  Executor::RelAlgExecutionUnit createWorkUnit(const RelAlgNode*, const std::list<Analyzer::OrderEntry>&);
 
-  Executor::RelAlgExecutionUnit createCompoundWorkUnit(const RelCompound*);
+  Executor::RelAlgExecutionUnit createCompoundWorkUnit(const RelCompound*, const std::list<Analyzer::OrderEntry>&);
 
-  Executor::RelAlgExecutionUnit createProjectWorkUnit(const RelProject*);
+  Executor::RelAlgExecutionUnit createProjectWorkUnit(const RelProject*, const std::list<Analyzer::OrderEntry>&);
 
-  Executor::RelAlgExecutionUnit createFilterWorkUnit(const RelFilter*);
+  Executor::RelAlgExecutionUnit createFilterWorkUnit(const RelFilter*, const std::list<Analyzer::OrderEntry>&);
 
   void addTemporaryTable(const int table_id, const ResultRows* rows) {
     CHECK_LT(table_id, 0);

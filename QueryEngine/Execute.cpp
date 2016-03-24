@@ -2,6 +2,7 @@
 
 #include "CartesianProduct.h"
 #include "Codec.h"
+#include "ExpressionRewrite.h"
 #include "GpuMemUtils.h"
 #include "GpuSort.h"
 #include "AggregateUtils.h"
@@ -188,14 +189,6 @@ bool check_plan_sanity(const Planner::Plan* plan) {
   return static_cast<bool>(scan_plan) != static_cast<bool>(join_plan);
 }
 
-const Analyzer::Expr* extract_cast_arg(const Analyzer::Expr* expr) {
-  const auto cast_expr = dynamic_cast<const Analyzer::UOper*>(expr);
-  if (!cast_expr || cast_expr->get_optype() != kCAST) {
-    return expr;
-  }
-  return cast_expr->get_operand();
-}
-
 bool is_unnest(const Analyzer::Expr* expr) {
   return dynamic_cast<const Analyzer::UOper*>(expr) &&
          static_cast<const Analyzer::UOper*>(expr)->get_optype() == kUNNEST;
@@ -365,7 +358,7 @@ ResultRows Executor::execute(const Planner::RootPlan* root_plan,
   switch (stmt_type) {
     case kSELECT: {
       int32_t error_code{0};
-      size_t max_groups_buffer_entry_guess{2048};
+      size_t max_groups_buffer_entry_guess{16384};
 
       std::unique_ptr<RenderAllocatorMap> render_allocator_map;
       if (root_plan->get_plan_dest() == Planner::RootPlan::kRENDER) {
@@ -812,7 +805,7 @@ InValuesBitmap* Executor::createInValuesBitmap(const Analyzer::InValues* in_valu
     return nullptr;
   }
   const auto sd = ti.is_string() ? getStringDictionary(ti.get_comp_param(), row_set_mem_owner_) : nullptr;
-  if (value_list.size() > 10) {
+  if (value_list.size() > 3) {
     for (const auto in_val : value_list) {
       const auto in_val_const = dynamic_cast<const Analyzer::Constant*>(extract_cast_arg(in_val.get()));
       if (!in_val_const) {
@@ -3718,7 +3711,7 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
       case kCHAR: {
         switch (cd->columnType.get_compression()) {
           case kENCODING_NONE:
-            str_col_buffers[col_ids[col_idx]].push_back(*col_datum.stringval);
+            str_col_buffers[col_ids[col_idx]].push_back(col_datum.stringval ? *col_datum.stringval : "");
             break;
           case kENCODING_DICT: {
             auto col_data = reinterpret_cast<int32_t*>(checked_malloc(sizeof(int32_t)));
@@ -4102,7 +4095,11 @@ Executor::CompilationResult Executor::compilePlan(const bool render_output,
       deferred_quals.push_back(expr.get());
       continue;
     }
-    filter_lv = cgen_state_->ir_builder_.CreateAnd(filter_lv, toBool(codegen(expr.get(), true, co).front()));
+    auto qual_expr = rewrite_expr(expr.get());
+    if (!qual_expr) {
+      qual_expr = expr;
+    }
+    filter_lv = cgen_state_->ir_builder_.CreateAnd(filter_lv, toBool(codegen(qual_expr.get(), true, co).front()));
   }
 
   if (!deferred_quals.empty()) {

@@ -104,89 +104,117 @@ class SQLiteComparator {
         const auto mapd_variant = crt_row[col_idx];
         const auto scalar_mapd_variant = boost::get<ScalarTargetValue>(&mapd_variant);
         CHECK(scalar_mapd_variant);
-        switch (ref_col_type) {
-          case SQLITE_INTEGER: {
-            ASSERT_TRUE(mapd_results.getColType(col_idx).is_integer());
-            const auto ref_val = connector_.getData<int64_t>(row_idx, col_idx);
+        const auto mapd_ti = mapd_results.getColType(col_idx);
+        const auto mapd_type = mapd_ti.get_type();
+        checkTypeConsistency(ref_col_type, mapd_ti);
+        const bool ref_is_null = connector_.isNull(row_idx, col_idx);
+        switch (mapd_type) {
+          case kSMALLINT:
+          case kINT:
+          case kBIGINT: {
             const auto mapd_as_int_p = boost::get<int64_t>(scalar_mapd_variant);
             ASSERT_NE(nullptr, mapd_as_int_p);
             const auto mapd_val = *mapd_as_int_p;
-            ASSERT_EQ(ref_val, mapd_val);
+            if (ref_is_null) {
+              ASSERT_EQ(inline_int_null_val(mapd_ti), mapd_val);
+            } else {
+              const auto ref_val = connector_.getData<int64_t>(row_idx, col_idx);
+              ASSERT_EQ(ref_val, mapd_val);
+            }
             break;
           }
-          case SQLITE_FLOAT: {
-            ASSERT_TRUE(mapd_results.getColType(col_idx).is_integer() ||
-                        mapd_results.getColType(col_idx).is_decimal() || mapd_results.getColType(col_idx).is_fp());
-            const auto ref_val = connector_.getData<double>(row_idx, col_idx);
+          case kTEXT:
+          case kVARCHAR: {
+            const auto mapd_as_str_p = boost::get<NullableString>(scalar_mapd_variant);
+            ASSERT_NE(nullptr, mapd_as_str_p);
+            const auto mapd_str_notnull = boost::get<std::string>(mapd_as_str_p);
+            if (ref_is_null) {
+              CHECK(!mapd_str_notnull);
+            } else {
+              CHECK(mapd_str_notnull);
+              const auto ref_val = connector_.getData<std::string>(row_idx, col_idx);
+              const auto mapd_val = *mapd_str_notnull;
+              ASSERT_EQ(ref_val, mapd_val);
+            }
+            break;
+          }
+          case kNUMERIC:
+          case kDECIMAL:
+          case kFLOAT:
+          case kDOUBLE: {
             const auto mapd_as_double_p = boost::get<double>(scalar_mapd_variant);
             ASSERT_NE(nullptr, mapd_as_double_p);
             const auto mapd_val = *mapd_as_double_p;
-            ASSERT_TRUE(approx_eq(ref_val, mapd_val));
+            if (ref_is_null) {
+              ASSERT_EQ(inline_fp_null_val(SQLTypeInfo(kDOUBLE, false)), mapd_val);
+            } else {
+              const auto ref_val = connector_.getData<double>(row_idx, col_idx);
+              ASSERT_TRUE(approx_eq(ref_val, mapd_val));
+            }
             break;
           }
-          case SQLITE_TEXT: {
-            ASSERT_TRUE(mapd_results.getColType(col_idx).is_string() || mapd_results.getColType(col_idx).is_time() ||
-                        mapd_results.getColType(col_idx).is_boolean());
-            const auto ref_val = connector_.getData<std::string>(row_idx, col_idx);
-            if (mapd_results.getColType(col_idx).is_string()) {
-              const auto mapd_as_str_p = boost::get<NullableString>(scalar_mapd_variant);
-              ASSERT_NE(nullptr, mapd_as_str_p);
-              const auto mapd_str_notnull = boost::get<std::string>(mapd_as_str_p);
-              CHECK(mapd_str_notnull);
-              const auto mapd_val = *mapd_str_notnull;
-              ASSERT_EQ(ref_val, mapd_val);
+          case kTIMESTAMP:
+          case kDATE: {
+            const auto mapd_as_int_p = boost::get<int64_t>(scalar_mapd_variant);
+            CHECK(mapd_as_int_p);
+            const auto mapd_val = *mapd_as_int_p;
+            if (ref_is_null) {
+              CHECK_EQ(inline_int_null_val(mapd_ti), mapd_val);
             } else {
-              const auto mapd_type = mapd_results.getColType(col_idx).get_type();
-              switch (mapd_type) {
-                case kTIMESTAMP:
-                case kDATE: {
-                  struct tm tm_struct {
-                    0
-                  };
-                  const auto end_str =
-                      strptime(ref_val.c_str(), mapd_type == kTIMESTAMP ? "%Y-%m-%d %H:%M:%S" : "%Y-%m-%d", &tm_struct);
-                  if (end_str != nullptr) {
-                    ASSERT_EQ(0, *end_str);
-                    ASSERT_EQ(ref_val.size(), static_cast<size_t>(end_str - ref_val.c_str()));
-                  }
-                  const auto mapd_as_int_p = boost::get<int64_t>(scalar_mapd_variant);
-                  if (timestamp_approx) {
-                    // approximate result give 10 second lee way
-                    ASSERT_NEAR(*mapd_as_int_p, timegm(&tm_struct), 10);
-                  } else {
-                    ASSERT_EQ(*mapd_as_int_p, timegm(&tm_struct));
-                  }
-                  break;
-                }
-                case kBOOLEAN: {
-                  const auto mapd_as_int_p = boost::get<int64_t>(scalar_mapd_variant);
-                  if (ref_val == "t") {
-                    ASSERT_EQ(1, *mapd_as_int_p);
-                  } else {
-                    CHECK_EQ("f", ref_val);
-                    ASSERT_EQ(0, *mapd_as_int_p);
-                  }
-                  break;
-                }
-                case kTIME: {
-                  std::vector<std::string> time_tokens;
-                  boost::split(time_tokens, ref_val, boost::is_any_of(":"));
-                  ASSERT_EQ(size_t(3), time_tokens.size());
-                  const auto mapd_as_int_p = boost::get<int64_t>(scalar_mapd_variant);
-                  ASSERT_EQ(boost::lexical_cast<int64_t>(time_tokens[0]) * 3600 +
-                                boost::lexical_cast<int64_t>(time_tokens[1]) * 60 +
-                                boost::lexical_cast<int64_t>(time_tokens[2]),
-                            *mapd_as_int_p);
-                  break;
-                }
-                default:
-                  CHECK(false);
+              struct tm tm_struct {
+                0
+              };
+              const auto ref_val = connector_.getData<std::string>(row_idx, col_idx);
+              const auto end_str =
+                  strptime(ref_val.c_str(), mapd_type == kTIMESTAMP ? "%Y-%m-%d %H:%M:%S" : "%Y-%m-%d", &tm_struct);
+              if (end_str != nullptr) {
+                ASSERT_EQ(0, *end_str);
+                ASSERT_EQ(ref_val.size(), static_cast<size_t>(end_str - ref_val.c_str()));
+              }
+              if (timestamp_approx) {
+                // approximate result give 10 second lee way
+                ASSERT_NEAR(*mapd_as_int_p, timegm(&tm_struct), 10);
+              } else {
+                ASSERT_EQ(*mapd_as_int_p, timegm(&tm_struct));
               }
             }
             break;
           }
-          case SQLITE_NULL:
+          case kBOOLEAN: {
+            const auto mapd_as_int_p = boost::get<int64_t>(scalar_mapd_variant);
+            CHECK(mapd_as_int_p);
+            const auto mapd_val = *mapd_as_int_p;
+            if (ref_is_null) {
+              CHECK_EQ(inline_int_null_val(mapd_ti), mapd_val);
+            } else {
+              const auto ref_val = connector_.getData<std::string>(row_idx, col_idx);
+              if (ref_val == "t") {
+                ASSERT_EQ(1, *mapd_as_int_p);
+              } else {
+                CHECK_EQ("f", ref_val);
+                ASSERT_EQ(0, *mapd_as_int_p);
+              }
+            }
             break;
+          }
+          case kTIME: {
+            const auto mapd_as_int_p = boost::get<int64_t>(scalar_mapd_variant);
+            CHECK(mapd_as_int_p);
+            const auto mapd_val = *mapd_as_int_p;
+            if (ref_is_null) {
+              CHECK_EQ(inline_int_null_val(mapd_ti), mapd_val);
+            } else {
+              const auto ref_val = connector_.getData<std::string>(row_idx, col_idx);
+              std::vector<std::string> time_tokens;
+              boost::split(time_tokens, ref_val, boost::is_any_of(":"));
+              ASSERT_EQ(size_t(3), time_tokens.size());
+              ASSERT_EQ(boost::lexical_cast<int64_t>(time_tokens[0]) * 3600 +
+                            boost::lexical_cast<int64_t>(time_tokens[1]) * 60 +
+                            boost::lexical_cast<int64_t>(time_tokens[2]),
+                        *mapd_as_int_p);
+            }
+            break;
+          }
           default:
             CHECK(false);
         }
@@ -195,6 +223,20 @@ class SQLiteComparator {
   }
 
  private:
+  static void checkTypeConsistency(const int ref_col_type, const SQLTypeInfo& mapd_ti) {
+    if (ref_col_type == SQLITE_NULL) {
+      CHECK(!mapd_ti.get_notnull());
+      return;
+    }
+    if (mapd_ti.is_integer()) {
+      CHECK_EQ(SQLITE_INTEGER, ref_col_type);
+    } else if (mapd_ti.is_fp() || mapd_ti.is_decimal()) {
+      CHECK_EQ(SQLITE_FLOAT, ref_col_type);
+    } else {
+      CHECK_EQ(SQLITE_TEXT, ref_col_type);
+    }
+  }
+
   SqliteConnector connector_;
 };
 
@@ -511,13 +553,17 @@ TEST(Select, Case) {
     c("SELECT SUM(CASE WHEN x BETWEEN 6 AND 7 THEN 1 WHEN x BETWEEN 8 AND 9 THEN 2 ELSE 3 END) "
       "FROM test WHERE CASE WHEN y BETWEEN 42 AND 43 THEN 5 ELSE 4 END > 4;",
       dt);
-    c("SELECT SUM(CASE WHEN x BETWEEN 6 AND 7 THEN 1 WHEN x BETWEEN 8 AND 9 THEN 2 ELSE 3 END) "
-      "FROM test WHERE CASE WHEN y BETWEEN 44 AND 45 THEN 5 ELSE 4 END > 4;",
-      dt);
+    ASSERT_EQ(0L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT SUM(CASE WHEN x BETWEEN 6 AND 7 THEN 1 WHEN x BETWEEN 8 AND 9 THEN 2 ELSE 3 END) FROM test "
+                  "WHERE CASE WHEN y BETWEEN 44 AND 45 THEN 5 ELSE 4 END > 4;",
+                  dt)));
     c("SELECT CASE WHEN x + y > 50 THEN 77 ELSE 88 END AS foo, COUNT(*) FROM test GROUP BY foo ORDER BY foo;", dt);
-    c("SELECT SUM(CASE WHEN x BETWEEN 6 AND 7 THEN 1.1 WHEN x BETWEEN 8 AND 9 THEN 2.2 ELSE 3.3 END) "
-      "FROM test WHERE CASE WHEN y BETWEEN 44 AND 45 THEN 5.1 ELSE 3.9 END > 4;",
-      dt);
+    ASSERT_EQ(double(0.),
+              v<double>(run_simple_agg(
+                  "SELECT SUM(CASE WHEN x BETWEEN 6 AND 7 THEN 1.1 WHEN x BETWEEN 8 AND 9 THEN 2.2 ELSE 3.3 END) FROM "
+                  "test WHERE CASE WHEN y BETWEEN 44 AND 45 THEN 5.1 ELSE 3.9 END > 4;",
+                  dt)));
     c("SELECT CASE WHEN x BETWEEN 1 AND 3 THEN 'oops 1' WHEN x BETWEEN 4 AND 6 THEN 'oops 2' ELSE real_str END from "
       "test;",
       dt);
@@ -970,6 +1016,25 @@ void import_array_test(const std::string& table_name) {
   loader.checkpoint();
 }
 
+void import_gpu_sort_test() {
+  const std::string drop_old_gpu_sort_test{"DROP TABLE IF EXISTS gpu_sort_test;"};
+  run_ddl_statement(drop_old_gpu_sort_test);
+  g_sqlite_comparator.query(drop_old_gpu_sort_test);
+  const std::string create_gpu_sort_test{"CREATE TABLE gpu_sort_test(x int);"};
+  run_ddl_statement("CREATE TABLE gpu_sort_test(x int) WITH (fragment_size=2);");
+  g_sqlite_comparator.query("CREATE TABLE gpu_sort_test(x int);");
+  for (size_t i = 0; i < 4; ++i) {
+    const std::string insert_query{"INSERT INTO gpu_sort_test VALUES(1);"};
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query);
+  }
+  for (size_t i = 0; i < 6; ++i) {
+    const std::string insert_query{"INSERT INTO gpu_sort_test VALUES(16000);"};
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query);
+  }
+}
+
 }  // namespace
 
 TEST(Select, ArrayUnnest) {
@@ -1160,6 +1225,35 @@ TEST(Select, JoinsAndArrays) {
   }
 }
 
+TEST(Select, OrRewrite) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT COUNT(*) FROM test WHERE str = 'foo' OR str = 'bar' OR str = 'baz' OR str = 'foo' OR str = 'bar' OR str "
+      "= 'baz' OR str = 'foo' OR str = 'bar' OR str = 'baz' OR str = 'baz' OR str = 'foo' OR str = 'bar' OR str = "
+      "'baz';",
+      dt);
+    c("SELECT COUNT(*) FROM test WHERE x = 7 OR x = 8 OR x = 7 OR x = 8 OR x = 7 OR x = 8 OR x = 7 OR x = 8 OR x = 7 "
+      "OR x = 8 OR x = 7 OR x = 8;",
+      dt);
+  }
+}
+
+TEST(Select, GpuSort) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT x, COUNT(*) AS n FROM gpu_sort_test GROUP BY x ORDER BY n DESC;", dt);
+  }
+}
+
+#ifdef HAVE_RAVM
+TEST(Select, Subqueries) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT str, SUM(y) AS n FROM test WHERE x > (SELECT COUNT(*) FROM test) - 14 GROUP BY str ORDER BY n ASC;", dt);
+  }
+}
+#endif  // HAVE_RAVM
+
 int main(int argc, char** argv) {
   testing::InitGoogleTest(&argc, argv);
   google::InitGoogleLogging(argv[0]);
@@ -1183,11 +1277,11 @@ int main(int argc, char** argv) {
     const std::string create_test{
         "CREATE TABLE test(x int not null, y int, z smallint, t bigint, b boolean, f float, d double, str text "
         "encoding dict, real_str text, m timestamp(0), n time(0), o date, fx int encoding fixed(16), dd decimal(10, "
-        "2)) WITH (fragment_size=2);"};
+        "2), ss text encoding dict, u int) WITH (fragment_size=2);"};
     run_ddl_statement(create_test);
     g_sqlite_comparator.query(
         "CREATE TABLE test(x int not null, y int, z smallint, t bigint, b boolean, f float, d double, str text, "
-        "real_str text, m timestamp(0), n time(0), o date, fx int, dd decimal(10, 2));");
+        "real_str text, m timestamp(0), n time(0), o date, fx int, dd decimal(10, 2), ss text, u int);");
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'test'";
     return -EEXIST;
@@ -1197,7 +1291,7 @@ int main(int argc, char** argv) {
     const std::string insert_query{
         "INSERT INTO test VALUES(7, 42, 101, 1001, 't', 1.1, 2.2, 'foo', 'real_foo', '2014-12-13 22:23:15', "
         "'15:13:14', "
-        "'1999-09-09', 9, 111.1);"};
+        "'1999-09-09', 9, 111.1, 'fish', null);"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
@@ -1205,7 +1299,7 @@ int main(int argc, char** argv) {
     const std::string insert_query{
         "INSERT INTO test VALUES(8, 43, 102, 1002, 'f', 1.2, 2.4, 'bar', 'real_bar', '2014-12-13 22:23:15', "
         "'15:13:14', "
-        "'1999-09-09', 10, 222.2);"};
+        "'1999-09-09', 10, 222.2, null, null);"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
@@ -1213,7 +1307,7 @@ int main(int argc, char** argv) {
     const std::string insert_query{
         "INSERT INTO test VALUES(7, 43, 102, 1002, 't', 1.3, 2.6, 'baz', 'real_baz', '2014-12-13 22:23:15', "
         "'15:13:14', "
-        "'1999-09-09', 11, 333.3);"};
+        "'1999-09-09', 11, 333.3, 'boat', null);"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
@@ -1259,6 +1353,12 @@ int main(int argc, char** argv) {
     return -EEXIST;
   }
   import_array_test("array_test_inner");
+  try {
+    import_gpu_sort_test();
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'gpu_sort_test'";
+    return -EEXIST;
+  }
   int err{0};
   try {
     err = RUN_ALL_TESTS();
@@ -1272,6 +1372,9 @@ int main(int argc, char** argv) {
   const std::string drop_test_inner{"DROP TABLE test_inner;"};
   run_ddl_statement(drop_test_inner);
   g_sqlite_comparator.query(drop_test_inner);
+  const std::string drop_gpu_sort_test{"DROP TABLE gpu_sort_test;"};
+  run_ddl_statement(drop_gpu_sort_test);
+  g_sqlite_comparator.query(drop_gpu_sort_test);
   const std::string drop_array_test{"DROP TABLE array_test;"};
   run_ddl_statement(drop_array_test);
   const std::string drop_array_test_inner{"DROP TABLE array_test_inner;"};

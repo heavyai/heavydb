@@ -82,6 +82,14 @@ inline const ColumnDescriptor* get_column_descriptor(const int col_id,
   return col_desc;
 }
 
+inline const Analyzer::Expr* extract_cast_arg(const Analyzer::Expr* expr) {
+  const auto cast_expr = dynamic_cast<const Analyzer::UOper*>(expr);
+  if (!cast_expr || cast_expr->get_optype() != kCAST) {
+    return expr;
+  }
+  return cast_expr->get_operand();
+}
+
 class CompilationRetryNoLazyFetch : public std::runtime_error {
  public:
   CompilationRetryNoLazyFetch() : std::runtime_error("CompilationRetryNoLazyFetch") {}

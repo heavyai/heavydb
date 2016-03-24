@@ -455,9 +455,10 @@ class Subquery : public Expr {
  */
 class InValues : public Expr {
  public:
-  InValues(std::shared_ptr<Analyzer::Expr> a, std::list<std::shared_ptr<Analyzer::Expr>>& l)
+  InValues(std::shared_ptr<Analyzer::Expr> a, const std::list<std::shared_ptr<Analyzer::Expr>>& l)
       : Expr(kBOOLEAN, true), arg(a), value_list(l) {}
   const Expr* get_arg() const { return arg.get(); }
+  const std::shared_ptr<Analyzer::Expr> get_own_arg() const { return arg; }
   const std::list<std::shared_ptr<Analyzer::Expr>>& get_value_list() const { return value_list; }
   virtual std::shared_ptr<Analyzer::Expr> deep_copy() const;
   virtual void group_predicates(std::list<const Expr*>& scan_predicates,
@@ -479,8 +480,8 @@ class InValues : public Expr {
   virtual void find_expr(bool (*f)(const Expr*), std::list<const Expr*>& expr_list) const;
 
  private:
-  std::shared_ptr<Analyzer::Expr> arg;                    // the argument left of IN
-  std::list<std::shared_ptr<Analyzer::Expr>> value_list;  // the list of values right of IN
+  std::shared_ptr<Analyzer::Expr> arg;                          // the argument left of IN
+  const std::list<std::shared_ptr<Analyzer::Expr>> value_list;  // the list of values right of IN
 };
 
 /*

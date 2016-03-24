@@ -35,7 +35,6 @@ class Calcite {
   jobject calciteDirectObject_;
   jmethodID constructor_;
   jmethodID processMID_;
-  jclass calciteReturnClass_;
   jmethodID hasFailedMID_;
   jmethodID getElapsedTimeMID_;
   jmethodID getTextMID_;

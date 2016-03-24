@@ -10,6 +10,7 @@ set(query_engine_source_files
     Codec.cpp
     Execute.cpp
     ExpressionRange.cpp
+    ExpressionRewrite.cpp
     GpuMemUtils.cpp
     GpuSort.cpp
     GroupByAndAggregate.cpp
