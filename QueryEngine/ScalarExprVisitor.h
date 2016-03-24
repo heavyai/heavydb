@@ -7,6 +7,7 @@ template <class T>
 class ScalarExprVisitor {
  public:
   T visit(const Analyzer::Expr* expr) const {
+    CHECK(expr);
     const auto var = dynamic_cast<const Analyzer::Var*>(expr);
     if (var) {
       return visitVar(var);
@@ -51,7 +52,6 @@ class ScalarExprVisitor {
     if (extract) {
       return visitExtractExpr(extract);
     }
-    CHECK(false);
     return defaultResult();
   }
 
@@ -94,7 +94,9 @@ class ScalarExprVisitor {
     T result = defaultResult();
     result = aggregateResult(result, visit(like->get_arg()));
     result = aggregateResult(result, visit(like->get_like_expr()));
-    result = aggregateResult(result, visit(like->get_escape_expr()));
+    if (like->get_escape_expr()) {
+      result = aggregateResult(result, visit(like->get_escape_expr()));
+    }
     return result;
   }
 
