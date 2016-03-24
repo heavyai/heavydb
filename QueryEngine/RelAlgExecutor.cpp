@@ -4,6 +4,7 @@
 
 #include "InputMetadata.h"
 #include "RexVisitor.h"
+#include "ScalarExprVisitor.h"
 
 ExecutionResult RelAlgExecutor::executeRelAlgSeq(std::vector<RaExecutionDesc>& exec_descs,
                                                  const CompilationOptions& co,
@@ -388,6 +389,45 @@ Executor::RelAlgExecutionUnit RelAlgExecutor::createWorkUnit(const RelAlgNode* n
   return createFilterWorkUnit(filter, order_entries);
 }
 
+namespace {
+
+class UsedTablesVisitor : public ScalarExprVisitor<std::unordered_set<int>> {
+ protected:
+  virtual std::unordered_set<int> visitColumnVar(const Analyzer::ColumnVar* column) const override {
+    return {column->get_table_id()};
+  }
+
+  virtual std::unordered_set<int> aggregateResult(const std::unordered_set<int>& aggregate,
+                                                  const std::unordered_set<int>& next_result) const override {
+    auto result = aggregate;
+    result.insert(next_result.begin(), next_result.end());
+    return result;
+  }
+};
+
+struct SeparatedQuals {
+  const std::list<std::shared_ptr<Analyzer::Expr>> regular_quals;
+  const std::list<std::shared_ptr<Analyzer::Expr>> join_quals;
+};
+
+SeparatedQuals separate_join_quals(const std::list<std::shared_ptr<Analyzer::Expr>>& all_quals) {
+  std::list<std::shared_ptr<Analyzer::Expr>> regular_quals;
+  std::list<std::shared_ptr<Analyzer::Expr>> join_quals;
+  UsedTablesVisitor qual_visitor;
+  for (auto qual_candidate : all_quals) {
+    const auto used_table_ids = qual_visitor.visit(qual_candidate.get());
+    if (used_table_ids.size() > 1) {
+      CHECK_EQ(size_t(2), used_table_ids.size());
+      join_quals.push_back(qual_candidate);
+    } else {
+      regular_quals.push_back(qual_candidate);
+    }
+  }
+  return {regular_quals, join_quals};
+}
+
+}  // namespace
+
 Executor::RelAlgExecutionUnit RelAlgExecutor::createCompoundWorkUnit(
     const RelCompound* compound,
     const std::list<Analyzer::OrderEntry>& order_entries) {
@@ -399,6 +439,9 @@ Executor::RelAlgExecutionUnit RelAlgExecutor::createCompoundWorkUnit(
   const auto scalar_sources = translate_scalar_sources(compound, translator);
   const auto groupby_exprs = translate_groupby_exprs(compound, scalar_sources);
   const auto quals_cf = translate_quals(compound, translator);
+  const auto separated_quals = separate_join_quals(quals_cf.quals);
+  const auto simple_separated_quals = separate_join_quals(quals_cf.simple_quals);
+  CHECK(simple_separated_quals.join_quals.empty());
   const auto target_exprs = translate_targets(target_exprs_owned_, scalar_sources, groupby_exprs, compound, translator);
   CHECK_EQ(compound->size(), target_exprs.size());
   const auto targets_meta = get_targets_meta(compound, target_exprs);
@@ -406,8 +449,8 @@ Executor::RelAlgExecutionUnit RelAlgExecutor::createCompoundWorkUnit(
   return {input_descs,
           input_col_descs,
           quals_cf.simple_quals,
-          quals_cf.quals,
-          {},
+          separated_quals.regular_quals,
+          separated_quals.join_quals,
           groupby_exprs,
           target_exprs,
           order_entries,
