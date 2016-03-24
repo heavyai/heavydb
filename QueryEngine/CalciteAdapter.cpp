@@ -810,6 +810,107 @@ void separate_join_quals(std::unordered_map<int, std::list<std::shared_ptr<Analy
   }
 }
 
+const std::string get_op_name(const rapidjson::Value& obj) {
+  CHECK(obj.IsObject());
+  const auto field_it = obj.FindMember("relOp");
+  CHECK(field_it != obj.MemberEnd());
+  const auto& field = field_it->value;
+  CHECK(field.IsString());
+  return field.GetString();
+}
+
+bool match_compound_seq(rapidjson::Value::ConstValueIterator& rels_it,
+                        const rapidjson::Value::ConstValueIterator rels_end) {
+  auto op_name = get_op_name(*rels_it);
+  if (op_name == std::string("LogicalFilter")) {
+    ++rels_it;
+  }
+  op_name = get_op_name(*rels_it++);
+  if (op_name != std::string("LogicalProject")) {
+    return false;
+  }
+  if (rels_it == rels_end) {
+    return true;
+  }
+  op_name = get_op_name(*rels_it);
+  if (op_name == std::string("LogicalAggregate")) {
+    ++rels_it;
+    if (rels_it == rels_end) {
+      return true;
+    }
+    op_name = get_op_name(*rels_it);
+    if (op_name == std::string("LogicalProject")) {
+      ++rels_it;
+    }
+  }
+  return true;
+}
+
+bool match_filter_project_seq(rapidjson::Value::ConstValueIterator& rels_it,
+                              const rapidjson::Value::ConstValueIterator rels_end) {
+  CHECK(rels_it != rels_end);
+  auto op_name = get_op_name(*rels_it++);
+  if (op_name != std::string("LogicalFilter")) {
+    return false;
+  }
+  if (rels_it != rels_end && get_op_name(*rels_it) == std::string("LogicalProject")) {
+    ++rels_it;
+  }
+  return true;
+}
+
+bool match_sort_seq(rapidjson::Value::ConstValueIterator& rels_it,
+                    const rapidjson::Value::ConstValueIterator rels_end) {
+  auto op_name = get_op_name(*rels_it++);
+  if (op_name != std::string("LogicalSort")) {
+    return false;
+  }
+  op_name = get_op_name(*rels_it++);
+  if (op_name != std::string("LogicalProject")) {
+    return false;
+  }
+  op_name = get_op_name(*rels_it++);
+  if (op_name != std::string("LogicalSort")) {
+    return false;
+  }
+  return rels_it == rels_end;
+}
+
+// We don't aim to support everything Calcite allows in this adapter. Inspect
+// the nodes and reject queries which go beyond the legacy front-end.
+bool query_is_supported(const rapidjson::Value& rels) {
+  rapidjson::Value::ConstValueIterator rels_it = rels.Begin();
+  CHECK_EQ("LogicalTableScan", get_op_name(*rels_it++));
+  const auto op_name = get_op_name(*rels_it);
+  if (op_name == std::string("LogicalTableScan")) {
+    ++rels_it;
+    CHECK(rels_it != rels.End());
+    if (get_op_name(*rels_it++) != std::string("LogicalJoin")) {
+      return false;
+    }
+  }
+  if (!match_compound_seq(rels_it, rels.End())) {
+    return false;
+  }
+  if (rels_it == rels.End()) {
+    return true;
+  }
+  if (get_op_name(*rels_it) == std::string("LogicalSort")) {
+    return match_sort_seq(rels_it, rels.End());
+  }
+  // HAVING query
+  if (!match_filter_project_seq(rels_it, rels.End())) {
+    return false;
+  }
+  if (rels_it == rels.End()) {
+    return true;
+  }
+  if (!match_sort_seq(rels_it, rels.End())) {
+    return false;
+  }
+  return rels_it == rels.End();
+}
+
 }  // namespace
 
 Planner::RootPlan* translate_query(const std::string& query, const Catalog_Namespace::Catalog& cat) {
@@ -818,6 +919,9 @@ Planner::RootPlan* translate_query(const std::string& query, const Catalog_Names
   CHECK(!query_ast.HasParseError());
   CHECK(query_ast.IsObject());
   const auto& rels = query_ast["rels"];
+  if (!query_is_supported(rels)) {
+    throw std::runtime_error("This query is not supported yet");
+  }
   CHECK(rels.IsArray());
   CalciteAdapter calcite_adapter(cat, rels);
   std::list<std::shared_ptr<Analyzer::Expr>> quals;
