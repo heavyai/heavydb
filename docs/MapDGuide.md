@@ -7,15 +7,19 @@ logo: mapd-logo.pdf
 # Dependencies
 MapD is distributed as a group of mostly statically-linked executables, which minimizes the number of dependencies required. The following are the minimum requirements for running MapD.
 
+Basic installation instructions for all dependencies are provided in the [Installation] section below.
+
 Operating Systems
 
 * CentOS/RHEL 7.0 or later. CentOS/RHEL 6.x builds may be provided upon request, but are not supported.
 * Ubuntu 15.04 or later.
 * Mac OS X 10.9 or later, on 2013 or later hardware. Builds which support 2012 hardware may be provided upon request, but are not supported.
 
-Libraries
+Libraries and Drivers
 
-* CUDA 7.0 or later. Basic installation instructions are provided below.
+* libldap.
+* NVIDIA GPU Drivers. Not required for CPU-only installations.
+* Xorg. Only required to utilize MapD's backend rendering feature.
 
 # Terminology
 
@@ -38,8 +42,8 @@ Other
 
 # Installation
 
-## CUDA Installation
-CUDA-enabled installations of MapD depends on `libcuda` which is provided by the NVIDIA GPU drivers and NVIDIA CUDA Toolkit, respectively. As of January 2016, both CUDA 7.0 and CUDA 7.5 are supported by MapD.
+## Xorg and NVIDIA GPU Driver Installation
+CUDA-enabled installations of MapD depend on `libcuda` which is provided by the NVIDIA GPU Drivers and NVIDIA CUDA Toolkit. The backend rendering feature of MapD additionally requires a working installation of Xorg.
 
 The NVIDIA CUDA Toolkit, which includes the NVIDIA GPU drivers, is available from the [NVIDIA CUDA Zone](https://developer.nvidia.com/cuda-downloads).
 
@@ -48,7 +52,7 @@ The installation notes below are just a summary of what is required to install t
 Before proceeding, please make sure your system is completely up-to-date and you have restarted to activate the latest kernel, etc.
 
 ### CentOS / Red Hat Enterprise Linux (RHEL)
-Please download the RPM package provided by NVIDIA from the [NVIDIA CUDA Zone](https://developer.nvidia.com/cuda-downloads).
+Please download the network install RPM package provided by NVIDIA from the [NVIDIA CUDA Zone](https://developer.nvidia.com/cuda-downloads).
 
 RHEL-based distributions require Dynamic Kernel Module Support (DKMS) in order to build the GPU driver kernel modules, which is provided by the Extra Packages for Enterprise Linux (EPEL) repository. See the [EPEL website](https://fedoraproject.org/wiki/EPEL) for complete instructions for enabling this repository.
 
@@ -63,22 +67,39 @@ sudo yum groupinstall "Development Tools"
 sudo yum install linux-headers
 ```
 
-3. Install the CUDA repository, update local repository cache, and then install the CUDA Toolkit and GPU drivers
+3. Install Xorg and required libraries. This is only required to take advantage of the backend rendering features of MapD.
 ```
-sudo rpm --install cuda-repo-<distro>-<version>.<architecture>.rpm
+sudo yum install xorg-x11-server-Xorg mesa-libGLU libGLEWmx libXv
+```
+
+4. Install the CUDA repository, update local repository cache, and then install the GPU drivers. The CUDA Toolkit (package `cuda`) is not required to run MapD, but the GPU drivers (package `cuda-drivers`, which include libcuda) are.
+```
+sudo rpm --install cuda-repo-rhel7-7.5-18.x86_64.rpm
 sudo yum clean expire-cache
-sudo yum install cuda
+sudo yum install cuda-drivers
 ```
+Where `cuda-repo-rhel7-7.5-18.x86_64.rpm` is the name of the RPM package provided by NVIDIA.
+
+5. Reboot and continue to section [Environment Variables] below.
 
 ### Ubuntu / Debian
 Please download the DEB package provided by NVIDIA from the [NVIDIA CUDA Zone](https://developer.nvidia.com/cuda-downloads).
 
-Install the CUDA repository, update local repository cache, and then install the CUDA Toolkit and GPU drivers
+1. Install Xorg and required libraries, and disable the automatically enabled `graphical` target. This is only required to take advantage of the backend rendering features of MapD.
 ```
-sudo dpkg --install cuda-repo-<distro>-<version>.<architecture>.deb
+sudo apt-get install xserver-xorg libglewmx1.10
+sudo systemctl set-default multi-user
+```
+
+2. Install the CUDA repository, update local repository cache, and then install the CUDA Toolkit and GPU drivers
+```
+sudo dpkg --install cuda-repo-ubuntu1504_7.5-18_amd64.deb
 sudo apt-get update
-sudo apt-get install cuda
+sudo apt-get install cuda-drivers linux-image-extra-virtual
 ```
+Where `cuda-repo-ubuntu1504_7.5-18_amd64.deb` is the name of the RPM package provided by NVIDIA.
+
+3. Reboot and continue to section [Environment Variables] below.
 
 ### Mac OS X
 Please download the DMG package provided by NVIDIA from the [NVIDIA CUDA Zone](https://developer.nvidia.com/cuda-downloads).
@@ -86,12 +107,80 @@ Please download the DMG package provided by NVIDIA from the [NVIDIA CUDA Zone](h
 The DMG package will walk you through all required steps to install CUDA.
 
 ### Environment Variables
+For CPU-only installations of MapD, skip to section [MapD Installation] below.
+
 MapD depends on `libcuda`, which must be available in your environment in order to run MapD. The NVIDIA GPU drivers usually make `libcuda` available by default by installing it to a system-wide `lib` directory such as `/usr/lib64` (on CentOS/RHEL) or `/usr/lib/x86_64-linux-gnu` (on Ubuntu).
 
 ### Verifying Installation
 After installing CUDA and setting up the environment variables, please restart your machine to activate the GPU drivers.
 
 On Linux, you can verify installation of the GPU drivers by running `nvidia-smi`.
+
+## Xorg Configuration
+The `nvidia-xconfig` tool provided by the GPU drivers may be used to generate a valid `/etc/X11/xorg.conf`. To use, run:
+```
+sudo nvidia-xconfig --use-display-device=none --enable-all-gpus
+```
+Run the following to verify configuration:
+```
+sudo X :1
+```
+If `X` starts without issues, proceed to `MapD Installation`.
+
+### Troubleshooting
+
+### `no screens defined`, NVIDIA Tesla K20 GPUs
+The NVIDIA Tesla K20 GPU requires graphics support to be explicitly enabled in order to use Xorg. This mode may be enabled by running:
+```
+sudo nvidia-smi --gom=0
+```
+
+### `no screens defined`
+In rare circumstances `nvidia-xconfig` generates an `xorg.conf` that does not include the PCIe BusID for each GPU. When this happens, `X :1` will fail with the error message `no screens defined`. To resolve this issue, verify that the BusIDs are not listed by opening `/etc/X11/xorg.conf` and look for the `BusID` option under each `Section "Device"`. For example, you should see something similar to:
+```
+Section "Device"
+    Identifier     "Device0"
+    Driver         "nvidia"
+    VendorName     "NVIDIA Corporation"
+    BoardName      "Tesla K80"
+    BusID          "PCI:131:0:0"
+EndSection
+
+Section "Device"
+    Identifier     "Device1"
+    Driver         "nvidia"
+    VendorName     "NVIDIA Corporation"
+    BoardName      "Tesla K80"
+    BusID          "PCI:132:0:0"
+EndSection
+```
+If the `BusID` is not listed, they may be determined by running the command `nvidia-smi`:
+```
+$ nvidia-smi
++-------------------------------+----------------------+----------------------+
+| GPU  Name        Persistence-M| Bus-Id        Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp  Perf  Pwr:Usage/Cap|         Memory-Usage | GPU-Util  Compute M. |
+|===============================+======================+======================|
+|   0  Tesla K80           On   | 0000:83:00.0     Off |                    0 |
+| N/A   29C    P8    26W / 149W |     74MiB / 11519MiB |      0%      Default |
++-------------------------------+----------------------+----------------------+
+|   1  Tesla K80           On   | 0000:84:00.0     Off |                    0 |
+| N/A   25C    P8    29W / 149W |     74MiB / 11519MiB |      0%      Default |
++-------------------------------+----------------------+----------------------+
+```
+In this case, the BusIDs are `83:00.0` and `84:00.0`. Note: this values are in hexadecimal and must be converted to decimal to use in `xorg.conf`. One way to do this is by running `echo $((16#xx))`, replacing `xx` with the values from `nvidia-smi`:
+```
+$ echo $((16#83))
+131
+$ echo $((16#84))
+132
+```
+This means that the BusIDs to use would be `PCI:131:0:0` and `PCI:132:0:0`. `nvidia-smi` can then be used to regenerate `xorg.conf` with these values:
+```
+sudo nvidia-xconfig --use-display-device=none --busid=PCI:131:0:0 --busid=PCI:132:0:0
+```
+
+Note: On some systems, such as those provided by Amazon Web Services, `nvidia-smi` will report the BusID as, for example, `00:03.0`. In these cases the Xorg BusIDs would be of the form `PCI:0:3:0`.
 
 ## MapD Installation
 MapD is distributed as a self-extracting archive, that is, a shell script which contains the complete contents of a .tar.gz file. Other package types are available upon request.
@@ -144,6 +233,12 @@ MapD consists of two system services: `mapd_server` and `mapd_web_server`. These
 ## MapD Via `startmapd`
 MapD may be run via the `startmapd` script provided in `$MAPD_PATH/startmapd`. This script handles creating the `data` directory if it does not exist, inserting a sample dataset if desired, and starting both `mapd_server` and `mapd_web_server`.
 
+For backend rendering support, please start Xorg and set the `DISPLAY` environment variable before running `startmapd`:
+```
+sudo X :1 &
+export DISPLAY=:1
+```
+
 ### Starting MapD Via `startmapd`
 To use `startmapd` to start MapD, run:
 ```
@@ -161,25 +256,31 @@ To stop an instance of MapD that was started with the `startmapd` script, simply
 ## MapD Via `systemd`
 For permenant installations of MapD, it is recommended that you use `systemd` to manage the MapD services. `systemd` automatically handles tasks such as log management, starting the services on restart, and restarting the services in case they die. It is assumed that you have followed the instructions above for installing the `systemd` service unit files for MapD.
 
+For backend rendering-enabled builds, the `install_mapd_systemd.sh` script also installs a service named `mapd_xorg`. This service is configured to start `Xorg` on display `:1`, which the `mapd_server` service is configured to use. Before proceeding, please start the the `mapd_xorg` service before `mapd_server` if you wish to utilize backend rendering:
+```
+sudo systemctl start mapd_xorg
+sudo systemctl enable mapd_xorg # start mapd_xorg on startup
+```
+
 ### Starting MapD Via `systemd`
 To manually start MapD via `systemd`, run:
 ```
-systemctl start mapd_server
-systemctl start mapd_web_server
+sudo systemctl start mapd_server
+sudo systemctl start mapd_web_server
 ```
 
 ### Stopping MapD Via `systemd`
 To manually stop MapD via `systemd`, run:
 ```
-systemctl stop mapd_server
-systemctl stop mapd_web_server
+sudo systemctl stop mapd_server
+sudo systemctl stop mapd_web_server
 ```
 
 ### Enabling MapD on Startup
 To enable the MapD services to be started on restart, run:
 ```
-systemctl enable mapd_server
-systemctl enable mapd_web_server
+sudo systemctl enable mapd_server
+sudo systemctl enable mapd_web_server
 ```
 
 ## MapD Service Details
