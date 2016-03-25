@@ -164,7 +164,7 @@ public class MetaConnect {
           tdt = typeToThrift(colType);
         }
 
-        tti.nullable = isNotNull;
+        tti.nullable = !isNotNull;
         tti.encoding = TEncodingType.NONE;
         tti.type = tdt;
 
