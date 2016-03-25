@@ -118,7 +118,6 @@ inline SQLTypes to_sql_type(const std::string& type_name) {
   if (type_name == std::string("NULL")) {
     return kNULLT;
   }
-  CHECK(false);
   return kNULLT;
 }
 

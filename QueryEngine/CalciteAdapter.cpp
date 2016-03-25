@@ -124,8 +124,7 @@ class CalciteAdapter {
     if (expr.IsObject() && expr.HasMember("literal")) {
       return translateTypedLiteral(expr);
     }
-    CHECK(false);
-    return nullptr;
+    throw std::runtime_error("Unsupported node type");
   }
 
   std::pair<std::shared_ptr<Analyzer::Expr>, SQLQualifier> getQuantifiedRhs(
@@ -211,6 +210,9 @@ class CalciteAdapter {
       }
       CHECK(rhs);
       const auto sql_op = to_sql_op(op_str);
+      if (sql_op == kFUNCTION) {
+        throw std::runtime_error(std::string("Unsupported operator: ") + op_str);
+      }
       if (sql_op == kEQ || sql_op == kNE) {
         lhs = remove_cast(lhs);
         rhs = remove_cast(rhs);
@@ -254,8 +256,10 @@ class CalciteAdapter {
         CHECK(ti.is_array());
         return makeExpr<Analyzer::UOper>(ti.get_elem_type(), false, kUNNEST, operand_expr);
       }
-      default:
-        CHECK(false);
+      default: {
+        CHECK_EQ(kFUNCTION, sql_op);
+        throw std::runtime_error(std::string("Unsupported unary operator: ") + op_str);
+      }
     }
     return nullptr;
   }
@@ -963,10 +967,20 @@ Planner::RootPlan* translate_query(const std::string& query, const Catalog_Names
         add_quals(calcite_adapter.getExprFromNode(crt_node["condition"], res_targets), result_quals, result_quals);
       }
     } else if (rel_op_it->value.GetString() == std::string("LogicalJoin")) {
+      const auto condition =
+          std::dynamic_pointer_cast<Analyzer::Constant>(calcite_adapter.getExprFromNode(crt_node["condition"], {}));
+      if (!condition) {
+        throw std::runtime_error("Unsupported join condition");
+      }
+      const auto condition_ti = condition->get_type_info();
+      CHECK(condition_ti.is_boolean());
+      if (crt_node["joinType"].GetString() != std::string("inner")) {
+        throw std::runtime_error("Only inner joins supported for now");
+      }
       // TODO(alex): use the information in this node?
       is_join = true;
     } else {
-      CHECK(false);
+      throw std::runtime_error(std::string("Node ") + rel_op_it->value.GetString() + " not supported yet");
     }
   }
   const auto tds = calcite_adapter.getTableDescriptors();

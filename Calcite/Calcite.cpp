@@ -132,6 +132,7 @@ string Calcite::process(string user, string passwd, string catalog, string sql_s
       LOG(ERROR) << "Exception occured ";
       env->ExceptionDescribe();
       LOG(ERROR) << "Exception occured " << env->ExceptionOccurred();
+      throw std::runtime_error("Calcite::process failed");
     }
     CHECK(process_result);
     long java_time = env->CallLongMethod(process_result, getElapsedTimeMID_);
