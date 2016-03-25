@@ -211,13 +211,15 @@ class SQLTypeInfo {
     return type != rhs.get_type() || subtype != rhs.get_subtype() || dimension != rhs.get_dimension() ||
            scale != rhs.get_scale() || compression != rhs.get_compression() ||
            (compression != kENCODING_NONE && comp_param != rhs.get_comp_param() &&
-            comp_param != TRANSIENT_DICT(rhs.get_comp_param()));
+            comp_param != TRANSIENT_DICT(rhs.get_comp_param())) ||
+           notnull != rhs.get_notnull();
   }
   DEVICE inline bool operator==(const SQLTypeInfo& rhs) const {
     return type == rhs.get_type() && subtype == rhs.get_subtype() && dimension == rhs.get_dimension() &&
            scale == rhs.get_scale() && compression == rhs.get_compression() &&
            (compression == kENCODING_NONE || comp_param == rhs.get_comp_param() ||
-            comp_param == TRANSIENT_DICT(rhs.get_comp_param()));
+            comp_param == TRANSIENT_DICT(rhs.get_comp_param())) &&
+           notnull == rhs.get_notnull();
   }
   DEVICE inline void operator=(const SQLTypeInfo& rhs) {
     type = rhs.get_type();
