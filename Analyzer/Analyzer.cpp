@@ -730,6 +730,8 @@ void Constant::do_cast(const SQLTypeInfo& new_type_info) {
     cast_from_string(new_type_info);
   } else if (new_type_info.is_string()) {
     cast_to_string(new_type_info);
+  } else if (new_type_info.get_type() == kDATE && type_info.get_type() == kDATE) {
+    type_info = new_type_info;
   } else
     throw std::runtime_error("Invalid cast.");
 }
