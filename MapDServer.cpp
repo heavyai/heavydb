@@ -1368,7 +1368,7 @@ int main(int argc, char** argv) {
   bool allow_multifrag = true;
   bool read_only = false;
   bool allow_loop_joins = false;
-  bool enable_legacy_syntax = false;
+  bool enable_legacy_syntax = true;
   bool enable_fork = true;
   LdapMetadata ldapMetadata;
   bool enable_rendering = false;
@@ -1421,8 +1421,8 @@ int main(int argc, char** argv) {
                          po::bool_switch(&allow_loop_joins)->default_value(allow_loop_joins)->implicit_value(true),
                          "Enable loop joins");
   desc_adv.add_options()(
-      "enable-legacy-syntax",
-      po::bool_switch(&enable_legacy_syntax)->default_value(enable_legacy_syntax)->implicit_value(true),
+      "disable-legacy-syntax",
+      po::bool_switch(&enable_legacy_syntax)->default_value(enable_legacy_syntax)->implicit_value(false),
       "Enable legacy syntax");
   desc_adv.add_options()("disable-fork",
                          po::bool_switch(&enable_fork)->default_value(enable_fork)->implicit_value(false),
