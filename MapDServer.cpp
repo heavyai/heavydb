@@ -1012,7 +1012,8 @@ class MapDHandler : virtual public MapDIf {
                        const std::string& query_ra,
                        const bool column_format,
                        const Catalog_Namespace::SessionInfo& session_info,
-                       const ExecutorDeviceType executor_device_type) const {
+                       const ExecutorDeviceType executor_device_type,
+                       const bool just_explain) const {
     rapidjson::Document query_ast;
     query_ast.Parse(query_ra.c_str());
     CHECK(!query_ast.HasParseError());
@@ -1025,8 +1026,12 @@ class MapDHandler : virtual public MapDIf {
     RelAlgExecutor ra_executor(executor.get(), cat);
     const auto result = ra_executor.executeRelAlgSeq(ed_list,
                                                      {executor_device_type, true, ExecutorOptLevel::Default},
-                                                     {false, allow_multifrag_, false, allow_loop_joins_});
-    convert_rows(_return, result.getTargetsMeta(), result.getRows(), column_format);
+                                                     {false, allow_multifrag_, just_explain, allow_loop_joins_});
+    if (just_explain) {
+      convert_explain(_return, result.getRows(), column_format);
+    } else {
+      convert_rows(_return, result.getTargetsMeta(), result.getRows(), column_format);
+    }
   }
 #endif  // HAVE_RAVM
 
@@ -1214,9 +1219,7 @@ class MapDHandler : virtual public MapDIf {
                                         cat.get_currentDB().dbName,
                                         legacy_syntax_ ? pg_shim(actual_query) : actual_query,
                                         legacy_syntax_);
-#ifdef HAVE_RAVM
-            CHECK(!pw.is_select_explain);
-#else
+#ifndef HAVE_RAVM
             root_plan = translate_query(query_ra, cat);
             plan_ptr.reset(root_plan);
             if (pw.is_select_explain) {
@@ -1227,7 +1230,7 @@ class MapDHandler : virtual public MapDIf {
 #ifdef HAVE_RAVM
           CHECK(!root_plan);
           CHECK(!query_ra.empty());
-          execute_rel_alg(_return, query_ra, column_format, session_info, executor_device_type);
+          execute_rel_alg(_return, query_ra, column_format, session_info, executor_device_type, pw.is_select_explain);
 #else
           CHECK(root_plan);
           execute_root_plan(_return, root_plan, column_format, session_info, executor_device_type);
