@@ -36,7 +36,9 @@ SQLTypeInfo get_ti(const SQLTypes sql_type, const int type_precision, const int 
       case 19:
         return SQLTypeInfo(kBIGINT, false);
       default:
-        CHECK(false);
+        throw std::runtime_error("Unsupported type & precision combination: " + type_ti.get_type_name() +
+                                 ", precision: " + std::to_string(type_precision) + ", scale: " +
+                                 std::to_string(type_scale));
     }
   }
   return type_ti;
