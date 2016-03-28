@@ -3034,22 +3034,32 @@ void Executor::ExecutionDispatch::run(const ExecutorDeviceType chosen_device_typ
   }
 }
 
-const int8_t* Executor::ExecutionDispatch::getColumn(const ResultRows* rows, const int col_id) const {
+const int8_t* Executor::ExecutionDispatch::getColumn(const ResultRows* rows,
+                                                     const int col_id,
+                                                     const Data_Namespace::MemoryLevel memory_level,
+                                                     const int device_id) const {
   CHECK(rows);
   CHECK_GE(col_id, 0);
+  std::vector<SQLTypeInfo> col_types;
+  for (size_t i = 0; i < rows->colCount(); ++i) {
+    col_types.push_back(rows->getColType(i));
+  }
   static std::mutex columnar_conversion_mutex;
   {
     std::lock_guard<std::mutex> columnar_conversion_guard(columnar_conversion_mutex);
     if (!ra_node_input_) {
-      std::vector<SQLTypeInfo> col_types;
-      for (size_t i = 0; i < rows->colCount(); ++i) {
-        col_types.push_back(rows->getColType(i));
-      }
       ra_node_input_.reset(new ColumnarResults(*rows, rows->colCount(), col_types));
     }
   }
   const auto& col_buffers = ra_node_input_->getColumnBuffers();
   CHECK_LT(static_cast<size_t>(col_id), col_buffers.size());
+  if (memory_level == Data_Namespace::GPU_LEVEL) {
+    auto& data_mgr = cat_.get_dataMgr();
+    const auto num_bytes = ra_node_input_->size() * get_bit_width(col_types[col_id]) * 8;
+    auto gpu_col_buffer = alloc_gpu_mem(&data_mgr, num_bytes, device_id, nullptr);
+    copy_to_gpu(&data_mgr, gpu_col_buffer, col_buffers[col_id], num_bytes, device_id);
+    return reinterpret_cast<const int8_t*>(gpu_col_buffer);
+  }
   return col_buffers[col_id];
 }
 
@@ -3406,8 +3416,8 @@ std::vector<std::vector<const int8_t*>> Executor::fetchChunks(
         CHECK_NE(input_is_result, static_cast<bool>(chunk));
         if (input_is_result) {
           CHECK_EQ(size_t(0), frag_id);
-          frag_col_buffers[it->second] =
-              execution_dispatch.getColumn(get_temporary_table(temporary_tables_, table_id), col_id.getColId());
+          frag_col_buffers[it->second] = execution_dispatch.getColumn(
+              get_temporary_table(temporary_tables_, table_id), col_id.getColId(), memory_level_for_column, device_id);
         } else {
           auto ab = chunk->get_buffer();
           CHECK(ab->getMemoryPtr());

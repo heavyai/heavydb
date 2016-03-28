@@ -323,7 +323,10 @@ class Executor {
              const size_t ctx_idx,
              const int64_t rowid_lookup_key) noexcept;
 
-    const int8_t* getColumn(const ResultRows* rows, const int col_id) const;
+    const int8_t* getColumn(const ResultRows* rows,
+                            const int col_id,
+                            const Data_Namespace::MemoryLevel memory_level,
+                            const int device_id) const;
 
     std::string getIR(const ExecutorDeviceType device_type) const;
 
