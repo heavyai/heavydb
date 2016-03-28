@@ -685,6 +685,9 @@ class RaAbstractInterp {
   RelJoin* dispatchJoin(const rapidjson::Value& join_ra) {
     const auto join_type = to_join_type(json_str(field(join_ra, "joinType")));
     const auto filter_rex = parse_scalar_expr(field(join_ra, "condition"));
+    if (!dynamic_cast<const RexLiteral*>(filter_rex)) {
+      throw std::runtime_error("Unsupported join condition");
+    }
     const auto str_input_indices = strings_from_json_array(field(join_ra, "inputs"));
     CHECK_EQ(size_t(2), str_input_indices.size());
     std::vector<size_t> input_indices;
