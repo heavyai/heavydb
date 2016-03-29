@@ -2927,9 +2927,7 @@ void GroupByAndAggregate::codegenAggCalls(llvm::Value* agg_out_start_ptr,
         CHECK(agg_info.is_distinct);
         const auto& elem_ti = arg_expr->get_type_info().get_elem_type();
         executor_->cgen_state_->emitExternalCall(
-            elem_ti.is_fp()
-                ? "agg_count_distinct_array_" + std::string(elem_ti.get_type() == kDOUBLE ? "double" : "float")
-                : "agg_count_distinct_array_int" + std::to_string(elem_ti.get_size() * 8) + "_t",
+            "agg_count_distinct_array_" + numeric_type_name(elem_ti),
             llvm::Type::getVoidTy(LL_CONTEXT),
             {is_group_by ? LL_BUILDER.CreateGEP(agg_out_start_ptr, LL_INT(aggColumnarOff(agg_out_off, query_mem_desc)))
                          : agg_out_vec[agg_out_off],
