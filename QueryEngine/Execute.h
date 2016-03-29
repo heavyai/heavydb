@@ -211,6 +211,15 @@ class Executor {
                           const SQLTypeInfo&);
   llvm::Value* codegenLogical(const Analyzer::UOper*, const CompilationOptions&);
   llvm::Value* codegenCast(const Analyzer::UOper*, const CompilationOptions&);
+  llvm::Value* codegenCastFromString(llvm::Value* operand_lv,
+                                     const SQLTypeInfo& operand_ti,
+                                     const SQLTypeInfo& ti,
+                                     const bool operand_is_const);
+  llvm::Value* codegenCastBetweenIntTypes(llvm::Value* operand_lv,
+                                          const SQLTypeInfo& operand_ti,
+                                          const SQLTypeInfo& ti);
+  llvm::Value* codegenCastToFp(llvm::Value* operand_lv, const SQLTypeInfo& operand_ti, const SQLTypeInfo& ti);
+  llvm::Value* codegenCastFromFp(llvm::Value* operand_lv, const SQLTypeInfo& operand_ti, const SQLTypeInfo& ti);
   llvm::Value* codegenUMinus(const Analyzer::UOper*, const CompilationOptions&);
   llvm::Value* codegenIsNull(const Analyzer::UOper*, const CompilationOptions&);
   llvm::Value* codegenUnnest(const Analyzer::UOper*, const CompilationOptions&);

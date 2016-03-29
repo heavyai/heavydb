@@ -1661,33 +1661,7 @@ llvm::Value* Executor::codegenCast(const Analyzer::UOper* uoper, const Compilati
   const auto& operand_ti = operand->get_type_info();
   if (operand_lv->getType()->isIntegerTy()) {
     if (operand_ti.is_string()) {
-      if (!ti.is_string()) {
-        throw std::runtime_error("Cast from " + operand_ti.get_type_name() + " to " + ti.get_type_name() +
-                                 " not supported");
-      }
-      // dictionary encode non-constant
-      if (operand_ti.get_compression() != kENCODING_DICT && !operand_as_const) {
-        CHECK_EQ(kENCODING_NONE, operand_ti.get_compression());
-        CHECK_EQ(kENCODING_DICT, ti.get_compression());
-        CHECK(operand_lv->getType()->isIntegerTy(64));
-        cgen_state_->must_run_on_cpu_ = true;
-        return cgen_state_->emitExternalCall(
-            "string_compress",
-            get_int_type(32, cgen_state_->context_),
-            {operand_lv, ll_int(int64_t(getStringDictionary(ti.get_comp_param(), row_set_mem_owner_)))});
-      }
-      CHECK(operand_lv->getType()->isIntegerTy(32));
-      if (ti.get_compression() == kENCODING_NONE) {
-        CHECK_EQ(kENCODING_DICT, operand_ti.get_compression());
-        cgen_state_->must_run_on_cpu_ = true;
-        return cgen_state_->emitExternalCall(
-            "string_decompress",
-            get_int_type(64, cgen_state_->context_),
-            {operand_lv, ll_int(int64_t(getStringDictionary(operand_ti.get_comp_param(), row_set_mem_owner_)))});
-      }
-      CHECK(operand_as_const);
-      CHECK_EQ(kENCODING_DICT, ti.get_compression());
-      return operand_lv;
+      return codegenCastFromString(operand_lv, operand_ti, ti, operand_as_const);
     }
     CHECK(operand_ti.is_integer() || operand_ti.is_decimal() || operand_ti.is_time() || operand_ti.is_boolean());
     if (operand_ti.is_boolean()) {
@@ -1696,95 +1670,146 @@ llvm::Value* Executor::codegenCast(const Analyzer::UOper* uoper, const Compilati
         operand_lv = boolToInt8(operand_lv);
       }
     }
-    const std::string from_tname{"int" + std::to_string(get_bit_width(operand_ti)) + "_t"};
     if (ti.is_integer() || ti.is_decimal() || ti.is_time()) {
-      if (ti.is_decimal()) {
-        CHECK(!operand_ti.is_decimal() || operand_ti.get_scale() <= ti.get_scale());
-        operand_lv = cgen_state_->ir_builder_.CreateSExt(operand_lv, get_int_type(64, cgen_state_->context_));
-        const auto scale_lv = llvm::ConstantInt::get(get_int_type(64, cgen_state_->context_),
-                                                     exp_to_scale(ti.get_scale() - operand_ti.get_scale()));
-        if (operand_ti.get_notnull()) {
-          operand_lv = cgen_state_->ir_builder_.CreateMul(operand_lv, scale_lv);
-        } else {
-          operand_lv = cgen_state_->emitCall("scale_decimal",
-                                             {operand_lv,
-                                              scale_lv,
-                                              ll_int(inline_int_null_val(operand_ti)),
-                                              inlineIntNull(SQLTypeInfo(kBIGINT, false))});
-        }
-      } else if (operand_ti.is_decimal()) {
-        const std::string int_typename{"int" + std::to_string(get_bit_width(operand_ti)) + "_t"};
-        const auto scale_lv = llvm::ConstantInt::get(static_cast<llvm::IntegerType*>(operand_lv->getType()),
-                                                     exp_to_scale(operand_ti.get_scale()));
-        operand_lv = cgen_state_->emitCall("div_" + int_typename + "_nullable_lhs",
-                                           {operand_lv, scale_lv, ll_int(inline_int_null_val(operand_ti))});
-      }
-      const auto operand_width = static_cast<llvm::IntegerType*>(operand_lv->getType())->getBitWidth();
-      const auto target_width = get_bit_width(ti);
-      if (target_width == operand_width) {
-        return operand_lv;
-      }
-      if (operand_ti.get_notnull()) {
-        return cgen_state_->ir_builder_.CreateCast(
-            target_width > operand_width ? llvm::Instruction::CastOps::SExt : llvm::Instruction::CastOps::Trunc,
-            operand_lv,
-            get_int_type(target_width, cgen_state_->context_));
-      }
-      const std::string to_tname{"int" + std::to_string(get_bit_width(ti)) + "_t"};
-      return cgen_state_->emitCall("cast_" + from_tname + "_to_" + to_tname + "_nullable",
-                                   {operand_lv, inlineIntNull(operand_ti), inlineIntNull(ti)});
+      return codegenCastBetweenIntTypes(operand_lv, operand_ti, ti);
     } else {
-      if (!ti.is_fp()) {
-        throw std::runtime_error("Cast from " + operand_ti.get_type_name() + " to " + ti.get_type_name() +
-                                 " not supported");
-      }
-      const std::string to_tname{ti.get_type() == kFLOAT ? "float" : "double"};
-      if (operand_ti.get_notnull()) {
-        operand_lv = cgen_state_->ir_builder_.CreateSIToFP(operand_lv,
-                                                           ti.get_type() == kFLOAT
-                                                               ? llvm::Type::getFloatTy(cgen_state_->context_)
-                                                               : llvm::Type::getDoubleTy(cgen_state_->context_));
-      } else {
-        operand_lv = cgen_state_->emitCall("cast_" + from_tname + "_to_" + to_tname + "_nullable",
-                                           {operand_lv, inlineIntNull(operand_ti), inlineFpNull(ti)});
-      }
-      operand_lv = cgen_state_->ir_builder_.CreateFDiv(
-          operand_lv, llvm::ConstantFP::get(operand_lv->getType(), exp_to_scale(operand_ti.get_scale())));
-      return operand_lv;
+      return codegenCastToFp(operand_lv, operand_ti, ti);
     }
   } else {
-    if (!operand_ti.is_fp()) {
-      throw std::runtime_error("Cast from " + operand_ti.get_type_name() + " to " + ti.get_type_name() +
-                               " not supported");
-    }
-    if (operand_ti == ti) {
-      return operand_lv;
-    }
-    CHECK(operand_lv->getType()->isFloatTy() || operand_lv->getType()->isDoubleTy());
+    return codegenCastFromFp(operand_lv, operand_ti, ti);
+  }
+  CHECK(false);
+  return nullptr;
+}
+
+llvm::Value* Executor::codegenCastFromString(llvm::Value* operand_lv,
+                                             const SQLTypeInfo& operand_ti,
+                                             const SQLTypeInfo& ti,
+                                             const bool operand_is_const) {
+  if (!ti.is_string()) {
+    throw std::runtime_error("Cast from " + operand_ti.get_type_name() + " to " + ti.get_type_name() +
+                             " not supported");
+  }
+  // dictionary encode non-constant
+  if (operand_ti.get_compression() != kENCODING_DICT && !operand_is_const) {
+    CHECK_EQ(kENCODING_NONE, operand_ti.get_compression());
+    CHECK_EQ(kENCODING_DICT, ti.get_compression());
+    CHECK(operand_lv->getType()->isIntegerTy(64));
+    cgen_state_->must_run_on_cpu_ = true;
+    return cgen_state_->emitExternalCall(
+        "string_compress",
+        get_int_type(32, cgen_state_->context_),
+        {operand_lv, ll_int(int64_t(getStringDictionary(ti.get_comp_param(), row_set_mem_owner_)))});
+  }
+  CHECK(operand_lv->getType()->isIntegerTy(32));
+  if (ti.get_compression() == kENCODING_NONE) {
+    CHECK_EQ(kENCODING_DICT, operand_ti.get_compression());
+    cgen_state_->must_run_on_cpu_ = true;
+    return cgen_state_->emitExternalCall(
+        "string_decompress",
+        get_int_type(64, cgen_state_->context_),
+        {operand_lv, ll_int(int64_t(getStringDictionary(operand_ti.get_comp_param(), row_set_mem_owner_)))});
+  }
+  CHECK(operand_is_const);
+  CHECK_EQ(kENCODING_DICT, ti.get_compression());
+  return operand_lv;
+}
+
+llvm::Value* Executor::codegenCastBetweenIntTypes(llvm::Value* operand_lv,
+                                                  const SQLTypeInfo& operand_ti,
+                                                  const SQLTypeInfo& ti) {
+  if (ti.is_decimal()) {
+    CHECK(!operand_ti.is_decimal() || operand_ti.get_scale() <= ti.get_scale());
+    operand_lv = cgen_state_->ir_builder_.CreateSExt(operand_lv, get_int_type(64, cgen_state_->context_));
+    const auto scale_lv = llvm::ConstantInt::get(get_int_type(64, cgen_state_->context_),
+                                                 exp_to_scale(ti.get_scale() - operand_ti.get_scale()));
     if (operand_ti.get_notnull()) {
-      if (ti.get_type() == kDOUBLE) {
-        return cgen_state_->ir_builder_.CreateFPExt(operand_lv, llvm::Type::getDoubleTy(cgen_state_->context_));
-      } else if (ti.get_type() == kFLOAT) {
-        return cgen_state_->ir_builder_.CreateFPTrunc(operand_lv, llvm::Type::getFloatTy(cgen_state_->context_));
-      } else if (ti.is_integer()) {
-        return cgen_state_->ir_builder_.CreateFPToSI(operand_lv,
-                                                     get_int_type(get_bit_width(ti), cgen_state_->context_));
-      } else {
-        CHECK(false);
-      }
+      operand_lv = cgen_state_->ir_builder_.CreateMul(operand_lv, scale_lv);
     } else {
-      const std::string from_tname{operand_ti.get_type() == kFLOAT ? "float" : "double"};
-      if (ti.is_fp()) {
-        const std::string to_tname{ti.get_type() == kFLOAT ? "float" : "double"};
-        return cgen_state_->emitCall("cast_" + from_tname + "_to_" + to_tname + "_nullable",
-                                     {operand_lv, inlineFpNull(operand_ti), inlineFpNull(ti)});
-      } else if (ti.is_integer()) {
-        const std::string to_tname{"int" + std::to_string(get_bit_width(ti)) + "_t"};
-        return cgen_state_->emitCall("cast_" + from_tname + "_to_" + to_tname + "_nullable",
-                                     {operand_lv, inlineFpNull(operand_ti), inlineIntNull(ti)});
-      } else {
-        CHECK(false);
-      }
+      operand_lv = cgen_state_->emitCall(
+          "scale_decimal",
+          {operand_lv, scale_lv, ll_int(inline_int_null_val(operand_ti)), inlineIntNull(SQLTypeInfo(kBIGINT, false))});
+    }
+  } else if (operand_ti.is_decimal()) {
+    const std::string int_typename{"int" + std::to_string(get_bit_width(operand_ti)) + "_t"};
+    const auto scale_lv = llvm::ConstantInt::get(static_cast<llvm::IntegerType*>(operand_lv->getType()),
+                                                 exp_to_scale(operand_ti.get_scale()));
+    operand_lv = cgen_state_->emitCall("div_" + int_typename + "_nullable_lhs",
+                                       {operand_lv, scale_lv, ll_int(inline_int_null_val(operand_ti))});
+  }
+  const auto operand_width = static_cast<llvm::IntegerType*>(operand_lv->getType())->getBitWidth();
+  const auto target_width = get_bit_width(ti);
+  if (target_width == operand_width) {
+    return operand_lv;
+  }
+  if (operand_ti.get_notnull()) {
+    return cgen_state_->ir_builder_.CreateCast(
+        target_width > operand_width ? llvm::Instruction::CastOps::SExt : llvm::Instruction::CastOps::Trunc,
+        operand_lv,
+        get_int_type(target_width, cgen_state_->context_));
+  }
+  const std::string to_tname{"int" + std::to_string(get_bit_width(ti)) + "_t"};
+  const std::string from_tname{"int" + std::to_string(get_bit_width(operand_ti)) + "_t"};
+  return cgen_state_->emitCall("cast_" + from_tname + "_to_" + to_tname + "_nullable",
+                               {operand_lv, inlineIntNull(operand_ti), inlineIntNull(ti)});
+}
+
+llvm::Value* Executor::codegenCastToFp(llvm::Value* operand_lv, const SQLTypeInfo& operand_ti, const SQLTypeInfo& ti) {
+  if (!ti.is_fp()) {
+    throw std::runtime_error("Cast from " + operand_ti.get_type_name() + " to " + ti.get_type_name() +
+                             " not supported");
+  }
+  const std::string to_tname{ti.get_type() == kFLOAT ? "float" : "double"};
+  llvm::Value* result_lv{nullptr};
+  if (operand_ti.get_notnull()) {
+    result_lv =
+        cgen_state_->ir_builder_.CreateSIToFP(operand_lv,
+                                              ti.get_type() == kFLOAT ? llvm::Type::getFloatTy(cgen_state_->context_)
+                                                                      : llvm::Type::getDoubleTy(cgen_state_->context_));
+  } else {
+    const std::string from_tname{"int" + std::to_string(get_bit_width(operand_ti)) + "_t"};
+    result_lv = cgen_state_->emitCall("cast_" + from_tname + "_to_" + to_tname + "_nullable",
+                                      {operand_lv, inlineIntNull(operand_ti), inlineFpNull(ti)});
+  }
+  CHECK(result_lv);
+  result_lv = cgen_state_->ir_builder_.CreateFDiv(
+      result_lv, llvm::ConstantFP::get(result_lv->getType(), exp_to_scale(operand_ti.get_scale())));
+  return result_lv;
+}
+
+llvm::Value* Executor::codegenCastFromFp(llvm::Value* operand_lv,
+                                         const SQLTypeInfo& operand_ti,
+                                         const SQLTypeInfo& ti) {
+  if (!operand_ti.is_fp()) {
+    throw std::runtime_error("Cast from " + operand_ti.get_type_name() + " to " + ti.get_type_name() +
+                             " not supported");
+  }
+  if (operand_ti == ti) {
+    return operand_lv;
+  }
+  CHECK(operand_lv->getType()->isFloatTy() || operand_lv->getType()->isDoubleTy());
+  if (operand_ti.get_notnull()) {
+    if (ti.get_type() == kDOUBLE) {
+      return cgen_state_->ir_builder_.CreateFPExt(operand_lv, llvm::Type::getDoubleTy(cgen_state_->context_));
+    } else if (ti.get_type() == kFLOAT) {
+      return cgen_state_->ir_builder_.CreateFPTrunc(operand_lv, llvm::Type::getFloatTy(cgen_state_->context_));
+    } else if (ti.is_integer()) {
+      return cgen_state_->ir_builder_.CreateFPToSI(operand_lv, get_int_type(get_bit_width(ti), cgen_state_->context_));
+    } else {
+      CHECK(false);
+    }
+  } else {
+    const std::string from_tname{operand_ti.get_type() == kFLOAT ? "float" : "double"};
+    if (ti.is_fp()) {
+      const std::string to_tname{ti.get_type() == kFLOAT ? "float" : "double"};
+      return cgen_state_->emitCall("cast_" + from_tname + "_to_" + to_tname + "_nullable",
+                                   {operand_lv, inlineFpNull(operand_ti), inlineFpNull(ti)});
+    } else if (ti.is_integer()) {
+      const std::string to_tname{"int" + std::to_string(get_bit_width(ti)) + "_t"};
+      return cgen_state_->emitCall("cast_" + from_tname + "_to_" + to_tname + "_nullable",
+                                   {operand_lv, inlineFpNull(operand_ti), inlineIntNull(ti)});
+    } else {
+      CHECK(false);
     }
   }
   CHECK(false);
