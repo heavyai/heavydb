@@ -1696,6 +1696,7 @@ llvm::Value* Executor::codegenCast(const Analyzer::UOper* uoper, const Compilati
         operand_lv = boolToInt8(operand_lv);
       }
     }
+    const std::string from_tname{"int" + std::to_string(get_bit_width(operand_ti)) + "_t"};
     if (ti.is_integer() || ti.is_decimal() || ti.is_time()) {
       if (ti.is_decimal()) {
         CHECK(!operand_ti.is_decimal() || operand_ti.get_scale() <= ti.get_scale());
@@ -1729,7 +1730,6 @@ llvm::Value* Executor::codegenCast(const Analyzer::UOper* uoper, const Compilati
             operand_lv,
             get_int_type(target_width, cgen_state_->context_));
       }
-      const std::string from_tname{"int" + std::to_string(get_bit_width(operand_ti)) + "_t"};
       const std::string to_tname{"int" + std::to_string(get_bit_width(ti)) + "_t"};
       return cgen_state_->emitCall("cast_" + from_tname + "_to_" + to_tname + "_nullable",
                                    {operand_lv, inlineIntNull(operand_ti), inlineIntNull(ti)});
@@ -1738,10 +1738,16 @@ llvm::Value* Executor::codegenCast(const Analyzer::UOper* uoper, const Compilati
         throw std::runtime_error("Cast from " + operand_ti.get_type_name() + " to " + ti.get_type_name() +
                                  " not supported");
       }
-      operand_lv = cgen_state_->ir_builder_.CreateSIToFP(operand_lv,
-                                                         ti.get_type() == kFLOAT
-                                                             ? llvm::Type::getFloatTy(cgen_state_->context_)
-                                                             : llvm::Type::getDoubleTy(cgen_state_->context_));
+      const std::string to_tname{ti.get_type() == kFLOAT ? "float" : "double"};
+      if (operand_ti.get_notnull()) {
+        operand_lv = cgen_state_->ir_builder_.CreateSIToFP(operand_lv,
+                                                           ti.get_type() == kFLOAT
+                                                               ? llvm::Type::getFloatTy(cgen_state_->context_)
+                                                               : llvm::Type::getDoubleTy(cgen_state_->context_));
+      } else {
+        operand_lv = cgen_state_->emitCall("cast_" + from_tname + "_to_" + to_tname + "_nullable",
+                                           {operand_lv, inlineIntNull(operand_ti), inlineFpNull(ti)});
+      }
       operand_lv = cgen_state_->ir_builder_.CreateFDiv(
           operand_lv, llvm::ConstantFP::get(operand_lv->getType(), exp_to_scale(operand_ti.get_scale())));
       return operand_lv;

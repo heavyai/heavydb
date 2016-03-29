@@ -334,6 +334,8 @@ TEST(Select, FilterAndSimpleAggregation) {
     c("SELECT MIN(dd * dd) FROM test;", dt);
     c("SELECT MAX(dd * dd) FROM test;", dt);
     c("SELECT COUNT(*) FROM test WHERE u IS NOT NULL;", dt);
+    c("SELECT AVG(u * f) FROM test;", dt);
+    c("SELECT AVG(u * d) FROM test;", dt);
     ASSERT_EQ(15, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE MOD(x, 7) = 0;", dt)));
     ASSERT_EQ(0, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE MOD(x, 7) = 7;", dt)));
     ASSERT_EQ(5, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE MOD(x, 7) <> 0;", dt)));
