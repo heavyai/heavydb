@@ -47,9 +47,9 @@ extern "C" __device__ void init_columnar_group_by_buffer_gpu_impl(int64_t* group
   const int32_t start = threadIdx.x;
   const int32_t step = blockDim.x;
 #endif
-  int32_t i = start;
+  int32_t i = 0;
   if (!keyless) {
-    for (; i < groups_buffer_entry_count; i += step) {
+    for (i = start; i < groups_buffer_entry_count; i += step) {
       groups_buffer[i] = EMPTY_KEY;
     }
     i = groups_buffer_entry_count;
