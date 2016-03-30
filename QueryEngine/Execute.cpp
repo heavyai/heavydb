@@ -237,7 +237,8 @@ ResultRows Executor::executeSelectPlan(const Planner::Plan* plan,
     }
     if (limit || offset) {
       const size_t scan_limit = get_scan_limit(plan, limit);
-      size_t max_groups_buffer_entry_guess_limit{scan_limit ? scan_limit + offset : max_groups_buffer_entry_guess};
+      const size_t scan_total_limit = scan_limit ? get_scan_limit(plan, scan_limit + offset) : 0;
+      size_t max_groups_buffer_entry_guess_limit{scan_total_limit ? scan_total_limit : max_groups_buffer_entry_guess};
       auto rows = executeWorkUnit(error_code,
                                   max_groups_buffer_entry_guess_limit,
                                   is_agg,
@@ -250,7 +251,7 @@ ResultRows Executor::executeSelectPlan(const Planner::Plan* plan,
                                    groupby_exprs,
                                    target_exprs,
                                    order_entries,
-                                   get_scan_limit(plan, scan_limit ? scan_limit + offset : 0)},
+                                   scan_total_limit},
                                   {device_type, hoist_literals, opt_level},
                                   {false, allow_multifrag, just_explain, allow_loop_joins},
                                   cat,
@@ -263,24 +264,17 @@ ResultRows Executor::executeSelectPlan(const Planner::Plan* plan,
       }
       return rows;
     }
-    return executeWorkUnit(error_code,
-                           max_groups_buffer_entry_guess,
-                           is_agg,
-                           query_infos,
-                           {input_descs,
-                            input_col_descs,
-                            simple_quals,
-                            quals,
-                            join_quals,
-                            groupby_exprs,
-                            target_exprs,
-                            order_entries,
-                            get_scan_limit(plan, limit)},
-                           {device_type, hoist_literals, opt_level},
-                           {false, allow_multifrag, just_explain, allow_loop_joins},
-                           cat,
-                           row_set_mem_owner_,
-                           render_allocator_map);
+    return executeWorkUnit(
+        error_code,
+        max_groups_buffer_entry_guess,
+        is_agg,
+        query_infos,
+        {input_descs, input_col_descs, simple_quals, quals, join_quals, groupby_exprs, target_exprs, order_entries, 0},
+        {device_type, hoist_literals, opt_level},
+        {false, allow_multifrag, just_explain, allow_loop_joins},
+        cat,
+        row_set_mem_owner_,
+        render_allocator_map);
   }
   const auto result_plan = dynamic_cast<const Planner::Result*>(plan);
   if (result_plan) {

@@ -266,7 +266,7 @@ class Executor {
     const std::list<std::shared_ptr<Analyzer::Expr>> groupby_exprs;
     const std::vector<Analyzer::Expr*> target_exprs;
     const std::list<Analyzer::OrderEntry> order_entries;
-    const int64_t scan_limit;
+    const size_t scan_limit;
   };
 
   struct CompilationResult {
