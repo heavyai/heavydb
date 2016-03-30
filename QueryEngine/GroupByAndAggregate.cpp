@@ -1720,7 +1720,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const std::vector<voi
                                                            std::vector<std::vector<const int8_t*>> col_buffers,
                                                            const std::vector<int64_t>& num_rows,
                                                            const std::vector<uint64_t>& frag_row_offsets,
-                                                           const int64_t scan_limit,
+                                                           const int32_t scan_limit,
                                                            const std::vector<int64_t>& init_agg_vals,
                                                            Data_Namespace::DataMgr* data_mgr,
                                                            const unsigned block_size_x,
@@ -1785,9 +1785,15 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const std::vector<voi
   }
   CUdeviceptr max_matched_dev_ptr{0};
   {
-    int64_t max_matched{scan_limit};
-    max_matched_dev_ptr = alloc_gpu_mem(data_mgr, sizeof(int64_t), device_id, nullptr);
-    copy_to_gpu(data_mgr, max_matched_dev_ptr, &max_matched, sizeof(int64_t), device_id);
+    int32_t max_matched{scan_limit};
+    max_matched_dev_ptr = alloc_gpu_mem(data_mgr, sizeof(max_matched), device_id, nullptr);
+    copy_to_gpu(data_mgr, max_matched_dev_ptr, &max_matched, sizeof(max_matched), device_id);
+  }
+  CUdeviceptr total_matched_dev_ptr{0};
+  {
+    int32_t total_matched{0};
+    total_matched_dev_ptr = alloc_gpu_mem(data_mgr, sizeof(total_matched), device_id, nullptr);
+    copy_to_gpu(data_mgr, total_matched_dev_ptr, &total_matched, sizeof(total_matched), device_id);
   }
   CUdeviceptr init_agg_vals_dev_ptr;
   {
@@ -1866,6 +1872,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const std::vector<voi
                                  &num_rows_dev_ptr,
                                  &frag_row_offsets_dev_ptr,
                                  &max_matched_dev_ptr,
+                                 &total_matched_dev_ptr,
                                  &init_agg_vals_dev_ptr,
                                  &gpu_query_mem.group_by_buffers.first,
                                  &gpu_query_mem.small_group_by_buffers.first,
@@ -1889,6 +1896,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const std::vector<voi
                                  &num_rows_dev_ptr,
                                  &frag_row_offsets_dev_ptr,
                                  &max_matched_dev_ptr,
+                                 &total_matched_dev_ptr,
                                  &init_agg_vals_dev_ptr,
                                  &gpu_query_mem.group_by_buffers.first,
                                  &gpu_query_mem.small_group_by_buffers.first,
@@ -1945,6 +1953,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const std::vector<voi
                                  &num_rows_dev_ptr,
                                  &frag_row_offsets_dev_ptr,
                                  &max_matched_dev_ptr,
+                                 &total_matched_dev_ptr,
                                  &init_agg_vals_dev_ptr,
                                  &out_vec_dev_ptr,
                                  &unused_dev_ptr,
@@ -1968,6 +1977,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const std::vector<voi
                                  &num_rows_dev_ptr,
                                  &frag_row_offsets_dev_ptr,
                                  &max_matched_dev_ptr,
+                                 &total_matched_dev_ptr,
                                  &init_agg_vals_dev_ptr,
                                  &out_vec_dev_ptr,
                                  &unused_dev_ptr,
@@ -2631,16 +2641,20 @@ bool GroupByAndAggregate::codegen(llvm::Value* filter_result, const CompilationO
     const bool is_group_by = !groupby_exprs_.empty();
     auto query_mem_desc = getQueryMemoryDescriptor();
 
+    auto crt_match_it = ROW_FUNC->arg_begin();
+    ++crt_match_it;
+    ++crt_match_it;
+
+    if (scan_limit_) {
+      LL_BUILDER.CreateStore(executor_->ll_int(int32_t(0)), crt_match_it);
+    }
+
     DiamondCodegen filter_cfg(
         filter_result, executor_, !is_group_by || query_mem_desc.usesGetGroupValueFast(), "filter");
 
     if (is_group_by) {
       if (scan_limit_) {
-        auto arg_it = ROW_FUNC->arg_begin();
-        ++arg_it;
-        ++arg_it;
-        auto crt_matched = LL_BUILDER.CreateLoad(arg_it);
-        LL_BUILDER.CreateStore(LL_BUILDER.CreateAdd(crt_matched, executor_->ll_int(int64_t(1))), arg_it);
+        LL_BUILDER.CreateStore(executor_->ll_int(int32_t(1)), crt_match_it);
       }
 
       auto agg_out_start_ptr = codegenGroupBy(query_mem_desc, co, filter_cfg);
