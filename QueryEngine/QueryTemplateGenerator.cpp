@@ -135,6 +135,7 @@ llvm::Function* row_process(llvm::Module* mod,
   auto i8_type = IntegerType::get(mod->getContext(), 8);
   auto i32_type = IntegerType::get(mod->getContext(), 32);
   auto i64_type = IntegerType::get(mod->getContext(), 64);
+  auto pi32_type = PointerType::get(i32_type, 0);
   auto pi64_type = PointerType::get(i64_type, 0);
 
   if (aggr_col_count) {
@@ -144,7 +145,7 @@ llvm::Function* row_process(llvm::Module* mod,
   } else {                           // group by query
     func_args.push_back(pi64_type);  // groups buffer
     func_args.push_back(pi64_type);  // small groups buffer
-    func_args.push_back(pi64_type);  // max matched
+    func_args.push_back(pi32_type);  // max matched
   }
 
   func_args.push_back(pi64_type);  // aggregate init values
@@ -222,13 +223,14 @@ llvm::Function* query_template(llvm::Module* mod,
   }
   query_args.push_back(pi64_type);
   query_args.push_back(pi64_type);
-  query_args.push_back(pi64_type);
+  query_args.push_back(pi32_type);
 
   query_args.push_back(pi64_type);
   query_args.push_back(ppi64_type);
   query_args.push_back(ppi64_type);
   query_args.push_back(i32_type);
   query_args.push_back(i64_type);
+  query_args.push_back(pi32_type);
   query_args.push_back(pi32_type);
 
   FunctionType* query_func_type = FunctionType::get(
@@ -308,11 +310,13 @@ llvm::Function* query_template(llvm::Module* mod,
   frag_idx->setName("frag_idx");
   Value* join_hash_table = ++query_arg_it;
   join_hash_table->setName("join_hash_table");
+  Value* total_matched = ++query_arg_it;
+  total_matched->setName("total_matched");
   Value* error_code = ++query_arg_it;
   error_code->setName("error_code");
 
   auto bb_entry = BasicBlock::Create(mod->getContext(), ".entry", query_func_ptr, 0);
-  auto bb_prehader = BasicBlock::Create(mod->getContext(), ".loop.preheader", query_func_ptr, 0);
+  auto bb_preheader = BasicBlock::Create(mod->getContext(), ".loop.preheader", query_func_ptr, 0);
   auto bb_forbody = BasicBlock::Create(mod->getContext(), ".for.body", query_func_ptr, 0);
   auto bb_crit_edge = BasicBlock::Create(mod->getContext(), "._crit_edge", query_func_ptr, 0);
   auto bb_exit = BasicBlock::Create(mod->getContext(), ".exit", query_func_ptr, 0);
@@ -361,16 +365,16 @@ llvm::Function* query_template(llvm::Module* mod,
 
   CastInst* pos_start_i64 = new SExtInst(pos_start, i64_type, "", bb_entry);
   ICmpInst* enter_or_not = new ICmpInst(*bb_entry, ICmpInst::ICMP_SLT, pos_start_i64, row_count, "");
-  BranchInst::Create(bb_prehader, bb_exit, enter_or_not, bb_entry);
+  BranchInst::Create(bb_preheader, bb_exit, enter_or_not, bb_entry);
 
   // Block .loop.preheader
-  CastInst* pos_step_i64 = new SExtInst(pos_step, i64_type, "", bb_prehader);
-  BranchInst::Create(bb_forbody, bb_prehader);
+  CastInst* pos_step_i64 = new SExtInst(pos_step, i64_type, "", bb_preheader);
+  BranchInst::Create(bb_forbody, bb_preheader);
 
-  // Block  .for.body
+  // Block  .forbody
   Argument* pos_inc_pre = new Argument(i64_type);
   PHINode* pos = PHINode::Create(i64_type, 2, "pos", bb_forbody);
-  pos->addIncoming(pos_start_i64, bb_prehader);
+  pos->addIncoming(pos_start_i64, bb_preheader);
   pos->addIncoming(pos_inc_pre, bb_forbody);
 
   std::vector<Value*> row_process_params;
@@ -476,13 +480,14 @@ llvm::Function* query_group_by_template(llvm::Module* mod,
   }
   query_args.push_back(pi64_type);
   query_args.push_back(pi64_type);
-  query_args.push_back(pi64_type);
+  query_args.push_back(pi32_type);
   query_args.push_back(pi64_type);
 
   query_args.push_back(ppi64_type);
   query_args.push_back(ppi64_type);
   query_args.push_back(i32_type);
   query_args.push_back(i64_type);
+  query_args.push_back(pi32_type);
   query_args.push_back(pi32_type);
 
   FunctionType* query_func_type = FunctionType::get(
@@ -575,6 +580,8 @@ llvm::Function* query_group_by_template(llvm::Module* mod,
   frag_idx->setName("frag_idx");
   Value* join_hash_table = ++query_arg_it;
   join_hash_table->setName("join_hash_table");
+  Value* total_matched = ++query_arg_it;
+  total_matched->setName("total_matched");
   Value* error_code = ++query_arg_it;
   error_code->setName("error_code");
 
@@ -590,9 +597,8 @@ llvm::Function* query_group_by_template(llvm::Module* mod,
   LoadInst* frag_row_off = new LoadInst(frag_row_off_ptr, "", false, bb_entry);
   frag_row_off->setAlignment(8);
   LoadInst* max_matched = new LoadInst(max_matched_ptr, "", false, bb_entry);
-  max_matched->setAlignment(8);
-  auto crt_matched_ptr = new AllocaInst(i64_type, "crt_matched", bb_entry);
-  new StoreInst(ConstantInt::get(i64_type, 0), crt_matched_ptr, false, bb_entry);
+  max_matched->setAlignment(4);
+  auto crt_matched_ptr = new AllocaInst(i32_type, "crt_matched", bb_entry);
   CallInst* pos_start = CallInst::Create(func_pos_start, "", bb_entry);
   pos_start->setCallingConv(CallingConv::C);
   pos_start->setTailCall(true);
@@ -660,9 +666,7 @@ llvm::Function* query_group_by_template(llvm::Module* mod,
 
   // Block .forbody
   Argument* pos_pre = new Argument(i64_type);
-  PHINode* pos = PHINode::Create(i64_type, 2, "pos", bb_forbody);
-  pos->addIncoming(pos_start_i64, bb_preheader);
-  pos->addIncoming(pos_pre, bb_forbody);
+  PHINode* pos = PHINode::Create(i64_type, check_scan_limit ? 3 : 2, "pos", bb_forbody);
 
   std::vector<Value*> row_process_params;
   row_process_params.push_back(result_buffer);
@@ -680,6 +684,9 @@ llvm::Function* query_group_by_template(llvm::Module* mod,
     CHECK(literals);
     row_process_params.push_back(literals);
   }
+  if (check_scan_limit) {
+    new StoreInst(ConstantInt::get(IntegerType::get(mod->getContext(), 32), 0), crt_matched_ptr, bb_forbody);
+  }
   CallInst* row_process = CallInst::Create(func_row_process, row_process_params, "", bb_forbody);
   row_process->setCallingConv(CallingConv::C);
   row_process->setTailCall(true);
@@ -689,13 +696,39 @@ llvm::Function* query_group_by_template(llvm::Module* mod,
   BinaryOperator* pos_inc = BinaryOperator::Create(Instruction::Add, pos, pos_step_i64, "", bb_forbody);
   ICmpInst* loop_or_exit = new ICmpInst(*bb_forbody, ICmpInst::ICMP_SLT, pos_inc, row_count, "");
   if (check_scan_limit) {
-    ICmpInst* limit_not_reached = new ICmpInst(
-        *bb_forbody, ICmpInst::ICMP_SLT, new LoadInst(crt_matched_ptr, "", false, bb_forbody), max_matched, "");
+    auto crt_matched = new LoadInst(crt_matched_ptr, "", false, bb_forbody);
+    auto filter_match = BasicBlock::Create(mod->getContext(), "filter_match", query_func_ptr, bb_crit_edge);
+    llvm::Value* new_total_matched{nullptr};
+    if (device_type == ExecutorDeviceType::GPU) {
+      auto old_total_matched = new AtomicRMWInst(llvm::AtomicRMWInst::Add,
+                                                 total_matched,
+                                                 crt_matched,
+                                                 AtomicOrdering::Monotonic,
+                                                 SynchronizationScope::CrossThread,
+                                                 filter_match);
+      new_total_matched = BinaryOperator::CreateAdd(old_total_matched, crt_matched, "", filter_match);
+    } else {
+      auto old_total_matched = new LoadInst(total_matched, "", false, filter_match);
+      new_total_matched = BinaryOperator::CreateAdd(old_total_matched, crt_matched, "", filter_match);
+      new StoreInst(new_total_matched, total_matched, filter_match);
+    }
+    CHECK(new_total_matched);
+    ICmpInst* limit_not_reached = new ICmpInst(*filter_match, ICmpInst::ICMP_SLT, new_total_matched, max_matched, "");
     BranchInst::Create(bb_forbody,
                        bb_crit_edge,
-                       BinaryOperator::Create(BinaryOperator::And, loop_or_exit, limit_not_reached, "", bb_forbody),
-                       bb_forbody);
+                       BinaryOperator::Create(BinaryOperator::And, loop_or_exit, limit_not_reached, "", filter_match),
+                       filter_match);
+    auto filter_nomatch = BasicBlock::Create(mod->getContext(), "filter_nomatch", query_func_ptr, bb_crit_edge);
+    BranchInst::Create(bb_forbody, bb_crit_edge, loop_or_exit, filter_nomatch);
+    ICmpInst* crt_matched_nz =
+        new ICmpInst(*bb_forbody, ICmpInst::ICMP_NE, crt_matched, ConstantInt::get(i32_type, 0), "");
+    BranchInst::Create(filter_match, filter_nomatch, crt_matched_nz, bb_forbody);
+    pos->addIncoming(pos_start_i64, bb_preheader);
+    pos->addIncoming(pos_pre, filter_match);
+    pos->addIncoming(pos_pre, filter_nomatch);
   } else {
+    pos->addIncoming(pos_start_i64, bb_preheader);
+    pos->addIncoming(pos_pre, bb_forbody);
     BranchInst::Create(bb_forbody, bb_crit_edge, loop_or_exit, bb_forbody);
   }
 

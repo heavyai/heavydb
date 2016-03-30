@@ -1046,7 +1046,7 @@ class QueryExecutionContext : boost::noncopyable {
                                       std::vector<std::vector<const int8_t*>> col_buffers,
                                       const std::vector<int64_t>& num_rows,
                                       const std::vector<uint64_t>& frag_row_offsets,
-                                      const int64_t scan_limit,
+                                      const int32_t scan_limit,
                                       const std::vector<int64_t>& init_agg_vals,
                                       Data_Namespace::DataMgr* data_mgr,
                                       const unsigned block_size_x,
