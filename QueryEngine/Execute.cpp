@@ -3490,7 +3490,7 @@ int32_t Executor::executePlanWithoutGroupBy(const CompilationResult& compilation
                                             const int device_id,
                                             const uint32_t start_rowid,
                                             const uint32_t num_tables,
-                                            RenderAllocatorMap* render_allocator_map) {
+                                            RenderAllocatorMap* render_allocator_map) noexcept {
   int32_t error_code = device_type == ExecutorDeviceType::GPU ? 0 : start_rowid;
   std::vector<int64_t*> out_vec;
   const auto hoist_buf = serializeLiterals(compilation_result.literal_values, device_id);
@@ -3529,6 +3529,8 @@ int32_t Executor::executePlanWithoutGroupBy(const CompilationResult& compilation
                                                  render_allocator_map);
     } catch (const OutOfMemory&) {
       return ERR_OUT_OF_GPU_MEM;
+    } catch (...) {
+      LOG(FATAL) << "Unknown error launching the GPU kernel, most likely a timeout";
     }
   }
   results = ResultRows(
@@ -3579,7 +3581,7 @@ int32_t Executor::executePlanWithGroupBy(const CompilationResult& compilation_re
                                          const bool was_auto_device,
                                          const uint32_t start_rowid,
                                          const uint32_t num_tables,
-                                         RenderAllocatorMap* render_allocator_map) {
+                                         RenderAllocatorMap* render_allocator_map) noexcept {
   CHECK_NE(group_by_col_count, size_t(0));
   // TODO(alex):
   // 1. Optimize size (make keys more compact).
@@ -3624,6 +3626,8 @@ int32_t Executor::executePlanWithGroupBy(const CompilationResult& compilation_re
       return ERR_OUT_OF_GPU_MEM;
     } catch (const OutOfRenderMemory&) {
       return ERR_OUT_OF_RENDER_MEM;
+    } catch (...) {
+      LOG(FATAL) << "Unknown error launching the GPU kernel, most likely a timeout";
     }
   }
   if (!query_exe_context->query_mem_desc_.usesCachedContext() && !render_allocator_map) {

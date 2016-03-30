@@ -467,7 +467,7 @@ class Executor {
                                  const bool was_auto_device,
                                  const uint32_t start_rowid,
                                  const uint32_t num_tables,
-                                 RenderAllocatorMap* render_allocator_map);
+                                 RenderAllocatorMap* render_allocator_map) noexcept;
   int32_t executePlanWithoutGroupBy(const CompilationResult&,
                                     const bool hoist_literals,
                                     ResultRows& results,
@@ -481,7 +481,7 @@ class Executor {
                                     const int device_id,
                                     const uint32_t start_rowid,
                                     const uint32_t num_tables,
-                                    RenderAllocatorMap* render_allocator_map);
+                                    RenderAllocatorMap* render_allocator_map) noexcept;
   int64_t getJoinHashTablePtr(const ExecutorDeviceType device_type, const int device_id);
   ResultRows reduceMultiDeviceResults(std::vector<std::pair<ResultRows, std::vector<size_t>>>& all_fragment_results,
                                       std::shared_ptr<RowSetMemoryOwner>,
