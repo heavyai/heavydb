@@ -292,22 +292,22 @@ std::vector<TargetMetaInfo> get_targets_meta(const RA* ra_node, const std::vecto
 ExecutionResult RelAlgExecutor::executeCompound(const RelCompound* compound,
                                                 const CompilationOptions& co,
                                                 const ExecutionOptions& eo) {
-  const auto rel_alg_exe_unit = createCompoundWorkUnit(compound, {});
-  return executeWorkUnit(rel_alg_exe_unit, compound->getOutputMetainfo(), compound->isAggregate(), co, eo);
+  const auto work_unit = createCompoundWorkUnit(compound, {});
+  return executeWorkUnit(work_unit, compound->getOutputMetainfo(), compound->isAggregate(), co, eo);
 }
 
 ExecutionResult RelAlgExecutor::executeProject(const RelProject* project,
                                                const CompilationOptions& co,
                                                const ExecutionOptions& eo) {
-  const auto rel_alg_exe_unit = createProjectWorkUnit(project, {});
-  return executeWorkUnit(rel_alg_exe_unit, project->getOutputMetainfo(), false, co, eo);
+  const auto work_unit = createProjectWorkUnit(project, {});
+  return executeWorkUnit(work_unit, project->getOutputMetainfo(), false, co, eo);
 }
 
 ExecutionResult RelAlgExecutor::executeFilter(const RelFilter* filter,
                                               const CompilationOptions& co,
                                               const ExecutionOptions& eo) {
-  const auto rel_alg_exe_unit = createFilterWorkUnit(filter, {});
-  return executeWorkUnit(rel_alg_exe_unit, filter->getOutputMetainfo(), false, co, eo);
+  const auto work_unit = createFilterWorkUnit(filter, {});
+  return executeWorkUnit(work_unit, filter->getOutputMetainfo(), false, co, eo);
 }
 
 namespace {
@@ -325,6 +325,11 @@ std::list<Analyzer::OrderEntry> get_order_entries(const RelSort* sort) {
   return result;
 }
 
+size_t get_scan_limit(const RelAlgNode* ra, const size_t limit) {
+  const auto compound = dynamic_cast<const RelCompound*>(ra);
+  return (compound && compound->isAggregate()) ? 0 : limit;
+}
+
 }  // namespace
 
 ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
@@ -333,36 +338,44 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
   CHECK_EQ(size_t(1), sort->inputCount());
   const auto source = sort->getInput(0);
   CHECK(!dynamic_cast<const RelSort*>(source));
-  auto rel_alg_exe_unit = createWorkUnit(source, get_order_entries(sort));
+  auto source_work_unit = createWorkUnit(source, get_order_entries(sort));
+  const size_t limit = sort->getLimit();
+  const size_t offset = sort->getOffset();
+  const size_t scan_limit = get_scan_limit(source, limit);
+  const size_t scan_total_limit = scan_limit ? get_scan_limit(source, scan_limit + offset) : 0;
+  size_t max_groups_buffer_entry_guess{scan_total_limit ? scan_total_limit : max_groups_buffer_entry_default_guess};
   const auto compound = dynamic_cast<const RelCompound*>(source);
-  auto source_result = executeWorkUnit(
-      rel_alg_exe_unit, source->getOutputMetainfo(), compound ? compound->isAggregate() : false, co, eo);
+  auto source_result = executeWorkUnit({source_work_unit.exe_unit, max_groups_buffer_entry_guess},
+                                       source->getOutputMetainfo(),
+                                       compound ? compound->isAggregate() : false,
+                                       co,
+                                       eo);
   auto rows_to_sort = source_result.getRows();
   if (sort->collationCount() != 0) {
-    rows_to_sort.sort(rel_alg_exe_unit.order_entries, false, sort->getLimit() + sort->getOffset());
+    rows_to_sort.sort(source_work_unit.exe_unit.order_entries, false, limit + offset);
   }
-  if (sort->getLimit() || sort->getOffset()) {
-    rows_to_sort.dropFirstN(sort->getOffset());
-    if (sort->getLimit()) {
-      rows_to_sort.keepFirstN(sort->getLimit());
+  if (limit || offset) {
+    rows_to_sort.dropFirstN(offset);
+    if (limit) {
+      rows_to_sort.keepFirstN(limit);
     }
   }
   return {rows_to_sort, source_result.getTargetsMeta()};
 }
 
-ExecutionResult RelAlgExecutor::executeWorkUnit(const Executor::RelAlgExecutionUnit& rel_alg_exe_unit,
+ExecutionResult RelAlgExecutor::executeWorkUnit(const RelAlgExecutor::WorkUnit& work_unit,
                                                 const std::vector<TargetMetaInfo>& targets_meta,
                                                 const bool is_agg,
                                                 const CompilationOptions& co,
                                                 const ExecutionOptions& eo) {
-  size_t max_groups_buffer_entry_guess{16384};
   int32_t error_code{0};
+  size_t max_groups_buffer_entry_guess = work_unit.max_groups_buffer_entry_guess;
   ExecutionResult result = {
       executor_->executeWorkUnit(&error_code,
                                  max_groups_buffer_entry_guess,
                                  is_agg,
-                                 get_table_infos(rel_alg_exe_unit.input_descs, cat_, temporary_tables_),
-                                 rel_alg_exe_unit,
+                                 get_table_infos(work_unit.exe_unit.input_descs, cat_, temporary_tables_),
+                                 work_unit.exe_unit,
                                  co,
                                  eo,
                                  cat_,
@@ -376,8 +389,8 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(const Executor::RelAlgExecutionU
   return result;
 }
 
-Executor::RelAlgExecutionUnit RelAlgExecutor::createWorkUnit(const RelAlgNode* node,
-                                                             const std::list<Analyzer::OrderEntry>& order_entries) {
+RelAlgExecutor::WorkUnit RelAlgExecutor::createWorkUnit(const RelAlgNode* node,
+                                                        const std::list<Analyzer::OrderEntry>& order_entries) {
   const auto compound = dynamic_cast<const RelCompound*>(node);
   if (compound) {
     return createCompoundWorkUnit(compound, order_entries);
@@ -430,9 +443,8 @@ SeparatedQuals separate_join_quals(const std::list<std::shared_ptr<Analyzer::Exp
 
 }  // namespace
 
-Executor::RelAlgExecutionUnit RelAlgExecutor::createCompoundWorkUnit(
-    const RelCompound* compound,
-    const std::list<Analyzer::OrderEntry>& order_entries) {
+RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(const RelCompound* compound,
+                                                                const std::list<Analyzer::OrderEntry>& order_entries) {
   std::vector<InputDescriptor> input_descs;
   std::list<InputColDescriptor> input_col_descs;
   const auto input_to_nest_level = get_input_nest_levels(compound);
@@ -448,20 +460,20 @@ Executor::RelAlgExecutionUnit RelAlgExecutor::createCompoundWorkUnit(
   CHECK_EQ(compound->size(), target_exprs.size());
   const auto targets_meta = get_targets_meta(compound, target_exprs);
   compound->setOutputMetainfo(targets_meta);
-  return {input_descs,
-          input_col_descs,
-          quals_cf.simple_quals,
-          separated_quals.regular_quals,
-          separated_quals.join_quals,
-          groupby_exprs,
-          target_exprs,
-          order_entries,
-          0};
+  return {{input_descs,
+           input_col_descs,
+           quals_cf.simple_quals,
+           separated_quals.regular_quals,
+           separated_quals.join_quals,
+           groupby_exprs,
+           target_exprs,
+           order_entries,
+           0},
+          max_groups_buffer_entry_default_guess};
 }
 
-Executor::RelAlgExecutionUnit RelAlgExecutor::createProjectWorkUnit(
-    const RelProject* project,
-    const std::list<Analyzer::OrderEntry>& order_entries) {
+RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(const RelProject* project,
+                                                               const std::list<Analyzer::OrderEntry>& order_entries) {
   std::vector<InputDescriptor> input_descs;
   std::list<InputColDescriptor> input_col_descs;
   const auto input_to_nest_level = get_input_nest_levels(project);
@@ -472,7 +484,8 @@ Executor::RelAlgExecutionUnit RelAlgExecutor::createProjectWorkUnit(
   const auto target_exprs = get_exprs_not_owned(target_exprs_owned);
   const auto targets_meta = get_targets_meta(project, target_exprs);
   project->setOutputMetainfo(targets_meta);
-  return {input_descs, input_col_descs, {}, {}, {}, {nullptr}, target_exprs, order_entries, 0};
+  return {{input_descs, input_col_descs, {}, {}, {}, {nullptr}, target_exprs, order_entries, 0},
+          max_groups_buffer_entry_default_guess};
 }
 
 namespace {
@@ -500,9 +513,8 @@ std::vector<std::shared_ptr<Analyzer::Expr>> synthesize_inputs(
 
 }  // namespace
 
-Executor::RelAlgExecutionUnit RelAlgExecutor::createFilterWorkUnit(
-    const RelFilter* filter,
-    const std::list<Analyzer::OrderEntry>& order_entries) {
+RelAlgExecutor::WorkUnit RelAlgExecutor::createFilterWorkUnit(const RelFilter* filter,
+                                                              const std::list<Analyzer::OrderEntry>& order_entries) {
   CHECK_EQ(size_t(1), filter->inputCount());
   std::vector<InputDescriptor> input_descs;
   std::list<InputColDescriptor> input_col_descs;
@@ -523,7 +535,8 @@ Executor::RelAlgExecutionUnit RelAlgExecutor::createFilterWorkUnit(
   target_exprs_owned_.insert(target_exprs_owned_.end(), target_exprs_owned.begin(), target_exprs_owned.end());
   const auto target_exprs = get_exprs_not_owned(target_exprs_owned);
   filter->setOutputMetainfo(in_metainfo);
-  return {input_descs, input_col_descs, {}, {qual}, {}, {nullptr}, target_exprs, order_entries, 0};
+  return {{input_descs, input_col_descs, {}, {qual}, {}, {nullptr}, target_exprs, order_entries, 0},
+          max_groups_buffer_entry_default_guess};
 }
 
 #endif  // HAVE_CALCITE

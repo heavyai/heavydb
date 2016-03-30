@@ -22,19 +22,26 @@ class RelAlgExecutor {
 
   ExecutionResult executeSort(const RelSort*, const CompilationOptions&, const ExecutionOptions&);
 
-  ExecutionResult executeWorkUnit(const Executor::RelAlgExecutionUnit& rel_alg_exe_unit,
+  // TODO(alex): just move max_groups_buffer_entry_guess to RelAlgExecutionUnit once
+  //             we deprecate the plan-based executor paths and remove WorkUnit
+  struct WorkUnit {
+    const Executor::RelAlgExecutionUnit exe_unit;
+    const size_t max_groups_buffer_entry_guess;
+  };
+
+  ExecutionResult executeWorkUnit(const WorkUnit& work_unit,
                                   const std::vector<TargetMetaInfo>& targets_meta,
                                   const bool is_agg,
                                   const CompilationOptions& co,
                                   const ExecutionOptions& eo);
 
-  Executor::RelAlgExecutionUnit createWorkUnit(const RelAlgNode*, const std::list<Analyzer::OrderEntry>&);
+  WorkUnit createWorkUnit(const RelAlgNode*, const std::list<Analyzer::OrderEntry>&);
 
-  Executor::RelAlgExecutionUnit createCompoundWorkUnit(const RelCompound*, const std::list<Analyzer::OrderEntry>&);
+  WorkUnit createCompoundWorkUnit(const RelCompound*, const std::list<Analyzer::OrderEntry>&);
 
-  Executor::RelAlgExecutionUnit createProjectWorkUnit(const RelProject*, const std::list<Analyzer::OrderEntry>&);
+  WorkUnit createProjectWorkUnit(const RelProject*, const std::list<Analyzer::OrderEntry>&);
 
-  Executor::RelAlgExecutionUnit createFilterWorkUnit(const RelFilter*, const std::list<Analyzer::OrderEntry>&);
+  WorkUnit createFilterWorkUnit(const RelFilter*, const std::list<Analyzer::OrderEntry>&);
 
   void addTemporaryTable(const int table_id, const ResultRows* rows) {
     CHECK_LT(table_id, 0);
@@ -47,6 +54,7 @@ class RelAlgExecutor {
   TemporaryTables temporary_tables_;
   time_t now_;
   std::vector<std::shared_ptr<Analyzer::Expr>> target_exprs_owned_;  // TODO(alex): remove
+  static const size_t max_groups_buffer_entry_default_guess{16384};
 };
 
 #endif  // QUERYENGINE_RELALGEXECUTOR_H

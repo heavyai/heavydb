@@ -640,7 +640,7 @@ class SortField {
 
 class RelSort : public RelAlgNode {
  public:
-  RelSort(const std::vector<SortField>& collation, const int64_t limit, const int64_t offset, const RelAlgNode* input)
+  RelSort(const std::vector<SortField>& collation, const size_t limit, const size_t offset, const RelAlgNode* input)
       : collation_(collation), limit_(limit), offset_(offset) {
     inputs_.emplace_back(input);
   }
@@ -656,9 +656,9 @@ class RelSort : public RelAlgNode {
     return collation_[i];
   }
 
-  int64_t getLimit() const { return limit_; }
+  size_t getLimit() const { return limit_; }
 
-  int64_t getOffset() const { return offset_; }
+  size_t getOffset() const { return offset_; }
 
   std::string toString() const override {
     std::string result = "(RelSort<" + std::to_string(reinterpret_cast<uint64_t>(this)) + ">(";
@@ -674,8 +674,8 @@ class RelSort : public RelAlgNode {
 
  private:
   const std::vector<SortField> collation_;
-  const int64_t limit_;
-  const int64_t offset_;
+  const size_t limit_;
+  const size_t offset_;
 };
 
 std::unique_ptr<const RelAlgNode> ra_interpret(const rapidjson::Value&, const Catalog_Namespace::Catalog&);
