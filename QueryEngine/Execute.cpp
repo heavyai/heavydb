@@ -1491,55 +1491,7 @@ llvm::Value* Executor::codegenCmp(const SQLOps optype,
   CHECK(IS_COMPARISON(optype));
   const auto& rhs_ti = rhs->get_type_info();
   if (rhs_ti.is_array()) {
-    const Analyzer::Expr* arr_expr{rhs};
-    if (dynamic_cast<const Analyzer::UOper*>(rhs)) {
-      const auto cast_arr = static_cast<const Analyzer::UOper*>(rhs);
-      CHECK_EQ(kCAST, cast_arr->get_optype());
-      arr_expr = cast_arr->get_operand();
-    }
-    const auto& arr_ti = arr_expr->get_type_info();
-    const auto& elem_ti = arr_ti.get_elem_type();
-    auto rhs_lvs = codegen(arr_expr, true, co);
-    CHECK_NE(kONE, qualifier);
-    std::string fname{std::string("array_") + (qualifier == kANY ? "any" : "all") + "_" + icmp_arr_name(optype)};
-    const auto& target_ti = rhs_ti.get_elem_type();
-    const bool is_real_string{target_ti.is_string() && target_ti.get_compression() != kENCODING_DICT};
-    if (is_real_string) {
-      cgen_state_->must_run_on_cpu_ = true;
-      CHECK_EQ(kENCODING_NONE, target_ti.get_compression());
-      fname += "_str";
-    }
-    if (elem_ti.is_integer() || elem_ti.is_boolean() || elem_ti.is_string()) {
-      fname += ("_" + numeric_type_name(elem_ti));
-    } else {
-      CHECK(elem_ti.is_fp());
-      fname += elem_ti.get_type() == kDOUBLE ? "_double" : "_float";
-    }
-    if (is_real_string) {
-      CHECK_EQ(size_t(3), lhs_lvs.size());
-      return cgen_state_->emitExternalCall(
-          fname,
-          get_int_type(1, cgen_state_->context_),
-          {rhs_lvs.front(),
-           posArg(arr_expr),
-           lhs_lvs[1],
-           lhs_lvs[2],
-           ll_int(int64_t(getStringDictionary(elem_ti.get_comp_param(), row_set_mem_owner_))),
-           inlineIntNull(elem_ti)});
-    }
-    if (target_ti.is_integer() || target_ti.is_boolean() || target_ti.is_string()) {
-      fname += ("_" + numeric_type_name(target_ti));
-    } else {
-      CHECK(target_ti.is_fp());
-      fname += target_ti.get_type() == kDOUBLE ? "_double" : "_float";
-    }
-    return cgen_state_->emitExternalCall(fname,
-                                         get_int_type(1, cgen_state_->context_),
-                                         {rhs_lvs.front(),
-                                          posArg(arr_expr),
-                                          lhs_lvs.front(),
-                                          elem_ti.is_fp() ? static_cast<llvm::Value*>(inlineFpNull(elem_ti))
-                                                          : static_cast<llvm::Value*>(inlineIntNull(elem_ti))});
+    return codegenQualifierCmp(optype, qualifier, lhs_lvs, rhs, co);
   }
   auto rhs_lvs = codegen(rhs, true, co);
   CHECK_EQ(kONE, qualifier);
@@ -1590,6 +1542,63 @@ llvm::Value* Executor::codegenCmp(const SQLOps optype,
   }
   CHECK(false);
   return nullptr;
+}
+
+llvm::Value* Executor::codegenQualifierCmp(const SQLOps optype,
+                                           const SQLQualifier qualifier,
+                                           std::vector<llvm::Value*> lhs_lvs,
+                                           const Analyzer::Expr* rhs,
+                                           const CompilationOptions& co) {
+  const auto& rhs_ti = rhs->get_type_info();
+  const Analyzer::Expr* arr_expr{rhs};
+  if (dynamic_cast<const Analyzer::UOper*>(rhs)) {
+    const auto cast_arr = static_cast<const Analyzer::UOper*>(rhs);
+    CHECK_EQ(kCAST, cast_arr->get_optype());
+    arr_expr = cast_arr->get_operand();
+  }
+  const auto& arr_ti = arr_expr->get_type_info();
+  const auto& elem_ti = arr_ti.get_elem_type();
+  auto rhs_lvs = codegen(arr_expr, true, co);
+  CHECK_NE(kONE, qualifier);
+  std::string fname{std::string("array_") + (qualifier == kANY ? "any" : "all") + "_" + icmp_arr_name(optype)};
+  const auto& target_ti = rhs_ti.get_elem_type();
+  const bool is_real_string{target_ti.is_string() && target_ti.get_compression() != kENCODING_DICT};
+  if (is_real_string) {
+    cgen_state_->must_run_on_cpu_ = true;
+    CHECK_EQ(kENCODING_NONE, target_ti.get_compression());
+    fname += "_str";
+  }
+  if (elem_ti.is_integer() || elem_ti.is_boolean() || elem_ti.is_string()) {
+    fname += ("_" + numeric_type_name(elem_ti));
+  } else {
+    CHECK(elem_ti.is_fp());
+    fname += elem_ti.get_type() == kDOUBLE ? "_double" : "_float";
+  }
+  if (is_real_string) {
+    CHECK_EQ(size_t(3), lhs_lvs.size());
+    return cgen_state_->emitExternalCall(
+        fname,
+        get_int_type(1, cgen_state_->context_),
+        {rhs_lvs.front(),
+         posArg(arr_expr),
+         lhs_lvs[1],
+         lhs_lvs[2],
+         ll_int(int64_t(getStringDictionary(elem_ti.get_comp_param(), row_set_mem_owner_))),
+         inlineIntNull(elem_ti)});
+  }
+  if (target_ti.is_integer() || target_ti.is_boolean() || target_ti.is_string()) {
+    fname += ("_" + numeric_type_name(target_ti));
+  } else {
+    CHECK(target_ti.is_fp());
+    fname += target_ti.get_type() == kDOUBLE ? "_double" : "_float";
+  }
+  return cgen_state_->emitExternalCall(fname,
+                                       get_int_type(1, cgen_state_->context_),
+                                       {rhs_lvs.front(),
+                                        posArg(arr_expr),
+                                        lhs_lvs.front(),
+                                        elem_ti.is_fp() ? static_cast<llvm::Value*>(inlineFpNull(elem_ti))
+                                                        : static_cast<llvm::Value*>(inlineIntNull(elem_ti))});
 }
 
 llvm::Value* Executor::codegenLogical(const Analyzer::BinOper* bin_oper, const CompilationOptions& co) {
