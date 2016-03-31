@@ -338,19 +338,13 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
   CHECK_EQ(size_t(1), sort->inputCount());
   const auto source = sort->getInput(0);
   CHECK(!dynamic_cast<const RelSort*>(source));
-  auto source_work_unit = createWorkUnit(source, get_order_entries(sort));
+  const auto compound = dynamic_cast<const RelCompound*>(source);
+  const auto source_work_unit = createSortInputWorkUnit(sort);
+  auto source_result = executeWorkUnit(
+      source_work_unit, source->getOutputMetainfo(), compound ? compound->isAggregate() : false, co, eo);
+  auto rows_to_sort = source_result.getRows();
   const size_t limit = sort->getLimit();
   const size_t offset = sort->getOffset();
-  const size_t scan_limit = get_scan_limit(source, limit);
-  const size_t scan_total_limit = scan_limit ? get_scan_limit(source, scan_limit + offset) : 0;
-  size_t max_groups_buffer_entry_guess{scan_total_limit ? scan_total_limit : max_groups_buffer_entry_default_guess};
-  const auto compound = dynamic_cast<const RelCompound*>(source);
-  auto source_result = executeWorkUnit({source_work_unit.exe_unit, max_groups_buffer_entry_guess},
-                                       source->getOutputMetainfo(),
-                                       compound ? compound->isAggregate() : false,
-                                       co,
-                                       eo);
-  auto rows_to_sort = source_result.getRows();
   if (sort->collationCount() != 0) {
     rows_to_sort.sort(source_work_unit.exe_unit.order_entries, false, limit + offset);
   }
@@ -361,6 +355,27 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
     }
   }
   return {rows_to_sort, source_result.getTargetsMeta()};
+}
+
+RelAlgExecutor::WorkUnit RelAlgExecutor::createSortInputWorkUnit(const RelSort* sort) {
+  const auto source = sort->getInput(0);
+  auto source_work_unit = createWorkUnit(source, get_order_entries(sort));
+  const size_t limit = sort->getLimit();
+  const size_t offset = sort->getOffset();
+  const size_t scan_limit = sort->collationCount() ? 0 : get_scan_limit(source, limit);
+  const size_t scan_total_limit = scan_limit ? get_scan_limit(source, scan_limit + offset) : 0;
+  size_t max_groups_buffer_entry_guess{scan_total_limit ? scan_total_limit : max_groups_buffer_entry_default_guess};
+  const auto& source_exe_unit = source_work_unit.exe_unit;
+  return {{source_exe_unit.input_descs,
+           source_exe_unit.input_col_descs,
+           source_exe_unit.simple_quals,
+           source_exe_unit.quals,
+           source_exe_unit.join_quals,
+           source_exe_unit.groupby_exprs,
+           source_exe_unit.target_exprs,
+           source_exe_unit.order_entries,
+           scan_total_limit},
+          max_groups_buffer_entry_guess};
 }
 
 ExecutionResult RelAlgExecutor::executeWorkUnit(const RelAlgExecutor::WorkUnit& work_unit,

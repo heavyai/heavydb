@@ -29,6 +29,8 @@ class RelAlgExecutor {
     const size_t max_groups_buffer_entry_guess;
   };
 
+  WorkUnit createSortInputWorkUnit(const RelSort*);
+
   ExecutionResult executeWorkUnit(const WorkUnit& work_unit,
                                   const std::vector<TargetMetaInfo>& targets_meta,
                                   const bool is_agg,
