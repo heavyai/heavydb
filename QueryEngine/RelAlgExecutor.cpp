@@ -343,6 +343,9 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
   auto source_result = executeWorkUnit(
       source_work_unit, source->getOutputMetainfo(), compound ? compound->isAggregate() : false, co, eo);
   auto rows_to_sort = source_result.getRows();
+  if (eo.just_explain) {
+    return {rows_to_sort, {}};
+  }
   const size_t limit = sort->getLimit();
   const size_t offset = sort->getOffset();
   if (sort->collationCount() != 0) {
