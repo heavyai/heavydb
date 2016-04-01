@@ -1038,6 +1038,22 @@ void import_gpu_sort_test() {
   }
 }
 
+void import_query_rewrite_test() {
+  const std::string drop_old_query_rewrite_test{"DROP TABLE IF EXISTS query_rewrite_test;"};
+  run_ddl_statement(drop_old_query_rewrite_test);
+  g_sqlite_comparator.query(drop_old_query_rewrite_test);
+  run_ddl_statement("CREATE TABLE query_rewrite_test(x int, str text encoding dict) WITH (fragment_size=2);");
+  g_sqlite_comparator.query("CREATE TABLE query_rewrite_test(x int, str text);");
+  for (size_t i = 1; i <= 30; ++i) {
+    for (size_t j = 1; j <= i % 2 + 1; ++j) {
+      const std::string insert_query{"INSERT INTO query_rewrite_test VALUES(" + std::to_string(i) + ", 'str" +
+                                     std::to_string(i) + "');"};
+      run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+      g_sqlite_comparator.query(insert_query);
+    }
+  }
+}
+
 }  // namespace
 
 TEST(Select, ArrayUnnest) {
@@ -1248,6 +1264,21 @@ TEST(Select, GpuSort) {
   }
 }
 
+TEST(Select, GroupByConstrainedByInQueryRewrite) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT COUNT(*) AS n, x FROM query_rewrite_test WHERE x IN (2, 5) GROUP BY x HAVING n > 0 ORDER BY n DESC;", dt);
+    c("SELECT COUNT(*) AS n, x FROM query_rewrite_test WHERE x IN (2, 99) GROUP BY x HAVING n > 0 ORDER BY n DESC;",
+      dt);
+    c("SELECT COUNT(*) AS n, str FROM query_rewrite_test WHERE str IN ('str2', 'str5') GROUP BY str HAVING n > 0 ORDER "
+      "BY n DESC;",
+      dt);
+    c("SELECT COUNT(*) AS n, str FROM query_rewrite_test WHERE str IN ('str2', 'str99') GROUP BY str HAVING n > 0 "
+      "ORDER BY n DESC;",
+      dt);
+  }
+}
+
 #ifdef HAVE_RAVM
 TEST(Select, Subqueries) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
@@ -1362,6 +1393,12 @@ int main(int argc, char** argv) {
     LOG(ERROR) << "Failed to (re-)create table 'gpu_sort_test'";
     return -EEXIST;
   }
+  try {
+    import_query_rewrite_test();
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'query_rewrite_test'";
+    return -EEXIST;
+  }
   int err{0};
   try {
     err = RUN_ALL_TESTS();
@@ -1378,6 +1415,9 @@ int main(int argc, char** argv) {
   const std::string drop_gpu_sort_test{"DROP TABLE gpu_sort_test;"};
   run_ddl_statement(drop_gpu_sort_test);
   g_sqlite_comparator.query(drop_gpu_sort_test);
+  const std::string drop_query_rewrite_test{"DROP TABLE query_rewrite_test;"};
+  run_ddl_statement(drop_query_rewrite_test);
+  g_sqlite_comparator.query(drop_query_rewrite_test);
   const std::string drop_array_test{"DROP TABLE array_test;"};
   run_ddl_statement(drop_array_test);
   const std::string drop_array_test_inner{"DROP TABLE array_test_inner;"};

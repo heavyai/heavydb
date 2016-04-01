@@ -255,8 +255,7 @@ std::vector<Analyzer::Expr*> translate_targets(std::vector<std::shared_ptr<Analy
         CHECK_GE(ref_idx, size_t(1));
         CHECK_LE(ref_idx, groupby_exprs.size());
         const auto groupby_expr = *std::next(groupby_exprs.begin(), ref_idx - 1);
-        target_expr =
-            makeExpr<Analyzer::Var>(groupby_expr->get_type_info(), 0, 0, -1, Analyzer::Var::kGROUPBY, ref_idx);
+        target_expr = var_ref(groupby_expr.get(), Analyzer::Var::kGROUPBY, ref_idx);
       } else {
         target_expr = translator.translateScalarRex(target_rex_scalar);
       }
@@ -378,7 +377,8 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createSortInputWorkUnit(const RelSort* 
            source_exe_unit.target_exprs,
            source_exe_unit.order_entries,
            scan_total_limit},
-          max_groups_buffer_entry_guess};
+          max_groups_buffer_entry_guess,
+          std::move(source_work_unit.query_rewriter)};
 }
 
 ExecutionResult RelAlgExecutor::executeWorkUnit(const RelAlgExecutor::WorkUnit& work_unit,
@@ -535,18 +535,21 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(const RelCompoun
   CHECK(simple_separated_quals.join_quals.empty());
   const auto target_exprs = translate_targets(target_exprs_owned_, scalar_sources, groupby_exprs, compound, translator);
   CHECK_EQ(compound->size(), target_exprs.size());
-  const auto targets_meta = get_targets_meta(compound, target_exprs);
+  const Executor::RelAlgExecutionUnit exe_unit = {input_descs,
+                                                  input_col_descs,
+                                                  quals_cf.simple_quals,
+                                                  separated_quals.regular_quals,
+                                                  separated_quals.join_quals,
+                                                  groupby_exprs,
+                                                  target_exprs,
+                                                  order_entries,
+                                                  0};
+  const auto query_infos = get_table_infos(exe_unit.input_descs, cat_, temporary_tables_);
+  QueryRewriter* query_rewriter = new QueryRewriter(exe_unit, query_infos, executor_, nullptr);
+  const auto rewritten_exe_unit = query_rewriter->rewrite();
+  const auto targets_meta = get_targets_meta(compound, rewritten_exe_unit.target_exprs);
   compound->setOutputMetainfo(targets_meta);
-  return {{input_descs,
-           input_col_descs,
-           quals_cf.simple_quals,
-           separated_quals.regular_quals,
-           separated_quals.join_quals,
-           groupby_exprs,
-           target_exprs,
-           order_entries,
-           0},
-          max_groups_buffer_entry_default_guess};
+  return {rewritten_exe_unit, max_groups_buffer_entry_default_guess, std::unique_ptr<QueryRewriter>(query_rewriter)};
 }
 
 RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(const RelProject* project,
@@ -562,7 +565,8 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(const RelProject*
   const auto targets_meta = get_targets_meta(project, target_exprs);
   project->setOutputMetainfo(targets_meta);
   return {{input_descs, input_col_descs, {}, {}, {}, {nullptr}, target_exprs, order_entries, 0},
-          max_groups_buffer_entry_default_guess};
+          max_groups_buffer_entry_default_guess,
+          nullptr};
 }
 
 namespace {
@@ -613,7 +617,8 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createFilterWorkUnit(const RelFilter* f
   const auto target_exprs = get_exprs_not_owned(target_exprs_owned);
   filter->setOutputMetainfo(in_metainfo);
   return {{input_descs, input_col_descs, {}, {qual}, {}, {nullptr}, target_exprs, order_entries, 0},
-          max_groups_buffer_entry_default_guess};
+          max_groups_buffer_entry_default_guess,
+          nullptr};
 }
 
 #endif  // HAVE_CALCITE

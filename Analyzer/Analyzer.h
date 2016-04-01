@@ -894,4 +894,14 @@ class Query {
 };
 }
 
+inline std::shared_ptr<Analyzer::Var> var_ref(const Analyzer::Expr* expr,
+                                              const Analyzer::Var::WhichRow which_row,
+                                              const int varno) {
+  const auto col_expr = dynamic_cast<const Analyzer::ColumnVar*>(expr);
+  const int table_id = col_expr ? col_expr->get_table_id() : 0;
+  const int column_id = col_expr ? col_expr->get_column_id() : 0;
+  const int rte_idx = col_expr ? col_expr->get_rte_idx() : -1;
+  return makeExpr<Analyzer::Var>(expr->get_type_info(), table_id, column_id, rte_idx, which_row, varno);
+}
+
 #endif  // ANALYZER_H

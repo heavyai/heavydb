@@ -833,6 +833,7 @@ class Executor {
   friend class ResultRows;
   friend class InValuesBitmap;
   friend class JoinHashTable;
+  friend class QueryRewriter;
   friend class RelAlgExecutor;
   friend class ExecutionDispatch;
 };

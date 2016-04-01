@@ -3,6 +3,7 @@
 
 #include "InputMetadata.h"
 #include "Execute.h"
+#include "QueryRewrite.h"
 #include "RelAlgExecutionDescriptor.h"
 
 #include <ctime>
@@ -27,6 +28,7 @@ class RelAlgExecutor {
   struct WorkUnit {
     const Executor::RelAlgExecutionUnit exe_unit;
     const size_t max_groups_buffer_entry_guess;
+    std::unique_ptr<QueryRewriter> query_rewriter;
   };
 
   WorkUnit createSortInputWorkUnit(const RelSort*);

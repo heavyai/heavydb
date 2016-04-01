@@ -232,23 +232,26 @@ ResultRows Executor::executeSelectPlan(const Planner::Plan* plan,
     const bool is_agg = dynamic_cast<const Planner::AggPlan*>(plan);
     const auto order_entries = sort_plan_in ? sort_plan_in->get_order_entries() : std::list<Analyzer::OrderEntry>{};
     const auto query_infos = get_table_infos(input_descs, cat, TemporaryTables{});
+    const size_t scan_limit = get_scan_limit(plan, limit);
+    const size_t scan_total_limit = scan_limit ? get_scan_limit(plan, scan_limit + offset) : 0;
+    const auto ra_exe_unit_in = RelAlgExecutionUnit{input_descs,
+                                                    input_col_descs,
+                                                    simple_quals,
+                                                    quals,
+                                                    join_quals,
+                                                    groupby_exprs,
+                                                    target_exprs,
+                                                    order_entries,
+                                                    scan_total_limit};
+    QueryRewriter query_rewriter(ra_exe_unit_in, query_infos, this, agg_plan);
+    const auto ra_exe_unit = query_rewriter.rewrite();
     if (limit || offset) {
-      const size_t scan_limit = get_scan_limit(plan, limit);
-      const size_t scan_total_limit = scan_limit ? get_scan_limit(plan, scan_limit + offset) : 0;
       size_t max_groups_buffer_entry_guess_limit{scan_total_limit ? scan_total_limit : max_groups_buffer_entry_guess};
       auto rows = executeWorkUnit(error_code,
                                   max_groups_buffer_entry_guess_limit,
                                   is_agg,
                                   query_infos,
-                                  {input_descs,
-                                   input_col_descs,
-                                   simple_quals,
-                                   quals,
-                                   join_quals,
-                                   groupby_exprs,
-                                   target_exprs,
-                                   order_entries,
-                                   scan_total_limit},
+                                  ra_exe_unit,
                                   {device_type, hoist_literals, opt_level},
                                   {false, allow_multifrag, just_explain, allow_loop_joins},
                                   cat,
@@ -261,17 +264,16 @@ ResultRows Executor::executeSelectPlan(const Planner::Plan* plan,
       }
       return rows;
     }
-    return executeWorkUnit(
-        error_code,
-        max_groups_buffer_entry_guess,
-        is_agg,
-        query_infos,
-        {input_descs, input_col_descs, simple_quals, quals, join_quals, groupby_exprs, target_exprs, order_entries, 0},
-        {device_type, hoist_literals, opt_level},
-        {false, allow_multifrag, just_explain, allow_loop_joins},
-        cat,
-        row_set_mem_owner_,
-        render_allocator_map);
+    return executeWorkUnit(error_code,
+                           max_groups_buffer_entry_guess,
+                           is_agg,
+                           query_infos,
+                           ra_exe_unit,
+                           {device_type, hoist_literals, opt_level},
+                           {false, allow_multifrag, just_explain, allow_loop_joins},
+                           cat,
+                           row_set_mem_owner_,
+                           render_allocator_map);
   }
   const auto result_plan = dynamic_cast<const Planner::Result*>(plan);
   if (result_plan) {
@@ -2501,19 +2503,22 @@ ResultRows Executor::executeResultPlan(const Planner::Result* result_plan,
   CHECK(check_plan_sanity(agg_plan));
   const auto order_entries = sort_plan ? sort_plan->get_order_entries() : std::list<Analyzer::OrderEntry>{};
   const auto query_infos = get_table_infos(input_descs, cat, TemporaryTables{});
+  const auto ra_exe_unit_in = RelAlgExecutionUnit{input_descs,
+                                                  input_col_descs,
+                                                  simple_quals,
+                                                  quals,
+                                                  join_quals,
+                                                  agg_plan->get_groupby_list(),
+                                                  get_agg_target_exprs(agg_plan),
+                                                  order_entries,
+                                                  0};
+  QueryRewriter query_rewriter(ra_exe_unit_in, query_infos, this, result_plan);
+  const auto ra_exe_unit = query_rewriter.rewrite();
   auto result_rows = executeWorkUnit(error_code,
                                      max_groups_buffer_entry_guess,
                                      true,
                                      query_infos,
-                                     {input_descs,
-                                      input_col_descs,
-                                      simple_quals,
-                                      quals,
-                                      join_quals,
-                                      agg_plan->get_groupby_list(),
-                                      get_agg_target_exprs(agg_plan),
-                                      order_entries,
-                                      0},
+                                     ra_exe_unit,
                                      {device_type, hoist_literals, opt_level},
                                      {false, allow_multifrag, just_explain, allow_loop_joins},
                                      cat,

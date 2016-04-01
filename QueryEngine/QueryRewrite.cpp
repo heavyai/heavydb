@@ -1,31 +1,33 @@
 #include "QueryRewrite.h"
 #include "ExpressionRange.h"
+#include "ExpressionRewrite.h"
 
 #include <glog/logging.h>
 
-void QueryRewriter::rewrite() {
-  if (!dynamic_cast<const Planner::AggPlan*>(plan_)) {
-    return;
-  }
-  rewriteConstrainedByIn();
+Executor::RelAlgExecutionUnit QueryRewriter::rewrite() {
+  return rewriteConstrainedByIn();
 }
 
-void QueryRewriter::rewriteConstrainedByIn() {
-  const auto agg_plan = dynamic_cast<const Planner::AggPlan*>(plan_);
-  CHECK(agg_plan);
-  const auto& groupby_list = agg_plan->get_groupby_list();
-  if (groupby_list.empty()) {
-    return;
+Executor::RelAlgExecutionUnit QueryRewriter::rewriteConstrainedByIn() {
+  if (ra_exe_unit_.groupby_exprs.empty()) {
+    return ra_exe_unit_;
   }
-  const auto scan_plan = static_cast<const Planner::Scan*>(agg_plan->get_child_plan());
-  if (!scan_plan->get_simple_quals().empty()) {
-    return;
+  if (ra_exe_unit_.groupby_exprs.size() == 1 && !ra_exe_unit_.groupby_exprs.front()) {
+    return ra_exe_unit_;
   }
-  const auto& quals = scan_plan->get_quals();
-  if (quals.size() != 1 || !std::dynamic_pointer_cast<Analyzer::InValues>(quals.front())) {
-    return;
+  if (!ra_exe_unit_.simple_quals.empty()) {
+    return ra_exe_unit_;
   }
-  const auto in_vals = std::static_pointer_cast<Analyzer::InValues>(quals.front());
+  if (ra_exe_unit_.quals.size() != 1) {
+    return ra_exe_unit_;
+  }
+  auto in_vals = std::dynamic_pointer_cast<Analyzer::InValues>(ra_exe_unit_.quals.front());
+  if (!in_vals) {
+    in_vals = std::dynamic_pointer_cast<Analyzer::InValues>(rewrite_expr(ra_exe_unit_.quals.front().get()));
+  }
+  if (!in_vals) {
+    return ra_exe_unit_;
+  }
   CHECK(!in_vals->get_value_list().empty());
   for (const auto in_val : in_vals->get_value_list()) {
     if (!std::dynamic_pointer_cast<Analyzer::Constant>(in_val)) {
@@ -34,7 +36,7 @@ void QueryRewriter::rewriteConstrainedByIn() {
   }
   std::list<std::pair<std::shared_ptr<Analyzer::Expr>, std::shared_ptr<Analyzer::Expr>>> case_expr_list;
   if (dynamic_cast<const Analyzer::CaseExpr*>(in_vals->get_arg())) {
-    return;
+    return ra_exe_unit_;
   }
   auto in_val_arg = in_vals->get_arg()->deep_copy();
   for (const auto in_val : in_vals->get_value_list()) {
@@ -53,9 +55,11 @@ void QueryRewriter::rewriteConstrainedByIn() {
   auto case_expr =
       makeExpr<Analyzer::CaseExpr>(case_expr_list.front().second->get_type_info(), false, case_expr_list, else_expr);
   std::list<std::shared_ptr<Analyzer::Expr>> new_groupby_list;
+  std::vector<Analyzer::Expr*> new_target_exprs;
   bool rewrite{false};
   size_t groupby_idx{0};
-  for (const auto group_expr : groupby_list) {
+  for (const auto group_expr : ra_exe_unit_.groupby_exprs) {
+    CHECK(group_expr);
     ++groupby_idx;
     if (*group_expr == *in_vals->get_arg()) {
       const auto expr_range = getExpressionRange(group_expr.get(), query_infos_, executor_);
@@ -68,11 +72,25 @@ void QueryRewriter::rewriteConstrainedByIn() {
         continue;
       }
       new_groupby_list.push_back(case_expr);
-      for (auto target : agg_plan->get_targetlist()) {
-        if (*target->get_expr() == *in_vals->get_arg()) {
+      for (size_t i = 0; i < ra_exe_unit_.target_exprs.size(); ++i) {
+        const auto target = ra_exe_unit_.target_exprs[i];
+        if (*target == *in_vals->get_arg()) {
           auto var_case_expr =
               makeExpr<Analyzer::Var>(case_expr->get_type_info(), Analyzer::Var::kGROUPBY, groupby_idx);
-          target->set_expr(var_case_expr);
+          target_exprs_owned_.push_back(var_case_expr);
+          // TODO(alex): fixup for legacy plan-based path, remove
+          if (plan_) {
+            auto& plan_target_list = plan_->get_targetlist();
+            CHECK_EQ(plan_target_list.size(), ra_exe_unit_.target_exprs.size());
+            for (auto& te : plan_target_list) {
+              if (*te->get_expr() == *target) {
+                te->get_expr()->set_type_info(var_case_expr->get_type_info());
+              }
+            }
+          }
+          new_target_exprs.push_back(var_case_expr.get());
+        } else {
+          new_target_exprs.push_back(target);
         }
       }
       rewrite = true;
@@ -81,7 +99,15 @@ void QueryRewriter::rewriteConstrainedByIn() {
     }
   }
   if (!rewrite) {
-    return;
+    return ra_exe_unit_;
   }
-  const_cast<Planner::AggPlan*>(agg_plan)->set_groupby_list(new_groupby_list);
+  return {ra_exe_unit_.input_descs,
+          ra_exe_unit_.input_col_descs,
+          ra_exe_unit_.simple_quals,
+          ra_exe_unit_.quals,
+          ra_exe_unit_.join_quals,
+          new_groupby_list,
+          new_target_exprs,
+          ra_exe_unit_.order_entries,
+          ra_exe_unit_.scan_limit};
 }
