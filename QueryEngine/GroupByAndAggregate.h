@@ -1074,6 +1074,47 @@ class QueryExecutionContext : boost::noncopyable {
                           const int64_t* init_vals,
                           const int32_t groups_buffer_entry_count,
                           const bool keyless);
+#ifdef HAVE_CUDA
+  enum {
+    COL_BUFFERS,
+    NUM_FRAGMENTS,
+    LITERALS,
+    NUM_ROWS,
+    FRAG_ROW_OFFSETS,
+    MAX_MATCHED,
+    TOTAL_MATCHED,
+    INIT_AGG_VALS,
+    GROUPBY_BUF,
+    SMALL_BUF,
+    ERROR_CODE,
+    NUM_TABLES,
+    JOIN_HASH_TABLE,
+    KERN_PARAM_COUNT,
+  };
+
+  std::vector<CUdeviceptr> prepareKernelParams(const std::vector<std::vector<const int8_t*>>& col_buffers,
+                                               const std::vector<int8_t>& literal_buff,
+                                               const std::vector<int64_t>& num_rows,
+                                               const std::vector<uint64_t>& frag_row_offsets,
+                                               const int32_t scan_limit,
+                                               const std::vector<int64_t>& init_agg_vals,
+                                               const std::vector<int32_t>& error_codes,
+                                               const unsigned grid_size_x,
+                                               const uint32_t num_tables,
+                                               const int64_t join_hash_table,
+                                               Data_Namespace::DataMgr* data_mgr,
+                                               const int device_id,
+                                               const bool hoist_literals,
+                                               const bool is_group_by) const;
+
+  GpuQueryMemory prepareGroupByDevBuffer(Data_Namespace::DataMgr* data_mgr,
+                                         RenderAllocator* render_allocator,
+                                         const CUdeviceptr init_agg_vals_dev_ptr,
+                                         const int device_id,
+                                         const unsigned block_size_x,
+                                         const unsigned grid_size_x,
+                                         const bool can_sort_on_gpu) const;
+#endif
 
   std::vector<ssize_t> allocateCountDistinctBuffers(const bool deferred);
   int64_t allocateCountDistinctBitmap(const size_t bitmap_sz);
