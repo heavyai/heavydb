@@ -231,10 +231,6 @@ ResultRows Executor::executeSelectPlan(const Planner::Plan* plan,
     const bool is_agg = dynamic_cast<const Planner::AggPlan*>(plan);
     const auto order_entries = sort_plan_in ? sort_plan_in->get_order_entries() : std::list<Analyzer::OrderEntry>{};
     const auto query_infos = get_table_infos(input_descs, cat, TemporaryTables{});
-    if (query_infos.size() == 1) {
-      QueryRewriter query_rewriter(plan, query_infos, this);
-      query_rewriter.rewrite();
-    }
     if (limit || offset) {
       const size_t scan_limit = get_scan_limit(plan, limit);
       const size_t scan_total_limit = scan_limit ? get_scan_limit(plan, scan_limit + offset) : 0;
@@ -2503,10 +2499,6 @@ ResultRows Executor::executeResultPlan(const Planner::Result* result_plan,
   CHECK(check_plan_sanity(agg_plan));
   const auto order_entries = sort_plan ? sort_plan->get_order_entries() : std::list<Analyzer::OrderEntry>{};
   const auto query_infos = get_table_infos(input_descs, cat, TemporaryTables{});
-  if (query_infos.size() == 1) {
-    QueryRewriter query_rewriter(agg_plan, query_infos, this);
-    query_rewriter.rewrite();
-  }
   auto result_rows = executeWorkUnit(error_code,
                                      max_groups_buffer_entry_guess,
                                      true,
