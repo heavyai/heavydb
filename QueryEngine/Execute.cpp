@@ -5003,10 +5003,6 @@ std::pair<bool, int64_t> Executor::skipFragment(const int table_id,
       // is this possible?
       return {false, -1};
     }
-    if (lhs->get_type_info() != rhs->get_type_info()) {
-      // is this possible?
-      return {false, -1};
-    }
     if (!lhs->get_type_info().is_integer() && !lhs->get_type_info().is_time()) {
       return {false, -1};
     }
