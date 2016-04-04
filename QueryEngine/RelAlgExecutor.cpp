@@ -403,7 +403,51 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(const RelAlgExecutor::WorkUnit& 
   if (error_code == Executor::ERR_DIV_BY_ZERO) {
     throw std::runtime_error("Division by zero");
   }
-  CHECK(!error_code);
+  if (error_code == Executor::ERR_UNSUPPORTED_SELF_JOIN) {
+    throw std::runtime_error("Self joins not supported yet");
+  }
+  if (error_code == Executor::ERR_OUT_OF_CPU_MEM) {
+    throw std::runtime_error("Not enough host memory to execute the query");
+  }
+  ExecutionOptions eo_no_multifrag{eo.output_columnar_hint, false, false, eo.allow_loop_joins};
+  if (error_code == Executor::ERR_OUT_OF_GPU_MEM) {
+    result = {executor_->executeWorkUnit(&error_code,
+                                         max_groups_buffer_entry_guess,
+                                         is_agg,
+                                         get_table_infos(work_unit.exe_unit.input_descs, cat_, temporary_tables_),
+                                         work_unit.exe_unit,
+                                         co,
+                                         eo_no_multifrag,
+                                         cat_,
+                                         executor_->row_set_mem_owner_,
+                                         nullptr),
+              targets_meta};
+  }
+  CompilationOptions co_cpu{ExecutorDeviceType::CPU, co.hoist_literals_, co.opt_level_};
+  if (error_code) {
+    max_groups_buffer_entry_guess = 0;
+    while (true) {
+      result = {executor_->executeWorkUnit(&error_code,
+                                           max_groups_buffer_entry_guess,
+                                           is_agg,
+                                           get_table_infos(work_unit.exe_unit.input_descs, cat_, temporary_tables_),
+                                           work_unit.exe_unit,
+                                           co_cpu,
+                                           eo_no_multifrag,
+                                           cat_,
+                                           executor_->row_set_mem_owner_,
+                                           nullptr),
+                targets_meta};
+    }
+    if (!error_code) {
+      return result;
+    }
+    // Even the conservative guess failed; it should only happen when we group
+    // by a huge cardinality array. Maybe we should throw an exception instead?
+    // Such a heavy query is entirely capable of exhausting all the host memory.
+    CHECK(max_groups_buffer_entry_guess);
+    max_groups_buffer_entry_guess *= 2;
+  }
   return result;
 }
 
