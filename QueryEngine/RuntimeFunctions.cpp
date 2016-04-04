@@ -574,16 +574,15 @@ extern "C" __attribute__((noinline)) void query_stub_hoisted_literals(const int8
                                                                       const int8_t* literals,
                                                                       const int64_t* num_rows,
                                                                       const uint64_t* frag_row_offsets,
-                                                                      const int32_t* max_matched,
+                                                                      const int64_t* max_matched,
                                                                       const int64_t* init_agg_value,
                                                                       int64_t** out,
                                                                       int64_t** out2,
                                                                       uint32_t frag_idx,
                                                                       const int64_t join_hash_table,
-                                                                      int32_t* resume_row_index,
-                                                                      int32_t* total_matched) {
+                                                                      int32_t* resume_row_index) {
   assert(col_buffers || literals || num_rows || frag_row_offsets || max_matched || init_agg_value || out || out2 ||
-         frag_idx || resume_row_index || join_hash_table || total_matched);
+         frag_idx || resume_row_index || join_hash_table);
 }
 
 extern "C" void multifrag_query_hoisted_literals(const int8_t*** col_buffers,
@@ -591,8 +590,7 @@ extern "C" void multifrag_query_hoisted_literals(const int8_t*** col_buffers,
                                                  const int8_t* literals,
                                                  const int64_t* num_rows,
                                                  const uint64_t* frag_row_offsets,
-                                                 const int32_t* max_matched,
-                                                 int32_t* total_matched,
+                                                 const int64_t* max_matched,
                                                  const int64_t* init_agg_value,
                                                  int64_t** out,
                                                  int64_t** out2,
@@ -610,7 +608,6 @@ extern "C" void multifrag_query_hoisted_literals(const int8_t*** col_buffers,
                                 out2,
                                 i,
                                 *join_hash_table_ptr,
-                                total_matched,
                                 resume_row_index);
   }
 }
@@ -618,24 +615,22 @@ extern "C" void multifrag_query_hoisted_literals(const int8_t*** col_buffers,
 extern "C" __attribute__((noinline)) void query_stub(const int8_t** col_buffers,
                                                      const int64_t* num_rows,
                                                      const uint64_t* frag_row_offsets,
-                                                     const int32_t* max_matched,
+                                                     const int64_t* max_matched,
                                                      const int64_t* init_agg_value,
                                                      int64_t** out,
                                                      int64_t** out2,
                                                      uint32_t frag_idx,
                                                      const int64_t join_hash_table,
-                                                     int32_t* resume_row_index,
-                                                     int32_t* total_matched) {
+                                                     int32_t* resume_row_index) {
   assert(col_buffers || num_rows || frag_row_offsets || max_matched || init_agg_value || out || out2 || frag_idx ||
-         resume_row_index || join_hash_table || total_matched);
+         resume_row_index || join_hash_table);
 }
 
 extern "C" void multifrag_query(const int8_t*** col_buffers,
                                 const uint32_t* num_fragments,
                                 const int64_t* num_rows,
                                 const uint64_t* frag_row_offsets,
-                                const int32_t* max_matched,
-                                int32_t* total_matched,
+                                const int64_t* max_matched,
                                 const int64_t* init_agg_value,
                                 int64_t** out,
                                 int64_t** out2,
@@ -652,7 +647,6 @@ extern "C" void multifrag_query(const int8_t*** col_buffers,
                out2,
                i,
                *join_hash_table_ptr,
-               total_matched,
                resume_row_index);
   }
 }
