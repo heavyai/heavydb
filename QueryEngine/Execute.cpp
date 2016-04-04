@@ -213,6 +213,7 @@ ResultRows Executor::executeSelectPlan(const Planner::Plan* plan,
   if (dynamic_cast<const Planner::Scan*>(plan) || dynamic_cast<const Planner::AggPlan*>(plan) ||
       dynamic_cast<const Planner::Join*>(plan)) {
     row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>();
+    lit_str_dict_ = nullptr;
     const auto target_exprs = get_agg_target_exprs(plan);
     const auto scan_plan = get_scan_child(plan);
     auto simple_quals = scan_plan ? scan_plan->get_simple_quals() : std::list<std::shared_ptr<Analyzer::Expr>>{};
@@ -2485,6 +2486,7 @@ ResultRows Executor::executeResultPlan(const Planner::Result* result_plan,
     throw std::runtime_error("Query not supported yet, child plan needs to be an aggregate plan.");
   }
   row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>();
+  lit_str_dict_ = nullptr;
   const auto scan_plan = dynamic_cast<const Planner::Scan*>(agg_plan->get_child_plan());
   auto simple_quals = scan_plan ? scan_plan->get_simple_quals() : std::list<std::shared_ptr<Analyzer::Expr>>{};
   auto quals = scan_plan ? scan_plan->get_quals() : std::list<std::shared_ptr<Analyzer::Expr>>{};

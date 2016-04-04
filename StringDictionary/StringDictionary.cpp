@@ -110,12 +110,15 @@ StringDictionary::StringDictionary(const std::string& folder, const bool recover
 }
 
 StringDictionary::~StringDictionary() noexcept {
-  CHECK(payload_map_);
-  CHECK(offset_map_);
-  munmap(payload_map_, payload_file_size_);
-  munmap(offset_map_, offset_file_size_);
-  close(payload_fd_);
-  close(offset_fd_);
+  if (payload_map_) {
+    CHECK(offset_map_);
+    munmap(payload_map_, payload_file_size_);
+    munmap(offset_map_, offset_file_size_);
+    CHECK_GE(payload_fd_, 0);
+    close(payload_fd_);
+    CHECK_GE(offset_fd_, 0);
+    close(offset_fd_);
+  }
 }
 
 int32_t StringDictionary::getOrAdd(const std::string& str) noexcept {
