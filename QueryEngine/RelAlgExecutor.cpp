@@ -400,6 +400,9 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(const RelAlgExecutor::WorkUnit& 
                                  executor_->row_set_mem_owner_,
                                  nullptr),
       targets_meta};
+  if (!error_code) {
+    return result;
+  }
   if (error_code == Executor::ERR_DIV_BY_ZERO) {
     throw std::runtime_error("Division by zero");
   }
@@ -409,7 +412,19 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(const RelAlgExecutor::WorkUnit& 
   if (error_code == Executor::ERR_OUT_OF_CPU_MEM) {
     throw std::runtime_error("Not enough host memory to execute the query");
   }
+  return handleRetry(error_code, {work_unit.exe_unit, max_groups_buffer_entry_guess}, targets_meta, is_agg, co, eo);
+}
+
+ExecutionResult RelAlgExecutor::handleRetry(const int32_t error_code_in,
+                                            const RelAlgExecutor::WorkUnit& work_unit,
+                                            const std::vector<TargetMetaInfo>& targets_meta,
+                                            const bool is_agg,
+                                            const CompilationOptions& co,
+                                            const ExecutionOptions& eo) {
+  auto error_code = error_code_in;
+  auto max_groups_buffer_entry_guess = work_unit.max_groups_buffer_entry_guess;
   ExecutionOptions eo_no_multifrag{eo.output_columnar_hint, false, false, eo.allow_loop_joins};
+  ExecutionResult result{ResultRows({}, {}, nullptr, nullptr, co.device_type_), {}};
   if (error_code == Executor::ERR_OUT_OF_GPU_MEM) {
     result = {executor_->executeWorkUnit(&error_code,
                                          max_groups_buffer_entry_guess,

@@ -37,6 +37,13 @@ class RelAlgExecutor {
                                   const CompilationOptions& co,
                                   const ExecutionOptions& eo);
 
+  ExecutionResult handleRetry(const int32_t error_code_in,
+                              const RelAlgExecutor::WorkUnit& work_unit,
+                              const std::vector<TargetMetaInfo>& targets_meta,
+                              const bool is_agg,
+                              const CompilationOptions& co,
+                              const ExecutionOptions& eo);
+
   WorkUnit createWorkUnit(const RelAlgNode*, const std::list<Analyzer::OrderEntry>&);
 
   WorkUnit createCompoundWorkUnit(const RelCompound*, const std::list<Analyzer::OrderEntry>&);
