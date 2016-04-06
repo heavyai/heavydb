@@ -4,11 +4,11 @@
 
 #include <glog/logging.h>
 
-Executor::RelAlgExecutionUnit QueryRewriter::rewrite() {
+Executor::RelAlgExecutionUnit QueryRewriter::rewrite() const {
   return rewriteConstrainedByIn();
 }
 
-Executor::RelAlgExecutionUnit QueryRewriter::rewriteConstrainedByIn() {
+Executor::RelAlgExecutionUnit QueryRewriter::rewriteConstrainedByIn() const {
   if (ra_exe_unit_.groupby_exprs.empty()) {
     return ra_exe_unit_;
   }
@@ -34,10 +34,15 @@ Executor::RelAlgExecutionUnit QueryRewriter::rewriteConstrainedByIn() {
       break;
     }
   }
-  std::list<std::pair<std::shared_ptr<Analyzer::Expr>, std::shared_ptr<Analyzer::Expr>>> case_expr_list;
   if (dynamic_cast<const Analyzer::CaseExpr*>(in_vals->get_arg())) {
     return ra_exe_unit_;
   }
+  auto case_expr = generateCaseForDomainValues(in_vals.get());
+  return rewriteConstrainedByIn(case_expr, in_vals.get());
+}
+
+std::shared_ptr<Analyzer::CaseExpr> QueryRewriter::generateCaseForDomainValues(const Analyzer::InValues* in_vals) {
+  std::list<std::pair<std::shared_ptr<Analyzer::Expr>, std::shared_ptr<Analyzer::Expr>>> case_expr_list;
   auto in_val_arg = in_vals->get_arg()->deep_copy();
   for (const auto in_val : in_vals->get_value_list()) {
     auto case_cond = makeExpr<Analyzer::BinOper>(SQLTypeInfo(kBOOLEAN, true), false, kEQ, kONE, in_val_arg, in_val);
@@ -52,8 +57,11 @@ Executor::RelAlgExecutionUnit QueryRewriter::rewriteConstrainedByIn() {
   // TODO(alex): refine the expression range for case with empty else expression;
   //             for now, add a dummy else which should never be taken
   auto else_expr = case_expr_list.front().second;
-  auto case_expr =
-      makeExpr<Analyzer::CaseExpr>(case_expr_list.front().second->get_type_info(), false, case_expr_list, else_expr);
+  return makeExpr<Analyzer::CaseExpr>(case_expr_list.front().second->get_type_info(), false, case_expr_list, else_expr);
+}
+
+Executor::RelAlgExecutionUnit QueryRewriter::rewriteConstrainedByIn(const std::shared_ptr<Analyzer::CaseExpr> case_expr,
+                                                                    const Analyzer::InValues* in_vals) const {
   std::list<std::shared_ptr<Analyzer::Expr>> new_groupby_list;
   std::vector<Analyzer::Expr*> new_target_exprs;
   bool rewrite{false};
