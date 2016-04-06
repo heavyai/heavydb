@@ -336,6 +336,9 @@ TEST(Select, FilterAndSimpleAggregation) {
     c("SELECT COUNT(*) FROM test WHERE u IS NOT NULL;", dt);
     c("SELECT AVG(u * f) FROM test;", dt);
     c("SELECT AVG(u * d) FROM test;", dt);
+#ifdef HAVE_CALCITE
+    c("SELECT COUNT(ss) FROM test;", dt);
+#endif  // HAVE_CALCITE
     ASSERT_EQ(15, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE MOD(x, 7) = 0;", dt)));
     ASSERT_EQ(0, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE MOD(x, 7) = 7;", dt)));
     ASSERT_EQ(5, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE MOD(x, 7) <> 0;", dt)));
