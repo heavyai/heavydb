@@ -5,6 +5,12 @@
 #endif
 
 #ifdef __CUDACC__
+#define FORCE_INLINE __forceinline__
+#else
+#define FORCE_INLINE inline __attribute__((always_inline))
+#endif
+
+#ifdef __CUDACC__
 #define ALWAYS_INLINE
 #else
 #define ALWAYS_INLINE __attribute__((always_inline))

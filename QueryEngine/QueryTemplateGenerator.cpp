@@ -455,7 +455,6 @@ llvm::Function* query_group_by_template(llvm::Module* mod,
   CHECK(func_pos_step);
   auto func_group_buff_idx = group_buff_idx(mod);
   CHECK(func_group_buff_idx);
-  auto func_init_group_by_buffer = init_group_by_buffer(mod);
   auto func_row_process = row_process(mod, 0, is_nested, hoist_literals);
   CHECK(func_row_process);
   auto func_init_shared_mem = query_mem_desc.sharedMemBytes(device_type) ? mod->getFunction("init_shared_mem")
@@ -643,17 +642,20 @@ llvm::Function* query_group_by_template(llvm::Module* mod,
     small_buffer = new LoadInst(small_buffer_gep, "", false, bb_entry);
     small_buffer->setAlignment(8);
   }
-  CallInst::Create(
-      func_init_group_by_buffer,
-      std::vector<llvm::Value*>{
-          col_buffer,
-          agg_init_val,
-          ConstantInt::get(IntegerType::get(mod->getContext(), 32), query_mem_desc.entry_count),
-          ConstantInt::get(IntegerType::get(mod->getContext(), 32), query_mem_desc.group_col_widths.size()),
-          ConstantInt::get(IntegerType::get(mod->getContext(), 32), query_mem_desc.agg_col_widths.size()),
-      },
-      "",
-      bb_entry);
+  if (query_mem_desc.lazyInitGroups(device_type) && query_mem_desc.hash_type == GroupByColRangeType::MultiCol) {
+    CHECK(!query_mem_desc.output_columnar);
+    CallInst::Create(
+        init_group_by_buffer(mod),
+        std::vector<llvm::Value*>{
+            col_buffer,
+            agg_init_val,
+            ConstantInt::get(IntegerType::get(mod->getContext(), 32), query_mem_desc.entry_count),
+            ConstantInt::get(IntegerType::get(mod->getContext(), 32), query_mem_desc.group_col_widths.size()),
+            ConstantInt::get(IntegerType::get(mod->getContext(), 32), query_mem_desc.getRowSize() / sizeof(int64_t)),
+        },
+        "",
+        bb_entry);
+  }
   auto shared_mem_bytes_lv = ConstantInt::get(i32_type, query_mem_desc.sharedMemBytes(device_type));
   auto result_buffer =
       CallInst::Create(func_init_shared_mem, std::vector<llvm::Value*>{col_buffer, shared_mem_bytes_lv}, "", bb_entry);

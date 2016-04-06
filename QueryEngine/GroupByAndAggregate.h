@@ -8,6 +8,7 @@
 #include "../Shared/checked_alloc.h"
 #include "../Shared/sqltypes.h"
 #include "RuntimeFunctions.h"
+#include "BufferCompaction.h"
 
 #include <boost/algorithm/string/join.hpp>
 #include <boost/noncopyable.hpp>
@@ -16,6 +17,7 @@
 #include <boost/version.hpp>
 #include <glog/logging.h>
 #include <llvm/IR/Function.h>
+#include <llvm/IR/Instructions.h>
 #include <llvm/IR/Value.h>
 
 #include <functional>
@@ -45,7 +47,7 @@ enum class GroupByMemSharing { Private, Shared };
 struct QueryMemoryDescriptor;
 
 typedef boost::variant<std::string, void*> NullableString;
-typedef boost::variant<int64_t, double, NullableString> ScalarTargetValue;
+typedef boost::variant<int64_t, double, float, NullableString> ScalarTargetValue;
 typedef boost::variant<ScalarTargetValue, std::vector<ScalarTargetValue>> TargetValue;
 
 struct TargetInfo {
@@ -141,6 +143,19 @@ struct QueryMemoryDescriptor {
   bool canOutputColumnar() const;
 
   bool sortOnGpu() const;
+
+  size_t getKeyOffInBytes(const size_t bin, const size_t key_idx = 0) const;
+  size_t getNextKeyOffInBytes(const size_t key_idx) const;
+  size_t getColOffInBytes(const size_t bin, const size_t col_idx) const;
+  size_t getColOffInBytesInNextBin(const size_t col_idx) const;
+  size_t getNextColOffInBytes(const int8_t* col_ptr, const size_t bin, const size_t col_idx) const;
+  size_t getColOnlyOffInBytes(const size_t col_idx) const;
+  size_t getRowSize() const;
+  size_t getColsSize() const;
+  size_t getWarpCount() const;
+
+ private:
+  size_t getTotalBytesOfColumnarBuffers(const std::vector<int8_t>& col_widths) const;
 };
 
 inline int64_t bitmap_set_size(const int64_t bitmap_ptr,
@@ -298,7 +313,7 @@ inline bool constrained_not_null(const Analyzer::Expr* expr, const std::list<std
 }
 
 template <class PointerType>
-inline TargetInfo target_info(const PointerType target_expr, const std::list<std::shared_ptr<Analyzer::Expr>>& quals) {
+inline TargetInfo target_info(const PointerType target_expr) {
   const auto agg_expr = cast_to_agg_expr(target_expr);
   bool notnull = target_expr->get_type_info().get_notnull();
   if (!agg_expr) {
@@ -311,21 +326,69 @@ inline TargetInfo target_info(const PointerType target_expr, const std::list<std
     CHECK(!agg_expr->get_is_distinct());
     return {true, kCOUNT, SQLTypeInfo(kBIGINT, notnull), false, false};
   }
+
   const auto& agg_arg_ti = agg_arg->get_type_info();
   bool is_distinct{false};
   if (agg_expr->get_aggtype() == kCOUNT) {
     is_distinct = agg_expr->get_is_distinct();
   }
-  const bool skip_null = !agg_arg_ti.get_notnull();
+
   return {
       true,
       agg_expr->get_aggtype(),
-      agg_type == kAVG ? agg_arg_ti : (agg_type == kCOUNT ? SQLTypeInfo(kBIGINT, notnull) : agg_expr->get_type_info()),
-      skip_null,
+      agg_type == kCOUNT ? SQLTypeInfo(kBIGINT, notnull) : (agg_type == kAVG ? agg_arg_ti : agg_expr->get_type_info()),
+      !agg_arg_ti.get_notnull(),
       is_distinct};
 }
 
+template <class PointerType>
+inline SQLTypeInfo agg_arg_info(const PointerType target_expr) {
+  const auto agg_expr = cast_to_agg_expr(target_expr);
+  if (!agg_expr) {
+    return SQLTypeInfo(kNULLT, false);
+  }
+  const auto agg_type = agg_expr->get_aggtype();
+  const auto agg_arg = agg_expr->get_arg();
+  if (!agg_arg) {
+    CHECK_EQ(kCOUNT, agg_type);
+    CHECK(!agg_expr->get_is_distinct());
+    return SQLTypeInfo(kNULLT, false);
+  }
+
+  return agg_arg->get_type_info();
+}
+
 namespace {
+
+inline TargetInfo get_compact_target(const TargetInfo& target, const SQLTypeInfo& agg_arg) {
+  if (!target.is_agg) {
+    return target;
+  }
+  const auto agg_type = target.agg_kind;
+  if (agg_arg.get_type() == kNULLT) {
+    CHECK_EQ(kCOUNT, agg_type);
+    CHECK(!target.is_distinct);
+    return target;
+  }
+
+  return {true, agg_type, agg_type != kCOUNT ? agg_arg : target.sql_type, target.skip_null_val, target.is_distinct};
+}
+
+template <class PointerType>
+inline TargetInfo compact_target_info(const PointerType target_expr) {
+  return get_compact_target(target_info(target_expr), agg_arg_info(target_expr));
+}
+
+inline std::vector<TargetInfo> get_compact_targets(const std::vector<TargetInfo>& targets,
+                                                   const std::vector<SQLTypeInfo>& args) {
+  CHECK_EQ(targets.size(), args.size());
+  std::vector<TargetInfo> new_targets;
+  new_targets.reserve(targets.size());
+  for (size_t i = 0, e = targets.size(); i < e; ++i) {
+    new_targets.push_back(get_compact_target(targets[i], args[i]));
+  }
+  return new_targets;
+}
 
 inline int64_t inline_int_null_val(const SQLTypeInfo& ti) {
   auto type = ti.is_decimal() ? decimal_to_int_type(ti) : ti.get_type();
@@ -393,6 +456,131 @@ inline size_t get_bit_width(const SQLTypeInfo& ti) {
     default:
       CHECK(false);
   }
+}
+
+// TODO(alex): proper types for aggregate
+inline int64_t get_agg_initial_val(const SQLAgg agg, const SQLTypeInfo& ti, const bool enable_compaction) {
+  CHECK(!ti.is_string());
+  const auto byte_width =
+      enable_compaction ? compact_byte_width(static_cast<unsigned>(get_bit_width(ti) >> 3)) : sizeof(int64_t);
+  CHECK_GE(byte_width, static_cast<unsigned>(ti.get_size()));
+  switch (agg) {
+    case kAVG:
+    case kSUM: {
+      if (!ti.get_notnull()) {
+        if (ti.is_fp()) {
+          switch (byte_width) {
+            case 4: {
+              const float null_float = inline_fp_null_val(ti);
+              return *reinterpret_cast<const int32_t*>(&null_float);
+            }
+            case 8: {
+              const double null_double = inline_fp_null_val(ti);
+              return *reinterpret_cast<const int64_t*>(&null_double);
+            }
+            default:
+              CHECK(false);
+          }
+        } else {
+          return inline_int_null_val(ti);
+        }
+      }
+      switch (byte_width) {
+        case 4: {
+          const float zero_float{0.};
+          return ti.is_fp() ? *reinterpret_cast<const int32_t*>(&zero_float) : 0;
+        }
+        case 8: {
+          const double zero_double{0.};
+          return ti.is_fp() ? *reinterpret_cast<const int64_t*>(&zero_double) : 0;
+        }
+        default:
+          CHECK(false);
+      }
+    }
+    case kCOUNT:
+      return 0;
+    case kMIN: {
+      switch (byte_width) {
+        case 4: {
+          const float max_float = std::numeric_limits<float>::max();
+          const float null_float = ti.is_fp() ? static_cast<float>(inline_fp_null_val(ti)) : 0.;
+          return ti.is_fp() ? (ti.get_notnull() ? *reinterpret_cast<const int32_t*>(&max_float)
+                                                : *reinterpret_cast<const int32_t*>(&null_float))
+                            : (ti.get_notnull() ? std::numeric_limits<int32_t>::max() : inline_int_null_val(ti));
+        }
+        case 8: {
+          const double max_double = std::numeric_limits<double>::max();
+          const double null_double{ti.is_fp() ? inline_fp_null_val(ti) : 0.};
+          return ti.is_fp() ? (ti.get_notnull() ? *reinterpret_cast<const int64_t*>(&max_double)
+                                                : *reinterpret_cast<const int64_t*>(&null_double))
+                            : (ti.get_notnull() ? std::numeric_limits<int64_t>::max() : inline_int_null_val(ti));
+        }
+        default:
+          CHECK(false);
+      }
+    }
+    case kMAX: {
+      switch (byte_width) {
+        case 4: {
+          const float min_float = std::numeric_limits<float>::min();
+          const float null_float = ti.is_fp() ? static_cast<float>(inline_fp_null_val(ti)) : 0.;
+          return (ti.is_fp()) ? (ti.get_notnull() ? *reinterpret_cast<const int32_t*>(&min_float)
+                                                  : *reinterpret_cast<const int32_t*>(&null_float))
+                              : (ti.get_notnull() ? std::numeric_limits<int32_t>::min() : inline_int_null_val(ti));
+        }
+        case 8: {
+          const double min_double = std::numeric_limits<double>::min();
+          const double null_double{ti.is_fp() ? inline_fp_null_val(ti) : 0.};
+          return ti.is_fp() ? (ti.get_notnull() ? *reinterpret_cast<const int64_t*>(&min_double)
+                                                : *reinterpret_cast<const int64_t*>(&null_double))
+                            : (ti.get_notnull() ? std::numeric_limits<int64_t>::min() : inline_int_null_val(ti));
+        }
+        default:
+          CHECK(false);
+      }
+    }
+    default:
+      CHECK(false);
+  }
+}
+
+inline std::vector<int64_t> init_agg_val_vec(const std::vector<TargetInfo>& targets,
+                                             size_t agg_col_count,
+                                             const bool is_group_by) {
+  std::vector<int64_t> agg_init_vals(agg_col_count, 0);
+  for (size_t target_idx = 0, agg_col_idx = 0; target_idx < targets.size() && agg_col_idx < agg_col_count;
+       ++target_idx, ++agg_col_idx) {
+    const auto agg_info = targets[target_idx];
+    if (!agg_info.is_agg) {
+      continue;
+    }
+    agg_init_vals[agg_col_idx] = get_agg_initial_val(agg_info.agg_kind, agg_info.sql_type, is_group_by);
+    if (kAVG == agg_info.agg_kind) {
+      agg_init_vals[++agg_col_idx] = 0;
+    }
+  }
+  return agg_init_vals;
+}
+
+inline std::vector<int64_t> init_agg_val_vec(const std::vector<Analyzer::Expr*>& targets,
+                                             size_t agg_col_count,
+                                             const bool is_group_by) {
+  std::vector<TargetInfo> target_infos;
+  target_infos.reserve(targets.size());
+  for (size_t target_idx = 0, agg_col_idx = 0; target_idx < targets.size() && agg_col_idx < agg_col_count;
+       ++target_idx, ++agg_col_idx) {
+    target_infos.push_back(compact_target_info(targets[target_idx]));
+  }
+  return init_agg_val_vec(target_infos, agg_col_count, is_group_by);
+}
+
+inline int64_t get_initial_val(const TargetInfo& target_info) {
+  if (!target_info.is_agg) {
+    return 0;
+  }
+
+  return get_agg_initial_val(target_info.agg_kind, target_info.sql_type, !target_info.sql_type.is_fp());
 }
 
 }  // namespace
@@ -598,10 +786,12 @@ class ResultRows {
         just_explain_(false),
         queue_time_ms_(queue_time_ms) {
     for (const auto target_expr : targets) {
-      const auto agg_info = target_info(target_expr, {});
-      targets_.push_back(agg_info);
+      targets_.push_back(target_info(target_expr));
+      agg_args_.push_back(agg_arg_info(target_expr));
     }
-    initAggInitValCache(query_mem_desc.agg_col_widths.size());
+    agg_init_vals_ = init_agg_val_vec(get_compact_targets(targets_, agg_args_),
+                                      query_mem_desc.agg_col_widths.size(),
+                                      !query_mem_desc.group_col_widths.empty());
   }
 
   ResultRows(const QueryMemoryDescriptor& query_mem_desc,
@@ -687,9 +877,9 @@ class ResultRows {
     target_values_.beginRow(row_set_mem_owner_.get());
   }
 
-  bool reduceSingleRow(const int64_t* group_by_buffer,
+  bool reduceSingleRow(const int8_t* row_ptr,
                        const int32_t groups_buffer_entry_count,
-                       size_t row_base_idx,
+                       const size_t bin,
                        const int8_t warp_count,
                        const bool is_columnar,
                        const bool keep_cnt_dtnc_buff,
@@ -798,8 +988,6 @@ class ResultRows {
   int64_t getQueueTime() const { return queue_time_ms_; }
   int64_t getRenderTime() const { return render_time_ms_; }
 
-  void initAggInitValCache(size_t agg_col_count);
-
  private:
   bool fetchLazyOrBuildRow(std::vector<TargetValue>& row,
                            const std::vector<std::vector<const int8_t*>>& col_buffers,
@@ -852,6 +1040,7 @@ class ResultRows {
   void setQueueTime(int64_t queue_time) { queue_time_ms_ = queue_time; }
 
   std::vector<TargetInfo> targets_;
+  std::vector<SQLTypeInfo> agg_args_;
   std::vector<int64_t> simple_keys_;
   typedef std::vector<int64_t> MultiKey;
   std::vector<MultiKey> multi_keys_;
@@ -864,7 +1053,7 @@ class ResultRows {
 
   std::vector<int64_t> agg_init_vals_;
   int64_t* group_by_buffer_;
-  int32_t groups_buffer_entry_count_;
+  size_t groups_buffer_entry_count_;
   mutable size_t group_by_buffer_idx_;
   int64_t min_val_;
   int8_t warp_count_;
@@ -915,13 +1104,13 @@ class ColumnarResults {
         if (i64_p) {
           switch (get_bit_width(target_types[i])) {
             case 8:
-              ((int8_t*)column_buffers_[i])[row_idx] = *i64_p;
+              ((int8_t*)column_buffers_[i])[row_idx] = static_cast<int8_t>(*i64_p);
               break;
             case 16:
-              ((int16_t*)column_buffers_[i])[row_idx] = *i64_p;
+              ((int16_t*)column_buffers_[i])[row_idx] = static_cast<int16_t>(*i64_p);
               break;
             case 32:
-              ((int32_t*)column_buffers_[i])[row_idx] = *i64_p;
+              ((int32_t*)column_buffers_[i])[row_idx] = static_cast<int32_t>(*i64_p);
               break;
             case 64:
               ((int64_t*)column_buffers_[i])[row_idx] = *i64_p;
@@ -1001,6 +1190,10 @@ inline std::string datum_to_string(const TargetValue& tv, const SQLTypeInfo& ti,
   auto iptr = boost::get<int64_t>(scalar_tv);
   if (iptr) {
     return *iptr == inline_int_null_val(ti) ? "NULL" : std::to_string(*iptr);
+  }
+  auto fptr = boost::get<float>(scalar_tv);
+  if (fptr) {
+    return *fptr == inline_fp_null_val(ti) ? "NULL" : std::to_string(*fptr);
   }
   auto dptr = boost::get<double>(scalar_tv);
   if (dptr) {
@@ -1082,17 +1275,30 @@ class QueryExecutionContext : boost::noncopyable {
                                       RenderAllocatorMap* render_allocator_map) const;
 
  private:
+  bool isEmptyBin(const int64_t* group_by_buffer, const size_t bin, const size_t key_idx) const;
   void outputBin(ResultRows& results,
                  const std::vector<Analyzer::Expr*>& targets,
                  int64_t* group_by_buffer,
                  const size_t groups_buffer_entry_count,
                  const size_t bin) const;
 
+  void initColumnPerRow(int8_t* row_ptr,
+                        const size_t bin,
+                        const int64_t* init_vals,
+                        const std::vector<ssize_t>& bitmap_sizes);
+
   void initGroups(int64_t* groups_buffer,
                   const int64_t* init_vals,
                   const int32_t groups_buffer_entry_count,
                   const bool keyless,
                   const size_t warp_size);
+
+  template <typename T>
+  int8_t* initColumnarBuffer(T* buffer_ptr,
+                             const T init_val,
+                             const uint32_t entry_count,
+                             const ssize_t bitmap_sz = -1,
+                             const bool key_or_col = true);
 
   void initColumnarGroups(int64_t* groups_buffer,
                           const int64_t* init_vals,
@@ -1182,9 +1388,11 @@ class GroupByAndAggregate {
                       const bool allow_multifrag,
                       const bool output_columnar_hint);
 
-  QueryMemoryDescriptor getQueryMemoryDescriptor() const;
+  const QueryMemoryDescriptor& getQueryMemoryDescriptor() const;
 
   bool outputColumnar() const;
+
+  void patchGroupbyCall(llvm::CallInst* call_site);
 
   // returns true iff checking the error code after every row
   // is required -- slow path group by queries for now
@@ -1223,12 +1431,11 @@ class GroupByAndAggregate {
                                  const size_t small_groups_buffer_entry_count,
                                  const bool sort_on_gpu_hint,
                                  const bool render_output);
-
   void addTransientStringLiterals();
 
   CountDistinctDescriptors initCountDistinctDescriptors();
 
-  llvm::Value* codegenGroupBy(const QueryMemoryDescriptor&, const CompilationOptions&, DiamondCodegen&);
+  std::tuple<llvm::Value*, llvm::Value*> codegenGroupBy(const CompilationOptions&, DiamondCodegen&);
 
   llvm::Function* codegenPerfectHashFunction();
 
@@ -1242,14 +1449,16 @@ class GroupByAndAggregate {
     const int64_t init_val;
   };
 
-  KeylessInfo getKeylessInfo(const std::vector<Analyzer::Expr*>& target_expr_list) const;
+  KeylessInfo getKeylessInfo(const std::vector<Analyzer::Expr*>& target_expr_list, const bool is_group_by) const;
 
-  void codegenAggCalls(llvm::Value* agg_out_start_ptr,
+  llvm::Value* convertNullIfAny(const SQLTypeInfo& arg_type,
+                                const SQLTypeInfo& agg_type,
+                                const size_t chosen_bytes,
+                                llvm::Value* target);
+
+  void codegenAggCalls(const std::tuple<llvm::Value*, llvm::Value*>& agg_out_ptr_w_idx,
                        const std::vector<llvm::Value*>& agg_out_vec,
-                       const QueryMemoryDescriptor&,
                        const CompilationOptions&);
-
-  uint32_t aggColumnarOff(const uint32_t agg_out_off, const QueryMemoryDescriptor& query_mem_desc);
 
   void codegenCountDistinct(const size_t target_idx,
                             const Analyzer::Expr* target_expr,
@@ -1339,7 +1548,7 @@ inline std::vector<int8_t> get_col_byte_widths(const T& col_expr_list) {
       // row index
       col_widths.push_back(sizeof(int64_t));
     } else {
-      const auto agg_info = target_info(col_expr, {});
+      const auto agg_info = compact_target_info(col_expr);
       if ((agg_info.sql_type.is_string() && agg_info.sql_type.get_compression() == kENCODING_NONE) ||
           agg_info.sql_type.is_array()) {
         col_widths.push_back(sizeof(int64_t));
@@ -1348,7 +1557,7 @@ inline std::vector<int8_t> get_col_byte_widths(const T& col_expr_list) {
       }
       const auto col_expr_bitwidth = get_bit_width(agg_info.sql_type);
       CHECK_EQ(size_t(0), col_expr_bitwidth % 8);
-      col_widths.push_back(col_expr_bitwidth / 8);
+      col_widths.push_back(static_cast<int8_t>(col_expr_bitwidth >> 3));
       // for average, we'll need to keep the count as well
       if (agg_info.agg_kind == kAVG) {
         CHECK(agg_info.is_agg);
@@ -1358,23 +1567,5 @@ inline std::vector<int8_t> get_col_byte_widths(const T& col_expr_list) {
   }
   return col_widths;
 }
-
-namespace {
-
-inline size_t key_columnar_off(const size_t group_by_col_count,
-                               const size_t bin,
-                               const size_t agg_col_count,
-                               const bool output_columnar) {
-  return (output_columnar ? 1 : (group_by_col_count + agg_col_count)) * bin;
-}
-
-inline uint32_t agg_columnar_off(const size_t group_by_col_count,
-                                 const size_t out_vec_idx,
-                                 const size_t groups_buffer_entry_count,
-                                 const bool output_columnar) {
-  return (out_vec_idx + group_by_col_count) * (output_columnar ? groups_buffer_entry_count : 1);
-}
-
-}  // namespace
 
 #endif  // QUERYENGINE_GROUPBYANDAGGREGATE_H

@@ -100,10 +100,10 @@ llvm::Value* InValuesBitmap::codegen(llvm::Value* needle, Executor* executor) {
   }
   const auto bitset_handle_lvs = executor->codegenHoistedConstants(constants, kENCODING_NONE, 0);
   CHECK_EQ(size_t(1), bitset_handle_lvs.size());
-  const auto needle_i64 = executor->toDoublePrecision(needle);
+  const auto needle_i64 = executor->castToTypeIn(needle, 64);
   const auto null_bool_val = static_cast<int8_t>(inline_int_null_val(SQLTypeInfo(kBOOLEAN, false)));
   return executor->cgen_state_->emitCall("bit_is_set",
-                                         {executor->toDoublePrecision(bitset_handle_lvs.front()),
+                                         {executor->castToTypeIn(bitset_handle_lvs.front(), 64),
                                           needle_i64,
                                           executor->ll_int(min_val_),
                                           executor->ll_int(max_val_),

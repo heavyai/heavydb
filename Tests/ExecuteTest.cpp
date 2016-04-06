@@ -140,7 +140,6 @@ class SQLiteComparator {
           }
           case kNUMERIC:
           case kDECIMAL:
-          case kFLOAT:
           case kDOUBLE: {
             const auto mapd_as_double_p = boost::get<double>(scalar_mapd_variant);
             ASSERT_NE(nullptr, mapd_as_double_p);
@@ -150,6 +149,22 @@ class SQLiteComparator {
             } else {
               const auto ref_val = connector_.getData<double>(row_idx, col_idx);
               ASSERT_TRUE(approx_eq(ref_val, mapd_val));
+            }
+            break;
+          }
+          case kFLOAT: {
+            const auto mapd_as_float_p = boost::get<float>(scalar_mapd_variant);
+            ASSERT_NE(nullptr, mapd_as_float_p);
+            const auto mapd_val = *mapd_as_float_p;
+            if (ref_is_null) {
+              if (inline_fp_null_val(SQLTypeInfo(kFLOAT, false)) != mapd_val) {
+                CHECK(false);
+              }
+            } else {
+              const auto ref_val = connector_.getData<float>(row_idx, col_idx);
+              if (!approx_eq(ref_val, mapd_val)) {
+                CHECK(false);
+              }
             }
             break;
           }
@@ -415,6 +430,7 @@ TEST(Select, FloatAndDoubleTests) {
     c("SELECT COUNT(*) AS n FROM test GROUP BY d ORDER BY n;", dt);
     c("SELECT MIN(x + y) AS n FROM test WHERE x + y > 47 AND x + y < 53 GROUP BY f + 1, f + d ORDER BY n;", dt);
     c("SELECT f + d AS s FROM test GROUP BY s ORDER BY s DESC;", dt);
+    c("SELECT f + 1 as s, AVG(u * f) FROM test GROUP BY s ORDER BY s DESC;", dt);
   }
 }
 
@@ -460,6 +476,7 @@ TEST(Select, Having) {
     c("SELECT z, SUM(y) AS n FROM test WHERE x > 6 GROUP BY z HAVING MAX(x) < 100 AND COUNT(*) > 9 ORDER BY n;", dt);
     c("SELECT str, COUNT(*) AS n FROM test GROUP BY str HAVING str IN ('bar', 'baz') ORDER BY str;", dt);
     c("SELECT str, COUNT(*) AS n FROM test GROUP BY str HAVING str LIKE 'ba_' ORDER BY str;", dt);
+    c("SELECT ss, COUNT(*) AS n FROM test GROUP BY ss HAVING ss LIKE 'bo_' ORDER BY ss;", dt);
   }
 }
 
@@ -471,6 +488,7 @@ TEST(Select, CountDistinct) {
     c("SELECT COUNT(distinct f) FROM test;", dt);
     c("SELECT COUNT(distinct d) FROM test;", dt);
     c("SELECT COUNT(distinct str) FROM test;", dt);
+    c("SELECT COUNT(distinct ss) FROM test;", dt);
     c("SELECT COUNT(distinct x + 1) FROM test;", dt);
     c("SELECT COUNT(*), MIN(x), MAX(x), AVG(y), SUM(z) AS n, COUNT(distinct x) FROM test GROUP BY y ORDER BY n;", dt);
     c("SELECT COUNT(*), MIN(x), MAX(x), AVG(y), SUM(z) AS n, COUNT(distinct x + 1) FROM test GROUP BY y ORDER BY n;",
@@ -562,13 +580,13 @@ TEST(Select, Case) {
     c("SELECT SUM(CASE WHEN x BETWEEN 6 AND 7 THEN 1 WHEN x BETWEEN 8 AND 9 THEN 2 ELSE 3 END) "
       "FROM test WHERE CASE WHEN y BETWEEN 42 AND 43 THEN 5 ELSE 4 END > 4;",
       dt);
-    ASSERT_EQ(0L,
+    ASSERT_EQ(std::numeric_limits<int64_t>::min(),
               v<int64_t>(run_simple_agg(
                   "SELECT SUM(CASE WHEN x BETWEEN 6 AND 7 THEN 1 WHEN x BETWEEN 8 AND 9 THEN 2 ELSE 3 END) FROM test "
                   "WHERE CASE WHEN y BETWEEN 44 AND 45 THEN 5 ELSE 4 END > 4;",
                   dt)));
     c("SELECT CASE WHEN x + y > 50 THEN 77 ELSE 88 END AS foo, COUNT(*) FROM test GROUP BY foo ORDER BY foo;", dt);
-    ASSERT_EQ(double(0.),
+    ASSERT_EQ(std::numeric_limits<double>::min(),
               v<double>(run_simple_agg(
                   "SELECT SUM(CASE WHEN x BETWEEN 6 AND 7 THEN 1.1 WHEN x BETWEEN 8 AND 9 THEN 2.2 ELSE 3.3 END) FROM "
                   "test WHERE CASE WHEN y BETWEEN 44 AND 45 THEN 5.1 ELSE 3.9 END > 4;",
@@ -609,6 +627,8 @@ TEST(Select, Strings) {
     c("SELECT str, COUNT(*) FROM test GROUP BY str ORDER BY str;", dt);
     c("SELECT COUNT(*) FROM test WHERE str IS NULL;", dt);
     c("SELECT COUNT(*) FROM test WHERE str IS NOT NULL;", dt);
+    c("SELECT COUNT(*) FROM test WHERE ss IS NULL;", dt);
+    c("SELECT COUNT(*) FROM test WHERE ss IS NOT NULL;", dt);
     c("SELECT COUNT(*) FROM test WHERE str LIKE '%%%';", dt);
     c("SELECT COUNT(*) FROM test WHERE str LIKE 'ba%';", dt);
     c("SELECT COUNT(*) FROM test WHERE str LIKE '%eal_bar';", dt);
@@ -616,6 +636,7 @@ TEST(Select, Strings) {
     c("SELECT * FROM test WHERE str LIKE '%';", dt);
     c("SELECT * FROM test WHERE str LIKE 'f%%';", dt);
     c("SELECT * FROM test WHERE str LIKE 'f%\%';", dt);
+    c("SELECT * FROM test WHERE ss LIKE 'f%\%';", dt);
     c("SELECT * FROM test WHERE str LIKE '@f%%' ESCAPE '@';", dt);
     c("SELECT COUNT(*) FROM test WHERE str LIKE 'ba_' or str LIKE 'fo_';", dt);
     c("SELECT COUNT(*) FROM test WHERE str IS NULL;", dt);

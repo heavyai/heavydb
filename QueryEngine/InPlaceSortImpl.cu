@@ -6,43 +6,123 @@
 
 #include "InPlaceSortImpl.h"
 
-void sort_on_gpu(int64_t* val_buff, int64_t* idx_buff, const uint64_t entry_count, const bool desc) {
 #ifdef HAVE_CUDA
-  thrust::device_ptr<int64_t> key_ptr(val_buff);
+template <typename T>
+void sort_on_gpu(T* val_buff, int64_t* idx_buff, const uint64_t entry_count, const bool desc) {
+  thrust::device_ptr<T> key_ptr(val_buff);
   thrust::device_ptr<int64_t> idx_ptr(idx_buff);
   thrust::sequence(idx_ptr, idx_ptr + entry_count);
   if (desc) {
-    thrust::sort_by_key(key_ptr, key_ptr + entry_count, idx_ptr, thrust::greater<int64_t>());
+    thrust::sort_by_key(key_ptr, key_ptr + entry_count, idx_ptr, thrust::greater<T>());
   } else {
     thrust::sort_by_key(key_ptr, key_ptr + entry_count, idx_ptr);
   }
-#endif
 }
 
-void sort_on_cpu(int64_t* val_buff, int64_t* idx_buff, const uint64_t entry_count, const bool desc) {
-#ifdef HAVE_CUDA
+template <typename T>
+void apply_permutation_on_gpu(T* val_buff, int64_t* idx_buff, const uint64_t entry_count, T* tmp_buff) {
+  thrust::device_ptr<T> key_ptr(val_buff);
+  thrust::device_ptr<int64_t> idx_ptr(idx_buff);
+  thrust::device_ptr<T> tmp_ptr(tmp_buff);
+  thrust::copy(key_ptr, key_ptr + entry_count, tmp_ptr);
+  thrust::gather(idx_ptr, idx_ptr + entry_count, tmp_ptr, key_ptr);
+}
+
+template <typename T>
+void sort_on_cpu(T* val_buff, int64_t* idx_buff, const uint64_t entry_count, const bool desc) {
   thrust::sequence(idx_buff, idx_buff + entry_count);
   if (desc) {
-    thrust::sort_by_key(val_buff, val_buff + entry_count, idx_buff, thrust::greater<int64_t>());
+    thrust::sort_by_key(val_buff, val_buff + entry_count, idx_buff, thrust::greater<T>());
   } else {
     thrust::sort_by_key(val_buff, val_buff + entry_count, idx_buff);
+  }
+}
+
+template <typename T>
+void apply_permutation_on_cpu(T* val_buff, int64_t* idx_buff, const uint64_t entry_count, T* tmp_buff) {
+  thrust::copy(val_buff, val_buff + entry_count, tmp_buff);
+  thrust::gather(idx_buff, idx_buff + entry_count, tmp_buff, val_buff);
+}
+#endif
+
+void sort_on_gpu(int64_t* val_buff,
+                 int64_t* idx_buff,
+                 const uint64_t entry_count,
+                 const bool desc,
+                 const uint32_t chosen_bytes) {
+#ifdef HAVE_CUDA
+  switch (chosen_bytes) {
+    case 4:
+      sort_on_gpu(reinterpret_cast<int32_t*>(val_buff), idx_buff, entry_count, desc);
+      break;
+    case 8:
+      sort_on_gpu(val_buff, idx_buff, entry_count, desc);
+      break;
+    default:
+      // FIXME(miyu): CUDA linker doesn't accept assertion on GPU yet right now.
+      break;
   }
 #endif
 }
 
-void apply_permutation_on_gpu(int64_t* val_buff, int64_t* idx_buff, const uint64_t entry_count, int64_t* tmp_buff) {
+void sort_on_cpu(int64_t* val_buff,
+                 int64_t* idx_buff,
+                 const uint64_t entry_count,
+                 const bool desc,
+                 const uint32_t chosen_bytes) {
 #ifdef HAVE_CUDA
-  thrust::device_ptr<int64_t> key_ptr(val_buff);
-  thrust::device_ptr<int64_t> idx_ptr(idx_buff);
-  thrust::device_ptr<int64_t> tmp_ptr(tmp_buff);
-  thrust::copy(key_ptr, key_ptr + entry_count, tmp_ptr);
-  thrust::gather(idx_ptr, idx_ptr + entry_count, tmp_ptr, key_ptr);
+  switch (chosen_bytes) {
+    case 4:
+      sort_on_cpu(reinterpret_cast<int32_t*>(val_buff), idx_buff, entry_count, desc);
+      break;
+    case 8:
+      sort_on_cpu(val_buff, idx_buff, entry_count, desc);
+      break;
+    default:
+      // FIXME(miyu): CUDA linker doesn't accept assertion on GPU yet right now.
+      break;
+  }
 #endif
 }
 
-void apply_permutation_on_cpu(int64_t* val_buff, int64_t* idx_buff, const uint64_t entry_count, int64_t* tmp_buff) {
+void apply_permutation_on_gpu(int64_t* val_buff,
+                              int64_t* idx_buff,
+                              const uint64_t entry_count,
+                              int64_t* tmp_buff,
+                              const uint32_t chosen_bytes) {
 #ifdef HAVE_CUDA
-  thrust::copy(val_buff, val_buff + entry_count, tmp_buff);
-  thrust::gather(idx_buff, idx_buff + entry_count, tmp_buff, val_buff);
+  switch (chosen_bytes) {
+    case 4:
+      apply_permutation_on_gpu(
+          reinterpret_cast<int32_t*>(val_buff), idx_buff, entry_count, reinterpret_cast<int32_t*>(tmp_buff));
+      break;
+    case 8:
+      apply_permutation_on_gpu(val_buff, idx_buff, entry_count, tmp_buff);
+      break;
+    default:
+      // FIXME(miyu): CUDA linker doesn't accept assertion on GPU yet right now.
+      break;
+  }
+#endif
+}
+
+void apply_permutation_on_cpu(int64_t* val_buff,
+                              int64_t* idx_buff,
+                              const uint64_t entry_count,
+                              int64_t* tmp_buff,
+                              const uint32_t chosen_bytes) {
+#ifdef HAVE_CUDA
+  switch (chosen_bytes) {
+    case 4:
+      apply_permutation_on_cpu(
+          reinterpret_cast<int32_t*>(val_buff), idx_buff, entry_count, reinterpret_cast<int32_t*>(tmp_buff));
+      break;
+    case 8:
+      apply_permutation_on_cpu(val_buff, idx_buff, entry_count, tmp_buff);
+      break;
+    default:
+      // FIXME(miyu): CUDA linker doesn't accept assertion on GPU yet right now.
+      break;
+  }
 #endif
 }
