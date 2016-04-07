@@ -749,7 +749,19 @@ class MapDHandler : virtual public MapDIf {
       auto session_it = get_session_it(session);
       auto session_info_ptr = session_it->second.get();
       try {
+#ifdef HAVE_CALCITE
+        ParserWrapper pw{query_str};
+        if (pw.is_select_explain || pw.is_other_explain || pw.is_ddl || pw.is_update_dml) {
+          TMapDException ex;
+          ex.error_msg = "Can only render SELECT statements.";
+          LOG(ERROR) << ex.error_msg;
+          throw ex;
+        }
+        auto root_plan = parse_to_plan(query_str, *session_info_ptr);
+#else
         auto root_plan = parse_to_render_plan_legacy(query_str, *session_info_ptr);
+#endif  // HAVE_CALCITE
+        CHECK(root_plan);
         std::unique_ptr<Planner::RootPlan> plan_ptr(root_plan);  // make sure it's deleted
         render_root_plan(_return, root_plan, *session_info_ptr, render_type, render_properties, col_render_properties);
       } catch (std::exception& e) {
@@ -1276,8 +1288,7 @@ class MapDHandler : virtual public MapDIf {
   }
 
 #ifdef HAVE_CALCITE
-  const Planner::RootPlan* parse_to_plan(const std::string& query_str,
-                                         const Catalog_Namespace::SessionInfo& session_info) {
+  Planner::RootPlan* parse_to_plan(const std::string& query_str, const Catalog_Namespace::SessionInfo& session_info) {
     auto& cat = session_info.get_catalog();
     ParserWrapper pw{query_str};
     // if this is a calcite select or explain select run in calcite
