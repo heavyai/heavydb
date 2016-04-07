@@ -1196,10 +1196,10 @@ class MapDHandler : virtual public MapDIf {
 #ifdef HAVE_CALCITE
       try {
 #ifdef HAVE_RAVM
-        std::string query_ra;
-        _return.execution_time_ms += measure<>::execution([&]() { query_ra = parse_to_ra(query_str, session_info); });
         ParserWrapper pw{query_str};
         if (!pw.is_ddl && !pw.is_update_dml && !pw.is_other_explain) {
+          std::string query_ra;
+          _return.execution_time_ms += measure<>::execution([&]() { query_ra = parse_to_ra(query_str, session_info); });
           execute_rel_alg(_return, query_ra, column_format, session_info, executor_device_type, pw.is_select_explain);
           return;
         }
