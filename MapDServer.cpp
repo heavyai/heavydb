@@ -336,7 +336,7 @@ class MapDHandler : virtual public MapDIf {
       render_lock.reset(new std::lock_guard<std::mutex>(render_mutex_));
     }
     const auto session_info = get_session(session);
-    sql_execute_impl(_return, session_info, query_str, column_format, nonce, true);
+    sql_execute_impl(_return, session_info, query_str, column_format, nonce);
   }
 
   void get_rows_for_pixels(TPixelResult& _return,
@@ -1169,31 +1169,11 @@ class MapDHandler : virtual public MapDIf {
     }
   }
 
-  virtual int64_t get_row_count(const TSessionId session, const std::string& table_name) {
-#ifdef HAVE_CALCITE
-    const auto session_info = get_session(session);
-    TQueryResult ret;
-    sql_execute_impl(ret, session_info, "SELECT COUNT(*) FROM " + table_name + ";", true, "", false);
-    // check for our slightly weird zero row condition
-    if (ret.row_set.columns.empty()) {
-      return 0;
-    }
-    return ret.row_set.columns[0].data.int_col[0];
-#else
-    throw std::runtime_error("Not implemented yet");
-#endif  // HAVE_CALCITE
-  }
-
   void sql_execute_impl(TQueryResult& _return,
                         const Catalog_Namespace::SessionInfo& session_info,
                         const std::string& query_str,
                         const bool column_format,
-                        const std::string& nonce,
-#ifdef HAVE_CALCITE
-                        const bool with_calcite) {
-#else
-                        const bool /* with_calcite */) {
-#endif  // HAVE_CALCITE
+                        const std::string& nonce) {
     _return.nonce = nonce;
     _return.execution_time_ms = 0;
     auto& cat = session_info.get_catalog();
@@ -1207,38 +1187,24 @@ class MapDHandler : virtual public MapDIf {
       Planner::RootPlan* root_plan{nullptr};
 #ifdef HAVE_CALCITE
       try {
-        std::unique_ptr<Planner::RootPlan> plan_ptr;
-        ParserWrapper pw{query_str};
-        std::string query_ra;
-        // if this is a calcite select or explain select run in calcite
-        if (!pw.is_ddl && !pw.is_update_dml && !pw.is_other_explain) {
-          _return.execution_time_ms += measure<>::execution([&]() {
-            const std::string actual_query{pw.is_select_explain ? pw.actual_query : query_str};
-            query_ra = calcite_.process(session_info.get_currentUser().userName,
-                                        session_info.get_currentUser().passwd,
-                                        cat.get_currentDB().dbName,
-                                        legacy_syntax_ ? pg_shim(actual_query) : actual_query,
-                                        legacy_syntax_);
-#ifndef HAVE_RAVM
-            root_plan = translate_query(query_ra, cat);
-            plan_ptr.reset(root_plan);
-            if (pw.is_select_explain) {
-              root_plan->set_plan_dest(Planner::RootPlan::Dest::kEXPLAIN);
-            }
-#endif  // HAVE_RAVM
-          });
 #ifdef HAVE_RAVM
-          CHECK(!root_plan);
-          CHECK(!query_ra.empty());
+        std::string query_ra;
+        _return.execution_time_ms += measure<>::execution([&]() { query_ra = parse_to_ra(query_str, session_info); });
+        ParserWrapper pw{query_str};
+        if (!pw.is_ddl && !pw.is_update_dml && !pw.is_other_explain) {
           execute_rel_alg(_return, query_ra, column_format, session_info, executor_device_type, pw.is_select_explain);
-#else
-          CHECK(root_plan);
-          execute_root_plan(_return, root_plan, column_format, session_info, executor_device_type);
-#endif  // HAVE_RAVM
           return;
-        } else {
-          LOG(ERROR) << "passing query to legacy processor";
         }
+#else
+        std::unique_ptr<const Planner::RootPlan> plan_ptr;
+        _return.execution_time_ms +=
+            measure<>::execution([&]() { plan_ptr.reset(parse_to_plan(query_str, session_info)); });
+        if (plan_ptr) {
+          execute_root_plan(_return, plan_ptr.get(), column_format, session_info, executor_device_type);
+          return;
+        }
+#endif  // HAVE_RAVM
+        LOG(ERROR) << "passing query to legacy processor";
       } catch (std::exception& e) {
         TMapDException ex;
         ex.error_msg = std::string("Exception: ") + e.what();
@@ -1300,6 +1266,44 @@ class MapDHandler : virtual public MapDIf {
     });
     LOG(INFO) << "Total: " << _return.total_time_ms << " (ms), Execution: " << _return.execution_time_ms << " (ms)";
   }
+
+#ifdef HAVE_CALCITE
+  const Planner::RootPlan* parse_to_plan(const std::string& query_str,
+                                         const Catalog_Namespace::SessionInfo& session_info) {
+    auto& cat = session_info.get_catalog();
+    ParserWrapper pw{query_str};
+    // if this is a calcite select or explain select run in calcite
+    if (!pw.is_ddl && !pw.is_update_dml && !pw.is_other_explain) {
+      const std::string actual_query{pw.is_select_explain ? pw.actual_query : query_str};
+      const auto query_ra = calcite_.process(session_info.get_currentUser().userName,
+                                             session_info.get_currentUser().passwd,
+                                             cat.get_currentDB().dbName,
+                                             legacy_syntax_ ? pg_shim(actual_query) : actual_query,
+                                             legacy_syntax_);
+      auto root_plan = translate_query(query_ra, cat);
+      CHECK(root_plan);
+      if (pw.is_select_explain) {
+        root_plan->set_plan_dest(Planner::RootPlan::Dest::kEXPLAIN);
+      }
+      return root_plan;
+    }
+    return nullptr;
+  }
+
+  std::string parse_to_ra(const std::string& query_str, const Catalog_Namespace::SessionInfo& session_info) {
+    ParserWrapper pw{query_str};
+    const std::string actual_query{pw.is_select_explain ? pw.actual_query : query_str};
+    auto& cat = session_info.get_catalog();
+    if (!pw.is_ddl && !pw.is_update_dml && !pw.is_other_explain) {
+      return calcite_.process(session_info.get_currentUser().userName,
+                              session_info.get_currentUser().passwd,
+                              cat.get_currentDB().dbName,
+                              legacy_syntax_ ? pg_shim(actual_query) : actual_query,
+                              legacy_syntax_);
+    }
+    return "";
+  }
+#endif  // HAVE_CALCITE
 
   void throw_profile_exception(const std::string& error_msg) {
     TMapDException ex;
