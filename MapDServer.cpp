@@ -749,6 +749,12 @@ class MapDHandler : virtual public MapDIf {
       auto session_it = get_session_it(session);
       auto session_info_ptr = session_it->second.get();
       try {
+#ifdef HAVE_RAVM
+        std::string query_ra;
+        _return.execution_time_ms +=
+            measure<>::execution([&]() { query_ra = parse_to_ra(query_str, *session_info_ptr); });
+        render_rel_alg(_return, query_ra, *session_info_ptr, render_type);
+#else
 #ifdef HAVE_CALCITE
         ParserWrapper pw{query_str};
         if (pw.is_select_explain || pw.is_other_explain || pw.is_ddl || pw.is_update_dml) {
@@ -764,6 +770,7 @@ class MapDHandler : virtual public MapDIf {
         CHECK(root_plan);
         std::unique_ptr<Planner::RootPlan> plan_ptr(root_plan);  // make sure it's deleted
         render_root_plan(_return, root_plan, *session_info_ptr, render_type, render_properties, col_render_properties);
+#endif  // HAVE_RAVM
       } catch (std::exception& e) {
         TMapDException ex;
         ex.error_msg = std::string("Exception: ") + e.what();
@@ -1006,7 +1013,8 @@ class MapDHandler : virtual public MapDIf {
     RelAlgExecutor ra_executor(executor.get(), cat);
     const auto result = ra_executor.executeRelAlgSeq(ed_list,
                                                      {executor_device_type, true, ExecutorOptLevel::Default},
-                                                     {false, allow_multifrag_, just_explain, allow_loop_joins_});
+                                                     {false, allow_multifrag_, just_explain, allow_loop_joins_},
+                                                     {false, 0, 0, ""});
     if (just_explain) {
       convert_explain(_return, result.getRows(), column_format);
     } else {
@@ -1088,6 +1096,47 @@ class MapDHandler : virtual public MapDIf {
     CHECK(sptr);
     _return.image = *sptr;
   }
+
+#ifdef HAVE_RAVM
+  void render_rel_alg(TRenderResult& _return,
+                      const std::string& query_ra,
+                      const Catalog_Namespace::SessionInfo& session_info,
+                      const std::string& render_type) {
+    const auto& cat = session_info.get_catalog();
+    auto executor = Executor::getExecutor(cat.get_currentDB().dbId,
+                                          jit_debug_ ? "/tmp" : "",
+                                          jit_debug_ ? "mapdquery" : "",
+                                          0,
+                                          0,
+                                          nullptr);
+    RelAlgExecutor ra_executor(executor.get(), cat);
+    auto clock_begin = timer_start();
+    rapidjson::Document query_ast;
+    query_ast.Parse(query_ra.c_str());
+    CHECK(!query_ast.HasParseError());
+    CHECK(query_ast.IsObject());
+    const auto ra = ra_interpret(query_ast, cat);
+    auto ed_list = get_execution_descriptors(ra.get());
+    const auto exe_result =
+        ra_executor.executeRelAlgSeq(ed_list,
+                                     {session_info.get_executor_device_type(), true, ExecutorOptLevel::Default},
+                                     {false, allow_multifrag_, false, allow_loop_joins_},
+                                     {true, 1, session_info.get_session_id(), render_type});
+    const auto& results = exe_result.getRows();
+    // reduce execution time by the time spent during queue waiting
+    _return.execution_time_ms = timer_stop(clock_begin) - results.getQueueTime() - results.getRenderTime();
+    _return.render_time_ms = results.getRenderTime();
+    const auto img_row = results.getNextRow(false, false);
+    CHECK_EQ(size_t(1), img_row.size());
+    const auto& img_tv = img_row.front();
+    const auto scalar_tv = boost::get<ScalarTargetValue>(&img_tv);
+    const auto nullable_sptr = boost::get<NullableString>(scalar_tv);
+    CHECK(nullable_sptr);
+    auto sptr = boost::get<std::string>(nullable_sptr);
+    CHECK(sptr);
+    _return.image = *sptr;
+  }
+#endif  // HAVE_RAVM
 
   static std::vector<TargetMetaInfo> getTargetMetaInfo(
       const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& targets) {

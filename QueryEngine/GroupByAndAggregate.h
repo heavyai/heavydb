@@ -773,8 +773,8 @@ class ResultRows {
     return targets_[col_idx].agg_kind == kAVG ? SQLTypeInfo(kDOUBLE, false) : targets_[col_idx].sql_type;
   }
 
-  int64_t getQueueTime() { return queue_time_ms_; }
-  int64_t getRenderTime() { return render_time_ms_; }
+  int64_t getQueueTime() const { return queue_time_ms_; }
+  int64_t getRenderTime() const { return render_time_ms_; }
 
   void initAggInitValCache(size_t agg_col_count);
 

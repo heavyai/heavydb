@@ -12,16 +12,35 @@ class RelAlgExecutor {
  public:
   RelAlgExecutor(Executor* executor, const Catalog_Namespace::Catalog& cat) : executor_(executor), cat_(cat), now_(0) {}
 
-  ExecutionResult executeRelAlgSeq(std::vector<RaExecutionDesc>&, const CompilationOptions&, const ExecutionOptions&);
+  struct RenderInfo {
+    const bool is_render;
+    const int render_widget_id;
+    const int session_id;
+    const std::string render_type;
+  };
+
+  ExecutionResult executeRelAlgSeq(std::vector<RaExecutionDesc>&,
+                                   const CompilationOptions&,
+                                   const ExecutionOptions&,
+                                   const RenderInfo&);
 
  private:
-  ExecutionResult executeCompound(const RelCompound*, const CompilationOptions&, const ExecutionOptions&);
+  ExecutionResult executeCompound(const RelCompound*,
+                                  const CompilationOptions&,
+                                  const ExecutionOptions&,
+                                  const RenderInfo&);
 
-  ExecutionResult executeProject(const RelProject*, const CompilationOptions&, const ExecutionOptions&);
+  ExecutionResult executeProject(const RelProject*,
+                                 const CompilationOptions&,
+                                 const ExecutionOptions&,
+                                 const RenderInfo&);
 
-  ExecutionResult executeFilter(const RelFilter*, const CompilationOptions&, const ExecutionOptions&);
+  ExecutionResult executeFilter(const RelFilter*,
+                                const CompilationOptions&,
+                                const ExecutionOptions&,
+                                const RenderInfo&);
 
-  ExecutionResult executeSort(const RelSort*, const CompilationOptions&, const ExecutionOptions&);
+  ExecutionResult executeSort(const RelSort*, const CompilationOptions&, const ExecutionOptions&, const RenderInfo&);
 
   // TODO(alex): just move max_groups_buffer_entry_guess to RelAlgExecutionUnit once
   //             we deprecate the plan-based executor paths and remove WorkUnit
@@ -37,7 +56,8 @@ class RelAlgExecutor {
                                   const std::vector<TargetMetaInfo>& targets_meta,
                                   const bool is_agg,
                                   const CompilationOptions& co,
-                                  const ExecutionOptions& eo);
+                                  const ExecutionOptions& eo,
+                                  const RenderInfo&);
 
   ExecutionResult handleRetry(const int32_t error_code_in,
                               const RelAlgExecutor::WorkUnit& work_unit,

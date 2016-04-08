@@ -6,9 +6,12 @@
 #include "RexVisitor.h"
 #include "ScalarExprVisitor.h"
 
+#include "../Shared/measure.h"
+
 ExecutionResult RelAlgExecutor::executeRelAlgSeq(std::vector<RaExecutionDesc>& exec_descs,
                                                  const CompilationOptions& co,
-                                                 const ExecutionOptions& eo) {
+                                                 const ExecutionOptions& eo,
+                                                 const RenderInfo& render_info) {
   std::lock_guard<std::mutex> lock(executor_->execute_mutex_);
   decltype(temporary_tables_)().swap(temporary_tables_);
   decltype(target_exprs_owned_)().swap(target_exprs_owned_);
@@ -23,25 +26,25 @@ ExecutionResult RelAlgExecutor::executeRelAlgSeq(std::vector<RaExecutionDesc>& e
     const auto body = exec_desc.getBody();
     const auto compound = dynamic_cast<const RelCompound*>(body);
     if (compound) {
-      exec_desc.setResult(executeCompound(compound, co, eo));
+      exec_desc.setResult(executeCompound(compound, co, eo, render_info));
       addTemporaryTable(-compound->getId(), &exec_desc.getResult().getRows());
       continue;
     }
     const auto project = dynamic_cast<const RelProject*>(body);
     if (project) {
-      exec_desc.setResult(executeProject(project, co, eo));
+      exec_desc.setResult(executeProject(project, co, eo, render_info));
       addTemporaryTable(-project->getId(), &exec_desc.getResult().getRows());
       continue;
     }
     const auto filter = dynamic_cast<const RelFilter*>(body);
     if (filter) {
-      exec_desc.setResult(executeFilter(filter, co, eo));
+      exec_desc.setResult(executeFilter(filter, co, eo, render_info));
       addTemporaryTable(-filter->getId(), &exec_desc.getResult().getRows());
       continue;
     }
     const auto sort = dynamic_cast<const RelSort*>(body);
     if (sort) {
-      exec_desc.setResult(executeSort(sort, co, eo));
+      exec_desc.setResult(executeSort(sort, co, eo, render_info));
       addTemporaryTable(-sort->getId(), &exec_desc.getResult().getRows());
       continue;
     }
@@ -290,23 +293,26 @@ std::vector<TargetMetaInfo> get_targets_meta(const RA* ra_node, const std::vecto
 
 ExecutionResult RelAlgExecutor::executeCompound(const RelCompound* compound,
                                                 const CompilationOptions& co,
-                                                const ExecutionOptions& eo) {
+                                                const ExecutionOptions& eo,
+                                                const RenderInfo& render_info) {
   const auto work_unit = createCompoundWorkUnit(compound, {});
-  return executeWorkUnit(work_unit, compound->getOutputMetainfo(), compound->isAggregate(), co, eo);
+  return executeWorkUnit(work_unit, compound->getOutputMetainfo(), compound->isAggregate(), co, eo, render_info);
 }
 
 ExecutionResult RelAlgExecutor::executeProject(const RelProject* project,
                                                const CompilationOptions& co,
-                                               const ExecutionOptions& eo) {
+                                               const ExecutionOptions& eo,
+                                               const RenderInfo& render_info) {
   const auto work_unit = createProjectWorkUnit(project, {});
-  return executeWorkUnit(work_unit, project->getOutputMetainfo(), false, co, eo);
+  return executeWorkUnit(work_unit, project->getOutputMetainfo(), false, co, eo, render_info);
 }
 
 ExecutionResult RelAlgExecutor::executeFilter(const RelFilter* filter,
                                               const CompilationOptions& co,
-                                              const ExecutionOptions& eo) {
+                                              const ExecutionOptions& eo,
+                                              const RenderInfo& render_info) {
   const auto work_unit = createFilterWorkUnit(filter, {});
-  return executeWorkUnit(work_unit, filter->getOutputMetainfo(), false, co, eo);
+  return executeWorkUnit(work_unit, filter->getOutputMetainfo(), false, co, eo, render_info);
 }
 
 namespace {
@@ -333,14 +339,18 @@ size_t get_scan_limit(const RelAlgNode* ra, const size_t limit) {
 
 ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
                                             const CompilationOptions& co,
-                                            const ExecutionOptions& eo) {
+                                            const ExecutionOptions& eo,
+                                            const RenderInfo& render_info) {
   CHECK_EQ(size_t(1), sort->inputCount());
   const auto source = sort->getInput(0);
   CHECK(!dynamic_cast<const RelSort*>(source));
   const auto compound = dynamic_cast<const RelCompound*>(source);
   const auto source_work_unit = createSortInputWorkUnit(sort);
   auto source_result = executeWorkUnit(
-      source_work_unit, source->getOutputMetainfo(), compound ? compound->isAggregate() : false, co, eo);
+      source_work_unit, source->getOutputMetainfo(), compound ? compound->isAggregate() : false, co, eo, render_info);
+  if (render_info.is_render) {
+    return source_result;
+  }
   auto rows_to_sort = source_result.getRows();
   if (eo.just_explain) {
     return {rows_to_sort, {}};
@@ -385,9 +395,21 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(const RelAlgExecutor::WorkUnit& 
                                                 const std::vector<TargetMetaInfo>& targets_meta,
                                                 const bool is_agg,
                                                 const CompilationOptions& co,
-                                                const ExecutionOptions& eo) {
+                                                const ExecutionOptions& eo,
+                                                const RenderInfo& render_info) {
   int32_t error_code{0};
   size_t max_groups_buffer_entry_guess = work_unit.max_groups_buffer_entry_guess;
+  std::unique_ptr<RenderAllocatorMap> render_allocator_map;
+  if (render_info.is_render) {
+    if (co.device_type_ != ExecutorDeviceType::GPU) {
+      throw std::runtime_error("Backend rendering is only supported on GPU");
+    }
+    if (!executor_->render_manager_) {
+      throw std::runtime_error("This build doesn't support backend rendering");
+    }
+    render_allocator_map.reset(new RenderAllocatorMap(
+        cat_.get_dataMgr().cudaMgr_, executor_->render_manager_, executor_->blockSize(), executor_->gridSize()));
+  }
   ExecutionResult result = {
       executor_->executeWorkUnit(&error_code,
                                  max_groups_buffer_entry_guess,
@@ -398,8 +420,34 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(const RelAlgExecutor::WorkUnit& 
                                  eo,
                                  cat_,
                                  executor_->row_set_mem_owner_,
-                                 nullptr),
+                                 render_allocator_map.get()),
       targets_meta};
+  if (render_info.is_render) {
+    if (error_code == Executor::ERR_OUT_OF_RENDER_MEM) {
+      throw std::runtime_error("Not enough OpenGL memory to render the query results");
+    }
+    if (error_code == Executor::ERR_OUT_OF_GPU_MEM) {
+      throw std::runtime_error("Not enough GPU memory to execute the query");
+    }
+    if (error_code && !work_unit.exe_unit.scan_limit) {
+      CHECK_LT(error_code, 0);
+      throw std::runtime_error("Ran out of slots in the output buffer");
+    }
+    auto clock_begin = timer_start();
+    CHECK_EQ(target_exprs_owned_.size(), targets_meta.size());
+    std::vector<std::shared_ptr<Analyzer::TargetEntry>> target_entries;
+    for (size_t i = 0; i < targets_meta.size(); ++i) {
+      target_entries.emplace_back(
+          new Analyzer::TargetEntry(targets_meta[i].get_resname(), target_exprs_owned_[i], false));
+    }
+    auto image_bytes = executor_->renderRows(target_entries,
+                                             render_info.render_type,
+                                             render_allocator_map.get(),
+                                             render_info.session_id,
+                                             render_info.render_widget_id);
+    int64_t render_time_ms = timer_stop(clock_begin);
+    return {ResultRows(image_bytes, 0, render_time_ms), {}};
+  }
   if (!error_code) {
     return result;
   }
