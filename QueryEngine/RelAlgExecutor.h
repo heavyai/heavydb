@@ -59,6 +59,12 @@ class RelAlgExecutor {
                                   const ExecutionOptions& eo,
                                   const RenderInfo&);
 
+  ExecutionResult renderWorkUnit(const RelAlgExecutor::WorkUnit& work_unit,
+                                 const std::vector<TargetMetaInfo>& targets_meta,
+                                 RenderAllocatorMap* render_allocator_map,
+                                 const RenderInfo& render_info,
+                                 const int32_t error_code);
+
   ExecutionResult handleRetry(const int32_t error_code_in,
                               const RelAlgExecutor::WorkUnit& work_unit,
                               const std::vector<TargetMetaInfo>& targets_meta,

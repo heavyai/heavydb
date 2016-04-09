@@ -437,6 +437,7 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(const RelAlgExecutor::WorkUnit& 
   return handleRetry(error_code, {work_unit.exe_unit, max_groups_buffer_entry_guess}, targets_meta, is_agg, co, eo);
 }
 
+
 ExecutionResult RelAlgExecutor::handleRetry(const int32_t error_code_in,
                                             const RelAlgExecutor::WorkUnit& work_unit,
                                             const std::vector<TargetMetaInfo>& targets_meta,
