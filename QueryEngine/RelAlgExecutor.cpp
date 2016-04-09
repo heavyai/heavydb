@@ -422,32 +422,6 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(const RelAlgExecutor::WorkUnit& 
                                  executor_->row_set_mem_owner_,
                                  render_allocator_map.get()),
       targets_meta};
-  if (render_info.is_render) {
-    if (error_code == Executor::ERR_OUT_OF_RENDER_MEM) {
-      throw std::runtime_error("Not enough OpenGL memory to render the query results");
-    }
-    if (error_code == Executor::ERR_OUT_OF_GPU_MEM) {
-      throw std::runtime_error("Not enough GPU memory to execute the query");
-    }
-    if (error_code && !work_unit.exe_unit.scan_limit) {
-      CHECK_LT(error_code, 0);
-      throw std::runtime_error("Ran out of slots in the output buffer");
-    }
-    auto clock_begin = timer_start();
-    CHECK_EQ(target_exprs_owned_.size(), targets_meta.size());
-    std::vector<std::shared_ptr<Analyzer::TargetEntry>> target_entries;
-    for (size_t i = 0; i < targets_meta.size(); ++i) {
-      target_entries.emplace_back(
-          new Analyzer::TargetEntry(targets_meta[i].get_resname(), target_exprs_owned_[i], false));
-    }
-    auto image_bytes = executor_->renderRows(target_entries,
-                                             render_info.render_type,
-                                             render_allocator_map.get(),
-                                             render_info.session_id,
-                                             render_info.render_widget_id);
-    int64_t render_time_ms = timer_stop(clock_begin);
-    return {ResultRows(image_bytes, 0, render_time_ms), {}};
-  }
   if (!error_code) {
     return result;
   }
