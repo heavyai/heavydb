@@ -1207,11 +1207,6 @@ int Executor::deviceCount(const ExecutorDeviceType device_type) const {
 }
 
 std::vector<llvm::Value*> Executor::codegen(const Analyzer::CaseExpr* case_expr, const CompilationOptions& co) {
-  // Generate a "projection" function which takes the case conditions and
-  // values as arguments, interleaved. The 'else' expression is the last one.
-  const auto& expr_pair_list = case_expr->get_expr_pair_list();
-  const auto else_expr = case_expr->get_else_expr();
-  std::vector<llvm::Type*> case_arg_types;
   const auto case_ti = case_expr->get_type_info();
   llvm::Type* case_llvm_type = nullptr;
   bool is_real_str = false;
@@ -1229,76 +1224,68 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::CaseExpr* case_expr,
     }
   }
   CHECK(case_llvm_type);
-  for (const auto& expr_pair : expr_pair_list) {
-    CHECK_EQ(expr_pair.first->get_type_info().get_type(), kBOOLEAN);
-    case_arg_types.push_back(llvm::Type::getInt1Ty(cgen_state_->context_));
-    CHECK(expr_pair.second->get_type_info() == case_ti);
-    case_arg_types.push_back(case_llvm_type);
-  }
-  CHECK(!else_expr || else_expr->get_type_info() == case_ti);
-  case_arg_types.push_back(case_llvm_type);
-  auto ft = llvm::FunctionType::get(case_llvm_type, case_arg_types, false);
-  auto case_func = llvm::Function::Create(ft, llvm::Function::ExternalLinkage, "case_func", cgen_state_->module_);
-  cgen_state_->helper_functions_.push_back(case_func);
-  const auto end_case = llvm::BasicBlock::Create(cgen_state_->context_, "end_case", case_func);
-  size_t expr_idx = 0;
-  auto& case_branch_exprs = case_func->getArgumentList();
-  auto arg_it = case_branch_exprs.begin();
-  llvm::BasicBlock* next_cmp_branch{end_case};
-  auto& case_func_entry = case_func->front();
-  llvm::IRBuilder<> case_func_builder(&case_func_entry);
-  for (size_t i = 0; i < expr_pair_list.size(); ++i) {
-    CHECK(arg_it != case_branch_exprs.end());
-    llvm::Value* cond_lv = arg_it++;
-    CHECK(arg_it != case_branch_exprs.end());
-    llvm::Value* ret_lv = arg_it++;
-    auto ret_case = llvm::BasicBlock::Create(cgen_state_->context_, "ret_case", case_func, next_cmp_branch);
-    case_func_builder.SetInsertPoint(ret_case);
-    case_func_builder.CreateRet(ret_lv);
-    auto cmp_case = llvm::BasicBlock::Create(cgen_state_->context_, "cmp_case", case_func, ret_case);
-    case_func_builder.SetInsertPoint(cmp_case);
-    case_func_builder.CreateCondBr(cond_lv, ret_case, next_cmp_branch);
-    next_cmp_branch = cmp_case;
-    ++expr_idx;
-  }
-  CHECK(arg_it != case_branch_exprs.end());
-  case_func_builder.SetInsertPoint(end_case);
-  case_func_builder.CreateRet(arg_it++);
-  CHECK(arg_it == case_branch_exprs.end());
-  case_func->addAttribute(llvm::AttributeSet::FunctionIndex, llvm::Attribute::AlwaysInline);
-  std::vector<llvm::Value*> case_func_args;
-  // The 'case_func' function checks arguments for match in reverse order
-  // (code generation is easier this way because of how 'BasicBlock::Create' works).
-  // Reverse the actual arguments to compensate for this, then call the function.
-  for (const auto& expr_pair : boost::adaptors::reverse(expr_pair_list)) {
-    case_func_args.push_back(toBool(codegen(expr_pair.first.get(), true, co).front()));
-    auto branch_val_lvs = codegen(expr_pair.second.get(), true, co);
-    if (is_real_str) {
-      if (branch_val_lvs.size() == 3) {
-        case_func_args.push_back(cgen_state_->emitCall("string_pack", {branch_val_lvs[1], branch_val_lvs[2]}));
-      } else {
-        case_func_args.push_back(branch_val_lvs.front());
-      }
-    } else {
-      CHECK_EQ(size_t(1), branch_val_lvs.size());
-      case_func_args.push_back(branch_val_lvs.front());
-    }
-  }
-  CHECK(else_expr);
-  auto else_lvs = codegen(else_expr, true, co);
-  if (is_real_str && dynamic_cast<const Analyzer::Constant*>(else_expr)) {
-    CHECK_EQ(size_t(3), else_lvs.size());
-    case_func_args.push_back(cgen_state_->emitCall("string_pack", {else_lvs[1], else_lvs[2]}));
-  } else {
-    case_func_args.push_back(else_lvs.front());
-  }
-  llvm::Value* case_val = cgen_state_->ir_builder_.CreateCall(case_func, case_func_args);
+  CHECK(case_expr->get_else_expr()->get_type_info() == case_ti);
+  llvm::Value* case_val = codegenCase(case_expr, case_llvm_type, is_real_str, co);
   std::vector<llvm::Value*> ret_vals{case_val};
   if (is_real_str) {
     ret_vals.push_back(cgen_state_->emitCall("extract_str_ptr", {case_val}));
     ret_vals.push_back(cgen_state_->emitCall("extract_str_len", {case_val}));
   }
   return ret_vals;
+}
+
+llvm::Value* Executor::codegenCase(const Analyzer::CaseExpr* case_expr,
+                                   llvm::Type* case_llvm_type,
+                                   const bool is_real_str,
+                                   const CompilationOptions& co) {
+  const auto& expr_pair_list = case_expr->get_expr_pair_list();
+  std::vector<llvm::Value*> then_lvs;
+  std::vector<llvm::BasicBlock*> then_bbs;
+  const auto end_bb = llvm::BasicBlock::Create(cgen_state_->context_, "end_case", cgen_state_->row_func_);
+  for (const auto& expr_pair : expr_pair_list) {
+    const auto when_lv = toBool(codegen(expr_pair.first.get(), true, co).front());
+    const auto cmp_bb = cgen_state_->ir_builder_.GetInsertBlock();
+    const auto then_bb = llvm::BasicBlock::Create(cgen_state_->context_, "then_case", cgen_state_->row_func_);
+    cgen_state_->ir_builder_.SetInsertPoint(then_bb);
+    auto then_bb_lvs = codegen(expr_pair.second.get(), true, co);
+    if (is_real_str) {
+      if (then_bb_lvs.size() == 3) {
+        then_lvs.push_back(cgen_state_->emitCall("string_pack", {then_bb_lvs[1], then_bb_lvs[2]}));
+      } else {
+        then_lvs.push_back(then_bb_lvs.front());
+      }
+    } else {
+      CHECK_EQ(size_t(1), then_bb_lvs.size());
+      then_lvs.push_back(then_bb_lvs.front());
+    }
+    then_bbs.push_back(cgen_state_->ir_builder_.GetInsertBlock());
+    cgen_state_->ir_builder_.CreateBr(end_bb);
+    const auto when_bb = llvm::BasicBlock::Create(cgen_state_->context_, "when_case", cgen_state_->row_func_);
+    cgen_state_->ir_builder_.SetInsertPoint(cmp_bb);
+    cgen_state_->ir_builder_.CreateCondBr(when_lv, then_bb, when_bb);
+    cgen_state_->ir_builder_.SetInsertPoint(when_bb);
+  }
+  const auto else_expr = case_expr->get_else_expr();
+  CHECK(else_expr);
+  auto else_lvs = codegen(else_expr, true, co);
+  llvm::Value* else_lv{nullptr};
+  if (is_real_str && dynamic_cast<const Analyzer::Constant*>(else_expr)) {
+    CHECK_EQ(size_t(3), else_lvs.size());
+    else_lv = cgen_state_->emitCall("string_pack", {else_lvs[1], else_lvs[2]});
+  } else {
+    else_lv = else_lvs.front();
+  }
+  CHECK(else_lv);
+  auto else_bb = cgen_state_->ir_builder_.GetInsertBlock();
+  cgen_state_->ir_builder_.CreateBr(end_bb);
+  cgen_state_->ir_builder_.SetInsertPoint(end_bb);
+  auto then_phi = cgen_state_->ir_builder_.CreatePHI(case_llvm_type, expr_pair_list.size() + 1);
+  CHECK_EQ(then_bbs.size(), then_lvs.size());
+  for (size_t i = 0; i < then_bbs.size(); ++i) {
+    then_phi->addIncoming(then_lvs[i], then_bbs[i]);
+  }
+  then_phi->addIncoming(else_lv, else_bb);
+  return then_phi;
 }
 
 llvm::Value* Executor::codegen(const Analyzer::ExtractExpr* extract_expr, const CompilationOptions& co) {

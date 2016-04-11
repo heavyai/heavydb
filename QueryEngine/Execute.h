@@ -185,6 +185,10 @@ class Executor {
                                                     const int dict_id);
   int deviceCount(const ExecutorDeviceType) const;
   std::vector<llvm::Value*> codegen(const Analyzer::CaseExpr*, const CompilationOptions&);
+  llvm::Value* codegenCase(const Analyzer::CaseExpr*,
+                           llvm::Type* case_llvm_type,
+                           const bool is_real_str,
+                           const CompilationOptions&);
   llvm::Value* codegen(const Analyzer::ExtractExpr*, const CompilationOptions&);
   llvm::Value* codegen(const Analyzer::DatetruncExpr*, const CompilationOptions&);
   llvm::Value* codegen(const Analyzer::CharLengthExpr*, const CompilationOptions&);

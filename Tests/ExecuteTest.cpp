@@ -589,6 +589,7 @@ TEST(Select, Case) {
     c("SELECT CASE WHEN x BETWEEN 1 AND 7 THEN str WHEN x BETWEEN 7 AND 10 THEN 'eight' ELSE 'ooops' END AS g, "
       "COUNT(*) FROM test GROUP BY g ORDER BY g;",
       dt);
+    c("SELECT y AS key0, SUM(CASE WHEN x > 7 THEN x / (x - 7) ELSE 99 END) FROM test GROUP BY key0 ORDER BY key0;", dt);
   }
 }
 
