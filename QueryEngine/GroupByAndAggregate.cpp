@@ -49,7 +49,7 @@ ResultRows::ResultRows(const QueryMemoryDescriptor& query_mem_desc,
   }
   bool has_lazy_columns = false;
   for (const auto target_expr : targets) {
-    const auto agg_info = target_info(target_expr);
+    const auto agg_info = target_info(target_expr, {});
     bool is_real_string = agg_info.sql_type.is_string() && agg_info.sql_type.get_compression() == kENCODING_NONE;
     bool is_array = agg_info.sql_type.is_array();
     CHECK(!is_real_string || !is_array);
@@ -1398,7 +1398,7 @@ std::vector<ssize_t> QueryExecutionContext::allocateCountDistinctBuffers(const b
        target_idx < executor_->plan_state_->target_exprs_.size() && agg_col_idx < agg_col_count;
        ++target_idx, ++agg_col_idx) {
     const auto target_expr = executor_->plan_state_->target_exprs_[target_idx];
-    const auto agg_info = target_info(target_expr);
+    const auto agg_info = target_info(target_expr, {});
     if (agg_info.is_distinct) {
       CHECK(agg_info.is_agg && agg_info.agg_kind == kCOUNT);
       auto count_distinct_it = query_mem_desc_.count_distinct_descriptors_.find(target_idx);
@@ -1490,7 +1490,7 @@ void QueryExecutionContext::outputBin(ResultRows& results,
     CHECK(!is_real_string || !is_array);
     const auto col_var = dynamic_cast<Analyzer::ColumnVar*>(target_expr);
     const int global_col_id{col_var ? col_var->get_column_id() : -1};
-    const auto agg_info = target_info(target_expr);
+    const auto agg_info = target_info(target_expr, {});
     if (is_real_string || is_array) {
       int64_t str_len =
           group_by_buffer[key_off + agg_columnar_off(
@@ -2220,7 +2220,7 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const size_t max_groups_buff
   CountDistinctDescriptors count_distinct_descriptors;
   size_t target_idx{0};
   for (const auto target_expr : ra_exe_unit_.target_exprs) {
-    auto agg_info = target_info(target_expr);
+    auto agg_info = target_info(target_expr, {});
     if (agg_info.is_distinct) {
       CHECK(agg_info.is_agg);
       CHECK_EQ(kCOUNT, agg_info.agg_kind);
@@ -2424,7 +2424,7 @@ GroupByAndAggregate::KeylessInfo GroupByAndAggregate::getKeylessInfo(
   int32_t index{0};
   int64_t init_val{0};
   for (const auto target_expr : target_expr_list) {
-    auto agg_info = target_info(target_expr);
+    auto agg_info = target_info(target_expr, {});
     if (!found && agg_info.is_agg) {
       const auto agg_expr = dynamic_cast<Analyzer::AggExpr*>(target_expr);
       CHECK(agg_expr);
@@ -2896,7 +2896,7 @@ void GroupByAndAggregate::codegenAggCalls(llvm::Value* agg_out_start_ptr,
         static_cast<Analyzer::UOper*>(target_expr)->get_optype() == kUNNEST) {
       throw std::runtime_error("UNNEST not supported in the projection list yet.");
     }
-    const auto agg_info = target_info(target_expr);
+    const auto agg_info = target_info(target_expr, ra_exe_unit_.quals);
     const auto agg_fn_names = agg_fn_base_names(agg_info);
     auto target_lvs = codegenAggArg(target_expr, co);
     llvm::Value* str_target_lv{nullptr};
@@ -2998,7 +2998,7 @@ void GroupByAndAggregate::codegenCountDistinct(const size_t target_idx,
                                                std::vector<llvm::Value*>& agg_args,
                                                const QueryMemoryDescriptor& query_mem_desc,
                                                const ExecutorDeviceType device_type) {
-  const auto agg_info = target_info(target_expr);
+  const auto agg_info = target_info(target_expr, {});
   const auto& arg_ti = static_cast<const Analyzer::AggExpr*>(target_expr)->get_arg()->get_type_info();
   if (arg_ti.is_fp()) {
     agg_args.back() = executor_->cgen_state_->ir_builder_.CreateBitCast(

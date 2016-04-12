@@ -277,8 +277,28 @@ inline const Analyzer::AggExpr* cast_to_agg_expr(const std::shared_ptr<Analyzer:
   return dynamic_cast<const Analyzer::AggExpr*>(target_expr.get());
 }
 
+inline bool constrained_not_null(const Analyzer::Expr* expr, const std::list<std::shared_ptr<Analyzer::Expr>>& quals) {
+  for (const auto qual : quals) {
+    auto uoper = std::dynamic_pointer_cast<Analyzer::UOper>(qual);
+    if (!uoper) {
+      continue;
+    }
+    bool is_negated{false};
+    if (uoper->get_optype() == kNOT) {
+      uoper = std::dynamic_pointer_cast<Analyzer::UOper>(uoper->get_own_operand());
+      is_negated = true;
+    }
+    if (uoper && (uoper->get_optype() == kISNOTNULL || (is_negated && uoper->get_optype() == kISNULL))) {
+      if (*uoper->get_own_operand() == *expr) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 template <class PointerType>
-inline TargetInfo target_info(const PointerType target_expr) {
+inline TargetInfo target_info(const PointerType target_expr, const std::list<std::shared_ptr<Analyzer::Expr>>& quals) {
   const auto agg_expr = cast_to_agg_expr(target_expr);
   bool notnull = target_expr->get_type_info().get_notnull();
   if (!agg_expr) {
@@ -297,6 +317,9 @@ inline TargetInfo target_info(const PointerType target_expr) {
     is_distinct = agg_expr->get_is_distinct();
   }
   bool skip_null = !agg_arg_ti.get_notnull();
+  if (skip_null && constrained_not_null(agg_arg, quals)) {
+    skip_null = false;
+  }
   return {
       true,
       agg_expr->get_aggtype(),
@@ -578,7 +601,7 @@ class ResultRows {
         just_explain_(false),
         queue_time_ms_(queue_time_ms) {
     for (const auto target_expr : targets) {
-      const auto agg_info = target_info(target_expr);
+      const auto agg_info = target_info(target_expr, {});
       targets_.push_back(agg_info);
     }
     initAggInitValCache(query_mem_desc.agg_col_widths.size());
@@ -1313,7 +1336,7 @@ inline std::vector<int8_t> get_col_byte_widths(const T& col_expr_list) {
       // row index
       col_widths.push_back(sizeof(int64_t));
     } else {
-      const auto agg_info = target_info(col_expr);
+      const auto agg_info = target_info(col_expr, {});
       if ((agg_info.sql_type.is_string() && agg_info.sql_type.get_compression() == kENCODING_NONE) ||
           agg_info.sql_type.is_array()) {
         col_widths.push_back(sizeof(int64_t));

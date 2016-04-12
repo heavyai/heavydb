@@ -3534,7 +3534,7 @@ int32_t Executor::executePlanWithoutGroupBy(const CompilationResult& compilation
   results.beginRow();
   size_t out_vec_idx = 0;
   for (const auto target_expr : target_exprs) {
-    const auto agg_info = target_info(target_expr);
+    const auto agg_info = target_info(target_expr, {});
     CHECK(agg_info.is_agg);
     uint32_t num_fragments = col_buffers.size();
     const auto val1 =
