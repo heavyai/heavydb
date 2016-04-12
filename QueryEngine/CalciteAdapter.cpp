@@ -731,10 +731,10 @@ std::vector<std::shared_ptr<Analyzer::TargetEntry>> handle_logical_aggregate(
     CHECK(fields_it != fields.End());
     CHECK(fields_it->IsString());
     CHECK_EQ(target->get_resname(), fields_it->GetString());
-    const auto target_expr = target->get_expr();
-    const auto uoper_expr = dynamic_cast<const Analyzer::UOper*>(target_expr);
+    const auto target_expr = set_transient_dict(target->get_own_expr());
+    const auto uoper_expr = dynamic_cast<const Analyzer::UOper*>(target_expr.get());
     const bool is_unnest{uoper_expr && uoper_expr->get_optype() == kUNNEST};
-    auto group_var_ref = var_ref(target_expr, Analyzer::Var::kGROUPBY, group_nodes_it - group_nodes.Begin() + 1);
+    auto group_var_ref = var_ref(target_expr.get(), Analyzer::Var::kGROUPBY, group_nodes_it - group_nodes.Begin() + 1);
     result.emplace_back(new Analyzer::TargetEntry(target->get_resname(), group_var_ref, is_unnest));
   }
   for (auto agg_nodes_it = agg_nodes.Begin(); agg_nodes_it != agg_nodes.End(); ++agg_nodes_it, ++fields_it) {

@@ -2189,32 +2189,7 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const size_t max_groups_buff
                                                     const size_t small_groups_buffer_entry_count,
                                                     const bool sort_on_gpu_hint,
                                                     const bool render_output) {
-  for (const auto group_expr : ra_exe_unit_.groupby_exprs) {
-    const auto case_expr = dynamic_cast<const Analyzer::CaseExpr*>(group_expr.get());
-    if (!case_expr) {
-      continue;
-    }
-    Analyzer::DomainSet domain_set;
-    case_expr->get_domain(domain_set);
-    if (domain_set.empty()) {
-      continue;
-    }
-    const auto& case_ti = case_expr->get_type_info();
-    if (case_ti.is_string()) {
-      CHECK_EQ(kENCODING_DICT, case_ti.get_compression());
-      auto sd = executor_->getStringDictionary(case_ti.get_comp_param(), row_set_mem_owner_);
-      CHECK(sd);
-      for (const auto domain_expr : domain_set) {
-        const auto cast_expr = dynamic_cast<const Analyzer::UOper*>(domain_expr);
-        const auto str_lit_expr = cast_expr && cast_expr->get_optype() == kCAST
-                                      ? dynamic_cast<const Analyzer::Constant*>(cast_expr->get_operand())
-                                      : dynamic_cast<const Analyzer::Constant*>(domain_expr);
-        if (str_lit_expr && str_lit_expr->get_constval().stringval) {
-          sd->getOrAddTransient(*str_lit_expr->get_constval().stringval);
-        }
-      }
-    }
-  }
+  addTransientStringLiterals();
   auto group_col_widths = get_col_byte_widths(ra_exe_unit_.groupby_exprs);
   std::vector<Analyzer::Expr*> target_expr_list;
   CountDistinctDescriptors count_distinct_descriptors;
@@ -2408,6 +2383,49 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const size_t max_groups_buff
   }
   CHECK(false);
   return;
+}
+
+void GroupByAndAggregate::addTransientStringLiterals() {
+  for (const auto group_expr : ra_exe_unit_.groupby_exprs) {
+    if (!group_expr) {
+      continue;
+    }
+    const auto cast_expr = dynamic_cast<const Analyzer::UOper*>(group_expr.get());
+    const auto& group_ti = group_expr->get_type_info();
+    if (cast_expr && cast_expr->get_optype() == kCAST && group_ti.is_string()) {
+      CHECK_EQ(kENCODING_DICT, group_ti.get_compression());
+      auto sd = executor_->getStringDictionary(group_ti.get_comp_param(), row_set_mem_owner_);
+      CHECK(sd);
+      const auto str_lit_expr = dynamic_cast<const Analyzer::Constant*>(cast_expr->get_operand());
+      if (str_lit_expr && str_lit_expr->get_constval().stringval) {
+        sd->getOrAddTransient(*str_lit_expr->get_constval().stringval);
+      }
+      continue;
+    }
+    const auto case_expr = dynamic_cast<const Analyzer::CaseExpr*>(group_expr.get());
+    if (!case_expr) {
+      continue;
+    }
+    Analyzer::DomainSet domain_set;
+    case_expr->get_domain(domain_set);
+    if (domain_set.empty()) {
+      continue;
+    }
+    if (group_ti.is_string()) {
+      CHECK_EQ(kENCODING_DICT, group_ti.get_compression());
+      auto sd = executor_->getStringDictionary(group_ti.get_comp_param(), row_set_mem_owner_);
+      CHECK(sd);
+      for (const auto domain_expr : domain_set) {
+        const auto cast_expr = dynamic_cast<const Analyzer::UOper*>(domain_expr);
+        const auto str_lit_expr = cast_expr && cast_expr->get_optype() == kCAST
+                                      ? dynamic_cast<const Analyzer::Constant*>(cast_expr->get_operand())
+                                      : dynamic_cast<const Analyzer::Constant*>(domain_expr);
+        if (str_lit_expr && str_lit_expr->get_constval().stringval) {
+          sd->getOrAddTransient(*str_lit_expr->get_constval().stringval);
+        }
+      }
+    }
+  }
 }
 
 QueryMemoryDescriptor GroupByAndAggregate::getQueryMemoryDescriptor() const {

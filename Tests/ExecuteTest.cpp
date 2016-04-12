@@ -435,6 +435,7 @@ TEST(Select, FilterAndGroupBy) {
       "DESC "
       "LIMIT 12;",
       dt);
+    c("SELECT 'literal_string' AS key0 FROM test GROUP BY key0;", dt);
   }
 }
 

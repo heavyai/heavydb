@@ -1225,6 +1225,8 @@ class GroupByAndAggregate {
                                  const bool sort_on_gpu_hint,
                                  const bool render_output);
 
+  void addTransientStringLiterals();
+
   llvm::Value* codegenGroupBy(const QueryMemoryDescriptor&, const CompilationOptions&, DiamondCodegen&);
 
   llvm::Function* codegenPerfectHashFunction();
