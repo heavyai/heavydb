@@ -5,20 +5,20 @@
 
 class QueryRewriter {
  public:
-  QueryRewriter(const Executor::RelAlgExecutionUnit& ra_exe_unit,
+  QueryRewriter(const RelAlgExecutionUnit& ra_exe_unit,
                 const std::vector<Fragmenter_Namespace::TableInfo>& query_infos,
                 const Executor* executor,
                 const Planner::Plan* plan)
       : ra_exe_unit_(ra_exe_unit), query_infos_(query_infos), executor_(executor), plan_(plan){};
-  Executor::RelAlgExecutionUnit rewrite() const;
+  RelAlgExecutionUnit rewrite() const;
 
  private:
-  Executor::RelAlgExecutionUnit rewriteConstrainedByIn() const;
+  RelAlgExecutionUnit rewriteConstrainedByIn() const;
   static std::shared_ptr<Analyzer::CaseExpr> generateCaseForDomainValues(const Analyzer::InValues*);
-  Executor::RelAlgExecutionUnit rewriteConstrainedByIn(const std::shared_ptr<Analyzer::CaseExpr>,
-                                                       const Analyzer::InValues*) const;
+  RelAlgExecutionUnit rewriteConstrainedByIn(const std::shared_ptr<Analyzer::CaseExpr>,
+                                             const Analyzer::InValues*) const;
 
-  const Executor::RelAlgExecutionUnit& ra_exe_unit_;
+  const RelAlgExecutionUnit& ra_exe_unit_;
   const std::vector<Fragmenter_Namespace::TableInfo>& query_infos_;
   const Executor* executor_;
   // TODO(alex): artifacts of the plan based interface below, remove.

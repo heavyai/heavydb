@@ -109,6 +109,18 @@ class TooManyLiterals : public std::runtime_error {
   TooManyLiterals() : std::runtime_error("Too many literals in the query") {}
 };
 
+struct RelAlgExecutionUnit {
+  const std::vector<InputDescriptor> input_descs;
+  const std::list<InputColDescriptor> input_col_descs;
+  const std::list<std::shared_ptr<Analyzer::Expr>> simple_quals;
+  const std::list<std::shared_ptr<Analyzer::Expr>> quals;
+  const std::list<std::shared_ptr<Analyzer::Expr>> join_quals;
+  const std::list<std::shared_ptr<Analyzer::Expr>> groupby_exprs;
+  const std::vector<Analyzer::Expr*> target_exprs;
+  const std::list<Analyzer::OrderEntry> order_entries;
+  const size_t scan_limit;
+};
+
 class Executor {
   static_assert(sizeof(float) == 4 && sizeof(double) == 8,
                 "Host hardware not supported, unexpected size of float / double.");
@@ -266,18 +278,6 @@ class Executor {
                                const bool allow_loop_joins,
                                RenderAllocatorMap* render_allocator_map);
 
-  struct RelAlgExecutionUnit {
-    const std::vector<InputDescriptor> input_descs;
-    const std::list<InputColDescriptor> input_col_descs;
-    const std::list<std::shared_ptr<Analyzer::Expr>> simple_quals;
-    const std::list<std::shared_ptr<Analyzer::Expr>> quals;
-    const std::list<std::shared_ptr<Analyzer::Expr>> join_quals;
-    const std::list<std::shared_ptr<Analyzer::Expr>> groupby_exprs;
-    const std::vector<Analyzer::Expr*> target_exprs;
-    const std::list<Analyzer::OrderEntry> order_entries;
-    const size_t scan_limit;
-  };
-
   struct CompilationResult {
     std::vector<void*> native_functions;
     std::unordered_map<int, LiteralValues> literal_values;
@@ -384,7 +384,7 @@ class Executor {
   ResultRows executeExplain(const ExecutionDispatch&);
 
   // TODO(alex): remove
-  static ExecutorDeviceType getDeviceTypeForTargets(const Executor::RelAlgExecutionUnit& ra_exe_unit,
+  static ExecutorDeviceType getDeviceTypeForTargets(const RelAlgExecutionUnit& ra_exe_unit,
                                                     const ExecutorDeviceType requested_device_type);
 
   ResultRows collectAllDeviceResults(ExecutionDispatch& execution_dispatch,

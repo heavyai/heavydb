@@ -2838,7 +2838,7 @@ ResultRows Executor::executeExplain(const ExecutionDispatch& execution_dispatch)
 
 // Looks at the targets and returns a feasible device type. We only punt
 // to CPU for count distinct and we should probably fix it and remove this.
-ExecutorDeviceType Executor::getDeviceTypeForTargets(const Executor::RelAlgExecutionUnit& ra_exe_unit,
+ExecutorDeviceType Executor::getDeviceTypeForTargets(const RelAlgExecutionUnit& ra_exe_unit,
                                                      const ExecutorDeviceType requested_device_type) {
   auto agg_infos = get_agg_name_and_exprs(ra_exe_unit.target_exprs);
   for (const auto& agg_info : agg_infos) {
@@ -4041,16 +4041,13 @@ Executor::CompilationResult Executor::compilePlan(const bool render_output,
 
   GroupByAndAggregate group_by_and_aggregate(this,
                                              co.device_type_,
-                                             ra_exe_unit.groupby_exprs,
-                                             ra_exe_unit.target_exprs,
+                                             ra_exe_unit,
                                              render_output,
                                              query_infos,
                                              row_set_mem_owner,
                                              max_groups_buffer_entry_guess,
                                              small_groups_buffer_entry_count,
-                                             ra_exe_unit.scan_limit,
                                              eo.allow_multifrag,
-                                             ra_exe_unit.order_entries,
                                              eo.output_columnar_hint && co.device_type_ == ExecutorDeviceType::GPU);
   auto query_mem_desc = group_by_and_aggregate.getQueryMemoryDescriptor();
 

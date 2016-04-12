@@ -4,11 +4,11 @@
 
 #include <glog/logging.h>
 
-Executor::RelAlgExecutionUnit QueryRewriter::rewrite() const {
+RelAlgExecutionUnit QueryRewriter::rewrite() const {
   return rewriteConstrainedByIn();
 }
 
-Executor::RelAlgExecutionUnit QueryRewriter::rewriteConstrainedByIn() const {
+RelAlgExecutionUnit QueryRewriter::rewriteConstrainedByIn() const {
   if (ra_exe_unit_.groupby_exprs.empty()) {
     return ra_exe_unit_;
   }
@@ -60,8 +60,8 @@ std::shared_ptr<Analyzer::CaseExpr> QueryRewriter::generateCaseForDomainValues(c
   return makeExpr<Analyzer::CaseExpr>(case_expr_list.front().second->get_type_info(), false, case_expr_list, else_expr);
 }
 
-Executor::RelAlgExecutionUnit QueryRewriter::rewriteConstrainedByIn(const std::shared_ptr<Analyzer::CaseExpr> case_expr,
-                                                                    const Analyzer::InValues* in_vals) const {
+RelAlgExecutionUnit QueryRewriter::rewriteConstrainedByIn(const std::shared_ptr<Analyzer::CaseExpr> case_expr,
+                                                          const Analyzer::InValues* in_vals) const {
   std::list<std::shared_ptr<Analyzer::Expr>> new_groupby_list;
   std::vector<Analyzer::Expr*> new_target_exprs;
   bool rewrite{false};

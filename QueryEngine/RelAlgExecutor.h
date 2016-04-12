@@ -45,7 +45,7 @@ class RelAlgExecutor {
   // TODO(alex): just move max_groups_buffer_entry_guess to RelAlgExecutionUnit once
   //             we deprecate the plan-based executor paths and remove WorkUnit
   struct WorkUnit {
-    const Executor::RelAlgExecutionUnit exe_unit;
+    const RelAlgExecutionUnit exe_unit;
     const size_t max_groups_buffer_entry_guess;
     std::unique_ptr<QueryRewriter> query_rewriter;
   };

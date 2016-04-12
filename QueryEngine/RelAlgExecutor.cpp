@@ -558,15 +558,15 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(const RelCompoun
   CHECK(simple_separated_quals.join_quals.empty());
   const auto target_exprs = translate_targets(target_exprs_owned_, scalar_sources, groupby_exprs, compound, translator);
   CHECK_EQ(compound->size(), target_exprs.size());
-  const Executor::RelAlgExecutionUnit exe_unit = {input_descs,
-                                                  input_col_descs,
-                                                  quals_cf.simple_quals,
-                                                  separated_quals.regular_quals,
-                                                  separated_quals.join_quals,
-                                                  groupby_exprs,
-                                                  target_exprs,
-                                                  order_entries,
-                                                  0};
+  const RelAlgExecutionUnit exe_unit = {input_descs,
+                                        input_col_descs,
+                                        quals_cf.simple_quals,
+                                        separated_quals.regular_quals,
+                                        separated_quals.join_quals,
+                                        groupby_exprs,
+                                        target_exprs,
+                                        order_entries,
+                                        0};
   const auto query_infos = get_table_infos(exe_unit.input_descs, cat_, temporary_tables_);
   QueryRewriter* query_rewriter = new QueryRewriter(exe_unit, query_infos, executor_, nullptr);
   const auto rewritten_exe_unit = query_rewriter->rewrite();

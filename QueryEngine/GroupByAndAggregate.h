@@ -28,6 +28,8 @@
 
 class Executor;
 
+struct RelAlgExecutionUnit;
+
 enum class GroupByColRangeType {
   OneColKnownRange,    // statically known range, only possible for column expressions
   OneColGuessedRange,  // best guess: small hash for the guess plus overflow for outliers
@@ -1149,16 +1151,13 @@ class GroupByAndAggregate {
  public:
   GroupByAndAggregate(Executor* executor,
                       const ExecutorDeviceType device_type,
-                      const std::list<std::shared_ptr<Analyzer::Expr>>& groupby_exprs,
-                      const std::vector<Analyzer::Expr*>& target_exprs,
+                      const RelAlgExecutionUnit& ra_exe_unit,
                       const bool render_output,
                       const std::vector<Fragmenter_Namespace::TableInfo>& query_infos,
                       std::shared_ptr<RowSetMemoryOwner>,
                       const size_t max_groups_buffer_entry_count,
                       const size_t small_groups_buffer_entry_count,
-                      const int64_t scan_limit,
                       const bool allow_multifrag,
-                      const std::list<Analyzer::OrderEntry>& order_entries,
                       const bool output_columnar_hint);
 
   QueryMemoryDescriptor getQueryMemoryDescriptor() const;
@@ -1238,11 +1237,9 @@ class GroupByAndAggregate {
 
   QueryMemoryDescriptor query_mem_desc_;
   Executor* executor_;
-  const std::list<std::shared_ptr<Analyzer::Expr>> groupby_exprs_;
-  const std::vector<Analyzer::Expr*> target_exprs_;
+  const RelAlgExecutionUnit& ra_exe_unit_;
   const std::vector<Fragmenter_Namespace::TableInfo>& query_infos_;
   std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
-  const int64_t scan_limit_;
   bool output_columnar_;
 
   friend class Executor;

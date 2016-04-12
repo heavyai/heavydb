@@ -2093,11 +2093,11 @@ int32_t get_agg_count(const std::vector<Analyzer::Expr*>& target_exprs) {
 }  // namespace
 
 GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getColRangeInfo() {
-  if (groupby_exprs_.size() != 1) {
+  if (ra_exe_unit_.groupby_exprs.size() != 1) {
     try {
       checked_int64_t cardinality{1};
       bool has_nulls{false};
-      for (const auto groupby_expr : groupby_exprs_) {
+      for (const auto groupby_expr : ra_exe_unit_.groupby_exprs) {
         auto col_range_info = getExprRangeInfo(groupby_expr.get());
         if (col_range_info.hash_type_ != GroupByColRangeType::OneColKnownRange) {
           return {GroupByColRangeType::MultiCol, 0, 0, 0, false};
@@ -2117,7 +2117,7 @@ GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getColRangeInfo() {
       return {GroupByColRangeType::MultiCol, 0, 0, 0, false};
     }
   }
-  return getExprRangeInfo(groupby_exprs_.front().get());
+  return getExprRangeInfo(ra_exe_unit_.groupby_exprs.front().get());
 }
 
 GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getExprRangeInfo(const Analyzer::Expr* expr) const {
@@ -2156,24 +2156,16 @@ bool many_entries(const int64_t max_val, const int64_t min_val, const int64_t bu
 
 GroupByAndAggregate::GroupByAndAggregate(Executor* executor,
                                          const ExecutorDeviceType device_type,
-                                         const std::list<std::shared_ptr<Analyzer::Expr>>& groupby_exprs,
-                                         const std::vector<Analyzer::Expr*>& target_exprs,
+                                         const RelAlgExecutionUnit& ra_exe_unit,
                                          const bool render_output,
                                          const std::vector<Fragmenter_Namespace::TableInfo>& query_infos,
                                          std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                                          const size_t max_groups_buffer_entry_count,
                                          const size_t small_groups_buffer_entry_count,
-                                         const int64_t scan_limit,
                                          const bool allow_multifrag,
-                                         const std::list<Analyzer::OrderEntry>& order_entries,
                                          const bool output_columnar_hint)
-    : executor_(executor),
-      groupby_exprs_(groupby_exprs),
-      target_exprs_(target_exprs),
-      query_infos_(query_infos),
-      row_set_mem_owner_(row_set_mem_owner),
-      scan_limit_(scan_limit) {
-  for (const auto groupby_expr : groupby_exprs_) {
+    : executor_(executor), ra_exe_unit_(ra_exe_unit), query_infos_(query_infos), row_set_mem_owner_(row_set_mem_owner) {
+  for (const auto groupby_expr : ra_exe_unit.groupby_exprs) {
     if (!groupby_expr) {
       continue;
     }
@@ -2182,13 +2174,13 @@ GroupByAndAggregate::GroupByAndAggregate(Executor* executor,
       throw std::runtime_error("Cannot group by string columns which are not dictionary encoded.");
     }
   }
-  bool sort_on_gpu_hint = device_type == ExecutorDeviceType::GPU && allow_multifrag && !order_entries.empty() &&
-                          gpuCanHandleOrderEntries(order_entries);
+  bool sort_on_gpu_hint = device_type == ExecutorDeviceType::GPU && allow_multifrag &&
+                          !ra_exe_unit.order_entries.empty() && gpuCanHandleOrderEntries(ra_exe_unit.order_entries);
   initQueryMemoryDescriptor(
       max_groups_buffer_entry_count, small_groups_buffer_entry_count, sort_on_gpu_hint, render_output);
   query_mem_desc_.sort_on_gpu_ =
       sort_on_gpu_hint && query_mem_desc_.canOutputColumnar() && !query_mem_desc_.keyless_hash;
-  query_mem_desc_.is_sort_plan = !order_entries.empty() && !query_mem_desc_.sort_on_gpu_;
+  query_mem_desc_.is_sort_plan = !ra_exe_unit.order_entries.empty() && !query_mem_desc_.sort_on_gpu_;
   output_columnar_ = (output_columnar_hint && query_mem_desc_.canOutputColumnar()) || query_mem_desc_.sortOnGpu();
   query_mem_desc_.output_columnar = output_columnar_;
 }
@@ -2197,7 +2189,7 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const size_t max_groups_buff
                                                     const size_t small_groups_buffer_entry_count,
                                                     const bool sort_on_gpu_hint,
                                                     const bool render_output) {
-  for (const auto group_expr : groupby_exprs_) {
+  for (const auto group_expr : ra_exe_unit_.groupby_exprs) {
     const auto case_expr = dynamic_cast<const Analyzer::CaseExpr*>(group_expr.get());
     if (!case_expr) {
       continue;
@@ -2223,11 +2215,11 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const size_t max_groups_buff
       }
     }
   }
-  auto group_col_widths = get_col_byte_widths(groupby_exprs_);
+  auto group_col_widths = get_col_byte_widths(ra_exe_unit_.groupby_exprs);
   std::vector<Analyzer::Expr*> target_expr_list;
   CountDistinctDescriptors count_distinct_descriptors;
   size_t target_idx{0};
-  for (const auto target_expr : target_exprs_) {
+  for (const auto target_expr : ra_exe_unit_.target_exprs) {
     auto agg_info = target_info(target_expr);
     if (agg_info.is_distinct) {
       CHECK(agg_info.is_agg);
@@ -2296,11 +2288,13 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const size_t max_groups_buff
     case GroupByColRangeType::Scan: {
       if (col_range_info.hash_type_ == GroupByColRangeType::OneColGuessedRange ||
           col_range_info.hash_type_ == GroupByColRangeType::Scan ||
-          ((groupby_exprs_.size() != 1 || !groupby_exprs_.front()->get_type_info().is_string()) &&
+          ((ra_exe_unit_.groupby_exprs.size() != 1 ||
+            !ra_exe_unit_.groupby_exprs.front()->get_type_info().is_string()) &&
            col_range_info.max >= col_range_info.min + static_cast<int64_t>(max_groups_buffer_entry_count) &&
            !col_range_info.bucket)) {
         const auto hash_type = render_output ? GroupByColRangeType::MultiCol : col_range_info.hash_type_;
-        size_t small_group_slots = scan_limit_ ? static_cast<size_t>(scan_limit_) : small_groups_buffer_entry_count;
+        size_t small_group_slots =
+            ra_exe_unit_.scan_limit ? static_cast<size_t>(ra_exe_unit_.scan_limit) : small_groups_buffer_entry_count;
         if (render_output) {
           small_group_slots = 0;
         }
@@ -2530,8 +2524,8 @@ bool GroupByAndAggregate::gpuCanHandleOrderEntries(const std::list<Analyzer::Ord
   }
   for (const auto order_entry : order_entries) {
     CHECK_GE(order_entry.tle_no, 1);
-    CHECK_LE(static_cast<size_t>(order_entry.tle_no), target_exprs_.size());
-    const auto target_expr = target_exprs_[order_entry.tle_no - 1];
+    CHECK_LE(static_cast<size_t>(order_entry.tle_no), ra_exe_unit_.target_exprs.size());
+    const auto target_expr = ra_exe_unit_.target_exprs[order_entry.tle_no - 1];
     if (!dynamic_cast<Analyzer::AggExpr*>(target_expr)) {
       return false;
     }
@@ -2646,14 +2640,14 @@ bool GroupByAndAggregate::codegen(llvm::Value* filter_result, const CompilationO
   bool can_return_error = false;
 
   {
-    const bool is_group_by = !groupby_exprs_.empty();
+    const bool is_group_by = !ra_exe_unit_.groupby_exprs.empty();
     auto query_mem_desc = getQueryMemoryDescriptor();
 
     DiamondCodegen filter_cfg(
         filter_result, executor_, !is_group_by || query_mem_desc.usesGetGroupValueFast(), "filter");
 
     if (is_group_by) {
-      if (scan_limit_) {
+      if (ra_exe_unit_.scan_limit) {
         auto crt_match_it = ROW_FUNC->arg_begin();
         ++crt_match_it;
         ++crt_match_it;
@@ -2689,7 +2683,7 @@ bool GroupByAndAggregate::codegen(llvm::Value* filter_result, const CompilationO
     } else {
       auto arg_it = ROW_FUNC->arg_begin();
       std::vector<llvm::Value*> agg_out_vec;
-      for (int32_t i = 0; i < get_agg_count(target_exprs_); ++i) {
+      for (int32_t i = 0; i < get_agg_count(ra_exe_unit_.target_exprs); ++i) {
         agg_out_vec.push_back(arg_it++);
       }
       codegenAggCalls(nullptr, agg_out_vec, query_mem_desc, co);
@@ -2713,8 +2707,8 @@ llvm::Value* GroupByAndAggregate::codegenGroupBy(const QueryMemoryDescriptor& qu
     case GroupByColRangeType::OneColKnownRange:
     case GroupByColRangeType::OneColGuessedRange:
     case GroupByColRangeType::Scan: {
-      CHECK_EQ(size_t(1), groupby_exprs_.size());
-      const auto group_expr = groupby_exprs_.front();
+      CHECK_EQ(size_t(1), ra_exe_unit_.groupby_exprs.size());
+      const auto group_expr = ra_exe_unit_.groupby_exprs.front();
       const auto group_expr_lv =
           executor_->groupByColumnCodegen(group_expr.get(),
                                           co,
@@ -2770,7 +2764,7 @@ llvm::Value* GroupByAndAggregate::codegenGroupBy(const QueryMemoryDescriptor& qu
       // create the key buffer
       auto group_key = LL_BUILDER.CreateAlloca(llvm::Type::getInt64Ty(LL_CONTEXT), key_size_lv);
       int32_t subkey_idx = 0;
-      for (const auto group_expr : groupby_exprs_) {
+      for (const auto group_expr : ra_exe_unit_.groupby_exprs) {
         auto col_range_info = getExprRangeInfo(group_expr.get());
         const auto group_expr_lv = executor_->groupByColumnCodegen(
             group_expr.get(), co, col_range_info.has_nulls, col_range_info.max + 1, diamond_codegen, array_loops);
@@ -2808,7 +2802,7 @@ llvm::Value* GroupByAndAggregate::codegenGroupBy(const QueryMemoryDescriptor& qu
 }
 
 llvm::Function* GroupByAndAggregate::codegenPerfectHashFunction() {
-  CHECK_GT(groupby_exprs_.size(), size_t(1));
+  CHECK_GT(ra_exe_unit_.groupby_exprs.size(), size_t(1));
   auto ft = llvm::FunctionType::get(get_int_type(32, LL_CONTEXT),
                                     std::vector<llvm::Type*>{llvm::PointerType::get(get_int_type(64, LL_CONTEXT), 0)},
                                     false);
@@ -2822,13 +2816,13 @@ llvm::Function* GroupByAndAggregate::codegenPerfectHashFunction() {
   llvm::IRBuilder<> key_hash_func_builder(bb);
   llvm::Value* hash_lv{llvm::ConstantInt::get(get_int_type(64, LL_CONTEXT), 0)};
   std::vector<int64_t> cardinalities;
-  for (const auto groupby_expr : groupby_exprs_) {
+  for (const auto groupby_expr : ra_exe_unit_.groupby_exprs) {
     auto col_range_info = getExprRangeInfo(groupby_expr.get());
     CHECK(col_range_info.hash_type_ == GroupByColRangeType::OneColKnownRange);
     cardinalities.push_back(col_range_info.max - col_range_info.min + 1);
   }
   size_t dim_idx = 0;
-  for (const auto groupby_expr : groupby_exprs_) {
+  for (const auto groupby_expr : ra_exe_unit_.groupby_exprs) {
     auto key_comp_lv = key_hash_func_builder.CreateLoad(key_hash_func_builder.CreateGEP(key_buff_lv, LL_INT(dim_idx)));
     auto col_range_info = getExprRangeInfo(groupby_expr.get());
     auto crt_term_lv = key_hash_func_builder.CreateSub(key_comp_lv, LL_INT(col_range_info.min));
@@ -2895,8 +2889,8 @@ void GroupByAndAggregate::codegenAggCalls(llvm::Value* agg_out_start_ptr,
     CHECK(!agg_out_vec.empty());
   }
   int32_t agg_out_off{0};
-  for (size_t target_idx = 0; target_idx < target_exprs_.size(); ++target_idx) {
-    auto target_expr = target_exprs_[target_idx];
+  for (size_t target_idx = 0; target_idx < ra_exe_unit_.target_exprs.size(); ++target_idx) {
+    auto target_expr = ra_exe_unit_.target_exprs[target_idx];
     CHECK(target_expr);
     if (dynamic_cast<Analyzer::UOper*>(target_expr) &&
         static_cast<Analyzer::UOper*>(target_expr)->get_optype() == kUNNEST) {
@@ -2993,7 +2987,7 @@ void GroupByAndAggregate::codegenAggCalls(llvm::Value* agg_out_start_ptr,
       ++target_lv_idx;
     }
   }
-  for (auto target_expr : target_exprs_) {
+  for (auto target_expr : ra_exe_unit_.target_exprs) {
     CHECK(target_expr);
     executor_->plan_state_->isLazyFetchColumn(target_expr);
   }
