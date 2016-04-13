@@ -1238,6 +1238,11 @@ llvm::Value* Executor::codegenCase(const Analyzer::CaseExpr* case_expr,
                                    llvm::Type* case_llvm_type,
                                    const bool is_real_str,
                                    const CompilationOptions& co) {
+  // Here the linear control flow will diverge and expressions cached during the
+  // code branch code generation (currently just column decoding) are not going
+  // to be available once we're done generating the case. Take a snapshot of
+  // the cache with FetchCacheAnchor and restore it once we're done with CASE.
+  FetchCacheAnchor anchor(cgen_state_.get());
   const auto& expr_pair_list = case_expr->get_expr_pair_list();
   std::vector<llvm::Value*> then_lvs;
   std::vector<llvm::BasicBlock*> then_bbs;

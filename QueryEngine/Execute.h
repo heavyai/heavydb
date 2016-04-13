@@ -738,6 +738,16 @@ class Executor {
   };
   std::unique_ptr<CgenState> cgen_state_;
 
+  class FetchCacheAnchor {
+   public:
+    FetchCacheAnchor(CgenState* cgen_state) : cgen_state_(cgen_state), saved_fetch_cache(cgen_state_->fetch_cache_) {}
+    ~FetchCacheAnchor() { cgen_state_->fetch_cache_.swap(saved_fetch_cache); }
+
+   private:
+    CgenState* cgen_state_;
+    std::unordered_map<int, std::vector<llvm::Value*>> saved_fetch_cache;
+  };
+
   struct PlanState {
     PlanState(const bool allow_lazy_fetch, const JoinInfo& join_info, const Executor* executor)
         : allow_lazy_fetch_(allow_lazy_fetch), join_info_(join_info), executor_(executor) {}

@@ -594,6 +594,7 @@ TEST(Select, Case) {
     c("SELECT CASE WHEN str IN ('str1', 'str3', 'str8') THEN 'foo' WHEN str IN ('str2', 'str4', 'str9') THEN 'bar' "
       "ELSE 'baz' END AS bucketed_str, COUNT(*) AS n FROM query_rewrite_test GROUP BY bucketed_str ORDER BY n DESC;",
       dt);
+    c("SELECT CASE WHEN y > 40 THEN x END, x FROM test;", dt);
   }
 }
 
