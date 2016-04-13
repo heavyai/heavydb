@@ -1227,6 +1227,8 @@ class GroupByAndAggregate {
 
   void addTransientStringLiterals();
 
+  CountDistinctDescriptors initCountDistinctDescriptors();
+
   llvm::Value* codegenGroupBy(const QueryMemoryDescriptor&, const CompilationOptions&, DiamondCodegen&);
 
   llvm::Function* codegenPerfectHashFunction();

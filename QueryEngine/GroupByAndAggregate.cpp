@@ -2190,45 +2190,15 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const size_t max_groups_buff
                                                     const bool sort_on_gpu_hint,
                                                     const bool render_output) {
   addTransientStringLiterals();
-  auto group_col_widths = get_col_byte_widths(ra_exe_unit_.groupby_exprs);
-  std::vector<Analyzer::Expr*> target_expr_list;
-  CountDistinctDescriptors count_distinct_descriptors;
-  size_t target_idx{0};
-  for (const auto target_expr : ra_exe_unit_.target_exprs) {
-    auto agg_info = target_info(target_expr, {});
-    if (agg_info.is_distinct) {
-      CHECK(agg_info.is_agg);
-      CHECK_EQ(kCOUNT, agg_info.agg_kind);
-      const auto agg_expr = static_cast<const Analyzer::AggExpr*>(target_expr);
-      const auto& arg_ti = agg_expr->get_arg()->get_type_info();
-      if (arg_ti.is_string() && arg_ti.get_compression() != kENCODING_DICT) {
-        throw std::runtime_error("Strings must be dictionary-encoded in COUNT(DISTINCT).");
-      }
-      auto arg_range_info = getExprRangeInfo(agg_expr->get_arg());
-      CountDistinctImplType count_distinct_impl_type{CountDistinctImplType::StdSet};
-      int64_t bitmap_sz_bits{0};
-      if (arg_range_info.hash_type_ == GroupByColRangeType::OneColKnownRange &&
-          !arg_ti.is_array()) {  // TODO(alex): allow bitmap implementation for arrays
-        count_distinct_impl_type = CountDistinctImplType::Bitmap;
-        bitmap_sz_bits = arg_range_info.max - arg_range_info.min + 1;
-        const int64_t MAX_BITMAP_BITS{8 * 1000 * 1000 * 1000L};
-        if (bitmap_sz_bits <= 0 || bitmap_sz_bits > MAX_BITMAP_BITS) {
-          count_distinct_impl_type = CountDistinctImplType::StdSet;
-        }
-      }
-      CountDistinctDescriptor count_distinct_desc{
-          executor_, count_distinct_impl_type, arg_range_info.min, bitmap_sz_bits};
-      auto it_ok = count_distinct_descriptors.insert(std::make_pair(target_idx, count_distinct_desc));
-      CHECK(it_ok.second);
-    }
-    target_expr_list.emplace_back(target_expr);
-    ++target_idx;
-  }
+
+  const auto count_distinct_descriptors = initCountDistinctDescriptors();
   if (!count_distinct_descriptors.empty()) {
     CHECK(row_set_mem_owner_);
     row_set_mem_owner_->setCountDistinctDescriptors(count_distinct_descriptors);
   }
-  auto agg_col_widths = get_col_byte_widths(target_expr_list);
+
+  auto agg_col_widths = get_col_byte_widths(ra_exe_unit_.target_exprs);
+  auto group_col_widths = get_col_byte_widths(ra_exe_unit_.groupby_exprs);
 
   if (group_col_widths.empty()) {
     CHECK(!render_output);
@@ -2296,7 +2266,7 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const size_t max_groups_buff
         return;
       } else {
         CHECK(!render_output);
-        const auto keyless_info = getKeylessInfo(target_expr_list);
+        const auto keyless_info = getKeylessInfo(ra_exe_unit_.target_exprs);
         bool keyless =
             (!sort_on_gpu_hint || !many_entries(col_range_info.max, col_range_info.min, col_range_info.bucket)) &&
             !col_range_info.bucket && keyless_info.keyless;
@@ -2426,6 +2396,41 @@ void GroupByAndAggregate::addTransientStringLiterals() {
       }
     }
   }
+}
+
+CountDistinctDescriptors GroupByAndAggregate::initCountDistinctDescriptors() {
+  CountDistinctDescriptors count_distinct_descriptors;
+  size_t target_idx{0};
+  for (const auto target_expr : ra_exe_unit_.target_exprs) {
+    auto agg_info = target_info(target_expr, {});
+    if (agg_info.is_distinct) {
+      CHECK(agg_info.is_agg);
+      CHECK_EQ(kCOUNT, agg_info.agg_kind);
+      const auto agg_expr = static_cast<const Analyzer::AggExpr*>(target_expr);
+      const auto& arg_ti = agg_expr->get_arg()->get_type_info();
+      if (arg_ti.is_string() && arg_ti.get_compression() != kENCODING_DICT) {
+        throw std::runtime_error("Strings must be dictionary-encoded in COUNT(DISTINCT).");
+      }
+      auto arg_range_info = getExprRangeInfo(agg_expr->get_arg());
+      CountDistinctImplType count_distinct_impl_type{CountDistinctImplType::StdSet};
+      int64_t bitmap_sz_bits{0};
+      if (arg_range_info.hash_type_ == GroupByColRangeType::OneColKnownRange &&
+          !arg_ti.is_array()) {  // TODO(alex): allow bitmap implementation for arrays
+        count_distinct_impl_type = CountDistinctImplType::Bitmap;
+        bitmap_sz_bits = arg_range_info.max - arg_range_info.min + 1;
+        const int64_t MAX_BITMAP_BITS{8 * 1000 * 1000 * 1000L};
+        if (bitmap_sz_bits <= 0 || bitmap_sz_bits > MAX_BITMAP_BITS) {
+          count_distinct_impl_type = CountDistinctImplType::StdSet;
+        }
+      }
+      CountDistinctDescriptor count_distinct_desc{
+          executor_, count_distinct_impl_type, arg_range_info.min, bitmap_sz_bits};
+      auto it_ok = count_distinct_descriptors.insert(std::make_pair(target_idx, count_distinct_desc));
+      CHECK(it_ok.second);
+    }
+    ++target_idx;
+  }
+  return count_distinct_descriptors;
 }
 
 QueryMemoryDescriptor GroupByAndAggregate::getQueryMemoryDescriptor() const {
