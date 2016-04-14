@@ -2579,25 +2579,25 @@ ResultRows Executor::executeResultPlan(const Planner::Result* result_plan,
     pseudo_input_col_descs.emplace_back(pseudo_col, 0, -1);
   }
   auto compilation_result =
-      compilePlan(false,
-                  {},
-                  {{},
-                   pseudo_input_col_descs,
-                   result_plan->get_constquals(),
-                   result_plan->get_quals(),
-                   {},
-                   {nullptr},
-                   get_agg_target_exprs(result_plan),
-                   order_entries,
-                   0},
-                  {ExecutorDeviceType::CPU, hoist_literals, opt_level},
-                  {false, allow_multifrag, just_explain, allow_loop_joins},
-                  nullptr,
-                  false,
-                  row_set_mem_owner_,
-                  result_rows.rowCount(),
-                  small_groups_buffer_entry_count_,
-                  JoinInfo(JoinImplType::Invalid, std::vector<std::shared_ptr<Analyzer::BinOper>>{}, nullptr));
+      compileWorkUnit(false,
+                      {},
+                      {{},
+                       pseudo_input_col_descs,
+                       result_plan->get_constquals(),
+                       result_plan->get_quals(),
+                       {},
+                       {nullptr},
+                       get_agg_target_exprs(result_plan),
+                       order_entries,
+                       0},
+                      {ExecutorDeviceType::CPU, hoist_literals, opt_level},
+                      {false, allow_multifrag, just_explain, allow_loop_joins},
+                      nullptr,
+                      false,
+                      row_set_mem_owner_,
+                      result_rows.rowCount(),
+                      small_groups_buffer_entry_count_,
+                      JoinInfo(JoinImplType::Invalid, std::vector<std::shared_ptr<Analyzer::BinOper>>{}, nullptr));
   auto column_buffers = result_columns.getColumnBuffers();
   CHECK_EQ(column_buffers.size(), static_cast<size_t>(in_col_count));
   auto query_exe_context = query_mem_desc.getQueryExecutionContext(
@@ -3092,32 +3092,32 @@ void Executor::ExecutionDispatch::compile(const Executor::JoinInfo& join_info,
     const CompilationOptions co_cpu{ExecutorDeviceType::CPU, co_.hoist_literals_, co_.opt_level_};
     try {
       compilation_result_cpu_ =
-          executor_->compilePlan(false,
-                                 query_infos_,
-                                 ra_exe_unit_,
-                                 co_cpu,
-                                 options,
-                                 cat_.get_dataMgr().cudaMgr_,
-                                 true,
-                                 row_set_mem_owner_,
-                                 max_groups_buffer_entry_guess,
-                                 render_allocator_map_ ? executor_->render_small_groups_buffer_entry_count_
-                                                       : executor_->small_groups_buffer_entry_count_,
-                                 join_info);
+          executor_->compileWorkUnit(false,
+                                     query_infos_,
+                                     ra_exe_unit_,
+                                     co_cpu,
+                                     options,
+                                     cat_.get_dataMgr().cudaMgr_,
+                                     true,
+                                     row_set_mem_owner_,
+                                     max_groups_buffer_entry_guess,
+                                     render_allocator_map_ ? executor_->render_small_groups_buffer_entry_count_
+                                                           : executor_->small_groups_buffer_entry_count_,
+                                     join_info);
     } catch (const CompilationRetryNoLazyFetch&) {
       compilation_result_cpu_ =
-          executor_->compilePlan(false,
-                                 query_infos_,
-                                 ra_exe_unit_,
-                                 co_cpu,
-                                 options,
-                                 cat_.get_dataMgr().cudaMgr_,
-                                 false,
-                                 row_set_mem_owner_,
-                                 max_groups_buffer_entry_guess,
-                                 render_allocator_map_ ? executor_->render_small_groups_buffer_entry_count_
-                                                       : executor_->small_groups_buffer_entry_count_,
-                                 join_info);
+          executor_->compileWorkUnit(false,
+                                     query_infos_,
+                                     ra_exe_unit_,
+                                     co_cpu,
+                                     options,
+                                     cat_.get_dataMgr().cudaMgr_,
+                                     false,
+                                     row_set_mem_owner_,
+                                     max_groups_buffer_entry_guess,
+                                     render_allocator_map_ ? executor_->render_small_groups_buffer_entry_count_
+                                                           : executor_->small_groups_buffer_entry_count_,
+                                     join_info);
     }
   };
 
@@ -3130,32 +3130,32 @@ void Executor::ExecutionDispatch::compile(const Executor::JoinInfo& join_info,
     const CompilationOptions co_gpu{ExecutorDeviceType::GPU, co_.hoist_literals_, co_.opt_level_};
     try {
       compilation_result_gpu_ =
-          executor_->compilePlan(render_allocator_map_,
-                                 query_infos_,
-                                 ra_exe_unit_,
-                                 co_gpu,
-                                 options,
-                                 cat_.get_dataMgr().cudaMgr_,
-                                 render_allocator_map_ ? false : true,
-                                 row_set_mem_owner_,
-                                 max_groups_buffer_entry_guess,
-                                 render_allocator_map_ ? executor_->render_small_groups_buffer_entry_count_
-                                                       : executor_->small_groups_buffer_entry_count_,
-                                 join_info);
+          executor_->compileWorkUnit(render_allocator_map_,
+                                     query_infos_,
+                                     ra_exe_unit_,
+                                     co_gpu,
+                                     options,
+                                     cat_.get_dataMgr().cudaMgr_,
+                                     render_allocator_map_ ? false : true,
+                                     row_set_mem_owner_,
+                                     max_groups_buffer_entry_guess,
+                                     render_allocator_map_ ? executor_->render_small_groups_buffer_entry_count_
+                                                           : executor_->small_groups_buffer_entry_count_,
+                                     join_info);
     } catch (const CompilationRetryNoLazyFetch&) {
       compilation_result_gpu_ =
-          executor_->compilePlan(render_allocator_map_,
-                                 query_infos_,
-                                 ra_exe_unit_,
-                                 co_gpu,
-                                 options,
-                                 cat_.get_dataMgr().cudaMgr_,
-                                 false,
-                                 row_set_mem_owner_,
-                                 max_groups_buffer_entry_guess,
-                                 render_allocator_map_ ? executor_->render_small_groups_buffer_entry_count_
-                                                       : executor_->small_groups_buffer_entry_count_,
-                                 join_info);
+          executor_->compileWorkUnit(render_allocator_map_,
+                                     query_infos_,
+                                     ra_exe_unit_,
+                                     co_gpu,
+                                     options,
+                                     cat_.get_dataMgr().cudaMgr_,
+                                     false,
+                                     row_set_mem_owner_,
+                                     max_groups_buffer_entry_guess,
+                                     render_allocator_map_ ? executor_->render_small_groups_buffer_entry_count_
+                                                           : executor_->small_groups_buffer_entry_count_,
+                                     join_info);
     }
   }
 
@@ -4031,17 +4031,17 @@ void Executor::nukeOldState(const bool allow_lazy_fetch, const JoinInfo& join_in
   plan_state_.reset(new PlanState(allow_lazy_fetch, join_info, this));
 }
 
-Executor::CompilationResult Executor::compilePlan(const bool render_output,
-                                                  const std::vector<Fragmenter_Namespace::TableInfo>& query_infos,
-                                                  const RelAlgExecutionUnit& ra_exe_unit,
-                                                  const CompilationOptions& co,
-                                                  const ExecutionOptions& eo,
-                                                  const CudaMgr_Namespace::CudaMgr* cuda_mgr,
-                                                  const bool allow_lazy_fetch,
-                                                  std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-                                                  const size_t max_groups_buffer_entry_guess,
-                                                  const size_t small_groups_buffer_entry_count,
-                                                  const JoinInfo& join_info) {
+Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
+                                                      const std::vector<Fragmenter_Namespace::TableInfo>& query_infos,
+                                                      const RelAlgExecutionUnit& ra_exe_unit,
+                                                      const CompilationOptions& co,
+                                                      const ExecutionOptions& eo,
+                                                      const CudaMgr_Namespace::CudaMgr* cuda_mgr,
+                                                      const bool allow_lazy_fetch,
+                                                      std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+                                                      const size_t max_groups_buffer_entry_guess,
+                                                      const size_t small_groups_buffer_entry_count,
+                                                      const JoinInfo& join_info) {
   nukeOldState(allow_lazy_fetch, join_info);
 
   GroupByAndAggregate group_by_and_aggregate(this,
@@ -4153,34 +4153,7 @@ Executor::CompilationResult Executor::compilePlan(const bool render_output,
   const bool needs_error_check = group_by_and_aggregate.codegen(filter_lv, co);
 
   if (needs_error_check) {
-    // check whether the row processing was successful; currently, it can
-    // fail by running out of group by buffer slots
-    bool done_splitting = false;
-    for (auto bb_it = query_func->begin(); bb_it != query_func->end() && !done_splitting; ++bb_it) {
-      for (auto inst_it = bb_it->begin(); inst_it != bb_it->end(); ++inst_it) {
-        if (!llvm::isa<llvm::CallInst>(*inst_it)) {
-          continue;
-        }
-        auto& filter_call = llvm::cast<llvm::CallInst>(*inst_it);
-        if (std::string(filter_call.getCalledFunction()->getName()) == unique_name("row_process", is_nested_)) {
-          auto next_inst_it = inst_it;
-          ++next_inst_it;
-          auto new_bb = bb_it->splitBasicBlock(next_inst_it);
-          auto& br_instr = bb_it->back();
-          llvm::IRBuilder<> ir_builder(&br_instr);
-          llvm::Value* err_lv = inst_it;
-          auto& error_code_arg = query_func->getArgumentList().back();
-          err_lv = ir_builder.CreateCall(cgen_state_->module_->getFunction("merge_error_code"),
-                                         std::vector<llvm::Value*>{err_lv, &error_code_arg});
-          err_lv = ir_builder.CreateICmp(llvm::ICmpInst::ICMP_NE, err_lv, ll_int(int32_t(0)));
-          auto& last_bb = query_func->back();
-          llvm::ReplaceInstWithInst(&br_instr, llvm::BranchInst::Create(&last_bb, new_bb, err_lv));
-          done_splitting = true;
-          break;
-        }
-      }
-    }
-    CHECK(done_splitting);
+    createErrorCheckControlFlow(query_func);
   }
 
   if (!needs_error_check && cgen_state_->uses_div_) {
@@ -4258,6 +4231,37 @@ Executor::CompilationResult Executor::compilePlan(const bool render_output,
       query_mem_desc,
       output_columnar,
       llvm_ir};
+}
+
+void Executor::createErrorCheckControlFlow(llvm::Function* query_func) {
+  // check whether the row processing was successful; currently, it can
+  // fail by running out of group by buffer slots
+  bool done_splitting = false;
+  for (auto bb_it = query_func->begin(); bb_it != query_func->end() && !done_splitting; ++bb_it) {
+    for (auto inst_it = bb_it->begin(); inst_it != bb_it->end(); ++inst_it) {
+      if (!llvm::isa<llvm::CallInst>(*inst_it)) {
+        continue;
+      }
+      auto& filter_call = llvm::cast<llvm::CallInst>(*inst_it);
+      if (std::string(filter_call.getCalledFunction()->getName()) == unique_name("row_process", is_nested_)) {
+        auto next_inst_it = inst_it;
+        ++next_inst_it;
+        auto new_bb = bb_it->splitBasicBlock(next_inst_it);
+        auto& br_instr = bb_it->back();
+        llvm::IRBuilder<> ir_builder(&br_instr);
+        llvm::Value* err_lv = inst_it;
+        auto& error_code_arg = query_func->getArgumentList().back();
+        err_lv = ir_builder.CreateCall(cgen_state_->module_->getFunction("merge_error_code"),
+                                       std::vector<llvm::Value*>{err_lv, &error_code_arg});
+        err_lv = ir_builder.CreateICmp(llvm::ICmpInst::ICMP_NE, err_lv, ll_int(int32_t(0)));
+        auto& last_bb = query_func->back();
+        llvm::ReplaceInstWithInst(&br_instr, llvm::BranchInst::Create(&last_bb, new_bb, err_lv));
+        done_splitting = true;
+        break;
+      }
+    }
+  }
+  CHECK(done_splitting);
 }
 
 void Executor::codegenInnerScanNextRow() {

@@ -498,17 +498,19 @@ class Executor {
                                       const bool output_columnar) const;
   void executeSimpleInsert(const Planner::RootPlan* root_plan);
 
-  CompilationResult compilePlan(const bool render_output,
-                                const std::vector<Fragmenter_Namespace::TableInfo>& query_infos,
-                                const RelAlgExecutionUnit& ra_exe_unit,
-                                const CompilationOptions& co,
-                                const ExecutionOptions& eo,
-                                const CudaMgr_Namespace::CudaMgr* cuda_mgr,
-                                const bool allow_lazy_fetch,
-                                std::shared_ptr<RowSetMemoryOwner>,
-                                const size_t max_groups_buffer_entry_count,
-                                const size_t small_groups_buffer_entry_count,
-                                const JoinInfo& join_info);
+  CompilationResult compileWorkUnit(const bool render_output,
+                                    const std::vector<Fragmenter_Namespace::TableInfo>& query_infos,
+                                    const RelAlgExecutionUnit& ra_exe_unit,
+                                    const CompilationOptions& co,
+                                    const ExecutionOptions& eo,
+                                    const CudaMgr_Namespace::CudaMgr* cuda_mgr,
+                                    const bool allow_lazy_fetch,
+                                    std::shared_ptr<RowSetMemoryOwner>,
+                                    const size_t max_groups_buffer_entry_count,
+                                    const size_t small_groups_buffer_entry_count,
+                                    const JoinInfo& join_info);
+
+  void createErrorCheckControlFlow(llvm::Function* query_func);
 
   void codegenInnerScanNextRow();
 
