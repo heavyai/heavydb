@@ -494,6 +494,11 @@ void create_compound(std::vector<RelAlgNode*>& nodes, const std::vector<size_t>&
     }
     node->replaceInput(old_node, compound_node);
   }
+  // Since the last node isn't an input, we need to manually delete it.
+  // TODO(alex): figure out a better ownership model
+  if (pattern.back() == nodes.size() - 1) {
+    delete old_node;
+  }
 }
 
 void coalesce_nodes(std::vector<RelAlgNode*>& nodes) {

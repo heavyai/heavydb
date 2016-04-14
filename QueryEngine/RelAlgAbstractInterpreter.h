@@ -13,6 +13,8 @@
 class Rex {
  public:
   virtual std::string toString() const = 0;
+
+  virtual ~Rex() {}
 };
 
 class RexScalar : public Rex {};
@@ -290,6 +292,8 @@ class RexAgg : public Rex {
 class RelAlgNode {
  public:
   RelAlgNode() : id_(crt_id_++), context_data_(nullptr) {}
+
+  virtual ~RelAlgNode() {}
 
   void setContextData(const void* context_data) const {
     CHECK(!context_data_);
