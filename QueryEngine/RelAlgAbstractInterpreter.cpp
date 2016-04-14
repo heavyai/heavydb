@@ -124,7 +124,9 @@ bool RelProject::isIdentity() const {
     const auto input = dynamic_cast<const RexInput*>(scalar_expr.get());
     CHECK(input);
     CHECK_EQ(source, input->getSourceNode());
-    if (input->getIndex() != source_shape[i].getIndex() || input->getSourceNode() != source_shape[i].getSourceNode()) {
+    // We should add the additional check that input->getIndex() != source_shape[i].getIndex(),
+    // but Calcite doesn't generate the right Sort-Project-Sort sequence when joins are involved.
+    if (input->getSourceNode() != source_shape[i].getSourceNode()) {
       return false;
     }
   }
