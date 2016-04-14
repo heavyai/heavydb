@@ -330,15 +330,15 @@ RexScalar* parse_scalar_expr(const rapidjson::Value& expr) {
   return nullptr;
 }
 
-RelJoinType to_join_type(const std::string& join_type_name) {
+JoinType to_join_type(const std::string& join_type_name) {
   if (join_type_name == "inner") {
-    return RelJoinType::INNER;
+    return JoinType::INNER;
   }
   if (join_type_name == "left") {
-    return RelJoinType::LEFT;
+    return JoinType::LEFT;
   }
   CHECK(false);
-  return RelJoinType::INNER;
+  return JoinType::INNER;
 }
 
 const RexScalar* disambiguate_rex(const RexScalar*, const RANodeOutput&);

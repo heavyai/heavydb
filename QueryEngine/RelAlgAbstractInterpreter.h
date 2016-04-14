@@ -484,11 +484,9 @@ class RelAggregate : public RelAlgNode {
   const std::vector<std::string> fields_;
 };
 
-enum class RelJoinType { INNER, LEFT };
-
 class RelJoin : public RelAlgNode {
  public:
-  RelJoin(const RelAlgNode* lhs, const RelAlgNode* rhs, const RexScalar* condition, const RelJoinType join_type)
+  RelJoin(const RelAlgNode* lhs, const RelAlgNode* rhs, const RexScalar* condition, const JoinType join_type)
       : condition_(condition), join_type_(join_type) {
     inputs_.emplace_back(lhs);
     inputs_.emplace_back(rhs);
@@ -505,7 +503,7 @@ class RelJoin : public RelAlgNode {
 
  private:
   const std::unique_ptr<const RexScalar> condition_;
-  const RelJoinType join_type_;
+  const JoinType join_type_;
 };
 
 class RelFilter : public RelAlgNode {

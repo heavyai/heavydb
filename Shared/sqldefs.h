@@ -50,4 +50,7 @@ enum SQLStmtType { kSELECT, kUPDATE, kINSERT, kDELETE, kCREATE_TABLE };
 enum StorageOption { kDISK = 0, kGPU = 1, kCPU = 2 };
 
 enum ViewRefreshOption { kMANUAL = 0, kAUTO = 1, kIMMEDIATE = 2 };
+
+enum class JoinType { INNER, LEFT };
+
 #endif  // SQLDEFS_H
