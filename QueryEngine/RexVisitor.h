@@ -23,6 +23,10 @@ class RexVisitor {
     if (rex_case) {
       return visitCase(rex_case);
     }
+    const auto rex_ref = dynamic_cast<const RexRef*>(rex_scalar);
+    if (rex_ref) {
+      return visitRef(rex_ref);
+    }
     CHECK(false);
     return defaultResult();
   }
@@ -30,6 +34,8 @@ class RexVisitor {
   virtual T visitInput(const RexInput*) const { return defaultResult(); }
 
   virtual T visitLiteral(const RexLiteral*) const { return defaultResult(); }
+
+  virtual T visitRef(const RexRef*) const { return defaultResult(); }
 
   T visitOperator(const RexOperator* rex_operator) const {
     const size_t operand_count = rex_operator->size();

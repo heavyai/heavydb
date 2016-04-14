@@ -470,7 +470,9 @@ void create_compound(std::vector<RelAlgNode*>& nodes, const std::vector<size_t>&
       decltype(target_exprs){}.swap(target_exprs);
       CHECK_LE(groupby_count, scalar_sources.size());
       for (size_t group_idx = 0; group_idx < groupby_count; ++group_idx) {
-        target_exprs.push_back(new RexRef(group_idx + 1));
+        const auto rex_ref = new RexRef(group_idx + 1);
+        target_exprs.push_back(rex_ref);
+        scalar_sources.push_back(rex_ref);
       }
       for (const auto rex_agg : agg_exprs) {
         target_exprs.push_back(rex_agg);

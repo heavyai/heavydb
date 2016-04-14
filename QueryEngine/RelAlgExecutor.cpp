@@ -189,7 +189,13 @@ std::vector<std::shared_ptr<Analyzer::Expr>> translate_scalar_sources(const RA* 
                                                                       const RelAlgTranslator& translator) {
   std::vector<std::shared_ptr<Analyzer::Expr>> scalar_sources;
   for (size_t i = 0; i < get_scalar_sources_size(ra_node); ++i) {
-    scalar_sources.push_back(translator.translateScalarRex(scalar_at(i, ra_node)));
+    const auto scalar_rex = scalar_at(i, ra_node);
+    if (dynamic_cast<const RexRef*>(scalar_rex)) {
+      // RexRef are synthetic scalars we append at the end of the real ones
+      // for the sake of taking memory ownership, no real work needed here.
+      continue;
+    }
+    scalar_sources.push_back(translator.translateScalarRex(scalar_rex));
   }
   return scalar_sources;
 }
