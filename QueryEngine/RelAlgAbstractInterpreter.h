@@ -492,6 +492,8 @@ class RelJoin : public RelAlgNode {
     inputs_.emplace_back(rhs);
   }
 
+  JoinType getJoinType() const { return join_type_; }
+
   void replaceInput(const RelAlgNode* old_input, const RelAlgNode* input) override;
 
   std::string toString() const override {

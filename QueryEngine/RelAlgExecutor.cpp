@@ -388,6 +388,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createSortInputWorkUnit(const RelSort* 
            source_exe_unit.input_col_descs,
            source_exe_unit.simple_quals,
            source_exe_unit.quals,
+           source_exe_unit.join_type,
            source_exe_unit.join_quals,
            source_exe_unit.groupby_exprs,
            source_exe_unit.target_exprs,
@@ -547,6 +548,11 @@ SeparatedQuals separate_join_quals(const std::list<std::shared_ptr<Analyzer::Exp
   return {regular_quals, join_quals};
 }
 
+JoinType get_join_type(const RelAlgNode* ra) {
+  const auto join_ra = dynamic_cast<const RelJoin*>(get_data_sink(ra));
+  return join_ra ? join_ra->getJoinType() : JoinType::INVALID;
+}
+
 }  // namespace
 
 RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(const RelCompound* compound,
@@ -568,6 +574,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(const RelCompoun
                                         input_col_descs,
                                         quals_cf.simple_quals,
                                         separated_quals.regular_quals,
+                                        get_join_type(compound),
                                         separated_quals.join_quals,
                                         groupby_exprs,
                                         target_exprs,
@@ -593,7 +600,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(const RelProject*
   const auto target_exprs = get_exprs_not_owned(target_exprs_owned);
   const auto targets_meta = get_targets_meta(project, target_exprs);
   project->setOutputMetainfo(targets_meta);
-  return {{input_descs, input_col_descs, {}, {}, {}, {nullptr}, target_exprs, order_entries, 0},
+  return {{input_descs, input_col_descs, {}, {}, get_join_type(project), {}, {nullptr}, target_exprs, order_entries, 0},
           max_groups_buffer_entry_default_guess,
           nullptr};
 }
@@ -645,9 +652,10 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createFilterWorkUnit(const RelFilter* f
   target_exprs_owned_.insert(target_exprs_owned_.end(), target_exprs_owned.begin(), target_exprs_owned.end());
   const auto target_exprs = get_exprs_not_owned(target_exprs_owned);
   filter->setOutputMetainfo(in_metainfo);
-  return {{input_descs, input_col_descs, {}, {qual}, {}, {nullptr}, target_exprs, order_entries, 0},
-          max_groups_buffer_entry_default_guess,
-          nullptr};
+  return {
+      {input_descs, input_col_descs, {}, {qual}, get_join_type(filter), {}, {nullptr}, target_exprs, order_entries, 0},
+      max_groups_buffer_entry_default_guess,
+      nullptr};
 }
 
 #endif  // HAVE_CALCITE

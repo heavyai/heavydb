@@ -114,6 +114,7 @@ struct RelAlgExecutionUnit {
   const std::list<InputColDescriptor> input_col_descs;
   const std::list<std::shared_ptr<Analyzer::Expr>> simple_quals;
   const std::list<std::shared_ptr<Analyzer::Expr>> quals;
+  const JoinType join_type;
   const std::list<std::shared_ptr<Analyzer::Expr>> join_quals;
   const std::list<std::shared_ptr<Analyzer::Expr>> groupby_exprs;
   const std::vector<Analyzer::Expr*> target_exprs;

@@ -113,6 +113,7 @@ RelAlgExecutionUnit QueryRewriter::rewriteConstrainedByIn(const std::shared_ptr<
           ra_exe_unit_.input_col_descs,
           ra_exe_unit_.simple_quals,
           ra_exe_unit_.quals,
+          ra_exe_unit_.join_type,
           ra_exe_unit_.join_quals,
           new_groupby_list,
           new_target_exprs,

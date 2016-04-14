@@ -338,7 +338,7 @@ JoinType to_join_type(const std::string& join_type_name) {
     return JoinType::LEFT;
   }
   CHECK(false);
-  return JoinType::INNER;
+  return JoinType::INVALID;
 }
 
 const RexScalar* disambiguate_rex(const RexScalar*, const RANodeOutput&);
