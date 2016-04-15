@@ -1564,11 +1564,11 @@ int main(int argc, char** argv) {
       device = "gpu";
     if (vm.count("hybrid"))
       device = "hybrid";
-    if (device == "cpu") {
-      enable_rendering = false;
-    }
     if (num_gpus == 0)
       device = "cpu";
+
+    if (device == "cpu")
+      enable_rendering = false;
   } catch (boost::program_options::error& e) {
     std::cerr << "Usage Error: " << e.what() << std::endl;
     return 1;
