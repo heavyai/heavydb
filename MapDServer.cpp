@@ -339,6 +339,7 @@ class MapDHandler : virtual public MapDIf {
     sql_execute_impl(_return, session_info, query_str, column_format, nonce);
   }
 
+  // DEPRECATED - use get_row_for_pixel()
   void get_rows_for_pixels(TPixelResult& _return,
                            const TSessionId session,
                            const int64_t widget_id,
@@ -347,6 +348,24 @@ class MapDHandler : virtual public MapDIf {
                            const std::vector<std::string>& col_names,
                            const bool column_format,
                            const std::string& nonce) {
+    _return.nonce = nonce;
+    if (!enable_rendering_) {
+      TMapDException ex;
+      ex.error_msg = "Backend rendering is disabled.";
+      LOG(ERROR) << ex.error_msg;
+      throw ex;
+    }
+  }
+
+  void get_row_for_pixel(TPixelRowResult& _return,
+                         const TSessionId session,
+                         const int64_t widget_id,
+                         const TPixel& pixel,
+                         const std::string& table_name,
+                         const std::vector<std::string>& col_names,
+                         const bool column_format,
+                         const int32_t pixelRadius,
+                         const std::string& nonce) {
     _return.nonce = nonce;
     if (!enable_rendering_) {
       TMapDException ex;

@@ -158,7 +158,11 @@ class Executor {
                      const bool allow_multifrag,
                      const bool allow_loop_joins);
 
-  int64_t getRowidForPixel(const int64_t x, const int64_t y, const int session_id, const int render_widget_id);
+  int64_t getRowidForPixel(const int64_t x,
+                           const int64_t y,
+                           const int session_id,
+                           const int render_widget_id,
+                           const int pixelRadius = 0);
 
 
   StringDictionary* getStringDictionary(const int dictId,
