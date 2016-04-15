@@ -64,7 +64,7 @@ sudo yum install epel-release
 2. Install GCC and Linux headers
 ```
 sudo yum groupinstall "Development Tools"
-sudo yum install linux-headers
+sudo yum install kernel-headers
 ```
 
 3. Install Xorg and required libraries. This is only required to take advantage of the backend rendering features of MapD.
@@ -183,15 +183,13 @@ sudo nvidia-xconfig --use-display-device=none --busid=PCI:131:0:0 --busid=PCI:13
 Note: On some systems, such as those provided by Amazon Web Services, `nvidia-smi` will report the BusID as, for example, `00:03.0`. In these cases the Xorg BusIDs would be of the form `PCI:0:3:0`.
 
 ## MapD Installation
-MapD is distributed as a self-extracting archive, that is, a shell script which contains the complete contents of a .tar.gz file. Other package types are available upon request.
+MapD is distributed as a .tar.gz archive. Other package types are available upon request.
 
 To install, move the archive to the desired installation directory (`$MAPD_PATH`) and run:
 ```
-sh mapd2-<date>-<hash>-<platform>-<architecture>.sh
+tar -xvf mapd2-<date>-<hash>-<platform>-<architecture>.tar.gz
 ```
-replacing `mapd2-<date>-<hash>-<platform>-<architecture>.sh` with the name of the archive provided to you.
-
-The installer will then present the EULA and, if accepted, ask for the installation path. 
+replacing `mapd2-<date>-<hash>-<platform>-<architecture>.tar.gz` with the name of the archive provided to you. For example, a release for x86-64 Linux built on 15 April 2016 will have the file name `mapd2-20160415-86fec7b-Linux-x86_64.tar.gz`.
 
 ### `systemd`
 For Linux, the MapD archive includes `systemd` target files which allows `systemd` to manage MapD as a service on your server. The provided `install_mapd_systemd.sh` script will ask a few questions about your environment and then install the target files into the correct location.
