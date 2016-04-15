@@ -923,6 +923,17 @@ size_t get_col_bit_width(const Analyzer::ColumnVar* col_var) {
 std::vector<llvm::Value*> Executor::codegen(const Analyzer::ColumnVar* col_var,
                                             const bool fetch_column,
                                             const bool hoist_literals) {
+  const auto col_var_lvs = codegenColVar(col_var, fetch_column, hoist_literals);
+  if (!cgen_state_->outer_join_cond_lv_ || col_var->get_rte_idx() == 0) {
+    return col_var_lvs;
+  }
+  return codegenOuterJoinNullPlaceholder(
+      col_var_lvs, col_var, CompilationOptions{ExecutorDeviceType::CPU, false, ExecutorOptLevel::Default});
+}
+
+std::vector<llvm::Value*> Executor::codegenColVar(const Analyzer::ColumnVar* col_var,
+                                                  const bool fetch_column,
+                                                  const bool hoist_literals) {
   auto col_id = col_var->get_column_id();
   if (col_var->get_table_id() > 0) {
     auto cd = get_column_descriptor(col_id, col_var->get_table_id(), *catalog_);
@@ -1007,6 +1018,42 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::ColumnVar* col_var,
   auto it_ok = cgen_state_->fetch_cache_.insert(std::make_pair(local_col_id, std::vector<llvm::Value*>{dec_val_cast}));
   CHECK(it_ok.second);
   return {it_ok.first->second};
+}
+
+std::vector<llvm::Value*> Executor::codegenOuterJoinNullPlaceholder(const std::vector<llvm::Value*>& orig_lvs,
+                                                                    const Analyzer::Expr* orig_expr,
+                                                                    const CompilationOptions& co) {
+  const auto bb = cgen_state_->ir_builder_.GetInsertBlock();
+  const auto outer_join_args_bb =
+      llvm::BasicBlock::Create(cgen_state_->context_, "outer_join_args", cgen_state_->row_func_);
+  const auto outer_join_nulls_bb =
+      llvm::BasicBlock::Create(cgen_state_->context_, "outer_join_nulls", cgen_state_->row_func_);
+  const auto phi_bb = llvm::BasicBlock::Create(cgen_state_->context_, "outer_join_phi", cgen_state_->row_func_);
+  cgen_state_->ir_builder_.SetInsertPoint(bb);
+  cgen_state_->ir_builder_.CreateCondBr(cgen_state_->outer_join_cond_lv_, outer_join_args_bb, outer_join_nulls_bb);
+  const auto back_from_outer_join_bb =
+      llvm::BasicBlock::Create(cgen_state_->context_, "back_from_outer_join", cgen_state_->row_func_);
+  cgen_state_->ir_builder_.SetInsertPoint(outer_join_args_bb);
+  cgen_state_->ir_builder_.CreateBr(phi_bb);
+  cgen_state_->ir_builder_.SetInsertPoint(outer_join_nulls_bb);
+  const auto& null_ti = orig_expr->get_type_info();
+  const auto null_constant = makeExpr<Analyzer::Constant>(null_ti, true, Datum{0});
+  const auto null_target_lvs = codegen(null_constant.get(), false, co);
+  cgen_state_->ir_builder_.CreateBr(phi_bb);
+  CHECK_EQ(orig_lvs.size(), null_target_lvs.size());
+  cgen_state_->ir_builder_.SetInsertPoint(phi_bb);
+  std::vector<llvm::Value*> target_lvs;
+  for (size_t i = 0; i < orig_lvs.size(); ++i) {
+    const auto target_type = orig_lvs[i]->getType();
+    CHECK_EQ(target_type, null_target_lvs[i]->getType());
+    auto target_phi = cgen_state_->ir_builder_.CreatePHI(target_type, 2);
+    target_phi->addIncoming(orig_lvs[i], outer_join_args_bb);
+    target_phi->addIncoming(null_target_lvs[i], outer_join_nulls_bb);
+    target_lvs.push_back(target_phi);
+  }
+  cgen_state_->ir_builder_.CreateBr(back_from_outer_join_bb);
+  cgen_state_->ir_builder_.SetInsertPoint(back_from_outer_join_bb);
+  return target_lvs;
 }
 
 // returns the byte stream argument and the position for the given column
@@ -4129,6 +4176,15 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
 
   for (auto expr : ra_exe_unit.inner_join_quals) {
     filter_lv = cgen_state_->ir_builder_.CreateAnd(filter_lv, toBool(codegen(expr.get(), true, co).front()));
+  }
+
+  if (!ra_exe_unit.outer_join_quals.empty()) {
+    cgen_state_->outer_join_cond_lv_ =
+        llvm::ConstantInt::get(llvm::IntegerType::getInt1Ty(cgen_state_->context_), true);
+    for (auto expr : ra_exe_unit.outer_join_quals) {
+      cgen_state_->outer_join_cond_lv_ = cgen_state_->ir_builder_.CreateAnd(
+          cgen_state_->outer_join_cond_lv_, toBool(codegen(expr.get(), true, co).front()));
+    }
   }
 
   for (auto expr : ra_exe_unit.simple_quals) {

@@ -494,6 +494,13 @@ class RelJoin : public RelAlgNode {
 
   JoinType getJoinType() const { return join_type_; }
 
+  const RexScalar* getCondition() const { return condition_.get(); }
+
+  void setCondition(const RexScalar* condition) {
+    CHECK(condition);
+    condition_.reset(condition);
+  }
+
   void replaceInput(const RelAlgNode* old_input, const RelAlgNode* input) override;
 
   std::string toString() const override {
@@ -504,7 +511,7 @@ class RelJoin : public RelAlgNode {
   }
 
  private:
-  const std::unique_ptr<const RexScalar> condition_;
+  std::unique_ptr<const RexScalar> condition_;
   const JoinType join_type_;
 };
 

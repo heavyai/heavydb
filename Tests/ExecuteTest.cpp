@@ -1296,6 +1296,13 @@ TEST(Select, Subqueries) {
     c("SELECT str, SUM(y) AS n FROM test WHERE x > (SELECT COUNT(*) FROM test) - 14 GROUP BY str ORDER BY n ASC;", dt);
   }
 }
+
+TEST(Select, LeftOuterJoins) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT test.x, test_inner.x FROM test LEFT OUTER JOIN test_inner ON test.x = test_inner.x WHERE test.y > 40;", dt);
+  }
+}
 #endif  // HAVE_RAVM
 
 int main(int argc, char** argv) {

@@ -571,13 +571,18 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(const RelCompoun
   CHECK(simple_separated_quals.join_quals.empty());
   const auto target_exprs = translate_targets(target_exprs_owned_, scalar_sources, groupby_exprs, compound, translator);
   CHECK_EQ(compound->size(), target_exprs.size());
+  const auto join = dynamic_cast<const RelJoin*>(compound->getInput(0));
+  std::list<std::shared_ptr<Analyzer::Expr>> inner_join_quals;
+  if (join && join->getCondition() && join->getJoinType() == JoinType::LEFT) {
+    inner_join_quals.push_back(translator.translateScalarRex(join->getCondition()));
+  }
   const RelAlgExecutionUnit exe_unit = {input_descs,
                                         input_col_descs,
                                         quals_cf.simple_quals,
                                         separated_quals.regular_quals,
                                         get_join_type(compound),
                                         separated_quals.join_quals,
-                                        {},
+                                        inner_join_quals,
                                         groupby_exprs,
                                         target_exprs,
                                         order_entries,

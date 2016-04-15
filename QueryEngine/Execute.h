@@ -194,6 +194,12 @@ class Executor {
   llvm::Value* codegen(const Analyzer::BinOper*, const CompilationOptions&);
   llvm::Value* codegen(const Analyzer::UOper*, const CompilationOptions&);
   std::vector<llvm::Value*> codegen(const Analyzer::ColumnVar*, const bool fetch_column, const bool hoist_literals);
+  std::vector<llvm::Value*> codegenColVar(const Analyzer::ColumnVar*,
+                                          const bool fetch_column,
+                                          const bool hoist_literals);
+  std::vector<llvm::Value*> codegenOuterJoinNullPlaceholder(const std::vector<llvm::Value*>& orig_lvs,
+                                                            const Analyzer::Expr* orig_expr,
+                                                            const CompilationOptions& co);
   std::vector<llvm::Value*> codegen(const Analyzer::Constant*,
                                     const EncodingType enc_type,
                                     const int dict_id,
@@ -619,6 +625,7 @@ class Executor {
           row_func_(nullptr),
           context_(llvm::getGlobalContext()),
           ir_builder_(context_),
+          outer_join_cond_lv_(nullptr),
           must_run_on_cpu_(false),
           uses_div_(false) {}
 
@@ -716,6 +723,7 @@ class Executor {
     std::vector<llvm::Value*> group_by_expr_cache_;
     std::vector<llvm::Value*> str_constants_;
     std::unordered_map<InputDescriptor, std::pair<llvm::Value*, llvm::Value*>> scan_to_iterator_;
+    llvm::Value* outer_join_cond_lv_;
     std::vector<llvm::BasicBlock*> inner_scan_labels_;
     std::unordered_map<int, llvm::Value*> scan_idx_to_hash_pos_;
     std::vector<std::unique_ptr<const InValuesBitmap>> in_values_bitmaps_;

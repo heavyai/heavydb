@@ -391,12 +391,19 @@ void bind_project_to_input(RelProject* project_node, const RANodeOutput& input) 
 
 void bind_inputs(const std::vector<RelAlgNode*>& nodes) {
   for (auto ra_node : nodes) {
-    auto filter_node = dynamic_cast<RelFilter*>(ra_node);
+    const auto filter_node = dynamic_cast<RelFilter*>(ra_node);
     if (filter_node) {
       CHECK_EQ(size_t(1), filter_node->inputCount());
       const auto disambiguated_condition =
           disambiguate_rex(filter_node->getCondition(), get_node_output(filter_node->getInput(0)));
       filter_node->setCondition(disambiguated_condition);
+      continue;
+    }
+    const auto join_node = dynamic_cast<RelJoin*>(ra_node);
+    if (join_node) {
+      CHECK_EQ(size_t(2), join_node->inputCount());
+      const auto disambiguated_condition = disambiguate_rex(join_node->getCondition(), get_node_output(join_node));
+      join_node->setCondition(disambiguated_condition);
       continue;
     }
     const auto project_node = dynamic_cast<RelProject*>(ra_node);
@@ -694,9 +701,6 @@ class RaAbstractInterp {
   RelJoin* dispatchJoin(const rapidjson::Value& join_ra) {
     const auto join_type = to_join_type(json_str(field(join_ra, "joinType")));
     const auto filter_rex = parse_scalar_expr(field(join_ra, "condition"));
-    if (!dynamic_cast<const RexLiteral*>(filter_rex)) {
-      throw std::runtime_error("Unsupported join condition");
-    }
     const auto str_input_indices = strings_from_json_array(field(join_ra, "inputs"));
     CHECK_EQ(size_t(2), str_input_indices.size());
     std::vector<size_t> input_indices;
