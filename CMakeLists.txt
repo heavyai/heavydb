@@ -107,6 +107,10 @@ include_directories(ThirdParty/rapidjson)
 include_directories(ThirdParty/poly2tri)
 add_subdirectory(ThirdParty/poly2tri)
 
+# ShapeLib
+include_directories(ThirdParty/shapelib)
+add_subdirectory(ThirdParty/shapelib)
+
 
 
 option(ENABLE_CALCITE "Build Calcite adapter" OFF)
