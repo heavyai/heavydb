@@ -17,24 +17,26 @@
 #include "BufferSeg.h"
 #include <mutex>
 
-class FailedToCreateFirstSlab : public std::runtime_error {
- public:
-  FailedToCreateFirstSlab() : std::runtime_error("FailedToCreateFirstSlab") {}
-};
-
-class FailedToCreateSlab : public std::runtime_error {
- public:
-  FailedToCreateSlab() : std::runtime_error("FailedToCreateSlab") {}
-};
-
-class SlabTooBig : public std::runtime_error {
- public:
-  SlabTooBig() : std::runtime_error("SlabTooBig") {}
-};
-
 class OutOfMemory : public std::runtime_error {
  public:
   OutOfMemory() : std::runtime_error("OutOfMemory") {}
+
+  OutOfMemory(const std::string& err) : std::runtime_error(err) {}
+};
+
+class FailedToCreateFirstSlab : public OutOfMemory {
+ public:
+  FailedToCreateFirstSlab() : OutOfMemory("FailedToCreateFirstSlab") {}
+};
+
+class FailedToCreateSlab : public OutOfMemory {
+ public:
+  FailedToCreateSlab() : OutOfMemory("FailedToCreateSlab") {}
+};
+
+class SlabTooBig : public OutOfMemory {
+ public:
+  SlabTooBig() : OutOfMemory("SlabTooBig") {}
 };
 
 using namespace Data_Namespace;
