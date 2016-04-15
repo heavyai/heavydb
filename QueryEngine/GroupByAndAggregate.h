@@ -316,10 +316,7 @@ inline TargetInfo target_info(const PointerType target_expr, const std::list<std
   if (agg_expr->get_aggtype() == kCOUNT) {
     is_distinct = agg_expr->get_is_distinct();
   }
-  bool skip_null = !agg_arg_ti.get_notnull();
-  if (skip_null && constrained_not_null(agg_arg, quals)) {
-    skip_null = false;
-  }
+  const bool skip_null = !agg_arg_ti.get_notnull();
   return {
       true,
       agg_expr->get_aggtype(),
