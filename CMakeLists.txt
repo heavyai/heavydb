@@ -103,6 +103,10 @@ add_subdirectory(ThirdParty/googletest)
 # RapidJSON
 include_directories(ThirdParty/rapidjson)
 
+# Poly2Tri
+include_directories(ThirdParty/poly2tri)
+add_subdirectory(ThirdParty/poly2tri)
+
 
 
 option(ENABLE_CALCITE "Build Calcite adapter" OFF)
