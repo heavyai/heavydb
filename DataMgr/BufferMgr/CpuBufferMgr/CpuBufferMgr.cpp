@@ -27,14 +27,14 @@ void CpuBufferMgr::addSlab(const size_t slabSize) {
       slabs_.back() = cudaMgr_->allocatePinnedHostMem(slabSize);
     } catch (std::runtime_error& error) {
       slabs_.resize(slabs_.size() - 1);
-      throw std::runtime_error("Could not create slab on device");
+      throw FailedToCreateSlab();
     }
   } else {
     try {
       slabs_.back() = new int8_t[slabSize];
     } catch (std::runtime_error& error) {
       slabs_.resize(slabs_.size() - 1);
-      throw std::runtime_error("Could not create slab on device");
+      throw FailedToCreateSlab();
     }
   }
   slabSegments_.resize(slabSegments_.size() + 1);

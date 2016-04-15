@@ -3533,6 +3533,12 @@ int32_t Executor::executePlanWithoutGroupBy(const CompilationResult& compilation
                                                  render_allocator_map);
     } catch (const OutOfMemory&) {
       return ERR_OUT_OF_GPU_MEM;
+    } catch (const FailedToCreateFirstSlab&) {
+      return ERR_OUT_OF_GPU_MEM;
+    } catch (const FailedToCreateSlab&) {
+      return ERR_OUT_OF_GPU_MEM;
+    } catch (const SlabTooBig&) {
+      return ERR_OUT_OF_GPU_MEM;
     } catch (...) {
       LOG(FATAL) << "Unknown error launching the GPU kernel, most likely a timeout";
     }
@@ -3627,6 +3633,12 @@ int32_t Executor::executePlanWithGroupBy(const CompilationResult& compilation_re
                                        join_hash_table_ptr,
                                        render_allocator_map);
     } catch (const OutOfMemory&) {
+      return ERR_OUT_OF_GPU_MEM;
+    } catch (const FailedToCreateFirstSlab&) {
+      return ERR_OUT_OF_GPU_MEM;
+    } catch (const FailedToCreateSlab&) {
+      return ERR_OUT_OF_GPU_MEM;
+    } catch (const SlabTooBig&) {
       return ERR_OUT_OF_GPU_MEM;
     } catch (const OutOfRenderMemory&) {
       return ERR_OUT_OF_RENDER_MEM;

@@ -226,7 +226,7 @@ BufferList::iterator BufferMgr::findFreeBufferInSlab(const size_t slabNum, const
 BufferList::iterator BufferMgr::findFreeBuffer(size_t numBytes) {
   size_t numPagesRequested = (numBytes + pageSize_ - 1) / pageSize_;
   if (numPagesRequested > numPagesPerSlab_) {
-    throw std::runtime_error("Requested memory allocation larger than slab size.");
+    throw SlabTooBig();
   }
 
   size_t numSlabs = slabSegments_.size();
@@ -247,7 +247,7 @@ BufferList::iterator BufferMgr::findFreeBuffer(size_t numBytes) {
                                                                  // buffer is smaller than the size of a slab
     } catch (std::runtime_error& error) {                        // failed to allocate slab)
       if (numSlabs == 0) {
-        throw std::runtime_error("Could not allocate first slab on device");
+        throw FailedToCreateFirstSlab();
       }
       maxNumSlabs_ = numSlabs;  // this prevents us from ever allocating slabs in the future - is this desired?
     }

@@ -17,6 +17,21 @@
 #include "BufferSeg.h"
 #include <mutex>
 
+class FailedToCreateFirstSlab : public std::runtime_error {
+ public:
+  FailedToCreateFirstSlab() : std::runtime_error("FailedToCreateFirstSlab") {}
+};
+
+class FailedToCreateSlab : public std::runtime_error {
+ public:
+  FailedToCreateSlab() : std::runtime_error("FailedToCreateSlab") {}
+};
+
+class SlabTooBig : public std::runtime_error {
+ public:
+  SlabTooBig() : std::runtime_error("SlabTooBig") {}
+};
+
 class OutOfMemory : public std::runtime_error {
  public:
   OutOfMemory() : std::runtime_error("OutOfMemory") {}
