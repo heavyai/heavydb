@@ -103,7 +103,6 @@ class MapDHandler : virtual public MapDIf {
       executor_device_type_ = ExecutorDeviceType::GPU;
       LOG(INFO) << "Started in GPU Mode" << std::endl;
       cpu_mode_only_ = false;
-
     } else if (executor_device == "hybrid") {
       executor_device_type_ = ExecutorDeviceType::Hybrid;
       LOG(INFO) << "Started in Hybrid Mode" << std::endl;
@@ -116,6 +115,8 @@ class MapDHandler : virtual public MapDIf {
     const auto data_path = boost::filesystem::path(base_data_path_) / "mapd_data";
     data_mgr_.reset(
         new Data_Namespace::DataMgr(data_path.string(), cpu_buffer_mem_bytes, !cpu_mode_only_, num_gpus, start_gpu));
+
+
     sys_cat_.reset(new Catalog_Namespace::SysCatalog(base_data_path_, data_mgr_, ldapMetadata));
     import_path_ = boost::filesystem::path(base_data_path_) / "mapd_import";
   }
