@@ -145,10 +145,10 @@ static const char* get_row(const char* buf,
             }
           }
           std::string s = trim_space(field_buf.get(), j);
-          if (copy_params.quoted && s.front() == copy_params.quote) {
+          if (copy_params.quoted && s.size() > 0 && s.front() == copy_params.quote) {
             s.erase(0, 1);
           }
-          if (copy_params.quoted && s.back() == copy_params.quote) {
+          if (copy_params.quoted && s.size() > 0 && s.back() == copy_params.quote) {
             s.pop_back();
           }
           row.push_back(s);
