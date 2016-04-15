@@ -3553,7 +3553,7 @@ int32_t Executor::executePlanWithoutGroupBy(const CompilationResult& compilation
     uint32_t num_fragments = col_buffers.size();
     const auto val1 =
         reduce_results(agg_info.agg_kind,
-                       target_expr->get_type_info(),
+                       agg_info.sql_type,
                        out_vec[out_vec_idx],
                        device_type == ExecutorDeviceType::GPU ? num_fragments * blockSize() * gridSize() : 1);
     if (agg_info.agg_kind == kAVG) {
@@ -3561,7 +3561,7 @@ int32_t Executor::executePlanWithoutGroupBy(const CompilationResult& compilation
       results.addValue(
           val1,
           reduce_results(agg_info.agg_kind,
-                         target_expr->get_type_info(),
+                         agg_info.sql_type,
                          out_vec[out_vec_idx],
                          device_type == ExecutorDeviceType::GPU ? num_fragments * blockSize() * gridSize() : 1));
     } else {
