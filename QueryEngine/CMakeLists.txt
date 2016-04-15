@@ -71,6 +71,11 @@ add_custom_command(
 
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctions.bc DESTINATION QueryEngine)
 
+set(MAPD_HOST_COMPILER "" CACHE STRING "Host compiler to use with nvcc")
+if(NOT "${MAPD_HOST_COMPILER}" STREQUAL "")
+    set(MAPD_HOST_COMPILER_FLAG "-ccbin=${MAPD_HOST_COMPILER}")
+endif()
+
 
 if(ENABLE_CUDA)
     add_library(QueryEngine ${query_engine_source_files} ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.a ${CMAKE_CURRENT_BINARY_DIR}/GpuSortImpl.o ${CMAKE_CURRENT_BINARY_DIR}/GpuInitGroups.o ${CMAKE_CURRENT_BINARY_DIR}/HashJoinRuntimeGpu.o)
@@ -89,31 +94,66 @@ add_custom_command(
     DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.o
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.a
     COMMAND nvcc
-    ARGS -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS ${MAPD_DEFINITIONS} -arch sm_30 -lib ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.o -o ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.a)
+    ARGS
+        ${MAPD_HOST_COMPILER_FLAG}
+        -D__STDC_LIMIT_MACROS
+        -D__STDC_CONSTANT_MACROS
+        ${MAPD_DEFINITIONS}
+        -arch sm_30
+        -lib ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.o
+        -o ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.a
+    )
 
 add_custom_command(
     DEPENDS cuda_mapd_rt.cu GpuInitGroups.cu GroupByRuntime.cpp DateTruncate.cpp ExtractFromTime.cpp ArrayOps.cpp StringFunctions.cpp ${CMAKE_SOURCE_DIR}/Utils/ChunkIter.cpp ${CMAKE_SOURCE_DIR}/Utils/StringLike.cpp
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.o
     COMMAND nvcc
-    ARGS -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS ${MAPD_DEFINITIONS} --device-link -arch sm_30 -c ${CMAKE_CURRENT_SOURCE_DIR}/cuda_mapd_rt.cu)
+    ARGS
+        ${MAPD_HOST_COMPILER_FLAG}
+        -D__STDC_LIMIT_MACROS
+        -D__STDC_CONSTANT_MACROS
+        ${MAPD_DEFINITIONS}
+        --device-link
+        -arch sm_30
+        -c ${CMAKE_CURRENT_SOURCE_DIR}/cuda_mapd_rt.cu
+    )
 
 add_custom_command(
     DEPENDS GpuSortImpl.cu
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/GpuSortImpl.o
     COMMAND nvcc
-    ARGS -O3 ${MAPD_DEFINITIONS} -arch sm_30 -c ${CMAKE_CURRENT_SOURCE_DIR}/GpuSortImpl.cu)
+    ARGS
+        ${MAPD_HOST_COMPILER_FLAG}
+        -O3
+        ${MAPD_DEFINITIONS}
+        -arch sm_30
+        -c ${CMAKE_CURRENT_SOURCE_DIR}/GpuSortImpl.cu
+    )
 
 add_custom_command(
     DEPENDS GpuInitGroups.cu
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/GpuInitGroups.o
     COMMAND nvcc
-    ARGS -DEXECUTOR_RT ${MAPD_DEFINITIONS} -O3 -arch sm_30 -c ${CMAKE_CURRENT_SOURCE_DIR}/GpuInitGroups.cu)
+    ARGS
+        ${MAPD_HOST_COMPILER_FLAG}
+        -DEXECUTOR_RT
+        ${MAPD_DEFINITIONS}
+        -O3
+        -arch sm_30
+        -c ${CMAKE_CURRENT_SOURCE_DIR}/GpuInitGroups.cu
+    )
 
 add_custom_command(
     DEPENDS HashJoinRuntimeGpu.cu HashJoinRuntime.cpp
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/HashJoinRuntimeGpu.o
     COMMAND nvcc
-    ARGS ${MAPD_DEFINITIONS} -O3 -arch sm_30 -c ${CMAKE_CURRENT_SOURCE_DIR}/HashJoinRuntimeGpu.cu)
+    ARGS
+        ${MAPD_HOST_COMPILER_FLAG}
+        ${MAPD_DEFINITIONS}
+        -O3
+        -arch sm_30
+        -c ${CMAKE_CURRENT_SOURCE_DIR}/HashJoinRuntimeGpu.cu
+    )
 
 add_executable(group_by_hash_test ${group_by_hash_test_files})
 target_link_libraries(group_by_hash_test gtest ${Glog_LIBRARIES})
