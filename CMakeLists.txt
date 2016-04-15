@@ -265,10 +265,11 @@ set(CPACK_PACKAGE_VENDOR "MapD Technologies, Inc.")
 
 # Frontend
 option(MAPD2_FRONTEND_DOWNLOAD "Download mapd2-frontend for packaging" OFF)
+set(MAPD_FRONTEND_URL "http://builds.mapd.com/frontend/mapd2-dashboard-v1-latest-release.zip" CACHE STRING "URL to bundled frontend")
 if(MAPD2_FRONTEND_DOWNLOAD)
   include(ExternalProject)
   ExternalProject_Add(frontend
-    URL http://builds.mapd.com/frontend/mapd2-frontend-latest.zip
+    URL ${MAPD_FRONTEND_URL}
     PREFIX external
     CONFIGURE_COMMAND ""
     UPDATE_COMMAND ""
