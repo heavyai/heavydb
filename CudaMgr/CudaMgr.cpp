@@ -118,6 +118,7 @@ void CudaMgr::printDeviceProperties() const {
 #endif
 }
 
+// deviceNum is the device number relative to startGpu (realDeviceNum - startGpu_)
 void CudaMgr::setContext(const int deviceNum) const {
 #ifdef HAVE_CUDA
   // assert (deviceNum < deviceCount_);
@@ -173,6 +174,7 @@ void CudaMgr::copyDeviceToHost(int8_t* hostPtr, const int8_t* devicePtr, const s
 #endif
 }
 
+// destDeviceNum and srcDeviceNum are the device numbers relative to startGpu (realDeviceNum - startGpu_)
 void CudaMgr::copyDeviceToDevice(int8_t* destPtr,
                                  int8_t* srcPtr,
                                  const size_t numBytes,
