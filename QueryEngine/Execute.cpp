@@ -240,6 +240,7 @@ ResultRows Executor::executeSelectPlan(const Planner::Plan* plan,
                                                     quals,
                                                     JoinType::INVALID,
                                                     join_quals,
+                                                    {},
                                                     groupby_exprs,
                                                     target_exprs,
                                                     order_entries,
@@ -2502,6 +2503,7 @@ ResultRows Executor::executeResultPlan(const Planner::Result* result_plan,
                                                   quals,
                                                   JoinType::INVALID,
                                                   join_quals,
+                                                  {},
                                                   agg_plan->get_groupby_list(),
                                                   get_agg_target_exprs(agg_plan),
                                                   order_entries,
@@ -2588,6 +2590,7 @@ ResultRows Executor::executeResultPlan(const Planner::Result* result_plan,
                        result_plan->get_constquals(),
                        result_plan->get_quals(),
                        JoinType::INVALID,
+                       {},
                        {},
                        {nullptr},
                        get_agg_target_exprs(result_plan),
@@ -2734,7 +2737,7 @@ ResultRows Executor::executeWorkUnit(int32_t* error_code,
     max_groups_buffer_entry_guess = compute_buffer_entry_guess(query_infos);
   }
 
-  const auto join_info = chooseJoinType(ra_exe_unit.join_quals, query_infos, device_type);
+  const auto join_info = chooseJoinType(ra_exe_unit.inner_join_quals, query_infos, device_type);
 
   // could use std::thread::hardware_concurrency(), but some
   // slightly out-of-date compilers (gcc 4.7) implement it as always 0.
@@ -4115,7 +4118,7 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
   std::vector<Analyzer::Expr*> deferred_quals;
   llvm::Value* filter_lv = llvm::ConstantInt::get(llvm::IntegerType::getInt1Ty(cgen_state_->context_), true);
 
-  for (auto expr : ra_exe_unit.join_quals) {
+  for (auto expr : ra_exe_unit.inner_join_quals) {
     filter_lv = cgen_state_->ir_builder_.CreateAnd(filter_lv, toBool(codegen(expr.get(), true, co).front()));
   }
 
