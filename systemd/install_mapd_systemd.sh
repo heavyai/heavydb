@@ -53,7 +53,7 @@ sed -e "s#@MAPD_PATH@#${vars['MAPD_PATH']}#g" \
     mapd.conf.in > mapd.conf
 sudo cp mapd.conf ${vars['MAPD_STORAGE']}
 
-systemctl daemon-reload
+sudo systemctl daemon-reload
 
 if [ ! -d "${vars['MAPD_DATA']}/mapd_catalogs" ]; then
   echo
