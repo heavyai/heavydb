@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include <cuda.h>
 #include <limits>
 #include "GpuRtConstants.h"
 
@@ -99,6 +100,8 @@ __device__ int64_t atomicMin64(int64_t* address, int64_t val) {
   return old;
 }
 
+// As of 20160418, CUDA 8.0EA only defines `atomicAdd(double*, double)` for compute capability >= 6.0.
+#if CUDA_VERSION < 8000 || (defined(__CUDA_ARCH__) && __CUDA_ARCH__ < 600)
 __device__ double atomicAdd(double* address, double val) {
   unsigned long long int* address_as_ull = (unsigned long long int*)address;
   unsigned long long int old = *address_as_ull, assumed;
@@ -112,6 +115,7 @@ __device__ double atomicAdd(double* address, double val) {
 
   return __longlong_as_double(old);
 }
+#endif
 
 __device__ double atomicMax(double* address, double val) {
   unsigned long long int* address_as_ull = (unsigned long long int*)address;
