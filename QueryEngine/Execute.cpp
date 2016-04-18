@@ -923,8 +923,6 @@ size_t get_col_bit_width(const Analyzer::ColumnVar* col_var) {
 std::vector<llvm::Value*> Executor::codegen(const Analyzer::ColumnVar* col_var,
                                             const bool fetch_column,
                                             const bool hoist_literals) {
-  // only generate the decoding code once; if a column has been previously
-  // fetched in the generated IR, we'll reuse it
   auto col_id = col_var->get_column_id();
   if (col_var->get_table_id() > 0) {
     auto cd = get_column_descriptor(col_id, col_var->get_table_id(), *catalog_);
@@ -952,6 +950,8 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::ColumnVar* col_var,
     }
   }
   const int local_col_id = getLocalColumnId(col_var, fetch_column);
+  // only generate the decoding code once; if a column has been previously
+  // fetched in the generated IR, we'll reuse it
   auto it = cgen_state_->fetch_cache_.find(local_col_id);
   if (it != cgen_state_->fetch_cache_.end()) {
     return {it->second};
