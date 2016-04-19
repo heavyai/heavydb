@@ -4030,6 +4030,15 @@ llvm::Value* get_arg_by_name(llvm::Function* func, const std::string& name) {
   return nullptr;
 }
 
+void verify_function_ir(const llvm::Function* func) {
+  std::stringstream err_ss;
+  llvm::raw_os_ostream err_os(err_ss);
+  if (llvm::verifyFunction(*func, &err_os)) {
+    func->dump();
+    LOG(FATAL) << err_ss.str();
+  }
+}
+
 }  // namespace
 
 void Executor::nukeOldState(const bool allow_lazy_fetch, const JoinInfo& join_info) {
@@ -4228,6 +4237,7 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
   if (eo.just_explain) {
     llvm_ir = serialize_llvm_object(query_func) + serialize_llvm_object(cgen_state_->row_func_);
   }
+  verify_function_ir(cgen_state_->row_func_);
   return Executor::CompilationResult{
       co.device_type_ == ExecutorDeviceType::CPU
           ? optimizeAndCodegenCPU(query_func, multifrag_query_func, live_funcs, cgen_state_->module_, co)
@@ -4442,6 +4452,7 @@ void optimizeIR(llvm::Function* query_func,
   // safe and clear all attributes
   llvm::AttributeSet no_attributes;
   query_func->setAttributes(no_attributes);
+  verify_function_ir(query_func);
 }
 
 }  // namespace
@@ -4520,11 +4531,6 @@ std::vector<void*> Executor::optimizeAndCodegenCPU(llvm::Function* query_func,
   execution_engine = eb.create();
   CHECK(execution_engine);
 
-  std::stringstream ss;
-  llvm::raw_os_ostream raw_os(ss);
-  if (llvm::verifyFunction(*query_func, &raw_os)) {
-    LOG(FATAL) << ss.str();
-  }
   execution_engine->finalizeObject();
   auto native_code = execution_engine->getPointerToFunction(multifrag_query_func);
 
