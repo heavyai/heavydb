@@ -1014,7 +1014,7 @@ class ScopedScratchBuffer {
  public:
   ScopedScratchBuffer(const size_t num_bytes, Data_Namespace::DataMgr* data_mgr, const int device_id)
       : data_mgr_(data_mgr), ab_(alloc_gpu_abstract_buffer(data_mgr_, num_bytes, device_id)) {}
-  ~ScopedScratchBuffer() { free_gpu_abstract_buffer(data_mgr_, ab_); }
+  ~ScopedScratchBuffer() { data_mgr_->freeAllBuffers(); }
   CUdeviceptr getPtr() const { return reinterpret_cast<CUdeviceptr>(ab_->getMemoryPtr()); }
 
  private:
