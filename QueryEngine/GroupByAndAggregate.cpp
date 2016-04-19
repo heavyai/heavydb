@@ -2,7 +2,7 @@
 #include "AggregateUtils.h"
 
 #include "ExpressionRange.h"
-#include "GpuSort.h"
+#include "InPlaceSort.h"
 #include "GpuInitGroups.h"
 
 #include "Execute.h"
@@ -11,6 +11,7 @@
 #include "../CudaMgr/CudaMgr.h"
 #include "../Shared/checked_alloc.h"
 #include "../Utils/ChunkIter.h"
+#include "DataMgr/BufferMgr/BufferMgr.h"
 
 #include <numeric>
 #include <thread>
@@ -601,7 +602,11 @@ void ResultRows::sort(const std::list<Analyzer::OrderEntry>& order_entries,
     return;
   }
   if (query_mem_desc_.sortOnGpu()) {
-    gpuSort(order_entries);
+    try {
+      inplaceSortGpu(order_entries);
+    } catch (const OutOfMemory&) {
+      inplaceSortCpu(order_entries);
+    }
     return;
   }
   if (query_mem_desc_.keyless_hash) {
@@ -688,7 +693,7 @@ void ResultRows::sort(const std::list<Analyzer::OrderEntry>& order_entries,
   }
 }
 
-void ResultRows::gpuSort(const std::list<Analyzer::OrderEntry>& order_entries) {
+void ResultRows::inplaceSortGpu(const std::list<Analyzer::OrderEntry>& order_entries) {
   auto data_mgr = &executor_->catalog_->get_dataMgr();
   const int device_id{0};
   CHECK(in_place_);
@@ -708,21 +713,20 @@ void ResultRows::gpuSort(const std::list<Analyzer::OrderEntry>& order_entries) {
   ScopedScratchBuffer scratch_buff(query_mem_desc_.entry_count * sizeof(int64_t), data_mgr, device_id);
   auto tmp_buff = reinterpret_cast<int64_t*>(scratch_buff.getPtr());
   CHECK_EQ(size_t(1), order_entries.size());
-  CHECK_EQ(size_t(1), order_entries.size());
   const auto idx_buff = gpu_query_mem.group_by_buffers.second - query_mem_desc_.entry_count * sizeof(int64_t);
   for (const auto& order_entry : order_entries) {
     const auto val_buff = gpu_query_mem.group_by_buffers.second +
                           (order_entry.tle_no - 1 + (query_mem_desc_.keyless_hash ? 0 : 1)) *
                               query_mem_desc_.entry_count * sizeof(int64_t);
-    sort_groups(reinterpret_cast<int64_t*>(val_buff),
-                reinterpret_cast<int64_t*>(idx_buff),
-                query_mem_desc_.entry_count,
-                order_entry.is_desc);
+    sort_groups_gpu(reinterpret_cast<int64_t*>(val_buff),
+                    reinterpret_cast<int64_t*>(idx_buff),
+                    query_mem_desc_.entry_count,
+                    order_entry.is_desc);
     if (!query_mem_desc_.keyless_hash) {
-      apply_permutation(reinterpret_cast<int64_t*>(gpu_query_mem.group_by_buffers.second),
-                        reinterpret_cast<int64_t*>(idx_buff),
-                        query_mem_desc_.entry_count,
-                        tmp_buff);
+      apply_permutation_gpu(reinterpret_cast<int64_t*>(gpu_query_mem.group_by_buffers.second),
+                            reinterpret_cast<int64_t*>(idx_buff),
+                            query_mem_desc_.entry_count,
+                            tmp_buff);
     }
     for (size_t target_idx = 0; target_idx < query_mem_desc_.agg_col_widths.size(); ++target_idx) {
       if (static_cast<int>(target_idx) == order_entry.tle_no - 1) {
@@ -731,10 +735,10 @@ void ResultRows::gpuSort(const std::list<Analyzer::OrderEntry>& order_entries) {
       const auto val_buff =
           gpu_query_mem.group_by_buffers.second +
           (target_idx + (query_mem_desc_.keyless_hash ? 0 : 1)) * query_mem_desc_.entry_count * sizeof(int64_t);
-      apply_permutation(reinterpret_cast<int64_t*>(val_buff),
-                        reinterpret_cast<int64_t*>(idx_buff),
-                        query_mem_desc_.entry_count,
-                        tmp_buff);
+      apply_permutation_gpu(reinterpret_cast<int64_t*>(val_buff),
+                            reinterpret_cast<int64_t*>(idx_buff),
+                            query_mem_desc_.entry_count,
+                            tmp_buff);
     }
   }
   copy_group_by_buffers_from_gpu(data_mgr,
@@ -746,6 +750,28 @@ void ResultRows::gpuSort(const std::list<Analyzer::OrderEntry>& order_entries) {
                                  executor_->gridSize(),
                                  device_id,
                                  false);
+}
+
+void ResultRows::inplaceSortCpu(const std::list<Analyzer::OrderEntry>& order_entries) {
+  CHECK(in_place_);
+  CHECK(!query_mem_desc_.keyless_hash);
+  CHECK_EQ(size_t(1), in_place_group_by_buffers_.size());
+  std::vector<int64_t> tmp_buff(query_mem_desc_.entry_count);
+  std::vector<int64_t> idx_buff(query_mem_desc_.entry_count);
+  CHECK_EQ(size_t(1), order_entries.size());
+  for (const auto& order_entry : order_entries) {
+    const auto sortkey_val_buff = in_place_group_by_buffers_.front() + order_entry.tle_no * query_mem_desc_.entry_count;
+    sort_groups_cpu(sortkey_val_buff, &idx_buff[0], query_mem_desc_.entry_count, order_entry.is_desc);
+    apply_permutation_cpu(in_place_group_by_buffers_.front(), &idx_buff[0], query_mem_desc_.entry_count, &tmp_buff[0]);
+    for (size_t target_idx = 0; target_idx < query_mem_desc_.agg_col_widths.size(); ++target_idx) {
+      if (static_cast<int>(target_idx) == order_entry.tle_no - 1) {
+        continue;
+      }
+      const auto satellite_val_buff =
+          in_place_group_by_buffers_.front() + (target_idx + 1) * query_mem_desc_.entry_count;
+      apply_permutation_cpu(satellite_val_buff, &idx_buff[0], query_mem_desc_.entry_count, &tmp_buff[0]);
+    }
+  }
 }
 
 #undef UNLIKELY

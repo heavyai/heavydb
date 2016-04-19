@@ -4,7 +4,7 @@
 #include "Codec.h"
 #include "ExpressionRewrite.h"
 #include "GpuMemUtils.h"
-#include "GpuSort.h"
+#include "InPlaceSort.h"
 #include "AggregateUtils.h"
 #include "GroupByAndAggregate.h"
 #include "NvidiaKernel.h"

@@ -845,7 +845,9 @@ class ResultRows {
     }
   }
 
-  void gpuSort(const std::list<Analyzer::OrderEntry>& order_entries);
+  void inplaceSortGpu(const std::list<Analyzer::OrderEntry>& order_entries);
+
+  void inplaceSortCpu(const std::list<Analyzer::OrderEntry>& order_entries);
 
   void setQueueTime(int64_t queue_time) { queue_time_ms_ = queue_time; }
 

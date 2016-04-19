@@ -12,7 +12,7 @@ set(query_engine_source_files
     ExpressionRange.cpp
     ExpressionRewrite.cpp
     GpuMemUtils.cpp
-    GpuSort.cpp
+    InPlaceSort.cpp
     GroupByAndAggregate.cpp
     InValuesBitmap.cpp
     InputMetadata.cpp
@@ -78,7 +78,7 @@ endif()
 
 
 if(ENABLE_CUDA)
-    add_library(QueryEngine ${query_engine_source_files} ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.a ${CMAKE_CURRENT_BINARY_DIR}/GpuSortImpl.o ${CMAKE_CURRENT_BINARY_DIR}/GpuInitGroups.o ${CMAKE_CURRENT_BINARY_DIR}/HashJoinRuntimeGpu.o)
+    add_library(QueryEngine ${query_engine_source_files} ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.a ${CMAKE_CURRENT_BINARY_DIR}/InPlaceSortImpl.o ${CMAKE_CURRENT_BINARY_DIR}/GpuInitGroups.o ${CMAKE_CURRENT_BINARY_DIR}/HashJoinRuntimeGpu.o)
 else()
     add_library(QueryEngine ${query_engine_source_files})
 endif()
@@ -119,15 +119,15 @@ add_custom_command(
     )
 
 add_custom_command(
-    DEPENDS GpuSortImpl.cu
-    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/GpuSortImpl.o
+    DEPENDS InPlaceSortImpl.cu
+    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/InPlaceSortImpl.o
     COMMAND nvcc
     ARGS
         ${MAPD_HOST_COMPILER_FLAG}
         -O3
         ${MAPD_DEFINITIONS}
         -arch sm_30
-        -c ${CMAKE_CURRENT_SOURCE_DIR}/GpuSortImpl.cu
+        -c ${CMAKE_CURRENT_SOURCE_DIR}/InPlaceSortImpl.cu
     )
 
 add_custom_command(
