@@ -74,7 +74,8 @@ inline std::vector<int64_t> compact_init_vals(const size_t cmpt_size,
   std::vector<int64_t> cmpt_res(cmpt_size, 0);
   int8_t* buffer_ptr = reinterpret_cast<int8_t*>(&cmpt_res[0]);
   for (size_t col_idx = 0, col_count = col_widths.size(); col_idx < col_count; ++col_idx) {
-    const auto chosen_bytes = compact_byte_width(col_widths[col_idx]);
+    const auto chosen_bytes =
+        compact_byte_width(static_cast<unsigned>(col_widths[col_idx]), unsigned(SMALLEST_BYTE_WIDTH_TO_COMPACT));
     if (chosen_bytes == sizeof(int64_t)) {
       buffer_ptr = align_to_int64(buffer_ptr);
     }

@@ -3651,7 +3651,8 @@ int32_t Executor::executePlanWithoutGroupBy(const CompilationResult& compilation
     auto val1 = reduce_results(agg_info.agg_kind,
                                agg_info.sql_type,
                                query_exe_context->init_agg_vals_[out_vec_idx],
-                               compact_byte_width(query_exe_context->query_mem_desc_.agg_col_widths[out_vec_idx]),
+                               compact_byte_width(query_exe_context->query_mem_desc_.agg_col_widths[out_vec_idx],
+                                                  unsigned(SMALLEST_BYTE_WIDTH_TO_COMPACT)),
                                out_vec[out_vec_idx],
                                device_type == ExecutorDeviceType::GPU ? num_fragments * blockSize() * gridSize() : 1,
                                false);
@@ -3662,7 +3663,8 @@ int32_t Executor::executePlanWithoutGroupBy(const CompilationResult& compilation
           reduce_results(kCOUNT,
                          agg_info.sql_type,
                          query_exe_context->init_agg_vals_[out_vec_idx],
-                         compact_byte_width(query_exe_context->query_mem_desc_.agg_col_widths[out_vec_idx]),
+                         compact_byte_width(query_exe_context->query_mem_desc_.agg_col_widths[out_vec_idx],
+                                            unsigned(SMALLEST_BYTE_WIDTH_TO_COMPACT)),
                          out_vec[out_vec_idx],
                          device_type == ExecutorDeviceType::GPU ? num_fragments * blockSize() * gridSize() : 1,
                          false));

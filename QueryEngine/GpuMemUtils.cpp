@@ -117,10 +117,10 @@ std::pair<CUdeviceptr, CUdeviceptr> create_dev_group_by_buffers(Data_Namespace::
 
   CUdeviceptr group_by_dev_buffers_mem =
       alloc_gpu_mem(data_mgr, mem_size + prepended_buff_size, device_id, render_allocator) + prepended_buff_size;
-#if SMALLEST_BIT_WIDTH_TO_COMPACT < 64
-  //TODO(miyu): Compaction assumes the base ptr to be aligned to int64_t, otherwise offsetting is wrong.
+#if SMALLEST_BYTE_WIDTH_TO_COMPACT < 8
+  // TODO(miyu): Compaction assumes the base ptr to be aligned to int64_t, otherwise offsetting is wrong.
   //            Remove this assumption amd make offsetting work in all cases.
-  CHECK_EQ(0, static_cast<int64_t>(group_by_dev_buffers_mem) % sizeof(int64_t));
+  CHECK_EQ(uint64_t(0), static_cast<int64_t>(group_by_dev_buffers_mem) % sizeof(int64_t));
 #endif
   const size_t step{query_mem_desc.threadsShareMemory() ? block_size_x : 1};
 

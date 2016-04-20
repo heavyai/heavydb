@@ -16,15 +16,13 @@
 #include <algorithm>
 #endif
 
-#define SMALLEST_BIT_WIDTH_TO_COMPACT 64
+#define SMALLEST_BYTE_WIDTH_TO_COMPACT 8
 
-extern "C" FORCE_INLINE DEVICE unsigned compact_byte_width(unsigned qw) {
-#ifdef __CUDACC__
-  return umax(qw, (SMALLEST_BIT_WIDTH_TO_COMPACT >> 3));
-#else
-  return std::max(qw, static_cast<unsigned>(SMALLEST_BIT_WIDTH_TO_COMPACT >> 3));
-#endif
+#ifndef __CUDACC__
+inline unsigned compact_byte_width(unsigned qw, unsigned low_bound) {
+  return std::max(qw, low_bound);
 }
+#endif
 
 template <typename T>
 FORCE_INLINE DEVICE T align_to_int64(T addr) {

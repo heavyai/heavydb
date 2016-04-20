@@ -471,8 +471,9 @@ inline size_t get_bit_width(const SQLTypeInfo& ti) {
 // TODO(alex): proper types for aggregate
 inline int64_t get_agg_initial_val(const SQLAgg agg, const SQLTypeInfo& ti, const bool enable_compaction) {
   CHECK(!ti.is_string());
-  const auto byte_width =
-      enable_compaction ? compact_byte_width(static_cast<unsigned>(get_bit_width(ti) >> 3)) : sizeof(int64_t);
+  const auto byte_width = enable_compaction ? compact_byte_width(static_cast<unsigned>(get_bit_width(ti) >> 3),
+                                                                 unsigned(SMALLEST_BYTE_WIDTH_TO_COMPACT))
+                                            : sizeof(int64_t);
   CHECK_GE(byte_width, static_cast<unsigned>(ti.get_size()));
   switch (agg) {
     case kAVG:
