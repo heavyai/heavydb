@@ -927,8 +927,7 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::ColumnVar* col_var,
   if (!cgen_state_->outer_join_cond_lv_ || col_var->get_rte_idx() == 0) {
     return col_var_lvs;
   }
-  return codegenOuterJoinNullPlaceholder(
-      col_var_lvs, col_var, CompilationOptions{ExecutorDeviceType::CPU, false, ExecutorOptLevel::Default});
+  return codegenOuterJoinNullPlaceholder(col_var_lvs, col_var);
 }
 
 std::vector<llvm::Value*> Executor::codegenColVar(const Analyzer::ColumnVar* col_var,
@@ -1021,8 +1020,7 @@ std::vector<llvm::Value*> Executor::codegenColVar(const Analyzer::ColumnVar* col
 }
 
 std::vector<llvm::Value*> Executor::codegenOuterJoinNullPlaceholder(const std::vector<llvm::Value*>& orig_lvs,
-                                                                    const Analyzer::Expr* orig_expr,
-                                                                    const CompilationOptions& co) {
+                                                                    const Analyzer::Expr* orig_expr) {
   const auto bb = cgen_state_->ir_builder_.GetInsertBlock();
   const auto outer_join_args_bb =
       llvm::BasicBlock::Create(cgen_state_->context_, "outer_join_args", cgen_state_->row_func_);
@@ -1038,7 +1036,8 @@ std::vector<llvm::Value*> Executor::codegenOuterJoinNullPlaceholder(const std::v
   cgen_state_->ir_builder_.SetInsertPoint(outer_join_nulls_bb);
   const auto& null_ti = orig_expr->get_type_info();
   const auto null_constant = makeExpr<Analyzer::Constant>(null_ti, true, Datum{0});
-  const auto null_target_lvs = codegen(null_constant.get(), false, co);
+  const auto null_target_lvs = codegen(
+      null_constant.get(), false, CompilationOptions{ExecutorDeviceType::CPU, false, ExecutorOptLevel::Default});
   cgen_state_->ir_builder_.CreateBr(phi_bb);
   CHECK_EQ(orig_lvs.size(), null_target_lvs.size());
   cgen_state_->ir_builder_.SetInsertPoint(phi_bb);
