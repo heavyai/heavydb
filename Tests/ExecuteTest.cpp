@@ -225,7 +225,8 @@ class SQLiteComparator {
  private:
   static void checkTypeConsistency(const int ref_col_type, const SQLTypeInfo& mapd_ti) {
     if (ref_col_type == SQLITE_NULL) {
-      CHECK(!mapd_ti.get_notnull());
+      // TODO(alex): re-enable the check that mapd_ti is nullable,
+      //             got invalidated because of outer joins
       return;
     }
     if (mapd_ti.is_integer()) {
@@ -1300,7 +1301,11 @@ TEST(Select, Subqueries) {
 TEST(Select, LeftOuterJoins) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-    c("SELECT test.x, test_inner.x FROM test LEFT OUTER JOIN test_inner ON test.x = test_inner.x WHERE test.y > 40;", dt);
+    c("SELECT test.x, test_inner.x FROM test LEFT OUTER JOIN test_inner ON test.x = test_inner.x WHERE test.y > 40;",
+      dt);
+    c("SELECT test.x, test_inner.x FROM test LEFT OUTER JOIN test_inner ON test.x = test_inner.x WHERE test.y > 42;",
+      dt);
+    c("SELECT test.x, test_inner.x FROM test LEFT OUTER JOIN test_inner ON test.x = test_inner.x;", dt);
   }
 }
 #endif  // HAVE_RAVM
