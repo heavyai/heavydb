@@ -2654,6 +2654,10 @@ ResultRows Executor::executeResultPlan(const Planner::Result* result_plan,
   if (!row_count) {
     return result_rows;
   }
+  std::vector<ColWidths> agg_col_widths;
+  for (auto wid : get_col_byte_widths(target_exprs)) {
+    agg_col_widths.push_back({wid, int8_t(compact_byte_width(wid, unsigned(SMALLEST_BYTE_WIDTH_TO_COMPACT)))});
+  }
   QueryMemoryDescriptor query_mem_desc{this,
                                        allow_multifrag,
                                        GroupByColRangeType::OneColGuessedRange,
@@ -2662,7 +2666,7 @@ ResultRows Executor::executeResultPlan(const Planner::Result* result_plan,
                                        -1,
                                        0,
                                        {sizeof(int64_t)},
-                                       get_col_byte_widths(target_exprs),
+                                       agg_col_widths,
                                        row_count,
                                        small_groups_buffer_entry_count_,
                                        0,
@@ -3651,8 +3655,7 @@ int32_t Executor::executePlanWithoutGroupBy(const CompilationResult& compilation
     auto val1 = reduce_results(agg_info.agg_kind,
                                agg_info.sql_type,
                                query_exe_context->init_agg_vals_[out_vec_idx],
-                               compact_byte_width(query_exe_context->query_mem_desc_.agg_col_widths[out_vec_idx],
-                                                  unsigned(SMALLEST_BYTE_WIDTH_TO_COMPACT)),
+                               query_exe_context->query_mem_desc_.agg_col_widths[out_vec_idx].compact,
                                out_vec[out_vec_idx],
                                device_type == ExecutorDeviceType::GPU ? num_fragments * blockSize() * gridSize() : 1,
                                false);
@@ -3663,8 +3666,7 @@ int32_t Executor::executePlanWithoutGroupBy(const CompilationResult& compilation
           reduce_results(kCOUNT,
                          agg_info.sql_type,
                          query_exe_context->init_agg_vals_[out_vec_idx],
-                         compact_byte_width(query_exe_context->query_mem_desc_.agg_col_widths[out_vec_idx],
-                                            unsigned(SMALLEST_BYTE_WIDTH_TO_COMPACT)),
+                         query_exe_context->query_mem_desc_.agg_col_widths[out_vec_idx].compact,
                          out_vec[out_vec_idx],
                          device_type == ExecutorDeviceType::GPU ? num_fragments * blockSize() * gridSize() : 1,
                          false));

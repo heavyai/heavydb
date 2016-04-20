@@ -84,6 +84,11 @@ typedef std::unordered_map<size_t, CountDistinctDescriptor> CountDistinctDescrip
 
 class RowSetMemoryOwner;
 
+struct ColWidths {
+  int8_t actual;
+  int8_t compact;
+};
+
 struct QueryMemoryDescriptor {
   const Executor* executor_;
   bool allow_multifrag;
@@ -95,7 +100,7 @@ struct QueryMemoryDescriptor {
   int64_t init_val;
 
   std::vector<int8_t> group_col_widths;
-  std::vector<int8_t> agg_col_widths;
+  std::vector<ColWidths> agg_col_widths;
   size_t entry_count;        // the number of entries in the main buffer
   size_t entry_count_small;  // the number of entries in the small buffer
   int64_t min_val;           // meaningful for OneColKnownRange, MultiColPerfectHash only
@@ -156,7 +161,7 @@ struct QueryMemoryDescriptor {
   size_t getWarpCount() const;
 
  private:
-  size_t getTotalBytesOfColumnarBuffers(const std::vector<int8_t>& col_widths) const;
+  size_t getTotalBytesOfColumnarBuffers(const std::vector<ColWidths>& col_widths) const;
 };
 
 inline int64_t bitmap_set_size(const int64_t bitmap_ptr,

@@ -69,13 +69,12 @@ inline int64_t float_to_double_bin(int32_t val, bool nullable = false) {
 
 inline std::vector<int64_t> compact_init_vals(const size_t cmpt_size,
                                               const std::vector<int64_t>& init_vec,
-                                              const std::vector<int8_t>& col_widths) {
+                                              const std::vector<ColWidths>& col_widths) {
   CHECK_GE(init_vec.size(), col_widths.size());
   std::vector<int64_t> cmpt_res(cmpt_size, 0);
   int8_t* buffer_ptr = reinterpret_cast<int8_t*>(&cmpt_res[0]);
   for (size_t col_idx = 0, col_count = col_widths.size(); col_idx < col_count; ++col_idx) {
-    const auto chosen_bytes =
-        compact_byte_width(static_cast<unsigned>(col_widths[col_idx]), unsigned(SMALLEST_BYTE_WIDTH_TO_COMPACT));
+    const auto chosen_bytes = static_cast<unsigned>(col_widths[col_idx].compact);
     if (chosen_bytes == sizeof(int64_t)) {
       buffer_ptr = align_to_int64(buffer_ptr);
     }

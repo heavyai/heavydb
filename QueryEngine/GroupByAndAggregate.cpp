@@ -141,8 +141,7 @@ bool ResultRows::reduceSingleRow(const int8_t* row_ptr,
     for (size_t target_idx = 0, agg_col_idx = 0; target_idx < compact_targets.size() && agg_col_idx < agg_col_count;
          ++target_idx, ++agg_col_idx) {
       const auto& agg_info = compact_targets[target_idx];
-      const auto chosen_bytes =
-          compact_byte_width(query_mem_desc_.agg_col_widths[agg_col_idx], unsigned(SMALLEST_BYTE_WIDTH_TO_COMPACT));
+      const auto chosen_bytes = query_mem_desc_.agg_col_widths[agg_col_idx].compact;
       auto partial_bin_val = get_component(row_ptr + query_mem_desc_.getColOnlyOffInBytes(agg_col_idx), chosen_bytes);
       partial_agg_vals[agg_col_idx] = partial_bin_val;
       if (agg_info.is_distinct) {
@@ -154,9 +153,9 @@ bool ResultRows::reduceSingleRow(const int8_t* row_ptr,
       if (kAVG == agg_info.agg_kind) {
         CHECK(agg_info.is_agg && !agg_info.is_distinct);
         ++agg_col_idx;
-        partial_bin_val = partial_agg_vals[agg_col_idx] = get_component(
-            row_ptr + query_mem_desc_.getColOnlyOffInBytes(agg_col_idx),
-            compact_byte_width(query_mem_desc_.agg_col_widths[agg_col_idx], unsigned(SMALLEST_BYTE_WIDTH_TO_COMPACT)));
+        partial_bin_val = partial_agg_vals[agg_col_idx] =
+            get_component(row_ptr + query_mem_desc_.getColOnlyOffInBytes(agg_col_idx),
+                          query_mem_desc_.agg_col_widths[agg_col_idx].compact);
       }
       if (agg_col_idx == static_cast<size_t>(query_mem_desc_.idx_target_as_key) &&
           partial_bin_val != query_mem_desc_.init_val) {
@@ -173,8 +172,7 @@ bool ResultRows::reduceSingleRow(const int8_t* row_ptr,
          ++target_idx, ++agg_col_idx) {
       const auto& agg_info = compact_targets[target_idx];
       auto partial_bin_val = partial_agg_vals[agg_col_idx];
-      const auto chosen_bytes =
-          compact_byte_width(query_mem_desc_.agg_col_widths[agg_col_idx], unsigned(SMALLEST_BYTE_WIDTH_TO_COMPACT));
+      const auto chosen_bytes = query_mem_desc_.agg_col_widths[agg_col_idx].compact;
       if (agg_info.is_agg) {
         switch (agg_info.agg_kind) {
           case kAVG:
@@ -368,12 +366,10 @@ void ResultRows::reduce(const ResultRows& other_results,
          ++target_index,
                 col_base_off += query_mem_desc.getNextColOffInBytes(&crt_results[col_base_off], 0, agg_col_idx++)) {
       const auto agg_info = compact_targets[target_index];
-      auto chosen_bytes =
-          compact_byte_width(query_mem_desc.agg_col_widths[agg_col_idx], unsigned(SMALLEST_BYTE_WIDTH_TO_COMPACT));
+      auto chosen_bytes = query_mem_desc.agg_col_widths[agg_col_idx].compact;
       auto next_chosen_bytes = chosen_bytes;
       if (kAVG == agg_info.agg_kind) {
-        next_chosen_bytes = compact_byte_width(query_mem_desc.agg_col_widths[agg_col_idx + 1],
-                                               unsigned(SMALLEST_BYTE_WIDTH_TO_COMPACT));
+        next_chosen_bytes = query_mem_desc.agg_col_widths[agg_col_idx + 1].compact;
       }
 
       for (size_t bin = 0, bin_base_off = col_base_off; bin < groups_buffer_entry_count_;
@@ -510,8 +506,7 @@ void ResultRows::reduce(const ResultRows& other_results,
         size_t col_idx{0};
         size_t other_off{bin_base_off};
         for (const auto& agg_info : targets) {
-          const auto chosen_bytes =
-              compact_byte_width(query_mem_desc_in.agg_col_widths[col_idx], unsigned(SMALLEST_BYTE_WIDTH_TO_COMPACT));
+          const auto chosen_bytes = query_mem_desc_in.agg_col_widths[col_idx].compact;
           auto next_chosen_bytes = chosen_bytes;
           const auto other_ptr = reinterpret_cast<const int8_t*>(other_group_by_buffer) + other_off;
           const auto other_val = get_component(other_ptr, chosen_bytes);
@@ -533,8 +528,7 @@ void ResultRows::reduce(const ResultRows& other_results,
               next_col_ptr =
                   reinterpret_cast<int8_t*>(group_val_buff) + query_mem_desc_in.getColOnlyOffInBytes(col_idx + 1);
             }
-            next_chosen_bytes = compact_byte_width(query_mem_desc_in.agg_col_widths[col_idx + 1],
-                                                   unsigned(SMALLEST_BYTE_WIDTH_TO_COMPACT));
+            next_chosen_bytes = query_mem_desc_in.agg_col_widths[col_idx + 1].compact;
             other_off += query_mem_desc_in.getNextColOffInBytes(other_ptr, bin, col_idx + 1);
             other_next_ptr = reinterpret_cast<const int8_t*>(other_group_by_buffer) + other_off;
             ++col_idx;
@@ -852,8 +846,7 @@ void ResultRows::inplaceSortGpu(const std::list<Analyzer::OrderEntry>& order_ent
   for (const auto& order_entry : order_entries) {
     const auto target_idx = order_entry.tle_no - 1;
     const auto val_buff = gpu_query_mem.group_by_buffers.second + query_mem_desc_.getColOffInBytes(0, target_idx);
-    const auto chosen_bytes =
-        compact_byte_width(query_mem_desc_.agg_col_widths[target_idx], unsigned(SMALLEST_BYTE_WIDTH_TO_COMPACT));
+    const auto chosen_bytes = query_mem_desc_.agg_col_widths[target_idx].compact;
     sort_groups_gpu(reinterpret_cast<int64_t*>(val_buff),
                     reinterpret_cast<int64_t*>(idx_buff),
                     query_mem_desc_.entry_count,
@@ -870,8 +863,7 @@ void ResultRows::inplaceSortGpu(const std::list<Analyzer::OrderEntry>& order_ent
       if (static_cast<int>(target_idx) == order_entry.tle_no - 1) {
         continue;
       }
-      const auto chosen_bytes =
-          compact_byte_width(query_mem_desc_.agg_col_widths[target_idx], unsigned(SMALLEST_BYTE_WIDTH_TO_COMPACT));
+      const auto chosen_bytes = query_mem_desc_.agg_col_widths[target_idx].compact;
       const auto val_buff = gpu_query_mem.group_by_buffers.second + query_mem_desc_.getColOffInBytes(0, target_idx);
       apply_permutation_gpu(reinterpret_cast<int64_t*>(val_buff),
                             reinterpret_cast<int64_t*>(idx_buff),
@@ -901,8 +893,7 @@ void ResultRows::inplaceSortCpu(const std::list<Analyzer::OrderEntry>& order_ent
   for (const auto& order_entry : order_entries) {
     const auto target_idx = order_entry.tle_no - 1;
     const auto sortkey_val_buff = in_place_group_by_buffers_.front() + order_entry.tle_no * query_mem_desc_.entry_count;
-    const auto chosen_bytes =
-        compact_byte_width(query_mem_desc_.agg_col_widths[target_idx], unsigned(SMALLEST_BYTE_WIDTH_TO_COMPACT));
+    const auto chosen_bytes = query_mem_desc_.agg_col_widths[target_idx].compact;
     sort_groups_cpu(sortkey_val_buff, &idx_buff[0], query_mem_desc_.entry_count, order_entry.is_desc, chosen_bytes);
     apply_permutation_cpu(
         in_place_group_by_buffers_.front(), &idx_buff[0], query_mem_desc_.entry_count, &tmp_buff[0], sizeof(int64_t));
@@ -910,8 +901,7 @@ void ResultRows::inplaceSortCpu(const std::list<Analyzer::OrderEntry>& order_ent
       if (static_cast<int>(target_idx) == order_entry.tle_no - 1) {
         continue;
       }
-      const auto chosen_bytes =
-          compact_byte_width(query_mem_desc_.agg_col_widths[target_idx], unsigned(SMALLEST_BYTE_WIDTH_TO_COMPACT));
+      const auto chosen_bytes = query_mem_desc_.agg_col_widths[target_idx].compact;
       const auto satellite_val_buff =
           in_place_group_by_buffers_.front() + (target_idx + 1) * query_mem_desc_.entry_count;
       apply_permutation_cpu(satellite_val_buff, &idx_buff[0], query_mem_desc_.entry_count, &tmp_buff[0], chosen_bytes);
@@ -1177,8 +1167,7 @@ bool ResultRows::fetchLazyOrBuildRow(std::vector<TargetValue>& row,
         if (agg_info.is_distinct) {
           row.emplace_back(agg_vals[agg_col_idx]);
         } else {
-          const auto chosen_bytes =
-              compact_byte_width(query_mem_desc_.agg_col_widths[agg_col_idx], unsigned(SMALLEST_BYTE_WIDTH_TO_COMPACT));
+          const auto chosen_bytes = query_mem_desc_.agg_col_widths[agg_col_idx].compact;
           if (compact_targets[target_idx].sql_type.is_fp() && chosen_bytes == sizeof(float)) {
             agg_vals[agg_col_idx] = float_to_double_bin(agg_vals[agg_col_idx], !agg_info.sql_type.get_notnull());
           }
@@ -1227,8 +1216,7 @@ bool ResultRows::fetchLazyOrBuildRow(std::vector<TargetValue>& row,
       auto col_ptr = reinterpret_cast<int8_t*>(group_by_buffer) + bin_base_off;
       for (size_t col_idx = 0; col_idx < colCount();
            ++col_idx, col_ptr += query_mem_desc_.getNextColOffInBytes(col_ptr, crt_row_buff_idx_, out_vec_idx++)) {
-        auto chosen_bytes =
-            compact_byte_width(query_mem_desc_.agg_col_widths[out_vec_idx], unsigned(SMALLEST_BYTE_WIDTH_TO_COMPACT));
+        auto chosen_bytes = query_mem_desc_.agg_col_widths[out_vec_idx].compact;
         size_t next_chosen_bytes = chosen_bytes;
         auto val1 = get_component(col_ptr, chosen_bytes);
         const auto& agg_info = compact_targets[col_idx];
@@ -1242,8 +1230,7 @@ bool ResultRows::fetchLazyOrBuildRow(std::vector<TargetValue>& row,
         int8_t* next_col_ptr{nullptr};
         if (agg_info.agg_kind == kAVG || is_real_string || is_array) {
           next_col_ptr = col_ptr + query_mem_desc_.getNextColOffInBytes(col_ptr, crt_row_buff_idx_, out_vec_idx++);
-          next_chosen_bytes =
-              compact_byte_width(query_mem_desc_.agg_col_widths[out_vec_idx], unsigned(SMALLEST_BYTE_WIDTH_TO_COMPACT));
+          next_chosen_bytes = query_mem_desc_.agg_col_widths[out_vec_idx].compact;
           val2 = get_component(next_col_ptr, next_chosen_bytes);
         }
         if (fetch_lazy) {
@@ -1543,10 +1530,10 @@ void QueryExecutionContext::initColumnPerRow(int8_t* row_ptr,
     if (!bm_sz) {
       init_val = init_vals[col_idx];
     } else {
-      CHECK_EQ(static_cast<size_t>(query_mem_desc_.agg_col_widths[col_idx]), sizeof(int64_t));
+      CHECK_EQ(static_cast<size_t>(query_mem_desc_.agg_col_widths[col_idx].compact), sizeof(int64_t));
       init_val = bm_sz > 0 ? allocateCountDistinctBitmap(bm_sz) : allocateCountDistinctSet();
     }
-    switch (compact_byte_width(query_mem_desc_.agg_col_widths[col_idx], unsigned(SMALLEST_BYTE_WIDTH_TO_COMPACT))) {
+    switch (query_mem_desc_.agg_col_widths[col_idx].compact) {
       case 1:
         *col_ptr = static_cast<int8_t>(init_val);
         break;
@@ -1636,7 +1623,7 @@ void QueryExecutionContext::initColumnarGroups(int64_t* groups_buffer,
   }
   for (int32_t i = 0; i < agg_col_count; ++i) {
     const ssize_t bitmap_sz{agg_bitmap_size[i]};
-    switch (compact_byte_width(query_mem_desc_.agg_col_widths[i], unsigned(SMALLEST_BYTE_WIDTH_TO_COMPACT))) {
+    switch (query_mem_desc_.agg_col_widths[i].compact) {
       case 1:
         buffer_ptr = initColumnarBuffer<int8_t>(buffer_ptr, init_vals[i], bitmap_sz, false);
         break;
@@ -1672,7 +1659,7 @@ std::vector<ssize_t> QueryExecutionContext::allocateCountDistinctBuffers(const b
     const auto agg_info = target_info(target_expr);
     if (agg_info.is_distinct) {
       CHECK(agg_info.is_agg && agg_info.agg_kind == kCOUNT);
-      CHECK_EQ(static_cast<size_t>(query_mem_desc_.agg_col_widths[agg_col_idx]), sizeof(int64_t));
+      CHECK_EQ(static_cast<size_t>(query_mem_desc_.agg_col_widths[agg_col_idx].actual), sizeof(int64_t));
       auto count_distinct_it = query_mem_desc_.count_distinct_descriptors_.find(target_idx);
       CHECK(count_distinct_it != query_mem_desc_.count_distinct_descriptors_.end());
       const auto& count_distinct_desc = count_distinct_it->second;
@@ -1775,13 +1762,9 @@ void QueryExecutionContext::outputBin(ResultRows& results,
     const int global_col_id{col_var ? col_var->get_column_id() : -1};
     if (is_real_string || is_array) {
       CHECK(!output_columnar_);
-      int64_t str_ptr = get_component(
-          buffer_ptr,
-          compact_byte_width(query_mem_desc_.agg_col_widths[out_vec_idx], unsigned(SMALLEST_BYTE_WIDTH_TO_COMPACT)));
+      int64_t str_ptr = get_component(buffer_ptr, query_mem_desc_.agg_col_widths[out_vec_idx].compact);
       buffer_ptr += query_mem_desc_.getNextColOffInBytes(buffer_ptr, bin, out_vec_idx);
-      int64_t str_len = get_component(buffer_ptr,
-                                      compact_byte_width(query_mem_desc_.agg_col_widths[out_vec_idx + 1],
-                                                         unsigned(SMALLEST_BYTE_WIDTH_TO_COMPACT)));
+      int64_t str_len = get_component(buffer_ptr, query_mem_desc_.agg_col_widths[out_vec_idx + 1].compact);
       buffer_ptr += query_mem_desc_.getNextColOffInBytes(buffer_ptr, bin, out_vec_idx + 1);
       if (is_lazy_fetched) {  // TODO(alex): expensive!!!, remove
         CHECK_GE(str_len, 0);
@@ -1901,8 +1884,7 @@ void QueryExecutionContext::outputBin(ResultRows& results,
       }
       out_vec_idx += 2;
     } else {
-      const auto chosen_byte_width =
-          compact_byte_width(query_mem_desc_.agg_col_widths[out_vec_idx], unsigned(SMALLEST_BYTE_WIDTH_TO_COMPACT));
+      const auto chosen_byte_width = query_mem_desc_.agg_col_widths[out_vec_idx].compact;
       auto val1 = get_component(buffer_ptr, chosen_byte_width);
 
       if (is_lazy_fetched) {
@@ -1920,9 +1902,7 @@ void QueryExecutionContext::outputBin(ResultRows& results,
       if (agg_info.agg_kind == kAVG) {
         CHECK(!is_lazy_fetched);
         buffer_ptr += query_mem_desc_.getNextColOffInBytes(buffer_ptr, bin, out_vec_idx++);
-        auto val2 = get_component(
-            buffer_ptr,
-            compact_byte_width(query_mem_desc_.agg_col_widths[out_vec_idx], unsigned(SMALLEST_BYTE_WIDTH_TO_COMPACT)));
+        auto val2 = get_component(buffer_ptr, query_mem_desc_.agg_col_widths[out_vec_idx].compact);
         results.addValue(val1, val2);
       } else {
         results.addValue(val1);
@@ -2108,8 +2088,7 @@ GpuQueryMemory QueryExecutionContext::prepareGroupByDevBuffer(Data_Namespace::Da
     if (output_columnar_) {
       std::vector<int8_t> compact_col_widths(col_count);
       for (size_t idx = 0; idx < col_count; ++idx) {
-        compact_col_widths[idx] =
-            compact_byte_width(query_mem_desc_.agg_col_widths[idx], unsigned(SMALLEST_BYTE_WIDTH_TO_COMPACT));
+        compact_col_widths[idx] = query_mem_desc_.agg_col_widths[idx].compact;
       }
       col_widths_dev_ptr = alloc_gpu_mem(data_mgr, col_count * sizeof(int8_t), device_id, nullptr);
       copy_to_gpu(data_mgr, col_widths_dev_ptr, &compact_col_widths[0], col_count * sizeof(int8_t), device_id);
@@ -2347,7 +2326,7 @@ size_t QueryMemoryDescriptor::getColsSize() const {
   CHECK(!output_columnar);
   size_t total_bytes{0};
   for (size_t col_idx = 0; col_idx < agg_col_widths.size(); ++col_idx) {
-    auto chosen_bytes = compact_byte_width(agg_col_widths[col_idx], unsigned(SMALLEST_BYTE_WIDTH_TO_COMPACT));
+    auto chosen_bytes = agg_col_widths[col_idx].compact;
     if (chosen_bytes == sizeof(int64_t)) {
       total_bytes = align_to_int64(total_bytes);
     }
@@ -2372,11 +2351,11 @@ size_t QueryMemoryDescriptor::getWarpCount() const {
   return (interleaved_bins_on_gpu ? executor_->warpSize() : 1);
 }
 
-size_t QueryMemoryDescriptor::getTotalBytesOfColumnarBuffers(const std::vector<int8_t>& col_widths) const {
+size_t QueryMemoryDescriptor::getTotalBytesOfColumnarBuffers(const std::vector<ColWidths>& col_widths) const {
   CHECK(output_columnar);
   size_t total_bytes{0};
   for (size_t col_idx = 0; col_idx < col_widths.size(); ++col_idx) {
-    total_bytes += compact_byte_width(col_widths[col_idx], unsigned(SMALLEST_BYTE_WIDTH_TO_COMPACT)) * entry_count;
+    total_bytes += col_widths[col_idx].compact * entry_count;
     total_bytes = align_to_int64(total_bytes);
   }
   return total_bytes;
@@ -2409,14 +2388,14 @@ size_t QueryMemoryDescriptor::getColOnlyOffInBytes(const size_t col_idx) const {
   CHECK_LT(col_idx, agg_col_widths.size());
   size_t offset{0};
   for (size_t index = 0; index < col_idx; ++index) {
-    auto chosen_bytes = compact_byte_width(agg_col_widths[index], unsigned(SMALLEST_BYTE_WIDTH_TO_COMPACT));
+    const auto chosen_bytes = agg_col_widths[index].compact;
     if (chosen_bytes == sizeof(int64_t)) {
       offset = align_to_int64(offset);
     }
     offset += chosen_bytes;
   }
 
-  if (compact_byte_width(agg_col_widths[col_idx], unsigned(SMALLEST_BYTE_WIDTH_TO_COMPACT)) == sizeof(int64_t)) {
+  if (sizeof(int64_t) == agg_col_widths[col_idx].compact) {
     offset = align_to_int64(offset);
   }
 
@@ -2435,10 +2414,10 @@ size_t QueryMemoryDescriptor::getColOffInBytes(const size_t bin, const size_t co
       offset = sizeof(int64_t) * entry_count;
     }
     for (size_t index = 0; index < col_idx; ++index) {
-      offset += compact_byte_width(agg_col_widths[index], unsigned(SMALLEST_BYTE_WIDTH_TO_COMPACT)) * entry_count;
+      offset += agg_col_widths[index].compact * entry_count;
       offset = align_to_int64(offset);
     }
-    offset += bin * compact_byte_width(agg_col_widths[col_idx], unsigned(SMALLEST_BYTE_WIDTH_TO_COMPACT));
+    offset += bin * agg_col_widths[col_idx].compact;
     return offset;
   }
 
@@ -2458,7 +2437,7 @@ size_t QueryMemoryDescriptor::getColOffInBytesInNextBin(const size_t col_idx) co
   if (output_columnar) {
     CHECK_EQ(size_t(1), group_col_widths.size());
     CHECK_EQ(size_t(1), warp_count);
-    return compact_byte_width(agg_col_widths[col_idx], unsigned(SMALLEST_BYTE_WIDTH_TO_COMPACT));
+    return agg_col_widths[col_idx].compact;
   }
 
   return warp_count * getRowSize();
@@ -2471,7 +2450,7 @@ size_t QueryMemoryDescriptor::getNextColOffInBytes(const int8_t* col_ptr,
   CHECK(!output_columnar || bin < entry_count);
   size_t offset{0};
   auto warp_count = getWarpCount();
-  const auto chosen_bytes = compact_byte_width(agg_col_widths[col_idx], unsigned(SMALLEST_BYTE_WIDTH_TO_COMPACT));
+  const auto chosen_bytes = agg_col_widths[col_idx].compact;
   if (col_idx + 1 == agg_col_widths.size()) {
     if (output_columnar) {
       return (entry_count - bin) * chosen_bytes;
@@ -2480,8 +2459,7 @@ size_t QueryMemoryDescriptor::getNextColOffInBytes(const int8_t* col_ptr,
     }
   }
 
-  const auto next_chosen_bytes =
-      compact_byte_width(agg_col_widths[col_idx + 1], unsigned(SMALLEST_BYTE_WIDTH_TO_COMPACT));
+  const auto next_chosen_bytes = agg_col_widths[col_idx + 1].compact;
   if (output_columnar) {
     CHECK_EQ(size_t(1), group_col_widths.size());
     CHECK_EQ(size_t(1), warp_count);
@@ -2671,7 +2649,10 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
     row_set_mem_owner_->setCountDistinctDescriptors(count_distinct_descriptors);
   }
 
-  auto agg_col_widths = get_col_byte_widths(ra_exe_unit_.target_exprs);
+  std::vector<ColWidths> agg_col_widths;
+  for (auto wid : get_col_byte_widths(ra_exe_unit_.target_exprs)) {
+    agg_col_widths.push_back({wid, int8_t(compact_byte_width(wid, unsigned(SMALLEST_BYTE_WIDTH_TO_COMPACT)))});
+  }
   auto group_col_widths = get_col_byte_widths(ra_exe_unit_.groupby_exprs);
 
   const bool is_group_by{!group_col_widths.empty()};
@@ -3513,7 +3494,7 @@ void GroupByAndAggregate::codegenAggCalls(const std::tuple<llvm::Value*, llvm::V
     auto target_lvs = codegenAggArg(target_expr, co);
     if (executor_->plan_state_->isLazyFetchColumn(target_expr) || !is_group_by) {
       // TODO(miyu): could be smaller than qword
-      query_mem_desc_.agg_col_widths[agg_out_off] = sizeof(int64_t);
+      query_mem_desc_.agg_col_widths[agg_out_off].compact = sizeof(int64_t);
     }
     llvm::Value* str_target_lv{nullptr};
     if (target_lvs.size() == 3) {
@@ -3538,8 +3519,7 @@ void GroupByAndAggregate::codegenAggCalls(const std::tuple<llvm::Value*, llvm::V
     if (co.device_type_ == ExecutorDeviceType::GPU && query_mem_desc_.threadsShareMemory() && is_simple_count &&
         (!arg_expr || arg_expr->get_type_info().get_notnull())) {
       CHECK_EQ(size_t(1), agg_fn_names.size());
-      auto chosen_bytes =
-          compact_byte_width(query_mem_desc_.agg_col_widths[agg_out_off], unsigned(SMALLEST_BYTE_WIDTH_TO_COMPACT));
+      const auto chosen_bytes = query_mem_desc_.agg_col_widths[agg_out_off].compact;
       llvm::Value* agg_col_ptr{nullptr};
       if (is_group_by) {
         if (outputColumnar()) {
@@ -3582,7 +3562,7 @@ void GroupByAndAggregate::codegenAggCalls(const std::tuple<llvm::Value*, llvm::V
       }
       if (agg_info.is_distinct && arg_expr->get_type_info().is_array()) {
         CHECK(agg_info.is_distinct);
-        CHECK_EQ(static_cast<size_t>(query_mem_desc_.agg_col_widths[agg_out_off]), sizeof(int64_t));
+        CHECK_EQ(static_cast<size_t>(query_mem_desc_.agg_col_widths[agg_out_off].actual), sizeof(int64_t));
         // TODO(miyu): check if buffer may be columnar here
         CHECK(!outputColumnar());
         const auto& elem_ti = arg_expr->get_type_info().get_elem_type();
@@ -3606,8 +3586,7 @@ void GroupByAndAggregate::codegenAggCalls(const std::tuple<llvm::Value*, llvm::V
       }
 
       llvm::Value* agg_col_ptr{nullptr};
-      size_t chosen_bytes =
-          compact_byte_width(query_mem_desc_.agg_col_widths[agg_out_off], unsigned(SMALLEST_BYTE_WIDTH_TO_COMPACT));
+      const size_t chosen_bytes = static_cast<size_t>(query_mem_desc_.agg_col_widths[agg_out_off].compact);
       if (is_group_by) {
         if (outputColumnar()) {
           col_off = query_mem_desc_.getColOffInBytes(0, agg_out_off);
