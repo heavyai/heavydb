@@ -2084,9 +2084,12 @@ GpuQueryMemory QueryExecutionContext::prepareGroupByDevBuffer(Data_Namespace::Da
     const size_t col_count = query_mem_desc_.agg_col_widths.size();
     CUdeviceptr col_widths_dev_ptr{0};
     if (output_columnar_) {
+      std::vector<int8_t> compact_col_widths(col_count);
+      for (size_t idx = 0; idx < col_count; ++idx) {
+        compact_col_widths[idx] = compact_byte_width(query_mem_desc_.agg_col_widths[idx]);
+      }
       col_widths_dev_ptr = alloc_gpu_mem(data_mgr, col_count * sizeof(int8_t), device_id, nullptr);
-      copy_to_gpu(
-          data_mgr, col_widths_dev_ptr, &query_mem_desc_.agg_col_widths[0], col_count * sizeof(int8_t), device_id);
+      copy_to_gpu(data_mgr, col_widths_dev_ptr, &compact_col_widths[0], col_count * sizeof(int8_t), device_id);
     }
     const int8_t warp_count = query_mem_desc_.interleavedBins(ExecutorDeviceType::GPU) ? executor_->warpSize() : 1;
     for (size_t i = 0; i < group_by_buffers_.size(); i += step) {

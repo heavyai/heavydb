@@ -89,8 +89,7 @@ extern "C" __device__ void init_columnar_group_by_buffer_gpu_impl(int64_t* group
   }
   for (int32_t i = 0; i < agg_col_count; ++i) {
     buffer_ptr = align_to_int64(buffer_ptr);
-    int8_t chosen_bytes = compact_byte_width(col_sizes[i]);
-    switch (chosen_bytes) {
+    switch (col_sizes[i]) {
       case 1:
         buffer_ptr = init_columnar_buffer<int8_t>(buffer_ptr, init_vals[i], groups_buffer_entry_count, start, step);
         break;
