@@ -1292,7 +1292,6 @@ class QueryExecutionContext : boost::noncopyable {
   void outputBin(ResultRows& results,
                  const std::vector<Analyzer::Expr*>& targets,
                  int64_t* group_by_buffer,
-                 const size_t groups_buffer_entry_count,
                  const size_t bin) const;
 
   void initColumnPerRow(int8_t* row_ptr,

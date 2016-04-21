@@ -1724,7 +1724,6 @@ bool QueryExecutionContext::isEmptyBin(const int64_t* group_by_buffer, const siz
 void QueryExecutionContext::outputBin(ResultRows& results,
                                       const std::vector<Analyzer::Expr*>& targets,
                                       int64_t* group_by_buffer,
-                                      const size_t groups_buffer_entry_count,
                                       const size_t bin) const {
   if (isEmptyBin(group_by_buffer, bin, 0)) {
     return;
@@ -1950,7 +1949,7 @@ ResultRows QueryExecutionContext::groupBufferToResults(const size_t i,
       return results;
     }
     for (size_t bin = 0; bin < groups_buffer_entry_count; ++bin) {
-      outputBin(results, targets, group_by_buffer, groups_buffer_entry_count, bin);
+      outputBin(results, targets, group_by_buffer, bin);
     }
     return results;
   };
