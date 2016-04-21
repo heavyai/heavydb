@@ -247,6 +247,11 @@ class MapDHandler : virtual public MapDIf {
         } else {
           column.nulls.push_back(data == NULL_DOUBLE);
         }
+      } else if (boost::get<float>(scalar_tv)) {
+        CHECK_EQ(kFLOAT, ti.get_type());
+        float data = *(boost::get<float>(scalar_tv));
+        column.data.real_col.push_back(data);
+        column.nulls.push_back(data == NULL_FLOAT);
       } else if (boost::get<NullableString>(scalar_tv)) {
         auto s_n = boost::get<NullableString>(scalar_tv);
         auto s = boost::get<std::string>(s_n);
@@ -311,6 +316,10 @@ class MapDHandler : virtual public MapDIf {
       } else {
         datum.is_null = (datum.val.real_val == NULL_DOUBLE);
       }
+    } else if (boost::get<float>(scalar_tv)) {
+      CHECK_EQ(kFLOAT, ti.get_type());
+      datum.val.real_val = *(boost::get<float>(scalar_tv));
+      datum.is_null = (datum.val.real_val == NULL_FLOAT);
     } else if (boost::get<NullableString>(scalar_tv)) {
       auto s_n = boost::get<NullableString>(scalar_tv);
       auto s = boost::get<std::string>(s_n);
