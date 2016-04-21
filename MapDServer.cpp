@@ -1476,6 +1476,7 @@ int main(int argc, char** argv) {
   bool enable_fork = true;
   LdapMetadata ldapMetadata;
   bool enable_rendering = false;
+  bool enable_watchdog = false;
 
   size_t cpu_buffer_mem_bytes = 0;  // 0 will cause DataMgr to auto set this based on available memory
   size_t render_mem_bytes = 500000000;
@@ -1509,6 +1510,9 @@ int main(int argc, char** argv) {
   desc.add_options()("flush-log",
                      po::bool_switch(&flush_log)->default_value(flush_log)->implicit_value(true),
                      "Force aggressive log file flushes. Use when trouble-shooting.");
+  desc.add_options()("enable-watchdog",
+                     po::bool_switch(&enable_watchdog)->default_value(enable_watchdog)->implicit_value(true),
+                     "Enable watchdog");
   desc.add_options()("num-gpus", po::value<int>(&num_gpus)->default_value(num_gpus), "Number of gpus to use");
   desc.add_options()("start-gpu", po::value<int>(&start_gpu)->default_value(start_gpu), "First gpu to use");
   desc.add_options()("version,v", "Print Release Version Number");
@@ -1578,6 +1582,8 @@ int main(int argc, char** argv) {
 
     if (device == "cpu")
       enable_rendering = false;
+
+    g_enable_watchdog = enable_watchdog;
   } catch (boost::program_options::error& e) {
     std::cerr << "Usage Error: " << e.what() << std::endl;
     return 1;

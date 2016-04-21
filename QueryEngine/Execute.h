@@ -36,6 +36,13 @@
 #include <deque>
 #include <unistd.h>
 
+extern bool g_enable_watchdog;
+
+class WatchdogException : public std::runtime_error {
+ public:
+  WatchdogException(const std::string& cause) : std::runtime_error(cause) {}
+};
+
 class Executor;
 
 inline llvm::Type* get_int_type(const int width, llvm::LLVMContext& context) {
@@ -763,6 +770,16 @@ class Executor {
    private:
     CgenState* cgen_state_;
     std::unordered_map<int, std::vector<llvm::Value*>> saved_fetch_cache;
+  };
+
+  // TODO(alex): remove, only useful for the legacy path
+  class ResetIsNested {
+   public:
+    ResetIsNested(Executor* executor) : executor_(executor) {}
+    ~ResetIsNested() { executor_->is_nested_ = false; }
+
+   private:
+    Executor* executor_;
   };
 
   struct PlanState {

@@ -54,6 +54,8 @@
 #include <boost/filesystem/path.hpp>
 #include <boost/filesystem/operations.hpp>
 
+bool g_enable_watchdog{false};
+
 Executor::Executor(const int db_id,
                    const size_t block_size_x,
                    const size_t grid_size_x,
@@ -2663,6 +2665,7 @@ ResultRows Executor::executeResultPlan(const Planner::Result* result_plan,
   ColumnarResults result_columns(result_rows, in_col_count, target_types);
   std::vector<llvm::Value*> col_heads;
   // Nested query, let the compiler know
+  ResetIsNested reset_is_nested(this);
   is_nested_ = true;
   std::vector<Analyzer::Expr*> target_exprs;
   for (auto target_entry : targets) {

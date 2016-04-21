@@ -809,6 +809,9 @@ void ResultRows::sort(const std::list<Analyzer::OrderEntry>& order_entries,
     }
     return false;
   };
+  if (g_enable_watchdog && target_values_.size() > 100000) {
+    throw WatchdogException("Sorting the result would be too slow");
+  }
   if (use_heap) {
     target_values_.top(top_n, compare);
     return;
@@ -2567,8 +2570,11 @@ GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getExprRangeInfo(const An
               expr_range.getIntMax(),
               expr_range.getBucket(),
               expr_range.hasNulls()};
-    case ExpressionRangeType::Invalid:
     case ExpressionRangeType::FloatingPoint:
+      if (g_enable_watchdog) {
+        throw WatchdogException("Group by float / double would be slow");
+      }
+    case ExpressionRangeType::Invalid:
       return {GroupByColRangeType::OneColGuessedRange, 0, guessed_range_max, 0, false};
     default:
       CHECK(false);
@@ -2667,6 +2673,13 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const size_t max_groups_buff
   }
 
   const auto col_range_info = getColRangeInfo();
+
+  if (g_enable_watchdog && col_range_info.hash_type_ != GroupByColRangeType::OneColKnownRange &&
+      col_range_info.hash_type_ != GroupByColRangeType::MultiColPerfectHash &&
+      col_range_info.hash_type_ != GroupByColRangeType::OneColGuessedRange && !render_output &&
+      (ra_exe_unit_.scan_limit == 0 || ra_exe_unit_.scan_limit > 10000)) {
+    throw WatchdogException("Query would use too much memory");
+  }
 
   switch (col_range_info.hash_type_) {
     case GroupByColRangeType::OneColKnownRange:
@@ -2863,6 +2876,9 @@ CountDistinctDescriptors GroupByAndAggregate::initCountDistinctDescriptors() {
         if (bitmap_sz_bits <= 0 || bitmap_sz_bits > MAX_BITMAP_BITS) {
           count_distinct_impl_type = CountDistinctImplType::StdSet;
         }
+      }
+      if (g_enable_watchdog && count_distinct_impl_type == CountDistinctImplType::StdSet) {
+        throw WatchdogException("Cannot use a fast path for COUNT distinct");
       }
       CountDistinctDescriptor count_distinct_desc{
           executor_, count_distinct_impl_type, arg_range_info.min, bitmap_sz_bits};
