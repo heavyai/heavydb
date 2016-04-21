@@ -2671,6 +2671,10 @@ ResultRows Executor::executeResultPlan(const Planner::Result* result_plan,
   for (auto target_entry : targets) {
     target_exprs.emplace_back(target_entry->get_expr());
   }
+  const auto row_count = result_rows.rowCount();
+  if (!row_count) {
+    return result_rows;
+  }
   QueryMemoryDescriptor query_mem_desc{this,
                                        GroupByColRangeType::OneColGuessedRange,
                                        false,
@@ -2679,7 +2683,7 @@ ResultRows Executor::executeResultPlan(const Planner::Result* result_plan,
                                        0,
                                        {sizeof(int64_t)},
                                        get_col_byte_widths(target_exprs),
-                                       result_rows.rowCount(),
+                                       row_count,
                                        small_groups_buffer_entry_count_,
                                        0,
                                        0,
@@ -2714,7 +2718,7 @@ ResultRows Executor::executeResultPlan(const Planner::Result* result_plan,
                       nullptr,
                       false,
                       row_set_mem_owner_,
-                      result_rows.rowCount(),
+                      row_count,
                       small_groups_buffer_entry_count_,
                       JoinInfo(JoinImplType::Invalid, std::vector<std::shared_ptr<Analyzer::BinOper>>{}, nullptr));
   auto column_buffers = result_columns.getColumnBuffers();

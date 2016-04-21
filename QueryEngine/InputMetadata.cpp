@@ -48,15 +48,19 @@ std::map<int, ChunkMetadata> synthesize_metadata(const ResultRows* rows) noexcep
 }
 
 Fragmenter_Namespace::TableInfo synthesize_table_info(const ResultRows* rows) noexcept {
-  std::deque<Fragmenter_Namespace::FragmentInfo> result(1);
-  auto& fragment = result.front();
-  fragment.fragmentId = 0;
-  fragment.numTuples = rows->rowCount();
-  fragment.deviceIds.resize(3);
-  fragment.chunkMetadataMap = synthesize_metadata(rows);
+  std::deque<Fragmenter_Namespace::FragmentInfo> result;
+  const size_t row_count = rows->rowCount();
+  if (row_count) {
+    result.resize(1);
+    auto& fragment = result.front();
+    fragment.fragmentId = 0;
+    fragment.numTuples = row_count;
+    fragment.deviceIds.resize(3);
+    fragment.chunkMetadataMap = synthesize_metadata(rows);
+  }
   Fragmenter_Namespace::TableInfo table_info;
   table_info.fragments = result;
-  table_info.numTuples = fragment.numTuples;
+  table_info.numTuples = row_count;
   return table_info;
 }
 
