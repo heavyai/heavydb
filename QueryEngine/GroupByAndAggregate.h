@@ -292,6 +292,11 @@ inline const Analyzer::AggExpr* cast_to_agg_expr(const std::shared_ptr<Analyzer:
   return dynamic_cast<const Analyzer::AggExpr*>(target_expr.get());
 }
 
+inline const Analyzer::Expr* agg_arg(const Analyzer::Expr* expr) {
+  const auto agg_expr = dynamic_cast<const Analyzer::AggExpr*>(expr);
+  return agg_expr ? agg_expr->get_arg() : nullptr;
+}
+
 inline bool constrained_not_null(const Analyzer::Expr* expr, const std::list<std::shared_ptr<Analyzer::Expr>>& quals) {
   for (const auto qual : quals) {
     auto uoper = std::dynamic_pointer_cast<Analyzer::UOper>(qual);
@@ -564,13 +569,21 @@ inline std::vector<int64_t> init_agg_val_vec(const std::vector<TargetInfo>& targ
 }
 
 inline std::vector<int64_t> init_agg_val_vec(const std::vector<Analyzer::Expr*>& targets,
+                                             const std::list<std::shared_ptr<Analyzer::Expr>>& quals,
                                              size_t agg_col_count,
                                              const bool is_group_by) {
   std::vector<TargetInfo> target_infos;
   target_infos.reserve(targets.size());
   for (size_t target_idx = 0, agg_col_idx = 0; target_idx < targets.size() && agg_col_idx < agg_col_count;
        ++target_idx, ++agg_col_idx) {
-    target_infos.push_back(compact_target_info(targets[target_idx]));
+    const auto target_expr = targets[target_idx];
+    auto target_info = compact_target_info(target_expr);
+    auto arg_expr = agg_arg(target_expr);
+    if (arg_expr && constrained_not_null(arg_expr, quals)) {
+      target_info.skip_null_val = false;
+      target_info.sql_type.set_notnull(true);
+    }
+    target_infos.push_back(target_info);
   }
   return init_agg_val_vec(target_infos, agg_col_count, is_group_by);
 }

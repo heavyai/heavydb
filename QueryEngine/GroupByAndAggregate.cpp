@@ -2883,15 +2883,6 @@ bool GroupByAndAggregate::outputColumnar() const {
   return output_columnar_;
 }
 
-namespace {
-
-const Analyzer::Expr* agg_arg(const Analyzer::Expr* expr) {
-  const auto agg_expr = dynamic_cast<const Analyzer::AggExpr*>(expr);
-  return agg_expr ? agg_expr->get_arg() : nullptr;
-}
-
-}  // namespace
-
 GroupByAndAggregate::KeylessInfo GroupByAndAggregate::getKeylessInfo(
     const std::vector<Analyzer::Expr*>& target_expr_list,
     const bool is_group_by) const {
@@ -3466,6 +3457,10 @@ void GroupByAndAggregate::codegenAggCalls(const std::tuple<llvm::Value*, llvm::V
       throw std::runtime_error("UNNEST not supported in the projection list yet.");
     }
     auto agg_info = compact_target_info(target_expr);
+    auto arg_expr = agg_arg(target_expr);
+    if (arg_expr && constrained_not_null(arg_expr, ra_exe_unit_.quals)) {
+      agg_info.skip_null_val = false;
+    }
     const auto agg_fn_names = agg_fn_base_names(agg_info);
     auto target_lvs = codegenAggArg(target_expr, co);
     if (executor_->plan_state_->isLazyFetchColumn(target_expr) || !is_group_by) {
@@ -3492,7 +3487,6 @@ void GroupByAndAggregate::codegenAggCalls(const std::tuple<llvm::Value*, llvm::V
     }
     uint32_t col_off{0};
     const bool is_simple_count = agg_info.is_agg && agg_info.agg_kind == kCOUNT && !agg_info.is_distinct;
-    auto arg_expr = agg_arg(target_expr);
     if (co.device_type_ == ExecutorDeviceType::GPU && query_mem_desc_.threadsShareMemory() && is_simple_count &&
         (!arg_expr || arg_expr->get_type_info().get_notnull())) {
       CHECK_EQ(size_t(1), agg_fn_names.size());

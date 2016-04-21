@@ -4344,7 +4344,7 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
 
   is_nested_ = false;
   plan_state_->init_agg_vals_ =
-      init_agg_val_vec(ra_exe_unit.target_exprs, query_mem_desc.agg_col_widths.size(), is_group_by);
+      init_agg_val_vec(ra_exe_unit.target_exprs, ra_exe_unit.quals, query_mem_desc.agg_col_widths.size(), is_group_by);
 
   if (co.device_type_ == ExecutorDeviceType::GPU && cgen_state_->must_run_on_cpu_) {
     return {};

@@ -454,6 +454,7 @@ TEST(Select, FilterAndGroupBy) {
       "LIMIT 12;",
       dt);
     c("SELECT 'literal_string' AS key0 FROM test GROUP BY key0;", dt);
+    c("SELECT str, MIN(y) FROM test WHERE y IS NOT NULL GROUP BY str ORDER BY str DESC;", dt);
   }
 }
 
