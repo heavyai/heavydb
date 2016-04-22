@@ -2399,9 +2399,9 @@ size_t QueryMemoryDescriptor::getColOnlyOffInBytes(const size_t col_idx) const {
 
 size_t QueryMemoryDescriptor::getColOffInBytes(const size_t bin, const size_t col_idx) const {
   CHECK_LT(col_idx, agg_col_widths.size());
-  CHECK_LT(bin, entry_count);
   auto warp_count = getWarpCount();
   if (output_columnar) {
+    CHECK_LT(bin, entry_count);
     CHECK_EQ(size_t(1), group_col_widths.size());
     CHECK_EQ(size_t(1), warp_count);
     size_t offset{0};
