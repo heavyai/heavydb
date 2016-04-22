@@ -2619,7 +2619,7 @@ GroupByAndAggregate::GroupByAndAggregate(Executor* executor,
   bool sort_on_gpu_hint = device_type == ExecutorDeviceType::GPU && allow_multifrag &&
                           !ra_exe_unit.order_entries.empty() && gpuCanHandleOrderEntries(ra_exe_unit.order_entries);
   initQueryMemoryDescriptor(
-      max_groups_buffer_entry_count, small_groups_buffer_entry_count, sort_on_gpu_hint, render_output);
+      allow_multifrag, max_groups_buffer_entry_count, small_groups_buffer_entry_count, sort_on_gpu_hint, render_output);
   if (device_type != ExecutorDeviceType::GPU) {
     // TODO(miyu): remove w/ interleaving
     query_mem_desc_.interleaved_bins_on_gpu = false;
@@ -2631,7 +2631,8 @@ GroupByAndAggregate::GroupByAndAggregate(Executor* executor,
   query_mem_desc_.output_columnar = output_columnar_;
 }
 
-void GroupByAndAggregate::initQueryMemoryDescriptor(const size_t max_groups_buffer_entry_count,
+void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
+                                                    const size_t max_groups_buffer_entry_count,
                                                     const size_t small_groups_buffer_entry_count,
                                                     const bool sort_on_gpu_hint,
                                                     const bool render_output) {
@@ -2650,6 +2651,7 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const size_t max_groups_buff
   if (!is_group_by) {
     CHECK(!render_output);
     query_mem_desc_ = {executor_,
+                       allow_multifrag,
                        GroupByColRangeType::Scan,
                        false,
                        false,
@@ -2698,6 +2700,7 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const size_t max_groups_buff
           small_group_slots = 0;
         }
         query_mem_desc_ = {executor_,
+                           allow_multifrag,
                            hash_type,
                            false,
                            false,
@@ -2732,6 +2735,7 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const size_t max_groups_buff
         const size_t interleaved_max_threshold{20};
         bool interleaved_bins = keyless && (bin_count <= interleaved_max_threshold);
         query_mem_desc_ = {executor_,
+                           allow_multifrag,
                            col_range_info.hash_type_,
                            keyless,
                            interleaved_bins,
@@ -2757,6 +2761,7 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const size_t max_groups_buff
     case GroupByColRangeType::MultiCol: {
       CHECK(!render_output);
       query_mem_desc_ = {executor_,
+                         allow_multifrag,
                          col_range_info.hash_type_,
                          false,
                          false,
@@ -2781,6 +2786,7 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const size_t max_groups_buff
     case GroupByColRangeType::MultiColPerfectHash: {
       CHECK(!render_output);
       query_mem_desc_ = {executor_,
+                         allow_multifrag,
                          col_range_info.hash_type_,
                          false,
                          false,
@@ -3054,7 +3060,7 @@ bool QueryMemoryDescriptor::usesGetGroupValueFast() const {
 }
 
 bool QueryMemoryDescriptor::usesCachedContext() const {
-  return usesGetGroupValueFast() || hash_type == GroupByColRangeType::MultiColPerfectHash;
+  return allow_multifrag && (usesGetGroupValueFast() || hash_type == GroupByColRangeType::MultiColPerfectHash);
 }
 
 bool QueryMemoryDescriptor::threadsShareMemory() const {

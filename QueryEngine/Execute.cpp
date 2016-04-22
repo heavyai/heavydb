@@ -393,6 +393,22 @@ ResultRows Executor::execute(const Planner::RootPlan* root_plan,
       if (error_code == ERR_OUT_OF_CPU_MEM) {
         throw std::runtime_error("Not enough host memory to execute the query");
       }
+      if (error_code == ERR_OUT_OF_GPU_MEM) {
+        rows = executeSelectPlan(root_plan->get_plan(),
+                                 root_plan->get_limit(),
+                                 root_plan->get_offset(),
+                                 hoist_literals,
+                                 device_type,
+                                 opt_level,
+                                 root_plan->get_catalog(),
+                                 max_groups_buffer_entry_guess,
+                                 &error_code,
+                                 nullptr,
+                                 false,
+                                 false,
+                                 allow_loop_joins,
+                                 nullptr);
+      }
       if (error_code) {
         max_groups_buffer_entry_guess = 0;
         while (true) {
@@ -2658,6 +2674,7 @@ ResultRows Executor::executeResultPlan(const Planner::Result* result_plan,
     return result_rows;
   }
   QueryMemoryDescriptor query_mem_desc{this,
+                                       allow_multifrag,
                                        GroupByColRangeType::OneColGuessedRange,
                                        false,
                                        false,

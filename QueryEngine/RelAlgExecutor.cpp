@@ -456,31 +456,49 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(const RelAlgExecutor::WorkUnit& 
   if (error_code == Executor::ERR_OUT_OF_CPU_MEM) {
     throw std::runtime_error("Not enough host memory to execute the query");
   }
-  return handleRetry({work_unit.exe_unit, max_groups_buffer_entry_guess}, targets_meta, is_agg, co, eo);
+  return handleRetry(error_code, {work_unit.exe_unit, max_groups_buffer_entry_guess}, targets_meta, is_agg, co, eo);
 }
 
 
-ExecutionResult RelAlgExecutor::handleRetry(const RelAlgExecutor::WorkUnit& work_unit,
+ExecutionResult RelAlgExecutor::handleRetry(const int32_t error_code_in,
+                                            const RelAlgExecutor::WorkUnit& work_unit,
                                             const std::vector<TargetMetaInfo>& targets_meta,
                                             const bool is_agg,
                                             const CompilationOptions& co,
                                             const ExecutionOptions& eo) {
+  auto error_code = error_code_in;
+  auto max_groups_buffer_entry_guess = work_unit.max_groups_buffer_entry_guess;
+  ExecutionOptions eo_no_multifrag{eo.output_columnar_hint, false, false, eo.allow_loop_joins};
   ExecutionResult result{ResultRows({}, {}, nullptr, nullptr, co.device_type_), {}};
-  CompilationOptions co_cpu{ExecutorDeviceType::CPU, co.hoist_literals_, co.opt_level_};
-  int32_t error_code{0};
-  size_t max_groups_buffer_entry_guess = 0;
-  while (true) {
+  if (error_code == Executor::ERR_OUT_OF_GPU_MEM) {
     result = {executor_->executeWorkUnit(&error_code,
                                          max_groups_buffer_entry_guess,
                                          is_agg,
                                          get_table_infos(work_unit.exe_unit.input_descs, cat_, temporary_tables_),
                                          work_unit.exe_unit,
-                                         co_cpu,
-                                         eo,
+                                         co,
+                                         eo_no_multifrag,
                                          cat_,
                                          executor_->row_set_mem_owner_,
                                          nullptr),
               targets_meta};
+  }
+  CompilationOptions co_cpu{ExecutorDeviceType::CPU, co.hoist_literals_, co.opt_level_};
+  if (error_code) {
+    max_groups_buffer_entry_guess = 0;
+    while (true) {
+      result = {executor_->executeWorkUnit(&error_code,
+                                           max_groups_buffer_entry_guess,
+                                           is_agg,
+                                           get_table_infos(work_unit.exe_unit.input_descs, cat_, temporary_tables_),
+                                           work_unit.exe_unit,
+                                           co_cpu,
+                                           eo_no_multifrag,
+                                           cat_,
+                                           executor_->row_set_mem_owner_,
+                                           nullptr),
+                targets_meta};
+    }
     if (!error_code) {
       return result;
     }

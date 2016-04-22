@@ -86,6 +86,7 @@ class RowSetMemoryOwner;
 
 struct QueryMemoryDescriptor {
   const Executor* executor_;
+  bool allow_multifrag;
   GroupByColRangeType hash_type;
 
   bool keyless_hash;
@@ -1439,7 +1440,8 @@ class GroupByAndAggregate {
 
   bool gpuCanHandleOrderEntries(const std::list<Analyzer::OrderEntry>& order_entries);
 
-  void initQueryMemoryDescriptor(const size_t max_groups_buffer_entry_count,
+  void initQueryMemoryDescriptor(const bool allow_multifrag,
+                                 const size_t max_groups_buffer_entry_count,
                                  const size_t small_groups_buffer_entry_count,
                                  const bool sort_on_gpu_hint,
                                  const bool render_output);
