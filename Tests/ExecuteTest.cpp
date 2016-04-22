@@ -1334,6 +1334,9 @@ TEST(Select, LeftOuterJoins) {
     c("SELECT test.str AS foobar, test_inner.str FROM test LEFT OUTER JOIN test_inner ON test.x = test_inner.x WHERE "
       "test.y > 42 ORDER BY foobar DESC LIMIT 8;",
       dt);
+    c("SELECT test.x AS foobar, test_inner.x AS inner_foobar, test.f as f_foobar FROM test LEFT OUTER JOIN test_inner "
+      "ON test.str = test_inner.str WHERE test.y > 40 ORDER BY foobar DESC, f_foobar DESC;",
+      dt);
   }
 }
 #endif  // HAVE_RAVM

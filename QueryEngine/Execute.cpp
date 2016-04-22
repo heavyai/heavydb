@@ -4182,7 +4182,7 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
                                                       const size_t max_groups_buffer_entry_guess,
                                                       const size_t small_groups_buffer_entry_count,
                                                       const JoinInfo& join_info) {
-  nukeOldState(allow_lazy_fetch, join_info);
+  nukeOldState(allow_lazy_fetch && ra_exe_unit.outer_join_quals.empty(), join_info);
 
   GroupByAndAggregate group_by_and_aggregate(this,
                                              co.device_type_,
