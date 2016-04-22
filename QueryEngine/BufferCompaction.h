@@ -16,17 +16,8 @@
 #include <algorithm>
 #endif
 
-#define SMALLEST_BIT_WIDTH_TO_COMPACT 64
-
-extern "C" FORCE_INLINE DEVICE unsigned compact_bit_width(unsigned qw) {
-#ifdef __CUDACC__
-  return umax((qw << 3), SMALLEST_BIT_WIDTH_TO_COMPACT);
-#else
-  return std::max((qw << 3), static_cast<unsigned>(SMALLEST_BIT_WIDTH_TO_COMPACT));
-#endif
-}
-
 extern "C" FORCE_INLINE DEVICE unsigned compact_byte_width(unsigned qw) {
+  static const unsigned SMALLEST_BIT_WIDTH_TO_COMPACT = 64;
 #ifdef __CUDACC__
   return umax(qw, (SMALLEST_BIT_WIDTH_TO_COMPACT >> 3));
 #else
