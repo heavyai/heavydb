@@ -65,8 +65,7 @@ class RelAlgExecutor {
                                  const RenderInfo& render_info,
                                  const int32_t error_code);
 
-  ExecutionResult handleRetry(const int32_t error_code_in,
-                              const RelAlgExecutor::WorkUnit& work_unit,
+  ExecutionResult handleRetry(const RelAlgExecutor::WorkUnit& work_unit,
                               const std::vector<TargetMetaInfo>& targets_meta,
                               const bool is_agg,
                               const CompilationOptions& co,
