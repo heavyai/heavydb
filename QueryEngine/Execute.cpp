@@ -393,22 +393,6 @@ ResultRows Executor::execute(const Planner::RootPlan* root_plan,
       if (error_code == ERR_OUT_OF_CPU_MEM) {
         throw std::runtime_error("Not enough host memory to execute the query");
       }
-      if (error_code == ERR_OUT_OF_GPU_MEM) {
-        rows = executeSelectPlan(root_plan->get_plan(),
-                                 root_plan->get_limit(),
-                                 root_plan->get_offset(),
-                                 hoist_literals,
-                                 device_type,
-                                 opt_level,
-                                 root_plan->get_catalog(),
-                                 max_groups_buffer_entry_guess,
-                                 &error_code,
-                                 nullptr,
-                                 false,
-                                 false,
-                                 allow_loop_joins,
-                                 nullptr);
-      }
       if (error_code) {
         max_groups_buffer_entry_guess = 0;
         while (true) {
@@ -3377,7 +3361,7 @@ void Executor::dispatchFragments(const std::function<void(const ExecutorDeviceTy
   CHECK(it != all_tables_fragments.end());
   const auto fragments = it->second;
 
-  if (device_type == ExecutorDeviceType::GPU && allow_multifrag && is_agg) {
+  if ((device_type == ExecutorDeviceType::GPU) && allow_multifrag && is_agg) {
     // NB: We should never be on this path when the query is retried because of
     //     running out of group by slots; also, for scan only queries (!agg_plan)
     //     we want the high-granularity, fragment by fragment execution instead.
