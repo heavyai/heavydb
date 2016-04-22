@@ -2177,11 +2177,9 @@ std::vector<int64_t*> launch_query_cpu_code(const std::vector<void*>& fn_ptrs,
                                             const uint32_t num_tables,
                                             const int64_t join_hash_table) {
   const bool is_group_by{!group_by_buffers.empty()};
-  const size_t col_count = init_agg_vals.size();
-  CHECK_GE(col_count, query_mem_desc.agg_col_widths.size());
   std::vector<int64_t*> out_vec;
   if (group_by_buffers.empty()) {
-    for (size_t i = 0; i < col_count; ++i) {
+    for (size_t i = 0; i < init_agg_vals.size(); ++i) {
       auto buff = new int64_t[1];
       out_vec.push_back(static_cast<int64_t*>(buff));
     }
@@ -2707,10 +2705,7 @@ ResultRows Executor::executeResultPlan(const Planner::Result* result_plan,
                       JoinInfo(JoinImplType::Invalid, std::vector<std::shared_ptr<Analyzer::BinOper>>{}, nullptr));
   auto column_buffers = result_columns.getColumnBuffers();
   CHECK_EQ(column_buffers.size(), static_cast<size_t>(in_col_count));
-  // TODO(miyu): check why set init_agg_vals size to in_col_count instead of
-  // result_rows.query_mem_desc_.agg_col_widths.size()
-  //             while part of it is used according to query_mem_desc.agg_col_widths.size()
-  std::vector<int64_t> init_agg_vals(in_col_count);
+  std::vector<int64_t> init_agg_vals(query_mem_desc.agg_col_widths.size());
   auto query_exe_context = query_mem_desc.getQueryExecutionContext(
       init_agg_vals, this, ExecutorDeviceType::CPU, 0, {}, row_set_mem_owner_, false, false, nullptr);
   const auto hoist_buf = serializeLiterals(compilation_result.literal_values, 0);
