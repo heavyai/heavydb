@@ -123,6 +123,17 @@ std::unordered_map<const RelAlgNode*, int> get_input_nest_levels(const RelAlgNod
   return input_to_nest_level;
 }
 
+std::unordered_set<const RexInput*> get_join_source_used_inputs(const RelAlgNode* ra_node) {
+  CHECK_EQ(size_t(1), ra_node->inputCount());
+  const auto join_input = dynamic_cast<const RelJoin*>(ra_node->getInput(0));
+  if (join_input) {
+    const auto join_cond = join_input->getCondition();
+    RexUsedInputsVisitor visitor;
+    return visitor.visit(join_cond);
+  }
+  return std::unordered_set<const RexInput*>{};
+}
+
 template <class RA>
 std::pair<std::vector<InputDescriptor>, std::list<InputColDescriptor>> get_input_desc_impl(
     const RA* ra_node,
@@ -136,7 +147,10 @@ std::pair<std::vector<InputDescriptor>, std::list<InputColDescriptor>> get_input
     input_descs.emplace_back(table_id, nest_level);
   }
   std::unordered_set<InputColDescriptor> input_col_descs_unique;
-  for (const auto used_input : used_inputs) {
+  auto all_used_inputs = used_inputs;
+  const auto source_used_inputs = get_join_source_used_inputs(ra_node);
+  all_used_inputs.insert(source_used_inputs.begin(), source_used_inputs.end());
+  for (const auto used_input : all_used_inputs) {
     const auto input_ra = used_input->getSourceNode();
     const auto scan_ra = dynamic_cast<const RelScan*>(input_ra);
     const int table_id = table_id_from_ra(input_ra);
