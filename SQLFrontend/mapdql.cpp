@@ -253,9 +253,9 @@ void process_backslash_commands(char* command, ClientContext& context) {
       if (thrift_with_retry(kGET_ROW_DESC, context, command + 3)) {
         std::string comma_or_blank("");
         for (auto p : context.rowdesc_return) {
-          std::cout << comma_or_blank << p.col_name << " " << thrift_to_name(p.col_type) << " "
-                    << (p.col_type.encoding == 0 ? "" : "ENCODING " + thrift_to_encoding_name(p.col_type) + " ")
-                    << (p.col_type.nullable ? "" : "NOT NULL");
+          std::cout << comma_or_blank << p.col_name << " " << thrift_to_name(p.col_type)
+                    << (p.col_type.nullable ? "" : " NOT NULL")
+                    << (p.col_type.encoding == 0 ? "" : " ENCODING " + thrift_to_encoding_name(p.col_type));
           comma_or_blank = ",\n";
         }
         // push final "\n";
@@ -434,6 +434,7 @@ int main(int argc, char** argv) {
   int port = 9091;
   std::string delimiter("|");
   bool print_header = true;
+  bool print_connection = true;
   bool print_timing = false;
   bool http = false;
   char* line;
@@ -452,7 +453,8 @@ int main(int argc, char** argv) {
       "user,u", po::value<std::string>(&user_name), "User name")(
       "passwd,p", po::value<std::string>(&passwd), "Password")(
       "server,s", po::value<std::string>(&server_host), "MapD Server Hostname (default localhost)")(
-      "port", po::value<int>(&port), "Port number (default 9091)")("http", "Use HTTP transport");
+      "port", po::value<int>(&port), "Port number (default 9091)")("http", "Use HTTP transport")(
+      "quiet,q", "Do not print result headers or connection strings ");
 
   po::variables_map vm;
   po::positional_options_description positionalOptions;
@@ -462,12 +464,16 @@ int main(int argc, char** argv) {
     po::store(po::command_line_parser(argc, argv).options(desc).positional(positionalOptions).run(), vm);
     if (vm.count("help")) {
       std::cout << "Usage: mapdql [<database>][{--user|-u} <user>][{--passwd|-p} <password>][--port <port number>] "
-                   "[{-s|--server} <server host>][--http] [{--no-header|-n}] [{--delimiter|-d}]\n";
+                   "[{-s|--server} <server host>][--http] [{--no-header|-n}] [{--quiet|-q}] [{--delimiter|-d}]\n";
       return 0;
     }
     if (vm.count("version")) {
       std::cout << "MapDQL Version: " << MapDQLRelease << std::endl;
       return 0;
+    }
+    if (vm.count("quiet")) {
+      print_header = false;
+      print_connection = false;
     }
     if (vm.count("no-header"))
       print_header = false;
@@ -514,7 +520,9 @@ int main(int argc, char** argv) {
         << std::endl;
   } else {
     if (thrift_with_retry(kCONNECT, context, nullptr))
-      std::cout << "User " << context.user_name << " connected to database " << context.db_name << std::endl;
+      if (print_connection) {
+        std::cout << "User " << context.user_name << " connected to database " << context.db_name << std::endl;
+      }
   }
 
   /* Set the completion callback. This will be called every time the
@@ -645,7 +653,9 @@ int main(int argc, char** argv) {
 
   if (context.session != INVALID_SESSION_ID) {
     if (thrift_with_retry(kDISCONNECT, context, nullptr)) {
-      std::cout << "User " << context.user_name << " disconnected from database " << context.db_name << std::endl;
+      if (print_connection) {
+        std::cout << "User " << context.user_name << " disconnected from database " << context.db_name << std::endl;
+      }
     }
   }
   transport->close();
