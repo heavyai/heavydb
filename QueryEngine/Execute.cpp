@@ -2493,27 +2493,8 @@ std::vector<std::string> get_agg_fnames(const std::vector<Analyzer::Expr*>& targ
     const auto target_expr = target_exprs[target_idx];
     CHECK(target_expr);
     const auto target_type_info = target_expr->get_type_info();
-    const auto byte_width = is_group_by ? compact_byte_width(get_bit_width(target_type_info) >> 3) : sizeof(int64_t);
     const auto target_type = target_type_info.get_type();
     const auto agg_expr = dynamic_cast<Analyzer::AggExpr*>(target_expr);
-    std::string fname_suffix{""};
-    switch (byte_width) {
-      case 4:
-        if (target_type == kFLOAT) {
-          fname_suffix = "_float";
-        } else {
-          CHECK(!target_type_info.is_fp());
-          fname_suffix = "_int32";
-        }
-        break;
-      case 8:
-        if (target_type_info.is_fp()) {
-          fname_suffix = "_double";
-        }
-        break;
-      default:
-        CHECK(false);
-    }
     if (!agg_expr) {
       result.push_back((target_type == kFLOAT || target_type == kDOUBLE) ? "agg_id_double" : "agg_id");
       if (target_type_info.is_string() && target_type_info.get_compression() == kENCODING_NONE) {
