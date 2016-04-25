@@ -61,7 +61,7 @@ class RenderAllocatorMap {
   RenderAllocator* getRenderAllocator(size_t device_id);
   RenderAllocator* operator[](size_t device_id);
 
-  void prepForRendering();
+  void prepForRendering(const std::shared_ptr<::QueryRenderer::QueryDataLayout>& query_data_layout);
 
  private:
   ::CudaMgr_Namespace::CudaMgr* cuda_mgr_;

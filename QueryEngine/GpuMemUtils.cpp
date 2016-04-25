@@ -43,7 +43,7 @@ RenderAllocator* RenderAllocatorMap::operator[](size_t device_id) {
   return &render_allocator_map_[device_id];
 }
 
-void RenderAllocatorMap::prepForRendering() {
+void RenderAllocatorMap::prepForRendering(const std::shared_ptr<::QueryRenderer::QueryDataLayout>& query_data_layout) {
 }
 
 CUdeviceptr alloc_gpu_mem(Data_Namespace::DataMgr* data_mgr,
