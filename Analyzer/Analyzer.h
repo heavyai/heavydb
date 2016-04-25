@@ -494,6 +494,7 @@ class CharLengthExpr : public Expr {
   CharLengthExpr(std::shared_ptr<Analyzer::Expr> a, bool e)
       : Expr(kINT, a->get_type_info().get_notnull()), arg(a), calc_encoded_length(e) {}
   const Expr* get_arg() const { return arg.get(); }
+  const std::shared_ptr<Analyzer::Expr> get_own_arg() const { return arg; }
   bool get_calc_encoded_length() const { return calc_encoded_length; }
   virtual std::shared_ptr<Analyzer::Expr> deep_copy() const;
   virtual void group_predicates(std::list<const Expr*>& scan_predicates,
@@ -694,6 +695,7 @@ class ExtractExpr : public Expr {
       : Expr(ti, has_agg), field(f), from_expr(e) {}
   ExtractField get_field() const { return field; }
   const Expr* get_from_expr() const { return from_expr.get(); }
+  const std::shared_ptr<Analyzer::Expr> get_own_from_expr() const { return from_expr; }
   virtual std::shared_ptr<Analyzer::Expr> deep_copy() const;
   virtual void check_group_by(const std::list<std::shared_ptr<Analyzer::Expr>>& groupby) const;
   virtual void group_predicates(std::list<const Expr*>& scan_predicates,
@@ -727,6 +729,7 @@ class DatetruncExpr : public Expr {
       : Expr(ti, has_agg), field(f), from_expr(e) {}
   DatetruncField get_field() const { return field; }
   const Expr* get_from_expr() const { return from_expr.get(); }
+  const std::shared_ptr<Analyzer::Expr> get_own_from_expr() const { return from_expr; }
   virtual std::shared_ptr<Analyzer::Expr> deep_copy() const;
   virtual void check_group_by(const std::list<std::shared_ptr<Analyzer::Expr>>& groupby) const;
   virtual void group_predicates(std::list<const Expr*>& scan_predicates,

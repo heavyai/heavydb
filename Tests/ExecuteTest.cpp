@@ -961,7 +961,7 @@ namespace {
 const size_t g_array_test_row_count{20};
 
 void import_array_test(const std::string& table_name) {
-  CHECK_EQ(size_t(0), g_array_test_row_count % 2);
+  CHECK_EQ(size_t(0), g_array_test_row_count % 4);
   const auto& cat = g_session->get_catalog();
   const auto td = cat.getMetadataForTable(table_name);
   CHECK(td);
@@ -1254,6 +1254,19 @@ TEST(Select, Joins) {
     c("SELECT test.str, COUNT(*) AS foobar FROM test, test_inner WHERE test.x = test_inner.x AND test.x > 6 GROUP BY "
       "test.str HAVING foobar > 5;",
       dt);
+    c("SELECT COUNT(*) FROM test, test_inner WHERE test.real_str LIKE 'real_ba%' AND test.x = test_inner.x;", dt);
+    c("SELECT COUNT(*) FROM test, test_inner WHERE LENGTH(test.real_str) = 8 AND test.x = test_inner.x;", dt);
+    ASSERT_EQ(
+        int64_t(g_array_test_row_count / 2 + g_array_test_row_count / 4),
+        v<int64_t>(run_simple_agg(
+            "SELECT COUNT(*) FROM test, test_inner WHERE EXTRACT(HOUR FROM test.m) = 22 AND test.x = test_inner.x;",
+            dt)));
+    ASSERT_EQ(int64_t(1),
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM array_test, test_inner WHERE array_test.arr_i32[array_test.x - 5] = 20 AND "
+                  "array_test.x = "
+                  "test_inner.x;",
+                  dt)));
   }
 }
 

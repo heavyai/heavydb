@@ -787,6 +787,26 @@ void collect_used_columns(std::vector<std::shared_ptr<Analyzer::ColumnVar>>& use
     collect_used_columns(used_cols, bin_oper->get_own_right_operand());
     return;
   }
+  const auto extract_expr = std::dynamic_pointer_cast<Analyzer::ExtractExpr>(expr);
+  if (extract_expr) {
+    collect_used_columns(used_cols, extract_expr->get_own_from_expr());
+    return;
+  }
+  const auto datetrunc_expr = std::dynamic_pointer_cast<Analyzer::DatetruncExpr>(expr);
+  if (datetrunc_expr) {
+    collect_used_columns(used_cols, datetrunc_expr->get_own_from_expr());
+    return;
+  }
+  const auto charlength_expr = std::dynamic_pointer_cast<Analyzer::CharLengthExpr>(expr);
+  if (charlength_expr) {
+    collect_used_columns(used_cols, charlength_expr->get_own_arg());
+    return;
+  }
+  const auto like_expr = std::dynamic_pointer_cast<Analyzer::LikeExpr>(expr);
+  if (like_expr) {
+    collect_used_columns(used_cols, like_expr->get_own_arg());
+    return;
+  }
 }
 
 std::unordered_set<int> get_used_table_ids(const std::vector<std::shared_ptr<Analyzer::ColumnVar>>& used_cols) {
@@ -808,6 +828,7 @@ void separate_join_quals(std::unordered_map<int, std::list<std::shared_ptr<Analy
       CHECK_EQ(size_t(2), used_table_ids.size());
       join_quals.push_back(qual_candidate);
     } else {
+      CHECK(!used_table_ids.empty());
       quals[*used_table_ids.begin()].push_back(qual_candidate);
     }
   }
