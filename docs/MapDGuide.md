@@ -624,6 +624,7 @@ It supports all the common SELECT features except for the following temporary li
 
 ## Function Support
 ```
+AVG
 COUNT
 MIN
 MAX
