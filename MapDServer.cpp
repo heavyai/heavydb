@@ -762,8 +762,6 @@ class MapDHandler : virtual public MapDIf {
               const TSessionId session,
               const std::string& query_str,
               const std::string& render_type,
-              const TRenderPropertyMap& render_properties,
-              const TColumnRenderMap& col_render_properties,
               const std::string& nonce) {
     _return.total_time_ms = measure<>::execution([&]() {
       _return.nonce = nonce;
@@ -798,7 +796,7 @@ class MapDHandler : virtual public MapDIf {
 #endif  // HAVE_CALCITE
         CHECK(root_plan);
         std::unique_ptr<Planner::RootPlan> plan_ptr(root_plan);  // make sure it's deleted
-        render_root_plan(_return, root_plan, *session_info_ptr, render_type, render_properties, col_render_properties);
+        render_root_plan(_return, root_plan, *session_info_ptr, render_type);
 #endif  // HAVE_RAVM
       } catch (std::exception& e) {
         TMapDException ex;
@@ -1089,12 +1087,8 @@ class MapDHandler : virtual public MapDIf {
   void render_root_plan(TRenderResult& _return,
                         Planner::RootPlan* root_plan,
                         const Catalog_Namespace::SessionInfo& session_info,
-                        const std::string& render_type,
-                        const TRenderPropertyMap& render_properties,
-                        const TColumnRenderMap& col_render_properties) {
+                        const std::string& render_type) {
     root_plan->set_render_type(render_type);
-    root_plan->set_render_properties(&render_properties);
-    root_plan->set_column_render_properties(&col_render_properties);
     root_plan->set_plan_dest(Planner::RootPlan::Dest::kRENDER);
     auto executor = Executor::getExecutor(root_plan->get_catalog().get_currentDB().dbId,
                                           jit_debug_ ? "/tmp" : "",

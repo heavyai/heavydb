@@ -15,11 +15,6 @@
 #include <map>
 #include "../Analyzer/Analyzer.h"
 
-// forward class references to avoid including Thrift headers
-class TRenderProperty;
-typedef std::map<std::string, TRenderProperty> TRenderPropertyMap;
-typedef std::map<std::string, TRenderPropertyMap> TColumnRenderMap;
-
 namespace Planner {
 /*
  * @type Plan
@@ -249,8 +244,6 @@ class RootPlan {
         limit(l),
         offset(o),
         render_type("NONE"),
-        render_properties(nullptr),
-        column_render_properties(nullptr),
         plan_dest(kCLIENT) {}
   const Plan* get_plan() const { return plan.get(); }
   SQLStmtType get_stmt_type() const { return stmt_type; }
@@ -262,10 +255,6 @@ class RootPlan {
   int64_t get_offset() const { return offset; }
   const std::string& get_render_type() const { return render_type; }
   void set_render_type(std::string t) { render_type = t; }
-  const TRenderPropertyMap* get_render_properties() const { return render_properties; }
-  void set_render_properties(const TRenderPropertyMap* r) { render_properties = r; }
-  const TColumnRenderMap* get_column_render_properties() const { return column_render_properties; }
-  void set_column_render_properties(const TColumnRenderMap* p) { column_render_properties = p; }
   Dest get_plan_dest() const { return plan_dest; }
   void set_plan_dest(Dest d) { plan_dest = d; }
 
@@ -278,8 +267,6 @@ class RootPlan {
   int64_t limit;                              // limit from LIMIT clause.  0 means ALL
   int64_t offset;                             // offset from OFFSET clause.  0 means no offset.
   std::string render_type;
-  const TRenderPropertyMap* render_properties;
-  const TColumnRenderMap* column_render_properties;
   Dest plan_dest;
 };
 
