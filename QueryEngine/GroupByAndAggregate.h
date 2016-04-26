@@ -330,7 +330,7 @@ inline TargetInfo target_info(const PointerType target_expr) {
   if (!agg_arg) {
     CHECK_EQ(kCOUNT, agg_type);
     CHECK(!agg_expr->get_is_distinct());
-    return {true, kCOUNT, SQLTypeInfo(kBIGINT, notnull), false, false};
+    return {true, kCOUNT, SQLTypeInfo(kINT, notnull), false, false};
   }
 
   const auto& agg_arg_ti = agg_arg->get_type_info();
