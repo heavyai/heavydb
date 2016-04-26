@@ -111,8 +111,10 @@ ResultRows::ResultRows(const QueryMemoryDescriptor& query_mem_desc,
     targets_.push_back(agg_info);
   }
   std::vector<TargetValue> row;
-  agg_init_vals_ =
-      init_agg_val_vec(get_compact_targets(targets_, agg_args_), query_mem_desc.agg_col_widths.size(), is_group_by);
+  agg_init_vals_ = init_agg_val_vec(get_compact_targets(targets_, agg_args_),
+                                    query_mem_desc.agg_col_widths.size(),
+                                    is_group_by,
+                                    query_mem_desc_.getCompactByteWidth());
   if (in_place_ && has_lazy_columns) {
     while (fetchLazyOrBuildRow(row, col_buffers, targets, false, false, true)) {
     };
@@ -419,7 +421,7 @@ void ResultRows::reduce(const ResultRows& other_results,
                   reinterpret_cast<const int8_t*>(&new_results[agg_col_idx].i1),
                   reinterpret_cast<const int8_t*>(&new_results[agg_col_idx].i2),
                   compact_targets[agg_col_idx],
-                  get_initial_val(compact_targets[agg_col_idx]),
+                  get_initial_val(compact_targets[agg_col_idx], query_mem_desc_.getCompactByteWidth()),
                   agg_col_idx);
     }
     return;
@@ -634,7 +636,7 @@ void ResultRows::reduce(const ResultRows& other_results,
                   reinterpret_cast<const int8_t*>(&kv.second[agg_col_idx].i1),
                   reinterpret_cast<const int8_t*>(&kv.second[agg_col_idx].i2),
                   compact_targets[agg_col_idx],
-                  get_initial_val(compact_targets[agg_col_idx]),
+                  get_initial_val(compact_targets[agg_col_idx], query_mem_desc_.getCompactByteWidth()),
                   agg_col_idx);
     }
   }
@@ -656,7 +658,7 @@ void ResultRows::reduce(const ResultRows& other_results,
                     reinterpret_cast<const int8_t*>(&kv.second[agg_col_idx].i1),
                     reinterpret_cast<const int8_t*>(&kv.second[agg_col_idx].i2),
                     agg_info,
-                    get_initial_val(agg_info),
+                    get_initial_val(agg_info, query_mem_desc_.getCompactByteWidth()),
                     agg_col_idx);
       } else {
         old_agg_results[agg_col_idx] = kv.second[agg_col_idx];
@@ -1742,7 +1744,7 @@ void QueryExecutionContext::outputBin(ResultRows& results,
     for (size_t key_idx = 0; key_idx < group_by_col_count; ++key_idx) {
       const auto key_comp = get_component(
           buffer_ptr,
-          compact_byte_width(query_mem_desc_.group_col_widths[key_idx], unsigned(SMALLEST_BYTE_WIDTH_TO_COMPACT)));
+          compact_byte_width(query_mem_desc_.group_col_widths[key_idx], query_mem_desc_.getCompactByteWidth()));
       multi_key.push_back(key_comp);
       buffer_ptr += query_mem_desc_.getNextKeyOffInBytes(key_idx);
     }
@@ -2351,6 +2353,17 @@ size_t QueryMemoryDescriptor::getWarpCount() const {
   return (interleaved_bins_on_gpu ? executor_->warpSize() : 1);
 }
 
+size_t QueryMemoryDescriptor::getCompactByteWidth() const {
+  if (agg_col_widths.empty()) {
+    return 8;
+  }
+  const auto compact_width = agg_col_widths.front().compact;
+  for (const auto col_width : agg_col_widths) {
+    CHECK_EQ(col_width.compact, compact_width);
+  }
+  return compact_width;
+}
+
 size_t QueryMemoryDescriptor::getTotalBytesOfColumnarBuffers(const std::vector<ColWidths>& col_widths) const {
   CHECK(output_columnar);
   size_t total_bytes{0};
@@ -2651,7 +2664,7 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
 
   std::vector<ColWidths> agg_col_widths;
   for (auto wid : get_col_byte_widths(ra_exe_unit_.target_exprs)) {
-    agg_col_widths.push_back({wid, int8_t(compact_byte_width(wid, unsigned(SMALLEST_BYTE_WIDTH_TO_COMPACT)))});
+    agg_col_widths.push_back({wid, static_cast<int8_t>(compact_byte_width(wid, SMALLEST_BYTE_WIDTH_TO_COMPACT))});
   }
   auto group_col_widths = get_col_byte_widths(ra_exe_unit_.groupby_exprs);
 
@@ -2944,7 +2957,8 @@ GroupByAndAggregate::KeylessInfo GroupByAndAggregate::getKeylessInfo(
           if (!arg_expr->get_type_info().get_notnull()) {
             auto expr_range_info = getExpressionRange(arg_expr, query_infos_, executor_);
             if (!expr_range_info.hasNulls()) {
-              init_val = get_agg_initial_val(agg_info.agg_kind, arg_expr->get_type_info(), is_group_by);
+              init_val = get_agg_initial_val(
+                  agg_info.agg_kind, arg_expr->get_type_info(), is_group_by, query_mem_desc_.getCompactByteWidth());
               found = true;
             }
           } else {
@@ -2969,7 +2983,8 @@ GroupByAndAggregate::KeylessInfo GroupByAndAggregate::getKeylessInfo(
         }
         case kMIN: {
           auto expr_range_info = getExpressionRange(agg_expr->get_arg(), query_infos_, executor_);
-          auto init_max = get_agg_initial_val(agg_info.agg_kind, agg_info.sql_type, is_group_by);
+          auto init_max = get_agg_initial_val(
+              agg_info.agg_kind, agg_info.sql_type, is_group_by, query_mem_desc_.getCompactByteWidth());
           switch (expr_range_info.getType()) {
             case ExpressionRangeType::FloatingPoint: {
               init_val = init_max;
@@ -2992,7 +3007,8 @@ GroupByAndAggregate::KeylessInfo GroupByAndAggregate::getKeylessInfo(
         }
         case kMAX: {
           auto expr_range_info = getExpressionRange(agg_expr->get_arg(), query_infos_, executor_);
-          auto init_min = get_agg_initial_val(agg_info.agg_kind, agg_info.sql_type, is_group_by);
+          auto init_min = get_agg_initial_val(
+              agg_info.agg_kind, agg_info.sql_type, is_group_by, query_mem_desc_.getCompactByteWidth());
           switch (expr_range_info.getType()) {
             case ExpressionRangeType::FloatingPoint: {
               init_val = init_min;

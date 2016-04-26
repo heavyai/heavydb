@@ -160,6 +160,8 @@ struct QueryMemoryDescriptor {
   size_t getColsSize() const;
   size_t getWarpCount() const;
 
+  size_t getCompactByteWidth() const;
+
  private:
   size_t getTotalBytesOfColumnarBuffers(const std::vector<ColWidths>& col_widths) const;
 };
@@ -474,10 +476,13 @@ inline size_t get_bit_width(const SQLTypeInfo& ti) {
 }
 
 // TODO(alex): proper types for aggregate
-inline int64_t get_agg_initial_val(const SQLAgg agg, const SQLTypeInfo& ti, const bool enable_compaction) {
+inline int64_t get_agg_initial_val(const SQLAgg agg,
+                                   const SQLTypeInfo& ti,
+                                   const bool enable_compaction,
+                                   const unsigned smallest_byte_width_to_compact) {
   CHECK(!ti.is_string());
   const auto byte_width = enable_compaction ? compact_byte_width(static_cast<unsigned>(get_bit_width(ti) >> 3),
-                                                                 unsigned(SMALLEST_BYTE_WIDTH_TO_COMPACT))
+                                                                 unsigned(smallest_byte_width_to_compact))
                                             : sizeof(int64_t);
   CHECK_GE(byte_width, static_cast<unsigned>(ti.get_size()));
   switch (agg) {
@@ -563,7 +568,8 @@ inline int64_t get_agg_initial_val(const SQLAgg agg, const SQLTypeInfo& ti, cons
 
 inline std::vector<int64_t> init_agg_val_vec(const std::vector<TargetInfo>& targets,
                                              size_t agg_col_count,
-                                             const bool is_group_by) {
+                                             const bool is_group_by,
+                                             const size_t smallest_byte_width_to_compact) {
   std::vector<int64_t> agg_init_vals(agg_col_count, 0);
   for (size_t target_idx = 0, agg_col_idx = 0; target_idx < targets.size() && agg_col_idx < agg_col_count;
        ++target_idx, ++agg_col_idx) {
@@ -571,7 +577,8 @@ inline std::vector<int64_t> init_agg_val_vec(const std::vector<TargetInfo>& targ
     if (!agg_info.is_agg) {
       continue;
     }
-    agg_init_vals[agg_col_idx] = get_agg_initial_val(agg_info.agg_kind, agg_info.sql_type, is_group_by);
+    agg_init_vals[agg_col_idx] =
+        get_agg_initial_val(agg_info.agg_kind, agg_info.sql_type, is_group_by, smallest_byte_width_to_compact);
     if (kAVG == agg_info.agg_kind) {
       agg_init_vals[++agg_col_idx] = 0;
     }
@@ -582,7 +589,8 @@ inline std::vector<int64_t> init_agg_val_vec(const std::vector<TargetInfo>& targ
 inline std::vector<int64_t> init_agg_val_vec(const std::vector<Analyzer::Expr*>& targets,
                                              const std::list<std::shared_ptr<Analyzer::Expr>>& quals,
                                              size_t agg_col_count,
-                                             const bool is_group_by) {
+                                             const bool is_group_by,
+                                             const size_t smallest_byte_width_to_compact) {
   std::vector<TargetInfo> target_infos;
   target_infos.reserve(targets.size());
   for (size_t target_idx = 0, agg_col_idx = 0; target_idx < targets.size() && agg_col_idx < agg_col_count;
@@ -596,15 +604,16 @@ inline std::vector<int64_t> init_agg_val_vec(const std::vector<Analyzer::Expr*>&
     }
     target_infos.push_back(target_info);
   }
-  return init_agg_val_vec(target_infos, agg_col_count, is_group_by);
+  return init_agg_val_vec(target_infos, agg_col_count, is_group_by, smallest_byte_width_to_compact);
 }
 
-inline int64_t get_initial_val(const TargetInfo& target_info) {
+inline int64_t get_initial_val(const TargetInfo& target_info, const size_t smallest_byte_width_to_compact) {
   if (!target_info.is_agg) {
     return 0;
   }
 
-  return get_agg_initial_val(target_info.agg_kind, target_info.sql_type, !target_info.sql_type.is_fp());
+  return get_agg_initial_val(
+      target_info.agg_kind, target_info.sql_type, !target_info.sql_type.is_fp(), smallest_byte_width_to_compact);
 }
 
 }  // namespace
@@ -815,7 +824,8 @@ class ResultRows {
     }
     agg_init_vals_ = init_agg_val_vec(get_compact_targets(targets_, agg_args_),
                                       query_mem_desc.agg_col_widths.size(),
-                                      !query_mem_desc.group_col_widths.empty());
+                                      !query_mem_desc.group_col_widths.empty(),
+                                      query_mem_desc.getCompactByteWidth());
   }
 
   ResultRows(const QueryMemoryDescriptor& query_mem_desc,
