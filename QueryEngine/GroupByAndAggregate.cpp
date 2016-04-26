@@ -2359,7 +2359,10 @@ size_t QueryMemoryDescriptor::getCompactByteWidth() const {
   }
   const auto compact_width = agg_col_widths.front().compact;
   for (const auto col_width : agg_col_widths) {
-    CHECK_EQ(col_width.compact, compact_width);
+    // TODO(alex): should instead check that col_width.compact and compact_width are equal
+    if (col_width.compact != compact_width) {
+      return 8;
+    }
   }
   return compact_width;
 }
@@ -2649,6 +2652,49 @@ GroupByAndAggregate::GroupByAndAggregate(Executor* executor,
   query_mem_desc_.output_columnar = output_columnar_;
 }
 
+namespace {
+
+int8_t pick_target_compact_width(const RelAlgExecutionUnit& ra_exe_unit,
+                                 const std::vector<Fragmenter_Namespace::TableInfo>& query_infos) {
+#ifdef HAVE_RAVM
+  return 8;
+#else
+  for (const auto groupby_expr : ra_exe_unit.groupby_exprs) {
+    if (dynamic_cast<Analyzer::UOper*>(groupby_expr.get()) &&
+        static_cast<Analyzer::UOper*>(groupby_expr.get())->get_optype() == kUNNEST) {
+      return 8;
+    }
+  }
+  if (ra_exe_unit.groupby_exprs.size() != 1 || !ra_exe_unit.groupby_exprs.front()) {
+    return 8;
+  }
+  for (const auto target : ra_exe_unit.target_exprs) {
+    const auto& ti = target->get_type_info();
+    const auto agg = dynamic_cast<const Analyzer::AggExpr*>(target);
+    if (agg && agg->get_arg()) {
+      return 8;
+    }
+    if (agg) {
+      CHECK_EQ(kCOUNT, agg->get_aggtype());
+      CHECK(!agg->get_is_distinct());
+      continue;
+    }
+    if (ti.get_type() == kINT || (ti.is_string() && ti.get_compression() == kENCODING_DICT)) {
+      continue;
+    } else {
+      return 8;
+    }
+  }
+  size_t total_tuples{0};
+  for (const auto& query_info : query_infos) {
+    total_tuples += query_info.numTuples;
+  }
+  return total_tuples <= std::numeric_limits<uint32_t>::max() ? 4 : 8;
+#endif  // HAVE_RAVM
+}
+
+}  // namespace
+
 void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
                                                     const size_t max_groups_buffer_entry_count,
                                                     const size_t small_groups_buffer_entry_count,
@@ -2663,8 +2709,9 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
   }
 
   std::vector<ColWidths> agg_col_widths;
+  const auto smallest_byte_width_to_compact = pick_target_compact_width(ra_exe_unit_, query_infos_);
   for (auto wid : get_col_byte_widths(ra_exe_unit_.target_exprs)) {
-    agg_col_widths.push_back({wid, static_cast<int8_t>(compact_byte_width(wid, SMALLEST_BYTE_WIDTH_TO_COMPACT))});
+    agg_col_widths.push_back({wid, static_cast<int8_t>(compact_byte_width(wid, smallest_byte_width_to_compact))});
   }
   auto group_col_widths = get_col_byte_widths(ra_exe_unit_.groupby_exprs);
 
@@ -3635,7 +3682,9 @@ void GroupByAndAggregate::codegenAggCalls(const std::tuple<llvm::Value*, llvm::V
         target_lv = executor_->castToFP(target_lv);
       }
 
-      target_lv = executor_->castToTypeIn(target_lv, (chosen_bytes << 3));
+      if (!dynamic_cast<const Analyzer::AggExpr*>(target_expr) || arg_expr) {
+        target_lv = executor_->castToTypeIn(target_lv, (chosen_bytes << 3));
+      }
 
       std::vector<llvm::Value*> agg_args{
           is_group_by ? agg_col_ptr : executor_->castToIntPtrTyIn(agg_out_vec[agg_out_off], (chosen_bytes << 3)),
