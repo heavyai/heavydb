@@ -809,6 +809,56 @@ class MapDHandler : virtual public MapDIf {
               << " (ms), Render: " << _return.render_time_ms << " (ms)";
   }
 
+  void testRenderSimplePolys(TRenderResult& _return,
+                             const TSessionId session,
+                             const std::string& query_str,
+                             const std::string& nonce) {
+    _return.total_time_ms = measure<>::execution([&]() {
+      _return.nonce = nonce;
+      if (!enable_rendering_) {
+        TMapDException ex;
+        ex.error_msg = "Backend rendering is disabled.";
+        LOG(ERROR) << ex.error_msg;
+        throw ex;
+      }
+      std::lock_guard<std::mutex> render_lock(render_mutex_);
+      mapd_shared_lock<mapd_shared_mutex> read_lock(sessions_mutex_);
+      auto session_it = get_session_it(session);
+      auto session_info_ptr = session_it->second.get();
+
+      try {
+        auto root_plan = parse_to_render_plan_legacy(query_str, *session_info_ptr);
+        auto executor = Executor::getExecutor(root_plan->get_catalog().get_currentDB().dbId,
+                                              jit_debug_ ? "/tmp" : "",
+                                              jit_debug_ ? "mapdquery" : "",
+                                              0,
+                                              0,
+                                              nullptr);
+
+        auto clock_begin = timer_start();
+        auto results = executor->testRenderSimplePolys(root_plan, *session_info_ptr, 1);
+        _return.execution_time_ms = timer_stop(clock_begin) - results.getQueueTime() - results.getRenderTime();
+        _return.render_time_ms = results.getRenderTime();
+
+        const auto img_row = results.getNextRow(false, false);
+        CHECK_EQ(size_t(1), img_row.size());
+        const auto& img_tv = img_row.front();
+        const auto scalar_tv = boost::get<ScalarTargetValue>(&img_tv);
+        const auto nullable_sptr = boost::get<NullableString>(scalar_tv);
+        CHECK(nullable_sptr);
+        auto sptr = boost::get<std::string>(nullable_sptr);
+        CHECK(sptr);
+        _return.image = *sptr;
+
+      } catch (std::exception& e) {
+        TMapDException ex;
+        ex.error_msg = std::string("Exception: ") + e.what();
+        LOG(ERROR) << ex.error_msg;
+        throw ex;
+      }
+    });
+  }
+
   void create_frontend_view(const TSessionId session,
                             const std::string& view_name,
                             const std::string& view_state,

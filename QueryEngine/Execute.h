@@ -211,6 +211,10 @@ class Executor {
                            const int render_widget_id,
                            const int pixelRadius = 0);
 
+  ResultRows testRenderSimplePolys(const Planner::RootPlan* root_plan,
+                                   const Catalog_Namespace::SessionInfo& session,
+                                   const int render_widget_id);
+
 
   StringDictionary* getStringDictionary(const int dictId,
                                         const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner) const;
