@@ -5,7 +5,7 @@
 SQLTypeInfo get_agg_type(const SQLAgg agg_kind, const Analyzer::Expr* arg_expr) {
   switch (agg_kind) {
     case kCOUNT:
-      return SQLTypeInfo(kBIGINT, false);
+      return SQLTypeInfo(kINT, false);
     case kMIN:
     case kMAX:
       return arg_expr->get_type_info();
