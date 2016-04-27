@@ -2359,10 +2359,7 @@ size_t QueryMemoryDescriptor::getCompactByteWidth() const {
   }
   const auto compact_width = agg_col_widths.front().compact;
   for (const auto col_width : agg_col_widths) {
-    // TODO(alex): should instead check that col_width.compact and compact_width are equal
-    if (col_width.compact != compact_width) {
-      return 8;
-    }
+    CHECK_EQ(col_width.compact, compact_width);
   }
   return compact_width;
 }
