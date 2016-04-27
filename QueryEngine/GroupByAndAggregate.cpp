@@ -1629,7 +1629,7 @@ int8_t* QueryExecutionContext::initColumnarBuffer(T* buffer_ptr,
     }
   }
 
-  return reinterpret_cast<int8_t*>(align_to_int64(buffer_ptr + entry_count));
+  return reinterpret_cast<int8_t*>(buffer_ptr + entry_count);
 }
 
 void QueryExecutionContext::initColumnarGroups(int64_t* groups_buffer,
@@ -1637,6 +1637,7 @@ void QueryExecutionContext::initColumnarGroups(int64_t* groups_buffer,
                                                const int32_t groups_buffer_entry_count,
                                                const bool keyless) {
   auto agg_bitmap_size = allocateCountDistinctBuffers(true);
+  const bool need_padding = !query_mem_desc_.isCompactLayoutIsometric();
   const int32_t agg_col_count = query_mem_desc_.agg_col_widths.size();
   const int32_t key_qw_count = query_mem_desc_.group_col_widths.size();
   auto buffer_ptr = reinterpret_cast<int8_t*>(groups_buffer);
@@ -1665,6 +1666,9 @@ void QueryExecutionContext::initColumnarGroups(int64_t* groups_buffer,
         break;
       default:
         CHECK(false);
+    }
+    if (need_padding) {
+      buffer_ptr = align_to_int64(buffer_ptr);
     }
   }
 }
@@ -2126,6 +2130,7 @@ GpuQueryMemory QueryExecutionContext::prepareGroupByDevBuffer(Data_Namespace::Da
                                                 query_mem_desc_.group_col_widths.size(),
                                                 col_count,
                                                 reinterpret_cast<int8_t*>(col_widths_dev_ptr),
+                                                !query_mem_desc_.isCompactLayoutIsometric(),
                                                 query_mem_desc_.keyless_hash,
                                                 sizeof(int64_t),
                                                 block_size_x,
@@ -2403,9 +2408,12 @@ bool QueryMemoryDescriptor::isCompactLayoutIsometric() const {
 size_t QueryMemoryDescriptor::getTotalBytesOfColumnarBuffers(const std::vector<ColWidths>& col_widths) const {
   CHECK(output_columnar);
   size_t total_bytes{0};
+  const auto is_isometric = isCompactLayoutIsometric();
   for (size_t col_idx = 0; col_idx < col_widths.size(); ++col_idx) {
     total_bytes += col_widths[col_idx].compact * entry_count;
-    total_bytes = align_to_int64(total_bytes);
+    if (!is_isometric) {
+      total_bytes = align_to_int64(total_bytes);
+    }
   }
   return total_bytes;
 }
@@ -2453,18 +2461,21 @@ size_t QueryMemoryDescriptor::getColOnlyOffInBytes(const size_t col_idx) const {
 
 size_t QueryMemoryDescriptor::getColOffInBytes(const size_t bin, const size_t col_idx) const {
   CHECK_LT(col_idx, agg_col_widths.size());
-  auto warp_count = getWarpCount();
+  const auto warp_count = getWarpCount();
   if (output_columnar) {
     CHECK_LT(bin, entry_count);
     CHECK_EQ(size_t(1), group_col_widths.size());
     CHECK_EQ(size_t(1), warp_count);
     size_t offset{0};
+    const auto is_isometric = isCompactLayoutIsometric();
     if (!keyless_hash) {
       offset = sizeof(int64_t) * entry_count;
     }
     for (size_t index = 0; index < col_idx; ++index) {
       offset += agg_col_widths[index].compact * entry_count;
-      offset = align_to_int64(offset);
+      if (!is_isometric) {
+        offset = align_to_int64(offset);
+      }
     }
     offset += bin * agg_col_widths[col_idx].compact;
     return offset;
@@ -2519,7 +2530,9 @@ size_t QueryMemoryDescriptor::getNextColOffInBytes(const int8_t* col_ptr,
     CHECK_EQ(size_t(1), warp_count);
 
     offset = entry_count * chosen_bytes;
-    offset = align_to_int64(offset);
+    if (!isCompactLayoutIsometric()) {
+      offset = align_to_int64(offset);
+    }
     offset += bin * (next_chosen_bytes - chosen_bytes);
     return offset;
   }

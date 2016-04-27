@@ -54,6 +54,7 @@ extern "C" __device__ void init_columnar_group_by_buffer_gpu_impl(int64_t* group
                                                                   const uint32_t key_qw_count,
                                                                   const uint32_t agg_col_count,
                                                                   const int8_t* col_sizes,
+                                                                  const bool need_padding,
                                                                   const bool keyless,
                                                                   const int8_t key_size) {
 #ifdef EXECUTOR_RT
@@ -86,9 +87,12 @@ extern "C" __device__ void init_columnar_group_by_buffer_gpu_impl(int64_t* group
         // FIXME(miyu): CUDA linker doesn't accept assertion on GPU yet right now.
         break;
     }
+    buffer_ptr = align_to_int64(buffer_ptr);
   }
   for (int32_t i = 0; i < agg_col_count; ++i) {
-    buffer_ptr = align_to_int64(buffer_ptr);
+    if (need_padding) {
+      buffer_ptr = align_to_int64(buffer_ptr);
+    }
     switch (col_sizes[i]) {
       case 1:
         buffer_ptr = init_columnar_buffer<int8_t>(buffer_ptr, init_vals[i], groups_buffer_entry_count, start, step);
@@ -142,10 +146,11 @@ __global__ void init_columnar_group_by_buffer_gpu_wrapper(int64_t* groups_buffer
                                                           const uint32_t key_qw_count,
                                                           const uint32_t agg_col_count,
                                                           const int8_t* col_sizes,
+                                                          const bool need_padding,
                                                           const bool keyless,
                                                           const int8_t key_size) {
   init_columnar_group_by_buffer_gpu_impl(
-      groups_buffer, init_vals, groups_buffer_entry_count, key_qw_count, agg_col_count, col_sizes, keyless, key_size);
+      groups_buffer, init_vals, groups_buffer_entry_count, key_qw_count, agg_col_count, col_sizes, need_padding, keyless, key_size);
 }
 
 void init_group_by_buffer_on_device(int64_t* groups_buffer,
@@ -167,12 +172,13 @@ void init_columnar_group_by_buffer_on_device(int64_t* groups_buffer,
                                              const uint32_t key_qw_count,
                                              const uint32_t agg_col_count,
                                              const int8_t* col_sizes,
+                                             const bool need_padding,
                                              const bool keyless,
                                              const int8_t key_size,
                                              const size_t block_size_x,
                                              const size_t grid_size_x) {
   init_columnar_group_by_buffer_gpu_wrapper<<<grid_size_x, block_size_x>>>(
-      groups_buffer, init_vals, groups_buffer_entry_count, key_qw_count, agg_col_count, col_sizes, keyless, key_size);
+      groups_buffer, init_vals, groups_buffer_entry_count, key_qw_count, agg_col_count, col_sizes, need_padding, keyless, key_size);
 }
 
 void init_render_buffer_on_device(int64_t* render_buffer,
