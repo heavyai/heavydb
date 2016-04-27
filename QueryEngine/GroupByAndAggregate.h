@@ -161,6 +161,8 @@ struct QueryMemoryDescriptor {
   size_t getWarpCount() const;
 
   size_t getCompactByteWidth() const;
+  bool isCompactLayoutIsometric() const;
+  size_t getConsistColOffInBytes(const size_t bin, const size_t col_idx) const;
 
  private:
   size_t getTotalBytesOfColumnarBuffers(const std::vector<ColWidths>& col_widths) const;
