@@ -2840,7 +2840,10 @@ ResultRows Executor::executeWorkUnit(int32_t* error_code,
     max_groups_buffer_entry_guess = compute_buffer_entry_guess(query_infos);
   }
 
-  const auto join_info = chooseJoinType(ra_exe_unit.inner_join_quals, query_infos, device_type);
+  auto join_info = chooseJoinType(ra_exe_unit.inner_join_quals, query_infos, device_type);
+  if (join_info.join_impl_type_ == JoinImplType::Loop) {
+    join_info = chooseJoinType(ra_exe_unit.outer_join_quals, query_infos, device_type);
+  }
 
   // could use std::thread::hardware_concurrency(), but some
   // slightly out-of-date compilers (gcc 4.7) implement it as always 0.
@@ -4465,7 +4468,13 @@ Executor::JoinInfo Executor::chooseJoinType(const std::list<std::shared_ptr<Anal
                                                                         : MemoryLevel::CPU_LEVEL};
   for (auto qual : join_quals) {
     auto qual_bin_oper = std::dynamic_pointer_cast<Analyzer::BinOper>(qual);
-    CHECK(qual_bin_oper);
+    if (!qual_bin_oper) {
+      const auto bool_const = std::dynamic_pointer_cast<Analyzer::Constant>(qual);
+      CHECK(bool_const);
+      const auto& bool_const_ti = bool_const->get_type_info();
+      CHECK(bool_const_ti.is_boolean());
+      continue;
+    }
     if (qual_bin_oper->get_optype() == kEQ) {
       const int device_count =
           device_type == ExecutorDeviceType::GPU ? catalog_->get_dataMgr().cudaMgr_->getDeviceCount() : 1;
