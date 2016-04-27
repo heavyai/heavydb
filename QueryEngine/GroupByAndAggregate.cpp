@@ -2653,9 +2653,6 @@ namespace {
 
 int8_t pick_target_compact_width(const RelAlgExecutionUnit& ra_exe_unit,
                                  const std::vector<Fragmenter_Namespace::TableInfo>& query_infos) {
-#ifdef HAVE_RAVM
-  return 8;
-#else
   for (const auto groupby_expr : ra_exe_unit.groupby_exprs) {
     if (dynamic_cast<Analyzer::UOper*>(groupby_expr.get()) &&
         static_cast<Analyzer::UOper*>(groupby_expr.get())->get_optype() == kUNNEST) {
@@ -2687,7 +2684,6 @@ int8_t pick_target_compact_width(const RelAlgExecutionUnit& ra_exe_unit,
     total_tuples += query_info.numTuples;
   }
   return total_tuples <= std::numeric_limits<uint32_t>::max() ? 4 : 8;
-#endif  // HAVE_RAVM
 }
 
 }  // namespace
