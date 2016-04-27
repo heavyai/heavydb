@@ -348,12 +348,12 @@ inline TargetInfo target_info(const PointerType target_expr) {
     is_distinct = agg_expr->get_is_distinct();
   }
 
-  return {
-      true,
-      agg_expr->get_aggtype(),
-      agg_type == kCOUNT ? SQLTypeInfo(kBIGINT, notnull) : (agg_type == kAVG ? agg_arg_ti : agg_expr->get_type_info()),
-      !agg_arg_ti.get_notnull(),
-      is_distinct};
+  return {true,
+          agg_expr->get_aggtype(),
+          agg_type == kCOUNT ? SQLTypeInfo(is_distinct ? kBIGINT : kINT, notnull)
+                             : (agg_type == kAVG ? agg_arg_ti : agg_expr->get_type_info()),
+          !agg_arg_ti.get_notnull(),
+          is_distinct};
 }
 
 template <class PointerType>
@@ -947,6 +947,25 @@ class ResultRows {
                                                      more_results.in_place_groups_by_buffers_entry_count_.end());
     }
   }
+
+  void reduce_helper(int8_t* crt_val_i1,
+                     int8_t* crt_val_i2,
+                     const int8_t* new_val_i1,
+                     const int8_t* new_val_i2,
+                     const TargetInfo& agg_info,
+                     const int64_t agg_skip_val,
+                     const size_t target_idx,
+                     size_t crt_byte_width = sizeof(int64_t),
+                     size_t next_byte_width = sizeof(int64_t));
+  void reduce_in_place(const bool output_columnar,
+                       int32_t& groups_buffer_entry_count,
+                       const int32_t other_groups_buffer_entry_count,
+                       int64_t** group_by_buffer_ptr,
+                       const int64_t* other_group_by_buffer,
+                       const GroupByColRangeType hash_type,
+                       const std::vector<TargetInfo>& targets,
+                       const QueryMemoryDescriptor& query_mem_desc_in,
+                       std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner);
 
   void reduce(const ResultRows& other_results, const QueryMemoryDescriptor& query_mem_desc, const bool output_columnar);
 

@@ -271,6 +271,213 @@ void ResultRows::addKeylessGroupByBuffer(const int64_t* group_by_buffer,
 #define LIKELY(x) __builtin_expect(!!(x), 1)
 #define UNLIKELY(x) __builtin_expect(!!(x), 0)
 
+void ResultRows::reduce_helper(int8_t* crt_val_i1,
+                               int8_t* crt_val_i2,
+                               const int8_t* new_val_i1,
+                               const int8_t* new_val_i2,
+                               const TargetInfo& agg_info,
+                               const int64_t agg_skip_val,
+                               const size_t target_idx,
+                               size_t crt_byte_width,
+                               size_t next_byte_width) {
+  CHECK(agg_info.sql_type.is_integer() || agg_info.sql_type.is_decimal() || agg_info.sql_type.is_time() ||
+        agg_info.sql_type.is_boolean() || agg_info.sql_type.is_string() || agg_info.sql_type.is_fp());
+  switch (agg_info.agg_kind) {
+    case kAVG:
+      CHECK(crt_val_i2 && new_val_i2);
+      AGGREGATE_ONE_VALUE(sum, crt_val_i2, new_val_i2, next_byte_width, agg_info.sql_type);
+    // fall thru
+    case kCOUNT:
+      if (agg_info.is_distinct) {
+        CHECK(agg_info.is_agg);
+        CHECK_EQ(kCOUNT, agg_info.agg_kind);
+        CHECK_EQ(crt_byte_width, sizeof(int64_t));
+        auto crt_val_i1_ptr = reinterpret_cast<int64_t*>(crt_val_i1);
+        auto count_distinct_desc_it = row_set_mem_owner_->count_distinct_descriptors_.find(target_idx);
+        CHECK(count_distinct_desc_it != row_set_mem_owner_->count_distinct_descriptors_.end());
+        auto old_set_ptr = reinterpret_cast<const int64_t*>(crt_val_i1_ptr);
+        auto new_set_ptr = reinterpret_cast<const int64_t*>(new_val_i1);
+        if (count_distinct_desc_it->second.impl_type_ == CountDistinctImplType::Bitmap) {
+          auto old_set = reinterpret_cast<int8_t*>(*old_set_ptr);
+          auto new_set = reinterpret_cast<int8_t*>(*new_set_ptr);
+          bitmap_set_unify(new_set, old_set, count_distinct_desc_it->second.bitmapSizeBytes());
+        } else {
+          CHECK(count_distinct_desc_it->second.impl_type_ == CountDistinctImplType::StdSet);
+          auto old_set = reinterpret_cast<std::set<int64_t>*>(*old_set_ptr);
+          auto new_set = reinterpret_cast<std::set<int64_t>*>(*new_set_ptr);
+          old_set->insert(new_set->begin(), new_set->end());
+          new_set->insert(old_set->begin(), old_set->end());
+        }
+        break;
+      }
+    // fall thru
+    case kSUM:
+      AGGREGATE_ONE_NULLABLE_VALUE(sum, crt_val_i1, new_val_i1, agg_skip_val, crt_byte_width, agg_info);
+      break;
+    case kMIN:
+      if (!agg_info.is_agg) {  // projected groupby key
+        if (crt_byte_width == sizeof(int32_t)) {
+          auto new_key = *reinterpret_cast<const int32_t*>(new_val_i1);
+          if (new_key) {
+            *reinterpret_cast<int32_t*>(crt_val_i1) = new_key;
+          }
+        } else {
+          auto new_key = *reinterpret_cast<const int64_t*>(new_val_i1);
+          if (new_key) {
+            *reinterpret_cast<int64_t*>(crt_val_i1) = new_key;
+          }
+        }
+        break;
+      }
+      AGGREGATE_ONE_NULLABLE_VALUE(min, crt_val_i1, new_val_i1, agg_skip_val, crt_byte_width, agg_info);
+      break;
+    case kMAX:
+      AGGREGATE_ONE_NULLABLE_VALUE(max, crt_val_i1, new_val_i1, agg_skip_val, crt_byte_width, agg_info);
+      break;
+    default:
+      CHECK(false);
+  }
+}
+
+void ResultRows::reduce_in_place(const bool output_columnar,
+                                 int32_t& groups_buffer_entry_count,
+                                 const int32_t other_groups_buffer_entry_count,
+                                 int64_t** group_by_buffer_ptr,
+                                 const int64_t* other_group_by_buffer,
+                                 const GroupByColRangeType hash_type,
+                                 const std::vector<TargetInfo>& targets,
+                                 const QueryMemoryDescriptor& query_mem_desc_in,
+                                 std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner) {
+  // TODO(miyu): apply the opt to row-wise format
+  const bool isometric_layout = query_mem_desc_in.output_columnar && query_mem_desc_in.isCompactLayoutIsometric();
+  const auto consist_col_width = query_mem_desc_in.getCompactByteWidth();
+
+  const size_t group_by_col_count{query_mem_desc_in.group_col_widths.size()};
+  const int64_t min_val{query_mem_desc_in.min_val};
+  const size_t row_size_quad{output_columnar ? 0 : query_mem_desc_in.getRowSize() / sizeof(int64_t)};
+  CHECK_LE(other_groups_buffer_entry_count, groups_buffer_entry_count);
+  CHECK_EQ(query_mem_desc_in.output_columnar, output_columnar);
+  for (size_t bin = 0, bin_base_off = query_mem_desc_in.getColOffInBytes(0, 0);
+       bin < static_cast<size_t>(other_groups_buffer_entry_count);
+       ++bin, bin_base_off += isometric_layout ? consist_col_width : query_mem_desc_in.getColOffInBytesInNextBin(0)) {
+    const size_t other_key_off = query_mem_desc_in.getKeyOffInBytes(bin) / sizeof(int64_t);
+    const auto other_key_buff = &other_group_by_buffer[other_key_off];
+    const auto consist_col_offset = isometric_layout ? consist_col_width * query_mem_desc_in.entry_count : 0;
+    if (other_key_buff[0] == EMPTY_KEY_64) {
+      continue;
+    }
+    int64_t* group_val_buff{nullptr};
+    size_t target_bin{0};
+    switch (hash_type) {
+      case GroupByColRangeType::OneColKnownRange:
+        if (output_columnar) {
+          target_bin =
+              get_columnar_group_bin_offset(*group_by_buffer_ptr, other_key_buff[0], min_val, query_mem_desc_in.bucket);
+        } else {
+          group_val_buff = get_group_value_fast(
+              *group_by_buffer_ptr, other_key_buff[0], min_val, query_mem_desc_in.bucket, row_size_quad);
+        }
+        break;
+      case GroupByColRangeType::MultiColPerfectHash:
+        group_val_buff = get_matching_group_value_perfect_hash(
+            *group_by_buffer_ptr, bin, other_key_buff, group_by_col_count, row_size_quad);
+        break;
+      case GroupByColRangeType::MultiCol:
+        group_val_buff = get_group_value(
+            *group_by_buffer_ptr, groups_buffer_entry_count, other_key_buff, group_by_col_count, row_size_quad);
+        break;
+      default:
+        CHECK(false);
+    }
+    if (!output_columnar && !group_val_buff) {
+      throw ReductionRanOutOfSlots();
+    }
+    if (hash_type == GroupByColRangeType::OneColKnownRange &&
+        other_group_by_buffer[other_key_off] != (*group_by_buffer_ptr)[other_key_off]) {
+      CHECK(EMPTY_KEY_64 == other_group_by_buffer[other_key_off] ||
+            EMPTY_KEY_64 == (*group_by_buffer_ptr)[other_key_off]);
+    }
+    size_t target_idx{0};
+    size_t col_idx{0};
+    size_t other_off{bin_base_off};
+    for (const auto& agg_info : targets) {
+      const auto chosen_bytes = query_mem_desc_in.agg_col_widths[col_idx].compact;
+      auto next_chosen_bytes = chosen_bytes;
+      const auto other_ptr = reinterpret_cast<const int8_t*>(other_group_by_buffer) + other_off;
+      const auto other_val = get_component(other_ptr, chosen_bytes);
+      int8_t* col_ptr{nullptr};
+      if (output_columnar) {
+        col_ptr = reinterpret_cast<int8_t*>(*group_by_buffer_ptr) +
+                  (isometric_layout ? query_mem_desc_in.getConsistColOffInBytes(target_bin, col_idx)
+                                    : query_mem_desc_in.getColOffInBytes(target_bin, col_idx));
+      } else {
+        col_ptr = reinterpret_cast<int8_t*>(group_val_buff) + query_mem_desc_in.getColOnlyOffInBytes(col_idx);
+      }
+
+      int8_t* next_col_ptr{nullptr};
+      const int8_t* other_next_ptr{nullptr};
+      if (agg_info.is_agg && agg_info.agg_kind == kAVG) {
+        if (output_columnar) {
+          next_col_ptr = reinterpret_cast<int8_t*>(*group_by_buffer_ptr) +
+                         (isometric_layout ? query_mem_desc_in.getConsistColOffInBytes(target_bin, col_idx + 1)
+                                           : query_mem_desc_in.getColOffInBytes(target_bin, col_idx + 1));
+        } else {
+          next_col_ptr =
+              reinterpret_cast<int8_t*>(group_val_buff) + query_mem_desc_in.getColOnlyOffInBytes(col_idx + 1);
+        }
+        next_chosen_bytes = query_mem_desc_in.agg_col_widths[col_idx + 1].compact;
+        other_off +=
+            isometric_layout ? consist_col_offset : query_mem_desc_in.getNextColOffInBytes(other_ptr, bin, col_idx + 1);
+        other_next_ptr = reinterpret_cast<const int8_t*>(other_group_by_buffer) + other_off;
+        ++col_idx;
+      }
+
+      switch (chosen_bytes) {
+        case 4: {
+          if (agg_info.is_agg) {
+            reduce_helper(col_ptr,
+                          next_col_ptr,
+                          other_ptr,
+                          other_next_ptr,
+                          agg_info,
+                          agg_init_vals_[col_idx],
+                          target_idx,
+                          chosen_bytes,
+                          next_chosen_bytes);
+          } else {
+            *reinterpret_cast<int32_t*>(col_ptr) = static_cast<int32_t>(other_val);
+          }
+          break;
+        }
+        case 8: {
+          if (agg_info.is_agg) {
+            reduce_helper(col_ptr,
+                          next_col_ptr,
+                          other_ptr,
+                          other_next_ptr,
+                          agg_info,
+                          agg_init_vals_[col_idx],
+                          target_idx,
+                          chosen_bytes,
+                          next_chosen_bytes);
+          } else {
+            *reinterpret_cast<int64_t*>(col_ptr) = other_val;
+          }
+          break;
+        }
+        case 1:
+        case 2:
+        default:
+          CHECK(false);
+      }
+      other_off +=
+          isometric_layout ? consist_col_offset : query_mem_desc_in.getNextColOffInBytes(other_ptr, bin, col_idx);
+      ++col_idx;
+      ++target_idx;
+    }
+  }
+}
+
 void ResultRows::reduce(const ResultRows& other_results,
                         const QueryMemoryDescriptor& query_mem_desc,
                         const bool output_columnar) {
@@ -281,74 +488,6 @@ void ResultRows::reduce(const ResultRows& other_results,
     *this = other_results;
     return;
   }
-
-  auto reduce_impl = [this](int8_t* crt_val_i1,
-                            int8_t* crt_val_i2,
-                            const int8_t* new_val_i1,
-                            const int8_t* new_val_i2,
-                            const TargetInfo& agg_info,
-                            const int64_t agg_skip_val,
-                            const size_t target_idx,
-                            size_t crt_byte_width = sizeof(int64_t),
-                            size_t next_byte_width = sizeof(int64_t)) {
-    CHECK(agg_info.sql_type.is_integer() || agg_info.sql_type.is_decimal() || agg_info.sql_type.is_time() ||
-          agg_info.sql_type.is_boolean() || agg_info.sql_type.is_string() || agg_info.sql_type.is_fp());
-    switch (agg_info.agg_kind) {
-      case kAVG:
-        CHECK(crt_val_i2 && new_val_i2);
-        AGGREGATE_ONE_VALUE(sum, crt_val_i2, new_val_i2, next_byte_width, agg_info.sql_type);
-      // fall thru
-      case kCOUNT:
-        if (agg_info.is_distinct) {
-          CHECK(agg_info.is_agg);
-          CHECK_EQ(kCOUNT, agg_info.agg_kind);
-          CHECK_EQ(crt_byte_width, sizeof(int64_t));
-          auto crt_val_i1_ptr = reinterpret_cast<int64_t*>(crt_val_i1);
-          auto count_distinct_desc_it = row_set_mem_owner_->count_distinct_descriptors_.find(target_idx);
-          CHECK(count_distinct_desc_it != row_set_mem_owner_->count_distinct_descriptors_.end());
-          auto old_set_ptr = reinterpret_cast<const int64_t*>(crt_val_i1_ptr);
-          auto new_set_ptr = reinterpret_cast<const int64_t*>(new_val_i1);
-          if (count_distinct_desc_it->second.impl_type_ == CountDistinctImplType::Bitmap) {
-            auto old_set = reinterpret_cast<int8_t*>(*old_set_ptr);
-            auto new_set = reinterpret_cast<int8_t*>(*new_set_ptr);
-            bitmap_set_unify(new_set, old_set, count_distinct_desc_it->second.bitmapSizeBytes());
-          } else {
-            CHECK(count_distinct_desc_it->second.impl_type_ == CountDistinctImplType::StdSet);
-            auto old_set = reinterpret_cast<std::set<int64_t>*>(*old_set_ptr);
-            auto new_set = reinterpret_cast<std::set<int64_t>*>(*new_set_ptr);
-            old_set->insert(new_set->begin(), new_set->end());
-            new_set->insert(old_set->begin(), old_set->end());
-          }
-          break;
-        }
-      // fall thru
-      case kSUM:
-        AGGREGATE_ONE_NULLABLE_VALUE(sum, crt_val_i1, new_val_i1, agg_skip_val, crt_byte_width, agg_info);
-        break;
-      case kMIN:
-        if (!agg_info.is_agg) {  // projected groupby key
-          if (crt_byte_width == sizeof(int32_t)) {
-            auto new_key = *reinterpret_cast<const int32_t*>(new_val_i1);
-            if (new_key) {
-              *reinterpret_cast<int32_t*>(crt_val_i1) = new_key;
-            }
-          } else {
-            auto new_key = *reinterpret_cast<const int64_t*>(new_val_i1);
-            if (new_key) {
-              *reinterpret_cast<int64_t*>(crt_val_i1) = new_key;
-            }
-          }
-          break;
-        }
-        AGGREGATE_ONE_NULLABLE_VALUE(min, crt_val_i1, new_val_i1, agg_skip_val, crt_byte_width, agg_info);
-        break;
-      case kMAX:
-        AGGREGATE_ONE_NULLABLE_VALUE(max, crt_val_i1, new_val_i1, agg_skip_val, crt_byte_width, agg_info);
-        break;
-      default:
-        CHECK(false);
-    }
-  };
 
   const auto compact_targets = get_compact_targets(targets_, agg_args_);
   // TODO(miyu): apply the opt to row-wise format
@@ -397,15 +536,15 @@ void ResultRows::reduce(const ResultRows& other_results,
 
         for (size_t warp_idx = 0, row_base_off = bin_base_off; warp_idx < static_cast<size_t>(warp_count_);
              ++warp_idx, row_base_off += row_size) {
-          reduce_impl(&crt_results[row_base_off],
-                      crt_next_result_ptr,
-                      &new_results[row_base_off],
-                      new_next_result_ptr,
-                      agg_info,
-                      agg_init_vals_[agg_col_idx],
-                      target_index,
-                      chosen_bytes,
-                      next_chosen_bytes);
+          reduce_helper(&crt_results[row_base_off],
+                        crt_next_result_ptr,
+                        &new_results[row_base_off],
+                        new_next_result_ptr,
+                        agg_info,
+                        agg_init_vals_[agg_col_idx],
+                        target_index,
+                        chosen_bytes,
+                        next_chosen_bytes);
           if (kAVG == agg_info.agg_kind) {
             crt_next_result_ptr += row_size;
             new_next_result_ptr += row_size;
@@ -430,13 +569,13 @@ void ResultRows::reduce(const ResultRows& other_results,
     auto& crt_results = target_values_.front();
     const auto& new_results = other_results.target_values_.front();
     for (size_t agg_col_idx = 0; agg_col_idx < colCount(); ++agg_col_idx) {
-      reduce_impl(reinterpret_cast<int8_t*>(&crt_results[agg_col_idx].i1),
-                  reinterpret_cast<int8_t*>(&crt_results[agg_col_idx].i2),
-                  reinterpret_cast<const int8_t*>(&new_results[agg_col_idx].i1),
-                  reinterpret_cast<const int8_t*>(&new_results[agg_col_idx].i2),
-                  compact_targets[agg_col_idx],
-                  get_initial_val(compact_targets[agg_col_idx], consist_col_width),
-                  agg_col_idx);
+      reduce_helper(reinterpret_cast<int8_t*>(&crt_results[agg_col_idx].i1),
+                    reinterpret_cast<int8_t*>(&crt_results[agg_col_idx].i2),
+                    reinterpret_cast<const int8_t*>(&new_results[agg_col_idx].i1),
+                    reinterpret_cast<const int8_t*>(&new_results[agg_col_idx].i2),
+                    compact_targets[agg_col_idx],
+                    get_initial_val(compact_targets[agg_col_idx], consist_col_width),
+                    agg_col_idx);
     }
     return;
   }
@@ -454,154 +593,6 @@ void ResultRows::reduce(const ResultRows& other_results,
     CHECK(other_results.in_place_groups_by_buffers_entry_count_[0] <= in_place_groups_by_buffers_entry_count_[0]);
     auto group_by_buffer_ptr = &in_place_group_by_buffers_[0];
     auto other_group_by_buffer = other_results.in_place_group_by_buffers_[0];
-
-    std::function<void(const bool output_columnar,
-                       int32_t& groups_buffer_entry_count,
-                       const int32_t other_groups_buffer_entry_count,
-                       int64_t** group_by_buffer_ptr,
-                       const int64_t* other_group_by_buffer,
-                       const GroupByColRangeType hash_type,
-                       const std::vector<TargetInfo>& targets,
-                       const QueryMemoryDescriptor& query_mem_desc_in,
-                       std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner)> reduce_in_place;
-
-    reduce_in_place = [this, &reduce_impl, &reduce_in_place, isometric_layout, consist_col_width](
-        const bool output_columnar,
-        int32_t& groups_buffer_entry_count,
-        const int32_t other_groups_buffer_entry_count,
-        int64_t** group_by_buffer_ptr,
-        const int64_t* other_group_by_buffer,
-        const GroupByColRangeType hash_type,
-        const std::vector<TargetInfo>& targets,
-        const QueryMemoryDescriptor& query_mem_desc_in,
-        std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner) {
-      const size_t group_by_col_count{query_mem_desc_in.group_col_widths.size()};
-      const int64_t min_val{query_mem_desc_in.min_val};
-      const size_t row_size_quad{output_columnar ? 0 : query_mem_desc_in.getRowSize() / sizeof(int64_t)};
-      CHECK_LE(other_groups_buffer_entry_count, groups_buffer_entry_count);
-      CHECK_EQ(query_mem_desc_in.output_columnar, output_columnar);
-      for (size_t bin = 0, bin_base_off = query_mem_desc_in.getColOffInBytes(0, 0);
-           bin < static_cast<size_t>(other_groups_buffer_entry_count);
-           ++bin,
-                  bin_base_off +=
-                  isometric_layout ? consist_col_width : query_mem_desc_in.getColOffInBytesInNextBin(0)) {
-        const size_t other_key_off = query_mem_desc_in.getKeyOffInBytes(bin) / sizeof(int64_t);
-        const auto other_key_buff = &other_group_by_buffer[other_key_off];
-        const auto consist_col_offset = isometric_layout ? consist_col_width * query_mem_desc_in.entry_count : 0;
-        if (other_key_buff[0] == EMPTY_KEY_64) {
-          continue;
-        }
-        int64_t* group_val_buff{nullptr};
-        size_t target_bin{0};
-        switch (hash_type) {
-          case GroupByColRangeType::OneColKnownRange:
-            if (output_columnar) {
-              target_bin = get_columnar_group_bin_offset(
-                  *group_by_buffer_ptr, other_key_buff[0], min_val, query_mem_desc_in.bucket);
-            } else {
-              group_val_buff = get_group_value_fast(
-                  *group_by_buffer_ptr, other_key_buff[0], min_val, query_mem_desc_in.bucket, row_size_quad);
-            }
-            break;
-          case GroupByColRangeType::MultiColPerfectHash:
-            group_val_buff = get_matching_group_value_perfect_hash(
-                *group_by_buffer_ptr, bin, other_key_buff, group_by_col_count, row_size_quad);
-            break;
-          case GroupByColRangeType::MultiCol:
-            group_val_buff = get_group_value(
-                *group_by_buffer_ptr, groups_buffer_entry_count, other_key_buff, group_by_col_count, row_size_quad);
-            break;
-          default:
-            CHECK(false);
-        }
-        if (!output_columnar && !group_val_buff) {
-          throw ReductionRanOutOfSlots();
-        }
-        if (hash_type == GroupByColRangeType::OneColKnownRange &&
-            other_group_by_buffer[other_key_off] != (*group_by_buffer_ptr)[other_key_off]) {
-          CHECK(EMPTY_KEY_64 == other_group_by_buffer[other_key_off] ||
-                EMPTY_KEY_64 == (*group_by_buffer_ptr)[other_key_off]);
-        }
-        size_t target_idx{0};
-        size_t col_idx{0};
-        size_t other_off{bin_base_off};
-        for (const auto& agg_info : targets) {
-          const auto chosen_bytes = query_mem_desc_in.agg_col_widths[col_idx].compact;
-          auto next_chosen_bytes = chosen_bytes;
-          const auto other_ptr = reinterpret_cast<const int8_t*>(other_group_by_buffer) + other_off;
-          const auto other_val = get_component(other_ptr, chosen_bytes);
-          int8_t* col_ptr{nullptr};
-          if (output_columnar) {
-            col_ptr = reinterpret_cast<int8_t*>(*group_by_buffer_ptr) +
-                      (isometric_layout ? query_mem_desc_in.getConsistColOffInBytes(target_bin, col_idx)
-                                        : query_mem_desc_in.getColOffInBytes(target_bin, col_idx));
-          } else {
-            col_ptr = reinterpret_cast<int8_t*>(group_val_buff) + query_mem_desc_in.getColOnlyOffInBytes(col_idx);
-          }
-
-          int8_t* next_col_ptr{nullptr};
-          const int8_t* other_next_ptr{nullptr};
-          if (agg_info.is_agg && agg_info.agg_kind == kAVG) {
-            if (output_columnar) {
-              next_col_ptr = reinterpret_cast<int8_t*>(*group_by_buffer_ptr) +
-                             (isometric_layout ? query_mem_desc_in.getConsistColOffInBytes(target_bin, col_idx + 1)
-                                               : query_mem_desc_in.getColOffInBytes(target_bin, col_idx + 1));
-            } else {
-              next_col_ptr =
-                  reinterpret_cast<int8_t*>(group_val_buff) + query_mem_desc_in.getColOnlyOffInBytes(col_idx + 1);
-            }
-            next_chosen_bytes = query_mem_desc_in.agg_col_widths[col_idx + 1].compact;
-            other_off += isometric_layout ? consist_col_offset
-                                          : query_mem_desc_in.getNextColOffInBytes(other_ptr, bin, col_idx + 1);
-            other_next_ptr = reinterpret_cast<const int8_t*>(other_group_by_buffer) + other_off;
-            ++col_idx;
-          }
-
-          switch (chosen_bytes) {
-            case 4: {
-              if (agg_info.is_agg) {
-                reduce_impl(col_ptr,
-                            next_col_ptr,
-                            other_ptr,
-                            other_next_ptr,
-                            agg_info,
-                            agg_init_vals_[col_idx],
-                            target_idx,
-                            chosen_bytes,
-                            next_chosen_bytes);
-              } else {
-                *reinterpret_cast<int32_t*>(col_ptr) = static_cast<int32_t>(other_val);
-              }
-              break;
-            }
-            case 8: {
-              if (agg_info.is_agg) {
-                reduce_impl(col_ptr,
-                            next_col_ptr,
-                            other_ptr,
-                            other_next_ptr,
-                            agg_info,
-                            agg_init_vals_[col_idx],
-                            target_idx,
-                            chosen_bytes,
-                            next_chosen_bytes);
-              } else {
-                *reinterpret_cast<int64_t*>(col_ptr) = other_val;
-              }
-              break;
-            }
-            case 1:
-            case 2:
-            default:
-              CHECK(false);
-          }
-          other_off +=
-              isometric_layout ? consist_col_offset : query_mem_desc_in.getNextColOffInBytes(other_ptr, bin, col_idx);
-          ++col_idx;
-          ++target_idx;
-        }
-      }
-    };
 
     if (query_mem_desc.getSmallBufferSizeBytes()) {
       CHECK_EQ(size_t(2), in_place_groups_by_buffers_entry_count_.size());
@@ -653,13 +644,13 @@ void ResultRows::reduce(const ResultRows& other_results,
     CHECK_EQ(old_agg_results.size(), kv.second.size());
     const size_t agg_col_count = old_agg_results.size();
     for (size_t agg_col_idx = 0; agg_col_idx < agg_col_count; ++agg_col_idx) {
-      reduce_impl(reinterpret_cast<int8_t*>(&old_agg_results[agg_col_idx].i1),
-                  reinterpret_cast<int8_t*>(&old_agg_results[agg_col_idx].i2),
-                  reinterpret_cast<const int8_t*>(&kv.second[agg_col_idx].i1),
-                  reinterpret_cast<const int8_t*>(&kv.second[agg_col_idx].i2),
-                  compact_targets[agg_col_idx],
-                  get_initial_val(compact_targets[agg_col_idx], consist_col_width),
-                  agg_col_idx);
+      reduce_helper(reinterpret_cast<int8_t*>(&old_agg_results[agg_col_idx].i1),
+                    reinterpret_cast<int8_t*>(&old_agg_results[agg_col_idx].i2),
+                    reinterpret_cast<const int8_t*>(&kv.second[agg_col_idx].i1),
+                    reinterpret_cast<const int8_t*>(&kv.second[agg_col_idx].i2),
+                    compact_targets[agg_col_idx],
+                    get_initial_val(compact_targets[agg_col_idx], consist_col_width),
+                    agg_col_idx);
     }
   }
   for (const auto& kv : other_results.as_unordered_map_) {
@@ -675,13 +666,13 @@ void ResultRows::reduce(const ResultRows& other_results,
     for (size_t agg_col_idx = 0; agg_col_idx < agg_col_count; ++agg_col_idx) {
       const auto agg_info = compact_targets[agg_col_idx];
       if (agg_info.is_agg) {
-        reduce_impl(reinterpret_cast<int8_t*>(&old_agg_results[agg_col_idx].i1),
-                    reinterpret_cast<int8_t*>(&old_agg_results[agg_col_idx].i2),
-                    reinterpret_cast<const int8_t*>(&kv.second[agg_col_idx].i1),
-                    reinterpret_cast<const int8_t*>(&kv.second[agg_col_idx].i2),
-                    agg_info,
-                    get_initial_val(agg_info, consist_col_width),
-                    agg_col_idx);
+        reduce_helper(reinterpret_cast<int8_t*>(&old_agg_results[agg_col_idx].i1),
+                      reinterpret_cast<int8_t*>(&old_agg_results[agg_col_idx].i2),
+                      reinterpret_cast<const int8_t*>(&kv.second[agg_col_idx].i1),
+                      reinterpret_cast<const int8_t*>(&kv.second[agg_col_idx].i2),
+                      agg_info,
+                      get_initial_val(agg_info, consist_col_width),
+                      agg_col_idx);
       } else {
         old_agg_results[agg_col_idx] = kv.second[agg_col_idx];
       }
