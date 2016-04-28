@@ -1031,6 +1031,13 @@ class ResultRows {
                           size_t crt_byte_width = sizeof(int64_t),
                           size_t next_byte_width = sizeof(int64_t));
 
+  void reduceDispatch(int64_t* group_by_buffer,
+                      const int64_t* other_group_by_buffer,
+                      const std::vector<TargetInfo>& compact_targets,
+                      const QueryMemoryDescriptor& query_mem_desc_in,
+                      const size_t start,
+                      const size_t end);
+
   void reduceInPlaceDispatch(int64_t** group_by_buffer_ptr,
                              const int64_t* other_group_by_buffer,
                              const int32_t groups_buffer_entry_count,

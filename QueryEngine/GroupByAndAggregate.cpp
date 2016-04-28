@@ -489,9 +489,8 @@ void ResultRows::reduceInPlace(int64_t** group_by_buffer_ptr,
   const auto available_cpus = cpu_threads();
   CHECK_LT(0, available_cpus);
   const int32_t stride = (other_groups_buffer_entry_count + (available_cpus - 1)) / available_cpus;
-  // TODO(miyu): apply the opt to row-wise format
-  const bool multithreaded = query_mem_desc_in.output_columnar && query_mem_desc_in.isCompactLayoutIsometric() &&
-                             hash_type == GroupByColRangeType::OneColKnownRange && stride > 1;
+  const bool multithreaded = query_mem_desc_in.isCompactLayoutIsometric() &&
+                             hash_type == GroupByColRangeType::OneColKnownRange && stride > 1000;
   CHECK_LE(other_groups_buffer_entry_count, groups_buffer_entry_count);
   if (multithreaded) {
     std::vector<std::thread> reducer_threads;
@@ -526,6 +525,79 @@ void ResultRows::reduceInPlace(int64_t** group_by_buffer_ptr,
   }
 }
 
+void ResultRows::reduceDispatch(int64_t* group_by_buffer,
+                                const int64_t* other_group_by_buffer,
+                                const std::vector<TargetInfo>& compact_targets,
+                                const QueryMemoryDescriptor& query_mem_desc_in,
+                                const size_t start,
+                                const size_t end) {
+  if (start >= end) {
+    return;
+  }
+  const bool output_columnar{query_mem_desc_in.output_columnar};
+  const bool isometric_layout{query_mem_desc_in.isCompactLayoutIsometric()};
+  const size_t consist_col_width{query_mem_desc_in.getCompactByteWidth()};
+  const size_t consist_col_offset{output_columnar ? consist_col_width * query_mem_desc_in.entry_count
+                                                  : consist_col_width};
+  const size_t agg_col_count{query_mem_desc_in.agg_col_widths.size()};
+  auto crt_results = reinterpret_cast<int8_t*>(group_by_buffer);
+  auto new_results = reinterpret_cast<const int8_t*>(other_group_by_buffer);
+  size_t row_size = output_columnar ? 1 : query_mem_desc_in.getRowSize();
+  CHECK_GE(agg_col_count, compact_targets.size());
+  std::vector<size_t> col_offsets(agg_col_count);
+  for (size_t agg_col_idx = 0; agg_col_idx < agg_col_count; ++agg_col_idx) {
+    col_offsets[agg_col_idx] = query_mem_desc_in.getColOffInBytesInNextBin(agg_col_idx);
+  }
+  for (size_t target_index = 0, agg_col_idx = 0, col_base_off = query_mem_desc_in.getColOffInBytes(start, 0);
+       target_index < compact_targets.size() && agg_col_idx < agg_col_count;
+       ++target_index,
+              col_base_off +=
+              (isometric_layout ? consist_col_offset : query_mem_desc_in.getNextColOffInBytes(
+                                                           &crt_results[col_base_off], 0, agg_col_idx - 1))) {
+    const auto agg_info = compact_targets[target_index];
+    auto chosen_bytes = query_mem_desc_in.agg_col_widths[agg_col_idx].compact;
+    auto next_chosen_bytes = chosen_bytes;
+    if (kAVG == agg_info.agg_kind) {
+      next_chosen_bytes = query_mem_desc_in.agg_col_widths[agg_col_idx + 1].compact;
+    }
+
+    for (size_t bin = start, bin_base_off = col_base_off; bin < end; ++bin, bin_base_off += col_offsets[agg_col_idx]) {
+      int8_t* crt_next_result_ptr{nullptr};
+      const int8_t* new_next_result_ptr{nullptr};
+      if (kAVG == agg_info.agg_kind) {
+        auto additional_off =
+            bin_base_off + (isometric_layout ? consist_col_offset : query_mem_desc_in.getNextColOffInBytes(
+                                                                        &crt_results[bin_base_off], bin, agg_col_idx));
+        crt_next_result_ptr = &crt_results[additional_off];
+        new_next_result_ptr = &new_results[additional_off];
+      }
+
+      for (size_t warp_idx = 0, row_base_off = bin_base_off; warp_idx < static_cast<size_t>(warp_count_);
+           ++warp_idx, row_base_off += row_size) {
+        reduceSingleColumn(&crt_results[row_base_off],
+                           crt_next_result_ptr,
+                           &new_results[row_base_off],
+                           new_next_result_ptr,
+                           agg_info,
+                           agg_init_vals_[agg_col_idx],
+                           target_index,
+                           chosen_bytes,
+                           next_chosen_bytes);
+        if (kAVG == agg_info.agg_kind) {
+          crt_next_result_ptr += row_size;
+          new_next_result_ptr += row_size;
+        }
+      }
+    }
+    if (kAVG == agg_info.agg_kind) {
+      col_base_off += isometric_layout ? consist_col_offset : query_mem_desc_in.getNextColOffInBytes(
+                                                                  &crt_results[col_base_off], 0, agg_col_idx);
+      ++agg_col_idx;
+    }
+    ++agg_col_idx;
+  }
+}
+
 void ResultRows::reduce(const ResultRows& other_results,
                         const QueryMemoryDescriptor& query_mem_desc,
                         const bool output_columnar) {
@@ -538,9 +610,8 @@ void ResultRows::reduce(const ResultRows& other_results,
   }
 
   const auto compact_targets = get_compact_targets(targets_, agg_args_);
-  // TODO(miyu): apply the opt to row-wise format
-  const bool isometric_layout = query_mem_desc.output_columnar && query_mem_desc.isCompactLayoutIsometric();
-  const auto consist_col_width = query_mem_desc.getCompactByteWidth();
+  const size_t consist_col_width{query_mem_desc.getCompactByteWidth()};
+  CHECK_EQ(output_columnar_, query_mem_desc.output_columnar);
 
   if (group_by_buffer_ && !in_place_) {
     CHECK(!query_mem_desc.sortOnGpu());
@@ -548,64 +619,36 @@ void ResultRows::reduce(const ResultRows& other_results,
     CHECK(query_mem_desc.keyless_hash);
     CHECK(warp_count_ == 1 || !output_columnar);
     CHECK_EQ(static_cast<size_t>(warp_count_), query_mem_desc.getWarpCount());
-    const size_t agg_col_count{query_mem_desc.agg_col_widths.size()};
-    int8_t* crt_results = reinterpret_cast<int8_t*>(group_by_buffer_);
-    int8_t* new_results = reinterpret_cast<int8_t*>(other_results.group_by_buffer_);
-    size_t row_size = output_columnar ? 1 : query_mem_desc.getRowSize();
-    CHECK_GE(agg_col_count, compact_targets.size());
-    std::vector<size_t> col_offsets(agg_col_count);
-    for (size_t agg_col_idx = 0; agg_col_idx < agg_col_count; ++agg_col_idx) {
-      col_offsets[agg_col_idx] = query_mem_desc.getColOffInBytesInNextBin(agg_col_idx);
-    }
-    for (size_t target_index = 0, agg_col_idx = 0, col_base_off = query_mem_desc.getColOffInBytes(0, 0);
-         target_index < compact_targets.size() && agg_col_idx < agg_col_count;
-         ++target_index,
-                col_base_off += (isometric_layout ? consist_col_width * query_mem_desc.entry_count
-                                                  : query_mem_desc.getNextColOffInBytes(
-                                                        &crt_results[col_base_off], 0, agg_col_idx - 1))) {
-      const auto agg_info = compact_targets[target_index];
-      auto chosen_bytes = query_mem_desc.agg_col_widths[agg_col_idx].compact;
-      auto next_chosen_bytes = chosen_bytes;
-      if (kAVG == agg_info.agg_kind) {
-        next_chosen_bytes = query_mem_desc.agg_col_widths[agg_col_idx + 1].compact;
+    const auto available_cpus = cpu_threads();
+    CHECK_LT(0, available_cpus);
+    const size_t stride = (groups_buffer_entry_count_ + (available_cpus - 1)) / available_cpus;
+    const bool multithreaded = query_mem_desc.isCompactLayoutIsometric() && stride > 1000;
+    if (multithreaded) {
+      std::vector<std::thread> reducer_threads;
+      for (size_t tidx = 0, start = 0, end = std::min(start + stride, groups_buffer_entry_count_);
+           tidx < static_cast<size_t>(available_cpus);
+           ++tidx,
+                  start = std::min(start + stride, groups_buffer_entry_count_),
+                  end = std::min(end + stride, groups_buffer_entry_count_)) {
+        reducer_threads.push_back(std::thread(&ResultRows::reduceDispatch,
+                                              this,
+                                              group_by_buffer_,
+                                              other_results.group_by_buffer_,
+                                              compact_targets,
+                                              query_mem_desc,
+                                              start,
+                                              end));
       }
-
-      for (size_t bin = 0, bin_base_off = col_base_off; bin < groups_buffer_entry_count_;
-           ++bin, bin_base_off += col_offsets[agg_col_idx]) {
-        int8_t* crt_next_result_ptr{nullptr};
-        int8_t* new_next_result_ptr{nullptr};
-        if (kAVG == agg_info.agg_kind) {
-          auto additional_off = bin_base_off + (isometric_layout ? consist_col_width * query_mem_desc.entry_count
-                                                                 : query_mem_desc.getNextColOffInBytes(
-                                                                       &crt_results[bin_base_off], bin, agg_col_idx));
-          crt_next_result_ptr = &crt_results[additional_off];
-          new_next_result_ptr = &new_results[additional_off];
-        }
-
-        for (size_t warp_idx = 0, row_base_off = bin_base_off; warp_idx < static_cast<size_t>(warp_count_);
-             ++warp_idx, row_base_off += row_size) {
-          reduceSingleColumn(&crt_results[row_base_off],
-                             crt_next_result_ptr,
-                             &new_results[row_base_off],
-                             new_next_result_ptr,
-                             agg_info,
-                             agg_init_vals_[agg_col_idx],
-                             target_index,
-                             chosen_bytes,
-                             next_chosen_bytes);
-          if (kAVG == agg_info.agg_kind) {
-            crt_next_result_ptr += row_size;
-            new_next_result_ptr += row_size;
-          }
-        }
+      for (auto& child : reducer_threads) {
+        child.join();
       }
-      if (kAVG == agg_info.agg_kind) {
-        col_base_off += isometric_layout
-                            ? consist_col_width * query_mem_desc.entry_count
-                            : query_mem_desc.getNextColOffInBytes(&crt_results[col_base_off], 0, agg_col_idx);
-        ++agg_col_idx;
-      }
-      ++agg_col_idx;
+    } else {
+      reduceDispatch(group_by_buffer_,
+                     other_results.group_by_buffer_,
+                     compact_targets,
+                     query_mem_desc,
+                     size_t(0),
+                     groups_buffer_entry_count_);
     }
     return;
   }
@@ -637,7 +680,6 @@ void ResultRows::reduce(const ResultRows& other_results,
     CHECK(other_results.in_place_);
     CHECK(in_place_group_by_buffers_.size() == other_results.in_place_group_by_buffers_.size());
     CHECK(in_place_group_by_buffers_.size() == 1 || in_place_group_by_buffers_.size() == 2);
-    CHECK_EQ(output_columnar_, query_mem_desc.output_columnar);
 
     CHECK(other_results.in_place_groups_by_buffers_entry_count_[0] <= in_place_groups_by_buffers_entry_count_[0]);
     auto group_by_buffer_ptr = &in_place_group_by_buffers_[0];
