@@ -10,7 +10,8 @@ namespace {
 
 std::pair<const Analyzer::ColumnVar*, const Analyzer::ColumnVar*> get_cols(
     const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
-    const Catalog_Namespace::Catalog& cat) {
+    const Catalog_Namespace::Catalog& cat,
+    const TemporaryTables* temporary_tables) {
   const auto lhs = qual_bin_oper->get_left_operand();
   const auto rhs = qual_bin_oper->get_right_operand();
   const auto& lhs_ti = lhs->get_type_info();
@@ -48,9 +49,9 @@ std::pair<const Analyzer::ColumnVar*, const Analyzer::ColumnVar*> get_cols(
   }
   // We need to fetch the actual type information from the catalog since Analyzer
   // always reports nullable as true for inner table columns in left joins.
-  const auto inner_col_cd = cat.getMetadataForColumn(inner_col->get_table_id(), inner_col->get_column_id());
-  CHECK(inner_col_cd);
-  const auto& inner_col_real_ti = inner_col_cd->columnType;
+  const auto inner_col_cd = get_column_descriptor_maybe(inner_col->get_column_id(), inner_col->get_table_id(), cat);
+  const auto& inner_col_real_ti =
+      get_column_type(inner_col->get_column_id(), inner_col->get_table_id(), inner_col_cd, temporary_tables);
   const auto& outer_col_ti = outer_col->get_type_info();
   if (outer_col_ti.get_notnull() != inner_col_real_ti.get_notnull()) {
     return {nullptr, nullptr};
@@ -72,7 +73,7 @@ std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(
     const int device_count,
     Executor* executor) {
   CHECK_EQ(kEQ, qual_bin_oper->get_optype());
-  const auto cols = get_cols(qual_bin_oper, cat);
+  const auto cols = get_cols(qual_bin_oper, cat, executor->temporary_tables_);
   const auto inner_col = cols.first;
   if (!inner_col) {
     return nullptr;
@@ -98,7 +99,7 @@ std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(
 
 int JoinHashTable::reify(const int device_count) {
   CHECK_LT(0, device_count);
-  const auto cols = get_cols(qual_bin_oper_, cat_);
+  const auto cols = get_cols(qual_bin_oper_, cat_, executor_->temporary_tables_);
   const auto inner_col = cols.first;
   CHECK(inner_col);
   const auto& query_info = query_infos_[inner_col->get_rte_idx()];
@@ -110,9 +111,10 @@ int JoinHashTable::reify(const int device_count) {
   CHECK(chunk_meta_it != fragment.chunkMetadataMap.end());
   ChunkKey chunk_key{
       cat_.get_currentDB().dbId, inner_col->get_table_id(), inner_col->get_column_id(), fragment.fragmentId};
-  const auto cd = cat_.getMetadataForColumn(inner_col->get_table_id(), inner_col->get_column_id());
-  CHECK(!(cd->isVirtualCol));
-  const auto& ti = inner_col->get_type_info();
+  const auto cd = get_column_descriptor_maybe(inner_col->get_column_id(), inner_col->get_table_id(), cat_);
+  CHECK(!cd || !(cd->isVirtualCol));
+  const auto& ti =
+      get_column_type(inner_col->get_column_id(), inner_col->get_table_id(), cd, executor_->temporary_tables_);
   // Since we don't have the string dictionary payloads on the GPU, we'll build
   // the join hash table on the CPU and transfer it to the GPU.
   const auto effective_memory_level = ti.is_string() ? Data_Namespace::CPU_LEVEL : memory_level_;
@@ -281,7 +283,7 @@ int JoinHashTable::initHashTableForDevice(const std::shared_ptr<Chunk_NS::Chunk>
 
 llvm::Value* JoinHashTable::codegenSlot(const bool hoist_literals) {
   CHECK(executor_->plan_state_->join_info_.join_impl_type_ == Executor::JoinImplType::HashOneToOne);
-  const auto cols = get_cols(qual_bin_oper_, cat_);
+  const auto cols = get_cols(qual_bin_oper_, cat_, executor_->temporary_tables_);
   auto key_col = cols.second;
   CHECK(key_col);
   auto val_col = cols.first;

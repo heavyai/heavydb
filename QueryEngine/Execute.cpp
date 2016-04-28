@@ -2805,15 +2805,6 @@ size_t get_context_count(const ExecutorDeviceType device_type, const size_t cpu_
                                                                   : static_cast<size_t>(cpu_count);
 }
 
-const ResultRows* get_temporary_table(const TemporaryTables* temporary_tables, const int table_id) {
-  CHECK_LT(table_id, 0);
-  const auto it = temporary_tables->find(table_id);
-  CHECK(it != temporary_tables->end());
-  const auto rows = it->second;
-  CHECK(rows);
-  return rows;
-}
-
 }  // namespace
 
 ResultRows Executor::executeWorkUnit(int32_t* error_code,
@@ -3442,31 +3433,6 @@ void Executor::dispatchFragments(const std::function<void(const ExecutorDeviceTy
     child.join();
   }
 }
-
-namespace {
-
-const ColumnDescriptor* get_column_descriptor_maybe(const int col_id,
-                                                    const int table_id,
-                                                    const Catalog_Namespace::Catalog& cat) {
-  CHECK(table_id);
-  return table_id > 0 ? get_column_descriptor(col_id, table_id, cat) : nullptr;
-}
-
-const SQLTypeInfo get_column_type(const int col_id,
-                                  const int table_id,
-                                  const ColumnDescriptor* cd,
-                                  const TemporaryTables* temporary_tables) {
-  CHECK(cd || temporary_tables);
-  if (cd) {
-    CHECK_EQ(col_id, cd->columnId);
-    CHECK_EQ(table_id, cd->tableId);
-    return cd->columnType;
-  }
-  const auto rows = get_temporary_table(temporary_tables, table_id);
-  return rows->getColType(col_id);
-}
-
-}  // namespace
 
 std::vector<std::vector<const int8_t*>> Executor::fetchChunks(
     const ExecutionDispatch& execution_dispatch,
