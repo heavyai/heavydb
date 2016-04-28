@@ -158,13 +158,21 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInput(const RexInput*
     const auto table_desc = scan_source->getTableDescriptor();
     const auto cd = cat_.getMetadataForColumn(table_desc->tableId, col_name);
     CHECK(cd);
-    return std::make_shared<Analyzer::ColumnVar>(cd->columnType, table_desc->tableId, cd->columnId, rte_idx);
+    auto col_ti = cd->columnType;
+    if (rte_idx > 0 && join_type_ == JoinType::LEFT) {
+      col_ti.set_notnull(false);
+    }
+    return std::make_shared<Analyzer::ColumnVar>(col_ti, table_desc->tableId, cd->columnId, rte_idx);
   }
   CHECK(!in_metainfo.empty());
   CHECK_GE(rte_idx, 0);
   const size_t col_id = rex_input->getIndex();
   CHECK_LT(col_id, in_metainfo.size());
-  return std::make_shared<Analyzer::ColumnVar>(in_metainfo[col_id].get_type_info(), -source->getId(), col_id, rte_idx);
+  auto col_ti = in_metainfo[col_id].get_type_info();
+  if (rte_idx > 0 && join_type_ == JoinType::LEFT) {
+    col_ti.set_notnull(false);
+  }
+  return std::make_shared<Analyzer::ColumnVar>(col_ti, -source->getId(), col_id, rte_idx);
 }
 
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUoper(const RexOperator* rex_operator) const {

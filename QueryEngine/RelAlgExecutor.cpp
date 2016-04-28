@@ -586,7 +586,8 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(const RelCompoun
   std::list<InputColDescriptor> input_col_descs;
   const auto input_to_nest_level = get_input_nest_levels(compound);
   std::tie(input_descs, input_col_descs) = get_input_desc(compound, input_to_nest_level);
-  RelAlgTranslator translator(cat_, input_to_nest_level, now_);
+  const auto join_type = get_join_type(compound);
+  RelAlgTranslator translator(cat_, input_to_nest_level, join_type, now_);
   const auto scalar_sources = translate_scalar_sources(compound, translator);
   const auto groupby_exprs = translate_groupby_exprs(compound, scalar_sources);
   const auto quals_cf = translate_quals(compound, translator);
@@ -599,7 +600,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(const RelCompoun
                                         input_col_descs,
                                         quals_cf.simple_quals,
                                         separated_quals.regular_quals,
-                                        get_join_type(compound),
+                                        join_type,
                                         separated_quals.join_quals,
                                         get_outer_join_quals(compound, translator),
                                         groupby_exprs,
@@ -620,7 +621,8 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(const RelProject*
   std::list<InputColDescriptor> input_col_descs;
   const auto input_to_nest_level = get_input_nest_levels(project);
   std::tie(input_descs, input_col_descs) = get_input_desc(project, input_to_nest_level);
-  RelAlgTranslator translator(cat_, input_to_nest_level, now_);
+  const auto join_type = get_join_type(project);
+  RelAlgTranslator translator(cat_, input_to_nest_level, join_type, now_);
   const auto target_exprs_owned = translate_scalar_sources(project, translator);
   target_exprs_owned_.insert(target_exprs_owned_.end(), target_exprs_owned.begin(), target_exprs_owned.end());
   const auto target_exprs = get_exprs_not_owned(target_exprs_owned);
@@ -630,7 +632,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(const RelProject*
            input_col_descs,
            {},
            {},
-           get_join_type(project),
+           join_type,
            {},
            get_outer_join_quals(project, translator),
            {nullptr},
@@ -682,7 +684,8 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createFilterWorkUnit(const RelFilter* f
   }
   const auto input_to_nest_level = get_input_nest_levels(filter);
   std::tie(input_descs, input_col_descs) = get_input_desc_impl(filter, used_inputs, input_to_nest_level);
-  RelAlgTranslator translator(cat_, input_to_nest_level, now_);
+  const auto join_type = get_join_type(filter);
+  RelAlgTranslator translator(cat_, input_to_nest_level, join_type, now_);
   const auto qual = translator.translateScalarRex(filter->getCondition());
   const auto target_exprs_owned = synthesize_inputs(filter, in_metainfo, input_to_nest_level);
   target_exprs_owned_.insert(target_exprs_owned_.end(), target_exprs_owned.begin(), target_exprs_owned.end());
@@ -692,7 +695,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createFilterWorkUnit(const RelFilter* f
            input_col_descs,
            {},
            {qual},
-           get_join_type(filter),
+           join_type,
            {},
            get_outer_join_quals(filter, translator),
            {nullptr},
