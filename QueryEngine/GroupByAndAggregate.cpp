@@ -339,27 +339,26 @@ void ResultRows::reduceSingleColumn(int8_t* crt_val_i1,
   }
 }
 
-void ResultRows::reduceInPlace(const bool output_columnar,
-                               int32_t& groups_buffer_entry_count,
-                               const int32_t other_groups_buffer_entry_count,
-                               int64_t** group_by_buffer_ptr,
-                               const int64_t* other_group_by_buffer,
-                               const GroupByColRangeType hash_type,
-                               const std::vector<TargetInfo>& targets,
-                               const QueryMemoryDescriptor& query_mem_desc_in,
-                               std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner) {
+void ResultRows::reduceInPlaceDispatch(int64_t** group_by_buffer_ptr,
+                                       const int64_t* other_group_by_buffer,
+                                       const int32_t groups_buffer_entry_count,
+                                       const bool output_columnar,
+                                       const GroupByColRangeType hash_type,
+                                       const std::vector<TargetInfo>& targets,
+                                       const QueryMemoryDescriptor& query_mem_desc_in,
+                                       const int32_t start,
+                                       const int32_t end) {
   // TODO(miyu): apply the opt to row-wise format
   const bool isometric_layout = query_mem_desc_in.output_columnar && query_mem_desc_in.isCompactLayoutIsometric();
   const auto consist_col_width = query_mem_desc_in.getCompactByteWidth();
-
+  const auto off_stride = isometric_layout ? consist_col_width : query_mem_desc_in.getColOffInBytesInNextBin(0);
   const size_t group_by_col_count{query_mem_desc_in.group_col_widths.size()};
   const int64_t min_val{query_mem_desc_in.min_val};
   const size_t row_size_quad{output_columnar ? 0 : query_mem_desc_in.getRowSize() / sizeof(int64_t)};
-  CHECK_LE(other_groups_buffer_entry_count, groups_buffer_entry_count);
-  CHECK_EQ(query_mem_desc_in.output_columnar, output_columnar);
-  for (size_t bin = 0, bin_base_off = query_mem_desc_in.getColOffInBytes(0, 0);
-       bin < static_cast<size_t>(other_groups_buffer_entry_count);
-       ++bin, bin_base_off += isometric_layout ? consist_col_width : query_mem_desc_in.getColOffInBytesInNextBin(0)) {
+
+  for (int32_t bin = start, bin_base_off = static_cast<int32_t>(query_mem_desc_in.getColOffInBytes(start, 0));
+       bin < end;
+       ++bin, bin_base_off += off_stride) {
     const size_t other_key_off = query_mem_desc_in.getKeyOffInBytes(bin) / sizeof(int64_t);
     const auto other_key_buff = &other_group_by_buffer[other_key_off];
     const auto consist_col_offset = isometric_layout ? consist_col_width * query_mem_desc_in.entry_count : 0;
@@ -371,8 +370,8 @@ void ResultRows::reduceInPlace(const bool output_columnar,
     switch (hash_type) {
       case GroupByColRangeType::OneColKnownRange:
         if (output_columnar) {
-          target_bin =
-              get_columnar_group_bin_offset(*group_by_buffer_ptr, other_key_buff[0], min_val, query_mem_desc_in.bucket);
+          target_bin = static_cast<size_t>(get_columnar_group_bin_offset(
+              *group_by_buffer_ptr, other_key_buff[0], min_val, query_mem_desc_in.bucket));
         } else {
           group_val_buff = get_group_value_fast(
               *group_by_buffer_ptr, other_key_buff[0], min_val, query_mem_desc_in.bucket, row_size_quad);
@@ -397,9 +396,9 @@ void ResultRows::reduceInPlace(const bool output_columnar,
       CHECK(EMPTY_KEY_64 == other_group_by_buffer[other_key_off] ||
             EMPTY_KEY_64 == (*group_by_buffer_ptr)[other_key_off]);
     }
-    size_t target_idx{0};
-    size_t col_idx{0};
-    size_t other_off{bin_base_off};
+    int32_t target_idx{0};
+    int32_t col_idx{0};
+    int32_t other_off{bin_base_off};
     for (const auto& agg_info : targets) {
       const auto chosen_bytes = query_mem_desc_in.agg_col_widths[col_idx].compact;
       auto next_chosen_bytes = chosen_bytes;
@@ -475,6 +474,57 @@ void ResultRows::reduceInPlace(const bool output_columnar,
       ++col_idx;
       ++target_idx;
     }
+  }
+}
+
+void ResultRows::reduceInPlace(const bool output_columnar,
+                               const int32_t groups_buffer_entry_count,
+                               const int32_t other_groups_buffer_entry_count,
+                               int64_t** group_by_buffer_ptr,
+                               const int64_t* other_group_by_buffer,
+                               const GroupByColRangeType hash_type,
+                               const std::vector<TargetInfo>& targets,
+                               const QueryMemoryDescriptor& query_mem_desc_in) {
+  const auto available_cpus = cpu_threads();
+  CHECK_LT(0, available_cpus);
+  const int32_t stride = (other_groups_buffer_entry_count + (available_cpus - 1)) / available_cpus;
+  // TODO(miyu): apply the opt to row-wise format
+  const bool multithreaded = query_mem_desc_in.output_columnar && query_mem_desc_in.isCompactLayoutIsometric() &&
+                             hash_type == GroupByColRangeType::OneColKnownRange && stride > 1;
+  CHECK_LE(other_groups_buffer_entry_count, groups_buffer_entry_count);
+  CHECK_EQ(query_mem_desc_in.output_columnar, output_columnar);
+  if (multithreaded) {
+    std::vector<std::thread> reducer_threads;
+    for (int32_t tidx = 0, start = 0, end = std::min(start + stride, other_groups_buffer_entry_count);
+         tidx < static_cast<int32_t>(available_cpus);
+         ++tidx,
+                 start = std::min(start + stride, other_groups_buffer_entry_count),
+                 end = std::min(end + stride, other_groups_buffer_entry_count)) {
+      reducer_threads.push_back(std::thread(&ResultRows::reduceInPlaceDispatch,
+                                            this,
+                                            group_by_buffer_ptr,
+                                            other_group_by_buffer,
+                                            groups_buffer_entry_count,
+                                            output_columnar,
+                                            hash_type,
+                                            targets,
+                                            query_mem_desc_in,
+                                            start,
+                                            end));
+    }
+    for (auto& child : reducer_threads) {
+      child.join();
+    }
+  } else {
+    reduceInPlaceDispatch(group_by_buffer_ptr,
+                          other_group_by_buffer,
+                          groups_buffer_entry_count,
+                          output_columnar,
+                          hash_type,
+                          targets,
+                          query_mem_desc_in,
+                          0,
+                          other_groups_buffer_entry_count);
   }
 }
 
@@ -605,8 +655,7 @@ void ResultRows::reduce(const ResultRows& other_results,
                     other_group_by_buffer,
                     GroupByColRangeType::OneColKnownRange,
                     compact_targets,
-                    query_mem_desc,
-                    row_set_mem_owner_);
+                    query_mem_desc);
       group_by_buffer_ptr = &in_place_group_by_buffers_[1];
       other_group_by_buffer = other_results.in_place_group_by_buffers_[1];
       reduceInPlace(output_columnar_,
@@ -616,8 +665,7 @@ void ResultRows::reduce(const ResultRows& other_results,
                     other_group_by_buffer,
                     GroupByColRangeType::MultiCol,
                     compact_targets,
-                    query_mem_desc,
-                    row_set_mem_owner_);
+                    query_mem_desc);
     } else {
       reduceInPlace(output_columnar_,
                     in_place_groups_by_buffers_entry_count_[0],
@@ -626,8 +674,7 @@ void ResultRows::reduce(const ResultRows& other_results,
                     other_group_by_buffer,
                     query_mem_desc.hash_type,
                     compact_targets,
-                    query_mem_desc,
-                    row_set_mem_owner_);
+                    query_mem_desc);
     }
     return;
   }

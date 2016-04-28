@@ -1031,15 +1031,24 @@ class ResultRows {
                           size_t crt_byte_width = sizeof(int64_t),
                           size_t next_byte_width = sizeof(int64_t));
 
+  void reduceInPlaceDispatch(int64_t** group_by_buffer_ptr,
+                             const int64_t* other_group_by_buffer,
+                             const int32_t groups_buffer_entry_count,
+                             const bool output_columnar,
+                             const GroupByColRangeType hash_type,
+                             const std::vector<TargetInfo>& targets,
+                             const QueryMemoryDescriptor& query_mem_desc_in,
+                             const int32_t start,
+                             const int32_t end);
+
   void reduceInPlace(const bool output_columnar,
-                     int32_t& groups_buffer_entry_count,
+                     const int32_t groups_buffer_entry_count,
                      const int32_t other_groups_buffer_entry_count,
                      int64_t** group_by_buffer_ptr,
                      const int64_t* other_group_by_buffer,
                      const GroupByColRangeType hash_type,
                      const std::vector<TargetInfo>& targets,
-                     const QueryMemoryDescriptor& query_mem_desc_in,
-                     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner);
+                     const QueryMemoryDescriptor& query_mem_desc_in);
 
   bool fetchLazyOrBuildRow(std::vector<TargetValue>& row,
                            const std::vector<std::vector<const int8_t*>>& col_buffers,
