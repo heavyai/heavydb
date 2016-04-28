@@ -1509,7 +1509,7 @@ std::string get_null_check_suffix(const SQLTypeInfo& lhs_ti, const SQLTypeInfo& 
 llvm::Value* Executor::codegenCmp(const Analyzer::BinOper* bin_oper, const CompilationOptions& co) {
   for (const auto equi_join_tautology : plan_state_->join_info_.equi_join_tautologies_) {
     if (*equi_join_tautology == *bin_oper) {
-      return plan_state_->join_info_.join_hash_table_->codegenSlot(this, co.hoist_literals_);
+      return plan_state_->join_info_.join_hash_table_->codegenSlot(co.hoist_literals_);
     }
   }
   const auto optype = bin_oper->get_optype();

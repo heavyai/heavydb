@@ -29,7 +29,7 @@ class JoinHashTable {
                                                     const std::vector<Fragmenter_Namespace::TableInfo>& query_infos,
                                                     const Data_Namespace::MemoryLevel memory_level,
                                                     const int device_count,
-                                                    const Executor* executor);
+                                                    Executor* executor);
 
   int64_t getJoinHashBuffer(const ExecutorDeviceType device_type, const int device_id) {
 #ifdef HAVE_CUDA
@@ -48,7 +48,7 @@ class JoinHashTable {
                 const std::vector<Fragmenter_Namespace::TableInfo>& query_infos,
                 const Data_Namespace::MemoryLevel memory_level,
                 const ExpressionRange& col_range,
-                const Executor* executor)
+                Executor* executor)
       : qual_bin_oper_(qual_bin_oper),
         cat_(cat),
         query_infos_(query_infos),
@@ -64,7 +64,7 @@ class JoinHashTable {
                              const std::pair<const Analyzer::ColumnVar*, const Analyzer::ColumnVar*>& cols,
                              const Data_Namespace::MemoryLevel effective_memory_level,
                              const int device_id);
-  llvm::Value* codegenSlot(Executor*, const bool hoist_literals);
+  llvm::Value* codegenSlot(const bool hoist_literals);
 
   std::shared_ptr<Analyzer::BinOper> qual_bin_oper_;
   const Catalog_Namespace::Catalog& cat_;
@@ -76,7 +76,7 @@ class JoinHashTable {
   std::vector<CUdeviceptr> gpu_hash_table_buff_;
 #endif
   ExpressionRange col_range_;
-  const Executor* executor_;
+  Executor* executor_;
 
   friend class Executor;
 };

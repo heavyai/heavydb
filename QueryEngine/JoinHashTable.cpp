@@ -70,7 +70,7 @@ std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(
     const std::vector<Fragmenter_Namespace::TableInfo>& query_infos,
     const Data_Namespace::MemoryLevel memory_level,
     const int device_count,
-    const Executor* executor) {
+    Executor* executor) {
   CHECK_EQ(kEQ, qual_bin_oper->get_optype());
   const auto cols = get_cols(qual_bin_oper, cat);
   const auto inner_col = cols.first;
@@ -279,32 +279,32 @@ int JoinHashTable::initHashTableForDevice(const std::shared_ptr<Chunk_NS::Chunk>
   return err;
 }
 
-llvm::Value* JoinHashTable::codegenSlot(Executor* executor, const bool hoist_literals) {
-  CHECK(executor->plan_state_->join_info_.join_impl_type_ == Executor::JoinImplType::HashOneToOne);
+llvm::Value* JoinHashTable::codegenSlot(const bool hoist_literals) {
+  CHECK(executor_->plan_state_->join_info_.join_impl_type_ == Executor::JoinImplType::HashOneToOne);
   const auto cols = get_cols(qual_bin_oper_, cat_);
   auto key_col = cols.second;
   CHECK(key_col);
   auto val_col = cols.first;
   CHECK(val_col);
-  const auto key_lvs = executor->codegen(key_col, true, hoist_literals);
+  const auto key_lvs = executor_->codegen(key_col, true, hoist_literals);
   CHECK_EQ(size_t(1), key_lvs.size());
-  CHECK(executor->plan_state_->join_info_.join_hash_table_);
-  auto& hash_ptr = executor->cgen_state_->row_func_->getArgumentList().back();
+  CHECK(executor_->plan_state_->join_info_.join_hash_table_);
+  auto& hash_ptr = executor_->cgen_state_->row_func_->getArgumentList().back();
   std::vector<llvm::Value*> hash_join_idx_args{&hash_ptr,
-                                               executor->castToTypeIn(key_lvs.front(), 64),
-                                               executor->ll_int(col_range_.getIntMin()),
-                                               executor->ll_int(col_range_.getIntMax())};
+                                               executor_->castToTypeIn(key_lvs.front(), 64),
+                                               executor_->ll_int(col_range_.getIntMin()),
+                                               executor_->ll_int(col_range_.getIntMax())};
   if (col_range_.hasNulls()) {
-    hash_join_idx_args.push_back(executor->ll_int(inline_int_null_val(key_col->get_type_info())));
+    hash_join_idx_args.push_back(executor_->ll_int(inline_int_null_val(key_col->get_type_info())));
   }
   std::string fname{"hash_join_idx"};
   if (col_range_.hasNulls()) {
     fname += "_nullable";
   }
-  const auto slot_lv = executor->cgen_state_->emitCall(fname, hash_join_idx_args);
-  const auto it_ok = executor->cgen_state_->scan_idx_to_hash_pos_.emplace(val_col->get_rte_idx(), slot_lv);
+  const auto slot_lv = executor_->cgen_state_->emitCall(fname, hash_join_idx_args);
+  const auto it_ok = executor_->cgen_state_->scan_idx_to_hash_pos_.emplace(val_col->get_rte_idx(), slot_lv);
   CHECK(it_ok.second);
   const auto slot_valid_lv =
-      executor->cgen_state_->ir_builder_.CreateICmp(llvm::ICmpInst::ICMP_SGE, slot_lv, executor->ll_int(int64_t(0)));
+      executor_->cgen_state_->ir_builder_.CreateICmp(llvm::ICmpInst::ICMP_SGE, slot_lv, executor_->ll_int(int64_t(0)));
   return slot_valid_lv;
 }
