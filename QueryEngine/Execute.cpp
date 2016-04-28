@@ -4237,13 +4237,8 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
   // generate the code for the filter
   allocateLocalColumnIds(ra_exe_unit.input_col_descs);
 
-  std::vector<Analyzer::Expr*> deferred_quals;
-  llvm::Value* filter_lv = llvm::ConstantInt::get(llvm::IntegerType::getInt1Ty(cgen_state_->context_), true);
-
-  for (auto expr : ra_exe_unit.inner_join_quals) {
-    filter_lv = cgen_state_->ir_builder_.CreateAnd(filter_lv, toBool(codegen(expr.get(), true, co).front()));
-  }
-
+  // Generate the expression for outer join first, the isOuterJoin() method relies
+  // on it and ExpressionRange module calls isOuterJoin() when computing range.
   if (!ra_exe_unit.outer_join_quals.empty()) {
     cgen_state_->outer_join_cond_lv_ =
         llvm::ConstantInt::get(llvm::IntegerType::getInt1Ty(cgen_state_->context_), true);
@@ -4251,6 +4246,13 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
       cgen_state_->outer_join_cond_lv_ = cgen_state_->ir_builder_.CreateAnd(
           cgen_state_->outer_join_cond_lv_, toBool(codegen(expr.get(), true, co).front()));
     }
+  }
+
+  std::vector<Analyzer::Expr*> deferred_quals;
+  llvm::Value* filter_lv = llvm::ConstantInt::get(llvm::IntegerType::getInt1Ty(cgen_state_->context_), true);
+
+  for (auto expr : ra_exe_unit.inner_join_quals) {
+    filter_lv = cgen_state_->ir_builder_.CreateAnd(filter_lv, toBool(codegen(expr.get(), true, co).front()));
   }
 
   for (auto expr : ra_exe_unit.simple_quals) {

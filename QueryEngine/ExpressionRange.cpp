@@ -74,7 +74,8 @@ ExpressionRange getExpressionRange(const Analyzer::BinOper* expr,
 ExpressionRange getExpressionRange(const Analyzer::Constant* expr);
 
 ExpressionRange getExpressionRange(const Analyzer::ColumnVar* col_expr,
-                                   const std::vector<Fragmenter_Namespace::TableInfo>& query_infos);
+                                   const std::vector<Fragmenter_Namespace::TableInfo>& query_infos,
+                                   const Executor* executor);
 
 ExpressionRange getExpressionRange(const Analyzer::LikeExpr* like_expr);
 
@@ -107,7 +108,7 @@ ExpressionRange getExpressionRange(const Analyzer::Expr* expr,
   }
   auto column_var_expr = dynamic_cast<const Analyzer::ColumnVar*>(expr);
   if (column_var_expr) {
-    return getExpressionRange(column_var_expr, query_infos);
+    return getExpressionRange(column_var_expr, query_infos, executor);
   }
   auto like_expr = dynamic_cast<const Analyzer::LikeExpr*>(expr);
   if (like_expr) {
@@ -235,7 +236,8 @@ inline double extract_max_stat_double(const ChunkStats& stats, const SQLTypeInfo
 }  // namespace
 
 ExpressionRange getExpressionRange(const Analyzer::ColumnVar* col_expr,
-                                   const std::vector<Fragmenter_Namespace::TableInfo>& query_infos) {
+                                   const std::vector<Fragmenter_Namespace::TableInfo>& query_infos,
+                                   const Executor* executor) {
   int col_id = col_expr->get_column_id();
   const auto& col_ti =
       col_expr->get_type_info().is_array() ? col_expr->get_type_info().get_elem_type() : col_expr->get_type_info();
@@ -255,8 +257,8 @@ ExpressionRange getExpressionRange(const Analyzer::ColumnVar* col_expr,
     case kTIME:
     case kFLOAT:
     case kDOUBLE: {
-      bool has_nulls{false};
       const auto& fragments = query_infos[col_expr->get_rte_idx()].fragments;
+      bool has_nulls = col_expr->get_rte_idx() > 0 && executor->isOuterJoin();
       FIND_STAT_FRAG(min);
       FIND_STAT_FRAG(max);
       const auto min_it = min_frag->chunkMetadataMap.find(col_id);

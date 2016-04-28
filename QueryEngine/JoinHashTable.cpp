@@ -61,10 +61,10 @@ std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(
     return nullptr;
   }
   const auto& ti = inner_col->get_type_info();
-  auto col_range = getExpressionRange(ti.is_string() ? cols.second : inner_col, query_infos, nullptr);
+  auto col_range = getExpressionRange(ti.is_string() ? cols.second : inner_col, query_infos, executor);
   if (ti.is_string()) {
     // The nullable info must be the same as the source column.
-    const auto source_col_range = getExpressionRange(inner_col, query_infos, nullptr);
+    const auto source_col_range = getExpressionRange(inner_col, query_infos, executor);
     col_range = ExpressionRange::makeIntRange(std::min(source_col_range.getIntMin(), col_range.getIntMin()),
                                               std::max(source_col_range.getIntMax(), col_range.getIntMax()),
                                               0,
