@@ -9,10 +9,18 @@
 namespace {
 
 std::pair<const Analyzer::ColumnVar*, const Analyzer::ColumnVar*> get_cols(
-    const std::shared_ptr<Analyzer::BinOper> qual_bin_oper) {
+    const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
+    const Catalog_Namespace::Catalog& cat) {
   const auto lhs = qual_bin_oper->get_left_operand();
   const auto rhs = qual_bin_oper->get_right_operand();
-  if (lhs->get_type_info() != rhs->get_type_info()) {
+  const auto& lhs_ti = lhs->get_type_info();
+  const auto& rhs_ti = rhs->get_type_info();
+  CHECK_EQ(kENCODING_NONE, lhs_ti.get_compression());
+  CHECK_EQ(kENCODING_NONE, rhs_ti.get_compression());
+  if (lhs_ti.get_type() != rhs_ti.get_type()) {
+    return {nullptr, nullptr};
+  }
+  if (!lhs_ti.is_integer() && !lhs_ti.is_string()) {
     return {nullptr, nullptr};
   }
   const auto lhs_cast = dynamic_cast<const Analyzer::UOper*>(lhs);
@@ -38,8 +46,17 @@ std::pair<const Analyzer::ColumnVar*, const Analyzer::ColumnVar*> get_cols(
     inner_col = lhs_col;
     outer_col = rhs_col;
   }
-  const auto& ti = inner_col->get_type_info();
-  if (!(ti.is_integer() || (ti.is_string() && ti.get_compression() == kENCODING_DICT))) {
+  // We need to fetch the actual type information from the catalog since Analyzer
+  // always reports nullable as true for inner table columns in left joins.
+  const auto inner_col_cd = cat.getMetadataForColumn(inner_col->get_table_id(), inner_col->get_column_id());
+  CHECK(inner_col_cd);
+  const auto& inner_col_real_ti = inner_col_cd->columnType;
+  const auto& outer_col_ti = outer_col->get_type_info();
+  if (outer_col_ti.get_notnull() != inner_col_real_ti.get_notnull()) {
+    return {nullptr, nullptr};
+  }
+  if (!(inner_col_real_ti.is_integer() ||
+        (inner_col_real_ti.is_string() && inner_col_real_ti.get_compression() == kENCODING_DICT))) {
     return {nullptr, nullptr};
   }
   return {inner_col, outer_col};
@@ -55,7 +72,7 @@ std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(
     const int device_count,
     const Executor* executor) {
   CHECK_EQ(kEQ, qual_bin_oper->get_optype());
-  const auto cols = get_cols(qual_bin_oper);
+  const auto cols = get_cols(qual_bin_oper, cat);
   const auto inner_col = cols.first;
   if (!inner_col) {
     return nullptr;
@@ -81,7 +98,7 @@ std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(
 
 int JoinHashTable::reify(const int device_count) {
   CHECK_LT(0, device_count);
-  const auto cols = get_cols(qual_bin_oper_);
+  const auto cols = get_cols(qual_bin_oper_, cat_);
   const auto inner_col = cols.first;
   CHECK(inner_col);
   const auto& query_info = query_infos_[inner_col->get_rte_idx()];
@@ -264,7 +281,7 @@ int JoinHashTable::initHashTableForDevice(const std::shared_ptr<Chunk_NS::Chunk>
 
 llvm::Value* JoinHashTable::codegenSlot(Executor* executor, const bool hoist_literals) {
   CHECK(executor->plan_state_->join_info_.join_impl_type_ == Executor::JoinImplType::HashOneToOne);
-  const auto cols = get_cols(qual_bin_oper_);
+  const auto cols = get_cols(qual_bin_oper_, cat_);
   auto key_col = cols.second;
   CHECK(key_col);
   auto val_col = cols.first;
