@@ -64,6 +64,12 @@ class JoinHashTable {
                              const std::pair<const Analyzer::ColumnVar*, const Analyzer::ColumnVar*>& cols,
                              const Data_Namespace::MemoryLevel effective_memory_level,
                              const int device_id);
+  int initHashTableOnCpu(const int8_t* col_buff,
+                         const size_t num_elements,
+                         const std::pair<const Analyzer::ColumnVar*, const Analyzer::ColumnVar*>& cols,
+                         const int32_t hash_entry_count,
+                         const int32_t hash_join_invalid_val);
+
   llvm::Value* codegenSlot(const bool hoist_literals);
 
   std::shared_ptr<Analyzer::BinOper> qual_bin_oper_;

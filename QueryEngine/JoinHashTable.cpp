@@ -175,14 +175,77 @@ int JoinHashTable::reify(const int device_count) {
   return 0;
 }
 
+int JoinHashTable::initHashTableOnCpu(const int8_t* col_buff,
+                                      const size_t num_elements,
+                                      const std::pair<const Analyzer::ColumnVar*, const Analyzer::ColumnVar*>& cols,
+                                      const int32_t hash_entry_count,
+                                      const int32_t hash_join_invalid_val) {
+  const auto inner_col = cols.first;
+  CHECK(inner_col);
+  const auto& ti = inner_col->get_type_info();
+  int err = 0;
+  if (cpu_hash_table_buff_.empty()) {
+    cpu_hash_table_buff_.resize(hash_entry_count);
+    const StringDictionary* sd_inner{nullptr};
+    const StringDictionary* sd_outer{nullptr};
+    if (ti.is_string()) {
+      CHECK_EQ(kENCODING_DICT, ti.get_compression());
+      sd_inner = executor_->getStringDictionary(inner_col->get_comp_param(), executor_->row_set_mem_owner_);
+      CHECK(sd_inner);
+      sd_outer = executor_->getStringDictionary(cols.second->get_comp_param(), executor_->row_set_mem_owner_);
+      CHECK(sd_outer);
+    }
+    int thread_count = cpu_threads();
+    std::vector<std::thread> init_cpu_buff_threads;
+    for (int thread_idx = 0; thread_idx < thread_count; ++thread_idx) {
+      init_cpu_buff_threads.emplace_back([this, hash_entry_count, hash_join_invalid_val, thread_idx, thread_count] {
+        init_hash_join_buff(
+            &cpu_hash_table_buff_[0], hash_entry_count, hash_join_invalid_val, thread_idx, thread_count);
+      });
+    }
+    for (auto& t : init_cpu_buff_threads) {
+      t.join();
+    }
+    init_cpu_buff_threads.clear();
+    for (int thread_idx = 0; thread_idx < thread_count; ++thread_idx) {
+      init_cpu_buff_threads.emplace_back([this,
+                                          hash_join_invalid_val,
+                                          hash_entry_count,
+                                          col_buff,
+                                          num_elements,
+                                          sd_inner,
+                                          sd_outer,
+                                          thread_idx,
+                                          thread_count,
+                                          &ti,
+                                          &err] {
+        int partial_err = fill_hash_join_buff(&cpu_hash_table_buff_[0],
+                                              hash_join_invalid_val,
+                                              col_buff,
+                                              num_elements,
+                                              ti.get_size(),
+                                              col_range_.getIntMin(),
+                                              inline_int_null_val(ti),
+                                              col_range_.getIntMax() + 1,
+                                              sd_inner,
+                                              sd_outer,
+                                              thread_idx,
+                                              thread_count);
+        __sync_val_compare_and_swap(&err, 0, partial_err);
+      });
+    }
+    for (auto& t : init_cpu_buff_threads) {
+      t.join();
+    }
+  }
+  return err;
+}
+
 int JoinHashTable::initHashTableForDevice(const int8_t* col_buff,
                                           const size_t num_elements,
                                           const std::pair<const Analyzer::ColumnVar*, const Analyzer::ColumnVar*>& cols,
                                           const Data_Namespace::MemoryLevel effective_memory_level,
                                           const int device_id) {
-  const auto inner_col = cols.first;
-  CHECK(inner_col);
-  const auto& ti = inner_col->get_type_info();
   const int32_t hash_entry_count =
       col_range_.getIntMax() - col_range_.getIntMin() + 1 + (col_range_.hasNulls() ? 1 : 0);
 #ifdef HAVE_CUDA
@@ -195,65 +258,15 @@ int JoinHashTable::initHashTableForDevice(const int8_t* col_buff,
 #else
   CHECK_EQ(Data_Namespace::CPU_LEVEL, effective_memory_level);
 #endif
+  const auto inner_col = cols.first;
+  CHECK(inner_col);
+  const auto& ti = inner_col->get_type_info();
   int err = 0;
   const int32_t hash_join_invalid_val{-1};
   if (effective_memory_level == Data_Namespace::CPU_LEVEL) {
     {
       std::lock_guard<std::mutex> cpu_hash_table_buff_lock(cpu_hash_table_buff_mutex_);
-      if (cpu_hash_table_buff_.empty()) {
-        cpu_hash_table_buff_.resize(hash_entry_count);
-        const StringDictionary* sd_inner{nullptr};
-        const StringDictionary* sd_outer{nullptr};
-        if (ti.is_string()) {
-          CHECK_EQ(kENCODING_DICT, ti.get_compression());
-          sd_inner = executor_->getStringDictionary(inner_col->get_comp_param(), executor_->row_set_mem_owner_);
-          CHECK(sd_inner);
-          sd_outer = executor_->getStringDictionary(cols.second->get_comp_param(), executor_->row_set_mem_owner_);
-          CHECK(sd_outer);
-        }
-        int thread_count = cpu_threads();
-        std::vector<std::thread> init_cpu_buff_threads;
-        for (int thread_idx = 0; thread_idx < thread_count; ++thread_idx) {
-          init_cpu_buff_threads.emplace_back([this, hash_entry_count, thread_idx, thread_count] {
-            init_hash_join_buff(
-                &cpu_hash_table_buff_[0], hash_entry_count, hash_join_invalid_val, thread_idx, thread_count);
-          });
-        }
-        for (auto& t : init_cpu_buff_threads) {
-          t.join();
-        }
-        init_cpu_buff_threads.clear();
-        for (int thread_idx = 0; thread_idx < thread_count; ++thread_idx) {
-          init_cpu_buff_threads.emplace_back([this,
-                                              hash_join_invalid_val,
-                                              hash_entry_count,
-                                              col_buff,
-                                              num_elements,
-                                              sd_inner,
-                                              sd_outer,
-                                              thread_idx,
-                                              thread_count,
-                                              &ti,
-                                              &err] {
-            int partial_err = fill_hash_join_buff(&cpu_hash_table_buff_[0],
-                                                  hash_join_invalid_val,
-                                                  col_buff,
-                                                  num_elements,
-                                                  ti.get_size(),
-                                                  col_range_.getIntMin(),
-                                                  inline_int_null_val(ti),
-                                                  col_range_.getIntMax() + 1,
-                                                  sd_inner,
-                                                  sd_outer,
-                                                  thread_idx,
-                                                  thread_count);
-            __sync_val_compare_and_swap(&err, 0, partial_err);
-          });
-        }
-        for (auto& t : init_cpu_buff_threads) {
-          t.join();
-        }
-      }
+      err = initHashTableOnCpu(col_buff, num_elements, cols, hash_entry_count, hash_join_invalid_val);
     }
     // Transfer the hash table on the GPU if we've only built it on CPU
     // but the query runs on GPU (join on dictionary encoded columns).
