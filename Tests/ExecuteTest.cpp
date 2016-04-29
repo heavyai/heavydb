@@ -1333,6 +1333,7 @@ TEST(Select, Subqueries) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     c("SELECT str, SUM(y) AS n FROM test WHERE x > (SELECT COUNT(*) FROM test) - 14 GROUP BY str ORDER BY n ASC;", dt);
+    c("SELECT COUNT(*) FROM test, (SELECT x FROM test_inner) as inner_x WHERE test.x = inner_x.x;", dt);
   }
 }
 

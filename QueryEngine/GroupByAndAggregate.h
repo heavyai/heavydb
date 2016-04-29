@@ -1148,7 +1148,7 @@ class ResultRows {
 class ColumnarResults {
  public:
   ColumnarResults(const ResultRows& rows, const size_t num_columns, const std::vector<SQLTypeInfo>& target_types)
-      : column_buffers_(num_columns), num_rows_(rows.rowCount()) {
+      : column_buffers_(num_columns), num_rows_(rows.rowCount()), target_types_(target_types) {
     column_buffers_.resize(num_columns);
     for (size_t i = 0; i < num_columns; ++i) {
       CHECK(!target_types[i].is_array());
@@ -1202,17 +1202,27 @@ class ColumnarResults {
       ++row_idx;
     }
   }
+
   ~ColumnarResults() {
     for (const auto column_buffer : column_buffers_) {
       free((void*)column_buffer);
     }
   }
+
   const std::vector<const int8_t*>& getColumnBuffers() const { return column_buffers_; }
+
   const size_t size() const { return num_rows_; }
+
+  const SQLTypeInfo& getColumnType(const int col_id) const {
+    CHECK_GE(col_id, 0);
+    CHECK_LT(static_cast<size_t>(col_id), target_types_.size());
+    return target_types_[col_id];
+  }
 
  private:
   std::vector<const int8_t*> column_buffers_;
   const size_t num_rows_;
+  const std::vector<SQLTypeInfo> target_types_;
 };
 
 namespace {

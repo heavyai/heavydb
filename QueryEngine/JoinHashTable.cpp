@@ -123,22 +123,46 @@ int JoinHashTable::reify(const int device_count) {
 #endif
   std::vector<int> errors(device_count);
   std::vector<std::thread> init_threads;
+  std::vector<std::shared_ptr<Chunk_NS::Chunk>> chunks_owner;
+  std::unique_ptr<const ColumnarResults> columnar_results;
+  if (!cd) {
+    columnar_results.reset(
+        rows_to_columnar_results(get_temporary_table(executor_->temporary_tables_, inner_col->get_table_id())));
+  }
   for (int device_id = 0; device_id < device_count; ++device_id) {
-    const auto chunk = Chunk_NS::Chunk::getChunk(cd,
+    const int8_t* col_buff{nullptr};
+    if (cd) {
+      CHECK(!columnar_results);
+      const auto chunk = Chunk_NS::Chunk::getChunk(cd,
+                                                   &cat_.get_dataMgr(),
+                                                   chunk_key,
+                                                   effective_memory_level,
+                                                   effective_memory_level == Data_Namespace::CPU_LEVEL ? 0 : device_id,
+                                                   chunk_meta_it->second.numBytes,
+                                                   chunk_meta_it->second.numElements);
+      chunks_owner.push_back(chunk);
+      CHECK(chunk);
+      auto ab = chunk->get_buffer();
+      CHECK(ab->getMemoryPtr());
+      col_buff = reinterpret_cast<int8_t*>(ab->getMemoryPtr());
+    } else {
+      CHECK(columnar_results);
+      col_buff =
+          Executor::ExecutionDispatch::getColumn(columnar_results.get(),
+                                                 inner_col->get_column_id(),
                                                  &cat_.get_dataMgr(),
-                                                 chunk_key,
                                                  effective_memory_level,
-                                                 effective_memory_level == Data_Namespace::CPU_LEVEL ? 0 : device_id,
-                                                 chunk_meta_it->second.numBytes,
-                                                 chunk_meta_it->second.numElements);
-    init_threads.emplace_back([&errors, &chunk_meta_it, &cols, chunk, effective_memory_level, device_id, this] {
-      try {
-        errors[device_id] =
-            initHashTableForDevice(chunk, chunk_meta_it->second.numElements, cols, effective_memory_level, device_id);
-      } catch (...) {
-        errors[device_id] = -1;
-      }
-    });
+                                                 effective_memory_level == Data_Namespace::CPU_LEVEL ? 0 : device_id);
+    }
+    init_threads.emplace_back(
+        [&errors, &chunk_meta_it, &cols, &fragment, col_buff, effective_memory_level, device_id, this] {
+          try {
+            errors[device_id] =
+                initHashTableForDevice(col_buff, fragment.numTuples, cols, effective_memory_level, device_id);
+          } catch (...) {
+            errors[device_id] = -1;
+          }
+        });
   }
   for (auto& init_thread : init_threads) {
     init_thread.join();
@@ -151,18 +175,14 @@ int JoinHashTable::reify(const int device_count) {
   return 0;
 }
 
-int JoinHashTable::initHashTableForDevice(const std::shared_ptr<Chunk_NS::Chunk> chunk,
+int JoinHashTable::initHashTableForDevice(const int8_t* col_buff,
                                           const size_t num_elements,
                                           const std::pair<const Analyzer::ColumnVar*, const Analyzer::ColumnVar*>& cols,
                                           const Data_Namespace::MemoryLevel effective_memory_level,
                                           const int device_id) {
-  CHECK(chunk);
   const auto inner_col = cols.first;
   CHECK(inner_col);
   const auto& ti = inner_col->get_type_info();
-  auto ab = chunk->get_buffer();
-  CHECK(ab->getMemoryPtr());
-  const auto col_buff = reinterpret_cast<int8_t*>(ab->getMemoryPtr());
   const int32_t hash_entry_count =
       col_range_.getIntMax() - col_range_.getIntMin() + 1 + (col_range_.hasNulls() ? 1 : 0);
 #ifdef HAVE_CUDA

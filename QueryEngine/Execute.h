@@ -137,6 +137,14 @@ inline const SQLTypeInfo get_column_type(const int col_id,
   return rows->getColType(col_id);
 }
 
+inline const ColumnarResults* rows_to_columnar_results(const ResultRows* rows) {
+  std::vector<SQLTypeInfo> col_types;
+  for (size_t i = 0; i < rows->colCount(); ++i) {
+    col_types.push_back(rows->getColType(i));
+  }
+  return new ColumnarResults(*rows, rows->colCount(), col_types);
+}
+
 class CompilationRetryNoLazyFetch : public std::runtime_error {
  public:
   CompilationRetryNoLazyFetch() : std::runtime_error("CompilationRetryNoLazyFetch") {}
@@ -369,7 +377,7 @@ class Executor {
     int32_t* error_code_;
     RenderAllocatorMap* render_allocator_map_;
     std::vector<std::pair<ResultRows, std::vector<size_t>>> all_fragment_results_;
-    mutable std::unique_ptr<ColumnarResults> ra_node_input_;
+    mutable std::unique_ptr<const ColumnarResults> ra_node_input_;
 
    public:
     ExecutionDispatch(Executor* executor,
@@ -404,6 +412,12 @@ class Executor {
                             const int col_id,
                             const Data_Namespace::MemoryLevel memory_level,
                             const int device_id) const;
+
+    static const int8_t* getColumn(const ColumnarResults* columnar_results,
+                                   const int col_id,
+                                   Data_Namespace::DataMgr* data_mgr,
+                                   const Data_Namespace::MemoryLevel memory_level,
+                                   const int device_id);
 
     std::string getIR(const ExecutorDeviceType device_type) const;
 

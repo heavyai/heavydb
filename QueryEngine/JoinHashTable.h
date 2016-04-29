@@ -59,7 +59,7 @@ class JoinHashTable {
   }
 
   int reify(const int device_count);
-  int initHashTableForDevice(const std::shared_ptr<Chunk_NS::Chunk> chunk,
+  int initHashTableForDevice(const int8_t* col_buff,
                              const size_t num_elements,
                              const std::pair<const Analyzer::ColumnVar*, const Analyzer::ColumnVar*>& cols,
                              const Data_Namespace::MemoryLevel effective_memory_level,

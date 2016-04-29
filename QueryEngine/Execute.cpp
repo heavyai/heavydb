@@ -3164,25 +3164,28 @@ const int8_t* Executor::ExecutionDispatch::getColumn(const ResultRows* rows,
                                                      const Data_Namespace::MemoryLevel memory_level,
                                                      const int device_id) const {
   CHECK(rows);
-  CHECK_GE(col_id, 0);
-  std::vector<SQLTypeInfo> col_types;
-  for (size_t i = 0; i < rows->colCount(); ++i) {
-    col_types.push_back(rows->getColType(i));
-  }
   static std::mutex columnar_conversion_mutex;
   {
     std::lock_guard<std::mutex> columnar_conversion_guard(columnar_conversion_mutex);
     if (!ra_node_input_) {
-      ra_node_input_.reset(new ColumnarResults(*rows, rows->colCount(), col_types));
+      ra_node_input_.reset(rows_to_columnar_results(rows));
     }
   }
-  const auto& col_buffers = ra_node_input_->getColumnBuffers();
+  CHECK_GE(col_id, 0);
+  return getColumn(ra_node_input_.get(), col_id, &cat_.get_dataMgr(), memory_level, device_id);
+}
+
+const int8_t* Executor::ExecutionDispatch::getColumn(const ColumnarResults* columnar_results,
+                                                     const int col_id,
+                                                     Data_Namespace::DataMgr* data_mgr,
+                                                     const Data_Namespace::MemoryLevel memory_level,
+                                                     const int device_id) {
+  const auto& col_buffers = columnar_results->getColumnBuffers();
   CHECK_LT(static_cast<size_t>(col_id), col_buffers.size());
   if (memory_level == Data_Namespace::GPU_LEVEL) {
-    auto& data_mgr = cat_.get_dataMgr();
-    const auto num_bytes = ra_node_input_->size() * get_bit_width(col_types[col_id]) * 8;
-    auto gpu_col_buffer = alloc_gpu_mem(&data_mgr, num_bytes, device_id, nullptr);
-    copy_to_gpu(&data_mgr, gpu_col_buffer, col_buffers[col_id], num_bytes, device_id);
+    const auto num_bytes = columnar_results->size() * get_bit_width(columnar_results->getColumnType(col_id)) * 8;
+    auto gpu_col_buffer = alloc_gpu_mem(data_mgr, num_bytes, device_id, nullptr);
+    copy_to_gpu(data_mgr, gpu_col_buffer, col_buffers[col_id], num_bytes, device_id);
     return reinterpret_cast<const int8_t*>(gpu_col_buffer);
   }
   return col_buffers[col_id];
