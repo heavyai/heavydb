@@ -115,6 +115,12 @@ inline SQLTypes to_sql_type(const std::string& type_name) {
   if (type_name == std::string("TIMESTAMP")) {
     return kTIMESTAMP;
   }
+  if (type_name == std::string("DATE")) {
+    return kDATE;
+  }
+  if (type_name == std::string("TIME")) {
+    return kTIME;
+  }
   if (type_name == std::string("NULL")) {
     return kNULLT;
   }

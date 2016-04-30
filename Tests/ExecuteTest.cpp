@@ -31,6 +31,11 @@ TargetValue run_simple_agg(const string& query_str, const ExecutorDeviceType dev
   return crt_row[0];
 }
 
+bool query_result_is_empty(const string& query_str, const ExecutorDeviceType device_type) {
+  auto rows = run_multiple_agg(query_str, device_type);
+  return rows.rowCount() == 0;
+}
+
 template <class T>
 T v(const TargetValue& r) {
   auto scalar_r = boost::get<ScalarTargetValue>(&r);
@@ -700,6 +705,12 @@ TEST(Select, StringsNoneEncoding) {
 TEST(Select, Time) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
+    ASSERT_EQ(2 * g_num_rows,
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE CAST('1999-09-10' AS DATE) > o;", dt)));
+    ASSERT_EQ(0, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE CAST('1999-09-10' AS DATE) <= o;", dt)));
+    ASSERT_EQ(2 * g_num_rows,
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE CAST('15:13:15' AS TIME) > n;", dt)));
+    ASSERT_TRUE(query_result_is_empty("SELECT COUNT(*) FROM test WHERE CAST('15:13:15' AS TIME) <= n;", dt));
     cta("SELECT DATETIME('NOW') FROM test limit 1;", dt);
     // these next tests work because all dates are before now 2015-12-8 17:00:00
     ASSERT_EQ(2 * g_num_rows, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE m < NOW();", dt)));
