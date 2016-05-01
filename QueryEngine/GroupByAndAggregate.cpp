@@ -18,9 +18,9 @@
 #include <numeric>
 #include <thread>
 
-#define AGGREGATE_ONE_VALUE(agg_kind__, val_ptr__, other_ptr__, chosen_bytes__, sql_type__)                            \
+#define AGGREGATE_ONE_VALUE(agg_kind__, val_ptr__, other_ptr__, chosen_bytes__, agg_info__)                            \
   do {                                                                                                                 \
-    if (sql_type__.is_fp()) {                                                                                          \
+    if (get_compact_type(agg_info__).is_fp()) {                                                                        \
       if (chosen_bytes__ == sizeof(float)) {                                                                           \
         agg_##agg_kind__##_float(reinterpret_cast<int32_t*>(val_ptr__), *reinterpret_cast<const float*>(other_ptr__)); \
       } else {                                                                                                         \
@@ -40,7 +40,7 @@
 #define AGGREGATE_ONE_NULLABLE_VALUE(agg_kind__, val_ptr__, other_ptr__, init_val__, chosen_bytes__, agg_info__)  \
   do {                                                                                                            \
     if (agg_info__.skip_null_val) {                                                                               \
-      if (agg_info__.sql_type.is_fp()) {                                                                          \
+      if (get_compact_type(agg_info__).is_fp()) {                                                                 \
         if (chosen_bytes__ == sizeof(float)) {                                                                    \
           agg_##agg_kind__##_float_skip_val(reinterpret_cast<int32_t*>(val_ptr__),                                \
                                             *reinterpret_cast<const float*>(other_ptr__),                         \
@@ -61,7 +61,7 @@
         }                                                                                                         \
       }                                                                                                           \
     } else {                                                                                                      \
-      AGGREGATE_ONE_VALUE(agg_kind__, val_ptr__, other_ptr__, chosen_bytes__, agg_info__.sql_type);               \
+      AGGREGATE_ONE_VALUE(agg_kind__, val_ptr__, other_ptr__, chosen_bytes__, agg_info__);                        \
     }                                                                                                             \
   } while (0)
 
@@ -107,14 +107,11 @@ ResultRows::ResultRows(const QueryMemoryDescriptor& query_mem_desc,
     if (executor_->plan_state_->isLazyFetchColumn(target_expr) || is_real_string || is_array) {
       has_lazy_columns = true;
     }
-    agg_args_.push_back(agg_arg_info(target_expr));
     targets_.push_back(agg_info);
   }
   std::vector<TargetValue> row;
-  agg_init_vals_ = init_agg_val_vec(get_compact_targets(targets_, agg_args_),
-                                    query_mem_desc.agg_col_widths.size(),
-                                    is_group_by,
-                                    query_mem_desc_.getCompactByteWidth());
+  agg_init_vals_ = init_agg_val_vec(
+      targets_, query_mem_desc.agg_col_widths.size(), is_group_by, query_mem_desc_.getCompactByteWidth());
   if (in_place_ && has_lazy_columns) {
     while (fetchLazyOrBuildRow(row, col_buffers, targets, false, false, true)) {
     };
@@ -135,14 +132,13 @@ bool ResultRows::reduceSingleRow(const int8_t* row_ptr,
   CHECK_GE(agg_col_count, targets_.size());
   CHECK_EQ(is_columnar, query_mem_desc_.output_columnar);
   CHECK(query_mem_desc_.keyless_hash);
-  const auto compact_targets = get_compact_targets(targets_, agg_args_);
   std::vector<int64_t> partial_agg_vals(agg_col_count, 0);
   bool discard_row = true;
   for (int8_t warp_idx = 0; warp_idx < warp_count; ++warp_idx) {
     bool discard_partial_result = true;
-    for (size_t target_idx = 0, agg_col_idx = 0; target_idx < compact_targets.size() && agg_col_idx < agg_col_count;
+    for (size_t target_idx = 0, agg_col_idx = 0; target_idx < targets_.size() && agg_col_idx < agg_col_count;
          ++target_idx, ++agg_col_idx) {
-      const auto& agg_info = compact_targets[target_idx];
+      const auto& agg_info = targets_[target_idx];
       const auto chosen_bytes = query_mem_desc_.agg_col_widths[agg_col_idx].compact;
       auto partial_bin_val = get_component(row_ptr + query_mem_desc_.getColOnlyOffInBytes(agg_col_idx), chosen_bytes);
       partial_agg_vals[agg_col_idx] = partial_bin_val;
@@ -170,11 +166,12 @@ bool ResultRows::reduceSingleRow(const int8_t* row_ptr,
       continue;
     }
     discard_row = false;
-    for (size_t target_idx = 0, agg_col_idx = 0; target_idx < compact_targets.size() && agg_col_idx < agg_col_count;
+    for (size_t target_idx = 0, agg_col_idx = 0; target_idx < targets_.size() && agg_col_idx < agg_col_count;
          ++target_idx, ++agg_col_idx) {
-      const auto& agg_info = compact_targets[target_idx];
+      const auto& agg_info = targets_[target_idx];
       auto partial_bin_val = partial_agg_vals[agg_col_idx];
       const auto chosen_bytes = query_mem_desc_.agg_col_widths[agg_col_idx].compact;
+      const auto& chosen_type = get_compact_type(agg_info);
       if (agg_info.is_agg) {
         switch (agg_info.agg_kind) {
           case kAVG:
@@ -182,7 +179,7 @@ bool ResultRows::reduceSingleRow(const int8_t* row_ptr,
                                 reinterpret_cast<int8_t*>(&agg_vals[agg_col_idx + 1]),
                                 reinterpret_cast<int8_t*>(&partial_agg_vals[agg_col_idx + 1]),
                                 chosen_bytes,
-                                agg_info.sql_type);
+                                agg_info);
           // fall thru
           case kCOUNT:
           case kSUM:
@@ -213,7 +210,7 @@ bool ResultRows::reduceSingleRow(const int8_t* row_ptr,
             CHECK(false);
             break;
         }
-        if (agg_info.sql_type.is_integer() || agg_info.sql_type.is_decimal()) {
+        if (chosen_type.is_integer() || chosen_type.is_decimal()) {
           switch (chosen_bytes) {
             case 8:
               break;
@@ -275,17 +272,18 @@ void ResultRows::reduceSingleColumn(int8_t* crt_val_i1,
                                     int8_t* crt_val_i2,
                                     const int8_t* new_val_i1,
                                     const int8_t* new_val_i2,
-                                    const TargetInfo& agg_info,
                                     const int64_t agg_skip_val,
                                     const size_t target_idx,
                                     size_t crt_byte_width,
                                     size_t next_byte_width) {
-  CHECK(agg_info.sql_type.is_integer() || agg_info.sql_type.is_decimal() || agg_info.sql_type.is_time() ||
-        agg_info.sql_type.is_boolean() || agg_info.sql_type.is_string() || agg_info.sql_type.is_fp());
+  const auto agg_info = targets_[target_idx];
+  const auto& chosen_type = get_compact_type(agg_info);
+  CHECK(chosen_type.is_integer() || chosen_type.is_decimal() || chosen_type.is_time() || chosen_type.is_boolean() ||
+        chosen_type.is_string() || chosen_type.is_fp());
   switch (agg_info.agg_kind) {
     case kAVG:
       CHECK(crt_val_i2 && new_val_i2);
-      AGGREGATE_ONE_VALUE(sum, crt_val_i2, new_val_i2, next_byte_width, agg_info.sql_type);
+      AGGREGATE_ONE_VALUE(sum, crt_val_i2, new_val_i2, next_byte_width, agg_info);
     // fall thru
     case kCOUNT:
       if (agg_info.is_distinct) {
@@ -343,7 +341,6 @@ void ResultRows::reduceInPlaceDispatch(int64_t** group_by_buffer_ptr,
                                        const int64_t* other_group_by_buffer,
                                        const int32_t groups_buffer_entry_count,
                                        const GroupByColRangeType hash_type,
-                                       const std::vector<TargetInfo>& targets,
                                        const QueryMemoryDescriptor& query_mem_desc_in,
                                        const int32_t start,
                                        const int32_t end) {
@@ -401,7 +398,7 @@ void ResultRows::reduceInPlaceDispatch(int64_t** group_by_buffer_ptr,
     int32_t target_idx{0};
     int32_t col_idx{0};
     int32_t other_off{bin_base_off};
-    for (const auto& agg_info : targets) {
+    for (const auto& agg_info : targets_) {
       const auto chosen_bytes = query_mem_desc_in.agg_col_widths[col_idx].compact;
       auto next_chosen_bytes = chosen_bytes;
       const auto other_ptr = reinterpret_cast<const int8_t*>(other_group_by_buffer) + other_off;
@@ -440,7 +437,6 @@ void ResultRows::reduceInPlaceDispatch(int64_t** group_by_buffer_ptr,
                                next_col_ptr,
                                other_ptr,
                                other_next_ptr,
-                               agg_info,
                                agg_init_vals_[col_idx],
                                target_idx,
                                chosen_bytes,
@@ -456,7 +452,6 @@ void ResultRows::reduceInPlaceDispatch(int64_t** group_by_buffer_ptr,
                                next_col_ptr,
                                other_ptr,
                                other_next_ptr,
-                               agg_info,
                                agg_init_vals_[col_idx],
                                target_idx,
                                chosen_bytes,
@@ -484,7 +479,6 @@ void ResultRows::reduceInPlace(int64_t** group_by_buffer_ptr,
                                const int32_t groups_buffer_entry_count,
                                const int32_t other_groups_buffer_entry_count,
                                const GroupByColRangeType hash_type,
-                               const std::vector<TargetInfo>& targets,
                                const QueryMemoryDescriptor& query_mem_desc_in) {
   const auto available_cpus = cpu_threads();
   CHECK_LT(0, available_cpus);
@@ -505,7 +499,6 @@ void ResultRows::reduceInPlace(int64_t** group_by_buffer_ptr,
                                             other_group_by_buffer,
                                             groups_buffer_entry_count,
                                             hash_type,
-                                            targets,
                                             query_mem_desc_in,
                                             start,
                                             end));
@@ -518,7 +511,6 @@ void ResultRows::reduceInPlace(int64_t** group_by_buffer_ptr,
                           other_group_by_buffer,
                           groups_buffer_entry_count,
                           hash_type,
-                          targets,
                           query_mem_desc_in,
                           0,
                           other_groups_buffer_entry_count);
@@ -527,7 +519,6 @@ void ResultRows::reduceInPlace(int64_t** group_by_buffer_ptr,
 
 void ResultRows::reduceDispatch(int64_t* group_by_buffer,
                                 const int64_t* other_group_by_buffer,
-                                const std::vector<TargetInfo>& compact_targets,
                                 const QueryMemoryDescriptor& query_mem_desc_in,
                                 const size_t start,
                                 const size_t end) {
@@ -543,18 +534,17 @@ void ResultRows::reduceDispatch(int64_t* group_by_buffer,
   auto crt_results = reinterpret_cast<int8_t*>(group_by_buffer);
   auto new_results = reinterpret_cast<const int8_t*>(other_group_by_buffer);
   size_t row_size = output_columnar ? 1 : query_mem_desc_in.getRowSize();
-  CHECK_GE(agg_col_count, compact_targets.size());
   std::vector<size_t> col_offsets(agg_col_count);
   for (size_t agg_col_idx = 0; agg_col_idx < agg_col_count; ++agg_col_idx) {
     col_offsets[agg_col_idx] = query_mem_desc_in.getColOffInBytesInNextBin(agg_col_idx);
   }
   for (size_t target_index = 0, agg_col_idx = 0, col_base_off = query_mem_desc_in.getColOffInBytes(start, 0);
-       target_index < compact_targets.size() && agg_col_idx < agg_col_count;
+       target_index < targets_.size() && agg_col_idx < agg_col_count;
        ++target_index,
               col_base_off +=
               (isometric_layout ? consist_col_offset : query_mem_desc_in.getNextColOffInBytes(
                                                            &crt_results[col_base_off], 0, agg_col_idx - 1))) {
-    const auto agg_info = compact_targets[target_index];
+    const auto agg_info = targets_[target_index];
     auto chosen_bytes = query_mem_desc_in.agg_col_widths[agg_col_idx].compact;
     auto next_chosen_bytes = chosen_bytes;
     if (kAVG == agg_info.agg_kind) {
@@ -578,7 +568,6 @@ void ResultRows::reduceDispatch(int64_t* group_by_buffer,
                            crt_next_result_ptr,
                            &new_results[row_base_off],
                            new_next_result_ptr,
-                           agg_info,
                            agg_init_vals_[agg_col_idx],
                            target_index,
                            chosen_bytes,
@@ -609,7 +598,6 @@ void ResultRows::reduce(const ResultRows& other_results,
     return;
   }
 
-  const auto compact_targets = get_compact_targets(targets_, agg_args_);
   const size_t consist_col_width{query_mem_desc.getCompactByteWidth()};
   CHECK_EQ(output_columnar_, query_mem_desc.output_columnar);
 
@@ -634,7 +622,6 @@ void ResultRows::reduce(const ResultRows& other_results,
                                               this,
                                               group_by_buffer_,
                                               other_results.group_by_buffer_,
-                                              compact_targets,
                                               query_mem_desc,
                                               start,
                                               end));
@@ -643,12 +630,8 @@ void ResultRows::reduce(const ResultRows& other_results,
         child.join();
       }
     } else {
-      reduceDispatch(group_by_buffer_,
-                     other_results.group_by_buffer_,
-                     compact_targets,
-                     query_mem_desc,
-                     size_t(0),
-                     groups_buffer_entry_count_);
+      reduceDispatch(
+          group_by_buffer_, other_results.group_by_buffer_, query_mem_desc, size_t(0), groups_buffer_entry_count_);
     }
     return;
   }
@@ -664,8 +647,7 @@ void ResultRows::reduce(const ResultRows& other_results,
                          reinterpret_cast<int8_t*>(&crt_results[agg_col_idx].i2),
                          reinterpret_cast<const int8_t*>(&new_results[agg_col_idx].i1),
                          reinterpret_cast<const int8_t*>(&new_results[agg_col_idx].i2),
-                         compact_targets[agg_col_idx],
-                         get_initial_val(compact_targets[agg_col_idx], consist_col_width),
+                         get_initial_val(targets_[agg_col_idx], consist_col_width),
                          agg_col_idx);
     }
     return;
@@ -694,7 +676,6 @@ void ResultRows::reduce(const ResultRows& other_results,
                     in_place_groups_by_buffers_entry_count_[0],
                     other_results.in_place_groups_by_buffers_entry_count_[0],
                     GroupByColRangeType::OneColKnownRange,
-                    compact_targets,
                     query_mem_desc);
       group_by_buffer_ptr = &in_place_group_by_buffers_[1];
       other_group_by_buffer = other_results.in_place_group_by_buffers_[1];
@@ -703,7 +684,6 @@ void ResultRows::reduce(const ResultRows& other_results,
                     in_place_groups_by_buffers_entry_count_[1],
                     other_results.in_place_groups_by_buffers_entry_count_[1],
                     GroupByColRangeType::MultiCol,
-                    compact_targets,
                     query_mem_desc);
     } else {
       reduceInPlace(group_by_buffer_ptr,
@@ -711,7 +691,6 @@ void ResultRows::reduce(const ResultRows& other_results,
                     in_place_groups_by_buffers_entry_count_[0],
                     other_results.in_place_groups_by_buffers_entry_count_[0],
                     query_mem_desc.hash_type,
-                    compact_targets,
                     query_mem_desc);
     }
     return;
@@ -733,8 +712,7 @@ void ResultRows::reduce(const ResultRows& other_results,
                          reinterpret_cast<int8_t*>(&old_agg_results[agg_col_idx].i2),
                          reinterpret_cast<const int8_t*>(&kv.second[agg_col_idx].i1),
                          reinterpret_cast<const int8_t*>(&kv.second[agg_col_idx].i2),
-                         compact_targets[agg_col_idx],
-                         get_initial_val(compact_targets[agg_col_idx], consist_col_width),
+                         get_initial_val(targets_[agg_col_idx], consist_col_width),
                          agg_col_idx);
     }
   }
@@ -749,13 +727,12 @@ void ResultRows::reduce(const ResultRows& other_results,
     CHECK_EQ(old_agg_results.size(), kv.second.size());
     const size_t agg_col_count = old_agg_results.size();
     for (size_t agg_col_idx = 0; agg_col_idx < agg_col_count; ++agg_col_idx) {
-      const auto agg_info = compact_targets[agg_col_idx];
+      const auto agg_info = targets_[agg_col_idx];
       if (agg_info.is_agg) {
         reduceSingleColumn(reinterpret_cast<int8_t*>(&old_agg_results[agg_col_idx].i1),
                            reinterpret_cast<int8_t*>(&old_agg_results[agg_col_idx].i2),
                            reinterpret_cast<const int8_t*>(&kv.second[agg_col_idx].i1),
                            reinterpret_cast<const int8_t*>(&kv.second[agg_col_idx].i2),
-                           agg_info,
                            get_initial_val(agg_info, consist_col_width),
                            agg_col_idx);
       } else {
@@ -840,14 +817,13 @@ void ResultRows::sort(const std::list<Analyzer::OrderEntry>& order_entries,
     group_by_buffer_ = nullptr;
   }
   CHECK(!in_place_);
-  const auto compact_targets = get_compact_targets(targets_, agg_args_);
   const bool use_heap{order_entries.size() == 1 && !remove_duplicates && top_n};
-  auto compare = [this, &order_entries, compact_targets, use_heap](const InternalRow& lhs, const InternalRow& rhs) {
+  auto compare = [this, &order_entries, use_heap](const InternalRow& lhs, const InternalRow& rhs) {
     // NB: The compare function must define a strict weak ordering, otherwise
     // std::sort will trigger a segmentation fault (or corrupt memory).
     for (const auto order_entry : order_entries) {
       CHECK_GE(order_entry.tle_no, 1);
-      const auto& entry_ti = compact_targets[order_entry.tle_no - 1].sql_type;
+      const auto& entry_ti = get_compact_type(targets_[order_entry.tle_no - 1]);
       const auto is_dict = entry_ti.is_string() && entry_ti.get_compression() == kENCODING_DICT;
       const auto& lhs_v = lhs[order_entry.tle_no - 1];
       const auto& rhs_v = rhs[order_entry.tle_no - 1];
@@ -873,7 +849,7 @@ void ResultRows::sort(const std::list<Analyzer::OrderEntry>& order_entries,
           }
           return use_desc_cmp ? lhs_str > rhs_str : lhs_str < rhs_str;
         }
-        if (UNLIKELY(compact_targets[order_entry.tle_no - 1].is_distinct)) {
+        if (UNLIKELY(targets_[order_entry.tle_no - 1].is_distinct)) {
           const auto lhs_sz =
               bitmap_set_size(lhs_v.i1, order_entry.tle_no - 1, row_set_mem_owner_->count_distinct_descriptors_);
           const auto rhs_sz =
@@ -1023,30 +999,30 @@ TargetValue result_rows_get_impl(const InternalTargetValue& col_val,
                                  const bool translate_strings,
                                  const Executor* executor,
                                  const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner) {
-  const auto& ti = agg_info.sql_type;
+  const auto& chosen_type = get_compact_type(agg_info);
   if (agg_info.agg_kind == kAVG) {
-    CHECK(!ti.is_string());
+    CHECK(!chosen_type.is_string());
     CHECK(col_val.isPair());
-    return pair_to_double({col_val.i1, col_val.i2}, ti);
+    return pair_to_double({col_val.i1, col_val.i2}, chosen_type);
   }
-  if (ti.is_integer() || ti.is_decimal() || ti.is_boolean() || ti.is_time()) {
+  if (chosen_type.is_integer() || chosen_type.is_decimal() || chosen_type.is_boolean() || chosen_type.is_time()) {
     if (agg_info.is_distinct) {
       return TargetValue(bitmap_set_size(col_val.i1, col_idx, row_set_mem_owner->getCountDistinctDescriptors()));
     }
     CHECK(col_val.isInt());
-    if (ti.is_decimal() && decimal_to_double) {
-      if (col_val.i1 == inline_int_null_val(SQLTypeInfo(decimal_to_int_type(ti), false))) {
+    if (chosen_type.is_decimal() && decimal_to_double) {
+      if (col_val.i1 == inline_int_null_val(SQLTypeInfo(decimal_to_int_type(chosen_type), false))) {
         return NULL_DOUBLE;
       }
-      return static_cast<double>(col_val.i1) / exp_to_scale(ti.get_scale());
+      return static_cast<double>(col_val.i1) / exp_to_scale(chosen_type.get_scale());
     }
-    if (inline_int_null_val(ti) == col_val.i1) {
+    if (inline_int_null_val(chosen_type) == col_val.i1) {
       return inline_int_null_val(target_type);
     }
     return col_val.i1;
-  } else if (ti.is_string()) {
-    if (ti.get_compression() == kENCODING_DICT) {
-      const int dict_id = ti.get_comp_param();
+  } else if (chosen_type.is_string()) {
+    if (chosen_type.get_compression() == kENCODING_DICT) {
+      const int dict_id = chosen_type.get_comp_param();
       const auto string_id = col_val.i1;
       if (!translate_strings) {
         return TargetValue(string_id);
@@ -1055,11 +1031,11 @@ TargetValue result_rows_get_impl(const InternalTargetValue& col_val,
                  ? TargetValue(nullptr)
                  : TargetValue(executor->getStringDictionary(dict_id, row_set_mem_owner)->getString(string_id));
     } else {
-      CHECK_EQ(kENCODING_NONE, ti.get_compression());
+      CHECK_EQ(kENCODING_NONE, chosen_type.get_compression());
       return col_val.isNull() ? TargetValue(nullptr) : TargetValue(col_val.strVal());
     }
-  } else if (ti.is_array()) {
-    const auto& elem_type = ti.get_elem_type();
+  } else if (chosen_type.is_array()) {
+    const auto& elem_type = chosen_type.get_elem_type();
     CHECK(col_val.ty == InternalTargetValue::ITVType::Arr || col_val.ty == InternalTargetValue::ITVType::Null);
     if (col_val.ty == InternalTargetValue::ITVType::Null) {
       return std::vector<ScalarTargetValue>{};
@@ -1079,9 +1055,9 @@ TargetValue result_rows_get_impl(const InternalTargetValue& col_val,
         }
       }
     } else if (elem_type.is_string()) {
-      CHECK_EQ(kENCODING_DICT, ti.get_compression());
+      CHECK_EQ(kENCODING_DICT, chosen_type.get_compression());
       const auto& string_ids = *reinterpret_cast<std::vector<int64_t>*>(col_val.i1);
-      const int dict_id = ti.get_comp_param();
+      const int dict_id = chosen_type.get_comp_param();
       for (const auto string_id : string_ids) {
         tv_arr.emplace_back(
             string_id == NULL_INT
@@ -1093,8 +1069,8 @@ TargetValue result_rows_get_impl(const InternalTargetValue& col_val,
     }
     return tv_arr;
   } else {
-    CHECK(ti.is_fp());
-    if (ti.get_type() == kFLOAT) {
+    CHECK(chosen_type.is_fp());
+    if (chosen_type.get_type() == kFLOAT) {
       return ScalarTargetValue(static_cast<float>(*reinterpret_cast<const double*>(&col_val.i1)));
     }
     return ScalarTargetValue(*reinterpret_cast<const double*>(&col_val.i1));
@@ -1187,7 +1163,7 @@ TargetValue ResultRows::getRowAt(const size_t row_idx,
   return result_rows_get_impl(target_values_[row_idx][col_idx],
                               agg_init_vals_[agg_col_idx],
                               col_idx,
-                              get_compact_target(targets_[col_idx], agg_args_[col_idx]),
+                              targets_[col_idx],
                               targets_[col_idx].sql_type,
                               decimal_to_double,
                               translate_strings,
@@ -1239,7 +1215,6 @@ bool ResultRows::fetchLazyOrBuildRow(std::vector<TargetValue>& row,
                                      const bool translate_strings,
                                      const bool decimal_to_double,
                                      const bool fetch_lazy) const {
-  const auto compact_targets = get_compact_targets(targets_, agg_args_);
   if (group_by_buffer_) {
     for (size_t bin_base_off = group_by_buffer_idx_ < static_cast<size_t>(groups_buffer_entry_count_)
                                    ? query_mem_desc_.getColOffInBytes(group_by_buffer_idx_, 0)
@@ -1261,15 +1236,16 @@ bool ResultRows::fetchLazyOrBuildRow(std::vector<TargetValue>& row,
                           agg_vals)) {
         continue;
       }
-      for (size_t target_idx = 0, agg_col_idx = 0; target_idx < compact_targets.size() && agg_col_idx < agg_col_count;
+      for (size_t target_idx = 0, agg_col_idx = 0; target_idx < targets_.size() && agg_col_idx < agg_col_count;
            ++target_idx, ++agg_col_idx) {
-        const auto& agg_info = compact_targets[target_idx];
+        const auto& agg_info = targets_[target_idx];
         if (agg_info.is_distinct) {
           row.emplace_back(agg_vals[agg_col_idx]);
         } else {
           const auto chosen_bytes = query_mem_desc_.agg_col_widths[agg_col_idx].compact;
-          if (compact_targets[target_idx].sql_type.is_fp() && chosen_bytes == sizeof(float)) {
-            agg_vals[agg_col_idx] = float_to_double_bin(agg_vals[agg_col_idx], !agg_info.sql_type.get_notnull());
+          const auto& chosen_type = get_compact_type(agg_info);
+          if (chosen_type.is_fp() && chosen_bytes == sizeof(float)) {
+            agg_vals[agg_col_idx] = float_to_double_bin(agg_vals[agg_col_idx], !chosen_type.get_notnull());
           }
           auto target_val =
               (kAVG == agg_info.agg_kind ? InternalTargetValue(agg_vals[agg_col_idx], agg_vals[agg_col_idx + 1])
@@ -1277,8 +1253,8 @@ bool ResultRows::fetchLazyOrBuildRow(std::vector<TargetValue>& row,
           row.push_back(result_rows_get_impl(target_val,
                                              agg_init_vals_[agg_col_idx],
                                              target_idx,
-                                             compact_targets[target_idx],
-                                             targets_[target_idx].sql_type,
+                                             agg_info,
+                                             agg_info.sql_type,
                                              decimal_to_double,
                                              translate_strings,
                                              executor_,
@@ -1316,15 +1292,16 @@ bool ResultRows::fetchLazyOrBuildRow(std::vector<TargetValue>& row,
       auto col_ptr = reinterpret_cast<int8_t*>(group_by_buffer) + bin_base_off;
       for (size_t col_idx = 0; col_idx < colCount();
            ++col_idx, col_ptr += query_mem_desc_.getNextColOffInBytes(col_ptr, crt_row_buff_idx_, out_vec_idx++)) {
+        const auto& agg_info = targets_[col_idx];
+        const auto& chosen_type = get_compact_type(agg_info);
         auto chosen_bytes = query_mem_desc_.agg_col_widths[out_vec_idx].compact;
         size_t next_chosen_bytes = chosen_bytes;
         auto val1 = get_component(col_ptr, chosen_bytes);
-        const auto& agg_info = compact_targets[col_idx];
-        if (agg_info.sql_type.is_fp() && chosen_bytes == sizeof(float)) {
-          val1 = float_to_double_bin(val1, !agg_info.sql_type.get_notnull());
+        if (chosen_type.is_fp() && chosen_bytes == sizeof(float)) {
+          val1 = float_to_double_bin(val1, !chosen_type.get_notnull());
         }
-        bool is_real_string = agg_info.sql_type.is_string() && agg_info.sql_type.get_compression() == kENCODING_NONE;
-        bool is_array = agg_info.sql_type.is_array();
+        bool is_real_string = chosen_type.is_string() && chosen_type.get_compression() == kENCODING_NONE;
+        bool is_array = chosen_type.is_array();
         CHECK(!is_real_string || !is_array);
         int64_t val2{0};
         int8_t* next_col_ptr{nullptr};
@@ -1495,7 +1472,7 @@ bool ResultRows::fetchLazyOrBuildRow(std::vector<TargetValue>& row,
               (agg_info.agg_kind == kAVG ? agg_init_vals_[out_vec_idx - 1] : agg_init_vals_[out_vec_idx]),
               col_idx,
               agg_info,
-              targets_[col_idx].sql_type,
+              agg_info.sql_type,
               decimal_to_double,
               translate_strings,
               executor_,
@@ -1999,8 +1976,8 @@ void QueryExecutionContext::outputBin(ResultRows& results,
         auto& frag_col_buffers = col_buffers_.front();
         val1 = lazy_decode(static_cast<Analyzer::ColumnVar*>(target_expr), frag_col_buffers[col_id], val1);
       }
-      const auto agg_info = compact_target_info(target_expr);
-      if (agg_info.sql_type.get_type() == kFLOAT && (is_lazy_fetched || chosen_byte_width == sizeof(float))) {
+      const auto agg_info = target_info(target_expr);
+      if (get_compact_type(agg_info).get_type() == kFLOAT && (is_lazy_fetched || chosen_byte_width == sizeof(float))) {
         val1 = float_to_double_bin(val1);
       }
       if (agg_info.agg_kind == kAVG) {
@@ -3102,7 +3079,8 @@ GroupByAndAggregate::KeylessInfo GroupByAndAggregate::getKeylessInfo(
   int32_t index{0};
   int64_t init_val{0};
   for (const auto target_expr : target_expr_list) {
-    auto agg_info = compact_target_info(target_expr);
+    const auto agg_info = target_info(target_expr);
+    const auto& chosen_type = get_compact_type(agg_info);
     if (!found && agg_info.is_agg) {
       auto agg_expr = dynamic_cast<const Analyzer::AggExpr*>(target_expr);
       CHECK(agg_expr);
@@ -3153,8 +3131,8 @@ GroupByAndAggregate::KeylessInfo GroupByAndAggregate::getKeylessInfo(
         }
         case kMIN: {
           auto expr_range_info = getExpressionRange(agg_expr->get_arg(), query_infos_, executor_);
-          auto init_max = get_agg_initial_val(
-              agg_info.agg_kind, agg_info.sql_type, is_group_by, query_mem_desc_.getCompactByteWidth());
+          auto init_max =
+              get_agg_initial_val(agg_info.agg_kind, chosen_type, is_group_by, query_mem_desc_.getCompactByteWidth());
           switch (expr_range_info.getType()) {
             case ExpressionRangeType::FloatingPoint: {
               init_val = init_max;
@@ -3177,8 +3155,8 @@ GroupByAndAggregate::KeylessInfo GroupByAndAggregate::getKeylessInfo(
         }
         case kMAX: {
           auto expr_range_info = getExpressionRange(agg_expr->get_arg(), query_infos_, executor_);
-          auto init_min = get_agg_initial_val(
-              agg_info.agg_kind, agg_info.sql_type, is_group_by, query_mem_desc_.getCompactByteWidth());
+          auto init_min =
+              get_agg_initial_val(agg_info.agg_kind, chosen_type, is_group_by, query_mem_desc_.getCompactByteWidth());
           switch (expr_range_info.getType()) {
             case ExpressionRangeType::FloatingPoint: {
               init_val = init_min;
@@ -3582,9 +3560,9 @@ llvm::Function* GroupByAndAggregate::codegenPerfectHashFunction() {
 namespace {
 
 std::vector<std::string> agg_fn_base_names(const TargetInfo& target_info) {
+  const auto& chosen_type = get_compact_type(target_info);
   if (!target_info.is_agg) {
-    if ((target_info.sql_type.is_string() && target_info.sql_type.get_compression() == kENCODING_NONE) ||
-        target_info.sql_type.is_array()) {
+    if ((chosen_type.is_string() && chosen_type.get_compression() == kENCODING_NONE) || chosen_type.is_array()) {
       return {"agg_id", "agg_id"};
     }
     return {"agg_id"};
@@ -3671,7 +3649,7 @@ void GroupByAndAggregate::codegenAggCalls(const std::tuple<llvm::Value*, llvm::V
         static_cast<Analyzer::UOper*>(target_expr)->get_optype() == kUNNEST) {
       throw std::runtime_error("UNNEST not supported in the projection list yet.");
     }
-    auto agg_info = compact_target_info(target_expr);
+    auto agg_info = target_info(target_expr);
     auto arg_expr = agg_arg(target_expr);
     if (arg_expr && constrained_not_null(arg_expr, ra_exe_unit_.quals)) {
       agg_info.skip_null_val = false;
@@ -3743,9 +3721,6 @@ void GroupByAndAggregate::codegenAggCalls(const std::tuple<llvm::Value*, llvm::V
     size_t target_lv_idx = 0;
     const bool lazy_fetched{executor_->plan_state_->isLazyFetchColumn(target_expr)};
     for (const auto& agg_base_name : agg_fn_names) {
-      if (agg_info.agg_kind == kCOUNT && !agg_info.is_distinct && arg_expr) {
-        agg_info.sql_type = arg_expr->get_type_info();
-      }
       if (agg_info.is_distinct && arg_expr->get_type_info().is_array()) {
         CHECK(agg_info.is_distinct);
         CHECK_EQ(static_cast<size_t>(query_mem_desc_.agg_col_widths[agg_out_off].actual), sizeof(int64_t));
@@ -3772,7 +3747,8 @@ void GroupByAndAggregate::codegenAggCalls(const std::tuple<llvm::Value*, llvm::V
       }
 
       llvm::Value* agg_col_ptr{nullptr};
-      const size_t chosen_bytes = static_cast<size_t>(query_mem_desc_.agg_col_widths[agg_out_off].compact);
+      const auto chosen_bytes = static_cast<size_t>(query_mem_desc_.agg_col_widths[agg_out_off].compact);
+      const auto& chosen_type = get_compact_type(agg_info);
       if (is_group_by) {
         if (outputColumnar()) {
           col_off = query_mem_desc_.getColOffInBytes(0, agg_out_off);
@@ -3800,8 +3776,8 @@ void GroupByAndAggregate::codegenAggCalls(const std::tuple<llvm::Value*, llvm::V
       const bool need_skip_null =
           agg_info.skip_null_val && !(agg_info.agg_kind == kAVG && agg_base_name == "agg_count");
       if (need_skip_null && agg_info.agg_kind != kCOUNT) {
-        target_lv = convertNullIfAny(arg_expr->get_type_info(), agg_info.sql_type, chosen_bytes, target_lv);
-      } else if (!lazy_fetched && agg_info.sql_type.is_fp()) {
+        target_lv = convertNullIfAny(arg_expr->get_type_info(), chosen_type, chosen_bytes, target_lv);
+      } else if (!lazy_fetched && chosen_type.is_fp()) {
         target_lv = executor_->castToFP(target_lv);
       }
 
@@ -3814,10 +3790,10 @@ void GroupByAndAggregate::codegenAggCalls(const std::tuple<llvm::Value*, llvm::V
           (is_simple_count && !arg_expr) ? (chosen_bytes == sizeof(int32_t) ? LL_INT(int32_t(0)) : LL_INT(int64_t(0)))
                                          : (is_simple_count && arg_expr && str_target_lv ? str_target_lv : target_lv)};
       std::string agg_fname{agg_base_name};
-      if (!lazy_fetched && agg_info.sql_type.is_fp()) {
+      if (!lazy_fetched && chosen_type.is_fp()) {
         if (!lazy_fetched) {
           if (chosen_bytes == sizeof(float)) {
-            CHECK_EQ(agg_info.sql_type.get_type(), kFLOAT);
+            CHECK_EQ(chosen_type.get_type(), kFLOAT);
             agg_fname += "_float";
           } else {
             CHECK_EQ(chosen_bytes, sizeof(double));
@@ -3830,16 +3806,16 @@ void GroupByAndAggregate::codegenAggCalls(const std::tuple<llvm::Value*, llvm::V
 
       if (agg_info.is_distinct) {
         CHECK_EQ(chosen_bytes, sizeof(int64_t));
-        CHECK(!agg_info.sql_type.is_fp());
+        CHECK(!chosen_type.is_fp());
         CHECK_EQ("agg_count_distinct", agg_base_name);
         codegenCountDistinct(target_idx, target_expr, agg_args, query_mem_desc_, co.device_type_);
       } else {
         if (need_skip_null) {
           agg_fname += "_skip_val";
-          auto null_lv = executor_->castToTypeIn(
-              agg_info.sql_type.is_fp() ? static_cast<llvm::Value*>(executor_->inlineFpNull(agg_info.sql_type))
-                                        : static_cast<llvm::Value*>(executor_->inlineIntNull(agg_info.sql_type)),
-              (chosen_bytes << 3));
+          auto null_lv = executor_->castToTypeIn(chosen_type.is_fp()
+                                                     ? static_cast<llvm::Value*>(executor_->inlineFpNull(chosen_type))
+                                                     : static_cast<llvm::Value*>(executor_->inlineIntNull(chosen_type)),
+                                                 (chosen_bytes << 3));
           agg_args.push_back(null_lv);
         }
         if (!agg_info.is_distinct) {
@@ -3864,7 +3840,7 @@ void GroupByAndAggregate::codegenCountDistinct(const size_t target_idx,
                                                std::vector<llvm::Value*>& agg_args,
                                                const QueryMemoryDescriptor& query_mem_desc,
                                                const ExecutorDeviceType device_type) {
-  const auto agg_info = compact_target_info(target_expr);
+  const auto agg_info = target_info(target_expr);
   const auto& arg_ti = static_cast<const Analyzer::AggExpr*>(target_expr)->get_arg()->get_type_info();
   if (arg_ti.is_fp()) {
     agg_args.back() = executor_->cgen_state_->ir_builder_.CreateBitCast(

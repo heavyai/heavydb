@@ -54,6 +54,7 @@ struct TargetInfo {
   bool is_agg;
   SQLAgg agg_kind;
   SQLTypeInfo sql_type;
+  SQLTypeInfo agg_arg_type;
   bool skip_null_val;
   bool is_distinct;
 };
@@ -332,14 +333,19 @@ inline TargetInfo target_info(const PointerType target_expr) {
   const auto agg_expr = cast_to_agg_expr(target_expr);
   bool notnull = target_expr->get_type_info().get_notnull();
   if (!agg_expr) {
-    return {false, kMIN, target_expr ? target_expr->get_type_info() : SQLTypeInfo(kBIGINT, notnull), false, false};
+    return {false,
+            kMIN,
+            target_expr ? target_expr->get_type_info() : SQLTypeInfo(kBIGINT, notnull),
+            SQLTypeInfo(kNULLT, false),
+            false,
+            false};
   }
   const auto agg_type = agg_expr->get_aggtype();
   const auto agg_arg = agg_expr->get_arg();
   if (!agg_arg) {
     CHECK_EQ(kCOUNT, agg_type);
     CHECK(!agg_expr->get_is_distinct());
-    return {true, kCOUNT, SQLTypeInfo(kINT, notnull), false, false};
+    return {true, kCOUNT, SQLTypeInfo(kINT, notnull), SQLTypeInfo(kNULLT, false), false, false};
   }
 
   const auto& agg_arg_ti = agg_arg->get_type_info();
@@ -352,57 +358,38 @@ inline TargetInfo target_info(const PointerType target_expr) {
           agg_expr->get_aggtype(),
           agg_type == kCOUNT ? SQLTypeInfo(is_distinct ? kBIGINT : kINT, notnull)
                              : (agg_type == kAVG ? agg_arg_ti : agg_expr->get_type_info()),
+          agg_arg_ti,
           !agg_arg_ti.get_notnull(),
           is_distinct};
 }
 
-template <class PointerType>
-inline SQLTypeInfo agg_arg_info(const PointerType target_expr) {
-  const auto agg_expr = cast_to_agg_expr(target_expr);
-  if (!agg_expr) {
-    return SQLTypeInfo(kNULLT, false);
-  }
-  const auto agg_type = agg_expr->get_aggtype();
-  const auto agg_arg = agg_expr->get_arg();
-  if (!agg_arg) {
-    CHECK_EQ(kCOUNT, agg_type);
-    CHECK(!agg_expr->get_is_distinct());
-    return SQLTypeInfo(kNULLT, false);
-  }
-
-  return agg_arg->get_type_info();
-}
-
 namespace {
 
-inline TargetInfo get_compact_target(const TargetInfo& target, const SQLTypeInfo& agg_arg) {
+inline const SQLTypeInfo& get_compact_type(const TargetInfo& target) {
   if (!target.is_agg) {
-    return target;
+    return target.sql_type;
   }
   const auto agg_type = target.agg_kind;
+  const auto& agg_arg = target.agg_arg_type;
   if (agg_arg.get_type() == kNULLT) {
     CHECK_EQ(kCOUNT, agg_type);
     CHECK(!target.is_distinct);
-    return target;
+    return target.sql_type;
   }
 
-  return {true, agg_type, agg_type != kCOUNT ? agg_arg : target.sql_type, target.skip_null_val, target.is_distinct};
+  return agg_type != kCOUNT ? agg_arg : target.sql_type;
 }
 
-template <class PointerType>
-inline TargetInfo compact_target_info(const PointerType target_expr) {
-  return get_compact_target(target_info(target_expr), agg_arg_info(target_expr));
-}
-
-inline std::vector<TargetInfo> get_compact_targets(const std::vector<TargetInfo>& targets,
-                                                   const std::vector<SQLTypeInfo>& args) {
-  CHECK_EQ(targets.size(), args.size());
-  std::vector<TargetInfo> new_targets;
-  new_targets.reserve(targets.size());
-  for (size_t i = 0, e = targets.size(); i < e; ++i) {
-    new_targets.push_back(get_compact_target(targets[i], args[i]));
+inline void set_compact_type(TargetInfo& target, const SQLTypeInfo& new_type) {
+  if (target.is_agg) {
+    const auto agg_type = target.agg_kind;
+    auto& agg_arg = target.agg_arg_type;
+    if (agg_type != kCOUNT || agg_arg.get_type() != kNULLT) {
+      agg_arg = new_type;
+      return;
+    }
   }
-  return new_targets;
+  target.sql_type = new_type;
 }
 
 inline int64_t inline_int_null_val(const SQLTypeInfo& ti) {
@@ -576,7 +563,7 @@ inline std::vector<int64_t> init_agg_val_vec(const std::vector<TargetInfo>& targ
       continue;
     }
     agg_init_vals[agg_col_idx] =
-        get_agg_initial_val(agg_info.agg_kind, agg_info.sql_type, is_group_by, smallest_byte_width_to_compact);
+        get_agg_initial_val(agg_info.agg_kind, get_compact_type(agg_info), is_group_by, smallest_byte_width_to_compact);
     if (kAVG == agg_info.agg_kind) {
       agg_init_vals[++agg_col_idx] = 0;
     }
@@ -594,13 +581,15 @@ inline std::vector<int64_t> init_agg_val_vec(const std::vector<Analyzer::Expr*>&
   for (size_t target_idx = 0, agg_col_idx = 0; target_idx < targets.size() && agg_col_idx < agg_col_count;
        ++target_idx, ++agg_col_idx) {
     const auto target_expr = targets[target_idx];
-    auto target_info = compact_target_info(target_expr);
+    auto target = target_info(target_expr);
     auto arg_expr = agg_arg(target_expr);
     if (arg_expr && constrained_not_null(arg_expr, quals)) {
-      target_info.skip_null_val = false;
-      target_info.sql_type.set_notnull(true);
+      target.skip_null_val = false;
+      auto new_type = get_compact_type(target);
+      new_type.set_notnull(true);
+      set_compact_type(target, new_type);
     }
-    target_infos.push_back(target_info);
+    target_infos.push_back(target);
   }
   return init_agg_val_vec(target_infos, agg_col_count, is_group_by, smallest_byte_width_to_compact);
 }
@@ -609,9 +598,8 @@ inline int64_t get_initial_val(const TargetInfo& target_info, const size_t small
   if (!target_info.is_agg) {
     return 0;
   }
-
-  return get_agg_initial_val(
-      target_info.agg_kind, target_info.sql_type, !target_info.sql_type.is_fp(), smallest_byte_width_to_compact);
+  const auto chosen_type = get_compact_type(target_info);
+  return get_agg_initial_val(target_info.agg_kind, chosen_type, !chosen_type.is_fp(), smallest_byte_width_to_compact);
 }
 
 }  // namespace
@@ -818,9 +806,8 @@ class ResultRows {
         queue_time_ms_(queue_time_ms) {
     for (const auto target_expr : targets) {
       targets_.push_back(target_info(target_expr));
-      agg_args_.push_back(agg_arg_info(target_expr));
     }
-    agg_init_vals_ = init_agg_val_vec(get_compact_targets(targets_, agg_args_),
+    agg_init_vals_ = init_agg_val_vec(targets_,
                                       query_mem_desc.agg_col_widths.size(),
                                       !query_mem_desc.group_col_widths.empty(),
                                       query_mem_desc.getCompactByteWidth());
@@ -1025,7 +1012,6 @@ class ResultRows {
                           int8_t* crt_val_i2,
                           const int8_t* new_val_i1,
                           const int8_t* new_val_i2,
-                          const TargetInfo& agg_info,
                           const int64_t agg_skip_val,
                           const size_t target_idx,
                           size_t crt_byte_width = sizeof(int64_t),
@@ -1033,7 +1019,6 @@ class ResultRows {
 
   void reduceDispatch(int64_t* group_by_buffer,
                       const int64_t* other_group_by_buffer,
-                      const std::vector<TargetInfo>& compact_targets,
                       const QueryMemoryDescriptor& query_mem_desc_in,
                       const size_t start,
                       const size_t end);
@@ -1042,7 +1027,6 @@ class ResultRows {
                              const int64_t* other_group_by_buffer,
                              const int32_t groups_buffer_entry_count,
                              const GroupByColRangeType hash_type,
-                             const std::vector<TargetInfo>& targets,
                              const QueryMemoryDescriptor& query_mem_desc_in,
                              const int32_t start,
                              const int32_t end);
@@ -1052,7 +1036,6 @@ class ResultRows {
                      const int32_t groups_buffer_entry_count,
                      const int32_t other_groups_buffer_entry_count,
                      const GroupByColRangeType hash_type,
-                     const std::vector<TargetInfo>& targets,
                      const QueryMemoryDescriptor& query_mem_desc_in);
 
   bool fetchLazyOrBuildRow(std::vector<TargetValue>& row,
@@ -1106,7 +1089,6 @@ class ResultRows {
   void setQueueTime(int64_t queue_time) { queue_time_ms_ = queue_time; }
 
   std::vector<TargetInfo> targets_;
-  std::vector<SQLTypeInfo> agg_args_;
   std::vector<int64_t> simple_keys_;
   typedef std::vector<int64_t> MultiKey;
   std::vector<MultiKey> multi_keys_;
@@ -1624,14 +1606,14 @@ inline std::vector<int8_t> get_col_byte_widths(const T& col_expr_list) {
       // row index
       col_widths.push_back(sizeof(int64_t));
     } else {
-      const auto agg_info = compact_target_info(col_expr);
-      if ((agg_info.sql_type.is_string() && agg_info.sql_type.get_compression() == kENCODING_NONE) ||
-          agg_info.sql_type.is_array()) {
+      const auto agg_info = target_info(col_expr);
+      const auto chosen_type = get_compact_type(agg_info);
+      if ((chosen_type.is_string() && chosen_type.get_compression() == kENCODING_NONE) || chosen_type.is_array()) {
         col_widths.push_back(sizeof(int64_t));
         col_widths.push_back(sizeof(int64_t));
         continue;
       }
-      const auto col_expr_bitwidth = get_bit_width(agg_info.sql_type);
+      const auto col_expr_bitwidth = get_bit_width(chosen_type);
       CHECK_EQ(size_t(0), col_expr_bitwidth % 8);
       col_widths.push_back(static_cast<int8_t>(col_expr_bitwidth >> 3));
       // for average, we'll need to keep the count as well
