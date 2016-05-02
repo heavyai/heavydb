@@ -1346,6 +1346,7 @@ TEST(Select, Subqueries) {
     c("SELECT str, SUM(y) AS n FROM test WHERE x > (SELECT COUNT(*) FROM test) - 14 GROUP BY str ORDER BY n ASC;", dt);
     c("SELECT COUNT(*) FROM test, (SELECT x FROM test_inner) as inner_x WHERE test.x = inner_x.x;", dt);
     c("SELECT COUNT(*) FROM test WHERE x in (SELECT x FROM test WHERE y > 42);", dt);
+    c("SELECT COUNT(*) FROM test WHERE x IN (SELECT x FROM test GROUP BY x ORDER BY COUNT(*) DESC LIMIT 1);", dt);
   }
 }
 

@@ -392,6 +392,7 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
 RelAlgExecutor::WorkUnit RelAlgExecutor::createSortInputWorkUnit(const RelSort* sort) {
   const auto source = sort->getInput(0);
   auto source_work_unit = createWorkUnit(source, get_order_entries(sort));
+  sort->setOutputMetainfo(source->getOutputMetainfo());
   const size_t limit = sort->getLimit();
   const size_t offset = sort->getOffset();
   const size_t scan_limit = sort->collationCount() ? 0 : get_scan_limit(source, limit);
