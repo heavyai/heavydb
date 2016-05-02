@@ -1345,6 +1345,14 @@ TEST(Select, Subqueries) {
     SKIP_NO_GPU();
     c("SELECT str, SUM(y) AS n FROM test WHERE x > (SELECT COUNT(*) FROM test) - 14 GROUP BY str ORDER BY n ASC;", dt);
     c("SELECT COUNT(*) FROM test, (SELECT x FROM test_inner) as inner_x WHERE test.x = inner_x.x;", dt);
+    c("SELECT COUNT(*) FROM test WHERE x in (SELECT x FROM test WHERE y > 42);", dt);
+  }
+}
+
+TEST(Select, InnerJoins) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT COUNT(*) FROM test JOIN test_inner ON test.x = test_inner.x;", dt);
   }
 }
 

@@ -568,14 +568,33 @@ JoinType get_join_type(const RelAlgNode* ra) {
   return join_ra ? join_ra->getJoinType() : JoinType::INVALID;
 }
 
+bool is_literal_true(const RexScalar* condition) {
+  CHECK(condition);
+  const auto literal = dynamic_cast<const RexLiteral*>(condition);
+  return literal && literal->getType() == kBOOLEAN && literal->getVal<bool>();
+}
+
 std::list<std::shared_ptr<Analyzer::Expr>> get_outer_join_quals(const RelAlgNode* ra,
                                                                 const RelAlgTranslator& translator) {
   const auto join = dynamic_cast<const RelJoin*>(ra->getInput(0));
-  std::list<std::shared_ptr<Analyzer::Expr>> outer_join_quals;
-  if (join && join->getCondition() && join->getJoinType() == JoinType::LEFT) {
-    outer_join_quals.push_back(translator.translateScalarRex(join->getCondition()));
+  if (join && join->getCondition() && !is_literal_true(join->getCondition()) && join->getJoinType() == JoinType::LEFT) {
+    const auto join_cond_cf = qual_to_conjunctive_form(translator.translateScalarRex(join->getCondition()));
+    CHECK(join_cond_cf.simple_quals.empty());
+    return join_cond_cf.quals;
   }
-  return outer_join_quals;
+  return {};
+}
+
+std::list<std::shared_ptr<Analyzer::Expr>> get_inner_join_quals(const RelAlgNode* ra,
+                                                                const RelAlgTranslator& translator) {
+  const auto join = dynamic_cast<const RelJoin*>(ra->getInput(0));
+  if (join && join->getCondition() && !is_literal_true(join->getCondition()) &&
+      join->getJoinType() == JoinType::INNER) {
+    const auto join_cond_cf = qual_to_conjunctive_form(translator.translateScalarRex(join->getCondition()));
+    CHECK(join_cond_cf.simple_quals.empty());
+    return join_cond_cf.quals;
+  }
+  return {};
 }
 
 }  // namespace
@@ -596,12 +615,14 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(const RelCompoun
   CHECK(simple_separated_quals.join_quals.empty());
   const auto target_exprs = translate_targets(target_exprs_owned_, scalar_sources, groupby_exprs, compound, translator);
   CHECK_EQ(compound->size(), target_exprs.size());
+  auto inner_join_quals = get_inner_join_quals(compound, translator);
+  inner_join_quals.insert(inner_join_quals.end(), separated_quals.join_quals.begin(), separated_quals.join_quals.end());
   const RelAlgExecutionUnit exe_unit = {input_descs,
                                         input_col_descs,
                                         quals_cf.simple_quals,
                                         separated_quals.regular_quals,
                                         join_type,
-                                        separated_quals.join_quals,
+                                        inner_join_quals,
                                         get_outer_join_quals(compound, translator),
                                         groupby_exprs,
                                         target_exprs,
@@ -633,7 +654,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(const RelProject*
            {},
            {},
            join_type,
-           {},
+           get_inner_join_quals(project, translator),
            get_outer_join_quals(project, translator),
            {nullptr},
            target_exprs,
@@ -696,7 +717,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createFilterWorkUnit(const RelFilter* f
            {},
            {qual},
            join_type,
-           {},
+           get_inner_join_quals(filter, translator),
            get_outer_join_quals(filter, translator),
            {nullptr},
            target_exprs,
