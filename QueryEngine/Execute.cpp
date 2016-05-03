@@ -630,7 +630,11 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Expr* expr,
   if (in_expr) {
     return {codegen(in_expr, co)};
   }
+#ifdef HAVE_CALCITE
   CHECK(false);
+#else
+  throw std::runtime_error("Invalid scalar expression");
+#endif
 }
 
 extern "C" uint64_t string_decode(int8_t* chunk_iter_, int64_t pos) {
