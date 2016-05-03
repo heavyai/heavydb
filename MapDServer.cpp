@@ -1038,10 +1038,11 @@ class MapDHandler : virtual public MapDIf {
     auto executor = Executor::getExecutor(
         cat.get_currentDB().dbId, jit_debug_ ? "/tmp" : "", jit_debug_ ? "mapdquery" : "", 0, 0, nullptr);
     RelAlgExecutor ra_executor(executor.get(), cat);
-    const auto result = ra_executor.executeRelAlgSeq(ed_list,
-                                                     {executor_device_type, true, ExecutorOptLevel::Default},
-                                                     {false, allow_multifrag_, just_explain, allow_loop_joins_},
-                                                     {false, 0, 0, ""});
+    const auto result =
+        ra_executor.executeRelAlgSeq(ed_list,
+                                     {executor_device_type, true, ExecutorOptLevel::Default},
+                                     {false, allow_multifrag_, just_explain, allow_loop_joins_, g_enable_watchdog},
+                                     {false, 0, 0, ""});
     if (just_explain) {
       convert_explain(_return, result.getRows(), column_format);
     } else {
@@ -1143,7 +1144,7 @@ class MapDHandler : virtual public MapDIf {
     const auto exe_result =
         ra_executor.executeRelAlgSeq(ed_list,
                                      {session_info.get_executor_device_type(), true, ExecutorOptLevel::Default},
-                                     {false, allow_multifrag_, false, allow_loop_joins_},
+                                     {false, allow_multifrag_, false, allow_loop_joins_, g_enable_watchdog},
                                      {true, 1, session_info.get_session_id(), render_type});
     const auto& results = exe_result.getRows();
     // reduce execution time by the time spent during queue waiting

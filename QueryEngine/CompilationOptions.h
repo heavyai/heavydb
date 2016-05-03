@@ -16,6 +16,7 @@ struct ExecutionOptions {
   const bool allow_multifrag;
   const bool just_explain;
   const bool allow_loop_joins;
+  const bool with_watchdog;  // Per work unit, not global.
 };
 
 #endif  // QUERYENGINE_COMPILATIONOPTIONS_H

@@ -257,7 +257,7 @@ ResultRows Executor::executeSelectPlan(const Planner::Plan* plan,
                                   query_infos,
                                   ra_exe_unit,
                                   {device_type, hoist_literals, opt_level},
-                                  {false, allow_multifrag, just_explain, allow_loop_joins},
+                                  {false, allow_multifrag, just_explain, allow_loop_joins, g_enable_watchdog},
                                   cat,
                                   row_set_mem_owner_,
                                   render_allocator_map);
@@ -274,7 +274,7 @@ ResultRows Executor::executeSelectPlan(const Planner::Plan* plan,
                            query_infos,
                            ra_exe_unit,
                            {device_type, hoist_literals, opt_level},
-                           {false, allow_multifrag, just_explain, allow_loop_joins},
+                           {false, allow_multifrag, just_explain, allow_loop_joins, g_enable_watchdog},
                            cat,
                            row_set_mem_owner_,
                            render_allocator_map);
@@ -2619,7 +2619,7 @@ ResultRows Executor::executeResultPlan(const Planner::Result* result_plan,
                                      query_infos,
                                      ra_exe_unit,
                                      {device_type, hoist_literals, opt_level},
-                                     {false, allow_multifrag, just_explain, allow_loop_joins},
+                                     {false, allow_multifrag, just_explain, allow_loop_joins, g_enable_watchdog},
                                      cat,
                                      row_set_mem_owner_,
                                      nullptr);
@@ -2702,7 +2702,7 @@ ResultRows Executor::executeResultPlan(const Planner::Result* result_plan,
                        order_entries,
                        0},
                       {ExecutorDeviceType::CPU, hoist_literals, opt_level},
-                      {false, allow_multifrag, just_explain, allow_loop_joins},
+                      {false, allow_multifrag, just_explain, allow_loop_joins, g_enable_watchdog},
                       nullptr,
                       false,
                       row_set_mem_owner_,
@@ -2807,6 +2807,17 @@ size_t get_context_count(const ExecutorDeviceType device_type, const size_t cpu_
   return device_type == ExecutorDeviceType::GPU ? gpu_count : device_type == ExecutorDeviceType::Hybrid
                                                                   ? std::max(static_cast<size_t>(cpu_count), gpu_count)
                                                                   : static_cast<size_t>(cpu_count);
+}
+
+void checkWorkUnitWatchdog(const RelAlgExecutionUnit& ra_exe_unit) {
+  for (const auto target_expr : ra_exe_unit.target_exprs) {
+    if (dynamic_cast<const Analyzer::AggExpr*>(target_expr)) {
+      return;
+    }
+  }
+  if (ra_exe_unit.groupby_exprs.size() == 1 && !ra_exe_unit.groupby_exprs.front() && !ra_exe_unit.scan_limit) {
+    throw WatchdogException("No limit specified for projection query");
+  }
 }
 
 }  // namespace
@@ -3390,6 +3401,9 @@ void Executor::dispatchFragments(const std::function<void(const ExecutorDeviceTy
       }
       rowid_lookup_key = std::max(rowid_lookup_key, skip_frag.second);
     }
+    if (eo.with_watchdog && rowid_lookup_key < 0) {
+      checkWorkUnitWatchdog(ra_exe_unit);
+    }
     for (const auto& kv : fragments_per_device) {
       query_threads.push_back(std::thread(
           dispatch, ExecutorDeviceType::GPU, kv.first, kv.second, kv.first % context_count, rowid_lookup_key));
@@ -3432,6 +3446,9 @@ void Executor::dispatchFragments(const std::function<void(const ExecutorDeviceTy
           std::iota(all_frag_ids.begin(), all_frag_ids.end(), 0);
           frag_ids_for_table[inner_frags.first] = all_frag_ids;
         }
+      }
+      if (eo.with_watchdog && rowid_lookup_key < 0) {
+        checkWorkUnitWatchdog(ra_exe_unit);
       }
       query_threads.push_back(std::thread(dispatch,
                                           chosen_device_type,

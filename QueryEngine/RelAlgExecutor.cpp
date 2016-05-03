@@ -28,27 +28,29 @@ ExecutionResult RelAlgExecutor::executeRelAlgSeq(std::vector<RaExecutionDesc>& e
       handleNop(body);
       continue;
     }
+    const ExecutionOptions eo_work_unit{
+        eo.output_columnar_hint, eo.allow_multifrag, eo.just_explain, eo.allow_loop_joins, eo.with_watchdog && i == 0};
     const auto compound = dynamic_cast<const RelCompound*>(body);
     if (compound) {
-      exec_desc.setResult(executeCompound(compound, co, eo, render_info));
+      exec_desc.setResult(executeCompound(compound, co, eo_work_unit, render_info));
       addTemporaryTable(-compound->getId(), &exec_desc.getResult().getRows());
       continue;
     }
     const auto project = dynamic_cast<const RelProject*>(body);
     if (project) {
-      exec_desc.setResult(executeProject(project, co, eo, render_info));
+      exec_desc.setResult(executeProject(project, co, eo_work_unit, render_info));
       addTemporaryTable(-project->getId(), &exec_desc.getResult().getRows());
       continue;
     }
     const auto filter = dynamic_cast<const RelFilter*>(body);
     if (filter) {
-      exec_desc.setResult(executeFilter(filter, co, eo, render_info));
+      exec_desc.setResult(executeFilter(filter, co, eo_work_unit, render_info));
       addTemporaryTable(-filter->getId(), &exec_desc.getResult().getRows());
       continue;
     }
     const auto sort = dynamic_cast<const RelSort*>(body);
     if (sort) {
-      exec_desc.setResult(executeSort(sort, co, eo, render_info));
+      exec_desc.setResult(executeSort(sort, co, eo_work_unit, render_info));
       addTemporaryTable(-sort->getId(), &exec_desc.getResult().getRows());
       continue;
     }
@@ -483,7 +485,7 @@ ExecutionResult RelAlgExecutor::handleRetry(const int32_t error_code_in,
                                             const ExecutionOptions& eo) {
   auto error_code = error_code_in;
   auto max_groups_buffer_entry_guess = work_unit.max_groups_buffer_entry_guess;
-  ExecutionOptions eo_no_multifrag{eo.output_columnar_hint, false, false, eo.allow_loop_joins};
+  ExecutionOptions eo_no_multifrag{eo.output_columnar_hint, false, false, eo.allow_loop_joins, eo.with_watchdog};
   ExecutionResult result{ResultRows({}, {}, nullptr, nullptr, co.device_type_), {}};
   if (error_code == Executor::ERR_OUT_OF_GPU_MEM) {
     result = {executor_->executeWorkUnit(&error_code,

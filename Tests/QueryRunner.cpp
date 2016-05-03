@@ -131,7 +131,7 @@ ResultRows run_multiple_agg(const std::string& query_str,
     RelAlgExecutor ra_executor(executor.get(), cat);
     return ra_executor.executeRelAlgSeq(ed_list,
                                         {device_type, true, ExecutorOptLevel::LoopStrengthReduction},
-                                        {false, true, false, true},
+                                        {false, true, false, true, false},
                                         {false, 0, 0, ""}).getRows();
   }
 #endif  // HAVE_RAVM
