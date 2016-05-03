@@ -1029,6 +1029,71 @@ class MapDHandler : virtual public MapDIf {
     std::cout << "Total Import Time: " << (double)ms / 1000.0 << " Seconds." << std::endl;
   }
 
+  void import_geo_table(const TSessionId session,
+                        const std::string& file_name,
+                        const std::string& table_name,
+                        const TCopyParams& cp) {
+    check_read_only("import_table");
+    check_read_only("create_table");
+    const auto session_info = get_session(session);
+    auto& cat = session_info.get_catalog();
+
+    LOG(INFO) << "create_geo_table: " << table_name;
+
+    if (cat.getMetadataForTable(table_name) != nullptr) {
+      TMapDException ex;
+      ex.error_msg = "Table " + table_name + " already exists. Appending shapefiles is not currently supported.";
+      LOG(ERROR) << ex.error_msg;
+      throw ex;
+    }
+
+    {
+      TableDescriptor td;
+      td.tableName = table_name;
+      td.isView = false;
+      td.fragType = Fragmenter_Namespace::FragmenterType::INSERT_ORDER;
+      td.maxFragRows = DEFAULT_FRAGMENT_SIZE;
+      td.fragPageSize = DEFAULT_PAGE_SIZE;
+      td.maxRows = DEFAULT_MAX_ROWS;
+
+      std::list<ColumnDescriptor> cds = Importer_NS::Importer::shapefileToColumnDescriptors(file_name);
+
+      td.nColumns = cds.size();
+      td.isMaterialized = false;
+      td.storageOption = kDISK;
+      td.refreshOption = kMANUAL;
+      td.checkOption = false;
+      td.isReady = true;
+      td.fragmenter = nullptr;
+
+      cat.createTable(td, cds);
+    }
+
+    LOG(INFO) << "import_geo_table " << table_name << " from " << file_name;
+
+    const TableDescriptor* td = cat.getMetadataForTable(table_name);
+    if (td == nullptr) {
+      TMapDException ex;
+      ex.error_msg = "Table " + table_name + " does not exist.";
+      LOG(ERROR) << ex.error_msg;
+      throw ex;
+    }
+
+    auto file_path = boost::filesystem::path(file_name);
+    if (!boost::filesystem::exists(file_path)) {
+      TMapDException ex;
+      ex.error_msg = "File does not exist: ";
+      LOG(ERROR) << ex.error_msg << file_path;
+      throw ex;
+    }
+
+    Importer_NS::CopyParams copy_params = thrift_to_copyparams(cp);
+
+    Importer_NS::Importer importer(cat, td, file_path.string(), copy_params);
+    auto ms = measure<>::execution([&]() { importer.importShapefile(); });
+    std::cout << "Total Import Time: " << (double)ms / 1000.0 << " Seconds." << std::endl;
+  }
+
   void import_table_status(TImportStatus& _return, const TSessionId session, const std::string& import_id) {
     LOG(INFO) << "import_table_status " << import_id;
     auto is = Importer_NS::Importer::get_import_status(import_id);

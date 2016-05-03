@@ -225,6 +225,21 @@ void detect_table(char* file_name, TCopyParams& copy_params, ClientContext& cont
   }
 }
 
+void import_geo_table(char* file_name, char* table_name, TCopyParams& copy_params, ClientContext& context) {
+  if (context.session == INVALID_SESSION_ID) {
+    std::cerr << "Not connected to any databases." << std::endl;
+    return;
+  }
+
+  try {
+    context.client.import_geo_table(context.session, file_name, table_name, copy_params);
+  } catch (TMapDException& e) {
+    std::cerr << e.error_msg << std::endl;
+  } catch (TException& te) {
+    std::cerr << "Thrift error in import_geo_table: " << te.what() << std::endl;
+  }
+}
+
 void process_backslash_commands(char* command, ClientContext& context) {
   switch (command[1]) {
     case 'h':
@@ -621,6 +636,11 @@ int main(int argc, char** argv) {
       } else {
         std::cout << "Cannot connect to MapD Server." << std::endl;
       }
+    } else if (!strncmp(line, "\\copygeo", 8)) {
+      char* filepath = strtok(line + 9, " ");
+      char* table = strtok(nullptr, " ");
+      TCopyParams copy_params;
+      import_geo_table(filepath, table, copy_params, context);
     } else if (!strncmp(line, "\\copy", 5)) {
       char* filepath = strtok(line + 6, " ");
       char* table = strtok(NULL, " ");

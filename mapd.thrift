@@ -217,4 +217,5 @@ service MapD {
   void start_heap_profile() throws (1: TMapDException e 2: ThriftException te)
   void stop_heap_profile() throws (1: TMapDException e 2: ThriftException te)
   string get_heap_profile() throws (1: TMapDException e 2: ThriftException te)
+  void import_geo_table(1: TSessionId session, 2: string file_name, 3: string table_name, 4: TCopyParams copy_params) throws (1: TMapDException e 2: ThriftException te)
 }
