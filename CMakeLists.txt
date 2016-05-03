@@ -128,7 +128,7 @@ endif()
 
 option(ENABLE_OVERFLOW "Enable Overflow/Underflow Detection" OFF)
 if(ENABLE_OVERFLOW)
-    add_definitions("-DOVERFLOW")
+    add_definitions("-DDETECT_OVERFLOW")
 endif()
 
 option(ENABLE_PROFILER "Enable google perftools" OFF)
