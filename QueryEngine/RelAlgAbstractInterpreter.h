@@ -291,7 +291,7 @@ class RexAgg : public Rex {
 
 class RelAlgNode {
  public:
-  RelAlgNode() : id_(crt_id_++), context_data_(nullptr) {}
+  RelAlgNode() : id_(crt_id_++), context_data_(nullptr), is_nop_(false) {}
 
   virtual ~RelAlgNode() {}
 
@@ -336,6 +336,10 @@ class RelAlgNode {
     }
   }
 
+  bool isNop() const { return is_nop_; }
+
+  void markAsNop() { is_nop_ = true; }
+
   virtual std::string toString() const = 0;
 
  protected:
@@ -344,6 +348,7 @@ class RelAlgNode {
 
  private:
   mutable const void* context_data_;
+  bool is_nop_;
   mutable std::vector<TargetMetaInfo> targets_metainfo_;
   static unsigned crt_id_;
 };
@@ -455,6 +460,8 @@ class RelAggregate : public RelAlgNode {
   size_t size() const { return groupby_count_ + agg_exprs_.size(); }
 
   const size_t getGroupByCount() const { return groupby_count_; }
+
+  const size_t getAggExprsCount() const { return agg_exprs_.size(); }
 
   const std::vector<std::string>& getFields() const { return fields_; }
 

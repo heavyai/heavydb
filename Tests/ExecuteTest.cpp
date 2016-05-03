@@ -1347,6 +1347,7 @@ TEST(Select, Subqueries) {
     c("SELECT COUNT(*) FROM test, (SELECT x FROM test_inner) as inner_x WHERE test.x = inner_x.x;", dt);
     c("SELECT COUNT(*) FROM test WHERE x in (SELECT x FROM test WHERE y > 42);", dt);
     c("SELECT COUNT(*) FROM test WHERE x IN (SELECT x FROM test GROUP BY x ORDER BY COUNT(*) DESC LIMIT 1);", dt);
+    c("SELECT COUNT(*) FROM test WHERE x IN (SELECT x FROM test GROUP BY x);", dt);
   }
 }
 

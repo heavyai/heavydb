@@ -24,6 +24,10 @@ ExecutionResult RelAlgExecutor::executeRelAlgSeq(std::vector<RaExecutionDesc>& e
   for (size_t i = 0; i < exec_desc_count; ++i) {
     auto& exec_desc = exec_descs[i];
     const auto body = exec_desc.getBody();
+    if (body->isNop()) {
+      handleNop(body);
+      continue;
+    }
     const auto compound = dynamic_cast<const RelCompound*>(body);
     if (compound) {
       exec_desc.setResult(executeCompound(compound, co, eo, render_info));
@@ -51,6 +55,16 @@ ExecutionResult RelAlgExecutor::executeRelAlgSeq(std::vector<RaExecutionDesc>& e
     CHECK(false);
   }
   return exec_descs[exec_desc_count - 1].getResult();
+}
+
+void RelAlgExecutor::handleNop(const RelAlgNode* body) {
+  CHECK(dynamic_cast<const RelAggregate*>(body));
+  CHECK_EQ(size_t(1), body->inputCount());
+  const auto input = body->getInput(0);
+  body->setOutputMetainfo(input->getOutputMetainfo());
+  const auto it = temporary_tables_.find(-input->getId());
+  CHECK(it != temporary_tables_.end());
+  addTemporaryTable(-body->getId(), it->second);
 }
 
 namespace {

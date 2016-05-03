@@ -414,6 +414,21 @@ void bind_inputs(const std::vector<RelAlgNode*>& nodes) {
   }
 }
 
+void mark_nops(const std::vector<RelAlgNode*>& nodes) {
+  for (auto node : nodes) {
+    const auto agg_node = dynamic_cast<RelAggregate*>(node);
+    if (!agg_node || agg_node->getAggExprsCount()) {
+      continue;
+    }
+    CHECK_EQ(size_t(1), node->inputCount());
+    const auto agg_input_node = dynamic_cast<const RelAggregate*>(node->getInput(0));
+    if (agg_input_node && !agg_input_node->getAggExprsCount() &&
+        agg_node->getGroupByCount() == agg_input_node->getGroupByCount()) {
+      agg_node->markAsNop();
+    }
+  }
+}
+
 std::vector<const Rex*> reproject_targets(const RelProject* simple_project,
                                           const std::vector<const Rex*>& target_exprs) {
   std::vector<const Rex*> result;
@@ -645,6 +660,7 @@ class RaAbstractInterp {
     }
     CHECK(!nodes_.empty());
     bind_inputs(nodes_);
+    mark_nops(nodes_);
     coalesce_nodes(nodes_);
     simplify_sort(nodes_);
     CHECK(is_valid_rel_alg(nodes_.back()));

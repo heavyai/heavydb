@@ -86,6 +86,8 @@ class RelAlgExecutor {
     CHECK(it_ok.second);
   }
 
+  void handleNop(const RelAlgNode*);
+
   Executor* executor_;
   const Catalog_Namespace::Catalog& cat_;
   TemporaryTables temporary_tables_;
