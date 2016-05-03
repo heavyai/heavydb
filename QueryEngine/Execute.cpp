@@ -2816,7 +2816,7 @@ void checkWorkUnitWatchdog(const RelAlgExecutionUnit& ra_exe_unit) {
     }
   }
   if (ra_exe_unit.groupby_exprs.size() == 1 && !ra_exe_unit.groupby_exprs.front() && !ra_exe_unit.scan_limit) {
-    throw WatchdogException("No limit specified for projection query");
+    throw WatchdogException("Query would require a scan without a limit");
   }
 }
 
