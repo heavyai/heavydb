@@ -2896,20 +2896,16 @@ ResultRows Executor::executeWorkUnit(int32_t* error_code,
     all_tables_fragments[ra_exe_unit.input_descs[table_idx].getTableId()] = &query_infos[table_idx].fragments;
   }
   const QueryMemoryDescriptor& query_mem_desc = execution_dispatch.getQueryMemoryDescriptor();
-  dispatchFragments(
-      dispatch,
-      execution_dispatch.getDeviceType(),
-      options.allow_multifrag && (ra_exe_unit.groupby_exprs.empty() || query_mem_desc.usesCachedContext()),
-      is_agg,
-      ra_exe_unit.input_descs,
-      all_tables_fragments,
-      ra_exe_unit.simple_quals,
-      execution_dispatch.getFragOffsets(),
-      context_count,
-      scheduler_cv,
-      scheduler_mutex,
-      available_gpus,
-      available_cpus);
+  dispatchFragments(dispatch,
+                    execution_dispatch,
+                    options,
+                    is_agg,
+                    all_tables_fragments,
+                    context_count,
+                    scheduler_cv,
+                    scheduler_mutex,
+                    available_gpus,
+                    available_cpus);
   cat.get_dataMgr().freeAllBuffers();
   if (is_agg) {
     try {
@@ -3289,6 +3285,10 @@ ExecutorDeviceType Executor::ExecutionDispatch::getDeviceType() const {
   return co_.device_type_;
 }
 
+const RelAlgExecutionUnit& Executor::ExecutionDispatch::getExecutionUnit() const {
+  return ra_exe_unit_;
+}
+
 const QueryMemoryDescriptor& Executor::ExecutionDispatch::getQueryMemoryDescriptor() const {
   // TODO(alex): make query_mem_desc easily available
   return compilation_result_cpu_.native_functions.empty() ? compilation_result_gpu_.query_mem_desc
@@ -3338,13 +3338,10 @@ void Executor::dispatchFragments(const std::function<void(const ExecutorDeviceTy
                                                           const std::map<int, std::vector<size_t>>& frag_ids,
                                                           const size_t ctx_idx,
                                                           const int64_t rowid_lookup_key)> dispatch,
-                                 const ExecutorDeviceType device_type,
-                                 const bool allow_multifrag,
+                                 const ExecutionDispatch& execution_dispatch,
+                                 const ExecutionOptions& eo,
                                  const bool is_agg,
-                                 const std::vector<InputDescriptor>& input_descs,
                                  const std::map<int, const TableFragments*>& all_tables_fragments,
-                                 const std::list<std::shared_ptr<Analyzer::Expr>>& simple_quals,
-                                 const std::vector<uint64_t>& all_frag_row_offsets,
                                  const size_t context_count,
                                  std::condition_variable& scheduler_cv,
                                  std::mutex& scheduler_mutex,
@@ -3353,11 +3350,18 @@ void Executor::dispatchFragments(const std::function<void(const ExecutorDeviceTy
   size_t frag_list_idx{0};
   std::vector<std::thread> query_threads;
   int64_t rowid_lookup_key{-1};
-  CHECK(!input_descs.empty());
-  const int outer_table_id = input_descs.front().getTableId();
+  const auto& ra_exe_unit = execution_dispatch.getExecutionUnit();
+  CHECK(!ra_exe_unit.input_descs.empty());
+  const int outer_table_id = ra_exe_unit.input_descs.front().getTableId();
   auto it = all_tables_fragments.find(outer_table_id);
   CHECK(it != all_tables_fragments.end());
   const auto fragments = it->second;
+  const auto device_type = execution_dispatch.getDeviceType();
+  const auto& all_frag_row_offsets = execution_dispatch.getFragOffsets();
+
+  const auto& query_mem_desc = execution_dispatch.getQueryMemoryDescriptor();
+  const bool allow_multifrag =
+      eo.allow_multifrag && (ra_exe_unit.groupby_exprs.empty() || query_mem_desc.usesCachedContext());
 
   if ((device_type == ExecutorDeviceType::GPU) && allow_multifrag && is_agg) {
     // NB: We should never be on this path when the query is retried because of
@@ -3366,7 +3370,8 @@ void Executor::dispatchFragments(const std::function<void(const ExecutorDeviceTy
     std::unordered_map<int, std::map<int, std::vector<size_t>>> fragments_per_device;
     for (size_t frag_id = 0; frag_id < fragments->size(); ++frag_id) {
       const auto& fragment = (*fragments)[frag_id];
-      const auto skip_frag = skipFragment(outer_table_id, fragment, simple_quals, all_frag_row_offsets, frag_id);
+      const auto skip_frag =
+          skipFragment(outer_table_id, fragment, ra_exe_unit.simple_quals, all_frag_row_offsets, frag_id);
       if (skip_frag.first) {
         continue;
       }
@@ -3391,7 +3396,8 @@ void Executor::dispatchFragments(const std::function<void(const ExecutorDeviceTy
     }
   } else {
     for (size_t i = 0; i < fragments->size(); ++i) {
-      const auto skip_frag = skipFragment(outer_table_id, (*fragments)[i], simple_quals, all_frag_row_offsets, i);
+      const auto skip_frag =
+          skipFragment(outer_table_id, (*fragments)[i], ra_exe_unit.simple_quals, all_frag_row_offsets, i);
       if (skip_frag.first) {
         continue;
       }

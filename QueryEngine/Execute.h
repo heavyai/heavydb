@@ -423,6 +423,8 @@ class Executor {
 
     ExecutorDeviceType getDeviceType() const;
 
+    const RelAlgExecutionUnit& getExecutionUnit() const;
+
     const QueryMemoryDescriptor& getQueryMemoryDescriptor() const;
 
     const bool outputColumnar() const;
@@ -470,13 +472,10 @@ class Executor {
                                                   const std::map<int, std::vector<size_t>>& frag_ids,
                                                   const size_t ctx_idx,
                                                   const int64_t rowid_lookup_key)> dispatch,
-                         const ExecutorDeviceType device_type,
-                         const bool allow_multifrag,
+                         const ExecutionDispatch& execution_dispatch,
+                         const ExecutionOptions& eo,
                          const bool is_agg,
-                         const std::vector<InputDescriptor>& input_descs,
                          const std::map<int, const TableFragments*>& all_tables_fragments,
-                         const std::list<std::shared_ptr<Analyzer::Expr>>& simple_quals,
-                         const std::vector<uint64_t>& all_frag_row_offsets,
                          const size_t context_count,
                          std::condition_variable& scheduler_cv,
                          std::mutex& scheduler_mutex,
