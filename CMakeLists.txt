@@ -126,6 +126,11 @@ if(ENABLE_RAVM)
     add_definitions("-DHAVE_RAVM")
 endif()
 
+option(ENABLE_OVERFLOW "Enable Overflow/Underflow Detection" OFF)
+if(ENABLE_OVERFLOW)
+    add_definitions("-DOVERFLOW")
+endif()
+
 option(ENABLE_PROFILER "Enable google perftools" OFF)
 if(ENABLE_PROFILER)
   find_package(Gperftools REQUIRED COMPONENTS TCMALLOC PROFILER)
