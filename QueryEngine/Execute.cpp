@@ -2366,7 +2366,7 @@ int64_t reduce_results(const SQLAgg agg,
         }
       }
       if (ti.is_integer() || ti.is_decimal() || ti.is_time()) {
-        return std::accumulate(out_vec, out_vec + out_vec_sz, 0);
+        return std::accumulate(out_vec, out_vec + out_vec_sz, int64_t(0));
       } else {
         CHECK(ti.is_fp());
         switch (out_byte_width) {
@@ -2390,7 +2390,7 @@ int64_t reduce_results(const SQLAgg agg,
       }
       break;
     case kCOUNT:
-      return std::accumulate(out_vec, out_vec + out_vec_sz, (int64_t)0);
+      return std::accumulate(out_vec, out_vec + out_vec_sz, int64_t(0));
     case kMIN: {
       if (ti.is_integer() || ti.is_decimal() || ti.is_time() || ti.is_boolean()) {
         int64_t agg_result = agg_init_val;
