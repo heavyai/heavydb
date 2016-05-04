@@ -778,6 +778,7 @@ class ResultRows {
              const std::vector<Analyzer::Expr*>& targets,
              const Executor* executor,
              const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+             const std::vector<int64_t>& init_vals,
              const ExecutorDeviceType device_type,
              int64_t* group_by_buffer = nullptr,
              const int32_t groups_buffer_entry_count = 0,
@@ -787,6 +788,7 @@ class ResultRows {
       : executor_(executor),
         query_mem_desc_(query_mem_desc),
         row_set_mem_owner_(row_set_mem_owner),
+        agg_init_vals_(init_vals),
         group_by_buffer_(group_by_buffer),
         groups_buffer_entry_count_(groups_buffer_entry_count),
         group_by_buffer_idx_(0),
@@ -807,15 +809,12 @@ class ResultRows {
     for (const auto target_expr : targets) {
       targets_.push_back(target_info(target_expr));
     }
-    agg_init_vals_ = init_agg_val_vec(targets_,
-                                      query_mem_desc.agg_col_widths.size(),
-                                      !query_mem_desc.group_col_widths.empty(),
-                                      query_mem_desc.getCompactByteWidth());
   }
 
   ResultRows(const QueryMemoryDescriptor& query_mem_desc,
              const std::vector<Analyzer::Expr*>& targets,
              const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+             const std::vector<int64_t>& init_vals,
              int64_t* group_by_buffer,
              const size_t groups_buffer_entry_count,
              const bool output_columnar,

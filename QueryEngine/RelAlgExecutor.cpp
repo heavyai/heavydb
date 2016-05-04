@@ -486,7 +486,7 @@ ExecutionResult RelAlgExecutor::handleRetry(const int32_t error_code_in,
   auto error_code = error_code_in;
   auto max_groups_buffer_entry_guess = work_unit.max_groups_buffer_entry_guess;
   ExecutionOptions eo_no_multifrag{eo.output_columnar_hint, false, false, eo.allow_loop_joins, eo.with_watchdog};
-  ExecutionResult result{ResultRows({}, {}, nullptr, nullptr, co.device_type_), {}};
+  ExecutionResult result{ResultRows({}, {}, nullptr, nullptr, {}, co.device_type_), {}};
   if (error_code == Executor::ERR_OUT_OF_GPU_MEM) {
     result = {executor_->executeWorkUnit(&error_code,
                                          max_groups_buffer_entry_guess,

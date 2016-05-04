@@ -68,6 +68,7 @@
 ResultRows::ResultRows(const QueryMemoryDescriptor& query_mem_desc,
                        const std::vector<Analyzer::Expr*>& targets,
                        const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+                       const std::vector<int64_t>& init_vals,
                        int64_t* group_by_buffer,
                        const size_t groups_buffer_entry_count,
                        const bool output_columnar,
@@ -77,6 +78,7 @@ ResultRows::ResultRows(const QueryMemoryDescriptor& query_mem_desc,
     : executor_(query_mem_desc.executor_),
       query_mem_desc_(query_mem_desc),
       row_set_mem_owner_(row_set_mem_owner),
+      agg_init_vals_(init_vals),
       group_by_buffer_(nullptr),
       groups_buffer_entry_count_(groups_buffer_entry_count),
       group_by_buffer_idx_(0),
@@ -98,7 +100,6 @@ ResultRows::ResultRows(const QueryMemoryDescriptor& query_mem_desc,
     in_place_groups_by_buffers_entry_count_.push_back(groups_buffer_entry_count);
   }
   bool has_lazy_columns = false;
-  const bool is_group_by{!query_mem_desc.group_col_widths.empty()};
   for (const auto target_expr : targets) {
     const auto agg_info = target_info(target_expr);
     bool is_real_string = agg_info.sql_type.is_string() && agg_info.sql_type.get_compression() == kENCODING_NONE;
@@ -110,8 +111,6 @@ ResultRows::ResultRows(const QueryMemoryDescriptor& query_mem_desc,
     targets_.push_back(agg_info);
   }
   std::vector<TargetValue> row;
-  agg_init_vals_ = init_agg_val_vec(
-      targets_, query_mem_desc.agg_col_widths.size(), is_group_by, query_mem_desc_.getCompactByteWidth());
   if (in_place_ && has_lazy_columns) {
     while (fetchLazyOrBuildRow(row, col_buffers, targets, false, false, true)) {
     };
@@ -154,7 +153,7 @@ bool ResultRows::reduceSingleRow(const int8_t* row_ptr,
                           query_mem_desc_.agg_col_widths[agg_col_idx].compact);
       }
       if (agg_col_idx == static_cast<size_t>(query_mem_desc_.idx_target_as_key) &&
-          partial_bin_val != query_mem_desc_.init_val) {
+          partial_bin_val != agg_init_vals_[query_mem_desc_.idx_target_as_key]) {
         CHECK(agg_info.is_agg);
         discard_partial_result = false;
       }
@@ -2004,6 +2003,7 @@ ResultRows QueryExecutionContext::groupBufferToResults(const size_t i,
                           targets,
                           executor_,
                           row_set_mem_owner_,
+                          init_agg_vals_,
                           device_type_,
                           group_by_buffer,
                           groups_buffer_entry_count,
@@ -2011,7 +2011,7 @@ ResultRows QueryExecutionContext::groupBufferToResults(const size_t i,
                           warp_count);
       }
       // Can't do the fast reduction in auto mode for interleaved bins, warp count isn't the same
-      ResultRows results({}, targets, executor_, row_set_mem_owner_, ExecutorDeviceType::CPU);
+      ResultRows results({}, targets, executor_, row_set_mem_owner_, init_agg_vals_, ExecutorDeviceType::CPU);
       results.addKeylessGroupByBuffer(
           group_by_buffer, groups_buffer_entry_count, query_mem_desc_.min_val, warp_count, output_columnar_);
       return results;
@@ -2019,6 +2019,7 @@ ResultRows QueryExecutionContext::groupBufferToResults(const size_t i,
     ResultRows results(query_mem_desc_,
                        targets,
                        row_set_mem_owner_,
+                       init_agg_vals_,
                        group_by_buffer,
                        groups_buffer_entry_count,
                        output_columnar_,
@@ -2036,6 +2037,7 @@ ResultRows QueryExecutionContext::groupBufferToResults(const size_t i,
   ResultRows results(query_mem_desc_,
                      targets,
                      row_set_mem_owner_,
+                     init_agg_vals_,
                      nullptr,
                      0,
                      output_columnar_,
@@ -3144,7 +3146,6 @@ GroupByAndAggregate::KeylessInfo GroupByAndAggregate::getKeylessInfo(
             default:
               break;
           }
-          found = false;
           break;
         }
         case kMAX: {
@@ -3169,7 +3170,6 @@ GroupByAndAggregate::KeylessInfo GroupByAndAggregate::getKeylessInfo(
             default:
               break;
           }
-          found = false;
           break;
         }
         default:

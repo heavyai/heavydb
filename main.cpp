@@ -339,8 +339,8 @@ int main(int argc, char* argv[]) {
             }
             auto executor = Executor::getExecutor(
                 plan->get_catalog().get_currentDB().dbId, jit_debug ? "/tmp" : "", jit_debug ? "mapdquery" : "");
-            ResultRows results({}, {}, nullptr, nullptr, ExecutorDeviceType::CPU);
-            ResultRows results_cpu({}, {}, nullptr, nullptr, ExecutorDeviceType::CPU);
+            ResultRows results({}, {}, nullptr, nullptr, {}, ExecutorDeviceType::CPU);
+            ResultRows results_cpu({}, {}, nullptr, nullptr, {}, ExecutorDeviceType::CPU);
             {
               auto ms = measure<>::execution([&]() {
                 results_cpu = executor->execute(plan,
@@ -357,7 +357,7 @@ int main(int argc, char* argv[]) {
               }
             }
             if (cat->get_dataMgr().gpusPresent() && plan->get_stmt_type() == kSELECT) {
-              ResultRows results_gpu({}, {}, nullptr, nullptr, ExecutorDeviceType::GPU);
+              ResultRows results_gpu({}, {}, nullptr, nullptr, {}, ExecutorDeviceType::GPU);
               {
                 auto ms = measure<>::execution([&]() {
                   results_gpu = executor->execute(plan,
