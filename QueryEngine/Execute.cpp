@@ -2598,7 +2598,6 @@ ResultRows Executor::executeResultPlan(const Planner::Result* result_plan,
   }
   const auto join_quals = join_plan ? join_plan->get_quals() : std::list<std::shared_ptr<Analyzer::Expr>>{};
   CHECK(check_plan_sanity(agg_plan));
-  const auto order_entries = sort_plan ? sort_plan->get_order_entries() : std::list<Analyzer::OrderEntry>{};
   const auto query_infos = get_table_infos(input_descs, cat, TemporaryTables{});
   const auto ra_exe_unit_in = RelAlgExecutionUnit{input_descs,
                                                   input_col_descs,
@@ -2609,7 +2608,7 @@ ResultRows Executor::executeResultPlan(const Planner::Result* result_plan,
                                                   {},
                                                   agg_plan->get_groupby_list(),
                                                   get_agg_target_exprs(agg_plan),
-                                                  order_entries,
+                                                  {},
                                                   0};
   QueryRewriter query_rewriter(ra_exe_unit_in, query_infos, this, result_plan);
   const auto ra_exe_unit = query_rewriter.rewrite();
@@ -2687,6 +2686,7 @@ ResultRows Executor::executeResultPlan(const Planner::Result* result_plan,
   for (int pseudo_col = 1; pseudo_col <= in_col_count; ++pseudo_col) {
     pseudo_input_col_descs.emplace_back(pseudo_col, 0, -1);
   }
+  const auto order_entries = sort_plan ? sort_plan->get_order_entries() : std::list<Analyzer::OrderEntry>{};
   auto compilation_result =
       compileWorkUnit(false,
                       {},

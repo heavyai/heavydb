@@ -532,6 +532,7 @@ TEST(Select, OrderBy) {
                   v<int64_t>(rows.getRowAt(row_idx, 3, true)) == 301);
     }
     c("SELECT x, COUNT(distinct y) AS n FROM test GROUP BY x ORDER BY n DESC;", dt);
+    c("SELECT x, x, COUNT(*) AS val FROM test GROUP BY x HAVING val > 5 ORDER BY val DESC LIMIT 5;", dt);
   }
 }
 
