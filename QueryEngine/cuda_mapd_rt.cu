@@ -4,7 +4,7 @@
 #include "GpuRtConstants.h"
 
 extern "C" __device__ int32_t pos_start_impl(const int32_t* row_index_resume) {
-  return blockIdx.x * blockDim.x + threadIdx.x + (row_index_resume ? row_index_resume[blockIdx.x] : 0);
+  return blockIdx.x * blockDim.x + threadIdx.x;
 }
 
 extern "C" __device__ int32_t group_buff_idx_impl() {
@@ -476,16 +476,4 @@ extern "C" __device__ uint64_t string_decode(int8_t* chunk_iter_, int64_t pos) {
   ChunkIter_get_nth(chunk_iter, pos, false, &vd, &is_end);
   return vd.is_null ? 0 : (reinterpret_cast<uint64_t>(vd.pointer) & 0xffffffffffff) |
                               (static_cast<uint64_t>(vd.length) << 48);
-}
-
-extern "C" __device__ int32_t merge_error_code(const int32_t err_code, int32_t* merged_err_code) {
-  if (err_code) {
-    int32_t assumed = *merged_err_code;
-    int32_t old;
-    do {
-      old = atomicCAS(merged_err_code, assumed, err_code);
-    } while (old != assumed);
-  }
-  __syncthreads();
-  return *merged_err_code;
 }
