@@ -120,8 +120,6 @@ ResultRows::ResultRows(const QueryMemoryDescriptor& query_mem_desc,
 }
 
 bool ResultRows::reduceSingleRow(const int8_t* row_ptr,
-                                 const int32_t entry_count,
-                                 const size_t bin,
                                  const int8_t warp_count,
                                  const bool is_columnar,
                                  const bool keep_cnt_dtnc_buff,
@@ -252,8 +250,6 @@ void ResultRows::addKeylessGroupByBuffer(const int64_t* group_by_buffer,
     memcpy(&agg_vals[0], &agg_init_vals_[0], agg_col_count * sizeof(agg_vals[0]));
     beginRow(bin + min_val);
     if (reduceSingleRow(reinterpret_cast<const int8_t*>(group_by_buffer) + query_mem_desc_.getColOffInBytes(bin, 0),
-                        groups_buffer_entry_count,
-                        bin,
                         warp_count,
                         is_columnar,
                         true,
@@ -1228,8 +1224,6 @@ bool ResultRows::fetchLazyOrBuildRow(std::vector<TargetValue>& row,
       CHECK_EQ(agg_col_count, agg_init_vals_.size());
       memcpy(&agg_vals[0], &agg_init_vals_[0], agg_col_count * sizeof(agg_vals[0]));
       if (reduceSingleRow(reinterpret_cast<int8_t*>(group_by_buffer_) + bin_base_off,
-                          groups_buffer_entry_count_,
-                          group_by_buffer_idx_,
                           warp_count,
                           output_columnar_,
                           false,

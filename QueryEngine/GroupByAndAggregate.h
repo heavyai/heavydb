@@ -897,8 +897,6 @@ class ResultRows {
   }
 
   bool reduceSingleRow(const int8_t* row_ptr,
-                       const int32_t groups_buffer_entry_count,
-                       const size_t bin,
                        const int8_t warp_count,
                        const bool is_columnar,
                        const bool keep_cnt_dtnc_buff,
