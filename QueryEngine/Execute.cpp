@@ -4302,7 +4302,7 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
         done_div_zero_check = true;
         auto& error_code_arg = query_func->getArgumentList().back();
         ++it;
-        llvm::CallInst::Create(cgen_state_->module_->getFunction("merge_error_code"),
+        llvm::CallInst::Create(cgen_state_->module_->getFunction("record_error_code"),
                                std::vector<llvm::Value*>{&filter_call, &error_code_arg},
                                "",
                                &*it);
@@ -4388,7 +4388,7 @@ void Executor::createErrorCheckControlFlow(llvm::Function* query_func) {
         llvm::IRBuilder<> ir_builder(&br_instr);
         llvm::Value* err_lv = inst_it;
         auto& error_code_arg = query_func->getArgumentList().back();
-        err_lv = ir_builder.CreateCall(cgen_state_->module_->getFunction("merge_error_code"),
+        err_lv = ir_builder.CreateCall(cgen_state_->module_->getFunction("record_error_code"),
                                        std::vector<llvm::Value*>{err_lv, &error_code_arg});
         err_lv = ir_builder.CreateICmp(llvm::ICmpInst::ICMP_NE, err_lv, ll_int(int32_t(0)));
         auto& last_bb = query_func->back();
@@ -4798,7 +4798,7 @@ declare i8 @string_gt_nullable(i8*, i32, i8*, i32, i8);
 declare i8 @string_ge_nullable(i8*, i32, i8*, i32, i8);
 declare i8 @string_eq_nullable(i8*, i32, i8*, i32, i8);
 declare i8 @string_ne_nullable(i8*, i32, i8*, i32, i8);
-declare i32 @merge_error_code(i32, i32*);
+declare i32 @record_error_code(i32, i32*);
 )" +
     gen_array_any_all_sigs();
 
