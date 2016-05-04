@@ -3145,6 +3145,7 @@ GroupByAndAggregate::KeylessInfo GroupByAndAggregate::getKeylessInfo(
             default:
               break;
           }
+          found = false;
           break;
         }
         case kMAX: {
@@ -3169,6 +3170,7 @@ GroupByAndAggregate::KeylessInfo GroupByAndAggregate::getKeylessInfo(
             default:
               break;
           }
+          found = false;
           break;
         }
         default:
