@@ -6,6 +6,7 @@
 
 namespace QueryRenderer {
 typedef void QueryRenderManager;
+typedef void QueryDataLayout;
 }  // namespace QueryRenderer
 
 #include <cuda.h>
