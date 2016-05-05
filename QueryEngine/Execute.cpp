@@ -3640,8 +3640,8 @@ int32_t Executor::executePlanWithoutGroupBy(const CompilationResult& compilation
                                                  render_allocator_map);
     } catch (const OutOfMemory&) {
       return ERR_OUT_OF_GPU_MEM;
-    } catch (...) {
-      LOG(FATAL) << "Unknown error launching the GPU kernel, most likely a timeout";
+    } catch (const std::exception& e) {
+      LOG(FATAL) << "Error launching the GPU kernel: " << e.what();
     }
   }
   results = ResultRows(query_exe_context->query_mem_desc_,
