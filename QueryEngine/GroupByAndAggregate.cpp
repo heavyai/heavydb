@@ -2026,7 +2026,7 @@ ResultRows QueryExecutionContext::groupBufferToResults(const size_t i,
                        col_buffers_,
                        device_type_,
                        device_id_);
-    if (results.in_place_) {
+    if (results.isInPlace()) {
       return results;
     }
     for (size_t bin = 0; bin < groups_buffer_entry_count; ++bin) {

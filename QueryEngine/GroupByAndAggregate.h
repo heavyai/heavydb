@@ -1004,6 +1004,8 @@ class ResultRows {
   int64_t getQueueTime() const { return queue_time_ms_; }
   int64_t getRenderTime() const { return render_time_ms_; }
 
+  bool isInPlace() const { return in_place_; }
+
  private:
   void reduceSingleColumn(int8_t* crt_val_i1,
                           int8_t* crt_val_i2,
@@ -1121,7 +1123,6 @@ class ResultRows {
   int64_t render_time_ms_;
 
   friend class Executor;
-  friend class QueryExecutionContext;
 };
 
 class ColumnarResults {
