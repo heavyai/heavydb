@@ -670,7 +670,9 @@ class RaAbstractInterp {
     mark_nops(nodes_);
     coalesce_nodes(nodes_);
     simplify_sort(nodes_);
-    CHECK(is_valid_rel_alg(nodes_.back()));
+    if (!is_valid_rel_alg(nodes_.back())) {
+      throw QueryNotSupported("Failed to optimize away Aggregate nodes");
+    }
     return std::unique_ptr<const RelAlgNode>(nodes_.back());
   }
 
