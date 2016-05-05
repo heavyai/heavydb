@@ -696,6 +696,11 @@ class RelSort : public RelAlgNode {
   const size_t offset_;
 };
 
+class QueryNotSupported : public std::runtime_error {
+ public:
+  QueryNotSupported(const std::string& reason) : std::runtime_error(reason) {}
+};
+
 std::unique_ptr<const RelAlgNode> ra_interpret(const rapidjson::Value&, const Catalog_Namespace::Catalog&);
 
 std::string tree_string(const RelAlgNode*, const size_t indent = 0);

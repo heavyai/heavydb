@@ -324,7 +324,6 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(const RexFun
   if (rex_function->getName() == std::string("DATETIME")) {
     return translateDatetime(rex_function);
   }
-  CHECK(false);
-  return nullptr;
+  throw QueryNotSupported("Function " + rex_function->getName() + " not supported");
 }
 #endif  // HAVE_CALCITE

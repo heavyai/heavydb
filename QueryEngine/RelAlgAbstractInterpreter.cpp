@@ -5,6 +5,8 @@
 #include "RexVisitor.h"
 
 #include <glog/logging.h>
+#include <rapidjson/stringbuffer.h>
+#include <rapidjson/writer.h>
 
 #include <string>
 #include <unordered_map>
@@ -302,6 +304,13 @@ std::vector<size_t> indices_from_json_array(const rapidjson::Value& json_idx_arr
   return indices;
 }
 
+std::string json_node_to_string(const rapidjson::Value& node) {
+  rapidjson::StringBuffer buffer;
+  rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+  node.Accept(writer);
+  return buffer.GetString();
+}
+
 RexAgg* parse_aggregate_expr(const rapidjson::Value& expr) {
   const auto agg = to_agg_kind(json_str(field(expr, "agg")));
   const auto distinct = json_bool(field(expr, "distinct"));
@@ -326,8 +335,7 @@ RexScalar* parse_scalar_expr(const rapidjson::Value& expr) {
     }
     return parse_operator(expr);
   }
-  CHECK(false);
-  return nullptr;
+  throw QueryNotSupported("Expression node " + json_node_to_string(expr) + " not supported");
 }
 
 JoinType to_join_type(const std::string& join_type_name) {
@@ -337,8 +345,7 @@ JoinType to_join_type(const std::string& join_type_name) {
   if (join_type_name == "left") {
     return JoinType::LEFT;
   }
-  CHECK(false);
-  return JoinType::INVALID;
+  throw QueryNotSupported("Join type (" + join_type_name + ") not supported");
 }
 
 const RexScalar* disambiguate_rex(const RexScalar*, const RANodeOutput&);
@@ -654,7 +661,7 @@ class RaAbstractInterp {
       } else if (rel_op == std::string("LogicalSort")) {
         ra_node = dispatchSort(crt_node);
       } else {
-        CHECK(false);
+        throw QueryNotSupported(std::string("Node ") + rel_op + " not supported yet");
       }
       nodes_.push_back(ra_node);
     }
