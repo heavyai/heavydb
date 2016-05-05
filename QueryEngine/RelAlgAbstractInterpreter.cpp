@@ -633,6 +633,21 @@ int64_t get_int_literal_field(const rapidjson::Value& obj, const char field[], c
   return lit->getVal<int64_t>();
 }
 
+// As of now, only Join nodes specify inputs and we only support relational
+// algebra trees. For full SQL support we'll need DAG relational algebra and thus
+// forward edges, which are specified by the inputs field in non-join nodes.
+void check_no_inputs_field(const rapidjson::Value& node) {
+  CHECK(node.IsObject());
+  if (node.HasMember("inputs")) {
+    throw QueryNotSupported("This query structure is not supported yet");
+  }
+}
+
+void check_empty_inputs_field(const rapidjson::Value& node) {
+  const auto& inputs_json = field(node, "inputs");
+  CHECK(inputs_json.IsArray() && !inputs_json.Size());
+}
+
 class RaAbstractInterp {
  public:
   RaAbstractInterp(const rapidjson::Value& query_ast, const Catalog_Namespace::Catalog& cat)
@@ -678,6 +693,7 @@ class RaAbstractInterp {
 
  private:
   RelScan* dispatchTableScan(const rapidjson::Value& scan_ra) {
+    check_empty_inputs_field(scan_ra);
     CHECK(scan_ra.IsObject());
     const auto td = getTableFromScanNode(scan_ra);
     const auto field_names = getFieldNamesFromScanNode(scan_ra);
@@ -685,6 +701,7 @@ class RaAbstractInterp {
   }
 
   RelProject* dispatchProject(const rapidjson::Value& proj_ra) {
+    check_no_inputs_field(proj_ra);
     const auto& exprs_json = field(proj_ra, "exprs");
     CHECK(exprs_json.IsArray());
     std::vector<const RexScalar*> exprs;
@@ -696,6 +713,7 @@ class RaAbstractInterp {
   }
 
   RelFilter* dispatchFilter(const rapidjson::Value& filter_ra) {
+    check_no_inputs_field(filter_ra);
     const auto id = node_id(filter_ra);
     CHECK(id);
     return new RelFilter(parse_scalar_expr(field(filter_ra, "condition")), prev(filter_ra));
@@ -709,6 +727,7 @@ class RaAbstractInterp {
   }
 
   RelAggregate* dispatchAggregate(const rapidjson::Value& agg_ra) {
+    check_no_inputs_field(agg_ra);
     const auto fields = strings_from_json_array(field(agg_ra, "fields"));
     const auto group = indices_from_json_array(field(agg_ra, "group"));
     for (size_t i = 0; i < group.size(); ++i) {
@@ -738,6 +757,7 @@ class RaAbstractInterp {
   }
 
   RelSort* dispatchSort(const rapidjson::Value& sort_ra) {
+    check_no_inputs_field(sort_ra);
     std::vector<SortField> collation;
     const auto& collation_arr = field(sort_ra, "collation");
     CHECK(collation_arr.IsArray());
