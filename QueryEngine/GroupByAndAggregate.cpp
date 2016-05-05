@@ -2067,6 +2067,7 @@ std::vector<CUdeviceptr> QueryExecutionContext::prepareKernelParams(
     const int32_t scan_limit,
     const std::vector<int64_t>& init_agg_vals,
     const std::vector<int32_t>& error_codes,
+    const unsigned grid_size_x,
     const uint32_t num_tables,
     const int64_t join_hash_table,
     Data_Namespace::DataMgr* data_mgr,
@@ -2121,8 +2122,8 @@ std::vector<CUdeviceptr> QueryExecutionContext::prepareKernelParams(
     copy_to_gpu(data_mgr, params[INIT_AGG_VALS], &init_agg_vals[0], init_agg_vals.size() * sizeof(int64_t), device_id);
   }
 
-  params[ERROR_CODE] = alloc_gpu_mem(data_mgr, error_codes.size() * sizeof(error_codes[0]), device_id, nullptr);
-  copy_to_gpu(data_mgr, params[ERROR_CODE], &error_codes[0], error_codes.size() * sizeof(error_codes[0]), device_id);
+  params[ERROR_CODE] = alloc_gpu_mem(data_mgr, grid_size_x * sizeof(error_codes[0]), device_id, nullptr);
+  copy_to_gpu(data_mgr, params[ERROR_CODE], &error_codes[0], grid_size_x * sizeof(error_codes[0]), device_id);
 
   params[NUM_TABLES] = alloc_gpu_mem(data_mgr, sizeof(uint32_t), device_id, nullptr);
   copy_to_gpu(data_mgr, params[NUM_TABLES], &num_tables, sizeof(uint32_t), device_id);
@@ -2229,7 +2230,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const std::vector<voi
   auto cu_func = static_cast<CUfunction>(cu_functions[device_id]);
   std::vector<int64_t*> out_vec;
   uint32_t num_fragments = col_buffers.size();
-  std::vector<int32_t> error_codes(grid_size_x * block_size_x);
+  std::vector<int32_t> error_codes(block_size_x);
 
   auto kernel_params = prepareKernelParams(col_buffers,
                                            literal_buff,
@@ -2238,6 +2239,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const std::vector<voi
                                            scan_limit,
                                            init_agg_vals,
                                            error_codes,
+                                           grid_size_x,
                                            num_tables,
                                            join_hash_table,
                                            data_mgr,
@@ -2253,7 +2255,6 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const std::vector<voi
   const unsigned block_size_z = 1;
   const unsigned grid_size_y = 1;
   const unsigned grid_size_z = 1;
-
   if (is_group_by) {
     CHECK(!group_by_buffers_.empty() || render_allocator);
     bool can_sort_on_gpu = query_mem_desc_.sortOnGpu();
@@ -2307,7 +2308,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const std::vector<voi
                                      can_sort_on_gpu && query_mem_desc_.keyless_hash);
     }
     copy_from_gpu(
-        data_mgr, &error_codes[0], kernel_params[ERROR_CODE], error_codes.size() * sizeof(error_codes[0]), device_id);
+        data_mgr, &error_codes[0], kernel_params[ERROR_CODE], grid_size_x * sizeof(error_codes[0]), device_id);
     *error_code = 0;
     for (const auto err : error_codes) {
       if (err && (!*error_code || err > *error_code)) {

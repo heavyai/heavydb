@@ -1384,6 +1384,7 @@ class QueryExecutionContext : boost::noncopyable {
                                                const int32_t scan_limit,
                                                const std::vector<int64_t>& init_agg_vals,
                                                const std::vector<int32_t>& error_codes,
+                                               const unsigned grid_size_x,
                                                const uint32_t num_tables,
                                                const int64_t join_hash_table,
                                                Data_Namespace::DataMgr* data_mgr,
