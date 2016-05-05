@@ -1418,7 +1418,6 @@ class QueryExecutionContext : boost::noncopyable {
   const bool sort_on_gpu_;
 
   friend class Executor;
-  friend class ResultRows;
   friend void copy_group_by_buffers_from_gpu(Data_Namespace::DataMgr* data_mgr,
                                              const QueryExecutionContext* query_exe_context,
                                              const GpuQueryMemory& gpu_query_mem,
