@@ -1006,6 +1006,8 @@ class ResultRows {
 
   bool isInPlace() const { return in_place_; }
 
+  void setQueueTime(int64_t queue_time) { queue_time_ms_ = queue_time; }
+
  private:
   void reduceSingleColumn(int8_t* crt_val_i1,
                           int8_t* crt_val_i2,
@@ -1085,8 +1087,6 @@ class ResultRows {
 
   void inplaceSortCpu(const std::list<Analyzer::OrderEntry>& order_entries);
 
-  void setQueueTime(int64_t queue_time) { queue_time_ms_ = queue_time; }
-
   std::vector<TargetInfo> targets_;
   std::vector<int64_t> simple_keys_;
   typedef std::vector<int64_t> MultiKey;
@@ -1121,8 +1121,6 @@ class ResultRows {
   std::unordered_set<int64_t> unkown_top_keys_;
   int64_t queue_time_ms_;
   int64_t render_time_ms_;
-
-  friend class Executor;
 };
 
 class ColumnarResults {

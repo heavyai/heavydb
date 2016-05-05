@@ -2468,7 +2468,7 @@ ResultRows Executor::reduceMultiDeviceResults(
     const QueryMemoryDescriptor& query_mem_desc,
     const bool output_columnar) const {
   if (results_per_device.empty()) {
-    return ResultRows({}, {}, nullptr, nullptr, {}, ExecutorDeviceType::CPU);
+    return ResultRows(query_mem_desc, {}, nullptr, nullptr, {}, ExecutorDeviceType::CPU);
   }
 
   auto reduced_results = results_per_device.front().first;
@@ -3337,12 +3337,8 @@ ResultRows Executor::collectAllDeviceResults(ExecutionDispatch& execution_dispat
             target_exprs, query_mem_desc, execution_dispatch.getDeviceType() == ExecutorDeviceType::Hybrid),
         std::vector<size_t>{});
   }
-  auto reduced_results = reduceMultiDeviceResults(
+  return reduceMultiDeviceResults(
       execution_dispatch.getFragmentResults(), row_set_mem_owner, query_mem_desc, output_columnar);
-  CHECK_EQ(reduced_results.in_place_group_by_buffers_.size(),
-           reduced_results.in_place_groups_by_buffers_entry_count_.size());
-  reduced_results.query_mem_desc_ = query_mem_desc;  // TODO(alex): remove
-  return reduced_results;
 }
 
 void Executor::dispatchFragments(const std::function<void(const ExecutorDeviceType chosen_device_type,
