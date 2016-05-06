@@ -13,6 +13,8 @@
 
 #include <boost/filesystem/operations.hpp>
 
+#define CALCITEPORT -1
+
 Catalog_Namespace::SessionInfo* get_session(const char* db_path) {
   std::string db_name{MAPD_SYSTEM_DB};
   std::string user_name{"mapd"};
@@ -73,7 +75,7 @@ Planner::RootPlan* parse_plan_calcite(const std::string& query_str,
   }
 
   const auto& cat = session->get_catalog();
-  static Calcite calcite_cli(9092, cat.get_basePath());
+  static Calcite calcite_cli(CALCITEPORT, cat.get_basePath());
   const auto query_ra = calcite_cli.process(session->get_currentUser().userName,
                                             session->get_currentUser().passwd,
                                             cat.get_currentDB().dbName,
@@ -99,7 +101,7 @@ Planner::RootPlan* parse_plan(const std::string& query_str,
 std::unique_ptr<const RelAlgNode> parse_ravm_plan(const std::string& query_str,
                                                   const std::unique_ptr<Catalog_Namespace::SessionInfo>& session) {
   const auto& cat = session->get_catalog();
-  static Calcite calcite_cli(9092, cat.get_basePath());
+  static Calcite calcite_cli(CALCITEPORT, cat.get_basePath());
   const auto query_ra = calcite_cli.process(session->get_currentUser().userName,
                                             session->get_currentUser().passwd,
                                             cat.get_currentDB().dbName,
