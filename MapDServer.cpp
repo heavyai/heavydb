@@ -1469,9 +1469,7 @@ void start_server(TThreadedServer& server) {
 int main(int argc, char** argv) {
   int port = 9091;
   int http_port = 9090;
-#ifdef HAVE_CALCITE
-  int calcite_port = 9093;
-#endif  // HAVE_CALCITE
+  int calcite_port = -1;  // do not use calcite via thrift normally
   std::string base_path;
   std::string device("gpu");
   std::string config_file("mapd.conf");
@@ -1685,7 +1683,7 @@ int main(int argc, char** argv) {
                                                   num_gpus,
                                                   start_gpu,
                                                   ldapMetadata,
-                                                  port,
+                                                  calcite_port,
                                                   enable_legacy_syntax));
 
   shared_ptr<TProcessor> processor(new MapDProcessor(handler));

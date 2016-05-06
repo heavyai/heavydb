@@ -26,29 +26,8 @@ using namespace apache::thrift;
 using namespace apache::thrift::protocol;
 using namespace apache::thrift::transport;
 
-Calcite::Calcite() : server_available_(true), jni_(false) {
-  int port = 5;
-  LOG(INFO) << "Creating Calcite Class with port " << port << std::endl;
-  boost::shared_ptr<TTransport> socket(new TSocket("localhost", port));
-  boost::shared_ptr<TTransport> transport(new TBufferedTransport(socket));
-  boost::shared_ptr<TProtocol> protocol(new TBinaryProtocol(transport));
-  client.reset(new CalciteServerClient(protocol));
-
-  try {
-    transport->open();
-
-    auto ms = measure<>::execution([&]() { client->ping(); });
-
-    LOG(INFO) << "ping took " << ms << " ms " << endl;
-
-  } catch (TException& tx) {
-    LOG(ERROR) << tx.what() << endl;
-    server_available_ = false;
-  }
-}
-
-Calcite::Calcite(int port, std::string data_dir) : server_available_(false), jni_(true), jvm_(NULL) {
-  LOG(INFO) << "Creating Calcite Class with jni,  MapD Port is " << port << " base data dir is " << data_dir;
+void Calcite::runJNI(int port, std::string data_dir) {
+  LOG(INFO) << "Creating Calcite Server local as JNI instance";
   const int kNumOptions = 3;
   std::string jar_file{"-Djava.class.path=" + mapd_root_abs_path() +
                        "/bin/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar"};
@@ -86,6 +65,10 @@ Calcite::Calcite(int port, std::string data_dir) : server_available_(false), jni
                                  "mapd/parser/server/CalciteReturn;");
   CHECK(processMID_);
 
+  // get all the methods we will need for calciteDirect;
+  updateMetadataMID_ = env->GetMethodID(calciteDirect_, "updateMetadata", "(Ljava/lang/String;)V");
+  CHECK(updateMetadataMID_);
+
   // get all the methods we will need to process the calcite results
   jclass calcite_return_class = env->FindClass("com/mapd/parser/server/CalciteReturn");
   CHECK(calcite_return_class);
@@ -96,26 +79,82 @@ Calcite::Calcite(int port, std::string data_dir) : server_available_(false), jni
   CHECK(getElapsedTimeMID_);
   getTextMID_ = env->GetMethodID(calcite_return_class, "getText", "()Ljava/lang/String;");
   CHECK(getTextMID_);
+}
 
-  LOG(INFO) << "End of Constructor ";
+void Calcite::runServer(int port, std::string data_dir) {
+  LOG(INFO) << "Remote calcite server";
+  server_available_ = true;
+  jni_ = false;
+  // check server is responding
+  boost::shared_ptr<TTransport> socket(new TSocket("localhost", port));
+  boost::shared_ptr<TTransport> transport(new TBufferedTransport(socket));
+  boost::shared_ptr<TProtocol> protocol(new TBinaryProtocol(transport));
+  client.reset(new CalciteServerClient(protocol));
+
+  try {
+    transport->open();
+
+    auto ms = measure<>::execution([&]() { client->ping(); });
+
+    LOG(INFO) << "ping took " << ms << " ms " << endl;
+
+  } catch (TException& tx) {
+    LOG(ERROR) << tx.what() << endl;
+    server_available_ = false;
+    LOG(ERROR) << "No calcite remote server running on port " << port;
+  }
+}
+
+Calcite::Calcite(int port, std::string data_dir) : server_available_(false), jni_(true), jvm_(NULL) {
+  LOG(INFO) << "Creating Calcite Handler,  Calcite Port is " << port << " base data dir is " << data_dir;
+  if (port == -1) {
+    runJNI(port, data_dir);
+  } else {
+    remote_calcite_port_ = port;
+    runServer(port, data_dir);
+  }
+}
+
+JNIEnv* Calcite::checkJNIConnection() {
+  JNIEnv* env;
+  int res = jvm_->GetEnv((void**)&env, JNI_VERSION_1_6);
+  if (res != JNI_OK) {
+    JavaVMAttachArgs args;
+    args.version = JNI_VERSION_1_6;  // choose your JNI version
+    args.name = NULL;                // you might want to give the java thread a name
+    args.group = NULL;               // you might want to assign the java thread to a ThreadGroup
+    int res = jvm_->AttachCurrentThread((void**)&env, &args);
+    CHECK_EQ(res, JNI_OK);
+  }
+  CHECK(calciteDirectObject_);
+  CHECK(processMID_);
+  CHECK(updateMetadataMID_);
+
+  return env;
+}
+
+void Calcite::updateMetadata(string metadata) {
+  if (jni_) {
+    JNIEnv* env = checkJNIConnection();
+    auto ms = measure<>::execution([&]() {
+      env->CallObjectMethod(calciteDirectObject_, updateMetadataMID_, env->NewStringUTF(metadata.c_str()));
+
+    });
+    if (env->ExceptionCheck()) {
+      LOG(ERROR) << "Exception occured ";
+      env->ExceptionDescribe();
+      LOG(ERROR) << "Exception occured " << env->ExceptionOccurred();
+      throw std::runtime_error("Calcite::updateMetadata failed");
+    }
+    LOG(INFO) << "Time to updateMetadata " << ms << " (ms)" << endl;
+    jvm_->DetachCurrentThread();
+  }
 }
 
 string Calcite::process(string user, string passwd, string catalog, string sql_string, const bool legacy_syntax) {
   LOG(INFO) << "User " << user << " catalog " << catalog << " sql '" << sql_string << "'";
   if (jni_) {
-    JNIEnv* env;
-
-    int res = jvm_->GetEnv((void**)&env, JNI_VERSION_1_6);
-    if (res != JNI_OK) {
-      JavaVMAttachArgs args;
-      args.version = JNI_VERSION_1_6;  // choose your JNI version
-      args.name = NULL;                // you might want to give the java thread a name
-      args.group = NULL;               // you might want to assign the java thread to a ThreadGroup
-      int res = jvm_->AttachCurrentThread((void**)&env, &args);
-      CHECK_EQ(res, JNI_OK);
-    }
-    CHECK(calciteDirectObject_);
-    CHECK(processMID_);
+    JNIEnv* env = checkJNIConnection();
     jboolean legacy = legacy_syntax;
     jobject process_result;
     auto ms = measure<>::execution([&]() {

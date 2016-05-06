@@ -61,8 +61,8 @@ public class MetaConnect {
       //try {
       Class.forName("org.sqlite.JDBC");
     } catch (ClassNotFoundException ex) {
-      String err = "Could not find class for metadata connection; DB: " + db +
-              " data dir " + dataDir + ", error was " + ex.getMessage();
+      String err = "Could not find class for metadata connection; DB: '" + db +
+              "' data dir '" + dataDir + "', error was " + ex.getMessage();
       MAPDLOGGER.error(err);
       throw new RuntimeException(err);
     }
@@ -70,8 +70,8 @@ public class MetaConnect {
     try {
       catConn = DriverManager.getConnection(connectURL);
     } catch (SQLException ex) {
-      String err = "Could not establish a connection for metadata; DB: " + db +
-              " data dir " + dataDir + ", error was " + ex.getMessage();
+      String err = "Could not establish a connection for metadata; DB: '" + db +
+              "' data dir '" + dataDir + "', error was " + ex.getMessage();
       MAPDLOGGER.error(err);
       throw new RuntimeException(err);
     }

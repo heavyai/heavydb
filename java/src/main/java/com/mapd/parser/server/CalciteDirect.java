@@ -54,6 +54,10 @@ final static Logger MAPDLOGGER = LoggerFactory.getLogger(CalciteDirect.class);
     }
   }
 
+  public void updateMetadata(String jsonMetatData){
+    MAPDLOGGER.info("Received new metadata from server");
+  }
+
   public CalciteReturn process(String user, String passwd, String catalog, String sqlText, boolean legacySyntax) {
     MAPDLOGGER.debug(user + " " + " " + catalog +" '"+sqlText + "' " + legacySyntax);
     long timer = System.currentTimeMillis();
