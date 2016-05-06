@@ -291,7 +291,6 @@ class RowSetMemoryOwner : boost::noncopyable {
   std::shared_ptr<StringDictionary> lit_str_dict_;
   std::mutex state_mutex_;
 
-  friend class QueryExecutionContext;
   friend class ResultRows;
 };
 
