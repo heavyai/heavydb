@@ -1163,14 +1163,17 @@ class ColumnarResults {
           }
         } else {
           CHECK(target_types[i].is_fp());
-          auto double_p = boost::get<double>(scalar_col_val);
           switch (target_types[i].get_type()) {
-            case kFLOAT:
-              ((float*)column_buffers_[i])[row_idx] = static_cast<float>(*double_p);
+            case kFLOAT: {
+              auto float_p = boost::get<float>(scalar_col_val);
+              ((float*)column_buffers_[i])[row_idx] = static_cast<float>(*float_p);
               break;
-            case kDOUBLE:
+            }
+            case kDOUBLE: {
+              auto double_p = boost::get<double>(scalar_col_val);
               ((double*)column_buffers_[i])[row_idx] = static_cast<double>(*double_p);
               break;
+            }
             default:
               CHECK(false);
           }
