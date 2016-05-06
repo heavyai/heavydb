@@ -32,9 +32,22 @@ std::map<int, ChunkMetadata> synthesize_metadata(const ResultRows* rows) noexcep
         dummy_encoders[i]->updateStats(*i64_p, *i64_p == inline_int_null_val(col_ti));
       } else {
         CHECK(col_ti.is_fp());
-        const auto double_p = boost::get<double>(scalar_col_val);
-        CHECK(double_p);
-        dummy_encoders[i]->updateStats(*double_p, *double_p == inline_fp_null_val(col_ti));
+        switch (col_ti.get_type()) {
+          case kFLOAT: {
+            const auto float_p = boost::get<float>(scalar_col_val);
+            CHECK(float_p);
+            dummy_encoders[i]->updateStats(*float_p, *float_p == inline_fp_null_val(col_ti));
+            break;
+          }
+          case kDOUBLE: {
+            const auto double_p = boost::get<double>(scalar_col_val);
+            CHECK(double_p);
+            dummy_encoders[i]->updateStats(*double_p, *double_p == inline_fp_null_val(col_ti));
+            break;
+          }
+          default:
+            CHECK(false);
+        }
       }
     }
   }

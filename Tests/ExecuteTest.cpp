@@ -432,6 +432,7 @@ TEST(Select, FloatAndDoubleTests) {
       dt);
     c("SELECT f + d AS s, x * y FROM test ORDER by s DESC;", dt);
     c("SELECT COUNT(*) AS n FROM test GROUP BY f ORDER BY n;", dt);
+    c("SELECT f, COUNT(*) FROM test GROUP BY f HAVING f > 1.25;", dt);
     c("SELECT COUNT(*) AS n FROM test GROUP BY d ORDER BY n;", dt);
     c("SELECT MIN(x + y) AS n FROM test WHERE x + y > 47 AND x + y < 53 GROUP BY f + 1, f + d ORDER BY n;", dt);
     c("SELECT f + d AS s FROM test GROUP BY s ORDER BY s DESC;", dt);
