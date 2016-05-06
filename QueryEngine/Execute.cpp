@@ -1879,6 +1879,10 @@ llvm::Value* Executor::codegenLogical(const Analyzer::UOper* uoper, const Compil
 llvm::Value* Executor::codegenIsNull(const Analyzer::UOper* uoper, const CompilationOptions& co) {
   const auto operand = uoper->get_operand();
   const auto& ti = operand->get_type_info();
+  if (ti.get_type() == kNULLT) {
+    // if type is null, short-circuit to false
+    return llvm::ConstantInt::get(get_int_type(1, cgen_state_->context_), 1);
+  }
   CHECK(ti.is_integer() || ti.is_boolean() || ti.is_decimal() || ti.is_time() || ti.is_string() || ti.is_fp() ||
         ti.is_array());
   // if the type is inferred as non null, short-circuit to false
