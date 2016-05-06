@@ -1491,7 +1491,12 @@ bool ResultRows::isNull(const SQLTypeInfo& ti, const InternalTargetValue& val) {
     return val.i1 == *reinterpret_cast<const int64_t*>(&null_val);
   }
   if (val.isPair()) {
-    return val.i2 == 0;
+    // TODO(alex): Review this logic, we're not supposed to hit val.i2 == 0 anymore.
+    //             Also, if AVG gets compacted to float, this will become incorrect.
+    if (!val.i2) {
+      LOG(ERROR) << "The AVG pair looks incorrect";
+    }
+    return (val.i2 == 0) || pair_to_double({val.i1, val.i2}, ti) == NULL_DOUBLE;
   }
   if (val.isStr()) {
     return false;
