@@ -322,6 +322,7 @@ elseif(ENABLE_DOCS)
   message(WARNING "pandoc or pdflatex not found. Skipping PDF docs.")
 endif()
 install(FILES docs/MapDGuide.md DESTINATION docs)
+install(DIRECTORY docs/release-notes DESTINATION docs)
 
 # systemd
 if (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
