@@ -820,6 +820,10 @@ std::vector<SQLTypes> Detector::find_best_sqltypes(
   std::vector<SQLTypes> best_types(num_cols, kCHAR);
   std::vector<size_t> non_null_col_counts(num_cols, 0);
   for (auto row = row_begin; row != row_end; row++) {
+    while (best_types.size() < row->size() || non_null_col_counts.size() < row->size()) {
+      best_types.push_back(kCHAR);
+      non_null_col_counts.push_back(0);
+    }
     for (size_t col_idx = 0; col_idx < row->size(); col_idx++) {
       // do not count nulls
       if (row->at(col_idx) == "" || !row->at(col_idx).compare(copy_params.null_str))
