@@ -1,5 +1,7 @@
 #include "../StringDictionary/StringDictionary.h"
 
+#include <limits>
+
 #include <glog/logging.h>
 #include <gtest/gtest.h>
 
@@ -40,8 +42,7 @@ TEST(StringDictionary, HandleEmpty) {
   auto id1 = string_dict.getOrAdd("");
   auto id2 = string_dict.getOrAdd("");
   ASSERT_EQ(id1, id2);
-  ASSERT_EQ(0, id1);
-  ASSERT_EQ("", string_dict.getString(id1));
+  ASSERT_EQ(std::numeric_limits<int32_t>::min(), id1);
 }
 
 const int g_op_count{250000};
