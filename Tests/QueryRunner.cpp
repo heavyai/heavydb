@@ -13,7 +13,11 @@
 
 #include <boost/filesystem/operations.hpp>
 
+#ifdef RUN_ASAN
+#define CALCITEPORT 9093
+#else
 #define CALCITEPORT -1
+#endif
 
 Catalog_Namespace::SessionInfo* get_session(const char* db_path) {
   std::string db_name{MAPD_SYSTEM_DB};
