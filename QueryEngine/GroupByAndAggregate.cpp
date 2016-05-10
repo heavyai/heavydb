@@ -1044,7 +1044,7 @@ int8_t pick_target_compact_width(const RelAlgExecutionUnit& ra_exe_unit,
   for (const auto& query_info : query_infos) {
     total_tuples += query_info.numTuples;
   }
-  return total_tuples <= std::numeric_limits<uint32_t>::max() ? 4 : 8;
+  return total_tuples <= static_cast<size_t>(std::numeric_limits<int32_t>::max()) ? 4 : 8;
 }
 
 }  // namespace
