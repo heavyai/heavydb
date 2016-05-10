@@ -141,6 +141,16 @@ else()
 endif()
 
 ADD_SUBDIRECTORY    (SqliteConnector)
+
+# address sanitizer
+option(ENABLE_ASAN "Enable address sanitizer" OFF)
+if(ENABLE_ASAN)
+  set(ASAN_FLAGS "-fsanitize=address -O1 -fno-omit-frame-pointer")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${ASAN_FLAGS}")
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${ASAN_FLAGS}")
+  add_definitions("-DRUN_ASAN")
+endif()
+
 ADD_SUBDIRECTORY    (Catalog)
 ADD_SUBDIRECTORY    (Parser)
 ADD_SUBDIRECTORY    (Analyzer)
