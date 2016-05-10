@@ -217,6 +217,8 @@ string Calcite::process(string user, string passwd, string catalog, string sql_s
 
 Calcite::~Calcite() {
   LOG(INFO) << "Destroy Calcite Class" << std::endl;
-  jvm_->DestroyJavaVM();
+  if (jvm_) {
+    jvm_->DestroyJavaVM();
+  }
   LOG(INFO) << "After java destroy: ";
 }
