@@ -349,9 +349,9 @@ TEST(Select, FilterAndSimpleAggregation) {
     c("SELECT COUNT(*) FROM test WHERE dd > 222.2;", dt);
     c("SELECT MAX(x + dd) FROM test;", dt);
     c("SELECT MAX(x + 2 * dd), MIN(x + 2 * dd) FROM test;", dt);
-    c("SELECT COUNT(*) FROM test where dd > CAST(111.0 AS decimal(10, 2));", dt);
-    c("SELECT COUNT(*) FROM test where dd > CAST(222.0 AS decimal(10, 2));", dt);
-    c("SELECT COUNT(*) FROM test where dd > CAST(333.0 AS decimal(10, 2));", dt);
+    c("SELECT COUNT(*) FROM test WHERE dd > CAST(111.0 AS decimal(10, 2));", dt);
+    c("SELECT COUNT(*) FROM test WHERE dd > CAST(222.0 AS decimal(10, 2));", dt);
+    c("SELECT COUNT(*) FROM test WHERE dd > CAST(333.0 AS decimal(10, 2));", dt);
     c("SELECT MIN(dd * dd) FROM test;", dt);
     c("SELECT MAX(dd * dd) FROM test;", dt);
     c("SELECT COUNT(*) FROM test WHERE u IS NOT NULL;", dt);
@@ -438,7 +438,7 @@ TEST(Select, FloatAndDoubleTests) {
     c("SELECT COUNT(*) AS n FROM test GROUP BY d ORDER BY n;", dt);
     c("SELECT MIN(x + y) AS n FROM test WHERE x + y > 47 AND x + y < 53 GROUP BY f + 1, f + d ORDER BY n;", dt);
     c("SELECT f + d AS s FROM test GROUP BY s ORDER BY s DESC;", dt);
-    c("SELECT f + 1 as s, AVG(u * f) FROM test GROUP BY s ORDER BY s DESC;", dt);
+    c("SELECT f + 1 AS s, AVG(u * f) FROM test GROUP BY s ORDER BY s DESC;", dt);
   }
 }
 
@@ -457,7 +457,7 @@ TEST(Select, FilterAndGroupBy) {
     c("SELECT MIN(x + y) FROM test WHERE x + y > 47 AND x + y < 53 GROUP BY x + 1, x + y;", dt);
     c("SELECT x, y, COUNT(*) FROM test GROUP BY x, y;", dt);
     c("SELECT x, dd, COUNT(*) FROM test GROUP BY x, dd ORDER BY x;", dt);
-    c("SELECT dd as key1, COUNT(*) AS value1 FROM test GROUP BY key1 HAVING key1 IS NOT NULL ORDER BY key1, value1 "
+    c("SELECT dd AS key1, COUNT(*) AS value1 FROM test GROUP BY key1 HAVING key1 IS NOT NULL ORDER BY key1, value1 "
       "DESC "
       "LIMIT 12;",
       dt);
@@ -528,7 +528,7 @@ TEST(Select, ScanNoAggregation) {
 TEST(Select, OrderBy) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-    const auto rows = run_multiple_agg("SELECT x, y, z + t, x * y as m FROM test ORDER BY 3 desc LIMIT 5;", dt);
+    const auto rows = run_multiple_agg("SELECT x, y, z + t, x * y AS m FROM test ORDER BY 3 desc LIMIT 5;", dt);
     CHECK_EQ(rows.rowCount(), std::min(size_t(5), static_cast<size_t>(g_num_rows)));
     CHECK_EQ(rows.colCount(), size_t(4));
     for (size_t row_idx = 0; row_idx < rows.rowCount(); ++row_idx) {
@@ -608,12 +608,12 @@ TEST(Select, Case) {
                   "SELECT SUM(CASE WHEN x BETWEEN 6 AND 7 THEN 1.1 WHEN x BETWEEN 8 AND 9 THEN 2.2 ELSE 3.3 END) FROM "
                   "test WHERE CASE WHEN y BETWEEN 44 AND 45 THEN 5.1 ELSE 3.9 END > 4;",
                   dt)));
-    c("SELECT CASE WHEN x BETWEEN 1 AND 3 THEN 'oops 1' WHEN x BETWEEN 4 AND 6 THEN 'oops 2' ELSE real_str END from "
+    c("SELECT CASE WHEN x BETWEEN 1 AND 3 THEN 'oops 1' WHEN x BETWEEN 4 AND 6 THEN 'oops 2' ELSE real_str END FROM "
       "test;",
       dt);
-    c("SELECT CASE WHEN x BETWEEN 1 AND 3 THEN 'oops 1' WHEN x BETWEEN 4 AND 6 THEN 'oops 2' ELSE str END from test;",
+    c("SELECT CASE WHEN x BETWEEN 1 AND 3 THEN 'oops 1' WHEN x BETWEEN 4 AND 6 THEN 'oops 2' ELSE str END FROM test;",
       dt);
-    c("SELECT CASE WHEN x BETWEEN 1 AND 7 THEN 'seven' WHEN x BETWEEN 7 AND 10 THEN 'eight' ELSE 'ooops' end from "
+    c("SELECT CASE WHEN x BETWEEN 1 AND 7 THEN 'seven' WHEN x BETWEEN 7 AND 10 THEN 'eight' ELSE 'ooops' end FROM "
       "test;",
       dt);
     c("SELECT CASE WHEN x BETWEEN 1 AND 7 THEN 'seven' WHEN x BETWEEN 7 AND 10 THEN real_str ELSE 'ooops' END AS g "
@@ -621,7 +621,7 @@ TEST(Select, Case) {
       dt);
     c("SELECT CASE WHEN x BETWEEN 1 AND 7 THEN 'seven' WHEN x BETWEEN 7 AND 10 THEN str ELSE 'ooops' END FROM test;",
       dt);
-    c("SELECT CASE WHEN x BETWEEN 1 AND 7 THEN 'seven' WHEN x BETWEEN 7 AND 10 THEN 'eight' ELSE 'ooops' END from "
+    c("SELECT CASE WHEN x BETWEEN 1 AND 7 THEN 'seven' WHEN x BETWEEN 7 AND 10 THEN 'eight' ELSE 'ooops' END FROM "
       "test;",
       dt);
     c("SELECT CASE WHEN x BETWEEN 1 AND 7 THEN str WHEN x BETWEEN 7 AND 10 THEN 'eight' ELSE 'ooops' END AS g, "
@@ -841,81 +841,81 @@ TEST(Select, Time) {
     // test QUARTER
     ASSERT_EQ(4,
               v<int64_t>(run_simple_agg(
-                  "select EXTRACT(quarter from CAST('2008-11-27 12:12:12' as timestamp)) from test limit 1;", dt)));
+                  "select EXTRACT(quarter FROM CAST('2008-11-27 12:12:12' AS timestamp)) FROM test limit 1;", dt)));
     ASSERT_EQ(1,
               v<int64_t>(run_simple_agg(
-                  "select EXTRACT(quarter from CAST('2008-03-21 12:12:12' as timestamp)) from test limit 1;", dt)));
+                  "select EXTRACT(quarter FROM CAST('2008-03-21 12:12:12' AS timestamp)) FROM test limit 1;", dt)));
     ASSERT_EQ(1199145600L,
               v<int64_t>(run_simple_agg(
-                  "select DATE_TRUNC(quarter, CAST('2008-03-21 12:12:12' as timestamp)) from test limit 1;", dt)));
+                  "select DATE_TRUNC(quarter, CAST('2008-03-21 12:12:12' AS timestamp)) FROM test limit 1;", dt)));
     ASSERT_EQ(1230768000L,
               v<int64_t>(run_simple_agg(
-                  "select DATE_TRUNC(quarter, CAST('2009-03-21 12:12:12' as timestamp)) from test limit 1;", dt)));
+                  "select DATE_TRUNC(quarter, CAST('2009-03-21 12:12:12' AS timestamp)) FROM test limit 1;", dt)));
     ASSERT_EQ(1254355200L,
               v<int64_t>(run_simple_agg(
-                  "select DATE_TRUNC(quarter, CAST('2009-11-21 12:12:12' as timestamp)) from test limit 1;", dt)));
+                  "select DATE_TRUNC(quarter, CAST('2009-11-21 12:12:12' AS timestamp)) FROM test limit 1;", dt)));
     ASSERT_EQ(946684800L,
               v<int64_t>(run_simple_agg(
-                  "select DATE_TRUNC(quarter, CAST('2000-03-21 12:12:12' as timestamp)) from test limit 1;", dt)));
+                  "select DATE_TRUNC(quarter, CAST('2000-03-21 12:12:12' AS timestamp)) FROM test limit 1;", dt)));
     ASSERT_EQ(-2208988800L,
               v<int64_t>(run_simple_agg(
-                  "select DATE_TRUNC(quarter, CAST('1900-03-21 12:12:12' as timestamp)) from test limit 1;", dt)));
+                  "select DATE_TRUNC(quarter, CAST('1900-03-21 12:12:12' AS timestamp)) FROM test limit 1;", dt)));
     // test different input formats
     // added new format for customer
     ASSERT_EQ(1434896116L,
-              v<int64_t>(run_simple_agg("select CAST('2015-06-21 14:15:16' as timestamp) from test limit 1;", dt)));
+              v<int64_t>(run_simple_agg("select CAST('2015-06-21 14:15:16' AS timestamp) FROM test limit 1;", dt)));
     ASSERT_EQ(
         1434896116L,
-        v<int64_t>(run_simple_agg("select CAST('21-JUN-15 2.15.16.12345 PM' as timestamp) from test limit 1;", dt)));
+        v<int64_t>(run_simple_agg("select CAST('21-JUN-15 2.15.16.12345 PM' AS timestamp) FROM test limit 1;", dt)));
     ASSERT_EQ(
         1434852916L,
-        v<int64_t>(run_simple_agg("select CAST('21-JUN-15 2.15.16.12345 AM' as timestamp) from test limit 1;", dt)));
+        v<int64_t>(run_simple_agg("select CAST('21-JUN-15 2.15.16.12345 AM' AS timestamp) FROM test limit 1;", dt)));
     ASSERT_EQ(1434896116L,
-              v<int64_t>(run_simple_agg("select CAST('06/21/2015 14:15:16' as timestamp) from test limit 1;", dt)));
+              v<int64_t>(run_simple_agg("select CAST('06/21/2015 14:15:16' AS timestamp) FROM test limit 1;", dt)));
 
     // Support ISO date offset format
     ASSERT_EQ(
         1440180794L,
-        v<int64_t>(run_simple_agg("select CAST('21/Aug/2015:12:13:14 -0600' as timestamp) from test limit 1;", dt)));
+        v<int64_t>(run_simple_agg("select CAST('21/Aug/2015:12:13:14 -0600' AS timestamp) FROM test limit 1;", dt)));
     ASSERT_EQ(
         1440180794L,
-        v<int64_t>(run_simple_agg("select CAST('2015-08-21T12:13:14 -0600' as timestamp) from test limit 1;", dt)));
+        v<int64_t>(run_simple_agg("select CAST('2015-08-21T12:13:14 -0600' AS timestamp) FROM test limit 1;", dt)));
     ASSERT_EQ(
         1440180794L,
-        v<int64_t>(run_simple_agg("select CAST('21-Aug-15 12:13:14 -0600' as timestamp) from test limit 1;", dt)));
+        v<int64_t>(run_simple_agg("select CAST('21-Aug-15 12:13:14 -0600' AS timestamp) FROM test limit 1;", dt)));
     ASSERT_EQ(
         1440180794L,
-        v<int64_t>(run_simple_agg("select CAST('21/Aug/2015:13:13:14 -0500' as timestamp) from test limit 1;", dt)));
+        v<int64_t>(run_simple_agg("select CAST('21/Aug/2015:13:13:14 -0500' AS timestamp) FROM test limit 1;", dt)));
     ASSERT_EQ(1440180794L,
-              v<int64_t>(run_simple_agg("select CAST('2015-08-21T18:13:14' as timestamp) from test limit 1;", dt)));
+              v<int64_t>(run_simple_agg("select CAST('2015-08-21T18:13:14' AS timestamp) FROM test limit 1;", dt)));
     // add test for quarterday behaviour
     ASSERT_EQ(1L,
               v<int64_t>(run_simple_agg(
-                  "select EXTRACT (QUARTERDAY FROM CAST('2015-08-21T04:23:11' as timestamp)) from test limit 1;", dt)));
+                  "select EXTRACT (QUARTERDAY FROM CAST('2015-08-21T04:23:11' AS timestamp)) FROM test limit 1;", dt)));
     ASSERT_EQ(1L,
               v<int64_t>(run_simple_agg(
-                  "select EXTRACT (QUARTERDAY FROM CAST('2015-08-21T00:00:00' as timestamp)) from test limit 1;", dt)));
+                  "select EXTRACT (QUARTERDAY FROM CAST('2015-08-21T00:00:00' AS timestamp)) FROM test limit 1;", dt)));
     ASSERT_EQ(2L,
               v<int64_t>(run_simple_agg(
-                  "select EXTRACT (QUARTERDAY FROM CAST('2015-08-21T08:23:11' as timestamp)) from test limit 1;", dt)));
+                  "select EXTRACT (QUARTERDAY FROM CAST('2015-08-21T08:23:11' AS timestamp)) FROM test limit 1;", dt)));
     ASSERT_EQ(3L,
               v<int64_t>(run_simple_agg(
-                  "select EXTRACT (QUARTERDAY FROM CAST('2015-08-21T14:23:11' as timestamp)) from test limit 1;", dt)));
+                  "select EXTRACT (QUARTERDAY FROM CAST('2015-08-21T14:23:11' AS timestamp)) FROM test limit 1;", dt)));
     ASSERT_EQ(4L,
               v<int64_t>(run_simple_agg(
-                  "select EXTRACT (QUARTERDAY FROM CAST('2015-08-21T23:23:11' as timestamp)) from test limit 1;", dt)));
+                  "select EXTRACT (QUARTERDAY FROM CAST('2015-08-21T23:23:11' AS timestamp)) FROM test limit 1;", dt)));
     ASSERT_EQ(1440115200L,
               v<int64_t>(run_simple_agg(
-                  "select DATE_TRUNC (QUARTERDAY, CAST('2015-08-21T04:23:11' as timestamp)) from test limit 1;", dt)));
+                  "select DATE_TRUNC (QUARTERDAY, CAST('2015-08-21T04:23:11' AS timestamp)) FROM test limit 1;", dt)));
     ASSERT_EQ(1440136800L,
               v<int64_t>(run_simple_agg(
-                  "select DATE_TRUNC (QUARTERDAY, CAST('2015-08-21T08:23:11' as timestamp)) from test limit 1;", dt)));
+                  "select DATE_TRUNC (QUARTERDAY, CAST('2015-08-21T08:23:11' AS timestamp)) FROM test limit 1;", dt)));
     ASSERT_EQ(1440158400L,
               v<int64_t>(run_simple_agg(
-                  "select DATE_TRUNC (QUARTERDAY, CAST('2015-08-21T13:23:11' as timestamp)) from test limit 1;", dt)));
+                  "select DATE_TRUNC (QUARTERDAY, CAST('2015-08-21T13:23:11' AS timestamp)) FROM test limit 1;", dt)));
     ASSERT_EQ(1440180000L,
               v<int64_t>(run_simple_agg(
-                  "select DATE_TRUNC (QUARTERDAY, CAST('2015-08-21T23:59:59' as timestamp)) from test limit 1;", dt)));
+                  "select DATE_TRUNC (QUARTERDAY, CAST('2015-08-21T23:59:59' AS timestamp)) FROM test limit 1;", dt)));
   }
 }
 
@@ -1261,8 +1261,8 @@ TEST(Select, ArrayAnyAndAll) {
 TEST(Select, Joins) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-    c("SELECT COUNT(*) from test, test_inner WHERE test.x = test_inner.x;", dt);
-    c("SELECT COUNT(*) from test, test_inner WHERE test.x < test_inner.x + 1;", dt);
+    c("SELECT COUNT(*) FROM test, test_inner WHERE test.x = test_inner.x;", dt);
+    c("SELECT COUNT(*) FROM test, test_inner WHERE test.x < test_inner.x + 1;", dt);
     c("SELECT test_inner.x, COUNT(*) AS n FROM test, test_inner WHERE test.x = test_inner.x GROUP BY test_inner.x "
       "ORDER BY n;",
       dt);
@@ -1352,8 +1352,8 @@ TEST(Select, Subqueries) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     c("SELECT str, SUM(y) AS n FROM test WHERE x > (SELECT COUNT(*) FROM test) - 14 GROUP BY str ORDER BY n ASC;", dt);
-    c("SELECT COUNT(*) FROM test, (SELECT x FROM test_inner) as inner_x WHERE test.x = inner_x.x;", dt);
-    c("SELECT COUNT(*) FROM test WHERE x in (SELECT x FROM test WHERE y > 42);", dt);
+    c("SELECT COUNT(*) FROM test, (SELECT x FROM test_inner) AS inner_x WHERE test.x = inner_x.x;", dt);
+    c("SELECT COUNT(*) FROM test WHERE x IN (SELECT x FROM test WHERE y > 42);", dt);
     c("SELECT COUNT(*) FROM test WHERE x IN (SELECT x FROM test GROUP BY x ORDER BY COUNT(*) DESC LIMIT 1);", dt);
     c("SELECT COUNT(*) FROM test WHERE x IN (SELECT x FROM test GROUP BY x);", dt);
     EXPECT_THROW(run_multiple_agg(
@@ -1382,7 +1382,7 @@ TEST(Select, LeftOuterJoins) {
     c("SELECT test.str AS foobar, test_inner.str FROM test LEFT OUTER JOIN test_inner ON test.x = test_inner.x WHERE "
       "test.y > 42 ORDER BY foobar DESC LIMIT 8;",
       dt);
-    c("SELECT test.x AS foobar, test_inner.x AS inner_foobar, test.f as f_foobar FROM test LEFT OUTER JOIN test_inner "
+    c("SELECT test.x AS foobar, test_inner.x AS inner_foobar, test.f AS f_foobar FROM test LEFT OUTER JOIN test_inner "
       "ON test.str = test_inner.str WHERE test.y > 40 ORDER BY foobar DESC, f_foobar DESC;",
       dt);
     c("SELECT test.str AS foobar, test_inner.str FROM test LEFT OUTER JOIN test_inner ON test.x = test_inner.x WHERE "
