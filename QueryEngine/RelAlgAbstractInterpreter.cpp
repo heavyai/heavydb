@@ -656,6 +656,29 @@ class RaAbstractInterp {
   std::unique_ptr<const RelAlgNode> run() {
     const auto& rels = field(query_ast_, "rels");
     CHECK(rels.IsArray());
+    try {
+      dispatchNodes(rels);
+    } catch (const QueryNotSupported&) {
+      CHECK(!nodes_.empty());
+      // TODO(alex): Not great, need to figure out a better ownership model.
+      delete nodes_.back();
+      throw;
+    }
+    CHECK(!nodes_.empty());
+    bind_inputs(nodes_);
+    mark_nops(nodes_);
+    coalesce_nodes(nodes_);
+    simplify_sort(nodes_);
+    if (!is_valid_rel_alg(nodes_.back())) {
+      // TODO(alex): Not great, need to figure out a better ownership model.
+      delete nodes_.back();
+      throw QueryNotSupported("Failed to optimize away Aggregate nodes");
+    }
+    return std::unique_ptr<const RelAlgNode>(nodes_.back());
+  }
+
+ private:
+  void dispatchNodes(const rapidjson::Value& rels) {
     for (auto rels_it = rels.Begin(); rels_it != rels.End(); ++rels_it) {
       const auto& crt_node = *rels_it;
       const auto id = node_id(crt_node);
@@ -680,18 +703,8 @@ class RaAbstractInterp {
       }
       nodes_.push_back(ra_node);
     }
-    CHECK(!nodes_.empty());
-    bind_inputs(nodes_);
-    mark_nops(nodes_);
-    coalesce_nodes(nodes_);
-    simplify_sort(nodes_);
-    if (!is_valid_rel_alg(nodes_.back())) {
-      throw QueryNotSupported("Failed to optimize away Aggregate nodes");
-    }
-    return std::unique_ptr<const RelAlgNode>(nodes_.back());
   }
 
- private:
   RelScan* dispatchTableScan(const rapidjson::Value& scan_ra) {
     check_empty_inputs_field(scan_ra);
     CHECK(scan_ra.IsObject());
