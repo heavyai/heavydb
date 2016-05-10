@@ -490,6 +490,9 @@ TEST(Select, Having) {
     c("SELECT x, COUNT(*) FROM test WHERE x > 9 GROUP BY x HAVING x > 15;", dt);
     c("SELECT x, AVG(y), AVG(y) FROM test GROUP BY x HAVING x >= 0;", dt);
     c("SELECT AVG(y), x, AVG(y) FROM test GROUP BY x HAVING x >= 0;", dt);
+    c("SELECT x, y, COUNT(*) FROM test WHERE real_str LIKE 'nope%' GROUP BY x, y HAVING x >= 0 AND x < 12 AND y >= 0 "
+      "AND y < 12 ORDER BY x, y;",
+      dt);
   }
 }
 

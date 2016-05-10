@@ -2659,7 +2659,7 @@ ResultRows Executor::executeResultPlan(const Planner::Result* result_plan,
   }
   const auto row_count = result_rows.rowCount();
   if (!row_count) {
-    return result_rows;
+    return ResultRows({}, {}, nullptr, nullptr, {}, ExecutorDeviceType::CPU);
   }
   std::vector<ColWidths> agg_col_widths;
   for (auto wid : get_col_byte_widths(target_exprs)) {
