@@ -123,14 +123,27 @@
 			"revisionTime": "2016-02-05T10:48:01+09:00"
 		},
 		{
+			"checksumSHA1": "7WASrg0PEueWDDRHkFhEEN6Qrms=",
+			"path": "golang.org/x/net/netutil",
+			"revision": "96dbb961a39ddccf16860cdd355bfa639c497f23",
+			"revisionTime": "2016-05-10T16:41:55Z"
+		},
+		{
 			"path": "gopkg.in/fsnotify.v1",
 			"revision": "8611c35ab31c1c28aa903d33cf8b6e44a399b09e",
 			"revisionTime": "2016-01-10T16:04:37+01:00"
+		},
+		{
+			"checksumSHA1": "ePLAdIjySy93l8jolvCb+YJd0Pg=",
+			"path": "gopkg.in/tylerb/graceful.v1",
+			"revision": "ecde8c8f16df93a994dda8936c8f60f0c26c28ab",
+			"revisionTime": "2016-06-20T17:09:02Z"
 		},
 		{
 			"path": "gopkg.in/yaml.v2",
 			"revision": "f7716cbe52baa25d2e9b0d0da546fcf909fc16b4",
 			"revisionTime": "2015-12-01T14:27:45-02:00"
 		}
-	]
+	],
+	"rootPath": "mapd"
 }

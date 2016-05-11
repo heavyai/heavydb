@@ -25,6 +25,7 @@ import (
 	"github.com/rs/cors"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
+	"gopkg.in/tylerb/graceful.v1"
 )
 
 var (
@@ -448,6 +449,14 @@ func main() {
 		cmux = handlers.CompressHandler(cmux)
 	}
 
+	srv := &graceful.Server{
+		Timeout: 5 * time.Second,
+		Server: &http.Server{
+			Addr:    ":" + strconv.Itoa(port),
+			Handler: cmux,
+		},
+	}
+
 	if enableHttps {
 		if _, err := os.Stat(certFile); err != nil {
 			log.Fatalln("Error opening certificate:", err)
@@ -455,9 +464,9 @@ func main() {
 		if _, err := os.Stat(keyFile); err != nil {
 			log.Fatalln("Error opening keyfile:", err)
 		}
-		err = http.ListenAndServeTLS(":"+strconv.Itoa(port), certFile, keyFile, cmux)
+		err = srv.ListenAndServeTLS(certFile, keyFile)
 	} else {
-		err = http.ListenAndServe(":"+strconv.Itoa(port), cmux)
+		err = srv.ListenAndServe()
 	}
 
 	if err != nil {
