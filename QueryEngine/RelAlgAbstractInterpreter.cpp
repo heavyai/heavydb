@@ -1,7 +1,8 @@
 #ifdef HAVE_CALCITE
 #include "RelAlgAbstractInterpreter.h"
-#include "RelAlgValidator.h"
 #include "CalciteDeserializerUtils.h"
+#include "JsonAccessors.h"
+#include "RelAlgValidator.h"
 #include "RexVisitor.h"
 
 #include <glog/logging.h>
@@ -161,34 +162,6 @@ void RelCompound::replaceInput(const RelAlgNode* old_input, const RelAlgNode* in
 }
 
 namespace {
-
-// Checked json field retrieval.
-const rapidjson::Value& field(const rapidjson::Value& obj, const char field[]) noexcept {
-  CHECK(obj.IsObject());
-  const auto field_it = obj.FindMember(field);
-  CHECK(field_it != obj.MemberEnd());
-  return field_it->value;
-}
-
-const int64_t json_i64(const rapidjson::Value& obj) noexcept {
-  CHECK(obj.IsInt64());
-  return obj.GetInt64();
-}
-
-const std::string json_str(const rapidjson::Value& obj) noexcept {
-  CHECK(obj.IsString());
-  return obj.GetString();
-}
-
-const bool json_bool(const rapidjson::Value& obj) noexcept {
-  CHECK(obj.IsBool());
-  return obj.GetBool();
-}
-
-const double json_double(const rapidjson::Value& obj) noexcept {
-  CHECK(obj.IsDouble());
-  return obj.GetDouble();
-}
 
 unsigned node_id(const rapidjson::Value& ra_node) noexcept {
   const auto& id = field(ra_node, "id");

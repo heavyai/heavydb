@@ -11,6 +11,7 @@
 #include "QueryTemplateGenerator.h"
 #include "QueryRewrite.h"
 #include "RuntimeFunctions.h"
+#include "JsonAccessors.h"
 #include "DataMgr/BufferMgr/BufferMgr.h"
 #include "CudaMgr/CudaMgr.h"
 #include "Parser/ParserNode.h"

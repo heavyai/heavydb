@@ -28,6 +28,7 @@
 #include "Planner/Planner.h"
 #include "QueryEngine/CalciteAdapter.h"
 #include "QueryEngine/Execute.h"
+#include "QueryEngine/JsonAccessors.h"
 #include "QueryEngine/TargetMetaInfo.h"
 #include "Shared/mapd_shared_mutex.h"
 #include "Shared/measure.h"
@@ -881,7 +882,6 @@ class MapDHandler : virtual public MapDIf {
 
   void testRenderSimplePolys(TRenderResult& _return,
                              const TSessionId session,
-                             const std::string& query_str,
                              const std::string& render_type,
                              const std::string& nonce) {
     if (!enable_rendering_) {

@@ -8,6 +8,7 @@
 #include "JoinHashTable.h"
 #include "NvidiaKernel.h"
 #include "InputDescriptors.h"
+#include "TargetMetaInfo.h"
 #include "../Analyzer/Analyzer.h"
 #include "../Chunk/Chunk.h"
 #include "../Fragmenter/Fragmenter.h"
@@ -211,7 +212,10 @@ class Executor {
                            const int render_widget_id,
                            const int pixelRadius = 0);
 
-  ResultRows testRenderSimplePolys(const std::string& render_config_json,
+  ResultRows testRenderSimplePolys(const int8_t* row_buffer,
+                                   const size_t row_buffer_entry_count,
+                                   const std::vector<TargetMetaInfo>& row_shape,
+                                   const std::string& render_config_json,
                                    const Catalog_Namespace::SessionInfo& session,
                                    const int render_widget_id);
 
