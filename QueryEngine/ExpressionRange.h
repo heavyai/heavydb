@@ -73,6 +73,8 @@ class ExpressionRange {
   ExpressionRange operator/(const ExpressionRange& other) const;
   ExpressionRange operator||(const ExpressionRange& other) const;
 
+  bool operator==(const ExpressionRange& other) const;
+
  private:
   ExpressionRange(const int64_t int_min_in, const int64_t int_max_in, const int64_t bucket, const bool has_nulls_in)
       : type_(ExpressionRangeType::Integer),

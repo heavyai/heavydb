@@ -67,6 +67,25 @@ ExpressionRange ExpressionRange::operator||(const ExpressionRange& other) const 
   return result;
 }
 
+bool ExpressionRange::operator==(const ExpressionRange& other) const {
+  if (type_ != other.type_) {
+    return false;
+  }
+  switch (type_) {
+    case ExpressionRangeType::Invalid:
+      return true;
+    case ExpressionRangeType::Integer: {
+      return has_nulls_ == other.has_nulls_ && int_min_ == other.int_min_ && int_max_ == other.int_max_;
+    }
+    case ExpressionRangeType::FloatingPoint: {
+      return has_nulls_ == other.has_nulls_ && fp_min_ == other.fp_min_ && fp_max_ == other.fp_max_;
+    }
+    default:
+      CHECK(false);
+  }
+  return false;
+}
+
 ExpressionRange getExpressionRange(const Analyzer::BinOper* expr,
                                    const std::vector<Fragmenter_Namespace::TableInfo>& query_infos,
                                    const Executor*);

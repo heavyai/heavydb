@@ -65,6 +65,10 @@ std::pair<const Analyzer::ColumnVar*, const Analyzer::ColumnVar*> get_cols(
 
 }  // namespace
 
+std::vector<std::pair<JoinHashTable::JoinHashTableCacheKey, const std::vector<int32_t>>>
+    JoinHashTable::join_hash_table_cache_;
+std::mutex JoinHashTable::join_hash_table_cache_mutex_;
+
 std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(
     const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
     const Catalog_Namespace::Catalog& cat,
@@ -109,8 +113,6 @@ int JoinHashTable::reify(const int device_count) {
   const auto& fragment = query_info.fragments.front();
   auto chunk_meta_it = fragment.chunkMetadataMap.find(inner_col->get_column_id());
   CHECK(chunk_meta_it != fragment.chunkMetadataMap.end());
-  ChunkKey chunk_key{
-      cat_.get_currentDB().dbId, inner_col->get_table_id(), inner_col->get_column_id(), fragment.fragmentId};
   const auto cd = get_column_descriptor_maybe(inner_col->get_column_id(), inner_col->get_table_id(), cat_);
   CHECK(!cd || !(cd->isVirtualCol));
   const auto& ti =
@@ -129,6 +131,9 @@ int JoinHashTable::reify(const int device_count) {
     columnar_results.reset(
         rows_to_columnar_results(get_temporary_table(executor_->temporary_tables_, inner_col->get_table_id())));
   }
+  ChunkKey chunk_key{
+      cat_.get_currentDB().dbId, inner_col->get_table_id(), inner_col->get_column_id(), fragment.fragmentId};
+  const JoinHashTableCacheKey cache_key{col_range_, *inner_col, *cols.second, fragment.numTuples, chunk_key};
   for (int device_id = 0; device_id < device_count; ++device_id) {
     const int8_t* col_buff{nullptr};
     if (cd) {
@@ -155,10 +160,10 @@ int JoinHashTable::reify(const int device_count) {
                                                  effective_memory_level == Data_Namespace::CPU_LEVEL ? 0 : device_id);
     }
     init_threads.emplace_back(
-        [&errors, &chunk_meta_it, &cols, &fragment, col_buff, effective_memory_level, device_id, this] {
+        [&errors, &chunk_key, &chunk_meta_it, &cols, &fragment, col_buff, effective_memory_level, device_id, this] {
           try {
-            errors[device_id] =
-                initHashTableForDevice(col_buff, fragment.numTuples, cols, effective_memory_level, device_id);
+            errors[device_id] = initHashTableForDevice(
+                chunk_key, col_buff, fragment.numTuples, cols, effective_memory_level, device_id);
           } catch (...) {
             errors[device_id] = -1;
           }
@@ -241,7 +246,8 @@ int JoinHashTable::initHashTableOnCpu(const int8_t* col_buff,
   return err;
 }
 
-int JoinHashTable::initHashTableForDevice(const int8_t* col_buff,
+int JoinHashTable::initHashTableForDevice(const ChunkKey& chunk_key,
+                                          const int8_t* col_buff,
                                           const size_t num_elements,
                                           const std::pair<const Analyzer::ColumnVar*, const Analyzer::ColumnVar*>& cols,
                                           const Data_Namespace::MemoryLevel effective_memory_level,
@@ -264,9 +270,13 @@ int JoinHashTable::initHashTableForDevice(const int8_t* col_buff,
   int err = 0;
   const int32_t hash_join_invalid_val{-1};
   if (effective_memory_level == Data_Namespace::CPU_LEVEL) {
+    initHashTableOnCpuFromCache(chunk_key, num_elements, cols);
     {
       std::lock_guard<std::mutex> cpu_hash_table_buff_lock(cpu_hash_table_buff_mutex_);
       err = initHashTableOnCpu(col_buff, num_elements, cols, hash_entry_count, hash_join_invalid_val);
+    }
+    if (!err) {
+      putHashTableOnCpuToCache(chunk_key, num_elements, cols);
     }
     // Transfer the hash table on the GPU if we've only built it on CPU
     // but the query runs on GPU (join on dictionary encoded columns).
@@ -312,6 +322,34 @@ int JoinHashTable::initHashTableForDevice(const int8_t* col_buff,
 #endif
   }
   return err;
+}
+
+void JoinHashTable::initHashTableOnCpuFromCache(
+    const ChunkKey& chunk_key,
+    const size_t num_elements,
+    const std::pair<const Analyzer::ColumnVar*, const Analyzer::ColumnVar*>& cols) {
+  JoinHashTableCacheKey cache_key{col_range_, *cols.first, *cols.second, num_elements, chunk_key};
+  std::lock_guard<std::mutex> join_hash_table_cache_lock(join_hash_table_cache_mutex_);
+  for (const auto& kv : join_hash_table_cache_) {
+    if (kv.first == cache_key) {
+      cpu_hash_table_buff_ = kv.second;
+      break;
+    }
+  }
+}
+
+void JoinHashTable::putHashTableOnCpuToCache(
+    const ChunkKey& chunk_key,
+    const size_t num_elements,
+    const std::pair<const Analyzer::ColumnVar*, const Analyzer::ColumnVar*>& cols) {
+  JoinHashTableCacheKey cache_key{col_range_, *cols.first, *cols.second, num_elements, chunk_key};
+  std::lock_guard<std::mutex> join_hash_table_cache_lock(join_hash_table_cache_mutex_);
+  for (const auto& kv : join_hash_table_cache_) {
+    if (kv.first == cache_key) {
+      return;
+    }
+  }
+  join_hash_table_cache_.emplace_back(cache_key, cpu_hash_table_buff_);
 }
 
 llvm::Value* JoinHashTable::codegenSlot(const bool hoist_literals) {

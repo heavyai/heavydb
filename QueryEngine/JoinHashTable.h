@@ -59,11 +59,18 @@ class JoinHashTable {
   }
 
   int reify(const int device_count);
-  int initHashTableForDevice(const int8_t* col_buff,
+  int initHashTableForDevice(const ChunkKey& chunk_key,
+                             const int8_t* col_buff,
                              const size_t num_elements,
                              const std::pair<const Analyzer::ColumnVar*, const Analyzer::ColumnVar*>& cols,
                              const Data_Namespace::MemoryLevel effective_memory_level,
                              const int device_id);
+  void initHashTableOnCpuFromCache(const ChunkKey& chunk_key,
+                                   const size_t num_elements,
+                                   const std::pair<const Analyzer::ColumnVar*, const Analyzer::ColumnVar*>& cols);
+  void putHashTableOnCpuToCache(const ChunkKey& chunk_key,
+                                const size_t num_elements,
+                                const std::pair<const Analyzer::ColumnVar*, const Analyzer::ColumnVar*>& cols);
   int initHashTableOnCpu(const int8_t* col_buff,
                          const size_t num_elements,
                          const std::pair<const Analyzer::ColumnVar*, const Analyzer::ColumnVar*>& cols,
@@ -83,6 +90,22 @@ class JoinHashTable {
 #endif
   ExpressionRange col_range_;
   Executor* executor_;
+
+  struct JoinHashTableCacheKey {
+    const ExpressionRange col_range;
+    const Analyzer::ColumnVar inner_col;
+    const Analyzer::ColumnVar outer_col;
+    const size_t num_elements;
+    const ChunkKey chunk_key;
+
+    bool operator==(const struct JoinHashTableCacheKey& that) const {
+      return col_range == that.col_range && inner_col == that.inner_col && outer_col == that.outer_col &&
+             num_elements == that.num_elements && chunk_key == that.chunk_key;
+    }
+  };
+
+  static std::vector<std::pair<JoinHashTableCacheKey, const std::vector<int32_t>>> join_hash_table_cache_;
+  static std::mutex join_hash_table_cache_mutex_;
 
   friend class Executor;
 };
