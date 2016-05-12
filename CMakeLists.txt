@@ -324,7 +324,7 @@ option(ENABLE_DOCS "Enable compilation of MapD docs" ON)
 find_program(PANDOC_EXECUTABLE NAMES pandoc)
 find_program(PDFLATEX_EXECUTABLE NAMES pdflatex)
 configure_file(
-  "${CMAKE_SOURCE_DIR}/docs/MapDGuide.md"
+  "${CMAKE_SOURCE_DIR}/docs/MapDGuide.in.md"
   "${CMAKE_BINARY_DIR}/docs/MapDGuide.md"
   @ONLY
   )
