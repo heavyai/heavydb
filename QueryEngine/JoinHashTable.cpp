@@ -65,7 +65,7 @@ std::pair<const Analyzer::ColumnVar*, const Analyzer::ColumnVar*> get_cols(
 
 }  // namespace
 
-std::vector<std::pair<JoinHashTable::JoinHashTableCacheKey, const std::vector<int32_t>>>
+std::vector<std::pair<JoinHashTable::JoinHashTableCacheKey, std::shared_ptr<std::vector<int32_t>>>>
     JoinHashTable::join_hash_table_cache_;
 std::mutex JoinHashTable::join_hash_table_cache_mutex_;
 
@@ -189,8 +189,8 @@ int JoinHashTable::initHashTableOnCpu(const int8_t* col_buff,
   CHECK(inner_col);
   const auto& ti = inner_col->get_type_info();
   int err = 0;
-  if (cpu_hash_table_buff_.empty()) {
-    cpu_hash_table_buff_.resize(hash_entry_count);
+  if (!cpu_hash_table_buff_) {
+    cpu_hash_table_buff_ = std::make_shared<std::vector<int32_t>>(hash_entry_count);
     const StringDictionary* sd_inner{nullptr};
     const StringDictionary* sd_outer{nullptr};
     if (ti.is_string()) {
@@ -205,7 +205,7 @@ int JoinHashTable::initHashTableOnCpu(const int8_t* col_buff,
     for (int thread_idx = 0; thread_idx < thread_count; ++thread_idx) {
       init_cpu_buff_threads.emplace_back([this, hash_entry_count, hash_join_invalid_val, thread_idx, thread_count] {
         init_hash_join_buff(
-            &cpu_hash_table_buff_[0], hash_entry_count, hash_join_invalid_val, thread_idx, thread_count);
+            &(*cpu_hash_table_buff_)[0], hash_entry_count, hash_join_invalid_val, thread_idx, thread_count);
       });
     }
     for (auto& t : init_cpu_buff_threads) {
@@ -224,7 +224,7 @@ int JoinHashTable::initHashTableOnCpu(const int8_t* col_buff,
                                           thread_count,
                                           &ti,
                                           &err] {
-        int partial_err = fill_hash_join_buff(&cpu_hash_table_buff_[0],
+        int partial_err = fill_hash_join_buff(&(*cpu_hash_table_buff_)[0],
                                               hash_join_invalid_val,
                                               col_buff,
                                               num_elements,
@@ -275,7 +275,7 @@ int JoinHashTable::initHashTableForDevice(const ChunkKey& chunk_key,
       std::lock_guard<std::mutex> cpu_hash_table_buff_lock(cpu_hash_table_buff_mutex_);
       err = initHashTableOnCpu(col_buff, num_elements, cols, hash_entry_count, hash_join_invalid_val);
     }
-    if (!err) {
+    if (!err && inner_col->get_table_id() > 0) {
       putHashTableOnCpuToCache(chunk_key, num_elements, cols);
     }
     // Transfer the hash table on the GPU if we've only built it on CPU
@@ -287,8 +287,8 @@ int JoinHashTable::initHashTableForDevice(const ChunkKey& chunk_key,
       auto& data_mgr = cat_.get_dataMgr();
       copy_to_gpu(&data_mgr,
                   gpu_hash_table_buff_[device_id],
-                  &cpu_hash_table_buff_[0],
-                  cpu_hash_table_buff_.size() * sizeof(cpu_hash_table_buff_[0]),
+                  &(*cpu_hash_table_buff_)[0],
+                  cpu_hash_table_buff_->size() * sizeof((*cpu_hash_table_buff_)[0]),
                   device_id);
 #else
       CHECK(false);

@@ -33,11 +33,11 @@ class JoinHashTable {
 
   int64_t getJoinHashBuffer(const ExecutorDeviceType device_type, const int device_id) {
 #ifdef HAVE_CUDA
-    return device_type == ExecutorDeviceType::CPU ? reinterpret_cast<int64_t>(&cpu_hash_table_buff_[0])
+    return device_type == ExecutorDeviceType::CPU ? reinterpret_cast<int64_t>(&(*cpu_hash_table_buff_)[0])
                                                   : gpu_hash_table_buff_[device_id];
 #else
     CHECK(device_type == ExecutorDeviceType::CPU);
-    return reinterpret_cast<int64_t>(&cpu_hash_table_buff_[0]);
+    return reinterpret_cast<int64_t>(&(*cpu_hash_table_buff_)[0]);
 #endif
   }
 
@@ -83,7 +83,7 @@ class JoinHashTable {
   const Catalog_Namespace::Catalog& cat_;
   const std::vector<Fragmenter_Namespace::TableInfo>& query_infos_;
   const Data_Namespace::MemoryLevel memory_level_;
-  std::vector<int32_t> cpu_hash_table_buff_;
+  std::shared_ptr<std::vector<int32_t>> cpu_hash_table_buff_;
   std::mutex cpu_hash_table_buff_mutex_;
 #ifdef HAVE_CUDA
   std::vector<CUdeviceptr> gpu_hash_table_buff_;
@@ -104,7 +104,7 @@ class JoinHashTable {
     }
   };
 
-  static std::vector<std::pair<JoinHashTableCacheKey, const std::vector<int32_t>>> join_hash_table_cache_;
+  static std::vector<std::pair<JoinHashTableCacheKey, std::shared_ptr<std::vector<int32_t>>>> join_hash_table_cache_;
   static std::mutex join_hash_table_cache_mutex_;
 
   friend class Executor;
