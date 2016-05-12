@@ -347,7 +347,7 @@ if(PANDOC_EXECUTABLE AND PDFLATEX_EXECUTABLE AND ENABLE_DOCS)
 elseif(ENABLE_DOCS)
   message(WARNING "pandoc or pdflatex not found. Skipping PDF docs.")
 endif()
-install(FILES docs/MapDGuide.md DESTINATION docs)
+install(FILES ${CMAKE_BINARY_DIR}/docs/MapDGuide.md DESTINATION docs)
 install(DIRECTORY docs/release-notes DESTINATION docs)
 
 # systemd
