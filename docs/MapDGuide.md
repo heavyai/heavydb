@@ -1,5 +1,5 @@
 ---
-title: MapD Guide | Release 0.1
+title: MapD Guide | Release @MAPD_VERSION_RAW@
 author: MapD Technologies, Inc.
 logo: mapd-logo.pdf
 ---

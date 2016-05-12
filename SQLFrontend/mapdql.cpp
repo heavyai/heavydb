@@ -20,6 +20,7 @@
 
 #include "gen-cpp/MapD.h"
 #include "MapDServer.h"
+#include "MapDRelease.h"
 #include <thrift/transport/TSocket.h>
 #include <thrift/protocol/TBinaryProtocol.h>
 #include <thrift/protocol/TJSONProtocol.h>
@@ -32,7 +33,7 @@ using namespace ::apache::thrift;
 using namespace ::apache::thrift::protocol;
 using namespace ::apache::thrift::transport;
 
-const std::string MapDQLRelease("0.1");
+const std::string MapDQLRelease(MapDRelease);
 
 using boost::shared_ptr;
 

@@ -2,6 +2,17 @@ cmake_minimum_required(VERSION 2.8)
 
 PROJECT(mapd2)
 
+set(MAPD_VERSION_RAW "1.1.4dev")
+set(MAPD_IMMERSE_URL "http://builds.mapd.com/frontend/mapd2-dashboard-v1-latest-release.zip")
+string(TIMESTAMP MAPD_BUILD_DATE "%Y%m%d")
+
+if($ENV{BUILD_NUMBER})
+  set(MAPD_BUILD_NUMBER "$ENV{BUILD_NUMBER}")
+else()
+  set(MAPD_BUILD_NUMBER "dev")
+endif()
+set(MAPD_VERSION "${MAPD_VERSION_RAW}-${MAPD_BUILD_NUMBER}")
+
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/Modules")
@@ -275,11 +286,11 @@ set(CPACK_PACKAGE_VENDOR "MapD Technologies, Inc.")
 
 # Frontend
 option(MAPD2_FRONTEND_DOWNLOAD "Download mapd2-frontend for packaging" OFF)
-set(MAPD_FRONTEND_URL "http://builds.mapd.com/frontend/mapd2-dashboard-v1-latest-release.zip" CACHE STRING "URL to bundled frontend")
+set(MAPD_IMMERSE_URL ${MAPD_IMMERSE_URL} CACHE STRING "URL to bundled frontend")
 if(MAPD2_FRONTEND_DOWNLOAD)
   include(ExternalProject)
   ExternalProject_Add(frontend
-    URL ${MAPD_FRONTEND_URL}
+    URL ${MAPD_IMMERSE_URL}
     PREFIX external
     CONFIGURE_COMMAND ""
     UPDATE_COMMAND ""
@@ -312,6 +323,11 @@ add_subdirectory(ThirdParty/generate_cert)
 option(ENABLE_DOCS "Enable compilation of MapD docs" ON)
 find_program(PANDOC_EXECUTABLE NAMES pandoc)
 find_program(PDFLATEX_EXECUTABLE NAMES pdflatex)
+configure_file(
+  "${CMAKE_SOURCE_DIR}/docs/MapDGuide.md"
+  "${CMAKE_BINARY_DIR}/docs/MapDGuide.md"
+  @ONLY
+  )
 if(PANDOC_EXECUTABLE AND PDFLATEX_EXECUTABLE AND ENABLE_DOCS)
   add_custom_target(docs ALL
     COMMAND ${PANDOC_EXECUTABLE}
@@ -322,7 +338,7 @@ if(PANDOC_EXECUTABLE AND PDFLATEX_EXECUTABLE AND ENABLE_DOCS)
       --template=mapd
       --data-dir=.
       --output=${CMAKE_BINARY_DIR}/MapDGuide.pdf
-      ${CMAKE_SOURCE_DIR}/docs/MapDGuide.md
+      ${CMAKE_BINARY_DIR}/docs/MapDGuide.md
     SOURCES docs/MapDGuide.md
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/docs
     )
@@ -387,9 +403,8 @@ install(PROGRAMS startmapd DESTINATION ".")
 install(PROGRAMS insert_sample_data DESTINATION ".")
 
 exec_program(uname ARGS -m OUTPUT_VARIABLE MAPD_HOST_SYSTEM_ARCHITECTURE) # does not account for cross-compiling or Windows
-string(TIMESTAMP CURRENT_DATE "%Y%m%d")
 file(STRINGS ${CMAKE_BINARY_DIR}/MAPD_GIT_HASH.txt MAPD_GIT_HASH)
-set(CPACK_PACKAGE_VERSION "${CURRENT_DATE}-${MAPD_GIT_HASH}")
+set(CPACK_PACKAGE_VERSION "${MAPD_VERSION_RAW}-${MAPD_BUILD_DATE}-${MAPD_GIT_HASH}")
 set(CPACK_PACKAGE_FILE_NAME "${CMAKE_PROJECT_NAME}-${CPACK_PACKAGE_VERSION}-${CMAKE_SYSTEM_NAME}-${MAPD_HOST_SYSTEM_ARCHITECTURE}${MAPD_PACKAGE_FLAGS}")
 
 set(CPACK_GENERATOR "STGZ")
