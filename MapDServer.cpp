@@ -812,6 +812,7 @@ class MapDHandler : virtual public MapDIf {
   void testRenderSimplePolys(TRenderResult& _return,
                              const TSessionId session,
                              const std::string& query_str,
+                             const std::string& render_type,
                              const std::string& nonce) {
     if (!enable_rendering_) {
       TMapDException ex;

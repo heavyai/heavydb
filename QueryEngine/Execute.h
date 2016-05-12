@@ -211,7 +211,7 @@ class Executor {
                            const int render_widget_id,
                            const int pixelRadius = 0);
 
-  ResultRows testRenderSimplePolys(const Planner::RootPlan* root_plan,
+  ResultRows testRenderSimplePolys(const std::string& render_config_json,
                                    const Catalog_Namespace::SessionInfo& session,
                                    const int render_widget_id);
 
