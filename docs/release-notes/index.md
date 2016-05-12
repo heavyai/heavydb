@@ -1,5 +1,20 @@
 # MapD Platform
-The latest version of the MapD Platform is 1.1.3.
+The latest version of the MapD Platform is 1.1.4.
+
+
+#### **1.1.4** — Released May 16, 2016
+
+#### New
+- Improved memory fragmentation handling by adding support for huge pages.
+- Improved performance when joining large tables to small tables.
+- Improved join on dictionary strings performance.
+
+#### Fixed
+- Fixed out-of-bound access in VRAM when out-of-slot exception raised.
+- Fixed issue with queries returning empty result sets.
+- More conservative tuple threshold for compaction, fixing count overflow on large tables.
+- Reduced memory fragmentation for long-running servers.
+
 
 #### **1.1.3** — Released May 9, 2016
 
