@@ -512,6 +512,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const std::vector<voi
   const unsigned block_size_z = 1;
   const unsigned grid_size_y = 1;
   const unsigned grid_size_z = 1;
+  const auto err_desc = kernel_params[ERROR_CODE];
 
   if (is_group_by) {
     CHECK(!group_by_buffers_.empty() || render_allocator);
@@ -556,6 +557,14 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const std::vector<voi
                                      &param_ptrs[0],
                                      nullptr));
     }
+    copy_from_gpu(data_mgr, &error_codes[0], err_desc, error_codes.size() * sizeof(error_codes[0]), device_id);
+    *error_code = 0;
+    for (const auto err : error_codes) {
+      if (err < 0 || (err > 0 && (!*error_code || err > *error_code))) {
+        *error_code = err;
+        break;
+      }
+    }
     if (!render_allocator) {
       copy_group_by_buffers_from_gpu(data_mgr,
                                      this,
@@ -564,15 +573,6 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const std::vector<voi
                                      grid_size_x,
                                      device_id,
                                      can_sort_on_gpu && query_mem_desc_.keyless_hash);
-    }
-    copy_from_gpu(
-        data_mgr, &error_codes[0], kernel_params[ERROR_CODE], error_codes.size() * sizeof(error_codes[0]), device_id);
-    *error_code = 0;
-    for (const auto err : error_codes) {
-      if (err && (!*error_code || err > *error_code)) {
-        *error_code = err;
-        break;
-      }
     }
   } else {
     std::vector<CUdeviceptr> out_vec_dev_buffers;
@@ -619,6 +619,14 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const std::vector<voi
                                      nullptr,
                                      &param_ptrs[0],
                                      nullptr));
+    }
+    copy_from_gpu(data_mgr, &error_codes[0], err_desc, error_codes.size() * sizeof(error_codes[0]), device_id);
+    *error_code = 0;
+    for (const auto err : error_codes) {
+      if (err < 0 || (err > 0 && (!*error_code || err > *error_code))) {
+        *error_code = err;
+        break;
+      }
     }
     for (size_t i = 0; i < agg_col_count; ++i) {
       int64_t* host_out_vec = new int64_t[block_size_x * grid_size_x * sizeof(int64_t) * num_fragments];
