@@ -191,6 +191,7 @@ service MapD {
   void disconnect(1: TSessionId session) throws (1: TMapDException e 2: ThriftException te)
   TServerStatus get_server_status(1: TSessionId session) throws (1: TMapDException e 2: ThriftException te)
   TQueryResult sql_execute(1: TSessionId session, 2: string query 3: bool column_format, 4: string nonce) throws (1: TMapDException e 2: ThriftException te)
+  TTableDescriptor sql_validate(1: TSessionId session, 2: string query) throws (1: TMapDException e 2: ThriftException te)
   TTableDescriptor get_table_descriptor(1: TSessionId session, 2: string table_name) throws (1: TMapDException e 2: ThriftException te)
   TRowDescriptor get_row_descriptor(1: TSessionId session, 2: string table_name) throws (1: TMapDException e 2: ThriftException te)
   TFrontendView get_frontend_view(1: TSessionId session, 2: string view_name) throws (1: TMapDException e 2: ThriftException te)

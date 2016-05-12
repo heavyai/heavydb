@@ -349,6 +349,36 @@ class MapDHandler : virtual public MapDIf {
     sql_execute_impl(_return, session_info, query_str, column_format, nonce);
   }
 
+  void sql_validate(TTableDescriptor& _return, const TSessionId session, const std::string& query_str) {
+    std::unique_ptr<const Planner::RootPlan> root_plan;
+    const auto session_info = get_session(session);
+#ifdef HAVE_CALCITE
+    ParserWrapper pw{query_str};
+    if (pw.is_select_explain || pw.is_other_explain || pw.is_ddl || pw.is_update_dml) {
+      TMapDException ex;
+      ex.error_msg = "Can only validate SELECT statements.";
+      LOG(ERROR) << ex.error_msg;
+      throw ex;
+    }
+    root_plan.reset(parse_to_plan(query_str, session_info));
+#else
+    root_plan.reset(parse_to_plan_legacy(query_str, session_info, "validate"));
+#endif  // HAVE_CALCITE
+    CHECK(root_plan);
+    CHECK(root_plan->get_plan());
+    const auto& target_list = root_plan->get_plan()->get_targetlist();
+    for (const auto& target : target_list) {
+      TColumnType col_type;
+      const auto& target_ti = target->get_expr()->get_type_info();
+      col_type.col_type.type = type_to_thrift(target_ti);
+      col_type.col_type.encoding = encoding_to_thrift(target_ti);
+      col_type.col_type.nullable = !target_ti.get_notnull();
+      col_type.col_type.is_array = target_ti.get_type() == kARRAY;
+      col_type.col_name = target->get_resname();
+      _return.insert(std::make_pair(col_type.col_name, col_type));
+    }
+  }
+
   // DEPRECATED - use get_row_for_pixel()
   void get_rows_for_pixels(TPixelResult& _return,
                            const TSessionId session,
@@ -713,10 +743,11 @@ class MapDHandler : virtual public MapDIf {
     }
   }
 
-  Planner::RootPlan* parse_to_render_plan_legacy(const std::string& query_str,
-                                                 const Catalog_Namespace::SessionInfo& session_info) {
+  Planner::RootPlan* parse_to_plan_legacy(const std::string& query_str,
+                                          const Catalog_Namespace::SessionInfo& session_info,
+                                          const std::string& action /* render or validate */) {
     auto& cat = session_info.get_catalog();
-    LOG(INFO) << "Render: " << query_str;
+    LOG(INFO) << action << ": " << query_str;
     SQLParser parser;
     std::list<Parser::Stmt*> parse_trees;
     std::string last_parsed;
@@ -737,7 +768,7 @@ class MapDHandler : virtual public MapDIf {
     }
     if (parse_trees.size() != 1) {
       TMapDException ex;
-      ex.error_msg = "Can only render a single query at a time.";
+      ex.error_msg = "Can only " + action + " a single query at a time.";
       LOG(ERROR) << ex.error_msg;
       throw ex;
     }
@@ -746,7 +777,7 @@ class MapDHandler : virtual public MapDIf {
     Parser::DDLStmt* ddl = dynamic_cast<Parser::DDLStmt*>(stmt);
     if (ddl != nullptr) {
       TMapDException ex;
-      ex.error_msg = "Can only render SELECT statements.";
+      ex.error_msg = "Can only " + action + " SELECT statements.";
       LOG(ERROR) << ex.error_msg;
       throw ex;
     }
@@ -792,7 +823,7 @@ class MapDHandler : virtual public MapDIf {
         }
         auto root_plan = parse_to_plan(query_str, *session_info_ptr);
 #else
-        auto root_plan = parse_to_render_plan_legacy(query_str, *session_info_ptr);
+        auto root_plan = parse_to_plan_legacy(query_str, *session_info_ptr, "render");
 #endif  // HAVE_CALCITE
         CHECK(root_plan);
         std::unique_ptr<Planner::RootPlan> plan_ptr(root_plan);  // make sure it's deleted
