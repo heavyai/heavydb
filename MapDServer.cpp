@@ -360,24 +360,63 @@ class MapDHandler : virtual public MapDIf {
       LOG(ERROR) << ex.error_msg;
       throw ex;
     }
+#ifdef HAVE_RAVM
+    const auto targets_meta = validate_rel_alg(query_str, session_info);
+    for (const auto& target : targets_meta) {
+      const auto& target_ti = target.get_type_info();
+      TColumnType col_type;
+      col_type.col_type.type = type_to_thrift(target_ti);
+      col_type.col_type.encoding = encoding_to_thrift(target_ti);
+      col_type.col_type.nullable = !target_ti.get_notnull();
+      col_type.col_type.is_array = target_ti.get_type() == kARRAY;
+      col_type.col_name = target.get_resname();
+      const auto it_ok = _return.insert(std::make_pair(col_type.col_name, col_type));
+      CHECK(it_ok.second);
+    }
+#else   // HAVE_RAVM
     root_plan.reset(parse_to_plan(query_str, session_info));
-#else
+#endif  // !HAVE_RAVM
+#else   // HAVE_CALCITE
     root_plan.reset(parse_to_plan_legacy(query_str, session_info, "validate"));
-#endif  // HAVE_CALCITE
+#endif  // !HAVE_CALCITE
+#ifndef HAVE_RAVM
     CHECK(root_plan);
     CHECK(root_plan->get_plan());
     const auto& target_list = root_plan->get_plan()->get_targetlist();
     for (const auto& target : target_list) {
-      TColumnType col_type;
       const auto& target_ti = target->get_expr()->get_type_info();
+      TColumnType col_type;
       col_type.col_type.type = type_to_thrift(target_ti);
       col_type.col_type.encoding = encoding_to_thrift(target_ti);
       col_type.col_type.nullable = !target_ti.get_notnull();
       col_type.col_type.is_array = target_ti.get_type() == kARRAY;
       col_type.col_name = target->get_resname();
-      _return.insert(std::make_pair(col_type.col_name, col_type));
+      const auto it_ok = _return.insert(std::make_pair(col_type.col_name, col_type));
+      if (!it_ok.second) {
+        TMapDException ex;
+        ex.error_msg = "Duplicate alias: " + col_type.col_name;
+        LOG(ERROR) << ex.error_msg;
+        throw ex;
+      }
     }
+#endif  // !HAVE_RAVM
   }
+
+#ifdef HAVE_RAVM
+  std::vector<TargetMetaInfo> validate_rel_alg(const std::string& query_str,
+                                               const Catalog_Namespace::SessionInfo& session_info) {
+    const auto query_ra = parse_to_ra(query_str, session_info);
+    rapidjson::Document query_ast;
+    query_ast.Parse(query_ra.c_str());
+    CHECK(!query_ast.HasParseError());
+    CHECK(query_ast.IsObject());
+    const auto& cat = session_info.get_catalog();
+    const auto ra = ra_interpret(query_ast, cat);
+    auto ed_list = get_execution_descriptors(ra.get());
+    RelAlgExecutor ra_executor(nullptr, cat);
+    return ra_executor.validateRelAlgSeq(ed_list);
+  }
+#endif  // HAVE_RAVM
 
   // DEPRECATED - use get_row_for_pixel()
   void get_rows_for_pixels(TPixelResult& _return,

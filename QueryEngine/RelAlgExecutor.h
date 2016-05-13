@@ -24,6 +24,8 @@ class RelAlgExecutor {
                                    const ExecutionOptions&,
                                    const RenderInfo&);
 
+  std::vector<TargetMetaInfo> validateRelAlgSeq(const std::vector<RaExecutionDesc>&);
+
  private:
   ExecutionResult executeCompound(const RelCompound*,
                                   const CompilationOptions&,

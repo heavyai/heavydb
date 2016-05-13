@@ -59,6 +59,49 @@ ExecutionResult RelAlgExecutor::executeRelAlgSeq(std::vector<RaExecutionDesc>& e
   return exec_descs[exec_desc_count - 1].getResult();
 }
 
+std::vector<TargetMetaInfo> RelAlgExecutor::validateRelAlgSeq(const std::vector<RaExecutionDesc>& exec_descs) {
+  CHECK(!exec_descs.empty());
+  for (const auto& exec_desc : exec_descs) {
+    const auto body = exec_desc.getBody();
+    if (body->isNop()) {
+      CHECK(dynamic_cast<const RelAggregate*>(body));
+      CHECK_EQ(size_t(1), body->inputCount());
+      const auto input = body->getInput(0);
+      body->setOutputMetainfo(input->getOutputMetainfo());
+      addTemporaryTable(-body->getId(), nullptr);
+      continue;
+    }
+    const auto compound = dynamic_cast<const RelCompound*>(body);
+    if (compound) {
+      createCompoundWorkUnit(compound, {});
+      addTemporaryTable(-compound->getId(), nullptr);
+      continue;
+    }
+    const auto project = dynamic_cast<const RelProject*>(body);
+    if (project) {
+      createProjectWorkUnit(project, {});
+      addTemporaryTable(-project->getId(), nullptr);
+      continue;
+    }
+    const auto filter = dynamic_cast<const RelFilter*>(body);
+    if (filter) {
+      createFilterWorkUnit(filter, {});
+      addTemporaryTable(-filter->getId(), nullptr);
+      continue;
+    }
+    const auto sort = dynamic_cast<const RelSort*>(body);
+    if (sort) {
+      CHECK_EQ(size_t(1), sort->inputCount());
+      const auto source = sort->getInput(0);
+      CHECK(!dynamic_cast<const RelSort*>(source));
+      createSortInputWorkUnit(sort);
+      addTemporaryTable(-sort->getId(), nullptr);
+      continue;
+    }
+  }
+  return exec_descs.back().getBody()->getOutputMetainfo();
+}
+
 void RelAlgExecutor::handleNop(const RelAlgNode* body) {
   CHECK(dynamic_cast<const RelAggregate*>(body));
   CHECK_EQ(size_t(1), body->inputCount());

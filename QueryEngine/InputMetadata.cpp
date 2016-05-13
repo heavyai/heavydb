@@ -62,7 +62,7 @@ std::map<int, ChunkMetadata> synthesize_metadata(const ResultRows* rows) noexcep
 
 Fragmenter_Namespace::TableInfo synthesize_table_info(const ResultRows* rows) noexcept {
   std::deque<Fragmenter_Namespace::FragmentInfo> result;
-  const size_t row_count = rows->rowCount();
+  const size_t row_count = rows ? rows->rowCount() : 0;  // rows can be null only for query validation
   if (row_count) {
     result.resize(1);
     auto& fragment = result.front();
