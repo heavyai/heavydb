@@ -632,6 +632,8 @@ TEST(Select, Case) {
       "ELSE 'baz' END AS bucketed_str, COUNT(*) AS n FROM query_rewrite_test GROUP BY bucketed_str ORDER BY n DESC;",
       dt);
     c("SELECT CASE WHEN y > 40 THEN x END, x FROM test;", dt);
+    c("SELECT COUNT(CASE WHEN str = 'foo' THEN 1 END) FROM test;", dt);
+    c("SELECT COUNT(CASE WHEN str = 'foo' THEN 1 ELSE NULL END) FROM test;", dt);
   }
 }
 

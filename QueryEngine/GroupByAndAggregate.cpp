@@ -2066,10 +2066,11 @@ void GroupByAndAggregate::codegenAggCalls(const std::tuple<llvm::Value*, llvm::V
       } else {
         if (need_skip_null) {
           agg_fname += "_skip_val";
-          auto null_lv = executor_->castToTypeIn(chosen_type.is_fp()
-                                                     ? static_cast<llvm::Value*>(executor_->inlineFpNull(chosen_type))
-                                                     : static_cast<llvm::Value*>(executor_->inlineIntNull(chosen_type)),
-                                                 (chosen_bytes << 3));
+          const auto& arg_ti = agg_info.agg_arg_type;
+          auto null_lv =
+              executor_->castToTypeIn(arg_ti.is_fp() ? static_cast<llvm::Value*>(executor_->inlineFpNull(arg_ti))
+                                                     : static_cast<llvm::Value*>(executor_->inlineIntNull(arg_ti)),
+                                      (chosen_bytes << 3));
           agg_args.push_back(null_lv);
         }
         if (!agg_info.is_distinct) {
