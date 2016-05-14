@@ -276,8 +276,18 @@ ExpressionRange getExpressionRange(const Analyzer::ColumnVar* col_expr,
     case kTIME:
     case kFLOAT:
     case kDOUBLE: {
-      const auto& fragments = query_infos[col_expr->get_rte_idx()].fragments;
-      bool has_nulls = col_expr->get_rte_idx() > 0 && executor->isOuterJoin();
+      const int rte_idx = col_expr->get_rte_idx();
+      CHECK_GE(rte_idx, 0);
+      CHECK_LT(static_cast<size_t>(rte_idx), query_infos.size());
+      const auto& fragments = query_infos[rte_idx].fragments;
+      bool has_nulls = rte_idx > 0 && executor->isOuterJoin();
+      const auto cd = executor->getColumnDescriptor(col_expr);
+      if (cd && cd->isVirtualCol) {
+        CHECK(cd->columnName == "rowid");
+        CHECK_EQ(kBIGINT, col_ti.get_type());
+        const int64_t num_tuples = query_infos[rte_idx].numTuples;
+        return ExpressionRange::makeIntRange(0, std::max(num_tuples - 1, 0L), 0, has_nulls);
+      }
       FIND_STAT_FRAG(min);
       FIND_STAT_FRAG(max);
       const auto min_it = min_frag->chunkMetadataMap.find(col_id);

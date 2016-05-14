@@ -482,6 +482,10 @@ bool Executor::isCPUOnly() const {
   return !catalog_->get_dataMgr().cudaMgr_;
 }
 
+const ColumnDescriptor* Executor::getColumnDescriptor(const Analyzer::ColumnVar* col_var) const {
+  return get_column_descriptor_maybe(col_var->get_column_id(), col_var->get_table_id(), *catalog_);
+}
+
 std::vector<int8_t> Executor::serializeLiterals(const std::unordered_map<int, Executor::LiteralValues>& literals,
                                                 const int device_id) {
   if (literals.empty()) {
