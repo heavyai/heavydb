@@ -286,7 +286,7 @@ ExpressionRange getExpressionRange(const Analyzer::ColumnVar* col_expr,
         CHECK(cd->columnName == "rowid");
         CHECK_EQ(kBIGINT, col_ti.get_type());
         const int64_t num_tuples = query_infos[rte_idx].numTuples;
-        return ExpressionRange::makeIntRange(0, std::max(num_tuples - 1, 0L), 0, has_nulls);
+        return ExpressionRange::makeIntRange(0, std::max(num_tuples - 1, int64_t(0)), 0, has_nulls);
       }
       FIND_STAT_FRAG(min);
       FIND_STAT_FRAG(max);
