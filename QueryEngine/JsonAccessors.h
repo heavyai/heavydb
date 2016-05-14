@@ -9,6 +9,8 @@
 #ifndef QUERYENGINE_JSONACCESSORS_H
 #define QUERYENGINE_JSONACCESSORS_H
 
+#include <rapidjson/document.h>
+
 inline const rapidjson::Value& field(const rapidjson::Value& obj, const char field[]) noexcept {
   CHECK(obj.IsObject());
   const auto field_it = obj.FindMember(field);
