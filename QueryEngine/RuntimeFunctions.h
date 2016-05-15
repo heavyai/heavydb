@@ -6,7 +6,7 @@
 #include <ctime>
 #include <limits>
 
-extern "C" void agg_sum(int64_t* agg, const int64_t val);
+extern "C" int64_t agg_sum(int64_t* agg, const int64_t val);
 
 extern "C" void agg_max(int64_t* agg, const int64_t val);
 
@@ -18,9 +18,9 @@ extern "C" void agg_max_double(int64_t* agg, const double val);
 
 extern "C" void agg_min_double(int64_t* agg, const double val);
 
-extern "C" void agg_sum_int32_skip_val(int32_t* agg, const int32_t val, const int32_t skip_val);
+extern "C" int32_t agg_sum_int32_skip_val(int32_t* agg, const int32_t val, const int32_t skip_val);
 
-extern "C" void agg_sum_skip_val(int64_t* agg, const int64_t val, const int64_t skip_val);
+extern "C" int64_t agg_sum_skip_val(int64_t* agg, const int64_t val, const int64_t skip_val);
 
 extern "C" void agg_max_skip_val(int64_t* agg, const int64_t val, const int64_t skip_val);
 
@@ -34,7 +34,7 @@ extern "C" void agg_max_double_skip_val(int64_t* agg, const double val, const do
 
 extern "C" void agg_min_double_skip_val(int64_t* agg, const double val, const double skip_val);
 
-extern "C" void agg_sum_int32(int32_t* agg, const int32_t val);
+extern "C" int32_t agg_sum_int32(int32_t* agg, const int32_t val);
 
 extern "C" void agg_max_int32(int32_t* agg, const int32_t val);
 

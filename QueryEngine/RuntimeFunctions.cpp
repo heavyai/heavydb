@@ -231,8 +231,8 @@ DEF_TRANSLATE_NULL_KEY(int64_t)
 
 // aggregator implementations
 
-extern "C" __attribute__((always_inline)) void agg_count(int64_t* agg, const int64_t val) {
-  ++*agg;
+extern "C" __attribute__((always_inline)) int64_t agg_count(int64_t* agg, const int64_t) {
+  return (*agg)++;
 }
 
 extern "C" __attribute__((always_inline)) void agg_count_distinct(int64_t* agg, const int64_t val) {
@@ -262,8 +262,10 @@ extern "C" __attribute__((always_inline)) int8_t bit_is_set(const int64_t bitset
   return (reinterpret_cast<const int8_t*>(bitset))[bitmap_idx >> 3] & (1 << (bitmap_idx & 7)) ? 1 : 0;
 }
 
-extern "C" __attribute__((always_inline)) void agg_sum(int64_t* agg, const int64_t val) {
+extern "C" __attribute__((always_inline)) int64_t agg_sum(int64_t* agg, const int64_t val) {
+  const auto old = *agg;
   *agg += val;
+  return old;
 }
 
 extern "C" __attribute__((always_inline)) void agg_max(int64_t* agg, const int64_t val) {
@@ -295,12 +297,14 @@ extern "C" __attribute__((always_inline)) void agg_count_distinct_bitmap_skip_va
   }
 }
 
-extern "C" __attribute__((always_inline)) void agg_count_int32(int32_t* agg, const int32_t val) {
-  ++*agg;
+extern "C" __attribute__((always_inline)) int32_t agg_count_int32(int32_t* agg, const int32_t) {
+  return (*agg)++;
 }
 
-extern "C" __attribute__((always_inline)) void agg_sum_int32(int32_t* agg, const int32_t val) {
+extern "C" __attribute__((always_inline)) int32_t agg_sum_int32(int32_t* agg, const int32_t val) {
+  const auto old = *agg;
   *agg += val;
+  return old;
 }
 
 extern "C" __attribute__((always_inline)) void agg_max_int32(int32_t* agg, const int32_t val) {
@@ -313,6 +317,48 @@ extern "C" __attribute__((always_inline)) void agg_min_int32(int32_t* agg, const
 
 extern "C" __attribute__((always_inline)) void agg_id_int32(int32_t* agg, const int32_t val) {
   *agg = val;
+}
+
+extern "C" __attribute__((always_inline)) int64_t
+    agg_sum_skip_val(int64_t* agg, const int64_t val, const int64_t skip_val) {
+  const auto old = *agg;
+  if (val != skip_val) {
+    if (old != skip_val) {
+      return agg_sum(agg, val);
+    } else {
+      *agg = val;
+    }
+  }
+  return old;
+}
+
+extern "C" __attribute__((always_inline)) int32_t
+    agg_sum_int32_skip_val(int32_t* agg, const int32_t val, const int32_t skip_val) {
+  const auto old = *agg;
+  if (val != skip_val) {
+    if (old != skip_val) {
+      return agg_sum_int32(agg, val);
+    } else {
+      *agg = val;
+    }
+  }
+  return old;
+}
+
+extern "C" __attribute__((always_inline)) int64_t
+    agg_count_skip_val(int64_t* agg, const int64_t val, const int64_t skip_val) {
+  if (val != skip_val) {
+    return agg_count(agg, val);
+  }
+  return *agg;
+}
+
+extern "C" __attribute__((always_inline)) int32_t
+    agg_count_int32_skip_val(int32_t* agg, const int32_t val, const int32_t skip_val) {
+  if (val != skip_val) {
+    return agg_count_int32(agg, val);
+  }
+  return *agg;
 }
 
 #define DEF_SKIP_AGG_ADD(base_agg_func)                                    \
@@ -337,15 +383,11 @@ extern "C" __attribute__((always_inline)) void agg_id_int32(int32_t* agg, const 
   }
 
 #define DATA_T int64_t
-DEF_SKIP_AGG_ADD(agg_count)
-DEF_SKIP_AGG(agg_sum)
 DEF_SKIP_AGG(agg_max)
 DEF_SKIP_AGG(agg_min)
 #undef DATA_T
 
 #define DATA_T int32_t
-DEF_SKIP_AGG_ADD(agg_count_int32)
-DEF_SKIP_AGG(agg_sum_int32)
 DEF_SKIP_AGG(agg_max_int32)
 DEF_SKIP_AGG(agg_min_int32)
 #undef DATA_T
@@ -355,8 +397,8 @@ DEF_SKIP_AGG(agg_min_int32)
 
 // TODO(alex): fix signature
 
-extern "C" __attribute__((always_inline)) void agg_count_double(int64_t* agg, const double val) {
-  ++*agg;
+extern "C" __attribute__((always_inline)) int64_t agg_count_double(int64_t* agg, const double val) {
+  return (*agg)++;
 }
 
 extern "C" __attribute__((always_inline)) void agg_sum_double(int64_t* agg, const double val) {
@@ -378,8 +420,8 @@ extern "C" __attribute__((always_inline)) void agg_id_double(int64_t* agg, const
   *agg = *(reinterpret_cast<const int64_t*>(&val));
 }
 
-extern "C" __attribute__((always_inline)) void agg_count_float(int32_t* agg, const float val) {
-  ++*agg;
+extern "C" __attribute__((always_inline)) int32_t agg_count_float(int32_t* agg, const float val) {
+  return (*agg)++;
 }
 
 extern "C" __attribute__((always_inline)) void agg_sum_float(int32_t* agg, const float val) {
@@ -399,6 +441,22 @@ extern "C" __attribute__((always_inline)) void agg_min_float(int32_t* agg, const
 
 extern "C" __attribute__((always_inline)) void agg_id_float(int32_t* agg, const float val) {
   *agg = *(reinterpret_cast<const int32_t*>(&val));
+}
+
+extern "C" __attribute__((always_inline)) int64_t
+    agg_count_double_skip_val(int64_t* agg, const double val, const double skip_val) {
+  if (val != skip_val) {
+    return agg_count_double(agg, val);
+  }
+  return *agg;
+}
+
+extern "C" __attribute__((always_inline)) int32_t
+    agg_count_float_skip_val(int32_t* agg, const float val, const float skip_val) {
+  if (val != skip_val) {
+    return agg_count_float(agg, val);
+  }
+  return *agg;
 }
 
 #define DEF_SKIP_AGG_ADD(base_agg_func)                                    \
@@ -424,7 +482,6 @@ extern "C" __attribute__((always_inline)) void agg_id_float(int32_t* agg, const 
 
 #define DATA_T double
 #define ADDR_T int64_t
-DEF_SKIP_AGG_ADD(agg_count_double)
 DEF_SKIP_AGG(agg_sum_double)
 DEF_SKIP_AGG(agg_max_double)
 DEF_SKIP_AGG(agg_min_double)
@@ -433,7 +490,6 @@ DEF_SKIP_AGG(agg_min_double)
 
 #define DATA_T float
 #define ADDR_T int32_t
-DEF_SKIP_AGG_ADD(agg_count_float)
 DEF_SKIP_AGG(agg_sum_float)
 DEF_SKIP_AGG(agg_max_float)
 DEF_SKIP_AGG(agg_min_float)
@@ -445,6 +501,38 @@ DEF_SKIP_AGG(agg_min_float)
 
 // Shared memory aggregators. Should never be called,
 // real implementations are in cuda_mapd_rt.cu.
+#define DEF_SHARED_AGG_RET_STUBS(base_agg_func)                                                                     \
+  extern "C" __attribute__((noinline)) int64_t base_agg_func##_shared(int64_t* agg, const int64_t val) { abort(); } \
+                                                                                                                    \
+  extern "C" __attribute__((noinline))                                                                              \
+      int64_t base_agg_func##_skip_val_shared(int64_t* agg, const int64_t val, const int64_t skip_val) {            \
+    abort();                                                                                                        \
+  }                                                                                                                 \
+  extern "C" __attribute__((noinline)) int32_t base_agg_func##_int32_shared(int32_t* agg, const int32_t val) {      \
+    abort();                                                                                                        \
+  }                                                                                                                 \
+                                                                                                                    \
+  extern "C" __attribute__((noinline))                                                                              \
+      int32_t base_agg_func##_int32_skip_val_shared(int32_t* agg, const int32_t val, const int32_t skip_val) {      \
+    abort();                                                                                                        \
+  }                                                                                                                 \
+                                                                                                                    \
+  extern "C" __attribute__((noinline)) int64_t base_agg_func##_double_shared(int64_t* agg, const double val) {      \
+    abort();                                                                                                        \
+  }                                                                                                                 \
+                                                                                                                    \
+  extern "C" __attribute__((noinline))                                                                              \
+      int64_t base_agg_func##_double_skip_val_shared(int64_t* agg, const double val, const double skip_val) {       \
+    abort();                                                                                                        \
+  }                                                                                                                 \
+  extern "C" __attribute__((noinline)) int32_t base_agg_func##_float_shared(int32_t* agg, const float val) {        \
+    abort();                                                                                                        \
+  }                                                                                                                 \
+                                                                                                                    \
+  extern "C" __attribute__((noinline))                                                                              \
+      int32_t base_agg_func##_float_skip_val_shared(int32_t* agg, const float val, const float skip_val) {          \
+    abort();                                                                                                        \
+  }
 
 #define DEF_SHARED_AGG_STUBS(base_agg_func)                                                                            \
   extern "C" __attribute__((noinline)) void base_agg_func##_shared(int64_t* agg, const int64_t val) { abort(); }       \
@@ -473,11 +561,45 @@ DEF_SKIP_AGG(agg_min_float)
     abort();                                                                                                           \
   }
 
-DEF_SHARED_AGG_STUBS(agg_count)
-DEF_SHARED_AGG_STUBS(agg_sum)
+DEF_SHARED_AGG_RET_STUBS(agg_count)
 DEF_SHARED_AGG_STUBS(agg_max)
 DEF_SHARED_AGG_STUBS(agg_min)
 DEF_SHARED_AGG_STUBS(agg_id)
+
+extern "C" __attribute__((noinline)) int64_t agg_sum_shared(int64_t* agg, const int64_t val) {
+  abort();
+}
+
+extern "C" __attribute__((noinline)) int64_t
+    agg_sum_skip_val_shared(int64_t* agg, const int64_t val, const int64_t skip_val) {
+  abort();
+}
+extern "C" __attribute__((noinline)) int32_t agg_sum_int32_shared(int32_t* agg, const int32_t val) {
+  abort();
+}
+
+extern "C" __attribute__((noinline)) int32_t
+    agg_sum_int32_skip_val_shared(int32_t* agg, const int32_t val, const int32_t skip_val) {
+  abort();
+}
+
+extern "C" __attribute__((noinline)) void agg_sum_double_shared(int64_t* agg, const double val) {
+  abort();
+}
+
+extern "C" __attribute__((noinline)) void agg_sum_double_skip_val_shared(int64_t* agg,
+                                                                         const double val,
+                                                                         const double skip_val) {
+  abort();
+}
+extern "C" __attribute__((noinline)) void agg_sum_float_shared(int32_t* agg, const float val) {
+  abort();
+}
+
+extern "C"
+    __attribute__((noinline)) void agg_sum_float_skip_val_shared(int32_t* agg, const float val, const float skip_val) {
+  abort();
+}
 
 // x64 stride functions
 
