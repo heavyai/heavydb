@@ -896,19 +896,6 @@ class MapDHandler : virtual public MapDIf {
               << " (ms), Render: " << _return.render_time_ms << " (ms)";
   }
 
-  void testRenderSimplePolys(TRenderResult& _return,
-                             const TSessionId session,
-                             const std::string& render_type,
-                             const std::string& nonce) {
-    if (!enable_rendering_) {
-      TMapDException ex;
-      ex.error_msg = "Backend rendering is disabled.";
-      LOG(ERROR) << ex.error_msg;
-      throw ex;
-    }
-
-  }
-
   void create_frontend_view(const TSessionId session,
                             const std::string& view_name,
                             const std::string& view_state,

@@ -212,11 +212,11 @@ class Executor {
                            const int render_widget_id,
                            const int pixelRadius = 0);
 
-  ResultRows testRenderSimplePolys(const ResultRows& rows,
-                                   const std::vector<TargetMetaInfo>& row_shape,
-                                   const std::string& render_config_json,
-                                   const Catalog_Namespace::SessionInfo& session,
-                                   const int render_widget_id);
+  ResultRows renderPolygons(const ResultRows& rows,
+                            const std::vector<TargetMetaInfo>& row_shape,
+                            const std::string& render_config_json,
+                            const Catalog_Namespace::SessionInfo& session,
+                            const int render_widget_id);
 
 
   StringDictionary* getStringDictionary(const int dictId,
