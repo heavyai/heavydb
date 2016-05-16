@@ -1213,25 +1213,7 @@ class MapDHandler : virtual public MapDIf {
                                      allow_multifrag_,
                                      false);
     if (render_polys) {
-      const auto plan = root_plan->get_plan();
-      CHECK(plan);
-      const auto& targets = plan->get_targetlist();
-      auto rendered_results =
-          executor->testRenderSimplePolys(results, getTargetMetaInfo(targets), render_type, session_info, 1);
-      _return.execution_time_ms =
-          timer_stop(clock_begin) - rendered_results.getQueueTime() - rendered_results.getRenderTime();
-      _return.render_time_ms = rendered_results.getRenderTime();
-
-      const auto img_row = rendered_results.getNextRow(false, false);
-      CHECK_EQ(size_t(1), img_row.size());
-      const auto& img_tv = img_row.front();
-      const auto scalar_tv = boost::get<ScalarTargetValue>(&img_tv);
-      const auto nullable_sptr = boost::get<NullableString>(scalar_tv);
-      CHECK(nullable_sptr);
-      auto sptr = boost::get<std::string>(nullable_sptr);
-      CHECK(sptr);
-      _return.image = *sptr;
-      return;
+      CHECK(false);
     }
     // reduce execution time by the time spent during queue waiting
     _return.execution_time_ms = timer_stop(clock_begin) - results.getQueueTime() - results.getRenderTime();
