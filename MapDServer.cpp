@@ -64,6 +64,22 @@ using boost::shared_ptr;
 
 #define INVALID_SESSION_ID -1
 
+namespace {
+
+bool is_poly_render(const rapidjson::Document& render_config) {
+  const auto& data_descs = field(render_config, "data");
+  CHECK(data_descs.IsArray());
+  CHECK_EQ(unsigned(1), data_descs.Size());
+  const auto& data_desc = *(data_descs.Begin());
+  if (data_desc.HasMember("format")) {
+    CHECK_EQ("polys", json_str(field(data_desc, "format")));
+    return true;
+  }
+  return false;
+}
+
+}  // namespace
+
 class MapDHandler : virtual public MapDIf {
  public:
   MapDHandler(const std::string& base_data_path,
@@ -1174,7 +1190,12 @@ class MapDHandler : virtual public MapDIf {
                         const Catalog_Namespace::SessionInfo& session_info,
                         const std::string& render_type) {
     root_plan->set_render_type(render_type);
-    root_plan->set_plan_dest(Planner::RootPlan::Dest::kRENDER);
+    rapidjson::Document render_config;
+    render_config.Parse(render_type.c_str());
+    const bool render_polys = is_poly_render(render_config);
+    if (!render_polys) {
+      root_plan->set_plan_dest(Planner::RootPlan::Dest::kRENDER);
+    }
     auto executor = Executor::getExecutor(root_plan->get_catalog().get_currentDB().dbId,
                                           jit_debug_ ? "/tmp" : "",
                                           jit_debug_ ? "mapdquery" : "",
@@ -1191,6 +1212,27 @@ class MapDHandler : virtual public MapDIf {
                                      ExecutorOptLevel::Default,
                                      allow_multifrag_,
                                      false);
+    if (render_polys) {
+      const auto plan = root_plan->get_plan();
+      CHECK(plan);
+      const auto& targets = plan->get_targetlist();
+      auto rendered_results =
+          executor->testRenderSimplePolys(results, getTargetMetaInfo(targets), render_type, session_info, 1);
+      _return.execution_time_ms =
+          timer_stop(clock_begin) - rendered_results.getQueueTime() - rendered_results.getRenderTime();
+      _return.render_time_ms = rendered_results.getRenderTime();
+
+      const auto img_row = rendered_results.getNextRow(false, false);
+      CHECK_EQ(size_t(1), img_row.size());
+      const auto& img_tv = img_row.front();
+      const auto scalar_tv = boost::get<ScalarTargetValue>(&img_tv);
+      const auto nullable_sptr = boost::get<NullableString>(scalar_tv);
+      CHECK(nullable_sptr);
+      auto sptr = boost::get<std::string>(nullable_sptr);
+      CHECK(sptr);
+      _return.image = *sptr;
+      return;
+    }
     // reduce execution time by the time spent during queue waiting
     _return.execution_time_ms = timer_stop(clock_begin) - results.getQueueTime() - results.getRenderTime();
     _return.render_time_ms = results.getRenderTime();
