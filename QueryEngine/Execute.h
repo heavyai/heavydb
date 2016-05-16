@@ -36,6 +36,7 @@
 #include <vector>
 #include <deque>
 #include <unistd.h>
+#include <limits>
 
 extern bool g_enable_watchdog;
 
@@ -155,6 +156,30 @@ inline const ColumnarResults* rows_to_columnar_results(const ResultRows* rows) {
     col_types.push_back(rows->getColType(i));
   }
   return new ColumnarResults(*rows, rows->colCount(), col_types);
+}
+
+template <typename T>
+inline bool detect_overflow_and_underflow(const T a,
+                                          const T b,
+                                          const bool nullable,
+                                          const T null_val,
+                                          const SQLTypeInfo& ti) {
+#ifdef ENABLE_COMPACTION
+  if (!ti.is_integer()) {
+    return false;
+  }
+  if (nullable) {
+    if (a == null_val || b == null_val) {
+      return false;
+    }
+  }
+  const auto max_intx = std::numeric_limits<T>::max();
+  const auto min_intx = std::numeric_limits<T>::min();
+  if ((b > 0 && a > (max_intx - b)) || (b < 0 && a < (min_intx - b))) {
+    return true;
+  }
+#endif
+  return false;
 }
 
 class CompilationRetryNoLazyFetch : public std::runtime_error {
@@ -575,6 +600,13 @@ class Executor {
                                     const uint32_t start_rowid,
                                     const uint32_t num_tables,
                                     RenderAllocatorMap* render_allocator_map) noexcept;
+  std::pair<int64_t, int32_t> reduceResults(const SQLAgg agg,
+                                            const SQLTypeInfo& ti,
+                                            const int64_t agg_init_val,
+                                            const int8_t out_byte_width,
+                                            const int64_t* out_vec,
+                                            const size_t out_vec_sz,
+                                            const bool is_group_by);
   int64_t getJoinHashTablePtr(const ExecutorDeviceType device_type, const int device_id);
   ResultRows reduceMultiDeviceResults(std::vector<std::pair<ResultRows, std::vector<size_t>>>& all_fragment_results,
                                       std::shared_ptr<RowSetMemoryOwner>,

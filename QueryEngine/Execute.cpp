@@ -2353,14 +2353,17 @@ std::vector<int64_t*> launch_query_cpu_code(const std::vector<void*>& fn_ptrs,
 #pragma GCC diagnostic pop
 #endif
 
+}  // namespace
+
 // TODO(alex): remove or split
-int64_t reduce_results(const SQLAgg agg,
-                       const SQLTypeInfo& ti,
-                       const int64_t agg_init_val,
-                       const int8_t out_byte_width,
-                       const int64_t* out_vec,
-                       const size_t out_vec_sz,
-                       const bool is_group_by) {
+std::pair<int64_t, int32_t> Executor::reduceResults(const SQLAgg agg,
+                                                    const SQLTypeInfo& ti,
+                                                    const int64_t agg_init_val,
+                                                    const int8_t out_byte_width,
+                                                    const int64_t* out_vec,
+                                                    const size_t out_vec_sz,
+                                                    const bool is_group_by) {
+  const auto error_no = ERR_OVERFLOW_OR_UNDERFLOW;
   switch (agg) {
     case kAVG:
     case kSUM:
@@ -2368,9 +2371,12 @@ int64_t reduce_results(const SQLAgg agg,
         if (ti.is_integer() || ti.is_decimal() || ti.is_time() || ti.is_boolean()) {
           int64_t agg_result = agg_init_val;
           for (size_t i = 0; i < out_vec_sz; ++i) {
+            if (detect_overflow_and_underflow(agg_result, out_vec[i], true, agg_init_val, ti)) {
+              return {0, error_no};
+            }
             agg_sum_skip_val(&agg_result, out_vec[i], agg_init_val);
           }
-          return agg_result;
+          return {agg_result, 0};
         } else {
           CHECK(ti.is_fp());
           switch (out_byte_width) {
@@ -2381,7 +2387,7 @@ int64_t reduce_results(const SQLAgg agg,
                                        *reinterpret_cast<const float*>(&out_vec[i]),
                                        *reinterpret_cast<const float*>(&agg_init_val));
               }
-              return float_to_double_bin(static_cast<int32_t>(agg_result), true);
+              return {float_to_double_bin(static_cast<int32_t>(agg_result), true), 0};
             } break;
             case 8: {
               int64_t agg_result = agg_init_val;
@@ -2390,7 +2396,7 @@ int64_t reduce_results(const SQLAgg agg,
                                         *reinterpret_cast<const double*>(&out_vec[i]),
                                         *reinterpret_cast<const double*>(&agg_init_val));
               }
-              return agg_result;
+              return {agg_result, 0};
             } break;
             default:
               CHECK(false);
@@ -2398,7 +2404,14 @@ int64_t reduce_results(const SQLAgg agg,
         }
       }
       if (ti.is_integer() || ti.is_decimal() || ti.is_time()) {
-        return std::accumulate(out_vec, out_vec + out_vec_sz, int64_t(0));
+        int64_t agg_result = 0;
+        for (size_t i = 0; i < out_vec_sz; ++i) {
+          if (detect_overflow_and_underflow(agg_result, out_vec[i], false, int64_t(0), ti)) {
+            return {0, error_no};
+          }
+          agg_result += out_vec[i];
+        }
+        return {agg_result, 0};
       } else {
         CHECK(ti.is_fp());
         switch (out_byte_width) {
@@ -2407,29 +2420,37 @@ int64_t reduce_results(const SQLAgg agg,
             for (size_t i = 0; i < out_vec_sz; ++i) {
               r += *reinterpret_cast<const float*>(&out_vec[i]);
             }
-            return *reinterpret_cast<const int64_t*>(&r);
+            return {*reinterpret_cast<const int64_t*>(&r), 0};
           }
           case 8: {
             double r = 0.;
             for (size_t i = 0; i < out_vec_sz; ++i) {
               r += *reinterpret_cast<const double*>(&out_vec[i]);
             }
-            return *reinterpret_cast<const int64_t*>(&r);
+            return {*reinterpret_cast<const int64_t*>(&r), 0};
           }
           default:
             CHECK(false);
         }
       }
       break;
-    case kCOUNT:
-      return std::accumulate(out_vec, out_vec + out_vec_sz, int64_t(0));
+    case kCOUNT: {
+      int64_t agg_result = 0;
+      for (size_t i = 0; i < out_vec_sz; ++i) {
+        if (detect_overflow_and_underflow(agg_result, out_vec[i], false, int64_t(0), ti)) {
+          return {0, error_no};
+        }
+        agg_result += out_vec[i];
+      }
+      return {agg_result, 0};
+    }
     case kMIN: {
       if (ti.is_integer() || ti.is_decimal() || ti.is_time() || ti.is_boolean()) {
         int64_t agg_result = agg_init_val;
         for (size_t i = 0; i < out_vec_sz; ++i) {
           agg_min_skip_val(&agg_result, out_vec[i], agg_init_val);
         }
-        return agg_result;
+        return {agg_result, 0};
       } else {
         switch (out_byte_width) {
           case 4: {
@@ -2439,7 +2460,7 @@ int64_t reduce_results(const SQLAgg agg,
                                      *reinterpret_cast<const float*>(&out_vec[i]),
                                      *reinterpret_cast<const float*>(&agg_init_val));
             }
-            return float_to_double_bin(agg_result, true);
+            return {float_to_double_bin(agg_result, true), 0};
           }
           case 8: {
             int64_t agg_result = agg_init_val;
@@ -2448,7 +2469,7 @@ int64_t reduce_results(const SQLAgg agg,
                                       *reinterpret_cast<const double*>(&out_vec[i]),
                                       *reinterpret_cast<const double*>(&agg_init_val));
             }
-            return agg_result;
+            return {agg_result, 0};
           }
           default:
             CHECK(false);
@@ -2461,7 +2482,7 @@ int64_t reduce_results(const SQLAgg agg,
         for (size_t i = 0; i < out_vec_sz; ++i) {
           agg_max_skip_val(&agg_result, out_vec[i], agg_init_val);
         }
-        return agg_result;
+        return {agg_result, 0};
       } else {
         switch (out_byte_width) {
           case 4: {
@@ -2471,7 +2492,7 @@ int64_t reduce_results(const SQLAgg agg,
                                      *reinterpret_cast<const float*>(&out_vec[i]),
                                      *reinterpret_cast<const float*>(&agg_init_val));
             }
-            return float_to_double_bin(agg_result, !ti.get_notnull());
+            return {float_to_double_bin(agg_result, !ti.get_notnull()), 0};
           }
           case 8: {
             int64_t agg_result = agg_init_val;
@@ -2480,7 +2501,7 @@ int64_t reduce_results(const SQLAgg agg,
                                       *reinterpret_cast<const double*>(&out_vec[i]),
                                       *reinterpret_cast<const double*>(&agg_init_val));
             }
-            return agg_result;
+            return {agg_result, 0};
           }
           default:
             CHECK(false);
@@ -2491,8 +2512,6 @@ int64_t reduce_results(const SQLAgg agg,
   }
   CHECK(false);
 }
-
-}  // namespace
 
 ResultRows Executor::reduceMultiDeviceResults(
     std::vector<std::pair<ResultRows, std::vector<size_t>>>& results_per_device,
@@ -3707,24 +3726,33 @@ int32_t Executor::executePlanWithoutGroupBy(const CompilationResult& compilation
     const auto agg_info = target_info(target_expr);
     CHECK(agg_info.is_agg);
     uint32_t num_fragments = col_buffers.size();
-    auto val1 = reduce_results(agg_info.agg_kind,
-                               agg_info.sql_type,
-                               query_exe_context->init_agg_vals_[out_vec_idx],
-                               query_exe_context->query_mem_desc_.agg_col_widths[out_vec_idx].compact,
-                               out_vec[out_vec_idx],
-                               device_type == ExecutorDeviceType::GPU ? num_fragments * blockSize() * gridSize() : 1,
-                               false);
+    int64_t val1;
+    std::tie(val1, error_code) =
+        reduceResults(agg_info.agg_kind,
+                      agg_info.sql_type,
+                      query_exe_context->init_agg_vals_[out_vec_idx],
+                      query_exe_context->query_mem_desc_.agg_col_widths[out_vec_idx].compact,
+                      out_vec[out_vec_idx],
+                      device_type == ExecutorDeviceType::GPU ? num_fragments * blockSize() * gridSize() : 1,
+                      false);
+    if (error_code) {
+      break;
+    }
     if (agg_info.agg_kind == kAVG) {
       ++out_vec_idx;
-      results.addValue(
-          val1,
-          reduce_results(kCOUNT,
-                         agg_info.sql_type,
-                         query_exe_context->init_agg_vals_[out_vec_idx],
-                         query_exe_context->query_mem_desc_.agg_col_widths[out_vec_idx].compact,
-                         out_vec[out_vec_idx],
-                         device_type == ExecutorDeviceType::GPU ? num_fragments * blockSize() * gridSize() : 1,
-                         false));
+      int64_t val2;
+      std::tie(val2, error_code) =
+          reduceResults(kCOUNT,
+                        agg_info.sql_type,
+                        query_exe_context->init_agg_vals_[out_vec_idx],
+                        query_exe_context->query_mem_desc_.agg_col_widths[out_vec_idx].compact,
+                        out_vec[out_vec_idx],
+                        device_type == ExecutorDeviceType::GPU ? num_fragments * blockSize() * gridSize() : 1,
+                        false);
+      if (error_code) {
+        break;
+      }
+      results.addValue(val1, val2);
     } else {
       results.addValue(val1);
     }
