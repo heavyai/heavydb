@@ -522,6 +522,11 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(const RelAlgExecutor::WorkUnit& 
   if (!error_code) {
     return result;
   }
+#ifdef DETECT_OVERFLOW
+  if (error_code == Executor::ERR_OVERFLOW_OR_UNDERFLOW) {
+    throw std::runtime_error("Overflow or underflow");
+  }
+#endif
   if (error_code == Executor::ERR_DIV_BY_ZERO) {
     throw std::runtime_error("Division by zero");
   }

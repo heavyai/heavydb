@@ -385,6 +385,11 @@ ResultRows Executor::execute(const Planner::RootPlan* root_plan,
                                     root_plan->get_plan_dest() == Planner::RootPlan::kEXPLAIN,
                                     allow_loop_joins,
                                     render_allocator_map.get());
+#ifdef DETECT_OVERFLOW
+      if (error_code == ERR_OVERFLOW_OR_UNDERFLOW) {
+        throw std::runtime_error("Overflow or underflow");
+      }
+#endif
       if (error_code == ERR_DIV_BY_ZERO) {
         throw std::runtime_error("Division by zero");
       }
@@ -2008,6 +2013,23 @@ llvm::ConstantFP* Executor::inlineFpNull(const SQLTypeInfo& type_info) {
   }
 }
 
+std::pair<llvm::ConstantInt*, llvm::ConstantInt*> Executor::inlineIntMaxMin(const size_t byte_width) {
+  int64_t max_int{0}, min_int{0};
+  std::tie(max_int, min_int) = inline_int_max_min(byte_width);
+  switch (byte_width) {
+    case 1:
+      return std::make_pair(ll_int(static_cast<int8_t>(max_int)), ll_int(static_cast<int8_t>(min_int)));
+    case 2:
+      return std::make_pair(ll_int(static_cast<int16_t>(max_int)), ll_int(static_cast<int16_t>(min_int)));
+    case 4:
+      return std::make_pair(ll_int(static_cast<int32_t>(max_int)), ll_int(static_cast<int32_t>(min_int)));
+    case 8:
+      return std::make_pair(ll_int(max_int), ll_int(min_int));
+    default:
+      CHECK(false);
+  }
+}
+
 llvm::Value* Executor::codegenArith(const Analyzer::BinOper* bin_oper, const CompilationOptions& co) {
   const auto optype = bin_oper->get_optype();
   CHECK(IS_ARITHMETIC(optype));
@@ -2244,7 +2266,7 @@ std::vector<int64_t*> launch_query_cpu_code(const std::vector<void*>& fn_ptrs,
                               const int64_t* init_agg_value,
                               int64_t** out,
                               int64_t** out2,
-                              int32_t* resume_row_index,
+                              int32_t* error_code,
                               const uint32_t* num_tables,
                               const int64_t* join_hash_table_ptr);
     if (is_group_by) {
@@ -2286,7 +2308,7 @@ std::vector<int64_t*> launch_query_cpu_code(const std::vector<void*>& fn_ptrs,
                               const int64_t* init_agg_value,
                               int64_t** out,
                               int64_t** out2,
-                              int32_t* resume_row_index,
+                              int32_t* error_code,
                               const uint32_t* num_tables,
                               const int64_t* join_hash_table_ptr);
     if (is_group_by) {
@@ -2318,7 +2340,7 @@ std::vector<int64_t*> launch_query_cpu_code(const std::vector<void*>& fn_ptrs,
     }
   }
 
-  if (rowid_lookup_num_rows) {
+  if (rowid_lookup_num_rows && *error_code < 0) {
     *error_code = 0;
   }
 
@@ -3670,6 +3692,9 @@ int32_t Executor::executePlanWithoutGroupBy(const CompilationResult& compilation
       LOG(FATAL) << "Error launching the GPU kernel: " << e.what();
     }
   }
+  if (error_code == Executor::ERR_OVERFLOW_OR_UNDERFLOW || error_code == Executor::ERR_DIV_BY_ZERO) {
+    return error_code;
+  }
   results = ResultRows(query_exe_context->query_mem_desc_,
                        target_exprs,
                        this,
@@ -3774,7 +3799,8 @@ int32_t Executor::executePlanWithGroupBy(const CompilationResult& compilation_re
       LOG(FATAL) << "Error launching the GPU kernel: " << e.what();
     }
   }
-  if (!query_exe_context->query_mem_desc_.usesCachedContext() && !render_allocator_map) {
+  if (error_code != Executor::ERR_OVERFLOW_OR_UNDERFLOW && error_code != Executor::ERR_DIV_BY_ZERO &&
+      !query_exe_context->query_mem_desc_.usesCachedContext() && !render_allocator_map) {
     CHECK(!query_exe_context->query_mem_desc_.sortOnGpu());
     results = query_exe_context->getRowSet(target_exprs, query_exe_context->query_mem_desc_, was_auto_device);
   }
@@ -4312,29 +4338,8 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
 
   const bool needs_error_check = group_by_and_aggregate.codegen(filter_lv, co);
 
-  if (needs_error_check) {
+  if (needs_error_check || cgen_state_->uses_div_) {
     createErrorCheckControlFlow(query_func);
-  }
-
-  if (!needs_error_check && cgen_state_->uses_div_) {
-    bool done_div_zero_check = false;
-    for (auto it = llvm::inst_begin(query_func), e = llvm::inst_end(query_func); it != e; ++it) {
-      if (!llvm::isa<llvm::CallInst>(*it)) {
-        continue;
-      }
-      auto& filter_call = llvm::cast<llvm::CallInst>(*it);
-      if (std::string(filter_call.getCalledFunction()->getName()) == unique_name("row_process", is_nested_)) {
-        done_div_zero_check = true;
-        auto& error_code_arg = query_func->getArgumentList().back();
-        ++it;
-        llvm::CallInst::Create(cgen_state_->module_->getFunction("record_error_code"),
-                               std::vector<llvm::Value*>{&filter_call, &error_code_arg},
-                               "",
-                               &*it);
-        break;
-      }
-    }
-    CHECK(done_div_zero_check);
   }
 
   // iterate through all the instruction in the query template function and
@@ -4413,11 +4418,13 @@ void Executor::createErrorCheckControlFlow(llvm::Function* query_func) {
         llvm::IRBuilder<> ir_builder(&br_instr);
         llvm::Value* err_lv = inst_it;
         auto& error_code_arg = query_func->getArgumentList().back();
+        CHECK(error_code_arg.getName() == "error_code");
         err_lv = ir_builder.CreateCall(cgen_state_->module_->getFunction("record_error_code"),
                                        std::vector<llvm::Value*>{err_lv, &error_code_arg});
         err_lv = ir_builder.CreateICmp(llvm::ICmpInst::ICMP_NE, err_lv, ll_int(int32_t(0)));
-        auto& last_bb = query_func->back();
-        llvm::ReplaceInstWithInst(&br_instr, llvm::BranchInst::Create(&last_bb, new_bb, err_lv));
+        auto error_bb = llvm::BasicBlock::Create(cgen_state_->context_, ".error_exit", query_func, new_bb);
+        llvm::ReturnInst::Create(cgen_state_->context_, error_bb);
+        llvm::ReplaceInstWithInst(&br_instr, llvm::BranchInst::Create(error_bb, new_bb, err_lv));
         done_splitting = true;
         break;
       }

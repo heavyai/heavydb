@@ -340,6 +340,7 @@ class Executor {
   llvm::Value* rowsPerScan() const;
   llvm::ConstantInt* inlineIntNull(const SQLTypeInfo&);
   llvm::ConstantFP* inlineFpNull(const SQLTypeInfo&);
+  std::pair<llvm::ConstantInt*, llvm::ConstantInt*> inlineIntMaxMin(const size_t byte_width);
 
   ResultRows executeSelectPlan(const Planner::Plan* plan,
                                const int64_t limit,
@@ -940,6 +941,7 @@ class Executor {
   static const int32_t ERR_UNSUPPORTED_SELF_JOIN{4};
   static const int32_t ERR_OUT_OF_RENDER_MEM{5};
   static const int32_t ERR_OUT_OF_CPU_MEM{6};
+  static const int32_t ERR_OVERFLOW_OR_UNDERFLOW{7};
   friend class GroupByAndAggregate;
   friend struct QueryMemoryDescriptor;
   friend class QueryExecutionContext;
