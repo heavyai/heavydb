@@ -1003,10 +1003,8 @@ TEST(Select, DivByZero) {
 TEST(Select, OverflowAndUnderFlow) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-    // TODO(miyu): remove EXPECT_THROW when retry is added
-    EXPECT_THROW(run_multiple_agg("SELECT SUM(ofd) FROM test GROUP BY x;", dt), std::runtime_error);
-    EXPECT_THROW(run_multiple_agg("SELECT SUM(ufd) FROM test GROUP BY x;", dt), std::runtime_error);
-
+    c("SELECT SUM(ofd) FROM test GROUP BY x;", dt);
+    c("SELECT SUM(ufd) FROM test GROUP BY x;", dt);
     EXPECT_THROW(run_multiple_agg("SELECT SUM(ofq) FROM test;", dt), std::runtime_error);
     EXPECT_THROW(run_multiple_agg("SELECT SUM(ufq) FROM test;", dt), std::runtime_error);
     EXPECT_THROW(run_multiple_agg("SELECT SUM(ofq) FROM test GROUP BY x;", dt), std::runtime_error);

@@ -161,10 +161,10 @@ inline size_t get_bit_width(const SQLTypeInfo& ti) {
 inline int64_t get_agg_initial_val(const SQLAgg agg,
                                    const SQLTypeInfo& ti,
                                    const bool enable_compaction,
-                                   const unsigned smallest_byte_width_to_compact) {
+                                   const unsigned min_byte_width_to_compact) {
   CHECK(!ti.is_string());
   const auto byte_width = enable_compaction ? compact_byte_width(static_cast<unsigned>(get_bit_width(ti) >> 3),
-                                                                 unsigned(smallest_byte_width_to_compact))
+                                                                 unsigned(min_byte_width_to_compact))
                                             : sizeof(int64_t);
   CHECK_GE(byte_width, static_cast<unsigned>(ti.get_size()));
   switch (agg) {
@@ -251,7 +251,7 @@ inline int64_t get_agg_initial_val(const SQLAgg agg,
 inline std::vector<int64_t> init_agg_val_vec(const std::vector<TargetInfo>& targets,
                                              size_t agg_col_count,
                                              const bool is_group_by,
-                                             const size_t smallest_byte_width_to_compact) {
+                                             const size_t min_byte_width_to_compact) {
   std::vector<int64_t> agg_init_vals(agg_col_count, 0);
   for (size_t target_idx = 0, agg_col_idx = 0; target_idx < targets.size() && agg_col_idx < agg_col_count;
        ++target_idx, ++agg_col_idx) {
@@ -260,7 +260,7 @@ inline std::vector<int64_t> init_agg_val_vec(const std::vector<TargetInfo>& targ
       continue;
     }
     agg_init_vals[agg_col_idx] =
-        get_agg_initial_val(agg_info.agg_kind, get_compact_type(agg_info), is_group_by, smallest_byte_width_to_compact);
+        get_agg_initial_val(agg_info.agg_kind, get_compact_type(agg_info), is_group_by, min_byte_width_to_compact);
     if (kAVG == agg_info.agg_kind) {
       agg_init_vals[++agg_col_idx] = 0;
     }
@@ -272,7 +272,7 @@ inline std::vector<int64_t> init_agg_val_vec(const std::vector<Analyzer::Expr*>&
                                              const std::list<std::shared_ptr<Analyzer::Expr>>& quals,
                                              size_t agg_col_count,
                                              const bool is_group_by,
-                                             const size_t smallest_byte_width_to_compact) {
+                                             const size_t min_byte_width_to_compact) {
   std::vector<TargetInfo> target_infos;
   target_infos.reserve(targets.size());
   for (size_t target_idx = 0, agg_col_idx = 0; target_idx < targets.size() && agg_col_idx < agg_col_count;
@@ -288,15 +288,15 @@ inline std::vector<int64_t> init_agg_val_vec(const std::vector<Analyzer::Expr*>&
     }
     target_infos.push_back(target);
   }
-  return init_agg_val_vec(target_infos, agg_col_count, is_group_by, smallest_byte_width_to_compact);
+  return init_agg_val_vec(target_infos, agg_col_count, is_group_by, min_byte_width_to_compact);
 }
 
-inline int64_t get_initial_val(const TargetInfo& target_info, const size_t smallest_byte_width_to_compact) {
+inline int64_t get_initial_val(const TargetInfo& target_info, const size_t min_byte_width_to_compact) {
   if (!target_info.is_agg) {
     return 0;
   }
   const auto chosen_type = get_compact_type(target_info);
-  return get_agg_initial_val(target_info.agg_kind, chosen_type, !chosen_type.is_fp(), smallest_byte_width_to_compact);
+  return get_agg_initial_val(target_info.agg_kind, chosen_type, !chosen_type.is_fp(), min_byte_width_to_compact);
 }
 
 }  // namespace
@@ -622,6 +622,7 @@ class GroupByAndAggregate {
                       std::shared_ptr<RowSetMemoryOwner>,
                       const size_t max_groups_buffer_entry_count,
                       const size_t small_groups_buffer_entry_count,
+                      const int8_t crt_min_byte_width,
                       const bool allow_multifrag,
                       const bool output_columnar_hint);
 
@@ -667,6 +668,7 @@ class GroupByAndAggregate {
   void initQueryMemoryDescriptor(const bool allow_multifrag,
                                  const size_t max_groups_buffer_entry_count,
                                  const size_t small_groups_buffer_entry_count,
+                                 const int8_t crt_min_byte_width,
                                  const bool sort_on_gpu_hint,
                                  const bool render_output);
   void addTransientStringLiterals();
@@ -826,6 +828,7 @@ inline int8_t get_min_byte_width() {
 struct RelAlgExecutionUnit;
 
 int8_t pick_target_compact_width(const RelAlgExecutionUnit& ra_exe_unit,
-                                 const std::vector<Fragmenter_Namespace::TableInfo>& query_infos);
+                                 const std::vector<Fragmenter_Namespace::TableInfo>& query_infos,
+                                 const int8_t crt_min_byte_width);
 
 #endif  // QUERYENGINE_GROUPBYANDAGGREGATE_H

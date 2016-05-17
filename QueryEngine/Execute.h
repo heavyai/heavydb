@@ -449,9 +449,10 @@ class Executor {
 
     ExecutionDispatch& operator=(ExecutionDispatch&&) = delete;
 
-    void compile(const JoinInfo& join_info,
-                 const size_t max_groups_buffer_entry_guess,
-                 const ExecutionOptions& options);
+    int8_t compile(const JoinInfo& join_info,
+                   const size_t max_groups_buffer_entry_guess,
+                   const int8_t crt_min_byte_width,
+                   const ExecutionOptions& options);
 
     void run(const ExecutorDeviceType chosen_device_type,
              int chosen_device_id,
@@ -629,6 +630,7 @@ class Executor {
                                     std::shared_ptr<RowSetMemoryOwner>,
                                     const size_t max_groups_buffer_entry_count,
                                     const size_t small_groups_buffer_entry_count,
+                                    const int8_t crt_min_byte_width,
                                     const JoinInfo& join_info);
 
   void createErrorCheckControlFlow(llvm::Function* query_func);

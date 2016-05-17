@@ -1036,6 +1036,7 @@ GroupByAndAggregate::GroupByAndAggregate(Executor* executor,
                                          std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                                          const size_t max_groups_buffer_entry_count,
                                          const size_t small_groups_buffer_entry_count,
+                                         const int8_t crt_min_byte_width,
                                          const bool allow_multifrag,
                                          const bool output_columnar_hint)
     : executor_(executor), ra_exe_unit_(ra_exe_unit), query_infos_(query_infos), row_set_mem_owner_(row_set_mem_owner) {
@@ -1050,8 +1051,12 @@ GroupByAndAggregate::GroupByAndAggregate(Executor* executor,
   }
   bool sort_on_gpu_hint = device_type == ExecutorDeviceType::GPU && allow_multifrag &&
                           !ra_exe_unit.order_entries.empty() && gpuCanHandleOrderEntries(ra_exe_unit.order_entries);
-  initQueryMemoryDescriptor(
-      allow_multifrag, max_groups_buffer_entry_count, small_groups_buffer_entry_count, sort_on_gpu_hint, render_output);
+  initQueryMemoryDescriptor(allow_multifrag,
+                            max_groups_buffer_entry_count,
+                            small_groups_buffer_entry_count,
+                            crt_min_byte_width,
+                            sort_on_gpu_hint,
+                            render_output);
   if (device_type != ExecutorDeviceType::GPU) {
     // TODO(miyu): remove w/ interleaving
     query_mem_desc_.interleaved_bins_on_gpu = false;
@@ -1064,24 +1069,25 @@ GroupByAndAggregate::GroupByAndAggregate(Executor* executor,
 }
 
 int8_t pick_target_compact_width(const RelAlgExecutionUnit& ra_exe_unit,
-                                 const std::vector<Fragmenter_Namespace::TableInfo>& query_infos) {
+                                 const std::vector<Fragmenter_Namespace::TableInfo>& query_infos,
+                                 const int8_t crt_min_byte_width) {
   int8_t compact_width{0};
   for (const auto groupby_expr : ra_exe_unit.groupby_exprs) {
     if (dynamic_cast<Analyzer::UOper*>(groupby_expr.get()) &&
         static_cast<Analyzer::UOper*>(groupby_expr.get())->get_optype() == kUNNEST) {
-      compact_width = get_min_byte_width();
+      compact_width = crt_min_byte_width;
       break;
     }
   }
   if (!compact_width && (ra_exe_unit.groupby_exprs.size() != 1 || !ra_exe_unit.groupby_exprs.front())) {
-    compact_width = get_min_byte_width();
+    compact_width = crt_min_byte_width;
   }
   if (!compact_width) {
     for (const auto target : ra_exe_unit.target_exprs) {
       const auto& ti = target->get_type_info();
       const auto agg = dynamic_cast<const Analyzer::AggExpr*>(target);
       if (agg && agg->get_arg()) {
-        compact_width = get_min_byte_width();
+        compact_width = crt_min_byte_width;
         break;
       }
       if (agg) {
@@ -1092,7 +1098,7 @@ int8_t pick_target_compact_width(const RelAlgExecutionUnit& ra_exe_unit,
       if (ti.get_type() == kINT || (ti.is_string() && ti.get_compression() == kENCODING_DICT)) {
         continue;
       } else {
-        compact_width = get_min_byte_width();
+        compact_width = crt_min_byte_width;
         break;
       }
     }
@@ -1102,7 +1108,7 @@ int8_t pick_target_compact_width(const RelAlgExecutionUnit& ra_exe_unit,
     for (const auto& query_info : query_infos) {
       total_tuples += query_info.numTuples;
     }
-    return total_tuples <= static_cast<size_t>(std::numeric_limits<int32_t>::max()) ? 4 : get_min_byte_width();
+    return total_tuples <= static_cast<size_t>(std::numeric_limits<int32_t>::max()) ? 4 : crt_min_byte_width;
   } else {
     // TODO(miyu): relax this condition to allow more cases just w/o padding
     for (auto wid : get_col_byte_widths(ra_exe_unit.target_exprs)) {
@@ -1115,6 +1121,7 @@ int8_t pick_target_compact_width(const RelAlgExecutionUnit& ra_exe_unit,
 void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
                                                     const size_t max_groups_buffer_entry_count,
                                                     const size_t small_groups_buffer_entry_count,
+                                                    const int8_t crt_min_byte_width,
                                                     const bool sort_on_gpu_hint,
                                                     const bool render_output) {
   addTransientStringLiterals();
@@ -1126,9 +1133,9 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
   }
 
   std::vector<ColWidths> agg_col_widths;
-  const auto smallest_byte_width_to_compact = pick_target_compact_width(ra_exe_unit_, query_infos_);
+  const auto min_byte_width = pick_target_compact_width(ra_exe_unit_, query_infos_, crt_min_byte_width);
   for (auto wid : get_col_byte_widths(ra_exe_unit_.target_exprs)) {
-    agg_col_widths.push_back({wid, static_cast<int8_t>(compact_byte_width(wid, smallest_byte_width_to_compact))});
+    agg_col_widths.push_back({wid, static_cast<int8_t>(compact_byte_width(wid, min_byte_width))});
   }
   auto group_col_widths = get_col_byte_widths(ra_exe_unit_.groupby_exprs);
 

@@ -2725,7 +2725,8 @@ ResultRows Executor::executeResultPlan(const Planner::Result* result_plan,
   }
   std::vector<ColWidths> agg_col_widths;
   for (auto wid : get_col_byte_widths(target_exprs)) {
-    agg_col_widths.push_back({wid, int8_t(compact_byte_width(wid, pick_target_compact_width(res_ra_unit, {})))});
+    agg_col_widths.push_back(
+        {wid, int8_t(compact_byte_width(wid, pick_target_compact_width(res_ra_unit, {}, get_min_byte_width())))});
   }
   QueryMemoryDescriptor query_mem_desc{this,
                                        allow_multifrag,
@@ -2759,6 +2760,7 @@ ResultRows Executor::executeResultPlan(const Planner::Result* result_plan,
                       row_set_mem_owner_,
                       row_count,
                       small_groups_buffer_entry_count_,
+                      get_min_byte_width(),
                       JoinInfo(JoinImplType::Invalid, std::vector<std::shared_ptr<Analyzer::BinOper>>{}, nullptr));
   auto column_buffers = result_columns.getColumnBuffers();
   CHECK_EQ(column_buffers.size(), static_cast<size_t>(in_col_count));
@@ -2883,12 +2885,8 @@ ResultRows Executor::executeWorkUnit(int32_t* error_code,
                                      const Catalog_Namespace::Catalog& cat,
                                      std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                                      RenderAllocatorMap* render_allocator_map) {
-  *error_code = 0;
-
   const auto device_type = getDeviceTypeForTargets(ra_exe_unit, co.device_type_);
-
   CHECK(!query_infos.empty());
-
   if (!max_groups_buffer_entry_guess) {
     // The query has failed the first execution attempt because of running out
     // of group by slots. Make the conservative choice: allocate fragment size
@@ -2902,110 +2900,110 @@ ResultRows Executor::executeWorkUnit(int32_t* error_code,
     join_info = chooseJoinType(ra_exe_unit.outer_join_quals, query_infos, device_type);
   }
 
-  // could use std::thread::hardware_concurrency(), but some
-  // slightly out-of-date compilers (gcc 4.7) implement it as always 0.
-  // Play it POSIX.1 safe instead.
-  int available_cpus = cpu_threads();
-  auto available_gpus = get_available_gpus(cat);
+  int8_t crt_min_byte_width{get_min_byte_width()};
+  do {
+    *error_code = 0;
+    // could use std::thread::hardware_concurrency(), but some
+    // slightly out-of-date compilers (gcc 4.7) implement it as always 0.
+    // Play it POSIX.1 safe instead.
+    int available_cpus = cpu_threads();
+    auto available_gpus = get_available_gpus(cat);
 
-  const auto context_count = get_context_count(device_type, available_cpus, available_gpus.size());
+    const auto context_count = get_context_count(device_type, available_cpus, available_gpus.size());
 
-  ExecutionDispatch execution_dispatch(this,
-                                       ra_exe_unit,
-                                       query_infos,
-                                       cat,
-                                       {device_type, co.hoist_literals_, co.opt_level_},
-                                       context_count,
+    ExecutionDispatch execution_dispatch(this,
+                                         ra_exe_unit,
+                                         query_infos,
+                                         cat,
+                                         {device_type, co.hoist_literals_, co.opt_level_},
+                                         context_count,
+                                         row_set_mem_owner,
+                                         error_code,
+                                         render_allocator_map);
+    crt_min_byte_width =
+        execution_dispatch.compile(join_info, max_groups_buffer_entry_guess, crt_min_byte_width, options);
+
+    if (options.just_explain) {
+      return executeExplain(execution_dispatch);
+    }
+
+    for (const auto target_expr : ra_exe_unit.target_exprs) {
+      plan_state_->target_exprs_.push_back(target_expr);
+    }
+
+    std::condition_variable scheduler_cv;
+    std::mutex scheduler_mutex;
+    auto dispatch = [this, &execution_dispatch, &available_cpus, &available_gpus, &scheduler_mutex, &scheduler_cv](
+        const ExecutorDeviceType chosen_device_type,
+        int chosen_device_id,
+        const std::map<int, std::vector<size_t>>& frag_ids,
+        const size_t ctx_idx,
+        const int64_t rowid_lookup_key) {
+      execution_dispatch.run(chosen_device_type, chosen_device_id, frag_ids, ctx_idx, rowid_lookup_key);
+      if (execution_dispatch.getDeviceType() == ExecutorDeviceType::Hybrid) {
+        std::unique_lock<std::mutex> scheduler_lock(scheduler_mutex);
+        if (chosen_device_type == ExecutorDeviceType::CPU) {
+          ++available_cpus;
+        } else {
+          CHECK(chosen_device_type == ExecutorDeviceType::GPU);
+          auto it_ok = available_gpus.insert(chosen_device_id);
+          CHECK(it_ok.second);
+        }
+        scheduler_lock.unlock();
+        scheduler_cv.notify_one();
+      }
+    };
+
+    std::map<int, const TableFragments*> all_tables_fragments;
+    CHECK_EQ(query_infos.size(), ra_exe_unit.input_descs.size());
+    for (size_t table_idx = 0; table_idx < ra_exe_unit.input_descs.size(); ++table_idx) {
+      all_tables_fragments[ra_exe_unit.input_descs[table_idx].getTableId()] = &query_infos[table_idx].fragments;
+    }
+    const QueryMemoryDescriptor& query_mem_desc = execution_dispatch.getQueryMemoryDescriptor();
+    dispatchFragments(dispatch,
+                      execution_dispatch,
+                      options,
+                      is_agg,
+                      all_tables_fragments,
+                      context_count,
+                      scheduler_cv,
+                      scheduler_mutex,
+                      available_gpus,
+                      available_cpus);
+    cat.get_dataMgr().freeAllBuffers();
+    if (*error_code == ERR_OVERFLOW_OR_UNDERFLOW) {
+      crt_min_byte_width <<= 1;
+      continue;
+    }
+    if (is_agg) {
+      try {
+        return collectAllDeviceResults(execution_dispatch,
+                                       ra_exe_unit.target_exprs,
+                                       query_mem_desc,
                                        row_set_mem_owner,
-                                       error_code,
-                                       render_allocator_map);
-  execution_dispatch.compile(join_info, max_groups_buffer_entry_guess, options);
-
-  if (options.just_explain) {
-    return executeExplain(execution_dispatch);
-  }
-
-  for (const auto target_expr : ra_exe_unit.target_exprs) {
-    plan_state_->target_exprs_.push_back(target_expr);
-  }
-
-  std::condition_variable scheduler_cv;
-  std::mutex scheduler_mutex;
-  auto dispatch = [this, &execution_dispatch, &available_cpus, &available_gpus, &scheduler_mutex, &scheduler_cv](
-      const ExecutorDeviceType chosen_device_type,
-      int chosen_device_id,
-      const std::map<int, std::vector<size_t>>& frag_ids,
-      const size_t ctx_idx,
-      const int64_t rowid_lookup_key) {
-    execution_dispatch.run(chosen_device_type, chosen_device_id, frag_ids, ctx_idx, rowid_lookup_key);
-    if (execution_dispatch.getDeviceType() == ExecutorDeviceType::Hybrid) {
-      std::unique_lock<std::mutex> scheduler_lock(scheduler_mutex);
-      if (chosen_device_type == ExecutorDeviceType::CPU) {
-        ++available_cpus;
-      } else {
-        CHECK(chosen_device_type == ExecutorDeviceType::GPU);
-        auto it_ok = available_gpus.insert(chosen_device_id);
-        CHECK(it_ok.second);
+                                       execution_dispatch.outputColumnar());
+      } catch (ReductionRanOutOfSlots&) {
+        *error_code = ERR_OUT_OF_SLOTS;
+        return ResultRows(query_mem_desc,
+                          plan_state_->target_exprs_,
+                          nullptr,
+                          {},
+                          nullptr,
+                          0,
+                          false,
+                          {},
+                          execution_dispatch.getDeviceType(),
+                          -1);
+      } catch (OverflowOrUnderflow&) {
+        crt_min_byte_width <<= 1;
+        continue;
       }
-      scheduler_lock.unlock();
-      scheduler_cv.notify_one();
     }
-  };
+    return results_union(execution_dispatch.getFragmentResults());
 
-  std::map<int, const TableFragments*> all_tables_fragments;
-  CHECK_EQ(query_infos.size(), ra_exe_unit.input_descs.size());
-  for (size_t table_idx = 0; table_idx < ra_exe_unit.input_descs.size(); ++table_idx) {
-    all_tables_fragments[ra_exe_unit.input_descs[table_idx].getTableId()] = &query_infos[table_idx].fragments;
-  }
-  const QueryMemoryDescriptor& query_mem_desc = execution_dispatch.getQueryMemoryDescriptor();
-  dispatchFragments(dispatch,
-                    execution_dispatch,
-                    options,
-                    is_agg,
-                    all_tables_fragments,
-                    context_count,
-                    scheduler_cv,
-                    scheduler_mutex,
-                    available_gpus,
-                    available_cpus);
-  cat.get_dataMgr().freeAllBuffers();
-  if (is_agg) {
-    try {
-      if (*error_code == ERR_OVERFLOW_OR_UNDERFLOW) {
-        throw OverflowOrUnderflow();
-      }
-      return collectAllDeviceResults(execution_dispatch,
-                                     ra_exe_unit.target_exprs,
-                                     query_mem_desc,
-                                     row_set_mem_owner,
-                                     execution_dispatch.outputColumnar());
-    } catch (ReductionRanOutOfSlots&) {
-      *error_code = ERR_OUT_OF_SLOTS;
-      return ResultRows(query_mem_desc,
-                        plan_state_->target_exprs_,
-                        nullptr,
-                        {},
-                        nullptr,
-                        0,
-                        false,
-                        {},
-                        execution_dispatch.getDeviceType(),
-                        -1);
-    } catch (OverflowOrUnderflow&) {
-      *error_code = ERR_OVERFLOW_OR_UNDERFLOW;
-      return ResultRows(query_mem_desc,
-                        plan_state_->target_exprs_,
-                        nullptr,
-                        {},
-                        nullptr,
-                        0,
-                        false,
-                        {},
-                        execution_dispatch.getDeviceType(),
-                        -1);
-    }
-  }
-  return results_union(execution_dispatch.getFragmentResults());
+  } while (static_cast<size_t>(crt_min_byte_width) <= sizeof(int64_t));
+
+  return ResultRows({}, {}, nullptr, nullptr, {}, ExecutorDeviceType::CPU);
 }
 
 ResultRows Executor::executeExplain(const ExecutionDispatch& execution_dispatch) {
@@ -3269,9 +3267,11 @@ const int8_t* Executor::ExecutionDispatch::getColumn(const ColumnarResults* colu
   return col_buffers[col_id];
 }
 
-void Executor::ExecutionDispatch::compile(const Executor::JoinInfo& join_info,
-                                          const size_t max_groups_buffer_entry_guess,
-                                          const ExecutionOptions& options) {
+int8_t Executor::ExecutionDispatch::compile(const Executor::JoinInfo& join_info,
+                                            const size_t max_groups_buffer_entry_guess,
+                                            const int8_t crt_min_byte_width,
+                                            const ExecutionOptions& options) {
+  int8_t actual_min_byte_wdith{MAX_BYTE_WIDTH_SUPPORTED};
   auto compile_on_cpu = [&]() {
     const CompilationOptions co_cpu{ExecutorDeviceType::CPU, co_.hoist_literals_, co_.opt_level_};
     try {
@@ -3287,6 +3287,7 @@ void Executor::ExecutionDispatch::compile(const Executor::JoinInfo& join_info,
                                      max_groups_buffer_entry_guess,
                                      render_allocator_map_ ? executor_->render_small_groups_buffer_entry_count_
                                                            : executor_->small_groups_buffer_entry_count_,
+                                     crt_min_byte_width,
                                      join_info);
     } catch (const CompilationRetryNoLazyFetch&) {
       compilation_result_cpu_ =
@@ -3301,7 +3302,11 @@ void Executor::ExecutionDispatch::compile(const Executor::JoinInfo& join_info,
                                      max_groups_buffer_entry_guess,
                                      render_allocator_map_ ? executor_->render_small_groups_buffer_entry_count_
                                                            : executor_->small_groups_buffer_entry_count_,
+                                     crt_min_byte_width,
                                      join_info);
+    }
+    for (auto wids : compilation_result_cpu_.query_mem_desc.agg_col_widths) {
+      actual_min_byte_wdith = std::min(actual_min_byte_wdith, wids.compact);
     }
   };
 
@@ -3325,6 +3330,7 @@ void Executor::ExecutionDispatch::compile(const Executor::JoinInfo& join_info,
                                      max_groups_buffer_entry_guess,
                                      render_allocator_map_ ? executor_->render_small_groups_buffer_entry_count_
                                                            : executor_->small_groups_buffer_entry_count_,
+                                     crt_min_byte_width,
                                      join_info);
     } catch (const CompilationRetryNoLazyFetch&) {
       compilation_result_gpu_ =
@@ -3339,7 +3345,11 @@ void Executor::ExecutionDispatch::compile(const Executor::JoinInfo& join_info,
                                      max_groups_buffer_entry_guess,
                                      render_allocator_map_ ? executor_->render_small_groups_buffer_entry_count_
                                                            : executor_->small_groups_buffer_entry_count_,
+                                     crt_min_byte_width,
                                      join_info);
+    }
+    for (auto wids : compilation_result_gpu_.query_mem_desc.agg_col_widths) {
+      actual_min_byte_wdith = std::min(actual_min_byte_wdith, wids.compact);
     }
   }
 
@@ -3349,6 +3359,7 @@ void Executor::ExecutionDispatch::compile(const Executor::JoinInfo& join_info,
     }
     co_.device_type_ = ExecutorDeviceType::CPU;
   }
+  return std::max(actual_min_byte_wdith, crt_min_byte_width);
 }
 
 std::string Executor::ExecutionDispatch::getIR(const ExecutorDeviceType device_type) const {
@@ -4263,6 +4274,7 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
                                                       std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                                                       const size_t max_groups_buffer_entry_guess,
                                                       const size_t small_groups_buffer_entry_count,
+                                                      const int8_t crt_min_byte_width,
                                                       const JoinInfo& join_info) {
   nukeOldState(allow_lazy_fetch && ra_exe_unit.outer_join_quals.empty(), join_info);
 
@@ -4274,6 +4286,7 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
                                              row_set_mem_owner,
                                              max_groups_buffer_entry_guess,
                                              small_groups_buffer_entry_count,
+                                             crt_min_byte_width,
                                              eo.allow_multifrag,
                                              eo.output_columnar_hint && co.device_type_ == ExecutorDeviceType::GPU);
   const auto& query_mem_desc = group_by_and_aggregate.getQueryMemoryDescriptor();
