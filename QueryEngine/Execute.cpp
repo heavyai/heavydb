@@ -2525,7 +2525,11 @@ ResultRows Executor::reduceMultiDeviceResults(
   auto reduced_results = results_per_device.front().first;
 
   for (size_t i = 1; i < results_per_device.size(); ++i) {
-    reduced_results.reduce(results_per_device[i].first, query_mem_desc, output_columnar);
+    const auto error_code = reduced_results.reduce(results_per_device[i].first, query_mem_desc, output_columnar);
+    if (error_code) {
+      CHECK_EQ(error_code, ERR_OVERFLOW_OR_UNDERFLOW);
+      throw OverflowOrUnderflow();
+    }
   }
 
   row_set_mem_owner->addLiteralStringDict(lit_str_dict_);
@@ -2967,6 +2971,9 @@ ResultRows Executor::executeWorkUnit(int32_t* error_code,
   cat.get_dataMgr().freeAllBuffers();
   if (is_agg) {
     try {
+      if (*error_code == ERR_OVERFLOW_OR_UNDERFLOW) {
+        throw OverflowOrUnderflow();
+      }
       return collectAllDeviceResults(execution_dispatch,
                                      ra_exe_unit.target_exprs,
                                      query_mem_desc,
@@ -2974,6 +2981,18 @@ ResultRows Executor::executeWorkUnit(int32_t* error_code,
                                      execution_dispatch.outputColumnar());
     } catch (ReductionRanOutOfSlots&) {
       *error_code = ERR_OUT_OF_SLOTS;
+      return ResultRows(query_mem_desc,
+                        plan_state_->target_exprs_,
+                        nullptr,
+                        {},
+                        nullptr,
+                        0,
+                        false,
+                        {},
+                        execution_dispatch.getDeviceType(),
+                        -1);
+    } catch (OverflowOrUnderflow&) {
+      *error_code = ERR_OVERFLOW_OR_UNDERFLOW;
       return ResultRows(query_mem_desc,
                         plan_state_->target_exprs_,
                         nullptr,

@@ -1,0 +1,63 @@
+#include "ResultRows.h"
+
+#include "AggregateUtils.h"
+#include "Execute.h"
+#include "InPlaceSort.h"
+
+#include "../DataMgr/BufferMgr/BufferMgr.h"
+
+#include <thread>
+
+ResultRows::ResultRows(const QueryMemoryDescriptor& query_mem_desc,
+                       const std::vector<Analyzer::Expr*>& targets,
+                       const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+                       const std::vector<int64_t>& init_vals,
+                       int64_t* group_by_buffer,
+                       const size_t groups_buffer_entry_count,
+                       const bool output_columnar,
+                       const std::vector<std::vector<const int8_t*>>& col_buffers,
+                       const ExecutorDeviceType device_type,
+                       const int device_id)
+    : executor_(query_mem_desc.executor_),
+      query_mem_desc_(query_mem_desc),
+      row_set_mem_owner_(row_set_mem_owner),
+      agg_init_vals_(init_vals),
+      group_by_buffer_(nullptr),
+      groups_buffer_entry_count_(groups_buffer_entry_count),
+      group_by_buffer_idx_(0),
+      min_val_(0),
+      warp_count_(0),
+      output_columnar_(output_columnar),
+      in_place_(!query_mem_desc.is_sort_plan && query_mem_desc.usesCachedContext()),
+      device_type_(device_type),
+      device_id_(device_id),
+      crt_row_idx_(0),
+      crt_row_buff_idx_(0),
+      drop_first_(0),
+      keep_first_(0),
+      fetch_started_(false),
+      in_place_buff_idx_(0),
+      just_explain_(false) {
+  if (group_by_buffer) {
+    in_place_group_by_buffers_.push_back(group_by_buffer);
+    in_place_groups_by_buffers_entry_count_.push_back(groups_buffer_entry_count);
+  }
+  bool has_lazy_columns = false;
+  for (const auto target_expr : targets) {
+    const auto agg_info = target_info(target_expr);
+    bool is_real_string = agg_info.sql_type.is_string() && agg_info.sql_type.get_compression() == kENCODING_NONE;
+    bool is_array = agg_info.sql_type.is_array();
+    CHECK(!is_real_string || !is_array);
+    if (executor_->plan_state_->isLazyFetchColumn(target_expr) || is_real_string || is_array) {
+      has_lazy_columns = true;
+    }
+    targets_.push_back(agg_info);
+  }
+  std::vector<TargetValue> row;
+  if (in_place_ && has_lazy_columns) {
+    while (fetchLazyOrBuildRow(row, col_buffers, targets, false, false, true)) {
+    };
+  }
+  moveToBegin();
+}
+

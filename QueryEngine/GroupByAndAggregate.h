@@ -815,6 +815,14 @@ inline std::vector<int8_t> get_col_byte_widths(const T& col_expr_list) {
   return col_widths;
 }
 
+inline int8_t get_min_byte_width() {
+#ifdef ENABLE_COMPACTION
+  return 4;
+#else
+  return MAX_BYTE_WIDTH_SUPPORTED;
+#endif
+}
+
 struct RelAlgExecutionUnit;
 
 int8_t pick_target_compact_width(const RelAlgExecutionUnit& ra_exe_unit,

@@ -999,6 +999,26 @@ TEST(Select, DivByZero) {
   }
 }
 
+#ifdef ENABLE_COMPACTION
+TEST(Select, OverflowAndUnderFlow) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    // TODO(miyu): remove EXPECT_THROW when retry is added
+    EXPECT_THROW(run_multiple_agg("SELECT SUM(ofd) FROM test GROUP BY x;", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("SELECT SUM(ufd) FROM test GROUP BY x;", dt), std::runtime_error);
+
+    EXPECT_THROW(run_multiple_agg("SELECT SUM(ofq) FROM test;", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("SELECT SUM(ufq) FROM test;", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("SELECT SUM(ofq) FROM test GROUP BY x;", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("SELECT SUM(ufq) FROM test GROUP BY x;", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("SELECT AVG(ofq) FROM test;", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("SELECT AVG(ufq) FROM test;", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("SELECT AVG(ofq) FROM test GROUP BY y;", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("SELECT AVG(ufq) FROM test GROUP BY y;", dt), std::runtime_error);
+  }
+}
+#endif  // ENABLE_COMPACTION
+
 TEST(Select, BooleanColumn) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -1468,11 +1488,13 @@ int main(int argc, char** argv) {
     const std::string create_test{
         "CREATE TABLE test(x int not null, y int, z smallint, t bigint, b boolean, f float, d double, str text "
         "encoding dict, real_str text, m timestamp(0), n time(0), o date, fx int encoding fixed(16), dd decimal(10, "
-        "2), ss text encoding dict, u int) WITH (fragment_size=2);"};
+        "2), ss text encoding dict, u int, ofd int, ufd int not null, ofq bigint, ufq bigint not null) WITH "
+        "(fragment_size=2);"};
     run_ddl_statement(create_test);
     g_sqlite_comparator.query(
         "CREATE TABLE test(x int not null, y int, z smallint, t bigint, b boolean, f float, d double, str text, "
-        "real_str text, m timestamp(0), n time(0), o date, fx int, dd decimal(10, 2), ss text, u int);");
+        "real_str text, m timestamp(0), n time(0), o date, fx int, dd decimal(10, 2), ss text, u int, ofd int, ufd int "
+        "not null, ofq bigint, ufq bigint not null);");
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'test'";
     return -EEXIST;
@@ -1482,7 +1504,7 @@ int main(int argc, char** argv) {
     const std::string insert_query{
         "INSERT INTO test VALUES(7, 42, 101, 1001, 't', 1.1, 2.2, 'foo', 'real_foo', '2014-12-13 22:23:15', "
         "'15:13:14', "
-        "'1999-09-09', 9, 111.1, 'fish', null);"};
+        "'1999-09-09', 9, 111.1, 'fish', null, 2147483647, -2147483648, null, -1);"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
@@ -1490,7 +1512,7 @@ int main(int argc, char** argv) {
     const std::string insert_query{
         "INSERT INTO test VALUES(8, 43, 102, 1002, 'f', 1.2, 2.4, 'bar', 'real_bar', '2014-12-13 22:23:15', "
         "'15:13:14', "
-        "NULL, 10, 222.2, null, null);"};
+        "NULL, 10, 222.2, null, null, null, -1, 9223372036854775807, -9223372036854775808);"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
@@ -1498,7 +1520,7 @@ int main(int argc, char** argv) {
     const std::string insert_query{
         "INSERT INTO test VALUES(7, 43, 102, 1002, 't', 1.3, 2.6, 'baz', 'real_baz', '2014-12-13 22:23:15', "
         "'15:13:14', "
-        "'1999-09-09', 11, 333.3, 'boat', null);"};
+        "'1999-09-09', 11, 333.3, 'boat', null, 1, -1, 1, -9223372036854775808);"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }

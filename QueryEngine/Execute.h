@@ -45,6 +45,11 @@ class WatchdogException : public std::runtime_error {
   WatchdogException(const std::string& cause) : std::runtime_error(cause) {}
 };
 
+class OverflowOrUnderflow : public std::runtime_error {
+ public:
+  OverflowOrUnderflow() : std::runtime_error("Overflow or underflow") {}
+};
+
 class Executor;
 
 inline llvm::Type* get_int_type(const int width, llvm::LLVMContext& context) {
