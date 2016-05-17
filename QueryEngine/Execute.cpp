@@ -2493,13 +2493,6 @@ ResultRows Executor::reduceMultiDeviceResults(
 
 namespace {
 
-std::pair<llvm::Function*, std::vector<llvm::Value*>> create_row_function(const size_t in_col_count,
-                                                                          const size_t agg_col_count,
-                                                                          const bool hoist_literals,
-                                                                          llvm::Function* query_func,
-                                                                          llvm::Module* module,
-                                                                          llvm::LLVMContext& context);
-
 std::vector<std::string> get_agg_fnames(const std::vector<Analyzer::Expr*>& target_exprs, const bool is_group_by) {
   std::vector<std::string> result;
   for (size_t target_idx = 0, agg_col_idx = 0; target_idx < target_exprs.size(); ++target_idx, ++agg_col_idx) {
