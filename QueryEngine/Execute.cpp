@@ -3997,6 +3997,10 @@ void set_row_func_argnames(llvm::Function* row_func,
     ++arg_it;
     arg_it->setName("crt_match");
     ++arg_it;
+    arg_it->setName("total_matched");
+    ++arg_it;
+    arg_it->setName("old_total_matched");
+    ++arg_it;
   }
 
   arg_it->setName("agg_init_val");
@@ -4043,6 +4047,10 @@ std::pair<llvm::Function*, std::vector<llvm::Value*>> create_row_function(const 
     // small group by buffer
     row_process_arg_types.push_back(llvm::Type::getInt64PtrTy(context));
     // current match count
+    row_process_arg_types.push_back(llvm::Type::getInt32PtrTy(context));
+    // total match count passed from the caller
+    row_process_arg_types.push_back(llvm::Type::getInt32PtrTy(context));
+    // old total match count returned to the caller
     row_process_arg_types.push_back(llvm::Type::getInt32PtrTy(context));
   }
 
@@ -4129,17 +4137,6 @@ bool should_defer_eval(const std::shared_ptr<Analyzer::Expr> expr) {
   const auto bin_expr = std::static_pointer_cast<Analyzer::BinOper>(expr);
   const auto rhs = bin_expr->get_right_operand();
   return rhs->get_type_info().is_array();
-}
-
-llvm::Value* get_arg_by_name(llvm::Function* func, const std::string& name) {
-  auto& arg_list = func->getArgumentList();
-  for (auto& arg : arg_list) {
-    if (arg.getName() == name) {
-      return &arg;
-    }
-  }
-  CHECK(false);
-  return nullptr;
 }
 
 void verify_function_ir(const llvm::Function* func) {

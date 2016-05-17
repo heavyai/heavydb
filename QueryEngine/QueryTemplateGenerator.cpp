@@ -145,7 +145,9 @@ llvm::Function* row_process(llvm::Module* mod,
   } else {                           // group by query
     func_args.push_back(pi64_type);  // groups buffer
     func_args.push_back(pi64_type);  // small groups buffer
-    func_args.push_back(pi32_type);  // max matched
+    func_args.push_back(pi32_type);  // 1 iff current row matched, else 0
+    func_args.push_back(pi32_type);  // total rows matched from the caller
+    func_args.push_back(pi32_type);  // total rows matched before atomic increment
   }
 
   func_args.push_back(pi64_type);  // aggregate init values
@@ -598,6 +600,7 @@ llvm::Function* query_group_by_template(llvm::Module* mod,
   LoadInst* max_matched = new LoadInst(max_matched_ptr, "", false, bb_entry);
   max_matched->setAlignment(4);
   auto crt_matched_ptr = new AllocaInst(i32_type, "crt_matched", bb_entry);
+  auto old_total_matched_ptr = new AllocaInst(i32_type, "old_total_matched", bb_entry);
   CallInst* pos_start = CallInst::Create(func_pos_start, "", bb_entry);
   pos_start->setCallingConv(CallingConv::C);
   pos_start->setTailCall(true);
@@ -678,6 +681,8 @@ llvm::Function* query_group_by_template(llvm::Module* mod,
     row_process_params.push_back(Constant::getNullValue(pi64_type));
   }
   row_process_params.push_back(crt_matched_ptr);
+  row_process_params.push_back(total_matched);
+  row_process_params.push_back(old_total_matched_ptr);
   row_process_params.push_back(agg_init_val);
   row_process_params.push_back(pos);
   row_process_params.push_back(frag_row_off);
@@ -700,20 +705,8 @@ llvm::Function* query_group_by_template(llvm::Module* mod,
   if (check_scan_limit) {
     auto crt_matched = new LoadInst(crt_matched_ptr, "", false, bb_forbody);
     auto filter_match = BasicBlock::Create(mod->getContext(), "filter_match", query_func_ptr, bb_crit_edge);
-    llvm::Value* new_total_matched{nullptr};
-    if (device_type == ExecutorDeviceType::GPU) {
-      auto old_total_matched = new AtomicRMWInst(llvm::AtomicRMWInst::Add,
-                                                 total_matched,
-                                                 crt_matched,
-                                                 AtomicOrdering::Monotonic,
-                                                 SynchronizationScope::CrossThread,
-                                                 filter_match);
-      new_total_matched = BinaryOperator::CreateAdd(old_total_matched, crt_matched, "", filter_match);
-    } else {
-      auto old_total_matched = new LoadInst(total_matched, "", false, filter_match);
-      new_total_matched = BinaryOperator::CreateAdd(old_total_matched, crt_matched, "", filter_match);
-      new StoreInst(new_total_matched, total_matched, filter_match);
-    }
+    llvm::Value* new_total_matched = new LoadInst(old_total_matched_ptr, "", false, filter_match);
+    new_total_matched = BinaryOperator::CreateAdd(new_total_matched, crt_matched, "", filter_match);
     CHECK(new_total_matched);
     ICmpInst* limit_not_reached = new ICmpInst(*filter_match, ICmpInst::ICMP_SLT, new_total_matched, max_matched, "");
     BranchInst::Create(bb_forbody,

@@ -362,8 +362,8 @@ llvm::Value* JoinHashTable::codegenSlot(const bool hoist_literals) {
   const auto key_lvs = executor_->codegen(key_col, true, hoist_literals);
   CHECK_EQ(size_t(1), key_lvs.size());
   CHECK(executor_->plan_state_->join_info_.join_hash_table_);
-  auto& hash_ptr = executor_->cgen_state_->row_func_->getArgumentList().back();
-  std::vector<llvm::Value*> hash_join_idx_args{&hash_ptr,
+  auto hash_ptr = get_arg_by_name(executor_->cgen_state_->row_func_, "join_hash_table");
+  std::vector<llvm::Value*> hash_join_idx_args{hash_ptr,
                                                executor_->castToTypeIn(key_lvs.front(), 64),
                                                executor_->ll_int(col_range_.getIntMin()),
                                                executor_->ll_int(col_range_.getIntMax())};

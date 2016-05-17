@@ -67,6 +67,17 @@ inline llvm::Type* get_int_type(const int width, llvm::LLVMContext& context) {
   }
 }
 
+inline llvm::Value* get_arg_by_name(llvm::Function* func, const std::string& name) {
+  auto& arg_list = func->getArgumentList();
+  for (auto& arg : arg_list) {
+    if (arg.getName() == name) {
+      return &arg;
+    }
+  }
+  CHECK(false);
+  return nullptr;
+}
+
 inline uint32_t log2_bytes(const uint32_t bytes) {
   switch (bytes) {
     case 1:

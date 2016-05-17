@@ -1612,10 +1612,19 @@ bool GroupByAndAggregate::codegen(llvm::Value* filter_result, const CompilationO
 
     if (is_group_by) {
       if (ra_exe_unit_.scan_limit) {
-        auto crt_match_it = ROW_FUNC->arg_begin();
-        ++crt_match_it;
-        ++crt_match_it;
-        LL_BUILDER.CreateStore(executor_->ll_int(int32_t(1)), crt_match_it);
+        const auto crt_match = get_arg_by_name(ROW_FUNC, "crt_match");
+        LL_BUILDER.CreateStore(LL_INT(int32_t(1)), crt_match);
+        auto total_matched_ptr = get_arg_by_name(ROW_FUNC, "total_matched");
+        llvm::Value* old_total_matched_val{nullptr};
+        if (co.device_type_ == ExecutorDeviceType::GPU) {
+          old_total_matched_val = LL_BUILDER.CreateAtomicRMW(
+              llvm::AtomicRMWInst::Add, total_matched_ptr, LL_INT(int32_t(1)), llvm::AtomicOrdering::Monotonic);
+        } else {
+          old_total_matched_val = LL_BUILDER.CreateLoad(total_matched_ptr);
+          LL_BUILDER.CreateStore(LL_BUILDER.CreateAdd(old_total_matched_val, LL_INT(int32_t(1))), total_matched_ptr);
+        }
+        auto old_total_matched_ptr = get_arg_by_name(ROW_FUNC, "old_total_matched");
+        LL_BUILDER.CreateStore(old_total_matched_val, old_total_matched_ptr);
       }
 
       auto agg_out_ptr_w_idx = codegenGroupBy(co, filter_cfg);
@@ -1721,6 +1730,8 @@ std::tuple<llvm::Value*, llvm::Value*> GroupByAndAggregate::codegenGroupBy(const
         return std::make_tuple(emitCall(get_group_fn_name, get_group_fn_args), nullptr);
       } else {
         ++arg_it;
+        ++arg_it;
+        ++arg_it;
         return std::make_tuple(emitCall("get_group_value_one_key",
                                         {groups_buffer,
                                          LL_INT(static_cast<int32_t>(query_mem_desc_.entry_count)),
@@ -1747,6 +1758,8 @@ std::tuple<llvm::Value*, llvm::Value*> GroupByAndAggregate::codegenGroupBy(const
         // store the sub-key to the buffer
         LL_BUILDER.CreateStore(group_expr_lv, LL_BUILDER.CreateGEP(group_key, LL_INT(subkey_idx++)));
       }
+      ++arg_it;
+      ++arg_it;
       ++arg_it;
       auto perfect_hash_func = query_mem_desc_.hash_type == GroupByColRangeType::MultiColPerfectHash
                                    ? codegenPerfectHashFunction()
