@@ -1115,7 +1115,8 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
             !ra_exe_unit_.groupby_exprs.front()->get_type_info().is_string()) &&
            col_range_info.max >= col_range_info.min + static_cast<int64_t>(max_groups_buffer_entry_count) &&
            !col_range_info.bucket)) {
-        const auto hash_type = render_output ? GroupByColRangeType::MultiCol : col_range_info.hash_type_;
+        const auto hash_type =
+            (render_output || ra_exe_unit_.scan_limit) ? GroupByColRangeType::MultiCol : col_range_info.hash_type_;
         size_t small_group_slots =
             ra_exe_unit_.scan_limit ? static_cast<size_t>(ra_exe_unit_.scan_limit) : small_groups_buffer_entry_count;
         if (render_output) {
@@ -1130,7 +1131,7 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
                            0,
                            group_col_widths,
                            agg_col_widths,
-                           max_groups_buffer_entry_count * (render_output ? 4 : 1),
+                           max_groups_buffer_entry_count,
                            small_group_slots,
                            col_range_info.min,
                            col_range_info.max,
@@ -1682,6 +1683,19 @@ std::tuple<llvm::Value*, llvm::Value*> GroupByAndAggregate::codegenGroupBy(const
   const int32_t row_size_quad = outputColumnar() ? 0 : query_mem_desc_.getRowSize() / sizeof(int64_t);
 
   std::stack<llvm::BasicBlock*> array_loops;
+
+  if (ra_exe_unit_.scan_limit) {
+    CHECK_EQ(size_t(1), ra_exe_unit_.groupby_exprs.size());
+    const auto group_expr = ra_exe_unit_.groupby_exprs.front();
+    CHECK(!group_expr);
+    const auto group_expr_lv = LL_BUILDER.CreateLoad(get_arg_by_name(ROW_FUNC, "old_total_matched"));
+    return std::make_tuple(emitCall("get_scan_output_slot",
+                                    {groups_buffer,
+                                     LL_INT(static_cast<int32_t>(query_mem_desc_.entry_count)),
+                                     group_expr_lv,
+                                     LL_INT(row_size_quad)}),
+                           nullptr);
+  }
 
   switch (query_mem_desc_.hash_type) {
     case GroupByColRangeType::OneColKnownRange:

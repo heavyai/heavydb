@@ -75,6 +75,18 @@ extern "C" ALWAYS_INLINE DEVICE int64_t* get_group_value_one_key(int64_t* groups
   return get_group_value(groups_buffer, groups_buffer_entry_count, &key, 1, row_size_quad, init_vals);
 }
 
+extern "C" ALWAYS_INLINE DEVICE int64_t* get_scan_output_slot(int64_t* output_buffer,
+                                                              const uint32_t output_buffer_entry_count,
+                                                              const uint32_t pos,
+                                                              const uint32_t row_size_quad) {
+  uint64_t off = static_cast<uint64_t>(pos) * static_cast<uint64_t>(row_size_quad);
+  if (pos < output_buffer_entry_count) {
+    output_buffer[off] = pos;
+    return output_buffer + off + 1;
+  }
+  return NULL;
+}
+
 extern "C" ALWAYS_INLINE DEVICE int64_t
     hash_join_idx(int64_t hash_buff, const int64_t key, const int64_t min_key, const int64_t max_key) {
   if (key >= min_key && key <= max_key) {
