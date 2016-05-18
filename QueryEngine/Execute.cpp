@@ -3745,8 +3745,8 @@ int32_t Executor::executePlanWithGroupBy(const CompilationResult& compilation_re
       return ERR_OUT_OF_GPU_MEM;
     } catch (const OutOfRenderMemory&) {
       return ERR_OUT_OF_RENDER_MEM;
-    } catch (...) {
-      LOG(FATAL) << "Unknown error launching the GPU kernel, most likely a timeout";
+    } catch (const std::exception& e) {
+      LOG(FATAL) << "Error launching the GPU kernel: " << e.what();
     }
   }
   if (!query_exe_context->query_mem_desc_.usesCachedContext() && !render_allocator_map) {
