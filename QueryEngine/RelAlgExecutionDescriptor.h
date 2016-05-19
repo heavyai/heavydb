@@ -23,6 +23,8 @@ class ExecutionResult {
 
   const std::vector<TargetMetaInfo>& getTargetsMeta() const { return targets_meta_; }
 
+  void setQueueTime(const int64_t queue_time_ms) { rows_.setQueueTime(queue_time_ms); }
+
  private:
   ResultRows rows_;
   std::vector<TargetMetaInfo> targets_meta_;

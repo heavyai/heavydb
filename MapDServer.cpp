@@ -1145,6 +1145,8 @@ class MapDHandler : virtual public MapDIf {
                                        {false, allow_multifrag_, just_explain, allow_loop_joins_, g_enable_watchdog},
                                        {false, 0, 0, ""});
     });
+    // reduce execution time by the time spent during queue waiting
+    _return.execution_time_ms -= result.getRows().getQueueTime();
     if (just_explain) {
       convert_explain(_return, result.getRows(), column_format);
     } else {

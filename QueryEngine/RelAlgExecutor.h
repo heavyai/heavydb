@@ -30,19 +30,26 @@ class RelAlgExecutor {
   ExecutionResult executeCompound(const RelCompound*,
                                   const CompilationOptions&,
                                   const ExecutionOptions&,
-                                  const RenderInfo&);
+                                  const RenderInfo&,
+                                  const int64_t queue_time_ms);
 
   ExecutionResult executeProject(const RelProject*,
                                  const CompilationOptions&,
                                  const ExecutionOptions&,
-                                 const RenderInfo&);
+                                 const RenderInfo&,
+                                 const int64_t queue_time_ms);
 
   ExecutionResult executeFilter(const RelFilter*,
                                 const CompilationOptions&,
                                 const ExecutionOptions&,
-                                const RenderInfo&);
+                                const RenderInfo&,
+                                const int64_t queue_time_ms);
 
-  ExecutionResult executeSort(const RelSort*, const CompilationOptions&, const ExecutionOptions&, const RenderInfo&);
+  ExecutionResult executeSort(const RelSort*,
+                              const CompilationOptions&,
+                              const ExecutionOptions&,
+                              const RenderInfo&,
+                              const int64_t queue_time_ms);
 
   // TODO(alex): just move max_groups_buffer_entry_guess to RelAlgExecutionUnit once
   //             we deprecate the plan-based executor paths and remove WorkUnit
@@ -59,20 +66,23 @@ class RelAlgExecutor {
                                   const bool is_agg,
                                   const CompilationOptions& co,
                                   const ExecutionOptions& eo,
-                                  const RenderInfo&);
+                                  const RenderInfo&,
+                                  const int64_t queue_time_ms);
 
   ExecutionResult renderWorkUnit(const RelAlgExecutor::WorkUnit& work_unit,
                                  const std::vector<TargetMetaInfo>& targets_meta,
                                  RenderAllocatorMap* render_allocator_map,
                                  const RenderInfo& render_info,
-                                 const int32_t error_code);
+                                 const int32_t error_code,
+                                 const int64_t queue_time_ms);
 
   ExecutionResult handleRetry(const int32_t error_code_in,
                               const RelAlgExecutor::WorkUnit& work_unit,
                               const std::vector<TargetMetaInfo>& targets_meta,
                               const bool is_agg,
                               const CompilationOptions& co,
-                              const ExecutionOptions& eo);
+                              const ExecutionOptions& eo,
+                              const int64_t queue_time_ms);
 
   WorkUnit createWorkUnit(const RelAlgNode*, const std::list<Analyzer::OrderEntry>&);
 

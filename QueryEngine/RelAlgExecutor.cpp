@@ -12,7 +12,10 @@ ExecutionResult RelAlgExecutor::executeRelAlgSeq(std::vector<RaExecutionDesc>& e
                                                  const CompilationOptions& co,
                                                  const ExecutionOptions& eo,
                                                  const RenderInfo& render_info) {
+  // capture the lock acquistion time
+  auto clock_begin = timer_start();
   std::lock_guard<std::mutex> lock(executor_->execute_mutex_);
+  int64_t queue_time_ms = timer_stop(clock_begin);
   decltype(temporary_tables_)().swap(temporary_tables_);
   decltype(target_exprs_owned_)().swap(target_exprs_owned_);
   executor_->row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>();
@@ -32,25 +35,25 @@ ExecutionResult RelAlgExecutor::executeRelAlgSeq(std::vector<RaExecutionDesc>& e
         eo.output_columnar_hint, eo.allow_multifrag, eo.just_explain, eo.allow_loop_joins, eo.with_watchdog && i == 0};
     const auto compound = dynamic_cast<const RelCompound*>(body);
     if (compound) {
-      exec_desc.setResult(executeCompound(compound, co, eo_work_unit, render_info));
+      exec_desc.setResult(executeCompound(compound, co, eo_work_unit, render_info, queue_time_ms));
       addTemporaryTable(-compound->getId(), &exec_desc.getResult().getRows());
       continue;
     }
     const auto project = dynamic_cast<const RelProject*>(body);
     if (project) {
-      exec_desc.setResult(executeProject(project, co, eo_work_unit, render_info));
+      exec_desc.setResult(executeProject(project, co, eo_work_unit, render_info, queue_time_ms));
       addTemporaryTable(-project->getId(), &exec_desc.getResult().getRows());
       continue;
     }
     const auto filter = dynamic_cast<const RelFilter*>(body);
     if (filter) {
-      exec_desc.setResult(executeFilter(filter, co, eo_work_unit, render_info));
+      exec_desc.setResult(executeFilter(filter, co, eo_work_unit, render_info, queue_time_ms));
       addTemporaryTable(-filter->getId(), &exec_desc.getResult().getRows());
       continue;
     }
     const auto sort = dynamic_cast<const RelSort*>(body);
     if (sort) {
-      exec_desc.setResult(executeSort(sort, co, eo_work_unit, render_info));
+      exec_desc.setResult(executeSort(sort, co, eo_work_unit, render_info, queue_time_ms));
       addTemporaryTable(-sort->getId(), &exec_desc.getResult().getRows());
       continue;
     }
@@ -373,25 +376,29 @@ std::vector<TargetMetaInfo> get_targets_meta(const RA* ra_node, const std::vecto
 ExecutionResult RelAlgExecutor::executeCompound(const RelCompound* compound,
                                                 const CompilationOptions& co,
                                                 const ExecutionOptions& eo,
-                                                const RenderInfo& render_info) {
+                                                const RenderInfo& render_info,
+                                                const int64_t queue_time_ms) {
   const auto work_unit = createCompoundWorkUnit(compound, {});
-  return executeWorkUnit(work_unit, compound->getOutputMetainfo(), compound->isAggregate(), co, eo, render_info);
+  return executeWorkUnit(
+      work_unit, compound->getOutputMetainfo(), compound->isAggregate(), co, eo, render_info, queue_time_ms);
 }
 
 ExecutionResult RelAlgExecutor::executeProject(const RelProject* project,
                                                const CompilationOptions& co,
                                                const ExecutionOptions& eo,
-                                               const RenderInfo& render_info) {
+                                               const RenderInfo& render_info,
+                                               const int64_t queue_time_ms) {
   const auto work_unit = createProjectWorkUnit(project, {});
-  return executeWorkUnit(work_unit, project->getOutputMetainfo(), false, co, eo, render_info);
+  return executeWorkUnit(work_unit, project->getOutputMetainfo(), false, co, eo, render_info, queue_time_ms);
 }
 
 ExecutionResult RelAlgExecutor::executeFilter(const RelFilter* filter,
                                               const CompilationOptions& co,
                                               const ExecutionOptions& eo,
-                                              const RenderInfo& render_info) {
+                                              const RenderInfo& render_info,
+                                              const int64_t queue_time_ms) {
   const auto work_unit = createFilterWorkUnit(filter, {});
-  return executeWorkUnit(work_unit, filter->getOutputMetainfo(), false, co, eo, render_info);
+  return executeWorkUnit(work_unit, filter->getOutputMetainfo(), false, co, eo, render_info, queue_time_ms);
 }
 
 namespace {
@@ -419,14 +426,20 @@ size_t get_scan_limit(const RelAlgNode* ra, const size_t limit) {
 ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
                                             const CompilationOptions& co,
                                             const ExecutionOptions& eo,
-                                            const RenderInfo& render_info) {
+                                            const RenderInfo& render_info,
+                                            const int64_t queue_time_ms) {
   CHECK_EQ(size_t(1), sort->inputCount());
   const auto source = sort->getInput(0);
   CHECK(!dynamic_cast<const RelSort*>(source));
   const auto compound = dynamic_cast<const RelCompound*>(source);
   const auto source_work_unit = createSortInputWorkUnit(sort);
-  auto source_result = executeWorkUnit(
-      source_work_unit, source->getOutputMetainfo(), compound ? compound->isAggregate() : false, co, eo, render_info);
+  auto source_result = executeWorkUnit(source_work_unit,
+                                       source->getOutputMetainfo(),
+                                       compound ? compound->isAggregate() : false,
+                                       co,
+                                       eo,
+                                       render_info,
+                                       queue_time_ms);
   if (render_info.is_render) {
     return source_result;
   }
@@ -478,7 +491,8 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(const RelAlgExecutor::WorkUnit& 
                                                 const bool is_agg,
                                                 const CompilationOptions& co,
                                                 const ExecutionOptions& eo,
-                                                const RenderInfo& render_info) {
+                                                const RenderInfo& render_info,
+                                                const int64_t queue_time_ms) {
   int32_t error_code{0};
   size_t max_groups_buffer_entry_guess = work_unit.max_groups_buffer_entry_guess;
   std::unique_ptr<RenderAllocatorMap> render_allocator_map;
@@ -504,6 +518,7 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(const RelAlgExecutor::WorkUnit& 
                                  executor_->row_set_mem_owner_,
                                  render_allocator_map.get()),
       targets_meta};
+  result.setQueueTime(queue_time_ms);
   if (!error_code) {
     return result;
   }
@@ -516,7 +531,8 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(const RelAlgExecutor::WorkUnit& 
   if (error_code == Executor::ERR_OUT_OF_CPU_MEM) {
     throw std::runtime_error("Not enough host memory to execute the query");
   }
-  return handleRetry(error_code, {work_unit.exe_unit, max_groups_buffer_entry_guess}, targets_meta, is_agg, co, eo);
+  return handleRetry(
+      error_code, {work_unit.exe_unit, max_groups_buffer_entry_guess}, targets_meta, is_agg, co, eo, queue_time_ms);
 }
 
 
@@ -525,7 +541,8 @@ ExecutionResult RelAlgExecutor::handleRetry(const int32_t error_code_in,
                                             const std::vector<TargetMetaInfo>& targets_meta,
                                             const bool is_agg,
                                             const CompilationOptions& co,
-                                            const ExecutionOptions& eo) {
+                                            const ExecutionOptions& eo,
+                                            const int64_t queue_time_ms) {
   auto error_code = error_code_in;
   auto max_groups_buffer_entry_guess = work_unit.max_groups_buffer_entry_guess;
   ExecutionOptions eo_no_multifrag{eo.output_columnar_hint, false, false, eo.allow_loop_joins, eo.with_watchdog};
@@ -542,6 +559,7 @@ ExecutionResult RelAlgExecutor::handleRetry(const int32_t error_code_in,
                                          executor_->row_set_mem_owner_,
                                          nullptr),
               targets_meta};
+    result.setQueueTime(queue_time_ms);
   }
   CompilationOptions co_cpu{ExecutorDeviceType::CPU, co.hoist_literals_, co.opt_level_};
   if (error_code) {
@@ -558,6 +576,7 @@ ExecutionResult RelAlgExecutor::handleRetry(const int32_t error_code_in,
                                            executor_->row_set_mem_owner_,
                                            nullptr),
                 targets_meta};
+      result.setQueueTime(queue_time_ms);
     }
     if (!error_code) {
       return result;
