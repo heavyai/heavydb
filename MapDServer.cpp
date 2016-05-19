@@ -78,6 +78,18 @@ bool is_poly_render(const rapidjson::Document& render_config) {
   return false;
 }
 
+std::string image_from_rendered_rows(const ResultRows& rendered_results) {
+  const auto img_row = rendered_results.getNextRow(false, false);
+  CHECK_EQ(size_t(1), img_row.size());
+  const auto& img_tv = img_row.front();
+  const auto scalar_tv = boost::get<ScalarTargetValue>(&img_tv);
+  const auto nullable_sptr = boost::get<NullableString>(scalar_tv);
+  CHECK(nullable_sptr);
+  auto sptr = boost::get<std::string>(nullable_sptr);
+  CHECK(sptr);
+  return *sptr;
+}
+
 }  // namespace
 
 class MapDHandler : virtual public MapDIf {
@@ -1205,15 +1217,7 @@ class MapDHandler : virtual public MapDIf {
     // reduce execution time by the time spent during queue waiting
     _return.execution_time_ms = timer_stop(clock_begin) - results.getQueueTime() - results.getRenderTime();
     _return.render_time_ms = results.getRenderTime();
-    const auto img_row = results.getNextRow(false, false);
-    CHECK_EQ(size_t(1), img_row.size());
-    const auto& img_tv = img_row.front();
-    const auto scalar_tv = boost::get<ScalarTargetValue>(&img_tv);
-    const auto nullable_sptr = boost::get<NullableString>(scalar_tv);
-    CHECK(nullable_sptr);
-    auto sptr = boost::get<std::string>(nullable_sptr);
-    CHECK(sptr);
-    _return.image = *sptr;
+    _return.image = image_from_rendered_rows(results);
   }
 
 #ifdef HAVE_RAVM
@@ -1236,24 +1240,22 @@ class MapDHandler : virtual public MapDIf {
     CHECK(query_ast.IsObject());
     const auto ra = ra_interpret(query_ast, cat);
     auto ed_list = get_execution_descriptors(ra.get());
+    rapidjson::Document render_config;
+    render_config.Parse(render_type.c_str());
+    const bool render_polys = is_poly_render(render_config);
     const auto exe_result =
         ra_executor.executeRelAlgSeq(ed_list,
                                      {session_info.get_executor_device_type(), true, ExecutorOptLevel::Default},
                                      {false, allow_multifrag_, false, allow_loop_joins_, g_enable_watchdog},
-                                     {true, 1, session_info.get_session_id(), render_type});
+                                     {!render_polys, 1, session_info.get_session_id(), render_type});
     const auto& results = exe_result.getRows();
+    if (render_polys) {
+      CHECK(false);
+    }
     // reduce execution time by the time spent during queue waiting
     _return.execution_time_ms = timer_stop(clock_begin) - results.getQueueTime() - results.getRenderTime();
     _return.render_time_ms = results.getRenderTime();
-    const auto img_row = results.getNextRow(false, false);
-    CHECK_EQ(size_t(1), img_row.size());
-    const auto& img_tv = img_row.front();
-    const auto scalar_tv = boost::get<ScalarTargetValue>(&img_tv);
-    const auto nullable_sptr = boost::get<NullableString>(scalar_tv);
-    CHECK(nullable_sptr);
-    auto sptr = boost::get<std::string>(nullable_sptr);
-    CHECK(sptr);
-    _return.image = *sptr;
+    _return.image = image_from_rendered_rows(results);
   }
 #endif  // HAVE_RAVM
 
