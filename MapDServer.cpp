@@ -1137,11 +1137,14 @@ class MapDHandler : virtual public MapDIf {
     auto executor = Executor::getExecutor(
         cat.get_currentDB().dbId, jit_debug_ ? "/tmp" : "", jit_debug_ ? "mapdquery" : "", 0, 0, nullptr);
     RelAlgExecutor ra_executor(executor.get(), cat);
-    const auto result =
-        ra_executor.executeRelAlgSeq(ed_list,
-                                     {executor_device_type, true, ExecutorOptLevel::Default},
-                                     {false, allow_multifrag_, just_explain, allow_loop_joins_, g_enable_watchdog},
-                                     {false, 0, 0, ""});
+    ExecutionResult result{ResultRows({}, {}, nullptr, nullptr, {}, executor_device_type), {}};
+    _return.execution_time_ms += measure<>::execution([&]() {
+      result =
+          ra_executor.executeRelAlgSeq(ed_list,
+                                       {executor_device_type, true, ExecutorOptLevel::Default},
+                                       {false, allow_multifrag_, just_explain, allow_loop_joins_, g_enable_watchdog},
+                                       {false, 0, 0, ""});
+    });
     if (just_explain) {
       convert_explain(_return, result.getRows(), column_format);
     } else {
