@@ -1,6 +1,15 @@
 # MapD Platform
-The latest version of the MapD Platform is 1.1.4.
+The latest version of the MapD Platform is 1.1.5.
 
+#### **1.1.5** — Released May 23, 2016
+
+#### New
+- Improved error logging to reveal the root kernel launch error for group by queries.
+- Added a new API endpoint `sql_validate` to the API.
+
+#### Fixed
+- Fixed a bug that calculated incorrect results on` COUNT(CASE....)` style conditional counting queries.
+- Fixed a memory usage and performance bug which was causing some `render` API calls to timeout.
 
 #### **1.1.4** — Released May 16, 2016
 
@@ -14,7 +23,6 @@ The latest version of the MapD Platform is 1.1.4.
 - Fixed issue with queries returning empty result sets.
 - More conservative tuple threshold for compaction, fixing count overflow on large tables.
 - Reduced memory fragmentation for long-running servers.
-
 
 #### **1.1.3** — Released May 9, 2016
 
