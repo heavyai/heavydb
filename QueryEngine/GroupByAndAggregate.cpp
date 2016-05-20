@@ -1582,28 +1582,21 @@ void GroupByAndAggregate::patchGroupbyCall(llvm::CallInst* call_site) {
   }
 
   const auto arg_count = call_site->getNumArgOperands();
-  const int32_t new_size_quad = query_mem_desc_.getRowSize() / sizeof(int64_t);
+  const int32_t new_size_quad = static_cast<int32_t>(query_mem_desc_.getRowSize() / sizeof(int64_t));
   std::vector<llvm::Value*> args;
-  size_t arg_idx = 0;
-  auto arg_iter = func->arg_begin();
-  if (func_name == "get_group_value_one_key") {
-    // param 7
-    for (arg_idx = 0; arg_idx < 6; ++arg_idx, ++arg_iter) {
+  size_t arg_idx{0};
+  bool found{false};
+  for (const auto& arg : func->args()) {
+    if (arg.getName() == "row_size_quad") {
+      args.push_back(LL_INT(new_size_quad));
+      found = true;
+    } else {
       args.push_back(call_site->getArgOperand(arg_idx));
     }
-  } else {
-    // param 5
-    for (arg_idx = 0; arg_idx < 4; ++arg_idx, ++arg_iter) {
-      args.push_back(call_site->getArgOperand(arg_idx));
-    }
+    ++arg_idx;
   }
-  CHECK(arg_iter->getName() == "row_size_quad");
-  CHECK_LT(arg_idx, arg_count);
-  args.push_back(LL_INT(new_size_quad));
-  ++arg_idx;
-  for (; arg_idx < arg_count; ++arg_idx) {
-    args.push_back(call_site->getArgOperand(arg_idx));
-  }
+  CHECK_EQ(true, found);
+  CHECK_EQ(arg_count, arg_idx);
   llvm::ReplaceInstWithInst(call_site, llvm::CallInst::Create(func, args));
 }
 
