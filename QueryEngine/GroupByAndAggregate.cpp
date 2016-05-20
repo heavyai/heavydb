@@ -2095,9 +2095,9 @@ void GroupByAndAggregate::codegenAggCalls(const std::tuple<llvm::Value*, llvm::V
         CHECK_EQ("agg_count_distinct", agg_base_name);
         codegenCountDistinct(target_idx, target_expr, agg_args, query_mem_desc_, co.device_type_);
       } else {
+        const auto& arg_ti = agg_info.agg_arg_type;
         if (need_skip_null) {
           agg_fname += "_skip_val";
-          const auto& arg_ti = agg_info.agg_arg_type;
           auto null_lv =
               executor_->castToTypeIn(arg_ti.is_fp() ? static_cast<llvm::Value*>(executor_->inlineFpNull(arg_ti))
                                                      : static_cast<llvm::Value*>(executor_->inlineIntNull(arg_ti)),
@@ -2105,6 +2105,10 @@ void GroupByAndAggregate::codegenAggCalls(const std::tuple<llvm::Value*, llvm::V
           agg_args.push_back(null_lv);
         }
         if (!agg_info.is_distinct) {
+          if (g_enable_watchdog && co.device_type_ == ExecutorDeviceType::GPU && query_mem_desc_.threadsShareMemory() &&
+              (agg_info.agg_kind == kAVG || agg_info.agg_kind == kSUM) && arg_ti.is_fp()) {
+            throw WatchdogException("AVG / SUM on float / double would be slow");
+          }
           emitCall((co.device_type_ == ExecutorDeviceType::GPU && query_mem_desc_.threadsShareMemory())
                        ? agg_fname + "_shared"
                        : agg_fname,
