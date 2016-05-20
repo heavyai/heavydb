@@ -1018,8 +1018,6 @@ GroupByAndAggregate::GroupByAndAggregate(Executor* executor,
   query_mem_desc_.output_columnar = output_columnar_;
 }
 
-namespace {
-
 int8_t pick_target_compact_width(const RelAlgExecutionUnit& ra_exe_unit,
                                  const std::vector<Fragmenter_Namespace::TableInfo>& query_infos) {
   for (const auto groupby_expr : ra_exe_unit.groupby_exprs) {
@@ -1054,8 +1052,6 @@ int8_t pick_target_compact_width(const RelAlgExecutionUnit& ra_exe_unit,
   }
   return total_tuples <= static_cast<size_t>(std::numeric_limits<int32_t>::max()) ? 4 : 8;
 }
-
-}  // namespace
 
 void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
                                                     const size_t max_groups_buffer_entry_count,
