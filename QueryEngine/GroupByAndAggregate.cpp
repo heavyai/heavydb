@@ -928,7 +928,7 @@ GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getColRangeInfo() {
         if (col_range_info.hash_type_ != GroupByColRangeType::OneColKnownRange) {
           return {GroupByColRangeType::MultiCol, 0, 0, 0, false};
         }
-        auto crt_col_cardinality = col_range_info.max - col_range_info.min + 1 + (col_range_info.has_nulls ? 1 : 0);
+        auto crt_col_cardinality = getBucketedCardinality(col_range_info);
         CHECK_GT(crt_col_cardinality, 0);
         cardinality *= crt_col_cardinality;
         if (col_range_info.has_nulls) {
@@ -968,6 +968,14 @@ GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getExprRangeInfo(const An
   }
   CHECK(false);
   return {GroupByColRangeType::Scan, 0, 0, 0, false};
+}
+
+int64_t GroupByAndAggregate::getBucketedCardinality(const GroupByAndAggregate::ColRangeInfo& col_range_info) {
+  auto crt_col_cardinality = col_range_info.max - col_range_info.min;
+  if (col_range_info.bucket) {
+    crt_col_cardinality /= col_range_info.bucket;
+  }
+  return crt_col_cardinality + (1 + (col_range_info.has_nulls ? 1 : 0));
 }
 
 #define LL_CONTEXT executor_->cgen_state_->context_
@@ -1154,11 +1162,7 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
         bool keyless =
             (!sort_on_gpu_hint || !many_entries(col_range_info.max, col_range_info.min, col_range_info.bucket)) &&
             !col_range_info.bucket && keyless_info.keyless;
-        size_t bin_count = col_range_info.max - col_range_info.min;
-        if (col_range_info.bucket) {
-          bin_count /= col_range_info.bucket;
-        }
-        bin_count += (1 + (col_range_info.has_nulls ? 1 : 0));
+        size_t bin_count = getBucketedCardinality(col_range_info);
         const size_t interleaved_max_threshold{20};
         bool interleaved_bins = keyless && (bin_count <= interleaved_max_threshold);
         query_mem_desc_ = {executor_,
@@ -1771,8 +1775,13 @@ std::tuple<llvm::Value*, llvm::Value*> GroupByAndAggregate::codegenGroupBy(const
       int32_t subkey_idx = 0;
       for (const auto group_expr : ra_exe_unit_.groupby_exprs) {
         auto col_range_info = getExprRangeInfo(group_expr.get());
-        const auto group_expr_lv = executor_->groupByColumnCodegen(
-            group_expr.get(), co, col_range_info.has_nulls, col_range_info.max + 1, diamond_codegen, array_loops);
+        const auto group_expr_lv =
+            executor_->groupByColumnCodegen(group_expr.get(),
+                                            co,
+                                            col_range_info.has_nulls,
+                                            col_range_info.max + (col_range_info.bucket ? col_range_info.bucket : 1),
+                                            diamond_codegen,
+                                            array_loops);
         // store the sub-key to the buffer
         LL_BUILDER.CreateStore(group_expr_lv, LL_BUILDER.CreateGEP(group_key, LL_INT(subkey_idx++)));
       }
@@ -1825,13 +1834,16 @@ llvm::Function* GroupByAndAggregate::codegenPerfectHashFunction() {
   for (const auto groupby_expr : ra_exe_unit_.groupby_exprs) {
     auto col_range_info = getExprRangeInfo(groupby_expr.get());
     CHECK(col_range_info.hash_type_ == GroupByColRangeType::OneColKnownRange);
-    cardinalities.push_back(col_range_info.max - col_range_info.min + 1);
+    cardinalities.push_back(getBucketedCardinality(col_range_info));
   }
   size_t dim_idx = 0;
   for (const auto groupby_expr : ra_exe_unit_.groupby_exprs) {
     auto key_comp_lv = key_hash_func_builder.CreateLoad(key_hash_func_builder.CreateGEP(key_buff_lv, LL_INT(dim_idx)));
     auto col_range_info = getExprRangeInfo(groupby_expr.get());
     auto crt_term_lv = key_hash_func_builder.CreateSub(key_comp_lv, LL_INT(col_range_info.min));
+    if (col_range_info.bucket) {
+      crt_term_lv = key_hash_func_builder.CreateSDiv(crt_term_lv, LL_INT(col_range_info.bucket));
+    }
     for (size_t prev_dim_idx = 0; prev_dim_idx < dim_idx; ++prev_dim_idx) {
       crt_term_lv = key_hash_func_builder.CreateMul(crt_term_lv, LL_INT(cardinalities[prev_dim_idx]));
     }

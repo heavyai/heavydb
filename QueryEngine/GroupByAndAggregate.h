@@ -666,6 +666,8 @@ class GroupByAndAggregate {
 
   GroupByAndAggregate::ColRangeInfo getExprRangeInfo(const Analyzer::Expr* expr) const;
 
+  static int64_t getBucketedCardinality(const GroupByAndAggregate::ColRangeInfo& col_range_info);
+
   struct KeylessInfo {
     const bool keyless;
     const int32_t target_index;
