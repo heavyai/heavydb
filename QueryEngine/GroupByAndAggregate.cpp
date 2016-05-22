@@ -2058,9 +2058,10 @@ bool GroupByAndAggregate::codegenAggCalls(const std::tuple<llvm::Value*, llvm::V
     }
     const auto agg_fn_names = agg_fn_base_names(agg_info);
     auto target_lvs = codegenAggArg(target_expr, co);
-    if (executor_->plan_state_->isLazyFetchColumn(target_expr) || !is_group_by) {
-      // TODO(miyu): could be smaller than qword
-      query_mem_desc_.agg_col_widths[agg_out_off].compact = sizeof(int64_t);
+    if ((executor_->plan_state_->isLazyFetchColumn(target_expr) || !is_group_by) &&
+        static_cast<size_t>(query_mem_desc_.agg_col_widths[agg_out_off].compact) < sizeof(int64_t)) {
+      // TODO(miyu): enable different byte width in the layout w/o padding
+      throw CompilationRetryNoCompaction();
     }
     llvm::Value* str_target_lv{nullptr};
     if (target_lvs.size() == 3) {

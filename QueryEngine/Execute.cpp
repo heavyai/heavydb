@@ -2920,8 +2920,13 @@ ResultRows Executor::executeWorkUnit(int32_t* error_code,
                                          row_set_mem_owner,
                                          error_code,
                                          render_allocator_map);
-    crt_min_byte_width =
-        execution_dispatch.compile(join_info, max_groups_buffer_entry_guess, crt_min_byte_width, options);
+    try {
+      crt_min_byte_width =
+          execution_dispatch.compile(join_info, max_groups_buffer_entry_guess, crt_min_byte_width, options);
+    } catch (CompilationRetryNoCompaction&) {
+      crt_min_byte_width = MAX_BYTE_WIDTH_SUPPORTED;
+      continue;
+    }
 
     if (options.just_explain) {
       return executeExplain(execution_dispatch);

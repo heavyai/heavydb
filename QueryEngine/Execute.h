@@ -197,6 +197,11 @@ class TooManyLiterals : public std::runtime_error {
   TooManyLiterals() : std::runtime_error("Too many literals in the query") {}
 };
 
+class CompilationRetryNoCompaction : public std::runtime_error {
+ public:
+  CompilationRetryNoCompaction() : std::runtime_error("CompilationRetryNoCompaction") {}
+};
+
 struct RelAlgExecutionUnit {
   const std::vector<InputDescriptor> input_descs;
   const std::list<InputColDescriptor> input_col_descs;
