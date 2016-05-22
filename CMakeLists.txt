@@ -137,9 +137,9 @@ if(ENABLE_RAVM)
     add_definitions("-DHAVE_RAVM")
 endif()
 
-option(ENABLE_OVERFLOW "Enable Overflow/Underflow Detection" OFF)
-if(ENABLE_OVERFLOW)
-    add_definitions("-DDETECT_OVERFLOW")
+option(ENABLE_COMPACTION "Enable Compaction and Overflow/Underflow Detection" OFF)
+if(ENABLE_COMPACTION)
+    add_definitions("-DENABLE_COMPACTION")
 endif()
 
 option(ENABLE_PROFILER "Enable google perftools" OFF)
