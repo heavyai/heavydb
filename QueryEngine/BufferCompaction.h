@@ -16,7 +16,7 @@
 #include <algorithm>
 #endif
 
-#define SMALLEST_BYTE_WIDTH_TO_COMPACT 8
+#define MAX_BYTE_WIDTH_SUPPORTED 8
 
 #ifndef __CUDACC__
 inline unsigned compact_byte_width(unsigned qw, unsigned low_bound) {

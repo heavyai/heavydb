@@ -385,7 +385,7 @@ ResultRows Executor::execute(const Planner::RootPlan* root_plan,
                                     root_plan->get_plan_dest() == Planner::RootPlan::kEXPLAIN,
                                     allow_loop_joins,
                                     render_allocator_map.get());
-#ifdef DETECT_OVERFLOW
+#ifdef ENABLE_COMPACTION
       if (error_code == ERR_OVERFLOW_OR_UNDERFLOW) {
         throw std::runtime_error("Overflow or underflow");
       }

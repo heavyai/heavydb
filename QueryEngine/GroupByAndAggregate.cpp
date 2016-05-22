@@ -15,7 +15,7 @@
 #include "DataMgr/BufferMgr/BufferMgr.h"
 
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
-#ifdef DETECT_OVERFLOW
+#ifdef ENABLE_COMPACTION
 #include <llvm/IR/MDBuilder.h>
 #endif
 
@@ -1923,7 +1923,7 @@ llvm::Value* GroupByAndAggregate::convertNullIfAny(const SQLTypeInfo& arg_type,
   }
 }
 
-#ifdef DETECT_OVERFLOW
+#ifdef ENABLE_COMPACTION
 bool GroupByAndAggregate::detectOverflowAndUnderflow(llvm::Value* agg_col_val,
                                                      llvm::Value* val,
                                                      const TargetInfo& agg_info,
@@ -1974,7 +1974,7 @@ bool GroupByAndAggregate::detectOverflowAndUnderflow(llvm::Value* agg_col_val,
   LL_BUILDER.SetInsertPoint(bb_pass);
   return true;
 }
-#endif  // DETECT_OVERFLOW
+#endif  // ENABLE_COMPACTION
 
 bool GroupByAndAggregate::codegenAggCalls(const std::tuple<llvm::Value*, llvm::Value*>& agg_out_ptr_w_idx,
                                           const std::vector<llvm::Value*>& agg_out_vec,
@@ -2175,7 +2175,7 @@ bool GroupByAndAggregate::codegenAggCalls(const std::tuple<llvm::Value*, llvm::V
                                       : agg_fname,
                                   agg_args);
 
-#ifdef DETECT_OVERFLOW
+#ifdef ENABLE_COMPACTION
           CHECK_LE(size_t(2), agg_args.size());
           can_return_error =
               detectOverflowAndUnderflow(old_val, agg_args[1], agg_info, chosen_bytes, need_skip_null, agg_base_name);
