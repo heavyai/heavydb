@@ -119,7 +119,7 @@ DEVICE static LikeStatus string_like_match(const char* str,
 
       while (slen > 0) {
         bool match = false;
-        if (firstpat == '[') {
+        if (firstpat == '[' && *p != escape_char) {
           const char* pp = p + 1;
           int pplen = plen - 1;
           while (pplen > 0 && *pp != ']') {

@@ -9,6 +9,8 @@ TEST(Utils, StringLike) {
   ASSERT_TRUE(string_like("abcxyzefgXYZhij", 15, "%xyz%XYZ%", 9, '\\'));
   ASSERT_TRUE(string_like("abcxOzefgXpZhij", 15, "%x_z%X_Z%", 9, '\\'));
   ASSERT_TRUE(string_like("abc100%efg", 10, "%100!%___", 9, '!'));
+  ASSERT_TRUE(string_like("[ hello", 7, "%\\[%", 4, '\\'));
+  ASSERT_TRUE(string_like("hello [", 7, "%\\[%", 4, '\\'));
 }
 
 int main(int argc, char* argv[]) {
