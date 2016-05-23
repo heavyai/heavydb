@@ -3602,6 +3602,10 @@ int32_t Executor::executePlanWithoutGroupBy(const CompilationResult& compilation
                                             const uint32_t start_rowid,
                                             const uint32_t num_tables,
                                             RenderAllocatorMap* render_allocator_map) noexcept {
+  if (col_buffers.empty()) {
+    results = ResultRows({}, {}, nullptr, nullptr, {}, device_type);
+    return 0;
+  }
   int32_t error_code = device_type == ExecutorDeviceType::GPU ? 0 : start_rowid;
   std::vector<int64_t*> out_vec;
   const auto hoist_buf = serializeLiterals(compilation_result.literal_values, device_id);
