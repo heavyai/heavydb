@@ -945,6 +945,8 @@ TEST(Select, DivByZero) {
     EXPECT_THROW(run_multiple_agg("SELECT COUNT(*) FROM test GROUP BY y / (x - x);", dt), std::runtime_error);
     EXPECT_THROW(run_multiple_agg("SELECT COUNT(*) FROM test GROUP BY z, y / (x - x);", dt), std::runtime_error);
     EXPECT_THROW(run_multiple_agg("SELECT COUNT(*) FROM test GROUP BY MOD(y , (x - x));", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("SELECT SUM(x) / SUM(CASE WHEN str = 'none' THEN y ELSE 0 END) FROM test;", dt),
+                 std::runtime_error);
   }
 }
 
