@@ -99,6 +99,7 @@ add_custom_command(
         ${MAPD_HOST_COMPILER_FLAG}
         -D__STDC_LIMIT_MACROS
         -D__STDC_CONSTANT_MACROS
+        -D_FORCE_INLINES
         ${MAPD_DEFINITIONS}
         -arch sm_30
         -lib ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.o
@@ -113,6 +114,7 @@ add_custom_command(
         ${MAPD_HOST_COMPILER_FLAG}
         -D__STDC_LIMIT_MACROS
         -D__STDC_CONSTANT_MACROS
+        -D_FORCE_INLINES
         ${MAPD_DEFINITIONS}
         --device-link
         -arch sm_30
@@ -126,6 +128,7 @@ add_custom_command(
     ARGS
         ${MAPD_HOST_COMPILER_FLAG}
         -O3
+        -D_FORCE_INLINES
         ${MAPD_DEFINITIONS}
         -arch sm_30
         -c ${CMAKE_CURRENT_SOURCE_DIR}/InPlaceSortImpl.cu
@@ -138,6 +141,7 @@ add_custom_command(
     ARGS
         ${MAPD_HOST_COMPILER_FLAG}
         -DEXECUTOR_RT
+        -D_FORCE_INLINES
         ${MAPD_DEFINITIONS}
         -O3
         -arch sm_30
@@ -150,6 +154,7 @@ add_custom_command(
     COMMAND nvcc
     ARGS
         ${MAPD_HOST_COMPILER_FLAG}
+        -D_FORCE_INLINES
         ${MAPD_DEFINITIONS}
         -O3
         -arch sm_30
