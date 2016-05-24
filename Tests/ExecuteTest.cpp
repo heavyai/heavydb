@@ -712,6 +712,48 @@ TEST(Select, StringsNoneEncoding) {
   }
 }
 
+namespace {
+
+void check_date_trunc_groups(const ResultRows& rows) {
+  {
+    const auto crt_row = rows.getNextRow(true, true);
+    CHECK(!crt_row.empty());
+    CHECK_EQ(size_t(3), crt_row.size());
+    const auto sv0 = v<int64_t>(crt_row[0]);
+    ASSERT_EQ(int64_t(936144000), sv0);
+    const auto sv1 = boost::get<std::string>(v<NullableString>(crt_row[1]));
+    ASSERT_EQ("foo", sv1);
+    const auto sv2 = v<int64_t>(crt_row[2]);
+    ASSERT_EQ(g_num_rows, sv2);
+  }
+  {
+    const auto crt_row = rows.getNextRow(true, true);
+    CHECK(!crt_row.empty());
+    CHECK_EQ(size_t(3), crt_row.size());
+    const auto sv0 = v<int64_t>(crt_row[0]);
+    ASSERT_EQ(inline_int_null_val(rows.getColType(0)), sv0);
+    const auto sv1 = boost::get<std::string>(v<NullableString>(crt_row[1]));
+    ASSERT_EQ("bar", sv1);
+    const auto sv2 = v<int64_t>(crt_row[2]);
+    ASSERT_EQ(g_num_rows / 2, sv2);
+  }
+  {
+    const auto crt_row = rows.getNextRow(true, true);
+    CHECK(!crt_row.empty());
+    CHECK_EQ(size_t(3), crt_row.size());
+    const auto sv0 = v<int64_t>(crt_row[0]);
+    ASSERT_EQ(int64_t(936144000), sv0);
+    const auto sv1 = boost::get<std::string>(v<NullableString>(crt_row[1]));
+    ASSERT_EQ("baz", sv1);
+    const auto sv2 = v<int64_t>(crt_row[2]);
+    ASSERT_EQ(g_num_rows / 2, sv2);
+  }
+  const auto crt_row = rows.getNextRow(true, true);
+  CHECK(crt_row.empty());
+}
+
+}  // namespace
+
 TEST(Select, Time) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -726,7 +768,7 @@ TEST(Select, Time) {
     ASSERT_EQ(2 * g_num_rows, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE m < NOW();", dt)));
     ASSERT_EQ(2 * g_num_rows,
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE m > timestamp(0) '2014-12-13T000000';", dt)));
-    ASSERT_EQ(2 * g_num_rows,
+    ASSERT_EQ(g_num_rows + g_num_rows / 2,
               v<int64_t>(run_simple_agg(
                   "SELECT COUNT(*) FROM test WHERE CAST(o AS TIMESTAMP) > timestamp(0) '1999-09-08T160000';", dt)));
     ASSERT_EQ(0,
@@ -918,6 +960,11 @@ TEST(Select, Time) {
     ASSERT_EQ(1440180000L,
               v<int64_t>(run_simple_agg(
                   "select DATE_TRUNC (QUARTERDAY, CAST('2015-08-21T23:59:59' AS timestamp)) FROM test limit 1;", dt)));
+    const auto rows = run_multiple_agg(
+        "SELECT DATE_TRUNC(month, CAST(o AS TIMESTAMP(0))) AS key0, str AS key1, COUNT(*) AS val FROM test GROUP BY "
+        "key0, key1 ORDER BY val DESC, key1;",
+        dt);
+    check_date_trunc_groups(rows);
   }
 }
 
@@ -1441,7 +1488,7 @@ int main(int argc, char** argv) {
     const std::string insert_query{
         "INSERT INTO test VALUES(8, 43, 102, 1002, 'f', 1.2, 2.4, 'bar', 'real_bar', '2014-12-13 22:23:15', "
         "'15:13:14', "
-        "'1999-09-09', 10, 222.2, null, null);"};
+        "NULL, 10, 222.2, null, null);"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
