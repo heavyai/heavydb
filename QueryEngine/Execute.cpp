@@ -3610,6 +3610,23 @@ void Executor::buildSelectedFragsMapping(std::vector<std::vector<size_t>>& selec
   }
 }
 
+namespace {
+
+class OutVecOwner {
+ public:
+  OutVecOwner(const std::vector<int64_t*>& out_vec) : out_vec_(out_vec) {}
+  ~OutVecOwner() {
+    for (auto out : out_vec_) {
+      delete[] out;
+    }
+  }
+
+ private:
+  std::vector<int64_t*> out_vec_;
+};
+
+}  // namespace
+
 int32_t Executor::executePlanWithoutGroupBy(const CompilationResult& compilation_result,
                                             const bool hoist_literals,
                                             ResultRows& results,
@@ -3671,6 +3688,7 @@ int32_t Executor::executePlanWithoutGroupBy(const CompilationResult& compilation
       LOG(FATAL) << "Error launching the GPU kernel: " << e.what();
     }
   }
+  OutVecOwner output_memory_scope(out_vec);
   if (error_code == Executor::ERR_OVERFLOW_OR_UNDERFLOW || error_code == Executor::ERR_DIV_BY_ZERO) {
     return error_code;
   }
@@ -3708,9 +3726,6 @@ int32_t Executor::executePlanWithoutGroupBy(const CompilationResult& compilation
       results.addValue(val1);
     }
     ++out_vec_idx;
-  }
-  for (auto out : out_vec) {
-    delete[] out;
   }
   return error_code;
 }
