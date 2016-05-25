@@ -1123,11 +1123,11 @@ void Importer::importShapefile() {
 void Importer::readVerticesFromShapefilePolygonZ(const std::string& fileName,
                                                  SHPObject* polygonObj,
                                                  PolyData2d& poly,
-                                                 bool hasZ) {
+                                                 bool) {
   int partType, startIdx, endIdx;
   int id = polygonObj->nShapeId;
   int numParts = polygonObj->nParts;
-  double x, y, z;
+  double x, y;
 
   std::vector<std::shared_ptr<p2t::Point>> vertexShPtrs;
   std::vector<p2t::Point*> vertexPtrs;
@@ -1159,9 +1159,6 @@ void Importer::readVerticesFromShapefilePolygonZ(const std::string& fileName,
       auto xy = geotransform("4326", "900913", polygonObj->padfX[j], polygonObj->padfY[j]);
       x = xy.first;
       y = xy.second;
-      if (hasZ) {
-        z = polygonObj->padfZ[j];
-      }
 
       if (!vertexPtrs.size() || vertexPtrs.back()->x != x || vertexPtrs.back()->y != y) {
         vertexShPtrs.emplace_back(new p2t::Point(x, y));
@@ -1288,7 +1285,7 @@ const std::list<ColumnDescriptor> Importer::shapefileToColumnDescriptors(const s
 
   size_t nFields = DBFGetFieldCount(dbfHandle);
 
-  for (auto i = 0; i < nFields; i++) {
+  for (size_t i = 0; i < nFields; i++) {
     char name[12];
     int colLen;
     int decimalLen;
