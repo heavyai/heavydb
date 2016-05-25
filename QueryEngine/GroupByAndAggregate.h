@@ -695,7 +695,7 @@ class GroupByAndAggregate {
                                 const SQLTypeInfo& agg_type,
                                 const size_t chosen_bytes,
                                 llvm::Value* target);
-#ifdef ENABLE_COMPACTION
+#ifdef OVERFLOW
   bool detectOverflowAndUnderflow(llvm::Value* agg_addr,
                                   llvm::Value* val,
                                   const TargetInfo& agg_info,
