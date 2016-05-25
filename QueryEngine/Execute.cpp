@@ -3649,6 +3649,7 @@ int32_t Executor::executePlanWithoutGroupBy(const CompilationResult& compilation
   std::vector<int64_t*> out_vec;
   const auto hoist_buf = serializeLiterals(compilation_result.literal_values, device_id);
   const auto join_hash_table_ptr = getJoinHashTablePtr(device_type, device_id);
+  std::unique_ptr<OutVecOwner> output_memory_scope;
   if (device_type == ExecutorDeviceType::CPU) {
     out_vec = launch_query_cpu_code(compilation_result.native_functions,
                                     hoist_literals,
@@ -3664,6 +3665,7 @@ int32_t Executor::executePlanWithoutGroupBy(const CompilationResult& compilation
                                     &error_code,
                                     num_tables,
                                     join_hash_table_ptr);
+    output_memory_scope.reset(new OutVecOwner(out_vec));
   } else {
     try {
       out_vec = query_exe_context->launchGpuCode(compilation_result.native_functions,
@@ -3682,13 +3684,13 @@ int32_t Executor::executePlanWithoutGroupBy(const CompilationResult& compilation
                                                  num_tables,
                                                  join_hash_table_ptr,
                                                  render_allocator_map);
+      output_memory_scope.reset(new OutVecOwner(out_vec));
     } catch (const OutOfMemory&) {
       return ERR_OUT_OF_GPU_MEM;
     } catch (const std::exception& e) {
       LOG(FATAL) << "Error launching the GPU kernel: " << e.what();
     }
   }
-  OutVecOwner output_memory_scope(out_vec);
   if (error_code == Executor::ERR_OVERFLOW_OR_UNDERFLOW || error_code == Executor::ERR_DIV_BY_ZERO) {
     return error_code;
   }
