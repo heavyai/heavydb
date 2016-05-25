@@ -631,6 +631,9 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const std::vector<voi
         break;
       }
     }
+    if (*error_code > 0) {
+        return {};
+    }
     for (size_t i = 0; i < agg_col_count; ++i) {
       int64_t* host_out_vec = new int64_t[block_size_x * grid_size_x * sizeof(int64_t) * num_fragments];
       copy_from_gpu(data_mgr,
