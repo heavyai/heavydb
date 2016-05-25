@@ -112,21 +112,6 @@ inline double inline_fp_null_val(const SQLTypeInfo& ti) {
   }
 }
 
-inline std::pair<int64_t, int64_t> inline_int_max_min(const size_t byte_width) {
-  switch (byte_width) {
-    case 1:
-      return std::make_pair(std::numeric_limits<int8_t>::max(), std::numeric_limits<int8_t>::min());
-    case 2:
-      return std::make_pair(std::numeric_limits<int16_t>::max(), std::numeric_limits<int16_t>::min());
-    case 4:
-      return std::make_pair(std::numeric_limits<int32_t>::max(), std::numeric_limits<int32_t>::min());
-    case 8:
-      return std::make_pair(std::numeric_limits<int64_t>::max(), std::numeric_limits<int64_t>::min());
-    default:
-      CHECK(false);
-  }
-}
-
 inline size_t get_bit_width(const SQLTypeInfo& ti) {
   const auto int_type = ti.is_decimal() ? decimal_to_int_type(ti) : ti.get_type();
   switch (int_type) {
@@ -695,15 +680,8 @@ class GroupByAndAggregate {
                                 const SQLTypeInfo& agg_type,
                                 const size_t chosen_bytes,
                                 llvm::Value* target);
-#ifdef OVERFLOW
-  bool detectOverflowAndUnderflow(llvm::Value* agg_addr,
-                                  llvm::Value* val,
-                                  const TargetInfo& agg_info,
-                                  const size_t chosen_bytes,
-                                  const bool need_skip_null,
-                                  const std::string& agg_base_name);
-#endif
-  bool codegenAggCalls(const std::tuple<llvm::Value*, llvm::Value*>& agg_out_ptr_w_idx,
+
+  void codegenAggCalls(const std::tuple<llvm::Value*, llvm::Value*>& agg_out_ptr_w_idx,
                        const std::vector<llvm::Value*>& agg_out_vec,
                        const CompilationOptions&);
 
