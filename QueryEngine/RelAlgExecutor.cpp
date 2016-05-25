@@ -522,7 +522,7 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(const RelAlgExecutor::WorkUnit& 
   if (!error_code) {
     return result;
   }
-#ifdef ENABLE_COMPACTION
+#ifdef DETECT_OVERFLOW
   if (error_code == Executor::ERR_OVERFLOW_OR_UNDERFLOW) {
     throw std::runtime_error("Overflow or underflow");
   }
