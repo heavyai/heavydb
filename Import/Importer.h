@@ -479,7 +479,7 @@ struct PolyData2d {
       coords.push_back(coords[idx_x]);
       coords.push_back(coords[idx_y]);
     }
-    lineDrawItem.count += 6;
+    lineDrawItem.count += 3;
 
     // add an empty coord as a separator
     // coords.push_back(-10000000.0);
