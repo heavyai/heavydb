@@ -510,6 +510,7 @@ TEST(Select, CountDistinct) {
     c("SELECT COUNT(*), MIN(x), MAX(x), AVG(y), SUM(z) AS n, COUNT(distinct x + 1) FROM test GROUP BY y ORDER BY n;",
       dt);
     c("SELECT COUNT(distinct dd) AS n FROM test GROUP BY y ORDER BY n;", dt);
+    c("SELECT z, str, AVG(z), COUNT(distinct z) FROM test GROUP BY z, str;", dt);
     EXPECT_THROW(run_multiple_agg("SELECT COUNT(distinct real_str) FROM test;", dt), std::runtime_error);
   }
 }

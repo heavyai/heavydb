@@ -444,7 +444,6 @@ void ResultRows::reduceInPlaceDispatch(int64_t** group_by_buffer_ptr,
         other_off +=
             isometric_layout ? consist_col_offset : query_mem_desc_in.getNextColOffInBytes(other_ptr, bin, col_idx + 1);
         other_next_ptr = reinterpret_cast<const int8_t*>(other_group_by_buffer) + other_off;
-        ++col_idx;
       }
 
       switch (chosen_bytes) {
@@ -485,7 +484,7 @@ void ResultRows::reduceInPlaceDispatch(int64_t** group_by_buffer_ptr,
       }
       other_off +=
           isometric_layout ? consist_col_offset : query_mem_desc_in.getNextColOffInBytes(other_ptr, bin, col_idx);
-      ++col_idx;
+      col_idx += (agg_info.is_agg && agg_info.agg_kind == kAVG) ? 2 : 1;
       ++target_idx;
     }
   }
@@ -1469,9 +1468,6 @@ bool ResultRows::fetchLazyOrBuildRow(std::vector<TargetValue>& row,
               }
             }
           }
-          if (next_col_ptr) {
-            col_ptr = next_col_ptr;
-          }
         } else {
           auto build_itv = [is_real_string, is_array, &agg_info](const int64_t val1, const int64_t val2) {
             if (agg_info.agg_kind == kAVG) {
@@ -1496,6 +1492,9 @@ bool ResultRows::fetchLazyOrBuildRow(std::vector<TargetValue>& row,
               translate_strings,
               executor_,
               row_set_mem_owner_));
+        }
+        if (next_col_ptr) {
+          col_ptr = next_col_ptr;
         }
       }
       ++crt_row_buff_idx_;
