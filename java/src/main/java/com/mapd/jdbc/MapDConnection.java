@@ -112,7 +112,7 @@ public class MapDConnection implements java.sql.Connection {
 
   @Override
   public void setAutoCommit(boolean autoCommit) throws SQLException { //logger.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet.");
+    // we always autocommit per statement
   }
 
   @Override
@@ -122,7 +122,7 @@ public class MapDConnection implements java.sql.Connection {
 
   @Override
   public void commit() throws SQLException { //logger.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet.");
+    //noop
   }
 
   @Override
@@ -203,7 +203,7 @@ public class MapDConnection implements java.sql.Connection {
 
   @Override
   public PreparedStatement prepareStatement(String sql, int resultSetType, int resultSetConcurrency) throws SQLException { //logger.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet.");
+    return new MapDPreparedStatement(sql, session, client);
   }
 
   @Override
