@@ -144,6 +144,35 @@ void QueryExecutionContext::initColumnPerRow(int8_t* row_ptr,
   }
 }
 
+namespace {
+
+void check_total_bitmap_memory(const std::vector<ssize_t>& agg_bitmap_size,
+                               const int32_t groups_buffer_entry_count,
+                               const bool keyless,
+                               const size_t warp_size) {
+  if (g_enable_watchdog) {
+    checked_int64_t total_bits_per_group = 0;
+    for (const auto col_bitmap_size : agg_bitmap_size) {
+      if (col_bitmap_size <= 0) {
+        continue;
+      }
+      total_bits_per_group += col_bitmap_size;
+    }
+    try {
+      const auto total_bits = total_bits_per_group * groups_buffer_entry_count * (keyless ? warp_size : 1);
+      // Need to use OutOfHostMemory since it's the only type of exception
+      // QueryExecutionContext is supposed to throw.
+      if (total_bits >= 8 * 1000 * 1000 * 1000L) {
+        throw OutOfHostMemory(static_cast<int64_t>(total_bits) / 8);
+      }
+    } catch (...) {
+      throw OutOfHostMemory(std::numeric_limits<int64_t>::max() / 8);
+    }
+  }
+}
+
+}  // namespace
+
 void QueryExecutionContext::initGroups(int64_t* groups_buffer,
                                        const int64_t* init_vals,
                                        const int32_t groups_buffer_entry_count,
@@ -155,6 +184,8 @@ void QueryExecutionContext::initGroups(int64_t* groups_buffer,
 
   auto agg_bitmap_size = allocateCountDistinctBuffers(true);
   auto buffer_ptr = reinterpret_cast<int8_t*>(groups_buffer);
+
+  check_total_bitmap_memory(agg_bitmap_size, groups_buffer_entry_count, keyless, warp_size);
 
   if (keyless) {
     CHECK(warp_size >= 1);
