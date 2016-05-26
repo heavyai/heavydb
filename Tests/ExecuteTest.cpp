@@ -634,6 +634,7 @@ TEST(Select, Case) {
     c("SELECT CASE WHEN y > 40 THEN x END, x FROM test;", dt);
     c("SELECT COUNT(CASE WHEN str = 'foo' THEN 1 END) FROM test;", dt);
     c("SELECT COUNT(CASE WHEN str = 'foo' THEN 1 ELSE NULL END) FROM test;", dt);
+    c("SELECT CASE WHEN x BETWEEN 1 AND 3 THEN y ELSE y END AS foobar FROM test ORDER BY foobar DESC;", dt);
   }
 }
 

@@ -1307,6 +1307,7 @@ llvm::Value* Executor::codegenCase(const Analyzer::CaseExpr* case_expr,
   std::vector<llvm::BasicBlock*> then_bbs;
   const auto end_bb = llvm::BasicBlock::Create(cgen_state_->context_, "end_case", cgen_state_->row_func_);
   for (const auto& expr_pair : expr_pair_list) {
+    FetchCacheAnchor branch_anchor(cgen_state_.get());
     const auto when_lv = toBool(codegen(expr_pair.first.get(), true, co).front());
     const auto cmp_bb = cgen_state_->ir_builder_.GetInsertBlock();
     const auto then_bb = llvm::BasicBlock::Create(cgen_state_->context_, "then_case", cgen_state_->row_func_);
