@@ -84,7 +84,7 @@ std::string build_poly_render_query(const rapidjson::Document& render_config) {
   CHECK_EQ(unsigned(1), data_descs.Size());
   const auto& data_desc = *(data_descs.Begin());
   CHECK_EQ("polys", json_str(field(data_desc, "format")));
-  const auto polyTableName = json_str(field(data_desc, "dbTableName"));
+  const auto polyTableName = json_str(field(data_desc, "polyTableName"));
   const auto factsTableName = json_str(field(data_desc, "factsTableName"));
   const auto filterExpr = json_str(field(data_desc, "filterExpr"));
   const auto aggExpr = json_str(field(data_desc, "aggExpr"));
