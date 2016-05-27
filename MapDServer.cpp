@@ -78,6 +78,23 @@ bool is_poly_render(const rapidjson::Document& render_config) {
   return false;
 }
 
+std::string build_poly_render_query(const rapidjson::Document& render_config) {
+  const auto& data_descs = field(render_config, "data");
+  CHECK(data_descs.IsArray());
+  CHECK_EQ(unsigned(1), data_descs.Size());
+  const auto& data_desc = *(data_descs.Begin());
+  CHECK_EQ("polys", json_str(field(data_desc, "format")));
+  const auto polyTableName = json_str(field(data_desc, "dbTableName"));
+  const auto factsTableName = json_str(field(data_desc, "factsTableName"));
+  const auto filterExpr = json_str(field(data_desc, "filterExpr"));
+  const auto aggExpr = json_str(field(data_desc, "aggExpr"));
+  const auto factsKey = json_str(field(data_desc, "factsKey"));
+  const auto polysKey = json_str(field(data_desc, "polysKey"));
+  return "SELECT " + polyTableName + ".rowid, " + aggExpr + " FROM " + factsTableName + ", " + polyTableName +
+         " WHERE " + filterExpr + (filterExpr.empty() ? "" : " AND ") + factsTableName + "." + factsKey + " = " +
+         polyTableName + "." + polysKey + " GROUP BY " + polyTableName + ".rowid;";
+}
+
 std::string image_from_rendered_rows(const ResultRows& rendered_results) {
   const auto img_row = rendered_results.getNextRow(false, false);
   CHECK_EQ(size_t(1), img_row.size());
@@ -859,7 +876,7 @@ class MapDHandler : virtual public MapDIf {
 
   void render(TRenderResult& _return,
               const TSessionId session,
-              const std::string& query_str,
+              const std::string& query_str_in,
               const std::string& render_type,
               const std::string& nonce) {
     _return.total_time_ms = measure<>::execution([&]() {
@@ -869,6 +886,12 @@ class MapDHandler : virtual public MapDIf {
         ex.error_msg = "Backend rendering is disabled.";
         LOG(ERROR) << ex.error_msg;
         throw ex;
+      }
+      auto query_str = query_str_in;
+      rapidjson::Document render_config;
+      render_config.Parse(render_type.c_str());
+      if (is_poly_render(render_config)) {
+        query_str = build_poly_render_query(render_config);
       }
       std::lock_guard<std::mutex> render_lock(render_mutex_);
       mapd_shared_lock<mapd_shared_mutex> read_lock(sessions_mutex_);
