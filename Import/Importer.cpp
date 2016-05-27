@@ -1252,7 +1252,7 @@ void Importer::readVerticesFromShapefile(const std::string& fileName, std::vecto
 SQLTypes dbf_to_type(const DBFFieldType& dbf_type) {
   switch (dbf_type) {
     case FTString:
-      return kVARCHAR;
+      return kTEXT;
     case FTInteger:
       return kINT;
     case FTDouble:
@@ -1295,9 +1295,8 @@ const std::list<ColumnDescriptor> Importer::shapefileToColumnDescriptors(const s
     cd.columnName = name;
     SQLTypeInfo ti;
     ti.set_type(type);
-    if (type == kVARCHAR) {
+    if (type == kTEXT) {
       ti.set_compression(kENCODING_DICT);
-      ti.set_dimension(colLen);
       ti.set_comp_param(32);
     }
     if (type == kDECIMAL) {
