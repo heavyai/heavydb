@@ -388,7 +388,8 @@ class MapDHandler : virtual public MapDIf {
                    const bool column_format,
                    const std::string& nonce) {
     std::unique_ptr<std::lock_guard<std::mutex>> render_lock;
-    if (enable_rendering_) {
+    ParserWrapper pw{query_str};
+    if (enable_rendering_ && !pw.is_ddl && !pw.is_update_dml) {
       render_lock.reset(new std::lock_guard<std::mutex>(render_mutex_));
     }
     const auto session_info = get_session(session);
