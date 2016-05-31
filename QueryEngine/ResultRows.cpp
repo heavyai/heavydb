@@ -62,12 +62,10 @@ ResultRows::ResultRows(const QueryMemoryDescriptor& query_mem_desc,
 }
 
 namespace {
-enum {
-  min_check_flag = false,
-  max_check_flag = false,
-  sum_check_flag = true,
-};
-}
+const bool min_check_flag = false;
+const bool max_check_flag = false;
+const bool sum_check_flag = true;
+}  // namespace
 
 #define AGGREGATE_ONE_VALUE(agg_kind__, val_ptr__, other_ptr__, chosen_bytes__, agg_info__)                            \
   do {                                                                                                                 \
