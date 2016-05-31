@@ -61,6 +61,14 @@ ResultRows::ResultRows(const QueryMemoryDescriptor& query_mem_desc,
   moveToBegin();
 }
 
+namespace {
+enum {
+  min_check_flag = false,
+  max_check_flag = false,
+  sum_check_flag = true,
+};
+}
+
 #define AGGREGATE_ONE_VALUE(agg_kind__, val_ptr__, other_ptr__, chosen_bytes__, agg_info__)                            \
   do {                                                                                                                 \
     const auto sql_type = get_compact_type(agg_info__);                                                                \
@@ -75,7 +83,7 @@ ResultRows::ResultRows(const QueryMemoryDescriptor& query_mem_desc,
       if (chosen_bytes__ == sizeof(int32_t)) {                                                                         \
         auto val_ptr = reinterpret_cast<int32_t*>(val_ptr__);                                                          \
         auto other_ptr = reinterpret_cast<const int32_t*>(other_ptr__);                                                \
-        if (std::string(#agg_kind__) == "sum" &&                                                                       \
+        if (agg_kind__##_check_flag &&                                                                                \
             detect_overflow_and_underflow(*val_ptr, *other_ptr, false, int32_t(0), sql_type)) {                        \
           throw OverflowOrUnderflow();                                                                                 \
         }                                                                                                              \
@@ -83,7 +91,7 @@ ResultRows::ResultRows(const QueryMemoryDescriptor& query_mem_desc,
       } else {                                                                                                         \
         auto val_ptr = reinterpret_cast<int64_t*>(val_ptr__);                                                          \
         auto other_ptr = reinterpret_cast<const int64_t*>(other_ptr__);                                                \
-        if (std::string(#agg_kind__) == "sum" &&                                                                       \
+        if (agg_kind__##_check_flag &&                                                                                 \
             detect_overflow_and_underflow(*val_ptr, *other_ptr, false, int64_t(0), sql_type)) {                        \
           throw OverflowOrUnderflow();                                                                                 \
         }                                                                                                              \
@@ -111,7 +119,7 @@ ResultRows::ResultRows(const QueryMemoryDescriptor& query_mem_desc,
           auto val_ptr = reinterpret_cast<int32_t*>(val_ptr__);                                                  \
           auto other_ptr = reinterpret_cast<const int32_t*>(other_ptr__);                                        \
           const auto null_val = static_cast<int32_t>(init_val__);                                                \
-          if (std::string(#agg_kind__) == "sum" &&                                                               \
+          if (agg_kind__##_check_flag &&                                                                         \
               detect_overflow_and_underflow(*val_ptr, *other_ptr, true, null_val, sql_type)) {                   \
             throw OverflowOrUnderflow();                                                                         \
           }                                                                                                      \
@@ -120,7 +128,7 @@ ResultRows::ResultRows(const QueryMemoryDescriptor& query_mem_desc,
           auto val_ptr = reinterpret_cast<int64_t*>(val_ptr__);                                                  \
           auto other_ptr = reinterpret_cast<const int64_t*>(other_ptr__);                                        \
           const auto null_val = static_cast<int64_t>(init_val__);                                                \
-          if (std::string(#agg_kind__) == "sum" &&                                                               \
+          if (agg_kind__##_check_flag &&                                                                         \
               detect_overflow_and_underflow(*val_ptr, *other_ptr, true, null_val, sql_type)) {                   \
             throw OverflowOrUnderflow();                                                                         \
           }                                                                                                      \
