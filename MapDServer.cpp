@@ -34,6 +34,7 @@
 #include "Shared/measure.h"
 #include "Shared/scope.h"
 
+#include <boost/algorithm/string/replace.hpp>
 #include <boost/program_options.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/tokenizer.hpp>
@@ -93,6 +94,46 @@ std::string build_poly_render_query(const rapidjson::Document& render_config) {
   return "SELECT " + polyTableName + ".rowid, " + aggExpr + " FROM " + factsTableName + ", " + polyTableName +
          " WHERE " + filterExpr + (filterExpr.empty() ? "" : " AND ") + factsTableName + "." + factsKey + " = " +
          polyTableName + "." + polysKey + " GROUP BY " + polyTableName + ".rowid;";
+}
+
+std::string transform_to_poly_render_query(const std::string& query_str, const rapidjson::Document& render_config) {
+  const auto& data_descs = field(render_config, "data");
+  CHECK(data_descs.IsArray());
+  CHECK_EQ(unsigned(1), data_descs.Size());
+  const auto& data_desc = *(data_descs.Begin());
+  CHECK_EQ("polys", json_str(field(data_desc, "format")));
+  auto result = query_str;
+  const auto polyTableName = json_str(field(data_desc, "polyTableName"));
+  const auto polysKey = json_str(field(data_desc, "polysKey"));
+  std::string groupby_expr;
+  {
+    boost::regex group_expr{R"(group\s+by\s+([^(\s|;|,)]+))", boost::regex::extended | boost::regex::icase};
+    boost::smatch what;
+    CHECK(boost::regex_search(result, what, group_expr));
+    groupby_expr = what[1];
+    boost::ireplace_all(result, std::string(what[1]), polyTableName + ".rowid");
+  }
+  CHECK(!groupby_expr.empty());
+  const auto join_filter = groupby_expr + " = " + polyTableName + "." + polysKey;
+  {
+    boost::regex where_expr(R"(\s+where\s+(.*)\s+group\s+by)", boost::regex::extended | boost::regex::icase);
+    boost::smatch what_where;
+    boost::regex from_expr{R"(\s+from\s+([^\s]+)\s+)", boost::regex::extended | boost::regex::icase};
+    boost::smatch what_from;
+    if (boost::regex_search(result, what_where, where_expr)) {
+      result.replace(
+          what_where.position(), what_where.length(), " WHERE " + what_where[1] + " AND " + join_filter + " GROUP BY");
+      CHECK(boost::regex_search(result, what_from, from_expr));
+      result.replace(
+          what_from.position(), what_from.length(), " FROM " + std::string(what_from[1]) + ", " + polyTableName + " ");
+    } else {
+      CHECK(boost::regex_search(result, what_from, from_expr));
+      result.replace(what_from.position(),
+                     what_from.length(),
+                     " FROM " + std::string(what_from[1]) + ", " + polyTableName + " WHERE " + join_filter + " ");
+    }
+  }
+  return result;
 }
 
 std::string image_from_rendered_rows(const ResultRows& rendered_results) {
@@ -892,7 +933,16 @@ class MapDHandler : virtual public MapDIf {
       rapidjson::Document render_config;
       render_config.Parse(render_type.c_str());
       if (is_poly_render(render_config)) {
-        query_str = build_poly_render_query(render_config);
+        const auto& data_descs = field(render_config, "data");
+        CHECK(data_descs.IsArray());
+        CHECK_EQ(unsigned(1), data_descs.Size());
+        const auto& data_desc = *(data_descs.Begin());
+        CHECK_EQ("polys", json_str(field(data_desc, "format")));
+        if (data_desc.HasMember("factsKey")) {
+          query_str = build_poly_render_query(render_config);
+        } else {
+          query_str = transform_to_poly_render_query(query_str, render_config);
+        }
       }
       std::lock_guard<std::mutex> render_lock(render_mutex_);
       mapd_shared_lock<mapd_shared_mutex> read_lock(sessions_mutex_);
