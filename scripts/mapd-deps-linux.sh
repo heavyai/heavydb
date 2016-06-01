@@ -3,7 +3,8 @@
 set -e
 set -x
 
-PREFIX=${MAPD_PATH:="/usr/local/mapd-deps"}
+SUFFIX=${SUFFIX:=$(date +%Y%m%d)}
+PREFIX=${MAPD_PATH:="/usr/local/mapd-deps/$SUFFIX"}
 sudo mkdir -p $PREFIX
 sudo chown -R $USER $PREFIX
 
@@ -153,3 +154,6 @@ download_make_install http://download.sourceforge.net/libpng/libpng-1.6.21.tar.x
 download https://storage.googleapis.com/golang/go1.6.2.linux-amd64.tar.gz
 extract go1.6.2.linux-amd64.tar.gz
 mv go $PREFIX
+
+sed -e "s|%MAPD_DEPS_ROOT%|$PREFIX|g" mapd-deps.modulefile.in > mapd-deps-$SUFFIX.modulefile
+sed -e "s|%MAPD_DEPS_ROOT%|$PREFIX|g" mapd-deps.sh.in > mapd-deps-$SUFFIX.sh

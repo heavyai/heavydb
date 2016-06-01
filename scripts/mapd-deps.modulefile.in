@@ -1,0 +1,28 @@
+#%Module 1.0
+#
+# MapD dependencies module for use with 'environment-modules' package:
+#
+
+set root %MAPD_DEPS_ROOT%
+
+prepend-path LD_LIBRARY_PATH $root/lib64
+prepend-path LD_LIBRARY_PATH $root/lib
+prepend-path LIBRARY_PATH $root/lib64
+prepend-path LIBRARY_PATH $root/lib
+prepend-path C_INCLUDE_PATH $root/include
+prepend-path CXX_INCLUDE_PATH $root/include
+prepend-path PATH $root/bin
+
+
+setenv BOOST_ROOT $root
+setenv BOOSTROOT $root
+setenv BOOST_DIR $root
+setenv BOOSTDIR $root
+setenv BOOST_INCLUDEDIR $root/include
+setenv BOOST_LIBRARYDIR $root/lib
+
+setenv CC $root/bin/gcc
+setenv CXX $root/bin/g++
+
+prepend-path PATH $root/go/bin
+setenv GOROOT $root/go
