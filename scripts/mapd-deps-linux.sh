@@ -43,8 +43,8 @@ download_make_install() {
 # note: if gmp fails on POWER8:
 # wget https://gmplib.org/repo/gmp/raw-rev/4a6d258b467f
 # patch -p1 < 4a6d258b467f
-download_make_install https://gmplib.org/download/gmp/gmp-6.0.0a.tar.xz gmp-6.0.0
-download_make_install http://www.mpfr.org/mpfr-current/mpfr-3.1.3.tar.xz "" "--with-gmp=$PREFIX"
+download_make_install https://gmplib.org/download/gmp/gmp-6.1.0.tar.xz
+download_make_install http://www.mpfr.org/mpfr-current/mpfr-3.1.4.tar.xz "" "--with-gmp=$PREFIX"
 download_make_install ftp://ftp.gnu.org/gnu/mpc/mpc-1.0.3.tar.gz "" "--with-gmp=$PREFIX"
 download_make_install ftp://ftp.gnu.org/gnu/autoconf/autoconf-2.69.tar.xz # "" "--build=powerpc64le-unknown-linux-gnu"
 download_make_install ftp://ftp.gnu.org/gnu/automake/automake-1.14.1.tar.xz
@@ -96,7 +96,7 @@ download_make_install https://flexpp-bisonpp.googlecode.com/files/bisonpp-1.21-4
 
 download_make_install https://github.com/google/glog/archive/v0.3.4.tar.gz glog-0.3.4 # --build=powerpc64le-unknown-linux-gnu"
 
-download_make_install ftp://ftp.cwru.edu/pub/bash/readline-6.3.tar.gz
+download_make_install ftp://ftp.gnu.org/gnu/readline/readline-6.3.tar.gz
 
 download http://downloads.sourceforge.net/project/boost/boost/1.57.0/boost_1_57_0.tar.bz2
 extract boost_1_57_0.tar.bz2
