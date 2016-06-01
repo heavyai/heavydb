@@ -144,15 +144,11 @@ download https://sourceforge.net/projects/glew/files/glew/1.13.0/glew-1.13.0.tgz
 extract glew-1.13.0.tgz
 pushd glew-1.13.0
 makej DESTDIR=$PREFIX GLEW_DEST="" install
-popd
-
-download https://github.com/glfw/glfw/releases/download/3.1.2/glfw-3.1.2.zip
-unzip glfw-3.1.2.zip
-mkdir -p glfw-3.1.2/build
-pushd glfw-3.1.2/build
-cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$PREFIX ..
-makej
-make install
+makej DESTDIR=$PREFIX GLEW_DEST="" install.mx
 popd
 
 download_make_install http://download.sourceforge.net/libpng/libpng-1.6.21.tar.xz
+
+download https://storage.googleapis.com/golang/go1.6.2.linux-amd64.tar.gz
+extract go1.6.2.linux-amd64.tar.gz
+mv go $PREFIX
