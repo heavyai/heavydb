@@ -88,7 +88,7 @@ makej
 make install PREFIX=$PREFIX
 popd
 
-download_make_install ftp://ftp.gnu.org/pub/gnu/ncurses/ncurses-5.9.tar.gz # "" "--build=powerpc64le-unknown-linux-gnu"
+CFLAGS="-fPIC" download_make_install ftp://ftp.gnu.org/pub/gnu/ncurses/ncurses-5.9.tar.gz # "" "--build=powerpc64le-unknown-linux-gnu"
 
 download_make_install ftp://ftp.gnu.org/gnu/bison/bison-2.5.1.tar.xz # "" "--build=powerpc64le-unknown-linux-gnu"
 
@@ -96,7 +96,7 @@ download_make_install https://flexpp-bisonpp.googlecode.com/files/bisonpp-1.21-4
 
 download_make_install https://github.com/google/glog/archive/v0.3.4.tar.gz glog-0.3.4 # --build=powerpc64le-unknown-linux-gnu"
 
-download_make_install ftp://ftp.gnu.org/gnu/readline/readline-6.3.tar.gz
+CFLAGS="-fPIC" download_make_install ftp://ftp.gnu.org/gnu/readline/readline-6.3.tar.gz
 
 download http://downloads.sourceforge.net/project/boost/boost/1.57.0/boost_1_57_0.tar.bz2
 extract boost_1_57_0.tar.bz2
@@ -137,14 +137,15 @@ popd
 
 # thrift
 download_make_install https://github.com/libevent/libevent/releases/download/release-2.0.22-stable/libevent-2.0.22-stable.tar.gz
-download_make_install http://apache.claz.org/thrift/0.9.3/thrift-0.9.3.tar.gz "" "--with-lua=no --with-python=no --with-php=no --with-boost-libdir=$PREFIX/lib"
+JAVA_PREFIX=$PREFIX/lib download_make_install http://apache.claz.org/thrift/0.9.3/thrift-0.9.3.tar.gz "" "--with-lua=no --with-python=no --with-php=no --with-boost-libdir=$PREFIX/lib"
 
 # backend rendering
-download https://sourceforge.net/projects/glew/files/glew/1.13.0/glew-1.13.0.tgz
+download https://downloads.sourceforge.net/project/glew/glew/1.13.0/glew-1.13.0.tgz
 extract glew-1.13.0.tgz
 pushd glew-1.13.0
-makej DESTDIR=$PREFIX GLEW_DEST="" install
-makej DESTDIR=$PREFIX GLEW_DEST="" install.mx
+make DESTDIR=$PREFIX GLEW_DEST=""
+make DESTDIR=$PREFIX GLEW_DEST="" install
+make DESTDIR=$PREFIX GLEW_DEST="" install.mx
 popd
 
 download_make_install http://download.sourceforge.net/libpng/libpng-1.6.21.tar.xz
