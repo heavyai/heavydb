@@ -62,13 +62,15 @@ ResultRows::ResultRows(const QueryMemoryDescriptor& query_mem_desc,
 }
 
 namespace {
+
 const bool min_check_flag = false;
 const bool max_check_flag = false;
 const bool sum_check_flag = true;
+
 }  // namespace
 
 #define AGGREGATE_ONE_VALUE(agg_kind__, val_ptr__, other_ptr__, chosen_bytes__, agg_info__)                            \
-  do {                                                                                                                 \
+  {                                                                                                                    \
     const auto sql_type = get_compact_type(agg_info__);                                                                \
     if (sql_type.is_fp()) {                                                                                            \
       if (chosen_bytes__ == sizeof(float)) {                                                                           \
@@ -81,7 +83,7 @@ const bool sum_check_flag = true;
       if (chosen_bytes__ == sizeof(int32_t)) {                                                                         \
         auto val_ptr = reinterpret_cast<int32_t*>(val_ptr__);                                                          \
         auto other_ptr = reinterpret_cast<const int32_t*>(other_ptr__);                                                \
-        if (agg_kind__##_check_flag &&                                                                                \
+        if (agg_kind__##_check_flag &&                                                                                 \
             detect_overflow_and_underflow(*val_ptr, *other_ptr, false, int32_t(0), sql_type)) {                        \
           throw OverflowOrUnderflow();                                                                                 \
         }                                                                                                              \
@@ -96,10 +98,10 @@ const bool sum_check_flag = true;
         agg_##agg_kind__(val_ptr, *other_ptr);                                                                         \
       }                                                                                                                \
     }                                                                                                                  \
-  } while (0)
+  }
 
 #define AGGREGATE_ONE_NULLABLE_VALUE(agg_kind__, val_ptr__, other_ptr__, init_val__, chosen_bytes__, agg_info__) \
-  do {                                                                                                           \
+  {                                                                                                              \
     if (agg_info__.skip_null_val) {                                                                              \
       const auto sql_type = get_compact_type(agg_info__);                                                        \
       if (sql_type.is_fp()) {                                                                                    \
@@ -136,7 +138,7 @@ const bool sum_check_flag = true;
     } else {                                                                                                     \
       AGGREGATE_ONE_VALUE(agg_kind__, val_ptr__, other_ptr__, chosen_bytes__, agg_info__);                       \
     }                                                                                                            \
-  } while (0)
+  }
 
 namespace {
 
