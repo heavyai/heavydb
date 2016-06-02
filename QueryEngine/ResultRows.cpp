@@ -7,7 +7,7 @@
 
 #include "../DataMgr/BufferMgr/BufferMgr.h"
 
-#include <thread>
+#include <future>
 
 ResultRows::ResultRows(const QueryMemoryDescriptor& query_mem_desc,
                        const std::vector<Analyzer::Expr*>& targets,
@@ -398,8 +398,7 @@ void ResultRows::reduceInPlaceDispatch(int64_t** group_by_buffer_ptr,
                                        const GroupByColRangeType hash_type,
                                        const QueryMemoryDescriptor& query_mem_desc_in,
                                        const size_t start,
-                                       const size_t end,
-                                       int32_t* error_code) {
+                                       const size_t end) {
   const bool output_columnar{query_mem_desc_in.output_columnar};
   const bool isometric_layout{query_mem_desc_in.isCompactLayoutIsometric()};
   const size_t consist_col_width{query_mem_desc_in.getCompactByteWidth()};
@@ -483,44 +482,40 @@ void ResultRows::reduceInPlaceDispatch(int64_t** group_by_buffer_ptr,
             isometric_layout ? consist_col_offset : query_mem_desc_in.getNextColOffInBytes(other_ptr, bin, col_idx + 1);
         other_next_ptr = reinterpret_cast<const int8_t*>(other_group_by_buffer) + other_off;
       }
-      try {
-        switch (chosen_bytes) {
-          case 4: {
-            if (agg_info.is_agg) {
-              reduceSingleColumn(col_ptr,
-                                 next_col_ptr,
-                                 other_ptr,
-                                 other_next_ptr,
-                                 agg_init_vals_[col_idx],
-                                 target_idx,
-                                 chosen_bytes,
-                                 next_chosen_bytes);
-            } else {
-              *reinterpret_cast<int32_t*>(col_ptr) = static_cast<int32_t>(other_val);
-            }
-            break;
+
+      switch (chosen_bytes) {
+        case 4: {
+          if (agg_info.is_agg) {
+            reduceSingleColumn(col_ptr,
+                               next_col_ptr,
+                               other_ptr,
+                               other_next_ptr,
+                               agg_init_vals_[col_idx],
+                               target_idx,
+                               chosen_bytes,
+                               next_chosen_bytes);
+          } else {
+            *reinterpret_cast<int32_t*>(col_ptr) = static_cast<int32_t>(other_val);
           }
-          case 8: {
-            if (agg_info.is_agg) {
-              reduceSingleColumn(col_ptr,
-                                 next_col_ptr,
-                                 other_ptr,
-                                 other_next_ptr,
-                                 agg_init_vals_[col_idx],
-                                 target_idx,
-                                 chosen_bytes,
-                                 next_chosen_bytes);
-            } else {
-              *reinterpret_cast<int64_t*>(col_ptr) = other_val;
-            }
-            break;
-          }
-          default:
-            CHECK(false);
+          break;
         }
-      } catch (const OverflowOrUnderflow&) {
-        *error_code = Executor::ERR_OVERFLOW_OR_UNDERFLOW;
-        return;
+        case 8: {
+          if (agg_info.is_agg) {
+            reduceSingleColumn(col_ptr,
+                               next_col_ptr,
+                               other_ptr,
+                               other_next_ptr,
+                               agg_init_vals_[col_idx],
+                               target_idx,
+                               chosen_bytes,
+                               next_chosen_bytes);
+          } else {
+            *reinterpret_cast<int64_t*>(col_ptr) = other_val;
+          }
+          break;
+        }
+        default:
+          CHECK(false);
       }
       other_off +=
           isometric_layout ? consist_col_offset : query_mem_desc_in.getNextColOffInBytes(other_ptr, bin, col_idx);
@@ -530,12 +525,12 @@ void ResultRows::reduceInPlaceDispatch(int64_t** group_by_buffer_ptr,
   }
 }
 
-int32_t ResultRows::reduceInPlace(int64_t** group_by_buffer_ptr,
-                                  const int64_t* other_group_by_buffer,
-                                  const int32_t groups_buffer_entry_count,
-                                  const int32_t other_groups_buffer_entry_count,
-                                  const GroupByColRangeType hash_type,
-                                  const QueryMemoryDescriptor& query_mem_desc_in) {
+void ResultRows::reduceInPlace(int64_t** group_by_buffer_ptr,
+                               const int64_t* other_group_by_buffer,
+                               const int32_t groups_buffer_entry_count,
+                               const int32_t other_groups_buffer_entry_count,
+                               const GroupByColRangeType hash_type,
+                               const QueryMemoryDescriptor& query_mem_desc_in) {
   const auto available_cpus = cpu_threads();
   CHECK_LT(0, available_cpus);
   const size_t stride = (other_groups_buffer_entry_count + (available_cpus - 1)) / available_cpus;
@@ -543,8 +538,7 @@ int32_t ResultRows::reduceInPlace(int64_t** group_by_buffer_ptr,
                              hash_type == GroupByColRangeType::OneColKnownRange && stride > 1000;
   CHECK_LE(other_groups_buffer_entry_count, groups_buffer_entry_count);
   if (multithreaded) {
-    std::vector<int32_t> error_codes(available_cpus, 0);
-    std::vector<std::thread> reducer_threads;
+    std::vector<std::future<void>> reducer_threads;
     for (size_t tidx = 0,
                 start = 0,
                 end = std::min(start + stride, static_cast<size_t>(other_groups_buffer_entry_count));
@@ -552,37 +546,27 @@ int32_t ResultRows::reduceInPlace(int64_t** group_by_buffer_ptr,
          ++tidx,
                 start = std::min(start + stride, static_cast<size_t>(other_groups_buffer_entry_count)),
                 end = std::min(end + stride, static_cast<size_t>(other_groups_buffer_entry_count))) {
-      reducer_threads.push_back(std::thread(&ResultRows::reduceInPlaceDispatch,
-                                            this,
-                                            group_by_buffer_ptr,
-                                            other_group_by_buffer,
-                                            groups_buffer_entry_count,
-                                            hash_type,
-                                            query_mem_desc_in,
-                                            start,
-                                            end,
-                                            &error_codes[tidx]));
+      reducer_threads.push_back(std::async(&ResultRows::reduceInPlaceDispatch,
+                                           this,
+                                           group_by_buffer_ptr,
+                                           other_group_by_buffer,
+                                           groups_buffer_entry_count,
+                                           hash_type,
+                                           query_mem_desc_in,
+                                           start,
+                                           end));
     }
     for (auto& child : reducer_threads) {
-      child.join();
+      child.get();
     }
-    for (const auto err : error_codes) {
-      if (err) {
-        return err;
-      }
-    }
-    return 0;
   } else {
-    int32_t error_code{0};
     reduceInPlaceDispatch(group_by_buffer_ptr,
                           other_group_by_buffer,
                           groups_buffer_entry_count,
                           hash_type,
                           query_mem_desc_in,
                           0,
-                          other_groups_buffer_entry_count,
-                          &error_code);
-    return error_code;
+                          other_groups_buffer_entry_count);
   }
 }
 
@@ -590,8 +574,7 @@ void ResultRows::reduceDispatch(int64_t* group_by_buffer,
                                 const int64_t* other_group_by_buffer,
                                 const QueryMemoryDescriptor& query_mem_desc_in,
                                 const size_t start,
-                                const size_t end,
-                                int32_t* error_code) {
+                                const size_t end) {
   if (start >= end) {
     return;
   }
@@ -634,19 +617,14 @@ void ResultRows::reduceDispatch(int64_t* group_by_buffer,
 
       for (size_t warp_idx = 0, row_base_off = bin_base_off; warp_idx < static_cast<size_t>(warp_count_);
            ++warp_idx, row_base_off += row_size) {
-        try {
-          reduceSingleColumn(&crt_results[row_base_off],
-                             crt_next_result_ptr,
-                             &new_results[row_base_off],
-                             new_next_result_ptr,
-                             agg_init_vals_[agg_col_idx],
-                             target_index,
-                             chosen_bytes,
-                             next_chosen_bytes);
-        } catch (const OverflowOrUnderflow&) {
-          *error_code = Executor::ERR_OVERFLOW_OR_UNDERFLOW;
-          return;
-        }
+        reduceSingleColumn(&crt_results[row_base_off],
+                           crt_next_result_ptr,
+                           &new_results[row_base_off],
+                           new_next_result_ptr,
+                           agg_init_vals_[agg_col_idx],
+                           target_index,
+                           chosen_bytes,
+                           next_chosen_bytes);
         if (kAVG == agg_info.agg_kind) {
           crt_next_result_ptr += row_size;
           new_next_result_ptr += row_size;
@@ -662,20 +640,19 @@ void ResultRows::reduceDispatch(int64_t* group_by_buffer,
   }
 }
 
-int32_t ResultRows::reduce(const ResultRows& other_results,
-                           const QueryMemoryDescriptor& query_mem_desc,
-                           const bool output_columnar) {
+void ResultRows::reduce(const ResultRows& other_results,
+                        const QueryMemoryDescriptor& query_mem_desc,
+                        const bool output_columnar) {
   if (other_results.definitelyHasNoRows()) {
-    return 0;
+    return;
   }
   if (definitelyHasNoRows()) {
     *this = other_results;
-    return 0;
+    return;
   }
 
   const size_t consist_col_width{query_mem_desc.getCompactByteWidth()};
   CHECK_EQ(output_columnar_, query_mem_desc.output_columnar);
-  int32_t error_code{0};
 
   if (group_by_buffer_ && !in_place_) {
     CHECK(!query_mem_desc.sortOnGpu());
@@ -688,40 +665,28 @@ int32_t ResultRows::reduce(const ResultRows& other_results,
     const size_t stride = (groups_buffer_entry_count_ + (available_cpus - 1)) / available_cpus;
     const bool multithreaded = query_mem_desc.isCompactLayoutIsometric() && stride > 1000;
     if (multithreaded) {
-      std::vector<int32_t> error_codes(available_cpus, 0);
-      std::vector<std::thread> reducer_threads;
+      std::vector<std::future<void>> reducer_threads;
       for (size_t tidx = 0, start = 0, end = std::min(start + stride, groups_buffer_entry_count_);
            tidx < static_cast<size_t>(available_cpus);
            ++tidx,
                   start = std::min(start + stride, groups_buffer_entry_count_),
                   end = std::min(end + stride, groups_buffer_entry_count_)) {
-        reducer_threads.push_back(std::thread(&ResultRows::reduceDispatch,
-                                              this,
-                                              group_by_buffer_,
-                                              other_results.group_by_buffer_,
-                                              query_mem_desc,
-                                              start,
-                                              end,
-                                              &error_codes[tidx]));
+        reducer_threads.push_back(std::async(&ResultRows::reduceDispatch,
+                                             this,
+                                             group_by_buffer_,
+                                             other_results.group_by_buffer_,
+                                             query_mem_desc,
+                                             start,
+                                             end));
       }
       for (auto& child : reducer_threads) {
-        child.join();
+        child.get();
       }
-      for (const auto err : error_codes) {
-        if (err) {
-          return err;
-        }
-      }
-      return 0;
     } else {
-      reduceDispatch(group_by_buffer_,
-                     other_results.group_by_buffer_,
-                     query_mem_desc,
-                     size_t(0),
-                     groups_buffer_entry_count_,
-                     &error_code);
-      return error_code;
+      reduceDispatch(
+          group_by_buffer_, other_results.group_by_buffer_, query_mem_desc, size_t(0), groups_buffer_entry_count_);
     }
+    return;
   }
 
   if (simple_keys_.empty() && multi_keys_.empty() && !in_place_) {
@@ -731,18 +696,14 @@ int32_t ResultRows::reduce(const ResultRows& other_results,
     auto& crt_results = target_values_.front();
     const auto& new_results = other_results.target_values_.front();
     for (size_t agg_col_idx = 0; agg_col_idx < colCount(); ++agg_col_idx) {
-      try {
-        reduceSingleColumn(reinterpret_cast<int8_t*>(&crt_results[agg_col_idx].i1),
-                           reinterpret_cast<int8_t*>(&crt_results[agg_col_idx].i2),
-                           reinterpret_cast<const int8_t*>(&new_results[agg_col_idx].i1),
-                           reinterpret_cast<const int8_t*>(&new_results[agg_col_idx].i2),
-                           get_initial_val(targets_[agg_col_idx], consist_col_width),
-                           agg_col_idx);
-      } catch (const OverflowOrUnderflow&) {
-        return Executor::ERR_OVERFLOW_OR_UNDERFLOW;
-      }
+      reduceSingleColumn(reinterpret_cast<int8_t*>(&crt_results[agg_col_idx].i1),
+                         reinterpret_cast<int8_t*>(&crt_results[agg_col_idx].i2),
+                         reinterpret_cast<const int8_t*>(&new_results[agg_col_idx].i1),
+                         reinterpret_cast<const int8_t*>(&new_results[agg_col_idx].i2),
+                         get_initial_val(targets_[agg_col_idx], consist_col_width),
+                         agg_col_idx);
     }
-    return 0;
+    return;
   }
 
   if (!in_place_) {
@@ -763,81 +724,74 @@ int32_t ResultRows::reduce(const ResultRows& other_results,
       CHECK_EQ(size_t(2), in_place_groups_by_buffers_entry_count_.size());
       CHECK_EQ(size_t(2), in_place_group_by_buffers_.size());
       CHECK(!output_columnar_);
-      error_code = reduceInPlace(group_by_buffer_ptr,
-                                 other_group_by_buffer,
-                                 in_place_groups_by_buffers_entry_count_[0],
-                                 other_results.in_place_groups_by_buffers_entry_count_[0],
-                                 GroupByColRangeType::OneColKnownRange,
-                                 query_mem_desc);
-      if (error_code) {
-        return error_code;
-      }
+      reduceInPlace(group_by_buffer_ptr,
+                    other_group_by_buffer,
+                    in_place_groups_by_buffers_entry_count_[0],
+                    other_results.in_place_groups_by_buffers_entry_count_[0],
+                    GroupByColRangeType::OneColKnownRange,
+                    query_mem_desc);
       group_by_buffer_ptr = &in_place_group_by_buffers_[1];
       other_group_by_buffer = other_results.in_place_group_by_buffers_[1];
-      error_code = reduceInPlace(group_by_buffer_ptr,
-                                 other_group_by_buffer,
-                                 in_place_groups_by_buffers_entry_count_[1],
-                                 other_results.in_place_groups_by_buffers_entry_count_[1],
-                                 GroupByColRangeType::MultiCol,
-                                 query_mem_desc);
+      reduceInPlace(group_by_buffer_ptr,
+                    other_group_by_buffer,
+                    in_place_groups_by_buffers_entry_count_[1],
+                    other_results.in_place_groups_by_buffers_entry_count_[1],
+                    GroupByColRangeType::MultiCol,
+                    query_mem_desc);
     } else {
-      error_code = reduceInPlace(group_by_buffer_ptr,
-                                 other_group_by_buffer,
-                                 in_place_groups_by_buffers_entry_count_[0],
-                                 other_results.in_place_groups_by_buffers_entry_count_[0],
-                                 query_mem_desc.hash_type,
-                                 query_mem_desc);
+      reduceInPlace(group_by_buffer_ptr,
+                    other_group_by_buffer,
+                    in_place_groups_by_buffers_entry_count_[0],
+                    other_results.in_place_groups_by_buffers_entry_count_[0],
+                    query_mem_desc.hash_type,
+                    query_mem_desc);
     }
-    return error_code;
+    return;
   }
 
   createReductionMap();
   other_results.createReductionMap();
-  try {
-    for (const auto& kv : other_results.as_map_) {
-      auto it = as_map_.find(kv.first);
-      if (it == as_map_.end()) {
-        as_map_.insert(std::make_pair(kv.first, kv.second));
-        continue;
-      }
-      auto& old_agg_results = it->second;
-      CHECK_EQ(old_agg_results.size(), kv.second.size());
-      const size_t agg_col_count = old_agg_results.size();
-      for (size_t agg_col_idx = 0; agg_col_idx < agg_col_count; ++agg_col_idx) {
+  for (const auto& kv : other_results.as_map_) {
+    auto it = as_map_.find(kv.first);
+    if (it == as_map_.end()) {
+      as_map_.insert(std::make_pair(kv.first, kv.second));
+      continue;
+    }
+    auto& old_agg_results = it->second;
+    CHECK_EQ(old_agg_results.size(), kv.second.size());
+    const size_t agg_col_count = old_agg_results.size();
+    for (size_t agg_col_idx = 0; agg_col_idx < agg_col_count; ++agg_col_idx) {
+      reduceSingleColumn(reinterpret_cast<int8_t*>(&old_agg_results[agg_col_idx].i1),
+                         reinterpret_cast<int8_t*>(&old_agg_results[agg_col_idx].i2),
+                         reinterpret_cast<const int8_t*>(&kv.second[agg_col_idx].i1),
+                         reinterpret_cast<const int8_t*>(&kv.second[agg_col_idx].i2),
+                         get_initial_val(targets_[agg_col_idx], consist_col_width),
+                         agg_col_idx);
+    }
+  }
+  for (const auto& kv : other_results.as_unordered_map_) {
+    auto it = as_unordered_map_.find(kv.first);
+    if (it == as_unordered_map_.end()) {
+      auto it_ok = as_unordered_map_.insert(std::make_pair(kv.first, kv.second));
+      CHECK(it_ok.second);
+      continue;
+    }
+    auto& old_agg_results = it->second;
+    CHECK_EQ(old_agg_results.size(), kv.second.size());
+    const size_t agg_col_count = old_agg_results.size();
+    for (size_t agg_col_idx = 0; agg_col_idx < agg_col_count; ++agg_col_idx) {
+      const auto agg_info = targets_[agg_col_idx];
+      if (agg_info.is_agg) {
         reduceSingleColumn(reinterpret_cast<int8_t*>(&old_agg_results[agg_col_idx].i1),
                            reinterpret_cast<int8_t*>(&old_agg_results[agg_col_idx].i2),
                            reinterpret_cast<const int8_t*>(&kv.second[agg_col_idx].i1),
                            reinterpret_cast<const int8_t*>(&kv.second[agg_col_idx].i2),
-                           get_initial_val(targets_[agg_col_idx], consist_col_width),
+                           get_initial_val(agg_info, consist_col_width),
                            agg_col_idx);
+      } else {
+        old_agg_results[agg_col_idx] = kv.second[agg_col_idx];
       }
     }
-    for (const auto& kv : other_results.as_unordered_map_) {
-      auto it = as_unordered_map_.find(kv.first);
-      if (it == as_unordered_map_.end()) {
-        auto it_ok = as_unordered_map_.insert(std::make_pair(kv.first, kv.second));
-        CHECK(it_ok.second);
-        continue;
-      }
-      auto& old_agg_results = it->second;
-      CHECK_EQ(old_agg_results.size(), kv.second.size());
-      const size_t agg_col_count = old_agg_results.size();
-      for (size_t agg_col_idx = 0; agg_col_idx < agg_col_count; ++agg_col_idx) {
-        const auto agg_info = targets_[agg_col_idx];
-        if (agg_info.is_agg) {
-          reduceSingleColumn(reinterpret_cast<int8_t*>(&old_agg_results[agg_col_idx].i1),
-                             reinterpret_cast<int8_t*>(&old_agg_results[agg_col_idx].i2),
-                             reinterpret_cast<const int8_t*>(&kv.second[agg_col_idx].i1),
-                             reinterpret_cast<const int8_t*>(&kv.second[agg_col_idx].i2),
-                             get_initial_val(agg_info, consist_col_width),
-                             agg_col_idx);
-        } else {
-          old_agg_results[agg_col_idx] = kv.second[agg_col_idx];
-        }
-      }
-    }
-  } catch (const OverflowOrUnderflow&) {
-    error_code = Executor::ERR_OVERFLOW_OR_UNDERFLOW;
   }
 
   CHECK(simple_keys_.empty() != multi_keys_.empty());
@@ -858,7 +812,6 @@ int32_t ResultRows::reduce(const ResultRows& other_results,
       target_values_.push_back(kv.second);
     }
   }
-  return error_code;
 }
 
 namespace {

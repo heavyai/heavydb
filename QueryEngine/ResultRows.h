@@ -653,9 +653,7 @@ class ResultRows {
     }
   }
 
-  int32_t reduce(const ResultRows& other_results,
-                 const QueryMemoryDescriptor& query_mem_desc,
-                 const bool output_columnar);
+  void reduce(const ResultRows& other_results, const QueryMemoryDescriptor& query_mem_desc, const bool output_columnar);
 
   void sort(const std::list<Analyzer::OrderEntry>& order_entries, const bool remove_duplicates, const int64_t top_n);
 
@@ -745,8 +743,7 @@ class ResultRows {
                       const int64_t* other_group_by_buffer,
                       const QueryMemoryDescriptor& query_mem_desc_in,
                       const size_t start,
-                      const size_t end,
-                      int32_t* error_code);
+                      const size_t end);
 
   void reduceInPlaceDispatch(int64_t** group_by_buffer_ptr,
                              const int64_t* other_group_by_buffer,
@@ -754,15 +751,14 @@ class ResultRows {
                              const GroupByColRangeType hash_type,
                              const QueryMemoryDescriptor& query_mem_desc_in,
                              const size_t start,
-                             const size_t end,
-                             int32_t* error_code);
+                             const size_t end);
 
-  int32_t reduceInPlace(int64_t** group_by_buffer_ptr,
-                        const int64_t* other_group_by_buffer,
-                        const int32_t groups_buffer_entry_count,
-                        const int32_t other_groups_buffer_entry_count,
-                        const GroupByColRangeType hash_type,
-                        const QueryMemoryDescriptor& query_mem_desc_in);
+  void reduceInPlace(int64_t** group_by_buffer_ptr,
+                     const int64_t* other_group_by_buffer,
+                     const int32_t groups_buffer_entry_count,
+                     const int32_t other_groups_buffer_entry_count,
+                     const GroupByColRangeType hash_type,
+                     const QueryMemoryDescriptor& query_mem_desc_in);
 
   bool fetchLazyOrBuildRow(std::vector<TargetValue>& row,
                            const std::vector<std::vector<const int8_t*>>& col_buffers,

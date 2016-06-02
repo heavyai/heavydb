@@ -2523,11 +2523,7 @@ ResultRows Executor::reduceMultiDeviceResults(
   auto reduced_results = results_per_device.front().first;
 
   for (size_t i = 1; i < results_per_device.size(); ++i) {
-    const auto error_code = reduced_results.reduce(results_per_device[i].first, query_mem_desc, output_columnar);
-    if (error_code) {
-      CHECK_EQ(error_code, ERR_OVERFLOW_OR_UNDERFLOW);
-      throw OverflowOrUnderflow();
-    }
+    reduced_results.reduce(results_per_device[i].first, query_mem_desc, output_columnar);
   }
 
   row_set_mem_owner->addLiteralStringDict(lit_str_dict_);
