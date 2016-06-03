@@ -11,8 +11,7 @@
 #include "CompilationOptions.h"
 
 #include "../Analyzer/Analyzer.h"
-#include "../Shared/sqldefs.h"
-#include "../Shared/sqltypes.h"
+#include "../Shared/TargetInfo.h"
 #include "../StringDictionary/StringDictionary.h"
 
 #include <boost/noncopyable.hpp>
@@ -49,15 +48,6 @@ struct QueryMemoryDescriptor;
 typedef boost::variant<std::string, void*> NullableString;
 typedef boost::variant<int64_t, double, float, NullableString> ScalarTargetValue;
 typedef boost::variant<ScalarTargetValue, std::vector<ScalarTargetValue>> TargetValue;
-
-struct TargetInfo {
-  bool is_agg;
-  SQLAgg agg_kind;
-  SQLTypeInfo sql_type;
-  SQLTypeInfo agg_arg_type;
-  bool skip_null_val;
-  bool is_distinct;
-};
 
 enum class CountDistinctImplType { Bitmap, StdSet };
 

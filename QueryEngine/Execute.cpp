@@ -6,6 +6,7 @@
 #include "GpuMemUtils.h"
 #include "InPlaceSort.h"
 #include "GroupByAndAggregate.h"
+#include "OutputBufferInitialization.h"
 #include "AggregateUtils.h"
 #include "NvidiaKernel.h"
 #include "QueryTemplateGenerator.h"

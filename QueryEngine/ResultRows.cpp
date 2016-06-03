@@ -3,6 +3,7 @@
 #include "AggregateUtils.h"
 #include "Execute.h"
 #include "InPlaceSort.h"
+#include "OutputBufferInitialization.h"
 
 #include "../DataMgr/BufferMgr/BufferMgr.h"
 

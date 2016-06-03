@@ -6,7 +6,11 @@
 #ifndef QUERYENGINE_SQLTYPESLAYOUT_H
 #define QUERYENGINE_SQLTYPESLAYOUT_H
 
-#include "../Shared/sqltypes.h"
+#include "../Shared/TargetInfo.h"
+
+#include <glog/logging.h>
+
+#include <limits>
 
 class OverflowOrUnderflow : public std::runtime_error {
  public:

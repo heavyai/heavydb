@@ -17,6 +17,7 @@ set(query_engine_source_files
     InValuesBitmap.cpp
     InputMetadata.cpp
     NvidiaKernel.cpp
+    OutputBufferInitialization.cpp
     QueryRewrite.cpp
     QueryTemplateGenerator.cpp
     RelAlgAbstractInterpreter.cpp

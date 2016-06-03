@@ -4,6 +4,7 @@
 #include "ExpressionRange.h"
 #include "InPlaceSort.h"
 #include "GpuInitGroups.h"
+#include "OutputBufferInitialization.h"
 
 #include "Execute.h"
 #include "QueryTemplateGenerator.h"
