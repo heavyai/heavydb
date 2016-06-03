@@ -45,11 +45,6 @@ class WatchdogException : public std::runtime_error {
   WatchdogException(const std::string& cause) : std::runtime_error(cause) {}
 };
 
-class OverflowOrUnderflow : public std::runtime_error {
- public:
-  OverflowOrUnderflow() : std::runtime_error("Overflow or underflow") {}
-};
-
 class Executor;
 
 inline llvm::Type* get_int_type(const int width, llvm::LLVMContext& context) {
@@ -161,30 +156,6 @@ inline const ColumnarResults* rows_to_columnar_results(const ResultRows* rows) {
     col_types.push_back(rows->getColType(i));
   }
   return new ColumnarResults(*rows, rows->colCount(), col_types);
-}
-
-template <typename T>
-inline bool detect_overflow_and_underflow(const T a,
-                                          const T b,
-                                          const bool nullable,
-                                          const T null_val,
-                                          const SQLTypeInfo& ti) {
-#ifdef ENABLE_COMPACTION
-  if (!ti.is_integer()) {
-    return false;
-  }
-  if (nullable) {
-    if (a == null_val || b == null_val) {
-      return false;
-    }
-  }
-  const auto max_intx = std::numeric_limits<T>::max();
-  const auto min_intx = std::numeric_limits<T>::min();
-  if ((b > 0 && a > (max_intx - b)) || (b < 0 && a < (min_intx - b))) {
-    return true;
-  }
-#endif
-  return false;
 }
 
 class CompilationRetryNoLazyFetch : public std::runtime_error {

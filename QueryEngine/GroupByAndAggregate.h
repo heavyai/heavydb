@@ -12,6 +12,8 @@
 #include "../Shared/checked_alloc.h"
 #include "../Shared/sqltypes.h"
 
+#include "SqlTypesLayout.h"
+
 #include <boost/algorithm/string/join.hpp>
 #include <glog/logging.h>
 #include <llvm/IR/Function.h>
@@ -47,21 +49,6 @@ inline bool constrained_not_null(const Analyzer::Expr* expr, const std::list<std
 
 namespace {
 
-inline const SQLTypeInfo& get_compact_type(const TargetInfo& target) {
-  if (!target.is_agg) {
-    return target.sql_type;
-  }
-  const auto agg_type = target.agg_kind;
-  const auto& agg_arg = target.agg_arg_type;
-  if (agg_arg.get_type() == kNULLT) {
-    CHECK_EQ(kCOUNT, agg_type);
-    CHECK(!target.is_distinct);
-    return target.sql_type;
-  }
-
-  return agg_type != kCOUNT ? agg_arg : target.sql_type;
-}
-
 inline void set_compact_type(TargetInfo& target, const SQLTypeInfo& new_type) {
   if (target.is_agg) {
     const auto agg_type = target.agg_kind;
@@ -74,44 +61,6 @@ inline void set_compact_type(TargetInfo& target, const SQLTypeInfo& new_type) {
   target.sql_type = new_type;
 }
 
-inline int64_t inline_int_null_val(const SQLTypeInfo& ti) {
-  auto type = ti.is_decimal() ? decimal_to_int_type(ti) : ti.get_type();
-  if (ti.is_string()) {
-    CHECK_EQ(kENCODING_DICT, ti.get_compression());
-    CHECK_EQ(4, ti.get_size());
-    type = kINT;
-  }
-  switch (type) {
-    case kBOOLEAN:
-      return std::numeric_limits<int8_t>::min();
-    case kSMALLINT:
-      return std::numeric_limits<int16_t>::min();
-    case kINT:
-      return std::numeric_limits<int32_t>::min();
-    case kBIGINT:
-      return std::numeric_limits<int64_t>::min();
-    case kTIMESTAMP:
-    case kTIME:
-    case kDATE:
-      return std::numeric_limits<int64_t>::min();
-    default:
-      CHECK(false);
-  }
-}
-
-inline double inline_fp_null_val(const SQLTypeInfo& ti) {
-  CHECK(ti.is_fp());
-  const auto type = ti.get_type();
-  switch (type) {
-    case kFLOAT:
-      return NULL_FLOAT;
-    case kDOUBLE:
-      return NULL_DOUBLE;
-    default:
-      CHECK(false);
-  }
-}
-
 inline std::pair<int64_t, int64_t> inline_int_max_min(const size_t byte_width) {
   switch (byte_width) {
     case 1:
@@ -122,36 +71,6 @@ inline std::pair<int64_t, int64_t> inline_int_max_min(const size_t byte_width) {
       return std::make_pair(std::numeric_limits<int32_t>::max(), std::numeric_limits<int32_t>::min());
     case 8:
       return std::make_pair(std::numeric_limits<int64_t>::max(), std::numeric_limits<int64_t>::min());
-    default:
-      CHECK(false);
-  }
-}
-
-inline size_t get_bit_width(const SQLTypeInfo& ti) {
-  const auto int_type = ti.is_decimal() ? decimal_to_int_type(ti) : ti.get_type();
-  switch (int_type) {
-    case kBOOLEAN:
-      return 8;
-    case kSMALLINT:
-      return 16;
-    case kINT:
-      return 32;
-    case kBIGINT:
-      return 64;
-    case kFLOAT:
-      return 32;
-    case kDOUBLE:
-      return 64;
-    case kTIME:
-    case kTIMESTAMP:
-    case kDATE:
-      return sizeof(time_t) * 8;
-    case kTEXT:
-    case kVARCHAR:
-    case kCHAR:
-      return 32;
-    case kARRAY:
-      throw std::runtime_error("Projecting on array columns not supported yet.");
     default:
       CHECK(false);
   }
@@ -730,14 +649,6 @@ class GroupByAndAggregate {
 };
 
 namespace {
-
-inline uint64_t exp_to_scale(const unsigned exp) {
-  uint64_t res = 1;
-  for (unsigned i = 0; i < exp; ++i) {
-    res *= 10;
-  }
-  return res;
-}
 
 inline std::vector<Analyzer::Expr*> get_agg_target_exprs(
     const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& target_list) {
