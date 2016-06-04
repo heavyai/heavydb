@@ -104,6 +104,14 @@ std::string transform_to_poly_render_query(const std::string& query_str, const r
   const auto& data_desc = *(data_descs.Begin());
   CHECK_EQ("polys", json_str(field(data_desc, "format")));
   auto result = query_str;
+  {
+    boost::regex aliased_group_expr{R"(\s+([^\s]+)\s+as\s+([^(\s|,)]+))", boost::regex::extended | boost::regex::icase};
+    boost::smatch what;
+    if (boost::regex_search(result, what, aliased_group_expr)) {
+      result.replace(what.position(), what.length(), " " + std::string(what[1]));
+    }
+    boost::ireplace_all(result, std::string(what[2]), std::string(what[1]));
+  }
   const auto polyTableName = json_str(field(data_desc, "dbTableName"));
   const auto polysKey = json_str(field(data_desc, "polysKey"));
   std::string groupby_expr;
