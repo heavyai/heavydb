@@ -678,6 +678,7 @@ TEST(Select, Strings) {
     c("SELECT COUNT(*) FROM test WHERE LENGTH(str) = 3;", dt);
     ASSERT_EQ(2 * g_num_rows, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE CHAR_LENGTH(str) = 3;", dt)));
     ASSERT_EQ(g_num_rows, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE str ILIKE 'f%%';", dt)));
+    ASSERT_EQ(0, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE str ILIKE 'McDonald''s';", dt)));
   }
 }
 

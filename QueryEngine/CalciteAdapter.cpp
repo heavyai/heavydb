@@ -1082,14 +1082,14 @@ std::string pg_shim(const std::string& query) {
     }
   }
   {
-    boost::regex ilike_expr{R"((\s+)([^\s]+)\s+ilike\s+('[^']+')(\s+escape(\s+('[^']+')))?)",
+    boost::regex ilike_expr{R"((\s+)([^\s]+)\s+ilike\s+('([^']+|'')+')(\s+escape(\s+('[^']+')))?)",
                             boost::regex::extended | boost::regex::icase};
     boost::smatch what;
     while (true) {
       if (!boost::regex_search(result, what, ilike_expr)) {
         break;
       }
-      std::string esc = what[6];
+      std::string esc = what[7];
       result.replace(what.position(),
                      what.length(),
                      what[1] + "PG_ILIKE(" + what[2] + ", " + what[3] + (esc.empty() ? "" : ", " + esc) + ")");
