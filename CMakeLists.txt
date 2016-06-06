@@ -135,6 +135,7 @@ endif()
 option(ENABLE_RAVM "Enable RA vm" OFF)
 if(ENABLE_RAVM)
     add_definitions("-DHAVE_RAVM")
+    set(MAPD_PACKAGE_FLAGS "${MAPD_PACKAGE_FLAGS}-ravm")
 endif()
 
 option(ENABLE_COMPACTION "Enable Compaction and Overflow/Underflow Detection" OFF)
