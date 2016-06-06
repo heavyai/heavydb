@@ -3030,11 +3030,17 @@ ResultRows Executor::executeExplain(const ExecutionDispatch& execution_dispatch)
 // to CPU for count distinct and we should probably fix it and remove this.
 ExecutorDeviceType Executor::getDeviceTypeForTargets(const RelAlgExecutionUnit& ra_exe_unit,
                                                      const ExecutorDeviceType requested_device_type) {
-  auto agg_fnames = get_agg_fnames(ra_exe_unit.target_exprs, !ra_exe_unit.groupby_exprs.empty());
-  for (const auto& agg_name : agg_fnames) {
-    // TODO(alex): count distinct can't be executed on the GPU yet, punt to CPU
-    if (agg_name == "agg_count_distinct") {
+  for (const auto target_expr : ra_exe_unit.target_exprs) {
+    const auto agg_info = target_info(target_expr);
+    if (agg_info.is_distinct) {
+      // TODO(alex): count distinct can't be executed on the GPU yet, punt to CPU
+      CHECK_EQ(kCOUNT, agg_info.agg_kind);
       return ExecutorDeviceType::CPU;
+    }
+    if (!ra_exe_unit.groupby_exprs.empty()) {
+      if ((agg_info.agg_kind == kAVG || agg_info.agg_kind == kSUM) && agg_info.agg_arg_type.is_fp()) {
+        return ExecutorDeviceType::CPU;
+      }
     }
   }
   return requested_device_type;
