@@ -68,7 +68,10 @@ std::tuple<const rapidjson::Value*, SQLTypeInfo, SQLTypeInfo> parse_literal(cons
   CHECK(type_precision_it != expr.MemberEnd());
   CHECK(type_precision_it->value.IsInt());
   const int type_precision = type_precision_it->value.GetInt();
-  const auto sql_type = to_sql_type(type_name);
+  auto sql_type = to_sql_type(type_name);
+  if (sql_type == kDECIMAL) {
+    sql_type = kNUMERIC;
+  }
   SQLTypeInfo ti(sql_type, 0, 0, false);
   ti.set_scale(scale);
   ti.set_precision(precision);
@@ -376,7 +379,8 @@ class CalciteAdapter {
     const auto& lit_ti = std::get<1>(parsed_lit);
     const auto json_val = std::get<0>(parsed_lit);
     switch (lit_ti.get_type()) {
-      case kDECIMAL: {
+      case kDECIMAL:
+      case kNUMERIC: {
         CHECK(json_val->IsInt64());
         const auto val = json_val->GetInt64();
         const int precision = lit_ti.get_precision();
