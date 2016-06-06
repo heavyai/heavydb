@@ -1,5 +1,12 @@
 # MapD Platform
-The latest version of the MapD Platform is 1.1.6.
+The latest version of the MapD Platform is 1.1.7.
+
+#### **1.1.7** — Released June 13, 2016
+
+##### Fixed
+- Fixed bug where certain long-running queries would needlessly block others
+- Immerse: fixed a problem where embedding apostrophes or % in filters or custom filters could cause errors
+- Immerse: added MapDCon example for Node.js
 
 #### **1.1.6** — Released May 31, 2016
 
