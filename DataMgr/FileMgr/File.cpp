@@ -5,12 +5,12 @@
  *
  */
 #include <iostream>
-#include <cassert>
 #include <cstdio>
 #include <string>
 #include <stdexcept>
 #include <unistd.h>
 #include "File.h"
+#include <glog/logging.h>
 
 namespace File_Namespace {
 
@@ -18,58 +18,46 @@ FILE* create(const std::string& basePath, const int fileId, const size_t pageSiz
   if (numPages < 1 || pageSize < 1)
     throw std::invalid_argument("Number of pages and page size must be positive integers.");
 
-  FILE* f;
   std::string path(basePath + std::to_string(fileId) + "." + std::to_string(pageSize) +
                    std::string(MAPD_FILE_EXT));  // MAPD_FILE_EXT has preceding "."
-  if ((f = fopen(path.c_str(), "w+b")) == NULL)
-    throw std::runtime_error("Unable to create file");
-
+  FILE *f = fopen(path.c_str(), "w+b");
+  CHECK(f);
   fseek(f, (pageSize * numPages) - 1, SEEK_SET);
   fputc(EOF, f);
   fseek(f, 0, SEEK_SET);  // rewind
-  assert(fileSize(f) == (pageSize * numPages));
+  CHECK_EQ(fileSize(f), pageSize * numPages);
 
   return f;
 }
 
 FILE* create(const std::string& fullPath, const size_t requestedFileSize) {
-  if (requestedFileSize <= 0) {
-    throw std::invalid_argument("Created file size must be > 0");
-  }
-  FILE* f;
-  if ((f = fopen(fullPath.c_str(), "w+b")) == NULL)
-    throw std::runtime_error("Unable to create file");
-
+  CHECK_GE(requestedFileSize, 0);
+  FILE* f = fopen(fullPath.c_str(), "w+b");
+  CHECK(f);
   fseek(f, requestedFileSize - 1, SEEK_SET);
   fputc(EOF, f);
   fseek(f, 0, SEEK_SET);  // rewind
-  assert(fileSize(f) == requestedFileSize);
+  CHECK_EQ(fileSize(f), requestedFileSize);
   return f;
 }
 
 FILE* open(int fileId) {
-  FILE* f;
   std::string s(std::to_string(fileId) + std::string(MAPD_FILE_EXT));
-  f = fopen(s.c_str(), "r+b");  // opens existing file for updates
-  if (f == nullptr)
-    throw std::runtime_error("Unable to open file.");
+  FILE* f = fopen(s.c_str(), "r+b");  // opens existing file for updates
+  CHECK(f);
   return f;
 }
 
 FILE* open(const std::string& path) {
-  FILE* f;
-  f = fopen(path.c_str(), "r+b");  // opens existing file for updates
-  if (f == nullptr)
-    throw std::runtime_error("Unable to open file.");
+  FILE* f = fopen(path.c_str(), "r+b");  // opens existing file for updates
+  CHECK(f);
   return f;
 }
 
 void close(FILE* f) {
-  assert(f);
-  if (fflush(f) != 0)
-    throw std::runtime_error("Unable to flush file.");
-  if (fclose(f) != 0)
-    throw std::runtime_error("Unable to close file.");
+  CHECK(f);
+  CHECK_EQ(fflush(f), 0);
+  CHECK_EQ(fclose(f), 0);
 }
 
 bool removeFile(const std::string basePath, const std::string filename) {
@@ -78,29 +66,19 @@ bool removeFile(const std::string basePath, const std::string filename) {
 }
 
 size_t read(FILE* f, const size_t offset, const size_t size, int8_t* buf) {
-  // assert(f);
-  // assert(buf);
-  // assert(size > 0);
-
   // read "size" bytes from the offset location in the file into the buffer
   fseek(f, offset, SEEK_SET);
   size_t bytesRead = fread(buf, sizeof(int8_t), size, f);
-  // size_t bytesRead = fread(buf, sizeof(int8_t)*size,1, f) * size;
-  if (bytesRead < 1)
-    throw std::runtime_error("Error reading file contents into buffer.");
+  CHECK_EQ(bytesRead, sizeof(int8_t) * size);
   return bytesRead;
 }
 
 size_t write(FILE* f, const size_t offset, const size_t size, int8_t* buf) {
-  // assert(f);
-  // assert(buf);
   // write size bytes from the buffer to the offset location in the file
   fseek(f, offset, SEEK_SET);
   size_t bytesWritten = fwrite(buf, sizeof(int8_t), size, f);
-  // size_t bytesWritten = fwrite(buf, sizeof(int8_t)*size,1, f) * size;
-  if (bytesWritten < 1)
-    throw std::runtime_error("Error writing buffer to file.");
-  fflush(f);
+  CHECK_EQ(bytesWritten, sizeof(int8_t) * size);
+  fflush(f); //needed?
   return bytesWritten;
 }
 
