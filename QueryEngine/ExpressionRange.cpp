@@ -239,9 +239,6 @@ ExpressionRange getExpressionRange(const Analyzer::Constant* constant_expr) {
 namespace {
 
 inline double extract_min_stat_double(const ChunkStats& stats, const SQLTypeInfo& col_ti) {
-  if (stats.has_nulls) {  // clobber the additional information for now
-    return NULL_DOUBLE;
-  }
   return col_ti.get_type() == kDOUBLE ? stats.min.doubleval : stats.min.floatval;
 }
 
@@ -293,11 +290,6 @@ ExpressionRange getExpressionRange(const Analyzer::ColumnVar* col_expr,
       }
       const auto max_it = max_frag->chunkMetadataMap.find(col_id);
       CHECK(max_it != max_frag->chunkMetadataMap.end());
-      if (col_ti.is_fp()) {
-        return ExpressionRange::makeFpRange(extract_min_stat_double(min_it->second.chunkStats, col_ti),
-                                            extract_max_stat_double(max_it->second.chunkStats, col_ti),
-                                            has_nulls);
-      }
       for (const auto& fragment : fragments) {
         const auto it = fragment.chunkMetadataMap.find(col_id);
         if (it != fragment.chunkMetadataMap.end()) {
@@ -305,6 +297,14 @@ ExpressionRange getExpressionRange(const Analyzer::ColumnVar* col_expr,
             has_nulls = true;
           }
         }
+      }
+      if (col_ti.is_fp()) {
+        if (has_nulls) {
+          return ExpressionRange::makeInvalidRange();
+        }
+        return ExpressionRange::makeFpRange(extract_min_stat_double(min_it->second.chunkStats, col_ti),
+                                            extract_max_stat_double(max_it->second.chunkStats, col_ti),
+                                            has_nulls);
       }
       const auto min_val = extract_min_stat(min_it->second.chunkStats, col_ti);
       const auto max_val = extract_max_stat(max_it->second.chunkStats, col_ti);
