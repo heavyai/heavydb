@@ -111,8 +111,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLiteral(const RexLite
   const auto target_ti =
       build_adjusted_type_info(rex_literal->getType(), rex_literal->getTypeScale(), rex_literal->getTypePrecision());
   switch (rex_literal->getType()) {
-    case kDECIMAL:
-    case kNUMERIC: {
+    case kDECIMAL: {
       const auto val = rex_literal->getVal<int64_t>();
       const int precision = rex_literal->getPrecision();
       const int scale = rex_literal->getScale();

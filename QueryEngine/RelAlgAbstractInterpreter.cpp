@@ -183,7 +183,7 @@ RexLiteral* parse_literal(const rapidjson::Value& expr) noexcept {
   const auto type_precision = json_i64(field(expr, "type_precision"));
   switch (type) {
     case kDECIMAL:
-      return new RexLiteral(json_i64(literal), kNUMERIC, scale, precision, type_scale, type_precision);
+      return new RexLiteral(json_i64(literal), type, scale, precision, type_scale, type_precision);
     case kDOUBLE:
       return new RexLiteral(json_double(literal), type, scale, precision, type_scale, type_precision);
     case kTEXT:
@@ -600,7 +600,7 @@ int64_t get_int_literal_field(const rapidjson::Value& obj, const char field[], c
     return default_val;
   }
   std::unique_ptr<RexLiteral> lit(parse_literal(it->value));
-  CHECK_EQ(kNUMERIC, lit->getType());
+  CHECK_EQ(kDECIMAL, lit->getType());
   CHECK_EQ(unsigned(0), lit->getScale());
   CHECK_EQ(unsigned(0), lit->getTypeScale());
   return lit->getVal<int64_t>();
