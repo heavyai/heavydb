@@ -384,12 +384,13 @@ ExpressionRange getExpressionRange(const Analyzer::UOper* u_expr,
     }
     case ExpressionRangeType::Integer: {
       if (ti.is_decimal()) {
-        const auto scale = exp_to_scale(ti.get_scale() - arg_ti.get_scale());
         CHECK_EQ(int64_t(0), arg_range.getBucket());
+        const auto scale = exp_to_scale(ti.get_scale() - arg_ti.get_scale());
         return ExpressionRange::makeIntRange(
             arg_range.getIntMin() * scale, arg_range.getIntMax() * scale, 0, arg_range.hasNulls());
       }
       if (arg_ti.is_decimal()) {
+        CHECK_EQ(int64_t(0), arg_range.getBucket());
         const auto scale = exp_to_scale(arg_ti.get_scale());
         return ExpressionRange::makeIntRange(
             arg_range.getIntMin() / scale, arg_range.getIntMax() / scale, 0, arg_range.hasNulls());
