@@ -566,6 +566,10 @@ DEF_SHARED_AGG_STUBS(agg_max)
 DEF_SHARED_AGG_STUBS(agg_min)
 DEF_SHARED_AGG_STUBS(agg_id)
 
+extern "C" __attribute__((noinline)) void agg_id_double_shared_slow(int64_t* agg, const double* val) {
+  abort();
+}
+
 extern "C" __attribute__((noinline)) int64_t agg_sum_shared(int64_t* agg, const int64_t val) {
   abort();
 }
@@ -598,6 +602,10 @@ extern "C" __attribute__((noinline)) void agg_sum_float_shared(int32_t* agg, con
 
 extern "C"
     __attribute__((noinline)) void agg_sum_float_skip_val_shared(int32_t* agg, const float val, const float skip_val) {
+  abort();
+}
+
+extern "C" __attribute__((noinline)) void force_sync() {
   abort();
 }
 

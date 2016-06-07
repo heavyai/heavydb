@@ -241,6 +241,8 @@ class Executor {
 
   bool isCPUOnly() const;
 
+  bool isArchMaxwell(const CompilationOptions& co) const;
+
   bool isOuterJoin() const { return cgen_state_->outer_join_cond_lv_; }
 
   const ColumnDescriptor* getColumnDescriptor(const Analyzer::ColumnVar*) const;
@@ -648,7 +650,8 @@ class Executor {
                                     const bool translate_null_val,
                                     const int64_t translated_null_val,
                                     GroupByAndAggregate::DiamondCodegen&,
-                                    std::stack<llvm::BasicBlock*>&);
+                                    std::stack<llvm::BasicBlock*>&,
+                                    const bool thread_mem_shared);
 
   llvm::Value* castToFP(llvm::Value* val);
   llvm::Value* castToTypeIn(llvm::Value* val, const size_t bit_width);
@@ -908,6 +911,8 @@ class Executor {
   std::unordered_set<llvm::Function*> markDeadRuntimeFuncs(llvm::Module& module,
                                                            const std::vector<llvm::Function*>& roots,
                                                            const std::vector<llvm::Function*>& leaves);
+
+  llvm::Value* spillDoubleElement(llvm::Value* elem_val, llvm::Type* elem_ty);
 
   struct RowSetHolder {
     RowSetHolder(Executor* executor) : executor_(executor) {}

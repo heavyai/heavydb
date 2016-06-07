@@ -4,6 +4,7 @@
 #include "ExpressionRange.h"
 #include "InPlaceSort.h"
 #include "GpuInitGroups.h"
+#include "GpuPatches.h"
 #include "OutputBufferInitialization.h"
 
 #include "Execute.h"
@@ -1668,6 +1669,9 @@ bool GroupByAndAggregate::codegen(llvm::Value* filter_result, const CompilationO
     const bool is_group_by = !ra_exe_unit_.groupby_exprs.empty();
     const auto query_mem_desc = getQueryMemoryDescriptor();
 
+    if (executor_->isArchMaxwell(co)) {
+      prependForceSync();
+    }
     DiamondCodegen filter_cfg(
         filter_result, executor_, !is_group_by || query_mem_desc.usesGetGroupValueFast(), "filter");
 
@@ -1769,7 +1773,8 @@ std::tuple<llvm::Value*, llvm::Value*> GroupByAndAggregate::codegenGroupBy(const
           query_mem_desc_.has_nulls,
           query_mem_desc_.max_val + (query_mem_desc_.bucket ? query_mem_desc_.bucket : 1),
           diamond_codegen,
-          array_loops);
+          array_loops,
+          query_mem_desc_.threadsShareMemory());
       auto small_groups_buffer = arg_it;
       if (query_mem_desc_.usesGetGroupValueFast()) {
         std::string get_group_fn_name{outputColumnar() && !query_mem_desc_.keyless_hash
@@ -1833,7 +1838,8 @@ std::tuple<llvm::Value*, llvm::Value*> GroupByAndAggregate::codegenGroupBy(const
                                             col_range_info.has_nulls,
                                             col_range_info.max + (col_range_info.bucket ? col_range_info.bucket : 1),
                                             diamond_codegen,
-                                            array_loops);
+                                            array_loops,
+                                            query_mem_desc_.threadsShareMemory());
         // store the sub-key to the buffer
         LL_BUILDER.CreateStore(group_expr_lv, LL_BUILDER.CreateGEP(group_key, LL_INT(subkey_idx++)));
       }
@@ -2176,16 +2182,18 @@ bool GroupByAndAggregate::codegenAggCalls(const std::tuple<llvm::Value*, llvm::V
       }
 
       auto target_lv = target_lvs[target_lv_idx];
-      const bool need_skip_null =
-          agg_info.skip_null_val && !(agg_info.agg_kind == kAVG && agg_base_name == "agg_count");
-      if (need_skip_null && agg_info.agg_kind != kCOUNT) {
-        target_lv = convertNullIfAny(arg_expr->get_type_info(), chosen_type, chosen_bytes, target_lv);
-      } else if (!lazy_fetched && chosen_type.is_fp()) {
-        target_lv = executor_->castToFP(target_lv);
-      }
-
-      if (!dynamic_cast<const Analyzer::AggExpr*>(target_expr) || arg_expr) {
-        target_lv = executor_->castToTypeIn(target_lv, (chosen_bytes << 3));
+      const auto is_unnest_double = isUnnestDouble(target_lv, agg_base_name, co);
+      const auto need_skip_null =
+          !is_unnest_double && agg_info.skip_null_val && !(agg_info.agg_kind == kAVG && agg_base_name == "agg_count");
+      if (!is_unnest_double) {
+        if (need_skip_null && agg_info.agg_kind != kCOUNT) {
+          target_lv = convertNullIfAny(arg_expr->get_type_info(), chosen_type, chosen_bytes, target_lv);
+        } else if (!lazy_fetched && chosen_type.is_fp()) {
+          target_lv = executor_->castToFP(target_lv);
+        }
+        if (!dynamic_cast<const Analyzer::AggExpr*>(target_expr) || arg_expr) {
+          target_lv = executor_->castToTypeIn(target_lv, (chosen_bytes << 3));
+        }
       }
 
       std::vector<llvm::Value*> agg_args{
@@ -2223,10 +2231,14 @@ bool GroupByAndAggregate::codegenAggCalls(const std::tuple<llvm::Value*, llvm::V
           agg_args.push_back(null_lv);
         }
         if (!agg_info.is_distinct) {
-          auto old_val = emitCall((co.device_type_ == ExecutorDeviceType::GPU && query_mem_desc_.threadsShareMemory())
-                                      ? agg_fname + "_shared"
-                                      : agg_fname,
-                                  agg_args);
+          if (co.device_type_ == ExecutorDeviceType::GPU && query_mem_desc_.threadsShareMemory()) {
+            agg_fname += "_shared";
+            if (is_unnest_double) {
+              agg_fname = patch_agg_fname(agg_fname);
+            }
+          }
+
+          auto old_val = emitCall(agg_fname, agg_args);
 
 #ifdef ENABLE_COMPACTION
           CHECK_LE(size_t(2), agg_args.size());

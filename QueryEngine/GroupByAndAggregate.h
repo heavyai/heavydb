@@ -396,7 +396,7 @@ class GroupByAndAggregate {
 
   CountDistinctDescriptors initCountDistinctDescriptors();
 
-  std::tuple<llvm::Value*, llvm::Value*> codegenGroupBy(const CompilationOptions&, DiamondCodegen&);
+  std::tuple<llvm::Value*, llvm::Value*> codegenGroupBy(const CompilationOptions& co, DiamondCodegen& codegen);
 
   llvm::Function* codegenPerfectHashFunction();
 
@@ -439,6 +439,10 @@ class GroupByAndAggregate {
   std::vector<llvm::Value*> codegenAggArg(const Analyzer::Expr* target_expr, const CompilationOptions& co);
 
   llvm::Value* emitCall(const std::string& fname, const std::vector<llvm::Value*>& args);
+
+  bool isUnnestDouble(llvm::Value* val_ptr, const std::string& agg_base_name, const CompilationOptions& co) const;
+
+  void prependForceSync();
 
   QueryMemoryDescriptor query_mem_desc_;
   Executor* executor_;

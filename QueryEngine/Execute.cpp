@@ -4,6 +4,7 @@
 #include "Codec.h"
 #include "ExpressionRewrite.h"
 #include "GpuMemUtils.h"
+#include "GpuPatches.h"
 #include "InPlaceSort.h"
 #include "GroupByAndAggregate.h"
 #include "OutputBufferInitialization.h"
@@ -4855,6 +4856,7 @@ declare void @agg_min_float_skip_val_shared(i32*, float, float);
 declare void @agg_id_shared(i64*, i64);
 declare void @agg_id_int32_shared(i32*, i32);
 declare void @agg_id_double_shared(i64*, double);
+declare void @agg_id_double_shared_slow(i64*, double*);
 declare void @agg_id_float_shared(i32*, float);
 declare i64 @ExtractFromTime(i32, i64);
 declare i64 @ExtractFromTimeNullable(i32, i64, i64);
@@ -4901,6 +4903,7 @@ declare i8 @string_ge_nullable(i8*, i32, i8*, i32, i8);
 declare i8 @string_eq_nullable(i8*, i32, i8*, i32, i8);
 declare i8 @string_ne_nullable(i8*, i32, i8*, i32, i8);
 declare i32 @record_error_code(i32, i32*);
+declare void @force_sync();
 )" +
     gen_array_any_all_sigs();
 
@@ -5188,8 +5191,10 @@ llvm::Value* Executor::groupByColumnCodegen(Analyzer::Expr* group_by_col,
                                             const bool translate_null_val,
                                             const int64_t translated_null_val,
                                             GroupByAndAggregate::DiamondCodegen& diamond_codegen,
-                                            std::stack<llvm::BasicBlock*>& array_loops) {
+                                            std::stack<llvm::BasicBlock*>& array_loops,
+                                            const bool thread_mem_shared) {
   auto group_key = codegen(group_by_col, true, co).front();
+  auto key_to_cache = group_key;
   if (dynamic_cast<Analyzer::UOper*>(group_by_col) &&
       static_cast<Analyzer::UOper*>(group_by_col)->get_optype() == kUNNEST) {
     auto preheader = cgen_state_->ir_builder_.GetInsertBlock();
@@ -5223,10 +5228,15 @@ llvm::Value* Executor::groupByColumnCodegen(Analyzer::Expr* group_by_col,
                                                                 : llvm::Type::getFloatTy(cgen_state_->context_))
                                : get_int_type(elem_ti.get_size() * 8, cgen_state_->context_);
     group_key = cgen_state_->emitExternalCall(array_at_fname, ar_ret_ty, {group_key, posArg(arr_expr), array_idx});
+    if (need_patch_unnest_double(elem_ti, isArchMaxwell(co), thread_mem_shared)) {
+      key_to_cache = spillDoubleElement(group_key, ar_ret_ty);
+    } else {
+      key_to_cache = group_key;
+    }
     CHECK(array_loop_head);
     array_loops.push(array_loop_head);
   }
-  cgen_state_->group_by_expr_cache_.push_back(group_key);
+  cgen_state_->group_by_expr_cache_.push_back(key_to_cache);
   if (translate_null_val) {
     const auto& ti = group_by_col->get_type_info();
     const auto key_type = get_int_type(ti.get_size() * 8, cgen_state_->context_);

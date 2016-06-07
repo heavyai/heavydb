@@ -44,6 +44,7 @@ class CudaMgr {
                           const int srcDeviceNum);
   void zeroDeviceMem(int8_t* devicePtr, const size_t numBytes, const int deviceNum);
   inline int getDeviceCount() const { return deviceCount_; }
+  inline bool isArchMaxwell() const { return (getDeviceCount() > 0 && deviceProperties[0].computeMajor == 5); }
   std::vector<DeviceProperties> deviceProperties;
 
  private:

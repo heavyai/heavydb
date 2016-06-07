@@ -245,6 +245,10 @@ extern "C" __device__ void agg_id_double_shared(int64_t* agg, const double val) 
   *agg = *(reinterpret_cast<const int64_t*>(&val));
 }
 
+extern "C" __device__ void agg_id_double_shared_slow(int64_t* agg, const double* val) {
+  *agg = *(reinterpret_cast<const int64_t*>(val));
+}
+
 extern "C" __device__ void agg_id_float_shared(int32_t* agg, const float val) {
   *agg = __float_as_int(val);
 }
@@ -493,4 +497,8 @@ extern "C" __device__ uint64_t string_decode(int8_t* chunk_iter_, int64_t pos) {
   ChunkIter_get_nth(chunk_iter, pos, false, &vd, &is_end);
   return vd.is_null ? 0 : (reinterpret_cast<uint64_t>(vd.pointer) & 0xffffffffffff) |
                               (static_cast<uint64_t>(vd.length) << 48);
+}
+
+extern "C" __device__ void force_sync() {
+  __threadfence_block();
 }
