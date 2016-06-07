@@ -309,6 +309,7 @@ ExpressionRange getExpressionRange(const Analyzer::ColumnVar* col_expr,
       const auto min_val = extract_min_stat(min_it->second.chunkStats, col_ti);
       const auto max_val = extract_max_stat(max_it->second.chunkStats, col_ti);
       if (max_val < min_val) {
+        // The column doesn't contain any non-null values, synthesize an empty range.
         CHECK_LT(max_val, 0);
         CHECK_GT(min_val, 0);
         CHECK_EQ(-(min_val + 1), max_val);
