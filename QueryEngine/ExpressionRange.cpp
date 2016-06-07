@@ -187,7 +187,9 @@ ExpressionRange getExpressionRange(const Analyzer::Constant* constant_expr) {
       const int64_t v = datum.intval;
       return ExpressionRange::makeIntRange(v, v, 0, false);
     }
-    case kBIGINT: {
+    case kBIGINT:
+    case kNUMERIC:
+    case kDECIMAL: {
       const int64_t v = datum.bigintval;
       return ExpressionRange::makeIntRange(v, v, 0, false);
     }
@@ -200,11 +202,6 @@ ExpressionRange getExpressionRange(const Analyzer::Constant* constant_expr) {
     case kFLOAT:
     case kDOUBLE: {
       const double v = constant_type == kDOUBLE ? datum.doubleval : datum.floatval;
-      return ExpressionRange::makeFpRange(v, v, false);
-    }
-    case kNUMERIC:
-    case kDECIMAL: {
-      const double v = static_cast<double>(datum.bigintval) / exp_to_scale(constant_expr->get_type_info().get_scale());
       return ExpressionRange::makeFpRange(v, v, false);
     }
     default:
@@ -374,9 +371,9 @@ ExpressionRange getExpressionRange(const Analyzer::UOper* u_expr,
     return ExpressionRange::makeIntRange(v, v, 0, false);
   }
   const auto arg_range = getExpressionRange(u_expr->get_operand(), query_infos, executor);
+  const auto& arg_ti = u_expr->get_operand()->get_type_info();
   switch (arg_range.getType()) {
     case ExpressionRangeType::FloatingPoint: {
-      const auto& arg_ti = u_expr->get_operand()->get_type_info();
       if (ti.is_fp() && ti.get_size() >= arg_ti.get_size()) {
         return arg_range;
       }
@@ -386,10 +383,21 @@ ExpressionRange getExpressionRange(const Analyzer::UOper* u_expr,
       break;
     }
     case ExpressionRangeType::Integer: {
+      if (ti.is_decimal()) {
+        const auto scale = exp_to_scale(ti.get_scale() - arg_ti.get_scale());
+        CHECK_EQ(int64_t(0), arg_range.getBucket());
+        return ExpressionRange::makeIntRange(
+            arg_range.getIntMin() * scale, arg_range.getIntMax() * scale, 0, arg_range.hasNulls());
+      }
+      if (arg_ti.is_decimal()) {
+        const auto scale = exp_to_scale(arg_ti.get_scale());
+        return ExpressionRange::makeIntRange(
+            arg_range.getIntMin() / scale, arg_range.getIntMax() / scale, 0, arg_range.hasNulls());
+      }
       if (ti.is_integer() || ti.is_time()) {
         return arg_range;
       }
-      if (ti.is_decimal() || ti.get_type() == kDOUBLE) {
+      if (ti.get_type() == kDOUBLE) {
         return ExpressionRange::makeFpRange(arg_range.getIntMin(), arg_range.getIntMax(), arg_range.hasNulls());
       }
       break;
