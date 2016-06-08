@@ -1,3 +1,6 @@
+#ifndef QUERYENGINE_MAXWELLCODEGENPATCH_H
+#define QUERYENGINE_MAXWELLCODEGENPATCH_H
+
 #include "Execute.h"
 #include "../CudaMgr/CudaMgr.h"
 
@@ -10,3 +13,5 @@ inline std::string patch_agg_fname(const std::string& agg_name) {
   CHECK_EQ("agg_id_double_shared_slow", new_name);
   return new_name;
 }
+
+#endif  // QUERYENGINE_MAXWELLCODEGENPATCH_H

@@ -440,7 +440,9 @@ class GroupByAndAggregate {
 
   llvm::Value* emitCall(const std::string& fname, const std::vector<llvm::Value*>& args);
 
-  bool isUnnestDouble(llvm::Value* val_ptr, const std::string& agg_base_name, const CompilationOptions& co) const;
+  bool needsUnnestDoublePatch(llvm::Value* val_ptr,
+                              const std::string& agg_base_name,
+                              const CompilationOptions& co) const;
 
   void prependForceSync();
 

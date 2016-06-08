@@ -4,7 +4,7 @@
 #include "ExpressionRange.h"
 #include "InPlaceSort.h"
 #include "GpuInitGroups.h"
-#include "GpuPatches.h"
+#include "MaxwellCodegenPatch.h"
 #include "OutputBufferInitialization.h"
 
 #include "Execute.h"
@@ -2182,10 +2182,10 @@ bool GroupByAndAggregate::codegenAggCalls(const std::tuple<llvm::Value*, llvm::V
       }
 
       auto target_lv = target_lvs[target_lv_idx];
-      const auto is_unnest_double = isUnnestDouble(target_lv, agg_base_name, co);
-      const auto need_skip_null =
-          !is_unnest_double && agg_info.skip_null_val && !(agg_info.agg_kind == kAVG && agg_base_name == "agg_count");
-      if (!is_unnest_double) {
+      const auto needs_unnest_double_patch = needsUnnestDoublePatch(target_lv, agg_base_name, co);
+      const auto need_skip_null = !needs_unnest_double_patch && agg_info.skip_null_val &&
+                                  !(agg_info.agg_kind == kAVG && agg_base_name == "agg_count");
+      if (!needs_unnest_double_patch) {
         if (need_skip_null && agg_info.agg_kind != kCOUNT) {
           target_lv = convertNullIfAny(arg_expr->get_type_info(), chosen_type, chosen_bytes, target_lv);
         } else if (!lazy_fetched && chosen_type.is_fp()) {
@@ -2233,7 +2233,7 @@ bool GroupByAndAggregate::codegenAggCalls(const std::tuple<llvm::Value*, llvm::V
         if (!agg_info.is_distinct) {
           if (co.device_type_ == ExecutorDeviceType::GPU && query_mem_desc_.threadsShareMemory()) {
             agg_fname += "_shared";
-            if (is_unnest_double) {
+            if (needs_unnest_double_patch) {
               agg_fname = patch_agg_fname(agg_fname);
             }
           }

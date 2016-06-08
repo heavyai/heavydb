@@ -1,4 +1,4 @@
-#include "GpuPatches.h"
+#include "MaxwellCodegenPatch.h"
 
 llvm::Value* Executor::spillDoubleElement(llvm::Value* elem_val, llvm::Type* elem_ty) {
   auto var_ptr = cgen_state_->ir_builder_.CreateAlloca(elem_ty);
@@ -10,9 +10,9 @@ bool Executor::isArchMaxwell(const CompilationOptions& co) const {
   return co.device_type_ == ExecutorDeviceType::GPU && catalog_->get_dataMgr().cudaMgr_->isArchMaxwell();
 }
 
-bool GroupByAndAggregate::isUnnestDouble(llvm::Value* val_ptr,
-                                         const std::string& agg_base_name,
-                                         const CompilationOptions& co) const {
+bool GroupByAndAggregate::needsUnnestDoublePatch(llvm::Value* val_ptr,
+                                                 const std::string& agg_base_name,
+                                                 const CompilationOptions& co) const {
   return (
       executor_->isArchMaxwell(co) && query_mem_desc_.threadsShareMemory() && llvm::isa<llvm::AllocaInst>(val_ptr) &&
       val_ptr->getType() == llvm::Type::getDoublePtrTy(executor_->cgen_state_->context_) && "agg_id" == agg_base_name);

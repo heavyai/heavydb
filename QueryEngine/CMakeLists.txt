@@ -12,11 +12,11 @@ set(query_engine_source_files
     ExpressionRange.cpp
     ExpressionRewrite.cpp
     GpuMemUtils.cpp
-    GpuPatches.cpp
     InPlaceSort.cpp
     GroupByAndAggregate.cpp
     InValuesBitmap.cpp
     InputMetadata.cpp
+    MaxwellCodegenPatch.cpp
     NvidiaKernel.cpp
     OutputBufferInitialization.cpp
     QueryRewrite.cpp

@@ -5,7 +5,7 @@
 #include "Codec.h"
 #include "ExpressionRewrite.h"
 #include "GpuMemUtils.h"
-#include "GpuPatches.h"
+#include "MaxwellCodegenPatch.h"
 #include "GroupByAndAggregate.h"
 #include "InPlaceSort.h"
 #include "JsonAccessors.h"
