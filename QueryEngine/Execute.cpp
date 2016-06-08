@@ -1,25 +1,27 @@
 #include "Execute.h"
 
+#include "AggregateUtils.h"
 #include "CartesianProduct.h"
 #include "Codec.h"
 #include "ExpressionRewrite.h"
 #include "GpuMemUtils.h"
 #include "GpuPatches.h"
-#include "InPlaceSort.h"
 #include "GroupByAndAggregate.h"
-#include "OutputBufferInitialization.h"
-#include "AggregateUtils.h"
+#include "InPlaceSort.h"
+#include "JsonAccessors.h"
 #include "NvidiaKernel.h"
+#include "OutputBufferInitialization.h"
 #include "QueryTemplateGenerator.h"
 #include "QueryRewrite.h"
 #include "RuntimeFunctions.h"
-#include "JsonAccessors.h"
-#include "DataMgr/BufferMgr/BufferMgr.h"
-#include "CudaMgr/CudaMgr.h"
-#include "Parser/ParserNode.h"
-#include "Shared/mapdpath.h"
-#include "Shared/checked_alloc.h"
 
+#include "CudaMgr/CudaMgr.h"
+#include "DataMgr/BufferMgr/BufferMgr.h"
+#include "Parser/ParserNode.h"
+#include "Shared/checked_alloc.h"
+#include "Shared/mapdpath.h"
+
+#include <llvm/Bitcode/ReaderWriter.h>
 #include <llvm/ExecutionEngine/MCJIT.h>
 #include <llvm/IRReader/IRReader.h>
 #include <llvm/IR/Attributes.h>
@@ -29,6 +31,7 @@
 #include <llvm/IR/Value.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/Support/raw_os_ostream.h>
+#include <llvm/Support/FileSystem.h>
 #include <llvm/Support/FormattedStream.h>
 #include <llvm/Support/MemoryBuffer.h>
 #include <llvm/Support/SourceMgr.h>
@@ -38,11 +41,9 @@
 #include <llvm/Transforms/IPO.h>
 #include <llvm/Transforms/Scalar.h>
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
-#include <llvm/Bitcode/ReaderWriter.h>
 
-#include <llvm/Support/FileSystem.h>
-#include <llvm/Support/raw_ostream.h>
-
+#include <boost/filesystem/path.hpp>
+#include <boost/filesystem/operations.hpp>
 #include <cuda.h>
 
 #include <algorithm>
@@ -51,9 +52,6 @@
 #include <unistd.h>
 #include <map>
 #include <set>
-
-#include <boost/filesystem/path.hpp>
-#include <boost/filesystem/operations.hpp>
 
 bool g_enable_watchdog{false};
 
