@@ -31,7 +31,7 @@ FILE* create(const std::string& basePath, const int fileId, const size_t pageSiz
 }
 
 FILE* create(const std::string& fullPath, const size_t requestedFileSize) {
-  CHECK_GE(requestedFileSize, 0);
+  CHECK_GE(requestedFileSize, size_t(0));
   FILE* f = fopen(fullPath.c_str(), "w+b");
   CHECK(f);
   fseek(f, requestedFileSize - 1, SEEK_SET);
