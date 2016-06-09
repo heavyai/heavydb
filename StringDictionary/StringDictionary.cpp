@@ -43,7 +43,12 @@ const uint32_t round_up_p2(const size_t num) {
   in |= in >> 8;
   in |= in >> 16;
   in++;
-  CHECK_NE(in, size_t(0));
+  // TODO MAT deal with case where filesize has been increased but reality is
+  // we are constrained to 2^30.
+  // In that situation this calculation will wrap to zero
+  if (in == 0 ){
+    in = 1 << 31;
+  }
   return in;
 }
 
