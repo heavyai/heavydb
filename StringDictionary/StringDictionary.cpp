@@ -43,6 +43,7 @@ const uint32_t round_up_p2(const size_t num) {
   in |= in >> 8;
   in |= in >> 16;
   in++;
+  CHECK_NE(in, size_t(0));
   return in;
 }
 
