@@ -299,9 +299,6 @@ ExpressionRange getExpressionRange(const Analyzer::ColumnVar* col_expr,
         }
       }
       if (col_ti.is_fp()) {
-        if (has_nulls) {
-          return ExpressionRange::makeInvalidRange();
-        }
         return ExpressionRange::makeFpRange(extract_min_stat_double(min_it->second.chunkStats, col_ti),
                                             extract_max_stat_double(max_it->second.chunkStats, col_ti),
                                             has_nulls);
