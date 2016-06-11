@@ -1120,6 +1120,23 @@ int8_t pick_target_compact_width(const RelAlgExecutionUnit& ra_exe_unit,
   }
 }
 
+namespace {
+
+bool expr_is_rowid(const Analyzer::Expr* expr, const Catalog_Namespace::Catalog& cat) {
+  const auto col = dynamic_cast<const Analyzer::ColumnVar*>(expr);
+  if (!col) {
+    return false;
+  }
+  const auto cd = get_column_descriptor_maybe(col->get_column_id(), col->get_table_id(), cat);
+  if (!cd || !cd->isVirtualCol) {
+    return false;
+  }
+  CHECK_EQ("rowid", cd->columnName);
+  return true;
+}
+
+}  // namespace
+
 void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
                                                     const size_t max_groups_buffer_entry_count,
                                                     const size_t small_groups_buffer_entry_count,
@@ -1184,7 +1201,8 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
       if (col_range_info.hash_type_ == GroupByColRangeType::OneColGuessedRange ||
           col_range_info.hash_type_ == GroupByColRangeType::Scan ||
           ((ra_exe_unit_.groupby_exprs.size() != 1 ||
-            !ra_exe_unit_.groupby_exprs.front()->get_type_info().is_string()) &&
+            (!ra_exe_unit_.groupby_exprs.front()->get_type_info().is_string() &&
+             !expr_is_rowid(ra_exe_unit_.groupby_exprs.front().get(), *executor_->catalog_))) &&
            col_range_info.max >= col_range_info.min + static_cast<int64_t>(max_groups_buffer_entry_count) &&
            !col_range_info.bucket)) {
         const auto hash_type =
