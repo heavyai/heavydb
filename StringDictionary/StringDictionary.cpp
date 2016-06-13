@@ -29,7 +29,11 @@ void* checked_mmap(const int fd, const size_t sz) {
   auto ptr = mmap(nullptr, sz, PROT_WRITE | PROT_READ, MAP_SHARED, fd, 0);
   CHECK(ptr != reinterpret_cast<void*>(-1));
 #ifdef __linux__
+#ifdef MADV_HUGEPAGE
   madvise(ptr, sz, MADV_RANDOM | MADV_WILLNEED | MADV_HUGEPAGE);
+#else
+  madvise(ptr, sz, MADV_RANDOM | MADV_WILLNEED);
+#endif
 #endif
   return ptr;
 }
