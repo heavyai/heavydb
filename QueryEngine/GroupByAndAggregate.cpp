@@ -1430,7 +1430,7 @@ GroupByAndAggregate::KeylessInfo GroupByAndAggregate::getKeylessInfo(
         case kAVG:
           if (arg_expr && !arg_expr->get_type_info().get_notnull()) {
             auto expr_range_info = getExpressionRange(arg_expr, query_infos_, executor_);
-            if (expr_range_info.hasNulls()) {
+            if (expr_range_info.getType() == ExpressionRangeType::Invalid || expr_range_info.hasNulls()) {
               break;
             }
           }
@@ -1441,7 +1441,7 @@ GroupByAndAggregate::KeylessInfo GroupByAndAggregate::getKeylessInfo(
         case kCOUNT:
           if (arg_expr && !arg_expr->get_type_info().get_notnull()) {
             auto expr_range_info = getExpressionRange(arg_expr, query_infos_, executor_);
-            if (expr_range_info.hasNulls()) {
+            if (expr_range_info.getType() == ExpressionRangeType::Invalid || expr_range_info.hasNulls()) {
               break;
             }
           }
@@ -1451,7 +1451,7 @@ GroupByAndAggregate::KeylessInfo GroupByAndAggregate::getKeylessInfo(
         case kSUM: {
           if (!arg_expr->get_type_info().get_notnull()) {
             auto expr_range_info = getExpressionRange(arg_expr, query_infos_, executor_);
-            if (!expr_range_info.hasNulls()) {
+            if (expr_range_info.getType() != ExpressionRangeType::Invalid && !expr_range_info.hasNulls()) {
               init_val = get_agg_initial_val(
                   agg_info.agg_kind, arg_expr->get_type_info(), is_group_by, query_mem_desc_.getCompactByteWidth());
               found = true;
