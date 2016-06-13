@@ -2871,6 +2871,19 @@ void checkWorkUnitWatchdog(const RelAlgExecutionUnit& ra_exe_unit) {
   }
 }
 
+bool is_sample_query(const RelAlgExecutionUnit& ra_exe_unit) {
+  const bool result = ra_exe_unit.input_descs.size() == 1 && ra_exe_unit.simple_quals.empty() &&
+                      ra_exe_unit.quals.empty() && ra_exe_unit.order_entries.empty() && ra_exe_unit.scan_limit;
+  if (result) {
+    CHECK(ra_exe_unit.join_type == JoinType::INVALID);
+    CHECK(ra_exe_unit.inner_join_quals.empty());
+    CHECK(ra_exe_unit.outer_join_quals.empty());
+    CHECK_EQ(size_t(1), ra_exe_unit.groupby_exprs.size());
+    CHECK(!ra_exe_unit.groupby_exprs.front());
+  }
+  return result;
+}
+
 }  // namespace
 
 ResultRows Executor::executeWorkUnit(int32_t* error_code,
@@ -3493,8 +3506,8 @@ void Executor::dispatchFragments(const std::function<void(const ExecutorDeviceTy
     }
   } else {
     for (size_t i = 0; i < fragments->size(); ++i) {
-      const auto skip_frag =
-          skipFragment(outer_table_id, (*fragments)[i], ra_exe_unit.simple_quals, all_frag_row_offsets, i);
+      const auto& fragment = (*fragments)[i];
+      const auto skip_frag = skipFragment(outer_table_id, fragment, ra_exe_unit.simple_quals, all_frag_row_offsets, i);
       if (skip_frag.first) {
         continue;
       }
@@ -3540,6 +3553,9 @@ void Executor::dispatchFragments(const std::function<void(const ExecutorDeviceTy
                                           frag_list_idx % context_count,
                                           rowid_lookup_key));
       ++frag_list_idx;
+      if (is_sample_query(ra_exe_unit) && fragment.numTuples >= ra_exe_unit.scan_limit) {
+        break;
+      }
     }
   }
   for (auto& child : query_threads) {
