@@ -387,6 +387,7 @@ In addition to SQL statements `mapdql` also accepts the following list of backsl
 * `\notiming`: Do not print timing information.
 * `\version`: Print MapD Server version.
 * `\copy <file path> <table>`: Copy data from file on client side to table. The file is assumed to be in CSV format unless the file name ends with `.tsv`.
+* `\copygeo <file path> <table>`: Experimental support for copying a server side shapefile to a new table. Coordinates are assumed to be in the EPSG:4326 / WGS 84 / latitude+longitude projection.
 * `\q`: Quit.
 
 `mapdql` automatically attempts to reconnect to `mapd_server` in case it restarts due to crashes or human intervention.  There is no need to restart or reconnect.
