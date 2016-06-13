@@ -1428,6 +1428,12 @@ GroupByAndAggregate::KeylessInfo GroupByAndAggregate::getKeylessInfo(
       const auto arg_expr = agg_arg(target_expr);
       switch (agg_info.agg_kind) {
         case kAVG:
+          if (arg_expr && !arg_expr->get_type_info().get_notnull()) {
+            auto expr_range_info = getExpressionRange(arg_expr, query_infos_, executor_);
+            if (expr_range_info.hasNulls()) {
+              break;
+            }
+          }
           ++index;
           init_val = 0;
           found = true;
