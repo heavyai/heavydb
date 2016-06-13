@@ -2201,8 +2201,7 @@ bool GroupByAndAggregate::codegenAggCalls(const std::tuple<llvm::Value*, llvm::V
 
       auto target_lv = target_lvs[target_lv_idx];
       const auto needs_unnest_double_patch = needsUnnestDoublePatch(target_lv, agg_base_name, co);
-      const auto need_skip_null = !needs_unnest_double_patch && agg_info.skip_null_val &&
-                                  !(agg_info.agg_kind == kAVG && agg_base_name == "agg_count");
+      const auto need_skip_null = !needs_unnest_double_patch && agg_info.skip_null_val;
       if (!needs_unnest_double_patch) {
         if (need_skip_null && agg_info.agg_kind != kCOUNT) {
           target_lv = convertNullIfAny(arg_expr->get_type_info(), chosen_type, chosen_bytes, target_lv);

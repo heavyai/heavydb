@@ -464,9 +464,11 @@ TEST(Select, FilterAndGroupBy) {
     c("SELECT 'literal_string' AS key0 FROM test GROUP BY key0;", dt);
     c("SELECT str, MIN(y) FROM test WHERE y IS NOT NULL GROUP BY str ORDER BY str DESC;", dt);
     c("SELECT x, MAX(z) FROM test WHERE z IS NOT NULL GROUP BY x HAVING x > 7;", dt);
-    c("SELECT CAST((dd - 0.5) * 2.0 AS int) AS key0, COUNT(*) AS val FROM test WHERE (dd >= 100.0 AND dd < 400.0) GROUP "
+    c("SELECT CAST((dd - 0.5) * 2.0 AS int) AS key0, COUNT(*) AS val FROM test WHERE (dd >= 100.0 AND dd < 400.0) "
+      "GROUP "
       "BY key0 HAVING key0 >= 0 AND key0 < 400 ORDER BY val DESC LIMIT 50 OFFSET 0;",
       dt);
+    c("SELECT y, AVG(CASE WHEN x BETWEEN 6 AND 7 THEN x END) FROM test GROUP BY y;", dt);
   }
 }
 
