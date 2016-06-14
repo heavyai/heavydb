@@ -63,9 +63,15 @@ class ExpressionRange {
 
   ExpressionRangeType getType() const { return type_; }
 
-  int64_t getBucket() const { return bucket_; }
+  int64_t getBucket() const {
+    CHECK(type_ != ExpressionRangeType::Invalid);
+    return bucket_;
+  }
 
-  bool hasNulls() const { return has_nulls_; }
+  bool hasNulls() const {
+    CHECK(type_ != ExpressionRangeType::Invalid);
+    return has_nulls_;
+  }
 
   void setHasNulls() { has_nulls_ = true; }
 
