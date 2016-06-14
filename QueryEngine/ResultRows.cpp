@@ -397,8 +397,8 @@ void ResultRows::reduceInPlaceDispatch(int64_t** group_by_buffer_ptr,
                                        const int32_t groups_buffer_entry_count,
                                        const GroupByColRangeType hash_type,
                                        const QueryMemoryDescriptor& query_mem_desc_in,
-                                       const int32_t start,
-                                       const int32_t end,
+                                       const size_t start,
+                                       const size_t end,
                                        int32_t* error_code) {
   const bool output_columnar{query_mem_desc_in.output_columnar};
   const bool isometric_layout{query_mem_desc_in.isCompactLayoutIsometric()};
@@ -410,8 +410,7 @@ void ResultRows::reduceInPlaceDispatch(int64_t** group_by_buffer_ptr,
   const size_t key_base_stride_quad{output_columnar ? 1 : row_size_quad};
   const int64_t min_val{query_mem_desc_in.min_val};
 
-  for (int32_t bin = start, bin_base_off = static_cast<int32_t>(query_mem_desc_in.getColOffInBytes(start, 0));
-       bin < end;
+  for (size_t bin = start, bin_base_off = query_mem_desc_in.getColOffInBytes(start, 0); bin < end;
        ++bin, bin_base_off += off_stride) {
     const size_t other_key_off_quad = key_base_stride_quad * bin;
     const auto other_key_buff = &other_group_by_buffer[other_key_off_quad];
@@ -451,9 +450,9 @@ void ResultRows::reduceInPlaceDispatch(int64_t** group_by_buffer_ptr,
       CHECK(EMPTY_KEY_64 == other_group_by_buffer[other_key_off_quad] ||
             EMPTY_KEY_64 == (*group_by_buffer_ptr)[other_key_off_quad]);
     }
-    int32_t target_idx{0};
-    int32_t col_idx{0};
-    int32_t other_off{bin_base_off};
+    size_t target_idx{0};
+    size_t col_idx{0};
+    size_t other_off{bin_base_off};
     for (const auto& agg_info : targets_) {
       const auto chosen_bytes = query_mem_desc_in.agg_col_widths[col_idx].compact;
       auto next_chosen_bytes = chosen_bytes;
@@ -539,18 +538,20 @@ int32_t ResultRows::reduceInPlace(int64_t** group_by_buffer_ptr,
                                   const QueryMemoryDescriptor& query_mem_desc_in) {
   const auto available_cpus = cpu_threads();
   CHECK_LT(0, available_cpus);
-  const int32_t stride = (other_groups_buffer_entry_count + (available_cpus - 1)) / available_cpus;
+  const size_t stride = (other_groups_buffer_entry_count + (available_cpus - 1)) / available_cpus;
   const bool multithreaded = query_mem_desc_in.isCompactLayoutIsometric() &&
                              hash_type == GroupByColRangeType::OneColKnownRange && stride > 1000;
   CHECK_LE(other_groups_buffer_entry_count, groups_buffer_entry_count);
   if (multithreaded) {
     std::vector<int32_t> error_codes(available_cpus, 0);
     std::vector<std::thread> reducer_threads;
-    for (int32_t tidx = 0, start = 0, end = std::min(start + stride, other_groups_buffer_entry_count);
-         tidx < static_cast<int32_t>(available_cpus);
+    for (size_t tidx = 0,
+                start = 0,
+                end = std::min(start + stride, static_cast<size_t>(other_groups_buffer_entry_count));
+         tidx < static_cast<size_t>(available_cpus);
          ++tidx,
-                 start = std::min(start + stride, other_groups_buffer_entry_count),
-                 end = std::min(end + stride, other_groups_buffer_entry_count)) {
+                start = std::min(start + stride, static_cast<size_t>(other_groups_buffer_entry_count)),
+                end = std::min(end + stride, static_cast<size_t>(other_groups_buffer_entry_count))) {
       reducer_threads.push_back(std::thread(&ResultRows::reduceInPlaceDispatch,
                                             this,
                                             group_by_buffer_ptr,

@@ -753,8 +753,8 @@ class ResultRows {
                              const int32_t groups_buffer_entry_count,
                              const GroupByColRangeType hash_type,
                              const QueryMemoryDescriptor& query_mem_desc_in,
-                             const int32_t start,
-                             const int32_t end,
+                             const size_t start,
+                             const size_t end,
                              int32_t* error_code);
 
   int32_t reduceInPlace(int64_t** group_by_buffer_ptr,
