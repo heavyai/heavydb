@@ -346,6 +346,11 @@ ExpressionRange getExpressionRange(const Analyzer::CaseExpr* case_expr,
   }
   const auto else_expr = case_expr->get_else_expr();
   CHECK(else_expr);
+  const auto else_null_expr = dynamic_cast<const Analyzer::Constant*>(else_expr);
+  if (else_null_expr && else_null_expr->get_is_null()) {
+    expr_range.setHasNulls();
+    return expr_range;
+  }
   return expr_range || getExpressionRange(else_expr, query_infos, executor);
 }
 
