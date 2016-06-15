@@ -179,7 +179,7 @@ class TypedImportBuffer : boost::noncopyable {
 
   void addDictEncodedString(const std::vector<std::string>& string_vec) {
     CHECK(string_dict_);
-    for (const auto& str: string_vec) {
+    for (const auto& str : string_vec) {
       if (str.size() > StringDictionary::MAX_STRLEN) {
         throw std::runtime_error("String too long for dictionary encoding.");
       }
@@ -193,7 +193,7 @@ class TypedImportBuffer : boost::noncopyable {
     for (auto& p : string_array_vec) {
       size_t len = p.size() * sizeof(int32_t);
       auto a = static_cast<int32_t*>(checked_malloc(len));
-      for (const auto& str: p) {
+      for (const auto& str : p) {
         if (str.size() > StringDictionary::MAX_STRLEN) {
           throw std::runtime_error("String too long for dictionary encoding.");
         }
@@ -474,10 +474,9 @@ struct PolyData2d {
     // primitive type
     int num = lineDrawItem.count;
     for (int i = 0; i < 3; ++i) {
-      int idx_x = (idx0 + (i % num));
-      int idx_y = (idx1 + (i % num));
-      coords.push_back(coords[idx_x]);
-      coords.push_back(coords[idx_y]);
+      int idx = (idx0 + ((i % num) * 2));
+      coords.push_back(coords[idx]);
+      coords.push_back(coords[idx + 1]);
     }
     lineDrawItem.count += 3;
 
