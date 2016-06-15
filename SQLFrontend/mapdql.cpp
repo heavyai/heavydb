@@ -17,7 +17,6 @@
 #include <boost/program_options.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/tokenizer.hpp>
-#include <curses.h>
 
 #include "gen-cpp/MapD.h"
 #include "MapDServer.h"
@@ -444,25 +443,6 @@ TDatum columnar_val_to_datum(const TColumn& col, const size_t row_idx, const TTy
   return datum;
 }
 
-std::string get_password_interactive() {
-  const auto win = initscr();
-  printw("Password: ");
-  cbreak();
-  noecho();
-  static const size_t MAX_PASSWORD_LENGTH{256};
-  char password[MAX_PASSWORD_LENGTH];
-  size_t i = 0;
-  char c;
-  while (i < MAX_PASSWORD_LENGTH && (c = getch()) != '\n') {
-    password[i++] = c;
-  }
-  echo();
-  nocbreak();
-  endwin();
-  delwin(win);
-  return std::string(password, i);
-}
-
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -517,8 +497,8 @@ int main(int argc, char** argv) {
       print_timing = true;
     if (vm.count("http"))
       http = true;
-    if (vm.count("db") && !vm.count("user")) {
-      std::cerr << "Must specify a user name to access database " << db_name << std::endl;
+    if (vm.count("db") && (!vm.count("user") || !vm.count("passwd"))) {
+      std::cerr << "Must specify a user name and password to access database " << db_name << std::endl;
       return 1;
     }
 
@@ -526,10 +506,6 @@ int main(int argc, char** argv) {
   } catch (boost::program_options::error& e) {
     std::cerr << "Usage Error: " << e.what() << std::endl;
     return 1;
-  }
-
-  if (!vm.count("passwd")) {
-    passwd = get_password_interactive();
   }
 
   shared_ptr<TTransport> transport;
