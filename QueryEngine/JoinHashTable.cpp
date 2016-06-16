@@ -266,7 +266,9 @@ int JoinHashTable::initHashTableForDevice(const ChunkKey& chunk_key,
 #endif
   const auto inner_col = cols.first;
   CHECK(inner_col);
+#ifdef HAVE_CUDA
   const auto& ti = inner_col->get_type_info();
+#endif
   int err = 0;
   const int32_t hash_join_invalid_val{-1};
   if (effective_memory_level == Data_Namespace::CPU_LEVEL) {
