@@ -439,7 +439,6 @@ TEST(Select, FloatAndDoubleTests) {
     c("SELECT MIN(x + y) AS n FROM test WHERE x + y > 47 AND x + y < 53 GROUP BY f + 1, f + d ORDER BY n;", dt);
     c("SELECT f + d AS s FROM test GROUP BY s ORDER BY s DESC;", dt);
     c("SELECT f + 1 AS s, AVG(u * f) FROM test GROUP BY s ORDER BY s DESC;", dt);
-    c("SELECT x, AVG(u), COUNT(*) FROM test GROUP BY x;", dt);
   }
 }
 
@@ -470,6 +469,7 @@ TEST(Select, FilterAndGroupBy) {
       "BY key0 HAVING key0 >= 0 AND key0 < 400 ORDER BY val DESC LIMIT 50 OFFSET 0;",
       dt);
     c("SELECT y, AVG(CASE WHEN x BETWEEN 6 AND 7 THEN x END) FROM test GROUP BY y ORDER BY y;", dt);
+    c("SELECT x, AVG(u), COUNT(*) AS n FROM test GROUP BY x ORDER BY n DESC;", dt);
   }
 }
 
