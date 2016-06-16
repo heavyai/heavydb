@@ -58,7 +58,7 @@ class BufferMgr : public AbstractBufferMgr {  // implements
   // explicit BufferMgr(const size_t bufferSize, const size_t pageSize);
   BufferMgr(const int deviceId,
             const size_t maxBufferSize,
-            const size_t bufferAllocIncrement = 2147483648,
+            const size_t maxSlabSize = 2147483648,
             const size_t pageSize = 512,
             AbstractBufferMgr* parentMgr = 0);
 
@@ -110,7 +110,7 @@ class BufferMgr : public AbstractBufferMgr {  // implements
  protected:
   std::vector<int8_t*> slabs_;  /// vector of beginning memory addresses for each allocation of the buffer pool
   std::vector<BufferList> slabSegments_;
-  size_t numPagesPerSlab_;
+  size_t pageSize_;
 
  private:
   BufferMgr(const BufferMgr&);             // private copy constructor
@@ -128,10 +128,14 @@ class BufferMgr : public AbstractBufferMgr {  // implements
   std::mutex globalMutex_;
 
   std::map<ChunkKey, BufferList::iterator> chunkIndex_;
-  size_t maxBufferSize_;  /// max number of bytes allocated for the buffer poo
-  size_t slabSize_;  /// size of the individual memory allocations that compose the buffer pool (up to maxBufferSize_)
-  size_t maxNumSlabs_;
-  size_t pageSize_;
+  size_t maxBufferSize_;  /// max number of bytes allocated for the buffer pool
+  size_t maxNumPages_;
+  size_t numPagesAllocated_;
+  size_t maxNumPagesPerSlab_;
+  size_t currentMaxSlabPageSize_;
+  size_t
+      maxSlabSize_;  /// size of the individual memory allocations that compose the buffer pool (up to maxBufferSize_)
+  bool allocationsCapped_;
   AbstractBufferMgr* parentMgr_;
   int maxBufferId_;
   unsigned int bufferEpoch_;

@@ -20,6 +20,7 @@ class CpuBufferMgr : public BufferMgr {
                const size_t pageSize = 512,
                AbstractBufferMgr* parentMgr = 0);
   virtual inline MgrType getMgrType() { return CPU_MGR; }
+  virtual inline std::string getStringMgrType() { return ToString(CPU_MGR); }
   ~CpuBufferMgr();
 
  private:

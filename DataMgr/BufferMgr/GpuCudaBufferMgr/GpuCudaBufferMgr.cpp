@@ -1,6 +1,7 @@
 #include "GpuCudaBufferMgr.h"
 #include "GpuCudaBuffer.h"
 #include "../../../CudaMgr/CudaMgr.h"
+#include <glog/logging.h>
 //#include "../CudaUtils.h"
 
 namespace Buffer_Namespace {
@@ -19,8 +20,6 @@ GpuCudaBufferMgr::~GpuCudaBufferMgr() {
 }
 
 void GpuCudaBufferMgr::addSlab(const size_t slabSize) {
-  // std::cout << "Adding GPU slab " << slabs_.size() << " to GPU " << deviceId_ << " of size " << slabSize <<
-  // std::endl;
   slabs_.resize(slabs_.size() + 1);
   try {
     slabs_.back() = cudaMgr_->allocateDeviceMem(slabSize, deviceId_);
@@ -29,7 +28,7 @@ void GpuCudaBufferMgr::addSlab(const size_t slabSize) {
     throw FailedToCreateSlab();
   }
   slabSegments_.resize(slabSegments_.size() + 1);
-  slabSegments_[slabSegments_.size() - 1].push_back(BufferSeg(0, numPagesPerSlab_));
+  slabSegments_[slabSegments_.size() - 1].push_back(BufferSeg(0, slabSize / pageSize_));
 }
 
 void GpuCudaBufferMgr::freeAllMem() {

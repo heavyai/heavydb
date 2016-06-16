@@ -83,33 +83,31 @@ void DataMgr::populateMgrs(const size_t userSpecifiedCpuBufferSize) {
   bufferMgrs_[0].push_back(new FileMgr(0, dataDir_));
   levelSizes_.push_back(1);
   size_t cpuBufferSize = userSpecifiedCpuBufferSize;
-  if (cpuBufferSize == 0)                           // if size is not specified
-    cpuBufferSize = getTotalSystemMemory() * 0.65;  // should get free memory instead of this ugly heuristic
-  size_t bufferAllocIncrement{1L << 31};
-  while (bufferAllocIncrement > cpuBufferSize) {
-    bufferAllocIncrement >>= 1;
-  }
+  if (cpuBufferSize == 0)                          // if size is not specified
+    cpuBufferSize = getTotalSystemMemory() * 0.8;  // should get free memory instead of this ugly heuristic
+  size_t cpuSlabSize = std::min(static_cast<size_t>(1L << 32), cpuBufferSize);
+  // cpuSlabSize -= cpuSlabSize % 512 == 0 ? 0 : 512 - (cpuSlabSize % 512);
+  cpuSlabSize = (cpuSlabSize / 512) * 512;
+  LOG(INFO) << "cpuSlabSize is " << cpuSlabSize;
   if (hasGpus_) {
     bufferMgrs_.resize(3);
     bufferMgrs_[1].push_back(
-        new CpuBufferMgr(0, cpuBufferSize, CUDA_HOST, cudaMgr_, bufferAllocIncrement, 512, bufferMgrs_[0][0]));
+        new CpuBufferMgr(0, cpuBufferSize, CUDA_HOST, cudaMgr_, cpuSlabSize, 512, bufferMgrs_[0][0]));
     levelSizes_.push_back(1);
     int numGpus = cudaMgr_->getDeviceCount();
     for (int gpuNum = 0; gpuNum < numGpus; ++gpuNum) {
       size_t gpuMaxMemSize = (cudaMgr_->deviceProperties[gpuNum].globalMem) -
-                             (1 << 29);  // set max mem size to be size of global mem - 512MB
-      size_t gpuSlabSize = std::min(static_cast<size_t>((cudaMgr_->deviceProperties[gpuNum].globalMem / 4)),
-                                    static_cast<size_t>(bufferAllocIncrement));
-      gpuSlabSize -= gpuSlabSize % 512;
-      // cout << "Gpu Slab Size: " << gpuSlabSize << endl;
-      // bufferMgrs_[2].push_back(new GpuCudaBufferMgr(gpuNum, gpuMaxMemSize, cudaMgr_, 1 << 29,512,bufferMgrs_[1][0]));
+                             (1 << 27);  // set max mem size to be size of global mem - 128MB
+      size_t gpuSlabSize = std::min(static_cast<size_t>(1L << 31), gpuMaxMemSize);
+      gpuSlabSize -= gpuSlabSize % 512 == 0 ? 0 : 512 - (gpuSlabSize % 512);
+      LOG(INFO) << "gpuSlabSize is " << gpuSlabSize;
       bufferMgrs_[2].push_back(
           new GpuCudaBufferMgr(gpuNum, gpuMaxMemSize, cudaMgr_, gpuSlabSize, 512, bufferMgrs_[1][0]));
     }
     levelSizes_.push_back(numGpus);
   } else {
     bufferMgrs_[1].push_back(
-        new CpuBufferMgr(0, cpuBufferSize, CPU_HOST, cudaMgr_, bufferAllocIncrement, 512, bufferMgrs_[0][0]));
+        new CpuBufferMgr(0, cpuBufferSize, CPU_HOST, cudaMgr_, cpuSlabSize, 512, bufferMgrs_[0][0]));
     levelSizes_.push_back(1);
   }
 }

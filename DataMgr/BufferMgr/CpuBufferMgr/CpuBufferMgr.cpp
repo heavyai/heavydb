@@ -1,5 +1,6 @@
 #include "CpuBufferMgr.h"
 #include "CpuBuffer.h"
+#include <glog/logging.h>
 #include "../../../CudaMgr/CudaMgr.h"
 
 namespace Buffer_Namespace {
@@ -38,7 +39,7 @@ void CpuBufferMgr::addSlab(const size_t slabSize) {
     }
   }
   slabSegments_.resize(slabSegments_.size() + 1);
-  slabSegments_[slabSegments_.size() - 1].push_back(BufferSeg(0, numPagesPerSlab_));
+  slabSegments_[slabSegments_.size() - 1].push_back(BufferSeg(0, slabSize / pageSize_));
 }
 
 void CpuBufferMgr::freeAllMem() {

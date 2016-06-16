@@ -18,6 +18,7 @@ class GpuCudaBufferMgr : public BufferMgr {
                    const size_t pageSize = 512,
                    AbstractBufferMgr* parentMgr = 0);
   virtual inline MgrType getMgrType() { return GPU_MGR; }
+  virtual inline std::string getStringMgrType() { return ToString(GPU_MGR); }
   ~GpuCudaBufferMgr();
 
  private:

@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cassert>
 #include <limits>
+#include <glog/logging.h>
 
 using namespace std;
 
@@ -27,20 +28,23 @@ std::string BufferMgr::keyToString(const ChunkKey& key) {
 /// Allocates memSize bytes for the buffer pool and initializes the free memory map.
 BufferMgr::BufferMgr(const int deviceId,
                      const size_t maxBufferSize,
-                     const size_t slabSize,
+                     const size_t maxSlabSize,
                      const size_t pageSize,
                      AbstractBufferMgr* parentMgr)
     : AbstractBufferMgr(deviceId),
-      maxBufferSize_(maxBufferSize),
-      slabSize_(slabSize),
       pageSize_(pageSize),
+      maxBufferSize_(maxBufferSize),
+      numPagesAllocated_(0),
+      maxSlabSize_(maxSlabSize),
+      allocationsCapped_(false),
       parentMgr_(parentMgr),
       maxBufferId_(0),
       bufferEpoch_(0) {
-  assert(maxBufferSize_ > 0 && slabSize_ > 0 && pageSize_ > 0 && slabSize_ % pageSize_ == 0);
-  numPagesPerSlab_ = slabSize_ / pageSize_;
-  maxNumSlabs_ = (maxBufferSize_ / slabSize_);
-  // addSlab(slabSize_);
+  assert(maxBufferSize_ > 0 && maxSlabSize_ > 0 && pageSize_ > 0 && maxSlabSize_ % pageSize_ == 0);
+  maxNumPages_ = maxBufferSize_ / pageSize_;
+  maxNumPagesPerSlab_ = maxSlabSize_ / pageSize_;
+  currentMaxSlabPageSize_ =
+      maxNumPagesPerSlab_;  // currentMaxSlabPageSize_ will drop as allocations fail - this is the high water mark
 }
 
 /// Frees the heap-allocated buffer pool memory
@@ -56,10 +60,8 @@ void BufferMgr::clear() {
     delete bufferIt->second->buffer;
   }
   chunkIndex_.clear();
-  // size_t numBufferSlabs = slabSegments_.size();
   slabs_.clear();
   slabSegments_.clear();
-  // addSlab(slabSize_);
   unsizedSegs_.clear();
   bufferEpoch_ = 0;
 }
@@ -225,8 +227,8 @@ BufferList::iterator BufferMgr::findFreeBufferInSlab(const size_t slabNum, const
 
 BufferList::iterator BufferMgr::findFreeBuffer(size_t numBytes) {
   size_t numPagesRequested = (numBytes + pageSize_ - 1) / pageSize_;
-  if (numPagesRequested > numPagesPerSlab_) {
-    throw SlabTooBig();
+  if (numPagesRequested > maxNumPagesPerSlab_) {
+    throw SlabTooBig();  //@todo change to requested allocation too big
   }
 
   size_t numSlabs = slabSegments_.size();
@@ -240,18 +242,48 @@ BufferList::iterator BufferMgr::findFreeBuffer(size_t numBytes) {
 
   // If we're here then we didn't find a free segment of sufficient size
   // First we see if we can add another slab
-  if (numSlabs < maxNumSlabs_) {
+  while (!allocationsCapped_ && numPagesAllocated_ < maxNumPages_) {
     try {
-      addSlab(slabSize_);
-      return findFreeBufferInSlab(numSlabs, numPagesRequested);  // has to return a free slab as long as requested
-                                                                 // buffer is smaller than the size of a slab
-    } catch (std::runtime_error& error) {                        // failed to allocate slab)
-      if (numSlabs == 0) {
-        throw FailedToCreateFirstSlab();
+      size_t pagesLeft = maxNumPages_ - numPagesAllocated_;
+      if (pagesLeft < currentMaxSlabPageSize_)
+        currentMaxSlabPageSize_ = pagesLeft;
+      if (numPagesRequested <= currentMaxSlabPageSize_) {  // don't try to allocate if the new slab won't be big enough
+        addSlab(currentMaxSlabPageSize_ * pageSize_);
+        LOG(INFO) << "ALLOCATION slab of " << currentMaxSlabPageSize_ << " pages ("
+                  << currentMaxSlabPageSize_ * pageSize_ << "B) created " << getStringMgrType() << ":" << deviceId_;
+      } else
+        break;
+      // if here then addSlab succeeded
+      numPagesAllocated_ += currentMaxSlabPageSize_;
+      return findFreeBufferInSlab(
+          numSlabs,
+          numPagesRequested);  // has to succeed since we made sure to request a slab big enough to accomodate request
+    } catch (std::runtime_error& error) {  // failed to allocate slab
+      LOG(INFO) << "ALLOCATION Attempted slab of " << currentMaxSlabPageSize_ << " pages ("
+                << currentMaxSlabPageSize_ * pageSize_ << "B) failed " << getStringMgrType() << ":" << deviceId_;
+      // check if there is any point halving currentMaxSlabSize and trying again
+      // if the request wont fit in half available then let try once at full size
+      // if we have already tries at full size and failed then break as
+      // there could still be room enough for other later request but
+      // not for his current one
+      if (numPagesRequested > currentMaxSlabPageSize_ / 2 && currentMaxSlabPageSize_ != numPagesRequested) {
+        currentMaxSlabPageSize_ = numPagesRequested;
+      } else {
+        currentMaxSlabPageSize_ /= 2;
+        if (currentMaxSlabPageSize_ < (maxNumPagesPerSlab_ / 8)) {  // should be a constant
+          allocationsCapped_ = true;
+          // dump out the slabs and their sizes
+          LOG(INFO) << "ALLOCATION Capped " << currentMaxSlabPageSize_
+                    << " Minimum size = " << (maxNumPagesPerSlab_ / 8) << " " << getStringMgrType() << ":" << deviceId_;
+        }
       }
-      maxNumSlabs_ = numSlabs;  // this prevents us from ever allocating slabs in the future - is this desired?
     }
   }
+
+  if (numPagesAllocated_ == 0 && allocationsCapped_) {
+    throw FailedToCreateFirstSlab();
+  }
+
   // If here then we can't add a slab - so we need to evict
 
   size_t minScore = std::numeric_limits<size_t>::max();
@@ -632,9 +664,9 @@ size_t BufferMgr::getNumChunks() {
 }
 
 size_t BufferMgr::size() {
-  std::lock_guard<std::mutex> sizedSegsLock(sizedSegsMutex_);
-  return slabs_.size() * pageSize_ * numPagesPerSlab_;
+  return numPagesAllocated_;
 }
+
 void BufferMgr::getChunkMetadataVec(std::vector<std::pair<ChunkKey, ChunkMetadata>>& chunkMetadataVec) {
   throw std::runtime_error("getChunkMetadataVec not supported for BufferMgr");
 }

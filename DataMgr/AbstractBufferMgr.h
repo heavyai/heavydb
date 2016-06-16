@@ -8,8 +8,24 @@
 
 #include "../Shared/types.h"
 #include "AbstractBuffer.h"
+#include <boost/preprocessor.hpp>
 
-enum MgrType { FILE_MGR, CPU_MGR, GPU_MGR };
+#define X_DEFINE_ENUM_WITH_STRING_CONVERSIONS_TOSTRING_CASE(r, data, elem) \
+  case elem:                                                               \
+    return BOOST_PP_STRINGIZE(elem);
+
+#define DEFINE_ENUM_WITH_STRING_CONVERSIONS(name, enumerators)                                      \
+  enum name { BOOST_PP_SEQ_ENUM(enumerators) };                                                     \
+                                                                                                    \
+  inline const char* ToString(name v) {                                                             \
+    switch (v) {                                                                                    \
+      BOOST_PP_SEQ_FOR_EACH(X_DEFINE_ENUM_WITH_STRING_CONVERSIONS_TOSTRING_CASE, name, enumerators) \
+      default:                                                                                      \
+        return "[Unknown " BOOST_PP_STRINGIZE(name) "]";                                            \
+    }                                                                                               \
+  }
+
+DEFINE_ENUM_WITH_STRING_CONVERSIONS(MgrType, (FILE_MGR)(CPU_MGR)(GPU_MGR))
 
 namespace Data_Namespace {
 
@@ -53,6 +69,7 @@ class AbstractBufferMgr {
   virtual void free(AbstractBuffer* buffer) = 0;
   // virtual AbstractBuffer* putBuffer(AbstractBuffer *d) = 0;
   virtual MgrType getMgrType() = 0;
+  virtual std::string getStringMgrType() = 0;
   virtual size_t getNumChunks() = 0;
   inline int getDeviceId() { return deviceId_; }
 

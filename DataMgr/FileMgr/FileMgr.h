@@ -104,6 +104,7 @@ class FileMgr : public AbstractBufferMgr {  // implements
   Page requestFreePage(size_t pagesize, const bool isMetadata);
 
   virtual inline MgrType getMgrType() { return FILE_MGR; };
+  virtual inline std::string getStringMgrType() { return ToString(FILE_MGR); }
   inline FileInfo* getFileInfoForFileId(const int fileId) { return files_[fileId]; }
 
   void init();
