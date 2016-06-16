@@ -1872,6 +1872,15 @@ llvm::Value* Executor::codegenUMinus(const Analyzer::UOper* uoper, const Compila
                                                               : static_cast<llvm::Value*>(inlineIntNull(ti))});
 }
 
+namespace {
+
+bool is_qualified_bin_oper(const Analyzer::Expr* expr) {
+  const auto bin_oper = dynamic_cast<const Analyzer::BinOper*>(expr);
+  return bin_oper && bin_oper->get_qualifier() != kONE;
+}
+
+}  // namespace
+
 llvm::Value* Executor::codegenLogical(const Analyzer::UOper* uoper, const CompilationOptions& co) {
   const auto optype = uoper->get_optype();
   CHECK_EQ(kNOT, optype);
@@ -1880,9 +1889,10 @@ llvm::Value* Executor::codegenLogical(const Analyzer::UOper* uoper, const Compil
   CHECK(operand_ti.is_boolean());
   const auto operand_lv = codegen(operand, true, co).front();
   CHECK(operand_lv->getType()->isIntegerTy());
-  CHECK(operand_ti.get_notnull() || operand_lv->getType()->isIntegerTy(8));
-  return operand_ti.get_notnull() ? cgen_state_->ir_builder_.CreateNot(toBool(operand_lv))
-                                  : cgen_state_->emitCall("logical_not", {operand_lv, inlineIntNull(operand_ti)});
+  const bool not_null = (operand_ti.get_notnull() || is_qualified_bin_oper(operand));
+  CHECK(not_null || operand_lv->getType()->isIntegerTy(8));
+  return not_null ? cgen_state_->ir_builder_.CreateNot(toBool(operand_lv))
+                  : cgen_state_->emitCall("logical_not", {operand_lv, inlineIntNull(operand_ti)});
 }
 
 llvm::Value* Executor::codegenIsNull(const Analyzer::UOper* uoper, const CompilationOptions& co) {

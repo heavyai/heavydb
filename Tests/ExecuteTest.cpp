@@ -1335,6 +1335,8 @@ TEST(Select, ArrayAnyAndAll) {
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM array_test WHERE  real_str = ANY arr_str;", dt)));
     ASSERT_EQ(int64_t(g_array_test_row_count),
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM array_test WHERE  real_str <> ANY arr_str;", dt)));
+    ASSERT_EQ(int64_t(g_array_test_row_count - 1),
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM array_test WHERE (NOT ('aa' = ANY arr_str));", dt)));
   }
 }
 
