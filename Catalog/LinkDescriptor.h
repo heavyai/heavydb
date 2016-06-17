@@ -17,6 +17,7 @@ struct LinkDescriptor {
   std::string link;
   std::string viewState;
   std::string updateTime;
+  std::string viewMetadata;
 };
 
 #endif  // LINK_DESCRIPTOR

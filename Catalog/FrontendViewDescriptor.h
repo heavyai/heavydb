@@ -17,6 +17,7 @@ struct FrontendViewDescriptor {
   std::string viewState;
   std::string imageHash;
   std::string updateTime;
+  std::string viewMetadata;
   int32_t userId;
 };
 

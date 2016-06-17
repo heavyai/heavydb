@@ -608,6 +608,7 @@ class MapDHandler : virtual public MapDIf {
     _return.view_state = vd->viewState;
     _return.image_hash = vd->imageHash;
     _return.update_time = vd->updateTime;
+    _return.view_metadata = vd->viewMetadata;
   }
 
   void get_link_view(TFrontendView& _return, const TSessionId session, const std::string& link) {
@@ -623,6 +624,7 @@ class MapDHandler : virtual public MapDIf {
     _return.view_state = ld->viewState;
     _return.view_name = ld->link;
     _return.update_time = ld->updateTime;
+    _return.view_metadata = ld->viewMetadata;
   }
 
   void get_tables(std::vector<std::string>& table_names, const TSessionId session) {
@@ -669,6 +671,7 @@ class MapDHandler : virtual public MapDIf {
         fv.view_name = vd->viewName;
         fv.image_hash = vd->imageHash;
         fv.update_time = vd->updateTime;
+        fv.view_metadata = vd->viewMetadata;
         view_names.push_back(fv);
       }
     }
@@ -994,7 +997,8 @@ class MapDHandler : virtual public MapDIf {
   void create_frontend_view(const TSessionId session,
                             const std::string& view_name,
                             const std::string& view_state,
-                            const std::string& image_hash) {
+                            const std::string& image_hash,
+                            const std::string& view_metadata) {
     check_read_only("create_frontend_view");
     const auto session_info = get_session(session);
     auto& cat = session_info.get_catalog();
@@ -1002,6 +1006,7 @@ class MapDHandler : virtual public MapDIf {
     vd.viewName = view_name;
     vd.viewState = view_state;
     vd.imageHash = image_hash;
+    vd.viewMetadata = view_metadata;
     vd.userId = session_info.get_currentUser().userId;
 
     cat.createFrontendView(vd);
@@ -1021,7 +1026,10 @@ class MapDHandler : virtual public MapDIf {
     cat.deleteMetadataForFrontendView(std::to_string(session_info.get_currentUser().userId), view_name);
   }
 
-  void create_link(std::string& _return, const TSessionId session, const std::string& view_state) {
+  void create_link(std::string& _return,
+                   const TSessionId session,
+                   const std::string& view_state,
+                   const std::string& view_metadata) {
     // check_read_only("create_link");
     const auto session_info = get_session(session);
     auto& cat = session_info.get_catalog();
@@ -1029,6 +1037,7 @@ class MapDHandler : virtual public MapDIf {
     LinkDescriptor ld;
     ld.userId = session_info.get_currentUser().userId;
     ld.viewState = view_state;
+    ld.viewMetadata = view_metadata;
 
     _return = cat.createLink(ld, 6);
   }
