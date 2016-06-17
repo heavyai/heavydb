@@ -582,15 +582,15 @@ ExecutionResult RelAlgExecutor::handleRetry(const int32_t error_code_in,
                                            nullptr),
                 targets_meta};
       result.setQueueTime(queue_time_ms);
+      if (!error_code) {
+        return result;
+      }
+      // Even the conservative guess failed; it should only happen when we group
+      // by a huge cardinality array. Maybe we should throw an exception instead?
+      // Such a heavy query is entirely capable of exhausting all the host memory.
+      CHECK(max_groups_buffer_entry_guess);
+      max_groups_buffer_entry_guess *= 2;
     }
-    if (!error_code) {
-      return result;
-    }
-    // Even the conservative guess failed; it should only happen when we group
-    // by a huge cardinality array. Maybe we should throw an exception instead?
-    // Such a heavy query is entirely capable of exhausting all the host memory.
-    CHECK(max_groups_buffer_entry_guess);
-    max_groups_buffer_entry_guess *= 2;
   }
   return result;
 }
