@@ -4,7 +4,7 @@ set -e
 
 MAPD_TCP_PORT=${MAPD_TCP_PORT:=9091}
 
-DATA_URL=${DATA_URL:="http://data.mapd.com"}
+DATA_URL=${DATA_URL:="https://data.mapd.com"}
 
 DATA_PATH=${DATA_PATH:="$PWD/sample_datasets"}
 
@@ -13,7 +13,7 @@ ALLOW_DOWNLOADS=${ALLOW_DOWNLOADS:=true}
 if hash wget 2>/dev/null; then
   GETTER="wget --continue"
 elif hash curl 2>/dev/null; then
-  GETTER="curl --continue - --remote-name"
+  GETTER="curl --continue - --remote-name --location"
 else
   GETTER="echo Please download: "
 fi
