@@ -2819,7 +2819,7 @@ ResultRows Executor::executeSortPlan(const Planner::Sort* sort_plan,
                                         just_explain,
                                         allow_loop_joins,
                                         nullptr);
-  if (just_explain) {
+  if (just_explain || *error_code == ERR_OUT_OF_GPU_MEM) {
     return rows_to_sort;
   }
   rows_to_sort.sort(sort_plan->get_order_entries(), sort_plan->get_remove_duplicates(), limit + offset);
