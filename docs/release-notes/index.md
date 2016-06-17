@@ -1,5 +1,17 @@
 # MapD Platform
-The latest version of the MapD Platform is 1.1.7.
+The latest version of the MapD Platform is 1.1.8.
+
+#### **1.1.8** — Released June 21, 2016
+
+##### New
+- Added `\copygeo` command to support ingesting shapefiles
+- Added backend API for rendering polygons
+ 
+##### Fixed
+- Improved performance of `CASE` queries that don't have an `ELSE` clause
+- Fixed a crash that would occur when certain large output results were generated
+- Improved performance of queries, such as `SELECT * FROM table_name LIMIT 5` 
+- Fixed a bug that would sometimes omit results from queries with `AVG` where `NULL`s were present
 
 #### **1.1.7** — Released June 13, 2016
 
