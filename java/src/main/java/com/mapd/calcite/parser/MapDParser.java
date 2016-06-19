@@ -28,6 +28,7 @@ import org.apache.calcite.sql.validate.SqlConformance;
 import org.apache.calcite.sql.validate.SqlValidator;
 import org.apache.calcite.sql2rel.SqlToRelConverter;
 import org.apache.calcite.sql2rel.StandardConvertletTable;
+import org.apache.calcite.util.ConversionUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -51,6 +52,9 @@ public final class MapDParser {
   private int callCount = 0;
 
   public MapDParser(String dataDir){
+    System.setProperty("saffron.default.charset",ConversionUtil.NATIVE_UTF16_CHARSET_NAME);
+    System.setProperty("saffron.default.nationalcharset",ConversionUtil.NATIVE_UTF16_CHARSET_NAME);
+    System.setProperty("saffron.default.collation.name",ConversionUtil.NATIVE_UTF16_CHARSET_NAME + "$en_US");
     typeFactory = new SqlTypeFactoryImpl(RelDataTypeSystem.DEFAULT);
     catalogReader = new MapDCatalogReader(typeFactory, dataDir);
     validator = new MapDValidator(
