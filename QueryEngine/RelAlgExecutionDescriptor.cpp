@@ -3,7 +3,9 @@
 
 std::vector<RaExecutionDesc> get_execution_descriptors(const RelAlgNode* ra_node) {
   CHECK(ra_node);
-  CHECK(!dynamic_cast<const RelScan*>(ra_node) && !dynamic_cast<const RelJoin*>(ra_node));
+  if (dynamic_cast<const RelScan*>(ra_node) || dynamic_cast<const RelJoin*>(ra_node)) {
+    throw std::runtime_error("Query not supported yet");
+  }
   CHECK_GT(ra_node->inputCount(), size_t(0));
   CHECK_EQ(size_t(1), ra_node->inputCount());
   std::vector<ForLoop> for_loops;
