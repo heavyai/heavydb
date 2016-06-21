@@ -33,6 +33,12 @@ class RelAlgExecutor {
                                   const RenderInfo&,
                                   const int64_t queue_time_ms);
 
+  ExecutionResult executeAggregate(const RelAggregate* aggregate,
+                                   const CompilationOptions& co,
+                                   const ExecutionOptions& eo,
+                                   const RenderInfo& render_info,
+                                   const int64_t queue_time_ms);
+
   ExecutionResult executeProject(const RelProject*,
                                  const CompilationOptions&,
                                  const ExecutionOptions&,
@@ -87,6 +93,8 @@ class RelAlgExecutor {
   WorkUnit createWorkUnit(const RelAlgNode*, const std::list<Analyzer::OrderEntry>&);
 
   WorkUnit createCompoundWorkUnit(const RelCompound*, const std::list<Analyzer::OrderEntry>&);
+
+  WorkUnit createAggregateWorkUnit(const RelAggregate*, const std::list<Analyzer::OrderEntry>&);
 
   WorkUnit createProjectWorkUnit(const RelProject*, const std::list<Analyzer::OrderEntry>&);
 

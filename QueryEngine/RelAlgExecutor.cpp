@@ -45,6 +45,12 @@ ExecutionResult RelAlgExecutor::executeRelAlgSeq(std::vector<RaExecutionDesc>& e
       addTemporaryTable(-project->getId(), &exec_desc.getResult().getRows());
       continue;
     }
+    const auto aggregate = dynamic_cast<const RelAggregate*>(body);
+    if (aggregate) {
+      exec_desc.setResult(executeAggregate(aggregate, co, eo_work_unit, render_info, queue_time_ms));
+      addTemporaryTable(-aggregate->getId(), &exec_desc.getResult().getRows());
+      continue;
+    }
     const auto filter = dynamic_cast<const RelFilter*>(body);
     if (filter) {
       exec_desc.setResult(executeFilter(filter, co, eo_work_unit, render_info, queue_time_ms));
@@ -144,6 +150,23 @@ std::unordered_set<const RexInput*> get_used_inputs(const RelCompound* compound)
   return used_inputs;
 }
 
+std::unordered_set<const RexInput*> get_used_inputs(const RelAggregate* aggregate) {
+  RexUsedInputsVisitor visitor;
+  std::unordered_set<const RexInput*> used_inputs;
+  CHECK_LT(size_t(0), aggregate->inputCount());
+  const auto project = dynamic_cast<const RelProject*>(aggregate->getInput(0));
+  CHECK(nullptr != project);
+  for (size_t i = 0; i < aggregate->getGroupByCount(); ++i) {
+    const auto source_inputs = visitor.visit(project->getProjectAt(i));
+    used_inputs.insert(source_inputs.begin(), source_inputs.end());
+  }
+  for (const auto& agg_expr : aggregate->getAggExprs()) {
+    const auto source_inputs = visitor.visit(project->getProjectAt(agg_expr->getOperand()));
+    used_inputs.insert(source_inputs.begin(), source_inputs.end());
+  }
+  return used_inputs;
+}
+
 std::unordered_set<const RexInput*> get_used_inputs(const RelProject* project) {
   RexUsedInputsVisitor visitor;
   std::unordered_set<const RexInput*> used_inputs;
@@ -236,12 +259,24 @@ size_t get_scalar_sources_size(const RelCompound* compound) {
   return compound->getScalarSourcesSize();
 }
 
+size_t get_scalar_sources_size(const RelAggregate* aggregate) {
+  return aggregate->getGroupByCount();
+}
+
 size_t get_scalar_sources_size(const RelProject* project) {
   return project->size();
 }
 
 const RexScalar* scalar_at(const size_t i, const RelCompound* compound) {
   return compound->getScalarSource(i);
+}
+
+const RexScalar* scalar_at(const size_t i, const RelAggregate* aggregate) {
+  CHECK_LT(i, aggregate->getGroupByCount());
+  CHECK_LT(size_t(0), aggregate->inputCount());
+  const auto project = dynamic_cast<const RelProject*>(aggregate->getInput(0));
+  CHECK(nullptr != project);
+  return project->getProjectAt(i);
 }
 
 const RexScalar* scalar_at(const size_t i, const RelProject* project) {
@@ -284,6 +319,16 @@ std::list<std::shared_ptr<Analyzer::Expr>> translate_groupby_exprs(
   }
   std::list<std::shared_ptr<Analyzer::Expr>> groupby_exprs;
   for (size_t group_idx = 0; group_idx < compound->getGroupByCount(); ++group_idx) {
+    groupby_exprs.push_back(set_transient_dict(scalar_sources[group_idx]));
+  }
+  return groupby_exprs;
+}
+
+std::list<std::shared_ptr<Analyzer::Expr>> translate_groupby_exprs(
+    const RelAggregate* aggregate,
+    const std::vector<std::shared_ptr<Analyzer::Expr>>& scalar_sources) {
+  std::list<std::shared_ptr<Analyzer::Expr>> groupby_exprs;
+  for (size_t group_idx = 0; group_idx < aggregate->getGroupByCount(); ++group_idx) {
     groupby_exprs.push_back(set_transient_dict(scalar_sources[group_idx]));
   }
   return groupby_exprs;
@@ -352,6 +397,28 @@ std::vector<Analyzer::Expr*> translate_targets(std::vector<std::shared_ptr<Analy
   return target_exprs;
 }
 
+std::vector<Analyzer::Expr*> translate_targets(std::vector<std::shared_ptr<Analyzer::Expr>>& target_exprs_owned,
+                                               const std::vector<std::shared_ptr<Analyzer::Expr>>& scalar_sources,
+                                               const std::list<std::shared_ptr<Analyzer::Expr>>& groupby_exprs,
+                                               const RelAggregate* aggregate,
+                                               const RelAlgTranslator& translator) {
+  std::vector<Analyzer::Expr*> target_exprs;
+  size_t group_key_idx = 0;
+  for (const auto& groupby_expr : groupby_exprs) {
+    auto target_expr = var_ref(groupby_expr.get(), Analyzer::Var::kGROUPBY, group_key_idx++);
+    target_exprs_owned.push_back(target_expr);
+    target_exprs.push_back(target_expr.get());
+  }
+
+  for (const auto& target_rex_agg : aggregate->getAggExprs()) {
+    auto target_expr = RelAlgTranslator::translateAggregateRex(target_rex_agg.get(), scalar_sources);
+    CHECK(target_expr);
+    target_exprs_owned.push_back(target_expr);
+    target_exprs.push_back(target_expr.get());
+  }
+  return target_exprs;
+}
+
 // TODO(alex): Adjust interfaces downstream and make this not needed.
 std::vector<Analyzer::Expr*> get_exprs_not_owned(const std::vector<std::shared_ptr<Analyzer::Expr>>& exprs) {
   std::vector<Analyzer::Expr*> exprs_not_owned;
@@ -381,6 +448,15 @@ ExecutionResult RelAlgExecutor::executeCompound(const RelCompound* compound,
   const auto work_unit = createCompoundWorkUnit(compound, {});
   return executeWorkUnit(
       work_unit, compound->getOutputMetainfo(), compound->isAggregate(), co, eo, render_info, queue_time_ms);
+}
+
+ExecutionResult RelAlgExecutor::executeAggregate(const RelAggregate* aggregate,
+                                                 const CompilationOptions& co,
+                                                 const ExecutionOptions& eo,
+                                                 const RenderInfo& render_info,
+                                                 const int64_t queue_time_ms) {
+  const auto work_unit = createAggregateWorkUnit(aggregate, {});
+  return executeWorkUnit(work_unit, aggregate->getOutputMetainfo(), true, co, eo, render_info, queue_time_ms);
 }
 
 ExecutionResult RelAlgExecutor::executeProject(const RelProject* project,
@@ -718,6 +794,33 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(const RelCompoun
   const auto targets_meta = get_targets_meta(compound, rewritten_exe_unit.target_exprs);
   compound->setOutputMetainfo(targets_meta);
   return {rewritten_exe_unit, max_groups_buffer_entry_default_guess, std::unique_ptr<QueryRewriter>(query_rewriter)};
+}
+
+RelAlgExecutor::WorkUnit RelAlgExecutor::createAggregateWorkUnit(const RelAggregate* aggregate,
+                                                                 const std::list<Analyzer::OrderEntry>& order_entries) {
+  std::vector<InputDescriptor> input_descs;
+  std::list<InputColDescriptor> input_col_descs;
+  const auto input_to_nest_level = get_input_nest_levels(aggregate);
+  std::tie(input_descs, input_col_descs) = get_input_desc(aggregate, input_to_nest_level);
+  const auto join_type = get_join_type(aggregate);
+  RelAlgTranslator translator(cat_, input_to_nest_level, join_type, now_);
+  const auto scalar_sources = translate_scalar_sources(aggregate, translator);
+  const auto groupby_exprs = translate_groupby_exprs(aggregate, scalar_sources);
+  const auto target_exprs =
+      translate_targets(target_exprs_owned_, scalar_sources, groupby_exprs, aggregate, translator);
+  return {{input_descs,
+           input_col_descs,
+           {},
+           {},
+           join_type,
+           get_inner_join_quals(aggregate, translator),
+           get_outer_join_quals(aggregate, translator),
+           groupby_exprs,
+           target_exprs,
+           order_entries,
+           0},
+          max_groups_buffer_entry_default_guess,
+          nullptr};
 }
 
 RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(const RelProject* project,

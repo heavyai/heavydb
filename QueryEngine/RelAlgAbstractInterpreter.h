@@ -473,6 +473,8 @@ class RelAggregate : public RelAlgNode {
     return result;
   }
 
+  const std::vector<std::unique_ptr<const RexAgg>>& getAggExprs() const { return agg_exprs_; }
+
   std::string toString() const override {
     std::string result = "(RelAggregate<" + std::to_string(reinterpret_cast<uint64_t>(this)) + ">(groups: [";
     for (size_t group_index = 0; group_index < groupby_count_; ++group_index) {
