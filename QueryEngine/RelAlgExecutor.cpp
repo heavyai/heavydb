@@ -137,7 +137,18 @@ class RexUsedInputsVisitor : public RexVisitor<std::unordered_set<const RexInput
   }
 };
 
-std::unordered_set<const RexInput*> get_used_inputs(const RelCompound* compound) {
+const RelAlgNode* get_data_sink(const RelAlgNode* ra_node) {
+  CHECK_EQ(size_t(1), ra_node->inputCount());
+  const auto join_input = dynamic_cast<const RelJoin*>(ra_node->getInput(0));
+  // If the input node is a join, the data is sourced from it instead of the initial node.
+  const auto data_sink_node =
+      join_input ? static_cast<const RelAlgNode*>(join_input) : static_cast<const RelAlgNode*>(ra_node);
+  CHECK(1 <= data_sink_node->inputCount() && data_sink_node->inputCount() <= 2);
+  return data_sink_node;
+}
+
+std::pair<std::unordered_set<const RexInput*>, std::vector<std::shared_ptr<RexInput>>> get_used_inputs(
+    const RelCompound* compound) {
   RexUsedInputsVisitor visitor;
   const auto filter_expr = compound->getFilterExpr();
   std::unordered_set<const RexInput*> used_inputs =
@@ -147,34 +158,45 @@ std::unordered_set<const RexInput*> get_used_inputs(const RelCompound* compound)
     const auto source_inputs = visitor.visit(compound->getScalarSource(i));
     used_inputs.insert(source_inputs.begin(), source_inputs.end());
   }
-  return used_inputs;
+  return std::make_pair(used_inputs, std::vector<std::shared_ptr<RexInput>>{});
 }
 
-std::unordered_set<const RexInput*> get_used_inputs(const RelAggregate* aggregate) {
-  RexUsedInputsVisitor visitor;
+std::pair<std::unordered_set<const RexInput*>, std::vector<std::shared_ptr<RexInput>>> get_used_inputs(
+    const RelAggregate* aggregate) {
+  CHECK_EQ(size_t(1), aggregate->inputCount());
   std::unordered_set<const RexInput*> used_inputs;
-  CHECK_LT(size_t(0), aggregate->inputCount());
-  const auto project = dynamic_cast<const RelProject*>(aggregate->getInput(0));
-  CHECK(nullptr != project);
-  for (size_t i = 0; i < aggregate->getGroupByCount(); ++i) {
-    const auto source_inputs = visitor.visit(project->getProjectAt(i));
-    used_inputs.insert(source_inputs.begin(), source_inputs.end());
+  std::vector<std::shared_ptr<RexInput>> used_inputs_owned;
+  const auto source = aggregate->getInput(0);
+  const auto& in_metainfo = source->getOutputMetainfo();
+  const auto group_count = aggregate->getGroupByCount();
+  CHECK_GE(in_metainfo.size(), group_count);
+  for (size_t i = 0; i < group_count; ++i) {
+    auto synthesized_used_input = new RexInput(source, i);
+    used_inputs_owned.emplace_back(synthesized_used_input);
+    used_inputs.insert(synthesized_used_input);
   }
   for (const auto& agg_expr : aggregate->getAggExprs()) {
-    const auto source_inputs = visitor.visit(project->getProjectAt(agg_expr->getOperand()));
-    used_inputs.insert(source_inputs.begin(), source_inputs.end());
+    const auto operand_idx = agg_expr->getOperand();
+    const bool takes_arg{operand_idx >= 0};
+    if (takes_arg) {
+      CHECK_GE(in_metainfo.size(), static_cast<size_t>(operand_idx));
+      auto synthesized_used_input = new RexInput(source, operand_idx);
+      used_inputs_owned.emplace_back(synthesized_used_input);
+      used_inputs.insert(synthesized_used_input);
+    }
   }
-  return used_inputs;
+  return std::make_pair(used_inputs, used_inputs_owned);
 }
 
-std::unordered_set<const RexInput*> get_used_inputs(const RelProject* project) {
+std::pair<std::unordered_set<const RexInput*>, std::vector<std::shared_ptr<RexInput>>> get_used_inputs(
+    const RelProject* project) {
   RexUsedInputsVisitor visitor;
   std::unordered_set<const RexInput*> used_inputs;
   for (size_t i = 0; i < project->size(); ++i) {
     const auto proj_inputs = visitor.visit(project->getProjectAt(i));
     used_inputs.insert(proj_inputs.begin(), proj_inputs.end());
   }
-  return used_inputs;
+  return std::make_pair(used_inputs, std::vector<std::shared_ptr<RexInput>>{});
 }
 
 int table_id_from_ra(const RelAlgNode* ra_node) {
@@ -185,16 +207,6 @@ int table_id_from_ra(const RelAlgNode* ra_node) {
     return td->tableId;
   }
   return -ra_node->getId();
-}
-
-const RelAlgNode* get_data_sink(const RelAlgNode* ra_node) {
-  CHECK_EQ(size_t(1), ra_node->inputCount());
-  const auto join_input = dynamic_cast<const RelJoin*>(ra_node->getInput(0));
-  // If the input node is a join, the data is sourced from it instead of the initial node.
-  const auto data_sink_node =
-      join_input ? static_cast<const RelAlgNode*>(join_input) : static_cast<const RelAlgNode*>(ra_node);
-  CHECK(1 <= data_sink_node->inputCount() && data_sink_node->inputCount() <= 2);
-  return data_sink_node;
 }
 
 std::unordered_map<const RelAlgNode*, int> get_input_nest_levels(const RelAlgNode* ra_node) {
@@ -248,19 +260,17 @@ std::pair<std::vector<InputDescriptor>, std::list<InputColDescriptor>> get_input
 }
 
 template <class RA>
-std::pair<std::vector<InputDescriptor>, std::list<InputColDescriptor>> get_input_desc(
-    const RA* ra_node,
-    const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level) {
-  const auto used_inputs = get_used_inputs(ra_node);
-  return get_input_desc_impl(ra_node, used_inputs, input_to_nest_level);
+std::tuple<std::vector<InputDescriptor>, std::list<InputColDescriptor>, std::vector<std::shared_ptr<RexInput>>>
+get_input_desc(const RA* ra_node, const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level) {
+  std::unordered_set<const RexInput*> used_inputs;
+  std::vector<std::shared_ptr<RexInput>> used_inputs_owned;
+  std::tie(used_inputs, used_inputs_owned) = get_used_inputs(ra_node);
+  auto input_desc_pair = get_input_desc_impl(ra_node, used_inputs, input_to_nest_level);
+  return std::make_tuple(input_desc_pair.first, input_desc_pair.second, used_inputs_owned);
 }
 
 size_t get_scalar_sources_size(const RelCompound* compound) {
   return compound->getScalarSourcesSize();
-}
-
-size_t get_scalar_sources_size(const RelAggregate* aggregate) {
-  return aggregate->getGroupByCount();
 }
 
 size_t get_scalar_sources_size(const RelProject* project) {
@@ -269,14 +279,6 @@ size_t get_scalar_sources_size(const RelProject* project) {
 
 const RexScalar* scalar_at(const size_t i, const RelCompound* compound) {
   return compound->getScalarSource(i);
-}
-
-const RexScalar* scalar_at(const size_t i, const RelAggregate* aggregate) {
-  CHECK_LT(i, aggregate->getGroupByCount());
-  CHECK_LT(size_t(0), aggregate->inputCount());
-  const auto project = dynamic_cast<const RelProject*>(aggregate->getInput(0));
-  CHECK(nullptr != project);
-  return project->getProjectAt(i);
 }
 
 const RexScalar* scalar_at(const size_t i, const RelProject* project) {
@@ -681,6 +683,10 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createWorkUnit(const RelAlgNode* node,
   if (project) {
     return createProjectWorkUnit(project, order_entries);
   }
+  const auto aggregate = dynamic_cast<const RelAggregate*>(node);
+  if (aggregate) {
+    return createAggregateWorkUnit(aggregate, order_entries);
+  }
   const auto filter = dynamic_cast<const RelFilter*>(node);
   CHECK(filter);
   return createFilterWorkUnit(filter, order_entries);
@@ -764,7 +770,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(const RelCompoun
   std::vector<InputDescriptor> input_descs;
   std::list<InputColDescriptor> input_col_descs;
   const auto input_to_nest_level = get_input_nest_levels(compound);
-  std::tie(input_descs, input_col_descs) = get_input_desc(compound, input_to_nest_level);
+  std::tie(input_descs, input_col_descs, std::ignore) = get_input_desc(compound, input_to_nest_level);
   const auto join_type = get_join_type(compound);
   RelAlgTranslator translator(cat_, input_to_nest_level, join_type, now_);
   const auto scalar_sources = translate_scalar_sources(compound, translator);
@@ -796,61 +802,6 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(const RelCompoun
   return {rewritten_exe_unit, max_groups_buffer_entry_default_guess, std::unique_ptr<QueryRewriter>(query_rewriter)};
 }
 
-RelAlgExecutor::WorkUnit RelAlgExecutor::createAggregateWorkUnit(const RelAggregate* aggregate,
-                                                                 const std::list<Analyzer::OrderEntry>& order_entries) {
-  std::vector<InputDescriptor> input_descs;
-  std::list<InputColDescriptor> input_col_descs;
-  const auto input_to_nest_level = get_input_nest_levels(aggregate);
-  std::tie(input_descs, input_col_descs) = get_input_desc(aggregate, input_to_nest_level);
-  const auto join_type = get_join_type(aggregate);
-  RelAlgTranslator translator(cat_, input_to_nest_level, join_type, now_);
-  const auto scalar_sources = translate_scalar_sources(aggregate, translator);
-  const auto groupby_exprs = translate_groupby_exprs(aggregate, scalar_sources);
-  const auto target_exprs =
-      translate_targets(target_exprs_owned_, scalar_sources, groupby_exprs, aggregate, translator);
-  return {{input_descs,
-           input_col_descs,
-           {},
-           {},
-           join_type,
-           get_inner_join_quals(aggregate, translator),
-           get_outer_join_quals(aggregate, translator),
-           groupby_exprs,
-           target_exprs,
-           order_entries,
-           0},
-          max_groups_buffer_entry_default_guess,
-          nullptr};
-}
-
-RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(const RelProject* project,
-                                                               const std::list<Analyzer::OrderEntry>& order_entries) {
-  std::vector<InputDescriptor> input_descs;
-  std::list<InputColDescriptor> input_col_descs;
-  const auto input_to_nest_level = get_input_nest_levels(project);
-  std::tie(input_descs, input_col_descs) = get_input_desc(project, input_to_nest_level);
-  const auto join_type = get_join_type(project);
-  RelAlgTranslator translator(cat_, input_to_nest_level, join_type, now_);
-  const auto target_exprs_owned = translate_scalar_sources(project, translator);
-  target_exprs_owned_.insert(target_exprs_owned_.end(), target_exprs_owned.begin(), target_exprs_owned.end());
-  const auto target_exprs = get_exprs_not_owned(target_exprs_owned);
-  const auto targets_meta = get_targets_meta(project, target_exprs);
-  project->setOutputMetainfo(targets_meta);
-  return {{input_descs,
-           input_col_descs,
-           {},
-           {},
-           join_type,
-           get_inner_join_quals(project, translator),
-           get_outer_join_quals(project, translator),
-           {nullptr},
-           target_exprs,
-           order_entries,
-           0},
-          max_groups_buffer_entry_default_guess,
-          nullptr};
-}
-
 namespace {
 
 std::vector<std::shared_ptr<Analyzer::Expr>> synthesize_inputs(
@@ -875,6 +826,67 @@ std::vector<std::shared_ptr<Analyzer::Expr>> synthesize_inputs(
 }
 
 }  // namespace
+
+RelAlgExecutor::WorkUnit RelAlgExecutor::createAggregateWorkUnit(const RelAggregate* aggregate,
+                                                                 const std::list<Analyzer::OrderEntry>& order_entries) {
+  std::vector<InputDescriptor> input_descs;
+  std::list<InputColDescriptor> input_col_descs;
+  std::vector<std::shared_ptr<RexInput>> used_inputs_owned;
+  const auto input_to_nest_level = get_input_nest_levels(aggregate);
+  std::tie(input_descs, input_col_descs, used_inputs_owned) = get_input_desc(aggregate, input_to_nest_level);
+  const auto join_type = get_join_type(aggregate);
+  RelAlgTranslator translator(cat_, input_to_nest_level, join_type, now_);
+  CHECK_EQ(size_t(1), aggregate->inputCount());
+  const auto source = aggregate->getInput(0);
+  const auto& in_metainfo = source->getOutputMetainfo();
+  const auto scalar_sources = synthesize_inputs(aggregate, in_metainfo, input_to_nest_level);
+  const auto groupby_exprs = translate_groupby_exprs(aggregate, scalar_sources);
+  const auto target_exprs =
+      translate_targets(target_exprs_owned_, scalar_sources, groupby_exprs, aggregate, translator);
+  const auto targets_meta = get_targets_meta(aggregate, target_exprs);
+  aggregate->setOutputMetainfo(targets_meta);
+  return {{input_descs,
+           input_col_descs,
+           {},
+           {},
+           join_type,
+           get_inner_join_quals(aggregate, translator),
+           get_outer_join_quals(aggregate, translator),
+           groupby_exprs,
+           target_exprs,
+           order_entries,
+           0},
+          max_groups_buffer_entry_default_guess,
+          nullptr};
+}
+
+RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(const RelProject* project,
+                                                               const std::list<Analyzer::OrderEntry>& order_entries) {
+  std::vector<InputDescriptor> input_descs;
+  std::list<InputColDescriptor> input_col_descs;
+  const auto input_to_nest_level = get_input_nest_levels(project);
+  std::tie(input_descs, input_col_descs, std::ignore) = get_input_desc(project, input_to_nest_level);
+  const auto join_type = get_join_type(project);
+  RelAlgTranslator translator(cat_, input_to_nest_level, join_type, now_);
+  const auto target_exprs_owned = translate_scalar_sources(project, translator);
+  target_exprs_owned_.insert(target_exprs_owned_.end(), target_exprs_owned.begin(), target_exprs_owned.end());
+  const auto target_exprs = get_exprs_not_owned(target_exprs_owned);
+  const auto targets_meta = get_targets_meta(project, target_exprs);
+  project->setOutputMetainfo(targets_meta);
+  return {{input_descs,
+           input_col_descs,
+           {},
+           {},
+           join_type,
+           get_inner_join_quals(project, translator),
+           get_outer_join_quals(project, translator),
+           {nullptr},
+           target_exprs,
+           order_entries,
+           0},
+          max_groups_buffer_entry_default_guess,
+          nullptr};
+}
 
 RelAlgExecutor::WorkUnit RelAlgExecutor::createFilterWorkUnit(const RelFilter* filter,
                                                               const std::list<Analyzer::OrderEntry>& order_entries) {

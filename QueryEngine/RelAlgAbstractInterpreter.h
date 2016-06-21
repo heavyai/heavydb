@@ -465,6 +465,8 @@ class RelAggregate : public RelAlgNode {
 
   const std::vector<std::string>& getFields() const { return fields_; }
 
+  const std::string getFieldName(const size_t i) const { return fields_[i]; }
+
   std::vector<const RexAgg*> getAggregatesAndRelease() {
     std::vector<const RexAgg*> result;
     for (auto& agg_expr : agg_exprs_) {

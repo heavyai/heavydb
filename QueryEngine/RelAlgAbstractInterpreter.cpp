@@ -2,7 +2,6 @@
 #include "RelAlgAbstractInterpreter.h"
 #include "CalciteDeserializerUtils.h"
 #include "JsonAccessors.h"
-#include "RelAlgValidator.h"
 #include "RexVisitor.h"
 
 #include <glog/logging.h>
@@ -642,11 +641,6 @@ class RaAbstractInterp {
     mark_nops(nodes_);
     coalesce_nodes(nodes_);
     simplify_sort(nodes_);
-    if (!is_valid_rel_alg(nodes_.back())) {
-      // TODO(alex): Not great, need to figure out a better ownership model.
-      delete nodes_.back();
-      throw QueryNotSupported("Failed to optimize away Aggregate nodes");
-    }
     return std::unique_ptr<const RelAlgNode>(nodes_.back());
   }
 
