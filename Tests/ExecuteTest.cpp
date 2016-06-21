@@ -1190,6 +1190,24 @@ void import_query_rewrite_test() {
   }
 }
 
+void import_big_decimal_range_test() {
+  const std::string drop_old_decimal_range_test("DROP TABLE IF EXISTS big_decimal_range_test;");
+  run_ddl_statement(drop_old_decimal_range_test);
+  g_sqlite_comparator.query(drop_old_decimal_range_test);
+  run_ddl_statement("CREATE TABLE big_decimal_range_test(d DECIMAL(14, 2)) WITH (fragment_size=2);");
+  g_sqlite_comparator.query("CREATE TABLE big_decimal_range_test(d DECIMAL(14, 2));");
+  {
+    const std::string insert_query{"INSERT INTO big_decimal_range_test VALUES(-40840124.400000);"};
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query);
+  }
+  {
+    const std::string insert_query{"INSERT INTO big_decimal_range_test VALUES(59016609.300000);"};
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query);
+  }
+}
+
 }  // namespace
 
 TEST(Select, ArrayUnnest) {
@@ -1430,6 +1448,13 @@ TEST(Select, GroupByConstrainedByInQueryRewrite) {
   }
 }
 
+TEST(Select, BigDecimalRange) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT CAST(d AS INT) AS di, COUNT(*) FROM big_decimal_range_test GROUP BY di HAVING di > 0;", dt);
+  }
+}
+
 #ifdef HAVE_RAVM
 TEST(Select, Subqueries) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
@@ -1586,6 +1611,12 @@ int main(int argc, char** argv) {
     import_query_rewrite_test();
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'query_rewrite_test'";
+    return -EEXIST;
+  }
+  try {
+    import_big_decimal_range_test();
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'big_decimal_range_test'";
     return -EEXIST;
   }
   int err{0};

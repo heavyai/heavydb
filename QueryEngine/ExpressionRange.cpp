@@ -155,11 +155,11 @@ ExpressionRange getExpressionRange(const Analyzer::Expr* expr,
 namespace {
 
 int64_t scale_down_interval_endpoint(const int64_t endpoint, const SQLTypeInfo& ti) {
-  return endpoint / exp_to_scale(ti.get_scale());
+  return endpoint / static_cast<int64_t>(exp_to_scale(ti.get_scale()));
 }
 
 int64_t scale_up_interval_endpoint(const int64_t endpoint, const SQLTypeInfo& ti) {
-  return endpoint * exp_to_scale(ti.get_scale());
+  return endpoint * static_cast<int64_t>(exp_to_scale(ti.get_scale()));
 }
 
 }  // namespace
@@ -421,13 +421,13 @@ ExpressionRange getExpressionRange(const Analyzer::UOper* u_expr,
     case ExpressionRangeType::Integer: {
       if (ti.is_decimal()) {
         CHECK_EQ(int64_t(0), arg_range.getBucket());
-        const auto scale = exp_to_scale(ti.get_scale() - arg_ti.get_scale());
+        const int64_t scale = exp_to_scale(ti.get_scale() - arg_ti.get_scale());
         return ExpressionRange::makeIntRange(
             arg_range.getIntMin() * scale, arg_range.getIntMax() * scale, 0, arg_range.hasNulls());
       }
       if (arg_ti.is_decimal()) {
         CHECK_EQ(int64_t(0), arg_range.getBucket());
-        const auto scale = exp_to_scale(arg_ti.get_scale());
+        const int64_t scale = exp_to_scale(arg_ti.get_scale());
         return ExpressionRange::makeIntRange(
             arg_range.getIntMin() / scale, arg_range.getIntMax() / scale, 0, arg_range.hasNulls());
       }
