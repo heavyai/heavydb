@@ -31,6 +31,7 @@ var (
 	port        int
 	backendUrl  *url.URL
 	frontend    string
+	serversJson string
 	dataDir     string
 	certFile    string
 	keyFile     string
@@ -81,6 +82,7 @@ func init() {
 	pflag.IntP("port", "p", 9092, "frontend server port")
 	pflag.StringP("backend-url", "b", "", "url to http-port on mapd_server [http://localhost:9090]")
 	pflag.StringP("frontend", "f", "frontend", "path to frontend directory")
+	pflag.StringP("servers-json", "", "", "path to servers.json")
 	pflag.StringP("data", "d", "data", "path to MapD data directory")
 	pflag.StringP("config", "c", "", "path to MapD configuration file")
 	pflag.BoolP("read-only", "r", false, "enable read-only mode")
@@ -100,6 +102,7 @@ func init() {
 	viper.BindPFlag("web.port", pflag.CommandLine.Lookup("port"))
 	viper.BindPFlag("web.backend-url", pflag.CommandLine.Lookup("backend-url"))
 	viper.BindPFlag("web.frontend", pflag.CommandLine.Lookup("frontend"))
+	viper.BindPFlag("web.servers-json", pflag.CommandLine.Lookup("servers-json"))
 	viper.BindPFlag("web.enable-https", pflag.CommandLine.Lookup("enable-https"))
 	viper.BindPFlag("web.cert", pflag.CommandLine.Lookup("cert"))
 	viper.BindPFlag("web.key", pflag.CommandLine.Lookup("key"))
@@ -133,6 +136,7 @@ func init() {
 
 	port = viper.GetInt("web.port")
 	frontend = viper.GetString("web.frontend")
+	serversJson = viper.GetString("web.servers-json")
 
 	dataDir = viper.GetString("data")
 	readOnly = viper.GetBool("read-only")
@@ -366,7 +370,13 @@ func downloadsHandler(rw http.ResponseWriter, r *http.Request) {
 
 func serversHandler(rw http.ResponseWriter, r *http.Request) {
 	var j []byte
-	j, err := ioutil.ReadFile(frontend + "/servers.json")
+	servers := ""
+	if len(serversJson) > 0 {
+		servers = serversJson
+	} else {
+		servers = frontend + "/servers.json"
+	}
+	j, err := ioutil.ReadFile(servers)
 	if err != nil {
 		s := Server{}
 		s.Master = true
