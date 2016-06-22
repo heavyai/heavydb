@@ -36,7 +36,7 @@ class JoinHashTable {
     if (device_type == ExecutorDeviceType::CPU) {
       CHECK(cpu_hash_table_buff_);
     } else {
-      CHECK_LT(device_id, gpu_hash_table_buff_.size());
+      CHECK_LT(static_cast<size_t>(device_id), gpu_hash_table_buff_.size());
     }
     return device_type == ExecutorDeviceType::CPU ? reinterpret_cast<int64_t>(&(*cpu_hash_table_buff_)[0])
                                                   : gpu_hash_table_buff_[device_id];
