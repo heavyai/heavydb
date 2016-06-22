@@ -206,7 +206,7 @@ func uploadHandler(rw http.ResponseWriter, r *http.Request) {
 	case "image":
 		uploadDir = dataDir + "/mapd_images/"
 	default:
-		sessionId := r.Header.Get("sessionid")
+		sessionId := filepath.Base(filepath.Clean(r.Header.Get("sessionid")))
 		uploadDir = dataDir + "/mapd_import/" + sessionId + "/"
 	}
 
@@ -222,7 +222,8 @@ func uploadHandler(rw http.ResponseWriter, r *http.Request) {
 				status = http.StatusInternalServerError
 				return
 			}
-			outfile, err := os.Create(uploadDir + fh.Filename)
+			fn := filepath.Base(filepath.Clean(fh.Filename))
+			outfile, err := os.Create(uploadDir + fn)
 			if err != nil {
 				status = http.StatusInternalServerError
 				return
