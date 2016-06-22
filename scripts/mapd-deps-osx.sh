@@ -33,12 +33,26 @@ cd bison++-1.21
 # in 3.6). This version is provided by Homebrew's `versions` tap.
 
 brew tap homebrew/versions
+
+cat << EOS
+
+llvm35 requires a slight modification to the build config. See the README for details.
+
+Add the following to the args, somewhere around lines 196-203:
+   "--with-c-include-dirs=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.11.sdk/usr/include",
+
+Hit enter to edit the config.
+
+EOS
+read -r
+
+brew edit llvm35
 brew install llvm35 --with-all-targets
 
 # Finally, add a few components of llvm to your path PATH.
 mkdir -p ~/bin/
 for i in clang++ llc llvm-config; do
-  ln -sf $(brew --prefix llvm35)/bin/$i-3.5 ~/bin/$i
+  ln -sf "$(brew --prefix llvm35)/bin/$i-3.5" ~/bin/$i
 done
 export PATH=~/bin:$PATH
 

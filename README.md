@@ -62,9 +62,13 @@ Instructions for installing CUDA are below.
 
 [scripts/mapd-deps-osx.sh](scripts/mapd-deps-osx.sh) is provided that will automatically install and/or update [Homebrew](http://brew.sh/) and use that to install all dependencies. Please make sure OSX is completely update to date and Xcode is installed before running.
 
+Note: installing LLVM 3.5 view Homebrew requires some slight modifications to the build config arguments. [scripts/mapd-deps-osx.sh](scripts/mapd-deps-osx.sh) will run `brew edit llvm35`, which opens up the build config in your editor. Jump to the configure args (should be around lines 196-203) and add this line, if running on OS X 10.11:
+
+    "--with-c-include-dirs=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.11.sdk/usr/include",
+
 ### CUDA
 
-`mapd-deps-osx.sh` will automatically install CUDA via Homebrew.
+`mapd-deps-osx.sh` will automatically install CUDA via Homebrew and add the correct environment variables to `~/.bash_profile`.
 
 ## Ubuntu 15.10
 
