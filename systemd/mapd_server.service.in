@@ -7,6 +7,7 @@ User=@MAPD_USER@
 Group=@MAPD_GROUP@
 ExecStart=@MAPD_PATH@/bin/mapd_server --config @MAPD_STORAGE@/mapd.conf
 KillMode=control-group
+SuccessExitStatus=143
 LimitNOFILE=16384
 
 [Install]
