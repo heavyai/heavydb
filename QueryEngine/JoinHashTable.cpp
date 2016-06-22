@@ -84,9 +84,15 @@ std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(
   }
   const auto& ti = inner_col->get_type_info();
   auto col_range = getExpressionRange(ti.is_string() ? cols.second : inner_col, query_infos, executor);
+  if (col_range.getType() == ExpressionRangeType::Invalid) {
+    return nullptr;
+  }
   if (ti.is_string()) {
     // The nullable info must be the same as the source column.
     const auto source_col_range = getExpressionRange(inner_col, query_infos, executor);
+    if (source_col_range.getType() == ExpressionRangeType::Invalid) {
+      return nullptr;
+    }
     col_range = ExpressionRange::makeIntRange(std::min(source_col_range.getIntMin(), col_range.getIntMin()),
                                               std::max(source_col_range.getIntMax(), col_range.getIntMax()),
                                               0,
@@ -107,6 +113,9 @@ int JoinHashTable::reify(const int device_count) {
   const auto inner_col = cols.first;
   CHECK(inner_col);
   const auto& query_info = query_infos_[inner_col->get_rte_idx()];
+  if (query_info.fragments.empty()) {
+    return 0;
+  }
   if (query_info.fragments.size() != 1) {  // we don't support multiple fragment inner tables (yet)
     return -1;
   }

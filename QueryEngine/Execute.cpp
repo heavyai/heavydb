@@ -3839,6 +3839,10 @@ int32_t Executor::executePlanWithGroupBy(const CompilationResult& compilation_re
                                          const uint32_t start_rowid,
                                          const uint32_t num_tables,
                                          RenderAllocatorMap* render_allocator_map) noexcept {
+  if (col_buffers.empty()) {
+    results = ResultRows({}, {}, nullptr, nullptr, {}, device_type);
+    return 0;
+  }
   CHECK_NE(group_by_col_count, size_t(0));
   // TODO(alex):
   // 1. Optimize size (make keys more compact).

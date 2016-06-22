@@ -315,6 +315,10 @@ ExpressionRange getExpressionRange(const Analyzer::ColumnVar* col_expr,
         const int64_t num_tuples = query_infos[rte_idx].numTuples;
         return ExpressionRange::makeIntRange(0, std::max(num_tuples - 1, int64_t(0)), 0, has_nulls);
       }
+      if (query_infos[rte_idx].numTuples == 0 && !col_ti.is_fp()) {
+        // The column doesn't contain any values, synthesize an empty range.
+        return ExpressionRange::makeIntRange(0, -1, 0, false);
+      }
       FIND_STAT_FRAG(min);
       FIND_STAT_FRAG(max);
       const auto min_it = min_frag->chunkMetadataMap.find(col_id);
