@@ -3,7 +3,7 @@
 extern "C" ALWAYS_INLINE DEVICE uint32_t key_hash(const int64_t* key, const uint32_t key_qw_count) {
   uint32_t hash = 0;
   for (uint32_t i = 0; i < key_qw_count; ++i) {
-    hash = (hash << 5) - hash + key[i];
+    hash = (hash << 8) - (hash << 2) - hash + key[i];
   }
   return hash;
 }
