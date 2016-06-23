@@ -1,16 +1,31 @@
 # MapD Platform
-The latest version of the MapD Platform is 1.1.8.
+The latest version of the MapD Platform is 1.1.9.
+
+#### **1.1.9** - Released June 27, 2016
+
+##### New
+- Improved logging and system process management
+  - Deprecated `--disable-fork` flag in `mapd_server`. Please remove this flag from any config files.
+  - Removed `fork()` from `mapd_server`. Automatic restart should now be handled by an external process, such as `systemd`.
+  - Added graceful shutdown to `mapd_web_server` so that `systemd` more accurately reports its status
+  - Modified `mapd_server` service file so that `systemd` more accurately reports its status
+  - Improved logging of various mapd_server operations
+- Improved memory handling to better maximize GPU RAM usage
+
+##### Fixed
+- Fixed a bug that prevented queries from running which were joining an empty table
+- Fixed a subtle stroke/line visual defect when polygons are rendered on the backend
 
 #### **1.1.8** — Released June 21, 2016
 
 ##### New
 - Added `\copygeo` command to support ingesting shapefiles
 - Added backend API for rendering polygons
- 
+
 ##### Fixed
 - Improved performance of `CASE` queries that don't have an `ELSE` clause
 - Fixed a crash that would occur when certain large output results were generated
-- Improved performance of queries, such as `SELECT * FROM table_name LIMIT 5` 
+- Improved performance of queries, such as `SELECT * FROM table_name LIMIT 5`
 - Fixed a bug that would sometimes omit results from queries with `AVG` where `NULL`s were present
 
 #### **1.1.7** — Released June 13, 2016
