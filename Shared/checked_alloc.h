@@ -7,7 +7,7 @@
 class OutOfHostMemory : public std::runtime_error {
  public:
   OutOfHostMemory(const size_t size)
-      : std::runtime_error("Failed to allocate " + std::to_string(size) + "bytes of memory") {}
+      : std::runtime_error("Failed to allocate " + std::to_string(size) + " bytes of memory") {}
 };
 
 inline void* checked_malloc(const size_t size) {
