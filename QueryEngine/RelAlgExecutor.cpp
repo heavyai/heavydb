@@ -199,6 +199,33 @@ std::pair<std::unordered_set<const RexInput*>, std::vector<std::shared_ptr<RexIn
   return std::make_pair(used_inputs, std::vector<std::shared_ptr<RexInput>>{});
 }
 
+std::pair<std::unordered_set<const RexInput*>, std::vector<std::shared_ptr<RexInput>>> get_used_inputs(
+    const RelFilter* filter) {
+  std::unordered_set<const RexInput*> used_inputs;
+  std::vector<std::shared_ptr<RexInput>> used_inputs_owned;
+  const auto data_sink_node = get_data_sink(filter);
+  for (size_t nest_level = 0; nest_level < data_sink_node->inputCount(); ++nest_level) {
+    const auto source = data_sink_node->getInput(nest_level);
+    const auto scan_source = dynamic_cast<const RelScan*>(source);
+    if (scan_source) {
+      CHECK(source->getOutputMetainfo().empty());
+      for (size_t i = 0; i < scan_source->size(); ++i) {
+        auto synthesized_used_input = new RexInput(scan_source, i);
+        used_inputs_owned.emplace_back(synthesized_used_input);
+        used_inputs.insert(synthesized_used_input);
+      }
+    } else {
+      const auto& partial_in_metadata = source->getOutputMetainfo();
+      for (size_t i = 0; i < partial_in_metadata.size(); ++i) {
+        auto synthesized_used_input = new RexInput(source, i);
+        used_inputs_owned.emplace_back(synthesized_used_input);
+        used_inputs.insert(synthesized_used_input);
+      }
+    }
+  }
+  return std::make_pair(used_inputs, used_inputs_owned);
+}
+
 int table_id_from_ra(const RelAlgNode* ra_node) {
   const auto scan_ra = dynamic_cast<const RelScan*>(ra_node);
   if (scan_ra) {
@@ -806,10 +833,12 @@ namespace {
 
 std::vector<std::shared_ptr<Analyzer::Expr>> synthesize_inputs(
     const RelAlgNode* ra_node,
+    const size_t nest_level,
     const std::vector<TargetMetaInfo>& in_metainfo,
     const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level) {
-  CHECK_EQ(size_t(1), ra_node->inputCount());
-  const auto input = ra_node->getInput(0);
+  CHECK_LE(size_t(1), ra_node->inputCount());
+  CHECK_GE(size_t(2), ra_node->inputCount());
+  const auto input = ra_node->getInput(nest_level);
   const auto it_rte_idx = input_to_nest_level.find(input);
   CHECK(it_rte_idx != input_to_nest_level.end());
   const int rte_idx = it_rte_idx->second;
@@ -839,7 +868,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createAggregateWorkUnit(const RelAggreg
   CHECK_EQ(size_t(1), aggregate->inputCount());
   const auto source = aggregate->getInput(0);
   const auto& in_metainfo = source->getOutputMetainfo();
-  const auto scalar_sources = synthesize_inputs(aggregate, in_metainfo, input_to_nest_level);
+  const auto scalar_sources = synthesize_inputs(aggregate, size_t(0), in_metainfo, input_to_nest_level);
   const auto groupby_exprs = translate_groupby_exprs(aggregate, scalar_sources);
   const auto target_exprs =
       translate_targets(target_exprs_owned_, scalar_sources, groupby_exprs, aggregate, translator);
@@ -888,26 +917,59 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(const RelProject*
           nullptr};
 }
 
+namespace {
+
+std::pair<std::vector<TargetMetaInfo>, std::vector<std::shared_ptr<Analyzer::Expr>>> get_inputs_meta(
+    const RelFilter* filter,
+    const RelAlgTranslator& translator,
+    const std::vector<std::shared_ptr<RexInput>>& inputs_owned,
+    const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level) {
+  std::vector<TargetMetaInfo> in_metainfo;
+  std::vector<std::shared_ptr<Analyzer::Expr>> exprs_owned;
+  const auto data_sink_node = get_data_sink(filter);
+  auto input_it = inputs_owned.begin();
+  for (size_t nest_level = 0; nest_level < data_sink_node->inputCount(); ++nest_level) {
+    const auto source = data_sink_node->getInput(nest_level);
+    const auto scan_source = dynamic_cast<const RelScan*>(source);
+    if (scan_source) {
+      CHECK(source->getOutputMetainfo().empty());
+      std::vector<std::shared_ptr<Analyzer::Expr>> scalar_sources_owned;
+      for (size_t i = 0; i < scan_source->size(); ++i, ++input_it) {
+        scalar_sources_owned.push_back(translator.translateScalarRex(input_it->get()));
+      }
+      const auto source_metadata = get_targets_meta(scan_source, get_exprs_not_owned(scalar_sources_owned));
+      in_metainfo.insert(in_metainfo.end(), source_metadata.begin(), source_metadata.end());
+      exprs_owned.insert(exprs_owned.end(), scalar_sources_owned.begin(), scalar_sources_owned.end());
+    } else {
+      const auto& source_metadata = source->getOutputMetainfo();
+      input_it += source_metadata.size();
+      in_metainfo.insert(in_metainfo.end(), source_metadata.begin(), source_metadata.end());
+      const auto scalar_sources_owned =
+          synthesize_inputs(data_sink_node, nest_level, source_metadata, input_to_nest_level);
+      exprs_owned.insert(exprs_owned.end(), scalar_sources_owned.begin(), scalar_sources_owned.end());
+    }
+  }
+  return std::make_pair(in_metainfo, exprs_owned);
+}
+
+}  // namespace
+
 RelAlgExecutor::WorkUnit RelAlgExecutor::createFilterWorkUnit(const RelFilter* filter,
                                                               const std::list<Analyzer::OrderEntry>& order_entries) {
   CHECK_EQ(size_t(1), filter->inputCount());
   std::vector<InputDescriptor> input_descs;
   std::list<InputColDescriptor> input_col_descs;
-  std::unordered_set<const RexInput*> used_inputs;
-  std::vector<std::unique_ptr<RexInput>> used_inputs_owned;
-  const auto source = filter->getInput(0);
-  const auto& in_metainfo = source->getOutputMetainfo();
-  for (size_t i = 0; i < in_metainfo.size(); ++i) {
-    auto synthesized_used_input = new RexInput(source, i);
-    used_inputs_owned.emplace_back(synthesized_used_input);
-    used_inputs.insert(synthesized_used_input);
-  }
+  std::vector<TargetMetaInfo> in_metainfo;
+  std::vector<std::shared_ptr<RexInput>> used_inputs_owned;
+  std::vector<std::shared_ptr<Analyzer::Expr>> target_exprs_owned;
+
   const auto input_to_nest_level = get_input_nest_levels(filter);
-  std::tie(input_descs, input_col_descs) = get_input_desc_impl(filter, used_inputs, input_to_nest_level);
+  std::tie(input_descs, input_col_descs, used_inputs_owned) = get_input_desc(filter, input_to_nest_level);
   const auto join_type = get_join_type(filter);
   RelAlgTranslator translator(cat_, input_to_nest_level, join_type, now_);
+  std::tie(in_metainfo, target_exprs_owned) =
+      get_inputs_meta(filter, translator, used_inputs_owned, input_to_nest_level);
   const auto qual = translator.translateScalarRex(filter->getCondition());
-  const auto target_exprs_owned = synthesize_inputs(filter, in_metainfo, input_to_nest_level);
   target_exprs_owned_.insert(target_exprs_owned_.end(), target_exprs_owned.begin(), target_exprs_owned.end());
   const auto target_exprs = get_exprs_not_owned(target_exprs_owned);
   filter->setOutputMetainfo(in_metainfo);

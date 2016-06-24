@@ -364,6 +364,8 @@ class RelScan : public RelAlgNode {
 
   const std::vector<std::string>& getFieldNames() const { return field_names_; }
 
+  const std::string getFieldName(const size_t i) const { return field_names_[i]; }
+
   std::string toString() const override {
     return "(RelScan<" + std::to_string(reinterpret_cast<uint64_t>(this)) + "> " +
            std::to_string(reinterpret_cast<uint64_t>(td_)) + ")";
