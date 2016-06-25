@@ -30,8 +30,7 @@ std::map<int, ChunkMetadata> synthesize_metadata(const ResultRows* rows) noexcep
         const auto i64_p = boost::get<int64_t>(scalar_col_val);
         CHECK(i64_p);
         dummy_encoders[i]->updateStats(*i64_p, *i64_p == inline_int_null_val(col_ti));
-      } else {
-        CHECK(col_ti.is_fp());
+      } else if (col_ti.is_fp()) {
         switch (col_ti.get_type()) {
           case kFLOAT: {
             const auto float_p = boost::get<float>(scalar_col_val);
@@ -48,6 +47,8 @@ std::map<int, ChunkMetadata> synthesize_metadata(const ResultRows* rows) noexcep
           default:
             CHECK(false);
         }
+      } else {
+        throw std::runtime_error(col_ti.get_type_name() + " is not supported in temporary table.");
       }
     }
   }
