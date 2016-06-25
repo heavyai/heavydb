@@ -160,15 +160,18 @@ void check_total_bitmap_memory(const std::vector<ssize_t>& agg_bitmap_size,
       }
       total_bits_per_group += col_bitmap_size;
     }
+    int64_t total_bits{0};
+    // Need to use OutOfHostMemory since it's the only type of exception
+    // QueryExecutionContext is supposed to throw.
     try {
-      const auto total_bits = total_bits_per_group * groups_buffer_entry_count * (keyless ? warp_size : 1);
-      // Need to use OutOfHostMemory since it's the only type of exception
-      // QueryExecutionContext is supposed to throw.
-      if (total_bits >= 8 * 1000 * 1000 * 1000L) {
-        throw OutOfHostMemory(static_cast<int64_t>(total_bits) / 8);
-      }
+      total_bits = static_cast<int64_t>(total_bits_per_group * groups_buffer_entry_count * (keyless ? warp_size : 1));
     } catch (...) {
+      // Absurd amount of memory, merely computing the number of bits overflows int64_t.
+      // Don't bother to report the real amount, this is unlikely to ever happen.
       throw OutOfHostMemory(std::numeric_limits<int64_t>::max() / 8);
+    }
+    if (total_bits >= 8 * 1000 * 1000 * 1000L) {
+      throw OutOfHostMemory(static_cast<int64_t>(total_bits) / 8);
     }
   }
 }
