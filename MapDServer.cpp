@@ -1042,43 +1042,48 @@ class MapDHandler : virtual public MapDIf {
     _return = cat.createLink(ld, 6);
   }
 
+  std::string sanitize_name(const std::string& name) {
+    boost::regex invalid_chars{R"([^0-9a-z_\$])", boost::regex::extended | boost::regex::icase};
+
+    return boost::regex_replace(name, invalid_chars, "");
+  }
+
   void create_table(const TSessionId session, const std::string& table_name, const TRowDescriptor& rd) {
     check_read_only("create_table");
-    // TODO(alex): de-couple CreateTableStmt from the parser and reuse it here
-    const auto session_info = get_session(session);
-    auto& cat = session_info.get_catalog();
 
-    LOG(INFO) << "create_table: " << table_name;
+    if (table_name != sanitize_name(table_name)) {
+      TMapDException ex;
+      ex.error_msg = "Invalid characters in table name: " + table_name;
+      LOG(ERROR) << ex.error_msg;
+      throw ex;
+    }
+    std::string stmt{"CREATE TABLE " + table_name};
+    std::vector<std::string> col_stmts;
 
-    TableDescriptor td;
-    td.tableName = table_name;
-    td.isView = false;
-    td.fragType = Fragmenter_Namespace::FragmenterType::INSERT_ORDER;
-    td.maxFragRows = DEFAULT_FRAGMENT_SIZE;
-    td.fragPageSize = DEFAULT_PAGE_SIZE;
-    td.maxRows = DEFAULT_MAX_ROWS;
-
-    std::list<ColumnDescriptor> cds;
     for (auto col : rd) {
-      ColumnDescriptor cd;
-      cd.columnName = col.col_name;
-      SQLTypeInfo ti(thrift_to_type(col.col_type.type), false, thrift_to_encoding(col.col_type.encoding));
-      cd.columnType = ti;
-      if (cd.columnType.get_compression() == kENCODING_DICT) {
-        cd.columnType.set_comp_param(32);
+      if (col.col_name != sanitize_name(col.col_name)) {
+        TMapDException ex;
+        ex.error_msg = "Invalid characters in column name: " + col.col_name;
+        LOG(ERROR) << ex.error_msg;
+        throw ex;
       }
-      cds.push_back(cd);
+      std::string col_stmt;
+      col_stmt.append(col.col_name + " " + thrift_to_name(col.col_type) + " ");
+
+      // As of 2016-06-27 the Immerse v1 frontend does not explicitly set the
+      // `nullable` argument, leading this to default to false. Uncomment for v2.
+      // if (!col.col_type.nullable) col_stmt.append("NOT NULL ");
+
+      if (thrift_to_encoding(col.col_type.encoding) != kENCODING_NONE) {
+        col_stmt.append("ENCODING " + thrift_to_encoding_name(col.col_type) + " ");
+      }
+      col_stmts.push_back(col_stmt);
     }
 
-    td.nColumns = cds.size();
-    td.isMaterialized = false;
-    td.storageOption = kDISK;
-    td.refreshOption = kMANUAL;
-    td.checkOption = false;
-    td.isReady = true;
-    td.fragmenter = nullptr;
+    stmt.append(" (" + boost::algorithm::join(col_stmts, ", ") + ");");
 
-    cat.createTable(td, cds);
+    TQueryResult ret;
+    sql_execute(ret, session, stmt, true, "");
   }
 
   void import_table(const TSessionId session,
