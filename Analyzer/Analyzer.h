@@ -753,6 +753,31 @@ class DatetruncExpr : public Expr {
   std::shared_ptr<Analyzer::Expr> from_expr;
 };
 
+class FunctionOper : public Expr {
+ public:
+  FunctionOper(const SQLTypeInfo& ti, const std::string& name, const std::vector<std::shared_ptr<Analyzer::Expr>>& args)
+      : Expr(ti, false), name_(name), args_(args) {}
+
+  std::string getName() const { return name_; }
+
+  size_t getArity() const { return args_.size(); }
+
+  const Analyzer::Expr* getArg(const size_t i) const {
+    CHECK_LT(i, args_.size());
+    return args_[i].get();
+  }
+
+  std::shared_ptr<Analyzer::Expr> deep_copy() const override;
+
+  bool operator==(const Expr& rhs) const override;
+
+  void print() const override;
+
+ private:
+  const std::string name_;
+  const std::vector<std::shared_ptr<Analyzer::Expr>> args_;
+};
+
 /*
  * @type TargetEntry
  * @brief Target list defines a relational projection.  It is a list of TargetEntry's.

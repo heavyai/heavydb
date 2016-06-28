@@ -340,6 +340,7 @@ class Executor {
   llvm::Value* codegenIsNull(const Analyzer::UOper*, const CompilationOptions&);
   llvm::Value* codegenUnnest(const Analyzer::UOper*, const CompilationOptions&);
   llvm::Value* codegenArrayAt(const Analyzer::BinOper*, const CompilationOptions&);
+  llvm::Value* codegenFunctionOper(const Analyzer::FunctionOper*, const CompilationOptions&);
   llvm::ConstantInt* codegenIntConst(const Analyzer::Constant* constant);
   llvm::Value* colByteStream(const Analyzer::ColumnVar* col_var, const bool fetch_column, const bool hoist_literals);
   llvm::Value* posArg(const Analyzer::Expr*) const;

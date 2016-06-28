@@ -638,6 +638,11 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Expr* expr,
   if (in_expr) {
     return {codegen(in_expr, co)};
   }
+
+  auto function_oper_expr = dynamic_cast<const Analyzer::FunctionOper*>(expr);
+  if (function_oper_expr) {
+    return {codegenFunctionOper(function_oper_expr, co)};
+  }
 #ifdef HAVE_CALCITE
   CHECK(false);
 #else
@@ -1954,6 +1959,20 @@ llvm::Value* Executor::codegenArrayAt(const Analyzer::BinOper* array_at, const C
                                         idx_lv,
                                         elem_ti.is_fp() ? static_cast<llvm::Value*>(inlineFpNull(elem_ti))
                                                         : static_cast<llvm::Value*>(inlineIntNull(elem_ti))});
+}
+
+llvm::Value* Executor::codegenFunctionOper(const Analyzer::FunctionOper* function_oper, const CompilationOptions& co) {
+  std::vector<llvm::Value*> args;
+  const auto& ret_ti = function_oper->get_type_info();
+  const auto ret_ty = ret_ti.is_fp() ? (ret_ti.get_type() == kDOUBLE ? llvm::Type::getDoubleTy(cgen_state_->context_)
+                                                                     : llvm::Type::getFloatTy(cgen_state_->context_))
+                                     : get_int_type(ret_ti.get_size() * 8, cgen_state_->context_);
+  for (size_t i = 0; i < function_oper->getArity(); ++i) {
+    const auto arg_lvs = codegen(function_oper->getArg(i), true, co);
+    CHECK_EQ(size_t(1), arg_lvs.size());
+    args.push_back(arg_lvs.front());
+  }
+  return cgen_state_->emitExternalCall(function_oper->getName(), ret_ty, args);
 }
 
 llvm::ConstantInt* Executor::codegenIntConst(const Analyzer::Constant* constant) {

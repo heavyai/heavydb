@@ -330,10 +330,7 @@ public class MapDRelJson {
           list.add(toJson(operand));
         }
         map.put("operands", list);
-        switch (node.getKind()) {
-        case CAST:
-          map.put("type", toJson(node.getType()));
-        }
+        map.put("type", toJson(node.getType()));
         if (call.getOperator() instanceof SqlFunction) {
           switch (((SqlFunction) call.getOperator()).getFunctionType()) {
           case USER_DEFINED_CONSTRUCTOR:

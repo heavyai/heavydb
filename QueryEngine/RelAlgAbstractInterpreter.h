@@ -231,11 +231,11 @@ class RexCase : public RexScalar {
 
 class RexFunctionOperator : public RexOperator {
  public:
-  RexFunctionOperator(const std::string& name, const std::vector<const RexScalar*> operands)
-      : RexOperator(kFUNCTION, operands, SQLTypeInfo()), name_(name) {}
+  RexFunctionOperator(const std::string& name, const std::vector<const RexScalar*> operands, const SQLTypeInfo& ti)
+      : RexOperator(kFUNCTION, operands, ti), name_(name) {}
 
   virtual const RexOperator* getDisambiguated(const std::vector<const RexScalar*>& operands) const override {
-    return new RexFunctionOperator(name_, operands);
+    return new RexFunctionOperator(name_, operands, getType());
   }
 
   const std::string& getName() const { return name_; }

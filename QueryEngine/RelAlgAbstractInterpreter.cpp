@@ -225,16 +225,10 @@ RexOperator* parse_operator(const rapidjson::Value& expr) {
        ++operators_json_arr_it) {
     operands.push_back(parse_scalar_expr(*operators_json_arr_it));
   }
-  if (op == kFUNCTION) {
-    return new RexFunctionOperator(op_name, operands);
-  }
   const auto type_it = expr.FindMember("type");
-  CHECK_EQ(op == kCAST, type_it != expr.MemberEnd());
-  SQLTypeInfo ti;
-  if (op == kCAST) {
-    ti = parse_type(type_it->value);
-  }
-  return new RexOperator(op, operands, ti);
+  CHECK(type_it != expr.MemberEnd());
+  const auto ti = parse_type(type_it->value);
+  return op == kFUNCTION ? new RexFunctionOperator(op_name, operands, ti) : new RexOperator(op, operands, ti);
 }
 
 RexCase* parse_case(const rapidjson::Value& expr) {
