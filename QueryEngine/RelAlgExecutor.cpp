@@ -537,14 +537,11 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
   const auto source = sort->getInput(0);
   CHECK(!dynamic_cast<const RelSort*>(source));
   const auto compound = dynamic_cast<const RelCompound*>(source);
+  const auto aggregate = dynamic_cast<const RelAggregate*>(source);
+  const bool is_aggregate = ((compound && compound->isAggregate()) || aggregate);
   const auto source_work_unit = createSortInputWorkUnit(sort);
-  auto source_result = executeWorkUnit(source_work_unit,
-                                       source->getOutputMetainfo(),
-                                       compound ? compound->isAggregate() : false,
-                                       co,
-                                       eo,
-                                       render_info,
-                                       queue_time_ms);
+  auto source_result =
+      executeWorkUnit(source_work_unit, source->getOutputMetainfo(), is_aggregate, co, eo, render_info, queue_time_ms);
   if (render_info.is_render) {
     return source_result;
   }
