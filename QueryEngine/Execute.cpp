@@ -628,17 +628,14 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Expr* expr,
   if (charlength_expr) {
     return {codegen(charlength_expr, co)};
   }
-
   auto like_expr = dynamic_cast<const Analyzer::LikeExpr*>(expr);
   if (like_expr) {
     return {codegen(like_expr, co)};
   }
-
   auto in_expr = dynamic_cast<const Analyzer::InValues*>(expr);
   if (in_expr) {
     return {codegen(in_expr, co)};
   }
-
   auto function_oper_expr = dynamic_cast<const Analyzer::FunctionOper*>(expr);
   if (function_oper_expr) {
     return {codegenFunctionOper(function_oper_expr, co)};
