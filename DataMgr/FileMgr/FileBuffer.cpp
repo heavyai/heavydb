@@ -158,7 +158,7 @@ void FileBuffer::read(int8_t* const dst,
                       const MemoryLevel dstBufferType,
                       const int deviceId) {
   if (dstBufferType != CPU_LEVEL) {
-    throw std::runtime_error("Unsupported Buffer type");
+    LOG(FATAL) << "Unsupported Buffer type";
   }
 
   // variable declarations
@@ -356,7 +356,7 @@ void FileBuffer::write(int8_t* src,
                        const MemoryLevel srcBufferType,
                        const int deviceId) {
   if (srcBufferType != CPU_LEVEL) {
-    throw std::runtime_error("Unsupported Buffer type");
+    LOG(FATAL) << "Unsupported Buffer type";
   }
   isDirty_ = true;
   if (offset < size_) {

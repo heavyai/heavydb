@@ -29,7 +29,7 @@ void GpuCudaBuffer::readData(int8_t* const dst,
     cudaMgr_->copyDeviceToDevice(dst, mem_ + offset, numBytes, dstDeviceId, deviceId_);
 
   } else {
-    throw std::runtime_error("Unsupported buffer type");
+    LOG(FATAL) << "Unsupported buffer type";
   }
 }
 
@@ -50,7 +50,7 @@ void GpuCudaBuffer::writeData(int8_t* const src,
     // CudaUtils::copyGpuToGpu(mem_ + offset, src, numBytes, 1, deviceId_);
     //@todo fill this in
   } else {
-    throw std::runtime_error("Unsupported buffer type");
+    LOG(FATAL) << "Unsupported buffer type";
   }
 }
 

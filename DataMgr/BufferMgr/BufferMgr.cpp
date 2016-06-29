@@ -552,7 +552,7 @@ AbstractBuffer* BufferMgr::getBuffer(const ChunkKey& key, const size_t numBytes)
       printSegs();
       cout << error.what() << endl;
 
-      throw std::runtime_error("Get chunk - Could not find chunk in buffer pool or parent buffer pools");
+      LOG(FATAL) << "Get chunk - Could not find chunk in buffer pool or parent buffer pools.";
     }
     return buffer;
   }
@@ -653,7 +653,7 @@ void BufferMgr::free(AbstractBuffer* buffer) {
   std::lock_guard<std::mutex> lock(globalMutex_);  // hack for now
   Buffer* castedBuffer = dynamic_cast<Buffer*>(buffer);
   if (castedBuffer == 0) {
-    throw std::runtime_error("Wrong buffer type - expects base class pointer to Buffer type");
+    LOG(FATAL) << "Wrong buffer type - expects base class pointer to Buffer type.";
   }
   deleteBuffer(castedBuffer->segIt_->chunkKey);
 }
@@ -668,11 +668,11 @@ size_t BufferMgr::size() {
 }
 
 void BufferMgr::getChunkMetadataVec(std::vector<std::pair<ChunkKey, ChunkMetadata>>& chunkMetadataVec) {
-  throw std::runtime_error("getChunkMetadataVec not supported for BufferMgr");
+  LOG(FATAL) << "getChunkMetadataVec not supported for BufferMgr.";
 }
 
 void BufferMgr::getChunkMetadataVecForKeyPrefix(std::vector<std::pair<ChunkKey, ChunkMetadata>>& chunkMetadataVec,
                                                 const ChunkKey& keyPrefix) {
-  throw std::runtime_error("getChunkMetadataVecForPrefix not supported for BufferMgr");
+  LOG(FATAL) << "getChunkMetadataVecForPrefix not supported for BufferMgr.";
 }
 }

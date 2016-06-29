@@ -66,7 +66,7 @@ void FileMgr::init() {
   if (boost::filesystem::exists(path)) {
     // std::cout << "Path exists" << std::endl;
     if (!boost::filesystem::is_directory(path))
-      throw std::runtime_error("Specified path is not a directory.");
+      LOG(FATAL) << "Specified path is not a directory.";
     // std::cout << basePath_ << " exists." << std::endl;
     if (epoch_ != -1) {  // if opening at previous epoch
       int epochCopy = epoch_;
@@ -93,7 +93,7 @@ void FileMgr::init() {
           }
           size_t dotPos = fileStem.find_last_of(".");  // should only be one
           if (dotPos == std::string::npos) {
-            throw std::runtime_error("Filename does not carry page size information");
+            LOG(FATAL) << "Filename does not carry page size information.";
           }
           int fileId = boost::lexical_cast<int>(fileStem.substr(0, dotPos));
           if (fileId > maxFileId) {
@@ -163,7 +163,7 @@ void FileMgr::init() {
   } else {  // data directory does not exist
     // std::cout << basePath_ << " does not exist. Creating" << std::endl;
     if (!boost::filesystem::create_directory(path)) {
-      throw std::runtime_error("Could not create data directory");
+      LOG(FATAL) << "Could not create data directory";
     }
     // std::cout << basePath_ << " created." << std::endl;
     // now create epoch file
@@ -174,7 +174,7 @@ void FileMgr::init() {
 void FileMgr::createEpochFile(const std::string& epochFileName) {
   std::string epochFilePath(basePath_ + epochFileName);
   if (boost::filesystem::exists(epochFilePath)) {
-    throw std::runtime_error("Epoch file already exists");
+    LOG(FATAL) << "Epoch file already exists";
   }
   epochFile_ = create(epochFilePath, sizeof(int));
   // Write out current epoch to file - which if this
@@ -186,13 +186,13 @@ void FileMgr::createEpochFile(const std::string& epochFileName) {
 void FileMgr::openEpochFile(const std::string& epochFileName) {
   std::string epochFilePath(basePath_ + epochFileName);
   if (!boost::filesystem::exists(epochFilePath)) {
-    throw std::runtime_error("Epoch file does not exist");
+    LOG(FATAL) << "Epoch file does not exist";
   }
   if (!boost::filesystem::is_regular_file(epochFilePath)) {
-    throw std::runtime_error("Epoch file is not a regular file");
+    LOG(FATAL) << "Epoch file is not a regular file";
   }
   if (boost::filesystem::file_size(epochFilePath) < 4) {
-    throw std::runtime_error("Epoch file is not sized properly");
+    LOG(FATAL) << "Epoch file is not sized properly";
   }
   epochFile_ = open(epochFilePath);
   read(epochFile_, 0, sizeof(int), (int8_t*)&epoch_);
@@ -205,7 +205,7 @@ void FileMgr::writeAndSyncEpochToDisk() {
   int status = fflush(epochFile_);
   // int status = fcntl(fileno(epochFile_),51);
   if (status != 0) {
-    throw std::runtime_error("Could not sync epoch file to disk");
+    LOG(FATAL) << "Could not sync epoch file to disk";
   }
 
   ++epoch_;
@@ -230,7 +230,7 @@ void FileMgr::checkpoint() {
   for (auto fileIt = files_.begin(); fileIt != files_.end(); ++fileIt) {
     int status = (*fileIt)->syncToDisk();
     if (status != 0)
-      throw std::runtime_error("Could not sync file to disk");
+      LOG(FATAL) << "Could not sync file to disk";
   }
 
   writeAndSyncEpochToDisk();
@@ -247,7 +247,7 @@ AbstractBuffer* FileMgr::createBuffer(const ChunkKey& key, const size_t pageSize
   std::unique_lock<std::mutex> chunkIndexLock(chunkIndexMutex_);
 
   if (chunkIndex_.find(key) != chunkIndex_.end()) {
-    throw std::runtime_error("Chunk already exists.");
+    LOG(FATAL) << "Chunk already exists.";
   }
   chunkIndex_[key] = new FileBuffer(this, actualPageSize, key, numBytes);
   chunkIndexLock.unlock();
@@ -264,7 +264,7 @@ void FileMgr::deleteBuffer(const ChunkKey& key, const bool purge) {
   auto chunkIt = chunkIndex_.find(key);
   // ensure the Chunk exists
   if (chunkIt == chunkIndex_.end()) {
-    throw std::runtime_error("Chunk does not exist.");
+    LOG(FATAL) << "Chunk does not exist.";
   }
   chunkIndexLock.unlock();
   // chunkIt->second->writeMetadata(-1); // writes -1 as epoch - signifies deleted
@@ -306,7 +306,7 @@ AbstractBuffer* FileMgr::getBuffer(const ChunkKey& key, const size_t numBytes) {
   std::unique_lock<std::mutex> chunkIndexLock(chunkIndexMutex_);
   auto chunkIt = chunkIndex_.find(key);
   if (chunkIt == chunkIndex_.end())
-    throw std::runtime_error("Chunk does not exist.");
+    LOG(FATAL) << "Chunk does not exist.";
   chunkIndexLock.unlock();
   return chunkIt->second;
 }
@@ -318,18 +318,18 @@ void FileMgr::fetchBuffer(const ChunkKey& key, AbstractBuffer* destBuffer, const
 
   auto chunkIt = chunkIndex_.find(key);
   if (chunkIt == chunkIndex_.end()) {
-    throw std::runtime_error("Chunk does not exist");
+    LOG(FATAL) << "Chunk does not exist";
   }
   chunkIndexLock.unlock();
   if (destBuffer->isDirty()) {
-    throw std::runtime_error("Chunk inconsitency - fetchChunk");
+    LOG(FATAL) << " Chunk inconsitency - fetchChunk";
   }
   AbstractBuffer* chunk = chunkIt->second;
   // ChunkSize is either specified in function call with numBytes or we
   // just look at pageSize * numPages in FileBuffer
   size_t chunkSize = numBytes == 0 ? chunk->size() : numBytes;
   if (numBytes > 0 && numBytes > chunk->size()) {
-    throw std::runtime_error("Chunk is smaller than number of bytes requested");
+    LOG(FATAL) << "Chunk is smaller than number of bytes requested";
   }
   destBuffer->reserve(chunkSize);
   // std::cout << "After reserve chunksize: " << chunkSize << std::endl;
@@ -362,7 +362,7 @@ AbstractBuffer* FileMgr::putBuffer(const ChunkKey& key, AbstractBuffer* srcBuffe
   // size_t newChunkSize = numBytes == 0 ? srcBuffer->size() : numBytes;
   size_t newChunkSize = numBytes == 0 ? srcBuffer->size() : numBytes;
   if (chunk->isDirty()) {
-    throw std::runtime_error("Chunk inconsistency");
+    LOG(FATAL) << "Chunk inconsistency";
   }
   if (srcBuffer->isUpdated()) {
     //@todo use dirty flags to only flush pages of chunk that need to
@@ -384,11 +384,11 @@ AbstractBuffer* FileMgr::putBuffer(const ChunkKey& key, AbstractBuffer* srcBuffe
 }
 
 AbstractBuffer* FileMgr::alloc(const size_t numBytes = 0) {
-  throw std::runtime_error("Operation not supported");
+  LOG(FATAL) << "Operation not supported";
 }
 
 void FileMgr::free(AbstractBuffer* buffer) {
-  throw std::runtime_error("Operation not supported");
+  LOG(FATAL) << "Operation not supported";
 }
 
 // AbstractBuffer* FileMgr::putBuffer(AbstractBuffer *d) {
@@ -484,7 +484,7 @@ FileInfo* FileMgr::openExistingFile(const std::string& path,
 FileInfo* FileMgr::createFile(const size_t pageSize, const size_t numPages) {
   // check arguments
   if (pageSize == 0 || numPages == 0)
-    throw std::invalid_argument("pageSize and numPages must be greater than 0.");
+    LOG(FATAL) << "File creation failed: pageSize and numPages must be greater than 0.";
 
   // create the new file
   FILE* f = create(basePath_,
@@ -492,7 +492,7 @@ FileInfo* FileMgr::createFile(const size_t pageSize, const size_t numPages) {
                    pageSize,
                    numPages);  // TM: not sure if I like naming scheme here - should be in separate namespace?
   if (f == nullptr)
-    throw std::runtime_error("Unable to create the new file.");
+    LOG(FATAL) << "Unable to create the new file.";
 
   // instantiate a new FileInfo for the newly created file
   int fileId = nextFileId_++;

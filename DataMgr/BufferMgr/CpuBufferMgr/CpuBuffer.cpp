@@ -26,7 +26,7 @@ void CpuBuffer::readData(int8_t* const dst,
     assert(dstDeviceId >= 0);
     cudaMgr_->copyHostToDevice(dst, mem_ + offset, numBytes, dstDeviceId);  // need to replace 0 with gpu num
   } else {
-    throw std::runtime_error("Unsupported buffer type");
+    LOG(FATAL) << "Unsupported buffer type";
   }
 }
 
@@ -44,7 +44,7 @@ void CpuBuffer::writeData(int8_t* const src,
     assert(srcDeviceId >= 0);
     cudaMgr_->copyDeviceToHost(mem_ + offset, src, numBytes, srcDeviceId);  // need to replace 0 with gpu num
   } else {
-    throw std::runtime_error("Unsupported buffer type");
+    LOG(FATAL) << "Unsupported buffer type";
   }
 }
 

@@ -11,6 +11,7 @@
 #include <deque>
 #include <vector>
 #include <stdexcept>
+#include <glog/logging.h>
 #include "../../Shared/types.h"
 
 namespace File_Namespace {
@@ -66,8 +67,7 @@ struct MultiPage {
   /// is returned via the parameter "epoch").
   inline Page current(int* epoch = NULL) {
     if (pageVersions.size() < 1)
-      throw std::runtime_error("No current version of the page exists in this MultiPage.");
-    assert(pageVersions.size() > 0);  // @todo should use proper exception handling
+      LOG(FATAL) << "No current version of the page exists in this MultiPage.";
     if (epoch != NULL)
       *epoch = this->epochs.back();
     return pageVersions.back();
@@ -83,7 +83,7 @@ struct MultiPage {
   /// Purges the oldest Page
   inline void pop() {
     if (pageVersions.size() < 1)
-      throw std::runtime_error("No page to pop.");
+      LOG(FATAL) << "No page to pop.";
     pageVersions.pop_front();
     epochs.pop_front();
     assert(pageVersions.size() == epochs.size());

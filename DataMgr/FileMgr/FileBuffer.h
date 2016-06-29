@@ -91,7 +91,7 @@ class FileBuffer : public AbstractBuffer {
   virtual inline Data_Namespace::MemoryLevel getType() const { return DISK_LEVEL; }
 
   /// Not implemented for FileMgr -- throws a runtime_error
-  virtual int8_t* getMemoryPtr() { throw std::runtime_error("Operation not supported."); }
+  virtual int8_t* getMemoryPtr() { LOG(FATAL) << "Operation not supported."; }
 
   /// Returns the number of pages in the FileBuffer.
   inline virtual size_t pageCount() const { return multiPages_.size(); }

@@ -68,7 +68,7 @@ void Buffer::read(int8_t* const dst,
 #endif
 
   if (numBytes + offset > size_) {
-    throw std::runtime_error("Buffer: Out of bounds read error");
+    LOG(FATAL) << "Buffer: Out of bounds read error";
   }
   readData(dst, numBytes, offset, dstBufferType, dstDeviceId);
 }

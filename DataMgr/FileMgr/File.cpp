@@ -16,11 +16,11 @@ namespace File_Namespace {
 
 FILE* create(const std::string& basePath, const int fileId, const size_t pageSize, const size_t numPages) {
   if (numPages < 1 || pageSize < 1)
-    throw std::invalid_argument("Number of pages and page size must be positive integers.");
+    LOG(FATAL) << "Number of pages and page size must be positive integers.";
 
   std::string path(basePath + std::to_string(fileId) + "." + std::to_string(pageSize) +
                    std::string(MAPD_FILE_EXT));  // MAPD_FILE_EXT has preceding "."
-  FILE *f = fopen(path.c_str(), "w+b");
+  FILE* f = fopen(path.c_str(), "w+b");
   CHECK(f);
   fseek(f, (pageSize * numPages) - 1, SEEK_SET);
   fputc(EOF, f);
@@ -78,7 +78,7 @@ size_t write(FILE* f, const size_t offset, const size_t size, int8_t* buf) {
   fseek(f, offset, SEEK_SET);
   size_t bytesWritten = fwrite(buf, sizeof(int8_t), size, f);
   CHECK_EQ(bytesWritten, sizeof(int8_t) * size);
-  fflush(f); //needed?
+  fflush(f);  // needed?
   return bytesWritten;
 }
 
