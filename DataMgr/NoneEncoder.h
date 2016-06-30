@@ -46,16 +46,24 @@ class NoneEncoder : public Encoder {
 
   // Only called from the executor for synthesized meta-information.
   void updateStats(const int64_t val, const bool is_null) {
-    const auto data = static_cast<T>(val);
-    dataMin = std::min(dataMin, data);
-    dataMax = std::max(dataMax, data);
+    if (is_null) {
+      has_nulls = true;
+    } else {
+      const auto data = static_cast<T>(val);
+      dataMin = std::min(dataMin, data);
+      dataMax = std::max(dataMax, data);
+    }
   }
 
   // Only called from the executor for synthesized meta-information.
   void updateStats(const double val, const bool is_null) {
-    const auto data = static_cast<T>(val);
-    dataMin = std::min(dataMin, data);
-    dataMax = std::max(dataMax, data);
+    if (is_null) {
+      has_nulls = true;
+    } else {
+      const auto data = static_cast<T>(val);
+      dataMin = std::min(dataMin, data);
+      dataMax = std::max(dataMax, data);
+    }
   }
 
   void writeMetadata(FILE* f) {
