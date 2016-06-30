@@ -186,8 +186,25 @@ Datum StringToDatum(const std::string& s, SQLTypeInfo& ti) {
     }
     case kDATE: {
       std::tm tm_struct;
-      if (!strptime(s.c_str(), "%Y-%m-%d", &tm_struct) && !strptime(s.c_str(), "%m/%d/%Y", &tm_struct))
-        throw std::runtime_error("Invalid timestamp string " + s);
+      // not sure in advance if it is used so need to zero before processing
+      tm_struct.tm_gmtoff = 0;
+      char* tp;
+      // try ISO8601 date first
+      tp = strptime(s.c_str(), "%Y-%m-%d", &tm_struct);
+      if (!tp)
+        tp = strptime(s.c_str(), "%m/%d/%Y", &tm_struct);  // accept American date
+      if (!tp)
+        tp = strptime(s.c_str(), "%d-%b-%y", &tm_struct);  // accept 03-Sep-15
+      if (!tp)
+        tp = strptime(s.c_str(), "%d/%b/%Y", &tm_struct);  // accept 03/Sep/2015
+      if (!tp) {
+        try {
+          d.timeval = std::stoll(s);
+          break;
+        } catch (const std::invalid_argument& ia) {
+          throw std::runtime_error("Invalid date string " + s);
+        }
+      }
       tm_struct.tm_sec = tm_struct.tm_min = tm_struct.tm_hour = 0;
       tm_struct.tm_wday = tm_struct.tm_yday = tm_struct.tm_isdst = tm_struct.tm_gmtoff = 0;
       d.timeval = my_timegm(&tm_struct);
