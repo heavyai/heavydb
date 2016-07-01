@@ -59,7 +59,7 @@ void ExtensionFunctionsWhitelist::add(const std::string& json_func_sigs) {
          ++args_serialized_it) {
       args.push_back(deserialize_type(json_str(*args_serialized_it)));
     }
-    const auto it_ok = functions_.emplace(name, ExtensionFunction(name, args, ret));
+    const auto it_ok = functions_.emplace(name, ExtensionFunction(args, ret));
     CHECK(it_ok.second);
   }
 }

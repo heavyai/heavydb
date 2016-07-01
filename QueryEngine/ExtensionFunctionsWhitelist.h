@@ -17,8 +17,11 @@ enum class ExtArgumentType { Int16, Int32, Int64, Float, Double };
 
 class ExtensionFunction {
  public:
-  ExtensionFunction(const std::string& name, const std::vector<ExtArgumentType>& args, const ExtArgumentType ret)
-      : name_(name), args_(args), ret_(ret) {}
+  ExtensionFunction(const std::vector<ExtArgumentType>& args, const ExtArgumentType ret) : args_(args), ret_(ret) {}
+
+  const std::vector<ExtArgumentType>& getArgs() const { return args_; }
+
+  const ExtArgumentType getRet() const { return ret_; }
 
  private:
   const std::string name_;
@@ -30,7 +33,7 @@ class ExtensionFunctionsWhitelist {
  public:
   void add(const std::string& json_func_sigs);
 
-  ExtensionFunction* get(const std::string& name);
+  static ExtensionFunction* get(const std::string& name);
 
  private:
   // Function overloading not supported, they're uniquely identified by name.

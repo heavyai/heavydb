@@ -4,6 +4,7 @@
 #include "CartesianProduct.h"
 #include "Codec.h"
 #include "ExpressionRewrite.h"
+#include "ExtensionFunctionsWhitelist.h"
 #include "GpuMemUtils.h"
 #include "MaxwellCodegenPatch.h"
 #include "GroupByAndAggregate.h"
@@ -1958,16 +1959,49 @@ llvm::Value* Executor::codegenArrayAt(const Analyzer::BinOper* array_at, const C
                                                         : static_cast<llvm::Value*>(inlineIntNull(elem_ti))});
 }
 
+namespace {
+
+llvm::Type* ext_arg_type_to_llvm_type(const ExtArgumentType ext_arg_type, llvm::LLVMContext& ctx) {
+  switch (ext_arg_type) {
+    case ExtArgumentType::Int16:
+      return get_int_type(16, ctx);
+    case ExtArgumentType::Int32:
+      return get_int_type(32, ctx);
+    case ExtArgumentType::Int64:
+      return get_int_type(64, ctx);
+    case ExtArgumentType::Float:
+      return llvm::Type::getFloatTy(ctx);
+    case ExtArgumentType::Double:
+      return llvm::Type::getDoubleTy(ctx);
+    default:
+      CHECK(false);
+  }
+  CHECK(false);
+  return nullptr;
+}
+
+}  // namespace
+
 llvm::Value* Executor::codegenFunctionOper(const Analyzer::FunctionOper* function_oper, const CompilationOptions& co) {
+  const auto ext_func_sig = ExtensionFunctionsWhitelist::get(function_oper->getName());
+  if (!ext_func_sig) {
+    throw std::runtime_error("Runtime function " + function_oper->getName() + " not supported");
+  }
+  const auto& ext_func_args = ext_func_sig->getArgs();
   std::vector<llvm::Value*> args;
   const auto& ret_ti = function_oper->get_type_info();
+  CHECK(ret_ti.is_integer() || ret_ti.is_fp());
   const auto ret_ty = ret_ti.is_fp() ? (ret_ti.get_type() == kDOUBLE ? llvm::Type::getDoubleTy(cgen_state_->context_)
                                                                      : llvm::Type::getFloatTy(cgen_state_->context_))
                                      : get_int_type(ret_ti.get_size() * 8, cgen_state_->context_);
+  CHECK_EQ(ret_ty, ext_arg_type_to_llvm_type(ext_func_sig->getRet(), cgen_state_->context_));
+  CHECK_EQ(function_oper->getArity(), ext_func_args.size());
   for (size_t i = 0; i < function_oper->getArity(); ++i) {
     const auto arg_lvs = codegen(function_oper->getArg(i), true, co);
     CHECK_EQ(size_t(1), arg_lvs.size());
-    args.push_back(arg_lvs.front());
+    const auto arg = arg_lvs.front();
+    CHECK_EQ(arg->getType(), ext_arg_type_to_llvm_type(ext_func_args[i], cgen_state_->context_));
+    args.push_back(arg);
   }
   return cgen_state_->emitExternalCall(function_oper->getName(), ret_ty, args);
 }
