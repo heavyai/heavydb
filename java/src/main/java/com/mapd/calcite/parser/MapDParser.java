@@ -244,9 +244,8 @@ public final class MapDParser {
   protected SqlParser getSqlParser(String sql) {
     return SqlParser.create(sql,
             SqlParser.configBuilder()
-            .setQuoting(quoting)
-            .setUnquotedCasing(unquotedCasing)
-            .setQuotedCasing(quotedCasing)
+            .setUnquotedCasing(Casing.UNCHANGED)
+            .setCaseSensitive(false)
             .build());
   }
 

@@ -26,14 +26,10 @@ import org.apache.calcite.util.Util;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import com.google.common.collect.Ordering;
 import com.mapd.metadata.MetaConnect;
-import com.mapd.thrift.server.MapD;
 import com.mapd.thrift.server.TColumnType;
 import com.mapd.thrift.server.TDatumType;
 import com.mapd.thrift.server.TTypeInfo;
-import com.mapd.thrift.server.ThriftException;
-import java.sql.Connection;
 import java.util.ArrayList;
 
 import java.util.Arrays;
@@ -41,12 +37,6 @@ import java.util.Collections;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
-import org.apache.thrift.TException;
-import org.apache.thrift.protocol.TBinaryProtocol;
-import org.apache.thrift.protocol.TProtocol;
-import org.apache.thrift.transport.TSocket;
-import org.apache.thrift.transport.TTransport;
-import org.apache.thrift.transport.TTransportException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -61,9 +51,6 @@ public class MapDCatalogReader implements Prepare.CatalogReader {
   protected static final String DEFAULT_CATALOG = "CATALOG";
   protected String CURRENT_DEFAULT_SCHEMA = "mapd";
 
-  public static final Ordering<Iterable<String>> CASE_INSENSITIVE_LIST_COMPARATOR
-          = Ordering.from(String.CASE_INSENSITIVE_ORDER).lexicographical();
-
   private static volatile Map<List<String>, MapDTable> MAPD_TABLES = Maps.newConcurrentMap();
   private static volatile Map<String, MapDDatabase> MAPD_DATABASE = Maps.newConcurrentMap();
 
@@ -71,6 +58,7 @@ public class MapDCatalogReader implements Prepare.CatalogReader {
   protected final RelDataTypeFactory typeFactory;
   private final boolean elideRecord = true;
   private RelDataType addressType;
+  private boolean caseSensitive = false;
   private final EnumMap<TDatumType, ArrayList<ArrayList<RelDataType>>> mapDTypes;
   private MapDUser currentMapDUser;
   private final String dataDir;
@@ -349,7 +337,10 @@ public class MapDCatalogReader implements Prepare.CatalogReader {
 
   protected void registerTable(MapDTable table) {
     table.onRegister(typeFactory);
-    MAPD_TABLES.put(table.getQualifiedName(), table);
+    List<String> names = table.getQualifiedName();
+    MAPD_TABLES.put(
+            ImmutableList.of(names.get(0).toUpperCase(), names.get(1).toUpperCase(), names.get(2).toUpperCase()),
+            table);
   }
 
   protected void registerSchema(MapDDatabase schema) {
@@ -366,12 +357,13 @@ public class MapDCatalogReader implements Prepare.CatalogReader {
     switch (names.size()) {
       case 1:
         return getMapDTable(
-                ImmutableList.of(DEFAULT_CATALOG, this.currentMapDUser.getDB(), names.get(0)));
+                ImmutableList.of(DEFAULT_CATALOG, this.currentMapDUser.getDB().toUpperCase(), names.get(0).toUpperCase()));
       case 2:
         return getMapDTable(
-                ImmutableList.of(DEFAULT_CATALOG, names.get(0), names.get(1)));
+                ImmutableList.of(DEFAULT_CATALOG, names.get(0).toUpperCase(), names.get(1).toUpperCase()));
       case 3:
-        return getMapDTable(names);
+        return getMapDTable(
+                ImmutableList.of(names.get(0).toUpperCase(), names.get(1).toUpperCase(), names.get(2).toUpperCase()));
       default:
         return null;
     }
@@ -465,7 +457,7 @@ public class MapDCatalogReader implements Prepare.CatalogReader {
 
   @Override
   public RelDataTypeField field(RelDataType rowType, String alias) {
-    return SqlValidatorUtil.lookupField(true, elideRecord, rowType,
+    return SqlValidatorUtil.lookupField(caseSensitive, elideRecord, rowType,
             alias);
   }
 
@@ -477,19 +469,21 @@ public class MapDCatalogReader implements Prepare.CatalogReader {
 
   @Override
   public boolean matches(String string, String name) {
-    return Util.matches(true, string, name);
+    MAPDLOGGER.debug("matches  " + string + " vs " + name);
+    return Util.matches(caseSensitive, string, name);
   }
 
   @Override
   public int match(List<String> strings, String name) {
-    return Util.findMatch(strings, name, true);
+    MAPDLOGGER.debug("matches  " + strings + " vs " + name);
+    return Util.findMatch(strings, name, caseSensitive);
   }
 
   @Override
   public RelDataType createTypeFromProjection(final RelDataType type,
           final List<String> columnNameList) {
     return SqlValidatorUtil.createTypeFromProjection(type, columnNameList,
-            typeFactory, true, elideRecord);
+            typeFactory, caseSensitive, elideRecord);
   }
 
   public void setCurrentMapDUser(MapDUser mapDUser) {

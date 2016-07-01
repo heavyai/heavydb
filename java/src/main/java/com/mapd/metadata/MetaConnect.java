@@ -84,7 +84,7 @@ public class MetaConnect {
     ResultSet rs = null;
     try {
       stmt = catConn.createStatement();
-      rs = stmt.executeQuery(String.format("SELECT tableid FROM mapd_tables where name = '%s';", tableName));
+      rs = stmt.executeQuery(String.format("SELECT tableid FROM mapd_tables where name = '%s' COLLATE NOCASE;", tableName));
       while (rs.next()) {
         id = rs.getInt("tableid");
         MAPDLOGGER.debug("ID = " + id);
