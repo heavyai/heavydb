@@ -176,7 +176,7 @@ int64_t get_component(const int8_t* group_by_buffer, const size_t comp_sz, const
 bool ResultRows::reduceSingleRow(const int8_t* row_ptr,
                                  const int8_t warp_count,
                                  const bool is_columnar,
-                                 const bool replace_bitmap_ptr_with_bitmap_sz,
+                                 const bool keep_cnt_dtnc_buff,
                                  std::vector<int64_t>& agg_vals) const {
   const size_t agg_col_count{agg_vals.size()};
   const auto row_size = query_mem_desc_.getRowSize();
@@ -195,12 +195,10 @@ bool ResultRows::reduceSingleRow(const int8_t* row_ptr,
       auto partial_bin_val = get_component(row_ptr + query_mem_desc_.getColOnlyOffInBytes(agg_col_idx), chosen_bytes);
       partial_agg_vals[agg_col_idx] = partial_bin_val;
       if (agg_info.is_distinct) {
-        CHECK_EQ(int8_t(1), warp_count);
         CHECK(agg_info.is_agg && agg_info.agg_kind == kCOUNT);
         partial_bin_val = bitmap_set_size(partial_bin_val, target_idx, row_set_mem_owner_->count_distinct_descriptors_);
-        if (replace_bitmap_ptr_with_bitmap_sz) {
-          partial_agg_vals[agg_col_idx] = partial_bin_val;
-        }
+        if (!keep_cnt_dtnc_buff)
+          partial_agg_vals[target_idx] = partial_bin_val;
       }
       if (kAVG == agg_info.agg_kind) {
         CHECK(agg_info.is_agg && !agg_info.is_distinct);
@@ -313,7 +311,7 @@ void ResultRows::addKeylessGroupByBuffer(const int64_t* group_by_buffer,
     if (reduceSingleRow(reinterpret_cast<const int8_t*>(group_by_buffer) + query_mem_desc_.getColOffInBytes(bin, 0),
                         warp_count,
                         is_columnar,
-                        false,
+                        true,
                         agg_vals)) {
       discardRow();
       continue;
@@ -1290,7 +1288,7 @@ bool ResultRows::fetchLazyOrBuildRow(std::vector<TargetValue>& row,
       if (reduceSingleRow(reinterpret_cast<int8_t*>(group_by_buffer_) + bin_base_off,
                           warp_count,
                           output_columnar_,
-                          true,
+                          false,
                           agg_vals)) {
         continue;
       }
