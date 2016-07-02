@@ -31,7 +31,7 @@ class ExtensionFunction {
 
 class ExtensionFunctionsWhitelist {
  public:
-  void add(const std::string& json_func_sigs);
+  static void add(const std::string& json_func_sigs);
 
   static ExtensionFunction* get(const std::string& name);
 
