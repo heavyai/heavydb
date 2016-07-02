@@ -339,6 +339,16 @@ void Catalog::updateFrontendViewAndLinkUsers() {
   sqliteConnector_.query("END TRANSACTION");
 }
 
+namespace {
+
+std::string to_upper(const std::string& str) {
+  auto str_uc = str;
+  std::transform(str_uc.begin(), str_uc.end(), str_uc.begin(), ::toupper);
+  return str_uc;
+}
+
+}  // namespace
+
 void Catalog::buildMaps() {
   string dictQuery("SELECT dictid, name, nbits, is_shared from mapd_dictionaries");
   sqliteConnector_.query(dictQuery);
@@ -378,7 +388,7 @@ void Catalog::buildMaps() {
       td->isReady = true;
       td->fragmenter = nullptr;
     }
-    tableDescriptorMap_[td->tableName] = td;
+    tableDescriptorMap_[to_upper(td->tableName)] = td;
     tableDescriptorMapById_[td->tableId] = td;
   }
   string columnQuery(
@@ -403,7 +413,7 @@ void Catalog::buildMaps() {
     cd->isSystemCol = sqliteConnector_.getData<bool>(r, 12);
     cd->isVirtualCol = sqliteConnector_.getData<bool>(r, 13);
     cd->virtualExpr = sqliteConnector_.getData<string>(r, 14);
-    ColumnKey columnKey(cd->tableId, cd->columnName);
+    ColumnKey columnKey(cd->tableId, to_upper(cd->columnName));
     columnDescriptorMap_[columnKey] = cd;
     ColumnIdKey columnIdKey(cd->tableId, cd->columnId);
     columnDescriptorMapById_[columnIdKey] = cd;
@@ -463,12 +473,12 @@ void Catalog::addTableToMap(TableDescriptor& td,
   std::lock_guard<std::mutex> lock(cat_mutex_);
   TableDescriptor* new_td = new TableDescriptor();
   *new_td = td;
-  tableDescriptorMap_[td.tableName] = new_td;
+  tableDescriptorMap_[to_upper(td.tableName)] = new_td;
   tableDescriptorMapById_[td.tableId] = new_td;
   for (auto cd : columns) {
     ColumnDescriptor* new_cd = new ColumnDescriptor();
     *new_cd = cd;
-    ColumnKey columnKey(new_cd->tableId, new_cd->columnName);
+    ColumnKey columnKey(new_cd->tableId, to_upper(new_cd->columnName));
     columnDescriptorMap_[columnKey] = new_cd;
     ColumnIdKey columnIdKey(new_cd->tableId, new_cd->columnId);
     columnDescriptorMapById_[columnIdKey] = new_cd;
@@ -488,7 +498,7 @@ void Catalog::removeTableFromMap(const string& tableName, int tableId) {
   TableDescriptor* td = tableDescIt->second;
   int ncolumns = td->nColumns;
   tableDescriptorMapById_.erase(tableDescIt);
-  tableDescriptorMap_.erase(tableName);
+  tableDescriptorMap_.erase(to_upper(tableName));
   if (td->fragmenter != nullptr)
     delete td->fragmenter;
   delete td;
@@ -499,7 +509,7 @@ void Catalog::removeTableFromMap(const string& tableName, int tableId) {
     ColumnDescriptorMapById::iterator colDescIt = columnDescriptorMapById_.find(cidKey);
     ColumnDescriptor* cd = colDescIt->second;
     columnDescriptorMapById_.erase(colDescIt);
-    ColumnKey cnameKey(tableId, cd->columnName);
+    ColumnKey cnameKey(tableId, to_upper(cd->columnName));
     columnDescriptorMap_.erase(cnameKey);
     if (cd->columnType.get_compression() == kENCODING_DICT) {
       DictDescriptorMapById::iterator dictIt = dictDescriptorMapById_.find(cd->columnType.get_comp_param());
@@ -541,7 +551,7 @@ void Catalog::instantiateFragmenter(TableDescriptor* td) const {
 
 const TableDescriptor* Catalog::getMetadataForTable(const string& tableName) const {
   std::lock_guard<std::mutex> lock(cat_mutex_);
-  auto tableDescIt = tableDescriptorMap_.find(tableName);
+  auto tableDescIt = tableDescriptorMap_.find(to_upper(tableName));
   if (tableDescIt == tableDescriptorMap_.end()) {  // check to make sure table exists
     return nullptr;
   }
@@ -578,7 +588,7 @@ const DictDescriptor* Catalog::getMetadataForDict(int dictId) const {
 }
 
 const ColumnDescriptor* Catalog::getMetadataForColumn(int tableId, const string& columnName) const {
-  ColumnKey columnKey(tableId, columnName);
+  ColumnKey columnKey(tableId, to_upper(columnName));
   auto colDescIt = columnDescriptorMap_.find(columnKey);
   if (colDescIt == columnDescriptorMap_.end()) {  // need to check to make sure column exists for table
     return nullptr;
@@ -824,13 +834,13 @@ void Catalog::renameTable(const TableDescriptor* td, const string& newTableName)
     throw;
   }
   sqliteConnector_.query("END TRANSACTION");
-  TableDescriptorMap::iterator tableDescIt = tableDescriptorMap_.find(td->tableName);
+  TableDescriptorMap::iterator tableDescIt = tableDescriptorMap_.find(to_upper(td->tableName));
   CHECK(tableDescIt != tableDescriptorMap_.end());
   // Get table descriptor to change it
   TableDescriptor* changeTd = tableDescIt->second;
   changeTd->tableName = newTableName;
   tableDescriptorMap_.erase(tableDescIt);  // erase entry under old name
-  tableDescriptorMap_[newTableName] = changeTd;
+  tableDescriptorMap_[to_upper(newTableName)] = changeTd;
 }
 
 void Catalog::renameColumn(const TableDescriptor* td, const ColumnDescriptor* cd, const string& newColumnName) {
@@ -844,12 +854,12 @@ void Catalog::renameColumn(const TableDescriptor* td, const ColumnDescriptor* cd
     throw;
   }
   sqliteConnector_.query("END TRANSACTION");
-  ColumnDescriptorMap::iterator columnDescIt = columnDescriptorMap_.find(std::make_tuple(td->tableId, cd->columnName));
+  ColumnDescriptorMap::iterator columnDescIt = columnDescriptorMap_.find(std::make_tuple(td->tableId, to_upper(cd->columnName)));
   CHECK(columnDescIt != columnDescriptorMap_.end());
   ColumnDescriptor* changeCd = columnDescIt->second;
   changeCd->columnName = newColumnName;
   columnDescriptorMap_.erase(columnDescIt);  // erase entry under old name
-  columnDescriptorMap_[std::make_tuple(td->tableId, newColumnName)] = changeCd;
+  columnDescriptorMap_[std::make_tuple(td->tableId, to_upper(newColumnName))] = changeCd;
 }
 
 void Catalog::createFrontendView(FrontendViewDescriptor& vd) {
