@@ -619,7 +619,7 @@ class ResultRows {
   bool reduceSingleRow(const int8_t* row_ptr,
                        const int8_t warp_count,
                        const bool is_columnar,
-                       const bool keep_cnt_dtnc_buff,
+                       const bool replace_bitmap_ptr_with_bitmap_sz,
                        std::vector<int64_t>& agg_vals) const;
 
   void addKeylessGroupByBuffer(const int64_t* group_by_buffer,
