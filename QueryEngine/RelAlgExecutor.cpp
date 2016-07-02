@@ -457,12 +457,20 @@ std::vector<Analyzer::Expr*> get_exprs_not_owned(const std::vector<std::shared_p
   return exprs_not_owned;
 }
 
+bool is_count_distinct(const Analyzer::Expr* expr) {
+  const auto agg_expr = dynamic_cast<const Analyzer::AggExpr*>(expr);
+  return agg_expr && agg_expr->get_is_distinct();
+}
+
 template <class RA>
 std::vector<TargetMetaInfo> get_targets_meta(const RA* ra_node, const std::vector<Analyzer::Expr*>& target_exprs) {
   std::vector<TargetMetaInfo> targets_meta;
   for (size_t i = 0; i < ra_node->size(); ++i) {
     CHECK(target_exprs[i]);
-    targets_meta.emplace_back(ra_node->getFieldName(i), target_exprs[i]->get_type_info());
+    // TODO(alex): remove the count distinct type fixup.
+    targets_meta.emplace_back(
+        ra_node->getFieldName(i),
+        is_count_distinct(target_exprs[i]) ? SQLTypeInfo(kBIGINT, false) : target_exprs[i]->get_type_info());
   }
   return targets_meta;
 }
