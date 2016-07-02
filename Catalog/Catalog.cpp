@@ -424,7 +424,8 @@ void Catalog::buildMaps() {
 
   updateFrontendViewAndLinkUsers();
   updateFrontendViewSchema();
-  string frontendViewQuery("SELECT viewid, view_state, name, image_hash, update_time, userid, view_metadata FROM mapd_frontend_views");
+  string frontendViewQuery(
+      "SELECT viewid, view_state, name, image_hash, update_time, userid, view_metadata FROM mapd_frontend_views");
   sqliteConnector_.query(frontendViewQuery);
   numRows = sqliteConnector_.getNumRows();
   for (size_t r = 0; r < numRows; ++r) {
@@ -859,14 +860,18 @@ void Catalog::createFrontendView(FrontendViewDescriptor& vd) {
                                             std::vector<std::string>{vd.viewName, std::to_string(vd.userId)});
     if (sqliteConnector_.getNumRows() > 0) {
       sqliteConnector_.query_with_text_params(
-          "UPDATE mapd_frontend_views SET view_state = ?, image_hash = ?, view_metadata = ?, update_time = datetime('now') where name = ? "
+          "UPDATE mapd_frontend_views SET view_state = ?, image_hash = ?, view_metadata = ?, update_time = "
+          "datetime('now') where name = ? "
           "and userid = ?",
-          std::vector<std::string>{vd.viewState, vd.imageHash, vd.viewMetadata, vd.viewName, std::to_string(vd.userId)});
+          std::vector<std::string>{
+              vd.viewState, vd.imageHash, vd.viewMetadata, vd.viewName, std::to_string(vd.userId)});
     } else {
       sqliteConnector_.query_with_text_params(
-          "INSERT INTO mapd_frontend_views (name, view_state, image_hash, view_metadata, update_time, userid) VALUES (?,?,?,?, "
+          "INSERT INTO mapd_frontend_views (name, view_state, image_hash, view_metadata, update_time, userid) VALUES "
+          "(?,?,?,?, "
           "datetime('now'), ?)",
-          std::vector<std::string>{vd.viewName, vd.viewState, vd.imageHash, vd.viewMetadata, std::to_string(vd.userId)});
+          std::vector<std::string>{
+              vd.viewName, vd.viewState, vd.imageHash, vd.viewMetadata, std::to_string(vd.userId)});
     }
   } catch (std::exception& e) {
     sqliteConnector_.query("ROLLBACK TRANSACTION");
@@ -911,7 +916,8 @@ std::string Catalog::createLink(LinkDescriptor& ld, size_t min_length) {
           std::vector<std::string>{std::to_string(ld.userId), ld.link});
     } else {
       sqliteConnector_.query_with_text_params(
-          "INSERT INTO mapd_links (userid, link, view_state, view_metadata, update_time) VALUES (?,?,?,?, datetime('now'))",
+          "INSERT INTO mapd_links (userid, link, view_state, view_metadata, update_time) VALUES (?,?,?,?, "
+          "datetime('now'))",
           std::vector<std::string>{std::to_string(ld.userId), ld.link, ld.viewState, ld.viewMetadata});
     }
     // now get the auto generated viewid
