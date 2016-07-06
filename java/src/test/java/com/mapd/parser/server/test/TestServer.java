@@ -32,7 +32,7 @@ public class TestServer {
 
   @BeforeClass
   public static void startServer() {
-    csw = new CalciteServerWrapper(11000, 11001, "/data");
+    csw = new CalciteServerWrapper(11000, 11001, "/data", null);
     new Thread(csw).start();
   }
 

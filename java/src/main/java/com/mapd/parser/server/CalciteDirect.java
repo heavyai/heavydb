@@ -5,6 +5,8 @@ package com.mapd.parser.server;
 
 import com.mapd.calcite.parser.MapDParser;
 import com.mapd.calcite.parser.MapDUser;
+import java.io.IOException;
+import java.util.Map;
 import org.apache.calcite.runtime.CalciteContextException;
 import org.apache.calcite.sql.parser.SqlParseException;
 import org.apache.commons.pool.PoolableObjectFactory;
@@ -25,12 +27,23 @@ final static Logger MAPDLOGGER = LoggerFactory.getLogger(CalciteDirect.class);
 
   private final GenericObjectPool parserPool;
 
+  private final String extSigsJson;
+
   public CalciteDirect(int port, String dataDir, String extensionFunctionsAstFile) {
     MAPDLOGGER.debug("CalciteDirect Constructor port is '" + port + "' data dir is '" + dataDir +"'");
+    MAPDLOGGER.debug("Extension signatures file is " + extensionFunctionsAstFile);
     this.parserPool = new GenericObjectPool();
     this.mapDPort = port;
 
-    PoolableObjectFactory parserFactory = new CalciteParserFactory(dataDir, null);
+    Map<String, ExtensionFunction> extSigs = null;
+    try {
+      extSigs = ExtensionFunctionSignatureParser.parse(extensionFunctionsAstFile);
+    } catch (IOException ex) {
+      MAPDLOGGER.error("Could not load extension function signatures: " + ex.getMessage());
+    }
+    this.extSigsJson = ExtensionFunctionSignatureParser.signaturesToJson(extSigs);
+
+    PoolableObjectFactory parserFactory = new CalciteParserFactory(dataDir, extSigs);
 
     parserPool.setFactory(parserFactory);
     parserPool.setTestOnReturn(true);
@@ -131,5 +144,9 @@ final static Logger MAPDLOGGER = LoggerFactory.getLogger(CalciteDirect.class);
     }
     MAPDLOGGER.debug("About to return good result");
     return new CalciteReturn(relAlgebra, System.currentTimeMillis() - timer, false);
+  }
+
+  public String getExtensionFunctionWhitelist() {
+    return this.extSigsJson;
   }
 }

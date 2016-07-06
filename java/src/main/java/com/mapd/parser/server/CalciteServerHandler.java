@@ -8,6 +8,8 @@ import com.mapd.calcite.parser.MapDUser;
 import com.mapd.thrift.calciteserver.InvalidParseRequest;
 import com.mapd.thrift.calciteserver.TPlanResult;
 import com.mapd.thrift.calciteserver.CalciteServer;
+import java.io.IOException;
+import java.util.Map;
 import org.apache.calcite.runtime.CalciteContextException;
 import org.apache.calcite.sql.parser.SqlParseException;
 import org.apache.commons.pool.PoolableObjectFactory;
@@ -32,9 +34,19 @@ class CalciteServerHandler implements CalciteServer.Iface {
 
   private final GenericObjectPool parserPool;
 
-  CalciteServerHandler(int mapDPort, String dataDir) {
+  private final String extSigsJson;
+
+  CalciteServerHandler(int mapDPort, String dataDir, String extensionFunctionsAstFile) {
     this.parserPool = new GenericObjectPool();
     this.mapDPort = mapDPort;
+
+    Map<String, ExtensionFunction> extSigs = null;
+    try {
+      extSigs = ExtensionFunctionSignatureParser.parse(extensionFunctionsAstFile);
+    } catch (IOException ex) {
+      MAPDLOGGER.error("Could not load extension function signatures: " + ex.getMessage());
+    }
+    this.extSigsJson = ExtensionFunctionSignatureParser.signaturesToJson(extSigs);
 
     PoolableObjectFactory parserFactory = new CalciteParserFactory(dataDir, null);
 
@@ -94,6 +106,11 @@ class CalciteServerHandler implements CalciteServer.Iface {
     // received request to shutdown
     MAPDLOGGER.info("Shutdown calcite java server");
     server.stop();
+  }
+
+  @Override
+  public String getExtensionFunctionWhitelist() {
+    return this.extSigsJson;
   }
 
   void setServer(TServer s) {

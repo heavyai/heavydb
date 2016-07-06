@@ -3,8 +3,9 @@
  */
 package com.mapd.parser.server;
 
-import com.mapd.utility.SQLImporter;
 import static java.lang.System.exit;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.DefaultParser;
@@ -44,8 +45,15 @@ public class CalciteServerCaller {
             .longOpt("data")
             .build();
 
+    Option extensions = Option.builder("e")
+            .hasArg()
+            .desc("extension signatures directory")
+            .longOpt("extensions")
+            .build();
+
     options.addOption(port);
     options.addOption(data);
+    options.addOption(extensions);
 
     CommandLineParser parser = new DefaultParser();
 
@@ -59,8 +67,10 @@ public class CalciteServerCaller {
 
     int portNum = Integer.valueOf(cmd.getOptionValue("port", "9093"));
     String dataDir = cmd.getOptionValue("data", "data");
+    String extensionsDir = cmd.getOptionValue("extensions", "QueryEngine");
+    final Path extensionFunctionsAstFile = Paths.get(extensionsDir, "ExtensionFunctions.ast");
 
-    calciteServerWrapper = new CalciteServerWrapper(portNum, -1, dataDir);
+    calciteServerWrapper = new CalciteServerWrapper(portNum, -1, dataDir, extensionFunctionsAstFile.toString());
 
     while (true) {
       try {

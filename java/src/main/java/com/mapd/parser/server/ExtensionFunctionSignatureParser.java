@@ -37,8 +37,10 @@ class ExtensionFunctionSignatureParser {
 
   static String signaturesToJson(final Map<String, ExtensionFunction> sigs) {
     List<String> json_sigs = new ArrayList<String>();
-    for (Map.Entry<String, ExtensionFunction> sig : sigs.entrySet()) {
-      json_sigs.add(sig.getValue().toJson(sig.getKey()));
+    if (sigs != null) {
+      for (Map.Entry<String, ExtensionFunction> sig : sigs.entrySet()) {
+        json_sigs.add(sig.getValue().toJson(sig.getKey()));
+      }
     }
     return "[" + join(json_sigs, ",") + "]";
   }
