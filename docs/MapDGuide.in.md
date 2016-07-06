@@ -9,14 +9,24 @@ MapD is distributed as a group of mostly statically-linked executables, which mi
 
 Basic installation instructions for all dependencies are provided in the [Installation] section below.
 
-Operating Systems
+### Operating Systems, Officially Supported
 
-* CentOS/RHEL 7.0 or later. CentOS/RHEL 6.x builds may be provided upon request, but are not supported.
+* CentOS/RHEL 7.0 or later.
 * Ubuntu 15.04 or later.
-* Mac OS X 10.9 or later, on 2013 or later hardware. Builds which support 2012 hardware may be provided upon request, but are not supported.
 
-Libraries and Drivers
+### Operating Systems, Not Officially Supported
 
+Available on a case-by-case basis.
+
+* CentOS/RHEL 6.x.
+* Ubuntu 14.x.
+* Debian 7.x.
+* Debian 8.x. Lacks official driver support from NVIDIA.
+* Mac OS X 10.9 or later, 2013 or later hardware. Mac OS X builds do not support CUDA or backend rendering.
+
+### Libraries and Drivers
+
+* libjvm, provided by Java 1.6 or later.
 * libldap.
 * NVIDIA GPU Drivers. Not required for CPU-only installations.
 * Xorg. Only required to utilize MapD's backend rendering feature.
@@ -41,6 +51,40 @@ Other
 * `systemd`: init system used by most major Linux distributions. Sample `systemd` target files for starting MapD are provided in `$MAPD_PATH/systemd`.
 
 # Installation
+
+## Common Dependencies / CPU-only Installation
+All installations of MapD depend on Java 1.6+/`libjvm`, provided by a Java Runtime Environment (JRE), and `libldap`, provided by OpenLDAP and similar packages. `libldap` is available by default on most common Linux distributions and therefore does not require any special installation. The following describes how to install a JRE and configure the appropriate environment variables.
+
+### CentOS / Red Hat Enterprise Linux (RHEL)
+`libjvm` is provided by the packages `java-1.7.0-openjdk-headless` or `java-1.8.0-openjdk-headless`. `1.8.0` is preferred, but not currently required. To install run:
+
+```
+sudo yum install java-1.8.0-openjdk-headless
+```
+
+By default a symlink pointing to the newly installed JRE will be placed at `/usr/lib/jvm/jre-1.8.0-openjdk`. The `libjvm` library directory is therefore:
+
+```/usr/lib/jvm/jre-1.8.0-openjdk/lib/amd64/server```
+
+### Ubuntu / Debian
+`libjvm` is provided by the package `default-jre-headless`. To install run:
+
+```
+sudo apt install default-jre-headless
+```
+
+By default a symlink pointing to the newly installed JRE will be placed at `/usr/lib/jvm/default-java`. The `libjvm` library directory is therefore:
+
+```/usr/lib/jvm/default-java/jre/lib/amd64/server```
+
+### Environment Variables
+After installing the JRE, the `libjvm` library directory must be added to your `LD_LIBRARY_PATH` environment variable. For example, on CentOS this can be done with the following command:
+
+```
+export LD_LIBRARY_PATH=/usr/lib/jvm/jre-1.8.0-openjdk/lib/amd64/server:$LD_LIBRARY_PATH
+```
+
+This command may be added to any file managing your environment such as `$HOME/.bash_profile`, `/etc/profile`, or `/etc/profile.d/java.sh`.
 
 ## Xorg and NVIDIA GPU Driver Installation
 CUDA-enabled installations of MapD depend on `libcuda` which is provided by the NVIDIA GPU Drivers and NVIDIA CUDA Toolkit. The backend rendering feature of MapD additionally requires a working installation of Xorg.
@@ -198,6 +242,14 @@ For Linux, the MapD archive includes `systemd` target files which allows `system
 cd $MAPD_PATH/systemd
 ./install_mapd_systemd.sh
 ```
+
+This script will ask for the location of the following directories:
+
+* `MAPD_PATH`: path to the MapD installation directory
+* `MAPD_STORAGE`: path to the storage directory for MapD data and configuration files
+* `MAPD_USER`: user to run MapD as. User must exist prior to running the script.
+* `MAPD_GROUP`: group to run MapD as. Group must exist prior to running the script.
+* `MAPD_LIBJVM_DIR`: path to the `libjvm` library directory, as determined in the *Common Dependencies* section above.
 
 # Configuration
 Before starting MapD, the `data` directory must be initialized. To do so, create an empty directory at the desired path (`/var/lib/mapd/data`) and run `$MAPD_PATH/bin/initdb` with that path as the argument. For example:
