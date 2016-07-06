@@ -7,6 +7,7 @@ Requires=mapd_xorg.service
 User=@MAPD_USER@
 Group=@MAPD_GROUP@
 Environment=DISPLAY=:1
+Environment="LD_LIBRARY_PATH=@MAPD_LIBJVM_DIR@"
 ExecStart=@MAPD_PATH@/bin/mapd_server --config @MAPD_STORAGE@/mapd.conf
 KillMode=control-group
 LimitNOFILE=16384
