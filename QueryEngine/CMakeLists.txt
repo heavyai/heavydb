@@ -12,6 +12,7 @@ set(query_engine_source_files
     ExpressionRange.cpp
     ExpressionRewrite.cpp
     ExtensionFunctionsWhitelist.cpp
+    ExtensionFunctions.ast
     GpuMemUtils.cpp
     InPlaceSort.cpp
     GroupByAndAggregate.cpp
@@ -75,7 +76,15 @@ add_custom_command(
     ${MAPD_DEFINITIONS}
     ${CMAKE_CURRENT_SOURCE_DIR}/RuntimeFunctions.cpp)
 
-install(FILES ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctions.bc DESTINATION QueryEngine)
+add_custom_command(
+    DEPENDS ExtensionFunctions.h
+    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/ExtensionFunctions.ast
+    COMMAND ${llvm_clangpp_cmd}
+    ARGS -std=c++11 -fsyntax-only -Xclang -ast-dump -fno-diagnostics-color
+    ${CMAKE_CURRENT_SOURCE_DIR}/ExtensionFunctions.h | grep FunctionDecl | grep ExtensionFunctions |
+    sed -E "s/\\-FunctionDecl.*line:[0-9]+:[0-9]+//g" > ${CMAKE_CURRENT_BINARY_DIR}/ExtensionFunctions.ast)
+
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctions.bc ${CMAKE_CURRENT_BINARY_DIR}/ExtensionFunctions.ast DESTINATION QueryEngine)
 
 set(MAPD_HOST_COMPILER "" CACHE STRING "Host compiler to use with nvcc")
 if(NOT "${MAPD_HOST_COMPILER}" STREQUAL "")
