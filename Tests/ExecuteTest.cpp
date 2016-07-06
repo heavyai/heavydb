@@ -285,6 +285,7 @@ TEST(Select, FilterAndSimpleAggregation) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     c("SELECT COUNT(*) FROM test;", dt);
+    c("SELECT COUNT(f) FROM test;", dt);
     c("SELECT MIN(x) FROM test;", dt);
     c("SELECT MAX(x) FROM test;", dt);
     c("SELECT MIN(z) FROM test;", dt);

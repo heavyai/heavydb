@@ -2188,6 +2188,10 @@ bool GroupByAndAggregate::codegenAggCalls(const std::tuple<llvm::Value*, llvm::V
       llvm::Value* agg_col_ptr{nullptr};
       const auto chosen_bytes = static_cast<size_t>(query_mem_desc_.agg_col_widths[agg_out_off].compact);
       const auto& chosen_type = get_compact_type(agg_info);
+      const auto& arg_type = ((arg_expr && arg_expr->get_type_info().get_type() != kNULLT) && !agg_info.is_distinct)
+                                 ? agg_info.agg_arg_type
+                                 : agg_info.sql_type;
+      const bool is_fp_arg = !lazy_fetched && arg_type.get_type() != kNULLT && arg_type.is_fp();
       if (is_group_by) {
         if (outputColumnar()) {
           col_off = query_mem_desc_.getColOffInBytes(0, agg_out_off);
@@ -2215,8 +2219,8 @@ bool GroupByAndAggregate::codegenAggCalls(const std::tuple<llvm::Value*, llvm::V
       const auto need_skip_null = !needs_unnest_double_patch && agg_info.skip_null_val;
       if (!needs_unnest_double_patch) {
         if (need_skip_null && agg_info.agg_kind != kCOUNT) {
-          target_lv = convertNullIfAny(arg_expr->get_type_info(), chosen_type, chosen_bytes, target_lv);
-        } else if (!lazy_fetched && chosen_type.is_fp()) {
+          target_lv = convertNullIfAny(arg_expr->get_type_info(), arg_type, chosen_bytes, target_lv);
+        } else if (is_fp_arg) {
           target_lv = executor_->castToFP(target_lv);
         }
         if (!dynamic_cast<const Analyzer::AggExpr*>(target_expr) || arg_expr) {
@@ -2229,10 +2233,10 @@ bool GroupByAndAggregate::codegenAggCalls(const std::tuple<llvm::Value*, llvm::V
           (is_simple_count && !arg_expr) ? (chosen_bytes == sizeof(int32_t) ? LL_INT(int32_t(0)) : LL_INT(int64_t(0)))
                                          : (is_simple_count && arg_expr && str_target_lv ? str_target_lv : target_lv)};
       std::string agg_fname{agg_base_name};
-      if (!lazy_fetched && chosen_type.is_fp()) {
+      if (is_fp_arg) {
         if (!lazy_fetched) {
           if (chosen_bytes == sizeof(float)) {
-            CHECK_EQ(chosen_type.get_type(), kFLOAT);
+            CHECK_EQ(arg_type.get_type(), kFLOAT);
             agg_fname += "_float";
           } else {
             CHECK_EQ(chosen_bytes, sizeof(double));
