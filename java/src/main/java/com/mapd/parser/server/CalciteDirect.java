@@ -25,8 +25,8 @@ final static Logger MAPDLOGGER = LoggerFactory.getLogger(CalciteDirect.class);
 
   private final GenericObjectPool parserPool;
 
-  public CalciteDirect(int port, String dataDir) {
-    MAPDLOGGER.info("CalciteDirect Constructor port is '" + port + "' data dir is '" +dataDir+"'" );
+  public CalciteDirect(int port, String dataDir, String extensionFunctionsAstFile) {
+    MAPDLOGGER.info("CalciteDirect Constructor port is '" + port + "' data dir is '" + dataDir +"'");
     this.parserPool = new GenericObjectPool();
     this.mapDPort = port ;
 

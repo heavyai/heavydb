@@ -50,12 +50,16 @@ void Calcite::runJNI(int port, std::string data_dir) {
   CHECK(calciteDirect_);
 
   // now call the constructor
-  constructor_ = env->GetMethodID(calciteDirect_, "<init>", "(ILjava/lang/String;)V");
+  constructor_ = env->GetMethodID(calciteDirect_, "<init>", "(ILjava/lang/String;Ljava/lang/String;)V");
   CHECK(constructor_);
 
   // create the new calciteDirect via call to constructor
-  calciteDirectObject_ =
-      env->NewGlobalRef(env->NewObject(calciteDirect_, constructor_, port, env->NewStringUTF(data_dir.c_str())));
+  const auto extension_functions_ast_file = mapd_root_abs_path() + "/QueryEngine/ExtensionFunctions.ast";
+  calciteDirectObject_ = env->NewGlobalRef(env->NewObject(calciteDirect_,
+                                                          constructor_,
+                                                          port,
+                                                          env->NewStringUTF(data_dir.c_str()),
+                                                          env->NewStringUTF(extension_functions_ast_file.c_str())));
   CHECK(calciteDirectObject_);
 
   // get all the methods we will need for calciteDirect;
