@@ -3,6 +3,8 @@
  */
 package com.mapd.parser.server;
 
+import java.util.Map;
+
 import com.mapd.calcite.parser.MapDParser;
 import org.apache.commons.pool.PoolableObjectFactory;
 import org.slf4j.Logger;
@@ -16,14 +18,16 @@ class CalciteParserFactory implements PoolableObjectFactory {
   final static Logger MAPDLOGGER = LoggerFactory.getLogger(CalciteParserFactory.class);
 
   private final String dataDir;
+  private final Map<String, ExtensionFunction> extSigs;
 
-  public CalciteParserFactory(String dataDir) {
+  public CalciteParserFactory(String dataDir, final Map<String, ExtensionFunction> extSigs) {
     this.dataDir = dataDir;
+    this.extSigs = extSigs;
   }
 
   @Override
   public Object makeObject() throws Exception {
-    MapDParser obj = new MapDParser(dataDir);
+    MapDParser obj = new MapDParser(dataDir, extSigs);
     return obj;
   }
 

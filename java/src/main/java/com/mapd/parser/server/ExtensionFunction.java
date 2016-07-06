@@ -15,15 +15,15 @@ public class ExtensionFunction {
     this.ret = ret;
   }
 
-  List<ExtArgumentType> getArgs() {
+  public List<ExtArgumentType> getArgs() {
     return this.args;
   }
 
-  ExtArgumentType getRet() {
+  public ExtArgumentType getRet() {
     return this.ret;
   }
 
-  String toJson(final String name) {
+  public String toJson(final String name) {
     StringBuilder json_cons = new StringBuilder();
     json_cons.append("{");
     json_cons.append("\"name\":").append(dq(name)).append(",");

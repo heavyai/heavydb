@@ -3,6 +3,9 @@
  */
 package com.mapd.calcite.parser;
 
+import java.util.Map;
+
+import com.mapd.parser.server.ExtensionFunction;
 import org.apache.calcite.avatica.util.Casing;
 import org.apache.calcite.plan.RelOptCluster;
 import org.apache.calcite.rel.RelNode;
@@ -46,14 +49,14 @@ public final class MapDParser {
 
   private int callCount = 0;
 
-  public MapDParser(String dataDir){
+  public MapDParser(String dataDir, final Map<String, ExtensionFunction> extSigs) {
     System.setProperty("saffron.default.charset",ConversionUtil.NATIVE_UTF16_CHARSET_NAME);
     System.setProperty("saffron.default.nationalcharset",ConversionUtil.NATIVE_UTF16_CHARSET_NAME);
     System.setProperty("saffron.default.collation.name",ConversionUtil.NATIVE_UTF16_CHARSET_NAME + "$en_US");
     typeFactory = new SqlTypeFactoryImpl(RelDataTypeSystem.DEFAULT);
     catalogReader = new MapDCatalogReader(typeFactory, dataDir);
     validator = new MapDValidator(
-                  createOperatorTable(),
+                  createOperatorTable(extSigs),
                   catalogReader,
                   typeFactory,
                   SqlConformance.DEFAULT);
@@ -221,14 +224,15 @@ public final class MapDParser {
   /**
    * Creates an operator table.
    *
+   * @param extSigs
    * @return New operator table
    */
-  protected SqlOperatorTable createOperatorTable() {
+  protected SqlOperatorTable createOperatorTable(final Map<String, ExtensionFunction> extSigs) {
     final MapDSqlOperatorTable tempOpTab
             = new MapDSqlOperatorTable(SqlStdOperatorTable.instance());
     // MAT 11 Nov 2015
     // Example of how to add custom function
-    MapDSqlOperatorTable.addUDF(tempOpTab);
+    MapDSqlOperatorTable.addUDF(tempOpTab, extSigs);
     return tempOpTab;
   }
 

@@ -5,8 +5,11 @@
  */
 package com.mapd.calcite.parser;
 
+import java.util.Map;
+
 import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
+import com.mapd.parser.server.ExtensionFunction;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.sql.SqlFunction;
@@ -53,7 +56,7 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     // MAT Nov 11 2015
     // These are example of how to add custom functions
     // left in as a starting point for when we need them
-    public static void addUDF(MapDSqlOperatorTable opTab) {
+    public static void addUDF(MapDSqlOperatorTable opTab, final Map<String, ExtensionFunction> extSigs) {
         // Don't use anonymous inner classes. They can't be instantiated
         // using reflection when we are deserializing from JSON.
         //opTab.addOperator(new RampFunction());
@@ -69,6 +72,12 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
         opTab.addOperator(new Length());
         opTab.addOperator(new CharLength());
         opTab.addOperator(new PgILike());
+        if (extSigs == null) {
+          return;
+        }
+        for (Map.Entry<String, ExtensionFunction> extSig : extSigs.entrySet()) {
+          opTab.addOperator(new ExtFunction(extSig.getKey(), extSig.getValue()));
+        }
     }
 
     /**
@@ -358,6 +367,51 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
                     = opBinding.getTypeFactory();
             return typeFactory.createSqlType(SqlTypeName.BOOLEAN);
         }
+    }
+
+    static class ExtFunction extends SqlFunction {
+      ExtFunction(final String name, final ExtensionFunction sig) {
+        super(name,
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(toSqlSignature(sig)),
+              SqlFunctionCategory.SYSTEM);
+        ret = toSqlTypeName(sig.getRet());
+      }
+
+      private static java.util.List<SqlTypeFamily> toSqlSignature(final ExtensionFunction sig) {
+        java.util.List<SqlTypeFamily> sql_sig = new java.util.ArrayList<SqlTypeFamily>();
+        for (final ExtensionFunction.ExtArgumentType arg_type : sig.getArgs()) {
+          sql_sig.add(toSqlTypeName(arg_type).getFamily());
+        }
+        return sql_sig;
+      }
+
+      @Override
+      public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+        final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+        return typeFactory.createSqlType(ret);
+      }
+
+      private static SqlTypeName toSqlTypeName(final ExtensionFunction.ExtArgumentType type) {
+        switch (type) {
+          case Int16:
+            return SqlTypeName.SMALLINT;
+          case Int32:
+            return SqlTypeName.INTEGER;
+          case Int64:
+            return SqlTypeName.BIGINT;
+          case Float:
+            return SqlTypeName.FLOAT;
+          case Double:
+            return SqlTypeName.DOUBLE;
+        }
+        assert false;
+        return null;
+      }
+
+      private final SqlTypeName ret;
     }
 }
 

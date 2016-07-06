@@ -36,7 +36,7 @@ class CalciteServerHandler implements CalciteServer.Iface {
     this.parserPool = new GenericObjectPool();
     this.mapDPort = mapDPort;
 
-    PoolableObjectFactory parserFactory = new CalciteParserFactory(dataDir);
+    PoolableObjectFactory parserFactory = new CalciteParserFactory(dataDir, null);
 
     parserPool.setFactory(parserFactory);
   }
