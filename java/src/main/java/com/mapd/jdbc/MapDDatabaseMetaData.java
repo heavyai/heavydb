@@ -88,7 +88,7 @@ class MapDDatabaseMetaData implements DatabaseMetaData {
 
   @Override
   public String getDatabaseProductName() throws SQLException { //logger.debug("Entered");
-    return "MapD Stupid Fast DB";
+    return "MapD GPU DB";
   }
 
   @Override

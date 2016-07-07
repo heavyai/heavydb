@@ -26,7 +26,7 @@ public class MapDStatement implements java.sql.Statement {
   private MapD.Client client;
   private ResultSet currentRS = null;
   private TQueryResult sqlResult = null;
-  private int maxRows=0;
+  private int maxRows=100; // add limit to unlimited queries
 
   MapDStatement(int tsession, MapD.Client tclient) {
     session = tsession;
@@ -35,11 +35,14 @@ public class MapDStatement implements java.sql.Statement {
 
   @Override
   public ResultSet executeQuery(String sql) throws SQLException { //logger.debug("Entered");
-    if (maxRows > 0){
-      // add limit to sql call
-      //TODO MAT check there is not a limit there already
-      sql = sql + " LIMIT " + maxRows;
-      logger.info("Added LIMIT of "+ maxRows);
+    if (maxRows > 0) {
+      // add limit to sql call if it doesn't already have one
+      if (sql.toLowerCase().contains(" limit ")) {
+        // do nothing
+      } else {
+        sql = sql + " LIMIT " + maxRows;
+        logger.info("Added LIMIT of "+ maxRows);
+      }
     }
     logger.debug("sql is :'" + sql + "'");
     try {
