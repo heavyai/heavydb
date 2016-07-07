@@ -76,6 +76,10 @@ void Calcite::runJNI(int port, std::string data_dir) {
                                         "Lcom/mapd/parser/server/CalciteReturn;");
   CHECK(updateMetadataMID_);
 
+  getExtensionFunctionWhitelistMID_ =
+      env->GetMethodID(calciteDirect_, "getExtensionFunctionWhitelist", "()Ljava/lang/String;");
+  CHECK(getExtensionFunctionWhitelistMID_);
+
   // get all the methods we will need to process the calcite results
   jclass calcite_return_class = env->FindClass("com/mapd/parser/server/CalciteReturn");
   CHECK(calcite_return_class);
@@ -240,6 +244,41 @@ string Calcite::handle_java_return(JNIEnv* env, jobject process_result) {
   env->DeleteLocalRef(process_result);
   jvm_->DetachCurrentThread();
   return retText;
+}
+
+string Calcite::getExtensionFunctionWhitelist() {
+  if (jni_) {
+    JNIEnv* env = checkJNIConnection();
+    const auto whitelist_result =
+        static_cast<jstring>(env->CallObjectMethod(calciteDirectObject_, getExtensionFunctionWhitelistMID_));
+    if (env->ExceptionCheck()) {
+      LOG(ERROR) << "Exception occured ";
+      env->ExceptionDescribe();
+      LOG(ERROR) << "Exception occured " << env->ExceptionOccurred();
+      throw std::runtime_error("Calcite::getExtensionFunctionWhitelist failed");
+    }
+    CHECK(whitelist_result);
+    jboolean iscopy;
+    const char* whitelist_cstr = env->GetStringUTFChars(whitelist_result, &iscopy);
+    string whitelist(whitelist_cstr);
+    env->ReleaseStringUTFChars(whitelist_result, whitelist_cstr);
+    env->DeleteLocalRef(whitelist_result);
+    jvm_->DetachCurrentThread();
+    return whitelist;
+  } else {
+    if (server_available_) {
+      TPlanResult ret;
+      string whitelist;
+      client->getExtensionFunctionWhitelist(whitelist);
+      LOG(INFO) << whitelist << endl;
+      return whitelist;
+    } else {
+      LOG(INFO) << "Not routing to Calcite, server is not up and JNI not available" << endl;
+      return "";
+    }
+  }
+  CHECK(false);
+  return "";
 }
 
 Calcite::~Calcite() {

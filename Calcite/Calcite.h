@@ -23,6 +23,7 @@ class Calcite {
                       std::string catalog,
                       std::string sql_string,
                       const bool legacy_syntax);
+  std::string getExtensionFunctionWhitelist();
   std::string updateMetadata(std::string catalog, std::string table);
   virtual ~Calcite();
 
@@ -44,6 +45,7 @@ class Calcite {
   jmethodID hasFailedMID_;
   jmethodID getElapsedTimeMID_;
   jmethodID getTextMID_;
+  jmethodID getExtensionFunctionWhitelistMID_;
 };
 
 #endif /* CALCITE_H */
