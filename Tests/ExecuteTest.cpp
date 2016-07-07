@@ -529,6 +529,7 @@ TEST(Select, ScanNoAggregation) {
     c("SELECT * FROM test;", dt);
     c("SELECT t.* FROM test t;", dt);
     c("SELECT x, z, t FROM test;", dt);
+    c("SELECT x, y, x + 1 FROM test;", dt);
     c("SELECT x + z, t FROM test WHERE x <> 7 AND y > 42;", dt);
     c("SELECT * FROM test WHERE x > 8;", dt);
   }

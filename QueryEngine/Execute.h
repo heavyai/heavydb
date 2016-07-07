@@ -875,8 +875,8 @@ class Executor {
     std::vector<Analyzer::Expr*> target_exprs_;
     std::unordered_map<InputColDescriptor, int> global_to_local_col_ids_;
     std::vector<int> local_to_global_col_ids_;
-    std::unordered_set<int> columns_to_fetch_;
-    std::unordered_set<int> columns_to_not_fetch_;
+    std::set<int> columns_to_fetch_;
+    std::set<int> columns_to_not_fetch_;
     bool allow_lazy_fetch_;
     JoinInfo join_info_;
     const Executor* executor_;
@@ -896,7 +896,7 @@ class Executor {
           return false;
         }
       }
-      std::unordered_set<int> intersect;
+      std::set<int> intersect;
       std::set_intersection(columns_to_fetch_.begin(),
                             columns_to_fetch_.end(),
                             columns_to_not_fetch_.begin(),
