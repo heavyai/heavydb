@@ -4,7 +4,6 @@
 package com.mapd.calcite.parser;
 
 import org.apache.calcite.avatica.util.Casing;
-import org.apache.calcite.avatica.util.Quoting;
 import org.apache.calcite.plan.RelOptCluster;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.RelRoot;
@@ -39,10 +38,6 @@ import org.slf4j.LoggerFactory;
 
 public final class MapDParser {
   final static Logger MAPDLOGGER = LoggerFactory.getLogger(MapDParser.class);
-
-  private final Quoting quoting = Quoting.DOUBLE_QUOTE;
-  private final Casing unquotedCasing = Casing.UNCHANGED;
-  private final Casing quotedCasing = Casing.UNCHANGED;
 
   private final RelDataTypeFactory typeFactory;
   private final MapDCatalogReader catalogReader;
