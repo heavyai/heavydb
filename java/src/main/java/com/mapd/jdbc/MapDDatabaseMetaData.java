@@ -924,10 +924,11 @@ SQLException - if a database access error occurs
   */
   @Override
   public ResultSet getColumns(String catalog, String schemaPattern, String tableNamePattern, String columnNamePattern) throws SQLException { //logger.debug("Entered");
-    //logger.info("TablePattern "+ tableNamePattern+ " columnNamePattern "+ columnNamePattern);
+    logger.info("TablePattern "+ tableNamePattern+ " columnNamePattern "+ columnNamePattern);
     String modifiedTablePattern = tableNamePattern.replaceAll("%", ".*");
-    String modifiedColumnPattern = columnNamePattern.replaceAll("%", ".*");
-    //logger.info("TablePattern "+ tableNamePattern+ " modifiedColumnPattern "+ modifiedColumnPattern);
+    String modifiedColumnPattern = (columnNamePattern == null) ? null : columnNamePattern.replaceAll("%", ".*");
+    
+    logger.info("TablePattern "+ tableNamePattern+ " modifiedColumnPattern "+ modifiedColumnPattern);
 
     // declare the columns in the result set
     TColumnType columns[] = {

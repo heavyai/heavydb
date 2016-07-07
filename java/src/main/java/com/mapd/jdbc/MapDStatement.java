@@ -59,7 +59,15 @@ public class MapDStatement implements java.sql.Statement {
 
   @Override
   public int executeUpdate(String sql) throws SQLException { //logger.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet.");
+    try {
+      sqlResult = client.sql_execute(session, sql + ";", true, null);
+    } catch (ThriftException ex) {
+      throw new SQLException("Query failed : " + ex.getError_msg());
+    } catch (TException ex) {
+      throw new SQLException("Query failed : " + ex.toString());
+    }
+
+    return sqlResult.row_set.columns.size();
   }
 
   @Override
