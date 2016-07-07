@@ -28,6 +28,7 @@
 #include "Planner/Planner.h"
 #include "QueryEngine/CalciteAdapter.h"
 #include "QueryEngine/Execute.h"
+#include "QueryEngine/ExtensionFunctionsWhitelist.h"
 #include "QueryEngine/JsonAccessors.h"
 #include "QueryEngine/TargetMetaInfo.h"
 #include "Shared/mapd_shared_mutex.h"
@@ -212,6 +213,9 @@ class MapDHandler : virtual public MapDIf {
         new Data_Namespace::DataMgr(data_path.string(), cpu_buffer_mem_bytes, !cpu_mode_only_, num_gpus, start_gpu));
 #ifdef HAVE_CALCITE
     calcite_.reset(new Calcite(calcite_port, base_data_path_));
+#ifdef HAVE_RAVM
+    ExtensionFunctionsWhitelist::add(calcite_->getExtensionFunctionWhitelist());
+#endif  // HAVE_RAVM
 #endif  // HAVE_CALCITE
 
     sys_cat_.reset(new Catalog_Namespace::SysCatalog(base_data_path_,

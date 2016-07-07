@@ -2,6 +2,7 @@
 #include "RelAlgTranslator.h"
 
 #include "CalciteDeserializerUtils.h"
+#include "ExtensionFunctionsWhitelist.h"
 #include "RelAlgAbstractInterpreter.h"
 
 #include "../Analyzer/Analyzer.h"
@@ -324,6 +325,13 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(const RexFun
   if (rex_function->getName() == std::string("DATETIME")) {
     return translateDatetime(rex_function);
   }
-  throw QueryNotSupported("Function " + rex_function->getName() + " not supported");
+  if (!ExtensionFunctionsWhitelist::get(rex_function->getName())) {
+    throw QueryNotSupported("Function " + rex_function->getName() + " not supported");
+  }
+  std::vector<std::shared_ptr<Analyzer::Expr>> args;
+  for (size_t i = 0; i < rex_function->size(); ++i) {
+    args.push_back(translateScalarRex(rex_function->getOperand(i)));
+  }
+  return makeExpr<Analyzer::FunctionOper>(rex_function->getType(), rex_function->getName(), args);
 }
 #endif  // HAVE_CALCITE

@@ -5,6 +5,7 @@
 #include "Codec.h"
 #include "ExpressionRewrite.h"
 #include "ExtensionFunctionsWhitelist.h"
+#include "ExtensionFunctions.h"
 #include "GpuMemUtils.h"
 #include "MaxwellCodegenPatch.h"
 #include "GroupByAndAggregate.h"
@@ -5012,6 +5013,13 @@ declare void @force_sync();
 )" +
     gen_array_any_all_sigs();
 
+#ifdef HAVE_CUDA
+std::string extension_function_decls() {
+  const auto decls = ExtensionFunctionsWhitelist::getLLVMDeclarations();
+  return boost::algorithm::join(decls, "\n");
+}
+#endif  // HAVE_CUDA
+
 }  // namespace
 
 std::vector<void*> Executor::optimizeAndCodegenGPU(llvm::Function* query_func,
@@ -5106,7 +5114,7 @@ std::vector<void*> Executor::optimizeAndCodegenGPU(llvm::Function* query_func,
   }
   module->eraseNamedMetadata(md);
 
-  auto cuda_llir = cuda_rt_decls + ss.str();
+  auto cuda_llir = cuda_rt_decls + extension_function_decls() + ss.str();
 
   std::vector<void*> native_functions;
   std::vector<std::tuple<void*, llvm::ExecutionEngine*, GpuCompilationContext*>> cached_functions;
