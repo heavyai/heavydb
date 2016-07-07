@@ -9,10 +9,12 @@
 #include <cassert>
 #include <stdexcept>
 #include <typeinfo>
+#include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/filesystem.hpp>
 #include "../Catalog/Catalog.h"
 #include "ParserNode.h"
+#include "ReservedKeywords.h"
 #include "../Planner/Planner.h"
 #include "../QueryEngine/Execute.h"
 #include "../Fragmenter/InsertOrderFragmenter.h"
@@ -1336,8 +1338,9 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     ColumnDef* coldef = static_cast<ColumnDef*>(e.get());
     ColumnDescriptor cd;
     cd.columnName = *coldef->get_column_name();
-    if (cd.columnName == "rowid")
-      throw std::runtime_error("Cannot create column with name rowid. rowid is a system defined column.");
+    if (reserved_keywords.find(boost::to_upper_copy<std::string>(cd.columnName)) != reserved_keywords.end()) {
+      throw std::runtime_error("Cannot create column with reserved keyword '" + cd.columnName + "'");
+    }
     SQLType* t = coldef->get_column_type();
     t->check_type();
     if (t->get_is_array()) {
@@ -1520,6 +1523,9 @@ void RenameColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   }
   if (catalog.getMetadataForColumn(td->tableId, *new_column_name) != nullptr) {
     throw std::runtime_error("Column " + *new_column_name + " already exists.");
+  }
+  if (reserved_keywords.find(boost::to_upper_copy<std::string>(*new_column_name)) != reserved_keywords.end()) {
+    throw std::runtime_error("Cannot create column with reserved keyword '" + *new_column_name + "'");
   }
   catalog.renameColumn(td, cd, *new_column_name);
 }
