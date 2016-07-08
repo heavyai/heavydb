@@ -24,7 +24,6 @@ class ExtensionFunction {
   const ExtArgumentType getRet() const { return ret_; }
 
  private:
-  const std::string name_;
   const std::vector<ExtArgumentType> args_;
   const ExtArgumentType ret_;
 };
