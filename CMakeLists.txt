@@ -124,18 +124,20 @@ add_subdirectory(ThirdParty/shapelib)
 
 
 
-option(ENABLE_CALCITE "Build Calcite adapter" OFF)
+option(ENABLE_CALCITE "Build Calcite adapter" ON)
 if(ENABLE_CALCITE)
     add_definitions("-DHAVE_CALCITE")
     find_package(JNI REQUIRED)
     include_directories(${JNI_INCLUDE_DIRS})
-    set(MAPD_PACKAGE_FLAGS "${MAPD_PACKAGE_FLAGS}-calcite")
+else()
+    set(MAPD_PACKAGE_FLAGS "${MAPD_PACKAGE_FLAGS}-legacyparser")
 endif()
 
-option(ENABLE_RAVM "Enable RA vm" OFF)
+option(ENABLE_RAVM "Enable RA vm" ON)
 if(ENABLE_RAVM)
     add_definitions("-DHAVE_RAVM")
-    set(MAPD_PACKAGE_FLAGS "${MAPD_PACKAGE_FLAGS}-ravm")
+else()
+    set(MAPD_PACKAGE_FLAGS "${MAPD_PACKAGE_FLAGS}-noravm")
 endif()
 
 option(ENABLE_COMPACTION "Enable Compaction and Overflow/Underflow Detection" OFF)
