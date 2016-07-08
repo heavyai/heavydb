@@ -1,12 +1,51 @@
 #include "ExtensionFunctionsWhitelist.h"
 #include "JsonAccessors.h"
 
+#include <boost/algorithm/string/join.hpp>
+
 ExtensionFunction* ExtensionFunctionsWhitelist::get(const std::string& name) {
   const auto it = functions_.find(name);
   if (it == functions_.end()) {
     return nullptr;
   }
   return &it->second;
+}
+
+namespace {
+
+std::string serialize_type(const ExtArgumentType type) {
+  switch (type) {
+    case ExtArgumentType::Int16:
+      return "i16";
+    case ExtArgumentType::Int32:
+      return "i32";
+    case ExtArgumentType::Int64:
+      return "i64";
+    case ExtArgumentType::Float:
+      return "float";
+    case ExtArgumentType::Double:
+      return "double";
+    default:
+      CHECK(false);
+  }
+  CHECK(false);
+  return "";
+}
+
+}  // namespace
+
+std::vector<std::string> ExtensionFunctionsWhitelist::getLLVMDeclarations() {
+  std::vector<std::string> declarations;
+  for (const auto& kv : functions_) {
+    const auto signature = kv.second;
+    std::string decl_prefix{"declare " + serialize_type(signature.getRet()) + " @" + kv.first};
+    std::vector<std::string> arg_strs;
+    for (const auto arg : signature.getArgs()) {
+      arg_strs.push_back(serialize_type(arg));
+    }
+    declarations.push_back(decl_prefix + "(" + boost::algorithm::join(arg_strs, ", ") + ");");
+  }
+  return declarations;
 }
 
 namespace {

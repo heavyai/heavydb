@@ -34,6 +34,8 @@ class ExtensionFunctionsWhitelist {
 
   static ExtensionFunction* get(const std::string& name);
 
+  static std::vector<std::string> getLLVMDeclarations();
+
  private:
   // Function overloading not supported, they're uniquely identified by name.
   static std::unordered_map<std::string, ExtensionFunction> functions_;
