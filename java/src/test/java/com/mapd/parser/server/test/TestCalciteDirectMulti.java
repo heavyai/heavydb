@@ -35,7 +35,7 @@ public class TestCalciteDirectMulti {
   @Ignore
   public void testThreadedCall() {
     final ExecutorService pool = Executors.newFixedThreadPool(TEST_THREAD_COUNT);
-    final CalciteDirect cd = new CalciteDirect(9091,"/home/michael/mapd/mapd2/build/data");
+    final CalciteDirect cd = new CalciteDirect(9091,"/home/michael/mapd/mapd2/build/data", null);
     Runnable r = new Runnable() {
       @Override
       public void run() {
