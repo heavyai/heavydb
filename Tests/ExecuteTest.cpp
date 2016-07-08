@@ -1648,6 +1648,8 @@ int main(int argc, char** argv) {
   g_sqlite_comparator.query(drop_gpu_sort_test);
   const std::string drop_query_rewrite_test{"DROP TABLE query_rewrite_test;"};
   run_ddl_statement(drop_query_rewrite_test);
+  const std::string drop_big_decimal_range_test{"DROP TABLE big_decimal_range_test;"};
+  run_ddl_statement(drop_big_decimal_range_test);
   g_sqlite_comparator.query(drop_query_rewrite_test);
   const std::string drop_array_test{"DROP TABLE array_test;"};
   run_ddl_statement(drop_array_test);
