@@ -8,7 +8,7 @@
 #include <assert.h>
 #include <boost/lexical_cast.hpp>
 
-#define DROP_FRAGMENT_FACTOR 0.9  // drop to 90% of max so we don't keep adding and dropping fragments
+#define DROP_FRAGMENT_FACTOR 0.97  // drop to 97% of max so we don't keep adding and dropping fragments
 
 using Data_Namespace::AbstractBuffer;
 using Data_Namespace::DataMgr;
