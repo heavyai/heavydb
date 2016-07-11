@@ -1,32 +1,32 @@
 # MapD Platform
-The latest version of the MapD Platform is 1.1.9.
+The latest version of the MapD Platform is 1.2.0.
 
 #### **1.2.0** - Released July 11, 2016
 
 ##### New
 - Changed SQL parser to Apache Calcite
-   -Subquery support
-   -Further join support (e.g. left outer join)
-   -Case insensitivity for column and table names
+  - Subquery support
+  - Further join support (e.g. left outer join)
+  - Case insensitivity for column and table names
 - New core execution engine, Relational Algebra Virtual Machine ("RAVM"), gives more flexibility allowing execution of arbitrarily complex queries
 - Added additional formats for date import
 - MapD Immerse v.2 technical preview
-   - Redesigned user interface allows more powerful chart creation and intuitive data exploration
-   - To access the Immerse Technical Preview Dashboards page, go to `http://<your server>:9092/v2`. Note, change the port number `:9092` to match your configuration
-   - Immerse v.2 technical preview is an unstable preview release.  A subset of major known bugs is [here](https://docs.google.com/document/d/1sigSA4IhQTulibtDcxlALaCNEiAqEkPNjR7rkK-BXDo)
+  - Redesigned user interface allows more powerful chart creation and intuitive data exploration
+  - To access the Immerse Technical Preview Dashboards page, go to `http://<server>:<port>/v2/`
+  - Immerse v.2 technical preview is an unstable preview release.  A subset of major known bugs is [here](https://docs.google.com/document/d/1sigSA4IhQTulibtDcxlALaCNEiAqEkPNjR7rkK-BXDo)
 
 ##### Fixed
 - Fixed a problem with count distinct and group by queries
 - Fixed a problem with count on float
 - Fixed a problem with projection queries in limited cases
 - Fixed a problem where tables created via MapD web-based table importer were not consistent with tables built via SQL CREATE
-   - Disallowed additional SQL keywords from column names
+- Disallowed use of reserved SQL keywords as column names
 
 ##### Removed
--Loss of Group By ordinals (would restore pending Calcite support)
+- Loss of Group By ordinals (would restore pending Calcite support)
 
 ##### Dependencies
--Now requiring Java Runtime Environment (JRE) version 1.6 or higher
+- Now requiring Java Runtime Environment (JRE) version 1.6 or higher
 
 #### **1.1.9** - Released June 27, 2016
 
