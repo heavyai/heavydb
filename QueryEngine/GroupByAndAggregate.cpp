@@ -902,11 +902,20 @@ size_t QueryMemoryDescriptor::getNextColOffInBytes(const int8_t* col_ptr,
 }
 
 size_t QueryMemoryDescriptor::getBufferSizeQuad(const ExecutorDeviceType device_type) const {
+  return getBufferSizeBytes(device_type) * sizeof(int64_t);
+}
+
+size_t QueryMemoryDescriptor::getSmallBufferSizeQuad() const {
+  CHECK(!keyless_hash || entry_count_small == 0);
+  return (group_col_widths.size() + agg_col_widths.size()) * entry_count_small;
+}
+
+size_t QueryMemoryDescriptor::getBufferSizeBytes(const ExecutorDeviceType device_type) const {
   if (keyless_hash) {
     CHECK_EQ(size_t(1), group_col_widths.size());
     auto total_bytes = align_to_int64(getColsSize());
 
-    return (interleavedBins(device_type) ? executor_->warpSize() : 1) * entry_count * total_bytes / sizeof(int64_t);
+    return (interleavedBins(device_type) ? executor_->warpSize() : 1) * entry_count * total_bytes;
   }
 
   size_t total_bytes{0};
@@ -917,16 +926,7 @@ size_t QueryMemoryDescriptor::getBufferSizeQuad(const ExecutorDeviceType device_
     total_bytes = getRowSize() * entry_count;
   }
 
-  return total_bytes / sizeof(int64_t);
-}
-
-size_t QueryMemoryDescriptor::getSmallBufferSizeQuad() const {
-  CHECK(!keyless_hash || entry_count_small == 0);
-  return (group_col_widths.size() + agg_col_widths.size()) * entry_count_small;
-}
-
-size_t QueryMemoryDescriptor::getBufferSizeBytes(const ExecutorDeviceType device_type) const {
-  return getBufferSizeQuad(device_type) * sizeof(int64_t);
+  return total_bytes;
 }
 
 size_t QueryMemoryDescriptor::getSmallBufferSizeBytes() const {
