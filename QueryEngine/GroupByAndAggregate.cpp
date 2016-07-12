@@ -902,7 +902,9 @@ size_t QueryMemoryDescriptor::getNextColOffInBytes(const int8_t* col_ptr,
 }
 
 size_t QueryMemoryDescriptor::getBufferSizeQuad(const ExecutorDeviceType device_type) const {
-  return getBufferSizeBytes(device_type) * sizeof(int64_t);
+  const auto size_bytes = getBufferSizeBytes(device_type);
+  CHECK_EQ(size_t(0), size_bytes % sizeof(int64_t));
+  return getBufferSizeBytes(device_type) / sizeof(int64_t);
 }
 
 size_t QueryMemoryDescriptor::getSmallBufferSizeQuad() const {
