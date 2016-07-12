@@ -599,6 +599,15 @@ TEST(Select, GroupByExprNoFilterNoAggregate) {
   }
 }
 
+#ifdef HAVE_CALCITE
+TEST(Select, DistinctProjection) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT DISTINCT str FROM test ORDER BY str;", dt);
+  }
+}
+#endif  // HAVE_CALCITE
+
 TEST(Select, Case) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
