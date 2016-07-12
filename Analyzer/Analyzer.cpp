@@ -454,6 +454,26 @@ std::shared_ptr<Analyzer::Expr> Expr::add_cast(const SQLTypeInfo& new_type_info)
   return makeExpr<UOper>(new_type_info, contains_agg, kCAST, shared_from_this());
 }
 
+namespace {
+
+struct IntFracRepr {
+  const int64_t integral;
+  const int64_t fractional;
+  const int64_t scale;
+};
+
+IntFracRepr decimal_to_int_frac(const int64_t dec, const SQLTypeInfo& ti) {
+  int64_t integral_part = dec;
+  int64_t scale = 1;
+  for (int i = 0; i < ti.get_scale(); i++) {
+    integral_part /= 10;
+    scale *= 10;
+  }
+  return {integral_part, dec - integral_part * scale, scale};
+}
+
+}  // namespace
+
 void Constant::cast_number(const SQLTypeInfo& new_type_info) {
   switch (type_info.get_type()) {
     case kINT:
@@ -602,16 +622,16 @@ void Constant::cast_number(const SQLTypeInfo& new_type_info) {
           for (int i = 0; i < type_info.get_scale(); i++)
             constval.bigintval /= 10;
           break;
-        case kDOUBLE:
-          constval.doubleval = (double)constval.bigintval;
-          for (int i = 0; i < type_info.get_scale(); i++)
-            constval.doubleval /= 10;
+        case kDOUBLE: {
+          const auto int_frac = decimal_to_int_frac(constval.bigintval, type_info);
+          constval.doubleval = int_frac.integral + static_cast<double>(int_frac.fractional) / int_frac.scale;
           break;
-        case kFLOAT:
-          constval.floatval = (float)constval.bigintval;
-          for (int i = 0; i < type_info.get_scale(); i++)
-            constval.floatval /= 10;
+        }
+        case kFLOAT: {
+          const auto int_frac = decimal_to_int_frac(constval.bigintval, type_info);
+          constval.floatval = int_frac.integral + static_cast<double>(int_frac.fractional) / int_frac.scale;
           break;
+        }
         case kNUMERIC:
         case kDECIMAL:
           if (new_type_info.get_scale() > type_info.get_scale()) {
