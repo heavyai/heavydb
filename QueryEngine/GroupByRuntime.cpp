@@ -30,6 +30,28 @@ extern "C" NEVER_INLINE DEVICE int64_t* get_group_value(int64_t* groups_buffer,
   return NULL;
 }
 
+extern "C" NEVER_INLINE DEVICE int64_t* get_group_value_columnar(int64_t* groups_buffer,
+                                                                 const uint32_t groups_buffer_entry_count,
+                                                                 const int64_t* key,
+                                                                 const uint32_t key_qw_count) {
+  uint32_t h = key_hash(key, key_qw_count) % groups_buffer_entry_count;
+  int64_t* matching_group =
+      get_matching_group_value_columnar(groups_buffer, h, key, key_qw_count, groups_buffer_entry_count);
+  if (matching_group) {
+    return matching_group;
+  }
+  uint32_t h_probe = (h + 1) % groups_buffer_entry_count;
+  while (h_probe != h) {
+    matching_group =
+        get_matching_group_value_columnar(groups_buffer, h_probe, key, key_qw_count, groups_buffer_entry_count);
+    if (matching_group) {
+      return matching_group;
+    }
+    h_probe = (h_probe + 1) % groups_buffer_entry_count;
+  }
+  return NULL;
+}
+
 extern "C" ALWAYS_INLINE DEVICE int64_t* get_group_value_fast(int64_t* groups_buffer,
                                                               const int64_t key,
                                                               const int64_t min_key,

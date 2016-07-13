@@ -27,6 +27,9 @@ set(query_engine_source_files
     RelAlgExecutor.cpp
     RelAlgTranslator.cpp
     ResultRows.cpp
+    ResultSet.cpp
+    ResultSetIteration.cpp
+    ResultSetReduction.cpp
     RuntimeFunctions.cpp
     RuntimeFunctions.bc
     StringFunctions.cpp
@@ -87,9 +90,9 @@ else()
 endif()
 
 if(ENABLE_RENDERING)
-    target_link_libraries(QueryEngine CsvImport StringDictionary Utils QueryRenderer)
+    target_link_libraries(QueryEngine CsvImport Planner StringDictionary Utils QueryRenderer)
 else()
-    target_link_libraries(QueryEngine CsvImport StringDictionary Utils)
+    target_link_libraries(QueryEngine CsvImport Planner StringDictionary Utils)
 endif()
 
 

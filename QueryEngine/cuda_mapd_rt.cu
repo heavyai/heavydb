@@ -74,6 +74,33 @@ extern "C" __device__ int64_t* get_matching_group_value(int64_t* groups_buffer,
   return match ? groups_buffer + off + key_qw_count : NULL;
 }
 
+extern "C" __device__ int64_t* get_matching_group_value_columnar(int64_t* groups_buffer,
+                                                                 const uint32_t h,
+                                                                 const int64_t* key,
+                                                                 const uint32_t key_qw_count,
+                                                                 const size_t entry_count) {
+  uint32_t off = h;
+  {
+    const uint64_t old = atomicCAS(reinterpret_cast<unsigned long long*>(groups_buffer + off), EMPTY_KEY_64, *key);
+    if (EMPTY_KEY_64 == old) {
+      for (size_t i = 0; i < key_qw_count; ++i) {
+        groups_buffer[off] = key[i];
+        off += entry_count;
+      }
+      return &groups_buffer[off];
+    }
+  }
+  __syncthreads();
+  off = h;
+  for (size_t i = 0; i < key_qw_count; ++i) {
+    if (groups_buffer[off] != key[i]) {
+      return NULL;
+    }
+    off += entry_count;
+  }
+  return &groups_buffer[off];
+}
+
 #include "GroupByRuntime.cpp"
 
 __device__ int64_t atomicMax64(int64_t* address, int64_t val) {

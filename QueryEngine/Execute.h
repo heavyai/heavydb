@@ -967,6 +967,7 @@ class Executor {
   friend struct QueryMemoryDescriptor;
   friend class QueryExecutionContext;
   friend class ResultRows;
+  friend class ResultSet;
   friend class InValuesBitmap;
   friend class JoinHashTable;
   friend class QueryRewriter;

@@ -76,8 +76,8 @@ typedef std::unordered_map<size_t, CountDistinctDescriptor> CountDistinctDescrip
 class RowSetMemoryOwner;
 
 struct ColWidths {
-  int8_t actual;
-  int8_t compact;
+  int8_t actual;   // the real width of the type
+  int8_t compact;  // with padding
 };
 
 class QueryExecutionContext;
@@ -107,6 +107,8 @@ struct QueryMemoryDescriptor {
   bool is_sort_plan;  // TODO(alex): remove
   bool output_columnar;
   bool render_output;
+  std::vector<int8_t> key_column_pad_bytes;
+  std::vector<int8_t> target_column_pad_bytes;
 
   std::unique_ptr<QueryExecutionContext> getQueryExecutionContext(
       const std::vector<int64_t>& init_agg_vals,

@@ -1,0 +1,126 @@
+/**
+ * @file    ResultSetBufferAccessors.h
+ * @author  Alex Suhan <alex@mapd.com>
+ * @brief   Utility functions for easy access to the result set buffers.
+ *
+ * Copyright (c) 2014 MapD Technologies, Inc.  All rights reserved.
+ */
+
+#ifndef QUERYENGINE_RESULTSETBUFFERACCESSORS_H
+#define QUERYENGINE_RESULTSETBUFFERACCESSORS_H
+
+#include "ResultRows.h"
+
+inline size_t advance_slot(const size_t j, const TargetInfo& target_info) {
+  return j + (target_info.agg_kind == kAVG ? 2 : 1);
+}
+
+inline size_t slot_offset_rowwise(const size_t entry_idx,
+                                  const size_t slot_idx,
+                                  const size_t key_count,
+                                  const size_t slot_count) {
+  return (key_count + slot_count) * entry_idx + (key_count + slot_idx);
+}
+
+inline size_t slot_offset_colwise(const size_t entry_idx,
+                                  const size_t slot_idx,
+                                  const size_t key_count,
+                                  const size_t entry_count) {
+  return (key_count + slot_idx) * entry_count + entry_idx;
+}
+
+inline size_t key_offset_rowwise(const size_t entry_idx, const size_t key_count, const size_t slot_count) {
+  return (key_count + slot_count) * entry_idx;
+}
+
+inline size_t key_offset_colwise(const size_t entry_idx, const size_t key_idx, const size_t entry_count) {
+  return key_idx * entry_count + entry_idx;
+}
+
+template <class T>
+inline T advance_to_next_columnar_target_buff(T target_ptr,
+                                              const QueryMemoryDescriptor& query_mem_desc,
+                                              const size_t target_slot_idx) {
+  CHECK_LT(target_slot_idx, query_mem_desc.agg_col_widths.size());
+  auto new_target_ptr =
+      target_ptr + query_mem_desc.entry_count * query_mem_desc.agg_col_widths[target_slot_idx].compact;
+  if (!query_mem_desc.target_column_pad_bytes.empty()) {
+    CHECK_LT(target_slot_idx, query_mem_desc.target_column_pad_bytes.size());
+    new_target_ptr += query_mem_desc.target_column_pad_bytes[target_slot_idx];
+  }
+  return new_target_ptr;
+}
+
+inline size_t get_groupby_col_count(const QueryMemoryDescriptor& query_mem_desc) {
+  return query_mem_desc.group_col_widths.size();
+}
+
+inline size_t get_key_count_for_descriptor(const QueryMemoryDescriptor& query_mem_desc) {
+  return query_mem_desc.keyless_hash ? 0 : get_groupby_col_count(query_mem_desc);
+}
+
+inline size_t get_buffer_col_slot_count(const QueryMemoryDescriptor& query_mem_desc) {
+  return query_mem_desc.agg_col_widths.size();
+}
+
+template <class T>
+inline T get_cols_ptr(T buff, const QueryMemoryDescriptor& query_mem_desc) {
+  CHECK(query_mem_desc.output_columnar);
+  auto cols_ptr = buff;
+  if (query_mem_desc.keyless_hash) {
+    CHECK(query_mem_desc.key_column_pad_bytes.empty());
+  } else {
+    CHECK_EQ(query_mem_desc.key_column_pad_bytes.empty(), query_mem_desc.target_column_pad_bytes.empty());
+  }
+  const bool has_key_col_padding = !query_mem_desc.key_column_pad_bytes.empty();
+  const auto key_count = get_key_count_for_descriptor(query_mem_desc);
+  if (has_key_col_padding) {
+    CHECK_EQ(key_count, query_mem_desc.key_column_pad_bytes.size());
+  }
+  for (size_t key_idx = 0; key_idx < key_count; ++key_idx) {
+    cols_ptr += query_mem_desc.group_col_widths[key_idx] * query_mem_desc.entry_count;
+    if (has_key_col_padding) {
+      cols_ptr += query_mem_desc.key_column_pad_bytes[key_idx];
+    }
+  }
+  return cols_ptr;
+}
+
+inline size_t get_key_bytes_rowwise(const QueryMemoryDescriptor& query_mem_desc) {
+  if (query_mem_desc.keyless_hash) {
+    return 0;
+  }
+  size_t result = 0;
+  for (const auto& group_width : query_mem_desc.group_col_widths) {
+    result += group_width;
+  }
+  return result;
+}
+
+inline size_t get_row_bytes(const QueryMemoryDescriptor& query_mem_desc) {
+  size_t result = get_key_bytes_rowwise(query_mem_desc);
+  for (const auto& target_width : query_mem_desc.agg_col_widths) {
+    result += target_width.compact;
+  }
+  return result;
+}
+
+template <class T>
+inline T row_ptr_rowwise(T buff, const QueryMemoryDescriptor& query_mem_desc, const size_t entry_idx) {
+  const auto row_bytes = get_row_bytes(query_mem_desc);
+  return buff + entry_idx * row_bytes;
+}
+
+template <class T>
+inline T advance_target_ptr(T target_ptr,
+                            const TargetInfo& target_info,
+                            const size_t slot_idx,
+                            const QueryMemoryDescriptor& query_mem_desc) {
+  auto result = target_ptr + query_mem_desc.agg_col_widths[slot_idx].compact;
+  if (target_info.is_agg && target_info.agg_kind == kAVG) {
+    return result + query_mem_desc.agg_col_widths[slot_idx + 1].compact;
+  }
+  return result;
+}
+
+#endif  // QUERYENGINE_RESULTSETBUFFERACCESSORS_H

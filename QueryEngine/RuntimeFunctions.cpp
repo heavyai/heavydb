@@ -711,6 +711,29 @@ extern "C" __attribute__((always_inline)) int64_t* get_matching_group_value(int6
   return nullptr;
 }
 
+extern "C" __attribute__((always_inline)) int64_t* get_matching_group_value_columnar(int64_t* groups_buffer,
+                                                                                     const uint32_t h,
+                                                                                     const int64_t* key,
+                                                                                     const uint32_t key_qw_count,
+                                                                                     const size_t entry_count) {
+  auto off = h;
+  if (groups_buffer[off] == EMPTY_KEY_64) {
+    for (size_t i = 0; i < key_qw_count; ++i) {
+      groups_buffer[off] = key[i];
+      off += entry_count;
+    }
+    return &groups_buffer[off];
+  }
+  off = h;
+  for (size_t i = 0; i < key_qw_count; ++i) {
+    if (groups_buffer[off] != key[i]) {
+      return nullptr;
+    }
+    off += entry_count;
+  }
+  return &groups_buffer[off];
+}
+
 extern "C" __attribute__((always_inline)) int64_t* get_matching_group_value_perfect_hash(int64_t* groups_buffer,
                                                                                          const uint32_t h,
                                                                                          const int64_t* key,

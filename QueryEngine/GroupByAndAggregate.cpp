@@ -709,7 +709,6 @@ std::unique_ptr<QueryExecutionContext> QueryMemoryDescriptor::getQueryExecutionC
 }
 
 size_t QueryMemoryDescriptor::getColsSize() const {
-  CHECK(!output_columnar);
   size_t total_bytes{0};
   for (size_t col_idx = 0; col_idx < agg_col_widths.size(); ++col_idx) {
     auto chosen_bytes = agg_col_widths[col_idx].compact;
@@ -914,7 +913,7 @@ size_t QueryMemoryDescriptor::getSmallBufferSizeQuad() const {
 
 size_t QueryMemoryDescriptor::getBufferSizeBytes(const ExecutorDeviceType device_type) const {
   if (keyless_hash) {
-    CHECK_EQ(size_t(1), group_col_widths.size());
+    CHECK_GE(group_col_widths.size(), size_t(1));
     auto total_bytes = align_to_int64(getColsSize());
 
     return (interleavedBins(device_type) ? executor_->warpSize() : 1) * entry_count * total_bytes;
@@ -922,8 +921,8 @@ size_t QueryMemoryDescriptor::getBufferSizeBytes(const ExecutorDeviceType device
 
   size_t total_bytes{0};
   if (output_columnar) {
-    CHECK_EQ(size_t(1), group_col_widths.size());
-    total_bytes = sizeof(int64_t) * entry_count + getTotalBytesOfColumnarBuffers(agg_col_widths);
+    total_bytes =
+        sizeof(int64_t) * group_col_widths.size() * entry_count + getTotalBytesOfColumnarBuffers(agg_col_widths);
   } else {
     total_bytes = getRowSize() * entry_count;
   }
