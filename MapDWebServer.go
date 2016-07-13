@@ -34,6 +34,7 @@ var (
 	frontend    string
 	serversJson string
 	dataDir     string
+	tmpDir      string
 	certFile    string
 	keyFile     string
 	readOnly    bool
@@ -85,6 +86,7 @@ func init() {
 	pflag.StringP("frontend", "f", "frontend", "path to frontend directory")
 	pflag.StringP("servers-json", "", "", "path to servers.json")
 	pflag.StringP("data", "d", "data", "path to MapD data directory")
+	pflag.StringP("tmpdir", "", "", "path for temporary file storage [/tmp]")
 	pflag.StringP("config", "c", "", "path to MapD configuration file")
 	pflag.BoolP("read-only", "r", false, "enable read-only mode")
 	pflag.BoolP("quiet", "q", false, "suppress non-error messages")
@@ -111,6 +113,7 @@ func init() {
 	viper.BindPFlag("web.compress", pflag.CommandLine.Lookup("compress"))
 
 	viper.BindPFlag("data", pflag.CommandLine.Lookup("data"))
+	viper.BindPFlag("tmpdir", pflag.CommandLine.Lookup("tmpdir"))
 	viper.BindPFlag("config", pflag.CommandLine.Lookup("config"))
 	viper.BindPFlag("read-only", pflag.CommandLine.Lookup("read-only"))
 	viper.BindPFlag("quiet", pflag.CommandLine.Lookup("quiet"))
@@ -153,6 +156,20 @@ func init() {
 	backendUrl, err = url.Parse(backendUrlStr)
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	if os.Getenv("TMPDIR") != "" {
+		tmpDir = os.Getenv("TMPDIR")
+	}
+	if viper.IsSet("tmpdir") {
+		tmpDir = viper.GetString("tmpdir")
+	}
+	if tmpDir != "" {
+		err = os.MkdirAll(tmpDir, 0750)
+		if err != nil {
+			log.Fatal("Could not create temp dir: ", err)
+		}
+		os.Setenv("TMPDIR", tmpDir)
 	}
 
 	enableHttps = viper.GetBool("web.enable-https")

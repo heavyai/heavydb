@@ -377,6 +377,7 @@ mapd_web_server [{--port} <port number>]
                 [{--enable-https} <bool>]
                 [{--cert} <cert.pem>]
                 [{--key} <key.pem>]
+                [{--tmpdir} </path/to/tmp>]
 ```
 This command starts the MapD web server.  This server provides access to MapD's visualization frontend and allows the frontend to communicate with the MapD Server. HTTPS certificates and keys may be generated via the provided `generate_cert` utility, or provided by your Certificate Authority. The options are:
 
@@ -387,6 +388,9 @@ This command starts the MapD web server.  This server provides access to MapD's 
 * `[{--enable-https} <bool>]`: Enable HTTPS for serving the frontend. The default is `false`.
 * `[{--cert} <cert.pem>]`: Path to the HTTPS certificate file. The default is `cert.pem`.
 * `[{--key} <key.pem>]`: Path to the HTTPS key file. The default is `key.pem`.
+* `[{--tmpdir} </path/to/tmp>]`: Path to custom temporary directory. The default is `/tmp/`.
+
+The temporary directory is used as a staging location for file uploads. It is sometimes desirable to place this directory on the same file system as the MapD data directory. If not specified on the command line, `mapd_web_server` also respects the standard `TMPDIR` environment variable as well as a specific `MAPD_TMPDIR` environment variable, the latter of which takes precedence. Defaults to the system default `/tmp/` if neither the command line argument nor at least one of the environment variables are specified.
 
 ### `generate_cert`
 
