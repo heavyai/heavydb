@@ -144,6 +144,8 @@ JAVA_PREFIX=$PREFIX/lib download_make_install http://apache.claz.org/thrift/0.9.
 download https://downloads.sourceforge.net/project/glew/glew/1.13.0/glew-1.13.0.tgz
 extract glew-1.13.0.tgz
 pushd glew-1.13.0
+patch -p1 < ../mapd-deps-glew-egl.patch
+make extensions
 make DESTDIR=$PREFIX GLEW_DEST=""
 make DESTDIR=$PREFIX GLEW_DEST="" install
 make DESTDIR=$PREFIX GLEW_DEST="" install.mx

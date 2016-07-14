@@ -34,8 +34,13 @@
 # (To distribute this file outside of CMake, substitute the full
 #  License text for the above reference.)
 
-find_path(GLEW_MX_INCLUDE_DIR GL/glew.h)
-find_library(GLEW_MX_LIBRARY NAMES GLEWmx GLEWMX glewmx32 glewmx glewmx32s PATH_SUFFIXES lib64)
+find_library(GLEW_MX_LIBRARY
+  NAMES GLEWmx GLEWMX glewmx32 glewmx glewmx32s
+  HINTS ENV LD_LIBRARY_PATH
+  PATH_SUFFIXES lib64)
+get_filename_component(GLEW_LIB_DIR ${GLEW_MX_LIBRARY} DIRECTORY)
+get_filename_component(GLEW_INST_DIR ${GLEW_LIB_DIR} DIRECTORY)
+find_path(GLEW_MX_INCLUDE_DIR GL/glew.h HINTS ${GLEW_INST_DIR}/include)
 
 set(GLEW_MX_INCLUDE_DIRS ${GLEW_MX_INCLUDE_DIR})
 set(GLEW_MX_LIBRARIES ${GLEW_MX_LIBRARY})
