@@ -657,6 +657,25 @@ TEST(Select, Case) {
     c("SELECT x, AVG(CASE WHEN y BETWEEN 41 AND 42 THEN y END) FROM test GROUP BY x ORDER BY x;", dt);
     c("SELECT x, SUM(CASE WHEN y BETWEEN 41 AND 42 THEN y END) FROM test GROUP BY x ORDER BY x;", dt);
     c("SELECT x, COUNT(CASE WHEN y BETWEEN 41 AND 42 THEN y END) FROM test GROUP BY x ORDER BY x;", dt);
+#ifdef HAVE_CALCITE
+    ASSERT_EQ(
+        int64_t(1),
+        v<int64_t>(run_simple_agg("SELECT MIN(CASE WHEN x BETWEEN 7 AND 8 THEN true ELSE false END) FROM test;", dt)));
+    ASSERT_EQ(
+        int64_t(0),
+        v<int64_t>(run_simple_agg("SELECT MIN(CASE WHEN x BETWEEN 6 AND 7 THEN true ELSE false END) FROM test;", dt)));
+#else
+    ASSERT_EQ(int64_t(1),
+              v<int64_t>(run_simple_agg(
+                  "SELECT MIN(CASE WHEN x BETWEEN 7 AND 8 THEN CAST('t' AS boolean) ELSE CAST('f' AS boolean) END) "
+                  "FROM test;",
+                  dt)));
+    ASSERT_EQ(int64_t(0),
+              v<int64_t>(run_simple_agg(
+                  "SELECT MIN(CASE WHEN x BETWEEN 6 AND 7 THEN CAST('t' AS boolean) ELSE CAST('f' AS boolean) END) "
+                  "FROM test;",
+                  dt)));
+#endif  // HAVE_CALCITE
   }
 }
 

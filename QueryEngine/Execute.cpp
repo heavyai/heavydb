@@ -1287,6 +1287,8 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::CaseExpr* case_expr,
       is_real_str = true;
       case_llvm_type = get_int_type(64, cgen_state_->context_);
     }
+  } else if (case_ti.is_boolean()) {
+    case_llvm_type = get_int_type(8 * case_ti.get_size(), cgen_state_->context_);
   }
   CHECK(case_llvm_type);
   CHECK(case_expr->get_else_expr()->get_type_info() == case_ti);
