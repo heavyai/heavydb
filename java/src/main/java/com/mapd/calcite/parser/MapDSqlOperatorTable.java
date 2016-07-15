@@ -73,10 +73,10 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
         opTab.addOperator(new CharLength());
         opTab.addOperator(new PgILike());
         if (extSigs == null) {
-          return;
+            return;
         }
         for (Map.Entry<String, ExtensionFunction> extSig : extSigs.entrySet()) {
-          opTab.addOperator(new ExtFunction(extSig.getKey(), extSig.getValue()));
+            opTab.addOperator(new ExtFunction(extSig.getKey(), extSig.getValue()));
         }
     }
 
@@ -370,48 +370,49 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     }
 
     static class ExtFunction extends SqlFunction {
-      ExtFunction(final String name, final ExtensionFunction sig) {
-        super(name,
-              SqlKind.OTHER_FUNCTION,
-              null,
-              null,
-              OperandTypes.family(toSqlSignature(sig)),
-              SqlFunctionCategory.SYSTEM);
-        ret = toSqlTypeName(sig.getRet());
-      }
 
-      private static java.util.List<SqlTypeFamily> toSqlSignature(final ExtensionFunction sig) {
-        java.util.List<SqlTypeFamily> sql_sig = new java.util.ArrayList<SqlTypeFamily>();
-        for (final ExtensionFunction.ExtArgumentType arg_type : sig.getArgs()) {
-          sql_sig.add(toSqlTypeName(arg_type).getFamily());
+        ExtFunction(final String name, final ExtensionFunction sig) {
+            super(name,
+                    SqlKind.OTHER_FUNCTION,
+                    null,
+                    null,
+                    OperandTypes.family(toSqlSignature(sig)),
+                    SqlFunctionCategory.SYSTEM);
+            ret = toSqlTypeName(sig.getRet());
         }
-        return sql_sig;
-      }
 
-      @Override
-      public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
-        final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
-        return typeFactory.createSqlType(ret);
-      }
-
-      private static SqlTypeName toSqlTypeName(final ExtensionFunction.ExtArgumentType type) {
-        switch (type) {
-          case Int16:
-            return SqlTypeName.SMALLINT;
-          case Int32:
-            return SqlTypeName.INTEGER;
-          case Int64:
-            return SqlTypeName.BIGINT;
-          case Float:
-            return SqlTypeName.FLOAT;
-          case Double:
-            return SqlTypeName.DOUBLE;
+        private static java.util.List<SqlTypeFamily> toSqlSignature(final ExtensionFunction sig) {
+            java.util.List<SqlTypeFamily> sql_sig = new java.util.ArrayList<SqlTypeFamily>();
+            for (final ExtensionFunction.ExtArgumentType arg_type : sig.getArgs()) {
+                sql_sig.add(toSqlTypeName(arg_type).getFamily());
+            }
+            return sql_sig;
         }
-        assert false;
-        return null;
-      }
 
-      private final SqlTypeName ret;
+        @Override
+        public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+            final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+            return typeFactory.createSqlType(ret);
+        }
+
+        private static SqlTypeName toSqlTypeName(final ExtensionFunction.ExtArgumentType type) {
+            switch (type) {
+                case Int16:
+                    return SqlTypeName.SMALLINT;
+                case Int32:
+                    return SqlTypeName.INTEGER;
+                case Int64:
+                    return SqlTypeName.BIGINT;
+                case Float:
+                    return SqlTypeName.FLOAT;
+                case Double:
+                    return SqlTypeName.DOUBLE;
+            }
+            assert false;
+            return null;
+        }
+
+        private final SqlTypeName ret;
     }
 }
 
