@@ -10,19 +10,52 @@ import java.util.Map;
 import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
 import com.mapd.parser.server.ExtensionFunction;
+import java.util.List;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.sql.SqlFunction;
 import org.apache.calcite.sql.SqlFunctionCategory;
+import org.apache.calcite.sql.SqlIdentifier;
 import org.apache.calcite.sql.SqlKind;
 import org.apache.calcite.sql.SqlOperator;
 import org.apache.calcite.sql.SqlOperatorBinding;
 import org.apache.calcite.sql.SqlOperatorTable;
+import org.apache.calcite.sql.SqlSyntax;
 import org.apache.calcite.sql.type.OperandTypes;
 import org.apache.calcite.sql.type.SqlTypeFamily;
 import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.sql.util.ChainedSqlOperatorTable;
 import org.apache.calcite.sql.util.ListSqlOperatorTable;
+
+class CaseInsensitiveListSqlOperatorTable extends ListSqlOperatorTable {
+
+    @Override
+    public void lookupOperatorOverloads(SqlIdentifier opName,
+            SqlFunctionCategory category,
+            SqlSyntax syntax,
+            List<SqlOperator> operatorList) {
+        for (SqlOperator operator : this.getOperatorList()) {
+            if (operator.getSyntax() != syntax) {
+                continue;
+            }
+            if (!opName.isSimple()
+                    || !operator.getName().equalsIgnoreCase(opName.getSimple())) {
+                continue;
+            }
+            SqlFunctionCategory functionCategory;
+            if (operator instanceof SqlFunction) {
+                functionCategory = ((SqlFunction) operator).getFunctionType();
+            } else {
+                functionCategory = SqlFunctionCategory.SYSTEM;
+            }
+            if (category != functionCategory
+                    && category != SqlFunctionCategory.USER_DEFINED_FUNCTION) {
+                continue;
+            }
+            operatorList.add(operator);
+        }
+    }
+}
 
 /**
  *
@@ -39,7 +72,7 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
 
     //~ Constructors -----------------------------------------------------------
     public MapDSqlOperatorTable(SqlOperatorTable parentTable) {
-        super(ImmutableList.of(parentTable, new ListSqlOperatorTable()));
+        super(ImmutableList.of(parentTable, new CaseInsensitiveListSqlOperatorTable()));
         listOpTab = (ListSqlOperatorTable) tableList.get(1);
     }
 
