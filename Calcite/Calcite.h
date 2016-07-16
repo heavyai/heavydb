@@ -23,12 +23,13 @@ class Calcite {
                       std::string catalog,
                       std::string sql_string,
                       const bool legacy_syntax);
-  void updateMetadata(std::string metadata);
+  std::string updateMetadata(std::string catalog, std::string table);
   virtual ~Calcite();
 
  private:
   void runJNI(int port, std::string data_dir);
   void runServer(int port, std::string data_dir);
+  std::string handle_java_return(JNIEnv* env, jobject process_result);
   JNIEnv* checkJNIConnection();
   std::unique_ptr<CalciteServerClient> client;
   bool server_available_;

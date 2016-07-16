@@ -30,6 +30,9 @@ Catalog_Namespace::SessionInfo* get_session(const char* db_path) {
   auto data_dir = base_path / "mapd_data";
   Catalog_Namespace::UserMetadata user;
   Catalog_Namespace::DBMetadata db;
+#ifdef HAVE_CALCITE
+  auto calcite = std::make_shared<Calcite>(-1, db_path);
+#endif  // HAVE_CALCITE
 #ifdef HAVE_CUDA
   bool useGpus = true;
 #else
@@ -37,15 +40,30 @@ Catalog_Namespace::SessionInfo* get_session(const char* db_path) {
 #endif
   {
     auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), 0, useGpus, -1);
-    Catalog_Namespace::SysCatalog sys_cat(base_path.string(), dataMgr);
+    Catalog_Namespace::SysCatalog sys_cat(base_path.string(),
+                                          dataMgr
+#ifdef HAVE_CALCITE
+                                          ,
+                                          calcite
+#endif  // HAVE_CALCITE
+                                          );
     CHECK(sys_cat.getMetadataForUser(user_name, user));
     CHECK_EQ(user.passwd, passwd);
     CHECK(sys_cat.getMetadataForDB(db_name, db));
     CHECK(user.isSuper || (user.userId == db.dbOwner));
   }
   auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), 0, useGpus, -1);
-  return new Catalog_Namespace::SessionInfo(
-      std::make_shared<Catalog_Namespace::Catalog>(base_path.string(), db, dataMgr), user, ExecutorDeviceType::GPU, 0);
+  return new Catalog_Namespace::SessionInfo(std::make_shared<Catalog_Namespace::Catalog>(base_path.string(),
+                                                                                         db,
+                                                                                         dataMgr
+#ifdef HAVE_CALCITE
+                                                                                         ,
+                                                                                         calcite
+#endif  // HAVE_CALCITE
+                                                                                         ),
+                                            user,
+                                            ExecutorDeviceType::GPU,
+                                            0);
 }
 
 namespace {
@@ -79,8 +97,8 @@ Planner::RootPlan* parse_plan_calcite(const std::string& query_str,
   }
 
   const auto& cat = session->get_catalog();
-  static Calcite calcite_cli(CALCITEPORT, cat.get_basePath());
-  const auto query_ra = calcite_cli.process(session->get_currentUser().userName,
+  auto& calcite_mgr = cat.get_calciteMgr();
+  const auto query_ra = calcite_mgr.process(session->get_currentUser().userName,
                                             session->get_currentUser().passwd,
                                             cat.get_currentDB().dbName,
                                             pg_shim(query_str),
@@ -105,8 +123,8 @@ Planner::RootPlan* parse_plan(const std::string& query_str,
 std::unique_ptr<const RelAlgNode> parse_ravm_plan(const std::string& query_str,
                                                   const std::unique_ptr<Catalog_Namespace::SessionInfo>& session) {
   const auto& cat = session->get_catalog();
-  static Calcite calcite_cli(CALCITEPORT, cat.get_basePath());
-  const auto query_ra = calcite_cli.process(session->get_currentUser().userName,
+  auto& calcite_mgr = cat.get_calciteMgr();
+  const auto query_ra = calcite_mgr.process(session->get_currentUser().userName,
                                             session->get_currentUser().passwd,
                                             cat.get_currentDB().dbName,
                                             pg_shim(query_str),

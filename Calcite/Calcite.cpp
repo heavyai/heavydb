@@ -27,7 +27,7 @@ using namespace apache::thrift::protocol;
 using namespace apache::thrift::transport;
 
 void Calcite::runJNI(int port, std::string data_dir) {
-  LOG(INFO) << "Creating Calcite Server local as JNI instance";
+  LOG(INFO) << "Creating Calcite Server local as JNI instance, jar expected in " << mapd_root_abs_path() << "/bin";
   const int kNumOptions = 3;
   std::string jar_file{"-Djava.class.path=" + mapd_root_abs_path() +
                        "/bin/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar"};
@@ -70,7 +70,10 @@ void Calcite::runJNI(int port, std::string data_dir) {
   CHECK(processMID_);
 
   // get all the methods we will need for calciteDirect;
-  updateMetadataMID_ = env->GetMethodID(calciteDirect_, "updateMetadata", "(Ljava/lang/String;)V");
+  updateMetadataMID_ = env->GetMethodID(calciteDirect_,
+                                        "updateMetadata",
+                                        "(Ljava/lang/String;Ljava/lang/String;)"
+                                        "Lcom/mapd/parser/server/CalciteReturn;");
   CHECK(updateMetadataMID_);
 
   // get all the methods we will need to process the calcite results
@@ -137,11 +140,15 @@ JNIEnv* Calcite::checkJNIConnection() {
   return env;
 }
 
-void Calcite::updateMetadata(string metadata) {
+string Calcite::updateMetadata(string catalog, string table) {
   if (jni_) {
     JNIEnv* env = checkJNIConnection();
+    jobject process_result;
     auto ms = measure<>::execution([&]() {
-      env->CallObjectMethod(calciteDirectObject_, updateMetadataMID_, env->NewStringUTF(metadata.c_str()));
+      process_result = env->CallObjectMethod(calciteDirectObject_,
+                                             updateMetadataMID_,
+                                             env->NewStringUTF(catalog.c_str()),
+                                             env->NewStringUTF(table.c_str()));
 
     });
     if (env->ExceptionCheck()) {
@@ -151,7 +158,19 @@ void Calcite::updateMetadata(string metadata) {
       throw std::runtime_error("Calcite::updateMetadata failed");
     }
     LOG(INFO) << "Time to updateMetadata " << ms << " (ms)" << endl;
-    jvm_->DetachCurrentThread();
+    return handle_java_return(env, process_result);
+  } else {
+    if (server_available_) {
+      TPlanResult ret;
+      auto ms = measure<>::execution([&]() { client->send_ping(); });
+      LOG(INFO) << ret.plan_result << endl;
+      LOG(INFO) << "Time in Thrift " << (ms > ret.execution_time_ms ? ms - ret.execution_time_ms : 0)
+                << " (ms), Time in Java Calcite server " << ret.execution_time_ms << " (ms)" << endl;
+      return ret.plan_result;
+    } else {
+      LOG(INFO) << "Not routing to Calcite, server is not up and JNI not available" << endl;
+      return "";
+    }
   }
 }
 
@@ -182,28 +201,7 @@ string Calcite::process(string user, string passwd, string catalog, string sql_s
 
     LOG(INFO) << "Time marshalling in JNI " << (ms > java_time ? ms - java_time : 0) << " (ms), Time in Java Calcite  "
               << java_time << " (ms)" << endl;
-    CHECK(process_result);
-    CHECK(getTextMID_);
-    jstring s = (jstring)env->CallObjectMethod(process_result, getTextMID_);
-    CHECK(s);
-    // convert the Java String to use it in C
-    jboolean iscopy;
-    const char* text = env->GetStringUTFChars(s, &iscopy);
-
-    bool failed = env->CallBooleanMethod(process_result, hasFailedMID_);
-    if (failed) {
-      LOG(ERROR) << "Calcite process failed " << text;
-      string retText(text);
-      env->ReleaseStringUTFChars(s, text);
-      env->DeleteLocalRef(process_result);
-      jvm_->DetachCurrentThread();
-      throw std::invalid_argument(retText);
-    }
-    string retText(text);
-    env->ReleaseStringUTFChars(s, text);
-    env->DeleteLocalRef(process_result);
-    jvm_->DetachCurrentThread();
-    return retText;
+    return handle_java_return(env, process_result);
   } else {
     if (server_available_) {
       TPlanResult ret;
@@ -217,6 +215,31 @@ string Calcite::process(string user, string passwd, string catalog, string sql_s
       return "";
     }
   }
+}
+
+string Calcite::handle_java_return(JNIEnv* env, jobject process_result) {
+  CHECK(process_result);
+  CHECK(getTextMID_);
+  jstring s = (jstring)env->CallObjectMethod(process_result, getTextMID_);
+  CHECK(s);
+  // convert the Java String to use it in C
+  jboolean iscopy;
+  const char* text = env->GetStringUTFChars(s, &iscopy);
+
+  bool failed = env->CallBooleanMethod(process_result, hasFailedMID_);
+  if (failed) {
+    LOG(ERROR) << "Calcite process failed " << text;
+    string retText(text);
+    env->ReleaseStringUTFChars(s, text);
+    env->DeleteLocalRef(process_result);
+    jvm_->DetachCurrentThread();
+    throw std::invalid_argument(retText);
+  }
+  string retText(text);
+  env->ReleaseStringUTFChars(s, text);
+  env->DeleteLocalRef(process_result);
+  jvm_->DetachCurrentThread();
+  return retText;
 }
 
 Calcite::~Calcite() {

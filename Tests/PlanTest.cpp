@@ -36,13 +36,28 @@ class SQLTestEnv : public ::testing::Environment {
     auto data_dir = base_path / "mapd_data";
     UserMetadata user;
     DBMetadata db;
+#ifdef HAVE_CALCITE
+    auto calcite = std::make_shared<Calcite>(-1, data_dir.string());
+#endif  // HAVE_CALCITE
     {
-      auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), 0,  false, 0);
+      auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), 0, false, 0);
+
       if (!boost::filesystem::exists(system_db_file)) {
-        SysCatalog syscat(base_path.string(), dataMgr, true);
+        SysCatalog syscat(base_path.string(),
+                          dataMgr,
+#ifdef HAVE_CALCITE
+                          calcite,
+#endif  // HAVE_CALCITE
+                          true);
         syscat.initDB();
       }
-      SysCatalog sys_cat(base_path.string(), dataMgr);
+      SysCatalog sys_cat(base_path.string(),
+                         dataMgr
+#ifdef HAVE_CALCITE
+                         ,
+                         calcite
+#endif  // HAVE_CALCITE
+                         );
       CHECK(sys_cat.getMetadataForUser(MAPD_ROOT_USER, user));
       if (!sys_cat.getMetadataForUser("gtest", user)) {
         sys_cat.createUser("gtest", "test!test!", false);
@@ -54,7 +69,14 @@ class SQLTestEnv : public ::testing::Environment {
       }
     }
     auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), 0, false, 0);
-    gsession.reset(new SessionInfo(std::make_shared<Catalog_Namespace::Catalog>(base_path.string(), db, dataMgr),
+    gsession.reset(new SessionInfo(std::make_shared<Catalog_Namespace::Catalog>(base_path.string(),
+                                                                                db,
+                                                                                dataMgr
+#ifdef HAVE_CALCITE
+                                                                                ,
+                                                                                calcite
+#endif  // HAVE_CALCITE
+                                                                                ),
                                    user,
                                    ExecutorDeviceType::GPU,
                                    0));
@@ -260,9 +282,7 @@ TEST(ParseAnalyzePlan, Select) {
         "select * from fat where m >= '1999-09-09T111111' and n <= '222222' and o = "
         "'1996-02-23';"));
   });
-  EXPECT_THROW({
-    unique_ptr<RootPlan> plan_ptr(plan_dml("select AVG(*) from fat;"));
-  }, std::runtime_error);
+  EXPECT_THROW({ unique_ptr<RootPlan> plan_ptr(plan_dml("select AVG(*) from fat;")); }, std::runtime_error);
 }
 
 TEST(ParseAnalyzePlan, Insert) {
@@ -301,6 +321,7 @@ TEST(ParseAnalyzePlan, Drop) {
 }
 
 int main(int argc, char* argv[]) {
+  google::InitGoogleLogging(argv[0]);
   ::testing::InitGoogleTest(&argc, argv);
   ::testing::AddGlobalTestEnvironment(new SQLTestEnv);
   return RUN_ALL_TESTS();

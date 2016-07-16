@@ -10,6 +10,8 @@ int main(int argc, char* argv[]) {
   bool force = false;
   namespace po = boost::program_options;
 
+  google::InitGoogleLogging(argv[0]);
+
   po::options_description desc("Options");
   desc.add_options()("help,h", "Print help messages ")(
       "data", po::value<std::string>(&base_path)->required(), "Directory path to MapD catalogs")(
@@ -74,7 +76,8 @@ int main(int argc, char* argv[]) {
 
   try {
     auto dummy = std::make_shared<Data_Namespace::DataMgr>(data_path, 0, false, 0);
-    Catalog_Namespace::SysCatalog sys_cat(base_path, dummy, true);
+    auto dummy_calcite = std::make_shared<Calcite>(-1, base_path);
+    Catalog_Namespace::SysCatalog sys_cat(base_path, dummy, dummy_calcite, true);
     sys_cat.initDB();
   } catch (std::exception& e) {
     std::cerr << "Exception: " << e.what() << "\n";

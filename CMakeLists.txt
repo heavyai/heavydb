@@ -108,6 +108,9 @@ include_directories(${Boost_INCLUDE_DIR}
                     "/usr/local/cuda/include/")
 
 # Google Test and Google Mock
+if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
+  add_definitions("-DGTEST_USE_OWN_TR1_TUPLE=0")
+endif()
 include_directories(ThirdParty/googletest)
 add_subdirectory(ThirdParty/googletest)
 

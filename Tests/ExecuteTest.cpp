@@ -1540,8 +1540,9 @@ TEST(Select, LeftOuterJoins) {
 #endif  // HAVE_RAVM
 
 int main(int argc, char** argv) {
-  testing::InitGoogleTest(&argc, argv);
   google::InitGoogleLogging(argv[0]);
+  LOG(INFO) << " after initialization";
+  testing::InitGoogleTest(&argc, argv);
   namespace po = boost::program_options;
 
   po::options_description desc("Options");

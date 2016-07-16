@@ -52,13 +52,27 @@ class SQLTestEnv : public ::testing::Environment {
     auto data_dir = base_path / "mapd_data";
     UserMetadata user;
     DBMetadata db;
+#ifdef HAVE_CALCITE
+    auto calcite = std::make_shared<Calcite>(-1, data_dir.string());
+#endif  // HAVE_CALCITE
     {
       auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), 0, false, 0);
       if (!boost::filesystem::exists(system_db_file)) {
-        SysCatalog sys_cat(base_path.string(), dataMgr, true);
+        SysCatalog sys_cat(base_path.string(),
+                           dataMgr,
+#ifdef HAVE_CALCITE
+                           calcite,
+#endif  // HAVE_CALCITE
+                           true);
         sys_cat.initDB();
       }
-      SysCatalog sys_cat(base_path.string(), dataMgr);
+      SysCatalog sys_cat(base_path.string(),
+                         dataMgr
+#ifdef HAVE_CALCITE
+                         ,
+                         calcite
+#endif  // HAVE_CALCITE
+                         );
       CHECK(sys_cat.getMetadataForUser(MAPD_ROOT_USER, user));
       if (!sys_cat.getMetadataForUser("gtest", user)) {
         sys_cat.createUser("gtest", "test!test!", false);
@@ -70,8 +84,17 @@ class SQLTestEnv : public ::testing::Environment {
       }
     }
     auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), 0, false, 0);
-    gsession.reset(
-        new SessionInfo(std::make_shared<Catalog>(base_path.string(), db, dataMgr), user, ExecutorDeviceType::GPU, 0));
+    gsession.reset(new SessionInfo(std::make_shared<Catalog>(base_path.string(),
+                                                             db,
+                                                             dataMgr
+#ifdef HAVE_CALCITE
+                                                             ,
+                                                             calcite
+#endif  // HAVE_CALCITE
+                                                             ),
+                                   user,
+                                   ExecutorDeviceType::GPU,
+                                   0));
   }
 };
 
@@ -112,6 +135,7 @@ TEST(StorageSmall, AllTypes) {
 }
 
 int main(int argc, char* argv[]) {
+  google::InitGoogleLogging(argv[0]);
   ::testing::InitGoogleTest(&argc, argv);
   ::testing::AddGlobalTestEnvironment(new SQLTestEnv);
   return RUN_ALL_TESTS();

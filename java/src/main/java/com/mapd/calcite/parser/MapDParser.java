@@ -8,11 +8,13 @@ import java.util.Map;
 import com.mapd.parser.server.ExtensionFunction;
 import org.apache.calcite.avatica.util.Casing;
 import org.apache.calcite.plan.RelOptCluster;
+import org.apache.calcite.plan.RelOptUtil;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.RelRoot;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.rel.type.RelDataTypeSystem;
 import org.apache.calcite.rex.RexBuilder;
+import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.sql.SqlAsOperator;
 import org.apache.calcite.sql.SqlBasicCall;
 import org.apache.calcite.sql.SqlIdentifier;
@@ -94,11 +96,13 @@ public final class MapDParser {
     //final RelNode sqlRel = converter.convertSelect((SqlSelect)node, true);
     //RexNode convertExpression = converter.convertExpression(node);
 
-    //logger.debug("After convert relNode is "+ convertExpression.toString());
-    //logger.debug("After convert relRoot kind is " + sqlRel.kind);
-    //logger.debug("After convert relRoot project is " + sqlRel.project().toString());
-    //logger.debug("After convert relalgebra is \n" + RelOptUtil.toString(sqlRel.project()));
+    //MAPDLOGGER.debug("After convert relNode is "+ convertExpression.toString());
+    //MAPDLOGGER.debug("After convert relRoot kind is " + sqlRel.kind);
+    //MAPDLOGGER.debug("After convert relRoot project is " + sqlRel.project().toString());
+    //MAPDLOGGER.debug("After convert relalgebra is \n" + RelOptUtil.toString(sqlRel.project()));
     RelNode project = sqlRel.project();
+
+
 
     String res = MapDSerializer.toString(project);
 
@@ -250,5 +254,10 @@ public final class MapDParser {
 
   public int getCallCount() {
     return callCount;
+  }
+
+  public void updateMetaData(String catalog, String table) {
+    MAPDLOGGER.debug("catalog :" +catalog + " table :" +table);
+    catalogReader.updateMetaData(catalog, table);
   }
 }

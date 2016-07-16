@@ -278,7 +278,16 @@ int main(int argc, char* argv[]) {
   const bool use_gpus{false};
 #endif
   auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(base_path + "/mapd_data/", 0, use_gpus, -1);
-  SysCatalog sys_cat(base_path, dataMgr);
+#ifdef HAVE_CALCITE
+  auto calcite = std::make_shared<Calcite>(-1, base_path + "/mapd_data/");
+#endif  // HAVE_CALCITE
+  SysCatalog sys_cat(base_path,
+                     dataMgr
+#ifdef HAVE_CALCITE
+                     ,
+                     calcite
+#endif  // HAVE_CALCITE
+                     );
   UserMetadata user;
   if (!sys_cat.getMetadataForUser(user_name, user)) {
     cerr << "User " << user_name << " does not exist." << std::endl;
@@ -297,7 +306,14 @@ int main(int argc, char* argv[]) {
     cerr << "User " << user_name << " is not authorized to access database " << db_name << std::endl;
     return 1;
   }
-  auto cat = std::make_shared<Catalog>(base_path, db, dataMgr);
+  auto cat = std::make_shared<Catalog>(base_path,
+                                       db,
+                                       dataMgr
+#ifdef HAVE_CALCITE
+                                       ,
+                                       calcite
+#endif  // HAVE_CALCITE
+                                       );
   SessionInfo session(cat, user, ExecutorDeviceType::GPU, 0);
   while (true) {
     try {

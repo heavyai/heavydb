@@ -34,6 +34,10 @@
 #include "../QueryEngine/CompilationOptions.h"
 #include "../SqliteConnector/SqliteConnector.h"
 
+#ifdef HAVE_CALCITE
+#include "../Calcite/Calcite.h"
+#endif  // HAVE_CALCITE
+
 struct Privileges {
   bool super_;
   bool select_;
@@ -134,7 +138,12 @@ class Catalog {
           const std::string& dbname,
           std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
           LdapMetadata ldapMetadata,
-          bool is_initdb);
+          bool is_initdb
+#ifdef HAVE_CALCITE
+          ,
+          std::shared_ptr<Calcite> calcite
+#endif  // HAVE_CALCITE
+          );
 
   /**
    * @brief Constructor - takes basePath to already extant
@@ -145,15 +154,27 @@ class Catalog {
    * metadata - expects for this directory to already exist
    */
 
-  Catalog(const std::string& basePath, const DBMetadata& curDB, std::shared_ptr<Data_Namespace::DataMgr> dataMgr);
+  Catalog(const std::string& basePath,
+          const DBMetadata& curDB,
+          std::shared_ptr<Data_Namespace::DataMgr> dataMgr
+#ifdef HAVE_CALCITE
+          ,
+          std::shared_ptr<Calcite> calcite
+#endif  // HAVE_CALCITE
+          );
 
   /*
-   builds a catlog that uses an ldap server
+   builds a catalog that uses an ldap server
    */
   Catalog(const std::string& basePath,
           const DBMetadata& curDB,
           std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
-          LdapMetadata ldapMetadata);
+          LdapMetadata ldapMetadata
+#ifdef HAVE_CALCITE
+          ,
+          std::shared_ptr<Calcite> calcite
+#endif  // HAVE_CALCITE
+          );
 
   /**
    * @brief Destructor - deletes all
@@ -210,6 +231,9 @@ class Catalog {
   const DBMetadata& get_currentDB() const { return currentDB_; }
   void set_currentDB(const DBMetadata& db) { currentDB_ = db; }
   Data_Namespace::DataMgr& get_dataMgr() const { return *dataMgr_; }
+#ifdef HAVE_CALCITE
+  Calcite& get_calciteMgr() const { return *calciteMgr_; }
+#endif  // HAVE_CALCITE
   const std::string& get_basePath() const { return basePath_; }
 
   const DictDescriptor* getMetadataForDict(int dictId) const;
@@ -246,6 +270,9 @@ class Catalog {
   std::shared_ptr<Data_Namespace::DataMgr> dataMgr_;
   mutable std::mutex cat_mutex_;
   std::unique_ptr<LdapServer> ldap_server_;
+#ifdef HAVE_CALCITE
+  std::shared_ptr<Calcite> calciteMgr_;
+#endif  // HAVE_CALCITE
 };
 
 /*
@@ -257,10 +284,38 @@ class SysCatalog : public Catalog {
   SysCatalog(const std::string& basePath,
              std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
              LdapMetadata ldapMetadata,
+#ifdef HAVE_CALCITE
+             std::shared_ptr<Calcite> calcite,
+#endif  // HAVE_CALCITE
              bool is_initdb = false)
-      : Catalog(basePath, MAPD_SYSTEM_DB, dataMgr, ldapMetadata, is_initdb) {}
-  SysCatalog(const std::string& basePath, std::shared_ptr<Data_Namespace::DataMgr> dataMgr, bool is_initdb = false)
-      : Catalog(basePath, MAPD_SYSTEM_DB, dataMgr, LdapMetadata(), is_initdb) {
+      : Catalog(basePath,
+                MAPD_SYSTEM_DB,
+                dataMgr,
+                ldapMetadata,
+                is_initdb
+#ifdef HAVE_CALCITE
+                ,
+                calcite
+#endif  // HAVE_CALCITE
+                ) {
+  }
+
+  SysCatalog(const std::string& basePath,
+             std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
+#ifdef HAVE_CALCITE
+             std::shared_ptr<Calcite> calcite,
+#endif  // HAVE_CALCITE
+             bool is_initdb = false)
+      : Catalog(basePath,
+                MAPD_SYSTEM_DB,
+                dataMgr,
+                LdapMetadata(),
+                is_initdb
+#ifdef HAVE_CALCITE
+                ,
+                calcite
+#endif  // HAVE_CALCITE
+                ) {
     if (!is_initdb) {
       migrateSysCatalogSchema();
     }

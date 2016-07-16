@@ -469,13 +469,11 @@ public class MapDCatalogReader implements Prepare.CatalogReader {
 
   @Override
   public boolean matches(String string, String name) {
-    MAPDLOGGER.debug("matches  " + string + " vs " + name);
     return Util.matches(caseSensitive, string, name);
   }
 
   @Override
   public int match(List<String> strings, String name) {
-    MAPDLOGGER.debug("matches  " + strings + " vs " + name);
     return Util.findMatch(strings, name, caseSensitive);
   }
 
@@ -520,6 +518,27 @@ public class MapDCatalogReader implements Prepare.CatalogReader {
         return typeFactory.createSqlType(SqlTypeName.BOOLEAN);
       default:
         throw new AssertionError(dType.name());
+    }
+  }
+
+  void updateMetaData(String schema, String table) {
+    // Check if table is specified, if not we are dropping an entire DB so need to remove all tables for that DB
+    synchronized (this) {
+      if (table.equals("")) {
+        //Drop db and all tables
+        // iterate through all and remove matching schema
+        for (List<String> keys : MAPD_TABLES.keySet()) {
+          if (keys.get(1).equals(schema.toUpperCase())){
+            MAPDLOGGER.debug("removing schema "+ keys.get(1)+ " table " +keys.get(2));
+            MAPD_TABLES.remove(ImmutableList.of(DEFAULT_CATALOG, keys.get(1), keys.get(2)));
+          }
+        }
+         MAPDLOGGER.debug("removing schema "+ schema);
+        MAPD_DATABASE.remove(schema.toUpperCase());
+      } else {
+         MAPDLOGGER.debug("removing schema "+ schema.toUpperCase() + " table " + table.toUpperCase());
+        MAPD_TABLES.remove(ImmutableList.of(DEFAULT_CATALOG, schema.toUpperCase(), table.toUpperCase()));
+      }
     }
   }
 }

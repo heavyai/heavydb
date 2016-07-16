@@ -26,7 +26,7 @@ final static Logger MAPDLOGGER = LoggerFactory.getLogger(CalciteDirect.class);
   private final GenericObjectPool parserPool;
 
   public CalciteDirect(int port, String dataDir, String extensionFunctionsAstFile) {
-    MAPDLOGGER.info("CalciteDirect Constructor port is '" + port + "' data dir is '" + dataDir +"'");
+    MAPDLOGGER.debug("CalciteDirect Constructor port is '" + port + "' data dir is '" + dataDir +"'");
     this.parserPool = new GenericObjectPool();
     this.mapDPort = port;
 
@@ -54,8 +54,32 @@ final static Logger MAPDLOGGER = LoggerFactory.getLogger(CalciteDirect.class);
     }
   }
 
-  public void updateMetadata(String jsonMetatData){
-    MAPDLOGGER.info("Received new metadata from server");
+  public CalciteReturn updateMetadata(String catalog, String table){
+    MAPDLOGGER.debug("Received invalidation from server for "+ catalog + " : " + table);
+    long timer = System.currentTimeMillis();
+    callCount++;
+    MapDParser parser;
+    try {
+      parser = (MapDParser) parserPool.borrowObject();
+    } catch (Exception ex) {
+      String msg = "Could not get Parse Item from pool :" + ex.getMessage();
+      MAPDLOGGER.error(msg);
+      return new CalciteReturn("ERROR-- " +  msg, System.currentTimeMillis() - timer, true);
+    }
+    try {
+      parser.updateMetaData(catalog, table);
+    } finally {
+      try {
+        // put parser object back in pool for others to use
+        MAPDLOGGER.debug("Returning object to pool");
+        parserPool.returnObject(parser);
+      } catch (Exception ex) {
+        String msg = "Could not return parse object :" + ex.getMessage();
+        MAPDLOGGER.error(msg);
+        return new CalciteReturn("ERROR-- " +  msg, System.currentTimeMillis() - timer, true);
+      }
+    }
+    return new CalciteReturn("", System.currentTimeMillis() - timer, false);
   }
 
   public CalciteReturn process(String user, String passwd, String catalog, String sqlText, boolean legacySyntax) {
@@ -92,7 +116,7 @@ final static Logger MAPDLOGGER = LoggerFactory.getLogger(CalciteDirect.class);
     } catch (Exception ex) {
       String msg = "Exception Occured :" + ex.getMessage();
       ex.printStackTrace();
-      MAPDLOGGER.error(msg);
+      //MAPDLOGGER.error(msg);
       return new CalciteReturn("ERROR-- " +  msg, System.currentTimeMillis() - timer, true);
     } finally {
       try {

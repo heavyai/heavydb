@@ -119,7 +119,7 @@ public class MetaConnect {
     }
     if (id == -1) {
       String err = "Table '" + tableName + "' does not exist for DB '" + db + "'";
-      MAPDLOGGER.error(err);
+      //MAPDLOGGER.error(err);
       throw new RuntimeException(err);
     }
 
