@@ -1982,6 +1982,25 @@ llvm::Type* ext_arg_type_to_llvm_type(const ExtArgumentType ext_arg_type, llvm::
   return nullptr;
 }
 
+SQLTypeInfo ext_arg_type_to_type_info(const ExtArgumentType ext_arg_type) {
+  switch (ext_arg_type) {
+    case ExtArgumentType::Int16:
+      return SQLTypeInfo(kSMALLINT, true);
+    case ExtArgumentType::Int32:
+      return SQLTypeInfo(kINT, true);
+    case ExtArgumentType::Int64:
+      return SQLTypeInfo(kBIGINT, true);
+    case ExtArgumentType::Float:
+      return SQLTypeInfo(kFLOAT, true);
+    case ExtArgumentType::Double:
+      return SQLTypeInfo(kDOUBLE, true);
+    default:
+      CHECK(false);
+  }
+  CHECK(false);
+  return SQLTypeInfo(kNULLT, false);
+}
+
 }  // namespace
 
 llvm::Value* Executor::codegenFunctionOper(const Analyzer::FunctionOper* function_oper, const CompilationOptions& co) {
@@ -1999,11 +2018,21 @@ llvm::Value* Executor::codegenFunctionOper(const Analyzer::FunctionOper* functio
   CHECK_EQ(ret_ty, ext_arg_type_to_llvm_type(ext_func_sig->getRet(), cgen_state_->context_));
   CHECK_EQ(function_oper->getArity(), ext_func_args.size());
   for (size_t i = 0; i < function_oper->getArity(); ++i) {
-    const auto arg_lvs = codegen(function_oper->getArg(i), true, co);
+    const auto arg = function_oper->getArg(i);
+    const auto arg_target_ti = ext_arg_type_to_type_info(ext_func_args[i]);
+    const auto arg_copy = arg->deep_copy();
+    const auto arg_cast = arg_copy->add_cast(arg_target_ti);
+    const Analyzer::Expr* eff_arg{nullptr};
+    if (arg->get_type_info().get_type() != arg_target_ti.get_type()) {
+      eff_arg = arg_cast.get();
+    } else {
+      eff_arg = arg;
+    }
+    const auto arg_lvs = codegen(eff_arg, true, co);
     CHECK_EQ(size_t(1), arg_lvs.size());
-    const auto arg = arg_lvs.front();
-    CHECK_EQ(arg->getType(), ext_arg_type_to_llvm_type(ext_func_args[i], cgen_state_->context_));
-    args.push_back(arg);
+    const auto arg_lv = arg_lvs.front();
+    CHECK_EQ(arg_lv->getType(), ext_arg_type_to_llvm_type(ext_func_args[i], cgen_state_->context_));
+    args.push_back(arg_lv);
   }
   return cgen_state_->emitExternalCall(function_oper->getName(), ret_ty, args);
 }
