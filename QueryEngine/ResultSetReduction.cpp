@@ -13,6 +13,7 @@
 #include "Shared/thread_count.h"
 
 #include <future>
+#include <numeric>
 
 namespace {
 
