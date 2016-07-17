@@ -5,6 +5,12 @@
 #include <boost/filesystem.hpp>
 #include "Catalog/Catalog.h"
 
+#ifdef RUN_ASAN
+#define CALCITEPORT 9093
+#else
+#define CALCITEPORT -1
+#endif
+
 int main(int argc, char* argv[]) {
   std::string base_path;
   bool force = false;
@@ -76,8 +82,15 @@ int main(int argc, char* argv[]) {
 
   try {
     auto dummy = std::make_shared<Data_Namespace::DataMgr>(data_path, 0, false, 0);
-    auto dummy_calcite = std::make_shared<Calcite>(-1, base_path);
-    Catalog_Namespace::SysCatalog sys_cat(base_path, dummy, dummy_calcite, true);
+#ifdef HAVE_CALCITE
+    auto dummy_calcite = std::make_shared<Calcite>(CALCITEPORT, base_path);
+#endif  // HAVE_CALCITE
+    Catalog_Namespace::SysCatalog sys_cat(base_path,
+                                          dummy,
+#ifdef HAVE_CALCITE
+                                          dummy_calcite,
+#endif  // HAVE_CALCITE
+                                          true);
     sys_cat.initDB();
   } catch (std::exception& e) {
     std::cerr << "Exception: " << e.what() << "\n";

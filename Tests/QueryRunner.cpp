@@ -31,7 +31,7 @@ Catalog_Namespace::SessionInfo* get_session(const char* db_path) {
   Catalog_Namespace::UserMetadata user;
   Catalog_Namespace::DBMetadata db;
 #ifdef HAVE_CALCITE
-  auto calcite = std::make_shared<Calcite>(-1, db_path);
+  auto calcite = std::make_shared<Calcite>(CALCITEPORT, db_path);
 #endif  // HAVE_CALCITE
 #ifdef HAVE_CUDA
   bool useGpus = true;
