@@ -1,10 +1,10 @@
 # MapD Platform
-The latest version of the MapD Platform is 1.2.0.
+The latest version of the MapD Platform is 1.2.1.
 
 #### **1.2.1** - Released July 18, 2016
 
 ##### New
-- Backend rendered images can now be colored along a spectrum between 2 colors, based on an accumulated measure (e.g. accumulated red or blue datapoints can result in purple)
+- Backend rendered images can now be colored along a spectrum between two colors, based on an accumulated measure (e.g. accumulated red or blue datapoints can result in purple)
 - Added `DROP` and `ALTER` table support for Apache Calcite
 
 ##### Fixed
