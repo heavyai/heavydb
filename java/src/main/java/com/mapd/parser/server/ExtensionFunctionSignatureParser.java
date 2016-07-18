@@ -24,14 +24,12 @@ class ExtensionFunctionSignatureParser {
     Pattern r = Pattern.compile("([\\w]+) '([\\w]+) \\((.*)\\)'");
     Map<String, ExtensionFunction> sigs = new HashMap<String, ExtensionFunction>();
     while ((line = bufferedReader.readLine()) != null) {
-      if (line.contains("ExtensionFunctions") && line.contains("FunctionDecl")) {
-        Matcher m = r.matcher(line);
-        if (m.find()) {
-          final String name = m.group(1);
-          final String ret = m.group(2);
-          final String cs_param_list = m.group(3);
-          sigs.put(name, toSignature(ret, cs_param_list));
-        }
+      Matcher m = r.matcher(line);
+      if (m.find()) {
+        final String name = m.group(1);
+        final String ret = m.group(2);
+        final String cs_param_list = m.group(3);
+        sigs.put(name, toSignature(ret, cs_param_list));
       }
     }
     return sigs;
