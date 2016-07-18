@@ -9,7 +9,7 @@ bool uses_int_meta(const SQLTypeInfo& col_ti) {
 }
 
 // TODO(alex): Placeholder, provide an efficient implementation for this
-std::map<int, ChunkMetadata> synthesize_metadata(const ResultRows* rows) noexcept {
+std::map<int, ChunkMetadata> synthesize_metadata(const ResultRows* rows) {
   rows->moveToBegin();
   std::vector<std::unique_ptr<Encoder>> dummy_encoders;
   for (size_t i = 0; i < rows->colCount(); ++i) {
@@ -61,7 +61,7 @@ std::map<int, ChunkMetadata> synthesize_metadata(const ResultRows* rows) noexcep
   return metadata_map;
 }
 
-Fragmenter_Namespace::TableInfo synthesize_table_info(const ResultRows* rows) noexcept {
+Fragmenter_Namespace::TableInfo synthesize_table_info(const ResultRows* rows) {
   std::deque<Fragmenter_Namespace::FragmentInfo> result;
   const size_t row_count = rows ? rows->rowCount() : 0;  // rows can be null only for query validation
   if (row_count) {
@@ -82,7 +82,7 @@ Fragmenter_Namespace::TableInfo synthesize_table_info(const ResultRows* rows) no
 
 std::vector<Fragmenter_Namespace::TableInfo> get_table_infos(const std::vector<InputDescriptor>& input_descs,
                                                              const Catalog_Namespace::Catalog& cat,
-                                                             const TemporaryTables& temporary_tables) noexcept {
+                                                             const TemporaryTables& temporary_tables) {
   std::vector<Fragmenter_Namespace::TableInfo> table_infos;
   for (const auto& input_desc : input_descs) {
     if (input_desc.getSourceType() == InputSourceType::RESULT) {
