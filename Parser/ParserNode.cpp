@@ -562,6 +562,8 @@ std::shared_ptr<Analyzer::Expr> CaseExpr::normalize(
         ti = Analyzer::BinOper::common_string_type(ti, e2->get_type_info());
       else if (ti.is_number() && e2->get_type_info().is_number())
         ti = Analyzer::BinOper::common_numeric_type(ti, e2->get_type_info());
+      else if (ti.is_boolean() && e2->get_type_info().is_boolean())
+        ti = Analyzer::BinOper::common_numeric_type(ti, e2->get_type_info());
       else
         throw std::runtime_error("expressions in THEN clause must be of the same or compatible types.");
     }
@@ -580,6 +582,8 @@ std::shared_ptr<Analyzer::Expr> CaseExpr::normalize(
       if (ti.is_string() && else_e->get_type_info().is_string())
         ti = Analyzer::BinOper::common_string_type(ti, else_e->get_type_info());
       else if (ti.is_number() && else_e->get_type_info().is_number())
+        ti = Analyzer::BinOper::common_numeric_type(ti, else_e->get_type_info());
+      else if (ti.is_boolean() && else_e->get_type_info().is_boolean())
         ti = Analyzer::BinOper::common_numeric_type(ti, else_e->get_type_info());
       else
         throw std::runtime_error(

@@ -262,15 +262,17 @@ SQLTypeInfo BinOper::common_string_type(const SQLTypeInfo& type1, const SQLTypeI
 
 SQLTypeInfo BinOper::common_numeric_type(const SQLTypeInfo& type1, const SQLTypeInfo& type2) {
   SQLTypeInfo common_type;
-  CHECK(type1.is_number() && type2.is_number());
   const bool notnull = type1.get_notnull() && type2.get_notnull();
   if (type1.get_type() == type2.get_type()) {
+    CHECK((type1.is_number() && type2.is_number()) || (type1.is_boolean() && type2.is_boolean()));
     common_type = SQLTypeInfo(type1.get_type(),
                               std::max(type1.get_dimension(), type2.get_dimension()),
                               std::max(type1.get_scale(), type2.get_scale()),
                               notnull);
     return common_type;
   }
+
+  CHECK(type1.is_number() && type2.is_number());
   switch (type1.get_type()) {
     case kSMALLINT:
       switch (type2.get_type()) {
