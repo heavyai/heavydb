@@ -9,6 +9,7 @@
 #include <rapidjson/writer.h>
 
 #include <string>
+#include <unordered_set>
 #include <unordered_map>
 
 unsigned RelAlgNode::crt_id_ = 1;
@@ -415,9 +416,38 @@ std::vector<const Rex*> reproject_targets(const RelProject* simple_project,
   return result;
 }
 
+bool is_safe_to_coalesce(const std::vector<RelAlgNode*>& nodes, const std::vector<size_t>& pattern) {
+  std::unordered_set<const RelAlgNode*> coalesced_internal_nodes;
+  const auto last_idx = pattern.back();
+  const auto last_node = nodes[last_idx];
+  for (const auto node_index : pattern) {
+    if (last_idx == node_index) {
+      continue;
+    }
+    CHECK(nodes[node_index]);
+    coalesced_internal_nodes.insert(nodes[node_index]);
+  }
+  for (const auto node : nodes) {
+    if (nullptr == node || last_node == node || dynamic_cast<const RelScan*>(node) ||
+        coalesced_internal_nodes.count(node)) {
+      continue;
+    }
+    for (size_t i = 0; i < node->inputCount(); ++i) {
+      if (coalesced_internal_nodes.count(node->getInput(i))) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
 void create_compound(std::vector<RelAlgNode*>& nodes, const std::vector<size_t>& pattern) {
   CHECK_GE(pattern.size(), size_t(2));
   CHECK_LE(pattern.size(), size_t(4));
+  if (!is_safe_to_coalesce(nodes, pattern)) {
+    return;
+  }
+
   const RexScalar* filter_rex{nullptr};
   std::vector<const RexScalar*> scalar_sources;
   size_t groupby_count{0};
@@ -505,6 +535,7 @@ void coalesce_nodes(std::vector<RelAlgNode*>& nodes) {
   enum class CoalesceState { Initial, Filter, FirstProject, Aggregate };
   std::vector<size_t> crt_pattern;
   CoalesceState crt_state{CoalesceState::Initial};
+  // TODO(miyu): fix FA to transit along du-chain instead of adjacency in vector
   for (size_t i = 0; i < nodes.size();) {
     const auto ra_node = nodes[i];
     switch (crt_state) {
@@ -677,7 +708,12 @@ class RaAbstractInterp {
   }
 
   RelProject* dispatchProject(const rapidjson::Value& proj_ra) {
+#ifdef ENABLE_DAG_RAVM
+    const auto inputs = getRAInputs(proj_ra);
+    CHECK_EQ(size_t(1), inputs.size());
+#else
     check_no_inputs_field(proj_ra);
+#endif
     const auto& exprs_json = field(proj_ra, "exprs");
     CHECK(exprs_json.IsArray());
     std::vector<const RexScalar*> exprs;
@@ -685,25 +721,36 @@ class RaAbstractInterp {
       exprs.push_back(parse_scalar_expr(*exprs_json_it));
     }
     const auto& fields = field(proj_ra, "fields");
+#ifdef ENABLE_DAG_RAVM
+    return new RelProject(exprs, strings_from_json_array(fields), inputs.front());
+#else
     return new RelProject(exprs, strings_from_json_array(fields), prev(proj_ra));
+#endif
   }
 
   RelFilter* dispatchFilter(const rapidjson::Value& filter_ra) {
+#ifdef ENABLE_DAG_RAVM
+    const auto inputs = getRAInputs(filter_ra);
+    CHECK_EQ(size_t(1), inputs.size());
+#else
     check_no_inputs_field(filter_ra);
+#endif
     const auto id = node_id(filter_ra);
     CHECK(id);
+#ifdef ENABLE_DAG_RAVM
+    return new RelFilter(parse_scalar_expr(field(filter_ra, "condition")), inputs.front());
+#else
     return new RelFilter(parse_scalar_expr(field(filter_ra, "condition")), prev(filter_ra));
-  }
-
-  const RelAlgNode* prev(const rapidjson::Value& crt_node) {
-    const auto id = node_id(crt_node);
-    CHECK(id);
-    CHECK_EQ(static_cast<size_t>(id), nodes_.size());
-    return nodes_.back();
+#endif
   }
 
   RelAggregate* dispatchAggregate(const rapidjson::Value& agg_ra) {
+#ifdef ENABLE_DAG_RAVM
+    const auto inputs = getRAInputs(agg_ra);
+    CHECK_EQ(size_t(1), inputs.size());
+#else
     check_no_inputs_field(agg_ra);
+#endif
     const auto fields = strings_from_json_array(field(agg_ra, "fields"));
     const auto group = indices_from_json_array(field(agg_ra, "group"));
     for (size_t i = 0; i < group.size(); ++i) {
@@ -715,25 +762,28 @@ class RaAbstractInterp {
     for (auto aggs_json_arr_it = aggs_json_arr.Begin(); aggs_json_arr_it != aggs_json_arr.End(); ++aggs_json_arr_it) {
       aggs.push_back(parse_aggregate_expr(*aggs_json_arr_it));
     }
+#ifdef ENABLE_DAG_RAVM
+    return new RelAggregate(group.size(), aggs, fields, inputs.front());
+#else
     return new RelAggregate(group.size(), aggs, fields, prev(agg_ra));
+#endif
   }
 
   RelJoin* dispatchJoin(const rapidjson::Value& join_ra) {
+    const auto inputs = getRAInputs(join_ra);
+    CHECK_EQ(size_t(2), inputs.size());
     const auto join_type = to_join_type(json_str(field(join_ra, "joinType")));
     const auto filter_rex = parse_scalar_expr(field(join_ra, "condition"));
-    const auto str_input_indices = strings_from_json_array(field(join_ra, "inputs"));
-    CHECK_EQ(size_t(2), str_input_indices.size());
-    std::vector<size_t> input_indices;
-    for (const auto& str_index : str_input_indices) {
-      input_indices.push_back(std::stoi(str_index));
-    }
-    CHECK_LT(input_indices[0], nodes_.size());
-    CHECK_LT(input_indices[1], nodes_.size());
-    return new RelJoin(nodes_[input_indices[0]], nodes_[input_indices[1]], filter_rex, join_type);
+    return new RelJoin(inputs[0], inputs[1], filter_rex, join_type);
   }
 
   RelSort* dispatchSort(const rapidjson::Value& sort_ra) {
+#ifdef ENABLE_DAG_RAVM
+    const auto inputs = getRAInputs(sort_ra);
+    CHECK_EQ(size_t(1), inputs.size());
+#else
     check_no_inputs_field(sort_ra);
+#endif
     std::vector<SortField> collation;
     const auto& collation_arr = field(sort_ra, "collation");
     CHECK(collation_arr.IsArray());
@@ -749,7 +799,11 @@ class RaAbstractInterp {
     }
     const auto limit = get_int_literal_field(sort_ra, "fetch", 0);
     const auto offset = get_int_literal_field(sort_ra, "offset", 0);
+#ifdef ENABLE_DAG_RAVM
+    return new RelSort(collation, limit, offset, inputs.front());
+#else
     return new RelSort(collation, limit, offset, prev(sort_ra));
+#endif
   }
 
   const TableDescriptor* getTableFromScanNode(const rapidjson::Value& scan_ra) const {
@@ -764,6 +818,25 @@ class RaAbstractInterp {
   std::vector<std::string> getFieldNamesFromScanNode(const rapidjson::Value& scan_ra) const {
     const auto& fields_json = field(scan_ra, "fieldNames");
     return strings_from_json_array(fields_json);
+  }
+
+  std::vector<const RelAlgNode*> getRAInputs(const rapidjson::Value& node) {
+    if (node.HasMember("inputs")) {
+      const auto str_input_ids = strings_from_json_array(field(node, "inputs"));
+      std::vector<const RelAlgNode*> ra_inputs;
+      for (const auto str_id : str_input_ids) {
+        ra_inputs.push_back(nodes_[std::stoi(str_id)]);
+      }
+      return ra_inputs;
+    }
+    return {prev(node)};
+  }
+
+  const RelAlgNode* prev(const rapidjson::Value& crt_node) {
+    const auto id = node_id(crt_node);
+    CHECK(id);
+    CHECK_EQ(static_cast<size_t>(id), nodes_.size());
+    return nodes_.back();
   }
 
   const rapidjson::Value& query_ast_;
