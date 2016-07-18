@@ -17,13 +17,17 @@ enum class ExtArgumentType { Int16, Int32, Int64, Float, Double };
 
 class ExtensionFunction {
  public:
-  ExtensionFunction(const std::vector<ExtArgumentType>& args, const ExtArgumentType ret) : args_(args), ret_(ret) {}
+  ExtensionFunction(const std::string& name, const std::vector<ExtArgumentType>& args, const ExtArgumentType ret)
+      : name_(name), args_(args), ret_(ret) {}
+
+  const std::string& getName() const { return name_; }
 
   const std::vector<ExtArgumentType>& getArgs() const { return args_; }
 
   const ExtArgumentType getRet() const { return ret_; }
 
  private:
+  const std::string name_;
   const std::vector<ExtArgumentType> args_;
   const ExtArgumentType ret_;
 };

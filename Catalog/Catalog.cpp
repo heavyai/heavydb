@@ -16,6 +16,7 @@
 #include <boost/uuid/sha1.hpp>
 #include "../Fragmenter/Fragmenter.h"
 #include "../Fragmenter/InsertOrderFragmenter.h"
+#include "../Shared/StringTransform.h"
 
 using std::runtime_error;
 using std::string;
@@ -375,16 +376,6 @@ void Catalog::updateFrontendViewAndLinkUsers() {
   }
   sqliteConnector_.query("END TRANSACTION");
 }
-
-namespace {
-
-std::string to_upper(const std::string& str) {
-  auto str_uc = str;
-  std::transform(str_uc.begin(), str_uc.end(), str_uc.begin(), ::toupper);
-  return str_uc;
-}
-
-}  // namespace
 
 void Catalog::buildMaps() {
   string dictQuery("SELECT dictid, name, nbits, is_shared from mapd_dictionaries");

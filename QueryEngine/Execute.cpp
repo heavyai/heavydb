@@ -2034,7 +2034,7 @@ llvm::Value* Executor::codegenFunctionOper(const Analyzer::FunctionOper* functio
     CHECK_EQ(arg_lv->getType(), ext_arg_type_to_llvm_type(ext_func_args[i], cgen_state_->context_));
     args.push_back(arg_lv);
   }
-  return cgen_state_->emitExternalCall(function_oper->getName(), ret_ty, args);
+  return cgen_state_->emitExternalCall(ext_func_sig->getName(), ret_ty, args);
 }
 
 llvm::ConstantInt* Executor::codegenIntConst(const Analyzer::Constant* constant) {

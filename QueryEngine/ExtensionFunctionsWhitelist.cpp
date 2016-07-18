@@ -1,10 +1,12 @@
 #include "ExtensionFunctionsWhitelist.h"
 #include "JsonAccessors.h"
 
+#include "../Shared/StringTransform.h"
+
 #include <boost/algorithm/string/join.hpp>
 
 ExtensionFunction* ExtensionFunctionsWhitelist::get(const std::string& name) {
-  const auto it = functions_.find(name);
+  const auto it = functions_.find(to_upper(name));
   if (it == functions_.end()) {
     return nullptr;
   }
@@ -38,7 +40,7 @@ std::vector<std::string> ExtensionFunctionsWhitelist::getLLVMDeclarations() {
   std::vector<std::string> declarations;
   for (const auto& kv : functions_) {
     const auto signature = kv.second;
-    std::string decl_prefix{"declare " + serialize_type(signature.getRet()) + " @" + kv.first};
+    std::string decl_prefix{"declare " + serialize_type(signature.getRet()) + " @" + kv.second.getName()};
     std::vector<std::string> arg_strs;
     for (const auto arg : signature.getArgs()) {
       arg_strs.push_back(serialize_type(arg));
@@ -98,7 +100,7 @@ void ExtensionFunctionsWhitelist::add(const std::string& json_func_sigs) {
          ++args_serialized_it) {
       args.push_back(deserialize_type(json_str(*args_serialized_it)));
     }
-    const auto it_ok = functions_.emplace(name, ExtensionFunction(args, ret));
+    const auto it_ok = functions_.emplace(to_upper(name), ExtensionFunction(name, args, ret));
     CHECK(it_ok.second);
   }
 }
