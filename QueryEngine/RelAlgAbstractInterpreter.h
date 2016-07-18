@@ -338,17 +338,18 @@ class RelAlgNode {
     return inputs_[idx].get();
   }
 
-  const RelAlgNode* getInputAndRelease(const size_t idx) {
+  std::shared_ptr<const RelAlgNode> getManagedInput(const size_t idx) const {
     CHECK(idx < inputs_.size());
-    return inputs_[idx].release();
+    return inputs_[idx];
   }
 
-  const void addInput(const RelAlgNode* input) { inputs_.emplace_back(input); }
+  void addManagedInput(std::shared_ptr<const RelAlgNode> input) { inputs_.push_back(input); }
 
-  virtual void replaceInput(const RelAlgNode* old_input, const RelAlgNode* input) {
+  virtual void replaceManagedInput(std::shared_ptr<const RelAlgNode> old_input,
+                                   std::shared_ptr<const RelAlgNode> input) {
     for (auto& input_ptr : inputs_) {
-      if (input_ptr.get() == old_input) {
-        input_ptr.reset(input);
+      if (input_ptr == old_input) {
+        input_ptr = input;
         break;
       }
     }
@@ -361,7 +362,7 @@ class RelAlgNode {
   virtual std::string toString() const = 0;
 
  protected:
-  std::vector<std::unique_ptr<const RelAlgNode>> inputs_;
+  std::vector<std::shared_ptr<const RelAlgNode>> inputs_;
   const unsigned id_;
 
  private:
@@ -399,13 +400,13 @@ class RelProject : public RelAlgNode {
   // Takes memory ownership of the expressions.
   RelProject(const std::vector<const RexScalar*>& exprs,
              const std::vector<std::string>& fields,
-             const RelAlgNode* input)
+             std::shared_ptr<const RelAlgNode> input)
       : fields_(fields) {
     CHECK_EQ(exprs.size(), fields.size());
     for (auto expr : exprs) {
       scalar_exprs_.emplace_back(expr);
     }
-    inputs_.emplace_back(input);
+    inputs_.push_back(input);
   }
 
   void setExpressions(const std::vector<const RexScalar*>& exprs) {
@@ -448,7 +449,8 @@ class RelProject : public RelAlgNode {
 
   const std::string getFieldName(const size_t i) const { return fields_[i]; }
 
-  void replaceInput(const RelAlgNode* old_input, const RelAlgNode* input) override;
+  void replaceManagedInput(std::shared_ptr<const RelAlgNode> old_input,
+                           std::shared_ptr<const RelAlgNode> input) override;
 
   std::string toString() const override {
     std::string result = "(RelProject<" + std::to_string(reinterpret_cast<uint64_t>(this)) + ">";
@@ -469,12 +471,12 @@ class RelAggregate : public RelAlgNode {
   RelAggregate(const size_t groupby_count,
                const std::vector<const RexAgg*>& agg_exprs,
                const std::vector<std::string>& fields,
-               const RelAlgNode* input)
+               std::shared_ptr<const RelAlgNode> input)
       : groupby_count_(groupby_count), fields_(fields) {
     for (auto agg_expr : agg_exprs) {
       agg_exprs_.emplace_back(agg_expr);
     }
-    inputs_.emplace_back(input);
+    inputs_.push_back(input);
   }
 
   size_t size() const { return groupby_count_ + agg_exprs_.size(); }
@@ -517,10 +519,13 @@ class RelAggregate : public RelAlgNode {
 
 class RelJoin : public RelAlgNode {
  public:
-  RelJoin(const RelAlgNode* lhs, const RelAlgNode* rhs, const RexScalar* condition, const JoinType join_type)
+  RelJoin(std::shared_ptr<const RelAlgNode> lhs,
+          std::shared_ptr<const RelAlgNode> rhs,
+          const RexScalar* condition,
+          const JoinType join_type)
       : condition_(condition), join_type_(join_type) {
-    inputs_.emplace_back(lhs);
-    inputs_.emplace_back(rhs);
+    inputs_.push_back(lhs);
+    inputs_.push_back(rhs);
   }
 
   JoinType getJoinType() const { return join_type_; }
@@ -532,7 +537,8 @@ class RelJoin : public RelAlgNode {
     condition_.reset(condition);
   }
 
-  void replaceInput(const RelAlgNode* old_input, const RelAlgNode* input) override;
+  void replaceManagedInput(std::shared_ptr<const RelAlgNode> old_input,
+                           std::shared_ptr<const RelAlgNode> input) override;
 
   std::string toString() const override {
     std::string result = "(RelJoin<" + std::to_string(reinterpret_cast<uint64_t>(this)) + ">(";
@@ -548,9 +554,9 @@ class RelJoin : public RelAlgNode {
 
 class RelFilter : public RelAlgNode {
  public:
-  RelFilter(const RexScalar* filter, const RelAlgNode* input) : filter_(filter) {
+  RelFilter(const RexScalar* filter, std::shared_ptr<const RelAlgNode> input) : filter_(filter) {
     CHECK(filter_);
-    inputs_.emplace_back(input);
+    inputs_.push_back(input);
   }
 
   const RexScalar* getCondition() const { return filter_.get(); }
@@ -562,7 +568,8 @@ class RelFilter : public RelAlgNode {
     filter_.reset(condition);
   }
 
-  void replaceInput(const RelAlgNode* old_input, const RelAlgNode* input) override;
+  void replaceManagedInput(std::shared_ptr<const RelAlgNode> old_input,
+                           std::shared_ptr<const RelAlgNode> input) override;
 
   std::string toString() const override {
     std::string result = "(RelFilter<" + std::to_string(reinterpret_cast<uint64_t>(this)) + ">(";
@@ -604,7 +611,8 @@ class RelCompound : public RelAlgNode {
     }
   }
 
-  void replaceInput(const RelAlgNode* old_input, const RelAlgNode* input) override;
+  void replaceManagedInput(std::shared_ptr<const RelAlgNode> old_input,
+                           std::shared_ptr<const RelAlgNode> input) override;
 
   size_t size() const { return target_exprs_.size(); }
 
@@ -682,9 +690,12 @@ class SortField {
 
 class RelSort : public RelAlgNode {
  public:
-  RelSort(const std::vector<SortField>& collation, const size_t limit, const size_t offset, const RelAlgNode* input)
+  RelSort(const std::vector<SortField>& collation,
+          const size_t limit,
+          const size_t offset,
+          std::shared_ptr<const RelAlgNode> input)
       : collation_(collation), limit_(limit), offset_(offset) {
-    inputs_.emplace_back(input);
+    inputs_.push_back(input);
   }
 
   bool operator==(const RelSort& that) const {
@@ -725,7 +736,7 @@ class QueryNotSupported : public std::runtime_error {
   QueryNotSupported(const std::string& reason) : std::runtime_error(reason) {}
 };
 
-std::unique_ptr<const RelAlgNode> ra_interpret(const rapidjson::Value&, const Catalog_Namespace::Catalog&);
+std::shared_ptr<const RelAlgNode> ra_interpret(const rapidjson::Value&, const Catalog_Namespace::Catalog&);
 
 std::string tree_string(const RelAlgNode*, const size_t indent = 0);
 

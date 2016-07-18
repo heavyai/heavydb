@@ -126,7 +126,7 @@ Planner::RootPlan* parse_plan(const std::string& query_str,
 
 #ifdef HAVE_RAVM
 
-std::unique_ptr<const RelAlgNode> parse_ravm_plan(const std::string& query_str,
+std::shared_ptr<const RelAlgNode> parse_ravm_plan(const std::string& query_str,
                                                   const std::unique_ptr<Catalog_Namespace::SessionInfo>& session) {
   const auto& cat = session->get_catalog();
   auto& calcite_mgr = cat.get_calciteMgr();

@@ -101,9 +101,10 @@ RANodeOutput get_node_output(const RelAlgNode* ra_node) {
 
 }  // namespace
 
-void RelProject::replaceInput(const RelAlgNode* old_input, const RelAlgNode* input) {
-  RelAlgNode::replaceInput(old_input, input);
-  RexRebindInputsVisitor rebind_inputs(old_input, input);
+void RelProject::replaceManagedInput(std::shared_ptr<const RelAlgNode> old_input,
+                                     std::shared_ptr<const RelAlgNode> input) {
+  RelAlgNode::replaceManagedInput(old_input, input);
+  RexRebindInputsVisitor rebind_inputs(old_input.get(), input.get());
   for (const auto& scalar_expr : scalar_exprs_) {
     rebind_inputs.visit(scalar_expr.get());
   }
@@ -136,23 +137,26 @@ bool RelProject::isIdentity() const {
   return true;
 }
 
-void RelJoin::replaceInput(const RelAlgNode* old_input, const RelAlgNode* input) {
-  RelAlgNode::replaceInput(old_input, input);
-  RexRebindInputsVisitor rebind_inputs(old_input, input);
+void RelJoin::replaceManagedInput(std::shared_ptr<const RelAlgNode> old_input,
+                                  std::shared_ptr<const RelAlgNode> input) {
+  RelAlgNode::replaceManagedInput(old_input, input);
+  RexRebindInputsVisitor rebind_inputs(old_input.get(), input.get());
   if (condition_) {
     rebind_inputs.visit(condition_.get());
   }
 }
 
-void RelFilter::replaceInput(const RelAlgNode* old_input, const RelAlgNode* input) {
-  RelAlgNode::replaceInput(old_input, input);
-  RexRebindInputsVisitor rebind_inputs(old_input, input);
+void RelFilter::replaceManagedInput(std::shared_ptr<const RelAlgNode> old_input,
+                                    std::shared_ptr<const RelAlgNode> input) {
+  RelAlgNode::replaceManagedInput(old_input, input);
+  RexRebindInputsVisitor rebind_inputs(old_input.get(), input.get());
   rebind_inputs.visit(filter_.get());
 }
 
-void RelCompound::replaceInput(const RelAlgNode* old_input, const RelAlgNode* input) {
-  RelAlgNode::replaceInput(old_input, input);
-  RexRebindInputsVisitor rebind_inputs(old_input, input);
+void RelCompound::replaceManagedInput(std::shared_ptr<const RelAlgNode> old_input,
+                                      std::shared_ptr<const RelAlgNode> input) {
+  RelAlgNode::replaceManagedInput(old_input, input);
+  RexRebindInputsVisitor rebind_inputs(old_input.get(), input.get());
   for (const auto& scalar_source : scalar_sources_) {
     rebind_inputs.visit(scalar_source.get());
   }
@@ -364,9 +368,9 @@ void bind_project_to_input(RelProject* project_node, const RANodeOutput& input) 
   project_node->setExpressions(disambiguated_exprs);
 }
 
-void bind_inputs(const std::vector<RelAlgNode*>& nodes) {
+void bind_inputs(const std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
   for (auto ra_node : nodes) {
-    const auto filter_node = dynamic_cast<RelFilter*>(ra_node);
+    const auto filter_node = std::dynamic_pointer_cast<RelFilter>(ra_node);
     if (filter_node) {
       CHECK_EQ(size_t(1), filter_node->inputCount());
       const auto disambiguated_condition =
@@ -374,24 +378,25 @@ void bind_inputs(const std::vector<RelAlgNode*>& nodes) {
       filter_node->setCondition(disambiguated_condition);
       continue;
     }
-    const auto join_node = dynamic_cast<RelJoin*>(ra_node);
+    const auto join_node = std::dynamic_pointer_cast<RelJoin>(ra_node);
     if (join_node) {
       CHECK_EQ(size_t(2), join_node->inputCount());
-      const auto disambiguated_condition = disambiguate_rex(join_node->getCondition(), get_node_output(join_node));
+      const auto disambiguated_condition =
+          disambiguate_rex(join_node->getCondition(), get_node_output(join_node.get()));
       join_node->setCondition(disambiguated_condition);
       continue;
     }
-    const auto project_node = dynamic_cast<RelProject*>(ra_node);
+    const auto project_node = std::dynamic_pointer_cast<RelProject>(ra_node);
     if (project_node) {
-      bind_project_to_input(project_node, get_node_output(project_node->getInput(0)));
+      bind_project_to_input(project_node.get(), get_node_output(project_node->getInput(0)));
       continue;
     }
   }
 }
 
-void mark_nops(const std::vector<RelAlgNode*>& nodes) {
+void mark_nops(const std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
   for (auto node : nodes) {
-    const auto agg_node = dynamic_cast<RelAggregate*>(node);
+    const auto agg_node = std::dynamic_pointer_cast<RelAggregate>(node);
     if (!agg_node || agg_node->getAggExprsCount()) {
       continue;
     }
@@ -416,7 +421,7 @@ std::vector<const Rex*> reproject_targets(const RelProject* simple_project,
   return result;
 }
 
-bool is_safe_to_coalesce(const std::vector<RelAlgNode*>& nodes, const std::vector<size_t>& pattern) {
+bool is_safe_to_coalesce(const std::vector<std::shared_ptr<RelAlgNode>>& nodes, const std::vector<size_t>& pattern) {
   std::unordered_set<const RelAlgNode*> coalesced_internal_nodes;
   const auto last_idx = pattern.back();
   const auto last_node = nodes[last_idx];
@@ -425,11 +430,11 @@ bool is_safe_to_coalesce(const std::vector<RelAlgNode*>& nodes, const std::vecto
       continue;
     }
     CHECK(nodes[node_index]);
-    coalesced_internal_nodes.insert(nodes[node_index]);
+    coalesced_internal_nodes.insert(nodes[node_index].get());
   }
   for (const auto node : nodes) {
-    if (nullptr == node || last_node == node || dynamic_cast<const RelScan*>(node) ||
-        coalesced_internal_nodes.count(node)) {
+    if (nullptr == node || last_node == node || std::dynamic_pointer_cast<const RelScan>(node) ||
+        coalesced_internal_nodes.count(node.get())) {
       continue;
     }
     for (size_t i = 0; i < node->inputCount(); ++i) {
@@ -441,7 +446,7 @@ bool is_safe_to_coalesce(const std::vector<RelAlgNode*>& nodes, const std::vecto
   return true;
 }
 
-void create_compound(std::vector<RelAlgNode*>& nodes, const std::vector<size_t>& pattern) {
+void create_compound(std::vector<std::shared_ptr<RelAlgNode>>& nodes, const std::vector<size_t>& pattern) {
   CHECK_GE(pattern.size(), size_t(2));
   CHECK_LE(pattern.size(), size_t(4));
   if (!is_safe_to_coalesce(nodes, pattern)) {
@@ -458,14 +463,14 @@ void create_compound(std::vector<RelAlgNode*>& nodes, const std::vector<size_t>&
   bool is_agg{false};
   for (const auto node_idx : pattern) {
     const auto ra_node = nodes[node_idx];
-    const auto ra_filter = dynamic_cast<RelFilter*>(ra_node);
+    const auto ra_filter = std::dynamic_pointer_cast<RelFilter>(ra_node);
     if (ra_filter) {
       CHECK(!filter_rex);
       filter_rex = ra_filter->getAndReleaseCondition();
       CHECK(filter_rex);
       continue;
     }
-    const auto ra_project = dynamic_cast<RelProject*>(ra_node);
+    const auto ra_project = std::dynamic_pointer_cast<RelProject>(ra_node);
     if (ra_project) {
       fields = ra_project->getFields();
       if (first_project) {
@@ -476,7 +481,7 @@ void create_compound(std::vector<RelAlgNode*>& nodes, const std::vector<size_t>&
         const auto filter_input = dynamic_cast<const RelFilter*>(ra_project->getInput(0));
         if (filter_input) {
           CHECK_EQ(size_t(1), filter_input->inputCount());
-          bind_project_to_input(ra_project, get_node_output(filter_input->getInput(0)));
+          bind_project_to_input(ra_project.get(), get_node_output(filter_input->getInput(0)));
         }
         scalar_sources = ra_project->getExpressionsAndRelease();
         for (const auto scalar_expr : scalar_sources) {
@@ -485,11 +490,11 @@ void create_compound(std::vector<RelAlgNode*>& nodes, const std::vector<size_t>&
         first_project = false;
       } else {
         CHECK(ra_project->isSimple());
-        target_exprs = reproject_targets(ra_project, target_exprs);
+        target_exprs = reproject_targets(ra_project.get(), target_exprs);
       }
       continue;
     }
-    const auto ra_aggregate = dynamic_cast<RelAggregate*>(ra_node);
+    const auto ra_aggregate = std::dynamic_pointer_cast<RelAggregate>(ra_node);
     if (ra_aggregate) {
       is_agg = true;
       fields = ra_aggregate->getFields();
@@ -509,29 +514,24 @@ void create_compound(std::vector<RelAlgNode*>& nodes, const std::vector<size_t>&
     }
   }
   auto compound_node =
-      new RelCompound(filter_rex, target_exprs, groupby_count, agg_exprs, fields, scalar_sources, is_agg);
+      std::make_shared<RelCompound>(filter_rex, target_exprs, groupby_count, agg_exprs, fields, scalar_sources, is_agg);
   auto old_node = nodes[pattern.back()];
   nodes[pattern.back()] = compound_node;
   auto first_node = nodes[pattern.front()];
   CHECK_EQ(size_t(1), first_node->inputCount());
-  compound_node->addInput(first_node->getInputAndRelease(0));
+  compound_node->addManagedInput(first_node->getManagedInput(0));
   for (size_t i = 0; i < pattern.size() - 1; ++i) {
-    nodes[pattern[i]] = nullptr;
+    nodes[pattern[i]].reset();
   }
   for (auto node : nodes) {
     if (!node) {
       continue;
     }
-    node->replaceInput(old_node, compound_node);
-  }
-  // Since the last node isn't an input, we need to manually delete it.
-  // TODO(alex): figure out a better ownership model
-  if (pattern.back() == nodes.size() - 1) {
-    delete old_node;
+    node->replaceManagedInput(old_node, compound_node);
   }
 }
 
-void coalesce_nodes(std::vector<RelAlgNode*>& nodes) {
+void coalesce_nodes(std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
   enum class CoalesceState { Initial, Filter, FirstProject, Aggregate };
   std::vector<size_t> crt_pattern;
   CoalesceState crt_state{CoalesceState::Initial};
@@ -540,10 +540,10 @@ void coalesce_nodes(std::vector<RelAlgNode*>& nodes) {
     const auto ra_node = nodes[i];
     switch (crt_state) {
       case CoalesceState::Initial: {
-        if (dynamic_cast<const RelFilter*>(ra_node)) {
+        if (std::dynamic_pointer_cast<const RelFilter>(ra_node)) {
           crt_pattern.push_back(i);
           crt_state = CoalesceState::Filter;
-        } else if (dynamic_cast<const RelProject*>(ra_node)) {
+        } else if (std::dynamic_pointer_cast<const RelProject>(ra_node)) {
           crt_pattern.push_back(i);
           crt_state = CoalesceState::FirstProject;
         }
@@ -551,7 +551,7 @@ void coalesce_nodes(std::vector<RelAlgNode*>& nodes) {
         break;
       }
       case CoalesceState::Filter: {
-        if (dynamic_cast<const RelProject*>(ra_node)) {
+        if (std::dynamic_pointer_cast<const RelProject>(ra_node)) {
           crt_pattern.push_back(i);
           crt_state = CoalesceState::FirstProject;
           ++i;
@@ -562,7 +562,7 @@ void coalesce_nodes(std::vector<RelAlgNode*>& nodes) {
         break;
       }
       case CoalesceState::FirstProject: {
-        if (dynamic_cast<const RelAggregate*>(ra_node)) {
+        if (std::dynamic_pointer_cast<const RelAggregate>(ra_node)) {
           crt_pattern.push_back(i);
           crt_state = CoalesceState::Aggregate;
           ++i;
@@ -576,7 +576,8 @@ void coalesce_nodes(std::vector<RelAlgNode*>& nodes) {
         break;
       }
       case CoalesceState::Aggregate: {
-        if (dynamic_cast<const RelProject*>(ra_node) && static_cast<RelProject*>(ra_node)->isSimple()) {
+        if (std::dynamic_pointer_cast<const RelProject>(ra_node) &&
+            std::static_pointer_cast<RelProject>(ra_node)->isSimple()) {
           crt_pattern.push_back(i);
           ++i;
         }
@@ -601,17 +602,18 @@ void coalesce_nodes(std::vector<RelAlgNode*>& nodes) {
 // For some reason, Calcite generates Sort, Project, Sort sequences where the
 // two Sort nodes are identical and the Project is identity. Simplify this
 // pattern by re-binding the input of the second sort to the input of the first.
-void simplify_sort(std::vector<RelAlgNode*>& nodes) {
+void simplify_sort(std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
   if (nodes.size() < 3) {
     return;
   }
   for (size_t i = 0; i <= nodes.size() - 3;) {
-    auto first_sort = dynamic_cast<RelSort*>(nodes[i]);
-    const auto project = dynamic_cast<const RelProject*>(nodes[i + 1]);
-    auto second_sort = dynamic_cast<RelSort*>(nodes[i + 2]);
+    auto first_sort = std::dynamic_pointer_cast<RelSort>(nodes[i]);
+    const auto project = std::dynamic_pointer_cast<const RelProject>(nodes[i + 1]);
+    auto second_sort = std::dynamic_pointer_cast<RelSort>(nodes[i + 2]);
     if (first_sort && second_sort && project && project->isIdentity() && *first_sort == *second_sort) {
-      second_sort->replaceInput(second_sort->getInput(0), first_sort->getInputAndRelease(0));
-      nodes[i] = nodes[i + 1] = nullptr;
+      second_sort->replaceManagedInput(second_sort->getManagedInput(0), first_sort->getManagedInput(0));
+      nodes[i].reset();
+      nodes[i + 1].reset();
       i += 3;
     } else {
       ++i;
@@ -631,6 +633,7 @@ int64_t get_int_literal_field(const rapidjson::Value& obj, const char field[], c
   return lit->getVal<int64_t>();
 }
 
+#ifndef ENABLE_DAG_RAVM
 // As of now, only Join nodes specify inputs and we only support relational
 // algebra trees. For full SQL support we'll need DAG relational algebra and thus
 // forward edges, which are specified by the inputs field in non-join nodes.
@@ -640,6 +643,7 @@ void check_no_inputs_field(const rapidjson::Value& node) {
     throw QueryNotSupported("This query structure is not supported yet");
   }
 }
+#endif
 
 void check_empty_inputs_field(const rapidjson::Value& node) {
   const auto& inputs_json = field(node, "inputs");
@@ -651,16 +655,12 @@ class RaAbstractInterp {
   RaAbstractInterp(const rapidjson::Value& query_ast, const Catalog_Namespace::Catalog& cat)
       : query_ast_(query_ast), cat_(cat) {}
 
-  std::unique_ptr<const RelAlgNode> run() {
+  std::shared_ptr<const RelAlgNode> run() {
     const auto& rels = field(query_ast_, "rels");
     CHECK(rels.IsArray());
     try {
       dispatchNodes(rels);
     } catch (const QueryNotSupported&) {
-      if (!nodes_.empty()) {
-        // TODO(alex): Not great, need to figure out a better ownership model.
-        delete nodes_.back();
-      }
       throw;
     }
     CHECK(!nodes_.empty());
@@ -668,7 +668,8 @@ class RaAbstractInterp {
     mark_nops(nodes_);
     coalesce_nodes(nodes_);
     simplify_sort(nodes_);
-    return std::unique_ptr<const RelAlgNode>(nodes_.back());
+    CHECK(nodes_.back().unique());
+    return nodes_.back();
   }
 
  private:
@@ -678,7 +679,7 @@ class RaAbstractInterp {
       const auto id = node_id(crt_node);
       CHECK_EQ(static_cast<size_t>(id), nodes_.size());
       CHECK(crt_node.IsObject());
-      RelAlgNode* ra_node = nullptr;
+      std::shared_ptr<RelAlgNode> ra_node = nullptr;
       const auto rel_op = json_str(field(crt_node, "relOp"));
       if (rel_op == std::string("LogicalTableScan")) {
         ra_node = dispatchTableScan(crt_node);
@@ -699,15 +700,15 @@ class RaAbstractInterp {
     }
   }
 
-  RelScan* dispatchTableScan(const rapidjson::Value& scan_ra) {
+  std::shared_ptr<RelScan> dispatchTableScan(const rapidjson::Value& scan_ra) {
     check_empty_inputs_field(scan_ra);
     CHECK(scan_ra.IsObject());
     const auto td = getTableFromScanNode(scan_ra);
     const auto field_names = getFieldNamesFromScanNode(scan_ra);
-    return new RelScan(td, field_names);
+    return std::make_shared<RelScan>(td, field_names);
   }
 
-  RelProject* dispatchProject(const rapidjson::Value& proj_ra) {
+  std::shared_ptr<RelProject> dispatchProject(const rapidjson::Value& proj_ra) {
 #ifdef ENABLE_DAG_RAVM
     const auto inputs = getRAInputs(proj_ra);
     CHECK_EQ(size_t(1), inputs.size());
@@ -722,13 +723,13 @@ class RaAbstractInterp {
     }
     const auto& fields = field(proj_ra, "fields");
 #ifdef ENABLE_DAG_RAVM
-    return new RelProject(exprs, strings_from_json_array(fields), inputs.front());
+    return std::make_shared<RelProject>(exprs, strings_from_json_array(fields), inputs.front());
 #else
-    return new RelProject(exprs, strings_from_json_array(fields), prev(proj_ra));
+    return std::make_shared<RelProject>(exprs, strings_from_json_array(fields), prev(proj_ra));
 #endif
   }
 
-  RelFilter* dispatchFilter(const rapidjson::Value& filter_ra) {
+  std::shared_ptr<RelFilter> dispatchFilter(const rapidjson::Value& filter_ra) {
 #ifdef ENABLE_DAG_RAVM
     const auto inputs = getRAInputs(filter_ra);
     CHECK_EQ(size_t(1), inputs.size());
@@ -738,13 +739,13 @@ class RaAbstractInterp {
     const auto id = node_id(filter_ra);
     CHECK(id);
 #ifdef ENABLE_DAG_RAVM
-    return new RelFilter(parse_scalar_expr(field(filter_ra, "condition")), inputs.front());
+    return std::make_shared<RelFilter>(parse_scalar_expr(field(filter_ra, "condition")), inputs.front());
 #else
-    return new RelFilter(parse_scalar_expr(field(filter_ra, "condition")), prev(filter_ra));
+    return std::make_shared<RelFilter>(parse_scalar_expr(field(filter_ra, "condition")), prev(filter_ra));
 #endif
   }
 
-  RelAggregate* dispatchAggregate(const rapidjson::Value& agg_ra) {
+  std::shared_ptr<RelAggregate> dispatchAggregate(const rapidjson::Value& agg_ra) {
 #ifdef ENABLE_DAG_RAVM
     const auto inputs = getRAInputs(agg_ra);
     CHECK_EQ(size_t(1), inputs.size());
@@ -763,21 +764,21 @@ class RaAbstractInterp {
       aggs.push_back(parse_aggregate_expr(*aggs_json_arr_it));
     }
 #ifdef ENABLE_DAG_RAVM
-    return new RelAggregate(group.size(), aggs, fields, inputs.front());
+    return std::make_shared<RelAggregate>(group.size(), aggs, fields, inputs.front());
 #else
-    return new RelAggregate(group.size(), aggs, fields, prev(agg_ra));
+    return std::make_shared<RelAggregate>(group.size(), aggs, fields, prev(agg_ra));
 #endif
   }
 
-  RelJoin* dispatchJoin(const rapidjson::Value& join_ra) {
+  std::shared_ptr<RelJoin> dispatchJoin(const rapidjson::Value& join_ra) {
     const auto inputs = getRAInputs(join_ra);
     CHECK_EQ(size_t(2), inputs.size());
     const auto join_type = to_join_type(json_str(field(join_ra, "joinType")));
     const auto filter_rex = parse_scalar_expr(field(join_ra, "condition"));
-    return new RelJoin(inputs[0], inputs[1], filter_rex, join_type);
+    return std::make_shared<RelJoin>(inputs[0], inputs[1], filter_rex, join_type);
   }
 
-  RelSort* dispatchSort(const rapidjson::Value& sort_ra) {
+  std::shared_ptr<RelSort> dispatchSort(const rapidjson::Value& sort_ra) {
 #ifdef ENABLE_DAG_RAVM
     const auto inputs = getRAInputs(sort_ra);
     CHECK_EQ(size_t(1), inputs.size());
@@ -800,9 +801,9 @@ class RaAbstractInterp {
     const auto limit = get_int_literal_field(sort_ra, "fetch", 0);
     const auto offset = get_int_literal_field(sort_ra, "offset", 0);
 #ifdef ENABLE_DAG_RAVM
-    return new RelSort(collation, limit, offset, inputs.front());
+    return std::make_shared<RelSort>(collation, limit, offset, inputs.front());
 #else
-    return new RelSort(collation, limit, offset, prev(sort_ra));
+    return std::make_shared<RelSort>(collation, limit, offset, prev(sort_ra));
 #endif
   }
 
@@ -820,10 +821,10 @@ class RaAbstractInterp {
     return strings_from_json_array(fields_json);
   }
 
-  std::vector<const RelAlgNode*> getRAInputs(const rapidjson::Value& node) {
+  std::vector<std::shared_ptr<const RelAlgNode>> getRAInputs(const rapidjson::Value& node) {
     if (node.HasMember("inputs")) {
       const auto str_input_ids = strings_from_json_array(field(node, "inputs"));
-      std::vector<const RelAlgNode*> ra_inputs;
+      std::vector<std::shared_ptr<const RelAlgNode>> ra_inputs;
       for (const auto str_id : str_input_ids) {
         ra_inputs.push_back(nodes_[std::stoi(str_id)]);
       }
@@ -832,7 +833,7 @@ class RaAbstractInterp {
     return {prev(node)};
   }
 
-  const RelAlgNode* prev(const rapidjson::Value& crt_node) {
+  std::shared_ptr<const RelAlgNode> prev(const rapidjson::Value& crt_node) {
     const auto id = node_id(crt_node);
     CHECK(id);
     CHECK_EQ(static_cast<size_t>(id), nodes_.size());
@@ -841,12 +842,12 @@ class RaAbstractInterp {
 
   const rapidjson::Value& query_ast_;
   const Catalog_Namespace::Catalog& cat_;
-  std::vector<RelAlgNode*> nodes_;
+  std::vector<std::shared_ptr<RelAlgNode>> nodes_;
 };
 
 }  // namespace
 
-std::unique_ptr<const RelAlgNode> ra_interpret(const rapidjson::Value& query_ast,
+std::shared_ptr<const RelAlgNode> ra_interpret(const rapidjson::Value& query_ast,
                                                const Catalog_Namespace::Catalog& cat) {
   RaAbstractInterp interp(query_ast, cat);
   return interp.run();
