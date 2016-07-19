@@ -92,7 +92,7 @@ Planner::RootPlan* parse_plan_legacy(const std::string& query_str,
 #ifdef HAVE_CALCITE
 
 Planner::RootPlan* parse_plan_calcite(const std::string& query_str,
-                                      const std::unique_ptr<Catalog_Namespace::SessionInfo>& session) noexcept {
+                                      const std::unique_ptr<Catalog_Namespace::SessionInfo>& session) {
   ParserWrapper pw{query_str};
   if (pw.is_other_explain || pw.is_ddl || pw.is_update_dml) {
     return parse_plan_legacy(query_str, session);

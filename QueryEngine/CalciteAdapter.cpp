@@ -904,7 +904,9 @@ bool match_sort_seq(rapidjson::Value::ConstValueIterator& rels_it,
 // the nodes and reject queries which go beyond the legacy front-end.
 bool query_is_supported(const rapidjson::Value& rels) {
   rapidjson::Value::ConstValueIterator rels_it = rels.Begin();
-  CHECK_EQ("LogicalTableScan", get_op_name(*rels_it++));
+  if (std::string("LogicalTableScan") != get_op_name(*rels_it++)) {
+    return false;
+  }
   const auto op_name = get_op_name(*rels_it);
   if (op_name == std::string("LogicalTableScan")) {
     ++rels_it;
