@@ -64,7 +64,9 @@ sudo yum install java-1.8.0-openjdk-headless
 
 By default a symlink pointing to the newly installed JRE will be placed at `/usr/lib/jvm/jre-1.8.0-openjdk`. The `libjvm` library directory is therefore:
 
-```/usr/lib/jvm/jre-1.8.0-openjdk/lib/amd64/server```
+```
+/usr/lib/jvm/jre-1.8.0-openjdk/lib/amd64/server
+```
 
 ### Ubuntu / Debian
 `libjvm` is provided by the package `default-jre-headless`. To install run:
@@ -75,7 +77,9 @@ sudo apt install default-jre-headless
 
 By default a symlink pointing to the newly installed JRE will be placed at `/usr/lib/jvm/default-java`. The `libjvm` library directory is therefore:
 
-```/usr/lib/jvm/default-java/jre/lib/amd64/server```
+```
+/usr/lib/jvm/default-java/jre/lib/amd64/server
+```
 
 ### Environment Variables
 After installing the JRE, the `libjvm` library directory must be added to your `LD_LIBRARY_PATH` environment variable. For example, on CentOS this can be done with the following command:
