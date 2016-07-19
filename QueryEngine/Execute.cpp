@@ -1831,8 +1831,10 @@ llvm::Value* Executor::codegenCastToFp(llvm::Value* operand_lv, const SQLTypeInf
                                       {operand_lv, inlineIntNull(operand_ti), inlineFpNull(ti)});
   }
   CHECK(result_lv);
-  result_lv = cgen_state_->ir_builder_.CreateFDiv(
-      result_lv, llvm::ConstantFP::get(result_lv->getType(), exp_to_scale(operand_ti.get_scale())));
+  if (operand_ti.get_scale()) {
+    result_lv = cgen_state_->ir_builder_.CreateFDiv(
+        result_lv, llvm::ConstantFP::get(result_lv->getType(), exp_to_scale(operand_ti.get_scale())));
+  }
   return result_lv;
 }
 
