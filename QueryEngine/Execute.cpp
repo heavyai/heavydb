@@ -3435,6 +3435,7 @@ void Executor::ExecutionDispatch::run(const ExecutorDeviceType chosen_device_typ
 }
 
 const int8_t* Executor::ExecutionDispatch::getColumn(const ResultRows* rows,
+                                                     const int table_id,
                                                      const int col_id,
                                                      const Data_Namespace::MemoryLevel memory_level,
                                                      const int device_id) const {
@@ -3442,12 +3443,14 @@ const int8_t* Executor::ExecutionDispatch::getColumn(const ResultRows* rows,
   static std::mutex columnar_conversion_mutex;
   {
     std::lock_guard<std::mutex> columnar_conversion_guard(columnar_conversion_mutex);
-    if (!ra_node_input_) {
-      ra_node_input_.reset(rows_to_columnar_results(rows));
+    if (columnarized_table_cache_.empty() || !columnarized_table_cache_.count(table_id)) {
+      columnarized_table_cache_.insert(
+          std::make_pair(table_id, std::unique_ptr<const ColumnarResults>(rows_to_columnar_results(rows))));
     }
   }
   CHECK_GE(col_id, 0);
-  return getColumn(ra_node_input_.get(), col_id, &cat_.get_dataMgr(), memory_level, device_id);
+  CHECK_NE(size_t(0), columnarized_table_cache_.count(table_id));
+  return getColumn(columnarized_table_cache_[table_id].get(), col_id, &cat_.get_dataMgr(), memory_level, device_id);
 }
 
 const int8_t* Executor::ExecutionDispatch::getColumn(const ColumnarResults* columnar_results,
@@ -3822,8 +3825,11 @@ std::vector<std::vector<const int8_t*>> Executor::fetchChunks(
         CHECK_NE(input_is_result, static_cast<bool>(chunk));
         if (input_is_result) {
           CHECK_EQ(size_t(0), frag_id);
-          frag_col_buffers[it->second] = execution_dispatch.getColumn(
-              get_temporary_table(temporary_tables_, table_id), col_id.getColId(), memory_level_for_column, device_id);
+          frag_col_buffers[it->second] = execution_dispatch.getColumn(get_temporary_table(temporary_tables_, table_id),
+                                                                      table_id,
+                                                                      col_id.getColId(),
+                                                                      memory_level_for_column,
+                                                                      device_id);
         } else {
           auto ab = chunk->get_buffer();
           CHECK(ab->getMemoryPtr());
@@ -4742,7 +4748,7 @@ void Executor::allocateInnerScansIterators(const std::vector<InputDescriptor>& i
       CHECK(it_ok.second);
     }
     {
-      auto rows_per_scan_ptr = cgen_state_->ir_builder_.CreateGEP(rowsPerScan(), {ll_int(int32_t(inner_scan_idx))});
+      auto rows_per_scan_ptr = cgen_state_->ir_builder_.CreateGEP(rowsPerScan(), ll_int(int32_t(inner_scan_idx)));
       auto rows_per_scan = cgen_state_->ir_builder_.CreateLoad(rows_per_scan_ptr, "rows_per_scan");
       auto have_more_inner_rows =
           cgen_state_->ir_builder_.CreateICmp(llvm::ICmpInst::ICMP_ULT, inner_scan_pos, rows_per_scan);
@@ -4766,9 +4772,9 @@ Executor::JoinInfo Executor::chooseJoinType(const std::list<std::shared_ptr<Anal
     auto qual_bin_oper = std::dynamic_pointer_cast<Analyzer::BinOper>(qual);
     if (!qual_bin_oper) {
       const auto bool_const = std::dynamic_pointer_cast<Analyzer::Constant>(qual);
-      CHECK(bool_const);
-      const auto& bool_const_ti = bool_const->get_type_info();
-      CHECK(bool_const_ti.is_boolean());
+      if (bool_const) {
+        CHECK(bool_const->get_type_info().is_boolean());
+      }
       continue;
     }
     if (qual_bin_oper->get_optype() == kEQ) {

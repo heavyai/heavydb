@@ -1288,6 +1288,30 @@ void import_big_decimal_range_test() {
   }
 }
 
+void import_subquery_test() {
+  const std::string subquery_test("DROP TABLE IF EXISTS subquery_test;");
+  run_ddl_statement(subquery_test);
+  g_sqlite_comparator.query(subquery_test);
+  run_ddl_statement("CREATE TABLE subquery_test(x int) WITH (fragment_size=2);");
+  g_sqlite_comparator.query("CREATE TABLE subquery_test(x int);");
+  CHECK_EQ(g_num_rows % 2, 0);
+  for (ssize_t i = 0; i < g_num_rows; ++i) {
+    const std::string insert_query{"INSERT INTO subquery_test VALUES(7);"};
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query);
+  }
+  for (ssize_t i = 0; i < g_num_rows / 2; ++i) {
+    const std::string insert_query{"INSERT INTO subquery_test VALUES(8);"};
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query);
+  }
+  for (ssize_t i = 0; i < g_num_rows / 2; ++i) {
+    const std::string insert_query{"INSERT INTO subquery_test VALUES(9);"};
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query);
+  }
+}
+
 }  // namespace
 
 TEST(Select, ArrayUnnest) {
@@ -1583,6 +1607,7 @@ TEST(Select, Subqueries) {
     c("SELECT COUNT(*) FROM test WHERE x IN (SELECT x FROM test GROUP BY x ORDER BY COUNT(*) DESC LIMIT 1);", dt);
     c("SELECT COUNT(*) FROM test WHERE x IN (SELECT x FROM test GROUP BY x);", dt);
     c("SELECT MIN(yy), MAX(yy) FROM (SELECT AVG(y) as yy FROM test GROUP BY x);", dt);
+    c("SELECT COUNT(*) FROM subquery_test WHERE x NOT IN (SELECT x + 1 FROM subquery_test GROUP BY x);", dt);
     EXPECT_THROW(run_multiple_agg(
                      "SELECT COUNT(*) FROM test WHERE x NOT IN (SELECT x FROM test GROUP BY x ORDER BY COUNT(*));", dt),
                  std::runtime_error);
@@ -1807,6 +1832,12 @@ int main(int argc, char** argv) {
     import_big_decimal_range_test();
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'big_decimal_range_test'";
+    return -EEXIST;
+  }
+  try {
+    import_subquery_test();
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'subquery_test'";
     return -EEXIST;
   }
   int err{0};

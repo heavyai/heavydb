@@ -420,7 +420,7 @@ class Executor {
     int32_t* error_code_;
     RenderAllocatorMap* render_allocator_map_;
     std::vector<std::pair<ResultRows, std::vector<size_t>>> all_fragment_results_;
-    mutable std::unique_ptr<const ColumnarResults> ra_node_input_;
+    mutable std::unordered_map<int, std::unique_ptr<const ColumnarResults>> columnarized_table_cache_;
 
    public:
     ExecutionDispatch(Executor* executor,
@@ -453,6 +453,7 @@ class Executor {
              const int64_t rowid_lookup_key) noexcept;
 
     const int8_t* getColumn(const ResultRows* rows,
+                            const int table_id,
                             const int col_id,
                             const Data_Namespace::MemoryLevel memory_level,
                             const int device_id) const;
