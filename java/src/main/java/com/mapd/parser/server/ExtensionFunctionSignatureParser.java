@@ -50,7 +50,10 @@ class ExtensionFunctionSignatureParser {
         String[] params = cs_param_list.split(", ");
         List<ExtensionFunction.ExtArgumentType> args = new ArrayList<ExtensionFunction.ExtArgumentType>();
         for (final String param : params) {
-            args.add(deserializeType(param));
+            final ExtensionFunction.ExtArgumentType arg_type = deserializeType(param);
+            if (arg_type != ExtensionFunction.ExtArgumentType.Void) {
+                args.add(arg_type);
+            }
         }
         return new ExtensionFunction(args, deserializeType(ret));
     }
@@ -71,6 +74,9 @@ class ExtensionFunctionSignatureParser {
         }
         if (type_name.equals("double")) {
             return ExtensionFunction.ExtArgumentType.Double;
+        }
+        if (type_name.equals("void")) {
+            return ExtensionFunction.ExtArgumentType.Void;
         }
         assert false;
         return null;

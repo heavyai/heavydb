@@ -10,7 +10,7 @@ import java.util.List;
 public class ExtensionFunction {
 
     public enum ExtArgumentType {
-        Int16, Int32, Int64, Float, Double
+        Int16, Int32, Int64, Float, Double, Void
     };
 
     ExtensionFunction(final List<ExtArgumentType> args, final ExtArgumentType ret) {
