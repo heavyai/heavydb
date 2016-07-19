@@ -1715,9 +1715,16 @@ llvm::Value* Executor::codegenCast(const Analyzer::UOper* uoper, const Compilati
   auto operand_lv = operand_as_const ? codegen(operand_as_const, ti.get_compression(), ti.get_comp_param(), co).front()
                                      : codegen(operand, true, co).front();
   const auto& operand_ti = operand->get_type_info();
+  return codegenCast(operand_lv, operand_ti, ti, operand_as_const);
+}
+
+llvm::Value* Executor::codegenCast(llvm::Value* operand_lv,
+                                   const SQLTypeInfo& operand_ti,
+                                   const SQLTypeInfo& ti,
+                                   const bool operand_is_const) {
   if (operand_lv->getType()->isIntegerTy()) {
     if (operand_ti.is_string()) {
-      return codegenCastFromString(operand_lv, operand_ti, ti, operand_as_const);
+      return codegenCastFromString(operand_lv, operand_ti, ti, operand_is_const);
     }
     CHECK(operand_ti.is_integer() || operand_ti.is_decimal() || operand_ti.is_time() || operand_ti.is_boolean());
     if (operand_ti.is_boolean()) {
@@ -1915,13 +1922,17 @@ llvm::Value* Executor::codegenIsNull(const Analyzer::UOper* uoper, const Compila
     return llvm::ConstantInt::get(get_int_type(1, cgen_state_->context_), 0);
   }
   const auto operand_lv = codegen(operand, true, co).front();
-  if (ti.is_fp()) {
-    return cgen_state_->ir_builder_.CreateFCmp(
-        llvm::FCmpInst::FCMP_OEQ, operand_lv, ti.get_type() == kFLOAT ? ll_fp(NULL_FLOAT) : ll_fp(NULL_DOUBLE));
-  }
   if (ti.is_array()) {
     return cgen_state_->emitExternalCall(
         "array_is_null", get_int_type(1, cgen_state_->context_), {operand_lv, posArg(operand)});
+  }
+  return codegenIsNullNumber(operand_lv, ti);
+}
+
+llvm::Value* Executor::codegenIsNullNumber(llvm::Value* operand_lv, const SQLTypeInfo& ti) {
+  if (ti.is_fp()) {
+    return cgen_state_->ir_builder_.CreateFCmp(
+        llvm::FCmpInst::FCMP_OEQ, operand_lv, ti.get_type() == kFLOAT ? ll_fp(NULL_FLOAT) : ll_fp(NULL_DOUBLE));
   }
   return cgen_state_->ir_builder_.CreateICmp(llvm::ICmpInst::ICMP_EQ, operand_lv, inlineIntNull(ti));
 }
