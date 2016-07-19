@@ -88,3 +88,13 @@ EXTENSION_NOINLINE
 double Tan(const double x) {
   return tan(x);
 }
+
+EXTENSION_NOINLINE
+double conv_4326_900913_x (const double x) {
+  return x * 111319.490778;
+}
+
+EXTENSION_NOINLINE
+double conv_4326_900913_y (const double y) {
+  return 6378136.99911 * log(tan(.00872664626 * y + .785398163397));
+}
