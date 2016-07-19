@@ -625,9 +625,10 @@ class RaAbstractInterp {
     try {
       dispatchNodes(rels);
     } catch (const QueryNotSupported&) {
-      CHECK(!nodes_.empty());
-      // TODO(alex): Not great, need to figure out a better ownership model.
-      delete nodes_.back();
+      if (!nodes_.empty()) {
+        // TODO(alex): Not great, need to figure out a better ownership model.
+        delete nodes_.back();
+      }
       throw;
     }
     CHECK(!nodes_.empty());

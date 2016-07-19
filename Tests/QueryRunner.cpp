@@ -74,7 +74,9 @@ Planner::RootPlan* parse_plan_legacy(const std::string& query_str,
   SQLParser parser;
   std::list<Parser::Stmt*> parse_trees;
   std::string last_parsed;
-  CHECK_EQ(parser.parse(query_str, parse_trees, last_parsed), 0);
+  if (parser.parse(query_str, parse_trees, last_parsed)) {
+    throw std::runtime_error("Failed to parse query");
+  }
   CHECK_EQ(parse_trees.size(), size_t(1));
   auto stmt = parse_trees.front();
   std::unique_ptr<Stmt> stmt_ptr(stmt);  // make sure it's deleted
