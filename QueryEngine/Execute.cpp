@@ -2079,7 +2079,7 @@ llvm::Value* Executor::codegenFunctionOperNullArg(const Analyzer::FunctionOper* 
   for (size_t i = 0; i < function_oper->getArity(); ++i) {
     const auto arg = function_oper->getArg(i);
     const auto& arg_ti = arg->get_type_info();
-    CHECK(arg_ti.is_integer() || arg_ti.is_fp());
+    CHECK(arg_ti.is_number());
     one_arg_null = cgen_state_->ir_builder_.CreateOr(one_arg_null, codegenIsNullNumber(orig_arg_lvs[i], arg_ti));
   }
   return one_arg_null;
