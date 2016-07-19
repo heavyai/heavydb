@@ -1501,6 +1501,44 @@ TEST(Select, BigDecimalRange) {
   }
 }
 
+TEST(Select, AfterDrop) {
+  run_ddl_statement("create table droptest (i1 integer);");
+  run_multiple_agg("insert into droptest values(1);", ExecutorDeviceType::CPU);
+  run_multiple_agg("insert into droptest values(2);", ExecutorDeviceType::CPU);
+  ASSERT_EQ(int64_t(3), v<int64_t>(run_simple_agg("SELECT SUM(i1) FROM droptest;", ExecutorDeviceType::CPU)));
+  run_ddl_statement("drop table droptest;");
+  run_ddl_statement("create table droptest (n1 integer);");
+  run_multiple_agg("insert into droptest values(3);", ExecutorDeviceType::CPU);
+  run_multiple_agg("insert into droptest values(4);", ExecutorDeviceType::CPU);
+  ASSERT_EQ(int64_t(7), v<int64_t>(run_simple_agg("SELECT SUM(n1) FROM droptest;", ExecutorDeviceType::CPU)));
+  run_ddl_statement("drop table droptest;");
+}
+
+TEST(Select, AfterAlterTableName) {
+  run_ddl_statement("create table alter_name_test (i1 integer);");
+  run_multiple_agg("insert into alter_name_test values(1);", ExecutorDeviceType::CPU);
+  run_multiple_agg("insert into alter_name_test values(2);", ExecutorDeviceType::CPU);
+  ASSERT_EQ(int64_t(3), v<int64_t>(run_simple_agg("SELECT SUM(i1) FROM alter_name_test;", ExecutorDeviceType::CPU)));
+  run_ddl_statement("alter table alter_name_test rename to alter_name_test_after;");
+  run_multiple_agg("insert into alter_name_test_after values(3);", ExecutorDeviceType::CPU);
+  run_multiple_agg("insert into alter_name_test_after values(4);", ExecutorDeviceType::CPU);
+  ASSERT_EQ(int64_t(10),
+            v<int64_t>(run_simple_agg("SELECT SUM(i1) FROM alter_name_test_after;", ExecutorDeviceType::CPU)));
+  run_ddl_statement("drop table alter_name_test_after;");
+}
+
+TEST(Select, AfterAlterColumnName) {
+  run_ddl_statement("create table alter_column_test (i1 integer);");
+  run_multiple_agg("insert into alter_column_test values(1);", ExecutorDeviceType::CPU);
+  run_multiple_agg("insert into alter_column_test values(2);", ExecutorDeviceType::CPU);
+  ASSERT_EQ(int64_t(3), v<int64_t>(run_simple_agg("SELECT SUM(i1) FROM alter_column_test;", ExecutorDeviceType::CPU)));
+  run_ddl_statement("alter table alter_column_test rename column i1 to n1;");
+  run_multiple_agg("insert into alter_column_test values(3);", ExecutorDeviceType::CPU);
+  run_multiple_agg("insert into alter_column_test values(4);", ExecutorDeviceType::CPU);
+  ASSERT_EQ(int64_t(10), v<int64_t>(run_simple_agg("SELECT SUM(n1) FROM alter_column_test;", ExecutorDeviceType::CPU)));
+  run_ddl_statement("drop table alter_column_test;");
+}
+
 #ifdef HAVE_RAVM
 TEST(Select, Subqueries) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
