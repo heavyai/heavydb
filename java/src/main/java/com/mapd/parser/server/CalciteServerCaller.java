@@ -67,7 +67,7 @@ public class CalciteServerCaller {
 
     int portNum = Integer.valueOf(cmd.getOptionValue("port", "9093"));
     String dataDir = cmd.getOptionValue("data", "data");
-    String extensionsDir = cmd.getOptionValue("extensions", "QueryEngine");
+    String extensionsDir = cmd.getOptionValue("extensions", "build/QueryEngine");
     final Path extensionFunctionsAstFile = Paths.get(extensionsDir, "ExtensionFunctions.ast");
 
     calciteServerWrapper = new CalciteServerWrapper(portNum, -1, dataDir, extensionFunctionsAstFile.toString());
