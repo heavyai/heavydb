@@ -107,6 +107,9 @@ include_directories(${Boost_INCLUDE_DIR}
                     ${LLVM_INC_FLAGS}
                     "/usr/local/cuda/include/")
 
+# EGL
+include_directories(ThirdParty/egl)
+
 # Google Test and Google Mock
 if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
   add_definitions("-DGTEST_USE_OWN_TR1_TUPLE=0")

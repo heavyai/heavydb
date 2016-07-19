@@ -1,0 +1,6 @@
+URL: https://www.khronos.org/registry/egl/api/
+Download date: 2016-07-19
+
+Bundling the latest headers from Khronos to ensure they're in line with the libraries provided by NVIDIA.
+
+No source modifications were made.

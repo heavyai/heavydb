@@ -4,7 +4,7 @@
 # EGL_LIBRARY
 # EGL_FOUND
 
-find_path(EGL_INCLUDE_DIR NAMES EGL/egl.h PATHS /usr/include PATH_SUFFIXES nvidia nvidia-367 nvidia-365 nvidia-361)
+find_path(EGL_INCLUDE_DIR NAMES EGL/egl.h PATHS ${CMAKE_SOURCE_DIR}/ThirdParty/egl /usr/include PATH_SUFFIXES nvidia nvidia-367 nvidia-365 nvidia-361)
 find_library(EGL_LIBRARY NAMES egl EGL libEGL PATHS /usr/lib64 /usr/lib PATH_SUFFIXES nvidia nvidia-367 nvidia-365 nvidia-361 NO_DEFAULT_PATH)
 
 set(EGL_INCLUDE_DIRS ${EGL_INCLUDE_DIR})
