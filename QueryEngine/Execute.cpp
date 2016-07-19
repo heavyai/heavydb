@@ -2013,6 +2013,17 @@ SQLTypeInfo ext_arg_type_to_type_info(const ExtArgumentType ext_arg_type) {
   return SQLTypeInfo(kNULLT, false);
 }
 
+bool ext_func_call_requires_nullcheck(const Analyzer::FunctionOper* function_oper) {
+  for (size_t i = 0; i < function_oper->getArity(); ++i) {
+    const auto arg = function_oper->getArg(i);
+    const auto& arg_ti = arg->get_type_info();
+    if (!arg_ti.get_notnull()) {
+      return true;
+    }
+  }
+  return false;
+}
+
 }  // namespace
 
 llvm::Value* Executor::codegenFunctionOper(const Analyzer::FunctionOper* function_oper, const CompilationOptions& co) {
@@ -2020,33 +2031,79 @@ llvm::Value* Executor::codegenFunctionOper(const Analyzer::FunctionOper* functio
   if (!ext_func_sig) {
     throw std::runtime_error("Runtime function " + function_oper->getName() + " not supported");
   }
-  const auto& ext_func_args = ext_func_sig->getArgs();
-  std::vector<llvm::Value*> args;
   const auto& ret_ti = function_oper->get_type_info();
   CHECK(ret_ti.is_integer() || ret_ti.is_fp());
   const auto ret_ty = ret_ti.is_fp() ? (ret_ti.get_type() == kDOUBLE ? llvm::Type::getDoubleTy(cgen_state_->context_)
                                                                      : llvm::Type::getFloatTy(cgen_state_->context_))
                                      : get_int_type(ret_ti.get_size() * 8, cgen_state_->context_);
   CHECK_EQ(ret_ty, ext_arg_type_to_llvm_type(ext_func_sig->getRet(), cgen_state_->context_));
-  CHECK_EQ(function_oper->getArity(), ext_func_args.size());
+  std::vector<llvm::Value*> orig_arg_lvs;
+  for (size_t i = 0; i < function_oper->getArity(); ++i) {
+    const auto arg_lvs = codegen(function_oper->getArg(i), true, co);
+    CHECK_EQ(size_t(1), arg_lvs.size());
+    orig_arg_lvs.push_back(arg_lvs.front());
+  }
+  llvm::BasicBlock* args_null_bb{nullptr};
+  llvm::BasicBlock* args_notnull_bb{nullptr};
+  llvm::BasicBlock* orig_bb = cgen_state_->ir_builder_.GetInsertBlock();
+  if (ext_func_call_requires_nullcheck(function_oper)) {
+    const auto args_notnull_lv =
+        cgen_state_->ir_builder_.CreateNot(codegenFunctionOperNullArg(function_oper, orig_arg_lvs));
+    args_notnull_bb = llvm::BasicBlock::Create(cgen_state_->context_, "args_notnull", cgen_state_->row_func_);
+    args_null_bb = llvm::BasicBlock::Create(cgen_state_->context_, "args_null", cgen_state_->row_func_);
+    cgen_state_->ir_builder_.CreateCondBr(args_notnull_lv, args_notnull_bb, args_null_bb);
+    cgen_state_->ir_builder_.SetInsertPoint(args_notnull_bb);
+  }
+  CHECK_EQ(orig_arg_lvs.size(), function_oper->getArity());
+  const auto args = codegenFunctionOperCastArgs(function_oper, ext_func_sig, orig_arg_lvs);
+  auto ext_call = cgen_state_->emitExternalCall(ext_func_sig->getName(), ret_ty, args);
+  if (args_null_bb) {
+    CHECK(args_null_bb);
+    cgen_state_->ir_builder_.CreateBr(args_null_bb);
+    cgen_state_->ir_builder_.SetInsertPoint(args_null_bb);
+    auto ext_call_phi = cgen_state_->ir_builder_.CreatePHI(ret_ty, 2);
+    ext_call_phi->addIncoming(ext_call, args_notnull_bb);
+    const auto null_lv = ret_ti.is_fp() ? static_cast<llvm::Value*>(inlineFpNull(ret_ti))
+                                        : static_cast<llvm::Value*>(inlineIntNull(ret_ti));
+    ext_call_phi->addIncoming(null_lv, orig_bb);
+    return ext_call_phi;
+  }
+  return ext_call;
+}
+
+llvm::Value* Executor::codegenFunctionOperNullArg(const Analyzer::FunctionOper* function_oper,
+                                                  const std::vector<llvm::Value*>& orig_arg_lvs) {
+  llvm::Value* one_arg_null = llvm::ConstantInt::get(llvm::IntegerType::getInt1Ty(cgen_state_->context_), false);
   for (size_t i = 0; i < function_oper->getArity(); ++i) {
     const auto arg = function_oper->getArg(i);
+    const auto& arg_ti = arg->get_type_info();
+    CHECK(arg_ti.is_integer() || arg_ti.is_fp());
+    one_arg_null = cgen_state_->ir_builder_.CreateOr(one_arg_null, codegenIsNullNumber(orig_arg_lvs[i], arg_ti));
+  }
+  return one_arg_null;
+}
+
+std::vector<llvm::Value*> Executor::codegenFunctionOperCastArgs(const Analyzer::FunctionOper* function_oper,
+                                                                const ExtensionFunction* ext_func_sig,
+                                                                const std::vector<llvm::Value*>& orig_arg_lvs) {
+  CHECK(ext_func_sig);
+  const auto& ext_func_args = ext_func_sig->getArgs();
+  CHECK_EQ(function_oper->getArity(), ext_func_args.size());
+  std::vector<llvm::Value*> args;
+  for (size_t i = 0; i < function_oper->getArity(); ++i) {
+    const auto arg = function_oper->getArg(i);
+    const auto& arg_ti = arg->get_type_info();
     const auto arg_target_ti = ext_arg_type_to_type_info(ext_func_args[i]);
-    const auto arg_copy = arg->deep_copy();
-    const auto arg_cast = arg_copy->add_cast(arg_target_ti);
-    const Analyzer::Expr* eff_arg{nullptr};
-    if (arg->get_type_info().get_type() != arg_target_ti.get_type()) {
-      eff_arg = arg_cast.get();
+    llvm::Value* arg_lv{nullptr};
+    if (arg_ti.get_type() != arg_target_ti.get_type()) {
+      arg_lv = codegenCast(orig_arg_lvs[i], arg_ti, arg_target_ti, false);
     } else {
-      eff_arg = arg;
+      arg_lv = orig_arg_lvs[i];
     }
-    const auto arg_lvs = codegen(eff_arg, true, co);
-    CHECK_EQ(size_t(1), arg_lvs.size());
-    const auto arg_lv = arg_lvs.front();
     CHECK_EQ(arg_lv->getType(), ext_arg_type_to_llvm_type(ext_func_args[i], cgen_state_->context_));
     args.push_back(arg_lv);
   }
-  return cgen_state_->emitExternalCall(ext_func_sig->getName(), ret_ty, args);
+  return args;
 }
 
 llvm::ConstantInt* Executor::codegenIntConst(const Analyzer::Constant* constant) {

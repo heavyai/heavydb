@@ -187,6 +187,8 @@ struct RelAlgExecutionUnit {
   const size_t scan_limit;
 };
 
+class ExtensionFunction;
+
 class Executor {
   static_assert(sizeof(float) == 4 && sizeof(double) == 8,
                 "Host hardware not supported, unexpected size of float / double.");
@@ -346,6 +348,10 @@ class Executor {
   llvm::Value* codegenUnnest(const Analyzer::UOper*, const CompilationOptions&);
   llvm::Value* codegenArrayAt(const Analyzer::BinOper*, const CompilationOptions&);
   llvm::Value* codegenFunctionOper(const Analyzer::FunctionOper*, const CompilationOptions&);
+  llvm::Value* codegenFunctionOperNullArg(const Analyzer::FunctionOper*, const std::vector<llvm::Value*>&);
+  std::vector<llvm::Value*> codegenFunctionOperCastArgs(const Analyzer::FunctionOper*,
+                                                        const ExtensionFunction*,
+                                                        const std::vector<llvm::Value*>&);
   llvm::ConstantInt* codegenIntConst(const Analyzer::Constant* constant);
   llvm::Value* colByteStream(const Analyzer::ColumnVar* col_var, const bool fetch_column, const bool hoist_literals);
   llvm::Value* posArg(const Analyzer::Expr*) const;
