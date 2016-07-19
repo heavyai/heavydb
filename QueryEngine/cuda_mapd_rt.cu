@@ -1,7 +1,7 @@
 #include <stdint.h>
 #include <cuda.h>
 #include <limits>
-#include "ExtensionFunctions.h"
+#include "ExtensionFunctions.hpp"
 #include "GpuRtConstants.h"
 
 extern "C" __device__ int32_t pos_start_impl(const int32_t* row_index_resume) {

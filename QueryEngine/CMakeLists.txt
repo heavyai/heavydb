@@ -77,11 +77,11 @@ add_custom_command(
     ${CMAKE_CURRENT_SOURCE_DIR}/RuntimeFunctions.cpp)
 
 add_custom_command(
-    DEPENDS ExtensionFunctions.h
+    DEPENDS ExtensionFunctions.hpp
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/ExtensionFunctions.ast
     COMMAND ${llvm_clangpp_cmd}
     ARGS -std=c++11 -fsyntax-only -Xclang -ast-dump -fno-diagnostics-color
-    ${CMAKE_CURRENT_SOURCE_DIR}/ExtensionFunctions.h | grep FunctionDecl | grep ExtensionFunctions |
+    ${CMAKE_CURRENT_SOURCE_DIR}/ExtensionFunctions.hpp | grep FunctionDecl | grep ExtensionFunctions |
     sed -E "s/\\-FunctionDecl.*line:[0-9]+:[0-9]+//g" > ${CMAKE_CURRENT_BINARY_DIR}/ExtensionFunctions.ast)
 
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctions.bc ${CMAKE_CURRENT_BINARY_DIR}/ExtensionFunctions.ast DESTINATION QueryEngine)

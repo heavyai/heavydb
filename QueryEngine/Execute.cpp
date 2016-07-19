@@ -5,7 +5,7 @@
 #include "Codec.h"
 #include "ExpressionRewrite.h"
 #include "ExtensionFunctionsWhitelist.h"
-#include "ExtensionFunctions.h"
+#include "ExtensionFunctions.hpp"
 #include "GpuMemUtils.h"
 #include "MaxwellCodegenPatch.h"
 #include "GroupByAndAggregate.h"
