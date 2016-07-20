@@ -5,6 +5,7 @@
  */
 package com.mapd.calcite.parser;
 
+import java.util.HashSet;
 import java.util.Map;
 
 import com.google.common.base.Predicate;
@@ -108,9 +109,24 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
         if (extSigs == null) {
             return;
         }
+        HashSet<String> demangledNames = new HashSet<String>();
         for (Map.Entry<String, ExtensionFunction> extSig : extSigs.entrySet()) {
+            final String demangledName = dropSuffix(extSig.getKey());
+            if (demangledNames.contains(demangledName)) {
+                continue;
+            }
+            demangledNames.add(demangledName);
             opTab.addOperator(new ExtFunction(extSig.getKey(), extSig.getValue()));
         }
+    }
+
+    private static String dropSuffix(final String str) {
+        int suffix_idx = str.indexOf("__");
+        if (suffix_idx == -1) {
+            return str;
+        }
+        assert suffix_idx > 0;
+        return str.substring(0, suffix_idx - 1);
     }
 
     /**
