@@ -10,6 +10,9 @@ unsigned narrowing_conversion_score(const SQLTypeInfo& arg_ti, const SQLTypeInfo
   if (arg_ti.get_type() == arg_target_ti.get_type()) {
     return 0;
   }
+  if (arg_ti.get_type() == kDOUBLE && arg_target_ti.get_type() == kFLOAT) {
+    return 1;
+  }
   if (arg_ti.is_integer()) {
     if (!arg_target_ti.is_integer() || arg_target_ti.get_size() >= arg_ti.get_size()) {
       return 0;
