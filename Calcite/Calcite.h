@@ -24,7 +24,7 @@ class Calcite {
                       std::string sql_string,
                       const bool legacy_syntax);
   std::string getExtensionFunctionWhitelist();
-  std::string updateMetadata(std::string catalog, std::string table);
+  void updateMetadata(std::string catalog, std::string table);
   virtual ~Calcite();
 
  private:

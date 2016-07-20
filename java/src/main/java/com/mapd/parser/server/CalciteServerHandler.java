@@ -36,6 +36,8 @@ class CalciteServerHandler implements CalciteServer.Iface {
 
   private final String extSigsJson;
 
+  //TODO MAT we need to merge this into common code base for these funictions with
+  // CalciteDirect since we are not deprecating this stuff yet
   CalciteServerHandler(int mapDPort, String dataDir, String extensionFunctionsAstFile) {
     this.parserPool = new GenericObjectPool();
     this.mapDPort = mapDPort;
@@ -115,5 +117,32 @@ class CalciteServerHandler implements CalciteServer.Iface {
 
   void setServer(TServer s) {
     server = s;
+  }
+
+  @Override
+  public void updateMetadata(String catalog, String table) throws TException {
+    MAPDLOGGER.debug("Received invalidation from server for "+ catalog + " : " + table);
+    long timer = System.currentTimeMillis();
+    callCount++;
+    MapDParser parser;
+    try {
+      parser = (MapDParser) parserPool.borrowObject();
+    } catch (Exception ex) {
+      String msg = "Could not get Parse Item from pool :" + ex.getMessage();
+      MAPDLOGGER.error(msg);
+      return;
+    }
+    try {
+      parser.updateMetaData(catalog, table);
+    } finally {
+      try {
+        // put parser object back in pool for others to use
+        MAPDLOGGER.debug("Returning object to pool");
+        parserPool.returnObject(parser);
+      } catch (Exception ex) {
+        String msg = "Could not return parse object :" + ex.getMessage();
+        MAPDLOGGER.error(msg);
+      }
+    }
   }
 }

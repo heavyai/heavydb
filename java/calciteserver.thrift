@@ -15,5 +15,6 @@ service CalciteServer {
    void shutdown(),
    TPlanResult process(1:string user 2:string passwd 3:string catalog 4:string sql_text 5:bool legacySyntax) throws (1:InvalidParseRequest parseErr),
    string getExtensionFunctionWhitelist()
+   void updateMetadata(1: string catalog, 2:string table),
 
 }

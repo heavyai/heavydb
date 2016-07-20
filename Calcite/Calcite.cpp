@@ -144,7 +144,7 @@ JNIEnv* Calcite::checkJNIConnection() {
   return env;
 }
 
-string Calcite::updateMetadata(string catalog, string table) {
+void Calcite::updateMetadata(string catalog, string table) {
   if (jni_) {
     JNIEnv* env = checkJNIConnection();
     jobject process_result;
@@ -162,18 +162,12 @@ string Calcite::updateMetadata(string catalog, string table) {
       throw std::runtime_error("Calcite::updateMetadata failed");
     }
     LOG(INFO) << "Time to updateMetadata " << ms << " (ms)" << endl;
-    return handle_java_return(env, process_result);
   } else {
     if (server_available_) {
-      TPlanResult ret;
-      auto ms = measure<>::execution([&]() { client->send_ping(); });
-      LOG(INFO) << ret.plan_result << endl;
-      LOG(INFO) << "Time in Thrift " << (ms > ret.execution_time_ms ? ms - ret.execution_time_ms : 0)
-                << " (ms), Time in Java Calcite server " << ret.execution_time_ms << " (ms)" << endl;
-      return ret.plan_result;
+      auto ms = measure<>::execution([&]() { client->updateMetadata(catalog, table); });
+      LOG(INFO) << "Time to updateMetadata " << ms << " (ms)" << endl;
     } else {
       LOG(INFO) << "Not routing to Calcite, server is not up and JNI not available" << endl;
-      return "";
     }
   }
 }
