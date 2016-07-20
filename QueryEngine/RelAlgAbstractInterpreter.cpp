@@ -599,6 +599,51 @@ void coalesce_nodes(std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
   }
 }
 
+// For now, the only target to eliminate is restricted to project-aggregate pair between scan/sort and join
+// TODO(miyu): allow more chance if proved safe
+void eliminate_identical_copy(std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
+  std::unordered_set<std::shared_ptr<const RelAlgNode>> copies;
+  auto sink = nodes.back();
+  for (auto node : nodes) {
+    auto aggregate = std::dynamic_pointer_cast<const RelAggregate>(node);
+    if (!aggregate || aggregate == sink || !(aggregate->getGroupByCount() == 1 && aggregate->getAggExprsCount() == 0)) {
+      continue;
+    }
+    auto project = std::dynamic_pointer_cast<const RelProject>(aggregate->getManagedInput(0));
+    if (project && project->size() == aggregate->size() && project->getFields() == aggregate->getFields()) {
+      CHECK_EQ(size_t(0), copies.count(aggregate));
+      copies.insert(aggregate);
+    }
+  }
+  for (auto node : nodes) {
+    if (!node->inputCount()) {
+      continue;
+    }
+    auto last_source = node->getManagedInput(node->inputCount() - 1);
+    if (!copies.count(last_source)) {
+      continue;
+    }
+    auto aggregate = std::dynamic_pointer_cast<const RelAggregate>(last_source);
+    CHECK(aggregate);
+    if (!std::dynamic_pointer_cast<const RelJoin>(node) || aggregate->size() != 1) {
+      continue;
+    }
+    auto project = std::dynamic_pointer_cast<const RelProject>(aggregate->getManagedInput(0));
+    CHECK(project);
+    auto new_source = project->getManagedInput(0);
+    if (std::dynamic_pointer_cast<const RelSort>(new_source) || std::dynamic_pointer_cast<const RelScan>(new_source)) {
+      node->replaceManagedInput(last_source, new_source);
+    }
+  }
+
+  decltype(copies)().swap(copies);
+  for (auto& node : nodes) {
+    if (node.unique()) {
+      node.reset();
+    }
+  }
+}
+
 // For some reason, Calcite generates Sort, Project, Sort sequences where the
 // two Sort nodes are identical and the Project is identity. Simplify this
 // pattern by re-binding the input of the second sort to the input of the first.
@@ -666,6 +711,7 @@ class RaAbstractInterp {
     CHECK(!nodes_.empty());
     bind_inputs(nodes_);
     mark_nops(nodes_);
+    eliminate_identical_copy(nodes_);
     coalesce_nodes(nodes_);
     simplify_sort(nodes_);
     CHECK(nodes_.back().unique());
