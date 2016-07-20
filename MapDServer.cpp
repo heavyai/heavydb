@@ -173,6 +173,7 @@ class MapDHandler : virtual public MapDIf {
               const size_t render_mem_bytes,
               const int num_gpus,
               const int start_gpu,
+              const size_t num_reader_threads,
               const LdapMetadata ldapMetadata,
 #ifdef HAVE_CALCITE
               const int calcite_port,
@@ -209,8 +210,8 @@ class MapDHandler : virtual public MapDIf {
       cpu_mode_only_ = true;
     }
     const auto data_path = boost::filesystem::path(base_data_path_) / "mapd_data";
-    data_mgr_.reset(
-        new Data_Namespace::DataMgr(data_path.string(), cpu_buffer_mem_bytes, !cpu_mode_only_, num_gpus, start_gpu));
+    data_mgr_.reset(new Data_Namespace::DataMgr(
+        data_path.string(), cpu_buffer_mem_bytes, !cpu_mode_only_, num_gpus, start_gpu, num_reader_threads));
 #ifdef HAVE_CALCITE
     calcite_.reset(new Calcite(calcite_port, base_data_path_));
 #ifdef HAVE_RAVM
@@ -1757,7 +1758,7 @@ int main(int argc, char** argv) {
   size_t render_mem_bytes = 500000000;
   int num_gpus = -1;  // Can be used to override number of gpus detected on system - -1 means do not override
   int start_gpu = 0;
-
+  size_t num_reader_threads = 0;  // # of threads to load data; actual # of threads used, will be limited by # of cores
   namespace po = boost::program_options;
 
   po::options_description desc("Options");
@@ -1809,6 +1810,9 @@ int main(int argc, char** argv) {
       "Enable legacy syntax");
   // Deprecated on 2016-06-23
   desc_adv.add_options()("disable-fork", "(Deprecated) Disable forking");
+  desc_adv.add_options()("num-reader-threads",
+                         po::value<size_t>(&num_reader_threads)->default_value(num_reader_threads),
+                         "Number of reader threads to use");
 
   po::positional_options_description positionalOptions;
   positionalOptions.add("data", 1);
@@ -1942,6 +1946,7 @@ int main(int argc, char** argv) {
                                                   render_mem_bytes,
                                                   num_gpus,
                                                   start_gpu,
+                                                  num_reader_threads,
                                                   ldapMetadata,
                                                   calcite_port,
                                                   enable_legacy_syntax));

@@ -31,7 +31,8 @@ class DataMgr {
           const size_t cpuBufferSize /* 0 means auto set size */,
           const bool useGpus,
           const int numGpus,
-          const int startGpu = 0);
+          const int startGpu = 0,
+          const size_t numReaderThreads = 0); /* 0 means use default for # of reader threads */
   ~DataMgr();
   AbstractBuffer* createChunkBuffer(const ChunkKey& key, const MemoryLevel memoryLevel, const int deviceId = 0);
   AbstractBuffer* getChunkBuffer(const ChunkKey& key,
@@ -61,7 +62,7 @@ class DataMgr {
 
  private:
   size_t getTotalSystemMemory();
-  void populateMgrs(const size_t userSpecifiedCpuBufferSize);
+  void populateMgrs(const size_t userSpecifiedCpuBufferSize, const size_t userSpecifiedNumReaderThreads);
   std::vector<std::vector<AbstractBufferMgr*>> bufferMgrs_;
   std::string dataDir_;
   bool hasGpus_;
