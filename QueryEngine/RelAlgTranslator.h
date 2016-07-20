@@ -59,6 +59,8 @@ class RelAlgTranslator {
 
   std::shared_ptr<Analyzer::Expr> translateAbs(const RexFunctionOperator*) const;
 
+  std::shared_ptr<Analyzer::Expr> translateSign(const RexFunctionOperator*) const;
+
   std::shared_ptr<Analyzer::Expr> translateFunction(const RexFunctionOperator*) const;
 
   const Catalog_Namespace::Catalog& cat_;

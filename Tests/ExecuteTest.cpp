@@ -1601,6 +1601,34 @@ TEST(Select, RuntimeFunctions) {
     c("SELECT SUM(ABS(-f + 1)) FROM test;", dt);
     c("SELECT SUM(ABS(-d + 1)) FROM test;", dt);
     c("SELECT MIN(ABS(-ofd + 2)) FROM test;", dt);
+    ASSERT_EQ(static_cast<int64_t>(2 * g_num_rows),
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE SIGN(-dd) = -1;", dt)));
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows + g_num_rows / 2),
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE SIGN(x - 7) = 0;", dt)));
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows / 2),
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE SIGN(x - 7) = 1;", dt)));
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows + g_num_rows / 2),
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE SIGN(x - 8) = -1;", dt)));
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows / 2),
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE SIGN(x - 8) = 0;", dt)));
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows),
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE SIGN(y - 42) = 0;", dt)));
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows),
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE SIGN(y - 42) = 1;", dt)));
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows),
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE SIGN(y - 43) = -1;", dt)));
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows),
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE SIGN(y - 43) = 0;", dt)));
+    ASSERT_EQ(static_cast<int64_t>(2 * g_num_rows),
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE SIGN(-f) = -1;", dt)));
+    ASSERT_EQ(static_cast<int64_t>(2 * g_num_rows),
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE SIGN(-d) = -1;", dt)));
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows + g_num_rows / 2),
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE SIGN(ofd) = 1;", dt)));
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows + g_num_rows / 2),
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE SIGN(-ofd) = -1;", dt)));
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows / 2),
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE SIGN(ofd) IS NULL;", dt)));
   }
 }
 #endif  // HAVE_RAVM

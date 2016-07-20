@@ -1,5 +1,6 @@
 #ifdef HAVE_CALCITE
 #include "RelAlgTranslator.h"
+#include "SqlTypesLayout.h"
 
 #include "CalciteDeserializerUtils.h"
 #include "ExtensionFunctionsWhitelist.h"
@@ -308,36 +309,39 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDatetime(const RexFun
 
 namespace {
 
-std::shared_ptr<Analyzer::Constant> makeZeroConstant(const SQLTypeInfo& ti) {
+std::shared_ptr<Analyzer::Constant> makeNumericConstant(const SQLTypeInfo& ti, const int val) {
   CHECK(ti.is_number());
-  Datum v{0};
+  Datum datum{0};
   switch (ti.get_type()) {
     case kSMALLINT: {
-      v.smallintval = 0;
+      datum.smallintval = val;
       break;
     }
     case kINT: {
-      v.intval = 0;
+      datum.intval = val;
       break;
     }
-    case kBIGINT:
+    case kBIGINT: {
+      datum.bigintval = val;
+      break;
+    }
     case kDECIMAL:
     case kNUMERIC: {
-      v.bigintval = 0;
+      datum.bigintval = val * exp_to_scale(ti.get_scale());
       break;
     }
     case kFLOAT: {
-      v.floatval = 0;
+      datum.floatval = val;
       break;
     }
     case kDOUBLE: {
-      v.doubleval = 0;
+      datum.doubleval = val;
       break;
     }
     default:
       CHECK(false);
   }
-  return makeExpr<Analyzer::Constant>(ti, false, v);
+  return makeExpr<Analyzer::Constant>(ti, false, datum);
 }
 
 }  // namespace
@@ -348,11 +352,28 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateAbs(const RexFunction
   const auto operand = translateScalarRex(rex_function->getOperand(0));
   const auto& operand_ti = operand->get_type_info();
   CHECK(operand_ti.is_number());
-  const auto zero = makeZeroConstant(operand_ti);
+  const auto zero = makeNumericConstant(operand_ti, 0);
   const auto lt_zero = makeExpr<Analyzer::BinOper>(kBOOLEAN, kLT, kONE, operand, zero);
   const auto uminus_operand = makeExpr<Analyzer::UOper>(operand_ti.get_type(), kUMINUS, operand);
   expr_list.emplace_back(lt_zero, uminus_operand);
   return makeExpr<Analyzer::CaseExpr>(operand_ti, false, expr_list, operand);
+}
+
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateSign(const RexFunctionOperator* rex_function) const {
+  std::list<std::pair<std::shared_ptr<Analyzer::Expr>, std::shared_ptr<Analyzer::Expr>>> expr_list;
+  CHECK_EQ(size_t(1), rex_function->size());
+  const auto operand = translateScalarRex(rex_function->getOperand(0));
+  const auto& operand_ti = operand->get_type_info();
+  CHECK(operand_ti.is_number());
+  const auto zero = makeNumericConstant(operand_ti, 0);
+  const auto lt_zero = makeExpr<Analyzer::BinOper>(kBOOLEAN, kLT, kONE, operand, zero);
+  expr_list.emplace_back(lt_zero, makeNumericConstant(operand_ti, -1));
+  const auto eq_zero = makeExpr<Analyzer::BinOper>(kBOOLEAN, kEQ, kONE, operand, zero);
+  expr_list.emplace_back(eq_zero, makeNumericConstant(operand_ti, 0));
+  const auto gt_zero = makeExpr<Analyzer::BinOper>(kBOOLEAN, kGT, kONE, operand, zero);
+  expr_list.emplace_back(gt_zero, makeNumericConstant(operand_ti, 1));
+  return makeExpr<Analyzer::CaseExpr>(
+      operand_ti, false, expr_list, makeExpr<Analyzer::Constant>(operand_ti, true, Datum{0}));
 }
 
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(const RexFunctionOperator* rex_function) const {
@@ -376,6 +397,9 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(const RexFun
   }
   if (rex_function->getName() == std::string("ABS")) {
     return translateAbs(rex_function);
+  }
+  if (rex_function->getName() == std::string("SIGN")) {
+    return translateSign(rex_function);
   }
   if (!ExtensionFunctionsWhitelist::get(rex_function->getName())) {
     throw QueryNotSupported("Function " + rex_function->getName() + " not supported");

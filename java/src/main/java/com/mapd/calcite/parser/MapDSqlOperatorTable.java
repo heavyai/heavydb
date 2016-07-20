@@ -106,6 +106,7 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
         opTab.addOperator(new Length());
         opTab.addOperator(new CharLength());
         opTab.addOperator(new PgILike());
+        opTab.addOperator(new Sign());
         if (extSigs == null) {
             return;
         }
@@ -415,6 +416,18 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
             final RelDataTypeFactory typeFactory
                     = opBinding.getTypeFactory();
             return typeFactory.createSqlType(SqlTypeName.BOOLEAN);
+        }
+    }
+
+    public static class Sign extends SqlFunction {
+
+        public Sign() {
+            super("SIGN", SqlKind.OTHER_FUNCTION, null, null, OperandTypes.NUMERIC, SqlFunctionCategory.NUMERIC);
+        }
+
+        @Override
+        public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+            return opBinding.getOperandType(0);
         }
     }
 
