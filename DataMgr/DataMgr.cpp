@@ -29,8 +29,7 @@ DataMgr::DataMgr(const string& dataDir,
                  const size_t cpuBufferSize,
                  const bool useGpus,
                  const int numGpus,
-                 const int startGpu,
-                 const size_t numReaderThreads)
+                 const int startGpu)
     : dataDir_(dataDir) {
   if (useGpus) {
     try {
@@ -45,7 +44,7 @@ DataMgr::DataMgr(const string& dataDir,
     cudaMgr_ = 0;
   }
 
-  populateMgrs(cpuBufferSize, numReaderThreads);
+  populateMgrs(cpuBufferSize);
 }
 
 DataMgr::~DataMgr() {
@@ -79,9 +78,9 @@ size_t DataMgr::getTotalSystemMemory() {
 #endif
 }
 
-void DataMgr::populateMgrs(const size_t userSpecifiedCpuBufferSize, const size_t userSpecifiedNumReaderThreads) {
+void DataMgr::populateMgrs(const size_t userSpecifiedCpuBufferSize) {
   bufferMgrs_.resize(2);
-  bufferMgrs_[0].push_back(new FileMgr(0, dataDir_, userSpecifiedNumReaderThreads));
+  bufferMgrs_[0].push_back(new FileMgr(0, dataDir_));
   levelSizes_.push_back(1);
   size_t cpuBufferSize = userSpecifiedCpuBufferSize;
   if (cpuBufferSize == 0)                          // if size is not specified

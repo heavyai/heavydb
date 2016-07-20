@@ -9,8 +9,6 @@
 #include "FileMgr.h"
 #include <map>
 #include <glog/logging.h>
-#include <thread>
-#include <future>
 
 #define METADATA_PAGE_SIZE 4096
 
@@ -154,56 +152,6 @@ void FileBuffer::freePages() {
   }
 }
 
-struct readThreadDS {
-  FileMgr* t_fm;             // ptr to FileMgr
-  size_t t_startPage;        // start page for the thread
-  size_t t_endPage;          // last page for the thread
-  int8_t* t_curPtr;          // pointer to the current location of the target for the thread
-  size_t t_bytesLeft;        // number of bytes to be read in the thread
-  size_t t_startPageOffset;  // offset - used for the first page of the buffer
-  bool t_isFirstPage;        // true - for first page of the buffer, false - otherwise
-};
-
-static size_t readForThread(FileBuffer* fileBuffer, const readThreadDS threadDS) {
-  size_t startPage = threadDS.t_startPage;  // start reading at startPage, including it
-  size_t endPage = threadDS.t_endPage;      // stop reading at endPage, not including it
-  int8_t* curPtr = threadDS.t_curPtr;
-  size_t bytesLeft = threadDS.t_bytesLeft;
-  size_t totalBytesRead = 0;
-
-  std::vector<MultiPage> multiPages_ = fileBuffer->getMultiPage();
-
-  // Traverse the logical pages
-  for (size_t pageNum = startPage; pageNum < endPage; ++pageNum) {
-    CHECK(multiPages_[pageNum].pageSize == fileBuffer->pageSize());
-    Page page = multiPages_[pageNum].current();
-
-    FileInfo* fileInfo = threadDS.t_fm->getFileInfoForFileId(page.fileId);
-    CHECK(fileInfo);
-
-    // Read the page into the destination (dst) buffer at its
-    // current (cur) location
-    size_t bytesRead = 0;
-    ;
-    if (threadDS.t_isFirstPage) {
-      bytesRead = fileInfo->read(
-          page.pageNum * fileBuffer->pageSize() + threadDS.t_startPageOffset + fileBuffer->reservedHeaderSize(),
-          min(fileBuffer->pageDataSize() - threadDS.t_startPageOffset, bytesLeft),
-          curPtr);
-    } else {
-      bytesRead = fileInfo->read(page.pageNum * fileBuffer->pageSize() + fileBuffer->reservedHeaderSize(),
-                                 min(fileBuffer->pageDataSize(), bytesLeft),
-                                 curPtr);
-    }
-    curPtr += bytesRead;
-    bytesLeft -= bytesRead;
-    totalBytesRead += bytesRead;
-  }
-  CHECK(bytesLeft == 0);
-
-  return (totalBytesRead);
-}
-
 void FileBuffer::read(int8_t* const dst,
                       const size_t numBytes,
                       const size_t offset,
@@ -214,14 +162,14 @@ void FileBuffer::read(int8_t* const dst,
   }
 
   // variable declarations
+  int8_t* curPtr = dst;  // a pointer to the current location in dst being written to
   size_t startPage = offset / pageDataSize_;
   size_t startPageOffset = offset % pageDataSize_;
   size_t numPagesToRead = (numBytes + startPageOffset + pageDataSize_ - 1) / pageDataSize_;
-
   /*
   if (startPage + numPagesToRead > multiPages_.size()) {
       cout << "Start page: " << startPage << endl;
-
+      cout << "Num pages to read: " << numPagesToRead << endl;
       cout << "Num multipages: " << multiPages_.size() << endl;
       cout << "Offset: " << offset << endl;
       cout << "Num bytes: " << numBytes << endl;
@@ -229,70 +177,31 @@ void FileBuffer::read(int8_t* const dst,
   */
 
   CHECK(startPage + numPagesToRead <= multiPages_.size());
+  size_t bytesLeft = numBytes;
 
-  size_t numPagesPerThread = 0;
-  size_t numBytesCurrent = numBytes;  // total number of bytes still to be read
-  size_t bytesRead = 0;               // total number of bytes already being read
-  size_t bytesLeftForThread = 0;      // number of bytes to be read in the thread
-  size_t numExtraPages = 0;           // extra pages to be assigned one per thread as needed
-  size_t numThreads = fm_->getNumReaderThreads();
+  // Traverse the logical pages
+  for (size_t pageNum = startPage; pageNum < startPage + numPagesToRead; ++pageNum) {
+    CHECK(multiPages_[pageNum].pageSize == pageSize_);
+    Page page = multiPages_[pageNum].current();
 
-  if (numPagesToRead >= numThreads) {
-    numPagesPerThread = numPagesToRead / numThreads;
-    numExtraPages = numPagesToRead - (numThreads * numPagesPerThread);
-  } else {
-    numThreads = numPagesToRead;
-    numPagesPerThread = 1;
-  }
+    // FILE *f = fm_->files_[page.fileId]->f;
+    FileInfo* fileInfo = fm_->getFileInfoForFileId(page.fileId);
+    CHECK(fileInfo);
 
-  /* set threadDS for the first thread */
-  readThreadDS threadDS;
-  threadDS.t_fm = fm_;
-  threadDS.t_startPage = offset / pageDataSize_;
-  if (numExtraPages > 0) {
-    threadDS.t_endPage = threadDS.t_startPage + numPagesPerThread + 1;
-    numExtraPages--;
-  } else {
-    threadDS.t_endPage = threadDS.t_startPage + numPagesPerThread;
-  }
-  threadDS.t_curPtr = dst;
-  threadDS.t_startPageOffset = offset % pageDataSize_;
-  threadDS.t_isFirstPage = true;
-
-  bytesLeftForThread = min(((threadDS.t_endPage - threadDS.t_startPage) * pageDataSize_), numBytesCurrent);
-  threadDS.t_bytesLeft = bytesLeftForThread;
-
-  if (numThreads == 1) {
-    bytesRead += readForThread(this, threadDS);
-  } else {
-    std::vector<std::future<size_t>> threads;
-
-    for (size_t i = 0; i < numThreads; i++) {
-      threads.push_back(std::async(std::launch::async, readForThread, this, threadDS));
-
-      // calculate elements of threadDS
-      threadDS.t_fm = fm_;
-      threadDS.t_isFirstPage = false;
-      threadDS.t_curPtr += (threadDS.t_endPage - threadDS.t_startPage) *
-                           pageDataSize_;  // based on # of pages read on previous iteration
-      threadDS.t_startPage +=
-          threadDS.t_endPage - threadDS.t_startPage;  // based on # of pages read on previous iteration
-      if (numExtraPages > 0) {
-        threadDS.t_endPage = threadDS.t_startPage + numPagesPerThread + 1;
-        numExtraPages--;
-      } else {
-        threadDS.t_endPage = threadDS.t_startPage + numPagesPerThread;
-      }
-      numBytesCurrent -= bytesLeftForThread;
-      bytesLeftForThread = min(((threadDS.t_endPage - threadDS.t_startPage) * pageDataSize_), numBytesCurrent);
-      threadDS.t_bytesLeft = bytesLeftForThread;
+    // Read the page into the destination (dst) buffer at its
+    // current (cur) location
+    size_t bytesRead;
+    if (pageNum == startPage) {
+      bytesRead = fileInfo->read(page.pageNum * pageSize_ + startPageOffset + reservedHeaderSize_,
+                                 min(pageDataSize_ - startPageOffset, bytesLeft),
+                                 curPtr);
+    } else {
+      bytesRead = fileInfo->read(page.pageNum * pageSize_ + reservedHeaderSize_, min(pageDataSize_, bytesLeft), curPtr);
     }
-
-    for (auto& p : threads) {
-      bytesRead += p.get();
-    }
+    curPtr += bytesRead;
+    bytesLeft -= bytesRead;
   }
-  CHECK(bytesRead == numBytes);
+  CHECK(bytesLeft == 0);
 }
 
 void FileBuffer::copyPage(Page& srcPage, Page& destPage, const size_t numBytes, const size_t offset) {

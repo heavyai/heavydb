@@ -15,7 +15,6 @@
 #include <algorithm>
 #include <unistd.h>
 #include <fcntl.h>
-#include <thread>
 
 #define EPOCH_FILENAME "epoch"
 
@@ -39,17 +38,13 @@ bool headerCompare(const HeaderInfo& firstElem, const HeaderInfo& secondElem) {
   */
 }
 
-FileMgr::FileMgr(const int deviceId,
-                 std::string basePath,
-                 const size_t num_reader_threads,
-                 const size_t defaultPageSize,
-                 const int epoch)
+FileMgr::FileMgr(const int deviceId, std::string basePath, const size_t defaultPageSize, const int epoch)
     : AbstractBufferMgr(deviceId),
       basePath_(basePath),
       defaultPageSize_(defaultPageSize),
       nextFileId_(0),
       epoch_(epoch) {
-  init(num_reader_threads);
+  init();
 }
 
 FileMgr::~FileMgr() {
@@ -63,7 +58,7 @@ FileMgr::~FileMgr() {
   }
 }
 
-void FileMgr::init(const size_t num_reader_threads) {
+void FileMgr::init() {
   // if epoch = -1 this means open from epoch file
   boost::filesystem::path path(basePath_);
   if (basePath_.size() > 0 && basePath_[basePath_.size() - 1] != '/')
@@ -173,19 +168,6 @@ void FileMgr::init(const size_t num_reader_threads) {
     // std::cout << basePath_ << " created." << std::endl;
     // now create epoch file
     createEpochFile(EPOCH_FILENAME);
-  }
-
-  /* define number of reader threads to be used */
-  size_t num_hardware_based_threads =
-      std::thread::hardware_concurrency();  // # of threads is based on # of cores on the host
-  CHECK(num_hardware_based_threads > 0);
-  if (num_reader_threads == 0) {  // # of threads has not been defined by user
-    num_reader_threads_ = num_hardware_based_threads;
-  } else {
-    if (num_reader_threads > num_hardware_based_threads)
-      num_reader_threads_ = num_hardware_based_threads;
-    else
-      num_reader_threads_ = num_reader_threads;
   }
 }
 
