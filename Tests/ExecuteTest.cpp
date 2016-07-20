@@ -1589,6 +1589,19 @@ TEST(Select, LeftOuterJoins) {
       dt);
   }
 }
+
+TEST(Select, RuntimeFunctions) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT SUM(ABS(-x + 1)) FROM test;", dt);
+    c("SELECT SUM(ABS(-y + 1)) FROM test;", dt);
+    c("SELECT SUM(ABS(-z + 1)) FROM test;", dt);
+    c("SELECT SUM(ABS(-t + 1)) FROM test;", dt);
+    c("SELECT SUM(ABS(-dd + 1)) FROM test;", dt);
+    c("SELECT SUM(ABS(-f + 1)) FROM test;", dt);
+    c("SELECT SUM(ABS(-d + 1)) FROM test;", dt);
+  }
+}
 #endif  // HAVE_RAVM
 
 int main(int argc, char** argv) {

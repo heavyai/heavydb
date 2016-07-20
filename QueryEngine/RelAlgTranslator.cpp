@@ -306,6 +306,55 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDatetime(const RexFun
   return translateNow();
 }
 
+namespace {
+
+std::shared_ptr<Analyzer::Constant> makeZeroConstant(const SQLTypeInfo& ti) {
+  CHECK(ti.is_number());
+  Datum v{0};
+  switch (ti.get_type()) {
+    case kSMALLINT: {
+      v.smallintval = 0;
+      break;
+    }
+    case kINT: {
+      v.intval = 0;
+      break;
+    }
+    case kBIGINT:
+    case kDECIMAL:
+    case kNUMERIC: {
+      v.bigintval = 0;
+      break;
+    }
+    case kFLOAT: {
+      v.floatval = 0;
+      break;
+    }
+    case kDOUBLE: {
+      v.doubleval = 0;
+      break;
+    }
+    default:
+      CHECK(false);
+  }
+  return makeExpr<Analyzer::Constant>(ti, false, v);
+}
+
+}  // namespace
+
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateAbs(const RexFunctionOperator* rex_function) const {
+  std::list<std::pair<std::shared_ptr<Analyzer::Expr>, std::shared_ptr<Analyzer::Expr>>> expr_list;
+  CHECK_EQ(size_t(1), rex_function->size());
+  const auto operand = translateScalarRex(rex_function->getOperand(0));
+  const auto& operand_ti = operand->get_type_info();
+  CHECK(operand_ti.is_number());
+  const auto zero = makeZeroConstant(operand_ti);
+  const auto lt_zero = makeExpr<Analyzer::BinOper>(kBOOLEAN, kLT, kONE, operand, zero);
+  const auto uminus_operand = makeExpr<Analyzer::UOper>(operand_ti.get_type(), kUMINUS, operand);
+  expr_list.emplace_back(lt_zero, uminus_operand);
+  return makeExpr<Analyzer::CaseExpr>(operand_ti, false, expr_list, operand);
+}
+
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(const RexFunctionOperator* rex_function) const {
   if (rex_function->getName() == std::string("LIKE") || rex_function->getName() == std::string("PG_ILIKE")) {
     return translateLike(rex_function);
@@ -324,6 +373,9 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(const RexFun
   }
   if (rex_function->getName() == std::string("DATETIME")) {
     return translateDatetime(rex_function);
+  }
+  if (rex_function->getName() == std::string("ABS")) {
+    return translateAbs(rex_function);
   }
   if (!ExtensionFunctionsWhitelist::get(rex_function->getName())) {
     throw QueryNotSupported("Function " + rex_function->getName() + " not supported");
