@@ -55,8 +55,18 @@ double ln(const double x) {
 }
 
 EXTENSION_NOINLINE
+double ln__(const float x) {
+  return logf(x);
+}
+
+EXTENSION_NOINLINE
 double Log(const double x) {
   return log(x);
+}
+
+EXTENSION_NOINLINE
+double Log__(const float x) {
+  return logf(x);
 }
 
 EXTENSION_NOINLINE
@@ -90,11 +100,26 @@ double Tan(const double x) {
 }
 
 EXTENSION_NOINLINE
+double Tan__(const float x) {
+  return tanf(x);
+}
+
+EXTENSION_NOINLINE
 double conv_4326_900913_x(const double x) {
+  return x * 111319.490778;
+}
+
+EXTENSION_NOINLINE
+double conv_4326_900913_x__(const float x) {
   return x * 111319.490778;
 }
 
 EXTENSION_NOINLINE
 double conv_4326_900913_y(const double y) {
   return 6378136.99911 * log(tan(.00872664626 * y + .785398163397));
+}
+
+EXTENSION_NOINLINE
+double conv_4326_900913_y__(const float y) {
+  return 6378136.99911 * logf(tanf(.00872664626 * y + .785398163397));
 }
