@@ -4,6 +4,7 @@
 #include "CartesianProduct.h"
 #include "Codec.h"
 #include "ExpressionRewrite.h"
+#include "ExtensionFunctionsBinding.h"
 #include "ExtensionFunctionsWhitelist.h"
 #include "ExtensionFunctions.hpp"
 #include "GpuMemUtils.h"
@@ -1996,25 +1997,6 @@ llvm::Type* ext_arg_type_to_llvm_type(const ExtArgumentType ext_arg_type, llvm::
   return nullptr;
 }
 
-SQLTypeInfo ext_arg_type_to_type_info(const ExtArgumentType ext_arg_type) {
-  switch (ext_arg_type) {
-    case ExtArgumentType::Int16:
-      return SQLTypeInfo(kSMALLINT, true);
-    case ExtArgumentType::Int32:
-      return SQLTypeInfo(kINT, true);
-    case ExtArgumentType::Int64:
-      return SQLTypeInfo(kBIGINT, true);
-    case ExtArgumentType::Float:
-      return SQLTypeInfo(kFLOAT, true);
-    case ExtArgumentType::Double:
-      return SQLTypeInfo(kDOUBLE, true);
-    default:
-      CHECK(false);
-  }
-  CHECK(false);
-  return SQLTypeInfo(kNULLT, false);
-}
-
 bool ext_func_call_requires_nullcheck(const Analyzer::FunctionOper* function_oper) {
   for (size_t i = 0; i < function_oper->getArity(); ++i) {
     const auto arg = function_oper->getArg(i);
@@ -2029,16 +2011,18 @@ bool ext_func_call_requires_nullcheck(const Analyzer::FunctionOper* function_ope
 }  // namespace
 
 llvm::Value* Executor::codegenFunctionOper(const Analyzer::FunctionOper* function_oper, const CompilationOptions& co) {
-  const auto ext_func_sig = ExtensionFunctionsWhitelist::get(function_oper->getName());
-  if (!ext_func_sig) {
+  const auto ext_func_sigs = ExtensionFunctionsWhitelist::get(function_oper->getName());
+  if (!ext_func_sigs) {
     throw std::runtime_error("Runtime function " + function_oper->getName() + " not supported");
   }
+  CHECK(!ext_func_sigs->empty());
+  const auto& ext_func_sig = bind_function(function_oper, *ext_func_sigs);
   const auto& ret_ti = function_oper->get_type_info();
   CHECK(ret_ti.is_integer() || ret_ti.is_fp());
   const auto ret_ty = ret_ti.is_fp() ? (ret_ti.get_type() == kDOUBLE ? llvm::Type::getDoubleTy(cgen_state_->context_)
                                                                      : llvm::Type::getFloatTy(cgen_state_->context_))
                                      : get_int_type(ret_ti.get_size() * 8, cgen_state_->context_);
-  CHECK_EQ(ret_ty, ext_arg_type_to_llvm_type(ext_func_sig->getRet(), cgen_state_->context_));
+  CHECK_EQ(ret_ty, ext_arg_type_to_llvm_type(ext_func_sig.getRet(), cgen_state_->context_));
   std::vector<llvm::Value*> orig_arg_lvs;
   for (size_t i = 0; i < function_oper->getArity(); ++i) {
     const auto arg_lvs = codegen(function_oper->getArg(i), true, co);
@@ -2057,8 +2041,8 @@ llvm::Value* Executor::codegenFunctionOper(const Analyzer::FunctionOper* functio
     cgen_state_->ir_builder_.SetInsertPoint(args_notnull_bb);
   }
   CHECK_EQ(orig_arg_lvs.size(), function_oper->getArity());
-  const auto args = codegenFunctionOperCastArgs(function_oper, ext_func_sig, orig_arg_lvs);
-  auto ext_call = cgen_state_->emitExternalCall(ext_func_sig->getName(), ret_ty, args);
+  const auto args = codegenFunctionOperCastArgs(function_oper, &ext_func_sig, orig_arg_lvs);
+  auto ext_call = cgen_state_->emitExternalCall(ext_func_sig.getName(), ret_ty, args);
   if (args_null_bb) {
     CHECK(args_null_bb);
     cgen_state_->ir_builder_.CreateBr(args_null_bb);

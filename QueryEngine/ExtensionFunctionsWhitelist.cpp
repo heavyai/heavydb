@@ -5,7 +5,7 @@
 
 #include <boost/algorithm/string/join.hpp>
 
-ExtensionFunction* ExtensionFunctionsWhitelist::get(const std::string& name) {
+std::vector<ExtensionFunction>* ExtensionFunctionsWhitelist::get(const std::string& name) {
   const auto it = functions_.find(to_upper(name));
   if (it == functions_.end()) {
     return nullptr;
@@ -39,13 +39,16 @@ std::string serialize_type(const ExtArgumentType type) {
 std::vector<std::string> ExtensionFunctionsWhitelist::getLLVMDeclarations() {
   std::vector<std::string> declarations;
   for (const auto& kv : functions_) {
-    const auto signature = kv.second;
-    std::string decl_prefix{"declare " + serialize_type(signature.getRet()) + " @" + kv.second.getName()};
-    std::vector<std::string> arg_strs;
-    for (const auto arg : signature.getArgs()) {
-      arg_strs.push_back(serialize_type(arg));
+    const auto& signatures = kv.second;
+    CHECK(!signatures.empty());
+    for (const auto& signature : kv.second) {
+      std::string decl_prefix{"declare " + serialize_type(signature.getRet()) + " @" + signature.getName()};
+      std::vector<std::string> arg_strs;
+      for (const auto arg : signature.getArgs()) {
+        arg_strs.push_back(serialize_type(arg));
+      }
+      declarations.push_back(decl_prefix + "(" + boost::algorithm::join(arg_strs, ", ") + ");");
     }
-    declarations.push_back(decl_prefix + "(" + boost::algorithm::join(arg_strs, ", ") + ");");
   }
   return declarations;
 }
@@ -100,9 +103,8 @@ void ExtensionFunctionsWhitelist::add(const std::string& json_func_sigs) {
          ++args_serialized_it) {
       args.push_back(deserialize_type(json_str(*args_serialized_it)));
     }
-    const auto it_ok = functions_.emplace(to_upper(name), ExtensionFunction(name, args, ret));
-    CHECK(it_ok.second);
+    functions_[to_upper(name)].emplace_back(name, args, ret);
   }
 }
 
-std::unordered_map<std::string, ExtensionFunction> ExtensionFunctionsWhitelist::functions_;
+std::unordered_map<std::string, std::vector<ExtensionFunction>> ExtensionFunctionsWhitelist::functions_;

@@ -36,13 +36,13 @@ class ExtensionFunctionsWhitelist {
  public:
   static void add(const std::string& json_func_sigs);
 
-  static ExtensionFunction* get(const std::string& name);
+  static std::vector<ExtensionFunction>* get(const std::string& name);
 
   static std::vector<std::string> getLLVMDeclarations();
 
  private:
   // Function overloading not supported, they're uniquely identified by name.
-  static std::unordered_map<std::string, ExtensionFunction> functions_;
+  static std::unordered_map<std::string, std::vector<ExtensionFunction>> functions_;
 };
 
 #endif  // QUERYENGINE_EXTENSIONFUNCTIONSWHITELIST_H

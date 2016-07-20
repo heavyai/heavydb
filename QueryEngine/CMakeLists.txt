@@ -11,6 +11,7 @@ set(query_engine_source_files
     Execute.cpp
     ExpressionRange.cpp
     ExpressionRewrite.cpp
+    ExtensionFunctionsBinding.cpp
     ExtensionFunctionsWhitelist.cpp
     ExtensionFunctions.ast
     GpuMemUtils.cpp
