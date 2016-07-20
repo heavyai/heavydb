@@ -157,8 +157,8 @@ extern "C" __attribute__((always_inline)) int64_t scale_decimal(const int64_t op
     return operand == null_val ? null_val : -operand;                               \
   }
 
-DEF_UMINUS_NULLABLE(int16_t, int64_t)
-DEF_UMINUS_NULLABLE(int32_t, int64_t)
+DEF_UMINUS_NULLABLE(int16_t, int16_t)
+DEF_UMINUS_NULLABLE(int32_t, int32_t)
 DEF_UMINUS_NULLABLE(int64_t, int64_t)
 DEF_UMINUS_NULLABLE(float, float)
 DEF_UMINUS_NULLABLE(double, double)

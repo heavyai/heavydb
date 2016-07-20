@@ -358,6 +358,12 @@ TEST(Select, FilterAndSimpleAggregation) {
     c("SELECT COUNT(*) FROM test WHERE u IS NOT NULL;", dt);
     c("SELECT AVG(u * f) FROM test;", dt);
     c("SELECT AVG(u * d) FROM test;", dt);
+    c("SELECT SUM(-y) FROM test;", dt);
+    c("SELECT SUM(-z) FROM test;", dt);
+    c("SELECT SUM(-t) FROM test;", dt);
+    c("SELECT SUM(-dd) FROM test;", dt);
+    c("SELECT SUM(-f) FROM test;", dt);
+    c("SELECT SUM(-d) FROM test;", dt);
 #ifdef HAVE_CALCITE
     c("SELECT COUNT(ss) FROM test;", dt);
     c("SELECT COUNT(*) FROM test WHERE null IS NULL;", dt);
