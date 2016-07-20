@@ -1600,6 +1600,7 @@ TEST(Select, RuntimeFunctions) {
     c("SELECT SUM(ABS(-dd + 1)) FROM test;", dt);
     c("SELECT SUM(ABS(-f + 1)) FROM test;", dt);
     c("SELECT SUM(ABS(-d + 1)) FROM test;", dt);
+    c("SELECT MIN(ABS(-ofd + 2)) FROM test;", dt);
   }
 }
 #endif  // HAVE_RAVM
