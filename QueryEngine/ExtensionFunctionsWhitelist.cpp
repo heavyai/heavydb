@@ -75,6 +75,15 @@ ExtArgumentType deserialize_type(const std::string& type_name) {
   return ExtArgumentType::Int16;
 }
 
+std::string drop_suffix(const std::string& str) {
+  const auto idx = str.find("__");
+  if (idx == std::string::npos) {
+    return str;
+  }
+  CHECK_GT(idx, std::string::size_type(0));
+  return str.substr(0, idx);
+}
+
 }  // namespace
 
 // Valid json_func_sigs example:
@@ -103,7 +112,7 @@ void ExtensionFunctionsWhitelist::add(const std::string& json_func_sigs) {
          ++args_serialized_it) {
       args.push_back(deserialize_type(json_str(*args_serialized_it)));
     }
-    functions_[to_upper(name)].emplace_back(name, args, ret);
+    functions_[to_upper(drop_suffix(name))].emplace_back(name, args, ret);
   }
 }
 
