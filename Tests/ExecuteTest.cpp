@@ -1644,6 +1644,14 @@ TEST(Select, RuntimeFunctions) {
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE SIGN(-ofd) = -1;", dt)));
     ASSERT_EQ(static_cast<int64_t>(g_num_rows / 2),
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE SIGN(ofd) IS NULL;", dt)));
+    ASSERT_FLOAT_EQ(static_cast<double>(2 * g_num_rows),
+                    v<double>(run_simple_agg("SELECT SUM(SIN(x) * SIN(x) + COS(x) * COS(x)) FROM test;", dt)));
+    ASSERT_FLOAT_EQ(static_cast<double>(2 * g_num_rows),
+                    v<double>(run_simple_agg("SELECT SUM(SIN(f) * SIN(f) + COS(f) * COS(f)) FROM test;", dt)));
+    ASSERT_FLOAT_EQ(static_cast<double>(2 * g_num_rows),
+                    v<double>(run_simple_agg("SELECT SUM(SIN(d) * SIN(d) + COS(d) * COS(d)) FROM test;", dt)));
+    ASSERT_FLOAT_EQ(static_cast<double>(2 * g_num_rows),
+                    v<double>(run_simple_agg("SELECT SUM(SIN(dd) * SIN(dd) + COS(dd) * COS(dd)) FROM test;", dt)));
   }
 }
 #endif  // HAVE_RAVM

@@ -8,6 +8,7 @@
 #endif  // HAVE_CALCITE
 
 #ifdef HAVE_RAVM
+#include "../QueryEngine/ExtensionFunctionsWhitelist.h"
 #include "../QueryEngine/RelAlgExecutor.h"
 #endif  // HAVE_RAVM
 
@@ -32,6 +33,9 @@ Catalog_Namespace::SessionInfo* get_session(const char* db_path) {
   Catalog_Namespace::DBMetadata db;
 #ifdef HAVE_CALCITE
   auto calcite = std::make_shared<Calcite>(CALCITEPORT, db_path);
+#ifdef HAVE_RAVM
+  ExtensionFunctionsWhitelist::add(calcite->getExtensionFunctionWhitelist());
+#endif  // HAVE_RAVM
 #endif  // HAVE_CALCITE
 #ifdef HAVE_CUDA
   bool useGpus = true;
