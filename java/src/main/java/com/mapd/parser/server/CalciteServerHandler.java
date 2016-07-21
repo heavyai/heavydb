@@ -50,7 +50,7 @@ class CalciteServerHandler implements CalciteServer.Iface {
     }
     this.extSigsJson = ExtensionFunctionSignatureParser.signaturesToJson(extSigs);
 
-    PoolableObjectFactory parserFactory = new CalciteParserFactory(dataDir, null);
+    PoolableObjectFactory parserFactory = new CalciteParserFactory(dataDir, extSigs);
 
     parserPool.setFactory(parserFactory);
   }
