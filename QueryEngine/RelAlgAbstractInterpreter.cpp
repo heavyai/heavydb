@@ -633,6 +633,18 @@ int64_t get_int_literal_field(const rapidjson::Value& obj, const char field[], c
   return lit->getVal<int64_t>();
 }
 
+#ifndef ENABLE_DAG_RAVM
+// As of now, only Join nodes specify inputs and we only support relational
+// algebra trees. For full SQL support we'll need DAG relational algebra and thus
+// forward edges, which are specified by the inputs field in non-join nodes.
+void check_no_inputs_field(const rapidjson::Value& node) {
+  CHECK(node.IsObject());
+  if (node.HasMember("inputs")) {
+    throw QueryNotSupported("This query structure is not supported yet");
+  }
+}
+#endif
+
 void check_empty_inputs_field(const rapidjson::Value& node) {
   const auto& inputs_json = field(node, "inputs");
   CHECK(inputs_json.IsArray() && !inputs_json.Size());
@@ -697,8 +709,12 @@ class RaAbstractInterp {
   }
 
   std::shared_ptr<RelProject> dispatchProject(const rapidjson::Value& proj_ra) {
+#ifdef ENABLE_DAG_RAVM
     const auto inputs = getRAInputs(proj_ra);
     CHECK_EQ(size_t(1), inputs.size());
+#else
+    check_no_inputs_field(proj_ra);
+#endif
     const auto& exprs_json = field(proj_ra, "exprs");
     CHECK(exprs_json.IsArray());
     std::vector<const RexScalar*> exprs;
@@ -706,20 +722,36 @@ class RaAbstractInterp {
       exprs.push_back(parse_scalar_expr(*exprs_json_it));
     }
     const auto& fields = field(proj_ra, "fields");
+#ifdef ENABLE_DAG_RAVM
     return std::make_shared<RelProject>(exprs, strings_from_json_array(fields), inputs.front());
+#else
+    return std::make_shared<RelProject>(exprs, strings_from_json_array(fields), prev(proj_ra));
+#endif
   }
 
   std::shared_ptr<RelFilter> dispatchFilter(const rapidjson::Value& filter_ra) {
+#ifdef ENABLE_DAG_RAVM
     const auto inputs = getRAInputs(filter_ra);
     CHECK_EQ(size_t(1), inputs.size());
+#else
+    check_no_inputs_field(filter_ra);
+#endif
     const auto id = node_id(filter_ra);
     CHECK(id);
+#ifdef ENABLE_DAG_RAVM
     return std::make_shared<RelFilter>(parse_scalar_expr(field(filter_ra, "condition")), inputs.front());
+#else
+    return std::make_shared<RelFilter>(parse_scalar_expr(field(filter_ra, "condition")), prev(filter_ra));
+#endif
   }
 
   std::shared_ptr<RelAggregate> dispatchAggregate(const rapidjson::Value& agg_ra) {
+#ifdef ENABLE_DAG_RAVM
     const auto inputs = getRAInputs(agg_ra);
     CHECK_EQ(size_t(1), inputs.size());
+#else
+    check_no_inputs_field(agg_ra);
+#endif
     const auto fields = strings_from_json_array(field(agg_ra, "fields"));
     const auto group = indices_from_json_array(field(agg_ra, "group"));
     for (size_t i = 0; i < group.size(); ++i) {
@@ -731,7 +763,11 @@ class RaAbstractInterp {
     for (auto aggs_json_arr_it = aggs_json_arr.Begin(); aggs_json_arr_it != aggs_json_arr.End(); ++aggs_json_arr_it) {
       aggs.push_back(parse_aggregate_expr(*aggs_json_arr_it));
     }
+#ifdef ENABLE_DAG_RAVM
     return std::make_shared<RelAggregate>(group.size(), aggs, fields, inputs.front());
+#else
+    return std::make_shared<RelAggregate>(group.size(), aggs, fields, prev(agg_ra));
+#endif
   }
 
   std::shared_ptr<RelJoin> dispatchJoin(const rapidjson::Value& join_ra) {
@@ -743,8 +779,12 @@ class RaAbstractInterp {
   }
 
   std::shared_ptr<RelSort> dispatchSort(const rapidjson::Value& sort_ra) {
+#ifdef ENABLE_DAG_RAVM
     const auto inputs = getRAInputs(sort_ra);
     CHECK_EQ(size_t(1), inputs.size());
+#else
+    check_no_inputs_field(sort_ra);
+#endif
     std::vector<SortField> collation;
     const auto& collation_arr = field(sort_ra, "collation");
     CHECK(collation_arr.IsArray());
@@ -760,7 +800,11 @@ class RaAbstractInterp {
     }
     const auto limit = get_int_literal_field(sort_ra, "fetch", 0);
     const auto offset = get_int_literal_field(sort_ra, "offset", 0);
+#ifdef ENABLE_DAG_RAVM
     return std::make_shared<RelSort>(collation, limit, offset, inputs.front());
+#else
+    return std::make_shared<RelSort>(collation, limit, offset, prev(sort_ra));
+#endif
   }
 
   const TableDescriptor* getTableFromScanNode(const rapidjson::Value& scan_ra) const {
