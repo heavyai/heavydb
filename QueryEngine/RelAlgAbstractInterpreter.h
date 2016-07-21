@@ -338,15 +338,14 @@ class RelAlgNode {
     return inputs_[idx].get();
   }
 
-  std::shared_ptr<const RelAlgNode> getManagedInput(const size_t idx) const {
+  std::shared_ptr<const RelAlgNode> getAndOwnInput(const size_t idx) const {
     CHECK(idx < inputs_.size());
     return inputs_[idx];
   }
 
   void addManagedInput(std::shared_ptr<const RelAlgNode> input) { inputs_.push_back(input); }
 
-  virtual void replaceManagedInput(std::shared_ptr<const RelAlgNode> old_input,
-                                   std::shared_ptr<const RelAlgNode> input) {
+  virtual void replaceInput(std::shared_ptr<const RelAlgNode> old_input, std::shared_ptr<const RelAlgNode> input) {
     for (auto& input_ptr : inputs_) {
       if (input_ptr == old_input) {
         input_ptr = input;
@@ -449,8 +448,7 @@ class RelProject : public RelAlgNode {
 
   const std::string getFieldName(const size_t i) const { return fields_[i]; }
 
-  void replaceManagedInput(std::shared_ptr<const RelAlgNode> old_input,
-                           std::shared_ptr<const RelAlgNode> input) override;
+  void replaceInput(std::shared_ptr<const RelAlgNode> old_input, std::shared_ptr<const RelAlgNode> input) override;
 
   std::string toString() const override {
     std::string result = "(RelProject<" + std::to_string(reinterpret_cast<uint64_t>(this)) + ">";
@@ -537,8 +535,7 @@ class RelJoin : public RelAlgNode {
     condition_.reset(condition);
   }
 
-  void replaceManagedInput(std::shared_ptr<const RelAlgNode> old_input,
-                           std::shared_ptr<const RelAlgNode> input) override;
+  void replaceInput(std::shared_ptr<const RelAlgNode> old_input, std::shared_ptr<const RelAlgNode> input) override;
 
   std::string toString() const override {
     std::string result = "(RelJoin<" + std::to_string(reinterpret_cast<uint64_t>(this)) + ">(";
@@ -568,8 +565,7 @@ class RelFilter : public RelAlgNode {
     filter_.reset(condition);
   }
 
-  void replaceManagedInput(std::shared_ptr<const RelAlgNode> old_input,
-                           std::shared_ptr<const RelAlgNode> input) override;
+  void replaceInput(std::shared_ptr<const RelAlgNode> old_input, std::shared_ptr<const RelAlgNode> input) override;
 
   std::string toString() const override {
     std::string result = "(RelFilter<" + std::to_string(reinterpret_cast<uint64_t>(this)) + ">(";
@@ -611,8 +607,7 @@ class RelCompound : public RelAlgNode {
     }
   }
 
-  void replaceManagedInput(std::shared_ptr<const RelAlgNode> old_input,
-                           std::shared_ptr<const RelAlgNode> input) override;
+  void replaceInput(std::shared_ptr<const RelAlgNode> old_input, std::shared_ptr<const RelAlgNode> input) override;
 
   size_t size() const { return target_exprs_.size(); }
 

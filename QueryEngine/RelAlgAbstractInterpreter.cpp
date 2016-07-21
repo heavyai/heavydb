@@ -101,9 +101,8 @@ RANodeOutput get_node_output(const RelAlgNode* ra_node) {
 
 }  // namespace
 
-void RelProject::replaceManagedInput(std::shared_ptr<const RelAlgNode> old_input,
-                                     std::shared_ptr<const RelAlgNode> input) {
-  RelAlgNode::replaceManagedInput(old_input, input);
+void RelProject::replaceInput(std::shared_ptr<const RelAlgNode> old_input, std::shared_ptr<const RelAlgNode> input) {
+  RelAlgNode::replaceInput(old_input, input);
   RexRebindInputsVisitor rebind_inputs(old_input.get(), input.get());
   for (const auto& scalar_expr : scalar_exprs_) {
     rebind_inputs.visit(scalar_expr.get());
@@ -137,25 +136,22 @@ bool RelProject::isIdentity() const {
   return true;
 }
 
-void RelJoin::replaceManagedInput(std::shared_ptr<const RelAlgNode> old_input,
-                                  std::shared_ptr<const RelAlgNode> input) {
-  RelAlgNode::replaceManagedInput(old_input, input);
+void RelJoin::replaceInput(std::shared_ptr<const RelAlgNode> old_input, std::shared_ptr<const RelAlgNode> input) {
+  RelAlgNode::replaceInput(old_input, input);
   RexRebindInputsVisitor rebind_inputs(old_input.get(), input.get());
   if (condition_) {
     rebind_inputs.visit(condition_.get());
   }
 }
 
-void RelFilter::replaceManagedInput(std::shared_ptr<const RelAlgNode> old_input,
-                                    std::shared_ptr<const RelAlgNode> input) {
-  RelAlgNode::replaceManagedInput(old_input, input);
+void RelFilter::replaceInput(std::shared_ptr<const RelAlgNode> old_input, std::shared_ptr<const RelAlgNode> input) {
+  RelAlgNode::replaceInput(old_input, input);
   RexRebindInputsVisitor rebind_inputs(old_input.get(), input.get());
   rebind_inputs.visit(filter_.get());
 }
 
-void RelCompound::replaceManagedInput(std::shared_ptr<const RelAlgNode> old_input,
-                                      std::shared_ptr<const RelAlgNode> input) {
-  RelAlgNode::replaceManagedInput(old_input, input);
+void RelCompound::replaceInput(std::shared_ptr<const RelAlgNode> old_input, std::shared_ptr<const RelAlgNode> input) {
+  RelAlgNode::replaceInput(old_input, input);
   RexRebindInputsVisitor rebind_inputs(old_input.get(), input.get());
   for (const auto& scalar_source : scalar_sources_) {
     rebind_inputs.visit(scalar_source.get());
@@ -519,7 +515,7 @@ void create_compound(std::vector<std::shared_ptr<RelAlgNode>>& nodes, const std:
   nodes[pattern.back()] = compound_node;
   auto first_node = nodes[pattern.front()];
   CHECK_EQ(size_t(1), first_node->inputCount());
-  compound_node->addManagedInput(first_node->getManagedInput(0));
+  compound_node->addManagedInput(first_node->getAndOwnInput(0));
   for (size_t i = 0; i < pattern.size() - 1; ++i) {
     nodes[pattern[i]].reset();
   }
@@ -527,7 +523,7 @@ void create_compound(std::vector<std::shared_ptr<RelAlgNode>>& nodes, const std:
     if (!node) {
       continue;
     }
-    node->replaceManagedInput(old_node, compound_node);
+    node->replaceInput(old_node, compound_node);
   }
 }
 
@@ -609,7 +605,7 @@ void eliminate_identical_copy(std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
     if (!aggregate || aggregate == sink || !(aggregate->getGroupByCount() == 1 && aggregate->getAggExprsCount() == 0)) {
       continue;
     }
-    auto project = std::dynamic_pointer_cast<const RelProject>(aggregate->getManagedInput(0));
+    auto project = std::dynamic_pointer_cast<const RelProject>(aggregate->getAndOwnInput(0));
     if (project && project->size() == aggregate->size() && project->getFields() == aggregate->getFields()) {
       CHECK_EQ(size_t(0), copies.count(aggregate));
       copies.insert(aggregate);
@@ -619,7 +615,7 @@ void eliminate_identical_copy(std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
     if (!node->inputCount()) {
       continue;
     }
-    auto last_source = node->getManagedInput(node->inputCount() - 1);
+    auto last_source = node->getAndOwnInput(node->inputCount() - 1);
     if (!copies.count(last_source)) {
       continue;
     }
@@ -628,11 +624,11 @@ void eliminate_identical_copy(std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
     if (!std::dynamic_pointer_cast<const RelJoin>(node) || aggregate->size() != 1) {
       continue;
     }
-    auto project = std::dynamic_pointer_cast<const RelProject>(aggregate->getManagedInput(0));
+    auto project = std::dynamic_pointer_cast<const RelProject>(aggregate->getAndOwnInput(0));
     CHECK(project);
-    auto new_source = project->getManagedInput(0);
+    auto new_source = project->getAndOwnInput(0);
     if (std::dynamic_pointer_cast<const RelSort>(new_source) || std::dynamic_pointer_cast<const RelScan>(new_source)) {
-      node->replaceManagedInput(last_source, new_source);
+      node->replaceInput(last_source, new_source);
     }
   }
 
@@ -656,7 +652,7 @@ void simplify_sort(std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
     const auto project = std::dynamic_pointer_cast<const RelProject>(nodes[i + 1]);
     auto second_sort = std::dynamic_pointer_cast<RelSort>(nodes[i + 2]);
     if (first_sort && second_sort && project && project->isIdentity() && *first_sort == *second_sort) {
-      second_sort->replaceManagedInput(second_sort->getManagedInput(0), first_sort->getManagedInput(0));
+      second_sort->replaceInput(second_sort->getAndOwnInput(0), first_sort->getAndOwnInput(0));
       nodes[i].reset();
       nodes[i + 1].reset();
       i += 3;
@@ -756,7 +752,7 @@ class RaAbstractInterp {
 
   std::shared_ptr<RelProject> dispatchProject(const rapidjson::Value& proj_ra) {
 #ifdef ENABLE_DAG_RAVM
-    const auto inputs = getRAInputs(proj_ra);
+    const auto inputs = getRelAlgInputs(proj_ra);
     CHECK_EQ(size_t(1), inputs.size());
 #else
     check_no_inputs_field(proj_ra);
@@ -777,7 +773,7 @@ class RaAbstractInterp {
 
   std::shared_ptr<RelFilter> dispatchFilter(const rapidjson::Value& filter_ra) {
 #ifdef ENABLE_DAG_RAVM
-    const auto inputs = getRAInputs(filter_ra);
+    const auto inputs = getRelAlgInputs(filter_ra);
     CHECK_EQ(size_t(1), inputs.size());
 #else
     check_no_inputs_field(filter_ra);
@@ -793,7 +789,7 @@ class RaAbstractInterp {
 
   std::shared_ptr<RelAggregate> dispatchAggregate(const rapidjson::Value& agg_ra) {
 #ifdef ENABLE_DAG_RAVM
-    const auto inputs = getRAInputs(agg_ra);
+    const auto inputs = getRelAlgInputs(agg_ra);
     CHECK_EQ(size_t(1), inputs.size());
 #else
     check_no_inputs_field(agg_ra);
@@ -817,7 +813,7 @@ class RaAbstractInterp {
   }
 
   std::shared_ptr<RelJoin> dispatchJoin(const rapidjson::Value& join_ra) {
-    const auto inputs = getRAInputs(join_ra);
+    const auto inputs = getRelAlgInputs(join_ra);
     CHECK_EQ(size_t(2), inputs.size());
     const auto join_type = to_join_type(json_str(field(join_ra, "joinType")));
     const auto filter_rex = parse_scalar_expr(field(join_ra, "condition"));
@@ -826,7 +822,7 @@ class RaAbstractInterp {
 
   std::shared_ptr<RelSort> dispatchSort(const rapidjson::Value& sort_ra) {
 #ifdef ENABLE_DAG_RAVM
-    const auto inputs = getRAInputs(sort_ra);
+    const auto inputs = getRelAlgInputs(sort_ra);
     CHECK_EQ(size_t(1), inputs.size());
 #else
     check_no_inputs_field(sort_ra);
@@ -867,7 +863,7 @@ class RaAbstractInterp {
     return strings_from_json_array(fields_json);
   }
 
-  std::vector<std::shared_ptr<const RelAlgNode>> getRAInputs(const rapidjson::Value& node) {
+  std::vector<std::shared_ptr<const RelAlgNode>> getRelAlgInputs(const rapidjson::Value& node) {
     if (node.HasMember("inputs")) {
       const auto str_input_ids = strings_from_json_array(field(node, "inputs"));
       std::vector<std::shared_ptr<const RelAlgNode>> ra_inputs;

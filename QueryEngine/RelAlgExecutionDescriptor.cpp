@@ -8,7 +8,7 @@ namespace {
 typedef boost::adjacency_list<boost::setS, boost::vecS, boost::bidirectionalS, const RelAlgNode*> DAG;
 typedef DAG::vertex_descriptor Vertex;
 
-std::vector<Vertex> merge_sort_w_input(const std::vector<Vertex>& vertices, const DAG& graph) {
+std::vector<Vertex> merge_sort_with_input(const std::vector<Vertex>& vertices, const DAG& graph) {
   DAG::in_edge_iterator ie_iter, ie_end;
   std::unordered_set<Vertex> inputs;
   for (const auto vert : vertices) {
@@ -75,7 +75,7 @@ std::vector<const RelAlgNode*> schedule_ra_dag(const RelAlgNode* sink) {
   std::reverse(ordering.begin(), ordering.end());
 
   std::vector<const RelAlgNode*> nodes;
-  for (auto vert : merge_sort_w_input(ordering, graph)) {
+  for (auto vert : merge_sort_with_input(ordering, graph)) {
     nodes.push_back(graph[vert]);
   }
 
