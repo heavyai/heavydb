@@ -401,13 +401,23 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(const RexFun
   if (rex_function->getName() == std::string("SIGN")) {
     return translateSign(rex_function);
   }
+  if (rex_function->getName() == std::string("CEIL") || rex_function->getName() == std::string("FLOOR")) {
+    return makeExpr<Analyzer::FunctionOperWithCustomTypeHandling>(
+        rex_function->getType(), rex_function->getName(), translateFunctionArgs(rex_function));
+  }
   if (!ExtensionFunctionsWhitelist::get(rex_function->getName())) {
     throw QueryNotSupported("Function " + rex_function->getName() + " not supported");
   }
+  return makeExpr<Analyzer::FunctionOper>(
+      rex_function->getType(), rex_function->getName(), translateFunctionArgs(rex_function));
+}
+
+std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateFunctionArgs(
+    const RexFunctionOperator* rex_function) const {
   std::vector<std::shared_ptr<Analyzer::Expr>> args;
   for (size_t i = 0; i < rex_function->size(); ++i) {
     args.push_back(translateScalarRex(rex_function->getOperand(i)));
   }
-  return makeExpr<Analyzer::FunctionOper>(rex_function->getType(), rex_function->getName(), args);
+  return args;
 }
 #endif  // HAVE_CALCITE

@@ -348,6 +348,8 @@ class Executor {
   llvm::Value* codegenUnnest(const Analyzer::UOper*, const CompilationOptions&);
   llvm::Value* codegenArrayAt(const Analyzer::BinOper*, const CompilationOptions&);
   llvm::Value* codegenFunctionOper(const Analyzer::FunctionOper*, const CompilationOptions&);
+  llvm::Value* codegenFunctionOperWithCustomTypeHandling(const Analyzer::FunctionOperWithCustomTypeHandling*,
+                                                         const CompilationOptions&);
   llvm::Value* codegenFunctionOperNullArg(const Analyzer::FunctionOper*, const std::vector<llvm::Value*>&);
   std::vector<llvm::Value*> codegenFunctionOperCastArgs(const Analyzer::FunctionOper*,
                                                         const ExtensionFunction*,

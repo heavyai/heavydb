@@ -63,6 +63,8 @@ class RelAlgTranslator {
 
   std::shared_ptr<Analyzer::Expr> translateFunction(const RexFunctionOperator*) const;
 
+  std::vector<std::shared_ptr<Analyzer::Expr>> translateFunctionArgs(const RexFunctionOperator*) const;
+
   const Catalog_Namespace::Catalog& cat_;
   const std::unordered_map<const RelAlgNode*, int> input_to_nest_level_;
   const JoinType join_type_;

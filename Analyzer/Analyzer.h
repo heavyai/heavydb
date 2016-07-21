@@ -778,6 +778,14 @@ class FunctionOper : public Expr {
   const std::vector<std::shared_ptr<Analyzer::Expr>> args_;
 };
 
+class FunctionOperWithCustomTypeHandling : public FunctionOper {
+ public:
+  FunctionOperWithCustomTypeHandling(const SQLTypeInfo& ti,
+                                     const std::string& name,
+                                     const std::vector<std::shared_ptr<Analyzer::Expr>>& args)
+      : FunctionOper(ti, name, args) {}
+};
+
 /*
  * @type TargetEntry
  * @brief Target list defines a relational projection.  It is a list of TargetEntry's.

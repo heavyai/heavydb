@@ -639,6 +639,11 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Expr* expr,
   if (in_expr) {
     return {codegen(in_expr, co)};
   }
+  auto function_oper_with_custom_type_handling_expr =
+      dynamic_cast<const Analyzer::FunctionOperWithCustomTypeHandling*>(expr);
+  if (function_oper_with_custom_type_handling_expr) {
+    return {codegenFunctionOperWithCustomTypeHandling(function_oper_with_custom_type_handling_expr, co)};
+  }
   auto function_oper_expr = dynamic_cast<const Analyzer::FunctionOper*>(expr);
   if (function_oper_expr) {
     return {codegenFunctionOper(function_oper_expr, co)};
@@ -2056,6 +2061,34 @@ llvm::Value* Executor::codegenFunctionOper(const Analyzer::FunctionOper* functio
     return ext_call_phi;
   }
   return ext_call;
+}
+
+namespace {
+
+bool call_requires_custom_type_handling(const Analyzer::FunctionOper* function_oper) {
+  const auto& ret_ti = function_oper->get_type_info();
+  if (!ret_ti.is_integer() && !ret_ti.is_fp()) {
+    return true;
+  }
+  for (size_t i = 0; i < function_oper->getArity(); ++i) {
+    const auto arg = function_oper->getArg(i);
+    const auto& arg_ti = arg->get_type_info();
+    if (!arg_ti.is_integer() && !arg_ti.is_fp()) {
+      return true;
+    }
+  }
+  return false;
+}
+
+}  // namespace
+
+llvm::Value* Executor::codegenFunctionOperWithCustomTypeHandling(
+    const Analyzer::FunctionOperWithCustomTypeHandling* function_oper,
+    const CompilationOptions& co) {
+  if (call_requires_custom_type_handling(function_oper)) {
+    throw std::runtime_error("Type combination not supported for function " + function_oper->getName());
+  }
+  return codegenFunctionOper(function_oper, co);
 }
 
 llvm::Value* Executor::codegenFunctionOperNullArg(const Analyzer::FunctionOper* function_oper,
