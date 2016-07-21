@@ -1093,6 +1093,21 @@ TEST(Select, UnsupportedCast) {
   }
 }
 
+#ifdef HAVE_CALCITE
+TEST(Select, CastFromNull) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT CAST(NULL AS SMALLINT) FROM test;", dt);
+    c("SELECT CAST(NULL AS INT) FROM test;", dt);
+    c("SELECT CAST(NULL AS BIGINT) FROM test;", dt);
+    c("SELECT CAST(NULL AS FLOAT) FROM test;", dt);
+    c("SELECT CAST(NULL AS DOUBLE) FROM test;", dt);
+    c("SELECT CAST(NULL AS DECIMAL) FROM test;", dt);
+    c("SELECT CAST(NULL AS NUMERIC) FROM test;", dt);
+  }
+}
+#endif  // HAVE_CALCITE
+
 TEST(Select, UnsupportedNodes) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();

@@ -764,7 +764,10 @@ class Executor {
         case kCHAR:
         case kTEXT:
         case kVARCHAR:
-          CHECK(constant->get_constval().stringval);  // TODO(alex): support null
+          if (!constant->get_constval().stringval) {
+            throw std::runtime_error(
+                "CHAR / VARCHAR NULL literal not supported in this context");  // TODO(alex): support null
+          }
           if (enc_type == kENCODING_DICT) {
             return getOrAddLiteral(std::make_pair(*constant->get_constval().stringval, dict_id), device_id);
           }

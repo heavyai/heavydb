@@ -176,21 +176,22 @@ RexLiteral* parse_literal(const rapidjson::Value& expr) noexcept {
   CHECK(expr.IsObject());
   const auto& literal = field(expr, "literal");
   const auto type = to_sql_type(json_str(field(expr, "type")));
+  const auto original_type = to_sql_type(json_str(field(expr, "original_type")));
   const auto scale = json_i64(field(expr, "scale"));
   const auto precision = json_i64(field(expr, "precision"));
   const auto type_scale = json_i64(field(expr, "type_scale"));
   const auto type_precision = json_i64(field(expr, "type_precision"));
   switch (type) {
     case kDECIMAL:
-      return new RexLiteral(json_i64(literal), type, scale, precision, type_scale, type_precision);
+      return new RexLiteral(json_i64(literal), type, original_type, scale, precision, type_scale, type_precision);
     case kDOUBLE:
-      return new RexLiteral(json_double(literal), type, scale, precision, type_scale, type_precision);
+      return new RexLiteral(json_double(literal), type, original_type, scale, precision, type_scale, type_precision);
     case kTEXT:
-      return new RexLiteral(json_str(literal), type, scale, precision, type_scale, type_precision);
+      return new RexLiteral(json_str(literal), type, original_type, scale, precision, type_scale, type_precision);
     case kBOOLEAN:
-      return new RexLiteral(json_bool(literal), type, scale, precision, type_scale, type_precision);
+      return new RexLiteral(json_bool(literal), type, original_type, scale, precision, type_scale, type_precision);
     case kNULLT:
-      return new RexLiteral();
+      return new RexLiteral(original_type);
     default:
       CHECK(false);
   }

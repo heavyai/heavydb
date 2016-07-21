@@ -44,7 +44,7 @@ SQLTypeInfo get_ti(const SQLTypes sql_type, const int type_precision, const int 
   return type_ti;
 }
 
-std::tuple<const rapidjson::Value*, SQLTypeInfo, SQLTypeInfo> parse_literal(const rapidjson::Value& expr) {
+std::tuple<const rapidjson::Value*, SQLTypeInfo, SQLTypeInfo, SQLTypes> parse_literal(const rapidjson::Value& expr) {
   CHECK(expr.IsObject());
   auto val_it = expr.FindMember("literal");
   CHECK(val_it != expr.MemberEnd());
@@ -52,6 +52,10 @@ std::tuple<const rapidjson::Value*, SQLTypeInfo, SQLTypeInfo> parse_literal(cons
   CHECK(type_it != expr.MemberEnd());
   CHECK(type_it->value.IsString());
   const auto type_name = std::string(type_it->value.GetString());
+  auto original_type_it = expr.FindMember("original_type");
+  CHECK(original_type_it != expr.MemberEnd());
+  CHECK(original_type_it->value.IsString());
+  const auto original_type_name = std::string(original_type_it->value.GetString());
   auto scale_it = expr.FindMember("scale");
   CHECK(scale_it != expr.MemberEnd());
   CHECK(scale_it->value.IsInt());
@@ -72,7 +76,8 @@ std::tuple<const rapidjson::Value*, SQLTypeInfo, SQLTypeInfo> parse_literal(cons
   SQLTypeInfo ti(sql_type, 0, 0, false);
   ti.set_scale(scale);
   ti.set_precision(precision);
-  return std::make_tuple(&(val_it->value), ti, get_ti(sql_type, type_precision, type_scale));
+  return std::make_tuple(
+      &(val_it->value), ti, get_ti(sql_type, type_precision, type_scale), to_sql_type(original_type_name));
 }
 
 std::shared_ptr<Analyzer::Expr> set_transient_dict(const std::shared_ptr<Analyzer::Expr> expr) {
@@ -406,7 +411,7 @@ class CalciteAdapter {
         return lit_ti != target_ti ? lit_expr->add_cast(target_ti) : lit_expr;
       }
       case kNULLT: {
-        return makeExpr<Analyzer::Constant>(kNULLT, true);
+        return makeExpr<Analyzer::Constant>(std::get<3>(parsed_lit), true, Datum{0});
       }
       default: { LOG(FATAL) << "Unexpected literal type " << lit_ti.get_type_name(); }
     }

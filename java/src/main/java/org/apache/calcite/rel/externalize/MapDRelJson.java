@@ -300,6 +300,7 @@ public class MapDRelJson {
         }
       }
       map.put("type", literal.getTypeName().name());
+      map.put("original_type", literal.getType().getSqlTypeName().toString());
       final Object value = literal.getValue();
       if (value instanceof BigDecimal) {
         map.put("scale", ((BigDecimal) value).scale());

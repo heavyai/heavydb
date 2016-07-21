@@ -136,7 +136,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLiteral(const RexLite
       return lit_ti != target_ti ? lit_expr->add_cast(target_ti) : lit_expr;
     }
     case kNULLT: {
-      return makeExpr<Analyzer::Constant>(kNULLT, true);
+      return makeExpr<Analyzer::Constant>(rex_literal->getOriginalType(), true, Datum{0});
     }
     default: { LOG(FATAL) << "Unexpected literal type " << lit_ti.get_type_name(); }
   }
