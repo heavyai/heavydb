@@ -1667,6 +1667,26 @@ TEST(Select, RuntimeFunctions) {
                     v<double>(run_simple_agg("SELECT SUM(SIN(d) * SIN(d) + COS(d) * COS(d)) FROM test;", dt)));
     ASSERT_FLOAT_EQ(static_cast<double>(2 * g_num_rows),
                     v<double>(run_simple_agg("SELECT SUM(SIN(dd) * SIN(dd) + COS(dd) * COS(dd)) FROM test;", dt)));
+    ASSERT_FLOAT_EQ(static_cast<double>(2),
+                    v<double>(run_simple_agg("SELECT FLOOR(CAST(2.3 AS double)) FROM test LIMIT 1;", dt)));
+    ASSERT_FLOAT_EQ(static_cast<float>(2),
+                    v<float>(run_simple_agg("SELECT FLOOR(CAST(2.3 AS float)) FROM test LIMIT 1;", dt)));
+    ASSERT_EQ(static_cast<int64_t>(2),
+              v<int64_t>(run_simple_agg("SELECT FLOOR(CAST(2.3 AS BIGINT)) FROM test LIMIT 1;", dt)));
+    ASSERT_EQ(static_cast<int64_t>(2),
+              v<int64_t>(run_simple_agg("SELECT FLOOR(CAST(2.3 AS SMALLINT)) FROM test LIMIT 1;", dt)));
+    ASSERT_EQ(static_cast<int64_t>(2),
+              v<int64_t>(run_simple_agg("SELECT FLOOR(CAST(2.3 AS INT)) FROM test LIMIT 1;", dt)));
+    ASSERT_FLOAT_EQ(static_cast<double>(3),
+                    v<double>(run_simple_agg("SELECT CEIL(CAST(2.3 AS double)) FROM test LIMIT 1;", dt)));
+    ASSERT_FLOAT_EQ(static_cast<float>(3),
+                    v<float>(run_simple_agg("SELECT CEIL(CAST(2.3 AS float)) FROM test LIMIT 1;", dt)));
+    ASSERT_EQ(static_cast<int64_t>(2),
+              v<int64_t>(run_simple_agg("SELECT CEIL(CAST(2.3 AS BIGINT)) FROM test LIMIT 1;", dt)));
+    ASSERT_EQ(static_cast<int64_t>(2),
+              v<int64_t>(run_simple_agg("SELECT CEIL(CAST(2.3 AS SMALLINT)) FROM test LIMIT 1;", dt)));
+    ASSERT_EQ(static_cast<int64_t>(2),
+              v<int64_t>(run_simple_agg("SELECT CEIL(CAST(2.3 AS INT)) FROM test LIMIT 1;", dt)));
   }
 }
 #endif  // HAVE_RAVM

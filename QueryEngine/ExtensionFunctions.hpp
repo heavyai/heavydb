@@ -30,6 +30,31 @@ double Atan2(const double y, const double x) {
 }
 
 EXTENSION_NOINLINE
+double Ceil(double x) {
+  return ceil(x);
+}
+
+EXTENSION_NOINLINE
+float Ceil__(float x) {
+  return ceil(x);
+}
+
+EXTENSION_NOINLINE
+int16_t Ceil__1(int16_t x) {
+  return x;
+}
+
+EXTENSION_NOINLINE
+int32_t Ceil__2(int32_t x) {
+  return x;
+}
+
+EXTENSION_NOINLINE
+int64_t Ceil__3(int64_t x) {
+  return x;
+}
+
+EXTENSION_NOINLINE
 double Cos(const double x) {
   return cos(x);
 }
@@ -47,6 +72,31 @@ double degrees(double x) {
 EXTENSION_NOINLINE
 double Exp(double x) {
   return exp(x);
+}
+
+EXTENSION_NOINLINE
+double Floor(double x) {
+  return floor(x);
+}
+
+EXTENSION_NOINLINE
+float Floor__(float x) {
+  return floor(x);
+}
+
+EXTENSION_NOINLINE
+int16_t Floor__1(int16_t x) {
+  return x;
+}
+
+EXTENSION_NOINLINE
+int32_t Floor__2(int32_t x) {
+  return x;
+}
+
+EXTENSION_NOINLINE
+int64_t Floor__3(int64_t x) {
+  return x;
 }
 
 EXTENSION_NOINLINE
