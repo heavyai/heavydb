@@ -1,5 +1,18 @@
 # MapD Platform
-The latest version of the MapD Platform is 1.2.1.
+The latest version of the MapD Platform is 1.2.2.
+
+#### **1.2.2** - Released July 25, 2016
+
+#####New
+- Added math functions (`ACOS`,`ASIN`,`ATAN`,`ATAN2`,`COS`,`COT`,`SIN`,`TAN`,`ABS`,`CEIL`,`DEGREES`,`EXP`,`FLOOR`,`LN`,`LOG`,`MOD`,`PI`,`POWER`,`RADIANS`,`ROUND`,`SIGN`)
+- Improved performance for top k IN subqueries
+- Added partial support for NOT IN subqueries
+- Added automatic reprojection of lat/long to mercator for mapping display
+
+#####Fixed
+- Fixed an issue for CAST from a literal decimal
+- Fixed CAST of NULL to a numeric type
+- Fixed unary minus operator for nullable inputs
 
 #### **1.2.1** - Released July 18, 2016
 
