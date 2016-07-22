@@ -499,6 +499,20 @@ DEF_SKIP_AGG(agg_min_float)
 #undef DEF_SKIP_AGG_ADD
 #undef DEF_SKIP_AGG
 
+extern "C" __attribute__((always_inline)) int64_t decimal_floor(const int64_t x, const int64_t scale) {
+  if (x >= 0) {
+    return x / scale * scale;
+  }
+  if (!(x % scale)) {
+    return x;
+  }
+  return x / scale * scale - scale;
+}
+
+extern "C" __attribute__((always_inline)) int64_t decimal_ceil(const int64_t x, const int64_t scale) {
+  return decimal_floor(x, scale) + (x % scale ? scale : 0);
+}
+
 // Shared memory aggregators. Should never be called,
 // real implementations are in cuda_mapd_rt.cu.
 #define DEF_SHARED_AGG_RET_STUBS(base_agg_func)                                                                     \

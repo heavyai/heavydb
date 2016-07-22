@@ -1700,6 +1700,10 @@ TEST(Select, RuntimeFunctions) {
               v<int64_t>(run_simple_agg("SELECT FLOOR(CAST(2.3 AS SMALLINT)) FROM test LIMIT 1;", dt)));
     ASSERT_EQ(static_cast<int64_t>(2),
               v<int64_t>(run_simple_agg("SELECT FLOOR(CAST(2.3 AS INT)) FROM test LIMIT 1;", dt)));
+    ASSERT_FLOAT_EQ(static_cast<double>(2), v<double>(run_simple_agg("SELECT FLOOR(2.3) FROM test LIMIT 1;", dt)));
+    ASSERT_FLOAT_EQ(static_cast<double>(2), v<double>(run_simple_agg("SELECT FLOOR(2.0) FROM test LIMIT 1;", dt)));
+    ASSERT_FLOAT_EQ(static_cast<double>(-3), v<double>(run_simple_agg("SELECT FLOOR(-2.3) FROM test LIMIT 1;", dt)));
+    ASSERT_FLOAT_EQ(static_cast<double>(-2), v<double>(run_simple_agg("SELECT FLOOR(-2.0) FROM test LIMIT 1;", dt)));
     ASSERT_FLOAT_EQ(static_cast<double>(3),
                     v<double>(run_simple_agg("SELECT CEIL(CAST(2.3 AS double)) FROM test LIMIT 1;", dt)));
     ASSERT_FLOAT_EQ(static_cast<float>(3),
@@ -1710,6 +1714,10 @@ TEST(Select, RuntimeFunctions) {
               v<int64_t>(run_simple_agg("SELECT CEIL(CAST(2.3 AS SMALLINT)) FROM test LIMIT 1;", dt)));
     ASSERT_EQ(static_cast<int64_t>(2),
               v<int64_t>(run_simple_agg("SELECT CEIL(CAST(2.3 AS INT)) FROM test LIMIT 1;", dt)));
+    ASSERT_FLOAT_EQ(static_cast<double>(3), v<double>(run_simple_agg("SELECT CEIL(2.3) FROM test LIMIT 1;", dt)));
+    ASSERT_FLOAT_EQ(static_cast<double>(2), v<double>(run_simple_agg("SELECT CEIL(2.0) FROM test LIMIT 1;", dt)));
+    ASSERT_FLOAT_EQ(static_cast<double>(-2), v<double>(run_simple_agg("SELECT CEIL(-2.3) FROM test LIMIT 1;", dt)));
+    ASSERT_FLOAT_EQ(static_cast<double>(-2), v<double>(run_simple_agg("SELECT CEIL(-2.0) FROM test LIMIT 1;", dt)));
   }
 }
 #endif  // HAVE_RAVM

@@ -2100,6 +2100,25 @@ llvm::Value* Executor::codegenFunctionOperWithCustomTypeHandling(
     const Analyzer::FunctionOperWithCustomTypeHandling* function_oper,
     const CompilationOptions& co) {
   if (call_requires_custom_type_handling(function_oper)) {
+    if (function_oper->getName() == "FLOOR" || function_oper->getName() == "CEIL") {
+      CHECK_EQ(size_t(1), function_oper->getArity());
+      const auto arg = function_oper->getArg(0);
+      const auto& arg_ti = arg->get_type_info();
+      CHECK(arg_ti.is_decimal());
+      const auto arg_lvs = codegen(arg, true, co);
+      CHECK_EQ(size_t(1), arg_lvs.size());
+      const auto arg_lv = arg_lvs.front();
+      CHECK(arg_lv->getType()->isIntegerTy(64));
+      const auto bbs = beginArgsNullcheck(function_oper, {arg_lvs});
+      const std::string func_name = (function_oper->getName() == "FLOOR") ? "decimal_floor" : "decimal_ceil";
+      const auto covar_result_lv = cgen_state_->emitCall(func_name, {arg_lv, ll_int(exp_to_scale(arg_ti.get_scale()))});
+      const auto ret_ti = function_oper->get_type_info();
+      CHECK(ret_ti.is_decimal());
+      CHECK_EQ(0, ret_ti.get_scale());
+      const auto result_lv =
+          cgen_state_->ir_builder_.CreateSDiv(covar_result_lv, ll_int(exp_to_scale(arg_ti.get_scale())));
+      return endArgsNullcheck(bbs, result_lv, function_oper);
+    }
     throw std::runtime_error("Type combination not supported for function " + function_oper->getName());
   }
   return codegenFunctionOper(function_oper, co);
