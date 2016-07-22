@@ -11,27 +11,6 @@
 
 namespace {
 
-SQLTypeInfo build_adjusted_type_info(const SQLTypes sql_type, const int type_scale, const int type_precision) {
-  SQLTypeInfo type_ti(sql_type, 0, 0, false);
-  type_ti.set_scale(type_scale);
-  type_ti.set_precision(type_precision);
-  if (type_ti.is_number() && !type_scale) {
-    switch (type_precision) {
-      case 5:
-        return SQLTypeInfo(kSMALLINT, false);
-      case 10:
-        return SQLTypeInfo(kINT, false);
-      case 19:
-        return SQLTypeInfo(kBIGINT, false);
-      default:
-        throw std::runtime_error("Unsupported type & precision combination: " + type_ti.get_type_name() +
-                                 ", precision: " + std::to_string(type_precision) + ", scale: " +
-                                 std::to_string(type_scale));
-    }
-  }
-  return type_ti;
-}
-
 SQLTypeInfo build_type_info(const SQLTypes sql_type, const int scale, const int precision) {
   SQLTypeInfo ti(sql_type, 0, 0, false);
   ti.set_scale(scale);
@@ -111,7 +90,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateAggregateRex(
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLiteral(const RexLiteral* rex_literal) {
   const auto lit_ti = build_type_info(rex_literal->getType(), rex_literal->getScale(), rex_literal->getPrecision());
   const auto target_ti =
-      build_adjusted_type_info(rex_literal->getType(), rex_literal->getTypeScale(), rex_literal->getTypePrecision());
+      build_type_info(rex_literal->getOriginalType(), rex_literal->getTypeScale(), rex_literal->getTypePrecision());
   switch (rex_literal->getType()) {
     case kDECIMAL: {
       const auto val = rex_literal->getVal<int64_t>();

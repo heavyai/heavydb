@@ -1093,6 +1093,19 @@ TEST(Select, UnsupportedCast) {
   }
 }
 
+TEST(Select, CastFromLiteral) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT CAST(2.3 AS SMALLINT) FROM test;", dt);
+    c("SELECT CAST(2.3 AS INT) FROM test;", dt);
+    c("SELECT CAST(2.3 AS BIGINT) FROM test;", dt);
+    c("SELECT CAST(2.3 AS FLOAT) FROM test;", dt);
+    c("SELECT CAST(2.3 AS DOUBLE) FROM test;", dt);
+    c("SELECT CAST(2.3 AS DECIMAL(2, 1)) FROM test;", dt);
+    c("SELECT CAST(2.3 AS NUMERIC(2, 1)) FROM test;", dt);
+  }
+}
+
 #ifdef HAVE_CALCITE
 TEST(Select, CastFromNull) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {

@@ -23,28 +23,7 @@ ssize_t get_agg_operand_idx(const rapidjson::Value& expr) {
   return agg_operands.Empty() ? -1 : agg_operands[0].GetInt();
 }
 
-SQLTypeInfo get_ti(const SQLTypes sql_type, const int type_precision, const int type_scale) {
-  SQLTypeInfo type_ti(sql_type, 0, 0, false);
-  type_ti.set_scale(type_scale);
-  type_ti.set_precision(type_precision);
-  if (type_ti.is_number() && !type_scale) {
-    switch (type_precision) {
-      case 5:
-        return SQLTypeInfo(kSMALLINT, false);
-      case 10:
-        return SQLTypeInfo(kINT, false);
-      case 19:
-        return SQLTypeInfo(kBIGINT, false);
-      default:
-        throw std::runtime_error("Unsupported type & precision combination: " + type_ti.get_type_name() +
-                                 ", precision: " + std::to_string(type_precision) + ", scale: " +
-                                 std::to_string(type_scale));
-    }
-  }
-  return type_ti;
-}
-
-std::tuple<const rapidjson::Value*, SQLTypeInfo, SQLTypeInfo, SQLTypes> parse_literal(const rapidjson::Value& expr) {
+std::tuple<const rapidjson::Value*, SQLTypeInfo, SQLTypeInfo> parse_literal(const rapidjson::Value& expr) {
   CHECK(expr.IsObject());
   auto val_it = expr.FindMember("literal");
   CHECK(val_it != expr.MemberEnd());
@@ -72,12 +51,9 @@ std::tuple<const rapidjson::Value*, SQLTypeInfo, SQLTypeInfo, SQLTypes> parse_li
   CHECK(type_precision_it != expr.MemberEnd());
   CHECK(type_precision_it->value.IsInt());
   const int type_precision = type_precision_it->value.GetInt();
-  const auto sql_type = to_sql_type(type_name);
-  SQLTypeInfo ti(sql_type, 0, 0, false);
-  ti.set_scale(scale);
-  ti.set_precision(precision);
-  return std::make_tuple(
-      &(val_it->value), ti, get_ti(sql_type, type_precision, type_scale), to_sql_type(original_type_name));
+  SQLTypeInfo ti(to_sql_type(type_name), precision, scale, false);
+  SQLTypeInfo target_ti(to_sql_type(original_type_name), type_precision, type_scale, false);
+  return std::make_tuple(&(val_it->value), ti, target_ti);
 }
 
 std::shared_ptr<Analyzer::Expr> set_transient_dict(const std::shared_ptr<Analyzer::Expr> expr) {
@@ -411,7 +387,8 @@ class CalciteAdapter {
         return lit_ti != target_ti ? lit_expr->add_cast(target_ti) : lit_expr;
       }
       case kNULLT: {
-        return makeExpr<Analyzer::Constant>(std::get<3>(parsed_lit), true, Datum{0});
+        const auto& target_ti = std::get<2>(parsed_lit);
+        return makeExpr<Analyzer::Constant>(target_ti.get_type(), true, Datum{0});
       }
       default: { LOG(FATAL) << "Unexpected literal type " << lit_ti.get_type_name(); }
     }
