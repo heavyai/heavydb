@@ -347,7 +347,20 @@ class Executor {
   llvm::Value* codegenIsNullNumber(llvm::Value*, const SQLTypeInfo&);
   llvm::Value* codegenUnnest(const Analyzer::UOper*, const CompilationOptions&);
   llvm::Value* codegenArrayAt(const Analyzer::BinOper*, const CompilationOptions&);
+
   llvm::Value* codegenFunctionOper(const Analyzer::FunctionOper*, const CompilationOptions&);
+
+  struct ArgNullcheckBBs {
+    llvm::BasicBlock* args_null_bb;
+    llvm::BasicBlock* args_notnull_bb;
+    llvm::BasicBlock* orig_bb;
+  };
+
+  ArgNullcheckBBs beginArgsNullcheck(const Analyzer::FunctionOper* function_oper,
+                                     const std::vector<llvm::Value*>& orig_arg_lvs);
+
+  llvm::Value* endArgsNullcheck(const ArgNullcheckBBs&, llvm::Value*, const Analyzer::FunctionOper*);
+
   llvm::Value* codegenFunctionOperWithCustomTypeHandling(const Analyzer::FunctionOperWithCustomTypeHandling*,
                                                          const CompilationOptions&);
   llvm::Value* codegenFunctionOperNullArg(const Analyzer::FunctionOper*, const std::vector<llvm::Value*>&);

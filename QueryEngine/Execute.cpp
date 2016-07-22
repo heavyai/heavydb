@@ -2036,6 +2036,15 @@ llvm::Value* Executor::codegenFunctionOper(const Analyzer::FunctionOper* functio
     CHECK_EQ(size_t(1), arg_lvs.size());
     orig_arg_lvs.push_back(arg_lvs.front());
   }
+  const auto bbs = beginArgsNullcheck(function_oper, orig_arg_lvs);
+  CHECK_EQ(orig_arg_lvs.size(), function_oper->getArity());
+  const auto args = codegenFunctionOperCastArgs(function_oper, &ext_func_sig, orig_arg_lvs);
+  auto ext_call = cgen_state_->emitExternalCall(ext_func_sig.getName(), ret_ty, args);
+  return endArgsNullcheck(bbs, ext_call, function_oper);
+}
+
+Executor::ArgNullcheckBBs Executor::beginArgsNullcheck(const Analyzer::FunctionOper* function_oper,
+                                                       const std::vector<llvm::Value*>& orig_arg_lvs) {
   llvm::BasicBlock* args_null_bb{nullptr};
   llvm::BasicBlock* args_notnull_bb{nullptr};
   llvm::BasicBlock* orig_bb = cgen_state_->ir_builder_.GetInsertBlock();
@@ -2047,21 +2056,25 @@ llvm::Value* Executor::codegenFunctionOper(const Analyzer::FunctionOper* functio
     cgen_state_->ir_builder_.CreateCondBr(args_notnull_lv, args_notnull_bb, args_null_bb);
     cgen_state_->ir_builder_.SetInsertPoint(args_notnull_bb);
   }
-  CHECK_EQ(orig_arg_lvs.size(), function_oper->getArity());
-  const auto args = codegenFunctionOperCastArgs(function_oper, &ext_func_sig, orig_arg_lvs);
-  auto ext_call = cgen_state_->emitExternalCall(ext_func_sig.getName(), ret_ty, args);
-  if (args_null_bb) {
-    CHECK(args_null_bb);
-    cgen_state_->ir_builder_.CreateBr(args_null_bb);
-    cgen_state_->ir_builder_.SetInsertPoint(args_null_bb);
-    auto ext_call_phi = cgen_state_->ir_builder_.CreatePHI(ret_ty, 2);
-    ext_call_phi->addIncoming(ext_call, args_notnull_bb);
+  return {args_null_bb, args_notnull_bb, orig_bb};
+}
+
+llvm::Value* Executor::endArgsNullcheck(const ArgNullcheckBBs& bbs,
+                                        llvm::Value* fn_ret_lv,
+                                        const Analyzer::FunctionOper* function_oper) {
+  if (bbs.args_null_bb) {
+    CHECK(bbs.args_notnull_bb);
+    cgen_state_->ir_builder_.CreateBr(bbs.args_null_bb);
+    cgen_state_->ir_builder_.SetInsertPoint(bbs.args_null_bb);
+    auto ext_call_phi = cgen_state_->ir_builder_.CreatePHI(fn_ret_lv->getType(), 2);
+    ext_call_phi->addIncoming(fn_ret_lv, bbs.args_notnull_bb);
+    const auto& ret_ti = function_oper->get_type_info();
     const auto null_lv = ret_ti.is_fp() ? static_cast<llvm::Value*>(inlineFpNull(ret_ti))
                                         : static_cast<llvm::Value*>(inlineIntNull(ret_ti));
-    ext_call_phi->addIncoming(null_lv, orig_bb);
+    ext_call_phi->addIncoming(null_lv, bbs.orig_bb);
     return ext_call_phi;
   }
-  return ext_call;
+  return fn_ret_lv;
 }
 
 namespace {
