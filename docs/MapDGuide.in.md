@@ -678,24 +678,102 @@ SELECT [ALL|DISTINCT] <expr> [AS [<alias>]], ... FROM <table> [,<table>]
   [ORDER BY <expr>, ...]
   [LIMIT {<number>|ALL} [OFFSET <number> [ROWS]]];
 ```
-It supports all the common SELECT features except for the following temporary limitations:
 
-* Only equi join between two tables is currently supported.
-* Subqueries are not supported.
+## Logical Operator Support
+```
+AND
+IS FALSE
+IS NOT FALSE
+IS TRUE
+IS NOT TRUE
+NOT
+OR
+```
 
-## Function Support
+## Comparison Operator Support
+```
+=
+<>
+>
+>=
+<
+<=
+BETWEEN
+NOT BETWEEN
+EXISTS
+IN
+NOT IN
+IS NULL
+IS NOT NULL
+```
+
+## Mathematical Function Support
+```
+ABS
+CEIL
+DEGREES
+EXP
+FLOOR
+LN
+LOG
+MOD
+PI
+POWER
+RADIANS
+ROUND
+SIGN
+```
+
+## Trignometric Function Support
+```
+ACOS
+ASIN
+ATAN
+ATAN2
+COS
+COT
+SIN
+TAN
+```
+
+## String Function Support
+```
+CHAR_LENGTH
+LENGTH
+```
+
+## Pattern Matching Support
+```
+LIKE
+NOT LIKE
+ILIKE
+```
+
+## Date/Time Function Support
+```
+DATE_TRUNC
+EXTRACT
+NOW
+```
+
+## Aggregate Function Support
 ```
 AVG
 COUNT
 MIN
 MAX
 SUM
-NOW
-EXTRACT
-DATE_TRUNC
+```
+
+## Conditional Expression Support
+```
+CASE
+COALESCE
+```
+
+## Type Cast Support
+```
 CAST
-LENGTH
-CHAR_LENGTH
 ```
 
 ## Array Support
