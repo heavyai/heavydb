@@ -90,7 +90,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateAggregateRex(
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLiteral(const RexLiteral* rex_literal) {
   const auto lit_ti = build_type_info(rex_literal->getType(), rex_literal->getScale(), rex_literal->getPrecision());
   const auto target_ti =
-      build_type_info(rex_literal->getOriginalType(), rex_literal->getTypeScale(), rex_literal->getTypePrecision());
+      build_type_info(rex_literal->getTargetType(), rex_literal->getTypeScale(), rex_literal->getTypePrecision());
   switch (rex_literal->getType()) {
     case kDECIMAL: {
       const auto val = rex_literal->getVal<int64_t>();
@@ -115,7 +115,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLiteral(const RexLite
       return lit_ti != target_ti ? lit_expr->add_cast(target_ti) : lit_expr;
     }
     case kNULLT: {
-      return makeExpr<Analyzer::Constant>(rex_literal->getOriginalType(), true, Datum{0});
+      return makeExpr<Analyzer::Constant>(rex_literal->getTargetType(), true, Datum{0});
     }
     default: { LOG(FATAL) << "Unexpected literal type " << lit_ti.get_type_name(); }
   }

@@ -31,10 +31,10 @@ std::tuple<const rapidjson::Value*, SQLTypeInfo, SQLTypeInfo> parse_literal(cons
   CHECK(type_it != expr.MemberEnd());
   CHECK(type_it->value.IsString());
   const auto type_name = std::string(type_it->value.GetString());
-  auto original_type_it = expr.FindMember("original_type");
-  CHECK(original_type_it != expr.MemberEnd());
-  CHECK(original_type_it->value.IsString());
-  const auto original_type_name = std::string(original_type_it->value.GetString());
+  auto target_type_it = expr.FindMember("target_type");
+  CHECK(target_type_it != expr.MemberEnd());
+  CHECK(target_type_it->value.IsString());
+  const auto target_type_name = std::string(target_type_it->value.GetString());
   auto scale_it = expr.FindMember("scale");
   CHECK(scale_it != expr.MemberEnd());
   CHECK(scale_it->value.IsInt());
@@ -52,7 +52,7 @@ std::tuple<const rapidjson::Value*, SQLTypeInfo, SQLTypeInfo> parse_literal(cons
   CHECK(type_precision_it->value.IsInt());
   const int type_precision = type_precision_it->value.GetInt();
   SQLTypeInfo ti(to_sql_type(type_name), precision, scale, false);
-  SQLTypeInfo target_ti(to_sql_type(original_type_name), type_precision, type_scale, false);
+  SQLTypeInfo target_ti(to_sql_type(target_type_name), type_precision, type_scale, false);
   return std::make_tuple(&(val_it->value), ti, target_ti);
 }
 

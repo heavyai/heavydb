@@ -37,14 +37,14 @@ class RexLiteral : public RexScalar {
  public:
   RexLiteral(const int64_t val,
              const SQLTypes type,
-             const SQLTypes original_type,
+             const SQLTypes target_type,
              const unsigned scale,
              const unsigned precision,
              const unsigned type_scale,
              const unsigned type_precision)
       : literal_(val),
         type_(type),
-        original_type_(original_type),
+        target_type_(target_type),
         scale_(scale),
         precision_(precision),
         type_scale_(type_scale),
@@ -54,14 +54,14 @@ class RexLiteral : public RexScalar {
 
   RexLiteral(const double val,
              const SQLTypes type,
-             const SQLTypes original_type,
+             const SQLTypes target_type,
              const unsigned scale,
              const unsigned precision,
              const unsigned type_scale,
              const unsigned type_precision)
       : literal_(val),
         type_(type),
-        original_type_(original_type),
+        target_type_(target_type),
         scale_(scale),
         precision_(precision),
         type_scale_(type_scale),
@@ -71,14 +71,14 @@ class RexLiteral : public RexScalar {
 
   RexLiteral(const std::string& val,
              const SQLTypes type,
-             const SQLTypes original_type,
+             const SQLTypes target_type,
              const unsigned scale,
              const unsigned precision,
              const unsigned type_scale,
              const unsigned type_precision)
       : literal_(val),
         type_(type),
-        original_type_(original_type),
+        target_type_(target_type),
         scale_(scale),
         precision_(precision),
         type_scale_(type_scale),
@@ -88,14 +88,14 @@ class RexLiteral : public RexScalar {
 
   RexLiteral(const bool val,
              const SQLTypes type,
-             const SQLTypes original_type,
+             const SQLTypes target_type,
              const unsigned scale,
              const unsigned precision,
              const unsigned type_scale,
              const unsigned type_precision)
       : literal_(val),
         type_(type),
-        original_type_(original_type),
+        target_type_(target_type),
         scale_(scale),
         precision_(precision),
         type_scale_(type_scale),
@@ -103,10 +103,10 @@ class RexLiteral : public RexScalar {
     CHECK_EQ(kBOOLEAN, type);
   }
 
-  RexLiteral(const SQLTypes original_type)
+  RexLiteral(const SQLTypes target_type)
       : literal_(nullptr),
         type_(kNULLT),
-        original_type_(original_type),
+        target_type_(target_type),
         scale_(0),
         precision_(0),
         type_scale_(0),
@@ -121,7 +121,7 @@ class RexLiteral : public RexScalar {
 
   SQLTypes getType() const { return type_; }
 
-  SQLTypes getOriginalType() const { return original_type_; }
+  SQLTypes getTargetType() const { return target_type_; }
 
   unsigned getScale() const { return scale_; }
 
@@ -136,7 +136,7 @@ class RexLiteral : public RexScalar {
  private:
   const boost::variant<int64_t, double, std::string, bool, void*> literal_;
   const SQLTypes type_;
-  const SQLTypes original_type_;
+  const SQLTypes target_type_;
   const unsigned scale_;
   const unsigned precision_;
   const unsigned type_scale_;
