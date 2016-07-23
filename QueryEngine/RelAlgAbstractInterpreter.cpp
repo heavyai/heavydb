@@ -647,9 +647,9 @@ void eliminate_identical_copy(std::vector<std::shared_ptr<RelAlgNode>>& nodes) n
   }
 
   decltype(copies)().swap(copies);
-  for (auto& node : nodes) {
-    if (node.unique()) {
-      node.reset();
+  for (auto nodeIt = nodes.rbegin(); nodeIt != nodes.rend(); ++nodeIt) {
+    if (nodeIt->unique()) {
+      nodeIt->reset();
     }
   }
 }
