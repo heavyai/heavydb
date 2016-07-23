@@ -541,30 +541,101 @@ void create_compound(std::vector<std::shared_ptr<RelAlgNode>>& nodes, const std:
   }
 }
 
+class RANodeIterator : public std::vector<std::shared_ptr<RelAlgNode>>::const_iterator {
+  typedef std::shared_ptr<RelAlgNode> ElementType;
+  typedef std::vector<ElementType>::const_iterator Super;
+  typedef std::vector<ElementType> Container;
+
+ public:
+  enum class AdvancingMode { DUChain, InOrder };
+
+  explicit RANodeIterator(const Container& nodes) : Super(nodes.begin()), owner_(nodes) {
+    nodeCount_ = 0;
+    for (const auto& node : owner_) {
+      if (node) {
+        ++nodeCount_;
+      }
+    }
+  }
+
+  explicit operator size_t() { return std::distance(owner_.begin(), *static_cast<Super*>(this)); }
+
+  RANodeIterator operator++() = delete;
+
+  void advance(AdvancingMode mode) {
+    Super& super = *this;
+    switch (mode) {
+      case AdvancingMode::DUChain:
+        for (Super nodeIt = std::next(super); nodeIt != owner_.end(); ++nodeIt) {
+          if (!*nodeIt) {
+            continue;
+          }
+          for (size_t i = 0; i < (*nodeIt)->inputCount(); ++i) {
+            if ((*super) == (*nodeIt)->getAndOwnInput(i)) {
+              super = nodeIt;
+              return;
+            }
+          }
+        }
+        break;
+      case AdvancingMode::InOrder:
+        for (size_t i = 0; i != owner_.size(); ++i) {
+          if (!vistied_.count(i)) {
+            super = owner_.begin();
+            std::advance(super, i);
+            return;
+          }
+        }
+        break;
+      default:
+        CHECK(false);
+    }
+    super = owner_.end();
+  }
+
+  bool allVisited() { return vistied_.size() == nodeCount_; }
+
+  const ElementType& operator*() {
+    vistied_.insert(size_t(*this));
+    Super& super = *this;
+    return *super;
+  }
+
+  const ElementType* operator->() { return &(operator*()); }
+
+ private:
+  const Container& owner_;
+  size_t nodeCount_;
+  std::unordered_set<size_t> vistied_;
+};
+
 void coalesce_nodes(std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept {
   enum class CoalesceState { Initial, Filter, FirstProject, Aggregate };
   std::vector<size_t> crt_pattern;
   CoalesceState crt_state{CoalesceState::Initial};
-  // TODO(miyu): fix FA to transit along du-chain instead of adjacency in vector
-  for (size_t i = 0; i < nodes.size();) {
-    const auto ra_node = nodes[i];
+
+  for (RANodeIterator nodeIt(nodes); !nodeIt.allVisited();) {
+    const auto ra_node = nodeIt != nodes.end() ? *nodeIt : nullptr;
     switch (crt_state) {
       case CoalesceState::Initial: {
         if (std::dynamic_pointer_cast<const RelFilter>(ra_node)) {
-          crt_pattern.push_back(i);
+          crt_pattern.push_back(size_t(nodeIt));
           crt_state = CoalesceState::Filter;
+          nodeIt.advance(RANodeIterator::AdvancingMode::DUChain);
         } else if (std::dynamic_pointer_cast<const RelProject>(ra_node)) {
-          crt_pattern.push_back(i);
+          crt_pattern.push_back(size_t(nodeIt));
           crt_state = CoalesceState::FirstProject;
+          nodeIt.advance(RANodeIterator::AdvancingMode::DUChain);
+        } else {
+          nodeIt.advance(RANodeIterator::AdvancingMode::InOrder);
         }
-        ++i;
         break;
       }
       case CoalesceState::Filter: {
         if (std::dynamic_pointer_cast<const RelProject>(ra_node)) {
-          crt_pattern.push_back(i);
+          crt_pattern.push_back(size_t(nodeIt));
           crt_state = CoalesceState::FirstProject;
-          ++i;
+          nodeIt.advance(RANodeIterator::AdvancingMode::DUChain);
         } else {
           crt_state = CoalesceState::Initial;
           decltype(crt_pattern)().swap(crt_pattern);
@@ -573,9 +644,9 @@ void coalesce_nodes(std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept {
       }
       case CoalesceState::FirstProject: {
         if (std::dynamic_pointer_cast<const RelAggregate>(ra_node)) {
-          crt_pattern.push_back(i);
+          crt_pattern.push_back(size_t(nodeIt));
           crt_state = CoalesceState::Aggregate;
-          ++i;
+          nodeIt.advance(RANodeIterator::AdvancingMode::DUChain);
         } else {
           crt_state = CoalesceState::Initial;
           if (crt_pattern.size() >= 2) {
@@ -588,8 +659,8 @@ void coalesce_nodes(std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept {
       case CoalesceState::Aggregate: {
         if (std::dynamic_pointer_cast<const RelProject>(ra_node) &&
             std::static_pointer_cast<RelProject>(ra_node)->isSimple()) {
-          crt_pattern.push_back(i);
-          ++i;
+          crt_pattern.push_back(size_t(nodeIt));
+          nodeIt.advance(RANodeIterator::AdvancingMode::InOrder);
         }
         crt_state = CoalesceState::Initial;
         CHECK_GE(crt_pattern.size(), size_t(2));
