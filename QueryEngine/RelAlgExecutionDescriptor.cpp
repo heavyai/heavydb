@@ -95,19 +95,9 @@ std::vector<RaExecutionDesc> get_execution_descriptors(const RelAlgNode* ra_node
     if (dynamic_cast<const RelScan*>(node) || dynamic_cast<const RelJoin*>(node)) {
       continue;
     }
-    CHECK_GT(node->inputCount(), size_t(0));
+
     CHECK_EQ(size_t(1), node->inputCount());
-    std::vector<ForLoop> for_loops;
-    const auto in_node = node->getInput(0);
-    if (dynamic_cast<const RelJoin*>(in_node)) {
-      CHECK_EQ(size_t(2), in_node->inputCount());
-      for_loops.emplace_back(in_node->getInput(0));
-      for_loops.emplace_back(in_node->getInput(1));
-      descs.emplace_back(for_loops, node);
-      continue;
-    }
-    for_loops.emplace_back(in_node);
-    descs.emplace_back(for_loops, node);
+    descs.emplace_back(node);
   }
 
   return descs;

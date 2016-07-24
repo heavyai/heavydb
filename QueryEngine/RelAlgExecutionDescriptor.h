@@ -6,14 +6,6 @@
 
 class ResultRows;
 
-class ForLoop {
- public:
-  ForLoop(const RelAlgNode* node) : node_(node) {}
-
- private:
-  const RelAlgNode* node_;
-};
-
 class ExecutionResult {
  public:
   ExecutionResult(const ResultRows& rows, const std::vector<TargetMetaInfo>& targets_meta)
@@ -32,8 +24,8 @@ class ExecutionResult {
 
 class RaExecutionDesc {
  public:
-  RaExecutionDesc(const std::vector<ForLoop>& for_loops, const RelAlgNode* body)
-      : for_loops_(for_loops), body_(body), result_({{}, {}, nullptr, nullptr, {}, ExecutorDeviceType::CPU}, {}) {}
+  RaExecutionDesc(const RelAlgNode* body)
+      : body_(body), result_({{}, {}, nullptr, nullptr, {}, ExecutorDeviceType::CPU}, {}) {}
 
   const ExecutionResult& getResult() const { return result_; }
 
@@ -45,7 +37,6 @@ class RaExecutionDesc {
   const RelAlgNode* getBody() const { return body_; }
 
  private:
-  const std::vector<ForLoop> for_loops_;
   const RelAlgNode* body_;
   ExecutionResult result_;
 };
