@@ -223,7 +223,11 @@ func uploadHandler(rw http.ResponseWriter, r *http.Request) {
 	case "image":
 		uploadDir = dataDir + "/mapd_images/"
 	default:
-		sessionId := filepath.Base(filepath.Clean(r.Header.Get("sessionid")))
+		sid := r.Header.Get("sessionid")
+		if len(r.FormValue("sessionid")) > 0 {
+			sid = r.FormValue("sessionid")
+		}
+		sessionId := filepath.Base(filepath.Clean(sid))
 		uploadDir = dataDir + "/mapd_import/" + sessionId + "/"
 	}
 
