@@ -430,38 +430,9 @@ std::vector<const Rex*> reproject_targets(const RelProject* simple_project,
   return result;
 }
 
-bool is_safe_to_coalesce(const std::vector<std::shared_ptr<RelAlgNode>>& nodes,
-                         const std::vector<size_t>& pattern) noexcept {
-  std::unordered_set<const RelAlgNode*> coalesced_internal_nodes;
-  const auto last_idx = pattern.back();
-  const auto last_node = nodes[last_idx];
-  for (const auto node_index : pattern) {
-    if (last_idx == node_index) {
-      continue;
-    }
-    CHECK(nodes[node_index]);
-    coalesced_internal_nodes.insert(nodes[node_index].get());
-  }
-  for (const auto node : nodes) {
-    if (nullptr == node || last_node == node || std::dynamic_pointer_cast<const RelScan>(node) ||
-        coalesced_internal_nodes.count(node.get())) {
-      continue;
-    }
-    for (size_t i = 0; i < node->inputCount(); ++i) {
-      if (coalesced_internal_nodes.count(node->getInput(i))) {
-        return false;
-      }
-    }
-  }
-  return true;
-}
-
 void create_compound(std::vector<std::shared_ptr<RelAlgNode>>& nodes, const std::vector<size_t>& pattern) noexcept {
   CHECK_GE(pattern.size(), size_t(2));
   CHECK_LE(pattern.size(), size_t(4));
-  if (!is_safe_to_coalesce(nodes, pattern)) {
-    return;
-  }
 
   std::unique_ptr<const RexScalar> filter_rex;
   std::vector<std::unique_ptr<const RexScalar>> scalar_sources;
@@ -549,14 +520,18 @@ class RANodeIterator : public std::vector<std::shared_ptr<RelAlgNode>>::const_it
  public:
   enum class AdvancingMode { DUChain, InOrder };
 
-  explicit RANodeIterator(const Container& nodes) : Super(nodes.begin()), owner_(nodes) {
-    nodeCount_ = 0;
-    for (const auto& node : owner_) {
-      if (node) {
-        ++nodeCount_;
-      }
-    }
-  }
+  explicit RANodeIterator(const Container& nodes)
+      : Super(nodes.begin()),
+        owner_(nodes),
+        nodeCount_([&nodes]() -> size_t {
+          size_t non_zero_count = 0;
+          for (const auto& node : nodes) {
+            if (node) {
+              ++non_zero_count;
+            }
+          }
+          return non_zero_count;
+        }()) {}
 
   explicit operator size_t() { return std::distance(owner_.begin(), *static_cast<Super*>(this)); }
 
@@ -565,19 +540,27 @@ class RANodeIterator : public std::vector<std::shared_ptr<RelAlgNode>>::const_it
   void advance(AdvancingMode mode) {
     Super& super = *this;
     switch (mode) {
-      case AdvancingMode::DUChain:
+      case AdvancingMode::DUChain: {
+        size_t use_count = 0;
+        Super only_use = owner_.end();
         for (Super nodeIt = std::next(super); nodeIt != owner_.end(); ++nodeIt) {
           if (!*nodeIt) {
             continue;
           }
           for (size_t i = 0; i < (*nodeIt)->inputCount(); ++i) {
             if ((*super) == (*nodeIt)->getAndOwnInput(i)) {
-              super = nodeIt;
-              return;
+              ++use_count;
+              if (1 == use_count) {
+                only_use = nodeIt;
+              } else {
+                super = owner_.end();
+                return;
+              }
             }
           }
         }
-        break;
+        super = only_use;
+      } break;
       case AdvancingMode::InOrder:
         for (size_t i = 0; i != owner_.size(); ++i) {
           if (!vistied_.count(i)) {
@@ -586,11 +569,11 @@ class RANodeIterator : public std::vector<std::shared_ptr<RelAlgNode>>::const_it
             return;
           }
         }
+        super = owner_.end();
         break;
       default:
         CHECK(false);
     }
-    super = owner_.end();
   }
 
   bool allVisited() { return vistied_.size() == nodeCount_; }
@@ -605,7 +588,7 @@ class RANodeIterator : public std::vector<std::shared_ptr<RelAlgNode>>::const_it
 
  private:
   const Container& owner_;
-  size_t nodeCount_;
+  const size_t nodeCount_;
   std::unordered_set<size_t> vistied_;
 };
 
