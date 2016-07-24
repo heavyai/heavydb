@@ -464,8 +464,11 @@ func main() {
 		mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
 	}
 
-	lmux := handlers.LoggingHandler(alog, mux)
-	cmux := cors.Default().Handler(lmux)
+	c := cors.New(cors.Options{
+		AllowedHeaders: []string{"Accept", "Cache-Control", "Content-Type", "sessionid", "X-Requested-With"},
+	})
+	cmux := c.Handler(mux)
+	cmux = handlers.LoggingHandler(alog, cmux)
 	cmux = thriftTimingHandler(cmux)
 	if compress {
 		cmux = handlers.CompressHandler(cmux)
