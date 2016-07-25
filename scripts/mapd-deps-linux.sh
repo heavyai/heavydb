@@ -136,6 +136,14 @@ popd
 #make install
 #popd
 
+download_make_install https://curl.haxx.se/download/curl-7.50.0.tar.bz2
+
+download http://www.cryptopp.com/cryptopp563.zip
+unzip -a -d cryptopp563 cryptopp563
+pushd cryptopp563
+PREFIX=$PREFIX make all shared
+PREFIX=$PREFIX make install
+
 # thrift
 download_make_install https://github.com/libevent/libevent/releases/download/release-2.0.22-stable/libevent-2.0.22-stable.tar.gz
 JAVA_PREFIX=$PREFIX/lib download_make_install http://apache.claz.org/thrift/0.9.3/thrift-0.9.3.tar.gz "" "--with-lua=no --with-python=no --with-php=no --with-boost-libdir=$PREFIX/lib"

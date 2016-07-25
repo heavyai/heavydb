@@ -16,6 +16,7 @@ brew install cmake
 brew install gflags
 brew install glog
 brew install thrift
+brew install cryptopp
 
 # install CUDA (even if you don't have an nvidia GPU - some headers req'd for compilation)
 brew tap Caskroom/cask

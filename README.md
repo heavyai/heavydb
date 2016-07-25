@@ -37,6 +37,8 @@ MapD has the following dependencies:
 - [GLEW](http://glew.sourceforge.net/)
 - [GLFW 3.1.2+](http://www.glfw.org/)
 - [libpng](http://libpng.org/pub/png/libpng.html)
+- [libcurl](https://curl.haxx.se/)
+- [crypto++](https://www.cryptopp.com/)
 
 //TODO(@vastcharade): add backend rendering deps
 //TODO(@dwayneberry: add Calcite deps
@@ -89,7 +91,9 @@ Most build dependencies are available via APT. Thrift is the one exception and m
                     libevent-dev \
                     libglew-dev \
                     libglfw3-dev \
-                    libpng12-dev
+                    libpng12-dev \
+                    libcurl4-openssl-dev \
+                    libcrypto++-dev
 
     apt-get build-dep thrift-compiler
     wget http://apache.claz.org/thrift/0.9.2/thrift-0.9.2.tar.gz
