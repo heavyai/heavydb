@@ -6,7 +6,7 @@ bin/initdb -f Tests/tmp
 cd -
 
 result="success"
-for test in PlanTest ExecuteTest StorageTest
+for test in PlanTest ExecuteTest StorageTest ResultSetTest
 do
 	cd build/Tests && eval ./$test --gtest_output=xml:../
 	if [ $? != 0 ]
