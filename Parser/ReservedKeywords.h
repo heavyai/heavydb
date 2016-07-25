@@ -5,7 +5,7 @@
 #include <string>
 
 // Keywords from https://calcite.apache.org/docs/reference.html#keywords
-std::set<std::string> reserved_keywords{
+static std::set<std::string> reserved_keywords{
     "ROWID",  // MapD
     "ABS",
     "ALL",

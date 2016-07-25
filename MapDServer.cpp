@@ -25,6 +25,7 @@
 #include "Import/Importer.h"
 #include "Parser/parser.h"
 #include "Parser/ParserWrapper.h"
+#include "Parser/ReservedKeywords.h"
 #include "Planner/Planner.h"
 #include "QueryEngine/CalciteAdapter.h"
 #include "QueryEngine/Execute.h"
@@ -35,6 +36,7 @@
 #include "Shared/measure.h"
 #include "Shared/scope.h"
 
+#include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/replace.hpp>
 #include <boost/program_options.hpp>
 #include <boost/filesystem.hpp>
@@ -880,6 +882,8 @@ class MapDHandler : virtual public MapDIf {
       col.col_type.type = type_to_thrift(*ti);
       col.col_type.encoding = encoding_to_thrift(*ti);
       col.col_name = headers[col_idx];
+      col.is_reserved_keyword =
+          reserved_keywords.find(boost::to_upper_copy<std::string>(col.col_name)) != reserved_keywords.end();
       _return.row_set.row_desc[col_idx] = col;
     }
 

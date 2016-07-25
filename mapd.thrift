@@ -55,7 +55,8 @@ struct TTypeInfo {
 
 struct TColumnType {
   1: string col_name,
-  2: TTypeInfo col_type
+  2: TTypeInfo col_type,
+  3: bool is_reserved_keyword
 }
 
 struct TRow {
