@@ -36,16 +36,16 @@ size_t get_slot_count(const std::vector<TargetInfo>& target_infos) {
   return count;
 }
 
-class NumbersPatternGenerator {
+class NumberGenerator {
  public:
   virtual int64_t getNextValue() = 0;
 
   virtual void reset() = 0;
 };
 
-class EvenNumbersGenerator : public NumbersPatternGenerator {
+class EvenNumberGenerator : public NumberGenerator {
  public:
-  EvenNumbersGenerator() : crt_(0) {}
+  EvenNumberGenerator() : crt_(0) {}
 
   int64_t getNextValue() override {
     const auto crt = crt_;
@@ -59,9 +59,9 @@ class EvenNumbersGenerator : public NumbersPatternGenerator {
   int64_t crt_;
 };
 
-class ReverseEvenNumbersGenerator : public NumbersPatternGenerator {
+class ReverseOddOrEvenNumberGenerator : public NumberGenerator {
  public:
-  ReverseEvenNumbersGenerator(const int64_t init) : crt_(init), init_(init) {}
+  ReverseOddOrEvenNumberGenerator(const int64_t init) : crt_(init), init_(init) {}
 
   int64_t getNextValue() override {
     const auto crt = crt_;
@@ -252,7 +252,7 @@ void write_key(const int64_t k, int8_t* ptr, const int8_t key_bytes) {
 void fill_storage_buffer_perfect_hash_colwise(int8_t* buff,
                                               const std::vector<TargetInfo>& target_infos,
                                               const QueryMemoryDescriptor& query_mem_desc,
-                                              NumbersPatternGenerator& generator) {
+                                              NumberGenerator& generator) {
   const auto key_component_count = get_key_count_for_descriptor(query_mem_desc);
   CHECK(query_mem_desc.output_columnar);
   // initialize the key buffer(s)
@@ -310,7 +310,7 @@ void fill_storage_buffer_perfect_hash_colwise(int8_t* buff,
 void fill_storage_buffer_perfect_hash_rowwise(int8_t* buff,
                                               const std::vector<TargetInfo>& target_infos,
                                               const QueryMemoryDescriptor& query_mem_desc,
-                                              NumbersPatternGenerator& generator) {
+                                              NumberGenerator& generator) {
   const auto key_component_count = get_key_count_for_descriptor(query_mem_desc);
   CHECK(!query_mem_desc.output_columnar);
   auto key_buff = buff;
@@ -337,7 +337,7 @@ void fill_storage_buffer_perfect_hash_rowwise(int8_t* buff,
 void fill_storage_buffer_baseline_colwise(int8_t* buff,
                                           const std::vector<TargetInfo>& target_infos,
                                           const QueryMemoryDescriptor& query_mem_desc,
-                                          NumbersPatternGenerator& generator,
+                                          NumberGenerator& generator,
                                           const size_t step) {
   CHECK(query_mem_desc.output_columnar);
   const auto key_component_count = get_key_count_for_descriptor(query_mem_desc);
@@ -369,7 +369,7 @@ void fill_storage_buffer_baseline_colwise(int8_t* buff,
 void fill_storage_buffer_baseline_rowwise(int8_t* buff,
                                           const std::vector<TargetInfo>& target_infos,
                                           const QueryMemoryDescriptor& query_mem_desc,
-                                          NumbersPatternGenerator& generator,
+                                          NumberGenerator& generator,
                                           const size_t step) {
   const auto key_component_count = get_key_count_for_descriptor(query_mem_desc);
   const auto i64_buff = reinterpret_cast<int64_t*>(buff);
@@ -396,7 +396,7 @@ void fill_storage_buffer_baseline_rowwise(int8_t* buff,
 void fill_storage_buffer(int8_t* buff,
                          const std::vector<TargetInfo>& target_infos,
                          const QueryMemoryDescriptor& query_mem_desc,
-                         NumbersPatternGenerator& generator,
+                         NumberGenerator& generator,
                          const size_t step) {
   switch (query_mem_desc.hash_type) {
     case GroupByColRangeType::OneColKnownRange:
@@ -507,7 +507,7 @@ void test_iterate(const std::vector<TargetInfo>& target_infos, const QueryMemory
   SQLTypeInfo double_ti(kDOUBLE, false);
   ResultSet result_set(target_infos, ExecutorDeviceType::CPU, query_mem_desc);
   const auto storage = result_set.allocateStorage();
-  EvenNumbersGenerator generator;
+  EvenNumberGenerator generator;
   fill_storage_buffer(storage->getUnderlyingBuffer(), target_infos, query_mem_desc, generator, 2);
   int64_t ref_val{0};
   while (true) {
@@ -578,8 +578,8 @@ std::vector<OneRow> get_rows_sorted_by_col(const ResultSet& rs, const size_t col
 
 void test_reduce(const std::vector<TargetInfo>& target_infos,
                  const QueryMemoryDescriptor& query_mem_desc,
-                 NumbersPatternGenerator& generator1,
-                 NumbersPatternGenerator& generator2,
+                 NumberGenerator& generator1,
+                 NumberGenerator& generator2,
                  const int step) {
   SQLTypeInfo double_ti(kDOUBLE, false);
   const ResultSetStorage* storage1{nullptr};
@@ -782,16 +782,16 @@ TEST(Iterate, BaselineHashColumnar) {
 TEST(Reduce, PerfectHashOneCol) {
   const auto target_infos = generate_test_target_infos();
   const auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 8);
-  EvenNumbersGenerator generator1;
-  EvenNumbersGenerator generator2;
+  EvenNumberGenerator generator1;
+  EvenNumberGenerator generator2;
   test_reduce(target_infos, query_mem_desc, generator1, generator2, 2);
 }
 
 TEST(Reduce, PerfectHashOneCol32) {
   const auto target_infos = generate_test_target_infos();
   const auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 4);
-  EvenNumbersGenerator generator1;
-  EvenNumbersGenerator generator2;
+  EvenNumberGenerator generator1;
+  EvenNumberGenerator generator2;
   test_reduce(target_infos, query_mem_desc, generator1, generator2, 2);
 }
 
@@ -799,8 +799,8 @@ TEST(Reduce, PerfectHashOneColColumnar) {
   const auto target_infos = generate_test_target_infos();
   auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 8);
   query_mem_desc.output_columnar = true;
-  EvenNumbersGenerator generator1;
-  EvenNumbersGenerator generator2;
+  EvenNumberGenerator generator1;
+  EvenNumberGenerator generator2;
   test_reduce(target_infos, query_mem_desc, generator1, generator2, 2);
 }
 
@@ -808,8 +808,8 @@ TEST(Reduce, PerfectHashOneColColumnar32) {
   const auto target_infos = generate_test_target_infos();
   auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 4);
   query_mem_desc.output_columnar = true;
-  EvenNumbersGenerator generator1;
-  EvenNumbersGenerator generator2;
+  EvenNumberGenerator generator1;
+  EvenNumberGenerator generator2;
   test_reduce(target_infos, query_mem_desc, generator1, generator2, 2);
 }
 
@@ -818,8 +818,8 @@ TEST(Reduce, PerfectHashOneColKeyless) {
   auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 8);
   query_mem_desc.keyless_hash = true;
   query_mem_desc.idx_target_as_key = 2;
-  EvenNumbersGenerator generator1;
-  EvenNumbersGenerator generator2;
+  EvenNumberGenerator generator1;
+  EvenNumberGenerator generator2;
   test_reduce(target_infos, query_mem_desc, generator1, generator2, 2);
 }
 
@@ -828,8 +828,8 @@ TEST(Reduce, PerfectHashOneColKeyless32) {
   auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 4);
   query_mem_desc.keyless_hash = true;
   query_mem_desc.idx_target_as_key = 2;
-  EvenNumbersGenerator generator1;
-  EvenNumbersGenerator generator2;
+  EvenNumberGenerator generator1;
+  EvenNumberGenerator generator2;
   test_reduce(target_infos, query_mem_desc, generator1, generator2, 2);
 }
 
@@ -839,8 +839,8 @@ TEST(Reduce, PerfectHashOneColColumnarKeyless) {
   query_mem_desc.output_columnar = true;
   query_mem_desc.keyless_hash = true;
   query_mem_desc.idx_target_as_key = 2;
-  EvenNumbersGenerator generator1;
-  EvenNumbersGenerator generator2;
+  EvenNumberGenerator generator1;
+  EvenNumberGenerator generator2;
   test_reduce(target_infos, query_mem_desc, generator1, generator2, 2);
 }
 
@@ -850,24 +850,24 @@ TEST(Reduce, PerfectHashOneColColumnarKeyless32) {
   query_mem_desc.output_columnar = true;
   query_mem_desc.keyless_hash = true;
   query_mem_desc.idx_target_as_key = 2;
-  EvenNumbersGenerator generator1;
-  EvenNumbersGenerator generator2;
+  EvenNumberGenerator generator1;
+  EvenNumberGenerator generator2;
   test_reduce(target_infos, query_mem_desc, generator1, generator2, 2);
 }
 
 TEST(Reduce, PerfectHashTwoCol) {
   const auto target_infos = generate_test_target_infos();
   const auto query_mem_desc = perfect_hash_two_col_desc(target_infos, 8);
-  EvenNumbersGenerator generator1;
-  EvenNumbersGenerator generator2;
+  EvenNumberGenerator generator1;
+  EvenNumberGenerator generator2;
   test_reduce(target_infos, query_mem_desc, generator1, generator2, 2);
 }
 
 TEST(Reduce, PerfectHashTwoCol32) {
   const auto target_infos = generate_test_target_infos();
   const auto query_mem_desc = perfect_hash_two_col_desc(target_infos, 4);
-  EvenNumbersGenerator generator1;
-  EvenNumbersGenerator generator2;
+  EvenNumberGenerator generator1;
+  EvenNumberGenerator generator2;
   test_reduce(target_infos, query_mem_desc, generator1, generator2, 2);
 }
 
@@ -875,8 +875,8 @@ TEST(Reduce, PerfectHashTwoColColumnar) {
   const auto target_infos = generate_test_target_infos();
   auto query_mem_desc = perfect_hash_two_col_desc(target_infos, 8);
   query_mem_desc.output_columnar = true;
-  EvenNumbersGenerator generator1;
-  EvenNumbersGenerator generator2;
+  EvenNumberGenerator generator1;
+  EvenNumberGenerator generator2;
   test_reduce(target_infos, query_mem_desc, generator1, generator2, 2);
 }
 
@@ -884,8 +884,8 @@ TEST(Reduce, PerfectHashTwoColColumnar32) {
   const auto target_infos = generate_test_target_infos();
   auto query_mem_desc = perfect_hash_two_col_desc(target_infos, 4);
   query_mem_desc.output_columnar = true;
-  EvenNumbersGenerator generator1;
-  EvenNumbersGenerator generator2;
+  EvenNumberGenerator generator1;
+  EvenNumberGenerator generator2;
   test_reduce(target_infos, query_mem_desc, generator1, generator2, 2);
 }
 
@@ -894,8 +894,8 @@ TEST(Reduce, PerfectHashTwoColKeyless) {
   auto query_mem_desc = perfect_hash_two_col_desc(target_infos, 8);
   query_mem_desc.keyless_hash = true;
   query_mem_desc.idx_target_as_key = 2;
-  EvenNumbersGenerator generator1;
-  EvenNumbersGenerator generator2;
+  EvenNumberGenerator generator1;
+  EvenNumberGenerator generator2;
   test_reduce(target_infos, query_mem_desc, generator1, generator2, 2);
 }
 
@@ -904,8 +904,8 @@ TEST(Reduce, PerfectHashTwoColKeyless32) {
   auto query_mem_desc = perfect_hash_two_col_desc(target_infos, 4);
   query_mem_desc.keyless_hash = true;
   query_mem_desc.idx_target_as_key = 2;
-  EvenNumbersGenerator generator1;
-  EvenNumbersGenerator generator2;
+  EvenNumberGenerator generator1;
+  EvenNumberGenerator generator2;
   test_reduce(target_infos, query_mem_desc, generator1, generator2, 2);
 }
 
@@ -915,8 +915,8 @@ TEST(Reduce, PerfectHashTwoColColumnarKeyless) {
   query_mem_desc.output_columnar = true;
   query_mem_desc.keyless_hash = true;
   query_mem_desc.idx_target_as_key = 2;
-  EvenNumbersGenerator generator1;
-  EvenNumbersGenerator generator2;
+  EvenNumberGenerator generator1;
+  EvenNumberGenerator generator2;
   test_reduce(target_infos, query_mem_desc, generator1, generator2, 2);
 }
 
@@ -926,16 +926,16 @@ TEST(Reduce, PerfectHashTwoColColumnarKeyless32) {
   query_mem_desc.output_columnar = true;
   query_mem_desc.keyless_hash = true;
   query_mem_desc.idx_target_as_key = 2;
-  EvenNumbersGenerator generator1;
-  EvenNumbersGenerator generator2;
+  EvenNumberGenerator generator1;
+  EvenNumberGenerator generator2;
   test_reduce(target_infos, query_mem_desc, generator1, generator2, 2);
 }
 
 TEST(Reduce, BaselineHash) {
   const auto target_infos = generate_test_target_infos();
   const auto query_mem_desc = baseline_hash_two_col_desc(target_infos, 8);
-  EvenNumbersGenerator generator1;
-  ReverseEvenNumbersGenerator generator2(2 * query_mem_desc.entry_count - 1);
+  EvenNumberGenerator generator1;
+  ReverseOddOrEvenNumberGenerator generator2(2 * query_mem_desc.entry_count - 1);
   test_reduce(target_infos, query_mem_desc, generator1, generator2, 1);
 }
 
@@ -943,8 +943,8 @@ TEST(Reduce, BaselineHashColumnar) {
   const auto target_infos = generate_test_target_infos();
   auto query_mem_desc = baseline_hash_two_col_desc(target_infos, 8);
   query_mem_desc.output_columnar = true;
-  EvenNumbersGenerator generator1;
-  ReverseEvenNumbersGenerator generator2(2 * query_mem_desc.entry_count - 1);
+  EvenNumberGenerator generator1;
+  ReverseOddOrEvenNumberGenerator generator2(2 * query_mem_desc.entry_count - 1);
   test_reduce(target_infos, query_mem_desc, generator1, generator2, 1);
 }
 
