@@ -33,6 +33,7 @@ set(TEST_ARGS "--gtest_output=xml:../")
 add_test(PlanTest PlanTest ${TEST_ARGS})
 add_test(UtilTest UtilTest ${TEST_ARGS})
 add_test(ExecuteTest ExecuteTest ${TEST_ARGS})
+add_test(ResultSetTest ResultSetTest ${TEST_ARGS})
 add_test(RunQueryLoop RunQueryLoop ${TEST_ARGS})
 add_test(StringDictionaryTest StringDictionaryTest ${TEST_ARGS})
 add_test(StorageTest StorageTest ${TEST_ARGS})
@@ -41,11 +42,11 @@ add_test(StoragePerfTest StoragePerfTest ${TEST_ARGS})
 add_custom_target(sanity_tests
     COMMAND mkdir -p ${TEST_BASE_PATH}
     COMMAND initdb -f ${TEST_BASE_PATH}
-    COMMAND ${CMAKE_CTEST_COMMAND} --verbose --tests-regex "\"(PlanTest|ExecuteTest|StorageTest)\""
-    DEPENDS PlanTest ExecuteTest StorageTest)
+    COMMAND ${CMAKE_CTEST_COMMAND} --verbose --tests-regex "\"(PlanTest|ExecuteTest|ResultSetTest|StorageTest)\""
+    DEPENDS PlanTest ExecuteTest ResultSetTest StorageTest)
 
 add_custom_target(all_tests
     COMMAND mkdir -p ${TEST_BASE_PATH}
     COMMAND initdb -f ${TEST_BASE_PATH}
     COMMAND ${CMAKE_CTEST_COMMAND} --verbose
-    DEPENDS PlanTest UtilTest ExecuteTest RunQueryLoop StringDictionaryTest StorageTest StoragePerfTest)
+    DEPENDS PlanTest UtilTest ExecuteTest ResultSetTest RunQueryLoop StringDictionaryTest StorageTest StoragePerfTest)
