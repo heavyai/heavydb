@@ -682,10 +682,6 @@ SELECT [ALL|DISTINCT] <expr> [AS [<alias>]], ... FROM <table> [,<table>]
 ## Logical Operator Support
 ```
 AND
-IS FALSE
-IS NOT FALSE
-IS TRUE
-IS NOT TRUE
 NOT
 OR
 ```
