@@ -38,6 +38,10 @@ void* checked_mmap(const int fd, const size_t sz) {
   return ptr;
 }
 
+void checked_munmap(void* addr, size_t length) {
+  CHECK_EQ(0, munmap(addr, length));
+}
+
 const uint32_t round_up_p2(const size_t num) {
   uint32_t in = num;
   in--;
@@ -124,8 +128,8 @@ StringDictionary::StringDictionary(const std::string& folder, const bool recover
 StringDictionary::~StringDictionary() noexcept {
   if (payload_map_) {
     CHECK(offset_map_);
-    munmap(payload_map_, payload_file_size_);
-    munmap(offset_map_, offset_file_size_);
+    checked_munmap(payload_map_, payload_file_size_);
+    checked_munmap(offset_map_, offset_file_size_);
     CHECK_GE(payload_fd_, 0);
     close(payload_fd_);
     CHECK_GE(offset_fd_, 0);
@@ -346,7 +350,7 @@ void StringDictionary::appendToStorage(const std::string& str) noexcept {
   CHECK_GE(offset_fd_, 0);
   // write the payload
   if (payload_file_off_ + str.size() > payload_file_size_) {
-    munmap(payload_map_, payload_file_size_);
+    checked_munmap(payload_map_, payload_file_size_);
     addPayloadCapacity();
     CHECK(payload_file_off_ + str.size() <= payload_file_size_);
     payload_map_ = reinterpret_cast<char*>(checked_mmap(payload_fd_, payload_file_size_));
@@ -357,7 +361,7 @@ void StringDictionary::appendToStorage(const std::string& str) noexcept {
   StringIdxEntry str_meta{static_cast<uint64_t>(payload_file_off_), str.size()};
   payload_file_off_ += str.size();
   if (offset_file_off + sizeof(str_meta) >= offset_file_size_) {
-    munmap(offset_map_, offset_file_size_);
+    checked_munmap(offset_map_, offset_file_size_);
     addOffsetCapacity();
     CHECK(offset_file_off + sizeof(str_meta) <= offset_file_size_);
     offset_map_ = reinterpret_cast<StringIdxEntry*>(checked_mmap(offset_fd_, offset_file_size_));
