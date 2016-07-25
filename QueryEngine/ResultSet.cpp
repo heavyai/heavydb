@@ -47,13 +47,15 @@ void ResultSet::dropFirstN(const size_t n) {
 
 ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
                      const ExecutorDeviceType device_type,
-                     const QueryMemoryDescriptor& query_mem_desc)
+                     const QueryMemoryDescriptor& query_mem_desc,
+                     const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner)
     : targets_(targets),
       device_type_(device_type),
       query_mem_desc_(query_mem_desc),
       crt_row_buff_idx_(0),
       drop_first_(0),
-      keep_first_(0) {
+      keep_first_(0),
+      row_set_mem_owner_(row_set_mem_owner) {
 }
 
 ResultSet::ResultSet() : device_type_(ExecutorDeviceType::CPU), query_mem_desc_{}, crt_row_buff_idx_(0) {

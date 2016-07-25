@@ -75,7 +75,8 @@ class ResultSet {
  public:
   ResultSet(const std::vector<TargetInfo>& targets,
             const ExecutorDeviceType device_type,
-            const QueryMemoryDescriptor& query_mem_desc);
+            const QueryMemoryDescriptor& query_mem_desc,
+            const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner);
 
   // Empty result set constructor
   ResultSet();
@@ -120,6 +121,7 @@ class ResultSet {
   mutable size_t crt_row_buff_idx_;
   size_t drop_first_;
   size_t keep_first_;
+  const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
 
   friend class ResultSetManager;
 };

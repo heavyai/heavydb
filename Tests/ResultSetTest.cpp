@@ -22,7 +22,7 @@ TEST(Construct, Empty) {
 TEST(Construct, Allocate) {
   std::vector<TargetInfo> target_infos;
   QueryMemoryDescriptor query_mem_desc{};
-  ResultSet result_set(target_infos, ExecutorDeviceType::CPU, query_mem_desc);
+  ResultSet result_set(target_infos, ExecutorDeviceType::CPU, query_mem_desc, std::make_shared<RowSetMemoryOwner>());
   result_set.allocateStorage();
 }
 
@@ -505,7 +505,7 @@ bool approx_eq(const double v, const double target, const double eps = 0.01) {
 
 void test_iterate(const std::vector<TargetInfo>& target_infos, const QueryMemoryDescriptor& query_mem_desc) {
   SQLTypeInfo double_ti(kDOUBLE, false);
-  ResultSet result_set(target_infos, ExecutorDeviceType::CPU, query_mem_desc);
+  ResultSet result_set(target_infos, ExecutorDeviceType::CPU, query_mem_desc, std::make_shared<RowSetMemoryOwner>());
   const auto storage = result_set.allocateStorage();
   EvenNumberGenerator generator;
   fill_storage_buffer(storage->getUnderlyingBuffer(), target_infos, query_mem_desc, generator, 2);
@@ -586,22 +586,23 @@ void test_reduce(const std::vector<TargetInfo>& target_infos,
   const ResultSetStorage* storage2{nullptr};
   std::unique_ptr<ResultSet> rs1;
   std::unique_ptr<ResultSet> rs2;
+  const auto row_set_mem_owner = std::make_shared<RowSetMemoryOwner>();
   switch (query_mem_desc.hash_type) {
     case GroupByColRangeType::OneColKnownRange:
     case GroupByColRangeType::MultiColPerfectHash: {
-      rs1.reset(new ResultSet(target_infos, ExecutorDeviceType::CPU, query_mem_desc));
+      rs1.reset(new ResultSet(target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner));
       storage1 = rs1->allocateStorage();
       fill_storage_buffer(storage1->getUnderlyingBuffer(), target_infos, query_mem_desc, generator1, step);
-      rs2.reset(new ResultSet(target_infos, ExecutorDeviceType::CPU, query_mem_desc));
+      rs2.reset(new ResultSet(target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner));
       storage2 = rs2->allocateStorage();
       fill_storage_buffer(storage2->getUnderlyingBuffer(), target_infos, query_mem_desc, generator2, step);
       break;
     }
     case GroupByColRangeType::MultiCol: {
-      rs1.reset(new ResultSet(target_infos, ExecutorDeviceType::CPU, query_mem_desc));
+      rs1.reset(new ResultSet(target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner));
       storage1 = rs1->allocateStorage();
       fill_storage_buffer(storage1->getUnderlyingBuffer(), target_infos, query_mem_desc, generator1, step);
-      rs2.reset(new ResultSet(target_infos, ExecutorDeviceType::CPU, query_mem_desc));
+      rs2.reset(new ResultSet(target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner));
       storage2 = rs2->allocateStorage();
       fill_storage_buffer(storage2->getUnderlyingBuffer(), target_infos, query_mem_desc, generator2, step);
       break;
