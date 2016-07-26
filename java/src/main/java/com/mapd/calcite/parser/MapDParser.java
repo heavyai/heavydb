@@ -81,8 +81,9 @@ public final class MapDParser {
             SqlNodeList proj_exprs = ((SqlSelect) validate).getSelectList();
             SqlNodeList new_proj_exprs = new SqlNodeList(proj_exprs.getParserPosition());
             for (SqlNode proj_expr : proj_exprs) {
-                if (proj_expr instanceof SqlIdentifier
-                        && (((SqlIdentifier) proj_expr).toString().toLowerCase()).endsWith(".rowid")) {
+                final SqlNode unaliased_proj_expr = getUnaliasedExpression(proj_expr);
+                if (unaliased_proj_expr instanceof SqlIdentifier
+                        && (((SqlIdentifier) unaliased_proj_expr).toString().toLowerCase()).endsWith(".rowid")) {
                     continue;
                 }
                 new_proj_exprs.add(proj_expr);
@@ -104,6 +105,14 @@ public final class MapDParser {
 
         //logger.info("After convert relalgebra is \n" + res);
         return res;
+    }
+
+    private static SqlNode getUnaliasedExpression(final SqlNode node) {
+        if (node instanceof SqlBasicCall && ((SqlBasicCall) node).getOperator() instanceof SqlAsOperator) {
+            SqlNode[] operands = ((SqlBasicCall) node).getOperands();
+            return operands[0];
+        }
+        return node;
     }
 
     private boolean isSelectStar(SqlNode node) {
