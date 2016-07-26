@@ -166,6 +166,10 @@ public final class MapDParser {
   }
 
   private static void desugar(SqlSelect select_node) {
+    SqlNode from = select_node.getFrom();
+    if (from instanceof SqlSelect) {
+      desugar((SqlSelect) from);
+    }
     SqlNodeList select_list = select_node.getSelectList();
     java.util.Map<String, SqlNode> id_to_expr = new java.util.HashMap<String, SqlNode>();
     for (SqlNode proj : select_list) {
