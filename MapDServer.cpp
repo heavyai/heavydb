@@ -199,9 +199,15 @@ class MapDHandler : virtual public MapDIf {
 #endif  // HAVE_CALCITE
     LOG(INFO) << "MapD Server " << MapDRelease;
     if (executor_device == "gpu") {
+#ifdef HAVE_CUDA
       executor_device_type_ = ExecutorDeviceType::GPU;
       LOG(INFO) << "Started in GPU Mode" << std::endl;
       cpu_mode_only_ = false;
+#else
+      executor_device_type_ = ExecutorDeviceType::CPU;
+      LOG(ERROR) << "This build isn't CUDA enabled, will run on CPU";
+      cpu_mode_only_ = true;
+#endif  // HAVE_CUDA
     } else if (executor_device == "hybrid") {
       executor_device_type_ = ExecutorDeviceType::Hybrid;
       LOG(INFO) << "Started in Hybrid Mode" << std::endl;

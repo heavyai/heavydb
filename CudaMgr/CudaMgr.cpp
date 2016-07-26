@@ -25,7 +25,11 @@ CudaMgr::CudaMgr(const int numGpus, const int startGpu) : startGpu_(startGpu) {
   LOG(INFO) << "Using " << deviceCount_ << " Gpus." << std::endl;
   fillDeviceProperties();
   createDeviceContexts();
-#endif
+#else
+  std::string not_cuda{"This build isn't CUDA enabled, will run on CPU"};
+  LOG(ERROR) << not_cuda;
+  throw std::runtime_error(not_cuda);
+#endif  // HAVE_CUDA
 }
 
 CudaMgr::~CudaMgr() {
