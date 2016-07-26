@@ -115,7 +115,7 @@ public final class MapDParser {
         return node;
     }
 
-    private boolean isSelectStar(SqlNode node) {
+    private static boolean isSelectStar(SqlNode node) {
         SqlSelect select_node = getSelectChild(node);
         if (select_node == null) {
             return false;
@@ -131,7 +131,7 @@ public final class MapDParser {
         return ((SqlIdentifier) proj_expr).isStar();
     }
 
-    private SqlSelect getSelectChild(SqlNode node) {
+    private static SqlSelect getSelectChild(SqlNode node) {
         if (node instanceof SqlSelect) {
             return (SqlSelect) node;
         }
