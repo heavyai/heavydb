@@ -166,10 +166,8 @@ public final class MapDParser {
   }
 
   private static void desugar(SqlSelect select_node) {
-    SqlNode from = select_node.getFrom();
-    if (from instanceof SqlSelect) {
-      desugar((SqlSelect) from);
-    }
+    desugarExpression(select_node.getFrom());
+    desugarExpression(select_node.getWhere());
     SqlNodeList select_list = select_node.getSelectList();
     java.util.Map<String, SqlNode> id_to_expr = new java.util.HashMap<String, SqlNode>();
     for (SqlNode proj : select_list) {
@@ -193,6 +191,20 @@ public final class MapDParser {
       return;
     }
     expandAliases(having, id_to_expr);
+  }
+
+  private static void desugarExpression(SqlNode node) {
+    if (node instanceof SqlSelect) {
+      desugar((SqlSelect) node);
+      return;
+    }
+    if (!(node instanceof SqlBasicCall)) {
+      return;
+    }
+    SqlBasicCall basic_call = (SqlBasicCall) node;
+    for (SqlNode operator : basic_call.getOperands()) {
+      desugarExpression(operator);
+    }
   }
 
   private static SqlNode expandAliases(final SqlNode node,
