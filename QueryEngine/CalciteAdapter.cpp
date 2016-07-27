@@ -1113,16 +1113,6 @@ std::string pg_shim(const std::string& query) {
     }
   }
   {
-    boost::regex datepart_expr{R"(datepart\s*\(\s*(\w+)\s*,(.*)\))", boost::regex::extended | boost::regex::icase};
-    boost::smatch what;
-    while (true) {
-      if (!boost::regex_search(result, what, datepart_expr)) {
-        break;
-      }
-      result.replace(what.position(), what.length(), "DATEPART('" + what[1] + "', " + what[2] + ")");
-    }
-  }
-  {
     boost::regex extract_expr{R"(date_trunc\s*\(\s*(\w+)\s*,(.*)\))", boost::regex::extended | boost::regex::icase};
     boost::smatch what;
     while (true) {
