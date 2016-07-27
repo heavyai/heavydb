@@ -2,6 +2,8 @@
 
 #include "../Analyzer/Analyzer.h"
 
+#include <boost/algorithm/string.hpp>
+
 SQLTypeInfo get_agg_type(const SQLAgg agg_kind, const Analyzer::Expr* arg_expr) {
   switch (agg_kind) {
     case kCOUNT:
@@ -18,4 +20,27 @@ SQLTypeInfo get_agg_type(const SQLAgg agg_kind, const Analyzer::Expr* arg_expr) 
   }
   CHECK(false);
   return SQLTypeInfo();
+}
+
+ExtractField to_datepart_field(const std::string& field) {
+  ExtractField fieldno;
+  if (boost::iequals(field, "year") || boost::iequals(field, "yy") || boost::iequals(field, "yyyy"))
+    fieldno = kYEAR;
+  else if (boost::iequals(field, "quarter") || boost::iequals(field, "qq") || boost::iequals(field, "q"))
+    fieldno = kQUARTER;
+  else if (boost::iequals(field, "month") || boost::iequals(field, "mm") || boost::iequals(field, "m"))
+    fieldno = kMONTH;
+  else if (boost::iequals(field, "dayofyear") || boost::iequals(field, "dy") || boost::iequals(field, "y"))
+    fieldno = kDOY;
+  else if (boost::iequals(field, "day") || boost::iequals(field, "dd") || boost::iequals(field, "d"))
+    fieldno = kDAY;
+  else if (boost::iequals(field, "hour") || boost::iequals(field, "hh"))
+    fieldno = kHOUR;
+  else if (boost::iequals(field, "minute") || boost::iequals(field, "mi") || boost::iequals(field, "n"))
+    fieldno = kMINUTE;
+  else if (boost::iequals(field, "second") || boost::iequals(field, "ss") || boost::iequals(field, "s"))
+    fieldno = kSECOND;
+  else
+    throw std::runtime_error("Unsupported field in DATEPART function: " + field);
+  return fieldno;
 }

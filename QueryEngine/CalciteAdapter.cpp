@@ -170,9 +170,11 @@ class CalciteAdapter {
       }
       return translateNow();
     }
-    if (op_str == std::string("PG_EXTRACT") || op_str == std::string("DATEPART") ||
-        op_str == std::string("PG_DATE_TRUNC")) {
+    if (op_str == std::string("PG_EXTRACT") || op_str == std::string("PG_DATE_TRUNC")) {
       return translateExtract(operands, scan_targets, op_str == std::string("PG_DATE_TRUNC"));
+    }
+    if (op_str == std::string("DATEPART")) {
+      return translateDatepart(operands, scan_targets);
     }
     if (op_str == std::string("LENGTH") || op_str == std::string("CHAR_LENGTH")) {
       CHECK_EQ(unsigned(1), operands.Size());
@@ -306,6 +308,21 @@ class CalciteAdapter {
     const auto from_expr = getExprFromNode(operands[1], scan_targets);
     return is_date_trunc ? Parser::DatetruncExpr::get(from_expr, *timeunit_lit_expr->get_constval().stringval)
                          : Parser::ExtractExpr::get(from_expr, *timeunit_lit_expr->get_constval().stringval);
+  }
+
+  std::shared_ptr<Analyzer::Expr> translateDatepart(
+      const rapidjson::Value& operands,
+      const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& scan_targets) {
+    CHECK(operands.IsArray());
+    CHECK_EQ(unsigned(2), operands.Size());
+    const auto& timeunit_lit = operands[0];
+    if (!timeunit_lit.IsObject() || !timeunit_lit.HasMember("literal")) {
+      throw std::runtime_error("The time unit parameter must be a literal.");
+    }
+    const auto timeunit_lit_expr =
+        std::dynamic_pointer_cast<const Analyzer::Constant>(translateTypedLiteral(timeunit_lit));
+    const auto from_expr = getExprFromNode(operands[1], scan_targets);
+    return Parser::ExtractExpr::get(from_expr, to_datepart_field(*timeunit_lit_expr->get_constval().stringval));
   }
 
   std::shared_ptr<Analyzer::Expr> translateColRef(

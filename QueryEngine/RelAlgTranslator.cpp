@@ -253,6 +253,17 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateExtract(const RexFunc
                        : Parser::ExtractExpr::get(from_expr, *timeunit_lit->get_constval().stringval);
 }
 
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDatepart(const RexFunctionOperator* rex_function) const {
+  CHECK_EQ(size_t(2), rex_function->size());
+  const auto timeunit = translateScalarRex(rex_function->getOperand(0));
+  const auto timeunit_lit = std::dynamic_pointer_cast<Analyzer::Constant>(timeunit);
+  if (!timeunit_lit) {
+    throw std::runtime_error("The time unit parameter must be a literal.");
+  }
+  const auto from_expr = translateScalarRex(rex_function->getOperand(1));
+  return Parser::ExtractExpr::get(from_expr, to_datepart_field(*timeunit_lit->get_constval().stringval));
+}
+
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLength(const RexFunctionOperator* rex_function) const {
   CHECK_EQ(size_t(1), rex_function->size());
   const auto str_arg = translateScalarRex(rex_function->getOperand(0));
@@ -359,9 +370,11 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(const RexFun
   if (rex_function->getName() == std::string("LIKE") || rex_function->getName() == std::string("PG_ILIKE")) {
     return translateLike(rex_function);
   }
-  if (rex_function->getName() == std::string("PG_EXTRACT") || rex_function->getName() == std::string("DATEPART") ||
-      rex_function->getName() == std::string("PG_DATE_TRUNC")) {
+  if (rex_function->getName() == std::string("PG_EXTRACT") || rex_function->getName() == std::string("PG_DATE_TRUNC")) {
     return translateExtract(rex_function);
+  }
+  if (rex_function->getName() == std::string("DATEPART")) {
+    return translateDatepart(rex_function);
   }
   if (rex_function->getName() == std::string("LENGTH") || rex_function->getName() == std::string("CHAR_LENGTH")) {
     return translateLength(rex_function);

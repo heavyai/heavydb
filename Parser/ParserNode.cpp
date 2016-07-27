@@ -629,13 +629,52 @@ std::shared_ptr<Analyzer::Expr> ExtractExpr::analyze(const Catalog_Namespace::Ca
 
 std::shared_ptr<Analyzer::Expr> ExtractExpr::get(const std::shared_ptr<Analyzer::Expr> from_expr,
                                                  const std::string& field) {
-  const auto fieldno = to_extract_field(field);
+  return ExtractExpr::get(from_expr, to_extract_field(field));
+}
+
+namespace {
+
+std::string extract_field_name(const ExtractField fieldno) {
+  switch (fieldno) {
+    case kYEAR:
+      return "year";
+    case kQUARTER:
+      return "quarter";
+    case kMONTH:
+      return "month";
+    case kDAY:
+      return "day";
+    case kHOUR:
+      return "hour";
+    case kMINUTE:
+      return "minute";
+    case kSECOND:
+      return "second";
+    case kDOW:
+      return "dow";
+    case kISODOW:
+      return "isodow";
+    case kDOY:
+      return "doy";
+    case kEPOCH:
+      return "epoch";
+    case kQUARTERDAY:
+      return "quarterday";
+  }
+  CHECK(false);
+  return "";
+}
+
+}  // namespace
+
+std::shared_ptr<Analyzer::Expr> ExtractExpr::get(const std::shared_ptr<Analyzer::Expr> from_expr,
+                                                 const ExtractField fieldno) {
   if (!from_expr->get_type_info().is_time())
     throw std::runtime_error("Only TIME, TIMESTAMP and DATE types can be in EXTRACT function.");
   switch (from_expr->get_type_info().get_type()) {
     case kTIME:
       if (fieldno != kHOUR && fieldno != kMINUTE && fieldno != kSECOND)
-        throw std::runtime_error("Cannot EXTRACT " + field + " from TIME.");
+        throw std::runtime_error("Cannot EXTRACT " + extract_field_name(fieldno) + " from TIME.");
       break;
     default:
       break;

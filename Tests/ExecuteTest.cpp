@@ -1020,27 +1020,60 @@ TEST(Select, Time) {
     ASSERT_EQ(
         2007,
         v<int64_t>(run_simple_agg("SELECT DATEPART(year, CAST('2007-10-30 12:15:32' AS TIMESTAMP)) FROM test;", dt)));
+    ASSERT_EQ(
+        2007,
+        v<int64_t>(run_simple_agg("SELECT DATEPART(yyyy, CAST('2007-10-30 12:15:32' AS TIMESTAMP)) FROM test;", dt)));
+    ASSERT_EQ(
+        2007,
+        v<int64_t>(run_simple_agg("SELECT DATEPART(yy, CAST('2007-10-30 12:15:32' AS TIMESTAMP)) FROM test;", dt)));
     ASSERT_EQ(4,
               v<int64_t>(
                   run_simple_agg("SELECT DATEPART(quarter, CAST('2007-10-30 12:15:32' AS TIMESTAMP)) FROM test;", dt)));
     ASSERT_EQ(
+        4, v<int64_t>(run_simple_agg("SELECT DATEPART(qq, CAST('2007-10-30 12:15:32' AS TIMESTAMP)) FROM test;", dt)));
+    ASSERT_EQ(
+        4, v<int64_t>(run_simple_agg("SELECT DATEPART(q, CAST('2007-10-30 12:15:32' AS TIMESTAMP)) FROM test;", dt)));
+    ASSERT_EQ(
         10,
         v<int64_t>(run_simple_agg("SELECT DATEPART(month, CAST('2007-10-30 12:15:32' AS TIMESTAMP)) FROM test;", dt)));
     ASSERT_EQ(
+        10, v<int64_t>(run_simple_agg("SELECT DATEPART(mm, CAST('2007-10-30 12:15:32' AS TIMESTAMP)) FROM test;", dt)));
+    ASSERT_EQ(
+        10, v<int64_t>(run_simple_agg("SELECT DATEPART(m, CAST('2007-10-30 12:15:32' AS TIMESTAMP)) FROM test;", dt)));
+    ASSERT_EQ(303,
+              v<int64_t>(run_simple_agg(
+                  "SELECT DATEPART(dayofyear, CAST('2007-10-30 12:15:32' AS TIMESTAMP)) FROM test;", dt)));
+    ASSERT_EQ(
         303,
-        v<int64_t>(run_simple_agg("SELECT DATEPART(doy, CAST('2007-10-30 12:15:32' AS TIMESTAMP)) FROM test;", dt)));
+        v<int64_t>(run_simple_agg("SELECT DATEPART(dy, CAST('2007-10-30 12:15:32' AS TIMESTAMP)) FROM test;", dt)));
+    ASSERT_EQ(
+        303, v<int64_t>(run_simple_agg("SELECT DATEPART(y, CAST('2007-10-30 12:15:32' AS TIMESTAMP)) FROM test;", dt)));
     ASSERT_EQ(
         30,
         v<int64_t>(run_simple_agg("SELECT DATEPART(day, CAST('2007-10-30 12:15:32' AS TIMESTAMP)) FROM test;", dt)));
     ASSERT_EQ(
+        30, v<int64_t>(run_simple_agg("SELECT DATEPART(dd, CAST('2007-10-30 12:15:32' AS TIMESTAMP)) FROM test;", dt)));
+    ASSERT_EQ(
+        30, v<int64_t>(run_simple_agg("SELECT DATEPART(d, CAST('2007-10-30 12:15:32' AS TIMESTAMP)) FROM test;", dt)));
+    ASSERT_EQ(
         12,
         v<int64_t>(run_simple_agg("SELECT DATEPART(hour, CAST('2007-10-30 12:15:32' AS TIMESTAMP)) FROM test;", dt)));
+    ASSERT_EQ(
+        12, v<int64_t>(run_simple_agg("SELECT DATEPART(hh, CAST('2007-10-30 12:15:32' AS TIMESTAMP)) FROM test;", dt)));
     ASSERT_EQ(
         15,
         v<int64_t>(run_simple_agg("SELECT DATEPART(minute, CAST('2007-10-30 12:15:32' AS TIMESTAMP)) FROM test;", dt)));
     ASSERT_EQ(
+        15, v<int64_t>(run_simple_agg("SELECT DATEPART(mi, CAST('2007-10-30 12:15:32' AS TIMESTAMP)) FROM test;", dt)));
+    ASSERT_EQ(
+        15, v<int64_t>(run_simple_agg("SELECT DATEPART(n, CAST('2007-10-30 12:15:32' AS TIMESTAMP)) FROM test;", dt)));
+    ASSERT_EQ(
         32,
         v<int64_t>(run_simple_agg("SELECT DATEPART(second, CAST('2007-10-30 12:15:32' AS TIMESTAMP)) FROM test;", dt)));
+    ASSERT_EQ(
+        32, v<int64_t>(run_simple_agg("SELECT DATEPART(ss, CAST('2007-10-30 12:15:32' AS TIMESTAMP)) FROM test;", dt)));
+    ASSERT_EQ(
+        32, v<int64_t>(run_simple_agg("SELECT DATEPART(s, CAST('2007-10-30 12:15:32' AS TIMESTAMP)) FROM test;", dt)));
 #endif  // HAVE_CALCITE
     const auto rows = run_multiple_agg(
         "SELECT DATE_TRUNC(month, CAST(o AS TIMESTAMP(0))) AS key0, str AS key1, COUNT(*) AS val FROM test GROUP BY "

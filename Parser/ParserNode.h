@@ -525,6 +525,7 @@ class ExtractExpr : public Expr {
                                                   Analyzer::Query& query,
                                                   TlistRefType allow_tlist_ref = TLIST_NONE) const;
   static std::shared_ptr<Analyzer::Expr> get(const std::shared_ptr<Analyzer::Expr>, const std::string&);
+  static std::shared_ptr<Analyzer::Expr> get(const std::shared_ptr<Analyzer::Expr>, const ExtractField);
   virtual std::string to_string() const;
 
  private:
