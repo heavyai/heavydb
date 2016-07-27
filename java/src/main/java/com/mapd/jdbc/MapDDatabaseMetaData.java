@@ -182,7 +182,7 @@ class MapDDatabaseMetaData implements DatabaseMetaData {
 
   @Override
   public String getNumericFunctions() throws SQLException { //logger.debug("Entered");
-    return "";
+    return "ACOS(float), ACOS(number), ASIN, ATAN2, CEIL, COS, COT, DEGREES, EXP, FLOOR, LN, LOG, PI(), POWER, SQRT, RADIANS, ROUND, SIN, TAN";
   }
 
   @Override
@@ -192,7 +192,7 @@ class MapDDatabaseMetaData implements DatabaseMetaData {
 
   @Override
   public String getSystemFunctions() throws SQLException { //logger.debug("Entered");
-    return "";
+    return "ACOS(float), ACOS(number), ASIN, ATAN2, CEIL, COS, COT, DEGREES, EXP, FLOOR, LN, LOG, PI(), POWER, SQRT, RADIANS, ROUND, SIN, TAN";
   }
 
   @Override
@@ -638,12 +638,17 @@ class MapDDatabaseMetaData implements DatabaseMetaData {
 
   @Override
   public ResultSet getProcedures(String catalog, String schemaPattern, String procedureNamePattern) throws SQLException { //logger.debug("Entered");
-   throw new UnsupportedOperationException("Not supported yet.");
+    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
+            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
+            getStackTrace()[0].getMethodName());
   }
 
   @Override
-  public ResultSet getProcedureColumns(String catalog, String schemaPattern, String procedureNamePattern, String columnNamePattern) throws SQLException { //logger.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet.");
+  public ResultSet getProcedureColumns(String catalog, String schemaPattern, String procedureNamePattern,
+          String columnNamePattern) throws SQLException { //logger.debug("Entered");
+    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
+            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
+            getStackTrace()[0].getMethodName());
   }
 
   /*
@@ -673,7 +678,8 @@ Throws:
 SQLException - if a database access error occurs
    */
   @Override
-  public ResultSet getTables(String catalog, String schemaPattern, String tableNamePattern, String[] types) throws SQLException { //logger.debug("Entered");
+  public ResultSet getTables(String catalog, String schemaPattern, String tableNamePattern, String[] types) throws
+          SQLException { //logger.debug("Entered");
 
     List<String> tables;
     try {
@@ -721,26 +727,16 @@ SQLException - if a database access error occurs
     for (String x : tables) {
       dataMap.get("TABLE_NAME").add(x);
       nullMap.get("TABLE_NAME").add(false);
-
-      nullMap.get("TABLE_SCHEM").add(true) ;
-
+      nullMap.get("TABLE_SCHEM").add(true);
       nullMap.get("TABLE_CAT").add(true);
-
       dataMap.get("TABLE_TYPE").add("TABLE");
       nullMap.get("TABLE_TYPE").add(false);
-
       nullMap.get("REMARKS").add(true);
-
       nullMap.get("TYPE_CAT").add(true);
-
       nullMap.get("TYPE_SCHEM").add(true);
-
       nullMap.get("TYPE_NAME").add(true);
-
       nullMap.get("SELF_REFERENCING_COL_NAME").add(true);
-
       nullMap.get("REF_GENERATION").add(true);
-
     }
 
     List<TColumn> columnsList = new ArrayList(columns.length);
@@ -761,9 +757,9 @@ SQLException - if a database access error occurs
   }
 
   // need to add type to this currently only does str type
-  private TColumn createTColumnData(Object data, List<Boolean> nullsList){
+  private TColumn createTColumnData(Object data, List<Boolean> nullsList) {
     TColumnData colData = new TColumnData();
-    colData.setStr_col((List<String>)data);
+    colData.setStr_col((List<String>) data);
 
     TColumn col = new TColumn(colData, nullsList);
     return col;
@@ -836,7 +832,7 @@ SQLException - if a database access error occurs
         new TTypeInfo(TDatumType.STR, TEncodingType.NONE, false, false), false)
     };
 
-   Map<String, MapDData> dataMap = new HashMap(columns.length);
+    Map<String, MapDData> dataMap = new HashMap(columns.length);
 
     // create component to contain the meta data for the rows
     // and create  a container to store the data and the nul indicators
@@ -864,7 +860,6 @@ SQLException - if a database access error occurs
     MapDResultSet tab = new MapDResultSet(result, "getTableTypes");
 
     // logger.info("Dump result "+ result.toString());
-
     return tab;
   }
 
@@ -921,14 +916,15 @@ Returns:
 ResultSet - each row is a column description
 Throws:
 SQLException - if a database access error occurs
-  */
+   */
   @Override
-  public ResultSet getColumns(String catalog, String schemaPattern, String tableNamePattern, String columnNamePattern) throws SQLException { //logger.debug("Entered");
-    logger.info("TablePattern "+ tableNamePattern+ " columnNamePattern "+ columnNamePattern);
+  public ResultSet getColumns(String catalog, String schemaPattern, String tableNamePattern, String columnNamePattern)
+          throws SQLException { //logger.debug("Entered");
+    logger.info("TablePattern " + tableNamePattern + " columnNamePattern " + columnNamePattern);
     String modifiedTablePattern = tableNamePattern.replaceAll("%", ".*");
     String modifiedColumnPattern = (columnNamePattern == null) ? null : columnNamePattern.replaceAll("%", ".*");
-    
-    logger.info("TablePattern "+ tableNamePattern+ " modifiedColumnPattern "+ modifiedColumnPattern);
+
+    logger.info("TablePattern " + tableNamePattern + " modifiedColumnPattern " + modifiedColumnPattern);
 
     // declare the columns in the result set
     TColumnType columns[] = {
@@ -1021,8 +1017,8 @@ SQLException - if a database access error occurs
               dataMap.get("BUFFER_LENGTH").setNull(true);
               dataMap.get("DECIMAL_DIGITS").add(10);
               dataMap.get("NUM_PREC_RADIX").add(10);
-              dataMap.get("NULLABLE").add(value.col_type.nullable ? DatabaseMetaData.columnNullable:
-                      DatabaseMetaData.columnNoNulls);
+              dataMap.get("NULLABLE").add(value.col_type.nullable ? DatabaseMetaData.columnNullable
+                      : DatabaseMetaData.columnNoNulls);
               dataMap.get("REMARKS").add("Awsome Column");
               dataMap.get("COLUMN_DEF").setNull(true);
               dataMap.get("SQL_DATA_TYPE").add(0);
@@ -1062,47 +1058,66 @@ SQLException - if a database access error occurs
   }
 
   @Override
-  public ResultSet getColumnPrivileges(String catalog, String schema, String table, String columnNamePattern) throws SQLException { //logger.debug("Entered");
-   throw new UnsupportedOperationException("Not supported yet.");
+  public ResultSet getColumnPrivileges(String catalog, String schema, String table, String columnNamePattern) throws
+          SQLException { //logger.debug("Entered");
+    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
+            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
+            getStackTrace()[0].getMethodName());
   }
 
-  public ResultSet getEmptyResultSet(){
+  public ResultSet getEmptyResultSet() {
     return new MapDResultSet();
   }
 
   @Override
   public ResultSet getTablePrivileges(String catalog, String schemaPattern, String tableNamePattern) throws SQLException { //logger.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet.");
+    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
+            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
+            getStackTrace()[0].getMethodName());
   }
 
   @Override
-  public ResultSet getBestRowIdentifier(String catalog, String schema, String table, int scope, boolean nullable) throws SQLException { //logger.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet.");
+  public ResultSet getBestRowIdentifier(String catalog, String schema, String table, int scope, boolean nullable) throws
+          SQLException { //logger.debug("Entered");
+    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
+            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
+            getStackTrace()[0].getMethodName());
   }
 
   @Override
   public ResultSet getVersionColumns(String catalog, String schema, String table) throws SQLException { //logger.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet.");
+    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
+            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
+            getStackTrace()[0].getMethodName());
   }
 
   @Override
   public ResultSet getPrimaryKeys(String catalog, String schema, String table) throws SQLException { //logger.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet.");
+    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
+            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
+            getStackTrace()[0].getMethodName());
   }
 
   @Override
   public ResultSet getImportedKeys(String catalog, String schema, String table) throws SQLException { //logger.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet.");
+    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
+            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
+            getStackTrace()[0].getMethodName());
   }
 
   @Override
   public ResultSet getExportedKeys(String catalog, String schema, String table) throws SQLException { //logger.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet.");
+    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
+            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
+            getStackTrace()[0].getMethodName());
   }
 
   @Override
-  public ResultSet getCrossReference(String parentCatalog, String parentSchema, String parentTable, String foreignCatalog, String foreignSchema, String foreignTable) throws SQLException { //logger.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet.");
+  public ResultSet getCrossReference(String parentCatalog, String parentSchema, String parentTable,
+          String foreignCatalog, String foreignSchema, String foreignTable) throws SQLException { //logger.debug("Entered");
+    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
+            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
+            getStackTrace()[0].getMethodName());
   }
 
   /*
@@ -1144,7 +1159,7 @@ Returns:
 a ResultSet object in which each row is an SQL type description
 Throws:
 SQLException - if a database access error occurs
-  */
+   */
   @Override
   public ResultSet getTypeInfo() throws SQLException { //logger.debug("Entered");
 
@@ -1244,8 +1259,11 @@ SQLException - if a database access error occurs
   }
 
   @Override
-  public ResultSet getIndexInfo(String catalog, String schema, String table, boolean unique, boolean approximate) throws SQLException { //logger.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet.");
+  public ResultSet getIndexInfo(String catalog, String schema, String table, boolean unique, boolean approximate) throws
+          SQLException { //logger.debug("Entered");
+    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
+            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
+            getStackTrace()[0].getMethodName());
   }
 
   @Override
@@ -1311,7 +1329,9 @@ SQLException - if a database access error occurs
   @Override
   public ResultSet getUDTs(String catalog, String schemaPattern, String typeNamePattern,
           int[] types) throws SQLException { //logger.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet.");
+    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
+            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
+            getStackTrace()[0].getMethodName());
   }
 
   @Override
@@ -1341,17 +1361,24 @@ SQLException - if a database access error occurs
 
   @Override
   public ResultSet getSuperTypes(String catalog, String schemaPattern, String typeNamePattern) throws SQLException { //logger.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet.");
+    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
+            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
+            getStackTrace()[0].getMethodName());
   }
 
   @Override
   public ResultSet getSuperTables(String catalog, String schemaPattern, String tableNamePattern) throws SQLException { //logger.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet.");
+    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
+            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
+            getStackTrace()[0].getMethodName());
   }
 
   @Override
-  public ResultSet getAttributes(String catalog, String schemaPattern, String typeNamePattern, String attributeNamePattern) throws SQLException { //logger.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet.");
+  public ResultSet getAttributes(String catalog, String schemaPattern, String typeNamePattern,
+          String attributeNamePattern) throws SQLException { //logger.debug("Entered");
+    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
+            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
+            getStackTrace()[0].getMethodName());
   }
 
   @Override
@@ -1421,22 +1448,32 @@ SQLException - if a database access error occurs
 
   @Override
   public ResultSet getClientInfoProperties() throws SQLException { //logger.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet.");
+    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
+            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
+            getStackTrace()[0].getMethodName());
   }
 
   @Override
   public ResultSet getFunctions(String catalog, String schemaPattern, String functionNamePattern) throws SQLException { //logger.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet.");
+    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
+            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
+            getStackTrace()[0].getMethodName());
   }
 
   @Override
-  public ResultSet getFunctionColumns(String catalog, String schemaPattern, String functionNamePattern, String columnNamePattern) throws SQLException { //logger.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet.");
+  public ResultSet getFunctionColumns(String catalog, String schemaPattern, String functionNamePattern,
+          String columnNamePattern) throws SQLException { //logger.debug("Entered");
+    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
+            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
+            getStackTrace()[0].getMethodName());
   }
 
   @Override
-  public ResultSet getPseudoColumns(String catalog, String schemaPattern, String tableNamePattern, String columnNamePattern) throws SQLException { //logger.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet.");
+  public ResultSet getPseudoColumns(String catalog, String schemaPattern, String tableNamePattern,
+          String columnNamePattern) throws SQLException { //logger.debug("Entered");
+    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
+            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
+            getStackTrace()[0].getMethodName());
   }
 
   @Override

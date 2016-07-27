@@ -16,6 +16,7 @@ import org.slf4j.LoggerFactory;
  * @author michael
  */
 class MapDResultSetMetaData implements ResultSetMetaData {
+
   final static Logger logger = LoggerFactory.getLogger(MapDResultSetMetaData.class);
   final TQueryResult sqlResult;
   final String sql;
@@ -32,7 +33,7 @@ class MapDResultSetMetaData implements ResultSetMetaData {
 
   @Override
   public boolean isAutoIncrement(int column) throws SQLException { //logger.debug("Entered "+ sql );
-  //logger.debug("returning false");
+    //logger.debug("returning false");
     return false;
   }
 
@@ -53,9 +54,9 @@ class MapDResultSetMetaData implements ResultSetMetaData {
 
   @Override
   public int isNullable(int column) throws SQLException { //logger.debug("Entered "+ sql );
-    return  sqlResult.row_set.row_desc.get(column -1).col_type.nullable ?
-            DatabaseMetaData.columnNullable :
-            DatabaseMetaData.columnNoNulls;
+    return sqlResult.row_set.row_desc.get(column - 1).col_type.nullable
+            ? DatabaseMetaData.columnNullable
+            : DatabaseMetaData.columnNoNulls;
   }
 
   @Override
@@ -71,12 +72,12 @@ class MapDResultSetMetaData implements ResultSetMetaData {
   @Override
   public String getColumnLabel(int column) throws SQLException { //logger.debug("Entered "+ sql );
     //logger.debug("ColumnLabel is "+ sqlResult.row_set.row_desc.get(column -1).col_name);
-    return sqlResult.row_set.row_desc.get(column -1).col_name;
+    return sqlResult.row_set.row_desc.get(column - 1).col_name;
   }
 
   @Override
   public String getColumnName(int column) throws SQLException { //logger.debug("Entered "+ sql );
-    return sqlResult.row_set.row_desc.get(column-1).getCol_name();
+    return sqlResult.row_set.row_desc.get(column - 1).getCol_name();
   }
 
   @Override
@@ -96,7 +97,7 @@ class MapDResultSetMetaData implements ResultSetMetaData {
 
   @Override
   public String getTableName(int column) throws SQLException { //logger.debug("Entered "+ sql );
-    return "tableName??" ;
+    return "tableName??";
   }
 
   @Override
@@ -106,16 +107,14 @@ class MapDResultSetMetaData implements ResultSetMetaData {
 
   @Override
   public int getColumnType(int column) throws SQLException { //logger.debug("Entered "+ sql );
-    TDatumType type = sqlResult.row_set.row_desc.get(column-1).col_type.type;
+    TDatumType type = sqlResult.row_set.row_desc.get(column - 1).col_type.type;
 
     return MapDType.toJava(type);
   }
 
-
-
   @Override
   public String getColumnTypeName(int column) throws SQLException { //logger.debug("Entered "+ sql );
-    return sqlResult.row_set.row_desc.get(column-1).col_type.type.name();
+    return sqlResult.row_set.row_desc.get(column - 1).col_type.type.name();
   }
 
   @Override
@@ -135,17 +134,23 @@ class MapDResultSetMetaData implements ResultSetMetaData {
 
   @Override
   public String getColumnClassName(int column) throws SQLException { //logger.debug("Entered "+ sql );
-    throw new UnsupportedOperationException("Not supported yet.");
+    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
+            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
+            getStackTrace()[0].getMethodName());
   }
 
   @Override
   public <T> T unwrap(Class<T> iface) throws SQLException { //logger.debug("Entered "+ sql );
-    throw new UnsupportedOperationException("Not supported yet.");
+    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
+            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
+            getStackTrace()[0].getMethodName());
   }
 
   @Override
   public boolean isWrapperFor(Class<?> iface) throws SQLException { //logger.debug("Entered "+ sql );
-    throw new UnsupportedOperationException("Not supported yet.");
+    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
+            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
+            getStackTrace()[0].getMethodName());
   }
 
 }
