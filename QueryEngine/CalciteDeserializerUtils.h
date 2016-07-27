@@ -1,7 +1,7 @@
 #ifndef QUERYENGINE_CALCITEDESERIALIZERUTILS_H
 #define QUERYENGINE_CALCITEDESERIALIZERUTILS_H
 
-#include "ExtractFromTime.h"
+#include "DateTruncate.h"
 
 #include "../Shared/sqldefs.h"
 #include "../Shared/sqltypes.h"
@@ -138,5 +138,7 @@ class Expr;
 SQLTypeInfo get_agg_type(const SQLAgg agg_kind, const Analyzer::Expr* arg_expr);
 
 ExtractField to_datepart_field(const std::string&);
+
+DatetruncField to_datediff_field(const std::string&);
 
 #endif  // QUERYENGINE_CALCITEDESERIALIZERUTILS_H

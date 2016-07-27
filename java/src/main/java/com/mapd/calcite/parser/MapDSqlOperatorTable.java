@@ -102,6 +102,7 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
         opTab.addOperator(new Now());
         opTab.addOperator(new Datetime());
         opTab.addOperator(new PgExtract());
+        opTab.addOperator(new Datediff());
         opTab.addOperator(new Datepart());
         opTab.addOperator(new PgDateTrunc());
         opTab.addOperator(new Length());
@@ -335,6 +336,25 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
                     null,
                     null,
                     OperandTypes.family(SqlTypeFamily.STRING, SqlTypeFamily.DATETIME),
+                    SqlFunctionCategory.TIMEDATE);
+        }
+
+        @Override
+        public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+            final RelDataTypeFactory typeFactory
+                    = opBinding.getTypeFactory();
+            return typeFactory.createSqlType(SqlTypeName.BIGINT);
+        }
+    }
+
+    public static class Datediff extends SqlFunction {
+
+        public Datediff() {
+            super("DATEDIFF",
+                    SqlKind.OTHER_FUNCTION,
+                    null,
+                    null,
+                    OperandTypes.family(SqlTypeFamily.STRING, SqlTypeFamily.DATETIME, SqlTypeFamily.DATETIME),
                     SqlFunctionCategory.TIMEDATE);
         }
 

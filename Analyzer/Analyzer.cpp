@@ -102,6 +102,10 @@ std::shared_ptr<Analyzer::Expr> ExtractExpr::deep_copy() const {
   return makeExpr<ExtractExpr>(type_info, contains_agg, field, from_expr->deep_copy());
 }
 
+std::shared_ptr<Analyzer::Expr> DatediffExpr::deep_copy() const {
+  return makeExpr<DatediffExpr>(type_info, field_, start_->deep_copy(), end_->deep_copy());
+}
+
 std::shared_ptr<Analyzer::Expr> DatetruncExpr::deep_copy() const {
   return makeExpr<DatetruncExpr>(type_info, contains_agg, field, from_expr->deep_copy());
 }
@@ -1073,6 +1077,20 @@ void ExtractExpr::group_predicates(std::list<const Expr*>& scan_predicates,
     const_predicates.push_back(this);
 }
 
+void DatediffExpr::group_predicates(std::list<const Expr*>& scan_predicates,
+                                    std::list<const Expr*>& join_predicates,
+                                    std::list<const Expr*>& const_predicates) const {
+  std::set<int> rte_idx_set;
+  start_->collect_rte_idx(rte_idx_set);
+  end_->collect_rte_idx(rte_idx_set);
+  if (rte_idx_set.size() > 1)
+    join_predicates.push_back(this);
+  else if (rte_idx_set.size() == 1)
+    scan_predicates.push_back(this);
+  else
+    const_predicates.push_back(this);
+}
+
 void DatetruncExpr::group_predicates(std::list<const Expr*>& scan_predicates,
                                      std::list<const Expr*>& join_predicates,
                                      std::list<const Expr*>& const_predicates) const {
@@ -1227,6 +1245,12 @@ std::shared_ptr<Analyzer::Expr> ExtractExpr::rewrite_with_targetlist(
   return makeExpr<ExtractExpr>(type_info, contains_agg, field, from_expr->rewrite_with_targetlist(tlist));
 }
 
+std::shared_ptr<Analyzer::Expr> DatediffExpr::rewrite_with_targetlist(
+    const std::vector<std::shared_ptr<TargetEntry>>& tlist) const {
+  return makeExpr<DatediffExpr>(
+      type_info, field_, start_->rewrite_with_targetlist(tlist), end_->rewrite_with_targetlist(tlist));
+}
+
 std::shared_ptr<Analyzer::Expr> DatetruncExpr::rewrite_with_targetlist(
     const std::vector<std::shared_ptr<TargetEntry>>& tlist) const {
   return makeExpr<DatetruncExpr>(type_info, contains_agg, field, from_expr->rewrite_with_targetlist(tlist));
@@ -1248,6 +1272,12 @@ std::shared_ptr<Analyzer::Expr> ExtractExpr::rewrite_with_child_targetlist(
   return makeExpr<ExtractExpr>(type_info, contains_agg, field, from_expr->rewrite_with_child_targetlist(tlist));
 }
 
+std::shared_ptr<Analyzer::Expr> DatediffExpr::rewrite_with_child_targetlist(
+    const std::vector<std::shared_ptr<TargetEntry>>& tlist) const {
+  return makeExpr<DatediffExpr>(
+      type_info, field_, start_->rewrite_with_child_targetlist(tlist), end_->rewrite_with_child_targetlist(tlist));
+}
+
 std::shared_ptr<Analyzer::Expr> DatetruncExpr::rewrite_with_child_targetlist(
     const std::vector<std::shared_ptr<TargetEntry>>& tlist) const {
   return makeExpr<DatetruncExpr>(type_info, contains_agg, field, from_expr->rewrite_with_child_targetlist(tlist));
@@ -1266,6 +1296,11 @@ std::shared_ptr<Analyzer::Expr> CaseExpr::rewrite_agg_to_var(
 std::shared_ptr<Analyzer::Expr> ExtractExpr::rewrite_agg_to_var(
     const std::vector<std::shared_ptr<TargetEntry>>& tlist) const {
   return makeExpr<ExtractExpr>(type_info, contains_agg, field, from_expr->rewrite_agg_to_var(tlist));
+}
+
+std::shared_ptr<Analyzer::Expr> DatediffExpr::rewrite_agg_to_var(
+    const std::vector<std::shared_ptr<TargetEntry>>& tlist) const {
+  return makeExpr<DatediffExpr>(type_info, field_, start_->rewrite_agg_to_var(tlist), end_->rewrite_agg_to_var(tlist));
 }
 
 std::shared_ptr<Analyzer::Expr> DatetruncExpr::rewrite_agg_to_var(
@@ -1418,6 +1453,13 @@ bool ExtractExpr::operator==(const Expr& rhs) const {
     return false;
   const ExtractExpr& rhs_ee = dynamic_cast<const ExtractExpr&>(rhs);
   return field == rhs_ee.get_field() && *from_expr == *rhs_ee.get_from_expr();
+}
+
+bool DatediffExpr::operator==(const Expr& rhs) const {
+  if (typeid(rhs) != typeid(ExtractExpr))
+    return false;
+  const DatediffExpr& rhs_ee = dynamic_cast<const DatediffExpr&>(rhs);
+  return field_ == rhs_ee.get_field() && *start_ == *rhs_ee.get_start_expr() && *end_ == *rhs_ee.get_end_expr();
 }
 
 bool DatetruncExpr::operator==(const Expr& rhs) const {
@@ -1616,6 +1658,16 @@ void ExtractExpr::print() const {
   std::cout << ") ";
 }
 
+void DatediffExpr::print() const {
+  std::cout << "DATEDIFF(";
+  std::cout << field_;
+  std::cout << " START ";
+  start_->print();
+  std::cout << " END ";
+  end_->print();
+  std::cout << ") ";
+}
+
 void DatetruncExpr::print() const {
   std::cout << "DATE_TRUNC(";
   std::cout << field;
@@ -1725,6 +1777,15 @@ void ExtractExpr::find_expr(bool (*f)(const Expr*), std::list<const Expr*>& expr
   from_expr->find_expr(f, expr_list);
 }
 
+void DatediffExpr::find_expr(bool (*f)(const Expr*), std::list<const Expr*>& expr_list) const {
+  if (f(this)) {
+    add_unique(expr_list);
+    return;
+  }
+  start_->find_expr(f, expr_list);
+  end_->find_expr(f, expr_list);
+}
+
 void DatetruncExpr::find_expr(bool (*f)(const Expr*), std::list<const Expr*>& expr_list) const {
   if (f(this)) {
     add_unique(expr_list);
@@ -1744,6 +1805,11 @@ void CaseExpr::collect_rte_idx(std::set<int>& rte_idx_set) const {
 
 void ExtractExpr::collect_rte_idx(std::set<int>& rte_idx_set) const {
   from_expr->collect_rte_idx(rte_idx_set);
+}
+
+void DatediffExpr::collect_rte_idx(std::set<int>& rte_idx_set) const {
+  start_->collect_rte_idx(rte_idx_set);
+  end_->collect_rte_idx(rte_idx_set);
 }
 
 void DatetruncExpr::collect_rte_idx(std::set<int>& rte_idx_set) const {
@@ -1766,6 +1832,13 @@ void ExtractExpr::collect_column_var(
   from_expr->collect_column_var(colvar_set, include_agg);
 }
 
+void DatediffExpr::collect_column_var(
+    std::set<const ColumnVar*, bool (*)(const ColumnVar*, const ColumnVar*)>& colvar_set,
+    bool include_agg) const {
+  start_->collect_column_var(colvar_set, include_agg);
+  end_->collect_column_var(colvar_set, include_agg);
+}
+
 void DatetruncExpr::collect_column_var(
     std::set<const ColumnVar*, bool (*)(const ColumnVar*, const ColumnVar*)>& colvar_set,
     bool include_agg) const {
@@ -1783,6 +1856,11 @@ void CaseExpr::check_group_by(const std::list<std::shared_ptr<Analyzer::Expr>>& 
 
 void ExtractExpr::check_group_by(const std::list<std::shared_ptr<Analyzer::Expr>>& groupby) const {
   from_expr->check_group_by(groupby);
+}
+
+void DatediffExpr::check_group_by(const std::list<std::shared_ptr<Analyzer::Expr>>& groupby) const {
+  start_->check_group_by(groupby);
+  end_->check_group_by(groupby);
 }
 
 void DatetruncExpr::check_group_by(const std::list<std::shared_ptr<Analyzer::Expr>>& groupby) const {

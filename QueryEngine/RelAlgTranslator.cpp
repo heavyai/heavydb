@@ -253,6 +253,19 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateExtract(const RexFunc
                        : Parser::ExtractExpr::get(from_expr, *timeunit_lit->get_constval().stringval);
 }
 
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDatediff(const RexFunctionOperator* rex_function) const {
+  CHECK_EQ(size_t(3), rex_function->size());
+  const auto timeunit = translateScalarRex(rex_function->getOperand(0));
+  const auto timeunit_lit = std::dynamic_pointer_cast<Analyzer::Constant>(timeunit);
+  if (!timeunit_lit) {
+    throw std::runtime_error("The time unit parameter must be a literal.");
+  }
+  const auto start = translateScalarRex(rex_function->getOperand(1));
+  const auto end = translateScalarRex(rex_function->getOperand(2));
+  return makeExpr<Analyzer::DatediffExpr>(
+      SQLTypeInfo(kBIGINT, false), to_datediff_field(*timeunit_lit->get_constval().stringval), start, end);
+}
+
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDatepart(const RexFunctionOperator* rex_function) const {
   CHECK_EQ(size_t(2), rex_function->size());
   const auto timeunit = translateScalarRex(rex_function->getOperand(0));
@@ -372,6 +385,9 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(const RexFun
   }
   if (rex_function->getName() == std::string("PG_EXTRACT") || rex_function->getName() == std::string("PG_DATE_TRUNC")) {
     return translateExtract(rex_function);
+  }
+  if (rex_function->getName() == std::string("DATEDIFF")) {
+    return translateDatediff(rex_function);
   }
   if (rex_function->getName() == std::string("DATEPART")) {
     return translateDatepart(rex_function);

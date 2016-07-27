@@ -1085,6 +1085,26 @@ TEST(Select, Time) {
     ASSERT_EQ(
         32,
         v<int64_t>(run_simple_agg("SELECT DATEPART('s', CAST('2007-10-30 12:15:32' AS TIMESTAMP)) FROM test;", dt)));
+    ASSERT_EQ(3,
+              v<int64_t>(run_simple_agg(
+                  "SELECT DATEDIFF('year', CAST('2006-01-07 00:00:00' as TIMESTAMP), CAST('2009-01-07 00:00:00' AS "
+                  "TIMESTAMP)) FROM TEST LIMIT 1;",
+                  dt)));
+    ASSERT_EQ(36,
+              v<int64_t>(run_simple_agg(
+                  "SELECT DATEDIFF('month', CAST('2006-01-07 00:00:00' as TIMESTAMP), CAST('2009-01-07 00:00:00' AS "
+                  "TIMESTAMP)) FROM TEST LIMIT 1;",
+                  dt)));
+    ASSERT_EQ(1095,
+              v<int64_t>(run_simple_agg(
+                  "SELECT DATEDIFF('day', CAST('2006-01-07 00:00:00' as TIMESTAMP), CAST('2009-01-07 00:00:00' AS "
+                  "TIMESTAMP)) FROM TEST LIMIT 1;",
+                  dt)));
+    ASSERT_EQ(12,
+              v<int64_t>(run_simple_agg(
+                  "SELECT DATEDIFF('quarter', CAST('2006-01-07 00:00:00' as TIMESTAMP), CAST('2009-01-07 00:00:00' AS "
+                  "TIMESTAMP)) FROM TEST LIMIT 1;",
+                  dt)));
 #endif  // HAVE_CALCITE
     EXPECT_THROW(run_simple_agg("SELECT DATEPART('s', TIMESTAMP '2007-10-30 12:15:32') FROM test;", dt),
                  std::runtime_error);

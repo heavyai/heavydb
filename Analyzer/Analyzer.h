@@ -720,6 +720,44 @@ class ExtractExpr : public Expr {
 };
 
 /*
+ * @type ExtractExpr
+ * @brief the DATEDIFF expression
+ */
+class DatediffExpr : public Expr {
+ public:
+  DatediffExpr(const SQLTypeInfo& ti,
+               const DatetruncField f,
+               const std::shared_ptr<Analyzer::Expr> start,
+               const std::shared_ptr<Analyzer::Expr> end)
+      : Expr(ti, false), field_(f), start_(start), end_(end) {}
+  DatetruncField get_field() const { return field_; }
+  const Expr* get_start_expr() const { return start_.get(); }
+  const Expr* get_end_expr() const { return end_.get(); }
+  virtual std::shared_ptr<Analyzer::Expr> deep_copy() const;
+  virtual void check_group_by(const std::list<std::shared_ptr<Analyzer::Expr>>& groupby) const;
+  virtual void group_predicates(std::list<const Expr*>& scan_predicates,
+                                std::list<const Expr*>& join_predicates,
+                                std::list<const Expr*>& const_predicates) const;
+  virtual void collect_rte_idx(std::set<int>& rte_idx_set) const;
+  virtual void collect_column_var(std::set<const ColumnVar*, bool (*)(const ColumnVar*, const ColumnVar*)>& colvar_set,
+                                  bool include_agg) const;
+  virtual std::shared_ptr<Analyzer::Expr> rewrite_with_targetlist(
+      const std::vector<std::shared_ptr<TargetEntry>>& tlist) const;
+  virtual std::shared_ptr<Analyzer::Expr> rewrite_with_child_targetlist(
+      const std::vector<std::shared_ptr<TargetEntry>>& tlist) const;
+  virtual std::shared_ptr<Analyzer::Expr> rewrite_agg_to_var(
+      const std::vector<std::shared_ptr<TargetEntry>>& tlist) const;
+  virtual bool operator==(const Expr& rhs) const;
+  virtual void print() const;
+  virtual void find_expr(bool (*f)(const Expr*), std::list<const Expr*>& expr_list) const;
+
+ private:
+  const DatetruncField field_;
+  const std::shared_ptr<Analyzer::Expr> start_;
+  const std::shared_ptr<Analyzer::Expr> end_;
+};
+
+/*
  * @type DatetruncExpr
  * @brief the DATE_TRUNC expression
  */

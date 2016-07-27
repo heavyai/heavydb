@@ -624,6 +624,10 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Expr* expr,
   if (extract_expr) {
     return {codegen(extract_expr, co)};
   }
+  auto datediff_expr = dynamic_cast<const Analyzer::DatediffExpr*>(expr);
+  if (datediff_expr) {
+    return {codegen(datediff_expr, co)};
+  }
   auto datetrunc_expr = dynamic_cast<const Analyzer::DatetruncExpr*>(expr);
   if (datetrunc_expr) {
     return {codegen(datetrunc_expr, co)};
@@ -1394,6 +1398,32 @@ llvm::Value* Executor::codegen(const Analyzer::ExtractExpr* extract_expr, const 
     extract_fname += "Nullable";
   }
   return cgen_state_->emitExternalCall(extract_fname, get_int_type(64, cgen_state_->context_), extract_args);
+}
+
+llvm::Value* Executor::codegen(const Analyzer::DatediffExpr* datediff_expr, const CompilationOptions& co) {
+  static_assert(sizeof(time_t) == 4 || sizeof(time_t) == 8, "Unsupported time_t size");
+  auto start = codegen(datediff_expr->get_start_expr(), true, co).front();
+  CHECK(start->getType()->isIntegerTy(32) || start->getType()->isIntegerTy(64));
+  if (sizeof(time_t) == 4 && start->getType()->isIntegerTy(64)) {
+    start = cgen_state_->ir_builder_.CreateCast(
+        llvm::Instruction::CastOps::Trunc, start, get_int_type(32, cgen_state_->context_));
+  }
+  auto end = codegen(datediff_expr->get_end_expr(), true, co).front();
+  CHECK(end->getType()->isIntegerTy(32) || end->getType()->isIntegerTy(64));
+  if (sizeof(time_t) == 4 && end->getType()->isIntegerTy(64)) {
+    end = cgen_state_->ir_builder_.CreateCast(
+        llvm::Instruction::CastOps::Trunc, end, get_int_type(32, cgen_state_->context_));
+  }
+  std::vector<llvm::Value*> datediff_args{ll_int(static_cast<int32_t>(datediff_expr->get_field())), start, end};
+  std::string datediff_fname{"DateDiff"};
+  const auto& start_ti = datediff_expr->get_start_expr()->get_type_info();
+  const auto& end_ti = datediff_expr->get_end_expr()->get_type_info();
+  const auto& ret_ti = datediff_expr->get_type_info();
+  if (!start_ti.get_notnull() || !end_ti.get_notnull()) {
+    datediff_args.push_back(inlineIntNull(ret_ti));
+    datediff_fname += "Nullable";
+  }
+  return cgen_state_->emitExternalCall(datediff_fname, get_int_type(64, cgen_state_->context_), datediff_args);
 }
 
 llvm::Value* Executor::codegen(const Analyzer::DatetruncExpr* datetrunc_expr, const CompilationOptions& co) {
@@ -5095,6 +5125,8 @@ declare i64 @ExtractFromTime(i32, i64);
 declare i64 @ExtractFromTimeNullable(i32, i64, i64);
 declare i64 @DateTruncate(i32, i64);
 declare i64 @DateTruncateNullable(i32, i64, i64);
+declare i64 @DateDiff(i32, i64, i64);
+declare i64 @DateDiffNullable(i32, i64, i64, i64);
 declare i64 @string_decode(i8*, i64);
 declare i32 @array_size(i8*, i64, i32);
 declare i1 @array_is_null(i8*, i64);

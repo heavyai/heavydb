@@ -189,3 +189,33 @@ extern "C"
   }
   return DateTruncate(field, timeval);
 }
+
+extern "C"
+#ifdef __CUDACC__
+    __device__
+#endif
+        int64_t DateDiff(const DatetruncField datepart, time_t startdate, time_t enddate) {
+  int64_t res = 0;
+  time_t crt = enddate;
+  while (crt > startdate) {
+    const time_t dt = DateTruncate(datepart, crt - 1);
+    if (dt <= startdate) {
+      return res;
+    }
+    ++res;
+    crt = dt - 1;
+  }
+  return res;
+}
+
+extern "C"
+#ifdef __CUDACC__
+    __device__
+#endif
+        int64_t
+            DateDiffNullable(const DatetruncField datepart, time_t startdate, time_t enddate, const int64_t null_val) {
+  if (startdate == null_val || enddate == null_val) {
+    return null_val;
+  }
+  return DateDiff(datepart, startdate, enddate);
+}
