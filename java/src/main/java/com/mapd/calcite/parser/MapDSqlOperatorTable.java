@@ -102,6 +102,7 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
         opTab.addOperator(new Now());
         opTab.addOperator(new Datetime());
         opTab.addOperator(new PgExtract());
+        opTab.addOperator(new Datepart());
         opTab.addOperator(new PgDateTrunc());
         opTab.addOperator(new Length());
         opTab.addOperator(new CharLength());
@@ -316,6 +317,25 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
                     null,
                     OperandTypes.family(SqlTypeFamily.STRING, SqlTypeFamily.DATETIME),
                     SqlFunctionCategory.SYSTEM);
+        }
+
+        @Override
+        public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+            final RelDataTypeFactory typeFactory
+                    = opBinding.getTypeFactory();
+            return typeFactory.createSqlType(SqlTypeName.BIGINT);
+        }
+    }
+
+    public static class Datepart extends SqlFunction {
+
+        public Datepart() {
+            super("DATEPART",
+                    SqlKind.OTHER_FUNCTION,
+                    null,
+                    null,
+                    OperandTypes.family(SqlTypeFamily.STRING, SqlTypeFamily.DATETIME),
+                    SqlFunctionCategory.TIMEDATE);
         }
 
         @Override

@@ -170,7 +170,8 @@ class CalciteAdapter {
       }
       return translateNow();
     }
-    if (op_str == std::string("PG_EXTRACT") || op_str == std::string("PG_DATE_TRUNC")) {
+    if (op_str == std::string("PG_EXTRACT") || op_str == std::string("DATEPART") ||
+        op_str == std::string("PG_DATE_TRUNC")) {
       return translateExtract(operands, scan_targets, op_str == std::string("PG_DATE_TRUNC"));
     }
     if (op_str == std::string("LENGTH") || op_str == std::string("CHAR_LENGTH")) {
@@ -1087,6 +1088,16 @@ std::string pg_shim(const std::string& query) {
         break;
       }
       result.replace(what.position(), what.length(), "PG_EXTRACT('" + what[1] + "', " + what[2] + ")");
+    }
+  }
+  {
+    boost::regex datepart_expr{R"(datepart\s*\(\s*(\w+)\s*,(.*)\))", boost::regex::extended | boost::regex::icase};
+    boost::smatch what;
+    while (true) {
+      if (!boost::regex_search(result, what, datepart_expr)) {
+        break;
+      }
+      result.replace(what.position(), what.length(), "DATEPART('" + what[1] + "', " + what[2] + ")");
     }
   }
   {

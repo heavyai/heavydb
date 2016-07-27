@@ -1016,6 +1016,32 @@ TEST(Select, Time) {
     ASSERT_EQ(1440180000L,
               v<int64_t>(run_simple_agg(
                   "select DATE_TRUNC (QUARTERDAY, CAST('2015-08-21T23:59:59' AS timestamp)) FROM test limit 1;", dt)));
+#ifdef HAVE_CALCITE
+    ASSERT_EQ(
+        2007,
+        v<int64_t>(run_simple_agg("SELECT DATEPART(year, CAST('2007-10-30 12:15:32' AS TIMESTAMP)) FROM test;", dt)));
+    ASSERT_EQ(4,
+              v<int64_t>(
+                  run_simple_agg("SELECT DATEPART(quarter, CAST('2007-10-30 12:15:32' AS TIMESTAMP)) FROM test;", dt)));
+    ASSERT_EQ(
+        10,
+        v<int64_t>(run_simple_agg("SELECT DATEPART(month, CAST('2007-10-30 12:15:32' AS TIMESTAMP)) FROM test;", dt)));
+    ASSERT_EQ(
+        303,
+        v<int64_t>(run_simple_agg("SELECT DATEPART(doy, CAST('2007-10-30 12:15:32' AS TIMESTAMP)) FROM test;", dt)));
+    ASSERT_EQ(
+        30,
+        v<int64_t>(run_simple_agg("SELECT DATEPART(day, CAST('2007-10-30 12:15:32' AS TIMESTAMP)) FROM test;", dt)));
+    ASSERT_EQ(
+        12,
+        v<int64_t>(run_simple_agg("SELECT DATEPART(hour, CAST('2007-10-30 12:15:32' AS TIMESTAMP)) FROM test;", dt)));
+    ASSERT_EQ(
+        15,
+        v<int64_t>(run_simple_agg("SELECT DATEPART(minute, CAST('2007-10-30 12:15:32' AS TIMESTAMP)) FROM test;", dt)));
+    ASSERT_EQ(
+        32,
+        v<int64_t>(run_simple_agg("SELECT DATEPART(second, CAST('2007-10-30 12:15:32' AS TIMESTAMP)) FROM test;", dt)));
+#endif  // HAVE_CALCITE
     const auto rows = run_multiple_agg(
         "SELECT DATE_TRUNC(month, CAST(o AS TIMESTAMP(0))) AS key0, str AS key1, COUNT(*) AS val FROM test GROUP BY "
         "key0, key1 ORDER BY val DESC, key1;",

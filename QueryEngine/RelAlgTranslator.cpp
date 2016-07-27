@@ -359,7 +359,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(const RexFun
   if (rex_function->getName() == std::string("LIKE") || rex_function->getName() == std::string("PG_ILIKE")) {
     return translateLike(rex_function);
   }
-  if (rex_function->getName() == std::string("PG_EXTRACT") || rex_function->getName() == std::string("PG_DATE_TRUNC")) {
+  if (rex_function->getName() == std::string("PG_EXTRACT") || rex_function->getName() == std::string("DATEPART") ||
+      rex_function->getName() == std::string("PG_DATE_TRUNC")) {
     return translateExtract(rex_function);
   }
   if (rex_function->getName() == std::string("LENGTH") || rex_function->getName() == std::string("CHAR_LENGTH")) {
