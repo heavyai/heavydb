@@ -1075,6 +1075,8 @@ TEST(Select, Time) {
     ASSERT_EQ(
         32, v<int64_t>(run_simple_agg("SELECT DATEPART(s, CAST('2007-10-30 12:15:32' AS TIMESTAMP)) FROM test;", dt)));
 #endif  // HAVE_CALCITE
+    EXPECT_THROW(run_simple_agg("SELECT DATEPART(s, TIMESTAMP '2007-10-30 12:15:32') FROM test;", dt),
+                 std::runtime_error);
     const auto rows = run_multiple_agg(
         "SELECT DATE_TRUNC(month, CAST(o AS TIMESTAMP(0))) AS key0, str AS key1, COUNT(*) AS val FROM test GROUP BY "
         "key0, key1 ORDER BY val DESC, key1;",

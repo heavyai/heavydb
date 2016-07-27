@@ -173,7 +173,7 @@ RexAbstractInput* parse_abstract_input(const rapidjson::Value& expr) noexcept {
   return new RexAbstractInput(json_i64(input));
 }
 
-RexLiteral* parse_literal(const rapidjson::Value& expr) noexcept {
+RexLiteral* parse_literal(const rapidjson::Value& expr) {
   CHECK(expr.IsObject());
   const auto& literal = field(expr, "literal");
   const auto type = to_sql_type(json_str(field(expr, "type")));
@@ -193,6 +193,12 @@ RexLiteral* parse_literal(const rapidjson::Value& expr) noexcept {
       return new RexLiteral(json_bool(literal), type, target_type, scale, precision, type_scale, type_precision);
     case kNULLT:
       return new RexLiteral(target_type);
+    case kTIME:
+    case kTIMESTAMP:
+    case kDATE: {
+      SQLTypeInfo lit_ti(type, false);
+      throw std::runtime_error("Unsupported literal type " + lit_ti.get_type_name());
+    }
     default:
       CHECK(false);
   }
