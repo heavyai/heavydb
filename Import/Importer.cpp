@@ -858,19 +858,24 @@ std::vector<EncodingType> Detector::find_best_encodings(
   if (raw_rows.size() < 1) {
     throw std::runtime_error("No rows found in: " + boost::filesystem::basename(file_path));
   }
-  size_t num_cols = raw_rows.front().size();
-  size_t num_rows = raw_rows.size();
+  size_t num_cols = best_types.size();
   std::vector<EncodingType> best_encodes(num_cols, kENCODING_NONE);
+  std::vector<size_t> num_rows_per_col(num_cols, 1);
+  std::vector<std::unordered_set<std::string>> count_set(num_cols);
+  for (auto row = row_begin; row != row_end; row++) {
+    for (size_t col_idx = 0; col_idx < row->size(); col_idx++) {
+      if (IS_STRING(best_types[col_idx])) {
+        count_set[col_idx].insert(row->at(col_idx));
+        num_rows_per_col[col_idx]++;
+      }
+    }
+  }
   for (size_t col_idx = 0; col_idx < num_cols; col_idx++) {
-    // determine whether dictionary
     if (IS_STRING(best_types[col_idx])) {
-      std::unordered_set<std::string> count_set;
-      for (size_t row_idx = 1; row_idx < num_rows; row_idx++)
-        count_set.insert(raw_rows[row_idx][col_idx]);
-      float uniqueRatio = num_rows / static_cast<float>(count_set.size()) / num_rows;
-      // float uniqueScore = uniqueRatio * (num_row)
-      if (uniqueRatio < 0.75)
+      float uniqueRatio = static_cast<float>(count_set[col_idx].size()) / num_rows_per_col[col_idx];
+      if (uniqueRatio < 0.75) {
         best_encodes[col_idx] = kENCODING_DICT;
+      }
     }
   }
   return best_encodes;
