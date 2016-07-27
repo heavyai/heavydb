@@ -7,10 +7,12 @@ import com.mapd.calcite.parser.MapDParser;
 import com.mapd.calcite.parser.MapDUser;
 import java.io.IOException;
 import java.util.Map;
+import java.util.Properties;
 import org.apache.calcite.runtime.CalciteContextException;
 import org.apache.calcite.sql.parser.SqlParseException;
 import org.apache.commons.pool.PoolableObjectFactory;
 import org.apache.commons.pool.impl.GenericObjectPool;
+import org.apache.log4j.PropertyConfigurator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -30,6 +32,15 @@ final static Logger MAPDLOGGER = LoggerFactory.getLogger(CalciteDirect.class);
   private final String extSigsJson;
 
   public CalciteDirect(int port, String dataDir, String extensionFunctionsAstFile) {
+    Properties p = new Properties();
+    try {
+        p.load(getClass().getResourceAsStream("/log4j.properties" ));
+    }
+    catch (IOException ex) {
+        MAPDLOGGER.error("Could not load log4j property file from resources " + ex.getMessage());
+    }
+    p.put( "log.dir", dataDir ); // overwrite "log.dir"
+    PropertyConfigurator.configure( p );
     MAPDLOGGER.debug("CalciteDirect Constructor port is '" + port + "' data dir is '" + dataDir +"'");
     MAPDLOGGER.debug("Extension signatures file is " + extensionFunctionsAstFile);
     this.parserPool = new GenericObjectPool();

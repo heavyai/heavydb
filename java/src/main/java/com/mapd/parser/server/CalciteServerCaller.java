@@ -3,9 +3,11 @@
  */
 package com.mapd.parser.server;
 
+import java.io.IOException;
 import static java.lang.System.exit;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Properties;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.DefaultParser;
@@ -13,6 +15,7 @@ import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Option;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
+import org.apache.log4j.PropertyConfigurator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -70,6 +73,17 @@ public class CalciteServerCaller {
     String extensionsDir = cmd.getOptionValue("extensions", "build/QueryEngine");
     final Path extensionFunctionsAstFile = Paths.get(extensionsDir, "ExtensionFunctions.ast");
 
+    //Add logging to our log files directories
+    Properties p = new Properties();
+    try {
+        p.load(getClass().getResourceAsStream("/log4j.properties" ));
+    }
+    catch (IOException ex) {
+        MAPDLOGGER.error("Could not load log4j property file from resources " + ex.getMessage());
+    }
+    p.put( "log.dir", dataDir ); // overwrite "log.dir"
+    PropertyConfigurator.configure( p );
+
     calciteServerWrapper = new CalciteServerWrapper(portNum, -1, dataDir, extensionFunctionsAstFile.toString());
 
     while (true) {
@@ -89,7 +103,7 @@ public class CalciteServerCaller {
   private void help(Options options) {
     // automatically generate the help statement
     HelpFormatter formatter = new HelpFormatter();
-    formatter.printHelp("SQLImporter", options);
+    formatter.printHelp("CalciteServerCaller", options);
   }
 
 }
