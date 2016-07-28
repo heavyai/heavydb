@@ -268,8 +268,12 @@ public class SQLImporter {
         }
         LOGGER.debug("Column name is " + metaData.getColumnName(i));
         LOGGER.debug("Column type is " + metaData.getColumnTypeName(i));
+        LOGGER.debug("Column type is " + metaData.getColumnType(i));
 
-        sb.append(metaData.getColumnName(i)).append(" ").append(getColType(metaData.getColumnTypeName(i)));
+        sb.append(metaData.getColumnName(i)).append(" ");
+
+        sb.append(getColType(metaData.getColumnType(i), metaData.getPrecision(i),
+                metaData.getScale(i)));
       }
       sb.append(")");
 
@@ -343,14 +347,43 @@ public class SQLImporter {
       LOGGER.error("SQL Execute failed - " + ex.toString());
       exit(1);
     }
-
   }
 
-  private String getColType(String cType) {
-    if (cType.equals("VARCHAR") || cType.equals("CHAR")) {
-      return ("TEXT ENCODING DICT");
-    } else {
-      return cType;
+  private String getColType(int cType, int precision, int scale) {
+      switch (cType) {
+      case java.sql.Types.TINYINT:
+      case java.sql.Types.SMALLINT:
+          return ("SMALLINT");
+      case java.sql.Types.INTEGER:
+          return ("INTEGER");
+      case java.sql.Types.BIGINT:
+          return ("BIGINT");
+      case java.sql.Types.FLOAT:
+          return ("FLOAT");
+      case java.sql.Types.DECIMAL:
+          return ("DECIMAL(" + precision + "," + scale + ")");
+      case java.sql.Types.DOUBLE:
+          return ("DOUBLE");
+      case java.sql.Types.REAL:
+          return ("REAL");
+      case java.sql.Types.NUMERIC:
+          return ("NUMERIC");
+      case java.sql.Types.TIME:
+          return ("TIME");
+      case java.sql.Types.TIMESTAMP:
+          return ("TIMESTAMP");
+      case java.sql.Types.DATE:
+          return ("DATE");
+      case java.sql.Types.BOOLEAN:
+          return ("BOOLEAN");
+      case java.sql.Types.VARCHAR:
+      case java.sql.Types.NCHAR:
+      case java.sql.Types.CHAR:
+      case java.sql.Types.LONGVARCHAR:
+      case java.sql.Types.LONGNVARCHAR:
+          return ("TEXT ENCODING DICT");
+      default:
+        throw new AssertionError("Column type " + cType + " not Supported");
     }
   }
 }
