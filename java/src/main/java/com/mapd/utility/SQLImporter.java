@@ -367,7 +367,7 @@ public class SQLImporter {
       case java.sql.Types.REAL:
           return ("REAL");
       case java.sql.Types.NUMERIC:
-          return ("NUMERIC");
+          return ("NUMERIC(" + precision + "," + scale + ")");
       case java.sql.Types.TIME:
           return ("TIME");
       case java.sql.Types.TIMESTAMP:
