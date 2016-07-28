@@ -212,7 +212,7 @@ std::unique_ptr<RexLiteral> parse_literal(const rapidjson::Value& expr) {
 
 std::unique_ptr<const RexScalar> parse_scalar_expr(const rapidjson::Value& expr);
 
-SQLTypeInfo parse_type(const rapidjson::Value& type_obj) {
+SQLTypeInfo parse_type(const rapidjson::Value& type_obj) noexcept {
   CHECK(type_obj.IsObject() && (type_obj.MemberCount() >= 2 && type_obj.MemberCount() <= 4));
   const auto type = to_sql_type(json_str(field(type_obj, "type")));
   const auto nullable = json_bool(field(type_obj, "nullable"));
@@ -262,7 +262,7 @@ std::unique_ptr<RexCase> parse_case(const rapidjson::Value& expr) {
   return std::unique_ptr<RexCase>(new RexCase(expr_pair_list, else_expr));
 }
 
-std::vector<std::string> strings_from_json_array(const rapidjson::Value& json_str_arr) {
+std::vector<std::string> strings_from_json_array(const rapidjson::Value& json_str_arr) noexcept {
   CHECK(json_str_arr.IsArray());
   std::vector<std::string> fields;
   for (auto json_str_arr_it = json_str_arr.Begin(); json_str_arr_it != json_str_arr.End(); ++json_str_arr_it) {
@@ -272,7 +272,7 @@ std::vector<std::string> strings_from_json_array(const rapidjson::Value& json_st
   return fields;
 }
 
-std::vector<size_t> indices_from_json_array(const rapidjson::Value& json_idx_arr) {
+std::vector<size_t> indices_from_json_array(const rapidjson::Value& json_idx_arr) noexcept {
   CHECK(json_idx_arr.IsArray());
   std::vector<size_t> indices;
   for (auto json_idx_arr_it = json_idx_arr.Begin(); json_idx_arr_it != json_idx_arr.End(); ++json_idx_arr_it) {
@@ -283,7 +283,7 @@ std::vector<size_t> indices_from_json_array(const rapidjson::Value& json_idx_arr
   return indices;
 }
 
-std::string json_node_to_string(const rapidjson::Value& node) {
+std::string json_node_to_string(const rapidjson::Value& node) noexcept {
   rapidjson::StringBuffer buffer;
   rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
   node.Accept(writer);
@@ -330,7 +330,7 @@ JoinType to_join_type(const std::string& join_type_name) {
 std::unique_ptr<const RexScalar> disambiguate_rex(const RexScalar*, const RANodeOutput&);
 
 std::unique_ptr<const RexOperator> disambiguate_operator(const RexOperator* rex_operator,
-                                                         const RANodeOutput& ra_output) {
+                                                         const RANodeOutput& ra_output) noexcept {
   std::vector<std::unique_ptr<const RexScalar>> disambiguated_operands;
   for (size_t i = 0; i < rex_operator->size(); ++i) {
     disambiguated_operands.emplace_back(disambiguate_rex(rex_operator->getOperand(i), ra_output));
@@ -369,7 +369,7 @@ std::unique_ptr<const RexScalar> disambiguate_rex(const RexScalar* rex_scalar, c
   return std::unique_ptr<const RexLiteral>(new RexLiteral(*rex_literal));
 }
 
-void bind_project_to_input(RelProject* project_node, const RANodeOutput& input) {
+void bind_project_to_input(RelProject* project_node, const RANodeOutput& input) noexcept {
   CHECK_EQ(size_t(1), project_node->inputCount());
   std::vector<std::unique_ptr<const RexScalar>> disambiguated_exprs;
   for (size_t i = 0; i < project_node->size(); ++i) {
@@ -378,7 +378,7 @@ void bind_project_to_input(RelProject* project_node, const RANodeOutput& input) 
   project_node->setExpressions(disambiguated_exprs);
 }
 
-void bind_inputs(const std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
+void bind_inputs(const std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept {
   for (auto ra_node : nodes) {
     const auto filter_node = std::dynamic_pointer_cast<RelFilter>(ra_node);
     if (filter_node) {
@@ -403,7 +403,7 @@ void bind_inputs(const std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
   }
 }
 
-void mark_nops(const std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
+void mark_nops(const std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept {
   for (auto node : nodes) {
     const auto agg_node = std::dynamic_pointer_cast<RelAggregate>(node);
     if (!agg_node || agg_node->getAggExprsCount()) {
@@ -419,7 +419,7 @@ void mark_nops(const std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
 }
 
 std::vector<const Rex*> reproject_targets(const RelProject* simple_project,
-                                          const std::vector<const Rex*>& target_exprs) {
+                                          const std::vector<const Rex*>& target_exprs) noexcept {
   std::vector<const Rex*> result;
   for (size_t i = 0; i < simple_project->size(); ++i) {
     const auto input_rex = dynamic_cast<const RexInput*>(simple_project->getProjectAt(i));
@@ -430,7 +430,8 @@ std::vector<const Rex*> reproject_targets(const RelProject* simple_project,
   return result;
 }
 
-bool is_safe_to_coalesce(const std::vector<std::shared_ptr<RelAlgNode>>& nodes, const std::vector<size_t>& pattern) {
+bool is_safe_to_coalesce(const std::vector<std::shared_ptr<RelAlgNode>>& nodes,
+                         const std::vector<size_t>& pattern) noexcept {
   std::unordered_set<const RelAlgNode*> coalesced_internal_nodes;
   const auto last_idx = pattern.back();
   const auto last_node = nodes[last_idx];
@@ -455,7 +456,7 @@ bool is_safe_to_coalesce(const std::vector<std::shared_ptr<RelAlgNode>>& nodes, 
   return true;
 }
 
-void create_compound(std::vector<std::shared_ptr<RelAlgNode>>& nodes, const std::vector<size_t>& pattern) {
+void create_compound(std::vector<std::shared_ptr<RelAlgNode>>& nodes, const std::vector<size_t>& pattern) noexcept {
   CHECK_GE(pattern.size(), size_t(2));
   CHECK_LE(pattern.size(), size_t(4));
   if (!is_safe_to_coalesce(nodes, pattern)) {
@@ -540,7 +541,7 @@ void create_compound(std::vector<std::shared_ptr<RelAlgNode>>& nodes, const std:
   }
 }
 
-void coalesce_nodes(std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
+void coalesce_nodes(std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept {
   enum class CoalesceState { Initial, Filter, FirstProject, Aggregate };
   std::vector<size_t> crt_pattern;
   CoalesceState crt_state{CoalesceState::Initial};
@@ -610,7 +611,7 @@ void coalesce_nodes(std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
 
 // For now, the only target to eliminate is restricted to project-aggregate pair between scan/sort and join
 // TODO(miyu): allow more chance if proved safe
-void eliminate_identical_copy(std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
+void eliminate_identical_copy(std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept {
   std::unordered_set<std::shared_ptr<const RelAlgNode>> copies;
   auto sink = nodes.back();
   for (auto node : nodes) {
@@ -656,7 +657,7 @@ void eliminate_identical_copy(std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
 // For some reason, Calcite generates Sort, Project, Sort sequences where the
 // two Sort nodes are identical and the Project is identity. Simplify this
 // pattern by re-binding the input of the second sort to the input of the first.
-void simplify_sort(std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
+void simplify_sort(std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept {
   if (nodes.size() < 3) {
     return;
   }
@@ -675,7 +676,7 @@ void simplify_sort(std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
   }
 }
 
-int64_t get_int_literal_field(const rapidjson::Value& obj, const char field[], const int64_t default_val) {
+int64_t get_int_literal_field(const rapidjson::Value& obj, const char field[], const int64_t default_val) noexcept {
   const auto it = obj.FindMember(field);
   if (it == obj.MemberEnd()) {
     return default_val;
@@ -687,7 +688,7 @@ int64_t get_int_literal_field(const rapidjson::Value& obj, const char field[], c
   return lit->getVal<int64_t>();
 }
 
-void check_empty_inputs_field(const rapidjson::Value& node) {
+void check_empty_inputs_field(const rapidjson::Value& node) noexcept {
   const auto& inputs_json = field(node, "inputs");
   CHECK(inputs_json.IsArray() && !inputs_json.Size());
 }
