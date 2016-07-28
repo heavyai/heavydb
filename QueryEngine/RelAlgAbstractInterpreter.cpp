@@ -458,8 +458,8 @@ void create_compound(std::vector<std::shared_ptr<RelAlgNode>>& nodes, const std:
     return;
   }
 
-  const RexScalar* filter_rex{nullptr};
-  std::vector<const RexScalar*> scalar_sources;
+  std::unique_ptr<const RexScalar> filter_rex;
+  std::vector<std::unique_ptr<const RexScalar>> scalar_sources;
   size_t groupby_count{0};
   std::vector<std::string> fields;
   std::vector<const RexAgg*> agg_exprs;
@@ -471,7 +471,7 @@ void create_compound(std::vector<std::shared_ptr<RelAlgNode>>& nodes, const std:
     const auto ra_filter = std::dynamic_pointer_cast<RelFilter>(ra_node);
     if (ra_filter) {
       CHECK(!filter_rex);
-      filter_rex = ra_filter->getAndReleaseCondition();
+      filter_rex.reset(ra_filter->getAndReleaseCondition());
       CHECK(filter_rex);
       continue;
     }
@@ -489,8 +489,8 @@ void create_compound(std::vector<std::shared_ptr<RelAlgNode>>& nodes, const std:
           bind_project_to_input(ra_project.get(), get_node_output(filter_input->getInput(0)));
         }
         scalar_sources = ra_project->getExpressionsAndRelease();
-        for (const auto scalar_expr : scalar_sources) {
-          target_exprs.push_back(scalar_expr);
+        for (const auto& scalar_expr : scalar_sources) {
+          target_exprs.push_back(scalar_expr.get());
         }
         first_project = false;
       } else {
@@ -510,7 +510,7 @@ void create_compound(std::vector<std::shared_ptr<RelAlgNode>>& nodes, const std:
       for (size_t group_idx = 0; group_idx < groupby_count; ++group_idx) {
         const auto rex_ref = new RexRef(group_idx + 1);
         target_exprs.push_back(rex_ref);
-        scalar_sources.push_back(rex_ref);
+        scalar_sources.emplace_back(rex_ref);
       }
       for (const auto rex_agg : agg_exprs) {
         target_exprs.push_back(rex_agg);

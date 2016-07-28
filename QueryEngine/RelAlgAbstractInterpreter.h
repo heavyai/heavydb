@@ -421,13 +421,7 @@ class RelProject : public RelAlgNode {
     return scalar_exprs_[idx].get();
   }
 
-  std::vector<const RexScalar*> getExpressionsAndRelease() {
-    std::vector<const RexScalar*> result;
-    for (auto& expr : scalar_exprs_) {
-      result.push_back(expr.release());
-    }
-    return result;
-  }
+  std::vector<std::unique_ptr<const RexScalar>> getExpressionsAndRelease() { return std::move(scalar_exprs_); }
 
   const std::vector<std::string>& getFields() const { return fields_; }
 
@@ -572,24 +566,22 @@ class RelCompound : public RelAlgNode {
   // 'target_exprs_' are either scalar expressions owned by 'scalar_sources_'
   // or aggregate expressions owned by 'agg_exprs_', with the arguments
   // owned by 'scalar_sources_'.
-  RelCompound(const RexScalar* filter_expr,
+  RelCompound(std::unique_ptr<const RexScalar>& filter_expr,
               const std::vector<const Rex*>& target_exprs,
               const size_t groupby_count,
               const std::vector<const RexAgg*>& agg_exprs,
               const std::vector<std::string>& fields,
-              const std::vector<const RexScalar*>& scalar_sources,
+              std::vector<std::unique_ptr<const RexScalar>>& scalar_sources,
               const bool is_agg)
-      : filter_expr_(filter_expr),
+      : filter_expr_(std::move(filter_expr)),
         target_exprs_(target_exprs),
         groupby_count_(groupby_count),
         fields_(fields),
-        is_agg_(is_agg) {
+        is_agg_(is_agg),
+        scalar_sources_(std::move(scalar_sources)) {
     CHECK_EQ(fields.size(), target_exprs.size());
     for (auto agg_expr : agg_exprs) {
       agg_exprs_.emplace_back(agg_expr);
-    }
-    for (auto scalar_source : scalar_sources) {
-      scalar_sources_.emplace_back(scalar_source);
     }
   }
 
