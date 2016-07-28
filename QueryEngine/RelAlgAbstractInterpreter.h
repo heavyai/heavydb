@@ -391,23 +391,14 @@ class RelScan : public RelAlgNode {
 class RelProject : public RelAlgNode {
  public:
   // Takes memory ownership of the expressions.
-  RelProject(const std::vector<const RexScalar*>& exprs,
+  RelProject(std::vector<std::unique_ptr<const RexScalar>>& scalar_exprs,
              const std::vector<std::string>& fields,
              std::shared_ptr<const RelAlgNode> input)
-      : fields_(fields) {
-    CHECK_EQ(exprs.size(), fields.size());
-    for (auto expr : exprs) {
-      scalar_exprs_.emplace_back(expr);
-    }
+      : scalar_exprs_(std::move(scalar_exprs)), fields_(fields) {
     inputs_.push_back(input);
   }
 
-  void setExpressions(const std::vector<const RexScalar*>& exprs) {
-    decltype(scalar_exprs_)().swap(scalar_exprs_);
-    for (auto expr : exprs) {
-      scalar_exprs_.emplace_back(expr);
-    }
-  }
+  void setExpressions(std::vector<std::unique_ptr<const RexScalar>>& exprs) { scalar_exprs_ = std::move(exprs); }
 
   // True iff all the projected expressions are inputs. If true,
   // this node can be elided and merged into the previous node

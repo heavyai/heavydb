@@ -366,9 +366,9 @@ const RexScalar* disambiguate_rex(const RexScalar* rex_scalar, const RANodeOutpu
 
 void bind_project_to_input(RelProject* project_node, const RANodeOutput& input) {
   CHECK_EQ(size_t(1), project_node->inputCount());
-  std::vector<const RexScalar*> disambiguated_exprs;
+  std::vector<std::unique_ptr<const RexScalar>> disambiguated_exprs;
   for (size_t i = 0; i < project_node->size(); ++i) {
-    disambiguated_exprs.push_back(disambiguate_rex(project_node->getProjectAt(i), input));
+    disambiguated_exprs.emplace_back(disambiguate_rex(project_node->getProjectAt(i), input));
   }
   project_node->setExpressions(disambiguated_exprs);
 }
@@ -752,9 +752,9 @@ class RaAbstractInterp {
     CHECK_EQ(size_t(1), inputs.size());
     const auto& exprs_json = field(proj_ra, "exprs");
     CHECK(exprs_json.IsArray());
-    std::vector<const RexScalar*> exprs;
+    std::vector<std::unique_ptr<const RexScalar>> exprs;
     for (auto exprs_json_it = exprs_json.Begin(); exprs_json_it != exprs_json.End(); ++exprs_json_it) {
-      exprs.push_back(parse_scalar_expr(*exprs_json_it));
+      exprs.emplace_back(parse_scalar_expr(*exprs_json_it));
     }
     const auto& fields = field(proj_ra, "fields");
     return std::make_shared<RelProject>(exprs, strings_from_json_array(fields), inputs.front());
