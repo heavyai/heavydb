@@ -228,10 +228,10 @@ RexOperator* parse_operator(const rapidjson::Value& expr) {
   const auto op = is_quantifier ? kFUNCTION : to_sql_op(op_name);
   const auto& operators_json_arr = field(expr, "operands");
   CHECK(operators_json_arr.IsArray());
-  std::vector<const RexScalar*> operands;
+  std::vector<std::unique_ptr<const RexScalar>> operands;
   for (auto operators_json_arr_it = operators_json_arr.Begin(); operators_json_arr_it != operators_json_arr.End();
        ++operators_json_arr_it) {
-    operands.push_back(parse_scalar_expr(*operators_json_arr_it));
+    operands.emplace_back(parse_scalar_expr(*operators_json_arr_it));
   }
   const auto type_it = expr.FindMember("type");
   CHECK(type_it != expr.MemberEnd());
@@ -325,9 +325,9 @@ JoinType to_join_type(const std::string& join_type_name) {
 const RexScalar* disambiguate_rex(const RexScalar*, const RANodeOutput&);
 
 const RexOperator* disambiguate_operator(const RexOperator* rex_operator, const RANodeOutput& ra_output) {
-  std::vector<const RexScalar*> disambiguated_operands;
+  std::vector<std::unique_ptr<const RexScalar>> disambiguated_operands;
   for (size_t i = 0; i < rex_operator->size(); ++i) {
-    disambiguated_operands.push_back(disambiguate_rex(rex_operator->getOperand(i), ra_output));
+    disambiguated_operands.emplace_back(disambiguate_rex(rex_operator->getOperand(i), ra_output));
   }
   return rex_operator->getDisambiguated(disambiguated_operands);
 }

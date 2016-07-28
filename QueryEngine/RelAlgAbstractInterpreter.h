@@ -145,14 +145,10 @@ class RexLiteral : public RexScalar {
 
 class RexOperator : public RexScalar {
  public:
-  RexOperator(const SQLOps op, const std::vector<const RexScalar*> operands, const SQLTypeInfo& type)
-      : op_(op), type_(type) {
-    for (auto operand : operands) {
-      operands_.emplace_back(operand);
-    }
-  }
+  RexOperator(const SQLOps op, std::vector<std::unique_ptr<const RexScalar>>& operands, const SQLTypeInfo& type)
+      : op_(op), operands_(std::move(operands)), type_(type) {}
 
-  virtual const RexOperator* getDisambiguated(const std::vector<const RexScalar*>& operands) const {
+  virtual const RexOperator* getDisambiguated(std::vector<std::unique_ptr<const RexScalar>>& operands) const {
     return new RexOperator(op_, operands, type_);
   }
 
@@ -249,10 +245,12 @@ class RexCase : public RexScalar {
 
 class RexFunctionOperator : public RexOperator {
  public:
-  RexFunctionOperator(const std::string& name, const std::vector<const RexScalar*> operands, const SQLTypeInfo& ti)
+  RexFunctionOperator(const std::string& name,
+                      std::vector<std::unique_ptr<const RexScalar>>& operands,
+                      const SQLTypeInfo& ti)
       : RexOperator(kFUNCTION, operands, ti), name_(name) {}
 
-  virtual const RexOperator* getDisambiguated(const std::vector<const RexScalar*>& operands) const override {
+  virtual const RexOperator* getDisambiguated(std::vector<std::unique_ptr<const RexScalar>>& operands) const {
     return new RexFunctionOperator(name_, operands, getType());
   }
 
