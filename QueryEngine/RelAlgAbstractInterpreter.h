@@ -448,13 +448,10 @@ class RelAggregate : public RelAlgNode {
  public:
   // Takes ownership of the aggregate expressions.
   RelAggregate(const size_t groupby_count,
-               const std::vector<const RexAgg*>& agg_exprs,
+               std::vector<std::unique_ptr<const RexAgg>>& agg_exprs,
                const std::vector<std::string>& fields,
                std::shared_ptr<const RelAlgNode> input)
-      : groupby_count_(groupby_count), fields_(fields) {
-    for (auto agg_expr : agg_exprs) {
-      agg_exprs_.emplace_back(agg_expr);
-    }
+      : groupby_count_(groupby_count), agg_exprs_(std::move(agg_exprs)), fields_(fields) {
     inputs_.push_back(input);
   }
 

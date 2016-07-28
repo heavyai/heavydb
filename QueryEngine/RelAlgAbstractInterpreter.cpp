@@ -290,13 +290,13 @@ std::string json_node_to_string(const rapidjson::Value& node) {
   return buffer.GetString();
 }
 
-RexAgg* parse_aggregate_expr(const rapidjson::Value& expr) {
+std::unique_ptr<const RexAgg> parse_aggregate_expr(const rapidjson::Value& expr) noexcept {
   const auto agg = to_agg_kind(json_str(field(expr, "agg")));
   const auto distinct = json_bool(field(expr, "distinct"));
   const auto agg_ti = parse_type(field(expr, "type"));
   const auto operands = indices_from_json_array(field(expr, "operands"));
   CHECK_LE(operands.size(), size_t(1));
-  return new RexAgg(agg, distinct, agg_ti, operands.empty() ? -1 : operands[0]);
+  return std::unique_ptr<const RexAgg>(new RexAgg(agg, distinct, agg_ti, operands.empty() ? -1 : operands[0]));
 }
 
 std::unique_ptr<const RexScalar> parse_scalar_expr(const rapidjson::Value& expr) {
@@ -783,9 +783,9 @@ class RaAbstractInterp {
     }
     const auto& aggs_json_arr = field(agg_ra, "aggs");
     CHECK(aggs_json_arr.IsArray());
-    std::vector<const RexAgg*> aggs;
+    std::vector<std::unique_ptr<const RexAgg>> aggs;
     for (auto aggs_json_arr_it = aggs_json_arr.Begin(); aggs_json_arr_it != aggs_json_arr.End(); ++aggs_json_arr_it) {
-      aggs.push_back(parse_aggregate_expr(*aggs_json_arr_it));
+      aggs.emplace_back(parse_aggregate_expr(*aggs_json_arr_it));
     }
     return std::make_shared<RelAggregate>(group.size(), aggs, fields, inputs.front());
   }
