@@ -243,16 +243,16 @@ RexCase* parse_case(const rapidjson::Value& expr) {
   const auto& operands = field(expr, "operands");
   CHECK(operands.IsArray());
   CHECK_GE(operands.Size(), unsigned(2));
-  const RexScalar* else_expr{nullptr};
-  std::vector<std::pair<const RexScalar*, const RexScalar*>> expr_pair_list;
+  std::unique_ptr<const RexScalar> else_expr;
+  std::vector<std::pair<std::unique_ptr<const RexScalar>, std::unique_ptr<const RexScalar>>> expr_pair_list;
   for (auto operands_it = operands.Begin(); operands_it != operands.End();) {
     const auto when_expr = parse_scalar_expr(*operands_it++);
     if (operands_it == operands.End()) {
-      else_expr = when_expr;
+      else_expr.reset(when_expr);
       break;
     }
     const auto then_expr = parse_scalar_expr(*operands_it++);
-    expr_pair_list.emplace_back(when_expr, then_expr);
+    expr_pair_list.emplace_back(std::unique_ptr<RexScalar>(when_expr), std::unique_ptr<RexScalar>(then_expr));
   }
   return new RexCase(expr_pair_list, else_expr);
 }
@@ -333,13 +333,16 @@ const RexOperator* disambiguate_operator(const RexOperator* rex_operator, const 
 }
 
 const RexCase* disambiguate_case(const RexCase* rex_case, const RANodeOutput& ra_output) {
-  std::vector<std::pair<const RexScalar*, const RexScalar*>> disambiguated_expr_pair_list;
+  std::vector<std::pair<std::unique_ptr<const RexScalar>, std::unique_ptr<const RexScalar>>>
+      disambiguated_expr_pair_list;
   for (size_t i = 0; i < rex_case->branchCount(); ++i) {
     const auto disambiguated_when = disambiguate_rex(rex_case->getWhen(i), ra_output);
     const auto disambiguated_then = disambiguate_rex(rex_case->getThen(i), ra_output);
-    disambiguated_expr_pair_list.emplace_back(disambiguated_when, disambiguated_then);
+    disambiguated_expr_pair_list.emplace_back(std::unique_ptr<const RexScalar>(disambiguated_when),
+                                              std::unique_ptr<const RexScalar>(disambiguated_then));
   }
-  return new RexCase(disambiguated_expr_pair_list, disambiguate_rex(rex_case->getElse(), ra_output));
+  std::unique_ptr<const RexScalar> disambiguated_else{disambiguate_rex(rex_case->getElse(), ra_output)};
+  return new RexCase(disambiguated_expr_pair_list, disambiguated_else);
 }
 
 const RexScalar* disambiguate_rex(const RexScalar* rex_scalar, const RANodeOutput& ra_output) {

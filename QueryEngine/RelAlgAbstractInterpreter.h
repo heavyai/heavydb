@@ -204,13 +204,9 @@ class RexInput : public RexAbstractInput {
 // Not a real node created by Calcite. Created by us because CaseExpr is a node in our Analyzer.
 class RexCase : public RexScalar {
  public:
-  RexCase(const std::vector<std::pair<const RexScalar*, const RexScalar*>>& expr_pair_list, const RexScalar* else_expr)
-      : else_expr_(else_expr) {
-    for (const auto& expr_pair : expr_pair_list) {
-      expr_pair_list_.emplace_back(std::unique_ptr<const RexScalar>(expr_pair.first),
-                                   std::unique_ptr<const RexScalar>(expr_pair.second));
-    }
-  }
+  RexCase(std::vector<std::pair<std::unique_ptr<const RexScalar>, std::unique_ptr<const RexScalar>>>& expr_pair_list,
+          std::unique_ptr<const RexScalar>& else_expr)
+      : expr_pair_list_(std::move(expr_pair_list)), else_expr_(std::move(else_expr)) {}
 
   size_t branchCount() const { return expr_pair_list_.size(); }
 
