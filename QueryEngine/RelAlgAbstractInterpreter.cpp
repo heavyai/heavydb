@@ -168,12 +168,12 @@ unsigned node_id(const rapidjson::Value& ra_node) noexcept {
   return std::stoi(json_str(id));
 }
 
-RexAbstractInput* parse_abstract_input(const rapidjson::Value& expr) noexcept {
+std::unique_ptr<RexAbstractInput> parse_abstract_input(const rapidjson::Value& expr) noexcept {
   const auto& input = field(expr, "input");
-  return new RexAbstractInput(json_i64(input));
+  return std::unique_ptr<RexAbstractInput>(new RexAbstractInput(json_i64(input)));
 }
 
-RexLiteral* parse_literal(const rapidjson::Value& expr) {
+std::unique_ptr<RexLiteral> parse_literal(const rapidjson::Value& expr) {
   CHECK(expr.IsObject());
   const auto& literal = field(expr, "literal");
   const auto type = to_sql_type(json_str(field(expr, "type")));
@@ -184,15 +184,19 @@ RexLiteral* parse_literal(const rapidjson::Value& expr) {
   const auto type_precision = json_i64(field(expr, "type_precision"));
   switch (type) {
     case kDECIMAL:
-      return new RexLiteral(json_i64(literal), type, target_type, scale, precision, type_scale, type_precision);
+      return std::unique_ptr<RexLiteral>(
+          new RexLiteral(json_i64(literal), type, target_type, scale, precision, type_scale, type_precision));
     case kDOUBLE:
-      return new RexLiteral(json_double(literal), type, target_type, scale, precision, type_scale, type_precision);
+      return std::unique_ptr<RexLiteral>(
+          new RexLiteral(json_double(literal), type, target_type, scale, precision, type_scale, type_precision));
     case kTEXT:
-      return new RexLiteral(json_str(literal), type, target_type, scale, precision, type_scale, type_precision);
+      return std::unique_ptr<RexLiteral>(
+          new RexLiteral(json_str(literal), type, target_type, scale, precision, type_scale, type_precision));
     case kBOOLEAN:
-      return new RexLiteral(json_bool(literal), type, target_type, scale, precision, type_scale, type_precision);
+      return std::unique_ptr<RexLiteral>(
+          new RexLiteral(json_bool(literal), type, target_type, scale, precision, type_scale, type_precision));
     case kNULLT:
-      return new RexLiteral(target_type);
+      return std::unique_ptr<RexLiteral>(new RexLiteral(target_type));
     case kTIME:
     case kTIMESTAMP:
     case kDATE: {
@@ -206,7 +210,7 @@ RexLiteral* parse_literal(const rapidjson::Value& expr) {
   return nullptr;
 }
 
-RexScalar* parse_scalar_expr(const rapidjson::Value& expr);
+std::unique_ptr<const RexScalar> parse_scalar_expr(const rapidjson::Value& expr);
 
 SQLTypeInfo parse_type(const rapidjson::Value& type_obj) {
   CHECK(type_obj.IsObject() && (type_obj.MemberCount() >= 2 && type_obj.MemberCount() <= 4));
@@ -222,7 +226,7 @@ SQLTypeInfo parse_type(const rapidjson::Value& type_obj) {
   return ti;
 }
 
-RexOperator* parse_operator(const rapidjson::Value& expr) {
+std::unique_ptr<RexOperator> parse_operator(const rapidjson::Value& expr) {
   const auto op_name = json_str(field(expr, "op"));
   const bool is_quantifier = op_name == std::string("PG_ANY") || op_name == std::string("PG_ALL");
   const auto op = is_quantifier ? kFUNCTION : to_sql_op(op_name);
@@ -236,25 +240,26 @@ RexOperator* parse_operator(const rapidjson::Value& expr) {
   const auto type_it = expr.FindMember("type");
   CHECK(type_it != expr.MemberEnd());
   const auto ti = parse_type(type_it->value);
-  return op == kFUNCTION ? new RexFunctionOperator(op_name, operands, ti) : new RexOperator(op, operands, ti);
+  return std::unique_ptr<RexOperator>(op == kFUNCTION ? new RexFunctionOperator(op_name, operands, ti)
+                                                      : new RexOperator(op, operands, ti));
 }
 
-RexCase* parse_case(const rapidjson::Value& expr) {
+std::unique_ptr<RexCase> parse_case(const rapidjson::Value& expr) {
   const auto& operands = field(expr, "operands");
   CHECK(operands.IsArray());
   CHECK_GE(operands.Size(), unsigned(2));
   std::unique_ptr<const RexScalar> else_expr;
   std::vector<std::pair<std::unique_ptr<const RexScalar>, std::unique_ptr<const RexScalar>>> expr_pair_list;
   for (auto operands_it = operands.Begin(); operands_it != operands.End();) {
-    const auto when_expr = parse_scalar_expr(*operands_it++);
+    auto when_expr = parse_scalar_expr(*operands_it++);
     if (operands_it == operands.End()) {
-      else_expr.reset(when_expr);
+      else_expr = std::move(when_expr);
       break;
     }
-    const auto then_expr = parse_scalar_expr(*operands_it++);
-    expr_pair_list.emplace_back(std::unique_ptr<RexScalar>(when_expr), std::unique_ptr<RexScalar>(then_expr));
+    auto then_expr = parse_scalar_expr(*operands_it++);
+    expr_pair_list.emplace_back(std::move(when_expr), std::move(then_expr));
   }
-  return new RexCase(expr_pair_list, else_expr);
+  return std::unique_ptr<RexCase>(new RexCase(expr_pair_list, else_expr));
 }
 
 std::vector<std::string> strings_from_json_array(const rapidjson::Value& json_str_arr) {
@@ -294,20 +299,20 @@ RexAgg* parse_aggregate_expr(const rapidjson::Value& expr) {
   return new RexAgg(agg, distinct, agg_ti, operands.empty() ? -1 : operands[0]);
 }
 
-RexScalar* parse_scalar_expr(const rapidjson::Value& expr) {
+std::unique_ptr<const RexScalar> parse_scalar_expr(const rapidjson::Value& expr) {
   CHECK(expr.IsObject());
   if (expr.IsObject() && expr.HasMember("input")) {
-    return parse_abstract_input(expr);
+    return std::unique_ptr<const RexScalar>(parse_abstract_input(expr));
   }
   if (expr.IsObject() && expr.HasMember("literal")) {
-    return parse_literal(expr);
+    return std::unique_ptr<const RexScalar>(parse_literal(expr));
   }
   if (expr.IsObject() && expr.HasMember("op")) {
     const auto op_str = json_str(field(expr, "op"));
     if (op_str == std::string("CASE")) {
-      return parse_case(expr);
+      return std::unique_ptr<const RexScalar>(parse_case(expr));
     }
-    return parse_operator(expr);
+    return std::unique_ptr<const RexScalar>(parse_operator(expr));
   }
   throw QueryNotSupported("Expression node " + json_node_to_string(expr) + " not supported");
 }
@@ -765,7 +770,7 @@ class RaAbstractInterp {
     CHECK_EQ(size_t(1), inputs.size());
     const auto id = node_id(filter_ra);
     CHECK(id);
-    auto condition = std::unique_ptr<const RexScalar>(parse_scalar_expr(field(filter_ra, "condition")));
+    auto condition = parse_scalar_expr(field(filter_ra, "condition"));
     return std::make_shared<RelFilter>(condition, inputs.front());
   }
 
@@ -790,7 +795,7 @@ class RaAbstractInterp {
     const auto inputs = getRelAlgInputs(join_ra);
     CHECK_EQ(size_t(2), inputs.size());
     const auto join_type = to_join_type(json_str(field(join_ra, "joinType")));
-    auto filter_rex = std::unique_ptr<RexScalar>(parse_scalar_expr(field(join_ra, "condition")));
+    auto filter_rex = parse_scalar_expr(field(join_ra, "condition"));
     return std::make_shared<RelJoin>(inputs[0], inputs[1], filter_rex, join_type);
   }
 

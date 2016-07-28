@@ -498,7 +498,7 @@ class RelJoin : public RelAlgNode {
  public:
   RelJoin(std::shared_ptr<const RelAlgNode> lhs,
           std::shared_ptr<const RelAlgNode> rhs,
-          std::unique_ptr<RexScalar>& condition,
+          std::unique_ptr<const RexScalar>& condition,
           const JoinType join_type)
       : condition_(std::move(condition)), join_type_(join_type) {
     inputs_.push_back(lhs);
