@@ -139,11 +139,6 @@ else()
     set(MAPD_PACKAGE_FLAGS "${MAPD_PACKAGE_FLAGS}-legacyparser")
 endif()
 
-option(ENABLE_LDAP "Enable LDAP" ON)
-if (ENABLE_LDAP)
-    add_definitions("-DHAVE_LDAP")
-endif()
-
 option(ENABLE_RAVM "Enable RA vm" ON)
 if(ENABLE_RAVM)
     add_definitions("-DHAVE_RAVM")
