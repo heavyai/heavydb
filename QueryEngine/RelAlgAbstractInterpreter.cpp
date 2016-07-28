@@ -378,8 +378,8 @@ void bind_inputs(const std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
     const auto filter_node = std::dynamic_pointer_cast<RelFilter>(ra_node);
     if (filter_node) {
       CHECK_EQ(size_t(1), filter_node->inputCount());
-      const auto disambiguated_condition =
-          disambiguate_rex(filter_node->getCondition(), get_node_output(filter_node->getInput(0)));
+      auto disambiguated_condition = std::unique_ptr<const RexScalar>(
+          disambiguate_rex(filter_node->getCondition(), get_node_output(filter_node->getInput(0))));
       filter_node->setCondition(disambiguated_condition);
       continue;
     }
@@ -765,7 +765,8 @@ class RaAbstractInterp {
     CHECK_EQ(size_t(1), inputs.size());
     const auto id = node_id(filter_ra);
     CHECK(id);
-    return std::make_shared<RelFilter>(parse_scalar_expr(field(filter_ra, "condition")), inputs.front());
+    auto condition = std::unique_ptr<const RexScalar>(parse_scalar_expr(field(filter_ra, "condition")));
+    return std::make_shared<RelFilter>(condition, inputs.front());
   }
 
   std::shared_ptr<RelAggregate> dispatchAggregate(const rapidjson::Value& agg_ra) {

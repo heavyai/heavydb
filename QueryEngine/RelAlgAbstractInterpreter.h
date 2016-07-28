@@ -536,7 +536,8 @@ class RelJoin : public RelAlgNode {
 
 class RelFilter : public RelAlgNode {
  public:
-  RelFilter(const RexScalar* filter, std::shared_ptr<const RelAlgNode> input) : filter_(filter) {
+  RelFilter(std::unique_ptr<const RexScalar>& filter, std::shared_ptr<const RelAlgNode> input)
+      : filter_(std::move(filter)) {
     CHECK(filter_);
     inputs_.push_back(input);
   }
@@ -545,9 +546,9 @@ class RelFilter : public RelAlgNode {
 
   const RexScalar* getAndReleaseCondition() { return filter_.release(); }
 
-  void setCondition(const RexScalar* condition) {
+  void setCondition(std::unique_ptr<const RexScalar>& condition) {
     CHECK(condition);
-    filter_.reset(condition);
+    filter_ = std::move(condition);
   }
 
   void replaceInput(std::shared_ptr<const RelAlgNode> old_input, std::shared_ptr<const RelAlgNode> input) override;
