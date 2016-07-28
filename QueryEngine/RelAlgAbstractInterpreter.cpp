@@ -327,9 +327,10 @@ JoinType to_join_type(const std::string& join_type_name) {
   throw QueryNotSupported("Join type (" + join_type_name + ") not supported");
 }
 
-const RexScalar* disambiguate_rex(const RexScalar*, const RANodeOutput&);
+std::unique_ptr<const RexScalar> disambiguate_rex(const RexScalar*, const RANodeOutput&);
 
-const RexOperator* disambiguate_operator(const RexOperator* rex_operator, const RANodeOutput& ra_output) {
+std::unique_ptr<const RexOperator> disambiguate_operator(const RexOperator* rex_operator,
+                                                         const RANodeOutput& ra_output) {
   std::vector<std::unique_ptr<const RexScalar>> disambiguated_operands;
   for (size_t i = 0; i < rex_operator->size(); ++i) {
     disambiguated_operands.emplace_back(disambiguate_rex(rex_operator->getOperand(i), ra_output));
@@ -337,24 +338,23 @@ const RexOperator* disambiguate_operator(const RexOperator* rex_operator, const 
   return rex_operator->getDisambiguated(disambiguated_operands);
 }
 
-const RexCase* disambiguate_case(const RexCase* rex_case, const RANodeOutput& ra_output) {
+std::unique_ptr<const RexCase> disambiguate_case(const RexCase* rex_case, const RANodeOutput& ra_output) {
   std::vector<std::pair<std::unique_ptr<const RexScalar>, std::unique_ptr<const RexScalar>>>
       disambiguated_expr_pair_list;
   for (size_t i = 0; i < rex_case->branchCount(); ++i) {
-    const auto disambiguated_when = disambiguate_rex(rex_case->getWhen(i), ra_output);
-    const auto disambiguated_then = disambiguate_rex(rex_case->getThen(i), ra_output);
-    disambiguated_expr_pair_list.emplace_back(std::unique_ptr<const RexScalar>(disambiguated_when),
-                                              std::unique_ptr<const RexScalar>(disambiguated_then));
+    auto disambiguated_when = disambiguate_rex(rex_case->getWhen(i), ra_output);
+    auto disambiguated_then = disambiguate_rex(rex_case->getThen(i), ra_output);
+    disambiguated_expr_pair_list.emplace_back(std::move(disambiguated_when), std::move(disambiguated_then));
   }
   std::unique_ptr<const RexScalar> disambiguated_else{disambiguate_rex(rex_case->getElse(), ra_output)};
-  return new RexCase(disambiguated_expr_pair_list, disambiguated_else);
+  return std::unique_ptr<const RexCase>(new RexCase(disambiguated_expr_pair_list, disambiguated_else));
 }
 
-const RexScalar* disambiguate_rex(const RexScalar* rex_scalar, const RANodeOutput& ra_output) {
+std::unique_ptr<const RexScalar> disambiguate_rex(const RexScalar* rex_scalar, const RANodeOutput& ra_output) {
   const auto rex_abstract_input = dynamic_cast<const RexAbstractInput*>(rex_scalar);
   if (rex_abstract_input) {
     CHECK_LT(static_cast<size_t>(rex_abstract_input->getIndex()), ra_output.size());
-    return new RexInput(ra_output[rex_abstract_input->getIndex()]);
+    return std::unique_ptr<const RexInput>(new RexInput(ra_output[rex_abstract_input->getIndex()]));
   }
   const auto rex_operator = dynamic_cast<const RexOperator*>(rex_scalar);
   if (rex_operator) {
@@ -366,7 +366,7 @@ const RexScalar* disambiguate_rex(const RexScalar* rex_scalar, const RANodeOutpu
   }
   const auto rex_literal = dynamic_cast<const RexLiteral*>(rex_scalar);
   CHECK(rex_literal);
-  return new RexLiteral(*rex_literal);
+  return std::unique_ptr<const RexLiteral>(new RexLiteral(*rex_literal));
 }
 
 void bind_project_to_input(RelProject* project_node, const RANodeOutput& input) {
@@ -383,16 +383,15 @@ void bind_inputs(const std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
     const auto filter_node = std::dynamic_pointer_cast<RelFilter>(ra_node);
     if (filter_node) {
       CHECK_EQ(size_t(1), filter_node->inputCount());
-      auto disambiguated_condition = std::unique_ptr<const RexScalar>(
-          disambiguate_rex(filter_node->getCondition(), get_node_output(filter_node->getInput(0))));
+      auto disambiguated_condition =
+          disambiguate_rex(filter_node->getCondition(), get_node_output(filter_node->getInput(0)));
       filter_node->setCondition(disambiguated_condition);
       continue;
     }
     const auto join_node = std::dynamic_pointer_cast<RelJoin>(ra_node);
     if (join_node) {
       CHECK_EQ(size_t(2), join_node->inputCount());
-      auto disambiguated_condition = std::unique_ptr<const RexScalar>(
-          disambiguate_rex(join_node->getCondition(), get_node_output(join_node.get())));
+      auto disambiguated_condition = disambiguate_rex(join_node->getCondition(), get_node_output(join_node.get()));
       join_node->setCondition(disambiguated_condition);
       continue;
     }

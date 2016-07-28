@@ -148,8 +148,9 @@ class RexOperator : public RexScalar {
   RexOperator(const SQLOps op, std::vector<std::unique_ptr<const RexScalar>>& operands, const SQLTypeInfo& type)
       : op_(op), operands_(std::move(operands)), type_(type) {}
 
-  virtual const RexOperator* getDisambiguated(std::vector<std::unique_ptr<const RexScalar>>& operands) const {
-    return new RexOperator(op_, operands, type_);
+  virtual std::unique_ptr<const RexOperator> getDisambiguated(
+      std::vector<std::unique_ptr<const RexScalar>>& operands) const {
+    return std::unique_ptr<const RexOperator>(new RexOperator(op_, operands, type_));
   }
 
   size_t size() const { return operands_.size(); }
@@ -246,8 +247,9 @@ class RexFunctionOperator : public RexOperator {
                       const SQLTypeInfo& ti)
       : RexOperator(kFUNCTION, operands, ti), name_(name) {}
 
-  virtual const RexOperator* getDisambiguated(std::vector<std::unique_ptr<const RexScalar>>& operands) const {
-    return new RexFunctionOperator(name_, operands, getType());
+  virtual std::unique_ptr<const RexOperator> getDisambiguated(
+      std::vector<std::unique_ptr<const RexScalar>>& operands) const {
+    return std::unique_ptr<const RexOperator>(new RexFunctionOperator(name_, operands, getType()));
   }
 
   const std::string& getName() const { return name_; }
