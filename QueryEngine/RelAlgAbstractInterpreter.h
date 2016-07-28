@@ -504,9 +504,9 @@ class RelJoin : public RelAlgNode {
  public:
   RelJoin(std::shared_ptr<const RelAlgNode> lhs,
           std::shared_ptr<const RelAlgNode> rhs,
-          const RexScalar* condition,
+          std::unique_ptr<RexScalar>& condition,
           const JoinType join_type)
-      : condition_(condition), join_type_(join_type) {
+      : condition_(std::move(condition)), join_type_(join_type) {
     inputs_.push_back(lhs);
     inputs_.push_back(rhs);
   }
@@ -515,9 +515,9 @@ class RelJoin : public RelAlgNode {
 
   const RexScalar* getCondition() const { return condition_.get(); }
 
-  void setCondition(const RexScalar* condition) {
+  void setCondition(std::unique_ptr<const RexScalar>& condition) {
     CHECK(condition);
-    condition_.reset(condition);
+    condition_ = std::move(condition);
   }
 
   void replaceInput(std::shared_ptr<const RelAlgNode> old_input, std::shared_ptr<const RelAlgNode> input) override;

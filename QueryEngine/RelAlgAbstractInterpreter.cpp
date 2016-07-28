@@ -386,8 +386,8 @@ void bind_inputs(const std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
     const auto join_node = std::dynamic_pointer_cast<RelJoin>(ra_node);
     if (join_node) {
       CHECK_EQ(size_t(2), join_node->inputCount());
-      const auto disambiguated_condition =
-          disambiguate_rex(join_node->getCondition(), get_node_output(join_node.get()));
+      auto disambiguated_condition = std::unique_ptr<const RexScalar>(
+          disambiguate_rex(join_node->getCondition(), get_node_output(join_node.get())));
       join_node->setCondition(disambiguated_condition);
       continue;
     }
@@ -789,7 +789,7 @@ class RaAbstractInterp {
     const auto inputs = getRelAlgInputs(join_ra);
     CHECK_EQ(size_t(2), inputs.size());
     const auto join_type = to_join_type(json_str(field(join_ra, "joinType")));
-    const auto filter_rex = parse_scalar_expr(field(join_ra, "condition"));
+    auto filter_rex = std::unique_ptr<RexScalar>(parse_scalar_expr(field(join_ra, "condition")));
     return std::make_shared<RelJoin>(inputs[0], inputs[1], filter_rex, join_type);
   }
 
