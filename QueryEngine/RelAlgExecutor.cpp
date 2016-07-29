@@ -16,6 +16,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgSeq(std::vector<RaExecutionDesc>& e
   auto clock_begin = timer_start();
   std::lock_guard<std::mutex> lock(executor_->execute_mutex_);
   int64_t queue_time_ms = timer_stop(clock_begin);
+  Executor::RowSetHolder row_set_holder(executor_);
   decltype(temporary_tables_)().swap(temporary_tables_);
   decltype(target_exprs_owned_)().swap(target_exprs_owned_);
   executor_->row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>();
