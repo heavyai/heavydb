@@ -446,7 +446,7 @@ TDatum columnar_val_to_datum(const TColumn& col, const size_t row_idx, const TTy
 }  // namespace
 
 int main(int argc, char** argv) {
-  std::string server_host("localhost");
+  std::string server_host{"localhost"};
   int port = 9091;
   std::string delimiter("|");
   bool print_header = true;
@@ -455,22 +455,28 @@ int main(int argc, char** argv) {
   bool http = false;
   char* line;
   TQueryResult _return;
-  std::string db_name;
-  std::string user_name;
+  std::string db_name{"mapd"};
+  std::string user_name{"mapd"};
   std::string passwd;
 
   namespace po = boost::program_options;
 
   po::options_description desc("Options");
-  desc.add_options()("help,h", "Print help messages ")("version,v", "Print mapdql version number")(
-      "no-header,n", "Do not print query result header")("timing,t", "Print timing information")(
-      "delimiter,d", po::value<std::string>(&delimiter), "Field delimiter in row output (default is |)")(
-      "db", po::value<std::string>(&db_name), "Database name")(
-      "user,u", po::value<std::string>(&user_name), "User name")(
-      "passwd,p", po::value<std::string>(&passwd), "Password")(
-      "server,s", po::value<std::string>(&server_host), "MapD Server Hostname (default localhost)")(
-      "port", po::value<int>(&port), "Port number (default 9091)")("http", "Use HTTP transport")(
-      "quiet,q", "Do not print result headers or connection strings ");
+  desc.add_options()("help,h", "Print help messages ");
+  desc.add_options()("version,v", "Print mapdql version number");
+  desc.add_options()("no-header,n", "Do not print query result header");
+  desc.add_options()("timing,t",
+                     po::bool_switch(&print_timing)->default_value(print_timing)->implicit_value(true),
+                     "Print timing information");
+  desc.add_options()(
+      "delimiter,d", po::value<std::string>(&delimiter)->default_value(delimiter), "Field delimiter in row output");
+  desc.add_options()("db", po::value<std::string>(&db_name)->default_value(db_name), "Database name");
+  desc.add_options()("user,u", po::value<std::string>(&user_name)->default_value(user_name), "User name");
+  desc.add_options()("passwd,p", po::value<std::string>(&passwd), "Password");
+  desc.add_options()("server,s", po::value<std::string>(&server_host)->default_value(server_host), "Server hostname");
+  desc.add_options()("port", po::value<int>(&port)->default_value(port), "Port number");
+  desc.add_options()("http", po::bool_switch(&http)->default_value(http)->implicit_value(true), "Use HTTP transport");
+  desc.add_options()("quiet,q", "Do not print result headers or connection strings ");
 
   po::variables_map vm;
   po::positional_options_description positionalOptions;
@@ -479,8 +485,9 @@ int main(int argc, char** argv) {
   try {
     po::store(po::command_line_parser(argc, argv).options(desc).positional(positionalOptions).run(), vm);
     if (vm.count("help")) {
-      std::cout << "Usage: mapdql [<database>][{--user|-u} <user>][{--passwd|-p} <password>][--port <port number>] "
-                   "[{-s|--server} <server host>][--http] [{--no-header|-n}] [{--quiet|-q}] [{--delimiter|-d}]\n";
+      std::cout << "Usage: mapdql [<database>] [{--user|-u} <user>] [{--passwd|-p} <password>] [--port <port number>] "
+                   "[{-s|--server} <server host>] [--http] [{--no-header|-n}] [{--quiet|-q}] [{--delimiter|-d}]\n\n";
+      std::cout << desc << std::endl;
       return 0;
     }
     if (vm.count("version")) {
@@ -493,10 +500,6 @@ int main(int argc, char** argv) {
     }
     if (vm.count("no-header"))
       print_header = false;
-    if (vm.count("timing"))
-      print_timing = true;
-    if (vm.count("http"))
-      http = true;
     if (vm.count("db") && (!vm.count("user") || !vm.count("passwd"))) {
       std::cerr << "Must specify a user name and password to access database " << db_name << std::endl;
       return 1;
