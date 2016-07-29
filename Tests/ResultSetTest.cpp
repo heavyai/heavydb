@@ -122,6 +122,8 @@ int8_t* fill_one_entry_no_collisions(int8_t* buff,
     } else {
       if (target_info.sql_type.is_integer()) {
         write_int(slot_ptr, v, slot_bytes);
+      } else if (target_info.sql_type.is_string()) {
+        write_int(slot_ptr, -(v + 2), slot_bytes);
       } else {
         CHECK(target_info.sql_type.is_fp());
         write_fp(slot_ptr, v, slot_bytes);
@@ -160,6 +162,9 @@ void fill_one_entry_baseline(int64_t* value_slots,
         value_slots[target_slot] = *reinterpret_cast<int64_t*>(&di);
         break;
       }
+      case kTEXT:
+        value_slots[target_slot] = -(v + 2);
+        break;
       default:
         CHECK(false);
     }
@@ -284,9 +289,15 @@ void fill_storage_buffer_perfect_hash_colwise(int8_t* buff,
         ptr2 = col_entry_ptr + query_mem_desc.entry_count * col_bytes;
       }
       if (i % 2 == 0) {
-        const auto v = generator.getNextValue();
-        fill_one_entry_one_col(
-            col_entry_ptr, col_bytes, ptr2, query_mem_desc.agg_col_widths[slot_idx + 1].compact, v, target_info, false);
+        const auto gen_val = generator.getNextValue();
+        const auto val = target_info.sql_type.is_string() ? -(gen_val + 2) : gen_val;
+        fill_one_entry_one_col(col_entry_ptr,
+                               col_bytes,
+                               ptr2,
+                               query_mem_desc.agg_col_widths[slot_idx + 1].compact,
+                               val,
+                               target_info,
+                               false);
       } else {
         fill_one_entry_one_col(col_entry_ptr,
                                col_bytes,
@@ -352,12 +363,13 @@ void fill_storage_buffer_baseline_colwise(int8_t* buff,
     }
   }
   for (size_t i = 0; i < query_mem_desc.entry_count; i += step) {
-    const auto v = generator.getNextValue();
-    std::vector<int64_t> key(key_component_count, v);
+    const auto gen_val = generator.getNextValue();
+    std::vector<int64_t> key(key_component_count, gen_val);
     auto value_slots = get_group_value_columnar(i64_buff, query_mem_desc.entry_count, &key[0], key.size());
     CHECK(value_slots);
     for (const auto& target_info : target_infos) {
-      fill_one_entry_one_col(value_slots, v, target_info, query_mem_desc.entry_count);
+      const auto val = target_info.sql_type.is_string() ? -(gen_val + step) : gen_val;
+      fill_one_entry_one_col(value_slots, val, target_info, query_mem_desc.entry_count);
       value_slots += query_mem_desc.entry_count;
       if (target_info.agg_kind == kAVG) {
         value_slots += query_mem_desc.entry_count;
@@ -532,6 +544,11 @@ void test_iterate(const std::vector<TargetInfo>& target_infos, const QueryMemory
           ASSERT_TRUE(approx_eq(static_cast<double>(ref_val), dval));
           break;
         }
+        case kTEXT: {
+          const auto ival = v<int64_t>(row[i]);
+          CHECK_LT(ival, 0);  // TODO(alex): get the string for this id
+          break;
+        }
         default:
           CHECK(false);
       }
@@ -549,6 +566,12 @@ std::vector<TargetInfo> generate_test_target_infos() {
   target_infos.push_back(TargetInfo{true, kAVG, int_ti, int_ti, true, false});
   target_infos.push_back(TargetInfo{true, kSUM, int_ti, int_ti, true, false});
   target_infos.push_back(TargetInfo{false, kMIN, double_ti, null_ti, true, false});
+  {
+    SQLTypeInfo dict_string_ti(kTEXT, false);
+    dict_string_ti.set_compression(kENCODING_DICT);
+    dict_string_ti.set_comp_param(1);
+    target_infos.push_back(TargetInfo{false, kMIN, dict_string_ti, null_ti, true, false});
+  }
   return target_infos;
 }
 
@@ -637,6 +660,8 @@ void test_reduce(const std::vector<TargetInfo>& target_infos,
               dval));
           break;
         }
+        case kTEXT:
+          break;
         default:
           CHECK(false);
       }

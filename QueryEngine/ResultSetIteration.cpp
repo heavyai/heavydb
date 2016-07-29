@@ -109,6 +109,9 @@ TargetValue make_target_value(const int8_t* ptr, const int8_t compact_sz, const 
         CHECK(false);
     }
   }
+  if (ti.is_string() && ti.get_compression() == kENCODING_DICT) {
+    return read_int_from_buff(ptr, compact_sz);
+  }
   CHECK(false);
   return TargetValue(int64_t(0));
 }
