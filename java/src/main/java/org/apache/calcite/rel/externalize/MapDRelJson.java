@@ -21,6 +21,7 @@ import org.apache.calcite.rex.RexFieldAccess;
 import org.apache.calcite.rex.RexInputRef;
 import org.apache.calcite.rex.RexLiteral;
 import org.apache.calcite.rex.RexNode;
+import org.apache.calcite.sql.SemiJoinType;
 import org.apache.calcite.sql.SqlAggFunction;
 import org.apache.calcite.sql.SqlFunction;
 import org.apache.calcite.sql.SqlOperator;
@@ -239,6 +240,8 @@ public class MapDRelJson {
       return toJson((RelDataType) value);
     } else if (value instanceof RelDataTypeField) {
       return toJson((RelDataTypeField) value);
+    } else if (value instanceof SemiJoinType) {
+      return value.toString();
     } else {
       throw new UnsupportedOperationException("type not serializable: "
           + value + " (type " + value.getClass().getCanonicalName() + ")");
