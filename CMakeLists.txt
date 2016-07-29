@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 2.8)
 
 PROJECT(mapd2)
 
-set(MAPD_VERSION_RAW "1.2.3dev")
+set(MAPD_VERSION_RAW "1.2.4dev")
 set(MAPD_IMMERSE_URL "http://builds.mapd.com/frontend/mapd2-dashboard-v1-latest-release.zip")
 string(TIMESTAMP MAPD_BUILD_DATE "%Y%m%d")
 
