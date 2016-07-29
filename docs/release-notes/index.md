@@ -1,5 +1,16 @@
 # MapD Platform
-The latest version of the MapD Platform is 1.2.2.
+The latest version of the MapD Platform is 1.2.3.
+
+#### **1.2.3** - Released August 1, 2016
+
+#####New
+- Now allow using aliases in `FROM` and `WHERE` clauses
+
+#####Fixed
+- Made loading from cold cache (disk) faster
+- Fixed memory leaks around unsupported queries
+- Fixed problem when recreating a previously dropped table
+- Fixed problem when parsing CSVs with inconsistent number of columns
 
 #### **1.2.2** - Released July 25, 2016
 
