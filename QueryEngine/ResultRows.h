@@ -242,13 +242,14 @@ class RowSetMemoryOwner : boost::noncopyable {
     return &arrays_.back();
   }
 
-  void addStringDict(StringDictionary* str_dict) {
+  void addStringDict(StringDictionary* str_dict, const int dict_id) {
     std::lock_guard<std::mutex> lock(state_mutex_);
-    auto it = str_dict_owned_.find(str_dict);
+    auto it = str_dict_owned_.find(dict_id);
     if (it != str_dict_owned_.end()) {
+      CHECK_EQ(it->second, str_dict);
       return;
     }
-    str_dict_owned_.insert(str_dict);
+    str_dict_owned_.emplace(dict_id, str_dict);
     str_dict_owners_.emplace_back(new DictStrLiteralsOwner(str_dict));
   }
 
@@ -281,7 +282,7 @@ class RowSetMemoryOwner : boost::noncopyable {
   std::vector<int64_t*> group_by_buffers_;
   std::list<std::string> strings_;
   std::list<std::vector<int64_t>> arrays_;
-  std::unordered_set<StringDictionary*> str_dict_owned_;
+  std::unordered_map<int, StringDictionary*> str_dict_owned_;
   std::vector<std::unique_ptr<DictStrLiteralsOwner>> str_dict_owners_;
   std::shared_ptr<StringDictionary> lit_str_dict_;
   std::mutex state_mutex_;

@@ -471,7 +471,7 @@ StringDictionary* Executor::getStringDictionary(const int dict_id_in,
   if (dd) {
     if (row_set_mem_owner) {
       CHECK(dd->stringDict);
-      row_set_mem_owner->addStringDict(dd->stringDict.get());
+      row_set_mem_owner->addStringDict(dd->stringDict.get(), dict_id);
     }
     CHECK_EQ(32, dd->dictNBits);
     return dd->stringDict.get();
