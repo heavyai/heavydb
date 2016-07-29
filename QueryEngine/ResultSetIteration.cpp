@@ -91,74 +91,6 @@ TargetValue make_avg_target_value(const int8_t* ptr1,
   return pair_to_double({sum, count}, target_info.sql_type);
 }
 
-// Reads an integer or a float from ptr based on the type and the byte width.
-TargetValue make_target_value(const int8_t* ptr, const int8_t compact_sz, const SQLTypeInfo& ti) {
-  if (ti.is_integer()) {
-    return read_int_from_buff(ptr, compact_sz);
-  }
-  if (ti.is_fp()) {
-    switch (compact_sz) {
-      case 8: {
-        return *reinterpret_cast<const double*>(ptr);
-      }
-      case 4: {
-        CHECK_EQ(kFLOAT, ti.get_type());
-        return *reinterpret_cast<const float*>(ptr);
-      }
-      default:
-        CHECK(false);
-    }
-  }
-  if (ti.is_string() && ti.get_compression() == kENCODING_DICT) {
-    return read_int_from_buff(ptr, compact_sz);
-  }
-  CHECK(false);
-  return TargetValue(int64_t(0));
-}
-
-// Gets the TargetValue stored at position entry_idx in the col1_ptr and col2_ptr
-// column buffers. The second column is only used for AVG.
-TargetValue get_target_value_from_buffer_colwise(const int8_t* col1_ptr,
-                                                 const int8_t compact_sz1,
-                                                 const int8_t* col2_ptr,
-                                                 const int8_t compact_sz2,
-                                                 const size_t entry_idx,
-                                                 const TargetInfo& target_info,
-                                                 const QueryMemoryDescriptor& query_mem_desc) {
-  CHECK(query_mem_desc.output_columnar);
-  const auto& ti = target_info.sql_type;
-  const auto ptr1 = col1_ptr + compact_sz1 * entry_idx;
-  if (target_info.agg_kind == kAVG) {
-    CHECK(col2_ptr);
-    CHECK(compact_sz2);
-    const auto ptr2 = col2_ptr + compact_sz2 * entry_idx;
-    return make_avg_target_value(ptr1, compact_sz1, ptr2, compact_sz2, target_info);
-  }
-  return make_target_value(ptr1, compact_sz1, ti);
-}
-
-// Gets the TargetValue stored in slot_idx (and slot_idx for AVG) of rowwise_target_ptr.
-TargetValue get_target_value_from_buffer_rowwise(const int8_t* rowwise_target_ptr,
-                                                 const TargetInfo& target_info,
-                                                 const size_t slot_idx,
-                                                 const QueryMemoryDescriptor& query_mem_desc) {
-  auto ptr1 = rowwise_target_ptr;
-  auto compact_sz1 = query_mem_desc.agg_col_widths[slot_idx].compact;
-  const int8_t* ptr2{nullptr};
-  int8_t compact_sz2{0};
-  if (target_info.is_agg && target_info.agg_kind == kAVG) {
-    ptr2 = rowwise_target_ptr + query_mem_desc.agg_col_widths[slot_idx].compact;
-    compact_sz2 = query_mem_desc.agg_col_widths[slot_idx + 1].compact;
-  }
-  if (target_info.agg_kind == kAVG) {
-    CHECK(ptr2);
-    return make_avg_target_value(ptr1, compact_sz1, ptr2, compact_sz2, target_info);
-  }
-  CHECK(!ptr2);
-  CHECK_EQ(0, compact_sz2);
-  return make_target_value(ptr1, compact_sz1, target_info.sql_type);
-}
-
 // Gets the byte offset, starting from the beginning of the row targets buffer, of
 // the value in position slot_idx (only makes sense for row-wise representation).
 size_t get_byteoff_of_slot(const size_t slot_idx, const QueryMemoryDescriptor& query_mem_desc) {
@@ -199,8 +131,7 @@ const int8_t* advance_col_buff_to_slot(const int8_t* buff,
 
 }  // namespace
 
-std::vector<TargetValue> ResultSet::getNextRow(const bool /* translate_strings */,
-                                               const bool /* decimal_to_double */) const {
+std::vector<TargetValue> ResultSet::getNextRow(const bool translate_strings, const bool /* decimal_to_double */) const {
   advanceCursorToNextEntry();
   if (keep_first_ && crt_row_buff_idx_ >= drop_first_ + keep_first_) {
     return {};
@@ -230,19 +161,19 @@ std::vector<TargetValue> ResultSet::getNextRow(const bool /* translate_strings *
       const auto col2_ptr = (agg_info.is_agg && agg_info.agg_kind == kAVG) ? next_col_ptr : nullptr;
       const auto compact_sz2 =
           (agg_info.is_agg && agg_info.agg_kind == kAVG) ? query_mem_desc_.agg_col_widths[agg_col_idx + 1].compact : 0;
-      row.push_back(get_target_value_from_buffer_colwise(crt_col_ptr,
-                                                         query_mem_desc_.agg_col_widths[agg_col_idx].compact,
-                                                         col2_ptr,
-                                                         compact_sz2,
-                                                         crt_row_buff_idx_,
-                                                         agg_info,
-                                                         query_mem_desc_));
+      row.push_back(getTargetValueFromBufferColwise(crt_col_ptr,
+                                                    query_mem_desc_.agg_col_widths[agg_col_idx].compact,
+                                                    col2_ptr,
+                                                    compact_sz2,
+                                                    crt_row_buff_idx_,
+                                                    agg_info,
+                                                    translate_strings));
       crt_col_ptr = next_col_ptr;
       if (agg_info.is_agg && agg_info.agg_kind == kAVG) {
         crt_col_ptr = advance_to_next_columnar_target_buff(crt_col_ptr, query_mem_desc_, agg_col_idx + 1);
       }
     } else {
-      row.push_back(get_target_value_from_buffer_rowwise(rowwise_target_ptr, agg_info, agg_col_idx, query_mem_desc_));
+      row.push_back(getTargetValueFromBufferRowwise(rowwise_target_ptr, agg_info, agg_col_idx, translate_strings));
       rowwise_target_ptr = advance_target_ptr(rowwise_target_ptr, agg_info, agg_col_idx, query_mem_desc_);
     }
     agg_col_idx = advance_slot(agg_col_idx, agg_info);
@@ -263,6 +194,86 @@ void ResultSet::advanceCursorToNextEntry() const {
     }
     ++crt_row_buff_idx_;
   }
+}
+
+// Reads an integer or a float from ptr based on the type and the byte width.
+TargetValue ResultSet::makeTargetValue(const int8_t* ptr,
+                                       const int8_t compact_sz,
+                                       const SQLTypeInfo& ti,
+                                       const bool translate_strings) const {
+  if (ti.is_integer()) {
+    return read_int_from_buff(ptr, compact_sz);
+  }
+  if (ti.is_fp()) {
+    switch (compact_sz) {
+      case 8: {
+        return *reinterpret_cast<const double*>(ptr);
+      }
+      case 4: {
+        CHECK_EQ(kFLOAT, ti.get_type());
+        return *reinterpret_cast<const float*>(ptr);
+      }
+      default:
+        CHECK(false);
+    }
+  }
+  if (ti.is_string() && ti.get_compression() == kENCODING_DICT) {
+    const auto string_id = read_int_from_buff(ptr, compact_sz);
+    if (translate_strings) {
+      if (string_id == NULL_INT) {
+        return NullableString(nullptr);
+      }
+      const auto sd = row_set_mem_owner_->getStringDict(ti.get_comp_param());
+      return NullableString(sd->getString(string_id));
+    } else {
+      return string_id;
+    }
+  }
+  CHECK(false);
+  return TargetValue(int64_t(0));
+}
+
+// Gets the TargetValue stored at position entry_idx in the col1_ptr and col2_ptr
+// column buffers. The second column is only used for AVG.
+TargetValue ResultSet::getTargetValueFromBufferColwise(const int8_t* col1_ptr,
+                                                       const int8_t compact_sz1,
+                                                       const int8_t* col2_ptr,
+                                                       const int8_t compact_sz2,
+                                                       const size_t entry_idx,
+                                                       const TargetInfo& target_info,
+                                                       const bool translate_strings) const {
+  CHECK(query_mem_desc_.output_columnar);
+  const auto& ti = target_info.sql_type;
+  const auto ptr1 = col1_ptr + compact_sz1 * entry_idx;
+  if (target_info.agg_kind == kAVG) {
+    CHECK(col2_ptr);
+    CHECK(compact_sz2);
+    const auto ptr2 = col2_ptr + compact_sz2 * entry_idx;
+    return make_avg_target_value(ptr1, compact_sz1, ptr2, compact_sz2, target_info);
+  }
+  return makeTargetValue(ptr1, compact_sz1, ti, translate_strings);
+}
+
+// Gets the TargetValue stored in slot_idx (and slot_idx for AVG) of rowwise_target_ptr.
+TargetValue ResultSet::getTargetValueFromBufferRowwise(const int8_t* rowwise_target_ptr,
+                                                       const TargetInfo& target_info,
+                                                       const size_t slot_idx,
+                                                       const bool translate_strings) const {
+  auto ptr1 = rowwise_target_ptr;
+  auto compact_sz1 = query_mem_desc_.agg_col_widths[slot_idx].compact;
+  const int8_t* ptr2{nullptr};
+  int8_t compact_sz2{0};
+  if (target_info.is_agg && target_info.agg_kind == kAVG) {
+    ptr2 = rowwise_target_ptr + query_mem_desc_.agg_col_widths[slot_idx].compact;
+    compact_sz2 = query_mem_desc_.agg_col_widths[slot_idx + 1].compact;
+  }
+  if (target_info.agg_kind == kAVG) {
+    CHECK(ptr2);
+    return make_avg_target_value(ptr1, compact_sz1, ptr2, compact_sz2, target_info);
+  }
+  CHECK(!ptr2);
+  CHECK_EQ(0, compact_sz2);
+  return makeTargetValue(ptr1, compact_sz1, target_info.sql_type, translate_strings);
 }
 
 // Returns true iff the entry at position entry_idx in buff contains a valid row.

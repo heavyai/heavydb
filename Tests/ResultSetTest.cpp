@@ -515,15 +515,22 @@ bool approx_eq(const double v, const double target, const double eps = 0.01) {
   return target - eps < v && v < target + eps;
 }
 
+StringDictionary g_sd("");
+
 void test_iterate(const std::vector<TargetInfo>& target_infos, const QueryMemoryDescriptor& query_mem_desc) {
   SQLTypeInfo double_ti(kDOUBLE, false);
-  ResultSet result_set(target_infos, ExecutorDeviceType::CPU, query_mem_desc, std::make_shared<RowSetMemoryOwner>());
+  auto row_set_mem_owner = std::make_shared<RowSetMemoryOwner>();
+  row_set_mem_owner->addStringDict(&g_sd, 1);
+  ResultSet result_set(target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner);
+  for (size_t i = 0; i < query_mem_desc.entry_count; ++i) {
+    g_sd.getOrAddTransient(std::to_string(i));
+  }
   const auto storage = result_set.allocateStorage();
   EvenNumberGenerator generator;
   fill_storage_buffer(storage->getUnderlyingBuffer(), target_infos, query_mem_desc, generator, 2);
   int64_t ref_val{0};
   while (true) {
-    const auto row = result_set.getNextRow(false, false);
+    const auto row = result_set.getNextRow(true, false);
     if (row.empty()) {
       break;
     }
@@ -545,8 +552,8 @@ void test_iterate(const std::vector<TargetInfo>& target_infos, const QueryMemory
           break;
         }
         case kTEXT: {
-          const auto ival = v<int64_t>(row[i]);
-          CHECK_LT(ival, 0);  // TODO(alex): get the string for this id
+          const auto sval = v<NullableString>(row[i]);
+          ASSERT_EQ(std::to_string(ref_val), boost::get<std::string>(sval));
           break;
         }
         default:
@@ -610,6 +617,7 @@ void test_reduce(const std::vector<TargetInfo>& target_infos,
   std::unique_ptr<ResultSet> rs1;
   std::unique_ptr<ResultSet> rs2;
   const auto row_set_mem_owner = std::make_shared<RowSetMemoryOwner>();
+  row_set_mem_owner->addStringDict(&g_sd, 1);
   switch (query_mem_desc.hash_type) {
     case GroupByColRangeType::OneColKnownRange:
     case GroupByColRangeType::MultiColPerfectHash: {

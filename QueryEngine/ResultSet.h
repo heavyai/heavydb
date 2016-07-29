@@ -113,6 +113,24 @@ class ResultSet {
 
   static bool isNull(const SQLTypeInfo& ti, const InternalTargetValue& val);
 
+  TargetValue getTargetValueFromBufferRowwise(const int8_t* rowwise_target_ptr,
+                                              const TargetInfo& target_info,
+                                              const size_t slot_idx,
+                                              const bool translate_strings) const;
+
+  TargetValue getTargetValueFromBufferColwise(const int8_t* col1_ptr,
+                                              const int8_t compact_sz1,
+                                              const int8_t* col2_ptr,
+                                              const int8_t compact_sz2,
+                                              const size_t entry_idx,
+                                              const TargetInfo& target_info,
+                                              const bool translate_strings) const;
+
+  TargetValue makeTargetValue(const int8_t* ptr,
+                              const int8_t compact_sz,
+                              const SQLTypeInfo& ti,
+                              const bool translate_strings) const;
+
   const std::vector<TargetInfo> targets_;
   const ExecutorDeviceType device_type_;
   const QueryMemoryDescriptor query_mem_desc_;
