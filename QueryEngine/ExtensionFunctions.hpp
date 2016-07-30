@@ -155,6 +155,13 @@ double Tan__(const float x) {
 }
 
 EXTENSION_NOINLINE
+double Truncate(const double x, double y) {
+  double p = pow((double)10L,y);
+  int64_t temp = x * p;
+  return temp / p;
+}
+
+EXTENSION_NOINLINE
 double conv_4326_900913_x(const double x) {
   return x * 111319.490778;
 }

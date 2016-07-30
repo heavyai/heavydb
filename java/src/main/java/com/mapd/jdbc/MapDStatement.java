@@ -12,6 +12,7 @@ import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.SQLWarning;
+import java.util.regex.Pattern;
 import org.apache.thrift.TException;
 import org.slf4j.LoggerFactory;
 
@@ -37,7 +38,7 @@ public class MapDStatement implements java.sql.Statement {
   public ResultSet executeQuery(String sql) throws SQLException { //logger.debug("Entered");
     if (maxRows > 0) {
       // add limit to sql call if it doesn't already have one
-      if (sql.toLowerCase().contains(" limit ")) {
+      if (sql.toLowerCase().contains("limit")) {
         // do nothing
       } else {
         sql = sql + " LIMIT " + maxRows;
@@ -45,8 +46,9 @@ public class MapDStatement implements java.sql.Statement {
       }
     }
     logger.debug("sql is :'" + sql + "'");
+    String afterFnSQL = fnReplace(sql);
     try {
-      sqlResult = client.sql_execute(session, sql + ";", true, null);
+      sqlResult = client.sql_execute(session, afterFnSQL + ";", true, null);
     } catch (ThriftException ex) {
       throw new SQLException("Query failed : " + ex.getError_msg());
     } catch (TException ex) {
@@ -357,4 +359,54 @@ public class MapDStatement implements java.sql.Statement {
             getStackTrace()[0].getMethodName());
   }
 
+  private static final Pattern FN = Pattern.compile("\\{fn([^\\{]*?)}",
+            Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
+  private static final Pattern QUARTER = Pattern.compile("\\{fn\\sQUARTER\\(([^\\{]*?)}",
+            Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
+  private static final Pattern DAYOFYEAR = Pattern.compile("\\{fn\\sDAYOFYEAR\\(([^\\{]*?)}",
+            Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
+  private static final Pattern DAYOFWEEK = Pattern.compile("\\{fn\\sDAYOFWEEK\\(([^\\{]*?)}",
+            Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
+  private static final Pattern WEEK = Pattern.compile("\\{fn\\sWEEK\\(([^\\{]*?)}",
+            Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
+  //private static final Pattern CAST = Pattern.compile("(CAST\\()(.*?)(\\sINTEGER\\)|\\sDATE\\)|\\sTIMESTAMP\\))",
+  private static final Pattern CAST = Pattern.compile("(\\sINTEGER\\)|\\sDATE\\)|\\sTIMESTAMP\\)|\\sFLOAT\\))",
+            Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
+
+  private String fnReplace(String sql) {
+    //Pattern p1 = Pattern.compile("(.*)\\{fn([^\\{]*?)}(.*)",
+
+    // need to iterate as each reduction of string opens up a anew match
+    String start;
+    do {
+        start = sql;
+        sql =  QUARTER.matcher(sql).replaceAll(" EXTRACT(QUARTER FROM $1");
+    } while (!sql.equals(start));
+
+    do {
+        start = sql;
+        sql =  DAYOFYEAR.matcher(sql).replaceAll(" EXTRACT(DOY FROM $1");
+    } while (!sql.equals(start));
+
+    do {
+        start = sql;
+        sql =  DAYOFWEEK.matcher(sql).replaceAll(" EXTRACT(ISODOW FROM $1");
+    } while (!sql.equals(start));
+
+    do {
+        start = sql;
+        sql =  WEEK.matcher(sql).replaceAll(" EXTRACT(WEEK FROM $1");
+    } while (!sql.equals(start));
+
+
+    do {
+        start = sql;
+        sql =  FN.matcher(sql).replaceAll("$1");
+    } while (!sql.equals(start));
+
+    //todo MAT this is wrong it is not going to work with general purpose casts
+    sql =  CAST.matcher(sql).replaceAll(" AS$1");
+
+    return sql;
+  }
 }

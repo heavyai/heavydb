@@ -488,6 +488,8 @@ ExpressionRange getExpressionRange(const Analyzer::ExtractExpr* extract_expr,
       return ExpressionRange::makeIntRange(1, 7, 0, has_nulls);
     case kDOY:
       return ExpressionRange::makeIntRange(1, 366, 0, has_nulls);
+    case kWEEK:
+      return ExpressionRange::makeIntRange(1, 53, 0, has_nulls);
     default:
       CHECK(false);
   }

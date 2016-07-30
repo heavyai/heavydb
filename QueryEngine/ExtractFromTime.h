@@ -38,7 +38,21 @@
 /* number of days in non-leap February */
 #define DAYS_IN_FEBRUARY 28
 
-enum ExtractField { kYEAR, kQUARTER, kMONTH, kDAY, kHOUR, kMINUTE, kSECOND, kDOW, kISODOW, kDOY, kEPOCH, kQUARTERDAY };
+enum ExtractField {
+  kYEAR,
+  kQUARTER,
+  kMONTH,
+  kDAY,
+  kHOUR,
+  kMINUTE,
+  kSECOND,
+  kDOW,
+  kISODOW,
+  kDOY,
+  kEPOCH,
+  kQUARTERDAY,
+  kWEEK
+};
 
 // Shared by DateTruncate
 #ifdef __CUDACC__

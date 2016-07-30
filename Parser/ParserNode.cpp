@@ -660,6 +660,8 @@ std::string extract_field_name(const ExtractField fieldno) {
       return "epoch";
     case kQUARTERDAY:
       return "quarterday";
+    case kWEEK:
+      return "week";
   }
   CHECK(false);
   return "";
@@ -717,6 +719,8 @@ ExtractField ExtractExpr::to_extract_field(const std::string& field) {
     fieldno = kDOY;
   else if (boost::iequals(field, "epoch"))
     fieldno = kEPOCH;
+  else if (boost::iequals(field, "week"))
+    fieldno = kWEEK;
   else
     throw std::runtime_error("Invalid field in EXTRACT function " + field);
   return fieldno;

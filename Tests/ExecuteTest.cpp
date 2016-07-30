@@ -841,6 +841,13 @@ TEST(Select, Time) {
     ASSERT_EQ(4, v<int64_t>(run_simple_agg("SELECT EXTRACT(DOW FROM o) FROM test;", dt)));
     ASSERT_EQ(252, v<int64_t>(run_simple_agg("SELECT EXTRACT(DOY FROM o) FROM test;", dt)));
     ASSERT_EQ(936835200L, v<int64_t>(run_simple_agg("SELECT MAX(EXTRACT(EPOCH FROM o)) FROM test;", dt)));
+    ASSERT_EQ(1L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT MAX(EXTRACT(WEEK FROM CAST('2012-01-01 20:15:12' AS TIMESTAMP))) FROM test limit 1;", dt)));
+    ASSERT_EQ(10L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT MAX(EXTRACT(WEEK FROM CAST('2008-03-03 20:15:12' AS TIMESTAMP))) FROM test limit 1;", dt)));
+
     // do some DATE_TRUNC tests
     /*
  * year
