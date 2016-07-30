@@ -375,6 +375,7 @@ public class SQLImporter {
       case java.sql.Types.DATE:
           return ("DATE");
       case java.sql.Types.BOOLEAN:
+      case java.sql.Types.BIT:  // deal with postgress treating boolean as bit... this will bite me
           return ("BOOLEAN");
       case java.sql.Types.VARCHAR:
       case java.sql.Types.NCHAR:
