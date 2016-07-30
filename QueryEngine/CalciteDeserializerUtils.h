@@ -126,7 +126,7 @@ inline SQLTypes to_sql_type(const std::string& type_name) {
   if (type_name == std::string("NULL")) {
     return kNULLT;
   }
-  return kNULLT;
+  throw std::runtime_error("Unsupported type: " + type_name);
 }
 
 namespace Analyzer {
