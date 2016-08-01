@@ -334,6 +334,7 @@ class Executor {
                            const SQLTypeInfo& operand_ti,
                            const SQLTypeInfo& ti,
                            const bool operand_is_const);
+  llvm::Value* codegenCastTimestampToDate(llvm::Value* ts_lv, const bool nullable);
   llvm::Value* codegenCastFromString(llvm::Value* operand_lv,
                                      const SQLTypeInfo& operand_ti,
                                      const SQLTypeInfo& ti,

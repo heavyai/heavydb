@@ -412,6 +412,11 @@ ExpressionRange getExpressionRange(const Analyzer::UOper* u_expr,
   }
   const auto arg_range = getExpressionRange(u_expr->get_operand(), query_infos, executor);
   const auto& arg_ti = u_expr->get_operand()->get_type_info();
+  // Timestamp to date cast is generated like a date trunc on day in the executor.
+  if (arg_ti.get_type() == kTIMESTAMP && ti.get_type() == kDATE) {
+    const auto dt_expr = makeExpr<Analyzer::DatetruncExpr>(arg_ti, false, dtDAY, u_expr->get_own_operand());
+    return getExpressionRange(dt_expr.get(), query_infos, executor);
+  }
   switch (arg_range.getType()) {
     case ExpressionRangeType::FloatingPoint: {
       if (ti.is_fp() && ti.get_size() >= arg_ti.get_size()) {

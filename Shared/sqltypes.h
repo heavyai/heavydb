@@ -247,6 +247,8 @@ class SQLTypeInfo {
     // can cast from date to timestamp
     else if (type == kDATE && new_type_info.get_type() == kTIMESTAMP)
       return true;
+    else if (type == kTIMESTAMP && new_type_info.get_type() == kDATE)
+      return true;
     else if (type == kBOOLEAN && new_type_info.is_number())
       return true;
     else if (type == kARRAY && new_type_info.get_type() == kARRAY)

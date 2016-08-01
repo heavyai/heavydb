@@ -1770,6 +1770,13 @@ llvm::Value* Executor::codegenCast(llvm::Value* operand_lv,
         operand_lv = castToTypeIn(operand_lv, 8);
       }
     }
+    if (operand_ti.get_type() == kTIMESTAMP && ti.get_type() == kDATE) {
+      // Maybe we should instead generate DatetruncExpr directly from RelAlgTranslator
+      // for this pattern. However, DatetruncExpr is supposed to return a timestamp,
+      // whereas this cast returns a date. The underlying type for both is still the same,
+      // but it still doesn't look like a good idea to misuse DatetruncExpr.
+      return codegenCastTimestampToDate(operand_lv, !ti.get_notnull());
+    }
     if (ti.is_integer() || ti.is_decimal() || ti.is_time()) {
       return codegenCastBetweenIntTypes(operand_lv, operand_ti, ti);
     } else {
@@ -1780,6 +1787,22 @@ llvm::Value* Executor::codegenCast(llvm::Value* operand_lv,
   }
   CHECK(false);
   return nullptr;
+}
+
+llvm::Value* Executor::codegenCastTimestampToDate(llvm::Value* ts_lv, const bool nullable) {
+  static_assert(sizeof(time_t) == 4 || sizeof(time_t) == 8, "Unsupported time_t size");
+  CHECK(ts_lv->getType()->isIntegerTy(32) || ts_lv->getType()->isIntegerTy(64));
+  if (sizeof(time_t) == 4 && ts_lv->getType()->isIntegerTy(64)) {
+    ts_lv = cgen_state_->ir_builder_.CreateCast(
+        llvm::Instruction::CastOps::Trunc, ts_lv, get_int_type(32, cgen_state_->context_));
+  }
+  std::vector<llvm::Value*> datetrunc_args{ll_int(static_cast<int32_t>(dtDAY)), ts_lv};
+  std::string datetrunc_fname{"DateTruncate"};
+  if (nullable) {
+    datetrunc_args.push_back(inlineIntNull(SQLTypeInfo(ts_lv->getType()->isIntegerTy(64) ? kBIGINT : kINT, false)));
+    datetrunc_fname += "Nullable";
+  }
+  return cgen_state_->emitExternalCall(datetrunc_fname, get_int_type(64, cgen_state_->context_), datetrunc_args);
 }
 
 llvm::Value* Executor::codegenCastFromString(llvm::Value* operand_lv,

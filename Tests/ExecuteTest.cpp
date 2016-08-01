@@ -1129,6 +1129,8 @@ TEST(Select, Time) {
                   "TIMESTAMP)) FROM TEST LIMIT 1;",
                   dt)));
 #endif  // HAVE_CALCITE
+    ASSERT_EQ(1418428800L, v<int64_t>(run_simple_agg("SELECT CAST(m AS date) FROM test LIMIT 1;", dt)));
+    ASSERT_EQ(g_num_rows * 2, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test GROUP BY CAST(m AS date);", dt)));
     EXPECT_THROW(run_simple_agg("SELECT DATEPART('s', TIMESTAMP '2007-10-30 12:15:32') FROM test;", dt),
                  std::runtime_error);
     const auto rows = run_multiple_agg(
