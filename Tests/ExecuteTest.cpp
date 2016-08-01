@@ -847,6 +847,22 @@ TEST(Select, Time) {
     ASSERT_EQ(10L,
               v<int64_t>(run_simple_agg(
                   "SELECT MAX(EXTRACT(WEEK FROM CAST('2008-03-03 20:15:12' AS TIMESTAMP))) FROM test limit 1;", dt)));
+    // Monday
+    ASSERT_EQ(1L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(DOW FROM CAST('2008-03-03 20:15:12' AS TIMESTAMP)) FROM test limit 1;", dt)));
+    // Monday
+    ASSERT_EQ(1L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(ISODOW FROM CAST('2008-03-03 20:15:12' AS TIMESTAMP)) FROM test limit 1;", dt)));
+    // Sunday
+    ASSERT_EQ(0L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(DOW FROM CAST('2008-03-02 20:15:12' AS TIMESTAMP)) FROM test limit 1;", dt)));
+    // Sunday
+    ASSERT_EQ(7L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(ISODOW FROM CAST('2008-03-02 20:15:12' AS TIMESTAMP)) FROM test limit 1;", dt)));
 
     // do some DATE_TRUNC tests
     /*

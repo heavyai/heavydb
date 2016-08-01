@@ -194,7 +194,8 @@ __device__
     case kDOW:
       return extract_dow(&timeval);
     case kISODOW: {
-      return extract_dow(&timeval) + 1;
+      int64_t dow = extract_dow(&timeval);
+      return (dow == 0 ? 7 : dow);
     }
     default:
       break;
@@ -214,17 +215,17 @@ __device__
     case kDOY:
       return tm_struct.tm_yday + 1;
     case kWEEK: {
-      int64_t doy = tm_struct.tm_yday;
-      int64_t isodow = extract_dow(&timeval) + 1;  // use iso week
+      int64_t doy = tm_struct.tm_yday;  // numbered from 0
+      int64_t dow = extract_dow(&timeval) + 1;  // use Sunday 1 - Saturday 7
       int64_t week = (doy / 7) + 1;
       // now adjust for offset at start of year
-      //     S M T W T F S
+      //      S M T W T F S
       // doy      0 1 2 3 4
       // doy  5 6
       // mod  5 6 0 1 2 3 4
       // dow  1 2 3 4 5 6 7
       // week 2 2 1 1 1 1 1
-      if (isodow > (doy % 7)) {
+      if (dow > (doy % 7)) {
         return week;
       }
       return week + 1;
