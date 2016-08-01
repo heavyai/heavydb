@@ -1578,6 +1578,13 @@ TEST(Select, ArrayAnyAndAll) {
   }
 }
 
+TEST(Select, ArrayUnsupported) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    EXPECT_THROW(run_multiple_agg("SELECT MIN(arr_i64) FROM array_test;", dt), std::runtime_error);
+  }
+}
+
 TEST(Select, Joins) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
