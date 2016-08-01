@@ -215,7 +215,7 @@ __device__
     case kDOY:
       return tm_struct.tm_yday + 1;
     case kWEEK: {
-      int64_t doy = tm_struct.tm_yday;  // numbered from 0
+      int64_t doy = tm_struct.tm_yday;          // numbered from 0
       int64_t dow = extract_dow(&timeval) + 1;  // use Sunday 1 - Saturday 7
       int64_t week = (doy / 7) + 1;
       // now adjust for offset at start of year

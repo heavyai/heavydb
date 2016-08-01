@@ -156,7 +156,7 @@ double Tan__(const float x) {
 
 EXTENSION_NOINLINE
 double Truncate(const double x, double y) {
-  double p = pow((double)10L,y);
+  double p = pow((double)10L, y);
   int64_t temp = x * p;
   return temp / p;
 }
