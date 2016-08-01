@@ -212,7 +212,7 @@ std::unique_ptr<RexLiteral> parse_literal(const rapidjson::Value& expr) {
 
 std::unique_ptr<const RexScalar> parse_scalar_expr(const rapidjson::Value& expr);
 
-SQLTypeInfo parse_type(const rapidjson::Value& type_obj) noexcept {
+SQLTypeInfo parse_type(const rapidjson::Value& type_obj) {
   CHECK(type_obj.IsObject() && (type_obj.MemberCount() >= 2 && type_obj.MemberCount() <= 4));
   const auto type = to_sql_type(json_str(field(type_obj, "type")));
   const auto nullable = json_bool(field(type_obj, "nullable"));
@@ -290,7 +290,7 @@ std::string json_node_to_string(const rapidjson::Value& node) noexcept {
   return buffer.GetString();
 }
 
-std::unique_ptr<const RexAgg> parse_aggregate_expr(const rapidjson::Value& expr) noexcept {
+std::unique_ptr<const RexAgg> parse_aggregate_expr(const rapidjson::Value& expr) {
   const auto agg = to_agg_kind(json_str(field(expr, "agg")));
   const auto distinct = json_bool(field(expr, "distinct"));
   const auto agg_ti = parse_type(field(expr, "type"));
