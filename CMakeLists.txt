@@ -171,6 +171,8 @@ if(ENABLE_ASAN)
   add_definitions("-DRUN_ASAN")
 endif()
 
+# Curl/CPR
+option(ENABLE_LICENSING_AWS "Enable licensing options for AWS Marketplace" OFF)
 ADD_SUBDIRECTORY    (Catalog)
 ADD_SUBDIRECTORY    (Parser)
 ADD_SUBDIRECTORY    (Analyzer)
@@ -185,6 +187,7 @@ ADD_SUBDIRECTORY    (Chunk)
 ADD_SUBDIRECTORY    (Shared)
 ADD_SUBDIRECTORY    (Utils)
 ADD_SUBDIRECTORY    (SQLFrontend)
+ADD_SUBDIRECTORY    (Licensing)
 
 option(ENABLE_ODBC "Build ODBC driver" OFF)
 if(ENABLE_ODBC)
