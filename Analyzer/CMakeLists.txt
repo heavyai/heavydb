@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 2.8)
 SET (analyzer_source_files
     Analyzer.cpp
     Analyzer.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../QueryEngine/DateTruncate.cpp
 )
 
 include_directories("/usr/local/include")
