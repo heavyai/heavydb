@@ -3,8 +3,11 @@
 #ifdef HAVE_PROFILER
 #include <gperftools/heap-profiler.h>
 #endif  // HAVE_PROFILER
+#include <thrift/concurrency/ThreadManager.h>
+#include <thrift/concurrency/PlatformThreadFactory.h>
 #include <thrift/protocol/TBinaryProtocol.h>
 #include <thrift/protocol/TJSONProtocol.h>
+#include <thrift/server/TThreadPoolServer.h>
 #include <thrift/server/TThreadedServer.h>
 #include <thrift/transport/THttpServer.h>
 #include <thrift/transport/TServerSocket.h>
@@ -38,11 +41,12 @@
 
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/replace.hpp>
-#include <boost/program_options.hpp>
+#include <boost/algorithm/string/trim.hpp>
 #include <boost/filesystem.hpp>
+#include <boost/make_shared.hpp>
+#include <boost/program_options.hpp>
 #include <boost/regex.hpp>
 #include <boost/tokenizer.hpp>
-#include <boost/algorithm/string/trim.hpp>
 #include <memory>
 #include <string>
 #include <fstream>
@@ -61,10 +65,12 @@
 
 
 using namespace ::apache::thrift;
+using namespace ::apache::thrift::concurrency;
 using namespace ::apache::thrift::protocol;
-using namespace ::apache::thrift::transport;
 using namespace ::apache::thrift::server;
+using namespace ::apache::thrift::transport;
 
+using boost::make_shared;
 using boost::shared_ptr;
 
 #define INVALID_SESSION_ID -1
@@ -1739,7 +1745,7 @@ void register_signal_handler() {
   signal(SIGTERM, mapd_signal_handler);
 }
 
-void start_server(TThreadedServer& server) {
+void start_server(TThreadPoolServer& server) {
   try {
     server.serve();
   } catch (std::exception& e) {
@@ -1963,15 +1969,21 @@ int main(int argc, char** argv) {
 
   shared_ptr<TProcessor> processor(new MapDProcessor(handler));
 
+  int workerCount = cpu_threads();
+  shared_ptr<ThreadManager> threadManager = ThreadManager::newSimpleThreadManager(workerCount);
+  threadManager->threadFactory(make_shared<PlatformThreadFactory>());
+  threadManager->start();
+
   shared_ptr<TServerTransport> bufServerTransport(new TServerSocket(port));
   shared_ptr<TTransportFactory> bufTransportFactory(new TBufferedTransportFactory());
   shared_ptr<TProtocolFactory> bufProtocolFactory(new TBinaryProtocolFactory());
-  TThreadedServer bufServer(processor, bufServerTransport, bufTransportFactory, bufProtocolFactory);
+  TThreadPoolServer bufServer(processor, bufServerTransport, bufTransportFactory, bufProtocolFactory, threadManager);
 
   shared_ptr<TServerTransport> httpServerTransport(new TServerSocket(http_port));
   shared_ptr<TTransportFactory> httpTransportFactory(new THttpServerTransportFactory());
   shared_ptr<TProtocolFactory> httpProtocolFactory(new TJSONProtocolFactory());
-  TThreadedServer httpServer(processor, httpServerTransport, httpTransportFactory, httpProtocolFactory);
+  TThreadPoolServer httpServer(
+      processor, httpServerTransport, httpTransportFactory, httpProtocolFactory, threadManager);
 
   std::thread bufThread(start_server, std::ref(bufServer));
   std::thread httpThread(start_server, std::ref(httpServer));
