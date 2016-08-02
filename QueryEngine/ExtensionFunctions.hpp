@@ -155,10 +155,32 @@ double Tan__(const float x) {
 }
 
 EXTENSION_NOINLINE
-double Truncate(const double x, double y) {
+double Truncate(const double x, const int32_t y) {
   double p = pow((double)10L, y);
   int64_t temp = x * p;
   return temp / p;
+}
+
+EXTENSION_NOINLINE
+float Truncate__(const float x, const int32_t y) {
+  float p = powf((float)10L, y);
+  int64_t temp = x * p;
+  return temp / p;
+}
+
+EXTENSION_NOINLINE
+int16_t Truncate__1(const int16_t x, const int32_t) {
+  return x;
+}
+
+EXTENSION_NOINLINE
+int32_t Truncate__2(const int32_t x, const int32_t) {
+  return x;
+}
+
+EXTENSION_NOINLINE
+int64_t Truncate__3(const int64_t x, const int32_t) {
+  return x;
 }
 
 EXTENSION_NOINLINE

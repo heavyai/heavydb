@@ -109,6 +109,7 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
         opTab.addOperator(new CharLength());
         opTab.addOperator(new PgILike());
         opTab.addOperator(new Sign());
+        opTab.addOperator(new Truncate());
         if (extSigs == null) {
             return;
         }
@@ -468,6 +469,26 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
         @Override
         public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
             return opBinding.getOperandType(0);
+        }
+    }
+
+    static class Truncate extends SqlFunction {
+
+        Truncate() {
+            super("TRUNCATE", SqlKind.OTHER_FUNCTION, null, null, OperandTypes.family(signature()), SqlFunctionCategory.NUMERIC);
+        }
+
+        @Override
+        public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+            assert opBinding.getOperandCount() == 2;
+            return opBinding.getOperandType(0);
+        }
+
+        private static java.util.List<SqlTypeFamily> signature() {
+            java.util.List<SqlTypeFamily> truncate_sig = new java.util.ArrayList<SqlTypeFamily>();
+            truncate_sig.add(SqlTypeFamily.NUMERIC);
+            truncate_sig.add(SqlTypeFamily.INTEGER);
+            return truncate_sig;
         }
     }
 

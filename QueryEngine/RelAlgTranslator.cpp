@@ -410,7 +410,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(const RexFun
   if (rex_function->getName() == std::string("SIGN")) {
     return translateSign(rex_function);
   }
-  if (rex_function->getName() == std::string("CEIL") || rex_function->getName() == std::string("FLOOR")) {
+  if (rex_function->getName() == std::string("CEIL") || rex_function->getName() == std::string("FLOOR") ||
+      rex_function->getName() == std::string("TRUNCATE")) {
     return makeExpr<Analyzer::FunctionOperWithCustomTypeHandling>(
         rex_function->getType(), rex_function->getName(), translateFunctionArgs(rex_function));
   }
