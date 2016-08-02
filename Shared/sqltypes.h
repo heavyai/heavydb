@@ -36,7 +36,9 @@ enum SQLTypes {
   kTEXT = 13,
   kDATE = 14,
   kARRAY = 15,
-  kSQLTYPE_LAST = 16
+  kINTERVAL_DAY_TIME = 16,
+  kINTERVAL_YEAR_MONTH = 17,
+  kSQLTYPE_LAST = 18
 };
 
 struct VarlenDatum {

@@ -43,7 +43,6 @@ public class MetaConnect {
   private static final int KTEXT = 13;
   private static final int KDATE = 14;
   private static final int KARRAY = 15;
-  private static final int KSQLTYPE_LAST = 16;
 
   public static void main(String args[]) {
     MetaConnect x = new MetaConnect("/home/michael/mapd/mapd2/build/data/", "mapd");

@@ -29,7 +29,9 @@ std::string SQLTypeInfo::type_name[kSQLTYPE_LAST] = {"NULL",
                                                      "BIGINT",
                                                      "TEXT",
                                                      "DATE",
-                                                     "ARRAY"};
+                                                     "ARRAY",
+                                                     "INTERVAL_DAY_TIME",
+                                                     "INTERVAL_YEAR_MONTH"};
 std::string SQLTypeInfo::comp_name[kENCODING_LAST] = {"NONE", "FIXED", "RL", "DIFF", "DICT", "SPARSE"};
 
 int64_t parse_numeric(const std::string& s, SQLTypeInfo& ti) {
