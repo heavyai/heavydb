@@ -2002,6 +2002,9 @@ int main(int argc, char** argv) {
   run_ddl_statement(drop_array_test);
   const std::string drop_array_test_inner{"DROP TABLE array_test_inner;"};
   run_ddl_statement(drop_array_test_inner);
+  const std::string drop_subquery_test{"DROP TABLE subquery_test;"};
+  run_ddl_statement(drop_subquery_test);
+  g_sqlite_comparator.query(drop_subquery_test);
   g_session.reset(nullptr);
   return err;
 }
