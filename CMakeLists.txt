@@ -171,8 +171,6 @@ if(ENABLE_ASAN)
   add_definitions("-DRUN_ASAN")
 endif()
 
-# Curl/CPR
-option(ENABLE_LICENSING_AWS "Enable licensing options for AWS Marketplace" OFF)
 ADD_SUBDIRECTORY    (Catalog)
 ADD_SUBDIRECTORY    (Parser)
 ADD_SUBDIRECTORY    (Analyzer)

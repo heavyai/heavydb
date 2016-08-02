@@ -26,19 +26,6 @@
 #include "Catalog/Catalog.h"
 #include "Fragmenter/InsertOrderFragmenter.h"
 #include "Import/Importer.h"
-#include "Parser/parser.h"
-#include "Parser/ParserWrapper.h"
-#include "Parser/ReservedKeywords.h"
-#include "Planner/Planner.h"
-#include "QueryEngine/CalciteAdapter.h"
-#include "QueryEngine/Execute.h"
-#include "QueryEngine/ExtensionFunctionsWhitelist.h"
-#include "QueryEngine/JsonAccessors.h"
-#include "QueryEngine/TargetMetaInfo.h"
-#include "Shared/mapd_shared_mutex.h"
-#include "Shared/measure.h"
-#include "Shared/scope.h"
-
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/replace.hpp>
 #include <boost/algorithm/string/trim.hpp>
@@ -1969,6 +1956,7 @@ int main(int argc, char** argv) {
     close(pid_fd);
     return 1;
   }
+
 
 
   const auto log_path = boost::filesystem::path(base_path) / "mapd_log";
