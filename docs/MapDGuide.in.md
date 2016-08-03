@@ -608,6 +608,8 @@ Example:
 DROP TABLE IF EXISTS tweets;
 ```
 
+# Loading Data
+
 ## `COPY FROM`
 ```
 COPY <table> FROM '<file path>' [WITH (<property> = value, ...)];
@@ -632,6 +634,64 @@ Example:
 COPY tweets from '/tmp/tweets.csv' WITH (nulls = 'NA');
 COPY tweets from '/tmp/tweets.tsv' WITH (delimiter = '\t', quoted = 'false');
 ```
+
+## `SQL Importer`
+```
+java -cp [MapD JDBC driver]:[3rd party JDBC driver]
+com.mapd.utility.SQLImporter -t [MapD table name] -su [external source user]
+-sp [external source password] -c "jdbc:[external
+source]://server:port;DatabaseName=some_database" -ss "[select statement]"
+```
+
+SQL Importer executes a select statement on another database via JDBC and brings the result set into MapD.  Note: SQL Importer drops the MapD target table (if it exists) then creates the MapD table with appropriate datatypes and populates the table with the contents of the result set.  It is recommended to use a service account with read-only permissions when accessing data from a remote database.
+
+SQLServer Example:
+```
+java -cp
+/path/to/mapd/bin/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar:/path/to/sqljdbc4.jar
+com.mapd.utility.SQLImporter -d com.microsoft.sqlserver.jdbc.SQLServerDriver -t
+mapd_target_table -su source_user -sp source_pwd -c
+"jdbc:sqlserver://server:port;DatabaseName=some_database" -ss "select top 10 *
+from dbo.some_table"
+```
+
+PostgreSQL Example:
+```
+java -cp
+/p/to/mapd/bin/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar:/p/to/postgresql-9.4.1208.jre6.jar
+com.mapd.utility.SQLImporter -t mapd_target_table -su source_user -sp
+source_pwd -c "jdbc:postgresql://server/database" -ss "select * from some_table
+where transaction_date > '2014-01-01'"
+```
+
+## `StreamInsert`
+```
+<data stream> | StreamInsert <table> <mapd database> --host <localhost> --port 9091
+-u <mapd_user> -p <mapd_pwd> --delim '\t' --batch 1000
+```
+
+Stream data into MapD by attaching the StreamInsert program onto the end of a data stream.  The data stream could be another program printing to standard out, a Kafka endpoint, or any other real-time stream output.  Users may specify the appropriate batch size according to the expected stream rates and desired insert frequency.  The MapD target table must already exist before attempting to stream data into the table.
+
+Example:
+```
+cat file.tsv | /path/to/mapd/SampleCode/StreamInsert stream_example mapd --host localhost
+--port 9091 -u mapd -p MapDRocks!  --delim '\t' --batch 1000
+```
+
+## `HDFS`
+Consume a CSV or Parquet file residing in HDFS into MapD
+
+Copy the MapD JDBC driver into the sqoop lib, normally /usr/lib/sqoop/lib/
+
+Example:
+```
+sqoop-export --table alltypes --export-dir /user/cloudera/ \
+  --connect "jdbc:mapd:192.168.122.1:9091:mapd" \
+  --driver com.mapd.jdbc.MapDDriver --username mapd \
+  --password HyperInteractive --direct --batch
+```
+
+# Exporting Data
 
 ## `COPY TO`
 ```
@@ -680,98 +740,116 @@ SELECT [ALL|DISTINCT] <expr> [AS [<alias>]], ... FROM <table> [,<table>]
 ```
 
 ## Logical Operator Support
-```
-AND
-NOT
-OR
-```
+| Operator | Description |
+| --- | --- |
+| AND | logical AND |
+| NOT | negates value |
+| OR | logical OR |
 
 ## Comparison Operator Support
-```
-=
-<>
->
->=
-<
-<=
-BETWEEN
-NOT BETWEEN
-EXISTS
-IN
-NOT IN
-IS NULL
-IS NOT NULL
-```
+| Operator            | Description                   |
+| ------------------- | ----------------------------- |
+| =                   | equals                        |
+| <>                  | not equals                    |
+| >                   | greater than                  |
+| >=                  | greater than or equal to      |
+| <                   | less than                     |
+| <=                  | less than or equal to         |
+| BETWEEN **x** AND **y**     | is a value within a range     |
+| NOT BETWEEN **x** AND **y** | is a value not within a range |
+| IS NULL             | is a value null               |
+| IS NOT NULL         | is a value not null           |
 
 ## Mathematical Function Support
-```
-ABS
-CEIL
-DEGREES
-EXP
-FLOOR
-LN
-LOG
-MOD
-PI
-POWER
-RADIANS
-ROUND
-SIGN
-TRUNCATE
-```
+| Function            | Description                   |
+| ------------------- | ----------------------------- |
+| ABS(**x**) | returns the absolute value of **x** |
+| CEIL(**x**) | returns the smallest integer not less than the argument |
+| DEGREES(**x**) | converts radians to degrees |
+| EXP(**x**) | returns the value of e to the power of **x** |
+| FLOOR(**x**) | returns the largest integer not greater than the argument |
+| LN(**x**) | returns the natural logarithm of **x** |
+| LOG(**x**, **y**) | returns the logarithm of **y** to the base **x** |
+| MOD(**x**, **y**) | returns the remainder of **x** divided by **y** |
+| PI() | returns the value of pi |
+| POWER(**x**, **y**) | returns the value of **x** raised to the power of **y** |
+| RADIANS(**x**) | converts degrees to radians |
+| ROUND(**x**, **y**) | rounds **x** to **y** decimal places |
+| SIGN(**x**) | returns the sign of **x** as -1, 0, 1 if **x** is negative, zero, or positive |
+| TRUNCATE(**x**, **y**) | truncates **x** to **y** decimal places |
 
 ## Trignometric Function Support
-```
-ACOS
-ASIN
-ATAN
-ATAN2
-COS
-COT
-SIN
-TAN
-```
+| Function            | Description                   |
+| ------------------- | ----------------------------- |
+| ACOS(**x**) | returns the arc cosine of **x** |
+| ASIN(**x**) | returns the arc sine of **x** |
+| ATAN(**x**) | returns the arc tangent of **x** |
+| ATAN2(**x**, **y**) | returns the arc tangent of **x** and **y** |
+| COS(**x**) | returns the cosine of **x** |
+| COT(**x**) | returns the cotangent of **x** |
+| SIN(**x**) | returns the sine of **x** |
+| TAN(**x**) | returns the tangent of **x** |
 
 ## String Function Support
-```
-CHAR_LENGTH
-LENGTH
-```
+| Function | Description |
+| --- | --- |
+| CHAR_LENGTH(**str**) | returns the number of characters in a string |
+| LENGTH(**str**) | returns the length of a string in bytes |
 
 ## Pattern Matching Support
-```
-LIKE
-NOT LIKE
-ILIKE
-```
+| Name | Example | Description |
+| ------------------------ | -------------------- | ------------------------------------- |
+| **str** LIKE **pattern** | 'ab' LIKE 'ab' | returns true if the string matches the pattern |
+| **str** NOT LIKE **pattern** | 'ab' NOT LIKE 'cd' | returns true if the string does not match the pattern |
+| **str** ILIKE **pattern** | 'AB' ILIKE 'ab' | case-insensitve LIKE |
+
+Wildcard characters are supported:
+
+% matches any number of characters, including zero characters
+
+_ matches exactly one character
 
 ## Date/Time Function Support
+| Function | Description |
+| -------------------------------------------------- | ---------------------------------------------- |
+| DATE_TRUNC(**date_part**, **timestamp**) | truncates the **timestamp** to the specified **date_part** |
+| EXTRACT(**date_part** FROM **timestamp**) | returns the specified **date_part** from provided **timestamp** |
+| NOW() | returns the current timestamp |
+
+Supported **date_part** types:
 ```
-DATE_TRUNC [YEAR, QUARTER, MONTH, DAY, HOUR, MINUTE, SECOND, MILLENIUM, CENTURY, DECADE, WEEK, QUARTERDAY]
-EXTRACT [YEAR, QUARTER, MONTH, DAY, HOUR, MINUTE, SECOND, DOW, ISODOW, DOY, EPOCH, QUARTERDAY, WEEK]
-NOW
+DATE_TRUNC [YEAR, QUARTER, MONTH, DAY, HOUR, MINUTE, SECOND,
+            MILLENIUM, CENTURY, DECADE, WEEK, QUARTERDAY]
+EXTRACT [YEAR, QUARTER, MONTH, DAY, HOUR, MINUTE, SECOND,
+         DOW, ISODOW, DOY, EPOCH, QUARTERDAY, WEEK]
 ```
 
 ## Aggregate Function Support
-```
-AVG
-COUNT
-MIN
-MAX
-SUM
-```
+| Function | Description |
+| --- | --- |
+| AVG(**x**) | returns the average value of **x** |
+| COUNT() | returns the count of the number of rows returned |
+| MAX(**x**) | returns the maximum value of **x** |
+| MIN(**x**) | returns the minimum value of **x** |
+| SUM(**x**) | returns the sum of the values of **x** |
 
 ## Conditional Expression Support
-```
-CASE
-COALESCE
-```
+| Expression | Description |
+| --- | --- |
+| CASE WHEN **condition** THEN **result** | Case operator |
+| COALESCE(**val1**, **val2**, ..) | returns the first non-null value in the list |
+
+## Subquery Expression Support
+| Expression | Example | Description |
+| ---------- | --------------------------------- | ------------------------------------------------- |
+| EXISTS     | EXISTS (**subquery**) | evaluates whether the subquery returns rows |
+| IN         | **expr** IN (**subquery** or **list of values**) | evaluates whether **expr** equals any value of the IN list |
+| NOT IN     | **expr** NOT IN (**subquery** or **list of values**) | evaluates whether **expr** does not equal any value of the IN list |
 
 ## Type Cast Support
-```
-CAST
-```
+| Expression | Example | Description |
+| ------------------------ | --------------------------- | ------------------------------------- |
+| CAST(**expr** AS **type**) | CAST(1.25 AS FLOAT) | converts an expression to another data type |
 
 ## Array Support
 ```
@@ -782,6 +860,8 @@ Query array elements n of column `ArrayCol`
 SELECT UNNEST(<ArrayCol>) ...
 ```
  Flatten entire array `ArrayCol`
+
+##
 
 # Client Interfaces
 
