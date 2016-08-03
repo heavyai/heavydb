@@ -113,8 +113,8 @@ inline const Analyzer::Expr* extract_cast_arg(const Analyzer::Expr* expr) {
 
 inline std::string numeric_type_name(const SQLTypeInfo& ti) {
   CHECK(ti.is_integer() || ti.is_decimal() || ti.is_boolean() || ti.is_time() || ti.is_fp() ||
-        (ti.is_string() && ti.get_compression() == kENCODING_DICT));
-  if (ti.is_integer() || ti.is_decimal() || ti.is_boolean() || ti.is_time() || ti.is_string()) {
+        (ti.is_string() && ti.get_compression() == kENCODING_DICT) || ti.is_timeinterval());
+  if (ti.is_integer() || ti.is_decimal() || ti.is_boolean() || ti.is_time() || ti.is_string() || ti.is_timeinterval()) {
     return "int" + std::to_string(ti.get_size() * 8) + "_t";
   }
   return ti.get_type() == kDOUBLE ? "double" : "float";

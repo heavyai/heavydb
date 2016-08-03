@@ -1253,6 +1253,17 @@ TEST(Select, TimeInterval) {
     ASSERT_EQ(2 * g_num_rows,
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE INTERVAL '1' DAY < INTERVAL '2' DAY;", dt)));
     ASSERT_EQ(2 * g_num_rows, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test GROUP BY INTERVAL '1' DAY;", dt)));
+    ASSERT_EQ(3 * 60 * 60 * 1000L, v<int64_t>(run_simple_agg("SELECT 3 * INTERVAL '1' HOUR FROM test LIMIT 1;", dt)));
+    ASSERT_EQ(3 * 60 * 60 * 1000L, v<int64_t>(run_simple_agg("SELECT INTERVAL '1' HOUR * 3 FROM test LIMIT 1;", dt)));
+    ASSERT_EQ(7L, v<int64_t>(run_simple_agg("SELECT INTERVAL '1' MONTH * x FROM test WHERE x <> 8 LIMIT 1;", dt)));
+    ASSERT_EQ(7L, v<int64_t>(run_simple_agg("SELECT x * INTERVAL '1' MONTH FROM test WHERE x <> 8 LIMIT 1;", dt)));
+    ASSERT_EQ(42L, v<int64_t>(run_simple_agg("SELECT INTERVAL '1' MONTH * y FROM test WHERE y <> 43 LIMIT 1;", dt)));
+    ASSERT_EQ(42L, v<int64_t>(run_simple_agg("SELECT y * INTERVAL '1' MONTH FROM test WHERE y <> 43 LIMIT 1;", dt)));
+    ASSERT_EQ(1002L,
+              v<int64_t>(run_simple_agg("SELECT INTERVAL '1' MONTH * t FROM test WHERE t <> 1001 LIMIT 1;", dt)));
+    ASSERT_EQ(1002L,
+              v<int64_t>(run_simple_agg("SELECT t * INTERVAL '1' MONTH FROM test WHERE t <> 1001 LIMIT 1;", dt)));
+    ASSERT_EQ(3L, v<int64_t>(run_simple_agg("SELECT INTERVAL '1' MONTH + INTERVAL '2' MONTH FROM test LIMIT 1;", dt)));
   }
 }
 #endif  // HAVE_CALCITE

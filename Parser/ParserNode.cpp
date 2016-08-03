@@ -158,6 +158,9 @@ std::shared_ptr<Analyzer::Expr> OperExpr::normalize(const SQLOps optype,
   SQLTypeInfo new_right_type;
   const auto result_type =
       Analyzer::BinOper::analyze_type_info(optype, left_type, right_type, &new_left_type, &new_right_type);
+  if (result_type.is_timeinterval()) {
+    return makeExpr<Analyzer::BinOper>(result_type, false, optype, qual, left_expr, right_expr);
+  }
   if (left_type != new_left_type)
     left_expr = left_expr->add_cast(new_left_type);
   if (right_type != new_right_type) {

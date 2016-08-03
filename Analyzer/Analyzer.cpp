@@ -218,7 +218,8 @@ SQLTypeInfo BinOper::analyze_type_info(SQLOps op,
     }
     result_type = SQLTypeInfo(kBOOLEAN, false);
   } else if (IS_ARITHMETIC(op)) {
-    if (!left_type.is_number() || !right_type.is_number())
+    if (!(left_type.is_number() || left_type.is_timeinterval()) ||
+        !(right_type.is_number() || right_type.is_timeinterval()))
       throw std::runtime_error("non-numeric operands in arithmetic operations.");
     if (op == kMODULO && (!left_type.is_integer() || !right_type.is_integer()))
       throw std::runtime_error("non-integer operands in modulo operation.");
@@ -268,14 +269,27 @@ SQLTypeInfo BinOper::common_numeric_type(const SQLTypeInfo& type1, const SQLType
   SQLTypeInfo common_type;
   const bool notnull = type1.get_notnull() && type2.get_notnull();
   if (type1.get_type() == type2.get_type()) {
-    CHECK((type1.is_number() && type2.is_number()) || (type1.is_boolean() && type2.is_boolean()));
+    CHECK(((type1.is_number() || type1.is_timeinterval()) && (type2.is_number() || type2.is_timeinterval())) ||
+          (type1.is_boolean() && type2.is_boolean()));
     common_type = SQLTypeInfo(type1.get_type(),
                               std::max(type1.get_dimension(), type2.get_dimension()),
                               std::max(type1.get_scale(), type2.get_scale()),
                               notnull);
     return common_type;
   }
-
+  std::string timeinterval_op_error{"Operator type not supported for time interval arithmetic: "};
+  if (type1.is_timeinterval()) {
+    if (!type2.is_integer()) {
+      throw std::runtime_error(timeinterval_op_error + type2.get_type_name());
+    }
+    return type1;
+  }
+  if (type2.is_timeinterval()) {
+    if (!type1.is_integer()) {
+      throw std::runtime_error(timeinterval_op_error + type1.get_type_name());
+    }
+    return type2;
+  }
   CHECK(type1.is_number() && type2.is_number());
   switch (type1.get_type()) {
     case kSMALLINT:

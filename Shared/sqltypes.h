@@ -424,6 +424,8 @@ class SQLTypeInfo {
       case kTIMESTAMP:
         if (dimension > 0)
           assert(false);  // not supported yet
+      case kINTERVAL_DAY_TIME:
+      case kINTERVAL_YEAR_MONTH:
       case kDATE:
         switch (compression) {
           case kENCODING_NONE:

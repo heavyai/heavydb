@@ -2262,6 +2262,8 @@ llvm::ConstantInt* Executor::inlineIntNull(const SQLTypeInfo& type_info) {
     case kTIME:
     case kTIMESTAMP:
     case kDATE:
+    case kINTERVAL_DAY_TIME:
+    case kINTERVAL_YEAR_MONTH:
       return ll_int(inline_int_null_val(type_info));
     case kARRAY:
       return ll_int(int64_t(0));
@@ -2299,6 +2301,17 @@ std::pair<llvm::ConstantInt*, llvm::ConstantInt*> Executor::inlineIntMaxMin(cons
   }
 }
 
+namespace {
+
+std::string numeric_or_time_interval_type_name(const SQLTypeInfo& ti1, const SQLTypeInfo& ti2) {
+  if (ti2.is_timeinterval()) {
+    return numeric_type_name(ti2);
+  }
+  return numeric_type_name(ti1);
+}
+
+}  // namespace
+
 llvm::Value* Executor::codegenArith(const Analyzer::BinOper* bin_oper, const CompilationOptions& co) {
   const auto optype = bin_oper->get_optype();
   CHECK(IS_ARITHMETIC(optype));
@@ -2308,13 +2321,19 @@ llvm::Value* Executor::codegenArith(const Analyzer::BinOper* bin_oper, const Com
   const auto& rhs_type = rhs->get_type_info();
   auto lhs_lv = codegen(lhs, true, co).front();
   auto rhs_lv = codegen(rhs, true, co).front();
-  CHECK_EQ(lhs_type.get_type(), rhs_type.get_type());
+  if (lhs_type.is_timeinterval()) {
+    rhs_lv = codegenCastBetweenIntTypes(rhs_lv, rhs_type, lhs_type);
+  } else if (rhs_type.is_timeinterval()) {
+    lhs_lv = codegenCastBetweenIntTypes(lhs_lv, lhs_type, rhs_type);
+  } else {
+    CHECK_EQ(lhs_type.get_type(), rhs_type.get_type());
+  }
   if (lhs_type.is_decimal()) {
     CHECK_EQ(lhs_type.get_scale(), rhs_type.get_scale());
   }
   const auto null_check_suffix = get_null_check_suffix(lhs_type, rhs_type);
-  if (lhs_type.is_integer() || lhs_type.is_decimal()) {
-    const auto int_typename = numeric_type_name(lhs_type);
+  if (lhs_type.is_integer() || lhs_type.is_decimal() || lhs_type.is_timeinterval()) {
+    const auto int_typename = numeric_or_time_interval_type_name(lhs_type, rhs_type);
     switch (optype) {
       case kMINUS:
         if (null_check_suffix.empty()) {
