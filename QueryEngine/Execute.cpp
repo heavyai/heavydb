@@ -1202,6 +1202,8 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Constant* constant,
     case kTIME:
     case kTIMESTAMP:
     case kDATE:
+    case kINTERVAL_DAY_TIME:
+    case kINTERVAL_YEAR_MONTH:
       return {codegenIntConst(constant)};
     case kFLOAT:
       return {llvm::ConstantFP::get(llvm::Type::getFloatTy(cgen_state_->context_), constant->get_constval().floatval)};
@@ -1266,8 +1268,8 @@ std::vector<llvm::Value*> Executor::codegenHoistedConstants(const std::vector<co
   llvm::Type* val_ptr_type{nullptr};
   const auto val_bits = get_bit_width(type_info);
   CHECK_EQ(size_t(0), val_bits % 8);
-  if (type_info.is_integer() || type_info.is_decimal() || type_info.is_time() || type_info.is_string() ||
-      type_info.is_boolean()) {
+  if (type_info.is_integer() || type_info.is_decimal() || type_info.is_time() || type_info.is_timeinterval() ||
+      type_info.is_string() || type_info.is_boolean()) {
     val_ptr_type = llvm::PointerType::get(llvm::IntegerType::get(cgen_state_->context_, val_bits), 0);
   } else {
     CHECK(type_info.get_type() == kFLOAT || type_info.get_type() == kDOUBLE);
@@ -1594,7 +1596,8 @@ llvm::Value* Executor::codegenCmp(const SQLOps optype,
   CHECK_EQ(kONE, qualifier);
   CHECK((lhs_ti.get_type() == rhs_ti.get_type()) || (lhs_ti.is_string() && rhs_ti.is_string()));
   const auto null_check_suffix = get_null_check_suffix(lhs_ti, rhs_ti);
-  if (lhs_ti.is_integer() || lhs_ti.is_decimal() || lhs_ti.is_time() || lhs_ti.is_boolean() || lhs_ti.is_string()) {
+  if (lhs_ti.is_integer() || lhs_ti.is_decimal() || lhs_ti.is_time() || lhs_ti.is_boolean() || lhs_ti.is_string() ||
+      lhs_ti.is_timeinterval()) {
     if (lhs_ti.is_string()) {
       CHECK(rhs_ti.is_string());
       CHECK_EQ(lhs_ti.get_compression(), rhs_ti.get_compression());
@@ -2228,6 +2231,8 @@ llvm::ConstantInt* Executor::codegenIntConst(const Analyzer::Constant* constant)
     case kTIME:
     case kTIMESTAMP:
     case kDATE:
+    case kINTERVAL_DAY_TIME:
+    case kINTERVAL_YEAR_MONTH:
       return ll_int(constant->get_constval().timeval);
     default:
       CHECK(false);

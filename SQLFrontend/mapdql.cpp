@@ -368,6 +368,10 @@ std::string scalar_datum_to_string(const TDatum& datum, const TTypeInfo& type_in
     }
     case TDatumType::BOOL:
       return (datum.val.int_val ? "true" : "false");
+    case TDatumType::INTERVAL_DAY_TIME:
+      return std::to_string(datum.val.int_val) + " ms (day-time interval)";
+    case TDatumType::INTERVAL_YEAR_MONTH:
+      return std::to_string(datum.val.int_val) + " month(s) (year-month interval)";
     default:
       return "Unknown column type.\n";
   }
@@ -423,7 +427,9 @@ TDatum columnar_val_to_datum(const TColumn& col, const size_t row_idx, const TTy
     case TDatumType::TIME:
     case TDatumType::TIMESTAMP:
     case TDatumType::DATE:
-    case TDatumType::BOOL: {
+    case TDatumType::BOOL:
+    case TDatumType::INTERVAL_DAY_TIME:
+    case TDatumType::INTERVAL_YEAR_MONTH: {
       datum.val.int_val = col.data.int_col[row_idx];
       break;
     }

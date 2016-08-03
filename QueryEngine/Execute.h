@@ -794,6 +794,8 @@ class Executor {
         case kTIME:
         case kTIMESTAMP:
         case kDATE:
+        case kINTERVAL_DAY_TIME:
+        case kINTERVAL_YEAR_MONTH:
           // TODO(alex): support null
           return getOrAddLiteral(static_cast<int64_t>(constant->get_constval().timeval), device_id);
         default:

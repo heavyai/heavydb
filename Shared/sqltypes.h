@@ -206,6 +206,7 @@ class SQLTypeInfo {
   inline bool is_time() const { return IS_TIME(type); }
   inline bool is_boolean() const { return type == kBOOLEAN; }
   inline bool is_array() const { return type == kARRAY; }
+  inline bool is_timeinterval() const { return type == kINTERVAL_DAY_TIME || type == kINTERVAL_YEAR_MONTH; }
 
   inline bool is_varlen() const { return (IS_STRING(type) && compression != kENCODING_DICT) || type == kARRAY; }
 

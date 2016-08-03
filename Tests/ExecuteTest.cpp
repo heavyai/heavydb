@@ -1241,6 +1241,22 @@ TEST(Select, CastFromNull) {
 }
 #endif  // HAVE_CALCITE
 
+#ifdef HAVE_CALCITE
+TEST(Select, TimeInterval) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    ASSERT_EQ(60 * 60 * 1000L, v<int64_t>(run_simple_agg("SELECT INTERVAL '1' HOUR FROM test LIMIT 1;", dt)));
+    ASSERT_EQ(24 * 60 * 60 * 1000L, v<int64_t>(run_simple_agg("SELECT INTERVAL '1' DAY FROM test LIMIT 1;", dt)));
+    ASSERT_EQ(
+        2 * g_num_rows,
+        v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE INTERVAL '1' MONTH < INTERVAL '2' MONTH;", dt)));
+    ASSERT_EQ(2 * g_num_rows,
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE INTERVAL '1' DAY < INTERVAL '2' DAY;", dt)));
+    ASSERT_EQ(2 * g_num_rows, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test GROUP BY INTERVAL '1' DAY;", dt)));
+  }
+}
+#endif  // HAVE_CALCITE
+
 TEST(Select, UnsupportedNodes) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();

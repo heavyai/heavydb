@@ -11,7 +11,9 @@ enum TDatumType {
   TIME,
   TIMESTAMP,
   DATE,
-  BOOL
+  BOOL,
+  INTERVAL_DAY_TIME,
+  INTERVAL_YEAR_MONTH
 }
 
 enum TEncodingType {

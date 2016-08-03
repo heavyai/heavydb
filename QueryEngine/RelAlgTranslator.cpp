@@ -114,6 +114,12 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLiteral(const RexLite
       auto lit_expr = makeExpr<Analyzer::Constant>(kDOUBLE, false, d);
       return lit_ti != target_ti ? lit_expr->add_cast(target_ti) : lit_expr;
     }
+    case kINTERVAL_DAY_TIME:
+    case kINTERVAL_YEAR_MONTH: {
+      Datum d;
+      d.timeval = rex_literal->getVal<int64_t>();
+      return makeExpr<Analyzer::Constant>(rex_literal->getType(), false, d);
+    }
     case kNULLT: {
       return makeExpr<Analyzer::Constant>(rex_literal->getTargetType(), true, Datum{0});
     }

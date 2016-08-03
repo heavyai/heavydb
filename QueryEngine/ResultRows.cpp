@@ -336,7 +336,7 @@ void ResultRows::reduceSingleColumn(int8_t* crt_val_i1,
   const auto agg_info = targets_[target_idx];
   const auto& chosen_type = get_compact_type(agg_info);
   CHECK(chosen_type.is_integer() || chosen_type.is_decimal() || chosen_type.is_time() || chosen_type.is_boolean() ||
-        chosen_type.is_string() || chosen_type.is_fp());
+        chosen_type.is_string() || chosen_type.is_fp() || chosen_type.is_timeinterval());
   switch (agg_info.agg_kind) {
     case kAVG:
       CHECK(crt_val_i2 && new_val_i2);
@@ -1061,7 +1061,8 @@ TargetValue result_rows_get_impl(const InternalTargetValue& col_val,
     CHECK(col_val.isPair());
     return pair_to_double({col_val.i1, col_val.i2}, chosen_type);
   }
-  if (chosen_type.is_integer() || chosen_type.is_decimal() || chosen_type.is_boolean() || chosen_type.is_time()) {
+  if (chosen_type.is_integer() || chosen_type.is_decimal() || chosen_type.is_boolean() || chosen_type.is_time() ||
+      chosen_type.is_timeinterval()) {
     if (agg_info.is_distinct) {
       return TargetValue(bitmap_set_size(col_val.i1, col_idx, row_set_mem_owner->getCountDistinctDescriptors()));
     }

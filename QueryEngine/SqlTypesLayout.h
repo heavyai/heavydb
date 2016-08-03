@@ -75,6 +75,8 @@ inline int64_t inline_int_null_val(const SQLTypeInfo& ti) {
     case kTIMESTAMP:
     case kTIME:
     case kDATE:
+    case kINTERVAL_DAY_TIME:
+    case kINTERVAL_YEAR_MONTH:
       return std::numeric_limits<int64_t>::min();
     default:
       CHECK(false);
@@ -120,6 +122,8 @@ inline size_t get_bit_width(const SQLTypeInfo& ti) {
     case kTIME:
     case kTIMESTAMP:
     case kDATE:
+    case kINTERVAL_DAY_TIME:
+    case kINTERVAL_YEAR_MONTH:
       return sizeof(time_t) * 8;
     case kTEXT:
     case kVARCHAR:

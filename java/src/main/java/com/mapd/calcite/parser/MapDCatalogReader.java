@@ -516,6 +516,10 @@ public class MapDCatalogReader implements Prepare.CatalogReader {
         return typeFactory.createSqlType(SqlTypeName.DATE);
       case BOOL:
         return typeFactory.createSqlType(SqlTypeName.BOOLEAN);
+      case INTERVAL_DAY_TIME:
+        return typeFactory.createSqlType(SqlTypeName.INTERVAL_DAY_TIME);
+      case INTERVAL_YEAR_MONTH:
+        return typeFactory.createSqlType(SqlTypeName.INTERVAL_YEAR_MONTH);
       default:
         throw new AssertionError(dType.name());
     }

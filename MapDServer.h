@@ -46,6 +46,10 @@ inline TDatumType::type type_to_thrift(const SQLTypeInfo& type_info) {
       return TDatumType::TIMESTAMP;
     case kDATE:
       return TDatumType::DATE;
+    case kINTERVAL_DAY_TIME:
+      return TDatumType::INTERVAL_DAY_TIME;
+    case kINTERVAL_YEAR_MONTH:
+      return TDatumType::INTERVAL_YEAR_MONTH;
     default:
       break;
   }

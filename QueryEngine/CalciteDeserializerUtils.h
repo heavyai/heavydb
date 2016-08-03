@@ -126,6 +126,12 @@ inline SQLTypes to_sql_type(const std::string& type_name) {
   if (type_name == std::string("NULL")) {
     return kNULLT;
   }
+  if (type_name == std::string("INTERVAL_DAY_TIME")) {
+    return kINTERVAL_DAY_TIME;
+  }
+  if (type_name == std::string("INTERVAL_YEAR_MONTH")) {
+    return kINTERVAL_YEAR_MONTH;
+  }
   throw std::runtime_error("Unsupported type: " + type_name);
 }
 

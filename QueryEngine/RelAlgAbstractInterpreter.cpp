@@ -184,6 +184,8 @@ std::unique_ptr<RexLiteral> parse_literal(const rapidjson::Value& expr) {
   const auto type_precision = json_i64(field(expr, "type_precision"));
   switch (type) {
     case kDECIMAL:
+    case kINTERVAL_DAY_TIME:
+    case kINTERVAL_YEAR_MONTH:
       return std::unique_ptr<RexLiteral>(
           new RexLiteral(json_i64(literal), type, target_type, scale, precision, type_scale, type_precision));
     case kDOUBLE:

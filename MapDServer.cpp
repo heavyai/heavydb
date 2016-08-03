@@ -361,6 +361,8 @@ class MapDHandler : virtual public MapDIf {
           case kTIME:
           case kTIMESTAMP:
           case kDATE:
+          case kINTERVAL_DAY_TIME:
+          case kINTERVAL_YEAR_MONTH:
             if (sizeof(time_t) == 4)
               column.nulls.push_back(data == NULL_INT);
             else
@@ -431,6 +433,8 @@ class MapDHandler : virtual public MapDIf {
         case kTIME:
         case kTIMESTAMP:
         case kDATE:
+        case kINTERVAL_DAY_TIME:
+        case kINTERVAL_YEAR_MONTH:
           if (sizeof(time_t) == 4)
             datum.is_null = (datum.val.int_val == NULL_INT);
           else

@@ -405,6 +405,13 @@ class CalciteAdapter {
             scale ? Parser::FixedPtLiteral::analyzeValue(val, scale, precision) : Parser::IntLiteral::analyzeValue(val);
         return scale && lit_ti != target_ti ? lit_expr->add_cast(target_ti) : lit_expr;
       }
+      case kINTERVAL_DAY_TIME:
+      case kINTERVAL_YEAR_MONTH: {
+        CHECK(json_val->IsInt64());
+        Datum d;
+        d.timeval = json_val->GetInt64();
+        return makeExpr<Analyzer::Constant>(lit_ti.get_type(), false, d);
+      }
       case kTEXT: {
         CHECK(json_val->IsString());
         const auto val = json_val->GetString();

@@ -132,6 +132,8 @@ void data_gen(const TTableDescriptor& table_desc, const char* delimiter, int num
           std::cout << gen_time();
           break;
         case TDatumType::TIMESTAMP:
+        case TDatumType::INTERVAL_DAY_TIME:
+        case TDatumType::INTERVAL_YEAR_MONTH:
           std::cout << gen_timestamp();
           break;
         case TDatumType::DATE:
