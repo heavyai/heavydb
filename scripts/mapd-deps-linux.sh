@@ -145,8 +145,16 @@ PREFIX=$PREFIX make all shared
 PREFIX=$PREFIX make install
 
 # thrift
+VERS=0.9.3
 download_make_install https://github.com/libevent/libevent/releases/download/release-2.0.22-stable/libevent-2.0.22-stable.tar.gz
-JAVA_PREFIX=$PREFIX/lib download_make_install http://apache.claz.org/thrift/0.9.3/thrift-0.9.3.tar.gz "" "--with-lua=no --with-python=no --with-php=no --with-boost-libdir=$PREFIX/lib"
+download http://apache.claz.org/thrift/$VERS/thrift-$VERS.tar.gz
+extract thrift-$VERS.tar.gz
+pushd thrift-$VERS
+# see: https://issues.apache.org/jira/browse/THRIFT-3704
+patch -p1 < ../mapd-deps-thrift-empty-buffer.patch
+JAVA_PREFIX=$PREFIX/lib ./configure --prefix=$PREFIX --with-lua=no --with-python=no --with-php=no --with-boost-libdir=$PREFIX/lib
+makej
+make install
 
 # backend rendering
 download https://downloads.sourceforge.net/project/glew/glew/1.13.0/glew-1.13.0.tgz

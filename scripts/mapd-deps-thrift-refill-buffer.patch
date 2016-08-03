@@ -1,0 +1,26 @@
+From 47f9c762eeaef45b686e8adb6ad89161d8e44f31 Mon Sep 17 00:00:00 2001
+From: Pascal Bach <pascal.bach@siemens.com>
+Date: Thu, 3 Mar 2016 14:08:30 +0100
+Subject: [PATCH] Treat the case where we are not able to refill the buffer the
+ same as the EOL case.
+
+---
+ lib/cpp/src/thrift/transport/THttpTransport.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/lib/cpp/src/thrift/transport/THttpTransport.cpp b/lib/cpp/src/thrift/transport/THttpTransport.cpp
+index a466ff6..f93df23 100644
+--- a/lib/cpp/src/thrift/transport/THttpTransport.cpp
++++ b/lib/cpp/src/thrift/transport/THttpTransport.cpp
+@@ -212,7 +212,7 @@ void THttpTransport::refill() {
+   httpBuf_[httpBufLen_] = '\0';
+
+   if (got == 0) {
+-    throw TTransportException("Could not refill buffer");
++    throw TTransportException(TTransportException::END_OF_FILE, "Could not refill buffer");
+   }
+ }
+
+--
+2.1.4
+
