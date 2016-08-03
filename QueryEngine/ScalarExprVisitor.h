@@ -52,6 +52,18 @@ class ScalarExprVisitor {
     if (extract) {
       return visitExtractExpr(extract);
     }
+    const auto func_with_custom_type_handling = dynamic_cast<const Analyzer::FunctionOperWithCustomTypeHandling*>(expr);
+    if (func_with_custom_type_handling) {
+      return visitFunctionOperWithCustomTypeHandling(func_with_custom_type_handling);
+    }
+    const auto func = dynamic_cast<const Analyzer::FunctionOper*>(expr);
+    if (func) {
+      return visitFunctionOper(func);
+    }
+    const auto datediff = dynamic_cast<const Analyzer::DatediffExpr*>(expr);
+    if (datediff) {
+      return visitDatediffExpr(datediff);
+    }
     return defaultResult();
   }
 
@@ -119,6 +131,26 @@ class ScalarExprVisitor {
   virtual T visitExtractExpr(const Analyzer::ExtractExpr* extract) const {
     T result = defaultResult();
     result = aggregateResult(result, visit(extract->get_from_expr()));
+    return result;
+  }
+
+  virtual T visitFunctionOperWithCustomTypeHandling(
+      const Analyzer::FunctionOperWithCustomTypeHandling* func_oper) const {
+    return visitFunctionOper(func_oper);
+  }
+
+  virtual T visitFunctionOper(const Analyzer::FunctionOper* func_oper) const {
+    T result = defaultResult();
+    for (size_t i = 0; i < func_oper->getArity(); ++i) {
+      result = aggregateResult(result, visit(func_oper->getArg(i)));
+    }
+    return result;
+  }
+
+  virtual T visitDatediffExpr(const Analyzer::DatediffExpr* datediff) const {
+    T result = defaultResult();
+    result = aggregateResult(result, visit(datediff->get_start_expr()));
+    result = aggregateResult(result, visit(datediff->get_end_expr()));
     return result;
   }
 
