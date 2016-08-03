@@ -805,6 +805,11 @@ class FunctionOper : public Expr {
     return args_[i].get();
   }
 
+  std::shared_ptr<Analyzer::Expr> getOwnArg(const size_t i) const {
+    CHECK_LT(i, args_.size());
+    return args_[i];
+  }
+
   std::shared_ptr<Analyzer::Expr> deep_copy() const override;
 
   bool operator==(const Expr& rhs) const override;

@@ -1264,6 +1264,35 @@ TEST(Select, TimeInterval) {
     ASSERT_EQ(1002L,
               v<int64_t>(run_simple_agg("SELECT t * INTERVAL '1' MONTH FROM test WHERE t <> 1001 LIMIT 1;", dt)));
     ASSERT_EQ(3L, v<int64_t>(run_simple_agg("SELECT INTERVAL '1' MONTH + INTERVAL '2' MONTH FROM test LIMIT 1;", dt)));
+#ifdef HAVE_RAVM
+    ASSERT_EQ(1388534400L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT CAST(m AS date) + CAST(TRUNCATE(-1 * (EXTRACT(DOY FROM m) - 1), 0) AS INTEGER) * INTERVAL "
+                  "'1' DAY AS g FROM test GROUP BY g;",
+                  dt)));
+    ASSERT_EQ(1417392000L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT CAST(m AS date) + CAST(TRUNCATE(-1 * (EXTRACT(DAY FROM m) - 1), 0) AS INTEGER) * INTERVAL "
+                  "'1' DAY AS g FROM test GROUP BY g;",
+                  dt)));
+    ASSERT_EQ(1418508000L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT CAST(m AS date) + EXTRACT(HOUR FROM m) * INTERVAL '1' HOUR AS g FROM test GROUP BY g;", dt)));
+    ASSERT_EQ(1388534400L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT TIMESTAMPADD(SQL_TSI_DAY, CAST(TRUNCATE(-1 * (EXTRACT(DOY from m) - 1), 0) AS INTEGER), "
+                  "CAST(m AS DATE)) AS g FROM test GROUP BY g;",
+                  dt)));
+    ASSERT_EQ(1417392000L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT TIMESTAMPADD(SQL_TSI_DAY, CAST(TRUNCATE(-1 * (EXTRACT(DAY from m) - 1), 0) AS INTEGER), "
+                  "CAST(m AS DATE)) AS g FROM test GROUP BY g;",
+                  dt)));
+    ASSERT_EQ(1418508000L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT TIMESTAMPADD(SQL_TSI_HOUR, EXTRACT(HOUR from m), CAST(m AS DATE)) AS g FROM test GROUP BY g;",
+                  dt)));
+#endif  // HAVE_RAVM
   }
 }
 #endif  // HAVE_CALCITE

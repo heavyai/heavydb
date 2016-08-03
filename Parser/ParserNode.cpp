@@ -759,12 +759,54 @@ std::shared_ptr<Analyzer::Expr> DatetruncExpr::analyze(const Catalog_Namespace::
 std::shared_ptr<Analyzer::Expr> DatetruncExpr::get(const std::shared_ptr<Analyzer::Expr> from_expr,
                                                    const std::string& field) {
   const auto fieldno = to_date_trunc_field(field);
+  return DatetruncExpr::get(from_expr, fieldno);
+}
+
+std::string dt_field_name(const DatetruncField fieldno) {
+  switch (fieldno) {
+    case dtYEAR:
+      return "year";
+    case dtQUARTER:
+      return "quarter";
+    case dtMONTH:
+      return "month";
+    case dtQUARTERDAY:
+      return "quarterday";
+    case dtDAY:
+      return "day";
+    case dtHOUR:
+      return "hour";
+    case dtMINUTE:
+      return "minute";
+    case dtSECOND:
+      return "second";
+    case dtMILLENNIUM:
+      return "millennium";
+    case dtCENTURY:
+      return "century";
+    case dtDECADE:
+      return "decade";
+    case dtMILLISECOND:
+      return "millisecond";
+    case dtMICROSECOND:
+      return "microsecond";
+    case dtWEEK:
+      return "week";
+    case dtINVALID:
+      CHECK(false);
+  }
+  CHECK(false);
+  return "";
+}
+
+std::shared_ptr<Analyzer::Expr> DatetruncExpr::get(const std::shared_ptr<Analyzer::Expr> from_expr,
+                                                   const DatetruncField fieldno) {
   if (!from_expr->get_type_info().is_time())
     throw std::runtime_error("Only TIME, TIMESTAMP and DATE types can be in DATE_TRUNC function.");
   switch (from_expr->get_type_info().get_type()) {
     case kTIME:
       if (fieldno != dtHOUR && fieldno != dtMINUTE && fieldno != dtSECOND)
-        throw std::runtime_error("Cannot DATE_TRUNC " + field + " from TIME.");
+        throw std::runtime_error("Cannot DATE_TRUNC " + dt_field_name(fieldno) + " from TIME.");
       break;
     default:
       break;

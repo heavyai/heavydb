@@ -36,7 +36,8 @@ enum DatetruncField {
   dtMILLISECOND,
   dtMICROSECOND,
   dtWEEK,
-  dtQUARTERDAY
+  dtQUARTERDAY,
+  dtINVALID
 };
 
 extern "C" __attribute__((noinline))

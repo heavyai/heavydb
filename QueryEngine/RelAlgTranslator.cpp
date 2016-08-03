@@ -3,6 +3,7 @@
 #include "SqlTypesLayout.h"
 
 #include "CalciteDeserializerUtils.h"
+#include "DateTimePlusRewrite.h"
 #include "ExtensionFunctionsWhitelist.h"
 #include "RelAlgAbstractInterpreter.h"
 
@@ -420,6 +421,14 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(const RexFun
       rex_function->getName() == std::string("TRUNCATE")) {
     return makeExpr<Analyzer::FunctionOperWithCustomTypeHandling>(
         rex_function->getType(), rex_function->getName(), translateFunctionArgs(rex_function));
+  }
+  if (rex_function->getName() == std::string("DATETIME_PLUS")) {
+    auto dt_plus = makeExpr<Analyzer::FunctionOper>(
+        rex_function->getType(), rex_function->getName(), translateFunctionArgs(rex_function));
+    const auto date_trunc = rewrite_to_date_trunc(dt_plus.get());
+    if (date_trunc) {
+      return date_trunc;
+    }
   }
   if (!ExtensionFunctionsWhitelist::get(rex_function->getName())) {
     throw QueryNotSupported("Function " + rex_function->getName() + " not supported");
