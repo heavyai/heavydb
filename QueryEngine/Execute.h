@@ -613,7 +613,8 @@ class Executor {
                                     const int device_id,
                                     const uint32_t start_rowid,
                                     const uint32_t num_tables,
-                                    RenderAllocatorMap* render_allocator_map) noexcept;
+                                    RenderAllocatorMap* render_allocator_map,
+                                    const bool input_is_empty) noexcept;
   std::pair<int64_t, int32_t> reduceResults(const SQLAgg agg,
                                             const SQLTypeInfo& ti,
                                             const int64_t agg_init_val,

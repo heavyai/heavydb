@@ -739,6 +739,14 @@ class ResultRows {
 
   void setQueueTime(int64_t queue_time) { queue_time_ms_ = queue_time; }
 
+  void markAsEmpty() {
+    for (auto& target : targets_) {
+      target.sql_type.set_notnull(false);
+      target.agg_arg_type.set_notnull(false);
+      target.skip_null_val = true;
+    }
+  }
+
  private:
   void reduceSingleColumn(int8_t* crt_val_i1,
                           int8_t* crt_val_i2,

@@ -2521,6 +2521,7 @@ std::vector<int64_t*> launch_query_cpu_code(const std::vector<void*>& fn_ptrs,
   if (group_by_buffers.empty()) {
     for (size_t i = 0; i < init_agg_vals.size(); ++i) {
       auto buff = new int64_t[1];
+      *buff = init_agg_vals[i];
       out_vec.push_back(static_cast<int64_t*>(buff));
     }
   }
@@ -3170,6 +3171,15 @@ bool is_sample_query(const RelAlgExecutionUnit& ra_exe_unit) {
   return result;
 }
 
+bool input_is_empty(const std::vector<Fragmenter_Namespace::TableInfo>& query_infos) {
+  for (const auto& query_info : query_infos) {
+    if (query_info.fragments.empty()) {
+      return true;
+    }
+  }
+  return false;
+}
+
 }  // namespace
 
 ResultRows Executor::executeWorkUnit(int32_t* error_code,
@@ -3382,11 +3392,16 @@ void Executor::ExecutionDispatch::run(const ExecutorDeviceType chosen_device_typ
   const auto outer_it = frag_ids.find(outer_table_id);
   CHECK(outer_it != frag_ids.end());
   for (const auto frag_id : outer_it->second) {
-    const auto& outer_fragment = query_infos_.front().fragments[frag_id];
-    if (co_.device_type_ != ExecutorDeviceType::Hybrid) {
-      chosen_device_id = outer_fragment.deviceIds[static_cast<int>(memory_level)];
+    if (query_infos_.front().fragments.empty()) {
+      chosen_device_id = 0;
+      num_rows.push_back(0);
+    } else {
+      const auto& outer_fragment = query_infos_.front().fragments[frag_id];
+      if (co_.device_type_ != ExecutorDeviceType::Hybrid) {
+        chosen_device_id = outer_fragment.deviceIds[static_cast<int>(memory_level)];
+      }
+      num_rows.push_back(outer_fragment.numTuples);
     }
-    num_rows.push_back(outer_fragment.numTuples);
     if (ra_exe_unit_.input_descs.size() > 1) {
       for (size_t table_idx = 1; table_idx < ra_exe_unit_.input_descs.size(); ++table_idx) {
         const int inner_table_id = ra_exe_unit_.input_descs[table_idx].getTableId();
@@ -3512,7 +3527,8 @@ void Executor::ExecutionDispatch::run(const ExecutorDeviceType chosen_device_typ
                                                chosen_device_id,
                                                start_rowid,
                                                ra_exe_unit_.input_descs.size(),
-                                               render_allocator_map_);
+                                               render_allocator_map_,
+                                               input_is_empty(query_infos_));
   } else {
     err = executor_->executePlanWithGroupBy(compilation_result,
                                             co_.hoist_literals_,
@@ -3764,14 +3780,17 @@ void Executor::dispatchFragments(const std::function<void(const ExecutorDeviceTy
     //     running out of group by slots; also, for scan only queries (!agg_plan)
     //     we want the high-granularity, fragment by fragment execution instead.
     std::unordered_map<int, std::map<int, std::vector<size_t>>> fragments_per_device;
-    for (size_t frag_id = 0; frag_id < fragments->size(); ++frag_id) {
-      const auto& fragment = (*fragments)[frag_id];
-      const auto skip_frag =
-          skipFragment(outer_table_id, fragment, ra_exe_unit.simple_quals, all_frag_row_offsets, frag_id);
-      if (skip_frag.first) {
-        continue;
+    for (size_t frag_id = 0; frag_id < std::max(size_t(1), fragments->size()); ++frag_id) {
+      std::pair<bool, int64_t> skip_frag{false, -1};
+      int device_id = 0;
+      if (!fragments->empty()) {
+        const auto& fragment = (*fragments)[frag_id];
+        skip_frag = skipFragment(outer_table_id, fragment, ra_exe_unit.simple_quals, all_frag_row_offsets, frag_id);
+        if (skip_frag.first) {
+          continue;
+        }
+        device_id = fragment.deviceIds[static_cast<int>(Data_Namespace::GPU_LEVEL)];
       }
-      const int device_id = fragment.deviceIds[static_cast<int>(Data_Namespace::GPU_LEVEL)];
       for (const auto& inner_frags : all_tables_fragments) {
         if (inner_frags.first == outer_table_id) {
           fragments_per_device[device_id][inner_frags.first].push_back(frag_id);
@@ -3794,11 +3813,16 @@ void Executor::dispatchFragments(const std::function<void(const ExecutorDeviceTy
           dispatch, ExecutorDeviceType::GPU, kv.first, kv.second, kv.first % context_count, rowid_lookup_key));
     }
   } else {
-    for (size_t i = 0; i < fragments->size(); ++i) {
-      const auto& fragment = (*fragments)[i];
-      const auto skip_frag = skipFragment(outer_table_id, fragment, ra_exe_unit.simple_quals, all_frag_row_offsets, i);
-      if (skip_frag.first) {
-        continue;
+    for (size_t i = 0; i < std::max(size_t(1), fragments->size()); ++i) {
+      std::pair<bool, int64_t> skip_frag{false, -1};
+      size_t num_tuples{0};
+      if (!fragments->empty()) {
+        const auto& fragment = (*fragments)[i];
+        num_tuples = fragment.numTuples;
+        skip_frag = skipFragment(outer_table_id, fragment, ra_exe_unit.simple_quals, all_frag_row_offsets, i);
+        if (skip_frag.first) {
+          continue;
+        }
       }
       rowid_lookup_key = std::max(rowid_lookup_key, skip_frag.second);
       auto chosen_device_type = device_type;
@@ -3842,7 +3866,7 @@ void Executor::dispatchFragments(const std::function<void(const ExecutorDeviceTy
                                           frag_list_idx % context_count,
                                           rowid_lookup_key));
       ++frag_list_idx;
-      if (is_sample_query(ra_exe_unit) && fragment.numTuples >= ra_exe_unit.scan_limit) {
+      if (is_sample_query(ra_exe_unit) && num_tuples >= ra_exe_unit.scan_limit) {
         break;
       }
     }
@@ -3891,6 +3915,9 @@ std::vector<std::vector<const int8_t*>> Executor::fetchChunks(
       auto it = plan_state_->global_to_local_col_ids_.find(col_id);
       CHECK(it != plan_state_->global_to_local_col_ids_.end());
       CHECK_LT(static_cast<size_t>(it->second), plan_state_->global_to_local_col_ids_.size());
+      if (fragments->empty()) {
+        continue;
+      }
       const size_t frag_id = selected_frag_ids[local_col_to_frag_pos[it->second]];
       CHECK_LT(frag_id, fragments->size());
       const auto& fragment = (*fragments)[frag_id];
@@ -4007,11 +4034,8 @@ int32_t Executor::executePlanWithoutGroupBy(const CompilationResult& compilation
                                             const int device_id,
                                             const uint32_t start_rowid,
                                             const uint32_t num_tables,
-                                            RenderAllocatorMap* render_allocator_map) noexcept {
-  if (col_buffers.empty()) {
-    results = ResultRows({}, {}, nullptr, nullptr, {}, device_type);
-    return 0;
-  }
+                                            RenderAllocatorMap* render_allocator_map,
+                                            const bool input_is_empty) noexcept {
   int32_t error_code = device_type == ExecutorDeviceType::GPU ? 0 : start_rowid;
   std::vector<int64_t*> out_vec;
   const auto hoist_buf = serializeLiterals(compilation_result.literal_values, device_id);
@@ -4067,6 +4091,9 @@ int32_t Executor::executePlanWithoutGroupBy(const CompilationResult& compilation
                        query_exe_context->row_set_mem_owner_,
                        query_exe_context->init_agg_vals_,
                        device_type);
+  if (input_is_empty) {
+    results.markAsEmpty();
+  }
   results.beginRow();
   size_t out_vec_idx = 0;
   for (const auto target_expr : target_exprs) {
@@ -4747,7 +4774,8 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
                                                  ra_exe_unit.quals,
                                                  query_mem_desc.agg_col_widths.size(),
                                                  is_group_by,
-                                                 query_mem_desc.getCompactByteWidth());
+                                                 query_mem_desc.getCompactByteWidth(),
+                                                 input_is_empty(query_infos));
 
   if (co.device_type_ == ExecutorDeviceType::GPU && cgen_state_->must_run_on_cpu_) {
     return {};
