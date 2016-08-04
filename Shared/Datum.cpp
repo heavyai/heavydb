@@ -265,6 +265,10 @@ std::string DatumToString(Datum d, const SQLTypeInfo& ti) {
       strftime(buf, 11, "%F", &tm_struct);
       return std::string(buf);
     }
+    case kINTERVAL_DAY_TIME:
+      return std::to_string(d.timeval) + " ms (day-time interval)";
+    case kINTERVAL_YEAR_MONTH:
+      return std::to_string(d.timeval) + " month(s) (year-month interval)";
     case kTEXT:
     case kVARCHAR:
     case kCHAR:
