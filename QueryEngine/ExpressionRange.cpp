@@ -271,12 +271,43 @@ ExpressionRange getExpressionRange(const Analyzer::Constant* constant_expr) {
 
 namespace {
 
-inline double extract_min_stat_double(const ChunkStats& stats, const SQLTypeInfo& col_ti) {
+double extract_min_stat_double(const ChunkStats& stats, const SQLTypeInfo& col_ti) {
   return col_ti.get_type() == kDOUBLE ? stats.min.doubleval : stats.min.floatval;
 }
 
-inline double extract_max_stat_double(const ChunkStats& stats, const SQLTypeInfo& col_ti) {
+double extract_max_stat_double(const ChunkStats& stats, const SQLTypeInfo& col_ti) {
   return col_ti.get_type() == kDOUBLE ? stats.max.doubleval : stats.max.floatval;
+}
+
+int64_t get_conservative_datetrunc_bucket(const DatetruncField datetrunc_field) {
+  const int64_t day_seconds{24 * 3600};
+  const int64_t year_days{365};
+  switch (datetrunc_field) {
+    case dtYEAR:
+      return year_days * day_seconds;
+    case dtQUARTER:
+      return 90 * day_seconds;  // 90 is least number of days in any quater
+    case dtMONTH:
+      return 28 * day_seconds;
+    case dtDAY:
+      return day_seconds;
+    case dtHOUR:
+      return 3600;
+    case dtMINUTE:
+      return 60;
+    case dtMILLENNIUM:
+      return 1000 * year_days * day_seconds;
+    case dtCENTURY:
+      return 100 * year_days * day_seconds;
+    case dtDECADE:
+      return 10 * year_days * day_seconds;
+    case dtWEEK:
+      return 7 * day_seconds;
+    case dtQUARTERDAY:
+      return 4 * 60 * 50;
+    default:
+      return 0;
+  }
 }
 
 }  // namespace
@@ -349,7 +380,8 @@ ExpressionRange getExpressionRange(const Analyzer::ColumnVar* col_expr,
         CHECK_EQ(-(min_val + 1), max_val);
         return ExpressionRange::makeIntRange(0, -1, 0, has_nulls);
       }
-      return ExpressionRange::makeIntRange(min_val, max_val, 0, has_nulls);
+      const int64_t bucket = col_ti.get_type() == kDATE ? get_conservative_datetrunc_bucket(dtDAY) : 0;
+      return ExpressionRange::makeIntRange(min_val, max_val, bucket, has_nulls);
     }
     default:
       break;
@@ -500,41 +532,6 @@ ExpressionRange getExpressionRange(const Analyzer::ExtractExpr* extract_expr,
   }
   return ExpressionRange::makeInvalidRange();
 }
-
-namespace {
-
-int64_t get_conservative_datetrunc_bucket(const DatetruncField datetrunc_field) {
-  const int64_t day_seconds{24 * 3600};
-  const int64_t year_days{365};
-  switch (datetrunc_field) {
-    case dtYEAR:
-      return year_days * day_seconds;
-    case dtQUARTER:
-      return 90 * day_seconds;  // 90 is least number of days in any quater
-    case dtMONTH:
-      return 28 * day_seconds;
-    case dtDAY:
-      return day_seconds;
-    case dtHOUR:
-      return 3600;
-    case dtMINUTE:
-      return 60;
-    case dtMILLENNIUM:
-      return 1000 * year_days * day_seconds;
-    case dtCENTURY:
-      return 100 * year_days * day_seconds;
-    case dtDECADE:
-      return 10 * year_days * day_seconds;
-    case dtWEEK:
-      return 7 * day_seconds;
-    case dtQUARTERDAY:
-      return 4 * 60 * 50;
-    default:
-      return 0;
-  }
-}
-
-}  // namespace
 
 ExpressionRange getExpressionRange(const Analyzer::DatetruncExpr* datetrunc_expr,
                                    const std::vector<Fragmenter_Namespace::TableInfo>& query_infos,
