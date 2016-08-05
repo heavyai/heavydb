@@ -1779,26 +1779,6 @@ TEST(Select, AfterAlterColumnName) {
   run_ddl_statement("drop table alter_column_test;");
 }
 
-TEST(Select, Empty) {
-  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
-    SKIP_NO_GPU();
-    c("SELECT COUNT(*) FROM empty;", dt);
-    c("SELECT SUM(x) FROM empty;", dt);
-    c("SELECT SUM(y) FROM empty;", dt);
-    c("SELECT MIN(x) FROM empty;", dt);
-    c("SELECT MIN(y) FROM empty;", dt);
-    c("SELECT MAX(x) FROM empty;", dt);
-    c("SELECT MAX(y) FROM empty;", dt);
-    c("SELECT AVG(x) FROM empty;", dt);
-    c("SELECT AVG(y) FROM empty;", dt);
-    c("SELECT COUNT(*) FROM test, empty;", dt);
-    c("SELECT SUM(test.x) FROM test, empty;", dt);
-    c("SELECT SUM(test.y) FROM test, empty;", dt);
-    c("SELECT SUM(empty.x) FROM test, empty;", dt);
-    c("SELECT SUM(empty.y) FROM test, empty;", dt);
-  }
-}
-
 #ifdef HAVE_RAVM
 TEST(Select, Subqueries) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
@@ -2052,17 +2032,6 @@ int main(int argc, char** argv) {
     LOG(ERROR) << "Failed to (re-)create table 'subquery_test'";
     return -EEXIST;
   }
-  try {
-    const std::string drop_old_empty{"DROP TABLE IF EXISTS empty;"};
-    run_ddl_statement(drop_old_empty);
-    g_sqlite_comparator.query(drop_old_empty);
-    const std::string create_empty{"CREATE TABLE empty(x int, y int not null);"};
-    run_ddl_statement(create_empty);
-    g_sqlite_comparator.query(create_empty);
-  } catch (...) {
-    LOG(ERROR) << "Failed to (re-)create table 'empty'";
-    return -EEXIST;
-  }
   int err{0};
   try {
     err = RUN_ALL_TESTS();
@@ -2091,9 +2060,6 @@ int main(int argc, char** argv) {
   const std::string drop_subquery_test{"DROP TABLE subquery_test;"};
   run_ddl_statement(drop_subquery_test);
   g_sqlite_comparator.query(drop_subquery_test);
-  const std::string drop_empty_test{"DROP TABLE empty;"};
-  run_ddl_statement(drop_empty_test);
-  g_sqlite_comparator.query(drop_empty_test);
   g_session.reset(nullptr);
   return err;
 }

@@ -158,8 +158,7 @@ std::vector<int64_t> init_agg_val_vec(const std::vector<Analyzer::Expr*>& target
                                       const std::list<std::shared_ptr<Analyzer::Expr>>& quals,
                                       size_t agg_col_count,
                                       const bool is_group_by,
-                                      const size_t min_byte_width_to_compact,
-                                      const bool input_is_empty) {
+                                      const size_t min_byte_width_to_compact) {
   std::vector<TargetInfo> target_infos;
   target_infos.reserve(targets.size());
   for (size_t target_idx = 0, agg_col_idx = 0; target_idx < targets.size() && agg_col_idx < agg_col_count;
@@ -167,11 +166,7 @@ std::vector<int64_t> init_agg_val_vec(const std::vector<Analyzer::Expr*>& target
     const auto target_expr = targets[target_idx];
     auto target = target_info(target_expr);
     auto arg_expr = agg_arg(target_expr);
-    if (input_is_empty) {
-      auto new_type = get_compact_type(target);
-      new_type.set_notnull(false);
-      set_compact_type(target, new_type);
-    } else if (arg_expr && constrained_not_null(arg_expr, quals)) {
+    if (arg_expr && constrained_not_null(arg_expr, quals)) {
       target.skip_null_val = false;
       auto new_type = get_compact_type(target);
       new_type.set_notnull(true);

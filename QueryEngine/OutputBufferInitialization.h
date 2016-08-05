@@ -30,8 +30,7 @@ std::vector<int64_t> init_agg_val_vec(const std::vector<Analyzer::Expr*>& target
                                       const std::list<std::shared_ptr<Analyzer::Expr>>& quals,
                                       size_t agg_col_count,
                                       const bool is_group_by,
-                                      const size_t min_byte_width_to_compact,
-                                      const bool input_is_empty);
+                                      const size_t min_byte_width_to_compact);
 
 const Analyzer::Expr* agg_arg(const Analyzer::Expr* expr);
 
