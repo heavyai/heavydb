@@ -10,6 +10,7 @@ ExecStart=@MAPD_PATH@/bin/mapd_server --config @MAPD_STORAGE@/mapd.conf
 KillMode=control-group
 SuccessExitStatus=143
 LimitNOFILE=16384
+Restart=always
 
 [Install]
 WantedBy=multi-user.target
