@@ -4,7 +4,7 @@
 %define CONSTRUCTOR_INIT : lexer(yylval)
 %define MEMBERS                 \
 		virtual ~SQLParser() {} \
-    int parse(const std::string & inputStr, std::list<Stmt*>& parseTrees, std::string &lastParsed) { std::lock_guard<std::mutex> lock(mutex_); std::istringstream ss(inputStr); lexer.switch_streams(&ss,0);  yyparse(parseTrees); lastParsed = lexer.YYText(); return yynerrs; } \
+    int parse(const std::string & inputStr, std::list<std::unique_ptr<Stmt>>& parseTrees, std::string &lastParsed) { std::lock_guard<std::mutex> lock(mutex_); std::istringstream ss(inputStr); lexer.switch_streams(&ss,0);  yyparse(parseTrees); lastParsed = lexer.YYText(); return yynerrs; } \
     private:                   \
        SQLLexer lexer;         \
        std::mutex mutex_;
@@ -26,7 +26,7 @@
 #include "ParserNode.h"
 
 using namespace Parser;
-#define YY_Parser_PARSE_PARAM std::list<Stmt*>& parseTrees
+#define YY_Parser_PARSE_PARAM std::list<std::unique_ptr<Stmt>>& parseTrees
 %}
 
 %union {
@@ -84,10 +84,10 @@ using namespace Parser;
 %%
 
 sql_list:
-		sql ';'	{ parseTrees.push_front(dynamic_cast<Stmt*>($<nodeval>1)); }
+		sql ';'	{ parseTrees.emplace_front(dynamic_cast<Stmt*>($<nodeval>1)); }
 	|	sql_list sql ';'
 	{
-		parseTrees.push_front(dynamic_cast<Stmt*>($<nodeval>2));
+		parseTrees.emplace_front(dynamic_cast<Stmt*>($<nodeval>2));
 	}
 	;
 

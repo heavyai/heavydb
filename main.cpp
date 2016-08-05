@@ -329,19 +329,18 @@ int main(int argc, char* argv[]) {
         continue;
       }
       SQLParser parser;
-      list<Parser::Stmt*> parse_trees;
+      list<std::unique_ptr<Parser::Stmt>> parse_trees;
       string last_parsed;
       int numErrors = parser.parse(input_str, parse_trees, last_parsed);
       if (numErrors > 0)
         throw runtime_error("Syntax error at: " + last_parsed);
-      for (auto stmt : parse_trees) {
-        unique_ptr<Stmt> stmt_ptr(stmt);  // make sure it's deleted
-        Parser::DDLStmt* ddl = dynamic_cast<Parser::DDLStmt*>(stmt);
+      for (const auto& stmt : parse_trees) {
+        Parser::DDLStmt* ddl = dynamic_cast<Parser::DDLStmt*>(stmt.get());
         Parser::ExplainStmt* explain_stmt = dynamic_cast<Parser::ExplainStmt*>(ddl);
         if (ddl != nullptr && !explain_stmt)
           ddl->execute(session);
         else {
-          auto dml = explain_stmt ? explain_stmt->get_stmt() : static_cast<const Parser::DMLStmt*>(stmt);
+          auto dml = explain_stmt ? explain_stmt->get_stmt() : static_cast<const Parser::DMLStmt*>(stmt.get());
           Query query;
           dml->analyze(*cat, query);
           Optimizer optimizer(query, *cat);

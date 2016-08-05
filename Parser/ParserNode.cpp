@@ -2021,14 +2021,13 @@ void RefreshViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   if (!td->isMaterialized)
     throw std::runtime_error(*view_name + " is not a materialized view.");
   SQLParser parser;
-  std::list<Stmt*> parse_trees;
+  std::list<std::unique_ptr<Stmt>> parse_trees;
   std::string last_parsed;
   std::string query_str = "INSERT INTO " + *view_name + " " + td->viewSQL;
   int numErrors = parser.parse(query_str, parse_trees, last_parsed);
   if (numErrors > 0)
     throw std::runtime_error("Internal Error: syntax error at: " + last_parsed);
-  DMLStmt* view_stmt = dynamic_cast<DMLStmt*>(parse_trees.front());
-  std::unique_ptr<Stmt> stmt_ptr(view_stmt);  // make sure it's deleted
+  DMLStmt* view_stmt = dynamic_cast<DMLStmt*>(parse_trees.front().get());
   Analyzer::Query query;
   view_stmt->analyze(catalog, query);
   Planner::Optimizer optimizer(query, catalog);

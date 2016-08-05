@@ -39,12 +39,11 @@ std::unique_ptr<SessionInfo> gsession;
 
 void run_ddl(const string& input_str) {
   SQLParser parser;
-  list<Parser::Stmt*> parse_trees;
+  list<std::unique_ptr<Parser::Stmt>> parse_trees;
   string last_parsed;
   CHECK_EQ(parser.parse(input_str, parse_trees, last_parsed), 0);
   CHECK_EQ(parse_trees.size(), size_t(1));
-  auto stmt = parse_trees.front();
-  unique_ptr<Stmt> stmt_ptr(stmt);  // make sure it's deleted
+  auto stmt = parse_trees.front().get();
   Parser::DDLStmt* ddl = dynamic_cast<Parser::DDLStmt*>(stmt);
   CHECK(ddl != nullptr);
   ddl->execute(*gsession);

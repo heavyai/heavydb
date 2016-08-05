@@ -928,7 +928,7 @@ class MapDHandler : virtual public MapDIf {
     auto& cat = session_info.get_catalog();
     LOG(INFO) << action << ": " << query_str;
     SQLParser parser;
-    std::list<Parser::Stmt*> parse_trees;
+    std::list<std::unique_ptr<Parser::Stmt>> parse_trees;
     std::string last_parsed;
     int num_parse_errors = 0;
     try {
@@ -951,8 +951,7 @@ class MapDHandler : virtual public MapDIf {
       LOG(ERROR) << ex.error_msg;
       throw ex;
     }
-    Parser::Stmt* stmt = parse_trees.front();
-    std::unique_ptr<Parser::Stmt> stmt_ptr(stmt);
+    Parser::Stmt* stmt = parse_trees.front().get();
     Parser::DDLStmt* ddl = dynamic_cast<Parser::DDLStmt*>(stmt);
     if (ddl != nullptr) {
       TMapDException ex;
@@ -1578,7 +1577,7 @@ class MapDHandler : virtual public MapDIf {
     LOG(INFO) << query_str;
     _return.total_time_ms = measure<>::execution([&]() {
       SQLParser parser;
-      std::list<Parser::Stmt*> parse_trees;
+      std::list<std::unique_ptr<Parser::Stmt>> parse_trees;
       std::string last_parsed;
       int num_parse_errors = 0;
       Planner::RootPlan* root_plan{nullptr};
@@ -1623,14 +1622,13 @@ class MapDHandler : virtual public MapDIf {
         LOG(ERROR) << ex.error_msg;
         throw ex;
       }
-      for (auto stmt : parse_trees) {
+      for (const auto& stmt : parse_trees) {
         try {
-          auto select_stmt = dynamic_cast<Parser::SelectStmt*>(stmt);
+          auto select_stmt = dynamic_cast<Parser::SelectStmt*>(stmt.get());
           if (!select_stmt) {
             check_read_only("Non-SELECT statements");
           }
-          std::unique_ptr<Parser::Stmt> stmt_ptr(stmt);
-          Parser::DDLStmt* ddl = dynamic_cast<Parser::DDLStmt*>(stmt);
+          Parser::DDLStmt* ddl = dynamic_cast<Parser::DDLStmt*>(stmt.get());
           Parser::ExplainStmt* explain_stmt = nullptr;
           if (ddl != nullptr)
             explain_stmt = dynamic_cast<Parser::ExplainStmt*>(ddl);
@@ -1641,7 +1639,7 @@ class MapDHandler : virtual public MapDIf {
             if (explain_stmt != nullptr)
               dml = explain_stmt->get_stmt();
             else
-              dml = dynamic_cast<Parser::DMLStmt*>(stmt);
+              dml = dynamic_cast<Parser::DMLStmt*>(stmt.get());
             Analyzer::Query query;
             dml->analyze(cat, query);
             Planner::Optimizer optimizer(query, cat);

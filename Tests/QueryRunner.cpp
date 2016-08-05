@@ -76,17 +76,16 @@ Planner::RootPlan* parse_plan_legacy(const std::string& query_str,
                                      const std::unique_ptr<Catalog_Namespace::SessionInfo>& session) {
   const auto& cat = session->get_catalog();
   SQLParser parser;
-  std::list<Parser::Stmt*> parse_trees;
+  std::list<std::unique_ptr<Parser::Stmt>> parse_trees;
   std::string last_parsed;
   if (parser.parse(query_str, parse_trees, last_parsed)) {
     throw std::runtime_error("Failed to parse query");
   }
   CHECK_EQ(parse_trees.size(), size_t(1));
-  auto stmt = parse_trees.front();
-  std::unique_ptr<Stmt> stmt_ptr(stmt);  // make sure it's deleted
-  Parser::DDLStmt* ddl = dynamic_cast<Parser::DDLStmt*>(stmt);
+  const auto& stmt = parse_trees.front();
+  Parser::DDLStmt* ddl = dynamic_cast<Parser::DDLStmt*>(stmt.get());
   CHECK(!ddl);
-  Parser::DMLStmt* dml = dynamic_cast<Parser::DMLStmt*>(stmt);
+  Parser::DMLStmt* dml = dynamic_cast<Parser::DMLStmt*>(stmt.get());
   Analyzer::Query query;
   dml->analyze(cat, query);
   Planner::Optimizer optimizer(query, cat);
