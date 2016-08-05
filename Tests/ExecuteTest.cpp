@@ -31,11 +31,6 @@ TargetValue run_simple_agg(const string& query_str, const ExecutorDeviceType dev
   return crt_row[0];
 }
 
-bool query_result_is_empty(const string& query_str, const ExecutorDeviceType device_type) {
-  auto rows = run_multiple_agg(query_str, device_type);
-  return rows.rowCount() == 0;
-}
-
 template <class T>
 T v(const TargetValue& r) {
   auto scalar_r = boost::get<ScalarTargetValue>(&r);
@@ -810,7 +805,7 @@ TEST(Select, Time) {
     ASSERT_EQ(0, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE CAST('1999-09-10' AS DATE) <= o;", dt)));
     ASSERT_EQ(2 * g_num_rows,
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE CAST('15:13:15' AS TIME) > n;", dt)));
-    ASSERT_TRUE(query_result_is_empty("SELECT COUNT(*) FROM test WHERE CAST('15:13:15' AS TIME) <= n;", dt));
+    ASSERT_EQ(0, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE CAST('15:13:15' AS TIME) <= n;", dt)));
     cta("SELECT DATETIME('NOW') FROM test limit 1;", dt);
     // these next tests work because all dates are before now 2015-12-8 17:00:00
     ASSERT_EQ(2 * g_num_rows, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE m < NOW();", dt)));
@@ -1779,6 +1774,47 @@ TEST(Select, AfterAlterColumnName) {
   run_ddl_statement("drop table alter_column_test;");
 }
 
+TEST(Select, Empty) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT COUNT(*) FROM empty;", dt);
+    c("SELECT SUM(x) FROM empty;", dt);
+    c("SELECT SUM(y) FROM empty;", dt);
+    c("SELECT SUM(t) FROM empty;", dt);
+    c("SELECT SUM(f) FROM empty;", dt);
+    c("SELECT SUM(d) FROM empty;", dt);
+    c("SELECT SUM(dd) FROM empty;", dt);
+    c("SELECT MIN(x) FROM empty;", dt);
+    c("SELECT MIN(y) FROM empty;", dt);
+    c("SELECT MIN(t) FROM empty;", dt);
+    c("SELECT MIN(f) FROM empty;", dt);
+    c("SELECT MIN(d) FROM empty;", dt);
+    c("SELECT MIN(dd) FROM empty;", dt);
+    c("SELECT MAX(x) FROM empty;", dt);
+    c("SELECT MAX(y) FROM empty;", dt);
+    c("SELECT MAX(t) FROM empty;", dt);
+    c("SELECT MAX(f) FROM empty;", dt);
+    c("SELECT MAX(d) FROM empty;", dt);
+    c("SELECT MAX(dd) FROM empty;", dt);
+    c("SELECT AVG(x) FROM empty;", dt);
+    c("SELECT AVG(y) FROM empty;", dt);
+    c("SELECT AVG(t) FROM empty;", dt);
+    c("SELECT AVG(f) FROM empty;", dt);
+    c("SELECT AVG(d) FROM empty;", dt);
+    c("SELECT AVG(dd) FROM empty;", dt);
+    c("SELECT COUNT(*) FROM test, empty;", dt);
+    c("SELECT SUM(test.x) FROM test, empty;", dt);
+    c("SELECT SUM(test.y) FROM test, empty;", dt);
+    c("SELECT SUM(empty.x) FROM test, empty;", dt);
+    c("SELECT SUM(empty.y) FROM test, empty;", dt);
+    c("SELECT COUNT(*) FROM test WHERE x > 8;", dt);
+    c("SELECT SUM(x) FROM test WHERE x > 8;", dt);
+    c("SELECT SUM(f) FROM test WHERE x > 8;", dt);
+    c("SELECT SUM(d) FROM test WHERE x > 8;", dt);
+    c("SELECT SUM(dd) FROM test WHERE x > 8;", dt);
+  }
+}
+
 #ifdef HAVE_RAVM
 TEST(Select, Subqueries) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
@@ -2032,6 +2068,19 @@ int main(int argc, char** argv) {
     LOG(ERROR) << "Failed to (re-)create table 'subquery_test'";
     return -EEXIST;
   }
+  try {
+    const std::string drop_old_empty{"DROP TABLE IF EXISTS empty;"};
+    run_ddl_statement(drop_old_empty);
+    g_sqlite_comparator.query(drop_old_empty);
+    const std::string create_empty{
+        "CREATE TABLE empty(x int, y int not null, t bigint not null, f float not null, d double not null, dd "
+        "decimal(10, 2) not null);"};
+    run_ddl_statement(create_empty);
+    g_sqlite_comparator.query(create_empty);
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'empty'";
+    return -EEXIST;
+  }
   int err{0};
   try {
     err = RUN_ALL_TESTS();
@@ -2060,6 +2109,9 @@ int main(int argc, char** argv) {
   const std::string drop_subquery_test{"DROP TABLE subquery_test;"};
   run_ddl_statement(drop_subquery_test);
   g_sqlite_comparator.query(drop_subquery_test);
+  const std::string drop_empty_test{"DROP TABLE empty;"};
+  run_ddl_statement(drop_empty_test);
+  g_sqlite_comparator.query(drop_empty_test);
   g_session.reset(nullptr);
   return err;
 }

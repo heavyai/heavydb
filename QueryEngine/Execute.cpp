@@ -3711,6 +3711,53 @@ std::vector<std::pair<ResultRows, std::vector<size_t>>>& Executor::ExecutionDisp
   return all_fragment_results_;
 }
 
+namespace {
+
+int64_t inline_null_val(const SQLTypeInfo& ti) {
+  CHECK(ti.is_number());
+  if (ti.is_fp()) {
+    const auto double_null_val = inline_fp_null_val(ti);
+    return *reinterpret_cast<const int64_t*>(&double_null_val);
+  }
+  return inline_int_null_val(ti);
+}
+
+ResultRows build_row_for_empty_input(const std::vector<Analyzer::Expr*>& target_exprs_in,
+                                     const QueryMemoryDescriptor& query_mem_desc) {
+  std::vector<std::shared_ptr<Analyzer::Expr>> target_exprs_owned_copies;
+  std::vector<Analyzer::Expr*> target_exprs;
+  for (const auto target_expr : target_exprs_in) {
+    const auto target_expr_copy = std::dynamic_pointer_cast<Analyzer::AggExpr>(target_expr->deep_copy());
+    CHECK(target_expr_copy);
+    auto ti = target_expr->get_type_info();
+    ti.set_notnull(false);
+    target_expr_copy->set_type_info(ti);
+    if (target_expr_copy->get_arg()) {
+      auto arg_ti = target_expr_copy->get_arg()->get_type_info();
+      arg_ti.set_notnull(false);
+      target_expr_copy->get_arg()->set_type_info(arg_ti);
+    }
+    target_exprs_owned_copies.push_back(target_expr_copy);
+    target_exprs.push_back(target_expr_copy.get());
+  }
+  auto result_rows = ResultRows(query_mem_desc, target_exprs, nullptr, nullptr, {}, ExecutorDeviceType::CPU);
+  result_rows.beginRow();
+  for (const auto target_expr : target_exprs) {
+    const auto agg_info = target_info(target_expr);
+    CHECK(agg_info.is_agg);
+    if (agg_info.agg_kind == kCOUNT) {
+      result_rows.addValue(0);
+    } else if (agg_info.agg_kind == kAVG) {
+      result_rows.addValue(inline_null_val(agg_info.agg_arg_type), 0);
+    } else {
+      result_rows.addValue(inline_null_val(agg_info.sql_type));
+    }
+  }
+  return result_rows;
+}
+
+}  // namespace
+
 ResultRows Executor::collectAllDeviceResults(ExecutionDispatch& execution_dispatch,
                                              const std::vector<Analyzer::Expr*>& target_exprs,
                                              const QueryMemoryDescriptor& query_mem_desc,
@@ -3725,8 +3772,11 @@ ResultRows Executor::collectAllDeviceResults(ExecutionDispatch& execution_dispat
             target_exprs, query_mem_desc, execution_dispatch.getDeviceType() == ExecutorDeviceType::Hybrid),
         std::vector<size_t>{});
   }
-  return reduceMultiDeviceResults(
-      execution_dispatch.getFragmentResults(), row_set_mem_owner, query_mem_desc, output_columnar);
+  auto& result_per_device = execution_dispatch.getFragmentResults();
+  if (result_per_device.empty() && query_mem_desc.hash_type == GroupByColRangeType::Scan) {
+    return build_row_for_empty_input(target_exprs, query_mem_desc);
+  }
+  return reduceMultiDeviceResults(result_per_device, row_set_mem_owner, query_mem_desc, output_columnar);
 }
 
 void Executor::dispatchFragments(const std::function<void(const ExecutorDeviceType chosen_device_type,

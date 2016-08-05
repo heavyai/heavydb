@@ -1047,7 +1047,6 @@ void ResultRows::inplaceSortCpu(const std::list<Analyzer::OrderEntry>& order_ent
 namespace {
 
 TargetValue result_rows_get_impl(const InternalTargetValue& col_val,
-                                 const int64_t agg_initial_val,
                                  const size_t col_idx,
                                  const TargetInfo& agg_info,
                                  const SQLTypeInfo& target_type,
@@ -1190,7 +1189,6 @@ TargetValue ResultRows::getRowAt(const size_t row_idx,
   }
 
   return result_rows_get_impl(target_values_[row_idx][col_idx],
-                              agg_init_vals_[agg_col_idx],
                               col_idx,
                               targets_[col_idx],
                               targets_[col_idx].sql_type,
@@ -1310,7 +1308,6 @@ bool ResultRows::fetchLazyOrBuildRow(std::vector<TargetValue>& row,
               (kAVG == agg_info.agg_kind ? InternalTargetValue(agg_vals[agg_col_idx], agg_vals[agg_col_idx + 1])
                                          : InternalTargetValue(agg_vals[agg_col_idx]));
           row.push_back(result_rows_get_impl(target_val,
-                                             agg_init_vals_[agg_col_idx],
                                              target_idx,
                                              agg_info,
                                              agg_info.sql_type,
@@ -1523,16 +1520,14 @@ bool ResultRows::fetchLazyOrBuildRow(std::vector<TargetValue>& row,
             }
             return InternalTargetValue(val1);
           };
-          row.push_back(result_rows_get_impl(
-              build_itv(val1, val2),
-              (agg_info.agg_kind == kAVG ? agg_init_vals_[out_vec_idx - 1] : agg_init_vals_[out_vec_idx]),
-              col_idx,
-              agg_info,
-              agg_info.sql_type,
-              decimal_to_double,
-              translate_strings,
-              executor_,
-              row_set_mem_owner_));
+          row.push_back(result_rows_get_impl(build_itv(val1, val2),
+                                             col_idx,
+                                             agg_info,
+                                             agg_info.sql_type,
+                                             decimal_to_double,
+                                             translate_strings,
+                                             executor_,
+                                             row_set_mem_owner_));
         }
         if (next_col_ptr) {
           col_ptr = next_col_ptr;
