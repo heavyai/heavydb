@@ -120,6 +120,16 @@ double Log__(const float x) {
 }
 
 EXTENSION_NOINLINE
+double Log10(const double x) {
+  return log10(x);
+}
+
+EXTENSION_NOINLINE
+double Log10__(const float x) {
+  return log10f(x);
+}
+
+EXTENSION_NOINLINE
 double pi() {
   return M_PI;
 }
