@@ -36,26 +36,106 @@ struct CopyParams {
   std::string null_str;
   char line_delim;
   size_t batch_size;
-  CopyParams(char d, const std::string& n, char l, size_t b)
-      : delimiter(d), null_str(n), line_delim(l), batch_size(b) {}
+  size_t retry_count;
+  size_t retry_wait;
+  CopyParams(char d, const std::string& n, char l, size_t b, size_t retries, size_t wait)
+      : delimiter(d), null_str(n), line_delim(l), batch_size(b), retry_count(retries), retry_wait(wait) {}
+};
+
+struct ConnectionDetails {
+  std::string server_host;
+  int port;
+  std::string db_name;
+  std::string user_name;
+  std::string passwd;
+  ConnectionDetails(std::string in_server_host,
+                    int in_port,
+                    std::string in_db_name,
+                    std::string in_user_name,
+                    std::string in_passwd)
+      : server_host(in_server_host), port(in_port), db_name(in_db_name), user_name(in_user_name), passwd(in_passwd) {}
 };
 
 bool print_error_data = false;
 bool print_transformation = false;
 
+shared_ptr<MapDClient> client;
+TSessionId session;
+shared_ptr<apache::thrift::transport::TTransport> mytransport;
+
 namespace {
 // anonymous namespace for private functions
 
 #define MAX_FIELD_LEN 20000
+
+void createConnection(ConnectionDetails con) {
+  shared_ptr<TTransport> socket(new TSocket(con.server_host, con.port));
+  mytransport.reset(new TBufferedTransport(socket));
+  shared_ptr<TProtocol> protocol(new TBinaryProtocol(mytransport));
+  client.reset(new MapDClient(protocol));
+  try {
+    mytransport->open();                                                // open transport
+    session = client->connect(con.user_name, con.passwd, con.db_name);  // connect to mapd_server
+  } catch (TMapDException& e) {
+    std::cerr << e.error_msg << std::endl;
+  } catch (TException& te) {
+    std::cerr << "Thrift error: " << te.what() << std::endl;
+  }
+}
+
+void closeConnection() {
+  try {
+    client->disconnect(session);  // disconnect from mapd_server
+    mytransport->close();         // close transport
+  } catch (TMapDException& e) {
+    std::cerr << e.error_msg << std::endl;
+  } catch (TException& te) {
+    std::cerr << "Thrift error: " << te.what() << std::endl;
+  }
+}
+
+void wait_disconnet_reconnnect_retry(size_t tries, CopyParams copy_params, ConnectionDetails conn_details) {
+  std::cout << "  Waiting  " << copy_params.retry_wait << " secs to retry Inserts , will try "
+            << (copy_params.retry_count - tries) << " times more " << std::endl;
+  sleep(copy_params.retry_wait);
+
+  closeConnection();
+  createConnection(conn_details);
+}
+
+void do_load(int& nrows,
+             int& nskipped,
+             std::vector<TStringRow> input_rows,
+             const std::string& table_name,
+             CopyParams copy_params,
+             ConnectionDetails conn_details) {
+  for (size_t tries = 0; tries < copy_params.retry_count; tries++) {  // allow for retries in case of insert failure
+    try {
+      client->load_table(session, table_name, input_rows);
+      nrows += input_rows.size();
+      std::cout << nrows << " Rows Inserted, " << nskipped << " rows skipped." << std::endl;
+      // we successfully loaded the data, lets move on
+      return;
+    } catch (TMapDException& e) {
+      std::cerr << "Exception trying to insert data " << e.error_msg << std::endl;
+      wait_disconnet_reconnnect_retry(tries, copy_params, conn_details);
+    } catch (TException& te) {
+      std::cerr << "Exception trying to insert data " << te.what() << std::endl;
+      wait_disconnet_reconnnect_retry(tries, copy_params, conn_details);
+    }
+  }
+  std::cerr << "Retries exhausted program terminated" << std::endl;
+  exit(1);
+}
+
 // reads copy_params.delimiter delimited rows from std::cin and load them to
 // table_name in batches of size copy_params.batch_size until EOF
-void stream_insert(MapDClient& client,
-                   const TSessionId session,
-                   const std::string& table_name,
+void stream_insert(const std::string& table_name,
                    const TRowDescriptor& row_desc,
                    const std::map<std::string, std::pair<std::unique_ptr<boost::regex>, std::unique_ptr<std::string>>>&
                        transformations,
-                   const CopyParams& copy_params) {
+                   const CopyParams& copy_params,
+                   const ConnectionDetails conn_details) {
   std::vector<TStringRow> input_rows;
   TStringRow row;
 
@@ -142,13 +222,7 @@ void stream_insert(MapDClient& client,
     if (row.cols.size() == row_desc.size()) {
       input_rows.push_back(row);
       if (input_rows.size() >= copy_params.batch_size) {
-        try {
-          client.load_table(session, table_name, input_rows);
-          nrows += input_rows.size();
-          std::cout << nrows << " rows inserted, " << nskipped << " rows skipped." << std::endl;
-        } catch (TMapDException& e) {
-          std::cerr << e.error_msg << std::endl;
-        }
+        do_load(nrows, nskipped, input_rows, table_name, copy_params, conn_details);
         {
           // free rowset that has already been loaded
           std::vector<TStringRow> empty;
@@ -179,13 +253,7 @@ void stream_insert(MapDClient& client,
   }
   // load remaining rowset if any
   if (input_rows.size() > 0) {
-    try {
-      client.load_table(session, table_name, input_rows);
-      nrows += input_rows.size();
-      std::cout << nrows << " rows inserted, " << nskipped << " rows skipped." << std::endl;
-    } catch (TMapDException& e) {
-      std::cerr << e.error_msg << std::endl;
-    }
+    do_load(nrows, nskipped, input_rows, table_name, copy_params, conn_details);
   }
 }
 }
@@ -199,6 +267,8 @@ int main(int argc, char** argv) {
   std::string passwd;
   std::string delim_str(","), nulls("\\N"), line_delim_str("\n");
   size_t batch_size = 10000;
+  size_t retry_count = 10;
+  size_t retry_wait = 5;
   std::vector<std::string> xforms;
   std::map<std::string, std::pair<std::unique_ptr<boost::regex>, std::unique_ptr<std::string>>> transformations;
 
@@ -216,8 +286,11 @@ int main(int argc, char** argv) {
       "null", po::value<std::string>(&nulls), "NULL string")(
       "line", po::value<std::string>(&line_delim_str), "Line delimiter")(
       "batch", po::value<size_t>(&batch_size), "Insert batch size")(
+      "retry_count", po::value<size_t>(&retry_count), "Number of time to retry an insert")(
+      "retry_wait", po::value<size_t>(&retry_wait), "wait in secs between retries")(
       "transform,t", po::value<std::vector<std::string>>(&xforms)->multitoken(), "Column Transformations")(
-      "print_error", "Print Error Rows")("print_transform", "Print Transformations");
+      "print_error", "Print Error Rows")(
+      "print_transform", "Print Transformations");
 
   po::positional_options_description positionalOptions;
   positionalOptions.add("table", 1);
@@ -231,7 +304,7 @@ int main(int argc, char** argv) {
       std::cout << "Usage: <table name> <database name> {-u|--user} <user> {-p|--passwd} <password> [{--host} "
                    "<hostname>][--port <port number>][--delim <delimiter>][--null <null string>][--line <line "
                    "delimiter>][--batch <batch size>][{-t|--transform} transformation "
-                   "...][--print_error][--print_transform]\n";
+                   "...][--retry_count <num_of_retries>] [--retry_wait <wait in secs.][--print_error][--print_transform]\n";
       return 0;
     }
     if (vm.count("print_error"))
@@ -332,30 +405,17 @@ int main(int argc, char** argv) {
         std::unique_ptr<std::string>(new std::string(fmt_str)));
   }
 
-  CopyParams copy_params(delim, nulls, line_delim, batch_size);
+  CopyParams copy_params(delim, nulls, line_delim, batch_size, retry_count, retry_wait);
 
   // for attaching debugger std::this_thread::sleep_for (std::chrono::seconds(20));
+  ConnectionDetails conn_details(server_host, port, db_name, user_name, passwd);
+  createConnection(conn_details);
 
-  shared_ptr<TTransport> socket(new TSocket(server_host, port));
-  shared_ptr<TTransport> transport(new TBufferedTransport(socket));
-  shared_ptr<TProtocol> protocol(new TBinaryProtocol(transport));
-  MapDClient client(protocol);
-  TSessionId session;
-  try {
-    transport->open();                                     // open transport
-    session = client.connect(user_name, passwd, db_name);  // connect to mapd_server
-    TRowDescriptor row_desc;
-    client.get_row_descriptor(row_desc, session, table_name);
-    stream_insert(client, session, table_name, row_desc, transformations, copy_params);
-    client.disconnect(session);  // disconnect from mapd_server
-    transport->close();          // close transport
-  } catch (TMapDException& e) {
-    std::cerr << e.error_msg << std::endl;
-    return 1;
-  } catch (TException& te) {
-    std::cerr << "Thrift error: " << te.what() << std::endl;
-    return 1;
-  }
+  TRowDescriptor row_desc;
+  client->get_row_descriptor(row_desc, session, table_name);
+  stream_insert(table_name, row_desc, transformations, copy_params, conn_details);
+
+  closeConnection();
 
   return 0;
 }
