@@ -3714,7 +3714,7 @@ std::vector<std::pair<ResultRows, std::vector<size_t>>>& Executor::ExecutionDisp
 namespace {
 
 int64_t inline_null_val(const SQLTypeInfo& ti) {
-  CHECK(ti.is_number());
+  CHECK(ti.is_number() || ti.is_time() || ti.is_boolean());
   if (ti.is_fp()) {
     const auto double_null_val = inline_fp_null_val(ti);
     return *reinterpret_cast<const int64_t*>(&double_null_val);

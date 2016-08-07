@@ -1803,6 +1803,7 @@ TEST(Select, Empty) {
     c("SELECT AVG(d) FROM empty;", dt);
     c("SELECT AVG(dd) FROM empty;", dt);
     c("SELECT COUNT(*) FROM test, empty;", dt);
+    c("SELECT MIN(ts), MAX(ts) FROM empty;", dt);
     c("SELECT SUM(test.x) FROM test, empty;", dt);
     c("SELECT SUM(test.y) FROM test, empty;", dt);
     c("SELECT SUM(empty.x) FROM test, empty;", dt);
@@ -2074,7 +2075,7 @@ int main(int argc, char** argv) {
     g_sqlite_comparator.query(drop_old_empty);
     const std::string create_empty{
         "CREATE TABLE empty(x int, y int not null, t bigint not null, f float not null, d double not null, dd "
-        "decimal(10, 2) not null);"};
+        "decimal(10, 2) not null, ts timestamp);"};
     run_ddl_statement(create_empty);
     g_sqlite_comparator.query(create_empty);
   } catch (...) {
