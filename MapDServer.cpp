@@ -1971,7 +1971,7 @@ int main(int argc, char** argv) {
 
   shared_ptr<TProcessor> processor(new MapDProcessor(handler));
 
-  int workerCount = cpu_threads();
+  int workerCount = 4;
   shared_ptr<ThreadManager> threadManager = ThreadManager::newSimpleThreadManager(workerCount);
   threadManager->threadFactory(make_shared<PlatformThreadFactory>());
   threadManager->start();
