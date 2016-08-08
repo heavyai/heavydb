@@ -15,7 +15,9 @@ import org.apache.calcite.rel.type.RelDataTypeSystem;
 import org.apache.calcite.rex.RexBuilder;
 import org.apache.calcite.sql.SqlAsOperator;
 import org.apache.calcite.sql.SqlBasicCall;
+import org.apache.calcite.sql.SqlCall;
 import org.apache.calcite.sql.SqlIdentifier;
+import org.apache.calcite.sql.SqlKind;
 import org.apache.calcite.sql.SqlNodeList;
 import org.apache.calcite.sql.SqlNode;
 import org.apache.calcite.sql.SqlOperatorTable;
@@ -118,6 +120,10 @@ public final class MapDParser {
     private static boolean isSelectStar(SqlNode node) {
         SqlSelect select_node = getSelectChild(node);
         if (select_node == null) {
+            return false;
+        }
+        SqlNode from = getUnaliasedExpression(select_node.getFrom());
+        if (from instanceof SqlCall && from.getKind() != SqlKind.AS) {
             return false;
         }
         SqlNodeList proj_exprs = select_node.getSelectList();

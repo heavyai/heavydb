@@ -1829,6 +1829,7 @@ TEST(Select, Subqueries) {
     c("SELECT COUNT(*) FROM subquery_test WHERE x NOT IN (SELECT x + 1 FROM subquery_test GROUP BY x);", dt);
     c("SELECT MAX(ct) FROM (SELECT COUNT(*) AS ct, str AS foo FROM test GROUP BY foo);", dt);
     c("SELECT COUNT(*) FROM subquery_test WHERE x IN (SELECT x AS foobar FROM subquery_test GROUP BY foobar);", dt);
+    ASSERT_EQ(int64_t(0), v<int64_t>(run_simple_agg("SELECT * FROM (SELECT rowid FROM test WHERE rowid = 0);", dt)));
     EXPECT_THROW(run_multiple_agg(
                      "SELECT COUNT(*) FROM test WHERE x NOT IN (SELECT x FROM test GROUP BY x ORDER BY COUNT(*));", dt),
                  std::runtime_error);
