@@ -123,7 +123,7 @@ public final class MapDParser {
             return false;
         }
         SqlNode from = getUnaliasedExpression(select_node.getFrom());
-        if (from instanceof SqlCall && from.getKind() != SqlKind.AS) {
+        if (from instanceof SqlCall) {
             return false;
         }
         SqlNodeList proj_exprs = select_node.getSelectList();
