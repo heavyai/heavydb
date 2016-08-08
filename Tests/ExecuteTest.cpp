@@ -1813,6 +1813,7 @@ TEST(Select, Empty) {
     c("SELECT SUM(f) FROM test WHERE x > 8;", dt);
     c("SELECT SUM(d) FROM test WHERE x > 8;", dt);
     c("SELECT SUM(dd) FROM test WHERE x > 8;", dt);
+    c("SELECT SUM(dd) FROM empty GROUP BY x, y;", dt);
   }
 }
 
