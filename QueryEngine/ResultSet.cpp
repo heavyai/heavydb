@@ -82,21 +82,132 @@ void ResultSet::append(ResultSet& that) {
   CHECK(false);
 }
 
-void ResultSet::sort(const std::list<Analyzer::OrderEntry>& order_entries,
-                     const bool /* remove_duplicates */,
-                     const int64_t /* top_n */) const {
+void ResultSet::sort(const std::list<Analyzer::OrderEntry>& order_entries, const size_t top_n) {
   if (isEmptyInitializer()) {
     return;
   }
-  if (query_mem_desc_.sortOnGpu()) {
-    try {
-      sortOnGpu(order_entries);
-    } catch (const OutOfMemory&) {
-      sortOnCpu(order_entries);
-    }
-    return;
+  // This check isn't strictly required, but allows the index buffer to be 32-bit.
+  if (query_mem_desc_.entry_count > std::numeric_limits<uint32_t>::max()) {
+    throw RowSortException("Sorting more than 4B elements not supported");
   }
-  CHECK(false);
+  CHECK_EQ(size_t(0), query_mem_desc_.entry_count_small);  // TODO(alex)
+  CHECK(permutation_.empty());
+  permutation_.resize(query_mem_desc_.entry_count);
+  std::iota(permutation_.begin(), permutation_.end(), 0);
+  CHECK(!query_mem_desc_.sortOnGpu());  // TODO(alex)
+  const bool use_heap{order_entries.size() == 1 && top_n};
+  auto compare = createComparator(order_entries, use_heap);
+  if (g_enable_watchdog && (query_mem_desc_.entry_count + query_mem_desc_.entry_count_small > 100000)) {
+    throw WatchdogException("Sorting the result would be too slow");
+  }
+  if (use_heap) {
+    topPermutation(top_n, compare);
+  } else {
+    sortPermutation(compare);
+  }
+}
+
+#define LIKELY(x) __builtin_expect(!!(x), 1)
+#define UNLIKELY(x) __builtin_expect(!!(x), 0)
+
+std::function<bool(const uint32_t, const uint32_t)> ResultSet::createComparator(
+    const std::list<Analyzer::OrderEntry>& order_entries,
+    const bool use_heap) const {
+  return [this, &order_entries, use_heap](const uint32_t lhs, const uint32_t rhs) {
+    // NB: The compare function must define a strict weak ordering, otherwise
+    // std::sort will trigger a segmentation fault (or corrupt memory).
+    for (const auto order_entry : order_entries) {
+      CHECK_GE(order_entry.tle_no, 1);
+      const auto& entry_ti = get_compact_type(targets_[order_entry.tle_no - 1]);
+      const auto is_dict = entry_ti.is_string() && entry_ti.get_compression() == kENCODING_DICT;
+      if (storage_->isEmptyEntry(lhs, storage_->buff_) && storage_->isEmptyEntry(rhs, storage_->buff_)) {
+        return false;
+      }
+      if (storage_->isEmptyEntry(lhs, storage_->buff_) && !storage_->isEmptyEntry(rhs, storage_->buff_)) {
+        return use_heap;
+      }
+      if (storage_->isEmptyEntry(rhs, storage_->buff_) && !storage_->isEmptyEntry(lhs, storage_->buff_)) {
+        return !use_heap;
+      }
+      const auto lhs_v = getColumnInternal(lhs, order_entry.tle_no - 1);
+      const auto rhs_v = getColumnInternal(lhs, order_entry.tle_no - 1);
+      if (UNLIKELY(isNull(entry_ti, lhs_v) && isNull(entry_ti, rhs_v))) {
+        return false;
+      }
+      if (UNLIKELY(isNull(entry_ti, lhs_v) && !isNull(entry_ti, rhs_v))) {
+        return use_heap ? !order_entry.nulls_first : order_entry.nulls_first;
+      }
+      if (UNLIKELY(isNull(entry_ti, rhs_v) && !isNull(entry_ti, lhs_v))) {
+        return use_heap ? order_entry.nulls_first : !order_entry.nulls_first;
+      }
+      const bool use_desc_cmp = use_heap ? !order_entry.is_desc : order_entry.is_desc;
+      if (LIKELY(lhs_v.isInt())) {
+        CHECK(rhs_v.isInt());
+        if (UNLIKELY(is_dict)) {
+          CHECK_EQ(4, entry_ti.get_size());
+          auto string_dict = row_set_mem_owner_->getStringDict(entry_ti.get_comp_param());
+          auto lhs_str = string_dict->getString(lhs_v.i1);
+          auto rhs_str = string_dict->getString(rhs_v.i1);
+          if (lhs_str == rhs_str) {
+            continue;
+          }
+          return use_desc_cmp ? lhs_str > rhs_str : lhs_str < rhs_str;
+        }
+        if (UNLIKELY(targets_[order_entry.tle_no - 1].is_distinct)) {
+          const auto lhs_sz =
+              bitmap_set_size(lhs_v.i1, order_entry.tle_no - 1, row_set_mem_owner_->getCountDistinctDescriptors());
+          const auto rhs_sz =
+              bitmap_set_size(rhs_v.i1, order_entry.tle_no - 1, row_set_mem_owner_->getCountDistinctDescriptors());
+          if (lhs_sz == rhs_sz) {
+            continue;
+          }
+          return use_desc_cmp ? lhs_sz > rhs_sz : lhs_sz < rhs_sz;
+        }
+        if (lhs_v.i1 == rhs_v.i1) {
+          continue;
+        }
+        return use_desc_cmp ? lhs_v.i1 > rhs_v.i1 : lhs_v.i1 < rhs_v.i1;
+      } else {
+        if (lhs_v.isPair()) {
+          CHECK(rhs_v.isPair());
+          const auto lhs = pair_to_double({lhs_v.i1, lhs_v.i2}, entry_ti);
+          const auto rhs = pair_to_double({rhs_v.i1, rhs_v.i2}, entry_ti);
+          if (lhs == rhs) {
+            continue;
+          }
+          return use_desc_cmp ? lhs > rhs : lhs < rhs;
+        } else {
+          CHECK(lhs_v.isStr() && rhs_v.isStr());
+          const auto lhs = lhs_v.strVal();
+          const auto rhs = rhs_v.strVal();
+          if (lhs == rhs) {
+            continue;
+          }
+          return use_desc_cmp ? lhs > rhs : lhs < rhs;
+        }
+      }
+    }
+    return false;
+  };
+}
+
+#undef UNLIKELY
+#undef LIKELY
+
+void ResultSet::topPermutation(const size_t n, const std::function<bool(const uint32_t, const uint32_t)> compare) {
+  std::make_heap(permutation_.begin(), permutation_.end(), compare);
+  decltype(permutation_) permutation_top;
+  permutation_top.reserve(n);
+  for (size_t i = 0; i < n && !permutation_.empty(); ++i) {
+    permutation_top.push_back(permutation_.front());
+    std::pop_heap(permutation_.begin(), permutation_.end(), compare);
+    permutation_.pop_back();
+  }
+  permutation_.swap(permutation_top);
+}
+
+void ResultSet::sortPermutation(const std::function<bool(const uint32_t, const uint32_t)> compare) {
+  std::sort(permutation_.begin(), permutation_.end(), compare);
 }
 
 bool ResultSet::isEmptyInitializer() const {

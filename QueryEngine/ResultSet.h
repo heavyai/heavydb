@@ -87,9 +87,7 @@ class ResultSet {
 
   std::vector<TargetValue> getNextRow(const bool translate_strings, const bool decimal_to_double) const;
 
-  void sort(const std::list<Analyzer::OrderEntry>& order_entries,
-            const bool remove_duplicates,
-            const int64_t top_n) const;
+  void sort(const std::list<Analyzer::OrderEntry>& order_entries, const size_t top_n);
 
   bool isEmptyInitializer() const;
 
@@ -131,6 +129,16 @@ class ResultSet {
                               const SQLTypeInfo& ti,
                               const bool translate_strings) const;
 
+  InternalTargetValue getColumnInternal(const size_t entry_idx, const size_t col_idx) const;
+
+  std::function<bool(const uint32_t, const uint32_t)> createComparator(
+      const std::list<Analyzer::OrderEntry>& order_entries,
+      const bool use_heap) const;
+
+  void topPermutation(const size_t n, const std::function<bool(const uint32_t, const uint32_t)> compare);
+
+  void sortPermutation(const std::function<bool(const uint32_t, const uint32_t)> compare);
+
   const std::vector<TargetInfo> targets_;
   const ExecutorDeviceType device_type_;
   const QueryMemoryDescriptor query_mem_desc_;
@@ -140,6 +148,7 @@ class ResultSet {
   size_t drop_first_;
   size_t keep_first_;
   const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
+  std::vector<uint32_t> permutation_;
 
   friend class ResultSetManager;
 };
@@ -150,6 +159,11 @@ class ResultSetManager {
 
  private:
   std::unique_ptr<ResultSet> rs_;
+};
+
+class RowSortException : public std::runtime_error {
+ public:
+  RowSortException(const std::string& cause) : std::runtime_error(cause) {}
 };
 
 #endif  // QUERYENGINE_RESULTSET_H

@@ -10,6 +10,7 @@
 #define QUERYENGINE_RESULTSETBUFFERACCESSORS_H
 
 #include "ResultRows.h"
+#include "SqlTypesLayout.h"
 
 inline size_t advance_slot(const size_t j, const TargetInfo& target_info) {
   return j + (target_info.agg_kind == kAVG ? 2 : 1);
@@ -121,6 +122,38 @@ inline T advance_target_ptr(T target_ptr,
     return result + query_mem_desc.agg_col_widths[slot_idx + 1].compact;
   }
   return result;
+}
+
+inline double pair_to_double(const std::pair<int64_t, int64_t>& fp_pair, const SQLTypeInfo& ti) {
+  double dividend{0.0};
+  int64_t null_val{0};
+  switch (ti.get_type()) {
+    case kFLOAT: {
+      dividend = *reinterpret_cast<const double*>(&fp_pair.first);
+      double null_float = inline_fp_null_val(ti);
+      null_val = *reinterpret_cast<int64_t*>(&null_float);
+      break;
+    }
+    case kDOUBLE: {
+      dividend = *reinterpret_cast<const double*>(&fp_pair.first);
+      double null_double = inline_fp_null_val(ti);
+      null_val = *reinterpret_cast<int64_t*>(&null_double);
+      break;
+    }
+    default: {
+      CHECK(ti.is_integer() || ti.is_decimal());
+      dividend = static_cast<double>(fp_pair.first);
+      null_val = inline_int_null_val(ti);
+      break;
+    }
+  }
+  if (!ti.get_notnull() && null_val == fp_pair.first) {
+    return inline_fp_null_val(SQLTypeInfo(kDOUBLE, false));
+  }
+
+  return ti.is_integer() || ti.is_decimal()
+             ? (dividend / exp_to_scale(ti.is_decimal() ? ti.get_scale() : 0)) / static_cast<double>(fp_pair.second)
+             : dividend / static_cast<double>(fp_pair.second);
 }
 
 #endif  // QUERYENGINE_RESULTSETBUFFERACCESSORS_H

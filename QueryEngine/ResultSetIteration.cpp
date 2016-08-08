@@ -12,38 +12,6 @@
 
 namespace {
 
-double pair_to_double(const std::pair<int64_t, int64_t>& fp_pair, const SQLTypeInfo& ti) {
-  double dividend{0.0};
-  int64_t null_val{0};
-  switch (ti.get_type()) {
-    case kFLOAT: {
-      dividend = *reinterpret_cast<const double*>(&fp_pair.first);
-      double null_float = inline_fp_null_val(ti);
-      null_val = *reinterpret_cast<int64_t*>(&null_float);
-      break;
-    }
-    case kDOUBLE: {
-      dividend = *reinterpret_cast<const double*>(&fp_pair.first);
-      double null_double = inline_fp_null_val(ti);
-      null_val = *reinterpret_cast<int64_t*>(&null_double);
-      break;
-    }
-    default: {
-      CHECK(ti.is_integer() || ti.is_decimal());
-      dividend = static_cast<double>(fp_pair.first);
-      null_val = inline_int_null_val(ti);
-      break;
-    }
-  }
-  if (!ti.get_notnull() && null_val == fp_pair.first) {
-    return inline_fp_null_val(SQLTypeInfo(kDOUBLE, false));
-  }
-
-  return ti.is_integer() || ti.is_decimal()
-             ? (dividend / exp_to_scale(ti.is_decimal() ? ti.get_scale() : 0)) / static_cast<double>(fp_pair.second)
-             : dividend / static_cast<double>(fp_pair.second);
-}
-
 // Interprets ptr as an integer of compact_sz byte width and reads it.
 int64_t read_int_from_buff(const int8_t* ptr, const int8_t compact_sz) {
   switch (compact_sz) {
@@ -180,6 +148,11 @@ std::vector<TargetValue> ResultSet::getNextRow(const bool translate_strings, con
   }
   ++crt_row_buff_idx_;
   return row;
+}
+
+InternalTargetValue ResultSet::getColumnInternal(const size_t entry_idx, const size_t col_idx) const {
+  CHECK(false);
+  return InternalTargetValue(int64_t(0));
 }
 
 // Not all entries in the buffer represent a valid row. Advance the internal cursor
