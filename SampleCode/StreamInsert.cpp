@@ -289,8 +289,7 @@ int main(int argc, char** argv) {
       "retry_count", po::value<size_t>(&retry_count), "Number of time to retry an insert")(
       "retry_wait", po::value<size_t>(&retry_wait), "wait in secs between retries")(
       "transform,t", po::value<std::vector<std::string>>(&xforms)->multitoken(), "Column Transformations")(
-      "print_error", "Print Error Rows")(
-      "print_transform", "Print Transformations");
+      "print_error", "Print Error Rows")("print_transform", "Print Transformations");
 
   po::positional_options_description positionalOptions;
   positionalOptions.add("table", 1);
@@ -301,10 +300,11 @@ int main(int argc, char** argv) {
   try {
     po::store(po::command_line_parser(argc, argv).options(desc).positional(positionalOptions).run(), vm);
     if (vm.count("help")) {
-      std::cout << "Usage: <table name> <database name> {-u|--user} <user> {-p|--passwd} <password> [{--host} "
-                   "<hostname>][--port <port number>][--delim <delimiter>][--null <null string>][--line <line "
-                   "delimiter>][--batch <batch size>][{-t|--transform} transformation "
-                   "...][--retry_count <num_of_retries>] [--retry_wait <wait in secs.][--print_error][--print_transform]\n";
+      std::cout
+          << "Usage: <table name> <database name> {-u|--user} <user> {-p|--passwd} <password> [{--host} "
+             "<hostname>][--port <port number>][--delim <delimiter>][--null <null string>][--line <line "
+             "delimiter>][--batch <batch size>][{-t|--transform} transformation "
+             "...][--retry_count <num_of_retries>] [--retry_wait <wait in secs>][--print_error][--print_transform]\n";
       return 0;
     }
     if (vm.count("print_error"))
@@ -337,10 +337,10 @@ int main(int argc, char** argv) {
   if (isprint(delim))
     std::cout << "Field Delimiter: " << delim << std::endl;
   else if (delim == '\t')
-    std::cout << "Line Delimiter: "
+    std::cout << "Field Delimiter: "
               << "\\t" << std::endl;
   else if (delim == '\n')
-    std::cout << "Line Delimiter: "
+    std::cout << "Field Delimiter: "
               << "\\n" << std::endl;
   else
     std::cout << "Field Delimiter: \\x" << std::hex << (int)delim << std::endl;
