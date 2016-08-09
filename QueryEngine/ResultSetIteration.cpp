@@ -150,7 +150,72 @@ std::vector<TargetValue> ResultSet::getNextRow(const bool translate_strings, con
   return row;
 }
 
+namespace {
+
+const int8_t* columnar_elem_ptr(const size_t entry_idx, const int8_t* col1_ptr, const int8_t compact_sz1) {
+  return col1_ptr + compact_sz1 * entry_idx;
+}
+
+}  // namespace
+
 InternalTargetValue ResultSet::getColumnInternal(const size_t entry_idx, const size_t col_idx) const {
+  const auto buff = storage_->buff_;
+  CHECK(buff);
+  const auto buffer_col_count = get_buffer_col_slot_count(storage_->query_mem_desc_);
+  const int8_t* rowwise_target_ptr{nullptr};
+  const int8_t* crt_col_ptr{nullptr};
+  if (query_mem_desc_.output_columnar) {
+    crt_col_ptr = get_cols_ptr(buff, query_mem_desc_);
+  } else {
+    rowwise_target_ptr = row_ptr_rowwise(buff, query_mem_desc_, entry_idx) + get_key_bytes_rowwise(query_mem_desc_);
+  }
+  CHECK_LT(col_idx, storage_->targets_.size());
+  size_t agg_col_idx = 0;
+  // TODO(alex): remove this loop, offsets can be computed only once
+  for (size_t target_idx = 0; target_idx < storage_->targets_.size(); ++target_idx) {
+    CHECK_LT(agg_col_idx, buffer_col_count);
+    const auto& agg_info = storage_->targets_[target_idx];
+    if (query_mem_desc_.output_columnar) {
+      const auto next_col_ptr = advance_to_next_columnar_target_buff(crt_col_ptr, query_mem_desc_, agg_col_idx);
+      const auto col2_ptr = (agg_info.is_agg && agg_info.agg_kind == kAVG) ? next_col_ptr : nullptr;
+      const auto compact_sz2 =
+          (agg_info.is_agg && agg_info.agg_kind == kAVG) ? query_mem_desc_.agg_col_widths[agg_col_idx + 1].compact : 0;
+      if (target_idx == col_idx) {
+        const auto compact_sz1 = query_mem_desc_.agg_col_widths[agg_col_idx].compact;
+        const auto i1 = read_int_from_buff(columnar_elem_ptr(entry_idx, crt_col_ptr, compact_sz1), compact_sz1);
+        if (col2_ptr) {
+          const auto i2 = read_int_from_buff(columnar_elem_ptr(entry_idx, col2_ptr, compact_sz2), compact_sz2);
+          return InternalTargetValue(i1, i2);
+        } else {
+          return InternalTargetValue(i1);
+        }
+      }
+      crt_col_ptr = next_col_ptr;
+      if (agg_info.is_agg && agg_info.agg_kind == kAVG) {
+        crt_col_ptr = advance_to_next_columnar_target_buff(crt_col_ptr, query_mem_desc_, agg_col_idx + 1);
+      }
+    } else {
+      const auto ptr1 = rowwise_target_ptr;
+      const auto compact_sz1 = query_mem_desc_.agg_col_widths[agg_col_idx].compact;
+      const int8_t* ptr2{nullptr};
+      int8_t compact_sz2{0};
+      if (agg_info.is_agg && agg_info.agg_kind == kAVG) {
+        ptr2 = rowwise_target_ptr + query_mem_desc_.agg_col_widths[agg_col_idx].compact;
+        compact_sz2 = query_mem_desc_.agg_col_widths[agg_col_idx + 1].compact;
+      }
+      if (target_idx == col_idx) {
+        const auto i1 = read_int_from_buff(ptr1, compact_sz1);
+        if (ptr2) {
+          const auto i2 = read_int_from_buff(ptr2, compact_sz2);
+          return InternalTargetValue(i1, i2);
+        } else {
+          return InternalTargetValue(i1);
+        }
+      }
+      rowwise_target_ptr = advance_target_ptr(rowwise_target_ptr, agg_info, agg_col_idx, query_mem_desc_);
+    }
+    agg_col_idx = advance_slot(agg_col_idx, agg_info);
+  }
   CHECK(false);
   return InternalTargetValue(int64_t(0));
 }
