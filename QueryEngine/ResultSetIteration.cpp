@@ -282,11 +282,11 @@ TargetValue ResultSet::getTargetValueFromBufferColwise(const int8_t* col1_ptr,
                                                        const bool translate_strings) const {
   CHECK(query_mem_desc_.output_columnar);
   const auto& ti = target_info.sql_type;
-  const auto ptr1 = col1_ptr + compact_sz1 * entry_idx;
+  const auto ptr1 = columnar_elem_ptr(entry_idx, col1_ptr, compact_sz1);
   if (target_info.agg_kind == kAVG) {
     CHECK(col2_ptr);
     CHECK(compact_sz2);
-    const auto ptr2 = col2_ptr + compact_sz2 * entry_idx;
+    const auto ptr2 = columnar_elem_ptr(entry_idx, col2_ptr, compact_sz2);
     return make_avg_target_value(ptr1, compact_sz1, ptr2, compact_sz2, target_info);
   }
   return makeTargetValue(ptr1, compact_sz1, ti, translate_strings);
