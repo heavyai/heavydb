@@ -98,7 +98,9 @@ class ResultSet {
   void append(ResultSet& that);
 
  private:
-  void advanceCursorToNextEntry() const;
+  size_t advanceCursorToNextEntry() const;
+
+  size_t entryCount() const;
 
   void sortOnGpu(const std::list<Analyzer::OrderEntry>& order_entries) const;
 

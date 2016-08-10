@@ -131,7 +131,7 @@ std::function<bool(const uint32_t, const uint32_t)> ResultSet::createComparator(
         return !use_heap;
       }
       const auto lhs_v = getColumnInternal(lhs, order_entry.tle_no - 1);
-      const auto rhs_v = getColumnInternal(lhs, order_entry.tle_no - 1);
+      const auto rhs_v = getColumnInternal(rhs, order_entry.tle_no - 1);
       if (UNLIKELY(isNull(entry_ti, lhs_v) && isNull(entry_ti, rhs_v))) {
         return false;
       }

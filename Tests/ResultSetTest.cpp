@@ -582,30 +582,6 @@ std::vector<TargetInfo> generate_test_target_infos() {
   return target_infos;
 }
 
-typedef std::vector<TargetValue> OneRow;
-
-std::vector<OneRow> get_rows_sorted_by_col(const ResultSet& rs, const size_t col_idx) {
-  std::vector<OneRow> result;
-  while (true) {
-    const auto row = rs.getNextRow(false, false);
-    if (row.empty()) {
-      break;
-    }
-    result.push_back(row);
-  }
-  auto sort_func = [col_idx](const OneRow& lhs, const OneRow& rhs) {
-    const auto& lhs_col = lhs[col_idx];
-    const auto& rhs_col = rhs[col_idx];
-    const auto lhs_iptr = vptr<int64_t>(lhs_col);
-    if (lhs_iptr) {
-      return *lhs_iptr < v<int64_t>(rhs_col);
-    }
-    return v<double>(lhs_col) < v<double>(rhs_col);
-  };
-  std::sort(result.begin(), result.end(), sort_func);
-  return result;
-}
-
 void test_reduce(const std::vector<TargetInfo>& target_infos,
                  const QueryMemoryDescriptor& query_mem_desc,
                  NumberGenerator& generator1,
@@ -645,9 +621,14 @@ void test_reduce(const std::vector<TargetInfo>& target_infos,
   std::vector<ResultSet*> storage_set{rs1.get(), rs2.get()};
   auto result_rs = rs_manager.reduce(storage_set);
   int64_t ref_val{0};
-  const auto result = get_rows_sorted_by_col(*result_rs, 0);
-  CHECK(!result.empty());
-  for (const auto& row : result) {
+  std::list<Analyzer::OrderEntry> order_entries;
+  order_entries.emplace_back(1, false, false);
+  result_rs->sort(order_entries, 0);
+  while (true) {
+    const auto row = result_rs->getNextRow(false, false);
+    if (row.empty()) {
+      break;
+    }
     CHECK_EQ(target_infos.size(), row.size());
     for (size_t i = 0; i < target_infos.size(); ++i) {
       const auto& target_info = target_infos[i];

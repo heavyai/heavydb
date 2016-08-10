@@ -100,12 +100,12 @@ const int8_t* advance_col_buff_to_slot(const int8_t* buff,
 }  // namespace
 
 std::vector<TargetValue> ResultSet::getNextRow(const bool translate_strings, const bool /* decimal_to_double */) const {
-  advanceCursorToNextEntry();
-  if (keep_first_ && crt_row_buff_idx_ >= drop_first_ + keep_first_) {
+  const auto entry_buff_idx = advanceCursorToNextEntry();
+  if (keep_first_ && entry_buff_idx >= drop_first_ + keep_first_) {
     return {};
   }
-  if (crt_row_buff_idx_ >= query_mem_desc_.entry_count) {
-    CHECK_EQ(query_mem_desc_.entry_count, crt_row_buff_idx_);
+  if (entry_buff_idx >= entryCount()) {
+    CHECK_EQ(entryCount(), entry_buff_idx);
     return {};
   }
   const auto buff = storage_->buff_;
@@ -119,7 +119,7 @@ std::vector<TargetValue> ResultSet::getNextRow(const bool translate_strings, con
     crt_col_ptr = get_cols_ptr(buff, query_mem_desc_);
   } else {
     rowwise_target_ptr =
-        row_ptr_rowwise(buff, query_mem_desc_, crt_row_buff_idx_) + get_key_bytes_rowwise(query_mem_desc_);
+        row_ptr_rowwise(buff, query_mem_desc_, entry_buff_idx) + get_key_bytes_rowwise(query_mem_desc_);
   }
   for (size_t target_idx = 0; target_idx < storage_->targets_.size(); ++target_idx) {
     CHECK_LT(agg_col_idx, buffer_col_count);
@@ -133,7 +133,7 @@ std::vector<TargetValue> ResultSet::getNextRow(const bool translate_strings, con
                                                     query_mem_desc_.agg_col_widths[agg_col_idx].compact,
                                                     col2_ptr,
                                                     compact_sz2,
-                                                    crt_row_buff_idx_,
+                                                    entry_buff_idx,
                                                     agg_info,
                                                     translate_strings));
       crt_col_ptr = next_col_ptr;
@@ -222,16 +222,26 @@ InternalTargetValue ResultSet::getColumnInternal(const size_t entry_idx, const s
 
 // Not all entries in the buffer represent a valid row. Advance the internal cursor
 // used for the getNextRow method to the next row which is valid.
-void ResultSet::advanceCursorToNextEntry() const {
+size_t ResultSet::advanceCursorToNextEntry() const {
   CHECK(GroupByColRangeType::OneColKnownRange == storage_->query_mem_desc_.hash_type ||
         GroupByColRangeType::MultiColPerfectHash == storage_->query_mem_desc_.hash_type ||
         GroupByColRangeType::MultiCol == storage_->query_mem_desc_.hash_type);
-  while (crt_row_buff_idx_ < query_mem_desc_.entry_count) {
-    if (!storage_->isEmptyEntry(crt_row_buff_idx_, storage_->buff_)) {
+  while (crt_row_buff_idx_ < entryCount()) {
+    const auto entry_idx = permutation_.empty() ? crt_row_buff_idx_ : permutation_[crt_row_buff_idx_];
+    if (!storage_->isEmptyEntry(entry_idx, storage_->buff_)) {
       break;
     }
     ++crt_row_buff_idx_;
   }
+  if (permutation_.empty()) {
+    return crt_row_buff_idx_;
+  }
+  CHECK_LE(crt_row_buff_idx_, permutation_.size());
+  return crt_row_buff_idx_ == permutation_.size() ? crt_row_buff_idx_ : permutation_[crt_row_buff_idx_];
+}
+
+size_t ResultSet::entryCount() const {
+  return permutation_.empty() ? query_mem_desc_.entry_count : permutation_.size();
 }
 
 // Reads an integer or a float from ptr based on the type and the byte width.
