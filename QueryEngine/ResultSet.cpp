@@ -18,6 +18,7 @@
 
 #include <algorithm>
 #include <future>
+#include <numeric>
 
 ResultSetStorage::ResultSetStorage(const std::vector<TargetInfo>& targets,
                                    const ExecutorDeviceType device_type,
