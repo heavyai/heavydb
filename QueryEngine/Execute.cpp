@@ -3570,7 +3570,7 @@ const int8_t* Executor::ExecutionDispatch::getColumn(const ColumnarResults* colu
   const auto& col_buffers = columnar_results->getColumnBuffers();
   CHECK_LT(static_cast<size_t>(col_id), col_buffers.size());
   if (memory_level == Data_Namespace::GPU_LEVEL) {
-    const auto num_bytes = columnar_results->size() * get_bit_width(columnar_results->getColumnType(col_id)) * 8;
+    const auto num_bytes = columnar_results->size() * get_bit_width(columnar_results->getColumnType(col_id)) / 8;
     auto gpu_col_buffer = alloc_gpu_mem(data_mgr, num_bytes, device_id, nullptr);
     copy_to_gpu(data_mgr, gpu_col_buffer, col_buffers[col_id], num_bytes, device_id);
     return reinterpret_cast<const int8_t*>(gpu_col_buffer);
