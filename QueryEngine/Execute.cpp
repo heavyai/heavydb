@@ -2284,9 +2284,17 @@ llvm::ConstantFP* Executor::inlineFpNull(const SQLTypeInfo& type_info) {
   }
 }
 
-std::pair<llvm::ConstantInt*, llvm::ConstantInt*> Executor::inlineIntMaxMin(const size_t byte_width) {
+std::pair<llvm::ConstantInt*, llvm::ConstantInt*> Executor::inlineIntMaxMin(const size_t byte_width,
+                                                                            const bool is_signed) {
   int64_t max_int{0}, min_int{0};
-  std::tie(max_int, min_int) = inline_int_max_min(byte_width);
+  if (is_signed) {
+    std::tie(max_int, min_int) = inline_int_max_min(byte_width);
+  } else {
+    uint64_t max_uint{0}, min_uint{0};
+    std::tie(max_uint, min_uint) = inline_uint_max_min(byte_width);
+    max_int = static_cast<int64_t>(max_uint);
+    CHECK_EQ(uint64_t(0), min_uint);
+  }
   switch (byte_width) {
     case 1:
       return std::make_pair(ll_int(static_cast<int8_t>(max_int)), ll_int(static_cast<int8_t>(min_int)));
@@ -2723,14 +2731,15 @@ std::pair<int64_t, int32_t> Executor::reduceResults(const SQLAgg agg,
       }
       break;
     case kCOUNT: {
-      int64_t agg_result = 0;
+      uint64_t agg_result = 0;
       for (size_t i = 0; i < out_vec_sz; ++i) {
-        if (detect_overflow_and_underflow(agg_result, out_vec[i], false, int64_t(0), ti)) {
+        const uint64_t out = static_cast<uint64_t>(out_vec[i]);
+        if (detect_overflow_and_underflow(agg_result, out, false, uint64_t(0), ti)) {
           return {0, error_no};
         }
-        agg_result += out_vec[i];
+        agg_result += out;
       }
-      return {agg_result, 0};
+      return {static_cast<int64_t>(agg_result), 0};
     }
     case kMIN: {
       if (ti.is_integer() || ti.is_decimal() || ti.is_time() || ti.is_boolean()) {

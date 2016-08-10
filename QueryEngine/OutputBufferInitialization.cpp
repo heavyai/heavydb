@@ -55,6 +55,21 @@ std::pair<int64_t, int64_t> inline_int_max_min(const size_t byte_width) {
   }
 }
 
+std::pair<uint64_t, uint64_t> inline_uint_max_min(const size_t byte_width) {
+  switch (byte_width) {
+    case 1:
+      return std::make_pair(std::numeric_limits<uint8_t>::max(), std::numeric_limits<uint8_t>::min());
+    case 2:
+      return std::make_pair(std::numeric_limits<uint16_t>::max(), std::numeric_limits<uint16_t>::min());
+    case 4:
+      return std::make_pair(std::numeric_limits<uint32_t>::max(), std::numeric_limits<uint32_t>::min());
+    case 8:
+      return std::make_pair(std::numeric_limits<uint64_t>::max(), std::numeric_limits<uint64_t>::min());
+    default:
+      CHECK(false);
+  }
+}
+
 // TODO(alex): proper types for aggregate
 int64_t get_agg_initial_val(const SQLAgg agg,
                             const SQLTypeInfo& ti,

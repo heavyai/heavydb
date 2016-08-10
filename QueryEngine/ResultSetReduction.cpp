@@ -435,6 +435,82 @@ const bool sum_check_flag = true;
     }                                                                                                            \
   }
 
+#define AGGREGATE_ONE_COUNT(val_ptr__, other_ptr__, chosen_bytes__, agg_info__)                                      \
+  {                                                                                                                  \
+    const auto sql_type = get_compact_type(agg_info__);                                                              \
+    if (sql_type.is_fp()) {                                                                                          \
+      if (chosen_bytes__ == sizeof(float)) {                                                                         \
+        agg_sum_float(reinterpret_cast<int32_t*>(val_ptr__), *reinterpret_cast<const float*>(other_ptr__));          \
+      } else {                                                                                                       \
+        agg_sum_double(reinterpret_cast<int64_t*>(val_ptr__), *reinterpret_cast<const double*>(other_ptr__));        \
+      }                                                                                                              \
+    } else {                                                                                                         \
+      if (chosen_bytes__ == sizeof(int32_t)) {                                                                       \
+        auto val_ptr = reinterpret_cast<int32_t*>(val_ptr__);                                                        \
+        auto other_ptr = reinterpret_cast<const int32_t*>(other_ptr__);                                              \
+        if (detect_overflow_and_underflow(                                                                           \
+                static_cast<uint32_t>(*val_ptr), static_cast<uint32_t>(*other_ptr), false, uint32_t(0), sql_type)) { \
+          throw OverflowOrUnderflow();                                                                               \
+        }                                                                                                            \
+        agg_sum_int32(val_ptr, *other_ptr);                                                                          \
+      } else {                                                                                                       \
+        auto val_ptr = reinterpret_cast<int64_t*>(val_ptr__);                                                        \
+        auto other_ptr = reinterpret_cast<const int64_t*>(other_ptr__);                                              \
+        if (detect_overflow_and_underflow(                                                                           \
+                static_cast<uint64_t>(*val_ptr), static_cast<uint64_t>(*other_ptr), false, uint64_t(0), sql_type)) { \
+          throw OverflowOrUnderflow();                                                                               \
+        }                                                                                                            \
+        agg_sum(val_ptr, *other_ptr);                                                                                \
+      }                                                                                                              \
+    }                                                                                                                \
+  }
+
+#define AGGREGATE_ONE_NULLABLE_COUNT(val_ptr__, other_ptr__, init_val__, chosen_bytes__, agg_info__) \
+  {                                                                                                  \
+    if (agg_info__.skip_null_val) {                                                                  \
+      const auto sql_type = get_compact_type(agg_info__);                                            \
+      if (sql_type.is_fp()) {                                                                        \
+        if (chosen_bytes__ == sizeof(float)) {                                                       \
+          agg_sum_float_skip_val(reinterpret_cast<int32_t*>(val_ptr__),                              \
+                                 *reinterpret_cast<const float*>(other_ptr__),                       \
+                                 *reinterpret_cast<const float*>(&init_val__));                      \
+        } else {                                                                                     \
+          agg_sum_double_skip_val(reinterpret_cast<int64_t*>(val_ptr__),                             \
+                                  *reinterpret_cast<const double*>(other_ptr__),                     \
+                                  *reinterpret_cast<const double*>(&init_val__));                    \
+        }                                                                                            \
+      } else {                                                                                       \
+        if (chosen_bytes__ == sizeof(int32_t)) {                                                     \
+          auto val_ptr = reinterpret_cast<int32_t*>(val_ptr__);                                      \
+          auto other_ptr = reinterpret_cast<const int32_t*>(other_ptr__);                            \
+          const auto null_val = static_cast<int32_t>(init_val__);                                    \
+          if (detect_overflow_and_underflow(static_cast<uint32_t>(*val_ptr),                         \
+                                            static_cast<uint32_t>(*other_ptr),                       \
+                                            true,                                                    \
+                                            static_cast<uint32_t>(null_val),                         \
+                                            sql_type)) {                                             \
+            throw OverflowOrUnderflow();                                                             \
+          }                                                                                          \
+          agg_sum_int32_skip_val(val_ptr, *other_ptr, null_val);                                     \
+        } else {                                                                                     \
+          auto val_ptr = reinterpret_cast<int64_t*>(val_ptr__);                                      \
+          auto other_ptr = reinterpret_cast<const int64_t*>(other_ptr__);                            \
+          const auto null_val = static_cast<int64_t>(init_val__);                                    \
+          if (detect_overflow_and_underflow(static_cast<uint64_t>(*val_ptr),                         \
+                                            static_cast<uint64_t>(*other_ptr),                       \
+                                            true,                                                    \
+                                            static_cast<uint64_t>(null_val),                         \
+                                            sql_type)) {                                             \
+            throw OverflowOrUnderflow();                                                             \
+          }                                                                                          \
+          agg_sum_skip_val(val_ptr, *other_ptr, null_val);                                           \
+        }                                                                                            \
+      }                                                                                              \
+    } else {                                                                                         \
+      AGGREGATE_ONE_COUNT(val_ptr__, other_ptr__, chosen_bytes__, agg_info__);                       \
+    }                                                                                                \
+  }
+
 void ResultSetStorage::reduceOneSlot(int8_t* this_ptr1,
                                      int8_t* this_ptr2,
                                      const int8_t* that_ptr1,
@@ -447,16 +523,18 @@ void ResultSetStorage::reduceOneSlot(int8_t* this_ptr1,
   const auto init_val = target_init_vals_[target_slot_idx];
   if (target_info.is_agg) {
     switch (target_info.agg_kind) {
-      case kAVG: {
-        AGGREGATE_ONE_VALUE(sum, this_ptr2, that_ptr2, chosen_bytes, target_info);
-      }
-      // fall thru
       case kCOUNT: {
         if (target_info.is_distinct) {
           CHECK(false);
           break;
         }
+        AGGREGATE_ONE_NULLABLE_COUNT(this_ptr1, that_ptr1, init_val, chosen_bytes, target_info);
+        break;
       }
+      case kAVG: {
+        AGGREGATE_ONE_COUNT(this_ptr2, that_ptr2, chosen_bytes, target_info);
+      }
+      // fall thru
       case kSUM: {
         AGGREGATE_ONE_NULLABLE_VALUE(sum, this_ptr1, that_ptr1, init_val, chosen_bytes, target_info);
         break;

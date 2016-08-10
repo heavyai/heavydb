@@ -1114,7 +1114,7 @@ int8_t pick_target_compact_width(const RelAlgExecutionUnit& ra_exe_unit,
     for (const auto& query_info : query_infos) {
       total_tuples += query_info.numTuples;
     }
-    return total_tuples <= static_cast<size_t>(std::numeric_limits<int32_t>::max()) ? 4 : crt_min_byte_width;
+    return total_tuples <= static_cast<size_t>(std::numeric_limits<uint32_t>::max()) ? 4 : crt_min_byte_width;
   } else {
     // TODO(miyu): relax this condition to allow more cases just w/o padding
     for (auto wid : get_col_byte_widths(ra_exe_unit.target_exprs)) {
@@ -2044,12 +2044,12 @@ bool GroupByAndAggregate::detectOverflowAndUnderflow(llvm::Value* agg_col_val,
 
   llvm::Value* chosen_max{nullptr};
   llvm::Value* chosen_min{nullptr};
-  std::tie(chosen_max, chosen_min) = executor_->inlineIntMaxMin(chosen_bytes);
+  std::tie(chosen_max, chosen_min) = executor_->inlineIntMaxMin(chosen_bytes, agg_base_name != "agg_count");
 
   llvm::Value* detected{nullptr};
   if (agg_base_name == "agg_count") {
     auto const_one = llvm::ConstantInt::get(get_int_type(chosen_bytes << 3, LL_CONTEXT), 1);
-    detected = LL_BUILDER.CreateICmpSGT(agg_col_val, LL_BUILDER.CreateSub(chosen_max, const_one));
+    detected = LL_BUILDER.CreateICmpUGT(agg_col_val, LL_BUILDER.CreateSub(chosen_max, const_one));
   } else {
     auto const_zero = llvm::ConstantInt::get(get_int_type(chosen_bytes << 3, LL_CONTEXT), 0);
     auto overflow = LL_BUILDER.CreateAnd(LL_BUILDER.CreateICmpSGT(val, const_zero),

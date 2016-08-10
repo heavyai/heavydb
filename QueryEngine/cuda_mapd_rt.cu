@@ -197,19 +197,19 @@ __device__ double atomicMin(float* address, float val) {
   return __int_as_float(old);
 }
 
-extern "C" __device__ int64_t agg_count_shared(int64_t* agg, const int64_t val) {
-  return atomicAdd(reinterpret_cast<int32_t*>(agg), 1L);
+extern "C" __device__ uint64_t agg_count_shared(uint64_t* agg, const int64_t val) {
+  return static_cast<uint64_t>(atomicAdd(reinterpret_cast<uint32_t*>(agg), 1UL));
 }
 
-extern "C" __device__ int32_t agg_count_int32_shared(int32_t* agg, const int32_t val) {
-  return atomicAdd(agg, 1L);
+extern "C" __device__ uint32_t agg_count_int32_shared(uint32_t* agg, const int32_t val) {
+  return atomicAdd(agg, 1UL);
 }
 
-extern "C" __device__ int64_t agg_count_double_shared(int64_t* agg, const double val) {
+extern "C" __device__ uint64_t agg_count_double_shared(uint64_t* agg, const double val) {
   return agg_count_shared(agg, val);
 }
 
-extern "C" __device__ int32_t agg_count_float_shared(int32_t* agg, const float val) {
+extern "C" __device__ uint32_t agg_count_float_shared(uint32_t* agg, const float val) {
   return agg_count_int32_shared(agg, val);
 }
 
@@ -282,7 +282,7 @@ extern "C" __device__ void agg_id_float_shared(int32_t* agg, const float val) {
 }
 
 #define DEF_SKIP_AGG(base_agg_func)                                                                                    \
-  extern "C" __device__ DATA_T base_agg_func##_skip_val_shared(DATA_T* agg, const DATA_T val, const DATA_T skip_val) { \
+  extern "C" __device__ ADDR_T base_agg_func##_skip_val_shared(ADDR_T* agg, const DATA_T val, const DATA_T skip_val) { \
     if (val != skip_val) {                                                                                             \
       return base_agg_func##_shared(agg, val);                                                                         \
     }                                                                                                                  \
@@ -290,12 +290,16 @@ extern "C" __device__ void agg_id_float_shared(int32_t* agg, const float val) {
   }
 
 #define DATA_T int64_t
+#define ADDR_T uint64_t
 DEF_SKIP_AGG(agg_count)
 #undef DATA_T
+#undef ADDR_T
 
 #define DATA_T int32_t
+#define ADDR_T uint32_t
 DEF_SKIP_AGG(agg_count_int32)
 #undef DATA_T
+#undef ADDR_T
 
 // Initial value for nullable column is INT32_MIN
 extern "C" __device__ void agg_max_int32_skip_val_shared(int32_t* agg, const int32_t val, const int32_t skip_val) {
@@ -396,13 +400,13 @@ extern "C" __device__ void agg_max_skip_val_shared(int64_t* agg, const int64_t v
   }
 
 #define DATA_T double
-#define ADDR_T int64_t
+#define ADDR_T uint64_t
 DEF_SKIP_AGG(agg_count_double)
 #undef ADDR_T
 #undef DATA_T
 
 #define DATA_T float
-#define ADDR_T int32_t
+#define ADDR_T uint32_t
 DEF_SKIP_AGG(agg_count_float)
 #undef ADDR_T
 #undef DATA_T
