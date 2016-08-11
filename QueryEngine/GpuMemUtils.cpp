@@ -217,6 +217,12 @@ void copy_group_by_buffers_from_gpu(Data_Namespace::DataMgr* data_mgr,
     return;
   }
   const unsigned block_buffer_count{query_mem_desc.blocksShareMemory() ? 1 : grid_size_x};
+  if (block_buffer_count == 1 && !prepend_index_buffer) {
+    CHECK_EQ(block_size_x, group_by_buffers.size());
+    CHECK_EQ(coalesced_size(query_mem_desc, groups_buffer_size, block_size_x, block_buffer_count), groups_buffer_size);
+    copy_from_gpu(data_mgr, group_by_buffers[0], group_by_dev_buffers_mem, groups_buffer_size, device_id);
+    return;
+  }
   const size_t num_buffers{block_size_x * block_buffer_count};
   const size_t index_buffer_sz{prepend_index_buffer ? query_mem_desc.entry_count * sizeof(int64_t) : 0};
   std::vector<int8_t> buff_from_gpu(
