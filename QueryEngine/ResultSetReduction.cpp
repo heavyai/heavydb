@@ -64,15 +64,16 @@ void ResultSetStorage::reduce(const ResultSetStorage& that) const {
     const size_t thread_count = cpu_threads();
     std::vector<std::future<void>> reduction_threads;
     for (size_t thread_idx = 0; thread_idx < thread_count; ++thread_idx) {
-      reduction_threads.emplace_back(std::async([this, thread_idx, entry_count, this_buff, that_buff, thread_count] {
-        for (size_t i = thread_idx; i < entry_count; i += thread_count) {
-          if (query_mem_desc_.output_columnar) {
-            reduceOneEntryNoCollisionsColWise(i, this_buff, that_buff);
-          } else {
-            reduceOneEntryNoCollisionsRowWise(i, this_buff, that_buff);
-          }
-        }
-      }));
+      reduction_threads.emplace_back(
+          std::async(std::launch::async, [this, thread_idx, entry_count, this_buff, that_buff, thread_count] {
+            for (size_t i = thread_idx; i < entry_count; i += thread_count) {
+              if (query_mem_desc_.output_columnar) {
+                reduceOneEntryNoCollisionsColWise(i, this_buff, that_buff);
+              } else {
+                reduceOneEntryNoCollisionsRowWise(i, this_buff, that_buff);
+              }
+            }
+          }));
     }
     for (auto& reduction_thread : reduction_threads) {
       reduction_thread.get();
