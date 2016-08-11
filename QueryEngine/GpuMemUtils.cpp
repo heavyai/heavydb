@@ -113,7 +113,9 @@ std::pair<CUdeviceptr, CUdeviceptr> create_dev_group_by_buffers(Data_Namespace::
   const size_t mem_size{coalesced_size(
       query_mem_desc, groups_buffer_size, block_size_x, query_mem_desc.blocksShareMemory() ? 1 : grid_size_x)};
 
-  const size_t prepended_buff_size{prepend_index_buffer ? query_mem_desc.entry_count * sizeof(int64_t) : 0};
+  CHECK_LE(query_mem_desc.entry_count, std::numeric_limits<uint32_t>::max());
+  const size_t prepended_buff_size{prepend_index_buffer ? align_to_int64(query_mem_desc.entry_count * sizeof(int32_t))
+                                                        : 0};
 
   CUdeviceptr group_by_dev_buffers_mem =
       alloc_gpu_mem(data_mgr, mem_size + prepended_buff_size, device_id, render_allocator) + prepended_buff_size;

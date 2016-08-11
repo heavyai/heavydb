@@ -1057,22 +1057,27 @@ void ResultRows::inplaceSortGpu(const std::list<Analyzer::OrderEntry>& order_ent
                                                    true,
                                                    true,
                                                    nullptr);
-  ScopedScratchBuffer scratch_buff(query_mem_desc_.entry_count * sizeof(int64_t), data_mgr, device_id);
+  size_t max_entry_size{0};
+  for (const auto& wid : query_mem_desc_.agg_col_widths) {
+    max_entry_size = std::max(max_entry_size, size_t(wid.compact));
+  }
+  ScopedScratchBuffer scratch_buff(query_mem_desc_.entry_count * max_entry_size, data_mgr, device_id);
   auto tmp_buff = reinterpret_cast<int64_t*>(scratch_buff.getPtr());
   CHECK_EQ(size_t(1), order_entries.size());
-  const auto idx_buff = gpu_query_mem.group_by_buffers.second - query_mem_desc_.entry_count * sizeof(int64_t);
+  const auto idx_buff =
+      gpu_query_mem.group_by_buffers.second - align_to_int64(query_mem_desc_.entry_count * sizeof(int32_t));
   for (const auto& order_entry : order_entries) {
     const auto target_idx = order_entry.tle_no - 1;
     const auto val_buff = gpu_query_mem.group_by_buffers.second + query_mem_desc_.getColOffInBytes(0, target_idx);
     const auto chosen_bytes = query_mem_desc_.agg_col_widths[target_idx].compact;
     sort_groups_gpu(reinterpret_cast<int64_t*>(val_buff),
-                    reinterpret_cast<int64_t*>(idx_buff),
+                    reinterpret_cast<int32_t*>(idx_buff),
                     query_mem_desc_.entry_count,
                     order_entry.is_desc,
                     chosen_bytes);
     if (!query_mem_desc_.keyless_hash) {
       apply_permutation_gpu(reinterpret_cast<int64_t*>(gpu_query_mem.group_by_buffers.second),
-                            reinterpret_cast<int64_t*>(idx_buff),
+                            reinterpret_cast<int32_t*>(idx_buff),
                             query_mem_desc_.entry_count,
                             tmp_buff,
                             sizeof(int64_t));
@@ -1084,7 +1089,7 @@ void ResultRows::inplaceSortGpu(const std::list<Analyzer::OrderEntry>& order_ent
       const auto chosen_bytes = query_mem_desc_.agg_col_widths[target_idx].compact;
       const auto val_buff = gpu_query_mem.group_by_buffers.second + query_mem_desc_.getColOffInBytes(0, target_idx);
       apply_permutation_gpu(reinterpret_cast<int64_t*>(val_buff),
-                            reinterpret_cast<int64_t*>(idx_buff),
+                            reinterpret_cast<int32_t*>(idx_buff),
                             query_mem_desc_.entry_count,
                             tmp_buff,
                             chosen_bytes);
@@ -1106,7 +1111,7 @@ void ResultRows::inplaceSortCpu(const std::list<Analyzer::OrderEntry>& order_ent
   CHECK(!query_mem_desc_.keyless_hash);
   CHECK_EQ(size_t(1), in_place_group_by_buffers_.size());
   std::vector<int64_t> tmp_buff(query_mem_desc_.entry_count);
-  std::vector<int64_t> idx_buff(query_mem_desc_.entry_count);
+  std::vector<int32_t> idx_buff(query_mem_desc_.entry_count);
   CHECK_EQ(size_t(1), order_entries.size());
   for (const auto& order_entry : order_entries) {
     const auto target_idx = order_entry.tle_no - 1;
