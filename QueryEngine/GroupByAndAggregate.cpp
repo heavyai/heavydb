@@ -1032,6 +1032,13 @@ bool many_entries(const int64_t max_val, const int64_t min_val, const int64_t bu
   return max_val - min_val > 10000 * std::max(bucket, int64_t(1));
 }
 
+bool is_int_and_no_bigger_than(const SQLTypeInfo& ti, const size_t byte_width) {
+  if (!ti.is_integer()) {
+    return false;
+  }
+  return get_bit_width(ti) <= (byte_width * 8);
+}
+
 }  // namespace
 
 GroupByAndAggregate::GroupByAndAggregate(Executor* executor,
@@ -1078,17 +1085,29 @@ int8_t pick_target_compact_width(const RelAlgExecutionUnit& ra_exe_unit,
                                  const std::vector<Fragmenter_Namespace::TableInfo>& query_infos,
                                  const int8_t crt_min_byte_width) {
   int8_t compact_width{0};
+  auto col_it = ra_exe_unit.input_col_descs.begin();
+  int unnest_array_col_id{std::numeric_limits<int>::min()};
   for (const auto groupby_expr : ra_exe_unit.groupby_exprs) {
-    if (dynamic_cast<Analyzer::UOper*>(groupby_expr.get()) &&
-        static_cast<Analyzer::UOper*>(groupby_expr.get())->get_optype() == kUNNEST) {
-      compact_width = crt_min_byte_width;
-      break;
+    const auto uoper = dynamic_cast<Analyzer::UOper*>(groupby_expr.get());
+    if (uoper && uoper->get_optype() == kUNNEST) {
+      const auto& arg_ti = uoper->get_operand()->get_type_info();
+      CHECK(arg_ti.is_array());
+      const auto& elem_ti = arg_ti.get_elem_type();
+      if (elem_ti.is_string() && elem_ti.get_compression() == kENCODING_DICT) {
+        unnest_array_col_id = col_it->getColId();
+      } else {
+        compact_width = crt_min_byte_width;
+        break;
+      }
     }
+    ++col_it;
   }
   if (!compact_width && (ra_exe_unit.groupby_exprs.size() != 1 || !ra_exe_unit.groupby_exprs.front())) {
     compact_width = crt_min_byte_width;
   }
   if (!compact_width) {
+    col_it = ra_exe_unit.input_col_descs.begin();
+    std::advance(col_it, ra_exe_unit.groupby_exprs.size());
     for (const auto target : ra_exe_unit.target_exprs) {
       const auto& ti = target->get_type_info();
       const auto agg = dynamic_cast<const Analyzer::AggExpr*>(target);
@@ -1096,17 +1115,32 @@ int8_t pick_target_compact_width(const RelAlgExecutionUnit& ra_exe_unit,
         compact_width = crt_min_byte_width;
         break;
       }
+
       if (agg) {
         CHECK_EQ(kCOUNT, agg->get_aggtype());
         CHECK(!agg->get_is_distinct());
+        ++col_it;
         continue;
       }
-      if (ti.get_type() == kINT || (ti.is_string() && ti.get_compression() == kENCODING_DICT)) {
+
+      if (is_int_and_no_bigger_than(ti, 4) || (ti.is_string() && ti.get_compression() == kENCODING_DICT)) {
+        ++col_it;
         continue;
-      } else {
-        compact_width = crt_min_byte_width;
-        break;
       }
+
+      const auto uoper = dynamic_cast<Analyzer::UOper*>(target);
+      if (uoper && uoper->get_optype() == kUNNEST && col_it->getColId() == unnest_array_col_id) {
+        const auto arg_ti = uoper->get_operand()->get_type_info();
+        CHECK(arg_ti.is_array());
+        const auto& elem_ti = arg_ti.get_elem_type();
+        if (elem_ti.is_string() && elem_ti.get_compression() == kENCODING_DICT) {
+          ++col_it;
+          continue;
+        }
+      }
+
+      compact_width = crt_min_byte_width;
+      break;
     }
   }
   if (!compact_width) {
@@ -1114,7 +1148,10 @@ int8_t pick_target_compact_width(const RelAlgExecutionUnit& ra_exe_unit,
     for (const auto& query_info : query_infos) {
       total_tuples += query_info.numTuples;
     }
-    return total_tuples <= static_cast<size_t>(std::numeric_limits<uint32_t>::max()) ? 4 : crt_min_byte_width;
+    return total_tuples <= static_cast<size_t>(std::numeric_limits<uint32_t>::max()) ||
+                   unnest_array_col_id != std::numeric_limits<int>::min()
+               ? 4
+               : crt_min_byte_width;
   } else {
     // TODO(miyu): relax this condition to allow more cases just w/o padding
     for (auto wid : get_col_byte_widths(ra_exe_unit.target_exprs)) {
