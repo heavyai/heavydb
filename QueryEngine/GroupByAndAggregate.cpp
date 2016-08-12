@@ -331,21 +331,23 @@ int64_t QueryExecutionContext::allocateCountDistinctSet() {
   return reinterpret_cast<int64_t>(count_distinct_set);
 }
 
-ResultRows QueryExecutionContext::getRowSet(const std::vector<Analyzer::Expr*>& targets,
+ResultRows QueryExecutionContext::getRowSet(const RelAlgExecutionUnit& ra_exe_unit,
                                             const QueryMemoryDescriptor& query_mem_desc,
                                             const bool was_auto_device) const noexcept {
   std::vector<std::pair<ResultRows, std::vector<size_t>>> results_per_sm;
   CHECK_EQ(num_buffers_, group_by_buffers_.size());
   if (device_type_ == ExecutorDeviceType::CPU) {
     CHECK_EQ(size_t(1), num_buffers_);
-    return groupBufferToResults(0, targets, was_auto_device);
+    return groupBufferToResults(0, ra_exe_unit.target_exprs, was_auto_device);
   }
   size_t step{query_mem_desc_.threadsShareMemory() ? executor_->blockSize() : 1};
   for (size_t i = 0; i < group_by_buffers_.size(); i += step) {
-    results_per_sm.emplace_back(groupBufferToResults(i, targets, was_auto_device), std::vector<size_t>{});
+    results_per_sm.emplace_back(groupBufferToResults(i, ra_exe_unit.target_exprs, was_auto_device),
+                                std::vector<size_t>{});
   }
   CHECK(device_type_ == ExecutorDeviceType::GPU);
-  return executor_->reduceMultiDeviceResults(results_per_sm, row_set_mem_owner_, query_mem_desc, output_columnar_);
+  return executor_->reduceMultiDeviceResults(
+      ra_exe_unit, results_per_sm, row_set_mem_owner_, query_mem_desc, output_columnar_);
 }
 
 bool QueryExecutionContext::isEmptyBin(const int64_t* group_by_buffer, const size_t bin, const size_t key_idx) const {
@@ -499,7 +501,8 @@ GpuQueryMemory QueryExecutionContext::prepareGroupByDevBuffer(Data_Namespace::Da
 }
 #endif
 
-std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const std::vector<void*>& cu_functions,
+std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const RelAlgExecutionUnit& ra_exe_unit,
+                                                           const std::vector<void*>& cu_functions,
                                                            const bool hoist_literals,
                                                            const std::vector<int8_t>& literal_buff,
                                                            std::vector<std::vector<const int8_t*>> col_buffers,
@@ -1063,7 +1066,8 @@ GroupByAndAggregate::GroupByAndAggregate(Executor* executor,
     }
   }
   bool sort_on_gpu_hint = device_type == ExecutorDeviceType::GPU && allow_multifrag &&
-                          !ra_exe_unit.order_entries.empty() && gpuCanHandleOrderEntries(ra_exe_unit.order_entries);
+                          !ra_exe_unit.sort_info.order_entries.empty() &&
+                          gpuCanHandleOrderEntries(ra_exe_unit.sort_info.order_entries);
   initQueryMemoryDescriptor(allow_multifrag,
                             max_groups_buffer_entry_count,
                             small_groups_buffer_entry_count,
@@ -1076,7 +1080,7 @@ GroupByAndAggregate::GroupByAndAggregate(Executor* executor,
   }
   query_mem_desc_.sort_on_gpu_ =
       sort_on_gpu_hint && query_mem_desc_.canOutputColumnar() && !query_mem_desc_.keyless_hash;
-  query_mem_desc_.is_sort_plan = !ra_exe_unit.order_entries.empty() && !query_mem_desc_.sort_on_gpu_;
+  query_mem_desc_.is_sort_plan = !ra_exe_unit.sort_info.order_entries.empty() && !query_mem_desc_.sort_on_gpu_;
   output_columnar_ = (output_columnar_hint && query_mem_desc_.canOutputColumnar()) || query_mem_desc_.sortOnGpu();
   query_mem_desc_.output_columnar = output_columnar_;
 }

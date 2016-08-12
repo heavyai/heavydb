@@ -90,15 +90,15 @@ class RelAlgExecutor {
                               const ExecutionOptions& eo,
                               const int64_t queue_time_ms);
 
-  WorkUnit createWorkUnit(const RelAlgNode*, const std::list<Analyzer::OrderEntry>&);
+  WorkUnit createWorkUnit(const RelAlgNode*, const SortInfo&);
 
-  WorkUnit createCompoundWorkUnit(const RelCompound*, const std::list<Analyzer::OrderEntry>&);
+  WorkUnit createCompoundWorkUnit(const RelCompound*, const SortInfo&);
 
-  WorkUnit createAggregateWorkUnit(const RelAggregate*, const std::list<Analyzer::OrderEntry>&);
+  WorkUnit createAggregateWorkUnit(const RelAggregate*, const SortInfo&);
 
-  WorkUnit createProjectWorkUnit(const RelProject*, const std::list<Analyzer::OrderEntry>&);
+  WorkUnit createProjectWorkUnit(const RelProject*, const SortInfo&);
 
-  WorkUnit createFilterWorkUnit(const RelFilter*, const std::list<Analyzer::OrderEntry>&);
+  WorkUnit createFilterWorkUnit(const RelFilter*, const SortInfo&);
 
   void addTemporaryTable(const int table_id, const ResultRows* rows) {
     CHECK_LT(table_id, 0);

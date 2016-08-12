@@ -173,6 +173,15 @@ class CompilationRetryNoCompaction : public std::runtime_error {
   CompilationRetryNoCompaction() : std::runtime_error("CompilationRetryNoCompaction") {}
 };
 
+enum class SortAlgorithm { Default, SpeculativeTopN };
+
+struct SortInfo {
+  const std::list<Analyzer::OrderEntry> order_entries;
+  const SortAlgorithm algorithm;
+  const size_t limit;
+  const size_t offset;
+};
+
 struct RelAlgExecutionUnit {
   const std::vector<InputDescriptor> input_descs;
   const std::list<InputColDescriptor> input_col_descs;
@@ -183,7 +192,7 @@ struct RelAlgExecutionUnit {
   const std::list<std::shared_ptr<Analyzer::Expr>> outer_join_quals;
   const std::list<std::shared_ptr<Analyzer::Expr>> groupby_exprs;
   const std::vector<Analyzer::Expr*> target_exprs;
-  const std::list<Analyzer::OrderEntry> order_entries;
+  const SortInfo sort_info;
   const size_t scan_limit;
 };
 
@@ -592,11 +601,10 @@ class Executor {
                              const bool just_explain,
                              const bool allow_loop_joins);
 
-  int32_t executePlanWithGroupBy(const CompilationResult&,
+  int32_t executePlanWithGroupBy(const RelAlgExecutionUnit& ra_exe_unit,
+                                 const CompilationResult&,
                                  const bool hoist_literals,
                                  ResultRows& results,
-                                 const std::vector<Analyzer::Expr*>& target_exprs,
-                                 const size_t group_by_col_count,
                                  const ExecutorDeviceType device_type,
                                  std::vector<std::vector<const int8_t*>>& col_buffers,
                                  const QueryExecutionContext*,
@@ -609,7 +617,8 @@ class Executor {
                                  const uint32_t start_rowid,
                                  const uint32_t num_tables,
                                  RenderAllocatorMap* render_allocator_map) noexcept;
-  int32_t executePlanWithoutGroupBy(const CompilationResult&,
+  int32_t executePlanWithoutGroupBy(const RelAlgExecutionUnit& ra_exe_unit,
+                                    const CompilationResult&,
                                     const bool hoist_literals,
                                     ResultRows& results,
                                     const std::vector<Analyzer::Expr*>& target_exprs,
@@ -631,7 +640,8 @@ class Executor {
                                             const size_t out_vec_sz,
                                             const bool is_group_by);
   int64_t getJoinHashTablePtr(const ExecutorDeviceType device_type, const int device_id);
-  ResultRows reduceMultiDeviceResults(std::vector<std::pair<ResultRows, std::vector<size_t>>>& all_fragment_results,
+  ResultRows reduceMultiDeviceResults(const RelAlgExecutionUnit&,
+                                      std::vector<std::pair<ResultRows, std::vector<size_t>>>& all_fragment_results,
                                       std::shared_ptr<RowSetMemoryOwner>,
                                       const QueryMemoryDescriptor&,
                                       const bool output_columnar) const;
