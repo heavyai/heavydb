@@ -655,7 +655,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createSortInputWorkUnit(const RelSort* 
   const size_t scan_limit = sort->collationCount() ? 0 : get_scan_limit(source, limit);
   const size_t scan_total_limit = scan_limit ? get_scan_limit(source, scan_limit + offset) : 0;
   size_t max_groups_buffer_entry_guess{scan_total_limit ? scan_total_limit : max_groups_buffer_entry_default_guess};
-  SortAlgorithm sort_algorithm{SortAlgorithm::Default};
+  SortAlgorithm sort_algorithm{SortAlgorithm::SpeculativeTopN};
   const auto order_entries = get_order_entries(sort);
   SortInfo sort_info{order_entries, sort_algorithm, limit, offset};
   auto source_work_unit = createWorkUnit(source, sort_info);
