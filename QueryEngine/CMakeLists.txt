@@ -35,6 +35,7 @@ set(query_engine_source_files
     ResultSetReduction.cpp
     RuntimeFunctions.cpp
     RuntimeFunctions.bc
+    SpeculativeTopN.cpp
     StringFunctions.cpp
     RegexpFunctions.cpp
     JoinHashTable.cpp

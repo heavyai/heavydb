@@ -17,6 +17,7 @@
 #include "QueryTemplateGenerator.h"
 #include "QueryRewrite.h"
 #include "RuntimeFunctions.h"
+#include "SpeculativeTopN.h"
 
 #include "CudaMgr/CudaMgr.h"
 #include "DataMgr/BufferMgr/BufferMgr.h"
@@ -2910,6 +2911,26 @@ ResultRows Executor::reduceMultiDeviceResults(
   return reduced_results;
 }
 
+ResultRows Executor::reduceSpeculativeTopN(const RelAlgExecutionUnit& ra_exe_unit,
+                                           std::vector<std::pair<ResultRows, std::vector<size_t>>>& results_per_device,
+                                           std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+                                           const QueryMemoryDescriptor& query_mem_desc) const {
+  if (results_per_device.size() == 1) {
+    return results_per_device.front().first;
+  }
+  const auto top_n = ra_exe_unit.sort_info.limit + ra_exe_unit.sort_info.offset;
+  SpeculativeTopNMap m;
+  for (const auto& result : results_per_device) {
+    SpeculativeTopNMap that(result.first,
+                            ra_exe_unit.target_exprs,
+                            std::max(size_t(10000 * std::max(1, static_cast<int>(log(top_n)))), top_n));
+    m.reduce(that);
+  }
+  CHECK_EQ(size_t(1), ra_exe_unit.sort_info.order_entries.size());
+  const auto desc = ra_exe_unit.sort_info.order_entries.front().is_desc;
+  return m.asRows(ra_exe_unit, row_set_mem_owner, query_mem_desc, plan_state_->init_agg_vals_, this, top_n, desc);
+}
+
 namespace {
 
 std::vector<std::string> get_agg_fnames(const std::vector<Analyzer::Expr*>& target_exprs, const bool is_group_by) {
@@ -3858,22 +3879,24 @@ ResultRows Executor::collectAllDeviceResults(ExecutionDispatch& execution_dispat
                                              const QueryMemoryDescriptor& query_mem_desc,
                                              std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                                              const bool output_columnar) {
+  const auto& ra_exe_unit = execution_dispatch.getExecutionUnit();
   for (const auto& query_exe_context : execution_dispatch.getQueryContexts()) {
     if (!query_exe_context) {
       continue;
     }
     execution_dispatch.getFragmentResults().emplace_back(
-        query_exe_context->getRowSet(execution_dispatch.getExecutionUnit(),
-                                     query_mem_desc,
-                                     execution_dispatch.getDeviceType() == ExecutorDeviceType::Hybrid),
+        query_exe_context->getRowSet(
+            ra_exe_unit, query_mem_desc, execution_dispatch.getDeviceType() == ExecutorDeviceType::Hybrid),
         std::vector<size_t>{});
   }
   auto& result_per_device = execution_dispatch.getFragmentResults();
   if (result_per_device.empty() && query_mem_desc.hash_type == GroupByColRangeType::Scan) {
     return build_row_for_empty_input(target_exprs, query_mem_desc);
   }
-  return reduceMultiDeviceResults(
-      execution_dispatch.getExecutionUnit(), result_per_device, row_set_mem_owner, query_mem_desc, output_columnar);
+  if (query_mem_desc.sortOnGpu() && ra_exe_unit.sort_info.algorithm == SortAlgorithm::SpeculativeTopN) {
+    return reduceSpeculativeTopN(ra_exe_unit, result_per_device, row_set_mem_owner, query_mem_desc);
+  }
+  return reduceMultiDeviceResults(ra_exe_unit, result_per_device, row_set_mem_owner, query_mem_desc, output_columnar);
 }
 
 void Executor::dispatchFragments(const std::function<void(const ExecutorDeviceType chosen_device_type,

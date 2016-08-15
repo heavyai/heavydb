@@ -645,6 +645,10 @@ class Executor {
                                       std::shared_ptr<RowSetMemoryOwner>,
                                       const QueryMemoryDescriptor&,
                                       const bool output_columnar) const;
+  ResultRows reduceSpeculativeTopN(const RelAlgExecutionUnit&,
+                                   std::vector<std::pair<ResultRows, std::vector<size_t>>>& all_fragment_results,
+                                   std::shared_ptr<RowSetMemoryOwner>,
+                                   const QueryMemoryDescriptor&) const;
   void executeSimpleInsert(const Planner::RootPlan* root_plan);
 
   CompilationResult compileWorkUnit(const bool render_output,
