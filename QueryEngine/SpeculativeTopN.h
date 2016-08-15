@@ -31,9 +31,9 @@ struct SpeculativeTopNEntry {
 };
 
 class Executor;
-class QueryMemoryDescriptor;
+struct QueryMemoryDescriptor;
 class ResultRows;
-class RelAlgExecutionUnit;
+struct RelAlgExecutionUnit;
 class RowSetMemoryOwner;
 namespace Analyzer {
 class Expr;
@@ -63,6 +63,15 @@ class SpeculativeTopNMap {
 class SpeculativeTopNFailed : public std::runtime_error {
  public:
   SpeculativeTopNFailed() : std::runtime_error("SpeculativeTopNFailed"){};
+};
+
+class SpeculativeTopNBlacklist {
+ public:
+  void add(const std::shared_ptr<Analyzer::Expr>);
+  bool contains(const std::shared_ptr<Analyzer::Expr>) const;
+
+ private:
+  std::vector<std::shared_ptr<Analyzer::Expr>> blacklist_;
 };
 
 #endif  // QUERYENGINE_SPECULATIVETOPN_H

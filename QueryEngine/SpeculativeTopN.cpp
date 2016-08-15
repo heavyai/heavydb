@@ -112,3 +112,19 @@ ResultRows SpeculativeTopNMap::asRows(const RelAlgExecutionUnit& ra_exe_unit,
   }
   return result;
 }
+
+void SpeculativeTopNBlacklist::add(const std::shared_ptr<Analyzer::Expr> expr) {
+  for (const auto e : blacklist_) {
+    CHECK(!(*e == *expr));
+  }
+  blacklist_.push_back(expr);
+}
+
+bool SpeculativeTopNBlacklist::contains(const std::shared_ptr<Analyzer::Expr> expr) const {
+  for (const auto e : blacklist_) {
+    if (*e == *expr) {
+      return true;
+    }
+  }
+  return false;
+}
