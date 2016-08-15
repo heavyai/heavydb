@@ -608,6 +608,16 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const RelAlgExecution
       }
     }
     if (!render_allocator) {
+      if (query_mem_desc_.sortOnGpu() && ra_exe_unit.sort_info.algorithm == SortAlgorithm::SpeculativeTopN) {
+        size_t max_entry_size{0};
+        for (const auto& wid : query_mem_desc_.agg_col_widths) {
+          max_entry_size = std::max(max_entry_size, size_t(wid.compact));
+        }
+        const size_t num_bytes{query_mem_desc_.entry_count * max_entry_size};
+        auto scratch_ab = alloc_gpu_abstract_buffer(data_mgr, num_bytes, device_id);
+        auto tmp_buff = reinterpret_cast<int64_t*>(scratch_ab->getMemoryPtr());
+        ResultRows::inplaceSortGpuImpl(ra_exe_unit.sort_info.order_entries, query_mem_desc_, gpu_query_mem, tmp_buff);
+      }
       copy_group_by_buffers_from_gpu(data_mgr,
                                      this,
                                      gpu_query_mem,

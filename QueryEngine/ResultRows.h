@@ -503,6 +503,8 @@ inline TargetInfo target_info(const PointerType target_expr) {
           is_distinct};
 }
 
+struct GpuQueryMemory;
+
 class ResultRows {
  public:
   ResultRows(const QueryMemoryDescriptor& query_mem_desc,
@@ -738,6 +740,11 @@ class ResultRows {
   bool isInPlace() const { return in_place_; }
 
   void setQueueTime(int64_t queue_time) { queue_time_ms_ = queue_time; }
+
+  static void inplaceSortGpuImpl(const std::list<Analyzer::OrderEntry>&,
+                                 const QueryMemoryDescriptor&,
+                                 const GpuQueryMemory&,
+                                 int64_t*);
 
  private:
   void reduceSingleColumn(int8_t* crt_val_i1,
