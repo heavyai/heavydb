@@ -5,6 +5,7 @@
 #include "Execute.h"
 #include "QueryRewrite.h"
 #include "RelAlgExecutionDescriptor.h"
+#include "SpeculativeTopN.h"
 
 #include <ctime>
 
@@ -113,6 +114,7 @@ class RelAlgExecutor {
   TemporaryTables temporary_tables_;
   time_t now_;
   std::vector<std::shared_ptr<Analyzer::Expr>> target_exprs_owned_;  // TODO(alex): remove
+  static SpeculativeTopNBlacklist speculative_topn_blacklist_;
   static const size_t max_groups_buffer_entry_default_guess{16384};
 };
 

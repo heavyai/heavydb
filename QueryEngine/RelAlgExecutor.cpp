@@ -549,28 +549,40 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
   const auto compound = dynamic_cast<const RelCompound*>(source);
   const auto aggregate = dynamic_cast<const RelAggregate*>(source);
   const bool is_aggregate = ((compound && compound->isAggregate()) || aggregate);
-  const auto source_work_unit = createSortInputWorkUnit(sort);
-  auto source_result =
-      executeWorkUnit(source_work_unit, source->getOutputMetainfo(), is_aggregate, co, eo, render_info, queue_time_ms);
-  if (render_info.is_render) {
-    return source_result;
-  }
-  auto rows_to_sort = source_result.getRows();
-  if (eo.just_explain) {
-    return {rows_to_sort, {}};
-  }
-  const size_t limit = sort->getLimit();
-  const size_t offset = sort->getOffset();
-  if (sort->collationCount() != 0 && source_work_unit.exe_unit.sort_info.algorithm != SortAlgorithm::SpeculativeTopN) {
-    rows_to_sort.sort(source_work_unit.exe_unit.sort_info.order_entries, false, limit + offset);
-  }
-  if (limit || offset) {
-    rows_to_sort.dropFirstN(offset);
-    if (limit) {
-      rows_to_sort.keepFirstN(limit);
+  while (true) {
+    std::list<std::shared_ptr<Analyzer::Expr>> groupby_exprs;
+    try {
+      const auto source_work_unit = createSortInputWorkUnit(sort);
+      groupby_exprs = source_work_unit.exe_unit.groupby_exprs;
+      auto source_result = executeWorkUnit(
+          source_work_unit, source->getOutputMetainfo(), is_aggregate, co, eo, render_info, queue_time_ms);
+      if (render_info.is_render) {
+        return source_result;
+      }
+      auto rows_to_sort = source_result.getRows();
+      if (eo.just_explain) {
+        return {rows_to_sort, {}};
+      }
+      const size_t limit = sort->getLimit();
+      const size_t offset = sort->getOffset();
+      if (sort->collationCount() != 0 &&
+          source_work_unit.exe_unit.sort_info.algorithm != SortAlgorithm::SpeculativeTopN) {
+        rows_to_sort.sort(source_work_unit.exe_unit.sort_info.order_entries, false, limit + offset);
+      }
+      if (limit || offset) {
+        rows_to_sort.dropFirstN(offset);
+        if (limit) {
+          rows_to_sort.keepFirstN(limit);
+        }
+      }
+      return {rows_to_sort, source_result.getTargetsMeta()};
+    } catch (const SpeculativeTopNFailed&) {
+      CHECK_EQ(size_t(1), groupby_exprs.size());
+      speculative_topn_blacklist_.add(groupby_exprs.front());
     }
   }
-  return {rows_to_sort, source_result.getTargetsMeta()};
+  CHECK(false);
+  return {ResultRows({}, {}, nullptr, nullptr, {}, co.device_type_), {}};
 }
 
 RelAlgExecutor::WorkUnit RelAlgExecutor::createSortInputWorkUnit(const RelSort* sort) {
@@ -580,9 +592,15 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createSortInputWorkUnit(const RelSort* 
   const size_t scan_limit = sort->collationCount() ? 0 : get_scan_limit(source, limit);
   const size_t scan_total_limit = scan_limit ? get_scan_limit(source, scan_limit + offset) : 0;
   size_t max_groups_buffer_entry_guess{scan_total_limit ? scan_total_limit : max_groups_buffer_entry_default_guess};
-  auto source_work_unit = createWorkUnit(source, {get_order_entries(sort), SortAlgorithm::Default, limit, offset});
-  sort->setOutputMetainfo(source->getOutputMetainfo());
+  SortAlgorithm sort_algorithm{SortAlgorithm::Default};
+  SortInfo sort_info{get_order_entries(sort), sort_algorithm, limit, offset};
+  auto source_work_unit = createWorkUnit(source, sort_info);
   const auto& source_exe_unit = source_work_unit.exe_unit;
+  if (source_exe_unit.groupby_exprs.size() == 1 && source_exe_unit.groupby_exprs.front() &&
+      speculative_topn_blacklist_.contains(source_exe_unit.groupby_exprs.front())) {
+    sort_algorithm = SortAlgorithm::Default;
+  }
+  sort->setOutputMetainfo(source->getOutputMetainfo());
   return {{source_exe_unit.input_descs,
            source_exe_unit.input_col_descs,
            source_exe_unit.simple_quals,
@@ -592,7 +610,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createSortInputWorkUnit(const RelSort* 
            source_exe_unit.outer_join_quals,
            source_exe_unit.groupby_exprs,
            source_exe_unit.target_exprs,
-           source_exe_unit.sort_info,
+           {sort_info.order_entries, sort_algorithm, limit, offset},
            scan_total_limit},
           max_groups_buffer_entry_guess,
           std::move(source_work_unit.query_rewriter)};
@@ -991,5 +1009,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createFilterWorkUnit(const RelFilter* f
           max_groups_buffer_entry_default_guess,
           nullptr};
 }
+
+SpeculativeTopNBlacklist RelAlgExecutor::speculative_topn_blacklist_;
 
 #endif  // HAVE_CALCITE
