@@ -128,3 +128,8 @@ bool SpeculativeTopNBlacklist::contains(const std::shared_ptr<Analyzer::Expr> ex
   }
   return false;
 }
+
+bool use_speculative_top_n(const RelAlgExecutionUnit& ra_exe_unit, const QueryMemoryDescriptor& query_mem_desc) {
+  return query_mem_desc.sortOnGpu() && ra_exe_unit.sort_info.limit &&
+         ra_exe_unit.sort_info.algorithm == SortAlgorithm::SpeculativeTopN;
+}

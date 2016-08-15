@@ -74,4 +74,6 @@ class SpeculativeTopNBlacklist {
   std::vector<std::shared_ptr<Analyzer::Expr>> blacklist_;
 };
 
+bool use_speculative_top_n(const RelAlgExecutionUnit&, const QueryMemoryDescriptor&);
+
 #endif  // QUERYENGINE_SPECULATIVETOPN_H

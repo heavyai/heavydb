@@ -741,6 +741,8 @@ class ResultRows {
 
   void setQueueTime(int64_t queue_time) { queue_time_ms_ = queue_time; }
 
+  const QueryMemoryDescriptor& getQueryMemDesc() const { return query_mem_desc_; }
+
   static void inplaceSortGpuImpl(const std::list<Analyzer::OrderEntry>&,
                                  const QueryMemoryDescriptor&,
                                  const GpuQueryMemory&,

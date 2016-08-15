@@ -566,7 +566,7 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
       const size_t limit = sort->getLimit();
       const size_t offset = sort->getOffset();
       if (sort->collationCount() != 0 &&
-          source_work_unit.exe_unit.sort_info.algorithm != SortAlgorithm::SpeculativeTopN) {
+          !use_speculative_top_n(source_work_unit.exe_unit, rows_to_sort.getQueryMemDesc())) {
         rows_to_sort.sort(source_work_unit.exe_unit.sort_info.order_entries, false, limit + offset);
       }
       if (limit || offset) {

@@ -3893,7 +3893,7 @@ ResultRows Executor::collectAllDeviceResults(ExecutionDispatch& execution_dispat
   if (result_per_device.empty() && query_mem_desc.hash_type == GroupByColRangeType::Scan) {
     return build_row_for_empty_input(target_exprs, query_mem_desc);
   }
-  if (query_mem_desc.sortOnGpu() && ra_exe_unit.sort_info.algorithm == SortAlgorithm::SpeculativeTopN) {
+  if (use_speculative_top_n(ra_exe_unit, query_mem_desc)) {
     return reduceSpeculativeTopN(ra_exe_unit, result_per_device, row_set_mem_owner, query_mem_desc);
   }
   return reduceMultiDeviceResults(ra_exe_unit, result_per_device, row_set_mem_owner, query_mem_desc, output_columnar);

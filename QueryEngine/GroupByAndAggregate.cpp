@@ -11,6 +11,7 @@
 #include "QueryTemplateGenerator.h"
 #include "ResultRows.h"
 #include "RuntimeFunctions.h"
+#include "SpeculativeTopN.h"
 #include "../CudaMgr/CudaMgr.h"
 #include "../Shared/checked_alloc.h"
 #include "../Utils/ChunkIter.h"
@@ -608,7 +609,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const RelAlgExecution
       }
     }
     if (!render_allocator) {
-      if (query_mem_desc_.sortOnGpu() && ra_exe_unit.sort_info.algorithm == SortAlgorithm::SpeculativeTopN) {
+      if (use_speculative_top_n(ra_exe_unit, query_mem_desc_)) {
         size_t max_entry_size{0};
         for (const auto& wid : query_mem_desc_.agg_col_widths) {
           max_entry_size = std::max(max_entry_size, size_t(wid.compact));
