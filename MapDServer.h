@@ -132,6 +132,10 @@ inline std::string thrift_to_name(const TTypeInfo& ti) {
   const auto type = thrift_to_type(ti.type);
   auto internal_ti =
       SQLTypeInfo(ti.is_array ? kARRAY : type, 0, 0, !ti.nullable, kENCODING_NONE, 0, ti.is_array ? type : kNULLT);
+  if (type == kDECIMAL || type == kNUMERIC) {
+    internal_ti.set_precision(ti.precision);
+    internal_ti.set_scale(ti.scale);
+  }
   return internal_ti.get_type_name();
 }
 

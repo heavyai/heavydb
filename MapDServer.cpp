@@ -516,6 +516,8 @@ class MapDHandler : virtual public MapDIf {
       col_type.col_type.nullable = !target_ti.get_notnull();
       col_type.col_type.is_array = target_ti.get_type() == kARRAY;
       col_type.col_name = target.get_resname();
+      col_type.col_type.precision = target_ti.get_precision();
+      col_type.col_type.scale = target_ti.get_scale();
       const auto it_ok = _return.insert(std::make_pair(col_type.col_name, col_type));
       CHECK(it_ok.second);
     }
@@ -537,6 +539,8 @@ class MapDHandler : virtual public MapDIf {
       col_type.col_type.nullable = !target_ti.get_notnull();
       col_type.col_type.is_array = target_ti.get_type() == kARRAY;
       col_type.col_name = target->get_resname();
+      col_type.col_type.precision = target_ti.get_precision();
+      col_type.col_type.scale = target_ti.get_scale();
       const auto it_ok = _return.insert(std::make_pair(col_type.col_name, col_type));
       if (!it_ok.second) {
         TMapDException ex;
@@ -618,6 +622,31 @@ class MapDHandler : virtual public MapDIf {
     }
   }
 
+  TColumnType populateThriftColumnType(const Catalog_Namespace::Catalog& cat, const ColumnDescriptor* cd) {
+    TColumnType col_type;
+    col_type.col_name = cd->columnName;
+    col_type.col_type.type = type_to_thrift(cd->columnType);
+    col_type.col_type.encoding = encoding_to_thrift(cd->columnType);
+    col_type.col_type.nullable = !cd->columnType.get_notnull();
+    col_type.col_type.is_array = cd->columnType.get_type() == kARRAY;
+    col_type.col_type.precision = cd->columnType.get_precision();
+    col_type.col_type.scale = cd->columnType.get_scale();
+    if (cd->columnType.get_compression() == EncodingType::kENCODING_DICT) {
+      // have to get the actual size of the encoding from the dictionary definition
+      auto dd = cat.getMetadataForDict(cd->columnType.get_comp_param());
+      if (!dd) {
+        TMapDException ex;
+        ex.error_msg = "Dictionary doesn't exist";
+        LOG(ERROR) << ex.error_msg;
+        throw ex;
+      }
+      col_type.col_type.comp_param = dd->dictNBits;
+    } else {
+      col_type.col_type.comp_param = cd->columnType.get_comp_param();
+    }
+    return col_type;
+  }
+
   void get_table_descriptor(TTableDescriptor& _return, const TSessionId session, const std::string& table_name) {
     const auto session_info = get_session(session);
     auto& cat = session_info.get_catalog();
@@ -630,12 +659,7 @@ class MapDHandler : virtual public MapDIf {
     }
     const auto col_descriptors = cat.getAllColumnMetadataForTable(td->tableId, false, true);
     for (const auto cd : col_descriptors) {
-      TColumnType col_type;
-      col_type.col_type.type = type_to_thrift(cd->columnType);
-      col_type.col_type.encoding = encoding_to_thrift(cd->columnType);
-      col_type.col_type.nullable = !cd->columnType.get_notnull();
-      col_type.col_type.is_array = cd->columnType.get_type() == kARRAY;
-      _return.insert(std::make_pair(cd->columnName, col_type));
+      _return.insert(std::make_pair(cd->columnName, populateThriftColumnType(cat, cd)));
     }
   }
 
@@ -651,13 +675,7 @@ class MapDHandler : virtual public MapDIf {
     }
     const auto col_descriptors = cat.getAllColumnMetadataForTable(td->tableId, false, true);
     for (const auto cd : col_descriptors) {
-      TColumnType col_type;
-      col_type.col_name = cd->columnName;
-      col_type.col_type.type = type_to_thrift(cd->columnType);
-      col_type.col_type.encoding = encoding_to_thrift(cd->columnType);
-      col_type.col_type.nullable = !cd->columnType.get_notnull();
-      col_type.col_type.is_array = cd->columnType.get_type() == kARRAY;
-      _return.push_back(col_type);
+      _return.push_back(populateThriftColumnType(cat, cd));
     }
   }
 
@@ -1592,6 +1610,8 @@ class MapDHandler : virtual public MapDIf {
         proj_info.col_type.encoding = encoding_to_thrift(target_ti);
         proj_info.col_type.nullable = !target_ti.get_notnull();
         proj_info.col_type.is_array = target_ti.get_type() == kARRAY;
+        proj_info.col_type.precision = target_ti.get_precision();
+        proj_info.col_type.scale = target_ti.get_scale();
         _return.row_set.row_desc.push_back(proj_info);
         ++i;
       }

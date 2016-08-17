@@ -59,7 +59,7 @@ public class MapDCatalogReader implements Prepare.CatalogReader {
   private final boolean elideRecord = true;
   private RelDataType addressType;
   private boolean caseSensitive = false;
-  private final EnumMap<TDatumType, ArrayList<ArrayList<RelDataType>>> mapDTypes;
+//  private final EnumMap<TDatumType, ArrayList<ArrayList<RelDataType>>> mapDTypes;
   private MapDUser currentMapDUser;
   private final String dataDir;
 
@@ -78,26 +78,26 @@ public class MapDCatalogReader implements Prepare.CatalogReader {
     this.typeFactory = typeFactory;
     this.dataDir = dataDir;
 
-    // add all the MapD datatype into this structure
-    // it is indexed with the TDatumType,  isArray , isNullable
-    mapDTypes = new EnumMap<TDatumType, ArrayList<ArrayList<RelDataType>>>(TDatumType.class);
-
-    for (TDatumType dType : TDatumType.values()) {
-      RelDataType cType = getRelDataType(dType);
-      ArrayList<ArrayList<RelDataType>> nullList = new ArrayList<ArrayList<RelDataType>>(2);
-      for (int nullable = 0; nullable < 2; nullable++) {
-        ArrayList<RelDataType> arrayList = new ArrayList<RelDataType>(2);
-        if (nullable == 0) {
-          arrayList.add(0, cType);                                              // regular type
-          arrayList.add(1, typeFactory.createArrayType(cType, -1));             // Array type
-        } else {
-          arrayList.add(0, typeFactory.createTypeWithNullability(cType, true)); // regular type nullable
-          arrayList.add(1, typeFactory.createArrayType(arrayList.get(0), -1));  // Array type nullable
-        }
-        nullList.add(nullable, arrayList);
-      }
-      mapDTypes.put(dType, nullList);
-    }
+//    // add all the MapD datatype into this structure
+//    // it is indexed with the TDatumType,  isArray , isNullable
+//    mapDTypes = new EnumMap<TDatumType, ArrayList<ArrayList<RelDataType>>>(TDatumType.class);
+//
+//    for (TDatumType dType : TDatumType.values()) {
+//      RelDataType cType = getRelDataType(dType, value.col_type.precision, value.col_type.scale);
+//      ArrayList<ArrayList<RelDataType>> nullList = new ArrayList<ArrayList<RelDataType>>(2);
+//      for (int nullable = 0; nullable < 2; nullable++) {
+//        ArrayList<RelDataType> arrayList = new ArrayList<RelDataType>(2);
+//        if (nullable == 0) {
+//          arrayList.add(0, cType);                                              // regular type
+//          arrayList.add(1, typeFactory.createArrayType(cType, -1));             // Array type
+//        } else {
+//          arrayList.add(0, typeFactory.createTypeWithNullability(cType, true)); // regular type nullable
+//          arrayList.add(1, typeFactory.createArrayType(arrayList.get(0), -1));  // Array type nullable
+//        }
+//        nullList.add(nullable, arrayList);
+//      }
+//      mapDTypes.put(dType, nullList);
+//    }
 
     addDefaultTestSchemas();
   }
@@ -132,11 +132,15 @@ public class MapDCatalogReader implements Prepare.CatalogReader {
                 + " \t" + value.getCol_type().getFieldValue(TTypeInfo._Fields.TYPE)
                 + " \t" + value.getCol_type().nullable
                 + " \t" + value.getCol_type().is_array
+                + " \t" + value.getCol_type().precision
+                + " \t" + value.getCol_type().scale
         );
 
-        mtable.addColumn(entry.getKey(), mapDTypes.get(value.getCol_type().type)
-                .get(value.getCol_type().nullable ? 1 : 0)
-                .get(value.getCol_type().is_array ? 1 : 0));
+        mtable.addColumn(entry.getKey(), createType(value));
+
+//        mtable.addColumn(entry.getKey(), mapDTypes.get(value.getCol_type().type)
+ //               .get(value.getCol_type().nullable ? 1 : 0)
+  //              .get(value.getCol_type().is_array ? 1 : 0));
 
       }
       registerTable(mtable);
@@ -152,6 +156,7 @@ public class MapDCatalogReader implements Prepare.CatalogReader {
    */
   private MapDCatalogReader addDefaultTestSchemas() {
 
+    final RelDataType decimalType = typeFactory.createSqlType(SqlTypeName.DECIMAL, 16, 14);
     final RelDataType intType
             = typeFactory.createSqlType(SqlTypeName.INTEGER);
     final RelDataType intTypeNull
@@ -485,7 +490,7 @@ public class MapDCatalogReader implements Prepare.CatalogReader {
   // Convert our TDataumn type in to a base calcite SqlType
   // todo confirm whether it is ok to ignore thinsg like lengths
   // since we do not use them on the validator side of the calcite 'fence'
-  private RelDataType getRelDataType(TDatumType dType) {
+  private RelDataType getRelDataType(TDatumType dType, int precision, int scale) {
 
     switch (dType) {
       case SMALLINT:
@@ -497,7 +502,7 @@ public class MapDCatalogReader implements Prepare.CatalogReader {
       case FLOAT:
         return typeFactory.createSqlType(SqlTypeName.FLOAT);
       case DECIMAL:
-        return typeFactory.createSqlType(SqlTypeName.DECIMAL);
+        return typeFactory.createSqlType(SqlTypeName.DECIMAL, precision, scale);
       case DOUBLE:
         return typeFactory.createSqlType(SqlTypeName.DOUBLE);
       case STR:
@@ -536,6 +541,23 @@ public class MapDCatalogReader implements Prepare.CatalogReader {
       } else {
          MAPDLOGGER.debug("removing schema "+ schema.toUpperCase() + " table " + table.toUpperCase());
         MAPD_TABLES.remove(ImmutableList.of(DEFAULT_CATALOG, schema.toUpperCase(), table.toUpperCase()));
+      }
+    }
+  }
+
+  private RelDataType createType(TColumnType value) {
+    RelDataType cType = getRelDataType(value.col_type.type, value.col_type.precision, value.col_type.scale);
+    if (value.col_type.is_array){
+      if (value.col_type.isNullable()){
+        return typeFactory.createArrayType(typeFactory.createTypeWithNullability(cType, true), -1);
+      } else {
+        return typeFactory.createArrayType(cType, -1);
+      }
+    } else {
+      if (value.col_type.isNullable()){
+        return typeFactory.createTypeWithNullability(cType, true);
+      } else {
+       return  cType;
       }
     }
   }

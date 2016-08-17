@@ -166,6 +166,8 @@ public class MetaConnect {
         tti.nullable = !isNotNull;
         tti.encoding = TEncodingType.NONE;
         tti.type = tdt;
+        tti.scale = colScale;
+        tti.precision = colDim;
 
         tct.col_name = colName;
         tct.col_type = tti;

@@ -87,12 +87,13 @@ class MapDResultSetMetaData implements ResultSetMetaData {
 
   @Override
   public int getPrecision(int column) throws SQLException { //logger.debug("Entered "+ sql );
-    return 10;
+    logger.info("Precision is "+sqlResult.row_set.row_desc.get(column - 1).col_type.precision );
+    return sqlResult.row_set.row_desc.get(column - 1).col_type.precision;
   }
 
   @Override
   public int getScale(int column) throws SQLException { //logger.debug("Entered "+ sql );
-    return 0;
+    return sqlResult.row_set.row_desc.get(column - 1).col_type.scale;
   }
 
   @Override

@@ -203,7 +203,10 @@ class SQLTypeInfo {
   inline void set_comp_param(int p) { comp_param = p; }
 #ifndef __CUDACC__
   inline std::string get_type_name() const {
-    return (type == kARRAY) ? type_name[(int)subtype] + "[]" : type_name[(int)type];
+    std::string ps = (type == kDECIMAL || type == kNUMERIC || subtype == kDECIMAL || subtype == kNUMERIC)
+                         ? "(" + std::to_string(dimension) + "," + std::to_string(scale) + ")"
+                         : "";
+    return (type == kARRAY) ? type_name[(int)subtype] + ps + "[]" : type_name[(int)type] + ps;
   }
   inline std::string get_compression_name() const { return comp_name[(int)compression]; }
 #endif

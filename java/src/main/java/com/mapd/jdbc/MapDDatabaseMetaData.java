@@ -688,27 +688,18 @@ SQLException - if a database access error occurs
       throw new SQLException("get_tables failed " + ex.toString());
     }
 
+    TTypeInfo strTTI = new TTypeInfo(TDatumType.STR, TEncodingType.NONE, false, false, 0, 0, 0);
     TColumnType columns[] = {
-      new TColumnType("TABLE_CAT",
-        new TTypeInfo(TDatumType.STR, TEncodingType.NONE, false, false), false),
-      new TColumnType("TABLE_SCHEM",
-        new TTypeInfo(TDatumType.STR, TEncodingType.NONE, false, false), false),
-      new TColumnType("TABLE_NAME",
-        new TTypeInfo(TDatumType.STR, TEncodingType.NONE, false, false), false),
-      new TColumnType("TABLE_TYPE",
-        new TTypeInfo(TDatumType.STR, TEncodingType.NONE, false, false), false),
-      new TColumnType("REMARKS",
-        new TTypeInfo(TDatumType.STR, TEncodingType.NONE, false, false), false),
-      new TColumnType("TYPE_CAT",
-        new TTypeInfo(TDatumType.STR, TEncodingType.NONE, false, false), false),
-      new TColumnType("TYPE_SCHEM",
-        new TTypeInfo(TDatumType.STR, TEncodingType.NONE, false, false), false),
-      new TColumnType("TYPE_NAME",
-        new TTypeInfo(TDatumType.STR, TEncodingType.NONE, false, false), false),
-      new TColumnType("SELF_REFERENCING_COL_NAME",
-        new TTypeInfo(TDatumType.STR, TEncodingType.NONE, false, false), false),
-      new TColumnType("REF_GENERATION",
-        new TTypeInfo(TDatumType.STR, TEncodingType.NONE, false, false), false)
+      new TColumnType("TABLE_CAT", new TTypeInfo(strTTI), false),
+      new TColumnType("TABLE_SCHEM", new TTypeInfo(strTTI), false),
+      new TColumnType("TABLE_NAME", new TTypeInfo(strTTI), false),
+      new TColumnType("TABLE_TYPE", new TTypeInfo(strTTI), false),
+      new TColumnType("REMARKS", new TTypeInfo(strTTI), false),
+      new TColumnType("TYPE_CAT", new TTypeInfo(strTTI), false),
+      new TColumnType("TYPE_SCHEM", new TTypeInfo(strTTI), false),
+      new TColumnType("TYPE_NAME", new TTypeInfo(strTTI), false),
+      new TColumnType("SELF_REFERENCING_COL_NAME", new TTypeInfo(strTTI), false),
+      new TColumnType("REF_GENERATION", new TTypeInfo(strTTI), false)
     };
 
     Map<String, ArrayList<String>> dataMap = new HashMap(columns.length);
@@ -777,11 +768,10 @@ SQLException - if a database access error occurs
     }
 
     // process info from databses into the resultset, then place in regular return from MapD
+    TTypeInfo strTTI = new TTypeInfo(TDatumType.STR, TEncodingType.NONE, false, false, 0, 0, 0);
     TColumnType columns[] = {
-      new TColumnType("TABLE_SCHEM",
-      new TTypeInfo(TDatumType.STR, TEncodingType.NONE, false, false), false),
-      new TColumnType("TABLE_CATALOG",
-      new TTypeInfo(TDatumType.STR, TEncodingType.NONE, false, false), false)
+      new TColumnType("TABLE_SCHEM", new TTypeInfo(strTTI), false),
+      new TColumnType("TABLE_CATALOG", new TTypeInfo(strTTI), false)
     };
     // create component to contain the meta data for the rows
     List<TColumnType> rowDesc = new ArrayList();
@@ -827,9 +817,9 @@ SQLException - if a database access error occurs
   @Override
   public ResultSet getTableTypes() throws SQLException { //logger.debug("Entered");
 
+    TTypeInfo strTTI = new TTypeInfo(TDatumType.STR, TEncodingType.NONE, false, false, 0, 0, 0);
     TColumnType columns[] = {
-      new TColumnType("TABLE_TYPE",
-        new TTypeInfo(TDatumType.STR, TEncodingType.NONE, false, false), false)
+      new TColumnType("TABLE_TYPE", new TTypeInfo(strTTI), false)
     };
 
     Map<String, MapDData> dataMap = new HashMap(columns.length);
@@ -927,55 +917,34 @@ SQLException - if a database access error occurs
     logger.info("TablePattern " + tableNamePattern + " modifiedColumnPattern " + modifiedColumnPattern);
 
     // declare the columns in the result set
+    TTypeInfo strTTI = new TTypeInfo(TDatumType.STR, TEncodingType.NONE, false, false, 0, 0, 0);
+    TTypeInfo intTTI = new TTypeInfo(TDatumType.INT, TEncodingType.NONE, false, false, 0, 0, 0);
+    TTypeInfo smallIntTTI = new TTypeInfo(TDatumType.SMALLINT, TEncodingType.NONE, false, false, 0, 0, 0);
     TColumnType columns[] = {
-      new TColumnType("TABLE_CAT",
-        new TTypeInfo(TDatumType.STR, TEncodingType.NONE, false, false), false),
-      new TColumnType("TABLE_SCHEM",
-        new TTypeInfo(TDatumType.STR, TEncodingType.NONE, false, false), false),
-      new TColumnType("TABLE_NAME",
-        new TTypeInfo(TDatumType.STR, TEncodingType.NONE, false, false), false),
-      new TColumnType("COLUMN_NAME",
-        new TTypeInfo(TDatumType.STR, TEncodingType.NONE, false, false), false),
-      new TColumnType("DATA_TYPE",
-        new TTypeInfo(TDatumType.INT, TEncodingType.NONE, false, false), false),
-      new TColumnType("TYPE_NAME",
-        new TTypeInfo(TDatumType.STR, TEncodingType.NONE, false, false), false),
-      new TColumnType("COLUMN_SIZE",
-        new TTypeInfo(TDatumType.INT, TEncodingType.NONE, false, false), false),
-      new TColumnType("BUFFER_LENGTH",
-        new TTypeInfo(TDatumType.STR, TEncodingType.NONE, false, false), false),
-      new TColumnType("DECIMAL_DIGITS",
-        new TTypeInfo(TDatumType.INT, TEncodingType.NONE, false, false), false),
-      new TColumnType("NUM_PREC_RADIX",
-        new TTypeInfo(TDatumType.INT, TEncodingType.NONE, false, false), false),
-      new TColumnType("NULLABLE",
-        new TTypeInfo(TDatumType.INT, TEncodingType.NONE, false, false), false),
-      new TColumnType("REMARKS",
-        new TTypeInfo(TDatumType.STR, TEncodingType.NONE, false, false), false),
-      new TColumnType("COLUMN_DEF",
-        new TTypeInfo(TDatumType.STR, TEncodingType.NONE, false, false), false),
-      new TColumnType("SQL_DATA_TYPE",
-        new TTypeInfo(TDatumType.INT, TEncodingType.NONE, false, false), false),
-      new TColumnType("SQL_DATETIME_SUB",
-        new TTypeInfo(TDatumType.INT, TEncodingType.NONE, false, false), false),
-      new TColumnType("CHAR_OCTET_LENGTH",
-        new TTypeInfo(TDatumType.INT, TEncodingType.NONE, false, false), false),
-      new TColumnType("ORDINAL_POSITION",
-        new TTypeInfo(TDatumType.INT, TEncodingType.NONE, false, false), false),
-      new TColumnType("IS_NULLABLE",
-        new TTypeInfo(TDatumType.STR, TEncodingType.NONE, false, false), false),
-      new TColumnType("SCOPE_CATALOG",
-        new TTypeInfo(TDatumType.STR, TEncodingType.NONE, false, false), false),
-      new TColumnType("SCOPE_SCHEMA",
-        new TTypeInfo(TDatumType.STR, TEncodingType.NONE, false, false), false),
-      new TColumnType("SCOPE_TABLE",
-        new TTypeInfo(TDatumType.STR, TEncodingType.NONE, false, false), false),
-      new TColumnType("SOURCE_DATA_TYPE",
-        new TTypeInfo(TDatumType.SMALLINT, TEncodingType.NONE, false, false), false),
-      new TColumnType("IS_AUTOINCREMENT",
-        new TTypeInfo(TDatumType.STR, TEncodingType.NONE, false, false), false),
-      new TColumnType("IS_GENERATEDCOLUMN",
-        new TTypeInfo(TDatumType.STR, TEncodingType.NONE, false, false), false)
+      new TColumnType("TABLE_CAT", new TTypeInfo(strTTI), false),
+      new TColumnType("TABLE_SCHEM", new TTypeInfo(strTTI), false),
+      new TColumnType("TABLE_NAME", new TTypeInfo(strTTI), false),
+      new TColumnType("COLUMN_NAME", new TTypeInfo(strTTI), false),
+      new TColumnType("DATA_TYPE", new TTypeInfo(intTTI), false),
+      new TColumnType("TYPE_NAME", new TTypeInfo(strTTI), false),
+      new TColumnType("COLUMN_SIZE", new TTypeInfo(intTTI), false),
+      new TColumnType("BUFFER_LENGTH", new TTypeInfo(strTTI), false),
+      new TColumnType("DECIMAL_DIGITS", new TTypeInfo(intTTI), false),
+      new TColumnType("NUM_PREC_RADIX", new TTypeInfo(intTTI), false),
+      new TColumnType("NULLABLE", new TTypeInfo(intTTI), false),
+      new TColumnType("REMARKS", new TTypeInfo(strTTI), false),
+      new TColumnType("COLUMN_DEF", new TTypeInfo(strTTI), false),
+      new TColumnType("SQL_DATA_TYPE", new TTypeInfo(intTTI), false),
+      new TColumnType("SQL_DATETIME_SUB", new TTypeInfo(intTTI), false),
+      new TColumnType("CHAR_OCTET_LENGTH", new TTypeInfo(intTTI), false),
+      new TColumnType("ORDINAL_POSITION", new TTypeInfo(intTTI), false),
+      new TColumnType("IS_NULLABLE", new TTypeInfo(strTTI), false),
+      new TColumnType("SCOPE_CATALOG", new TTypeInfo(strTTI), false),
+      new TColumnType("SCOPE_SCHEMA", new TTypeInfo(strTTI), false),
+      new TColumnType("SCOPE_TABLE", new TTypeInfo(strTTI), false),
+      new TColumnType("SOURCE_DATA_TYPE", new TTypeInfo(smallIntTTI), false),
+      new TColumnType("IS_AUTOINCREMENT", new TTypeInfo(strTTI), false),
+      new TColumnType("IS_GENERATEDCOLUMN", new TTypeInfo(strTTI), false)
     };
 
     Map<String, MapDData> dataMap = new HashMap(columns.length);
@@ -1013,13 +982,19 @@ SQLException - if a database access error occurs
               dataMap.get("COLUMN_NAME").add(entry.getKey());
               dataMap.get("DATA_TYPE").add(MapDType.toJava(value.col_type.type));
               dataMap.get("TYPE_NAME").add((value.col_type.type.name() + (value.col_type.is_array ? "[]" : "")));
-              dataMap.get("COLUMN_SIZE").add(100);
+              if (value.col_type.type == TDatumType.DECIMAL)
+                dataMap.get("COLUMN_SIZE").add(value.col_type.precision);
+              else
+                dataMap.get("COLUMN_SIZE").add(100);
               dataMap.get("BUFFER_LENGTH").setNull(true);
-              dataMap.get("DECIMAL_DIGITS").add(10);
+              if (value.col_type.type == TDatumType.DECIMAL)
+                dataMap.get("DECIMAL_DIGITS").add(value.col_type.scale);
+              else
+                 dataMap.get("DECIMAL_DIGITS").setNull(true);
               dataMap.get("NUM_PREC_RADIX").add(10);
               dataMap.get("NULLABLE").add(value.col_type.nullable ? DatabaseMetaData.columnNullable
                       : DatabaseMetaData.columnNoNulls);
-              dataMap.get("REMARKS").add("Awsome Column");
+              dataMap.get("REMARKS").add(" ");
               dataMap.get("COLUMN_DEF").setNull(true);
               dataMap.get("SQL_DATA_TYPE").add(0);
               dataMap.get("SQL_DATETIME_SUB").setNull(true);
@@ -1162,43 +1137,29 @@ SQLException - if a database access error occurs
   public ResultSet getTypeInfo() throws SQLException { //logger.debug("Entered");
 
     // declare the columns in the result set
+    TTypeInfo strTTI = new TTypeInfo(TDatumType.STR, TEncodingType.NONE, false, false, 0, 0, 0);
+    TTypeInfo intTTI = new TTypeInfo(TDatumType.INT, TEncodingType.NONE, false, false, 0, 0, 0);
+    TTypeInfo smallIntTTI = new TTypeInfo(TDatumType.SMALLINT, TEncodingType.NONE, false, false, 0, 0, 0);
+    TTypeInfo boolTTI = new TTypeInfo(TDatumType.BOOL, TEncodingType.NONE, false, false, 0, 0, 0);
     TColumnType columns[] = {
-      new TColumnType("TYPE_NAME",
-      new TTypeInfo(TDatumType.STR, TEncodingType.NONE, false, false), false),
-      new TColumnType("DATA_TYPE",
-      new TTypeInfo(TDatumType.INT, TEncodingType.NONE, false, false), false),
-      new TColumnType("PRECISION",
-      new TTypeInfo(TDatumType.INT, TEncodingType.NONE, false, false), false),
-      new TColumnType("LITERAL_PREFIX",
-      new TTypeInfo(TDatumType.STR, TEncodingType.NONE, false, false), false),
-      new TColumnType("LITERAL_SUFFIX",
-      new TTypeInfo(TDatumType.STR, TEncodingType.NONE, false, false), false),
-      new TColumnType("CREATE_PARAMS",
-      new TTypeInfo(TDatumType.STR, TEncodingType.NONE, false, false), false),
-      new TColumnType("NULLABLE",
-      new TTypeInfo(TDatumType.SMALLINT, TEncodingType.NONE, false, false), false),
-      new TColumnType("CASE_SENSITIVE",
-      new TTypeInfo(TDatumType.BOOL, TEncodingType.NONE, false, false), false),
-      new TColumnType("SEARCHABLE",
-      new TTypeInfo(TDatumType.SMALLINT, TEncodingType.NONE, false, false), false),
-      new TColumnType("UNSIGNED_ATTRIBUTE",
-      new TTypeInfo(TDatumType.BOOL, TEncodingType.NONE, false, false), false),
-      new TColumnType("FIXED_PREC_SCALE",
-      new TTypeInfo(TDatumType.BOOL, TEncodingType.NONE, false, false), false),
-      new TColumnType("AUTO_INCREMENT",
-      new TTypeInfo(TDatumType.BOOL, TEncodingType.NONE, false, false), false),
-      new TColumnType("LOCAL_TYPE_NAME",
-      new TTypeInfo(TDatumType.STR, TEncodingType.NONE, false, false), false),
-      new TColumnType("MINIMUM_SCALE",
-      new TTypeInfo(TDatumType.SMALLINT, TEncodingType.NONE, false, false), false),
-      new TColumnType("MAXIMUM_SCALE",
-      new TTypeInfo(TDatumType.SMALLINT, TEncodingType.NONE, false, false), false),
-      new TColumnType("SQL_DATA_TYPE",
-      new TTypeInfo(TDatumType.INT, TEncodingType.NONE, false, false), false),
-      new TColumnType("SQL_DATETIME_SUB",
-      new TTypeInfo(TDatumType.INT, TEncodingType.NONE, false, false), false),
-      new TColumnType("NUM_PREC_RADIX",
-      new TTypeInfo(TDatumType.INT, TEncodingType.NONE, false, false), false)
+      new TColumnType("TYPE_NAME", new TTypeInfo(strTTI), false),
+      new TColumnType("DATA_TYPE", new TTypeInfo(intTTI), false),
+      new TColumnType("PRECISION", new TTypeInfo(intTTI), false),
+      new TColumnType("LITERAL_PREFIX", new TTypeInfo(strTTI), false),
+      new TColumnType("LITERAL_SUFFIX", new TTypeInfo(strTTI), false),
+      new TColumnType("CREATE_PARAMS", new TTypeInfo(strTTI), false),
+      new TColumnType("NULLABLE", new TTypeInfo(smallIntTTI), false),
+      new TColumnType("CASE_SENSITIVE", new TTypeInfo(boolTTI), false),
+      new TColumnType("SEARCHABLE", new TTypeInfo(smallIntTTI), false),
+      new TColumnType("UNSIGNED_ATTRIBUTE", new TTypeInfo(boolTTI), false),
+      new TColumnType("FIXED_PREC_SCALE", new TTypeInfo(boolTTI), false),
+      new TColumnType("AUTO_INCREMENT", new TTypeInfo(boolTTI), false),
+      new TColumnType("LOCAL_TYPE_NAME", new TTypeInfo(strTTI), false),
+      new TColumnType("MINIMUM_SCALE", new TTypeInfo(smallIntTTI), false),
+      new TColumnType("MAXIMUM_SCALE", new TTypeInfo(smallIntTTI), false),
+      new TColumnType("SQL_DATA_TYPE", new TTypeInfo(intTTI), false),
+      new TColumnType("SQL_DATETIME_SUB", new TTypeInfo(intTTI), false),
+      new TColumnType("NUM_PREC_RADIX", new TTypeInfo(intTTI), false)
     };
 
     Map<String, MapDData> dataMap = new HashMap(columns.length);

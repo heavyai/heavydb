@@ -52,7 +52,10 @@ struct TTypeInfo {
   1: TDatumType type,
   4: TEncodingType encoding,
   2: bool nullable,
-  3: bool is_array
+  3: bool is_array,
+  5: i32 precision,
+  6: i32 scale,
+  7: i32 comp_param
 }
 
 struct TColumnType {
