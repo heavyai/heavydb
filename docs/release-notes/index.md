@@ -1,5 +1,18 @@
 # MapD Platform
-The latest version of the MapD Platform is 1.2.4.
+The latest version of the MapD Platform is 1.2.5.
+
+#### **1.2.5** - Released August 23, 2016
+
+#####New
+- Improvement in memory efficiency for `GROUP BY` unnested string arrays
+- Added fragment size option to SQL Importer
+- Optimization to leverage hardware-accelerated FP64 atomics on Pascal architecture
+- Improved stability and performance for high cardinality group by queries
+
+#####Fixed
+- Issue with multi-key `GROUP BY` on empty table
+- Regression with coloring by string on backend rendered images
+- Issue on certain hardware where backend rendered pointmap images draw to a corner/side
 
 #### **1.2.4** - Released August 15, 2016
 
