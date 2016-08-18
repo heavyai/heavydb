@@ -22,6 +22,7 @@ InsertOrderFragmenter::InsertOrderFragmenter(const vector<int> chunkKeyPrefix,
                                              vector<Chunk>& chunkVec,
                                              Data_Namespace::DataMgr* dataMgr,
                                              const size_t maxFragmentRows,
+                                             const size_t maxChunkSize,
                                              const size_t pageSize /*default 1MB*/,
                                              const size_t maxRows,
                                              const Data_Namespace::MemoryLevel defaultInsertLevel)
@@ -31,6 +32,7 @@ InsertOrderFragmenter::InsertOrderFragmenter(const vector<int> chunkKeyPrefix,
       pageSize_(pageSize),
       numTuples_(0),
       maxFragmentId_(-1),
+      maxChunkSize_(maxChunkSize),
       maxRows_(maxRows),
       fragmenterType_("insert_order"),
       defaultInsertLevel_(defaultInsertLevel),
@@ -87,9 +89,25 @@ void InsertOrderFragmenter::getChunkMetadata() {
     int columnId = chunkIt->first[2];
     fragmentInfoVec_.back().chunkMetadataMap[columnId] = chunkIt->second;
   }
-  // Now need to get the insert buffers for each column - should be last
-  // fragment
+
+  ssize_t maxFixedColSize = 0;
+
+  for (auto colIt = columnMap_.begin(); colIt != columnMap_.end(); ++colIt) {
+    ssize_t size = colIt->second.get_column_desc()->columnType.get_size();
+    if (size == -1) {  // variable length
+      varLenColInfo_.insert(std::make_pair(colIt->first, 0));
+      size = 8;  // b/c we use this for string and array indices - gross to have magic number here
+    }
+    maxFixedColSize = std::max(maxFixedColSize, size);
+  }
+
+  maxFragmentRows_ =
+      std::min(maxFragmentRows_,
+               maxChunkSize_ / maxFixedColSize);  // this is maximum number of rows assuming everything is fixed length
+
   if (fragmentInfoVec_.size() > 0) {
+    // Now need to get the insert buffers for each column - should be last
+    // fragment
     int lastFragmentId = fragmentInfoVec_.back().fragmentId;
     int deviceId = fragmentInfoVec_.back().deviceIds[static_cast<int>(defaultInsertLevel_)];
     for (auto colIt = columnMap_.begin(); colIt != columnMap_.end(); ++colIt) {
@@ -97,6 +115,10 @@ void InsertOrderFragmenter::getChunkMetadata() {
       insertKey.push_back(colIt->first);     // column id
       insertKey.push_back(lastFragmentId);   // fragment id
       colIt->second.getChunkBuffer(dataMgr_, insertKey, defaultInsertLevel_, deviceId);
+      auto varLenColInfoIt = varLenColInfo_.find(colIt->first);
+      if (varLenColInfoIt != varLenColInfo_.end()) {
+        varLenColInfoIt->second = colIt->second.get_buffer()->size();
+      }
     }
   }
 }
@@ -140,6 +162,12 @@ void InsertOrderFragmenter::insertData(const InsertData& insertDataStruct) {
   mapd_lock_guard<std::mutex> insertLock(
       insertMutex_);  // prevent two threads from trying to insert into the same table simultaneously
 
+  std::unordered_map<int, int> inverseInsertDataColIdMap;
+
+  for (size_t insertId = 0; insertId < insertDataStruct.columnIds.size(); ++insertId) {
+    inverseInsertDataColIdMap.insert(std::make_pair(insertDataStruct.columnIds[insertId], insertId));
+  }
+
   size_t numRowsLeft = insertDataStruct.numRows;
   size_t numRowsInserted = 0;
   vector<DataBlockPtr> dataCopy =
@@ -159,12 +187,45 @@ void InsertOrderFragmenter::insertData(const InsertData& insertDataStruct) {
 
   while (numRowsLeft > 0) {  // may have to create multiple fragments for bulk insert
     // loop until done inserting all rows
+    CHECK_LE(currentFragment->shadowNumTuples, maxFragmentRows_);
     size_t rowsLeftInCurrentFragment = maxFragmentRows_ - currentFragment->shadowNumTuples;
-    if (rowsLeftInCurrentFragment == 0) {
+    size_t numRowsToInsert = min(rowsLeftInCurrentFragment, numRowsLeft);
+    if (rowsLeftInCurrentFragment != 0) {
+      for (auto& varLenColInfoIt : varLenColInfo_) {
+        CHECK_LE(varLenColInfoIt.second, maxChunkSize_);
+        size_t bytesLeft = maxChunkSize_ - varLenColInfoIt.second;
+        auto insertIdIt = inverseInsertDataColIdMap.find(varLenColInfoIt.first);
+        if (insertIdIt != inverseInsertDataColIdMap.end()) {
+          auto colMapIt = columnMap_.find(varLenColInfoIt.first);
+          numRowsToInsert = std::min(numRowsToInsert,
+                                     colMapIt->second.getNumElemsForBytesInsertData(
+                                         dataCopy[insertIdIt->second], numRowsToInsert, numRowsInserted, bytesLeft));
+        }
+      }
+    }
+
+    if (rowsLeftInCurrentFragment == 0 || numRowsToInsert == 0) {
       currentFragment = createNewFragment();
       rowsLeftInCurrentFragment = maxFragmentRows_;
+      for (auto& varLenColInfoIt : varLenColInfo_) {
+        varLenColInfoIt.second = 0;  // reset byte counter
+      }
+      numRowsToInsert = min(rowsLeftInCurrentFragment, numRowsLeft);
+      for (auto& varLenColInfoIt : varLenColInfo_) {
+        CHECK_LE(varLenColInfoIt.second, maxChunkSize_);
+        size_t bytesLeft = maxChunkSize_ - varLenColInfoIt.second;
+        auto insertIdIt = inverseInsertDataColIdMap.find(varLenColInfoIt.first);
+        if (insertIdIt != inverseInsertDataColIdMap.end()) {
+          auto colMapIt = columnMap_.find(varLenColInfoIt.first);
+          numRowsToInsert = std::min(numRowsToInsert,
+                                     colMapIt->second.getNumElemsForBytesInsertData(
+                                         dataCopy[insertIdIt->second], numRowsToInsert, numRowsInserted, bytesLeft));
+        }
+      }
     }
-    size_t numRowsToInsert = min(rowsLeftInCurrentFragment, numRowsLeft);
+
+    CHECK_GT(numRowsToInsert, size_t(0));  // would put us into an endless loop as we'd never be able to insert anything
+
     // for each column, append the data in the appropriate insert buffer
     for (size_t i = 0; i < insertDataStruct.columnIds.size(); ++i) {
       int columnId = insertDataStruct.columnIds[i];
@@ -172,6 +233,10 @@ void InsertOrderFragmenter::insertData(const InsertData& insertDataStruct) {
       assert(colMapIt != columnMap_.end());
       currentFragment->shadowChunkMetadataMap[columnId] =
           colMapIt->second.appendData(dataCopy[i], numRowsToInsert, numRowsInserted);
+      auto varLenColInfoIt = varLenColInfo_.find(columnId);
+      if (varLenColInfoIt != varLenColInfo_.end()) {
+        varLenColInfoIt->second = colMapIt->second.get_buffer()->size();
+      }
     }
     if (hasMaterializedRowId_) {
       size_t startId = maxFragmentRows_ * currentFragment->fragmentId + currentFragment->shadowNumTuples;

@@ -1606,7 +1606,8 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   td.isReady = true;
   td.fragmenter = nullptr;
   td.fragType = Fragmenter_Namespace::FragmenterType::INSERT_ORDER;
-  td.maxFragRows = DEFAULT_FRAGMENT_SIZE;
+  td.maxFragRows = DEFAULT_FRAGMENT_ROWS;
+  td.maxChunkSize = DEFAULT_MAX_CHUNK_SIZE;
   td.fragPageSize = DEFAULT_PAGE_SIZE;
   td.maxRows = DEFAULT_MAX_ROWS;
   if (!storage_options.empty()) {
@@ -1618,6 +1619,13 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
         if (frag_size <= 0)
           throw std::runtime_error("FRAGMENT_SIZE must be a positive number.");
         td.maxFragRows = frag_size;
+      } else if (boost::iequals(*p->get_name(), "max_chunk_size")) {
+        if (!dynamic_cast<const IntLiteral*>(p->get_value()))
+          throw std::runtime_error("MAX_CHUNK_SIZE must be an integer literal.");
+        int64_t max_chunk_size = static_cast<const IntLiteral*>(p->get_value())->get_intval();
+        if (max_chunk_size <= 0)
+          throw std::runtime_error("MAX_CHUNK_SIZE must be a positive number.");
+        td.maxChunkSize = max_chunk_size;
       } else if (boost::iequals(*p->get_name(), "page_size")) {
         if (!dynamic_cast<const IntLiteral*>(p->get_value()))
           throw std::runtime_error("PAGE_SIZE must be an integer literal.");
@@ -2068,7 +2076,8 @@ void CreateViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   td.isReady = !is_materialized;
   td.fragmenter = nullptr;
   td.fragType = Fragmenter_Namespace::FragmenterType::INSERT_ORDER;
-  td.maxFragRows = DEFAULT_FRAGMENT_SIZE;  // @todo this stuff should not be InsertOrderFragmenter
+  td.maxFragRows = DEFAULT_FRAGMENT_ROWS;    // @todo this stuff should not be InsertOrderFragmenter
+  td.maxChunkSize = DEFAULT_MAX_CHUNK_SIZE;  // @todo this stuff should not be InsertOrderFragmenter
   td.fragPageSize = DEFAULT_PAGE_SIZE;
   td.maxRows = DEFAULT_MAX_ROWS;
   catalog.createTable(td, columns);

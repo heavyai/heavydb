@@ -239,6 +239,7 @@ class Catalog {
   const DictDescriptor* getMetadataForDict(int dictId) const;
 
  protected:
+  void updateTableDescriptorSchema();
   void updateFrontendViewSchema();
   void updateLinkSchema();
   void updateFrontendViewAndLinkUsers();

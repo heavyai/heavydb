@@ -51,15 +51,26 @@ void Chunk::getChunkBuffer(DataMgr* data_mgr,
         mem_level,
         device_id,
         (num_elems + 1) * sizeof(StringOffsetT));  // always record n+1 offsets so string length can be calculated
-    if (column_desc->columnType.get_type() == kARRAY) {
-      ArrayNoneEncoder* array_encoder = dynamic_cast<ArrayNoneEncoder*>(buffer->encoder.get());
-      array_encoder->set_index_buf(index_buf);
-    } else if (column_desc->columnType.get_compression() == kENCODING_NONE) {
-      StringNoneEncoder* str_encoder = dynamic_cast<StringNoneEncoder*>(buffer->encoder.get());
-      str_encoder->set_index_buf(index_buf);
+    switch (column_desc->columnType.get_type()) {
+      case kARRAY: {
+        ArrayNoneEncoder* array_encoder = dynamic_cast<ArrayNoneEncoder*>(buffer->encoder.get());
+        array_encoder->set_index_buf(index_buf);
+        break;
+      }
+      case kTEXT:
+      case kVARCHAR:
+      case kCHAR: {
+        CHECK_EQ(kENCODING_NONE, column_desc->columnType.get_compression());
+        StringNoneEncoder* str_encoder = dynamic_cast<StringNoneEncoder*>(buffer->encoder.get());
+        str_encoder->set_index_buf(index_buf);
+        break;
+      }
+      default:
+        CHECK(false);
     }
-  } else
+  } else {
     buffer = data_mgr->getChunkBuffer(key, mem_level, device_id, num_bytes);
+  }
 }
 
 void Chunk::createChunkBuffer(DataMgr* data_mgr,
@@ -77,14 +88,45 @@ void Chunk::createChunkBuffer(DataMgr* data_mgr,
     buffer = data_mgr->createChunkBuffer(key, mem_level, device_id);
 }
 
+size_t Chunk::getNumElemsForBytesInsertData(const DataBlockPtr& src_data,
+                                            const size_t num_elems,
+                                            const size_t start_idx,
+                                            const size_t byte_limit) {
+  CHECK(column_desc->columnType.is_varlen());
+  switch (column_desc->columnType.get_type()) {
+    case kARRAY: {
+      ArrayNoneEncoder* array_encoder = dynamic_cast<ArrayNoneEncoder*>(buffer->encoder.get());
+      return array_encoder->getNumElemsForBytesInsertData(src_data.arraysPtr, start_idx, num_elems, byte_limit);
+    }
+    case kTEXT:
+    case kVARCHAR:
+    case kCHAR: {
+      CHECK_EQ(kENCODING_NONE, column_desc->columnType.get_compression());
+      StringNoneEncoder* str_encoder = dynamic_cast<StringNoneEncoder*>(buffer->encoder.get());
+      return str_encoder->getNumElemsForBytesInsertData(src_data.stringsPtr, start_idx, num_elems, byte_limit);
+    }
+    default:
+      CHECK(false);
+      return 0;
+  }
+}
+
 ChunkMetadata Chunk::appendData(DataBlockPtr& src_data, const size_t num_elems, const size_t start_idx) {
   if (column_desc->columnType.is_varlen()) {
-    if (column_desc->columnType.get_type() == kARRAY) {
-      ArrayNoneEncoder* array_encoder = dynamic_cast<ArrayNoneEncoder*>(buffer->encoder.get());
-      return array_encoder->appendData(src_data.arraysPtr, start_idx, num_elems);
-    } else if (column_desc->columnType.get_compression() == kENCODING_NONE) {
-      StringNoneEncoder* str_encoder = dynamic_cast<StringNoneEncoder*>(buffer->encoder.get());
-      return str_encoder->appendData(src_data.stringsPtr, start_idx, num_elems);
+    switch (column_desc->columnType.get_type()) {
+      case kARRAY: {
+        ArrayNoneEncoder* array_encoder = dynamic_cast<ArrayNoneEncoder*>(buffer->encoder.get());
+        return array_encoder->appendData(src_data.arraysPtr, start_idx, num_elems);
+      }
+      case kTEXT:
+      case kVARCHAR:
+      case kCHAR: {
+        CHECK_EQ(kENCODING_NONE, column_desc->columnType.get_compression());
+        StringNoneEncoder* str_encoder = dynamic_cast<StringNoneEncoder*>(buffer->encoder.get());
+        return str_encoder->appendData(src_data.stringsPtr, start_idx, num_elems);
+      }
+      default:
+        CHECK(false);
     }
   }
   return buffer->encoder->appendData(src_data.numbersPtr, num_elems);
@@ -100,12 +142,22 @@ void Chunk::unpin_buffer() {
 void Chunk::init_encoder() {
   buffer->initEncoder(column_desc->columnType);
   if (column_desc->columnType.is_varlen()) {
-    if (column_desc->columnType.get_type() == kARRAY) {
-      ArrayNoneEncoder* array_encoder = dynamic_cast<ArrayNoneEncoder*>(buffer->encoder.get());
-      array_encoder->set_index_buf(index_buf);
-    } else if (column_desc->columnType.get_compression() == kENCODING_NONE) {
-      StringNoneEncoder* str_encoder = dynamic_cast<StringNoneEncoder*>(buffer->encoder.get());
-      str_encoder->set_index_buf(index_buf);
+    switch (column_desc->columnType.get_type()) {
+      case kARRAY: {
+        ArrayNoneEncoder* array_encoder = dynamic_cast<ArrayNoneEncoder*>(buffer->encoder.get());
+        array_encoder->set_index_buf(index_buf);
+        break;
+      }
+      case kTEXT:
+      case kVARCHAR:
+      case kCHAR: {
+        CHECK_EQ(kENCODING_NONE, column_desc->columnType.get_compression());
+        StringNoneEncoder* str_encoder = dynamic_cast<StringNoneEncoder*>(buffer->encoder.get());
+        str_encoder->set_index_buf(index_buf);
+        break;
+      }
+      default:
+        CHECK(false);
     }
   }
 }

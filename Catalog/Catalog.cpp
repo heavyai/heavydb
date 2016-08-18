@@ -135,7 +135,8 @@ void SysCatalog::createDatabase(const string& name, int owner) {
   SqliteConnector dbConn(name, basePath_ + "/mapd_catalogs/");
   dbConn.query(
       "CREATE TABLE mapd_tables (tableid integer primary key, name text unique, ncolumns integer, isview boolean, "
-      "fragments text, frag_type integer, max_frag_rows integer, frag_page_size integer, max_rows bigint, partitions "
+      "fragments text, frag_type integer, max_frag_rows integer, max_chunk_size bigint, frag_page_size integer, "
+      "max_rows bigint, partitions "
       "text)");
   dbConn.query(
       "CREATE TABLE mapd_columns (tableid integer references mapd_tables, columnid integer, name text, coltype "
@@ -320,6 +321,26 @@ Catalog::~Catalog() {
   // ColumnDescriptorMapById points to the same descriptors.  No need to delete
 }
 
+void Catalog::updateTableDescriptorSchema() {
+  sqliteConnector_.query("BEGIN TRANSACTION");
+  try {
+    sqliteConnector_.query("PRAGMA TABLE_INFO(mapd_tables)");
+    std::vector<std::string> cols;
+    for (size_t i = 0; i < sqliteConnector_.getNumRows(); i++) {
+      cols.push_back(sqliteConnector_.getData<std::string>(i, 1));
+    }
+    if (std::find(cols.begin(), cols.end(), std::string("max_chunk_size")) == cols.end()) {
+      string queryString("ALTER TABLE mapd_tables ADD max_chunk_size BIGINT DEFAULT " +
+                         std::to_string(DEFAULT_MAX_CHUNK_SIZE));
+      sqliteConnector_.query(queryString);
+    }
+  } catch (std::exception& e) {
+    sqliteConnector_.query("ROLLBACK TRANSACTION");
+    throw;
+  }
+  sqliteConnector_.query("END TRANSACTION");
+}
+
 void Catalog::updateFrontendViewSchema() {
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
@@ -390,8 +411,10 @@ void Catalog::buildMaps() {
     DictDescriptor* dd = new DictDescriptor(dictId, dictName, dictNBits, is_shared, fname);
     dictDescriptorMapById_[dd->dictId].reset(dd);
   }
+  updateTableDescriptorSchema();
   string tableQuery(
-      "SELECT tableid, name, ncolumns, isview, fragments, frag_type, max_frag_rows, frag_page_size, max_rows, "
+      "SELECT tableid, name, ncolumns, isview, fragments, frag_type, max_frag_rows, max_chunk_size, frag_page_size, "
+      "max_rows, "
       "partitions from mapd_tables");
   sqliteConnector_.query(tableQuery);
   numRows = sqliteConnector_.getNumRows();
@@ -404,9 +427,10 @@ void Catalog::buildMaps() {
     td->fragments = sqliteConnector_.getData<string>(r, 4);
     td->fragType = (Fragmenter_Namespace::FragmenterType)sqliteConnector_.getData<int>(r, 5);
     td->maxFragRows = sqliteConnector_.getData<int>(r, 6);
-    td->fragPageSize = sqliteConnector_.getData<int>(r, 7);
-    td->maxRows = sqliteConnector_.getData<int64_t>(r, 8);
-    td->partitions = sqliteConnector_.getData<string>(r, 9);
+    td->maxChunkSize = sqliteConnector_.getData<int>(r, 7);
+    td->fragPageSize = sqliteConnector_.getData<int>(r, 8);
+    td->maxRows = sqliteConnector_.getData<int64_t>(r, 9);
+    td->partitions = sqliteConnector_.getData<string>(r, 10);
     if (!td->isView) {
       // initialize view fields even though irrelevant
       td->isMaterialized = false;
@@ -462,6 +486,7 @@ void Catalog::buildMaps() {
 
   updateFrontendViewAndLinkUsers();
   updateFrontendViewSchema();
+
   string frontendViewQuery(
       "SELECT viewid, view_state, name, image_hash, strftime('%Y-%m-%dT%H:%M:%SZ', update_time), userid, view_metadata "
       "FROM mapd_frontend_views");
@@ -577,7 +602,7 @@ void Catalog::instantiateFragmenter(TableDescriptor* td) const {
   Chunk::translateColumnDescriptorsToChunkVec(columnDescs, chunkVec);
   ChunkKey chunkKeyPrefix = {currentDB_.dbId, td->tableId};
   td->fragmenter = new InsertOrderFragmenter(
-      chunkKeyPrefix, chunkVec, dataMgr_.get(), td->maxFragRows, td->fragPageSize, td->maxRows);
+      chunkKeyPrefix, chunkVec, dataMgr_.get(), td->maxFragRows, td->maxChunkSize, td->fragPageSize, td->maxRows);
 }
 
 const TableDescriptor* Catalog::getMetadataForTable(const string& tableName) const {
@@ -751,14 +776,16 @@ void Catalog::createTable(TableDescriptor& td, const list<ColumnDescriptor>& col
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
     sqliteConnector_.query_with_text_params(
-        "INSERT INTO mapd_tables (name, ncolumns, isview, fragments, frag_type, max_frag_rows, frag_page_size, "
-        "max_rows, partitions) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO mapd_tables (name, ncolumns, isview, fragments, frag_type, max_frag_rows, max_chunk_size, "
+        "frag_page_size, "
+        "max_rows, partitions) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         std::vector<std::string>{td.tableName,
                                  std::to_string(columns.size()),
                                  std::to_string(td.isView),
                                  "",
                                  std::to_string(td.fragType),
                                  std::to_string(td.maxFragRows),
+                                 std::to_string(td.maxChunkSize),
                                  std::to_string(td.fragPageSize),
                                  std::to_string(td.maxRows),
                                  ""});

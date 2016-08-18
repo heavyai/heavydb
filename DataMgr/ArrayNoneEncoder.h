@@ -24,6 +24,22 @@ class ArrayNoneEncoder : public Encoder {
   ArrayNoneEncoder(AbstractBuffer* buffer)
       : Encoder(buffer), has_nulls(false), initialized(false), index_buf(nullptr), last_offset(-1) {}
 
+  size_t getNumElemsForBytesInsertData(const std::vector<ArrayDatum>* srcData,
+                                       const int start_idx,
+                                       const size_t numAppendElems,
+                                       const size_t byteLimit) {
+    size_t dataSize = 0;
+
+    size_t n = start_idx;
+    for (; n < start_idx + numAppendElems; n++) {
+      size_t len = (*srcData)[n].length;
+      if (dataSize + len > byteLimit)
+        break;
+      dataSize += len;
+    }
+    return n - start_idx;
+  }
+
   ChunkMetadata appendData(int8_t*& srcData, const size_t numAppendElems) {
     assert(false);  // should never be called for arrays
     ChunkMetadata chunkMetadata;

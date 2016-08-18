@@ -1216,7 +1216,8 @@ class MapDHandler : virtual public MapDIf {
       td.tableName = table_name;
       td.isView = false;
       td.fragType = Fragmenter_Namespace::FragmenterType::INSERT_ORDER;
-      td.maxFragRows = DEFAULT_FRAGMENT_SIZE;
+      td.maxFragRows = DEFAULT_FRAGMENT_ROWS;
+      td.maxChunkSize = DEFAULT_MAX_CHUNK_SIZE;
       td.fragPageSize = DEFAULT_PAGE_SIZE;
       td.maxRows = DEFAULT_MAX_ROWS;
 

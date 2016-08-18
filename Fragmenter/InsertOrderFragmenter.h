@@ -13,16 +13,17 @@
 
 #include <vector>
 #include <map>
-
+#include <unordered_map>
 #include <mutex>
 
 namespace Data_Namespace {
 class DataMgr;
 }
 
-#define DEFAULT_FRAGMENT_SIZE 4000000  // in tuples
-#define DEFAULT_PAGE_SIZE 1048576      // in bytes
-#define DEFAULT_MAX_ROWS (1L) << 62    // in rows
+#define DEFAULT_FRAGMENT_ROWS 32000000     // in tuples
+#define DEFAULT_PAGE_SIZE 1048576          // in bytes
+#define DEFAULT_MAX_ROWS (1L) << 62        // in rows
+#define DEFAULT_MAX_CHUNK_SIZE 1073741824  // in bytes
 
 namespace Fragmenter_Namespace {
 
@@ -38,9 +39,11 @@ class InsertOrderFragmenter : public AbstractFragmenter {
   InsertOrderFragmenter(const std::vector<int> chunkKeyPrefix,
                         std::vector<Chunk_NS::Chunk>& chunkVec,
                         Data_Namespace::DataMgr* dataMgr,
-                        const size_t maxFragmentRows = DEFAULT_FRAGMENT_SIZE,
+                        const size_t maxFragmentRows = DEFAULT_FRAGMENT_ROWS,
+                        const size_t maxChunkSize = DEFAULT_MAX_CHUNK_SIZE,
                         const size_t pageSize = DEFAULT_PAGE_SIZE /*default 1MB*/,
                         const size_t maxRows = DEFAULT_MAX_ROWS,
+
                         const Data_Namespace::MemoryLevel defaultInsertLevel = Data_Namespace::DISK_LEVEL);
 
   virtual ~InsertOrderFragmenter();
@@ -83,6 +86,7 @@ class InsertOrderFragmenter : public AbstractFragmenter {
   size_t pageSize_; /* Page size in bytes of each page making up a given chunk - passed to BufferMgr in createChunk() */
   size_t numTuples_;
   int maxFragmentId_;
+  size_t maxChunkSize_;
   size_t maxRows_;
   std::string fragmenterType_;
   mapd_shared_mutex fragmentInfoMutex_;  // to prevent read-write conflicts for fragmentInfoVec_
@@ -92,6 +96,7 @@ class InsertOrderFragmenter : public AbstractFragmenter {
   Data_Namespace::MemoryLevel defaultInsertLevel_;
   bool hasMaterializedRowId_;
   int rowIdColId_;
+  std::unordered_map<int, size_t> varLenColInfo_;
 
   /**
    * @brief creates new fragment, calling createChunk()

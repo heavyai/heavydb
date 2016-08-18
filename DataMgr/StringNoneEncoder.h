@@ -21,6 +21,11 @@ class StringNoneEncoder : public Encoder {
  public:
   StringNoneEncoder(AbstractBuffer* buffer) : Encoder(buffer), index_buf(nullptr), last_offset(-1), has_nulls(false) {}
 
+  size_t getNumElemsForBytesInsertData(const std::vector<std::string>* srcData,
+                                       const int start_idx,
+                                       const size_t numAppendElems,
+                                       const size_t byteLimit);
+
   ChunkMetadata appendData(int8_t*& srcData, const size_t numAppendElems) {
     assert(false);  // should never be called for strings
     ChunkMetadata chunkMetadata;
