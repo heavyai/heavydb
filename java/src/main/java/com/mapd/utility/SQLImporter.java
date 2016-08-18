@@ -119,6 +119,12 @@ public class SQLImporter {
             .longOpt("bufferSize")
             .build();
 
+    Option fragmentSize = Option.builder("f")
+            .hasArg()
+            .desc("table fragment size")
+            .longOpt("fragmentSize")
+            .build();
+
     Option database = Option.builder("db")
             .hasArg()
             .desc("MapD Database")
@@ -137,6 +143,7 @@ public class SQLImporter {
     options.addOption(targetTable);
     options.addOption(database);
     options.addOption(bufferSize);
+    options.addOption(fragmentSize);
 
     CommandLineParser parser = new DefaultParser();
 
@@ -276,6 +283,12 @@ public class SQLImporter {
                 metaData.getScale(i)));
       }
       sb.append(")");
+
+      if (Integer.valueOf(cmd.getOptionValue("fragmentSize", "0")) > 0) {
+          sb.append(" with (fragment_size = ");
+          sb.append(cmd.getOptionValue("fragmentSize", "0"));
+          sb.append(")");
+      }
 
     } catch (SQLException ex) {
       LOGGER.error("Error processing the metadata - " + ex.toString());
