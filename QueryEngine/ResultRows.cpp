@@ -1057,11 +1057,7 @@ void ResultRows::inplaceSortGpu(const std::list<Analyzer::OrderEntry>& order_ent
                                                    true,
                                                    true,
                                                    nullptr);
-  size_t max_entry_size{0};
-  for (const auto& wid : query_mem_desc_.agg_col_widths) {
-    max_entry_size = std::max(max_entry_size, size_t(wid.compact));
-  }
-  ScopedScratchBuffer scratch_buff(query_mem_desc_.entry_count * max_entry_size, data_mgr, device_id);
+  ScopedScratchBuffer scratch_buff(query_mem_desc_.entry_count * sizeof(int64_t), data_mgr, device_id);
   auto tmp_buff = reinterpret_cast<int64_t*>(scratch_buff.getPtr());
   CHECK_EQ(size_t(1), order_entries.size());
   const auto idx_buff =
