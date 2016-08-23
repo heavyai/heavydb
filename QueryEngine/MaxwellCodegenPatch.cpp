@@ -6,15 +6,15 @@ llvm::Value* Executor::spillDoubleElement(llvm::Value* elem_val, llvm::Type* ele
   return var_ptr;
 }
 
-bool Executor::isArchMaxwell(const CompilationOptions& co) const {
-  return co.device_type_ == ExecutorDeviceType::GPU && catalog_->get_dataMgr().cudaMgr_->isArchMaxwell();
+bool Executor::isArchMaxwell(const ExecutorDeviceType dt) const {
+  return dt == ExecutorDeviceType::GPU && catalog_->get_dataMgr().cudaMgr_->isArchMaxwell();
 }
 
 bool GroupByAndAggregate::needsUnnestDoublePatch(llvm::Value* val_ptr,
                                                  const std::string& agg_base_name,
                                                  const CompilationOptions& co) const {
   return (
-      executor_->isArchMaxwell(co) && query_mem_desc_.threadsShareMemory() && llvm::isa<llvm::AllocaInst>(val_ptr) &&
+      executor_->isArchMaxwell(co.device_type_) && query_mem_desc_.threadsShareMemory() && llvm::isa<llvm::AllocaInst>(val_ptr) &&
       val_ptr->getType() == llvm::Type::getDoublePtrTy(executor_->cgen_state_->context_) && "agg_id" == agg_base_name);
 }
 

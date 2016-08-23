@@ -243,7 +243,7 @@ class Executor {
 
   bool isCPUOnly() const;
 
-  bool isArchMaxwell(const CompilationOptions& co) const;
+  bool isArchMaxwell(const ExecutorDeviceType dt) const;
 
   bool isOuterJoin() const { return cgen_state_->outer_join_cond_lv_; }
 
@@ -401,6 +401,10 @@ class Executor {
     bool output_columnar;
     std::string llvm_ir;
   };
+  
+  bool isArchPascal(const ExecutorDeviceType dt) const {
+    return dt == ExecutorDeviceType::GPU && catalog_->get_dataMgr().cudaMgr_->isArchPascal();
+  }
 
   enum class JoinImplType { Invalid, Loop, HashOneToOne };
 
@@ -510,8 +514,8 @@ class Executor {
   ResultRows executeExplain(const ExecutionDispatch&);
 
   // TODO(alex): remove
-  static ExecutorDeviceType getDeviceTypeForTargets(const RelAlgExecutionUnit& ra_exe_unit,
-                                                    const ExecutorDeviceType requested_device_type);
+  ExecutorDeviceType getDeviceTypeForTargets(const RelAlgExecutionUnit& ra_exe_unit,
+                                             const ExecutorDeviceType requested_device_type);
 
   ResultRows collectAllDeviceResults(ExecutionDispatch& execution_dispatch,
                                      const std::vector<Analyzer::Expr*>& target_exprs,

@@ -1736,7 +1736,7 @@ bool GroupByAndAggregate::codegen(llvm::Value* filter_result, const CompilationO
     const bool is_group_by = !ra_exe_unit_.groupby_exprs.empty();
     const auto query_mem_desc = getQueryMemoryDescriptor();
 
-    if (executor_->isArchMaxwell(co)) {
+    if (executor_->isArchMaxwell(co.device_type_)) {
       prependForceSync();
     }
     DiamondCodegen filter_cfg(

@@ -3342,7 +3342,7 @@ ExecutorDeviceType Executor::getDeviceTypeForTargets(const RelAlgExecutionUnit& 
       CHECK_EQ(kCOUNT, agg_info.agg_kind);
       return ExecutorDeviceType::CPU;
     }
-    if (!ra_exe_unit.groupby_exprs.empty()) {
+    if (!ra_exe_unit.groupby_exprs.empty() && !isArchPascal(requested_device_type)) {
       if ((agg_info.agg_kind == kAVG || agg_info.agg_kind == kSUM) && agg_info.agg_arg_type.is_fp()) {
         return ExecutorDeviceType::CPU;
       }
@@ -5606,7 +5606,7 @@ llvm::Value* Executor::groupByColumnCodegen(Analyzer::Expr* group_by_col,
                                                                 : llvm::Type::getFloatTy(cgen_state_->context_))
                                : get_int_type(elem_ti.get_size() * 8, cgen_state_->context_);
     group_key = cgen_state_->emitExternalCall(array_at_fname, ar_ret_ty, {group_key, posArg(arr_expr), array_idx});
-    if (need_patch_unnest_double(elem_ti, isArchMaxwell(co), thread_mem_shared)) {
+    if (need_patch_unnest_double(elem_ti, isArchMaxwell(co.device_type_), thread_mem_shared)) {
       key_to_cache = spillDoubleElement(group_key, ar_ret_ty);
     } else {
       key_to_cache = group_key;
