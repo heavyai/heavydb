@@ -31,7 +31,8 @@ class DataMgr {
           const size_t cpuBufferSize /* 0 means auto set size */,
           const bool useGpus,
           const int numGpus,
-          const int startGpu = 0);
+          const int startGpu = 0,
+          const int reservedGpuMem = (1 << 27));
   ~DataMgr();
   AbstractBuffer* createChunkBuffer(const ChunkKey& key, const MemoryLevel memoryLevel, const int deviceId = 0);
   AbstractBuffer* getChunkBuffer(const ChunkKey& key,
@@ -65,6 +66,7 @@ class DataMgr {
   std::vector<std::vector<AbstractBufferMgr*>> bufferMgrs_;
   std::string dataDir_;
   bool hasGpus_;
+  int reservedGpuMem_;
 };
 }  // Data_Namespace
 

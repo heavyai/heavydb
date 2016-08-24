@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cassert>
 #include <limits>
+#include <iomanip>
 #include <glog/logging.h>
 
 using namespace std;
@@ -70,6 +71,7 @@ void BufferMgr::clear() {
 AbstractBuffer* BufferMgr::createBuffer(const ChunkKey& chunkKey,
                                         const size_t chunkPageSize,
                                         const size_t initialSize) {
+  // LOG(INFO) << printMap();
   size_t actualChunkPageSize = chunkPageSize;
   if (actualChunkPageSize == 0) {
     actualChunkPageSize = pageSize_;
@@ -348,62 +350,111 @@ BufferList::iterator BufferMgr::findFreeBuffer(size_t numBytes) {
       }
       // other possibility is ending at PINNED - do nothing in this
       // case
-
       //}
     }
   }
   if (bestEvictionStart == slabSegments_[0].end()) {
+    LOG(ERROR) << "ALLOCATION failed to find " << numBytes << "B throwing out of memory" << getStringMgrType() << ":"
+               << deviceId_;
+    printSlabs();
     throw OutOfMemory();
   }
+  LOG(INFO) << "ALLOCATION failed to find " << numBytes << "B free. Forcing Eviction."
+            << " Eviction start " << bestEvictionStart->startPage << " Number pages requested " << numPagesRequested
+            << " Best Eviction Start Slab " << bestEvictionStartSlab << " " << getStringMgrType() << ":" << deviceId_;
   bestEvictionStart = evict(bestEvictionStart, numPagesRequested, bestEvictionStartSlab);
   return bestEvictionStart;
 }
 
-void BufferMgr::printSeg(BufferList::iterator& segIt) {
-  std::cout << "Start page: " << segIt->startPage << std::endl;
-  std::cout << "Num Pages: " << segIt->numPages << std::endl;
-  std::cout << "Last touched: " << segIt->lastTouched << std::endl;
-  if (segIt->memStatus == FREE)
-    std::cout << "FREE" << std::endl;
-  else {
-    std::cout << "USED - Chunk: ";
-    for (auto vecIt = segIt->chunkKey.begin(); vecIt != segIt->chunkKey.end(); ++vecIt) {
-      std::cout << *vecIt << ",";
+std::string BufferMgr::printSlab(size_t slabNum) {
+  std::ostringstream tss;
+  size_t lastEnd = 0;
+  for (auto segIt = slabSegments_[slabNum].begin(); segIt != slabSegments_[slabNum].end(); ++segIt) {
+    tss << "SN: " << setfill(' ') << setw(2) << slabNum;
+    tss << " BSN: " << setfill(' ') << setw(2) << segIt->slabNum;
+    tss << " SP: " << setfill(' ') << setw(7) << segIt->startPage;
+    tss << " NP: " << setfill(' ') << setw(7) << segIt->numPages;
+    tss << " GAP: " << setfill(' ') << setw(7) << segIt->startPage - lastEnd;
+    lastEnd = segIt->startPage + segIt->numPages;
+    tss << " LT: " << setfill(' ') << setw(7) << segIt->lastTouched;
+    // tss << " PC: " << setfill(' ') << setw(2) << segIt->buffer->getPinCount();
+    if (segIt->memStatus == FREE)
+      tss << " FREE"
+          << " ";
+    else {
+      tss << " USED - Chunk: ";
+      for (auto vecIt = segIt->chunkKey.begin(); vecIt != segIt->chunkKey.end(); ++vecIt) {
+        tss << *vecIt << ",";
+      }
     }
-    std::cout << std::endl;
-    std::cout << "Pin count: " << segIt->buffer->getPinCount() << std::endl;
-    // printf ("Mem address:  %p",segIt->buffer->getMemoryPtr());
-    std::cout << "t: " << segIt->buffer->getPinCount() << std::endl;
+    tss << std::endl;
   }
+  return tss.str();
+}
+
+std::string BufferMgr::printSlabs() {
+  std::ostringstream tss;
+  tss << std::endl << "Slabs Contents: "
+      << " " << getStringMgrType() << ":" << deviceId_ << std::endl;
+  size_t numSlabs = slabSegments_.size();
+  for (size_t slabNum = 0; slabNum != numSlabs; ++slabNum) {
+    tss << printSlab(slabNum);
+  }
+  tss << "--------------------" << std::endl;
+  return tss.str();
+}
+
+std::string BufferMgr::printSeg(BufferList::iterator& segIt) {
+  std::ostringstream tss;
+  tss << "SN: " << setfill(' ') << setw(2) << segIt->slabNum;
+  tss << " SP: " << setfill(' ') << setw(7) << segIt->startPage;
+  tss << " NP: " << setfill(' ') << setw(7) << segIt->numPages;
+  tss << " LT: " << setfill(' ') << setw(7) << segIt->lastTouched;
+  tss << " PC: " << setfill(' ') << setw(2) << segIt->buffer->getPinCount();
+  if (segIt->memStatus == FREE)
+    tss << " FREE"
+        << " ";
+  else {
+    tss << " USED - Chunk: ";
+    for (auto vecIt = segIt->chunkKey.begin(); vecIt != segIt->chunkKey.end(); ++vecIt) {
+      tss << *vecIt << ",";
+    }
+    tss << std::endl;
+  }
+  return tss.str();
+}
+
+std::string BufferMgr::printMap() {
+  std::ostringstream tss;
+  int segNum = 1;
+  tss << std::endl << "Map Contents: "
+      << " " << getStringMgrType() << ":" << deviceId_ << std::endl;
+  for (auto segIt = chunkIndex_.begin(); segIt != chunkIndex_.end(); ++segIt, ++segNum) {
+    //    tss << "Map Entry " << segNum << ": ";
+    //    for (auto vecIt = segIt->first.begin(); vecIt != segIt->first.end(); ++vecIt) {
+    //      tss << *vecIt << ",";
+    //    }
+    //    tss << " " << std::endl;
+    tss << printSeg(segIt->second);
+  }
+  tss << "--------------------" << std::endl;
+  return tss.str();
 }
 
 void BufferMgr::printSegs() {
   int segNum = 1;
   int slabNum = 1;
-  std::cout << std::endl << std::endl;
+  LOG(INFO) << std::endl << " " << getStringMgrType() << ":" << deviceId_;
   for (auto slabIt = slabSegments_.begin(); slabIt != slabSegments_.end(); ++slabIt, ++slabNum) {
-    std::cout << "Slab Num: " << slabNum << std::endl;
+    LOG(INFO) << "Slab Num: " << slabNum << " " << getStringMgrType() << ":" << deviceId_;
     for (auto segIt = slabIt->begin(); segIt != slabIt->end(); ++segIt, ++segNum) {
-      std::cout << "Segment: " << segNum << std::endl;
+      LOG(INFO) << "Segment: " << segNum << " " << getStringMgrType() << ":" << deviceId_;
       printSeg(segIt);
-      std::cout << std::endl;
+      LOG(INFO) << " " << getStringMgrType() << ":" << deviceId_;
     }
-    std::cout << "--------------------" << std::endl;
+    LOG(INFO) << "--------------------"
+              << " " << getStringMgrType() << ":" << deviceId_;
   }
-}
-
-void BufferMgr::printMap() {
-  int segNum = 1;
-  std::cout << std::endl << "Map Contents: " << std::endl;
-  for (auto segIt = chunkIndex_.begin(); segIt != chunkIndex_.end(); ++segIt, ++segNum) {
-    std::cout << "Chunk " << segNum << ": ";
-    for (auto vecIt = segIt->first.begin(); vecIt != segIt->first.end(); ++vecIt) {
-      std::cout << *vecIt << ",";
-    }
-    std::cout << std::endl;
-    printSeg(segIt->second);
-  }
-  std::cout << "--------------------" << std::endl;
 }
 
 bool BufferMgr::isBufferOnDevice(const ChunkKey& key) {
@@ -473,7 +524,7 @@ void BufferMgr::removeSegment(BufferList::iterator& segIt) {
   } else {
     if (segIt != slabSegments_[slabNum].begin()) {
       auto prevIt = std::prev(segIt);
-      // std::cout << "PrevIt: " << std::endl;
+      // LOG(INFO) << "PrevIt: " << " " << getStringMgrType() << ":" << deviceId_;
       // printSeg(prevIt);
       if (prevIt->memStatus == FREE) {
         segIt->startPage = prevIt->startPage;
@@ -504,9 +555,9 @@ void BufferMgr::checkpoint() {
         bufferIt->second->buffer->isDirty_) {  // checks that buffer is actual chunk (not just buffer) and is dirty
       // cout << "Flushing: ";
       // for (auto vecIt = bufferIt->second->chunkKey.begin(); vecIt != bufferIt->second->chunkKey.end(); ++vecIt) {
-      //    std::cout << *vecIt << ",";
+      //    LOG(INFO) << *vecIt << ",";
       //}
-      // std::cout << std::endl;
+      // LOG(INFO) << " " << getStringMgrType() << ":" << deviceId_;
       parentMgr_->putBuffer(bufferIt->second->chunkKey, bufferIt->second->buffer);
       bufferIt->second->buffer->clearDirtyBits();
     }
@@ -543,7 +594,7 @@ AbstractBuffer* BufferMgr::getBuffer(const ChunkKey& key, const size_t numBytes)
       // created
       cout << "Could not find chunk: ";
       for (auto subKey : key) {
-        std::cout << subKey << ",";
+        LOG(INFO) << subKey << ",";
       }
       cout << endl;
       deleteBuffer(key);
@@ -591,7 +642,7 @@ void BufferMgr::fetchBuffer(const ChunkKey& key, AbstractBuffer* destBuffer, con
   }
   size_t chunkSize = numBytes == 0 ? buffer->size() : numBytes;
   destBuffer->reserve(chunkSize);
-  // std::cout << "After reserve chunksize: " << chunkSize << std::endl;
+  // LOG(INFO) << "After reserve chunksize: " << chunkSize << " " << getStringMgrType() << ":" << deviceId_;
   if (buffer->isUpdated()) {
     buffer->read(destBuffer->getMemoryPtr(), chunkSize, 0, destBuffer->getType(), deviceId_);
   } else {

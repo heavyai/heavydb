@@ -67,9 +67,11 @@ class BufferMgr : public AbstractBufferMgr {  // implements
 
   void clear();
 
-  void printMap();
+  std::string printSlab(size_t slabNum);
+  std::string printSlabs();
+  std::string printMap();
   void printSegs();
-  void printSeg(BufferList::iterator& segIt);
+  std::string printSeg(BufferList::iterator& segIt);
   std::string keyToString(const ChunkKey& key);
 
   /// Creates a chunk with the specified key and page size.
