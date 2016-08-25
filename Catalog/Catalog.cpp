@@ -463,7 +463,8 @@ void Catalog::buildMaps() {
   updateFrontendViewAndLinkUsers();
   updateFrontendViewSchema();
   string frontendViewQuery(
-      "SELECT viewid, view_state, name, image_hash, update_time, userid, view_metadata FROM mapd_frontend_views");
+      "SELECT viewid, view_state, name, image_hash, strftime('%Y-%m-%dT%H:%M:%SZ', update_time), userid, view_metadata "
+      "FROM mapd_frontend_views");
   sqliteConnector_.query(frontendViewQuery);
   numRows = sqliteConnector_.getNumRows();
   for (size_t r = 0; r < numRows; ++r) {
@@ -479,7 +480,9 @@ void Catalog::buildMaps() {
   }
 
   updateLinkSchema();
-  string linkQuery("SELECT linkid, userid, link, view_state, update_time, view_metadata FROM mapd_links");
+  string linkQuery(
+      "SELECT linkid, userid, link, view_state, strftime('%Y-%m-%dT%H:%M:%SZ', update_time), view_metadata "
+      "FROM mapd_links");
   sqliteConnector_.query(linkQuery);
   numRows = sqliteConnector_.getNumRows();
   for (size_t r = 0; r < numRows; ++r) {
@@ -930,7 +933,8 @@ void Catalog::createFrontendView(FrontendViewDescriptor& vd) {
   // now get the auto generated viewid
   try {
     sqliteConnector_.query_with_text_params(
-        "SELECT viewid, update_time FROM mapd_frontend_views WHERE name = ? and userid = ?",
+        "SELECT viewid, strftime('%Y-%m-%dT%H:%M:%SZ', update_time) FROM mapd_frontend_views "
+        "WHERE name = ? and userid = ?",
         std::vector<std::string>{vd.viewName, std::to_string(vd.userId)});
     vd.viewId = sqliteConnector_.getData<int>(0, 0);
     vd.updateTime = sqliteConnector_.getData<std::string>(0, 1);
@@ -969,7 +973,8 @@ std::string Catalog::createLink(LinkDescriptor& ld, size_t min_length) {
           std::vector<std::string>{std::to_string(ld.userId), ld.link, ld.viewState, ld.viewMetadata});
     }
     // now get the auto generated viewid
-    sqliteConnector_.query_with_text_param("SELECT linkid, update_time FROM mapd_links WHERE link = ?", ld.link);
+    sqliteConnector_.query_with_text_param(
+        "SELECT linkid, strftime('%Y-%m-%dT%H:%M:%SZ', update_time) FROM mapd_links WHERE link = ?", ld.link);
     ld.linkId = sqliteConnector_.getData<int>(0, 0);
     ld.updateTime = sqliteConnector_.getData<std::string>(0, 1);
   } catch (std::exception& e) {
