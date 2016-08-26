@@ -382,6 +382,48 @@ std::shared_ptr<Analyzer::Expr> LikeExpr::get(std::shared_ptr<Analyzer::Expr> ar
   return result;
 }
 
+void RegexpExpr::check_pattern_expr(const std::string& pattern_str, char escape_char) {
+  if (pattern_str.back() == escape_char)
+    throw std::runtime_error("REGEXP pattern must not end with escape character.");
+}
+
+std::shared_ptr<Analyzer::Expr> RegexpExpr::analyze(const Catalog_Namespace::Catalog& catalog,
+                                                    Analyzer::Query& query,
+                                                    TlistRefType allow_tlist_ref) const {
+  auto arg_expr = arg->analyze(catalog, query, allow_tlist_ref);
+  auto pattern_expr = pattern_string->analyze(catalog, query, allow_tlist_ref);
+  auto escape_expr = escape_string == nullptr ? nullptr : escape_string->analyze(catalog, query, allow_tlist_ref);
+  return RegexpExpr::get(arg_expr, pattern_expr, escape_expr, is_not);
+}
+
+std::shared_ptr<Analyzer::Expr> RegexpExpr::get(std::shared_ptr<Analyzer::Expr> arg_expr,
+                                                std::shared_ptr<Analyzer::Expr> pattern_expr,
+                                                std::shared_ptr<Analyzer::Expr> escape_expr,
+                                                const bool is_not) {
+  if (!arg_expr->get_type_info().is_string())
+    throw std::runtime_error("expression before REGEXP must be of a string type.");
+  if (!pattern_expr->get_type_info().is_string())
+    throw std::runtime_error("expression after REGEXP must be of a string type.");
+  char escape_char = '\\';
+  if (escape_expr != nullptr) {
+    if (!escape_expr->get_type_info().is_string())
+      throw std::runtime_error("expression after ESCAPE must be of a string type.");
+    if (!escape_expr->get_type_info().is_string())
+      throw std::runtime_error("expression after ESCAPE must be of a string type.");
+    auto c = std::dynamic_pointer_cast<Analyzer::Constant>(escape_expr);
+    if (c != nullptr && c->get_constval().stringval->length() > 1)
+      throw std::runtime_error("String after ESCAPE must have a single character.");
+    escape_char = (*c->get_constval().stringval)[0];
+    if (escape_char != '\\')
+      throw std::runtime_error("Only supporting '\\' escape character.");
+  }
+  std::shared_ptr<Analyzer::Expr> result =
+      makeExpr<Analyzer::RegexpExpr>(arg_expr->decompress(), pattern_expr, escape_expr);
+  if (is_not)
+    result = makeExpr<Analyzer::UOper>(kBOOLEAN, kNOT, result);
+  return result;
+}
+
 std::shared_ptr<Analyzer::Expr> ExistsExpr::analyze(const Catalog_Namespace::Catalog& catalog,
                                                     Analyzer::Query& query,
                                                     TlistRefType allow_tlist_ref) const {
@@ -1261,6 +1303,18 @@ std::string LikeExpr::to_string() const {
   else
     str += " LIKE ";
   str += like_string->to_string();
+  if (escape_string != nullptr)
+    str += " ESCAPE " + escape_string->to_string();
+  return str;
+}
+
+std::string RegexpExpr::to_string() const {
+  std::string str = arg->to_string();
+  if (is_not)
+    str += " NOT REGEXP ";
+  else
+    str += " REGEXP ";
+  str += pattern_string->to_string();
   if (escape_string != nullptr)
     str += " ESCAPE " + escape_string->to_string();
   return str;

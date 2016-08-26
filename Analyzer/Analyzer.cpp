@@ -86,6 +86,11 @@ std::shared_ptr<Analyzer::Expr> LikeExpr::deep_copy() const {
       arg->deep_copy(), like_expr->deep_copy(), escape_expr ? escape_expr->deep_copy() : nullptr, is_ilike, is_simple);
 }
 
+std::shared_ptr<Analyzer::Expr> RegexpExpr::deep_copy() const {
+  return makeExpr<RegexpExpr>(
+      arg->deep_copy(), pattern_expr->deep_copy(), escape_expr ? escape_expr->deep_copy() : nullptr);
+}
+
 std::shared_ptr<Analyzer::Expr> AggExpr::deep_copy() const {
   return makeExpr<AggExpr>(type_info, aggtype, arg == nullptr ? nullptr : arg->deep_copy(), is_distinct);
 }
@@ -1050,6 +1055,19 @@ void LikeExpr::group_predicates(std::list<const Expr*>& scan_predicates,
     const_predicates.push_back(this);
 }
 
+void RegexpExpr::group_predicates(std::list<const Expr*>& scan_predicates,
+                                  std::list<const Expr*>& join_predicates,
+                                  std::list<const Expr*>& const_predicates) const {
+  std::set<int> rte_idx_set;
+  arg->collect_rte_idx(rte_idx_set);
+  if (rte_idx_set.size() > 1)
+    join_predicates.push_back(this);
+  else if (rte_idx_set.size() == 1)
+    scan_predicates.push_back(this);
+  else
+    const_predicates.push_back(this);
+}
+
 void AggExpr::group_predicates(std::list<const Expr*>& scan_predicates,
                                std::list<const Expr*>& join_predicates,
                                std::list<const Expr*>& const_predicates) const {
@@ -1417,6 +1435,19 @@ bool LikeExpr::operator==(const Expr& rhs) const {
   return false;
 }
 
+bool RegexpExpr::operator==(const Expr& rhs) const {
+  if (typeid(rhs) != typeid(RegexpExpr))
+    return false;
+  const RegexpExpr& rhs_re = dynamic_cast<const RegexpExpr&>(rhs);
+  if (!(*arg == *rhs_re.get_arg()) || !(*pattern_expr == *rhs_re.get_pattern_expr()))
+    return false;
+  if (escape_expr.get() == rhs_re.get_escape_expr())
+    return true;
+  if (escape_expr != nullptr && rhs_re.get_escape_expr() != nullptr && *escape_expr == *rhs_re.get_escape_expr())
+    return true;
+  return false;
+}
+
 bool InValues::operator==(const Expr& rhs) const {
   if (typeid(rhs) != typeid(InValues))
     return false;
@@ -1623,6 +1654,15 @@ void LikeExpr::print() const {
   std::cout << ") ";
 }
 
+void RegexpExpr::print() const {
+  std::cout << "(REGEXP ";
+  arg->print();
+  pattern_expr->print();
+  if (escape_expr != nullptr)
+    escape_expr->print();
+  std::cout << ") ";
+}
+
 void AggExpr::print() const {
   std::string agg;
   switch (aggtype) {
@@ -1760,6 +1800,17 @@ void LikeExpr::find_expr(bool (*f)(const Expr*), std::list<const Expr*>& expr_li
   }
   arg->find_expr(f, expr_list);
   like_expr->find_expr(f, expr_list);
+  if (escape_expr != nullptr)
+    escape_expr->find_expr(f, expr_list);
+}
+
+void RegexpExpr::find_expr(bool (*f)(const Expr*), std::list<const Expr*>& expr_list) const {
+  if (f(this)) {
+    add_unique(expr_list);
+    return;
+  }
+  arg->find_expr(f, expr_list);
+  pattern_expr->find_expr(f, expr_list);
   if (escape_expr != nullptr)
     escape_expr->find_expr(f, expr_list);
 }
