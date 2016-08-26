@@ -31,8 +31,6 @@ class StringDictionary {
                                    const bool is_simple,
                                    const char escape) const noexcept;
 
-  std::vector<std::string> getRegexpLike(const std::string& pattern, const char escape) const noexcept;
-
   void clearTransient() noexcept;
   bool checkpoint() noexcept;
 

@@ -143,9 +143,6 @@ class CalciteAdapter {
     if (op_str == std::string("LIKE") || op_str == std::string("PG_ILIKE")) {
       return translateLike(expr, scan_targets, op_str == std::string("PG_ILIKE"));
     }
-    if (op_str == std::string("REGEXP")) {
-      return translateRegexp(expr, scan_targets);
-    }
     if (op_str == std::string("CASE")) {
       return translateCase(expr, scan_targets);
     }
@@ -265,17 +262,6 @@ class CalciteAdapter {
     auto rhs = getExprFromNode(operands[1], scan_targets);
     auto esc = operands.Size() > 2 ? getExprFromNode(operands[2], scan_targets) : nullptr;
     return Parser::LikeExpr::get(lhs, rhs, esc, is_ilike, false);
-  }
-
-  std::shared_ptr<Analyzer::Expr> translateRegexp(
-      const rapidjson::Value& expr,
-      const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& scan_targets) {
-    const auto& operands = expr["operands"];
-    CHECK_GE(operands.Size(), unsigned(2));
-    auto lhs = getExprFromNode(operands[0], scan_targets);
-    auto rhs = getExprFromNode(operands[1], scan_targets);
-    auto esc = operands.Size() > 2 ? getExprFromNode(operands[2], scan_targets) : nullptr;
-    return Parser::RegexpExpr::get(lhs, rhs, esc, false);
   }
 
   std::shared_ptr<Analyzer::Expr> translateCase(
@@ -1141,20 +1127,6 @@ std::string pg_shim(const std::string& query) {
       result.replace(what.position(),
                      what.length(),
                      what[1] + "PG_ILIKE(" + what[2] + ", " + what[3] + (esc.empty() ? "" : ", " + esc) + ")");
-    }
-  }
-  {
-    boost::regex regexp_expr{R"((\s+)([^\s]+)\s+REGEXP\s+('(?:[^']+|'')+')(\s+escape(\s+('[^']+')))?)",
-                             boost::regex::perl | boost::regex::icase};
-    boost::smatch what;
-    while (true) {
-      if (!boost::regex_search(result, what, regexp_expr)) {
-        break;
-      }
-      std::string esc = what[6];
-      result.replace(what.position(),
-                     what.length(),
-                     what[1] + "REGEXP_LIKE(" + what[2] + ", " + what[3] + (esc.empty() ? "" : ", " + esc) + ")");
     }
   }
   {

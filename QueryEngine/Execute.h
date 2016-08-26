@@ -301,11 +301,6 @@ class Executor {
                                const bool is_simple,
                                const char escape_char,
                                const CompilationOptions&);
-  llvm::Value* codegen(const Analyzer::RegexpExpr*, const CompilationOptions&);
-  llvm::Value* codegenDictRegexp(const std::shared_ptr<Analyzer::Expr> arg,
-                                 const Analyzer::Constant* pattern,
-                                 const char escape_char,
-                                 const CompilationOptions&);
   llvm::Value* codegen(const Analyzer::InValues*, const CompilationOptions&);
   InValuesBitmap* createInValuesBitmap(const Analyzer::InValues*, const CompilationOptions&);
   llvm::Value* codegenCmp(const Analyzer::BinOper*, const CompilationOptions&);

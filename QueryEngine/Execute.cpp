@@ -640,10 +640,6 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Expr* expr,
   if (like_expr) {
     return {codegen(like_expr, co)};
   }
-  auto regexp_expr = dynamic_cast<const Analyzer::RegexpExpr*>(expr);
-  if (regexp_expr) {
-    return {codegen(regexp_expr, co)};
-  }
   auto in_expr = dynamic_cast<const Analyzer::InValues*>(expr);
   if (in_expr) {
     return {codegen(in_expr, co)};
@@ -789,80 +785,6 @@ llvm::Value* Executor::codegenDictLike(const std::shared_ptr<Analyzer::Expr> lik
     matching_str_exprs.push_back(const_val->add_cast(dict_like_arg_ti));
   }
   const auto in_values = makeExpr<Analyzer::InValues>(dict_like_arg, matching_str_exprs);
-  return codegen(in_values.get(), co);
-}
-
-llvm::Value* Executor::codegen(const Analyzer::RegexpExpr* expr, const CompilationOptions& co) {
-  if (is_unnest(extract_cast_arg(expr->get_arg()))) {
-    throw std::runtime_error("REGEXP not supported for unnested expressions");
-  }
-  char escape_char{'\\'};
-  if (expr->get_escape_expr()) {
-    auto escape_char_expr = dynamic_cast<const Analyzer::Constant*>(expr->get_escape_expr());
-    CHECK(escape_char_expr);
-    CHECK(escape_char_expr->get_type_info().is_string());
-    CHECK_EQ(size_t(1), escape_char_expr->get_constval().stringval->size());
-    escape_char = (*escape_char_expr->get_constval().stringval)[0];
-  }
-  auto pattern = dynamic_cast<const Analyzer::Constant*>(expr->get_pattern_expr());
-  CHECK(pattern);
-  auto fast_dict_pattern_lv = codegenDictRegexp(expr->get_own_arg(), pattern, escape_char, co);
-  if (fast_dict_pattern_lv) {
-    return fast_dict_pattern_lv;
-  }
-  auto str_lv = codegen(expr->get_arg(), true, co);
-  // Running on CPU for now.
-  cgen_state_->must_run_on_cpu_ = true;
-  if (str_lv.size() != 3) {
-    CHECK_EQ(size_t(1), str_lv.size());
-    str_lv.push_back(cgen_state_->emitCall("extract_str_ptr", {str_lv.front()}));
-    str_lv.push_back(cgen_state_->emitCall("extract_str_len", {str_lv.front()}));
-    cgen_state_->must_run_on_cpu_ = true;
-  }
-  auto regexp_expr_arg_lvs = codegen(expr->get_pattern_expr(), true, co);
-  CHECK_EQ(size_t(3), regexp_expr_arg_lvs.size());
-  const bool is_nullable{!expr->get_arg()->get_type_info().get_notnull()};
-  std::vector<llvm::Value*> regexp_args{str_lv[1], str_lv[2], regexp_expr_arg_lvs[1], regexp_expr_arg_lvs[2]};
-  std::string fn_name("regexp_like");
-  regexp_args.push_back(ll_int(int8_t(escape_char)));
-  if (is_nullable) {
-    fn_name += "_nullable";
-    regexp_args.push_back(inlineIntNull(expr->get_type_info()));
-    return cgen_state_->emitExternalCall(fn_name, get_int_type(8, cgen_state_->context_), regexp_args);
-  }
-  return cgen_state_->emitExternalCall(fn_name, get_int_type(1, cgen_state_->context_), regexp_args);
-}
-
-llvm::Value* Executor::codegenDictRegexp(const std::shared_ptr<Analyzer::Expr> pattern_arg,
-                                         const Analyzer::Constant* pattern,
-                                         const char escape_char,
-                                         const CompilationOptions& co) {
-  const auto cast_oper = std::dynamic_pointer_cast<Analyzer::UOper>(pattern_arg);
-  if (!cast_oper) {
-    return nullptr;
-  }
-  CHECK(cast_oper);
-  CHECK_EQ(kCAST, cast_oper->get_optype());
-  const auto dict_regexp_arg = cast_oper->get_own_operand();
-  const auto& dict_regexp_arg_ti = dict_regexp_arg->get_type_info();
-  CHECK(dict_regexp_arg_ti.is_string());
-  CHECK_EQ(kENCODING_DICT, dict_regexp_arg_ti.get_compression());
-  const auto sd = getStringDictionary(dict_regexp_arg_ti.get_comp_param(), row_set_mem_owner_);
-  if (sd->size() > 10000000) {
-    return nullptr;
-  }
-  const auto& pattern_ti = pattern->get_type_info();
-  CHECK(pattern_ti.is_string());
-  CHECK_EQ(kENCODING_NONE, pattern_ti.get_compression());
-  const auto& pattern_datum = pattern->get_constval();
-  const auto& pattern_str = *pattern_datum.stringval;
-  const auto matching_strings = sd->getRegexpLike(pattern_str, escape_char);
-  std::list<std::shared_ptr<Analyzer::Expr>> matching_str_exprs;
-  for (const auto& matching_string : matching_strings) {
-    auto const_val = Parser::StringLiteral::analyzeValue(matching_string);
-    matching_str_exprs.push_back(const_val->add_cast(dict_regexp_arg_ti));
-  }
-  const auto in_values = makeExpr<Analyzer::InValues>(dict_regexp_arg, matching_str_exprs);
   return codegen(in_values.get(), co);
 }
 
@@ -3425,9 +3347,6 @@ ExecutorDeviceType Executor::getDeviceTypeForTargets(const RelAlgExecutionUnit& 
         return ExecutorDeviceType::CPU;
       }
     }
-    if (dynamic_cast<const Analyzer::RegexpExpr*>(target_expr)) {
-      return ExecutorDeviceType::CPU;
-    }
   }
   return requested_device_type;
 }
@@ -4701,9 +4620,6 @@ bool should_defer_eval(const std::shared_ptr<Analyzer::Expr> expr) {
   if (std::dynamic_pointer_cast<Analyzer::LikeExpr>(expr)) {
     return true;
   }
-  if (std::dynamic_pointer_cast<Analyzer::RegexpExpr>(expr)) {
-    return true;
-  }
   if (!std::dynamic_pointer_cast<Analyzer::BinOper>(expr)) {
     return false;
   }
@@ -5357,8 +5273,6 @@ declare i8 @string_gt_nullable(i8*, i32, i8*, i32, i8);
 declare i8 @string_ge_nullable(i8*, i32, i8*, i32, i8);
 declare i8 @string_eq_nullable(i8*, i32, i8*, i32, i8);
 declare i8 @string_ne_nullable(i8*, i32, i8*, i32, i8);
-declare i1 @regexp_like(i8*, i32, i8*, i32, i8);
-declare i8 @regexp_like_nullable(i8*, i32, i8*, i32, i8, i8);
 declare i32 @record_error_code(i32, i32*);
 declare void @force_sync();
 )" +

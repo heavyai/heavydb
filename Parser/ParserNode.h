@@ -413,35 +413,6 @@ class LikeExpr : public Expr {
 };
 
 /*
- * @type RegexpExpr
- * @brief expression for REGEXP
- */
-class RegexpExpr : public Expr {
- public:
-  RegexpExpr(bool n, Expr* a, Expr* p, Expr* e) : is_not(n), arg(a), pattern_string(p), escape_string(e) {}
-  bool get_is_not() const { return is_not; }
-  const Expr* get_arg() const { return arg.get(); }
-  const Expr* get_pattern_string() const { return pattern_string.get(); }
-  const Expr* get_escape_string() const { return escape_string.get(); }
-  virtual std::shared_ptr<Analyzer::Expr> analyze(const Catalog_Namespace::Catalog& catalog,
-                                                  Analyzer::Query& query,
-                                                  TlistRefType allow_tlist_ref = TLIST_NONE) const;
-  static std::shared_ptr<Analyzer::Expr> get(std::shared_ptr<Analyzer::Expr> arg_expr,
-                                             std::shared_ptr<Analyzer::Expr> pattern_expr,
-                                             std::shared_ptr<Analyzer::Expr> escape_expr,
-                                             const bool is_not);
-  virtual std::string to_string() const;
-
- private:
-  bool is_not;
-  std::unique_ptr<Expr> arg;
-  std::unique_ptr<Expr> pattern_string;
-  std::unique_ptr<Expr> escape_string;
-
-  static void check_pattern_expr(const std::string& pattern_str, char escape_char);
-};
-
-/*
  * @type ExistsExpr
  * @brief expression for EXISTS (subquery)
  */

@@ -36,7 +36,6 @@ set(query_engine_source_files
     RuntimeFunctions.cpp
     RuntimeFunctions.bc
     StringFunctions.cpp
-    RegexpFunctions.cpp
     JoinHashTable.cpp
     HashJoinRuntime.cpp
     Codec.h
@@ -52,7 +51,7 @@ set(group_by_hash_test_files
 execute_process(COMMAND ${llvm_config_cmd} "--includedir"
                 OUTPUT_VARIABLE LLVM_INC_FLAGS)
 
-include_directories(.. ${LLVM_INC_FLAGS} "/usr/local/cuda/nvvm/include/" "/usr/local/cuda/include/" "/usr/local/cuda/nvvm/libnvvm-samples/common/include/" ${Boost_INCLUDE_DIR})
+include_directories(.. ${LLVM_INC_FLAGS} "/usr/local/cuda/nvvm/include/" "/usr/local/cuda/include/" "/usr/local/cuda/nvvm/libnvvm-samples/common/include/")
 
 if(ENABLE_CUDA)
     set(MAPD_DEFINITIONS "-DHAVE_CUDA")
@@ -124,7 +123,7 @@ add_custom_command(
     )
 
 add_custom_command(
-    DEPENDS cuda_mapd_rt.cu GpuInitGroups.cu GroupByRuntime.cpp DateTruncate.cpp ExtractFromTime.cpp ArrayOps.cpp StringFunctions.cpp RegexpFunctions.cpp ${CMAKE_SOURCE_DIR}/Utils/ChunkIter.cpp ${CMAKE_SOURCE_DIR}/Utils/StringLike.cpp ${CMAKE_SOURCE_DIR}/Utils/Regexp.cpp ${CMAKE_CURRENT_SOURCE_DIR}/ExtensionFunctions.hpp
+    DEPENDS cuda_mapd_rt.cu GpuInitGroups.cu GroupByRuntime.cpp DateTruncate.cpp ExtractFromTime.cpp ArrayOps.cpp StringFunctions.cpp ${CMAKE_SOURCE_DIR}/Utils/ChunkIter.cpp ${CMAKE_SOURCE_DIR}/Utils/StringLike.cpp ${CMAKE_CURRENT_SOURCE_DIR}/ExtensionFunctions.hpp
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.o
     COMMAND nvcc
     ARGS
@@ -179,4 +178,4 @@ add_custom_command(
     )
 
 add_executable(group_by_hash_test ${group_by_hash_test_files})
-target_link_libraries(group_by_hash_test gtest ${Glog_LIBRARIES} ${Boost_LIBRARIES})
+target_link_libraries(group_by_hash_test gtest ${Glog_LIBRARIES})

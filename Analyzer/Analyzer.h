@@ -597,55 +597,6 @@ class LikeExpr : public Expr {
 };
 
 /*
- * @type RegexpExpr
- * @brief expression for REGEXP.
- * arg must evaluate to char, varchar or text.
- */
-class RegexpExpr : public Expr {
- public:
-  RegexpExpr(std::shared_ptr<Analyzer::Expr> a, std::shared_ptr<Analyzer::Expr> p, std::shared_ptr<Analyzer::Expr> e)
-      : Expr(kBOOLEAN, a->get_type_info().get_notnull()), arg(a), pattern_expr(p), escape_expr(e) {}
-  const Expr* get_arg() const { return arg.get(); }
-  const std::shared_ptr<Analyzer::Expr> get_own_arg() const { return arg; }
-  const Expr* get_pattern_expr() const { return pattern_expr.get(); }
-  const Expr* get_escape_expr() const { return escape_expr.get(); }
-  virtual std::shared_ptr<Analyzer::Expr> deep_copy() const;
-  virtual void group_predicates(std::list<const Expr*>& scan_predicates,
-                                std::list<const Expr*>& join_predicates,
-                                std::list<const Expr*>& const_predicates) const;
-  virtual void collect_rte_idx(std::set<int>& rte_idx_set) const { arg->collect_rte_idx(rte_idx_set); }
-  virtual void collect_column_var(std::set<const ColumnVar*, bool (*)(const ColumnVar*, const ColumnVar*)>& colvar_set,
-                                  bool include_agg) const {
-    arg->collect_column_var(colvar_set, include_agg);
-  }
-  virtual std::shared_ptr<Analyzer::Expr> rewrite_with_targetlist(
-      const std::vector<std::shared_ptr<TargetEntry>>& tlist) const {
-    return makeExpr<RegexpExpr>(arg->rewrite_with_targetlist(tlist),
-                                pattern_expr->deep_copy(),
-                                escape_expr ? escape_expr->deep_copy() : nullptr);
-  }
-  virtual std::shared_ptr<Analyzer::Expr> rewrite_with_child_targetlist(
-      const std::vector<std::shared_ptr<TargetEntry>>& tlist) const {
-    return makeExpr<RegexpExpr>(arg->rewrite_with_child_targetlist(tlist),
-                                pattern_expr->deep_copy(),
-                                escape_expr ? escape_expr->deep_copy() : nullptr);
-  }
-  virtual std::shared_ptr<Analyzer::Expr> rewrite_agg_to_var(
-      const std::vector<std::shared_ptr<TargetEntry>>& tlist) const {
-    return makeExpr<RegexpExpr>(
-        arg->rewrite_agg_to_var(tlist), pattern_expr->deep_copy(), escape_expr ? escape_expr->deep_copy() : nullptr);
-  }
-  virtual bool operator==(const Expr& rhs) const;
-  virtual void print() const;
-  virtual void find_expr(bool (*f)(const Expr*), std::list<const Expr*>& expr_list) const;
-
- private:
-  std::shared_ptr<Analyzer::Expr> arg;           // the argument to the left of REGEXP
-  std::shared_ptr<Analyzer::Expr> pattern_expr;  // expression that evaluates to pattern string
-  std::shared_ptr<Analyzer::Expr> escape_expr;   // expression that evaluates to escape string, can be nullptr
-};
-
-/*
  * @type AggExpr
  * @brief expression for builtin SQL aggregates.
  */
