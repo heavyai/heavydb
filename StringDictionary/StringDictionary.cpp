@@ -1,6 +1,7 @@
 #include "StringDictionary.h"
 #include "../Shared/sqltypes.h"
 #include "../Utils/StringLike.h"
+#include "../Utils/Regexp.h"
 #include "Shared/thread_count.h"
 
 #include <boost/filesystem/operations.hpp>
@@ -258,6 +259,46 @@ std::vector<std::string> StringDictionary::getLike(const std::string& pattern,
   for (const auto& kv : transient_int_to_str_) {
     const auto str = getStringUnlocked(kv.first);
     if (is_like(str, pattern, icase, is_simple, escape)) {
+      result.push_back(str);
+    }
+  }
+  return result;
+}
+
+namespace {
+
+bool is_regexp_like(const std::string& str, const std::string& pattern, const char escape) {
+  return regexp_like(str.c_str(), str.size(), pattern.c_str(), pattern.size(), escape);
+}
+
+}  // namespace
+
+std::vector<std::string> StringDictionary::getRegexpLike(const std::string& pattern, const char escape) const noexcept {
+  mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
+  std::vector<std::string> result;
+  std::vector<std::thread> workers;
+  int worker_count = cpu_threads();
+  CHECK_GT(worker_count, 0);
+  std::vector<std::vector<std::string>> worker_results(worker_count);
+  for (int worker_idx = 0; worker_idx < worker_count; ++worker_idx) {
+    workers.emplace_back([&worker_results, &pattern, escape, worker_idx, worker_count, this]() {
+      for (size_t string_id = worker_idx; string_id < str_count_; string_id += worker_count) {
+        const auto str = getStringUnlocked(string_id);
+        if (is_regexp_like(str, pattern, escape)) {
+          worker_results[worker_idx].push_back(str);
+        }
+      }
+    });
+  }
+  for (auto& worker : workers) {
+    worker.join();
+  }
+  for (const auto& worker_result : worker_results) {
+    result.insert(result.end(), worker_result.begin(), worker_result.end());
+  }
+  for (const auto& kv : transient_int_to_str_) {
+    const auto str = getStringUnlocked(kv.first);
+    if (is_regexp_like(str, pattern, escape)) {
       result.push_back(str);
     }
   }

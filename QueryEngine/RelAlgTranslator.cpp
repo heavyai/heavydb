@@ -247,6 +247,14 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLike(const RexFunctio
   return Parser::LikeExpr::get(arg, like, escape, is_ilike, false);
 }
 
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateRegexp(const RexFunctionOperator* rex_function) const {
+  CHECK(rex_function->size() == 2 || rex_function->size() == 3);
+  const auto arg = translateScalarRex(rex_function->getOperand(0));
+  const auto pattern = translateScalarRex(rex_function->getOperand(1));
+  const auto escape = (rex_function->size() == 3) ? translateScalarRex(rex_function->getOperand(2)) : nullptr;
+  return Parser::RegexpExpr::get(arg, pattern, escape, false);
+}
+
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateExtract(const RexFunctionOperator* rex_function) const {
   CHECK_EQ(size_t(2), rex_function->size());
   const auto timeunit = translateScalarRex(rex_function->getOperand(0));
@@ -389,6 +397,9 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateSign(const RexFunctio
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(const RexFunctionOperator* rex_function) const {
   if (rex_function->getName() == std::string("LIKE") || rex_function->getName() == std::string("PG_ILIKE")) {
     return translateLike(rex_function);
+  }
+  if (rex_function->getName() == std::string("REGEXP_LIKE")) {
+    return translateRegexp(rex_function);
   }
   if (rex_function->getName() == std::string("PG_EXTRACT") || rex_function->getName() == std::string("PG_DATE_TRUNC")) {
     return translateExtract(rex_function);
