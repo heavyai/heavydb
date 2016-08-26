@@ -719,6 +719,38 @@ TEST(Select, Strings) {
     ASSERT_EQ(2 * g_num_rows, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE CHAR_LENGTH(str) = 3;", dt)));
     ASSERT_EQ(g_num_rows, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE str ILIKE 'f%%';", dt)));
     ASSERT_EQ(0, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE str ILIKE 'McDonald''s';", dt)));
+    ASSERT_EQ("foo",
+              boost::get<std::string>(
+                  v<NullableString>(run_simple_agg("SELECT str FROM test WHERE REGEXP_LIKE(str, '^f.?.+');", dt))));
+    ASSERT_EQ("bar",
+              boost::get<std::string>(
+                  v<NullableString>(run_simple_agg("SELECT str FROM test WHERE REGEXP_LIKE(str, '^[a-z]+r$');", dt))));
+    ASSERT_EQ(2 * g_num_rows, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE str REGEXP '.*';", dt)));
+    ASSERT_EQ(2 * g_num_rows, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE str REGEXP '...';", dt)));
+    ASSERT_EQ(2 * g_num_rows, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE str REGEXP '.+.+.+';", dt)));
+    ASSERT_EQ(2 * g_num_rows, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE str REGEXP '.?.?.?';", dt)));
+    ASSERT_EQ(2 * g_num_rows,
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE str REGEXP 'ba.' or str REGEXP 'fo.';", dt)));
+    ASSERT_EQ(2 * g_num_rows,
+              v<int64_t>(
+                  run_simple_agg("SELECT COUNT(*) FROM test WHERE REGEXP_LIKE(str, 'ba.') or str REGEXP 'fo.?';", dt)));
+    ASSERT_EQ(2 * g_num_rows,
+              v<int64_t>(
+                  run_simple_agg("SELECT COUNT(*) FROM test WHERE str REGEXP 'ba.' or REGEXP_LIKE(str, 'fo.+');", dt)));
+    ASSERT_EQ(g_num_rows, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE str REGEXP 'ba.+';", dt)));
+    ASSERT_EQ(g_num_rows,
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE REGEXP_LIKE(str, '.?ba.*');", dt)));
+    ASSERT_EQ(2 * g_num_rows,
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM test WHERE REGEXP_LIKE(str,'ba.') or REGEXP_LIKE(str, 'fo.+');", dt)));
+    ASSERT_EQ(2 * g_num_rows,
+              v<int64_t>(
+                  run_simple_agg("SELECT COUNT(*) FROM test WHERE str REGEXP 'ba.' or REGEXP_LIKE(str, 'fo.+');", dt)));
+    ASSERT_EQ(2 * g_num_rows,
+              v<int64_t>(
+                  run_simple_agg("SELECT COUNT(*) FROM test WHERE REGEXP_LIKE(str, 'ba.') or str REGEXP 'fo.?';", dt)));
+    ASSERT_EQ(2 * g_num_rows,
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE str REGEXP 'ba.' or str REGEXP 'fo.';", dt)));
   }
 }
 
@@ -752,6 +784,15 @@ TEST(Select, StringsNoneEncoding) {
     c("SELECT COUNT(*) FROM test WHERE LENGTH(real_str) = 8;", dt);
     ASSERT_EQ(2 * g_num_rows,
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE CHAR_LENGTH(real_str) = 8;", dt)));
+
+    ASSERT_EQ(2 * g_num_rows,
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE REGEXP_LIKE(real_str,'real_.*.*.*');", dt)));
+    ASSERT_EQ(g_num_rows,
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE real_str REGEXP 'real_ba.*';", dt)));
+    ASSERT_EQ(2 * g_num_rows, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE real_str REGEXP '.*';", dt)));
+    ASSERT_EQ(g_num_rows,
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE real_str REGEXP 'real_f.*.*';", dt)));
+    ASSERT_EQ(0, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE real_str REGEXP 'real_f.+\%';", dt)));
   }
 }
 
