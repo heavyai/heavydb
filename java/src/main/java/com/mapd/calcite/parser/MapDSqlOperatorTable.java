@@ -108,6 +108,7 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
         opTab.addOperator(new Length());
         opTab.addOperator(new CharLength());
         opTab.addOperator(new PgILike());
+        opTab.addOperator(new RegexpLike());
         opTab.addOperator(new Sign());
         opTab.addOperator(new Truncate());
         if (extSigs == null) {
@@ -429,6 +430,41 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
 
         public PgILike() {
             super("PG_ILIKE",
+                    SqlKind.OTHER_FUNCTION,
+                    null,
+                    null,
+                    OperandTypes.family(getSignatureFamilies(), new EscapeOptional()),
+                    SqlFunctionCategory.SYSTEM);
+        }
+
+        private static java.util.List<SqlTypeFamily> getSignatureFamilies() {
+            java.util.ArrayList<SqlTypeFamily> families = new java.util.ArrayList<SqlTypeFamily>();
+            families.add(SqlTypeFamily.STRING);
+            families.add(SqlTypeFamily.STRING);
+            families.add(SqlTypeFamily.STRING);
+            return families;
+        }
+
+        private static class EscapeOptional implements Predicate<Integer> {
+
+            @Override
+            public boolean apply(Integer t) {
+                return t == 2;
+            }
+        }
+
+        @Override
+        public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+            final RelDataTypeFactory typeFactory
+                    = opBinding.getTypeFactory();
+            return typeFactory.createSqlType(SqlTypeName.BOOLEAN);
+        }
+    }
+
+    public static class RegexpLike extends SqlFunction {
+
+        public RegexpLike() {
+            super("REGEXP_LIKE",
                     SqlKind.OTHER_FUNCTION,
                     null,
                     null,
