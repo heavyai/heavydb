@@ -17,7 +17,7 @@ add_executable(StorageTest StorageTest.cpp PopulateTableRandom.cpp ScanTable.cpp
 add_executable(StoragePerfTest StoragePerfTest.cpp PopulateTableRandom.cpp ScanTable.cpp)
 
 target_link_libraries(PlanTest gtest ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${Glog_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${LLVM_LINKER_FLAGS} "-lz -lncurses")
-target_link_libraries(UtilTest Utils gtest)
+target_link_libraries(UtilTest Utils gtest ${Boost_LIBRARIES})
 target_link_libraries(StorageTest gtest ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${Glog_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${LLVM_LINKER_FLAGS} "-lz -lncurses")
 target_link_libraries(StoragePerfTest gtest ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${Glog_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${LLVM_LINKER_FLAGS} "-lz -lncurses")
 set(EXECUTE_TEST_LIBS gtest ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${Glog_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${LLVM_LINKER_FLAGS} "-lz -lncurses")
