@@ -149,8 +149,15 @@ __global__ void init_columnar_group_by_buffer_gpu_wrapper(int64_t* groups_buffer
                                                           const bool need_padding,
                                                           const bool keyless,
                                                           const int8_t key_size) {
-  init_columnar_group_by_buffer_gpu_impl(
-      groups_buffer, init_vals, groups_buffer_entry_count, key_qw_count, agg_col_count, col_sizes, need_padding, keyless, key_size);
+  init_columnar_group_by_buffer_gpu_impl(groups_buffer,
+                                         init_vals,
+                                         groups_buffer_entry_count,
+                                         key_qw_count,
+                                         agg_col_count,
+                                         col_sizes,
+                                         need_padding,
+                                         keyless,
+                                         key_size);
 }
 
 void init_group_by_buffer_on_device(int64_t* groups_buffer,

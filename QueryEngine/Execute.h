@@ -406,7 +406,7 @@ class Executor {
     bool output_columnar;
     std::string llvm_ir;
   };
-  
+
   bool isArchPascal(const ExecutorDeviceType dt) const {
     return dt == ExecutorDeviceType::GPU && catalog_->get_dataMgr().cudaMgr_->isArchPascal();
   }
