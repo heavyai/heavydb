@@ -143,7 +143,7 @@ class CalciteAdapter {
     if (op_str == std::string("LIKE") || op_str == std::string("PG_ILIKE")) {
       return translateLike(expr, scan_targets, op_str == std::string("PG_ILIKE"));
     }
-    if (op_str == std::string("REGEXP")) {
+    if (op_str == std::string("REGEXP_LIKE")) {
       return translateRegexp(expr, scan_targets);
     }
     if (op_str == std::string("CASE")) {
