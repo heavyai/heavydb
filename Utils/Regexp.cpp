@@ -31,7 +31,7 @@ extern "C" DEVICE bool regexp_like(const char* str,
   try {
     boost::regex re(pattern, pat_len, boost::regex::extended);
     boost::cmatch what;
-    result = boost::regex_match(str, what, re);
+    result = boost::regex_match(str, str + str_len, what, re);
   } catch (std::runtime_error& error) {
     // LOG(ERROR) << "Regexp match error: " << error.what();
     result = false;
