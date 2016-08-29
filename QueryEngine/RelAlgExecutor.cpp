@@ -536,6 +536,10 @@ size_t get_scan_limit(const RelAlgNode* ra, const size_t limit) {
   return (compound && compound->isAggregate()) ? 0 : limit;
 }
 
+bool first_oe_is_desc(const std::list<Analyzer::OrderEntry>& order_entries) {
+  return !order_entries.empty() && order_entries.front().is_desc;
+}
+
 }  // namespace
 
 ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
@@ -551,8 +555,10 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
   const bool is_aggregate = ((compound && compound->isAggregate()) || aggregate);
   while (true) {
     std::list<std::shared_ptr<Analyzer::Expr>> groupby_exprs;
+    bool is_desc{false};
     try {
       const auto source_work_unit = createSortInputWorkUnit(sort);
+      is_desc = first_oe_is_desc(source_work_unit.exe_unit.sort_info.order_entries);
       groupby_exprs = source_work_unit.exe_unit.groupby_exprs;
       auto source_result = executeWorkUnit(
           source_work_unit, source->getOutputMetainfo(), is_aggregate, co, eo, render_info, queue_time_ms);
@@ -578,7 +584,7 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
       return {rows_to_sort, source_result.getTargetsMeta()};
     } catch (const SpeculativeTopNFailed&) {
       CHECK_EQ(size_t(1), groupby_exprs.size());
-      speculative_topn_blacklist_.add(groupby_exprs.front());
+      speculative_topn_blacklist_.add(groupby_exprs.front(), is_desc);
     }
   }
   CHECK(false);
@@ -593,11 +599,12 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createSortInputWorkUnit(const RelSort* 
   const size_t scan_total_limit = scan_limit ? get_scan_limit(source, scan_limit + offset) : 0;
   size_t max_groups_buffer_entry_guess{scan_total_limit ? scan_total_limit : max_groups_buffer_entry_default_guess};
   SortAlgorithm sort_algorithm{SortAlgorithm::Default};
-  SortInfo sort_info{get_order_entries(sort), sort_algorithm, limit, offset};
+  const auto order_entries = get_order_entries(sort);
+  SortInfo sort_info{order_entries, sort_algorithm, limit, offset};
   auto source_work_unit = createWorkUnit(source, sort_info);
   const auto& source_exe_unit = source_work_unit.exe_unit;
   if (source_exe_unit.groupby_exprs.size() == 1 && source_exe_unit.groupby_exprs.front() &&
-      speculative_topn_blacklist_.contains(source_exe_unit.groupby_exprs.front())) {
+      speculative_topn_blacklist_.contains(source_exe_unit.groupby_exprs.front(), first_oe_is_desc(order_entries))) {
     sort_algorithm = SortAlgorithm::Default;
   }
   sort->setOutputMetainfo(source->getOutputMetainfo());

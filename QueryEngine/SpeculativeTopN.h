@@ -67,11 +67,11 @@ class SpeculativeTopNFailed : public std::runtime_error {
 
 class SpeculativeTopNBlacklist {
  public:
-  void add(const std::shared_ptr<Analyzer::Expr>);
-  bool contains(const std::shared_ptr<Analyzer::Expr>) const;
+  void add(const std::shared_ptr<Analyzer::Expr> expr, const bool desc);
+  bool contains(const std::shared_ptr<Analyzer::Expr> expr, const bool desc) const;
 
  private:
-  std::vector<std::shared_ptr<Analyzer::Expr>> blacklist_;
+  std::vector<std::pair<std::shared_ptr<Analyzer::Expr>, bool>> blacklist_;
 };
 
 bool use_speculative_top_n(const RelAlgExecutionUnit&, const QueryMemoryDescriptor&);
