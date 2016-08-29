@@ -247,8 +247,8 @@ class RexFunctionOperator : public RexOperator {
                       const SQLTypeInfo& ti)
       : RexOperator(kFUNCTION, operands, ti), name_(name) {}
 
-  virtual std::unique_ptr<const RexOperator> getDisambiguated(
-      std::vector<std::unique_ptr<const RexScalar>>& operands) const {
+  std::unique_ptr<const RexOperator> getDisambiguated(
+      std::vector<std::unique_ptr<const RexScalar>>& operands) const override {
     return std::unique_ptr<const RexOperator>(new RexFunctionOperator(name_, operands, getType()));
   }
 
