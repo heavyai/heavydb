@@ -212,3 +212,46 @@ EXTENSION_NOINLINE
 double conv_4326_900913_y__(const float y) {
   return 6378136.99911 * logf(tanf(.00872664626 * y + .785398163397));
 }
+
+/** @brief  Computes the distance, in meters, between two WGS-84 positions.
+  *
+  * The result is equal to <code>EARTH_RADIUS_IN_METERS*ArcInRadians(from,to)</code>
+  *
+  * ArcInRadians is equal to <code>Distance(from,to)/EARTH_RADIUS_IN_METERS</code>
+  *    <code>= 2*asin(sqrt(h(d/EARTH_RADIUS_IN_METERS )))</code>
+  *
+  * where:<ul>
+  *    <li>d is the distance in meters between 'from' and 'to' positions.</li>
+  *    <li>h is the haversine function: <code>h(x)=sin²(x/2)</code></li>
+  * </ul>
+  *
+  * code attribution: http://blog.julien.cayzac.name/2008/10/arc-and-distance-between-two-points-on.html
+  *
+  * The haversine formula gives:
+  *    <code>h(d/R) = h(from.lat-to.lat)+h(from.lon-to.lon)+cos(from.lat)*cos(to.lat)</code>
+  *
+  * @sa http://en.wikipedia.org/wiki/Law_of_haversines
+  */
+EXTENSION_NOINLINE
+double distance_in_meters(const double fromlon, const double fromlat, const double tolon, const double tolat) {
+  double latitudeArc = (fromlat - tolat) * 0.017453292519943295769236907684886;
+  double longitudeArc = (fromlon - tolon) * 0.017453292519943295769236907684886;
+  double latitudeH = sin(latitudeArc * 0.5);
+  latitudeH *= latitudeH;
+  double lontitudeH = sin(longitudeArc * 0.5);
+  lontitudeH *= lontitudeH;
+  double tmp = cos(fromlat * 0.017453292519943295769236907684886) * cos(tolat * 0.017453292519943295769236907684886);
+  return 6372797.560856 * (2.0 * asin(sqrt(latitudeH + tmp * lontitudeH)));
+}
+
+EXTENSION_NOINLINE
+double distance_in_meters__(const float fromlon, const float fromlat, const float tolon, const float tolat) {
+  float latitudeArc = (fromlat - tolat) * 0.017453292519943295769236907684886;
+  float longitudeArc = (fromlon - tolon) * 0.017453292519943295769236907684886;
+  float latitudeH = sin(latitudeArc * 0.5);
+  latitudeH *= latitudeH;
+  float lontitudeH = sin(longitudeArc * 0.5);
+  lontitudeH *= lontitudeH;
+  float tmp = cos(fromlat * 0.017453292519943295769236907684886) * cos(tolat * 0.017453292519943295769236907684886);
+  return 6372797.560856 * (2.0 * asin(sqrt(latitudeH + tmp * lontitudeH)));
+}

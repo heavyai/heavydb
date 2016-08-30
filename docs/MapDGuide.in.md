@@ -790,6 +790,12 @@ SELECT [ALL|DISTINCT] <expr> [AS [<alias>]], ... FROM <table> [,<table>]
 | SIN(**x**) | returns the sine of **x** |
 | TAN(**x**) | returns the tangent of **x** |
 
+## Geometric Function Support
+| Function                                                          | Description                   |
+| ----------------------------------------------------------------- | ----------------------------- |
+| DISTANCE_IN_METERS(**fromLon**, **fromLat**, **toLon**, **toLat**)| calculate distance in meters  |
+|                                                                   | between two WGS-84 positions  |
+
 ## String Function Support
 | Function | Description |
 | --- | --- |

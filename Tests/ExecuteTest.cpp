@@ -1985,6 +1985,9 @@ TEST(Select, RuntimeFunctions) {
     ASSERT_FLOAT_EQ(static_cast<double>(2), v<double>(run_simple_agg("SELECT CEIL(2.0) FROM test LIMIT 1;", dt)));
     ASSERT_FLOAT_EQ(static_cast<double>(-2), v<double>(run_simple_agg("SELECT CEIL(-2.3) FROM test LIMIT 1;", dt)));
     ASSERT_FLOAT_EQ(static_cast<double>(-2), v<double>(run_simple_agg("SELECT CEIL(-2.0) FROM test LIMIT 1;", dt)));
+    ASSERT_FLOAT_EQ(static_cast<float>(4129511.320307),
+                    v<double>(run_simple_agg(
+                        "SELECT DISTANCE_IN_METERS(-74.0059, 40.7217,-122.416667 , 37.783333) FROM test limit1;", dt)));
   }
 }
 #endif  // HAVE_RAVM
