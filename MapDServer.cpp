@@ -1775,6 +1775,7 @@ int main(int argc, char** argv) {
   size_t render_mem_bytes = 500000000;
   int num_gpus = -1;  // Can be used to override number of gpus detected on system - -1 means do not override
   int start_gpu = 0;
+  int tthreadpool_size = 8;
 
   namespace po = boost::program_options;
 
@@ -1827,6 +1828,9 @@ int main(int argc, char** argv) {
       "Enable legacy syntax");
   // Deprecated on 2016-06-23
   desc_adv.add_options()("disable-fork", "(Deprecated) Disable forking");
+  desc_adv.add_options()("tthreadpool-size",
+                         po::value<int>(&tthreadpool_size)->default_value(tthreadpool_size),
+                         "Server thread pool size. Increasing may adversely affect render performance and stability.");
 
   po::positional_options_description positionalOptions;
   positionalOptions.add("data", 1);
@@ -1966,8 +1970,7 @@ int main(int argc, char** argv) {
 
   shared_ptr<TProcessor> processor(new MapDProcessor(handler));
 
-  int workerCount = 4;
-  shared_ptr<ThreadManager> threadManager = ThreadManager::newSimpleThreadManager(workerCount);
+  shared_ptr<ThreadManager> threadManager = ThreadManager::newSimpleThreadManager(tthreadpool_size);
   threadManager->threadFactory(make_shared<PlatformThreadFactory>());
   threadManager->start();
 
