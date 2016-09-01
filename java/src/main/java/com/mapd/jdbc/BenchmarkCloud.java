@@ -14,6 +14,7 @@ import java.sql.*;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -107,7 +108,7 @@ public class BenchmarkCloud {
     // read from query file and execute queries
     String sCurrentLine;
     List<String> resultArray = new ArrayList();
-    Map<String, String> queryIDMap = new HashMap();
+    Map<String, String> queryIDMap = new LinkedHashMap();
     BufferedReader br;
     try {
       br = new BufferedReader(new FileReader(queryFile));

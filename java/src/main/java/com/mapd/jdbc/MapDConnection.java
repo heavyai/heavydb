@@ -47,6 +47,7 @@ public class MapDConnection implements java.sql.Connection {
   protected String url = null;
   protected Properties properties = null;
   protected String user;
+  protected TTransport transport;
 
   public MapDConnection(String url, Properties info) throws SQLException { //logger.debug("Entered");
     this.url = url;
@@ -64,7 +65,6 @@ public class MapDConnection implements java.sql.Connection {
     int port = Integer.valueOf(temp[3]);
     String db = temp[4];
 
-    TTransport transport;
     try {
       transport = new TSocket(machine, port);
 
@@ -141,6 +141,7 @@ public class MapDConnection implements java.sql.Connection {
         client.disconnect(session);
       }
       session = 0;
+      transport.close();
     } catch (ThriftException ex) {
       throw new SQLException("disconnect failed." + ex.toString());
     } catch (TException ex) {

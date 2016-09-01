@@ -37,13 +37,16 @@ public class MapDStatement implements java.sql.Statement {
   @Override
   public ResultSet executeQuery(String sql) throws SQLException { //logger.debug("Entered");
     if (maxRows > 0) {
-      // add limit to sql call if it doesn't already have one
+      // add limit to sql call if it doesn't already have one and is a select
+      String[] tokens = sql.toLowerCase().split(" ",3);
+      if (tokens[0].equals("select")){
       if (sql.toLowerCase().contains("limit")) {
         // do nothing
       } else {
         sql = sql + " LIMIT " + maxRows;
-        logger.info("Added LIMIT of " + maxRows);
+        logger.debug("Added LIMIT of " + maxRows);
       }
+    }
     }
     logger.debug("sql is :'" + sql + "'");
     String afterFnSQL = fnReplace(sql);
