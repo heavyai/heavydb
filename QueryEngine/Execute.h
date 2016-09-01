@@ -284,6 +284,7 @@ class Executor {
   std::vector<llvm::Value*> codegenColVar(const Analyzer::ColumnVar*,
                                           const bool fetch_column,
                                           const bool hoist_literals);
+  llvm::Value* codgenAdjustFixedEncNull(llvm::Value*, const SQLTypeInfo&);
   std::vector<llvm::Value*> codegenOuterJoinNullPlaceholder(const std::vector<llvm::Value*>& orig_lvs,
                                                             const Analyzer::Expr* orig_expr);
   std::vector<llvm::Value*> codegen(const Analyzer::Constant*,

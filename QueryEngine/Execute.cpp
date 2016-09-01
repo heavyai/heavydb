@@ -1085,7 +1085,8 @@ std::vector<llvm::Value*> Executor::codegenColVar(const Analyzer::ColumnVar* col
     plan_state_->columns_to_not_fetch_.insert(col_id);
     return {pos_arg};
   }
-  if (col_var->get_type_info().is_string() && col_var->get_type_info().get_compression() == kENCODING_NONE) {
+  const auto& col_ti = col_var->get_type_info();
+  if (col_ti.is_string() && col_ti.get_compression() == kENCODING_NONE) {
     // real (not dictionary-encoded) strings; store the pointer to the payload
     auto ptr_and_len = cgen_state_->emitExternalCall(
         "string_decode", get_int_type(64, cgen_state_->context_), {col_byte_stream, pos_arg});
@@ -1097,7 +1098,7 @@ std::vector<llvm::Value*> Executor::codegenColVar(const Analyzer::ColumnVar* col
     CHECK(it_ok.second);
     return {ptr_and_len, str_lv, len_lv};
   }
-  if (col_var->get_type_info().is_array()) {
+  if (col_ti.is_array()) {
     return {col_byte_stream};
   }
   const auto decoder = get_col_decoder(col_var);
@@ -1113,12 +1114,16 @@ std::vector<llvm::Value*> Executor::codegenColVar(const Analyzer::ColumnVar* col
                                                            : llvm::Instruction::CastOps::Trunc,
                                                        dec_val,
                                                        get_int_type(col_width, cgen_state_->context_));
+    if (col_ti.get_compression() == kENCODING_FIXED && !col_ti.get_notnull()) {
+      dec_val_cast = codgenAdjustFixedEncNull(dec_val_cast, col_ti);
+    }
   } else {
+    CHECK_EQ(kENCODING_NONE, col_ti.get_compression());
     CHECK(dec_type->isFloatTy() || dec_type->isDoubleTy());
     if (dec_type->isDoubleTy()) {
-      CHECK(col_var->get_type_info().get_type() == kDOUBLE);
+      CHECK(col_ti.get_type() == kDOUBLE);
     } else if (dec_type->isFloatTy()) {
-      CHECK(col_var->get_type_info().get_type() == kFLOAT);
+      CHECK(col_ti.get_type() == kFLOAT);
     }
     dec_val_cast = dec_val;
   }
@@ -1126,6 +1131,43 @@ std::vector<llvm::Value*> Executor::codegenColVar(const Analyzer::ColumnVar* col
   auto it_ok = cgen_state_->fetch_cache_.insert(std::make_pair(local_col_id, std::vector<llvm::Value*>{dec_val_cast}));
   CHECK(it_ok.second);
   return {it_ok.first->second};
+}
+
+namespace {
+
+SQLTypes get_phys_int_type(const size_t byte_sz) {
+  switch (byte_sz) {
+    case 1:
+      return kBOOLEAN;
+    case 2:
+      return kSMALLINT;
+    case 4:
+      return kINT;
+    case 8:
+      return kBIGINT;
+    default:
+      CHECK(false);
+  }
+  return kNULLT;
+}
+
+}  // namespace
+
+llvm::Value* Executor::codgenAdjustFixedEncNull(llvm::Value* val, const SQLTypeInfo& col_ti) {
+  CHECK_LT(col_ti.get_size(), col_ti.get_logical_size());
+  const auto col_phys_width = col_ti.get_size() * 8;
+  const auto from_typename = "int" + std::to_string(col_phys_width) + "_t";
+  auto adjusted = cgen_state_->ir_builder_.CreateCast(
+      llvm::Instruction::CastOps::Trunc, val, get_int_type(col_phys_width, cgen_state_->context_));
+  SQLTypeInfo col_phys_ti(get_phys_int_type(col_ti.get_size()),
+                          col_ti.get_dimension(),
+                          col_ti.get_scale(),
+                          false,
+                          kENCODING_NONE,
+                          0,
+                          col_ti.get_subtype());
+  return cgen_state_->emitCall("cast_" + from_typename + "_to_" + numeric_type_name(col_ti) + "_nullable",
+                               {adjusted, inlineIntNull(col_phys_ti), inlineIntNull(col_ti)});
 }
 
 std::vector<llvm::Value*> Executor::codegenOuterJoinNullPlaceholder(const std::vector<llvm::Value*>& orig_lvs,
@@ -4428,25 +4470,26 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
     switch (col_type) {
       case kBOOLEAN: {
         auto col_data = reinterpret_cast<int8_t*>(checked_malloc(sizeof(int8_t)));
-        *col_data = col_cv->get_is_null() ? inline_int_null_val(cd->columnType) : (col_datum.boolval ? 1 : 0);
+        *col_data =
+            col_cv->get_is_null() ? inline_fixed_encoding_null_val(cd->columnType) : (col_datum.boolval ? 1 : 0);
         col_buffers[col_ids[col_idx]] = col_data;
         break;
       }
       case kSMALLINT: {
         auto col_data = reinterpret_cast<int16_t*>(checked_malloc(sizeof(int16_t)));
-        *col_data = col_cv->get_is_null() ? inline_int_null_val(cd->columnType) : col_datum.smallintval;
+        *col_data = col_cv->get_is_null() ? inline_fixed_encoding_null_val(cd->columnType) : col_datum.smallintval;
         col_buffers[col_ids[col_idx]] = reinterpret_cast<int8_t*>(col_data);
         break;
       }
       case kINT: {
         auto col_data = reinterpret_cast<int32_t*>(checked_malloc(sizeof(int32_t)));
-        *col_data = col_cv->get_is_null() ? inline_int_null_val(cd->columnType) : col_datum.intval;
+        *col_data = col_cv->get_is_null() ? inline_fixed_encoding_null_val(cd->columnType) : col_datum.intval;
         col_buffers[col_ids[col_idx]] = reinterpret_cast<int8_t*>(col_data);
         break;
       }
       case kBIGINT: {
         auto col_data = reinterpret_cast<int64_t*>(checked_malloc(sizeof(int64_t)));
-        *col_data = col_cv->get_is_null() ? inline_int_null_val(cd->columnType) : col_datum.bigintval;
+        *col_data = col_cv->get_is_null() ? inline_fixed_encoding_null_val(cd->columnType) : col_datum.bigintval;
         col_buffers[col_ids[col_idx]] = reinterpret_cast<int8_t*>(col_data);
         break;
       }

@@ -21,6 +21,7 @@
 #include <boost/filesystem.hpp>
 #include <glog/logging.h>
 #include <shapelib/shapefil.h>
+#include "../QueryEngine/SqlTypesLayout.h"
 #include "../Shared/measure.h"
 #include "../Shared/geosupport.h"
 #include "Importer.h"
@@ -159,10 +160,9 @@ static const char* get_row(const char* buf,
         field = p + 1;
         has_escape = false;
         strip_quotes = false;
-
       }
       if (is_eol(*p, line_endings) && ((!in_quote && !in_array) || copy_params.threads != 1)) {
-        while (p+1 < buf_end && is_eol(*(p+1), line_endings)) {
+        while (p + 1 < buf_end && is_eol(*(p + 1), line_endings)) {
           p++;
         }
         break;
@@ -274,16 +274,16 @@ Datum TDatumToDatum(const TDatum& datum, SQLTypeInfo& ti) {
   const auto type = ti.is_decimal() ? decimal_to_int_type(ti) : ti.get_type();
   switch (type) {
     case kBOOLEAN:
-      d.boolval = datum.is_null ? NULL_BOOLEAN : datum.val.int_val;
+      d.boolval = datum.is_null ? inline_fixed_encoding_null_val(ti) : datum.val.int_val;
       break;
     case kBIGINT:
-      d.bigintval = datum.is_null ? NULL_BIGINT : datum.val.int_val;
+      d.bigintval = datum.is_null ? inline_fixed_encoding_null_val(ti) : datum.val.int_val;
       break;
     case kINT:
-      d.intval = datum.is_null ? NULL_INT : datum.val.int_val;
+      d.intval = datum.is_null ? inline_fixed_encoding_null_val(ti) : datum.val.int_val;
       break;
     case kSMALLINT:
-      d.smallintval = datum.is_null ? NULL_SMALLINT : datum.val.int_val;
+      d.smallintval = datum.is_null ? inline_fixed_encoding_null_val(ti) : datum.val.int_val;
       break;
     case kFLOAT:
       d.floatval = datum.is_null ? NULL_FLOAT : datum.val.real_val;
@@ -294,7 +294,7 @@ Datum TDatumToDatum(const TDatum& datum, SQLTypeInfo& ti) {
     case kTIME:
     case kTIMESTAMP:
     case kDATE:
-      d.timeval = datum.is_null ? (sizeof(time_t) == 8 ? NULL_BIGINT : NULL_INT) : datum.val.int_val;
+      d.timeval = datum.is_null ? inline_fixed_encoding_null_val(ti) : datum.val.int_val;
       break;
     default:
       throw std::runtime_error("Internal error: invalid type in StringToDatum.");
@@ -336,7 +336,7 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
       if (is_null) {
         if (cd->columnType.get_notnull())
           throw std::runtime_error("NULL for column " + cd->columnName);
-        addBoolean(NULL_BOOLEAN);
+        addBoolean(inline_fixed_encoding_null_val(cd->columnType));
       } else {
         SQLTypeInfo ti = cd->columnType;
         Datum d = StringToDatum(val, ti);
@@ -351,7 +351,7 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
       } else {
         if (cd->columnType.get_notnull())
           throw std::runtime_error("NULL for column " + cd->columnName);
-        addSmallint(NULL_SMALLINT);
+        addSmallint(inline_fixed_encoding_null_val(cd->columnType));
       }
       break;
     }
@@ -362,7 +362,7 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
       } else {
         if (cd->columnType.get_notnull())
           throw std::runtime_error("NULL for column " + cd->columnName);
-        addInt(NULL_INT);
+        addInt(inline_fixed_encoding_null_val(cd->columnType));
       }
       break;
     }
@@ -373,7 +373,7 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
       } else {
         if (cd->columnType.get_notnull())
           throw std::runtime_error("NULL for column " + cd->columnName);
-        addBigint(NULL_BIGINT);
+        addBigint(inline_fixed_encoding_null_val(cd->columnType));
       }
       break;
     }
@@ -417,7 +417,7 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
       } else {
         if (cd->columnType.get_notnull())
           throw std::runtime_error("NULL for column " + cd->columnName);
-        addTime(cd->columnType.get_size() == 4 ? NULL_INT : NULL_BIGINT);
+        addTime(inline_fixed_encoding_null_val(cd->columnType));
       }
       break;
     case kARRAY:
@@ -448,7 +448,7 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd, const TDatum& datu
       if (is_null) {
         if (cd->columnType.get_notnull())
           throw std::runtime_error("NULL for column " + cd->columnName);
-        addBoolean(NULL_BOOLEAN);
+        addBoolean(inline_fixed_encoding_null_val(cd->columnType));
       } else {
         addBoolean((int8_t)datum.val.int_val);
       }
@@ -460,7 +460,7 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd, const TDatum& datu
       } else {
         if (cd->columnType.get_notnull())
           throw std::runtime_error("NULL for column " + cd->columnName);
-        addSmallint(NULL_SMALLINT);
+        addSmallint(inline_fixed_encoding_null_val(cd->columnType));
       }
       break;
     case kINT:
@@ -469,7 +469,7 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd, const TDatum& datu
       } else {
         if (cd->columnType.get_notnull())
           throw std::runtime_error("NULL for column " + cd->columnName);
-        addInt(NULL_INT);
+        addInt(inline_fixed_encoding_null_val(cd->columnType));
       }
       break;
     case kBIGINT:
@@ -478,7 +478,7 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd, const TDatum& datu
       } else {
         if (cd->columnType.get_notnull())
           throw std::runtime_error("NULL for column " + cd->columnName);
-        addBigint(NULL_BIGINT);
+        addBigint(inline_fixed_encoding_null_val(cd->columnType));
       }
       break;
     case kFLOAT:
@@ -519,7 +519,7 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd, const TDatum& datu
       } else {
         if (cd->columnType.get_notnull())
           throw std::runtime_error("NULL for column " + cd->columnName);
-        addTime(sizeof(time_t) == 4 ? NULL_INT : NULL_BIGINT);
+        addTime(inline_fixed_encoding_null_val(cd->columnType));
       }
       break;
     case kARRAY:
