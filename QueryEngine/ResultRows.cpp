@@ -982,7 +982,7 @@ void ResultRows::sort(const std::list<Analyzer::OrderEntry>& order_entries,
       if (LIKELY(lhs_v.isInt())) {
         CHECK(rhs_v.isInt());
         if (UNLIKELY(is_dict)) {
-          CHECK_EQ(4, entry_ti.get_size());
+          CHECK_EQ(4, entry_ti.get_logical_size());
           auto string_dict = executor_->getStringDictionary(entry_ti.get_comp_param(), row_set_mem_owner_);
           auto lhs_str = string_dict->getString(lhs_v.i1);
           auto rhs_str = string_dict->getString(rhs_v.i1);
@@ -1508,7 +1508,7 @@ bool ResultRows::fetchLazyOrBuildRow(std::vector<TargetValue>& row,
                 CHECK(target_ti.is_array());
                 const auto& elem_ti = target_ti.get_elem_type();
                 std::vector<int64_t>* arr_owned{nullptr};
-                switch (elem_ti.get_size()) {
+                switch (elem_ti.get_logical_size()) {
                   case 1:
                     arr_owned = row_set_mem_owner_->addArray(arr_from_buffer<int8_t>(ad.pointer, ad.length));
                     break;
@@ -1551,7 +1551,7 @@ bool ResultRows::fetchLazyOrBuildRow(std::vector<TargetValue>& row,
               const auto& target_ti = target_expr->get_type_info();
               CHECK(target_ti.is_array());
               const auto& elem_ti = target_ti.get_elem_type();
-              elem_sz = elem_ti.get_size();
+              elem_sz = elem_ti.get_logical_size();
               is_fp = elem_ti.is_fp();
             }
             val2 *= elem_sz;
@@ -1740,7 +1740,7 @@ void QueryExecutionContext::outputBin(ResultRows& results,
             const auto& target_ti = target_expr->get_type_info();
             CHECK(target_ti.is_array());
             const auto& elem_ti = target_ti.get_elem_type();
-            switch (elem_ti.get_size()) {
+            switch (elem_ti.get_logical_size()) {
               case 1:
                 results.addValue(arr_from_buffer<int8_t>(ad.pointer, ad.length));
                 break;
@@ -1778,7 +1778,7 @@ void QueryExecutionContext::outputBin(ResultRows& results,
           const auto& target_ti = target_expr->get_type_info();
           CHECK(target_ti.is_array());
           const auto& elem_ti = target_ti.get_elem_type();
-          elem_sz = elem_ti.get_size();
+          elem_sz = elem_ti.get_logical_size();
           is_fp = elem_ti.is_fp();
         }
         str_len *= elem_sz;

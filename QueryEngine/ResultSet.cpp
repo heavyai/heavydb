@@ -145,7 +145,7 @@ std::function<bool(const uint32_t, const uint32_t)> ResultSet::createComparator(
       if (LIKELY(lhs_v.isInt())) {
         CHECK(rhs_v.isInt());
         if (UNLIKELY(is_dict)) {
-          CHECK_EQ(4, entry_ti.get_size());
+          CHECK_EQ(4, entry_ti.get_logical_size());
           auto string_dict = row_set_mem_owner_->getStringDict(entry_ti.get_comp_param());
           auto lhs_str = string_dict->getString(lhs_v.i1);
           auto rhs_str = string_dict->getString(rhs_v.i1);

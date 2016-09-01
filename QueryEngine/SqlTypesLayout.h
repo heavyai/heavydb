@@ -60,7 +60,7 @@ inline int64_t inline_int_null_val(const SQLTypeInfo& ti) {
   auto type = ti.is_decimal() ? decimal_to_int_type(ti) : ti.get_type();
   if (ti.is_string()) {
     CHECK_EQ(kENCODING_DICT, ti.get_compression());
-    CHECK_EQ(4, ti.get_size());
+    CHECK_EQ(4, ti.get_logical_size());
     type = kINT;
   }
   switch (type) {

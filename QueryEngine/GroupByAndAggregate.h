@@ -35,7 +35,7 @@ class ColumnarResults {
     for (size_t i = 0; i < num_columns; ++i) {
       CHECK(!target_types[i].is_array());
       CHECK(!target_types[i].is_string() ||
-            (target_types[i].get_compression() == kENCODING_DICT && target_types[i].get_size() == 4));
+            (target_types[i].get_compression() == kENCODING_DICT && target_types[i].get_logical_size() == 4));
       column_buffers_[i] = static_cast<const int8_t*>(checked_malloc(num_rows_ * (get_bit_width(target_types[i]) / 8)));
     }
     size_t row_idx{0};

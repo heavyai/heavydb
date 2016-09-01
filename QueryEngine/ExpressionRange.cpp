@@ -451,7 +451,7 @@ ExpressionRange getExpressionRange(const Analyzer::UOper* u_expr,
   }
   switch (arg_range.getType()) {
     case ExpressionRangeType::FloatingPoint: {
-      if (ti.is_fp() && ti.get_size() >= arg_ti.get_size()) {
+      if (ti.is_fp() && ti.get_logical_size() >= arg_ti.get_logical_size()) {
         return arg_range;
       }
       if (ti.is_integer()) {

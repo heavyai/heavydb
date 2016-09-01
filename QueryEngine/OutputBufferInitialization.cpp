@@ -79,7 +79,7 @@ int64_t get_agg_initial_val(const SQLAgg agg,
   const auto byte_width = enable_compaction ? compact_byte_width(static_cast<unsigned>(get_bit_width(ti) >> 3),
                                                                  unsigned(min_byte_width_to_compact))
                                             : sizeof(int64_t);
-  CHECK_GE(byte_width, static_cast<unsigned>(ti.get_size()));
+  CHECK_GE(byte_width, static_cast<unsigned>(ti.get_logical_size()));
   switch (agg) {
     case kAVG:
     case kSUM: {

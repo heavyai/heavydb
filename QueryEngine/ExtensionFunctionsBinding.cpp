@@ -14,11 +14,11 @@ unsigned narrowing_conversion_score(const SQLTypeInfo& arg_ti, const SQLTypeInfo
     return 1;
   }
   if (arg_ti.is_integer()) {
-    if (!arg_target_ti.is_integer() || arg_target_ti.get_size() >= arg_ti.get_size()) {
+    if (!arg_target_ti.is_integer() || arg_target_ti.get_logical_size() >= arg_ti.get_logical_size()) {
       return 0;
     }
-    CHECK_EQ(0, arg_ti.get_size() % arg_target_ti.get_size());
-    const int size_ratio = arg_ti.get_size() / arg_target_ti.get_size();
+    CHECK_EQ(0, arg_ti.get_logical_size() % arg_target_ti.get_logical_size());
+    const int size_ratio = arg_ti.get_logical_size() / arg_target_ti.get_logical_size();
     switch (size_ratio) {
       case 2:
         return 1;
@@ -63,11 +63,11 @@ unsigned widening_conversion_score(const SQLTypeInfo& arg_ti, const SQLTypeInfo&
     }
   }
   if (arg_ti.is_integer() && arg_target_ti.is_integer()) {
-    if (arg_target_ti.get_size() <= arg_ti.get_size()) {
+    if (arg_target_ti.get_logical_size() <= arg_ti.get_logical_size()) {
       return 0;
     }
-    CHECK_EQ(0, arg_target_ti.get_size() % arg_ti.get_size());
-    const int size_ratio = arg_target_ti.get_size() / arg_ti.get_size();
+    CHECK_EQ(0, arg_target_ti.get_logical_size() % arg_ti.get_logical_size());
+    const int size_ratio = arg_target_ti.get_logical_size() / arg_ti.get_logical_size();
     switch (size_ratio) {
       case 2:
         return 1;

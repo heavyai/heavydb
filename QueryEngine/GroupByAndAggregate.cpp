@@ -2391,13 +2391,13 @@ std::vector<llvm::Value*> GroupByAndAggregate::codegenAggArg(const Analyzer::Exp
       const auto i32_ty = get_int_type(32, executor_->cgen_state_->context_);
       const auto i8p_ty = llvm::PointerType::get(get_int_type(8, executor_->cgen_state_->context_), 0);
       const auto& elem_ti = target_ti.get_elem_type();
-      return {
-          executor_->cgen_state_->emitExternalCall(
-              "array_buff", i8p_ty, {target_lvs.front(), executor_->posArg(target_expr)}),
-          executor_->cgen_state_->emitExternalCall(
-              "array_size",
-              i32_ty,
-              {target_lvs.front(), executor_->posArg(target_expr), executor_->ll_int(log2_bytes(elem_ti.get_size()))})};
+      return {executor_->cgen_state_->emitExternalCall(
+                  "array_buff", i8p_ty, {target_lvs.front(), executor_->posArg(target_expr)}),
+              executor_->cgen_state_->emitExternalCall("array_size",
+                                                       i32_ty,
+                                                       {target_lvs.front(),
+                                                        executor_->posArg(target_expr),
+                                                        executor_->ll_int(log2_bytes(elem_ti.get_logical_size()))})};
     }
   }
   return agg_expr ? executor_->codegen(agg_expr->get_arg(), true, co)

@@ -1376,13 +1376,13 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::CaseExpr* case_expr,
                                                   : llvm::Type::getDoubleTy(cgen_state_->context_);
   } else if (case_ti.is_string()) {
     if (case_ti.get_compression() == kENCODING_DICT) {
-      case_llvm_type = get_int_type(8 * case_ti.get_size(), cgen_state_->context_);
+      case_llvm_type = get_int_type(8 * case_ti.get_logical_size(), cgen_state_->context_);
     } else {
       is_real_str = true;
       case_llvm_type = get_int_type(64, cgen_state_->context_);
     }
   } else if (case_ti.is_boolean()) {
-    case_llvm_type = get_int_type(8 * case_ti.get_size(), cgen_state_->context_);
+    case_llvm_type = get_int_type(8 * case_ti.get_logical_size(), cgen_state_->context_);
   }
   CHECK(case_llvm_type);
   CHECK(case_expr->get_else_expr()->get_type_info() == case_ti);
@@ -2095,7 +2095,7 @@ llvm::Value* Executor::codegenArrayAt(const Analyzer::BinOper* array_at, const C
   auto idx_lvs = codegen(idx_expr, true, co);
   CHECK_EQ(size_t(1), idx_lvs.size());
   auto idx_lv = idx_lvs.front();
-  if (idx_ti.get_size() < 8) {
+  if (idx_ti.get_logical_size() < 8) {
     idx_lv = cgen_state_->ir_builder_.CreateCast(
         llvm::Instruction::CastOps::SExt, idx_lv, get_int_type(64, cgen_state_->context_));
   }
@@ -2104,10 +2104,10 @@ llvm::Value* Executor::codegenArrayAt(const Analyzer::BinOper* array_at, const C
   const auto& elem_ti = array_ti.get_elem_type();
   const std::string array_at_fname{
       elem_ti.is_fp() ? "array_at_" + std::string(elem_ti.get_type() == kDOUBLE ? "double_checked" : "float_checked")
-                      : "array_at_int" + std::to_string(elem_ti.get_size() * 8) + "_t_checked"};
+                      : "array_at_int" + std::to_string(elem_ti.get_logical_size() * 8) + "_t_checked"};
   const auto ret_ty = elem_ti.is_fp() ? (elem_ti.get_type() == kDOUBLE ? llvm::Type::getDoubleTy(cgen_state_->context_)
                                                                        : llvm::Type::getFloatTy(cgen_state_->context_))
-                                      : get_int_type(elem_ti.get_size() * 8, cgen_state_->context_);
+                                      : get_int_type(elem_ti.get_logical_size() * 8, cgen_state_->context_);
   const auto arr_lvs = codegen(arr_expr, true, co);
   CHECK_EQ(size_t(1), arr_lvs.size());
   return cgen_state_->emitExternalCall(array_at_fname,
@@ -2164,7 +2164,7 @@ llvm::Value* Executor::codegenFunctionOper(const Analyzer::FunctionOper* functio
   CHECK(ret_ti.is_integer() || ret_ti.is_fp());
   const auto ret_ty = ret_ti.is_fp() ? (ret_ti.get_type() == kDOUBLE ? llvm::Type::getDoubleTy(cgen_state_->context_)
                                                                      : llvm::Type::getFloatTy(cgen_state_->context_))
-                                     : get_int_type(ret_ti.get_size() * 8, cgen_state_->context_);
+                                     : get_int_type(ret_ti.get_logical_size() * 8, cgen_state_->context_);
   CHECK_EQ(ret_ty, ext_arg_type_to_llvm_type(ext_func_sig.getRet(), cgen_state_->context_));
   std::vector<llvm::Value*> orig_arg_lvs;
   for (size_t i = 0; i < function_oper->getArity(); ++i) {
@@ -5706,7 +5706,7 @@ llvm::Value* Executor::groupByColumnCodegen(Analyzer::Expr* group_by_col,
     CHECK(array_ti.is_array());
     const auto& elem_ti = array_ti.get_elem_type();
     auto array_len = cgen_state_->emitExternalCall(
-        "array_size", ret_ty, {group_key, posArg(arr_expr), ll_int(log2_bytes(elem_ti.get_size()))});
+        "array_size", ret_ty, {group_key, posArg(arr_expr), ll_int(log2_bytes(elem_ti.get_logical_size()))});
     cgen_state_->ir_builder_.CreateBr(array_loop_head);
     cgen_state_->ir_builder_.SetInsertPoint(array_loop_head);
     CHECK(array_len);
@@ -5722,7 +5722,7 @@ llvm::Value* Executor::groupByColumnCodegen(Analyzer::Expr* group_by_col,
     const auto ar_ret_ty = elem_ti.is_fp()
                                ? (elem_ti.get_type() == kDOUBLE ? llvm::Type::getDoubleTy(cgen_state_->context_)
                                                                 : llvm::Type::getFloatTy(cgen_state_->context_))
-                               : get_int_type(elem_ti.get_size() * 8, cgen_state_->context_);
+                               : get_int_type(elem_ti.get_logical_size() * 8, cgen_state_->context_);
     group_key = cgen_state_->emitExternalCall(array_at_fname, ar_ret_ty, {group_key, posArg(arr_expr), array_idx});
     if (need_patch_unnest_double(elem_ti, isArchMaxwell(co.device_type_), thread_mem_shared)) {
       key_to_cache = spillDoubleElement(group_key, ar_ret_ty);
@@ -5735,7 +5735,7 @@ llvm::Value* Executor::groupByColumnCodegen(Analyzer::Expr* group_by_col,
   cgen_state_->group_by_expr_cache_.push_back(key_to_cache);
   if (translate_null_val) {
     const auto& ti = group_by_col->get_type_info();
-    const auto key_type = get_int_type(ti.get_size() * 8, cgen_state_->context_);
+    const auto key_type = get_int_type(ti.get_logical_size() * 8, cgen_state_->context_);
     group_key =
         cgen_state_->emitCall("translate_null_key_" + numeric_type_name(ti),
                               {group_key,
