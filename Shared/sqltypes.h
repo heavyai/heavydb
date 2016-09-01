@@ -181,6 +181,13 @@ class SQLTypeInfo {
   DEVICE inline EncodingType get_compression() const { return compression; }
   DEVICE inline int get_comp_param() const { return comp_param; }
   inline int get_size() const { return size; }
+  inline int get_logical_size() const {
+    if (get_compression() == kENCODING_FIXED) {
+      SQLTypeInfo ti(type, dimension, scale, notnull, kENCODING_NONE, 0, subtype);
+      return ti.get_size();
+    }
+    return get_size();
+  }
   inline void set_type(SQLTypes t) { type = t; }
   inline void set_subtype(SQLTypes st) { subtype = st; }
   inline void set_dimension(int d) { dimension = d; }
