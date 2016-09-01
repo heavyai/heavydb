@@ -182,7 +182,7 @@ class SQLTypeInfo {
   DEVICE inline int get_comp_param() const { return comp_param; }
   inline int get_size() const { return size; }
   inline int get_logical_size() const {
-    if (get_compression() == kENCODING_FIXED) {
+    if (compression == kENCODING_FIXED) {
       SQLTypeInfo ti(type, dimension, scale, notnull, kENCODING_NONE, 0, subtype);
       return ti.get_size();
     }
