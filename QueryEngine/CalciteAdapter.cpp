@@ -1178,7 +1178,7 @@ std::string pg_shim(const std::string& query) {
     }
   }
   {
-    boost::regex quant_expr{R"((any|all)\s+([^(\s|;)]+))", boost::regex::extended | boost::regex::icase};
+    boost::regex quant_expr{R"(\s(any|all)\s+([^(\s|;)]+))", boost::regex::extended | boost::regex::icase};
     boost::smatch what;
     while (true) {
       if (!boost::regex_search(result, what, quant_expr)) {

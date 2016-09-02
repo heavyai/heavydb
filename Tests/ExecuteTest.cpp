@@ -1674,6 +1674,11 @@ TEST(Select, ArrayAnyAndAll) {
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM array_test WHERE  real_str <> ANY arr_str;", dt)));
     ASSERT_EQ(int64_t(g_array_test_row_count - 1),
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM array_test WHERE (NOT ('aa' = ANY arr_str));", dt)));
+    // these two test just confirm that the regex does not mess with other similar patterns
+    ASSERT_EQ(int64_t(g_array_test_row_count),
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) as SMALL FROM array_test;", dt)));
+    ASSERT_EQ(int64_t(g_array_test_row_count),
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) as COMPANY FROM array_test;", dt)));
   }
 }
 
