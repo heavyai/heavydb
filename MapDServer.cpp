@@ -1081,7 +1081,7 @@ class MapDHandler : virtual public MapDIf {
   }
 
   std::string sanitize_name(const std::string& name) {
-    boost::regex invalid_chars{R"([^0-9a-z_\$])", boost::regex::extended | boost::regex::icase};
+    boost::regex invalid_chars{R"([^0-9a-z_])", boost::regex::extended | boost::regex::icase};
 
     return boost::regex_replace(name, invalid_chars, "");
   }

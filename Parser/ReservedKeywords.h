@@ -6,8 +6,34 @@
 
 // Keywords from https://calcite.apache.org/docs/reference.html#keywords
 static std::set<std::string> reserved_keywords{
-    "ROWID",  // MapD
-    "ABS",
+    "ROWID",  // MapD internal
+    "AMMSC",  // MapD legacy
+    "ASC",
+    "CHAR_LENGTH",
+    "CONTINUE",
+    "COPY",
+    "DATABASE",
+    "DATETIME",
+    "DATE_TRUNC",
+    "DESC",
+    "FIRST",
+    "FOUND",
+    "IF",
+    "ILIKE",
+    "LAST",
+    "LENGTH",
+    "NOW",
+    "NULLX",
+    "OPTION",
+    "PRIVILEGES",
+    "PUBLIC",
+    "RENAME",
+    "SCHEMA",
+    "SHOW",
+    "TEXT",
+    "VIEW",
+    "WORK",
+    "ABS",  // Calcite reserved keywords
     "ALL",
     "ALLOCATE",
     "ALLOW",
