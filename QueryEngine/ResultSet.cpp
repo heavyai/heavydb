@@ -26,8 +26,7 @@ ResultSetStorage::ResultSetStorage(const std::vector<TargetInfo>& targets,
                                    int8_t* buff)
     : targets_(targets), query_mem_desc_(query_mem_desc), buff_(buff) {
   for (const auto& target_info : targets_) {
-    target_init_vals_.push_back(
-        target_info.is_agg ? get_agg_initial_val(target_info.agg_kind, target_info.sql_type, false, 8) : 0);
+    target_init_vals_.push_back(target_info.is_agg ? 0xdeadbeef : 0);
     if (target_info.agg_kind == kAVG) {
       target_init_vals_.push_back(0);
     }
