@@ -5,6 +5,7 @@
 #include "../Catalog/Catalog.h"
 
 #include <boost/variant.hpp>
+#include <boost/make_unique.hpp>
 #include <rapidjson/document.h>
 
 #include <memory>
@@ -133,6 +134,37 @@ class RexLiteral : public RexScalar {
 
   std::string toString() const override { return "(RexLiteral " + boost::lexical_cast<std::string>(literal_) + ")"; }
 
+  std::unique_ptr<RexLiteral> deepCopy() const {
+    switch (literal_.which()) {
+      case 0: {
+        int64_t val = getVal<int64_t>();
+        return boost::make_unique<RexLiteral>(
+            val, type_, target_type_, scale_, precision_, type_scale_, type_precision_);
+      }
+      case 1: {
+        double val = getVal<double>();
+        return boost::make_unique<RexLiteral>(
+            val, type_, target_type_, scale_, precision_, type_scale_, type_precision_);
+      }
+      case 2: {
+        auto val = getVal<std::string>();
+        return boost::make_unique<RexLiteral>(
+            val, type_, target_type_, scale_, precision_, type_scale_, type_precision_);
+      }
+      case 3: {
+        bool val = getVal<bool>();
+        return boost::make_unique<RexLiteral>(
+            val, type_, target_type_, scale_, precision_, type_scale_, type_precision_);
+      }
+      case 4: {
+        return boost::make_unique<RexLiteral>(target_type_);
+      }
+      default:
+        CHECK(false);
+    }
+    return nullptr;
+  }
+
  private:
   const boost::variant<int64_t, double, std::string, bool, void*> literal_;
   const SQLTypes type_;
@@ -197,6 +229,8 @@ class RexInput : public RexAbstractInput {
     return "(RexInput " + std::to_string(getIndex()) + " " + std::to_string(reinterpret_cast<const uint64_t>(node_)) +
            ")";
   }
+
+  std::unique_ptr<RexInput> deepCopy() const { return boost::make_unique<RexInput>(node_, getIndex()); }
 
  private:
   mutable const RelAlgNode* node_;
@@ -276,6 +310,8 @@ class RexRef : public RexScalar {
 
   virtual std::string toString() const { return "(RexRef " + std::to_string(index_) + ")"; }
 
+  std::unique_ptr<RexRef> deepCopy() const { return boost::make_unique<RexRef>(index_); }
+
  private:
   const size_t index_;
 };
@@ -295,6 +331,8 @@ class RexAgg : public Rex {
   bool isDistinct() const { return distinct_; }
 
   ssize_t getOperand() const { return operand_; }
+
+  const SQLTypeInfo& getType() const { return type_; }
 
  private:
   const SQLAgg agg_;
@@ -356,6 +394,8 @@ class RelAlgNode {
 
   virtual std::string toString() const = 0;
 
+  virtual size_t size() const = 0;
+
  protected:
   std::vector<std::shared_ptr<const RelAlgNode>> inputs_;
   const unsigned id_;
@@ -372,7 +412,7 @@ class RelScan : public RelAlgNode {
   RelScan(const TableDescriptor* td, const std::vector<std::string>& field_names)
       : td_(td), field_names_(field_names) {}
 
-  size_t size() const { return field_names_.size(); }
+  size_t size() const override { return field_names_.size(); }
 
   const TableDescriptor* getTableDescriptor() const { return td_; }
 
@@ -416,7 +456,7 @@ class RelProject : public RelAlgNode {
 
   bool isIdentity() const;
 
-  size_t size() const { return scalar_exprs_.size(); }
+  size_t size() const override { return scalar_exprs_.size(); }
 
   const RexScalar* getProjectAt(const size_t idx) const {
     CHECK(idx < scalar_exprs_.size());
@@ -455,7 +495,7 @@ class RelAggregate : public RelAlgNode {
     inputs_.push_back(input);
   }
 
-  size_t size() const { return groupby_count_ + agg_exprs_.size(); }
+  size_t size() const override { return groupby_count_ + agg_exprs_.size(); }
 
   const size_t getGroupByCount() const { return groupby_count_; }
 
@@ -474,6 +514,11 @@ class RelAggregate : public RelAlgNode {
   }
 
   const std::vector<std::unique_ptr<const RexAgg>>& getAggExprs() const { return agg_exprs_; }
+
+  void setAggExprs(std::vector<std::unique_ptr<const RexAgg>>& agg_exprs) {
+    CHECK_EQ(agg_exprs.size(), size());
+    agg_exprs_ = std::move(agg_exprs);
+  }
 
   std::string toString() const override {
     std::string result = "(RelAggregate<" + std::to_string(reinterpret_cast<uint64_t>(this)) + ">(groups: [";
@@ -522,6 +567,8 @@ class RelJoin : public RelAlgNode {
     return result + ")";
   }
 
+  size_t size() const override { return inputs_[0]->size() + inputs_[1]->size(); }
+
  private:
   std::unique_ptr<const RexScalar> condition_;
   const JoinType join_type_;
@@ -543,6 +590,8 @@ class RelFilter : public RelAlgNode {
     CHECK(condition);
     filter_ = std::move(condition);
   }
+
+  size_t size() const override { return inputs_[0]->size(); }
 
   void replaceInput(std::shared_ptr<const RelAlgNode> old_input, std::shared_ptr<const RelAlgNode> input) override;
 
@@ -586,7 +635,7 @@ class RelCompound : public RelAlgNode {
 
   void replaceInput(std::shared_ptr<const RelAlgNode> old_input, std::shared_ptr<const RelAlgNode> input) override;
 
-  size_t size() const { return target_exprs_.size(); }
+  size_t size() const override { return target_exprs_.size(); }
 
   const RexScalar* getFilterExpr() const { return filter_expr_.get(); }
 
@@ -696,6 +745,8 @@ class RelSort : public RelAlgNode {
     result += "]";
     return result + ")";
   }
+
+  size_t size() const override { return inputs_[0]->size(); }
 
  private:
   const std::vector<SortField> collation_;
