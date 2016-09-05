@@ -237,9 +237,9 @@ int JoinHashTable::initHashTableOnCpu(const int8_t* col_buff,
                                               hash_join_invalid_val,
                                               col_buff,
                                               num_elements,
-                                              ti.get_logical_size(),
+                                              ti.get_size(),
                                               col_range_.getIntMin(),
-                                              inline_int_null_val(ti),
+                                              inline_fixed_encoding_null_val(ti),
                                               col_range_.getIntMax() + 1,
                                               sd_inner,
                                               sd_outer,
@@ -321,9 +321,9 @@ int JoinHashTable::initHashTableForDevice(const ChunkKey& chunk_key,
                                   reinterpret_cast<int*>(dev_err_buff),
                                   col_buff,
                                   num_elements,
-                                  ti.get_logical_size(),
+                                  ti.get_size(),
                                   col_range_.getIntMin(),
-                                  inline_int_null_val(ti),
+                                  inline_fixed_encoding_null_val(ti),
                                   col_range_.getIntMax() + 1,
                                   executor_->blockSize(),
                                   executor_->gridSize());
@@ -379,7 +379,7 @@ llvm::Value* JoinHashTable::codegenSlot(const bool hoist_literals) {
                                                executor_->ll_int(col_range_.getIntMin()),
                                                executor_->ll_int(col_range_.getIntMax())};
   if (col_range_.hasNulls()) {
-    hash_join_idx_args.push_back(executor_->ll_int(inline_int_null_val(key_col->get_type_info())));
+    hash_join_idx_args.push_back(executor_->ll_int(inline_fixed_encoding_null_val(key_col->get_type_info())));
   }
   std::string fname{"hash_join_idx"};
   if (col_range_.hasNulls()) {
