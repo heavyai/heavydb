@@ -86,7 +86,19 @@ class TypedImportBuffer : boost::noncopyable {
       case kCHAR:
         string_buffer_ = new std::vector<std::string>();
         if (col_desc->columnType.get_compression() == kENCODING_DICT) {
-          string_dict_buffer_ = new std::vector<int32_t>();
+          switch (col_desc->columnType.get_size()) {
+            case 1:
+              string_dict_i8_buffer_ = new std::vector<int8_t>();
+              break;
+            case 2:
+              string_dict_i16_buffer_ = new std::vector<int16_t>();
+              break;
+            case 4:
+              string_dict_i32_buffer_ = new std::vector<int32_t>();
+              break;
+            default:
+              CHECK(false);
+          }
         }
         break;
       case kTIME:
@@ -134,7 +146,17 @@ class TypedImportBuffer : boost::noncopyable {
       case kCHAR:
         delete string_buffer_;
         if (column_desc_->columnType.get_compression() == kENCODING_DICT) {
-          delete string_dict_buffer_;
+          switch (column_desc_->columnType.get_size()) {
+            case 1:
+              delete string_dict_i8_buffer_;
+              break;
+            case 2:
+              delete string_dict_i16_buffer_;
+              break;
+            case 4:
+              delete string_dict_i32_buffer_;
+              break;
+          }
         }
         break;
       case kTIME:
@@ -184,8 +206,22 @@ class TypedImportBuffer : boost::noncopyable {
         throw std::runtime_error("String too long for dictionary encoding.");
       }
     }
-    string_dict_buffer_->resize(string_vec.size());
-    string_dict_->getOrAddBulk(string_vec, string_dict_buffer_->data());
+    switch (column_desc_->columnType.get_size()) {
+      case 1:
+        string_dict_i8_buffer_->resize(string_vec.size());
+        string_dict_->getOrAddBulk(string_vec, string_dict_i8_buffer_->data());
+        break;
+      case 2:
+        string_dict_i16_buffer_->resize(string_vec.size());
+        string_dict_->getOrAddBulk(string_vec, string_dict_i16_buffer_->data());
+        break;
+      case 4:
+        string_dict_i32_buffer_->resize(string_vec.size());
+        string_dict_->getOrAddBulk(string_vec, string_dict_i32_buffer_->data());
+        break;
+      default:
+        CHECK(false);
+    }
   }
 
   void addDictEncodedStringArray(const std::vector<std::vector<std::string>>& string_array_vec) {
@@ -240,7 +276,18 @@ class TypedImportBuffer : boost::noncopyable {
 
   std::vector<ArrayDatum>* getStringArrayDictBuffer() const { return string_array_dict_buffer_; }
 
-  int8_t* getStringDictBuffer() const { return reinterpret_cast<int8_t*>(&((*string_dict_buffer_)[0])); }
+  int8_t* getStringDictBuffer() const {
+    switch (column_desc_->columnType.get_size()) {
+      case 1:
+        return reinterpret_cast<int8_t*>(&((*string_dict_i8_buffer_)[0]));
+      case 2:
+        return reinterpret_cast<int8_t*>(&((*string_dict_i16_buffer_)[0]));
+      case 4:
+        return reinterpret_cast<int8_t*>(&((*string_dict_i32_buffer_)[0]));
+      default:
+        CHECK(false);
+    }
+  }
 
   bool stringDictCheckpoint() {
     if (string_dict_ == nullptr)
@@ -281,7 +328,19 @@ class TypedImportBuffer : boost::noncopyable {
       case kCHAR: {
         string_buffer_->clear();
         if (column_desc_->columnType.get_compression() == kENCODING_DICT) {
-          string_dict_buffer_->clear();
+          switch (column_desc_->columnType.get_size()) {
+            case 1:
+              string_dict_i8_buffer_->clear();
+              break;
+            case 2:
+              string_dict_i16_buffer_->clear();
+              break;
+            case 4:
+              string_dict_i32_buffer_->clear();
+              break;
+            default:
+              CHECK(false);
+          }
         }
         break;
       }
@@ -321,7 +380,9 @@ class TypedImportBuffer : boost::noncopyable {
     std::vector<std::vector<std::string>>* string_array_buffer_;
   };
   union {
-    std::vector<int32_t>* string_dict_buffer_;
+    std::vector<int8_t>* string_dict_i8_buffer_;
+    std::vector<int16_t>* string_dict_i16_buffer_;
+    std::vector<int32_t>* string_dict_i32_buffer_;
     std::vector<ArrayDatum>* string_array_dict_buffer_;
   };
   const ColumnDescriptor* column_desc_;

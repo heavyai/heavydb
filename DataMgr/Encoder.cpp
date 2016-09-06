@@ -121,7 +121,20 @@ Encoder* Encoder::Create(Data_Namespace::AbstractBuffer* buffer, const SQLTypeIn
         return new ArrayNoneEncoder(buffer);
       } else {
         CHECK(sqlType.is_string());
-        return new NoneEncoder<int32_t>(buffer);
+        switch (sqlType.get_size()) {
+          case 1:
+            return new NoneEncoder<int8_t>(buffer);
+            break;
+          case 2:
+            return new NoneEncoder<int16_t>(buffer);
+            break;
+          case 4:
+            return new NoneEncoder<int32_t>(buffer);
+            break;
+          default:
+            CHECK(false);
+            break;
+        }
       }
       break;
     }

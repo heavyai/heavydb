@@ -36,7 +36,7 @@ class ColumnarResults {
       CHECK(!target_types[i].is_array());
       CHECK(!target_types[i].is_string() ||
             (target_types[i].get_compression() == kENCODING_DICT && target_types[i].get_logical_size() == 4));
-      column_buffers_[i] = static_cast<const int8_t*>(checked_malloc(num_rows_ * (get_bit_width(target_types[i]) / 8)));
+      column_buffers_[i] = static_cast<const int8_t*>(checked_malloc(num_rows_ * target_types[i].get_size()));
     }
     size_t row_idx{0};
     while (true) {
@@ -50,17 +50,17 @@ class ColumnarResults {
         CHECK(scalar_col_val);
         auto i64_p = boost::get<int64_t>(scalar_col_val);
         if (i64_p) {
-          switch (get_bit_width(target_types[i])) {
-            case 8:
+          switch (target_types[i].get_size()) {
+            case 1:
               ((int8_t*)column_buffers_[i])[row_idx] = static_cast<int8_t>(*i64_p);
               break;
-            case 16:
+            case 2:
               ((int16_t*)column_buffers_[i])[row_idx] = static_cast<int16_t>(*i64_p);
               break;
-            case 32:
+            case 4:
               ((int32_t*)column_buffers_[i])[row_idx] = static_cast<int32_t>(*i64_p);
               break;
-            case 64:
+            case 8:
               ((int64_t*)column_buffers_[i])[row_idx] = *i64_p;
               break;
             default:

@@ -84,9 +84,14 @@ inline int64_t inline_int_null_val(const SQLTypeInfo& ti) {
 }
 
 inline int64_t inline_fixed_encoding_null_val(const SQLTypeInfo& ti) {
-  if (ti.get_compression() != kENCODING_FIXED) {
+  if (ti.get_compression() == kENCODING_NONE) {
     return inline_int_null_val(ti);
   }
+  if (ti.get_compression() == kENCODING_DICT) {
+    CHECK(ti.is_string());
+    return -(1L << (8 * ti.get_size() - 1));
+  }
+  CHECK_EQ(kENCODING_FIXED, ti.get_compression());
   CHECK(ti.is_integer() || ti.is_time() || ti.is_decimal());
   CHECK_EQ(0, ti.get_comp_param() % 8);
   return -(1L << (ti.get_comp_param() - 1));

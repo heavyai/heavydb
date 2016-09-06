@@ -143,13 +143,18 @@ int32_t StringDictionary::getOrAdd(const std::string& str) noexcept {
   return getOrAddImpl(str, false);
 }
 
-void StringDictionary::getOrAddBulk(const std::vector<std::string>& string_vec, int32_t* encoded_vec) noexcept {
+template <class T>
+void StringDictionary::getOrAddBulk(const std::vector<std::string>& string_vec, T* encoded_vec) noexcept {
   mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
   size_t out_idx{0};
   for (const auto& str : string_vec) {
     encoded_vec[out_idx++] = getOrAddImpl(str, false);
   }
 }
+
+template void StringDictionary::getOrAddBulk(const std::vector<std::string>& string_vec, int8_t* encoded_vec) noexcept;
+template void StringDictionary::getOrAddBulk(const std::vector<std::string>& string_vec, int16_t* encoded_vec) noexcept;
+template void StringDictionary::getOrAddBulk(const std::vector<std::string>& string_vec, int32_t* encoded_vec) noexcept;
 
 int32_t StringDictionary::getOrAddTransient(const std::string& str) noexcept {
   mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);

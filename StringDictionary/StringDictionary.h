@@ -19,7 +19,8 @@ class StringDictionary {
   ~StringDictionary() noexcept;
 
   int32_t getOrAdd(const std::string& str) noexcept;
-  void getOrAddBulk(const std::vector<std::string>& string_vec, int32_t* encoded_vec) noexcept;
+  template <class T>
+  void getOrAddBulk(const std::vector<std::string>& string_vec, T* encoded_vec) noexcept;
   int32_t getOrAddTransient(const std::string& str) noexcept;
   int32_t get(const std::string& str) const noexcept;
   std::string getString(int32_t string_id) const noexcept;

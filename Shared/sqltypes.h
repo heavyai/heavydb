@@ -186,6 +186,9 @@ class SQLTypeInfo {
       SQLTypeInfo ti(type, dimension, scale, notnull, kENCODING_NONE, 0, subtype);
       return ti.get_size();
     }
+    if (compression == kENCODING_DICT) {
+      return 4;
+    }
     return get_size();
   }
   inline void set_type(SQLTypes t) { type = t; }

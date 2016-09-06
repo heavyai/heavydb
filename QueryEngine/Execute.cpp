@@ -475,7 +475,7 @@ StringDictionary* Executor::getStringDictionary(const int dict_id_in,
       CHECK(dd->stringDict);
       row_set_mem_owner->addStringDict(dd->stringDict.get(), dict_id);
     }
-    CHECK_EQ(32, dd->dictNBits);
+    CHECK_LE(dd->dictNBits, 32);
     return dd->stringDict.get();
   }
   CHECK_EQ(0, dict_id);
@@ -1004,14 +1004,14 @@ std::shared_ptr<Decoder> get_col_decoder(const Analyzer::ColumnVar* col_var) {
         default:
           // TODO(alex): make columnar results write the correct encoding
           if (ti.is_string()) {
-            return std::make_shared<FixedWidthInt>(4);
+            return std::make_shared<FixedWidthInt>(ti.get_size());
           }
           CHECK(false);
       }
     }
     case kENCODING_DICT:
       CHECK(ti.is_string());
-      return std::make_shared<FixedWidthInt>(4);
+      return std::make_shared<FixedWidthInt>(ti.get_size());
     case kENCODING_FIXED: {
       const auto bit_width = col_var->get_comp_param();
       CHECK_EQ(0, bit_width % 8);
@@ -1114,7 +1114,9 @@ std::vector<llvm::Value*> Executor::codegenColVar(const Analyzer::ColumnVar* col
                                                            : llvm::Instruction::CastOps::Trunc,
                                                        dec_val,
                                                        get_int_type(col_width, cgen_state_->context_));
-    if (col_ti.get_compression() == kENCODING_FIXED && !col_ti.get_notnull()) {
+    if ((col_ti.get_compression() == kENCODING_FIXED ||
+         (col_ti.get_compression() == kENCODING_DICT && col_ti.get_size() < 4)) &&
+        !col_ti.get_notnull()) {
       dec_val_cast = codgenAdjustFixedEncNull(dec_val_cast, col_ti);
     }
   } else {
@@ -3728,7 +3730,8 @@ const int8_t* Executor::ExecutionDispatch::getColumn(const ColumnarResults* colu
   const auto& col_buffers = columnar_results->getColumnBuffers();
   CHECK_LT(static_cast<size_t>(col_id), col_buffers.size());
   if (memory_level == Data_Namespace::GPU_LEVEL) {
-    const auto num_bytes = columnar_results->size() * get_bit_width(columnar_results->getColumnType(col_id)) / 8;
+    const auto& col_ti = columnar_results->getColumnType(col_id);
+    const auto num_bytes = columnar_results->size() * col_ti.get_size();
     auto gpu_col_buffer = alloc_gpu_mem(data_mgr, num_bytes, device_id, nullptr);
     copy_to_gpu(data_mgr, gpu_col_buffer, col_buffers[col_id], num_bytes, device_id);
     return reinterpret_cast<const int8_t*>(gpu_col_buffer);
@@ -4411,6 +4414,27 @@ int64_t Executor::getJoinHashTablePtr(const ExecutorDeviceType device_type, cons
   return join_hash_table->getJoinHashBuffer(device_type, device_type == ExecutorDeviceType::GPU ? device_id : 0);
 }
 
+namespace {
+
+template <class T>
+int8_t* insert_one_dict_str(const ColumnDescriptor* cd,
+                            const Analyzer::Constant* col_cv,
+                            const Executor* executor,
+                            std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner) {
+  auto col_data = reinterpret_cast<T*>(checked_malloc(sizeof(T)));
+  if (col_cv->get_is_null()) {
+    *col_data = inline_fixed_encoding_null_val(cd->columnType);
+  } else {
+    const int dict_id = cd->columnType.get_comp_param();
+    const auto col_datum = col_cv->get_constval();
+    const int32_t str_id = executor->getStringDictionary(dict_id, row_set_mem_owner)->getOrAdd(*col_datum.stringval);
+    *col_data = str_id;
+  }
+  return reinterpret_cast<int8_t*>(col_data);
+}
+
+}  // namespace
+
 void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
   const auto plan = root_plan->get_plan();
   CHECK(plan);
@@ -4513,15 +4537,19 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
             str_col_buffers[col_ids[col_idx]].push_back(col_datum.stringval ? *col_datum.stringval : "");
             break;
           case kENCODING_DICT: {
-            auto col_data = reinterpret_cast<int32_t*>(checked_malloc(sizeof(int32_t)));
-            if (col_cv->get_is_null()) {
-              *col_data = NULL_INT;
-            } else {
-              const int dict_id = cd->columnType.get_comp_param();
-              const int32_t str_id = getStringDictionary(dict_id, row_set_mem_owner_)->getOrAdd(*col_datum.stringval);
-              *col_data = str_id;
+            switch (cd->columnType.get_size()) {
+              case 1:
+                col_buffers[col_ids[col_idx]] = insert_one_dict_str<int8_t>(cd, col_cv, this, row_set_mem_owner_);
+                break;
+              case 2:
+                col_buffers[col_ids[col_idx]] = insert_one_dict_str<int16_t>(cd, col_cv, this, row_set_mem_owner_);
+                break;
+              case 4:
+                col_buffers[col_ids[col_idx]] = insert_one_dict_str<int32_t>(cd, col_cv, this, row_set_mem_owner_);
+                break;
+              default:
+                CHECK(false);
             }
-            col_buffers[col_ids[col_idx]] = reinterpret_cast<int8_t*>(col_data);
             break;
           }
           default:

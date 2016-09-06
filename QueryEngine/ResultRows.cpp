@@ -1251,15 +1251,22 @@ int64_t lazy_decode(const Analyzer::ColumnVar* col_var, const int8_t* byte_strea
   size_t type_bitwidth = get_bit_width(type_info);
   if (type_info.get_compression() == kENCODING_FIXED) {
     type_bitwidth = type_info.get_comp_param();
+  } else if (type_info.get_compression() == kENCODING_DICT) {
+    type_bitwidth = 8 * type_info.get_size();
   }
   CHECK_EQ(size_t(0), type_bitwidth % 8);
   auto val = fixed_width_int_decode_noinline(byte_stream, type_bitwidth / 8, pos);
-  if (type_info.get_compression() == kENCODING_FIXED) {
+  if (type_info.get_compression() != kENCODING_NONE) {
+    CHECK(type_info.get_compression() == kENCODING_FIXED || type_info.get_compression() == kENCODING_DICT);
+    auto encoding = type_info.get_compression();
+    if (encoding == kENCODING_FIXED) {
+      encoding = kENCODING_NONE;
+    }
     SQLTypeInfo col_logical_ti(type_info.get_type(),
                                type_info.get_dimension(),
                                type_info.get_scale(),
                                false,
-                               kENCODING_NONE,
+                               encoding,
                                0,
                                type_info.get_subtype());
     if (val == inline_fixed_encoding_null_val(type_info)) {
