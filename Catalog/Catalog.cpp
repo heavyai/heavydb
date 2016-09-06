@@ -737,10 +737,7 @@ void Catalog::createTable(TableDescriptor& td, const list<ColumnDescriptor>& col
   ColumnDescriptor cd;
   cd.columnName = "rowid";
   cd.isSystemCol = true;
-  cd.columnType.set_type(kBIGINT);
-  cd.columnType.set_notnull(true);
-  cd.columnType.set_compression(kENCODING_NONE);
-  cd.columnType.set_comp_param(0);
+  cd.columnType = SQLTypeInfo(kBIGINT, true);
 #ifdef MATERIALIZED_ROWID
   cd.isVirtualCol = false;
 #else

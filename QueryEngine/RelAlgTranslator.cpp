@@ -147,6 +147,11 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInput(const RexInput*
     const auto cd = cat_.getMetadataForColumn(table_desc->tableId, col_name);
     CHECK(cd);
     auto col_ti = cd->columnType;
+    if (cd->isVirtualCol) {
+      // TODO(alex): remove at some point, we only need this fixup for backwards compatibility with old imported data
+      CHECK_EQ("rowid", cd->columnName);
+      col_ti.set_size(8);
+    }
     if (rte_idx > 0 && join_type_ == JoinType::LEFT) {
       col_ti.set_notnull(false);
     }
