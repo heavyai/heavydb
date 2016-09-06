@@ -1558,8 +1558,8 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
           comp_param = 32;  // default to 32-bits
         else
           comp_param = compression->get_encoding_param();
-        if ((cd.columnType.is_string_array() || cd.columnType.is_string()) && comp_param != 32) {
-          throw std::runtime_error("Compression parameter for strings and string arrays must be 32");
+        if (cd.columnType.is_string_array() && comp_param != 32) {
+          throw std::runtime_error("Compression parameter for string arrays must be 32");
         }
         if (comp_param != 8 && comp_param != 16 && comp_param != 32)
           throw std::runtime_error("Compression parameter for Dictionary encoding must be 8 or 16 or 32.");
