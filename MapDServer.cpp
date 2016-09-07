@@ -1105,6 +1105,12 @@ class MapDHandler : virtual public MapDIf {
         LOG(ERROR) << ex.error_msg;
         throw ex;
       }
+      if (col.col_type.type == TDatumType::INTERVAL_DAY_TIME || col.col_type.type == TDatumType::INTERVAL_YEAR_MONTH) {
+        TMapDException ex;
+        ex.error_msg = "Unsupported type: " + thrift_to_name(col.col_type) + " for column: " + col.col_name;
+        LOG(ERROR) << ex.error_msg;
+        throw ex;
+      }
       std::string col_stmt;
       col_stmt.append(col.col_name + " " + thrift_to_name(col.col_type) + " ");
 

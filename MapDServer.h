@@ -80,6 +80,10 @@ inline SQLTypes thrift_to_type(const TDatumType::type& type) {
       return kTIMESTAMP;
     case TDatumType::DATE:
       return kDATE;
+    case TDatumType::INTERVAL_DAY_TIME:
+      return kINTERVAL_DAY_TIME;
+    case TDatumType::INTERVAL_YEAR_MONTH:
+      return kINTERVAL_YEAR_MONTH;
     default:
       break;
   }
