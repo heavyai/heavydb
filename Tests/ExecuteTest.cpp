@@ -358,6 +358,7 @@ TEST(Select, FilterAndSimpleAggregation) {
     c("SELECT SUM(-dd) FROM test;", dt);
     c("SELECT SUM(-f) FROM test;", dt);
     c("SELECT SUM(-d) FROM test;", dt);
+    c("SELECT COUNT(*) FROM test WHERE fx + 1 IS NULL;", dt);
 #ifdef HAVE_CALCITE
     c("SELECT COUNT(ss) FROM test;", dt);
     c("SELECT COUNT(*) FROM test WHERE null IS NULL;", dt);
@@ -2048,7 +2049,7 @@ int main(int argc, char** argv) {
     const std::string insert_query{
         "INSERT INTO test VALUES(8, 43, 102, 1002, 'f', 1.2, 2.4, 'bar', 'real_bar', '2014-12-13 22:23:15', "
         "'15:13:14', "
-        "NULL, 10, 222.2, null, null, null, -1, 9223372036854775807, -9223372036854775808);"};
+        "NULL, NULL, 222.2, null, null, null, -1, 9223372036854775807, -9223372036854775808);"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
