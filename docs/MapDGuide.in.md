@@ -808,6 +808,8 @@ SELECT [ALL|DISTINCT] <expr> [AS [<alias>]], ... FROM <table> [,<table>]
 | **str** LIKE **pattern** | 'ab' LIKE 'ab' | returns true if the string matches the pattern |
 | **str** NOT LIKE **pattern** | 'ab' NOT LIKE 'cd' | returns true if the string does not match the pattern |
 | **str** ILIKE **pattern** | 'AB' ILIKE 'ab' | case-insensitve LIKE |
+| **str** REGEX **POSIX pattern** | '^[a-z]+r$' | lower case string ending with r |
+| REGEXP_LIKE ( **str** , **POSIX pattern** | '^[hc]at' | cat or hat |
 
 Wildcard characters are supported:
 
