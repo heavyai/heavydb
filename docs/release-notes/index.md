@@ -1,5 +1,19 @@
 # MapD Platform
-The latest version of the MapD Platform is 1.2.5.
+The latest version of the MapD Platform is 1.2.6.
+
+#### **1.2.6** - Released September 6, 2016
+
+#####New
+- Support for POSIX regular expressions, boolean match
+- Performance improvement for some `GROUP BY` `ORDER BY` queries with a `LIMIT`
+- Added NVARCHAR support to SQLImporter
+- Added function distance_in_meters
+- Now supporting sub-pixel morphological anti-aliasing, for better line anti-aliasing
+
+#####Fixed
+- Problem when coloring by string with null value
+- Failure to update pointmap color when range of the scale changes
+- Parsing problem with SQL text containing “all” or “any”
 
 #### **1.2.5** - Released August 23, 2016
 
