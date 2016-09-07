@@ -6,6 +6,7 @@
 package com.mapd.jdbc;
 
 import com.mapd.thrift.server.TColumnType;
+import com.mapd.thrift.server.TDatumType;
 import com.mapd.thrift.server.TQueryResult;
 import com.mapd.thrift.server.TRowSet;
 import java.io.InputStream;
@@ -37,6 +38,10 @@ import org.slf4j.LoggerFactory;
  *
  * @author michael
  */
+//Useful debug string
+//System.out.println("Entered " + " line:" + new Throwable().getStackTrace()[0].getLineNumber() +
+//" class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" +
+//new Throwable().getStackTrace()[0].getMethodName());
 class MapDResultSet implements java.sql.ResultSet {
 
   final static Logger logger = LoggerFactory.getLogger(MapDResultSet.class);
@@ -49,6 +54,7 @@ class MapDResultSet implements java.sql.ResultSet {
   private boolean wasNull = false;
   private String warnings = null;
   private Map<String, Integer> columnMap;
+  private int fetchSize = 0;
 
   public MapDResultSet(TQueryResult tsqlResult, String sql) throws SQLException { //logger.debug("Entered "+ sql );
     sqlResult = tsqlResult;
@@ -113,16 +119,51 @@ class MapDResultSet implements java.sql.ResultSet {
   }
 
   @Override
-  public String getString(int columnIndex) throws SQLException { //logger.debug("Entered "+ sql );
+  public String getString(int columnIndex) throws SQLException {
+    //System.out.println("Entered " + " line:" + new Throwable().getStackTrace()[0].getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().getStackTrace()[0].getMethodName());
     //logger.info("Dump result columns "+rowSet.columns.toString());
     //logger.info("Dump column:offset "+ columnIndex + ":" +offset);
     if (rowSet.columns.get(columnIndex - 1).nulls.get(offset)) {
       wasNull = true;
       return null;
     } else {
-      // assume column is str already for now
       wasNull = false;
-      return rowSet.columns.get(columnIndex - 1).data.str_col.get(offset);
+      TDatumType type = sqlResult.row_set.row_desc.get(columnIndex - 1).col_type.type;
+
+      if (type == TDatumType.STR) {
+        return rowSet.columns.get(columnIndex - 1).data.str_col.get(offset);
+      } else {
+        return (String) getStringInternal(columnIndex);
+      }
+    }
+  }
+
+  private String getStringInternal(int columnIndex) throws SQLException {
+    TDatumType type = sqlResult.row_set.row_desc.get(columnIndex - 1).col_type.type;
+
+    switch (type) {
+      case SMALLINT:
+      case INT:
+      case BIGINT:
+        return String.valueOf(getInt(columnIndex));
+      case FLOAT:
+        return String.valueOf(getFloat(columnIndex));
+      case DECIMAL:
+        return String.valueOf(getFloat(columnIndex));
+      case DOUBLE:
+        return String.valueOf(getDouble(columnIndex));
+      case STR:
+        return getString(columnIndex);
+      case TIME:
+        return getTime(columnIndex).toString();
+      case TIMESTAMP:
+        return getTimestamp(columnIndex).toString();
+      case DATE:
+        return getDate(columnIndex).toString();
+      case BOOL:
+        return getBoolean(columnIndex) ? "1" : "0";
+      default:
+        throw new AssertionError(type.name());
     }
   }
 
@@ -209,7 +250,42 @@ class MapDResultSet implements java.sql.ResultSet {
     } else {
       // assume column is str already for now
       wasNull = false;
-      return rowSet.columns.get(columnIndex - 1).data.real_col.get(offset);
+      TDatumType type = sqlResult.row_set.row_desc.get(columnIndex - 1).col_type.type;
+
+      if (type == TDatumType.DOUBLE) {
+        return rowSet.columns.get(columnIndex - 1).data.real_col.get(offset);
+      } else {
+        return getDoubleInternal(columnIndex);
+      }
+    }
+  }
+
+  private double getDoubleInternal(int columnIndex) throws SQLException {
+    TDatumType type = sqlResult.row_set.row_desc.get(columnIndex - 1).col_type.type;
+
+    switch (type) {
+      case SMALLINT:
+      case INT:
+      case BIGINT:
+        return (double) getInt(columnIndex);
+      case FLOAT:
+        return (double) getFloat(columnIndex);
+      case DECIMAL:
+        return (double) getFloat(columnIndex);
+      case DOUBLE:
+        return getDouble(columnIndex);
+      case STR:
+        return Double.valueOf(getString(columnIndex));
+      case TIME:
+        return (double) getTime(columnIndex).toInstant().getEpochSecond();
+      case TIMESTAMP:
+        return (double) getTimestamp(columnIndex).toInstant().getEpochSecond();
+      case DATE:
+        return (double) getDate(columnIndex).toInstant().getEpochSecond();
+      case BOOL:
+        return (double) (getBoolean(columnIndex) ? 1 : 0);
+      default:
+        throw new AssertionError(type.name());
     }
   }
 
@@ -627,9 +703,7 @@ class MapDResultSet implements java.sql.ResultSet {
 
   @Override
   public void setFetchSize(int rows) throws SQLException { //logger.debug("Entered "+ sql );
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    fetchSize = rows;
   }
 
   @Override
