@@ -598,6 +598,16 @@ CREATE TABLE IF NOT EXISTS tweets (
   county_state TEXT ENCODING DICT,
   origin TEXT ENCODING DICT);
 ```
+## `ALTER TABLE`
+```
+ALTER TABLE <table> RENAME TO <table>;
+ALTER TABLE <table> RENAME COLUMN <column> TO <column>;
+```
+Example:
+```
+ALTER TABLE tweets RENAME TO retweets;
+ALTER TABLE retweets RENAME COLUMN source TO device;
+```
 
 ## `DROP TABLE`
 ```
@@ -809,7 +819,7 @@ SELECT [ALL|DISTINCT] <expr> [AS [<alias>]], ... FROM <table> [,<table>]
 | **str** NOT LIKE **pattern** | 'ab' NOT LIKE 'cd' | returns true if the string does not match the pattern |
 | **str** ILIKE **pattern** | 'AB' ILIKE 'ab' | case-insensitve LIKE |
 | **str** REGEX **POSIX pattern** | '^[a-z]+r$' | lower case string ending with r |
-| REGEXP_LIKE ( **str** , **POSIX pattern** | '^[hc]at' | cat or hat |
+| REGEXP_LIKE ( **str** , **POSIX pattern** ) | '^[hc]at' | cat or hat |
 
 Wildcard characters are supported:
 
