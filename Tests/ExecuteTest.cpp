@@ -358,8 +358,8 @@ TEST(Select, FilterAndSimpleAggregation) {
     c("SELECT SUM(-dd) FROM test;", dt);
     c("SELECT SUM(-f) FROM test;", dt);
     c("SELECT SUM(-d) FROM test;", dt);
-    c("SELECT COUNT(*) FROM test WHERE fx + 1 IS NULL;", dt);
 #ifdef HAVE_CALCITE
+    c("SELECT COUNT(*) FROM test WHERE fx + 1 IS NULL;", dt);
     c("SELECT COUNT(ss) FROM test;", dt);
     c("SELECT COUNT(*) FROM test WHERE null IS NULL;", dt);
     c("SELECT COUNT(*) FROM test WHERE null IS NOT NULL;", dt);
