@@ -14,6 +14,7 @@
 
 #include <algorithm>
 #include <queue>
+#include <random>
 
 TEST(Construct, Empty) {
   ResultSet result_set;
@@ -554,6 +555,8 @@ const T* vptr(const TargetValue& r) {
   return boost::get<T>(scalar_r);
 }
 
+typedef std::vector<TargetValue> OneRow;
+
 /* This class allows to emulate and evaluate ResultSet and it's reduce function.
  * It creates two ResultSet equivalents, populates them with randomly generated data,
  * merges them into one, and provides access to the data contained in the merged set.
@@ -617,7 +620,7 @@ class ResultSetEmulator {
     return rse_reduced_row;
   }
   void print_rse_generated_result_sets() const;
-  void print_merged_result_sets(const auto result);
+  void print_merged_result_sets(const std::vector<OneRow>& result);
 
  private:
   void emulateResultSets();
@@ -992,7 +995,7 @@ void ResultSetEmulator::print_rse_generated_result_sets() const {
   printf("\n");
 }
 
-void ResultSetEmulator::print_merged_result_sets(const auto result) {
+void ResultSetEmulator::print_merged_result_sets(const std::vector<OneRow>& result) {
   printf("\n ****** KMIN_DATA_FROM_RS_MERGE_CODE ****** %i", (int)result.size());
   size_t j = 0;
   for (const auto& row : result) {
@@ -1203,8 +1206,6 @@ std::vector<TargetInfo> generate_random_groups_target_infos() {
   target_infos.push_back(TargetInfo{true, kAVG, int_ti, int_ti, true, false});
   return target_infos;
 }
-
-typedef std::vector<TargetValue> OneRow;
 
 std::vector<OneRow> get_rows_sorted_by_col(const ResultSet& rs, const size_t col_idx) {
   std::vector<OneRow> result;
