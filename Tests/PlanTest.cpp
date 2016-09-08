@@ -133,13 +133,13 @@ TEST(ParseAnalyzePlan, Create) {
   const TableDescriptor* td = gsession->get_catalog().getMetadataForTable("smallfrag");
   EXPECT_TRUE(td->maxFragRows == 1000 && td->fragPageSize == 512);
   ASSERT_NO_THROW(run_ddl(
-                      "create table if not exists testdict (a varchar(100) encoding dict(32), c "
+                      "create table if not exists testdict (a varchar(100) encoding dict(8), c "
                       "text encoding dict);"););
   td = gsession->get_catalog().getMetadataForTable("testdict");
   const ColumnDescriptor* cd = gsession->get_catalog().getMetadataForColumn(td->tableId, "a");
   const DictDescriptor* dd = gsession->get_catalog().getMetadataForDict(cd->columnType.get_comp_param());
   ASSERT_TRUE(dd != nullptr);
-  EXPECT_EQ(dd->dictNBits, 32);
+  EXPECT_EQ(dd->dictNBits, 8);
 }
 
 TEST(ParseAnalyzePlan, Select) {
