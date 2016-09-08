@@ -93,7 +93,7 @@ CFLAGS="-fPIC" download_make_install ftp://ftp.gnu.org/pub/gnu/ncurses/ncurses-5
 
 download_make_install ftp://ftp.gnu.org/gnu/bison/bison-2.5.1.tar.xz # "" "--build=powerpc64le-unknown-linux-gnu"
 
-download_make_install https://flexpp-bisonpp.googlecode.com/files/bisonpp-1.21-45.tar.gz bison++-1.21
+download_make_install https://storage.googleapis.com/google-code-archive-downloads/v2/code.google.com/flexpp-bisonpp/bisonpp-1.21-45.tar.gz bison++-1.21
 
 download_make_install https://github.com/google/glog/archive/v0.3.4.tar.gz glog-0.3.4 # --build=powerpc64le-unknown-linux-gnu"
 
@@ -143,6 +143,7 @@ unzip -a -d cryptopp563 cryptopp563
 pushd cryptopp563
 PREFIX=$PREFIX make all shared
 PREFIX=$PREFIX make install
+popd
 
 # thrift
 VERS=0.9.3
@@ -155,6 +156,7 @@ patch -p1 < ../mapd-deps-thrift-refill-buffer.patch
 JAVA_PREFIX=$PREFIX/lib ./configure --prefix=$PREFIX --with-lua=no --with-python=no --with-php=no --with-boost-libdir=$PREFIX/lib
 makej
 make install
+popd
 
 # backend rendering
 download https://downloads.sourceforge.net/project/glew/glew/1.13.0/glew-1.13.0.tgz

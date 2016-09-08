@@ -52,6 +52,10 @@ Dependencies for `mapd_web_server` and other Go utils are in [`ThirdParty/go`](T
 [scripts/mapd-deps-linux.sh](scripts/mapd-deps-linux.sh) is provided that will automatically download, build, and install most dependencies. Before running this script, make sure you have the basic build tools installed:
 
     yum groupinstall "Development Tools"
+    yum install zlib-devel
+    yum install libssh
+    yum install openssl-devel
+    yun install openldap-devel
     yum install git
 
 Instructions for installing CUDA are below.
