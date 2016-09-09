@@ -2032,7 +2032,7 @@ llvm::Value* Executor::codegenCastFromFp(llvm::Value* operand_lv,
     throw std::runtime_error("Cast from " + operand_ti.get_type_name() + " to " + ti.get_type_name() +
                              " not supported");
   }
-  if (operand_ti == ti) {
+  if (operand_ti.get_type() == ti.get_type()) {
     return operand_lv;
   }
   CHECK(operand_lv->getType()->isFloatTy() || operand_lv->getType()->isDoubleTy());
