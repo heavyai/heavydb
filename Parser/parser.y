@@ -256,7 +256,6 @@ column_def:
 		{	$<nodeval>$ = new ColumnDef($<stringval>1, dynamic_cast<SQLType*>($<nodeval>2), dynamic_cast<CompressDef*>($<nodeval>3), nullptr); }
 		| column data_type column_constraint_def opt_compression
 		{ $<nodeval>$ = new ColumnDef($<stringval>1, dynamic_cast<SQLType*>($<nodeval>2), dynamic_cast<CompressDef*>($<nodeval>4), dynamic_cast<ColumnConstraintDef*>($<nodeval>3)); }
-		|
 	;
 
 opt_compression:
