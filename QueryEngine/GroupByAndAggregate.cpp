@@ -1250,7 +1250,7 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
     case GroupByColRangeType::OneColKnownRange:
     case GroupByColRangeType::OneColGuessedRange:
     case GroupByColRangeType::Scan: {
-      static const int64_t MAX_BUFFER_SIZE = 2 << 30;
+      static const int64_t MAX_BUFFER_SIZE = 1 << 30;
       const int64_t col_count = ra_exe_unit_.groupby_exprs.size() + ra_exe_unit_.target_exprs.size();
       const int64_t max_entry_count = MAX_BUFFER_SIZE / (col_count * sizeof(int64_t));
       CHECK_EQ(size_t(1), ra_exe_unit_.groupby_exprs.size());
