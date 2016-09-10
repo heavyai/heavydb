@@ -1429,7 +1429,8 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::CaseExpr* case_expr,
     case_llvm_type = get_int_type(8 * case_ti.get_logical_size(), cgen_state_->context_);
   }
   CHECK(case_llvm_type);
-  CHECK(case_expr->get_else_expr()->get_type_info() == case_ti);
+  const auto& else_ti = case_expr->get_else_expr()->get_type_info();
+  CHECK_EQ(else_ti.get_type(), case_ti.get_type());
   llvm::Value* case_val = codegenCase(case_expr, case_llvm_type, is_real_str, co);
   std::vector<llvm::Value*> ret_vals{case_val};
   if (is_real_str) {
