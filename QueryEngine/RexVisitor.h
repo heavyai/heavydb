@@ -3,12 +3,10 @@
 
 #include "RelAlgAbstractInterpreter.h"
 
-#include <memory>
-
 template <class T>
-class RexVisitorBase {
+class RexVisitor {
  public:
-  virtual T visit(const RexScalar* rex_scalar) const {
+  T visit(const RexScalar* rex_scalar) const {
     const auto rex_input = dynamic_cast<const RexInput*>(rex_scalar);
     if (rex_input) {
       return visitInput(rex_input);
@@ -33,50 +31,33 @@ class RexVisitorBase {
     return defaultResult();
   }
 
-  virtual T visitInput(const RexInput*) const = 0;
+  virtual T visitInput(const RexInput*) const { return defaultResult(); }
 
-  virtual T visitLiteral(const RexLiteral*) const = 0;
+  virtual T visitLiteral(const RexLiteral*) const { return defaultResult(); }
 
-  virtual T visitRef(const RexRef*) const = 0;
+  virtual T visitRef(const RexRef*) const { return defaultResult(); }
 
-  virtual T visitOperator(const RexOperator* rex_operator) const = 0;
-
-  virtual T visitCase(const RexCase* rex_case) const = 0;
-
- protected:
-  virtual T defaultResult() const = 0;
-};
-
-template <class T>
-class RexVisitor : public RexVisitorBase<T> {
- public:
-  T visitInput(const RexInput*) const override { return defaultResult(); }
-
-  T visitLiteral(const RexLiteral*) const override { return defaultResult(); }
-
-  T visitRef(const RexRef*) const override { return defaultResult(); }
-
-  T visitOperator(const RexOperator* rex_operator) const override {
+  T visitOperator(const RexOperator* rex_operator) const {
     const size_t operand_count = rex_operator->size();
     T result = defaultResult();
     for (size_t i = 0; i < operand_count; ++i) {
       const auto operand = rex_operator->getOperand(i);
-      T operandResult = RexVisitorBase<T>::visit(operand);
+      T operandResult = visit(operand);
       result = aggregateResult(result, operandResult);
     }
     return result;
   }
 
-  T visitCase(const RexCase* rex_case) const override {
+  T visitCase(const RexCase* rex_case) const {
     T result = defaultResult();
     for (size_t i = 0; i < rex_case->branchCount(); ++i) {
       const auto when = rex_case->getWhen(i);
-      result = aggregateResult(result, RexVisitorBase<T>::visit(when));
+      result = aggregateResult(result, visit(when));
       const auto then = rex_case->getThen(i);
-      result = aggregateResult(result, RexVisitorBase<T>::visit(then));
+      result = aggregateResult(result, visit(then));
     }
     if (rex_case->getElse()) {
-      result = aggregateResult(result, RexVisitorBase<T>::visit(rex_case->getElse()));
+      result = aggregateResult(result, visit(rex_case->getElse()));
     }
     return result;
   }
@@ -84,39 +65,7 @@ class RexVisitor : public RexVisitorBase<T> {
  protected:
   virtual T aggregateResult(const T& aggregate, const T& next_result) const { return next_result; }
 
-  T defaultResult() const override { return T{}; }
-};
-
-class RexDeepCopyVisitor : public RexVisitorBase<std::unique_ptr<const RexScalar>> {
- protected:
-  typedef std::unique_ptr<const RexScalar> RetType;
-
-  RetType visitInput(const RexInput* input) const override { return input->deepCopy(); }
-
-  RetType visitLiteral(const RexLiteral* literal) const override { return literal->deepCopy(); }
-
-  RetType visitRef(const RexRef* ref) const override { return ref->deepCopy(); }
-
-  RetType visitOperator(const RexOperator* rex_operator) const override {
-    const size_t operand_count = rex_operator->size();
-    std::vector<RetType> new_opnds;
-    for (size_t i = 0; i < operand_count; ++i) {
-      new_opnds.push_back(visit(rex_operator->getOperand(i)));
-    }
-    return rex_operator->getDisambiguated(new_opnds);
-  }
-
-  RetType visitCase(const RexCase* rex_case) const override {
-    std::vector<std::pair<RetType, RetType>> new_pair_list;
-    for (size_t i = 0; i < rex_case->branchCount(); ++i) {
-      new_pair_list.emplace_back(visit(rex_case->getWhen(i)), visit(rex_case->getThen(i)));
-    }
-    auto new_else = visit(rex_case->getElse());
-    return boost::make_unique<RexCase>(new_pair_list, new_else);
-  }
-
- private:
-  RetType defaultResult() const override { return nullptr; }
+  virtual T defaultResult() const { return T{}; }
 };
 
 #endif  // QUERYENGINE_REXVISITOR_H
