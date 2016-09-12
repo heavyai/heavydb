@@ -333,6 +333,21 @@ class Executor {
   llvm::Value* codegenLogical(const Analyzer::BinOper*, const CompilationOptions&);
   llvm::Value* toBool(llvm::Value*);
   llvm::Value* codegenArith(const Analyzer::BinOper*, const CompilationOptions&);
+  llvm::Value* codegenAdd(llvm::Value*,
+                          llvm::Value*,
+                          const std::string& null_typename,
+                          const std::string& null_check_suffix,
+                          const SQLTypeInfo&);
+  llvm::Value* codegenSub(llvm::Value*,
+                          llvm::Value*,
+                          const std::string& null_typename,
+                          const std::string& null_check_suffix,
+                          const SQLTypeInfo&);
+  llvm::Value* codegenMul(llvm::Value*,
+                          llvm::Value*,
+                          const std::string& null_typename,
+                          const std::string& null_check_suffix,
+                          const SQLTypeInfo&);
   llvm::Value* codegenDiv(llvm::Value*,
                           llvm::Value*,
                           const std::string& null_typename,
@@ -773,7 +788,7 @@ class Executor {
           ir_builder_(context_),
           outer_join_cond_lv_(nullptr),
           must_run_on_cpu_(false),
-          uses_div_(false) {}
+          needs_error_check_(false) {}
 
     size_t getOrAddLiteral(const Analyzer::Constant* constant,
                            const EncodingType enc_type,
@@ -879,7 +894,7 @@ class Executor {
     std::unordered_map<int, llvm::Value*> scan_idx_to_hash_pos_;
     std::vector<std::unique_ptr<const InValuesBitmap>> in_values_bitmaps_;
     bool must_run_on_cpu_;
-    bool uses_div_;
+    bool needs_error_check_;
 
    private:
     template <class T>

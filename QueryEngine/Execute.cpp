@@ -2469,34 +2469,11 @@ llvm::Value* Executor::codegenArith(const Analyzer::BinOper* bin_oper, const Com
     const auto int_typename = numeric_or_time_interval_type_name(lhs_type, rhs_type);
     switch (optype) {
       case kMINUS:
-        if (null_check_suffix.empty()) {
-          return cgen_state_->ir_builder_.CreateSub(lhs_lv, rhs_lv);
-        } else {
-          return cgen_state_->emitCall("sub_" + int_typename + null_check_suffix,
-                                       {lhs_lv, rhs_lv, ll_int(inline_int_null_val(lhs_type))});
-        }
+        return codegenSub(lhs_lv, rhs_lv, null_check_suffix.empty() ? "" : int_typename, null_check_suffix, lhs_type);
       case kPLUS:
-        if (null_check_suffix.empty()) {
-          return cgen_state_->ir_builder_.CreateAdd(lhs_lv, rhs_lv);
-        } else {
-          return cgen_state_->emitCall("add_" + int_typename + null_check_suffix,
-                                       {lhs_lv, rhs_lv, ll_int(inline_int_null_val(lhs_type))});
-        }
-      case kMULTIPLY: {
-        if (lhs_type.is_decimal()) {
-          return cgen_state_->emitCall(
-              "mul_" + int_typename + "_decimal",
-              {lhs_lv, rhs_lv, ll_int(exp_to_scale(lhs_type.get_scale())), ll_int(inline_int_null_val(lhs_type))});
-        }
-        llvm::Value* result{nullptr};
-        if (null_check_suffix.empty()) {
-          result = cgen_state_->ir_builder_.CreateMul(lhs_lv, rhs_lv);
-        } else {
-          result = cgen_state_->emitCall("mul_" + int_typename + null_check_suffix,
-                                         {lhs_lv, rhs_lv, ll_int(inline_int_null_val(lhs_type))});
-        }
-        return result;
-      }
+        return codegenAdd(lhs_lv, rhs_lv, null_check_suffix.empty() ? "" : int_typename, null_check_suffix, lhs_type);
+      case kMULTIPLY:
+        return codegenMul(lhs_lv, rhs_lv, null_check_suffix.empty() ? "" : int_typename, null_check_suffix, lhs_type);
       case kDIVIDE:
         return codegenDiv(lhs_lv, rhs_lv, null_check_suffix.empty() ? "" : int_typename, null_check_suffix, lhs_type);
       case kMODULO:
@@ -2531,6 +2508,116 @@ llvm::Value* Executor::codegenArith(const Analyzer::BinOper* bin_oper, const Com
   return nullptr;
 }
 
+llvm::Value* Executor::codegenAdd(llvm::Value* lhs_lv,
+                                  llvm::Value* rhs_lv,
+                                  const std::string& null_typename,
+                                  const std::string& null_check_suffix,
+                                  const SQLTypeInfo& ti) {
+  CHECK_EQ(lhs_lv->getType(), rhs_lv->getType());
+  CHECK(ti.is_integer() || ti.is_decimal() || ti.is_timeinterval());
+  cgen_state_->needs_error_check_ = true;
+  auto add_ok = llvm::BasicBlock::Create(cgen_state_->context_, "add_ok", cgen_state_->row_func_);
+  auto add_fail = llvm::BasicBlock::Create(cgen_state_->context_, "add_fail", cgen_state_->row_func_);
+
+  llvm::Value* chosen_max{nullptr};
+  llvm::Value* chosen_min{nullptr};
+  std::tie(chosen_max, chosen_min) = inlineIntMaxMin(ti.get_size(), true);
+  llvm::Value* detected{nullptr};
+  auto const_zero = llvm::ConstantInt::get(lhs_lv->getType(), 0, true);
+  auto overflow = cgen_state_->ir_builder_.CreateAnd(
+      cgen_state_->ir_builder_.CreateICmpSGT(lhs_lv, const_zero),
+      cgen_state_->ir_builder_.CreateICmpSGT(rhs_lv, cgen_state_->ir_builder_.CreateSub(chosen_max, lhs_lv)));
+  auto underflow = cgen_state_->ir_builder_.CreateAnd(
+      cgen_state_->ir_builder_.CreateICmpSLT(lhs_lv, const_zero),
+      cgen_state_->ir_builder_.CreateICmpSLT(rhs_lv, cgen_state_->ir_builder_.CreateSub(chosen_min, lhs_lv)));
+  detected = cgen_state_->ir_builder_.CreateOr(overflow, underflow);
+
+  cgen_state_->ir_builder_.CreateCondBr(detected, add_fail, add_ok);
+  cgen_state_->ir_builder_.SetInsertPoint(add_ok);
+  auto ret = null_check_suffix.empty() ? cgen_state_->ir_builder_.CreateAdd(lhs_lv, rhs_lv)
+                                       : cgen_state_->emitCall("add_" + null_typename + null_check_suffix,
+                                                               {lhs_lv, rhs_lv, ll_int(inline_int_null_val(ti))});
+  cgen_state_->ir_builder_.SetInsertPoint(add_fail);
+  cgen_state_->ir_builder_.CreateRet(ll_int(ERR_OVERFLOW_OR_UNDERFLOW));
+  cgen_state_->ir_builder_.SetInsertPoint(add_ok);
+  return ret;
+}
+
+llvm::Value* Executor::codegenSub(llvm::Value* lhs_lv,
+                                  llvm::Value* rhs_lv,
+                                  const std::string& null_typename,
+                                  const std::string& null_check_suffix,
+                                  const SQLTypeInfo& ti) {
+  CHECK_EQ(lhs_lv->getType(), rhs_lv->getType());
+  CHECK(ti.is_integer() || ti.is_decimal() || ti.is_timeinterval());
+  cgen_state_->needs_error_check_ = true;
+  auto sub_ok = llvm::BasicBlock::Create(cgen_state_->context_, "sub_ok", cgen_state_->row_func_);
+  auto sub_fail = llvm::BasicBlock::Create(cgen_state_->context_, "sub_fail", cgen_state_->row_func_);
+
+  llvm::Value* chosen_max{nullptr};
+  llvm::Value* chosen_min{nullptr};
+  std::tie(chosen_max, chosen_min) = inlineIntMaxMin(ti.get_size(), true);
+  llvm::Value* detected{nullptr};
+  auto const_zero = llvm::ConstantInt::get(lhs_lv->getType(), 0, true);
+  auto overflow = cgen_state_->ir_builder_.CreateAnd(
+      cgen_state_->ir_builder_.CreateICmpSLT(lhs_lv, const_zero),
+      cgen_state_->ir_builder_.CreateICmpSGT(rhs_lv, cgen_state_->ir_builder_.CreateAdd(chosen_max, lhs_lv)));
+  auto underflow = cgen_state_->ir_builder_.CreateAnd(
+      cgen_state_->ir_builder_.CreateICmpSGT(lhs_lv, const_zero),
+      cgen_state_->ir_builder_.CreateICmpSLT(rhs_lv, cgen_state_->ir_builder_.CreateAdd(chosen_min, lhs_lv)));
+  detected = cgen_state_->ir_builder_.CreateOr(overflow, underflow);
+
+  cgen_state_->ir_builder_.CreateCondBr(detected, sub_fail, sub_ok);
+  cgen_state_->ir_builder_.SetInsertPoint(sub_ok);
+  auto ret = null_check_suffix.empty() ? cgen_state_->ir_builder_.CreateSub(lhs_lv, rhs_lv)
+                                       : cgen_state_->emitCall("sub_" + null_typename + null_check_suffix,
+                                                               {lhs_lv, rhs_lv, ll_int(inline_int_null_val(ti))});
+  cgen_state_->ir_builder_.SetInsertPoint(sub_fail);
+  cgen_state_->ir_builder_.CreateRet(ll_int(ERR_OVERFLOW_OR_UNDERFLOW));
+  cgen_state_->ir_builder_.SetInsertPoint(sub_ok);
+  return ret;
+}
+
+llvm::Value* Executor::codegenMul(llvm::Value* lhs_lv,
+                                  llvm::Value* rhs_lv,
+                                  const std::string& null_typename,
+                                  const std::string& null_check_suffix,
+                                  const SQLTypeInfo& ti) {
+  CHECK_EQ(lhs_lv->getType(), rhs_lv->getType());
+  CHECK(ti.is_integer() || ti.is_decimal() || ti.is_timeinterval());
+  cgen_state_->needs_error_check_ = true;
+  auto mul_ok = llvm::BasicBlock::Create(cgen_state_->context_, "mul_ok", cgen_state_->row_func_);
+  auto mul_fail = llvm::BasicBlock::Create(cgen_state_->context_, "mul_fail", cgen_state_->row_func_);
+
+  llvm::Value* chosen_max{nullptr};
+  llvm::Value* chosen_min{nullptr};
+  std::tie(chosen_max, chosen_min) = inlineIntMaxMin(ti.get_size(), true);
+  auto const_zero = llvm::ConstantInt::get(lhs_lv->getType(), 0, true);
+  auto detected = cgen_state_->ir_builder_.CreateAnd(
+      cgen_state_->ir_builder_.CreateICmpNE(rhs_lv, const_zero),
+      cgen_state_->ir_builder_.CreateOr(  // overflow
+          cgen_state_->ir_builder_.CreateICmpSGT(lhs_lv, cgen_state_->ir_builder_.CreateSDiv(chosen_max, rhs_lv)),
+          // underflow
+          cgen_state_->ir_builder_.CreateICmpSLT(lhs_lv, cgen_state_->ir_builder_.CreateSDiv(chosen_min, rhs_lv))));
+
+  cgen_state_->ir_builder_.CreateCondBr(detected, mul_fail, mul_ok);
+  cgen_state_->ir_builder_.SetInsertPoint(mul_ok);
+  llvm::Value* ret{nullptr};
+  if (ti.is_decimal()) {
+    ret =
+        cgen_state_->emitCall("mul_" + null_typename + "_decimal",
+                              {lhs_lv, rhs_lv, ll_int(exp_to_scale(ti.get_scale())), ll_int(inline_int_null_val(ti))});
+  } else {
+    ret = null_check_suffix.empty() ? cgen_state_->ir_builder_.CreateMul(lhs_lv, rhs_lv)
+                                    : cgen_state_->emitCall("mul_" + null_typename + null_check_suffix,
+                                                            {lhs_lv, rhs_lv, ll_int(inline_int_null_val(ti))});
+  }
+  cgen_state_->ir_builder_.SetInsertPoint(mul_fail);
+  cgen_state_->ir_builder_.CreateRet(ll_int(ERR_OVERFLOW_OR_UNDERFLOW));
+  cgen_state_->ir_builder_.SetInsertPoint(mul_ok);
+  return ret;
+}
+
 llvm::Value* Executor::codegenDiv(llvm::Value* lhs_lv,
                                   llvm::Value* rhs_lv,
                                   const std::string& null_typename,
@@ -2544,7 +2631,7 @@ llvm::Value* Executor::codegenDiv(llvm::Value* lhs_lv,
                                    : cgen_state_->emitCall("mul_" + numeric_type_name(ti) + null_check_suffix,
                                                            {lhs_lv, scale_lv, ll_int(inline_int_null_val(ti))});
   }
-  cgen_state_->uses_div_ = true;
+  cgen_state_->needs_error_check_ = true;
   auto div_ok = llvm::BasicBlock::Create(cgen_state_->context_, "div_ok", cgen_state_->row_func_);
   auto div_zero = llvm::BasicBlock::Create(cgen_state_->context_, "div_zero", cgen_state_->row_func_);
   auto zero_const = rhs_lv->getType()->isIntegerTy() ? llvm::ConstantInt::get(rhs_lv->getType(), 0, true)
@@ -2578,7 +2665,7 @@ llvm::Value* Executor::codegenMod(llvm::Value* lhs_lv,
                                   const SQLTypeInfo& ti) {
   CHECK_EQ(lhs_lv->getType(), rhs_lv->getType());
   CHECK(ti.is_integer());
-  cgen_state_->uses_div_ = true;
+  cgen_state_->needs_error_check_ = true;
   auto mod_ok = llvm::BasicBlock::Create(cgen_state_->context_, "mod_ok", cgen_state_->row_func_);
   auto mod_zero = llvm::BasicBlock::Create(cgen_state_->context_, "mod_zero", cgen_state_->row_func_);
   auto zero_const = llvm::ConstantInt::get(rhs_lv->getType(), 0, true);
@@ -4966,7 +5053,7 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
 
   const bool needs_error_check = group_by_and_aggregate.codegen(filter_lv, co);
 
-  if (needs_error_check || cgen_state_->uses_div_) {
+  if (needs_error_check || cgen_state_->needs_error_check_) {
     createErrorCheckControlFlow(query_func);
   }
 
