@@ -161,6 +161,77 @@ void RelCompound::replaceInput(std::shared_ptr<const RelAlgNode> old_input, std:
   }
 }
 
+namespace std {
+template <>
+struct hash<std::pair<const RelAlgNode*, int>> {
+  size_t operator()(const std::pair<const RelAlgNode*, int>& input_col) const {
+    auto ptr_val = reinterpret_cast<const int64_t*>(&input_col.first);
+    return static_cast<int64_t>(*ptr_val) ^ input_col.second;
+  }
+};
+}  // std
+
+namespace {
+
+std::set<std::pair<const RelAlgNode*, int>> get_equiv_cols(const RelAlgNode* node, const size_t which_col) {
+  std::set<std::pair<const RelAlgNode*, int>> work_set;
+  auto walker = node;
+  auto curr_col = which_col;
+  while (true) {
+    work_set.insert(std::make_pair(walker, curr_col));
+    if (dynamic_cast<const RelScan*>(walker) || dynamic_cast<const RelJoin*>(walker)) {
+      break;
+    }
+    CHECK_EQ(size_t(1), walker->inputCount());
+    auto only_source = walker->getInput(0);
+    if (auto project = dynamic_cast<const RelProject*>(walker)) {
+      if (auto input = dynamic_cast<const RexInput*>(project->getProjectAt(curr_col))) {
+        CHECK_EQ(input->getSourceNode(), only_source);
+        curr_col = input->getIndex();
+      } else {
+        break;
+      }
+    } else if (auto aggregate = dynamic_cast<const RelAggregate*>(walker)) {
+      if (curr_col >= aggregate->getGroupByCount()) {
+        break;
+      }
+    }
+    walker = only_source;
+  }
+  return work_set;
+}
+
+}  // namespace
+
+bool RelSort::hasEquivCollationOf(const RelSort& that) const {
+  if (collation_.size() != that.collation_.size()) {
+    return false;
+  }
+
+  for (size_t i = 0, e = collation_.size(); i < e; ++i) {
+    auto this_sort_key = collation_[i];
+    auto that_sort_key = that.collation_[i];
+    if (this_sort_key.getSortDir() != that_sort_key.getSortDir()) {
+      return false;
+    }
+    if (this_sort_key.getNullsPosition() != that_sort_key.getNullsPosition()) {
+      return false;
+    }
+    auto this_equiv_keys = get_equiv_cols(this, this_sort_key.getField());
+    auto that_equiv_keys = get_equiv_cols(&that, that_sort_key.getField());
+    std::vector<std::pair<const RelAlgNode*, int>> intersect;
+    std::set_intersection(this_equiv_keys.begin(),
+                          this_equiv_keys.end(),
+                          that_equiv_keys.begin(),
+                          that_equiv_keys.end(),
+                          std::back_inserter(intersect));
+    if (intersect.empty()) {
+      return false;
+    }
+  }
+  return true;
+}
+
 namespace {
 
 unsigned node_id(const rapidjson::Value& ra_node) noexcept {

@@ -671,7 +671,7 @@ class RelSort : public RelAlgNode {
   }
 
   bool operator==(const RelSort& that) const {
-    return collation_ == that.collation_ && limit_ == that.limit_ && offset_ == that.offset_;
+    return limit_ == that.limit_ && offset_ == that.offset_ && hasEquivCollationOf(that);
   }
 
   size_t collationCount() const { return collation_.size(); }
@@ -701,6 +701,8 @@ class RelSort : public RelAlgNode {
   const std::vector<SortField> collation_;
   const size_t limit_;
   const size_t offset_;
+
+  bool hasEquivCollationOf(const RelSort& that) const;
 };
 
 class QueryNotSupported : public std::runtime_error {

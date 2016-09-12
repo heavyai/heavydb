@@ -450,6 +450,7 @@ TEST(Select, FilterAndMultipleAggregation) {
     SKIP_NO_GPU();
     c("SELECT AVG(x), AVG(y) FROM test;", dt);
     c("SELECT MIN(x), AVG(x * y), MAX(y + 7), COUNT(*) FROM test WHERE x + y > 47 AND x + y < 51;", dt);
+    c("SELECT str, AVG(x), COUNT(*) as xx, COUNT(*) as countval FROM test GROUP BY str ORDER BY countval;", dt);
   }
 }
 
@@ -1887,6 +1888,7 @@ TEST(Select, Subqueries) {
     c("SELECT COUNT(*) FROM subquery_test WHERE x NOT IN (SELECT x + 1 FROM subquery_test GROUP BY x);", dt);
     c("SELECT MAX(ct) FROM (SELECT COUNT(*) AS ct, str AS foo FROM test GROUP BY foo);", dt);
     c("SELECT COUNT(*) FROM subquery_test WHERE x IN (SELECT x AS foobar FROM subquery_test GROUP BY foobar);", dt);
+    c("SELECT * FROM (SELECT x FROM test ORDER BY x);", dt);
     ASSERT_EQ(int64_t(0), v<int64_t>(run_simple_agg("SELECT * FROM (SELECT rowid FROM test WHERE rowid = 0);", dt)));
     EXPECT_THROW(run_multiple_agg(
                      "SELECT COUNT(*) FROM test WHERE x NOT IN (SELECT x FROM test GROUP BY x ORDER BY COUNT(*));", dt),
