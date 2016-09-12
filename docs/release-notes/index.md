@@ -1,5 +1,9 @@
 # MapD Platform
-The latest version of the MapD Platform is 1.2.6.
+The latest version of the MapD Platform is 1.2.7.
+
+#### **1.2.7** - Released September 12, 2016
+- Add support in JDBC driver for implicit type casting of expressions to double/string, not requiring explicit CAST operator
+
 
 #### **1.2.6** - Released September 6, 2016
 
