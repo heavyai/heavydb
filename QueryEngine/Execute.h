@@ -771,6 +771,9 @@ class Executor {
                                      std::shared_ptr<RowSetMemoryOwner>,
                                      const QueryMemoryDescriptor&,
                                      const bool output_columnar) const;
+  RowSetPtr reduceMultiDeviceResultSets(std::vector<std::pair<ResultPtr, std::vector<size_t>>>& all_fragment_results,
+                                        std::shared_ptr<RowSetMemoryOwner>,
+                                        const QueryMemoryDescriptor&) const;
   RowSetPtr reduceSpeculativeTopN(const RelAlgExecutionUnit&,
                                   std::vector<std::pair<ResultPtr, std::vector<size_t>>>& all_fragment_results,
                                   std::shared_ptr<RowSetMemoryOwner>,

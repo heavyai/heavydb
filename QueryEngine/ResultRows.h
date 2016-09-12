@@ -9,6 +9,7 @@
 #define QUERYENGINE_RESULTROWS_H
 
 #include "QueryMemoryDescriptor.h"
+#include "ResultSet.h"
 #include "TargetValue.h"
 
 #include "../Analyzer/Analyzer.h"
@@ -339,10 +340,20 @@ inline TargetInfo target_info(const PointerType target_expr) {
           is_distinct};
 }
 
+inline std::vector<TargetInfo> target_exprs_to_infos(const std::vector<Analyzer::Expr*>& targets) {
+  std::vector<TargetInfo> target_infos;
+  for (const auto target_expr : targets) {
+    target_infos.push_back(target_info(target_expr));
+  }
+  return target_infos;
+}
+
 struct GpuQueryMemory;
 
 class ResultRows {
  public:
+  ResultRows(std::shared_ptr<ResultSet>);
+
   ResultRows(const QueryMemoryDescriptor& query_mem_desc,
              const std::vector<Analyzer::Expr*>& targets,
              const Executor* executor,
@@ -354,7 +365,8 @@ class ResultRows {
              const int64_t min_val = 0,
              const int8_t warp_count = 0,
              const int64_t queue_time_ms = 0)
-      : executor_(executor),
+      : result_set_(nullptr),
+        executor_(executor),
         query_mem_desc_(query_mem_desc),
         row_set_mem_owner_(row_set_mem_owner),
         agg_init_vals_(init_vals),
@@ -392,7 +404,8 @@ class ResultRows {
              const int device_id);
 
   ResultRows(const std::string& explanation, int64_t queue_time_ms)
-      : query_mem_desc_{},
+      : result_set_(nullptr),
+        query_mem_desc_{},
         group_by_buffer_idx_(0),
         output_columnar_(false),
         in_place_(false),
@@ -409,7 +422,8 @@ class ResultRows {
         queue_time_ms_(queue_time_ms) {}
 
   ResultRows(const std::string& explanation, int64_t queue_time_ms, int64_t render_time_ms)
-      : query_mem_desc_{},
+      : result_set_(nullptr),
+        query_mem_desc_{},
         group_by_buffer_idx_(0),
         output_columnar_(false),
         in_place_(false),
@@ -427,7 +441,8 @@ class ResultRows {
         render_time_ms_(render_time_ms) {}
 
   explicit ResultRows(const std::string& explanation)
-      : query_mem_desc_{},
+      : result_set_(nullptr),
+        query_mem_desc_{},
         group_by_buffer_idx_(0),
         output_columnar_(false),
         in_place_(false),
@@ -444,21 +459,30 @@ class ResultRows {
         queue_time_ms_(0) {}
 
   void moveToBegin() const {
+    if (result_set_) {
+      result_set_->moveToBegin();
+      return;
+    }
     crt_row_idx_ = 0;
     crt_row_buff_idx_ = 0;
     in_place_buff_idx_ = 0;
     group_by_buffer_idx_ = 0;
     fetch_started_ = false;
   }
-  void beginRow() { target_values_.beginRow(row_set_mem_owner_.get()); }
+  void beginRow() {
+    CHECK(!result_set_);
+    target_values_.beginRow(row_set_mem_owner_.get());
+  }
 
   void beginRow(const int64_t key) {
+    CHECK(!result_set_);
     CHECK(multi_keys_.empty());
     simple_keys_.push_back(key);
     target_values_.beginRow(row_set_mem_owner_.get());
   }
 
   void beginRow(const std::vector<int64_t>& key) {
+    CHECK(!result_set_);
     CHECK(simple_keys_.empty());
     multi_keys_.push_back(key);
     target_values_.beginRow(row_set_mem_owner_.get());
@@ -476,18 +500,34 @@ class ResultRows {
                                const int8_t warp_count,
                                const bool is_columnar);
 
-  void addValue(const int64_t val) { target_values_.addValue(val); }
+  void addValue(const int64_t val) {
+    CHECK(!result_set_);
+    target_values_.addValue(val);
+  }
 
   // used for kAVG
-  void addValue(const int64_t val1, const int64_t val2) { target_values_.addValue(val1, val2); }
+  void addValue(const int64_t val1, const int64_t val2) {
+    CHECK(!result_set_);
+    target_values_.addValue(val1, val2);
+  }
 
-  void addValue(const std::string& val) { target_values_.addValue(val); }
+  void addValue(const std::string& val) {
+    CHECK(!result_set_);
+    target_values_.addValue(val);
+  }
 
-  void addValue(const std::vector<int64_t>& val) { target_values_.addValue(val); }
+  void addValue(const std::vector<int64_t>& val) {
+    CHECK(!result_set_);
+    target_values_.addValue(val);
+  }
 
-  void addValue() { target_values_.addValue(); }
+  void addValue() {
+    CHECK(!result_set_);
+    target_values_.addValue();
+  }
 
   void append(const ResultRows& more_results) {
+    CHECK(!result_set_);
     simple_keys_.insert(simple_keys_.end(), more_results.simple_keys_.begin(), more_results.simple_keys_.end());
     multi_keys_.insert(multi_keys_.end(), more_results.multi_keys_.begin(), more_results.multi_keys_.end());
     target_values_.append(more_results.target_values_);
@@ -506,6 +546,10 @@ class ResultRows {
   void sort(const std::list<Analyzer::OrderEntry>& order_entries, const bool remove_duplicates, const int64_t top_n);
 
   void keepFirstN(const size_t n) {
+    if (result_set_) {
+      result_set_->keepFirstN(n);
+      return;
+    }
     CHECK(n);
     if (in_place_ || group_by_buffer_) {
       keep_first_ = n;
@@ -518,6 +562,10 @@ class ResultRows {
   }
 
   void dropFirstN(const size_t n) {
+    if (result_set_) {
+      result_set_->dropFirstN(n);
+      return;
+    }
     if (in_place_ || group_by_buffer_) {
       drop_first_ = n;
       return;
@@ -529,6 +577,9 @@ class ResultRows {
   }
 
   size_t rowCount() const {
+    if (result_set_) {
+      return result_set_->rowCount();
+    }
     if (in_place_ || group_by_buffer_) {
       moveToBegin();
       size_t row_count{0};
@@ -545,9 +596,17 @@ class ResultRows {
     return just_explain_ ? 1 : target_values_.size();
   }
 
-  size_t colCount() const { return just_explain_ ? 1 : targets_.size(); }
+  size_t colCount() const {
+    if (result_set_) {
+      return result_set_->colCount();
+    }
+    return just_explain_ ? 1 : targets_.size();
+  }
 
   bool definitelyHasNoRows() const {
+    if (result_set_) {
+      return result_set_->definitelyHasNoRows();
+    }
     if (in_place_) {
       return in_place_group_by_buffers_.empty();
     }
@@ -564,6 +623,9 @@ class ResultRows {
   std::vector<TargetValue> getNextRow(const bool translate_strings, const bool decimal_to_double) const;
 
   SQLTypeInfo getColType(const size_t col_idx) const {
+    if (result_set_) {
+      return result_set_->getColType(col_idx);
+    }
     if (just_explain_) {
       return SQLTypeInfo(kTEXT, false);
     }
@@ -571,19 +633,43 @@ class ResultRows {
     return targets_[col_idx].agg_kind == kAVG ? SQLTypeInfo(kDOUBLE, false) : targets_[col_idx].sql_type;
   }
 
-  int64_t getQueueTime() const { return queue_time_ms_; }
-  int64_t getRenderTime() const { return render_time_ms_; }
+  int64_t getQueueTime() const {
+    if (result_set_) {
+      return result_set_->getQueueTime();
+    }
+    return queue_time_ms_;
+  }
+  int64_t getRenderTime() const {
+    CHECK(!result_set_);
+    return render_time_ms_;
+  }
 
-  bool isInPlace() const { return in_place_; }
+  bool isInPlace() const {
+    CHECK(!result_set_);
+    return in_place_;
+  }
 
-  void setQueueTime(int64_t queue_time) { queue_time_ms_ = queue_time; }
+  void setQueueTime(int64_t queue_time) {
+    if (result_set_) {
+      result_set_->setQueueTime(queue_time);
+      return;
+    }
+    queue_time_ms_ = queue_time;
+  }
 
-  const QueryMemoryDescriptor& getQueryMemDesc() const { return query_mem_desc_; }
+  const QueryMemoryDescriptor& getQueryMemDesc() const {
+    if (result_set_) {
+      return result_set_->getQueryMemDesc();
+    }
+    return query_mem_desc_;
+  }
 
   static void inplaceSortGpuImpl(const std::list<Analyzer::OrderEntry>&,
                                  const QueryMemoryDescriptor&,
                                  const GpuQueryMemory&,
                                  int64_t*);
+
+  std::shared_ptr<ResultSet> getResultSet() const { return result_set_; }
 
  private:
   void reduceSingleColumn(int8_t* crt_val_i1,
@@ -663,6 +749,8 @@ class ResultRows {
   void inplaceSortGpu(const std::list<Analyzer::OrderEntry>& order_entries);
 
   void inplaceSortCpu(const std::list<Analyzer::OrderEntry>& order_entries);
+
+  std::shared_ptr<ResultSet> result_set_;
 
   std::vector<TargetInfo> targets_;
   std::vector<int64_t> simple_keys_;

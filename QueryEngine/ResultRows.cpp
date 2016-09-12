@@ -9,6 +9,9 @@
 
 #include <future>
 
+ResultRows::ResultRows(std::shared_ptr<ResultSet> result_set) : result_set_(result_set) {
+}
+
 ResultRows::ResultRows(const QueryMemoryDescriptor& query_mem_desc,
                        const std::vector<Analyzer::Expr*>& targets,
                        const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
@@ -19,7 +22,8 @@ ResultRows::ResultRows(const QueryMemoryDescriptor& query_mem_desc,
                        const std::vector<std::vector<const int8_t*>>& col_buffers,
                        const ExecutorDeviceType device_type,
                        const int device_id)
-    : executor_(query_mem_desc.executor_),
+    : result_set_(nullptr),
+      executor_(query_mem_desc.executor_),
       query_mem_desc_(query_mem_desc),
       row_set_mem_owner_(row_set_mem_owner),
       agg_init_vals_(init_vals),
@@ -222,6 +226,7 @@ bool ResultRows::reduceSingleRow(const int8_t* row_ptr,
                                  const bool is_columnar,
                                  const bool replace_bitmap_ptr_with_bitmap_sz,
                                  std::vector<int64_t>& agg_vals) const {
+  CHECK(!result_set_);
   const size_t agg_col_count{agg_vals.size()};
   const auto row_size = query_mem_desc_.getRowSize();
   CHECK_EQ(agg_col_count, query_mem_desc_.agg_col_widths.size());
@@ -353,6 +358,7 @@ void ResultRows::addKeylessGroupByBuffer(const int64_t* group_by_buffer,
                                          const int64_t min_val,
                                          const int8_t warp_count,
                                          const bool is_columnar) {
+  CHECK(!result_set_);
   CHECK(!is_columnar || warp_count == 1);
   const size_t agg_col_count{query_mem_desc_.agg_col_widths.size()};
   std::vector<int64_t> agg_vals(agg_col_count, 0);
@@ -698,6 +704,7 @@ void ResultRows::reduceDispatch(int64_t* group_by_buffer,
 void ResultRows::reduce(const ResultRows& other_results,
                         const QueryMemoryDescriptor& query_mem_desc,
                         const bool output_columnar) {
+  CHECK(!result_set_);
   if (other_results.definitelyHasNoRows()) {
     return;
   }
@@ -870,46 +877,13 @@ void ResultRows::reduce(const ResultRows& other_results,
   }
 }
 
-namespace {
-
-__attribute__((always_inline)) inline double pair_to_double(const std::pair<int64_t, int64_t>& fp_pair,
-                                                            const SQLTypeInfo& ti) {
-  double dividend{0.0};
-  int64_t null_val{0};
-  switch (ti.get_type()) {
-    case kFLOAT: {
-      dividend = *reinterpret_cast<const double*>(&fp_pair.first);
-      double null_float = inline_fp_null_val(ti);
-      null_val = *reinterpret_cast<int64_t*>(&null_float);
-      break;
-    }
-    case kDOUBLE: {
-      dividend = *reinterpret_cast<const double*>(&fp_pair.first);
-      double null_double = inline_fp_null_val(ti);
-      null_val = *reinterpret_cast<int64_t*>(&null_double);
-      break;
-    }
-    default: {
-      CHECK(ti.is_integer() || ti.is_decimal());
-      dividend = static_cast<double>(fp_pair.first);
-      null_val = inline_int_null_val(ti);
-      break;
-    }
-  }
-  if (!ti.get_notnull() && null_val == fp_pair.first) {
-    return inline_fp_null_val(SQLTypeInfo(kDOUBLE, false));
-  }
-
-  return ti.is_integer() || ti.is_decimal()
-             ? (dividend / exp_to_scale(ti.is_decimal() ? ti.get_scale() : 0)) / static_cast<double>(fp_pair.second)
-             : dividend / static_cast<double>(fp_pair.second);
-}
-
-}  // namespace
-
 void ResultRows::sort(const std::list<Analyzer::OrderEntry>& order_entries,
                       const bool remove_duplicates,
                       const int64_t top_n) {
+  if (result_set_) {
+    result_set_->sort(order_entries, top_n);
+    return;
+  }
   if (definitelyHasNoRows()) {
     return;
   }
@@ -1257,11 +1231,11 @@ TargetValue ResultRows::getRowAt(const size_t row_idx,
                                  const size_t col_idx,
                                  const bool translate_strings,
                                  const bool decimal_to_double /* = true */) const {
-  if (just_explain_) {
+  if (!result_set_ && just_explain_) {
     return explanation_;
   }
 
-  if (in_place_ || group_by_buffer_) {
+  if (in_place_ || group_by_buffer_ || result_set_) {
     moveToBegin();
     for (size_t i = 0; i < row_idx; ++i) {
       auto crt_row = getNextRow(translate_strings, decimal_to_double);
@@ -1294,6 +1268,9 @@ TargetValue ResultRows::getRowAt(const size_t row_idx,
 }
 
 std::vector<TargetValue> ResultRows::getNextRow(const bool translate_strings, const bool decimal_to_double) const {
+  if (result_set_) {
+    return result_set_->getNextRow(translate_strings, decimal_to_double);
+  }
   if (just_explain_) {
     if (crt_row_buff_idx_) {
       return {};
@@ -1852,6 +1829,10 @@ void QueryExecutionContext::outputBin(ResultRows& results,
 RowSetPtr QueryExecutionContext::groupBufferToResults(const size_t i,
                                                       const std::vector<Analyzer::Expr*>& targets,
                                                       const bool was_auto_device) const {
+  if (can_use_result_set(query_mem_desc_, device_type_)) {
+    CHECK(result_set_);
+    return boost::make_unique<ResultRows>(std::shared_ptr<ResultSet>(result_set_.release()));
+  }
   const size_t group_by_col_count{query_mem_desc_.group_col_widths.size()};
   const size_t agg_col_count{query_mem_desc_.agg_col_widths.size()};
   CHECK(!output_columnar_ || group_by_col_count == 1);

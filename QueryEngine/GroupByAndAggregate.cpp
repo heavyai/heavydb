@@ -26,7 +26,8 @@
 #include <numeric>
 #include <thread>
 
-QueryExecutionContext::QueryExecutionContext(const QueryMemoryDescriptor& query_mem_desc,
+QueryExecutionContext::QueryExecutionContext(const RelAlgExecutionUnit& ra_exe_unit,
+                                             const QueryMemoryDescriptor& query_mem_desc,
                                              const std::vector<int64_t>& init_agg_vals,
                                              const Executor* executor,
                                              const ExecutorDeviceType device_type,
@@ -114,6 +115,15 @@ QueryExecutionContext::QueryExecutionContext(const QueryMemoryDescriptor& query_
       for (size_t j = 1; j < step; ++j) {
         small_group_by_buffers_.push_back(nullptr);
       }
+    }
+    if (can_use_result_set(query_mem_desc_, device_type_)) {
+      CHECK(!result_set_);
+      result_set_.reset(new ResultSet(target_exprs_to_infos(ra_exe_unit.target_exprs),
+                                      device_type_,
+                                      ResultSet::fixupQueryMemoryDescriptor(query_mem_desc_),
+                                      row_set_mem_owner_,
+                                      executor));
+      result_set_->allocateStorage(reinterpret_cast<int8_t*>(group_by_buffer), executor_->plan_state_->init_agg_vals_);
     }
   }
 }
@@ -702,6 +712,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const RelAlgExecution
 }
 
 std::unique_ptr<QueryExecutionContext> QueryMemoryDescriptor::getQueryExecutionContext(
+    const RelAlgExecutionUnit& ra_exe_unit,
     const std::vector<int64_t>& init_agg_vals,
     const Executor* executor,
     const ExecutorDeviceType device_type,
@@ -712,7 +723,8 @@ std::unique_ptr<QueryExecutionContext> QueryMemoryDescriptor::getQueryExecutionC
     const bool output_columnar,
     const bool sort_on_gpu,
     RenderAllocatorMap* render_allocator_map) const {
-  return std::unique_ptr<QueryExecutionContext>(new QueryExecutionContext(*this,
+  return std::unique_ptr<QueryExecutionContext>(new QueryExecutionContext(ra_exe_unit,
+                                                                          *this,
                                                                           init_agg_vals,
                                                                           executor,
                                                                           device_type,

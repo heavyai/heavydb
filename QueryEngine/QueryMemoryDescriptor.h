@@ -65,6 +65,8 @@ struct CountDistinctDescriptor {
 
 typedef std::unordered_map<size_t, CountDistinctDescriptor> CountDistinctDescriptors;
 
+struct RelAlgExecutionUnit;
+
 struct QueryMemoryDescriptor {
   const Executor* executor_;
   bool allow_multifrag;
@@ -93,6 +95,7 @@ struct QueryMemoryDescriptor {
   std::vector<int8_t> target_column_pad_bytes;
 
   std::unique_ptr<QueryExecutionContext> getQueryExecutionContext(
+      const RelAlgExecutionUnit&,
       const std::vector<int64_t>& init_agg_vals,
       const Executor* executor,
       const ExecutorDeviceType device_type,
@@ -146,5 +149,9 @@ struct QueryMemoryDescriptor {
  private:
   size_t getTotalBytesOfColumnarBuffers(const std::vector<ColWidths>& col_widths) const;
 };
+
+inline bool can_use_result_set(const QueryMemoryDescriptor&, const ExecutorDeviceType) {
+  return false;
+}
 
 #endif  // QUERYENGINE_QUERYMEMORYDESCRIPTOR_H

@@ -271,7 +271,8 @@ inline std::string row_col_to_string(const std::vector<TargetValue>& row,
 class QueryExecutionContext : boost::noncopyable {
  public:
   // TODO(alex): move init_agg_vals to GroupByBufferDescriptor, remove device_type
-  QueryExecutionContext(const QueryMemoryDescriptor&,
+  QueryExecutionContext(const RelAlgExecutionUnit& ra_exe_unit,
+                        const QueryMemoryDescriptor&,
                         const std::vector<int64_t>& init_agg_vals,
                         const Executor* executor,
                         const ExecutorDeviceType device_type,
@@ -413,6 +414,8 @@ class QueryExecutionContext : boost::noncopyable {
   std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
   const bool output_columnar_;
   const bool sort_on_gpu_;
+
+  mutable std::unique_ptr<ResultSet> result_set_;
 
   friend class Executor;
   friend void copy_group_by_buffers_from_gpu(Data_Namespace::DataMgr* data_mgr,

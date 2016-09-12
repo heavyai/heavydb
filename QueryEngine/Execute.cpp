@@ -3414,6 +3414,10 @@ RowSetPtr Executor::reduceMultiDeviceResults(const RelAlgExecutionUnit& ra_exe_u
         query_mem_desc, ra_exe_unit.target_exprs, nullptr, nullptr, std::vector<int64_t>{}, ExecutorDeviceType::CPU);
   }
 
+  if (can_use_result_set(query_mem_desc, ExecutorDeviceType::CPU)) {
+    return reduceMultiDeviceResultSets(results_per_device, row_set_mem_owner, query_mem_desc);
+  }
+
   auto first = boost::get<RowSetPtr>(&results_per_device.front().first);
   CHECK(first && *first);
   auto reduced_results = boost::make_unique<ResultRows>(**first);
@@ -3428,6 +3432,48 @@ RowSetPtr Executor::reduceMultiDeviceResults(const RelAlgExecutionUnit& ra_exe_u
   row_set_mem_owner->addLiteralStringDict(lit_str_dict_);
 
   return reduced_results;
+}
+
+RowSetPtr Executor::reduceMultiDeviceResultSets(
+    std::vector<std::pair<ResultPtr, std::vector<size_t>>>& results_per_device,
+    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+    const QueryMemoryDescriptor& query_mem_desc) const {
+  std::shared_ptr<ResultSet> reduced_results;
+
+  const auto& first = boost::get<RowSetPtr>(results_per_device.front().first);
+  CHECK(first);
+
+  if (query_mem_desc.hash_type == GroupByColRangeType::MultiCol) {
+    const auto total_entry_count =
+        std::accumulate(results_per_device.begin(),
+                        results_per_device.end(),
+                        size_t(0),
+                        [](const size_t init, const std::pair<ResultPtr, std::vector<size_t>>& rs) {
+          const auto& r = boost::get<RowSetPtr>(rs.first);
+          return init + r->getResultSet()->getQueryMemDesc().entry_count;
+        });
+    CHECK(total_entry_count);
+    const auto first_result = first->getResultSet();
+    CHECK(first_result);
+    auto query_mem_desc = first_result->getQueryMemDesc();
+    query_mem_desc.entry_count = total_entry_count * 2;
+    reduced_results = std::make_shared<ResultSet>(
+        first_result->getTargetInfos(), ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, this);
+    auto result_storage = reduced_results->allocateStorage(plan_state_->init_agg_vals_);
+    reduced_results->initializeStorage();
+    first_result->getStorage()->moveEntriesToBuffer(result_storage->getUnderlyingBuffer(), query_mem_desc.entry_count);
+  } else {
+    reduced_results = first->getResultSet();
+  }
+
+  for (size_t i = 1; i < results_per_device.size(); ++i) {
+    const auto& result = boost::get<RowSetPtr>(results_per_device[i].first);
+    const auto result_set = result->getResultSet();
+    CHECK(result_set);
+    reduced_results->getStorage()->reduce(*(result_set->getStorage()));
+  }
+
+  return boost::make_unique<ResultRows>(ResultRows(reduced_results));
 }
 
 RowSetPtr Executor::reduceSpeculativeTopN(const RelAlgExecutionUnit& ra_exe_unit,
@@ -3686,7 +3732,7 @@ RowSetPtr Executor::executeResultPlan(const Planner::Result* result_plan,
   CHECK_EQ(column_buffers.size(), static_cast<size_t>(in_col_count));
   std::vector<int64_t> init_agg_vals(query_mem_desc.agg_col_widths.size());
   auto query_exe_context = query_mem_desc.getQueryExecutionContext(
-      init_agg_vals, this, ExecutorDeviceType::CPU, 0, {}, {}, row_set_mem_owner_, false, false, nullptr);
+      res_ra_unit, init_agg_vals, this, ExecutorDeviceType::CPU, 0, {}, {}, row_set_mem_owner_, false, false, nullptr);
   const auto hoist_buf = serializeLiterals(compilation_result.literal_values, 0);
   *error_code = 0;
   std::vector<std::vector<const int8_t*>> multi_frag_col_buffers{column_buffers};
@@ -4184,7 +4230,8 @@ void Executor::ExecutionDispatch::runImpl(const ExecutorDeviceType chosen_device
     query_exe_context_owned =
         compilation_result.query_mem_desc.usesCachedContext()
             ? nullptr
-            : compilation_result.query_mem_desc.getQueryExecutionContext(executor_->plan_state_->init_agg_vals_,
+            : compilation_result.query_mem_desc.getQueryExecutionContext(ra_exe_unit_,
+                                                                         executor_->plan_state_->init_agg_vals_,
                                                                          executor_,
                                                                          chosen_device_type,
                                                                          chosen_device_id,
@@ -4207,7 +4254,8 @@ void Executor::ExecutionDispatch::runImpl(const ExecutorDeviceType chosen_device
     if (!query_contexts_[ctx_idx]) {
       try {
         query_contexts_[ctx_idx] =
-            compilation_result.query_mem_desc.getQueryExecutionContext(executor_->plan_state_->init_agg_vals_,
+            compilation_result.query_mem_desc.getQueryExecutionContext(ra_exe_unit_,
+                                                                       executor_->plan_state_->init_agg_vals_,
                                                                        executor_,
                                                                        chosen_device_type,
                                                                        chosen_device_id,
