@@ -1219,10 +1219,16 @@ TEST(Select, DivByZero) {
   }
 }
 
-#ifdef ENABLE_COMPACTION
 TEST(Select, OverflowAndUnderFlow) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
+    EXPECT_THROW(run_multiple_agg("SELECT COUNT(*) FROM test WHERE ofd + 1 > 0;", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("SELECT COUNT(*) FROM test WHERE ofd - 1 > 0;", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("SELECT COUNT(*) FROM test WHERE ofd * 2 > 0;", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("SELECT COUNT(*) FROM test WHERE ofq + 1 > 0;", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("SELECT COUNT(*) FROM test WHERE ofq - 1 > 0;", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("SELECT COUNT(*) FROM test WHERE ofq * 2 > 0;", dt), std::runtime_error);
+#ifdef ENABLE_COMPACTION
     c("SELECT SUM(ofd) FROM test GROUP BY x;", dt);
     c("SELECT SUM(ufd) FROM test GROUP BY x;", dt);
     EXPECT_THROW(run_multiple_agg("SELECT SUM(ofq) FROM test;", dt), std::runtime_error);
@@ -1233,9 +1239,9 @@ TEST(Select, OverflowAndUnderFlow) {
     EXPECT_THROW(run_multiple_agg("SELECT AVG(ufq) FROM test;", dt), std::runtime_error);
     EXPECT_THROW(run_multiple_agg("SELECT AVG(ofq) FROM test GROUP BY y;", dt), std::runtime_error);
     EXPECT_THROW(run_multiple_agg("SELECT AVG(ufq) FROM test GROUP BY y;", dt), std::runtime_error);
+#endif  // ENABLE_COMPACTION
   }
 }
-#endif  // ENABLE_COMPACTION
 
 TEST(Select, BooleanColumn) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
