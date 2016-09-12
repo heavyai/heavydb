@@ -549,7 +549,9 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
                                             const int64_t queue_time_ms) {
   CHECK_EQ(size_t(1), sort->inputCount());
   const auto source = sort->getInput(0);
-  CHECK(!dynamic_cast<const RelSort*>(source));
+  if (dynamic_cast<const RelSort*>(source)) {
+    throw std::runtime_error("Sort node not supported as input to another sort");
+  }
   const auto compound = dynamic_cast<const RelCompound*>(source);
   const auto aggregate = dynamic_cast<const RelAggregate*>(source);
   const bool is_aggregate = ((compound && compound->isAggregate()) || aggregate);
