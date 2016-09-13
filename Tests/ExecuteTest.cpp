@@ -1942,7 +1942,7 @@ TEST(Select, RuntimeFunctions) {
     c("SELECT SUM(ABS(-dd + 1)) FROM test;", dt);
     c("SELECT SUM(ABS(-f + 1)) FROM test;", dt);
     c("SELECT SUM(ABS(-d + 1)) FROM test;", dt);
-    c("SELECT MIN(ABS(-ofd + 2)) FROM test;", dt);
+    EXPECT_THROW(run_multiple_agg("SELECT MIN(ABS(-ofd + 2)) FROM test;", dt), std::runtime_error);
     ASSERT_EQ(static_cast<int64_t>(2 * g_num_rows),
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE SIGN(-dd) = -1;", dt)));
     ASSERT_EQ(static_cast<int64_t>(g_num_rows + g_num_rows / 2),
