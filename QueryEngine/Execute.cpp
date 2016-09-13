@@ -2461,6 +2461,7 @@ llvm::Value* Executor::codegenArith(const Analyzer::BinOper* bin_oper, const Com
   } else {
     CHECK_EQ(lhs_type.get_type(), rhs_type.get_type());
   }
+  const auto& oper_type = rhs_type.is_timeinterval() ? rhs_type : lhs_type;
   if (lhs_type.is_decimal()) {
     CHECK_EQ(lhs_type.get_scale(), rhs_type.get_scale());
   }
@@ -2469,15 +2470,15 @@ llvm::Value* Executor::codegenArith(const Analyzer::BinOper* bin_oper, const Com
     const auto int_typename = numeric_or_time_interval_type_name(lhs_type, rhs_type);
     switch (optype) {
       case kMINUS:
-        return codegenSub(lhs_lv, rhs_lv, null_check_suffix.empty() ? "" : int_typename, null_check_suffix, lhs_type);
+        return codegenSub(lhs_lv, rhs_lv, null_check_suffix.empty() ? "" : int_typename, null_check_suffix, oper_type);
       case kPLUS:
-        return codegenAdd(lhs_lv, rhs_lv, null_check_suffix.empty() ? "" : int_typename, null_check_suffix, lhs_type);
+        return codegenAdd(lhs_lv, rhs_lv, null_check_suffix.empty() ? "" : int_typename, null_check_suffix, oper_type);
       case kMULTIPLY:
-        return codegenMul(lhs_lv, rhs_lv, null_check_suffix.empty() ? "" : int_typename, null_check_suffix, lhs_type);
+        return codegenMul(lhs_lv, rhs_lv, null_check_suffix.empty() ? "" : int_typename, null_check_suffix, oper_type);
       case kDIVIDE:
-        return codegenDiv(lhs_lv, rhs_lv, null_check_suffix.empty() ? "" : int_typename, null_check_suffix, lhs_type);
+        return codegenDiv(lhs_lv, rhs_lv, null_check_suffix.empty() ? "" : int_typename, null_check_suffix, oper_type);
       case kMODULO:
-        return codegenMod(lhs_lv, rhs_lv, null_check_suffix.empty() ? "" : int_typename, null_check_suffix, lhs_type);
+        return codegenMod(lhs_lv, rhs_lv, null_check_suffix.empty() ? "" : int_typename, null_check_suffix, oper_type);
       default:
         CHECK(false);
     }
