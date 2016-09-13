@@ -2587,20 +2587,22 @@ llvm::Value* Executor::codegenMul(llvm::Value* lhs_lv,
   CHECK(ti.is_integer() || ti.is_decimal() || ti.is_timeinterval());
   cgen_state_->needs_error_check_ = true;
   auto mul_ok = llvm::BasicBlock::Create(cgen_state_->context_, "mul_ok", cgen_state_->row_func_);
+  auto mul_check = llvm::BasicBlock::Create(cgen_state_->context_, "mul_check", cgen_state_->row_func_);
   auto mul_fail = llvm::BasicBlock::Create(cgen_state_->context_, "mul_fail", cgen_state_->row_func_);
 
   llvm::Value* chosen_max{nullptr};
   llvm::Value* chosen_min{nullptr};
   std::tie(chosen_max, chosen_min) = inlineIntMaxMin(ti.get_size(), true);
   auto const_zero = llvm::ConstantInt::get(lhs_lv->getType(), 0, true);
-  auto detected = cgen_state_->ir_builder_.CreateAnd(
-      cgen_state_->ir_builder_.CreateICmpNE(rhs_lv, const_zero),
-      cgen_state_->ir_builder_.CreateOr(  // overflow
-          cgen_state_->ir_builder_.CreateICmpSGT(lhs_lv, cgen_state_->ir_builder_.CreateSDiv(chosen_max, rhs_lv)),
-          // underflow
-          cgen_state_->ir_builder_.CreateICmpSLT(lhs_lv, cgen_state_->ir_builder_.CreateSDiv(chosen_min, rhs_lv))));
+  cgen_state_->ir_builder_.CreateCondBr(cgen_state_->ir_builder_.CreateICmpEQ(rhs_lv, const_zero), mul_ok, mul_check);
 
+  cgen_state_->ir_builder_.SetInsertPoint(mul_check);
+  auto detected = cgen_state_->ir_builder_.CreateOr(  // overflow
+      cgen_state_->ir_builder_.CreateICmpSGT(lhs_lv, cgen_state_->ir_builder_.CreateSDiv(chosen_max, rhs_lv)),
+      // underflow
+      cgen_state_->ir_builder_.CreateICmpSLT(lhs_lv, cgen_state_->ir_builder_.CreateSDiv(chosen_min, rhs_lv)));
   cgen_state_->ir_builder_.CreateCondBr(detected, mul_fail, mul_ok);
+
   cgen_state_->ir_builder_.SetInsertPoint(mul_ok);
   llvm::Value* ret{nullptr};
   if (ti.is_decimal()) {
