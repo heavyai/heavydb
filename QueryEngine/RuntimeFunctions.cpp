@@ -207,8 +207,11 @@ extern "C" __attribute__((always_inline)) int8_t
 }
 
 extern "C" __attribute__((always_inline)) int8_t logical_or(const int8_t lhs, const int8_t rhs, const int8_t null_val) {
-  if (lhs == null_val || rhs == null_val) {
-    return null_val;
+  if (lhs == null_val) {
+    return rhs;
+  }
+  if (rhs == null_val) {
+    return lhs;
   }
   return (lhs || rhs) ? 1 : 0;
 }
