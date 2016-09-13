@@ -9,7 +9,7 @@
 #ifndef QUERYENGINE_RESULTSETBUFFERACCESSORS_H
 #define QUERYENGINE_RESULTSETBUFFERACCESSORS_H
 
-#include "ResultRows.h"
+#include "QueryMemoryDescriptor.h"
 #include "SqlTypesLayout.h"
 
 inline size_t advance_slot(const size_t j, const TargetInfo& target_info) {

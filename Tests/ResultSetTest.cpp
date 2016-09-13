@@ -6,8 +6,10 @@
  * Copyright (c) 2014 MapD Technologies, Inc.  All rights reserved.
  */
 
+#include "../QueryEngine/ResultRows.h"
 #include "../QueryEngine/ResultSet.h"
 #include "../QueryEngine/RuntimeFunctions.h"
+#include "../StringDictionary/StringDictionary.h"
 
 #include <glog/logging.h>
 #include <gtest/gtest.h>

@@ -9,6 +9,8 @@
 #ifndef QUERYENGINE_QUERYMEMORYDESCRIPTOR_H
 #define QUERYENGINE_QUERYMEMORYDESCRIPTOR_H
 
+#include "CompilationOptions.h"
+
 #include <glog/logging.h>
 
 #include <cstddef>

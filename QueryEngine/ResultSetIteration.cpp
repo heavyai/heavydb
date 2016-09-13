@@ -7,6 +7,7 @@
  */
 
 #include "ResultSet.h"
+#include "ResultRows.h"
 #include "RuntimeFunctions.h"
 #include "SqlTypesLayout.h"
 

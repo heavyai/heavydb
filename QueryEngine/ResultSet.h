@@ -10,6 +10,9 @@
 #define QUERYENGINE_RESULTSET_H
 
 #include "ResultSetBufferAccessors.h"
+#include "TargetValue.h"
+
+#include <list>
 
 class ResultSetStorage {
  public:
@@ -70,6 +73,12 @@ class ResultSetStorage {
   friend class ResultSet;
   friend class ResultSetManager;
 };
+
+namespace Analyzer {
+
+struct OrderEntry;
+
+}  // Analyzer
 
 class ResultSet {
  public:

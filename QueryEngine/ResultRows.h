@@ -8,29 +8,23 @@
 #ifndef QUERYENGINE_RESULTROWS_H
 #define QUERYENGINE_RESULTROWS_H
 
-#include "CompilationOptions.h"
 #include "QueryMemoryDescriptor.h"
+#include "TargetValue.h"
 
 #include "../Analyzer/Analyzer.h"
 #include "../Shared/TargetInfo.h"
 #include "../StringDictionary/StringDictionary.h"
 
 #include <boost/noncopyable.hpp>
-#include <boost/variant.hpp>
 #include <glog/logging.h>
 
 #include <list>
 #include <set>
-#include <string>
 #include <unordered_set>
 
 struct QueryMemoryDescriptor;
 struct RelAlgExecutionUnit;
 class RowSetMemoryOwner;
-
-typedef boost::variant<std::string, void*> NullableString;
-typedef boost::variant<int64_t, double, float, NullableString> ScalarTargetValue;
-typedef boost::variant<ScalarTargetValue, std::vector<ScalarTargetValue>> TargetValue;
 
 inline int64_t bitmap_set_size(const int64_t bitmap_ptr,
                                const int target_idx,
@@ -163,60 +157,6 @@ class RowSetMemoryOwner : boost::noncopyable {
   mutable std::mutex state_mutex_;
 
   friend class ResultRows;
-};
-
-struct InternalTargetValue {
-  int64_t i1;
-  int64_t i2;
-
-  enum class ITVType { Int, Pair, Str, Arr, Null };
-
-  ITVType ty;
-
-  explicit InternalTargetValue(const int64_t i1_) : i1(i1_), ty(ITVType::Int) {}
-
-  explicit InternalTargetValue(const int64_t i1_, const int64_t i2_) : i1(i1_), i2(i2_), ty(ITVType::Pair) {}
-
-  explicit InternalTargetValue(const std::string* s) : i1(reinterpret_cast<int64_t>(s)), ty(ITVType::Str) {}
-
-  explicit InternalTargetValue(const std::vector<int64_t>* v) : i1(reinterpret_cast<int64_t>(v)), ty(ITVType::Arr) {}
-
-  explicit InternalTargetValue() : ty(ITVType::Null) {}
-
-  std::string strVal() const { return *reinterpret_cast<std::string*>(i1); }
-
-  std::vector<int64_t> arrVal() const { return *reinterpret_cast<std::vector<int64_t>*>(i1); }
-
-  bool isInt() const { return ty == ITVType::Int; }
-
-  bool isPair() const { return ty == ITVType::Pair; }
-
-  bool isNull() const { return ty == ITVType::Null; }
-
-  bool isStr() const { return ty == ITVType::Str; }
-
-  bool operator<(const InternalTargetValue& other) const {
-    switch (ty) {
-      case ITVType::Int:
-        CHECK(other.ty == ITVType::Int);
-        return i1 < other.i1;
-      case ITVType::Pair:
-        CHECK(other.ty == ITVType::Pair);
-        if (i1 != other.i1) {
-          return i1 < other.i1;
-        }
-        return i2 < other.i2;
-      case ITVType::Str:
-        CHECK(other.ty == ITVType::Str);
-        return strVal() < other.strVal();
-      case ITVType::Null:
-        return false;
-      default:
-        CHECK(false);
-    }
-  }
-
-  bool operator==(const InternalTargetValue& other) const { return !(*this < other || other < *this); }
 };
 
 class InternalRow {
