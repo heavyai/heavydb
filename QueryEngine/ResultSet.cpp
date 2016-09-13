@@ -71,6 +71,10 @@ ResultSet::~ResultSet() {
 const ResultSetStorage* ResultSet::allocateStorage() const {
   CHECK(!storage_);
   auto buff = static_cast<int8_t*>(checked_malloc(query_mem_desc_.getBufferSizeBytes(device_type_)));
+  return allocateStorage(buff);
+}
+
+const ResultSetStorage* ResultSet::allocateStorage(int8_t* buff) const {
   CHECK(buff);
   storage_.reset(new ResultSetStorage(targets_, device_type_, query_mem_desc_, buff));
   return storage_.get();

@@ -94,6 +94,8 @@ class ResultSet {
 
   const ResultSetStorage* allocateStorage() const;
 
+  const ResultSetStorage* allocateStorage(int8_t*) const;
+
   std::vector<TargetValue> getNextRow(const bool translate_strings, const bool decimal_to_double) const;
 
   void sort(const std::list<Analyzer::OrderEntry>& order_entries, const size_t top_n);
