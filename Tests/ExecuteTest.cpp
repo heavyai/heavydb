@@ -1222,12 +1222,34 @@ TEST(Select, DivByZero) {
 TEST(Select, OverflowAndUnderFlow) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-    EXPECT_THROW(run_multiple_agg("SELECT COUNT(*) FROM test WHERE ofd + 1 > 0;", dt), std::runtime_error);
-    EXPECT_THROW(run_multiple_agg("SELECT COUNT(*) FROM test WHERE ofd - 1 > 0;", dt), std::runtime_error);
+    c("SELECT COUNT(*) FROM test WHERE z + 32600 > 0;", dt);
+    EXPECT_THROW(run_multiple_agg("SELECT COUNT(*) FROM test WHERE z + 32666 > 0;", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("SELECT COUNT(*) FROM test WHERE -32670 - z < 0;", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("SELECT COUNT(*) FROM test WHERE (z + 16333) * 2 > 0;", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("SELECT COUNT(*) FROM test WHERE x + 2147483640 > 0;", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("SELECT COUNT(*) FROM test WHERE -x - 2147483642 < 0;", dt), std::runtime_error);
+    c("SELECT COUNT(*) FROM test WHERE t + 9223372036854774000 > 0;", dt);
+    EXPECT_THROW(run_multiple_agg("SELECT COUNT(*) FROM test WHERE t + 9223372036854775000 > 0;", dt),
+                 std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("SELECT COUNT(*) FROM test WHERE ufq - 1 < 0;", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("SELECT COUNT(*) FROM test WHERE ofd + x - 2 > 0;", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("SELECT COUNT(*) FROM test WHERE ufd - 1 < -2;", dt), std::runtime_error);
     EXPECT_THROW(run_multiple_agg("SELECT COUNT(*) FROM test WHERE ofd * 2 > 0;", dt), std::runtime_error);
     EXPECT_THROW(run_multiple_agg("SELECT COUNT(*) FROM test WHERE ofq + 1 > 0;", dt), std::runtime_error);
-    EXPECT_THROW(run_multiple_agg("SELECT COUNT(*) FROM test WHERE ofq - 1 > 0;", dt), std::runtime_error);
-    EXPECT_THROW(run_multiple_agg("SELECT COUNT(*) FROM test WHERE ofq * 2 > 0;", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("SELECT COUNT(*) FROM test WHERE ufq - 1 > 0;", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("SELECT COUNT(*) FROM test WHERE ufq * 2 <= 0;", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg(
+                     "SELECT cast((z - -32666) *0.000190 as int) as key0, "
+                     "COUNT(*) AS val FROM test WHERE (z >= -32666 AND z < 31496) "
+                     "GROUP BY key0 HAVING key0 >= 0 AND key0 < 12 ORDER BY val "
+                     "DESC LIMIT 50 OFFSET 0;",
+                     dt),
+                 std::runtime_error);
+    c("SELECT cast((cast(z as int) - -32666) *0.000190 as int) as key0, "
+      "COUNT(*) AS val FROM test WHERE (z >= -32666 AND z < 31496) "
+      "GROUP BY key0 HAVING key0 >= 0 AND key0 < 12 ORDER BY val "
+      "DESC LIMIT 50 OFFSET 0;",
+      dt);
 #ifdef ENABLE_COMPACTION
     c("SELECT SUM(ofd) FROM test GROUP BY x;", dt);
     c("SELECT SUM(ufd) FROM test GROUP BY x;", dt);
