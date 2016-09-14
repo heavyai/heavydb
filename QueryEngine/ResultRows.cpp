@@ -950,6 +950,8 @@ void ResultRows::sort(const std::list<Analyzer::OrderEntry>& order_entries,
       inplaceSortGpu(order_entries);
     } catch (const OutOfMemory&) {
       inplaceSortCpu(order_entries);
+    } catch (const std::bad_alloc&) {
+      inplaceSortCpu(order_entries);
     }
     return;
   }
