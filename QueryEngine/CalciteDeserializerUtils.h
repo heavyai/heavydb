@@ -85,8 +85,7 @@ inline SQLAgg to_agg_kind(const std::string& agg_name) {
   if (agg_name == std::string("AVG")) {
     return kAVG;
   }
-  CHECK(false);
-  return kCOUNT;
+  throw std::runtime_error("Aggregate function " + agg_name + " not supported");
 }
 
 inline SQLTypes to_sql_type(const std::string& type_name) {
