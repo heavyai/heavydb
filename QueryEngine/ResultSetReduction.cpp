@@ -551,10 +551,23 @@ void ResultSetStorage::reduceOneSlot(int8_t* this_ptr1,
         CHECK(false);
     }
   } else {
-    if (query_mem_desc_.hash_type == GroupByColRangeType::MultiCol) {
-      memcpy(this_ptr1, that_ptr1, chosen_bytes);
-    } else {
-      CHECK_EQ(0, memcmp(this_ptr1, that_ptr1, chosen_bytes));
+    switch (chosen_bytes) {
+      case 4: {
+        const auto rhs_proj_col = *reinterpret_cast<const int32_t*>(that_ptr1);
+        if (rhs_proj_col) {
+          *reinterpret_cast<int32_t*>(this_ptr1) = rhs_proj_col;
+        }
+        break;
+      }
+      case 8: {
+        const auto rhs_proj_col = *reinterpret_cast<const int64_t*>(that_ptr1);
+        if (rhs_proj_col) {
+          *reinterpret_cast<int64_t*>(this_ptr1) = rhs_proj_col;
+        }
+        break;
+      }
+      default:
+        CHECK(false);
     }
   }
 }
