@@ -186,7 +186,15 @@ std::set<std::pair<const RelAlgNode*, int>> get_equiv_cols(const RelAlgNode* nod
     auto only_source = walker->getInput(0);
     if (auto project = dynamic_cast<const RelProject*>(walker)) {
       if (auto input = dynamic_cast<const RexInput*>(project->getProjectAt(curr_col))) {
-        CHECK_EQ(input->getSourceNode(), only_source);
+        const auto join_source = dynamic_cast<const RelJoin*>(only_source);
+        // TODO(alex): remove after we pick multi-way join
+        if (join_source) {
+          CHECK_EQ(size_t(2), join_source->inputCount());
+          CHECK(join_source->getInput(0) == input->getSourceNode() ||
+                join_source->getInput(1) == input->getSourceNode());
+        } else {
+          CHECK_EQ(input->getSourceNode(), only_source);
+        }
         curr_col = input->getIndex();
       } else {
         break;
