@@ -394,10 +394,14 @@ func downloadsHandler(rw http.ResponseWriter, r *http.Request) {
 func serversHandler(rw http.ResponseWriter, r *http.Request) {
 	var j []byte
 	servers := ""
+	subDir := filepath.Dir(r.URL.Path)
 	if len(serversJson) > 0 {
 		servers = serversJson
 	} else {
-		servers = frontend + "/servers.json"
+		servers = frontend + subDir + "/servers.json"
+		if _, err := os.Stat(servers); os.IsNotExist(err) {
+			servers = frontend + "/servers.json"
+		}
 	}
 	j, err := ioutil.ReadFile(servers)
 	if err != nil {
@@ -456,6 +460,10 @@ func main() {
 	mux.HandleFunc("/", thriftOrFrontendHandler)
 	mux.HandleFunc("/metrics/", metricsHandler)
 	mux.HandleFunc("/metrics/reset/", metricsResetHandler)
+
+	// Required while Immerse V2 beta is deployed to the `/v2/` subdir of Immerse
+	// V1. To be removed once Immerse V1 is officially deprecated.
+	mux.HandleFunc("/v2/servers.json", serversHandler)
 
 	if profile {
 		mux.HandleFunc("/debug/pprof/", pprof.Index)
