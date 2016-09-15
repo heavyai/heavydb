@@ -999,15 +999,17 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createFilterWorkUnit(const RelFilter* f
   std::tie(in_metainfo, target_exprs_owned) =
       get_inputs_meta(filter, translator, used_inputs_owned, input_to_nest_level);
   const auto qual = translator.translateScalarRex(filter->getCondition());
+  std::list<std::shared_ptr<Analyzer::Expr>> quals{qual};
+  const auto separated_quals = separate_join_quals(quals);
   target_exprs_owned_.insert(target_exprs_owned_.end(), target_exprs_owned.begin(), target_exprs_owned.end());
   const auto target_exprs = get_exprs_not_owned(target_exprs_owned);
   filter->setOutputMetainfo(in_metainfo);
   return {{input_descs,
            input_col_descs,
            {},
-           {qual},
+           separated_quals.regular_quals,
            join_type,
-           get_inner_join_quals(filter, translator),
+           separated_quals.join_quals,
            get_outer_join_quals(filter, translator),
            {nullptr},
            target_exprs,
