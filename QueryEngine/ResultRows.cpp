@@ -1126,9 +1126,11 @@ void ResultRows::inplaceSortCpu(const std::list<Analyzer::OrderEntry>& order_ent
   std::vector<int64_t> tmp_buff(query_mem_desc_.entry_count);
   std::vector<int32_t> idx_buff(query_mem_desc_.entry_count);
   CHECK_EQ(size_t(1), order_entries.size());
+  auto buffer_ptr = reinterpret_cast<int8_t*>(in_place_group_by_buffers_.front());
   for (const auto& order_entry : order_entries) {
     const auto target_idx = order_entry.tle_no - 1;
-    const auto sortkey_val_buff = in_place_group_by_buffers_.front() + order_entry.tle_no * query_mem_desc_.entry_count;
+    const auto sortkey_val_buff =
+        reinterpret_cast<int64_t*>(buffer_ptr + query_mem_desc_.getColOffInBytes(0, target_idx));
     const auto chosen_bytes = query_mem_desc_.agg_col_widths[target_idx].compact;
     sort_groups_cpu(sortkey_val_buff, &idx_buff[0], query_mem_desc_.entry_count, order_entry.is_desc, chosen_bytes);
     apply_permutation_cpu(
@@ -1139,7 +1141,7 @@ void ResultRows::inplaceSortCpu(const std::list<Analyzer::OrderEntry>& order_ent
       }
       const auto chosen_bytes = query_mem_desc_.agg_col_widths[target_idx].compact;
       const auto satellite_val_buff =
-          in_place_group_by_buffers_.front() + (target_idx + 1) * query_mem_desc_.entry_count;
+          reinterpret_cast<int64_t*>(buffer_ptr + query_mem_desc_.getColOffInBytes(0, target_idx));
       apply_permutation_cpu(satellite_val_buff, &idx_buff[0], query_mem_desc_.entry_count, &tmp_buff[0], chosen_bytes);
     }
   }
