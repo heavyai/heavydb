@@ -6,6 +6,7 @@
  * Copyright (c) 2014 MapD Technologies, Inc.  All rights reserved.
  */
 
+#include "Execute.h"
 #include "ResultSet.h"
 #include "ResultRows.h"
 #include "RuntimeFunctions.h"
@@ -272,7 +273,8 @@ TargetValue ResultSet::makeTargetValue(const int8_t* ptr,
       if (string_id == NULL_INT) {
         return NullableString(nullptr);
       }
-      const auto sd = row_set_mem_owner_->getStringDict(ti.get_comp_param());
+      const auto sd = executor_ ? executor_->getStringDictionary(ti.get_comp_param(), row_set_mem_owner_)
+                                : row_set_mem_owner_->getStringDict(ti.get_comp_param());
       return NullableString(sd->getString(string_id));
     } else {
       return string_id;

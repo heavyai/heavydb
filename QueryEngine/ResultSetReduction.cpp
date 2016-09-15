@@ -285,6 +285,10 @@ ResultSet* ResultSetManager::reduce(std::vector<ResultSet*>& result_sets) {
   for (const auto result_set : result_sets) {
     CHECK_EQ(row_set_mem_owner, result_set->row_set_mem_owner_);
   }
+  const auto executor = result_rs->executor_;
+  for (const auto result_set : result_sets) {
+    CHECK_EQ(executor, result_set->executor_);
+  }
   if (first_result.query_mem_desc_.hash_type == GroupByColRangeType::MultiCol) {
     const auto total_entry_count =
         std::accumulate(result_sets.begin(), result_sets.end(), size_t(0), [](const size_t init, const ResultSet* rs) {
@@ -293,7 +297,8 @@ ResultSet* ResultSetManager::reduce(std::vector<ResultSet*>& result_sets) {
     CHECK(total_entry_count);
     auto query_mem_desc = first_result.query_mem_desc_;
     query_mem_desc.entry_count = total_entry_count * 2;
-    rs_.reset(new ResultSet(first_result.targets_, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner));
+    rs_.reset(
+        new ResultSet(first_result.targets_, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, nullptr));
     auto result_storage = rs_->allocateStorage();
     rs_->initializeStorage();
     first_result.moveEntriesToBuffer(result_storage->getUnderlyingBuffer(), query_mem_desc.entry_count);

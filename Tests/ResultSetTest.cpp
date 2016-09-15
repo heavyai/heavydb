@@ -26,7 +26,8 @@ TEST(Construct, Empty) {
 TEST(Construct, Allocate) {
   std::vector<TargetInfo> target_infos;
   QueryMemoryDescriptor query_mem_desc{};
-  ResultSet result_set(target_infos, ExecutorDeviceType::CPU, query_mem_desc, std::make_shared<RowSetMemoryOwner>());
+  ResultSet result_set(
+      target_infos, ExecutorDeviceType::CPU, query_mem_desc, std::make_shared<RowSetMemoryOwner>(), nullptr);
   result_set.allocateStorage();
 }
 
@@ -1135,7 +1136,7 @@ void test_iterate(const std::vector<TargetInfo>& target_infos, const QueryMemory
   SQLTypeInfo double_ti(kDOUBLE, false);
   auto row_set_mem_owner = std::make_shared<RowSetMemoryOwner>();
   row_set_mem_owner->addStringDict(&g_sd, 1);
-  ResultSet result_set(target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner);
+  ResultSet result_set(target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, nullptr);
   for (size_t i = 0; i < query_mem_desc.entry_count; ++i) {
     g_sd.getOrAddTransient(std::to_string(i));
   }
@@ -1236,19 +1237,19 @@ void test_reduce(const std::vector<TargetInfo>& target_infos,
   switch (query_mem_desc.hash_type) {
     case GroupByColRangeType::OneColKnownRange:
     case GroupByColRangeType::MultiColPerfectHash: {
-      rs1.reset(new ResultSet(target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner));
+      rs1.reset(new ResultSet(target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, nullptr));
       storage1 = rs1->allocateStorage();
       fill_storage_buffer(storage1->getUnderlyingBuffer(), target_infos, query_mem_desc, generator1, step);
-      rs2.reset(new ResultSet(target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner));
+      rs2.reset(new ResultSet(target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, nullptr));
       storage2 = rs2->allocateStorage();
       fill_storage_buffer(storage2->getUnderlyingBuffer(), target_infos, query_mem_desc, generator2, step);
       break;
     }
     case GroupByColRangeType::MultiCol: {
-      rs1.reset(new ResultSet(target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner));
+      rs1.reset(new ResultSet(target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, nullptr));
       storage1 = rs1->allocateStorage();
       fill_storage_buffer(storage1->getUnderlyingBuffer(), target_infos, query_mem_desc, generator1, step);
-      rs2.reset(new ResultSet(target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner));
+      rs2.reset(new ResultSet(target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, nullptr));
       storage2 = rs2->allocateStorage();
       fill_storage_buffer(storage2->getUnderlyingBuffer(), target_infos, query_mem_desc, generator2, step);
       break;
@@ -1315,16 +1316,16 @@ void test_reduce_random_groups(const std::vector<TargetInfo>& target_infos,
   switch (query_mem_desc.hash_type) {
     case GroupByColRangeType::OneColKnownRange:
     case GroupByColRangeType::MultiColPerfectHash: {
-      rs1.reset(new ResultSet(target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner));
+      rs1.reset(new ResultSet(target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, nullptr));
       storage1 = rs1->allocateStorage();
-      rs2.reset(new ResultSet(target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner));
+      rs2.reset(new ResultSet(target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, nullptr));
       storage2 = rs2->allocateStorage();
       break;
     }
     case GroupByColRangeType::MultiCol: {
-      rs1.reset(new ResultSet(target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner));
+      rs1.reset(new ResultSet(target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, nullptr));
       storage1 = rs1->allocateStorage();
-      rs2.reset(new ResultSet(target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner));
+      rs2.reset(new ResultSet(target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, nullptr));
       storage2 = rs2->allocateStorage();
       break;
     }

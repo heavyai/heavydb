@@ -80,12 +80,15 @@ struct OrderEntry;
 
 }  // Analyzer
 
+class Executor;
+
 class ResultSet {
  public:
   ResultSet(const std::vector<TargetInfo>& targets,
             const ExecutorDeviceType device_type,
             const QueryMemoryDescriptor& query_mem_desc,
-            const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner);
+            const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+            const Executor* executor);
 
   // Empty result set constructor
   ResultSet();
@@ -162,6 +165,7 @@ class ResultSet {
   size_t keep_first_;
   const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
   std::vector<uint32_t> permutation_;
+  const Executor* executor_;  // TODO(alex): remove
 
   friend class ResultSetManager;
 };
