@@ -542,13 +542,13 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd, const TDatum& datu
   }
 }
 
-static size_t import_thread(int thread_id,
-                            Importer* importer,
-                            const char* buffer,
-                            size_t begin_pos,
-                            size_t end_pos,
-                            size_t total_size) {
-  size_t row_count = 0;
+static ImportStatus import_thread(int thread_id,
+                                  Importer* importer,
+                                  const char* buffer,
+                                  size_t begin_pos,
+                                  size_t end_pos,
+                                  size_t total_size) {
+  ImportStatus import_status;
   int64_t total_get_row_time_us = 0;
   int64_t total_str_to_val_time_us = 0;
   auto load_ms = measure<>::execution([]() {});
@@ -583,6 +583,7 @@ static size_t import_thread(int thread_id,
       std::cout << std::endl;
       */
       if (row.size() != col_descs.size()) {
+        import_status.rows_rejected++;
         LOG(ERROR) << "Incorrect Row (expected " << col_descs.size() << " columns, has " << row.size() << "): ";
         for (auto p : row)
           std::cerr << p << ", ";
@@ -599,24 +600,24 @@ static size_t import_thread(int thread_id,
             import_buffers[col_idx]->add_value(cd, row[col_idx], is_null, copy_params);
             ++col_idx;
           }
-          row_count++;
+          import_status.rows_completed++;
         } catch (const std::exception& e) {
           LOG(WARNING) << "Input exception thrown: " << e.what() << ". Row discarded.";
         }
       });
       total_str_to_val_time_us += us;
     }
-    if (row_count > 0) {
-      load_ms = measure<>::execution([&]() { importer->load(import_buffers, row_count); });
+    if (import_status.rows_completed > 0) {
+      load_ms = measure<>::execution([&]() { importer->load(import_buffers, import_status.rows_completed); });
     }
   });
-  if (debug_timing && row_count > 0) {
-    LOG(INFO) << "Thread" << std::this_thread::get_id() << ":" << row_count << " rows inserted in "
+  if (debug_timing && import_status.rows_completed > 0) {
+    LOG(INFO) << "Thread" << std::this_thread::get_id() << ":" << import_status.rows_completed << " rows inserted in "
               << (double)ms / 1000.0 << "sec, Insert Time: " << (double)load_ms / 1000.0
               << "sec, get_row: " << (double)total_get_row_time_us / 1000000.0
               << "sec, str_to_val: " << (double)total_str_to_val_time_us / 1000000.0 << "sec" << std::endl;
   }
-  return row_count;
+  return import_status;
 }
 
 static size_t find_end(const char* buffer, size_t size, const CopyParams& copy_params) {
@@ -926,15 +927,15 @@ std::vector<std::string> Detector::get_headers() {
   return headers;
 }
 
-void Importer::import() {
+ImportStatus Importer::import() {
   // TODO(andrew): add file type detection
-  importDelimited();
+  return importDelimited();
 }
 
 #define IMPORT_FILE_BUFFER_SIZE 100000000
 #define MIN_FILE_BUFFER_SIZE 1000000
 
-void Importer::importDelimited() {
+ImportStatus Importer::importDelimited() {
   set_import_status(import_id, import_status);
   p_file = fopen(file_path.c_str(), "rb");
   if (!p_file) {
@@ -961,7 +962,6 @@ void Importer::importDelimited() {
   size_t size = fread((void*)buffer[which_buf], 1, IMPORT_FILE_BUFFER_SIZE, p_file);
   bool eof_reached = false;
   size_t begin_pos = 0;
-  size_t row_count = 0;
   if (copy_params.has_header) {
     size_t i;
     for (i = 0; i < size && buffer[which_buf][i] != copy_params.line_delim; i++)
@@ -979,14 +979,14 @@ void Importer::importDelimited() {
       max_threads = std::min(max_threads, (int)std::ceil((double)(end_pos - begin_pos) / MIN_FILE_BUFFER_SIZE));
     }
     if (max_threads == 1) {
-      row_count += import_thread(0, this, buffer[which_buf], begin_pos, end_pos, end_pos);
+      import_status += import_thread(0, this, buffer[which_buf], begin_pos, end_pos, end_pos);
       current_pos += end_pos;
       (void)fseek(p_file, current_pos, SEEK_SET);
       size = fread((void*)buffer[which_buf], 1, IMPORT_FILE_BUFFER_SIZE, p_file);
       if (size < IMPORT_FILE_BUFFER_SIZE && feof(p_file))
         eof_reached = true;
     } else {
-      std::vector<std::future<size_t>> threads;
+      std::vector<std::future<ImportStatus>> threads;
       for (int i = 0; i < max_threads; i++) {
         size_t begin = begin_pos + i * ((end_pos - begin_pos) / max_threads);
         size_t end = (i < max_threads - 1) ? begin_pos + (i + 1) * ((end_pos - begin_pos) / max_threads) : end_pos;
@@ -1000,10 +1000,9 @@ void Importer::importDelimited() {
       if (size < IMPORT_FILE_BUFFER_SIZE && feof(p_file))
         eof_reached = true;
       for (auto& p : threads)
-        row_count += p.get();
+        import_status += p.get();
     }
-    import_status.rows_completed = row_count;
-    import_status.rows_estimated = ((float)file_size / current_pos) * row_count;
+    import_status.rows_estimated = ((float)file_size / current_pos) * import_status.rows_completed;
     set_import_status(import_id, import_status);
     begin_pos = 0;
   }
@@ -1029,9 +1028,11 @@ void Importer::importDelimited() {
   buffer[1] = nullptr;
   fclose(p_file);
   p_file = nullptr;
+
+  return import_status;
 }
 
-void Importer::importShapefile() {
+ImportStatus Importer::importShapefile() {
   set_import_status(import_id, import_status);
   std::vector<PolyData2d> polys;
   readVerticesFromShapefile(file_path.c_str(), polys);
@@ -1119,10 +1120,12 @@ void Importer::importShapefile() {
   try {
     loader.load(import_buffers_vec, polys.size());
     loader.checkpoint();
-    return;
+    return import_status;
   } catch (const std::exception& e) {
     LOG(WARNING) << e.what();
   }
+
+  return import_status;
 }
 
 void Importer::readVerticesFromShapefilePolygonZ(const std::string& fileName,

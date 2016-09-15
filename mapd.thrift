@@ -141,6 +141,7 @@ struct TImportStatus {
   1: i64 elapsed
   2: i64 rows_completed
   3: i64 rows_estimated
+  4: i64 rows_rejected
 }
 
 struct TFrontendView {

@@ -1257,6 +1257,7 @@ class MapDHandler : virtual public MapDIf {
     _return.elapsed = is.elapsed.count();
     _return.rows_completed = is.rows_completed;
     _return.rows_estimated = is.rows_estimated;
+    _return.rows_rejected = is.rows_rejected;
   }
 
   void start_heap_profile() {

@@ -465,8 +465,17 @@ struct ImportStatus {
   std::chrono::steady_clock::time_point end;
   size_t rows_completed;
   size_t rows_estimated;
+  size_t rows_rejected;
   std::chrono::duration<size_t, std::milli> elapsed;
-  ImportStatus() : start(std::chrono::steady_clock::now()), rows_completed(0), rows_estimated(0), elapsed(0) {}
+  ImportStatus()
+      : start(std::chrono::steady_clock::now()), rows_completed(0), rows_estimated(0), rows_rejected(0), elapsed(0) {}
+
+  ImportStatus& operator+=(const ImportStatus& is) {
+    rows_completed += is.rows_completed;
+    rows_rejected += is.rows_rejected;
+
+    return *this;
+  }
 };
 
 struct PolyData2d {
@@ -577,9 +586,9 @@ class Importer {
  public:
   Importer(const Catalog_Namespace::Catalog& c, const TableDescriptor* t, const std::string& f, const CopyParams& p);
   ~Importer();
-  void import();
-  void importDelimited();
-  void importShapefile();
+  ImportStatus import();
+  ImportStatus importDelimited();
+  ImportStatus importShapefile();
   const CopyParams& get_copy_params() const { return copy_params; }
   const std::list<const ColumnDescriptor*>& get_column_descs() const { return loader.get_column_descs(); }
   void load(const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers, size_t row_count) {
