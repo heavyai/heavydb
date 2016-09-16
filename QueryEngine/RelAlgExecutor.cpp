@@ -113,6 +113,55 @@ std::vector<TargetMetaInfo> RelAlgExecutor::validateRelAlgSeq(const std::vector<
   return exec_descs.back().getBody()->getOutputMetainfo();
 }
 
+std::vector<std::string> RelAlgExecutor::getScanTableNamesInRelAlgSeq(std::vector<RaExecutionDesc>& exec_descs) {
+  if (exec_descs.empty()) {
+    return {};
+  }
+  std::unordered_set<std::string> table_names;
+  std::unordered_set<const RelAlgNode*> visited;
+  std::vector<const RelAlgNode*> work_set;
+  for (const auto& exec_desc : exec_descs) {
+    const auto body = exec_desc.getBody();
+    if (visited.count(body)) {
+      continue;
+    }
+    work_set.push_back(body);
+    while (!work_set.empty()) {
+      auto walker = work_set.back();
+      work_set.pop_back();
+      if (visited.count(walker)) {
+        continue;
+      }
+      visited.insert(walker);
+      if (walker->isNop()) {
+        CHECK_EQ(size_t(1), walker->inputCount());
+        work_set.push_back(walker->getInput(0));
+        continue;
+      }
+      if (const auto scan = dynamic_cast<const RelScan*>(walker)) {
+        auto td = scan->getTableDescriptor();
+        CHECK(td);
+        table_names.insert(td->tableName);
+        continue;
+      }
+      const auto compound = dynamic_cast<const RelCompound*>(walker);
+      const auto join = dynamic_cast<const RelJoin*>(walker);
+      const auto project = dynamic_cast<const RelProject*>(walker);
+      const auto aggregate = dynamic_cast<const RelAggregate*>(walker);
+      const auto filter = dynamic_cast<const RelFilter*>(walker);
+      const auto sort = dynamic_cast<const RelSort*>(walker);
+      if (compound || join || project || aggregate || filter || sort) {
+        for (size_t i = 0; i < walker->inputCount(); ++i) {
+          work_set.push_back(walker->getInput(i));
+        }
+        continue;
+      }
+      CHECK(false);
+    }
+  }
+  return std::vector<std::string>(table_names.begin(), table_names.end());
+}
+
 void RelAlgExecutor::handleNop(const RelAlgNode* body) {
   CHECK(dynamic_cast<const RelAggregate*>(body));
   CHECK_EQ(size_t(1), body->inputCount());

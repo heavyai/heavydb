@@ -25,6 +25,8 @@ class RelAlgExecutor {
                                    const ExecutionOptions&,
                                    const RenderInfo&);
 
+  static std::vector<std::string> getScanTableNamesInRelAlgSeq(std::vector<RaExecutionDesc>& exec_descs);
+
   std::vector<TargetMetaInfo> validateRelAlgSeq(const std::vector<RaExecutionDesc>&);
 
  private:
