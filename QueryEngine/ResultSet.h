@@ -28,6 +28,8 @@ class ResultSetStorage {
  private:
   void reduceOneEntryNoCollisionsColWise(const size_t i, int8_t* this_buff, const int8_t* that_buff) const;
 
+  void copyKeyColWise(const size_t entry_idx, int8_t* this_buff, const int8_t* that_buff) const;
+
   void reduceOneEntryNoCollisionsRowWise(const size_t i, int8_t* this_buff, const int8_t* that_buff) const;
 
   bool isEmptyEntry(const size_t i, const int8_t* buff) const;

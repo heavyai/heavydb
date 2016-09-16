@@ -97,6 +97,13 @@ void ResultSetStorage::reduceOneEntryNoCollisionsColWise(const size_t entry_idx,
   CHECK(query_mem_desc_.hash_type == GroupByColRangeType::OneColKnownRange ||
         query_mem_desc_.hash_type == GroupByColRangeType::MultiColPerfectHash ||
         query_mem_desc_.hash_type == GroupByColRangeType::MultiCol);
+  if (isEmptyEntry(entry_idx, that_buff)) {
+    return;
+  }
+  // copy the key from right hand side
+  if (!query_mem_desc_.keyless_hash) {
+    copyKeyColWise(entry_idx, this_buff, that_buff);
+  }
   auto this_crt_col_ptr = get_cols_ptr(this_buff, query_mem_desc_);
   auto that_crt_col_ptr = get_cols_ptr(that_buff, query_mem_desc_);
   size_t agg_col_idx = 0;
@@ -125,6 +132,18 @@ void ResultSetStorage::reduceOneEntryNoCollisionsColWise(const size_t entry_idx,
   }
 }
 
+void ResultSetStorage::copyKeyColWise(const size_t entry_idx, int8_t* this_buff, const int8_t* that_buff) const {
+  const auto key_count = get_groupby_col_count(query_mem_desc_);
+  // TODO(alex): we might want to support keys smaller than 64 bits at some point
+  auto lhs_key_buff = reinterpret_cast<int64_t*>(this_buff) + entry_idx;
+  auto rhs_key_buff = reinterpret_cast<const int64_t*>(that_buff) + entry_idx;
+  for (size_t key_comp_idx = 0; key_comp_idx < key_count; ++key_comp_idx) {
+    *lhs_key_buff = *rhs_key_buff;
+    lhs_key_buff += query_mem_desc_.entry_count;
+    rhs_key_buff += query_mem_desc_.entry_count;
+  }
+}
+
 // Reduces entry at position entry_idx in that_buff into the same position in this_buff, row-wise format.
 void ResultSetStorage::reduceOneEntryNoCollisionsRowWise(const size_t entry_idx,
                                                          int8_t* this_buff,
@@ -133,9 +152,15 @@ void ResultSetStorage::reduceOneEntryNoCollisionsRowWise(const size_t entry_idx,
   CHECK(query_mem_desc_.hash_type == GroupByColRangeType::OneColKnownRange ||
         query_mem_desc_.hash_type == GroupByColRangeType::MultiColPerfectHash ||
         query_mem_desc_.hash_type == GroupByColRangeType::MultiCol);
+  if (isEmptyEntry(entry_idx, that_buff)) {
+    return;
+  }
   const auto key_bytes = get_key_bytes_rowwise(query_mem_desc_);
   auto this_targets_ptr = row_ptr_rowwise(this_buff, query_mem_desc_, entry_idx) + key_bytes;
   auto that_targets_ptr = row_ptr_rowwise(that_buff, query_mem_desc_, entry_idx) + key_bytes;
+  if (key_bytes) {  // copy the key from right hand side
+    memcpy(this_targets_ptr - key_bytes, that_targets_ptr - key_bytes, key_bytes);
+  }
   size_t target_slot_idx = 0;
   for (const auto& target_info : targets_) {
     int8_t* this_ptr2{nullptr};
