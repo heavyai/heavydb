@@ -1071,6 +1071,9 @@ GroupByAndAggregate::GroupByAndAggregate(Executor* executor,
     if (groupby_ti.is_string() && groupby_ti.get_compression() != kENCODING_DICT) {
       throw std::runtime_error("Cannot group by string columns which are not dictionary encoded.");
     }
+    if (groupby_ti.is_array()) {
+      throw std::runtime_error("Group by array not supported");
+    }
   }
   bool sort_on_gpu_hint = device_type == ExecutorDeviceType::GPU && allow_multifrag &&
                           !ra_exe_unit.sort_info.order_entries.empty() &&

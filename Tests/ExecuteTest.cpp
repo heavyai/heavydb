@@ -1724,6 +1724,8 @@ TEST(Select, ArrayUnsupported) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     EXPECT_THROW(run_multiple_agg("SELECT MIN(arr_i64) FROM array_test;", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("SELECT UNNEST(arr_str), COUNT(*) cc FROM array_test GROUP BY arr_str;", dt),
+                 std::runtime_error);
   }
 }
 
