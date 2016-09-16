@@ -3523,6 +3523,9 @@ ResultRows Executor::executeWorkUnit(int32_t* error_code,
       crt_min_byte_width <<= 1;
       continue;
     }
+    if (*error_code == ERR_SPECULATIVE_TOP_OOM) {
+      return ResultRows({}, {}, nullptr, nullptr, {}, ExecutorDeviceType::CPU);
+    }
     if (is_agg) {
       try {
         return collectAllDeviceResults(execution_dispatch,
@@ -4480,6 +4483,8 @@ int32_t Executor::executePlanWithGroupBy(const RelAlgExecutionUnit& ra_exe_unit,
       return ERR_OUT_OF_GPU_MEM;
     } catch (const OutOfRenderMemory&) {
       return ERR_OUT_OF_RENDER_MEM;
+    } catch (const std::bad_alloc&) {
+      return ERR_SPECULATIVE_TOP_OOM;
     } catch (const std::exception& e) {
       LOG(FATAL) << "Error launching the GPU kernel: " << e.what();
     }

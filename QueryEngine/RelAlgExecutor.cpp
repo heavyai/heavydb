@@ -673,6 +673,9 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(const RelAlgExecutor::WorkUnit& 
   if (error_code == Executor::ERR_OUT_OF_CPU_MEM) {
     throw std::runtime_error("Not enough host memory to execute the query");
   }
+  if (error_code == Executor::ERR_SPECULATIVE_TOP_OOM) {
+    throw SpeculativeTopNFailed();
+  }
   return handleRetry(
       error_code, {work_unit.exe_unit, max_groups_buffer_entry_guess}, targets_meta, is_agg, co, eo, queue_time_ms);
 }

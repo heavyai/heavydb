@@ -1036,6 +1036,7 @@ class Executor {
   static const int32_t ERR_OUT_OF_RENDER_MEM{5};
   static const int32_t ERR_OUT_OF_CPU_MEM{6};
   static const int32_t ERR_OVERFLOW_OR_UNDERFLOW{7};
+  static const int32_t ERR_SPECULATIVE_TOP_OOM{8};
   friend class GroupByAndAggregate;
   friend struct QueryMemoryDescriptor;
   friend class QueryExecutionContext;
