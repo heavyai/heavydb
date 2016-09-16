@@ -879,6 +879,26 @@ class FunctionOperWithCustomTypeHandling : public FunctionOper {
 };
 
 /*
+ * @type IterExpr
+ * @brief Only used in RelJoin Node Codegen.
+ */
+class IterExpr final : public Expr {
+ public:
+  IterExpr(const SQLTypeInfo& ti, int i) : Expr(ti), rte_idx(i) {}
+
+  int get_rte_idx() const { return rte_idx; }
+
+  std::shared_ptr<Analyzer::Expr> deep_copy() const override;
+
+  bool operator==(const Expr& rhs) const override;
+
+  void print() const override;
+
+ private:
+  int rte_idx;  // 0-based range table index.
+};
+
+/*
  * @type TargetEntry
  * @brief Target list defines a relational projection.  It is a list of TargetEntry's.
  */

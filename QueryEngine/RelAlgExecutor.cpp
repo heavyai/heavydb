@@ -64,6 +64,14 @@ ExecutionResult RelAlgExecutor::executeRelAlgSeq(std::vector<RaExecutionDesc>& e
       addTemporaryTable(-sort->getId(), &exec_desc.getResult().getRows());
       continue;
     }
+#ifdef ENABLE_JOIN_EXEC
+    const auto join = dynamic_cast<const RelJoin*>(body);
+    if (join) {
+      exec_desc.setResult(executeJoin(join, co, eo_work_unit, render_info, queue_time_ms));
+      addTemporaryTable(-join->getId(), &exec_desc.getResult().getRows());
+      continue;
+    }
+#endif
     CHECK(false);
   }
   return exec_descs[exec_desc_count - 1].getResult();
@@ -189,8 +197,10 @@ class RexUsedInputsVisitor : public RexVisitor<std::unordered_set<const RexInput
 };
 
 const RelAlgNode* get_data_sink(const RelAlgNode* ra_node) {
-  CHECK_EQ(size_t(1), ra_node->inputCount());
-  const auto join_input = dynamic_cast<const RelJoin*>(ra_node->getInput(0));
+  const bool is_join = dynamic_cast<const RelJoin*>(ra_node) != nullptr;
+  CHECK((is_join && 2 == ra_node->inputCount()) || (!is_join && 1 == ra_node->inputCount()));
+  const auto join_input =
+      is_join ? static_cast<const RelJoin*>(ra_node) : dynamic_cast<const RelJoin*>(ra_node->getInput(0));
   // If the input node is a join, the data is sourced from it instead of the initial node.
   const auto data_sink_node =
       join_input ? static_cast<const RelAlgNode*>(join_input) : static_cast<const RelAlgNode*>(ra_node);
@@ -277,6 +287,33 @@ std::pair<std::unordered_set<const RexInput*>, std::vector<std::shared_ptr<RexIn
   return std::make_pair(used_inputs, used_inputs_owned);
 }
 
+std::pair<std::unordered_set<const RexInput*>, std::vector<std::shared_ptr<RexInput>>> get_used_inputs(
+    const RelJoin* join) {
+  std::unordered_set<const RexInput*> used_inputs;
+  std::vector<std::shared_ptr<RexInput>> used_inputs_owned;
+  const auto data_sink_node = get_data_sink(join);
+  for (size_t nest_level = 0; nest_level < data_sink_node->inputCount(); ++nest_level) {
+    const auto source = data_sink_node->getInput(nest_level);
+    const auto scan_source = dynamic_cast<const RelScan*>(source);
+    if (scan_source) {
+      CHECK(source->getOutputMetainfo().empty());
+      for (size_t i = 0; i < scan_source->size(); ++i) {
+        auto synthesized_used_input = new RexInput(scan_source, i);
+        used_inputs_owned.emplace_back(synthesized_used_input);
+        used_inputs.insert(synthesized_used_input);
+      }
+    } else {
+      const auto& partial_in_metadata = source->getOutputMetainfo();
+      for (size_t i = 0; i < partial_in_metadata.size(); ++i) {
+        auto synthesized_used_input = new RexInput(source, i);
+        used_inputs_owned.emplace_back(synthesized_used_input);
+        used_inputs.insert(synthesized_used_input);
+      }
+    }
+  }
+  return std::make_pair(used_inputs, used_inputs_owned);
+}
+
 int table_id_from_ra(const RelAlgNode* ra_node) {
   const auto scan_ra = dynamic_cast<const RelScan*>(ra_node);
   if (scan_ra) {
@@ -299,8 +336,10 @@ std::unordered_map<const RelAlgNode*, int> get_input_nest_levels(const RelAlgNod
 }
 
 std::unordered_set<const RexInput*> get_join_source_used_inputs(const RelAlgNode* ra_node) {
-  CHECK_EQ(size_t(1), ra_node->inputCount());
-  const auto join_input = dynamic_cast<const RelJoin*>(ra_node->getInput(0));
+  const bool is_join = dynamic_cast<const RelJoin*>(ra_node) != nullptr;
+  CHECK((is_join && 2 == ra_node->inputCount()) || (!is_join && 1 == ra_node->inputCount()));
+  const auto join_input =
+      is_join ? static_cast<const RelJoin*>(ra_node) : dynamic_cast<const RelJoin*>(ra_node->getInput(0));
   if (join_input) {
     const auto join_cond = join_input->getCondition();
     RexUsedInputsVisitor visitor;
@@ -565,6 +604,15 @@ ExecutionResult RelAlgExecutor::executeFilter(const RelFilter* filter,
                                               const int64_t queue_time_ms) {
   const auto work_unit = createFilterWorkUnit(filter, {{}, SortAlgorithm::Default, 0, 0});
   return executeWorkUnit(work_unit, filter->getOutputMetainfo(), false, co, eo, render_info, queue_time_ms);
+}
+
+ExecutionResult RelAlgExecutor::executeJoin(const RelJoin* join,
+                                            const CompilationOptions& co,
+                                            const ExecutionOptions& eo,
+                                            const RenderInfo& render_info,
+                                            const int64_t queue_time_ms) {
+  const auto work_unit = createJoinWorkUnit(join, {{}, SortAlgorithm::Default, 0, 0});
+  return executeWorkUnit(work_unit, join->getOutputMetainfo(), false, co, eo, render_info, queue_time_ms);
 }
 
 namespace {
@@ -858,7 +906,8 @@ bool is_literal_true(const RexScalar* condition) {
 
 std::list<std::shared_ptr<Analyzer::Expr>> get_outer_join_quals(const RelAlgNode* ra,
                                                                 const RelAlgTranslator& translator) {
-  const auto join = dynamic_cast<const RelJoin*>(ra->getInput(0));
+  const auto join = dynamic_cast<const RelJoin*>(ra) ? static_cast<const RelJoin*>(ra)
+                                                     : dynamic_cast<const RelJoin*>(ra->getInput(0));
   if (join && join->getCondition() && !is_literal_true(join->getCondition()) && join->getJoinType() == JoinType::LEFT) {
     const auto join_cond_cf = qual_to_conjunctive_form(translator.translateScalarRex(join->getCondition()));
     CHECK(join_cond_cf.simple_quals.empty());
@@ -869,7 +918,8 @@ std::list<std::shared_ptr<Analyzer::Expr>> get_outer_join_quals(const RelAlgNode
 
 std::list<std::shared_ptr<Analyzer::Expr>> get_inner_join_quals(const RelAlgNode* ra,
                                                                 const RelAlgTranslator& translator) {
-  const auto join = dynamic_cast<const RelJoin*>(ra->getInput(0));
+  const auto join = dynamic_cast<const RelJoin*>(ra) ? static_cast<const RelJoin*>(ra)
+                                                     : dynamic_cast<const RelJoin*>(ra->getInput(0));
   if (join && join->getCondition() && !is_literal_true(join->getCondition()) &&
       join->getJoinType() == JoinType::INNER) {
     const auto join_cond_cf = qual_to_conjunctive_form(translator.translateScalarRex(join->getCondition()));
@@ -916,6 +966,40 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(const RelCompoun
   const auto targets_meta = get_targets_meta(compound, rewritten_exe_unit.target_exprs);
   compound->setOutputMetainfo(targets_meta);
   return {rewritten_exe_unit, max_groups_buffer_entry_default_guess, std::unique_ptr<QueryRewriter>(query_rewriter)};
+}
+
+RelAlgExecutor::WorkUnit RelAlgExecutor::createJoinWorkUnit(const RelJoin* join, const SortInfo& sort_info) {
+  std::vector<InputDescriptor> input_descs;
+  std::list<InputColDescriptor> input_col_descs;
+  const auto input_to_nest_level = get_input_nest_levels(join);
+  std::tie(input_descs, input_col_descs, std::ignore) = get_input_desc(join, input_to_nest_level);
+  const auto join_type = join->getJoinType();
+  RelAlgTranslator translator(cat_, input_to_nest_level, join_type, now_);
+  auto inner_join_quals = get_inner_join_quals(join, translator);
+  auto outer_join_quals = get_outer_join_quals(join, translator);
+  CHECK((join_type == JoinType::INNER && outer_join_quals.empty()) ||
+        (join_type == JoinType::LEFT && inner_join_quals.empty()));
+  const auto iter0_ti = SQLTypeInfo(kBIGINT, true);
+  const auto iter1_ti = SQLTypeInfo(kBIGINT, join_type == JoinType::INNER);
+  std::vector<TargetMetaInfo> targets_meta{{"ITER$0", iter0_ti}, {"ITER$1", iter1_ti}};
+  auto iter0_expr = std::make_shared<Analyzer::IterExpr>(iter0_ti, 0);
+  auto iter1_expr = std::make_shared<Analyzer::IterExpr>(iter1_ti, 1);
+  target_exprs_owned_.push_back(iter0_expr);
+  target_exprs_owned_.push_back(iter1_expr);
+  join->setOutputMetainfo(targets_meta);
+  return {{input_descs,
+           input_col_descs,
+           {},
+           {},
+           join_type,
+           inner_join_quals,
+           outer_join_quals,
+           {nullptr},
+           {iter0_expr.get(), iter1_expr.get()},
+           sort_info,
+           0},
+          max_groups_buffer_entry_default_guess,
+          nullptr};
 }
 
 namespace {

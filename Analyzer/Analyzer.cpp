@@ -115,6 +115,10 @@ std::shared_ptr<Analyzer::Expr> DatetruncExpr::deep_copy() const {
   return makeExpr<DatetruncExpr>(type_info, contains_agg, field, from_expr->deep_copy());
 }
 
+std::shared_ptr<Analyzer::Expr> IterExpr::deep_copy() const {
+  return makeExpr<IterExpr>(type_info, rte_idx);
+}
+
 SQLTypeInfo BinOper::analyze_type_info(SQLOps op,
                                        const SQLTypeInfo& left_type,
                                        const SQLTypeInfo& right_type,
@@ -1517,6 +1521,13 @@ bool DatetruncExpr::operator==(const Expr& rhs) const {
   return field == rhs_ee.get_field() && *from_expr == *rhs_ee.get_from_expr();
 }
 
+bool IterExpr::operator==(const Expr& rhs) const {
+  if (typeid(rhs) != typeid(IterExpr))
+    return false;
+  const IterExpr& rhs_ie = static_cast<const IterExpr&>(rhs);
+  return get_rte_idx() == rhs_ie.get_rte_idx();
+}
+
 void ColumnVar::print() const {
   std::cout << "(ColumnVar table: " << table_id << " column: " << column_id << " rte: " << rte_idx << ") ";
 }
@@ -1731,6 +1742,10 @@ void DatetruncExpr::print() const {
   std::cout << " , ";
   from_expr->print();
   std::cout << ") ";
+}
+
+void IterExpr::print() const {
+  std::cout << "(Iterator on rte: " << rte_idx << ") ";
 }
 
 void TargetEntry::print() const {

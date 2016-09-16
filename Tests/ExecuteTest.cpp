@@ -1950,6 +1950,9 @@ TEST(Select, InnerJoins) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     c("SELECT COUNT(*) FROM test JOIN test_inner ON test.x = test_inner.x;", dt);
+#ifdef ENABLE_JOIN_EXEC
+    c("SELECT count(*) FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str = c.str;", dt);
+#endif
   }
 }
 

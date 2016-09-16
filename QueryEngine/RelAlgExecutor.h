@@ -60,6 +60,12 @@ class RelAlgExecutor {
                               const RenderInfo&,
                               const int64_t queue_time_ms);
 
+  ExecutionResult executeJoin(const RelJoin*,
+                              const CompilationOptions&,
+                              const ExecutionOptions&,
+                              const RenderInfo&,
+                              const int64_t queue_time_ms);
+
   // TODO(alex): just move max_groups_buffer_entry_guess to RelAlgExecutionUnit once
   //             we deprecate the plan-based executor paths and remove WorkUnit
   struct WorkUnit {
@@ -102,6 +108,8 @@ class RelAlgExecutor {
   WorkUnit createProjectWorkUnit(const RelProject*, const SortInfo&);
 
   WorkUnit createFilterWorkUnit(const RelFilter*, const SortInfo&);
+
+  WorkUnit createJoinWorkUnit(const RelJoin*, const SortInfo&);
 
   void addTemporaryTable(const int table_id, const ResultRows* rows) {
     CHECK_LT(table_id, 0);
