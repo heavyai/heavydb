@@ -463,11 +463,14 @@ QueryMemoryDescriptor perfect_hash_one_col_desc_small(const std::vector<TargetIn
   return query_mem_desc;
 }
 
-QueryMemoryDescriptor perfect_hash_one_col_desc(const std::vector<TargetInfo>& target_infos, const int8_t num_bytes) {
+QueryMemoryDescriptor perfect_hash_one_col_desc(const std::vector<TargetInfo>& target_infos,
+                                                const int8_t num_bytes,
+                                                const size_t min_val,
+                                                const size_t max_val) {
   QueryMemoryDescriptor query_mem_desc{};
   query_mem_desc.hash_type = GroupByColRangeType::OneColKnownRange;
-  query_mem_desc.min_val = 0;
-  query_mem_desc.max_val = 99;
+  query_mem_desc.min_val = min_val;
+  query_mem_desc.max_val = max_val;
   query_mem_desc.has_nulls = false;
   query_mem_desc.group_col_widths.emplace_back(8);
   for (const auto& target_info : target_infos) {
@@ -1501,33 +1504,33 @@ void test_reduce_random_groups(const std::vector<TargetInfo>& target_infos,
 
 TEST(Iterate, PerfectHashOneCol) {
   const auto target_infos = generate_test_target_infos();
-  const auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 8);
+  const auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 8, 0, 99);
   test_iterate(target_infos, query_mem_desc);
 }
 
 TEST(Iterate, PerfectHashOneCol32) {
   const auto target_infos = generate_test_target_infos();
-  const auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 4);
+  const auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 4, 0, 99);
   test_iterate(target_infos, query_mem_desc);
 }
 
 TEST(Iterate, PerfectHashOneColColumnar) {
   const auto target_infos = generate_test_target_infos();
-  auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 8);
+  auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 8, 0, 99);
   query_mem_desc.output_columnar = true;
   test_iterate(target_infos, query_mem_desc);
 }
 
 TEST(Iterate, PerfectHashOneColColumnar32) {
   const auto target_infos = generate_test_target_infos();
-  auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 4);
+  auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 4, 0, 99);
   query_mem_desc.output_columnar = true;
   test_iterate(target_infos, query_mem_desc);
 }
 
 TEST(Iterate, PerfectHashOneColKeyless) {
   const auto target_infos = generate_test_target_infos();
-  auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 8);
+  auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 8, 0, 99);
   query_mem_desc.keyless_hash = true;
   query_mem_desc.idx_target_as_key = 2;
   test_iterate(target_infos, query_mem_desc);
@@ -1535,7 +1538,7 @@ TEST(Iterate, PerfectHashOneColKeyless) {
 
 TEST(Iterate, PerfectHashOneColKeyless32) {
   const auto target_infos = generate_test_target_infos();
-  auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 4);
+  auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 4, 0, 99);
   query_mem_desc.keyless_hash = true;
   query_mem_desc.idx_target_as_key = 2;
   test_iterate(target_infos, query_mem_desc);
@@ -1543,7 +1546,7 @@ TEST(Iterate, PerfectHashOneColKeyless32) {
 
 TEST(Iterate, PerfectHashOneColColumnarKeyless) {
   const auto target_infos = generate_test_target_infos();
-  auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 8);
+  auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 8, 0, 99);
   query_mem_desc.output_columnar = true;
   query_mem_desc.keyless_hash = true;
   query_mem_desc.idx_target_as_key = 2;
@@ -1552,7 +1555,7 @@ TEST(Iterate, PerfectHashOneColColumnarKeyless) {
 
 TEST(Iterate, PerfectHashOneColColumnarKeyless32) {
   const auto target_infos = generate_test_target_infos();
-  auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 4);
+  auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 4, 0, 99);
   query_mem_desc.output_columnar = true;
   query_mem_desc.keyless_hash = true;
   query_mem_desc.idx_target_as_key = 2;
@@ -1634,7 +1637,7 @@ TEST(Iterate, BaselineHashColumnar) {
 
 TEST(Reduce, PerfectHashOneCol) {
   const auto target_infos = generate_test_target_infos();
-  const auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 8);
+  const auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 8, 0, 99);
   EvenNumberGenerator generator1;
   EvenNumberGenerator generator2;
   test_reduce(target_infos, query_mem_desc, generator1, generator2, 2);
@@ -1642,7 +1645,7 @@ TEST(Reduce, PerfectHashOneCol) {
 
 TEST(Reduce, PerfectHashOneCol32) {
   const auto target_infos = generate_test_target_infos();
-  const auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 4);
+  const auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 4, 0, 99);
   EvenNumberGenerator generator1;
   EvenNumberGenerator generator2;
   test_reduce(target_infos, query_mem_desc, generator1, generator2, 2);
@@ -1650,7 +1653,7 @@ TEST(Reduce, PerfectHashOneCol32) {
 
 TEST(Reduce, PerfectHashOneColColumnar) {
   const auto target_infos = generate_test_target_infos();
-  auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 8);
+  auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 8, 0, 99);
   query_mem_desc.output_columnar = true;
   EvenNumberGenerator generator1;
   EvenNumberGenerator generator2;
@@ -1659,7 +1662,7 @@ TEST(Reduce, PerfectHashOneColColumnar) {
 
 TEST(Reduce, PerfectHashOneColColumnar32) {
   const auto target_infos = generate_test_target_infos();
-  auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 4);
+  auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 4, 0, 99);
   query_mem_desc.output_columnar = true;
   EvenNumberGenerator generator1;
   EvenNumberGenerator generator2;
@@ -1668,7 +1671,7 @@ TEST(Reduce, PerfectHashOneColColumnar32) {
 
 TEST(Reduce, PerfectHashOneColKeyless) {
   const auto target_infos = generate_test_target_infos();
-  auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 8);
+  auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 8, 0, 99);
   query_mem_desc.keyless_hash = true;
   query_mem_desc.idx_target_as_key = 2;
   EvenNumberGenerator generator1;
@@ -1678,7 +1681,7 @@ TEST(Reduce, PerfectHashOneColKeyless) {
 
 TEST(Reduce, PerfectHashOneColKeyless32) {
   const auto target_infos = generate_test_target_infos();
-  auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 4);
+  auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 4, 0, 99);
   query_mem_desc.keyless_hash = true;
   query_mem_desc.idx_target_as_key = 2;
   EvenNumberGenerator generator1;
@@ -1688,7 +1691,7 @@ TEST(Reduce, PerfectHashOneColKeyless32) {
 
 TEST(Reduce, PerfectHashOneColColumnarKeyless) {
   const auto target_infos = generate_test_target_infos();
-  auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 8);
+  auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 8, 0, 99);
   query_mem_desc.output_columnar = true;
   query_mem_desc.keyless_hash = true;
   query_mem_desc.idx_target_as_key = 2;
@@ -1699,7 +1702,7 @@ TEST(Reduce, PerfectHashOneColColumnarKeyless) {
 
 TEST(Reduce, PerfectHashOneColColumnarKeyless32) {
   const auto target_infos = generate_test_target_infos();
-  auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 4);
+  auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 4, 0, 99);
   query_mem_desc.output_columnar = true;
   query_mem_desc.keyless_hash = true;
   query_mem_desc.idx_target_as_key = 2;
@@ -1801,13 +1804,65 @@ TEST(Reduce, BaselineHashColumnar) {
   test_reduce(target_infos, query_mem_desc, generator1, generator2, 1);
 }
 
+TEST(MoreReduce, MissingValuesKeyless) {
+  std::vector<TargetInfo> target_infos;
+  SQLTypeInfo bigint_ti(kBIGINT, false);
+  SQLTypeInfo null_ti(kNULLT, false);
+  target_infos.push_back(TargetInfo{false, kMIN, bigint_ti, null_ti, true, false});
+  target_infos.push_back(TargetInfo{true, kCOUNT, bigint_ti, null_ti, true, false});
+  auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 8, 7, 9);
+  query_mem_desc.keyless_hash = true;
+  const auto row_set_mem_owner = std::make_shared<RowSetMemoryOwner>();
+  const auto rs1 =
+      boost::make_unique<ResultSet>(target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, nullptr);
+  const auto storage1 = rs1->allocateStorage();
+  const auto rs2 =
+      boost::make_unique<ResultSet>(target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, nullptr);
+  const auto storage2 = rs2->allocateStorage();
+  {
+    auto buff1 = reinterpret_cast<int64_t*>(storage1->getUnderlyingBuffer());
+    buff1[0 * 2] = 7;
+    buff1[1 * 2] = 0;
+    buff1[2 * 2] = 0;
+    buff1[0 * 2 + 1] = 15;
+    buff1[1 * 2 + 1] = 0;
+    buff1[2 * 2 + 1] = 0;
+  }
+  {
+    auto buff2 = reinterpret_cast<int64_t*>(storage2->getUnderlyingBuffer());
+    buff2[0 * 2] = 0;
+    buff2[1 * 2] = 0;
+    buff2[2 * 2] = 9;
+    buff2[0 * 2 + 1] = 0;
+    buff2[1 * 2 + 1] = 0;
+    buff2[2 * 2 + 1] = 5;
+  }
+  storage1->reduce(*storage2);
+  {
+    const auto row = rs1->getNextRow(false, false);
+    CHECK_EQ(size_t(2), row.size());
+    ASSERT_EQ(7, v<int64_t>(row[0]));
+    ASSERT_EQ(15, v<int64_t>(row[1]));
+  }
+  {
+    const auto row = rs1->getNextRow(false, false);
+    CHECK_EQ(size_t(2), row.size());
+    ASSERT_EQ(9, v<int64_t>(row[0]));
+    ASSERT_EQ(5, v<int64_t>(row[1]));
+  }
+  {
+    const auto row = rs1->getNextRow(false, false);
+    ASSERT_EQ(size_t(0), row.size());
+  }
+}
+
 /* Perfect_Hash_Row_Based testcases */
 // TBD_FLOW #1
 TEST(ReduceRandomGroups,
      DISABLED_PerfectHashOneCol_Small_2525) {  // TBD_BUG - fails: only ResultSet #1 groups are included
   const auto target_infos = generate_random_groups_target_infos();
   const auto query_mem_desc = perfect_hash_one_col_desc_small(target_infos, 8);
-  // const auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 8);
+  // const auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 8, 0, 99);
   EvenNumberGenerator gen1;
   EvenNumberGenerator gen2;
   const int prct1 = 25, prct2 = 25;
@@ -1820,7 +1875,7 @@ TEST(ReduceRandomGroups,
      DISABLED_PerfectHashOneCol_Small_2575) {  // TBD_BUG - fails: only ResultSet #1 groups are included
   const auto target_infos = generate_random_groups_target_infos();
   const auto query_mem_desc = perfect_hash_one_col_desc_small(target_infos, 8);
-  // const auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 8);
+  // const auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 8, 0, 99);
   EvenNumberGenerator gen1;
   EvenNumberGenerator gen2;
   const int prct1 = 25, prct2 = 75;
@@ -1833,7 +1888,7 @@ TEST(ReduceRandomGroups,
      DISABLED_PerfectHashOneCol_Small_5050) {  // TBD_BUG - fails: only ResultSet #1 groups are included
   const auto target_infos = generate_random_groups_target_infos();
   const auto query_mem_desc = perfect_hash_one_col_desc_small(target_infos, 8);
-  // const auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 8);
+  // const auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 8, 0, 99);
   EvenNumberGenerator gen1;
   EvenNumberGenerator gen2;
   const int prct1 = 50, prct2 = 50;
@@ -1846,7 +1901,7 @@ TEST(ReduceRandomGroups,
      DISABLED_PerfectHashOneCol_Small_7525) {  // TBD_BUG - fails: only ResultSet #1 groups are included
   const auto target_infos = generate_random_groups_target_infos();
   const auto query_mem_desc = perfect_hash_one_col_desc_small(target_infos, 8);
-  // const auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 8);
+  // const auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 8, 0, 99);
   EvenNumberGenerator gen1;
   EvenNumberGenerator gen2;
   const int prct1 = 75, prct2 = 25;
@@ -1859,7 +1914,7 @@ TEST(ReduceRandomGroups,
      DISABLED_PerfectHashOneCol_Small_25100) {  // TBD_BUG - fails: only ResultSet #1 groups are included
   const auto target_infos = generate_random_groups_target_infos();
   const auto query_mem_desc = perfect_hash_one_col_desc_small(target_infos, 8);
-  // const auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 8);
+  // const auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 8, 0, 99);
   EvenNumberGenerator gen1;
   EvenNumberGenerator gen2;
   const int prct1 = 25, prct2 = 100;
@@ -1872,7 +1927,7 @@ TEST(ReduceRandomGroups,
      DISABLED_PerfectHashOneCol_Small_10025) {  // TBD_BUG - fails: when calculating AVG, ResultSet #2 overwrites #1
   const auto target_infos = generate_random_groups_target_infos();
   const auto query_mem_desc = perfect_hash_one_col_desc_small(target_infos, 8);
-  // const auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 8);
+  // const auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 8, 0, 99);
   EvenNumberGenerator gen1;
   EvenNumberGenerator gen2;
   const int prct1 = 100, prct2 = 25;
@@ -1886,7 +1941,7 @@ TEST(ReduceRandomGroups,
                                                  // ResultSets
   const auto target_infos = generate_random_groups_target_infos();
   const auto query_mem_desc = perfect_hash_one_col_desc_small(target_infos, 8);
-  // const auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 8);
+  // const auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 8, 0, 99);
   EvenNumberGenerator gen1;
   EvenNumberGenerator gen2;
   const int prct1 = 100, prct2 = 100;
@@ -1914,7 +1969,7 @@ groups not
 convenient for debugging
   const auto target_infos = generate_random_groups_target_infos();
   // const auto query_mem_desc = perfect_hash_one_col_desc_small(target_infos, 8);
-  const auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 8);
+  const auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 8, 0, 99);
   EvenNumberGenerator gen1;
   EvenNumberGenerator gen2;
   const int prct1 = 25, prct2 = 25;
