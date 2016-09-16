@@ -982,8 +982,8 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createJoinWorkUnit(const RelJoin* join,
   const auto iter0_ti = SQLTypeInfo(kBIGINT, true);
   const auto iter1_ti = SQLTypeInfo(kBIGINT, join_type == JoinType::INNER);
   std::vector<TargetMetaInfo> targets_meta{{"ITER$0", iter0_ti}, {"ITER$1", iter1_ti}};
-  auto iter0_expr = std::make_shared<Analyzer::IterExpr>(iter0_ti, 0);
-  auto iter1_expr = std::make_shared<Analyzer::IterExpr>(iter1_ti, 1);
+  auto iter0_expr = std::make_shared<Analyzer::IterExpr>(iter0_ti, input_descs[0].getTableId(), 0);
+  auto iter1_expr = std::make_shared<Analyzer::IterExpr>(iter1_ti, input_descs[1].getTableId(), 1);
   target_exprs_owned_.push_back(iter0_expr);
   target_exprs_owned_.push_back(iter1_expr);
   join->setOutputMetainfo(targets_meta);

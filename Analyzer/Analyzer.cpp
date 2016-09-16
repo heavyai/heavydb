@@ -116,7 +116,7 @@ std::shared_ptr<Analyzer::Expr> DatetruncExpr::deep_copy() const {
 }
 
 std::shared_ptr<Analyzer::Expr> IterExpr::deep_copy() const {
-  return makeExpr<IterExpr>(type_info, rte_idx);
+  return makeExpr<IterExpr>(type_info, table_id, rte_idx);
 }
 
 SQLTypeInfo BinOper::analyze_type_info(SQLOps op,
@@ -1525,7 +1525,7 @@ bool IterExpr::operator==(const Expr& rhs) const {
   if (typeid(rhs) != typeid(IterExpr))
     return false;
   const IterExpr& rhs_ie = static_cast<const IterExpr&>(rhs);
-  return get_rte_idx() == rhs_ie.get_rte_idx();
+  return get_table_id() == rhs_ie.get_table_id() && get_rte_idx() == rhs_ie.get_rte_idx();
 }
 
 void ColumnVar::print() const {

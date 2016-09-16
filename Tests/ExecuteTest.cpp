@@ -1581,6 +1581,27 @@ void import_text_group_by_test() {
   const std::string insert_query{"INSERT INTO text_group_by_test VALUES('hello','world',':-)');"};
   run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
 }
+
+void import_join_test() {
+  const std::string drop_old_test{"DROP TABLE IF EXISTS join_test;"};
+  run_ddl_statement(drop_old_test);
+  g_sqlite_comparator.query(drop_old_test);
+  const std::string create_test{
+      "CREATE TABLE join_test(x int not null, str text encoding dict) WITH (fragment_size=2);"};
+  run_ddl_statement(create_test);
+  g_sqlite_comparator.query("CREATE TABLE join_test(x int not null, str text);");
+  {
+    const std::string insert_query{"INSERT INTO join_test VALUES(7, 'foo');"};
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query);
+  }
+  {
+    const std::string insert_query{"INSERT INTO join_test VALUES(8, 'bar');"};
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query);
+  }
+}
+
 }  // namespace
 
 TEST(Select, ArrayUnnest) {
@@ -1952,6 +1973,12 @@ TEST(Select, InnerJoins) {
     c("SELECT COUNT(*) FROM test JOIN test_inner ON test.x = test_inner.x;", dt);
 #ifdef ENABLE_JOIN_EXEC
     c("SELECT count(*) FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str = c.str;", dt);
+#else
+    EXPECT_THROW(run_multiple_agg(
+                     "SELECT count(*) FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c ON "
+                     "b.str = c.str;",
+                     dt),
+                 std::runtime_error);
 #endif
   }
 }
@@ -2232,6 +2259,12 @@ int main(int argc, char** argv) {
     import_text_group_by_test();
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'text_group_by_test'";
+    return -EEXIST;
+  }
+  try {
+    import_join_test();
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'join_test'";
     return -EEXIST;
   }
   try {

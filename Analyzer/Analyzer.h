@@ -884,7 +884,9 @@ class FunctionOperWithCustomTypeHandling : public FunctionOper {
  */
 class IterExpr final : public Expr {
  public:
-  IterExpr(const SQLTypeInfo& ti, int i) : Expr(ti), rte_idx(i) {}
+  IterExpr(const SQLTypeInfo& ti, int r, int i) : Expr(ti), table_id(r), rte_idx(i) {}
+
+  int get_table_id() const { return table_id; }
 
   int get_rte_idx() const { return rte_idx; }
 
@@ -895,7 +897,8 @@ class IterExpr final : public Expr {
   void print() const override;
 
  private:
-  int rte_idx;  // 0-based range table index.
+  int table_id;  // the global table id
+  int rte_idx;   // 0-based range table index.
 };
 
 /*

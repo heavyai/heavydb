@@ -12,13 +12,11 @@ std::vector<Vertex> merge_sort_with_input(const std::vector<Vertex>& vertices, c
   DAG::in_edge_iterator ie_iter, ie_end;
   std::unordered_set<Vertex> inputs;
   for (const auto vert : vertices) {
-    const auto sort = dynamic_cast<const RelSort*>(graph[vert]);
-    if (sort) {
+    if (const auto sort = dynamic_cast<const RelSort*>(graph[vert])) {
       boost::tie(ie_iter, ie_end) = boost::in_edges(vert, graph);
       CHECK(size_t(1) == sort->inputCount() && boost::next(ie_iter) == ie_end);
       const auto in_vert = boost::source(*ie_iter, graph);
-      const auto input = graph[in_vert];
-      if (dynamic_cast<const RelScan*>(input)) {
+      if (dynamic_cast<const RelScan*>(graph[in_vert])) {
         throw std::runtime_error("Query not supported yet");
       }
       if (boost::out_degree(in_vert, graph) > 1) {
@@ -126,10 +124,15 @@ std::vector<RaExecutionDesc> get_execution_descriptors(const RelAlgNode* ra_node
     if (dynamic_cast<const RelScan*>(node)) {
       continue;
     }
+    CHECK_GT(node->inputCount(), size_t(0));
+#ifdef ENABLE_JOIN_EXEC
+    CHECK((dynamic_cast<const RelJoin*>(node) && 2 == node->inputCount()) || (1 == node->inputCount()));
+#else
     if (dynamic_cast<const RelJoin*>(node)) {
       throw std::runtime_error("3+-way join not supported yet");
     }
     CHECK_EQ(size_t(1), node->inputCount());
+#endif
     descs.emplace_back(node);
   }
 
