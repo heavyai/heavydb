@@ -112,13 +112,15 @@ static const char* get_row(const char* buf,
                            const CopyParams& copy_params,
                            bool is_begin,
                            const bool* is_array,
-                           std::vector<std::string>& row) {
+                           std::vector<std::string>& row,
+                           bool& try_single_thread) {
   const char* field = buf;
   const char* p;
   bool in_quote = false;
   bool in_array = false;
   bool has_escape = false;
   bool strip_quotes = false;
+  try_single_thread = false;
   std::string line_endings({copy_params.line_delim, '\r', '\n'});
   for (p = buf; p < entire_buf_end; p++) {
     if (*p == copy_params.escape && p < entire_buf_end - 1 && *(p + 1) == copy_params.quote) {
@@ -172,10 +174,14 @@ static const char* get_row(const char* buf,
   /*
   @TODO(wei) do error handling
   */
-  if (in_quote)
+  if (in_quote) {
     LOG(ERROR) << "Unmatched quote.";
-  if (in_array)
+    try_single_thread = true;
+  }
+  if (in_array) {
     LOG(ERROR) << "Unmatched array.";
+    try_single_thread = true;
+  }
   return p;
 }
 
@@ -559,6 +565,7 @@ static ImportStatus import_thread(int thread_id,
     const char* thread_buf = buffer + begin_pos + begin;
     const char* thread_buf_end = buffer + end_pos;
     const char* buf_end = buffer + total_size;
+    bool try_single_thread;
     std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers = importer->get_import_buffers(thread_id);
     auto us = measure<std::chrono::microseconds>::execution([&]() {});
     for (const auto& p : import_buffers)
@@ -571,11 +578,19 @@ static ImportStatus import_thread(int thread_id,
       }
       if (debug_timing) {
         us = measure<std::chrono::microseconds>::execution([&]() {
-          p = get_row(p, thread_buf_end, buf_end, copy_params, p == thread_buf, importer->get_is_array(), row);
+          p = get_row(p,
+                      thread_buf_end,
+                      buf_end,
+                      copy_params,
+                      p == thread_buf,
+                      importer->get_is_array(),
+                      row,
+                      try_single_thread);
         });
         total_get_row_time_us += us;
       } else
-        p = get_row(p, thread_buf_end, buf_end, copy_params, p == thread_buf, importer->get_is_array(), row);
+        p = get_row(
+            p, thread_buf_end, buf_end, copy_params, p == thread_buf, importer->get_is_array(), row, try_single_thread);
       /*
       std::cout << "Row " << row_count << " : ";
       for (auto p : row)
@@ -702,8 +717,9 @@ void Detector::read_file() {
   std::string line;
   auto end_time = std::chrono::steady_clock::now() + timeout;
   try {
-    while (std::getline(infile, line)) {
-      raw_data.push_back(line);
+    while (std::getline(infile, line, copy_params.line_delim)) {
+      raw_data += line;
+      raw_data += copy_params.line_delim;
       if (std::chrono::steady_clock::now() > end_time) {
         break;
       }
@@ -723,12 +739,25 @@ void Detector::detect_row_delimiter() {
 }
 
 void Detector::split_raw_data() {
-  for (auto line : raw_data) {
+  const char* buf = raw_data.c_str();
+  const char* buf_end = buf + raw_data.size();
+  bool try_single_thread;
+  for (const char* p = buf; p < buf_end; p++) {
     std::vector<std::string> row;
-    line += copy_params.line_delim;
-    const char* buf = line.c_str();
-    get_row(buf, buf + line.size(), buf + line.size(), copy_params, true, nullptr, row);
+    p = get_row(p, buf_end, buf_end, copy_params, true, nullptr, row, try_single_thread);
     raw_rows.push_back(row);
+    if (try_single_thread) {
+      break;
+    }
+  }
+  if (try_single_thread) {
+    copy_params.threads = 1;
+    raw_rows.clear();
+    for (const char* p = buf; p < buf_end; p++) {
+      std::vector<std::string> row;
+      p = get_row(p, buf_end, buf_end, copy_params, true, nullptr, row, try_single_thread);
+      raw_rows.push_back(row);
+    }
   }
 }
 
