@@ -11,6 +11,7 @@
 #include "../QueryEngine/RuntimeFunctions.h"
 #include "../StringDictionary/StringDictionary.h"
 
+#include <boost/make_unique.hpp>
 #include <glog/logging.h>
 #include <gtest/gtest.h>
 
@@ -1230,33 +1231,16 @@ void test_reduce(const std::vector<TargetInfo>& target_infos,
   SQLTypeInfo double_ti(kDOUBLE, false);
   const ResultSetStorage* storage1{nullptr};
   const ResultSetStorage* storage2{nullptr};
-  std::unique_ptr<ResultSet> rs1;
-  std::unique_ptr<ResultSet> rs2;
   const auto row_set_mem_owner = std::make_shared<RowSetMemoryOwner>();
   row_set_mem_owner->addStringDict(&g_sd, 1);
-  switch (query_mem_desc.hash_type) {
-    case GroupByColRangeType::OneColKnownRange:
-    case GroupByColRangeType::MultiColPerfectHash: {
-      rs1.reset(new ResultSet(target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, nullptr));
-      storage1 = rs1->allocateStorage();
-      fill_storage_buffer(storage1->getUnderlyingBuffer(), target_infos, query_mem_desc, generator1, step);
-      rs2.reset(new ResultSet(target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, nullptr));
-      storage2 = rs2->allocateStorage();
-      fill_storage_buffer(storage2->getUnderlyingBuffer(), target_infos, query_mem_desc, generator2, step);
-      break;
-    }
-    case GroupByColRangeType::MultiCol: {
-      rs1.reset(new ResultSet(target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, nullptr));
-      storage1 = rs1->allocateStorage();
-      fill_storage_buffer(storage1->getUnderlyingBuffer(), target_infos, query_mem_desc, generator1, step);
-      rs2.reset(new ResultSet(target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, nullptr));
-      storage2 = rs2->allocateStorage();
-      fill_storage_buffer(storage2->getUnderlyingBuffer(), target_infos, query_mem_desc, generator2, step);
-      break;
-    }
-    default:
-      CHECK(false);
-  }
+  const auto rs1 =
+      boost::make_unique<ResultSet>(target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, nullptr);
+  storage1 = rs1->allocateStorage();
+  fill_storage_buffer(storage1->getUnderlyingBuffer(), target_infos, query_mem_desc, generator1, step);
+  const auto rs2 =
+      boost::make_unique<ResultSet>(target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, nullptr);
+  storage2 = rs2->allocateStorage();
+  fill_storage_buffer(storage2->getUnderlyingBuffer(), target_infos, query_mem_desc, generator2, step);
   ResultSetManager rs_manager;
   std::vector<ResultSet*> storage_set{rs1.get(), rs2.get()};
   auto result_rs = rs_manager.reduce(storage_set);
