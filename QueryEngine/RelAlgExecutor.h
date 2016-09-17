@@ -13,17 +13,10 @@ class RelAlgExecutor {
  public:
   RelAlgExecutor(Executor* executor, const Catalog_Namespace::Catalog& cat) : executor_(executor), cat_(cat), now_(0) {}
 
-  struct RenderInfo {
-    const bool is_render;
-    const int render_widget_id;
-    const int session_id;
-    const std::string render_type;
-  };
-
   ExecutionResult executeRelAlgSeq(std::vector<RaExecutionDesc>&,
                                    const CompilationOptions&,
                                    const ExecutionOptions&,
-                                   const RenderInfo&);
+                                   RenderInfo*);
 
   static std::vector<std::string> getScanTableNamesInRelAlgSeq(std::vector<RaExecutionDesc>& exec_descs);
 
@@ -33,37 +26,37 @@ class RelAlgExecutor {
   ExecutionResult executeCompound(const RelCompound*,
                                   const CompilationOptions&,
                                   const ExecutionOptions&,
-                                  const RenderInfo&,
+                                  RenderInfo*,
                                   const int64_t queue_time_ms);
 
   ExecutionResult executeAggregate(const RelAggregate* aggregate,
                                    const CompilationOptions& co,
                                    const ExecutionOptions& eo,
-                                   const RenderInfo& render_info,
+                                   RenderInfo* render_info,
                                    const int64_t queue_time_ms);
 
   ExecutionResult executeProject(const RelProject*,
                                  const CompilationOptions&,
                                  const ExecutionOptions&,
-                                 const RenderInfo&,
+                                 RenderInfo*,
                                  const int64_t queue_time_ms);
 
   ExecutionResult executeFilter(const RelFilter*,
                                 const CompilationOptions&,
                                 const ExecutionOptions&,
-                                const RenderInfo&,
+                                RenderInfo*,
                                 const int64_t queue_time_ms);
 
   ExecutionResult executeSort(const RelSort*,
                               const CompilationOptions&,
                               const ExecutionOptions&,
-                              const RenderInfo&,
+                              RenderInfo*,
                               const int64_t queue_time_ms);
 
   ExecutionResult executeJoin(const RelJoin*,
                               const CompilationOptions&,
                               const ExecutionOptions&,
-                              const RenderInfo&,
+                              RenderInfo*,
                               const int64_t queue_time_ms);
 
   // TODO(alex): just move max_groups_buffer_entry_guess to RelAlgExecutionUnit once
@@ -81,13 +74,12 @@ class RelAlgExecutor {
                                   const bool is_agg,
                                   const CompilationOptions& co,
                                   const ExecutionOptions& eo,
-                                  const RenderInfo&,
+                                  RenderInfo*,
                                   const int64_t queue_time_ms);
 
   ExecutionResult renderWorkUnit(const RelAlgExecutor::WorkUnit& work_unit,
                                  const std::vector<TargetMetaInfo>& targets_meta,
-                                 RenderAllocatorMap* render_allocator_map,
-                                 const RenderInfo& render_info,
+                                 RenderInfo* render_info,
                                  const int32_t error_code,
                                  const int64_t queue_time_ms);
 

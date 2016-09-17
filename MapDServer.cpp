@@ -64,23 +64,22 @@ using boost::shared_ptr;
 
 namespace {
 
-bool is_poly_render(const rapidjson::Document& render_config) {
+std::shared_ptr<const rapidjson::Value> get_poly_render_data(rapidjson::Document& render_config) {
   const auto& data_descs = field(render_config, "data");
   CHECK(data_descs.IsArray());
   CHECK_EQ(unsigned(1), data_descs.Size());
-  const auto& data_desc = *(data_descs.Begin());
+  auto& data_desc = *(data_descs.Begin());
   if (data_desc.HasMember("format")) {
     CHECK_EQ("polys", json_str(field(data_desc, "format")));
-    return true;
+    std::shared_ptr<rapidjson::Value> data_ptr(new rapidjson::Value);
+    rapidjson::Document::AllocatorType& a = render_config.GetAllocator();
+    data_ptr->CopyFrom(data_desc, a);
+    return data_ptr;
   }
-  return false;
+  return nullptr;
 }
 
-std::string build_poly_render_query(const rapidjson::Document& render_config) {
-  const auto& data_descs = field(render_config, "data");
-  CHECK(data_descs.IsArray());
-  CHECK_EQ(unsigned(1), data_descs.Size());
-  const auto& data_desc = *(data_descs.Begin());
+std::string build_poly_render_query(const rapidjson::Value& data_desc) {
   CHECK_EQ("polys", json_str(field(data_desc, "format")));
   const auto polyTableName = json_str(field(data_desc, "dbTableName"));
   const auto factsTableName = json_str(field(data_desc, "factsTableName"));
@@ -93,18 +92,13 @@ std::string build_poly_render_query(const rapidjson::Document& render_config) {
          polyTableName + "." + polysKey + " GROUP BY " + polyTableName + ".rowid;";
 }
 
-std::string transform_to_poly_render_query(const std::string& query_str, const rapidjson::Document& render_config) {
-  const auto& data_descs = field(render_config, "data");
-  CHECK(data_descs.IsArray());
-  CHECK_EQ(unsigned(1), data_descs.Size());
-  const auto& data_desc = *(data_descs.Begin());
+std::string transform_to_poly_render_query(const std::string& query_str, const rapidjson::Value& data_desc) {
   CHECK_EQ("polys", json_str(field(data_desc, "format")));
   auto result = query_str;
   {
     boost::regex aliased_group_expr{R"(\s+([^\s]+)\s+as\s+([^(\s|,)]+))", boost::regex::extended | boost::regex::icase};
     boost::smatch what;
-    std::string what1;
-    std::string what2;
+    std::string what1, what2;
     if (boost::regex_search(result, what, aliased_group_expr)) {
       what1 = std::string(what[1]);
       what2 = std::string(what[2]);
@@ -147,6 +141,7 @@ std::string transform_to_poly_render_query(const std::string& query_str, const r
   }
   return result;
 }
+
 
 std::string image_from_rendered_rows(const ResultRows& rendered_results) {
   const auto img_row = rendered_results.getNextRow(false, false);
@@ -581,6 +576,7 @@ class MapDHandler : virtual public MapDIf {
     }
   }
 
+  // DEPRECATED - use get_result_row_for_pixel()
   void get_row_for_pixel(TPixelRowResult& _return,
                          const TSessionId session,
                          const int64_t widget_id,
@@ -590,6 +586,23 @@ class MapDHandler : virtual public MapDIf {
                          const bool column_format,
                          const int32_t pixelRadius,
                          const std::string& nonce) {
+    _return.nonce = nonce;
+    if (!enable_rendering_) {
+      TMapDException ex;
+      ex.error_msg = "Backend rendering is disabled.";
+      LOG(ERROR) << ex.error_msg;
+      throw ex;
+    }
+  }
+
+  void get_result_row_for_pixel(TPixelTableRowResult& _return,
+                                const TSessionId session,
+                                const int64_t widget_id,
+                                const TPixel& pixel,
+                                const std::map<std::string, std::vector<std::string>>& table_col_names,
+                                const bool column_format,
+                                const int32_t pixelRadius,
+                                const std::string& nonce) {
     _return.nonce = nonce;
     if (!enable_rendering_) {
       TMapDException ex;
@@ -993,16 +1006,12 @@ class MapDHandler : virtual public MapDIf {
       auto query_str = query_str_in;
       rapidjson::Document render_config;
       render_config.Parse(render_type.c_str());
-      if (is_poly_render(render_config)) {
-        const auto& data_descs = field(render_config, "data");
-        CHECK(data_descs.IsArray());
-        CHECK_EQ(unsigned(1), data_descs.Size());
-        const auto& data_desc = *(data_descs.Begin());
-        CHECK_EQ("polys", json_str(field(data_desc, "format")));
-        if (data_desc.HasMember("factsKey")) {
-          query_str = build_poly_render_query(render_config);
-        } else if (data_desc.HasMember("polysKey")) {
-          query_str = transform_to_poly_render_query(query_str, render_config);
+      auto poly_data_desc = get_poly_render_data(render_config);
+      if (poly_data_desc) {
+        if (poly_data_desc->HasMember("factsKey")) {
+          query_str = build_poly_render_query(*poly_data_desc);
+        } else if (poly_data_desc->HasMember("polysKey")) {
+          query_str = transform_to_poly_render_query(query_str, *poly_data_desc);
         }
       }
       std::lock_guard<std::mutex> render_lock(render_mutex_);
@@ -1041,6 +1050,44 @@ class MapDHandler : virtual public MapDIf {
     });
     LOG(INFO) << "Total: " << _return.total_time_ms << " (ms), Execution: " << _return.execution_time_ms
               << " (ms), Render: " << _return.render_time_ms << " (ms)";
+  }
+
+  void render_vega(TRenderResult& _return,
+                   const TSessionId session,
+                   const int64_t widget_id,
+                   const std::string& vega_json,
+                   const int compressionLevel,
+                   const std::string& nonce) {
+    _return.total_time_ms = measure<>::execution([&]() {
+      _return.execution_time_ms = 0;
+      _return.render_time_ms = 0;
+      _return.nonce = nonce;
+      if (!enable_rendering_) {
+        TMapDException ex;
+        ex.error_msg = "Backend rendering is disabled.";
+        LOG(ERROR) << ex.error_msg;
+        throw ex;
+      }
+
+      std::lock_guard<std::mutex> render_lock(render_mutex_);
+      mapd_shared_lock<mapd_shared_mutex> read_lock(sessions_mutex_);
+      auto session_it = get_session_it(session);
+      auto session_info_ptr = session_it->second.get();
+
+      const auto& cat = session_info_ptr->get_catalog();
+      size_t block_size_x = 0;
+      size_t grid_size_x = 0;
+      auto executor = Executor::getExecutor(cat.get_currentDB().dbId,
+                                            jit_debug_ ? "/tmp" : "",
+                                            jit_debug_ ? "mapdquery" : "",
+                                            block_size_x,
+                                            grid_size_x,
+                                            nullptr);
+
+
+    });
+    LOG(INFO) << "Total: " << _return.total_time_ms << " (ms), Total Execution: " << _return.execution_time_ms
+              << " (ms), Total Render: " << _return.render_time_ms << " (ms)";
   }
 
   void create_frontend_view(const TSessionId session,
@@ -1366,7 +1413,7 @@ class MapDHandler : virtual public MapDIf {
           ra_executor.executeRelAlgSeq(ed_list,
                                        {executor_device_type, true, ExecutorOptLevel::Default},
                                        {false, allow_multifrag_, just_explain, allow_loop_joins_, g_enable_watchdog},
-                                       {false, 0, 0, ""});
+                                       nullptr);
     });
     // reduce execution time by the time spent during queue waiting
     _return.execution_time_ms -= result.getRows().getQueueTime();
@@ -1393,7 +1440,6 @@ class MapDHandler : virtual public MapDIf {
     _return.execution_time_ms += measure<>::execution([&]() {
       results = executor->execute(root_plan,
                                   session_info,
-                                  -1,
                                   true,
                                   executor_device_type,
                                   ExecutorOptLevel::Default,
@@ -1412,15 +1458,18 @@ class MapDHandler : virtual public MapDIf {
     convert_rows(_return, getTargetMetaInfo(targets), results, column_format);
   }
 
+
   void render_root_plan(TRenderResult& _return,
                         Planner::RootPlan* root_plan,
                         const Catalog_Namespace::SessionInfo& session_info,
                         const std::string& render_type) {
-    root_plan->set_render_type(render_type);
     rapidjson::Document render_config;
     render_config.Parse(render_type.c_str());
-    const bool render_polys = is_poly_render(render_config);
-    if (!render_polys) {
+
+    auto poly_data_desc = get_poly_render_data(render_config);
+    std::unique_ptr<RenderInfo> render_info(
+        new RenderInfo(session_info.get_session_id(), 1, render_type, (poly_data_desc == nullptr)));
+    if (!poly_data_desc) {
       root_plan->set_plan_dest(Planner::RootPlan::Dest::kRENDER);
     }
     auto executor = Executor::getExecutor(root_plan->get_catalog().get_currentDB().dbId,
@@ -1433,13 +1482,13 @@ class MapDHandler : virtual public MapDIf {
     auto clock_begin = timer_start();
     auto results = executor->execute(root_plan,
                                      session_info,
-                                     1,  // TODO(alex): de-hardcode widget id
                                      true,
                                      session_info.get_executor_device_type(),
                                      ExecutorOptLevel::Default,
                                      allow_multifrag_,
-                                     false);
-    if (render_polys) {
+                                     false,
+                                     render_info.get());
+    if (poly_data_desc) {
       CHECK(false);
     }
     // reduce execution time by the time spent during queue waiting
@@ -1449,6 +1498,8 @@ class MapDHandler : virtual public MapDIf {
   }
 
 #ifdef HAVE_RAVM
+
+
   void render_rel_alg(TRenderResult& _return,
                       const std::string& query_ra,
                       const Catalog_Namespace::SessionInfo& session_info,
@@ -1470,14 +1521,18 @@ class MapDHandler : virtual public MapDIf {
     auto ed_list = get_execution_descriptors(ra.get());
     rapidjson::Document render_config;
     render_config.Parse(render_type.c_str());
-    const bool render_polys = is_poly_render(render_config);
+
+    auto poly_data_desc = get_poly_render_data(render_config);
+
+    std::unique_ptr<RenderInfo> render_info(
+        new RenderInfo(session_info.get_session_id(), 1, render_type, (poly_data_desc == nullptr)));
     const auto exe_result =
         ra_executor.executeRelAlgSeq(ed_list,
                                      {session_info.get_executor_device_type(), true, ExecutorOptLevel::Default},
                                      {false, allow_multifrag_, false, allow_loop_joins_, g_enable_watchdog},
-                                     {!render_polys, 1, session_info.get_session_id(), render_type});
+                                     render_info.get());
     const auto& results = exe_result.getRows();
-    if (render_polys) {
+    if (poly_data_desc) {
       CHECK(false);
     }
     // reduce execution time by the time spent during queue waiting

@@ -45,6 +45,10 @@ class RenderAllocator {
     throw OutOfRenderMemory();
   }
 
+  void markChunkComplete() { crt_chunk_offset_bytes_ = crt_allocated_bytes_; }
+
+  size_t getCurrentChunkOffset() const { return crt_chunk_offset_bytes_; }
+  size_t getCurrentChunkSize() const { return crt_allocated_bytes_ - crt_chunk_offset_bytes_; }
   size_t getAllocatedSize() const { return crt_allocated_bytes_; }
 
   int8_t* getBasePtr() const { return preallocated_ptr_; }
@@ -52,6 +56,7 @@ class RenderAllocator {
  private:
   int8_t* preallocated_ptr_;
   const size_t preallocated_size_;
+  size_t crt_chunk_offset_bytes_;
   size_t crt_allocated_bytes_;
 };
 
@@ -66,6 +71,7 @@ class RenderAllocatorMap {
   RenderAllocator* getRenderAllocator(size_t device_id);
   RenderAllocator* operator[](size_t device_id);
 
+  void setDataLayout(const std::shared_ptr<::QueryRenderer::QueryDataLayout>& query_data_layout);
   void prepForRendering(const std::shared_ptr<::QueryRenderer::QueryDataLayout>& query_data_layout);
 
  private:

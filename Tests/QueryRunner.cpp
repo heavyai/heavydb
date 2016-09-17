@@ -161,7 +161,7 @@ ResultRows run_multiple_agg(const std::string& query_str,
     return ra_executor.executeRelAlgSeq(ed_list,
                                         {device_type, true, ExecutorOptLevel::LoopStrengthReduction},
                                         {false, true, false, true, false},
-                                        {false, 0, 0, ""}).getRows();
+                                        nullptr).getRows();
   }
 #endif  // HAVE_RAVM
 
@@ -170,9 +170,9 @@ ResultRows run_multiple_agg(const std::string& query_str,
   std::unique_ptr<Planner::RootPlan> plan_ptr(plan);  // make sure it's deleted
 #ifdef HAVE_CUDA
   return executor->execute(
-      plan, *session, -1, hoist_literals, device_type, ExecutorOptLevel::LoopStrengthReduction, true, true);
+      plan, *session, hoist_literals, device_type, ExecutorOptLevel::LoopStrengthReduction, true, true);
 #else
   return executor->execute(
-      plan, *session, -1, hoist_literals, device_type, ExecutorOptLevel::LoopStrengthReduction, false, true);
+      plan, *session, hoist_literals, device_type, ExecutorOptLevel::LoopStrengthReduction, false, true);
 #endif
 }

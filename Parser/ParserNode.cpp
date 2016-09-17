@@ -1919,7 +1919,7 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   std::unique_ptr<Planner::RootPlan> plan_ptr(root_plan);
   auto executor = Executor::getExecutor(catalog.get_currentDB().dbId);
   ResultRows results({}, {}, nullptr, nullptr, {}, device_type);
-  results = executor->execute(root_plan, session, -1, true, device_type, ExecutorOptLevel::Default, true, false);
+  results = executor->execute(root_plan, session, true, device_type, ExecutorOptLevel::Default, true, false);
   const auto& targets = root_plan->get_plan()->get_targetlist();
   std::ofstream outfile;
   if (file_path->empty()) {

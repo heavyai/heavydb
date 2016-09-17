@@ -440,12 +440,12 @@ RowSetPtr Executor::executeSelectPlan(const Planner::Plan* plan,
 
 ResultRows Executor::execute(const Planner::RootPlan* root_plan,
                              const Catalog_Namespace::SessionInfo& session,
-                             const int render_widget_id,
                              const bool hoist_literals,
                              const ExecutorDeviceType device_type,
                              const ExecutorOptLevel opt_level,
                              const bool allow_multifrag,
-                             const bool allow_loop_joins) {
+                             const bool allow_loop_joins,
+                             RenderInfo* render_info) {
   catalog_ = &root_plan->get_catalog();
   const auto stmt_type = root_plan->get_stmt_type();
   // capture the lock acquistion time
@@ -458,7 +458,7 @@ ResultRows Executor::execute(const Planner::RootPlan* root_plan,
       int32_t error_code{0};
       size_t max_groups_buffer_entry_guess{16384};
 
-      std::unique_ptr<RenderAllocatorMap> render_allocator_map;
+      std::unique_ptr<RenderInfo> render_info_ptr;
       if (root_plan->get_plan_dest() == Planner::RootPlan::kRENDER) {
         if (device_type != ExecutorDeviceType::GPU) {
           throw std::runtime_error("Backend rendering is only supported on GPU");
@@ -468,23 +468,30 @@ ResultRows Executor::execute(const Planner::RootPlan* root_plan,
           throw std::runtime_error("This build doesn't support backend rendering");
         }
 
-        render_allocator_map.reset(
-            new RenderAllocatorMap(catalog_->get_dataMgr().cudaMgr_, render_manager_, blockSize(), gridSize()));
+        CHECK(render_info);
+
+        if (!render_info->render_allocator_map_ptr) {
+          // make backwards compatible, can be removed when MapDHandler::render(...)
+          // in MapDServer.cpp is removed
+          render_info->render_allocator_map_ptr.reset(
+              new RenderAllocatorMap(catalog_->get_dataMgr().cudaMgr_, render_manager_, blockSize(), gridSize()));
+        }
       }
-      auto rows = executeSelectPlan(root_plan->get_plan(),
-                                    root_plan->get_limit(),
-                                    root_plan->get_offset(),
-                                    hoist_literals,
-                                    device_type,
-                                    opt_level,
-                                    root_plan->get_catalog(),
-                                    max_groups_buffer_entry_guess,
-                                    &error_code,
-                                    nullptr,
-                                    allow_multifrag,
-                                    root_plan->get_plan_dest() == Planner::RootPlan::kEXPLAIN,
-                                    allow_loop_joins,
-                                    render_allocator_map.get());
+      auto rows = executeSelectPlan(
+          root_plan->get_plan(),
+          root_plan->get_limit(),
+          root_plan->get_offset(),
+          hoist_literals,
+          device_type,
+          opt_level,
+          root_plan->get_catalog(),
+          max_groups_buffer_entry_guess,
+          &error_code,
+          nullptr,
+          allow_multifrag,
+          root_plan->get_plan_dest() == Planner::RootPlan::kEXPLAIN,
+          allow_loop_joins,
+          render_info && render_info->do_render ? render_info->render_allocator_map_ptr.get() : nullptr);
       if (error_code == ERR_OVERFLOW_OR_UNDERFLOW) {
         throw std::runtime_error("Overflow or underflow");
       }

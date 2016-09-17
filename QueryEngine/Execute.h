@@ -16,6 +16,7 @@
 #include "../Shared/thread_count.h"
 #include "../StringDictionary/StringDictionary.h"
 
+#include <rapidjson/document.h>
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/LLVMContext.h>
@@ -39,6 +40,22 @@
 #include <limits>
 
 extern bool g_enable_watchdog;
+
+struct RenderInfo {
+  bool do_render;
+  const int session_id;
+  const int render_widget_id;
+  std::unique_ptr<RenderAllocatorMap> render_allocator_map_ptr;
+  const std::string render_vega;
+
+  std::shared_ptr<QueryRenderer::QueryDataLayout> result_query_data_layout;
+
+  RenderInfo(const int session_id,
+             const int render_widget_id,
+             const std::string& render_vega = "",
+             const bool do_render = true)
+      : do_render(do_render), session_id(session_id), render_widget_id(render_widget_id), render_vega(render_vega) {}
+};
 
 class WatchdogException : public std::runtime_error {
  public:
@@ -268,12 +285,12 @@ class Executor {
 
   ResultRows execute(const Planner::RootPlan* root_plan,
                      const Catalog_Namespace::SessionInfo& session,
-                     const int render_widget_id,
                      const bool hoist_literals,
                      const ExecutorDeviceType device_type,
                      const ExecutorOptLevel,
                      const bool allow_multifrag,
-                     const bool allow_loop_joins);
+                     const bool allow_loop_joins,
+                     RenderInfo* render_query_data = nullptr);
 
   int64_t getRowidForPixel(const int64_t x,
                            const int64_t y,
@@ -283,9 +300,10 @@ class Executor {
 
   ResultRows renderPolygons(const ResultRows& rows,
                             const std::vector<TargetMetaInfo>& row_shape,
-                            const std::string& render_config_json,
                             const Catalog_Namespace::SessionInfo& session,
-                            const int render_widget_id);
+                            const int render_widget_id,
+                            const rapidjson::Value& data_desc,
+                            const std::string* render_config_json = nullptr);
 
 
   StringDictionary* getStringDictionary(const int dictId,
@@ -627,10 +645,7 @@ class Executor {
                                     const bool output_columnar);
 
   std::string renderRows(const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& targets,
-                         const std::string& config_json,
-                         RenderAllocatorMap* render_allocator_map,
-                         const int session_id,
-                         const int render_widget_id);
+                         RenderInfo* render_query_data);
 
   void dispatchFragments(const std::function<void(const ExecutorDeviceType chosen_device_type,
                                                   int chosen_device_id,

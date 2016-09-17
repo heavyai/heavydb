@@ -10,7 +10,10 @@ RenderAllocator::RenderAllocator(int8_t* preallocated_ptr,
                                  const size_t preallocated_size,
                                  const unsigned block_size_x,
                                  const unsigned grid_size_x)
-    : preallocated_ptr_(preallocated_ptr), preallocated_size_(preallocated_size), crt_allocated_bytes_(0) {
+    : preallocated_ptr_(preallocated_ptr),
+      preallocated_size_(preallocated_size),
+      crt_chunk_offset_bytes_(0),
+      crt_allocated_bytes_(0) {
 #ifdef HAVE_CUDA
   init_render_buffer_on_device(
       reinterpret_cast<int64_t*>(preallocated_ptr_), preallocated_size_ / 8, block_size_x, grid_size_x);
@@ -41,6 +44,9 @@ RenderAllocator* RenderAllocatorMap::operator[](size_t device_id) {
       << " devices available.";
 
   return &render_allocator_map_[device_id];
+}
+
+void RenderAllocatorMap::setDataLayout(const std::shared_ptr<::QueryRenderer::QueryDataLayout>& query_data_layout) {
 }
 
 void RenderAllocatorMap::prepForRendering(const std::shared_ptr<::QueryRenderer::QueryDataLayout>& query_data_layout) {

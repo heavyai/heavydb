@@ -358,14 +358,8 @@ int main(int argc, char* argv[]) {
             ResultRows results_cpu({}, {}, nullptr, nullptr, {}, ExecutorDeviceType::CPU);
             {
               auto ms = measure<>::execution([&]() {
-                results_cpu = executor->execute(plan,
-                                                session,
-                                                -1,
-                                                true,
-                                                ExecutorDeviceType::CPU,
-                                                ExecutorOptLevel::Default,
-                                                true,
-                                                allow_loop_joins);
+                results_cpu = executor->execute(
+                    plan, session, true, ExecutorDeviceType::CPU, ExecutorOptLevel::Default, true, allow_loop_joins);
               });
               if (timer) {
                 cout << "Query took " << ms << " ms to execute." << endl;
@@ -375,14 +369,8 @@ int main(int argc, char* argv[]) {
               ResultRows results_gpu({}, {}, nullptr, nullptr, {}, ExecutorDeviceType::GPU);
               {
                 auto ms = measure<>::execution([&]() {
-                  results_gpu = executor->execute(plan,
-                                                  session,
-                                                  -1,
-                                                  true,
-                                                  ExecutorDeviceType::GPU,
-                                                  ExecutorOptLevel::Default,
-                                                  true,
-                                                  allow_loop_joins);
+                  results_gpu = executor->execute(
+                      plan, session, true, ExecutorDeviceType::GPU, ExecutorOptLevel::Default, true, allow_loop_joins);
                 });
                 if (timer) {
                   cout << "Query took " << ms << " ms to execute." << endl;
