@@ -291,24 +291,18 @@ std::pair<std::unordered_set<const RexInput*>, std::vector<std::shared_ptr<RexIn
     const RelJoin* join) {
   std::unordered_set<const RexInput*> used_inputs;
   std::vector<std::shared_ptr<RexInput>> used_inputs_owned;
-  const auto data_sink_node = get_data_sink(join);
-  for (size_t nest_level = 0; nest_level < data_sink_node->inputCount(); ++nest_level) {
-    const auto source = data_sink_node->getInput(nest_level);
-    const auto scan_source = dynamic_cast<const RelScan*>(source);
-    if (scan_source) {
-      CHECK(source->getOutputMetainfo().empty());
-      for (size_t i = 0; i < scan_source->size(); ++i) {
-        auto synthesized_used_input = new RexInput(scan_source, i);
-        used_inputs_owned.emplace_back(synthesized_used_input);
-        used_inputs.insert(synthesized_used_input);
-      }
-    } else {
-      const auto& partial_in_metadata = source->getOutputMetainfo();
-      for (size_t i = 0; i < partial_in_metadata.size(); ++i) {
-        auto synthesized_used_input = new RexInput(source, i);
-        used_inputs_owned.emplace_back(synthesized_used_input);
-        used_inputs.insert(synthesized_used_input);
-      }
+  const auto lhs = join->getInput(0);
+  if (dynamic_cast<const RelJoin*>(lhs)) {
+    size_t iter_count{0};
+    auto synthesized_used_input = new RexInput(lhs, iter_count);
+    ++iter_count;
+    used_inputs_owned.emplace_back(synthesized_used_input);
+    used_inputs.insert(synthesized_used_input);
+    for (auto previous_join = static_cast<const RelJoin*>(lhs); previous_join;
+         previous_join = dynamic_cast<const RelJoin*>(previous_join->getInput(0)), ++iter_count) {
+      synthesized_used_input = new RexInput(lhs, iter_count);
+      used_inputs_owned.emplace_back(synthesized_used_input);
+      used_inputs.insert(synthesized_used_input);
     }
   }
   return std::make_pair(used_inputs, used_inputs_owned);
@@ -372,6 +366,35 @@ std::pair<std::vector<InputDescriptor>, std::list<InputColDescriptor>> get_input
     if (it == input_to_nest_level.end()) {
       throw std::runtime_error("Multi-way join not supported");
     }
+    // Physical columns from a scan node are numbered from 1 in our system.
+    input_col_descs_unique.emplace(scan_ra ? used_input->getIndex() + 1 : used_input->getIndex(), table_id, it->second);
+  }
+  return {input_descs, std::list<InputColDescriptor>(input_col_descs_unique.begin(), input_col_descs_unique.end())};
+}
+
+template <>
+std::pair<std::vector<InputDescriptor>, std::list<InputColDescriptor>> get_input_desc_impl<RelJoin>(
+    const RelJoin* ra_node,
+    const std::unordered_set<const RexInput*>& used_inputs,
+    const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level) {
+  std::vector<InputDescriptor> input_descs;
+  const auto data_sink_node = get_data_sink(ra_node);
+  for (size_t nest_level = 0; nest_level < data_sink_node->inputCount(); ++nest_level) {
+    const auto input_ra = data_sink_node->getInput(nest_level);
+    const int table_id = table_id_from_ra(input_ra);
+    input_descs.emplace_back(table_id, nest_level);
+  }
+  std::unordered_set<InputColDescriptor> input_col_descs_unique;
+  auto all_used_inputs = used_inputs;
+  // TODO(miyu): redirect RexInput in join condition to non-join source
+  const auto source_used_inputs = get_join_source_used_inputs(ra_node);
+  all_used_inputs.insert(source_used_inputs.begin(), source_used_inputs.end());
+  for (const auto used_input : all_used_inputs) {
+    const auto input_ra = used_input->getSourceNode();
+    const auto scan_ra = dynamic_cast<const RelScan*>(input_ra);
+    const int table_id = table_id_from_ra(input_ra);
+    const auto it = input_to_nest_level.find(input_ra);
+    CHECK(it != input_to_nest_level.end());
     // Physical columns from a scan node are numbered from 1 in our system.
     input_col_descs_unique.emplace(scan_ra ? used_input->getIndex() + 1 : used_input->getIndex(), table_id, it->second);
   }
@@ -968,6 +991,57 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(const RelCompoun
   return {rewritten_exe_unit, max_groups_buffer_entry_default_guess, std::unique_ptr<QueryRewriter>(query_rewriter)};
 }
 
+namespace {
+
+std::pair<std::vector<TargetMetaInfo>, std::vector<std::shared_ptr<Analyzer::Expr>>> get_inputs_meta(
+    const RelJoin* join) {
+  const auto join_type = join->getJoinType();
+  std::vector<TargetMetaInfo> targets_meta;
+  std::vector<std::shared_ptr<Analyzer::Expr>> target_exprs_owned;
+  const auto lhs = join->getInput(0);
+  if (dynamic_cast<const RelJoin*>(lhs)) {
+    std::vector<std::shared_ptr<Analyzer::Expr>> source_exprs_owned;
+    const auto previous_join = static_cast<const RelJoin*>(lhs);
+    std::tie(targets_meta, source_exprs_owned) = get_inputs_meta(previous_join);
+    for (size_t i = 0; i < source_exprs_owned.size(); ++i) {
+      const auto expr_ptr = source_exprs_owned[i];
+      if (std::dynamic_pointer_cast<const Analyzer::ColumnVar>(expr_ptr)) {
+        const auto col_var = std::static_pointer_cast<const Analyzer::ColumnVar>(expr_ptr);
+        target_exprs_owned.push_back(
+            std::make_shared<Analyzer::ColumnVar>(col_var->get_type_info(), table_id_from_ra(lhs), i, 0));
+        continue;
+      }
+      if (std::dynamic_pointer_cast<const Analyzer::IterExpr>(expr_ptr)) {
+        const auto iter = std::static_pointer_cast<const Analyzer::IterExpr>(expr_ptr);
+        target_exprs_owned.push_back(
+            std::make_shared<Analyzer::ColumnVar>(iter->get_type_info(), table_id_from_ra(lhs), i, 0));
+        continue;
+      }
+      CHECK(false);
+    }
+  } else {
+    const auto iter_ti = SQLTypeInfo(kBIGINT, true);
+    auto iter_expr = std::make_shared<Analyzer::IterExpr>(iter_ti, table_id_from_ra(lhs), 0);
+    target_exprs_owned.push_back(iter_expr);
+    const auto& in_meta = lhs->getOutputMetainfo();
+    targets_meta.insert(targets_meta.end(), in_meta.begin(), in_meta.end());
+  }
+
+  const auto rhs = join->getInput(1);
+  if (dynamic_cast<const RelJoin*>(rhs)) {
+    CHECK(false);
+  } else {
+    const auto iter_ti = SQLTypeInfo(kBIGINT, join_type == JoinType::INNER);
+    auto iter_expr = std::make_shared<Analyzer::IterExpr>(iter_ti, table_id_from_ra(rhs), 1);
+    target_exprs_owned.push_back(iter_expr);
+    const auto& in_meta = rhs->getOutputMetainfo();
+    targets_meta.insert(targets_meta.end(), in_meta.begin(), in_meta.end());
+  }
+  return std::make_pair(targets_meta, target_exprs_owned);
+}
+
+}  // namespace
+
 RelAlgExecutor::WorkUnit RelAlgExecutor::createJoinWorkUnit(const RelJoin* join, const SortInfo& sort_info) {
   std::vector<InputDescriptor> input_descs;
   std::list<InputColDescriptor> input_col_descs;
@@ -979,13 +1053,9 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createJoinWorkUnit(const RelJoin* join,
   auto outer_join_quals = get_outer_join_quals(join, translator);
   CHECK((join_type == JoinType::INNER && outer_join_quals.empty()) ||
         (join_type == JoinType::LEFT && inner_join_quals.empty()));
-  const auto iter0_ti = SQLTypeInfo(kBIGINT, true);
-  const auto iter1_ti = SQLTypeInfo(kBIGINT, join_type == JoinType::INNER);
-  std::vector<TargetMetaInfo> targets_meta{{"ITER$0", iter0_ti}, {"ITER$1", iter1_ti}};
-  auto iter0_expr = std::make_shared<Analyzer::IterExpr>(iter0_ti, input_descs[0].getTableId(), 0);
-  auto iter1_expr = std::make_shared<Analyzer::IterExpr>(iter1_ti, input_descs[1].getTableId(), 1);
-  target_exprs_owned_.push_back(iter0_expr);
-  target_exprs_owned_.push_back(iter1_expr);
+  std::vector<TargetMetaInfo> targets_meta;
+  std::vector<std::shared_ptr<Analyzer::Expr>> target_exprs_owned;
+  std::tie(targets_meta, target_exprs_owned) = get_inputs_meta(join);
   join->setOutputMetainfo(targets_meta);
   return {{input_descs,
            input_col_descs,
@@ -995,7 +1065,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createJoinWorkUnit(const RelJoin* join,
            inner_join_quals,
            outer_join_quals,
            {nullptr},
-           {iter0_expr.get(), iter1_expr.get()},
+           get_exprs_not_owned(target_exprs_owned),
            sort_info,
            0},
           max_groups_buffer_entry_default_guess,
