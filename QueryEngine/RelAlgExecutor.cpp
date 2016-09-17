@@ -342,6 +342,100 @@ std::unordered_set<const RexInput*> get_join_source_used_inputs(const RelAlgNode
   return std::unordered_set<const RexInput*>{};
 }
 
+size_t get_target_list_size(const RelAlgNode* ra_node) {
+  const auto scan = dynamic_cast<const RelScan*>(ra_node);
+  if (scan) {
+    return scan->getFieldNames().size();
+  }
+  const auto join = dynamic_cast<const RelJoin*>(ra_node);
+  if (join) {
+    return get_target_list_size(join->getInput(0)) + get_target_list_size(join->getInput(1));
+  }
+  const auto aggregate = dynamic_cast<const RelAggregate*>(ra_node);
+  if (aggregate) {
+    return aggregate->getFields().size();
+  }
+  const auto compound = dynamic_cast<const RelCompound*>(ra_node);
+  if (compound) {
+    return compound->getFields().size();
+  }
+  const auto filter = dynamic_cast<const RelFilter*>(ra_node);
+  if (filter) {
+    return get_target_list_size(filter->getInput(0));
+  }
+  const auto project = dynamic_cast<const RelProject*>(ra_node);
+  if (project) {
+    return project->getFields().size();
+  }
+  const auto sort = dynamic_cast<const RelSort*>(ra_node);
+  if (sort) {
+    return get_target_list_size(sort->getInput(0));
+  }
+  CHECK(false);
+  return 0;
+}
+
+std::pair<const RelAlgNode*, int> get_non_join_source_node(const RelAlgNode* crt_source, const int col_id) {
+  CHECK_LE(0, col_id);
+  const auto join = dynamic_cast<const RelJoin*>(crt_source);
+  if (!join) {
+    return std::make_pair(crt_source, col_id);
+  }
+  const auto lhs = join->getInput(0);
+  const auto rhs = join->getInput(1);
+  const size_t left_source_size = get_target_list_size(lhs);
+  if (size_t(col_id) >= left_source_size) {
+    return std::make_pair(rhs, col_id - int(left_source_size));
+  }
+  if (dynamic_cast<const RelJoin*>(lhs)) {
+    return get_non_join_source_node(static_cast<const RelJoin*>(lhs), col_id);
+  }
+  return std::make_pair(lhs, col_id);
+}
+
+template <class RA>
+void collect_join_used_input_desc(std::vector<InputDescriptor>& input_descs,
+                                  std::unordered_set<InputColDescriptor>& input_col_descs_unique,
+                                  const RA* ra_node,
+                                  const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level) {
+  const auto source_used_inputs = get_join_source_used_inputs(ra_node);
+  for (const auto used_input : source_used_inputs) {
+    const auto input_ra = used_input->getSourceNode();
+    const auto scan_ra = dynamic_cast<const RelScan*>(input_ra);
+    const int table_id = table_id_from_ra(input_ra);
+    const auto it = input_to_nest_level.find(input_ra);
+    if (it == input_to_nest_level.end()) {
+      throw std::runtime_error("Multi-way join not supported");
+    }
+    // Physical columns from a scan node are numbered from 1 in our system.
+    input_col_descs_unique.emplace(scan_ra ? used_input->getIndex() + 1 : used_input->getIndex(), table_id, it->second);
+  }
+}
+
+template <>
+void collect_join_used_input_desc(std::vector<InputDescriptor>& input_descs,
+                                  std::unordered_set<InputColDescriptor>& input_col_descs_unique,
+                                  const RelJoin* ra_node,
+                                  const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level) {
+  const auto source_used_inputs = get_join_source_used_inputs(ra_node);
+  for (const auto used_input : source_used_inputs) {
+    const RelAlgNode* input_ra = nullptr;
+    int col_id = 0;
+    int input_desc = -1;
+    std::tie(input_ra, col_id) = get_non_join_source_node(used_input->getSourceNode(), used_input->getIndex());
+    const auto scan_ra = dynamic_cast<const RelScan*>(input_ra);
+    const int table_id = table_id_from_ra(input_ra);
+    const auto it = input_to_nest_level.find(input_ra);
+    if (it == input_to_nest_level.end()) {
+      input_descs.emplace_back(table_id, input_desc);
+    } else {
+      input_desc = it->second;
+    }
+    // Physical columns from a scan node are numbered from 1 in our system.
+    input_col_descs_unique.emplace(scan_ra ? col_id + 1 : col_id, table_id, input_desc);
+  }
+}
+
 template <class RA>
 std::pair<std::vector<InputDescriptor>, std::list<InputColDescriptor>> get_input_desc_impl(
     const RA* ra_node,
@@ -355,41 +449,7 @@ std::pair<std::vector<InputDescriptor>, std::list<InputColDescriptor>> get_input
     input_descs.emplace_back(table_id, nest_level);
   }
   std::unordered_set<InputColDescriptor> input_col_descs_unique;
-  auto all_used_inputs = used_inputs;
-  const auto source_used_inputs = get_join_source_used_inputs(ra_node);
-  all_used_inputs.insert(source_used_inputs.begin(), source_used_inputs.end());
-  for (const auto used_input : all_used_inputs) {
-    const auto input_ra = used_input->getSourceNode();
-    const auto scan_ra = dynamic_cast<const RelScan*>(input_ra);
-    const int table_id = table_id_from_ra(input_ra);
-    const auto it = input_to_nest_level.find(input_ra);
-    if (it == input_to_nest_level.end()) {
-      throw std::runtime_error("Multi-way join not supported");
-    }
-    // Physical columns from a scan node are numbered from 1 in our system.
-    input_col_descs_unique.emplace(scan_ra ? used_input->getIndex() + 1 : used_input->getIndex(), table_id, it->second);
-  }
-  return {input_descs, std::list<InputColDescriptor>(input_col_descs_unique.begin(), input_col_descs_unique.end())};
-}
-
-template <>
-std::pair<std::vector<InputDescriptor>, std::list<InputColDescriptor>> get_input_desc_impl<RelJoin>(
-    const RelJoin* ra_node,
-    const std::unordered_set<const RexInput*>& used_inputs,
-    const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level) {
-  std::vector<InputDescriptor> input_descs;
-  const auto data_sink_node = get_data_sink(ra_node);
-  for (size_t nest_level = 0; nest_level < data_sink_node->inputCount(); ++nest_level) {
-    const auto input_ra = data_sink_node->getInput(nest_level);
-    const int table_id = table_id_from_ra(input_ra);
-    input_descs.emplace_back(table_id, nest_level);
-  }
-  std::unordered_set<InputColDescriptor> input_col_descs_unique;
-  auto all_used_inputs = used_inputs;
-  // TODO(miyu): redirect RexInput in join condition to non-join source
-  const auto source_used_inputs = get_join_source_used_inputs(ra_node);
-  all_used_inputs.insert(source_used_inputs.begin(), source_used_inputs.end());
-  for (const auto used_input : all_used_inputs) {
+  for (const auto used_input : used_inputs) {
     const auto input_ra = used_input->getSourceNode();
     const auto scan_ra = dynamic_cast<const RelScan*>(input_ra);
     const int table_id = table_id_from_ra(input_ra);
@@ -398,6 +458,8 @@ std::pair<std::vector<InputDescriptor>, std::list<InputColDescriptor>> get_input
     // Physical columns from a scan node are numbered from 1 in our system.
     input_col_descs_unique.emplace(scan_ra ? used_input->getIndex() + 1 : used_input->getIndex(), table_id, it->second);
   }
+
+  collect_join_used_input_desc(input_descs, input_col_descs_unique, ra_node, input_to_nest_level);
   return {input_descs, std::list<InputColDescriptor>(input_col_descs_unique.begin(), input_col_descs_unique.end())};
 }
 
