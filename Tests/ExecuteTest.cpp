@@ -359,6 +359,7 @@ TEST(Select, FilterAndSimpleAggregation) {
     c("SELECT SUM(-f) FROM test;", dt);
     c("SELECT SUM(-d) FROM test;", dt);
     c("SELECT COUNT(*) FROM test WHERE ofq >= 0 OR ofq IS NULL;", dt);
+    c("SELECT COUNT(*) AS val FROM test WHERE (test.dd = 0.5 OR test.dd = 3);", dt);
 #ifdef HAVE_CALCITE
     c("SELECT COUNT(*) FROM test WHERE d = 2.2", dt);
     c("SELECT COUNT(*) FROM test WHERE fx + 1 IS NULL;", dt);
