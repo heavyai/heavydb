@@ -74,13 +74,13 @@ void SpeculativeTopNMap::reduce(SpeculativeTopNMap& that) {
   unknown_ += that.unknown_;
 }
 
-ResultRows SpeculativeTopNMap::asRows(const RelAlgExecutionUnit& ra_exe_unit,
-                                      std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-                                      const QueryMemoryDescriptor& query_mem_desc,
-                                      const std::vector<int64_t>& init_agg_vals,  // TODO(alex): needed?
-                                      const Executor* executor,                   // TODO(alex): needed?
-                                      const size_t top_n,
-                                      const bool desc) const {
+RowSetPtr SpeculativeTopNMap::asRows(const RelAlgExecutionUnit& ra_exe_unit,
+                                     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+                                     const QueryMemoryDescriptor& query_mem_desc,
+                                     const std::vector<int64_t>& init_agg_vals,  // TODO(alex): needed?
+                                     const Executor* executor,                   // TODO(alex): needed?
+                                     const size_t top_n,
+                                     const bool desc) const {
   std::vector<SpeculativeTopNEntry> vec;
   for (const auto& kv : map_) {
     vec.emplace_back(SpeculativeTopNEntry{kv.first, kv.second.val, kv.second.unknown});
@@ -97,18 +97,18 @@ ResultRows SpeculativeTopNMap::asRows(const RelAlgExecutionUnit& ra_exe_unit,
     }
   }
   CHECK_EQ(size_t(2), ra_exe_unit.target_exprs.size());
-  ResultRows result(
+  auto result = boost::make_unique<ResultRows>(
       query_mem_desc, ra_exe_unit.target_exprs, executor, row_set_mem_owner, init_agg_vals, ExecutorDeviceType::GPU);
   const bool count_first = dynamic_cast<const Analyzer::AggExpr*>(ra_exe_unit.target_exprs[0]);
   for (size_t i = 0; i < num_rows; ++i) {
-    result.beginRow(vec[i].key);
+    result->beginRow(vec[i].key);
     int64_t col0 = vec[i].key;
     int64_t col1 = vec[i].val;
     if (count_first) {
       std::swap(col0, col1);
     }
-    result.addValue(col0);
-    result.addValue(col1);
+    result->addValue(col0);
+    result->addValue(col1);
   }
   return result;
 }

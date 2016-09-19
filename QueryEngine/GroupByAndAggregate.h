@@ -15,6 +15,7 @@
 #include "SqlTypesLayout.h"
 
 #include <boost/algorithm/string/join.hpp>
+#include <boost/make_unique.hpp>
 #include <glog/logging.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
@@ -210,12 +211,12 @@ class QueryExecutionContext : boost::noncopyable {
                         const bool sort_on_gpu,
                         RenderAllocatorMap*);
 
-  ResultRows getRowSet(const RelAlgExecutionUnit& ra_exe_unit,
-                       const QueryMemoryDescriptor& query_mem_desc,
-                       const bool was_auto_device) const noexcept;
-  ResultRows groupBufferToResults(const size_t i,
-                                  const std::vector<Analyzer::Expr*>& targets,
-                                  const bool was_auto_device) const;
+  RowSetPtr getRowSet(const RelAlgExecutionUnit& ra_exe_unit,
+                      const QueryMemoryDescriptor& query_mem_desc,
+                      const bool was_auto_device) const noexcept;
+  RowSetPtr groupBufferToResults(const size_t i,
+                                 const std::vector<Analyzer::Expr*>& targets,
+                                 const bool was_auto_device) const;
 
   std::vector<int64_t*> launchGpuCode(const RelAlgExecutionUnit& ra_exe_unit,
                                       const std::vector<void*>& cu_functions,

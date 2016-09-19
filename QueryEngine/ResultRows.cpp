@@ -1880,9 +1880,9 @@ void QueryExecutionContext::outputBin(ResultRows& results,
   }
 }
 
-ResultRows QueryExecutionContext::groupBufferToResults(const size_t i,
-                                                       const std::vector<Analyzer::Expr*>& targets,
-                                                       const bool was_auto_device) const {
+RowSetPtr QueryExecutionContext::groupBufferToResults(const size_t i,
+                                                      const std::vector<Analyzer::Expr*>& targets,
+                                                      const bool was_auto_device) const {
   const size_t group_by_col_count{query_mem_desc_.group_col_widths.size()};
   const size_t agg_col_count{query_mem_desc_.agg_col_widths.size()};
   CHECK(!output_columnar_ || group_by_col_count == 1);
@@ -1893,54 +1893,49 @@ ResultRows QueryExecutionContext::groupBufferToResults(const size_t i,
       CHECK_EQ(size_t(1), group_by_col_count);
       const int8_t warp_count = query_mem_desc_.interleavedBins(device_type_) ? executor_->warpSize() : 1;
       if (!query_mem_desc_.interleavedBins(ExecutorDeviceType::GPU) || !was_auto_device) {
-        return ResultRows(query_mem_desc_,
-                          targets,
-                          executor_,
-                          row_set_mem_owner_,
-                          init_agg_vals_,
-                          device_type_,
-                          group_by_buffer,
-                          groups_buffer_entry_count,
-                          query_mem_desc_.min_val,
-                          warp_count);
+        return boost::make_unique<ResultRows>(query_mem_desc_,
+                                              targets,
+                                              executor_,
+                                              row_set_mem_owner_,
+                                              init_agg_vals_,
+                                              device_type_,
+                                              group_by_buffer,
+                                              groups_buffer_entry_count,
+                                              query_mem_desc_.min_val,
+                                              warp_count);
       }
       // Can't do the fast reduction in auto mode for interleaved bins, warp count isn't the same
-      ResultRows results({}, targets, executor_, row_set_mem_owner_, init_agg_vals_, ExecutorDeviceType::CPU);
-      results.addKeylessGroupByBuffer(
+      RowSetPtr results = boost::make_unique<ResultRows>(
+          QueryMemoryDescriptor{}, targets, executor_, row_set_mem_owner_, init_agg_vals_, ExecutorDeviceType::CPU);
+      CHECK(results);
+      results->addKeylessGroupByBuffer(
           group_by_buffer, groups_buffer_entry_count, query_mem_desc_.min_val, warp_count, output_columnar_);
       return results;
     }
-    ResultRows results(query_mem_desc_,
-                       targets,
-                       row_set_mem_owner_,
-                       init_agg_vals_,
-                       group_by_buffer,
-                       groups_buffer_entry_count,
-                       output_columnar_,
-                       col_buffers_,
-                       device_type_,
-                       device_id_);
-    if (results.isInPlace()) {
+    RowSetPtr results = boost::make_unique<ResultRows>(query_mem_desc_,
+                                                       targets,
+                                                       row_set_mem_owner_,
+                                                       init_agg_vals_,
+                                                       group_by_buffer,
+                                                       groups_buffer_entry_count,
+                                                       output_columnar_,
+                                                       col_buffers_,
+                                                       device_type_,
+                                                       device_id_);
+    CHECK(results);
+    if (results->isInPlace()) {
       return results;
     }
     for (size_t bin = 0; bin < groups_buffer_entry_count; ++bin) {
-      outputBin(results, targets, group_by_buffer, bin);
+      outputBin(*results, targets, group_by_buffer, bin);
     }
     return results;
   };
-  ResultRows results(query_mem_desc_,
-                     targets,
-                     row_set_mem_owner_,
-                     init_agg_vals_,
-                     nullptr,
-                     0,
-                     output_columnar_,
-                     col_buffers_,
-                     device_type_,
-                     device_id_);
+  RowSetPtr results{nullptr};
   if (query_mem_desc_.getSmallBufferSizeBytes()) {
     CHECK(!sort_on_gpu_);
     results = impl(query_mem_desc_.entry_count_small, small_group_by_buffers_[i]);
+    CHECK(results);
   }
   CHECK_LT(i, group_by_buffers_.size());
   auto more_results = impl(query_mem_desc_.entry_count, group_by_buffers_[i]);
@@ -1948,6 +1943,10 @@ ResultRows QueryExecutionContext::groupBufferToResults(const size_t i,
     CHECK(!sort_on_gpu_);
     return more_results;
   }
-  results.append(more_results);
-  return results;
+  if (results) {
+    results->append(*more_results);
+    return results;
+  } else {
+    return more_results;
+  }
 }

@@ -671,4 +671,8 @@ class ResultRows {
   int64_t render_time_ms_;
 };
 
+// TODO(miyu): make some uses of this pointer able to
+// hold iterator table as well and move decls elsewhere
+typedef std::unique_ptr<ResultRows> RowSetPtr;
+
 #endif  // QUERYENGINE_RESULTROWS_H

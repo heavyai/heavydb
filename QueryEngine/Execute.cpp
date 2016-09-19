@@ -51,6 +51,7 @@
 #include <cuda.h>
 
 #include <algorithm>
+#include <memory>
 #include <numeric>
 #include <thread>
 #include <unistd.h>
@@ -201,20 +202,20 @@ bool is_unnest(const Analyzer::Expr* expr) {
 
 }  // namespace
 
-ResultRows Executor::executeSelectPlan(const Planner::Plan* plan,
-                                       const int64_t limit,
-                                       const int64_t offset,
-                                       const bool hoist_literals,
-                                       const ExecutorDeviceType device_type,
-                                       const ExecutorOptLevel opt_level,
-                                       const Catalog_Namespace::Catalog& cat,
-                                       size_t& max_groups_buffer_entry_guess,
-                                       int32_t* error_code,
-                                       const Planner::Sort* sort_plan_in,
-                                       const bool allow_multifrag,
-                                       const bool just_explain,
-                                       const bool allow_loop_joins,
-                                       RenderAllocatorMap* render_allocator_map) {
+RowSetPtr Executor::executeSelectPlan(const Planner::Plan* plan,
+                                      const int64_t limit,
+                                      const int64_t offset,
+                                      const bool hoist_literals,
+                                      const ExecutorDeviceType device_type,
+                                      const ExecutorOptLevel opt_level,
+                                      const Catalog_Namespace::Catalog& cat,
+                                      size_t& max_groups_buffer_entry_guess,
+                                      int32_t* error_code,
+                                      const Planner::Sort* sort_plan_in,
+                                      const bool allow_multifrag,
+                                      const bool just_explain,
+                                      const bool allow_loop_joins,
+                                      RenderAllocatorMap* render_allocator_map) {
   if (dynamic_cast<const Planner::Scan*>(plan) || dynamic_cast<const Planner::AggPlan*>(plan) ||
       dynamic_cast<const Planner::Join*>(plan)) {
     row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>();
@@ -266,9 +267,10 @@ ResultRows Executor::executeSelectPlan(const Planner::Plan* plan,
                                   row_set_mem_owner_,
                                   render_allocator_map);
       max_groups_buffer_entry_guess = max_groups_buffer_entry_guess_limit;
-      rows.dropFirstN(offset);
+      CHECK(rows);
+      rows->dropFirstN(offset);
       if (limit) {
-        rows.keepFirstN(limit);
+        rows->keepFirstN(limit);
       }
       return rows;
     }
@@ -297,9 +299,10 @@ ResultRows Executor::executeSelectPlan(const Planner::Plan* plan,
                                     allow_multifrag,
                                     just_explain,
                                     allow_loop_joins);
-      rows.dropFirstN(offset);
+      CHECK(rows);
+      rows->dropFirstN(offset);
       if (limit) {
-        rows.keepFirstN(limit);
+        rows->keepFirstN(limit);
       }
       return rows;
     }
@@ -433,9 +436,10 @@ ResultRows Executor::execute(const Planner::RootPlan* root_plan,
                                    false,
                                    allow_loop_joins,
                                    nullptr);
+          CHECK(rows);
           if (!error_code) {
-            rows.setQueueTime(queue_time_ms);
-            return rows;
+            rows->setQueueTime(queue_time_ms);
+            return *rows;
           }
           // Even the conservative guess failed; it should only happen when we group
           // by a huge cardinality array. Maybe we should throw an exception instead?
@@ -444,8 +448,9 @@ ResultRows Executor::execute(const Planner::RootPlan* root_plan,
           max_groups_buffer_entry_guess *= 2;
         }
       }
-      rows.setQueueTime(queue_time_ms);
-      return rows;
+      CHECK(rows);
+      rows->setQueueTime(queue_time_ms);
+      return *rows;
     }
     case kINSERT: {
       if (root_plan->get_plan_dest() == Planner::RootPlan::kEXPLAIN) {
@@ -3084,20 +3089,25 @@ std::pair<int64_t, int32_t> Executor::reduceResults(const SQLAgg agg,
   CHECK(false);
 }
 
-ResultRows Executor::reduceMultiDeviceResults(
-    const RelAlgExecutionUnit& ra_exe_unit,
-    std::vector<std::pair<ResultRows, std::vector<size_t>>>& results_per_device,
-    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-    const QueryMemoryDescriptor& query_mem_desc,
-    const bool output_columnar) const {
+RowSetPtr Executor::reduceMultiDeviceResults(const RelAlgExecutionUnit& ra_exe_unit,
+                                             std::vector<std::pair<RowSetPtr, std::vector<size_t>>>& results_per_device,
+                                             std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+                                             const QueryMemoryDescriptor& query_mem_desc,
+                                             const bool output_columnar) const {
   if (results_per_device.empty()) {
-    return ResultRows(query_mem_desc, {}, nullptr, nullptr, {}, ExecutorDeviceType::CPU);
+    return boost::make_unique<ResultRows>(query_mem_desc,
+                                          std::vector<Analyzer::Expr*>{},
+                                          nullptr,
+                                          nullptr,
+                                          std::vector<int64_t>{},
+                                          ExecutorDeviceType::CPU);
   }
 
-  auto reduced_results = results_per_device.front().first;
+  RowSetPtr reduced_results = boost::make_unique<ResultRows>(*results_per_device.front().first);
+  CHECK(reduced_results);
 
   for (size_t i = 1; i < results_per_device.size(); ++i) {
-    reduced_results.reduce(results_per_device[i].first, query_mem_desc, output_columnar);
+    reduced_results->reduce(*results_per_device[i].first, query_mem_desc, output_columnar);
   }
 
   row_set_mem_owner->addLiteralStringDict(lit_str_dict_);
@@ -3105,17 +3115,20 @@ ResultRows Executor::reduceMultiDeviceResults(
   return reduced_results;
 }
 
-ResultRows Executor::reduceSpeculativeTopN(const RelAlgExecutionUnit& ra_exe_unit,
-                                           std::vector<std::pair<ResultRows, std::vector<size_t>>>& results_per_device,
-                                           std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-                                           const QueryMemoryDescriptor& query_mem_desc) const {
+RowSetPtr Executor::reduceSpeculativeTopN(const RelAlgExecutionUnit& ra_exe_unit,
+                                          std::vector<std::pair<RowSetPtr, std::vector<size_t>>>& results_per_device,
+                                          std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+                                          const QueryMemoryDescriptor& query_mem_desc) const {
   if (results_per_device.size() == 1) {
-    return results_per_device.front().first;
+    return std::move(results_per_device.front().first);
   }
   const auto top_n = ra_exe_unit.sort_info.limit + ra_exe_unit.sort_info.offset;
   SpeculativeTopNMap m;
   for (const auto& result : results_per_device) {
-    SpeculativeTopNMap that(result.first,
+    if (!result.first) {
+      continue;
+    }
+    SpeculativeTopNMap that(*result.first,
                             ra_exe_unit.target_exprs,
                             std::max(size_t(10000 * std::max(1, static_cast<int>(log(top_n)))), top_n));
     m.reduce(that);
@@ -3184,11 +3197,16 @@ std::vector<std::string> get_agg_fnames(const std::vector<Analyzer::Expr*>& targ
   return result;
 }
 
-ResultRows results_union(std::vector<std::pair<ResultRows, std::vector<size_t>>>& results_per_device) {
+RowSetPtr results_union(std::vector<std::pair<RowSetPtr, std::vector<size_t>>>& results_per_device) {
   if (results_per_device.empty()) {
-    return ResultRows({}, {}, nullptr, nullptr, {}, ExecutorDeviceType::CPU);
+    return boost::make_unique<ResultRows>(QueryMemoryDescriptor{},
+                                          std::vector<Analyzer::Expr*>{},
+                                          nullptr,
+                                          nullptr,
+                                          std::vector<int64_t>{},
+                                          ExecutorDeviceType::CPU);
   }
-  typedef std::pair<ResultRows, std::vector<size_t>> IndexedResultRows;
+  typedef std::pair<RowSetPtr, std::vector<size_t>> IndexedResultRows;
   std::sort(results_per_device.begin(),
             results_per_device.end(),
             [](const IndexedResultRows& lhs, const IndexedResultRows& rhs) {
@@ -3196,26 +3214,27 @@ ResultRows results_union(std::vector<std::pair<ResultRows, std::vector<size_t>>>
     CHECK_EQ(size_t(1), rhs.second.size());
     return lhs.second < rhs.second;
   });
-  auto all_results = results_per_device.front().first;
+  RowSetPtr all_results = boost::make_unique<ResultRows>(*results_per_device.front().first);
+  CHECK(all_results);
   for (size_t dev_idx = 1; dev_idx < results_per_device.size(); ++dev_idx) {
-    all_results.append(results_per_device[dev_idx].first);
+    all_results->append(*results_per_device[dev_idx].first);
   }
   return all_results;
 }
 
 }  // namespace
 
-ResultRows Executor::executeResultPlan(const Planner::Result* result_plan,
-                                       const bool hoist_literals,
-                                       const ExecutorDeviceType device_type,
-                                       const ExecutorOptLevel opt_level,
-                                       const Catalog_Namespace::Catalog& cat,
-                                       size_t& max_groups_buffer_entry_guess,
-                                       int32_t* error_code,
-                                       const Planner::Sort* sort_plan,
-                                       const bool allow_multifrag,
-                                       const bool just_explain,
-                                       const bool allow_loop_joins) {
+RowSetPtr Executor::executeResultPlan(const Planner::Result* result_plan,
+                                      const bool hoist_literals,
+                                      const ExecutorDeviceType device_type,
+                                      const ExecutorOptLevel opt_level,
+                                      const Catalog_Namespace::Catalog& cat,
+                                      size_t& max_groups_buffer_entry_guess,
+                                      int32_t* error_code,
+                                      const Planner::Sort* sort_plan,
+                                      const bool allow_multifrag,
+                                      const bool just_explain,
+                                      const bool allow_loop_joins) {
   const auto agg_plan = dynamic_cast<const Planner::AggPlan*>(result_plan->get_child_plan());
   if (!agg_plan) {  // TODO(alex)
     throw std::runtime_error("Query not supported yet, child plan needs to be an aggregate plan.");
@@ -3281,9 +3300,13 @@ ResultRows Executor::executeResultPlan(const Planner::Result* result_plan,
                                          order_entries, SortAlgorithm::Default, 0, 0,
                                         },
                                         0};
-
   if (*error_code) {
-    return ResultRows({}, {}, nullptr, nullptr, {}, ExecutorDeviceType::CPU);
+    return boost::make_unique<ResultRows>(QueryMemoryDescriptor{},
+                                          std::vector<Analyzer::Expr*>{},
+                                          nullptr,
+                                          nullptr,
+                                          std::vector<int64_t>{},
+                                          ExecutorDeviceType::CPU);
   }
   const auto& targets = result_plan->get_targetlist();
   CHECK(!targets.empty());
@@ -3300,7 +3323,8 @@ ResultRows Executor::executeResultPlan(const Planner::Result* result_plan,
   for (auto in_col : agg_plan->get_targetlist()) {
     target_types.push_back(in_col->get_expr()->get_type_info());
   }
-  ColumnarResults result_columns(result_rows, in_col_count, target_types);
+  CHECK(result_rows);
+  ColumnarResults result_columns(*result_rows, in_col_count, target_types);
   std::vector<llvm::Value*> col_heads;
   // Nested query, let the compiler know
   ResetIsNested reset_is_nested(this);
@@ -3309,9 +3333,14 @@ ResultRows Executor::executeResultPlan(const Planner::Result* result_plan,
   for (auto target_entry : targets) {
     target_exprs.emplace_back(target_entry->get_expr());
   }
-  const auto row_count = result_rows.rowCount();
+  const auto row_count = result_rows->rowCount();
   if (!row_count) {
-    return ResultRows({}, {}, nullptr, nullptr, {}, ExecutorDeviceType::CPU);
+    return boost::make_unique<ResultRows>(QueryMemoryDescriptor{},
+                                          std::vector<Analyzer::Expr*>{},
+                                          nullptr,
+                                          nullptr,
+                                          std::vector<int64_t>{},
+                                          ExecutorDeviceType::CPU);
   }
   std::vector<ColWidths> agg_col_widths;
   for (auto wid : get_col_byte_widths(target_exprs)) {
@@ -3378,18 +3407,18 @@ ResultRows Executor::executeResultPlan(const Planner::Result* result_plan,
   return query_exe_context->groupBufferToResults(0, target_exprs, false);
 }
 
-ResultRows Executor::executeSortPlan(const Planner::Sort* sort_plan,
-                                     const int64_t limit,
-                                     const int64_t offset,
-                                     const bool hoist_literals,
-                                     const ExecutorDeviceType device_type,
-                                     const ExecutorOptLevel opt_level,
-                                     const Catalog_Namespace::Catalog& cat,
-                                     size_t& max_groups_buffer_entry_guess,
-                                     int32_t* error_code,
-                                     const bool allow_multifrag,
-                                     const bool just_explain,
-                                     const bool allow_loop_joins) {
+RowSetPtr Executor::executeSortPlan(const Planner::Sort* sort_plan,
+                                    const int64_t limit,
+                                    const int64_t offset,
+                                    const bool hoist_literals,
+                                    const ExecutorDeviceType device_type,
+                                    const ExecutorOptLevel opt_level,
+                                    const Catalog_Namespace::Catalog& cat,
+                                    size_t& max_groups_buffer_entry_guess,
+                                    int32_t* error_code,
+                                    const bool allow_multifrag,
+                                    const bool just_explain,
+                                    const bool allow_loop_joins) {
   *error_code = 0;
   auto rows_to_sort = executeSelectPlan(sort_plan->get_child_plan(),
                                         0,
@@ -3405,14 +3434,15 @@ ResultRows Executor::executeSortPlan(const Planner::Sort* sort_plan,
                                         just_explain,
                                         allow_loop_joins,
                                         nullptr);
+  CHECK(rows_to_sort);
   if (just_explain || *error_code == ERR_OUT_OF_GPU_MEM) {
     return rows_to_sort;
   }
-  rows_to_sort.sort(sort_plan->get_order_entries(), sort_plan->get_remove_duplicates(), limit + offset);
+  rows_to_sort->sort(sort_plan->get_order_entries(), sort_plan->get_remove_duplicates(), limit + offset);
   if (limit || offset) {
-    rows_to_sort.dropFirstN(offset);
+    rows_to_sort->dropFirstN(offset);
     if (limit) {
-      rows_to_sort.keepFirstN(limit);
+      rows_to_sort->keepFirstN(limit);
     }
   }
   return rows_to_sort;
@@ -3479,16 +3509,16 @@ bool is_sample_query(const RelAlgExecutionUnit& ra_exe_unit) {
 
 }  // namespace
 
-ResultRows Executor::executeWorkUnit(int32_t* error_code,
-                                     size_t& max_groups_buffer_entry_guess,
-                                     const bool is_agg,
-                                     const std::vector<Fragmenter_Namespace::TableInfo>& query_infos,
-                                     const RelAlgExecutionUnit& ra_exe_unit,
-                                     const CompilationOptions& co,
-                                     const ExecutionOptions& options,
-                                     const Catalog_Namespace::Catalog& cat,
-                                     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-                                     RenderAllocatorMap* render_allocator_map) {
+RowSetPtr Executor::executeWorkUnit(int32_t* error_code,
+                                    size_t& max_groups_buffer_entry_guess,
+                                    const bool is_agg,
+                                    const std::vector<Fragmenter_Namespace::TableInfo>& query_infos,
+                                    const RelAlgExecutionUnit& ra_exe_unit,
+                                    const CompilationOptions& co,
+                                    const ExecutionOptions& options,
+                                    const Catalog_Namespace::Catalog& cat,
+                                    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+                                    RenderAllocatorMap* render_allocator_map) {
   const auto device_type = getDeviceTypeForTargets(ra_exe_unit, co.device_type_);
   CHECK(!query_infos.empty());
   if (!max_groups_buffer_entry_guess) {
@@ -3585,7 +3615,12 @@ ResultRows Executor::executeWorkUnit(int32_t* error_code,
       continue;
     }
     if (*error_code == ERR_SPECULATIVE_TOP_OOM) {
-      return ResultRows({}, {}, nullptr, nullptr, {}, ExecutorDeviceType::CPU);
+      return boost::make_unique<ResultRows>(QueryMemoryDescriptor{},
+                                            std::vector<Analyzer::Expr*>{},
+                                            nullptr,
+                                            nullptr,
+                                            std::vector<int64_t>{},
+                                            ExecutorDeviceType::CPU);
     }
     if (is_agg) {
       try {
@@ -3596,16 +3631,16 @@ ResultRows Executor::executeWorkUnit(int32_t* error_code,
                                        execution_dispatch.outputColumnar());
       } catch (ReductionRanOutOfSlots&) {
         *error_code = ERR_OUT_OF_SLOTS;
-        return ResultRows(query_mem_desc,
-                          plan_state_->target_exprs_,
-                          nullptr,
-                          {},
-                          nullptr,
-                          0,
-                          false,
-                          {},
-                          execution_dispatch.getDeviceType(),
-                          -1);
+        return boost::make_unique<ResultRows>(query_mem_desc,
+                                              plan_state_->target_exprs_,
+                                              nullptr,
+                                              std::vector<int64_t>{},
+                                              nullptr,
+                                              0,
+                                              false,
+                                              std::vector<std::vector<const int8_t*>>{},
+                                              execution_dispatch.getDeviceType(),
+                                              -1);
       } catch (OverflowOrUnderflow&) {
         crt_min_byte_width <<= 1;
         continue;
@@ -3615,10 +3650,15 @@ ResultRows Executor::executeWorkUnit(int32_t* error_code,
 
   } while (static_cast<size_t>(crt_min_byte_width) <= sizeof(int64_t));
 
-  return ResultRows({}, {}, nullptr, nullptr, {}, ExecutorDeviceType::CPU);
+  return boost::make_unique<ResultRows>(QueryMemoryDescriptor{},
+                                        std::vector<Analyzer::Expr*>{},
+                                        nullptr,
+                                        nullptr,
+                                        std::vector<int64_t>{},
+                                        ExecutorDeviceType::CPU);
 }
 
-ResultRows Executor::executeExplain(const ExecutionDispatch& execution_dispatch) {
+RowSetPtr Executor::executeExplain(const ExecutionDispatch& execution_dispatch) {
   std::string explained_plan;
   const auto llvm_ir_cpu = execution_dispatch.getIR(ExecutorDeviceType::CPU);
   if (!llvm_ir_cpu.empty()) {
@@ -3629,7 +3669,7 @@ ResultRows Executor::executeExplain(const ExecutionDispatch& execution_dispatch)
     explained_plan +=
         (std::string(llvm_ir_cpu.empty() ? "" : "\n") + "IR for the GPU:\n===============\n" + llvm_ir_gpu);
   }
-  return ResultRows(explained_plan);
+  return boost::make_unique<ResultRows>(explained_plan);
 }
 
 // Looks at the targets and returns a feasible device type. We only punt
@@ -3802,8 +3842,7 @@ void Executor::ExecutionDispatch::run(const ExecutorDeviceType chosen_device_typ
   }
   CHECK(query_exe_context);
   int32_t err{0};
-  ResultRows device_results(
-      compilation_result.query_mem_desc, {}, nullptr, {}, nullptr, 0, false, {}, chosen_device_type, chosen_device_id);
+  RowSetPtr device_results{nullptr};
   uint32_t start_rowid{0};
   if (rowid_lookup_key >= 0) {
     CHECK_LE(frag_ids.size(), size_t(1));
@@ -3850,8 +3889,8 @@ void Executor::ExecutionDispatch::run(const ExecutorDeviceType chosen_device_typ
     if (err) {
       *error_code_ = err;
     }
-    if (!device_results.definitelyHasNoRows()) {
-      all_fragment_results_.emplace_back(device_results, frag_ids.begin()->second);
+    if (device_results && !device_results->definitelyHasNoRows()) {
+      all_fragment_results_.emplace_back(std::move(device_results), frag_ids.begin()->second);
     }
   }
 }
@@ -4021,7 +4060,7 @@ const std::vector<std::unique_ptr<QueryExecutionContext>>& Executor::ExecutionDi
   return query_contexts_;
 }
 
-std::vector<std::pair<ResultRows, std::vector<size_t>>>& Executor::ExecutionDispatch::getFragmentResults() {
+std::vector<std::pair<RowSetPtr, std::vector<size_t>>>& Executor::ExecutionDispatch::getFragmentResults() {
   return all_fragment_results_;
 }
 
@@ -4036,8 +4075,8 @@ int64_t inline_null_val(const SQLTypeInfo& ti) {
   return inline_int_null_val(ti);
 }
 
-ResultRows build_row_for_empty_input(const std::vector<Analyzer::Expr*>& target_exprs_in,
-                                     const QueryMemoryDescriptor& query_mem_desc) {
+RowSetPtr build_row_for_empty_input(const std::vector<Analyzer::Expr*>& target_exprs_in,
+                                    const QueryMemoryDescriptor& query_mem_desc) {
   std::vector<std::shared_ptr<Analyzer::Expr>> target_exprs_owned_copies;
   std::vector<Analyzer::Expr*> target_exprs;
   for (const auto target_expr : target_exprs_in) {
@@ -4054,17 +4093,19 @@ ResultRows build_row_for_empty_input(const std::vector<Analyzer::Expr*>& target_
     target_exprs_owned_copies.push_back(target_expr_copy);
     target_exprs.push_back(target_expr_copy.get());
   }
-  auto result_rows = ResultRows(query_mem_desc, target_exprs, nullptr, nullptr, {}, ExecutorDeviceType::CPU);
-  result_rows.beginRow();
+  auto result_rows = boost::make_unique<ResultRows>(
+      query_mem_desc, target_exprs, nullptr, nullptr, std::vector<int64_t>{}, ExecutorDeviceType::CPU);
+
+  result_rows->beginRow();
   for (const auto target_expr : target_exprs) {
     const auto agg_info = target_info(target_expr);
     CHECK(agg_info.is_agg);
     if (agg_info.agg_kind == kCOUNT) {
-      result_rows.addValue(0);
+      result_rows->addValue(0);
     } else if (agg_info.agg_kind == kAVG) {
-      result_rows.addValue(inline_null_val(agg_info.agg_arg_type), 0);
+      result_rows->addValue(inline_null_val(agg_info.agg_arg_type), 0);
     } else {
-      result_rows.addValue(inline_null_val(agg_info.sql_type));
+      result_rows->addValue(inline_null_val(agg_info.sql_type));
     }
   }
   return result_rows;
@@ -4072,11 +4113,11 @@ ResultRows build_row_for_empty_input(const std::vector<Analyzer::Expr*>& target_
 
 }  // namespace
 
-ResultRows Executor::collectAllDeviceResults(ExecutionDispatch& execution_dispatch,
-                                             const std::vector<Analyzer::Expr*>& target_exprs,
-                                             const QueryMemoryDescriptor& query_mem_desc,
-                                             std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-                                             const bool output_columnar) {
+RowSetPtr Executor::collectAllDeviceResults(ExecutionDispatch& execution_dispatch,
+                                            const std::vector<Analyzer::Expr*>& target_exprs,
+                                            const QueryMemoryDescriptor& query_mem_desc,
+                                            std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+                                            const bool output_columnar) {
   const auto& ra_exe_unit = execution_dispatch.getExecutionUnit();
   for (const auto& query_exe_context : execution_dispatch.getQueryContexts()) {
     if (!query_exe_context) {
@@ -4365,7 +4406,7 @@ class OutVecOwner {
 int32_t Executor::executePlanWithoutGroupBy(const RelAlgExecutionUnit& ra_exe_unit,
                                             const CompilationResult& compilation_result,
                                             const bool hoist_literals,
-                                            ResultRows& results,
+                                            RowSetPtr& results,
                                             const std::vector<Analyzer::Expr*>& target_exprs,
                                             const ExecutorDeviceType device_type,
                                             std::vector<std::vector<const int8_t*>>& col_buffers,
@@ -4377,8 +4418,8 @@ int32_t Executor::executePlanWithoutGroupBy(const RelAlgExecutionUnit& ra_exe_un
                                             const uint32_t start_rowid,
                                             const uint32_t num_tables,
                                             RenderAllocatorMap* render_allocator_map) noexcept {
+  CHECK(!results);
   if (col_buffers.empty()) {
-    results = ResultRows({}, {}, nullptr, nullptr, {}, device_type);
     return 0;
   }
   int32_t error_code = device_type == ExecutorDeviceType::GPU ? 0 : start_rowid;
@@ -4431,13 +4472,14 @@ int32_t Executor::executePlanWithoutGroupBy(const RelAlgExecutionUnit& ra_exe_un
   if (error_code == Executor::ERR_OVERFLOW_OR_UNDERFLOW || error_code == Executor::ERR_DIV_BY_ZERO) {
     return error_code;
   }
-  results = ResultRows(query_exe_context->query_mem_desc_,
-                       target_exprs,
-                       this,
-                       query_exe_context->row_set_mem_owner_,
-                       query_exe_context->init_agg_vals_,
-                       device_type);
-  results.beginRow();
+  results = boost::make_unique<ResultRows>(query_exe_context->query_mem_desc_,
+                                           target_exprs,
+                                           this,
+                                           query_exe_context->row_set_mem_owner_,
+                                           query_exe_context->init_agg_vals_,
+                                           device_type);
+  CHECK(results);
+  results->beginRow();
   size_t out_vec_idx = 0;
   for (const auto target_expr : target_exprs) {
     const auto agg_info = target_info(target_expr);
@@ -4469,9 +4511,9 @@ int32_t Executor::executePlanWithoutGroupBy(const RelAlgExecutionUnit& ra_exe_un
       if (error_code) {
         break;
       }
-      results.addValue(val1, val2);
+      results->addValue(val1, val2);
     } else {
-      results.addValue(val1);
+      results->addValue(val1);
     }
     ++out_vec_idx;
   }
@@ -4481,7 +4523,7 @@ int32_t Executor::executePlanWithoutGroupBy(const RelAlgExecutionUnit& ra_exe_un
 int32_t Executor::executePlanWithGroupBy(const RelAlgExecutionUnit& ra_exe_unit,
                                          const CompilationResult& compilation_result,
                                          const bool hoist_literals,
-                                         ResultRows& results,
+                                         RowSetPtr& results,
                                          const ExecutorDeviceType device_type,
                                          std::vector<std::vector<const int8_t*>>& col_buffers,
                                          const QueryExecutionContext* query_exe_context,
@@ -4494,8 +4536,8 @@ int32_t Executor::executePlanWithGroupBy(const RelAlgExecutionUnit& ra_exe_unit,
                                          const uint32_t start_rowid,
                                          const uint32_t num_tables,
                                          RenderAllocatorMap* render_allocator_map) noexcept {
+  CHECK(!results);
   if (col_buffers.empty()) {
-    results = ResultRows({}, {}, nullptr, nullptr, {}, device_type);
     return 0;
   }
   CHECK_NE(ra_exe_unit.groupby_exprs.size(), size_t(0));
@@ -4555,7 +4597,8 @@ int32_t Executor::executePlanWithGroupBy(const RelAlgExecutionUnit& ra_exe_unit,
     CHECK(!query_exe_context->query_mem_desc_.sortOnGpu());
     results = query_exe_context->getRowSet(ra_exe_unit, query_exe_context->query_mem_desc_, was_auto_device);
   }
-  if (error_code && (render_allocator_map || (!scan_limit || results.rowCount() < static_cast<size_t>(scan_limit)))) {
+  if (error_code &&
+      (render_allocator_map || (!scan_limit || (results && results->rowCount() < static_cast<size_t>(scan_limit))))) {
     return error_code;  // unlucky, not enough results and we ran out of slots
   }
   return 0;

@@ -33,6 +33,7 @@ struct SpeculativeTopNEntry {
 class Executor;
 struct QueryMemoryDescriptor;
 class ResultRows;
+typedef std::unique_ptr<ResultRows> RowSetPtr;
 struct RelAlgExecutionUnit;
 class RowSetMemoryOwner;
 namespace Analyzer {
@@ -47,13 +48,13 @@ class SpeculativeTopNMap {
 
   void reduce(SpeculativeTopNMap& that);
 
-  ResultRows asRows(const RelAlgExecutionUnit& ra_exe_unit,
-                    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-                    const QueryMemoryDescriptor& query_mem_desc,
-                    const std::vector<int64_t>& init_agg_vals,  // TODO(alex): needed?
-                    const Executor* executor,                   // TODO(alex): needed?
-                    const size_t top_n,
-                    const bool desc) const;
+  RowSetPtr asRows(const RelAlgExecutionUnit& ra_exe_unit,
+                   std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+                   const QueryMemoryDescriptor& query_mem_desc,
+                   const std::vector<int64_t>& init_agg_vals,  // TODO(alex): needed?
+                   const Executor* executor,                   // TODO(alex): needed?
+                   const size_t top_n,
+                   const bool desc) const;
 
  private:
   std::unordered_map<int64_t, SpeculativeTopNVal> map_;

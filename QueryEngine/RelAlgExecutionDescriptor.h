@@ -9,16 +9,37 @@ class ResultRows;
 class ExecutionResult {
  public:
   ExecutionResult(const ResultRows& rows, const std::vector<TargetMetaInfo>& targets_meta)
-      : rows_(rows), targets_meta_(targets_meta) {}
+      : rows_(boost::make_unique<ResultRows>(rows)), targets_meta_(targets_meta) {}
 
-  const ResultRows& getRows() const { return rows_; }
+  ExecutionResult(RowSetPtr&& rows, const std::vector<TargetMetaInfo>& targets_meta)
+      : rows_(std::move(rows)), targets_meta_(targets_meta) {
+    CHECK(rows_);
+  }
+
+  ExecutionResult(const ExecutionResult& that)
+      : rows_(boost::make_unique<ResultRows>(*that.rows_)), targets_meta_(that.targets_meta_) {}
+
+  ExecutionResult(ExecutionResult&& that)
+      : rows_(std::move(that.rows_)), targets_meta_(std::move(that.targets_meta_)) {}
+
+  ExecutionResult& operator=(const ExecutionResult& that) {
+    rows_ = boost::make_unique<ResultRows>(*that.rows_);
+    CHECK(rows_);
+    targets_meta_ = that.targets_meta_;
+    return *this;
+  }
+
+  const ResultRows& getRows() const {
+    CHECK(rows_);
+    return *rows_;
+  }
 
   const std::vector<TargetMetaInfo>& getTargetsMeta() const { return targets_meta_; }
 
-  void setQueueTime(const int64_t queue_time_ms) { rows_.setQueueTime(queue_time_ms); }
+  void setQueueTime(const int64_t queue_time_ms) { rows_->setQueueTime(queue_time_ms); }
 
  private:
-  ResultRows rows_;
+  RowSetPtr rows_;
   std::vector<TargetMetaInfo> targets_meta_;
 };
 
