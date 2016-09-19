@@ -1050,6 +1050,7 @@ class Executor {
   friend class QueryExecutionContext;
   friend class ResultRows;
   friend class ResultSet;
+  friend class IteratorTable;
   friend class InValuesBitmap;
   friend class JoinHashTable;
   friend class QueryRewriter;

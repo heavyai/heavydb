@@ -217,38 +217,6 @@ const bool sum_check_flag = true;
     }                                                                                                \
   }
 
-namespace {
-
-int64_t get_component(const int8_t* group_by_buffer, const size_t comp_sz, const size_t index = 0) {
-  int64_t ret = std::numeric_limits<int64_t>::min();
-  switch (comp_sz) {
-    case 1: {
-      ret = group_by_buffer[index];
-      break;
-    }
-    case 2: {
-      const int16_t* buffer_ptr = reinterpret_cast<const int16_t*>(group_by_buffer);
-      ret = buffer_ptr[index];
-      break;
-    }
-    case 4: {
-      const int32_t* buffer_ptr = reinterpret_cast<const int32_t*>(group_by_buffer);
-      ret = buffer_ptr[index];
-      break;
-    }
-    case 8: {
-      const int64_t* buffer_ptr = reinterpret_cast<const int64_t*>(group_by_buffer);
-      ret = buffer_ptr[index];
-      break;
-    }
-    default:
-      CHECK(false);
-  }
-  return ret;
-}
-
-}  // namespace
-
 bool ResultRows::reduceSingleRow(const int8_t* row_ptr,
                                  const int8_t warp_count,
                                  const bool is_columnar,

@@ -20,6 +20,7 @@ set(query_engine_source_files
     GroupByAndAggregate.cpp
     InValuesBitmap.cpp
     InputMetadata.cpp
+    IteratorTable.cpp
     MaxwellCodegenPatch.cpp
     NvidiaKernel.cpp
     OutputBufferInitialization.cpp
