@@ -581,6 +581,10 @@ std::list<Analyzer::OrderEntry> get_order_entries(const RelSort* sort) {
 }
 
 size_t get_scan_limit(const RelAlgNode* ra, const size_t limit) {
+  const auto aggregate = dynamic_cast<const RelAggregate*>(ra);
+  if (aggregate) {
+    return 0;
+  }
   const auto compound = dynamic_cast<const RelCompound*>(ra);
   return (compound && compound->isAggregate()) ? 0 : limit;
 }
