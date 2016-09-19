@@ -1111,93 +1111,125 @@ Planner::RootPlan* translate_query(const std::string& query, const Catalog_Names
       plan, kSELECT, tds[0]->tableId, {}, cat, logical_sort_info.limit, logical_sort_info.offset);
 }
 
-std::string pg_shim(const std::string& query) {
-  auto result = query;
-  boost::ireplace_all(result, "unnest", "PG_UNNEST");
-  {
-    boost::smatch what;
-    boost::regex cast_true_expr{R"(CAST\s*\(\s*'t'\s+AS\s+boolean\s*\))", boost::regex::extended | boost::regex::icase};
-    if (boost::regex_search(result, what, cast_true_expr)) {
-      result = boost::regex_replace(query, cast_true_expr, "true");
+std::vector<std::pair<size_t, size_t>> find_string_literals(const std::string& query) {
+  boost::regex literal_string_regex{R"(([^']+)('(?:[^']+|'')+'))", boost::regex::perl};
+  boost::smatch what;
+  auto it = query.begin();
+  auto prev_it = it;
+  std::vector<std::pair<size_t, size_t>> positions;
+  while (true) {
+    if (!boost::regex_search(it, query.end(), what, literal_string_regex)) {
+      break;
+    }
+    CHECK_GT(what[1].length(), 0);
+    prev_it = it;
+    it += what.length();
+    positions.emplace_back(prev_it + what[1].length() - query.begin(), it - query.begin());
+  }
+  return positions;
+}
+
+ssize_t inside_string_literal(const size_t start,
+                              const size_t length,
+                              const std::vector<std::pair<size_t, size_t>>& literal_positions) {
+  const auto end = start + length;
+  for (const auto& literal_position : literal_positions) {
+    if (literal_position.first <= start && end <= literal_position.second) {
+      return literal_position.second;
     }
   }
+  return -1;
+}
+
+void apply_shim(std::string& result,
+                const boost::regex& reg_expr,
+                const std::function<void(std::string&, const boost::smatch&)>& shim_fn) {
+  boost::smatch what;
+  std::vector<std::pair<size_t, size_t>> lit_pos = find_string_literals(result);
+  auto start_it = result.cbegin();
+  auto end_it = result.cend();
+  while (true) {
+    if (!boost::regex_search(start_it, end_it, what, reg_expr)) {
+      break;
+    }
+    const auto next_start = inside_string_literal(what.position(), what.length(), lit_pos);
+    if (next_start >= 0) {
+      start_it = result.cbegin() + next_start;
+    } else {
+      shim_fn(result, what);
+      lit_pos = find_string_literals(result);
+      start_it = result.cbegin();
+      end_it = result.cend();
+    }
+  }
+}
+
+std::string pg_shim(const std::string& query) {
+  auto result = query;
   {
-    boost::smatch what;
+    boost::regex unnest_expr{R"((\s+)(unnest)\s*\()", boost::regex::extended | boost::regex::icase};
+    apply_shim(result, unnest_expr, [](std::string& result, const boost::smatch& what) {
+      result.replace(what.position(), what.length(), what[1] + "PG_UNNEST(");
+    });
+  }
+  {
+    boost::regex cast_true_expr{R"(CAST\s*\(\s*'t'\s+AS\s+boolean\s*\))", boost::regex::extended | boost::regex::icase};
+    apply_shim(result, cast_true_expr, [](std::string& result, const boost::smatch& what) {
+      result.replace(what.position(), what.length(), "true");
+    });
+  }
+  {
     boost::regex cast_false_expr{R"(CAST\s*\(\s*'f'\s+AS\s+boolean\s*\))",
                                  boost::regex::extended | boost::regex::icase};
-    if (boost::regex_search(result, what, cast_false_expr)) {
-      result = boost::regex_replace(query, cast_false_expr, "false");
-    }
+    apply_shim(result, cast_false_expr, [](std::string& result, const boost::smatch& what) {
+      result.replace(what.position(), what.length(), "false");
+    });
   }
   {
     boost::regex ilike_expr{R"((\s+)([^\s]+)\s+ilike\s+('(?:[^']+|'')+')(\s+escape(\s+('[^']+')))?)",
                             boost::regex::perl | boost::regex::icase};
-    boost::smatch what;
-    while (true) {
-      if (!boost::regex_search(result, what, ilike_expr)) {
-        break;
-      }
+    apply_shim(result, ilike_expr, [](std::string& result, const boost::smatch& what) {
       std::string esc = what[6];
       result.replace(what.position(),
                      what.length(),
                      what[1] + "PG_ILIKE(" + what[2] + ", " + what[3] + (esc.empty() ? "" : ", " + esc) + ")");
-    }
+    });
   }
   {
     boost::regex regexp_expr{R"((\s+)([^\s]+)\s+REGEXP\s+('(?:[^']+|'')+')(\s+escape(\s+('[^']+')))?)",
                              boost::regex::perl | boost::regex::icase};
-    boost::smatch what;
-    while (true) {
-      if (!boost::regex_search(result, what, regexp_expr)) {
-        break;
-      }
+    apply_shim(result, regexp_expr, [](std::string& result, const boost::smatch& what) {
       std::string esc = what[6];
       result.replace(what.position(),
                      what.length(),
                      what[1] + "REGEXP_LIKE(" + what[2] + ", " + what[3] + (esc.empty() ? "" : ", " + esc) + ")");
-    }
+    });
   }
   {
     boost::regex extract_expr{R"(extract\s*\(\s*(\w+)\s+from\s+(.+)\))", boost::regex::extended | boost::regex::icase};
-    boost::smatch what;
-    while (true) {
-      if (!boost::regex_search(result, what, extract_expr)) {
-        break;
-      }
+    apply_shim(result, extract_expr, [](std::string& result, const boost::smatch& what) {
       result.replace(what.position(), what.length(), "PG_EXTRACT('" + what[1] + "', " + what[2] + ")");
-    }
+    });
   }
   {
-    boost::regex extract_expr{R"(date_trunc\s*\(\s*(\w+)\s*,(.*)\))", boost::regex::extended | boost::regex::icase};
-    boost::smatch what;
-    while (true) {
-      if (!boost::regex_search(result, what, extract_expr)) {
-        break;
-      }
+    boost::regex date_trunc_expr{R"(date_trunc\s*\(\s*(\w+)\s*,(.*)\))", boost::regex::extended | boost::regex::icase};
+    apply_shim(result, date_trunc_expr, [](std::string& result, const boost::smatch& what) {
       result.replace(what.position(), what.length(), "PG_DATE_TRUNC('" + what[1] + "', " + what[2] + ")");
-    }
+    });
   }
   {
     boost::regex quant_expr{R"(\s(any|all)\s+([^(\s|;)]+))", boost::regex::extended | boost::regex::icase};
-    boost::smatch what;
-    while (true) {
-      if (!boost::regex_search(result, what, quant_expr)) {
-        break;
-      }
+    apply_shim(result, quant_expr, [](std::string& result, const boost::smatch& what) {
       std::string qual_name = what[1];
       std::string quant_fname{boost::iequals(qual_name, "any") ? "PG_ANY" : "PG_ALL"};
       result.replace(what.position(), what.length(), quant_fname + "(" + what[2] + ")");
-    }
+    });
   }
   {
     boost::regex immediate_cast_expr{R"(TIMESTAMP\(0\)\s+('[^']+'))", boost::regex::extended | boost::regex::icase};
-    boost::smatch what;
-    while (true) {
-      if (!boost::regex_search(result, what, immediate_cast_expr)) {
-        break;
-      }
+    apply_shim(result, immediate_cast_expr, [](std::string& result, const boost::smatch& what) {
       result.replace(what.position(), what.length(), "CAST(" + what[1] + " AS TIMESTAMP(0))");
-    }
+    });
   }
   return result;
 }

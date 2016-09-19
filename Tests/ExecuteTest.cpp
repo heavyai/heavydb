@@ -2041,6 +2041,15 @@ TEST(Select, RuntimeFunctions) {
 }
 #endif  // HAVE_RAVM
 
+#ifdef HAVE_CALCITE
+TEST(Select, PgShim) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT str, SUM(x), COUNT(str) FROM test WHERE \"y\" = 42 AND str = 'Shim All The Things!' GROUP BY str;", dt);
+  }
+}
+#endif  // HAVE_CALCITE
+
 int main(int argc, char** argv) {
   google::InitGoogleLogging(argv[0]);
   LOG(INFO) << " after initialization";
