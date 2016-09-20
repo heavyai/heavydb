@@ -28,6 +28,7 @@ class IteratorTable {
                 int64_t* group_by_buffer,
                 const size_t groups_buffer_entry_count,
                 const std::vector<std::vector<const int8_t*>>& col_buffers,
+                const ssize_t frag_id,
                 const ExecutorDeviceType device_type,
                 const int device_id);
 
@@ -90,6 +91,11 @@ class IteratorTable {
 
 typedef std::unique_ptr<IteratorTable> IterTabPtr;
 
-typedef boost::variant<IterTabPtr, RowSetPtr> ResultPtr;
+typedef boost::variant<RowSetPtr, IterTabPtr> ResultPtr;
+
+enum RESPTR_TYPE {
+  ROWSET,
+  ITERTAB,
+};
 
 #endif  // QUERYENGINE_ITERATORTABLE_H

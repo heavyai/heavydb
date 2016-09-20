@@ -491,7 +491,7 @@ class Executor {
     const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
     int32_t* error_code_;
     RenderAllocatorMap* render_allocator_map_;
-    std::vector<std::pair<RowSetPtr, std::vector<size_t>>> all_fragment_results_;
+    std::vector<std::pair<ResultPtr, std::vector<size_t>>> all_fragment_results_;
     mutable std::unordered_map<int, std::unordered_map<int, std::unique_ptr<const ColumnarResults>>>
         columnarized_table_cache_;
 
@@ -552,7 +552,7 @@ class Executor {
 
     const std::vector<std::unique_ptr<QueryExecutionContext>>& getQueryContexts() const;
 
-    std::vector<std::pair<RowSetPtr, std::vector<size_t>>>& getFragmentResults();
+    std::vector<std::pair<ResultPtr, std::vector<size_t>>>& getFragmentResults();
   };
 
   ResultPtr executeWorkUnit(int32_t* error_code,
@@ -645,9 +645,10 @@ class Executor {
   int32_t executePlanWithGroupBy(const RelAlgExecutionUnit& ra_exe_unit,
                                  const CompilationResult&,
                                  const bool hoist_literals,
-                                 RowSetPtr& results,
+                                 ResultPtr& results,
                                  const ExecutorDeviceType device_type,
                                  std::vector<std::vector<const int8_t*>>& col_buffers,
+                                 const std::vector<size_t> outer_tab_frag_ids,
                                  const QueryExecutionContext*,
                                  const std::vector<int64_t>& num_rows,
                                  const std::vector<uint64_t>& dev_frag_row_offsets,
@@ -657,11 +658,11 @@ class Executor {
                                  const bool was_auto_device,
                                  const uint32_t start_rowid,
                                  const uint32_t num_tables,
-                                 RenderAllocatorMap* render_allocator_map) noexcept;
+                                 RenderAllocatorMap* render_allocator_map);
   int32_t executePlanWithoutGroupBy(const RelAlgExecutionUnit& ra_exe_unit,
                                     const CompilationResult&,
                                     const bool hoist_literals,
-                                    RowSetPtr& results,
+                                    ResultPtr& results,
                                     const std::vector<Analyzer::Expr*>& target_exprs,
                                     const ExecutorDeviceType device_type,
                                     std::vector<std::vector<const int8_t*>>& col_buffers,
@@ -672,7 +673,7 @@ class Executor {
                                     const int device_id,
                                     const uint32_t start_rowid,
                                     const uint32_t num_tables,
-                                    RenderAllocatorMap* render_allocator_map) noexcept;
+                                    RenderAllocatorMap* render_allocator_map);
   std::pair<int64_t, int32_t> reduceResults(const SQLAgg agg,
                                             const SQLTypeInfo& ti,
                                             const int64_t agg_init_val,
@@ -682,12 +683,12 @@ class Executor {
                                             const bool is_group_by);
   int64_t getJoinHashTablePtr(const ExecutorDeviceType device_type, const int device_id);
   RowSetPtr reduceMultiDeviceResults(const RelAlgExecutionUnit&,
-                                     std::vector<std::pair<RowSetPtr, std::vector<size_t>>>& all_fragment_results,
+                                     std::vector<std::pair<ResultPtr, std::vector<size_t>>>& all_fragment_results,
                                      std::shared_ptr<RowSetMemoryOwner>,
                                      const QueryMemoryDescriptor&,
                                      const bool output_columnar) const;
   RowSetPtr reduceSpeculativeTopN(const RelAlgExecutionUnit&,
-                                  std::vector<std::pair<RowSetPtr, std::vector<size_t>>>& all_fragment_results,
+                                  std::vector<std::pair<ResultPtr, std::vector<size_t>>>& all_fragment_results,
                                   std::shared_ptr<RowSetMemoryOwner>,
                                   const QueryMemoryDescriptor&) const;
   void executeSimpleInsert(const Planner::RootPlan* root_plan);

@@ -335,7 +335,7 @@ int64_t QueryExecutionContext::allocateCountDistinctSet() {
 RowSetPtr QueryExecutionContext::getRowSet(const RelAlgExecutionUnit& ra_exe_unit,
                                            const QueryMemoryDescriptor& query_mem_desc,
                                            const bool was_auto_device) const {
-  std::vector<std::pair<RowSetPtr, std::vector<size_t>>> results_per_sm;
+  std::vector<std::pair<ResultPtr, std::vector<size_t>>> results_per_sm;
   CHECK_EQ(num_buffers_, group_by_buffers_.size());
   if (device_type_ == ExecutorDeviceType::CPU) {
     CHECK_EQ(size_t(1), num_buffers_);

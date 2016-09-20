@@ -19,6 +19,7 @@ IteratorTable::IteratorTable(const QueryMemoryDescriptor& query_mem_desc,
                              int64_t* group_by_buffer,
                              const size_t groups_buffer_entry_count,
                              const std::vector<std::vector<const int8_t*>>& col_buffers,
+                             const ssize_t frag_id,
                              const ExecutorDeviceType device_type,
                              const int device_id)
     : targets_([&targets]() {
@@ -50,7 +51,7 @@ IteratorTable::IteratorTable(const QueryMemoryDescriptor& query_mem_desc,
   if (group_by_buffer) {
     buffer_frags_.push_back(transformGroupByBuffer(group_by_buffer, groups_buffer_entry_count, query_mem_desc));
     if (has_lazy_columns) {
-      fetchLazy(lazy_col_local_ids, col_buffers, 0);
+      fetchLazy(lazy_col_local_ids, col_buffers, frag_id);
     }
   }
 }
@@ -110,6 +111,9 @@ BufferFragment IteratorTable::transformGroupByBuffer(const int64_t* group_by_buf
   }
   CHECK_EQ(size_t(0), scratch_buffer.size() % total_col_count);
 
+  if (scratch_buffer.empty()) {
+    return {nullptr, size_t(0)};
+  }
   CHECK(row_set_mem_owner_);
   auto table_frag = reinterpret_cast<int64_t*>(checked_malloc(scratch_buffer.size() * sizeof(int64_t)));
   memcpy(table_frag, &scratch_buffer[0], scratch_buffer.size() * sizeof(int64_t));
@@ -204,19 +208,21 @@ void IteratorTable::fuse(const IteratorTable& that) {
 }
 
 IterTabPtr QueryExecutionContext::groupBufferToTab(const size_t buf_idx,
+                                                   const ssize_t frag_idx,
                                                    const std::vector<Analyzer::Expr*>& targets,
                                                    const bool was_auto_device) const {
   const size_t group_by_col_count{query_mem_desc_.group_col_widths.size()};
   const size_t agg_col_count{query_mem_desc_.agg_col_widths.size()};
   CHECK(!output_columnar_ || group_by_col_count == 1);
   auto impl = [group_by_col_count, agg_col_count, was_auto_device, this, &targets](
-      const size_t groups_buffer_entry_count, int64_t* group_by_buffer) {
+      const size_t groups_buffer_entry_count, int64_t* group_by_buffer, const ssize_t frag_idx) {
     IterTabPtr table = boost::make_unique<IteratorTable>(query_mem_desc_,
                                                          targets,
                                                          row_set_mem_owner_,
                                                          group_by_buffer,
                                                          groups_buffer_entry_count,
                                                          col_buffers_,
+                                                         frag_idx,
                                                          device_type_,
                                                          device_id_);
     CHECK(table);
@@ -225,11 +231,11 @@ IterTabPtr QueryExecutionContext::groupBufferToTab(const size_t buf_idx,
   IterTabPtr table{nullptr};
   if (query_mem_desc_.getSmallBufferSizeBytes()) {
     CHECK(!sort_on_gpu_);
-    table = impl(query_mem_desc_.entry_count_small, small_group_by_buffers_[buf_idx]);
+    table = impl(query_mem_desc_.entry_count_small, small_group_by_buffers_[buf_idx], frag_idx);
     CHECK(table);
   }
   CHECK_LT(buf_idx, group_by_buffers_.size());
-  auto other_table = impl(query_mem_desc_.entry_count, group_by_buffers_[buf_idx]);
+  auto other_table = impl(query_mem_desc_.entry_count, group_by_buffers_[buf_idx], frag_idx);
   CHECK(other_table);
   if (table) {
     table->fuse(*other_table);
@@ -240,12 +246,13 @@ IterTabPtr QueryExecutionContext::groupBufferToTab(const size_t buf_idx,
 }
 
 IterTabPtr QueryExecutionContext::getIterTab(const std::vector<Analyzer::Expr*>& targets,
+                                             const ssize_t frag_idx,
                                              const QueryMemoryDescriptor& query_mem_desc,
                                              const bool was_auto_device) const {
   CHECK_EQ(num_buffers_, group_by_buffers_.size());
   if (device_type_ == ExecutorDeviceType::CPU) {
     CHECK_EQ(size_t(1), num_buffers_);
-    return groupBufferToTab(0, targets, was_auto_device);
+    return groupBufferToTab(0, frag_idx, targets, was_auto_device);
   }
 
   CHECK(device_type_ == ExecutorDeviceType::GPU);
@@ -253,11 +260,30 @@ IterTabPtr QueryExecutionContext::getIterTab(const std::vector<Analyzer::Expr*>&
   size_t step{query_mem_desc_.threadsShareMemory() ? executor_->blockSize() : 1};
   for (size_t i = 0; i < group_by_buffers_.size(); i += step) {
     if (!table) {
-      table = groupBufferToTab(i, targets, was_auto_device);
+      table = groupBufferToTab(i, frag_idx, targets, was_auto_device);
       continue;
     }
-    table->fuse(*groupBufferToTab(i, targets, was_auto_device));
+    table->fuse(*groupBufferToTab(i, frag_idx, targets, was_auto_device));
   }
 
   return table;
+}
+
+ResultPtr QueryExecutionContext::getResult(const RelAlgExecutionUnit& ra_exe_unit,
+                                           const std::vector<size_t>& outer_tab_frag_ids,
+                                           const QueryMemoryDescriptor& query_mem_desc,
+                                           const bool was_auto_device) const {
+  bool is_iter_table = false;
+  for (const auto& target : ra_exe_unit.target_exprs) {
+    if (dynamic_cast<const Analyzer::IterExpr*>(target)) {
+      is_iter_table = true;
+      break;
+    }
+  }
+  if (is_iter_table) {
+    CHECK_EQ(size_t(1), outer_tab_frag_ids.size());
+    return getIterTab(ra_exe_unit.target_exprs, outer_tab_frag_ids[0], query_mem_desc_, was_auto_device);
+  } else {
+    return getRowSet(ra_exe_unit, query_mem_desc_, was_auto_device);
+  }
 }

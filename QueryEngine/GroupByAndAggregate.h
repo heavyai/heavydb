@@ -235,6 +235,12 @@ class QueryExecutionContext : boost::noncopyable {
                         const bool sort_on_gpu,
                         RenderAllocatorMap*);
 
+  ResultPtr getResult(const RelAlgExecutionUnit& ra_exe_unit,
+                      const std::vector<size_t>& outer_tab_frag_ids,
+                      const QueryMemoryDescriptor& query_mem_desc,
+                      const bool was_auto_device) const;
+
+  // TOOD(alex): get rid of targets parameter
   RowSetPtr getRowSet(const RelAlgExecutionUnit& ra_exe_unit,
                       const QueryMemoryDescriptor& query_mem_desc,
                       const bool was_auto_device) const;
@@ -243,11 +249,9 @@ class QueryExecutionContext : boost::noncopyable {
                                  const bool was_auto_device) const;
 
   IterTabPtr getIterTab(const std::vector<Analyzer::Expr*>& targets,
+                        const ssize_t frag_idx,
                         const QueryMemoryDescriptor& query_mem_desc,
                         const bool was_auto_device) const;
-  IterTabPtr groupBufferToTab(const size_t i,
-                              const std::vector<Analyzer::Expr*>& targets,
-                              const bool was_auto_device) const;
 
   std::vector<int64_t*> launchGpuCode(const RelAlgExecutionUnit& ra_exe_unit,
                                       const std::vector<void*>& cu_functions,
@@ -296,6 +300,12 @@ class QueryExecutionContext : boost::noncopyable {
                           const int64_t* init_vals,
                           const int32_t groups_buffer_entry_count,
                           const bool keyless);
+
+  IterTabPtr groupBufferToTab(const size_t buf_idx,
+                              const ssize_t frag_idx,
+                              const std::vector<Analyzer::Expr*>& targets,
+                              const bool was_auto_device) const;
+
 #ifdef HAVE_CUDA
   enum {
     COL_BUFFERS,
