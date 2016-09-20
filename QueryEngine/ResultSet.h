@@ -132,7 +132,8 @@ class ResultSet {
   TargetValue getTargetValueFromBufferRowwise(const int8_t* rowwise_target_ptr,
                                               const TargetInfo& target_info,
                                               const size_t slot_idx,
-                                              const bool translate_strings) const;
+                                              const bool translate_strings,
+                                              const bool decimal_to_double) const;
 
   TargetValue getTargetValueFromBufferColwise(const int8_t* col1_ptr,
                                               const int8_t compact_sz1,
@@ -140,12 +141,14 @@ class ResultSet {
                                               const int8_t compact_sz2,
                                               const size_t entry_idx,
                                               const TargetInfo& target_info,
-                                              const bool translate_strings) const;
+                                              const bool translate_strings,
+                                              const bool decimal_to_double) const;
 
   TargetValue makeTargetValue(const int8_t* ptr,
                               const int8_t compact_sz,
                               const SQLTypeInfo& ti,
-                              const bool translate_strings) const;
+                              const bool translate_strings,
+                              const bool decimal_to_double) const;
 
   InternalTargetValue getColumnInternal(const size_t entry_idx, const size_t col_idx) const;
 
