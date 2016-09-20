@@ -832,6 +832,18 @@ bool try_cast(const std::string& str) {
   return true;
 }
 
+inline char* try_strptimes(const char* str, const std::vector<std::string>& formats) {
+  std::tm tm_struct;
+  char* buf;
+  for (auto format : formats) {
+    buf = strptime(str, format.c_str(), &tm_struct);
+    if (buf) {
+      return buf;
+    }
+  }
+  return nullptr;
+}
+
 SQLTypes Detector::detect_sqltype(const std::string& str) {
   SQLTypes type = kTEXT;
   if (try_cast<double>(str)) {
@@ -851,13 +863,23 @@ SQLTypes Detector::detect_sqltype(const std::string& str) {
 
   // see StringToDatum in Shared/Datum.cpp
   if (type == kTEXT) {
-    std::tm tm_struct;
-    if (strptime(str.c_str(), "%Y-%m-%d", &tm_struct) != nullptr ||
-        strptime(str.c_str(), "%m/%d/%Y", &tm_struct) != nullptr) {
+    char* buf;
+    buf = try_strptimes(str.c_str(), {"%Y-%m-%d", "%m/%d/%Y", "%d-%b-%y", "%d/%b/%Y"});
+    if (buf) {
       type = kDATE;
+      if (*buf == 'T' || *buf == ' ' || *buf == ':') {
+        buf++;
+      }
+    }
+    buf = try_strptimes(buf == nullptr ? str.c_str() : buf, {"%T %z", "%T", "%H%M%S", "%R"});
+    if (buf) {
+      if (type == kDATE) {
+        type = kTIMESTAMP;
+      } else {
+        type = kTIME;
+      }
     }
   }
-
   return type;
 }
 
@@ -871,15 +893,17 @@ std::vector<SQLTypes> Detector::detect_column_types(const std::vector<std::strin
 
 bool Detector::more_restrictive_sqltype(const SQLTypes a, const SQLTypes b) {
   static std::array<int, kSQLTYPE_LAST> typeorder;
-  typeorder[kDATE] = 8;
-  typeorder[kTEXT] = 9;
-  typeorder[kBIGINT] = 5;
-  typeorder[kDOUBLE] = 7;
-  typeorder[kFLOAT] = 6;
-  typeorder[kSMALLINT] = 3;
-  typeorder[kINT] = 4;
   typeorder[kCHAR] = 0;
   typeorder[kBOOLEAN] = 2;
+  typeorder[kSMALLINT] = 3;
+  typeorder[kINT] = 4;
+  typeorder[kBIGINT] = 5;
+  typeorder[kFLOAT] = 6;
+  typeorder[kDOUBLE] = 7;
+  typeorder[kTIMESTAMP] = 8;
+  typeorder[kTIME] = 9;
+  typeorder[kDATE] = 10;
+  typeorder[kTEXT] = 11;
 
   // note: b < a instead of a < b because the map is ordered most to least restrictive
   return typeorder[b] < typeorder[a];

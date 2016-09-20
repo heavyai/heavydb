@@ -462,7 +462,7 @@ class Detector {
     read_file();
     init();
   };
-  SQLTypes detect_sqltype(const std::string& str);
+  static SQLTypes detect_sqltype(const std::string& str);
   std::vector<std::string> get_headers();
   const CopyParams& get_copy_params() const { return copy_params; }
   std::vector<std::vector<std::string>> raw_rows;
