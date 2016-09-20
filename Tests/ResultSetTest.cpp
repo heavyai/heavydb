@@ -139,7 +139,7 @@ int8_t* fill_one_entry_no_collisions(int8_t* buff,
     if (target_info.agg_kind == kAVG) {
       const auto count_slot_bytes = query_mem_desc.agg_col_widths[target_idx + 1].actual;
       if (empty) {
-        write_int(slot_ptr, query_mem_desc.keyless_hash ? 0 : v, count_slot_bytes);
+        write_int(slot_ptr, query_mem_desc.keyless_hash ? 0 : 0, count_slot_bytes);
       } else {
         write_int(slot_ptr, 1, count_slot_bytes);  // count of elements in the group is 1 - good enough for testing
       }
@@ -1916,8 +1916,7 @@ TEST(MoreReduce, MissingValuesKeyless) {
 
 /* Perfect_Hash_Row_Based testcases */
 // TBD_FLOW #1
-TEST(ReduceRandomGroups,
-     DISABLED_PerfectHashOneCol_Small_2525) {  // TBD_BUG - fails: only ResultSet #1 groups are included
+TEST(ReduceRandomGroups, PerfectHashOneCol_Small_2525) {
   const auto target_infos = generate_random_groups_target_infos();
   const auto query_mem_desc = perfect_hash_one_col_desc_small(target_infos, 8);
   // const auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 8, 0, 99);
@@ -1925,12 +1924,11 @@ TEST(ReduceRandomGroups,
   EvenNumberGenerator gen2;
   const int prct1 = 25, prct2 = 25;
   bool silent = false;  // true/false - don't/do print diagnostic messages
-  // silent = true;
+  silent = true;
   test_reduce_random_groups(target_infos, query_mem_desc, gen1, gen2, prct1, prct2, silent);
 }
 
-TEST(ReduceRandomGroups,
-     DISABLED_PerfectHashOneCol_Small_2575) {  // TBD_BUG - fails: only ResultSet #1 groups are included
+TEST(ReduceRandomGroups, PerfectHashOneCol_Small_2575) {
   const auto target_infos = generate_random_groups_target_infos();
   const auto query_mem_desc = perfect_hash_one_col_desc_small(target_infos, 8);
   // const auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 8, 0, 99);
@@ -1938,12 +1936,11 @@ TEST(ReduceRandomGroups,
   EvenNumberGenerator gen2;
   const int prct1 = 25, prct2 = 75;
   bool silent = false;  // true/false - don't/do print diagnostic messages
-  // silent = true;
+  silent = true;
   test_reduce_random_groups(target_infos, query_mem_desc, gen1, gen2, prct1, prct2, silent);
 }
 
-TEST(ReduceRandomGroups,
-     DISABLED_PerfectHashOneCol_Small_5050) {  // TBD_BUG - fails: only ResultSet #1 groups are included
+TEST(ReduceRandomGroups, PerfectHashOneCol_Small_5050) {
   const auto target_infos = generate_random_groups_target_infos();
   const auto query_mem_desc = perfect_hash_one_col_desc_small(target_infos, 8);
   // const auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 8, 0, 99);
@@ -1951,12 +1948,11 @@ TEST(ReduceRandomGroups,
   EvenNumberGenerator gen2;
   const int prct1 = 50, prct2 = 50;
   bool silent = false;  // true/false - don't/do print diagnostic messages
-  // silent = true;
+  silent = true;
   test_reduce_random_groups(target_infos, query_mem_desc, gen1, gen2, prct1, prct2, silent);
 }
 
-TEST(ReduceRandomGroups,
-     DISABLED_PerfectHashOneCol_Small_7525) {  // TBD_BUG - fails: only ResultSet #1 groups are included
+TEST(ReduceRandomGroups, PerfectHashOneCol_Small_7525) {
   const auto target_infos = generate_random_groups_target_infos();
   const auto query_mem_desc = perfect_hash_one_col_desc_small(target_infos, 8);
   // const auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 8, 0, 99);
@@ -1964,12 +1960,11 @@ TEST(ReduceRandomGroups,
   EvenNumberGenerator gen2;
   const int prct1 = 75, prct2 = 25;
   bool silent = false;  // true/false - don't/do print diagnostic messages
-  // silent = true;
+  silent = true;
   test_reduce_random_groups(target_infos, query_mem_desc, gen1, gen2, prct1, prct2, silent);
 }
 
-TEST(ReduceRandomGroups,
-     DISABLED_PerfectHashOneCol_Small_25100) {  // TBD_BUG - fails: only ResultSet #1 groups are included
+TEST(ReduceRandomGroups, PerfectHashOneCol_Small_25100) {
   const auto target_infos = generate_random_groups_target_infos();
   const auto query_mem_desc = perfect_hash_one_col_desc_small(target_infos, 8);
   // const auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 8, 0, 99);
@@ -1977,12 +1972,11 @@ TEST(ReduceRandomGroups,
   EvenNumberGenerator gen2;
   const int prct1 = 25, prct2 = 100;
   bool silent = false;  // true/false - don't/do print diagnostic messages
-  // silent = true;
+  silent = true;
   test_reduce_random_groups(target_infos, query_mem_desc, gen1, gen2, prct1, prct2, silent);
 }
 
-TEST(ReduceRandomGroups,
-     DISABLED_PerfectHashOneCol_Small_10025) {  // TBD_BUG - fails: when calculating AVG, ResultSet #2 overwrites #1
+TEST(ReduceRandomGroups, PerfectHashOneCol_Small_10025) {
   const auto target_infos = generate_random_groups_target_infos();
   const auto query_mem_desc = perfect_hash_one_col_desc_small(target_infos, 8);
   // const auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 8, 0, 99);
@@ -1990,13 +1984,11 @@ TEST(ReduceRandomGroups,
   EvenNumberGenerator gen2;
   const int prct1 = 100, prct2 = 25;
   bool silent = false;  // true/false - don't/do print diagnostic messages
-  // silent = true;
+  silent = true;
   test_reduce_random_groups(target_infos, query_mem_desc, gen1, gen2, prct1, prct2, silent);
 }
 
-TEST(ReduceRandomGroups,
-     DISABLED_PerfectHashOneCol_Small_100100) {  // TBD_BUG - passes, as there is 100% match between all groups of both
-                                                 // ResultSets
+TEST(ReduceRandomGroups, PerfectHashOneCol_Small_100100) {
   const auto target_infos = generate_random_groups_target_infos();
   const auto query_mem_desc = perfect_hash_one_col_desc_small(target_infos, 8);
   // const auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 8, 0, 99);
@@ -2004,20 +1996,18 @@ TEST(ReduceRandomGroups,
   EvenNumberGenerator gen2;
   const int prct1 = 100, prct2 = 100;
   bool silent = false;  // true/false - don't/do print diagnostic messages
-  // silent = true;
+  silent = true;
   test_reduce_random_groups(target_infos, query_mem_desc, gen1, gen2, prct1, prct2, silent);
 }
 
-TEST(ReduceRandomGroups,
-     DISABLED_PerfectHashOneCol_Small_9505) {  // TBD_BUG - fails: only ResultSet #1 groups are included; AVG is not
-                                               // correct : ResultSet #2 overwrites #1
+TEST(ReduceRandomGroups, PerfectHashOneCol_Small_9505) {
   const auto target_infos = generate_random_groups_target_infos();
   const auto query_mem_desc = perfect_hash_one_col_desc_small(target_infos, 8);
   EvenNumberGenerator gen1;
   EvenNumberGenerator gen2;
   const int prct1 = 95, prct2 = 5;
   bool silent = false;  // true/false - don't/do print diagnostic messages
-  // silent = true;
+  silent = true;
   test_reduce_random_groups(target_infos, query_mem_desc, gen1, gen2, prct1, prct2, silent);
 }
 
