@@ -18,7 +18,6 @@ IteratorTable::IteratorTable(const QueryMemoryDescriptor& query_mem_desc,
                              const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                              int64_t* group_by_buffer,
                              const size_t groups_buffer_entry_count,
-                             const bool output_columnar,
                              const std::vector<std::vector<const int8_t*>>& col_buffers,
                              const ExecutorDeviceType device_type,
                              const int device_id)
@@ -29,9 +28,13 @@ IteratorTable::IteratorTable(const QueryMemoryDescriptor& query_mem_desc,
         }
         return info;
       }()),
-      query_mem_desc_(query_mem_desc),
+      query_mem_desc_([&query_mem_desc]() {
+        auto desc = query_mem_desc;
+        desc.group_col_widths.clear();
+        desc.output_columnar = true;
+        return desc;
+      }()),
       row_set_mem_owner_(row_set_mem_owner),
-      entry_count_per_frag_(groups_buffer_entry_count),
       device_type_(device_type),
       just_explain_(false) {
   bool has_lazy_columns = false;
@@ -45,28 +48,75 @@ IteratorTable::IteratorTable(const QueryMemoryDescriptor& query_mem_desc,
     }
   }
   if (group_by_buffer) {
-    group_by_buffer_frags_.push_back(group_by_buffer);
+    buffer_frags_.push_back(transformGroupByBuffer(group_by_buffer, groups_buffer_entry_count, query_mem_desc));
     if (has_lazy_columns) {
       fetchLazy(lazy_col_local_ids, col_buffers, 0);
     }
   }
 }
 
+IteratorTable::IteratorTable(const std::vector<TargetInfo>& targets,
+                             const QueryMemoryDescriptor& query_mem_desc,
+                             const ExecutorDeviceType device_type,
+                             const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner)
+    : targets_(targets),
+      query_mem_desc_(query_mem_desc),
+      row_set_mem_owner_(row_set_mem_owner),
+      device_type_(device_type),
+      just_explain_(false) {
+}
+
+IteratorTable::IteratorTable()
+    : targets_{},
+      query_mem_desc_{},
+      row_set_mem_owner_(nullptr),
+      device_type_(ExecutorDeviceType::CPU),
+      just_explain_(false) {
+}
+
 size_t IteratorTable::rowCount() const {
   size_t row_count{0};
-  for (auto frag : group_by_buffer_frags_) {
-    if (frag) {
-      for (size_t bin_base_off = 0, crt_row_buff_idx = 0; crt_row_buff_idx < static_cast<size_t>(entry_count_per_frag_);
-           ++crt_row_buff_idx, bin_base_off += query_mem_desc_.getColOffInBytesInNextBin(0)) {
-        auto key_off = query_mem_desc_.getKeyOffInBytes(crt_row_buff_idx) / sizeof(int64_t);
-        if (frag[key_off] == EMPTY_KEY_64) {
-          continue;
-        }
-        ++row_count;
-      }
+  for (const auto& frag : buffer_frags_) {
+    if (frag.data) {
+      row_count += frag.row_count;
     }
   }
   return row_count;
+}
+
+BufferFragment IteratorTable::transformGroupByBuffer(const int64_t* group_by_buffer,
+                                                     const size_t groups_buffer_entry_count,
+                                                     const QueryMemoryDescriptor& query_mem_desc) {
+  CHECK(group_by_buffer);
+  CHECK_LT(size_t(0), groups_buffer_entry_count);
+  CHECK_EQ(query_mem_desc.agg_col_widths.size(), query_mem_desc_.agg_col_widths.size());
+  const auto total_col_count = query_mem_desc.agg_col_widths.size();
+  std::vector<int64_t> scratch_buffer;
+  scratch_buffer.reserve(groups_buffer_entry_count * total_col_count);
+
+  for (size_t col_idx = 0; col_idx < total_col_count; ++col_idx) {
+    for (size_t bin_base_off = query_mem_desc.getConsistColOffInBytes(0, col_idx), crt_row_buff_idx = 0;
+         crt_row_buff_idx < static_cast<size_t>(groups_buffer_entry_count);
+         ++crt_row_buff_idx, bin_base_off += query_mem_desc.getColOffInBytesInNextBin(col_idx)) {
+      auto key_off = query_mem_desc.getKeyOffInBytes(crt_row_buff_idx) / sizeof(int64_t);
+      if (group_by_buffer[key_off] == EMPTY_KEY_64) {
+        continue;
+      }
+      auto col_ptr = reinterpret_cast<const int8_t*>(group_by_buffer) + bin_base_off;
+      auto chosen_bytes = query_mem_desc.agg_col_widths[col_idx].compact;
+      CHECK_EQ(sizeof(int64_t), chosen_bytes);
+      scratch_buffer.push_back(get_component(col_ptr, chosen_bytes));
+    }
+  }
+  CHECK_EQ(size_t(0), scratch_buffer.size() % total_col_count);
+
+  CHECK(row_set_mem_owner_);
+  auto table_frag = reinterpret_cast<int64_t*>(checked_malloc(scratch_buffer.size() * sizeof(int64_t)));
+  memcpy(table_frag, &scratch_buffer[0], scratch_buffer.size() * sizeof(int64_t));
+  // TODO(miyu): free old buffer held by row_set_mem_owner_ if proved safe.
+  CHECK(row_set_mem_owner_);
+  row_set_mem_owner_->addGroupByBuffer(table_frag);
+  return {table_frag, (scratch_buffer.size() / total_col_count)};
 }
 
 namespace {
@@ -85,24 +135,22 @@ void IteratorTable::fetchLazy(const std::unordered_map<size_t, ssize_t>& lazy_co
                               const std::vector<std::vector<const int8_t*>>& col_buffers,
                               const ssize_t frag_id) {
   const auto target_count = targets_.size();
-  CHECK_LT(frag_id, group_by_buffer_frags_.size());
-  CHECK_EQ(col_buffers.size(), group_by_buffer_frags_.size());
+  CHECK_LT(frag_id, col_buffers.size());
   CHECK_EQ(target_count, lazy_col_local_ids.size());
+  CHECK_EQ(size_t(1), buffer_frags_.size());
+  auto& buffer_frag = buffer_frags_[0];
+  if (!buffer_frag.row_count) {
+    CHECK(!buffer_frag.data);
+    return;
+  }
 
-  auto group_by_buffer = group_by_buffer_frags_[frag_id];
-  CHECK(group_by_buffer);
-  for (size_t bin_base_off = 0, crt_row_buff_idx = 0; crt_row_buff_idx < static_cast<size_t>(entry_count_per_frag_);
-       ++crt_row_buff_idx, bin_base_off += query_mem_desc_.getColOffInBytesInNextBin(0)) {
-    auto key_off = query_mem_desc_.getKeyOffInBytes(crt_row_buff_idx) / sizeof(int64_t);
-    if (group_by_buffer[key_off] == EMPTY_KEY_64) {
-      continue;
-    }
-
-    auto col_ptr = reinterpret_cast<int8_t*>(group_by_buffer) + bin_base_off;
-    for (size_t col_idx = 0; col_idx < colCount();
-         col_ptr += query_mem_desc_.getNextColOffInBytes(col_ptr, crt_row_buff_idx, col_idx++)) {
-      auto chosen_bytes = query_mem_desc_.agg_col_widths[col_idx].compact;
-      CHECK_EQ(sizeof(int64_t), chosen_bytes);
+  CHECK(buffer_frag.data);
+  CHECK_LT(size_t(0), buffer_frag.row_count);
+  for (size_t col_idx = 0, col_base_off = 0; col_idx < colCount(); ++col_idx, col_base_off += buffer_frag.row_count) {
+    auto chosen_bytes = query_mem_desc_.agg_col_widths[col_idx].compact;
+    CHECK_EQ(sizeof(int64_t), chosen_bytes);
+    for (size_t row_idx = 0; row_idx < buffer_frag.row_count; ++row_idx) {
+      auto col_ptr = reinterpret_cast<int8_t*>(&buffer_frag.data[col_base_off + row_idx]);
       auto val = get_component(col_ptr, chosen_bytes);
       if (lazy_col_local_ids.count(col_idx)) {
         auto it = lazy_col_local_ids.find(col_idx);
@@ -113,4 +161,103 @@ void IteratorTable::fetchLazy(const std::unordered_map<size_t, ssize_t>& lazy_co
       }
     }
   }
+}
+
+void IteratorTable::fuse(const IteratorTable& that) {
+  CHECK(!query_mem_desc_.keyless_hash && !that.query_mem_desc_.keyless_hash);
+  CHECK(size_t(1) == query_mem_desc_.group_col_widths.size() &&
+        size_t(1) == that.query_mem_desc_.group_col_widths.size());
+  CHECK_EQ(query_mem_desc_.agg_col_widths.size(), that.query_mem_desc_.agg_col_widths.size());
+  CHECK_EQ(query_mem_desc_.output_columnar, that.query_mem_desc_.output_columnar);
+  CHECK_EQ(size_t(1), buffer_frags_.size());
+  CHECK_EQ(size_t(1), that.buffer_frags_.size());
+  auto& this_buffer = buffer_frags_[0].data;
+  auto& this_entry_count = buffer_frags_[0].row_count;
+  const auto that_buffer = that.buffer_frags_[0].data;
+  const auto that_entry_count = that.buffer_frags_[0].row_count;
+  if (that.definitelyHasNoRows()) {
+    return;
+  }
+  if (definitelyHasNoRows()) {
+    this_buffer = that_buffer;
+    return;
+  }
+
+  const auto total_col_count = query_mem_desc_.agg_col_widths.size();
+  auto fused_buffer = reinterpret_cast<int64_t*>(
+      checked_malloc(((this_entry_count + that_entry_count) * total_col_count) * sizeof(int64_t)));
+  auto write_ptr = fused_buffer;
+  auto this_read_ptr = this_buffer;
+  auto that_read_ptr = that_buffer;
+  for (size_t col_idx = 0; col_idx < total_col_count;
+       ++col_idx, this_read_ptr += this_entry_count, that_read_ptr += that_entry_count) {
+    memcpy(write_ptr, this_read_ptr, this_entry_count * sizeof(int64_t));
+    write_ptr += this_entry_count;
+    memcpy(write_ptr, that_buffer, that_entry_count * sizeof(int64_t));
+    write_ptr += that_entry_count;
+  }
+  this_entry_count += that_entry_count;
+  // TODO(miyu): free old buffer held by row_set_mem_owner_ if proved safe.
+  CHECK(row_set_mem_owner_);
+  row_set_mem_owner_->addGroupByBuffer(fused_buffer);
+  this_buffer = fused_buffer;
+}
+
+IterTabPtr QueryExecutionContext::groupBufferToTab(const size_t buf_idx,
+                                                   const std::vector<Analyzer::Expr*>& targets,
+                                                   const bool was_auto_device) const {
+  const size_t group_by_col_count{query_mem_desc_.group_col_widths.size()};
+  const size_t agg_col_count{query_mem_desc_.agg_col_widths.size()};
+  CHECK(!output_columnar_ || group_by_col_count == 1);
+  auto impl = [group_by_col_count, agg_col_count, was_auto_device, this, &targets](
+      const size_t groups_buffer_entry_count, int64_t* group_by_buffer) {
+    IterTabPtr table = boost::make_unique<IteratorTable>(query_mem_desc_,
+                                                         targets,
+                                                         row_set_mem_owner_,
+                                                         group_by_buffer,
+                                                         groups_buffer_entry_count,
+                                                         col_buffers_,
+                                                         device_type_,
+                                                         device_id_);
+    CHECK(table);
+    return table;
+  };
+  IterTabPtr table{nullptr};
+  if (query_mem_desc_.getSmallBufferSizeBytes()) {
+    CHECK(!sort_on_gpu_);
+    table = impl(query_mem_desc_.entry_count_small, small_group_by_buffers_[buf_idx]);
+    CHECK(table);
+  }
+  CHECK_LT(buf_idx, group_by_buffers_.size());
+  auto other_table = impl(query_mem_desc_.entry_count, group_by_buffers_[buf_idx]);
+  CHECK(other_table);
+  if (table) {
+    table->fuse(*other_table);
+    return table;
+  } else {
+    return other_table;
+  }
+}
+
+IterTabPtr QueryExecutionContext::getIterTab(const std::vector<Analyzer::Expr*>& targets,
+                                             const QueryMemoryDescriptor& query_mem_desc,
+                                             const bool was_auto_device) const {
+  CHECK_EQ(num_buffers_, group_by_buffers_.size());
+  if (device_type_ == ExecutorDeviceType::CPU) {
+    CHECK_EQ(size_t(1), num_buffers_);
+    return groupBufferToTab(0, targets, was_auto_device);
+  }
+
+  CHECK(device_type_ == ExecutorDeviceType::GPU);
+  IterTabPtr table{nullptr};
+  size_t step{query_mem_desc_.threadsShareMemory() ? executor_->blockSize() : 1};
+  for (size_t i = 0; i < group_by_buffers_.size(); i += step) {
+    if (!table) {
+      table = groupBufferToTab(i, targets, was_auto_device);
+      continue;
+    }
+    table->fuse(*groupBufferToTab(i, targets, was_auto_device));
+  }
+
+  return table;
 }

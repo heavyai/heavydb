@@ -4,6 +4,7 @@
 #include "BufferCompaction.h"
 #include "CompilationOptions.h"
 #include "GpuMemUtils.h"
+#include "IteratorTable.h"
 #include "ResultRows.h"
 #include "RuntimeFunctions.h"
 
@@ -213,10 +214,17 @@ class QueryExecutionContext : boost::noncopyable {
 
   RowSetPtr getRowSet(const RelAlgExecutionUnit& ra_exe_unit,
                       const QueryMemoryDescriptor& query_mem_desc,
-                      const bool was_auto_device) const noexcept;
+                      const bool was_auto_device) const;
   RowSetPtr groupBufferToResults(const size_t i,
                                  const std::vector<Analyzer::Expr*>& targets,
                                  const bool was_auto_device) const;
+
+  IterTabPtr getIterTab(const std::vector<Analyzer::Expr*>& targets,
+                        const QueryMemoryDescriptor& query_mem_desc,
+                        const bool was_auto_device) const;
+  IterTabPtr groupBufferToTab(const size_t i,
+                              const std::vector<Analyzer::Expr*>& targets,
+                              const bool was_auto_device) const;
 
   std::vector<int64_t*> launchGpuCode(const RelAlgExecutionUnit& ra_exe_unit,
                                       const std::vector<void*>& cu_functions,
