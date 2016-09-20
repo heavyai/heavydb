@@ -246,6 +246,7 @@ RowSetPtr Executor::executeSelectPlan(const Planner::Plan* plan,
         simple_quals,
         quals,
         JoinType::INVALID,
+        {},
         join_quals,
         {},
         groupby_exprs,
@@ -3288,6 +3289,7 @@ RowSetPtr Executor::executeResultPlan(const Planner::Result* result_plan,
                                                   simple_quals,
                                                   quals,
                                                   JoinType::INVALID,
+                                                  {},
                                                   join_quals,
                                                   {},
                                                   agg_plan->get_groupby_list(),
@@ -3323,6 +3325,7 @@ RowSetPtr Executor::executeResultPlan(const Planner::Result* result_plan,
                                         result_plan->get_constquals(),
                                         result_plan->get_quals(),
                                         JoinType::INVALID,
+                                        {},
                                         {},
                                         {},
                                         {nullptr},
@@ -4195,6 +4198,36 @@ RowSetPtr Executor::collectAllDeviceResults(ExecutionDispatch& execution_dispatc
   return reduceMultiDeviceResults(ra_exe_unit, result_per_device, row_set_mem_owner, query_mem_desc, output_columnar);
 }
 
+namespace {
+
+size_t get_mapped_frag_id_of_src_table(const std::vector<std::pair<int, size_t>>& join_dimensions,
+                                       const int src_tab_id,
+                                       const size_t dst_frag_id) {
+  CHECK(join_dimensions.size());
+  std::unordered_map<int, size_t> tab_id_to_frag_cnt;
+  size_t combination_count{1};
+  for (const auto& table : join_dimensions) {
+    tab_id_to_frag_cnt.insert(table);
+    CHECK(table.second);
+    combination_count *= table.second;
+  }
+  auto cnt_it = tab_id_to_frag_cnt.find(src_tab_id);
+  CHECK(cnt_it != tab_id_to_frag_cnt.end());
+  if (size_t(1) == cnt_it->second) {
+    return size_t(0);
+  }
+  size_t crt_frag_id{dst_frag_id};
+  for (auto dim_it = join_dimensions.rbegin(); dim_it->first != src_tab_id && dim_it != join_dimensions.rend();
+       ++dim_it) {
+    combination_count /= dim_it->second;
+    crt_frag_id /= dim_it->second;
+  }
+  combination_count /= cnt_it->second;
+  return crt_frag_id % combination_count;
+}
+
+}  // namespace
+
 void Executor::dispatchFragments(const std::function<void(const ExecutorDeviceType chosen_device_type,
                                                           int chosen_device_id,
                                                           const std::map<int, std::vector<size_t>>& frag_ids,
@@ -4291,11 +4324,19 @@ void Executor::dispatchFragments(const std::function<void(const ExecutorDeviceTy
           frag_ids_for_table[inner_frags.first] = {i};
         } else {
           std::vector<size_t> all_frag_ids(inner_frags.second->size());
-          if (all_frag_ids.size() > 1) {
-            throw std::runtime_error("Multi-fragment inner table not supported yet");
+          if (ra_exe_unit.join_dimensions.empty()) {
+            if (all_frag_ids.size() > 1) {
+              throw std::runtime_error("Multi-fragment inner table not supported yet");
+            }
+            std::iota(all_frag_ids.begin(), all_frag_ids.end(), 0);
+            frag_ids_for_table[inner_frags.first] = all_frag_ids;
+          } else {
+            if (inner_frags.first != ra_exe_unit.join_dimensions[0].first && inner_frags.second->size() > 1) {
+              throw std::runtime_error("Multi-fragment inner table not supported yet");
+            }
+            frag_ids_for_table[inner_frags.first] = {
+                get_mapped_frag_id_of_src_table(ra_exe_unit.join_dimensions, inner_frags.first, i)};
           }
-          std::iota(all_frag_ids.begin(), all_frag_ids.end(), 0);
-          frag_ids_for_table[inner_frags.first] = all_frag_ids;
         }
       }
       if (eo.with_watchdog && rowid_lookup_key < 0) {

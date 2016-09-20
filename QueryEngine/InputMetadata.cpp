@@ -82,13 +82,13 @@ Fragmenter_Namespace::TableInfo synthesize_table_info(const IterTabPtr& table) {
   Fragmenter_Namespace::TableInfo table_info;
   size_t total_row_count{0};  // rows can be null only for query validation
   if (!table->definitelyHasNoRows()) {
+    table_info.fragments.resize(table->fragCount());
     for (size_t i = 0; i < table->fragCount(); ++i) {
-      Fragmenter_Namespace::FragmentInfo fragment;
+      auto& fragment = table_info.fragments[i];
       fragment.fragmentId = i;
       fragment.numTuples = table->getFragAt(i).row_count;
       fragment.deviceIds.resize(3);
       total_row_count += fragment.numTuples;
-      table_info.fragments.push_back(fragment);
     }
   }
 
@@ -97,6 +97,23 @@ Fragmenter_Namespace::TableInfo synthesize_table_info(const IterTabPtr& table) {
 }
 
 }  // namespace
+
+size_t get_frag_count_of_table(const int table_id,
+                               const Catalog_Namespace::Catalog& cat,
+                               const TemporaryTables& temporary_tables) {
+  auto it = temporary_tables.find(table_id);
+  if (it != temporary_tables.end()) {
+    CHECK_GE(int(0), table_id);
+    CHECK(boost::get<RowSetPtr>(it->second));
+    return size_t(1);
+  } else {
+    const auto table_descriptor = cat.getMetadataForTable(table_id);
+    CHECK(table_descriptor);
+    const auto fragmenter = table_descriptor->fragmenter;
+    CHECK(fragmenter);
+    return fragmenter->getFragmentsForQuery().fragments.size();
+  }
+}
 
 std::vector<Fragmenter_Namespace::TableInfo> get_table_infos(const std::vector<InputDescriptor>& input_descs,
                                                              const Catalog_Namespace::Catalog& cat,

@@ -207,6 +207,7 @@ struct RelAlgExecutionUnit {
   const std::list<std::shared_ptr<Analyzer::Expr>> simple_quals;
   const std::list<std::shared_ptr<Analyzer::Expr>> quals;
   const JoinType join_type;
+  const std::vector<std::pair<int, size_t>> join_dimensions;
   const std::list<std::shared_ptr<Analyzer::Expr>> inner_join_quals;
   const std::list<std::shared_ptr<Analyzer::Expr>> outer_join_quals;
   const std::list<std::shared_ptr<Analyzer::Expr>> groupby_exprs;

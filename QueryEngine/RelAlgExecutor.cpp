@@ -295,14 +295,12 @@ std::pair<std::unordered_set<const RexInput*>, std::vector<std::shared_ptr<RexIn
   std::vector<std::shared_ptr<RexInput>> used_inputs_owned;
   const auto lhs = join->getInput(0);
   if (dynamic_cast<const RelJoin*>(lhs)) {
-    size_t iter_count{0};
-    auto synthesized_used_input = new RexInput(lhs, iter_count);
-    ++iter_count;
+    auto synthesized_used_input = new RexInput(lhs, 0);
     used_inputs_owned.emplace_back(synthesized_used_input);
     used_inputs.insert(synthesized_used_input);
     for (auto previous_join = static_cast<const RelJoin*>(lhs); previous_join;
-         previous_join = dynamic_cast<const RelJoin*>(previous_join->getInput(0)), ++iter_count) {
-      synthesized_used_input = new RexInput(lhs, iter_count);
+         previous_join = dynamic_cast<const RelJoin*>(previous_join->getInput(0))) {
+      synthesized_used_input = new RexInput(lhs, 0);
       used_inputs_owned.emplace_back(synthesized_used_input);
       used_inputs.insert(synthesized_used_input);
     }
@@ -805,6 +803,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createSortInputWorkUnit(const RelSort* 
            source_exe_unit.simple_quals,
            source_exe_unit.quals,
            source_exe_unit.join_type,
+           source_exe_unit.join_dimensions,
            source_exe_unit.inner_join_quals,
            source_exe_unit.outer_join_quals,
            source_exe_unit.groupby_exprs,
@@ -1016,6 +1015,25 @@ std::list<std::shared_ptr<Analyzer::Expr>> get_inner_join_quals(const RelAlgNode
   return {};
 }
 
+std::vector<std::pair<int, size_t>> get_join_dimensions(const RelAlgNode* ra,
+                                                        const Catalog_Namespace::Catalog& cat,
+                                                        const TemporaryTables& temp_tables) {
+  std::vector<std::pair<int, size_t>> dims;
+  for (auto join = dynamic_cast<const RelJoin*>(ra); join; join = static_cast<const RelJoin*>(join->getInput(0))) {
+    CHECK_EQ(size_t(2), join->inputCount());
+    const auto id = table_id_from_ra(join->getInput(1));
+    dims.emplace_back(id, get_frag_count_of_table(id, cat, temp_tables));
+    auto lhs = join->getInput(0);
+    if (!dynamic_cast<const RelJoin*>(lhs)) {
+      const auto id = table_id_from_ra(lhs);
+      dims.emplace_back(id, get_frag_count_of_table(id, cat, temp_tables));
+      break;
+    }
+  }
+  std::reverse(dims.begin(), dims.end());
+  return dims;
+}
+
 }  // namespace
 
 RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(const RelCompound* compound,
@@ -1041,6 +1059,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(const RelCompoun
                                         quals_cf.simple_quals,
                                         separated_quals.regular_quals,
                                         join_type,
+                                        {},
                                         inner_join_quals,
                                         get_outer_join_quals(compound, translator),
                                         groupby_exprs,
@@ -1126,6 +1145,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createJoinWorkUnit(const RelJoin* join,
            {},
            {},
            join_type,
+           get_join_dimensions(join, cat_, temporary_tables_),
            inner_join_quals,
            outer_join_quals,
            {nullptr},
@@ -1186,6 +1206,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createAggregateWorkUnit(const RelAggreg
            {},
            {},
            join_type,
+           {},
            get_inner_join_quals(aggregate, translator),
            get_outer_join_quals(aggregate, translator),
            groupby_exprs,
@@ -1213,6 +1234,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(const RelProject*
            {},
            {},
            join_type,
+           {},
            get_inner_join_quals(project, translator),
            get_outer_join_quals(project, translator),
            {nullptr},
@@ -1285,6 +1307,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createFilterWorkUnit(const RelFilter* f
            {},
            separated_quals.regular_quals,
            join_type,
+           {},
            separated_quals.join_quals,
            get_outer_join_quals(filter, translator),
            {nullptr},
