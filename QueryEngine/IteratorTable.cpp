@@ -104,7 +104,7 @@ BufferFragment IteratorTable::transformGroupByBuffer(const int64_t* group_by_buf
       }
       auto col_ptr = reinterpret_cast<const int8_t*>(group_by_buffer) + bin_base_off;
       auto chosen_bytes = query_mem_desc.agg_col_widths[col_idx].compact;
-      CHECK_EQ(sizeof(int64_t), chosen_bytes);
+      CHECK_EQ(sizeof(int64_t), static_cast<size_t>(chosen_bytes));
       scratch_buffer.push_back(get_component(col_ptr, chosen_bytes));
     }
   }
@@ -135,7 +135,7 @@ void IteratorTable::fetchLazy(const std::unordered_map<size_t, ssize_t>& lazy_co
                               const std::vector<std::vector<const int8_t*>>& col_buffers,
                               const ssize_t frag_id) {
   const auto target_count = targets_.size();
-  CHECK_LT(frag_id, col_buffers.size());
+  CHECK_LT(frag_id, static_cast<ssize_t>(col_buffers.size()));
   CHECK_EQ(target_count, lazy_col_local_ids.size());
   CHECK_EQ(size_t(1), buffer_frags_.size());
   auto& buffer_frag = buffer_frags_[0];
@@ -148,7 +148,7 @@ void IteratorTable::fetchLazy(const std::unordered_map<size_t, ssize_t>& lazy_co
   CHECK_LT(size_t(0), buffer_frag.row_count);
   for (size_t col_idx = 0, col_base_off = 0; col_idx < colCount(); ++col_idx, col_base_off += buffer_frag.row_count) {
     auto chosen_bytes = query_mem_desc_.agg_col_widths[col_idx].compact;
-    CHECK_EQ(sizeof(int64_t), chosen_bytes);
+    CHECK_EQ(sizeof(int64_t), static_cast<size_t>(chosen_bytes));
     for (size_t row_idx = 0; row_idx < buffer_frag.row_count; ++row_idx) {
       auto col_ptr = reinterpret_cast<int8_t*>(&buffer_frag.data[col_base_off + row_idx]);
       auto val = get_component(col_ptr, chosen_bytes);

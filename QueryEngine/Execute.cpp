@@ -3903,6 +3903,7 @@ void Executor::ExecutionDispatch::run(const ExecutorDeviceType chosen_device_typ
 
 const int8_t* Executor::ExecutionDispatch::getColumn(const ResultPtr& buffer,
                                                      const int table_id,
+                                                     const int frag_id,
                                                      const int col_id,
                                                      const Data_Namespace::MemoryLevel memory_level,
                                                      const int device_id) const {
@@ -3911,12 +3912,18 @@ const int8_t* Executor::ExecutionDispatch::getColumn(const ResultPtr& buffer,
     std::lock_guard<std::mutex> columnar_conversion_guard(columnar_conversion_mutex);
     if (columnarized_table_cache_.empty() || !columnarized_table_cache_.count(table_id)) {
       columnarized_table_cache_.insert(
-          std::make_pair(table_id, std::unique_ptr<const ColumnarResults>(columnarize_result(buffer))));
+          std::make_pair(table_id, std::unordered_map<int, std::unique_ptr<const ColumnarResults>>()));
+    }
+    auto& frag_id_to_result = columnarized_table_cache_[table_id];
+    if (frag_id_to_result.empty() || !frag_id_to_result.count(frag_id)) {
+      frag_id_to_result.insert(
+          std::make_pair(frag_id, std::unique_ptr<const ColumnarResults>(columnarize_result(buffer, frag_id))));
     }
   }
   CHECK_GE(col_id, 0);
   CHECK_NE(size_t(0), columnarized_table_cache_.count(table_id));
-  return getColumn(columnarized_table_cache_[table_id].get(), col_id, &cat_.get_dataMgr(), memory_level, device_id);
+  return getColumn(
+      columnarized_table_cache_[table_id][frag_id].get(), col_id, &cat_.get_dataMgr(), memory_level, device_id);
 }
 
 const int8_t* Executor::ExecutionDispatch::getColumn(const ColumnarResults* columnar_results,
@@ -4347,9 +4354,9 @@ std::vector<std::vector<const int8_t*>> Executor::fetchChunks(
         const bool input_is_result = col_id.getScanDesc().getSourceType() == InputSourceType::RESULT;
         CHECK_NE(input_is_result, static_cast<bool>(chunk));
         if (input_is_result) {
-          CHECK_EQ(size_t(0), frag_id);
           frag_col_buffers[it->second] = execution_dispatch.getColumn(get_temporary_table(temporary_tables_, table_id),
                                                                       table_id,
+                                                                      frag_id,
                                                                       col_id.getColId(),
                                                                       memory_level_for_column,
                                                                       device_id);

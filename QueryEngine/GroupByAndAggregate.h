@@ -90,9 +90,27 @@ class ColumnarResults {
     }
   }
 
-  ColumnarResults(const IteratorTable& table, const size_t num_columns, const std::vector<SQLTypeInfo>& target_types)
-      : column_buffers_(num_columns), num_rows_(table.rowCount()), target_types_(target_types) {
-    CHECK(false);
+  ColumnarResults(const IteratorTable& table, const int frag_id, const std::vector<SQLTypeInfo>& target_types)
+      : num_rows_([&]() {
+          auto fragment = table.getFragAt(frag_id);
+          CHECK(!fragment.row_count || fragment.data);
+          return fragment.row_count;
+        }()),
+        target_types_(target_types) {
+    auto fragment = table.getFragAt(frag_id);
+    const auto col_count = table.colCount();
+    column_buffers_.resize(col_count);
+    if (!num_rows_) {
+      return;
+    }
+    for (size_t i = 0, col_base_off = 0; i < col_count; ++i, col_base_off += num_rows_) {
+      CHECK(target_types[i].get_type() == kBIGINT);
+      const auto buf_size = num_rows_ * (get_bit_width(target_types[i]) / 8);
+      // TODO(miyu): copy offset ptr into frag buffer of 'table' instead of alloc'ing new buffer
+      //             if it's proved to survive 'this' b/c it's already columnar.
+      column_buffers_[i] = static_cast<const int8_t*>(checked_malloc(buf_size));
+      memcpy(((void*)column_buffers_[i]), &fragment.data[col_base_off], buf_size);
+    }
   }
 
   ~ColumnarResults() {

@@ -157,22 +157,24 @@ inline const SQLTypeInfo get_column_type(const int col_id,
 }
 
 template <typename PtrTy>
-inline const ColumnarResults* rows_to_columnar_results(const PtrTy& rows) {
+inline const ColumnarResults* rows_to_columnar_results(const PtrTy& result, const int number) {
   std::vector<SQLTypeInfo> col_types;
-  for (size_t i = 0; i < rows->colCount(); ++i) {
-    col_types.push_back(rows->getColType(i));
+  for (size_t i = 0; i < result->colCount(); ++i) {
+    col_types.push_back(result->getColType(i));
   }
-  return new ColumnarResults(*rows, rows->colCount(), col_types);
+  return new ColumnarResults(*result, number, col_types);
 }
 
-inline const ColumnarResults* columnarize_result(const ResultPtr& result) {
-  if (const auto& rows = boost::get<RowSetPtr>(result)) {
-    return rows_to_columnar_results(rows);
-  } else if (const auto& table = boost::get<IterTabPtr>(result)) {
-    return rows_to_columnar_results(table);
+inline const ColumnarResults* columnarize_result(const ResultPtr& result, const int frag_id) {
+  if (const auto rows = boost::get<RowSetPtr>(&result)) {
+    CHECK_EQ(0, frag_id);
+    return rows_to_columnar_results(*rows, (*rows)->colCount());
+  } else if (const auto table = boost::get<IterTabPtr>(&result)) {
+    return rows_to_columnar_results(*table, frag_id);
   } else {
     CHECK(false);
   }
+  return nullptr;
 }
 
 class CompilationRetryNoLazyFetch : public std::runtime_error {
@@ -490,7 +492,8 @@ class Executor {
     int32_t* error_code_;
     RenderAllocatorMap* render_allocator_map_;
     std::vector<std::pair<RowSetPtr, std::vector<size_t>>> all_fragment_results_;
-    mutable std::unordered_map<int, std::unique_ptr<const ColumnarResults>> columnarized_table_cache_;
+    mutable std::unordered_map<int, std::unordered_map<int, std::unique_ptr<const ColumnarResults>>>
+        columnarized_table_cache_;
 
    public:
     ExecutionDispatch(Executor* executor,
@@ -524,6 +527,7 @@ class Executor {
 
     const int8_t* getColumn(const ResultPtr& buffer,
                             const int table_id,
+                            const int frag_id,
                             const int col_id,
                             const Data_Namespace::MemoryLevel memory_level,
                             const int device_id) const;
