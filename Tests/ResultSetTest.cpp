@@ -185,9 +185,12 @@ void fill_one_entry_one_col(int8_t* ptr1,
                             const int8_t compact_sz1,
                             int8_t* ptr2,
                             const int8_t compact_sz2,
-                            const int64_t v,
+                            int64_t v,
                             const TargetInfo& target_info,
                             const bool empty_entry) {
+  if (empty_entry && (target_info.agg_kind == kAVG)) {
+    v = 0;
+  }
   CHECK(ptr1);
   switch (compact_sz1) {
     case 8:
@@ -2096,9 +2099,7 @@ TEST(ReduceRandomGroups,
 
 /* Perfect_Hash_Column_Based testcases */
 // TBD_FLOW #3
-TEST(ReduceRandomGroups,
-     DISABLED_PerfectHashOneColColumnar_Small_5050) {  // TBD_BUG - fails: only ResultSet #1 groups are included, and
-                                                       // only corresponding to them from ResultSet #2
+TEST(ReduceRandomGroups, PerfectHashOneColColumnar_Small_5050) {
   const auto target_infos = generate_random_groups_target_infos();
   auto query_mem_desc = perfect_hash_one_col_desc_small(target_infos, 8);
   query_mem_desc.output_columnar = true;
@@ -2106,13 +2107,11 @@ TEST(ReduceRandomGroups,
   EvenNumberGenerator gen2;
   const int prct1 = 50, prct2 = 50;
   bool silent = false;  // true/false - don't/do print diagnostic messages
-  // silent = false;
+  silent = true;
   test_reduce_random_groups(target_infos, query_mem_desc, gen1, gen2, prct1, prct2, silent);
 }
 
-TEST(ReduceRandomGroups,
-     DISABLED_PerfectHashOneColColumnar_Small_25100) {  // TBD_BUG - fails: only ResultSet #1 groups are included, and
-                                                        // only corresponding to them from ResultSet #2
+TEST(ReduceRandomGroups, PerfectHashOneColColumnar_Small_25100) {
   const auto target_infos = generate_random_groups_target_infos();
   auto query_mem_desc = perfect_hash_one_col_desc_small(target_infos, 8);
   query_mem_desc.output_columnar = true;
@@ -2120,13 +2119,11 @@ TEST(ReduceRandomGroups,
   EvenNumberGenerator gen2;
   const int prct1 = 25, prct2 = 100;
   bool silent = false;  // true/false - don't/do print diagnostic messages
-  // silent = false;
+  silent = true;
   test_reduce_random_groups(target_infos, query_mem_desc, gen1, gen2, prct1, prct2, silent);
 }
 
-TEST(ReduceRandomGroups,
-     DISABLED_PerfectHashOneColColumnar_Small_10025) {  // TBD_BUG - fails: the merge/reduce is correct only because
-                                                        // ResultSet #1 is at 100 %, AVG is wrong
+TEST(ReduceRandomGroups, PerfectHashOneColColumnar_Small_10025) {
   const auto target_infos = generate_random_groups_target_infos();
   auto query_mem_desc = perfect_hash_one_col_desc_small(target_infos, 8);
   query_mem_desc.output_columnar = true;
@@ -2134,13 +2131,11 @@ TEST(ReduceRandomGroups,
   EvenNumberGenerator gen2;
   const int prct1 = 100, prct2 = 25;
   bool silent = false;  // true/false - don't/do print diagnostic messages
-  // silent = false;
+  silent = true;
   test_reduce_random_groups(target_infos, query_mem_desc, gen1, gen2, prct1, prct2, silent);
 }
 
-TEST(ReduceRandomGroups,
-     DISABLED_PerfectHashOneColColumnar_Small_100100) {  // TBD_BUG - passes: all correct, # of merged groups as well as
-                                                         // MIN, MAX, SUM, COUNT, AVG
+TEST(ReduceRandomGroups, PerfectHashOneColColumnar_Small_100100) {
   const auto target_infos = generate_random_groups_target_infos();
   auto query_mem_desc = perfect_hash_one_col_desc_small(target_infos, 8);
   query_mem_desc.output_columnar = true;
@@ -2148,7 +2143,7 @@ TEST(ReduceRandomGroups,
   EvenNumberGenerator gen2;
   const int prct1 = 100, prct2 = 100;
   bool silent = false;  // true/false - don't/do print diagnostic messages
-  // silent = false;
+  silent = true;
   test_reduce_random_groups(target_infos, query_mem_desc, gen1, gen2, prct1, prct2, silent);
 }
 
