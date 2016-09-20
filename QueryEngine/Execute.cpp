@@ -1224,22 +1224,16 @@ std::vector<llvm::Value*> Executor::codegenOuterJoinNullPlaceholder(const std::v
 llvm::Value* Executor::colByteStream(const Analyzer::ColumnVar* col_var,
                                      const bool fetch_column,
                                      const bool hoist_literals) {
-  auto& in_arg_list = cgen_state_->row_func_->getArgumentList();
-  CHECK_GE(in_arg_list.size(), size_t(3));
-  size_t arg_idx = 0;
-  size_t pos_idx = 0;
-  llvm::Value* pos_arg{nullptr};
-  const int local_col_id = getLocalColumnId(col_var, fetch_column);
-  for (auto& arg : in_arg_list) {
-    if (arg.getType()->isIntegerTy() && !pos_arg) {
-      pos_arg = &arg;
-      pos_idx = arg_idx;
-    } else if (pos_arg && arg_idx == pos_idx + 3 + static_cast<size_t>(local_col_id) + (hoist_literals ? 1 : 0)) {
+  CHECK_GE(cgen_state_->row_func_->arg_size(), size_t(3));
+  const auto stream_arg_name = "col_buf" + std::to_string(getLocalColumnId(col_var, fetch_column));
+  for (auto& arg : cgen_state_->row_func_->args()) {
+    if (arg.getName() == stream_arg_name) {
+      CHECK(arg.getType() == llvm::Type::getInt8PtrTy(cgen_state_->context_));
       return &arg;
     }
-    ++arg_idx;
   }
   CHECK(false);
+  return nullptr;
 }
 
 llvm::Value* Executor::posArg(const Analyzer::Expr* expr) const {
@@ -1273,9 +1267,8 @@ llvm::Value* Executor::posArg(const Analyzer::Expr* expr) const {
     }
   }
 #endif
-  auto& in_arg_list = cgen_state_->row_func_->getArgumentList();
-  for (auto& arg : in_arg_list) {
-    if (arg.getType()->isIntegerTy()) {
+  for (auto& arg : cgen_state_->row_func_->args()) {
+    if (arg.getName() == "pos") {
       CHECK(arg.getType()->isIntegerTy(64));
       return &arg;
     }
@@ -5028,7 +5021,7 @@ void set_row_func_argnames(llvm::Function* row_func,
   }
 
   for (size_t i = 0; i < in_col_count; ++i) {
-    arg_it->setName("col_buf");
+    arg_it->setName("col_buf" + std::to_string(i));
     ++arg_it;
   }
 
