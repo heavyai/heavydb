@@ -203,6 +203,7 @@ struct SortInfo {
 
 struct RelAlgExecutionUnit {
   const std::vector<InputDescriptor> input_descs;
+  const std::vector<InputDescriptor> extra_input_descs;
   const std::list<InputColDescriptor> input_col_descs;
   const std::list<std::shared_ptr<Analyzer::Expr>> simple_quals;
   const std::list<std::shared_ptr<Analyzer::Expr>> quals;
@@ -595,7 +596,7 @@ class Executor {
                          const ExecutionDispatch& execution_dispatch,
                          const ExecutionOptions& eo,
                          const bool is_agg,
-                         const std::map<int, const TableFragments*>& all_tables_fragments,
+                         const std::map<int, const TableFragments*>& selected_tables_fragments,
                          const size_t context_count,
                          std::condition_variable& scheduler_cv,
                          std::mutex& scheduler_mutex,
@@ -603,10 +604,9 @@ class Executor {
                          int& available_cpus);
 
   std::vector<std::vector<const int8_t*>> fetchChunks(const ExecutionDispatch&,
-                                                      const std::list<InputColDescriptor>&,
+                                                      const RelAlgExecutionUnit& ra_exe_unit,
                                                       const int device_id,
                                                       const Data_Namespace::MemoryLevel,
-                                                      const std::vector<InputDescriptor>& input_descs,
                                                       const std::map<int, const TableFragments*>&,
                                                       const std::map<int, std::vector<size_t>>& selected_fragments,
                                                       const Catalog_Namespace::Catalog&,

@@ -1,5 +1,5 @@
 #include "InputMetadata.h"
-#include "GroupByAndAggregate.h"
+#include "Execute.h"
 
 namespace {
 
@@ -96,6 +96,34 @@ Fragmenter_Namespace::TableInfo synthesize_table_info(const IterTabPtr& table) {
   return table_info;
 }
 
+void collect_table_infos(std::vector<Fragmenter_Namespace::TableInfo>& table_infos,
+                         const std::vector<InputDescriptor>& input_descs,
+                         const Catalog_Namespace::Catalog& cat,
+                         const TemporaryTables& temporary_tables) {
+  for (const auto& input_desc : input_descs) {
+    if (input_desc.getSourceType() == InputSourceType::RESULT) {
+      const int temp_table_id = input_desc.getTableId();
+      CHECK_LT(temp_table_id, 0);
+      const auto it = temporary_tables.find(temp_table_id);
+      CHECK(it != temporary_tables.end());
+      if (const auto& rows = boost::get<RowSetPtr>(it->second)) {
+        table_infos.push_back(synthesize_table_info(rows));
+      } else if (const auto& table = boost::get<IterTabPtr>(it->second)) {
+        table_infos.push_back(synthesize_table_info(table));
+      } else {
+        CHECK(false);
+      }
+      continue;
+    }
+    CHECK(input_desc.getSourceType() == InputSourceType::TABLE);
+    const auto table_descriptor = cat.getMetadataForTable(input_desc.getTableId());
+    CHECK(table_descriptor);
+    const auto fragmenter = table_descriptor->fragmenter;
+    CHECK(fragmenter);
+    table_infos.push_back(fragmenter->getFragmentsForQuery());
+  }
+}
+
 }  // namespace
 
 size_t get_frag_count_of_table(const int table_id,
@@ -119,27 +147,15 @@ std::vector<Fragmenter_Namespace::TableInfo> get_table_infos(const std::vector<I
                                                              const Catalog_Namespace::Catalog& cat,
                                                              const TemporaryTables& temporary_tables) {
   std::vector<Fragmenter_Namespace::TableInfo> table_infos;
-  for (const auto& input_desc : input_descs) {
-    if (input_desc.getSourceType() == InputSourceType::RESULT) {
-      const int temp_table_id = input_desc.getTableId();
-      CHECK_LT(temp_table_id, 0);
-      const auto it = temporary_tables.find(temp_table_id);
-      CHECK(it != temporary_tables.end());
-      if (const auto& rows = boost::get<RowSetPtr>(it->second)) {
-        table_infos.push_back(synthesize_table_info(rows));
-      } else if (const auto& table = boost::get<IterTabPtr>(it->second)) {
-        table_infos.push_back(synthesize_table_info(table));
-      } else {
-        CHECK(false);
-      }
-      continue;
-    }
-    CHECK(input_desc.getSourceType() == InputSourceType::TABLE);
-    const auto table_descriptor = cat.getMetadataForTable(input_desc.getTableId());
-    CHECK(table_descriptor);
-    const auto fragmenter = table_descriptor->fragmenter;
-    CHECK(fragmenter);
-    table_infos.push_back(fragmenter->getFragmentsForQuery());
-  }
+  collect_table_infos(table_infos, input_descs, cat, temporary_tables);
+  return table_infos;
+}
+
+std::vector<Fragmenter_Namespace::TableInfo> get_table_infos(const RelAlgExecutionUnit& ra_exe_unit,
+                                                             const Catalog_Namespace::Catalog& cat,
+                                                             const TemporaryTables& temporary_tables) {
+  std::vector<Fragmenter_Namespace::TableInfo> table_infos;
+  collect_table_infos(table_infos, ra_exe_unit.input_descs, cat, temporary_tables);
+  collect_table_infos(table_infos, ra_exe_unit.extra_input_descs, cat, temporary_tables);
   return table_infos;
 }

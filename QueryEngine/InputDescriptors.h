@@ -40,7 +40,13 @@ struct hash<InputDescriptor> {
 class InputColDescriptor {
  public:
   InputColDescriptor(const int col_id, const int table_id, const int input_desc)
-      : col_id_(col_id), input_desc_(table_id, input_desc) {}
+      : col_id_(col_id),
+        input_desc_(table_id, input_desc),
+        is_indirect_(false),
+        iter_col_id_(-1),
+        iter_input_desc_(table_id, -1),
+        ref_col_id_(-1),
+        ref_input_desc_(table_id, -1) {}
 
   bool operator==(const InputColDescriptor& that) const {
     return col_id_ == that.col_id_ && input_desc_ == that.input_desc_;
@@ -50,9 +56,57 @@ class InputColDescriptor {
 
   const InputDescriptor& getScanDesc() const { return input_desc_; }
 
+  // TODO(miyu) : put the following methods in a subclass
+  InputColDescriptor(const int col_id,
+                     const int table_id,
+                     const int input_desc,
+                     const int iter_col_id,
+                     const int iter_table_id,
+                     const int iter_input_desc,
+                     const int ref_col_id,
+                     const int ref_table_id,
+                     const int ref_input_desc)
+      : col_id_(col_id),
+        input_desc_(table_id, input_desc),
+        is_indirect_(true),
+        iter_col_id_(iter_col_id),
+        iter_input_desc_(iter_table_id, iter_input_desc),
+        ref_col_id_(ref_col_id),
+        ref_input_desc_(ref_table_id, ref_input_desc) {}
+
+  bool isIndirect() const { return is_indirect_; }
+
+  int getIterIndex() const {
+    CHECK(is_indirect_);
+    return iter_col_id_;
+  }
+
+  const InputDescriptor& getIterDesc() const {
+    CHECK(is_indirect_);
+    return iter_input_desc_;
+  }
+
+  int getRefColIndex() const {
+    CHECK(is_indirect_);
+    return ref_col_id_;
+  }
+
+  const InputDescriptor& getIndirectDesc() const {
+    CHECK(is_indirect_);
+    return ref_input_desc_;
+  }
+
  private:
   const int col_id_;
   const InputDescriptor input_desc_;
+
+  // TODO(miyu) : put the following fields in a subclass
+  const bool is_indirect_;
+  const int iter_col_id_;
+  const InputDescriptor iter_input_desc_;
+
+  const int ref_col_id_;
+  const InputDescriptor ref_input_desc_;
 };
 
 namespace std {

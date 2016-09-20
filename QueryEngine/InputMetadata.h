@@ -20,4 +20,8 @@ std::vector<Fragmenter_Namespace::TableInfo> get_table_infos(const std::vector<I
                                                              const Catalog_Namespace::Catalog& cat,
                                                              const TemporaryTables& temporary_tables);
 
+std::vector<Fragmenter_Namespace::TableInfo> get_table_infos(const RelAlgExecutionUnit& ra_exe_unit,
+                                                             const Catalog_Namespace::Catalog& cat,
+                                                             const TemporaryTables& temporary_tables);
+
 #endif  // QUERYENGINE_INPUTMETADATA_H

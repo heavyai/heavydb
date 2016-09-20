@@ -242,6 +242,7 @@ RowSetPtr Executor::executeSelectPlan(const Planner::Plan* plan,
     const size_t scan_total_limit = scan_limit ? get_scan_limit(plan, scan_limit + offset) : 0;
     const auto ra_exe_unit_in = RelAlgExecutionUnit{
         input_descs,
+        {},
         input_col_descs,
         simple_quals,
         quals,
@@ -3278,6 +3279,7 @@ RowSetPtr Executor::executeResultPlan(const Planner::Result* result_plan,
   CHECK(check_plan_sanity(agg_plan));
   const auto query_infos = get_table_infos(input_descs, cat, TemporaryTables{});
   const auto ra_exe_unit_in = RelAlgExecutionUnit{input_descs,
+                                                  {},
                                                   input_col_descs,
                                                   simple_quals,
                                                   quals,
@@ -3314,6 +3316,7 @@ RowSetPtr Executor::executeResultPlan(const Planner::Result* result_plan,
   }
   const auto order_entries = sort_plan ? sort_plan->get_order_entries() : std::list<Analyzer::OrderEntry>{};
   const RelAlgExecutionUnit res_ra_unit{{},
+                                        {},
                                         pseudo_input_col_descs,
                                         result_plan->get_constquals(),
                                         result_plan->get_quals(),
@@ -3620,17 +3623,18 @@ ResultPtr Executor::executeWorkUnit(int32_t* error_code,
       }
     };
 
-    std::map<int, const TableFragments*> all_tables_fragments;
-    CHECK_EQ(query_infos.size(), ra_exe_unit.input_descs.size());
-    for (size_t table_idx = 0; table_idx < ra_exe_unit.input_descs.size(); ++table_idx) {
-      all_tables_fragments[ra_exe_unit.input_descs[table_idx].getTableId()] = &query_infos[table_idx].fragments;
+    const size_t input_desc_count{ra_exe_unit.input_descs.size()};
+    std::map<int, const TableFragments*> selected_tables_fragments;
+    CHECK_EQ(query_infos.size(), (input_desc_count + ra_exe_unit.extra_input_descs.size()));
+    for (size_t table_idx = 0; table_idx < input_desc_count; ++table_idx) {
+      selected_tables_fragments[ra_exe_unit.input_descs[table_idx].getTableId()] = &query_infos[table_idx].fragments;
     }
     const QueryMemoryDescriptor& query_mem_desc = execution_dispatch.getQueryMemoryDescriptor();
     dispatchFragments(dispatch,
                       execution_dispatch,
                       options,
                       is_agg,
-                      all_tables_fragments,
+                      selected_tables_fragments,
                       context_count,
                       scheduler_cv,
                       scheduler_mutex,
@@ -3813,9 +3817,9 @@ void Executor::ExecutionDispatch::run(const ExecutorDeviceType chosen_device_typ
   std::vector<std::vector<const int8_t*>> col_buffers;
   try {
     std::map<int, const TableFragments*> all_tables_fragments;
-    for (size_t table_idx = 0; table_idx < ra_exe_unit_.input_descs.size(); ++table_idx) {
-      int table_id = ra_exe_unit_.input_descs[table_idx].getTableId();
-      const auto& fragments = query_infos_[table_idx].fragments;
+    for (size_t tab_idx = 0, tab_cnt = ra_exe_unit_.input_descs.size(); tab_idx < tab_cnt; ++tab_idx) {
+      int table_id = ra_exe_unit_.input_descs[tab_idx].getTableId();
+      const auto& fragments = query_infos_[tab_idx].fragments;
       auto it_ok = all_tables_fragments.insert(std::make_pair(table_id, &fragments));
       if (!it_ok.second) {
         std::lock_guard<std::mutex> lock(reduce_mutex);
@@ -3823,11 +3827,19 @@ void Executor::ExecutionDispatch::run(const ExecutorDeviceType chosen_device_typ
         return;
       }
     }
+    for (size_t tab_idx = 0,
+                extra_tab_base = ra_exe_unit_.input_descs.size(),
+                tab_cnt = ra_exe_unit_.extra_input_descs.size();
+         tab_idx < tab_cnt;
+         ++tab_idx) {
+      int table_id = ra_exe_unit_.extra_input_descs[tab_idx].getTableId();
+      const auto& fragments = query_infos_[extra_tab_base + tab_idx].info.fragments;
+      all_tables_fragments.insert(std::make_pair(table_id, &fragments));
+    }
     col_buffers = executor_->fetchChunks(*this,
-                                         ra_exe_unit_.input_col_descs,
+                                         ra_exe_unit_,
                                          chosen_device_id,
                                          memory_level,
-                                         ra_exe_unit_.input_descs,
                                          all_tables_fragments,
                                          frag_ids,
                                          cat_,
@@ -4191,6 +4203,7 @@ RowSetPtr Executor::collectAllDeviceResults(ExecutionDispatch& execution_dispatc
   return reduceMultiDeviceResults(ra_exe_unit, result_per_device, row_set_mem_owner, query_mem_desc, output_columnar);
 }
 
+#ifdef ENABLE_JOIN_EXEC
 namespace {
 
 size_t get_mapped_frag_id_of_src_table(const std::vector<std::pair<int, size_t>>& join_dimensions,
@@ -4220,6 +4233,7 @@ size_t get_mapped_frag_id_of_src_table(const std::vector<std::pair<int, size_t>>
 }
 
 }  // namespace
+#endif
 
 void Executor::dispatchFragments(const std::function<void(const ExecutorDeviceType chosen_device_type,
                                                           int chosen_device_id,
@@ -4229,7 +4243,7 @@ void Executor::dispatchFragments(const std::function<void(const ExecutorDeviceTy
                                  const ExecutionDispatch& execution_dispatch,
                                  const ExecutionOptions& eo,
                                  const bool is_agg,
-                                 const std::map<int, const TableFragments*>& all_tables_fragments,
+                                 const std::map<int, const TableFragments*>& selected_tables_fragments,
                                  const size_t context_count,
                                  std::condition_variable& scheduler_cv,
                                  std::mutex& scheduler_mutex,
@@ -4241,8 +4255,8 @@ void Executor::dispatchFragments(const std::function<void(const ExecutorDeviceTy
   const auto& ra_exe_unit = execution_dispatch.getExecutionUnit();
   CHECK(!ra_exe_unit.input_descs.empty());
   const int outer_table_id = ra_exe_unit.input_descs.front().getTableId();
-  auto it = all_tables_fragments.find(outer_table_id);
-  CHECK(it != all_tables_fragments.end());
+  auto it = selected_tables_fragments.find(outer_table_id);
+  CHECK(it != selected_tables_fragments.end());
   const auto fragments = it->second;
   const auto device_type = execution_dispatch.getDeviceType();
   const auto& all_frag_row_offsets = execution_dispatch.getFragOffsets();
@@ -4264,7 +4278,7 @@ void Executor::dispatchFragments(const std::function<void(const ExecutorDeviceTy
         continue;
       }
       const int device_id = fragment.deviceIds[static_cast<int>(Data_Namespace::GPU_LEVEL)];
-      for (const auto& inner_frags : all_tables_fragments) {
+      for (const auto& inner_frags : selected_tables_fragments) {
         if (inner_frags.first == outer_table_id) {
           fragments_per_device[device_id][inner_frags.first].push_back(frag_id);
         } else {
@@ -4312,24 +4326,16 @@ void Executor::dispatchFragments(const std::function<void(const ExecutorDeviceTy
         }
       }
       std::map<int, std::vector<size_t>> frag_ids_for_table;
-      for (const auto& inner_frags : all_tables_fragments) {
+      for (const auto& inner_frags : selected_tables_fragments) {
         if (inner_frags.first == outer_table_id) {
           frag_ids_for_table[inner_frags.first] = {i};
         } else {
           std::vector<size_t> all_frag_ids(inner_frags.second->size());
-          if (ra_exe_unit.join_dimensions.empty()) {
-            if (all_frag_ids.size() > 1) {
-              throw std::runtime_error("Multi-fragment inner table not supported yet");
-            }
-            std::iota(all_frag_ids.begin(), all_frag_ids.end(), 0);
-            frag_ids_for_table[inner_frags.first] = all_frag_ids;
-          } else {
-            if (inner_frags.first != ra_exe_unit.join_dimensions[0].first && inner_frags.second->size() > 1) {
-              throw std::runtime_error("Multi-fragment inner table not supported yet");
-            }
-            frag_ids_for_table[inner_frags.first] = {
-                get_mapped_frag_id_of_src_table(ra_exe_unit.join_dimensions, inner_frags.first, i)};
+          if (all_frag_ids.size() > 1) {
+            throw std::runtime_error("Multi-fragment inner table not supported yet");
           }
+          std::iota(all_frag_ids.begin(), all_frag_ids.end(), 0);
+          frag_ids_for_table[inner_frags.first] = all_frag_ids;
         }
       }
       if (eo.with_watchdog && rowid_lookup_key < 0) {
@@ -4354,10 +4360,9 @@ void Executor::dispatchFragments(const std::function<void(const ExecutorDeviceTy
 
 std::vector<std::vector<const int8_t*>> Executor::fetchChunks(
     const ExecutionDispatch& execution_dispatch,
-    const std::list<InputColDescriptor>& col_global_ids,
+    const RelAlgExecutionUnit& ra_exe_unit,
     const int device_id,
     const Data_Namespace::MemoryLevel memory_level,
-    const std::vector<InputDescriptor>& input_descs,
     const std::map<int, const TableFragments*>& all_tables_fragments,
     const std::map<int, std::vector<size_t>>& selected_fragments,
     const Catalog_Namespace::Catalog& cat,
@@ -4367,6 +4372,8 @@ std::vector<std::vector<const int8_t*>> Executor::fetchChunks(
 
   CHECK_EQ(all_tables_fragments.size(), selected_fragments.size());
 
+  const auto& col_global_ids = ra_exe_unit.input_col_descs;
+  const auto& input_descs = ra_exe_unit.input_descs;
   std::vector<std::vector<size_t>> selected_fragments_crossjoin;
   std::vector<size_t> local_col_to_frag_pos;
   buildSelectedFragsMapping(
