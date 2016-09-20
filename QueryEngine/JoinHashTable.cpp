@@ -138,7 +138,7 @@ int JoinHashTable::reify(const int device_count) {
   std::unique_ptr<const ColumnarResults> columnar_results;
   if (!cd) {
     columnar_results.reset(
-        rows_to_columnar_results(get_temporary_table(executor_->temporary_tables_, inner_col->get_table_id())));
+        columnarize_result(get_temporary_table(executor_->temporary_tables_, inner_col->get_table_id())));
   }
   ChunkKey chunk_key{
       cat_.get_currentDB().dbId, inner_col->get_table_id(), inner_col->get_column_id(), fragment.fragmentId};

@@ -37,38 +37,38 @@ ExecutionResult RelAlgExecutor::executeRelAlgSeq(std::vector<RaExecutionDesc>& e
     const auto compound = dynamic_cast<const RelCompound*>(body);
     if (compound) {
       exec_desc.setResult(executeCompound(compound, co, eo_work_unit, render_info, queue_time_ms));
-      addTemporaryTable(-compound->getId(), &exec_desc.getResult().getRows());
+      addTemporaryTable(-compound->getId(), exec_desc.getResult().getDataPtr());
       continue;
     }
     const auto project = dynamic_cast<const RelProject*>(body);
     if (project) {
       exec_desc.setResult(executeProject(project, co, eo_work_unit, render_info, queue_time_ms));
-      addTemporaryTable(-project->getId(), &exec_desc.getResult().getRows());
+      addTemporaryTable(-project->getId(), exec_desc.getResult().getDataPtr());
       continue;
     }
     const auto aggregate = dynamic_cast<const RelAggregate*>(body);
     if (aggregate) {
       exec_desc.setResult(executeAggregate(aggregate, co, eo_work_unit, render_info, queue_time_ms));
-      addTemporaryTable(-aggregate->getId(), &exec_desc.getResult().getRows());
+      addTemporaryTable(-aggregate->getId(), exec_desc.getResult().getDataPtr());
       continue;
     }
     const auto filter = dynamic_cast<const RelFilter*>(body);
     if (filter) {
       exec_desc.setResult(executeFilter(filter, co, eo_work_unit, render_info, queue_time_ms));
-      addTemporaryTable(-filter->getId(), &exec_desc.getResult().getRows());
+      addTemporaryTable(-filter->getId(), exec_desc.getResult().getDataPtr());
       continue;
     }
     const auto sort = dynamic_cast<const RelSort*>(body);
     if (sort) {
       exec_desc.setResult(executeSort(sort, co, eo_work_unit, render_info, queue_time_ms));
-      addTemporaryTable(-sort->getId(), &exec_desc.getResult().getRows());
+      addTemporaryTable(-sort->getId(), exec_desc.getResult().getDataPtr());
       continue;
     }
 #ifdef ENABLE_JOIN_EXEC
     const auto join = dynamic_cast<const RelJoin*>(body);
     if (join) {
       exec_desc.setResult(executeJoin(join, co, eo_work_unit, render_info, queue_time_ms));
-      addTemporaryTable(-join->getId(), &exec_desc.getResult().getRows());
+      addTemporaryTable(-join->getId(), exec_desc.getResult().getDataPtr());
       continue;
     }
 #endif
@@ -81,31 +81,33 @@ std::vector<TargetMetaInfo> RelAlgExecutor::validateRelAlgSeq(const std::vector<
   CHECK(!exec_descs.empty());
   for (const auto& exec_desc : exec_descs) {
     const auto body = exec_desc.getBody();
+    const auto result = exec_desc.getResult();
+    CHECK(result.empty());
     if (body->isNop()) {
       CHECK(dynamic_cast<const RelAggregate*>(body));
       CHECK_EQ(size_t(1), body->inputCount());
       const auto input = body->getInput(0);
       body->setOutputMetainfo(input->getOutputMetainfo());
-      addTemporaryTable(-body->getId(), nullptr);
+      addTemporaryTable(-body->getId(), result.getDataPtr());
       continue;
     }
     const auto compound = dynamic_cast<const RelCompound*>(body);
     SortInfo dummy{{}, SortAlgorithm::Default, 0, 0};
     if (compound) {
       createCompoundWorkUnit(compound, dummy);
-      addTemporaryTable(-compound->getId(), nullptr);
+      addTemporaryTable(-compound->getId(), result.getDataPtr());
       continue;
     }
     const auto project = dynamic_cast<const RelProject*>(body);
     if (project) {
       createProjectWorkUnit(project, dummy);
-      addTemporaryTable(-project->getId(), nullptr);
+      addTemporaryTable(-project->getId(), result.getDataPtr());
       continue;
     }
     const auto filter = dynamic_cast<const RelFilter*>(body);
     if (filter) {
       createFilterWorkUnit(filter, dummy);
-      addTemporaryTable(-filter->getId(), nullptr);
+      addTemporaryTable(-filter->getId(), result.getDataPtr());
       continue;
     }
     const auto sort = dynamic_cast<const RelSort*>(body);
@@ -114,7 +116,7 @@ std::vector<TargetMetaInfo> RelAlgExecutor::validateRelAlgSeq(const std::vector<
       const auto source = sort->getInput(0);
       CHECK(!dynamic_cast<const RelSort*>(source));
       createSortInputWorkUnit(sort);
-      addTemporaryTable(-sort->getId(), nullptr);
+      addTemporaryTable(-sort->getId(), result.getDataPtr());
       continue;
     }
   }

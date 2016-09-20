@@ -9,37 +9,86 @@ class ResultRows;
 class ExecutionResult {
  public:
   ExecutionResult(const ResultRows& rows, const std::vector<TargetMetaInfo>& targets_meta)
-      : rows_(boost::make_unique<ResultRows>(rows)), targets_meta_(targets_meta) {}
+      : result_(boost::make_unique<ResultRows>(rows)), targets_meta_(targets_meta) {}
 
-  ExecutionResult(RowSetPtr&& rows, const std::vector<TargetMetaInfo>& targets_meta)
-      : rows_(std::move(rows)), targets_meta_(targets_meta) {
-    CHECK(rows_);
+  ExecutionResult(const IteratorTable& table, const std::vector<TargetMetaInfo>& targets_meta)
+      : result_(boost::make_unique<IteratorTable>(table)), targets_meta_(targets_meta) {}
+
+  ExecutionResult(ResultPtr&& result, const std::vector<TargetMetaInfo>& targets_meta) : targets_meta_(targets_meta) {
+    if (auto& rows = boost::get<RowSetPtr>(result)) {
+      result_ = std::move(rows);
+      CHECK(boost::get<RowSetPtr>(result_));
+    } else if (auto& tab = boost::get<IterTabPtr>(result)) {
+      result_ = std::move(tab);
+      CHECK(boost::get<IterTabPtr>(result_));
+    } else {
+      CHECK(false);
+    }
   }
 
-  ExecutionResult(const ExecutionResult& that)
-      : rows_(boost::make_unique<ResultRows>(*that.rows_)), targets_meta_(that.targets_meta_) {}
+  ExecutionResult(const ExecutionResult& that) : targets_meta_(that.targets_meta_) {
+    if (const auto& rows = boost::get<RowSetPtr>(that.result_)) {
+      result_ = boost::make_unique<ResultRows>(*rows);
+      CHECK(boost::get<RowSetPtr>(result_));
+    } else if (const auto& tab = boost::get<IterTabPtr>(that.result_)) {
+      result_ = boost::make_unique<IteratorTable>(*tab);
+      CHECK(boost::get<IterTabPtr>(result_));
+    } else {
+      CHECK(false);
+    }
+  }
 
-  ExecutionResult(ExecutionResult&& that)
-      : rows_(std::move(that.rows_)), targets_meta_(std::move(that.targets_meta_)) {}
+  ExecutionResult(ExecutionResult&& that) : targets_meta_(std::move(that.targets_meta_)) {
+    if (auto& rows = boost::get<RowSetPtr>(that.result_)) {
+      result_ = std::move(rows);
+      CHECK(boost::get<RowSetPtr>(result_));
+    } else if (auto& tab = boost::get<IterTabPtr>(that.result_)) {
+      result_ = std::move(tab);
+      CHECK(boost::get<IterTabPtr>(result_));
+    } else {
+      CHECK(false);
+    }
+  }
 
   ExecutionResult& operator=(const ExecutionResult& that) {
-    rows_ = boost::make_unique<ResultRows>(*that.rows_);
-    CHECK(rows_);
+    if (const auto& rows = boost::get<RowSetPtr>(that.result_)) {
+      result_ = boost::make_unique<ResultRows>(*rows);
+      CHECK(boost::get<RowSetPtr>(result_));
+    } else if (const auto& tab = boost::get<IterTabPtr>(that.result_)) {
+      result_ = boost::make_unique<IteratorTable>(*tab);
+      CHECK(boost::get<IterTabPtr>(result_));
+    } else {
+      CHECK(false);
+    }
     targets_meta_ = that.targets_meta_;
     return *this;
   }
 
   const ResultRows& getRows() const {
-    CHECK(rows_);
-    return *rows_;
+    auto& rows = boost::get<RowSetPtr>(result_);
+    CHECK(rows);
+    return *rows;
   }
+
+  bool empty() const {
+    if (boost::get<RowSetPtr>(result_) || boost::get<IterTabPtr>(result_)) {
+      return false;
+    }
+    return true;
+  }
+
+  const ResultPtr& getDataPtr() const { return result_; }
 
   const std::vector<TargetMetaInfo>& getTargetsMeta() const { return targets_meta_; }
 
-  void setQueueTime(const int64_t queue_time_ms) { rows_->setQueueTime(queue_time_ms); }
+  void setQueueTime(const int64_t queue_time_ms) {
+    auto& rows = boost::get<RowSetPtr>(result_);
+    CHECK(rows);
+    rows->setQueueTime(queue_time_ms);
+  }
 
  private:
-  RowSetPtr rows_;
+  ResultPtr result_;
   std::vector<TargetMetaInfo> targets_meta_;
 };
 

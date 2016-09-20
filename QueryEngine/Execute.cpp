@@ -256,8 +256,27 @@ RowSetPtr Executor::executeSelectPlan(const Planner::Plan* plan,
     const auto ra_exe_unit = query_rewriter.rewrite();
     if (limit || offset) {
       size_t max_groups_buffer_entry_guess_limit{scan_total_limit ? scan_total_limit : max_groups_buffer_entry_guess};
-      auto rows = executeWorkUnit(error_code,
-                                  max_groups_buffer_entry_guess_limit,
+      auto result = executeWorkUnit(error_code,
+                                    max_groups_buffer_entry_guess_limit,
+                                    is_agg,
+                                    query_infos,
+                                    ra_exe_unit,
+                                    {device_type, hoist_literals, opt_level},
+                                    {false, allow_multifrag, just_explain, allow_loop_joins, g_enable_watchdog},
+                                    cat,
+                                    row_set_mem_owner_,
+                                    render_allocator_map);
+      auto& rows = boost::get<RowSetPtr>(result);
+      max_groups_buffer_entry_guess = max_groups_buffer_entry_guess_limit;
+      CHECK(rows);
+      rows->dropFirstN(offset);
+      if (limit) {
+        rows->keepFirstN(limit);
+      }
+      return std::move(rows);
+    }
+    auto result = executeWorkUnit(error_code,
+                                  max_groups_buffer_entry_guess,
                                   is_agg,
                                   query_infos,
                                   ra_exe_unit,
@@ -266,24 +285,9 @@ RowSetPtr Executor::executeSelectPlan(const Planner::Plan* plan,
                                   cat,
                                   row_set_mem_owner_,
                                   render_allocator_map);
-      max_groups_buffer_entry_guess = max_groups_buffer_entry_guess_limit;
-      CHECK(rows);
-      rows->dropFirstN(offset);
-      if (limit) {
-        rows->keepFirstN(limit);
-      }
-      return rows;
-    }
-    return executeWorkUnit(error_code,
-                           max_groups_buffer_entry_guess,
-                           is_agg,
-                           query_infos,
-                           ra_exe_unit,
-                           {device_type, hoist_literals, opt_level},
-                           {false, allow_multifrag, just_explain, allow_loop_joins, g_enable_watchdog},
-                           cat,
-                           row_set_mem_owner_,
-                           render_allocator_map);
+    auto& rows = boost::get<RowSetPtr>(result);
+    CHECK(rows);
+    return std::move(rows);
   }
   const auto result_plan = dynamic_cast<const Planner::Result*>(plan);
   if (result_plan) {
@@ -3267,18 +3271,20 @@ RowSetPtr Executor::executeResultPlan(const Planner::Result* result_plan,
                                                   0};
   QueryRewriter query_rewriter(ra_exe_unit_in, query_infos, this, result_plan);
   const auto ra_exe_unit = query_rewriter.rewrite();
-  auto result_rows = executeWorkUnit(error_code,
-                                     max_groups_buffer_entry_guess,
-                                     true,
-                                     query_infos,
-                                     ra_exe_unit,
-                                     {device_type, hoist_literals, opt_level},
-                                     {false, allow_multifrag, just_explain, allow_loop_joins, g_enable_watchdog},
-                                     cat,
-                                     row_set_mem_owner_,
-                                     nullptr);
+  auto result = executeWorkUnit(error_code,
+                                max_groups_buffer_entry_guess,
+                                true,
+                                query_infos,
+                                ra_exe_unit,
+                                {device_type, hoist_literals, opt_level},
+                                {false, allow_multifrag, just_explain, allow_loop_joins, g_enable_watchdog},
+                                cat,
+                                row_set_mem_owner_,
+                                nullptr);
+  auto& rows = boost::get<RowSetPtr>(result);
+  CHECK(rows);
   if (just_explain) {
-    return result_rows;
+    return std::move(rows);
   }
 
   const int in_col_count{static_cast<int>(agg_plan->get_targetlist().size())};
@@ -3323,8 +3329,8 @@ RowSetPtr Executor::executeResultPlan(const Planner::Result* result_plan,
   for (auto in_col : agg_plan->get_targetlist()) {
     target_types.push_back(in_col->get_expr()->get_type_info());
   }
-  CHECK(result_rows);
-  ColumnarResults result_columns(*result_rows, in_col_count, target_types);
+  CHECK(rows);
+  ColumnarResults result_columns(*rows, in_col_count, target_types);
   std::vector<llvm::Value*> col_heads;
   // Nested query, let the compiler know
   ResetIsNested reset_is_nested(this);
@@ -3333,7 +3339,7 @@ RowSetPtr Executor::executeResultPlan(const Planner::Result* result_plan,
   for (auto target_entry : targets) {
     target_exprs.emplace_back(target_entry->get_expr());
   }
-  const auto row_count = result_rows->rowCount();
+  const auto row_count = rows->rowCount();
   if (!row_count) {
     return boost::make_unique<ResultRows>(QueryMemoryDescriptor{},
                                           std::vector<Analyzer::Expr*>{},
@@ -3509,7 +3515,7 @@ bool is_sample_query(const RelAlgExecutionUnit& ra_exe_unit) {
 
 }  // namespace
 
-RowSetPtr Executor::executeWorkUnit(int32_t* error_code,
+ResultPtr Executor::executeWorkUnit(int32_t* error_code,
                                     size_t& max_groups_buffer_entry_guess,
                                     const bool is_agg,
                                     const std::vector<Fragmenter_Namespace::TableInfo>& query_infos,
@@ -3895,18 +3901,17 @@ void Executor::ExecutionDispatch::run(const ExecutorDeviceType chosen_device_typ
   }
 }
 
-const int8_t* Executor::ExecutionDispatch::getColumn(const ResultRows* rows,
+const int8_t* Executor::ExecutionDispatch::getColumn(const ResultPtr& buffer,
                                                      const int table_id,
                                                      const int col_id,
                                                      const Data_Namespace::MemoryLevel memory_level,
                                                      const int device_id) const {
-  CHECK(rows);
   static std::mutex columnar_conversion_mutex;
   {
     std::lock_guard<std::mutex> columnar_conversion_guard(columnar_conversion_mutex);
     if (columnarized_table_cache_.empty() || !columnarized_table_cache_.count(table_id)) {
       columnarized_table_cache_.insert(
-          std::make_pair(table_id, std::unique_ptr<const ColumnarResults>(rows_to_columnar_results(rows))));
+          std::make_pair(table_id, std::unique_ptr<const ColumnarResults>(columnarize_result(buffer))));
     }
   }
   CHECK_GE(col_id, 0);

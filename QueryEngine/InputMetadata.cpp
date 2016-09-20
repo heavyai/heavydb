@@ -9,7 +9,7 @@ bool uses_int_meta(const SQLTypeInfo& col_ti) {
 }
 
 // TODO(alex): Placeholder, provide an efficient implementation for this
-std::map<int, ChunkMetadata> synthesize_metadata(const ResultRows* rows) {
+std::map<int, ChunkMetadata> synthesize_metadata(const RowSetPtr& rows) {
   rows->moveToBegin();
   std::vector<std::unique_ptr<Encoder>> dummy_encoders;
   for (size_t i = 0; i < rows->colCount(); ++i) {
@@ -61,7 +61,7 @@ std::map<int, ChunkMetadata> synthesize_metadata(const ResultRows* rows) {
   return metadata_map;
 }
 
-Fragmenter_Namespace::TableInfo synthesize_table_info(const ResultRows* rows) {
+Fragmenter_Namespace::TableInfo synthesize_table_info(const RowSetPtr& rows) {
   std::deque<Fragmenter_Namespace::FragmentInfo> result;
   const size_t row_count = rows ? rows->rowCount() : 0;  // rows can be null only for query validation
   if (row_count) {
@@ -78,6 +78,24 @@ Fragmenter_Namespace::TableInfo synthesize_table_info(const ResultRows* rows) {
   return table_info;
 }
 
+Fragmenter_Namespace::TableInfo synthesize_table_info(const IterTabPtr& table) {
+  Fragmenter_Namespace::TableInfo table_info;
+  size_t total_row_count{0};  // rows can be null only for query validation
+  if (!table->definitelyHasNoRows()) {
+    for (size_t i = 0; i < table->fragCount(); ++i) {
+      Fragmenter_Namespace::FragmentInfo fragment;
+      fragment.fragmentId = i;
+      fragment.numTuples = table->getFragAt(i).row_count;
+      fragment.deviceIds.resize(3);
+      total_row_count += fragment.numTuples;
+      table_info.fragments.push_back(fragment);
+    }
+  }
+
+  table_info.numTuples = total_row_count;
+  return table_info;
+}
+
 }  // namespace
 
 std::vector<Fragmenter_Namespace::TableInfo> get_table_infos(const std::vector<InputDescriptor>& input_descs,
@@ -90,7 +108,13 @@ std::vector<Fragmenter_Namespace::TableInfo> get_table_infos(const std::vector<I
       CHECK_LT(temp_table_id, 0);
       const auto it = temporary_tables.find(temp_table_id);
       CHECK(it != temporary_tables.end());
-      table_infos.push_back(synthesize_table_info(it->second));
+      if (const auto& rows = boost::get<RowSetPtr>(it->second)) {
+        table_infos.push_back(synthesize_table_info(rows));
+      } else if (const auto& table = boost::get<IterTabPtr>(it->second)) {
+        table_infos.push_back(synthesize_table_info(table));
+      } else {
+        CHECK(false);
+      }
       continue;
     }
     CHECK(input_desc.getSourceType() == InputSourceType::TABLE);

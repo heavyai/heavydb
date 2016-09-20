@@ -90,6 +90,11 @@ class ColumnarResults {
     }
   }
 
+  ColumnarResults(const IteratorTable& table, const size_t num_columns, const std::vector<SQLTypeInfo>& target_types)
+      : column_buffers_(num_columns), num_rows_(table.rowCount()), target_types_(target_types) {
+    CHECK(false);
+  }
+
   ~ColumnarResults() {
     for (const auto column_buffer : column_buffers_) {
       free((void*)column_buffer);

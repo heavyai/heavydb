@@ -127,13 +127,13 @@ inline const ColumnDescriptor* get_column_descriptor_maybe(const int col_id,
   return table_id > 0 ? get_column_descriptor(col_id, table_id, cat) : nullptr;
 }
 
-inline const ResultRows* get_temporary_table(const TemporaryTables* temporary_tables, const int table_id) {
+inline const ResultPtr& get_temporary_table(const TemporaryTables* temporary_tables, const int table_id) {
   CHECK_LT(table_id, 0);
   const auto it = temporary_tables->find(table_id);
   CHECK(it != temporary_tables->end());
-  const auto rows = it->second;
-  CHECK(rows);
-  return rows;
+  const auto& temp = it->second;
+  CHECK(boost::get<RowSetPtr>(temp) || boost::get<IterTabPtr>(temp));
+  return temp;
 }
 
 inline const SQLTypeInfo get_column_type(const int col_id,
@@ -146,16 +146,33 @@ inline const SQLTypeInfo get_column_type(const int col_id,
     CHECK_EQ(table_id, cd->tableId);
     return cd->columnType;
   }
-  const auto rows = get_temporary_table(temporary_tables, table_id);
-  return rows->getColType(col_id);
+  const auto& temp = get_temporary_table(temporary_tables, table_id);
+  if (const auto& rows = boost::get<RowSetPtr>(temp)) {
+    return rows->getColType(col_id);
+  } else if (const auto& table = boost::get<IterTabPtr>(temp)) {
+    return table->getColType(col_id);
+  } else {
+    CHECK(false);
+  }
 }
 
-inline const ColumnarResults* rows_to_columnar_results(const ResultRows* rows) {
+template <typename PtrTy>
+inline const ColumnarResults* rows_to_columnar_results(const PtrTy& rows) {
   std::vector<SQLTypeInfo> col_types;
   for (size_t i = 0; i < rows->colCount(); ++i) {
     col_types.push_back(rows->getColType(i));
   }
   return new ColumnarResults(*rows, rows->colCount(), col_types);
+}
+
+inline const ColumnarResults* columnarize_result(const ResultPtr& result) {
+  if (const auto& rows = boost::get<RowSetPtr>(result)) {
+    return rows_to_columnar_results(rows);
+  } else if (const auto& table = boost::get<IterTabPtr>(result)) {
+    return rows_to_columnar_results(table);
+  } else {
+    CHECK(false);
+  }
 }
 
 class CompilationRetryNoLazyFetch : public std::runtime_error {
@@ -505,7 +522,7 @@ class Executor {
              const size_t ctx_idx,
              const int64_t rowid_lookup_key) noexcept;
 
-    const int8_t* getColumn(const ResultRows* rows,
+    const int8_t* getColumn(const ResultPtr& buffer,
                             const int table_id,
                             const int col_id,
                             const Data_Namespace::MemoryLevel memory_level,
@@ -534,7 +551,7 @@ class Executor {
     std::vector<std::pair<RowSetPtr, std::vector<size_t>>>& getFragmentResults();
   };
 
-  RowSetPtr executeWorkUnit(int32_t* error_code,
+  ResultPtr executeWorkUnit(int32_t* error_code,
                             size_t& max_groups_buffer_entry_guess,
                             const bool is_agg,
                             const std::vector<Fragmenter_Namespace::TableInfo>&,
