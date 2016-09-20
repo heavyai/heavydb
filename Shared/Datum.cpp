@@ -111,9 +111,11 @@ Datum StringToDatum(const std::string& s, SQLTypeInfo& ti) {
       break;
     case kTIME: {
       // @TODO handle fractional seconds
-      std::tm tm_struct;
-      if (!strptime(s.c_str(), "%T", &tm_struct) && !strptime(s.c_str(), "%H%M%S", &tm_struct))
+      std::tm tm_struct = {0};
+      if (!strptime(s.c_str(), "%T %z", &tm_struct) && !strptime(s.c_str(), "%T", &tm_struct) &&
+          !strptime(s.c_str(), "%H%M%S", &tm_struct) && !strptime(s.c_str(), "%R", &tm_struct)) {
         throw std::runtime_error("Invalid time string " + s);
+      }
       tm_struct.tm_mday = 1;
       tm_struct.tm_mon = 0;
       tm_struct.tm_year = 70;
@@ -153,6 +155,8 @@ Datum StringToDatum(const std::string& s, SQLTypeInfo& ti) {
         p = strptime(tp, "%T", &tm_struct);
       if (!p)
         p = strptime(tp, "%H%M%S", &tm_struct);
+      if (!p)
+        p = strptime(tp, "%R", &tm_struct);
       if (!p) {
         // check for weird customer format
         // remove decimal seconds from string if there is a period followed by a number
