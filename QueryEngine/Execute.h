@@ -333,17 +333,21 @@ class Executor {
   llvm::Value* codegenLogical(const Analyzer::BinOper*, const CompilationOptions&);
   llvm::Value* toBool(llvm::Value*);
   llvm::Value* codegenArith(const Analyzer::BinOper*, const CompilationOptions&);
-  llvm::Value* codegenAdd(llvm::Value*,
+  bool checkExpressionRanges(const Analyzer::BinOper*, int64_t, int64_t);
+  llvm::Value* codegenAdd(const Analyzer::BinOper*,
+			  llvm::Value*,
                           llvm::Value*,
                           const std::string& null_typename,
                           const std::string& null_check_suffix,
                           const SQLTypeInfo&);
-  llvm::Value* codegenSub(llvm::Value*,
+  llvm::Value* codegenSub(const Analyzer::BinOper*,
+			  llvm::Value*,
                           llvm::Value*,
                           const std::string& null_typename,
                           const std::string& null_check_suffix,
                           const SQLTypeInfo&);
-  llvm::Value* codegenMul(llvm::Value*,
+  llvm::Value* codegenMul(const Analyzer::BinOper*,
+			  llvm::Value*,
                           llvm::Value*,
                           const std::string& null_typename,
                           const std::string& null_check_suffix,
@@ -694,7 +698,9 @@ class Executor {
                              const QueryMemoryDescriptor& query_mem_desc,
                              const ExecutorDeviceType device_type);
 
-  void nukeOldState(const bool allow_lazy_fetch, const JoinInfo& join_info);
+  void nukeOldState(const bool allow_lazy_fetch,
+                    const JoinInfo& join_info,
+                    const std::vector<Fragmenter_Namespace::TableInfo>& query_infos);
   std::vector<void*> optimizeAndCodegenCPU(llvm::Function*,
                                            llvm::Function*,
                                            std::unordered_set<llvm::Function*>&,
@@ -781,12 +787,13 @@ class Executor {
 
   struct CgenState {
    public:
-    CgenState()
+    CgenState(const std::vector<Fragmenter_Namespace::TableInfo>& query_infos)
         : module_(nullptr),
           row_func_(nullptr),
           context_(llvm::getGlobalContext()),
           ir_builder_(context_),
           outer_join_cond_lv_(nullptr),
+          query_infos_(query_infos),
           must_run_on_cpu_(false),
           needs_error_check_(false) {}
 
@@ -893,6 +900,7 @@ class Executor {
     std::vector<llvm::BasicBlock*> inner_scan_labels_;
     std::unordered_map<int, llvm::Value*> scan_idx_to_hash_pos_;
     std::vector<std::unique_ptr<const InValuesBitmap>> in_values_bitmaps_;
+    const std::vector<Fragmenter_Namespace::TableInfo>& query_infos_;
     bool must_run_on_cpu_;
     bool needs_error_check_;
 

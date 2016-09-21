@@ -1233,13 +1233,17 @@ TEST(Select, OverflowAndUnderFlow) {
     c("SELECT COUNT(*) FROM test WHERE t + 9223372036854774000 > 0;", dt);
     EXPECT_THROW(run_multiple_agg("SELECT COUNT(*) FROM test WHERE t + 9223372036854775000 > 0;", dt),
                  std::runtime_error);
-    EXPECT_THROW(run_multiple_agg("SELECT COUNT(*) FROM test WHERE ufq - 1 < 0;", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("SELECT COUNT(*) FROM test WHERE -t - 9223372036854775000 < 0;", dt),
+                 std::runtime_error);
     EXPECT_THROW(run_multiple_agg("SELECT COUNT(*) FROM test WHERE ofd + x - 2 > 0;", dt), std::runtime_error);
-    EXPECT_THROW(run_multiple_agg("SELECT COUNT(*) FROM test WHERE ufd - 1 < -2;", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("SELECT COUNT(*) FROM test WHERE ufd * 3 - ofd * 1024 < -2;", dt),
+                 std::runtime_error);
     EXPECT_THROW(run_multiple_agg("SELECT COUNT(*) FROM test WHERE ofd * 2 > 0;", dt), std::runtime_error);
     EXPECT_THROW(run_multiple_agg("SELECT COUNT(*) FROM test WHERE ofq + 1 > 0;", dt), std::runtime_error);
-    EXPECT_THROW(run_multiple_agg("SELECT COUNT(*) FROM test WHERE ufq - 1 > 0;", dt), std::runtime_error);
-    EXPECT_THROW(run_multiple_agg("SELECT COUNT(*) FROM test WHERE ufq * 2 <= 0;", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("SELECT COUNT(*) FROM test WHERE -ufq - 9223372036854775000 > 0;", dt),
+                 std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("SELECT COUNT(*) FROM test WHERE -92233720368547758 - ofq <= 0;", dt),
+                 std::runtime_error);
     EXPECT_THROW(run_multiple_agg(
                      "SELECT cast((z - -32666) *0.000190 as int) as key0, "
                      "COUNT(*) AS val FROM test WHERE (z >= -32666 AND z < 31496) "
