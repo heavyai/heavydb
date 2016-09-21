@@ -3,6 +3,7 @@ http-port = 9090
 data = "@MAPD_DATA@"
 read-only = false
 quiet = false
+enable-watchdog = true
 
 [web]
 port = 9092
