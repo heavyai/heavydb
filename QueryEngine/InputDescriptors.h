@@ -114,7 +114,8 @@ template <>
 struct hash<InputColDescriptor> {
   size_t operator()(const InputColDescriptor& input_col_desc) const {
     hash<InputDescriptor> input_col_desc_hasher;
-    return input_col_desc_hasher(input_col_desc.getScanDesc()) ^ static_cast<size_t>(input_col_desc.getColId());
+    return input_col_desc_hasher(input_col_desc.getScanDesc()) ^ static_cast<size_t>(input_col_desc.getColId()) ^
+           static_cast<size_t>(input_col_desc.isIndirect());
   }
 };
 }  // std

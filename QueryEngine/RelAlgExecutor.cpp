@@ -433,7 +433,7 @@ void collect_used_input_desc(std::vector<InputDescriptor>& input_descs,
     int indirect_col_id{-1};
     std::tie(indirect_input_ra, indirect_col_id) = get_non_join_source_node(input_ra, col_id);
     if (indirect_input_ra == input_ra) {
-      CHECK_EQ(indirect_col_id, col_id);
+      CHECK_EQ(indirect_col_id, static_cast<ssize_t>(col_id));
       input_col_descs_unique.emplace(
           dynamic_cast<const RelScan*>(input_ra) ? col_id + 1 : col_id, table_id, input_desc);
       continue;
@@ -450,7 +450,7 @@ void collect_used_input_desc(std::vector<InputDescriptor>& input_descs,
       input_descs.emplace_back(indirect_table_id, -1);
     }
     CHECK(!dynamic_cast<const RelScan*>(input_ra));
-    CHECK_EQ(size_t(0), input_desc);
+    CHECK_EQ(size_t(0), static_cast<size_t>(input_desc));
     // Physical columns from a scan node are numbered from 1 in our system.
     input_col_descs_unique.emplace(
         col_id,

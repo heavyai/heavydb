@@ -494,8 +494,19 @@ class Executor {
     int32_t* error_code_;
     RenderAllocatorMap* render_allocator_map_;
     std::vector<std::pair<ResultPtr, std::vector<size_t>>> all_fragment_results_;
+
+    mutable std::mutex columnar_conversion_mutex_;
     mutable std::unordered_map<int, std::unordered_map<int, std::unique_ptr<const ColumnarResults>>>
         columnarized_table_cache_;
+    mutable std::unordered_map<InputColDescriptor, std::unordered_map<int, std::unique_ptr<const ColumnarResults>>>
+        columnarized_ref_table_cache_;
+
+    const int8_t* getColumn(const ResultPtr& buffer,
+                            const int table_id,
+                            const int frag_id,
+                            const int col_id,
+                            const Data_Namespace::MemoryLevel memory_level,
+                            const int device_id) const;
 
    public:
     ExecutionDispatch(Executor* executor,
@@ -527,10 +538,8 @@ class Executor {
              const size_t ctx_idx,
              const int64_t rowid_lookup_key) noexcept;
 
-    const int8_t* getColumn(const ResultPtr& buffer,
-                            const int table_id,
+    const int8_t* getColumn(const InputColDescriptor& col_desc,
                             const int frag_id,
-                            const int col_id,
                             const Data_Namespace::MemoryLevel memory_level,
                             const int device_id) const;
 

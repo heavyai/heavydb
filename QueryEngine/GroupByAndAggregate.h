@@ -113,6 +113,42 @@ class ColumnarResults {
     }
   }
 
+  static std::unique_ptr<ColumnarResults> createIndexedResults(const ColumnarResults& values,
+                                                               const ColumnarResults& indices,
+                                                               const int which) {
+    const auto idx_buf = reinterpret_cast<const int64_t*>(indices.column_buffers_[which]);
+    const auto row_count = indices.num_rows_;
+    const auto col_count = values.column_buffers_.size();
+    std::unique_ptr<ColumnarResults> filtered_vals(new ColumnarResults(row_count, values.target_types_));
+    CHECK(filtered_vals->column_buffers_.empty());
+    for (size_t col_idx = 0; col_idx < col_count; ++col_idx) {
+      const auto byte_width = get_bit_width(indices.getColumnType(col_idx)) / 8;
+      auto write_ptr = static_cast<int8_t*>(checked_malloc(byte_width * row_count));
+      filtered_vals->column_buffers_.push_back(write_ptr);
+
+      for (size_t row_idx = 0; row_idx < row_count; ++row_idx, write_ptr += byte_width) {
+        const int8_t* read_ptr = values.column_buffers_[col_idx] + idx_buf[row_idx] * byte_width;
+        switch (byte_width) {
+          case 8:
+            *reinterpret_cast<int64_t*>(write_ptr) = *reinterpret_cast<const int64_t*>(read_ptr);
+            break;
+          case 4:
+            *reinterpret_cast<int32_t*>(write_ptr) = *reinterpret_cast<const int32_t*>(read_ptr);
+            break;
+          case 2:
+            *reinterpret_cast<int16_t*>(write_ptr) = *reinterpret_cast<const int16_t*>(read_ptr);
+            break;
+          case 1:
+            *reinterpret_cast<int8_t*>(write_ptr) = *reinterpret_cast<const int8_t*>(read_ptr);
+            break;
+          default:
+            CHECK(false);
+        }
+      }
+    }
+    return filtered_vals;
+  }
+
   ~ColumnarResults() {
     for (const auto column_buffer : column_buffers_) {
       free((void*)column_buffer);
@@ -130,6 +166,9 @@ class ColumnarResults {
   }
 
  private:
+  ColumnarResults(const size_t num_rows, const std::vector<SQLTypeInfo>& target_types)
+      : num_rows_(num_rows), target_types_(target_types) {}
+
   std::vector<const int8_t*> column_buffers_;
   const size_t num_rows_;
   const std::vector<SQLTypeInfo> target_types_;
