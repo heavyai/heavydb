@@ -1217,8 +1217,12 @@ std::vector<TargetInfo> generate_random_groups_target_infos() {
   return target_infos;
 }
 
-std::vector<OneRow> get_rows_sorted_by_col(const ResultSet& rs, const size_t col_idx) {
+std::vector<OneRow> get_rows_sorted_by_col(ResultSet& rs, const size_t col_idx) {
+  std::list<Analyzer::OrderEntry> order_entries;
+  order_entries.emplace_back(1, false, false);
+  rs.sort(order_entries, 0);
   std::vector<OneRow> result;
+
   while (true) {
     const auto row = rs.getNextRow(false, false);
     if (row.empty()) {
@@ -2032,68 +2036,58 @@ convenient for debugging
 
 /* Non_Perfect_Hash_Row_Based testcases */
 // TBD_FLOW #2
-TEST(ReduceRandomGroups,
-     DISABLED_BaselineHash_Large_5050) {  // TBD_BUG - fails: # groups in merged ResultSet is correct, but SUM & COUNT
-                                          // are wrong, AVG is correct - why ?
+TEST(ReduceRandomGroups, BaselineHash_Large_5050) {
   const auto target_infos = generate_random_groups_target_infos();
   const auto query_mem_desc = baseline_hash_two_col_desc_large(target_infos, 8);
   EvenNumberGenerator gen1;
   EvenNumberGenerator gen2;
   const int prct1 = 50, prct2 = 50;
   bool silent = false;  // true/false - don't/do print diagnostic messages
-  // silent = true;
+  silent = true;
   test_reduce_random_groups(target_infos, query_mem_desc, gen1, gen2, prct1, prct2, silent);
 }
 
-TEST(ReduceRandomGroups,
-     DISABLED_BaselineHash_Large_7525) {  // TBD_BUG - fails: # groups in merged ResultSet is correct, but SUM & COUNT
-                                          // are wrong, AVG is correct - why ?
+TEST(ReduceRandomGroups, BaselineHash_Large_7525) {
   const auto target_infos = generate_random_groups_target_infos();
   const auto query_mem_desc = baseline_hash_two_col_desc_large(target_infos, 8);
   EvenNumberGenerator gen1;
   EvenNumberGenerator gen2;
   const int prct1 = 75, prct2 = 25;
   bool silent = false;  // true/false - don't/do print diagnostic messages
-  // silent = true;
+  silent = true;
   test_reduce_random_groups(target_infos, query_mem_desc, gen1, gen2, prct1, prct2, silent);
 }
 
-TEST(ReduceRandomGroups,
-     DISABLED_BaselineHash_Large_2575) {  // TBD_BUG - fails: # groups in merged ResultSet is correct, but SUM & COUNT
-                                          // are wrong, AVG is correct - why ?
+TEST(ReduceRandomGroups, BaselineHash_Large_2575) {
   const auto target_infos = generate_random_groups_target_infos();
   const auto query_mem_desc = baseline_hash_two_col_desc_large(target_infos, 8);
   EvenNumberGenerator gen1;
   EvenNumberGenerator gen2;
   const int prct1 = 25, prct2 = 75;
   bool silent = false;  // true/false - don't/do print diagnostic messages
-  // silent = true;
+  silent = true;
   test_reduce_random_groups(target_infos, query_mem_desc, gen1, gen2, prct1, prct2, silent);
 }
 
-TEST(ReduceRandomGroups,
-     DISABLED_BaselineHash_Large_1020) {  // TBD_BUG - fails: # groups in merged ResultSet is correct, but SUM & COUNT
-                                          // are wrong, AVG is correct - why ?
+TEST(ReduceRandomGroups, BaselineHash_Large_1020) {
   const auto target_infos = generate_random_groups_target_infos();
   const auto query_mem_desc = baseline_hash_two_col_desc_large(target_infos, 8);
   EvenNumberGenerator gen1;
   EvenNumberGenerator gen2;
   const int prct1 = 10, prct2 = 20;
   bool silent = false;  // true/false - don't/do print diagnostic messages
-  // silent = true;
+  silent = true;
   test_reduce_random_groups(target_infos, query_mem_desc, gen1, gen2, prct1, prct2, silent);
 }
 
-TEST(ReduceRandomGroups,
-     DISABLED_BaselineHash_Large_100100) {  // TBD_BUG - fails: # groups in merged ResultSet is correct, but SUM & COUNT
-                                            // are wrong, AVG is correct - why ?
+TEST(ReduceRandomGroups, BaselineHash_Large_100100) {
   const auto target_infos = generate_random_groups_target_infos();
   const auto query_mem_desc = baseline_hash_two_col_desc_large(target_infos, 8);
   EvenNumberGenerator gen1;
   EvenNumberGenerator gen2;
   const int prct1 = 100, prct2 = 100;
   bool silent = false;  // true/false - don't/do print diagnostic messages
-  // silent = true;
+  silent = true;
   test_reduce_random_groups(target_infos, query_mem_desc, gen1, gen2, prct1, prct2, silent);
 }
 
@@ -2149,9 +2143,7 @@ TEST(ReduceRandomGroups, PerfectHashOneColColumnar_Small_100100) {
 
 /* Non_Perfect_Hash_Column_Based testcases */
 // TBD_FLOW #4
-TEST(ReduceRandomGroups,
-     DISABLED_BaselineHashColumnar_Large_5050) {  // TBD_BUG - fails: # groups in merged ResultSet is correct, but SUM &
-                                                  // COUNT are wrong, AVG is correct - why ? SUM / 1 ?
+TEST(ReduceRandomGroups, BaselineHashColumnar_Large_5050) {
   const auto target_infos = generate_random_groups_target_infos();
   auto query_mem_desc = baseline_hash_two_col_desc_large(target_infos, 8);
   query_mem_desc.output_columnar = true;
@@ -2159,13 +2151,11 @@ TEST(ReduceRandomGroups,
   EvenNumberGenerator gen2;
   const int prct1 = 50, prct2 = 50;
   bool silent = false;  // true/false - don't/do print diagnostic messages
-  // silent = true;
+  silent = true;
   test_reduce_random_groups(target_infos, query_mem_desc, gen1, gen2, prct1, prct2, silent);
 }
 
-TEST(ReduceRandomGroups,
-     DISABLED_BaselineHashColumnar_Large_25100) {  // TBD_BUG - fails: # groups in merged ResultSet is correct, but SUM&
-                                                   // COUNT are wrong, AVG is correct - why ? SUM / 1 ?
+TEST(ReduceRandomGroups, BaselineHashColumnar_Large_25100) {
   const auto target_infos = generate_random_groups_target_infos();
   auto query_mem_desc = baseline_hash_two_col_desc_large(target_infos, 8);
   query_mem_desc.output_columnar = true;
@@ -2173,13 +2163,11 @@ TEST(ReduceRandomGroups,
   EvenNumberGenerator gen2;
   const int prct1 = 25, prct2 = 100;
   bool silent = false;  // true/false - don't/do print diagnostic messages
-  // silent = true;
+  silent = true;
   test_reduce_random_groups(target_infos, query_mem_desc, gen1, gen2, prct1, prct2, silent);
 }
 
-TEST(ReduceRandomGroups,
-     DISABLED_BaselineHashColumnar_Large_10025) {  // TBD_BUG - fails: # groups in merged ResultSet is correct, but SUM&
-                                                   // COUNT are wrong, AVG is correct - why ? SUM / 1 ?
+TEST(ReduceRandomGroups, BaselineHashColumnar_Large_10025) {
   const auto target_infos = generate_random_groups_target_infos();
   auto query_mem_desc = baseline_hash_two_col_desc_large(target_infos, 8);
   query_mem_desc.output_columnar = true;
@@ -2187,13 +2175,11 @@ TEST(ReduceRandomGroups,
   EvenNumberGenerator gen2;
   const int prct1 = 100, prct2 = 25;
   bool silent = false;  // true/false - don't/do print diagnostic messages
-  // silent = true;
+  silent = true;
   test_reduce_random_groups(target_infos, query_mem_desc, gen1, gen2, prct1, prct2, silent);
 }
 
-TEST(ReduceRandomGroups,
-     DISABLED_BaselineHashColumnar_Large_100100) {  // TBD_BUG - fails: # groups in merged ResultSet is correct, but
-                                                    // SUM& COUNT are wrong, AVG is correct - why ? SUM / 1 ?
+TEST(ReduceRandomGroups, BaselineHashColumnar_Large_100100) {
   const auto target_infos = generate_random_groups_target_infos();
   auto query_mem_desc = baseline_hash_two_col_desc_large(target_infos, 8);
   query_mem_desc.output_columnar = true;
@@ -2201,7 +2187,7 @@ TEST(ReduceRandomGroups,
   EvenNumberGenerator gen2;
   const int prct1 = 100, prct2 = 100;
   bool silent = false;  // true/false - don't/do print diagnostic messages
-  // silent = true;
+  silent = true;
   test_reduce_random_groups(target_infos, query_mem_desc, gen1, gen2, prct1, prct2, silent);
 }
 

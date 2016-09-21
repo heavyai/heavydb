@@ -206,7 +206,6 @@ void ResultSetStorage::reduceOneEntryBaseline(int8_t* this_buff,
                                        get_row_qw_count(query_mem_desc_),
                                        nullptr);
   }
-  initializeBaselineValueSlots(this_entry_slots);
   reduceOneEntrySlotsBaseline(this_entry_slots, that_buff_i64, that_entry_idx, that_entry_count);
 }
 
