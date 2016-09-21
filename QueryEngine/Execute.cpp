@@ -3983,8 +3983,64 @@ size_t get_mapped_frag_id_of_src_table(const std::vector<std::pair<int, size_t>>
 
 }  // namespace
 
+const int8_t* Executor::ExecutionDispatch::getScanColumn(
+    const int table_id,
+    const int frag_id,
+    const int col_id,
+    const std::map<int, const TableFragments*>& all_tables_fragments,
+    std::list<std::shared_ptr<Chunk_NS::Chunk>>& chunk_holder,
+    std::list<ChunkIter>& chunk_iter_holder,
+    const Data_Namespace::MemoryLevel memory_level,
+    const int device_id) const {
+  static std::mutex str_dec_mutex;  // TODO(alex): remove
+  const auto fragments_it = all_tables_fragments.find(table_id);
+  CHECK(fragments_it != all_tables_fragments.end());
+  const auto fragments = fragments_it->second;
+  const auto& fragment = (*fragments)[frag_id];
+  std::shared_ptr<Chunk_NS::Chunk> chunk;
+  auto chunk_meta_it = fragment.chunkMetadataMap.find(col_id);
+  CHECK(chunk_meta_it != fragment.chunkMetadataMap.end());
+  CHECK(table_id > 0);
+  auto cd = get_column_descriptor(col_id, table_id, cat_);
+  CHECK(cd);
+  {
+    ChunkKey chunk_key{cat_.get_currentDB().dbId, table_id, col_id, fragment.fragmentId};
+    std::lock_guard<std::mutex> lock(str_dec_mutex);
+    chunk = Chunk_NS::Chunk::getChunk(cd,
+                                      &cat_.get_dataMgr(),
+                                      chunk_key,
+                                      memory_level,
+                                      memory_level == Data_Namespace::CPU_LEVEL ? 0 : device_id,
+                                      chunk_meta_it->second.numBytes,
+                                      chunk_meta_it->second.numElements);
+    chunk_holder.push_back(chunk);
+  }
+  const auto col_type = get_column_type(col_id, table_id, cd, executor_->temporary_tables_);
+  const bool is_real_string = col_type.is_string() && col_type.get_compression() == kENCODING_NONE;
+  if (is_real_string || col_type.is_array()) {
+    CHECK_GT(table_id, 0);
+    CHECK(chunk_meta_it != fragment.chunkMetadataMap.end());
+    chunk_iter_holder.push_back(chunk->begin_iterator(chunk_meta_it->second));
+    auto& chunk_iter = chunk_iter_holder.back();
+    if (memory_level == Data_Namespace::CPU_LEVEL) {
+      return reinterpret_cast<int8_t*>(&chunk_iter);
+    } else {
+      CHECK_EQ(Data_Namespace::GPU_LEVEL, memory_level);
+      auto& data_mgr = cat_.get_dataMgr();
+      auto chunk_iter_gpu = alloc_gpu_mem(&data_mgr, sizeof(ChunkIter), device_id, nullptr);
+      copy_to_gpu(&data_mgr, chunk_iter_gpu, &chunk_iter, sizeof(ChunkIter), device_id);
+      return reinterpret_cast<int8_t*>(chunk_iter_gpu);
+    }
+  } else {
+    auto ab = chunk->get_buffer();
+    CHECK(ab->getMemoryPtr());
+    return ab->getMemoryPtr();  // @TODO(alex) change to use ChunkIter
+  }
+}
+
 const int8_t* Executor::ExecutionDispatch::getColumn(const InputColDescriptor& col_desc,
                                                      const int frag_id,
+                                                     const std::map<int, const TableFragments*>& all_tables_fragments,
                                                      const Data_Namespace::MemoryLevel memory_level,
                                                      const int device_id) const {
   if (!col_desc.isIndirect()) {
@@ -4002,12 +4058,15 @@ const int8_t* Executor::ExecutionDispatch::getColumn(const InputColDescriptor& c
   const auto iter_table_id = col_desc.getIterDesc().getTableId();
   const auto iter_col_id = col_desc.getIterIndex();
   const auto& iter_buffer = get_temporary_table(executor_->temporary_tables_, iter_table_id);
-  const auto& ref_buffer = get_temporary_table(executor_->temporary_tables_, ref_table_id);
+  const bool ref_tab_is_result = col_desc.getIndirectDesc().getSourceType() == InputSourceType::RESULT;
+
   const InputColDescriptor iter_desc(iter_col_id, iter_table_id, col_desc.getIterDesc().getNestLevel());
   CHECK_LE(size_t(3), ra_exe_unit_.join_dimensions.size());
   const std::vector<std::pair<int, size_t>> previous_join_dims(ra_exe_unit_.join_dimensions.begin(),
                                                                std::prev(ra_exe_unit_.join_dimensions.end()));
   const auto ref_frag_id = get_mapped_frag_id_of_src_table(previous_join_dims, ref_table_id, frag_id);
+  CacheKey sub_key;
+  auto ref_col_id_for_cache = ref_col_id;
   {
     std::lock_guard<std::mutex> columnar_conversion_guard(columnar_conversion_mutex_);
     if (columnarized_table_cache_.empty() || !columnarized_table_cache_.count(ref_table_id)) {
@@ -4016,36 +4075,64 @@ const int8_t* Executor::ExecutionDispatch::getColumn(const InputColDescriptor& c
     }
     auto& frag_id_to_iters = columnarized_table_cache_[iter_table_id];
     if (frag_id_to_iters.empty() || !frag_id_to_iters.count(frag_id)) {
-      frag_id_to_iters.insert(std::make_pair(
-          frag_id, std::unique_ptr<const ColumnarResults>(columnarize_result(iter_buffer, iter_table_id))));
-    }
-
-    if (columnarized_table_cache_.empty() || !columnarized_table_cache_.count(ref_table_id)) {
-      columnarized_table_cache_.insert(
-          std::make_pair(ref_table_id, std::unordered_map<int, std::unique_ptr<const ColumnarResults>>()));
-    }
-    auto& frag_id_to_ref = columnarized_table_cache_[ref_table_id];
-    if (frag_id_to_ref.empty() || !frag_id_to_ref.count(ref_frag_id)) {
-      frag_id_to_ref.insert(std::make_pair(
-          ref_frag_id, std::unique_ptr<const ColumnarResults>(columnarize_result(ref_buffer, ref_table_id))));
+      frag_id_to_iters.insert(
+          std::make_pair(frag_id, std::unique_ptr<const ColumnarResults>(columnarize_result(iter_buffer, frag_id))));
     }
 
     if (columnarized_ref_table_cache_.empty() || !columnarized_ref_table_cache_.count(iter_desc)) {
       columnarized_ref_table_cache_.insert(
-          std::make_pair(iter_desc, std::unordered_map<int, std::unique_ptr<const ColumnarResults>>()));
+          std::make_pair(iter_desc, std::unordered_map<CacheKey, std::unique_ptr<const ColumnarResults>>()));
     }
     auto& frag_id_to_result = columnarized_ref_table_cache_[iter_desc];
-    if (frag_id_to_result.empty() || !frag_id_to_result.count(frag_id)) {
-      frag_id_to_result.insert(
-          std::make_pair(frag_id,
-                         ColumnarResults::createIndexedResults(
-                             *frag_id_to_ref[ref_frag_id], *frag_id_to_iters[frag_id], iter_col_id)));
+    if (ref_tab_is_result) {
+      const auto& ref_buffer = get_temporary_table(executor_->temporary_tables_, ref_table_id);
+      if (columnarized_table_cache_.empty() || !columnarized_table_cache_.count(ref_table_id)) {
+        columnarized_table_cache_.insert(
+            std::make_pair(ref_table_id, std::unordered_map<int, std::unique_ptr<const ColumnarResults>>()));
+      }
+      auto& frag_id_to_ref = columnarized_table_cache_[ref_table_id];
+      if (frag_id_to_ref.empty() || !frag_id_to_ref.count(ref_frag_id)) {
+        frag_id_to_ref.insert(std::make_pair(
+            ref_frag_id, std::unique_ptr<const ColumnarResults>(columnarize_result(ref_buffer, ref_table_id))));
+      }
+      sub_key = {frag_id};
+      if (frag_id_to_result.empty() || !frag_id_to_result.count(sub_key)) {
+        frag_id_to_result.insert(
+            std::make_pair(sub_key,
+                           ColumnarResults::createIndexedResults(
+                               *frag_id_to_ref[ref_frag_id], *frag_id_to_iters[frag_id], iter_col_id)));
+      }
+    } else {
+      sub_key = {frag_id, ref_col_id};
+      if (frag_id_to_result.empty() || !frag_id_to_result.count(sub_key)) {
+        const auto fragments_it = all_tables_fragments.find(ref_table_id);
+        CHECK(fragments_it != all_tables_fragments.end());
+        const auto fragments = fragments_it->second;
+        const auto& fragment = (*fragments)[ref_frag_id];
+        std::shared_ptr<Chunk_NS::Chunk> chunk;
+        auto chunk_meta_it = fragment.chunkMetadataMap.find(ref_col_id);
+        CHECK(chunk_meta_it != fragment.chunkMetadataMap.end());
+        std::list<std::shared_ptr<Chunk_NS::Chunk>> chunk_holder;
+        std::list<ChunkIter> chunk_iter_holder;
+        auto col_buffer = getScanColumn(ref_table_id,
+                                        ref_frag_id,
+                                        ref_col_id,
+                                        all_tables_fragments,
+                                        chunk_holder,
+                                        chunk_iter_holder,
+                                        Data_Namespace::CPU_LEVEL,
+                                        device_id);
+        ColumnarResults ref_values(col_buffer, fragment.numTuples, chunk_meta_it->second.sqlType);
+        frag_id_to_result.insert(std::make_pair(
+            sub_key, ColumnarResults::createIndexedResults(ref_values, *frag_id_to_iters[frag_id], iter_col_id)));
+      }
+      ref_col_id_for_cache = 0;
     }
   }
   CHECK_GE(ref_col_id, 0);
   CHECK_NE(size_t(0), columnarized_ref_table_cache_.count(iter_desc));
-  return getColumn(columnarized_ref_table_cache_[iter_desc][ref_frag_id].get(),
-                   ref_col_id,
+  return getColumn(columnarized_ref_table_cache_[iter_desc][sub_key].get(),
+                   ref_col_id_for_cache,
                    &cat_.get_dataMgr(),
                    memory_level,
                    device_id);
@@ -4433,7 +4520,7 @@ std::vector<const int8_t*> Executor::fetchIterTabFrags(const size_t frag_id,
   std::vector<const int8_t*> frag_iter_buffers;
   for (size_t i = 0; i < (*table)->colCount(); ++i) {
     frag_iter_buffers.push_back(execution_dispatch.getColumn(
-        InputColDescriptor(i, table_desc.getTableId(), 0), frag_id, Data_Namespace::CPU_LEVEL, device_id));
+        InputColDescriptor(i, table_desc.getTableId(), 0), frag_id, {}, Data_Namespace::CPU_LEVEL, device_id));
   }
   return frag_iter_buffers;
 }
@@ -4448,9 +4535,7 @@ std::pair<std::vector<std::vector<const int8_t*>>, std::vector<std::vector<const
     const Catalog_Namespace::Catalog& cat,
     std::list<ChunkIter>& chunk_iterators,
     std::list<std::shared_ptr<Chunk_NS::Chunk>>& chunks) {
-  static std::mutex str_dec_mutex;  // TODO(alex): remove
-
-  CHECK_EQ(all_tables_fragments.size(), selected_fragments.size());
+  CHECK_GE(all_tables_fragments.size(), selected_fragments.size());
 
   const auto& col_global_ids = ra_exe_unit.input_col_descs;
   const auto& input_descs = ra_exe_unit.input_descs;
@@ -4483,53 +4568,26 @@ std::pair<std::vector<std::vector<const int8_t*>>, std::vector<std::vector<const
       CHECK_LT(static_cast<size_t>(it->second), plan_state_->global_to_local_col_ids_.size());
       const size_t frag_id = selected_frag_ids[local_col_to_frag_pos[it->second]];
       CHECK_LT(frag_id, fragments->size());
-      const auto& fragment = (*fragments)[frag_id];
       auto memory_level_for_column = memory_level;
       if (plan_state_->columns_to_fetch_.find(col_id.getColId()) == plan_state_->columns_to_fetch_.end()) {
         memory_level_for_column = Data_Namespace::CPU_LEVEL;
       }
-      std::shared_ptr<Chunk_NS::Chunk> chunk;
-      auto chunk_meta_it = fragment.chunkMetadataMap.find(col_id.getColId());
-      if (cd) {
-        CHECK(chunk_meta_it != fragment.chunkMetadataMap.end());
-        ChunkKey chunk_key{cat.get_currentDB().dbId, table_id, col_id.getColId(), fragment.fragmentId};
-        std::lock_guard<std::mutex> lock(str_dec_mutex);
-        chunk = Chunk_NS::Chunk::getChunk(cd,
-                                          &cat.get_dataMgr(),
-                                          chunk_key,
-                                          memory_level_for_column,
-                                          memory_level_for_column == Data_Namespace::CPU_LEVEL ? 0 : device_id,
-                                          chunk_meta_it->second.numBytes,
-                                          chunk_meta_it->second.numElements);
-        chunks.push_back(chunk);
-      }
+
       const auto col_type = get_column_type(col_id.getColId(), table_id, cd, temporary_tables_);
       const bool is_real_string = col_type.is_string() && col_type.get_compression() == kENCODING_NONE;
-      if (is_real_string || col_type.is_array()) {
-        CHECK_GT(table_id, 0);
-        CHECK(chunk_meta_it != fragment.chunkMetadataMap.end());
-        chunk_iterators.push_back(chunk->begin_iterator(chunk_meta_it->second));
-        auto& chunk_iter = chunk_iterators.back();
-        if (memory_level_for_column == Data_Namespace::CPU_LEVEL) {
-          frag_col_buffers[it->second] = reinterpret_cast<int8_t*>(&chunk_iter);
-        } else {
-          CHECK_EQ(Data_Namespace::GPU_LEVEL, memory_level_for_column);
-          auto& data_mgr = cat.get_dataMgr();
-          auto chunk_iter_gpu = alloc_gpu_mem(&data_mgr, sizeof(ChunkIter), device_id, nullptr);
-          copy_to_gpu(&data_mgr, chunk_iter_gpu, &chunk_iter, sizeof(ChunkIter), device_id);
-          frag_col_buffers[it->second] = reinterpret_cast<int8_t*>(chunk_iter_gpu);
-        }
+      if (col_id.getScanDesc().getSourceType() == InputSourceType::RESULT) {
+        CHECK(!is_real_string && !col_type.is_array());
+        frag_col_buffers[it->second] =
+            execution_dispatch.getColumn(col_id, frag_id, all_tables_fragments, memory_level_for_column, device_id);
       } else {
-        const bool input_is_result = col_id.getScanDesc().getSourceType() == InputSourceType::RESULT;
-        CHECK_NE(input_is_result, static_cast<bool>(chunk));
-        if (input_is_result) {
-          frag_col_buffers[it->second] =
-              execution_dispatch.getColumn(col_id, frag_id, memory_level_for_column, device_id);
-        } else {
-          auto ab = chunk->get_buffer();
-          CHECK(ab->getMemoryPtr());
-          frag_col_buffers[it->second] = ab->getMemoryPtr();  // @TODO(alex) change to use ChunkIter
-        }
+        frag_col_buffers[it->second] = execution_dispatch.getScanColumn(table_id,
+                                                                        frag_id,
+                                                                        col_id.getColId(),
+                                                                        all_tables_fragments,
+                                                                        chunks,
+                                                                        chunk_iterators,
+                                                                        memory_level_for_column,
+                                                                        device_id);
       }
     }
     all_frag_col_buffers.push_back(frag_col_buffers);

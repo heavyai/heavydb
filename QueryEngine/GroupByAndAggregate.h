@@ -113,6 +113,13 @@ class ColumnarResults {
     }
   }
 
+  ColumnarResults(const int8_t* one_col_buffer, const size_t num_rows, const SQLTypeInfo& target_type)
+      : column_buffers_(1), num_rows_(num_rows), target_types_{target_type} {
+    const auto buf_size = num_rows * get_bit_width(target_type) / 8;
+    column_buffers_[0] = static_cast<const int8_t*>(checked_malloc(buf_size));
+    memcpy(((void*)column_buffers_[0]), one_col_buffer, buf_size);
+  }
+
   static std::unique_ptr<ColumnarResults> createIndexedResults(const ColumnarResults& values,
                                                                const ColumnarResults& indices,
                                                                const int which) {
@@ -122,7 +129,7 @@ class ColumnarResults {
     std::unique_ptr<ColumnarResults> filtered_vals(new ColumnarResults(row_count, values.target_types_));
     CHECK(filtered_vals->column_buffers_.empty());
     for (size_t col_idx = 0; col_idx < col_count; ++col_idx) {
-      const auto byte_width = get_bit_width(indices.getColumnType(col_idx)) / 8;
+      const auto byte_width = get_bit_width(values.getColumnType(col_idx)) / 8;
       auto write_ptr = static_cast<int8_t*>(checked_malloc(byte_width * row_count));
       filtered_vals->column_buffers_.push_back(write_ptr);
 

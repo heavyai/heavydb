@@ -25,6 +25,8 @@
 #include <llvm/IR/Value.h>
 #include <cuda.h>
 
+#include <boost/functional/hash.hpp>
+
 #include <algorithm>
 #include <condition_variable>
 #include <functional>
@@ -228,6 +230,15 @@ struct RelAlgExecutionUnit {
 };
 
 class ExtensionFunction;
+
+namespace std {
+template <>
+struct hash<std::vector<int>> {
+  size_t operator()(const std::vector<int>& vec) const {
+    return vec.size() ^ boost::hash_range(vec.begin(), vec.end());
+  }
+};
+}  // std
 
 class Executor {
   static_assert(sizeof(float) == 4 && sizeof(double) == 8,
@@ -488,6 +499,8 @@ class Executor {
     std::shared_ptr<JoinHashTable> join_hash_table_;
   };
 
+  typedef std::deque<Fragmenter_Namespace::FragmentInfo> TableFragments;
+
   class ExecutionDispatch {
    private:
     Executor* executor_;
@@ -505,10 +518,11 @@ class Executor {
     RenderAllocatorMap* render_allocator_map_;
     std::vector<std::pair<ResultPtr, std::vector<size_t>>> all_fragment_results_;
 
+    typedef std::vector<int> CacheKey;
     mutable std::mutex columnar_conversion_mutex_;
     mutable std::unordered_map<int, std::unordered_map<int, std::unique_ptr<const ColumnarResults>>>
         columnarized_table_cache_;
-    mutable std::unordered_map<InputColDescriptor, std::unordered_map<int, std::unique_ptr<const ColumnarResults>>>
+    mutable std::unordered_map<InputColDescriptor, std::unordered_map<CacheKey, std::unique_ptr<const ColumnarResults>>>
         columnarized_ref_table_cache_;
 
     const int8_t* getColumn(const ResultPtr& buffer,
@@ -548,8 +562,18 @@ class Executor {
              const size_t ctx_idx,
              const int64_t rowid_lookup_key) noexcept;
 
+    const int8_t* getScanColumn(const int table_id,
+                                const int frag_id,
+                                const int col_id,
+                                const std::map<int, const TableFragments*>& all_tables_fragments,
+                                std::list<std::shared_ptr<Chunk_NS::Chunk>>& chunk_holder,
+                                std::list<ChunkIter>& chunk_iter_holder,
+                                const Data_Namespace::MemoryLevel memory_level,
+                                const int device_id) const;
+
     const int8_t* getColumn(const InputColDescriptor& col_desc,
                             const int frag_id,
+                            const std::map<int, const TableFragments*>& all_tables_fragments,
                             const Data_Namespace::MemoryLevel memory_level,
                             const int device_id) const;
 
@@ -604,8 +628,6 @@ class Executor {
                          RenderAllocatorMap* render_allocator_map,
                          const int session_id,
                          const int render_widget_id);
-
-  typedef std::deque<Fragmenter_Namespace::FragmentInfo> TableFragments;
 
   void dispatchFragments(const std::function<void(const ExecutorDeviceType chosen_device_type,
                                                   int chosen_device_id,
