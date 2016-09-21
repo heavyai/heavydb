@@ -132,7 +132,7 @@ inline const ResultPtr& get_temporary_table(const TemporaryTables* temporary_tab
   const auto it = temporary_tables->find(table_id);
   CHECK(it != temporary_tables->end());
   const auto& temp = it->second;
-  CHECK(boost::get<RowSetPtr>(temp) || boost::get<IterTabPtr>(temp));
+  CHECK(boost::get<RowSetPtr>(&temp) || boost::get<IterTabPtr>(&temp));
   return temp;
 }
 
@@ -147,13 +147,15 @@ inline const SQLTypeInfo get_column_type(const int col_id,
     return cd->columnType;
   }
   const auto& temp = get_temporary_table(temporary_tables, table_id);
-  if (const auto& rows = boost::get<RowSetPtr>(temp)) {
-    return rows->getColType(col_id);
-  } else if (const auto& table = boost::get<IterTabPtr>(temp)) {
-    return table->getColType(col_id);
-  } else {
-    CHECK(false);
+  if (const auto rows = boost::get<RowSetPtr>(&temp)) {
+    CHECK(*rows);
+    return (*rows)->getColType(col_id);
+  } else if (const auto tab = boost::get<IterTabPtr>(&temp)) {
+    CHECK(*tab);
+    return (*tab)->getColType(col_id);
   }
+
+  CHECK(false);
 }
 
 template <typename PtrTy>
@@ -180,9 +182,8 @@ inline const ColumnarResults* columnarize_result(const ResultPtr& result, const 
     return rows_to_columnar_results(*rows, (*rows)->colCount());
   } else if (const auto table = boost::get<IterTabPtr>(&result)) {
     return rows_to_columnar_results(*table, frag_id);
-  } else {
-    CHECK(false);
   }
+  CHECK(false);
   return nullptr;
 }
 
@@ -620,16 +621,21 @@ class Executor {
                          std::mutex& scheduler_mutex,
                          std::unordered_set<int>& available_gpus,
                          int& available_cpus);
+  std::vector<const int8_t*> fetchIterTabFrags(const size_t frag_id,
+                                               const ExecutionDispatch& execution_dispatch,
+                                               const InputDescriptor& table_desc,
+                                               const int device_id);
 
-  std::vector<std::vector<const int8_t*>> fetchChunks(const ExecutionDispatch&,
-                                                      const RelAlgExecutionUnit& ra_exe_unit,
-                                                      const int device_id,
-                                                      const Data_Namespace::MemoryLevel,
-                                                      const std::map<int, const TableFragments*>&,
-                                                      const std::map<int, std::vector<size_t>>& selected_fragments,
-                                                      const Catalog_Namespace::Catalog&,
-                                                      std::list<ChunkIter>&,
-                                                      std::list<std::shared_ptr<Chunk_NS::Chunk>>&);
+  std::pair<std::vector<std::vector<const int8_t*>>, std::vector<std::vector<const int8_t*>>> fetchChunks(
+      const ExecutionDispatch&,
+      const RelAlgExecutionUnit& ra_exe_unit,
+      const int device_id,
+      const Data_Namespace::MemoryLevel,
+      const std::map<int, const TableFragments*>&,
+      const std::map<int, std::vector<size_t>>& selected_fragments,
+      const Catalog_Namespace::Catalog&,
+      std::list<ChunkIter>&,
+      std::list<std::shared_ptr<Chunk_NS::Chunk>>&);
 
   void buildSelectedFragsMapping(std::vector<std::vector<size_t>>& selected_fragments_crossjoin,
                                  std::vector<size_t>& local_col_to_frag_pos,

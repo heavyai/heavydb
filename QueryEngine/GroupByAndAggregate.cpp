@@ -32,6 +32,7 @@ QueryExecutionContext::QueryExecutionContext(const QueryMemoryDescriptor& query_
                                              const ExecutorDeviceType device_type,
                                              const int device_id,
                                              const std::vector<std::vector<const int8_t*>>& col_buffers,
+                                             const std::vector<std::vector<const int8_t*>>& iter_buffers,
                                              std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                                              const bool output_columnar,
                                              const bool sort_on_gpu,
@@ -42,6 +43,7 @@ QueryExecutionContext::QueryExecutionContext(const QueryMemoryDescriptor& query_
       device_type_(device_type),
       device_id_(device_id),
       col_buffers_(col_buffers),
+      iter_buffers_(iter_buffers),
       num_buffers_{device_type == ExecutorDeviceType::CPU
                        ? 1
                        : executor->blockSize() * (query_mem_desc_.blocksShareMemory() ? 1 : executor->gridSize())},
@@ -703,6 +705,7 @@ std::unique_ptr<QueryExecutionContext> QueryMemoryDescriptor::getQueryExecutionC
     const ExecutorDeviceType device_type,
     const int device_id,
     const std::vector<std::vector<const int8_t*>>& col_buffers,
+    const std::vector<std::vector<const int8_t*>>& iter_buffers,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
     const bool output_columnar,
     const bool sort_on_gpu,
@@ -713,6 +716,7 @@ std::unique_ptr<QueryExecutionContext> QueryMemoryDescriptor::getQueryExecutionC
                                                                           device_type,
                                                                           device_id,
                                                                           col_buffers,
+                                                                          iter_buffers,
                                                                           row_set_mem_owner,
                                                                           output_columnar,
                                                                           sort_on_gpu,

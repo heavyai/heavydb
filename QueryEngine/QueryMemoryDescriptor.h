@@ -98,6 +98,7 @@ struct QueryMemoryDescriptor {
       const ExecutorDeviceType device_type,
       const int device_id,
       const std::vector<std::vector<const int8_t*>>& col_buffers,
+      const std::vector<std::vector<const int8_t*>>& iter_buffers,
       std::shared_ptr<RowSetMemoryOwner>,
       const bool output_columnar,
       const bool sort_on_gpu,

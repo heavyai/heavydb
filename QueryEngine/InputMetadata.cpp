@@ -106,19 +106,21 @@ void collect_table_infos(std::vector<Fragmenter_Namespace::TableInfo>& table_inf
       CHECK_LT(temp_table_id, 0);
       const auto it = temporary_tables.find(temp_table_id);
       CHECK(it != temporary_tables.end());
-      if (const auto& rows = boost::get<RowSetPtr>(it->second)) {
-        table_infos.push_back(synthesize_table_info(rows));
-      } else if (const auto& table = boost::get<IterTabPtr>(it->second)) {
-        table_infos.push_back(synthesize_table_info(table));
+      if (const auto rows = boost::get<RowSetPtr>(&it->second)) {
+        CHECK(*rows);
+        table_infos.push_back(synthesize_table_info(*rows));
+      } else if (const auto table = boost::get<IterTabPtr>(&it->second)) {
+        CHECK(*table);
+        table_infos.push_back(synthesize_table_info(*table));
       } else {
         CHECK(false);
       }
       continue;
     }
     CHECK(input_desc.getSourceType() == InputSourceType::TABLE);
-    const auto table_descriptor = cat.getMetadataForTable(input_desc.getTableId());
-    CHECK(table_descriptor);
-    const auto fragmenter = table_descriptor->fragmenter;
+    const auto td = cat.getMetadataForTable(input_desc.getTableId());
+    CHECK(td);
+    const auto fragmenter = td->fragmenter;
     CHECK(fragmenter);
     table_infos.push_back(fragmenter->getFragmentsForQuery());
   }
@@ -132,12 +134,12 @@ size_t get_frag_count_of_table(const int table_id,
   auto it = temporary_tables.find(table_id);
   if (it != temporary_tables.end()) {
     CHECK_GE(int(0), table_id);
-    CHECK(boost::get<RowSetPtr>(it->second));
+    CHECK(boost::get<RowSetPtr>(&it->second));
     return size_t(1);
   } else {
-    const auto table_descriptor = cat.getMetadataForTable(table_id);
-    CHECK(table_descriptor);
-    const auto fragmenter = table_descriptor->fragmenter;
+    const auto td = cat.getMetadataForTable(table_id);
+    CHECK(td);
+    const auto fragmenter = td->fragmenter;
     CHECK(fragmenter);
     return fragmenter->getFragmentsForQuery().fragments.size();
   }

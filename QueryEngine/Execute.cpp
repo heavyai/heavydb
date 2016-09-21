@@ -3102,15 +3102,15 @@ RowSetPtr Executor::reduceMultiDeviceResults(const RelAlgExecutionUnit& ra_exe_u
                                           ExecutorDeviceType::CPU);
   }
 
-  auto& first = boost::get<RowSetPtr>(results_per_device.front().first);
-  CHECK(first);
-  auto reduced_results = boost::make_unique<ResultRows>(*first);
+  auto first = boost::get<RowSetPtr>(&results_per_device.front().first);
+  CHECK(first && *first);
+  auto reduced_results = boost::make_unique<ResultRows>(**first);
   CHECK(reduced_results);
 
   for (size_t i = 1; i < results_per_device.size(); ++i) {
-    auto& next = boost::get<RowSetPtr>(results_per_device[i].first);
-    CHECK(next);
-    reduced_results->reduce(*next, query_mem_desc, output_columnar);
+    auto next = boost::get<RowSetPtr>(&results_per_device[i].first);
+    CHECK(next && *next);
+    reduced_results->reduce(**next, query_mem_desc, output_columnar);
   }
 
   row_set_mem_owner->addLiteralStringDict(lit_str_dict_);
@@ -3235,14 +3235,12 @@ ResultPtr results_union(std::vector<std::pair<ResultPtr, std::vector<size_t>>>& 
     return lhs.second < rhs.second;
   });
 
-  switch (results_per_device.front().first.which()) {
-    case RESPTR_TYPE::ROWSET:
-      return get_merged_result<RowSetPtr>(results_per_device);
-    case RESPTR_TYPE::ITERTAB:
-      return get_merged_result<IterTabPtr>(results_per_device);
-    default:
-      CHECK(false);
+  if (boost::get<RowSetPtr>(&results_per_device.front().first)) {
+    return get_merged_result<RowSetPtr>(results_per_device);
+  } else if (boost::get<IterTabPtr>(&results_per_device.front().first)) {
+    return get_merged_result<IterTabPtr>(results_per_device);
   }
+  CHECK(false);
   return RowSetPtr(nullptr);
 }
 
@@ -3415,7 +3413,7 @@ RowSetPtr Executor::executeResultPlan(const Planner::Result* result_plan,
   CHECK_EQ(column_buffers.size(), static_cast<size_t>(in_col_count));
   std::vector<int64_t> init_agg_vals(query_mem_desc.agg_col_widths.size());
   auto query_exe_context = query_mem_desc.getQueryExecutionContext(
-      init_agg_vals, this, ExecutorDeviceType::CPU, 0, {}, row_set_mem_owner_, false, false, nullptr);
+      init_agg_vals, this, ExecutorDeviceType::CPU, 0, {}, {}, row_set_mem_owner_, false, false, nullptr);
   const auto hoist_buf = serializeLiterals(compilation_result.literal_values, 0);
   *error_code = 0;
   std::vector<std::vector<const int8_t*>> multi_frag_col_buffers{column_buffers};
@@ -3755,17 +3753,14 @@ Executor::ExecutionDispatch::ExecutionDispatch(Executor* executor,
 namespace {
 
 inline bool needs_skip_result(const ResultPtr& res) {
-  switch (res.which()) {
-    case RESPTR_TYPE::ROWSET: {
-      const auto& rows = boost::get<RowSetPtr>(res);
-      return !rows || rows->definitelyHasNoRows();
-    }
-    case RESPTR_TYPE::ITERTAB:
-      // Keep empty table in result array when no error
-      return !boost::get<IterTabPtr>(res);
-    default:
-      return false;
+  if (auto rows = boost::get<RowSetPtr>(&res)) {
+    return !*rows || (*rows)->definitelyHasNoRows();
+  } else if (auto tab = boost::get<IterTabPtr>(&res)) {
+    // Keep empty table in result array when no error
+    return !*tab;
   }
+
+  return false;
 }
 
 }  // namespace
@@ -3815,6 +3810,7 @@ void Executor::ExecutionDispatch::run(const ExecutorDeviceType chosen_device_typ
     gpu_lock.reset(new std::lock_guard<std::mutex>(executor_->gpu_exec_mutex_[chosen_device_id]));
   }
   std::vector<std::vector<const int8_t*>> col_buffers;
+  std::vector<std::vector<const int8_t*>> iter_buffers;
   try {
     std::map<int, const TableFragments*> all_tables_fragments;
     for (size_t tab_idx = 0, tab_cnt = ra_exe_unit_.input_descs.size(); tab_idx < tab_cnt; ++tab_idx) {
@@ -3836,15 +3832,15 @@ void Executor::ExecutionDispatch::run(const ExecutorDeviceType chosen_device_typ
       const auto& fragments = query_infos_[extra_tab_base + tab_idx].fragments;
       all_tables_fragments.insert(std::make_pair(table_id, &fragments));
     }
-    col_buffers = executor_->fetchChunks(*this,
-                                         ra_exe_unit_,
-                                         chosen_device_id,
-                                         memory_level,
-                                         all_tables_fragments,
-                                         frag_ids,
-                                         cat_,
-                                         chunk_iterators,
-                                         chunks);
+    std::tie(col_buffers, iter_buffers) = executor_->fetchChunks(*this,
+                                                                 ra_exe_unit_,
+                                                                 chosen_device_id,
+                                                                 memory_level,
+                                                                 all_tables_fragments,
+                                                                 frag_ids,
+                                                                 cat_,
+                                                                 chunk_iterators,
+                                                                 chunks);
   } catch (const OutOfMemory&) {
     std::lock_guard<std::mutex> lock(reduce_mutex);
     *error_code_ = ERR_OUT_OF_GPU_MEM;
@@ -3864,6 +3860,7 @@ void Executor::ExecutionDispatch::run(const ExecutorDeviceType chosen_device_typ
                                                                          chosen_device_type,
                                                                          chosen_device_id,
                                                                          col_buffers,
+                                                                         iter_buffers,
                                                                          row_set_mem_owner_,
                                                                          compilation_result.output_columnar,
                                                                          compilation_result.query_mem_desc.sortOnGpu(),
@@ -3885,6 +3882,7 @@ void Executor::ExecutionDispatch::run(const ExecutorDeviceType chosen_device_typ
                                                                        chosen_device_type,
                                                                        chosen_device_id,
                                                                        col_buffers,
+                                                                       iter_buffers,
                                                                        row_set_mem_owner_,
                                                                        compilation_result.output_columnar,
                                                                        compilation_result.query_mem_desc.sortOnGpu(),
@@ -4424,7 +4422,23 @@ void Executor::dispatchFragments(const std::function<void(const ExecutorDeviceTy
   }
 }
 
-std::vector<std::vector<const int8_t*>> Executor::fetchChunks(
+std::vector<const int8_t*> Executor::fetchIterTabFrags(const size_t frag_id,
+                                                       const ExecutionDispatch& execution_dispatch,
+                                                       const InputDescriptor& table_desc,
+                                                       const int device_id) {
+  CHECK(table_desc.getSourceType() == InputSourceType::RESULT);
+  const auto& temp = get_temporary_table(temporary_tables_, table_desc.getTableId());
+  const auto table = boost::get<IterTabPtr>(&temp);
+  CHECK(table && *table);
+  std::vector<const int8_t*> frag_iter_buffers;
+  for (size_t i = 0; i < (*table)->colCount(); ++i) {
+    frag_iter_buffers.push_back(execution_dispatch.getColumn(
+        InputColDescriptor(i, table_desc.getTableId(), 0), frag_id, Data_Namespace::CPU_LEVEL, device_id));
+  }
+  return frag_iter_buffers;
+}
+
+std::pair<std::vector<std::vector<const int8_t*>>, std::vector<std::vector<const int8_t*>>> Executor::fetchChunks(
     const ExecutionDispatch& execution_dispatch,
     const RelAlgExecutionUnit& ra_exe_unit,
     const int device_id,
@@ -4448,6 +4462,9 @@ std::vector<std::vector<const int8_t*>> Executor::fetchChunks(
   CartesianProduct<std::vector<std::vector<size_t>>> frag_ids_crossjoin(selected_fragments_crossjoin);
 
   std::vector<std::vector<const int8_t*>> all_frag_col_buffers;
+  std::vector<std::vector<const int8_t*>> all_frag_iter_buffers;
+  const bool needs_fetch_iterators =
+      ra_exe_unit.join_dimensions.size() > 2 && dynamic_cast<Analyzer::IterExpr*>(ra_exe_unit.target_exprs.front());
 
   for (const auto& selected_frag_ids : frag_ids_crossjoin) {
     std::vector<const int8_t*> frag_col_buffers(plan_state_->global_to_local_col_ids_.size());
@@ -4516,8 +4533,13 @@ std::vector<std::vector<const int8_t*>> Executor::fetchChunks(
       }
     }
     all_frag_col_buffers.push_back(frag_col_buffers);
+    if (needs_fetch_iterators) {
+      CHECK_EQ(size_t(2), selected_fragments_crossjoin.size());
+      all_frag_iter_buffers.push_back(
+          fetchIterTabFrags(selected_frag_ids[0], execution_dispatch, ra_exe_unit.input_descs[0], device_id));
+    }
   }
-  return all_frag_col_buffers;
+  return {all_frag_col_buffers, all_frag_iter_buffers};
 }
 
 void Executor::buildSelectedFragsMapping(std::vector<std::vector<size_t>>& selected_fragments_crossjoin,
@@ -4695,18 +4717,12 @@ bool output_iter_tab(const std::vector<Analyzer::Expr*>& target_exprs) {
 
 bool check_rows_less_than_needed(const ResultPtr& results, const size_t scan_limit) {
   CHECK(scan_limit);
-  switch (results.which()) {
-    case RESPTR_TYPE::ROWSET: {
-      const auto& rows = boost::get<RowSetPtr>(results);
-      return (rows && rows->rowCount() < scan_limit);
-    }
-    case RESPTR_TYPE::ITERTAB: {
-      const auto& tab = boost::get<IterTabPtr>(results);
-      return (tab && tab->rowCount() < scan_limit);
-    }
-    default:
-      CHECK(false);
+  if (const auto rows = boost::get<RowSetPtr>(&results)) {
+    return (*rows && (*rows)->rowCount() < scan_limit);
+  } else if (const auto tab = boost::get<IterTabPtr>(&results)) {
+    return (*tab && (*tab)->rowCount() < scan_limit);
   }
+  CHECK(false);
 }
 
 }  // namespace

@@ -269,6 +269,7 @@ class QueryExecutionContext : boost::noncopyable {
                         const ExecutorDeviceType device_type,
                         const int device_id,
                         const std::vector<std::vector<const int8_t*>>& col_buffers,
+                        const std::vector<std::vector<const int8_t*>>& iter_buffers,
                         std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                         const bool output_columnar,
                         const bool sort_on_gpu,
@@ -396,6 +397,7 @@ class QueryExecutionContext : boost::noncopyable {
   const ExecutorDeviceType device_type_;
   const int device_id_;
   const std::vector<std::vector<const int8_t*>>& col_buffers_;
+  const std::vector<std::vector<const int8_t*>>& iter_buffers_;
   const size_t num_buffers_;
 
   std::vector<int64_t*> group_by_buffers_;

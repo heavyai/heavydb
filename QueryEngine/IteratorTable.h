@@ -27,7 +27,7 @@ class IteratorTable {
                 const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                 int64_t* group_by_buffer,
                 const size_t groups_buffer_entry_count,
-                const std::vector<std::vector<const int8_t*>>& col_buffers,
+                const std::vector<std::vector<const int8_t*>>& iter_buffers,
                 const ssize_t frag_id,
                 const ExecutorDeviceType device_type,
                 const int device_id);
@@ -44,9 +44,7 @@ class IteratorTable {
     buffer_frags_.insert(buffer_frags_.end(), that.buffer_frags_.begin(), that.buffer_frags_.end());
   }
 
-  void fetchLazy(const std::unordered_map<size_t, ssize_t>& lazy_col_local_ids,
-                 const std::vector<std::vector<const int8_t*>>& col_buffers,
-                 const ssize_t frag_id);
+  void fetchLazy(const std::vector<std::vector<const int8_t*>>& iter_buffers, const ssize_t frag_id);
 
   size_t colCount() const { return just_explain_ ? 1 : query_mem_desc_.agg_col_widths.size(); }
 
@@ -92,10 +90,5 @@ class IteratorTable {
 typedef std::unique_ptr<IteratorTable> IterTabPtr;
 
 typedef boost::variant<RowSetPtr, IterTabPtr> ResultPtr;
-
-enum RESPTR_TYPE {
-  ROWSET,
-  ITERTAB,
-};
 
 #endif  // QUERYENGINE_ITERATORTABLE_H
