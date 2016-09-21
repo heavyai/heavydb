@@ -409,7 +409,7 @@ std::pair<const RelAlgNode*, int> get_non_join_source_node(const RelAlgNode* crt
 }
 
 void collect_used_input_desc(std::vector<InputDescriptor>& input_descs,
-                             std::unordered_set<InputColDescriptor>& input_col_descs_unique,
+                             std::unordered_set<std::shared_ptr<const InputColDescriptor>>& input_col_descs_unique,
                              const RelAlgNode* ra_node,
                              const std::unordered_set<const RexInput*>& source_used_inputs,
                              const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level) {
@@ -434,8 +434,8 @@ void collect_used_input_desc(std::vector<InputDescriptor>& input_descs,
     std::tie(indirect_input_ra, indirect_col_id) = get_non_join_source_node(input_ra, col_id);
     if (indirect_input_ra == input_ra) {
       CHECK_EQ(indirect_col_id, static_cast<ssize_t>(col_id));
-      input_col_descs_unique.emplace(
-          dynamic_cast<const RelScan*>(input_ra) ? col_id + 1 : col_id, table_id, input_desc);
+      input_col_descs_unique.insert(std::make_shared<const InputColDescriptor>(
+          dynamic_cast<const RelScan*>(input_ra) ? col_id + 1 : col_id, table_id, input_desc));
       continue;
     }
 
@@ -452,7 +452,7 @@ void collect_used_input_desc(std::vector<InputDescriptor>& input_descs,
     CHECK(!dynamic_cast<const RelScan*>(input_ra));
     CHECK_EQ(size_t(0), static_cast<size_t>(input_desc));
     // Physical columns from a scan node are numbered from 1 in our system.
-    input_col_descs_unique.emplace(
+    input_col_descs_unique.insert(std::make_shared<const IndirectInputColDescriptor>(
         col_id,
         table_id,
         input_desc,
@@ -461,12 +461,12 @@ void collect_used_input_desc(std::vector<InputDescriptor>& input_descs,
         input_desc,
         dynamic_cast<const RelScan*>(indirect_input_ra) ? indirect_col_id + 1 : indirect_col_id,
         indirect_table_id,
-        nest_level);
+        nest_level));
   }
 }
 
 template <class RA>
-std::pair<std::vector<InputDescriptor>, std::list<InputColDescriptor>> get_input_desc_impl(
+std::pair<std::vector<InputDescriptor>, std::list<std::shared_ptr<const InputColDescriptor>>> get_input_desc_impl(
     const RA* ra_node,
     const std::unordered_set<const RexInput*>& used_inputs,
     const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level) {
@@ -477,15 +477,19 @@ std::pair<std::vector<InputDescriptor>, std::list<InputColDescriptor>> get_input
     const int table_id = table_id_from_ra(input_ra);
     input_descs.emplace_back(table_id, nest_level);
   }
-  std::unordered_set<InputColDescriptor> input_col_descs_unique;
+  std::unordered_set<std::shared_ptr<const InputColDescriptor>> input_col_descs_unique;
   collect_used_input_desc(input_descs, input_col_descs_unique, ra_node, used_inputs, input_to_nest_level);
   collect_used_input_desc(
       input_descs, input_col_descs_unique, ra_node, get_join_source_used_inputs(ra_node), input_to_nest_level);
-  return {input_descs, std::list<InputColDescriptor>(input_col_descs_unique.begin(), input_col_descs_unique.end())};
+  return {input_descs,
+          std::list<std::shared_ptr<const InputColDescriptor>>(input_col_descs_unique.begin(),
+                                                               input_col_descs_unique.end())};
 }
 
 template <class RA>
-std::tuple<std::vector<InputDescriptor>, std::list<InputColDescriptor>, std::vector<std::shared_ptr<RexInput>>>
+std::tuple<std::vector<InputDescriptor>,
+           std::list<std::shared_ptr<const InputColDescriptor>>,
+           std::vector<std::shared_ptr<RexInput>>>
 get_input_desc(const RA* ra_node, const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level) {
   std::unordered_set<const RexInput*> used_inputs;
   std::vector<std::shared_ptr<RexInput>> used_inputs_owned;
@@ -812,7 +816,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createSortInputWorkUnit(const RelSort* 
   sort->setOutputMetainfo(source->getOutputMetainfo());
   return {{source_exe_unit.input_descs,
            source_exe_unit.extra_input_descs,
-           source_exe_unit.input_col_descs,
+           std::move(source_exe_unit.input_col_descs),
            source_exe_unit.simple_quals,
            source_exe_unit.quals,
            source_exe_unit.join_type,
@@ -1069,7 +1073,7 @@ std::vector<InputDescriptor> separate_extra_input_descs(std::vector<InputDescrip
 RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(const RelCompound* compound,
                                                                 const SortInfo& sort_info) {
   std::vector<InputDescriptor> input_descs;
-  std::list<InputColDescriptor> input_col_descs;
+  std::list<std::shared_ptr<const InputColDescriptor>> input_col_descs;
   const auto input_to_nest_level = get_input_nest_levels(compound);
   std::tie(input_descs, input_col_descs, std::ignore) = get_input_desc(compound, input_to_nest_level);
   const auto extra_input_descs = separate_extra_input_descs(input_descs);
@@ -1176,7 +1180,7 @@ std::pair<std::vector<TargetMetaInfo>, std::vector<std::shared_ptr<Analyzer::Exp
 
 RelAlgExecutor::WorkUnit RelAlgExecutor::createJoinWorkUnit(const RelJoin* join, const SortInfo& sort_info) {
   std::vector<InputDescriptor> input_descs;
-  std::list<InputColDescriptor> input_col_descs;
+  std::list<std::shared_ptr<const InputColDescriptor>> input_col_descs;
   const auto input_to_nest_level = get_input_nest_levels(join);
   std::tie(input_descs, input_col_descs, std::ignore) = get_input_desc(join, input_to_nest_level);
   const auto extra_input_descs = separate_extra_input_descs(input_descs);
@@ -1241,7 +1245,7 @@ std::vector<std::shared_ptr<Analyzer::Expr>> synthesize_inputs(
 RelAlgExecutor::WorkUnit RelAlgExecutor::createAggregateWorkUnit(const RelAggregate* aggregate,
                                                                  const SortInfo& sort_info) {
   std::vector<InputDescriptor> input_descs;
-  std::list<InputColDescriptor> input_col_descs;
+  std::list<std::shared_ptr<const InputColDescriptor>> input_col_descs;
   std::vector<std::shared_ptr<RexInput>> used_inputs_owned;
   const auto input_to_nest_level = get_input_nest_levels(aggregate);
   std::tie(input_descs, input_col_descs, used_inputs_owned) = get_input_desc(aggregate, input_to_nest_level);
@@ -1277,7 +1281,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createAggregateWorkUnit(const RelAggreg
 
 RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(const RelProject* project, const SortInfo& sort_info) {
   std::vector<InputDescriptor> input_descs;
-  std::list<InputColDescriptor> input_col_descs;
+  std::list<std::shared_ptr<const InputColDescriptor>> input_col_descs;
   const auto input_to_nest_level = get_input_nest_levels(project);
   std::tie(input_descs, input_col_descs, std::ignore) = get_input_desc(project, input_to_nest_level);
   const auto extra_input_descs = separate_extra_input_descs(input_descs);
@@ -1346,7 +1350,7 @@ std::pair<std::vector<TargetMetaInfo>, std::vector<std::shared_ptr<Analyzer::Exp
 RelAlgExecutor::WorkUnit RelAlgExecutor::createFilterWorkUnit(const RelFilter* filter, const SortInfo& sort_info) {
   CHECK_EQ(size_t(1), filter->inputCount());
   std::vector<InputDescriptor> input_descs;
-  std::list<InputColDescriptor> input_col_descs;
+  std::list<std::shared_ptr<const InputColDescriptor>> input_col_descs;
   std::vector<TargetMetaInfo> in_metainfo;
   std::vector<std::shared_ptr<RexInput>> used_inputs_owned;
   std::vector<std::shared_ptr<Analyzer::Expr>> target_exprs_owned;

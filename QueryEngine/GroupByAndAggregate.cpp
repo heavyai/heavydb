@@ -1114,7 +1114,7 @@ int8_t pick_target_compact_width(const RelAlgExecutionUnit& ra_exe_unit,
       CHECK(arg_ti.is_array());
       const auto& elem_ti = arg_ti.get_elem_type();
       if (elem_ti.is_string() && elem_ti.get_compression() == kENCODING_DICT) {
-        unnest_array_col_id = col_it->getColId();
+        unnest_array_col_id = (*col_it)->getColId();
       } else {
         compact_width = crt_min_byte_width;
         break;
@@ -1149,7 +1149,7 @@ int8_t pick_target_compact_width(const RelAlgExecutionUnit& ra_exe_unit,
       }
 
       const auto uoper = dynamic_cast<Analyzer::UOper*>(target);
-      if (uoper && uoper->get_optype() == kUNNEST && col_it->getColId() == unnest_array_col_id) {
+      if (uoper && uoper->get_optype() == kUNNEST && (*col_it)->getColId() == unnest_array_col_id) {
         const auto arg_ti = uoper->get_operand()->get_type_info();
         CHECK(arg_ti.is_array());
         const auto& elem_ti = arg_ti.get_elem_type();

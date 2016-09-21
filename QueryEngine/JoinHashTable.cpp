@@ -74,7 +74,7 @@ std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(
     const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
     const Catalog_Namespace::Catalog& cat,
     const std::vector<Fragmenter_Namespace::TableInfo>& query_infos,
-    const std::list<InputColDescriptor>& input_col_descs,
+    const std::list<std::shared_ptr<const InputColDescriptor>>& input_col_descs,
     const Data_Namespace::MemoryLevel memory_level,
     const int device_count,
     Executor* executor) {

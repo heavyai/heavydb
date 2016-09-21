@@ -137,12 +137,12 @@ class DeepCopyVisitor : public ScalarExprVisitor<std::shared_ptr<Analyzer::Expr>
 
 class IndirectToDirectColVisitor : public DeepCopyVisitor {
  public:
-  IndirectToDirectColVisitor(const std::list<InputColDescriptor>& col_descs) {
+  IndirectToDirectColVisitor(const std::list<std::shared_ptr<const InputColDescriptor>>& col_descs) {
     for (auto& desc : col_descs) {
-      if (!desc.isIndirect()) {
+      if (!std::dynamic_pointer_cast<const IndirectInputColDescriptor>(desc)) {
         continue;
       }
-      ind_col_id_to_desc_.insert(std::make_pair(desc.getColId(), &desc));
+      ind_col_id_to_desc_.insert(std::make_pair(desc->getColId(), desc.get()));
     }
   }
 
@@ -157,10 +157,11 @@ class IndirectToDirectColVisitor : public DeepCopyVisitor {
     if (desc_it->second->getScanDesc().getTableId() != col_var->get_table_id()) {
       return col_var->deep_copy();
     }
-    CHECK(desc_it->second->isIndirect());
+    auto ind_col_desc = dynamic_cast<const IndirectInputColDescriptor*>(desc_it->second);
+    CHECK(ind_col_desc);
     return makeExpr<Analyzer::ColumnVar>(col_var->get_type_info(),
-                                         desc_it->second->getIndirectDesc().getTableId(),
-                                         desc_it->second->getRefColIndex(),
+                                         ind_col_desc->getIndirectDesc().getTableId(),
+                                         ind_col_desc->getRefColIndex(),
                                          col_var->get_rte_idx());
   }
 
@@ -181,11 +182,12 @@ std::shared_ptr<Analyzer::Expr> rewrite_expr(const Analyzer::Expr* expr) {
   return visitor.visit(expr);
 }
 
-std::list<std::shared_ptr<Analyzer::Expr>> redirect_exprs(const std::list<std::shared_ptr<Analyzer::Expr>>& exprs,
-                                                          const std::list<InputColDescriptor>& col_descs) {
+std::list<std::shared_ptr<Analyzer::Expr>> redirect_exprs(
+    const std::list<std::shared_ptr<Analyzer::Expr>>& exprs,
+    const std::list<std::shared_ptr<const InputColDescriptor>>& col_descs) {
   bool has_indirect_col = false;
   for (const auto& desc : col_descs) {
-    if (desc.isIndirect()) {
+    if (std::dynamic_pointer_cast<const IndirectInputColDescriptor>(desc)) {
       has_indirect_col = true;
       break;
     }
@@ -203,11 +205,12 @@ std::list<std::shared_ptr<Analyzer::Expr>> redirect_exprs(const std::list<std::s
   return new_exprs;
 }
 
-std::vector<std::shared_ptr<Analyzer::Expr>> redirect_exprs(const std::vector<Analyzer::Expr*>& exprs,
-                                                            const std::list<InputColDescriptor>& col_descs) {
+std::vector<std::shared_ptr<Analyzer::Expr>> redirect_exprs(
+    const std::vector<Analyzer::Expr*>& exprs,
+    const std::list<std::shared_ptr<const InputColDescriptor>>& col_descs) {
   bool has_indirect_col = false;
   for (const auto& desc : col_descs) {
-    if (desc.isIndirect()) {
+    if (std::dynamic_pointer_cast<const IndirectInputColDescriptor>(desc)) {
       has_indirect_col = true;
       break;
     }
@@ -229,6 +232,6 @@ std::vector<std::shared_ptr<Analyzer::Expr>> redirect_exprs(const std::vector<An
 }
 
 std::shared_ptr<Analyzer::Expr> redirect_expr(const Analyzer::Expr* expr,
-                                              const std::list<InputColDescriptor>& col_descs) {
+                                              const std::list<std::shared_ptr<const InputColDescriptor>>& col_descs) {
   return expr ? IndirectToDirectColVisitor(col_descs).visit(expr) : nullptr;
 }
