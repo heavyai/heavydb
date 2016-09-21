@@ -252,6 +252,7 @@ RowSetPtr Executor::executeSelectPlan(const Planner::Plan* plan,
         {},
         groupby_exprs,
         target_exprs,
+        {},
         {order_entries, SortAlgorithm::Default, static_cast<size_t>(limit), static_cast<size_t>(offset)},
         scan_total_limit};
     QueryRewriter query_rewriter(ra_exe_unit_in, query_infos, this, agg_plan);
@@ -3287,6 +3288,7 @@ RowSetPtr Executor::executeResultPlan(const Planner::Result* result_plan,
                                                   {},
                                                   agg_plan->get_groupby_list(),
                                                   get_agg_target_exprs(agg_plan),
+                                                  {},
                                                   {{}, SortAlgorithm::Default, 0, 0},
                                                   0};
   QueryRewriter query_rewriter(ra_exe_unit_in, query_infos, this, result_plan);
@@ -3324,6 +3326,7 @@ RowSetPtr Executor::executeResultPlan(const Planner::Result* result_plan,
                                         {},
                                         {nullptr},
                                         get_agg_target_exprs(result_plan),
+                                        {},
                                         {
                                          order_entries, SortAlgorithm::Default, 0, 0,
                                         },
@@ -4764,15 +4767,6 @@ int32_t Executor::executePlanWithoutGroupBy(const RelAlgExecutionUnit& ra_exe_un
 
 namespace {
 
-bool output_iter_tab(const std::vector<Analyzer::Expr*>& target_exprs) {
-  for (const auto& expr : target_exprs) {
-    if (dynamic_cast<const Analyzer::IterExpr*>(expr)) {
-      return true;
-    }
-  }
-  return false;
-}
-
 bool check_rows_less_than_needed(const ResultPtr& results, const size_t scan_limit) {
   CHECK(scan_limit);
   if (const auto rows = boost::get<RowSetPtr>(&results)) {
@@ -4802,7 +4796,7 @@ int32_t Executor::executePlanWithGroupBy(const RelAlgExecutionUnit& ra_exe_unit,
                                          const uint32_t start_rowid,
                                          const uint32_t num_tables,
                                          RenderAllocatorMap* render_allocator_map) {
-  if (output_iter_tab(ra_exe_unit.target_exprs)) {
+  if (contains_iter_expr(ra_exe_unit.target_exprs)) {
     results = IterTabPtr(nullptr);
   } else {
     results = RowSetPtr(nullptr);

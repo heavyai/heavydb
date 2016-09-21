@@ -87,6 +87,15 @@ class IteratorTable {
   friend class QueryExecutionContext;
 };
 
+inline bool contains_iter_expr(const std::vector<Analyzer::Expr*>& target_exprs) {
+  for (const auto& expr : target_exprs) {
+    if (dynamic_cast<const Analyzer::IterExpr*>(expr)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 typedef std::unique_ptr<IteratorTable> IterTabPtr;
 
 typedef boost::variant<RowSetPtr, IterTabPtr> ResultPtr;

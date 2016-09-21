@@ -1974,10 +1974,18 @@ TEST(Select, InnerJoins) {
     c("SELECT y, z FROM test JOIN test_inner ON test.x = test_inner.x order by y;", dt);
 #ifdef ENABLE_JOIN_EXEC
     c("SELECT count(*) FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str = c.str;", dt);
+    c("SELECT count(*) FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str = c.str JOIN "
+      "join_test AS d ON c.x = d.x;",
+      dt);
 #else
     EXPECT_THROW(run_multiple_agg(
                      "SELECT count(*) FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c ON "
                      "b.str = c.str;",
+                     dt),
+                 std::runtime_error);
+    EXPECT_THROW(run_multiple_agg(
+                     "SELECT count(*) FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str = "
+                     "c.str JOIN join_test AS d ON c.x = d.x;",
                      dt),
                  std::runtime_error);
 #endif

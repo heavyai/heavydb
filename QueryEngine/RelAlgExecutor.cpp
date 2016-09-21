@@ -821,6 +821,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createSortInputWorkUnit(const RelSort* 
            source_exe_unit.outer_join_quals,
            source_exe_unit.groupby_exprs,
            source_exe_unit.target_exprs,
+           source_exe_unit.orig_target_exprs,
            {sort_info.order_entries, sort_algorithm, limit, offset},
            scan_total_limit},
           max_groups_buffer_entry_guess,
@@ -1090,11 +1091,12 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(const RelCompoun
                                         quals_cf.simple_quals,
                                         separated_quals.regular_quals,
                                         join_type,
-                                        {},
+                                        get_join_dimensions(get_data_sink(compound), cat_, temporary_tables_),
                                         inner_join_quals,
                                         get_outer_join_quals(compound, translator),
                                         groupby_exprs,
                                         target_exprs,
+                                        {},
                                         sort_info,
                                         0};
   const auto query_infos = get_table_infos(exe_unit.input_descs, cat_, temporary_tables_);
@@ -1119,16 +1121,38 @@ std::vector<TargetMetaInfo> get_inputs_meta(const RelScan* scan, const Catalog_N
   return in_metainfo;
 }
 
+std::vector<std::shared_ptr<Analyzer::Expr>> get_input_exprs(const RelJoin* join, const bool need_original) {
+  const auto join_type = join->getJoinType();
+  std::vector<std::shared_ptr<Analyzer::Expr>> target_exprs_owned;
+  const auto lhs = join->getInput(0);
+  if (need_original && dynamic_cast<const RelJoin*>(lhs)) {
+    const auto previous_join = static_cast<const RelJoin*>(lhs);
+    auto source_exprs_owned = get_input_exprs(previous_join, true);
+    for (size_t i = 0; i < source_exprs_owned.size(); ++i) {
+      const auto iter_ti = source_exprs_owned[i]->get_type_info();
+      auto iter_expr = std::make_shared<Analyzer::IterExpr>(iter_ti, table_id_from_ra(lhs), 0);
+      target_exprs_owned.push_back(iter_expr);
+    }
+  } else {
+    const auto iter_ti = SQLTypeInfo(kBIGINT, true);
+    auto iter_expr = std::make_shared<Analyzer::IterExpr>(iter_ti, table_id_from_ra(lhs), 0);
+    target_exprs_owned.push_back(iter_expr);
+  }
+
+  const auto rhs = join->getInput(1);
+  CHECK(!dynamic_cast<const RelJoin*>(rhs));
+  const auto iter_ti = SQLTypeInfo(kBIGINT, join_type == JoinType::INNER);
+  auto iter_expr = std::make_shared<Analyzer::IterExpr>(iter_ti, table_id_from_ra(rhs), 1);
+  target_exprs_owned.push_back(iter_expr);
+
+  return target_exprs_owned;
+}
+
 std::pair<std::vector<TargetMetaInfo>, std::vector<std::shared_ptr<Analyzer::Expr>>> get_inputs_meta(
     const RelJoin* join,
     const Catalog_Namespace::Catalog& cat) {
-  const auto join_type = join->getJoinType();
   std::vector<TargetMetaInfo> targets_meta;
-  std::vector<std::shared_ptr<Analyzer::Expr>> target_exprs_owned;
   const auto lhs = join->getInput(0);
-  const auto lhs_iter_ti = SQLTypeInfo(kBIGINT, true);
-  auto lhs_iter_expr = std::make_shared<Analyzer::IterExpr>(lhs_iter_ti, table_id_from_ra(lhs), 0);
-  target_exprs_owned.push_back(lhs_iter_expr);
   if (auto scan = dynamic_cast<const RelScan*>(lhs)) {
     const auto lhs_in_meta = get_inputs_meta(scan, cat);
     targets_meta.insert(targets_meta.end(), lhs_in_meta.begin(), lhs_in_meta.end());
@@ -1136,12 +1160,8 @@ std::pair<std::vector<TargetMetaInfo>, std::vector<std::shared_ptr<Analyzer::Exp
     const auto& lhs_in_meta = lhs->getOutputMetainfo();
     targets_meta.insert(targets_meta.end(), lhs_in_meta.begin(), lhs_in_meta.end());
   }
-
   const auto rhs = join->getInput(1);
   CHECK(!dynamic_cast<const RelJoin*>(rhs));
-  const auto rhs_iter_ti = SQLTypeInfo(kBIGINT, join_type == JoinType::INNER);
-  auto rhs_iter_expr = std::make_shared<Analyzer::IterExpr>(rhs_iter_ti, table_id_from_ra(rhs), 1);
-  target_exprs_owned.push_back(rhs_iter_expr);
   if (auto scan = dynamic_cast<const RelScan*>(rhs)) {
     const auto rhs_in_meta = get_inputs_meta(scan, cat);
     targets_meta.insert(targets_meta.end(), rhs_in_meta.begin(), rhs_in_meta.end());
@@ -1149,7 +1169,7 @@ std::pair<std::vector<TargetMetaInfo>, std::vector<std::shared_ptr<Analyzer::Exp
     const auto& rhs_in_meta = rhs->getOutputMetainfo();
     targets_meta.insert(targets_meta.end(), rhs_in_meta.begin(), rhs_in_meta.end());
   }
-  return std::make_pair(targets_meta, target_exprs_owned);
+  return std::make_pair(targets_meta, get_input_exprs(join, false));
 }
 
 }  // namespace
@@ -1170,6 +1190,8 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createJoinWorkUnit(const RelJoin* join,
   std::vector<std::shared_ptr<Analyzer::Expr>> target_exprs_owned;
   std::tie(targets_meta, target_exprs_owned) = get_inputs_meta(join, cat_);
   target_exprs_owned_.insert(target_exprs_owned_.end(), target_exprs_owned.begin(), target_exprs_owned.end());
+  auto orig_target_exprs_owned = get_input_exprs(join, true);
+  target_exprs_owned_.insert(target_exprs_owned_.end(), orig_target_exprs_owned.begin(), orig_target_exprs_owned.end());
   join->setOutputMetainfo(targets_meta);
   return {{input_descs,
            extra_input_descs,
@@ -1182,6 +1204,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createJoinWorkUnit(const RelJoin* join,
            outer_join_quals,
            {nullptr},
            get_exprs_not_owned(target_exprs_owned),
+           get_exprs_not_owned(orig_target_exprs_owned),
            sort_info,
            0},
           max_groups_buffer_entry_default_guess,
@@ -1240,11 +1263,12 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createAggregateWorkUnit(const RelAggreg
            {},
            {},
            join_type,
-           {},
+           get_join_dimensions(get_data_sink(aggregate), cat_, temporary_tables_),
            get_inner_join_quals(aggregate, translator),
            get_outer_join_quals(aggregate, translator),
            groupby_exprs,
            target_exprs,
+           {},
            sort_info,
            0},
           max_groups_buffer_entry_default_guess,
@@ -1270,11 +1294,12 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(const RelProject*
            {},
            {},
            join_type,
-           {},
+           get_join_dimensions(get_data_sink(project), cat_, temporary_tables_),
            get_inner_join_quals(project, translator),
            get_outer_join_quals(project, translator),
            {nullptr},
            target_exprs,
+           {},
            sort_info,
            0},
           max_groups_buffer_entry_default_guess,
@@ -1345,11 +1370,12 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createFilterWorkUnit(const RelFilter* f
            {},
            separated_quals.regular_quals,
            join_type,
-           {},
+           get_join_dimensions(get_data_sink(filter), cat_, temporary_tables_),
            separated_quals.join_quals,
            get_outer_join_quals(filter, translator),
            {nullptr},
            target_exprs,
+           {},
            sort_info,
            0},
           max_groups_buffer_entry_default_guess,
