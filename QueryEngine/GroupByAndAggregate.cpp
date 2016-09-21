@@ -2,6 +2,7 @@
 #include "AggregateUtils.h"
 
 #include "ExpressionRange.h"
+#include "ExpressionRewrite.h"
 #include "InPlaceSort.h"
 #include "GpuInitGroups.h"
 #include "MaxwellCodegenPatch.h"
@@ -1002,7 +1003,8 @@ GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getColRangeInfo() {
 GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getExprRangeInfo(const Analyzer::Expr* expr) const {
   const int64_t guessed_range_max{255};  // TODO(alex): replace with educated guess
 
-  const auto expr_range = getExpressionRange(expr, query_infos_, executor_);
+  const auto expr_range =
+      getExpressionRange(redirect_expr(expr, ra_exe_unit_.input_col_descs).get(), query_infos_, executor_);
   switch (expr_range.getType()) {
     case ExpressionRangeType::Integer:
       return {GroupByColRangeType::OneColKnownRange,
@@ -1294,7 +1296,8 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
         return;
       } else {
         CHECK(!render_output);
-        const auto keyless_info = getKeylessInfo(ra_exe_unit_.target_exprs, is_group_by);
+        const auto redirected_targets = redirect_exprs(ra_exe_unit_.target_exprs, ra_exe_unit_.input_col_descs);
+        const auto keyless_info = getKeylessInfo(get_exprs_not_owned(redirected_targets), is_group_by);
         bool keyless =
             (!sort_on_gpu_hint || !many_entries(col_range_info.max, col_range_info.min, col_range_info.bucket)) &&
             !col_range_info.bucket && keyless_info.keyless;

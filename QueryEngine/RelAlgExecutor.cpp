@@ -646,15 +646,6 @@ std::vector<Analyzer::Expr*> translate_targets(std::vector<std::shared_ptr<Analy
   return target_exprs;
 }
 
-// TODO(alex): Adjust interfaces downstream and make this not needed.
-std::vector<Analyzer::Expr*> get_exprs_not_owned(const std::vector<std::shared_ptr<Analyzer::Expr>>& exprs) {
-  std::vector<Analyzer::Expr*> exprs_not_owned;
-  for (const auto expr : exprs) {
-    exprs_not_owned.push_back(expr.get());
-  }
-  return exprs_not_owned;
-}
-
 bool is_count_distinct(const Analyzer::Expr* expr) {
   const auto agg_expr = dynamic_cast<const Analyzer::AggExpr*>(expr);
   return agg_expr && agg_expr->get_is_distinct();

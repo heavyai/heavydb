@@ -66,17 +66,21 @@ RelAlgExecutionUnit QueryRewriter::rewriteConstrainedByIn(const std::shared_ptr<
   std::vector<Analyzer::Expr*> new_target_exprs;
   bool rewrite{false};
   size_t groupby_idx{0};
+  const auto redirected_exprs = redirect_exprs(ra_exe_unit_.groupby_exprs, ra_exe_unit_.input_col_descs);
+  auto it = redirected_exprs.begin();
   for (const auto group_expr : ra_exe_unit_.groupby_exprs) {
     CHECK(group_expr);
     ++groupby_idx;
     if (*group_expr == *in_vals->get_arg()) {
-      const auto expr_range = getExpressionRange(group_expr.get(), query_infos_, executor_);
+      const auto expr_range = getExpressionRange(it->get(), query_infos_, executor_);
       if (expr_range.getType() != ExpressionRangeType::Integer) {
+        ++it;
         continue;
       }
       const size_t use_constraint_thresh{10};
       const size_t range_sz = expr_range.getIntMax() - expr_range.getIntMin() + 1;
       if (range_sz <= in_vals->get_value_list().size() * use_constraint_thresh) {
+        ++it;
         continue;
       }
       new_groupby_list.push_back(case_expr);
@@ -105,6 +109,7 @@ RelAlgExecutionUnit QueryRewriter::rewriteConstrainedByIn(const std::shared_ptr<
     } else {
       new_groupby_list.push_back(group_expr);
     }
+    ++it;
   }
   if (!rewrite) {
     return ra_exe_unit_;

@@ -63,6 +63,111 @@ class OrToInVisitor : public ScalarExprVisitor<std::shared_ptr<Analyzer::InValue
   }
 };
 
+class DeepCopyVisitor : public ScalarExprVisitor<std::shared_ptr<Analyzer::Expr>> {
+ protected:
+  typedef std::shared_ptr<Analyzer::Expr> RetType;
+  RetType visitColumnVar(const Analyzer::ColumnVar* col_var) const override { return col_var->deep_copy(); }
+
+  RetType visitVar(const Analyzer::Var* var) const override { return var->deep_copy(); }
+
+  RetType visitConstant(const Analyzer::Constant* constant) const override { return constant->deep_copy(); }
+
+  RetType visitIterator(const Analyzer::IterExpr* iter) const override { return iter->deep_copy(); }
+
+  RetType visitUOper(const Analyzer::UOper* uoper) const override {
+    return makeExpr<Analyzer::UOper>(
+        uoper->get_type_info(), uoper->get_contains_agg(), uoper->get_optype(), visit(uoper->get_operand()));
+  }
+
+  RetType visitBinOper(const Analyzer::BinOper* bin_oper) const override {
+    return makeExpr<Analyzer::BinOper>(bin_oper->get_type_info(),
+                                       bin_oper->get_contains_agg(),
+                                       bin_oper->get_optype(),
+                                       bin_oper->get_qualifier(),
+                                       visit(bin_oper->get_left_operand()),
+                                       visit(bin_oper->get_right_operand()));
+  }
+
+  RetType visitInValues(const Analyzer::InValues* in_values) const override {
+    const auto& value_list = in_values->get_value_list();
+    std::list<RetType> new_list;
+    for (const auto in_value : value_list) {
+      new_list.push_back(visit(in_value.get()));
+    }
+    return makeExpr<Analyzer::InValues>(visit(in_values->get_arg()), new_list);
+  }
+
+  RetType visitCharLength(const Analyzer::CharLengthExpr* char_length) const override {
+    return makeExpr<Analyzer::CharLengthExpr>(visit(char_length->get_arg()), char_length->get_calc_encoded_length());
+  }
+
+  RetType visitLikeExpr(const Analyzer::LikeExpr* like) const override {
+    auto escape_expr = like->get_like_expr();
+    return makeExpr<Analyzer::LikeExpr>(visit(like->get_arg()),
+                                        visit(like->get_like_expr()),
+                                        escape_expr ? visit(escape_expr) : nullptr,
+                                        like->get_is_ilike(),
+                                        like->get_is_simple());
+  }
+
+  RetType visitCaseExpr(const Analyzer::CaseExpr* case_expr) const override {
+    std::list<std::pair<RetType, RetType>> new_list;
+    for (auto p : case_expr->get_expr_pair_list()) {
+      new_list.push_back(std::make_pair(visit(p.first.get()), visit(p.second.get())));
+    }
+    auto else_expr = case_expr->get_else_expr();
+    return makeExpr<Analyzer::CaseExpr>(case_expr->get_type_info(),
+                                        case_expr->get_contains_agg(),
+                                        new_list,
+                                        else_expr == nullptr ? nullptr : visit(else_expr));
+  }
+
+  RetType visitDatetruncExpr(const Analyzer::DatetruncExpr* datetrunc) const override {
+    return makeExpr<Analyzer::DatetruncExpr>(datetrunc->get_type_info(),
+                                             datetrunc->get_contains_agg(),
+                                             datetrunc->get_field(),
+                                             visit(datetrunc->get_from_expr()));
+  }
+
+  RetType visitExtractExpr(const Analyzer::ExtractExpr* extract) const override {
+    return makeExpr<Analyzer::ExtractExpr>(
+        extract->get_type_info(), extract->get_contains_agg(), extract->get_field(), visit(extract->get_from_expr()));
+  }
+};
+
+class IndirectToDirectColVisitor : public DeepCopyVisitor {
+ public:
+  IndirectToDirectColVisitor(const std::list<InputColDescriptor>& col_descs) {
+    for (auto& desc : col_descs) {
+      if (!desc.isIndirect()) {
+        continue;
+      }
+      ind_col_id_to_desc_.insert(std::make_pair(desc.getColId(), &desc));
+    }
+  }
+
+ protected:
+  RetType visitColumnVar(const Analyzer::ColumnVar* col_var) const override {
+    if (!ind_col_id_to_desc_.count(col_var->get_column_id())) {
+      return col_var->deep_copy();
+    }
+    auto desc_it = ind_col_id_to_desc_.find(col_var->get_column_id());
+    CHECK(desc_it != ind_col_id_to_desc_.end());
+    CHECK(desc_it->second);
+    if (desc_it->second->getScanDesc().getTableId() != col_var->get_table_id()) {
+      return col_var->deep_copy();
+    }
+    CHECK(desc_it->second->isIndirect());
+    return makeExpr<Analyzer::ColumnVar>(col_var->get_type_info(),
+                                         desc_it->second->getIndirectDesc().getTableId(),
+                                         desc_it->second->getRefColIndex(),
+                                         col_var->get_rte_idx());
+  }
+
+ private:
+  std::unordered_map<int, const InputColDescriptor*> ind_col_id_to_desc_;
+};
+
 }  // namespace
 
 std::shared_ptr<Analyzer::Expr> rewrite_expr(const Analyzer::Expr* expr) {
@@ -74,4 +179,56 @@ std::shared_ptr<Analyzer::Expr> rewrite_expr(const Analyzer::Expr* expr) {
   }
   OrToInVisitor visitor;
   return visitor.visit(expr);
+}
+
+std::list<std::shared_ptr<Analyzer::Expr>> redirect_exprs(const std::list<std::shared_ptr<Analyzer::Expr>>& exprs,
+                                                          const std::list<InputColDescriptor>& col_descs) {
+  bool has_indirect_col = false;
+  for (const auto& desc : col_descs) {
+    if (desc.isIndirect()) {
+      has_indirect_col = true;
+      break;
+    }
+  }
+
+  if (!has_indirect_col) {
+    return exprs;
+  }
+
+  IndirectToDirectColVisitor visitor(col_descs);
+  std::list<std::shared_ptr<Analyzer::Expr>> new_exprs;
+  for (auto& e : exprs) {
+    new_exprs.push_back(e ? visitor.visit(e.get()) : nullptr);
+  }
+  return new_exprs;
+}
+
+std::vector<std::shared_ptr<Analyzer::Expr>> redirect_exprs(const std::vector<Analyzer::Expr*>& exprs,
+                                                            const std::list<InputColDescriptor>& col_descs) {
+  bool has_indirect_col = false;
+  for (const auto& desc : col_descs) {
+    if (desc.isIndirect()) {
+      has_indirect_col = true;
+      break;
+    }
+  }
+
+  std::vector<std::shared_ptr<Analyzer::Expr>> new_exprs;
+  if (!has_indirect_col) {
+    for (auto& e : exprs) {
+      new_exprs.push_back(e ? e->deep_copy() : nullptr);
+    }
+    return new_exprs;
+  }
+
+  IndirectToDirectColVisitor visitor(col_descs);
+  for (auto& e : exprs) {
+    new_exprs.push_back(e ? visitor.visit(e) : nullptr);
+  }
+  return new_exprs;
+}
+
+std::shared_ptr<Analyzer::Expr> redirect_expr(const Analyzer::Expr* expr,
+                                              const std::list<InputColDescriptor>& col_descs) {
+  return expr ? IndirectToDirectColVisitor(col_descs).visit(expr) : nullptr;
 }

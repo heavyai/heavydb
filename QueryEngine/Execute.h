@@ -165,6 +165,15 @@ inline const ColumnarResults* rows_to_columnar_results(const PtrTy& result, cons
   return new ColumnarResults(*result, number, col_types);
 }
 
+// TODO(alex): Adjust interfaces downstream and make this not needed.
+inline std::vector<Analyzer::Expr*> get_exprs_not_owned(const std::vector<std::shared_ptr<Analyzer::Expr>>& exprs) {
+  std::vector<Analyzer::Expr*> exprs_not_owned;
+  for (const auto expr : exprs) {
+    exprs_not_owned.push_back(expr.get());
+  }
+  return exprs_not_owned;
+}
+
 inline const ColumnarResults* columnarize_result(const ResultPtr& result, const int frag_id) {
   if (const auto rows = boost::get<RowSetPtr>(&result)) {
     CHECK_EQ(0, frag_id);
@@ -724,6 +733,7 @@ class Executor {
 
   JoinInfo chooseJoinType(const std::list<std::shared_ptr<Analyzer::Expr>>&,
                           const std::vector<Fragmenter_Namespace::TableInfo>&,
+                          const std::list<InputColDescriptor>&,
                           const ExecutorDeviceType device_type);
 
   void bindInitGroupByBuffer(llvm::Function* query_func,

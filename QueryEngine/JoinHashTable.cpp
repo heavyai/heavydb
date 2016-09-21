@@ -1,5 +1,6 @@
 #include "JoinHashTable.h"
 #include "Execute.h"
+#include "ExpressionRewrite.h"
 #include "HashJoinRuntime.h"
 #include "RuntimeFunctions.h"
 
@@ -73,11 +74,15 @@ std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(
     const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
     const Catalog_Namespace::Catalog& cat,
     const std::vector<Fragmenter_Namespace::TableInfo>& query_infos,
+    const std::list<InputColDescriptor>& input_col_descs,
     const Data_Namespace::MemoryLevel memory_level,
     const int device_count,
     Executor* executor) {
   CHECK_EQ(kEQ, qual_bin_oper->get_optype());
-  const auto cols = get_cols(qual_bin_oper, cat, executor->temporary_tables_);
+  const auto redirected_bin_oper =
+      std::dynamic_pointer_cast<Analyzer::BinOper>(redirect_expr(qual_bin_oper.get(), input_col_descs));
+  CHECK(redirected_bin_oper);
+  const auto cols = get_cols(redirected_bin_oper, cat, executor->temporary_tables_);
   const auto inner_col = cols.first;
   if (!inner_col) {
     return nullptr;

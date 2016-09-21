@@ -3559,9 +3559,9 @@ ResultPtr Executor::executeWorkUnit(int32_t* error_code,
     max_groups_buffer_entry_guess = compute_buffer_entry_guess(query_infos);
   }
 
-  auto join_info = chooseJoinType(ra_exe_unit.inner_join_quals, query_infos, device_type);
+  auto join_info = chooseJoinType(ra_exe_unit.inner_join_quals, query_infos, ra_exe_unit.input_col_descs, device_type);
   if (join_info.join_impl_type_ == JoinImplType::Loop) {
-    join_info = chooseJoinType(ra_exe_unit.outer_join_quals, query_infos, device_type);
+    join_info = chooseJoinType(ra_exe_unit.outer_join_quals, query_infos, ra_exe_unit.input_col_descs, device_type);
   }
 
   int8_t crt_min_byte_width{get_min_byte_width()};
@@ -5517,6 +5517,7 @@ void Executor::allocateInnerScansIterators(const std::vector<InputDescriptor>& i
 
 Executor::JoinInfo Executor::chooseJoinType(const std::list<std::shared_ptr<Analyzer::Expr>>& join_quals,
                                             const std::vector<Fragmenter_Namespace::TableInfo>& query_infos,
+                                            const std::list<InputColDescriptor>& input_col_descs,
                                             const ExecutorDeviceType device_type) {
   CHECK(device_type != ExecutorDeviceType::Hybrid);
   const MemoryLevel memory_level{device_type == ExecutorDeviceType::GPU ? MemoryLevel::GPU_LEVEL
@@ -5534,8 +5535,8 @@ Executor::JoinInfo Executor::chooseJoinType(const std::list<std::shared_ptr<Anal
       const int device_count =
           device_type == ExecutorDeviceType::GPU ? catalog_->get_dataMgr().cudaMgr_->getDeviceCount() : 1;
       CHECK_GT(device_count, 0);
-      const auto join_hash_table =
-          JoinHashTable::getInstance(qual_bin_oper, *catalog_, query_infos, memory_level, device_count, this);
+      const auto join_hash_table = JoinHashTable::getInstance(
+          qual_bin_oper, *catalog_, query_infos, input_col_descs, memory_level, device_count, this);
       if (join_hash_table) {
         return Executor::JoinInfo(JoinImplType::HashOneToOne,
                                   std::vector<std::shared_ptr<Analyzer::BinOper>>{qual_bin_oper},
