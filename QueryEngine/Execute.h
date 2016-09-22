@@ -335,19 +335,19 @@ class Executor {
   llvm::Value* codegenArith(const Analyzer::BinOper*, const CompilationOptions&);
   bool checkExpressionRanges(const Analyzer::BinOper*, int64_t, int64_t);
   llvm::Value* codegenAdd(const Analyzer::BinOper*,
-			  llvm::Value*,
+                          llvm::Value*,
                           llvm::Value*,
                           const std::string& null_typename,
                           const std::string& null_check_suffix,
                           const SQLTypeInfo&);
   llvm::Value* codegenSub(const Analyzer::BinOper*,
-			  llvm::Value*,
+                          llvm::Value*,
                           llvm::Value*,
                           const std::string& null_typename,
                           const std::string& null_check_suffix,
                           const SQLTypeInfo&);
   llvm::Value* codegenMul(const Analyzer::BinOper*,
-			  llvm::Value*,
+                          llvm::Value*,
                           llvm::Value*,
                           const std::string& null_typename,
                           const std::string& null_check_suffix,
