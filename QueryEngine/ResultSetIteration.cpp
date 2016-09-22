@@ -255,7 +255,7 @@ TargetValue ResultSet::makeTargetValue(const int8_t* ptr,
                                        const bool translate_strings,
                                        const bool decimal_to_double) const {
   const auto& chosen_type = get_compact_type(target_info);
-  if (chosen_type.is_integer()) {
+  if (chosen_type.is_integer() | chosen_type.is_boolean() || chosen_type.is_time() || chosen_type.is_timeinterval()) {
     const auto ival = read_int_from_buff(ptr, compact_sz);
     if (inline_int_null_val(chosen_type) == ival) {
       return inline_int_null_val(target_info.sql_type);
