@@ -3876,7 +3876,7 @@ int8_t Executor::ExecutionDispatch::compile(const Executor::JoinInfo& join_info,
                                             const size_t max_groups_buffer_entry_guess,
                                             const int8_t crt_min_byte_width,
                                             const ExecutionOptions& options) {
-  int8_t actual_min_byte_wdith{MAX_BYTE_WIDTH_SUPPORTED};
+  int8_t actual_min_byte_width{MAX_BYTE_WIDTH_SUPPORTED};
   auto compile_on_cpu = [&]() {
     const CompilationOptions co_cpu{ExecutorDeviceType::CPU, co_.hoist_literals_, co_.opt_level_};
     try {
@@ -3911,7 +3911,7 @@ int8_t Executor::ExecutionDispatch::compile(const Executor::JoinInfo& join_info,
                                      join_info);
     }
     for (auto wids : compilation_result_cpu_.query_mem_desc.agg_col_widths) {
-      actual_min_byte_wdith = std::min(actual_min_byte_wdith, wids.compact);
+      actual_min_byte_width = std::min(actual_min_byte_width, wids.compact);
     }
   };
 
@@ -3954,7 +3954,7 @@ int8_t Executor::ExecutionDispatch::compile(const Executor::JoinInfo& join_info,
                                      join_info);
     }
     for (auto wids : compilation_result_gpu_.query_mem_desc.agg_col_widths) {
-      actual_min_byte_wdith = std::min(actual_min_byte_wdith, wids.compact);
+      actual_min_byte_width = std::min(actual_min_byte_width, wids.compact);
     }
   }
 
@@ -3964,7 +3964,7 @@ int8_t Executor::ExecutionDispatch::compile(const Executor::JoinInfo& join_info,
     }
     co_.device_type_ = ExecutorDeviceType::CPU;
   }
-  return std::max(actual_min_byte_wdith, crt_min_byte_width);
+  return std::max(actual_min_byte_width, crt_min_byte_width);
 }
 
 std::string Executor::ExecutionDispatch::getIR(const ExecutorDeviceType device_type) const {
