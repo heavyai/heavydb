@@ -140,11 +140,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInput(const RexInput*
     // We're at leaf (scan) level and not supposed to have input metadata,
     // the name and type information come directly from the catalog.
     CHECK(in_metainfo.empty());
-    const auto& field_names = scan_source->getFieldNames();
-    CHECK_LT(static_cast<size_t>(rex_input->getIndex()), field_names.size());
-    const auto& col_name = field_names[rex_input->getIndex()];
     const auto table_desc = scan_source->getTableDescriptor();
-    const auto cd = cat_.getMetadataForColumn(table_desc->tableId, col_name);
+    const auto cd = cat_.getMetadataForColumn(table_desc->tableId, rex_input->getIndex() + 1);
     CHECK(cd);
     auto col_ti = cd->columnType;
     if (cd->isVirtualCol) {
