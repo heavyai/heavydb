@@ -2525,81 +2525,17 @@ llvm::Value* Executor::codegenArith(const Analyzer::BinOper* bin_oper, const Com
 bool Executor::checkExpressionRanges(const Analyzer::BinOper* bin_oper,
 				     int64_t min,
 				     int64_t max) {
-  const auto optype = bin_oper->get_optype();
+  if (bin_oper->get_type_info().is_decimal())
+    return false;
+
   auto expr_range_info = cgen_state_->query_infos_.size() > 0
                              ? getExpressionRange(bin_oper, cgen_state_->query_infos_, this)
                              : ExpressionRange::makeInvalidRange();
-#ifndef NDEBUG
-  printf("Expression range check for %s: ",
-	 (optype == kPLUS) ? "ADD" : ((optype == kMINUS) ? "SUB" : ((optype == kMULTIPLY) ? "MUL" : "???")));
-  if (expr_range_info.getType() == ExpressionRangeType::Invalid) {
-    printf("InvalidRange\n");
-  } else if (expr_range_info.getType() != ExpressionRangeType::Integer) {
-    printf("Expected IntegerRange\n");
-  } else {
-    printf("0x%llx......0x%llx=%lld..%lld=0x%llx......0x%llx\n",
-	   min,
-	   expr_range_info.getIntMin(),
-	   expr_range_info.getIntMin(),
-	   expr_range_info.getIntMax(),
-	   expr_range_info.getIntMax(),
-	   max);
-  }
-  const auto lhs = bin_oper->get_left_operand();
-  const auto rhs = bin_oper->get_right_operand();
-  auto lhs_range_info = getExpressionRange(lhs, cgen_state_->query_infos_, this);
-  auto rhs_range_info = getExpressionRange(rhs, cgen_state_->query_infos_, this);
-  if (lhs_range_info.getType() == ExpressionRangeType::Invalid) {
-    printf("  LHS range: InvalidRange\n");
-  } else if (lhs_range_info.getType() != ExpressionRangeType::Integer) {
-    printf("  LHS range: NOT Integer\n");
-    if (lhs_range_info.getType() == ExpressionRangeType::FloatingPoint) {
-      printf("    LHS range: FloatingPoint: %f..%f\n",
-	     lhs_range_info.getFpMin(),
-	     lhs_range_info.getFpMax());
-    }
-  } else {
-    printf("  LHS range: 0x%llx......0x%llx .. 0x%llx......0x%llx\n",
-	   min,
-	   lhs_range_info.getIntMin(),
-	   lhs_range_info.getIntMax(),
-	   max);
-  }
-  if (rhs_range_info.getType() == ExpressionRangeType::Invalid) {
-    printf("  RHS range: InvalidRange\n");
-  } else if (rhs_range_info.getType() != ExpressionRangeType::Integer) {
-    printf("  RHS range: NOT Integer\n");
-    if (rhs_range_info.getType() == ExpressionRangeType::FloatingPoint) {
-      printf("    RHS range: FloatingPoint: %f..%f\n",
-	     rhs_range_info.getFpMin(),
-	     rhs_range_info.getFpMax());
-    }
-  } else {
-    printf("  RHS range: 0x%llx......0x%llx..0x%llx......0x%llx\n",
-	   min,
-	   rhs_range_info.getIntMin(),
-	   rhs_range_info.getIntMax(),
-	   max);
-  }
-#endif
-
-  if (expr_range_info.getType() != ExpressionRangeType::Integer) {
+  if (expr_range_info.getType() != ExpressionRangeType::Integer)
     return false;
-  }
-
-  if  (expr_range_info.getIntMin() >= min &&
-       expr_range_info.getIntMax() <= max) {
-#ifndef NDEBUG
-    printf("  Expression range is within limits: 0x%llx....0x%llx..0x%llx....0x%llx\n",
-	   min, expr_range_info.getIntMin(), expr_range_info.getIntMax(), max);
-#endif
+  if (expr_range_info.getIntMin() >= min && expr_range_info.getIntMax() <= max)
     return true;
-  }
 
-#ifndef NDEBUG
-  printf("  Possible oveflow, need a check: 0x%llx....0x%llx..0x%llx....0x%llx\n",
-	 min, expr_range_info.getIntMin(), expr_range_info.getIntMax(), max);
-#endif
   return false;
 }
 
