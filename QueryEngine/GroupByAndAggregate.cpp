@@ -1061,7 +1061,7 @@ GroupByAndAggregate::GroupByAndAggregate(Executor* executor,
                                          const ExecutorDeviceType device_type,
                                          const RelAlgExecutionUnit& ra_exe_unit,
                                          const bool render_output,
-                                         const std::vector<Fragmenter_Namespace::TableInfo>& query_infos,
+                                         const std::vector<InputTableInfo>& query_infos,
                                          std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                                          const size_t max_groups_buffer_entry_count,
                                          const size_t small_groups_buffer_entry_count,
@@ -1102,7 +1102,7 @@ GroupByAndAggregate::GroupByAndAggregate(Executor* executor,
 }
 
 int8_t pick_target_compact_width(const RelAlgExecutionUnit& ra_exe_unit,
-                                 const std::vector<Fragmenter_Namespace::TableInfo>& query_infos,
+                                 const std::vector<InputTableInfo>& query_infos,
                                  const int8_t crt_min_byte_width) {
   int8_t compact_width{0};
   auto col_it = ra_exe_unit.input_col_descs.begin();
@@ -1165,8 +1165,8 @@ int8_t pick_target_compact_width(const RelAlgExecutionUnit& ra_exe_unit,
   }
   if (!compact_width) {
     size_t total_tuples{0};
-    for (const auto& query_info : query_infos) {
-      total_tuples += query_info.numTuples;
+    for (const auto& qi : query_infos) {
+      total_tuples += qi.info.numTuples;
     }
     return total_tuples <= static_cast<size_t>(std::numeric_limits<uint32_t>::max()) ||
                    unnest_array_col_id != std::numeric_limits<int>::min()

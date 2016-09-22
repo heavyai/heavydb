@@ -87,35 +87,35 @@ bool ExpressionRange::operator==(const ExpressionRange& other) const {
 }
 
 ExpressionRange getExpressionRange(const Analyzer::BinOper* expr,
-                                   const std::vector<Fragmenter_Namespace::TableInfo>& query_infos,
+                                   const std::vector<InputTableInfo>& query_infos,
                                    const Executor*);
 
 ExpressionRange getExpressionRange(const Analyzer::Constant* expr);
 
 ExpressionRange getExpressionRange(const Analyzer::ColumnVar* col_expr,
-                                   const std::vector<Fragmenter_Namespace::TableInfo>& query_infos,
+                                   const std::vector<InputTableInfo>& query_infos,
                                    const Executor* executor);
 
 ExpressionRange getExpressionRange(const Analyzer::LikeExpr* like_expr);
 
 ExpressionRange getExpressionRange(const Analyzer::CaseExpr* case_expr,
-                                   const std::vector<Fragmenter_Namespace::TableInfo>& query_infos,
+                                   const std::vector<InputTableInfo>& query_infos,
                                    const Executor*);
 
 ExpressionRange getExpressionRange(const Analyzer::UOper* u_expr,
-                                   const std::vector<Fragmenter_Namespace::TableInfo>& query_infos,
+                                   const std::vector<InputTableInfo>& query_infos,
                                    const Executor*);
 
 ExpressionRange getExpressionRange(const Analyzer::ExtractExpr* extract_expr,
-                                   const std::vector<Fragmenter_Namespace::TableInfo>& query_infos,
+                                   const std::vector<InputTableInfo>& query_infos,
                                    const Executor*);
 
 ExpressionRange getExpressionRange(const Analyzer::DatetruncExpr* datetrunc_expr,
-                                   const std::vector<Fragmenter_Namespace::TableInfo>& query_infos,
+                                   const std::vector<InputTableInfo>& query_infos,
                                    const Executor* executor);
 
 ExpressionRange getExpressionRange(const Analyzer::Expr* expr,
-                                   const std::vector<Fragmenter_Namespace::TableInfo>& query_infos,
+                                   const std::vector<InputTableInfo>& query_infos,
                                    const Executor* executor) {
   auto bin_oper_expr = dynamic_cast<const Analyzer::BinOper*>(expr);
   if (bin_oper_expr) {
@@ -165,7 +165,7 @@ int64_t scale_up_interval_endpoint(const int64_t endpoint, const SQLTypeInfo& ti
 }  // namespace
 
 ExpressionRange getExpressionRange(const Analyzer::BinOper* expr,
-                                   const std::vector<Fragmenter_Namespace::TableInfo>& query_infos,
+                                   const std::vector<InputTableInfo>& query_infos,
                                    const Executor* executor) {
   const auto& lhs = getExpressionRange(expr->get_left_operand(), query_infos, executor);
   const auto& rhs = getExpressionRange(expr->get_right_operand(), query_infos, executor);
@@ -313,7 +313,7 @@ int64_t get_conservative_datetrunc_bucket(const DatetruncField datetrunc_field) 
 }  // namespace
 
 ExpressionRange getExpressionRange(const Analyzer::ColumnVar* col_expr,
-                                   const std::vector<Fragmenter_Namespace::TableInfo>& query_infos,
+                                   const std::vector<InputTableInfo>& query_infos,
                                    const Executor* executor) {
   int col_id = col_expr->get_column_id();
   const auto& col_ti =
@@ -337,16 +337,25 @@ ExpressionRange getExpressionRange(const Analyzer::ColumnVar* col_expr,
       const int rte_idx = col_expr->get_rte_idx();
       CHECK_GE(rte_idx, 0);
       CHECK_LT(static_cast<size_t>(rte_idx), query_infos.size());
-      const auto& fragments = query_infos[rte_idx].fragments;
+      ssize_t ti_idx = -1;
+      for (ssize_t i = 0; i < query_infos.size(); ++i) {
+        if (col_expr->get_table_id() == query_infos[i].table_id) {
+          ti_idx = i;
+          break;
+        }
+      }
+      CHECK_NE(ssize_t(-1), ti_idx);
+      const auto& query_info = query_infos[ti_idx].info;
+      const auto& fragments = query_info.fragments;
       bool has_nulls = rte_idx > 0 && executor->isOuterJoin();
       const auto cd = executor->getColumnDescriptor(col_expr);
       if (cd && cd->isVirtualCol) {
         CHECK(cd->columnName == "rowid");
         CHECK_EQ(kBIGINT, col_ti.get_type());
-        const int64_t num_tuples = query_infos[rte_idx].numTuples;
+        const int64_t num_tuples = query_info.numTuples;
         return ExpressionRange::makeIntRange(0, std::max(num_tuples - 1, int64_t(0)), 0, has_nulls);
       }
-      if (query_infos[rte_idx].numTuples == 0 && !col_ti.is_fp()) {
+      if (query_info.numTuples == 0 && !col_ti.is_fp()) {
         // The column doesn't contain any values, synthesize an empty range.
         return ExpressionRange::makeIntRange(0, -1, 0, false);
       }
@@ -399,7 +408,7 @@ ExpressionRange getExpressionRange(const Analyzer::LikeExpr* like_expr) {
 }
 
 ExpressionRange getExpressionRange(const Analyzer::CaseExpr* case_expr,
-                                   const std::vector<Fragmenter_Namespace::TableInfo>& query_infos,
+                                   const std::vector<InputTableInfo>& query_infos,
                                    const Executor* executor) {
   const auto& expr_pair_list = case_expr->get_expr_pair_list();
   auto expr_range = ExpressionRange::makeInvalidRange();
@@ -424,7 +433,7 @@ ExpressionRange getExpressionRange(const Analyzer::CaseExpr* case_expr,
 }
 
 ExpressionRange getExpressionRange(const Analyzer::UOper* u_expr,
-                                   const std::vector<Fragmenter_Namespace::TableInfo>& query_infos,
+                                   const std::vector<InputTableInfo>& query_infos,
                                    const Executor* executor) {
   if (u_expr->get_optype() == kUNNEST) {
     return getExpressionRange(u_expr->get_operand(), query_infos, executor);
@@ -489,7 +498,7 @@ ExpressionRange getExpressionRange(const Analyzer::UOper* u_expr,
 }
 
 ExpressionRange getExpressionRange(const Analyzer::ExtractExpr* extract_expr,
-                                   const std::vector<Fragmenter_Namespace::TableInfo>& query_infos,
+                                   const std::vector<InputTableInfo>& query_infos,
                                    const Executor* executor) {
   const int32_t extract_field{extract_expr->get_field()};
   const auto arg_range = getExpressionRange(extract_expr->get_from_expr(), query_infos, executor);
@@ -534,7 +543,7 @@ ExpressionRange getExpressionRange(const Analyzer::ExtractExpr* extract_expr,
 }
 
 ExpressionRange getExpressionRange(const Analyzer::DatetruncExpr* datetrunc_expr,
-                                   const std::vector<Fragmenter_Namespace::TableInfo>& query_infos,
+                                   const std::vector<InputTableInfo>& query_infos,
                                    const Executor* executor) {
   const auto arg_range = getExpressionRange(datetrunc_expr->get_from_expr(), query_infos, executor);
   if (arg_range.getType() == ExpressionRangeType::Invalid) {

@@ -4,11 +4,11 @@
 #include "BufferCompaction.h"
 #include "CompilationOptions.h"
 #include "GpuMemUtils.h"
+#include "InputMetadata.h"
 #include "IteratorTable.h"
 #include "ResultRows.h"
 #include "RuntimeFunctions.h"
 
-#include "../Fragmenter/Fragmenter.h"
 #include "../Planner/Planner.h"
 #include "../Shared/checked_alloc.h"
 #include "../Shared/sqltypes.h"
@@ -429,7 +429,7 @@ class GroupByAndAggregate {
                       const ExecutorDeviceType device_type,
                       const RelAlgExecutionUnit& ra_exe_unit,
                       const bool render_output,
-                      const std::vector<Fragmenter_Namespace::TableInfo>& query_infos,
+                      const std::vector<InputTableInfo>& query_infos,
                       std::shared_ptr<RowSetMemoryOwner>,
                       const size_t max_groups_buffer_entry_count,
                       const size_t small_groups_buffer_entry_count,
@@ -539,7 +539,7 @@ class GroupByAndAggregate {
   QueryMemoryDescriptor query_mem_desc_;
   Executor* executor_;
   const RelAlgExecutionUnit& ra_exe_unit_;
-  const std::vector<Fragmenter_Namespace::TableInfo>& query_infos_;
+  const std::vector<InputTableInfo>& query_infos_;
   std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
   bool output_columnar_;
 
@@ -637,7 +637,7 @@ inline int8_t get_min_byte_width() {
 struct RelAlgExecutionUnit;
 
 int8_t pick_target_compact_width(const RelAlgExecutionUnit& ra_exe_unit,
-                                 const std::vector<Fragmenter_Namespace::TableInfo>& query_infos,
+                                 const std::vector<InputTableInfo>& query_infos,
                                  const int8_t crt_min_byte_width);
 
 #endif  // QUERYENGINE_GROUPBYANDAGGREGATE_H

@@ -11,7 +11,6 @@
 #include "TargetMetaInfo.h"
 #include "../Analyzer/Analyzer.h"
 #include "../Chunk/Chunk.h"
-#include "../Fragmenter/Fragmenter.h"
 #include "../Planner/Planner.h"
 #include "../Shared/measure.h"
 #include "../Shared/thread_count.h"
@@ -506,7 +505,7 @@ class Executor {
    private:
     Executor* executor_;
     const RelAlgExecutionUnit& ra_exe_unit_;
-    const std::vector<Fragmenter_Namespace::TableInfo>& query_infos_;
+    const std::vector<InputTableInfo>& query_infos_;
     const Catalog_Namespace::Catalog& cat_;
     CompilationOptions co_;
     CompilationResult compilation_result_cpu_;
@@ -536,7 +535,7 @@ class Executor {
    public:
     ExecutionDispatch(Executor* executor,
                       const RelAlgExecutionUnit& ra_exe_unit,
-                      const std::vector<Fragmenter_Namespace::TableInfo>& query_infos,
+                      const std::vector<InputTableInfo>& query_infos,
                       const Catalog_Namespace::Catalog& cat,
                       const CompilationOptions& co,
                       const size_t context_count,
@@ -604,7 +603,7 @@ class Executor {
   ResultPtr executeWorkUnit(int32_t* error_code,
                             size_t& max_groups_buffer_entry_guess,
                             const bool is_agg,
-                            const std::vector<Fragmenter_Namespace::TableInfo>&,
+                            const std::vector<InputTableInfo>&,
                             const RelAlgExecutionUnit&,
                             const CompilationOptions&,
                             const ExecutionOptions& options,
@@ -742,7 +741,7 @@ class Executor {
   void executeSimpleInsert(const Planner::RootPlan* root_plan);
 
   CompilationResult compileWorkUnit(const bool render_output,
-                                    const std::vector<Fragmenter_Namespace::TableInfo>& query_infos,
+                                    const std::vector<InputTableInfo>& query_infos,
                                     const RelAlgExecutionUnit& ra_exe_unit,
                                     const CompilationOptions& co,
                                     const ExecutionOptions& eo,
@@ -761,7 +760,7 @@ class Executor {
   void allocateInnerScansIterators(const std::vector<InputDescriptor>& input_descs, const bool allow_loop_joins);
 
   JoinInfo chooseJoinType(const std::list<std::shared_ptr<Analyzer::Expr>>&,
-                          const std::vector<Fragmenter_Namespace::TableInfo>&,
+                          const std::vector<InputTableInfo>&,
                           const std::list<std::shared_ptr<const InputColDescriptor>>&,
                           const ExecutorDeviceType device_type);
 
@@ -771,7 +770,7 @@ class Executor {
 
   void nukeOldState(const bool allow_lazy_fetch,
                     const JoinInfo& join_info,
-                    const std::vector<Fragmenter_Namespace::TableInfo>& query_infos);
+                    const std::vector<InputTableInfo>& query_infos);
   std::vector<void*> optimizeAndCodegenCPU(llvm::Function*,
                                            llvm::Function*,
                                            std::unordered_set<llvm::Function*>&,
@@ -806,7 +805,7 @@ class Executor {
   void allocateLocalColumnIds(const std::list<std::shared_ptr<const InputColDescriptor>>& global_col_ids);
   int getLocalColumnId(const Analyzer::ColumnVar* col_var, const bool fetch_column) const;
 
-  std::pair<bool, int64_t> skipFragment(const int table_id,
+  std::pair<bool, int64_t> skipFragment(const InputDescriptor& table_desc,
                                         const Fragmenter_Namespace::FragmentInfo& frag_info,
                                         const std::list<std::shared_ptr<Analyzer::Expr>>& simple_quals,
                                         const std::vector<uint64_t>& all_frag_row_offsets,
@@ -858,7 +857,7 @@ class Executor {
 
   struct CgenState {
    public:
-    CgenState(const std::vector<Fragmenter_Namespace::TableInfo>& query_infos)
+    CgenState(const std::vector<InputTableInfo>& query_infos)
         : module_(nullptr),
           row_func_(nullptr),
           context_(llvm::getGlobalContext()),
@@ -971,7 +970,7 @@ class Executor {
     std::vector<llvm::BasicBlock*> inner_scan_labels_;
     std::unordered_map<int, llvm::Value*> scan_idx_to_hash_pos_;
     std::vector<std::unique_ptr<const InValuesBitmap>> in_values_bitmaps_;
-    const std::vector<Fragmenter_Namespace::TableInfo>& query_infos_;
+    const std::vector<InputTableInfo>& query_infos_;
     bool must_run_on_cpu_;
     bool needs_error_check_;
 

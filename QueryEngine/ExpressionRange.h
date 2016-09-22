@@ -2,7 +2,6 @@
 #define QUERYENGINE_EXPRESSIONRANGE_H
 
 #include "../Analyzer/Analyzer.h"
-#include "../Fragmenter/Fragmenter.h"
 
 #include <boost/multiprecision/cpp_int.hpp>
 #include <deque>
@@ -169,9 +168,8 @@ inline double getMax<double>(const ExpressionRange& e) {
 }
 
 class Executor;
+struct InputTableInfo;
 
-ExpressionRange getExpressionRange(const Analyzer::Expr*,
-                                   const std::vector<Fragmenter_Namespace::TableInfo>&,
-                                   const Executor*);
+ExpressionRange getExpressionRange(const Analyzer::Expr*, const std::vector<InputTableInfo>&, const Executor*);
 
 #endif  // QUERYENGINE_EXPRESSIONRANGE_H

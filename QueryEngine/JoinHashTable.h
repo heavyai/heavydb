@@ -10,9 +10,9 @@
 
 #include "ExpressionRange.h"
 #include "InputDescriptors.h"
+#include "InputMetadata.h"
 #include "../Analyzer/Analyzer.h"
 #include "../Chunk/Chunk.h"
-#include "../Fragmenter/Fragmenter.h"
 
 #include <llvm/IR/Value.h>
 #ifdef HAVE_CUDA
@@ -28,7 +28,7 @@ class JoinHashTable {
   static std::shared_ptr<JoinHashTable> getInstance(
       const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
       const Catalog_Namespace::Catalog& cat,
-      const std::vector<Fragmenter_Namespace::TableInfo>& query_infos,
+      const std::vector<InputTableInfo>& query_infos,
       const std::list<std::shared_ptr<const InputColDescriptor>>& input_col_descs,
       const Data_Namespace::MemoryLevel memory_level,
       const int device_count,
@@ -54,7 +54,7 @@ class JoinHashTable {
   JoinHashTable(const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
                 const Analyzer::ColumnVar* col_var,
                 const Catalog_Namespace::Catalog& cat,
-                const std::vector<Fragmenter_Namespace::TableInfo>& query_infos,
+                const std::vector<InputTableInfo>& query_infos,
                 const Data_Namespace::MemoryLevel memory_level,
                 const ExpressionRange& col_range,
                 Executor* executor)
@@ -90,7 +90,7 @@ class JoinHashTable {
 
   std::shared_ptr<Analyzer::BinOper> qual_bin_oper_;
   const Catalog_Namespace::Catalog& cat_;
-  const std::vector<Fragmenter_Namespace::TableInfo>& query_infos_;
+  const std::vector<InputTableInfo>& query_infos_;
   const Data_Namespace::MemoryLevel memory_level_;
   std::shared_ptr<std::vector<int32_t>> cpu_hash_table_buff_;
   std::mutex cpu_hash_table_buff_mutex_;

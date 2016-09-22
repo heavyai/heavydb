@@ -73,7 +73,7 @@ std::mutex JoinHashTable::join_hash_table_cache_mutex_;
 std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(
     const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
     const Catalog_Namespace::Catalog& cat,
-    const std::vector<Fragmenter_Namespace::TableInfo>& query_infos,
+    const std::vector<InputTableInfo>& query_infos,
     const std::list<std::shared_ptr<const InputColDescriptor>>& input_col_descs,
     const Data_Namespace::MemoryLevel memory_level,
     const int device_count,
@@ -117,7 +117,15 @@ int JoinHashTable::reify(const int device_count) {
   const auto cols = get_cols(qual_bin_oper_, cat_, executor_->temporary_tables_);
   const auto inner_col = cols.first;
   CHECK(inner_col);
-  const auto& query_info = query_infos_[inner_col->get_rte_idx()];
+  ssize_t ti_idx = -1;
+  for (size_t i = 0; i < query_infos_.size(); ++i) {
+    if (inner_col->get_table_id() == query_infos_[i].table_id) {
+      ti_idx = i;
+      break;
+    }
+  }
+  CHECK_NE(ssize_t(-1), ti_idx);
+  const auto& query_info = query_infos_[ti_idx].info;
   if (query_info.fragments.empty()) {
     return 0;
   }
