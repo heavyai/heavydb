@@ -146,7 +146,7 @@ class ResultSet {
 
   TargetValue makeTargetValue(const int8_t* ptr,
                               const int8_t compact_sz,
-                              const SQLTypeInfo& ti,
+                              const TargetInfo& target_info,
                               const bool translate_strings,
                               const bool decimal_to_double) const;
 

@@ -251,45 +251,50 @@ size_t ResultSet::entryCount() const {
 // Reads an integer or a float from ptr based on the type and the byte width.
 TargetValue ResultSet::makeTargetValue(const int8_t* ptr,
                                        const int8_t compact_sz,
-                                       const SQLTypeInfo& ti,
+                                       const TargetInfo& target_info,
                                        const bool translate_strings,
                                        const bool decimal_to_double) const {
-  if (ti.is_integer()) {
-    return read_int_from_buff(ptr, compact_sz);
+  const auto& chosen_type = get_compact_type(target_info);
+  if (chosen_type.is_integer()) {
+    const auto ival = read_int_from_buff(ptr, compact_sz);
+    if (inline_int_null_val(chosen_type) == ival) {
+      return inline_int_null_val(target_info.sql_type);
+    }
+    return ival;
   }
-  if (ti.is_fp()) {
+  if (chosen_type.is_fp()) {
     switch (compact_sz) {
       case 8: {
         return *reinterpret_cast<const double*>(ptr);
       }
       case 4: {
-        CHECK_EQ(kFLOAT, ti.get_type());
+        CHECK_EQ(kFLOAT, chosen_type.get_type());
         return *reinterpret_cast<const float*>(ptr);
       }
       default:
         CHECK(false);
     }
   }
-  if (ti.is_string() && ti.get_compression() == kENCODING_DICT) {
+  if (chosen_type.is_string() && chosen_type.get_compression() == kENCODING_DICT) {
     const auto string_id = read_int_from_buff(ptr, compact_sz);
     if (translate_strings) {
       if (string_id == NULL_INT) {
         return NullableString(nullptr);
       }
-      const auto sd = executor_ ? executor_->getStringDictionary(ti.get_comp_param(), row_set_mem_owner_)
-                                : row_set_mem_owner_->getStringDict(ti.get_comp_param());
+      const auto sd = executor_ ? executor_->getStringDictionary(chosen_type.get_comp_param(), row_set_mem_owner_)
+                                : row_set_mem_owner_->getStringDict(chosen_type.get_comp_param());
       return NullableString(sd->getString(string_id));
     } else {
       return string_id;
     }
   }
-  if (ti.is_decimal()) {
+  if (chosen_type.is_decimal()) {
     const auto unscaled_val = read_int_from_buff(ptr, compact_sz);
     if (decimal_to_double) {
-      if (unscaled_val == inline_int_null_val(SQLTypeInfo(decimal_to_int_type(ti), false))) {
+      if (unscaled_val == inline_int_null_val(SQLTypeInfo(decimal_to_int_type(chosen_type), false))) {
         return NULL_DOUBLE;
       }
-      return static_cast<double>(unscaled_val) / exp_to_scale(ti.get_scale());
+      return static_cast<double>(unscaled_val) / exp_to_scale(chosen_type.get_scale());
     }
     return unscaled_val;
   }
@@ -308,7 +313,6 @@ TargetValue ResultSet::getTargetValueFromBufferColwise(const int8_t* col1_ptr,
                                                        const bool translate_strings,
                                                        const bool decimal_to_double) const {
   CHECK(query_mem_desc_.output_columnar);
-  const auto& ti = target_info.sql_type;
   const auto ptr1 = columnar_elem_ptr(entry_idx, col1_ptr, compact_sz1);
   if (target_info.agg_kind == kAVG) {
     CHECK(col2_ptr);
@@ -316,7 +320,7 @@ TargetValue ResultSet::getTargetValueFromBufferColwise(const int8_t* col1_ptr,
     const auto ptr2 = columnar_elem_ptr(entry_idx, col2_ptr, compact_sz2);
     return make_avg_target_value(ptr1, compact_sz1, ptr2, compact_sz2, target_info);
   }
-  return makeTargetValue(ptr1, compact_sz1, ti, translate_strings, decimal_to_double);
+  return makeTargetValue(ptr1, compact_sz1, target_info, translate_strings, decimal_to_double);
 }
 
 // Gets the TargetValue stored in slot_idx (and slot_idx for AVG) of rowwise_target_ptr.
@@ -339,7 +343,7 @@ TargetValue ResultSet::getTargetValueFromBufferRowwise(const int8_t* rowwise_tar
   }
   CHECK(!ptr2);
   CHECK_EQ(0, compact_sz2);
-  return makeTargetValue(ptr1, compact_sz1, target_info.sql_type, translate_strings, decimal_to_double);
+  return makeTargetValue(ptr1, compact_sz1, target_info, translate_strings, decimal_to_double);
 }
 
 // Returns true iff the entry at position entry_idx in buff contains a valid row.
