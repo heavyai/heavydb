@@ -1066,7 +1066,7 @@ class ShowCreateTableStmt : public DDLStmt {
  */
 class ExportQueryStmt : public DDLStmt {
  public:
-  ExportQueryStmt(SelectStmt* q, std::string* p, std::list<NameValueAssign*>* o) : select_stmt(q), file_path(p) {
+  ExportQueryStmt(std::string* q, std::string* p, std::list<NameValueAssign*>* o) : select_stmt(q), file_path(p) {
     if (o) {
       for (const auto e : *o) {
         options.emplace_back(e);
@@ -1077,7 +1077,7 @@ class ExportQueryStmt : public DDLStmt {
   virtual void execute(const Catalog_Namespace::SessionInfo& session);
 
  private:
-  std::unique_ptr<SelectStmt> select_stmt;
+  std::unique_ptr<std::string> select_stmt;
   std::unique_ptr<std::string> file_path;
   std::list<std::unique_ptr<NameValueAssign>> options;
 };

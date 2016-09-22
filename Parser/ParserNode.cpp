@@ -23,7 +23,14 @@
 #include "../Shared/mapd_glob.h"
 #include "parser.h"
 
+#ifdef HAVE_RAVM
+#include "../QueryEngine/ExtensionFunctionsWhitelist.h"
+#include "../QueryEngine/RelAlgExecutor.h"
+#include "../QueryEngine/CalciteAdapter.h"
+#endif  // HAVE_RAVM
+
 namespace Parser {
+
 std::shared_ptr<Analyzer::Expr> NullLiteral::analyze(const Catalog_Namespace::Catalog& catalog,
                                                      Analyzer::Query& query,
                                                      TlistRefType allow_tlist_ref) const {
@@ -737,6 +744,7 @@ std::string CaseExpr::to_string() const {
   str += " END";
   return str;
 }
+
 std::shared_ptr<Analyzer::Expr> ExtractExpr::analyze(const Catalog_Namespace::Catalog& catalog,
                                                      Analyzer::Query& query,
                                                      TlistRefType allow_tlist_ref) const {
@@ -848,6 +856,7 @@ std::string ExtractExpr::to_string() const {
   str += *field + " FROM " + from_arg->to_string() + ")";
   return str;
 }
+
 /*
  * year
  * month
@@ -1884,9 +1893,91 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   }
 }
 
-void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+ResultRows getResultRows(const Catalog_Namespace::SessionInfo& session,
+                         const std::string select_stmt,
+                         std::vector<TargetMetaInfo>& targets) {
   auto& catalog = session.get_catalog();
   auto device_type = session.get_executor_device_type();
+
+  // this needs to be changed over to run through calcite
+
+  auto executor = Executor::getExecutor(catalog.get_currentDB().dbId);
+
+#ifdef HAVE_RAVM
+  auto& calcite_mgr = catalog.get_calciteMgr();
+
+  const auto query_ra = calcite_mgr.process(session.get_currentUser().userName,
+                                            session.get_currentUser().passwd,
+                                            catalog.get_currentDB().dbName,
+                                            pg_shim(select_stmt),
+                                            true,
+                                            false);
+  rapidjson::Document query_ast;
+  query_ast.Parse(query_ra.c_str());
+  CHECK(!query_ast.HasParseError());
+  CHECK(query_ast.IsObject());
+  const auto ra = ra_interpret(query_ast, catalog);
+
+  auto ed_list = get_execution_descriptors(ra.get());
+  RelAlgExecutor ra_executor(executor.get(), catalog);
+  ExecutionResult result{ResultRows({}, {}, nullptr, nullptr, {}, device_type), {}};
+  result = ra_executor.executeRelAlgSeq(ed_list,
+                                        {device_type, true, ExecutorOptLevel::LoopStrengthReduction},
+                                        {false, true, false, true, false},
+                                        nullptr);
+  targets = result.getTargetsMeta();
+
+  return result.getRows();
+}
+#else  // HAVE_RAVM
+#ifdef HAVE_CALCITE
+
+  ParserWrapper pw{query_str};
+  if (pw.is_other_explain || pw.is_ddl || pw.is_update_dml) {
+    return parse_plan_legacy(query_str, session);
+  }
+
+  const auto& cat = session->get_catalog();
+  auto& calcite_mgr = cat.get_calciteMgr();
+  const auto query_ra = calcite_mgr.process(session->get_currentUser().userName,
+                                            session->get_currentUser().passwd,
+                                            cat.get_currentDB().dbName,
+                                            pg_shim(query_str),
+                                            true);
+  Planner::RootPlan* plan = translate_query(query_ra, cat);
+
+#else  // HAVE_CALCITE
+
+  const auto& cat = session->get_catalog();
+  SQLParser parser;
+  std::list<std::unique_ptr<Parser::Stmt>> parse_trees;
+  std::string last_parsed;
+  if (parser.parse(query_str, parse_trees, last_parsed)) {
+    throw std::runtime_error("Failed to parse query");
+  }
+  CHECK_EQ(parse_trees.size(), size_t(1));
+  const auto& stmt = parse_trees.front();
+  Parser::DDLStmt* ddl = dynamic_cast<Parser::DDLStmt*>(stmt.get());
+  CHECK(!ddl);
+  Parser::DMLStmt* dml = dynamic_cast<Parser::DMLStmt*>(stmt.get());
+  Analyzer::Query query;
+  dml->analyze(cat, query);
+  Planner::Optimizer optimizer(query, cat);
+  Planner::RootPlan* plan = optimizer.optimize();
+
+#ifdef HAVE_CUDA
+  return executor->execute(
+      plan, *session, -1, hoist_literals, device_type, ExecutorOptLevel::LoopStrengthReduction, true, true);
+#else   // HAVE_CUDA
+  return executor->execute(
+      plan, *session, -1, hoist_literals, device_type, ExecutorOptLevel::LoopStrengthReduction, false, true);
+#endif  // HAVE_CUDA
+#endif  // HAVE_CALCITE
+#endif  // HAVE_RAVM
+}
+
+void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+  auto& catalog = session.get_catalog();
   Importer_NS::CopyParams copy_params;
   if (!options.empty()) {
     for (auto& p : options) {
@@ -1960,6 +2051,7 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
         throw std::runtime_error("Invalid option for COPY: " + *p->get_name());
     }
   }
+#if 0
   Analyzer::Query query;
   select_stmt->analyze(catalog, query);
   Planner::Optimizer optimizer(query, catalog);
@@ -1968,7 +2060,14 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto executor = Executor::getExecutor(catalog.get_currentDB().dbId);
   ResultRows results({}, {}, nullptr, nullptr, {}, device_type);
   results = executor->execute(root_plan, session, true, device_type, ExecutorOptLevel::Default, true, false);
+#else
+  std::vector<TargetMetaInfo> targets;
+  ResultRows results = getResultRows(session, *select_stmt, targets);
+  TargetMetaInfo* td = targets.data();
+#endif
+#if 0
   const auto& targets = root_plan->get_plan()->get_targetlist();
+#endif
   std::ofstream outfile;
   if (file_path->empty()) {
     // generate file name as sessionid under mapd_export
@@ -1985,7 +2084,7 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     bool not_first = false;
     size_t i = 0;
     for (const auto& target : targets) {
-      std::string col_name = target->get_resname();
+      std::string col_name = target.get_resname();
       if (col_name.empty()) {
         col_name = "result_" + std::to_string(i + 1);
       }
@@ -2014,7 +2113,7 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
         not_first = true;
       if (copy_params.quoted)
         outfile << copy_params.quote;
-      const auto& ti = targets[i]->get_expr()->get_type_info();
+      const auto& ti = td[i].get_type_info();
       if (!scalar_tv) {
         outfile << row_col_to_string(crt_row, i, ti, " | ");
         if (copy_params.quoted) {
@@ -2349,5 +2448,4 @@ void DropUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     throw std::runtime_error("Only super user can drop users.");
   Catalog_Namespace::SysCatalog& syscat = static_cast<Catalog_Namespace::SysCatalog&>(catalog);
   syscat.dropUser(*user_name);
-}
 }

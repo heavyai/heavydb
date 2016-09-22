@@ -5,6 +5,7 @@
 #undef yyFlexLexer
 #include <cstdint>
 #include <cstdio>
+#include <boost/algorithm/string/trim.hpp>
 #include "../Shared/sqldefs.h"
 #include "parser.h"
 
@@ -167,6 +168,16 @@ WORK          TOK(WORK)
 -?"."[0-9]*[eE][+-]?[0-9]+	{ yylval.doubleval = atof(yytext); TOK(DOUBLE) }
 
 	/* strings */
+#~#.*#~# {
+		int len = yyleng - 6;
+		if (len > 0) {
+			yylval.stringval = new std::string(yytext + 3, len);
+			boost::trim(*yylval.stringval);
+		} else {
+			yylval.stringval = new std::string("");
+		}
+		return SQLParser::FWDSTR;
+	}
 
 '[^'\n]*'	{
 		int c = yyFlexLexer::yyinput();
@@ -174,10 +185,10 @@ WORK          TOK(WORK)
 		unput(c);	/* just peeking */
 		if(c != '\'') {
 			/* remove quotes */
-      char escape_removed[strlen(yytext) - 3];
+      char escape_removed[yyleng - 2];
       char *p = yytext + 1;
       int j = 0;
-      int len = strlen(yytext) - 3;
+      int len = yyleng - 2;
       for (int i = 0; i < len; i++) {
         if (p[i] == '\\') {
           if (p[i+1] == 't') {

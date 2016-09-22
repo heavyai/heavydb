@@ -53,7 +53,7 @@ using namespace Parser;
 	/* symbolic tokens */
 
 %token NAME
-%token STRING
+%token STRING FWDSTR
 %token INTNUM FIXEDNUM
 
 	/* operators */
@@ -227,15 +227,19 @@ rename_column_statement:
 		;
 
 copy_table_statement:
-    COPY table FROM STRING opt_with_option_list
-    {
-      $<nodeval>$ = new CopyTableStmt($<stringval>2, $<stringval>4, reinterpret_cast<std::list<NameValueAssign*>*>($<listval>5));
+	COPY table FROM STRING opt_with_option_list
+	{
+	    $<nodeval>$ = new CopyTableStmt($<stringval>2, $<stringval>4, reinterpret_cast<std::list<NameValueAssign*>*>($<listval>5));
     }
-    | COPY '(' select_statement ')' TO STRING opt_with_option_list
-    {
-      $<nodeval>$ = new ExportQueryStmt(dynamic_cast<SelectStmt*>($<nodeval>3), $<stringval>6, reinterpret_cast<std::list<NameValueAssign*>*>($<listval>7));
-    }
-    ;
+	| COPY '(' FWDSTR ')' TO STRING opt_with_option_list
+	{
+	    if (!boost::istarts_with(*$<stringval>3, "SELECT")) {
+	        throw std::runtime_error("Select statement expected");
+	    }
+	    *$<stringval>3 += ";";
+	    $<nodeval>$ = new ExportQueryStmt($<stringval>3, $<stringval>6, reinterpret_cast<std::list<NameValueAssign*>*>($<listval>7));
+	}
+	;
 
 base_table_element_commalist:
 		base_table_element { $<listval>$ = new std::list<Node*>(1, $<nodeval>1); }

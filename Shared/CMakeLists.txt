@@ -4,6 +4,7 @@ SET (shared_source_files
     Datum.cpp
     timegm.cpp
     mapd_glob.cpp
+    StringTransform.cpp
 )
 
 ADD_LIBRARY (Shared ${shared_source_files})
