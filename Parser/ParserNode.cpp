@@ -1475,17 +1475,23 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   if (catalog.getMetadataForTable(*table) != nullptr) {
     if (if_not_exists)
       return;
-    throw std::runtime_error("Table " + *table + " already exits.");
+    throw std::runtime_error("Table " + *table + " already exists.");
   }
   std::list<ColumnDescriptor> columns;
+  std::unordered_set<std::string> uc_col_names;
   for (auto& e : table_element_list) {
     if (typeid(*e) != typeid(ColumnDef))
       throw std::runtime_error("Table constraints are not supported yet.");
     ColumnDef* coldef = static_cast<ColumnDef*>(e.get());
     ColumnDescriptor cd;
     cd.columnName = *coldef->get_column_name();
-    if (reserved_keywords.find(boost::to_upper_copy<std::string>(cd.columnName)) != reserved_keywords.end()) {
+    const auto uc_col_name = boost::to_upper_copy<std::string>(cd.columnName);
+    if (reserved_keywords.find(uc_col_name) != reserved_keywords.end()) {
       throw std::runtime_error("Cannot create column with reserved keyword '" + cd.columnName + "'");
+    }
+    const auto it_ok = uc_col_names.insert(uc_col_name);
+    if (!it_ok.second) {
+      throw std::runtime_error("Column '" + cd.columnName + "' defined more than once");
     }
     SQLType* t = coldef->get_column_type();
     t->check_type();
