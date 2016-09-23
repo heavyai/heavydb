@@ -2043,6 +2043,19 @@ TEST(Select, RuntimeFunctions) {
             "SELECT DISTANCE_IN_METERS(-74.0059, 40.7217,-122.416667 , 37.783333) FROM test LIMIT 1;", dt)));
   }
 }
+
+TEST(Select, UnsupportedPatterns) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    EXPECT_THROW(run_multiple_agg(
+                     "SELECT a.str as key0,a.fixed_str as key1,COUNT(*) AS color FROM test a JOIN (select str,count(*) "
+                     "from test group by str order by COUNT(*) desc limit 40) b on a.str=b.str JOIN (select "
+                     "fixed_str,count(*) from test group by fixed_str order by count(*) desc limit 40) c on "
+                     "c.fixed_str=a.fixed_str GROUP BY key0, key1;",
+                     dt),
+                 std::runtime_error);
+  }
+}
 #endif  // HAVE_RAVM
 
 #ifdef HAVE_CALCITE

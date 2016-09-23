@@ -330,7 +330,9 @@ std::pair<std::vector<InputDescriptor>, std::list<InputColDescriptor>> get_input
     const auto scan_ra = dynamic_cast<const RelScan*>(input_ra);
     const int table_id = table_id_from_ra(input_ra);
     const auto it = input_to_nest_level.find(input_ra);
-    CHECK(it != input_to_nest_level.end());
+    if (it == input_to_nest_level.end()) {
+      throw std::runtime_error("Multi-way join not supported");
+    }
     // Physical columns from a scan node are numbered from 1 in our system.
     input_col_descs_unique.emplace(scan_ra ? used_input->getIndex() + 1 : used_input->getIndex(), table_id, it->second);
   }
