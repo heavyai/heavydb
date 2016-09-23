@@ -116,10 +116,17 @@ std::string transform_to_poly_render_query(const std::string& query_str, const r
   {
     boost::regex aliased_group_expr{R"(\s+([^\s]+)\s+as\s+([^(\s|,)]+))", boost::regex::extended | boost::regex::icase};
     boost::smatch what;
+    std::string what1;
+    std::string what2;
     if (boost::regex_search(result, what, aliased_group_expr)) {
-      result.replace(what.position(), what.length(), " " + std::string(what[1]));
+      what1 = std::string(what[1]);
+      what2 = std::string(what[2]);
+      result.replace(what.position(), what.length(), " " + what1);
+    } else {
+      what1 = std::string(what[1]);
+      what2 = std::string(what[2]);
     }
-    boost::ireplace_all(result, std::string(what[2]), std::string(what[1]));
+    boost::ireplace_all(result, what2, what1);
   }
   const auto polyTableName = json_str(field(data_desc, "dbTableName"));
   const auto polysKey = json_str(field(data_desc, "polysKey"));
