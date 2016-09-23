@@ -149,7 +149,8 @@ public class SQLImporter {
 
     try {
       cmd = parser.parse(options, args);
-    } catch (ParseException ex) {
+    }
+    catch (ParseException ex) {
       LOGGER.error(ex.getLocalizedMessage());
       help(options);
       exit(0);
@@ -175,7 +176,7 @@ public class SQLImporter {
       //Execute a query
       stmt = conn.createStatement();
 
-      long timer = System.currentTimeMillis();
+      long timer;
       ResultSet rs = stmt.executeQuery(cmd.getOptionValue("sqlStmt"));
 
       //produce new table in MapD with the query metadata
@@ -184,14 +185,15 @@ public class SQLImporter {
 
       timer = System.currentTimeMillis();
 
-      int resultCount = 0;
+      long resultCount = 0;
       int bufferCount = 0;
+      long total = 0;
       int bufferSize = Integer.valueOf(cmd.getOptionValue("bufferSize", "10000"));
 
       List<TStringRow> rows = new ArrayList(bufferSize);
       while (rs.next()) {
         TStringRow tsr = new TStringRow();
-        for (int i = 1; i <= md.getColumnCount(); i++){
+        for (int i = 1; i <= md.getColumnCount(); i++) {
           // place string in rows array
           TStringValue tsv = new TStringValue();
           tsv.str_val = rs.getString(i);
@@ -206,20 +208,23 @@ public class SQLImporter {
 
         resultCount++;
         bufferCount++;
-        if (bufferCount == bufferSize){
+        if (bufferCount == bufferSize) {
           bufferCount = 0;
           //send the buffer to mapD
           client.load_table(session, cmd.getOptionValue("targetTable"), rows);
           rows.clear();
+          if (resultCount % 100000 == 0) {
+            LOGGER.info("Imported " + resultCount + " records");
+          }
         }
       }
-      if (bufferCount > 0){
-          bufferCount = 0;
-          //send the LAST buffer to mapD
-          client.load_table(session, cmd.getOptionValue("targetTable"), rows);
-          rows.clear();
-        }
-      LOGGER.info("result set count is " + resultCount + " read time is " + (System.currentTimeMillis() - timer)+ "ms");
+      if (bufferCount > 0) {
+        //send the LAST buffer to mapD
+        client.load_table(session, cmd.getOptionValue("targetTable"), rows);
+        rows.clear();
+        bufferCount = 0;
+      }
+      LOGGER.info("result set count is " + resultCount + " read time is " + (System.currentTimeMillis() - timer) + "ms");
 
       //Clean-up environment
       rs.close();
@@ -227,25 +232,35 @@ public class SQLImporter {
 
       totalTime = System.currentTimeMillis() - startTime;
       conn.close();
-    } catch (SQLException se) {
-      //Handle errors for JDBC
+    }
+    catch (SQLException se) {
+      LOGGER.error("SQLException - " + se.toString());
       se.printStackTrace();
-    } catch (Exception e) {
-      //Handle errors for Class.forName
-      e.printStackTrace();
-    } finally {
+    }
+    catch (ThriftException ex) {
+      LOGGER.error("ThriftException - " + ex.toString());
+      ex.printStackTrace();
+    }
+    catch (TException ex) {
+      LOGGER.error("TException failed - " + ex.toString());
+      ex.printStackTrace();
+    }
+    finally {
       //finally block used to close resources
       try {
         if (stmt != null) {
           stmt.close();
         }
-      } catch (SQLException se2) {
+      }
+      catch (SQLException se2) {
       }// nothing we can do
       try {
         if (conn != null) {
           conn.close();
         }
-      } catch (SQLException se) {
+      }
+      catch (SQLException se) {
+        LOGGER.error("SQlException in close - " + se.toString());
         se.printStackTrace();
       }//end finally try
     }//end try
@@ -285,12 +300,13 @@ public class SQLImporter {
       sb.append(")");
 
       if (Integer.valueOf(cmd.getOptionValue("fragmentSize", "0")) > 0) {
-          sb.append(" with (fragment_size = ");
-          sb.append(cmd.getOptionValue("fragmentSize", "0"));
-          sb.append(")");
+        sb.append(" with (fragment_size = ");
+        sb.append(cmd.getOptionValue("fragmentSize", "0"));
+        sb.append(")");
       }
 
-    } catch (SQLException ex) {
+    }
+    catch (SQLException ex) {
       LOGGER.error("Error processing the metadata - " + ex.toString());
       exit(1);
     }
@@ -317,13 +333,16 @@ public class SQLImporter {
 
       LOGGER.debug("Connected session is " + session);
 
-    } catch (TTransportException ex) {
+    }
+    catch (TTransportException ex) {
       LOGGER.error("Connection failed - " + ex.toString());
       exit(1);
-    } catch (ThriftException ex) {
+    }
+    catch (ThriftException ex) {
       LOGGER.error("Connection failed - " + ex.toString());
       exit(2);
-    } catch (TException ex) {
+    }
+    catch (TException ex) {
       LOGGER.error("Connection failed - " + ex.toString());
       exit(3);
     }
@@ -338,10 +357,12 @@ public class SQLImporter {
           return true;
         }
       }
-    } catch (ThriftException ex) {
+    }
+    catch (ThriftException ex) {
       LOGGER.error("Table check failed - " + ex.toString());
       exit(3);
-    } catch (TException ex) {
+    }
+    catch (TException ex) {
       LOGGER.error("Table check failed - " + ex.toString());
       exit(3);
     }
@@ -353,50 +374,52 @@ public class SQLImporter {
 
     try {
       TQueryResult sqlResult = client.sql_execute(session, sql + ";", true, null);
-    } catch (ThriftException ex) {
+    }
+    catch (ThriftException ex) {
       LOGGER.error("SQL Execute failed - " + ex.toString());
       exit(1);
-    } catch (TException ex) {
+    }
+    catch (TException ex) {
       LOGGER.error("SQL Execute failed - " + ex.toString());
       exit(1);
     }
   }
 
   private String getColType(int cType, int precision, int scale) {
-      switch (cType) {
+    switch (cType) {
       case java.sql.Types.TINYINT:
       case java.sql.Types.SMALLINT:
-          return ("SMALLINT");
+        return ("SMALLINT");
       case java.sql.Types.INTEGER:
-          return ("INTEGER");
+        return ("INTEGER");
       case java.sql.Types.BIGINT:
-          return ("BIGINT");
+        return ("BIGINT");
       case java.sql.Types.FLOAT:
-          return ("FLOAT");
+        return ("FLOAT");
       case java.sql.Types.DECIMAL:
-          return ("DECIMAL(" + precision + "," + scale + ")");
+        return ("DECIMAL(" + precision + "," + scale + ")");
       case java.sql.Types.DOUBLE:
-          return ("DOUBLE");
+        return ("DOUBLE");
       case java.sql.Types.REAL:
-          return ("REAL");
+        return ("REAL");
       case java.sql.Types.NUMERIC:
-          return ("NUMERIC(" + precision + "," + scale + ")");
+        return ("NUMERIC(" + precision + "," + scale + ")");
       case java.sql.Types.TIME:
-          return ("TIME");
+        return ("TIME");
       case java.sql.Types.TIMESTAMP:
-          return ("TIMESTAMP");
+        return ("TIMESTAMP");
       case java.sql.Types.DATE:
-          return ("DATE");
+        return ("DATE");
       case java.sql.Types.BOOLEAN:
       case java.sql.Types.BIT:  // deal with postgress treating boolean as bit... this will bite me
-          return ("BOOLEAN");
+        return ("BOOLEAN");
       case java.sql.Types.NVARCHAR:
       case java.sql.Types.VARCHAR:
       case java.sql.Types.NCHAR:
       case java.sql.Types.CHAR:
       case java.sql.Types.LONGVARCHAR:
       case java.sql.Types.LONGNVARCHAR:
-          return ("TEXT ENCODING DICT");
+        return ("TEXT ENCODING DICT");
       default:
         throw new AssertionError("Column type " + cType + " not Supported");
     }
