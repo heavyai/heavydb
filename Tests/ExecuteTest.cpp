@@ -609,7 +609,9 @@ TEST(Select, DistinctProjection) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     c("SELECT DISTINCT str FROM test ORDER BY str;", dt);
+#ifdef HAVE_RAVM
     c("SELECT DISTINCT(str), SUM(x) FROM test WHERE x > 7 GROUP BY str LIMIT 2;", dt);
+#endif  // HAVE_RAVM
   }
 }
 #endif  // HAVE_CALCITE
