@@ -68,6 +68,10 @@ class ScalarExprVisitor {
     if (datediff) {
       return visitDatediffExpr(datediff);
     }
+    const auto agg = dynamic_cast<const Analyzer::AggExpr*>(expr);
+    if (agg) {
+      return visitAggExpr(agg);
+    }
     return defaultResult();
   }
 
@@ -158,6 +162,11 @@ class ScalarExprVisitor {
     result = aggregateResult(result, visit(datediff->get_start_expr()));
     result = aggregateResult(result, visit(datediff->get_end_expr()));
     return result;
+  }
+
+  virtual T visitAggExpr(const Analyzer::AggExpr* agg) const {
+    T result = defaultResult();
+    return aggregateResult(result, visit(agg->get_arg()));
   }
 
  protected:

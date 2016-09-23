@@ -1977,17 +1977,21 @@ TEST(Select, InnerJoins) {
     c("SELECT count(*) FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str = c.str JOIN "
       "join_test AS d ON c.x = d.x;",
       dt);
-#else
-    EXPECT_THROW(run_multiple_agg(
-                     "SELECT count(*) FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c ON "
-                     "b.str = c.str;",
-                     dt),
-                 std::runtime_error);
-    EXPECT_THROW(run_multiple_agg(
-                     "SELECT count(*) FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str = "
-                     "c.str JOIN join_test AS d ON c.x = d.x;",
-                     dt),
-                 std::runtime_error);
+    c("SELECT a.x AS x, y, b.str FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str = c.str "
+      "ORDER BY x;",
+      dt);
+    c("SELECT count(*) FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str = c.str WHERE a.y "
+      "< 43;",
+      dt);
+    c("SELECT SUM(a.x), b.str FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str = c.str "
+      "WHERE a.y "
+      "= 43 group by b.str;",
+      dt);
+    c("SELECT a.str as key0,a.fixed_str as key1,COUNT(*) AS color FROM test a JOIN (select str,count(*) "
+      "from test group by str order by COUNT(*) desc limit 40) b on a.str=b.str JOIN (select "
+      "fixed_str,count(*) from test group by fixed_str order by count(*) desc limit 40) c on "
+      "c.fixed_str=a.fixed_str GROUP BY key0, key1 ORDER BY key0,key1;",
+      dt);
 #endif
   }
 }
@@ -2097,6 +2101,34 @@ TEST(Select, RuntimeFunctions) {
 TEST(Select, UnsupportedPatterns) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
+#ifndef ENABLE_JOIN_EXEC
+    EXPECT_THROW(run_multiple_agg(
+                     "SELECT count(*) FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c ON "
+                     "b.str = c.str;",
+                     dt),
+                 std::runtime_error);
+    EXPECT_THROW(run_multiple_agg(
+                     "SELECT count(*) FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str = "
+                     "c.str JOIN join_test AS d ON c.x = d.x;",
+                     dt),
+                 std::runtime_error);
+    EXPECT_THROW(run_multiple_agg(
+                     "SELECT a.x AS x, y, b.str FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c "
+                     "ON b.str = c.str ORDER BY x;",
+                     dt),
+                 std::runtime_error);
+    EXPECT_THROW(run_multiple_agg(
+                     "SELECT count(*) FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str = "
+                     "c.str WHERE a.y "
+                     "< 43;",
+                     dt),
+                 std::runtime_error);
+    EXPECT_THROW(run_multiple_agg(
+                     "SELECT SUM(a.x), b.str FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c ON "
+                     "b.str = c.str WHERE a.y "
+                     "= 43 group by b.str;",
+                     dt),
+                 std::runtime_error);
     EXPECT_THROW(run_multiple_agg(
                      "SELECT a.str as key0,a.fixed_str as key1,COUNT(*) AS color FROM test a JOIN (select str,count(*) "
                      "from test group by str order by COUNT(*) desc limit 40) b on a.str=b.str JOIN (select "
@@ -2104,6 +2136,7 @@ TEST(Select, UnsupportedPatterns) {
                      "c.fixed_str=a.fixed_str GROUP BY key0, key1 ORDER BY key0,key1;",
                      dt),
                  std::runtime_error);
+#endif
   }
 }
 

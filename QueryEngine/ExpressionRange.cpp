@@ -338,7 +338,7 @@ ExpressionRange getExpressionRange(const Analyzer::ColumnVar* col_expr,
       CHECK_GE(rte_idx, 0);
       CHECK_LT(static_cast<size_t>(rte_idx), query_infos.size());
       ssize_t ti_idx = -1;
-      for (ssize_t i = 0; i < query_infos.size(); ++i) {
+      for (size_t i = 0; i < query_infos.size(); ++i) {
         if (col_expr->get_table_id() == query_infos[i].table_id) {
           ti_idx = i;
           break;

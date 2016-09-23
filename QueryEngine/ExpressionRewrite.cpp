@@ -48,6 +48,8 @@ class OrToInVisitor : public ScalarExprVisitor<std::shared_ptr<Analyzer::InValue
 
   std::shared_ptr<Analyzer::InValues> visitExtractExpr(const Analyzer::ExtractExpr*) const override { return nullptr; }
 
+  std::shared_ptr<Analyzer::InValues> visitAggExpr(const Analyzer::AggExpr*) const override { return nullptr; }
+
   std::shared_ptr<Analyzer::InValues> aggregateResult(const std::shared_ptr<Analyzer::InValues>& lhs,
                                                       const std::shared_ptr<Analyzer::InValues>& rhs) const override {
     if (!lhs || !rhs) {
@@ -132,6 +134,11 @@ class DeepCopyVisitor : public ScalarExprVisitor<std::shared_ptr<Analyzer::Expr>
   RetType visitExtractExpr(const Analyzer::ExtractExpr* extract) const override {
     return makeExpr<Analyzer::ExtractExpr>(
         extract->get_type_info(), extract->get_contains_agg(), extract->get_field(), visit(extract->get_from_expr()));
+  }
+
+  RetType visitAggExpr(const Analyzer::AggExpr* agg) const override {
+    return makeExpr<Analyzer::AggExpr>(
+        agg->get_type_info(), agg->get_aggtype(), visit(agg->get_arg()), agg->get_is_distinct());
   }
 };
 
