@@ -102,6 +102,13 @@ const int8_t* advance_col_buff_to_slot(const int8_t* buff,
 }  // namespace
 
 std::vector<TargetValue> ResultSet::getNextRow(const bool translate_strings, const bool decimal_to_double) const {
+  while (fetched_so_far_ < drop_first_) {
+    getNextRowImpl(translate_strings, decimal_to_double);
+  }
+  return getNextRowImpl(translate_strings, decimal_to_double);
+}
+
+std::vector<TargetValue> ResultSet::getNextRowImpl(const bool translate_strings, const bool decimal_to_double) const {
   const auto entry_buff_idx = advanceCursorToNextEntry();
   if (keep_first_ && entry_buff_idx >= drop_first_ + keep_first_) {
     return {};
@@ -151,6 +158,7 @@ std::vector<TargetValue> ResultSet::getNextRow(const bool translate_strings, con
     agg_col_idx = advance_slot(agg_col_idx, agg_info);
   }
   ++crt_row_buff_idx_;
+  ++fetched_so_far_;
   return row;
 }
 

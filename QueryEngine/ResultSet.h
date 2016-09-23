@@ -114,6 +114,8 @@ class ResultSet {
   void append(ResultSet& that);
 
  private:
+  std::vector<TargetValue> getNextRowImpl(const bool translate_strings, const bool decimal_to_double) const;
+
   size_t advanceCursorToNextEntry() const;
 
   size_t entryCount() const;
@@ -166,6 +168,7 @@ class ResultSet {
   mutable std::unique_ptr<const ResultSetStorage> storage_;
   std::vector<std::unique_ptr<const ResultSetStorage>> appended_storage_;
   mutable size_t crt_row_buff_idx_;
+  mutable size_t fetched_so_far_;
   size_t drop_first_;
   size_t keep_first_;
   const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
