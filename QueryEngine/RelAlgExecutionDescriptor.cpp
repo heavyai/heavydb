@@ -36,6 +36,34 @@ std::vector<Vertex> merge_sort_with_input(const std::vector<Vertex>& vertices, c
   return new_vertices;
 }
 
+std::vector<Vertex> merge_join_with_non_join(const std::vector<Vertex>& vertices, const DAG& graph) {
+  DAG::out_edge_iterator oe_iter, oe_end;
+  std::unordered_set<Vertex> joins;
+  for (const auto vert : vertices) {
+    if (!dynamic_cast<const RelJoin*>(graph[vert])) {
+      continue;
+    }
+    if (boost::out_degree(vert, graph) > 1) {
+      throw std::runtime_error("Join used more than once not supported yet");
+    }
+    boost::tie(oe_iter, oe_end) = boost::out_edges(vert, graph);
+    CHECK(boost::next(oe_iter) == oe_end);
+    const auto out_vert = boost::target(*oe_iter, graph);
+    if (!dynamic_cast<const RelJoin*>(graph[out_vert])) {
+      joins.insert(vert);
+    }
+  }
+
+  std::vector<Vertex> new_vertices;
+  for (const auto vert : vertices) {
+    if (joins.count(vert)) {
+      continue;
+    }
+    new_vertices.push_back(vert);
+  }
+  return new_vertices;
+}
+
 DAG build_dag(const RelAlgNode* sink) {
   DAG graph(1);
   graph[0] = sink;
@@ -75,7 +103,8 @@ std::vector<const RelAlgNode*> schedule_ra_dag(const RelAlgNode* sink) {
   std::reverse(ordering.begin(), ordering.end());
 
   std::vector<const RelAlgNode*> nodes;
-  for (auto vert : merge_sort_with_input(ordering, graph)) {
+  ordering = merge_sort_with_input(ordering, graph);
+  for (auto vert : merge_join_with_non_join(ordering, graph)) {
     nodes.push_back(graph[vert]);
   }
 
@@ -92,10 +121,12 @@ std::vector<RaExecutionDesc> get_execution_descriptors(const RelAlgNode* ra_node
 
   std::vector<RaExecutionDesc> descs;
   for (const auto node : schedule_ra_dag(ra_node)) {
-    if (dynamic_cast<const RelScan*>(node) || dynamic_cast<const RelJoin*>(node)) {
+    if (dynamic_cast<const RelScan*>(node)) {
       continue;
     }
-
+    if (dynamic_cast<const RelJoin*>(node)) {
+      throw std::runtime_error("3+-way join not supported yet");
+    }
     CHECK_EQ(size_t(1), node->inputCount());
     descs.emplace_back(node);
   }

@@ -2051,7 +2051,7 @@ TEST(Select, UnsupportedPatterns) {
                      "SELECT a.str as key0,a.fixed_str as key1,COUNT(*) AS color FROM test a JOIN (select str,count(*) "
                      "from test group by str order by COUNT(*) desc limit 40) b on a.str=b.str JOIN (select "
                      "fixed_str,count(*) from test group by fixed_str order by count(*) desc limit 40) c on "
-                     "c.fixed_str=a.fixed_str GROUP BY key0, key1;",
+                     "c.fixed_str=a.fixed_str GROUP BY key0, key1 ORDER BY key0,key1;",
                      dt),
                  std::runtime_error);
   }

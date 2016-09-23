@@ -83,8 +83,8 @@ RANodeOutput get_node_output(const RelAlgNode* ra_node) {
     // Join concatenates the outputs from the inputs and the output
     // directly references the nodes in the input.
     CHECK_EQ(size_t(2), join_node->inputCount());
-    auto lhs_out = get_node_output(join_node->getInput(0));
-    const auto rhs_out = get_node_output(join_node->getInput(1));
+    auto lhs_out = n_outputs(join_node->getInput(0), get_node_output(join_node->getInput(0)).size());
+    const auto rhs_out = n_outputs(join_node->getInput(1), get_node_output(join_node->getInput(1)).size());
     lhs_out.insert(lhs_out.end(), rhs_out.begin(), rhs_out.end());
     return lhs_out;
   }
