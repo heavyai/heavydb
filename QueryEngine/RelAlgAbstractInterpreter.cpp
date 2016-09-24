@@ -1,5 +1,6 @@
 #ifdef HAVE_CALCITE
 #include "RelAlgAbstractInterpreter.h"
+#include "RelAlgOptimizer.h"
 #include "CalciteDeserializerUtils.h"
 #include "JsonAccessors.h"
 #include "RexVisitor.h"
@@ -10,7 +11,6 @@
 
 #include <string>
 #include <unordered_set>
-#include <unordered_map>
 
 unsigned RelAlgNode::crt_id_ = 1;
 
@@ -744,214 +744,6 @@ void coalesce_nodes(std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept {
   }
 }
 
-namespace {
-
-class RexRedirectInputsVisitor : public RexDeepCopyVisitor {
- public:
-  RexRedirectInputsVisitor(const std::unordered_set<const RelProject*>& crt_inputs) : crt_projects_(crt_inputs) {}
-
-  RetType visitInput(const RexInput* input) const {
-    auto source = dynamic_cast<const RelProject*>(input->getSourceNode());
-    if (!source || !crt_projects_.count(source)) {
-      return input->deepCopy();
-    }
-    auto new_source = source->getInput(0);
-    auto new_input = dynamic_cast<const RexInput*>(source->getProjectAt(input->getIndex()));
-    if (!new_input) {
-      return input->deepCopy();
-    }
-    return boost::make_unique<RexInput>(new_source, new_input->getIndex());
-  }
-
- private:
-  const std::unordered_set<const RelProject*>& crt_projects_;
-};
-
-void redirect_inputs_of(std::shared_ptr<RelAlgNode> node, const std::unordered_set<const RelProject*>& projects) {
-  RexRedirectInputsVisitor visitor(projects);
-  std::shared_ptr<const RelProject> src_project = nullptr;
-  for (size_t i = 0; i < node->inputCount(); ++i) {
-    if (auto project = std::dynamic_pointer_cast<const RelProject>(node->getAndOwnInput(i))) {
-      if (projects.count(project.get())) {
-        src_project = project;
-        break;
-      }
-    }
-  }
-  if (!src_project) {
-    return;
-  }
-  if (auto join = std::dynamic_pointer_cast<RelJoin>(node)) {
-    if (src_project->size() != src_project->getInput(0)->size()) {
-      return;
-    }
-    for (size_t i = 0; i < src_project->size(); ++i) {
-      auto target = dynamic_cast<const RexInput*>(src_project->getProjectAt(i));
-      CHECK(target);
-      if (i != target->getIndex()) {
-        return;
-      }
-    }
-    join->replaceInput(src_project, src_project->getAndOwnInput(0));
-    auto other_project = src_project == node->getAndOwnInput(0)
-                             ? std::dynamic_pointer_cast<const RelProject>(node->getAndOwnInput(1))
-                             : std::dynamic_pointer_cast<const RelProject>(node->getAndOwnInput(0));
-    if (other_project && projects.count(other_project.get())) {
-      if (other_project->size() != other_project->getInput(0)->size()) {
-        return;
-      }
-      for (size_t i = 0; i < other_project->size(); ++i) {
-        auto target = dynamic_cast<const RexInput*>(other_project->getProjectAt(i));
-        CHECK(target);
-        if (i != target->getIndex()) {
-          return;
-        }
-      }
-      join->replaceInput(other_project, other_project->getAndOwnInput(0));
-    }
-    auto new_condition = visitor.visit(join->getCondition());
-    join->setCondition(new_condition);
-    return;
-  }
-  if (auto project = std::dynamic_pointer_cast<RelProject>(node)) {
-    std::vector<std::unique_ptr<const RexScalar>> new_exprs;
-    for (size_t i = 0; i < project->size(); ++i) {
-      new_exprs.push_back(visitor.visit(project->getProjectAt(i)));
-    }
-    project->setExpressions(new_exprs);
-    project->replaceInput(src_project, src_project->getAndOwnInput(0));
-    return;
-  }
-  if (auto filter = std::dynamic_pointer_cast<RelFilter>(node)) {
-    if (src_project->size() != src_project->getInput(0)->size()) {
-      return;
-    }
-    for (size_t i = 0; i < src_project->size(); ++i) {
-      auto target = dynamic_cast<const RexInput*>(src_project->getProjectAt(i));
-      CHECK(target);
-      if (i != target->getIndex()) {
-        return;
-      }
-    }
-    auto new_condition = visitor.visit(filter->getCondition());
-    filter->setCondition(new_condition);
-    filter->replaceInput(src_project, src_project->getAndOwnInput(0));
-    return;
-  }
-
-  CHECK(std::dynamic_pointer_cast<RelAggregate>(node) || std::dynamic_pointer_cast<RelSort>(node));
-  if (src_project->size() != src_project->getInput(0)->size()) {
-    return;
-  }
-  for (size_t i = 0; i < src_project->size(); ++i) {
-    auto target = dynamic_cast<const RexInput*>(src_project->getProjectAt(i));
-    CHECK(target);
-    if (i != target->getIndex()) {
-      return;
-    }
-  }
-  node->replaceInput(src_project, src_project->getAndOwnInput(0));
-}
-
-}  // namespace
-
-// For now, the only target to eliminate is restricted to project-aggregate pair between scan/sort and join
-// TODO(miyu): allow more chance if proved safe
-void eliminate_identical_copy(std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept {
-  std::unordered_set<std::shared_ptr<const RelAlgNode>> copies;
-  auto sink = nodes.back();
-  for (auto node : nodes) {
-    auto aggregate = std::dynamic_pointer_cast<const RelAggregate>(node);
-    if (!aggregate || aggregate == sink || !(aggregate->getGroupByCount() == 1 && aggregate->getAggExprsCount() == 0)) {
-      continue;
-    }
-    auto project = std::dynamic_pointer_cast<const RelProject>(aggregate->getAndOwnInput(0));
-    if (project && project->size() == aggregate->size() && project->getFields() == aggregate->getFields()) {
-      CHECK_EQ(size_t(0), copies.count(aggregate));
-      copies.insert(aggregate);
-    }
-  }
-  for (auto node : nodes) {
-    if (!node->inputCount()) {
-      continue;
-    }
-    auto last_source = node->getAndOwnInput(node->inputCount() - 1);
-    if (!copies.count(last_source)) {
-      continue;
-    }
-    auto aggregate = std::dynamic_pointer_cast<const RelAggregate>(last_source);
-    CHECK(aggregate);
-    if (!std::dynamic_pointer_cast<const RelJoin>(node) || aggregate->size() != 1) {
-      continue;
-    }
-    auto project = std::dynamic_pointer_cast<const RelProject>(aggregate->getAndOwnInput(0));
-    CHECK(project);
-    auto new_source = project->getAndOwnInput(0);
-    if (std::dynamic_pointer_cast<const RelSort>(new_source) || std::dynamic_pointer_cast<const RelScan>(new_source)) {
-      node->replaceInput(last_source, new_source);
-    }
-  }
-  decltype(copies)().swap(copies);
-
-  std::unordered_set<const RelProject*> projects;
-  for (auto node : nodes) {
-    auto project = std::dynamic_pointer_cast<RelProject>(node);
-    if (project && project->isSimple()) {
-      projects.insert(project.get());
-    }
-  }
-
-  for (auto node : nodes) {
-    redirect_inputs_of(node, projects);
-  }
-
-  for (auto nodeIt = nodes.rbegin(); nodeIt != nodes.rend(); ++nodeIt) {
-    if (nodeIt->unique()) {
-      nodeIt->reset();
-    }
-  }
-
-  std::vector<std::shared_ptr<RelAlgNode>> new_nodes;
-  for (auto node : nodes) {
-    if (!node) {
-      continue;
-    }
-    new_nodes.push_back(node);
-  }
-  nodes.swap(new_nodes);
-}
-
-// For some reason, Calcite generates Sort, Project, Sort sequences where the
-// two Sort nodes are identical and the Project is identity. Simplify this
-// pattern by re-binding the input of the second sort to the input of the first.
-void simplify_sort(std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept {
-  if (nodes.size() < 3) {
-    return;
-  }
-  for (size_t i = 0; i <= nodes.size() - 3;) {
-    auto first_sort = std::dynamic_pointer_cast<RelSort>(nodes[i]);
-    const auto project = std::dynamic_pointer_cast<const RelProject>(nodes[i + 1]);
-    auto second_sort = std::dynamic_pointer_cast<RelSort>(nodes[i + 2]);
-    if (first_sort && second_sort && project && project->isIdentity() && *first_sort == *second_sort) {
-      second_sort->replaceInput(second_sort->getAndOwnInput(0), first_sort->getAndOwnInput(0));
-      nodes[i].reset();
-      nodes[i + 1].reset();
-      i += 3;
-    } else {
-      ++i;
-    }
-  }
-
-  std::vector<std::shared_ptr<RelAlgNode>> new_nodes;
-  for (auto node : nodes) {
-    if (!node) {
-      continue;
-    }
-    new_nodes.push_back(node);
-  }
-  nodes.swap(new_nodes);
-}
-
 int64_t get_int_literal_field(const rapidjson::Value& obj, const char field[], const int64_t default_val) noexcept {
   const auto it = obj.FindMember(field);
   if (it == obj.MemberEnd()) {
@@ -987,6 +779,9 @@ class RaAbstractInterp {
     mark_nops(nodes_);
     simplify_sort(nodes_);
     eliminate_identical_copy(nodes_);
+#ifdef ELIM_DEAD_COLS
+    eliminate_dead_columns(nodes_);
+#endif
     coalesce_nodes(nodes_);
     CHECK(nodes_.back().unique());
     return nodes_.back();

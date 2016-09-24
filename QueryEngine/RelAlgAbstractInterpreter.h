@@ -225,6 +225,10 @@ class RexInput : public RexAbstractInput {
   // Maybe create a fresh RA tree with the required changes after each coalescing?
   void setSourceNode(const RelAlgNode* node) const { node_ = node; }
 
+  bool operator==(const RexInput& that) const {
+    return getSourceNode() == that.getSourceNode() && getIndex() == that.getIndex();
+  }
+
   std::string toString() const override {
     return "(RexInput " + std::to_string(getIndex()) + " " + std::to_string(reinterpret_cast<const uint64_t>(node_)) +
            ")";
@@ -235,6 +239,18 @@ class RexInput : public RexAbstractInput {
  private:
   mutable const RelAlgNode* node_;
 };
+
+namespace std {
+
+template <>
+struct hash<RexInput> {
+  size_t operator()(const RexInput& rex_in) const {
+    auto addr = rex_in.getSourceNode();
+    return *reinterpret_cast<const size_t*>(&addr) ^ rex_in.getIndex();
+  }
+};
+
+}  // std
 
 // Not a real node created by Calcite. Created by us because CaseExpr is a node in our Analyzer.
 class RexCase : public RexScalar {

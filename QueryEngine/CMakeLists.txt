@@ -30,6 +30,7 @@ set(query_engine_source_files
     RelAlgExecutionDescriptor.cpp
     RelAlgExecutor.cpp
     RelAlgTranslator.cpp
+    RelAlgOptimizer.cpp
     ResultRows.cpp
     ResultSet.cpp
     ResultSetIteration.cpp
