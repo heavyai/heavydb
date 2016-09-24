@@ -18,7 +18,7 @@ std::vector<Vertex> merge_sort_with_input(const std::vector<Vertex>& vertices, c
       CHECK(size_t(1) == sort->inputCount() && boost::next(ie_iter) == ie_end);
       const auto in_vert = boost::source(*ie_iter, graph);
       const auto input = graph[in_vert];
-      if (!dynamic_cast<const RelScan*>(input)) {
+      if (dynamic_cast<const RelScan*>(input)) {
         throw std::runtime_error("Query not supported yet");
       }
       if (boost::out_degree(in_vert, graph) > 1) {
