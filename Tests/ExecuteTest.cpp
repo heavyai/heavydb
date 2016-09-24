@@ -1572,6 +1572,15 @@ void import_subquery_test() {
   }
 }
 
+void import_text_group_by_test() {
+  const std::string text_group_by_test("DROP TABLE IF EXISTS text_group_by_test;");
+  run_ddl_statement(text_group_by_test);
+  run_ddl_statement(
+      "CREATE TABLE text_group_by_test(tdef TEXT, tdict TEXT ENCODING DICT, tnone TEXT ENCODING NONE ) WITH "
+      "(fragment_size=200);");
+  const std::string insert_query{"INSERT INTO text_group_by_test VALUES('hello','world',':-)');"};
+  run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+}
 }  // namespace
 
 TEST(Select, ArrayUnnest) {
@@ -2058,6 +2067,22 @@ TEST(Select, UnsupportedPatterns) {
                  std::runtime_error);
   }
 }
+
+TEST(Select, TextGroupBy) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    EXPECT_THROW(run_multiple_agg(
+                     " select count(*) from (SELECT tnone, count(*) cc from text_group_by_test group by tnone);", dt),
+                 std::runtime_error);
+    ASSERT_EQ(static_cast<int64_t>(1),
+              v<int64_t>(run_simple_agg(
+                  "select count(*) from (SELECT tdict, count(*) cc from text_group_by_test group by tdict)", dt)));
+    ASSERT_EQ(static_cast<int64_t>(1),
+              v<int64_t>(run_simple_agg(
+                  "select count(*) from (SELECT tdef, count(*) cc from text_group_by_test group by tdef)", dt)));
+  }
+}
+
 #endif  // HAVE_RAVM
 
 #ifdef HAVE_CALCITE
@@ -2092,7 +2117,8 @@ int main(int argc, char** argv) {
     g_sqlite_comparator.query(drop_old_test);
     const std::string create_test{
         "CREATE TABLE test(x int not null, y int, z smallint, t bigint, b boolean, f float, d double, str text "
-        "encoding dict, fixed_str text encoding dict(16), real_str text, m timestamp(0), n time(0), o date, fx int "
+        "encoding dict, fixed_str text encoding dict(16), real_str text encoding none, m timestamp(0), n time(0), o "
+        "date, fx int "
         "encoding fixed(16), dd decimal(10, "
         "2), ss text encoding dict, u int, ofd int, ufd int not null, ofq bigint, ufq bigint not null) WITH "
         "(fragment_size=2);"};
@@ -2137,7 +2163,8 @@ int main(int argc, char** argv) {
     const std::string create_array_test{
         "CREATE TABLE array_test(x int, arr_i16 smallint[], arr_i32 int[], arr_i64 bigint[], arr_str text[] encoding "
         "dict, "
-        "arr_float float[], arr_double double[], arr_bool boolean[], real_str text) WITH (fragment_size=2);"};
+        "arr_float float[], arr_double double[], arr_bool boolean[], real_str text encoding none) WITH "
+        "(fragment_size=2);"};
     run_ddl_statement(create_array_test);
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'array_test'";
@@ -2151,7 +2178,7 @@ int main(int argc, char** argv) {
     const std::string create_test{
         "CREATE TABLE test_inner(x int not null, str text encoding dict) WITH (fragment_size=2);"};
     run_ddl_statement(create_test);
-    g_sqlite_comparator.query("CREATE TABLE test_inner(x int not null, str text);");
+    g_sqlite_comparator.query("CREATE TABLE test_inner(x int not null, str text encoding none);");
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'test_inner'";
     return -EEXIST;
@@ -2166,7 +2193,8 @@ int main(int argc, char** argv) {
         "CREATE TABLE array_test_inner(x int, arr_i16 smallint[], arr_i32 int[], arr_i64 bigint[], arr_str text[] "
         "encoding "
         "dict, "
-        "arr_float float[], arr_double double[], arr_bool boolean[], real_str text) WITH (fragment_size=4000000);"};
+        "arr_float float[], arr_double double[], arr_bool boolean[], real_str text encoding none) WITH "
+        "(fragment_size=4000000);"};
     run_ddl_statement(create_array_test);
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'array_test_inner'";
@@ -2195,6 +2223,12 @@ int main(int argc, char** argv) {
     import_subquery_test();
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'subquery_test'";
+    return -EEXIST;
+  }
+  try {
+    import_text_group_by_test();
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'text_group_by_test'";
     return -EEXIST;
   }
   try {

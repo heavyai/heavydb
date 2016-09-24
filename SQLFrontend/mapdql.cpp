@@ -267,10 +267,17 @@ void process_backslash_commands(char* command, ClientContext& context) {
       std::string table_name(command + 3);
       if (thrift_with_retry(kGET_ROW_DESC, context, command + 3)) {
         std::string comma_or_blank("");
-        for (auto p : context.rowdesc_return) {
+        for (TColumnType p : context.rowdesc_return) {
+          std::string encoding;
+          if (p.col_type.type == TDatumType::STR) {
+            encoding =
+                (p.col_type.encoding == 0 ? " ENCODING NONE" : " ENCODING " + thrift_to_encoding_name(p.col_type));
+
+          } else {
+            encoding = (p.col_type.encoding == 0 ? "" : " ENCODING " + thrift_to_encoding_name(p.col_type));
+          }
           std::cout << comma_or_blank << p.col_name << " " << thrift_to_name(p.col_type)
-                    << (p.col_type.nullable ? "" : " NOT NULL")
-                    << (p.col_type.encoding == 0 ? "" : " ENCODING " + thrift_to_encoding_name(p.col_type));
+                    << (p.col_type.nullable ? "" : " NOT NULL") << encoding;
           comma_or_blank = ",\n";
         }
         // push final "\n";

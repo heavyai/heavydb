@@ -1145,6 +1145,10 @@ class MapDHandler : virtual public MapDIf {
       if (thrift_to_encoding(col.col_type.encoding) != kENCODING_NONE) {
         col_stmt.append("ENCODING " + thrift_to_encoding_name(col.col_type) + " ");
       }
+      // deal with special case of non DICT encoded strings
+      if (thrift_to_encoding(col.col_type.encoding) == kENCODING_NONE && col.col_type.type == TDatumType::STR) {
+        col_stmt.append("ENCODING NONE");
+      }
       col_stmts.push_back(col_stmt);
     }
 

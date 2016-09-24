@@ -564,7 +564,8 @@ CREATE TABLE [IF NOT EXISTS] <table>
 
 `<encoding spec>` supported include:
 
-* DICT: Dictionary encoding on string columns.
+* DICT: Dictionary encoding on string columns (The Default for TEXT columns).
+* NONE: No encoding.  Only valid on TEXT columns.  No Dictionalry will be created.  Aggregate operations will not be possible on this column type
 * FIXED(bits): Fixed length encoding of integer or timestamp columns.
 
 The `<property>` in the optional WITH clause can be

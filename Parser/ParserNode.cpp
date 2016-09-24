@@ -1510,8 +1510,15 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     }
     const CompressDef* compression = coldef->get_compression();
     if (compression == nullptr) {
-      cd.columnType.set_compression(kENCODING_NONE);
-      cd.columnType.set_comp_param(0);
+      // Change default TEXT column behaviour to be DICT encoded
+      if (cd.columnType.is_string() || cd.columnType.is_string_array()) {
+        // default to 32-bits
+        cd.columnType.set_compression(kENCODING_DICT);
+        cd.columnType.set_comp_param(32);
+      } else {
+        cd.columnType.set_compression(kENCODING_NONE);
+        cd.columnType.set_comp_param(0);
+      }
     } else {
       const std::string& comp = *compression->get_encoding_name();
       int comp_param;
@@ -1572,6 +1579,11 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
         // diciontary encoding
         cd.columnType.set_compression(kENCODING_DICT);
         cd.columnType.set_comp_param(comp_param);
+      } else if (boost::iequals(comp, "NONE")) {
+        if (!cd.columnType.is_string() && !cd.columnType.is_string_array())
+          throw std::runtime_error("None encoding is only supported on string or string array columns.");
+        cd.columnType.set_compression(kENCODING_NONE);
+        cd.columnType.set_comp_param(0);
       } else if (boost::iequals(comp, "sparse")) {
         // sparse column encoding with mostly NULL values
         if (cd.columnType.get_notnull())
