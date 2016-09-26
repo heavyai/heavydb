@@ -125,7 +125,7 @@ TEST(StorageLarge, Numbers) {
 
 TEST(StorageSmall, Strings) {
   ASSERT_NO_THROW(run_ddl("drop table if exists strings;"););
-  ASSERT_NO_THROW(run_ddl("create table strings (x varchar(10), y text encoding none);"););
+  ASSERT_NO_THROW(run_ddl("create table strings (x varchar(10) encoding none, y text encoding none);"););
   EXPECT_TRUE(storage_test("strings", SMALL));
   ASSERT_NO_THROW(run_ddl("drop table strings;"););
 }
@@ -134,7 +134,7 @@ TEST(StorageSmall, AllTypes) {
   ASSERT_NO_THROW(run_ddl("drop table if exists alltypes;"););
   ASSERT_NO_THROW(run_ddl(
                       "create table alltypes (a smallint, b int, c bigint, d numeric(7,3), e double, f float, "
-                      "g timestamp(0), h time(0), i date, x varchar(10), y text encoding none);"););
+                      "g timestamp(0), h time(0), i date, x varchar(10) encoding none, y text encoding none);"););
   EXPECT_TRUE(storage_test("alltypes", SMALL));
   ASSERT_NO_THROW(run_ddl("drop table alltypes;"););
 }
