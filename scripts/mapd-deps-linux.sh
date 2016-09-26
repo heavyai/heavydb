@@ -136,7 +136,7 @@ popd
 #make install
 #popd
 
-download_make_install https://curl.haxx.se/download/curl-7.50.0.tar.bz2
+download_make_install https://curl.haxx.se/download/curl-7.50.0.tar.bz2 "" "--disable-ldap --disable-ldaps"
 
 download http://www.cryptopp.com/cryptopp563.zip
 unzip -a -d cryptopp563 cryptopp563
