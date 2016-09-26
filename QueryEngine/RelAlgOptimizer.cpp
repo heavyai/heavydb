@@ -1,6 +1,8 @@
 #include "RelAlgOptimizer.h"
 #include "RexVisitor.h"
 
+#include <glog/logging.h>
+
 #include <numeric>
 #include <unordered_set>
 #include <unordered_map>
@@ -349,6 +351,10 @@ std::vector<std::unordered_set<size_t>> get_live_ins(
   return {};
 }
 
+bool does_redef_cols(const RelAlgNode* node) {
+  return dynamic_cast<const RelAggregate*>(node) || dynamic_cast<const RelProject*>(node);
+}
+
 }  // namespace
 
 void eliminate_dead_columns(std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept {
@@ -418,7 +424,7 @@ void eliminate_dead_columns(std::vector<std::shared_ptr<RelAlgNode>>& nodes) noe
   if (!has_dead_cols) {
     return;
   }
-  // TODO(miyu): sweep and propagate
+  // Sweep
   auto web = build_du_web(nodes);
   for (auto node : dead_nodes) {
     auto node_it = web.find(node);
@@ -433,7 +439,66 @@ void eliminate_dead_columns(std::vector<std::shared_ptr<RelAlgNode>>& nodes) noe
       }
     }
   }
-  cleanup_dead_nodes(nodes);
+  std::unordered_map<const RelAlgNode*, std::unordered_map<size_t, size_t>> new_liveouts;
+  std::unordered_map<const RelAlgNode*, size_t> node_to_slot;
+  for (size_t i = 0; i < nodes.size(); ++i) {
+    auto node = nodes[i].get();
+    CHECK(node);
+    node_to_slot.insert(std::make_pair(node, i));
+  }
+  for (auto live_pair : live_outs) {
+    if (!does_redef_cols(live_pair.first)) {
+      continue;
+    }
+    auto node_it = node_to_slot.find(live_pair.first);
+    CHECK(node_it != node_to_slot.end());
+    auto node = nodes[node_it->second].get();
+    auto live_out = live_pair.second;
+    // Ignore empty live_out due to some invalid node
+    if (node->size() == live_out.size() || live_out.empty()) {
+      continue;
+    }
+    auto it_ok = new_liveouts.insert(std::make_pair(node, std::unordered_map<size_t, size_t>{}));
+    CHECK(it_ok.second);
+    auto& new_indices = it_ok.first->second;
+    std::vector<size_t> ordered_indices(live_out.begin(), live_out.end());
+    std::sort(ordered_indices.begin(), ordered_indices.end());
+    for (size_t i = 0; i < ordered_indices.size(); ++i) {
+      new_indices.insert(std::make_pair(ordered_indices[i], i));
+    }
+    if (auto aggregate = dynamic_cast<RelAggregate*>(node)) {
+      auto old_exprs = aggregate->getAggExprsAndRelease();
+      std::vector<std::unique_ptr<const RexAgg>> new_exprs;
+      auto key_name_it = aggregate->getFields().begin();
+      std::vector<std::string> new_fields(key_name_it, key_name_it + aggregate->getGroupByCount());
+      for (size_t i = aggregate->getGroupByCount(), j = 0; i < aggregate->getFields().size() && j < old_exprs.size();
+           ++i, ++j) {
+        if (live_out.count(i)) {
+          new_exprs.push_back(std::move(old_exprs[j]));
+          new_fields.push_back(aggregate->getFieldName(i));
+        }
+      }
+      aggregate->setAggExprs(new_exprs);
+      aggregate->setFilds(new_fields);
+      continue;
+    }
+    if (auto project = dynamic_cast<RelProject*>(node)) {
+      auto old_exprs = project->getExpressionsAndRelease();
+      std::vector<std::unique_ptr<const RexScalar>> new_exprs;
+      std::vector<std::string> new_fields;
+      for (size_t i = 0; i < old_exprs.size(); ++i) {
+        if (live_out.count(i)) {
+          new_exprs.push_back(std::move(old_exprs[i]));
+          new_fields.push_back(project->getFieldName(i));
+        }
+      }
+      project->setExpressions(new_exprs);
+      project->setFilds(new_fields);
+      continue;
+    }
+    CHECK(false);
+  }
+  // TODO(miyu): propagate
 }
 
 // For some reason, Calcite generates Sort, Project, Sort sequences where the

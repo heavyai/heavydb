@@ -482,6 +482,7 @@ class RelProject : public RelAlgNode {
   std::vector<std::unique_ptr<const RexScalar>> getExpressionsAndRelease() { return std::move(scalar_exprs_); }
 
   const std::vector<std::string>& getFields() const { return fields_; }
+  void setFilds(std::vector<std::string>& fields) { fields_ = std::move(fields); }
 
   const std::string getFieldName(const size_t i) const { return fields_[i]; }
 
@@ -497,7 +498,7 @@ class RelProject : public RelAlgNode {
 
  private:
   std::vector<std::unique_ptr<const RexScalar>> scalar_exprs_;
-  const std::vector<std::string> fields_;
+  std::vector<std::string> fields_;
 };
 
 class RelAggregate : public RelAlgNode {
@@ -518,6 +519,7 @@ class RelAggregate : public RelAlgNode {
   const size_t getAggExprsCount() const { return agg_exprs_.size(); }
 
   const std::vector<std::string>& getFields() const { return fields_; }
+  void setFilds(std::vector<std::string>& new_fields) { fields_ = std::move(new_fields); }
 
   const std::string getFieldName(const size_t i) const { return fields_[i]; }
 
@@ -528,6 +530,8 @@ class RelAggregate : public RelAlgNode {
     }
     return result;
   }
+
+  std::vector<std::unique_ptr<const RexAgg>> getAggExprsAndRelease() { return std::move(agg_exprs_); }
 
   const std::vector<std::unique_ptr<const RexAgg>>& getAggExprs() const { return agg_exprs_; }
 
@@ -551,7 +555,7 @@ class RelAggregate : public RelAlgNode {
  private:
   const size_t groupby_count_;
   std::vector<std::unique_ptr<const RexAgg>> agg_exprs_;
-  const std::vector<std::string> fields_;
+  std::vector<std::string> fields_;
 };
 
 class RelJoin : public RelAlgNode {
