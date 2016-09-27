@@ -937,6 +937,7 @@ void ResultRows::sort(const std::list<Analyzer::OrderEntry>& order_entries,
     // std::sort will trigger a segmentation fault (or corrupt memory).
     for (const auto order_entry : order_entries) {
       CHECK_GE(order_entry.tle_no, 1);
+      CHECK_LE(static_cast<size_t>(order_entry.tle_no), targets_.size());
       const auto& entry_ti = get_compact_type(targets_[order_entry.tle_no - 1]);
       const auto is_dict = entry_ti.is_string() && entry_ti.get_compression() == kENCODING_DICT;
       const auto& lhs_v = lhs[order_entry.tle_no - 1];

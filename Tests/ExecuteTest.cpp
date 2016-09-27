@@ -1964,6 +1964,8 @@ TEST(Select, Subqueries) {
                  std::runtime_error);
     EXPECT_THROW(run_multiple_agg("SELECT COUNT(*) FROM test WHERE x NOT IN (SELECT x FROM test GROUP BY x);", dt),
                  std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("SELECT AVG(y) FROM (SELECT * FROM test ORDER BY z LIMIT 5);", dt),
+                 std::runtime_error);
   }
 }
 

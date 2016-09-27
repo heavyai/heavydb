@@ -101,7 +101,9 @@ void redirect_inputs_of(std::shared_ptr<RelAlgNode> node, const std::unordered_s
     filter->replaceInput(src_project, src_project->getAndOwnInput(0));
     return;
   }
-
+  if (std::dynamic_pointer_cast<RelSort>(node) && dynamic_cast<const RelScan*>(src_project->getInput(0))) {
+    return;
+  }
   CHECK(std::dynamic_pointer_cast<RelAggregate>(node) || std::dynamic_pointer_cast<RelSort>(node));
   if (src_project->size() != src_project->getInput(0)->size()) {
     return;
