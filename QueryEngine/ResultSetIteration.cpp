@@ -273,7 +273,9 @@ TargetValue ResultSet::makeTargetValue(const int8_t* ptr,
   if (chosen_type.is_fp()) {
     switch (compact_sz) {
       case 8: {
-        return *reinterpret_cast<const double*>(ptr);
+        const auto dval = *reinterpret_cast<const double*>(ptr);
+        return chosen_type.get_type() == kFLOAT ? ScalarTargetValue(static_cast<const float>(dval))
+                                                : ScalarTargetValue(dval);
       }
       case 4: {
         CHECK_EQ(kFLOAT, chosen_type.get_type());
