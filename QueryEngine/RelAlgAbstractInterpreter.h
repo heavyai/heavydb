@@ -535,10 +535,7 @@ class RelAggregate : public RelAlgNode {
 
   const std::vector<std::unique_ptr<const RexAgg>>& getAggExprs() const { return agg_exprs_; }
 
-  void setAggExprs(std::vector<std::unique_ptr<const RexAgg>>& agg_exprs) {
-    CHECK_EQ(agg_exprs.size(), size());
-    agg_exprs_ = std::move(agg_exprs);
-  }
+  void setAggExprs(std::vector<std::unique_ptr<const RexAgg>>& agg_exprs) { agg_exprs_ = std::move(agg_exprs); }
 
   std::string toString() const override {
     std::string result = "(RelAggregate<" + std::to_string(reinterpret_cast<uint64_t>(this)) + ">(groups: [";
@@ -752,6 +749,8 @@ class RelSort : public RelAlgNode {
     return collation_[i];
   }
 
+  void setCollation(std::vector<SortField>&& collation) { collation_ = std::move(collation); }
+
   size_t getLimit() const { return limit_; }
 
   size_t getOffset() const { return offset_; }
@@ -771,7 +770,7 @@ class RelSort : public RelAlgNode {
   size_t size() const override { return inputs_[0]->size(); }
 
  private:
-  const std::vector<SortField> collation_;
+  std::vector<SortField> collation_;
   const size_t limit_;
   const size_t offset_;
 
