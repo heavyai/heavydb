@@ -1,266 +1,430 @@
-This Trial License Agreement (this “Agreement”) is made and entered into
-as of the date you click “I ACCEPT” (the “Effective Date”), between MapD
-Technologies, Inc., a Delaware corporation (“MapD”) with an address at
-180 Sansome St. 4th floor, San Francisco, CA 94104, and the individual
-clicking “I ACCEPT,” on his or her own behalf, or, if this Agreement is
-entered into for business purposes, for the business entity on whose
-behalf the individual clicks “I ACCEPT” (in either case, “Licensee”).
-MapD, on the one hand, and Licensee, on the other hand, may be referred
-to herein as a “Party,” and together as the “Parties.”
+MapD™ End User License Agreement (EULA)
+Last Updated: 27-Sep-2016
 
-SOFTWARE LICENSED
+IMPORTANT NOTICE: READ THIS END USER LICENSE AGREEMENT (THIS "AGREEMENT")
+CAREFULLY BEFORE ACCESSING OR USING THE PRODUCTS (AS DEFINED BELOW). BY
+ACCESSING OR USING THE PRODUCTS, YOU ACKNOWLEDGE THAT YOU HAVE READ, UNDERSTAND
+AND AGREE TO THE TERMS OF THIS AGREEMENT. IF YOU ARE ENTERING INTO THIS
+AGREEMENT ON BEHALF OF A BUSINESS ENTITY, YOU REPRESENT THAT YOU HAVE THE
+AUTHORITY TO BIND SUCH ENTITY TO THIS AGREEMENT, IN WHICH CASE "YOU" MEANS SUCH
+ENTITY.
+
+IF YOU DO NOT AGREE TO THE TERMS SET OUT IN THIS AGREEMENT, DO NOT USE THE
+PRODUCTS, AND IMMEDIATELY CONTACT YOUR SUPPLIER.
+
+1. LICENSE
+==========
+
+Subject to Your compliance with the terms of this Agreement, MapD Technologies,
+Inc., or a subsidiary or affiliate ("MapD") grants You a limited,
+non-exclusive, non-transferable, non-sublicensable license to use MapD® brand
+Products. Products may include software and documentation (together, the
+"Software"). The Products are licensed for Your internal business purposes
+only.
+
+This Agreement applies to any MapD® Software that is made available, at any
+time, for use in connection with the Products, whether as original Software,
+installed in third-party hardware, or made available separately as an update,
+upgrade, or otherwise. All such Software is also included in the term
+"Products." You may only use any such Software in conjunction with the
+Products, or as otherwise authorized by MapD.
+
+Software may be provided to You for local installation or as a service
+accessible through a browser or other remote access interface. In either case,
+or both, the terms of this Agreement apply. All Software will be delivered by
+electronic means unless otherwise specified on the applicable Ordering
+Documents (defined below). Software will be deemed delivered when it is first
+made available for Your access and use or download ("Delivery").
+
+You must not remove any copyright, proprietary rights or confidentiality notice
+included with the Products, and must reproduce all such notices on any copies
+of the Products that You make. You have no rights in or to source code or
+design specifications for the Products. You may not translate, adapt,
+reverse-engineer, decompile, create derivative works, disassemble or modify the
+Products in whole or in part for any purpose. You will not publish, rent,
+lease, license, sell, sub-license, assign, transmit, or use the Products to
+provide services to, or process or store the data of, third parties, whether as
+a service bureau, an application service provider, or otherwise. You must not
+transfer the Products or any copies thereof to any third party. You will comply
+with all applicable laws and regulations relating to the use of the Products.
+Except as specifically permitted in this Agreement, You may not use the
+Products for the benefit of any other person or entity, or permit any third
+party to make such use. Except as expressly provided in this Agreement, You
+have no other rights or licenses with respect to the Products or other
+intellectual property rights of MapD. MapD reserves all rights not expressly
+granted herein. You understand that MapD may deploy the Products with license
+key or other technology that prohibits use of the Products beyond the
+applicable license term or license parameters.
+
+2. PROPRIETARY RIGHTS
+=====================
+
+The Products are proprietary to MapD and its licensors, protected by copyright
+and other intellectual property laws. You have only the right to use the
+Products and not any rights, express or implied, in the Products other than
+those specified in this Agreement.
+
+The Products contain or are provided with certain components subject to third
+party or "open source" licenses ("Third-Party Products"). Attributions and
+terms relating to the Third-Party Products components, along with copies of any
+applicable source code, are available upon request. (See Section 15 - Contact -
+below.) The terms of this Agreement may not apply to certain Third-Party
+Products. You obtain only a limited license right to the Software and
+Third-Party Products and, notwithstanding of any use of the words "purchase,"
+"sale" or like terms in connection with this Agreement, no ownership rights are
+being conveyed to You under this Agreement or otherwise.
+
+If You provide any comments, criticisms, or other feedback relating to the
+Products to MapD (collectively, "Feedback"), such Feedback will be deemed
+non-confidential and non-proprietary information for purposes of this
+Agreement. MapD will have no obligation to You or any third party with respect
+to such Feedback, and will be free to use and exploit such Feedback in any form
+or manner and for any purpose and without payment of any consideration.
+
+You must permit MapD to audit Your use of the Products upon reasonable notice.
+In connection with such audit, You must: (a) provide assistance and access to
+information, at no cost to MapD, and (b) permit MapD to report the audit
+results to licensors.
+
+3. INSTALLATION AND SUPPORT; SERVICES
+=====================================
+
+If You order and pay for it, or purchase a Product that includes it, MapD will
+provide remote support services ("Support") by telephone and email only to
+assist with basic operation of the Software. Support is not a substitute for
+training, and will be made available during MapD normal business hours only.
+MapD may limit the number of authorized Support contacts who may contact MapD
+for Support.
+
+If specified and agreed to in "Ordering Documents" (MapD order forms or similar
+documents executed by MapD or an authorized agent), MapD may provide certain
+services ("Services," not including Support). In the absence of a specific
+written agreement governing the Services, the terms set out in the next
+paragraph will apply.
+
+The fee for the Services is as set forth in the Ordering Documents. In
+addition, You are responsible for all travel and living expenses ("Expenses")
+incurred by MapD personnel while traveling to and from Your facilities to
+perform Services. Unless otherwise agreed in the Ordering Documents, Fees for
+Services and reasonable Expenses will be billed monthly, or after the
+conclusion of the Services. You must use reasonable efforts to: (i) provide
+MapD's employees, agents and contractors (collectively, "Personnel") with such
+information, co-operation and support as may reasonably be required for MapD to
+provide the Services; (ii) permit MapD's Personnel to access such of Your
+systems, networks, premises and property as is necessary to perform the
+Services and ensure that MapD is granted sufficient authorization to use any
+third party systems, programs, or networks necessary to provide the Trial;
+(iii) ensure that all necessary consents, authorizations and licenses have been
+obtained so that MapD's provision of the Services does not breach any statutory
+or regulatory provisions (of whatever jurisdiction) relating to the use of and
+access to personal data; and (iv) ensure the health and safety of MapD's
+Personnel engaged in providing the Services at Your premises.
+
+4. FEES
+=======
+
+Unless otherwise specified in the Ordering Documents, You must pay the fees set
+out in the Ordering Documents (the "Fees") within 30 days of Delivery of the
+Software, and You may be invoiced for the Fees upon execution of this Agreement
+without the need for a purchase order. Unless otherwise specified on the
+Ordering Documents, the Fees are for a term license of one year only. MapD may
+increase the Fees for any applicable subsequent subscription periods upon
+written notice to You.
+
+Interest on all overdue amounts payable by You will be charged at the rate of
+1½% per month (or part thereof) or the maximum legal rate permitted, whichever
+is less, until paid. The Fees do not include taxes. You are responsible for,
+and agree to pay, all applicable sales, use, excise, and value added taxes, or
+taxes of a similar nature, related to the Fees, excepting only taxes based on
+MapD's and its authorized agents' net income.
+
+5. TRIAL PRODUCTS
 =================
 
-The software (the “Software”) licensed pursuant to this Agreement is:
-___________________________. There is no fee for the license.
+Unless otherwise specified in Ordering Documents, all Products are Trial
+Products, as defined below.
 
-TRIAL SERVICES FEE
-==================
+MapD may, in its discretion, provide access to "pre-release" or "trial"
+Products (however designated, collectively, "Trial Products"). You may only use
+Trial Products on a non-production basis for no more than 14 days, and MapD may
+terminate Your license to use such Trial Products at any time, upon written
+notice. In addition, the following Sections of this Agreement do not apply to
+Trial Products: 7 (WARRANTY) and 11 (INDEMNITY).
 
-Licensee agrees to pay a fee (the “Trial Services Fee”) in exchange for
-services that may be provided in connection with the Trial License. The
-Parties will set out any applicable services and the Trial Services Fee
-in a separate document (email exchange sufficient).
+6. DIAGNOSTIC DATA TRANSMISSION
+===============================
 
-LIMITED LICENSE
-===============
+The Products may transmit diagnostic data relating to the Products, including,
+without limitation, system performance, capacity usage, system faults, and
+other information of a similar nature (collectively, "Diagnostic Data") to
+MapD. Diagnostic Data may be sent on a periodic basis and upon a failure or
+fault in the Products. You may turn off the feature that sends Diagnostic Data
+automatically to MapD. In addition to the automatic transmission of Diagnostic
+Data, You may choose to provide additional data files ("Core Dumps") to MapD's
+support organization for technical analysis. In all cases, MapD will treat the
+contents of Diagnostic Data and Core Dumps as Your confidential information,
+and will take reasonable steps to safeguard same, using at least the degree of
+care it applies to its own Confidential Information. MapD may use the
+Diagnostic Data and Core Dumps to provide Support, troubleshoot the Products
+and to enhance, improve, and develop its products. MapD will only disclose
+Diagnostic Data, if at all, to third parties: (a) to MapD partners, under
+nondisclosure obligations, to assist with specific Support issues, or (b) in an
+anonymous and aggregated form that does not link such information to You or to
+any identifiable person.
 
-Subject to the terms and conditions of this Agreement, MapD hereby
-grants Licensee a non-exclusive, non-transferable, non-assignable,
-non-sublicenseable, limited license and right to install, use, and copy
-the Software for Licensee’s internal evaluation purposes only (the
-“License”). The License is valid for 30 days from the Effective Date
-only (the “Term”). MapD reserves all rights not expressly granted
-herein.
-
-Licensee will not translate, adapt, reverse-engineer, decompile, create
-derivative works, disassemble or modify the Software and related
-documentation from MapD (together, the “Licensed Products”) in whole or
-in part for any purpose. Licensee will not publish, rent, lease,
-license, sell, sub-license, assign, transmit, or use the Licensed
-Products to provide services to third parties whether as a service
-bureau, an application service provider, or otherwise, nor will Licensee
-process or store the data of third parties or otherwise transfer the
-Licensed Products to any third party. Licensee will comply with all
-applicable laws and regulations relating to the use of the Licensed
-Products. Except as specifically permitted in this Agreement:
-(i) Licensee shall make no use of the Licensed Products, or use them for
-the benefit of any other person or entity, or permit any third party to
-make such use, and (ii) Licensee will not obtain or claim any ownership
-interest in the Licensed Products, or any portion thereof, or any
-intellectual property therein.
-
-Licensee shall take all reasonable steps to ensure that only its
-representatives with a business need have access to the Licensed
-Products, and to ensure that no persons authorized to have such access
-shall take any action which would be in violation of this Agreement.
-
-LIMITATIONS
+7. WARRANTY
 ===========
 
-MapD may terminate Licensee’s License, and this Agreement, at any time,
-upon notice to Licensee upon Licensee’s breach of this Agreement. The
-License and this Agreement terminate automatically after the expiration
-of the Term. MapD may use license keys, lockouts, or remote control
-features to disable the Software after the end of the Term.
+For 90 days from the date of initial receipt of non-Trial Products (the
+"Warranty Period"), the Products will perform substantially as described in the
+documentation provided in or with the Products (the "Product Warranty").
 
-Upon any termination or expiration of this Agreement, Licensee must
-immediately stop all use of the Licensed Products and delete all copies
-of the Licensed Products held or controlled by Licensee. Upon request
-from MapD, Licensee must certify in writing to MapD that it has complied
-fully with the provisions of this paragraph.
+You must promptly notify MapD when You become aware of any breach of the
+Product Warranty. MapD's exclusive obligations and Your exclusive remedies in
+relation to any reproducible breach of such Product Warranty are limited to the
+following, at MapD's option: (a) repair of the Products; (b) replacement of the
+Products, or any relevant part, with other products of substantially equivalent
+functionality; or (c) if neither of the foregoing are commercially practicable,
+then at MapD's sole discretion, return of the Products and a refund of the
+applicable fees paid in relation to the Products. MapD will not be liable
+pursuant to the Product Warranty for any issues relating to or arising because
+of: (i) the use or operation of the Products other than in accordance with this
+Agreement and the applicable MapD documentation provided in or with the
+Products; (ii) alterations, modifications, repairs or any other work done on or
+in relation to the Products by anyone other than MapD or its authorized agents;
+(iii) incorrect configuration of or problems with Your equipment, operating
+environment or other products; or (iv) any other act or omission (whether
+accidental or deliberate) or other cause outside MapD's control. You must
+provide written notice of any non-compliance that is discovered during the
+applicable Warranty Period no later than 10 days from the end of the applicable
+Warranty Period. In no event may You bring any claim arising out of the Product
+Warranty more than 1 year after the date on which the alleged breach of
+warranty occurred.
 
-Licensee agrees to comply fully with all relevant export laws and
-regulations of the United States and all other jurisdictions (“Export
-Laws”) to assure that neither the Software, nor any direct product of
-the foregoing is exported, directly or indirectly, in violation of
-Export Laws or is intended to be used for any purposes prohibited by the
-Export Laws.
+THE PRODUCT WARRANTY PROVIDES SPECIFIC LEGAL RIGHTS, AND YOU MAY ALSO HAVE
+OTHER RIGHTS WHICH VARY FROM STATE TO STATE OR FROM COUNTRY TO COUNTRY.
 
-If Licensee provides MapD with any suggestions, comments or feedback
-about the Licensed Products, including any results of benchmark tests or
-comparisons (“Feedback”), Licensee agrees that such Feedback shall be
-the sole and exclusive property and Confidential Information of MapD,
-and Licensee hereby assigns, for no additional consideration, all of its
-rights, title and interest in and to such Feedback to MapD. MapD will be
-free to use, disclose, reproduce, license and otherwise distribute the
-Feedback without any obligations or restrictions of any kind.
+8. CONFIDENTIALITY
+==================
 
-Except as specifically provided in this Agreement, MapD has no
-responsibility to provide services or assistance to Licensee in
-connection with its use of the Licensed Products.
+The Products (including any software source code and object code portions
+thereof), any related benchmark or performance tests relating to the Products,
+and information regarding the Products, and MapD's business, including
+technical, marketing, financial, employee, planning, and other confidential or
+proprietary information, is considered MapD's "Confidential Information." You
+may use the Confidential Information only for use of the Products pursuant to
+this Agreement, and You must protect the Confidential Information from
+unauthorized dissemination and use with the same degree of care that You use to
+protect Your own like information and, in any event, with no less than a
+reasonable degree of care.
 
-TRIAL SERVICES
-==============
+9. EXPORT AND USE RESTRICTIONS
+==============================
 
-If agreed, and for the applicable Trial Services Fee, MapD will provide
-assistance with the installation, configuration, and support services
-for the Licensed Products during the Term (“Trial Services”). The Trial
-Services may include onsite professional services from a MapD
-consultant; (b) technical support via email (as available); and
-(c) online access to MapD’s Technical Support Knowledge Base.
+The Products are subject to United States export laws and regulations. You must
+comply with all domestic and international export laws and regulations that
+apply to the Products. These laws include restrictions on destinations, end
+users and end use.
 
-As applicable, Licensee shall use reasonable efforts to: (i) provide
-MapD’s employees, agents and contractors with such information,
-co-operation and support as may reasonably be required for MapD to
-provide the Trial Services; (ii) permit MapD’s employees, agents and
-contractors to access such of the Licensee’s systems, networks, premises
-and property as is necessary to perform the Trial Services and ensure
-that MapD is granted sufficient authorization to use any third party
-systems, programs, or networks necessary to provide the Trial Services;
-(iii) ensure that all necessary consents, authorizations and licenses
-have been obtained so that MapD’s provision of the Trial Services does
-not breach any statutory or regulatory provisions (of whatever
-jurisdiction) relating to the use of and access to personal data; and
-(iv) ensure the health and safety of MapD’s employees, agents and
-contractors engaged in providing the Trial Services at the Licensee’s
-premises.
+None of the Products or underlying information or technology may be accessed or
+otherwise exported or re-exported (a) into any country to which the U.S. has
+embargoed goods; or (b) to anyone on the U.S. Treasury Department's List of
+Specially Designated Nationals or the U.S. Commerce Department's Table of
+Denial Orders. By accessing or using the Products, You are agreeing to the
+foregoing and You are representing and warranting that You are not located in,
+under the control of, or a national or resident of any such country or on any
+such list.
 
-Licensee is responsible for all travel and living expenses
-(“Expenses”) incurred by: (i) MapD personnel while traveling to and from
-Licensee’s facilities to perform services, and (ii) Licensee personnel
-traveling to and from MapD’s facilities for training programs. MapD’s
-reasonable Expenses will be billed to Licensee by MapD periodically when
-such Expenses have been incurred.
+The Products are not designed or intended for use in connection with hazardous
+environments requiring fail-safe performance, such as the operation of nuclear
+facilities, aircraft navigation or communications systems, life support
+systems, and weapons systems, in which the failure of software could lead to
+personal injury and death ("High Risk Activities"). You may not use the
+Products for High Risk Activities.
 
-CONFIDENTIALITY
-===============
+10. DISCLAIMER OF WARRANTIES; LIMITATIONS OF LIABILITY
+======================================================
 
-Licensee agrees that, at all times and notwithstanding any termination
-or expiration of this Agreement, it will hold in strict confidence and
-not disclose to any third party any Confidential Information of MapD.
-Licensee further agrees that it will use the Confidential Information
-for no purpose other than for its evaluation the Software as set forth
-in this Agreement. For purposes hereof, “Confidential Information” means
-any and all technical and non-technical information, whether in oral,
-written, graphic or electronic form, MapD provides to Licensee under
-this Agreement, including, but not limited to, the Software, as well as
-any ideas, samples, media, techniques, sketches, drawings, works of
-authorship, firmware, layouts, designs, models, inventions, know-how,
-processes, algorithms, software source documents, and formulae related
-to the current, future, and proposed products and services of MapD, and
-any information concerning research, design details and specifications,
-financial information, employees, business and contractual
-relationships, business forecasts, sales and marketing plans,
-information MapD provides regarding third parties, and any third party
-proprietary information disclosed by MapD. Without limiting any of the
-foregoing, all results of the evaluation of the Software (including
-without limitation any benchmark tests or comparisons), all Feedback,
-and anything discussed at the evaluation meetings between the parties,
-will be deemed Confidential Information of MapD and Licensee agrees and
-shall cause Customer to agree that it will not publish or disclose the
-results of the evaluation of the Software. Licensee hereby acknowledges
-and agrees that in the event of any breach of this Agreement by
-Licensee, including, without limitation, the actual or threatened
-disclosure or unauthorized use of MapD’s Confidential Information
-without MapD’s prior express written consent, MapD will suffer an
-irreparable injury, such that no remedy at law will afford it adequate
-protection against, or appropriate compensation for, such injury.
-Accordingly, Licensee hereby agrees that MapD shall be entitled to
-injunctive relief, specific performance of Licensee’s obligations under
-this Agreement, and such further relief as may be granted by a court of
-competent jurisdiction.
+EXCEPT AS SPECIFICALLY PROVIDED IN THIS AGREEMENT, THE PRODUCTS ARE DISTRIBUTED
+"AS IS" AND MAPD DISCLAIMS ALL WARRANTIES, INCLUDING ANY IMPLIED WARRANTIES OF
+MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. MAPD DOES NOT WARRANT
+THAT THE PRODUCTS WILL MEET YOUR REQUIREMENTS OR THAT THEIR OPERATION WILL BE
+UNINTERRUPTED, ERROR-FREE OR VIRUS FREE.
 
-DISCLAIMER OF WARRANTIES; LIMITATIONS OF LIABILITY; INDEMNITY
-=============================================================
+IN NO EVENT WILL MAPD BE LIABLE FOR DAMAGES OF ANY KIND INCLUDING DIRECT,
+INDIRECT, SPECIAL, INCIDENTAL OR CONSEQUENTIAL DAMAGES (WHICH INCLUDE WITHOUT
+LIMITATION, DAMAGES FOR LOSS OF BUSINESS OR PROFITS, BUSINESS INTERRUPTION,
+LOSS OF BUSINESS INFORMATION OR DATA, OR OTHER PECUNIARY LOSS) WHETHER BASED ON
+CONTRACT, TORT, WARRANTY OR OTHER LEGAL THEORY, ARISING OUT OF THE USE OF OR
+INABILITY TO USE THE PRODUCTS, OR ANY RELATED SERVICES, EVEN IF MAPD HAS BEEN
+ADVISED OF THE POSSIBILITY OF SUCH DAMAGES. IN NO EVENT WILL MAPD'S LIABILITY
+UNDER OR IN CONNECTION WITH THIS AGREEMENT EXCEED THE AMOUNT PAID FOR THE
+PRODUCTS OR, AS APPLICABLE, SERVICES.
 
-THE LICENSED PRODUCTS AND ANY RELATED SERVICES ARE PROVIDED “AS IS” AND
-TO THE MAXIMUM EXTENT PERMITTED BY LAW, MAPD DOES NOT MAKE ANY WARRANTY
-EXPRESS OR IMPLIED, ORAL OR WRITTEN, WITH RESPECT TO THE LICENSED
-PRODUCTS, INCLUDING WITHOUT LIMITATION, ANY IMPLIED WARRANTIES OF
-MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE OR
-NON-INFRINGEMENT. MAPD DOES NOT WARRANT THAT THE OPERATION OF THE
-LICENSED PRODUCTS WILL BE UNINTERRUPTED, FREE FROM DEFECTS OR ERROR-FREE
-OR THAT THE LICENSED PRODUCTS WILL MEET THE LICENSEE’S REQUIREMENTS. THE
-WARRANTY DISCLAIMER IN THIS PARAGRAPH CONSTITUTES AN ESSENTIAL PART OF
-THIS AGREEMENT AND NO USE OF THE LICENSED PRODUCTS IS AUTHORIZED
-HEREUNDER EXCEPT UNDER THIS DISCLAIMER.
+THE LIMITATIONS ON DAMAGES IN THIS SECTION 10 APPLY TO: (A) ANY CLAIM RELATED
+TO THE PRODUCTS, AND RELATED SERVICES OR THIRD-PARTY PROGRAMS, AND (B) CLAIMS
+FOR BREACH OF CONTRACT, BREACH OF WARRANTY, GUARANTEE OR CONDITION, STRICT
+LIABILITY, NEGLIGENCE, OR OTHER TORT TO THE EXTENT PERMITTED BY APPLICABLE LAW.
+THEY ALSO APPLY EVEN IF REPAIR, REPLACEMENT OR A REFUND FOR THE PRODUCTS DOES
+NOT FULLY COMPENSATE YOU FOR ANY LOSSES, OR IF MAPD KNEW OR SHOULD HAVE KNOWN
+ABOUT THE POSSIBILITY OF THE DAMAGES.
 
-To the maximum extent permitted by law, in no event will MapD be liable
-to Licensee under or in connection with this Agreement for any: (a) loss
-of actual or anticipated profit or savings, (b) losses caused by
-business interruption, (c) loss of or damage to goodwill or reputation,
-(d) loss or corruption of data, or (e) any indirect, punitive,
-exemplary, multiple, special or consequential cost, expense, loss or
-damage, even if such cost, expense, loss or damage was reasonably
-foreseeable or might reasonably have been contemplated by the Parties or
-where MapD has been advised of the possibility of such loss and whether
-arising from breach of contract, tort, negligence, breach of statutory
-duty or otherwise. The maximum liability of MapD to Licensee under or in
-connection with this agreement whether arising from breach of contract,
-tort, negligence, breach of statutory duty or otherwise shall not exceed
-the sum of US \$2,000. This paragraph sets forth the entire maximum
-liability of MapD to Licensee. The provisions of this paragraph allocate
-the risk between MapD and Licensee and the License and these terms
-reflect the allocation of risk and limitation of liability specified
-herein.
+SOME STATES DO NOT ALLOW THE EXCLUSION OR LIMITATION OF INCIDENTAL OR
+CONSEQUENTIAL DAMAGES, SO THE ABOVE LIMITATIONS AND EXCLUSIONS MAY NOT APPLY TO
+YOU.
 
-Licensee will be solely responsible for the maintenance and security of
-its own software, data and equipment. MapD shall have no liability for
-any loss or corruption of any such software, data and/or equipment,
-however caused.
-
-Each Party (the “Indemnifying Party”) shall defend and indemnify the
-other party, and it agents, employees, officers, and representatives
-(each, an “Indemnified Party”) against, and hold such persons harmless
-from, any liability or damages (including, without limitation,
-reasonable legal fees and costs) assessed against or incurred by an
-Indemnified Party arising out of damage to personal or real property
-caused by the Indemnifying Party’s gross negligence or intentional
-misconduct, except to the extent resulting from the Indemnified Party’s
-negligence or intentional misconduct.
-
-COMMERCIAL SOFTWARE 
-====================
-
-If any Licensed Products are acquired by or on behalf of a unit or
-agency of the United States government, the government agrees that such
-Licensed Products are “commercial computer software” or “commercial
-computer software documentation” and that, absent a written agreement to
-the contrary, the government’s rights with respect to such Licensed
-Products are limited by the terms of this Agreement, pursuant to FAR §
-12.212(a) and/or DFARS § 227.7202-1(a), as applicable.
-
-MISCELLANEOUS
+11. INDEMNITY
 =============
 
-This Agreement shall be governed by and construed in accordance with the
-laws of the Commonwealth of Massachusetts. Any dispute arising hereunder
-or concerning any transaction contemplated hereby shall be resolved by a
-court of competent jurisdiction located in Middlesex or Suffolk County,
-Massachusetts, and Licensee hereby consents to personal jurisdiction in
-such venues for purposes of this Agreement. This Agreement sets forth
-the entire agreement between the Parties relating to the subject matter
-hereof and supersedes any prior oral or written agreements and
-understandings relating thereto. No modification, amendment or waiver of
-any of the provisions of this Agreement shall be binding on a Party
-unless it is in writing and signed by the Party against whom such
-amendment, waiver or discharge is sought to be enforced. No delay or
-omission by either Party in exercising any rights under this Agreement
-will impair any such right or power or be construed to be a waiver
-thereof. No purchase order, invoice or other similar form may vary the
-terms hereof, and any term thereof that is inconsistent with or
-additional to the terms of this Agreement shall not be binding, unless
-otherwise expressly agreed by the Parties in writing. Licensee expressly
-agrees that in the event of the breach or threatened breach of the
-License, in addition to any other rights or remedies which MapD may
-have, MapD shall be entitled to injunctive relief compelling specific
-performance of, and compliance with, the terms of the License. The terms
-and conditions of this Agreement are personal to Licensee and Licensee
-may not assign its rights or delegate its obligations hereunder without
-the prior written consent of MapD. Subject to the foregoing sentence,
-this Agreement will be binding upon and inure to the benefit of the
-successors and assigns of the Parties.
+If You have paid for a non-Trial license to use the Products, MapD will
+indemnify, defend and hold You harmless against any damages, settlements,
+liabilities, expenses, losses and costs, including reasonable legal fees,
+incurred by You in any action, suit, dispute or claim (collectively, "Claim")
+brought against You by a third party alleging that Your use of the Products in
+accordance with this Agreement infringes any copyrights or patents (together,
+"Intellectual Property Rights") of a third party, provided that: (a) You notify
+MapD in writing promptly after You become aware of any such Claim; (b) You make
+no admissions in respect of such Claim and comply with all reasonable MapD
+instructions relating to the Claim; (c) You allow MapD, at MapD's expense, to
+assume full control of the Claim, with an obligation to keep You informed about
+the Claim; and (d) You provide all reasonable assistance and information
+required for the defense of such Claim. MapD will have no liability or
+obligation to You with respect to any alleged infringement of Intellectual
+Property Rights based upon (i) Your use of the Products in combination with
+devices, products or other Products not provided or authorized by MapD,
+(ii) use of the Products in an application or environment for which such
+Products was not designed or contemplated, (iii) modifications, alterations or
+enhancements of the Products not created by or for MapD, or (iv) any claims of
+infringement of Intellectual Property Rights in which You or any affiliate of
+Yours has an interest. You must indemnify and hold MapD harmless from all
+costs, damages and expenses (including reasonable attorneys' fees) arising from
+any claim enumerated in clauses (i) through (iv) above.
 
-Whenever possible, each provision of this Agreement will be interpreted
-in such manner as to be effective and valid under applicable law. The
-Parties agree that (i) the provisions of this Agreement shall be
-severable in the event that any of the provisions hereof are for any
-reason whatsoever invalid, void or otherwise unenforceable, (ii) such
-invalid, void or otherwise unenforceable provisions shall be
-automatically replaced by other provisions which are as similar as
-possible in terms to such invalid, void or otherwise unenforceable
-provisions but are valid and enforceable, (iii) the remaining provisions
-shall remain enforceable to the fullest extent permitted by law.
+The indemnification remedies set forth in this Section 11 constitute Your
+exclusive remedies, and MapD's exclusive liability, with respect to the claims
+described in this Section 11.
 
-I ACCEPT
+12. TERM AND TERMINATION
+========================
+
+This Agreement commences when You click "I AGREE" (or earlier, by any written
+agreement to be bound by this Agreement, or by any use of the Products), and
+will remain in effect until terminated in accordance with the terms indicated
+on the Ordering Documents.
+
+Your rights to use the Products may be limited by time or other constraints,
+all as set out in the Ordering Documents. In the event either party (the
+"breaching party") is in material breach of this Agreement, the other party
+(the "non-breaching party") may terminate this Agreement as set out below. The
+non-breaching party will give the breaching party notice specifying the nature
+of the breach, and, if the breaching party fails to cure the breach within 30
+days of receipt of such notice, the non-breaching party may thereafter
+terminate this Agreement effective immediately upon giving written notice of
+same.
+
+Upon any termination of this Agreement, the license granted by MapD in Section
+1 will terminate immediately and You may no longer use the Products. No
+termination will relieve either party of any obligation to pay amounts due as a
+result of transactions occurring prior to the effective date of termination.
+Except as specifically provided in this Agreement, MapD will in no event refund
+fees paid for the Products.
+
+The provisions of Sections 2, 4, 8, 9, 12, 13, and 14 will survive any
+termination of this Agreement.
+
+13. GOVERNING LAW
+=================
+
+This Agreement is governed by the laws of the State of California, excluding
+(i) that body of law known as conflicts of law, (ii) the Uniform Computer
+Information Transactions Act, and (iii) the United Nations Convention on
+Contracts for the Sale of Goods, and each party hereto irrevocably submits to
+the exclusive jurisdiction of the state courts located in California state
+courts of San Francisco County, California (or, if there is federal
+jurisdiction, the United Stated District Court for the Northern District of
+California) for the determination of any action arising out of or in connection
+with this Agreement. Notwithstanding the foregoing, MapD may commence
+appropriate legal action in any jurisdiction to protect its Products or
+Confidential Information.
+
+14. GENERAL
+===========
+
+This Agreement is the complete and exclusive statement of the agreement between
+You and MapD relating to the use of the Products, and, as applicable, the
+Services. Any purchase order or other document issued by You in connection with
+Your purchase of the Products, the Services, or purchase of a license for the
+Products (in each case, a "Purchase Order") shall be placed pursuant to, and
+subject to, this Agreement. No terms contained in a Purchase Order issued in
+connection with a purchase of Products or Services will be binding on MapD.
+
+Notwithstanding the foregoing paragraph, if You have entered into a separate
+written agreement signed by MapD for use of the Products, the terms and
+conditions of such other agreement shall prevail over any conflicting terms or
+conditions in this Agreement.
+
+No amendment or modification to this Agreement, nor any waiver of any rights
+hereunder, shall be effective unless assented to in writing by both parties.
+The waiver of any breach or default shall not constitute a waiver of any other
+right hereunder or any subsequent breach or default. The parties to this
+Agreement are independent contractors. There is no relationship of partnership,
+joint venture, employment, franchise or agency created hereby between the
+parties. Neither party will have the power to bind the other or incur
+obligations on the other party's behalf pursuant to this Agreement.
+
+You may not assign Your rights or delegate Your obligations under this
+Agreement without the prior written consent of MapD. Subject to the foregoing,
+this Agreement will be binding upon and inure to the benefit of the successors
+and assigns of the parties hereto.
+
+Neither party shall be liable for the failure to perform its obligations under
+this Agreement due to events beyond such party's reasonable control including,
+but not limited to, strikes, riots, wars, fire, acts of nature or acts in
+compliance with any applicable law, regulation or order (whether valid or
+invalid) of any court or governmental body.
+
+If You are licensing Products on behalf of the U.S. Government, they are
+classified as "Commercial Computer Products" and "Commercial Computer
+Documentation" developed at private expense, contain confidential information
+and trade secrets of MapD and its licensors, and are subject to "Restricted
+Rights" as that term is defined in the Federal Acquisition Regulations.
+Contractor/Manufacturer is: MapD (see Contact - Section 15, below).
+
+Each party will obtain the other party's written consent prior to any other
+disclosure or any publication, presentation, public announcement, or press
+release concerning the terms and conditions of this Agreement. However, You
+agree that MapD may refer to You or Your company/organization as a customer in
+promotional materials to prospective customers and may issue a press release
+announcing You as a customer of MapD upon the parties' execution of this
+Agreement. You further agree that You will not unreasonably withhold Your
+consent to (a) MapD using Your corporate name and logo (pursuant to trademark
+usage guidelines You may provide) in other marketing, advertising, and
+promotional materials to identify You as a customer, and (b) serving as a
+public customer reference for MapD, which may include a joint press release, a
+case study and the like.
+
+MAPD™ and the MapD logo are either registered trademarks or trademarks of MapD
+Technologies, Inc. in the United States and other countries.
+
+15. CONTACT; NOTICES
+====================
+
+All notices to be given in connection with this Agreement will be effective
+upon receipt, must be made in writing and will be sufficiently given if
+personally delivered or if sent by courier or certified mail, return receipt
+requested, addressed to MapD as set out below, and to You at the address
+provided in the Ordering Documents whereby You purchased or obtained the
+Products.
+
+Either party may by such notice to the other change its notice address.
+
+MapD Notice Address:
+
+MapD Technologies, Inc.
+1 Front Street, Suite 2650
+San Francisco, CA 94111 USA
+Attention: Legal Department
+
+MapD Phone: +1 415 851 4787
+
+[END OF EULA TERMS]
