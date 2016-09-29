@@ -85,15 +85,16 @@ QueryExecutionContext::QueryExecutionContext(const QueryMemoryDescriptor& query_
     initGroups(&group_by_small_buffer_template[0], &init_agg_vals[0], query_mem_desc_.entry_count_small, false, 1);
   }
 
-  size_t step{device_type_ == ExecutorDeviceType::GPU && query_mem_desc_.threadsShareMemory() ? executor_->blockSize()
-                                                                                              : 1};
-
+  const auto step = device_type_ == ExecutorDeviceType::GPU && query_mem_desc_.threadsShareMemory()
+                        ? executor_->blockSize()
+                        : size_t(1);
+  const auto index_buffer_qw = device_type_ == ExecutorDeviceType::GPU && sort_on_gpu_ && query_mem_desc_.keyless_hash
+                                   ? query_mem_desc_.entry_count
+                                   : size_t(0);
+  const auto group_buffer_size = query_mem_desc_.getBufferSizeBytes(device_type_) + index_buffer_qw * sizeof(int64_t);
+  const auto small_buffer_size = query_mem_desc_.getSmallBufferSizeBytes();
   for (size_t i = 0; i < num_buffers_; i += step) {
-    size_t index_buffer_qw{device_type_ == ExecutorDeviceType::GPU && sort_on_gpu_ && query_mem_desc_.keyless_hash
-                               ? query_mem_desc_.entry_count
-                               : 0};
-    auto group_by_buffer = static_cast<int64_t*>(
-        checked_malloc(query_mem_desc_.getBufferSizeBytes(device_type_) + index_buffer_qw * sizeof(int64_t)));
+    auto group_by_buffer = static_cast<int64_t*>(checked_malloc(group_buffer_size + small_buffer_size));
     if (!query_mem_desc_.lazyInitGroups(device_type)) {
       memcpy(group_by_buffer + index_buffer_qw,
              &group_by_buffer_template[0],
@@ -104,10 +105,9 @@ QueryExecutionContext::QueryExecutionContext(const QueryMemoryDescriptor& query_
     for (size_t j = 1; j < step; ++j) {
       group_by_buffers_.push_back(nullptr);
     }
-    if (query_mem_desc_.getSmallBufferSizeBytes()) {
-      auto group_by_small_buffer = static_cast<int64_t*>(checked_malloc(query_mem_desc_.getSmallBufferSizeBytes()));
-      row_set_mem_owner_->addGroupByBuffer(group_by_small_buffer);
-      memcpy(group_by_small_buffer, &group_by_small_buffer_template[0], query_mem_desc_.getSmallBufferSizeBytes());
+    if (small_buffer_size) {
+      auto group_by_small_buffer = &group_by_buffer[group_buffer_size / sizeof(int64_t)];
+      memcpy(group_by_small_buffer, &group_by_small_buffer_template[0], small_buffer_size);
       small_group_by_buffers_.push_back(group_by_small_buffer);
       for (size_t j = 1; j < step; ++j) {
         small_group_by_buffers_.push_back(nullptr);
