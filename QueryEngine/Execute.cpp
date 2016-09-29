@@ -3404,17 +3404,19 @@ ResultPtr Executor::resultsUnion(ExecutionDispatch& execution_dispatch) {
   return RowSetPtr(nullptr);
 }
 
+// TODO(miyu): remove dt_for_all along w/ can_use_result_set
 RowSetPtr Executor::reduceMultiDeviceResults(const RelAlgExecutionUnit& ra_exe_unit,
                                              std::vector<std::pair<ResultPtr, std::vector<size_t>>>& results_per_device,
                                              std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                                              const QueryMemoryDescriptor& query_mem_desc,
-                                             const bool output_columnar) const {
+                                             const bool output_columnar,
+                                             const ExecutorDeviceType dt_for_all) const {
   if (results_per_device.empty()) {
     return boost::make_unique<ResultRows>(
         query_mem_desc, ra_exe_unit.target_exprs, nullptr, nullptr, std::vector<int64_t>{}, ExecutorDeviceType::CPU);
   }
 
-  if (can_use_result_set(query_mem_desc, ExecutorDeviceType::CPU)) {
+  if (can_use_result_set(query_mem_desc, dt_for_all)) {
     return reduceMultiDeviceResultSets(results_per_device, row_set_mem_owner, query_mem_desc);
   }
 
@@ -4765,7 +4767,12 @@ RowSetPtr Executor::collectAllDeviceResults(ExecutionDispatch& execution_dispatc
   if (use_speculative_top_n(ra_exe_unit, query_mem_desc)) {
     return reduceSpeculativeTopN(ra_exe_unit, result_per_device, row_set_mem_owner, query_mem_desc);
   }
-  return reduceMultiDeviceResults(ra_exe_unit, result_per_device, row_set_mem_owner, query_mem_desc, output_columnar);
+  return reduceMultiDeviceResults(ra_exe_unit,
+                                  result_per_device,
+                                  row_set_mem_owner,
+                                  query_mem_desc,
+                                  output_columnar,
+                                  execution_dispatch.getDeviceType());
 }
 
 void Executor::dispatchFragments(const std::function<void(const ExecutorDeviceType chosen_device_type,

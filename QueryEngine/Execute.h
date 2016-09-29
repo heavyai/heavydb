@@ -770,7 +770,8 @@ class Executor {
                                      std::vector<std::pair<ResultPtr, std::vector<size_t>>>& all_fragment_results,
                                      std::shared_ptr<RowSetMemoryOwner>,
                                      const QueryMemoryDescriptor&,
-                                     const bool output_columnar) const;
+                                     const bool output_columnar,
+                                     const ExecutorDeviceType dt_for_all) const;
   RowSetPtr reduceMultiDeviceResultSets(std::vector<std::pair<ResultPtr, std::vector<size_t>>>& all_fragment_results,
                                         std::shared_ptr<RowSetMemoryOwner>,
                                         const QueryMemoryDescriptor&) const;
