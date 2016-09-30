@@ -210,7 +210,7 @@ class RexInputCollector : public RexVisitor<std::unordered_set<RexInput>> {
 };
 
 std::unordered_map<const RelAlgNode*, std::unordered_set<const RelAlgNode*>> build_du_web(
-    std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
+    const std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
   std::unordered_map<const RelAlgNode*, std::unordered_set<const RelAlgNode*>> web;
   std::unordered_set<const RelAlgNode*> visited;
   std::vector<const RelAlgNode*> work_set;
@@ -405,7 +405,8 @@ class AvailabilityChecker {
   AvailabilityChecker(const std::unordered_map<const RelAlgNode*, std::unordered_map<size_t, size_t>>& liveouts,
                       const std::unordered_set<const RelAlgNode*>& intact_nodes)
       : liveouts_(liveouts), intact_nodes_(intact_nodes) {}
-  bool hasAllSrcReady(const RelAlgNode* node) {
+
+  bool hasAllSrcReady(const RelAlgNode* node) const {
     for (size_t i = 0; i < node->inputCount(); ++i) {
       auto src = node->getInput(i);
       if (!dynamic_cast<const RelScan*>(src) && liveouts_.find(src) == liveouts_.end() && !intact_nodes_.count(src)) {
@@ -516,18 +517,12 @@ SortField renumber_sort_field(const SortField& old_field, const std::unordered_m
   return SortField(field_idx, old_field.getSortDir(), old_field.getNullsPosition());
 }
 
-}  // namespace
+struct MarkLiveResult {
+  std::deque<const RelAlgNode*> work_set;
+  std::unordered_map<const RelAlgNode*, std::unordered_set<size_t>> live_outs;
+};
 
-void eliminate_dead_columns(std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept {
-  if (nodes.empty()) {
-    return;
-  }
-  auto root = nodes.back().get();
-  if (!root) {
-    return;
-  }
-  CHECK(!dynamic_cast<const RelScan*>(root) && !dynamic_cast<const RelJoin*>(root));
-  // Mark
+MarkLiveResult mark_live_nodes(std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
   std::unordered_map<const RelAlgNode*, std::unordered_set<size_t>> live_outs;
   std::deque<const RelAlgNode*> work_set;
   for (auto node_it = nodes.rbegin(); node_it != nodes.rend(); ++node_it) {
@@ -572,27 +567,17 @@ void eliminate_dead_columns(std::vector<std::shared_ptr<RelAlgNode>>& nodes) noe
       }
     }
   }
-  std::unordered_set<const RelAlgNode*> intact_nodes;
-  bool has_dead_cols = false;
-  for (auto live_pair : live_outs) {
-    auto node = live_pair.first;
-    auto outs = live_pair.second;
-    if (outs.empty()) {
-      LOG(WARNING) << "RA node with no used column: " << node->toString();
-      // Ignore empty live_out due to some invalid node
-      intact_nodes.insert(node);
-    }
-    if (any_dead_col_in(node, outs)) {
-      has_dead_cols = true;
-    } else {
-      intact_nodes.insert(node);
-    }
-  }
-  if (!has_dead_cols) {
-    return;
-  }
-  // Sweep
-  CHECK(work_set.empty());
+  return {work_set, live_outs};
+}
+
+struct SweepDeadResult {
+  std::unordered_map<const RelAlgNode*, std::unordered_set<const RelAlgNode*>> web;
+  std::unordered_map<const RelAlgNode*, std::unordered_map<size_t, size_t>> new_liveouts;
+};
+
+SweepDeadResult sweep_dead_nodes(MarkLiveResult& mark_live_result,
+                                 const std::vector<std::shared_ptr<RelAlgNode>>& nodes,
+                                 const std::unordered_set<const RelAlgNode*>& intact_nodes) {
   auto web = build_du_web(nodes);
   std::unordered_map<const RelAlgNode*, std::unordered_map<size_t, size_t>> new_liveouts;
   AvailabilityChecker checker(new_liveouts, intact_nodes);
@@ -601,8 +586,8 @@ void eliminate_dead_columns(std::vector<std::shared_ptr<RelAlgNode>>& nodes) noe
     if (!does_redef_cols(node.get()) || intact_nodes.count(node.get())) {
       continue;
     }
-    auto live_pair = live_outs.find(node.get());
-    CHECK(live_pair != live_outs.end());
+    auto live_pair = mark_live_result.live_outs.find(node.get());
+    CHECK(live_pair != mark_live_result.live_outs.end());
     auto old_live_outs = live_pair->second;
     add_new_indices_for(node.get(), new_liveouts, old_live_outs, intact_nodes);
     if (auto aggregate = std::dynamic_pointer_cast<RelAggregate>(node)) {
@@ -638,19 +623,22 @@ void eliminate_dead_columns(std::vector<std::shared_ptr<RelAlgNode>>& nodes) noe
     CHECK(usrs_it != web.end());
     for (auto usr : usrs_it->second) {
       if (checker.hasAllSrcReady(usr)) {
-        work_set.push_back(usr);
+        mark_live_result.work_set.push_back(usr);
       }
     }
   }
-  // Propagate
-  std::unordered_map<const RelAlgNode*, RelAlgNode*> deconst_mapping;
-  for (auto node : nodes) {
-    deconst_mapping.insert(std::make_pair(node.get(), node.get()));
-  }
-  RexInputRenumberVisitor renumberer(new_liveouts);
-  while (!work_set.empty()) {
-    auto walker = work_set.front();
-    work_set.pop_front();
+  return {web, new_liveouts};
+}
+
+void renumber_inputs(MarkLiveResult& mark_live_result,
+                     SweepDeadResult& sweep_dead_result,
+                     const std::unordered_map<const RelAlgNode*, RelAlgNode*>& deconst_mapping,
+                     const std::unordered_set<const RelAlgNode*>& intact_nodes) {
+  RexInputRenumberVisitor renumberer(sweep_dead_result.new_liveouts);
+  AvailabilityChecker checker(sweep_dead_result.new_liveouts, intact_nodes);
+  while (!mark_live_result.work_set.empty()) {
+    auto walker = mark_live_result.work_set.front();
+    mark_live_result.work_set.pop_front();
     CHECK(!dynamic_cast<const RelScan*>(walker));
     auto node_it = deconst_mapping.find(walker);
     CHECK(node_it != deconst_mapping.end());
@@ -663,8 +651,8 @@ void eliminate_dead_columns(std::vector<std::shared_ptr<RelAlgNode>>& nodes) noe
       }
       project->setExpressions(new_exprs);
     } else if (auto aggregate = dynamic_cast<RelAggregate*>(node)) {
-      auto src_it = new_liveouts.find(node->getInput(0));
-      CHECK(src_it != new_liveouts.end());
+      auto src_it = sweep_dead_result.new_liveouts.find(node->getInput(0));
+      CHECK(src_it != sweep_dead_result.new_liveouts.end());
       auto old_exprs = aggregate->getAggExprsAndRelease();
       auto new_exprs = renumber_rex_aggs(old_exprs, src_it->second);
       aggregate->setAggExprs(new_exprs);
@@ -675,8 +663,8 @@ void eliminate_dead_columns(std::vector<std::shared_ptr<RelAlgNode>>& nodes) noe
       auto new_condition = renumberer.visit(filter->getCondition());
       filter->setCondition(new_condition);
     } else if (auto sort = dynamic_cast<RelSort*>(node)) {
-      auto src_it = new_liveouts.find(node->getInput(0));
-      CHECK(src_it != new_liveouts.end());
+      auto src_it = sweep_dead_result.new_liveouts.find(node->getInput(0));
+      CHECK(src_it != sweep_dead_result.new_liveouts.end());
       std::vector<SortField> new_collation;
       for (size_t i = 0; i < sort->collationCount(); ++i) {
         new_collation.push_back(renumber_sort_field(sort->getCollation(i), src_it->second));
@@ -690,18 +678,62 @@ void eliminate_dead_columns(std::vector<std::shared_ptr<RelAlgNode>>& nodes) noe
     if (does_redef_cols(node) || intact_nodes.count(node)) {
       continue;
     }
-    auto live_pair = live_outs.find(node);
-    CHECK(live_pair != live_outs.end());
+    auto live_pair = mark_live_result.live_outs.find(node);
+    CHECK(live_pair != mark_live_result.live_outs.end());
     auto live_out = live_pair->second;
-    add_new_indices_for(node, new_liveouts, live_out, intact_nodes);
-    auto usrs_it = web.find(walker);
-    CHECK(usrs_it != web.end());
+    add_new_indices_for(node, sweep_dead_result.new_liveouts, live_out, intact_nodes);
+    auto usrs_it = sweep_dead_result.web.find(walker);
+    CHECK(usrs_it != sweep_dead_result.web.end());
     for (auto usr : usrs_it->second) {
       if (checker.hasAllSrcReady(usr)) {
-        work_set.push_back(usr);
+        mark_live_result.work_set.push_back(usr);
       }
     }
   }
+}
+
+}  // namespace
+
+void eliminate_dead_columns(std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept {
+  if (nodes.empty()) {
+    return;
+  }
+  auto root = nodes.back().get();
+  if (!root) {
+    return;
+  }
+  CHECK(!dynamic_cast<const RelScan*>(root) && !dynamic_cast<const RelJoin*>(root));
+  // Mark
+  auto mark_live_result = mark_live_nodes(nodes);
+  std::unordered_set<const RelAlgNode*> intact_nodes;
+  bool has_dead_cols = false;
+  for (auto live_pair : mark_live_result.live_outs) {
+    auto node = live_pair.first;
+    auto outs = live_pair.second;
+    if (outs.empty()) {
+      LOG(WARNING) << "RA node with no used column: " << node->toString();
+      // Ignore empty live_out due to some invalid node
+      intact_nodes.insert(node);
+    }
+    if (any_dead_col_in(node, outs)) {
+      has_dead_cols = true;
+    } else {
+      intact_nodes.insert(node);
+    }
+  }
+  if (!has_dead_cols) {
+    return;
+  }
+  // Sweep
+  CHECK(mark_live_result.work_set.empty());
+  auto sweep_dead_result = sweep_dead_nodes(mark_live_result, nodes, intact_nodes);
+  // Propagate
+  std::unordered_map<const RelAlgNode*, RelAlgNode*> deconst_mapping;
+  for (auto node : nodes) {
+    deconst_mapping.insert(std::make_pair(node.get(), node.get()));
+  }
+  // Renumber
+  renumber_inputs(mark_live_result, sweep_dead_result, deconst_mapping, intact_nodes);
 }
 
 // For some reason, Calcite generates Sort, Project, Sort sequences where the
