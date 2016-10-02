@@ -61,6 +61,8 @@ extern "C" void agg_count_distinct_bitmap(int64_t* agg, const int64_t val, const
 #define EMPTY_KEY_16 std::numeric_limits<int16_t>::max()
 #define EMPTY_KEY_8 std::numeric_limits<int8_t>::max()
 
+extern "C" uint32_t key_hash(const int64_t* key, const uint32_t key_qw_count);
+
 extern "C" int64_t* get_group_value(int64_t* groups_buffer,
                                     const uint32_t groups_buffer_entry_count,
                                     const int64_t* key,
