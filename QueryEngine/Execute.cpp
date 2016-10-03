@@ -5307,16 +5307,22 @@ void Executor::nukeOldState(const bool allow_lazy_fetch,
 
 namespace {
 
-bool is_trivial_loop_join(const std::vector<InputTableInfo>& query_infos) {
-  if (query_infos.size() < 2) {
+bool is_trivial_loop_join(const std::vector<InputTableInfo>& query_infos, const RelAlgExecutionUnit& ra_exe_unit) {
+  if (ra_exe_unit.input_descs.size() < 2) {
     return false;
   }
-  for (size_t i = 1; i < query_infos.size(); ++i) {
-    if (query_infos[i].info.numTuples > 1) {
-      return false;
+  CHECK_EQ(size_t(2), ra_exe_unit.input_descs.size());
+  const auto inner_table_id = ra_exe_unit.input_descs[1].getTableId();
+  ssize_t inner_table_idx = -1;
+  for (size_t i = 0; i < query_infos.size(); ++i) {
+    if (query_infos[i].table_id == inner_table_id) {
+      inner_table_idx = i;
+      break;
     }
   }
-  return true;
+  CHECK_NE(ssize_t(-1), inner_table_idx);
+  CHECK_NE(size_t(0), query_infos[inner_table_idx].info.numTuples);
+  return query_infos[inner_table_idx].info.numTuples == 1;
 }
 
 }  // namespace
@@ -5396,7 +5402,8 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
   auto bb = llvm::BasicBlock::Create(cgen_state_->context_, "entry", cgen_state_->row_func_);
   cgen_state_->ir_builder_.SetInsertPoint(bb);
 
-  allocateInnerScansIterators(ra_exe_unit.input_descs, eo.allow_loop_joins || is_trivial_loop_join(query_infos));
+  allocateInnerScansIterators(ra_exe_unit.input_descs,
+                              eo.allow_loop_joins || is_trivial_loop_join(query_infos, ra_exe_unit));
 
   // generate the code for the filter
   allocateLocalColumnIds(ra_exe_unit.input_col_descs);
