@@ -64,13 +64,17 @@ Instructions for installing CUDA are below.
 
 [scripts/cuda-autoinstall.sh](scripts/cuda_autoinstall.sh) will install CUDA and the drives via the runfile method. For the RPM method, first enable EPEL via `yum install epel-release` and then follow the instructions provided by Nvidia.
 
-## Mac OS X 10.11
+## Mac OS X
 
-[scripts/mapd-deps-osx.sh](scripts/mapd-deps-osx.sh) is provided that will automatically install and/or update [Homebrew](http://brew.sh/) and use that to install all dependencies. Please make sure OSX is completely update to date and Xcode is installed before running.
+[scripts/mapd-deps-osx.sh](scripts/mapd-deps-osx.sh) is provided that will automatically install and/or update [Homebrew](http://brew.sh/) and use that to install all dependencies. Please make sure OS X is completely update to date and Xcode is installed before running.
 
 Note: installing LLVM 3.5 view Homebrew requires some slight modifications to the build config arguments. [scripts/mapd-deps-osx.sh](scripts/mapd-deps-osx.sh) will run `brew edit llvm35`, which opens up the build config in your editor. Jump to the configure args (should be around lines 196-203) and add this line, if running on OS X 10.11:
 
     "--with-c-include-dirs=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.11.sdk/usr/include",
+
+For OS X 10.12 with Xcode 8.0 or later instead use:
+
+    "--with-c-include-dirs=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include",
 
 ### CUDA
 

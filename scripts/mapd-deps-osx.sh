@@ -21,10 +21,11 @@ brew install cryptopp
 # install CUDA (even if you don't have an nvidia GPU - some headers req'd for compilation)
 brew tap Caskroom/cask
 brew install Caskroom/cask/cuda
-export PATH=/Developer/NVIDIA/CUDA-7.5/bin/:$PATH
+CUDA_ROOT=$(ls -d /Developer/NVIDIA/CUDA-* | tail -n 1)
+export PATH=$CUDA_ROOT/bin/:$PATH
 
 # compile and install bison++ (default location under /usr/local is fine)
-curl -O https://flexpp-bisonpp.googlecode.com/files/bisonpp-1.21-45.tar.gz
+curl -O https://storage.googleapis.com/google-code-archive-downloads/v2/code.google.com/flexpp-bisonpp/bisonpp-1.21-45.tar.gz
 tar xvf bisonpp-1.21-45.tar.gz
 cd bison++-1.21
 ./configure && make && make install
@@ -39,8 +40,12 @@ cat << EOS
 
 llvm35 requires a slight modification to the build config. See the README for details.
 
-Add the following to the args, somewhere around lines 196-203:
+Add the following to the configure args, somewhere around lines 196-203:
+
+For OS X 10.11:
    "--with-c-include-dirs=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.11.sdk/usr/include",
+For OS X 10.12 or later:
+   "--with-c-include-dirs=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include",
 
 Hit enter to edit the config.
 
@@ -58,8 +63,9 @@ done
 export PATH=~/bin:$PATH
 
 cat >> ~/.bash_profile <<EOF
-DYLD_LIBRARY_PATH=/Developer/NVIDIA/CUDA-7.5/lib:\$DYLD_LIBRARY_PATH
-PATH=/Developer/NVIDIA/CUDA-7.5/bin:\$PATH
+CUDA_ROOT=\$(ls -d /Developer/NVIDIA/CUDA-* | tail -n 1)
+DYLD_LIBRARY_PATH=\$CUDA_ROOT/lib:\$DYLD_LIBRARY_PATH
+PATH=\$CUDA_ROOT/bin:\$PATH
 PATH=\$HOME/bin:\$PATH
 export DYLD_LIBRARY_PATH PATH
 EOF
