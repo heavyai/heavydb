@@ -5305,6 +5305,22 @@ void Executor::nukeOldState(const bool allow_lazy_fetch,
   plan_state_.reset(new PlanState(allow_lazy_fetch, join_info, this));
 }
 
+namespace {
+
+bool is_trivial_loop_join(const std::vector<InputTableInfo>& query_infos) {
+  if (query_infos.size() < 2) {
+    return false;
+  }
+  for (size_t i = 1; i < query_infos.size(); ++i) {
+    if (query_infos[i].info.numTuples > 1) {
+      return false;
+    }
+  }
+  return true;
+}
+
+}  // namespace
+
 Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
                                                       const std::vector<InputTableInfo>& query_infos,
                                                       const RelAlgExecutionUnit& ra_exe_unit,
@@ -5380,7 +5396,7 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
   auto bb = llvm::BasicBlock::Create(cgen_state_->context_, "entry", cgen_state_->row_func_);
   cgen_state_->ir_builder_.SetInsertPoint(bb);
 
-  allocateInnerScansIterators(ra_exe_unit.input_descs, eo.allow_loop_joins);
+  allocateInnerScansIterators(ra_exe_unit.input_descs, eo.allow_loop_joins || is_trivial_loop_join(query_infos));
 
   // generate the code for the filter
   allocateLocalColumnIds(ra_exe_unit.input_col_descs);
