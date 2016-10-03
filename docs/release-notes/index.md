@@ -1,7 +1,26 @@
 # MapD Platform
-The latest version of the MapD Platform is 1.2.7.
+The latest version of the MapD Platform is 1.2.8.
+
+#### **1.2.8** - Released October 3, 2016
+
+#####New
+- Text columns now default to dictionary encoding. If old unencoded behavior required then `TEXT ENCODING NONE` should be used in create table statement.  NOTE: This will not affect existing tables but any new tables created will be affected.
+- Now able to color by boolean
+
+#####Fixed
+- Issue for some `CASE` statements involving nullability
+- Issue with sort on very high cardinality column
+- Now throwing exception on overflow for arithmetic operations
+- Allow hash joins rather than loop joins in queries with `ORDER BY`
+- Issue when trying to `GROUP BY` array column
+- Issue with `OR` statements involving NULLs
+- Issue in comparing decimal column with integer literal
+- Issue for any string literal containing the term `all` or other SQL tokens
+- Now throwing exception for tables with very high number of columns
 
 #### **1.2.7** - Released September 12, 2016
+
+#####New
 - Add support in JDBC driver for implicit type casting of expressions to double/string, not requiring explicit CAST operator
 
 
