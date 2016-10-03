@@ -4,7 +4,8 @@ PROJECT(mapd2)
 
 set(MAPD_VERSION_RAW "1.2.9dev")
 set(MAPD_IMMERSE_URL "http://builds.mapd.com/frontend/mapd2-dashboard-v1-latest-release.zip")
-set(MAPD_IMMERSEv2_URL "http://builds.mapd.com/frontend/mapd2-dashboard-v2-latest-release.zip")
+set(MAPD_IMMERSEV2_URL "http://builds.mapd.com/frontend/mapd2-dashboard-v2-latest-release.zip")
+option(MAPD_USE_IMMERSEV2 "Only bundle Immerse v2" OFF)
 string(TIMESTAMP MAPD_BUILD_DATE "%Y%m%d")
 
 if($ENV{BUILD_NUMBER})
@@ -300,6 +301,27 @@ target_link_libraries (initdb Shared Catalog Fragmenter Chunk SqliteConnector Da
 set(CPACK_PACKAGE_VENDOR "MapD Technologies, Inc.")
 
 # Frontend
+if (MAPD_USE_IMMERSEV2)
+  set(MAPD_IMMERSE_URL ${MAPD_IMMERSEV2_URL})
+  set(MAPD_PACKAGE_FLAGS "${MAPD_PACKAGE_FLAGS}-v2")
+endif()
+option(MAPD2_FRONTEND_DOWNLOAD "Download mapd2-frontend for packaging" OFF)
+set(MAPD_IMMERSE_URL ${MAPD_IMMERSE_URL} CACHE STRING "URL to bundled frontend")
+if(MAPD2_FRONTEND_DOWNLOAD)
+  include(ExternalProject)
+  ExternalProject_Add(frontend
+    URL ${MAPD_IMMERSE_URL}
+    PREFIX external
+    CONFIGURE_COMMAND ""
+    UPDATE_COMMAND ""
+    BUILD_COMMAND ""
+    INSTALL_COMMAND ""
+    )
+  ExternalProject_Get_Property(frontend source_dir)
+  install(DIRECTORY ${source_dir}/ DESTINATION "frontend/" PATTERN .git EXCLUDE PATTERN node_modules EXCLUDE)
+  add_custom_command(TARGET frontend COMMAND ${CMAKE_COMMAND} -E copy_directory ${source_dir} frontend)
+endif()
+
 ## Go web server
 find_program(GO_EXECUTABLE NAMES go)
 if(NOT GO_EXECUTABLE)
