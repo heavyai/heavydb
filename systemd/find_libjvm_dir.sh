@@ -12,6 +12,7 @@ JVM_DIRS="
   /usr/lib/jvm/jre-1.7.0-openjdk/lib/amd64/server
   /usr/lib/jvm/java-1.8.0-openjdk/jre/lib/amd64/server
   /usr/lib/jvm/java-1.7.0-openjdk/jre/lib/amd64/server
+  /usr/lib/jvm/jre/lib/amd64/server
   /usr/lib/jvm/java/jre/lib/amd64/server
   /usr/lib/jvm/default-java/jre/lib/amd64/server
   $JVM_DIR

@@ -62,11 +62,13 @@ All installations of MapD depend on Java 1.6+/`libjvm`, provided by a Java Runti
 sudo yum install java-1.8.0-openjdk-headless
 ```
 
-By default a symlink pointing to the newly installed JRE will be placed at `/usr/lib/jvm/jre-1.8.0-openjdk`. The `libjvm` library directory is therefore:
+By default a symlink pointing to the newly installed JRE will be placed at `/usr/lib/jvm/jre-1.8.0-openjdk`, with the `libjvm` library residing in the subdirectory `lib/amd64/server`. This subdirectory must be added to your `LD_LIBRARY_PATH` environment variable in order to start MapD:
 
 ```
-/usr/lib/jvm/jre-1.8.0-openjdk/lib/amd64/server
+export LD_LIBRARY_PATH=/usr/lib/jvm/jre-1.8.0-openjdk/lib/amd64/server:$LD_LIBRARY_PATH
 ```
+
+This command may be added to any file managing your environment such as `$HOME/.bash_profile`, `/etc/profile`, or `/etc/profile.d/java.sh`.
 
 ### Ubuntu / Debian
 `libjvm` is provided by the package `default-jre-headless`. To install run:
@@ -75,23 +77,16 @@ By default a symlink pointing to the newly installed JRE will be placed at `/usr
 sudo apt install default-jre-headless
 ```
 
-By default a symlink pointing to the newly installed JRE will be placed at `/usr/lib/jvm/default-java`. The `libjvm` library directory is therefore:
+By default a symlink pointing to the newly installed JRE will be placed at `/usr/lib/jvm/default-java`, with the `libjvm` library residing in the subdirectory `jre/lib/amd64/server`. This subdirectory must be added to your `LD_LIBRARY_PATH` environment variable in order to start MapD:
 
 ```
-/usr/lib/jvm/default-java/jre/lib/amd64/server
-```
-
-### Environment Variables
-After installing the JRE, the `libjvm` library directory must be added to your `LD_LIBRARY_PATH` environment variable. For example, on CentOS this can be done with the following command:
-
-```
-export LD_LIBRARY_PATH=/usr/lib/jvm/jre-1.8.0-openjdk/lib/amd64/server:$LD_LIBRARY_PATH
+export LD_LIBRARY_PATH=/usr/lib/jvm/default-java/jre/lib/amd64/server:$LD_LIBRARY_PATH
 ```
 
 This command may be added to any file managing your environment such as `$HOME/.bash_profile`, `/etc/profile`, or `/etc/profile.d/java.sh`.
 
 ## Xorg and NVIDIA GPU Driver Installation
-CUDA-enabled installations of MapD depend on `libcuda` which is provided by the NVIDIA GPU Drivers and NVIDIA CUDA Toolkit. The backend rendering feature of MapD additionally requires a working installation of Xorg.
+CUDA-enabled installations of MapD depend on `libcuda`, which is provided by the NVIDIA GPU Drivers and NVIDIA CUDA Toolkit. The backend rendering feature of MapD additionally requires a working installation of Xorg.
 
 The NVIDIA CUDA Toolkit, which includes the NVIDIA GPU drivers, is available from the [NVIDIA CUDA Zone](https://developer.nvidia.com/cuda-downloads).
 
@@ -109,24 +104,25 @@ RHEL-based distributions require Dynamic Kernel Module Support (DKMS) in order t
 sudo yum install epel-release
 ```
 
-2. Install GCC and Linux headers
+2. Install Xorg and required libraries. This is only required to take advantage of the backend rendering features of MapD.
 ```
-sudo yum groupinstall "Development Tools"
-sudo yum install kernel-headers
-```
-
-3. Install Xorg and required libraries. This is only required to take advantage of the backend rendering features of MapD.
-```
-sudo yum install xorg-x11-server-Xorg mesa-libGLU libGLEWmx libXv
+sudo yum install xorg-x11-server-Xorg mesa-libGLU libXv
 ```
 
-4. Install the CUDA repository, update local repository cache, and then install the GPU drivers. The CUDA Toolkit (package `cuda`) is not required to run MapD, but the GPU drivers (package `cuda-drivers`, which include libcuda) are.
+3. Update and reboot
+The GPU drivers and their dependencies, specifically `kernel-devel` and `kernel-headers`, require that the latest available kernel is installed and active. To ensure this, update the entire system and reboot to activate the latest kernel:
 ```
-sudo rpm --install cuda-repo-rhel7-7.5-18.x86_64.rpm
+sudo yum update
+sudo reboot
+```
+
+4. Install the CUDA repository, update local repository cache, and then install the GPU drivers. `yum` will automatically install some additional dependencies for the `cuda-drivers` package, including: `dkms`, `gcc`, `kernel-devel`, and `kernel-headers`. The CUDA Toolkit (package `cuda`) is *not* required to run MapD, but the GPU drivers (package `cuda-drivers`, which include libcuda) are.
+```
+sudo rpm --install cuda-repo-rhel7-8.0.44-1.x86_64.rpm
 sudo yum clean expire-cache
 sudo yum install cuda-drivers
 ```
-Where `cuda-repo-rhel7-7.5-18.x86_64.rpm` is the name of the RPM package provided by NVIDIA.
+Where `cuda-repo-rhel7-8.0.44-1.x86_64.rpm` is the name of the RPM package provided by NVIDIA.
 
 5. Reboot and continue to section [Environment Variables] below.
 
@@ -135,17 +131,17 @@ Please download the DEB package provided by NVIDIA from the [NVIDIA CUDA Zone](h
 
 1. Install Xorg and required libraries, and disable the automatically enabled `graphical` target. This is only required to take advantage of the backend rendering features of MapD.
 ```
-sudo apt-get install xserver-xorg libglewmx1.10
+sudo apt install xserver-xorg libglu1-mesa
 sudo systemctl set-default multi-user
 ```
 
 2. Install the CUDA repository, update local repository cache, and then install the CUDA Toolkit and GPU drivers
 ```
-sudo dpkg --install cuda-repo-ubuntu1504_7.5-18_amd64.deb
-sudo apt-get update
-sudo apt-get install cuda-drivers linux-image-extra-virtual
+sudo dpkg --install cuda-repo-ubuntu1604_8.0.44-1_amd64.deb
+sudo apt update
+sudo apt install cuda-drivers linux-image-extra-virtual
 ```
-Where `cuda-repo-ubuntu1504_7.5-18_amd64.deb` is the name of the RPM package provided by NVIDIA.
+Where `cuda-repo-ubuntu1604_8.0.44-1_amd64.deb` is the name of the package provided by NVIDIA.
 
 3. Reboot and continue to section [Environment Variables] below.
 
@@ -167,23 +163,23 @@ On Linux, you can verify installation of the GPU drivers by running `nvidia-smi`
 ## Xorg Configuration
 The `nvidia-xconfig` tool provided by the GPU drivers may be used to generate a valid `/etc/X11/xorg.conf`. To use, run:
 ```
-sudo nvidia-xconfig --use-display-device=none --enable-all-gpus
+sudo nvidia-xconfig --use-display-device=none --enable-all-gpus --preserve-busid
 ```
 Run the following to verify configuration:
 ```
 sudo X :1
 ```
-If `X` starts without issues, proceed to `MapD Installation`.
+If `X` starts without issues, kill it via `<ctrl-c>` (or `sudo pkill X` in a different session) and then proceed to [MapD Installation].
 
 ### Troubleshooting
 
-### `no screens defined`, NVIDIA Tesla K20 GPUs
+#### `no screens defined`, NVIDIA Tesla K20 GPUs
 The NVIDIA Tesla K20 GPU requires graphics support to be explicitly enabled in order to use Xorg. This mode may be enabled by running:
 ```
 sudo nvidia-smi --gom=0
 ```
 
-### `no screens defined`
+#### `no screens defined`
 In rare circumstances `nvidia-xconfig` generates an `xorg.conf` that does not include the PCIe BusID for each GPU. When this happens, `X :1` will fail with the error message `no screens defined`. To resolve this issue, verify that the BusIDs are not listed by opening `/etc/X11/xorg.conf` and look for the `BusID` option under each `Section "Device"`. For example, you should see something similar to:
 ```
 Section "Device"
@@ -239,42 +235,22 @@ tar -xvf mapd2-<date>-<hash>-<platform>-<architecture>.tar.gz
 ```
 replacing `mapd2-<date>-<hash>-<platform>-<architecture>.tar.gz` with the name of the archive provided to you. For example, a release for x86-64 Linux built on 15 April 2016 will have the file name `mapd2-20160415-86fec7b-Linux-x86_64.tar.gz`.
 
-### `systemd`
-For Linux, the MapD archive includes `systemd` target files which allows `systemd` to manage MapD as a service on your server. The provided `install_mapd_systemd.sh` script will ask a few questions about your environment and then install the target files into the correct location.
-
-```
-cd $MAPD_PATH/systemd
-./install_mapd_systemd.sh
-```
-
-This script will ask for the location of the following directories:
-
-* `MAPD_PATH`: path to the MapD installation directory
-* `MAPD_STORAGE`: path to the storage directory for MapD data and configuration files
-* `MAPD_USER`: user to run MapD as. User must exist prior to running the script.
-* `MAPD_GROUP`: group to run MapD as. Group must exist prior to running the script.
-* `MAPD_LIBJVM_DIR`: path to the `libjvm` library directory, as determined in the *Common Dependencies* section above.
-
 # Configuration
-Before starting MapD, the `data` directory must be initialized. To do so, create an empty directory at the desired path (`/var/lib/mapd/data`) and run `$MAPD_PATH/bin/initdb` with that path as the argument. For example:
+Before starting MapD, the `data` directory must be initialized. To do so, first create an empty directory at the desired path (`$MAPD_DATA`) and change the owner to the user that the server will run as (`$MAPD_USER`):
 
 ```
-sudo mkdir -p /var/lib/mapd/data
-sudo $MAPD_PATH/bin/initdb /var/lib/mapd/data
+sudo mkdir -p $MAPD_DATA
+sudo chown -R $MAPD_USER $MAPD_DATA
 ```
+where `$MAPD_USER` is the system user account that the server will run as, such as `mapd`, and `$MAPD_DATA` is the desired path to the MapD `data` directory, such as `/var/lib/mapd/data`.
 
-Finally, make sure this directory is owned by the user that will be running MapD (i.e. `mapd`):
+Finally, run `$MAPD_PATH/bin/initdb` with the data directory path as the argument:
 ```
-sudo chown -R mapd /var/lib/mapd
-```
-
-You can now test your installation of MapD with the `startmapd` script:
-```
-$MAPD_PATH/startmapd --data $MAPD_DATA
+$MAPD_PATH/bin/initdb $MAPD_DATA
 ```
 
 ## Configuration file
-MapD also supports storing options in a configuration file. This is useful if, for example, you need to run the MapD database and/or web servers on different ports than the default. An example configuration file is provided under `$MAPD_PATH/mapd.conf.sample`.
+MapD supports storing options in a configuration file. This is useful if, for example, you need to run the MapD database and/or web servers on different ports than the default. An example configuration file is provided under `$MAPD_PATH/mapd.conf.sample`.
 
 To use options provided in this file, provide the path the the config file to the `--config` flag of `startmapd` or `mapd_server` and `mapd_web_server`. For example:
 ```
@@ -282,7 +258,7 @@ $MAPD_PATH/startmapd --config $MAPD_DATA/mapd.conf
 ```
 
 # Starting and Stopping MapD Services
-MapD consists of two system services: `mapd_server` and `mapd_web_server`. These services may be started individually or run via the interactive script `startmapd`. For permanent installations, it is recommended that you use `systemd` to manage the MapD services.
+MapD consists of two system services: `mapd_server` and `mapd_web_server`. These services may be started individually using `systemd` or run via the interactive script `startmapd`. For permanent installations, it is recommended that you use `systemd` to manage the MapD services.
 
 ## MapD Via `startmapd`
 MapD may be run via the `startmapd` script provided in `$MAPD_PATH/startmapd`. This script handles creating the `data` directory if it does not exist, inserting a sample dataset if desired, and starting both `mapd_server` and `mapd_web_server`.
@@ -308,7 +284,23 @@ to explicitly specify the `$MAPD_DATA` directory.
 To stop an instance of MapD that was started with the `startmapd` script, simply kill the `startmapd` process via `CTRL-C` or `pkill startmapd`. You can also use `pkill mapd` to ensure all processes have been killed.
 
 ## MapD Via `systemd`
-For permenant installations of MapD, it is recommended that you use `systemd` to manage the MapD services. `systemd` automatically handles tasks such as log management, starting the services on restart, and restarting the services in case they die. It is assumed that you have followed the instructions above for installing the `systemd` service unit files for MapD.
+For permanent installations of MapD, it is recommended that you use `systemd` to manage the MapD services. `systemd` automatically handles tasks such as log management, starting the services on restart, and restarting the services in case they die. Instructions for configuring your system to start MapD via `systemd` are in the [Initial Setup] section below.
+
+### Initial Setup
+The provided `install_mapd_systemd.sh` script will ask a few questions about your environment and then install the `systemd` service files into the correct location.
+
+```
+cd $MAPD_PATH/systemd
+./install_mapd_systemd.sh
+```
+
+This script will ask for the location of the following directories:
+
+* `MAPD_PATH`: path to the MapD installation directory
+* `MAPD_STORAGE`: path to the storage directory for MapD data and configuration files
+* `MAPD_USER`: user to run MapD as. User must exist prior to running the script.
+* `MAPD_GROUP`: group to run MapD as. Group must exist prior to running the script.
+* `MAPD_LIBJVM_DIR`: path to the `libjvm` library directory, as determined in the *Common Dependencies* section above.
 
 For backend rendering-enabled builds, the `install_mapd_systemd.sh` script also installs a service named `mapd_xorg`. This service is configured to start `Xorg` on display `:1`, which the `mapd_server` service is configured to use. Before proceeding, please start the the `mapd_xorg` service before `mapd_server` if you wish to utilize backend rendering:
 ```
@@ -337,21 +329,13 @@ sudo systemctl enable mapd_server
 sudo systemctl enable mapd_web_server
 ```
 
-## MapD Service Details
-Assuming `$MAPD_PATH` is the directory where MapD software is installed, make sure that `$MAPD_PATH/bin` is in `PATH`.
-
-### `initdb`
-The very first step before using MapD is to run initdb:
+# MapD Services and Utilities
+Assuming `$MAPD_PATH` is the directory where MapD software is installed, make sure that `$MAPD_PATH/bin` is in `PATH`:
 ```
-initdb [-f] $MAPD_DATA
+export PATH=$MAPD_PATH:$PATH
 ```
-initializes the MapD data directory. It creates three subdirectories:
 
-* `mapd_catalogs`: stores MapD catalogs
-* `mapd_data`: stores MapD data
-* `mapd_log`: contains all MapD log files. MapD uses [glog](https://code.google.com/p/google-glog/) for logging.
-
-The `-f` flag forces `initdb` to overwrite existing data and catalogs in the specified directory.
+## Services
 
 ### `mapd_server`
 
@@ -361,15 +345,13 @@ mapd_server $MAPD_DATA [--cpu|--gpu|--hybrid]
                        [--flush-log]
                        [--version|-v]
 ```
-This command starts the MapD Server process. `$MAPD_DATA` must match that in the `initdb` command when it was run. The options are:
+This command starts the MapD server process. `$MAPD_DATA` must match that in the `initdb` command when it was run. The options are:
 
-* `[--cpu|--gpu|--hybrid]`: Execute queries on CPU, GPU or both. The default is GPU.
-* `[{-p|--port} <port number>]`: Specify the port number mapd_server listens on. The default is port 9091.
-* `[{--http-port} <port number>]`: Specify the port the HTTP server listens on. The default is port 9090.
-* `[--flush-log]`: Flush log files to disk. Useful for `tail -f` on log files.
+* `[--cpu|--gpu]`: Execute queries on CPU-only or on both GPU and CPU. The default is `--gpu`.
+* `[{-p|--port} <port number>]`: Specify the port for MapD's binary-over-TCP protocol. The default is port 9091.
+* `[{--http-port} <port number>]`: Specify the port for MapD's JSON-over-HTTP protocol. The default is port 9090.
+* `[--flush-log]`: Flush log files to disk. Useful for `tail -F` on log files.
 * `[--version|-v]`: Prints version number.
-
-`mapd_server` automatically re-spawns itself in case of unexpected termination.  To force termination of `mapd_server` kill -9 **all** `mapd_server` processes.
 
 ### `mapd_web_server`
 
@@ -395,6 +377,21 @@ This command starts the MapD web server.  This server provides access to MapD's 
 * `[{--tmpdir} </path/to/tmp>]`: Path to custom temporary directory. The default is `/tmp/`.
 
 The temporary directory is used as a staging location for file uploads. It is sometimes desirable to place this directory on the same file system as the MapD data directory. If not specified on the command line, `mapd_web_server` also respects the standard `TMPDIR` environment variable as well as a specific `MAPD_TMPDIR` environment variable, the latter of which takes precedence. Defaults to the system default `/tmp/` if neither the command line argument nor at least one of the environment variables are specified.
+
+## Utilities
+
+### `initdb`
+The very first step before using MapD is to initialize the MapD data directory via `initdb`:
+```
+initdb [-f] $MAPD_DATA
+```
+This creates three subdirectories:
+
+* `mapd_catalogs`: stores MapD catalogs
+* `mapd_data`: stores MapD data
+* `mapd_log`: contains all MapD log files. MapD uses [glog](https://code.google.com/p/google-glog/) for logging.
+
+The `-f` flag forces `initdb` to overwrite existing data and catalogs in the specified directory.
 
 ### `generate_cert`
 
@@ -802,10 +799,11 @@ SELECT [ALL|DISTINCT] <expr> [AS [<alias>]], ... FROM <table> [,<table>]
 | TAN(**x**) | returns the tangent of **x** |
 
 ## Geometric Function Support
-| Function                                                          | Description                   |
-| ----------------------------------------------------------------- | ----------------------------- |
-| DISTANCE_IN_METERS(**fromLon**, **fromLat**, **toLon**, **toLat**)| calculate distance in meters  |
-|                                                                   | between two WGS-84 positions  |
++--------------------------------------------------------------------+----------------------------+
+| Function                                                           | Description                |
++====================================================================+============================+
+| DISTANCE_IN_METERS(**fromLon**, **fromLat**, **toLon**, **toLat**) | calculate distance in meters between two WGS-84 positions |
++--------------------------------------------------------------------+----------------------------+
 
 ## String Function Support
 | Function | Description |
@@ -814,28 +812,36 @@ SELECT [ALL|DISTINCT] <expr> [AS [<alias>]], ... FROM <table> [,<table>]
 | LENGTH(**str**) | returns the length of a string in bytes |
 
 ## Pattern Matching Support
-| Name | Example | Description |
-| ------------------------ | -------------------- | ------------------------------------- |
-| **str** LIKE **pattern** | 'ab' LIKE 'ab' | returns true if the string matches the pattern |
-| **str** NOT LIKE **pattern** | 'ab' NOT LIKE 'cd' | returns true if the string does not match the pattern |
-| **str** ILIKE **pattern** | 'AB' ILIKE 'ab' | case-insensitve LIKE |
-| **str** REGEXP **POSIX pattern** | '^[a-z]+r$' | lower case string ending with r |
-| REGEXP_LIKE ( **str** , **POSIX pattern** ) | '^[hc]at' | cat or hat |
 
-Wildcard characters supported by LIKE and ILIKE:
++---------------------------------------------+----------------------+-------------------------+
+| Name                                        | Example              | Description             |
++=============================================+======================+=========================+
+| **str** LIKE **pattern**                    | `'ab' LIKE 'ab'`     | returns true if the string matches the pattern |
++---------------------------------------------+----------------------+-------------------------+
+| **str** NOT LIKE **pattern**                | `'ab' NOT LIKE 'cd'` | returns true if the string does not match the pattern |
++---------------------------------------------+----------------------+-------------------------+
+| **str** ILIKE **pattern**                   | `'AB' ILIKE 'ab'`    | case-insensitive LIKE |
++---------------------------------------------+----------------------+-------------------------+
+| **str** REGEXP **POSIX pattern**            | `'^[a-z]+r$'`        | lower case string ending with r |
++---------------------------------------------+----------------------+-------------------------+
+| REGEXP_LIKE ( **str** , **POSIX pattern** ) | `'^[hc]at'`          | cat or hat |
++---------------------------------------------+----------------------+-------------------------+
 
-% matches any number of characters, including zero characters
+Wildcard characters supported by `LIKE` and `ILIKE`:
 
-_ matches exactly one character
+`%` matches any number of characters, including zero characters
+
+`_` matches exactly one character
 
 ## Date/Time Function Support
 | Function | Description |
-| -------------------------------------------------- | ---------------------------------------------- |
+| --------------------------------------------- | ---------------------------------------------- |
 | DATE_TRUNC(**date_part**, **timestamp**) | truncates the **timestamp** to the specified **date_part** |
 | EXTRACT(**date_part** FROM **timestamp**) | returns the specified **date_part** from provided **timestamp** |
 | NOW() | returns the current timestamp |
 
 Supported **date_part** types:
+
 ```
 DATE_TRUNC [YEAR, QUARTER, MONTH, DAY, HOUR, MINUTE, SECOND,
             MILLENIUM, CENTURY, DECADE, WEEK, QUARTERDAY]
@@ -859,11 +865,16 @@ EXTRACT [YEAR, QUARTER, MONTH, DAY, HOUR, MINUTE, SECOND,
 | COALESCE(**val1**, **val2**, ..) | returns the first non-null value in the list |
 
 ## Subquery Expression Support
-| Expression | Example | Description |
-| ---------- | --------------------------------- | ------------------------------------------------- |
-| EXISTS     | EXISTS (**subquery**) | evaluates whether the subquery returns rows |
-| IN         | **expr** IN (**subquery** or **list of values**) | evaluates whether **expr** equals any value of the IN list |
++------------+------------------------------------------------------+----------------------------+
+| Expression | Example                                              | Description                |
++============+======================================================+============================+
+| EXISTS     | EXISTS (**subquery**)                                | evaluates whether the subquery returns rows |
++------------+------------------------------------------------------+----------------------------+
+| IN         | **expr** IN (**subquery** or **list of values**)     | evaluates whether **expr** equals any value of the IN list |
++------------+------------------------------------------------------+----------------------------+
 | NOT IN     | **expr** NOT IN (**subquery** or **list of values**) | evaluates whether **expr** does not equal any value of the IN list |
++------------+------------------------------------------------------+----------------------------+
+
 
 ## Type Cast Support
 | Expression | Example | Description |
@@ -871,16 +882,10 @@ EXTRACT [YEAR, QUARTER, MONTH, DAY, HOUR, MINUTE, SECOND,
 | CAST(**expr** AS **type**) | CAST(1.25 AS FLOAT) | converts an expression to another data type |
 
 ## Array Support
-```
-SELECT <ArrayCol>[n] ...
-```
-Query array elements n of column `ArrayCol`
-```
-SELECT UNNEST(<ArrayCol>) ...
-```
- Flatten entire array `ArrayCol`
-
-##
+| Expression | Description |
+| --- | --- |
+| `SELECT <ArrayCol>[n] ...` | Query array elements n of column `ArrayCol` |
+| `SELECT UNNEST(<ArrayCol>) ...` | Flatten entire array `ArrayCol` |
 
 # Client Interfaces
 
