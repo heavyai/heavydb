@@ -62,23 +62,41 @@ void fill_slots(int64_t* dst_entry,
 // Driver method for various buffer layouts, actual work is done by reduceOne* methods.
 // Reduces the entries of `that` into the buffer of this ResultSetStorage object.
 void ResultSetStorage::reduce(const ResultSetStorage& that) const {
-  const auto entry_count = query_mem_desc_.entry_count;
+  auto entry_count = query_mem_desc_.entry_count;
   CHECK_GT(entry_count, size_t(0));
-  CHECK_EQ(size_t(0), query_mem_desc_.entry_count_small);
-  if (query_mem_desc_.hash_type == GroupByColRangeType::MultiCol) {
-    CHECK_GE(entry_count, that.query_mem_desc_.entry_count);
-  } else {
-    CHECK_EQ(entry_count, that.query_mem_desc_.entry_count);
+  switch (query_mem_desc_.hash_type) {
+    case GroupByColRangeType::MultiCol:
+      CHECK_EQ(size_t(0), query_mem_desc_.entry_count_small);
+      CHECK_GE(entry_count, that.query_mem_desc_.entry_count);
+      break;
+    case GroupByColRangeType::OneColGuessedRange:
+      CHECK_NE(size_t(0), query_mem_desc_.entry_count_small);
+      CHECK_EQ(query_mem_desc_.entry_count_small, that.query_mem_desc_.entry_count_small);
+      CHECK_GE(entry_count, that.query_mem_desc_.entry_count);
+      break;
+    default:
+      CHECK_EQ(entry_count, that.query_mem_desc_.entry_count);
   }
-  const auto this_buff = buff_;
+  auto this_buff = buff_;
   CHECK(this_buff);
-  const auto that_buff = that.buff_;
+  auto that_buff = that.buff_;
   CHECK(that_buff);
   if (query_mem_desc_.hash_type == GroupByColRangeType::MultiCol) {
     for (size_t i = 0; i < that.query_mem_desc_.entry_count; ++i) {
       reduceOneEntryBaseline(this_buff, that_buff, i, that.query_mem_desc_.entry_count);
     }
     return;
+  }
+  if (query_mem_desc_.hash_type == GroupByColRangeType::OneColGuessedRange) {
+    CHECK(!query_mem_desc_.output_columnar);
+    for (size_t i = 0; i < that.query_mem_desc_.entry_count; ++i) {
+      reduceOneEntryBaseline(this_buff, that_buff, i, that.query_mem_desc_.entry_count);
+    }
+    entry_count = query_mem_desc_.entry_count_small;
+    const auto row_bytes = get_row_bytes(query_mem_desc_);
+    CHECK_EQ(get_row_bytes(that.query_mem_desc_), row_bytes);
+    this_buff += query_mem_desc_.entry_count * row_bytes;
+    that_buff += that.query_mem_desc_.entry_count * row_bytes;
   }
   if (use_multithreaded_reduction(entry_count)) {
     const size_t thread_count = cpu_threads();
@@ -169,9 +187,7 @@ void ResultSetStorage::reduceOneEntryNoCollisionsRowWise(const size_t entry_idx,
                                                          int8_t* this_buff,
                                                          const int8_t* that_buff) const {
   CHECK(!query_mem_desc_.output_columnar);
-  CHECK(query_mem_desc_.hash_type == GroupByColRangeType::OneColKnownRange ||
-        query_mem_desc_.hash_type == GroupByColRangeType::MultiColPerfectHash ||
-        query_mem_desc_.hash_type == GroupByColRangeType::MultiCol);
+  CHECK(query_mem_desc_.hash_type != GroupByColRangeType::Scan);
   if (isEmptyEntry(entry_idx, that_buff)) {
     return;
   }
@@ -297,7 +313,8 @@ void ResultSetStorage::reduceOneEntryBaseline(int8_t* this_buff,
                                               const size_t that_entry_count) const {
   const auto slot_count = get_buffer_col_slot_count(query_mem_desc_);
   const auto key_count = get_groupby_col_count(query_mem_desc_);
-  CHECK(GroupByColRangeType::MultiCol == query_mem_desc_.hash_type);
+  CHECK(GroupByColRangeType::MultiCol == query_mem_desc_.hash_type ||
+        GroupByColRangeType::OneColGuessedRange == query_mem_desc_.hash_type);
   CHECK(!query_mem_desc_.keyless_hash);
   const auto key_off = query_mem_desc_.output_columnar
                            ? key_offset_colwise(that_entry_idx, 0, query_mem_desc_.output_columnar)
