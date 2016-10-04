@@ -66,8 +66,8 @@ ResultSet::ResultSet() : device_type_(ExecutorDeviceType::CPU), query_mem_desc_{
 
 ResultSet::~ResultSet() {
   if (storage_) {
-    CHECK(storage_->buff_);
-    free(storage_->buff_);
+    CHECK(storage_->getUnderlyingBuffer());
+    free(storage_->getUnderlyingBuffer());
   }
 }
 
@@ -91,6 +91,18 @@ void ResultSet::append(ResultSet& that) {
 
 void ResultSet::sort(const std::list<Analyzer::OrderEntry>& order_entries, const size_t top_n) {
   if (isEmptyInitializer()) {
+    return;
+  }
+  if (query_mem_desc_.sortOnGpu()) {
+    try {
+      radixSortOnGpu(order_entries);
+    } catch (const OutOfMemory&) {
+      LOG(WARNING) << "Out of GPU memory during sort, finish on CPU";
+      radixSortOnCpu(order_entries);
+    } catch (const std::bad_alloc&) {
+      LOG(WARNING) << "Out of GPU memory during sort, finish on CPU";
+      radixSortOnCpu(order_entries);
+    }
     return;
   }
   // This check isn't strictly required, but allows the index buffer to be 32-bit.
@@ -127,13 +139,16 @@ std::function<bool(const uint32_t, const uint32_t)> ResultSet::createComparator(
       CHECK_GE(order_entry.tle_no, 1);
       const auto& entry_ti = get_compact_type(targets_[order_entry.tle_no - 1]);
       const auto is_dict = entry_ti.is_string() && entry_ti.get_compression() == kENCODING_DICT;
-      if (storage_->isEmptyEntry(lhs, storage_->buff_) && storage_->isEmptyEntry(rhs, storage_->buff_)) {
+      if (storage_->isEmptyEntry(lhs, storage_->getUnderlyingBuffer()) &&
+          storage_->isEmptyEntry(rhs, storage_->getUnderlyingBuffer())) {
         return false;
       }
-      if (storage_->isEmptyEntry(lhs, storage_->buff_) && !storage_->isEmptyEntry(rhs, storage_->buff_)) {
+      if (storage_->isEmptyEntry(lhs, storage_->getUnderlyingBuffer()) &&
+          !storage_->isEmptyEntry(rhs, storage_->getUnderlyingBuffer())) {
         return use_heap;
       }
-      if (storage_->isEmptyEntry(rhs, storage_->buff_) && !storage_->isEmptyEntry(lhs, storage_->buff_)) {
+      if (storage_->isEmptyEntry(rhs, storage_->getUnderlyingBuffer()) &&
+          !storage_->isEmptyEntry(lhs, storage_->getUnderlyingBuffer())) {
         return !use_heap;
       }
       const auto lhs_v = getColumnInternal(lhs, order_entry.tle_no - 1);
@@ -221,17 +236,17 @@ bool ResultSet::isEmptyInitializer() const {
   return targets_.empty();
 }
 
-void ResultSet::sortOnGpu(const std::list<Analyzer::OrderEntry>& order_entries) const {
-  auto data_mgr = &query_mem_desc_.executor_->catalog_->get_dataMgr();
+void ResultSet::radixSortOnGpu(const std::list<Analyzer::OrderEntry>& order_entries) const {
+  auto data_mgr = &executor_->catalog_->get_dataMgr();
   const int device_id{0};
-  std::vector<int64_t*> group_by_buffers(query_mem_desc_.executor_->blockSize());
-  group_by_buffers[0] = reinterpret_cast<int64_t*>(storage_->buff_);
+  std::vector<int64_t*> group_by_buffers(executor_->blockSize());
+  group_by_buffers[0] = reinterpret_cast<int64_t*>(storage_->getUnderlyingBuffer());
   auto gpu_query_mem = create_dev_group_by_buffers(data_mgr,
                                                    group_by_buffers,
                                                    {},
                                                    query_mem_desc_,
-                                                   query_mem_desc_.executor_->blockSize(),
-                                                   query_mem_desc_.executor_->gridSize(),
+                                                   executor_->blockSize(),
+                                                   executor_->gridSize(),
                                                    device_id,
                                                    true,
                                                    true,
@@ -240,74 +255,50 @@ void ResultSet::sortOnGpu(const std::list<Analyzer::OrderEntry>& order_entries) 
   for (const auto& wid : query_mem_desc_.agg_col_widths) {
     max_entry_size = std::max(max_entry_size, size_t(wid.compact));
   }
-  ScopedScratchBuffer scratch_buff(query_mem_desc_.entry_count * max_entry_size, data_mgr, device_id);
-  auto tmp_buff = reinterpret_cast<int64_t*>(scratch_buff.getPtr());
-  CHECK_EQ(size_t(1), order_entries.size());
-  const auto idx_buff =
-      gpu_query_mem.group_by_buffers.second - align_to_int64(query_mem_desc_.entry_count * sizeof(int32_t));
-  for (const auto& order_entry : order_entries) {
-    const auto target_idx = order_entry.tle_no - 1;
-    const auto val_buff = gpu_query_mem.group_by_buffers.second + query_mem_desc_.getColOffInBytes(0, target_idx);
-    const auto chosen_bytes = query_mem_desc_.agg_col_widths[target_idx].compact;
-    sort_groups_gpu(reinterpret_cast<int64_t*>(val_buff),
-                    reinterpret_cast<int32_t*>(idx_buff),
-                    query_mem_desc_.entry_count,
-                    order_entry.is_desc,
-                    chosen_bytes);
-    if (!query_mem_desc_.keyless_hash) {
-      apply_permutation_gpu(reinterpret_cast<int64_t*>(gpu_query_mem.group_by_buffers.second),
-                            reinterpret_cast<int32_t*>(idx_buff),
-                            query_mem_desc_.entry_count,
-                            tmp_buff,
-                            sizeof(int64_t));
-    }
-    for (size_t target_idx = 0; target_idx < query_mem_desc_.agg_col_widths.size(); ++target_idx) {
-      if (static_cast<int>(target_idx) == order_entry.tle_no - 1) {
-        continue;
-      }
-      const auto chosen_bytes = query_mem_desc_.agg_col_widths[target_idx].compact;
-      const auto val_buff = gpu_query_mem.group_by_buffers.second + query_mem_desc_.getColOffInBytes(0, target_idx);
-      apply_permutation_gpu(reinterpret_cast<int64_t*>(val_buff),
-                            reinterpret_cast<int32_t*>(idx_buff),
-                            query_mem_desc_.entry_count,
-                            tmp_buff,
-                            chosen_bytes);
-    }
+  if (!query_mem_desc_.keyless_hash) {
+    max_entry_size = std::max(max_entry_size, sizeof(int64_t));
   }
+  ScopedScratchBuffer scratch_buff(query_mem_desc_.entry_count * max_entry_size, data_mgr, device_id);
+  ResultRows::inplaceSortGpuImpl(
+      order_entries, query_mem_desc_, gpu_query_mem, reinterpret_cast<int64_t*>(scratch_buff.getPtr()));
   copy_group_by_buffers_from_gpu(data_mgr,
                                  group_by_buffers,
                                  query_mem_desc_.getBufferSizeBytes(ExecutorDeviceType::GPU),
                                  gpu_query_mem.group_by_buffers.second,
                                  query_mem_desc_,
-                                 query_mem_desc_.executor_->blockSize(),
-                                 query_mem_desc_.executor_->gridSize(),
+                                 executor_->blockSize(),
+                                 executor_->gridSize(),
                                  device_id,
                                  false);
 }
 
-void ResultSet::sortOnCpu(const std::list<Analyzer::OrderEntry>& order_entries) const {
+void ResultSet::radixSortOnCpu(const std::list<Analyzer::OrderEntry>& order_entries) const {
   CHECK(!query_mem_desc_.keyless_hash);
-  CHECK(storage_->buff_);
   std::vector<int64_t> tmp_buff(query_mem_desc_.entry_count);
   std::vector<int32_t> idx_buff(query_mem_desc_.entry_count);
   CHECK_EQ(size_t(1), order_entries.size());
-  auto i64_buff = reinterpret_cast<int64_t*>(storage_->buff_);
+  auto buffer_ptr = storage_->getUnderlyingBuffer();
   for (const auto& order_entry : order_entries) {
     const auto target_idx = order_entry.tle_no - 1;
-    const auto sortkey_val_buff = i64_buff + order_entry.tle_no * query_mem_desc_.entry_count;
+    const auto sortkey_val_buff =
+        reinterpret_cast<int64_t*>(buffer_ptr + query_mem_desc_.getColOffInBytes(0, target_idx));
     const auto chosen_bytes = query_mem_desc_.agg_col_widths[target_idx].compact;
     sort_groups_cpu(sortkey_val_buff, &idx_buff[0], query_mem_desc_.entry_count, order_entry.is_desc, chosen_bytes);
-    apply_permutation_cpu(i64_buff, &idx_buff[0], query_mem_desc_.entry_count, &tmp_buff[0], sizeof(int64_t));
+    apply_permutation_cpu(reinterpret_cast<int64_t*>(buffer_ptr),
+                          &idx_buff[0],
+                          query_mem_desc_.entry_count,
+                          &tmp_buff[0],
+                          sizeof(int64_t));
     for (size_t target_idx = 0; target_idx < query_mem_desc_.agg_col_widths.size(); ++target_idx) {
       if (static_cast<int>(target_idx) == order_entry.tle_no - 1) {
         continue;
       }
       const auto chosen_bytes = query_mem_desc_.agg_col_widths[target_idx].compact;
-      const auto satellite_val_buff = i64_buff + (target_idx + 1) * query_mem_desc_.entry_count;
+      const auto satellite_val_buff =
+          reinterpret_cast<int64_t*>(buffer_ptr + query_mem_desc_.getColOffInBytes(0, target_idx));
       apply_permutation_cpu(satellite_val_buff, &idx_buff[0], query_mem_desc_.entry_count, &tmp_buff[0], chosen_bytes);
     }
   }
-  CHECK(false);
 }
 
 namespace {

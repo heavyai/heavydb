@@ -120,9 +120,9 @@ class ResultSet {
 
   size_t entryCount() const;
 
-  void sortOnGpu(const std::list<Analyzer::OrderEntry>& order_entries) const;
+  void radixSortOnGpu(const std::list<Analyzer::OrderEntry>& order_entries) const;
 
-  void sortOnCpu(const std::list<Analyzer::OrderEntry>& order_entries) const;
+  void radixSortOnCpu(const std::list<Analyzer::OrderEntry>& order_entries) const;
 
   void fetchLazy(const std::vector<ssize_t> lazy_col_local_ids,
                  const std::vector<std::vector<const int8_t*>>& col_buffers) const;
