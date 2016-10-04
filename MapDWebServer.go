@@ -29,19 +29,20 @@ import (
 )
 
 var (
-	port        int
-	backendUrl  *url.URL
-	frontend    string
-	serversJson string
-	dataDir     string
-	tmpDir      string
-	certFile    string
-	keyFile     string
-	readOnly    bool
-	quiet       bool
-	enableHttps bool
-	profile     bool
-	compress    bool
+	port          int
+	backendUrl    *url.URL
+	frontend      string
+	serversJson   string
+	dataDir       string
+	tmpDir        string
+	certFile      string
+	keyFile       string
+	readOnly      bool
+	quiet         bool
+	enableHttps   bool
+	profile       bool
+	compress      bool
+	enableMetrics bool
 )
 
 var (
@@ -95,7 +96,7 @@ func init() {
 	pflag.StringP("key", "", "key.pem", "key file for HTTPS")
 	pflag.Bool("profile", false, "enable profiling, accessible from /debug/pprof")
 	pflag.Bool("compress", false, "enable gzip compression")
-	pflag.Bool("metrics", false, "enable Thrift call metrics, accessible from /debug/metrics")
+	pflag.Bool("metrics", false, "enable Thrift call metrics, accessible from /metrics")
 	pflag.CommandLine.MarkHidden("compress")
 	pflag.CommandLine.MarkHidden("profile")
 	pflag.CommandLine.MarkHidden("metrics")
@@ -111,6 +112,7 @@ func init() {
 	viper.BindPFlag("web.key", pflag.CommandLine.Lookup("key"))
 	viper.BindPFlag("web.profile", pflag.CommandLine.Lookup("profile"))
 	viper.BindPFlag("web.compress", pflag.CommandLine.Lookup("compress"))
+	viper.BindPFlag("web.metrics", pflag.CommandLine.Lookup("metrics"))
 
 	viper.BindPFlag("data", pflag.CommandLine.Lookup("data"))
 	viper.BindPFlag("tmpdir", pflag.CommandLine.Lookup("tmpdir"))
@@ -147,6 +149,7 @@ func init() {
 	quiet = viper.GetBool("quiet")
 	profile = viper.GetBool("web.profile")
 	compress = viper.GetBool("web.compress")
+	enableMetrics = viper.GetBool("web.metrics")
 
 	backendUrlStr := viper.GetString("web.backend-url")
 	if backendUrlStr == "" {
@@ -303,6 +306,11 @@ func (w *ResponseMultiWriter) Write(b []byte) (int, error) {
 // TODO(andrew): use proper Thrift-generated parser
 func thriftTimingHandler(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		if !enableMetrics || r.Method != "POST" || (r.Method == "POST" && r.URL.Path != "/") {
+			h.ServeHTTP(rw, r)
+			return
+		}
+
 		var thriftMethod string
 		body, _ := ioutil.ReadAll(r.Body)
 		r.Body = ioutil.NopCloser(bytes.NewReader(body))
@@ -312,7 +320,7 @@ func thriftTimingHandler(h http.Handler) http.Handler {
 			thriftMethod = strings.Trim(elems[1], `"`)
 		}
 
-		if r.Method != "POST" || len(thriftMethod) < 1 || (r.Method == "POST" && r.URL.Path != "/") {
+		if len(thriftMethod) < 1 {
 			h.ServeHTTP(rw, r)
 			return
 		}
@@ -350,6 +358,11 @@ func thriftTimingHandler(h http.Handler) http.Handler {
 }
 
 func metricsHandler(rw http.ResponseWriter, r *http.Request) {
+	if len(r.FormValue("enable")) > 0 {
+		enableMetrics = true
+	} else if len(r.FormValue("disable")) > 0 {
+		enableMetrics = false
+	}
 	jsonBuf := new(bytes.Buffer)
 	metrics.WriteJSONOnce(registry, jsonBuf)
 	ijsonBuf := new(bytes.Buffer)
