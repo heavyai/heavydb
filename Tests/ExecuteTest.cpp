@@ -452,7 +452,7 @@ TEST(Select, FilterAndMultipleAggregation) {
     SKIP_NO_GPU();
     c("SELECT AVG(x), AVG(y) FROM test;", dt);
     c("SELECT MIN(x), AVG(x * y), MAX(y + 7), COUNT(*) FROM test WHERE x + y > 47 AND x + y < 51;", dt);
-    c("SELECT str, AVG(x), COUNT(*) as xx, COUNT(*) as countval FROM test GROUP BY str ORDER BY countval;", dt);
+    c("SELECT str, AVG(x), COUNT(*) as xx, COUNT(*) as countval FROM test GROUP BY str ORDER BY str;", dt);
   }
 }
 
@@ -462,7 +462,7 @@ TEST(Select, FilterAndGroupBy) {
     c("SELECT MIN(x + y) FROM test WHERE x + y > 47 AND x + y < 53 GROUP BY x, y;", dt);
     c("SELECT MIN(x + y) FROM test WHERE x + y > 47 AND x + y < 53 GROUP BY x + 1, x + y;", dt);
     c("SELECT x, y, COUNT(*) FROM test GROUP BY x, y;", dt);
-    c("SELECT x, dd, COUNT(*) FROM test GROUP BY x, dd ORDER BY x;", dt);
+    c("SELECT x, dd, COUNT(*) FROM test GROUP BY x, dd ORDER BY x, dd;", dt);
     c("SELECT dd AS key1, COUNT(*) AS value1 FROM test GROUP BY key1 HAVING key1 IS NOT NULL ORDER BY key1, value1 "
       "DESC "
       "LIMIT 12;",
@@ -500,8 +500,8 @@ TEST(Select, Having) {
     c("SELECT str, COUNT(*) AS n FROM test GROUP BY str HAVING str LIKE 'ba_' ORDER BY str;", dt);
     c("SELECT ss, COUNT(*) AS n FROM test GROUP BY ss HAVING ss LIKE 'bo_' ORDER BY ss;", dt);
     c("SELECT x, COUNT(*) FROM test WHERE x > 9 GROUP BY x HAVING x > 15;", dt);
-    c("SELECT x, AVG(y), AVG(y) FROM test GROUP BY x HAVING x >= 0;", dt);
-    c("SELECT AVG(y), x, AVG(y) FROM test GROUP BY x HAVING x >= 0;", dt);
+    c("SELECT x, AVG(y), AVG(y) FROM test GROUP BY x HAVING x >= 0 ORDER BY x;", dt);
+    c("SELECT AVG(y), x, AVG(y) FROM test GROUP BY x HAVING x >= 0 ORDER BY x;", dt);
     c("SELECT x, y, COUNT(*) FROM test WHERE real_str LIKE 'nope%' GROUP BY x, y HAVING x >= 0 AND x < 12 AND y >= 0 "
       "AND y < 12 ORDER BY x, y;",
       dt);
@@ -1948,7 +1948,8 @@ TEST(Select, Empty) {
 TEST(Select, Subqueries) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-    c("SELECT str, SUM(y) AS n FROM test WHERE x > (SELECT COUNT(*) FROM test) - 14 GROUP BY str ORDER BY n ASC;", dt);
+    c("SELECT str, SUM(y) AS n FROM test WHERE x > (SELECT COUNT(*) FROM test) - 14 GROUP BY str ORDER BY str ASC;",
+      dt);
     c("SELECT COUNT(*) FROM test, (SELECT x FROM test_inner) AS inner_x WHERE test.x = inner_x.x;", dt);
     c("SELECT COUNT(*) FROM test WHERE x IN (SELECT x FROM test WHERE y > 42);", dt);
     c("SELECT COUNT(*) FROM test WHERE x IN (SELECT x FROM test GROUP BY x ORDER BY COUNT(*) DESC LIMIT 1);", dt);
