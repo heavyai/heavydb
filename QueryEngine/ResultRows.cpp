@@ -1830,8 +1830,8 @@ RowSetPtr QueryExecutionContext::groupBufferToResults(const size_t i,
                                                       const std::vector<Analyzer::Expr*>& targets,
                                                       const bool was_auto_device) const {
   if (can_use_result_set(query_mem_desc_, device_type_)) {
-    CHECK(result_set_);
-    return boost::make_unique<ResultRows>(std::shared_ptr<ResultSet>(result_set_.release()));
+    CHECK_LT(i, result_sets_.size());
+    return boost::make_unique<ResultRows>(std::shared_ptr<ResultSet>(result_sets_[i].release()));
   }
   const size_t group_by_col_count{query_mem_desc_.group_col_widths.size()};
   const size_t agg_col_count{query_mem_desc_.agg_col_widths.size()};
