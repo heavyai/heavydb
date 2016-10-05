@@ -35,7 +35,8 @@ class ResultSetStorage {
 
   void reduceOneEntryNoCollisionsRowWise(const size_t i, int8_t* this_buff, const int8_t* that_buff) const;
 
-  bool isEmptyEntry(const size_t i, const int8_t* buff) const;
+  bool isEmptyEntry(const size_t entry_idx, const int8_t* buff) const;
+  bool isEmptyEntry(const size_t entry_idx) const;
 
   void reduceOneEntryBaseline(int8_t* this_buff,
                               const int8_t* that_buff,
@@ -191,7 +192,11 @@ class ResultSet {
                               const bool translate_strings,
                               const bool decimal_to_double) const;
 
-  InternalTargetValue getColumnInternal(const size_t entry_idx, const size_t col_idx) const;
+  InternalTargetValue getColumnInternal(const int8_t* buff, const size_t entry_idx, const size_t col_idx) const;
+
+  std::pair<ssize_t, size_t> getStorageIndex(const size_t entry_idx) const;
+
+  std::pair<const ResultSetStorage*, size_t> findStorage(const size_t entry_idx) const;
 
   std::function<bool(const uint32_t, const uint32_t)> createComparator(
       const std::list<Analyzer::OrderEntry>& order_entries,
@@ -203,7 +208,7 @@ class ResultSet {
 
   const std::vector<TargetInfo> targets_;
   const ExecutorDeviceType device_type_;
-  const QueryMemoryDescriptor query_mem_desc_;
+  QueryMemoryDescriptor query_mem_desc_;
   mutable std::unique_ptr<ResultSetStorage> storage_;
   std::vector<std::unique_ptr<ResultSetStorage>> appended_storage_;
   mutable size_t crt_row_buff_idx_;

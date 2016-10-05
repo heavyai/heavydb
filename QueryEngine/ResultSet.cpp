@@ -104,9 +104,10 @@ const ResultSetStorage* ResultSet::allocateStorage(const std::vector<int64_t>& t
 }
 
 void ResultSet::append(ResultSet& that) {
-  CHECK(that.appended_storage_.empty());
+  CHECK(!query_mem_desc_.output_columnar);  // TODO(miyu)
   appended_storage_.push_back(std::move(that.storage_));
-  CHECK(false);
+  query_mem_desc_.entry_count += appended_storage_.back()->query_mem_desc_.entry_count;
+  query_mem_desc_.entry_count_small += appended_storage_.back()->query_mem_desc_.entry_count_small;
 }
 
 const ResultSetStorage* ResultSet::getStorage() const {
@@ -240,7 +241,7 @@ void ResultSet::sort(const std::list<Analyzer::OrderEntry>& order_entries, const
   if (query_mem_desc_.entry_count > std::numeric_limits<uint32_t>::max()) {
     throw RowSortException("Sorting more than 4B elements not supported");
   }
-  CHECK_EQ(size_t(0), query_mem_desc_.entry_count_small);  // TODO(alex)
+  CHECK(size_t(0) == query_mem_desc_.entry_count_small || !query_mem_desc_.output_columnar);  // TODO(alex)
   CHECK(permutation_.empty());
   permutation_.resize(entryCount());
   // TODO(miyu): deempty underlying buffer esp. for baseline hashing.
@@ -249,7 +250,7 @@ void ResultSet::sort(const std::list<Analyzer::OrderEntry>& order_entries, const
   CHECK(!query_mem_desc_.sortOnGpu());  // TODO(alex)
   const bool use_heap{order_entries.size() == 1 && top_n};
   auto compare = createComparator(order_entries, use_heap);
-  if (g_enable_watchdog && (query_mem_desc_.entry_count + query_mem_desc_.entry_count_small > 100000)) {
+  if (g_enable_watchdog && (entryCount() > 100000)) {
     throw WatchdogException("Sorting the result would be too slow");
   }
   if (use_heap) {
@@ -257,6 +258,41 @@ void ResultSet::sort(const std::list<Analyzer::OrderEntry>& order_entries, const
   } else {
     sortPermutation(compare);
   }
+}
+
+std::pair<ssize_t, size_t> ResultSet::getStorageIndex(const size_t entry_idx) const {
+  size_t fixedup_entry_idx = entry_idx;
+  auto entry_count = storage_->query_mem_desc_.entry_count;
+  const bool is_rowwise_layout = !storage_->query_mem_desc_.output_columnar;
+  if (is_rowwise_layout) {
+    entry_count += storage_->query_mem_desc_.entry_count_small;
+  }
+  if (fixedup_entry_idx < entry_count) {
+    return {0, fixedup_entry_idx};
+  }
+  fixedup_entry_idx -= entry_count;
+  for (size_t i = 0; i < appended_storage_.size(); ++i) {
+    const auto desc = appended_storage_[i]->query_mem_desc_;
+    CHECK_NE(is_rowwise_layout, desc.output_columnar);
+    entry_count = desc.entry_count;
+    if (is_rowwise_layout) {
+      entry_count += desc.entry_count_small;
+    }
+    if (fixedup_entry_idx < entry_count) {
+      return {i + 1, fixedup_entry_idx};
+    }
+    fixedup_entry_idx -= entry_count;
+  }
+  CHECK(false);
+  return {-1, entry_idx};
+}
+
+std::pair<const ResultSetStorage*, size_t> ResultSet::findStorage(const size_t entry_idx) const {
+  ssize_t stg_idx{-1};
+  size_t fixedup_entry_idx{entry_idx};
+  std::tie(stg_idx, fixedup_entry_idx) = getStorageIndex(entry_idx);
+  CHECK_LE(ssize_t(0), stg_idx);
+  return {stg_idx ? appended_storage_[stg_idx - 1].get() : storage_.get(), fixedup_entry_idx};
 }
 
 #define LIKELY(x) __builtin_expect(!!(x), 1)
@@ -268,24 +304,27 @@ std::function<bool(const uint32_t, const uint32_t)> ResultSet::createComparator(
   return [this, &order_entries, use_heap](const uint32_t lhs, const uint32_t rhs) {
     // NB: The compare function must define a strict weak ordering, otherwise
     // std::sort will trigger a segmentation fault (or corrupt memory).
+    const ResultSetStorage* lhs_storage{nullptr};
+    const ResultSetStorage* rhs_storage{nullptr};
+    size_t fixedup_lhs{lhs};
+    size_t fixedup_rhs{rhs};
+    std::tie(lhs_storage, fixedup_lhs) = findStorage(lhs);
+    std::tie(rhs_storage, fixedup_rhs) = findStorage(rhs);
     for (const auto order_entry : order_entries) {
       CHECK_GE(order_entry.tle_no, 1);
       const auto& entry_ti = get_compact_type(targets_[order_entry.tle_no - 1]);
       const auto is_dict = entry_ti.is_string() && entry_ti.get_compression() == kENCODING_DICT;
-      if (storage_->isEmptyEntry(lhs, storage_->getUnderlyingBuffer()) &&
-          storage_->isEmptyEntry(rhs, storage_->getUnderlyingBuffer())) {
+      if (lhs_storage->isEmptyEntry(fixedup_lhs) && rhs_storage->isEmptyEntry(fixedup_rhs)) {
         return false;
       }
-      if (storage_->isEmptyEntry(lhs, storage_->getUnderlyingBuffer()) &&
-          !storage_->isEmptyEntry(rhs, storage_->getUnderlyingBuffer())) {
+      if (lhs_storage->isEmptyEntry(fixedup_lhs) && !rhs_storage->isEmptyEntry(fixedup_rhs)) {
         return use_heap;
       }
-      if (storage_->isEmptyEntry(rhs, storage_->getUnderlyingBuffer()) &&
-          !storage_->isEmptyEntry(lhs, storage_->getUnderlyingBuffer())) {
+      if (rhs_storage->isEmptyEntry(fixedup_rhs) && !lhs_storage->isEmptyEntry(fixedup_lhs)) {
         return !use_heap;
       }
-      const auto lhs_v = getColumnInternal(lhs, order_entry.tle_no - 1);
-      const auto rhs_v = getColumnInternal(rhs, order_entry.tle_no - 1);
+      const auto lhs_v = getColumnInternal(lhs_storage->buff_, fixedup_lhs, order_entry.tle_no - 1);
+      const auto rhs_v = getColumnInternal(rhs_storage->buff_, fixedup_rhs, order_entry.tle_no - 1);
       if (UNLIKELY(isNull(entry_ti, lhs_v) && isNull(entry_ti, rhs_v))) {
         return false;
       }

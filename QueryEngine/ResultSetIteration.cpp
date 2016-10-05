@@ -109,7 +109,7 @@ std::vector<TargetValue> ResultSet::getNextRow(const bool translate_strings, con
 }
 
 std::vector<TargetValue> ResultSet::getNextRowImpl(const bool translate_strings, const bool decimal_to_double) const {
-  const auto entry_buff_idx = advanceCursorToNextEntry();
+  auto entry_buff_idx = advanceCursorToNextEntry();
   if (keep_first_ && crt_row_buff_idx_ >= drop_first_ + keep_first_) {
     return {};
   }
@@ -117,7 +117,9 @@ std::vector<TargetValue> ResultSet::getNextRowImpl(const bool translate_strings,
     CHECK_EQ(entryCount(), crt_row_buff_idx_);
     return {};
   }
-  const auto buff = storage_->buff_;
+  const ResultSetStorage* storage{nullptr};
+  std::tie(storage, entry_buff_idx) = findStorage(entry_buff_idx);
+  const auto buff = storage->buff_;
   CHECK(buff);
   std::vector<TargetValue> row;
   size_t agg_col_idx = 0;
@@ -171,8 +173,9 @@ const int8_t* columnar_elem_ptr(const size_t entry_idx, const int8_t* col1_ptr, 
 
 }  // namespace
 
-InternalTargetValue ResultSet::getColumnInternal(const size_t entry_idx, const size_t col_idx) const {
-  const auto buff = storage_->buff_;
+InternalTargetValue ResultSet::getColumnInternal(const int8_t* buff,
+                                                 const size_t entry_idx,
+                                                 const size_t col_idx) const {
   CHECK(buff);
   const auto buffer_col_count = get_buffer_col_slot_count(storage_->query_mem_desc_);
   const int8_t* rowwise_target_ptr{nullptr};
@@ -236,12 +239,13 @@ InternalTargetValue ResultSet::getColumnInternal(const size_t entry_idx, const s
 // Not all entries in the buffer represent a valid row. Advance the internal cursor
 // used for the getNextRow method to the next row which is valid.
 size_t ResultSet::advanceCursorToNextEntry() const {
-  CHECK(GroupByColRangeType::OneColKnownRange == storage_->query_mem_desc_.hash_type ||
-        GroupByColRangeType::MultiColPerfectHash == storage_->query_mem_desc_.hash_type ||
-        GroupByColRangeType::MultiCol == storage_->query_mem_desc_.hash_type);
+  CHECK(GroupByColRangeType::Scan != storage_->query_mem_desc_.hash_type);
   while (crt_row_buff_idx_ < entryCount()) {
+    const ResultSetStorage* storage{nullptr};
     const auto entry_idx = permutation_.empty() ? crt_row_buff_idx_ : permutation_[crt_row_buff_idx_];
-    if (!storage_->isEmptyEntry(entry_idx, storage_->buff_)) {
+    size_t fixedup_entry_idx{entry_idx};
+    std::tie(storage, fixedup_entry_idx) = findStorage(entry_idx);
+    if (!storage->isEmptyEntry(fixedup_entry_idx)) {
       break;
     }
     ++crt_row_buff_idx_;
@@ -254,7 +258,7 @@ size_t ResultSet::advanceCursorToNextEntry() const {
 }
 
 size_t ResultSet::entryCount() const {
-  return permutation_.empty() ? query_mem_desc_.entry_count : permutation_.size();
+  return permutation_.empty() ? (query_mem_desc_.entry_count + query_mem_desc_.entry_count_small) : permutation_.size();
 }
 
 // Reads an integer or a float from ptr based on the type and the byte width.
@@ -365,9 +369,7 @@ TargetValue ResultSet::getTargetValueFromBufferRowwise(const int8_t* rowwise_tar
 
 // Returns true iff the entry at position entry_idx in buff contains a valid row.
 bool ResultSetStorage::isEmptyEntry(const size_t entry_idx, const int8_t* buff) const {
-  CHECK(query_mem_desc_.hash_type == GroupByColRangeType::OneColKnownRange ||
-        query_mem_desc_.hash_type == GroupByColRangeType::MultiColPerfectHash ||
-        query_mem_desc_.hash_type == GroupByColRangeType::MultiCol);
+  CHECK(query_mem_desc_.hash_type != GroupByColRangeType::Scan);
   if (query_mem_desc_.keyless_hash) {
     CHECK(query_mem_desc_.hash_type == GroupByColRangeType::OneColKnownRange ||
           query_mem_desc_.hash_type == GroupByColRangeType::MultiColPerfectHash);
@@ -395,6 +397,10 @@ bool ResultSetStorage::isEmptyEntry(const size_t entry_idx, const int8_t* buff) 
   }
   const auto keys_ptr = row_ptr_rowwise(buff, query_mem_desc_, entry_idx);
   return *reinterpret_cast<const int64_t*>(keys_ptr) == EMPTY_KEY_64;
+}
+
+bool ResultSetStorage::isEmptyEntry(const size_t entry_idx) const {
+  return isEmptyEntry(entry_idx, buff_);
 }
 
 bool ResultSet::isNull(const SQLTypeInfo& ti, const InternalTargetValue& val) {
