@@ -935,6 +935,9 @@ bool match_sort_seq(rapidjson::Value::ConstValueIterator& rels_it,
   if (op_name != std::string("LogicalSort")) {
     return false;
   }
+  if (rels_it == rels_end) {
+    return true;
+  }
   op_name = get_op_name(*rels_it++);
   if (op_name != std::string("LogicalProject")) {
     return false;
