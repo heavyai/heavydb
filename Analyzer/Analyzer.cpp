@@ -91,6 +91,9 @@ std::shared_ptr<Analyzer::Expr> RegexpExpr::deep_copy() const {
       arg->deep_copy(), pattern_expr->deep_copy(), escape_expr ? escape_expr->deep_copy() : nullptr);
 }
 
+std::shared_ptr<Analyzer::Expr> LikelihoodExpr::deep_copy() const {
+  return makeExpr<LikelihoodExpr>(arg->deep_copy(), likelihood);
+}
 std::shared_ptr<Analyzer::Expr> AggExpr::deep_copy() const {
   return makeExpr<AggExpr>(type_info, aggtype, arg == nullptr ? nullptr : arg->deep_copy(), is_distinct);
 }
@@ -1072,6 +1075,19 @@ void RegexpExpr::group_predicates(std::list<const Expr*>& scan_predicates,
     const_predicates.push_back(this);
 }
 
+void LikelihoodExpr::group_predicates(std::list<const Expr*>& scan_predicates,
+                                      std::list<const Expr*>& join_predicates,
+                                      std::list<const Expr*>& const_predicates) const {
+  std::set<int> rte_idx_set;
+  arg->collect_rte_idx(rte_idx_set);
+  if (rte_idx_set.size() > 1)
+    join_predicates.push_back(this);
+  else if (rte_idx_set.size() == 1)
+    scan_predicates.push_back(this);
+  else
+    const_predicates.push_back(this);
+}
+
 void AggExpr::group_predicates(std::list<const Expr*>& scan_predicates,
                                std::list<const Expr*>& join_predicates,
                                std::list<const Expr*>& const_predicates) const {
@@ -1452,6 +1468,17 @@ bool RegexpExpr::operator==(const Expr& rhs) const {
   return false;
 }
 
+bool LikelihoodExpr::operator==(const Expr& rhs) const {
+  if (typeid(rhs) != typeid(LikelihoodExpr))
+    return false;
+  const LikelihoodExpr& rhs_l = dynamic_cast<const LikelihoodExpr&>(rhs);
+  if (!(*arg == *rhs_l.get_arg()))
+    return false;
+  if (likelihood != rhs_l.get_likelihood())
+    return false;
+  return true;
+}
+
 bool InValues::operator==(const Expr& rhs) const {
   if (typeid(rhs) != typeid(InValues))
     return false;
@@ -1674,6 +1701,12 @@ void RegexpExpr::print() const {
   std::cout << ") ";
 }
 
+void LikelihoodExpr::print() const {
+  std::cout << "(LIKELIHOOD ";
+  arg->print();
+  std::cout << " " << likelihood << ") ";
+}
+
 void AggExpr::print() const {
   std::string agg;
   switch (aggtype) {
@@ -1828,6 +1861,14 @@ void RegexpExpr::find_expr(bool (*f)(const Expr*), std::list<const Expr*>& expr_
   pattern_expr->find_expr(f, expr_list);
   if (escape_expr != nullptr)
     escape_expr->find_expr(f, expr_list);
+}
+
+void LikelihoodExpr::find_expr(bool (*f)(const Expr*), std::list<const Expr*>& expr_list) const {
+  if (f(this)) {
+    add_unique(expr_list);
+    return;
+  }
+  arg->find_expr(f, expr_list);
 }
 
 void AggExpr::find_expr(bool (*f)(const Expr*), std::list<const Expr*>& expr_list) const {

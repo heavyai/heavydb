@@ -442,6 +442,30 @@ class RegexpExpr : public Expr {
 };
 
 /*
+ * @type LikelihoodExpr
+ * @brief expression for LIKELY, UNLIKELY
+ */
+class LikelihoodExpr : public Expr {
+ public:
+  LikelihoodExpr(bool n, Expr* a, float l) : is_not(n), arg(a), likelihood(l) {}
+  bool get_is_not() const { return is_not; }
+  const Expr* get_arg() const { return arg.get(); }
+  float get_likelihood() const { return likelihood; }
+  virtual std::shared_ptr<Analyzer::Expr> analyze(const Catalog_Namespace::Catalog& catalog,
+                                                  Analyzer::Query& query,
+                                                  TlistRefType allow_tlist_ref = TLIST_NONE) const;
+  static std::shared_ptr<Analyzer::Expr> get(std::shared_ptr<Analyzer::Expr> arg_expr,
+                                             float likelihood,
+                                             const bool is_not);
+  virtual std::string to_string() const;
+
+ private:
+  bool is_not;
+  std::unique_ptr<Expr> arg;
+  float likelihood;
+};
+
+/*
  * @type ExistsExpr
  * @brief expression for EXISTS (subquery)
  */

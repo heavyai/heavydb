@@ -424,6 +424,23 @@ std::shared_ptr<Analyzer::Expr> RegexpExpr::get(std::shared_ptr<Analyzer::Expr> 
   return result;
 }
 
+std::shared_ptr<Analyzer::Expr> LikelihoodExpr::analyze(const Catalog_Namespace::Catalog& catalog,
+                                                        Analyzer::Query& query,
+                                                        TlistRefType allow_tlist_ref) const {
+  auto arg_expr = arg->analyze(catalog, query, allow_tlist_ref);
+  return LikelihoodExpr::get(arg_expr, likelihood, is_not);
+}
+
+std::shared_ptr<Analyzer::Expr> LikelihoodExpr::get(std::shared_ptr<Analyzer::Expr> arg_expr,
+                                                    float likelihood,
+                                                    const bool is_not) {
+  if (!arg_expr->get_type_info().is_boolean())
+    throw std::runtime_error("likelihood expression expects boolean type.");
+  std::shared_ptr<Analyzer::Expr> result =
+      makeExpr<Analyzer::LikelihoodExpr>(arg_expr->decompress(), is_not ? 1 - likelihood : likelihood);
+  return result;
+}
+
 std::shared_ptr<Analyzer::Expr> ExistsExpr::analyze(const Catalog_Namespace::Catalog& catalog,
                                                     Analyzer::Query& query,
                                                     TlistRefType allow_tlist_ref) const {
@@ -1329,6 +1346,14 @@ std::string RegexpExpr::to_string() const {
   str += pattern_string->to_string();
   if (escape_string != nullptr)
     str += " ESCAPE " + escape_string->to_string();
+  return str;
+}
+
+std::string LikelihoodExpr::to_string() const {
+  std::string str = " LIKELIHOOD ";
+  str += arg->to_string();
+  str += " ";
+  str += boost::lexical_cast<std::string>(is_not ? 1.0 - likelihood : likelihood);
   return str;
 }
 

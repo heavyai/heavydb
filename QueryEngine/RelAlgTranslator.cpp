@@ -257,6 +257,18 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateRegexp(const RexFunct
   return Parser::RegexpExpr::get(arg, pattern, escape, false);
 }
 
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLikely(const RexFunctionOperator* rex_function) const {
+  CHECK(rex_function->size() == 1);
+  const auto arg = translateScalarRex(rex_function->getOperand(0));
+  return makeExpr<Analyzer::LikelihoodExpr>(arg, 0.9375);
+}
+
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUnlikely(const RexFunctionOperator* rex_function) const {
+  CHECK(rex_function->size() == 1);
+  const auto arg = translateScalarRex(rex_function->getOperand(0));
+  return makeExpr<Analyzer::LikelihoodExpr>(arg, 0.0625);
+}
+
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateExtract(const RexFunctionOperator* rex_function) const {
   CHECK_EQ(size_t(2), rex_function->size());
   const auto timeunit = translateScalarRex(rex_function->getOperand(0));
@@ -402,6 +414,12 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(const RexFun
   }
   if (rex_function->getName() == std::string("REGEXP_LIKE")) {
     return translateRegexp(rex_function);
+  }
+  if (rex_function->getName() == std::string("LIKELY")) {
+    return translateLikely(rex_function);
+  }
+  if (rex_function->getName() == std::string("UNLIKELY")) {
+    return translateUnlikely(rex_function);
   }
   if (rex_function->getName() == std::string("PG_EXTRACT") || rex_function->getName() == std::string("PG_DATE_TRUNC")) {
     return translateExtract(rex_function);

@@ -109,6 +109,8 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
         opTab.addOperator(new CharLength());
         opTab.addOperator(new PgILike());
         opTab.addOperator(new RegexpLike());
+        opTab.addOperator(new Likely());
+        opTab.addOperator(new Unlikely());
         opTab.addOperator(new Sign());
         opTab.addOperator(new Truncate());
         if (extSigs == null) {
@@ -486,6 +488,44 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
             public boolean apply(Integer t) {
                 return t == 2;
             }
+        }
+
+        @Override
+        public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+            final RelDataTypeFactory typeFactory
+                    = opBinding.getTypeFactory();
+            return typeFactory.createSqlType(SqlTypeName.BOOLEAN);
+        }
+    }
+
+    public static class Likely extends SqlFunction {
+
+        public Likely() {
+            super("LIKELY",
+                    SqlKind.OTHER_FUNCTION,
+                    null,
+                    null,
+                    OperandTypes.BOOLEAN,
+                    SqlFunctionCategory.SYSTEM);
+        }
+
+        @Override
+        public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+            final RelDataTypeFactory typeFactory
+                    = opBinding.getTypeFactory();
+            return typeFactory.createSqlType(SqlTypeName.BOOLEAN);
+        }
+    }
+
+    public static class Unlikely extends SqlFunction {
+
+        public Unlikely() {
+            super("UNLIKELY",
+                    SqlKind.OTHER_FUNCTION,
+                    null,
+                    null,
+                    OperandTypes.BOOLEAN,
+                    SqlFunctionCategory.SYSTEM);
         }
 
         @Override

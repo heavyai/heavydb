@@ -646,6 +646,47 @@ class RegexpExpr : public Expr {
 };
 
 /*
+ * @type LikelihoodExpr
+ * @brief expression for LIKELY and UNLIKELY boolean identity functions.
+ */
+class LikelihoodExpr : public Expr {
+ public:
+  LikelihoodExpr(std::shared_ptr<Analyzer::Expr> a, float l = 0.5)
+      : Expr(kBOOLEAN, a->get_type_info().get_notnull()), arg(a), likelihood(l) {}
+  const Expr* get_arg() const { return arg.get(); }
+  const std::shared_ptr<Analyzer::Expr> get_own_arg() const { return arg; }
+  float get_likelihood() const { return likelihood; }
+  virtual std::shared_ptr<Analyzer::Expr> deep_copy() const;
+  virtual void group_predicates(std::list<const Expr*>& scan_predicates,
+                                std::list<const Expr*>& join_predicates,
+                                std::list<const Expr*>& const_predicates) const;
+  virtual void collect_rte_idx(std::set<int>& rte_idx_set) const { arg->collect_rte_idx(rte_idx_set); }
+  virtual void collect_column_var(std::set<const ColumnVar*, bool (*)(const ColumnVar*, const ColumnVar*)>& colvar_set,
+                                  bool include_agg) const {
+    arg->collect_column_var(colvar_set, include_agg);
+  }
+  virtual std::shared_ptr<Analyzer::Expr> rewrite_with_targetlist(
+      const std::vector<std::shared_ptr<TargetEntry>>& tlist) const {
+    return makeExpr<LikelihoodExpr>(arg->rewrite_with_targetlist(tlist), likelihood);
+  }
+  virtual std::shared_ptr<Analyzer::Expr> rewrite_with_child_targetlist(
+      const std::vector<std::shared_ptr<TargetEntry>>& tlist) const {
+    return makeExpr<LikelihoodExpr>(arg->rewrite_with_child_targetlist(tlist), likelihood);
+  }
+  virtual std::shared_ptr<Analyzer::Expr> rewrite_agg_to_var(
+      const std::vector<std::shared_ptr<TargetEntry>>& tlist) const {
+    return makeExpr<LikelihoodExpr>(arg->rewrite_agg_to_var(tlist), likelihood);
+  }
+  virtual bool operator==(const Expr& rhs) const;
+  virtual void print() const;
+  virtual void find_expr(bool (*f)(const Expr*), std::list<const Expr*>& expr_list) const;
+
+ private:
+  std::shared_ptr<Analyzer::Expr> arg;  // the argument to LIKELY, UNLIKELY
+  float likelihood;
+};
+
+/*
  * @type AggExpr
  * @brief expression for builtin SQL aggregates.
  */

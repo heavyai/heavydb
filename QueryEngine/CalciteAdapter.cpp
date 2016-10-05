@@ -146,6 +146,12 @@ class CalciteAdapter {
     if (op_str == std::string("REGEXP_LIKE")) {
       return translateRegexp(expr, scan_targets);
     }
+    if (op_str == std::string("LIKELY")) {
+      return translateLikely(expr, scan_targets);
+    }
+    if (op_str == std::string("UNLIKELY")) {
+      return translateUnlikely(expr, scan_targets);
+    }
     if (op_str == std::string("CASE")) {
       return translateCase(expr, scan_targets);
     }
@@ -276,6 +282,24 @@ class CalciteAdapter {
     auto rhs = getExprFromNode(operands[1], scan_targets);
     auto esc = operands.Size() > 2 ? getExprFromNode(operands[2], scan_targets) : nullptr;
     return Parser::RegexpExpr::get(lhs, rhs, esc, false);
+  }
+
+  std::shared_ptr<Analyzer::Expr> translateLikely(
+      const rapidjson::Value& expr,
+      const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& scan_targets) {
+    const auto& operands = expr["operands"];
+    CHECK_GE(operands.Size(), unsigned(1));
+    auto arg = getExprFromNode(operands[0], scan_targets);
+    return Parser::LikelihoodExpr::get(arg, 0.9375, false);
+  }
+
+  std::shared_ptr<Analyzer::Expr> translateUnlikely(
+      const rapidjson::Value& expr,
+      const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& scan_targets) {
+    const auto& operands = expr["operands"];
+    CHECK_GE(operands.Size(), unsigned(1));
+    auto arg = getExprFromNode(operands[0], scan_targets);
+    return Parser::LikelihoodExpr::get(arg, 0.0625, false);
   }
 
   std::shared_ptr<Analyzer::Expr> translateCase(
