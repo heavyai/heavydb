@@ -1838,6 +1838,7 @@ std::tuple<llvm::Value*, llvm::Value*> GroupByAndAggregate::codegenGroupBy(const
   std::stack<llvm::BasicBlock*> array_loops;
 
   if (ra_exe_unit_.scan_limit) {
+    CHECK(query_mem_desc_.hash_type == GroupByColRangeType::MultiCol);
     CHECK_EQ(size_t(1), ra_exe_unit_.groupby_exprs.size());
     const auto group_expr = ra_exe_unit_.groupby_exprs.front();
     CHECK(!group_expr);
