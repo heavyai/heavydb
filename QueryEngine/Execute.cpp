@@ -3089,18 +3089,61 @@ std::pair<int64_t, int32_t> Executor::reduceResults(const SQLAgg agg,
   CHECK(false);
 }
 
+namespace {
+
+template <typename PtrTy>
+PtrTy get_merged_result(const std::vector<std::pair<ResultPtr, std::vector<size_t>>>& results_per_device) {
+  auto& first = boost::get<PtrTy>(results_per_device.front().first);
+  CHECK(first);
+  auto copy = boost::make_unique<typename PtrTy::element_type>(*first);
+  CHECK(copy);
+  for (size_t dev_idx = 1; dev_idx < results_per_device.size(); ++dev_idx) {
+    const auto& next = boost::get<PtrTy>(results_per_device[dev_idx].first);
+    CHECK(next);
+    copy->append(*next);
+  }
+  return copy;
+}
+
+}  // namespace
+
+ResultPtr Executor::resultsUnion(ExecutionDispatch& execution_dispatch) {
+  auto& results_per_device = execution_dispatch.getFragmentResults();
+  if (results_per_device.empty()) {
+    const auto& ra_exe_unit = execution_dispatch.getExecutionUnit();
+    return boost::make_unique<ResultRows>(QueryMemoryDescriptor{},
+                                          ra_exe_unit.target_exprs,
+                                          nullptr,
+                                          nullptr,
+                                          std::vector<int64_t>{},
+                                          ExecutorDeviceType::CPU);
+  }
+  typedef std::pair<ResultPtr, std::vector<size_t>> IndexedResultRows;
+  std::sort(results_per_device.begin(),
+            results_per_device.end(),
+            [](const IndexedResultRows& lhs, const IndexedResultRows& rhs) {
+    CHECK_EQ(size_t(1), lhs.second.size());
+    CHECK_EQ(size_t(1), rhs.second.size());
+    return lhs.second < rhs.second;
+  });
+
+  if (boost::get<RowSetPtr>(&results_per_device.front().first)) {
+    return get_merged_result<RowSetPtr>(results_per_device);
+  } else if (boost::get<IterTabPtr>(&results_per_device.front().first)) {
+    return get_merged_result<IterTabPtr>(results_per_device);
+  }
+  CHECK(false);
+  return RowSetPtr(nullptr);
+}
+
 RowSetPtr Executor::reduceMultiDeviceResults(const RelAlgExecutionUnit& ra_exe_unit,
                                              std::vector<std::pair<ResultPtr, std::vector<size_t>>>& results_per_device,
                                              std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                                              const QueryMemoryDescriptor& query_mem_desc,
                                              const bool output_columnar) const {
   if (results_per_device.empty()) {
-    return boost::make_unique<ResultRows>(query_mem_desc,
-                                          std::vector<Analyzer::Expr*>{},
-                                          nullptr,
-                                          nullptr,
-                                          std::vector<int64_t>{},
-                                          ExecutorDeviceType::CPU);
+    return boost::make_unique<ResultRows>(
+        query_mem_desc, ra_exe_unit.target_exprs, nullptr, nullptr, std::vector<int64_t>{}, ExecutorDeviceType::CPU);
   }
 
   auto first = boost::get<RowSetPtr>(&results_per_device.front().first);
@@ -3202,47 +3245,6 @@ std::vector<std::string> get_agg_fnames(const std::vector<Analyzer::Expr*>& targ
     }
   }
   return result;
-}
-
-template <typename PtrTy>
-PtrTy get_merged_result(const std::vector<std::pair<ResultPtr, std::vector<size_t>>>& results_per_device) {
-  auto& first = boost::get<PtrTy>(results_per_device.front().first);
-  CHECK(first);
-  auto copy = boost::make_unique<typename PtrTy::element_type>(*first);
-  CHECK(copy);
-  for (size_t dev_idx = 1; dev_idx < results_per_device.size(); ++dev_idx) {
-    const auto& next = boost::get<PtrTy>(results_per_device[dev_idx].first);
-    CHECK(next);
-    copy->append(*next);
-  }
-  return copy;
-}
-
-ResultPtr results_union(std::vector<std::pair<ResultPtr, std::vector<size_t>>>& results_per_device) {
-  if (results_per_device.empty()) {
-    return boost::make_unique<ResultRows>(QueryMemoryDescriptor{},
-                                          std::vector<Analyzer::Expr*>{},
-                                          nullptr,
-                                          nullptr,
-                                          std::vector<int64_t>{},
-                                          ExecutorDeviceType::CPU);
-  }
-  typedef std::pair<ResultPtr, std::vector<size_t>> IndexedResultRows;
-  std::sort(results_per_device.begin(),
-            results_per_device.end(),
-            [](const IndexedResultRows& lhs, const IndexedResultRows& rhs) {
-    CHECK_EQ(size_t(1), lhs.second.size());
-    CHECK_EQ(size_t(1), rhs.second.size());
-    return lhs.second < rhs.second;
-  });
-
-  if (boost::get<RowSetPtr>(&results_per_device.front().first)) {
-    return get_merged_result<RowSetPtr>(results_per_device);
-  } else if (boost::get<IterTabPtr>(&results_per_device.front().first)) {
-    return get_merged_result<IterTabPtr>(results_per_device);
-  }
-  CHECK(false);
-  return RowSetPtr(nullptr);
 }
 
 }  // namespace
@@ -3679,7 +3681,7 @@ ResultPtr Executor::executeWorkUnit(int32_t* error_code,
         continue;
       }
     }
-    return results_union(execution_dispatch.getFragmentResults());
+    return resultsUnion(execution_dispatch);
 
   } while (static_cast<size_t>(crt_min_byte_width) <= sizeof(int64_t));
 
@@ -5321,7 +5323,6 @@ bool is_trivial_loop_join(const std::vector<InputTableInfo>& query_infos, const 
     }
   }
   CHECK_NE(ssize_t(-1), inner_table_idx);
-  CHECK_NE(size_t(0), query_infos[inner_table_idx].info.numTuples);
   return query_infos[inner_table_idx].info.numTuples == 1;
 }
 

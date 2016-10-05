@@ -567,6 +567,7 @@ class ResultRows {
     if (just_explain_) {
       return SQLTypeInfo(kTEXT, false);
     }
+    CHECK_LT(col_idx, targets_.size());
     return targets_[col_idx].agg_kind == kAVG ? SQLTypeInfo(kDOUBLE, false) : targets_[col_idx].sql_type;
   }
 
