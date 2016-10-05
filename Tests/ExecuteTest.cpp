@@ -2363,6 +2363,10 @@ int main(int argc, char** argv) {
   const std::string drop_empty_test{"DROP TABLE empty;"};
   run_ddl_statement(drop_empty_test);
   g_sqlite_comparator.query(drop_empty_test);
+  run_ddl_statement("DROP TABLE text_group_by_test;");
+  const std::string drop_join_test{"DROP TABLE join_test;"};
+  g_sqlite_comparator.query(drop_join_test);
+  run_ddl_statement(drop_join_test);
   g_session.reset(nullptr);
   return err;
 }
