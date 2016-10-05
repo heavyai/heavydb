@@ -1900,8 +1900,17 @@ llvm::Value* Executor::codegenCast(const Analyzer::UOper* uoper, const Compilati
   const auto operand_as_const = dynamic_cast<const Analyzer::Constant*>(operand);
   // For dictionary encoded constants, the cast holds the dictionary id
   // information as the compression parameter; handle this case separately.
-  auto operand_lv = operand_as_const ? codegen(operand_as_const, ti.get_compression(), ti.get_comp_param(), co).front()
-                                     : codegen(operand, true, co).front();
+  llvm::Value* operand_lv{nullptr};
+  if (operand_as_const) {
+    const auto operand_lvs = codegen(operand_as_const, ti.get_compression(), ti.get_comp_param(), co);
+    if (operand_lvs.size() == 3) {
+      operand_lv = cgen_state_->emitCall("string_pack", {operand_lvs[1], operand_lvs[2]});
+    } else {
+      operand_lv = operand_lvs.front();
+    }
+  } else {
+    operand_lv = codegen(operand, true, co).front();
+  }
   const auto& operand_ti = operand->get_type_info();
   return codegenCast(operand_lv, operand_ti, ti, operand_as_const);
 }
@@ -1963,6 +1972,9 @@ llvm::Value* Executor::codegenCastFromString(llvm::Value* operand_lv,
   if (!ti.is_string()) {
     throw std::runtime_error("Cast from " + operand_ti.get_type_name() + " to " + ti.get_type_name() +
                              " not supported");
+  }
+  if (operand_ti.get_compression() == kENCODING_NONE && ti.get_compression() == kENCODING_NONE) {
+    return operand_lv;
   }
   // dictionary encode non-constant
   if (operand_ti.get_compression() != kENCODING_DICT && !operand_is_const) {
