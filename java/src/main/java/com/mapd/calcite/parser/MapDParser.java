@@ -16,6 +16,7 @@ import org.apache.calcite.rex.RexBuilder;
 import org.apache.calcite.sql.SqlAsOperator;
 import org.apache.calcite.sql.SqlBasicCall;
 import org.apache.calcite.sql.SqlCall;
+import org.apache.calcite.sql.SqlDialect;
 import org.apache.calcite.sql.SqlIdentifier;
 import org.apache.calcite.sql.SqlNodeList;
 import org.apache.calcite.sql.SqlNode;
@@ -71,6 +72,9 @@ public final class MapDParser {
             throws SqlParseException {
         callCount++;
         SqlNode node = processSQL(sql, legacy_syntax);
+        if (legacy_syntax) {
+            node = processSQL(node.toSqlString(SqlDialect.CALCITE).toString(), false);
+        }
 
         boolean is_select_star = isSelectStar(node);
         catalogReader.setCurrentMapDUser(mapDUser);
