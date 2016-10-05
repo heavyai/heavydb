@@ -92,7 +92,7 @@ public final class MapDParser {
             validate_select.setSelectList(new_proj_exprs);
         }
 
-        final RelRoot sqlRel = converter.convertQuery(node, true, true);
+        final RelRoot sqlRel = converter.convertQuery(validate, true, true);
         //final RelNode sqlRel = converter.convertSelect((SqlSelect)node, true);
         //RexNode convertExpression = converter.convertExpression(node);
 
