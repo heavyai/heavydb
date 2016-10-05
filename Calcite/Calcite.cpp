@@ -203,11 +203,17 @@ string Calcite::process(string user, string passwd, string catalog, string sql_s
   } else {
     if (server_available_) {
       TPlanResult ret;
-      auto ms = measure<>::execution([&]() { client->process(ret, user, passwd, catalog, sql_string, legacy_syntax); });
-      LOG(INFO) << ret.plan_result << endl;
-      LOG(INFO) << "Time in Thrift " << (ms > ret.execution_time_ms ? ms - ret.execution_time_ms : 0)
-                << " (ms), Time in Java Calcite server " << ret.execution_time_ms << " (ms)" << endl;
-      return ret.plan_result;
+      try {
+        auto ms =
+            measure<>::execution([&]() { client->process(ret, user, passwd, catalog, sql_string, legacy_syntax); });
+
+        LOG(INFO) << ret.plan_result << endl;
+        LOG(INFO) << "Time in Thrift " << (ms > ret.execution_time_ms ? ms - ret.execution_time_ms : 0)
+                  << " (ms), Time in Java Calcite server " << ret.execution_time_ms << " (ms)" << endl;
+        return ret.plan_result;
+      } catch (InvalidParseRequest& e) {
+        throw std::invalid_argument(e.whyUp);
+      }
     } else {
       LOG(INFO) << "Not routing to Calcite, server is not up and JNI not available" << endl;
       return "";
