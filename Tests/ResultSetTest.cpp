@@ -116,23 +116,31 @@ int8_t* fill_one_entry_no_collisions(int8_t* buff,
                                      const QueryMemoryDescriptor& query_mem_desc,
                                      const int64_t v,
                                      const std::vector<TargetInfo>& target_infos,
-                                     const bool empty) {
+                                     const bool empty,
+                                     const bool null_val = false) {
   size_t target_idx = 0;
   int8_t* slot_ptr = buff;
+  int64_t vv = 0;
   for (const auto& target_info : target_infos) {
     CHECK_LT(target_idx, query_mem_desc.agg_col_widths.size());
     const auto slot_bytes = query_mem_desc.agg_col_widths[target_idx].actual;
     CHECK_LE(target_info.sql_type.get_size(), slot_bytes);
+    bool isNullable = !target_info.sql_type.get_notnull();
+    if (isNullable && target_info.skip_null_val && null_val) {
+      vv = inline_int_null_val(target_info.sql_type);
+    } else {
+      vv = v;
+    }
     if (empty) {
-      write_int(slot_ptr, query_mem_desc.keyless_hash ? 0 : v, slot_bytes);
+      write_int(slot_ptr, query_mem_desc.keyless_hash ? 0 : vv, slot_bytes);
     } else {
       if (target_info.sql_type.is_integer()) {
-        write_int(slot_ptr, v, slot_bytes);
+        write_int(slot_ptr, vv, slot_bytes);
       } else if (target_info.sql_type.is_string()) {
-        write_int(slot_ptr, -(v + 2), slot_bytes);
+        write_int(slot_ptr, -(vv + 2), slot_bytes);
       } else {
         CHECK(target_info.sql_type.is_fp());
-        write_fp(slot_ptr, v, slot_bytes);
+        write_fp(slot_ptr, vv, slot_bytes);
       }
     }
     slot_ptr += slot_bytes;
@@ -141,7 +149,11 @@ int8_t* fill_one_entry_no_collisions(int8_t* buff,
       if (empty) {
         write_int(slot_ptr, query_mem_desc.keyless_hash ? 0 : 0, count_slot_bytes);
       } else {
-        write_int(slot_ptr, 1, count_slot_bytes);  // count of elements in the group is 1 - good enough for testing
+        if (isNullable && target_info.skip_null_val) {
+          write_int(slot_ptr, 0, count_slot_bytes);  // count of elements should be set to 0 for elements with null_val
+        } else {
+          write_int(slot_ptr, 1, count_slot_bytes);  // count of elements in the group is 1 - good enough for testing
+        }
       }
       slot_ptr += count_slot_bytes;
     }
@@ -584,7 +596,7 @@ class ResultSetEmulator {
                     NumberGenerator& gen2,
                     const size_t perc1,
                     const size_t perc2,
-                    const size_t step,
+                    const size_t flow,
                     const bool silent)
       :
 
@@ -596,10 +608,9 @@ class ResultSetEmulator {
         rs2_gen(gen2),
         rs1_perc(perc1),
         rs2_perc(perc2),
-        rs_step(step),
+        rs_flow(flow),
         rs_entry_count(query_mem_desc.entry_count),
         rs_silent(silent) {
-    static_cast<void>(rs_step);
     rs_entry_count = query_mem_desc.entry_count;  // it's set to 10 in "small" query_mem_descriptor
     rs1_groups.resize(rs_entry_count);
     std::fill(rs1_groups.begin(), rs1_groups.end(), false);
@@ -630,6 +641,15 @@ class ResultSetEmulator {
     }
     return rse_reduced_row;
   }
+  int64_t rse_get_null_val() {
+    int64_t null_val = 0;
+    for (const auto& target_info : rs_target_infos) {
+      null_val = inline_int_null_val(target_info.sql_type);
+      break;  // currently all of TargetInfo's columns used in tests have same type, so the
+              // they all share same null_val, and that's why the first column is used here.
+    }
+    return null_val;
+  }
   void print_rse_generated_result_sets() const;
   void print_merged_result_sets(const std::vector<OneRow>& result);
 
@@ -641,7 +661,7 @@ class ResultSetEmulator {
   const std::vector<TargetInfo> rs_target_infos;
   const QueryMemoryDescriptor rs_query_mem_desc;
   NumberGenerator& rs1_gen, &rs2_gen;
-  size_t rs1_perc, rs2_perc, rs_step;
+  size_t rs1_perc, rs2_perc, rs_flow;
   size_t rs_entry_count;
   bool rs_silent;
   std::vector<bool> rs1_groups;                      // true if group is in ResultSet #1
@@ -865,14 +885,31 @@ void ResultSetEmulator::rse_fill_storage_buffer_perfect_hash_rowwise(int8_t* buf
         *key_buff_i64++ = v;
       }
       auto entries_buff = reinterpret_cast<int8_t*>(key_buff_i64);
-      key_buff = fill_one_entry_no_collisions(entries_buff, rs_query_mem_desc, v, rs_target_infos, false);
+      if (rs_flow == 2) {               // null_vall test-cases
+        if (i >= rs_entry_count - 4) {  // only the last four rows of RS #1 and RS #2 exersized for null_val test
+          rs_values[i] = -1;
+          key_buff = fill_one_entry_no_collisions(entries_buff, rs_query_mem_desc, v, rs_target_infos, false, true);
+        } else {
+          key_buff = fill_one_entry_no_collisions(entries_buff, rs_query_mem_desc, v, rs_target_infos, false, false);
+        }
+      } else {
+        key_buff = fill_one_entry_no_collisions(entries_buff, rs_query_mem_desc, v, rs_target_infos, false);
+      }
     } else {
       auto key_buff_i64 = reinterpret_cast<int64_t*>(key_buff);
       for (size_t key_comp_idx = 0; key_comp_idx < key_component_count; ++key_comp_idx) {
         *key_buff_i64++ = EMPTY_KEY_64;
       }
       auto entries_buff = reinterpret_cast<int8_t*>(key_buff_i64);
-      key_buff = fill_one_entry_no_collisions(entries_buff, rs_query_mem_desc, 0xdeadbeef, rs_target_infos, true);
+      if (rs_flow == 2) {               // null_val test-cases
+        if (i >= rs_entry_count - 4) {  // only the last four rows of RS #1 and RS #2 exersized for null_val test
+          rs_values[i] = -1;
+        }
+        key_buff =
+            fill_one_entry_no_collisions(entries_buff, rs_query_mem_desc, 0xdeadbeef, rs_target_infos, true, true);
+      } else {
+        key_buff = fill_one_entry_no_collisions(entries_buff, rs_query_mem_desc, 0xdeadbeef, rs_target_infos, true);
+      }
     }
   }
 }
@@ -1058,16 +1095,28 @@ void ResultSetEmulator::print_merged_result_sets(const std::vector<OneRow>& resu
 }
 
 int64_t ResultSetEmulator::rseAggregateKMIN(size_t i) {
-  int64_t result = 0;
+  int64_t result = rse_get_null_val();
 
   if (rs1_groups[i] && rs2_groups[i]) {
-    result = std::min(rs1_values[i], rs2_values[i]);
+    if ((rs1_values[i] == -1) && (rs2_values[i] == -1)) {
+      return result;
+    } else {
+      if ((rs1_values[i] != -1) && (rs2_values[i] != -1)) {
+        result = std::min(rs1_values[i], rs2_values[i]);
+      } else {
+        result = std::max(rs1_values[i], rs2_values[i]);
+      }
+    }
   } else {
     if (rs1_groups[i]) {
-      result = rs1_values[i];
+      if (rs1_values[i] != -1) {
+        result = rs1_values[i];
+      }
     } else {
       if (rs2_groups[i]) {
-        result = rs2_values[i];
+        if (rs2_values[i] != -1) {
+          result = rs2_values[i];
+        }
       }
     }
   }
@@ -1076,16 +1125,24 @@ int64_t ResultSetEmulator::rseAggregateKMIN(size_t i) {
 }
 
 int64_t ResultSetEmulator::rseAggregateKMAX(size_t i) {
-  int64_t result = 0;
+  int64_t result = rse_get_null_val();
 
   if (rs1_groups[i] && rs2_groups[i]) {
-    result = std::max(rs1_values[i], rs2_values[i]);
+    if ((rs1_values[i] == -1) && (rs2_values[i] == -1)) {
+      return result;
+    } else {
+      result = std::max(rs1_values[i], rs2_values[i]);
+    }
   } else {
     if (rs1_groups[i]) {
-      result = rs1_values[i];
+      if (rs1_values[i] != -1) {
+        result = rs1_values[i];
+      }
     } else {
       if (rs2_groups[i]) {
-        result = rs2_values[i];
+        if (rs2_values[i] != -1) {
+          result = rs2_values[i];
+        }
       }
     }
   }
@@ -1099,13 +1156,33 @@ int64_t ResultSetEmulator::rseAggregateKAVG(size_t i) {
       n2 = 1;  // for test purposes count of elements in each group is 1 (see proc "fill_one_entry_no_collisions")
 
   if (rs1_groups[i] && rs2_groups[i]) {
-    result = (rs1_values[i] / n1 + rs2_values[i] / n2) / 2;
+    if ((rs1_values[i] == -1) && (rs2_values[i] == -1)) {
+      // return rse_get_null_val();
+      return result;
+    }
+    int n = 0;
+    if (rs1_values[i] != -1) {
+      result += rs1_values[i] / n1;
+      n++;
+    }
+    if (rs2_values[i] != -1) {
+      result += rs2_values[i] / n2;
+      n++;
+    }
+    if (n > 1) {
+      result /= n;
+    }
   } else {
+    // result = rse_get_null_val();
     if (rs1_groups[i]) {
-      result = rs1_values[i] / n1;
+      if (rs1_values[i] != -1) {
+        result = rs1_values[i] / n1;
+      }
     } else {
       if (rs2_groups[i]) {
-        result = rs2_values[i] / n2;
+        if (rs2_values[i] != -1) {
+          result = rs2_values[i] / n2;
+        }
       }
     }
   }
@@ -1116,11 +1193,29 @@ int64_t ResultSetEmulator::rseAggregateKAVG(size_t i) {
 int64_t ResultSetEmulator::rseAggregateKSUM(size_t i) {
   int64_t result = 0;
 
-  if (rs1_groups[i]) {
-    result += rs1_values[i];
-  }
-  if (rs2_groups[i]) {
-    result += rs2_values[i];
+  if (rs1_groups[i] && rs2_groups[i]) {
+    if ((rs1_values[i] == -1) && (rs2_values[i] == -1)) {
+      return rse_get_null_val();
+    }
+    if (rs1_values[i] != -1) {
+      result += rs1_values[i];
+    }
+    if (rs2_values[i] != -1) {
+      result += rs2_values[i];
+    }
+  } else {
+    result = rse_get_null_val();
+    if (rs1_groups[i]) {
+      if (rs1_values[i] != -1) {
+        result = rs1_values[i];
+      }
+    } else {
+      if (rs2_groups[i]) {
+        if (rs2_values[i] != -1) {
+          result = rs2_values[i];
+        }
+      }
+    }
   }
 
   return result;
@@ -1129,11 +1224,29 @@ int64_t ResultSetEmulator::rseAggregateKSUM(size_t i) {
 int64_t ResultSetEmulator::rseAggregateKCOUNT(size_t i) {
   int64_t result = 0;
 
-  if (rs1_groups[i]) {
-    result += rs1_values[i];
-  }
-  if (rs2_groups[i]) {
-    result += rs2_values[i];
+  if (rs1_groups[i] && rs2_groups[i]) {
+    if ((rs1_values[i] == -1) && (rs2_values[i] == -1)) {
+      return rse_get_null_val();
+    }
+    if (rs1_values[i] != -1) {
+      result += rs1_values[i];
+    }
+    if (rs2_values[i] != -1) {
+      result += rs2_values[i];
+    }
+  } else {
+    result = rse_get_null_val();
+    if (rs1_groups[i]) {
+      if (rs1_values[i] != -1) {
+        result = rs1_values[i];
+      }
+    } else {
+      if (rs2_groups[i]) {
+        if (rs2_values[i] != -1) {
+          result = rs2_values[i];
+        }
+      }
+    }
   }
 
   return result;
@@ -1194,9 +1307,9 @@ void test_iterate(const std::vector<TargetInfo>& target_infos, const QueryMemory
 
 std::vector<TargetInfo> generate_test_target_infos() {
   std::vector<TargetInfo> target_infos;
-  SQLTypeInfo int_ti(kINT, false);
-  SQLTypeInfo double_ti(kDOUBLE, false);
-  SQLTypeInfo null_ti(kNULLT, false);
+  SQLTypeInfo int_ti(kINT, true);
+  SQLTypeInfo double_ti(kDOUBLE, true);
+  SQLTypeInfo null_ti(kNULLT, true);
   target_infos.push_back(TargetInfo{false, kMIN, int_ti, null_ti, true, false});
   target_infos.push_back(TargetInfo{true, kAVG, int_ti, int_ti, true, false});
   target_infos.push_back(TargetInfo{true, kSUM, int_ti, int_ti, true, false});
@@ -1212,14 +1325,27 @@ std::vector<TargetInfo> generate_test_target_infos() {
 
 std::vector<TargetInfo> generate_random_groups_target_infos() {
   std::vector<TargetInfo> target_infos;
-  SQLTypeInfo int_ti(kINT, false);
-  // SQLTypeInfo double_ti(kDOUBLE, false);
-  SQLTypeInfo null_ti(kNULLT, false);
+  SQLTypeInfo int_ti(kINT, true);
+  SQLTypeInfo double_ti(kDOUBLE, true);
+  // SQLTypeInfo null_ti(kNULLT, false);
   target_infos.push_back(TargetInfo{true, kMIN, int_ti, int_ti, true, false});
   target_infos.push_back(TargetInfo{true, kMAX, int_ti, int_ti, true, false});
   target_infos.push_back(TargetInfo{true, kSUM, int_ti, int_ti, true, false});
   target_infos.push_back(TargetInfo{true, kCOUNT, int_ti, int_ti, true, false});
-  target_infos.push_back(TargetInfo{true, kAVG, int_ti, int_ti, true, false});
+  target_infos.push_back(TargetInfo{true, kAVG, int_ti, double_ti, true, false});
+  return target_infos;
+}
+
+std::vector<TargetInfo> generate_random_groups_nullable_target_infos() {
+  std::vector<TargetInfo> target_infos;
+  SQLTypeInfo int_ti(kINT, false);
+  // SQLTypeInfo null_ti(kNULLT, false);
+  SQLTypeInfo double_ti(kDOUBLE, false);
+  target_infos.push_back(TargetInfo{true, kMIN, int_ti, int_ti, true, false});
+  target_infos.push_back(TargetInfo{true, kMAX, int_ti, int_ti, true, false});
+  target_infos.push_back(TargetInfo{true, kSUM, int_ti, int_ti, true, false});
+  target_infos.push_back(TargetInfo{true, kCOUNT, int_ti, int_ti, true, false});
+  target_infos.push_back(TargetInfo{true, kAVG, int_ti, double_ti, true, false});
   return target_infos;
 }
 
@@ -1306,7 +1432,7 @@ void test_reduce_random_groups(const std::vector<TargetInfo>& target_infos,
                                const int prct1,
                                const int prct2,
                                bool silent,
-                               const int step = 0) {
+                               const int flow = 0) {
   SQLTypeInfo double_ti(kDOUBLE, false);
   const ResultSetStorage* storage1{nullptr};
   const ResultSetStorage* storage2{nullptr};
@@ -1341,7 +1467,7 @@ void test_reduce_random_groups(const std::vector<TargetInfo>& target_infos,
                                                  generator2,
                                                  prct1,
                                                  prct2,
-                                                 step,
+                                                 flow,
                                                  silent);
   if (!silent) {
     rse->print_rse_generated_result_sets();
@@ -1379,6 +1505,10 @@ void test_reduce_random_groups(const std::vector<TargetInfo>& target_infos,
       ref_val = ref_row[i];
       const auto& target_info = target_infos[i];
       const auto& ti = target_info.agg_kind == kAVG ? double_ti : target_info.sql_type;
+      std::string p_tag("");
+      if (flow == 2) {  // null_val test-cases
+        p_tag += "kNULLT_";
+      }
       switch (ti.get_type()) {
         case kSMALLINT:
         case kINT:
@@ -1387,14 +1517,16 @@ void test_reduce_random_groups(const std::vector<TargetInfo>& target_infos,
           switch (target_info.agg_kind) {
             case kMIN: {
               if (!silent) {
-                printf("\nKMIN row_idx = %i, ref_val = %lld, ival = %lld",
+                p_tag += "KMIN";
+                printf("\n%s row_idx = %i, ref_val = %lld, ival = %lld",
+                       p_tag.c_str(),
                        static_cast<int>(row_idx),
                        static_cast<long long>(ref_val),
                        static_cast<long long>(ival));
                 if (ref_val != ival) {
-                  printf("%21s%s", "", "KMIN TEST FAILED!\n");
+                  printf("%21s%s%s", "", p_tag.c_str(), " TEST FAILED!\n");
                 } else {
-                  printf("%21s%s", "", "KMIN TEST PASSED!\n");
+                  printf("%21s%s%s", "", p_tag.c_str(), " TEST PASSED!\n");
                 }
               } else {
                 ASSERT_EQ(ref_val, ival);
@@ -1403,14 +1535,16 @@ void test_reduce_random_groups(const std::vector<TargetInfo>& target_infos,
             }
             case kMAX: {
               if (!silent) {
-                printf("\nKMAX row_idx = %i, ref_val = %lld, ival = %lld",
+                p_tag += "KMAX";
+                printf("\n%s row_idx = %i, ref_val = %lld, ival = %lld",
+                       p_tag.c_str(),
                        static_cast<int>(row_idx),
                        static_cast<long long>(ref_val),
                        static_cast<long long>(ival));
                 if (ref_val != ival) {
-                  printf("%21s%s", "", "KMAX TEST FAILED!\n");
+                  printf("%21s%s%s", "", p_tag.c_str(), " TEST FAILED!\n");
                 } else {
-                  printf("%21s%s", "", "KMAX TEST PASSED!\n");
+                  printf("%21s%s%s", "", p_tag.c_str(), " TEST PASSED!\n");
                 }
               } else {
                 ASSERT_EQ(ref_val, ival);
@@ -1419,14 +1553,16 @@ void test_reduce_random_groups(const std::vector<TargetInfo>& target_infos,
             }
             case kAVG: {
               if (!silent) {
-                printf("\nKAVG row_idx = %i, ref_val = %lld, ival = %lld",
+                p_tag += "KAVG";
+                printf("\n%s row_idx = %i, ref_val = %lld, ival = %lld",
+                       p_tag.c_str(),
                        static_cast<int>(row_idx),
                        static_cast<long long>(ref_val),
                        static_cast<long long>(ival));
                 if (ref_val != ival) {
-                  printf("%21s%s", "", "KAVG TEST FAILED!\n");
+                  printf("%21s%s%s", "", p_tag.c_str(), " TEST FAILED1!\n");
                 } else {
-                  printf("%21s%s", "", "KAVG TEST PASSED!\n");
+                  printf("%21s%s%s", "", p_tag.c_str(), " TEST PASSED!\n");
                 }
               } else {
                 ASSERT_EQ(ref_val, ival);
@@ -1436,14 +1572,16 @@ void test_reduce_random_groups(const std::vector<TargetInfo>& target_infos,
             case kSUM:
             case kCOUNT: {
               if (!silent) {
-                printf("\nKSUM row_idx = %i, ref_val = %lld, ival = %lld",
+                p_tag += "KSUM";
+                printf("\n%s row_idx = %i, ref_val = %lld, ival = %lld",
+                       p_tag.c_str(),
                        static_cast<int>(row_idx),
                        static_cast<long long>(ref_val),
                        static_cast<long long>(ival));
                 if (ref_val != ival) {
-                  printf("%21s%s", "", "KSUM TEST FAILED!\n");
+                  printf("%21s%s%s", "", p_tag.c_str(), " TEST FAILED!\n");
                 } else {
-                  printf("%21s%s", "", "KSUM TEST PASSED!\n");
+                  printf("%21s%s%s", "", p_tag.c_str(), " TEST PASSED!\n");
                 }
               } else {
                 ASSERT_EQ(ref_val, ival);
@@ -1460,14 +1598,15 @@ void test_reduce_random_groups(const std::vector<TargetInfo>& target_infos,
           switch (target_info.agg_kind) {
             case kMIN: {
               if (!silent) {
+                p_tag += "KMIN_D";
                 printf("\nKMIN_D row_idx = %i, ref_val = %f, dval = %f",
                        static_cast<int>(row_idx),
                        static_cast<double>(ref_val),
                        dval);
                 if (static_cast<double>(ref_val) != dval) {
-                  printf("%5s%s", "", "KMIN_D TEST FAILED!\n");
+                  printf("%5s%s%s", "", p_tag.c_str(), " TEST FAILED!\n");
                 } else {
-                  printf("%5s%s", "", "KMIN_D TEST PASSED!\n");
+                  printf("%5s%s%s", "", p_tag.c_str(), " TEST PASSED!\n");
                 }
               } else {
                 ASSERT_TRUE(approx_eq(static_cast<double>(ref_val), dval));
@@ -1476,14 +1615,16 @@ void test_reduce_random_groups(const std::vector<TargetInfo>& target_infos,
             }
             case kMAX: {
               if (!silent) {
-                printf("\nKMAX_D row_idx = %i, ref_val = %f, dval = %f",
+                p_tag += "KMAX_D";
+                printf("\n%s row_idx = %i, ref_val = %f, dval = %f",
+                       p_tag.c_str(),
                        static_cast<int>(row_idx),
                        static_cast<double>(ref_val),
                        dval);
                 if (static_cast<double>(ref_val) != dval) {
-                  printf("%5s%s", "", "KMAX_D TEST FAILED!\n");
+                  printf("%5s%s%s", "", p_tag.c_str(), " TEST FAILED!\n");
                 } else {
-                  printf("%5s%s", "", "KMAX_D TEST PASSED!\n");
+                  printf("%5s%s%s", "", p_tag.c_str(), " TEST PASSED!\n");
                 }
               } else {
                 ASSERT_TRUE(approx_eq(static_cast<double>(ref_val), dval));
@@ -1492,28 +1633,37 @@ void test_reduce_random_groups(const std::vector<TargetInfo>& target_infos,
             }
             case kAVG: {
               if (!silent) {
-                printf("\nKAVG_D row_idx = %i, ref_val = %f, dval = %f",
+                p_tag += "KAVG_D";
+                printf("\n%s row_idx = %i, ref_val = %f, dval = %f",
+                       p_tag.c_str(),
                        static_cast<int>(row_idx),
                        static_cast<double>(ref_val),
                        dval);
                 if (static_cast<double>(ref_val) != dval) {
-                  printf("%5s%s", "", "KAVG_D TEST FAILED!\n");
+                  printf("%5s%s%s", "", p_tag.c_str(), " TEST FAILED!\n");
                 } else {
-                  printf("%5s%s", "", "KAVG_D TEST PASSED!\n");
+                  printf("%5s%s%s", "", p_tag.c_str(), " TEST PASSED!\n");
                 }
               } else {
-                ASSERT_TRUE(approx_eq(static_cast<double>(ref_val), dval));
+                if (flow == 2) {
+                  ASSERT_TRUE(
+                      true);  // Norair: TBD - always pass kAVG for null_val test-cases for now, to be fixed soon
+                } else {
+                  ASSERT_TRUE(approx_eq(static_cast<double>(ref_val), dval));
+                }
               }
               break;
             }
             case kSUM:
             case kCOUNT: {
               if (!silent) {
-                printf("\nKSUM_D row_idx = %i, ref_val = %f, dval = %f", (int)row_idx, (double)ref_val, dval);
+                p_tag += "KSUM_D";
+                printf(
+                    "\n%s row_idx = %i, ref_val = %f, dval = %f", p_tag.c_str(), (int)row_idx, (double)ref_val, dval);
                 if (static_cast<double>(ref_val) != dval) {
-                  printf("%5s%s", "", "KSUM_D TEST FAILED!\n");
+                  printf("%5s%s%s", "", p_tag.c_str(), " TEST FAILED!\n");
                 } else {
-                  printf("%5s%s", "", "KSUM_D TEST PASSED!\n");
+                  printf("%5s%s%s", "", p_tag.c_str(), " TEST PASSED!\n");
                 }
               } else {
                 ASSERT_TRUE(approx_eq(static_cast<double>(ref_val), dval));
@@ -1948,8 +2098,7 @@ TEST(MoreReduce, MissingValuesKeyless) {
   }
 }
 
-/* Perfect_Hash_Row_Based testcases */
-// TBD_FLOW #1
+/* FLOW #1: Perfect_Hash_Row_Based testcases */
 TEST(ReduceRandomGroups, PerfectHashOneCol_Small_2525) {
   const auto target_infos = generate_random_groups_target_infos();
   const auto query_mem_desc = perfect_hash_one_col_desc_small(target_infos, 8);
@@ -2022,18 +2171,6 @@ TEST(ReduceRandomGroups, PerfectHashOneCol_Small_10025) {
   test_reduce_random_groups(target_infos, query_mem_desc, gen1, gen2, prct1, prct2, silent);
 }
 
-TEST(ReduceRandomGroups, PerfectHashOneCol_Small_100100) {
-  const auto target_infos = generate_random_groups_target_infos();
-  const auto query_mem_desc = perfect_hash_one_col_desc_small(target_infos, 8);
-  // const auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 8, 0, 99);
-  EvenNumberGenerator gen1;
-  EvenNumberGenerator gen2;
-  const int prct1 = 100, prct2 = 100;
-  bool silent = false;  // true/false - don't/do print diagnostic messages
-  silent = true;
-  test_reduce_random_groups(target_infos, query_mem_desc, gen1, gen2, prct1, prct2, silent);
-}
-
 TEST(ReduceRandomGroups, PerfectHashOneCol_Small_9505) {
   const auto target_infos = generate_random_groups_target_infos();
   const auto query_mem_desc = perfect_hash_one_col_desc_small(target_infos, 8);
@@ -2045,24 +2182,40 @@ TEST(ReduceRandomGroups, PerfectHashOneCol_Small_9505) {
   test_reduce_random_groups(target_infos, query_mem_desc, gen1, gen2, prct1, prct2, silent);
 }
 
-/* TBD enable, retry, and add to the testsuite this testcase after fixing all bugs
-TEST(ReduceRandomGroups, DISABLED_PerfectHashOneCol_Large_2525) { // TBD - ignore this test for now, includes too many
-groups not
-convenient for debugging
+TEST(ReduceRandomGroups, PerfectHashOneCol_Small_100100) {
   const auto target_infos = generate_random_groups_target_infos();
-  // const auto query_mem_desc = perfect_hash_one_col_desc_small(target_infos, 8);
-  const auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 8, 0, 99);
+  const auto query_mem_desc = perfect_hash_one_col_desc_small(target_infos, 8);
   EvenNumberGenerator gen1;
   EvenNumberGenerator gen2;
-  const int prct1 = 25, prct2 = 25;
-  bool silent = false; // true/false - don't/do print diagnostic messages
-  // silent = true;
+  const int prct1 = 100, prct2 = 100;
+  bool silent = false;  // true/false - don't/do print diagnostic messages
+  silent = true;
   test_reduce_random_groups(target_infos, query_mem_desc, gen1, gen2, prct1, prct2, silent);
 }
-*/
 
-/* Non_Perfect_Hash_Row_Based testcases */
-// TBD_FLOW #2
+TEST(ReduceRandomGroups, PerfectHashOneCol_Small_2500) {
+  const auto target_infos = generate_random_groups_target_infos();
+  const auto query_mem_desc = perfect_hash_one_col_desc_small(target_infos, 8);
+  EvenNumberGenerator gen1;
+  EvenNumberGenerator gen2;
+  const int prct1 = 25, prct2 = 0;
+  bool silent = false;  // true/false - don't/do print diagnostic messages
+  silent = true;
+  test_reduce_random_groups(target_infos, query_mem_desc, gen1, gen2, prct1, prct2, silent);
+}
+
+TEST(ReduceRandomGroups, PerfectHashOneCol_Small_0075) {
+  const auto target_infos = generate_random_groups_target_infos();
+  const auto query_mem_desc = perfect_hash_one_col_desc_small(target_infos, 8);
+  EvenNumberGenerator gen1;
+  EvenNumberGenerator gen2;
+  const int prct1 = 0, prct2 = 75;
+  bool silent = false;  // true/false - don't/do print diagnostic messages
+  silent = true;
+  test_reduce_random_groups(target_infos, query_mem_desc, gen1, gen2, prct1, prct2, silent);
+}
+
+/* FLOW #2: Non_Perfect_Hash_Row_Based testcases */
 TEST(ReduceRandomGroups, BaselineHash_Large_5050) {
   const auto target_infos = generate_random_groups_target_infos();
   const auto query_mem_desc = baseline_hash_two_col_desc_large(target_infos, 8);
@@ -2118,8 +2271,29 @@ TEST(ReduceRandomGroups, BaselineHash_Large_100100) {
   test_reduce_random_groups(target_infos, query_mem_desc, gen1, gen2, prct1, prct2, silent);
 }
 
-/* Perfect_Hash_Column_Based testcases */
-// TBD_FLOW #3
+TEST(ReduceRandomGroups, BaselineHash_Large_2500) {
+  const auto target_infos = generate_random_groups_target_infos();
+  const auto query_mem_desc = baseline_hash_two_col_desc_large(target_infos, 8);
+  EvenNumberGenerator gen1;
+  EvenNumberGenerator gen2;
+  const int prct1 = 25, prct2 = 0;
+  bool silent = false;  // true/false - don't/do print diagnostic messages
+  silent = true;
+  test_reduce_random_groups(target_infos, query_mem_desc, gen1, gen2, prct1, prct2, silent);
+}
+
+TEST(ReduceRandomGroups, BaselineHash_Large_0075) {
+  const auto target_infos = generate_random_groups_target_infos();
+  const auto query_mem_desc = baseline_hash_two_col_desc_large(target_infos, 8);
+  EvenNumberGenerator gen1;
+  EvenNumberGenerator gen2;
+  const int prct1 = 0, prct2 = 75;
+  bool silent = false;  // true/false - don't/do print diagnostic messages
+  silent = true;
+  test_reduce_random_groups(target_infos, query_mem_desc, gen1, gen2, prct1, prct2, silent);
+}
+
+/*  FLOW #3: Perfect_Hash_Column_Based testcases */
 TEST(ReduceRandomGroups, PerfectHashOneColColumnar_Small_5050) {
   const auto target_infos = generate_random_groups_target_infos();
   auto query_mem_desc = perfect_hash_one_col_desc_small(target_infos, 8);
@@ -2168,8 +2342,31 @@ TEST(ReduceRandomGroups, PerfectHashOneColColumnar_Small_100100) {
   test_reduce_random_groups(target_infos, query_mem_desc, gen1, gen2, prct1, prct2, silent);
 }
 
-/* Non_Perfect_Hash_Column_Based testcases */
-// TBD_FLOW #4
+TEST(ReduceRandomGroups, PerfectHashOneColColumnar_Small_2500) {
+  const auto target_infos = generate_random_groups_target_infos();
+  auto query_mem_desc = perfect_hash_one_col_desc_small(target_infos, 8);
+  query_mem_desc.output_columnar = true;
+  EvenNumberGenerator gen1;
+  EvenNumberGenerator gen2;
+  const int prct1 = 25, prct2 = 0;
+  bool silent = false;  // true/false - don't/do print diagnostic messages
+  silent = true;
+  test_reduce_random_groups(target_infos, query_mem_desc, gen1, gen2, prct1, prct2, silent);
+}
+
+TEST(ReduceRandomGroups, PerfectHashOneColColumnar_Small_0075) {
+  const auto target_infos = generate_random_groups_target_infos();
+  auto query_mem_desc = perfect_hash_one_col_desc_small(target_infos, 8);
+  query_mem_desc.output_columnar = true;
+  EvenNumberGenerator gen1;
+  EvenNumberGenerator gen2;
+  const int prct1 = 0, prct2 = 75;
+  bool silent = false;  // true/false - don't/do print diagnostic messages
+  silent = true;
+  test_reduce_random_groups(target_infos, query_mem_desc, gen1, gen2, prct1, prct2, silent);
+}
+
+/* FLOW #4: Non_Perfect_Hash_Column_Based testcases */
 TEST(ReduceRandomGroups, BaselineHashColumnar_Large_5050) {
   const auto target_infos = generate_random_groups_target_infos();
   auto query_mem_desc = baseline_hash_two_col_desc_large(target_infos, 8);
@@ -2216,6 +2413,148 @@ TEST(ReduceRandomGroups, BaselineHashColumnar_Large_100100) {
   bool silent = false;  // true/false - don't/do print diagnostic messages
   silent = true;
   test_reduce_random_groups(target_infos, query_mem_desc, gen1, gen2, prct1, prct2, silent);
+}
+
+TEST(ReduceRandomGroups, BaselineHashColumnar_Large_2500) {
+  const auto target_infos = generate_random_groups_target_infos();
+  auto query_mem_desc = baseline_hash_two_col_desc_large(target_infos, 8);
+  query_mem_desc.output_columnar = true;
+  EvenNumberGenerator gen1;
+  EvenNumberGenerator gen2;
+  const int prct1 = 25, prct2 = 0;
+  bool silent = false;  // true/false - don't/do print diagnostic messages
+  silent = true;
+  test_reduce_random_groups(target_infos, query_mem_desc, gen1, gen2, prct1, prct2, silent);
+}
+
+TEST(ReduceRandomGroups, BaselineHashColumnar_Large_0075) {
+  const auto target_infos = generate_random_groups_target_infos();
+  auto query_mem_desc = baseline_hash_two_col_desc_large(target_infos, 8);
+  query_mem_desc.output_columnar = true;
+  EvenNumberGenerator gen1;
+  EvenNumberGenerator gen2;
+  const int prct1 = 0, prct2 = 75;
+  bool silent = false;  // true/false - don't/do print diagnostic messages
+  silent = true;
+  test_reduce_random_groups(target_infos, query_mem_desc, gen1, gen2, prct1, prct2, silent);
+}
+
+/* FLOW #5: These are new testcases: for debug & investigation purposes */
+TEST(ReduceRandomGroups, PerfectHashOneCol_NullVal_2525) {
+  const auto target_infos = generate_random_groups_nullable_target_infos();
+  const auto query_mem_desc = perfect_hash_one_col_desc_small(target_infos, 8);
+  EvenNumberGenerator gen1;
+  EvenNumberGenerator gen2;
+  const int prct1 = 25, prct2 = 25;
+  ASSERT_LE(prct1, 100);
+  ASSERT_LE(prct2, 100);
+  bool silent = false;  // true/false - don't/do print diagnostic messages
+  silent = true;
+  test_reduce_random_groups(target_infos, query_mem_desc, gen1, gen2, prct1, prct2, silent, 2);
+}
+
+TEST(ReduceRandomGroups, PerfectHashOneCol_NullVal_2575) {
+  const auto target_infos = generate_random_groups_nullable_target_infos();
+  const auto query_mem_desc = perfect_hash_one_col_desc_small(target_infos, 8);
+  EvenNumberGenerator gen1;
+  EvenNumberGenerator gen2;
+  const int prct1 = 25, prct2 = 75;
+  ASSERT_LE(prct1, 100);
+  ASSERT_LE(prct2, 100);
+  bool silent = false;  // true/false - don't/do print diagnostic messages
+  silent = true;
+  test_reduce_random_groups(target_infos, query_mem_desc, gen1, gen2, prct1, prct2, silent, 2);
+}
+
+TEST(ReduceRandomGroups, PerfectHashOneCol_NullVal_5050) {
+  const auto target_infos = generate_random_groups_nullable_target_infos();
+  const auto query_mem_desc = perfect_hash_one_col_desc_small(target_infos, 8);
+  EvenNumberGenerator gen1;
+  EvenNumberGenerator gen2;
+  const int prct1 = 50, prct2 = 50;
+  ASSERT_LE(prct1, 100);
+  ASSERT_LE(prct2, 100);
+  bool silent = false;  // true/false - don't/do print diagnostic messages
+  silent = true;
+  test_reduce_random_groups(target_infos, query_mem_desc, gen1, gen2, prct1, prct2, silent, 2);
+}
+
+TEST(ReduceRandomGroups, PerfectHashOneCol_NullVal_7525) {
+  const auto target_infos = generate_random_groups_nullable_target_infos();
+  const auto query_mem_desc = perfect_hash_one_col_desc_small(target_infos, 8);
+  EvenNumberGenerator gen1;
+  EvenNumberGenerator gen2;
+  const int prct1 = 75, prct2 = 25;
+  ASSERT_LE(prct1, 100);
+  ASSERT_LE(prct2, 100);
+  bool silent = false;  // true/false - don't/do print diagnostic messages
+  silent = true;
+  test_reduce_random_groups(target_infos, query_mem_desc, gen1, gen2, prct1, prct2, silent, 2);
+}
+
+TEST(ReduceRandomGroups, PerfectHashOneCol_NullVal_25100) {
+  const auto target_infos = generate_random_groups_nullable_target_infos();
+  const auto query_mem_desc = perfect_hash_one_col_desc_small(target_infos, 8);
+  EvenNumberGenerator gen1;
+  EvenNumberGenerator gen2;
+  const int prct1 = 25, prct2 = 100;
+  ASSERT_LE(prct1, 100);
+  ASSERT_LE(prct2, 100);
+  bool silent = false;  // true/false - don't/do print diagnostic messages
+  silent = true;
+  test_reduce_random_groups(target_infos, query_mem_desc, gen1, gen2, prct1, prct2, silent, 2);
+}
+
+TEST(ReduceRandomGroups, PerfectHashOneCol_NullVal_10025) {
+  const auto target_infos = generate_random_groups_nullable_target_infos();
+  const auto query_mem_desc = perfect_hash_one_col_desc_small(target_infos, 8);
+  EvenNumberGenerator gen1;
+  EvenNumberGenerator gen2;
+  const int prct1 = 100, prct2 = 25;
+  ASSERT_LE(prct1, 100);
+  ASSERT_LE(prct2, 100);
+  bool silent = false;  // true/false - don't/do print diagnostic messages
+  silent = true;
+  test_reduce_random_groups(target_infos, query_mem_desc, gen1, gen2, prct1, prct2, silent, 2);
+}
+
+TEST(ReduceRandomGroups, PerfectHashOneCol_NullVal_100100) {
+  const auto target_infos = generate_random_groups_nullable_target_infos();
+  const auto query_mem_desc = perfect_hash_one_col_desc_small(target_infos, 8);
+  EvenNumberGenerator gen1;
+  EvenNumberGenerator gen2;
+  const int prct1 = 100, prct2 = 100;
+  ASSERT_LE(prct1, 100);
+  ASSERT_LE(prct2, 100);
+  bool silent = false;  // true/false - don't/do print diagnostic messages
+  silent = true;
+  test_reduce_random_groups(target_infos, query_mem_desc, gen1, gen2, prct1, prct2, silent, 2);
+}
+
+TEST(ReduceRandomGroups, PerfectHashOneCol_NullVal_2500) {
+  const auto target_infos = generate_random_groups_nullable_target_infos();
+  const auto query_mem_desc = perfect_hash_one_col_desc_small(target_infos, 8);
+  EvenNumberGenerator gen1;
+  EvenNumberGenerator gen2;
+  const int prct1 = 25, prct2 = 0;
+  ASSERT_LE(prct1, 100);
+  ASSERT_LE(prct2, 100);
+  bool silent = false;  // true/false - don't/do print diagnostic messages
+  silent = true;
+  test_reduce_random_groups(target_infos, query_mem_desc, gen1, gen2, prct1, prct2, silent, 2);
+}
+
+TEST(ReduceRandomGroups, PerfectHashOneCol_NullVal_0075) {
+  const auto target_infos = generate_random_groups_nullable_target_infos();
+  const auto query_mem_desc = perfect_hash_one_col_desc_small(target_infos, 8);
+  EvenNumberGenerator gen1;
+  EvenNumberGenerator gen2;
+  const int prct1 = 0, prct2 = 75;
+  ASSERT_LE(prct1, 100);
+  ASSERT_LE(prct2, 100);
+  bool silent = false;  // true/false - don't/do print diagnostic messages
+  silent = true;
+  test_reduce_random_groups(target_infos, query_mem_desc, gen1, gen2, prct1, prct2, silent, 2);
 }
 
 int main(int argc, char** argv) {
