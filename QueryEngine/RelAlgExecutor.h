@@ -112,6 +112,10 @@ class RelAlgExecutor {
   WorkUnit createJoinWorkUnit(const RelJoin*, const SortInfo&);
 
   void addTemporaryTable(const int table_id, const ResultPtr& result) {
+    auto row_set = boost::get<RowSetPtr>(&result);
+    if (row_set) {
+      CHECK_LT(size_t(0), (*row_set)->colCount());
+    }
     CHECK_LT(table_id, 0);
     const auto it_ok = temporary_tables_.emplace(table_id, result);
     CHECK(it_ok.second);
