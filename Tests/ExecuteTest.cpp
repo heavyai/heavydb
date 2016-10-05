@@ -2169,6 +2169,13 @@ TEST(Select, PgShim) {
 }
 #endif  // HAVE_CALCITE
 
+TEST(Select, DesugarTransform) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT * FROM empty ORDER BY empty.x;", dt);
+  }
+}
+
 int main(int argc, char** argv) {
   google::InitGoogleLogging(argv[0]);
   LOG(INFO) << " after initialization";
