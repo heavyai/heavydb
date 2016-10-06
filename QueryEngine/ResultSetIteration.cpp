@@ -124,7 +124,7 @@ std::vector<TargetValue> ResultSet::getNextRow(const bool translate_strings, con
 
 std::vector<TargetValue> ResultSet::getNextRowImpl(const bool translate_strings, const bool decimal_to_double) const {
   auto entry_buff_idx = advanceCursorToNextEntry();
-  if (keep_first_ && crt_row_buff_idx_ >= drop_first_ + keep_first_) {
+  if (keep_first_ && fetched_so_far_ >= drop_first_ + keep_first_) {
     return {};
   }
   if (crt_row_buff_idx_ >= entryCount()) {
