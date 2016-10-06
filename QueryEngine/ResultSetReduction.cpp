@@ -550,15 +550,8 @@ void ResultSetStorage::reduceOneSlot(int8_t* this_ptr1,
   CHECK_LT(target_slot_idx, query_mem_desc_.agg_col_widths.size());
   const auto chosen_bytes = query_mem_desc_.agg_col_widths[target_slot_idx].compact;
   auto init_val = target_init_vals_[target_slot_idx];
-  int64_t null_val{0};
-  if (target_info.sql_type.is_fp()) {
-    const auto double_null_val = inline_fp_null_val(target_info.sql_type);
-    null_val = *reinterpret_cast<const int64_t*>(&double_null_val);
-  } else {
-    null_val = inline_int_null_val(target_info.sql_type);
-  }
   if (!target_info.sql_type.get_notnull()) {
-    init_val = null_val;
+    init_val = null_val_bit_pattern(target_info.sql_type);
   }
   if (target_info.is_agg) {
     switch (target_info.agg_kind) {

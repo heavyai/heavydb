@@ -149,7 +149,7 @@ int8_t* fill_one_entry_no_collisions(int8_t* buff,
       if (empty) {
         write_int(slot_ptr, query_mem_desc.keyless_hash ? 0 : 0, count_slot_bytes);
       } else {
-        if (isNullable && target_info.skip_null_val) {
+        if (isNullable && target_info.skip_null_val && null_val) {
           write_int(slot_ptr, 0, count_slot_bytes);  // count of elements should be set to 0 for elements with null_val
         } else {
           write_int(slot_ptr, 1, count_slot_bytes);  // count of elements in the group is 1 - good enough for testing
@@ -1307,9 +1307,9 @@ void test_iterate(const std::vector<TargetInfo>& target_infos, const QueryMemory
 
 std::vector<TargetInfo> generate_test_target_infos() {
   std::vector<TargetInfo> target_infos;
-  SQLTypeInfo int_ti(kINT, true);
-  SQLTypeInfo double_ti(kDOUBLE, true);
-  SQLTypeInfo null_ti(kNULLT, true);
+  SQLTypeInfo int_ti(kINT, false);
+  SQLTypeInfo double_ti(kDOUBLE, false);
+  SQLTypeInfo null_ti(kNULLT, false);
   target_infos.push_back(TargetInfo{false, kMIN, int_ti, null_ti, true, false});
   target_infos.push_back(TargetInfo{true, kAVG, int_ti, int_ti, true, false});
   target_infos.push_back(TargetInfo{true, kSUM, int_ti, int_ti, true, false});
@@ -1603,7 +1603,7 @@ void test_reduce_random_groups(const std::vector<TargetInfo>& target_infos,
                        static_cast<int>(row_idx),
                        static_cast<double>(ref_val),
                        dval);
-                if (static_cast<double>(ref_val) != dval) {
+                if (!approx_eq(static_cast<double>(ref_val), dval)) {
                   printf("%5s%s%s", "", p_tag.c_str(), " TEST FAILED!\n");
                 } else {
                   printf("%5s%s%s", "", p_tag.c_str(), " TEST PASSED!\n");
@@ -1621,7 +1621,7 @@ void test_reduce_random_groups(const std::vector<TargetInfo>& target_infos,
                        static_cast<int>(row_idx),
                        static_cast<double>(ref_val),
                        dval);
-                if (static_cast<double>(ref_val) != dval) {
+                if (!approx_eq(static_cast<double>(ref_val), dval)) {
                   printf("%5s%s%s", "", p_tag.c_str(), " TEST FAILED!\n");
                 } else {
                   printf("%5s%s%s", "", p_tag.c_str(), " TEST PASSED!\n");
@@ -1639,18 +1639,13 @@ void test_reduce_random_groups(const std::vector<TargetInfo>& target_infos,
                        static_cast<int>(row_idx),
                        static_cast<double>(ref_val),
                        dval);
-                if (static_cast<double>(ref_val) != dval) {
+                if (!approx_eq(static_cast<double>(ref_val), dval)) {
                   printf("%5s%s%s", "", p_tag.c_str(), " TEST FAILED!\n");
                 } else {
                   printf("%5s%s%s", "", p_tag.c_str(), " TEST PASSED!\n");
                 }
               } else {
-                if (flow == 2) {
-                  ASSERT_TRUE(
-                      true);  // Norair: TBD - always pass kAVG for null_val test-cases for now, to be fixed soon
-                } else {
-                  ASSERT_TRUE(approx_eq(static_cast<double>(ref_val), dval));
-                }
+                ASSERT_TRUE(approx_eq(static_cast<double>(ref_val), dval));
               }
               break;
             }
@@ -1660,7 +1655,7 @@ void test_reduce_random_groups(const std::vector<TargetInfo>& target_infos,
                 p_tag += "KSUM_D";
                 printf(
                     "\n%s row_idx = %i, ref_val = %f, dval = %f", p_tag.c_str(), (int)row_idx, (double)ref_val, dval);
-                if (static_cast<double>(ref_val) != dval) {
+                if (!approx_eq(static_cast<double>(ref_val), dval)) {
                   printf("%5s%s%s", "", p_tag.c_str(), " TEST FAILED!\n");
                 } else {
                   printf("%5s%s%s", "", p_tag.c_str(), " TEST PASSED!\n");

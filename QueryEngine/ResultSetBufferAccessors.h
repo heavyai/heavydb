@@ -162,4 +162,12 @@ inline double pair_to_double(const std::pair<int64_t, int64_t>& fp_pair, const S
              : dividend / static_cast<double>(fp_pair.second);
 }
 
+inline int64_t null_val_bit_pattern(const SQLTypeInfo& ti) {
+  if (ti.is_fp()) {
+    const auto double_null_val = inline_fp_null_val(ti);
+    return *reinterpret_cast<const int64_t*>(&double_null_val);
+  }
+  return inline_int_null_val(ti);
+}
+
 #endif  // QUERYENGINE_RESULTSETBUFFERACCESSORS_H

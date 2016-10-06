@@ -27,7 +27,7 @@ ResultSetStorage::ResultSetStorage(const std::vector<TargetInfo>& targets,
     : targets_(targets), query_mem_desc_(query_mem_desc), buff_(buff) {
   for (const auto& target_info : targets_) {
     if (!target_info.sql_type.get_notnull()) {
-      int64_t init_val = inline_int_null_val(target_info.sql_type);
+      int64_t init_val = null_val_bit_pattern(target_info.sql_type);
       target_init_vals_.push_back(target_info.is_agg ? init_val : 0);
     } else {
       target_init_vals_.push_back(target_info.is_agg ? 0xdeadbeef : 0);
