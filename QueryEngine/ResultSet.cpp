@@ -108,6 +108,10 @@ void ResultSet::append(ResultSet& that) {
   appended_storage_.push_back(std::move(that.storage_));
   query_mem_desc_.entry_count += appended_storage_.back()->query_mem_desc_.entry_count;
   query_mem_desc_.entry_count_small += appended_storage_.back()->query_mem_desc_.entry_count_small;
+  chunks_.insert(chunks_.end(), that.chunks_.begin(), that.chunks_.end());
+  for (auto& buff : that.literal_buffers_) {
+    literal_buffers_.push_back(std::move(buff));
+  }
 }
 
 const ResultSetStorage* ResultSet::getStorage() const {

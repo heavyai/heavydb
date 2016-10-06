@@ -11,6 +11,7 @@
 
 #include "ResultSetBufferAccessors.h"
 #include "TargetValue.h"
+#include "../Chunk/Chunk.h"
 
 #include <list>
 
@@ -152,6 +153,9 @@ class ResultSet {
 
   void initializeStorage() const;
 
+  void holdChunks(const std::list<std::shared_ptr<Chunk_NS::Chunk>>& chunks) { chunks_ = chunks; }
+  void holdLiterals(std::vector<int8_t>& literal_buff) { literal_buffers_.push_back(std::move(literal_buff)); }
+
  private:
   std::vector<TargetValue> getNextRowImpl(const bool translate_strings, const bool decimal_to_double) const;
 
@@ -220,6 +224,11 @@ class ResultSet {
   int64_t queue_time_ms_;
   int64_t render_time_ms_;
   const Executor* executor_;  // TODO(alex): remove
+
+  std::list<std::shared_ptr<Chunk_NS::Chunk>> chunks_;
+  // TODO(miyu): refine by using one buffer and
+  //   setting offset instead of ptr in group by buffer.
+  std::vector<std::vector<int8_t>> literal_buffers_;
 
   friend class ResultSetManager;
 };
