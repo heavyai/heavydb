@@ -61,6 +61,20 @@ TargetValue make_avg_target_value(const int8_t* ptr1,
   return pair_to_double({sum, count}, target_info.sql_type);
 }
 
+// Interprets ptr1, ptr2 as the ptr and len pair used for raw string.
+TargetValue make_raw_str_target_value(const int8_t* ptr1,
+                                      const int8_t compact_sz1,
+                                      const int8_t* ptr2,
+                                      const int8_t compact_sz2,
+                                      const TargetInfo& target_info) {
+  auto string_ptr = (read_int_from_buff(ptr1, compact_sz1));
+  if (string_ptr == NULL_INT) {
+    return TargetValue(nullptr);
+  }
+  const auto length = read_int_from_buff(ptr2, compact_sz2);
+  return std::string(reinterpret_cast<char*>(string_ptr), length);
+}
+
 // Gets the byte offset, starting from the beginning of the row targets buffer, of
 // the value in position slot_idx (only makes sense for row-wise representation).
 size_t get_byteoff_of_slot(const size_t slot_idx, const QueryMemoryDescriptor& query_mem_desc) {
@@ -340,6 +354,13 @@ TargetValue ResultSet::getTargetValueFromBufferColwise(const int8_t* col1_ptr,
     const auto ptr2 = columnar_elem_ptr(entry_idx, col2_ptr, compact_sz2);
     return make_avg_target_value(ptr1, compact_sz1, ptr2, compact_sz2, target_info);
   }
+  const auto& chosen_type = get_compact_type(target_info);
+  if (chosen_type.is_string() && kENCODING_NONE == chosen_type.get_compression()) {
+    CHECK(col2_ptr);
+    CHECK(compact_sz2);
+    const auto ptr2 = columnar_elem_ptr(entry_idx, col2_ptr, compact_sz2);
+    return make_raw_str_target_value(ptr1, compact_sz1, ptr2, compact_sz2, target_info);
+  }
   return makeTargetValue(ptr1, compact_sz1, target_info, target_logical_idx, translate_strings, decimal_to_double);
 }
 
@@ -352,18 +373,20 @@ TargetValue ResultSet::getTargetValueFromBufferRowwise(const int8_t* rowwise_tar
                                                        const bool decimal_to_double) const {
   auto ptr1 = rowwise_target_ptr;
   auto compact_sz1 = query_mem_desc_.agg_col_widths[slot_idx].compact;
-  const int8_t* ptr2{nullptr};
-  int8_t compact_sz2{0};
-  if (target_info.is_agg && target_info.agg_kind == kAVG) {
-    ptr2 = rowwise_target_ptr + query_mem_desc_.agg_col_widths[slot_idx].compact;
-    compact_sz2 = query_mem_desc_.agg_col_widths[slot_idx + 1].compact;
-  }
   if (target_info.agg_kind == kAVG) {
+    CHECK(target_info.is_agg);
+    const auto ptr2 = rowwise_target_ptr + query_mem_desc_.agg_col_widths[slot_idx].compact;
+    const auto compact_sz2 = query_mem_desc_.agg_col_widths[slot_idx + 1].compact;
     CHECK(ptr2);
     return make_avg_target_value(ptr1, compact_sz1, ptr2, compact_sz2, target_info);
   }
-  CHECK(!ptr2);
-  CHECK_EQ(0, compact_sz2);
+  const auto& chosen_type = get_compact_type(target_info);
+  if (chosen_type.is_string() && kENCODING_NONE == chosen_type.get_compression()) {
+    const auto ptr2 = rowwise_target_ptr + query_mem_desc_.agg_col_widths[slot_idx].compact;
+    const auto compact_sz2 = query_mem_desc_.agg_col_widths[slot_idx + 1].compact;
+    CHECK(ptr2);
+    return make_raw_str_target_value(ptr1, compact_sz1, ptr2, compact_sz2, target_info);
+  }
   return makeTargetValue(ptr1, compact_sz1, target_info, target_logical_idx, translate_strings, decimal_to_double);
 }
 
