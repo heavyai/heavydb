@@ -58,6 +58,7 @@ ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
                      const Executor* executor)
     : targets_(targets),
       device_type_(device_type),
+      device_id_(-1),
       query_mem_desc_(query_mem_desc),
       crt_row_buff_idx_(0),
       fetched_so_far_(0),
@@ -69,7 +70,32 @@ ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
       executor_(executor) {
 }
 
-ResultSet::ResultSet() : device_type_(ExecutorDeviceType::CPU), query_mem_desc_{}, crt_row_buff_idx_(0) {
+ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
+                     const std::vector<ColumnLazyFetchInfo>& lazy_fetch_info,
+                     const std::vector<std::vector<const int8_t*>>& col_buffers,
+                     const ExecutorDeviceType device_type,
+                     const int device_id,
+                     const QueryMemoryDescriptor& query_mem_desc,
+                     const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+                     const Executor* executor)
+    : targets_(targets),
+      device_type_(device_type),
+      device_id_(device_id),
+      query_mem_desc_(query_mem_desc),
+      crt_row_buff_idx_(0),
+      fetched_so_far_(0),
+      drop_first_(0),
+      keep_first_(0),
+      row_set_mem_owner_(row_set_mem_owner),
+      queue_time_ms_(0),
+      render_time_ms_(0),
+      executor_(executor),
+      lazy_fetch_info_(lazy_fetch_info),
+      col_buffers_(col_buffers) {
+}
+
+ResultSet::ResultSet()
+    : device_type_(ExecutorDeviceType::CPU), device_id_(-1), query_mem_desc_{}, crt_row_buff_idx_(0) {
 }
 
 ResultSet::~ResultSet() {
@@ -109,6 +135,8 @@ void ResultSet::append(ResultSet& that) {
   query_mem_desc_.entry_count += appended_storage_.back()->query_mem_desc_.entry_count;
   query_mem_desc_.entry_count_small += appended_storage_.back()->query_mem_desc_.entry_count_small;
   chunks_.insert(chunks_.end(), that.chunks_.begin(), that.chunks_.end());
+  col_buffers_.insert(col_buffers_.end(), that.col_buffers_.begin(), that.col_buffers_.end());
+  chunk_iters_.insert(chunk_iters_.end(), that.chunk_iters_.begin(), that.chunk_iters_.end());
   for (auto& buff : that.literal_buffers_) {
     literal_buffers_.push_back(std::move(buff));
   }
@@ -193,6 +221,9 @@ QueryMemoryDescriptor ResultSet::fixupQueryMemoryDescriptor(const QueryMemoryDes
     const auto padding = aligned_total_bytes - total_bytes;
     CHECK(padding == 0 || padding == 4);
     query_mem_desc_copy.agg_col_widths[col_idx - 1].compact += padding;
+  }
+  if (query_mem_desc_copy.entry_count_small > 0) {
+    query_mem_desc_copy.hash_type = GroupByColRangeType::OneColGuessedRange;
   }
   return query_mem_desc_copy;
 }
@@ -479,46 +510,4 @@ void ResultSet::radixSortOnCpu(const std::list<Analyzer::OrderEntry>& order_entr
       apply_permutation_cpu(satellite_val_buff, &idx_buff[0], query_mem_desc_.entry_count, &tmp_buff[0], chosen_bytes);
     }
   }
-}
-
-namespace {
-
-int64_t lazy_decode(const SQLTypeInfo& type_info, const int8_t* byte_stream, const int64_t pos) {
-  const auto enc_type = type_info.get_compression();
-  if (type_info.is_fp()) {
-    if (type_info.get_type() == kFLOAT) {
-      float fval = fixed_width_float_decode_noinline(byte_stream, pos);
-      return *reinterpret_cast<int32_t*>(&fval);
-    } else {
-      double fval = fixed_width_double_decode_noinline(byte_stream, pos);
-      return *reinterpret_cast<int64_t*>(&fval);
-    }
-  }
-  CHECK(type_info.is_integer() || type_info.is_decimal() || type_info.is_time() || type_info.is_boolean() ||
-        (type_info.is_string() && enc_type == kENCODING_DICT));
-  size_t type_bitwidth = get_bit_width(type_info);
-  if (type_info.get_compression() == kENCODING_FIXED) {
-    type_bitwidth = type_info.get_comp_param();
-  }
-  CHECK_EQ(size_t(0), type_bitwidth % 8);
-  return fixed_width_int_decode_noinline(byte_stream, type_bitwidth / 8, pos);
-}
-
-}  // namespace
-
-void ResultSet::fetchLazy(const std::vector<ssize_t> lazy_col_local_ids,
-                          const std::vector<std::vector<const int8_t*>>& col_buffers) const {
-  const auto target_count = targets_.size();
-  CHECK_EQ(target_count, lazy_col_local_ids.size());
-  for (size_t i = 0; i < target_count; ++i) {
-    const auto& target_info = targets_[i];
-    CHECK_EQ(size_t(1), col_buffers.size());
-    auto& frag_col_buffers = col_buffers.front();
-    const auto local_col_id = lazy_col_local_ids[i];
-    if (local_col_id >= 0) {
-      lazy_decode(target_info.sql_type, frag_col_buffers[local_col_id], -1);
-      CHECK(false);
-    }
-  }
-  CHECK(false);
 }

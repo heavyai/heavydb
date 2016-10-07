@@ -89,16 +89,32 @@ class ResultSetStorage {
 
 namespace Analyzer {
 
+class Expr;
 struct OrderEntry;
 
 }  // Analyzer
 
 class Executor;
 
+struct ColumnLazyFetchInfo {
+  const bool is_lazily_fetched;
+  const int local_col_id;
+  const SQLTypeInfo type;
+};
+
 class ResultSet {
  public:
   ResultSet(const std::vector<TargetInfo>& targets,
             const ExecutorDeviceType device_type,
+            const QueryMemoryDescriptor& query_mem_desc,
+            const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+            const Executor* executor);
+
+  ResultSet(const std::vector<TargetInfo>& targets,
+            const std::vector<ColumnLazyFetchInfo>& lazy_fetch_info,
+            const std::vector<std::vector<const int8_t*>>& col_buffers,
+            const ExecutorDeviceType device_type,
+            const int device_id,
             const QueryMemoryDescriptor& query_mem_desc,
             const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
             const Executor* executor);
@@ -154,6 +170,9 @@ class ResultSet {
   void initializeStorage() const;
 
   void holdChunks(const std::list<std::shared_ptr<Chunk_NS::Chunk>>& chunks) { chunks_ = chunks; }
+  void holdChunkIterators(const std::shared_ptr<std::list<ChunkIter>> chunk_iters) {
+    chunk_iters_.push_back(chunk_iters);
+  }
   void holdLiterals(std::vector<int8_t>& literal_buff) { literal_buffers_.push_back(std::move(literal_buff)); }
 
  private:
@@ -166,9 +185,6 @@ class ResultSet {
   void radixSortOnGpu(const std::list<Analyzer::OrderEntry>& order_entries) const;
 
   void radixSortOnCpu(const std::list<Analyzer::OrderEntry>& order_entries) const;
-
-  void fetchLazy(const std::vector<ssize_t> lazy_col_local_ids,
-                 const std::vector<std::vector<const int8_t*>>& col_buffers) const;
 
   static bool isNull(const SQLTypeInfo& ti, const InternalTargetValue& val);
 
@@ -196,6 +212,13 @@ class ResultSet {
                               const bool translate_strings,
                               const bool decimal_to_double) const;
 
+  TargetValue makeRealStringTargetValue(const int8_t* ptr1,
+                                        const int8_t compact_sz1,
+                                        const int8_t* ptr2,
+                                        const int8_t compact_sz2,
+                                        const TargetInfo& target_info,
+                                        const size_t target_logical_idx) const;
+
   InternalTargetValue getColumnInternal(const int8_t* buff, const size_t entry_idx, const size_t col_idx) const;
 
   std::pair<ssize_t, size_t> getStorageIndex(const size_t entry_idx) const;
@@ -212,6 +235,7 @@ class ResultSet {
 
   const std::vector<TargetInfo> targets_;
   const ExecutorDeviceType device_type_;
+  const int device_id_;
   QueryMemoryDescriptor query_mem_desc_;
   mutable std::unique_ptr<ResultSetStorage> storage_;
   std::vector<std::unique_ptr<ResultSetStorage>> appended_storage_;
@@ -226,9 +250,12 @@ class ResultSet {
   const Executor* executor_;  // TODO(alex): remove
 
   std::list<std::shared_ptr<Chunk_NS::Chunk>> chunks_;
+  std::vector<std::shared_ptr<std::list<ChunkIter>>> chunk_iters_;
   // TODO(miyu): refine by using one buffer and
   //   setting offset instead of ptr in group by buffer.
   std::vector<std::vector<int8_t>> literal_buffers_;
+  const std::vector<ColumnLazyFetchInfo> lazy_fetch_info_;
+  std::vector<std::vector<const int8_t*>> col_buffers_;
 
   friend class ResultSetManager;
 };
