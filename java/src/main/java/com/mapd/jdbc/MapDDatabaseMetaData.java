@@ -88,7 +88,7 @@ class MapDDatabaseMetaData implements DatabaseMetaData {
 
   @Override
   public String getDatabaseProductName() throws SQLException { //logger.debug("Entered");
-    return "MapD GPU DB";
+    return "MapD DB";
   }
 
   @Override
@@ -1093,9 +1093,7 @@ SQLException - if a database access error occurs
 
   @Override
   public ResultSet getPrimaryKeys(String catalog, String schema, String table) throws SQLException { //logger.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    return getEmptyResultSet();
   }
 
   @Override
@@ -1261,9 +1259,7 @@ SQLException - if a database access error occurs
   @Override
   public ResultSet getIndexInfo(String catalog, String schema, String table, boolean unique, boolean approximate) throws
           SQLException { //logger.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    return getEmptyResultSet();
   }
 
   @Override

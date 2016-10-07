@@ -89,9 +89,7 @@ class MapDResultSet implements java.sql.ResultSet {
   }
 
   MapDResultSet() {
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    numOfRecords = 0;
   }
 
   @Override

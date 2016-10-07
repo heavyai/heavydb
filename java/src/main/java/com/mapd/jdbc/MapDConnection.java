@@ -214,9 +214,7 @@ public class MapDConnection implements java.sql.Connection {
 
   @Override
   public Statement createStatement(int resultSetType, int resultSetConcurrency) throws SQLException { //logger.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    return new MapDStatement(session, client);
   }
 
   @Override
