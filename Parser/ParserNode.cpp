@@ -588,6 +588,18 @@ std::shared_ptr<Analyzer::Expr> CaseExpr::analyze(const Catalog_Namespace::Catal
   return normalize(expr_pair_list, else_e);
 }
 
+namespace {
+
+bool expr_is_null(const Analyzer::Expr* expr) {
+  if (expr->get_type_info().get_type() == kNULLT) {
+    return true;
+  }
+  const auto const_expr = dynamic_cast<const Analyzer::Constant*>(expr);
+  return const_expr && const_expr->get_is_null();
+}
+
+}  // namespace
+
 std::shared_ptr<Analyzer::Expr> CaseExpr::normalize(
     const std::list<std::pair<std::shared_ptr<Analyzer::Expr>, std::shared_ptr<Analyzer::Expr>>>& expr_pair_list,
     const std::shared_ptr<Analyzer::Expr> else_e_in) {
@@ -619,7 +631,7 @@ std::shared_ptr<Analyzer::Expr> CaseExpr::normalize(
   if (else_e) {
     if (else_e->get_contains_agg())
       has_agg = true;
-    if (else_e->get_type_info().get_type() == kNULLT) {
+    if (expr_is_null(else_e.get())) {
       ti.set_notnull(false);
       else_e->set_type_info(ti);
     } else if (ti != else_e->get_type_info()) {
