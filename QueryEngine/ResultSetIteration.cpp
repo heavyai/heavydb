@@ -37,7 +37,7 @@ TargetValue make_avg_target_value(const int8_t* ptr1,
                                   const int8_t compact_sz2,
                                   const TargetInfo& target_info) {
   int64_t sum{0};
-  if (target_info.agg_arg_type.is_integer()) {
+  if (target_info.agg_arg_type.is_integer() || target_info.agg_arg_type.is_decimal()) {
     sum = read_int_from_buff(ptr1, compact_sz1);
   } else if (target_info.agg_arg_type.is_fp()) {
     switch (compact_sz1) {
@@ -476,6 +476,9 @@ TargetValue ResultSet::getTargetValueFromBufferRowwise(const int8_t* rowwise_tar
 
 // Returns true iff the entry at position entry_idx in buff contains a valid row.
 bool ResultSetStorage::isEmptyEntry(const size_t entry_idx, const int8_t* buff) const {
+  if (GroupByColRangeType::Scan == query_mem_desc_.hash_type) {
+    return false;
+  }
   if (query_mem_desc_.keyless_hash) {
     CHECK(query_mem_desc_.hash_type == GroupByColRangeType::OneColKnownRange ||
           query_mem_desc_.hash_type == GroupByColRangeType::MultiColPerfectHash);
