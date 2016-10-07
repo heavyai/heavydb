@@ -326,12 +326,13 @@ std::pair<ssize_t, size_t> ResultSet::getStorageIndex(const size_t entry_idx) co
   return {-1, entry_idx};
 }
 
-std::pair<const ResultSetStorage*, size_t> ResultSet::findStorage(const size_t entry_idx) const {
+ResultSet::StorageLookupResult ResultSet::findStorage(const size_t entry_idx) const {
   ssize_t stg_idx{-1};
   size_t fixedup_entry_idx{entry_idx};
   std::tie(stg_idx, fixedup_entry_idx) = getStorageIndex(entry_idx);
   CHECK_LE(ssize_t(0), stg_idx);
-  return {stg_idx ? appended_storage_[stg_idx - 1].get() : storage_.get(), fixedup_entry_idx};
+  return {
+      stg_idx ? appended_storage_[stg_idx - 1].get() : storage_.get(), fixedup_entry_idx, static_cast<size_t>(stg_idx)};
 }
 
 #define LIKELY(x) __builtin_expect(!!(x), 1)
@@ -343,12 +344,12 @@ std::function<bool(const uint32_t, const uint32_t)> ResultSet::createComparator(
   return [this, &order_entries, use_heap](const uint32_t lhs, const uint32_t rhs) {
     // NB: The compare function must define a strict weak ordering, otherwise
     // std::sort will trigger a segmentation fault (or corrupt memory).
-    const ResultSetStorage* lhs_storage{nullptr};
-    const ResultSetStorage* rhs_storage{nullptr};
-    size_t fixedup_lhs{lhs};
-    size_t fixedup_rhs{rhs};
-    std::tie(lhs_storage, fixedup_lhs) = findStorage(lhs);
-    std::tie(rhs_storage, fixedup_rhs) = findStorage(rhs);
+    const auto lhs_storage_lookup_result = findStorage(lhs);
+    const auto rhs_storage_lookup_result = findStorage(rhs);
+    const auto lhs_storage = lhs_storage_lookup_result.storage_ptr;
+    const auto rhs_storage = rhs_storage_lookup_result.storage_ptr;
+    const auto fixedup_lhs = lhs_storage_lookup_result.fixedup_entry_idx;
+    const auto fixedup_rhs = rhs_storage_lookup_result.fixedup_entry_idx;
     for (const auto order_entry : order_entries) {
       CHECK_GE(order_entry.tle_no, 1);
       const auto& entry_ti = get_compact_type(targets_[order_entry.tle_no - 1]);
@@ -362,8 +363,10 @@ std::function<bool(const uint32_t, const uint32_t)> ResultSet::createComparator(
       if (rhs_storage->isEmptyEntry(fixedup_rhs) && !lhs_storage->isEmptyEntry(fixedup_lhs)) {
         return !use_heap;
       }
-      const auto lhs_v = getColumnInternal(lhs_storage->buff_, fixedup_lhs, order_entry.tle_no - 1);
-      const auto rhs_v = getColumnInternal(rhs_storage->buff_, fixedup_rhs, order_entry.tle_no - 1);
+      const auto lhs_v =
+          getColumnInternal(lhs_storage->buff_, fixedup_lhs, order_entry.tle_no - 1, lhs_storage_lookup_result);
+      const auto rhs_v =
+          getColumnInternal(rhs_storage->buff_, fixedup_rhs, order_entry.tle_no - 1, rhs_storage_lookup_result);
       if (UNLIKELY(isNull(entry_ti, lhs_v) && isNull(entry_ti, rhs_v))) {
         return false;
       }

@@ -3417,7 +3417,8 @@ RowSetPtr Executor::reduceMultiDeviceResults(const RelAlgExecutionUnit& ra_exe_u
   }
 
   if (can_use_result_set(query_mem_desc, dt_for_all)) {
-    return reduceMultiDeviceResultSets(results_per_device, row_set_mem_owner, query_mem_desc);
+    return reduceMultiDeviceResultSets(
+        results_per_device, row_set_mem_owner, ResultSet::fixupQueryMemoryDescriptor(query_mem_desc));
   }
 
   auto first = boost::get<RowSetPtr>(&results_per_device.front().first);
@@ -3673,7 +3674,7 @@ RowSetPtr Executor::executeResultPlan(const Planner::Result* result_plan,
     target_types.push_back(in_col->get_expr()->get_type_info());
   }
   CHECK(rows);
-  ColumnarResults result_columns(*rows, in_col_count, target_types);
+  ColumnarResults result_columns(row_set_mem_owner_, *rows, in_col_count, target_types);
   std::vector<llvm::Value*> col_heads;
   // Nested query, let the compiler know
   ResetIsNested reset_is_nested(this);
@@ -4179,7 +4180,7 @@ void Executor::ExecutionDispatch::runImpl(const ExecutorDeviceType chosen_device
   CHECK_GE(chosen_device_id, 0);
   CHECK_LT(chosen_device_id, max_gpu_count);
   // need to own them while query executes
-  std::list<ChunkIter> chunk_iterators;
+  auto chunk_iterators_ptr = std::make_shared<std::list<ChunkIter>>();
   std::list<std::shared_ptr<Chunk_NS::Chunk>> chunks;
   std::unique_ptr<std::lock_guard<std::mutex>> gpu_lock;
   if (chosen_device_type == ExecutorDeviceType::GPU) {
@@ -4216,7 +4217,7 @@ void Executor::ExecutionDispatch::runImpl(const ExecutorDeviceType chosen_device
                                                                  all_tables_fragments,
                                                                  frag_ids,
                                                                  cat_,
-                                                                 chunk_iterators,
+                                                                 *chunk_iterators_ptr,
                                                                  chunks);
   } catch (const OutOfMemory&) {
     std::lock_guard<std::mutex> lock(reduce_mutex_);
@@ -4325,6 +4326,7 @@ void Executor::ExecutionDispatch::runImpl(const ExecutorDeviceType chosen_device
   if (auto rows_pp = boost::get<RowSetPtr>(&device_results)) {
     if (auto& rows_ptr = *rows_pp) {
       rows_ptr->holdChunks(chunks);
+      rows_ptr->holdChunkIterators(chunk_iterators_ptr);
     }
   }
   {
@@ -4463,8 +4465,9 @@ const int8_t* Executor::ExecutionDispatch::getColumn(const InputColDescriptor* c
     }
     auto& frag_id_to_iters = columnarized_table_cache_[iter_table_id];
     if (frag_id_to_iters.empty() || !frag_id_to_iters.count(frag_id)) {
-      frag_id_to_iters.insert(
-          std::make_pair(frag_id, std::unique_ptr<const ColumnarResults>(columnarize_result(iter_buffer, frag_id))));
+      frag_id_to_iters.insert(std::make_pair(
+          frag_id,
+          std::unique_ptr<const ColumnarResults>(columnarize_result(row_set_mem_owner_, iter_buffer, frag_id))));
     }
 
     if (columnarized_ref_table_cache_.empty() || !columnarized_ref_table_cache_.count(iter_desc)) {
@@ -4481,7 +4484,8 @@ const int8_t* Executor::ExecutionDispatch::getColumn(const InputColDescriptor* c
       auto& frag_id_to_ref = columnarized_table_cache_[ref_table_id];
       if (frag_id_to_ref.empty() || !frag_id_to_ref.count(ref_frag_id)) {
         frag_id_to_ref.insert(std::make_pair(
-            ref_frag_id, std::unique_ptr<const ColumnarResults>(columnarize_result(ref_buffer, ref_table_id))));
+            ref_frag_id,
+            std::unique_ptr<const ColumnarResults>(columnarize_result(row_set_mem_owner_, ref_buffer, ref_table_id))));
       }
       sub_key = {frag_id};
       if (frag_id_to_result.empty() || !frag_id_to_result.count(sub_key)) {
@@ -4540,8 +4544,8 @@ const int8_t* Executor::ExecutionDispatch::getColumn(const ResultPtr& buffer,
     }
     auto& frag_id_to_result = columnarized_table_cache_[table_id];
     if (frag_id_to_result.empty() || !frag_id_to_result.count(frag_id)) {
-      frag_id_to_result.insert(
-          std::make_pair(frag_id, std::unique_ptr<const ColumnarResults>(columnarize_result(buffer, frag_id))));
+      frag_id_to_result.insert(std::make_pair(
+          frag_id, std::unique_ptr<const ColumnarResults>(columnarize_result(row_set_mem_owner_, buffer, frag_id))));
     }
   }
   CHECK_GE(col_id, 0);

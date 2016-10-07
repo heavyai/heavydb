@@ -118,8 +118,9 @@ std::vector<TargetValue> ResultSet::getNextRowImpl(const bool translate_strings,
     CHECK_EQ(entryCount(), crt_row_buff_idx_);
     return {};
   }
-  const ResultSetStorage* storage{nullptr};
-  std::tie(storage, entry_buff_idx) = findStorage(entry_buff_idx);
+  const auto storage_lookup_result = findStorage(entry_buff_idx);
+  const auto storage = storage_lookup_result.storage_ptr;
+  entry_buff_idx = storage_lookup_result.fixedup_entry_idx;
   const auto buff = storage->buff_;
   CHECK(buff);
   std::vector<TargetValue> row;
@@ -181,7 +182,8 @@ const int8_t* columnar_elem_ptr(const size_t entry_idx, const int8_t* col1_ptr, 
 
 InternalTargetValue ResultSet::getColumnInternal(const int8_t* buff,
                                                  const size_t entry_idx,
-                                                 const size_t col_idx) const {
+                                                 const size_t target_logical_idx,
+                                                 const StorageLookupResult& storage_lookup_result) const {
   CHECK(buff);
   const auto buffer_col_count = get_buffer_col_slot_count(storage_->query_mem_desc_);
   const int8_t* rowwise_target_ptr{nullptr};
@@ -191,7 +193,7 @@ InternalTargetValue ResultSet::getColumnInternal(const int8_t* buff,
   } else {
     rowwise_target_ptr = row_ptr_rowwise(buff, query_mem_desc_, entry_idx) + get_key_bytes_rowwise(query_mem_desc_);
   }
-  CHECK_LT(col_idx, storage_->targets_.size());
+  CHECK_LT(target_logical_idx, storage_->targets_.size());
   size_t agg_col_idx = 0;
   // TODO(alex): remove this loop, offsets can be computed only once
   for (size_t target_idx = 0; target_idx < storage_->targets_.size(); ++target_idx) {
@@ -202,9 +204,12 @@ InternalTargetValue ResultSet::getColumnInternal(const int8_t* buff,
       const auto col2_ptr = (agg_info.is_agg && agg_info.agg_kind == kAVG) ? next_col_ptr : nullptr;
       const auto compact_sz2 =
           (agg_info.is_agg && agg_info.agg_kind == kAVG) ? query_mem_desc_.agg_col_widths[agg_col_idx + 1].compact : 0;
-      if (target_idx == col_idx) {
+      if (target_idx == target_logical_idx) {
         const auto compact_sz1 = query_mem_desc_.agg_col_widths[agg_col_idx].compact;
-        const auto i1 = read_int_from_buff(columnar_elem_ptr(entry_idx, crt_col_ptr, compact_sz1), compact_sz1);
+        const auto i1 =
+            lazyReadInt(read_int_from_buff(columnar_elem_ptr(entry_idx, crt_col_ptr, compact_sz1), compact_sz1),
+                        target_logical_idx,
+                        storage_lookup_result);
         if (col2_ptr) {
           const auto i2 = read_int_from_buff(columnar_elem_ptr(entry_idx, col2_ptr, compact_sz2), compact_sz2);
           return InternalTargetValue(i1, i2);
@@ -225,8 +230,8 @@ InternalTargetValue ResultSet::getColumnInternal(const int8_t* buff,
         ptr2 = rowwise_target_ptr + query_mem_desc_.agg_col_widths[agg_col_idx].compact;
         compact_sz2 = query_mem_desc_.agg_col_widths[agg_col_idx + 1].compact;
       }
-      if (target_idx == col_idx) {
-        const auto i1 = read_int_from_buff(ptr1, compact_sz1);
+      if (target_idx == target_logical_idx) {
+        const auto i1 = lazyReadInt(read_int_from_buff(ptr1, compact_sz1), target_logical_idx, storage_lookup_result);
         if (ptr2) {
           const auto i2 = read_int_from_buff(ptr2, compact_sz2);
           return InternalTargetValue(i1, i2);
@@ -242,14 +247,29 @@ InternalTargetValue ResultSet::getColumnInternal(const int8_t* buff,
   return InternalTargetValue(int64_t(0));
 }
 
+int64_t ResultSet::lazyReadInt(const int64_t ival,
+                               const size_t target_logical_idx,
+                               const StorageLookupResult& storage_lookup_result) const {
+  if (!lazy_fetch_info_.empty()) {
+    CHECK_LT(target_logical_idx, lazy_fetch_info_.size());
+    const auto& col_lazy_fetch = lazy_fetch_info_[target_logical_idx];
+    if (col_lazy_fetch.is_lazily_fetched) {
+      CHECK_LT(static_cast<size_t>(storage_lookup_result.storage_idx), col_buffers_.size());
+      auto& frag_col_buffers = col_buffers_[storage_lookup_result.storage_idx];
+      return lazy_decode(col_lazy_fetch, frag_col_buffers[col_lazy_fetch.local_col_id], ival);
+    }
+  }
+  return ival;
+}
+
 // Not all entries in the buffer represent a valid row. Advance the internal cursor
 // used for the getNextRow method to the next row which is valid.
 size_t ResultSet::advanceCursorToNextEntry() const {
   while (crt_row_buff_idx_ < entryCount()) {
-    const ResultSetStorage* storage{nullptr};
     const auto entry_idx = permutation_.empty() ? crt_row_buff_idx_ : permutation_[crt_row_buff_idx_];
-    size_t fixedup_entry_idx{entry_idx};
-    std::tie(storage, fixedup_entry_idx) = findStorage(entry_idx);
+    const auto storage_lookup_result = findStorage(entry_idx);
+    const auto storage = storage_lookup_result.storage_ptr;
+    const auto fixedup_entry_idx = storage_lookup_result.fixedup_entry_idx;
     if (!storage->isEmptyEntry(fixedup_entry_idx)) {
       break;
     }
@@ -265,8 +285,6 @@ size_t ResultSet::advanceCursorToNextEntry() const {
 size_t ResultSet::entryCount() const {
   return permutation_.empty() ? (query_mem_desc_.entry_count + query_mem_desc_.entry_count_small) : permutation_.size();
 }
-
-namespace {
 
 int64_t lazy_decode(const ColumnLazyFetchInfo& col_lazy_fetch, const int8_t* byte_stream, const int64_t pos) {
   CHECK(col_lazy_fetch.is_lazily_fetched);
@@ -310,8 +328,6 @@ int64_t lazy_decode(const ColumnLazyFetchInfo& col_lazy_fetch, const int8_t* byt
   }
   return val;
 }
-
-}  // namespace
 
 // Interprets ptr1, ptr2 as the ptr and len pair used for raw string.
 TargetValue ResultSet::makeRealStringTargetValue(const int8_t* ptr1,

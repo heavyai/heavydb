@@ -31,7 +31,10 @@ class ReductionRanOutOfSlots : public std::runtime_error {
 
 class ColumnarResults {
  public:
-  ColumnarResults(const ResultRows& rows, const size_t num_columns, const std::vector<SQLTypeInfo>& target_types)
+  ColumnarResults(const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+                  const ResultRows& rows,
+                  const size_t num_columns,
+                  const std::vector<SQLTypeInfo>& target_types)
       : column_buffers_(num_columns), num_rows_(rows.rowCount()), target_types_(target_types) {
     column_buffers_.resize(num_columns);
     for (size_t i = 0; i < num_columns; ++i) {
@@ -39,6 +42,7 @@ class ColumnarResults {
       CHECK(!target_types[i].is_string() ||
             (target_types[i].get_compression() == kENCODING_DICT && target_types[i].get_logical_size() == 4));
       column_buffers_[i] = static_cast<const int8_t*>(checked_malloc(num_rows_ * target_types[i].get_size()));
+      row_set_mem_owner->addColBuffer(column_buffers_[i]);
     }
     size_t row_idx{0};
     while (true) {
@@ -91,7 +95,10 @@ class ColumnarResults {
     rows.moveToBegin();
   }
 
-  ColumnarResults(const IteratorTable& table, const int frag_id, const std::vector<SQLTypeInfo>& target_types)
+  ColumnarResults(const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+                  const IteratorTable& table,
+                  const int frag_id,
+                  const std::vector<SQLTypeInfo>& target_types)
       : num_rows_([&]() {
           auto fragment = table.getFragAt(frag_id);
           CHECK(!fragment.row_count || fragment.data);
@@ -155,12 +162,6 @@ class ColumnarResults {
       }
     }
     return filtered_vals;
-  }
-
-  ~ColumnarResults() {
-    for (const auto column_buffer : column_buffers_) {
-      free((void*)column_buffer);
-    }
   }
 
   const std::vector<const int8_t*>& getColumnBuffers() const { return column_buffers_; }
@@ -399,6 +400,8 @@ class QueryExecutionContext : boost::noncopyable {
   std::vector<ssize_t> allocateCountDistinctBuffers(const bool deferred);
   int64_t allocateCountDistinctBitmap(const size_t bitmap_sz);
   int64_t allocateCountDistinctSet();
+
+  std::vector<ColumnLazyFetchInfo> getColLazyFetchInfo(const std::vector<Analyzer::Expr*>& target_exprs) const;
 
   const QueryMemoryDescriptor& query_mem_desc_;
   std::vector<int64_t> init_agg_vals_;

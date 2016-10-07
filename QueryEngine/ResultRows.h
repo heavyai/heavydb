@@ -156,6 +156,11 @@ class RowSetMemoryOwner : boost::noncopyable {
     lit_str_dict_ = lit_str_dict;
   }
 
+  void addColBuffer(const void* col_buffer) {
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    col_buffers_.push_back(const_cast<void*>(col_buffer));
+  }
+
   ~RowSetMemoryOwner() {
     for (auto count_distinct_buffer : count_distinct_bitmaps_) {
       free(count_distinct_buffer);
@@ -165,6 +170,9 @@ class RowSetMemoryOwner : boost::noncopyable {
     }
     for (auto group_by_buffer : group_by_buffers_) {
       free(group_by_buffer);
+    }
+    for (auto col_buffer : col_buffers_) {
+      free(col_buffer);
     }
     decltype(str_dict_owners_)().swap(str_dict_owners_);
     decltype(str_dict_owned_)().swap(str_dict_owned_);
@@ -183,6 +191,7 @@ class RowSetMemoryOwner : boost::noncopyable {
   std::unordered_map<int, StringDictionary*> str_dict_owned_;
   std::vector<std::unique_ptr<DictStrLiteralsOwner>> str_dict_owners_;
   std::shared_ptr<StringDictionary> lit_str_dict_;
+  std::vector<void*> col_buffers_;
   mutable std::mutex state_mutex_;
 
   friend class ResultRows;
@@ -527,7 +536,9 @@ class ResultRows {
   }
 
   void append(const ResultRows& more_results) {
-    CHECK(!result_set_);
+    if (result_set_) {
+      result_set_->append(*more_results.getResultSet());
+    }
     simple_keys_.insert(simple_keys_.end(), more_results.simple_keys_.begin(), more_results.simple_keys_.end());
     multi_keys_.insert(multi_keys_.end(), more_results.multi_keys_.begin(), more_results.multi_keys_.end());
     target_values_.append(more_results.target_values_);
@@ -680,6 +691,12 @@ class ResultRows {
   void holdLiterals(std::vector<int8_t>& literal_buff) {
     if (result_set_) {
       result_set_->holdLiterals(literal_buff);
+    }
+  }
+
+  void holdChunkIterators(const std::shared_ptr<std::list<ChunkIter>> chunk_iters) {
+    if (result_set_) {
+      result_set_->holdChunkIterators(chunk_iters);
     }
   }
 

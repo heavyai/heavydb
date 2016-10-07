@@ -176,12 +176,14 @@ inline const SQLTypeInfo get_column_type(const int col_id,
 }
 
 template <typename PtrTy>
-inline const ColumnarResults* rows_to_columnar_results(const PtrTy& result, const int number) {
+inline const ColumnarResults* rows_to_columnar_results(std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+                                                       const PtrTy& result,
+                                                       const int number) {
   std::vector<SQLTypeInfo> col_types;
   for (size_t i = 0; i < result->colCount(); ++i) {
     col_types.push_back(result->getColType(i));
   }
-  return new ColumnarResults(*result, number, col_types);
+  return new ColumnarResults(row_set_mem_owner, *result, number, col_types);
 }
 
 // TODO(alex): Adjust interfaces downstream and make this not needed.
@@ -193,12 +195,14 @@ inline std::vector<Analyzer::Expr*> get_exprs_not_owned(const std::vector<std::s
   return exprs_not_owned;
 }
 
-inline const ColumnarResults* columnarize_result(const ResultPtr& result, const int frag_id) {
+inline const ColumnarResults* columnarize_result(std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+                                                 const ResultPtr& result,
+                                                 const int frag_id) {
   if (const auto rows = boost::get<RowSetPtr>(&result)) {
     CHECK_EQ(0, frag_id);
-    return rows_to_columnar_results(*rows, (*rows)->colCount());
+    return rows_to_columnar_results(row_set_mem_owner, *rows, (*rows)->colCount());
   } else if (const auto table = boost::get<IterTabPtr>(&result)) {
-    return rows_to_columnar_results(*table, frag_id);
+    return rows_to_columnar_results(row_set_mem_owner, *table, frag_id);
   }
   CHECK(false);
   return nullptr;

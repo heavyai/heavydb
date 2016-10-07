@@ -229,11 +229,24 @@ class ResultSet {
                                         const size_t target_logical_idx,
                                         const size_t entry_buff_idx) const;
 
-  InternalTargetValue getColumnInternal(const int8_t* buff, const size_t entry_idx, const size_t col_idx) const;
+  struct StorageLookupResult {
+    const ResultSetStorage* storage_ptr;
+    const size_t fixedup_entry_idx;
+    const size_t storage_idx;
+  };
+
+  InternalTargetValue getColumnInternal(const int8_t* buff,
+                                        const size_t entry_idx,
+                                        const size_t target_logical_idx,
+                                        const StorageLookupResult& storage_lookup_result) const;
+
+  int64_t lazyReadInt(const int64_t ival,
+                      const size_t target_logical_idx,
+                      const StorageLookupResult& storage_lookup_result) const;
 
   std::pair<ssize_t, size_t> getStorageIndex(const size_t entry_idx) const;
 
-  std::pair<const ResultSetStorage*, size_t> findStorage(const size_t entry_idx) const;
+  StorageLookupResult findStorage(const size_t entry_idx) const;
 
   std::function<bool(const uint32_t, const uint32_t)> createComparator(
       const std::list<Analyzer::OrderEntry>& order_entries,
@@ -282,5 +295,7 @@ class RowSortException : public std::runtime_error {
  public:
   RowSortException(const std::string& cause) : std::runtime_error(cause) {}
 };
+
+int64_t lazy_decode(const ColumnLazyFetchInfo& col_lazy_fetch, const int8_t* byte_stream, const int64_t pos);
 
 #endif  // QUERYENGINE_RESULTSET_H

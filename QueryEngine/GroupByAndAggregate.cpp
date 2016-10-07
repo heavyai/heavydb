@@ -118,7 +118,10 @@ QueryExecutionContext::QueryExecutionContext(const RelAlgExecutionUnit& ra_exe_u
     }
     if (can_use_result_set(query_mem_desc_, device_type_)) {
       result_sets_.emplace_back(new ResultSet(target_exprs_to_infos(ra_exe_unit.target_exprs),
+                                              getColLazyFetchInfo(ra_exe_unit.target_exprs),
+                                              col_buffers,
                                               device_type_,
+                                              device_id,
                                               ResultSet::fixupQueryMemoryDescriptor(query_mem_desc_),
                                               row_set_mem_owner_,
                                               executor));
@@ -129,6 +132,23 @@ QueryExecutionContext::QueryExecutionContext(const RelAlgExecutionUnit& ra_exe_u
       result_sets_.emplace_back(nullptr);
     }
   }
+}
+
+std::vector<ColumnLazyFetchInfo> QueryExecutionContext::getColLazyFetchInfo(
+    const std::vector<Analyzer::Expr*>& target_exprs) const {
+  std::vector<ColumnLazyFetchInfo> col_lazy_fetch_info;
+  for (const auto target_expr : target_exprs) {
+    if (!executor_->plan_state_->isLazyFetchColumn(target_expr)) {
+      col_lazy_fetch_info.emplace_back(ColumnLazyFetchInfo{false, -1, SQLTypeInfo(kNULLT, false)});
+    } else {
+      const auto col_var = dynamic_cast<const Analyzer::ColumnVar*>(target_expr);
+      CHECK(col_var);
+      auto col_id = executor_->getLocalColumnId(col_var, false);
+      const auto& col_ti = col_var->get_type_info();
+      col_lazy_fetch_info.emplace_back(ColumnLazyFetchInfo{true, col_id, col_ti});
+    }
+  }
+  return col_lazy_fetch_info;
 }
 
 void QueryExecutionContext::initColumnPerRow(int8_t* row_ptr,
