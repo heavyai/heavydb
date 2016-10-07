@@ -55,7 +55,9 @@ QueryExecutionContext::QueryExecutionContext(const RelAlgExecutionUnit& ra_exe_u
   CHECK(!sort_on_gpu_ || output_columnar);
   if (render_allocator_map || query_mem_desc_.group_col_widths.empty()) {
     allocateCountDistinctBuffers(false);
-    return;
+    if (render_allocator_map) {
+      return;
+    }
   }
 
   std::unique_ptr<int64_t, CheckedAllocDeleter> group_by_buffer_template(
@@ -89,7 +91,8 @@ QueryExecutionContext::QueryExecutionContext(const RelAlgExecutionUnit& ra_exe_u
     initGroups(group_by_small_buffer_template.get(), &init_agg_vals[0], query_mem_desc_.entry_count_small, false, 1);
   }
 
-  const auto step = device_type_ == ExecutorDeviceType::GPU && query_mem_desc_.threadsShareMemory()
+  const auto step = device_type_ == ExecutorDeviceType::GPU && query_mem_desc_.threadsShareMemory() &&
+                            !query_mem_desc_.group_col_widths.empty()
                         ? executor_->blockSize()
                         : size_t(1);
   const auto index_buffer_qw = device_type_ == ExecutorDeviceType::GPU && sort_on_gpu_ && query_mem_desc_.keyless_hash
@@ -97,7 +100,8 @@ QueryExecutionContext::QueryExecutionContext(const RelAlgExecutionUnit& ra_exe_u
                                    : size_t(0);
   const auto group_buffer_size = query_mem_desc_.getBufferSizeBytes(device_type_) + index_buffer_qw * sizeof(int64_t);
   const auto small_buffer_size = query_mem_desc_.getSmallBufferSizeBytes();
-  for (size_t i = 0; i < num_buffers_; i += step) {
+  const auto group_buffers_count = query_mem_desc_.group_col_widths.empty() ? 1 : num_buffers_;
+  for (size_t i = 0; i < group_buffers_count; i += step) {
     auto group_by_buffer = static_cast<int64_t*>(checked_malloc(group_buffer_size + small_buffer_size));
     if (!query_mem_desc_.lazyInitGroups(device_type)) {
       memcpy(group_by_buffer + index_buffer_qw,
@@ -563,7 +567,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const RelAlgExecution
                                                            const int64_t join_hash_table,
                                                            RenderAllocatorMap* render_allocator_map) const {
 #ifdef HAVE_CUDA
-  bool is_group_by{query_mem_desc_.getBufferSizeBytes(ExecutorDeviceType::GPU) > 0};
+  bool is_group_by{!query_mem_desc_.group_col_widths.empty()};
   data_mgr->cudaMgr_->setContext(device_id);
 
   RenderAllocator* render_allocator = nullptr;
@@ -1273,7 +1277,7 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
                        0,
                        group_col_widths,
                        agg_col_widths,
-                       0,
+                       1,
                        0,
                        0,
                        0,
