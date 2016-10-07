@@ -187,7 +187,6 @@ void ResultSetStorage::reduceOneEntryNoCollisionsRowWise(const size_t entry_idx,
                                                          int8_t* this_buff,
                                                          const int8_t* that_buff) const {
   CHECK(!query_mem_desc_.output_columnar);
-  CHECK(query_mem_desc_.hash_type != GroupByColRangeType::Scan);
   if (isEmptyEntry(entry_idx, that_buff)) {
     return;
   }
@@ -476,6 +475,23 @@ ResultSet* ResultSetManager::reduce(std::vector<ResultSet*>& result_sets) {
     result->reduce(*((*result_it)->storage_));
   }
   return result_rs;
+}
+
+void ResultSetStorage::fillOneEntryRowWise(const std::vector<int64_t>& entry) {
+  const auto slot_count = get_buffer_col_slot_count(query_mem_desc_);
+  const auto key_count = get_groupby_col_count(query_mem_desc_);
+  CHECK_EQ(slot_count + key_count, entry.size());
+  auto this_buff = reinterpret_cast<int64_t*>(buff_);
+  CHECK(!query_mem_desc_.output_columnar);
+  CHECK_EQ(size_t(1), query_mem_desc_.entry_count);
+  const auto key_off = key_offset_rowwise(0, key_count, slot_count);
+  for (size_t i = 0; i < key_count; ++i) {
+    this_buff[key_off + i] = entry[i];
+  }
+  const auto first_slot_off = slot_offset_rowwise(0, 0, key_count, slot_count);
+  for (size_t i = 0; i < target_init_vals_.size(); ++i) {
+    this_buff[first_slot_off + i] = entry[key_count + i];
+  }
 }
 
 void ResultSetStorage::initializeRowWise() const {

@@ -239,7 +239,6 @@ InternalTargetValue ResultSet::getColumnInternal(const int8_t* buff,
 // Not all entries in the buffer represent a valid row. Advance the internal cursor
 // used for the getNextRow method to the next row which is valid.
 size_t ResultSet::advanceCursorToNextEntry() const {
-  CHECK(GroupByColRangeType::Scan != storage_->query_mem_desc_.hash_type);
   while (crt_row_buff_idx_ < entryCount()) {
     const ResultSetStorage* storage{nullptr};
     const auto entry_idx = permutation_.empty() ? crt_row_buff_idx_ : permutation_[crt_row_buff_idx_];
@@ -477,7 +476,6 @@ TargetValue ResultSet::getTargetValueFromBufferRowwise(const int8_t* rowwise_tar
 
 // Returns true iff the entry at position entry_idx in buff contains a valid row.
 bool ResultSetStorage::isEmptyEntry(const size_t entry_idx, const int8_t* buff) const {
-  CHECK(query_mem_desc_.hash_type != GroupByColRangeType::Scan);
   if (query_mem_desc_.keyless_hash) {
     CHECK(query_mem_desc_.hash_type == GroupByColRangeType::OneColKnownRange ||
           query_mem_desc_.hash_type == GroupByColRangeType::MultiColPerfectHash);

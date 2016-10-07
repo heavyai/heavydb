@@ -73,6 +73,8 @@ class ResultSetStorage {
                                   const TargetInfo& target_info,
                                   const size_t target_logical_idx) const;
 
+  void fillOneEntryRowWise(const std::vector<int64_t>& entry);
+
   void initializeRowWise() const;
 
   void initializeColWise() const;
@@ -166,6 +168,11 @@ class ResultSet {
   // in ColWidths already contains the padding, whereas in the executor it's computed.
   // Once the buffer initialization moves to ResultSet we can remove this method.
   static QueryMemoryDescriptor fixupQueryMemoryDescriptor(const QueryMemoryDescriptor&);
+
+  void fillOneEntry(const std::vector<int64_t>& entry) {
+    CHECK(storage_);
+    storage_->fillOneEntryRowWise(entry);
+  }
 
   void initializeStorage() const;
 
