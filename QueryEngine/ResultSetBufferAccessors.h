@@ -12,8 +12,14 @@
 #include "QueryMemoryDescriptor.h"
 #include "SqlTypesLayout.h"
 
+inline bool is_real_str_or_array(const TargetInfo& target_info) {
+  return !target_info.is_agg &&
+         (target_info.sql_type.is_array() ||
+          (target_info.sql_type.is_string() && target_info.sql_type.get_compression() == kENCODING_NONE));
+}
+
 inline size_t advance_slot(const size_t j, const TargetInfo& target_info) {
-  return j + (target_info.agg_kind == kAVG ? 2 : 1);
+  return j + ((target_info.agg_kind == kAVG || is_real_str_or_array(target_info)) ? 2 : 1);
 }
 
 inline size_t slot_offset_rowwise(const size_t entry_idx,
@@ -118,7 +124,7 @@ inline T advance_target_ptr(T target_ptr,
                             const size_t slot_idx,
                             const QueryMemoryDescriptor& query_mem_desc) {
   auto result = target_ptr + query_mem_desc.agg_col_widths[slot_idx].compact;
-  if (target_info.is_agg && target_info.agg_kind == kAVG) {
+  if ((target_info.is_agg && target_info.agg_kind == kAVG) || is_real_str_or_array(target_info)) {
     return result + query_mem_desc.agg_col_widths[slot_idx + 1].compact;
   }
   return result;
