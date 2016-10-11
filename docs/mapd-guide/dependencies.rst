@@ -6,7 +6,7 @@ which minimizes the number of dependencies required. The following are
 the minimum requirements for running MapD.
 
 Basic installation instructions for all dependencies are provided in the
-`Installation <installation#installation>`__ section below.
+:ref:`installation` section.
 
 Operating Systems, Officially Supported
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

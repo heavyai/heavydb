@@ -28,7 +28,7 @@ Tables
 
 -  DICT: Dictionary encoding on string columns (The Default for TEXT
    columns).
--  NONE: No encoding. Only valid on TEXT columns. No Dictionalry will be
+-  NONE: No encoding. Only valid on TEXT columns. No Dictionary will be
    created. Aggregate operations will not be possible on this column
    type
 -  FIXED(bits): Fixed length encoding of integer or timestamp columns.

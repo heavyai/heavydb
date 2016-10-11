@@ -16,23 +16,43 @@ Services
 
 ::
 
-    mapd_server $MAPD_DATA [--cpu|--gpu|--hybrid]
+    mapd_server $MAPD_DATA [--cpu|--gpu]
+                           [--config </path/to/mapd.conf>]
                            [{-p|--port} <port number>]
+                           [--http-port <port number>]
+                           [--ldap-uri <string>]
+                           [--ldap-ou-dc <string>
                            [--flush-log]
+                           [--disable-rendering]
+                           [--num-gpus <number>]
+                           [--start-gpu <number>]
                            [--version|-v]
+                           [--help|-h]
 
 This command starts the MapD server process. ``$MAPD_DATA`` must match
 that in the ``initdb`` command when it was run. The options are:
 
 -  ``[--cpu|--gpu]``: Execute queries on CPU-only or on both GPU and
    CPU. The default is ``--gpu``.
+-  ``[--config]``: Path to mapd.conf.
 -  ``[{-p|--port} <port number>]``: Specify the port for MapD's
    binary-over-TCP protocol. The default is port 9091.
 -  ``[{--http-port} <port number>]``: Specify the port for MapD's
    JSON-over-HTTP protocol. The default is port 9090.
+-  ``[--ldap-uri <string>]``: LDAP URI for authentication, for example
+   ldap://ldap.mycompany.com
+-  ``[--ldap-ou-dc <string]``: LDAP organization unit and domain,
+   defaults to ou=users,dc=mapd,dc=com.
 -  ``[--flush-log]``: Flush log files to disk. Useful for ``tail -F`` on
    log files.
+-  ``[--disable-rendering]``: Disables server-based rendering. Defaults
+   to FALSE.
+-  ``[--num-gpus <number>]``: Number of GPUs to use, defaults to number
+   detected on hardware.
+-  ``[--start-gpu <number>]``: When not using all detected GPUs, start
+   using GPUs at this number, defaults to zero.
 -  ``[--version|-v]``: Prints version number.
+-  ``[--help|-h]``: Print this help text.
 
 ``mapd_web_server``
 -------------------
