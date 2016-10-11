@@ -585,16 +585,7 @@ void ResultSet::radixSortOnGpu(const std::list<Analyzer::OrderEntry>& order_entr
                                                    true,
                                                    true,
                                                    nullptr);
-  size_t max_entry_size{0};
-  for (const auto& wid : query_mem_desc_.agg_col_widths) {
-    max_entry_size = std::max(max_entry_size, size_t(wid.compact));
-  }
-  if (!query_mem_desc_.keyless_hash) {
-    max_entry_size = std::max(max_entry_size, sizeof(int64_t));
-  }
-  ScopedScratchBuffer scratch_buff(query_mem_desc_.entry_count * max_entry_size, data_mgr, device_id);
-  ResultRows::inplaceSortGpuImpl(
-      order_entries, query_mem_desc_, gpu_query_mem, reinterpret_cast<int64_t*>(scratch_buff.getPtr()));
+  ResultRows::inplaceSortGpuImpl(order_entries, query_mem_desc_, gpu_query_mem, data_mgr, device_id);
   copy_group_by_buffers_from_gpu(data_mgr,
                                  group_by_buffers,
                                  query_mem_desc_.getBufferSizeBytes(ExecutorDeviceType::GPU),

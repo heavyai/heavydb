@@ -287,3 +287,18 @@ bool buffer_not_null(const QueryMemoryDescriptor& query_mem_desc,
   }
   return (!query_mem_desc.threadsShareMemory() || (i % block_size_x == 0));
 }
+
+int8_t* ThrustAllocator::allocate(std::ptrdiff_t num_bytes) {
+  Data_Namespace::AbstractBuffer* ab = alloc_gpu_abstract_buffer(data_mgr_, num_bytes, device_id_);
+  int8_t* raw_ptr = reinterpret_cast<int8_t*>(ab->getMemoryPtr());
+  CHECK(!raw_to_ab_ptr_.count(raw_ptr));
+  raw_to_ab_ptr_.insert(std::make_pair(raw_ptr, ab));
+  return raw_ptr;
+}
+
+void ThrustAllocator::deallocate(int8_t* ptr, size_t num_bytes) {
+  PtrMapperType::iterator ab_it = raw_to_ab_ptr_.find(ptr);
+  CHECK(ab_it != raw_to_ab_ptr_.end());
+  data_mgr_->free(ab_it->second);
+  raw_to_ab_ptr_.erase(ab_it);
+}

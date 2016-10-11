@@ -679,7 +679,8 @@ class ResultRows {
   static void inplaceSortGpuImpl(const std::list<Analyzer::OrderEntry>&,
                                  const QueryMemoryDescriptor&,
                                  const GpuQueryMemory&,
-                                 int64_t*);
+                                 Data_Namespace::DataMgr*,
+                                 const int);
 
   std::shared_ptr<ResultSet> getResultSet() const { return result_set_; }
 

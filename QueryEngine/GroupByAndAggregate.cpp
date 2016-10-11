@@ -661,10 +661,8 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const RelAlgExecution
     }
     if (!render_allocator) {
       if (use_speculative_top_n(ra_exe_unit, query_mem_desc_)) {
-        const size_t num_bytes{query_mem_desc_.entry_count * sizeof(int64_t)};
-        auto scratch_ab = alloc_gpu_abstract_buffer(data_mgr, num_bytes, device_id);
-        auto tmp_buff = reinterpret_cast<int64_t*>(scratch_ab->getMemoryPtr());
-        ResultRows::inplaceSortGpuImpl(ra_exe_unit.sort_info.order_entries, query_mem_desc_, gpu_query_mem, tmp_buff);
+        ResultRows::inplaceSortGpuImpl(
+            ra_exe_unit.sort_info.order_entries, query_mem_desc_, gpu_query_mem, data_mgr, device_id);
       }
       copy_group_by_buffers_from_gpu(data_mgr,
                                      this,

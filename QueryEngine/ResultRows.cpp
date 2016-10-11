@@ -1008,15 +1008,7 @@ void ResultRows::inplaceSortGpu(const std::list<Analyzer::OrderEntry>& order_ent
                                                    true,
                                                    true,
                                                    nullptr);
-  size_t max_entry_size{0};
-  for (const auto& wid : query_mem_desc_.agg_col_widths) {
-    max_entry_size = std::max(max_entry_size, size_t(wid.compact));
-  }
-  if (!query_mem_desc_.keyless_hash) {
-    max_entry_size = std::max(max_entry_size, sizeof(int64_t));
-  }
-  ScopedScratchBuffer scratch_buff(query_mem_desc_.entry_count * max_entry_size, data_mgr, device_id);
-  inplaceSortGpuImpl(order_entries, query_mem_desc_, gpu_query_mem, reinterpret_cast<int64_t*>(scratch_buff.getPtr()));
+  inplaceSortGpuImpl(order_entries, query_mem_desc_, gpu_query_mem, data_mgr, device_id);
   copy_group_by_buffers_from_gpu(data_mgr,
                                  group_by_buffers,
                                  query_mem_desc_.getBufferSizeBytes(ExecutorDeviceType::GPU),
@@ -1031,7 +1023,9 @@ void ResultRows::inplaceSortGpu(const std::list<Analyzer::OrderEntry>& order_ent
 void ResultRows::inplaceSortGpuImpl(const std::list<Analyzer::OrderEntry>& order_entries,
                                     const QueryMemoryDescriptor& query_mem_desc,
                                     const GpuQueryMemory& gpu_query_mem,
-                                    int64_t* tmp_buff) {
+                                    Data_Namespace::DataMgr* data_mgr,
+                                    const int device_id) {
+  ThrustAllocator alloc(data_mgr, device_id);
   CHECK_EQ(size_t(1), order_entries.size());
   const auto idx_buff =
       gpu_query_mem.group_by_buffers.second - align_to_int64(query_mem_desc.entry_count * sizeof(int32_t));
@@ -1043,13 +1037,14 @@ void ResultRows::inplaceSortGpuImpl(const std::list<Analyzer::OrderEntry>& order
                     reinterpret_cast<int32_t*>(idx_buff),
                     query_mem_desc.entry_count,
                     order_entry.is_desc,
-                    chosen_bytes);
+                    chosen_bytes,
+                    alloc);
     if (!query_mem_desc.keyless_hash) {
       apply_permutation_gpu(reinterpret_cast<int64_t*>(gpu_query_mem.group_by_buffers.second),
                             reinterpret_cast<int32_t*>(idx_buff),
                             query_mem_desc.entry_count,
-                            tmp_buff,
-                            sizeof(int64_t));
+                            sizeof(int64_t),
+                            alloc);
     }
     for (size_t target_idx = 0; target_idx < query_mem_desc.agg_col_widths.size(); ++target_idx) {
       if (static_cast<int>(target_idx) == order_entry.tle_no - 1) {
@@ -1060,8 +1055,8 @@ void ResultRows::inplaceSortGpuImpl(const std::list<Analyzer::OrderEntry>& order
       apply_permutation_gpu(reinterpret_cast<int64_t*>(val_buff),
                             reinterpret_cast<int32_t*>(idx_buff),
                             query_mem_desc.entry_count,
-                            tmp_buff,
-                            chosen_bytes);
+                            chosen_bytes,
+                            alloc);
     }
   }
 }

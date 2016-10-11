@@ -156,6 +156,7 @@ add_custom_command(
         -D_FORCE_INLINES
         ${MAPD_DEFINITIONS}
         -arch sm_30
+        -std=c++11
         -c ${CMAKE_CURRENT_SOURCE_DIR}/InPlaceSortImpl.cu
     )
 

@@ -2,6 +2,7 @@
 #define QUERYENGINE_GPUMEMUTILS_H
 
 #include "CompilationOptions.h"
+#include "ThrustAllocator.h"
 #include "../DataMgr/DataMgr.h"
 
 namespace QueryRenderer {

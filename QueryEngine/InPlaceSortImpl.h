@@ -10,11 +10,14 @@
 
 #include <stdint.h>
 
+class ThrustAllocator;
+
 void sort_on_gpu(int64_t* val_buff,
                  int32_t* key_buff,
                  const uint64_t entry_count,
                  const bool desc,
-                 const uint32_t chosen_bytes);
+                 const uint32_t chosen_bytes,
+                 ThrustAllocator& alloc);
 
 void sort_on_cpu(int64_t* val_buff,
                  int32_t* key_buff,
@@ -25,8 +28,8 @@ void sort_on_cpu(int64_t* val_buff,
 void apply_permutation_on_gpu(int64_t* val_buff,
                               int32_t* idx_buff,
                               const uint64_t entry_count,
-                              int64_t* tmp_buff,
-                              const uint32_t chosen_bytes);
+                              const uint32_t chosen_bytes,
+                              ThrustAllocator& alloc);
 
 void apply_permutation_on_cpu(int64_t* val_buff,
                               int32_t* idx_buff,
