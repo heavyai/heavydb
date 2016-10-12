@@ -1505,6 +1505,10 @@ GroupByAndAggregate::KeylessInfo GroupByAndAggregate::getKeylessInfo(
           break;
         case kCOUNT:
           if (arg_expr && !arg_expr->get_type_info().get_notnull()) {
+            const auto& arg_ti = arg_expr->get_type_info();
+            if (arg_ti.is_string() && arg_ti.get_compression() == kENCODING_NONE) {
+              break;
+            }
             auto expr_range_info = getExpressionRange(arg_expr, query_infos_, executor_);
             if (expr_range_info.getType() == ExpressionRangeType::Invalid || expr_range_info.hasNulls()) {
               break;
