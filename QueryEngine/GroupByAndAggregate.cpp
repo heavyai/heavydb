@@ -1546,6 +1546,11 @@ GroupByAndAggregate::KeylessInfo GroupByAndAggregate::getKeylessInfo(
           break;
         }
         case kMIN: {
+          CHECK(agg_expr && agg_expr->get_arg());
+          const auto& arg_ti = agg_expr->get_arg()->get_type_info();
+          if (arg_ti.is_string() && arg_ti.get_compression() == kENCODING_NONE) {
+            break;
+          }
           auto expr_range_info = getExpressionRange(agg_expr->get_arg(), query_infos_, executor_);
           auto init_max =
               get_agg_initial_val(agg_info.agg_kind, chosen_type, is_group_by, query_mem_desc_.getCompactByteWidth());
@@ -1570,6 +1575,11 @@ GroupByAndAggregate::KeylessInfo GroupByAndAggregate::getKeylessInfo(
           break;
         }
         case kMAX: {
+          CHECK(agg_expr && agg_expr->get_arg());
+          const auto& arg_ti = agg_expr->get_arg()->get_type_info();
+          if (arg_ti.is_string() && arg_ti.get_compression() == kENCODING_NONE) {
+            break;
+          }
           auto expr_range_info = getExpressionRange(agg_expr->get_arg(), query_infos_, executor_);
           auto init_min =
               get_agg_initial_val(agg_info.agg_kind, chosen_type, is_group_by, query_mem_desc_.getCompactByteWidth());
