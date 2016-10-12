@@ -5373,7 +5373,8 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
 
   if (co.device_type_ == ExecutorDeviceType::GPU &&
       query_mem_desc.hash_type == GroupByColRangeType::MultiColPerfectHash) {
-    const size_t required_memory{(gridSize() * query_mem_desc.getBufferSizeBytes(ExecutorDeviceType::GPU))};
+    const auto grid_size = query_mem_desc.blocksShareMemory() ? 1 : gridSize();
+    const size_t required_memory{(grid_size * query_mem_desc.getBufferSizeBytes(ExecutorDeviceType::GPU))};
     CHECK(catalog_->get_dataMgr().cudaMgr_);
     const size_t max_memory{catalog_->get_dataMgr().cudaMgr_->deviceProperties[0].globalMem / 5};
     cgen_state_->must_run_on_cpu_ = required_memory > max_memory;
