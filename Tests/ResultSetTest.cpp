@@ -256,13 +256,15 @@ void fill_one_entry_one_col(int8_t* ptr1,
 void fill_one_entry_one_col(int64_t* value_slot,
                             const int64_t v,
                             const TargetInfo& target_info,
-                            const size_t entry_count) {
+                            const size_t entry_count,
+                            const bool empty_entry = false,
+                            const bool null_val = false) {
   auto ptr1 = reinterpret_cast<int8_t*>(value_slot);
   int8_t* ptr2{nullptr};
   if (target_info.agg_kind == kAVG) {
     ptr2 = reinterpret_cast<int8_t*>(&value_slot[entry_count]);
   }
-  fill_one_entry_one_col(ptr1, 8, ptr2, 8, v, target_info, false);
+  fill_one_entry_one_col(ptr1, 8, ptr2, 8, v, target_info, empty_entry, null_val);
 }
 
 int8_t* advance_to_next_columnar_key_buff(int8_t* key_ptr,
@@ -978,25 +980,41 @@ void ResultSetEmulator::rse_fill_storage_buffer_baseline_colwise(int8_t* buff,
   CHECK(rs_query_mem_desc.output_columnar);
   const auto key_component_count = get_key_count_for_descriptor(rs_query_mem_desc);
   const auto i64_buff = reinterpret_cast<int64_t*>(buff);
-  const auto target_slot_count = get_slot_count(rs_target_infos);
   for (size_t i = 0; i < rs_entry_count; i++) {
     for (size_t key_comp_idx = 0; key_comp_idx < key_component_count; ++key_comp_idx) {
       i64_buff[key_offset_colwise(i, key_comp_idx, rs_entry_count)] = EMPTY_KEY_64;
     }
-    for (size_t target_slot = 0; target_slot < target_slot_count; ++target_slot) {
-      i64_buff[slot_offset_colwise(i, target_slot, key_component_count, rs_entry_count)] = 0xdeadbeef;
+    size_t target_slot = 0;
+    int64_t init_val = 0;
+    for (const auto& target_info : rs_target_infos) {
+      if (!target_info.sql_type.get_notnull() && target_info.skip_null_val && (rs_flow == 2)) {  // null_val support
+        init_val = inline_int_null_val(target_info.sql_type);
+      } else {
+        init_val = 0xdeadbeef;
+      }
+      if (target_info.agg_kind != kAVG) {
+        i64_buff[slot_offset_colwise(i, target_slot, key_component_count, rs_entry_count)] = init_val;
+      } else {
+        i64_buff[slot_offset_colwise(i, target_slot, key_component_count, rs_entry_count)] = 0;
+      }
+      target_slot++;
     }
   }
   for (size_t i = 0; i < rs_entry_count; i++) {
     const auto v = generator.getNextValue();
     if (rs_groups[i]) {
-      // const auto v = generator.getNextValue();
-      rs_values[i] = v;
+      bool null_val = false;
+      if ((rs_flow == 2) && (i >= rs_entry_count - 4)) {  // null_val test-cases: last four rows
+        rs_values[i] = -1;
+        null_val = true;
+      } else {
+        rs_values[i] = v;
+      }
       std::vector<int64_t> key(key_component_count, v);
       auto value_slots = get_group_value_columnar(i64_buff, rs_entry_count, &key[0], key.size());
       CHECK(value_slots);
       for (const auto& target_info : rs_target_infos) {
-        fill_one_entry_one_col(value_slots, v, target_info, rs_entry_count);
+        fill_one_entry_one_col(value_slots, v, target_info, rs_entry_count, false, null_val);
         value_slots += rs_entry_count;
         if (target_info.agg_kind == kAVG) {
           value_slots += rs_entry_count;
@@ -1040,19 +1058,15 @@ void ResultSetEmulator::rse_fill_storage_buffer_baseline_rowwise(int8_t* buff,
   for (size_t i = 0; i < rs_entry_count; i++) {
     const auto v = generator.getNextValue();
     if (rs_groups[i]) {
+      std::vector<int64_t> key(key_component_count, v);
+      auto value_slots = get_group_value(
+          i64_buff, rs_entry_count, &key[0], key.size(), key_component_count + target_slot_count, nullptr);
+      CHECK(value_slots);
       if ((rs_flow == 2) && (i >= rs_entry_count - 4)) {  // null_val test-cases: last four rows
         rs_values[i] = -1;
-        std::vector<int64_t> key(key_component_count, v);
-        auto value_slots = get_group_value(
-            i64_buff, rs_entry_count, &key[0], key.size(), key_component_count + target_slot_count, nullptr);
-        CHECK(value_slots);
         fill_one_entry_baseline(value_slots, v, rs_target_infos, key_component_count, target_slot_count, false, true);
       } else {
         rs_values[i] = v;
-        std::vector<int64_t> key(key_component_count, v);
-        auto value_slots = get_group_value(
-            i64_buff, rs_entry_count, &key[0], key.size(), key_component_count + target_slot_count, nullptr);
-        CHECK(value_slots);
         fill_one_entry_baseline(value_slots, v, rs_target_infos, key_component_count, target_slot_count, false, false);
       }
     }
@@ -2703,7 +2717,7 @@ TEST(ReduceRandomGroups, PerfectHashOneColColumnar_NullVal_0075) {
   test_reduce_random_groups(target_infos, query_mem_desc, gen1, gen2, prct1, prct2, silent, 2);
 }
 
-/* FLOW #7: Non_Perfect_Hash_Row_Based testcases */
+/* FLOW #7: Non_Perfect_Hash_Row_Based_NullVal testcases */
 TEST(ReduceRandomGroups, BaselineHash_Large_NullVal_5050) {
   const auto target_infos = generate_random_groups_nullable_target_infos();
   const auto query_mem_desc = baseline_hash_two_col_desc_large(target_infos, 8);
@@ -2773,6 +2787,79 @@ TEST(ReduceRandomGroups, BaselineHash_Large_NullVal_2500) {
 TEST(ReduceRandomGroups, BaselineHash_Large_NullVal_0075) {
   const auto target_infos = generate_random_groups_nullable_target_infos();
   const auto query_mem_desc = baseline_hash_two_col_desc_large(target_infos, 8);
+  EvenNumberGenerator gen1;
+  EvenNumberGenerator gen2;
+  const int prct1 = 0, prct2 = 75;
+  bool silent = false;  // true/false - don't/do print diagnostic messages
+  silent = true;
+  test_reduce_random_groups(target_infos, query_mem_desc, gen1, gen2, prct1, prct2, silent, 2);
+}
+
+/* FLOW #8: Non_Perfect_Hash_Column_Based_NullVal testcases */
+TEST(ReduceRandomGroups, BaselineHashColumnar_Large_NullVal_5050) {
+  const auto target_infos = generate_random_groups_nullable_target_infos();
+  auto query_mem_desc = baseline_hash_two_col_desc_large(target_infos, 8);
+  query_mem_desc.output_columnar = true;
+  EvenNumberGenerator gen1;
+  EvenNumberGenerator gen2;
+  const int prct1 = 50, prct2 = 50;
+  bool silent = false;  // true/false - don't/do print diagnostic messages
+  silent = true;
+  test_reduce_random_groups(target_infos, query_mem_desc, gen1, gen2, prct1, prct2, silent, 2);
+}
+
+TEST(ReduceRandomGroups, BaselineHashColumnar_Large_NullVal_25100) {
+  const auto target_infos = generate_random_groups_nullable_target_infos();
+  auto query_mem_desc = baseline_hash_two_col_desc_large(target_infos, 8);
+  query_mem_desc.output_columnar = true;
+  EvenNumberGenerator gen1;
+  EvenNumberGenerator gen2;
+  const int prct1 = 25, prct2 = 100;
+  bool silent = false;  // true/false - don't/do print diagnostic messages
+  silent = true;
+  test_reduce_random_groups(target_infos, query_mem_desc, gen1, gen2, prct1, prct2, silent, 2);
+}
+
+TEST(ReduceRandomGroups, BaselineHashColumnar_Large_NullVal_10025) {
+  const auto target_infos = generate_random_groups_nullable_target_infos();
+  auto query_mem_desc = baseline_hash_two_col_desc_large(target_infos, 8);
+  query_mem_desc.output_columnar = true;
+  EvenNumberGenerator gen1;
+  EvenNumberGenerator gen2;
+  const int prct1 = 100, prct2 = 25;
+  bool silent = false;  // true/false - don't/do print diagnostic messages
+  silent = true;
+  test_reduce_random_groups(target_infos, query_mem_desc, gen1, gen2, prct1, prct2, silent, 2);
+}
+
+TEST(ReduceRandomGroups, BaselineHashColumnar_Large_NullVal_100100) {
+  const auto target_infos = generate_random_groups_nullable_target_infos();
+  auto query_mem_desc = baseline_hash_two_col_desc_large(target_infos, 8);
+  query_mem_desc.output_columnar = true;
+  EvenNumberGenerator gen1;
+  EvenNumberGenerator gen2;
+  const int prct1 = 100, prct2 = 100;
+  bool silent = false;  // true/false - don't/do print diagnostic messages
+  silent = true;
+  test_reduce_random_groups(target_infos, query_mem_desc, gen1, gen2, prct1, prct2, silent, 2);
+}
+
+TEST(ReduceRandomGroups, BaselineHashColumnar_Large_NullVal_2500) {
+  const auto target_infos = generate_random_groups_nullable_target_infos();
+  auto query_mem_desc = baseline_hash_two_col_desc_large(target_infos, 8);
+  query_mem_desc.output_columnar = true;
+  EvenNumberGenerator gen1;
+  EvenNumberGenerator gen2;
+  const int prct1 = 25, prct2 = 0;
+  bool silent = false;  // true/false - don't/do print diagnostic messages
+  silent = true;
+  test_reduce_random_groups(target_infos, query_mem_desc, gen1, gen2, prct1, prct2, silent, 2);
+}
+
+TEST(ReduceRandomGroups, BaselineHashColumnar_Large_NullVal_0075) {
+  const auto target_infos = generate_random_groups_nullable_target_infos();
+  auto query_mem_desc = baseline_hash_two_col_desc_large(target_infos, 8);
+  query_mem_desc.output_columnar = true;
   EvenNumberGenerator gen1;
   EvenNumberGenerator gen2;
   const int prct1 = 0, prct2 = 75;
