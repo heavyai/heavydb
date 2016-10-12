@@ -2009,10 +2009,10 @@ void CaseExpr::get_domain(DomainSet& domain_set) const {
 
 std::shared_ptr<Analyzer::Expr> FunctionOper::deep_copy() const {
   std::vector<std::shared_ptr<Analyzer::Expr>> args_copy;
-  for (const auto arg : args_) {
-    args_copy.push_back(arg->deep_copy());
+  for (size_t i = 0; i < getArity(); ++i) {
+    args_copy.push_back(getArg(i)->deep_copy());
   }
-  return makeExpr<Analyzer::FunctionOper>(type_info, name_, args_copy);
+  return makeExpr<Analyzer::FunctionOper>(type_info, getName(), args_copy);
 }
 
 bool FunctionOper::operator==(const Expr& rhs) const {
@@ -2023,7 +2023,18 @@ bool FunctionOper::operator==(const Expr& rhs) const {
   if (!rhs_func_oper) {
     return false;
   }
-  return false;
+  if (getName() != rhs_func_oper->getName()) {
+    return false;
+  }
+  if (getArity() != rhs_func_oper->getArity()) {
+    return false;
+  }
+  for (size_t i = 0; i < getArity(); ++i) {
+    if (!(*getArg(i) == *(rhs_func_oper->getArg(i)))) {
+      return false;
+    }
+  }
+  return true;
 }
 
 void FunctionOper::print() const {
@@ -2033,4 +2044,35 @@ void FunctionOper::print() const {
   }
   std::cout << ")";
 }
+
+std::shared_ptr<Analyzer::Expr> FunctionOperWithCustomTypeHandling::deep_copy() const {
+  std::vector<std::shared_ptr<Analyzer::Expr>> args_copy;
+  for (size_t i = 0; i < getArity(); ++i) {
+    args_copy.push_back(getArg(i)->deep_copy());
+  }
+  return makeExpr<Analyzer::FunctionOperWithCustomTypeHandling>(type_info, getName(), args_copy);
 }
+
+bool FunctionOperWithCustomTypeHandling::operator==(const Expr& rhs) const {
+  if (type_info != rhs.get_type_info()) {
+    return false;
+  }
+  const auto rhs_func_oper = dynamic_cast<const FunctionOperWithCustomTypeHandling*>(&rhs);
+  if (!rhs_func_oper) {
+    return false;
+  }
+  if (getName() != rhs_func_oper->getName()) {
+    return false;
+  }
+  if (getArity() != rhs_func_oper->getArity()) {
+    return false;
+  }
+  for (size_t i = 0; i < getArity(); ++i) {
+    if (!(*getArg(i) == *(rhs_func_oper->getArg(i)))) {
+      return false;
+    }
+  }
+  return true;
+}
+
+}  // namespace Analyzer

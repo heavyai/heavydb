@@ -876,6 +876,10 @@ class FunctionOperWithCustomTypeHandling : public FunctionOper {
                                      const std::string& name,
                                      const std::vector<std::shared_ptr<Analyzer::Expr>>& args)
       : FunctionOper(ti, name, args) {}
+
+  std::shared_ptr<Analyzer::Expr> deep_copy() const override;
+
+  bool operator==(const Expr& rhs) const override;
 };
 
 /*
