@@ -80,7 +80,9 @@ For OS X 10.12 with Xcode 8.0 or later instead use:
 
 `mapd-deps-osx.sh` will automatically install CUDA via Homebrew and add the correct environment variables to `~/.bash_profile`.
 
-## Ubuntu 15.10
+## Ubuntu 16.04, 16.10
+
+Note: as of 2016-10-17 CUDA 8 does not officially support GCC 6, which is the default in Ubuntu 16.10. For the time being it is recommended that you stick with Ubuntu 16.04 if your require CUDA support.
 
 Most build dependencies are available via APT. Thrift is the one exception and must be built by hand (Thrift 0.9.1 is available in APT, but that version is not supported by MapD).
 
@@ -91,30 +93,62 @@ Most build dependencies are available via APT. Thrift is the one exception and m
                     clang-3.5 \
                     clang-format-3.5 \
                     llvm-3.5 \
+                    llvm-3.5-dev \
                     libboost-all-dev \
-                    bison++ \
                     libgoogle-glog-dev \
                     golang \
                     libssl-dev \
                     libevent-dev \
                     libglew-dev \
                     libglfw3-dev \
-                    libpng12-dev \
+                    libpng-dev \
                     libcurl4-openssl-dev \
-                    libcrypto++-dev
+                    libcrypto++-dev \
+                    xserver-xorg \
+                    libglu1-mesa \
+                    default-jre \
+                    default-jre-headless \
+                    default-jdk \
+                    default-jdk-headless \
+                    maven \
+                    libldap2-dev \
+                    libncurses5-dev \
+                    libglewmx-dev
 
     apt-get build-dep thrift-compiler
-    wget http://apache.claz.org/thrift/0.9.2/thrift-0.9.3.tar.gz
+    wget http://apache.claz.org/thrift/0.9.3/thrift-0.9.3.tar.gz
     tar xvf thrift-0.9.3.tar.gz
     cd thrift-0.9.3
     patch -p1 < /path/to/mapd2/scripts/mapd-deps-thrift-refill-buffer.patch
     ./configure --with-lua=no --with-python=no --with-php=no --with-ruby=no --prefix=/usr/local/mapd-deps
     make -j $(nproc)
     make install
+    apt-get install bison++
+
+Next you need to configure symlinks so that `clang`, etc point to the newly installed `clang-3.5`:
+
+    update-alternatives --install /usr/bin/llvm-config llvm-config /usr/lib/llvm-3.5/bin/llvm-config 1
+    update-alternatives --install /usr/bin/llc llc /usr/lib/llvm-3.5/bin/llc 1
+    update-alternatives --install /usr/bin/clang clang /usr/lib/llvm-3.5/bin/clang 1
+    update-alternatives --install /usr/bin/clang++ clang++ /usr/lib/llvm-3.5/bin/clang++ 1
+    update-alternatives --install /usr/bin/clang-format clang-format /usr/lib/llvm-3.5/bin/clang-format 1
 
 ### CUDA
 
 CUDA should be installed via the .deb method, following the instructions provided by Nvidia.
+
+### Environment Variables
+CUDA, Java, and mapd-deps need to be added to `LD_LIBRARY_PATH`; CUDA and mapd-deps also need to be added to `PATH`. The easiest way to do so is by creating a new file `/etc/profile.d/mapd-deps.sh` containing the following:
+
+    LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
+    LD_LIBRARY_PATH=/usr/lib/jvm/default-java/jre/lib/amd64/server:$LD_LIBRARY_PATH
+    LD_LIBRARY_PATH=/usr/local/mapd-deps/lib:$LD_LIBRARY_PATH
+    LD_LIBRARY_PATH=/usr/local/mapd-deps/lib64:$LD_LIBRARY_PATH
+
+    PATH=/usr/local/cuda/bin:$PATH
+    PATH=/usr/local/mapd-deps/bin:$PATH
+
+    export LD_LIBRARY_PATH PATH
 
 ## Arch
 
