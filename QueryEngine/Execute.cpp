@@ -2245,7 +2245,9 @@ llvm::Value* Executor::codegenFunctionOper(const Analyzer::FunctionOper* functio
   const auto ret_ty = ret_ti.is_fp() ? (ret_ti.get_type() == kDOUBLE ? llvm::Type::getDoubleTy(cgen_state_->context_)
                                                                      : llvm::Type::getFloatTy(cgen_state_->context_))
                                      : get_int_type(ret_ti.get_logical_size() * 8, cgen_state_->context_);
-  CHECK_EQ(ret_ty, ext_arg_type_to_llvm_type(ext_func_sig.getRet(), cgen_state_->context_));
+  if (ret_ty != ext_arg_type_to_llvm_type(ext_func_sig.getRet(), cgen_state_->context_)) {
+    throw std::runtime_error("Inconsistent return type for " + function_oper->getName());
+  }
   std::vector<llvm::Value*> orig_arg_lvs;
   for (size_t i = 0; i < function_oper->getArity(); ++i) {
     const auto arg_lvs = codegen(function_oper->getArg(i), true, co);

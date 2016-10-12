@@ -2168,6 +2168,13 @@ TEST(Select, TextGroupBy) {
   }
 }
 
+TEST(Select, UnsupportedExtensions) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    EXPECT_THROW(run_multiple_agg("SELECT TRUNCATE(2016, 1) FROM test LIMIT 1;", dt), std::runtime_error);
+  }
+}
+
 #endif  // HAVE_RAVM
 
 #ifdef HAVE_CALCITE
