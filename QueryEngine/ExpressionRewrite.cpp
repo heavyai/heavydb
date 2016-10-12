@@ -136,7 +136,24 @@ class DeepCopyVisitor : public ScalarExprVisitor<std::shared_ptr<Analyzer::Expr>
         extract->get_type_info(), extract->get_contains_agg(), extract->get_field(), visit(extract->get_from_expr()));
   }
 
-  RetType visitFunctionOper(const Analyzer::FunctionOper* func_oper) const override { return func_oper->deep_copy(); }
+  RetType visitFunctionOper(const Analyzer::FunctionOper* func_oper) const override {
+    std::vector<std::shared_ptr<Analyzer::Expr>> args_copy;
+    for (size_t i = 0; i < func_oper->getArity(); ++i) {
+      args_copy.push_back(visit(func_oper->getArg(i)));
+    }
+    const auto& type_info = func_oper->get_type_info();
+    return makeExpr<Analyzer::FunctionOper>(type_info, func_oper->getName(), args_copy);
+  }
+
+  RetType visitFunctionOperWithCustomTypeHandling(
+      const Analyzer::FunctionOperWithCustomTypeHandling* func_oper) const override {
+    std::vector<std::shared_ptr<Analyzer::Expr>> args_copy;
+    for (size_t i = 0; i < func_oper->getArity(); ++i) {
+      args_copy.push_back(visit(func_oper->getArg(i)));
+    }
+    const auto& type_info = func_oper->get_type_info();
+    return makeExpr<Analyzer::FunctionOperWithCustomTypeHandling>(type_info, func_oper->getName(), args_copy);
+  }
 
   RetType visitAggExpr(const Analyzer::AggExpr* agg) const override {
     return makeExpr<Analyzer::AggExpr>(
