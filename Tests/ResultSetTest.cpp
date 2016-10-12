@@ -599,6 +599,7 @@ class ResultSetEmulator {
         rs_step(step),
         rs_entry_count(query_mem_desc.entry_count),
         rs_silent(silent) {
+    static_cast<void>(rs_step);
     rs_entry_count = query_mem_desc.entry_count;  // it's set to 10 in "small" query_mem_descriptor
     rs1_groups.resize(rs_entry_count);
     std::fill(rs1_groups.begin(), rs1_groups.end(), false);
@@ -981,7 +982,12 @@ void ResultSetEmulator::print_emulator_diag() {
       if (rs2_groups[j]) {
         g2 = 1;
       }
-      printf("\nGroup #%i (%i,%i): Buf1=%ld Buf2=%ld", (int)j, g1, g2, rs1_values[j], rs2_values[j]);
+      printf("\nGroup #%i (%i,%i): Buf1=%lld Buf2=%lld",
+             (int)j,
+             g1,
+             g2,
+             static_cast<long long>(rs1_values[j]),
+             static_cast<long long>(rs2_values[j]));
     }
   }
 }
@@ -1014,12 +1020,12 @@ void ResultSetEmulator::print_merged_result_sets(const std::vector<OneRow>& resu
     const auto ival_2 = v<int64_t>(row[2]);  // kSUM
     const auto ival_3 = v<int64_t>(row[3]);  // kCOUNT
     const auto ival_4 = v<double>(row[4]);   // kAVG
-    printf("\n Group #%i KMIN/KMAX/KSUM/KCOUNT from RS_MergeCode: %ld %ld %ld %ld %f",
+    printf("\n Group #%i KMIN/KMAX/KSUM/KCOUNT from RS_MergeCode: %lld %lld %lld %lld %f",
            (int)j,
-           ival_0,
-           ival_1,
-           ival_2,
-           ival_3,
+           static_cast<long long>(ival_0),
+           static_cast<long long>(ival_1),
+           static_cast<long long>(ival_2),
+           static_cast<long long>(ival_3),
            ival_4);
     j++;
   }
@@ -1040,13 +1046,13 @@ void ResultSetEmulator::print_merged_result_sets(const std::vector<OneRow>& resu
     int64_t ref_val_2 = ref_row[2];  // kSUM
     int64_t ref_val_3 = ref_row[3];  // kCOUNT
     int64_t ref_val_4 = ref_row[4];  // kAVG
-    printf("\n Group #%i KMIN/KMAX/KSUM/KCOUNT from ReducedBuffer: %ld %ld %ld %ld %f",
-           (int)i,
-           ref_val_0,
-           ref_val_1,
-           ref_val_2,
-           ref_val_3,
-           (double)ref_val_4);
+    printf("\n Group #%i KMIN/KMAX/KSUM/KCOUNT from ReducedBuffer: %lld %lld %lld %lld %f",
+           static_cast<int>(i),
+           static_cast<long long>(ref_val_0),
+           static_cast<long long>(ref_val_1),
+           static_cast<long long>(ref_val_2),
+           static_cast<long long>(ref_val_3),
+           static_cast<double>(ref_val_4));
   }
   printf("\n");
 }
@@ -1381,7 +1387,10 @@ void test_reduce_random_groups(const std::vector<TargetInfo>& target_infos,
           switch (target_info.agg_kind) {
             case kMIN: {
               if (!silent) {
-                printf("\nKMIN row_idx = %i, ref_val = %ld, ival = %ld", (int)row_idx, ref_val, ival);
+                printf("\nKMIN row_idx = %i, ref_val = %lld, ival = %lld",
+                       static_cast<int>(row_idx),
+                       static_cast<long long>(ref_val),
+                       static_cast<long long>(ival));
                 if (ref_val != ival) {
                   printf("%21s%s", "", "KMIN TEST FAILED!\n");
                 } else {
@@ -1394,7 +1403,10 @@ void test_reduce_random_groups(const std::vector<TargetInfo>& target_infos,
             }
             case kMAX: {
               if (!silent) {
-                printf("\nKMAX row_idx = %i, ref_val = %ld, ival = %ld", (int)row_idx, ref_val, ival);
+                printf("\nKMAX row_idx = %i, ref_val = %lld, ival = %lld",
+                       static_cast<int>(row_idx),
+                       static_cast<long long>(ref_val),
+                       static_cast<long long>(ival));
                 if (ref_val != ival) {
                   printf("%21s%s", "", "KMAX TEST FAILED!\n");
                 } else {
@@ -1407,7 +1419,10 @@ void test_reduce_random_groups(const std::vector<TargetInfo>& target_infos,
             }
             case kAVG: {
               if (!silent) {
-                printf("\nKAVG row_idx = %i, ref_val = %ld, ival = %ld", (int)row_idx, ref_val, ival);
+                printf("\nKAVG row_idx = %i, ref_val = %lld, ival = %lld",
+                       static_cast<int>(row_idx),
+                       static_cast<long long>(ref_val),
+                       static_cast<long long>(ival));
                 if (ref_val != ival) {
                   printf("%21s%s", "", "KAVG TEST FAILED!\n");
                 } else {
@@ -1421,7 +1436,10 @@ void test_reduce_random_groups(const std::vector<TargetInfo>& target_infos,
             case kSUM:
             case kCOUNT: {
               if (!silent) {
-                printf("\nKSUM row_idx = %i, ref_val = %ld, ival = %ld", (int)row_idx, ref_val, ival);
+                printf("\nKSUM row_idx = %i, ref_val = %lld, ival = %lld",
+                       static_cast<int>(row_idx),
+                       static_cast<long long>(ref_val),
+                       static_cast<long long>(ival));
                 if (ref_val != ival) {
                   printf("%21s%s", "", "KSUM TEST FAILED!\n");
                 } else {
@@ -1442,7 +1460,10 @@ void test_reduce_random_groups(const std::vector<TargetInfo>& target_infos,
           switch (target_info.agg_kind) {
             case kMIN: {
               if (!silent) {
-                printf("\nKMIN_D row_idx = %i, ref_val = %f, dval = %f", (int)row_idx, (double)ref_val, dval);
+                printf("\nKMIN_D row_idx = %i, ref_val = %f, dval = %f",
+                       static_cast<int>(row_idx),
+                       static_cast<double>(ref_val),
+                       dval);
                 if (static_cast<double>(ref_val) != dval) {
                   printf("%5s%s", "", "KMIN_D TEST FAILED!\n");
                 } else {
@@ -1455,7 +1476,10 @@ void test_reduce_random_groups(const std::vector<TargetInfo>& target_infos,
             }
             case kMAX: {
               if (!silent) {
-                printf("\nKMAX_D row_idx = %i, ref_val = %f, dval = %f", (int)row_idx, (double)ref_val, dval);
+                printf("\nKMAX_D row_idx = %i, ref_val = %f, dval = %f",
+                       static_cast<int>(row_idx),
+                       static_cast<double>(ref_val),
+                       dval);
                 if (static_cast<double>(ref_val) != dval) {
                   printf("%5s%s", "", "KMAX_D TEST FAILED!\n");
                 } else {
@@ -1468,7 +1492,10 @@ void test_reduce_random_groups(const std::vector<TargetInfo>& target_infos,
             }
             case kAVG: {
               if (!silent) {
-                printf("\nKAVG_D row_idx = %i, ref_val = %f, dval = %f", (int)row_idx, (double)ref_val, dval);
+                printf("\nKAVG_D row_idx = %i, ref_val = %f, dval = %f",
+                       static_cast<int>(row_idx),
+                       static_cast<double>(ref_val),
+                       dval);
                 if (static_cast<double>(ref_val) != dval) {
                   printf("%5s%s", "", "KAVG_D TEST FAILED!\n");
                 } else {
