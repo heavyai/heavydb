@@ -601,6 +601,9 @@ TEST(Select, GroupByExprNoFilterNoAggregate) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     c("SELECT x + y AS a FROM test GROUP BY a ORDER BY a;", dt);
+    ASSERT_EQ(8,
+              v<int64_t>(run_simple_agg(
+                  "SELECT TRUNCATE(x, 0) AS foo FROM test GROUP BY TRUNCATE(x, 0) ORDER BY foo DESC LIMIT 1;", dt)));
   }
 }
 

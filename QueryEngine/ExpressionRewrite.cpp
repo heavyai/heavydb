@@ -136,6 +136,8 @@ class DeepCopyVisitor : public ScalarExprVisitor<std::shared_ptr<Analyzer::Expr>
         extract->get_type_info(), extract->get_contains_agg(), extract->get_field(), visit(extract->get_from_expr()));
   }
 
+  RetType visitFunctionOper(const Analyzer::FunctionOper* func_oper) const override { return func_oper->deep_copy(); }
+
   RetType visitAggExpr(const Analyzer::AggExpr* agg) const override {
     return makeExpr<Analyzer::AggExpr>(
         agg->get_type_info(), agg->get_aggtype(), visit(agg->get_arg()), agg->get_is_distinct());
@@ -240,5 +242,9 @@ std::vector<std::shared_ptr<Analyzer::Expr>> redirect_exprs(
 
 std::shared_ptr<Analyzer::Expr> redirect_expr(const Analyzer::Expr* expr,
                                               const std::list<std::shared_ptr<const InputColDescriptor>>& col_descs) {
-  return expr ? IndirectToDirectColVisitor(col_descs).visit(expr) : nullptr;
+  if (!expr) {
+    return nullptr;
+  }
+  IndirectToDirectColVisitor visitor(col_descs);
+  return visitor.visit(expr);
 }
