@@ -32,8 +32,11 @@ ExecutionResult RelAlgExecutor::executeRelAlgSeq(std::vector<RaExecutionDesc>& e
       handleNop(body);
       continue;
     }
-    const ExecutionOptions eo_work_unit{
-        eo.output_columnar_hint, eo.allow_multifrag, eo.just_explain, eo.allow_loop_joins, eo.with_watchdog && i == 0};
+    const ExecutionOptions eo_work_unit{eo.output_columnar_hint,
+                                        eo.allow_multifrag,
+                                        eo.just_explain,
+                                        eo.allow_loop_joins,
+                                        eo.with_watchdog && (i == 0 || dynamic_cast<const RelProject*>(body))};
     const auto compound = dynamic_cast<const RelCompound*>(body);
     if (compound) {
       exec_desc.setResult(executeCompound(compound, co, eo_work_unit, render_info, queue_time_ms));
