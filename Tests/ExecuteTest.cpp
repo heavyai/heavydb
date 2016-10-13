@@ -1865,9 +1865,6 @@ TEST(Select, Joins) {
       dt);
     c("SELECT COUNT(*) FROM test, test_inner WHERE test.real_str LIKE 'real_ba%' AND test.x = test_inner.x;", dt);
     c("SELECT COUNT(*) FROM test, test_inner WHERE LENGTH(test.real_str) = 8 AND test.x = test_inner.x;", dt);
-    c("with d1 as (select deptno, dname from dept limit 10) select ename, dname from emp, d1 where emp.deptno = "
-      "d1.deptno limit 10;",
-      dt);
     ASSERT_EQ(
         int64_t(g_array_test_row_count / 2 + g_array_test_row_count / 4),
         v<int64_t>(run_simple_agg(
@@ -2050,6 +2047,9 @@ TEST(Select, Subqueries) {
     c("SELECT COUNT(*) FROM test WHERE x NOT IN (SELECT x FROM test GROUP BY x);", dt);
     c("SELECT empty.x, CASE WHEN empty.y IN (SELECT empty.y FROM empty GROUP BY empty.y) then empty.y END yy, sum(x) "
       "FROM empty GROUP BY empty.x, yy;",
+      dt);
+    c("WITH d1 AS (SELECT deptno, dname FROM dept LIMIT 10) SELECT ename, dname FROM emp, d1 WHERE emp.deptno = "
+      "d1.deptno LIMIT 10;",
       dt);
   }
 }
