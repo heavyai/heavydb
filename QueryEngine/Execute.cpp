@@ -4881,6 +4881,10 @@ int32_t Executor::executePlanWithGroupBy(const RelAlgExecutionUnit& ra_exe_unit,
     }
   }
 
+  if (error_code == Executor::ERR_OVERFLOW_OR_UNDERFLOW || error_code == Executor::ERR_DIV_BY_ZERO) {
+    return error_code;
+  }
+
   if (error_code != Executor::ERR_OVERFLOW_OR_UNDERFLOW && error_code != Executor::ERR_DIV_BY_ZERO &&
       !query_exe_context->query_mem_desc_.usesCachedContext() && !render_allocator_map) {
     CHECK(!query_exe_context->query_mem_desc_.sortOnGpu());
