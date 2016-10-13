@@ -88,6 +88,7 @@ class ColumnarResults {
       }
       ++row_idx;
     }
+    rows.moveToBegin();
   }
 
   ColumnarResults(const IteratorTable& table, const int frag_id, const std::vector<SQLTypeInfo>& target_types)

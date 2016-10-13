@@ -1619,6 +1619,70 @@ void import_join_test() {
   }
 }
 
+void import_emp_table() {
+  const std::string drop_old_test{"DROP TABLE IF EXISTS emp;"};
+  run_ddl_statement(drop_old_test);
+  g_sqlite_comparator.query(drop_old_test);
+  const std::string create_test{
+      "CREATE TABLE emp(empno INT, ename TEXT ENCODING DICT, deptno INT) WITH (fragment_size=2);"};
+  run_ddl_statement(create_test);
+  g_sqlite_comparator.query("CREATE TABLE emp(empno INT, ename TEXT ENCODING DICT, deptno INT);");
+  {
+    const std::string insert_query{"INSERT INTO emp VALUES(1, 'Brock', 10);"};
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query);
+  }
+  {
+    const std::string insert_query{"INSERT INTO emp VALUES(2, 'Bill', 20);"};
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query);
+  }
+  {
+    const std::string insert_query{"INSERT INTO emp VALUES(3, 'Julia', 60);"};
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query);
+  }
+  {
+    const std::string insert_query{"INSERT INTO emp VALUES(4, 'David', 10);"};
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query);
+  }
+}
+
+void import_dept_table() {
+  const std::string drop_old_test{"DROP TABLE IF EXISTS dept;"};
+  run_ddl_statement(drop_old_test);
+  g_sqlite_comparator.query(drop_old_test);
+  const std::string create_test{"CREATE TABLE dept(deptno INT, dname TEXT ENCODING DICT) WITH (fragment_size=2);"};
+  run_ddl_statement(create_test);
+  g_sqlite_comparator.query("CREATE TABLE dept(deptno INT, dname TEXT ENCODING DICT);");
+  {
+    const std::string insert_query{"INSERT INTO dept VALUES(10, 'Sales');"};
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query);
+  }
+  {
+    const std::string insert_query{"INSERT INTO dept VALUES(20, 'Dev');"};
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query);
+  }
+  {
+    const std::string insert_query{"INSERT INTO dept VALUES(30, 'Marketing');"};
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query);
+  }
+  {
+    const std::string insert_query{"INSERT INTO dept VALUES(40, 'HR');"};
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query);
+  }
+  {
+    const std::string insert_query{"INSERT INTO dept VALUES(50, 'QA');"};
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query);
+  }
+}
+
 }  // namespace
 
 TEST(Select, ArrayUnnest) {
@@ -1801,6 +1865,9 @@ TEST(Select, Joins) {
       dt);
     c("SELECT COUNT(*) FROM test, test_inner WHERE test.real_str LIKE 'real_ba%' AND test.x = test_inner.x;", dt);
     c("SELECT COUNT(*) FROM test, test_inner WHERE LENGTH(test.real_str) = 8 AND test.x = test_inner.x;", dt);
+    c("with d1 as (select deptno, dname from dept limit 10) select ename, dname from emp, d1 where emp.deptno = "
+      "d1.deptno limit 10;",
+      dt);
     ASSERT_EQ(
         int64_t(g_array_test_row_count / 2 + g_array_test_row_count / 4),
         v<int64_t>(run_simple_agg(
@@ -2344,6 +2411,18 @@ int main(int argc, char** argv) {
     return -EEXIST;
   }
   try {
+    import_emp_table();
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'emp'";
+    return -EEXIST;
+  }
+  try {
+    import_dept_table();
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'dept'";
+    return -EEXIST;
+  }
+  try {
     const std::string drop_old_empty{"DROP TABLE IF EXISTS empty;"};
     run_ddl_statement(drop_old_empty);
     g_sqlite_comparator.query(drop_old_empty);
@@ -2391,6 +2470,12 @@ int main(int argc, char** argv) {
   const std::string drop_join_test{"DROP TABLE join_test;"};
   g_sqlite_comparator.query(drop_join_test);
   run_ddl_statement(drop_join_test);
+  const std::string drop_emp_table{"DROP TABLE emp;"};
+  g_sqlite_comparator.query(drop_emp_table);
+  run_ddl_statement(drop_emp_table);
+  const std::string drop_dept_table{"DROP TABLE dept;"};
+  g_sqlite_comparator.query(drop_dept_table);
+  run_ddl_statement(drop_dept_table);
   g_session.reset(nullptr);
   return err;
 }
