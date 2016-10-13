@@ -199,23 +199,32 @@ void fill_one_entry_one_col(int8_t* ptr1,
                             const int8_t compact_sz2,
                             int64_t v,
                             const TargetInfo& target_info,
-                            const bool empty_entry) {
-  if (empty_entry && (target_info.agg_kind == kAVG)) {
-    v = 0;
+                            const bool empty_entry,
+                            const bool null_val = false) {
+  int64_t vv = 0;
+  bool isNullable = !target_info.sql_type.get_notnull();
+  if (isNullable && target_info.skip_null_val && null_val) {
+    vv = inline_int_null_val(target_info.sql_type);
+  } else {
+    if (empty_entry && (target_info.agg_kind == kAVG)) {
+      vv = 0;
+    } else {
+      vv = v;
+    }
   }
   CHECK(ptr1);
   switch (compact_sz1) {
     case 8:
       if (target_info.sql_type.is_fp()) {
-        double di = v;
+        double di = vv;
         *reinterpret_cast<int64_t*>(ptr1) = *reinterpret_cast<int64_t*>(&di);
       } else {
-        *reinterpret_cast<int64_t*>(ptr1) = v;
+        *reinterpret_cast<int64_t*>(ptr1) = vv;
       }
       break;
     case 4:
       CHECK(!target_info.sql_type.is_fp());
-      *reinterpret_cast<int32_t*>(ptr1) = v;
+      *reinterpret_cast<int32_t*>(ptr1) = vv;
       break;
     default:
       CHECK(false);
@@ -838,23 +847,61 @@ void ResultSetEmulator::rse_fill_storage_buffer_perfect_hash_colwise(int8_t* buf
       }
       const auto v = generator.getNextValue();
       if (rs_groups[i]) {
-        // const auto v = generator.getNextValue();
         rs_values[i] = v;
-        fill_one_entry_one_col(col_entry_ptr,
-                               col_bytes,
-                               ptr2,
-                               rs_query_mem_desc.agg_col_widths[slot_idx + 1].compact,
-                               v,
-                               target_info,
-                               false);
+        if (rs_flow == 2) {               // null_val test-cases
+          if (i >= rs_entry_count - 4) {  // only the last four rows of RS #1 and RS #2 exersized for null_val test
+            rs_values[i] = -1;
+            fill_one_entry_one_col(col_entry_ptr,
+                                   col_bytes,
+                                   ptr2,
+                                   rs_query_mem_desc.agg_col_widths[slot_idx + 1].compact,
+                                   v,
+                                   target_info,
+                                   false,
+                                   true);
+          } else {
+            fill_one_entry_one_col(col_entry_ptr,
+                                   col_bytes,
+                                   ptr2,
+                                   rs_query_mem_desc.agg_col_widths[slot_idx + 1].compact,
+                                   v,
+                                   target_info,
+                                   false,
+                                   false);
+          }
+        } else {
+          fill_one_entry_one_col(col_entry_ptr,
+                                 col_bytes,
+                                 ptr2,
+                                 rs_query_mem_desc.agg_col_widths[slot_idx + 1].compact,
+                                 v,
+                                 target_info,
+                                 false,
+                                 false);
+        }
       } else {
-        fill_one_entry_one_col(col_entry_ptr,
-                               col_bytes,
-                               ptr2,
-                               rs_query_mem_desc.agg_col_widths[slot_idx + 1].compact,
-                               rs_query_mem_desc.keyless_hash ? 0 : 0xdeadbeef,
-                               target_info,
-                               true);
+        if (rs_flow == 2) {               // null_val test-cases
+          if (i >= rs_entry_count - 4) {  // only the last four rows of RS #1 and RS #2 exersized for null_val test
+            rs_values[i] = -1;
+          }
+          fill_one_entry_one_col(col_entry_ptr,
+                                 col_bytes,
+                                 ptr2,
+                                 rs_query_mem_desc.agg_col_widths[slot_idx + 1].compact,
+                                 rs_query_mem_desc.keyless_hash ? 0 : 0xdeadbeef,
+                                 target_info,
+                                 true,
+                                 true);
+        } else {
+          fill_one_entry_one_col(col_entry_ptr,
+                                 col_bytes,
+                                 ptr2,
+                                 rs_query_mem_desc.agg_col_widths[slot_idx + 1].compact,
+                                 rs_query_mem_desc.keyless_hash ? 0 : 0xdeadbeef,
+                                 target_info,
+                                 true,
+                                 false);
+        }
       }
       col_entry_ptr += col_bytes;
     }
@@ -2434,7 +2481,7 @@ TEST(ReduceRandomGroups, BaselineHashColumnar_Large_0075) {
   test_reduce_random_groups(target_infos, query_mem_desc, gen1, gen2, prct1, prct2, silent);
 }
 
-/* FLOW #5: These are new testcases: for debug & investigation purposes */
+/* FLOW #5: Perfect_Hash_Row_Based_NullVal testcases */
 TEST(ReduceRandomGroups, PerfectHashOneCol_NullVal_2525) {
   const auto target_infos = generate_random_groups_nullable_target_infos();
   const auto query_mem_desc = perfect_hash_one_col_desc_small(target_infos, 8);
@@ -2547,6 +2594,79 @@ TEST(ReduceRandomGroups, PerfectHashOneCol_NullVal_0075) {
   const int prct1 = 0, prct2 = 75;
   ASSERT_LE(prct1, 100);
   ASSERT_LE(prct2, 100);
+  bool silent = false;  // true/false - don't/do print diagnostic messages
+  silent = true;
+  test_reduce_random_groups(target_infos, query_mem_desc, gen1, gen2, prct1, prct2, silent, 2);
+}
+
+/* FLOW #6: Perfect_Hash_Column_Based_NullVal testcases */
+TEST(ReduceRandomGroups, PerfectHashOneColColumnar_NullVal_5050) {
+  const auto target_infos = generate_random_groups_nullable_target_infos();
+  auto query_mem_desc = perfect_hash_one_col_desc_small(target_infos, 8);
+  query_mem_desc.output_columnar = true;
+  EvenNumberGenerator gen1;
+  EvenNumberGenerator gen2;
+  const int prct1 = 50, prct2 = 50;
+  bool silent = false;  // true/false - don't/do print diagnostic messages
+  silent = true;
+  test_reduce_random_groups(target_infos, query_mem_desc, gen1, gen2, prct1, prct2, silent, 2);
+}
+
+TEST(ReduceRandomGroups, PerfectHashOneColColumnar_NullVal_25100) {
+  const auto target_infos = generate_random_groups_nullable_target_infos();
+  auto query_mem_desc = perfect_hash_one_col_desc_small(target_infos, 8);
+  query_mem_desc.output_columnar = true;
+  EvenNumberGenerator gen1;
+  EvenNumberGenerator gen2;
+  const int prct1 = 25, prct2 = 100;
+  bool silent = false;  // true/false - don't/do print diagnostic messages
+  silent = true;
+  test_reduce_random_groups(target_infos, query_mem_desc, gen1, gen2, prct1, prct2, silent, 2);
+}
+
+TEST(ReduceRandomGroups, PerfectHashOneColColumnar_NullVal_10025) {
+  const auto target_infos = generate_random_groups_nullable_target_infos();
+  auto query_mem_desc = perfect_hash_one_col_desc_small(target_infos, 8);
+  query_mem_desc.output_columnar = true;
+  EvenNumberGenerator gen1;
+  EvenNumberGenerator gen2;
+  const int prct1 = 100, prct2 = 25;
+  bool silent = false;  // true/false - don't/do print diagnostic messages
+  silent = true;
+  test_reduce_random_groups(target_infos, query_mem_desc, gen1, gen2, prct1, prct2, silent, 2);
+}
+
+TEST(ReduceRandomGroups, PerfectHashOneColColumnar_NullVal_100100) {
+  const auto target_infos = generate_random_groups_nullable_target_infos();
+  auto query_mem_desc = perfect_hash_one_col_desc_small(target_infos, 8);
+  query_mem_desc.output_columnar = true;
+  EvenNumberGenerator gen1;
+  EvenNumberGenerator gen2;
+  const int prct1 = 100, prct2 = 100;
+  bool silent = false;  // true/false - don't/do print diagnostic messages
+  silent = true;
+  test_reduce_random_groups(target_infos, query_mem_desc, gen1, gen2, prct1, prct2, silent, 2);
+}
+
+TEST(ReduceRandomGroups, PerfectHashOneColColumnar_NullVal_2500) {
+  const auto target_infos = generate_random_groups_nullable_target_infos();
+  auto query_mem_desc = perfect_hash_one_col_desc_small(target_infos, 8);
+  query_mem_desc.output_columnar = true;
+  EvenNumberGenerator gen1;
+  EvenNumberGenerator gen2;
+  const int prct1 = 25, prct2 = 0;
+  bool silent = false;  // true/false - don't/do print diagnostic messages
+  silent = true;
+  test_reduce_random_groups(target_infos, query_mem_desc, gen1, gen2, prct1, prct2, silent, 2);
+}
+
+TEST(ReduceRandomGroups, PerfectHashOneColColumnar_NullVal_0075) {
+  const auto target_infos = generate_random_groups_nullable_target_infos();
+  auto query_mem_desc = perfect_hash_one_col_desc_small(target_infos, 8);
+  query_mem_desc.output_columnar = true;
+  EvenNumberGenerator gen1;
+  EvenNumberGenerator gen2;
+  const int prct1 = 0, prct2 = 75;
   bool silent = false;  // true/false - don't/do print diagnostic messages
   silent = true;
   test_reduce_random_groups(target_infos, query_mem_desc, gen1, gen2, prct1, prct2, silent, 2);
