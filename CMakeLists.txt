@@ -344,8 +344,8 @@ option(ENABLE_DOCS "Enable compilation of MapD docs" ON)
 find_program(PANDOC_EXECUTABLE NAMES pandoc)
 find_program(PDFLATEX_EXECUTABLE NAMES pdflatex)
 configure_file(
-  "${CMAKE_SOURCE_DIR}/docs/MapDGuide.in.md"
-  "${CMAKE_BINARY_DIR}/docs/MapDGuide.md"
+  "${CMAKE_SOURCE_DIR}/docs/MapDGuide.in.rst"
+  "${CMAKE_BINARY_DIR}/docs/MapDGuide.rst"
   @ONLY
   )
 if(PANDOC_EXECUTABLE AND PDFLATEX_EXECUTABLE AND ENABLE_DOCS)
@@ -355,11 +355,14 @@ if(PANDOC_EXECUTABLE AND PDFLATEX_EXECUTABLE AND ENABLE_DOCS)
       -V documentclass=report
       -V geometry:margin=1.5in
       -V graphics:on
+      -M logo=mapd-logo.pdf
+      -M title="MapD Guide | Release ${MAPD_VERSION_RAW}"
+      -M author="MapD Technologies, Inc."
       --template=mapd
       --data-dir=.
       --output=${CMAKE_BINARY_DIR}/MapDGuide.pdf
-      ${CMAKE_BINARY_DIR}/docs/MapDGuide.md
-    SOURCES docs/MapDGuide.md
+      ${CMAKE_BINARY_DIR}/docs/MapDGuide.rst
+    SOURCES docs/MapDGuide.rst
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/docs
     )
   install(FILES ${CMAKE_BINARY_DIR}/MapDGuide.pdf DESTINATION docs)
@@ -369,7 +372,7 @@ if(PANDOC_EXECUTABLE AND PDFLATEX_EXECUTABLE AND ENABLE_DOCS)
 elseif(ENABLE_DOCS)
   message(WARNING "pandoc or pdflatex not found. Skipping PDF docs.")
 endif()
-install(FILES ${CMAKE_BINARY_DIR}/docs/MapDGuide.md DESTINATION docs)
+install(FILES ${CMAKE_BINARY_DIR}/docs/MapDGuide.rst DESTINATION docs)
 install(DIRECTORY docs/release-notes DESTINATION docs)
 
 # systemd

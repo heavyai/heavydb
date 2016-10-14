@@ -1,0 +1,29 @@
+MapD documentation, compiled by Sphinx
+
+Requires pip, virtualenv, and pdflatex.
+
+HTML/CSS theme files are in `_themes/mapd-docs-theme`.
+
+To build:
+
+    ./build.sh
+
+HTML will be in `build/dirhtml`. Individual PDFs will be in `build/latex`.
+
+Installing dependencies:
+
+CentOS:
+
+    sudo yum install python-pip python-virtualenv
+    sudo yum install texlive texlive-latex-bin-bin "texlive-*"
+
+Ubuntu:
+
+    sudo apt install python-pip virtualenv
+    sudo apt install texlive-latex-base texlive-full
+
+MacOS:
+
+    sudo easy_install pip
+    sudo pip install virtualenv
+    brew cask install mactex

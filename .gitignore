@@ -43,3 +43,6 @@ ThirdParty/go/bin/
 ThirdParty/go/pkg/
 ThirdParty/go/src/*
 !ThirdParty/go/src/mapd/
+
+# sphinx docs
+!docs/**/Makefile

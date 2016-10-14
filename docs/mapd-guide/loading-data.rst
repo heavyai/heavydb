@@ -1,0 +1,123 @@
+Loading Data
+============
+
+``COPY FROM``
+~~~~~~~~~~~~~
+
+::
+
+    COPY <table> FROM '<file path>' [WITH (<property> = value, ...)];
+
+``<file path>`` must be a path on the server. There is a way to import
+client-side files (``\copy`` command in mapdql) but it will be
+significantly slower. For large files, it is recommended to first scp
+the file to the server and then issue the COPY command.
+
+``<property>`` in the optional WITH clause can be:
+
+-  ``delimiter``: a single-character string for the delimiter between
+   input fields. The default is ``","``, i.e., as a CSV file.
+-  ``nulls``: a string pattern indicating a field is NULL. By default,
+   an empty string or ``\N`` means NULL.
+-  ``header``: can be either ``'true'`` or ``'false'`` indicating
+   whether the input file has a header line in Line 1 that should be
+   skipped. The default is ``'true'``.
+-  ``escape``: a single-character string for escaping quotes. The
+   default is the quote character itself.
+-  ``quoted``: ``'true'`` or ``'false'`` indicating whether the input
+   file contains quoted fields. The default is ``'false'``.
+-  ``quote``: a single-character string for quoting a field. The default
+   quote character is double quote ``"``. All characters are inside
+   quotes are imported as is except for line delimiters.
+-  ``line_delimiter`` a single-character string for terminating each
+   line. The default is ``"\n"``.
+-  ``threads`` number of threads for doing the data importing. The
+   default is the number of CPU cores on the system.
+
+Note: by default the CSV parser assumes one row per line. To import a
+file with multiple lines in a single field, specify ``threads = 1`` in
+the ``WITH`` clause.
+
+Example:
+
+::
+
+    COPY tweets from '/tmp/tweets.csv' WITH (nulls = 'NA');
+    COPY tweets from '/tmp/tweets.tsv' WITH (delimiter = '\t', quoted = 'false');
+
+``SQL Importer``
+~~~~~~~~~~~~~~~~
+
+::
+
+    java -cp [MapD JDBC driver]:[3rd party JDBC driver]
+    com.mapd.utility.SQLImporter -t [MapD table name] -su [external source user]
+    -sp [external source password] -c "jdbc:[external
+    source]://server:port;DatabaseName=some_database" -ss "[select statement]"
+
+SQL Importer executes a select statement on another database via JDBC
+and brings the result set into MapD. Note: SQL Importer drops the MapD
+target table (if it exists) then creates the MapD table with appropriate
+datatypes and populates the table with the contents of the result set.
+It is recommended to use a service account with read-only permissions
+when accessing data from a remote database.
+
+SQLServer Example:
+
+::
+
+    java -cp
+    /path/to/mapd/bin/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar:/path/to/sqljdbc4.jar
+    com.mapd.utility.SQLImporter -d com.microsoft.sqlserver.jdbc.SQLServerDriver -t
+    mapd_target_table -su source_user -sp source_pwd -c
+    "jdbc:sqlserver://server:port;DatabaseName=some_database" -ss "select top 10 *
+    from dbo.some_table"
+
+PostgreSQL Example:
+
+::
+
+    java -cp
+    /p/to/mapd/bin/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar:/p/to/postgresql-9.4.1208.jre6.jar
+    com.mapd.utility.SQLImporter -t mapd_target_table -su source_user -sp
+    source_pwd -c "jdbc:postgresql://server/database" -ss "select * from some_table
+    where transaction_date > '2014-01-01'"
+
+``StreamInsert``
+~~~~~~~~~~~~~~~~
+
+::
+
+    <data stream> | StreamInsert <table> <mapd database> --host <localhost> --port 9091
+    -u <mapd_user> -p <mapd_pwd> --delim '\t' --batch 1000
+
+Stream data into MapD by attaching the StreamInsert program onto the end
+of a data stream. The data stream could be another program printing to
+standard out, a Kafka endpoint, or any other real-time stream output.
+Users may specify the appropriate batch size according to the expected
+stream rates and desired insert frequency. The MapD target table must
+already exist before attempting to stream data into the table.
+
+Example:
+
+::
+
+    cat file.tsv | /path/to/mapd/SampleCode/StreamInsert stream_example mapd --host localhost
+    --port 9091 -u mapd -p MapDRocks!  --delim '\t' --batch 1000
+
+``HDFS``
+~~~~~~~~
+
+Consume a CSV or Parquet file residing in HDFS into MapD
+
+Copy the MapD JDBC driver into the sqoop lib, normally
+/usr/lib/sqoop/lib/
+
+Example:
+
+::
+
+    sqoop-export --table alltypes --export-dir /user/cloudera/ \
+      --connect "jdbc:mapd:192.168.122.1:9091:mapd" \
+      --driver com.mapd.jdbc.MapDDriver --username mapd \
+      --password HyperInteractive --direct --batch

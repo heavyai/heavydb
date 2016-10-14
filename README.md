@@ -58,6 +58,11 @@ Dependencies for `mapd_web_server` and other Go utils are in [`ThirdParty/go`](T
     yun install openldap-devel
     yum install git
 
+For generating the documentation you will also need:
+
+    yum install python-pip python-virtualenv
+    yum install texlive texlive-latex-bin-bin "texlive-*"
+
 Instructions for installing CUDA are below.
 
 ### CUDA
@@ -75,6 +80,12 @@ Note: installing LLVM 3.5 view Homebrew requires some slight modifications to th
 For OS X 10.12 with Xcode 8.0 or later instead use:
 
     "--with-c-include-dirs=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include",
+
+For generating the documentation you will also need:
+
+    sudo easy_install pip
+    sudo pip install virtualenv
+    brew cask install mactex
 
 ### CUDA
 
@@ -132,6 +143,11 @@ Next you need to configure symlinks so that `clang`, etc point to the newly inst
     update-alternatives --install /usr/bin/clang clang /usr/lib/llvm-3.5/bin/clang 1
     update-alternatives --install /usr/bin/clang++ clang++ /usr/lib/llvm-3.5/bin/clang++ 1
     update-alternatives --install /usr/bin/clang-format clang-format /usr/lib/llvm-3.5/bin/clang-format 1
+
+For generating the documentation you will also need:
+
+    apt-get install python-pip virtualenv
+    apt-get install texlive-latex-base texlive-full
 
 ### CUDA
 
