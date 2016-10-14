@@ -711,6 +711,10 @@ class MapDHandler : virtual public MapDIf {
 
   void get_version(std::string& version) { version = MapDRelease; }
 
+  void get_memory_gpu(std::string& memory) { memory = sys_cat_->get_dataMgr().dumpLevel(MemoryLevel::GPU_LEVEL); }
+
+  void get_memory_summary(std::string& memory) { memory = sys_cat_->get_dataMgr().getMemorySummary(); }
+
   void get_databases(std::vector<TDBInfo>& dbinfos) {
     std::list<Catalog_Namespace::DBMetadata> db_list = sys_cat_->getAllDBMetadata();
     std::list<Catalog_Namespace::UserMetadata> user_list = sys_cat_->getAllUserMetadata();

@@ -12,6 +12,8 @@
 #include <map>
 #include <vector>
 #include <string>
+#include <iostream>
+#include <iomanip>
 
 namespace File_Namespace {
 class FileBuffer;
@@ -46,6 +48,8 @@ class DataMgr {
   // copies one buffer to another
   void copy(AbstractBuffer* destBuffer, AbstractBuffer* srcBuffer);
   bool isBufferOnDevice(const ChunkKey& key, const MemoryLevel memLevel, const int deviceId);
+  std::string getMemorySummary();
+  std::string dumpLevel(const MemoryLevel memLevel);
 
   // const std::map<ChunkKey, File_Namespace::FileBuffer *> & getChunkMap();
   const std::map<ChunkKey, File_Namespace::FileBuffer*>& getChunkMap();

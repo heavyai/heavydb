@@ -73,6 +73,8 @@ class BufferMgr : public AbstractBufferMgr {  // implements
   void printSegs();
   std::string printSeg(BufferList::iterator& segIt);
   std::string keyToString(const ChunkKey& key);
+  size_t getInUseSize();
+  size_t getMaxSize();
 
   /// Creates a chunk with the specified key and page size.
   virtual AbstractBuffer* createBuffer(const ChunkKey& key, const size_t pageSize = 0, const size_t initialSize = 0);

@@ -368,15 +368,16 @@ BufferList::iterator BufferMgr::findFreeBuffer(size_t numBytes) {
 
 std::string BufferMgr::printSlab(size_t slabNum) {
   std::ostringstream tss;
-  size_t lastEnd = 0;
+  // size_t lastEnd = 0;
+  tss << "Slab St.Page   Pages  Touch" << std::endl;
   for (auto segIt = slabSegments_[slabNum].begin(); segIt != slabSegments_[slabNum].end(); ++segIt) {
-    tss << "SN: " << setfill(' ') << setw(2) << slabNum;
-    tss << " BSN: " << setfill(' ') << setw(2) << segIt->slabNum;
-    tss << " SP: " << setfill(' ') << setw(7) << segIt->startPage;
-    tss << " NP: " << setfill(' ') << setw(7) << segIt->numPages;
-    tss << " GAP: " << setfill(' ') << setw(7) << segIt->startPage - lastEnd;
-    lastEnd = segIt->startPage + segIt->numPages;
-    tss << " LT: " << setfill(' ') << setw(7) << segIt->lastTouched;
+    tss << setfill(' ') << setw(4) << slabNum;
+    // tss << " BSN: " << setfill(' ') << setw(2) << segIt->slabNum;
+    tss << setfill(' ') << setw(8) << segIt->startPage;
+    tss << setfill(' ') << setw(8) << segIt->numPages;
+    // tss << " GAP: " << setfill(' ') << setw(7) << segIt->startPage - lastEnd;
+    // lastEnd = segIt->startPage + segIt->numPages;
+    tss << setfill(' ') << setw(7) << segIt->lastTouched;
     // tss << " PC: " << setfill(' ') << setw(2) << segIt->buffer->getPinCount();
     if (segIt->memStatus == FREE)
       tss << " FREE"
@@ -402,6 +403,25 @@ std::string BufferMgr::printSlabs() {
   }
   tss << "--------------------" << std::endl;
   return tss.str();
+}
+
+// return the maximum size this buffer can be in bytes
+size_t BufferMgr::getMaxSize() {
+  return pageSize_ * maxNumPages_;
+}
+
+// return the size of the chunks in use in bytes
+size_t BufferMgr::getInUseSize() {
+  size_t inUse = 0;
+  size_t numSlabs = slabSegments_.size();
+  for (size_t slabNum = 0; slabNum != numSlabs; ++slabNum) {
+    for (auto segIt = slabSegments_[slabNum].begin(); segIt != slabSegments_[slabNum].end(); ++segIt) {
+      if (segIt->memStatus != FREE) {
+        inUse += segIt->numPages * pageSize_;
+      }
+    }
+  }
+  return inUse;
 }
 
 std::string BufferMgr::printSeg(BufferList::iterator& segIt) {

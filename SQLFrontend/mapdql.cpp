@@ -59,6 +59,7 @@ struct ClientContext {
   TRowDescriptor rowdesc_return;
   TExecuteMode::type execution_mode;
   std::string version;
+  std::string memory_usage;
 
   ClientContext(TTransport& t, MapDClient& c)
       : transport(t), client(c), session(INVALID_SESSION_ID), execution_mode(TExecuteMode::GPU) {}
@@ -74,7 +75,9 @@ enum ThriftService {
   kGET_USERS,
   kSET_EXECUTION_MODE,
   kGET_VERSION,
-  kGET_ROW_DESC
+  kGET_ROW_DESC,
+  kGET_MEMORY_GPU,
+  kGET_MEMORY_SUMMARY
 };
 
 namespace {
@@ -111,6 +114,12 @@ bool thrift_with_retry(ThriftService which_service, ClientContext& context, cons
         break;
       case kGET_VERSION:
         context.client.get_version(context.version);
+        break;
+      case kGET_MEMORY_GPU:
+        context.client.get_memory_gpu(context.memory_usage);
+        break;
+      case kGET_MEMORY_SUMMARY:
+        context.client.get_memory_summary(context.memory_usage);
         break;
     }
   } catch (TMapDException& e) {
@@ -255,6 +264,8 @@ void process_backslash_commands(char* command, ClientContext& context) {
       std::cout << "\\historylen <number> Set history buffer size (default 100).\n";
       std::cout << "\\timing Print timing information.\n";
       std::cout << "\\notiming Do not print timing information.\n";
+      std::cout << "\\memory_gpu Print GPU memory usage.\n";
+      std::cout << "\\memory_summary Print memory usage summary.\n";
       std::cout << "\\version Print MapD Server version.\n";
       std::cout << "\\copy <file path> <table> Copy data from file to table.\n";
       std::cout << "\\q Quit.\n";
@@ -648,6 +659,18 @@ int main(int argc, char** argv) {
     } else if (!strncmp(line, "\\version", 8)) {
       if (thrift_with_retry(kGET_VERSION, context, nullptr)) {
         std::cout << "MapD Server Version: " << context.version << std::endl;
+      } else {
+        std::cout << "Cannot connect to MapD Server." << std::endl;
+      }
+    } else if (!strncmp(line, "\\memory_gpu", 11)) {
+      if (thrift_with_retry(kGET_MEMORY_GPU, context, nullptr)) {
+        std::cout << "MapD Server GPU memory Usage " << context.memory_usage << std::endl;
+      } else {
+        std::cout << "Cannot connect to MapD Server." << std::endl;
+      }
+    } else if (!strncmp(line, "\\memory_summary", 11)) {
+      if (thrift_with_retry(kGET_MEMORY_SUMMARY, context, nullptr)) {
+        std::cout << "MapD Server GPU memory Usage " << context.memory_usage << std::endl;
       } else {
         std::cout << "Cannot connect to MapD Server." << std::endl;
       }

@@ -215,6 +215,8 @@ service MapD {
   list<TFrontendView> get_frontend_views(1: TSessionId session) throws (1: TMapDException e 2: ThriftException te)
   void set_execution_mode(1: TSessionId session, 2: TExecuteMode mode) throws (1: TMapDException e 2: ThriftException te)
   string get_version() throws (1: ThriftException te)
+  string get_memory_gpu() throws (1: ThriftException te)
+  string get_memory_summary() throws (1: ThriftException te)
   void load_table_binary(1: TSessionId session, 2: string table_name, 3: list<TRow> rows) throws (1: TMapDException e 2: ThriftException te)
   void load_table(1: TSessionId session, 2: string table_name, 3: list<TStringRow> rows) throws (1: TMapDException e 2: ThriftException te)
   TRenderResult render(1: TSessionId session, 2: string query, 3: string render_type, 4: string nonce) throws (1: TMapDException e 2: ThriftException te)

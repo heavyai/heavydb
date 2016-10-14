@@ -61,6 +61,9 @@ class AbstractBufferMgr {
                                                const ChunkKey& keyPrefix) = 0;
 
   virtual bool isBufferOnDevice(const ChunkKey& key) = 0;
+  virtual std::string printSlabs() = 0;
+  virtual size_t getMaxSize() = 0;
+  virtual size_t getInUseSize() = 0;
 
   virtual void checkpoint() = 0;
 
