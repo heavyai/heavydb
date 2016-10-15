@@ -40,7 +40,7 @@ class JoinHashTable {
       const int device_count,
       Executor* executor);
 
-  int64_t getJoinHashBuffer(const ExecutorDeviceType device_type, const int device_id) {
+  int64_t getJoinHashBuffer(const ExecutorDeviceType device_type, const int device_id) noexcept {
 #ifdef HAVE_CUDA
     if (device_type == ExecutorDeviceType::CPU) {
       CHECK(cpu_hash_table_buff_);
@@ -73,7 +73,7 @@ class JoinHashTable {
     CHECK(col_range.getType() == ExpressionRangeType::Integer);
   }
 
-  int reify(const int device_count);
+  int reify(const int device_count) noexcept;
   int initHashTableForDevice(const ChunkKey& chunk_key,
                              const int8_t* col_buff,
                              const size_t num_elements,
@@ -92,7 +92,7 @@ class JoinHashTable {
                          const int32_t hash_entry_count,
                          const int32_t hash_join_invalid_val);
 
-  llvm::Value* codegenSlot(const bool hoist_literals);
+  llvm::Value* codegenSlot(const bool hoist_literals) noexcept;
 
   std::shared_ptr<Analyzer::BinOper> qual_bin_oper_;
   const Catalog_Namespace::Catalog& cat_;

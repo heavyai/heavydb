@@ -111,7 +111,7 @@ std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(
   return join_hash_table;
 }
 
-int JoinHashTable::reify(const int device_count) {
+int JoinHashTable::reify(const int device_count) noexcept {
   CHECK_LT(0, device_count);
   const auto cols = get_cols(qual_bin_oper_, cat_, executor_->temporary_tables_);
   const auto inner_col = cols.first;
@@ -375,7 +375,7 @@ void JoinHashTable::putHashTableOnCpuToCache(
   join_hash_table_cache_.emplace_back(cache_key, cpu_hash_table_buff_);
 }
 
-llvm::Value* JoinHashTable::codegenSlot(const bool hoist_literals) {
+llvm::Value* JoinHashTable::codegenSlot(const bool hoist_literals) noexcept {
   CHECK(executor_->plan_state_->join_info_.join_impl_type_ == Executor::JoinImplType::HashOneToOne);
   const auto cols = get_cols(qual_bin_oper_, cat_, executor_->temporary_tables_);
   auto key_col = cols.second;
