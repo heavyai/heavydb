@@ -62,7 +62,7 @@ struct InternalTargetValue {
       case ITVType::Null:
         return false;
       default:
-        CHECK(false);
+        abort();
     }
   }
 

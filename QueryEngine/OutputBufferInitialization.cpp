@@ -51,7 +51,7 @@ std::pair<int64_t, int64_t> inline_int_max_min(const size_t byte_width) {
     case 8:
       return std::make_pair(std::numeric_limits<int64_t>::max(), std::numeric_limits<int64_t>::min());
     default:
-      CHECK(false);
+      abort();
   }
 }
 
@@ -66,7 +66,7 @@ std::pair<uint64_t, uint64_t> inline_uint_max_min(const size_t byte_width) {
     case 8:
       return std::make_pair(std::numeric_limits<uint64_t>::max(), std::numeric_limits<uint64_t>::min());
     default:
-      CHECK(false);
+      abort();
   }
 }
 
@@ -157,7 +157,7 @@ int64_t get_agg_initial_val(const SQLAgg agg,
       }
     }
     default:
-      CHECK(false);
+      abort();
   }
 }
 

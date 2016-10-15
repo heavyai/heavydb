@@ -174,7 +174,7 @@ __device__
 #ifdef __CUDACC__
       return -1;
 #else
-      CHECK(false);
+      abort();
 #endif
   }
 }

@@ -481,7 +481,7 @@ std::shared_ptr<Analyzer::Expr> ColumnRef::analyze(const Catalog_Namespace::Cata
     if (cd == nullptr && allow_tlist_ref != TlistRefType::TLIST_NONE) {
       // check if this is a reference to a targetlist entry
       bool found = false;
-      int varno;
+      int varno = -1;
       int i = 1;
       std::shared_ptr<Analyzer::TargetEntry> tle;
       for (auto p : query.get_targetlist()) {

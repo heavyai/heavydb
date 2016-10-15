@@ -91,7 +91,7 @@ inline uint32_t log2_bytes(const uint32_t bytes) {
     case 8:
       return 3;
     default:
-      CHECK(false);
+      abort();
   }
 }
 
@@ -156,7 +156,7 @@ inline const SQLTypeInfo get_column_type(const int col_id,
     return (*tab)->getColType(col_id);
   }
 
-  CHECK(false);
+  abort();
 }
 
 template <typename PtrTy>
@@ -848,7 +848,7 @@ class Executor {
       case 7:
         return 4;
       default:
-        CHECK(false);
+        abort();
     }
   }
 
@@ -920,7 +920,7 @@ class Executor {
           // TODO(alex): support null
           return getOrAddLiteral(static_cast<int64_t>(constant->get_constval().timeval), device_id);
         default:
-          CHECK(false);
+          abort();
       }
     }
 

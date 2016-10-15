@@ -2038,7 +2038,7 @@ std::vector<std::string> agg_fn_base_names(const TargetInfo& target_info) {
     case kSUM:
       return {"agg_sum"};
     default:
-      CHECK(false);
+      abort();
   }
 }
 

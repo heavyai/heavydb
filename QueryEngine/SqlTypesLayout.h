@@ -79,7 +79,7 @@ inline int64_t inline_int_null_val(const SQLTypeInfo& ti) {
     case kINTERVAL_YEAR_MONTH:
       return std::numeric_limits<int64_t>::min();
     default:
-      CHECK(false);
+      abort();
   }
 }
 
@@ -106,7 +106,7 @@ inline double inline_fp_null_val(const SQLTypeInfo& ti) {
     case kDOUBLE:
       return NULL_DOUBLE;
     default:
-      CHECK(false);
+      abort();
   }
 }
 
@@ -146,7 +146,7 @@ inline size_t get_bit_width(const SQLTypeInfo& ti) {
     case kARRAY:
       throw std::runtime_error("Projecting on array columns not supported yet.");
     default:
-      CHECK(false);
+      abort();
   }
 }
 

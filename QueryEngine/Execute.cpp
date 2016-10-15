@@ -424,7 +424,7 @@ RowSetPtr Executor::executeSelectPlan(const Planner::Plan* plan,
                            just_explain,
                            allow_loop_joins);
   }
-  CHECK(false);
+  abort();
 }
 
 /*
@@ -762,7 +762,7 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Expr* expr,
     return {codegenFunctionOper(function_oper_expr, co)};
   }
 #ifdef HAVE_CALCITE
-  CHECK(false);
+  abort();
 #else
   throw std::runtime_error("Invalid scalar expression");
 #endif
@@ -1057,7 +1057,7 @@ llvm::Value* Executor::codegen(const Analyzer::BinOper* bin_oper, const Compilat
   if (optype == kARRAY_AT) {
     return codegenArrayAt(bin_oper, co);
   }
-  CHECK(false);
+  abort();
 }
 
 llvm::Value* Executor::codegen(const Analyzer::UOper* u_oper, const CompilationOptions& co) {
@@ -1074,7 +1074,7 @@ llvm::Value* Executor::codegen(const Analyzer::UOper* u_oper, const CompilationO
     case kUNNEST:
       return codegenUnnest(u_oper, co);
     default:
-      CHECK(false);
+      abort();
   }
 }
 
@@ -1120,7 +1120,7 @@ std::shared_ptr<Decoder> get_col_decoder(const Analyzer::ColumnVar* col_var) {
       return std::make_shared<FixedWidthInt>(bit_width / 8);
     }
     default:
-      CHECK(false);
+      abort();
   }
 }
 
@@ -1363,7 +1363,7 @@ llvm::Value* Executor::posArg(const Analyzer::Expr* expr) const {
       return &arg;
     }
   }
-  CHECK(false);
+  abort();
 }
 
 const Analyzer::ColumnVar* Executor::hashJoinLhs(const Analyzer::ColumnVar* rhs) const {
@@ -1385,7 +1385,7 @@ llvm::Value* Executor::fragRowOff() const {
       return arg_it;
     }
   }
-  CHECK(false);
+  abort();
 }
 
 llvm::Value* Executor::rowsPerScan() const {
@@ -1396,7 +1396,7 @@ llvm::Value* Executor::rowsPerScan() const {
       return arg_it;
     }
   }
-  CHECK(false);
+  abort();
 }
 
 namespace {
@@ -1465,7 +1465,7 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Constant* constant,
     default:
       CHECK(false);
   }
-  CHECK(false);
+  abort();
 }
 
 std::vector<llvm::Value*> Executor::codegenHoistedConstants(const std::vector<const Analyzer::Constant*>& constants,
@@ -1699,7 +1699,7 @@ llvm::CmpInst::Predicate llvm_icmp_pred(const SQLOps op_type) {
     case kGE:
       return llvm::ICmpInst::ICMP_SGE;
     default:
-      CHECK(false);
+      abort();
   }
 }
 
@@ -1718,7 +1718,7 @@ std::string icmp_name(const SQLOps op_type) {
     case kGE:
       return "ge";
     default:
-      CHECK(false);
+      abort();
   }
 }
 
@@ -1737,7 +1737,7 @@ std::string icmp_arr_name(const SQLOps op_type) {
     case kGE:
       return "le";
     default:
-      CHECK(false);
+      abort();
   }
 }
 
@@ -1756,7 +1756,7 @@ llvm::CmpInst::Predicate llvm_fcmp_pred(const SQLOps op_type) {
     case kGE:
       return llvm::CmpInst::FCMP_OGE;
     default:
-      CHECK(false);
+      abort();
   }
 }
 
@@ -1779,7 +1779,7 @@ std::string string_cmp_func(const SQLOps optype) {
     case kNE:
       return "string_ne";
     default:
-      CHECK(false);
+      abort();
   }
 }
 
@@ -2052,7 +2052,7 @@ llvm::Value* Executor::codegenLogical(const Analyzer::BinOper* bin_oper, const C
     case kOR:
       return cgen_state_->emitCall("logical_or", {lhs_lv, rhs_lv, inlineIntNull(ti)});
     default:
-      CHECK(false);
+      abort();
   }
 }
 
@@ -2568,7 +2568,7 @@ llvm::ConstantInt* Executor::codegenIntConst(const Analyzer::Constant* constant)
     case kINTERVAL_YEAR_MONTH:
       return ll_int(constant->get_constval().timeval);
     default:
-      CHECK(false);
+      abort();
   }
 }
 
@@ -2601,7 +2601,7 @@ llvm::ConstantInt* Executor::inlineIntNull(const SQLTypeInfo& type_info) {
     case kARRAY:
       return ll_int(int64_t(0));
     default:
-      CHECK(false);
+      abort();
   }
 }
 
@@ -2613,7 +2613,7 @@ llvm::ConstantFP* Executor::inlineFpNull(const SQLTypeInfo& type_info) {
     case kDOUBLE:
       return ll_fp(NULL_DOUBLE);
     default:
-      CHECK(false);
+      abort();
   }
 }
 
@@ -2638,7 +2638,7 @@ std::pair<llvm::ConstantInt*, llvm::ConstantInt*> Executor::inlineIntMaxMin(cons
     case 8:
       return std::make_pair(ll_int(max_int), ll_int(min_int));
     default:
-      CHECK(false);
+      abort();
   }
 }
 
@@ -3271,7 +3271,7 @@ std::pair<int64_t, int32_t> Executor::reduceResults(const SQLAgg agg,
     default:
       CHECK(false);
   }
-  CHECK(false);
+  abort();
 }
 
 namespace {
@@ -4996,7 +4996,7 @@ bool check_rows_less_than_needed(const ResultPtr& results, const size_t scan_lim
   } else if (const auto tab = boost::get<IterTabPtr>(&results)) {
     return (*tab && (*tab)->rowCount() < scan_limit);
   }
-  CHECK(false);
+  abort();
 }
 
 }  // namespace

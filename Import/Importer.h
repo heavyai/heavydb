@@ -264,7 +264,7 @@ class TypedImportBuffer : boost::noncopyable {
       case kDATE:
         return reinterpret_cast<int8_t*>(&((*time_buffer_)[0]));
       default:
-        CHECK(false);
+        abort();
     }
   }
 
@@ -285,7 +285,7 @@ class TypedImportBuffer : boost::noncopyable {
       case 4:
         return reinterpret_cast<int8_t*>(&((*string_dict_i32_buffer_)[0]));
       default:
-        CHECK(false);
+        abort();
     }
   }
 

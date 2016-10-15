@@ -53,7 +53,7 @@ inline TDatumType::type type_to_thrift(const SQLTypeInfo& type_info) {
     default:
       break;
   }
-  CHECK(false);
+  abort();
 }
 
 inline SQLTypes thrift_to_type(const TDatumType::type& type) {
@@ -87,7 +87,7 @@ inline SQLTypes thrift_to_type(const TDatumType::type& type) {
     default:
       break;
   }
-  CHECK(false);
+  abort();
 }
 
 #define THRIFT_ENCODING_CASE(encoding) \
@@ -109,7 +109,7 @@ inline TEncodingType::type encoding_to_thrift(const SQLTypeInfo& type_info) {
     default:
       CHECK(false);
   }
-  CHECK(false);
+  abort();
 }
 
 #undef ENCODING_CASE
@@ -125,7 +125,7 @@ inline EncodingType thrift_to_encoding(const TEncodingType::type tEncodingType) 
     default:
       CHECK(false);
   }
-  CHECK(false);
+  abort();
 }
 
 inline std::string thrift_to_name(const TTypeInfo& ti) {

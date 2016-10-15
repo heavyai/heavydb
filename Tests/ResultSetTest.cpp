@@ -1101,6 +1101,14 @@ void ResultSetEmulator::rse_fill_storage_buffer(int8_t* buff,
   CHECK(buff);
 }
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-function"
+#else
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-function"
+#endif
+
 void ResultSetEmulator::print_emulator_diag() {
   if (!rs_silent) {
     for (size_t j = 0; j < rs_entry_count; j++) {
@@ -1120,6 +1128,12 @@ void ResultSetEmulator::print_emulator_diag() {
     }
   }
 }
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#else
+#pragma GCC diagnostic pop
+#endif
 
 void ResultSetEmulator::print_rse_generated_result_sets() const {
   printf("\nResultSet #1 Final Groups: ");

@@ -427,15 +427,15 @@ class Subquery : public Expr {
   }
   virtual std::shared_ptr<Analyzer::Expr> rewrite_with_targetlist(
       const std::vector<std::shared_ptr<TargetEntry>>& tlist) const {
-    CHECK(false);
+    abort();
   }
   virtual std::shared_ptr<Analyzer::Expr> rewrite_with_child_targetlist(
       const std::vector<std::shared_ptr<TargetEntry>>& tlist) const {
-    CHECK(false);
+    abort();
   }
   virtual std::shared_ptr<Analyzer::Expr> rewrite_agg_to_var(
       const std::vector<std::shared_ptr<TargetEntry>>& tlist) const {
-    CHECK(false);
+    abort();
   }
   virtual bool operator==(const Expr& rhs) const {
     CHECK(false);

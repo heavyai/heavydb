@@ -585,7 +585,7 @@ inline int64_t extract_from_datum(const Datum datum, const SQLTypeInfo& ti) {
     case kDATE:
       return datum.timeval;
     default:
-      CHECK(false);
+      abort();
   }
 }
 
