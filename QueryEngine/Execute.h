@@ -488,16 +488,19 @@ class Executor {
   struct JoinInfo {
     JoinInfo(const JoinImplType join_impl_type,
              const std::vector<std::shared_ptr<Analyzer::BinOper>>& equi_join_tautologies,
-             std::shared_ptr<JoinHashTable> join_hash_table)
+             std::shared_ptr<JoinHashTable> join_hash_table,
+             const std::string& hash_join_fail_reason)
         : join_impl_type_(join_impl_type),
           equi_join_tautologies_(equi_join_tautologies),
-          join_hash_table_(join_hash_table) {}
+          join_hash_table_(join_hash_table),
+          hash_join_fail_reason_(hash_join_fail_reason) {}
 
     JoinImplType join_impl_type_;
     std::vector<std::shared_ptr<Analyzer::BinOper>> equi_join_tautologies_;  // expressions we equi-join on are true by
                                                                              // definition when using a hash join; we'll
                                                                              // fold them to true during code generation
     std::shared_ptr<JoinHashTable> join_hash_table_;
+    std::string hash_join_fail_reason_;
   };
 
   typedef std::deque<Fragmenter_Namespace::FragmentInfo> TableFragments;
@@ -759,7 +762,7 @@ class Executor {
 
   void codegenInnerScanNextRow();
 
-  void allocateInnerScansIterators(const std::vector<InputDescriptor>& input_descs, const bool allow_loop_joins);
+  void allocateInnerScansIterators(const std::vector<InputDescriptor>& input_descs);
 
   JoinInfo chooseJoinType(const std::list<std::shared_ptr<Analyzer::Expr>>&,
                           const std::vector<InputTableInfo>&,

@@ -3598,7 +3598,7 @@ RowSetPtr Executor::executeResultPlan(const Planner::Result* result_plan,
                       row_count,
                       small_groups_buffer_entry_count_,
                       get_min_byte_width(),
-                      JoinInfo(JoinImplType::Invalid, std::vector<std::shared_ptr<Analyzer::BinOper>>{}, nullptr));
+                      JoinInfo(JoinImplType::Invalid, std::vector<std::shared_ptr<Analyzer::BinOper>>{}, nullptr, ""));
   auto column_buffers = result_columns.getColumnBuffers();
   CHECK_EQ(column_buffers.size(), static_cast<size_t>(in_col_count));
   std::vector<int64_t> init_agg_vals(query_mem_desc.agg_col_widths.size());
@@ -3725,6 +3725,23 @@ bool is_sample_query(const RelAlgExecutionUnit& ra_exe_unit) {
   return result;
 }
 
+bool is_trivial_loop_join(const std::vector<InputTableInfo>& query_infos, const RelAlgExecutionUnit& ra_exe_unit) {
+  if (ra_exe_unit.input_descs.size() < 2) {
+    return false;
+  }
+  CHECK_EQ(size_t(2), ra_exe_unit.input_descs.size());
+  const auto inner_table_id = ra_exe_unit.input_descs[1].getTableId();
+  ssize_t inner_table_idx = -1;
+  for (size_t i = 0; i < query_infos.size(); ++i) {
+    if (query_infos[i].table_id == inner_table_id) {
+      inner_table_idx = i;
+      break;
+    }
+  }
+  CHECK_NE(ssize_t(-1), inner_table_idx);
+  return query_infos[inner_table_idx].info.numTuples == 1;
+}
+
 }  // namespace
 
 ResultPtr Executor::executeWorkUnit(int32_t* error_code,
@@ -3747,9 +3764,19 @@ ResultPtr Executor::executeWorkUnit(int32_t* error_code,
     max_groups_buffer_entry_guess = compute_buffer_entry_guess(query_infos);
   }
 
-  auto join_info = chooseJoinType(ra_exe_unit.inner_join_quals, query_infos, ra_exe_unit.input_col_descs, device_type);
-  if (join_info.join_impl_type_ == JoinImplType::Loop) {
+  auto join_info = JoinInfo(JoinImplType::Invalid, std::vector<std::shared_ptr<Analyzer::BinOper>>{}, nullptr, "");
+  if (ra_exe_unit.input_descs.size() > 1) {
+    join_info = chooseJoinType(ra_exe_unit.inner_join_quals, query_infos, ra_exe_unit.input_col_descs, device_type);
+  }
+  if (join_info.join_impl_type_ == JoinImplType::Loop && !ra_exe_unit.outer_join_quals.empty()) {
     join_info = chooseJoinType(ra_exe_unit.outer_join_quals, query_infos, ra_exe_unit.input_col_descs, device_type);
+  }
+
+  if (join_info.join_impl_type_ == JoinImplType::Loop &&
+      !(options.allow_loop_joins || is_trivial_loop_join(query_infos, ra_exe_unit))) {
+    throw std::runtime_error(
+        "Loop joins are disabled; run the server with --allow-loop-joins to enable them. Reason: " +
+        join_info.hash_join_fail_reason_);
   }
 
   int8_t crt_min_byte_width{get_min_byte_width()};
@@ -5496,27 +5523,6 @@ void Executor::nukeOldState(const bool allow_lazy_fetch,
   plan_state_.reset(new PlanState(allow_lazy_fetch, join_info, this));
 }
 
-namespace {
-
-bool is_trivial_loop_join(const std::vector<InputTableInfo>& query_infos, const RelAlgExecutionUnit& ra_exe_unit) {
-  if (ra_exe_unit.input_descs.size() < 2) {
-    return false;
-  }
-  CHECK_EQ(size_t(2), ra_exe_unit.input_descs.size());
-  const auto inner_table_id = ra_exe_unit.input_descs[1].getTableId();
-  ssize_t inner_table_idx = -1;
-  for (size_t i = 0; i < query_infos.size(); ++i) {
-    if (query_infos[i].table_id == inner_table_id) {
-      inner_table_idx = i;
-      break;
-    }
-  }
-  CHECK_NE(ssize_t(-1), inner_table_idx);
-  return query_infos[inner_table_idx].info.numTuples == 1;
-}
-
-}  // namespace
-
 Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
                                                       const std::vector<InputTableInfo>& query_infos,
                                                       const RelAlgExecutionUnit& ra_exe_unit,
@@ -5593,8 +5599,7 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
   auto bb = llvm::BasicBlock::Create(cgen_state_->context_, "entry", cgen_state_->row_func_);
   cgen_state_->ir_builder_.SetInsertPoint(bb);
 
-  allocateInnerScansIterators(ra_exe_unit.input_descs,
-                              eo.allow_loop_joins || is_trivial_loop_join(query_infos, ra_exe_unit));
+  allocateInnerScansIterators(ra_exe_unit.input_descs);
 
   // generate the code for the filter
   allocateLocalColumnIds(ra_exe_unit.input_col_descs);
@@ -5760,16 +5765,12 @@ void Executor::codegenInnerScanNextRow() {
   }
 }
 
-void Executor::allocateInnerScansIterators(const std::vector<InputDescriptor>& input_descs,
-                                           const bool allow_loop_joins) {
+void Executor::allocateInnerScansIterators(const std::vector<InputDescriptor>& input_descs) {
   if (input_descs.size() <= 1) {
     return;
   }
   if (plan_state_->join_info_.join_impl_type_ == JoinImplType::HashOneToOne) {
     return;
-  }
-  if (!allow_loop_joins) {
-    throw std::runtime_error("Loop joins are disabled; run the server with --allow-loop-joins to enable them.");
   }
   CHECK(plan_state_->join_info_.join_impl_type_ == JoinImplType::Loop);
   auto preheader = cgen_state_->ir_builder_.GetInsertBlock();
@@ -5811,6 +5812,7 @@ Executor::JoinInfo Executor::chooseJoinType(const std::list<std::shared_ptr<Anal
   CHECK(device_type != ExecutorDeviceType::Hybrid);
   const MemoryLevel memory_level{device_type == ExecutorDeviceType::GPU ? MemoryLevel::GPU_LEVEL
                                                                         : MemoryLevel::CPU_LEVEL};
+  std::string hash_join_fail_reason{"No equijoin expression found"};
   for (auto qual : join_quals) {
     auto qual_bin_oper = std::dynamic_pointer_cast<Analyzer::BinOper>(qual);
     if (!qual_bin_oper) {
@@ -5824,16 +5826,21 @@ Executor::JoinInfo Executor::chooseJoinType(const std::list<std::shared_ptr<Anal
       const int device_count =
           device_type == ExecutorDeviceType::GPU ? catalog_->get_dataMgr().cudaMgr_->getDeviceCount() : 1;
       CHECK_GT(device_count, 0);
-      const auto join_hash_table = JoinHashTable::getInstance(
-          qual_bin_oper, *catalog_, query_infos, input_col_descs, memory_level, device_count, this);
-      if (join_hash_table) {
+      try {
+        const auto join_hash_table = JoinHashTable::getInstance(
+            qual_bin_oper, *catalog_, query_infos, input_col_descs, memory_level, device_count, this);
+        CHECK(join_hash_table);
         return Executor::JoinInfo(JoinImplType::HashOneToOne,
                                   std::vector<std::shared_ptr<Analyzer::BinOper>>{qual_bin_oper},
-                                  join_hash_table);
+                                  join_hash_table,
+                                  "");
+      } catch (const HashJoinFail& e) {
+        hash_join_fail_reason = e.what();
       }
     }
   }
-  return Executor::JoinInfo(JoinImplType::Loop, std::vector<std::shared_ptr<Analyzer::BinOper>>{}, nullptr);
+  return Executor::JoinInfo(
+      JoinImplType::Loop, std::vector<std::shared_ptr<Analyzer::BinOper>>{}, nullptr, hash_join_fail_reason);
 }
 
 void Executor::bindInitGroupByBuffer(llvm::Function* query_func,

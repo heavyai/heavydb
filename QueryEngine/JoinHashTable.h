@@ -20,8 +20,14 @@
 #endif
 #include <memory>
 #include <mutex>
+#include <stdexcept>
 
 class Executor;
+
+class HashJoinFail : public std::runtime_error {
+ public:
+  HashJoinFail(const std::string& reason) : std::runtime_error(reason) {}
+};
 
 class JoinHashTable {
  public:

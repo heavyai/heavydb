@@ -20,23 +20,24 @@ std::pair<const Analyzer::ColumnVar*, const Analyzer::ColumnVar*> get_cols(
   CHECK_EQ(kENCODING_NONE, lhs_ti.get_compression());
   CHECK_EQ(kENCODING_NONE, rhs_ti.get_compression());
   if (lhs_ti.get_type() != rhs_ti.get_type()) {
-    return {nullptr, nullptr};
+    throw HashJoinFail("Equijoin types must be identical, found: " + lhs_ti.get_type_name() + ", " +
+                       rhs_ti.get_type_name());
   }
   if (!lhs_ti.is_integer() && !lhs_ti.is_string()) {
-    return {nullptr, nullptr};
+    throw HashJoinFail("Cannot apply hash join to " + lhs_ti.get_type_name());
   }
   const auto lhs_cast = dynamic_cast<const Analyzer::UOper*>(lhs);
   const auto rhs_cast = dynamic_cast<const Analyzer::UOper*>(rhs);
   if (static_cast<bool>(lhs_cast) != static_cast<bool>(rhs_cast) || (lhs_cast && lhs_cast->get_optype() != kCAST) ||
       (rhs_cast && rhs_cast->get_optype() != kCAST)) {
-    return {nullptr, nullptr};
+    throw HashJoinFail("Cannot use hash join for given expression");
   }
   const auto lhs_col = lhs_cast ? dynamic_cast<const Analyzer::ColumnVar*>(lhs_cast->get_operand())
                                 : dynamic_cast<const Analyzer::ColumnVar*>(lhs);
   const auto rhs_col = rhs_cast ? dynamic_cast<const Analyzer::ColumnVar*>(rhs_cast->get_operand())
                                 : dynamic_cast<const Analyzer::ColumnVar*>(rhs);
   if (!lhs_col || !rhs_col) {
-    return {nullptr, nullptr};
+    throw HashJoinFail("Cannot use hash join for given expression");
   }
   const Analyzer::ColumnVar* inner_col{nullptr};
   const Analyzer::ColumnVar* outer_col{nullptr};
@@ -55,11 +56,11 @@ std::pair<const Analyzer::ColumnVar*, const Analyzer::ColumnVar*> get_cols(
       get_column_type(inner_col->get_column_id(), inner_col->get_table_id(), inner_col_cd, temporary_tables);
   const auto& outer_col_ti = outer_col->get_type_info();
   if (outer_col_ti.get_notnull() != inner_col_real_ti.get_notnull()) {
-    return {nullptr, nullptr};
+    throw HashJoinFail("For hash join, both sides must have the same nullability");
   }
   if (!(inner_col_real_ti.is_integer() ||
         (inner_col_real_ti.is_string() && inner_col_real_ti.get_compression() == kENCODING_DICT))) {
-    return {nullptr, nullptr};
+    throw HashJoinFail("Can only apply hash join to integer-like types and dictionary encoded strings");
   }
   return {inner_col, outer_col};
 }
@@ -84,19 +85,17 @@ std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(
   CHECK(redirected_bin_oper);
   const auto cols = get_cols(redirected_bin_oper, cat, executor->temporary_tables_);
   const auto inner_col = cols.first;
-  if (!inner_col) {
-    return nullptr;
-  }
+  CHECK(inner_col);
   const auto& ti = inner_col->get_type_info();
   auto col_range = getExpressionRange(ti.is_string() ? cols.second : inner_col, query_infos, executor);
   if (col_range.getType() == ExpressionRangeType::Invalid) {
-    return nullptr;
+    throw HashJoinFail("Could not compute range for the expressions involved in the equijoin");
   }
   if (ti.is_string()) {
     // The nullable info must be the same as the source column.
     const auto source_col_range = getExpressionRange(inner_col, query_infos, executor);
     if (source_col_range.getType() == ExpressionRangeType::Invalid) {
-      return nullptr;
+      throw HashJoinFail("Could not compute range for the expressions involved in the equijoin");
     }
     col_range = ExpressionRange::makeIntRange(std::min(source_col_range.getIntMin(), col_range.getIntMin()),
                                               std::max(source_col_range.getIntMax(), col_range.getIntMax()),
@@ -107,7 +106,7 @@ std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(
       new JoinHashTable(qual_bin_oper, inner_col, cat, query_infos, memory_level, col_range, executor));
   const int err = join_hash_table->reify(device_count);
   if (err) {
-    return nullptr;
+    throw HashJoinFail("Could not build a 1-to-1 correspondence for columns involved in equijoin");
   }
   return join_hash_table;
 }
