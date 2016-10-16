@@ -786,7 +786,7 @@ size_t QueryMemoryDescriptor::getTotalBytesOfColumnarBuffers(const std::vector<C
       total_bytes = align_to_int64(total_bytes);
     }
   }
-  return total_bytes;
+  return align_to_int64(total_bytes);
 }
 
 size_t QueryMemoryDescriptor::getKeyOffInBytes(const size_t bin, const size_t key_idx) const {

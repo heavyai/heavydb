@@ -1526,7 +1526,7 @@ void import_gpu_sort_test() {
   run_ddl_statement("CREATE TABLE gpu_sort_test(x int) WITH (fragment_size=2);");
   g_sqlite_comparator.query("CREATE TABLE gpu_sort_test(x int);");
   for (size_t i = 0; i < 4; ++i) {
-    const std::string insert_query{"INSERT INTO gpu_sort_test VALUES(1);"};
+    const std::string insert_query{"INSERT INTO gpu_sort_test VALUES(2);"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
@@ -1925,6 +1925,7 @@ TEST(Select, GpuSort) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     c("SELECT x, COUNT(*) AS n FROM gpu_sort_test GROUP BY x ORDER BY n DESC;", dt);
+    c("SELECT x, COUNT(*), COUNT(*) AS n FROM gpu_sort_test GROUP BY x ORDER BY n DESC;", dt);
   }
 }
 
