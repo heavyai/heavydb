@@ -1,8 +1,13 @@
 #ifndef CUDAMGR_H
 #define CUDAMGR_H
 
+#include <cstdlib>
 #include <vector>
+#ifdef HAVE_CUDA
 #include <cuda.h>
+#else
+#include "../Shared/nocuda.h"
+#endif  // HAVE_CUDA
 
 namespace CudaMgr_Namespace {
 

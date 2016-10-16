@@ -32,10 +32,9 @@ if(PREFER_STATIC_LIBS)
   set(CUDA_USE_STATIC_CUDA_RUNTIME ON)
 endif()
 
-# CUDA required for build, even when CUDA support is disabled
-find_package(CUDA REQUIRED)
 option(ENABLE_CUDA "Enable CUDA support" ON)
 if(ENABLE_CUDA)
+  find_package(CUDA REQUIRED)
   list(APPEND CUDA_LIBRARIES ${CUDA_CUDA_LIBRARY})
   add_definitions("-DHAVE_CUDA")
 else()

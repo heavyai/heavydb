@@ -22,7 +22,6 @@
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Value.h>
-#include <cuda.h>
 
 #include <boost/functional/hash.hpp>
 

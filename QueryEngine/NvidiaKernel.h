@@ -3,7 +3,11 @@
 
 #include "../CudaMgr/CudaMgr.h"
 
+#ifdef HAVE_CUDA
 #include <cuda.h>
+#else
+#include "../Shared/nocuda.h"
+#endif  // HAVE_CUDA
 #include <string>
 #include <vector>
 

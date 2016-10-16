@@ -50,7 +50,10 @@
 
 #include <boost/filesystem/path.hpp>
 #include <boost/filesystem/operations.hpp>
+
+#ifdef HAVE_CUDA
 #include <cuda.h>
+#endif  // HAVE_CUDA
 
 #include <algorithm>
 #include <memory>

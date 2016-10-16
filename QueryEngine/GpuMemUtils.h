@@ -9,7 +9,11 @@ typedef void QueryRenderManager;
 typedef void QueryDataLayout;
 }  // namespace QueryRenderer
 
+#ifdef HAVE_CUDA
 #include <cuda.h>
+#else
+#include "../Shared/nocuda.h"
+#endif  // HAVE_CUDA
 
 #include <cstddef>
 #include <cstdint>
