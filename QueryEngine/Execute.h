@@ -413,7 +413,9 @@ class Executor {
                           llvm::Value*,
                           const std::string& null_typename,
                           const std::string& null_check_suffix,
-                          const SQLTypeInfo&);
+                          const SQLTypeInfo&,
+                          bool downscale = true);
+  llvm::Value* codegenDeciMul(const Analyzer::BinOper*, bool, const CompilationOptions&);
   llvm::Value* codegenDiv(llvm::Value*,
                           llvm::Value*,
                           const std::string& null_typename,
@@ -437,7 +439,8 @@ class Executor {
                                      const bool operand_is_const);
   llvm::Value* codegenCastBetweenIntTypes(llvm::Value* operand_lv,
                                           const SQLTypeInfo& operand_ti,
-                                          const SQLTypeInfo& ti);
+                                          const SQLTypeInfo& ti,
+                                          bool upscale = true);
   llvm::Value* codegenCastToFp(llvm::Value* operand_lv, const SQLTypeInfo& operand_ti, const SQLTypeInfo& ti);
   llvm::Value* codegenCastFromFp(llvm::Value* operand_lv, const SQLTypeInfo& operand_ti, const SQLTypeInfo& ti);
   llvm::Value* codegenUMinus(const Analyzer::UOper*, const CompilationOptions&);

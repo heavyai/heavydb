@@ -1275,7 +1275,8 @@ TEST(Select, OverflowAndUnderFlow) {
                      "DESC LIMIT 50 OFFSET 0;",
                      dt),
                  std::runtime_error);
-    EXPECT_THROW(run_multiple_agg("SELECT dd * 20000000000000 FROM test LIMIT 5;", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("SELECT dd * 2000000000000000 FROM test LIMIT 5;", dt), std::runtime_error);
+    c("SELECT dd * 200000000000000 FROM test LIMIT 5;", dt);  // overflow avoided through decimal mul optimization
     c("SELECT cast((cast(z as int) - -32666) *0.000190 as int) as key0, "
       "COUNT(*) AS val FROM test WHERE (z >= -32666 AND z < 31496) "
       "GROUP BY key0 HAVING key0 >= 0 AND key0 < 12 ORDER BY val "
@@ -1557,15 +1558,15 @@ void import_big_decimal_range_test() {
   const std::string drop_old_decimal_range_test("DROP TABLE IF EXISTS big_decimal_range_test;");
   run_ddl_statement(drop_old_decimal_range_test);
   g_sqlite_comparator.query(drop_old_decimal_range_test);
-  run_ddl_statement("CREATE TABLE big_decimal_range_test(d DECIMAL(14, 2)) WITH (fragment_size=2);");
-  g_sqlite_comparator.query("CREATE TABLE big_decimal_range_test(d DECIMAL(14, 2));");
+  run_ddl_statement("CREATE TABLE big_decimal_range_test(d DECIMAL(14, 2), d1 DECIMAL(17,11)) WITH (fragment_size=2);");
+  g_sqlite_comparator.query("CREATE TABLE big_decimal_range_test(d DECIMAL(14, 2), d1 DECIMAL(17,11));");
   {
-    const std::string insert_query{"INSERT INTO big_decimal_range_test VALUES(-40840124.400000);"};
+    const std::string insert_query{"INSERT INTO big_decimal_range_test VALUES(-40840124.400000, 1.3);"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
   {
-    const std::string insert_query{"INSERT INTO big_decimal_range_test VALUES(59016609.300000);"};
+    const std::string insert_query{"INSERT INTO big_decimal_range_test VALUES(59016609.300000, 1.3);"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
@@ -1948,6 +1949,10 @@ TEST(Select, BigDecimalRange) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     c("SELECT CAST(d AS INT) AS di, COUNT(*) FROM big_decimal_range_test GROUP BY di HAVING di > 0;", dt);
+    c("select d1*2 from big_decimal_range_test;", dt);
+    c("select 2*d1 from big_decimal_range_test;", dt);
+    c("select d1 * (CAST(d1 as INT) + 1) from big_decimal_range_test;", dt);
+    c("select (CAST(d1 as INT) + 1) * d1 from big_decimal_range_test;", dt);
   }
 }
 

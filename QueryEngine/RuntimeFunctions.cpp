@@ -144,6 +144,21 @@ DEF_MUL_DECIMAL(int64_t)
 
 #undef DEF_MUL_DECIMAL
 
+#define DEF_MUL_DECIMAL_NO_DOWNSCALE(type)                                                          \
+  extern "C" __attribute__((always_inline))                                                         \
+      type mul_##type##_decimal_no_downscale(const type lhs, const type rhs, const type null_val) { \
+    if (lhs != null_val && rhs != null_val) {                                                       \
+      return (static_cast<double>(lhs) * rhs);                                                      \
+    }                                                                                               \
+    return null_val;                                                                                \
+  }
+
+DEF_MUL_DECIMAL_NO_DOWNSCALE(int16_t)
+DEF_MUL_DECIMAL_NO_DOWNSCALE(int32_t)
+DEF_MUL_DECIMAL_NO_DOWNSCALE(int64_t)
+
+#undef DEF_MUL_DECIMAL_NO_DOWNSCALE
+
 extern "C" __attribute__((always_inline)) int64_t scale_decimal(const int64_t operand,
                                                                 const uint64_t scale,
                                                                 const int64_t operand_null_val,

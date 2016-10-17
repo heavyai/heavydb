@@ -2189,18 +2189,23 @@ llvm::Value* Executor::codegenCastFromString(llvm::Value* operand_lv,
 
 llvm::Value* Executor::codegenCastBetweenIntTypes(llvm::Value* operand_lv,
                                                   const SQLTypeInfo& operand_ti,
-                                                  const SQLTypeInfo& ti) {
+                                                  const SQLTypeInfo& ti,
+                                                  bool upscale) {
   if (ti.is_decimal()) {
-    CHECK(!operand_ti.is_decimal() || operand_ti.get_scale() <= ti.get_scale());
-    operand_lv = cgen_state_->ir_builder_.CreateSExt(operand_lv, get_int_type(64, cgen_state_->context_));
-    const auto scale_lv = llvm::ConstantInt::get(get_int_type(64, cgen_state_->context_),
-                                                 exp_to_scale(ti.get_scale() - operand_ti.get_scale()));
-    if (operand_ti.get_notnull()) {
-      operand_lv = cgen_state_->ir_builder_.CreateMul(operand_lv, scale_lv);
-    } else {
-      operand_lv = cgen_state_->emitCall(
-          "scale_decimal",
-          {operand_lv, scale_lv, ll_int(inline_int_null_val(operand_ti)), inlineIntNull(SQLTypeInfo(kBIGINT, false))});
+    if (upscale) {
+      CHECK(!operand_ti.is_decimal() || operand_ti.get_scale() <= ti.get_scale());
+      operand_lv = cgen_state_->ir_builder_.CreateSExt(operand_lv, get_int_type(64, cgen_state_->context_));
+      const auto scale_lv = llvm::ConstantInt::get(get_int_type(64, cgen_state_->context_),
+                                                   exp_to_scale(ti.get_scale() - operand_ti.get_scale()));
+      if (operand_ti.get_notnull()) {
+        operand_lv = cgen_state_->ir_builder_.CreateMul(operand_lv, scale_lv);
+      } else {
+        operand_lv = cgen_state_->emitCall("scale_decimal",
+                                           {operand_lv,
+                                            scale_lv,
+                                            ll_int(inline_int_null_val(operand_ti)),
+                                            inlineIntNull(SQLTypeInfo(kBIGINT, false))});
+      }
     }
   } else if (operand_ti.is_decimal()) {
     const auto scale_lv = llvm::ConstantInt::get(static_cast<llvm::IntegerType*>(operand_lv->getType()),
@@ -2675,6 +2680,15 @@ llvm::Value* Executor::codegenArith(const Analyzer::BinOper* bin_oper, const Com
   const auto rhs = bin_oper->get_right_operand();
   const auto& lhs_type = lhs->get_type_info();
   const auto& rhs_type = rhs->get_type_info();
+
+  if (lhs_type.is_decimal() && rhs_type.is_decimal() && lhs_type.get_scale() == rhs_type.get_scale() &&
+      optype == kMULTIPLY) {
+    if (auto ret = codegenDeciMul(bin_oper, false, co))
+      return ret;
+    if (auto ret = codegenDeciMul(bin_oper, true, co))
+      return ret;
+  }
+
   auto lhs_lv = codegen(lhs, true, co).front();
   auto rhs_lv = codegen(rhs, true, co).front();
   if (lhs_type.is_timeinterval()) {
@@ -2841,7 +2855,8 @@ llvm::Value* Executor::codegenMul(const Analyzer::BinOper* bin_oper,
                                   llvm::Value* rhs_lv,
                                   const std::string& null_typename,
                                   const std::string& null_check_suffix,
-                                  const SQLTypeInfo& ti) {
+                                  const SQLTypeInfo& ti,
+                                  bool downscale) {
   CHECK_EQ(lhs_lv->getType(), rhs_lv->getType());
   CHECK(ti.is_integer() || ti.is_decimal() || ti.is_timeinterval());
   llvm::Value* chosen_max{nullptr};
@@ -2869,9 +2884,14 @@ llvm::Value* Executor::codegenMul(const Analyzer::BinOper* bin_oper,
   }
   llvm::Value* ret{nullptr};
   if (ti.is_decimal()) {
-    ret =
-        cgen_state_->emitCall("mul_" + null_typename + "_decimal",
-                              {lhs_lv, rhs_lv, ll_int(exp_to_scale(ti.get_scale())), ll_int(inline_int_null_val(ti))});
+    if (downscale) {
+      ret = cgen_state_->emitCall(
+          "mul_" + null_typename + "_decimal",
+          {lhs_lv, rhs_lv, ll_int(exp_to_scale(ti.get_scale())), ll_int(inline_int_null_val(ti))});
+    } else {
+      ret = cgen_state_->emitCall("mul_" + null_typename + "_decimal_no_downscale",
+                                  {lhs_lv, rhs_lv, ll_int(inline_int_null_val(ti))});
+    }
   } else {
     ret = null_check_suffix.empty() ? cgen_state_->ir_builder_.CreateMul(lhs_lv, rhs_lv)
                                     : cgen_state_->emitCall("mul_" + null_typename + null_check_suffix,
@@ -2883,6 +2903,49 @@ llvm::Value* Executor::codegenMul(const Analyzer::BinOper* bin_oper,
     cgen_state_->ir_builder_.SetInsertPoint(mul_ok);
   }
   return ret;
+}
+
+llvm::Value* Executor::codegenDeciMul(const Analyzer::BinOper* bin_oper, bool swap, const CompilationOptions& co) {
+  auto lhs = swap ? bin_oper->get_right_operand() : bin_oper->get_left_operand();
+  auto rhs = swap ? bin_oper->get_left_operand() : bin_oper->get_right_operand();
+  const auto& lhs_type = lhs->get_type_info();
+  const auto& rhs_type = rhs->get_type_info();
+  CHECK(lhs_type.is_decimal() && rhs_type.is_decimal() && lhs_type.get_scale() == rhs_type.get_scale());
+
+  auto rhs_constant = dynamic_cast<const Analyzer::Constant*>(rhs);
+  auto rhs_cast = dynamic_cast<const Analyzer::UOper*>(rhs);
+  if (rhs_constant && (rhs_constant->get_constval().bigintval % exp_to_scale(rhs_type.get_scale())) == 0) {
+    // can safely downscale a scaled constant
+  } else if (rhs_cast && rhs_cast->get_optype() == kCAST && rhs_cast->get_operand()->get_type_info().is_integer()) {
+    // can skip upscale in the int to dec cast
+  } else {
+    return nullptr;
+  }
+
+  auto lhs_lv = codegen(lhs, true, co).front();
+  llvm::Value* rhs_lv{nullptr};
+  if (rhs_constant) {
+    const auto rhs_lit =
+        Parser::IntLiteral::analyzeValue(rhs_constant->get_constval().bigintval / exp_to_scale(rhs_type.get_scale()));
+    auto rhs_lit_lv = codegenIntConst(dynamic_cast<const Analyzer::Constant*>(rhs_lit.get()));
+    rhs_lv = codegenCastBetweenIntTypes(rhs_lit_lv, rhs_lit->get_type_info(), lhs_type, /*upscale*/ false);
+  } else if (rhs_cast) {
+    auto rhs_cast_oper = rhs_cast->get_operand();
+    const auto& rhs_cast_oper_ti = rhs_cast_oper->get_type_info();
+    auto rhs_cast_oper_lv = codegen(rhs_cast_oper, true, co).front();
+    rhs_lv = codegenCastBetweenIntTypes(rhs_cast_oper_lv, rhs_cast_oper_ti, lhs_type, /*upscale*/ false);
+  } else {
+    CHECK(false);
+  }
+  const auto int_typename = numeric_or_time_interval_type_name(lhs_type, rhs_type);
+  const auto null_check_suffix = get_null_check_suffix(lhs_type, rhs_type);
+  return codegenMul(bin_oper,
+                    lhs_lv,
+                    rhs_lv,
+                    null_check_suffix.empty() ? "" : int_typename,
+                    null_check_suffix,
+                    lhs_type,
+                    /*downscale*/ false);
 }
 
 llvm::Value* Executor::codegenDiv(llvm::Value* lhs_lv,
