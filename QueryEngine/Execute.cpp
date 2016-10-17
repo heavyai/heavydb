@@ -8,17 +8,15 @@
 #include "ExtensionFunctionsWhitelist.h"
 #include "ExtensionFunctions.hpp"
 #include "GpuMemUtils.h"
-#include "MaxwellCodegenPatch.h"
-#include "GroupByAndAggregate.h"
 #include "InPlaceSort.h"
 #include "JsonAccessors.h"
-#include "NvidiaKernel.h"
+#include "MaxwellCodegenPatch.h"
+#include "NullableValue.h"
 #include "OutputBufferInitialization.h"
-#include "QueryTemplateGenerator.h"
 #include "QueryRewrite.h"
+#include "QueryTemplateGenerator.h"
 #include "RuntimeFunctions.h"
 #include "SpeculativeTopN.h"
-#include "NullableValue.h"
 
 #include "CudaMgr/CudaMgr.h"
 #include "DataMgr/BufferMgr/BufferMgr.h"
@@ -33,34 +31,29 @@
 #include <llvm/IR/InstIterator.h>
 #include "llvm/IR/Intrinsics.h"
 #include <llvm/IR/LegacyPassManager.h>
-#include <llvm/IR/Value.h>
-#include <llvm/IR/Verifier.h>
 #include <llvm/IR/MDBuilder.h>
-#include <llvm/Support/raw_os_ostream.h>
+#include <llvm/IR/Verifier.h>
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/FormattedStream.h>
 #include <llvm/Support/MemoryBuffer.h>
 #include <llvm/Support/SourceMgr.h>
 #include <llvm/Support/TargetRegistry.h>
 #include <llvm/Support/TargetSelect.h>
+#include <llvm/Support/raw_os_ostream.h>
 #include <llvm/Transforms/Instrumentation.h>
 #include <llvm/Transforms/IPO.h>
 #include <llvm/Transforms/Scalar.h>
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
 
-#include <boost/filesystem/path.hpp>
 #include <boost/filesystem/operations.hpp>
+#include <boost/filesystem/path.hpp>
 
 #ifdef HAVE_CUDA
 #include <cuda.h>
 #endif  // HAVE_CUDA
-
-#include <algorithm>
 #include <memory>
 #include <numeric>
 #include <thread>
-#include <unistd.h>
-#include <map>
 #include <set>
 
 bool g_enable_watchdog{false};

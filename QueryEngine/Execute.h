@@ -1,14 +1,15 @@
 #ifndef QUERYENGINE_EXECUTE_H
 #define QUERYENGINE_EXECUTE_H
 
-#include "InputMetadata.h"
 #include "BufferCompaction.h"
 #include "GroupByAndAggregate.h"
 #include "InValuesBitmap.h"
+#include "InputDescriptors.h"
+#include "InputMetadata.h"
 #include "JoinHashTable.h"
 #include "NvidiaKernel.h"
-#include "InputDescriptors.h"
 #include "TargetMetaInfo.h"
+
 #include "../Analyzer/Analyzer.h"
 #include "../Chunk/Chunk.h"
 #include "../Planner/Planner.h"
@@ -16,28 +17,27 @@
 #include "../Shared/thread_count.h"
 #include "../StringDictionary/StringDictionary.h"
 
-#include <rapidjson/document.h>
+#include <boost/functional/hash.hpp>
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Value.h>
-
-#include <boost/functional/hash.hpp>
+#include <rapidjson/document.h>
 
 #include <algorithm>
 #include <condition_variable>
+#include <deque>
 #include <functional>
+#include <limits>
 #include <map>
 #include <mutex>
 #include <stack>
+#include <unistd.h>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
-#include <deque>
-#include <unistd.h>
-#include <limits>
 
 extern bool g_enable_watchdog;
 
