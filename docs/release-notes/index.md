@@ -1,5 +1,20 @@
 # MapD Platform
-The latest version of the MapD Platform is 1.2.8.
+The latest version of the MapD Platform is 1.2.9.
+
+#### **1.2.9** - Released October 17, 2016
+
+#####New
+- Scalar subqueries may now be run without enabling loop joins
+- Allow fully qualified columns not specified in project portion of query to be used in `ORDER BY`
+- Additional multi-column `GROUP BY` queries now run on GPU
+
+#####Fixed
+- Issue with sub-queries having empty intermediate results
+- Issue with `CASE` statements without a specified `ELSE` branch
+- `COUNT` on non-dictionary encoded strings used in a `GROUP BY`
+- Issue with `MIN` or `MAX` on a string in a `GROUP BY` query
+- Reliably throw exception instead of returning empty results for division by zero
+- Now short-circuiting logical expressions
 
 #### **1.2.8** - Released October 3, 2016
 
