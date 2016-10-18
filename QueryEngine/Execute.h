@@ -314,7 +314,7 @@ class Executor {
 
   bool isArchMaxwell(const ExecutorDeviceType dt) const;
 
-  bool isOuterJoin() const { return cgen_state_->outer_join_cond_lv_; }
+  bool isOuterJoin() const { return cgen_state_->is_outer_join_; }
 
   const ColumnDescriptor* getColumnDescriptor(const Analyzer::ColumnVar*) const;
 
@@ -791,7 +791,8 @@ class Executor {
 
   void nukeOldState(const bool allow_lazy_fetch,
                     const JoinInfo& join_info,
-                    const std::vector<InputTableInfo>& query_infos);
+                    const std::vector<InputTableInfo>& query_infos,
+                    const std::list<std::shared_ptr<Analyzer::Expr>>& outer_join_quals);
   std::vector<void*> optimizeAndCodegenCPU(llvm::Function*,
                                            llvm::Function*,
                                            std::unordered_set<llvm::Function*>&,
@@ -878,11 +879,12 @@ class Executor {
 
   struct CgenState {
    public:
-    CgenState(const std::vector<InputTableInfo>& query_infos)
+    CgenState(const std::vector<InputTableInfo>& query_infos, const bool is_outer_join)
         : module_(nullptr),
           row_func_(nullptr),
           context_(llvm::getGlobalContext()),
           ir_builder_(context_),
+          is_outer_join_(is_outer_join),
           outer_join_cond_lv_(nullptr),
           query_infos_(query_infos),
           must_run_on_cpu_(false),
@@ -987,6 +989,7 @@ class Executor {
     std::vector<llvm::Value*> group_by_expr_cache_;
     std::vector<llvm::Value*> str_constants_;
     std::unordered_map<InputDescriptor, std::pair<llvm::Value*, llvm::Value*>> scan_to_iterator_;
+    const bool is_outer_join_;
     llvm::Value* outer_join_cond_lv_;
     std::vector<llvm::BasicBlock*> inner_scan_labels_;
     std::unordered_map<int, llvm::Value*> scan_idx_to_hash_pos_;

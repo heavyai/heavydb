@@ -2110,6 +2110,9 @@ TEST(Select, LeftOuterJoins) {
     c("SELECT test.x key1, CASE WHEN test_inner.x IS NULL THEN 99 ELSE test_inner.x END key2 FROM test LEFT OUTER JOIN "
       "test_inner ON test.x = test_inner.x GROUP BY key1, key2 ORDER BY key1;",
       dt);
+    c("SELECT test_inner.x key1 FROM test LEFT OUTER JOIN test_inner ON test.x = test_inner.x GROUP BY key1 HAVING "
+      "key1 IS NOT NULL;",
+      dt);
   }
 }
 

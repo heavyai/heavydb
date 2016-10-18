@@ -64,7 +64,7 @@ Executor::Executor(const int db_id,
                    const std::string& debug_dir,
                    const std::string& debug_file,
                    ::QueryRenderer::QueryRenderManager* render_manager)
-    : cgen_state_(new CgenState({})),
+    : cgen_state_(new CgenState({}, false)),
       is_nested_(false),
       render_manager_(render_manager),
       block_size_x_(block_size_x),
@@ -5533,9 +5533,10 @@ void verify_function_ir(const llvm::Function* func) {
 
 void Executor::nukeOldState(const bool allow_lazy_fetch,
                             const JoinInfo& join_info,
-                            const std::vector<InputTableInfo>& query_infos) {
-  cgen_state_.reset(new CgenState(query_infos));
-  plan_state_.reset(new PlanState(allow_lazy_fetch, join_info, this));
+                            const std::vector<InputTableInfo>& query_infos,
+                            const std::list<std::shared_ptr<Analyzer::Expr>>& outer_join_quals) {
+  cgen_state_.reset(new CgenState(query_infos, !outer_join_quals.empty()));
+  plan_state_.reset(new PlanState(allow_lazy_fetch && outer_join_quals.empty(), join_info, this));
 }
 
 Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
@@ -5550,7 +5551,7 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
                                                       const size_t small_groups_buffer_entry_count,
                                                       const int8_t crt_min_byte_width,
                                                       const JoinInfo& join_info) {
-  nukeOldState(allow_lazy_fetch && ra_exe_unit.outer_join_quals.empty(), join_info, query_infos);
+  nukeOldState(allow_lazy_fetch, join_info, query_infos, ra_exe_unit.outer_join_quals);
 
   GroupByAndAggregate group_by_and_aggregate(this,
                                              co.device_type_,
@@ -5619,9 +5620,7 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
   // generate the code for the filter
   allocateLocalColumnIds(ra_exe_unit.input_col_descs);
 
-  // Generate the expression for outer join first, the isOuterJoin() method relies
-  // on it and ExpressionRange module calls isOuterJoin() when computing range.
-  if (!ra_exe_unit.outer_join_quals.empty()) {
+  if (isOuterJoin()) {
     cgen_state_->outer_join_cond_lv_ =
         llvm::ConstantInt::get(llvm::IntegerType::getInt1Ty(cgen_state_->context_), true);
     for (auto expr : ra_exe_unit.outer_join_quals) {
