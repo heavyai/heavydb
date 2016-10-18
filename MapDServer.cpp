@@ -1023,7 +1023,7 @@ class MapDHandler : virtual public MapDIf {
         std::string query_ra;
         _return.execution_time_ms +=
             measure<>::execution([&]() { query_ra = parse_to_ra(query_str, *session_info_ptr); });
-        render_rel_alg(_return, query_ra, *session_info_ptr, render_type);
+        render_rel_alg(_return, query_ra, query_str_in, *session_info_ptr, render_type);
 #else
 #ifdef HAVE_CALCITE
         ParserWrapper pw{query_str};
@@ -1039,7 +1039,7 @@ class MapDHandler : virtual public MapDIf {
 #endif  // HAVE_CALCITE
         CHECK(root_plan);
         std::unique_ptr<Planner::RootPlan> plan_ptr(root_plan);  // make sure it's deleted
-        render_root_plan(_return, root_plan, *session_info_ptr, render_type);
+        render_root_plan(_return, root_plan, query_str_in, *session_info_ptr, render_type);
 #endif  // HAVE_RAVM
       } catch (std::exception& e) {
         TMapDException ex;
@@ -1461,6 +1461,7 @@ class MapDHandler : virtual public MapDIf {
 
   void render_root_plan(TRenderResult& _return,
                         Planner::RootPlan* root_plan,
+                        const std::string& query_str,
                         const Catalog_Namespace::SessionInfo& session_info,
                         const std::string& render_type) {
     rapidjson::Document render_config;
@@ -1502,6 +1503,7 @@ class MapDHandler : virtual public MapDIf {
 
   void render_rel_alg(TRenderResult& _return,
                       const std::string& query_ra,
+                      const std::string& query_str,
                       const Catalog_Namespace::SessionInfo& session_info,
                       const std::string& render_type) {
     const auto& cat = session_info.get_catalog();

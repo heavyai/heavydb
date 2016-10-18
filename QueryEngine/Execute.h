@@ -298,7 +298,8 @@ class Executor {
                            const int render_widget_id,
                            const int pixelRadius = 0);
 
-  ResultRows renderPolygons(const ResultRows& rows,
+  ResultRows renderPolygons(const std::string& queryStr,
+                            const ResultRows& rows,
                             const std::vector<TargetMetaInfo>& row_shape,
                             const Catalog_Namespace::SessionInfo& session,
                             const int render_widget_id,
