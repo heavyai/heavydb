@@ -2107,6 +2107,9 @@ TEST(Select, LeftOuterJoins) {
     c("SELECT test.str AS foobar, test_inner.str FROM test LEFT OUTER JOIN test_inner ON test.x = test_inner.x WHERE "
       "test_inner.str IS NOT NULL ORDER BY foobar DESC;",
       dt);
+    c("SELECT test.x key1, CASE WHEN test_inner.x IS NULL THEN 99 ELSE test_inner.x END key2 FROM test LEFT OUTER JOIN "
+      "test_inner ON test.x = test_inner.x GROUP BY key1, key2 ORDER BY key1;",
+      dt);
   }
 }
 

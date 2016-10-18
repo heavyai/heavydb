@@ -345,8 +345,9 @@ class Executor {
                                           const bool fetch_column,
                                           const bool hoist_literals);
   llvm::Value* codgenAdjustFixedEncNull(llvm::Value*, const SQLTypeInfo&);
-  std::vector<llvm::Value*> codegenOuterJoinNullPlaceholder(const std::vector<llvm::Value*>& orig_lvs,
-                                                            const Analyzer::Expr* orig_expr);
+  std::vector<llvm::Value*> codegenOuterJoinNullPlaceholder(const std::vector<llvm::Value*>&,
+                                                            const Analyzer::ColumnVar*);
+  llvm::Value* resolveGroupedColumnReference(const Analyzer::ColumnVar*);
   std::vector<llvm::Value*> codegen(const Analyzer::Constant*,
                                     const EncodingType enc_type,
                                     const int dict_id,

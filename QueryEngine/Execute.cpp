@@ -1160,18 +1160,9 @@ std::vector<llvm::Value*> Executor::codegenColVar(const Analyzer::ColumnVar* col
       return {cgen_state_->ir_builder_.CreateAdd(posArg(col_var), fragRowOff())};
     }
   }
-  if (col_var->get_rte_idx() >= 0 && !is_nested_) {
-    CHECK(col_id > 0 || temporary_tables_);
-  } else {
-    CHECK((col_id == 0) || (col_var->get_rte_idx() >= 0 && col_var->get_table_id() > 0));
-    const auto var = dynamic_cast<const Analyzer::Var*>(col_var);
-    CHECK(var);
-    col_id = var->get_varno();
-    CHECK_GE(col_id, 1);
-    if (var->get_which_row() == Analyzer::Var::kGROUPBY) {
-      CHECK_LE(static_cast<size_t>(col_id), cgen_state_->group_by_expr_cache_.size());
-      return {cgen_state_->group_by_expr_cache_[col_id - 1]};
-    }
+  const auto grouped_col_lv = resolveGroupedColumnReference(col_var);
+  if (grouped_col_lv) {
+    return {grouped_col_lv};
   }
   const int local_col_id = getLocalColumnId(col_var, fetch_column);
   // only generate the decoding code once; if a column has been previously
@@ -1278,7 +1269,11 @@ llvm::Value* Executor::codgenAdjustFixedEncNull(llvm::Value* val, const SQLTypeI
 }
 
 std::vector<llvm::Value*> Executor::codegenOuterJoinNullPlaceholder(const std::vector<llvm::Value*>& orig_lvs,
-                                                                    const Analyzer::Expr* orig_expr) {
+                                                                    const Analyzer::ColumnVar* col_var) {
+  const auto grouped_col_lv = resolveGroupedColumnReference(col_var);
+  if (grouped_col_lv) {
+    return {grouped_col_lv};
+  }
   const auto bb = cgen_state_->ir_builder_.GetInsertBlock();
   const auto outer_join_args_bb =
       llvm::BasicBlock::Create(cgen_state_->context_, "outer_join_args", cgen_state_->row_func_);
@@ -1292,7 +1287,7 @@ std::vector<llvm::Value*> Executor::codegenOuterJoinNullPlaceholder(const std::v
   cgen_state_->ir_builder_.SetInsertPoint(outer_join_args_bb);
   cgen_state_->ir_builder_.CreateBr(phi_bb);
   cgen_state_->ir_builder_.SetInsertPoint(outer_join_nulls_bb);
-  const auto& null_ti = orig_expr->get_type_info();
+  const auto& null_ti = col_var->get_type_info();
   const auto null_constant = makeExpr<Analyzer::Constant>(null_ti, true, Datum{0});
   const auto null_target_lvs = codegen(
       null_constant.get(), false, CompilationOptions{ExecutorDeviceType::CPU, false, ExecutorOptLevel::Default});
@@ -1311,6 +1306,23 @@ std::vector<llvm::Value*> Executor::codegenOuterJoinNullPlaceholder(const std::v
   cgen_state_->ir_builder_.CreateBr(back_from_outer_join_bb);
   cgen_state_->ir_builder_.SetInsertPoint(back_from_outer_join_bb);
   return target_lvs;
+}
+
+llvm::Value* Executor::resolveGroupedColumnReference(const Analyzer::ColumnVar* col_var) {
+  auto col_id = col_var->get_column_id();
+  if (col_var->get_rte_idx() >= 0 && !is_nested_) {
+    return nullptr;
+  }
+  CHECK((col_id == 0) || (col_var->get_rte_idx() >= 0 && col_var->get_table_id() > 0));
+  const auto var = dynamic_cast<const Analyzer::Var*>(col_var);
+  CHECK(var);
+  col_id = var->get_varno();
+  CHECK_GE(col_id, 1);
+  if (var->get_which_row() == Analyzer::Var::kGROUPBY) {
+    CHECK_LE(static_cast<size_t>(col_id), cgen_state_->group_by_expr_cache_.size());
+    return cgen_state_->group_by_expr_cache_[col_id - 1];
+  }
+  return nullptr;
 }
 
 // returns the byte stream argument and the position for the given column
