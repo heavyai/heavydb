@@ -117,6 +117,7 @@ add_custom_command(
     COMMAND nvcc
     ARGS
         ${MAPD_HOST_COMPILER_FLAG}
+        -Xcompiler -fPIC
         -D__STDC_LIMIT_MACROS
         -D__STDC_CONSTANT_MACROS
         -D_FORCE_INLINES
@@ -132,6 +133,7 @@ add_custom_command(
     COMMAND nvcc
     ARGS
         ${MAPD_HOST_COMPILER_FLAG}
+        -Xcompiler -fPIC
         -D__STDC_LIMIT_MACROS
         -D__STDC_CONSTANT_MACROS
         -D_FORCE_INLINES
@@ -147,6 +149,7 @@ add_custom_command(
     COMMAND nvcc
     ARGS
         ${MAPD_HOST_COMPILER_FLAG}
+        -Xcompiler -fPIC
         -O3
         -D_FORCE_INLINES
         ${MAPD_DEFINITIONS}
@@ -160,6 +163,7 @@ add_custom_command(
     COMMAND nvcc
     ARGS
         ${MAPD_HOST_COMPILER_FLAG}
+        -Xcompiler -fPIC
         -DEXECUTOR_RT
         -D_FORCE_INLINES
         ${MAPD_DEFINITIONS}
@@ -174,6 +178,7 @@ add_custom_command(
     COMMAND nvcc
     ARGS
         ${MAPD_HOST_COMPILER_FLAG}
+        -Xcompiler -fPIC
         -D_FORCE_INLINES
         ${MAPD_DEFINITIONS}
         -O3
