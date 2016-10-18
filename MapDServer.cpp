@@ -1089,7 +1089,6 @@ class MapDHandler : virtual public MapDIf {
                                             grid_size_x,
                                             nullptr);
 
-
     });
     LOG(INFO) << "Total: " << _return.total_time_ms << " (ms), Total Execution: " << _return.execution_time_ms
               << " (ms), Total Render: " << _return.render_time_ms << " (ms)";
