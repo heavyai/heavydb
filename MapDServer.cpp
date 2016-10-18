@@ -170,7 +170,7 @@ class MapDHandler : virtual public MapDIf {
               const size_t render_mem_bytes,
               const int num_gpus,
               const int start_gpu,
-              const int reserved_gpu_mem,
+              const size_t reserved_gpu_mem,
               const LdapMetadata ldapMetadata,
 #ifdef HAVE_CALCITE
               const int calcite_port,
@@ -210,8 +210,13 @@ class MapDHandler : virtual public MapDIf {
       cpu_mode_only_ = true;
     }
     const auto data_path = boost::filesystem::path(base_data_path_) / "mapd_data";
+    // calculate the total amount of memory we need to reserve from each gpu that the Buffer manage cannot ask for
+    size_t total_reserved = reserved_gpu_mem;
+    if (enable_rendering_) {
+      total_reserved += render_mem_bytes;
+    }
     data_mgr_.reset(new Data_Namespace::DataMgr(
-        data_path.string(), cpu_buffer_mem_bytes, !cpu_mode_only_, num_gpus, start_gpu, reserved_gpu_mem));
+        data_path.string(), cpu_buffer_mem_bytes, !cpu_mode_only_, num_gpus, start_gpu, total_reserved));
 #ifdef HAVE_CALCITE
     calcite_.reset(new Calcite(calcite_port, base_data_path_));
 #ifdef HAVE_RAVM
@@ -1837,7 +1842,7 @@ void start_server(TThreadPoolServer& server) {
 int main(int argc, char** argv) {
   int port = 9091;
   int http_port = 9090;
-  int reserved_gpu_mem = 1 << 27;
+  size_t reserved_gpu_mem = 1 << 27;
   int calcite_port = -1;  // do not use calcite via thrift normally
   std::string base_path;
   std::string device("gpu");
@@ -1904,7 +1909,7 @@ int main(int argc, char** argv) {
                          po::bool_switch(&allow_loop_joins)->default_value(allow_loop_joins)->implicit_value(true),
                          "Enable loop joins");
   desc_adv.add_options()("res-gpu-mem",
-                         po::value<int>(&reserved_gpu_mem)->default_value(reserved_gpu_mem),
+                         po::value<size_t>(&reserved_gpu_mem)->default_value(reserved_gpu_mem),
                          "Reserved memory for GPU, not use mapd allocator");
   desc_adv.add_options()(
       "disable-legacy-syntax",

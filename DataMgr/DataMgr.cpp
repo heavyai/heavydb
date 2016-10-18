@@ -30,7 +30,7 @@ DataMgr::DataMgr(const string& dataDir,
                  const bool useGpus,
                  const int numGpus,
                  const int startGpu,
-                 const int reservedGpuMem)
+                 const size_t reservedGpuMem)
     : dataDir_(dataDir) {
   if (useGpus) {
     try {
@@ -90,9 +90,10 @@ void DataMgr::populateMgrs(const size_t userSpecifiedCpuBufferSize) {
   size_t cpuSlabSize = std::min(static_cast<size_t>(1L << 32), cpuBufferSize);
   // cpuSlabSize -= cpuSlabSize % 512 == 0 ? 0 : 512 - (cpuSlabSize % 512);
   cpuSlabSize = (cpuSlabSize / 512) * 512;
-  LOG(INFO) << "cpuSlabSize is " << cpuSlabSize;
+  LOG(INFO) << "cpuSlabSize is " << (float)cpuSlabSize / (1024 * 1024) << "M";
   if (hasGpus_) {
-    LOG(INFO) << "reserved GPU memory is " << reservedGpuMem_;
+    LOG(INFO) << "reserved GPU memory is " << (float)reservedGpuMem_ / (1024 * 1024)
+              << "M includes render buffer allocation";
     bufferMgrs_.resize(3);
     bufferMgrs_[1].push_back(
         new CpuBufferMgr(0, cpuBufferSize, CUDA_HOST, cudaMgr_, cpuSlabSize, 512, bufferMgrs_[0][0]));
@@ -102,7 +103,8 @@ void DataMgr::populateMgrs(const size_t userSpecifiedCpuBufferSize) {
       size_t gpuMaxMemSize = (cudaMgr_->deviceProperties[gpuNum].globalMem) - (reservedGpuMem_);
       size_t gpuSlabSize = std::min(static_cast<size_t>(1L << 31), gpuMaxMemSize);
       gpuSlabSize -= gpuSlabSize % 512 == 0 ? 0 : 512 - (gpuSlabSize % 512);
-      LOG(INFO) << "gpuSlabSize is " << gpuSlabSize;
+      LOG(INFO) << "gpuSlabSize is " << (float)gpuSlabSize / (1024 * 1024) << "M";
+      ;
       bufferMgrs_[2].push_back(
           new GpuCudaBufferMgr(gpuNum, gpuMaxMemSize, cudaMgr_, gpuSlabSize, 512, bufferMgrs_[1][0]));
     }
