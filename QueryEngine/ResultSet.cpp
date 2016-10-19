@@ -23,8 +23,9 @@
 ResultSetStorage::ResultSetStorage(const std::vector<TargetInfo>& targets,
                                    const ExecutorDeviceType device_type,
                                    const QueryMemoryDescriptor& query_mem_desc,
-                                   int8_t* buff)
-    : targets_(targets), query_mem_desc_(query_mem_desc), buff_(buff) {
+                                   int8_t* buff,
+                                   const bool buff_is_provided)
+    : targets_(targets), query_mem_desc_(query_mem_desc), buff_(buff), buff_is_provided_(buff_is_provided) {
   for (const auto& target_info : targets_) {
     if (!target_info.sql_type.get_notnull()) {
       int64_t init_val = null_val_bit_pattern(target_info.sql_type);
@@ -63,6 +64,8 @@ ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
       drop_first_(0),
       keep_first_(0),
       row_set_mem_owner_(row_set_mem_owner),
+      queue_time_ms_(0),
+      render_time_ms_(0),
       executor_(executor) {
 }
 
@@ -72,19 +75,31 @@ ResultSet::ResultSet() : device_type_(ExecutorDeviceType::CPU), query_mem_desc_{
 ResultSet::~ResultSet() {
   if (storage_) {
     CHECK(storage_->getUnderlyingBuffer());
-    free(storage_->getUnderlyingBuffer());
+    if (!storage_->buff_is_provided_) {
+      free(storage_->getUnderlyingBuffer());
+    }
   }
 }
 
 const ResultSetStorage* ResultSet::allocateStorage() const {
   CHECK(!storage_);
   auto buff = static_cast<int8_t*>(checked_malloc(query_mem_desc_.getBufferSizeBytes(device_type_)));
-  return allocateStorage(buff);
+  storage_.reset(new ResultSetStorage(targets_, device_type_, query_mem_desc_, buff, false));
+  return storage_.get();
 }
 
-const ResultSetStorage* ResultSet::allocateStorage(int8_t* buff) const {
+const ResultSetStorage* ResultSet::allocateStorage(int8_t* buff, const std::vector<int64_t>& target_init_vals) const {
   CHECK(buff);
-  storage_.reset(new ResultSetStorage(targets_, device_type_, query_mem_desc_, buff));
+  storage_.reset(new ResultSetStorage(targets_, device_type_, query_mem_desc_, buff, true));
+  storage_->target_init_vals_ = target_init_vals;
+  return storage_.get();
+}
+
+const ResultSetStorage* ResultSet::allocateStorage(const std::vector<int64_t>& target_init_vals) const {
+  CHECK(!storage_);
+  auto buff = static_cast<int8_t*>(checked_malloc(query_mem_desc_.getBufferSizeBytes(device_type_)));
+  storage_.reset(new ResultSetStorage(targets_, device_type_, query_mem_desc_, buff, false));
+  storage_->target_init_vals_ = target_init_vals;
   return storage_.get();
 }
 
@@ -92,6 +107,89 @@ void ResultSet::append(ResultSet& that) {
   CHECK(that.appended_storage_.empty());
   appended_storage_.push_back(std::move(that.storage_));
   CHECK(false);
+}
+
+const ResultSetStorage* ResultSet::getStorage() const {
+  return storage_.get();
+}
+
+size_t ResultSet::colCount() const {
+  return targets_.size();
+}
+
+SQLTypeInfo ResultSet::getColType(const size_t col_idx) const {
+  CHECK_LT(col_idx, targets_.size());
+  return targets_[col_idx].agg_kind == kAVG ? SQLTypeInfo(kDOUBLE, false) : targets_[col_idx].sql_type;
+}
+
+size_t ResultSet::rowCount() const {
+  moveToBegin();
+  size_t row_count{0};
+  while (true) {
+    auto crt_row = getNextRow(false, false);
+    if (crt_row.empty()) {
+      break;
+    }
+    ++row_count;
+  }
+  moveToBegin();
+  return row_count;
+}
+
+bool ResultSet::definitelyHasNoRows() const {
+  return !storage_;
+}
+
+const QueryMemoryDescriptor& ResultSet::getQueryMemDesc() const {
+  return storage_->query_mem_desc_;
+}
+
+const std::vector<TargetInfo>& ResultSet::getTargetInfos() const {
+  return targets_;
+}
+
+void ResultSet::setQueueTime(const int64_t queue_time) {
+  queue_time_ms_ = queue_time;
+}
+
+int64_t ResultSet::getQueueTime() const {
+  return queue_time_ms_;
+}
+
+void ResultSet::moveToBegin() const {
+  crt_row_buff_idx_ = 0;
+  fetched_so_far_ = 0;
+}
+
+QueryMemoryDescriptor ResultSet::fixupQueryMemoryDescriptor(const QueryMemoryDescriptor& query_mem_desc) {
+  auto query_mem_desc_copy = query_mem_desc;
+  for (auto& group_width : query_mem_desc_copy.group_col_widths) {
+    group_width = 8;
+  }
+  size_t total_bytes{0};
+  size_t col_idx = 0;
+  for (; col_idx < query_mem_desc_copy.agg_col_widths.size(); ++col_idx) {
+    auto chosen_bytes = query_mem_desc_copy.agg_col_widths[col_idx].compact;
+    if (chosen_bytes == sizeof(int64_t)) {
+      const auto aligned_total_bytes = align_to_int64(total_bytes);
+      CHECK_GE(aligned_total_bytes, total_bytes);
+      if (col_idx >= 1) {
+        const auto padding = aligned_total_bytes - total_bytes;
+        CHECK(padding == 0 || padding == 4);
+        query_mem_desc_copy.agg_col_widths[col_idx - 1].compact += padding;
+      }
+      total_bytes = aligned_total_bytes;
+    }
+    total_bytes += chosen_bytes;
+  }
+  {
+    const auto aligned_total_bytes = align_to_int64(total_bytes);
+    CHECK_GE(aligned_total_bytes, total_bytes);
+    const auto padding = aligned_total_bytes - total_bytes;
+    CHECK(padding == 0 || padding == 4);
+    query_mem_desc_copy.agg_col_widths[col_idx - 1].compact += padding;
+  }
+  return query_mem_desc_copy;
 }
 
 void ResultSet::sort(const std::list<Analyzer::OrderEntry>& order_entries, const size_t top_n) {

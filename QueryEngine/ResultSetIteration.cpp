@@ -110,11 +110,11 @@ std::vector<TargetValue> ResultSet::getNextRow(const bool translate_strings, con
 
 std::vector<TargetValue> ResultSet::getNextRowImpl(const bool translate_strings, const bool decimal_to_double) const {
   const auto entry_buff_idx = advanceCursorToNextEntry();
-  if (keep_first_ && fetched_so_far_ >= drop_first_ + keep_first_) {
+  if (keep_first_ && crt_row_buff_idx_ >= drop_first_ + keep_first_) {
     return {};
   }
-  if (entry_buff_idx >= entryCount()) {
-    CHECK_EQ(entryCount(), entry_buff_idx);
+  if (crt_row_buff_idx_ >= entryCount()) {
+    CHECK_EQ(entryCount(), crt_row_buff_idx_);
     return {};
   }
   const auto buff = storage_->buff_;
@@ -144,6 +144,7 @@ std::vector<TargetValue> ResultSet::getNextRowImpl(const bool translate_strings,
                                                     compact_sz2,
                                                     entry_buff_idx,
                                                     agg_info,
+                                                    target_idx,
                                                     translate_strings,
                                                     decimal_to_double));
       crt_col_ptr = next_col_ptr;
@@ -152,7 +153,7 @@ std::vector<TargetValue> ResultSet::getNextRowImpl(const bool translate_strings,
       }
     } else {
       row.push_back(getTargetValueFromBufferRowwise(
-          rowwise_target_ptr, agg_info, agg_col_idx, translate_strings, decimal_to_double));
+          rowwise_target_ptr, agg_info, target_idx, agg_col_idx, translate_strings, decimal_to_double));
       rowwise_target_ptr = advance_target_ptr(rowwise_target_ptr, agg_info, agg_col_idx, query_mem_desc_);
     }
     agg_col_idx = advance_slot(agg_col_idx, agg_info);
@@ -260,11 +261,15 @@ size_t ResultSet::entryCount() const {
 TargetValue ResultSet::makeTargetValue(const int8_t* ptr,
                                        const int8_t compact_sz,
                                        const TargetInfo& target_info,
+                                       const size_t target_logical_idx,
                                        const bool translate_strings,
                                        const bool decimal_to_double) const {
   const auto& chosen_type = get_compact_type(target_info);
   if (chosen_type.is_integer() | chosen_type.is_boolean() || chosen_type.is_time() || chosen_type.is_timeinterval()) {
     const auto ival = read_int_from_buff(ptr, compact_sz);
+    if (target_info.is_distinct) {
+      return TargetValue(bitmap_set_size(ival, target_logical_idx, query_mem_desc_.count_distinct_descriptors_));
+    }
     if (inline_int_null_val(chosen_type) == ival) {
       return inline_int_null_val(target_info.sql_type);
     }
@@ -320,6 +325,7 @@ TargetValue ResultSet::getTargetValueFromBufferColwise(const int8_t* col1_ptr,
                                                        const int8_t compact_sz2,
                                                        const size_t entry_idx,
                                                        const TargetInfo& target_info,
+                                                       const size_t target_logical_idx,
                                                        const bool translate_strings,
                                                        const bool decimal_to_double) const {
   CHECK(query_mem_desc_.output_columnar);
@@ -330,12 +336,13 @@ TargetValue ResultSet::getTargetValueFromBufferColwise(const int8_t* col1_ptr,
     const auto ptr2 = columnar_elem_ptr(entry_idx, col2_ptr, compact_sz2);
     return make_avg_target_value(ptr1, compact_sz1, ptr2, compact_sz2, target_info);
   }
-  return makeTargetValue(ptr1, compact_sz1, target_info, translate_strings, decimal_to_double);
+  return makeTargetValue(ptr1, compact_sz1, target_info, target_logical_idx, translate_strings, decimal_to_double);
 }
 
 // Gets the TargetValue stored in slot_idx (and slot_idx for AVG) of rowwise_target_ptr.
 TargetValue ResultSet::getTargetValueFromBufferRowwise(const int8_t* rowwise_target_ptr,
                                                        const TargetInfo& target_info,
+                                                       const size_t target_logical_idx,
                                                        const size_t slot_idx,
                                                        const bool translate_strings,
                                                        const bool decimal_to_double) const {
@@ -353,7 +360,7 @@ TargetValue ResultSet::getTargetValueFromBufferRowwise(const int8_t* rowwise_tar
   }
   CHECK(!ptr2);
   CHECK_EQ(0, compact_sz2);
-  return makeTargetValue(ptr1, compact_sz1, target_info, translate_strings, decimal_to_double);
+  return makeTargetValue(ptr1, compact_sz1, target_info, target_logical_idx, translate_strings, decimal_to_double);
 }
 
 // Returns true iff the entry at position entry_idx in buff contains a valid row.

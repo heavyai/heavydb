@@ -19,11 +19,14 @@ class ResultSetStorage {
   ResultSetStorage(const std::vector<TargetInfo>& targets,
                    const ExecutorDeviceType device_type,
                    const QueryMemoryDescriptor& query_mem_desc,
-                   int8_t* buff);
+                   int8_t* buff,
+                   const bool buff_is_provided);
 
   void reduce(const ResultSetStorage& that) const;
 
   int8_t* getUnderlyingBuffer() const;
+
+  void moveEntriesToBuffer(int8_t* new_buff, const size_t new_entry_count) const;
 
  private:
   void reduceOneEntryNoCollisionsColWise(const size_t i, int8_t* this_buff, const int8_t* that_buff) const;
@@ -52,6 +55,7 @@ class ResultSetStorage {
                              const size_t that_entry_count,
                              const size_t that_slot,
                              const TargetInfo& target_info,
+                             const size_t target_logical_idx,
                              const size_t target_slot_idx) const;
 
   void reduceOneSlot(int8_t* this_ptr1,
@@ -59,9 +63,13 @@ class ResultSetStorage {
                      const int8_t* that_ptr1,
                      const int8_t* that_ptr2,
                      const TargetInfo& target_info,
+                     const size_t target_logical_idx,
                      const size_t target_slot_idx) const;
 
-  void moveEntriesToBuffer(int8_t* new_buff, const size_t new_entry_count) const;
+  void reduceOneCountDistinctSlot(int8_t* this_ptr1,
+                                  const int8_t* that_ptr1,
+                                  const TargetInfo& target_info,
+                                  const size_t target_logical_idx) const;
 
   void initializeRowWise() const;
 
@@ -70,6 +78,7 @@ class ResultSetStorage {
   const std::vector<TargetInfo> targets_;
   const QueryMemoryDescriptor query_mem_desc_;
   int8_t* buff_;
+  const bool buff_is_provided_;
   std::vector<int64_t> target_init_vals_;
 
   friend class ResultSet;
@@ -99,7 +108,9 @@ class ResultSet {
 
   const ResultSetStorage* allocateStorage() const;
 
-  const ResultSetStorage* allocateStorage(int8_t*) const;
+  const ResultSetStorage* allocateStorage(int8_t*, const std::vector<int64_t>&) const;
+
+  const ResultSetStorage* allocateStorage(const std::vector<int64_t>&) const;
 
   std::vector<TargetValue> getNextRow(const bool translate_strings, const bool decimal_to_double) const;
 
@@ -112,6 +123,33 @@ class ResultSet {
   void dropFirstN(const size_t n);
 
   void append(ResultSet& that);
+
+  const ResultSetStorage* getStorage() const;
+
+  size_t colCount() const;
+
+  SQLTypeInfo getColType(const size_t col_idx) const;
+
+  size_t rowCount() const;
+
+  bool definitelyHasNoRows() const;
+
+  const QueryMemoryDescriptor& getQueryMemDesc() const;
+
+  const std::vector<TargetInfo>& getTargetInfos() const;
+
+  void setQueueTime(const int64_t queue_time);
+
+  int64_t getQueueTime() const;
+
+  void moveToBegin() const;
+
+  // Called from the executor because in the new ResultSet we assume the 'compact' field
+  // in ColWidths already contains the padding, whereas in the executor it's computed.
+  // Once the buffer initialization moves to ResultSet we can remove this method.
+  static QueryMemoryDescriptor fixupQueryMemoryDescriptor(const QueryMemoryDescriptor&);
+
+  void initializeStorage() const;
 
  private:
   std::vector<TargetValue> getNextRowImpl(const bool translate_strings, const bool decimal_to_double) const;
@@ -127,12 +165,11 @@ class ResultSet {
   void fetchLazy(const std::vector<ssize_t> lazy_col_local_ids,
                  const std::vector<std::vector<const int8_t*>>& col_buffers) const;
 
-  void initializeStorage() const;
-
   static bool isNull(const SQLTypeInfo& ti, const InternalTargetValue& val);
 
   TargetValue getTargetValueFromBufferRowwise(const int8_t* rowwise_target_ptr,
                                               const TargetInfo& target_info,
+                                              const size_t target_logical_idx,
                                               const size_t slot_idx,
                                               const bool translate_strings,
                                               const bool decimal_to_double) const;
@@ -143,12 +180,14 @@ class ResultSet {
                                               const int8_t compact_sz2,
                                               const size_t entry_idx,
                                               const TargetInfo& target_info,
+                                              const size_t target_logical_idx,
                                               const bool translate_strings,
                                               const bool decimal_to_double) const;
 
   TargetValue makeTargetValue(const int8_t* ptr,
                               const int8_t compact_sz,
                               const TargetInfo& target_info,
+                              const size_t target_logical_idx,
                               const bool translate_strings,
                               const bool decimal_to_double) const;
 
@@ -165,14 +204,16 @@ class ResultSet {
   const std::vector<TargetInfo> targets_;
   const ExecutorDeviceType device_type_;
   const QueryMemoryDescriptor query_mem_desc_;
-  mutable std::unique_ptr<const ResultSetStorage> storage_;
-  std::vector<std::unique_ptr<const ResultSetStorage>> appended_storage_;
+  mutable std::unique_ptr<ResultSetStorage> storage_;
+  std::vector<std::unique_ptr<ResultSetStorage>> appended_storage_;
   mutable size_t crt_row_buff_idx_;
   mutable size_t fetched_so_far_;
   size_t drop_first_;
   size_t keep_first_;
   const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
   std::vector<uint32_t> permutation_;
+  int64_t queue_time_ms_;
+  int64_t render_time_ms_;
   const Executor* executor_;  // TODO(alex): remove
 
   friend class ResultSetManager;

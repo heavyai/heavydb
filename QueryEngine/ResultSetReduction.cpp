@@ -6,6 +6,7 @@
  * Copyright (c) 2014 MapD Technologies, Inc.  All rights reserved.
  */
 
+#include "ResultRows.h"
 #include "ResultSet.h"
 #include "RuntimeFunctions.h"
 #include "SqlTypesLayout.h"
@@ -121,7 +122,7 @@ void ResultSetStorage::reduceOneEntryNoCollisionsColWise(const size_t entry_idx,
       this_ptr2 = this_next_col_ptr + entry_idx * query_mem_desc_.agg_col_widths[agg_col_idx + 1].compact;
       that_ptr2 = that_next_col_ptr + entry_idx * query_mem_desc_.agg_col_widths[agg_col_idx + 1].compact;
     }
-    reduceOneSlot(this_ptr1, this_ptr2, that_ptr1, that_ptr2, agg_info, agg_col_idx);
+    reduceOneSlot(this_ptr1, this_ptr2, that_ptr1, that_ptr2, agg_info, target_idx, agg_col_idx);
     this_crt_col_ptr = this_next_col_ptr;
     that_crt_col_ptr = that_next_col_ptr;
     if (agg_info.is_agg && agg_info.agg_kind == kAVG) {
@@ -162,14 +163,16 @@ void ResultSetStorage::reduceOneEntryNoCollisionsRowWise(const size_t entry_idx,
     memcpy(this_targets_ptr - key_bytes, that_targets_ptr - key_bytes, key_bytes);
   }
   size_t target_slot_idx = 0;
-  for (const auto& target_info : targets_) {
+  for (size_t target_logical_idx = 0; target_logical_idx < targets_.size(); ++target_logical_idx) {
+    const auto& target_info = targets_[target_logical_idx];
     int8_t* this_ptr2{nullptr};
     const int8_t* that_ptr2{nullptr};
     if (target_info.is_agg && target_info.agg_kind == kAVG) {
       this_ptr2 = this_targets_ptr + query_mem_desc_.agg_col_widths[target_slot_idx].compact;
       that_ptr2 = that_targets_ptr + query_mem_desc_.agg_col_widths[target_slot_idx].compact;
     }
-    reduceOneSlot(this_targets_ptr, this_ptr2, that_targets_ptr, that_ptr2, target_info, target_slot_idx);
+    reduceOneSlot(
+        this_targets_ptr, this_ptr2, that_targets_ptr, that_ptr2, target_info, target_logical_idx, target_slot_idx);
     this_targets_ptr = advance_target_ptr(this_targets_ptr, target_info, target_slot_idx, query_mem_desc_);
     that_targets_ptr = advance_target_ptr(that_targets_ptr, target_info, target_slot_idx, query_mem_desc_);
     target_slot_idx = advance_slot(target_slot_idx, target_info);
@@ -216,12 +219,20 @@ void ResultSetStorage::reduceOneEntrySlotsBaseline(int64_t* this_entry_slots,
   const auto slot_count = get_buffer_col_slot_count(query_mem_desc_);
   const auto key_count = get_groupby_col_count(query_mem_desc_);
   size_t j = 0;
-  for (const auto& target_info : targets_) {
+  for (size_t target_logical_idx = 0; target_logical_idx < targets_.size(); ++target_logical_idx) {
+    const auto& target_info = targets_[target_logical_idx];
     const auto that_slot_off = query_mem_desc_.output_columnar
                                    ? slot_offset_colwise(that_entry_idx, j, key_count, that_entry_count)
                                    : slot_offset_rowwise(that_entry_idx, j, key_count, slot_count);
     const auto this_slot_off = query_mem_desc_.output_columnar ? j * query_mem_desc_.entry_count : j;
-    reduceOneSlotBaseline(this_entry_slots, this_slot_off, that_buff, that_entry_count, that_slot_off, target_info, j);
+    reduceOneSlotBaseline(this_entry_slots,
+                          this_slot_off,
+                          that_buff,
+                          that_entry_count,
+                          that_slot_off,
+                          target_info,
+                          target_logical_idx,
+                          j);
     j = advance_slot(j, target_info);
   }
 }
@@ -232,6 +243,7 @@ void ResultSetStorage::reduceOneSlotBaseline(int64_t* this_buff,
                                              const size_t that_entry_count,
                                              const size_t that_slot,
                                              const TargetInfo& target_info,
+                                             const size_t target_logical_idx,
                                              const size_t target_slot_idx) const {
   int8_t* this_ptr2{nullptr};
   const int8_t* that_ptr2{nullptr};
@@ -246,6 +258,7 @@ void ResultSetStorage::reduceOneSlotBaseline(int64_t* this_buff,
                 reinterpret_cast<const int8_t*>(&that_buff[that_slot]),
                 that_ptr2,
                 target_info,
+                target_logical_idx,
                 target_slot_idx);
 }
 
@@ -303,6 +316,7 @@ void ResultSet::initializeStorage() const {
 ResultSet* ResultSetManager::reduce(std::vector<ResultSet*>& result_sets) {
   CHECK(!result_sets.empty());
   auto result_rs = result_sets.front();
+  CHECK(result_rs->storage_);
   auto& first_result = *result_rs->storage_;
   auto result = &first_result;
   const auto row_set_mem_owner = result_rs->row_set_mem_owner_;
@@ -545,6 +559,7 @@ void ResultSetStorage::reduceOneSlot(int8_t* this_ptr1,
                                      const int8_t* that_ptr1,
                                      const int8_t* that_ptr2,
                                      const TargetInfo& target_info,
+                                     const size_t target_logical_idx,
                                      const size_t target_slot_idx) const {
   CHECK_LT(target_slot_idx, target_init_vals_.size());
   CHECK_LT(target_slot_idx, query_mem_desc_.agg_col_widths.size());
@@ -557,7 +572,10 @@ void ResultSetStorage::reduceOneSlot(int8_t* this_ptr1,
     switch (target_info.agg_kind) {
       case kCOUNT: {
         if (target_info.is_distinct) {
-          CHECK(false);
+          CHECK(target_info.is_agg);
+          CHECK_EQ(kCOUNT, target_info.agg_kind);
+          CHECK_EQ(static_cast<size_t>(chosen_bytes), sizeof(int64_t));
+          reduceOneCountDistinctSlot(this_ptr1, that_ptr1, target_info, target_logical_idx);
           break;
         }
         AGGREGATE_ONE_NULLABLE_COUNT(this_ptr1, that_ptr1, init_val, chosen_bytes, target_info);
@@ -601,5 +619,26 @@ void ResultSetStorage::reduceOneSlot(int8_t* this_ptr1,
       default:
         CHECK(false);
     }
+  }
+}
+
+void ResultSetStorage::reduceOneCountDistinctSlot(int8_t* this_ptr1,
+                                                  const int8_t* that_ptr1,
+                                                  const TargetInfo& target_info,
+                                                  const size_t target_logical_idx) const {
+  auto count_distinct_desc_it = query_mem_desc_.count_distinct_descriptors_.find(target_logical_idx);
+  CHECK(count_distinct_desc_it != query_mem_desc_.count_distinct_descriptors_.end());
+  auto old_set_ptr = reinterpret_cast<const int64_t*>(this_ptr1);
+  auto new_set_ptr = reinterpret_cast<const int64_t*>(that_ptr1);
+  if (count_distinct_desc_it->second.impl_type_ == CountDistinctImplType::Bitmap) {
+    auto old_set = reinterpret_cast<int8_t*>(*old_set_ptr);
+    auto new_set = reinterpret_cast<int8_t*>(*new_set_ptr);
+    bitmap_set_unify(new_set, old_set, count_distinct_desc_it->second.bitmapSizeBytes());
+  } else {
+    CHECK(count_distinct_desc_it->second.impl_type_ == CountDistinctImplType::StdSet);
+    auto old_set = reinterpret_cast<std::set<int64_t>*>(*old_set_ptr);
+    auto new_set = reinterpret_cast<std::set<int64_t>*>(*new_set_ptr);
+    old_set->insert(new_set->begin(), new_set->end());
+    new_set->insert(old_set->begin(), old_set->end());
   }
 }
