@@ -654,6 +654,7 @@ class ResultRows {
     CHECK(!result_set_);
     return render_time_ms_;
   }
+  ExecutorDeviceType getDeviceType() const { return device_type_; }
 
   bool isInPlace() const {
     CHECK(!result_set_);

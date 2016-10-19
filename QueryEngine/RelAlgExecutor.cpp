@@ -141,6 +141,7 @@ std::vector<std::string> RelAlgExecutor::getScanTableNamesInRelAlgSeq(std::vecto
     return {};
   }
   std::unordered_set<std::string> table_names;
+  std::vector<std::string> rtn_table_names;
   std::unordered_set<const RelAlgNode*> visited;
   std::vector<const RelAlgNode*> work_set;
   for (const auto& exec_desc : exec_descs) {
@@ -164,7 +165,10 @@ std::vector<std::string> RelAlgExecutor::getScanTableNamesInRelAlgSeq(std::vecto
       if (const auto scan = dynamic_cast<const RelScan*>(walker)) {
         auto td = scan->getTableDescriptor();
         CHECK(td);
-        table_names.insert(td->tableName);
+        if (table_names.insert(td->tableName).second) {
+          // keeping the traversed table names in order
+          rtn_table_names.push_back(td->tableName);
+        }
         continue;
       }
       const auto compound = dynamic_cast<const RelCompound*>(walker);
@@ -182,7 +186,7 @@ std::vector<std::string> RelAlgExecutor::getScanTableNamesInRelAlgSeq(std::vecto
       CHECK(false);
     }
   }
-  return std::vector<std::string>(table_names.begin(), table_names.end());
+  return rtn_table_names;
 }
 
 void RelAlgExecutor::handleNop(const RelAlgNode* body) {
