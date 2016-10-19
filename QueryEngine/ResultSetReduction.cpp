@@ -710,9 +710,6 @@ void ResultSetStorage::reduceOneSlot(int8_t* this_ptr1,
   CHECK_LT(target_slot_idx, query_mem_desc_.agg_col_widths.size());
   const auto chosen_bytes = query_mem_desc_.agg_col_widths[target_slot_idx].compact;
   auto init_val = target_init_vals_[target_slot_idx];
-  if (!target_info.sql_type.get_notnull()) {
-    init_val = null_val_bit_pattern(target_info.sql_type);
-  }
   if (target_info.is_agg) {
     switch (target_info.agg_kind) {
       case kCOUNT: {
