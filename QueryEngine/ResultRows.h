@@ -671,6 +671,18 @@ class ResultRows {
 
   std::shared_ptr<ResultSet> getResultSet() const { return result_set_; }
 
+  void holdChunks(const std::list<std::shared_ptr<Chunk_NS::Chunk>>& chunks) {
+    if (result_set_) {
+      result_set_->holdChunks(chunks);
+    }
+  }
+
+  void holdLiterals(std::vector<int8_t>& literal_buff) {
+    if (result_set_) {
+      result_set_->holdLiterals(literal_buff);
+    }
+  }
+
  private:
   void reduceSingleColumn(int8_t* crt_val_i1,
                           int8_t* crt_val_i2,

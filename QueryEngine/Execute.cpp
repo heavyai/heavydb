@@ -4322,6 +4322,11 @@ void Executor::ExecutionDispatch::runImpl(const ExecutorDeviceType chosen_device
                                             ra_exe_unit_.input_descs.size(),
                                             render_allocator_map_);
   }
+  if (auto rows_pp = boost::get<RowSetPtr>(&device_results)) {
+    if (auto& rows_ptr = *rows_pp) {
+      rows_ptr->holdChunks(chunks);
+    }
+  }
   {
     std::lock_guard<std::mutex> lock(reduce_mutex_);
     if (err) {
@@ -5200,7 +5205,7 @@ int32_t Executor::executePlanWithGroupBy(const RelAlgExecutionUnit& ra_exe_unit,
   // 1. Optimize size (make keys more compact).
   // 2. Resize on overflow.
   // 3. Optimize runtime.
-  const auto hoist_buf = serializeLiterals(compilation_result.literal_values, device_id);
+  auto hoist_buf = serializeLiterals(compilation_result.literal_values, device_id);
   int32_t error_code = device_type == ExecutorDeviceType::GPU ? 0 : start_rowid;
   const auto join_hash_table_ptr = getJoinHashTablePtr(device_type, device_id);
   if (device_type == ExecutorDeviceType::CPU) {
@@ -5257,6 +5262,9 @@ int32_t Executor::executePlanWithGroupBy(const RelAlgExecutionUnit& ra_exe_unit,
     CHECK(!query_exe_context->query_mem_desc_.sortOnGpu());
     results = query_exe_context->getResult(
         ra_exe_unit, outer_tab_frag_ids, query_exe_context->query_mem_desc_, was_auto_device);
+    if (auto rows = boost::get<RowSetPtr>(&results)) {
+      (*rows)->holdLiterals(hoist_buf);
+    }
   }
   if (error_code && (render_allocator_map || (!scan_limit || check_rows_less_than_needed(results, scan_limit)))) {
     return error_code;  // unlucky, not enough results and we ran out of slots
