@@ -4566,6 +4566,7 @@ int8_t Executor::ExecutionDispatch::compile(const Executor::JoinInfo& join_info,
 
   if (executor_->cgen_state_->must_run_on_cpu_) {
     if (co_.device_type_ == ExecutorDeviceType::GPU) {  // override user choice
+      LOG(INFO) << "Query cannot run on GPU, punt to CPU";
       compile_on_cpu();
     }
     co_.device_type_ = ExecutorDeviceType::CPU;

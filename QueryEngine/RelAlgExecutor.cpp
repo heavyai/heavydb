@@ -922,6 +922,9 @@ ExecutionResult RelAlgExecutor::handleRetry(const int32_t error_code_in,
               targets_meta};
     result.setQueueTime(queue_time_ms);
   }
+  if (co.device_type_ == ExecutorDeviceType::GPU) {
+    LOG(INFO) << "Query ran out of GPU memory, punt to CPU";
+  }
   CompilationOptions co_cpu{ExecutorDeviceType::CPU, co.hoist_literals_, co.opt_level_};
   if (error_code) {
     max_groups_buffer_entry_guess = 0;
