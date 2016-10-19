@@ -66,7 +66,7 @@ void MapdType(String tn, int dt) {
       case INT:
         return java.sql.Types.INTEGER;
       case BIGINT:
-        return java.sql.Types.INTEGER;
+        return java.sql.Types.BIGINT;
       case FLOAT:
         return java.sql.Types.FLOAT;
       case DECIMAL:
