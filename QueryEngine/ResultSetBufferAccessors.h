@@ -167,6 +167,9 @@ inline int64_t null_val_bit_pattern(const SQLTypeInfo& ti) {
     const auto double_null_val = inline_fp_null_val(ti);
     return *reinterpret_cast<const int64_t*>(&double_null_val);
   }
+  if ((ti.is_string() && ti.get_compression() == kENCODING_NONE) || ti.is_array()) {
+    return 0;
+  }
   return inline_int_null_val(ti);
 }
 
