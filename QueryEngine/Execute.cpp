@@ -3778,14 +3778,28 @@ size_t get_context_count(const ExecutorDeviceType device_type, const size_t cpu_
                                                                   : static_cast<size_t>(cpu_count);
 }
 
-void checkWorkUnitWatchdog(const RelAlgExecutionUnit& ra_exe_unit) {
+void checkWorkUnitWatchdog(const RelAlgExecutionUnit& ra_exe_unit, const Catalog_Namespace::Catalog& cat) {
   for (const auto target_expr : ra_exe_unit.target_exprs) {
     if (dynamic_cast<const Analyzer::AggExpr*>(target_expr)) {
       return;
     }
   }
   if (ra_exe_unit.groupby_exprs.size() == 1 && !ra_exe_unit.groupby_exprs.front() && !ra_exe_unit.scan_limit) {
-    throw WatchdogException("Query would require a scan without a limit");
+    // getMetadataForTable();
+    std::vector<std::string> table_names;
+    const auto& input_descs = ra_exe_unit.input_descs;
+    for (const auto& input_desc : input_descs) {
+      const auto source_type = input_desc.getSourceType();
+      if (source_type == InputSourceType::TABLE) {
+        const auto td = cat.getMetadataForTable(input_desc.getTableId());
+        CHECK(td);
+        table_names.push_back(td->tableName);
+      } else {
+        table_names.emplace_back("$TEMPORARY_TABLE" + std::to_string(-input_desc.getTableId()));
+      }
+    }
+    throw WatchdogException("Query would require a scan without a limit on table(s): " +
+                            boost::algorithm::join(table_names, ", "));
   }
 }
 
@@ -4745,7 +4759,7 @@ void Executor::dispatchFragments(const std::function<void(const ExecutorDeviceTy
       rowid_lookup_key = std::max(rowid_lookup_key, skip_frag.second);
     }
     if (eo.with_watchdog && rowid_lookup_key < 0) {
-      checkWorkUnitWatchdog(ra_exe_unit);
+      checkWorkUnitWatchdog(ra_exe_unit, *catalog_);
     }
     for (const auto& kv : fragments_per_device) {
       query_threads.push_back(std::thread(
@@ -4792,7 +4806,7 @@ void Executor::dispatchFragments(const std::function<void(const ExecutorDeviceTy
         }
       }
       if (eo.with_watchdog && rowid_lookup_key < 0) {
-        checkWorkUnitWatchdog(ra_exe_unit);
+        checkWorkUnitWatchdog(ra_exe_unit, *catalog_);
       }
       query_threads.push_back(std::thread(dispatch,
                                           chosen_device_type,
