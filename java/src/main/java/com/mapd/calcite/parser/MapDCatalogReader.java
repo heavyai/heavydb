@@ -275,6 +275,11 @@ public class MapDCatalogReader implements Prepare.CatalogReader {
     return this;
   }
 
+  @Override
+  public boolean isCaseSensitive() {
+    return false;
+  }
+
   //~ Methods ----------------------------------------------------------------
   /**
    *
@@ -457,14 +462,8 @@ public class MapDCatalogReader implements Prepare.CatalogReader {
 
   @Override
   public RelDataTypeField field(RelDataType rowType, String alias) {
-    return SqlValidatorUtil.lookupField(caseSensitive, elideRecord, rowType,
+    return SqlValidatorUtil.lookupField(elideRecord, rowType,
             alias);
-  }
-
-  @Override
-  public int fieldOrdinal(RelDataType rowType, String alias) {
-    final RelDataTypeField field = field(rowType, alias);
-    return field != null ? field.getIndex() : -1;
   }
 
   @Override
@@ -473,15 +472,10 @@ public class MapDCatalogReader implements Prepare.CatalogReader {
   }
 
   @Override
-  public int match(List<String> strings, String name) {
-    return Util.findMatch(strings, name, caseSensitive);
-  }
-
-  @Override
   public RelDataType createTypeFromProjection(final RelDataType type,
           final List<String> columnNameList) {
     return SqlValidatorUtil.createTypeFromProjection(type, columnNameList,
-            typeFactory, caseSensitive, elideRecord);
+            typeFactory, elideRecord);
   }
 
   public void setCurrentMapDUser(MapDUser mapDUser) {
@@ -517,7 +511,7 @@ public class MapDCatalogReader implements Prepare.CatalogReader {
       case BOOL:
         return typeFactory.createSqlType(SqlTypeName.BOOLEAN);
       case INTERVAL_DAY_TIME:
-        return typeFactory.createSqlType(SqlTypeName.INTERVAL_DAY_TIME);
+        return typeFactory.createSqlType(SqlTypeName.INTERVAL_DAY);
       case INTERVAL_YEAR_MONTH:
         return typeFactory.createSqlType(SqlTypeName.INTERVAL_YEAR_MONTH);
       default:
