@@ -196,6 +196,7 @@ class ResultSet {
   static bool isNull(const SQLTypeInfo& ti, const InternalTargetValue& val);
 
   TargetValue getTargetValueFromBufferRowwise(const int8_t* rowwise_target_ptr,
+                                              const size_t entry_buff_idx,
                                               const TargetInfo& target_info,
                                               const size_t target_logical_idx,
                                               const size_t slot_idx,
@@ -217,14 +218,16 @@ class ResultSet {
                               const TargetInfo& target_info,
                               const size_t target_logical_idx,
                               const bool translate_strings,
-                              const bool decimal_to_double) const;
+                              const bool decimal_to_double,
+                              const size_t entry_buff_idx) const;
 
   TargetValue makeRealStringTargetValue(const int8_t* ptr1,
                                         const int8_t compact_sz1,
                                         const int8_t* ptr2,
                                         const int8_t compact_sz2,
                                         const TargetInfo& target_info,
-                                        const size_t target_logical_idx) const;
+                                        const size_t target_logical_idx,
+                                        const size_t entry_buff_idx) const;
 
   InternalTargetValue getColumnInternal(const int8_t* buff, const size_t entry_idx, const size_t col_idx) const;
 

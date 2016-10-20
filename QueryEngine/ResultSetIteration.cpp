@@ -110,6 +110,7 @@ std::vector<TargetValue> ResultSet::getNextRow(const bool translate_strings, con
 
 std::vector<TargetValue> ResultSet::getNextRowImpl(const bool translate_strings, const bool decimal_to_double) const {
   auto entry_buff_idx = advanceCursorToNextEntry();
+  const auto orig_entry_buff_idx = entry_buff_idx;
   if (keep_first_ && fetched_so_far_ >= drop_first_ + keep_first_) {
     return {};
   }
@@ -144,7 +145,7 @@ std::vector<TargetValue> ResultSet::getNextRowImpl(const bool translate_strings,
                                                     query_mem_desc_.agg_col_widths[agg_col_idx].compact,
                                                     col2_ptr,
                                                     compact_sz2,
-                                                    entry_buff_idx,
+                                                    orig_entry_buff_idx,
                                                     agg_info,
                                                     target_idx,
                                                     translate_strings,
@@ -154,8 +155,13 @@ std::vector<TargetValue> ResultSet::getNextRowImpl(const bool translate_strings,
         crt_col_ptr = advance_to_next_columnar_target_buff(crt_col_ptr, query_mem_desc_, agg_col_idx + 1);
       }
     } else {
-      row.push_back(getTargetValueFromBufferRowwise(
-          rowwise_target_ptr, agg_info, target_idx, agg_col_idx, translate_strings, decimal_to_double));
+      row.push_back(getTargetValueFromBufferRowwise(rowwise_target_ptr,
+                                                    orig_entry_buff_idx,
+                                                    agg_info,
+                                                    target_idx,
+                                                    agg_col_idx,
+                                                    translate_strings,
+                                                    decimal_to_double));
       rowwise_target_ptr = advance_target_ptr(rowwise_target_ptr, agg_info, agg_col_idx, query_mem_desc_);
     }
     agg_col_idx = advance_slot(agg_col_idx, agg_info);
@@ -313,13 +319,14 @@ TargetValue ResultSet::makeRealStringTargetValue(const int8_t* ptr1,
                                                  const int8_t* ptr2,
                                                  const int8_t compact_sz2,
                                                  const TargetInfo& target_info,
-                                                 const size_t target_logical_idx) const {
+                                                 const size_t target_logical_idx,
+                                                 const size_t entry_buff_idx) const {
   auto string_ptr = read_int_from_buff(ptr1, compact_sz1);
   if (!lazy_fetch_info_.empty()) {
     CHECK_LT(target_logical_idx, lazy_fetch_info_.size());
     const auto& col_lazy_fetch = lazy_fetch_info_[target_logical_idx];
     if (col_lazy_fetch.is_lazily_fetched) {
-      const auto storage_idx = getStorageIndex(crt_row_buff_idx_);
+      const auto storage_idx = getStorageIndex(entry_buff_idx);
       CHECK_LT(static_cast<size_t>(storage_idx.first), col_buffers_.size());
       auto& frag_col_buffers = col_buffers_[storage_idx.first];
       bool is_end{false};
@@ -360,14 +367,15 @@ TargetValue ResultSet::makeTargetValue(const int8_t* ptr,
                                        const TargetInfo& target_info,
                                        const size_t target_logical_idx,
                                        const bool translate_strings,
-                                       const bool decimal_to_double) const {
+                                       const bool decimal_to_double,
+                                       const size_t entry_buff_idx) const {
   auto ival = read_int_from_buff(ptr, compact_sz);
   const auto& chosen_type = get_compact_type(target_info);
   if (!lazy_fetch_info_.empty()) {
     CHECK_LT(target_logical_idx, lazy_fetch_info_.size());
     const auto& col_lazy_fetch = lazy_fetch_info_[target_logical_idx];
     if (col_lazy_fetch.is_lazily_fetched) {
-      const auto storage_idx = getStorageIndex(crt_row_buff_idx_);
+      const auto storage_idx = getStorageIndex(entry_buff_idx);
       CHECK_LT(static_cast<size_t>(storage_idx.first), col_buffers_.size());
       auto& frag_col_buffers = col_buffers_[storage_idx.first];
       ival = lazy_decode(col_lazy_fetch, frag_col_buffers[col_lazy_fetch.local_col_id], ival);
@@ -449,13 +457,16 @@ TargetValue ResultSet::getTargetValueFromBufferColwise(const int8_t* col1_ptr,
     const auto ptr2 = columnar_elem_ptr(entry_idx, col2_ptr, compact_sz2);
     return target_info.agg_kind == kAVG
                ? make_avg_target_value(ptr1, compact_sz1, ptr2, compact_sz2, target_info)
-               : makeRealStringTargetValue(ptr1, compact_sz1, ptr2, compact_sz2, target_info, target_logical_idx);
+               : makeRealStringTargetValue(
+                     ptr1, compact_sz1, ptr2, compact_sz2, target_info, target_logical_idx, entry_idx);
   }
-  return makeTargetValue(ptr1, compact_sz1, target_info, target_logical_idx, translate_strings, decimal_to_double);
+  return makeTargetValue(
+      ptr1, compact_sz1, target_info, target_logical_idx, translate_strings, decimal_to_double, entry_idx);
 }
 
 // Gets the TargetValue stored in slot_idx (and slot_idx for AVG) of rowwise_target_ptr.
 TargetValue ResultSet::getTargetValueFromBufferRowwise(const int8_t* rowwise_target_ptr,
+                                                       const size_t entry_buff_idx,
                                                        const TargetInfo& target_info,
                                                        const size_t target_logical_idx,
                                                        const size_t slot_idx,
@@ -469,9 +480,11 @@ TargetValue ResultSet::getTargetValueFromBufferRowwise(const int8_t* rowwise_tar
     CHECK(ptr2);
     return target_info.agg_kind == kAVG
                ? make_avg_target_value(ptr1, compact_sz1, ptr2, compact_sz2, target_info)
-               : makeRealStringTargetValue(ptr1, compact_sz1, ptr2, compact_sz2, target_info, target_logical_idx);
+               : makeRealStringTargetValue(
+                     ptr1, compact_sz1, ptr2, compact_sz2, target_info, target_logical_idx, entry_buff_idx);
   }
-  return makeTargetValue(ptr1, compact_sz1, target_info, target_logical_idx, translate_strings, decimal_to_double);
+  return makeTargetValue(
+      ptr1, compact_sz1, target_info, target_logical_idx, translate_strings, decimal_to_double, entry_buff_idx);
 }
 
 // Returns true iff the entry at position entry_idx in buff contains a valid row.
