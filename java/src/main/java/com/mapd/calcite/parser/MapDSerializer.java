@@ -12,7 +12,7 @@ import org.apache.calcite.rel.externalize.MapDRelJsonWriter;
  */
 public class MapDSerializer {
 
-  static String toString(final RelNode rel) {
+  public static String toString(final RelNode rel) {
     if (rel == null) {
       return null;
     }

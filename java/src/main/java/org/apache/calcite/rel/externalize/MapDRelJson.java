@@ -21,6 +21,7 @@ import org.apache.calcite.rex.RexFieldAccess;
 import org.apache.calcite.rex.RexInputRef;
 import org.apache.calcite.rex.RexLiteral;
 import org.apache.calcite.rex.RexNode;
+import org.apache.calcite.rex.RexSubQuery;
 import org.apache.calcite.sql.SemiJoinType;
 import org.apache.calcite.sql.SqlAggFunction;
 import org.apache.calcite.sql.SqlFunction;
@@ -33,6 +34,7 @@ import org.apache.calcite.util.JsonBuilder;
 import org.apache.calcite.util.Util;
 
 import com.google.common.collect.ImmutableList;
+import com.mapd.calcite.parser.MapDSerializer;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
@@ -335,6 +337,9 @@ public class MapDRelJson {
         }
         map.put("operands", list);
         map.put("type", toJson(node.getType()));
+        if (node instanceof RexSubQuery) {
+          map.put("subquery", MapDSerializer.toString(((RexSubQuery) node).rel));
+        }
         if (call.getOperator() instanceof SqlFunction) {
           switch (((SqlFunction) call.getOperator()).getFunctionType()) {
           case USER_DEFINED_CONSTRUCTOR:
