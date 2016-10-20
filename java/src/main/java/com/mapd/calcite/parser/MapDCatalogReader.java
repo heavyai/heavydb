@@ -462,7 +462,7 @@ public class MapDCatalogReader implements Prepare.CatalogReader {
 
   @Override
   public RelDataTypeField field(RelDataType rowType, String alias) {
-    return SqlValidatorUtil.lookupField(elideRecord, rowType,
+    return SqlValidatorUtil.lookupField(caseSensitive, rowType,
             alias);
   }
 
@@ -475,7 +475,7 @@ public class MapDCatalogReader implements Prepare.CatalogReader {
   public RelDataType createTypeFromProjection(final RelDataType type,
           final List<String> columnNameList) {
     return SqlValidatorUtil.createTypeFromProjection(type, columnNameList,
-            typeFactory, elideRecord);
+            typeFactory, caseSensitive);
   }
 
   public void setCurrentMapDUser(MapDUser mapDUser) {
