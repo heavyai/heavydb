@@ -4,6 +4,7 @@
 #include <glog/logging.h>
 
 #include <numeric>
+#include <string>
 #include <unordered_set>
 #include <unordered_map>
 
@@ -566,6 +567,102 @@ std::unordered_map<const RelAlgNode*, std::unordered_set<size_t>> mark_live_colu
   return live_outs;
 }
 
+class RexRebindInputsVisitor : public RexVisitor<void*> {
+ public:
+  RexRebindInputsVisitor(const RelAlgNode* old_input, const RelAlgNode* new_input)
+      : old_input_(old_input), new_input_(new_input) {}
+
+  void* visitInput(const RexInput* rex_input) const override {
+    const auto old_source = rex_input->getSourceNode();
+    if (old_source == old_input_) {
+      rex_input->setSourceNode(new_input_);
+    }
+    return nullptr;
+  };
+
+  void visitNode(const RelAlgNode* node) const {
+    if (dynamic_cast<const RelAggregate*>(node) || dynamic_cast<const RelSort*>(node)) {
+      return;
+    }
+    if (auto join = dynamic_cast<const RelJoin*>(node)) {
+      if (auto condition = join->getCondition()) {
+        visit(condition);
+      }
+      return;
+    }
+    if (auto project = dynamic_cast<const RelProject*>(node)) {
+      for (size_t i = 0; i < project->size(); ++i) {
+        visit(project->getProjectAt(i));
+      }
+      return;
+    }
+    if (auto filter = dynamic_cast<const RelFilter*>(node)) {
+      visit(filter->getCondition());
+      return;
+    }
+    CHECK(false);
+  }
+
+ private:
+  const RelAlgNode* old_input_;
+  const RelAlgNode* new_input_;
+};
+
+void try_insert_coalesable_proj(std::vector<std::shared_ptr<RelAlgNode>>& nodes,
+                                std::unordered_map<const RelAlgNode*, std::unordered_set<size_t>>& liveouts,
+                                std::unordered_map<const RelAlgNode*, std::unordered_set<const RelAlgNode*>>& du_web,
+                                std::unordered_map<const RelAlgNode*, RelAlgNode*>& deconst_mapping) {
+  std::vector<std::shared_ptr<RelAlgNode>> new_nodes;
+  for (auto node : nodes) {
+    new_nodes.push_back(node);
+    if (!std::dynamic_pointer_cast<RelFilter>(node)) {
+      continue;
+    }
+    const auto filter = node.get();
+    auto liveout_it = liveouts.find(filter);
+    CHECK(liveout_it != liveouts.end());
+    auto& outs = liveout_it->second;
+    if (!any_dead_col_in(filter, outs)) {
+      continue;
+    }
+    auto usrs_it = du_web.find(filter);
+    CHECK(usrs_it != du_web.end());
+    auto& usrs = usrs_it->second;
+    if (usrs.size() != 1 || does_redef_cols(*usrs.begin())) {
+      continue;
+    }
+    auto only_usr = deconst_mapping[*usrs.begin()];
+
+    std::vector<std::unique_ptr<const RexScalar>> exprs;
+    std::vector<std::string> fields;
+    for (size_t i = 0; i < filter->size(); ++i) {
+      exprs.emplace_back(boost::make_unique<RexAbstractInput>(i));
+      fields.push_back("$f" + std::to_string(i));
+    }
+    auto project_owner = std::make_shared<RelProject>(exprs, fields, node);
+    auto project = project_owner.get();
+
+    only_usr->replaceInput(node, project_owner);
+    if (dynamic_cast<const RelJoin*>(only_usr)) {
+      RexRebindInputsVisitor visitor(filter, project);
+      for (auto usr : du_web[only_usr]) {
+        visitor.visitNode(usr);
+      }
+    }
+
+    liveouts.insert(std::make_pair(project, outs));
+
+    usrs.clear();
+    usrs.insert(project);
+    du_web.insert(std::make_pair(project, std::unordered_set<const RelAlgNode*>{only_usr}));
+
+    new_nodes.push_back(project_owner);
+  }
+  if (new_nodes.size() > nodes.size()) {
+    nodes.swap(new_nodes);
+  }
+}
+
 std::pair<std::unordered_map<const RelAlgNode*, std::unordered_map<size_t, size_t>>, std::vector<const RelAlgNode*>>
 sweep_dead_columns(const std::unordered_map<const RelAlgNode*, std::unordered_set<size_t>>& live_outs,
                    const std::vector<std::shared_ptr<RelAlgNode>>& nodes,
@@ -706,7 +803,7 @@ void eliminate_dead_columns(std::vector<std::shared_ptr<RelAlgNode>>& nodes) noe
   bool has_dead_cols = false;
   for (auto live_pair : old_liveouts) {
     auto node = live_pair.first;
-    auto outs = live_pair.second;
+    const auto& outs = live_pair.second;
     if (outs.empty()) {
       LOG(WARNING) << "RA node with no used column: " << node->toString();
       // Ignore empty live_out due to some invalid node
@@ -721,16 +818,19 @@ void eliminate_dead_columns(std::vector<std::shared_ptr<RelAlgNode>>& nodes) noe
   if (!has_dead_cols) {
     return;
   }
-  // Sweep
-  std::unordered_map<const RelAlgNode*, std::unordered_map<size_t, size_t>> liveout_renumbering;
-  std::vector<const RelAlgNode*> ready_nodes;
-  const auto web = build_du_web(nodes);
-  std::tie(liveout_renumbering, ready_nodes) = sweep_dead_columns(old_liveouts, nodes, intact_nodes, web);
-  // Propagate
+  // Patch
   std::unordered_map<const RelAlgNode*, RelAlgNode*> deconst_mapping;
   for (auto node : nodes) {
     deconst_mapping.insert(std::make_pair(node.get(), node.get()));
   }
+  auto web = build_du_web(nodes);
+  try_insert_coalesable_proj(nodes, old_liveouts, web, deconst_mapping);
+
+  // Sweep
+  std::unordered_map<const RelAlgNode*, std::unordered_map<size_t, size_t>> liveout_renumbering;
+  std::vector<const RelAlgNode*> ready_nodes;
+  std::tie(liveout_renumbering, ready_nodes) = sweep_dead_columns(old_liveouts, nodes, intact_nodes, web);
+  // Propagate
   propagate_input_renumbering(liveout_renumbering, ready_nodes, old_liveouts, deconst_mapping, intact_nodes, web);
 }
 
