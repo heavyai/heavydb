@@ -215,7 +215,7 @@ QueryMemoryDescriptor ResultSet::fixupQueryMemoryDescriptor(const QueryMemoryDes
     }
     total_bytes += chosen_bytes;
   }
-  {
+  if (!query_mem_desc.sortOnGpu()) {
     const auto aligned_total_bytes = align_to_int64(total_bytes);
     CHECK_GE(aligned_total_bytes, total_bytes);
     const auto padding = aligned_total_bytes - total_bytes;
