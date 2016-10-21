@@ -1413,6 +1413,15 @@ TEST(Select, UnsupportedNodes) {
   }
 }
 
+#ifdef HAVE_RAVM
+TEST(Select, UnsupportedMultipleArgAggregate) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    EXPECT_THROW(run_multiple_agg("SELECT COUNT(distinct x, y) FROM test;", dt), std::runtime_error);
+  }
+}
+#endif  // HAVE_RAVM
+
 namespace Importer_NS {
 
 ArrayDatum StringToArray(const std::string& s, const SQLTypeInfo& ti, const CopyParams& copy_params);
