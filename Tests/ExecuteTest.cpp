@@ -2276,6 +2276,13 @@ TEST(Select, PgShim) {
     c("SELECT str, SUM(x), COUNT(str) FROM test WHERE \"y\" = 42 AND str = 'Shim All The Things!' GROUP BY str;", dt);
   }
 }
+
+TEST(Select, CaseInsensitive) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT X, COUNT(*) AS N FROM test GROUP BY teSt.x ORDER BY n DESC;", dt);
+  }
+}
 #endif  // HAVE_CALCITE
 
 TEST(Select, DesugarTransform) {
