@@ -190,7 +190,7 @@ void IteratorTable::fuse(const IteratorTable& that) {
        ++col_idx, this_read_ptr += this_entry_count, that_read_ptr += that_entry_count) {
     memcpy(write_ptr, this_read_ptr, this_entry_count * sizeof(int64_t));
     write_ptr += this_entry_count;
-    memcpy(write_ptr, that_buffer, that_entry_count * sizeof(int64_t));
+    memcpy(write_ptr, that_read_ptr, that_entry_count * sizeof(int64_t));
     write_ptr += that_entry_count;
   }
   this_entry_count += that_entry_count;

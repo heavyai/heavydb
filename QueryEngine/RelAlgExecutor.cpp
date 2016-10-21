@@ -1094,6 +1094,35 @@ std::vector<InputDescriptor> separate_extra_input_descs(std::vector<InputDescrip
   return extra_input_descs;
 }
 
+size_t getScanResultCount(const std::vector<InputDescriptor>& input_descs,
+                          const std::list<std::shared_ptr<Analyzer::Expr>>& inner_join_quals,
+                          const std::list<std::shared_ptr<Analyzer::Expr>>& outer_join_quals,
+                          const std::vector<InputTableInfo>& query_infos) {
+  CHECK(input_descs.size());
+  CHECK_EQ(input_descs[0].getTableId(), query_infos[0].table_id);
+  if (input_descs.size() == 1) {
+    const auto input_cardinality = query_infos[0].info.numTuples;
+    return input_cardinality;
+  }
+  CHECK_EQ(input_descs[0].getTableId(), query_infos[0].table_id);
+  CHECK_EQ(input_descs[1].getTableId(), query_infos[1].table_id);
+  const auto lhs_cardinality = query_infos[0].info.numTuples;
+  const auto rhs_cardinality = query_infos[1].info.numTuples;
+  for (auto qual : inner_join_quals) {
+    auto qual_bin_oper = std::dynamic_pointer_cast<Analyzer::BinOper>(qual);
+    if (qual_bin_oper && qual_bin_oper->get_optype() == kEQ) {
+      return std::max(lhs_cardinality, rhs_cardinality);
+    }
+  }
+  for (auto qual : outer_join_quals) {
+    auto qual_bin_oper = std::dynamic_pointer_cast<Analyzer::BinOper>(qual);
+    if (qual_bin_oper && qual_bin_oper->get_optype() == kEQ) {
+      return lhs_cardinality;
+    }
+  }
+  return lhs_cardinality * rhs_cardinality;
+}
+
 }  // namespace
 
 RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(const RelCompound* compound,
@@ -1115,20 +1144,25 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(const RelCompoun
   CHECK_EQ(compound->size(), target_exprs.size());
   auto inner_join_quals = get_inner_join_quals(compound, translator);
   inner_join_quals.insert(inner_join_quals.end(), separated_quals.join_quals.begin(), separated_quals.join_quals.end());
-  const RelAlgExecutionUnit exe_unit = {input_descs,
-                                        extra_input_descs,
-                                        input_col_descs,
-                                        quals_cf.simple_quals,
-                                        separated_quals.regular_quals,
-                                        join_type,
-                                        get_join_dimensions(get_data_sink(compound), cat_, temporary_tables_),
-                                        inner_join_quals,
-                                        get_outer_join_quals(compound, translator),
-                                        groupby_exprs,
-                                        target_exprs,
-                                        {},
-                                        sort_info,
-                                        0};
+  auto outer_join_quals = get_outer_join_quals(compound, translator);
+  const RelAlgExecutionUnit exe_unit = {
+      input_descs,
+      extra_input_descs,
+      input_col_descs,
+      quals_cf.simple_quals,
+      separated_quals.regular_quals,
+      join_type,
+      get_join_dimensions(get_data_sink(compound), cat_, temporary_tables_),
+      inner_join_quals,
+      outer_join_quals,
+      groupby_exprs,
+      target_exprs,
+      {},
+      sort_info,
+      compound->isAggregate() ? 0 : getScanResultCount(input_descs,
+                                                       inner_join_quals,
+                                                       outer_join_quals,
+                                                       get_table_infos(input_descs, cat_, temporary_tables_))};
   const auto query_infos = get_table_infos(exe_unit.input_descs, cat_, temporary_tables_);
   QueryRewriter* query_rewriter = new QueryRewriter(exe_unit, query_infos, executor_, nullptr);
   const auto rewritten_exe_unit = query_rewriter->rewrite();
@@ -1236,7 +1270,8 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createJoinWorkUnit(const RelJoin* join,
            get_exprs_not_owned(target_exprs_owned),
            get_exprs_not_owned(orig_target_exprs_owned),
            sort_info,
-           0},
+           getScanResultCount(
+               input_descs, inner_join_quals, outer_join_quals, get_table_infos(input_descs, cat_, temporary_tables_))},
           max_groups_buffer_entry_default_guess,
           nullptr};
 }
@@ -1318,6 +1353,8 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(const RelProject*
   const auto target_exprs = get_exprs_not_owned(target_exprs_owned);
   const auto targets_meta = get_targets_meta(project, target_exprs);
   project->setOutputMetainfo(targets_meta);
+  auto inner_join_quals = get_inner_join_quals(project, translator);
+  auto outer_join_quals = get_outer_join_quals(project, translator);
   return {{input_descs,
            extra_input_descs,
            input_col_descs,
@@ -1325,13 +1362,14 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(const RelProject*
            {},
            join_type,
            get_join_dimensions(get_data_sink(project), cat_, temporary_tables_),
-           get_inner_join_quals(project, translator),
-           get_outer_join_quals(project, translator),
+           inner_join_quals,
+           outer_join_quals,
            {nullptr},
            target_exprs,
            {},
            sort_info,
-           0},
+           getScanResultCount(
+               input_descs, inner_join_quals, outer_join_quals, get_table_infos(input_descs, cat_, temporary_tables_))},
           max_groups_buffer_entry_default_guess,
           nullptr};
 }
@@ -1394,6 +1432,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createFilterWorkUnit(const RelFilter* f
   target_exprs_owned_.insert(target_exprs_owned_.end(), target_exprs_owned.begin(), target_exprs_owned.end());
   const auto target_exprs = get_exprs_not_owned(target_exprs_owned);
   filter->setOutputMetainfo(in_metainfo);
+  auto outer_join_quals = get_outer_join_quals(filter, translator);
   return {{input_descs,
            extra_input_descs,
            input_col_descs,
@@ -1402,12 +1441,15 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createFilterWorkUnit(const RelFilter* f
            join_type,
            get_join_dimensions(get_data_sink(filter), cat_, temporary_tables_),
            separated_quals.join_quals,
-           get_outer_join_quals(filter, translator),
+           outer_join_quals,
            {nullptr},
            target_exprs,
            {},
            sort_info,
-           0},
+           getScanResultCount(input_descs,
+                              separated_quals.join_quals,
+                              outer_join_quals,
+                              get_table_infos(input_descs, cat_, temporary_tables_))},
           max_groups_buffer_entry_default_guess,
           nullptr};
 }

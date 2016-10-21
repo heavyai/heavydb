@@ -2060,7 +2060,7 @@ TEST(Select, Subqueries) {
     c("SELECT COUNT(*) FROM subquery_test WHERE x NOT IN (SELECT x + 1 FROM subquery_test GROUP BY x);", dt);
     c("SELECT MAX(ct) FROM (SELECT COUNT(*) AS ct, str AS foo FROM test GROUP BY foo);", dt);
     c("SELECT COUNT(*) FROM subquery_test WHERE x IN (SELECT x AS foobar FROM subquery_test GROUP BY foobar);", dt);
-    c("SELECT * FROM (SELECT x FROM test ORDER BY x);", dt);
+    c("SELECT * FROM (SELECT x FROM test ORDER BY x) ORDER BY x;", dt);
     c("SELECT AVG(y) FROM (SELECT * FROM test ORDER BY z LIMIT 5);", dt);
     c("SELECT COUNT(*) FROM subquery_test WHERE x NOT IN (SELECT x + 1 FROM subquery_test GROUP BY x);", dt);
     ASSERT_EQ(int64_t(0), v<int64_t>(run_simple_agg("SELECT * FROM (SELECT rowid FROM test WHERE rowid = 0);", dt)));
