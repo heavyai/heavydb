@@ -1175,12 +1175,15 @@ std::vector<llvm::Value*> Executor::codegenColVar(const Analyzer::ColumnVar* col
   }
   const auto hash_join_lhs = hashJoinLhs(col_var);
   if (hash_join_lhs && hash_join_lhs->get_rte_idx() == 0) {
+    if (plan_state_->isLazyFetchColumn(col_var)) {
+      plan_state_->columns_to_fetch_.insert(std::make_pair(col_var->get_table_id(), col_var->get_column_id()));
+    }
     return codegen(hash_join_lhs, fetch_column, hoist_literals);
   }
   auto pos_arg = posArg(col_var);
   auto col_byte_stream = colByteStream(col_var, fetch_column, hoist_literals);
   if (plan_state_->isLazyFetchColumn(col_var)) {
-    plan_state_->columns_to_not_fetch_.insert(col_id);
+    plan_state_->columns_to_not_fetch_.insert(std::make_pair(col_var->get_table_id(), col_var->get_column_id()));
     return {pos_arg};
   }
   const auto& col_ti = col_var->get_type_info();
@@ -4902,7 +4905,8 @@ std::pair<std::vector<std::vector<const int8_t*>>, std::vector<std::vector<const
       const size_t frag_id = selected_frag_ids[local_col_to_frag_pos[it->second]];
       CHECK_LT(frag_id, fragments->size());
       auto memory_level_for_column = memory_level;
-      if (plan_state_->columns_to_fetch_.find(col_id->getColId()) == plan_state_->columns_to_fetch_.end()) {
+      if (plan_state_->columns_to_fetch_.find(std::make_pair(col_id->getScanDesc().getTableId(), col_id->getColId())) ==
+          plan_state_->columns_to_fetch_.end()) {
         memory_level_for_column = Data_Namespace::CPU_LEVEL;
       }
 
@@ -6647,7 +6651,7 @@ int Executor::getLocalColumnId(const Analyzer::ColumnVar* col_var, const bool fe
   const auto it = plan_state_->global_to_local_col_ids_.find(scan_col_desc);
   CHECK(it != plan_state_->global_to_local_col_ids_.end());
   if (fetch_column) {
-    plan_state_->columns_to_fetch_.insert(global_col_id);
+    plan_state_->columns_to_fetch_.insert(std::make_pair(table_id, global_col_id));
   }
   return it->second;
 }

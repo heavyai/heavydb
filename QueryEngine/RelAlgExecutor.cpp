@@ -416,7 +416,7 @@ void collect_used_input_desc(std::vector<InputDescriptor>& input_descs,
                              const RelAlgNode* ra_node,
                              const std::unordered_set<const RexInput*>& source_used_inputs,
                              const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level) {
-  std::unordered_set<InputDescriptor> input_descs_unique;
+  std::unordered_set<InputDescriptor> input_descs_unique(input_descs.begin(), input_descs.end());
   const auto join_seq = get_join_sequence(get_data_sink(ra_node));
   std::unordered_map<const RelAlgNode*, int> non_join_to_nest_level;
   for (const auto node : join_seq) {
@@ -484,9 +484,20 @@ std::pair<std::vector<InputDescriptor>, std::list<std::shared_ptr<const InputCol
   collect_used_input_desc(input_descs, input_col_descs_unique, ra_node, used_inputs, input_to_nest_level);
   collect_used_input_desc(
       input_descs, input_col_descs_unique, ra_node, get_join_source_used_inputs(ra_node), input_to_nest_level);
+  std::vector<std::shared_ptr<const InputColDescriptor>> input_col_descs(input_col_descs_unique.begin(),
+                                                                         input_col_descs_unique.end());
+
+  std::sort(
+      input_col_descs.begin(),
+      input_col_descs.end(),
+      [](std::shared_ptr<const InputColDescriptor> const& lhs, std::shared_ptr<const InputColDescriptor> const& rhs) {
+        if (lhs->getScanDesc().getNestLevel() == rhs->getScanDesc().getNestLevel()) {
+          return lhs->getColId() < rhs->getColId();
+        }
+        return lhs->getScanDesc().getNestLevel() < rhs->getScanDesc().getNestLevel();
+      });
   return {input_descs,
-          std::list<std::shared_ptr<const InputColDescriptor>>(input_col_descs_unique.begin(),
-                                                               input_col_descs_unique.end())};
+          std::list<std::shared_ptr<const InputColDescriptor>>(input_col_descs.begin(), input_col_descs.end())};
 }
 
 template <class RA>

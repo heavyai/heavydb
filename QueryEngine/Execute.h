@@ -254,6 +254,12 @@ struct hash<std::vector<int>> {
     return vec.size() ^ boost::hash_range(vec.begin(), vec.end());
   }
 };
+
+template <>
+struct hash<std::pair<int, int>> {
+  size_t operator()(const std::pair<int, int>& p) const { return boost::hash<std::pair<int, int>>()(p); }
+};
+
 }  // std
 
 class Executor {
@@ -1060,8 +1066,8 @@ class Executor {
     std::vector<Analyzer::Expr*> target_exprs_;
     std::unordered_map<InputColDescriptor, int> global_to_local_col_ids_;
     std::vector<int> local_to_global_col_ids_;
-    std::set<int> columns_to_fetch_;
-    std::set<int> columns_to_not_fetch_;
+    std::set<std::pair<int, int>> columns_to_fetch_;
+    std::set<std::pair<int, int>> columns_to_not_fetch_;
     bool allow_lazy_fetch_;
     JoinInfo join_info_;
     const Executor* executor_;
@@ -1081,7 +1087,7 @@ class Executor {
           return false;
         }
       }
-      std::set<int> intersect;
+      std::set<std::pair<int, int>> intersect;
       std::set_intersection(columns_to_fetch_.begin(),
                             columns_to_fetch_.end(),
                             columns_to_not_fetch_.begin(),
@@ -1090,7 +1096,8 @@ class Executor {
       if (!intersect.empty()) {
         throw CompilationRetryNoLazyFetch();
       }
-      return columns_to_fetch_.find(do_not_fetch_column->get_column_id()) == columns_to_fetch_.end();
+      return columns_to_fetch_.find(std::make_pair(do_not_fetch_column->get_table_id(),
+                                                   do_not_fetch_column->get_column_id())) == columns_to_fetch_.end();
     }
   };
 

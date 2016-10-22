@@ -2100,6 +2100,7 @@ TEST(Select, InnerJoins) {
       "fixed_str,count(*) from test group by fixed_str order by count(*) desc limit 40) c on "
       "c.fixed_str=a.fixed_str GROUP BY key0, key1 ORDER BY key0,key1;",
       dt);
+    c("SELECT a.x, b.x, c.x FROM test a JOIN test_inner b ON a.x = b.x JOIN join_test c ON b.x = c.x;", dt);
 #endif
   }
 }
