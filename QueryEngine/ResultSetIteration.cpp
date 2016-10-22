@@ -544,6 +544,9 @@ bool ResultSetStorage::isEmptyEntry(const size_t entry_idx) const {
 bool ResultSet::isNull(const SQLTypeInfo& ti, const InternalTargetValue& val) {
   if (val.isInt()) {
     if (!ti.is_fp()) {
+      if ((ti.is_string() && ti.get_compression() == kENCODING_NONE) || ti.is_array()) {
+        return !val.i1;
+      }
       return val.i1 == inline_int_null_val(ti);
     }
     const auto null_val = inline_fp_null_val(ti);
