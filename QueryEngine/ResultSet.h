@@ -256,6 +256,8 @@ class ResultSet {
 
   void sortPermutation(const std::function<bool(const uint32_t, const uint32_t)> compare);
 
+  void initPermutationBuffer();
+
   const std::vector<TargetInfo> targets_;
   const ExecutorDeviceType device_type_;
   const int device_id_;

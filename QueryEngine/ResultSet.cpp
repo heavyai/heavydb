@@ -228,38 +228,6 @@ QueryMemoryDescriptor ResultSet::fixupQueryMemoryDescriptor(const QueryMemoryDes
   return query_mem_desc_copy;
 }
 
-namespace {
-
-void init_permutation_buffer(std::vector<uint32_t>& buffer) {
-  const auto available_cpus = cpu_threads();
-  CHECK_LT(0, available_cpus);
-  const size_t stride = (buffer.size() + (available_cpus - 1)) / available_cpus;
-  const bool multithreaded = stride > 1000;
-  if (multithreaded) {
-    std::vector<std::future<void>> filler_threads;
-    for (size_t i = 0; i < buffer.size(); i += stride) {
-      auto start_it = buffer.begin();
-      std::advance(start_it, i);
-      auto end_it = buffer.begin();
-      std::advance(end_it, std::min(i + stride, buffer.size()));
-      std::iota(start_it, end_it, i);
-      filler_threads.push_back(std::async(
-          std::launch::async,
-          std::function<void(decltype(start_it), decltype(end_it), size_t)>(std::iota<decltype(start_it), size_t>),
-          start_it,
-          end_it,
-          i));
-    }
-    for (auto& child : filler_threads) {
-      child.get();
-    }
-  } else {
-    std::iota(buffer.begin(), buffer.end(), 0);
-  }
-}
-
-}  // namespace
-
 void ResultSet::sort(const std::list<Analyzer::OrderEntry>& order_entries, const size_t top_n) {
   if (isEmptyInitializer()) {
     return;
@@ -282,9 +250,7 @@ void ResultSet::sort(const std::list<Analyzer::OrderEntry>& order_entries, const
   }
   CHECK(size_t(0) == query_mem_desc_.entry_count_small || !query_mem_desc_.output_columnar);  // TODO(alex)
   CHECK(permutation_.empty());
-  permutation_.resize(entryCount());
-  // TODO(miyu): deempty underlying buffer esp. for baseline hashing.
-  init_permutation_buffer(permutation_);
+  initPermutationBuffer();
 
   CHECK(!query_mem_desc_.sortOnGpu());  // TODO(alex)
   const bool use_heap{order_entries.size() == 1 && top_n};
@@ -296,6 +262,18 @@ void ResultSet::sort(const std::list<Analyzer::OrderEntry>& order_entries, const
     topPermutation(top_n, compare);
   } else {
     sortPermutation(compare);
+  }
+}
+
+void ResultSet::initPermutationBuffer() {
+  for (size_t i = 0; i < query_mem_desc_.entry_count + query_mem_desc_.entry_count_small; ++i) {
+    const auto storage_lookup_result = findStorage(i);
+    const auto lhs_storage = storage_lookup_result.storage_ptr;
+    const auto off = storage_lookup_result.fixedup_entry_idx;
+    CHECK(lhs_storage);
+    if (!lhs_storage->isEmptyEntry(off)) {
+      permutation_.push_back(i);
+    }
   }
 }
 
