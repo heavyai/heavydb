@@ -543,6 +543,7 @@ class Executor {
     int32_t* error_code_;
     RenderAllocatorMap* render_allocator_map_;
     std::vector<std::pair<ResultPtr, std::vector<size_t>>> all_fragment_results_;
+    static std::mutex reduce_mutex_;
 
     typedef std::vector<int> CacheKey;
     mutable std::mutex columnar_conversion_mutex_;
@@ -557,6 +558,12 @@ class Executor {
                             const int col_id,
                             const Data_Namespace::MemoryLevel memory_level,
                             const int device_id) const;
+
+    void runImpl(const ExecutorDeviceType chosen_device_type,
+                 int chosen_device_id,
+                 const std::map<int, std::vector<size_t>>& frag_ids,
+                 const size_t ctx_idx,
+                 const int64_t rowid_lookup_key);
 
    public:
     ExecutionDispatch(Executor* executor,

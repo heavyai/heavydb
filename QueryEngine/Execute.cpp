@@ -58,6 +58,8 @@
 
 bool g_enable_watchdog{false};
 
+std::mutex Executor::ExecutionDispatch::reduce_mutex_;
+
 Executor::Executor(const int db_id,
                    const size_t block_size_x,
                    const size_t grid_size_x,
@@ -4079,7 +4081,20 @@ void Executor::ExecutionDispatch::run(const ExecutorDeviceType chosen_device_typ
                                       const std::map<int, std::vector<size_t>>& frag_ids,
                                       const size_t ctx_idx,
                                       const int64_t rowid_lookup_key) noexcept {
-  static std::mutex reduce_mutex;
+  try {
+    runImpl(chosen_device_type, chosen_device_id, frag_ids, ctx_idx, rowid_lookup_key);
+  } catch (const std::bad_alloc& e) {
+    std::lock_guard<std::mutex> lock(reduce_mutex_);
+    LOG(ERROR) << e.what();
+    *error_code_ = ERR_OUT_OF_CPU_MEM;
+  }
+}
+
+void Executor::ExecutionDispatch::runImpl(const ExecutorDeviceType chosen_device_type,
+                                          int chosen_device_id,
+                                          const std::map<int, std::vector<size_t>>& frag_ids,
+                                          const size_t ctx_idx,
+                                          const int64_t rowid_lookup_key) {
   const auto memory_level =
       chosen_device_type == ExecutorDeviceType::GPU ? Data_Namespace::GPU_LEVEL : Data_Namespace::CPU_LEVEL;
   std::vector<int64_t> num_rows;
@@ -4128,7 +4143,7 @@ void Executor::ExecutionDispatch::run(const ExecutorDeviceType chosen_device_typ
       const auto& fragments = query_infos_[tab_idx].info.fragments;
       auto it_ok = all_tables_fragments.insert(std::make_pair(table_id, &fragments));
       if (!it_ok.second) {
-        std::lock_guard<std::mutex> lock(reduce_mutex);
+        std::lock_guard<std::mutex> lock(reduce_mutex_);
         *error_code_ = ERR_UNSUPPORTED_SELF_JOIN;
         return;
       }
@@ -4152,7 +4167,7 @@ void Executor::ExecutionDispatch::run(const ExecutorDeviceType chosen_device_typ
                                                                  chunk_iterators,
                                                                  chunks);
   } catch (const OutOfMemory&) {
-    std::lock_guard<std::mutex> lock(reduce_mutex);
+    std::lock_guard<std::mutex> lock(reduce_mutex_);
     *error_code_ = ERR_OUT_OF_GPU_MEM;
     return;
   }
@@ -4176,7 +4191,7 @@ void Executor::ExecutionDispatch::run(const ExecutorDeviceType chosen_device_typ
                                                                          compilation_result.query_mem_desc.sortOnGpu(),
                                                                          render_allocator_map_);
   } catch (const OutOfHostMemory& e) {
-    std::lock_guard<std::mutex> lock(reduce_mutex);
+    std::lock_guard<std::mutex> lock(reduce_mutex_);
     LOG(ERROR) << e.what();
     *error_code_ = ERR_OUT_OF_CPU_MEM;
     return;
@@ -4199,7 +4214,7 @@ void Executor::ExecutionDispatch::run(const ExecutorDeviceType chosen_device_typ
                                                                        compilation_result.query_mem_desc.sortOnGpu(),
                                                                        render_allocator_map_);
       } catch (const OutOfHostMemory& e) {
-        std::lock_guard<std::mutex> lock(reduce_mutex);
+        std::lock_guard<std::mutex> lock(reduce_mutex_);
         LOG(ERROR) << e.what();
         *error_code_ = ERR_OUT_OF_CPU_MEM;
         return;
@@ -4254,7 +4269,7 @@ void Executor::ExecutionDispatch::run(const ExecutorDeviceType chosen_device_typ
                                             render_allocator_map_);
   }
   {
-    std::lock_guard<std::mutex> lock(reduce_mutex);
+    std::lock_guard<std::mutex> lock(reduce_mutex_);
     if (err) {
       *error_code_ = err;
     }
