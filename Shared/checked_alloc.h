@@ -26,4 +26,8 @@ inline void* checked_calloc(const size_t nmemb, const size_t size) {
   return ptr;
 }
 
+struct CheckedAllocDeleter {
+  void operator()(void* p) { free(p); }
+};
+
 #endif  // CHECKED_ALLOC_H

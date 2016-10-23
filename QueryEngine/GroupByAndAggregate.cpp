@@ -56,13 +56,14 @@ QueryExecutionContext::QueryExecutionContext(const QueryMemoryDescriptor& query_
     return;
   }
 
-  std::vector<int64_t> group_by_buffer_template(query_mem_desc_.getBufferSizeQuad(device_type));
+  std::unique_ptr<int64_t, CheckedAllocDeleter> group_by_buffer_template(
+      static_cast<int64_t*>(checked_malloc(query_mem_desc_.getBufferSizeBytes(device_type))));
   if (!query_mem_desc_.lazyInitGroups(device_type)) {
     if (output_columnar_) {
       initColumnarGroups(
-          &group_by_buffer_template[0], &init_agg_vals[0], query_mem_desc_.entry_count, query_mem_desc_.keyless_hash);
+          group_by_buffer_template.get(), &init_agg_vals[0], query_mem_desc_.entry_count, query_mem_desc_.keyless_hash);
     } else {
-      initGroups(&group_by_buffer_template[0],
+      initGroups(group_by_buffer_template.get(),
                  &init_agg_vals[0],
                  query_mem_desc_.entry_count,
                  query_mem_desc_.keyless_hash,
@@ -78,11 +79,12 @@ QueryExecutionContext::QueryExecutionContext(const QueryMemoryDescriptor& query_
     CHECK_EQ(size_t(0), query_mem_desc_.getSmallBufferSizeQuad());
   }
 
-  std::vector<int64_t> group_by_small_buffer_template;
+  std::unique_ptr<int64_t, CheckedAllocDeleter> group_by_small_buffer_template;
   if (query_mem_desc_.getSmallBufferSizeBytes()) {
     CHECK(!output_columnar_ && !query_mem_desc_.keyless_hash);
-    group_by_small_buffer_template.resize(query_mem_desc_.getSmallBufferSizeQuad());
-    initGroups(&group_by_small_buffer_template[0], &init_agg_vals[0], query_mem_desc_.entry_count_small, false, 1);
+    group_by_small_buffer_template.reset(
+        static_cast<int64_t*>(checked_malloc(query_mem_desc_.getSmallBufferSizeBytes())));
+    initGroups(group_by_small_buffer_template.get(), &init_agg_vals[0], query_mem_desc_.entry_count_small, false, 1);
   }
 
   const auto step = device_type_ == ExecutorDeviceType::GPU && query_mem_desc_.threadsShareMemory()
@@ -97,7 +99,7 @@ QueryExecutionContext::QueryExecutionContext(const QueryMemoryDescriptor& query_
     auto group_by_buffer = static_cast<int64_t*>(checked_malloc(group_buffer_size + small_buffer_size));
     if (!query_mem_desc_.lazyInitGroups(device_type)) {
       memcpy(group_by_buffer + index_buffer_qw,
-             &group_by_buffer_template[0],
+             group_by_buffer_template.get(),
              query_mem_desc_.getBufferSizeBytes(device_type_));
     }
     row_set_mem_owner_->addGroupByBuffer(group_by_buffer);
@@ -107,7 +109,7 @@ QueryExecutionContext::QueryExecutionContext(const QueryMemoryDescriptor& query_
     }
     if (small_buffer_size) {
       auto group_by_small_buffer = &group_by_buffer[group_buffer_size / sizeof(int64_t)];
-      memcpy(group_by_small_buffer, &group_by_small_buffer_template[0], small_buffer_size);
+      memcpy(group_by_small_buffer, group_by_small_buffer_template.get(), small_buffer_size);
       small_group_by_buffers_.push_back(group_by_small_buffer);
       for (size_t j = 1; j < step; ++j) {
         small_group_by_buffers_.push_back(nullptr);
