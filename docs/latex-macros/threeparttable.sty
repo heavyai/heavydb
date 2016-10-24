@@ -1,0 +1,381 @@
+% threeparttable.sty   (or 3parttable) (or 3parttab on DOS)
+% by Donald Arseneau   Updated on June 13, 2003.
+% Three part tables: title, tabular environment, notes
+%
+% This file may be distributed, modified, and used in other works with just
+% one restriction: modified versions must clearly indicate the modification
+% (a name change, or a displayed message, or ?).
+%
+% This package facilitates tables with titles (captions) and notes. The
+% title and notes are given a width equal to the body of the table (a
+% tabular environment).  By itself, a threeparttable does not float, but
+% you can put it in a {table} or a {table*} or some other environment.
+% (This causes extra typing, but gives more flexibility.)
+%
+% Inside a threeparttable there should be a caption, followed by a tabular
+% environment (tabular, tabular* or tabularx), possibly followed by a series
+% of itemized "tablenotes".  The caption can also go after the tabular. 
+% 
+% \begin{table}
+%  \begin{threeparttable}[b]
+%   \caption{...}
+%   \begin{tabular}...% or {tabular*}
+%    ...42\tnote{1}&....
+%    ...
+%   \end{tabular}
+%   \begin{tablenotes}
+%    \item [1] the first note
+%    ...
+%   \end{tablenotes}
+%  \end{threeparttable}
+% \end{table}
+%
+% The {threeparttable} environment takes an optional vertical-placement
+% parameter, [t], [b], or [c]; the default is [t].
+% 
+% At present, there is nothing automatic about the notes; you must specify the
+% identifier in the body of the table ("\tnote{a}") and in the notes below
+% ("\item[a]...").  I chose this method because automatic numbering with 
+% \footnote would be very hard to use, particularly because many tables make
+% repeated reference to a single note.  If someone has a convenient, elegant,
+% automatic system, I'll listen!  \tnote commands can be given in the caption
+% too, and they will *NOT* appear in the list of tables.
+%
+% There are several commands which should be redefined for customizing the
+% behavior of threeparttable, especially the table notes.  Some options
+% are provided for common variations of the table notes.
+%
+% Options:
+%   [para]        Notes come one-after-another without line breaks
+%   [flushleft]   No hanging indentation on notes
+%   [online]      \item tag is printed normal size, not superscript
+%   [normal]      restores default formatting
+%
+% These options can be given to the \usepackage command or to each individual
+% {tablenotes} environment.  The [normal] option is intended to reverse the
+% whole-document options for a particular table; e.g.
+%
+% \usepackage[para]{threeparttable}
+% ... much document ...
+% \begin{tablenotes}[normal,flushleft]
+%
+% These few options are unlikely to give you a desired specified format,
+% so you should expect to redefine one or more of the configuration
+% commands.  Note that mixing options with redefinitions is unlikely
+% to work smoothly.  Please submit your redefinitions to be used as
+% options in future versions!
+%
+% Configuration commands:
+%   \TPTminimum: command telling minimum caption width.  Default "4em";
+%        change with \def or \renewcommnd.
+%   \TPTrlap: A command with one argument, to make notes go out of
+%        the column, into the column separation (for right-aligning)
+%   \TPTtagStyle: Command with one argument to set appearance of the tag
+%        (number) in \tnote{tag}.  It defaults to nil.  It could be \textit.
+%   \tnote: Yes, you can redefine the \tnote command.
+%   \TPTnoteLabel: Command with one argument to format the item label in 
+%        the tablenotes list (\makelabel); default uses \tnote.
+%   \TPTnoteSettings: A command to issue all the list-environment setup
+%        commands for the tablenotes.
+%   \tablenotes or \TPTdoTablenotes: Yes, you can redefine the whole
+%        tablenotes environment. (\tablenotes processes optional 
+%        parameters, then invokes \TPTdoTablenotes; the [para] option
+%        replaces \TPTdoTablenotes.)
+%
+% For figures, there is an equivalent "measuredfigure" environment. It
+% is fairly fragile though, and should be used only for a single graphic
+% above a single caption.
+%
+% Note that the \caption formatting is *not* adjusted by threeparttable.
+% You should use one of the caption-control packages to get captions
+% that work well as table titles.  In truth, threeparttable sets
+% \abovecaptionskip to zero for captions above the table, but more
+% complete changes are called for.
+
+\ProvidesPackage{threeparttable}[2003/06/13 \space v 3.0]
+
+\edef\TPTminimum % make a scratch macro for restoring catcodes
+  {\catcode\string `\string @=\the\catcode\string`\@
+   \catcode\string `\string :=\the\catcode\string`\:
+   \catcode\string `\string *=\the\catcode\string`\*}
+\catcode`\@=11
+\catcode`\:=12
+\catcode`\*=11
+
+\@ifundefined{@tempboxb}{\@nameuse{newbox}\@tempboxb}{}
+
+\newenvironment{threeparttable}[1][t]{%
+ \relax \ifvmode \noindent \fi
+ \TPT@common{threeparttable}{#1}%
+ \@ifundefined{@captype}{\def\@captype{table}}{}%
+ \let\TPT@LA@label\label
+ \let\TPT@LA@caption\@caption \let\@caption\TPT@caption
+ \let\TPT@begintabhook\TPT@begintabbox
+ \let\TPT@tabarghook\TPT@tabargset
+ \TPT@hookin{tabular}%
+ \TPT@hookarg{tabular*}%
+ \TPT@hookarg{tabularx}%
+ \let\TPToverlap\relax}%
+{\TPT@close}
+
+
+\newenvironment{measuredfigure}[1][t]{%
+ \relax \ifvmode \noindent \fi
+ \TPT@common{measuredfigure}{#1}%
+ \let\TPT@figfix\TPT@close % Provide closure if no caption
+ \@ifundefined{@captype}{\def\@captype{figure}}{}%
+ \let\TPT@LA@caption\@caption \let\@caption\TPT@gr@caption
+ \setbox\@tempboxb\hbox\bgroup
+  \aftergroup\TPT@measurement
+  \color@begingroup\spacefactor994\ignorespaces}
+{\TPT@close \TPT@figfix}
+
+\def\TPT@close{\ifhmode \unskip \fi \color@endgroup \egroup}
+\def\TPT@figfix{}
+
+%  Caption for figures:
+\def\TPT@gr@caption#1[#2]#3{\relax
+ \ifnum\spacefactor=994\relax % Caption listed first; hold on to it
+  \abovecaptionskip\z@skip
+  \let\TPT@hsize\@empty % double sure
+ \else % Have something to measure, and caption below
+  \TPT@close % close hbox.  Measurement happens here automatically
+ \fi
+ \TPT@caption{#1}[{#2}]{#3}%
+}
+
+%  "begin" code common for tables and figures
+\def\TPT@common#1#2{%
+ \ifx\TPT@LA@caption\relax\else  
+  \PackageError{threeparttable}%
+    {Illegal nested #1 environments}%
+    {Maybe you have a missing \string\end{#1}?^^J%
+     This cannot work, so type \string"x\string" and fix the problem now.}%
+ \fi
+ \let\TPT@docapt\@undefined
+ \if b#2\relax\vbox\bgroup\else
+ \if c#2\relax$\vcenter\bgroup\aftergroup$\else
+        \vtop\bgroup \fi\fi
+ \parindent\z@
+ \color@begingroup
+ \def\TPT@sethsize{\TPT@hsize\par}%
+ \topsep\z@
+ \@enumdepth\z@
+ \global\let\TPT@hsize\@empty
+}
+
+% "hookin" hooks into tabular to set the alignment in a box
+% and measure the box.
+% For tabular* and tabularx, we can simply use the supplied "width"
+% argument (using \TPT@hookarg), but for ordinary tabular environments
+% we need to measure the typeset tabular body, using hooks in both the
+% begin and the end code (using \TPT@hookin).  The hook-in is defined
+% generically so it is easy to add new supported environments.
+%
+% I will add \TPT@begintabhook and \TPT@endtabhook to \tabular and 
+% \endtabular.  These will do the measurement at the outer level, 
+% but will be no-ops inside.
+
+\def\TPT@unhook{%
+ \let\TPT@begintabhook\bgroup
+ \let\TPT@tabarghook\@gobble
+}
+
+\let\TPT@endtabhook\egroup
+
+%  This is simple -- Hook into tabular types that are given explicit width 
+\def\TPT@hookarg#1{% #1 = width
+ \expandafter\let\csname TPTsav@#1\expandafter\endcsname\csname #1\endcsname
+ \expandafter\edef\csname #1\endcsname##1{\noexpand\TPT@tabarghook{##1}%
+     \expandafter\noexpand\csname TPTsav@#1\endcsname{\hsize}}%
+}
+
+\def\TPT@tabargset#1{%  Alias \TPT@tabarghook
+ \TPT@unhook
+ \setlength\hsize{#1}%
+ \xdef\TPT@hsize{\hsize\the\hsize \parindent 1em \noexpand\@parboxrestore}%
+ \TPT@hsize
+ \ifx\TPT@docapt\@undefined\else \TPT@docapt \vskip.2\baselineskip \fi
+ \par \aftergroup\TPT@sethsize
+}
+
+%  Harder -- Hook into tabular/endtabular to measure the width
+\def\TPT@hookin#1{%
+ \expandafter\let\csname TPTsav@#1\expandafter\endcsname\csname #1\endcsname
+ \expandafter\let\csname TPTsav@end#1\expandafter\endcsname\csname end#1\endcsname
+ \expandafter\edef\csname #1\endcsname{\noexpand\TPT@begintabhook
+     \expandafter\noexpand\csname TPTsav@#1\endcsname}%
+ \expandafter\edef\csname end#1\endcsname{%
+     \expandafter\noexpand\csname TPTsav@end#1\endcsname \TPT@endtabhook}%
+}
+
+\def\TPT@begintabbox{% alias \TPT@begintabhook
+ \begingroup
+ \TPT@unhook
+ \setbox\@tempboxb\hbox\bgroup \aftergroup\TPT@endtabbox
+ \let\TPToverlap\TPTrlap % Just \rlap now, but could be smarter
+}
+
+\def\TPT@endtabbox{% Inserted after ending \@tempboxb
+ \TPT@measurement
+ \endgroup 
+ \TPT@hsize  \aftergroup\TPT@sethsize 
+ \@ignoretrue
+}
+
+\def\TPT@measurement{%
+ \ifdim\wd\@tempboxb<\TPTminimum
+  \hsize \TPTminimum
+ \else
+  \hsize\wd\@tempboxb
+ \fi
+ \xdef\TPT@hsize{\hsize\the\hsize \noexpand\@parboxrestore}\TPT@hsize
+ \ifx\TPT@docapt\@undefined\else
+  \TPT@docapt \vskip.2\baselineskip
+ \fi \par \box\@tempboxb
+ \ifvmode \prevdepth\z@ \fi
+}
+
+\gdef\TPT@hsize{}
+\def\TPT@sethsize{}%  Used with \aftergroup, so do this to cover for when a
+                   %  \TPT@sethsize escapes from threeparttable.
+
+% Collecting caption for tables:
+\def\TPT@caption#1[#2]#3{\gdef\TPT@docapt
+ {\par\global\let\TPT@docapt\@undefined \TPT@LA@caption{#1}[{#2}]%
+   {\strut\ignorespaces#3\ifhmode\unskip\@finalstrut\strutbox\fi}}%
+ \ifx\TPT@hsize\@empty \let\label\TPT@gatherlabel \abovecaptionskip\z@skip
+ \else \TPT@docapt \fi \ignorespaces}
+
+\let\TPT@LA@caption\relax
+
+% Must also collect any \label that appears after a collected \caption
+\def\TPT@gatherlabel#1{%
+  \ifx\TPT@docapt\@undefined \TPT@LA@label{#1}\else
+      \g@addto@macro\TPT@docapt{\label{#1}}\fi
+}
+
+\def\tablenotes{\TPT@defaults 
+  \@ifnextchar[\TPT@setuptnotes\TPTdoTablenotes} % ]
+\let\endtablenotes\endlist
+\def\TPT@setuptnotes [#1]{% process formatting options
+  \@for\@tempa:=#1\do{\@nameuse{TPT@opt@\romannumeral-`a\@tempa}}%
+  \TPTdoTablenotes
+}
+
+\def\TPTdoTablenotes{%
+ \par \prevdepth\z@ \TPT@hsize 
+ \list{}{\topsep\z@skip \partopsep\z@skip 
+  \itemsep\z@ \parsep\z@ \itemindent\z@
+  \TPTnoteSettings
+  \let\makelabel\TPTnoteLabel
+}}
+
+
+
+% \TPToverlap is a hook, to be used in \tnote, for making the note tag
+% hang over the right-edge of the column.  It takes different meanings 
+% at different places, and it should disappear, like this, outside of
+% a threeparttable environment.
+%
+\def\TPToverlap#1{} % notes in caption will disappear in list of tables!
+
+% \TPTrlap is the meaning of \TPToverlap within the tabular environment.
+% I could do some fancy definition so that it only acts at the right-edge
+% of a column, but it is left simple for compatibility and sanity. 
+\let\TPTrlap\rlap
+
+\def\tnote#1{\protect\TPToverlap{\textsuperscript{\TPTtagStyle{#1}}}}% 
+
+\def\TPTtagStyle#1{#1}
+
+\def\TPTnoteSettings{%
+ \setlength\leftmargin{1.5em}%
+ \setlength\labelwidth{.5em}%
+ \setlength\labelsep{.2em}%
+ \rightskip\tabcolsep \leftskip\tabcolsep
+}
+\def\TPTnoteLabel#1{\tnote{#1}\hfil}
+
+% Package and tablenotes options
+
+\def\TPT@opt@normal{\gdef\TPT@defaults{}}
+\TPT@opt@normal
+\DeclareOption{normal}{}
+
+\def\TPT@opt@online{%
+ \def\TPTnoteSettings{\leftmargin1.5em \labelwidth1em \labelsep.5em\relax}%
+ \def\TPTnoteLabel##1{\TPTtagStyle{##1}\hfil}%
+}
+\DeclareOption{online}{\g@addto@macro\TPT@defaults{\TPT@opt@online}}
+
+\def\TPT@opt@flushleft{%
+ \def\TPTnoteSettings{\labelsep.2em \leftmargin\z@ \labelwidth\z@}%
+ \def\TPTnoteLabel##1{\hspace\labelsep\tnote{##1}\hfil}%
+ \rightskip\z@skip \leftskip\z@skip
+}
+\DeclareOption{flushleft}{\g@addto@macro\TPT@defaults{\TPT@opt@flushleft}}
+
+\def\TPT@opt@para{\let\TPTdoTablenotes\TPT@doparanotes}
+\def\TPT@doparanotes{\par
+   \prevdepth\z@ \TPT@hsize
+   \TPTnoteSettings
+   \parindent\z@ \pretolerance 8
+   \linepenalty 200
+   \renewcommand\item[1][]{\relax\ifhmode \begingroup
+       \unskip
+       \advance\hsize 10em % \hsize is scratch register, based on real hsize
+       \penalty -45 \hskip\z@\@plus\hsize \penalty-19
+       \hskip .15\hsize \penalty 9999 \hskip-.15\hsize
+       \hskip .01\hsize\@plus-\hsize\@minus.01\hsize 
+       \hskip 1em\@plus .3em
+      \endgroup\fi
+      \tnote{##1}\,\ignorespaces}%
+   \let\TPToverlap\relax
+   \def\endtablenotes{\par}%
+}
+\DeclareOption{para}{\g@addto@macro\TPT@defaults{\TPT@opt@para}}
+
+\ProcessOptions
+
+
+\TPTminimum % restore catcode of @, : and * to starting value
+
+\def\TPTminimum{4em}
+
+\endinput
+
+Example:
+
+Here is some paragraph before the table.  Note that this table does not
+float because it is not in a {table} or {table*} environment.
+
+\begin{center}
+\begin{threeparttable}
+\caption{The Skewing Angles ($\beta$) for $\fam0 Mu(H)+X_2$ and
+   $\fam0 Mu(H)+HX$~\tnote{a}}
+\begin{tabular}{rlcc}
+\hline
+&   & $\fam0 H(Mu)+F_2$ & $\fam0 H(Mu)+Cl_2$ \\
+\hline
+&$\beta$(H)  & $80.9^\circ\tnote{b}$ & $83.2^\circ$ \\
+&$\beta$(Mu) & $86.7^\circ$ & $87.7^\circ$ \\
+\hline
+\end{tabular}
+\begin{tablenotes}
+\item[a] for the abstraction reaction, $\fam0 Mu+HX \rightarrow MuH+X$.
+\item[b] 1 degree${} = \pi/180$ radians.
+\end{tablenotes}
+\end{threeparttable}
+
+\end{center}
+
+Notes:  
+
+May 15, 2001: changed hook-in to use \setbox in a wrapper macro (or
+explicit width of tabular*).  I don't remember why I used \everyhbox
+and \lastbox before.  Something may break now.  At least it works with
+tabularx.
+
+June 13, 2003: Re-wrote a lot, particularly the hook mechanism.  Use macros
+and package/environment options for formatting control.  Add measuredfigure.

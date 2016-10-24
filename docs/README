@@ -2,7 +2,7 @@ MapD documentation, compiled by Sphinx
 
 Requires pip, virtualenv, and pdflatex.
 
-HTML/CSS theme files are in `_themes/mapd-docs-theme`.
+HTML/CSS theme files are in `_themes/mapd_docs_theme`.
 
 To build:
 

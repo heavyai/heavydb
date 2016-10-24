@@ -1,0 +1,280 @@
+%%
+%% This is file `eqparbox.sty',
+%% generated with the docstrip utility.
+%%
+%% The original source files were:
+%%
+%% eqparbox.dtx  (with options: `package')
+%% 
+%% This is a generated file.
+%% 
+%% Copyright (C) 2013 Scott Pakin <scott+eqp@pakin.org>
+%% -------------------------------------------------------
+%% 
+%% This package may be distributed and/or modified under the
+%% conditions of the LaTeX Project Public License, either version 1.2
+%% of this license or (at your option) any later version.
+%% The latest version of this license is in
+%%    http://www.latex-project.org/lppl.txt
+%% and version 1.3c or later is part of all distributions of LaTeX
+%% version 2008/05/04 or later.
+%% 
+\NeedsTeXFormat{LaTeX2e}[1999/12/01]
+\ProvidesPackage{eqparbox}
+    [2013/03/15 v4.0 Create equal-widthed boxes]
+\newlength{\eqp@tempdima}
+\newlength{\eqp@tempdimb}
+\def\eqp@taglist{}
+\newif\ifeqp@must@rerun
+\RequirePackage{array}
+\newsavebox{\eqp@tabular@box}
+\newsavebox{\eqp@list@box}
+\newlength{\eqp@list@indent}
+\RequirePackage{environ}
+\newcommand*{\eqp@storefont}{%
+  \xdef\eqp@restorefont{%
+    \noexpand\usefont{\f@encoding}{\f@family}{\f@series}{\f@shape}%
+    \noexpand\fontsize{\f@size}{\f@baselineskip}%
+    \noexpand\selectfont
+  }%
+}
+\newcommand{\eqp@settowidth}[2]{%
+  \begingroup
+    \global\setbox\eqp@tabular@box=\hbox{%
+      \def\eqp@endings{}%
+      \ifx\enditemize\endlist
+        \g@addto@macro\eqp@endings{\let\enditemize=\endlist}%
+      \fi
+      \ifx\endenumerate\endlist
+        \g@addto@macro\eqp@endings{\let\endenumerate=\endlist}%
+      \fi
+      \ifx\enddescription\endlist
+        \g@addto@macro\eqp@endings{\let\enddescription=\endlist}%
+      \fi
+      \renewenvironment{list}[2]{%
+        \ifnum \@listdepth >5\relax
+          \@toodeep
+        \else
+          \global\advance\@listdepth\@ne
+        \fi
+        \rightmargin\z@
+        \listparindent\z@
+        \itemindent\z@
+        \csname @list\romannumeral\the\@listdepth\endcsname
+        ##2\relax
+        \renewcommand*{\item}[1][]{%
+          \mbox{}\\
+          \box\eqp@list@box\mbox{} \\
+          \sbox\@tempboxa{\makelabel{####1}}%
+          \ifdim\wd\@tempboxa>\labelwidth
+            \advance\eqp@list@indent by -\labelwidth
+            \advance\eqp@list@indent by \wd\@tempboxa
+          \fi
+          \hspace*{\eqp@list@indent}%
+        }%
+        \hspace*{-\eqp@list@indent}%
+        \advance\eqp@list@indent by \leftmargin
+        \advance\eqp@list@indent by \rightmargin
+        \advance\eqp@list@indent by \itemindent
+        \global\setbox\eqp@list@box=\hbox\bgroup
+        \begin{tabular}{@{}l@{}}%
+      }{%
+        \item[]%
+        \end{tabular}%
+        \egroup
+        \global\advance\@listdepth\m@ne
+      }%
+      \eqp@endings
+      \global\let\eqp@par=\par
+      \eqp@storefont
+      \begin{tabular}{@{}>{\eqp@restorefont}l<{\eqp@storefont}@{}}%
+        \global\@setpar{\\}%
+        #2%
+        \\ \box\eqp@list@box
+      \end{tabular}%
+      \global\@restorepar
+    }%
+  \endgroup
+  \settowidth{#1}{\box\eqp@tabular@box}%
+}
+\long\def\eqp@compute@width#1#2{%
+  \eqp@settowidth{\eqp@tempdimb}{#2}%
+  \@ifundefined{eqp@minwd@#1}{}{%
+    \ifdim\eqp@tempdimb<\csname eqp@minwd@#1\endcsname
+      \eqp@tempdimb=\csname eqp@minwd@#1\endcsname
+    \fi
+  }%
+  \@ifundefined{eqp@maxwd@#1}{}{%
+    \ifdim\eqp@tempdimb>\csname eqp@maxwd@#1\endcsname
+      \eqp@tempdimb=\csname eqp@maxwd@#1\endcsname
+    \fi
+  }%
+  \expandafter
+  \ifx\csname eqp@this@#1\endcsname\relax
+    \global\eqp@must@reruntrue
+    \expandafter\xdef\csname eqp@this@#1\endcsname{\the\eqp@tempdimb}%
+    \expandafter\xdef\csname eqp@next@#1\endcsname{\the\eqp@tempdimb}%
+  \else
+    \eqp@tempdima=\csname eqp@this@#1\endcsname\relax
+    \ifdim\eqp@tempdima<\eqp@tempdimb
+      \expandafter\xdef\csname eqp@this@#1\endcsname{\the\eqp@tempdimb}%
+      \global\eqp@must@reruntrue
+    \fi
+    \eqp@tempdima=\csname eqp@next@#1\endcsname\relax
+    \ifdim\eqp@tempdima<\eqp@tempdimb
+      \expandafter\xdef\csname eqp@next@#1\endcsname{\the\eqp@tempdimb}%
+    \fi
+  \fi
+  \@ifundefined{eqp@seen@#1}{%
+    \expandafter\gdef\csname eqp@seen@#1\endcsname{}%
+    \@cons\eqp@taglist{{#1}}%
+  }{}%
+  \eqp@tempdima=\csname eqp@this@#1\endcsname\relax
+  \eqp@produce@box{\eqp@tempdima}{#2}%
+}
+\DeclareRobustCommand{\eqparbox}{%
+  \@ifnextchar[%]
+    {\eqparbox@i}%
+    {\eqparbox@iii[c][\relax][s]}%
+}
+\def\eqparbox@i[#1]{%
+  \@ifnextchar[%]
+    {\eqparbox@ii[#1]}%
+    {\eqparbox@iii[#1][\relax][s]}%
+}
+\def\eqparbox@ii[#1][#2]{%
+  \@ifnextchar[%]
+    {\eqparbox@iii[#1][#2]}%
+    {\eqparbox@iii[#1][#2][#1]}%
+}
+\def\eqparbox@iii[#1][#2][#3]{%
+  \long\gdef\eqp@produce@box##1##2{%
+    \parbox[#1][#2][#3]{##1}{##2}%
+  }%
+  \eqp@compute@width
+}
+\DeclareRobustCommand{\eqminipage}{%
+  \@ifnextchar[%]
+    {\eqminipage@i}%
+    {\eqminipage@iii[c][\relax][s]}%
+}
+\let\endeqpminipage=\relax
+\long\def\eqminipage@i[#1]{%
+  \@ifnextchar[%]
+    {\eqminipage@ii[#1]}%
+    {\eqminipage@iii[#1][\relax][s]}%
+}
+\def\eqminipage@ii[#1][#2]{%
+  \@ifnextchar[%]
+    {\eqminipage@iii[#1][#2]}%
+    {\eqminipage@iii[#1][#2][#1]}%
+}
+\def\eqminipage@iii[#1][#2][#3]#4{%
+  \long\def\eqminipage@iv##1{%
+    \long\gdef\eqp@produce@box####1####2{%
+      \begin{minipage}[#1][#2][#3]{####1}%
+        ####2%
+      \end{minipage}%
+    }%
+    \eqp@compute@width{#4}{##1}%
+  }%
+  \Collect@Body\eqminipage@iv
+}
+\DeclareRobustCommand{\eqmakebox}{%
+  \@ifnextchar[%]
+    {\eqlrbox@i\makebox}%
+    {\makebox}%
+}
+\DeclareRobustCommand{\eqframebox}{%
+  \@ifnextchar[%]
+    {\eqlrbox@i\framebox}%
+    {\framebox}%
+}
+\DeclareRobustCommand{\eqsavebox}[1]{%
+  \@ifnextchar[%]
+    {\eqlrbox@i{\savebox{#1}}}%
+    {\savebox{#1}}%
+}
+\def\eqlrbox@i#1[#2]{%
+  \@ifnextchar[%]
+    {\eqlrbox@ii{#1}[#2]}%
+    {\eqlrbox@ii{#1}[#2][c]}%
+}
+\def\eqlrbox@ii#1[#2][#3]{%
+  \long\gdef\eqp@produce@box##1##2{%
+    #1[##1][#3]{##2}%
+  }%
+  \eqp@compute@width{#2}%
+}
+\newcommand*{\eqboxwidth}[1]{%
+  \@ifundefined{eqp@this@#1}{0pt}{\csname eqp@this@#1\endcsname}%
+}
+\newcommand{\eqsetminwidth}[2]{%
+  \@tempdima=#2\relax
+  \expandafter\xdef\csname eqp@minwd@#1\endcsname{\the\@tempdima}%
+}
+\newcommand{\eqsetmaxwidth}[2]{%
+  \@tempdima=#2\relax
+  \expandafter\xdef\csname eqp@maxwd@#1\endcsname{\the\@tempdima}%
+}
+\newcommand{\eqsetminwidthto}[2]{%
+  \eqp@settowidth{\@tempdima}{#2}%
+  \expandafter\xdef\csname eqp@minwd@#1\endcsname{\the\@tempdima}%
+}
+\newcommand{\eqsetmaxwidthto}[2]{%
+  \eqp@settowidth{\@tempdima}{#2}%
+  \expandafter\xdef\csname eqp@maxwd@#1\endcsname{\the\@tempdima}%
+}
+\AtEndDocument{%
+  \begingroup
+    \def\@elt#1{%
+      \@ifundefined{eqp@minwd@#1}{}{%
+        \@ifundefined{eqp@maxwd@#1}{}{%
+          \ifdim\csname eqp@minwd@#1\endcsname>\csname eqp@maxwd@#1\endcsname
+            \PackageWarning{eqparbox}{For tag `#1',
+              minimum width (\csname eqp@minwd@#1\endcsname) >
+              maximum width (\csname eqp@maxwd@#1\endcsname)}%
+          \fi
+        }%
+      }%
+      \eqp@tempdima\csname eqp@this@#1\endcsname\relax
+      \eqp@tempdimb\csname eqp@next@#1\endcsname\relax
+      \ifdim\eqp@tempdima=\eqp@tempdimb
+      \else
+        \@latex@warning@no@line{Rerun to correct the width of eqparbox `#1'}%
+      \fi
+      \immediate\write\@auxout{%
+        \string\expandafter\string\gdef\string\csname\space
+        eqp@this@#1\string\endcsname{%
+          \csname eqp@next@#1\endcsname
+        }%
+        ^^J%
+        \string\expandafter\string\gdef\string\csname\space
+         eqp@next@#1\string\endcsname{0pt}%
+      }%
+      \@ifundefined{eqp@minwd@#1}{}{%
+        \immediate\write\@auxout{%
+          \string\expandafter\string\gdef\string\csname\space
+          eqp@minwd@#1\string\endcsname{%
+            \csname eqp@minwd@#1\endcsname
+          }%
+        }%
+      }%
+      \@ifundefined{eqp@maxwd@#1}{}{%
+        \immediate\write\@auxout{%
+          \string\expandafter\string\gdef\string\csname\space
+          eqp@maxwd@#1\string\endcsname{%
+            \csname eqp@maxwd@#1\endcsname
+          }%
+        }%
+      }%
+    }%
+    \eqp@taglist
+  \endgroup
+  \ifeqp@must@rerun
+    \@latex@warning@no@line{Rerun to correct eqparbox widths}
+  \fi
+}
+\endinput
+%%
+%% End of file `eqparbox.sty'.

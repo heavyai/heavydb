@@ -43,7 +43,7 @@ MapD has the following dependencies:
 //TODO(@vastcharade): add backend rendering deps
 //TODO(@dwayneberry: add Calcite deps
 
-Generating PDFs of the documentation requires `pandoc` and `texlive` (specifically `pdflatex`).
+Generating the documentation requires `pip`, `virtualenv`, and `texlive` (specifically `pdflatex`). `sphinx` will be installed automatically via `pip`.
 
 Dependencies for `mapd_web_server` and other Go utils are in [`ThirdParty/go`](ThirdParty/go). See [`ThirdParty/go/src/mapd/vendor/README.md`](ThirdParty/go/src/mapd/vendor/README.md) for instructions on how to add new deps.
 

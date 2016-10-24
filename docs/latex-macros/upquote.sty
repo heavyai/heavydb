@@ -1,0 +1,40 @@
+%%
+%% This is file `upquote.sty',
+%% generated with the docstrip utility.
+%%
+%% The original source files were:
+%%
+%% upquote.dtx  (with options: `package')
+%% 
+%% Copyright (C) 2000 by Michael A. Covington
+%% Copyright (C) 2003 by Frank Mittelbach
+%% Copyright (C) 2012 by Markus Kuhn (current maintainer)
+%% 
+%% Released under the LaTeX Project Public License v1.3c or later
+%% See http://www.latex-project.org/lppl.txt
+%% 
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{upquote}
+   [2012/04/19 v1.3 upright-quote and grave-accent glyphs in verbatim]
+\newcommand\upquote@cmtt{cmtt}
+\newcommand\upquote@OTone{OT1}
+\ifx\encodingdefault\upquote@OTone
+  \ifx\ttdefault\upquote@cmtt\else\RequirePackage{textcomp}\fi
+\else
+  \RequirePackage{textcomp}
+\fi
+\begingroup
+\catcode`'=\active
+\catcode``=\active
+\g@addto@macro\@noligs
+   {\let'\textquotesingle
+    \let`\textasciigrave
+    \ifx\encodingdefault\upquote@OTone
+    \ifx\ttdefault\upquote@cmtt
+    \def'{\char13 }%
+    \def`{\char18 }%
+    \fi\fi}
+\endgroup
+\endinput
+%%
+%% End of file `upquote.sty'.

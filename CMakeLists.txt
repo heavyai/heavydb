@@ -6,7 +6,6 @@ set(MAPD_VERSION_RAW "1.2.11dev")
 set(MAPD_IMMERSE_URL "http://builds.mapd.com/frontend/mapd2-dashboard-v1-latest-release.zip")
 set(MAPD_IMMERSEV2_URL "http://builds.mapd.com/frontend/mapd2-dashboard-v2-latest-release.zip")
 option(MAPD_USE_IMMERSEV2 "Only bundle Immerse v2" OFF)
-set(MAPD_IMMERSE_DOCS_URL "http://docs.mapd.com/immerse/ImmerseUserGuide.pdf")
 string(TIMESTAMP MAPD_BUILD_DATE "%Y%m%d")
 
 if($ENV{BUILD_NUMBER})
@@ -341,38 +340,29 @@ add_subdirectory(ThirdParty/generate_cert)
 
 # Docs
 option(ENABLE_DOCS "Enable compilation of MapD docs" ON)
-find_program(PANDOC_EXECUTABLE NAMES pandoc)
+find_program(PIP_EXECUTABLE NAMES pip)
+find_program(VENV_EXECUTABLE NAMES virtualenv)
 find_program(PDFLATEX_EXECUTABLE NAMES pdflatex)
-configure_file(
-  "${CMAKE_SOURCE_DIR}/docs/MapDGuide.in.rst"
-  "${CMAKE_BINARY_DIR}/docs/MapDGuide.rst"
-  @ONLY
-  )
-if(PANDOC_EXECUTABLE AND PDFLATEX_EXECUTABLE AND ENABLE_DOCS)
+#configure_file(
+#  "${CMAKE_SOURCE_DIR}/docs/MapDGuide.in.rst"
+#  "${CMAKE_BINARY_DIR}/docs/MapDGuide.rst"
+#  @ONLY
+#  )
+if(PIP_EXECUTABLE AND VENV_EXECUTABLE AND PDFLATEX_EXECUTABLE AND ENABLE_DOCS)
+  file(GLOB_RECURSE DOCS_FILES "*.rst")
   add_custom_target(docs ALL
-    COMMAND ${PANDOC_EXECUTABLE}
-      --toc --standalone
-      -V documentclass=report
-      -V geometry:margin=1.5in
-      -V graphics:on
-      -M logo=mapd-logo.pdf
-      -M title="MapD Guide | Release ${MAPD_VERSION_RAW}"
-      -M author="MapD Technologies, Inc."
-      --template=mapd
-      --data-dir=.
-      --output=${CMAKE_BINARY_DIR}/MapDGuide.pdf
-      ${CMAKE_BINARY_DIR}/docs/MapDGuide.rst
-    SOURCES docs/MapDGuide.rst
+    COMMAND ./build.sh
+    ${MAPD_VERSION_RAW}
+    ${CMAKE_BINARY_DIR}/docs/
+    SOURCES ${DOCS_FILES}
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/docs
     )
-  install(FILES ${CMAKE_BINARY_DIR}/MapDGuide.pdf DESTINATION docs)
-  list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/MapDGuide.pdf)
-  file(DOWNLOAD ${MAPD_IMMERSE_DOCS_URL} ${CMAKE_BINARY_DIR}/ImmerseUserGuide.pdf)
-  install(FILES ${CMAKE_BINARY_DIR}/ImmerseUserGuide.pdf DESTINATION "docs/")
+  install(DIRECTORY ${CMAKE_BINARY_DIR}/docs/ DESTINATION docs)
+  list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_SOURCE_DIR}/docs/build/)
+  list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/docs/)
 elseif(ENABLE_DOCS)
-  message(WARNING "pandoc or pdflatex not found. Skipping PDF docs.")
+  message(WARNING "pip, virtualenv, or pdflatex not found. Skipping generating docs.")
 endif()
-install(FILES ${CMAKE_BINARY_DIR}/docs/MapDGuide.rst DESTINATION docs)
 install(DIRECTORY docs/release-notes DESTINATION docs)
 
 # systemd
