@@ -442,12 +442,12 @@ extern "C" __device__ void agg_min_float_skip_val_shared(int32_t* agg, const flo
 
 __device__ void atomicSumFltSkipVal(float* address, const float val, const float skip_val) {
   unsigned int* address_as_int = (unsigned*)address;
-  int32_t old = atomicExch(address_as_int, __float_as_int(0.));
-  atomicAdd(address_as_int, __float_as_int(old == __float_as_int(skip_val) ? val : (val + __int_as_float(old))));
+  float old = __int_as_float(atomicExch(address_as_int, __float_as_int(0.)));
+  atomicAdd(address, __float_as_int(old) == __float_as_int(skip_val) ? val : (val + old));
 }
 
 extern "C" __device__ void agg_sum_float_skip_val_shared(int32_t* agg, const float val, const float skip_val) {
-  if (val != skip_val) {
+  if (__float_as_int(val) != __float_as_int(skip_val)) {
     atomicSumFltSkipVal(reinterpret_cast<float*>(agg), val, skip_val);
   }
 }
@@ -455,11 +455,11 @@ extern "C" __device__ void agg_sum_float_skip_val_shared(int32_t* agg, const flo
 __device__ void atomicSumDblSkipVal(double* address, const double val, const double skip_val) {
   unsigned long long int* address_as_ull = (unsigned long long int*)address;
   double old = __longlong_as_double(atomicExch(address_as_ull, __double_as_longlong(0.)));
-  atomicAdd(address_as_ull, __double_as_longlong(old == skip_val ? val : (val + old)));
+  atomicAdd(address, __double_as_longlong(old) == __double_as_longlong(skip_val) ? val : (val + old));
 }
 
 extern "C" __device__ void agg_sum_double_skip_val_shared(int64_t* agg, const double val, const double skip_val) {
-  if (val != skip_val) {
+  if (__double_as_longlong(val) != __double_as_longlong(skip_val)) {
     atomicSumDblSkipVal(reinterpret_cast<double*>(agg), val, skip_val);
   }
 }
