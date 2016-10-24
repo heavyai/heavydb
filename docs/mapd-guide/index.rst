@@ -3,10 +3,8 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Welcome to MapD Guide's documentation!
-======================================
-
-Contents:
+MapD Guide
+==========
 
 .. toctree::
    :maxdepth: 2
