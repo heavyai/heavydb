@@ -30,3 +30,8 @@ The following unnecessary files were removed:
 │   └── main.cc
 ├── waf
 └── wscript
+
+More changes to remove warnings in 9e291215228debe717647f34b8c1f35f62d5522c:
+
+performed to poly2tri/common/shapes.cc: lines 166, 225, 238
+poly2tri/sweep/sweep.cc: line 772
