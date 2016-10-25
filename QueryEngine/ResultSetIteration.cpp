@@ -553,8 +553,7 @@ bool ResultSet::isNull(const SQLTypeInfo& ti, const InternalTargetValue& val) {
     return val.i1 == *reinterpret_cast<const int64_t*>(&null_val);
   }
   if (val.isPair()) {
-    CHECK(val.i2);
-    return pair_to_double({val.i1, val.i2}, ti) == NULL_DOUBLE;
+    return !val.i2 || pair_to_double({val.i1, val.i2}, ti) == NULL_DOUBLE;
   }
   if (val.isStr()) {
     return false;
