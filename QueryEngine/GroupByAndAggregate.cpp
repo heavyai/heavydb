@@ -151,22 +151,23 @@ std::vector<ColumnLazyFetchInfo> QueryExecutionContext::getColLazyFetchInfo(
   return col_lazy_fetch_info;
 }
 
-void QueryExecutionContext::initColumnPerRow(int8_t* row_ptr,
+void QueryExecutionContext::initColumnPerRow(const QueryMemoryDescriptor& query_mem_desc,
+                                             int8_t* row_ptr,
                                              const size_t bin,
                                              const int64_t* init_vals,
                                              const std::vector<ssize_t>& bitmap_sizes) {
   int8_t* col_ptr = row_ptr;
-  for (size_t col_idx = 0; col_idx < query_mem_desc_.agg_col_widths.size();
-       col_ptr += query_mem_desc_.getNextColOffInBytes(col_ptr, bin, col_idx++)) {
+  for (size_t col_idx = 0; col_idx < query_mem_desc.agg_col_widths.size();
+       col_ptr += query_mem_desc.getNextColOffInBytes(col_ptr, bin, col_idx++)) {
     const ssize_t bm_sz{bitmap_sizes[col_idx]};
     int64_t init_val{0};
     if (!bm_sz) {
       init_val = init_vals[col_idx];
     } else {
-      CHECK_EQ(static_cast<size_t>(query_mem_desc_.agg_col_widths[col_idx].compact), sizeof(int64_t));
+      CHECK_EQ(static_cast<size_t>(query_mem_desc.agg_col_widths[col_idx].compact), sizeof(int64_t));
       init_val = bm_sz > 0 ? allocateCountDistinctBitmap(bm_sz) : allocateCountDistinctSet();
     }
-    switch (query_mem_desc_.agg_col_widths[col_idx].compact) {
+    switch (query_mem_desc.agg_col_widths[col_idx].compact) {
       case 1:
         *col_ptr = static_cast<int8_t>(init_val);
         break;
@@ -231,12 +232,16 @@ void QueryExecutionContext::initGroups(int64_t* groups_buffer,
 
   check_total_bitmap_memory(agg_bitmap_size, groups_buffer_entry_count, keyless, warp_size);
 
+  const auto query_mem_desc_fixedup = can_use_result_set(query_mem_desc_, device_type_)
+                                          ? ResultSet::fixupQueryMemoryDescriptor(query_mem_desc_)
+                                          : query_mem_desc_;
+
   if (keyless) {
     CHECK(warp_size >= 1);
     CHECK(key_qw_count == 1);
     for (size_t warp_idx = 0; warp_idx < warp_size; ++warp_idx) {
       for (size_t bin = 0; bin < static_cast<size_t>(groups_buffer_entry_count); ++bin, buffer_ptr += row_size) {
-        initColumnPerRow(&buffer_ptr[col_base_off], bin, init_vals, agg_bitmap_size);
+        initColumnPerRow(query_mem_desc_fixedup, &buffer_ptr[col_base_off], bin, init_vals, agg_bitmap_size);
       }
     }
     return;
@@ -246,7 +251,7 @@ void QueryExecutionContext::initGroups(int64_t* groups_buffer,
     for (size_t key_idx = 0; key_idx < key_qw_count; ++key_idx) {
       reinterpret_cast<int64_t*>(buffer_ptr)[key_idx] = EMPTY_KEY_64;
     }
-    initColumnPerRow(&buffer_ptr[col_base_off], bin, init_vals, agg_bitmap_size);
+    initColumnPerRow(query_mem_desc_fixedup, &buffer_ptr[col_base_off], bin, init_vals, agg_bitmap_size);
   }
 }
 
