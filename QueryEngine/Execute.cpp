@@ -3459,7 +3459,7 @@ RowSetPtr Executor::reduceMultiDeviceResultSets(
     const auto first_result = first->getResultSet();
     CHECK(first_result);
     auto query_mem_desc = first_result->getQueryMemDesc();
-    query_mem_desc.entry_count = total_entry_count * 2;
+    query_mem_desc.entry_count = total_entry_count;
     reduced_results = std::make_shared<ResultSet>(
         first_result->getTargetInfos(), ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, this);
     auto result_storage = reduced_results->allocateStorage(plan_state_->init_agg_vals_);
