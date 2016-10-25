@@ -3446,7 +3446,7 @@ RowSetPtr Executor::reduceMultiDeviceResultSets(
   const auto& first = boost::get<RowSetPtr>(results_per_device.front().first);
   CHECK(first);
 
-  if (query_mem_desc.hash_type == GroupByColRangeType::MultiCol) {
+  if (query_mem_desc.hash_type == GroupByColRangeType::MultiCol && results_per_device.size() > 1) {
     const auto total_entry_count =
         std::accumulate(results_per_device.begin(),
                         results_per_device.end(),
