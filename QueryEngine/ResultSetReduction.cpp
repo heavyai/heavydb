@@ -82,8 +82,24 @@ void ResultSetStorage::reduce(const ResultSetStorage& that) const {
   auto that_buff = that.buff_;
   CHECK(that_buff);
   if (query_mem_desc_.hash_type == GroupByColRangeType::MultiCol) {
-    for (size_t i = 0; i < that.query_mem_desc_.entry_count; ++i) {
-      reduceOneEntryBaseline(this_buff, that_buff, i, that.query_mem_desc_.entry_count);
+    if (use_multithreaded_reduction(that.query_mem_desc_.entry_count)) {
+      const size_t thread_count = cpu_threads();
+      std::vector<std::future<void>> reduction_threads;
+      for (size_t thread_idx = 0; thread_idx < thread_count; ++thread_idx) {
+        reduction_threads.emplace_back(
+            std::async(std::launch::async, [this, thread_idx, thread_count, this_buff, that_buff, &that] {
+              for (size_t i = thread_idx; i < that.query_mem_desc_.entry_count; i += thread_count) {
+                reduceOneEntryBaseline(this_buff, that_buff, i, that.query_mem_desc_.entry_count);
+              }
+            }));
+      }
+      for (auto& reduction_thread : reduction_threads) {
+        reduction_thread.get();
+      }
+    } else {
+      for (size_t i = 0; i < that.query_mem_desc_.entry_count; ++i) {
+        reduceOneEntryBaseline(this_buff, that_buff, i, that.query_mem_desc_.entry_count);
+      }
     }
     return;
   }
@@ -224,7 +240,8 @@ GroupValueInfo get_matching_group_value_columnar_reduction(int64_t* groups_buffe
                                                            const uint32_t key_qw_count,
                                                            const size_t entry_count) {
   auto off = h;
-  if (groups_buffer[off] == EMPTY_KEY_64) {
+  const auto old_key = __sync_val_compare_and_swap(&groups_buffer[off], EMPTY_KEY_64, *key);
+  if (old_key == EMPTY_KEY_64) {
     for (size_t i = 0; i < key_qw_count; ++i) {
       groups_buffer[off] = key[i];
       off += entry_count;
@@ -270,7 +287,8 @@ GroupValueInfo get_matching_group_value_reduction(int64_t* groups_buffer,
                                                   const uint32_t row_size_quad,
                                                   const int64_t* init_vals) {
   auto off = h * row_size_quad;
-  if (groups_buffer[off] == EMPTY_KEY_64) {
+  const auto old_key = __sync_val_compare_and_swap(&groups_buffer[off], EMPTY_KEY_64, *key);
+  if (old_key == EMPTY_KEY_64) {
     memcpy(groups_buffer + off, key, key_qw_count * sizeof(*key));
     return {groups_buffer + off + key_qw_count, true};
   }
