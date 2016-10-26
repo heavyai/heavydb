@@ -1271,6 +1271,10 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
             (!ra_exe_unit_.groupby_exprs.front()->get_type_info().is_string() &&
              !expr_is_rowid(ra_exe_unit_.groupby_exprs.front().get(), *executor_->catalog_))) &&
            col_range_info.max >= col_range_info.min + max_entry_count && !col_range_info.bucket)) {
+        if (g_enable_watchdog && col_range_info.hash_type_ == GroupByColRangeType::OneColKnownRange &&
+            col_range_info.max >= col_range_info.min + max_entry_count && !col_range_info.bucket) {
+          throw WatchdogException("The range of the column is too big");
+        }
         const auto hash_type =
             (render_output || ra_exe_unit_.scan_limit) ? GroupByColRangeType::MultiCol : col_range_info.hash_type_;
         size_t small_group_slots =
