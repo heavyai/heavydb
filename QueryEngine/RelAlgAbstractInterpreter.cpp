@@ -646,7 +646,7 @@ class RANodeIterator : public std::vector<std::shared_ptr<RelAlgNode>>::const_it
       } break;
       case AdvancingMode::InOrder:
         for (size_t i = 0; i != owner_.size(); ++i) {
-          if (!vistied_.count(i)) {
+          if (!visited_.count(i)) {
             super = owner_.begin();
             std::advance(super, i);
             return;
@@ -659,10 +659,10 @@ class RANodeIterator : public std::vector<std::shared_ptr<RelAlgNode>>::const_it
     }
   }
 
-  bool allVisited() { return vistied_.size() == nodeCount_; }
+  bool allVisited() { return visited_.size() == nodeCount_; }
 
   const ElementType& operator*() {
-    vistied_.insert(size_t(*this));
+    visited_.insert(size_t(*this));
     Super& super = *this;
     return *super;
   }
@@ -672,7 +672,7 @@ class RANodeIterator : public std::vector<std::shared_ptr<RelAlgNode>>::const_it
  private:
   const Container& owner_;
   const size_t nodeCount_;
-  std::unordered_set<size_t> vistied_;
+  std::unordered_set<size_t> visited_;
 };
 
 void coalesce_nodes(std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept {
