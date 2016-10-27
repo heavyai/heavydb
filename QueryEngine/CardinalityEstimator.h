@@ -41,6 +41,7 @@ class NDVEstimator : public Analyzer::Expr {
  private:
   const std::vector<std::shared_ptr<const Analyzer::Expr>> expr_tuple_;
 };
-}
+
+}  // Analyzer
 
 #endif  // QUERYENGINE_CARDINALITYESTIMATOR_H

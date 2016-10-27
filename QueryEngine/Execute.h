@@ -4,10 +4,10 @@
 #include "BufferCompaction.h"
 #include "GroupByAndAggregate.h"
 #include "InValuesBitmap.h"
-#include "InputDescriptors.h"
 #include "InputMetadata.h"
 #include "JoinHashTable.h"
 #include "NvidiaKernel.h"
+#include "RelAlgExecutionUnit.h"
 #include "TargetMetaInfo.h"
 
 #include "../Analyzer/Analyzer.h"
@@ -37,7 +37,6 @@
 #include <unistd.h>
 #include <unordered_map>
 #include <unordered_set>
-#include <vector>
 
 extern bool g_enable_watchdog;
 
@@ -221,32 +220,6 @@ class TooManyLiterals : public std::runtime_error {
 class CompilationRetryNoCompaction : public std::runtime_error {
  public:
   CompilationRetryNoCompaction() : std::runtime_error("CompilationRetryNoCompaction") {}
-};
-
-enum class SortAlgorithm { Default, SpeculativeTopN };
-
-struct SortInfo {
-  const std::list<Analyzer::OrderEntry> order_entries;
-  const SortAlgorithm algorithm;
-  const size_t limit;
-  const size_t offset;
-};
-
-struct RelAlgExecutionUnit {
-  const std::vector<InputDescriptor> input_descs;
-  const std::vector<InputDescriptor> extra_input_descs;
-  const std::list<std::shared_ptr<const InputColDescriptor>> input_col_descs;
-  const std::list<std::shared_ptr<Analyzer::Expr>> simple_quals;
-  const std::list<std::shared_ptr<Analyzer::Expr>> quals;
-  const JoinType join_type;
-  const std::vector<std::pair<int, size_t>> join_dimensions;
-  const std::list<std::shared_ptr<Analyzer::Expr>> inner_join_quals;
-  const std::list<std::shared_ptr<Analyzer::Expr>> outer_join_quals;
-  const std::list<std::shared_ptr<Analyzer::Expr>> groupby_exprs;
-  const std::vector<Analyzer::Expr*> target_exprs;
-  const std::vector<Analyzer::Expr*> orig_target_exprs;
-  const SortInfo sort_info;
-  const size_t scan_limit;
 };
 
 class ExtensionFunction;
