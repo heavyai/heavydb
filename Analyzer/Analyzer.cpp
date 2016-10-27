@@ -758,8 +758,8 @@ void Constant::cast_from_string(const SQLTypeInfo& new_type_info) {
 }
 
 void Constant::cast_to_string(const SQLTypeInfo& str_type_info) {
-  constval.stringval = new std::string();
-  *constval.stringval = DatumToString(constval, type_info);
+  const auto str_val = DatumToString(constval, type_info);
+  constval.stringval = new std::string(str_val);
   if (str_type_info.get_type() != kTEXT &&
       constval.stringval->length() > static_cast<size_t>(str_type_info.get_dimension())) {
     // truncate the string
