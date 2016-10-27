@@ -127,6 +127,10 @@ final static Logger MAPDLOGGER = LoggerFactory.getLogger(CalciteDirect.class);
     }
     String relAlgebra;
     try {
+      if (Thread.currentThread().getContextClassLoader() == null) {
+        ClassLoader cl = ClassLoader.getSystemClassLoader();
+        Thread.currentThread().setContextClassLoader(cl);
+      }
       relAlgebra = parser.getRelAlgebra(sqlText, legacySyntax, mapDUser);
       MAPDLOGGER.debug("After get relalgebra");
     } catch (SqlParseException ex) {
