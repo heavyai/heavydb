@@ -60,7 +60,7 @@ int64_t parse_numeric(const std::string& s, SQLTypeInfo& ti) {
     if (before_dot.length() + ti.get_scale() > static_cast<size_t>(ti.get_dimension()))
       throw std::runtime_error("numeric value " + s + " exceeds the maximum precision of " +
                                std::to_string(ti.get_dimension()));
-    for (size_t i = 0; i < after_dot.length() - static_cast<size_t>(ti.get_scale()); i++)
+    for (ssize_t i = 0; i < static_cast<ssize_t>(after_dot.length()) - ti.get_scale(); i++)
       fraction /= 10;  // truncate the digits after decimal point.
   }
   // the following loop can be made more efficient if needed
