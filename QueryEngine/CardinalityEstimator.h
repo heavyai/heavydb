@@ -9,6 +9,8 @@
 #ifndef QUERYENGINE_CARDINALITYESTIMATOR_H
 #define QUERYENGINE_CARDINALITYESTIMATOR_H
 
+#include "RelAlgExecutionUnit.h"
+
 #include "../Analyzer/Analyzer.h"
 
 #include <glog/logging.h>
@@ -23,7 +25,7 @@ namespace Analyzer {
  */
 class NDVEstimator : public Analyzer::Expr {
  public:
-  NDVEstimator(const std::vector<std::shared_ptr<const Analyzer::Expr>>& expr_tuple)
+  NDVEstimator(const std::list<std::shared_ptr<const Analyzer::Expr>>& expr_tuple)
       : Expr(SQLTypeInfo(kINT, true)), expr_tuple_(expr_tuple) {}
 
   std::shared_ptr<Analyzer::Expr> deep_copy() const override {
@@ -39,9 +41,11 @@ class NDVEstimator : public Analyzer::Expr {
   void print() const override { CHECK(false); }
 
  private:
-  const std::vector<std::shared_ptr<const Analyzer::Expr>> expr_tuple_;
+  const std::list<std::shared_ptr<const Analyzer::Expr>> expr_tuple_;
 };
 
 }  // Analyzer
+
+RelAlgExecutionUnit create_ndv_execution_unit(const RelAlgExecutionUnit&);
 
 #endif  // QUERYENGINE_CARDINALITYESTIMATOR_H

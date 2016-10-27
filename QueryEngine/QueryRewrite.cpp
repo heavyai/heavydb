@@ -127,6 +127,7 @@ RelAlgExecutionUnit QueryRewriter::rewriteConstrainedByIn(const std::shared_ptr<
           new_groupby_list,
           new_target_exprs,
           ra_exe_unit_.orig_target_exprs,
+          nullptr,
           ra_exe_unit_.sort_info,
           ra_exe_unit_.scan_limit};
 }

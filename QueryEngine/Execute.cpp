@@ -335,6 +335,7 @@ RowSetPtr Executor::executeSelectPlan(const Planner::Plan* plan,
         groupby_exprs,
         target_exprs,
         {},
+        nullptr,
         {order_entries, SortAlgorithm::Default, static_cast<size_t>(limit), static_cast<size_t>(offset)},
         scan_total_limit};
     QueryRewriter query_rewriter(ra_exe_unit_in, query_infos, this, agg_plan);
@@ -3608,6 +3609,7 @@ RowSetPtr Executor::executeResultPlan(const Planner::Result* result_plan,
                                                   agg_plan->get_groupby_list(),
                                                   get_agg_target_exprs(agg_plan),
                                                   {},
+                                                  nullptr,
                                                   {{}, SortAlgorithm::Default, 0, 0},
                                                   0};
   QueryRewriter query_rewriter(ra_exe_unit_in, query_infos, this, result_plan);
@@ -3646,6 +3648,7 @@ RowSetPtr Executor::executeResultPlan(const Planner::Result* result_plan,
                                         {nullptr},
                                         get_agg_target_exprs(result_plan),
                                         {},
+                                        nullptr,
                                         {
                                          order_entries, SortAlgorithm::Default, 0, 0,
                                         },

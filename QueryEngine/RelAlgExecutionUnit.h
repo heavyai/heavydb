@@ -25,6 +25,12 @@ struct SortInfo {
   const size_t offset;
 };
 
+namespace Analyzer {
+
+class NDVEstimator;
+
+}  // Analyzer
+
 struct RelAlgExecutionUnit {
   const std::vector<InputDescriptor> input_descs;
   const std::vector<InputDescriptor> extra_input_descs;
@@ -38,6 +44,7 @@ struct RelAlgExecutionUnit {
   const std::list<std::shared_ptr<Analyzer::Expr>> groupby_exprs;
   const std::vector<Analyzer::Expr*> target_exprs;
   const std::vector<Analyzer::Expr*> orig_target_exprs;
+  const std::shared_ptr<const Analyzer::NDVEstimator> estimator;
   const SortInfo sort_info;
   const size_t scan_limit;
 };
