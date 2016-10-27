@@ -4489,10 +4489,10 @@ const int8_t* Executor::ExecutionDispatch::getColumn(const InputColDescriptor* c
       }
       sub_key = {frag_id};
       if (frag_id_to_result.empty() || !frag_id_to_result.count(sub_key)) {
-        frag_id_to_result.insert(
-            std::make_pair(sub_key,
-                           ColumnarResults::createIndexedResults(
-                               *frag_id_to_ref[ref_frag_id], *frag_id_to_iters[frag_id], iter_col_id)));
+        frag_id_to_result.insert(std::make_pair(
+            sub_key,
+            ColumnarResults::createIndexedResults(
+                row_set_mem_owner_, *frag_id_to_ref[ref_frag_id], *frag_id_to_iters[frag_id], iter_col_id)));
       }
     } else {
       sub_key = {frag_id, ref_col_id};
@@ -4514,9 +4514,11 @@ const int8_t* Executor::ExecutionDispatch::getColumn(const InputColDescriptor* c
                                         chunk_iter_holder,
                                         Data_Namespace::CPU_LEVEL,
                                         device_id);
-        ColumnarResults ref_values(col_buffer, fragment.numTuples, chunk_meta_it->second.sqlType);
-        frag_id_to_result.insert(std::make_pair(
-            sub_key, ColumnarResults::createIndexedResults(ref_values, *frag_id_to_iters[frag_id], iter_col_id)));
+        ColumnarResults ref_values(row_set_mem_owner_, col_buffer, fragment.numTuples, chunk_meta_it->second.sqlType);
+        frag_id_to_result.insert(
+            std::make_pair(sub_key,
+                           ColumnarResults::createIndexedResults(
+                               row_set_mem_owner_, ref_values, *frag_id_to_iters[frag_id], iter_col_id)));
       }
       ref_col_id_for_cache = 0;
     }
@@ -4925,6 +4927,27 @@ std::vector<const int8_t*> Executor::fetchIterTabFrags(const size_t frag_id,
   return frag_iter_buffers;
 }
 
+namespace {
+
+const ColumnDescriptor* try_get_column_descriptor(const InputColDescriptor* col_desc,
+                                                  const Catalog_Namespace::Catalog& cat) {
+  const auto ind_col = dynamic_cast<const IndirectInputColDescriptor*>(col_desc);
+  const int ref_table_id = ind_col ? ind_col->getIndirectDesc().getTableId() : col_desc->getScanDesc().getTableId();
+  const int ref_col_id = ind_col ? ind_col->getRefColIndex() : col_desc->getColId();
+  return get_column_descriptor_maybe(ref_col_id, ref_table_id, cat);
+}
+
+const SQLTypeInfo get_column_type(const InputColDescriptor* col_desc,
+                                  const ColumnDescriptor* cd,
+                                  const TemporaryTables* temporary_tables) {
+  const auto ind_col = dynamic_cast<const IndirectInputColDescriptor*>(col_desc);
+  const int ref_table_id = ind_col ? ind_col->getIndirectDesc().getTableId() : col_desc->getScanDesc().getTableId();
+  const int ref_col_id = ind_col ? ind_col->getRefColIndex() : col_desc->getColId();
+  return get_column_type(ref_col_id, ref_table_id, cd, temporary_tables);
+}
+
+}  // namespace
+
 std::pair<std::vector<std::vector<const int8_t*>>, std::vector<std::vector<const int8_t*>>> Executor::fetchChunks(
     const ExecutionDispatch& execution_dispatch,
     const RelAlgExecutionUnit& ra_exe_unit,
@@ -4956,7 +4979,7 @@ std::pair<std::vector<std::vector<const int8_t*>>, std::vector<std::vector<const
     for (const auto& col_id : col_global_ids) {
       CHECK(col_id);
       const int table_id = col_id->getScanDesc().getTableId();
-      const auto cd = get_column_descriptor_maybe(col_id->getColId(), table_id, cat);
+      const auto cd = try_get_column_descriptor(col_id.get(), cat);
       if (cd && cd->isVirtualCol) {
         CHECK_EQ("rowid", cd->columnName);
         continue;
@@ -4974,8 +4997,7 @@ std::pair<std::vector<std::vector<const int8_t*>>, std::vector<std::vector<const
           plan_state_->columns_to_fetch_.end()) {
         memory_level_for_column = Data_Namespace::CPU_LEVEL;
       }
-
-      const auto col_type = get_column_type(col_id->getColId(), table_id, cd, temporary_tables_);
+      const auto col_type = get_column_type(col_id.get(), cd, temporary_tables_);
       const bool is_real_string = col_type.is_string() && col_type.get_compression() == kENCODING_NONE;
       if (col_id->getScanDesc().getSourceType() == InputSourceType::RESULT) {
         CHECK(!is_real_string && !col_type.is_array());
