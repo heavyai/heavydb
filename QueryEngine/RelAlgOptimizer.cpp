@@ -136,6 +136,26 @@ void cleanup_dead_nodes(std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
   nodes.swap(new_nodes);
 }
 
+std::unordered_set<const RelProject*> get_visible_projects(const RelAlgNode* root) {
+  if (auto project = dynamic_cast<const RelProject*>(root)) {
+    return {project};
+  }
+
+  if (dynamic_cast<const RelAggregate*>(root) || dynamic_cast<const RelScan*>(root)) {
+    return {};
+  }
+
+  if (auto join = dynamic_cast<const RelJoin*>(root)) {
+    auto lhs_projs = get_visible_projects(join->getInput(0));
+    auto rhs_projs = get_visible_projects(join->getInput(1));
+    lhs_projs.insert(rhs_projs.begin(), rhs_projs.end());
+    return lhs_projs;
+  }
+
+  CHECK(dynamic_cast<const RelFilter*>(root) || dynamic_cast<const RelSort*>(root));
+  return get_visible_projects(root->getInput(0));
+}
+
 }  // namespace
 
 // For now, the only target to eliminate is restricted to project-aggregate pair between scan/sort and join
@@ -177,9 +197,10 @@ void eliminate_identical_copy(std::vector<std::shared_ptr<RelAlgNode>>& nodes) n
   decltype(copies)().swap(copies);
 
   std::unordered_set<const RelProject*> projects;
+  auto visible_projs = get_visible_projects(nodes.back().get());
   for (auto node : nodes) {
     auto project = std::dynamic_pointer_cast<RelProject>(node);
-    if (project && project->isSimple() && !project->isRenaming()) {
+    if (project && project->isSimple() && (!visible_projs.count(project.get()) || !project->isRenaming())) {
       projects.insert(project.get());
     }
   }
