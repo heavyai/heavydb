@@ -179,7 +179,7 @@ void eliminate_identical_copy(std::vector<std::shared_ptr<RelAlgNode>>& nodes) n
   std::unordered_set<const RelProject*> projects;
   for (auto node : nodes) {
     auto project = std::dynamic_pointer_cast<RelProject>(node);
-    if (project && project->isSimple()) {
+    if (project && project->isSimple() && !project->isRenaming()) {
       projects.insert(project.get());
     }
   }

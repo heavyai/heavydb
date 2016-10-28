@@ -136,6 +136,49 @@ bool RelProject::isIdentity() const {
   return true;
 }
 
+namespace {
+
+bool isRenamedInput(const RelAlgNode* node, const size_t index, const std::string& new_name) {
+  CHECK_LT(index, node->size());
+  if (auto join = dynamic_cast<const RelJoin*>(node)) {
+    CHECK_EQ(size_t(2), join->inputCount());
+    const auto lhs_size = join->getInput(0)->size();
+    if (index < lhs_size) {
+      return isRenamedInput(join->getInput(0), index, new_name);
+    }
+    CHECK_GE(index, lhs_size);
+    return isRenamedInput(join->getInput(0), index - lhs_size, new_name);
+  }
+
+  if (auto scan = dynamic_cast<const RelScan*>(node)) {
+    return new_name != scan->getFieldName(index);
+  }
+
+  if (auto aggregate = dynamic_cast<const RelAggregate*>(node)) {
+    return new_name != aggregate->getFieldName(index);
+  }
+
+  if (auto project = dynamic_cast<const RelProject*>(node)) {
+    return new_name != project->getFieldName(index);
+  }
+
+  CHECK(dynamic_cast<const RelSort*>(node) || dynamic_cast<const RelFilter*>(node));
+  return isRenamedInput(node->getInput(0), index, new_name);
+}
+
+}  // namespace
+
+bool RelProject::isRenaming() const {
+  if (!isSimple())
+    return false;
+  for (size_t i = 0; i < fields_.size(); ++i) {
+    if (isRenamedInput(inputs_[0].get(), i, fields_[i])) {
+      return true;
+    }
+  }
+  return false;
+}
+
 void RelJoin::replaceInput(std::shared_ptr<const RelAlgNode> old_input, std::shared_ptr<const RelAlgNode> input) {
   RelAlgNode::replaceInput(old_input, input);
   RexRebindInputsVisitor rebind_inputs(old_input.get(), input.get());

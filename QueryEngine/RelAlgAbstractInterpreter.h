@@ -472,6 +472,8 @@ class RelProject : public RelAlgNode {
 
   bool isIdentity() const;
 
+  bool isRenaming() const;
+
   size_t size() const override { return scalar_exprs_.size(); }
 
   const RexScalar* getProjectAt(const size_t idx) const {
