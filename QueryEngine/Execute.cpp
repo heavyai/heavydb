@@ -5928,8 +5928,13 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
   return Executor::CompilationResult{
       co.device_type_ == ExecutorDeviceType::CPU
           ? optimizeAndCodegenCPU(query_func, multifrag_query_func, live_funcs, cgen_state_->module_, co)
-          : optimizeAndCodegenGPU(
-                query_func, multifrag_query_func, live_funcs, cgen_state_->module_, is_group_by, cuda_mgr, co),
+          : optimizeAndCodegenGPU(query_func,
+                                  multifrag_query_func,
+                                  live_funcs,
+                                  cgen_state_->module_,
+                                  is_group_by || ra_exe_unit.estimator,
+                                  cuda_mgr,
+                                  co),
       cgen_state_->getLiterals(),
       query_mem_desc,
       output_columnar,
@@ -6420,7 +6425,8 @@ std::vector<void*> Executor::optimizeAndCodegenGPU(llvm::Function* query_func,
         if (get_gv_call.getCalledFunction()->getName() == "get_group_value" ||
             get_gv_call.getCalledFunction()->getName() == "get_matching_group_value_perfect_hash" ||
             get_gv_call.getCalledFunction()->getName() == "string_decode" ||
-            get_gv_call.getCalledFunction()->getName() == "array_size") {
+            get_gv_call.getCalledFunction()->getName() == "array_size" ||
+            get_gv_call.getCalledFunction()->getName() == "linear_probabilistic_count") {
           llvm::AttributeSet no_inline_attrs;
           no_inline_attrs = no_inline_attrs.addAttribute(cgen_state_->context_, 0, llvm::Attribute::NoInline);
           cgen_state_->row_func_->setAttributes(no_inline_attrs);

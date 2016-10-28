@@ -837,9 +837,9 @@ extern "C" ALWAYS_INLINE DEVICE int32_t
   return str_len;
 }
 
-extern "C" ALWAYS_INLINE void linear_probabilistic_count(int8_t* bitmap,
-                                                         const int8_t* key_bytes,
-                                                         const uint32_t key_len) {
+extern "C" NEVER_INLINE void linear_probabilistic_count(int8_t* bitmap,
+                                                        const int8_t* key_bytes,
+                                                        const uint32_t key_len) {
   // TODO
   abort();
 }
