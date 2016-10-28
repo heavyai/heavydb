@@ -136,6 +136,7 @@ inline SQLTypes to_sql_type(const std::string& type_name) {
 
 namespace Analyzer {
 
+class Constant;
 class Expr;
 
 }  // Analyzer
@@ -145,5 +146,7 @@ SQLTypeInfo get_agg_type(const SQLAgg agg_kind, const Analyzer::Expr* arg_expr);
 ExtractField to_datepart_field(const std::string&);
 
 DatetruncField to_datediff_field(const std::string&);
+
+std::shared_ptr<Analyzer::Constant> make_fp_constant(const int64_t val, const SQLTypeInfo& ti);
 
 #endif  // QUERYENGINE_CALCITEDESERIALIZERUTILS_H

@@ -65,3 +65,18 @@ DatetruncField to_datediff_field(const std::string& field) {
     throw std::runtime_error("Unsupported field in DATEPART function: " + field);
   return fieldno;
 }
+
+std::shared_ptr<Analyzer::Constant> make_fp_constant(const int64_t val, const SQLTypeInfo& ti) {
+  Datum d;
+  switch (ti.get_type()) {
+    case kFLOAT:
+      d.floatval = val;
+      break;
+    case kDOUBLE:
+      d.doubleval = val;
+      break;
+    default:
+      CHECK(false);
+  }
+  return makeExpr<Analyzer::Constant>(ti, false, d);
+}

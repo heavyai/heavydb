@@ -439,6 +439,9 @@ class CalciteAdapter {
         const int precision = lit_ti.get_precision();
         const int scale = lit_ti.get_scale();
         const auto& target_ti = std::get<2>(parsed_lit);
+        if (target_ti.is_fp() && !scale) {
+          return make_fp_constant(val, target_ti);
+        }
         auto lit_expr =
             scale ? Parser::FixedPtLiteral::analyzeValue(val, scale, precision) : Parser::IntLiteral::analyzeValue(val);
         return scale && lit_ti != target_ti ? lit_expr->add_cast(target_ti) : lit_expr;

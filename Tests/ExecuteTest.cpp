@@ -1331,6 +1331,8 @@ TEST(Select, CastFromLiteral) {
     c("SELECT CAST(2.3 AS DOUBLE) FROM test;", dt);
     c("SELECT CAST(2.3 AS DECIMAL(2, 1)) FROM test;", dt);
     c("SELECT CAST(2.3 AS NUMERIC(2, 1)) FROM test;", dt);
+    c("SELECT CAST(CAST(10 AS float) / CAST(3600 as float) AS float) FROM test LIMIT 1;", dt);
+    c("SELECT CAST(CAST(10 AS double) / CAST(3600 as double) AS double) FROM test LIMIT 1;", dt);
   }
 }
 

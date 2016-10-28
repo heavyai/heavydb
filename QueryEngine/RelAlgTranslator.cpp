@@ -97,6 +97,9 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLiteral(const RexLite
       const auto val = rex_literal->getVal<int64_t>();
       const int precision = rex_literal->getPrecision();
       const int scale = rex_literal->getScale();
+      if (target_ti.is_fp() && !scale) {
+        return make_fp_constant(val, target_ti);
+      }
       auto lit_expr =
           scale ? Parser::FixedPtLiteral::analyzeValue(val, scale, precision) : Parser::IntLiteral::analyzeValue(val);
       return scale && lit_ti != target_ti ? lit_expr->add_cast(target_ti) : lit_expr;
