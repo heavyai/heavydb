@@ -275,11 +275,11 @@ class MapDResultSet implements java.sql.ResultSet {
       case STR:
         return Double.valueOf(getString(columnIndex));
       case TIME:
-        return (double) getTime(columnIndex).toInstant().getEpochSecond();
+        return (double) getTime(columnIndex).getTime();
       case TIMESTAMP:
-        return (double) getTimestamp(columnIndex).toInstant().getEpochSecond();
+        return (double) getTimestamp(columnIndex).getTime();
       case DATE:
-        return (double) getDate(columnIndex).toInstant().getEpochSecond();
+        return (double) getDate(columnIndex).getTime();
       case BOOL:
         return (double) (getBoolean(columnIndex) ? 1 : 0);
       default:
