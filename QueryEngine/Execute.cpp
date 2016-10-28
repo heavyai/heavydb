@@ -6374,6 +6374,7 @@ declare i8 @string_eq_nullable(i8*, i32, i8*, i32, i8);
 declare i8 @string_ne_nullable(i8*, i32, i8*, i32, i8);
 declare i1 @regexp_like(i8*, i32, i8*, i32, i8);
 declare i8 @regexp_like_nullable(i8*, i32, i8*, i32, i8, i8);
+declare void @linear_probabilistic_count(i8*, i8*, i32);
 declare i32 @record_error_code(i32, i32*);
 declare void @force_sync();
 )" +

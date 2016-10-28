@@ -532,6 +532,12 @@ extern "C" __device__ uint64_t string_decode(int8_t* chunk_iter_, int64_t pos) {
                               (static_cast<uint64_t>(vd.length) << 48);
 }
 
+extern "C" __device__ void linear_probabilistic_count(int8_t* bitmap,
+                                                      const int8_t* key_bytes,
+                                                      const uint32_t key_len) {
+  // TODO
+}
+
 extern "C" __device__ void force_sync() {
   __threadfence_block();
 }

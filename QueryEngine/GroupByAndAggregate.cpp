@@ -2425,16 +2425,21 @@ bool GroupByAndAggregate::codegenAggCalls(const std::tuple<llvm::Value*, llvm::V
 void GroupByAndAggregate::codegenEstimator(std::stack<llvm::BasicBlock*>& array_loops,
                                            GroupByAndAggregate::DiamondCodegen& diamond_codegen,
                                            const CompilationOptions& co) {
-  auto key_size_lv = LL_INT(static_cast<int32_t>(query_mem_desc_.group_col_widths.size()));
-  auto group_key = LL_BUILDER.CreateAlloca(llvm::Type::getInt64Ty(LL_CONTEXT), key_size_lv);
+  const auto& estimator_arg = ra_exe_unit_.estimator->getArgument();
+  auto estimator_comp_count_lv = LL_INT(static_cast<int32_t>(estimator_arg.size()));
+  auto estimator_key_lv = LL_BUILDER.CreateAlloca(llvm::Type::getInt64Ty(LL_CONTEXT), estimator_comp_count_lv);
   int32_t subkey_idx = 0;
-  for (const auto group_expr : ra_exe_unit_.estimator->getArgument()) {
-    const auto group_expr_lv =
-        executor_->groupByColumnCodegen(group_expr.get(), co, false, 0, diamond_codegen, array_loops, true);
+  for (const auto estimator_arg_comp : estimator_arg) {
+    const auto estimator_arg_comp_lv =
+        executor_->groupByColumnCodegen(estimator_arg_comp.get(), co, false, 0, diamond_codegen, array_loops, true);
     // store the sub-key to the buffer
-    LL_BUILDER.CreateStore(group_expr_lv, LL_BUILDER.CreateGEP(group_key, LL_INT(subkey_idx++)));
+    LL_BUILDER.CreateStore(estimator_arg_comp_lv, LL_BUILDER.CreateGEP(estimator_key_lv, LL_INT(subkey_idx++)));
   }
-  CHECK(false);
+  const auto int8_ptr_ty = llvm::PointerType::get(get_int_type(8, LL_CONTEXT), 0);
+  const auto bitmap = LL_BUILDER.CreateBitCast(ROW_FUNC->arg_begin(), int8_ptr_ty);
+  const auto key_bytes = LL_BUILDER.CreateBitCast(estimator_key_lv, int8_ptr_ty);
+  auto estimator_comp_bytes_lv = LL_INT(static_cast<int32_t>(estimator_arg.size() * sizeof(int64_t)));
+  emitCall("linear_probabilistic_count", {bitmap, key_bytes, estimator_comp_bytes_lv});
 }
 
 void GroupByAndAggregate::codegenCountDistinct(const size_t target_idx,

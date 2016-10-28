@@ -103,6 +103,8 @@ extern "C" int64_t* get_group_value_one_key(int64_t* groups_buffer,
 
 extern "C" int32_t* get_hash_slot(int32_t* buff, const int64_t key, const int64_t min_key);
 
+extern "C" void linear_probabilistic_count(int8_t* bitmap, const int8_t* key_bytes, const uint32_t key_len);
+
 // Regular fixed_width_*_decode are only available from the JIT,
 // we need to call them for lazy fetch columns -- create wrappers.
 

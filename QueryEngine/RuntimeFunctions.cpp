@@ -837,6 +837,13 @@ extern "C" ALWAYS_INLINE DEVICE int32_t
   return str_len;
 }
 
+extern "C" ALWAYS_INLINE void linear_probabilistic_count(int8_t* bitmap,
+                                                         const int8_t* key_bytes,
+                                                         const uint32_t key_len) {
+  // TODO
+  abort();
+}
+
 extern "C" __attribute__((noinline)) void query_stub_hoisted_literals(const int8_t** col_buffers,
                                                                       const int8_t* literals,
                                                                       const int64_t* num_rows,
