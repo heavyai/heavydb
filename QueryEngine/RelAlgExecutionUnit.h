@@ -14,9 +14,18 @@
 #include "../Shared/sqldefs.h"
 
 #include <list>
+#include <memory>
 #include <vector>
 
 enum class SortAlgorithm { Default, SpeculativeTopN };
+
+namespace Analyzer {
+
+class Expr;
+class NDVEstimator;
+struct OrderEntry;
+
+}  // Analyzer
 
 struct SortInfo {
   const std::list<Analyzer::OrderEntry> order_entries;
@@ -24,12 +33,6 @@ struct SortInfo {
   const size_t limit;
   const size_t offset;
 };
-
-namespace Analyzer {
-
-class NDVEstimator;
-
-}  // Analyzer
 
 struct RelAlgExecutionUnit {
   const std::vector<InputDescriptor> input_descs;

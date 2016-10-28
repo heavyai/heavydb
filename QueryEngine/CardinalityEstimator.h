@@ -25,7 +25,7 @@ namespace Analyzer {
  */
 class NDVEstimator : public Analyzer::Expr {
  public:
-  NDVEstimator(const std::list<std::shared_ptr<const Analyzer::Expr>>& expr_tuple)
+  NDVEstimator(const std::list<std::shared_ptr<Analyzer::Expr>>& expr_tuple)
       : Expr(SQLTypeInfo(kINT, true)), expr_tuple_(expr_tuple) {}
 
   std::shared_ptr<Analyzer::Expr> deep_copy() const override {
@@ -41,7 +41,7 @@ class NDVEstimator : public Analyzer::Expr {
   void print() const override { CHECK(false); }
 
  private:
-  const std::list<std::shared_ptr<const Analyzer::Expr>> expr_tuple_;
+  const std::list<std::shared_ptr<Analyzer::Expr>> expr_tuple_;
 };
 
 }  // Analyzer
