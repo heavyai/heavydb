@@ -142,7 +142,7 @@ std::unordered_set<const RelProject*> get_visible_projects(const RelAlgNode* roo
   }
 
   if (dynamic_cast<const RelAggregate*>(root) || dynamic_cast<const RelScan*>(root)) {
-    return {};
+    return std::unordered_set<const RelProject*>{};
   }
 
   if (auto join = dynamic_cast<const RelJoin*>(root)) {
