@@ -1,6 +1,7 @@
 #include "GroupByAndAggregate.h"
 #include "AggregateUtils.h"
 
+#include "CardinalityEstimator.h"
 #include "ExpressionRange.h"
 #include "ExpressionRewrite.h"
 #include "InPlaceSort.h"
@@ -1876,12 +1877,17 @@ bool GroupByAndAggregate::codegen(llvm::Value* filter_result, const CompilationO
       }
 
     } else {
-      auto arg_it = ROW_FUNC->arg_begin();
-      std::vector<llvm::Value*> agg_out_vec;
-      for (int32_t i = 0; i < get_agg_count(ra_exe_unit_.target_exprs); ++i) {
-        agg_out_vec.push_back(arg_it++);
+      if (ra_exe_unit_.estimator) {
+        std::stack<llvm::BasicBlock*> array_loops;
+        codegenEstimator(array_loops, filter_cfg, co);
+      } else {
+        auto arg_it = ROW_FUNC->arg_begin();
+        std::vector<llvm::Value*> agg_out_vec;
+        for (int32_t i = 0; i < get_agg_count(ra_exe_unit_.target_exprs); ++i) {
+          agg_out_vec.push_back(arg_it++);
+        }
+        can_return_error = codegenAggCalls(std::make_tuple(nullptr, nullptr), agg_out_vec, co);
       }
-      can_return_error = codegenAggCalls(std::make_tuple(nullptr, nullptr), agg_out_vec, co);
     }
   }
 
@@ -2414,6 +2420,21 @@ bool GroupByAndAggregate::codegenAggCalls(const std::tuple<llvm::Value*, llvm::V
   }
 
   return can_return_error;
+}
+
+void GroupByAndAggregate::codegenEstimator(std::stack<llvm::BasicBlock*>& array_loops,
+                                           GroupByAndAggregate::DiamondCodegen& diamond_codegen,
+                                           const CompilationOptions& co) {
+  auto key_size_lv = LL_INT(static_cast<int32_t>(query_mem_desc_.group_col_widths.size()));
+  auto group_key = LL_BUILDER.CreateAlloca(llvm::Type::getInt64Ty(LL_CONTEXT), key_size_lv);
+  int32_t subkey_idx = 0;
+  for (const auto group_expr : ra_exe_unit_.estimator->getArgument()) {
+    const auto group_expr_lv =
+        executor_->groupByColumnCodegen(group_expr.get(), co, false, 0, diamond_codegen, array_loops, true);
+    // store the sub-key to the buffer
+    LL_BUILDER.CreateStore(group_expr_lv, LL_BUILDER.CreateGEP(group_key, LL_INT(subkey_idx++)));
+  }
+  CHECK(false);
 }
 
 void GroupByAndAggregate::codegenCountDistinct(const size_t target_idx,

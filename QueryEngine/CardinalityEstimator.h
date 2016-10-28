@@ -28,6 +28,8 @@ class NDVEstimator : public Analyzer::Expr {
   NDVEstimator(const std::list<std::shared_ptr<Analyzer::Expr>>& expr_tuple)
       : Expr(SQLTypeInfo(kINT, true)), expr_tuple_(expr_tuple) {}
 
+  const std::list<std::shared_ptr<Analyzer::Expr>>& getArgument() const { return expr_tuple_; }
+
   std::shared_ptr<Analyzer::Expr> deep_copy() const override {
     CHECK(false);
     return nullptr;

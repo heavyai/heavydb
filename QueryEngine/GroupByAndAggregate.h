@@ -22,6 +22,7 @@
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/Value.h>
 
+#include <stack>
 #include <vector>
 
 class ReductionRanOutOfSlots : public std::runtime_error {
@@ -535,6 +536,10 @@ class GroupByAndAggregate {
   bool codegenAggCalls(const std::tuple<llvm::Value*, llvm::Value*>& agg_out_ptr_w_idx,
                        const std::vector<llvm::Value*>& agg_out_vec,
                        const CompilationOptions&);
+
+  void codegenEstimator(std::stack<llvm::BasicBlock*>& array_loops,
+                        GroupByAndAggregate::DiamondCodegen& diamond_codegen,
+                        const CompilationOptions&);
 
   void codegenCountDistinct(const size_t target_idx,
                             const Analyzer::Expr* target_expr,

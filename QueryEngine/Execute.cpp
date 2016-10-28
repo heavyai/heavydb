@@ -5786,16 +5786,16 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
   cgen_state_->module_ = read_template_module(cgen_state_->context_);
 
   auto agg_fnames = get_agg_fnames(ra_exe_unit.target_exprs, !ra_exe_unit.groupby_exprs.empty());
+  const auto agg_slot_count = ra_exe_unit.estimator ? size_t(1) : agg_fnames.size();
 
   const bool is_group_by{!query_mem_desc.group_col_widths.empty()};
-  auto query_func = is_group_by
-                        ? query_group_by_template(cgen_state_->module_,
-                                                  is_nested_,
-                                                  co.hoist_literals_,
-                                                  query_mem_desc,
-                                                  co.device_type_,
-                                                  ra_exe_unit.scan_limit)
-                        : query_template(cgen_state_->module_, agg_fnames.size(), is_nested_, co.hoist_literals_);
+  auto query_func = is_group_by ? query_group_by_template(cgen_state_->module_,
+                                                          is_nested_,
+                                                          co.hoist_literals_,
+                                                          query_mem_desc,
+                                                          co.device_type_,
+                                                          ra_exe_unit.scan_limit)
+                                : query_template(cgen_state_->module_, agg_slot_count, is_nested_, co.hoist_literals_);
   bind_pos_placeholders("pos_start", true, query_func, cgen_state_->module_);
   bind_pos_placeholders("group_buff_idx", false, query_func, cgen_state_->module_);
   bind_pos_placeholders("pos_step", false, query_func, cgen_state_->module_);
@@ -5805,7 +5805,7 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
 
   std::vector<llvm::Value*> col_heads;
   std::tie(cgen_state_->row_func_, col_heads) = create_row_function(ra_exe_unit.input_col_descs.size(),
-                                                                    is_group_by ? 0 : agg_fnames.size(),
+                                                                    is_group_by ? 0 : agg_slot_count,
                                                                     co.hoist_literals_,
                                                                     query_func,
                                                                     cgen_state_->module_,
