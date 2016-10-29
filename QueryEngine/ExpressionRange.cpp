@@ -415,7 +415,6 @@ ExpressionRange getExpressionRange(const Analyzer::CaseExpr* case_expr,
   const auto& case_ti = case_expr->get_type_info();
   for (const auto& expr_pair : expr_pair_list) {
     CHECK_EQ(expr_pair.first->get_type_info().get_type(), kBOOLEAN);
-    CHECK(expr_pair.second->get_type_info() == case_ti);
     const auto crt_range = getExpressionRange(expr_pair.second.get(), query_infos, executor);
     if (crt_range.getType() == ExpressionRangeType::Invalid) {
       return ExpressionRange::makeInvalidRange();
