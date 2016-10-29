@@ -199,19 +199,10 @@ double conv_4326_900913_x(const double x) {
 }
 
 EXTENSION_NOINLINE
-double conv_4326_900913_x__(const float x) {
-  return x * 111319.490778;
-}
-
-EXTENSION_NOINLINE
 double conv_4326_900913_y(const double y) {
   return 6378136.99911 * log(tan(.00872664626 * y + .785398163397));
 }
 
-EXTENSION_NOINLINE
-double conv_4326_900913_y__(const float y) {
-  return 6378136.99911 * logf(tanf(.00872664626 * y + .785398163397));
-}
 
 /** @brief  Computes the distance, in meters, between two WGS-84 positions.
   *
