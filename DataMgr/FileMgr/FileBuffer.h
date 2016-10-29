@@ -99,6 +99,15 @@ class FileBuffer : public AbstractBuffer {
   /// Returns the size in bytes of each page in the FileBuffer.
   inline virtual size_t pageSize() const { return pageSize_; }
 
+  /// Returns the size in bytes of the data portion of each page in the FileBuffer.
+  inline virtual size_t pageDataSize() const { return pageDataSize_; }
+
+  /// Returns the size in bytes of the reserved header portion of each page in the FileBuffer.
+  inline virtual size_t reservedHeaderSize() const { return reservedHeaderSize_; }
+
+  /// Returns vector of MultiPages in the FileBuffer.
+  inline virtual std::vector<MultiPage> getMultiPage() const { return multiPages_; }
+
   inline virtual size_t size() const { return size_; }
 
   /// Returns the total number of bytes allocated for the FileBuffer.

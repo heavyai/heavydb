@@ -67,7 +67,8 @@ class FileMgr : public AbstractBufferMgr {  // implements
 
  public:
   /// Constructor
-  FileMgr(const int deviceId, std::string basePath = ".", const size_t defaultPageSize = 2097152, const int epoch = -1);
+  FileMgr(const int deviceId, std::string basePath = ".", const size_t num_reader_threads = 0,
+          const size_t defaultPageSize = 2097152, const int epoch = -1);
 
   /// Destructor
   virtual ~FileMgr();
@@ -111,7 +112,7 @@ class FileMgr : public AbstractBufferMgr {  // implements
 
   inline FileInfo* getFileInfoForFileId(const int fileId) { return files_[fileId]; }
 
-  void init();
+  void init(const size_t num_reader_threads);
 
   /**
    * @brief Obtains free pages -- creates new files if necessary -- of the requested size.
@@ -144,6 +145,12 @@ class FileMgr : public AbstractBufferMgr {  // implements
   inline int epoch() { return epoch_; }
 
   /**
+   * @brief Returns number of threads defined by parameter num-reader-threads
+   * which should be used during initial load and consequent read of data.
+   */
+  inline size_t getNumReaderThreads() { return num_reader_threads_; }
+
+  /**
    * @brief Returns FILE pointer associated with
    * requested fileId
    *
@@ -163,6 +170,7 @@ class FileMgr : public AbstractBufferMgr {  // implements
   std::string basePath_;          /// The OS file system path containing the files.
   std::vector<FileInfo*> files_;  /// A vector of files accessible via a file identifier.
   PageSizeFileMMap fileIndex_;    /// Maps page sizes to FileInfo objects.
+  size_t num_reader_threads_;     /// number of threads used when loading data
   size_t defaultPageSize_;
   unsigned nextFileId_;  /// the index of the next file id
   int epoch_;            /// the current epoch (time of last checkpoint)

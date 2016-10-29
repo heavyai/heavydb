@@ -171,6 +171,7 @@ class MapDHandler : virtual public MapDIf {
               const int num_gpus,
               const int start_gpu,
               const size_t reserved_gpu_mem,
+              const size_t num_reader_threads,
               const LdapMetadata ldapMetadata,
 #ifdef HAVE_CALCITE
               const int calcite_port,
@@ -1865,6 +1866,7 @@ int main(int argc, char** argv) {
   int num_gpus = -1;  // Can be used to override number of gpus detected on system - -1 means do not override
   int start_gpu = 0;
   int tthreadpool_size = 8;
+  size_t num_reader_threads = 1; // number of threads used when loading data
 
   namespace po = boost::program_options;
 
@@ -1923,6 +1925,8 @@ int main(int argc, char** argv) {
   desc_adv.add_options()("tthreadpool-size",
                          po::value<int>(&tthreadpool_size)->default_value(tthreadpool_size),
                          "Server thread pool size. Increasing may adversely affect render performance and stability.");
+  desc_adv.add_options()("num-reader-threads", po::value<size_t>(&num_reader_threads)->default_value(num_reader_threads),
+                         "Number of reader threads to use");
 
   po::positional_options_description positionalOptions;
   positionalOptions.add("data", 1);
@@ -2057,6 +2061,7 @@ int main(int argc, char** argv) {
                                                   num_gpus,
                                                   start_gpu,
                                                   reserved_gpu_mem,
+                                                  num_reader_threads,
                                                   ldapMetadata,
                                                   calcite_port,
                                                   enable_legacy_syntax));
