@@ -9,13 +9,8 @@ extern "C" __device__ void init_group_by_buffer_gpu_impl(int64_t* groups_buffer,
                                                          const uint32_t row_size_quad,
                                                          const bool keyless,
                                                          const int8_t warp_size) {
-#ifdef EXECUTOR_RT
   const int32_t start = blockIdx.x * blockDim.x + threadIdx.x;
   const int32_t step = blockDim.x * gridDim.x;
-#else
-  const int32_t start = threadIdx.x;
-  const int32_t step = blockDim.x;
-#endif
   if (keyless) {
     for (int32_t i = start; i < groups_buffer_entry_count * row_size_quad * static_cast<int32_t>(warp_size);
          i += step) {
@@ -57,13 +52,8 @@ extern "C" __device__ void init_columnar_group_by_buffer_gpu_impl(int64_t* group
                                                                   const bool need_padding,
                                                                   const bool keyless,
                                                                   const int8_t key_size) {
-#ifdef EXECUTOR_RT
   const int32_t start = blockIdx.x * blockDim.x + threadIdx.x;
   const int32_t step = blockDim.x * gridDim.x;
-#else
-  const int32_t start = threadIdx.x;
-  const int32_t step = blockDim.x;
-#endif
 
   int8_t* buffer_ptr = reinterpret_cast<int8_t*>(groups_buffer);
   if (!keyless) {

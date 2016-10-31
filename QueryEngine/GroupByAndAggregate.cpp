@@ -507,8 +507,7 @@ GpuQueryMemory QueryExecutionContext::prepareGroupByDevBuffer(Data_Namespace::Da
   if (render_allocator) {
     CHECK_EQ(size_t(0), render_allocator->getAllocatedSize() % 8);
   }
-  if (query_mem_desc_.lazyInitGroups(ExecutorDeviceType::GPU) &&
-      query_mem_desc_.hash_type != GroupByColRangeType::MultiCol) {
+  if (query_mem_desc_.lazyInitGroups(ExecutorDeviceType::GPU)) {
     CHECK(!render_allocator);
     const size_t step{query_mem_desc_.threadsShareMemory() ? block_size_x : 1};
     size_t groups_buffer_size{query_mem_desc_.getBufferSizeBytes(ExecutorDeviceType::GPU)};
@@ -1872,7 +1871,7 @@ bool QueryMemoryDescriptor::threadsShareMemory() const {
 }
 
 bool QueryMemoryDescriptor::blocksShareMemory() const {
-  if (executor_->isCPUOnly() || render_output) {
+  if (executor_->isCPUOnly() || render_output || hash_type == GroupByColRangeType::MultiCol) {
     return true;
   }
   return usesCachedContext() && !sharedMemBytes(ExecutorDeviceType::GPU) && many_entries(max_val, min_val, bucket);

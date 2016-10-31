@@ -782,10 +782,6 @@ class Executor {
                           const std::list<std::shared_ptr<const InputColDescriptor>>&,
                           const ExecutorDeviceType device_type);
 
-  void bindInitGroupByBuffer(llvm::Function* query_func,
-                             const QueryMemoryDescriptor& query_mem_desc,
-                             const ExecutorDeviceType device_type);
-
   void nukeOldState(const bool allow_lazy_fetch,
                     const JoinInfo& join_info,
                     const std::vector<InputTableInfo>& query_infos,

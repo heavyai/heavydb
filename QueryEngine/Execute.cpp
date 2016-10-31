@@ -4695,7 +4695,8 @@ void Executor::dispatchFragments(const std::function<void(const ExecutorDeviceTy
 
   const auto& query_mem_desc = execution_dispatch.getQueryMemoryDescriptor();
   const bool allow_multifrag =
-      eo.allow_multifrag && (ra_exe_unit.groupby_exprs.empty() || query_mem_desc.usesCachedContext());
+      eo.allow_multifrag && (ra_exe_unit.groupby_exprs.empty() || query_mem_desc.usesCachedContext() ||
+                             query_mem_desc.hash_type == GroupByColRangeType::MultiCol);
 
   if ((device_type == ExecutorDeviceType::GPU) && allow_multifrag && is_agg) {
     // NB: We should never be on this path when the query is retried because of
@@ -5680,9 +5681,6 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
   bind_pos_placeholders("pos_start", true, query_func, cgen_state_->module_);
   bind_pos_placeholders("group_buff_idx", false, query_func, cgen_state_->module_);
   bind_pos_placeholders("pos_step", false, query_func, cgen_state_->module_);
-  if (is_group_by) {
-    bindInitGroupByBuffer(query_func, query_mem_desc, co.device_type_);
-  }
 
   std::vector<llvm::Value*> col_heads;
   std::tie(cgen_state_->row_func_, col_heads) = create_row_function(ra_exe_unit.input_col_descs.size(),
@@ -5944,39 +5942,6 @@ Executor::JoinInfo Executor::chooseJoinType(const std::list<std::shared_ptr<Anal
   }
   return Executor::JoinInfo(
       JoinImplType::Loop, std::vector<std::shared_ptr<Analyzer::BinOper>>{}, nullptr, hash_join_fail_reason);
-}
-
-void Executor::bindInitGroupByBuffer(llvm::Function* query_func,
-                                     const QueryMemoryDescriptor& query_mem_desc,
-                                     const ExecutorDeviceType device_type) {
-  if (!query_mem_desc.lazyInitGroups(device_type) || query_mem_desc.hash_type != GroupByColRangeType::MultiCol) {
-    return;
-  }
-  for (auto& inst : *query_func->begin()) {
-    if (!llvm::isa<llvm::CallInst>(inst)) {
-      continue;
-    }
-    auto& init_group_by_buffer_call = llvm::cast<llvm::CallInst>(inst);
-    if (std::string(init_group_by_buffer_call.getCalledFunction()->getName()) != "init_group_by_buffer") {
-      continue;
-    }
-    CHECK(!query_mem_desc.output_columnar);
-    std::vector<llvm::Value*> args;
-    for (size_t i = 0; i < init_group_by_buffer_call.getNumArgOperands(); ++i) {
-      args.push_back(init_group_by_buffer_call.getArgOperand(i));
-    }
-    auto keyless_lv = llvm::ConstantInt::get(get_int_type(1, cgen_state_->context_), query_mem_desc.keyless_hash);
-    args.push_back(keyless_lv);
-    if (!query_mem_desc.output_columnar) {
-      const int8_t warp_count = query_mem_desc.interleavedBins(device_type) ? warpSize() : 1;
-      args.push_back(ll_int<int8_t>(warp_count));
-    }
-
-    llvm::ReplaceInstWithInst(
-        &init_group_by_buffer_call,
-        llvm::CallInst::Create(query_func->getParent()->getFunction("init_group_by_buffer_gpu"), args));
-    break;
-  }
 }
 
 namespace {

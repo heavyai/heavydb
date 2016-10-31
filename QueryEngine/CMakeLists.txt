@@ -165,7 +165,6 @@ add_custom_command(
     ARGS
         ${MAPD_HOST_COMPILER_FLAG}
         -Xcompiler -fPIC
-        -DEXECUTOR_RT
         -D_FORCE_INLINES
         ${MAPD_DEFINITIONS}
         -O3

@@ -91,40 +91,6 @@ llvm::Function* pos_step(llvm::Module* mod) {
   return func_ptr;
 }
 
-llvm::Function* init_group_by_buffer(llvm::Module* mod) {
-  using namespace llvm;
-
-  auto i64_type = IntegerType::get(mod->getContext(), 64);
-  auto pi64_type = PointerType::get(i64_type, 0);
-  auto i32_type = IntegerType::get(mod->getContext(), 32);
-
-  std::vector<Type*> func_args{pi64_type, pi64_type, i32_type, i32_type, i32_type};
-
-  auto func_type = FunctionType::get(Type::getVoidTy(mod->getContext()), func_args, false);
-
-  auto func_ptr = mod->getFunction("init_group_by_buffer");
-  if (!func_ptr) {
-    func_ptr = Function::Create(func_type, GlobalValue::ExternalLinkage, "init_group_by_buffer", mod);
-    func_ptr->setCallingConv(CallingConv::C);
-  }
-
-  AttributeSet func_pal;
-  {
-    SmallVector<AttributeSet, 4> Attrs;
-    AttributeSet PAS;
-    {
-      AttrBuilder B;
-      PAS = AttributeSet::get(mod->getContext(), ~0U, B);
-    }
-
-    Attrs.push_back(PAS);
-    func_pal = AttributeSet::get(mod->getContext(), Attrs);
-  }
-  func_ptr->setAttributes(func_pal);
-
-  return func_ptr;
-}
-
 llvm::Function* row_process(llvm::Module* mod,
                             const size_t aggr_col_count,
                             const bool is_nested,
@@ -661,20 +627,6 @@ llvm::Function* query_group_by_template(llvm::Module* mod,
         bb_entry);
     small_buffer = new LoadInst(small_buffer_gep, "", false, bb_entry);
     small_buffer->setAlignment(8);
-  }
-  if (query_mem_desc.lazyInitGroups(device_type) && query_mem_desc.hash_type == GroupByColRangeType::MultiCol) {
-    CHECK(!query_mem_desc.output_columnar);
-    CallInst::Create(
-        init_group_by_buffer(mod),
-        std::vector<llvm::Value*>{
-            col_buffer,
-            agg_init_val,
-            ConstantInt::get(IntegerType::get(mod->getContext(), 32), query_mem_desc.entry_count),
-            ConstantInt::get(IntegerType::get(mod->getContext(), 32), query_mem_desc.group_col_widths.size()),
-            ConstantInt::get(IntegerType::get(mod->getContext(), 32), query_mem_desc.getRowSize() / sizeof(int64_t)),
-        },
-        "",
-        bb_entry);
   }
   auto shared_mem_bytes_lv = ConstantInt::get(i32_type, query_mem_desc.sharedMemBytes(device_type));
   auto result_buffer =
