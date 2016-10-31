@@ -3254,6 +3254,31 @@ ResultPtr Executor::resultsUnion(ExecutionDispatch& execution_dispatch) {
   return RowSetPtr(nullptr);
 }
 
+namespace {
+
+RowSetPtr reduce_estimator_results(const RelAlgExecutionUnit& ra_exe_unit,
+                                   std::vector<std::pair<ResultPtr, std::vector<size_t>>>& results_per_device) {
+  auto first = boost::get<RowSetPtr>(&results_per_device.front().first);
+  CHECK(first && *first);
+  const auto result_set = (*first)->getResultSet();
+  CHECK(result_set);
+  auto estimator_buffer = result_set->getEstimatorBuffer();
+  CHECK(estimator_buffer);
+  for (size_t i = 1; i < results_per_device.size(); ++i) {
+    auto next = boost::get<RowSetPtr>(&results_per_device[i].first);
+    CHECK(next && *next);
+    const auto next_result_set = (*next)->getResultSet();
+    CHECK(next_result_set);
+    const auto other_estimator_buffer = next_result_set->getEstimatorBuffer();
+    for (size_t off = 0; off < ra_exe_unit.estimator->getEstimatorBufferSize(); ++off) {
+      estimator_buffer[off] |= other_estimator_buffer[off];
+    }
+  }
+  return std::move(*first);
+}
+
+}  // namespace
+
 // TODO(miyu): remove dt_for_all along w/ can_use_result_set
 RowSetPtr Executor::reduceMultiDeviceResults(const RelAlgExecutionUnit& ra_exe_unit,
                                              std::vector<std::pair<ResultPtr, std::vector<size_t>>>& results_per_device,
@@ -3273,6 +3298,11 @@ RowSetPtr Executor::reduceMultiDeviceResults(const RelAlgExecutionUnit& ra_exe_u
 
   auto first = boost::get<RowSetPtr>(&results_per_device.front().first);
   CHECK(first && *first);
+
+  if (ra_exe_unit.estimator) {
+    return reduce_estimator_results(ra_exe_unit, results_per_device);
+  }
+
   auto reduced_results = boost::make_unique<ResultRows>(**first);
   CHECK(reduced_results);
 
@@ -4986,6 +5016,12 @@ int32_t Executor::executePlanWithoutGroupBy(const RelAlgExecutionUnit& ra_exe_un
   if (error_code == Executor::ERR_OVERFLOW_OR_UNDERFLOW || error_code == Executor::ERR_DIV_BY_ZERO) {
     return error_code;
   }
+  if (ra_exe_unit.estimator) {
+    CHECK(!error_code);
+    results =
+        boost::make_unique<ResultRows>(std::shared_ptr<ResultSet>(query_exe_context->estimator_result_set_.release()));
+    return 0;
+  }
   std::vector<int64_t> reduced_outs;
   const size_t entry_count = device_type == ExecutorDeviceType::GPU ? col_buffers.size() * blockSize() * gridSize() : 1;
   if (size_t(1) == entry_count) {
@@ -5632,13 +5668,15 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
   const auto agg_slot_count = ra_exe_unit.estimator ? size_t(1) : agg_fnames.size();
 
   const bool is_group_by{!query_mem_desc.group_col_widths.empty()};
-  auto query_func = is_group_by ? query_group_by_template(cgen_state_->module_,
-                                                          is_nested_,
-                                                          co.hoist_literals_,
-                                                          query_mem_desc,
-                                                          co.device_type_,
-                                                          ra_exe_unit.scan_limit)
-                                : query_template(cgen_state_->module_, agg_slot_count, is_nested_, co.hoist_literals_);
+  auto query_func =
+      is_group_by ? query_group_by_template(cgen_state_->module_,
+                                            is_nested_,
+                                            co.hoist_literals_,
+                                            query_mem_desc,
+                                            co.device_type_,
+                                            ra_exe_unit.scan_limit)
+                  : query_template(
+                        cgen_state_->module_, agg_slot_count, is_nested_, co.hoist_literals_, !!ra_exe_unit.estimator);
   bind_pos_placeholders("pos_start", true, query_func, cgen_state_->module_);
   bind_pos_placeholders("group_buff_idx", false, query_func, cgen_state_->module_);
   bind_pos_placeholders("pos_step", false, query_func, cgen_state_->module_);
@@ -6222,7 +6260,7 @@ declare i8 @string_eq_nullable(i8*, i32, i8*, i32, i8);
 declare i8 @string_ne_nullable(i8*, i32, i8*, i32, i8);
 declare i1 @regexp_like(i8*, i32, i8*, i32, i8);
 declare i8 @regexp_like_nullable(i8*, i32, i8*, i32, i8, i8);
-declare void @linear_probabilistic_count(i8*, i8*, i32);
+declare void @linear_probabilistic_count(i8*, i32, i8*, i32);
 declare i32 @record_error_code(i32, i32*);
 declare void @force_sync();
 )" +

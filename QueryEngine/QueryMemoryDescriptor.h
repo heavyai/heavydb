@@ -30,6 +30,7 @@ enum class GroupByColRangeType {
   MultiCol,
   MultiColPerfectHash,
   Scan,  // the plan is not a group by plan
+  Estimator
 };
 
 struct ColWidths {

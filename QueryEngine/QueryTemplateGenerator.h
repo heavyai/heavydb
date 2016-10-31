@@ -12,7 +12,8 @@ std::string unique_name(const char* base_name, const bool is_nested);
 llvm::Function* query_template(llvm::Module*,
                                const size_t aggr_col_count,
                                const bool is_nested,
-                               const bool hoist_literals);
+                               const bool hoist_literals,
+                               const bool is_estimate_query);
 llvm::Function* query_group_by_template(llvm::Module*,
                                         const bool is_nested,
                                         const bool hoist_literals,

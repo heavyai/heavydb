@@ -197,7 +197,8 @@ llvm::Function* row_process(llvm::Module* mod,
 llvm::Function* query_template(llvm::Module* mod,
                                const size_t aggr_col_count,
                                const bool is_nested,
-                               const bool hoist_literals) {
+                               const bool hoist_literals,
+                               const bool is_estimate_query) {
   using namespace llvm;
 
   auto func_pos_start = pos_start(mod);
@@ -206,7 +207,7 @@ llvm::Function* query_template(llvm::Module* mod,
   CHECK(func_pos_step);
   auto func_group_buff_idx = group_buff_idx(mod);
   CHECK(func_group_buff_idx);
-  auto func_row_process = row_process(mod, aggr_col_count, is_nested, hoist_literals);
+  auto func_row_process = row_process(mod, is_estimate_query ? 1 : aggr_col_count, is_nested, hoist_literals);
   CHECK(func_row_process);
 
   auto i8_type = IntegerType::get(mod->getContext(), 8);
@@ -325,10 +326,12 @@ llvm::Function* query_template(llvm::Module* mod,
 
   // Block  (.entry)
   std::vector<Value*> result_ptr_vec;
-  for (size_t i = 0; i < aggr_col_count; ++i) {
-    auto result_ptr = new AllocaInst(i64_type, "result", bb_entry);
-    result_ptr->setAlignment(8);
-    result_ptr_vec.push_back(result_ptr);
+  if (!is_estimate_query) {
+    for (size_t i = 0; i < aggr_col_count; ++i) {
+      auto result_ptr = new AllocaInst(i64_type, "result", bb_entry);
+      result_ptr->setAlignment(8);
+      result_ptr_vec.push_back(result_ptr);
+    }
   }
 
   LoadInst* row_count = new LoadInst(row_count_ptr, "row_count", false, bb_entry);
@@ -337,14 +340,16 @@ llvm::Function* query_template(llvm::Module* mod,
   frag_row_off->setAlignment(8);
 
   std::vector<Value*> agg_init_val_vec;
-  for (size_t i = 0; i < aggr_col_count; ++i) {
-    auto idx_lv = ConstantInt::get(i32_type, i);
-    auto agg_init_gep = GetElementPtrInst::CreateInBounds(agg_init_val, idx_lv, "", bb_entry);
-    auto agg_init_val = new LoadInst(agg_init_gep, "", false, bb_entry);
-    agg_init_val->setAlignment(8);
-    agg_init_val_vec.push_back(agg_init_val);
-    auto init_val_st = new StoreInst(agg_init_val, result_ptr_vec[i], false, bb_entry);
-    init_val_st->setAlignment(8);
+  if (!is_estimate_query) {
+    for (size_t i = 0; i < aggr_col_count; ++i) {
+      auto idx_lv = ConstantInt::get(i32_type, i);
+      auto agg_init_gep = GetElementPtrInst::CreateInBounds(agg_init_val, idx_lv, "", bb_entry);
+      auto agg_init_val = new LoadInst(agg_init_gep, "", false, bb_entry);
+      agg_init_val->setAlignment(8);
+      agg_init_val_vec.push_back(agg_init_val);
+      auto init_val_st = new StoreInst(agg_init_val, result_ptr_vec[i], false, bb_entry);
+      init_val_st->setAlignment(8);
+    }
   }
 
   CallInst* pos_start = CallInst::Create(func_pos_start, "pos_start", bb_entry);
@@ -359,11 +364,14 @@ llvm::Function* query_template(llvm::Module* mod,
   AttributeSet pos_step_pal;
   pos_step->setAttributes(pos_step_pal);
 
-  CallInst* group_buff_idx = CallInst::Create(func_group_buff_idx, "group_buff_idx", bb_entry);
-  group_buff_idx->setCallingConv(CallingConv::C);
-  group_buff_idx->setTailCall(true);
-  AttributeSet group_buff_idx_pal;
-  group_buff_idx->setAttributes(group_buff_idx_pal);
+  CallInst* group_buff_idx = nullptr;
+  if (!is_estimate_query) {
+    group_buff_idx = CallInst::Create(func_group_buff_idx, "group_buff_idx", bb_entry);
+    group_buff_idx->setCallingConv(CallingConv::C);
+    group_buff_idx->setTailCall(true);
+    AttributeSet group_buff_idx_pal;
+    group_buff_idx->setAttributes(group_buff_idx_pal);
+  }
 
   CastInst* pos_start_i64 = new SExtInst(pos_start, i64_type, "", bb_entry);
   ICmpInst* enter_or_not = new ICmpInst(*bb_entry, ICmpInst::ICMP_SLT, pos_start_i64, row_count, "");
@@ -381,6 +389,9 @@ llvm::Function* query_template(llvm::Module* mod,
 
   std::vector<Value*> row_process_params;
   row_process_params.insert(row_process_params.end(), result_ptr_vec.begin(), result_ptr_vec.end());
+  if (is_estimate_query) {
+    row_process_params.push_back(new LoadInst(out, "", false, bb_forbody));
+  }
   row_process_params.push_back(agg_init_val);
   row_process_params.push_back(pos);
   row_process_params.push_back(frag_row_off);
@@ -401,33 +412,39 @@ llvm::Function* query_template(llvm::Module* mod,
 
   // Block ._crit_edge
   std::vector<Instruction*> result_vec_pre;
-  for (size_t i = 0; i < aggr_col_count; ++i) {
-    auto result = new LoadInst(result_ptr_vec[i], ".pre.result", false, bb_crit_edge);
-    result->setAlignment(8);
-    result_vec_pre.push_back(result);
+  if (!is_estimate_query) {
+    for (size_t i = 0; i < aggr_col_count; ++i) {
+      auto result = new LoadInst(result_ptr_vec[i], ".pre.result", false, bb_crit_edge);
+      result->setAlignment(8);
+      result_vec_pre.push_back(result);
+    }
   }
 
   BranchInst::Create(bb_exit, bb_crit_edge);
 
   // Block  .exit
   std::vector<PHINode*> result_vec;
-  for (int64_t i = aggr_col_count - 1; i >= 0; --i) {
-    auto result = PHINode::Create(IntegerType::get(mod->getContext(), 64), 2, "", bb_exit);
-    result->addIncoming(result_vec_pre[i], bb_crit_edge);
-    result->addIncoming(agg_init_val_vec[i], bb_entry);
-    result_vec.insert(result_vec.begin(), result);
+  if (!is_estimate_query) {
+    for (int64_t i = aggr_col_count - 1; i >= 0; --i) {
+      auto result = PHINode::Create(IntegerType::get(mod->getContext(), 64), 2, "", bb_exit);
+      result->addIncoming(result_vec_pre[i], bb_crit_edge);
+      result->addIncoming(agg_init_val_vec[i], bb_entry);
+      result_vec.insert(result_vec.begin(), result);
+    }
   }
 
-  for (size_t i = 0; i < aggr_col_count; ++i) {
-    auto col_idx = ConstantInt::get(i32_type, i);
-    auto out_gep = GetElementPtrInst::CreateInBounds(out, col_idx, "", bb_exit);
-    auto col_buffer = new LoadInst(out_gep, "", false, bb_exit);
-    col_buffer->setAlignment(8);
-    auto slot_idx = BinaryOperator::CreateAdd(
-        group_buff_idx, BinaryOperator::CreateMul(frag_idx, pos_step, "", bb_exit), "", bb_exit);
-    auto target_addr = GetElementPtrInst::CreateInBounds(col_buffer, slot_idx, "", bb_exit);
-    StoreInst* result_st = new StoreInst(result_vec[i], target_addr, false, bb_exit);
-    result_st->setAlignment(8);
+  if (!is_estimate_query) {
+    for (size_t i = 0; i < aggr_col_count; ++i) {
+      auto col_idx = ConstantInt::get(i32_type, i);
+      auto out_gep = GetElementPtrInst::CreateInBounds(out, col_idx, "", bb_exit);
+      auto col_buffer = new LoadInst(out_gep, "", false, bb_exit);
+      col_buffer->setAlignment(8);
+      auto slot_idx = BinaryOperator::CreateAdd(
+          group_buff_idx, BinaryOperator::CreateMul(frag_idx, pos_step, "", bb_exit), "", bb_exit);
+      auto target_addr = GetElementPtrInst::CreateInBounds(col_buffer, slot_idx, "", bb_exit);
+      StoreInst* result_st = new StoreInst(result_vec[i], target_addr, false, bb_exit);
+      result_st->setAlignment(8);
+    }
   }
 
   ReturnInst::Create(mod->getContext(), bb_exit);

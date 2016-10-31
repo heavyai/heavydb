@@ -532,10 +532,14 @@ extern "C" __device__ uint64_t string_decode(int8_t* chunk_iter_, int64_t pos) {
                               (static_cast<uint64_t>(vd.length) << 48);
 }
 
-extern "C" __device__ void linear_probabilistic_count(int8_t* bitmap,
-                                                      const int8_t* key_bytes,
+extern "C" __device__ void linear_probabilistic_count(uint8_t* bitmap,
+                                                      const uint32_t bitmap_bytes,
+                                                      const uint8_t* key_bytes,
                                                       const uint32_t key_len) {
-  // TODO
+  const uint32_t bit_pos = MurmurHash1(key_bytes, key_len, 0) % (bitmap_bytes * 8);
+  const uint32_t word_idx = bit_pos / 32;
+  const uint32_t bit_idx = bit_pos % 32;
+  atomicOr(((uint32_t*) bitmap) + word_idx, 1 << bit_idx);
 }
 
 extern "C" __device__ void force_sync() {
