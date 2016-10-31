@@ -3056,157 +3056,6 @@ std::unordered_set<llvm::Function*> Executor::markDeadRuntimeFuncs(llvm::Module&
   return live_funcs;
 }
 
-namespace {
-
-#ifdef __clang__
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wunused-function"
-#else
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-function"
-#endif
-
-std::vector<int64_t*> launch_query_cpu_code(const std::vector<void*>& fn_ptrs,
-                                            const bool hoist_literals,
-                                            const std::vector<int8_t>& literal_buff,
-                                            std::vector<std::vector<const int8_t*>> col_buffers,
-                                            const std::vector<int64_t>& num_rows,
-                                            const std::vector<uint64_t>& frag_row_offsets,
-                                            const int32_t scan_limit,
-                                            const QueryMemoryDescriptor& query_mem_desc,
-                                            const std::vector<int64_t>& init_agg_vals,
-                                            std::vector<int64_t*> group_by_buffers,
-                                            std::vector<int64_t*> small_group_by_buffers,
-                                            int32_t* error_code,
-                                            const uint32_t num_tables,
-                                            const int64_t join_hash_table) {
-  const bool is_group_by{!group_by_buffers.empty()};
-  std::vector<int64_t*> out_vec;
-  if (group_by_buffers.empty()) {
-    for (size_t i = 0; i < init_agg_vals.size(); ++i) {
-      auto buff = new int64_t[1];
-      out_vec.push_back(static_cast<int64_t*>(buff));
-    }
-  }
-
-  std::vector<const int8_t**> multifrag_col_buffers;
-  for (auto& col_buffer : col_buffers) {
-    multifrag_col_buffers.push_back(&col_buffer[0]);
-  }
-  const int8_t*** multifrag_cols_ptr{multifrag_col_buffers.empty() ? nullptr : &multifrag_col_buffers[0]};
-  int64_t** small_group_by_buffers_ptr{small_group_by_buffers.empty() ? nullptr : &small_group_by_buffers[0]};
-  const uint32_t num_fragments = multifrag_cols_ptr ? 1 : 0;
-
-  int64_t rowid_lookup_num_rows{*error_code ? *error_code + 1 : 0};
-  auto num_rows_ptr = rowid_lookup_num_rows ? &rowid_lookup_num_rows : &num_rows[0];
-  int32_t total_matched_init{0};
-
-  std::vector<int64_t> cmpt_val_buff;
-  if (is_group_by) {
-    cmpt_val_buff = compact_init_vals(
-        align_to_int64(query_mem_desc.getColsSize()) / sizeof(int64_t), init_agg_vals, query_mem_desc.agg_col_widths);
-  }
-
-  if (hoist_literals) {
-    typedef void (*agg_query)(const int8_t*** col_buffers,
-                              const uint32_t* num_fragments,
-                              const int8_t* literals,
-                              const int64_t* num_rows,
-                              const uint64_t* frag_row_offsets,
-                              const int32_t* max_matched,
-                              int32_t* total_matched,
-                              const int64_t* init_agg_value,
-                              int64_t** out,
-                              int64_t** out2,
-                              int32_t* error_code,
-                              const uint32_t* num_tables,
-                              const int64_t* join_hash_table_ptr);
-    if (is_group_by) {
-      reinterpret_cast<agg_query>(fn_ptrs[0])(multifrag_cols_ptr,
-                                              &num_fragments,
-                                              &literal_buff[0],
-                                              num_rows_ptr,
-                                              &frag_row_offsets[0],
-                                              &scan_limit,
-                                              &total_matched_init,
-                                              &cmpt_val_buff[0],
-                                              &group_by_buffers[0],
-                                              small_group_by_buffers_ptr,
-                                              error_code,
-                                              &num_tables,
-                                              &join_hash_table);
-    } else {
-      reinterpret_cast<agg_query>(fn_ptrs[0])(multifrag_cols_ptr,
-                                              &num_fragments,
-                                              &literal_buff[0],
-                                              num_rows_ptr,
-                                              &frag_row_offsets[0],
-                                              &scan_limit,
-                                              &total_matched_init,
-                                              &init_agg_vals[0],
-                                              &out_vec[0],
-                                              nullptr,
-                                              error_code,
-                                              &num_tables,
-                                              &join_hash_table);
-    }
-  } else {
-    typedef void (*agg_query)(const int8_t*** col_buffers,
-                              const uint32_t* num_fragments,
-                              const int64_t* num_rows,
-                              const uint64_t* frag_row_offsets,
-                              const int32_t* max_matched,
-                              int32_t* total_matched,
-                              const int64_t* init_agg_value,
-                              int64_t** out,
-                              int64_t** out2,
-                              int32_t* error_code,
-                              const uint32_t* num_tables,
-                              const int64_t* join_hash_table_ptr);
-    if (is_group_by) {
-      reinterpret_cast<agg_query>(fn_ptrs[0])(multifrag_cols_ptr,
-                                              &num_fragments,
-                                              num_rows_ptr,
-                                              &frag_row_offsets[0],
-                                              &scan_limit,
-                                              &total_matched_init,
-                                              &cmpt_val_buff[0],
-                                              &group_by_buffers[0],
-                                              small_group_by_buffers_ptr,
-                                              error_code,
-                                              &num_tables,
-                                              &join_hash_table);
-    } else {
-      reinterpret_cast<agg_query>(fn_ptrs[0])(multifrag_cols_ptr,
-                                              &num_fragments,
-                                              num_rows_ptr,
-                                              &frag_row_offsets[0],
-                                              &scan_limit,
-                                              &total_matched_init,
-                                              &init_agg_vals[0],
-                                              &out_vec[0],
-                                              nullptr,
-                                              error_code,
-                                              &num_tables,
-                                              &join_hash_table);
-    }
-  }
-
-  if (rowid_lookup_num_rows && *error_code < 0) {
-    *error_code = 0;
-  }
-
-  return out_vec;
-}
-
-#ifdef __clang__
-#pragma clang diagnostic pop
-#else
-#pragma GCC diagnostic pop
-#endif
-
-}  // namespace
-
 // TODO(alex): remove or split
 std::pair<int64_t, int32_t> Executor::reduceResults(const SQLAgg agg,
                                                     const SQLTypeInfo& ti,
@@ -3751,20 +3600,18 @@ RowSetPtr Executor::executeResultPlan(const Planner::Result* result_plan,
   const auto hoist_buf = serializeLiterals(compilation_result.literal_values, 0);
   *error_code = 0;
   std::vector<std::vector<const int8_t*>> multi_frag_col_buffers{column_buffers};
-  launch_query_cpu_code(compilation_result.native_functions,
-                        hoist_literals,
-                        hoist_buf,
-                        multi_frag_col_buffers,
-                        {static_cast<int64_t>(result_columns.size())},
-                        {0},
-                        0,
-                        query_mem_desc,
-                        init_agg_vals,
-                        query_exe_context->group_by_buffers_,
-                        query_exe_context->small_group_by_buffers_,
-                        error_code,
-                        1,
-                        0);
+  query_exe_context->launchCpuCode(res_ra_unit,
+                                   compilation_result.native_functions,
+                                   hoist_literals,
+                                   hoist_buf,
+                                   multi_frag_col_buffers,
+                                   {static_cast<int64_t>(result_columns.size())},
+                                   {0},
+                                   0,
+                                   init_agg_vals,
+                                   error_code,
+                                   1,
+                                   0);
   CHECK_GE(*error_code, 0);
   return query_exe_context->groupBufferToResults(0, target_exprs, false);
 }
@@ -5092,7 +4939,7 @@ int32_t Executor::executePlanWithoutGroupBy(const RelAlgExecutionUnit& ra_exe_un
                                             const std::vector<Analyzer::Expr*>& target_exprs,
                                             const ExecutorDeviceType device_type,
                                             std::vector<std::vector<const int8_t*>>& col_buffers,
-                                            const QueryExecutionContext* query_exe_context,
+                                            QueryExecutionContext* query_exe_context,
                                             const std::vector<int64_t>& num_rows,
                                             const std::vector<uint64_t>& dev_frag_row_offsets,
                                             Data_Namespace::DataMgr* data_mgr,
@@ -5111,20 +4958,18 @@ int32_t Executor::executePlanWithoutGroupBy(const RelAlgExecutionUnit& ra_exe_un
   const auto join_hash_table_ptr = getJoinHashTablePtr(device_type, device_id);
   std::unique_ptr<OutVecOwner> output_memory_scope;
   if (device_type == ExecutorDeviceType::CPU) {
-    out_vec = launch_query_cpu_code(compilation_result.native_functions,
-                                    hoist_literals,
-                                    hoist_buf,
-                                    col_buffers,
-                                    num_rows,
-                                    dev_frag_row_offsets,
-                                    0,
-                                    query_exe_context->query_mem_desc_,
-                                    query_exe_context->init_agg_vals_,
-                                    {},
-                                    {},
-                                    &error_code,
-                                    num_tables,
-                                    join_hash_table_ptr);
+    out_vec = query_exe_context->launchCpuCode(ra_exe_unit,
+                                               compilation_result.native_functions,
+                                               hoist_literals,
+                                               hoist_buf,
+                                               col_buffers,
+                                               num_rows,
+                                               dev_frag_row_offsets,
+                                               0,
+                                               query_exe_context->init_agg_vals_,
+                                               &error_code,
+                                               num_tables,
+                                               join_hash_table_ptr);
     output_memory_scope.reset(new OutVecOwner(out_vec));
   } else {
     try {
@@ -5201,6 +5046,7 @@ int32_t Executor::executePlanWithoutGroupBy(const RelAlgExecutionUnit& ra_exe_un
 
   RowSetPtr rows_ptr{nullptr};
   if (can_use_result_set(query_exe_context->query_mem_desc_, device_type)) {
+    CHECK_EQ(size_t(1), query_exe_context->result_sets_.size());
     rows_ptr = boost::make_unique<ResultRows>(std::shared_ptr<ResultSet>(query_exe_context->result_sets_[0].release()));
   } else {
     rows_ptr = boost::make_unique<ResultRows>(query_exe_context->query_mem_desc_,
@@ -5237,7 +5083,7 @@ int32_t Executor::executePlanWithGroupBy(const RelAlgExecutionUnit& ra_exe_unit,
                                          const ExecutorDeviceType device_type,
                                          std::vector<std::vector<const int8_t*>>& col_buffers,
                                          const std::vector<size_t> outer_tab_frag_ids,
-                                         const QueryExecutionContext* query_exe_context,
+                                         QueryExecutionContext* query_exe_context,
                                          const std::vector<int64_t>& num_rows,
                                          const std::vector<uint64_t>& dev_frag_row_offsets,
                                          Data_Namespace::DataMgr* data_mgr,
@@ -5264,20 +5110,18 @@ int32_t Executor::executePlanWithGroupBy(const RelAlgExecutionUnit& ra_exe_unit,
   int32_t error_code = device_type == ExecutorDeviceType::GPU ? 0 : start_rowid;
   const auto join_hash_table_ptr = getJoinHashTablePtr(device_type, device_id);
   if (device_type == ExecutorDeviceType::CPU) {
-    launch_query_cpu_code(compilation_result.native_functions,
-                          hoist_literals,
-                          hoist_buf,
-                          col_buffers,
-                          num_rows,
-                          dev_frag_row_offsets,
-                          scan_limit,
-                          query_exe_context->query_mem_desc_,
-                          query_exe_context->init_agg_vals_,
-                          query_exe_context->group_by_buffers_,
-                          query_exe_context->small_group_by_buffers_,
-                          &error_code,
-                          num_tables,
-                          join_hash_table_ptr);
+    query_exe_context->launchCpuCode(ra_exe_unit,
+                                     compilation_result.native_functions,
+                                     hoist_literals,
+                                     hoist_buf,
+                                     col_buffers,
+                                     num_rows,
+                                     dev_frag_row_offsets,
+                                     scan_limit,
+                                     query_exe_context->init_agg_vals_,
+                                     &error_code,
+                                     num_tables,
+                                     join_hash_table_ptr);
   } else {
     try {
       query_exe_context->launchGpuCode(ra_exe_unit,
