@@ -60,6 +60,10 @@ QueryExecutionContext::QueryExecutionContext(const RelAlgExecutionUnit& ra_exe_u
     }
   }
 
+  if (ra_exe_unit.estimator) {
+    return;
+  }
+
   std::unique_ptr<int64_t, CheckedAllocDeleter> group_by_buffer_template(
       static_cast<int64_t*>(checked_malloc(query_mem_desc_.getBufferSizeBytes(device_type))));
   if (!query_mem_desc_.lazyInitGroups(device_type)) {
@@ -672,14 +676,19 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const RelAlgExecution
     }
   } else {
     std::vector<CUdeviceptr> out_vec_dev_buffers;
-    const size_t agg_col_count{init_agg_vals.size()};
-    for (size_t i = 0; i < agg_col_count; ++i) {
-      auto out_vec_dev_buffer =
-          num_fragments
-              ? alloc_gpu_mem(
-                    data_mgr, block_size_x * grid_size_x * sizeof(int64_t) * num_fragments, device_id, nullptr)
-              : 0;
-      out_vec_dev_buffers.push_back(out_vec_dev_buffer);
+    const size_t agg_col_count{ra_exe_unit.estimator ? size_t(1) : init_agg_vals.size()};
+    if (ra_exe_unit.estimator) {
+      estimator_result_set_.reset(new ResultSet(ra_exe_unit.estimator, ExecutorDeviceType::GPU, device_id, data_mgr));
+      out_vec_dev_buffers.push_back(reinterpret_cast<CUdeviceptr>(estimator_result_set_->getEstimatorBuffer()));
+    } else {
+      for (size_t i = 0; i < agg_col_count; ++i) {
+        auto out_vec_dev_buffer =
+            num_fragments
+                ? alloc_gpu_mem(
+                      data_mgr, block_size_x * grid_size_x * sizeof(int64_t) * num_fragments, device_id, nullptr)
+                : 0;
+        out_vec_dev_buffers.push_back(out_vec_dev_buffer);
+      }
     }
     auto out_vec_dev_ptr = alloc_gpu_mem(data_mgr, agg_col_count * sizeof(CUdeviceptr), device_id, nullptr);
     copy_to_gpu(data_mgr, out_vec_dev_ptr, &out_vec_dev_buffers[0], agg_col_count * sizeof(CUdeviceptr), device_id);
@@ -727,6 +736,11 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const RelAlgExecution
     if (*error_code > 0) {
       return {};
     }
+    if (ra_exe_unit.estimator) {
+      CHECK(estimator_result_set_);
+      estimator_result_set_->syncEstimatorBuffer();
+      return {};
+    }
     for (size_t i = 0; i < agg_col_count; ++i) {
       int64_t* host_out_vec = new int64_t[block_size_x * grid_size_x * sizeof(int64_t) * num_fragments];
       copy_from_gpu(data_mgr,
@@ -757,10 +771,15 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(const RelAlgExecution
                                                            const int64_t join_hash_table) {
   const bool is_group_by{!query_mem_desc_.group_col_widths.empty()};
   std::vector<int64_t*> out_vec;
-  if (!is_group_by) {
-    for (size_t i = 0; i < init_agg_vals.size(); ++i) {
-      auto buff = new int64_t[1];
-      out_vec.push_back(static_cast<int64_t*>(buff));
+  if (ra_exe_unit.estimator) {
+    estimator_result_set_.reset(new ResultSet(ra_exe_unit.estimator, ExecutorDeviceType::CPU, 0, nullptr));
+    out_vec.push_back(reinterpret_cast<int64_t*>(estimator_result_set_->getEstimatorBuffer()));
+  } else {
+    if (!is_group_by) {
+      for (size_t i = 0; i < init_agg_vals.size(); ++i) {
+        auto buff = new int64_t[1];
+        out_vec.push_back(static_cast<int64_t*>(buff));
+      }
     }
   }
 
@@ -865,6 +884,10 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(const RelAlgExecution
                                               &num_tables,
                                               &join_hash_table);
     }
+  }
+
+  if (ra_exe_unit.estimator) {
+    return {};
   }
 
   if (rowid_lookup_num_rows && *error_code < 0) {
@@ -1401,7 +1424,7 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
     CHECK(!render_output);
     query_mem_desc_ = {executor_,
                        allow_multifrag,
-                       GroupByColRangeType::Scan,
+                       ra_exe_unit_.estimator ? GroupByColRangeType::Estimator : GroupByColRangeType::Scan,
                        false,
                        false,
                        -1,
@@ -2570,8 +2593,9 @@ void GroupByAndAggregate::codegenEstimator(std::stack<llvm::BasicBlock*>& array_
   const auto int8_ptr_ty = llvm::PointerType::get(get_int_type(8, LL_CONTEXT), 0);
   const auto bitmap = LL_BUILDER.CreateBitCast(ROW_FUNC->arg_begin(), int8_ptr_ty);
   const auto key_bytes = LL_BUILDER.CreateBitCast(estimator_key_lv, int8_ptr_ty);
-  auto estimator_comp_bytes_lv = LL_INT(static_cast<int32_t>(estimator_arg.size() * sizeof(int64_t)));
-  emitCall("linear_probabilistic_count", {bitmap, key_bytes, estimator_comp_bytes_lv});
+  const auto estimator_comp_bytes_lv = LL_INT(static_cast<int32_t>(estimator_arg.size() * sizeof(int64_t)));
+  const auto bitmap_size_lv = LL_INT(static_cast<uint32_t>(ra_exe_unit_.estimator->getEstimatorBufferSize()));
+  emitCall("linear_probabilistic_count", {bitmap, bitmap_size_lv, key_bytes, estimator_comp_bytes_lv});
 }
 
 void GroupByAndAggregate::codegenCountDistinct(const size_t target_idx,
