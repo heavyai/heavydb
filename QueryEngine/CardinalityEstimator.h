@@ -15,6 +15,11 @@
 
 #include <glog/logging.h>
 
+class CardinalityEstimationRequired : public std::runtime_error {
+ public:
+  CardinalityEstimationRequired() : std::runtime_error("CardinalityEstimationRequired") {}
+};
+
 namespace Analyzer {
 
 /*

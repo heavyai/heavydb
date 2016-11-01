@@ -3621,7 +3621,8 @@ RowSetPtr Executor::executeResultPlan(const Planner::Result* result_plan,
                       row_count,
                       small_groups_buffer_entry_count_,
                       get_min_byte_width(),
-                      JoinInfo(JoinImplType::Invalid, std::vector<std::shared_ptr<Analyzer::BinOper>>{}, nullptr, ""));
+                      JoinInfo(JoinImplType::Invalid, std::vector<std::shared_ptr<Analyzer::BinOper>>{}, nullptr, ""),
+                      false);
   auto column_buffers = result_columns.getColumnBuffers();
   CHECK_EQ(column_buffers.size(), static_cast<size_t>(in_col_count));
   std::vector<int64_t> init_agg_vals(query_mem_desc.agg_col_widths.size());
@@ -3789,7 +3790,7 @@ ResultPtr Executor::executeWorkUnit(int32_t* error_code,
                                     const Catalog_Namespace::Catalog& cat,
                                     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                                     RenderAllocatorMap* render_allocator_map,
-                                    const bool /* has_cardinality_estimation */) {
+                                    const bool has_cardinality_estimation) {
   const auto device_type = getDeviceTypeForTargets(ra_exe_unit, co.device_type_);
   CHECK(!query_infos.empty());
   if (!max_groups_buffer_entry_guess) {
@@ -3836,8 +3837,8 @@ ResultPtr Executor::executeWorkUnit(int32_t* error_code,
                                          error_code,
                                          render_allocator_map);
     try {
-      crt_min_byte_width =
-          execution_dispatch.compile(join_info, max_groups_buffer_entry_guess, crt_min_byte_width, options);
+      crt_min_byte_width = execution_dispatch.compile(
+          join_info, max_groups_buffer_entry_guess, crt_min_byte_width, options, has_cardinality_estimation);
     } catch (CompilationRetryNoCompaction&) {
       crt_min_byte_width = MAX_BYTE_WIDTH_SUPPORTED;
       continue;
@@ -4469,7 +4470,8 @@ const int8_t* Executor::ExecutionDispatch::getColumn(const ColumnarResults* colu
 int8_t Executor::ExecutionDispatch::compile(const Executor::JoinInfo& join_info,
                                             const size_t max_groups_buffer_entry_guess,
                                             const int8_t crt_min_byte_width,
-                                            const ExecutionOptions& options) {
+                                            const ExecutionOptions& options,
+                                            const bool has_cardinality_estimation) {
   int8_t actual_min_byte_width{MAX_BYTE_WIDTH_SUPPORTED};
   auto compile_on_cpu = [&]() {
     const CompilationOptions co_cpu{ExecutorDeviceType::CPU, co_.hoist_literals_, co_.opt_level_};
@@ -4487,7 +4489,8 @@ int8_t Executor::ExecutionDispatch::compile(const Executor::JoinInfo& join_info,
                                      render_allocator_map_ ? executor_->render_small_groups_buffer_entry_count_
                                                            : executor_->small_groups_buffer_entry_count_,
                                      crt_min_byte_width,
-                                     join_info);
+                                     join_info,
+                                     has_cardinality_estimation);
     } catch (const CompilationRetryNoLazyFetch&) {
       compilation_result_cpu_ =
           executor_->compileWorkUnit(false,
@@ -4502,7 +4505,8 @@ int8_t Executor::ExecutionDispatch::compile(const Executor::JoinInfo& join_info,
                                      render_allocator_map_ ? executor_->render_small_groups_buffer_entry_count_
                                                            : executor_->small_groups_buffer_entry_count_,
                                      crt_min_byte_width,
-                                     join_info);
+                                     join_info,
+                                     has_cardinality_estimation);
     }
     for (auto wids : compilation_result_cpu_.query_mem_desc.agg_col_widths) {
       actual_min_byte_width = std::min(actual_min_byte_width, wids.compact);
@@ -4530,7 +4534,8 @@ int8_t Executor::ExecutionDispatch::compile(const Executor::JoinInfo& join_info,
                                      render_allocator_map_ ? executor_->render_small_groups_buffer_entry_count_
                                                            : executor_->small_groups_buffer_entry_count_,
                                      crt_min_byte_width,
-                                     join_info);
+                                     join_info,
+                                     has_cardinality_estimation);
     } catch (const CompilationRetryNoLazyFetch&) {
       compilation_result_gpu_ =
           executor_->compileWorkUnit(render_allocator_map_,
@@ -4545,7 +4550,8 @@ int8_t Executor::ExecutionDispatch::compile(const Executor::JoinInfo& join_info,
                                      render_allocator_map_ ? executor_->render_small_groups_buffer_entry_count_
                                                            : executor_->small_groups_buffer_entry_count_,
                                      crt_min_byte_width,
-                                     join_info);
+                                     join_info,
+                                     has_cardinality_estimation);
     }
     for (auto wids : compilation_result_gpu_.query_mem_desc.agg_col_widths) {
       actual_min_byte_width = std::min(actual_min_byte_width, wids.compact);
@@ -5647,7 +5653,8 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
                                                       const size_t max_groups_buffer_entry_guess,
                                                       const size_t small_groups_buffer_entry_count,
                                                       const int8_t crt_min_byte_width,
-                                                      const JoinInfo& join_info) {
+                                                      const JoinInfo& join_info,
+                                                      const bool has_cardinality_estimation) {
   nukeOldState(allow_lazy_fetch, join_info, query_infos, ra_exe_unit.outer_join_quals);
 
   GroupByAndAggregate group_by_and_aggregate(this,
@@ -5662,6 +5669,11 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
                                              eo.allow_multifrag,
                                              eo.output_columnar_hint && co.device_type_ == ExecutorDeviceType::GPU);
   const auto& query_mem_desc = group_by_and_aggregate.getQueryMemoryDescriptor();
+
+  if (query_mem_desc.hash_type == GroupByColRangeType::MultiCol && !query_mem_desc.getSmallBufferSizeBytes() &&
+      !has_cardinality_estimation) {
+    throw CardinalityEstimationRequired();
+  }
 
   const bool output_columnar = group_by_and_aggregate.outputColumnar();
 

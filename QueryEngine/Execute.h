@@ -570,7 +570,8 @@ class Executor {
     int8_t compile(const JoinInfo& join_info,
                    const size_t max_groups_buffer_entry_guess,
                    const int8_t crt_min_byte_width,
-                   const ExecutionOptions& options);
+                   const ExecutionOptions& options,
+                   const bool has_cardinality_estimation);
 
     void run(const ExecutorDeviceType chosen_device_type,
              int chosen_device_id,
@@ -770,7 +771,8 @@ class Executor {
                                     const size_t max_groups_buffer_entry_count,
                                     const size_t small_groups_buffer_entry_count,
                                     const int8_t crt_min_byte_width,
-                                    const JoinInfo& join_info);
+                                    const JoinInfo& join_info,
+                                    const bool has_cardinality_estimation);
 
   void createErrorCheckControlFlow(llvm::Function* query_func);
 

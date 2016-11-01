@@ -2,6 +2,7 @@
 #include "RelAlgExecutor.h"
 #include "RelAlgTranslator.h"
 
+#include "CardinalityEstimator.h"
 #include "InputMetadata.h"
 #include "RexVisitor.h"
 #include "ScalarExprVisitor.h"
@@ -847,6 +848,26 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createSortInputWorkUnit(const RelSort* 
           std::move(source_work_unit.query_rewriter)};
 }
 
+namespace {
+
+// Upper bound estimation for the number of groups. Not strictly correct and not
+// tight, but if the tables involved are really small we shouldn't waste time doing
+// the NDV estimation. We don't account for cross-joins and / or group by unnested
+// array, which is the reason this estimation isn't entirely reliable.
+size_t groups_approx_upper_bound(const std::vector<InputTableInfo>& table_infos) {
+  CHECK(!table_infos.empty());
+  const auto& first_table = table_infos.front();
+  size_t max_num_groups = first_table.info.numTuples;
+  for (const auto& table_info : table_infos) {
+    if (table_info.info.numTuples > max_num_groups) {
+      max_num_groups = table_info.info.numTuples;
+    }
+  }
+  return std::max(max_num_groups, size_t(1));
+}
+
+}  // namespace
+
 ExecutionResult RelAlgExecutor::executeWorkUnit(const RelAlgExecutor::WorkUnit& work_unit,
                                                 const std::vector<TargetMetaInfo>& targets_meta,
                                                 const bool is_agg,
@@ -855,7 +876,6 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(const RelAlgExecutor::WorkUnit& 
                                                 RenderInfo* render_info,
                                                 const int64_t queue_time_ms) {
   int32_t error_code{0};
-  size_t max_groups_buffer_entry_guess = work_unit.max_groups_buffer_entry_guess;
   if (render_info && render_info->do_render) {
     if (co.device_type_ != ExecutorDeviceType::GPU) {
       throw std::runtime_error("Backend rendering is only supported on GPU");
@@ -872,20 +892,46 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(const RelAlgExecutor::WorkUnit& 
     }
   }
 
-  ExecutionResult result = {
-      executor_->executeWorkUnit(
-          &error_code,
-          max_groups_buffer_entry_guess,
-          is_agg,
-          get_table_infos(work_unit.exe_unit, cat_, temporary_tables_),
-          work_unit.exe_unit,
-          co,
-          eo,
-          cat_,
-          executor_->row_set_mem_owner_,
-          (render_info && render_info->do_render ? render_info->render_allocator_map_ptr.get() : nullptr),
-          false),
-      targets_meta};
+  const auto table_infos = get_table_infos(work_unit.exe_unit, cat_, temporary_tables_);
+
+  auto max_groups_buffer_entry_guess = work_unit.max_groups_buffer_entry_guess;
+
+  static const size_t big_group_threshold{20000};
+
+  ExecutionResult result{ResultRows({}, {}, nullptr, nullptr, {}, co.device_type_), {}};
+
+  try {
+    result = {executor_->executeWorkUnit(
+                  &error_code,
+                  max_groups_buffer_entry_guess,
+                  is_agg,
+                  table_infos,
+                  work_unit.exe_unit,
+                  co,
+                  eo,
+                  cat_,
+                  executor_->row_set_mem_owner_,
+                  (render_info && render_info->do_render ? render_info->render_allocator_map_ptr.get() : nullptr),
+                  groups_approx_upper_bound(table_infos) <= big_group_threshold),
+              targets_meta};
+  } catch (const CardinalityEstimationRequired&) {
+    max_groups_buffer_entry_guess =
+        2 * std::min(groups_approx_upper_bound(table_infos), getNDVEstimation(work_unit, targets_meta, is_agg, co, eo));
+    CHECK_GT(max_groups_buffer_entry_guess, size_t(0));
+    result = {executor_->executeWorkUnit(
+                  &error_code,
+                  max_groups_buffer_entry_guess,
+                  is_agg,
+                  table_infos,
+                  work_unit.exe_unit,
+                  co,
+                  eo,
+                  cat_,
+                  executor_->row_set_mem_owner_,
+                  (render_info && render_info->do_render ? render_info->render_allocator_map_ptr.get() : nullptr),
+                  true),
+              targets_meta};
+  }
   result.setQueueTime(queue_time_ms);
   if (!error_code) {
     return result;
@@ -907,6 +953,35 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(const RelAlgExecutor::WorkUnit& 
   }
   return handleRetry(
       error_code, {work_unit.exe_unit, max_groups_buffer_entry_guess}, targets_meta, is_agg, co, eo, queue_time_ms);
+}
+
+size_t RelAlgExecutor::getNDVEstimation(const WorkUnit& work_unit,
+                                        const std::vector<TargetMetaInfo>& targets_meta,
+                                        const bool is_agg,
+                                        const CompilationOptions& co,
+                                        const ExecutionOptions& eo) {
+  int32_t error_code{0};
+  const auto estimator_exe_unit = create_ndv_execution_unit(work_unit.exe_unit);
+  size_t one{1};
+  const auto estimator_result = executor_->executeWorkUnit(&error_code,
+                                                           one,
+                                                           is_agg,
+                                                           get_table_infos(work_unit.exe_unit, cat_, temporary_tables_),
+                                                           estimator_exe_unit,
+                                                           co,
+                                                           eo,
+                                                           cat_,
+                                                           executor_->row_set_mem_owner_,
+                                                           nullptr,
+                                                           false);
+  if (error_code) {
+    return std::numeric_limits<size_t>::max();
+  }
+  const auto& estimator_result_rows = boost::get<RowSetPtr>(estimator_result);
+  CHECK(estimator_result_rows);
+  const auto estimator_result_set = estimator_result_rows->getResultSet();
+  CHECK(estimator_result_set);
+  return std::max(estimator_result_set->getNDVEstimator(), size_t(1));
 }
 
 

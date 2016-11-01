@@ -19,7 +19,7 @@
 namespace {
 
 bool use_multithreaded_reduction(const size_t entry_count) {
-  return entry_count > 2;
+  return entry_count > 100000;
 }
 
 size_t get_row_qw_count(const QueryMemoryDescriptor& query_mem_desc) {

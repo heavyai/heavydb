@@ -77,6 +77,12 @@ class RelAlgExecutor {
                                   RenderInfo*,
                                   const int64_t queue_time_ms);
 
+  size_t getNDVEstimation(const WorkUnit& work_unit,
+                          const std::vector<TargetMetaInfo>& targets_meta,
+                          const bool is_agg,
+                          const CompilationOptions& co,
+                          const ExecutionOptions& eo);
+
   ExecutionResult renderWorkUnit(const RelAlgExecutor::WorkUnit& work_unit,
                                  const std::vector<TargetMetaInfo>& targets_meta,
                                  RenderInfo* render_info,
