@@ -4005,6 +4005,9 @@ ResultPtr Executor::executeWorkUnit(int32_t* error_code,
           &query_infos[table_idx].info.fragments;
     }
     const QueryMemoryDescriptor& query_mem_desc = execution_dispatch.getQueryMemoryDescriptor();
+    if (render_allocator_map && cgen_state_->must_run_on_cpu_) {
+      throw std::runtime_error("Query has to run on CPU, cannot render its results");
+    }
     dispatchFragments(dispatch,
                       execution_dispatch,
                       options,
