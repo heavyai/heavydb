@@ -330,19 +330,6 @@ class QueryExecutionContext : boost::noncopyable {
                                       const int64_t join_hash_table,
                                       RenderAllocatorMap* render_allocator_map) const;
 
-  std::vector<int64_t*> launchCpuCode(const RelAlgExecutionUnit& ra_exe_unit,
-                                      const std::vector<void*>& fn_ptrs,
-                                      const bool hoist_literals,
-                                      const std::vector<int8_t>& literal_buff,
-                                      std::vector<std::vector<const int8_t*>> col_buffers,
-                                      const std::vector<int64_t>& num_rows,
-                                      const std::vector<uint64_t>& frag_row_offsets,
-                                      const int32_t scan_limit,
-                                      const std::vector<int64_t>& init_agg_vals,
-                                      int32_t* error_code,
-                                      const uint32_t num_tables,
-                                      const int64_t join_hash_table);
-
  private:
   bool isEmptyBin(const int64_t* group_by_buffer, const size_t bin, const size_t key_idx) const;
   void outputBin(ResultRows& results,
