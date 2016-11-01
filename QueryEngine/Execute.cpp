@@ -845,6 +845,9 @@ llvm::Value* Executor::codegen(const Analyzer::LikeExpr* expr, const Compilation
   if (fast_dict_like_lv) {
     return fast_dict_like_lv;
   }
+  if (g_enable_watchdog) {
+    throw WatchdogException("Cannot do LIKE / ILIKE on this dictionary encoded column, its cardinality is too high");
+  }
   auto str_lv = codegen(expr->get_arg(), true, co);
   if (str_lv.size() != 3) {
     CHECK_EQ(size_t(1), str_lv.size());
@@ -922,6 +925,9 @@ llvm::Value* Executor::codegen(const Analyzer::RegexpExpr* expr, const Compilati
   if (fast_dict_pattern_lv) {
     return fast_dict_pattern_lv;
   }
+  if (g_enable_watchdog) {
+    throw WatchdogException("Cannot do REGEXP_LIKE on this dictionary encoded column, its cardinality is too high");
+  }
   auto str_lv = codegen(expr->get_arg(), true, co);
   // Running on CPU for now.
   cgen_state_->must_run_on_cpu_ = true;
@@ -960,7 +966,7 @@ llvm::Value* Executor::codegenDictRegexp(const std::shared_ptr<Analyzer::Expr> p
   CHECK(dict_regexp_arg_ti.is_string());
   CHECK_EQ(kENCODING_DICT, dict_regexp_arg_ti.get_compression());
   const auto sd = getStringDictionary(dict_regexp_arg_ti.get_comp_param(), row_set_mem_owner_);
-  if (sd->size() > 10000000) {
+  if (sd->size() > 15000000) {
     return nullptr;
   }
   const auto& pattern_ti = pattern->get_type_info();
