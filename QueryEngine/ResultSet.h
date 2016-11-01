@@ -9,7 +9,6 @@
 #ifndef QUERYENGINE_RESULTSET_H
 #define QUERYENGINE_RESULTSET_H
 
-#include "CardinalityEstimator.h"
 #include "ResultSetBufferAccessors.h"
 #include "TargetValue.h"
 #include "../Chunk/Chunk.h"
@@ -93,7 +92,6 @@ class ResultSetStorage {
 namespace Analyzer {
 
 class Expr;
-class NDVEstimator;
 struct OrderEntry;
 
 }  // Analyzer
@@ -122,11 +120,6 @@ class ResultSet {
             const QueryMemoryDescriptor& query_mem_desc,
             const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
             const Executor* executor);
-
-  ResultSet(const std::shared_ptr<const Analyzer::NDVEstimator>,
-            const ExecutorDeviceType device_type,
-            const int device_id,
-            Data_Namespace::DataMgr* data_mgr);
 
   // Empty result set constructor
   ResultSet();
@@ -164,12 +157,6 @@ class ResultSet {
   const QueryMemoryDescriptor& getQueryMemDesc() const;
 
   const std::vector<TargetInfo>& getTargetInfos() const;
-
-  int8_t* getEstimatorBuffer() const;
-
-  void syncEstimatorBuffer() const;
-
-  size_t getNDVEstimator() const;
 
   void setQueueTime(const int64_t queue_time);
 
@@ -294,11 +281,6 @@ class ResultSet {
   std::vector<std::vector<int8_t>> literal_buffers_;
   const std::vector<ColumnLazyFetchInfo> lazy_fetch_info_;
   std::vector<std::vector<const int8_t*>> col_buffers_;
-
-  const std::shared_ptr<const Analyzer::NDVEstimator> estimator_;
-  int8_t* estimator_buffer_;
-  mutable int8_t* host_estimator_buffer_;
-  Data_Namespace::DataMgr* data_mgr_;
 
   friend class ResultSetManager;
 };

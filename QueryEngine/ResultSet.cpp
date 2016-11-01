@@ -17,7 +17,6 @@
 #include "Shared/thread_count.h"
 
 #include <algorithm>
-#include <bitset>
 #include <future>
 #include <numeric>
 
@@ -68,10 +67,7 @@ ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
       row_set_mem_owner_(row_set_mem_owner),
       queue_time_ms_(0),
       render_time_ms_(0),
-      executor_(executor),
-      estimator_buffer_(nullptr),
-      host_estimator_buffer_(nullptr),
-      data_mgr_(nullptr) {
+      executor_(executor) {
 }
 
 ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
@@ -95,47 +91,11 @@ ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
       render_time_ms_(0),
       executor_(executor),
       lazy_fetch_info_(lazy_fetch_info),
-      col_buffers_(col_buffers),
-      estimator_buffer_(nullptr),
-      host_estimator_buffer_(nullptr),
-      data_mgr_(nullptr) {
-}
-
-ResultSet::ResultSet(const std::shared_ptr<const Analyzer::NDVEstimator> estimator,
-                     const ExecutorDeviceType device_type,
-                     const int device_id,
-                     Data_Namespace::DataMgr* data_mgr)
-    : device_type_(device_type),
-      device_id_(device_id),
-      query_mem_desc_{},
-      crt_row_buff_idx_(0),
-      estimator_(estimator),
-      estimator_buffer_(nullptr),
-      host_estimator_buffer_(nullptr),
-      data_mgr_(data_mgr) {
-  std::unique_ptr<int8_t, CheckedAllocDeleter> zeros(
-      static_cast<int8_t*>(checked_calloc(estimator_->getEstimatorBufferSize(), 1)));
-  if (device_type == ExecutorDeviceType::GPU) {
-    estimator_buffer_ =
-        reinterpret_cast<int8_t*>(alloc_gpu_mem(data_mgr_, estimator_->getEstimatorBufferSize(), device_id_, nullptr));
-    copy_to_gpu(data_mgr,
-                reinterpret_cast<CUdeviceptr>(estimator_buffer_),
-                zeros.get(),
-                estimator_->getEstimatorBufferSize(),
-                device_id_);
-  } else {
-    host_estimator_buffer_ = static_cast<int8_t*>(checked_calloc(estimator_->getEstimatorBufferSize(), 1));
-  }
+      col_buffers_(col_buffers) {
 }
 
 ResultSet::ResultSet()
-    : device_type_(ExecutorDeviceType::CPU),
-      device_id_(-1),
-      query_mem_desc_{},
-      crt_row_buff_idx_(0),
-      estimator_buffer_(nullptr),
-      host_estimator_buffer_(nullptr),
-      data_mgr_(nullptr) {
+    : device_type_(ExecutorDeviceType::CPU), device_id_(-1), query_mem_desc_{}, crt_row_buff_idx_(0) {
 }
 
 ResultSet::~ResultSet() {
@@ -144,10 +104,6 @@ ResultSet::~ResultSet() {
     if (!storage_->buff_is_provided_) {
       free(storage_->getUnderlyingBuffer());
     }
-  }
-  if (host_estimator_buffer_) {
-    CHECK(device_type_ == ExecutorDeviceType::CPU || estimator_buffer_);
-    free(host_estimator_buffer_);
   }
 }
 
@@ -214,7 +170,7 @@ size_t ResultSet::rowCount() const {
 }
 
 bool ResultSet::definitelyHasNoRows() const {
-  return !storage_ && !estimator_;
+  return !storage_;
 }
 
 const QueryMemoryDescriptor& ResultSet::getQueryMemDesc() const {
@@ -223,39 +179,6 @@ const QueryMemoryDescriptor& ResultSet::getQueryMemDesc() const {
 
 const std::vector<TargetInfo>& ResultSet::getTargetInfos() const {
   return targets_;
-}
-
-int8_t* ResultSet::getEstimatorBuffer() const {
-  return device_type_ == ExecutorDeviceType::GPU ? estimator_buffer_ : host_estimator_buffer_;
-}
-
-void ResultSet::syncEstimatorBuffer() const {
-  CHECK(device_type_ == ExecutorDeviceType::GPU);
-  CHECK(!host_estimator_buffer_);
-  CHECK_EQ(size_t(0), estimator_->getEstimatorBufferSize() % sizeof(int64_t));
-  host_estimator_buffer_ = static_cast<int8_t*>(checked_calloc(estimator_->getEstimatorBufferSize(), 1));
-  copy_from_gpu(data_mgr_,
-                host_estimator_buffer_,
-                reinterpret_cast<CUdeviceptr>(estimator_buffer_),
-                estimator_->getEstimatorBufferSize(),
-                device_id_);
-}
-
-size_t ResultSet::getNDVEstimator() const {
-  CHECK(host_estimator_buffer_);
-  size_t bits_set = 0;
-  for (size_t i = 0; i < estimator_->getEstimatorBufferSize(); ++i) {
-    const auto bitfield = host_estimator_buffer_[i];
-    bits_set += std::bitset<8>(bitfield).count();
-  }
-  const auto total_bits = estimator_->getEstimatorBufferSize() * 8;
-  CHECK_LE(bits_set, total_bits);
-  const auto unset_bits = total_bits - bits_set;
-  const auto ratio = static_cast<double>(unset_bits) / total_bits;
-  if (ratio == 0.) {
-    return total_bits;
-  }
-  return -static_cast<double>(total_bits) * log(ratio);
 }
 
 void ResultSet::setQueueTime(const int64_t queue_time) {

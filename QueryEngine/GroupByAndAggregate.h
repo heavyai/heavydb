@@ -442,7 +442,6 @@ class QueryExecutionContext : boost::noncopyable {
   const bool sort_on_gpu_;
 
   mutable std::vector<std::unique_ptr<ResultSet>> result_sets_;
-  mutable std::unique_ptr<ResultSet> estimator_result_set_;
 
   friend class Executor;
   friend void copy_group_by_buffers_from_gpu(Data_Namespace::DataMgr* data_mgr,
