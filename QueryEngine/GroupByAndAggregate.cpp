@@ -130,9 +130,9 @@ QueryExecutionContext::QueryExecutionContext(const RelAlgExecutionUnit& ra_exe_u
                                               executor));
       result_sets_.back()->allocateStorage(reinterpret_cast<int8_t*>(group_by_buffer),
                                            executor_->plan_state_->init_agg_vals_);
-    }
-    for (size_t j = 1; j < step; ++j) {
-      result_sets_.emplace_back(nullptr);
+      for (size_t j = 1; j < step; ++j) {
+        result_sets_.emplace_back(nullptr);
+      }
     }
   }
 }
