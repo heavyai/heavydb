@@ -684,6 +684,9 @@ TEST(Select, Case) {
     c("SELECT CASE WHEN str IN ('foo', 'bar') THEN str END key1, COUNT(*) FROM test GROUP BY str HAVING key1 IS NOT "
       "NULL ORDER BY key1;",
       dt);
+    c("SELECT CASE WHEN str IN ('foo') THEN 'FOO' WHEN str IN ('bar') THEN 'BAR' ELSE 'BAZ' END AS g, COUNT(*) "
+      "FROM test GROUP BY g ORDER BY g DESC;",
+      dt);
 #ifdef HAVE_CALCITE
     ASSERT_EQ(
         int64_t(1),
