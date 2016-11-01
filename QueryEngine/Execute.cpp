@@ -886,7 +886,7 @@ llvm::Value* Executor::codegenDictLike(const std::shared_ptr<Analyzer::Expr> lik
   CHECK(dict_like_arg_ti.is_string());
   CHECK_EQ(kENCODING_DICT, dict_like_arg_ti.get_compression());
   const auto sd = getStringDictionary(dict_like_arg_ti.get_comp_param(), row_set_mem_owner_);
-  if (sd->size() > 10000000) {
+  if (sd->size() > 15000000) {
     return nullptr;
   }
   const auto& pattern_ti = pattern->get_type_info();
