@@ -1,5 +1,25 @@
 # MapD Platform
-The latest version of the MapD Platform is 1.2.9.
+The latest version of the MapD Platform is 1.2.10.
+
+#### **1.2.10** - Released November 3, 2016
+
+####New
+- Now supporting `JOIN` for three or more tables
+- Faster loading of cold data from disk
+- More detailed error messages for unsupported `JOIN` queries
+- Enhanced precision when rendering `double` columns for X/Y
+- New mapdql command `\memory_summary` to show current memory usage
+
+
+####Fixed
+- Issue with `SORT` queries containing duplicate count all aggregates
+- Incorrect results for `OUTER JOIN` queries with a projection `CASE` involving `NULL`s
+- `COUNT DISTINCT` for 2 or more columns now properly rejected
+- Issue with instability when close to limit of physical host memory
+- Inaccurate results for `SUM` and `AVERAGE` for floating point on GPU
+- Conversion from string to numeric types on `INSERT` statement
+- `CAST` from integer to float for literal constants
+- Issue with `bigint` interpretation in JDBC
 
 #### **1.2.9** - Released October 17, 2016
 
