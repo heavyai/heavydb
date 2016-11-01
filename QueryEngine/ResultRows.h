@@ -682,8 +682,6 @@ class ResultRows {
 
   std::shared_ptr<ResultSet> getResultSet() const { return result_set_; }
 
-  void fillOneRow(const std::vector<int64_t>& row);
-
   void holdChunks(const std::list<std::shared_ptr<Chunk_NS::Chunk>>& chunks) {
     if (result_set_) {
       result_set_->holdChunks(chunks);

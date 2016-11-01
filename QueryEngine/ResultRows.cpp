@@ -1638,25 +1638,6 @@ bool ResultRows::isNull(const SQLTypeInfo& ti, const InternalTargetValue& val) {
   return true;
 }
 
-void ResultRows::fillOneRow(const std::vector<int64_t>& row) {
-  if (result_set_) {
-    result_set_->fillOneEntry(row);
-    return;
-  }
-  beginRow();
-  size_t slot_idx = 0;
-  for (const auto target : targets_) {
-    CHECK(target.is_agg);
-    if (target.agg_kind == kAVG) {
-      addValue(row[slot_idx], row[slot_idx + 1]);
-      ++slot_idx;
-    } else {
-      addValue(row[slot_idx]);
-    }
-    ++slot_idx;
-  }
-}
-
 void QueryExecutionContext::outputBin(ResultRows& results,
                                       const std::vector<Analyzer::Expr*>& targets,
                                       int64_t* group_by_buffer,

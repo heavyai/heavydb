@@ -203,6 +203,7 @@ void ResultSetStorage::reduceOneEntryNoCollisionsRowWise(const size_t entry_idx,
                                                          int8_t* this_buff,
                                                          const int8_t* that_buff) const {
   CHECK(!query_mem_desc_.output_columnar);
+  CHECK(query_mem_desc_.hash_type != GroupByColRangeType::Scan);
   if (isEmptyEntry(entry_idx, that_buff)) {
     return;
   }

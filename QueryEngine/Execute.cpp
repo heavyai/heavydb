@@ -5152,64 +5152,52 @@ int32_t Executor::executePlanWithoutGroupBy(const RelAlgExecutionUnit& ra_exe_un
   if (error_code == Executor::ERR_OVERFLOW_OR_UNDERFLOW || error_code == Executor::ERR_DIV_BY_ZERO) {
     return error_code;
   }
-  std::vector<int64_t> reduced_outs;
-  const size_t entry_count = device_type == ExecutorDeviceType::GPU ? col_buffers.size() * blockSize() * gridSize() : 1;
-  if (size_t(1) == entry_count) {
-    for (auto out : out_vec) {
-      CHECK(out);
-      reduced_outs.push_back(*out);
+  auto rows = boost::make_unique<ResultRows>(query_exe_context->query_mem_desc_,
+                                             target_exprs,
+                                             this,
+                                             query_exe_context->row_set_mem_owner_,
+                                             query_exe_context->init_agg_vals_,
+                                             device_type);
+  CHECK(rows);
+  rows->beginRow();
+  size_t out_vec_idx = 0;
+  for (const auto target_expr : target_exprs) {
+    const auto agg_info = target_info(target_expr);
+    CHECK(agg_info.is_agg);
+    uint32_t num_fragments = col_buffers.size();
+    int64_t val1;
+    std::tie(val1, error_code) =
+        reduceResults(agg_info.agg_kind,
+                      agg_info.sql_type,
+                      query_exe_context->init_agg_vals_[out_vec_idx],
+                      query_exe_context->query_mem_desc_.agg_col_widths[out_vec_idx].compact,
+                      out_vec[out_vec_idx],
+                      device_type == ExecutorDeviceType::GPU ? num_fragments * blockSize() * gridSize() : 1,
+                      false);
+    if (error_code) {
+      break;
     }
-  } else {
-    size_t out_vec_idx = 0;
-    for (const auto target_expr : target_exprs) {
-      const auto agg_info = target_info(target_expr);
-      CHECK(agg_info.is_agg);
-      int64_t val1;
-      std::tie(val1, error_code) = reduceResults(agg_info.agg_kind,
-                                                 agg_info.sql_type,
-                                                 query_exe_context->init_agg_vals_[out_vec_idx],
-                                                 query_exe_context->query_mem_desc_.agg_col_widths[out_vec_idx].compact,
-                                                 out_vec[out_vec_idx],
-                                                 entry_count,
-                                                 false);
+    if (agg_info.agg_kind == kAVG) {
+      ++out_vec_idx;
+      int64_t val2;
+      std::tie(val2, error_code) =
+          reduceResults(kCOUNT,
+                        agg_info.sql_type,
+                        query_exe_context->init_agg_vals_[out_vec_idx],
+                        query_exe_context->query_mem_desc_.agg_col_widths[out_vec_idx].compact,
+                        out_vec[out_vec_idx],
+                        device_type == ExecutorDeviceType::GPU ? num_fragments * blockSize() * gridSize() : 1,
+                        false);
       if (error_code) {
         break;
       }
-      reduced_outs.push_back(val1);
-      if (agg_info.agg_kind == kAVG) {
-        int64_t val2;
-        std::tie(val2, error_code) =
-            reduceResults(kCOUNT,
-                          agg_info.sql_type,
-                          query_exe_context->init_agg_vals_[out_vec_idx + 1],
-                          query_exe_context->query_mem_desc_.agg_col_widths[out_vec_idx + 1].compact,
-                          out_vec[out_vec_idx + 1],
-                          entry_count,
-                          false);
-        if (error_code) {
-          break;
-        }
-        reduced_outs.push_back(val2);
-        ++out_vec_idx;
-      }
-      ++out_vec_idx;
+      rows->addValue(val1, val2);
+    } else {
+      rows->addValue(val1);
     }
+    ++out_vec_idx;
   }
-
-  RowSetPtr rows_ptr{nullptr};
-  if (can_use_result_set(query_exe_context->query_mem_desc_, device_type)) {
-    rows_ptr = boost::make_unique<ResultRows>(std::shared_ptr<ResultSet>(query_exe_context->result_sets_[0].release()));
-  } else {
-    rows_ptr = boost::make_unique<ResultRows>(query_exe_context->query_mem_desc_,
-                                              target_exprs,
-                                              this,
-                                              query_exe_context->row_set_mem_owner_,
-                                              query_exe_context->init_agg_vals_,
-                                              device_type);
-  }
-  CHECK(rows_ptr);
-  rows_ptr->fillOneRow(reduced_outs);
-  results = std::move(rows_ptr);
+  results = std::move(rows);
   return error_code;
 }
 

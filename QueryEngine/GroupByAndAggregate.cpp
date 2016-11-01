@@ -55,9 +55,7 @@ QueryExecutionContext::QueryExecutionContext(const RelAlgExecutionUnit& ra_exe_u
   CHECK(!sort_on_gpu_ || output_columnar);
   if (render_allocator_map || query_mem_desc_.group_col_widths.empty()) {
     allocateCountDistinctBuffers(false);
-    if (render_allocator_map) {
-      return;
-    }
+    return;
   }
 
   std::unique_ptr<int64_t, CheckedAllocDeleter> group_by_buffer_template(
@@ -565,7 +563,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const RelAlgExecution
                                                            const int64_t join_hash_table,
                                                            RenderAllocatorMap* render_allocator_map) const {
 #ifdef HAVE_CUDA
-  bool is_group_by{!query_mem_desc_.group_col_widths.empty()};
+  bool is_group_by{query_mem_desc_.getBufferSizeBytes(ExecutorDeviceType::GPU) > 0};
   data_mgr->cudaMgr_->setContext(device_id);
 
   RenderAllocator* render_allocator = nullptr;
@@ -1275,7 +1273,7 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
                        0,
                        group_col_widths,
                        agg_col_widths,
-                       1,
+                       0,
                        0,
                        0,
                        0,
