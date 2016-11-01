@@ -59,6 +59,7 @@ class StringDictionary {
   void addPayloadCapacity() noexcept;
   void addOffsetCapacity() noexcept;
   size_t addStorageCapacity(int fd) noexcept;
+  void invalidateInvertedIndex() noexcept;
 
   size_t str_count_;
   std::vector<int32_t> str_ids_;
@@ -73,6 +74,8 @@ class StringDictionary {
   std::map<int32_t, std::string> transient_int_to_str_;
   std::map<std::string, int32_t> transient_str_to_int_;
   mutable mapd_shared_mutex rw_mutex_;
+  mutable std::map<std::tuple<std::string, bool, bool, char>, std::vector<std::string>> like_cache_;
+  mutable std::map<std::pair<std::string, char>, std::vector<std::string>> regex_cache_;
 
   static char* CANARY_BUFFER;
 };

@@ -240,6 +240,11 @@ std::vector<std::string> StringDictionary::getLike(const std::string& pattern,
                                                    const bool is_simple,
                                                    const char escape) const noexcept {
   mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
+  const auto cache_key = std::make_tuple(pattern, icase, is_simple, escape);
+  const auto it = like_cache_.find(cache_key);
+  if (it != like_cache_.end()) {
+    return it->second;
+  }
   std::vector<std::string> result;
   std::vector<std::thread> workers;
   int worker_count = cpu_threads();
@@ -267,6 +272,8 @@ std::vector<std::string> StringDictionary::getLike(const std::string& pattern,
       result.push_back(str);
     }
   }
+  const auto it_ok = like_cache_.insert(std::make_pair(cache_key, result));
+  CHECK(it_ok.second);
   return result;
 }
 
@@ -280,6 +287,11 @@ bool is_regexp_like(const std::string& str, const std::string& pattern, const ch
 
 std::vector<std::string> StringDictionary::getRegexpLike(const std::string& pattern, const char escape) const noexcept {
   mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
+  const auto cache_key = std::make_pair(pattern, escape);
+  const auto it = regex_cache_.find(cache_key);
+  if (it != regex_cache_.end()) {
+    return it->second;
+  }
   std::vector<std::string> result;
   std::vector<std::thread> workers;
   int worker_count = cpu_threads();
@@ -307,6 +319,8 @@ std::vector<std::string> StringDictionary::getRegexpLike(const std::string& patt
       result.push_back(str);
     }
   }
+  const auto it_ok = regex_cache_.insert(std::make_pair(cache_key, result));
+  CHECK(it_ok.second);
   return result;
 }
 
@@ -351,6 +365,7 @@ int32_t StringDictionary::getOrAddImpl(const std::string& str, bool recover) noe
     }
     str_ids_[bucket] = static_cast<int32_t>(str_count_);
     ++str_count_;
+    invalidateInvertedIndex();
   }
   return str_ids_[bucket];
 }
@@ -445,6 +460,15 @@ size_t StringDictionary::addStorageCapacity(int fd) noexcept {
   CHECK_NE(lseek(fd, 0, SEEK_END), -1);
   CHECK(write(fd, CANARY_BUFFER, CANARY_BUFF_SIZE) == CANARY_BUFF_SIZE);
   return CANARY_BUFF_SIZE;
+}
+
+void StringDictionary::invalidateInvertedIndex() noexcept {
+  if (!like_cache_.empty()) {
+    decltype(like_cache_)().swap(like_cache_);
+  }
+  if (!regex_cache_.empty()) {
+    decltype(regex_cache_)().swap(regex_cache_);
+  }
 }
 
 char* StringDictionary::CANARY_BUFFER{nullptr};
