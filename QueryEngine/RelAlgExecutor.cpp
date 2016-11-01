@@ -883,7 +883,8 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(const RelAlgExecutor::WorkUnit& 
           eo,
           cat_,
           executor_->row_set_mem_owner_,
-          (render_info && render_info->do_render ? render_info->render_allocator_map_ptr.get() : nullptr)),
+          (render_info && render_info->do_render ? render_info->render_allocator_map_ptr.get() : nullptr),
+          false),
       targets_meta};
   result.setQueueTime(queue_time_ms);
   if (!error_code) {
@@ -930,7 +931,8 @@ ExecutionResult RelAlgExecutor::handleRetry(const int32_t error_code_in,
                                          eo_no_multifrag,
                                          cat_,
                                          executor_->row_set_mem_owner_,
-                                         nullptr),
+                                         nullptr,
+                                         true),
               targets_meta};
     result.setQueueTime(queue_time_ms);
   }
@@ -950,7 +952,8 @@ ExecutionResult RelAlgExecutor::handleRetry(const int32_t error_code_in,
                                            eo_no_multifrag,
                                            cat_,
                                            executor_->row_set_mem_owner_,
-                                           nullptr),
+                                           nullptr,
+                                           true),
                 targets_meta};
       result.setQueueTime(queue_time_ms);
       if (!error_code) {

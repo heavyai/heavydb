@@ -351,7 +351,8 @@ RowSetPtr Executor::executeSelectPlan(const Planner::Plan* plan,
                                     {false, allow_multifrag, just_explain, allow_loop_joins, g_enable_watchdog},
                                     cat,
                                     row_set_mem_owner_,
-                                    render_allocator_map);
+                                    render_allocator_map,
+                                    false);
       auto& rows = boost::get<RowSetPtr>(result);
       max_groups_buffer_entry_guess = max_groups_buffer_entry_guess_limit;
       CHECK(rows);
@@ -370,7 +371,8 @@ RowSetPtr Executor::executeSelectPlan(const Planner::Plan* plan,
                                   {false, allow_multifrag, just_explain, allow_loop_joins, g_enable_watchdog},
                                   cat,
                                   row_set_mem_owner_,
-                                  render_allocator_map);
+                                  render_allocator_map,
+                                  false);
     auto& rows = boost::get<RowSetPtr>(result);
     CHECK(rows);
     return std::move(rows);
@@ -3502,7 +3504,8 @@ RowSetPtr Executor::executeResultPlan(const Planner::Result* result_plan,
                                 {false, allow_multifrag, just_explain, allow_loop_joins, g_enable_watchdog},
                                 cat,
                                 row_set_mem_owner_,
-                                nullptr);
+                                nullptr,
+                                false);
   auto& rows = boost::get<RowSetPtr>(result);
   CHECK(rows);
   if (just_explain) {
@@ -3779,7 +3782,8 @@ ResultPtr Executor::executeWorkUnit(int32_t* error_code,
                                     const ExecutionOptions& options,
                                     const Catalog_Namespace::Catalog& cat,
                                     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-                                    RenderAllocatorMap* render_allocator_map) {
+                                    RenderAllocatorMap* render_allocator_map,
+                                    const bool /* has_cardinality_estimation */) {
   const auto device_type = getDeviceTypeForTargets(ra_exe_unit, co.device_type_);
   CHECK(!query_infos.empty());
   if (!max_groups_buffer_entry_guess) {

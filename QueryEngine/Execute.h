@@ -625,7 +625,8 @@ class Executor {
                             const ExecutionOptions& options,
                             const Catalog_Namespace::Catalog&,
                             std::shared_ptr<RowSetMemoryOwner>,
-                            RenderAllocatorMap* render_allocator_map);
+                            RenderAllocatorMap* render_allocator_map,
+                            const bool has_cardinality_estimation);
 
   RowSetPtr executeExplain(const ExecutionDispatch&);
 
