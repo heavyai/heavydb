@@ -1448,13 +1448,6 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
 
   const auto col_range_info = getColRangeInfo();
 
-  if (g_enable_watchdog && col_range_info.hash_type_ != GroupByColRangeType::OneColKnownRange &&
-      col_range_info.hash_type_ != GroupByColRangeType::MultiColPerfectHash &&
-      col_range_info.hash_type_ != GroupByColRangeType::OneColGuessedRange && !render_output &&
-      (ra_exe_unit_.scan_limit == 0 || ra_exe_unit_.scan_limit > 10000)) {
-    throw WatchdogException("Query would use too much memory");
-  }
-
   switch (col_range_info.hash_type_) {
     case GroupByColRangeType::OneColKnownRange:
     case GroupByColRangeType::OneColGuessedRange:
