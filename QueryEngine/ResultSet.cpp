@@ -413,16 +413,6 @@ std::function<bool(const uint32_t, const uint32_t)> ResultSet::createComparator(
     for (const auto order_entry : order_entries) {
       CHECK_GE(order_entry.tle_no, 1);
       const auto& entry_ti = get_compact_type(targets_[order_entry.tle_no - 1]);
-      const auto is_dict = entry_ti.is_string() && entry_ti.get_compression() == kENCODING_DICT;
-      if (lhs_storage->isEmptyEntry(fixedup_lhs) && rhs_storage->isEmptyEntry(fixedup_rhs)) {
-        return false;
-      }
-      if (lhs_storage->isEmptyEntry(fixedup_lhs) && !rhs_storage->isEmptyEntry(fixedup_rhs)) {
-        return use_heap;
-      }
-      if (rhs_storage->isEmptyEntry(fixedup_rhs) && !lhs_storage->isEmptyEntry(fixedup_lhs)) {
-        return !use_heap;
-      }
       const auto lhs_v =
           getColumnInternal(lhs_storage->buff_, fixedup_lhs, order_entry.tle_no - 1, lhs_storage_lookup_result);
       const auto rhs_v =
@@ -439,7 +429,7 @@ std::function<bool(const uint32_t, const uint32_t)> ResultSet::createComparator(
       const bool use_desc_cmp = use_heap ? !order_entry.is_desc : order_entry.is_desc;
       if (LIKELY(lhs_v.isInt())) {
         CHECK(rhs_v.isInt());
-        if (UNLIKELY(is_dict)) {
+        if (UNLIKELY(entry_ti.is_string() && entry_ti.get_compression() == kENCODING_DICT)) {
           CHECK_EQ(4, entry_ti.get_logical_size());
           const auto string_dict = executor_->getStringDictionary(entry_ti.get_comp_param(), row_set_mem_owner_);
           auto lhs_str = string_dict->getString(lhs_v.i1);
