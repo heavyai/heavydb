@@ -352,7 +352,7 @@ RowSetPtr Executor::executeSelectPlan(const Planner::Plan* plan,
                                     cat,
                                     row_set_mem_owner_,
                                     render_allocator_map,
-                                    false);
+                                    true);
       auto& rows = boost::get<RowSetPtr>(result);
       max_groups_buffer_entry_guess = max_groups_buffer_entry_guess_limit;
       CHECK(rows);
@@ -372,7 +372,7 @@ RowSetPtr Executor::executeSelectPlan(const Planner::Plan* plan,
                                   cat,
                                   row_set_mem_owner_,
                                   render_allocator_map,
-                                  false);
+                                  true);
     auto& rows = boost::get<RowSetPtr>(result);
     CHECK(rows);
     return std::move(rows);
@@ -3511,7 +3511,7 @@ RowSetPtr Executor::executeResultPlan(const Planner::Result* result_plan,
                                 cat,
                                 row_set_mem_owner_,
                                 nullptr,
-                                false);
+                                true);
   auto& rows = boost::get<RowSetPtr>(result);
   CHECK(rows);
   if (just_explain) {
