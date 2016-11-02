@@ -225,8 +225,13 @@ const std::vector<TargetInfo>& ResultSet::getTargetInfos() const {
   return targets_;
 }
 
-int8_t* ResultSet::getEstimatorBuffer() const {
-  return device_type_ == ExecutorDeviceType::GPU ? estimator_buffer_ : host_estimator_buffer_;
+int8_t* ResultSet::getDeviceEstimatorBuffer() const {
+  CHECK(device_type_ == ExecutorDeviceType::GPU);
+  return estimator_buffer_;
+}
+
+int8_t* ResultSet::getHostEstimatorBuffer() const {
+  return host_estimator_buffer_;
 }
 
 void ResultSet::syncEstimatorBuffer() const {

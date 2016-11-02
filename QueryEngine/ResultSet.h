@@ -165,7 +165,9 @@ class ResultSet {
 
   const std::vector<TargetInfo>& getTargetInfos() const;
 
-  int8_t* getEstimatorBuffer() const;
+  int8_t* getDeviceEstimatorBuffer() const;
+
+  int8_t* getHostEstimatorBuffer() const;
 
   void syncEstimatorBuffer() const;
 

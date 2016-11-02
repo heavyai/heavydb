@@ -679,7 +679,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const RelAlgExecution
     const size_t agg_col_count{ra_exe_unit.estimator ? size_t(1) : init_agg_vals.size()};
     if (ra_exe_unit.estimator) {
       estimator_result_set_.reset(new ResultSet(ra_exe_unit.estimator, ExecutorDeviceType::GPU, device_id, data_mgr));
-      out_vec_dev_buffers.push_back(reinterpret_cast<CUdeviceptr>(estimator_result_set_->getEstimatorBuffer()));
+      out_vec_dev_buffers.push_back(reinterpret_cast<CUdeviceptr>(estimator_result_set_->getDeviceEstimatorBuffer()));
     } else {
       for (size_t i = 0; i < agg_col_count; ++i) {
         auto out_vec_dev_buffer =
@@ -773,7 +773,7 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(const RelAlgExecution
   std::vector<int64_t*> out_vec;
   if (ra_exe_unit.estimator) {
     estimator_result_set_.reset(new ResultSet(ra_exe_unit.estimator, ExecutorDeviceType::CPU, 0, nullptr));
-    out_vec.push_back(reinterpret_cast<int64_t*>(estimator_result_set_->getEstimatorBuffer()));
+    out_vec.push_back(reinterpret_cast<int64_t*>(estimator_result_set_->getHostEstimatorBuffer()));
   } else {
     if (!is_group_by) {
       for (size_t i = 0; i < init_agg_vals.size(); ++i) {
