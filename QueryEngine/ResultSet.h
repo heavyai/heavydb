@@ -267,11 +267,15 @@ class ResultSet {
       const std::list<Analyzer::OrderEntry>& order_entries,
       const bool use_heap) const;
 
-  void topPermutation(const size_t n, const std::function<bool(const uint32_t, const uint32_t)> compare);
+  static void topPermutation(std::vector<uint32_t>& to_sort,
+                             const size_t n,
+                             const std::function<bool(const uint32_t, const uint32_t)> compare);
 
   void sortPermutation(const std::function<bool(const uint32_t, const uint32_t)> compare);
 
-  void initPermutationBuffer();
+  std::vector<uint32_t> initPermutationBuffer(const size_t start, const size_t step);
+
+  void parallelTop(const std::list<Analyzer::OrderEntry>& order_entries, const size_t top_n);
 
   const std::vector<TargetInfo> targets_;
   const ExecutorDeviceType device_type_;
@@ -285,6 +289,7 @@ class ResultSet {
   size_t keep_first_;
   const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
   std::vector<uint32_t> permutation_;
+  std::vector<std::vector<uint32_t>> strided_permutations_;
   int64_t queue_time_ms_;
   int64_t render_time_ms_;
   const Executor* executor_;  // TODO(alex): remove

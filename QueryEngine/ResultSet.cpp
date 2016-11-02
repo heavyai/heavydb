@@ -330,33 +330,78 @@ void ResultSet::sort(const std::list<Analyzer::OrderEntry>& order_entries, const
   if (query_mem_desc_.entry_count > std::numeric_limits<uint32_t>::max()) {
     throw RowSortException("Sorting more than 4B elements not supported");
   }
+
   CHECK(size_t(0) == query_mem_desc_.entry_count_small || !query_mem_desc_.output_columnar);  // TODO(alex)
   CHECK(permutation_.empty());
-  initPermutationBuffer();
 
-  CHECK(!query_mem_desc_.sortOnGpu());  // TODO(alex)
   const bool use_heap{order_entries.size() == 1 && top_n};
-  auto compare = createComparator(order_entries, use_heap);
+  if (use_heap && entryCount() > 100000) {
+    if (g_enable_watchdog && (entryCount() > 20000000)) {
+      throw WatchdogException("Sorting the result would be too slow");
+    }
+    parallelTop(order_entries, top_n);
+    return;
+  }
+
   if (g_enable_watchdog && (entryCount() > 100000)) {
     throw WatchdogException("Sorting the result would be too slow");
   }
+
+  permutation_ = initPermutationBuffer(0, 1);
+
+  auto compare = createComparator(order_entries, use_heap);
+
   if (use_heap) {
-    topPermutation(top_n, compare);
+    topPermutation(permutation_, top_n, compare);
   } else {
     sortPermutation(compare);
   }
 }
 
-void ResultSet::initPermutationBuffer() {
-  for (size_t i = 0; i < query_mem_desc_.entry_count + query_mem_desc_.entry_count_small; ++i) {
+std::vector<uint32_t> ResultSet::initPermutationBuffer(const size_t start, const size_t step) {
+  CHECK_NE(size_t(0), step);
+  std::vector<uint32_t> permutation;
+  const auto total_entries = query_mem_desc_.entry_count + query_mem_desc_.entry_count_small;
+  permutation.reserve(total_entries / step);
+  for (size_t i = start; i < query_mem_desc_.entry_count + query_mem_desc_.entry_count_small; i += step) {
     const auto storage_lookup_result = findStorage(i);
     const auto lhs_storage = storage_lookup_result.storage_ptr;
     const auto off = storage_lookup_result.fixedup_entry_idx;
     CHECK(lhs_storage);
     if (!lhs_storage->isEmptyEntry(off)) {
-      permutation_.push_back(i);
+      permutation.push_back(i);
     }
   }
+  return permutation;
+}
+
+void ResultSet::parallelTop(const std::list<Analyzer::OrderEntry>& order_entries, const size_t top_n) {
+  const size_t step = cpu_threads();
+  strided_permutations_.resize(step);
+  std::vector<std::future<void>> init_futures;
+  for (size_t start = 0; start < step; ++start) {
+    init_futures.emplace_back(std::async(std::launch::async, [this, start, step] {
+      strided_permutations_[start] = initPermutationBuffer(start, step);
+    }));
+  }
+  for (auto& init_future : init_futures) {
+    init_future.get();
+  }
+  auto compare = createComparator(order_entries, true);
+  std::vector<std::future<void>> top_futures;
+  for (auto& strided_permutation : strided_permutations_) {
+    top_futures.emplace_back(std::async(std::launch::async, [&strided_permutation, &compare, top_n] {
+      topPermutation(strided_permutation, top_n, compare);
+    }));
+  }
+  for (auto& top_future : top_futures) {
+    top_future.get();
+  }
+  permutation_.reserve(strided_permutations_.size() * top_n);
+  for (const auto& strided_permutation : strided_permutations_) {
+    permutation_.insert(permutation_.end(), strided_permutation.begin(), strided_permutation.end());
+  }
+  topPermutation(permutation_, top_n, compare);
 }
 
 std::pair<ssize_t, size_t> ResultSet::getStorageIndex(const size_t entry_idx) const {
@@ -480,16 +525,18 @@ std::function<bool(const uint32_t, const uint32_t)> ResultSet::createComparator(
 #undef UNLIKELY
 #undef LIKELY
 
-void ResultSet::topPermutation(const size_t n, const std::function<bool(const uint32_t, const uint32_t)> compare) {
-  std::make_heap(permutation_.begin(), permutation_.end(), compare);
-  decltype(permutation_) permutation_top;
+void ResultSet::topPermutation(std::vector<uint32_t>& to_sort,
+                               const size_t n,
+                               const std::function<bool(const uint32_t, const uint32_t)> compare) {
+  std::make_heap(to_sort.begin(), to_sort.end(), compare);
+  std::vector<uint32_t> permutation_top;
   permutation_top.reserve(n);
-  for (size_t i = 0; i < n && !permutation_.empty(); ++i) {
-    permutation_top.push_back(permutation_.front());
-    std::pop_heap(permutation_.begin(), permutation_.end(), compare);
-    permutation_.pop_back();
+  for (size_t i = 0; i < n && !to_sort.empty(); ++i) {
+    permutation_top.push_back(to_sort.front());
+    std::pop_heap(to_sort.begin(), to_sort.end(), compare);
+    to_sort.pop_back();
   }
-  permutation_.swap(permutation_top);
+  to_sort.swap(permutation_top);
 }
 
 void ResultSet::sortPermutation(const std::function<bool(const uint32_t, const uint32_t)> compare) {
