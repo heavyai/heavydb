@@ -82,6 +82,13 @@ class RelAlgExecutor {
                           const CompilationOptions& co,
                           const ExecutionOptions& eo);
 
+  ssize_t getFilteredCountAll(const WorkUnit& work_unit,
+                              const bool is_agg,
+                              const CompilationOptions& co,
+                              const ExecutionOptions& eo);
+
+  bool isRowidLookup(const WorkUnit& work_unit);
+
   ExecutionResult renderWorkUnit(const RelAlgExecutor::WorkUnit& work_unit,
                                  const std::vector<TargetMetaInfo>& targets_meta,
                                  RenderInfo* render_info,

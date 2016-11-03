@@ -49,7 +49,7 @@ struct RelAlgExecutionUnit {
   const std::vector<Analyzer::Expr*> orig_target_exprs;
   const std::shared_ptr<const Analyzer::NDVEstimator> estimator;
   const SortInfo sort_info;
-  const size_t scan_limit;
+  size_t scan_limit;
 };
 
 #endif  // QUERYENGINE_RELALGEXECUTIONUNIT_H

@@ -866,6 +866,19 @@ size_t groups_approx_upper_bound(const std::vector<InputTableInfo>& table_infos)
   return std::max(max_num_groups, size_t(1));
 }
 
+bool can_use_scan_limit(const RelAlgExecutionUnit& ra_exe_unit) {
+  for (const auto target_expr : ra_exe_unit.target_exprs) {
+    if (dynamic_cast<const Analyzer::AggExpr*>(target_expr)) {
+      return false;
+    }
+  }
+  if (ra_exe_unit.groupby_exprs.size() == 1 && !ra_exe_unit.groupby_exprs.front() &&
+      (!ra_exe_unit.scan_limit || ra_exe_unit.scan_limit > 10000000)) {
+    return true;
+  }
+  return false;
+}
+
 }  // namespace
 
 ExecutionResult RelAlgExecutor::executeWorkUnit(const RelAlgExecutor::WorkUnit& work_unit,
@@ -892,9 +905,18 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(const RelAlgExecutor::WorkUnit& 
     }
   }
 
-  const auto table_infos = get_table_infos(work_unit.exe_unit, cat_, temporary_tables_);
+  auto ra_exe_unit = work_unit.exe_unit;
+
+  const auto table_infos = get_table_infos(ra_exe_unit, cat_, temporary_tables_);
 
   auto max_groups_buffer_entry_guess = work_unit.max_groups_buffer_entry_guess;
+
+  if (can_use_scan_limit(ra_exe_unit) && !isRowidLookup(work_unit)) {
+    const auto filter_count_all = getFilteredCountAll(work_unit, true, co, eo);
+    if (filter_count_all >= 0) {
+      ra_exe_unit.scan_limit = filter_count_all;
+    }
+  }
 
   static const size_t big_group_threshold{20000};
 
@@ -906,7 +928,7 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(const RelAlgExecutor::WorkUnit& 
                   max_groups_buffer_entry_guess,
                   is_agg,
                   table_infos,
-                  work_unit.exe_unit,
+                  ra_exe_unit,
                   co,
                   eo,
                   cat_,
@@ -923,7 +945,7 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(const RelAlgExecutor::WorkUnit& 
                   max_groups_buffer_entry_guess,
                   is_agg,
                   table_infos,
-                  work_unit.exe_unit,
+                  ra_exe_unit,
                   co,
                   eo,
                   cat_,
@@ -952,15 +974,15 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(const RelAlgExecutor::WorkUnit& 
     throw SpeculativeTopNFailed();
   }
   return handleRetry(
-      error_code, {work_unit.exe_unit, max_groups_buffer_entry_guess}, targets_meta, is_agg, co, eo, queue_time_ms);
+      error_code, {ra_exe_unit, max_groups_buffer_entry_guess}, targets_meta, is_agg, co, eo, queue_time_ms);
 }
 
 size_t RelAlgExecutor::getNDVEstimation(const WorkUnit& work_unit,
                                         const bool is_agg,
                                         const CompilationOptions& co,
                                         const ExecutionOptions& eo) {
-  int32_t error_code{0};
   const auto estimator_exe_unit = create_ndv_execution_unit(work_unit.exe_unit);
+  int32_t error_code{0};
   size_t one{1};
   const auto estimator_result = executor_->executeWorkUnit(&error_code,
                                                            one,
@@ -981,6 +1003,83 @@ size_t RelAlgExecutor::getNDVEstimation(const WorkUnit& work_unit,
   const auto estimator_result_set = estimator_result_rows->getResultSet();
   CHECK(estimator_result_set);
   return std::max(estimator_result_set->getNDVEstimator(), size_t(1));
+}
+
+ssize_t RelAlgExecutor::getFilteredCountAll(const WorkUnit& work_unit,
+                                            const bool is_agg,
+                                            const CompilationOptions& co,
+                                            const ExecutionOptions& eo) {
+  const auto table_infos = get_table_infos(work_unit.exe_unit, cat_, temporary_tables_);
+  if (table_infos.size() == 1 && table_infos.front().info.numTuples <= 10000) {
+    return table_infos.front().info.numTuples;
+  }
+  const auto count = makeExpr<Analyzer::AggExpr>(SQLTypeInfo(kINT, false), kCOUNT, nullptr, false);
+  const auto count_all_exe_unit = create_count_all_execution_unit(work_unit.exe_unit, count);
+  int32_t error_code{0};
+  size_t one{1};
+  ResultPtr count_all_result;
+  try {
+    count_all_result = executor_->executeWorkUnit(&error_code,
+                                                  one,
+                                                  is_agg,
+                                                  get_table_infos(work_unit.exe_unit, cat_, temporary_tables_),
+                                                  count_all_exe_unit,
+                                                  co,
+                                                  eo,
+                                                  cat_,
+                                                  executor_->row_set_mem_owner_,
+                                                  nullptr,
+                                                  false);
+  } catch (...) {
+    return -1;
+  }
+  if (error_code) {
+    return -1;
+  }
+  const auto& count_all_result_rows = boost::get<RowSetPtr>(count_all_result);
+  CHECK(count_all_result_rows);
+  const auto count_row = count_all_result_rows->getNextRow(false, false);
+  CHECK_EQ(size_t(1), count_row.size());
+  const auto& count_tv = count_row.front();
+  const auto count_scalar_tv = boost::get<ScalarTargetValue>(&count_tv);
+  CHECK(count_scalar_tv);
+  const auto count_ptr = boost::get<int64_t>(count_scalar_tv);
+  CHECK(count_ptr);
+  return std::max(*count_ptr, int64_t(1));
+}
+
+bool RelAlgExecutor::isRowidLookup(const WorkUnit& work_unit) {
+  const auto& ra_exe_unit = work_unit.exe_unit;
+  if (ra_exe_unit.input_descs.size() != 1) {
+    return false;
+  }
+  const auto& table_desc = ra_exe_unit.input_descs.front();
+  if (table_desc.getSourceType() != InputSourceType::TABLE) {
+    return false;
+  }
+  const int table_id = table_desc.getTableId();
+  for (const auto simple_qual : ra_exe_unit.simple_quals) {
+    const auto comp_expr = std::dynamic_pointer_cast<const Analyzer::BinOper>(simple_qual);
+    if (!comp_expr || comp_expr->get_optype() != kEQ) {
+      return false;
+    }
+    const auto lhs = comp_expr->get_left_operand();
+    const auto lhs_col = dynamic_cast<const Analyzer::ColumnVar*>(lhs);
+    if (!lhs_col || !lhs_col->get_table_id() || lhs_col->get_rte_idx()) {
+      return false;
+    }
+    const auto rhs = comp_expr->get_right_operand();
+    const auto rhs_const = dynamic_cast<const Analyzer::Constant*>(rhs);
+    if (!rhs_const) {
+      return false;
+    }
+    auto cd = get_column_descriptor(lhs_col->get_column_id(), table_id, cat_);
+    if (cd->isVirtualCol) {
+      CHECK_EQ("rowid", cd->columnName);
+    }
+    return true;
+  }
+  return false;
 }
 
 
