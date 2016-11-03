@@ -1198,7 +1198,7 @@ void apply_shim(std::string& result,
 std::string pg_shim(const std::string& query) {
   auto result = query;
   {
-    boost::regex unnest_expr{R"((\s+)(unnest)\s*\()", boost::regex::extended | boost::regex::icase};
+    boost::regex unnest_expr{R"((\s+|,)(unnest)\s*\()", boost::regex::extended | boost::regex::icase};
     apply_shim(result, unnest_expr, [](std::string& result, const boost::smatch& what) {
       result.replace(what.position(), what.length(), what[1] + "PG_UNNEST(");
     });
