@@ -76,9 +76,9 @@
 
   {# Keep modernizr in head - http://modernizr.com/docs/#installing #}
   <script src="{{ pathto('_static/js/modernizr.min.js', 1) }}"></script>
+  <link href='https://fonts.googleapis.com/css?family=Roboto:300,400,500,700' rel='stylesheet' type='text/css'>
 
 </head>
-
 <body class="wy-body-for-nav" role="document">
 
   {% block extrabody %} {% endblock %}
@@ -93,7 +93,7 @@
           {% if logo and theme_logo_only %}
             <a href="{{ pathto(master_doc) }}">
           {% else %}
-            <a href="{{ pathto(master_doc) }}" class="icon icon-home"> {{ project }}
+            <a href="{{ pathto(master_doc) }}" class="icon icon-home">  
           {% endif %}
 
           {% if logo %}
