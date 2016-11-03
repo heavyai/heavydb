@@ -5671,7 +5671,7 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
   const auto& query_mem_desc = group_by_and_aggregate.getQueryMemoryDescriptor();
 
   if (query_mem_desc.hash_type == GroupByColRangeType::MultiCol && !query_mem_desc.getSmallBufferSizeBytes() &&
-      !has_cardinality_estimation) {
+      !has_cardinality_estimation && !render_output) {
     throw CardinalityEstimationRequired();
   }
 
