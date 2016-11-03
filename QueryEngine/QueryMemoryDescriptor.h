@@ -152,7 +152,7 @@ struct QueryMemoryDescriptor {
 };
 
 inline bool can_use_result_set(const QueryMemoryDescriptor& query_mem_desc, const ExecutorDeviceType) {
-  return query_mem_desc.hash_type == GroupByColRangeType::MultiCol && query_mem_desc.group_col_widths.size() > 1;
+  return query_mem_desc.hash_type == GroupByColRangeType::MultiCol;
 }
 
 #endif  // QUERYENGINE_QUERYMEMORYDESCRIPTOR_H
