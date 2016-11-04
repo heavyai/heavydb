@@ -714,7 +714,18 @@ class MapDHandler : virtual public MapDIf {
 
   void get_memory_gpu(std::string& memory) { memory = sys_cat_->get_dataMgr().dumpLevel(MemoryLevel::GPU_LEVEL); }
 
-  void get_memory_summary(std::string& memory) { memory = sys_cat_->get_dataMgr().getMemorySummary(); }
+  // void get_memory_summary(std::string& memory) { memory = sys_cat_->get_dataMgr().getMemorySummary(); }
+
+  void get_memory_summary(TMemorySummary& memory) {
+    Data_Namespace::memorySummary internal_memory = sys_cat_->get_dataMgr().getMemorySummary();
+    memory.cpu_memory_in_use = internal_memory.cpuMemoryInUse;
+    for (auto gpu : internal_memory.gpuSummary) {
+      TGpuMemorySummary gs;
+      gs.gpu_memory_in_use = gpu.gpuMemoryInUse;
+      gs.gpu_memory_max = gpu.gpuMemoryMax;
+      memory.gpu_summary.push_back(gs);
+    }
+  }
 
   void get_databases(std::vector<TDBInfo>& dbinfos) {
     std::list<Catalog_Namespace::DBMetadata> db_list = sys_cat_->getAllDBMetadata();
@@ -1866,7 +1877,7 @@ int main(int argc, char** argv) {
   int num_gpus = -1;  // Can be used to override number of gpus detected on system - -1 means do not override
   int start_gpu = 0;
   int tthreadpool_size = 8;
-  size_t num_reader_threads = 1; // number of threads used when loading data
+  size_t num_reader_threads = 1;  // number of threads used when loading data
 
   namespace po = boost::program_options;
 
@@ -1925,7 +1936,8 @@ int main(int argc, char** argv) {
   desc_adv.add_options()("tthreadpool-size",
                          po::value<int>(&tthreadpool_size)->default_value(tthreadpool_size),
                          "Server thread pool size. Increasing may adversely affect render performance and stability.");
-  desc_adv.add_options()("num-reader-threads", po::value<size_t>(&num_reader_threads)->default_value(num_reader_threads),
+  desc_adv.add_options()("num-reader-threads",
+                         po::value<size_t>(&num_reader_threads)->default_value(num_reader_threads),
                          "Number of reader threads to use");
 
   po::positional_options_description positionalOptions;

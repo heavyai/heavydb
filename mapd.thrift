@@ -199,6 +199,16 @@ struct TRenderResult {
   5: i64 total_time_ms
 }
 
+struct TGpuMemorySummary {
+  1: i64 gpu_memory_max
+  2: i64 gpu_memory_in_use
+}
+
+struct TMemorySummary {
+  1: i64 cpu_memory_in_use
+  2: list<TGpuMemorySummary> gpu_summary
+}
+
 service MapD {
   TSessionId connect(1: string user, 2: string passwd, 3: string dbname) throws (1: TMapDException e 2: ThriftException te)
   void disconnect(1: TSessionId session) throws (1: TMapDException e 2: ThriftException te)
@@ -216,7 +226,7 @@ service MapD {
   void set_execution_mode(1: TSessionId session, 2: TExecuteMode mode) throws (1: TMapDException e 2: ThriftException te)
   string get_version() throws (1: ThriftException te)
   string get_memory_gpu() throws (1: ThriftException te)
-  string get_memory_summary() throws (1: ThriftException te)
+  TMemorySummary get_memory_summary() throws (1: ThriftException te)
   void load_table_binary(1: TSessionId session, 2: string table_name, 3: list<TRow> rows) throws (1: TMapDException e 2: ThriftException te)
   void load_table(1: TSessionId session, 2: string table_name, 3: list<TStringRow> rows) throws (1: TMapDException e 2: ThriftException te)
   TRenderResult render(1: TSessionId session, 2: string query, 3: string render_type, 4: string nonce) throws (1: TMapDException e 2: ThriftException te)

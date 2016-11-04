@@ -11,6 +11,7 @@
 #include <cstdlib>
 #include <string>
 #include <iostream>
+#include <iomanip>
 #include <fstream>
 #include <boost/algorithm/string/join.hpp>
 #include <boost/algorithm/string/trim.hpp>
@@ -60,6 +61,7 @@ struct ClientContext {
   TExecuteMode::type execution_mode;
   std::string version;
   std::string memory_usage;
+  TMemorySummary memory_summary;
 
   ClientContext(TTransport& t, MapDClient& c)
       : transport(t), client(c), session(INVALID_SESSION_ID), execution_mode(TExecuteMode::GPU) {}
@@ -119,7 +121,7 @@ bool thrift_with_retry(ThriftService which_service, ClientContext& context, cons
         context.client.get_memory_gpu(context.memory_usage);
         break;
       case kGET_MEMORY_SUMMARY:
-        context.client.get_memory_summary(context.memory_usage);
+        context.client.get_memory_summary(context.memory_summary);
         break;
     }
   } catch (TMapDException& e) {
@@ -670,7 +672,26 @@ int main(int argc, char** argv) {
       }
     } else if (!strncmp(line, "\\memory_summary", 11)) {
       if (thrift_with_retry(kGET_MEMORY_SUMMARY, context, nullptr)) {
-        std::cout << "MapD Server GPU memory Usage " << context.memory_usage << std::endl;
+        std::ostringstream tss;
+        size_t mb = 1024 * 1024;
+        tss << std::endl;
+        // tss << "CPU RAM TOTAL AVAILABLE   : "  std::fixed << setw(9) << setprecision(2) <<
+        // ((float)bufferMgrs_[MemoryLevel::CPU_LEVEL][0]->getMaxSize() / mb)
+        //    << std::endl;
+        tss << "CPU RAM IN BUFFER USE            : " << std::fixed << std::setw(9) << std::setprecision(2)
+            << ((float)context.memory_summary.cpu_memory_in_use / mb) << " MB" << std::endl;
+        int gpuNum = 0;
+        for (auto gpu : context.memory_summary.gpu_summary) {
+          tss << "GPU" << std::setfill(' ') << std::setw(2) << gpuNum << " VRAM AVAILABLE FOR BUFFERS : " << std::fixed
+              << std::setw(9) << std::setprecision(2) << ((float)gpu.gpu_memory_max / mb) << " MB" << std::endl;
+          tss << "GPU" << std::setfill(' ') << std::setw(2) << gpuNum << " VRAM BEING USED BY BUFFERS : " << std::fixed
+              << std::setw(9) << std::setprecision(2) << ((float)gpu.gpu_memory_in_use / mb) << " MB" << std::endl;
+          tss << "GPU" << std::setfill(' ') << std::setw(2) << gpuNum << " VRAM FREE                  : " << std::fixed
+              << std::setw(9) << std::setprecision(2) << ((float)(gpu.gpu_memory_max - gpu.gpu_memory_in_use) / mb)
+              << " MB" << std::endl;
+          gpuNum++;
+        }
+        std::cout << "MapD Server GPU memory Usage " << tss.str() << std::endl;
       } else {
         std::cout << "Cannot connect to MapD Server." << std::endl;
       }

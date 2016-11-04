@@ -117,28 +117,41 @@ void DataMgr::populateMgrs(const size_t userSpecifiedCpuBufferSize, const size_t
   }
 }
 
-std::string DataMgr::getMemorySummary() {
-  std::ostringstream tss;
-  size_t mb = 1024 * 1024;
-  tss << std::endl;
-  // tss << "CPU RAM TOTAL AVAILABLE   : "  std::fixed << setw(9) << setprecision(2) <<
-  // ((float)bufferMgrs_[MemoryLevel::CPU_LEVEL][0]->getMaxSize() / mb)
-  //    << std::endl;
-  tss << "CPU RAM IN BUFFER USE     : " << std::fixed << setw(9) << setprecision(2)
-      << ((float)bufferMgrs_[MemoryLevel::CPU_LEVEL][0]->getInUseSize() / mb) << " MB" << std::endl;
+memorySummary DataMgr::getMemorySummary() {
+  memorySummary ms;
+  ms.cpuMemoryInUse = bufferMgrs_[MemoryLevel::CPU_LEVEL][0]->getInUseSize();
   if (hasGpus_) {
     int numGpus = cudaMgr_->getDeviceCount();
     for (int gpuNum = 0; gpuNum < numGpus; ++gpuNum) {
-      tss << "GPU" << setfill(' ') << setw(2) << gpuNum << " RAM TOTAL AVAILABLE : " << std::fixed << setw(9)
-          << setprecision(2) << ((float)bufferMgrs_[MemoryLevel::GPU_LEVEL][gpuNum]->getMaxSize() / mb) << " MB"
-          << std::endl;
-      tss << "GPU" << setfill(' ') << setw(2) << gpuNum << " RAM IN BUFFER USE   : " << std::fixed << setw(9)
-          << setprecision(2) << ((float)bufferMgrs_[MemoryLevel::GPU_LEVEL][gpuNum]->getInUseSize() / mb) << " MB"
-          << std::endl;
+      gpuMemorySummary gms;
+      gms.gpuMemoryMax = bufferMgrs_[MemoryLevel::GPU_LEVEL][gpuNum]->getMaxSize();
+      gms.gpuMemoryInUse = bufferMgrs_[MemoryLevel::GPU_LEVEL][gpuNum]->getInUseSize();
+      ms.gpuSummary.push_back(gms);
     }
   }
-  return tss.str();
+  return ms;
 }
+//  std::ostringstream tss;
+//  size_t mb = 1024 * 1024;
+//  tss << std::endl;
+//  // tss << "CPU RAM TOTAL AVAILABLE   : "  std::fixed << setw(9) << setprecision(2) <<
+//  // ((float)bufferMgrs_[MemoryLevel::CPU_LEVEL][0]->getMaxSize() / mb)
+//  //    << std::endl;
+//  tss << "CPU RAM IN BUFFER USE     : " << std::fixed << setw(9) << setprecision(2)
+//      << ((float)bufferMgrs_[MemoryLevel::CPU_LEVEL][0]->getInUseSize() / mb) << " MB" << std::endl;
+//  if (hasGpus_) {
+//    int numGpus = cudaMgr_->getDeviceCount();
+//    for (int gpuNum = 0; gpuNum < numGpus; ++gpuNum) {
+//      tss << "GPU" << setfill(' ') << setw(2) << gpuNum << " RAM TOTAL AVAILABLE : " << std::fixed << setw(9)
+//          << setprecision(2) << ((float)bufferMgrs_[MemoryLevel::GPU_LEVEL][gpuNum]->getMaxSize() / mb) << " MB"
+//          << std::endl;
+//      tss << "GPU" << setfill(' ') << setw(2) << gpuNum << " RAM IN BUFFER USE   : " << std::fixed << setw(9)
+//          << setprecision(2) << ((float)bufferMgrs_[MemoryLevel::GPU_LEVEL][gpuNum]->getInUseSize() / mb) << " MB"
+//          << std::endl;
+//    }
+//  }
+//  return tss.str();
+//}
 
 std::string DataMgr::dumpLevel(const MemoryLevel memLevel) {
   // if gpu we need to iterate through all the buffermanagers for each card

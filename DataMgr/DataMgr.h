@@ -12,8 +12,6 @@
 #include <map>
 #include <vector>
 #include <string>
-#include <iostream>
-#include <iomanip>
 
 namespace File_Namespace {
 class FileBuffer;
@@ -25,6 +23,16 @@ class CudaMgr;
 
 namespace Data_Namespace {
 
+struct gpuMemorySummary {
+  int64_t gpuMemoryMax;
+  int64_t gpuMemoryInUse;
+};
+
+struct memorySummary {
+  int64_t cpuMemoryInUse;
+  std::vector<gpuMemorySummary> gpuSummary;
+};
+
 class DataMgr {
   friend class FileMgr;
 
@@ -35,7 +43,7 @@ class DataMgr {
           const int numGpus,
           const int startGpu = 0,
           const size_t reservedGpuMem = (1 << 27),
-          const size_t numReaderThreads = 0);  /* 0 means use default for # of reader threads */
+          const size_t numReaderThreads = 0); /* 0 means use default for # of reader threads */
   ~DataMgr();
   AbstractBuffer* createChunkBuffer(const ChunkKey& key, const MemoryLevel memoryLevel, const int deviceId = 0);
   AbstractBuffer* getChunkBuffer(const ChunkKey& key,
@@ -49,7 +57,7 @@ class DataMgr {
   // copies one buffer to another
   void copy(AbstractBuffer* destBuffer, AbstractBuffer* srcBuffer);
   bool isBufferOnDevice(const ChunkKey& key, const MemoryLevel memLevel, const int deviceId);
-  std::string getMemorySummary();
+  memorySummary getMemorySummary();
   std::string dumpLevel(const MemoryLevel memLevel);
 
   // const std::map<ChunkKey, File_Namespace::FileBuffer *> & getChunkMap();
