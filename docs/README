@@ -1,14 +1,50 @@
-MapD documentation, compiled by Sphinx
+MapD documentation, written in reStructured Text and compiled by Sphinx.
 
-Requires pip, virtualenv, and pdflatex.
+RST primers:
 
-HTML/CSS theme files are in `_themes/mapd_docs_theme`.
+    http://docutils.sourceforge.net/docs/user/rst/quickstart.html
+    http://docutils.sourceforge.net/docs/user/rst/quickref.html
+    http://www.sphinx-doc.org/en/stable/rest.html
 
-To build:
+Requires pip, virtualenv, and pdflatex. Instructions for installing these
+dependencies are below.
+
+Raw documentation resides in .rst files under a directory named for each guide.
+Currently:
+
+    immerse-user-guide/
+    mapd-guide/
+
+To add a new section, list it in the `index.rst` for the relevant guide.
+
+To view changes, rebuild the documentation with:
 
     ./build.sh
 
 HTML will be in `build/dirhtml`. Individual PDFs will be in `build/latex`.
+
+If doing a full mapd build managed by CMake, you can instead do:
+
+    make docs
+
+and view them in `$CMAKE_BUILD_DIR/docs/`.
+
+You may wish to run a web server so that your browser correctly loads
+`index.html` when visiting a new directory. Run one of the following and then
+visit http://localhost:8282 :
+
+    python -m SimpleHTTPServer 8282
+    python3 -m http.server 8282
+
+Images should be selected with care: remember that PDFs are expected to be
+static, possibly printed, documents. Therefore if adding a .gif, also provide a
+static version of it as a .jpg. In your document refer to these images with
+`base.*` instead of `base.gif`, and the Sphinx will select an acceptable file
+type for PDF and HTML. Note: for historical reasons .png trumps all. This is
+why you must provide a .jpg to replace a .gif instead of a .png.
+
+HTML/CSS theme files are in `_themes/mapd_docs_theme`.
+
 
 Installing dependencies:
 
@@ -26,4 +62,5 @@ MacOS:
 
     sudo easy_install pip
     sudo pip install virtualenv
-    brew cask install mactex
+    brew cask install mactex # or follow instructions at
+                             # https://www.tug.org/mactex/
