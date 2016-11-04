@@ -46,3 +46,6 @@ ThirdParty/go/src/*
 
 # sphinx docs
 !docs/**/Makefile
+*.pyc
+docs/build/
+docs/generated-docs/
