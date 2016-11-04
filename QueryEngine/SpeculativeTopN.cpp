@@ -130,6 +130,15 @@ bool SpeculativeTopNBlacklist::contains(const std::shared_ptr<Analyzer::Expr> ex
 }
 
 bool use_speculative_top_n(const RelAlgExecutionUnit& ra_exe_unit, const QueryMemoryDescriptor& query_mem_desc) {
-  return ra_exe_unit.target_exprs.size() == 2 && query_mem_desc.sortOnGpu() && ra_exe_unit.sort_info.limit &&
+  if (ra_exe_unit.target_exprs.size() != 2) {
+    return false;
+  }
+  for (const auto target_expr : ra_exe_unit.target_exprs) {
+    const auto agg_expr = dynamic_cast<const Analyzer::AggExpr*>(target_expr);
+    if (agg_expr && agg_expr->get_aggtype() != kCOUNT) {
+      return false;
+    }
+  }
+  return query_mem_desc.sortOnGpu() && ra_exe_unit.sort_info.limit &&
          ra_exe_unit.sort_info.algorithm == SortAlgorithm::SpeculativeTopN;
 }
