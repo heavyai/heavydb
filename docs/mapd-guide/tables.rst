@@ -36,8 +36,10 @@ Tables
 The ``<property>`` in the optional WITH clause can be
 
 -  ``fragment_size``: number of rows per fragment which is a unit of the
-   table for query processing. It defaults to 8 million rows and is not
+   table for query processing. It defaults to 32 million rows and is not
    expected to be changed.
+-  ``max_rows``: maximum number of rows allowed in the table. When this limit
+   is reached, the oldest fragment will be removed. The default is 2^62.
 -  ``page_size``: number of bytes for an I/O page. This defaults to 1MB
    and does not need to be changed.
 

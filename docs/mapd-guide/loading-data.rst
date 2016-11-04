@@ -25,12 +25,18 @@ the file to the server and then issue the COPY command.
 -  ``escape``: a single-character string for escaping quotes. The
    default is the quote character itself.
 -  ``quoted``: ``'true'`` or ``'false'`` indicating whether the input
-   file contains quoted fields. The default is ``'false'``.
+   file contains quoted fields. The default is ``'true'``.
 -  ``quote``: a single-character string for quoting a field. The default
    quote character is double quote ``"``. All characters are inside
    quotes are imported as is except for line delimiters.
 -  ``line_delimiter`` a single-character string for terminating each
    line. The default is ``"\n"``.
+-  ``array``: a two character string consisting of the start and end characters
+   surrounding an array. The default is ``{}``. For example, data to be inserted
+   into a table with a string array in the second column (e.g. ``BOOLEAN,
+   STRING[], INTEGER``) may be written as ``true,{value1,value2,value3},3``.
+-  ``array_delimiter``: a single-character string for the delimiter between
+   input values contained within an array. The default is ``","``.
 -  ``threads`` number of threads for doing the data importing. The
    default is the number of CPU cores on the system.
 
