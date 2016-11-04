@@ -2122,7 +2122,9 @@ std::tuple<llvm::Value*, llvm::Value*> GroupByAndAggregate::codegenGroupBy(const
         ++arg_it;
         ++arg_it;
         ++arg_it;
-        LOG(INFO) << "Use get_group_value_one_key";
+        if (group_expr) {
+          LOG(INFO) << "Use get_group_value_one_key";
+        }
         return std::make_tuple(emitCall("get_group_value_one_key",
                                         {groups_buffer,
                                          LL_INT(static_cast<int32_t>(query_mem_desc_.entry_count)),
