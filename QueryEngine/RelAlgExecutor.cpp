@@ -916,7 +916,7 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(const RelAlgExecutor::WorkUnit& 
               targets_meta};
   } catch (const CardinalityEstimationRequired&) {
     max_groups_buffer_entry_guess =
-        2 * std::min(groups_approx_upper_bound(table_infos), getNDVEstimation(work_unit, targets_meta, is_agg, co, eo));
+        2 * std::min(groups_approx_upper_bound(table_infos), getNDVEstimation(work_unit, is_agg, co, eo));
     CHECK_GT(max_groups_buffer_entry_guess, size_t(0));
     result = {executor_->executeWorkUnit(
                   &error_code,
@@ -956,7 +956,6 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(const RelAlgExecutor::WorkUnit& 
 }
 
 size_t RelAlgExecutor::getNDVEstimation(const WorkUnit& work_unit,
-                                        const std::vector<TargetMetaInfo>& targets_meta,
                                         const bool is_agg,
                                         const CompilationOptions& co,
                                         const ExecutionOptions& eo) {
