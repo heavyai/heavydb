@@ -4351,6 +4351,7 @@ const int8_t* Executor::ExecutionDispatch::getColumn(const InputColDescriptor* c
   const auto ref_frag_id = get_mapped_frag_id_of_src_table(previous_join_dims, ref_table_id, frag_id);
   CacheKey sub_key;
   auto ref_col_id_for_cache = ref_col_id;
+  const ColumnarResults* result{nullptr};
   {
     std::lock_guard<std::mutex> columnar_conversion_guard(columnar_conversion_mutex_);
     if (columnarized_table_cache_.empty() || !columnarized_table_cache_.count(ref_table_id)) {
@@ -4416,14 +4417,11 @@ const int8_t* Executor::ExecutionDispatch::getColumn(const InputColDescriptor* c
       }
       ref_col_id_for_cache = 0;
     }
+    CHECK_NE(size_t(0), columnarized_ref_table_cache_.count(iter_desc));
+    result = columnarized_ref_table_cache_[iter_desc][sub_key].get();
   }
   CHECK_GE(ref_col_id, 0);
-  CHECK_NE(size_t(0), columnarized_ref_table_cache_.count(iter_desc));
-  return getColumn(columnarized_ref_table_cache_[iter_desc][sub_key].get(),
-                   ref_col_id_for_cache,
-                   &cat_.get_dataMgr(),
-                   memory_level,
-                   device_id);
+  return getColumn(result, ref_col_id_for_cache, &cat_.get_dataMgr(), memory_level, device_id);
 }
 
 const int8_t* Executor::ExecutionDispatch::getColumn(const ResultPtr& buffer,
@@ -4432,6 +4430,7 @@ const int8_t* Executor::ExecutionDispatch::getColumn(const ResultPtr& buffer,
                                                      const int col_id,
                                                      const Data_Namespace::MemoryLevel memory_level,
                                                      const int device_id) const {
+  const ColumnarResults* result{nullptr};
   {
     std::lock_guard<std::mutex> columnar_conversion_guard(columnar_conversion_mutex_);
     if (columnarized_table_cache_.empty() || !columnarized_table_cache_.count(table_id)) {
@@ -4443,11 +4442,11 @@ const int8_t* Executor::ExecutionDispatch::getColumn(const ResultPtr& buffer,
       frag_id_to_result.insert(std::make_pair(
           frag_id, std::unique_ptr<const ColumnarResults>(columnarize_result(row_set_mem_owner_, buffer, frag_id))));
     }
+    CHECK_NE(size_t(0), columnarized_table_cache_.count(table_id));
+    result = columnarized_table_cache_[table_id][frag_id].get();
   }
   CHECK_GE(col_id, 0);
-  CHECK_NE(size_t(0), columnarized_table_cache_.count(table_id));
-  return getColumn(
-      columnarized_table_cache_[table_id][frag_id].get(), col_id, &cat_.get_dataMgr(), memory_level, device_id);
+  return getColumn(result, col_id, &cat_.get_dataMgr(), memory_level, device_id);
 }
 
 const int8_t* Executor::ExecutionDispatch::getColumn(const ColumnarResults* columnar_results,
