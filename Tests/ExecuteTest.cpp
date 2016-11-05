@@ -878,6 +878,21 @@ void check_date_trunc_groups(const ResultRows& rows) {
 TEST(Select, Time) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
+    // check DATE Formats
+    ASSERT_EQ(2 * g_num_rows,
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE CAST('1999-09-10' AS DATE) > o;", dt)));
+    ASSERT_EQ(2 * g_num_rows,
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE CAST('10/09/1999' AS DATE) > o;", dt)));
+    ASSERT_EQ(2 * g_num_rows,
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE CAST('10-Sep-99' AS DATE) > o;", dt)));
+    ASSERT_EQ(2 * g_num_rows,
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE CAST('31/Oct/2013' AS DATE) > o;", dt)));
+    // check TIME FORMATS
+    ASSERT_EQ(2 * g_num_rows,
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE CAST('15:13:15' AS TIME) > n;", dt)));
+    ASSERT_EQ(2 * g_num_rows,
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE CAST('151315' AS TIME) > n;", dt)));
+
     ASSERT_EQ(2 * g_num_rows,
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE CAST('1999-09-10' AS DATE) > o;", dt)));
     ASSERT_EQ(0, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE CAST('1999-09-10' AS DATE) <= o;", dt)));
@@ -1059,12 +1074,17 @@ TEST(Select, Time) {
     // added new format for customer
     ASSERT_EQ(1434896116L,
               v<int64_t>(run_simple_agg("select CAST('2015-06-21 14:15:16' AS timestamp) FROM test limit 1;", dt)));
+    ASSERT_EQ(1434896116L,
+              v<int64_t>(run_simple_agg("select CAST('2015-06-21:141516' AS timestamp) FROM test limit 1;", dt)));
     ASSERT_EQ(
         1434896116L,
         v<int64_t>(run_simple_agg("select CAST('21-JUN-15 2.15.16.12345 PM' AS timestamp) FROM test limit 1;", dt)));
     ASSERT_EQ(
         1434852916L,
         v<int64_t>(run_simple_agg("select CAST('21-JUN-15 2.15.16.12345 AM' AS timestamp) FROM test limit 1;", dt)));
+    ASSERT_EQ(1434852916L,
+              v<int64_t>(run_simple_agg("select CAST('21-JUN-15 2:15:16 AM' AS timestamp) FROM test limit 1;", dt)));
+
     ASSERT_EQ(1434896116L,
               v<int64_t>(run_simple_agg("select CAST('06/21/2015 14:15:16' AS timestamp) FROM test limit 1;", dt)));
 
