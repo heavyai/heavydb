@@ -398,6 +398,64 @@ void Catalog::updateFrontendViewAndLinkUsers() {
   sqliteConnector_.query("END TRANSACTION");
 }
 
+// introduce DB version into the dictionary tables
+// if the DB does not have a version rename all dictionary tables
+
+void Catalog::updateDictionaryNames() {
+  if (currentDB_.dbName.length() == 0) {
+    // updateDictionaryNames dbName length is zero nothing to do here
+    return;
+  }
+  sqliteConnector_.query("BEGIN TRANSACTION");
+  try {
+    sqliteConnector_.query("PRAGMA TABLE_INFO(mapd_dictionaries)");
+    std::vector<std::string> cols;
+    for (size_t i = 0; i < sqliteConnector_.getNumRows(); i++) {
+      cols.push_back(sqliteConnector_.getData<std::string>(i, 1));
+    }
+    if (std::find(cols.begin(), cols.end(), std::string("version_num")) == cols.end()) {
+      // No version number
+      // need to rename dictionaries
+      string dictQuery("SELECT dictid, name from mapd_dictionaries");
+      sqliteConnector_.query(dictQuery);
+      size_t numRows = sqliteConnector_.getNumRows();
+      for (size_t r = 0; r < numRows; ++r) {
+        int dictId = sqliteConnector_.getData<int>(r, 0);
+        std::string dictName = sqliteConnector_.getData<string>(r, 1);
+
+        std::string oldName = basePath_ + "/mapd_data/" + currentDB_.dbName + "_" + dictName;
+        std::string newName =
+            basePath_ + "/mapd_data/DB_" + std::to_string(currentDB_.dbId) + "_DICT_" + std::to_string(dictId);
+
+        int result = rename(oldName.c_str(), newName.c_str());
+
+        if (result == 0)
+          LOG(INFO) << "Dictionary upgrade: successfully renamed " << oldName << " to " << newName;
+        else {
+          LOG(ERROR) << "Failed to rename old dictionary directory " << oldName << " to " << newName + " dbname '"
+                     << currentDB_.dbName << "' error code " << std::to_string(result);
+        }
+      }
+      // need to add new version info
+      string queryString("ALTER TABLE mapd_dictionaries ADD version_num BIGINT DEFAULT " +
+                         std::to_string(DEFAULT_INITIAL_VERSION));
+      sqliteConnector_.query(queryString);
+    }
+  } catch (std::exception& e) {
+    sqliteConnector_.query("ROLLBACK TRANSACTION");
+    throw;
+  }
+  sqliteConnector_.query("END TRANSACTION");
+}
+
+void Catalog::CheckAndExecuteMigrations() {
+  updateTableDescriptorSchema();
+  updateFrontendViewAndLinkUsers();
+  updateFrontendViewSchema();
+  updateLinkSchema();
+  updateDictionaryNames();
+}
+
 void Catalog::buildMaps() {
   string dictQuery("SELECT dictid, name, nbits, is_shared from mapd_dictionaries");
   sqliteConnector_.query(dictQuery);
@@ -407,11 +465,14 @@ void Catalog::buildMaps() {
     std::string dictName = sqliteConnector_.getData<string>(r, 1);
     int dictNBits = sqliteConnector_.getData<int>(r, 2);
     bool is_shared = sqliteConnector_.getData<bool>(r, 3);
-    std::string fname = basePath_ + "/mapd_data/" + currentDB_.dbName + "_" + dictName;
+    std::string fname =
+        basePath_ + "/mapd_data/DB_" + std::to_string(currentDB_.dbId) + "_DICT_" + std::to_string(dictId);
     DictDescriptor* dd = new DictDescriptor(dictId, dictName, dictNBits, is_shared, fname);
     dictDescriptorMapById_[dd->dictId].reset(dd);
   }
-  updateTableDescriptorSchema();
+
+  CheckAndExecuteMigrations();
+
   string tableQuery(
       "SELECT tableid, name, ncolumns, isview, fragments, frag_type, max_frag_rows, max_chunk_size, frag_page_size, "
       "max_rows, "
@@ -484,9 +545,6 @@ void Catalog::buildMaps() {
     td->fragmenter = nullptr;
   }
 
-  updateFrontendViewAndLinkUsers();
-  updateFrontendViewSchema();
-
   string frontendViewQuery(
       "SELECT viewid, view_state, name, image_hash, strftime('%Y-%m-%dT%H:%M:%SZ', update_time), userid, view_metadata "
       "FROM mapd_frontend_views");
@@ -504,7 +562,6 @@ void Catalog::buildMaps() {
     frontendViewDescriptorMap_[std::to_string(vd->userId) + vd->viewName] = vd;
   }
 
-  updateLinkSchema();
   string linkQuery(
       "SELECT linkid, userid, link, view_state, strftime('%Y-%m-%dT%H:%M:%SZ', update_time), view_metadata "
       "FROM mapd_links");
@@ -795,13 +852,19 @@ void Catalog::createTable(TableDescriptor& td, const list<ColumnDescriptor>& col
     int colId = 1;
     for (auto cd : columns) {
       if (cd.columnType.get_compression() == kENCODING_DICT) {
-        std::string dictName = td.tableName + "_" + cd.columnName + "_dict";
+        // std::string dictName = td.tableName + "_" + cd.columnName + "_dict";
+        std::string dictName = "Initial_key";
         sqliteConnector_.query_with_text_params(
             "INSERT INTO mapd_dictionaries (name, nbits, is_shared) VALUES (?, ?, ?)",
             std::vector<std::string>{dictName, std::to_string(cd.columnType.get_comp_param()), "0"});
         sqliteConnector_.query_with_text_param("SELECT dictid FROM mapd_dictionaries WHERE name = ?", dictName);
         int dictId = sqliteConnector_.getData<int>(0, 0);
-        std::string folderPath = basePath_ + "/mapd_data/" + currentDB_.dbName + "_" + dictName;
+        dictName = td.tableName + "_" + cd.columnName + "_dict" + std::to_string(dictId);
+        sqliteConnector_.query_with_text_param("UPDATE mapd_dictionaries SET name = ? WHERE name = 'Initial_key'",
+                                               dictName);
+        // std::string folderPath = basePath_ + "/mapd_data/" + currentDB_.dbName + "_" + dictName;
+        std::string folderPath =
+            basePath_ + "/mapd_data/DB_" + std::to_string(currentDB_.dbId) + "_DICT_" + std::to_string(dictId);
         DictDescriptor dd(dictId, dictName, cd.columnType.get_comp_param(), false, folderPath);
         dds.push_back(dd);
         if (!cd.columnType.is_array()) {

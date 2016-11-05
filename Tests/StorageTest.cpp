@@ -139,6 +139,33 @@ TEST(StorageSmall, AllTypes) {
   ASSERT_NO_THROW(run_ddl("drop table alltypes;"););
 }
 
+TEST(StorageRename, AllTypes) {
+  ASSERT_NO_THROW(run_ddl("drop table if exists original_table;"););
+  ASSERT_NO_THROW(run_ddl(
+                      "create table original_table (a smallint, b int, c bigint, d numeric(7,3), e double, f float, "
+                      "g timestamp(0), h time(0), i date, x varchar(10) encoding none, y text encoding none);"););
+  EXPECT_TRUE(storage_test("original_table", SMALL));
+
+  ASSERT_NO_THROW(run_ddl("drop table if exists new_table;"););
+  ASSERT_NO_THROW(run_ddl(
+                      "create table new_table (a smallint, b int, c bigint, d numeric(7,3), e double, f float, "
+                      "g timestamp(0), h time(0), i date, x varchar(10) encoding none, y text encoding none);"););
+  EXPECT_TRUE(storage_test("new_table", SMALL));
+
+  ASSERT_NO_THROW(run_ddl("alter table original_table rename to old_table;"););
+
+  ASSERT_NO_THROW(run_ddl("alter table new_table rename to original_table;"););
+
+  ASSERT_NO_THROW(run_ddl("drop table old_table;"););
+
+  ASSERT_NO_THROW(run_ddl(
+                      "create table new_table (a smallint, b int, c bigint, d numeric(7,3), e double, f float, "
+                      "g timestamp(0), h time(0), i date, x varchar(10) encoding none, y text encoding none);"););
+
+  ASSERT_NO_THROW(run_ddl("drop table original_table;"););
+  ASSERT_NO_THROW(run_ddl("drop table new_table;"););
+}
+
 int main(int argc, char* argv[]) {
   google::InitGoogleLogging(argv[0]);
   ::testing::InitGoogleTest(&argc, argv);

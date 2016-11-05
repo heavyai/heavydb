@@ -125,6 +125,7 @@ struct DBMetadata {
 #define MAPD_ROOT_USER_ID 0
 #define MAPD_ROOT_USER_ID_STR "0"
 #define MAPD_ROOT_PASSWD_DEFAULT "HyperInteractive"
+#define DEFAULT_INITIAL_VERSION 1  // start at version 1
 
 /**
  * @type Catalog
@@ -239,6 +240,8 @@ class Catalog {
   const DictDescriptor* getMetadataForDict(int dictId) const;
 
  protected:
+  void CheckAndExecuteMigrations();
+  void updateDictionaryNames();
   void updateTableDescriptorSchema();
   void updateFrontendViewSchema();
   void updateLinkSchema();
