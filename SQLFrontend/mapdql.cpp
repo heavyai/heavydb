@@ -260,13 +260,11 @@ void process_backslash_commands(char* command, ClientContext& context) {
       std::cout << "\\c <database> <user> <password>.\n";
       std::cout << "\\gpu Execute in GPU mode's.\n";
       std::cout << "\\cpu Execute in CPU mode's.\n";
-      std::cout << "\\hybrid Execute in Hybrid mode.\n";
       std::cout << "\\multiline Set multi-line command line mode.\n";
       std::cout << "\\singleline Set single-line command line mode.\n";
       std::cout << "\\historylen <number> Set history buffer size (default 100).\n";
       std::cout << "\\timing Print timing information.\n";
       std::cout << "\\notiming Do not print timing information.\n";
-      std::cout << "\\memory_gpu Print GPU memory usage.\n";
       std::cout << "\\memory_summary Print memory usage summary.\n";
       std::cout << "\\version Print MapD Server version.\n";
       std::cout << "\\copy <file path> <table> Copy data from file to table.\n";

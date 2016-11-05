@@ -188,10 +188,10 @@ of backslash commands:
 -  ``\c <database> <user> <password>``: Connect to a new database.
 -  ``\gpu``: Switch to GPU mode in the current session.
 -  ``\cpu``: Switch to CPU mode in the current session.
--  ``\hybrid``: Switch to Hybrid mode in the current session.
 -  ``\timing``: Print timing information.
 -  ``\notiming``: Do not print timing information.
 -  ``\version``: Print MapD Server version.
+-  ``\memory_summary``: Print memory usage summary.
 -  ``\copy <file path> <table>``: Copy data from file on client side to
    table. The file is assumed to be in CSV format unless the file name
    ends with ``.tsv``.
