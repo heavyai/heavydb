@@ -1207,6 +1207,12 @@ class MapDHandler : virtual public MapDIf {
         LOG(ERROR) << ex.error_msg;
         throw ex;
       }
+      // if no precision or scale passed in set to default 14,7
+      if (col.col_type.precision == 0 && col.col_type.precision == 0) {
+        col.col_type.precision = 14;
+        col.col_type.scale = 7;
+      }
+
       std::string col_stmt;
       col_stmt.append(col.col_name + " " + thrift_to_name(col.col_type) + " ");
 
