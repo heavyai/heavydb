@@ -103,7 +103,10 @@ const int8_t* advance_col_buff_to_slot(const int8_t* buff,
 
 std::vector<TargetValue> ResultSet::getNextRow(const bool translate_strings, const bool decimal_to_double) const {
   while (fetched_so_far_ < drop_first_) {
-    getNextRowImpl(translate_strings, decimal_to_double);
+    const auto row = getNextRowImpl(translate_strings, decimal_to_double);
+    if (row.empty()) {
+      return row;
+    }
   }
   return getNextRowImpl(translate_strings, decimal_to_double);
 }
