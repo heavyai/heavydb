@@ -9,8 +9,13 @@
 #ifndef QUERYENGINE_RESULTSETBUFFERACCESSORS_H
 #define QUERYENGINE_RESULTSETBUFFERACCESSORS_H
 
-#include "QueryMemoryDescriptor.h"
 #include "SqlTypesLayout.h"
+
+#include "../Shared/unreachable.h"
+
+#ifndef __CUDACC__
+
+#include "QueryMemoryDescriptor.h"
 
 inline bool is_real_str_or_array(const TargetInfo& target_info) {
   return !target_info.is_agg &&
@@ -130,6 +135,8 @@ inline T advance_target_ptr(T target_ptr,
   return result;
 }
 
+#endif  // __CUDACC__
+
 inline double pair_to_double(const std::pair<int64_t, int64_t>& fp_pair, const SQLTypeInfo& ti) {
   double dividend{0.0};
   int64_t null_val{0};
@@ -171,6 +178,22 @@ inline int64_t null_val_bit_pattern(const SQLTypeInfo& ti) {
     return 0;
   }
   return inline_int_null_val(ti);
+}
+
+// Interprets ptr as an integer of compact_sz byte width and reads it.
+inline int64_t read_int_from_buff(const int8_t* ptr, const int8_t compact_sz) {
+  switch (compact_sz) {
+    case 8: {
+      return *reinterpret_cast<const int64_t*>(ptr);
+    }
+    case 4: {
+      return *reinterpret_cast<const int32_t*>(ptr);
+    }
+    default:
+      UNREACHABLE();
+  }
+  UNREACHABLE();
+  return 0;
 }
 
 #endif  // QUERYENGINE_RESULTSETBUFFERACCESSORS_H

@@ -6,6 +6,7 @@
 #ifndef _CHUNK_ITER_H_
 #define _CHUNK_ITER_H_
 
+#include "../Shared/funcannotations.h"
 #include "../Shared/sqltypes.h"
 
 class ChunkIter {

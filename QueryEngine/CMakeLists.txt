@@ -35,6 +35,7 @@ set(query_engine_source_files
     ResultSet.cpp
     ResultSetIteration.cpp
     ResultSetReduction.cpp
+    ResultSetSort.cpp
     RuntimeFunctions.cpp
     RuntimeFunctions.bc
     SpeculativeTopN.cpp
@@ -99,7 +100,7 @@ endif()
 
 
 if(ENABLE_CUDA)
-    add_library(QueryEngine ${query_engine_source_files} ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.a ${CMAKE_CURRENT_BINARY_DIR}/InPlaceSortImpl.o ${CMAKE_CURRENT_BINARY_DIR}/GpuInitGroups.o ${CMAKE_CURRENT_BINARY_DIR}/HashJoinRuntimeGpu.o)
+    add_library(QueryEngine ${query_engine_source_files} ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.a ${CMAKE_CURRENT_BINARY_DIR}/InPlaceSortImpl.o ${CMAKE_CURRENT_BINARY_DIR}/ResultSetSortImpl.o ${CMAKE_CURRENT_BINARY_DIR}/GpuInitGroups.o ${CMAKE_CURRENT_BINARY_DIR}/HashJoinRuntimeGpu.o)
 else()
     add_library(QueryEngine ${query_engine_source_files})
 endif()
@@ -155,6 +156,21 @@ add_custom_command(
         ${MAPD_DEFINITIONS}
         -arch sm_30
         -c ${CMAKE_CURRENT_SOURCE_DIR}/InPlaceSortImpl.cu
+    )
+
+add_custom_command(
+    DEPENDS ResultSetSortImpl.cu
+    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/ResultSetSortImpl.o
+    COMMAND nvcc
+    ARGS
+        ${MAPD_HOST_COMPILER_FLAG}
+        -Xcompiler -fPIC
+        -std=c++11
+        -O3
+        -D_FORCE_INLINES
+        ${MAPD_DEFINITIONS}
+        -arch sm_30
+        -c ${CMAKE_CURRENT_SOURCE_DIR}/ResultSetSortImpl.cu
     )
 
 add_custom_command(

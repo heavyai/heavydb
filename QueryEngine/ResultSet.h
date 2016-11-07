@@ -265,7 +265,8 @@ class ResultSet {
 
   std::function<bool(const uint32_t, const uint32_t)> createComparator(
       const std::list<Analyzer::OrderEntry>& order_entries,
-      const bool use_heap) const;
+      const bool use_heap,
+      const bool remove_empty_entries) const;
 
   static void topPermutation(std::vector<uint32_t>& to_sort,
                              const size_t n,
@@ -276,6 +277,12 @@ class ResultSet {
   std::vector<uint32_t> initPermutationBuffer(const size_t start, const size_t step);
 
   void parallelTop(const std::list<Analyzer::OrderEntry>& order_entries, const size_t top_n);
+
+  void baselineSort(const ExecutorDeviceType device_type,
+                    const std::list<Analyzer::OrderEntry>& order_entries,
+                    const size_t top_n);
+
+  bool canUseFastBaselineSort(const std::list<Analyzer::OrderEntry>& order_entries, const size_t top_n);
 
   const std::vector<TargetInfo> targets_;
   const ExecutorDeviceType device_type_;

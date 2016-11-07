@@ -172,15 +172,15 @@ class SQLTypeInfo {
         comp_param(0),
         size(0) {}
 
-  DEVICE inline SQLTypes get_type() const { return type; }
-  inline SQLTypes get_subtype() const { return subtype; }
-  inline int get_dimension() const { return dimension; }
+  HOST DEVICE inline SQLTypes get_type() const { return type; }
+  HOST DEVICE inline SQLTypes get_subtype() const { return subtype; }
+  HOST DEVICE inline int get_dimension() const { return dimension; }
   inline int get_precision() const { return dimension; }
-  inline int get_scale() const { return scale; }
-  inline bool get_notnull() const { return notnull; }
-  DEVICE inline EncodingType get_compression() const { return compression; }
-  DEVICE inline int get_comp_param() const { return comp_param; }
-  inline int get_size() const { return size; }
+  HOST DEVICE inline int get_scale() const { return scale; }
+  HOST DEVICE inline bool get_notnull() const { return notnull; }
+  HOST DEVICE inline EncodingType get_compression() const { return compression; }
+  HOST DEVICE inline int get_comp_param() const { return comp_param; }
+  HOST DEVICE inline int get_size() const { return size; }
   inline int get_logical_size() const {
     if (compression == kENCODING_FIXED) {
       SQLTypeInfo ti(type, dimension, scale, notnull, kENCODING_NONE, 0, subtype);
@@ -223,21 +223,21 @@ class SQLTypeInfo {
 
   inline bool is_varlen() const { return (IS_STRING(type) && compression != kENCODING_DICT) || type == kARRAY; }
 
-  DEVICE inline bool operator!=(const SQLTypeInfo& rhs) const {
+  HOST DEVICE inline bool operator!=(const SQLTypeInfo& rhs) const {
     return type != rhs.get_type() || subtype != rhs.get_subtype() || dimension != rhs.get_dimension() ||
            scale != rhs.get_scale() || compression != rhs.get_compression() ||
            (compression != kENCODING_NONE && comp_param != rhs.get_comp_param() &&
             comp_param != TRANSIENT_DICT(rhs.get_comp_param())) ||
            notnull != rhs.get_notnull();
   }
-  DEVICE inline bool operator==(const SQLTypeInfo& rhs) const {
+  HOST DEVICE inline bool operator==(const SQLTypeInfo& rhs) const {
     return type == rhs.get_type() && subtype == rhs.get_subtype() && dimension == rhs.get_dimension() &&
            scale == rhs.get_scale() && compression == rhs.get_compression() &&
            (compression == kENCODING_NONE || comp_param == rhs.get_comp_param() ||
             comp_param == TRANSIENT_DICT(rhs.get_comp_param())) &&
            notnull == rhs.get_notnull();
   }
-  DEVICE inline void operator=(const SQLTypeInfo& rhs) {
+  HOST DEVICE inline void operator=(const SQLTypeInfo& rhs) {
     type = rhs.get_type();
     subtype = rhs.get_subtype();
     dimension = rhs.get_dimension();
@@ -247,7 +247,7 @@ class SQLTypeInfo {
     comp_param = rhs.get_comp_param();
     size = rhs.get_size();
   }
-  DEVICE inline bool is_castable(const SQLTypeInfo& new_type_info) const {
+  inline bool is_castable(const SQLTypeInfo& new_type_info) const {
     // can always cast between the same type but different precision/scale/encodings
     if (type == new_type_info.get_type())
       return true;
@@ -272,7 +272,7 @@ class SQLTypeInfo {
     else
       return false;
   }
-  DEVICE inline bool is_null(const Datum& d) const {
+  HOST DEVICE inline bool is_null(const Datum& d) const {
     // assuming Datum is always uncompressed
     switch (type) {
       case kBOOLEAN:
@@ -318,7 +318,7 @@ class SQLTypeInfo {
     }
     return false;
   }
-  DEVICE inline bool is_null(const int8_t* val) const {
+  HOST DEVICE inline bool is_null(const int8_t* val) const {
     // val can be either compressed or uncompressed
     switch (size) {
       case 1:

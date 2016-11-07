@@ -8,7 +8,11 @@
 
 #include "../Shared/TargetInfo.h"
 
+#ifndef __CUDACC__
 #include <glog/logging.h>
+#else
+#include "../Shared/cuda_glog.h"
+#endif  // __CUDACC__
 
 #include <limits>
 

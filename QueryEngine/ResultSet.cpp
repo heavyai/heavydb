@@ -317,6 +317,12 @@ void ResultSet::sort(const std::list<Analyzer::OrderEntry>& order_entries, const
   if (isEmptyInitializer()) {
     return;
   }
+#ifdef HAVE_CUDA
+  if (canUseFastBaselineSort(order_entries, top_n)) {
+    baselineSort(ExecutorDeviceType::GPU, order_entries, top_n);
+    return;
+  }
+#endif  // HAVE_CUDA
   if (query_mem_desc_.sortOnGpu()) {
     try {
       radixSortOnGpu(order_entries);
@@ -352,7 +358,7 @@ void ResultSet::sort(const std::list<Analyzer::OrderEntry>& order_entries, const
 
   permutation_ = initPermutationBuffer(0, 1);
 
-  auto compare = createComparator(order_entries, use_heap);
+  auto compare = createComparator(order_entries, use_heap, false);
 
   if (use_heap) {
     topPermutation(permutation_, top_n, compare);
@@ -390,7 +396,7 @@ void ResultSet::parallelTop(const std::list<Analyzer::OrderEntry>& order_entries
   for (auto& init_future : init_futures) {
     init_future.get();
   }
-  auto compare = createComparator(order_entries, true);
+  auto compare = createComparator(order_entries, true, false);
   std::vector<std::future<void>> top_futures;
   for (auto& strided_permutation : strided_permutations) {
     top_futures.emplace_back(std::async(std::launch::async, [&strided_permutation, &compare, top_n] {
@@ -448,8 +454,9 @@ ResultSet::StorageLookupResult ResultSet::findStorage(const size_t entry_idx) co
 
 std::function<bool(const uint32_t, const uint32_t)> ResultSet::createComparator(
     const std::list<Analyzer::OrderEntry>& order_entries,
-    const bool use_heap) const {
-  return [this, &order_entries, use_heap](const uint32_t lhs, const uint32_t rhs) {
+    const bool use_heap,
+    const bool remove_empty_entries) const {
+  return [this, &order_entries, use_heap, remove_empty_entries](const uint32_t lhs, const uint32_t rhs) {
     // NB: The compare function must define a strict weak ordering, otherwise
     // std::sort will trigger a segmentation fault (or corrupt memory).
     const auto lhs_storage_lookup_result = findStorage(lhs);
@@ -461,6 +468,17 @@ std::function<bool(const uint32_t, const uint32_t)> ResultSet::createComparator(
     for (const auto order_entry : order_entries) {
       CHECK_GE(order_entry.tle_no, 1);
       const auto& entry_ti = get_compact_type(targets_[order_entry.tle_no - 1]);
+      if (remove_empty_entries) {
+        if (lhs_storage->isEmptyEntry(fixedup_lhs) && rhs_storage->isEmptyEntry(fixedup_rhs)) {
+          return false;
+        }
+        if (lhs_storage->isEmptyEntry(fixedup_lhs) && !rhs_storage->isEmptyEntry(fixedup_rhs)) {
+          return use_heap;
+        }
+        if (rhs_storage->isEmptyEntry(fixedup_rhs) && !lhs_storage->isEmptyEntry(fixedup_lhs)) {
+          return !use_heap;
+        }
+      }
       const auto lhs_v =
           getColumnInternal(lhs_storage->buff_, fixedup_lhs, order_entry.tle_no - 1, lhs_storage_lookup_result);
       const auto rhs_v =

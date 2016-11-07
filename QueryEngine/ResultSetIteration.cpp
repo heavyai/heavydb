@@ -14,22 +14,6 @@
 
 namespace {
 
-// Interprets ptr as an integer of compact_sz byte width and reads it.
-int64_t read_int_from_buff(const int8_t* ptr, const int8_t compact_sz) {
-  switch (compact_sz) {
-    case 8: {
-      return *reinterpret_cast<const int64_t*>(ptr);
-    }
-    case 4: {
-      return *reinterpret_cast<const int32_t*>(ptr);
-    }
-    default:
-      CHECK(false);
-  }
-  CHECK(false);
-  return 0;
-}
-
 // Interprets ptr1, ptr2 as the sum and count pair used for AVG.
 TargetValue make_avg_target_value(const int8_t* ptr1,
                                   const int8_t compact_sz1,
