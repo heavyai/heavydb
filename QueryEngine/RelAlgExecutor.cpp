@@ -1076,8 +1076,8 @@ bool RelAlgExecutor::isRowidLookup(const WorkUnit& work_unit) {
     auto cd = get_column_descriptor(lhs_col->get_column_id(), table_id, cat_);
     if (cd->isVirtualCol) {
       CHECK_EQ("rowid", cd->columnName);
+      return true;
     }
-    return true;
   }
   return false;
 }
