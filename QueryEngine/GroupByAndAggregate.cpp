@@ -1455,17 +1455,14 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
 
   switch (col_range_info.hash_type_) {
     case GroupByColRangeType::OneColKnownRange:
-    case GroupByColRangeType::OneColGuessedRange:
-    case GroupByColRangeType::Scan: {
+    case GroupByColRangeType::OneColGuessedRange: {
       static const int64_t MAX_BUFFER_SIZE = 1 << 30;
       const int64_t col_count = ra_exe_unit_.groupby_exprs.size() + ra_exe_unit_.target_exprs.size();
       const int64_t max_entry_count = MAX_BUFFER_SIZE / (col_count * sizeof(int64_t));
       CHECK_EQ(size_t(1), ra_exe_unit_.groupby_exprs.size());
       if (col_range_info.hash_type_ == GroupByColRangeType::OneColGuessedRange ||
-          col_range_info.hash_type_ == GroupByColRangeType::Scan ||
-          ((ra_exe_unit_.groupby_exprs.size() != 1 ||
-            (!ra_exe_unit_.groupby_exprs.front()->get_type_info().is_string() &&
-             !expr_is_rowid(ra_exe_unit_.groupby_exprs.front().get(), *executor_->catalog_))) &&
+          ((!ra_exe_unit_.groupby_exprs.front()->get_type_info().is_string() &&
+            !expr_is_rowid(ra_exe_unit_.groupby_exprs.front().get(), *executor_->catalog_)) &&
            col_range_info.max >= col_range_info.min + max_entry_count && !col_range_info.bucket)) {
         if (g_enable_watchdog && col_range_info.hash_type_ == GroupByColRangeType::OneColKnownRange &&
             col_range_info.max >= col_range_info.min + max_entry_count && !col_range_info.bucket) {
