@@ -1174,6 +1174,19 @@ int32_t get_agg_count(const std::vector<Analyzer::Expr*>& target_exprs) {
   return agg_count;
 }
 
+bool expr_is_rowid(const Analyzer::Expr* expr, const Catalog_Namespace::Catalog& cat) {
+  const auto col = dynamic_cast<const Analyzer::ColumnVar*>(expr);
+  if (!col) {
+    return false;
+  }
+  const auto cd = get_column_descriptor_maybe(col->get_column_id(), col->get_table_id(), cat);
+  if (!cd || !cd->isVirtualCol) {
+    return false;
+  }
+  CHECK_EQ("rowid", cd->columnName);
+  return true;
+}
+
 }  // namespace
 
 GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getColRangeInfo() {
@@ -1201,7 +1214,19 @@ GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getColRangeInfo() {
       return {GroupByColRangeType::MultiCol, 0, 0, 0, false};
     }
   }
-  return getExprRangeInfo(ra_exe_unit_.groupby_exprs.front().get());
+  const auto col_range_info = getExprRangeInfo(ra_exe_unit_.groupby_exprs.front().get());
+  if (!ra_exe_unit_.groupby_exprs.front()) {
+    return col_range_info;
+  }
+  static const int64_t MAX_BUFFER_SIZE = 1 << 30;
+  const int64_t col_count = ra_exe_unit_.groupby_exprs.size() + ra_exe_unit_.target_exprs.size();
+  const int64_t max_entry_count = MAX_BUFFER_SIZE / (col_count * sizeof(int64_t));
+  if ((!ra_exe_unit_.groupby_exprs.front()->get_type_info().is_string() &&
+       !expr_is_rowid(ra_exe_unit_.groupby_exprs.front().get(), *executor_->catalog_)) &&
+      col_range_info.max >= col_range_info.min + max_entry_count && !col_range_info.bucket) {
+    return {GroupByColRangeType::MultiCol, col_range_info.min, col_range_info.max, 0, col_range_info.has_nulls};
+  }
+  return col_range_info;
 }
 
 GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getExprRangeInfo(const Analyzer::Expr* expr) const {
@@ -1381,23 +1406,6 @@ int8_t pick_target_compact_width(const RelAlgExecutionUnit& ra_exe_unit,
   }
 }
 
-namespace {
-
-bool expr_is_rowid(const Analyzer::Expr* expr, const Catalog_Namespace::Catalog& cat) {
-  const auto col = dynamic_cast<const Analyzer::ColumnVar*>(expr);
-  if (!col) {
-    return false;
-  }
-  const auto cd = get_column_descriptor_maybe(col->get_column_id(), col->get_table_id(), cat);
-  if (!cd || !cd->isVirtualCol) {
-    return false;
-  }
-  CHECK_EQ("rowid", cd->columnName);
-  return true;
-}
-
-}  // namespace
-
 void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
                                                     const size_t max_groups_buffer_entry_count,
                                                     const size_t small_groups_buffer_entry_count,
@@ -1456,18 +1464,8 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
   switch (col_range_info.hash_type_) {
     case GroupByColRangeType::OneColKnownRange:
     case GroupByColRangeType::OneColGuessedRange: {
-      static const int64_t MAX_BUFFER_SIZE = 1 << 30;
-      const int64_t col_count = ra_exe_unit_.groupby_exprs.size() + ra_exe_unit_.target_exprs.size();
-      const int64_t max_entry_count = MAX_BUFFER_SIZE / (col_count * sizeof(int64_t));
       CHECK_EQ(size_t(1), ra_exe_unit_.groupby_exprs.size());
-      if (col_range_info.hash_type_ == GroupByColRangeType::OneColGuessedRange ||
-          ((!ra_exe_unit_.groupby_exprs.front()->get_type_info().is_string() &&
-            !expr_is_rowid(ra_exe_unit_.groupby_exprs.front().get(), *executor_->catalog_)) &&
-           col_range_info.max >= col_range_info.min + max_entry_count && !col_range_info.bucket)) {
-        if (g_enable_watchdog && col_range_info.hash_type_ == GroupByColRangeType::OneColKnownRange &&
-            col_range_info.max >= col_range_info.min + max_entry_count && !col_range_info.bucket) {
-          throw WatchdogException("The range of the column is too big");
-        }
+      if (col_range_info.hash_type_ == GroupByColRangeType::OneColGuessedRange) {
         const auto hash_type =
             (render_output || ra_exe_unit_.scan_limit) ? GroupByColRangeType::MultiCol : col_range_info.hash_type_;
         size_t small_group_slots =
