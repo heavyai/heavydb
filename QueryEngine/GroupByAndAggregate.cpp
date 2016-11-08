@@ -1469,10 +1469,9 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
         const auto hash_type =
             (render_output || ra_exe_unit_.scan_limit) ? GroupByColRangeType::MultiCol : col_range_info.hash_type_;
         size_t small_group_slots =
-            ra_exe_unit_.scan_limit ? static_cast<size_t>(ra_exe_unit_.scan_limit) : small_groups_buffer_entry_count;
-        if (render_output) {
-          small_group_slots = 0;
-        }
+            (ra_exe_unit_.scan_limit || render_output) ? size_t(0) : small_groups_buffer_entry_count;
+        size_t group_slots =
+            ra_exe_unit_.scan_limit ? static_cast<size_t>(ra_exe_unit_.scan_limit) : max_groups_buffer_entry_count;
         query_mem_desc_ = {executor_,
                            allow_multifrag,
                            hash_type,
@@ -1482,7 +1481,7 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
                            0,
                            group_col_widths,
                            agg_col_widths,
-                           max_groups_buffer_entry_count,
+                           group_slots,
                            small_group_slots,
                            col_range_info.min,
                            col_range_info.max,
