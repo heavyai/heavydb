@@ -175,6 +175,9 @@ const ResultSetStorage* ResultSet::allocateStorage(const std::vector<int64_t>& t
 
 void ResultSet::append(ResultSet& that) {
   CHECK(!query_mem_desc_.output_columnar);  // TODO(miyu)
+  if (!that.storage_) {
+    return;
+  }
   appended_storage_.push_back(std::move(that.storage_));
   query_mem_desc_.entry_count += appended_storage_.back()->query_mem_desc_.entry_count;
   query_mem_desc_.entry_count_small += appended_storage_.back()->query_mem_desc_.entry_count_small;
