@@ -162,6 +162,7 @@ struct readThreadDS {
   size_t t_bytesLeft;        // number of bytes to be read in the thread
   size_t t_startPageOffset;  // offset - used for the first page of the buffer
   bool t_isFirstPage;        // true - for first page of the buffer, false - otherwise
+  std::vector<MultiPage> multiPages; // MultiPages of the FileBuffer passed to the thread
 };
 
 static size_t readForThread(FileBuffer* fileBuffer, const readThreadDS threadDS) {
@@ -172,12 +173,10 @@ static size_t readForThread(FileBuffer* fileBuffer, const readThreadDS threadDS)
   size_t totalBytesRead = 0;
   bool isFirstPage = threadDS.t_isFirstPage;
 
-  std::vector<MultiPage> multiPages_ = fileBuffer->getMultiPage();
-
   // Traverse the logical pages
   for (size_t pageNum = startPage; pageNum < endPage; ++pageNum) {
-    CHECK(multiPages_[pageNum].pageSize == fileBuffer->pageSize());
-    Page page = multiPages_[pageNum].current();
+    CHECK(threadDS.multiPages[pageNum].pageSize == fileBuffer->pageSize());
+    Page page = threadDS.multiPages[pageNum].current();
 
     FileInfo* fileInfo = threadDS.t_fm->getFileInfoForFileId(page.fileId);
     CHECK(fileInfo);
@@ -262,6 +261,7 @@ void FileBuffer::read(int8_t* const dst,
 
   bytesLeftForThread = min(((threadDS.t_endPage - threadDS.t_startPage) * pageDataSize_ - threadDS.t_startPageOffset), numBytesCurrent);
   threadDS.t_bytesLeft = bytesLeftForThread;
+  threadDS.multiPages = getMultiPage();
 
   if (numThreads == 1) {
     bytesRead += readForThread(this, threadDS);
@@ -287,6 +287,7 @@ void FileBuffer::read(int8_t* const dst,
       numBytesCurrent -= bytesLeftForThread;
       bytesLeftForThread = min(((threadDS.t_endPage - threadDS.t_startPage) * pageDataSize_), numBytesCurrent);
       threadDS.t_bytesLeft = bytesLeftForThread;
+      threadDS.multiPages = getMultiPage();
     }
 
     for (auto& p : threads) {

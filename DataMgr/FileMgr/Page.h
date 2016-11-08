@@ -65,7 +65,7 @@ struct MultiPage {
 
   /// Returns a reference to the most recent version of the page (optionally, the epoch
   /// is returned via the parameter "epoch").
-  inline Page current(int* epoch = NULL) {
+  inline Page current(int* epoch = NULL) const {
     if (pageVersions.size() < 1)
       LOG(FATAL) << "No current version of the page exists in this MultiPage.";
     if (epoch != NULL)

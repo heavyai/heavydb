@@ -217,7 +217,7 @@ class MapDHandler : virtual public MapDIf {
       total_reserved += render_mem_bytes;
     }
     data_mgr_.reset(new Data_Namespace::DataMgr(
-        data_path.string(), cpu_buffer_mem_bytes, !cpu_mode_only_, num_gpus, start_gpu, total_reserved));
+        data_path.string(), cpu_buffer_mem_bytes, !cpu_mode_only_, num_gpus, start_gpu, total_reserved, num_reader_threads));
 #ifdef HAVE_CALCITE
     calcite_.reset(new Calcite(calcite_port, base_data_path_));
 #ifdef HAVE_RAVM
@@ -1903,7 +1903,7 @@ int main(int argc, char** argv) {
   int num_gpus = -1;  // Can be used to override number of gpus detected on system - -1 means do not override
   int start_gpu = 0;
   int tthreadpool_size = 8;
-  size_t num_reader_threads = 1;  // number of threads used when loading data
+  size_t num_reader_threads = 0;  // number of threads used when loading data
 
   namespace po = boost::program_options;
 
