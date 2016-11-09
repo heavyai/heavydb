@@ -709,8 +709,20 @@ ExecutionResult RelAlgExecutor::executeProject(const RelProject* project,
                                                const ExecutionOptions& eo,
                                                RenderInfo* render_info,
                                                const int64_t queue_time_ms) {
-  const auto work_unit = createProjectWorkUnit(project, {{}, SortAlgorithm::Default, 0, 0});
-  return executeWorkUnit(work_unit, project->getOutputMetainfo(), false, co, eo, render_info, queue_time_ms);
+  auto work_unit = createProjectWorkUnit(project, {{}, SortAlgorithm::Default, 0, 0});
+  CompilationOptions co_project = co;
+  if (project->isSimple()) {
+    CHECK_EQ(size_t(1), project->inputCount());
+    const auto input_ra = project->getInput(0);
+    if (dynamic_cast<const RelSort*>(input_ra)) {
+      co_project.device_type_ = ExecutorDeviceType::CPU;
+      const auto& input_table = get_temporary_table(&temporary_tables_, -input_ra->getId());
+      const auto input_rows = boost::get<RowSetPtr>(&input_table);
+      CHECK(input_rows && *input_rows);
+      work_unit.exe_unit.scan_limit = (*input_rows)->rowCount();
+    }
+  }
+  return executeWorkUnit(work_unit, project->getOutputMetainfo(), false, co_project, eo, render_info, queue_time_ms);
 }
 
 ExecutionResult RelAlgExecutor::executeFilter(const RelFilter* filter,

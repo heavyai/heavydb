@@ -564,6 +564,7 @@ TEST(Select, OrderBy) {
     }
     c("SELECT x, COUNT(distinct y) AS n FROM test GROUP BY x ORDER BY n DESC;", dt);
     c("SELECT x, x, COUNT(*) AS val FROM test GROUP BY x HAVING val > 5 ORDER BY val DESC LIMIT 5;", dt);
+    c("SELECT -x, COUNT(*) FROM test GROUP BY x ORDER BY x DESC;", dt);
   }
 }
 
