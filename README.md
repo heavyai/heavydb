@@ -40,9 +40,6 @@ MapD has the following dependencies:
 - [libcurl](https://curl.haxx.se/)
 - [crypto++](https://www.cryptopp.com/)
 
-//TODO(@vastcharade): add backend rendering deps
-//TODO(@dwayneberry: add Calcite deps
-
 Generating the documentation requires `pip`, `virtualenv`, and `texlive` (specifically `pdflatex`). `sphinx` will be installed automatically via `pip`.
 
 Dependencies for `mapd_web_server` and other Go utils are in [`ThirdParty/go`](ThirdParty/go). See [`ThirdParty/go/src/mapd/vendor/README.md`](ThirdParty/go/src/mapd/vendor/README.md) for instructions on how to add new deps.
@@ -51,23 +48,34 @@ Dependencies for `mapd_web_server` and other Go utils are in [`ThirdParty/go`](T
 
 [scripts/mapd-deps-linux.sh](scripts/mapd-deps-linux.sh) is provided that will automatically download, build, and install most dependencies. Before running this script, make sure you have the basic build tools installed:
 
-    yum groupinstall "Development Tools"
-    yum install zlib-devel
-    yum install libssh
-    yum install openssl-devel
-    yun install openldap-devel
-    yum install git
+    yum groupinstall -y "Development Tools"
+    yum install -y zlib-devel \
+                   libssh \
+                   openssl-devel \
+                   openldap-devel \
+                   git \
+                   maven \
+                   java-1.8.0-openjdk{-devel,-headless}
 
 For generating the documentation you will also need:
 
-    yum install python-pip python-virtualenv
-    yum install texlive texlive-latex-bin-bin "texlive-*"
+    yum install -y python-pip python-virtualenv
+    yum install -y texlive texlive-latex-bin-bin "texlive-*"
 
 Instructions for installing CUDA are below.
 
 ### CUDA
 
-[scripts/cuda-autoinstall.sh](scripts/cuda_autoinstall.sh) will install CUDA and the drives via the runfile method. For the RPM method, first enable EPEL via `yum install epel-release` and then follow the instructions provided by Nvidia.
+CUDA should be installed via the .rpm method, following the instructions provided by Nvidia. Make sure you first enable EPEL via `yum install epel-release`.
+
+### Environment Variables
+
+[scripts/mapd-deps-linux.sh](scripts/mapd-deps-linux.sh) generates two files with the appropriate environment variables: `mapd-deps-<date>.sh` (for sourcing from your shell config) and `mapd-deps-<date>.modulefile` (for use with [Environment Modules](http://modules.sf.net), yum package `environment-modules`). These files are placed in mapd-deps install directory, usually `/usr/local/mapd-deps/<date>`. Either of these may be used to configure your environment: the `.sh` may be sourced in your shell config; the `.modulefile` needs to be moved to the modulespath.
+
+The Java server lib directory containing `libjvm.so` must also be added to your `LD_LIBRARY_PATH`. Add one of the following to your shell config:
+
+    LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib/jvm/jre/lib/amd64/server
+    LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib/jvm/java-1.8.0/jre/lib/amd64/server
 
 ## Mac OS X
 
@@ -154,6 +162,7 @@ For generating the documentation you will also need:
 CUDA should be installed via the .deb method, following the instructions provided by Nvidia.
 
 ### Environment Variables
+
 CUDA, Java, and mapd-deps need to be added to `LD_LIBRARY_PATH`; CUDA and mapd-deps also need to be added to `PATH`. The easiest way to do so is by creating a new file `/etc/profile.d/mapd-deps.sh` containing the following:
 
     LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH

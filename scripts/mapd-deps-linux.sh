@@ -188,3 +188,5 @@ mv go $PREFIX
 
 sed -e "s|%MAPD_DEPS_ROOT%|$PREFIX|g" mapd-deps.modulefile.in > mapd-deps-$SUFFIX.modulefile
 sed -e "s|%MAPD_DEPS_ROOT%|$PREFIX|g" mapd-deps.sh.in > mapd-deps-$SUFFIX.sh
+
+cp mapd-deps-$SUFFIX.sh mapd-deps-$SUFFIX.modulefile $PREFIX
