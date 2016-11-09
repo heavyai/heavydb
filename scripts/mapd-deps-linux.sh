@@ -44,8 +44,10 @@ download_make_install() {
 # note: if gmp fails on POWER8:
 # wget https://gmplib.org/repo/gmp/raw-rev/4a6d258b467f
 # patch -p1 < 4a6d258b467f
-download_make_install https://gmplib.org/download/gmp/gmp-6.1.0.tar.xz
-download_make_install http://www.mpfr.org/mpfr-current/mpfr-3.1.4.tar.xz "" "--with-gmp=$PREFIX"
+# https://gmplib.org/download/gmp/gmp-6.1.0.tar.xz
+download_make_install https://internal-dependencies.mapd.com/thirdparty/gmp-6.1.0.tar.xz
+# http://www.mpfr.org/mpfr-current/mpfr-3.1.5.tar.xz
+download_make_install https://internal-dependencies.mapd.com/thirdparty/mpfr-3.1.5.tar.xz "" "--with-gmp=$PREFIX"
 download_make_install ftp://ftp.gnu.org/gnu/mpc/mpc-1.0.3.tar.gz "" "--with-gmp=$PREFIX"
 download_make_install ftp://ftp.gnu.org/gnu/autoconf/autoconf-2.69.tar.xz # "" "--build=powerpc64le-unknown-linux-gnu"
 download_make_install ftp://ftp.gnu.org/gnu/automake/automake-1.14.1.tar.xz
@@ -80,7 +82,8 @@ export CC=$PREFIX/bin/gcc
 export CXX=$PREFIX/bin/g++
 
 download_make_install ftp://ftp.gnu.org/gnu/libtool/libtool-2.4.6.tar.gz
-download_make_install http://zlib.net/zlib-1.2.8.tar.xz
+# http://zlib.net/zlib-1.2.8.tar.xz
+download_make_install https://internal-dependencies.mapd.com/thirdparty/zlib-1.2.8.tar.xz
 
 download http://bzip.org/1.0.6/bzip2-1.0.6.tar.gz
 extract bzip2-1.0.6.tar.gz
@@ -93,20 +96,23 @@ CFLAGS="-fPIC" download_make_install ftp://ftp.gnu.org/pub/gnu/ncurses/ncurses-5
 
 download_make_install ftp://ftp.gnu.org/gnu/bison/bison-2.5.1.tar.xz # "" "--build=powerpc64le-unknown-linux-gnu"
 
-download_make_install https://storage.googleapis.com/google-code-archive-downloads/v2/code.google.com/flexpp-bisonpp/bisonpp-1.21-45.tar.gz bison++-1.21
+# https://storage.googleapis.com/google-code-archive-downloads/v2/code.google.com/flexpp-bisonpp/bisonpp-1.21-45.tar.gz
+download_make_install https://internal-dependencies.mapd.com/thirdparty/bisonpp-1.21-45.tar.gz bison++-1.21
 
 download_make_install https://github.com/google/glog/archive/v0.3.4.tar.gz glog-0.3.4 # --build=powerpc64le-unknown-linux-gnu"
 
 CFLAGS="-fPIC" download_make_install ftp://ftp.gnu.org/gnu/readline/readline-6.3.tar.gz
 
-download http://downloads.sourceforge.net/project/boost/boost/1.57.0/boost_1_57_0.tar.bz2
+# http://downloads.sourceforge.net/project/boost/boost/1.57.0/boost_1_57_0.tar.bz2
+download https://internal-dependencies.mapd.com/thirdparty/boost_1_57_0.tar.bz2
 extract boost_1_57_0.tar.bz2
 pushd boost_1_57_0
 ./bootstrap.sh --prefix=$PREFIX
 ./b2 install --prefix=$PREFIX || true
 popd
 
-download_make_install http://www.cmake.org/files/v3.4/cmake-3.4.1.tar.gz
+# http://www.cmake.org/files/v3.4/cmake-3.4.1.tar.gz
+download_make_install https://internal-dependencies.mapd.com/thirdparty//cmake-3.4.1.tar.gz
 
 # llvm
 VERS=3.5.2
@@ -136,9 +142,11 @@ popd
 #make install
 #popd
 
-download_make_install https://curl.haxx.se/download/curl-7.50.0.tar.bz2 "" "--disable-ldap --disable-ldaps"
+# https://curl.haxx.se/download/curl-7.50.0.tar.bz2
+download_make_install https://internal-dependencies.mapd.com/thirdparty/curl-7.50.0.tar.bz2 "" "--disable-ldap --disable-ldaps"
 
-download http://www.cryptopp.com/cryptopp563.zip
+# http://www.cryptopp.com/cryptopp563.zip
+download https://internal-dependencies.mapd.com/thirdparty/cryptopp563.zip
 unzip -a -d cryptopp563 cryptopp563
 pushd cryptopp563
 PREFIX=$PREFIX make all shared
@@ -159,7 +167,8 @@ make install
 popd
 
 # backend rendering
-download https://downloads.sourceforge.net/project/glew/glew/1.13.0/glew-1.13.0.tgz
+# https://downloads.sourceforge.net/project/glew/glew/1.13.0/glew-1.13.0.tgz
+download https://internal-dependencies.mapd.com/thirdparty/glew-1.13.0.tgz
 extract glew-1.13.0.tgz
 pushd glew-1.13.0
 patch -p1 < ../mapd-deps-glew-egl.patch
@@ -169,9 +178,11 @@ make DESTDIR=$PREFIX GLEW_DEST="" install
 make DESTDIR=$PREFIX GLEW_DEST="" install.mx
 popd
 
-download_make_install http://download.sourceforge.net/libpng/libpng-1.6.21.tar.xz
+# http://download.sourceforge.net/libpng/libpng-1.6.21.tar.xz
+download_make_install https://internal-dependencies.mapd.com/thirdparty/libpng-1.6.21.tar.xz
 
-download https://storage.googleapis.com/golang/go1.6.2.linux-amd64.tar.gz
+# https://storage.googleapis.com/golang/go1.6.2.linux-amd64.tar.gz
+download https://internal-dependencies.mapd.com/thirdparty/go1.6.2.linux-amd64.tar.gz
 extract go1.6.2.linux-amd64.tar.gz
 mv go $PREFIX
 
