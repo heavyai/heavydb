@@ -1206,7 +1206,7 @@ GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getColRangeInfo() {
           has_nulls = true;
         }
       }
-      if (cardinality > 10000000) {  // more than 10M groups is a lot
+      if (cardinality > 2000000) {  // more than 2M groups is a lot
         return {GroupByColRangeType::MultiCol, 0, 0, 0, false};
       }
       return {GroupByColRangeType::MultiColPerfectHash, 0, int64_t(cardinality), 0, has_nulls};
