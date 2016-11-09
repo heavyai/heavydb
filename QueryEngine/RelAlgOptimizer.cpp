@@ -122,6 +122,7 @@ void redirect_inputs_of(std::shared_ptr<RelAlgNode> node, const std::unordered_s
 void cleanup_dead_nodes(std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
   for (auto nodeIt = nodes.rbegin(); nodeIt != nodes.rend(); ++nodeIt) {
     if (nodeIt->unique()) {
+      LOG(WARNING) << (*nodeIt)->toString() << " deleted!";
       nodeIt->reset();
     }
   }
@@ -154,6 +155,34 @@ std::unordered_set<const RelProject*> get_visible_projects(const RelAlgNode* roo
 
   CHECK(dynamic_cast<const RelFilter*>(root) || dynamic_cast<const RelSort*>(root));
   return get_visible_projects(root->getInput(0));
+}
+
+// TODO(miyu): checking this at runtime is more accurate
+bool is_distinct(const size_t input_idx, const RelAlgNode* node) {
+  if (dynamic_cast<const RelFilter*>(node) || dynamic_cast<const RelSort*>(node)) {
+    CHECK_EQ(size_t(1), node->inputCount());
+    return is_distinct(input_idx, node->getInput(0));
+  }
+  if (auto aggregate = dynamic_cast<const RelAggregate*>(node)) {
+    CHECK_EQ(size_t(1), node->inputCount());
+    if (aggregate->getGroupByCount() == 1 && !input_idx) {
+      return true;
+    }
+    if (input_idx < aggregate->getGroupByCount()) {
+      return is_distinct(input_idx, node->getInput(0));
+    }
+    return false;
+  }
+  if (auto project = dynamic_cast<const RelProject*>(node)) {
+    CHECK_LT(input_idx, project->size());
+    if (auto input = dynamic_cast<const RexInput*>(project->getProjectAt(input_idx))) {
+      CHECK_EQ(size_t(1), node->inputCount());
+      return is_distinct(input->getIndex(), project->getInput(0));
+    }
+    return false;
+  }
+  CHECK(dynamic_cast<const RelJoin*>(node) || dynamic_cast<const RelScan*>(node));
+  return false;
 }
 
 }  // namespace
@@ -189,6 +218,10 @@ void eliminate_identical_copy(std::vector<std::shared_ptr<RelAlgNode>>& nodes) n
     }
     auto project = std::dynamic_pointer_cast<const RelProject>(aggregate->getAndOwnInput(0));
     CHECK(project);
+    CHECK_EQ(size_t(1), project->size());
+    if (!is_distinct(size_t(0), project.get())) {
+      continue;
+    }
     auto new_source = project->getAndOwnInput(0);
     if (std::dynamic_pointer_cast<const RelSort>(new_source) || std::dynamic_pointer_cast<const RelScan>(new_source)) {
       node->replaceInput(last_source, new_source);

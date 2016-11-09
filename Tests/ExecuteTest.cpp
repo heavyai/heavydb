@@ -1648,12 +1648,14 @@ void import_join_test() {
   run_ddl_statement(drop_old_test);
   g_sqlite_comparator.query(drop_old_test);
   const std::string create_test{
-      "CREATE TABLE join_test(x int not null, str text encoding dict) WITH (fragment_size=2);"};
+      "CREATE TABLE join_test(x int not null, str text encoding dict) WITH (fragment_size=3);"};
   run_ddl_statement(create_test);
   g_sqlite_comparator.query("CREATE TABLE join_test(x int not null, str text);");
   {
     const std::string insert_query{"INSERT INTO join_test VALUES(7, 'foo');"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query);
     g_sqlite_comparator.query(insert_query);
   }
   {
@@ -2084,6 +2086,7 @@ TEST(Select, Subqueries) {
     c("SELECT COUNT(*) FROM test WHERE x IN (SELECT x FROM test WHERE y > 42);", dt);
     c("SELECT COUNT(*) FROM test WHERE x IN (SELECT x FROM test GROUP BY x ORDER BY COUNT(*) DESC LIMIT 1);", dt);
     c("SELECT COUNT(*) FROM test WHERE x IN (SELECT x FROM test GROUP BY x);", dt);
+    c("SELECT COUNT(*) FROM test WHERE x IN (SELECT x FROM join_test);", dt);
     c("SELECT MIN(yy), MAX(yy) FROM (SELECT AVG(y) as yy FROM test GROUP BY x);", dt);
     c("SELECT COUNT(*) FROM subquery_test WHERE x NOT IN (SELECT x + 1 FROM subquery_test GROUP BY x);", dt);
     c("SELECT MAX(ct) FROM (SELECT COUNT(*) AS ct, str AS foo FROM test GROUP BY foo);", dt);
