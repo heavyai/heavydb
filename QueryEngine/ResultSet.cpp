@@ -500,6 +500,11 @@ std::function<bool(const uint32_t, const uint32_t)> ResultSet::createComparator(
         if (lhs_v.i1 == rhs_v.i1) {
           continue;
         }
+        if (entry_ti.is_fp()) {
+          const auto lhs_dval = *reinterpret_cast<const double*>(&lhs_v.i1);
+          const auto rhs_dval = *reinterpret_cast<const double*>(&rhs_v.i1);
+          return use_desc_cmp ? lhs_dval > rhs_dval : lhs_dval < rhs_dval;
+        }
         return use_desc_cmp ? lhs_v.i1 > rhs_v.i1 : lhs_v.i1 < rhs_v.i1;
       } else {
         if (lhs_v.isPair()) {
