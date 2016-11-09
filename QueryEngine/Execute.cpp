@@ -5669,7 +5669,8 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
                                              eo.output_columnar_hint && co.device_type_ == ExecutorDeviceType::GPU);
   const auto& query_mem_desc = group_by_and_aggregate.getQueryMemoryDescriptor();
 
-  if (query_mem_desc.hash_type == GroupByColRangeType::MultiCol && !query_mem_desc.getSmallBufferSizeBytes() &&
+  if (!ra_exe_unit.groupby_exprs.empty() && ra_exe_unit.groupby_exprs.front() &&
+      query_mem_desc.hash_type == GroupByColRangeType::MultiCol && !query_mem_desc.getSmallBufferSizeBytes() &&
       !has_cardinality_estimation && !render_output && !eo.just_explain) {
     throw CardinalityEstimationRequired();
   }
