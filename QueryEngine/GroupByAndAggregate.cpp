@@ -1862,7 +1862,8 @@ bool QueryMemoryDescriptor::threadsShareMemory() const {
 }
 
 bool QueryMemoryDescriptor::blocksShareMemory() const {
-  if (executor_->isCPUOnly() || render_output || hash_type == GroupByColRangeType::MultiCol) {
+  if (executor_->isCPUOnly() || render_output || hash_type == GroupByColRangeType::MultiCol ||
+      hash_type == GroupByColRangeType::MultiColPerfectHash) {
     return true;
   }
   return usesCachedContext() && !sharedMemBytes(ExecutorDeviceType::GPU) && many_entries(max_val, min_val, bucket);
