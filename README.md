@@ -14,10 +14,10 @@ MapD uses CMake for its build system. Only the `Unix Makefiles` and `Ninja` gene
 
 The following `cmake`/`ccmake` options can enable/disable different features:
 
-- `-DENABLE_CALCITE=on` enable Calcite SQL parser. Default `off`.
+- `-DENABLE_CALCITE=on` enable Calcite SQL parser. Default `on`.
 - `-DENABLE_RENDERING=on` enable backend rendering. Default `off`.
-- `-DENABLE_CUDA=off` disable CUDA (CUDA still required for build). Default `on`.
-- `-DMAPD2_FRONTEND_DOWNLOAD=on` download the latest pre-built `mapd2-frontend`. Default `off`.
+- `-DENABLE_CUDA=off` disable CUDA. Default `on`.
+- `-DMAPD2_FRONTEND_DOWNLOAD=on` download the latest pre-built `mapd2-frontend`. Default `on`.
 - `-DPREFER_STATIC_LIBS=on` static link dependencies, if available. Default `off`.
 
 # Dependencies
