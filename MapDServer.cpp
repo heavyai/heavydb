@@ -1896,7 +1896,7 @@ int main(int argc, char** argv) {
   bool enable_legacy_syntax = true;
   LdapMetadata ldapMetadata;
   bool enable_rendering = false;
-  bool enable_watchdog = false;
+  bool enable_watchdog = true;
 
   size_t cpu_buffer_mem_bytes = 0;  // 0 will cause DataMgr to auto set this based on available memory
   size_t render_mem_bytes = 500000000;
@@ -1932,9 +1932,6 @@ int main(int argc, char** argv) {
   desc.add_options()("flush-log",
                      po::bool_switch(&flush_log)->default_value(flush_log)->implicit_value(true),
                      "Force aggressive log file flushes. Use when trouble-shooting.");
-  desc.add_options()("enable-watchdog",
-                     po::bool_switch(&enable_watchdog)->default_value(enable_watchdog)->implicit_value(true),
-                     "Enable watchdog");
   desc.add_options()("num-gpus", po::value<int>(&num_gpus)->default_value(num_gpus), "Number of gpus to use");
   desc.add_options()("start-gpu", po::value<int>(&start_gpu)->default_value(start_gpu), "First gpu to use");
   desc.add_options()("version,v", "Print Release Version Number");
@@ -1965,6 +1962,9 @@ int main(int argc, char** argv) {
   desc_adv.add_options()("num-reader-threads",
                          po::value<size_t>(&num_reader_threads)->default_value(num_reader_threads),
                          "Number of reader threads to use");
+  desc_adv.add_options()("enable-watchdog",
+                         po::bool_switch(&enable_watchdog)->default_value(enable_watchdog)->implicit_value(true),
+                         "Enable watchdog");
 
   po::positional_options_description positionalOptions;
   positionalOptions.add("data", 1);
