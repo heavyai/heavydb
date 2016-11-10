@@ -418,6 +418,10 @@ endif()
 install(PROGRAMS startmapd DESTINATION ".")
 install(PROGRAMS insert_sample_data DESTINATION ".")
 
+if(_MAPDGL_EGL)
+  install(FILES docker/Dockerfile docker/README.md DESTINATION "docker")
+endif()
+
 exec_program(uname ARGS -m OUTPUT_VARIABLE MAPD_HOST_SYSTEM_ARCHITECTURE) # does not account for cross-compiling or Windows
 file(STRINGS ${CMAKE_BINARY_DIR}/MAPD_GIT_HASH.txt MAPD_GIT_HASH)
 set(CPACK_PACKAGE_VERSION "${MAPD_VERSION_RAW}-${MAPD_BUILD_DATE}-${MAPD_GIT_HASH}")
