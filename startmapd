@@ -55,6 +55,8 @@ while (( $# )); do
         --key)
             shift
             HTTPS_KEY="--key $1" ;;
+        --non-interactive)
+            NON_INTERACTIVE=true ;;
         *)
             break ;;
     esac
@@ -75,13 +77,16 @@ fi
 if [ ! -d $MAPD_DATA/mapd_data ]; then
     mkdir -p $MAPD_DATA
     ./bin/initdb -f --data $MAPD_DATA
-    echo "Download and insert sample data? Y/n"
-    read choice
-    if [ -z "$choice" ]; then choice="Y"; fi
-    case $choice in
-        [yY]* )
-            INSERT_SAMPLE_DATA=true;;
-    esac
+
+    if [ ! "$NON_INTERACTIVE" = true ]; then
+        echo "Download and insert sample data? Y/n"
+        read choice
+        if [ -z "$choice" ]; then choice="Y"; fi
+        case $choice in
+            [yY]* )
+                INSERT_SAMPLE_DATA=true;;
+        esac
+    fi
 fi
 
 ./bin/mapd_server $MAPD_DATA $DEVICE $RO --port $MAPD_TCP_PORT --http-port $MAPD_HTTP_PORT $* &
@@ -92,8 +97,10 @@ if [ "$INSERT_SAMPLE_DATA" = true ]; then
     echo "- sleeping for 5s while server starts"
     sleep 5
 
-    DIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
-    . "$DIR/insert_sample_data"
+    if [ ! "$NON_INTERACTIVE" = true ]; then
+        DIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
+        . "$DIR/insert_sample_data"
+    fi
 fi
 
 if [ -d frontend ] && [ -e ./bin/mapd_web_server ]; then
