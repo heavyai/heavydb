@@ -6,6 +6,10 @@ RUN ln -sf /usr/local/cuda-8.0/targets/x86_64-linux/lib/stubs/libcuda.so /usr/lo
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         libglu1-mesa-dev \
+        libldap-2.4-2 \
+        bsdmainutils \
+        wget \
+        curl \
         default-jre-headless && \
     apt-get remove --purge -y && \
     rm -rf /var/lib/apt/lists/*
