@@ -1,24 +1,24 @@
-# BasedOnStyle:  Chromium
+BasedOnStyle:  Chromium
 ---
 Language:        Cpp
 AccessModifierOffset: -1
 ConstructorInitializerIndentWidth: 4
 AlignEscapedNewlinesLeft: true
-#AlignAfterOpenBracket: true
+AlignAfterOpenBracket: true
 AlignTrailingComments: true
 AllowAllParametersOfDeclarationOnNextLine: false
 AllowShortBlocksOnASingleLine: false
-#AllowShortCaseLabelsOnASingleLine: false
+AllowShortCaseLabelsOnASingleLine: false
 AllowShortIfStatementsOnASingleLine: false
 AllowShortLoopsOnASingleLine: false
 AllowShortFunctionsOnASingleLine: Inline
-#AlwaysBreakAfterDefinitionReturnType: false
+AlwaysBreakAfterDefinitionReturnType: false
 AlwaysBreakTemplateDeclarations: true
 AlwaysBreakBeforeMultilineStrings: true
 BreakBeforeBinaryOperators: false
 BreakBeforeTernaryOperators: true
 BreakConstructorInitializersBeforeComma: false
-#BinPackArguments: false
+BinPackArguments: false
 BinPackParameters: false
 ColumnLimit:     120
 ConstructorInitializerAllOnOneLineOrOnePerLine: true
@@ -46,11 +46,11 @@ TabWidth:        8
 UseTab:          Never
 BreakBeforeBraces: Attach
 SpacesInParentheses: false
-#SpacesInSquareBrackets: false
+SpacesInSquareBrackets: false
 SpacesInAngles:  false
 SpaceInEmptyParentheses: false
 SpacesInCStyleCastParentheses: false
-#SpaceAfterCStyleCast: false
+SpaceAfterCStyleCast: false
 SpacesInContainerLiterals: true
 SpaceBeforeAssignmentOperators: true
 ContinuationIndentWidth: 4

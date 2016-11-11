@@ -52,13 +52,13 @@ Hit enter to edit the config.
 EOS
 read -r
 
-brew edit llvm35
-brew install llvm35 --with-all-targets
+brew edit llvm38
+brew install llvm38 --with-all-targets
 
 # Finally, add a few components of llvm to your path PATH.
 mkdir -p ~/bin/
 for i in clang++ llc llvm-config; do
-  ln -sf "$(brew --prefix llvm35)/bin/$i-3.5" ~/bin/$i
+  ln -sf "$(brew --prefix llvm38)/bin/$i-3.8" ~/bin/$i
 done
 export PATH=~/bin:$PATH
 

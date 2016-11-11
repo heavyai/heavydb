@@ -115,7 +115,7 @@ popd
 download_make_install https://internal-dependencies.mapd.com/thirdparty//cmake-3.4.1.tar.gz
 
 # llvm
-VERS=3.5.2
+VERS=3.8.1
 download http://llvm.org/releases/$VERS/llvm-$VERS.src.tar.xz
 download http://llvm.org/releases/$VERS/cfe-$VERS.src.tar.xz
 download http://llvm.org/releases/$VERS/compiler-rt-$VERS.src.tar.xz

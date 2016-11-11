@@ -2052,7 +2052,7 @@ bool GroupByAndAggregate::codegen(llvm::Value* filter_result, const CompilationO
         auto arg_it = ROW_FUNC->arg_begin();
         std::vector<llvm::Value*> agg_out_vec;
         for (int32_t i = 0; i < get_agg_count(ra_exe_unit_.target_exprs); ++i) {
-          agg_out_vec.push_back(arg_it++);
+          agg_out_vec.push_back(&*arg_it++);
         }
         can_return_error = codegenAggCalls(std::make_tuple(nullptr, nullptr), agg_out_vec, co);
       }
@@ -2079,9 +2079,9 @@ std::tuple<llvm::Value*, llvm::Value*> GroupByAndAggregate::codegenGroupBy(const
     CHECK(!group_expr);
     const auto group_expr_lv = LL_BUILDER.CreateLoad(get_arg_by_name(ROW_FUNC, "old_total_matched"));
     return std::make_tuple(emitCall("get_scan_output_slot",
-                                    {groups_buffer,
+                                    {&*groups_buffer,
                                      LL_INT(static_cast<int32_t>(query_mem_desc_.entry_count)),
-                                     group_expr_lv,
+                                     &*group_expr_lv,
                                      LL_INT(row_size_quad)}),
                            nullptr);
   }
@@ -2114,7 +2114,7 @@ std::tuple<llvm::Value*, llvm::Value*> GroupByAndAggregate::codegenGroupBy(const
           get_group_fn_name += "_semiprivate";
         }
         std::vector<llvm::Value*> get_group_fn_args{
-            groups_buffer, group_expr_lv, LL_INT(query_mem_desc_.min_val), LL_INT(query_mem_desc_.bucket)};
+            &*groups_buffer, &*group_expr_lv, LL_INT(query_mem_desc_.min_val), LL_INT(query_mem_desc_.bucket)};
         if (!query_mem_desc_.keyless_hash) {
           if (!outputColumnar()) {
             get_group_fn_args.push_back(LL_INT(row_size_quad));
@@ -2129,7 +2129,7 @@ std::tuple<llvm::Value*, llvm::Value*> GroupByAndAggregate::codegenGroupBy(const
           }
         }
         if (get_group_fn_name == "get_columnar_group_bin_offset") {
-          return std::make_tuple(groups_buffer, emitCall(get_group_fn_name, get_group_fn_args));
+          return std::make_tuple(&*groups_buffer, emitCall(get_group_fn_name, get_group_fn_args));
         }
         return std::make_tuple(emitCall(get_group_fn_name, get_group_fn_args), nullptr);
       } else {
@@ -2140,14 +2140,14 @@ std::tuple<llvm::Value*, llvm::Value*> GroupByAndAggregate::codegenGroupBy(const
           LOG(INFO) << "Use get_group_value_one_key";
         }
         return std::make_tuple(emitCall("get_group_value_one_key",
-                                        {groups_buffer,
+                                        {&*groups_buffer,
                                          LL_INT(static_cast<int32_t>(query_mem_desc_.entry_count)),
-                                         small_groups_buffer,
+                                         &*small_groups_buffer,
                                          LL_INT(static_cast<int32_t>(query_mem_desc_.entry_count_small)),
-                                         group_expr_lv,
+                                         &*group_expr_lv,
                                          LL_INT(query_mem_desc_.min_val),
                                          LL_INT(row_size_quad),
-                                         ++arg_it}),
+                                         &*(++arg_it)}),
                                nullptr);
       }
       break;
@@ -2180,16 +2180,16 @@ std::tuple<llvm::Value*, llvm::Value*> GroupByAndAggregate::codegenGroupBy(const
       if (perfect_hash_func) {
         auto hash_lv = LL_BUILDER.CreateCall(perfect_hash_func, std::vector<llvm::Value*>{group_key});
         return std::make_tuple(emitCall("get_matching_group_value_perfect_hash",
-                                        {groups_buffer, hash_lv, group_key, key_size_lv, LL_INT(row_size_quad)}),
+                                        {&*groups_buffer, hash_lv, group_key, key_size_lv, LL_INT(row_size_quad)}),
                                nullptr);
       }
       return std::make_tuple(emitCall("get_group_value",
-                                      {groups_buffer,
+                                      {&*groups_buffer,
                                        LL_INT(static_cast<int32_t>(query_mem_desc_.entry_count)),
-                                       group_key,
-                                       key_size_lv,
+                                       &*group_key,
+                                       &*key_size_lv,
                                        LL_INT(row_size_quad),
-                                       ++arg_it}),
+                                       &*(++arg_it)}),
                              nullptr);
       break;
     }
@@ -2606,11 +2606,11 @@ void GroupByAndAggregate::codegenEstimator(std::stack<llvm::BasicBlock*>& array_
     LL_BUILDER.CreateStore(estimator_arg_comp_lv, LL_BUILDER.CreateGEP(estimator_key_lv, LL_INT(subkey_idx++)));
   }
   const auto int8_ptr_ty = llvm::PointerType::get(get_int_type(8, LL_CONTEXT), 0);
-  const auto bitmap = LL_BUILDER.CreateBitCast(ROW_FUNC->arg_begin(), int8_ptr_ty);
+  const auto bitmap = LL_BUILDER.CreateBitCast(&*ROW_FUNC->arg_begin(), int8_ptr_ty);
   const auto key_bytes = LL_BUILDER.CreateBitCast(estimator_key_lv, int8_ptr_ty);
   const auto estimator_comp_bytes_lv = LL_INT(static_cast<int32_t>(estimator_arg.size() * sizeof(int64_t)));
   const auto bitmap_size_lv = LL_INT(static_cast<uint32_t>(ra_exe_unit_.estimator->getEstimatorBufferSize()));
-  emitCall("linear_probabilistic_count", {bitmap, bitmap_size_lv, key_bytes, estimator_comp_bytes_lv});
+  emitCall("linear_probabilistic_count", {bitmap, &*bitmap_size_lv, key_bytes, &*estimator_comp_bytes_lv});
 }
 
 void GroupByAndAggregate::codegenCountDistinct(const size_t target_idx,

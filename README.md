@@ -25,7 +25,7 @@ The following `cmake`/`ccmake` options can enable/disable different features:
 MapD has the following dependencies:
 
 - [CMake 3.3+](https://cmake.org/)
-- [LLVM 3.5](http://llvm.org/)
+- [LLVM 3.8](http://llvm.org/)
 - [GCC 4.9+](http://gcc.gnu.org/): not required if building with Clang
 - [Boost 1.5.7+](http://www.boost.org/)
 - [Thrift 0.9.2+](https://thrift.apache.org/)
@@ -81,7 +81,7 @@ The Java server lib directory containing `libjvm.so` must also be added to your 
 
 [scripts/mapd-deps-osx.sh](scripts/mapd-deps-osx.sh) is provided that will automatically install and/or update [Homebrew](http://brew.sh/) and use that to install all dependencies. Please make sure OS X is completely update to date and Xcode is installed before running.
 
-Note: installing LLVM 3.5 view Homebrew requires some slight modifications to the build config arguments. [scripts/mapd-deps-osx.sh](scripts/mapd-deps-osx.sh) will run `brew edit llvm35`, which opens up the build config in your editor. Jump to the configure args (should be around lines 196-203) and add this line, if running on OS X 10.11:
+Note: installing LLVM 3.8 via Homebrew requires some slight modifications to the build config arguments. [scripts/mapd-deps-osx.sh](scripts/mapd-deps-osx.sh) will run `brew edit llvm35`, which opens up the build config in your editor. Jump to the configure args (should be around lines 196-203) and add this line, if running on OS X 10.11:
 
     "--with-c-include-dirs=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.11.sdk/usr/include",
 
@@ -109,10 +109,10 @@ Most build dependencies are available via APT. Thrift is the one exception and m
     apt-get install build-essential \
                     cmake \
                     cmake-curses-gui \
-                    clang-3.5 \
-                    clang-format-3.5 \
-                    llvm-3.5 \
-                    llvm-3.5-dev \
+                    clang-3.8 \
+                    clang-format-3.8 \
+                    llvm-3.8 \
+                    llvm-3.8-dev \
                     libboost-all-dev \
                     libgoogle-glog-dev \
                     golang \
@@ -144,13 +144,13 @@ Most build dependencies are available via APT. Thrift is the one exception and m
     make install
     apt-get install bison++
 
-Next you need to configure symlinks so that `clang`, etc point to the newly installed `clang-3.5`:
+Next you need to configure symlinks so that `clang`, etc point to the newly installed `clang-3.8`:
 
-    update-alternatives --install /usr/bin/llvm-config llvm-config /usr/lib/llvm-3.5/bin/llvm-config 1
-    update-alternatives --install /usr/bin/llc llc /usr/lib/llvm-3.5/bin/llc 1
-    update-alternatives --install /usr/bin/clang clang /usr/lib/llvm-3.5/bin/clang 1
-    update-alternatives --install /usr/bin/clang++ clang++ /usr/lib/llvm-3.5/bin/clang++ 1
-    update-alternatives --install /usr/bin/clang-format clang-format /usr/lib/llvm-3.5/bin/clang-format 1
+    update-alternatives --install /usr/bin/llvm-config llvm-config /usr/lib/llvm-3.8/bin/llvm-config 1
+    update-alternatives --install /usr/bin/llc llc /usr/lib/llvm-3.8/bin/llc 1
+    update-alternatives --install /usr/bin/clang clang /usr/lib/llvm-3.8/bin/clang 1
+    update-alternatives --install /usr/bin/clang++ clang++ /usr/lib/llvm-3.8/bin/clang++ 1
+    update-alternatives --install /usr/bin/clang-format clang-format /usr/lib/llvm-3.8/bin/clang-format 1
 
 For generating the documentation you will also need:
 

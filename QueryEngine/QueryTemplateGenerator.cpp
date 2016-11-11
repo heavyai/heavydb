@@ -256,32 +256,32 @@ llvm::Function* query_template(llvm::Module* mod,
   query_func_ptr->setAttributes(query_func_pal);
 
   Function::arg_iterator query_arg_it = query_func_ptr->arg_begin();
-  Value* byte_stream = query_arg_it;
+  Value* byte_stream = &*query_arg_it;
   byte_stream->setName("byte_stream");
   Value* literals{nullptr};
   if (hoist_literals) {
-    literals = ++query_arg_it;
+    literals = &*(++query_arg_it);
     literals->setName("literals");
   }
-  Value* row_count_ptr = ++query_arg_it;
+  Value* row_count_ptr = &*(++query_arg_it);
   row_count_ptr->setName("row_count_ptr");
-  Value* frag_row_off_ptr = ++query_arg_it;
+  Value* frag_row_off_ptr = &*(++query_arg_it);
   frag_row_off_ptr->setName("frag_row_off_ptr");
-  Value* max_matched_ptr = ++query_arg_it;
+  Value* max_matched_ptr = &*(++query_arg_it);
   max_matched_ptr->setName("max_matched_ptr");
-  Value* agg_init_val = ++query_arg_it;
+  Value* agg_init_val = &*(++query_arg_it);
   agg_init_val->setName("agg_init_val");
-  Value* out = ++query_arg_it;
+  Value* out = &*(++query_arg_it);
   out->setName("out");
-  Value* unused = ++query_arg_it;
+  Value* unused = &*(++query_arg_it);
   unused->setName("unused");
-  Value* frag_idx = ++query_arg_it;
+  Value* frag_idx = &*(++query_arg_it);
   frag_idx->setName("frag_idx");
-  Value* join_hash_table = ++query_arg_it;
+  Value* join_hash_table = &*(++query_arg_it);
   join_hash_table->setName("join_hash_table");
-  Value* total_matched = ++query_arg_it;
+  Value* total_matched = &*(++query_arg_it);
   total_matched->setName("total_matched");
-  Value* error_code = ++query_arg_it;
+  Value* error_code = &*(++query_arg_it);
   error_code->setName("error_code");
 
   auto bb_entry = BasicBlock::Create(mod->getContext(), ".entry", query_func_ptr, 0);
@@ -540,33 +540,33 @@ llvm::Function* query_group_by_template(llvm::Module* mod,
   query_func_ptr->setAttributes(query_func_pal);
 
   Function::arg_iterator query_arg_it = query_func_ptr->arg_begin();
-  Value* byte_stream = query_arg_it;
+  Value* byte_stream = &*query_arg_it;
   byte_stream->setName("byte_stream");
   Value* literals{nullptr};
   if (hoist_literals) {
-    literals = ++query_arg_it;
+    literals = &*(++query_arg_it);
     ;
     literals->setName("literals");
   }
-  Value* row_count_ptr = ++query_arg_it;
+  Value* row_count_ptr = &*(++query_arg_it);
   row_count_ptr->setName("row_count_ptr");
-  Value* frag_row_off_ptr = ++query_arg_it;
+  Value* frag_row_off_ptr = &*(++query_arg_it);
   frag_row_off_ptr->setName("frag_row_off_ptr");
-  Value* max_matched_ptr = ++query_arg_it;
+  Value* max_matched_ptr = &*(++query_arg_it);
   max_matched_ptr->setName("max_matched_ptr");
-  Value* agg_init_val = ++query_arg_it;
+  Value* agg_init_val = &*(++query_arg_it);
   agg_init_val->setName("agg_init_val");
-  Value* group_by_buffers = ++query_arg_it;
+  Value* group_by_buffers = &*(++query_arg_it);
   group_by_buffers->setName("group_by_buffers");
-  Value* small_groups_buffer = ++query_arg_it;
+  Value* small_groups_buffer = &*(++query_arg_it);
   small_groups_buffer->setName("small_groups_buffer");
-  Value* frag_idx = ++query_arg_it;
+  Value* frag_idx = &*(++query_arg_it);
   frag_idx->setName("frag_idx");
-  Value* join_hash_table = ++query_arg_it;
+  Value* join_hash_table = &*(++query_arg_it);
   join_hash_table->setName("join_hash_table");
-  Value* total_matched = ++query_arg_it;
+  Value* total_matched = &*(++query_arg_it);
   total_matched->setName("total_matched");
-  Value* error_code = ++query_arg_it;
+  Value* error_code = &*(++query_arg_it);
   error_code->setName("error_code");
 
   auto bb_entry = BasicBlock::Create(mod->getContext(), ".entry", query_func_ptr, 0);
