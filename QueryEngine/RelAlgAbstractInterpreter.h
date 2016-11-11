@@ -484,7 +484,7 @@ class RelProject : public RelAlgNode {
   std::vector<std::unique_ptr<const RexScalar>> getExpressionsAndRelease() { return std::move(scalar_exprs_); }
 
   const std::vector<std::string>& getFields() const { return fields_; }
-  void setFilds(std::vector<std::string>& fields) { fields_ = std::move(fields); }
+  void setFields(std::vector<std::string>& fields) { fields_ = std::move(fields); }
 
   const std::string getFieldName(const size_t i) const { return fields_[i]; }
 
@@ -521,7 +521,7 @@ class RelAggregate : public RelAlgNode {
   const size_t getAggExprsCount() const { return agg_exprs_.size(); }
 
   const std::vector<std::string>& getFields() const { return fields_; }
-  void setFilds(std::vector<std::string>& new_fields) { fields_ = std::move(new_fields); }
+  void setFields(std::vector<std::string>& new_fields) { fields_ = std::move(new_fields); }
 
   const std::string getFieldName(const size_t i) const { return fields_[i]; }
 

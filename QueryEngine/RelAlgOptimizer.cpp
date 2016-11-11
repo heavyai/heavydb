@@ -714,7 +714,7 @@ sweep_dead_columns(const std::unordered_map<const RelAlgNode*, std::unordered_se
         }
       }
       aggregate->setAggExprs(new_exprs);
-      aggregate->setFilds(new_fields);
+      aggregate->setFields(new_fields);
     } else if (auto project = std::dynamic_pointer_cast<RelProject>(node)) {
       auto old_exprs = project->getExpressionsAndRelease();
       std::vector<std::unique_ptr<const RexScalar>> new_exprs;
@@ -726,7 +726,7 @@ sweep_dead_columns(const std::unordered_map<const RelAlgNode*, std::unordered_se
         }
       }
       project->setExpressions(new_exprs);
-      project->setFilds(new_fields);
+      project->setFields(new_fields);
     } else {
       CHECK(false);
     }
