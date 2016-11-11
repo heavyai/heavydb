@@ -88,6 +88,12 @@ struct TStringRow {
 typedef list<TColumnType> TRowDescriptor
 typedef map<string, TColumnType> TTableDescriptor
 typedef i32 TSessionId
+typedef i64 TQueryId
+
+struct TStepResult {
+  1: string serialized_rows
+  2: bool execution_finished
+}
 
 struct TRowSet {
   1: TRowDescriptor row_desc
@@ -248,4 +254,6 @@ service MapD {
   void stop_heap_profile() throws (1: TMapDException e 2: ThriftException te)
   string get_heap_profile() throws (1: TMapDException e 2: ThriftException te)
   void import_geo_table(1: TSessionId session, 2: string file_name, 3: string table_name, 4: TCopyParams copy_params) throws (1: TMapDException e 2: ThriftException te)
+  TQueryId start_query(1: TSessionId session, 2: string query 3: bool column_format, 4: string nonce) throws (1: TMapDException e 2: ThriftException te)
+  TStepResult execute_step(1: TQueryId query_id) throws (1: TMapDException e 2: ThriftException te)
 }

@@ -216,8 +216,13 @@ class MapDHandler : virtual public MapDIf {
     if (enable_rendering_) {
       total_reserved += render_mem_bytes;
     }
-    data_mgr_.reset(new Data_Namespace::DataMgr(
-        data_path.string(), cpu_buffer_mem_bytes, !cpu_mode_only_, num_gpus, start_gpu, total_reserved, num_reader_threads));
+    data_mgr_.reset(new Data_Namespace::DataMgr(data_path.string(),
+                                                cpu_buffer_mem_bytes,
+                                                !cpu_mode_only_,
+                                                num_gpus,
+                                                start_gpu,
+                                                total_reserved,
+                                                num_reader_threads));
 #ifdef HAVE_CALCITE
     calcite_.reset(new Calcite(calcite_port, base_data_path_));
 #ifdef HAVE_RAVM
@@ -1823,6 +1828,21 @@ class MapDHandler : virtual public MapDIf {
     return "";
   }
 #endif  // HAVE_CALCITE
+
+  TQueryId start_query(const TSessionId session,
+                       const std::string& query,
+                       const bool column_format,
+                       const std::string& nonce) {
+    TMapDException ex;
+    ex.error_msg = "start_query not supported yet";
+    throw ex;
+  }
+
+  void execute_step(TStepResult& _return, const TQueryId query_id) {
+    TMapDException ex;
+    ex.error_msg = "execute_step not supported yet";
+    throw ex;
+  }
 
   void throw_profile_exception(const std::string& error_msg) {
     TMapDException ex;
