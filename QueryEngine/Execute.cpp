@@ -2304,15 +2304,56 @@ llvm::Value* Executor::codegenCastFromFp(llvm::Value* operand_lv,
   return nullptr;
 }
 
+bool Executor::checkExpressionRanges(const Analyzer::UOper* uoper, int64_t min, int64_t max) {
+  if (uoper->get_type_info().is_decimal())
+    return false;
+
+  auto expr_range_info = cgen_state_->query_infos_.size() > 0
+                             ? getExpressionRange(uoper, cgen_state_->query_infos_, this)
+                             : ExpressionRange::makeInvalidRange();
+  if (expr_range_info.getType() != ExpressionRangeType::Integer)
+    return false;
+  if (expr_range_info.getIntMin() >= min && expr_range_info.getIntMax() <= max)
+    return true;
+
+  return false;
+}
+
 llvm::Value* Executor::codegenUMinus(const Analyzer::UOper* uoper, const CompilationOptions& co) {
   CHECK_EQ(uoper->get_optype(), kUMINUS);
   const auto operand_lv = codegen(uoper->get_operand(), true, co).front();
   const auto& ti = uoper->get_type_info();
-  return ti.get_notnull() ? cgen_state_->ir_builder_.CreateNeg(operand_lv)
-                          : cgen_state_->emitCall("uminus_" + numeric_type_name(ti) + "_nullable",
-                                                  {operand_lv,
-                                                   ti.is_fp() ? static_cast<llvm::Value*>(inlineFpNull(ti))
-                                                              : static_cast<llvm::Value*>(inlineIntNull(ti))});
+  llvm::Value* chosen_max{nullptr};
+  llvm::Value* chosen_min{nullptr};
+  bool need_overflow_check = false;
+  if (ti.is_integer() || ti.is_decimal() || ti.is_timeinterval()) {
+    std::tie(chosen_max, chosen_min) = inlineIntMaxMin(ti.get_size(), true);
+    need_overflow_check = !checkExpressionRanges(uoper,
+                                                 static_cast<llvm::ConstantInt*>(chosen_min)->getSExtValue(),
+                                                 static_cast<llvm::ConstantInt*>(chosen_max)->getSExtValue());
+  }
+  llvm::BasicBlock* uminus_ok{nullptr};
+  llvm::BasicBlock* uminus_fail{nullptr};
+  if (need_overflow_check) {
+    cgen_state_->needs_error_check_ = true;
+    uminus_ok = llvm::BasicBlock::Create(cgen_state_->context_, "uminus_ok", cgen_state_->row_func_);
+    uminus_fail = llvm::BasicBlock::Create(cgen_state_->context_, "uminus_fail", cgen_state_->row_func_);
+    auto const_min = llvm::ConstantInt::get(operand_lv->getType(), static_cast<llvm::ConstantInt*>(chosen_min)->getSExtValue(), true);
+    auto overflow = cgen_state_->ir_builder_.CreateICmpEQ(operand_lv, const_min);
+    cgen_state_->ir_builder_.CreateCondBr(overflow, uminus_fail, uminus_ok);
+    cgen_state_->ir_builder_.SetInsertPoint(uminus_ok);
+  }
+  auto ret = ti.get_notnull() ? cgen_state_->ir_builder_.CreateNeg(operand_lv)
+                              : cgen_state_->emitCall("uminus_" + numeric_type_name(ti) + "_nullable",
+                                                      {operand_lv,
+                                                      ti.is_fp() ? static_cast<llvm::Value*>(inlineFpNull(ti))
+                                                                 : static_cast<llvm::Value*>(inlineIntNull(ti))});
+  if (need_overflow_check) {
+    cgen_state_->ir_builder_.SetInsertPoint(uminus_fail);
+    cgen_state_->ir_builder_.CreateRet(ll_int(ERR_OVERFLOW_OR_UNDERFLOW));
+    cgen_state_->ir_builder_.SetInsertPoint(uminus_ok);
+  }
+  return ret;
 }
 
 namespace {

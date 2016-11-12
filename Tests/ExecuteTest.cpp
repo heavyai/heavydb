@@ -2194,8 +2194,7 @@ TEST(Select, RuntimeFunctions) {
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE SIGN(-d) = -1;", dt)));
     ASSERT_EQ(static_cast<int64_t>(g_num_rows + g_num_rows / 2),
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE SIGN(ofd) = 1;", dt)));
-    ASSERT_EQ(static_cast<int64_t>(g_num_rows + g_num_rows / 2),
-              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE SIGN(-ofd) = -1;", dt)));
+    EXPECT_THROW(run_simple_agg("SELECT COUNT(*) FROM test WHERE SIGN(-ofd) = -1;", dt), std::runtime_error);
     ASSERT_EQ(static_cast<int64_t>(g_num_rows / 2),
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE SIGN(ofd) IS NULL;", dt)));
     ASSERT_FLOAT_EQ(static_cast<double>(2 * g_num_rows),

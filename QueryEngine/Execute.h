@@ -378,6 +378,7 @@ class Executor {
   llvm::Value* codegenLogical(const Analyzer::BinOper*, const CompilationOptions&);
   llvm::Value* toBool(llvm::Value*);
   llvm::Value* codegenArith(const Analyzer::BinOper*, const CompilationOptions&);
+  bool checkExpressionRanges(const Analyzer::UOper*, int64_t, int64_t);
   bool checkExpressionRanges(const Analyzer::BinOper*, int64_t, int64_t);
   llvm::Value* codegenAdd(const Analyzer::BinOper*,
                           llvm::Value*,
