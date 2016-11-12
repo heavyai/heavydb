@@ -1095,8 +1095,19 @@ class CreateViewStmt : public DDLStmt {
                  std::list<NameValueAssign*>* o,
                  bool i)
       : view_name(v), query(q), checkoption(ck), is_materialized(m), if_not_exists(i) {
+    if (c) {
+      for (const auto e : *c) {
+        column_list.emplace_back(e);
+      }
+      delete c;
+    }
+    if (o) {
+      for (const auto e : *o) {
+        matview_options.emplace_back(e);
+      }
+      delete o;
+    }
     throw std::runtime_error("Views are not supported yet.");
-    /* Some dead code deleted */
   }
   const std::string* get_view_name() const { return view_name.get(); }
   const std::list<std::unique_ptr<std::string>>& get_column_list() const { return column_list; }
