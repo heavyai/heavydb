@@ -16,6 +16,7 @@ Tables
 -  SMALLINT
 -  INT[EGER]
 -  BIGINT
+-  NUMERIC \| DECIMAL (PRECISON[,SCALE]) max precision 19
 -  FLOAT \| REAL
 -  DOUBLE [PRECISION]
 -  [VAR]CHAR(length)
