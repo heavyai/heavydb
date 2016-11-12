@@ -14,6 +14,7 @@
 #include <iomanip>
 #include <fstream>
 #include <boost/algorithm/string/join.hpp>
+#include <boost/algorithm/string/predicate.hpp>
 #include <boost/algorithm/string/trim.hpp>
 #include <boost/program_options.hpp>
 #include <boost/filesystem.hpp>
@@ -615,6 +616,15 @@ int main(int argc, char** argv) {
           }
           const size_t row_count{get_row_count(context.query_return)};
           if (!row_count) {
+            static const std::string insert{"INSERT"};
+            std::string verb(query, 0, insert.size());
+            if (!boost::iequals(verb, insert)) {
+              std::cout << "No rows returned." << std::endl;
+            }
+            if (print_timing) {
+              std::cout << "Execution time: " << context.query_return.execution_time_ms << " ms,"
+                        << " Total time: " << context.query_return.total_time_ms << " ms" << std::endl;
+            }
             continue;
           }
           bool not_first = false;
