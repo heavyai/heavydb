@@ -2338,7 +2338,8 @@ llvm::Value* Executor::codegenUMinus(const Analyzer::UOper* uoper, const Compila
     cgen_state_->needs_error_check_ = true;
     uminus_ok = llvm::BasicBlock::Create(cgen_state_->context_, "uminus_ok", cgen_state_->row_func_);
     uminus_fail = llvm::BasicBlock::Create(cgen_state_->context_, "uminus_fail", cgen_state_->row_func_);
-    auto const_min = llvm::ConstantInt::get(operand_lv->getType(), static_cast<llvm::ConstantInt*>(chosen_min)->getSExtValue(), true);
+    auto const_min = llvm::ConstantInt::get(
+        operand_lv->getType(), static_cast<llvm::ConstantInt*>(chosen_min)->getSExtValue(), true);
     auto overflow = cgen_state_->ir_builder_.CreateICmpEQ(operand_lv, const_min);
     cgen_state_->ir_builder_.CreateCondBr(overflow, uminus_fail, uminus_ok);
     cgen_state_->ir_builder_.SetInsertPoint(uminus_ok);
@@ -2346,8 +2347,8 @@ llvm::Value* Executor::codegenUMinus(const Analyzer::UOper* uoper, const Compila
   auto ret = ti.get_notnull() ? cgen_state_->ir_builder_.CreateNeg(operand_lv)
                               : cgen_state_->emitCall("uminus_" + numeric_type_name(ti) + "_nullable",
                                                       {operand_lv,
-                                                      ti.is_fp() ? static_cast<llvm::Value*>(inlineFpNull(ti))
-                                                                 : static_cast<llvm::Value*>(inlineIntNull(ti))});
+                                                       ti.is_fp() ? static_cast<llvm::Value*>(inlineFpNull(ti))
+                                                                  : static_cast<llvm::Value*>(inlineIntNull(ti))});
   if (need_overflow_check) {
     cgen_state_->ir_builder_.SetInsertPoint(uminus_fail);
     cgen_state_->ir_builder_.CreateRet(ll_int(ERR_OVERFLOW_OR_UNDERFLOW));
