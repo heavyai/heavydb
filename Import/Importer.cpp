@@ -384,7 +384,7 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
       break;
     }
     case kFLOAT:
-      if (!is_null && (isdigit(val[0]) || val[0] == '-')) {
+      if (!is_null && (val[0] == '.' || isdigit(val[0]) || val[0] == '-')) {
         addFloat((float)std::atof(val.c_str()));
       } else {
         if (cd->columnType.get_notnull())
@@ -393,7 +393,7 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
       }
       break;
     case kDOUBLE:
-      if (!is_null && (isdigit(val[0]) || val[0] == '-')) {
+      if (!is_null && (val[0] == '.' || isdigit(val[0]) || val[0] == '-')) {
         addDouble(std::atof(val.c_str()));
       } else {
         if (cd->columnType.get_notnull())
