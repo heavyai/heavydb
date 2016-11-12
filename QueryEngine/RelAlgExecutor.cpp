@@ -27,58 +27,67 @@ ExecutionResult RelAlgExecutor::executeRelAlgSeq(std::vector<RaExecutionDesc>& e
   CHECK(!exec_descs.empty());
   const auto exec_desc_count = eo.just_explain ? size_t(1) : exec_descs.size();
   for (size_t i = 0; i < exec_desc_count; ++i) {
-    auto& exec_desc = exec_descs[i];
-    const auto body = exec_desc.getBody();
-    if (body->isNop()) {
-      handleNop(body);
-      continue;
-    }
-    const ExecutionOptions eo_work_unit{eo.output_columnar_hint,
-                                        eo.allow_multifrag,
-                                        eo.just_explain,
-                                        eo.allow_loop_joins,
-                                        eo.with_watchdog && (i == 0 || dynamic_cast<const RelProject*>(body))};
-    const auto compound = dynamic_cast<const RelCompound*>(body);
-    if (compound) {
-      exec_desc.setResult(executeCompound(compound, co, eo_work_unit, render_info, queue_time_ms));
-      addTemporaryTable(-compound->getId(), exec_desc.getResult().getDataPtr());
-      continue;
-    }
-    const auto project = dynamic_cast<const RelProject*>(body);
-    if (project) {
-      exec_desc.setResult(executeProject(project, co, eo_work_unit, render_info, queue_time_ms));
-      addTemporaryTable(-project->getId(), exec_desc.getResult().getDataPtr());
-      continue;
-    }
-    const auto aggregate = dynamic_cast<const RelAggregate*>(body);
-    if (aggregate) {
-      exec_desc.setResult(executeAggregate(aggregate, co, eo_work_unit, render_info, queue_time_ms));
-      addTemporaryTable(-aggregate->getId(), exec_desc.getResult().getDataPtr());
-      continue;
-    }
-    const auto filter = dynamic_cast<const RelFilter*>(body);
-    if (filter) {
-      exec_desc.setResult(executeFilter(filter, co, eo_work_unit, render_info, queue_time_ms));
-      addTemporaryTable(-filter->getId(), exec_desc.getResult().getDataPtr());
-      continue;
-    }
-    const auto sort = dynamic_cast<const RelSort*>(body);
-    if (sort) {
-      exec_desc.setResult(executeSort(sort, co, eo_work_unit, render_info, queue_time_ms));
-      addTemporaryTable(-sort->getId(), exec_desc.getResult().getDataPtr());
-      continue;
-    }
-#ifdef ENABLE_JOIN_EXEC
-    const auto join = dynamic_cast<const RelJoin*>(body);
-    if (join) {
-      exec_desc.setResult(executeJoin(join, co, eo_work_unit, render_info, queue_time_ms));
-      addTemporaryTable(-join->getId(), exec_desc.getResult().getDataPtr());
-      continue;
-    }
-#endif
-    CHECK(false);
+    executeRelAlgStep(i, exec_descs, co, eo, render_info, queue_time_ms);
   }
   return exec_descs[exec_desc_count - 1].getResult();
+}
+
+void RelAlgExecutor::executeRelAlgStep(const size_t i,
+                                       std::vector<RaExecutionDesc>& exec_descs,
+                                       const CompilationOptions& co,
+                                       const ExecutionOptions& eo,
+                                       RenderInfo* render_info,
+                                       const int64_t queue_time_ms) {
+  auto& exec_desc = exec_descs[i];
+  const auto body = exec_desc.getBody();
+  if (body->isNop()) {
+    handleNop(body);
+    return;
+  }
+  const ExecutionOptions eo_work_unit{eo.output_columnar_hint,
+                                      eo.allow_multifrag,
+                                      eo.just_explain,
+                                      eo.allow_loop_joins,
+                                      eo.with_watchdog && (i == 0 || dynamic_cast<const RelProject*>(body))};
+  const auto compound = dynamic_cast<const RelCompound*>(body);
+  if (compound) {
+    exec_desc.setResult(executeCompound(compound, co, eo_work_unit, render_info, queue_time_ms));
+    addTemporaryTable(-compound->getId(), exec_desc.getResult().getDataPtr());
+    return;
+  }
+  const auto project = dynamic_cast<const RelProject*>(body);
+  if (project) {
+    exec_desc.setResult(executeProject(project, co, eo_work_unit, render_info, queue_time_ms));
+    addTemporaryTable(-project->getId(), exec_desc.getResult().getDataPtr());
+    return;
+  }
+  const auto aggregate = dynamic_cast<const RelAggregate*>(body);
+  if (aggregate) {
+    exec_desc.setResult(executeAggregate(aggregate, co, eo_work_unit, render_info, queue_time_ms));
+    addTemporaryTable(-aggregate->getId(), exec_desc.getResult().getDataPtr());
+    return;
+  }
+  const auto filter = dynamic_cast<const RelFilter*>(body);
+  if (filter) {
+    exec_desc.setResult(executeFilter(filter, co, eo_work_unit, render_info, queue_time_ms));
+    addTemporaryTable(-filter->getId(), exec_desc.getResult().getDataPtr());
+    return;
+  }
+  const auto sort = dynamic_cast<const RelSort*>(body);
+  if (sort) {
+    exec_desc.setResult(executeSort(sort, co, eo_work_unit, render_info, queue_time_ms));
+    addTemporaryTable(-sort->getId(), exec_desc.getResult().getDataPtr());
+    return;
+  }
+#ifdef ENABLE_JOIN_EXEC
+  const auto join = dynamic_cast<const RelJoin*>(body);
+  if (join) {
+    exec_desc.setResult(executeJoin(join, co, eo_work_unit, render_info, queue_time_ms));
+    addTemporaryTable(-join->getId(), exec_desc.getResult().getDataPtr());
+    return;
+  }
+#endif
+  CHECK(false);
 }
 
 std::vector<TargetMetaInfo> RelAlgExecutor::validateRelAlgSeq(const std::vector<RaExecutionDesc>& exec_descs) {
