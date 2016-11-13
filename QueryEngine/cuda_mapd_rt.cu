@@ -59,12 +59,24 @@ extern "C" __device__ int64_t* get_matching_group_value(int64_t* groups_buffer,
   uint32_t off = h * row_size_quad;
   {
     const uint64_t old = atomicCAS(reinterpret_cast<unsigned long long*>(groups_buffer + off), EMPTY_KEY_64, *key);
-    if (EMPTY_KEY_64 == old) {
-      memcpy(groups_buffer + off, key, key_qw_count * sizeof(int64_t));
-      memcpy(groups_buffer + off + key_qw_count, init_vals, (row_size_quad - key_qw_count) * sizeof(int64_t));
+    if (EMPTY_KEY_64 == old && key_qw_count > 1) {
+      if (key_qw_count > 2) {
+        // write the middle part of the key
+        memcpy(groups_buffer + off + 1, key + 1, (key_qw_count - 2) * sizeof(int64_t));
+      }
+      // write the last component of the key with an atomic operation so that other threads can use it
+      // as a safe marker that the write is done when they investigate the key for collision or equality
+      atomicExch(reinterpret_cast<unsigned long long*>(groups_buffer + off + key_qw_count - 1), key[key_qw_count - 1]);
     }
   }
-  __syncthreads();
+  // make sure that the middle part of the key is written
+  __threadfence();
+  if (key_qw_count > 1) {
+    while (atomicAdd(reinterpret_cast<unsigned long long*>(groups_buffer + off + key_qw_count - 1), 0) ==
+           EMPTY_KEY_64) {
+      // spin until the winning thread has finished writing the entire key and the init value
+    }
+  }
   bool match = true;
   for (uint32_t i = 0; i < key_qw_count; ++i) {
     if (groups_buffer[off + i] != key[i]) {
