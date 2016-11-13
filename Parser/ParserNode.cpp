@@ -387,6 +387,41 @@ void RegexpExpr::check_pattern_expr(const std::string& pattern_str, char escape_
     throw std::runtime_error("REGEXP pattern must not end with escape character.");
 }
 
+bool RegexpExpr::translate_to_like_pattern(std::string& pattern_str, char escape_char) {
+  char prev_char = '\0';
+  char prev_prev_char = '\0';
+  std::string like_str;
+  for (char& cur_char : pattern_str) {
+    if (prev_char == escape_char ||
+	isalnum(cur_char) ||
+	cur_char == ' ' ||
+	cur_char == '.') {
+      like_str.push_back((cur_char == '.') ? '_' : cur_char);
+      prev_prev_char = prev_char;
+      prev_char = cur_char;
+      continue;
+    }
+    if (prev_char == '.' &&
+	prev_prev_char != escape_char) {
+      if (cur_char == '*' ||
+	  cur_char == '+') {
+	if (cur_char == '*') {
+	  like_str.pop_back();
+	}
+	// .* --> %
+	// .+ --> _%
+	like_str.push_back('%');
+	prev_prev_char = prev_char;
+	prev_char = cur_char;
+	continue;
+      }
+    }
+    return false;
+  }
+  pattern_str = like_str;
+  return true;
+}
+
 std::shared_ptr<Analyzer::Expr> RegexpExpr::analyze(const Catalog_Namespace::Catalog& catalog,
                                                     Analyzer::Query& query,
                                                     TlistRefType allow_tlist_ref) const {
@@ -416,6 +451,13 @@ std::shared_ptr<Analyzer::Expr> RegexpExpr::get(std::shared_ptr<Analyzer::Expr> 
     escape_char = (*c->get_constval().stringval)[0];
     if (escape_char != '\\')
       throw std::runtime_error("Only supporting '\\' escape character.");
+  }
+  auto c = std::dynamic_pointer_cast<Analyzer::Constant>(pattern_expr);
+  if (c != nullptr) {
+    std::string& pattern = *c->get_constval().stringval;
+    if (translate_to_like_pattern(pattern, escape_char)) {
+      return LikeExpr::get(arg_expr, pattern_expr, escape_expr, false, is_not);
+    }
   }
   std::shared_ptr<Analyzer::Expr> result =
       makeExpr<Analyzer::RegexpExpr>(arg_expr->decompress(), pattern_expr, escape_expr);

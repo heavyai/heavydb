@@ -439,6 +439,7 @@ class RegexpExpr : public Expr {
   std::unique_ptr<Expr> escape_string;
 
   static void check_pattern_expr(const std::string& pattern_str, char escape_char);
+  static bool translate_to_like_pattern(std::string& pattern_str, char escape_char);
 };
 
 /*
