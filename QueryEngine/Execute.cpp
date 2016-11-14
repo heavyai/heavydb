@@ -1991,6 +1991,13 @@ llvm::Value* Executor::codegenLogicalShortCircuit(const Analyzer::BinOper* bin_o
   const auto& ti = bin_oper->get_type_info();
   auto lhs_lv = codegen(lhs, true, co).front();
 
+  // Here the linear control flow will diverge and expressions cached during the
+  // code branch code generation (currently just column decoding) are not going
+  // to be available once we're done generating the short-circuited logic.
+  // Take a snapshot of the cache with FetchCacheAnchor and restore it once
+  // the control flow converges.
+  FetchCacheAnchor anchor(cgen_state_.get());
+
   auto rhs_bb = llvm::BasicBlock::Create(cgen_state_->context_, "rhs_bb", cgen_state_->row_func_);
   auto ret_bb = llvm::BasicBlock::Create(cgen_state_->context_, "ret_bb", cgen_state_->row_func_);
   llvm::BasicBlock* nullcheck_ok_bb{nullptr};
