@@ -65,7 +65,7 @@ void Calcite::runJNI(int port, std::string data_dir) {
   // get all the methods we will need for calciteDirect;
   processMID_ = env->GetMethodID(calciteDirect_,
                                  "process",
-                                 "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Z)Lcom/"
+                                 "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ZZ)Lcom/"
                                  "mapd/parser/server/CalciteReturn;");
   CHECK(processMID_);
 
@@ -172,7 +172,12 @@ void Calcite::updateMetadata(string catalog, string table) {
   }
 }
 
-string Calcite::process(string user, string passwd, string catalog, string sql_string, const bool legacy_syntax) {
+string Calcite::process(string user,
+                        string passwd,
+                        string catalog,
+                        string sql_string,
+                        const bool legacy_syntax,
+                        const bool is_explain) {
   LOG(INFO) << "User " << user << " catalog " << catalog << " sql '" << sql_string << "'";
   if (jni_) {
     JNIEnv* env = checkJNIConnection();
@@ -185,7 +190,8 @@ string Calcite::process(string user, string passwd, string catalog, string sql_s
                                              env->NewStringUTF(passwd.c_str()),
                                              env->NewStringUTF(catalog.c_str()),
                                              env->NewStringUTF(sql_string.c_str()),
-                                             legacy);
+                                             legacy,
+                                             is_explain);
 
     });
     if (env->ExceptionCheck()) {
@@ -204,8 +210,8 @@ string Calcite::process(string user, string passwd, string catalog, string sql_s
     if (server_available_) {
       TPlanResult ret;
       try {
-        auto ms =
-            measure<>::execution([&]() { client->process(ret, user, passwd, catalog, sql_string, legacy_syntax); });
+        auto ms = measure<>::execution(
+            [&]() { client->process(ret, user, passwd, catalog, sql_string, legacy_syntax, is_explain); });
 
         LOG(INFO) << ret.plan_result << endl;
         LOG(INFO) << "Time in Thrift " << (ms > ret.execution_time_ms ? ms - ret.execution_time_ms : 0)

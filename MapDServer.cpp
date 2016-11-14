@@ -1718,6 +1718,11 @@ class MapDHandler : virtual public MapDIf {
         if (!pw.is_ddl && !pw.is_update_dml && !pw.is_other_explain) {
           std::string query_ra;
           _return.execution_time_ms += measure<>::execution([&]() { query_ra = parse_to_ra(query_str, session_info); });
+          if (pw.is_select_calcite_explain) {
+            // return the ra as the result
+            convert_explain(_return, ResultRows(query_ra, 0), true);
+            return;
+          }
           execute_rel_alg(_return, query_ra, column_format, session_info, executor_device_type, pw.is_select_explain);
           return;
         }
@@ -1798,12 +1803,14 @@ class MapDHandler : virtual public MapDIf {
     ParserWrapper pw{query_str};
     // if this is a calcite select or explain select run in calcite
     if (!pw.is_ddl && !pw.is_update_dml && !pw.is_other_explain) {
-      const std::string actual_query{pw.is_select_explain ? pw.actual_query : query_str};
+      const std::string actual_query{pw.is_select_explain || pw.is_select_calcite_explain ? pw.actual_query
+                                                                                          : query_str};
       const auto query_ra = calcite_->process(session_info.get_currentUser().userName,
                                               session_info.get_currentUser().passwd,
                                               cat.get_currentDB().dbName,
                                               legacy_syntax_ ? pg_shim(actual_query) : actual_query,
-                                              legacy_syntax_);
+                                              legacy_syntax_,
+                                              pw.is_select_calcite_explain);
       auto root_plan = translate_query(query_ra, cat);
       CHECK(root_plan);
       if (pw.is_select_explain) {
@@ -1816,14 +1823,15 @@ class MapDHandler : virtual public MapDIf {
 
   std::string parse_to_ra(const std::string& query_str, const Catalog_Namespace::SessionInfo& session_info) {
     ParserWrapper pw{query_str};
-    const std::string actual_query{pw.is_select_explain ? pw.actual_query : query_str};
+    const std::string actual_query{pw.is_select_explain || pw.is_select_calcite_explain ? pw.actual_query : query_str};
     auto& cat = session_info.get_catalog();
     if (!pw.is_ddl && !pw.is_update_dml && !pw.is_other_explain) {
       return calcite_->process(session_info.get_currentUser().userName,
                                session_info.get_currentUser().passwd,
                                cat.get_currentDB().dbName,
                                legacy_syntax_ ? pg_shim(actual_query) : actual_query,
-                               legacy_syntax_);
+                               legacy_syntax_,
+                               pw.is_select_calcite_explain);
     }
     return "";
   }

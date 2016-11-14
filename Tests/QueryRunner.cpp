@@ -107,7 +107,8 @@ Planner::RootPlan* parse_plan_calcite(const std::string& query_str,
                                             session->get_currentUser().passwd,
                                             cat.get_currentDB().dbName,
                                             pg_shim(query_str),
-                                            true);
+                                            true,
+                                            false);  //  if we want to be able to check plans we may want to calc this
   return translate_query(query_ra, cat);
 }
 
@@ -133,7 +134,8 @@ std::shared_ptr<const RelAlgNode> parse_ravm_plan(const std::string& query_str,
                                             session->get_currentUser().passwd,
                                             cat.get_currentDB().dbName,
                                             pg_shim(query_str),
-                                            true);
+                                            true,
+                                            false);
   rapidjson::Document query_ast;
   query_ast.Parse(query_ra.c_str());
   CHECK(!query_ast.HasParseError());

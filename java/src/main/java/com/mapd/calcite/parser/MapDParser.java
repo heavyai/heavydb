@@ -8,6 +8,7 @@ import java.util.Map;
 import com.mapd.parser.server.ExtensionFunction;
 import org.apache.calcite.avatica.util.Casing;
 import org.apache.calcite.plan.RelOptCluster;
+import org.apache.calcite.plan.RelOptUtil;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.RelRoot;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
@@ -68,7 +69,7 @@ public final class MapDParser {
                 StandardConvertletTable.INSTANCE);
     }
 
-    public String getRelAlgebra(String sql, final boolean legacy_syntax, final MapDUser mapDUser)
+    public String getRelAlgebra(String sql, final boolean legacy_syntax, final MapDUser mapDUser, final boolean isExplain)
             throws SqlParseException {
         callCount++;
         SqlNode node = processSQL(sql, legacy_syntax);
@@ -105,6 +106,10 @@ public final class MapDParser {
         //MAPDLOGGER.debug("After convert relRoot project is " + sqlRel.project().toString());
         //MAPDLOGGER.debug("After convert relalgebra is \n" + RelOptUtil.toString(sqlRel.project()));
         RelNode project = sqlRel.project();
+        //MAPDLOGGER.info("After convert relalgebra is \n" + RelOptUtil.toString(sqlRel.project()));
+        if (isExplain){
+          return RelOptUtil.toString(sqlRel.project());
+        }
 
         String res = MapDSerializer.toString(project);
 

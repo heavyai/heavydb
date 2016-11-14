@@ -31,6 +31,22 @@ should be used instead which is far more efficient. Example:
       [ORDER BY <expr> [ ASC | DESC ] , ...]
       [LIMIT {<number>|ALL} [OFFSET <number> [ROWS]]];
 
+``EXPLAIN``
+~~~~~~~~~~~
+::
+
+   EXPLAIN <STMT>;
+
+Shows the generated IR code identifying whether it will be executed on GPU or CPU, mostly useful for MapD own internal debug.
+
+::
+
+   EXPLAIN CALCITE <STMT>;
+
+Returns a Relational Algebra tree describing the high level plan that will be followed to execute the statement
+
+
+	
 ``Table Expression and Join Support``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 

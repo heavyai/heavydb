@@ -75,7 +75,7 @@ public class TestCalciteDirectMulti {
     int aliasID = r.nextInt(100000) + 1000000;
     CalciteReturn cr = cd.process("mapd","HyperInteractive","SALES",
             String.format("Select TABALIAS%d.ENAME AS COLALIAS%d from EMP TABALIAS%d LIMIT %d",
-              aliasID, aliasID, aliasID, aliasID), true);
+              aliasID, aliasID, aliasID, aliasID), true, false);
     String res =
             String.format(
                     "{\n"

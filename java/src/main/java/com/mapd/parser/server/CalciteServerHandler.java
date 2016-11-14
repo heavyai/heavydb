@@ -61,7 +61,7 @@ class CalciteServerHandler implements CalciteServer.Iface {
   }
 
   @Override
-  public TPlanResult process(String user, String passwd, String catalog, String sqlText, boolean legacySyntax) throws InvalidParseRequest, TException {
+  public TPlanResult process(String user, String passwd, String catalog, String sqlText, boolean legacySyntax, boolean isExplain) throws InvalidParseRequest, TException {
     long timer = System.currentTimeMillis();
     callCount++;
     MapDParser parser;
@@ -81,7 +81,7 @@ class CalciteServerHandler implements CalciteServer.Iface {
     }
     String relAlgebra;
     try {
-      relAlgebra = parser.getRelAlgebra(sqlText, legacySyntax, mapDUser);
+      relAlgebra = parser.getRelAlgebra(sqlText, legacySyntax, mapDUser, isExplain);
     } catch (SqlParseException ex) {
       String msg = "Parse failed :" + ex.getMessage();
       MAPDLOGGER.error(msg);

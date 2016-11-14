@@ -106,8 +106,8 @@ final static Logger MAPDLOGGER = LoggerFactory.getLogger(CalciteDirect.class);
     return new CalciteReturn("", System.currentTimeMillis() - timer, false);
   }
 
-  public CalciteReturn process(String user, String passwd, String catalog, String sqlText, boolean legacySyntax) {
-    MAPDLOGGER.debug(user + " " + " " + catalog +" '"+sqlText + "' " + legacySyntax);
+  public CalciteReturn process(String user, String passwd, String catalog, String sqlText, boolean legacySyntax, boolean isExplain) {
+    MAPDLOGGER.debug(user + " " + " " + catalog +" '"+sqlText + "' " + legacySyntax + "' " + isExplain );
     long timer = System.currentTimeMillis();
     callCount++;
     MapDParser parser;
@@ -131,7 +131,7 @@ final static Logger MAPDLOGGER = LoggerFactory.getLogger(CalciteDirect.class);
         ClassLoader cl = ClassLoader.getSystemClassLoader();
         Thread.currentThread().setContextClassLoader(cl);
       }
-      relAlgebra = parser.getRelAlgebra(sqlText, legacySyntax, mapDUser);
+      relAlgebra = parser.getRelAlgebra(sqlText, legacySyntax, mapDUser, isExplain);
       MAPDLOGGER.debug("After get relalgebra");
     } catch (SqlParseException ex) {
       String msg = "Parse failed :" + ex.getPos() + ", " +  ex.getMessage();
