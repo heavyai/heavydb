@@ -29,6 +29,7 @@ enum class GroupByColRangeType {
   OneColGuessedRange,  // best guess: small hash for the guess plus overflow for outliers
   MultiCol,
   MultiColPerfectHash,
+  Projection,
   Scan,  // the plan is not a group by plan
   Estimator
 };
@@ -152,7 +153,8 @@ struct QueryMemoryDescriptor {
 };
 
 inline bool can_use_result_set(const QueryMemoryDescriptor& query_mem_desc, const ExecutorDeviceType) {
-  return query_mem_desc.hash_type == GroupByColRangeType::MultiCol;
+  return query_mem_desc.hash_type == GroupByColRangeType::MultiCol ||
+         query_mem_desc.hash_type == GroupByColRangeType::Projection;
 }
 
 #endif  // QUERYENGINE_QUERYMEMORYDESCRIPTOR_H

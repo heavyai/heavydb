@@ -1230,6 +1230,9 @@ GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getColRangeInfo() {
 }
 
 GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getExprRangeInfo(const Analyzer::Expr* expr) const {
+  if (!expr) {
+    return {GroupByColRangeType::Projection, 0, 0, 0, false};
+  }
   const int64_t guessed_range_max{255};  // TODO(alex): replace with educated guess
 
   const auto expr_range =
@@ -1462,71 +1465,62 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
   }
 
   switch (col_range_info.hash_type_) {
-    case GroupByColRangeType::OneColKnownRange:
+    case GroupByColRangeType::OneColKnownRange: {
+      CHECK(!render_output);
+      const auto redirected_targets = redirect_exprs(ra_exe_unit_.target_exprs, ra_exe_unit_.input_col_descs);
+      const auto keyless_info = getKeylessInfo(get_exprs_not_owned(redirected_targets), is_group_by);
+      bool keyless =
+          (!sort_on_gpu_hint || !many_entries(col_range_info.max, col_range_info.min, col_range_info.bucket)) &&
+          !col_range_info.bucket && keyless_info.keyless;
+      size_t bin_count = getBucketedCardinality(col_range_info);
+      const size_t interleaved_max_threshold{20};
+      bool interleaved_bins = keyless && (bin_count <= interleaved_max_threshold);
+      query_mem_desc_ = {executor_,
+                         allow_multifrag,
+                         col_range_info.hash_type_,
+                         keyless,
+                         interleaved_bins,
+                         keyless_info.target_index,
+                         keyless_info.init_val,
+                         group_col_widths,
+                         agg_col_widths,
+                         bin_count,
+                         0,
+                         col_range_info.min,
+                         col_range_info.max,
+                         col_range_info.bucket,
+                         col_range_info.has_nulls,
+                         GroupByMemSharing::Shared,
+                         count_distinct_descriptors,
+                         false,
+                         false,
+                         false,
+                         false};
+      return;
+    }
     case GroupByColRangeType::OneColGuessedRange: {
-      CHECK_EQ(size_t(1), ra_exe_unit_.groupby_exprs.size());
-      if (col_range_info.hash_type_ == GroupByColRangeType::OneColGuessedRange) {
-        const auto hash_type =
-            (render_output || ra_exe_unit_.scan_limit) ? GroupByColRangeType::MultiCol : col_range_info.hash_type_;
-        size_t small_group_slots =
-            (ra_exe_unit_.scan_limit || render_output) ? size_t(0) : small_groups_buffer_entry_count;
-        size_t group_slots =
-            ra_exe_unit_.scan_limit ? static_cast<size_t>(ra_exe_unit_.scan_limit) : max_groups_buffer_entry_count;
-        query_mem_desc_ = {executor_,
-                           allow_multifrag,
-                           hash_type,
-                           false,
-                           false,
-                           -1,
-                           0,
-                           group_col_widths,
-                           agg_col_widths,
-                           group_slots,
-                           small_group_slots,
-                           col_range_info.min,
-                           col_range_info.max,
-                           0,
-                           col_range_info.has_nulls,
-                           GroupByMemSharing::Shared,
-                           count_distinct_descriptors,
-                           false,
-                           false,
-                           false,
-                           render_output};
-        return;
-      } else {
-        CHECK(!render_output);
-        const auto redirected_targets = redirect_exprs(ra_exe_unit_.target_exprs, ra_exe_unit_.input_col_descs);
-        const auto keyless_info = getKeylessInfo(get_exprs_not_owned(redirected_targets), is_group_by);
-        bool keyless =
-            (!sort_on_gpu_hint || !many_entries(col_range_info.max, col_range_info.min, col_range_info.bucket)) &&
-            !col_range_info.bucket && keyless_info.keyless;
-        size_t bin_count = getBucketedCardinality(col_range_info);
-        const size_t interleaved_max_threshold{20};
-        bool interleaved_bins = keyless && (bin_count <= interleaved_max_threshold);
-        query_mem_desc_ = {executor_,
-                           allow_multifrag,
-                           col_range_info.hash_type_,
-                           keyless,
-                           interleaved_bins,
-                           keyless_info.target_index,
-                           keyless_info.init_val,
-                           group_col_widths,
-                           agg_col_widths,
-                           bin_count,
-                           0,
-                           col_range_info.min,
-                           col_range_info.max,
-                           col_range_info.bucket,
-                           col_range_info.has_nulls,
-                           GroupByMemSharing::Shared,
-                           count_distinct_descriptors,
-                           false,
-                           false,
-                           false,
-                           false};
-        return;
-      }
+      query_mem_desc_ = {executor_,
+                         allow_multifrag,
+                         col_range_info.hash_type_,
+                         false,
+                         false,
+                         -1,
+                         0,
+                         group_col_widths,
+                         agg_col_widths,
+                         max_groups_buffer_entry_count,
+                         small_groups_buffer_entry_count,
+                         col_range_info.min,
+                         col_range_info.max,
+                         0,
+                         col_range_info.has_nulls,
+                         GroupByMemSharing::Shared,
+                         count_distinct_descriptors,
+                         false,
+                         false,
+                         false,
+                         render_output};
+      return;
     }
     case GroupByColRangeType::MultiCol: {
       CHECK(!render_output);
@@ -1551,6 +1545,32 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
                          false,
                          false,
                          false};
+      return;
+    }
+    case GroupByColRangeType::Projection: {
+      size_t group_slots =
+          ra_exe_unit_.scan_limit ? static_cast<size_t>(ra_exe_unit_.scan_limit) : max_groups_buffer_entry_count;
+      query_mem_desc_ = {executor_,
+                         allow_multifrag,
+                         col_range_info.hash_type_,
+                         false,
+                         false,
+                         -1,
+                         0,
+                         group_col_widths,
+                         agg_col_widths,
+                         group_slots,
+                         0,
+                         col_range_info.min,
+                         col_range_info.max,
+                         0,
+                         col_range_info.has_nulls,
+                         GroupByMemSharing::Shared,
+                         count_distinct_descriptors,
+                         false,
+                         false,
+                         false,
+                         render_output};
       return;
     }
     case GroupByColRangeType::MultiColPerfectHash: {
@@ -1863,7 +1883,7 @@ bool QueryMemoryDescriptor::threadsShareMemory() const {
 
 bool QueryMemoryDescriptor::blocksShareMemory() const {
   if (executor_->isCPUOnly() || render_output || hash_type == GroupByColRangeType::MultiCol ||
-      hash_type == GroupByColRangeType::MultiColPerfectHash) {
+      hash_type == GroupByColRangeType::Projection || hash_type == GroupByColRangeType::MultiColPerfectHash) {
     return true;
   }
   return usesCachedContext() && !sharedMemBytes(ExecutorDeviceType::GPU) && many_entries(max_val, min_val, bucket);
@@ -1976,7 +1996,7 @@ bool GroupByAndAggregate::codegen(llvm::Value* filter_result, const CompilationO
         filter_result, executor_, !is_group_by || query_mem_desc.usesGetGroupValueFast(), "filter");
 
     if (is_group_by) {
-      if (ra_exe_unit_.scan_limit) {
+      if (query_mem_desc_.hash_type == GroupByColRangeType::Projection) {
         const auto crt_match = get_arg_by_name(ROW_FUNC, "crt_match");
         LL_BUILDER.CreateStore(LL_INT(int32_t(1)), crt_match);
         auto total_matched_ptr = get_arg_by_name(ROW_FUNC, "total_matched");
@@ -2053,8 +2073,7 @@ std::tuple<llvm::Value*, llvm::Value*> GroupByAndAggregate::codegenGroupBy(const
 
   std::stack<llvm::BasicBlock*> array_loops;
 
-  if (ra_exe_unit_.scan_limit) {
-    CHECK(query_mem_desc_.hash_type == GroupByColRangeType::MultiCol);
+  if (query_mem_desc_.hash_type == GroupByColRangeType::Projection) {
     CHECK_EQ(size_t(1), ra_exe_unit_.groupby_exprs.size());
     const auto group_expr = ra_exe_unit_.groupby_exprs.front();
     CHECK(!group_expr);

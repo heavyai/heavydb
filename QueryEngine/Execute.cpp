@@ -3639,7 +3639,7 @@ RowSetPtr Executor::executeResultPlan(const Planner::Result* result_plan,
   }
   QueryMemoryDescriptor query_mem_desc{this,
                                        allow_multifrag,
-                                       GroupByColRangeType::OneColGuessedRange,
+                                       GroupByColRangeType::Projection,
                                        false,
                                        false,
                                        -1,
@@ -4763,7 +4763,8 @@ void Executor::dispatchFragments(const std::function<void(const ExecutorDeviceTy
   const auto& query_mem_desc = execution_dispatch.getQueryMemoryDescriptor();
   const bool allow_multifrag =
       eo.allow_multifrag && (ra_exe_unit.groupby_exprs.empty() || query_mem_desc.usesCachedContext() ||
-                             query_mem_desc.hash_type == GroupByColRangeType::MultiCol);
+                             query_mem_desc.hash_type == GroupByColRangeType::MultiCol ||
+                             query_mem_desc.hash_type == GroupByColRangeType::Projection);
 
   if ((device_type == ExecutorDeviceType::GPU) && allow_multifrag && is_agg) {
     // NB: We should never be on this path when the query is retried because of
@@ -5718,8 +5719,7 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
                                              eo.output_columnar_hint && co.device_type_ == ExecutorDeviceType::GPU);
   const auto& query_mem_desc = group_by_and_aggregate.getQueryMemoryDescriptor();
 
-  if (!ra_exe_unit.groupby_exprs.empty() && ra_exe_unit.groupby_exprs.front() &&
-      query_mem_desc.hash_type == GroupByColRangeType::MultiCol && !query_mem_desc.getSmallBufferSizeBytes() &&
+  if (query_mem_desc.hash_type == GroupByColRangeType::MultiCol && !query_mem_desc.getSmallBufferSizeBytes() &&
       !has_cardinality_estimation && !render_output && !eo.just_explain) {
     throw CardinalityEstimationRequired();
   }
