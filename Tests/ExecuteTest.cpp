@@ -2100,6 +2100,11 @@ TEST(Select, Subqueries) {
     c("WITH d1 AS (SELECT deptno, dname FROM dept LIMIT 10) SELECT ename, dname FROM emp, d1 WHERE emp.deptno = "
       "d1.deptno LIMIT 10;",
       dt);
+#ifdef ENABLE_JOIN_EXEC
+    c("SELECT SUM((x - (SELECT AVG(x) FROM test)) * (x - (SELECT AVG(x) FROM test)) / ((SELECT COUNT(x) FROM test) - "
+      "1)) FROM test;",
+      dt);
+#endif
   }
 }
 

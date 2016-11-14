@@ -4429,7 +4429,7 @@ const int8_t* Executor::ExecutionDispatch::getColumn(const InputColDescriptor* c
       if (frag_id_to_ref.empty() || !frag_id_to_ref.count(ref_frag_id)) {
         frag_id_to_ref.insert(std::make_pair(
             ref_frag_id,
-            std::unique_ptr<const ColumnarResults>(columnarize_result(row_set_mem_owner_, ref_buffer, ref_table_id))));
+            std::unique_ptr<const ColumnarResults>(columnarize_result(row_set_mem_owner_, ref_buffer, ref_frag_id))));
       }
       sub_key = {frag_id};
       if (frag_id_to_result.empty() || !frag_id_to_result.count(sub_key)) {
