@@ -161,6 +161,7 @@ server. The options are:
            [{--passwd|-p} <password>]
            [--port <port number>]
            [{-s|--server} <server host>]
+           [--http]
 
 ``mapdql`` is the client-side SQL console. All SQL statements can be
 submitted to the MapD Server and the results are returned and displayed.
@@ -170,12 +171,13 @@ The options are:
    database if omitted.
 -  ``[{--user|-u} <user>]``: User to connect as. Not connected to MapD
    Server if omitted.
--  ``[{--passwd|-p} <password>]``: User password. *Will not be in
-   clear-text in production release*.
+-  ``[{--passwd|-p} <password>]``: User password.
 -  ``[--port <port number>]``: Port number of MapD Server. The default
    is port 9091.
 -  ``[{--server|-s} <server host>]``: MapD Server hostname in DNS name
    or IP address. The default is localhost.
+-  ``[--http]``: Use the Thrift HTTP transport instead of the default TCP
+   transport. Must set ``--port`` to ``mapd_web_server``'s port (default 9092).
 
 In addition to SQL statements ``mapdql`` also accepts the following list
 of backslash commands:
