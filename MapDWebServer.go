@@ -43,6 +43,7 @@ var (
 	profile       bool
 	compress      bool
 	enableMetrics bool
+	connTimeout   time.Duration
 )
 
 var (
@@ -94,6 +95,7 @@ func init() {
 	pflag.BoolP("enable-https", "", false, "enable HTTPS support")
 	pflag.StringP("cert", "", "cert.pem", "certificate file for HTTPS")
 	pflag.StringP("key", "", "key.pem", "key file for HTTPS")
+	pflag.DurationP("timeout", "", 60*time.Minute, "maximum request duration")
 	pflag.Bool("profile", false, "enable profiling, accessible from /debug/pprof")
 	pflag.Bool("compress", false, "enable gzip compression")
 	pflag.Bool("metrics", false, "enable Thrift call metrics, accessible from /metrics")
@@ -110,6 +112,7 @@ func init() {
 	viper.BindPFlag("web.enable-https", pflag.CommandLine.Lookup("enable-https"))
 	viper.BindPFlag("web.cert", pflag.CommandLine.Lookup("cert"))
 	viper.BindPFlag("web.key", pflag.CommandLine.Lookup("key"))
+	viper.BindPFlag("web.timeout", pflag.CommandLine.Lookup("timeout"))
 	viper.BindPFlag("web.profile", pflag.CommandLine.Lookup("profile"))
 	viper.BindPFlag("web.compress", pflag.CommandLine.Lookup("compress"))
 	viper.BindPFlag("web.metrics", pflag.CommandLine.Lookup("metrics"))
@@ -147,6 +150,7 @@ func init() {
 	dataDir = viper.GetString("data")
 	readOnly = viper.GetBool("read-only")
 	quiet = viper.GetBool("quiet")
+	connTimeout = viper.GetDuration("web.timeout")
 	profile = viper.GetBool("web.profile")
 	compress = viper.GetBool("web.compress")
 	enableMetrics = viper.GetBool("web.metrics")
@@ -499,8 +503,10 @@ func main() {
 	srv := &graceful.Server{
 		Timeout: 5 * time.Second,
 		Server: &http.Server{
-			Addr:    ":" + strconv.Itoa(port),
-			Handler: cmux,
+			Addr:         ":" + strconv.Itoa(port),
+			Handler:      cmux,
+			ReadTimeout:  connTimeout,
+			WriteTimeout: connTimeout,
 		},
 	}
 

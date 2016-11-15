@@ -67,6 +67,7 @@ that in the ``initdb`` command when it was run. The options are:
                     [{--cert} <cert.pem>]
                     [{--key} <key.pem>]
                     [{--tmpdir} </path/to/tmp>]
+                    [{--timeout} <1h0m0s>]
 
 This command starts the MapD web server. This server provides access to
 MapD's visualization frontend and allows the frontend to communicate
@@ -90,6 +91,8 @@ Authority. The options are:
    ``key.pem``.
 -  ``[{--tmpdir} </path/to/tmp>]``: Path to custom temporary directory.
    The default is ``/tmp/``.
+-  ``[{--timeout} <1h0m0s>]``: Maximum HTTP request duration. The default is
+   ``1h0m0s``.
 
 The temporary directory is used as a staging location for file uploads.
 It is sometimes desirable to place this directory on the same file
@@ -99,6 +102,14 @@ variable as well as a specific ``MAPD_TMPDIR`` environment variable, the
 latter of which takes precedence. Defaults to the system default
 ``/tmp/`` if neither the command line argument nor at least one of the
 environment variables are specified.
+
+The ``--timeout`` option controls the maximum duration of individual HTTP
+requests. This is used to manage resource exhaustion caused by improperly
+closed connections. One side effect of this option is that it limits the
+execution time of queries made over the Thrift HTTP transport. This timeout
+duration therefore must be increased if queries are expected to take longer
+than the default duration of one hour, e.g. if you will be performing a ``COPY
+FROM`` on a large file when using ``mapdql`` with the HTTP transport.
 
 Utilities
 ~~~~~~~~~
@@ -205,3 +216,9 @@ of backslash commands:
 ``mapdql`` automatically attempts to reconnect to ``mapd_server`` in
 case it restarts due to crashes or human intervention. There is no need
 to restart or reconnect.
+
+.. note:: ``mapd_web_server`` imposes a default one hour timeout on all
+   individual HTTP requests, including those made from ``mapdql`` when using the
+   Thrift HTTP transport. If your queries are expected to take longer than this
+   amount of time, please use either ``mapdql``'s TCP transport (the default) or
+   increase this timeout timeout using ``mapd_web_server``'s ``--timeout`` option.
