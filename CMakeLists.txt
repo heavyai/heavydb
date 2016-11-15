@@ -223,7 +223,7 @@ add_executable(mapd ${mapd_source_files})
 set(initdb_source_files initdb.cpp)
 add_executable(initdb ${initdb_source_files})
 
-set(mapd_server_source_files MapDServer.cpp ${CMAKE_BINARY_DIR}/gen-cpp/MapD.cpp ${CMAKE_BINARY_DIR}/gen-cpp/mapd_constants.cpp ${CMAKE_BINARY_DIR}/gen-cpp/mapd_types.cpp ${CMAKE_BINARY_DIR}/MapDRelease.h)
+set(mapd_server_source_files LeafHostInfo.cpp MapDServer.cpp ${CMAKE_BINARY_DIR}/gen-cpp/MapD.cpp ${CMAKE_BINARY_DIR}/gen-cpp/mapd_constants.cpp ${CMAKE_BINARY_DIR}/gen-cpp/mapd_types.cpp ${CMAKE_BINARY_DIR}/MapDRelease.h)
 
 if(ENABLE_CALCITE)
     list(APPEND mapd_server_source_files ${CMAKE_BINARY_DIR}/gen-cpp/CalciteServer.cpp ${CMAKE_BINARY_DIR}/gen-cpp/calciteserver_constants.cpp ${CMAKE_BINARY_DIR}/gen-cpp/calciteserver_types.cpp)
