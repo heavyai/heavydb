@@ -2119,7 +2119,7 @@ TEST(Select, InnerJoins) {
       "join_test AS d ON c.x = d.x;",
       dt);
     c("SELECT a.x AS x, y, b.str FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str = c.str "
-      "ORDER BY x;",
+      "ORDER BY y;",
       dt);
     c("SELECT count(*) FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str = c.str WHERE a.y "
       "< 43;",
