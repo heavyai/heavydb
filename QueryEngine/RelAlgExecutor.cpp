@@ -936,7 +936,7 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(const RelAlgExecutor::WorkUnit& 
 
   auto max_groups_buffer_entry_guess = work_unit.max_groups_buffer_entry_guess;
 
-  if (can_use_scan_limit(ra_exe_unit) && !isRowidLookup(work_unit)) {
+  if (!eo.just_explain && can_use_scan_limit(ra_exe_unit) && !isRowidLookup(work_unit)) {
     const auto filter_count_all = getFilteredCountAll(work_unit, true, co, eo);
     if (filter_count_all >= 0) {
       ra_exe_unit.scan_limit = filter_count_all;
