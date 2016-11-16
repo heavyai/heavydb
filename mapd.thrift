@@ -93,6 +93,7 @@ typedef i64 TQueryId
 struct TStepResult {
   1: string serialized_rows
   2: bool execution_finished
+  3: bool sharded
 }
 
 struct TRowSet {
