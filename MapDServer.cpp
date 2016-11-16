@@ -1852,15 +1852,21 @@ class MapDHandler : virtual public MapDIf {
   TQueryId start_query(const TSessionId session,
                        const std::string& query,
                        const bool column_format,
-                       const std::string& nonce) {
+                       const std::string& nonce) override {
     TMapDException ex;
     ex.error_msg = "start_query not supported yet";
     throw ex;
   }
 
-  void execute_step(TStepResult& _return, const TQueryId query_id) {
+  void execute_step(TStepResult& _return, const TQueryId query_id) override {
     TMapDException ex;
     ex.error_msg = "execute_step not supported yet";
+    throw ex;
+  }
+
+  void broadcast_serialized_rows(const std::string& serialized_rows) override {
+    TMapDException ex;
+    ex.error_msg = "broadcast_serialized_rows not supported yet";
     throw ex;
   }
 
