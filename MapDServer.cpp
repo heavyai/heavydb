@@ -278,7 +278,7 @@ class MapDHandler : virtual public MapDIf {
     }
   }
 
-  TSessionId connect(const std::string& user, const std::string& passwd, const std::string& dbname) {
+  TSessionId connect(const std::string& user, const std::string& passwd, const std::string& dbname) override {
     mapd_lock_guard<mapd_shared_mutex> write_lock(sessions_mutex_);
     Catalog_Namespace::UserMetadata user_meta;
     if (!sys_cat_->getMetadataForUser(user, user_meta)) {
@@ -337,7 +337,7 @@ class MapDHandler : virtual public MapDIf {
     return session;
   }
 
-  void disconnect(const TSessionId session) {
+  void disconnect(const TSessionId session) override {
     mapd_lock_guard<mapd_shared_mutex> write_lock(sessions_mutex_);
     auto session_it = get_session_it(session);
     const auto dbname = session_it->second->get_catalog().get_currentDB().dbName;
@@ -346,7 +346,7 @@ class MapDHandler : virtual public MapDIf {
     sessions_.erase(session_it);
   }
 
-  void get_server_status(TServerStatus& _return, const TSessionId session) {
+  void get_server_status(TServerStatus& _return, const TSessionId session) override {
     _return.read_only = read_only_;
     _return.version = MapDRelease;
     _return.rendering_enabled = enable_rendering_;
@@ -497,7 +497,7 @@ class MapDHandler : virtual public MapDIf {
                    const TSessionId session,
                    const std::string& query_str,
                    const bool column_format,
-                   const std::string& nonce) {
+                   const std::string& nonce) override {
     std::unique_ptr<std::lock_guard<std::mutex>> render_lock;
     ParserWrapper pw{query_str};
     if (enable_rendering_ && !pw.is_ddl && !pw.is_update_dml) {
@@ -507,7 +507,7 @@ class MapDHandler : virtual public MapDIf {
     sql_execute_impl(_return, session_info, query_str, column_format, nonce);
   }
 
-  void sql_validate(TTableDescriptor& _return, const TSessionId session, const std::string& query_str) {
+  void sql_validate(TTableDescriptor& _return, const TSessionId session, const std::string& query_str) override {
     std::unique_ptr<const Planner::RootPlan> root_plan;
     const auto session_info = get_session(session);
 #ifdef HAVE_CALCITE
@@ -588,7 +588,7 @@ class MapDHandler : virtual public MapDIf {
                            const std::string& table_name,
                            const std::vector<std::string>& col_names,
                            const bool column_format,
-                           const std::string& nonce) {
+                           const std::string& nonce) override {
     _return.nonce = nonce;
     if (!enable_rendering_) {
       TMapDException ex;
@@ -607,7 +607,7 @@ class MapDHandler : virtual public MapDIf {
                          const std::vector<std::string>& col_names,
                          const bool column_format,
                          const int32_t pixelRadius,
-                         const std::string& nonce) {
+                         const std::string& nonce) override {
     _return.nonce = nonce;
     if (!enable_rendering_) {
       TMapDException ex;
@@ -624,7 +624,7 @@ class MapDHandler : virtual public MapDIf {
                                 const std::map<std::string, std::vector<std::string>>& table_col_names,
                                 const bool column_format,
                                 const int32_t pixelRadius,
-                                const std::string& nonce) {
+                                const std::string& nonce) override {
     _return.nonce = nonce;
     if (!enable_rendering_) {
       TMapDException ex;
@@ -659,7 +659,9 @@ class MapDHandler : virtual public MapDIf {
     return col_type;
   }
 
-  void get_table_descriptor(TTableDescriptor& _return, const TSessionId session, const std::string& table_name) {
+  void get_table_descriptor(TTableDescriptor& _return,
+                            const TSessionId session,
+                            const std::string& table_name) override {
     const auto session_info = get_session(session);
     auto& cat = session_info.get_catalog();
     auto td = cat.getMetadataForTable(table_name);
@@ -675,7 +677,7 @@ class MapDHandler : virtual public MapDIf {
     }
   }
 
-  void get_row_descriptor(TRowDescriptor& _return, const TSessionId session, const std::string& table_name) {
+  void get_row_descriptor(TRowDescriptor& _return, const TSessionId session, const std::string& table_name) override {
     const auto session_info = get_session(session);
     auto& cat = session_info.get_catalog();
     auto td = cat.getMetadataForTable(table_name);
@@ -691,7 +693,7 @@ class MapDHandler : virtual public MapDIf {
     }
   }
 
-  void get_frontend_view(TFrontendView& _return, const TSessionId session, const std::string& view_name) {
+  void get_frontend_view(TFrontendView& _return, const TSessionId session, const std::string& view_name) override {
     const auto session_info = get_session(session);
     auto& cat = session_info.get_catalog();
     auto vd = cat.getMetadataForFrontendView(std::to_string(session_info.get_currentUser().userId), view_name);
@@ -708,7 +710,7 @@ class MapDHandler : virtual public MapDIf {
     _return.view_metadata = vd->viewMetadata;
   }
 
-  void get_link_view(TFrontendView& _return, const TSessionId session, const std::string& link) {
+  void get_link_view(TFrontendView& _return, const TSessionId session, const std::string& link) override {
     const auto session_info = get_session(session);
     auto& cat = session_info.get_catalog();
     auto ld = cat.getMetadataForLink(std::to_string(cat.get_currentDB().dbId) + link);
@@ -724,7 +726,7 @@ class MapDHandler : virtual public MapDIf {
     _return.view_metadata = ld->viewMetadata;
   }
 
-  void get_tables(std::vector<std::string>& table_names, const TSessionId session) {
+  void get_tables(std::vector<std::string>& table_names, const TSessionId session) override {
     const auto session_info = get_session(session);
     auto& cat = session_info.get_catalog();
     const auto tables = cat.getAllTableMetadata();
@@ -733,20 +735,22 @@ class MapDHandler : virtual public MapDIf {
     }
   }
 
-  void get_users(std::vector<std::string>& user_names) {
+  void get_users(std::vector<std::string>& user_names) override {
     std::list<Catalog_Namespace::UserMetadata> user_list = sys_cat_->getAllUserMetadata();
     for (auto u : user_list) {
       user_names.push_back(u.userName);
     }
   }
 
-  void get_version(std::string& version) { version = MapDRelease; }
+  void get_version(std::string& version) override { version = MapDRelease; }
 
-  void get_memory_gpu(std::string& memory) { memory = sys_cat_->get_dataMgr().dumpLevel(MemoryLevel::GPU_LEVEL); }
+  void get_memory_gpu(std::string& memory) override {
+    memory = sys_cat_->get_dataMgr().dumpLevel(MemoryLevel::GPU_LEVEL);
+  }
 
   // void get_memory_summary(std::string& memory) { memory = sys_cat_->get_dataMgr().getMemorySummary(); }
 
-  void get_memory_summary(TMemorySummary& memory) {
+  void get_memory_summary(TMemorySummary& memory) override {
     Data_Namespace::memorySummary internal_memory = sys_cat_->get_dataMgr().getMemorySummary();
     memory.cpu_memory_in_use = internal_memory.cpuMemoryInUse;
     for (auto gpu : internal_memory.gpuSummary) {
@@ -757,7 +761,7 @@ class MapDHandler : virtual public MapDIf {
     }
   }
 
-  void get_databases(std::vector<TDBInfo>& dbinfos) {
+  void get_databases(std::vector<TDBInfo>& dbinfos) override {
     std::list<Catalog_Namespace::DBMetadata> db_list = sys_cat_->getAllDBMetadata();
     std::list<Catalog_Namespace::UserMetadata> user_list = sys_cat_->getAllUserMetadata();
     for (auto d : db_list) {
@@ -773,7 +777,7 @@ class MapDHandler : virtual public MapDIf {
     }
   }
 
-  void get_frontend_views(std::vector<TFrontendView>& view_names, const TSessionId session) {
+  void get_frontend_views(std::vector<TFrontendView>& view_names, const TSessionId session) override {
     const auto session_info = get_session(session);
     auto& cat = session_info.get_catalog();
     const auto views = cat.getAllFrontendViewMetadata();
@@ -789,13 +793,15 @@ class MapDHandler : virtual public MapDIf {
     }
   }
 
-  void set_execution_mode(const TSessionId session, const TExecuteMode::type mode) {
+  void set_execution_mode(const TSessionId session, const TExecuteMode::type mode) override {
     mapd_lock_guard<mapd_shared_mutex> write_lock(sessions_mutex_);
     auto session_it = get_session_it(session);
     set_execution_mode_nolock(session_it->second.get(), mode);
   }
 
-  void load_table_binary(const TSessionId session, const std::string& table_name, const std::vector<TRow>& rows) {
+  void load_table_binary(const TSessionId session,
+                         const std::string& table_name,
+                         const std::vector<TRow>& rows) override {
     check_read_only("load_table_binary");
     const auto session_info = get_session(session);
     auto& cat = session_info.get_catalog();
@@ -836,7 +842,9 @@ class MapDHandler : virtual public MapDIf {
       loader.checkpoint();
   }
 
-  void load_table(const TSessionId session, const std::string& table_name, const std::vector<TStringRow>& rows) {
+  void load_table(const TSessionId session,
+                  const std::string& table_name,
+                  const std::vector<TStringRow>& rows) override {
     check_read_only("load_table");
     const auto session_info = get_session(session);
     auto& cat = session_info.get_catalog();
@@ -942,7 +950,7 @@ class MapDHandler : virtual public MapDIf {
   void detect_column_types(TDetectResult& _return,
                            const TSessionId session,
                            const std::string& file_name,
-                           const TCopyParams& cp) {
+                           const TCopyParams& cp) override {
     check_read_only("detect_column_types");
     get_session(session);
 
@@ -1045,7 +1053,7 @@ class MapDHandler : virtual public MapDIf {
               const TSessionId session,
               const std::string& query_str_in,
               const std::string& render_type,
-              const std::string& nonce) {
+              const std::string& nonce) override {
     _return.total_time_ms = measure<>::execution([&]() {
       _return.nonce = nonce;
       if (!enable_rendering_) {
@@ -1111,7 +1119,7 @@ class MapDHandler : virtual public MapDIf {
                    const int64_t widget_id,
                    const std::string& vega_json,
                    const int compressionLevel,
-                   const std::string& nonce) {
+                   const std::string& nonce) override {
     _return.total_time_ms = measure<>::execution([&]() {
       _return.execution_time_ms = 0;
       _return.render_time_ms = 0;
@@ -1147,7 +1155,7 @@ class MapDHandler : virtual public MapDIf {
                             const std::string& view_name,
                             const std::string& view_state,
                             const std::string& image_hash,
-                            const std::string& view_metadata) {
+                            const std::string& view_metadata) override {
     check_read_only("create_frontend_view");
     const auto session_info = get_session(session);
     auto& cat = session_info.get_catalog();
@@ -1161,7 +1169,7 @@ class MapDHandler : virtual public MapDIf {
     cat.createFrontendView(vd);
   }
 
-  void delete_frontend_view(const TSessionId session, const std::string& view_name) {
+  void delete_frontend_view(const TSessionId session, const std::string& view_name) override {
     check_read_only("delete_frontend_view");
     const auto session_info = get_session(session);
     auto& cat = session_info.get_catalog();
@@ -1178,7 +1186,7 @@ class MapDHandler : virtual public MapDIf {
   void create_link(std::string& _return,
                    const TSessionId session,
                    const std::string& view_state,
-                   const std::string& view_metadata) {
+                   const std::string& view_metadata) override {
     // check_read_only("create_link");
     const auto session_info = get_session(session);
     auto& cat = session_info.get_catalog();
@@ -1197,7 +1205,7 @@ class MapDHandler : virtual public MapDIf {
     return boost::regex_replace(name, invalid_chars, "");
   }
 
-  void create_table(const TSessionId session, const std::string& table_name, const TRowDescriptor& rd) {
+  void create_table(const TSessionId session, const std::string& table_name, const TRowDescriptor& rd) override {
     check_read_only("create_table");
 
     if (table_name != sanitize_name(table_name)) {
@@ -1254,7 +1262,7 @@ class MapDHandler : virtual public MapDIf {
   void import_table(const TSessionId session,
                     const std::string& table_name,
                     const std::string& file_name,
-                    const TCopyParams& cp) {
+                    const TCopyParams& cp) override {
     check_read_only("import_table");
     LOG(INFO) << "import_table " << table_name << " from " << file_name;
     const auto session_info = get_session(session);
@@ -1294,7 +1302,7 @@ class MapDHandler : virtual public MapDIf {
   void import_geo_table(const TSessionId session,
                         const std::string& file_name,
                         const std::string& table_name,
-                        const TCopyParams& cp) {
+                        const TCopyParams& cp) override {
     check_read_only("import_table");
     check_read_only("create_table");
     const auto session_info = get_session(session);
@@ -1357,7 +1365,7 @@ class MapDHandler : virtual public MapDIf {
     std::cout << "Total Import Time: " << (double)ms / 1000.0 << " Seconds." << std::endl;
   }
 
-  void import_table_status(TImportStatus& _return, const TSessionId session, const std::string& import_id) {
+  void import_table_status(TImportStatus& _return, const TSessionId session, const std::string& import_id) override {
     LOG(INFO) << "import_table_status " << import_id;
     auto is = Importer_NS::Importer::get_import_status(import_id);
     _return.elapsed = is.elapsed.count();
@@ -1366,7 +1374,7 @@ class MapDHandler : virtual public MapDIf {
     _return.rows_rejected = is.rows_rejected;
   }
 
-  void start_heap_profile() {
+  void start_heap_profile() override {
 #ifdef HAVE_PROFILER
     if (IsHeapProfilerRunning()) {
       throw_profile_exception("Profiler already started");
@@ -1377,7 +1385,7 @@ class MapDHandler : virtual public MapDIf {
 #endif  // HAVE_PROFILER
   }
 
-  void stop_heap_profile() {
+  void stop_heap_profile() override {
 #ifdef HAVE_PROFILER
     if (!IsHeapProfilerRunning()) {
       throw_profile_exception("Profiler not running");
@@ -1388,7 +1396,7 @@ class MapDHandler : virtual public MapDIf {
 #endif  // HAVE_PROFILER
   }
 
-  void get_heap_profile(std::string& profile) {
+  void get_heap_profile(std::string& profile) override {
 #ifdef HAVE_PROFILER
     if (!IsHeapProfilerRunning()) {
       throw_profile_exception("Profiler not running");
