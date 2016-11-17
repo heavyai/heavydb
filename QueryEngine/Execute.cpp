@@ -267,6 +267,9 @@ Weight get_weight(const Analyzer::Expr* expr, int depth = 0) {
     return weight + 1;
   }
 
+  if (depth > 4)
+    return Weight(1);
+
   return Weight();
 }
 
@@ -1977,10 +1980,10 @@ llvm::Value* Executor::codegenLogicalShortCircuit(const Analyzer::BinOper* bin_o
     // lhs contains a possible div-by-0: swap and short-circuit
     std::swap(rhs, lhs);
   } else if (((optype == kOR && get_likelihood(lhs) > 0.90) || (optype == kAND && get_likelihood(lhs) < 0.10)) &&
-             get_weight(rhs) > 100) {
+             get_weight(rhs) > 10) {
     // short circuit if we're likely to see either (trueA || heavyB) or (falseA && heavyB)
   } else if (((optype == kOR && get_likelihood(rhs) > 0.90) || (optype == kAND && get_likelihood(rhs) < 0.10)) &&
-             get_weight(lhs) > 100) {
+             get_weight(lhs) > 10) {
     // swap and short circuit if we're likely to see either (heavyA || trueB) or (heavyA && falseB)
     std::swap(rhs, lhs);
   } else {
