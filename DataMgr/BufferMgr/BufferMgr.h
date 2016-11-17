@@ -75,6 +75,8 @@ class BufferMgr : public AbstractBufferMgr {  // implements
   std::string keyToString(const ChunkKey& key);
   size_t getInUseSize();
   size_t getMaxSize();
+  size_t getAllocated();
+  bool isAllocationCapped();
 
   /// Creates a chunk with the specified key and page size.
   virtual AbstractBuffer* createBuffer(const ChunkKey& key, const size_t pageSize = 0, const size_t initialSize = 0);

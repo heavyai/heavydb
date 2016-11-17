@@ -410,6 +410,16 @@ size_t BufferMgr::getMaxSize() {
   return pageSize_ * maxNumPages_;
 }
 
+// return how large the buffer are currently allocated
+size_t BufferMgr::getAllocated() {
+  return numPagesAllocated_ * pageSize_;
+}
+
+//
+bool BufferMgr::isAllocationCapped() {
+  return allocationsCapped_;
+}
+
 // return the size of the chunks in use in bytes
 size_t BufferMgr::getInUseSize() {
   size_t inUse = 0;

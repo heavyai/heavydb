@@ -64,6 +64,8 @@ class AbstractBufferMgr {
   virtual std::string printSlabs() = 0;
   virtual size_t getMaxSize() = 0;
   virtual size_t getInUseSize() = 0;
+  virtual size_t getAllocated() = 0;
+  virtual bool isAllocationCapped() = 0;
 
   virtual void checkpoint() = 0;
 

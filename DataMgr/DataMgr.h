@@ -24,8 +24,10 @@ class CudaMgr;
 namespace Data_Namespace {
 
 struct gpuMemorySummary {
-  int64_t gpuMemoryMax;
-  int64_t gpuMemoryInUse;
+  int64_t max;
+  int64_t inUse;
+  int64_t allocated;
+  bool isAllocationCapped;  // mean allocation request failed
 };
 
 struct memorySummary {

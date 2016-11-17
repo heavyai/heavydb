@@ -217,8 +217,10 @@ struct TRenderResult {
 }
 
 struct TGpuMemorySummary {
-  1: i64 gpu_memory_max
-  2: i64 gpu_memory_in_use
+  1: i64 max
+  2: i64 in_use
+  3: i64 allocated
+  4: bool is_allocation_capped
 }
 
 struct TMemorySummary {

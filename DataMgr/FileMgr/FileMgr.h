@@ -67,8 +67,11 @@ class FileMgr : public AbstractBufferMgr {  // implements
 
  public:
   /// Constructor
-  FileMgr(const int deviceId, std::string basePath = ".", const size_t num_reader_threads = 0,
-          const size_t defaultPageSize = 2097152, const int epoch = -1);
+  FileMgr(const int deviceId,
+          std::string basePath = ".",
+          const size_t num_reader_threads = 0,
+          const size_t defaultPageSize = 2097152,
+          const int epoch = -1);
 
   /// Destructor
   virtual ~FileMgr();
@@ -109,6 +112,8 @@ class FileMgr : public AbstractBufferMgr {  // implements
   virtual inline std::string printSlabs() { return "Not Implemented"; }
   virtual inline size_t getMaxSize() { return 0; }
   virtual inline size_t getInUseSize() { return 0; }
+  virtual inline size_t getAllocated() { return 0; }
+  virtual inline bool isAllocationCapped() { return false; }
 
   inline FileInfo* getFileInfoForFileId(const int fileId) { return files_[fileId]; }
 

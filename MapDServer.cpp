@@ -770,8 +770,10 @@ class MapDHandler : virtual public MapDIf {
     memory.cpu_memory_in_use = internal_memory.cpuMemoryInUse;
     for (auto gpu : internal_memory.gpuSummary) {
       TGpuMemorySummary gs;
-      gs.gpu_memory_in_use = gpu.gpuMemoryInUse;
-      gs.gpu_memory_max = gpu.gpuMemoryMax;
+      gs.in_use = gpu.inUse;
+      gs.max = gpu.max;
+      gs.allocated = gpu.allocated;
+      gs.is_allocation_capped = gpu.isAllocationCapped;
       memory.gpu_summary.push_back(gs);
     }
   }

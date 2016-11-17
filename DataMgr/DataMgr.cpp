@@ -124,8 +124,10 @@ memorySummary DataMgr::getMemorySummary() {
     int numGpus = cudaMgr_->getDeviceCount();
     for (int gpuNum = 0; gpuNum < numGpus; ++gpuNum) {
       gpuMemorySummary gms;
-      gms.gpuMemoryMax = bufferMgrs_[MemoryLevel::GPU_LEVEL][gpuNum]->getMaxSize();
-      gms.gpuMemoryInUse = bufferMgrs_[MemoryLevel::GPU_LEVEL][gpuNum]->getInUseSize();
+      gms.max = bufferMgrs_[MemoryLevel::GPU_LEVEL][gpuNum]->getMaxSize();
+      gms.inUse = bufferMgrs_[MemoryLevel::GPU_LEVEL][gpuNum]->getInUseSize();
+      gms.allocated = bufferMgrs_[MemoryLevel::GPU_LEVEL][gpuNum]->getAllocated();
+      gms.isAllocationCapped = bufferMgrs_[MemoryLevel::GPU_LEVEL][gpuNum]->isAllocationCapped();
       ms.gpuSummary.push_back(gms);
     }
   }

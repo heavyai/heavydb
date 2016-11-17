@@ -704,7 +704,7 @@ int main(int argc, char** argv) {
       }
     } else if (!strncmp(line, "\\memory_gpu", 11)) {
       if (thrift_with_retry(kGET_MEMORY_GPU, context, nullptr)) {
-        std::cout << "MapD Server GPU memory Usage " << context.memory_usage << std::endl;
+        std::cout << "MapD Server GPU Detailed Memory Usage " << context.memory_usage << std::endl;
       } else {
         std::cout << "Cannot connect to MapD Server." << std::endl;
       }
@@ -713,23 +713,21 @@ int main(int argc, char** argv) {
         std::ostringstream tss;
         size_t mb = 1024 * 1024;
         tss << std::endl;
-        // tss << "CPU RAM TOTAL AVAILABLE   : "  std::fixed << setw(9) << setprecision(2) <<
-        // ((float)bufferMgrs_[MemoryLevel::CPU_LEVEL][0]->getMaxSize() / mb)
-        //    << std::endl;
-        tss << "CPU RAM IN BUFFER USE            : " << std::fixed << std::setw(9) << std::setprecision(2)
+        tss << "CPU RAM IN BUFFER USE : " << std::fixed << std::setw(9) << std::setprecision(2)
             << ((float)context.memory_summary.cpu_memory_in_use / mb) << " MB" << std::endl;
         int gpuNum = 0;
+        tss << "GPU VRAM USAGE (in MB's)" << std::endl;
+        tss << "GPU     MAX    ALLOC    IN-USE     FREE" << std::endl;
         for (auto gpu : context.memory_summary.gpu_summary) {
-          tss << "GPU" << std::setfill(' ') << std::setw(2) << gpuNum << " VRAM AVAILABLE FOR BUFFERS : " << std::fixed
-              << std::setw(9) << std::setprecision(2) << ((float)gpu.gpu_memory_max / mb) << " MB" << std::endl;
-          tss << "GPU" << std::setfill(' ') << std::setw(2) << gpuNum << " VRAM BEING USED BY BUFFERS : " << std::fixed
-              << std::setw(9) << std::setprecision(2) << ((float)gpu.gpu_memory_in_use / mb) << " MB" << std::endl;
-          tss << "GPU" << std::setfill(' ') << std::setw(2) << gpuNum << " VRAM FREE                  : " << std::fixed
-              << std::setw(9) << std::setprecision(2) << ((float)(gpu.gpu_memory_max - gpu.gpu_memory_in_use) / mb)
-              << " MB" << std::endl;
+          int64_t real_max = gpu.is_allocation_capped ? gpu.allocated : gpu.max;
+          tss << std::setfill(' ') << std::setw(2) << gpuNum << std::setw(9) << std::setprecision(2)
+              << ((float)gpu.max / mb) << std::setw(9) << std::setprecision(2) << ((float)gpu.allocated / mb)
+              << (gpu.is_allocation_capped ? "*" : " ") << std::setw(9) << std::setprecision(2)
+              << ((float)gpu.in_use / mb) << std::setw(9) << std::setprecision(2)
+              << ((float)(real_max - gpu.in_use) / mb) << std::endl;
           gpuNum++;
         }
-        std::cout << "MapD Server GPU memory Usage " << tss.str() << std::endl;
+        std::cout << "MapD Server Memory Usage " << tss.str() << std::endl;
       } else {
         std::cout << "Cannot connect to MapD Server." << std::endl;
       }
