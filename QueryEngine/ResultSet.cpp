@@ -380,11 +380,11 @@ std::vector<uint32_t> ResultSet::initPermutationBuffer(const size_t start, const
 
 void ResultSet::parallelTop(const std::list<Analyzer::OrderEntry>& order_entries, const size_t top_n) {
   const size_t step = cpu_threads();
-  strided_permutations_.resize(step);
+  std::vector<std::vector<uint32_t>> strided_permutations(step);
   std::vector<std::future<void>> init_futures;
   for (size_t start = 0; start < step; ++start) {
-    init_futures.emplace_back(std::async(std::launch::async, [this, start, step] {
-      strided_permutations_[start] = initPermutationBuffer(start, step);
+    init_futures.emplace_back(std::async(std::launch::async, [this, start, step, &strided_permutations] {
+      strided_permutations[start] = initPermutationBuffer(start, step);
     }));
   }
   for (auto& init_future : init_futures) {
@@ -392,7 +392,7 @@ void ResultSet::parallelTop(const std::list<Analyzer::OrderEntry>& order_entries
   }
   auto compare = createComparator(order_entries, true);
   std::vector<std::future<void>> top_futures;
-  for (auto& strided_permutation : strided_permutations_) {
+  for (auto& strided_permutation : strided_permutations) {
     top_futures.emplace_back(std::async(std::launch::async, [&strided_permutation, &compare, top_n] {
       topPermutation(strided_permutation, top_n, compare);
     }));
@@ -400,8 +400,8 @@ void ResultSet::parallelTop(const std::list<Analyzer::OrderEntry>& order_entries
   for (auto& top_future : top_futures) {
     top_future.get();
   }
-  permutation_.reserve(strided_permutations_.size() * top_n);
-  for (const auto& strided_permutation : strided_permutations_) {
+  permutation_.reserve(strided_permutations.size() * top_n);
+  for (const auto& strided_permutation : strided_permutations) {
     permutation_.insert(permutation_.end(), strided_permutation.begin(), strided_permutation.end());
   }
   topPermutation(permutation_, top_n, compare);

@@ -289,7 +289,6 @@ class ResultSet {
   size_t keep_first_;
   const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
   std::vector<uint32_t> permutation_;
-  std::vector<std::vector<uint32_t>> strided_permutations_;
   int64_t queue_time_ms_;
   int64_t render_time_ms_;
   const Executor* executor_;  // TODO(alex): remove
