@@ -226,6 +226,12 @@ struct TMemorySummary {
   2: list<TGpuMemorySummary> gpu_summary
 }
 
+struct TTableDetails {
+  2: i64 fragment_size
+  3: i64 page_size
+  4: i64 max_rows
+}
+
 service MapD {
   TSessionId connect(1: string user, 2: string passwd, 3: string dbname) throws (1: TMapDException e 2: ThriftException te)
   void disconnect(1: TSessionId session) throws (1: TMapDException e 2: ThriftException te)
@@ -265,4 +271,5 @@ service MapD {
   TQueryId start_query(1: TSessionId session, 2: string query 3: bool column_format, 4: string nonce) throws (1: TMapDException e 2: ThriftException te)
   TStepResult execute_step(1: TQueryId query_id) throws (1: TMapDException e 2: ThriftException te)
   void broadcast_serialized_rows(1: string serialized_rows)
+  TTableDetails get_table_details(1: TSessionId session, 2: string table_name) throws (1: TMapDException e 2: ThriftException te)
 }

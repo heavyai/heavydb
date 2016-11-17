@@ -20,6 +20,7 @@
 #include <boost/filesystem.hpp>
 #include <boost/tokenizer.hpp>
 
+#include "../Fragmenter/InsertOrderFragmenter.h"
 #include "gen-cpp/MapD.h"
 #include "MapDServer.h"
 #include "MapDRelease.h"
@@ -63,6 +64,7 @@ struct ClientContext {
   std::string version;
   std::string memory_usage;
   TMemorySummary memory_summary;
+  TTableDetails table_details;
 
   ClientContext(TTransport& t, MapDClient& c)
       : transport(t), client(c), session(INVALID_SESSION_ID), execution_mode(TExecuteMode::GPU) {}
@@ -80,7 +82,8 @@ enum ThriftService {
   kGET_VERSION,
   kGET_ROW_DESC,
   kGET_MEMORY_GPU,
-  kGET_MEMORY_SUMMARY
+  kGET_MEMORY_SUMMARY,
+  kGET_TABLE_DETAILS
 };
 
 namespace {
@@ -123,6 +126,9 @@ bool thrift_with_retry(ThriftService which_service, ClientContext& context, cons
         break;
       case kGET_MEMORY_SUMMARY:
         context.client.get_memory_summary(context.memory_summary);
+        break;
+      case kGET_TABLE_DETAILS:
+        context.client.get_table_details(context.table_details, context.session, arg);
         break;
     }
   } catch (TMapDException& e) {
@@ -296,7 +302,28 @@ void process_backslash_commands(char* command, ClientContext& context) {
           comma_or_blank = ",\n";
         }
         // push final "\n";
-        std::cout << "\n)\n";
+        std::cout << ")\n";
+        if (thrift_with_retry(kGET_TABLE_DETAILS, context, command + 3)) {
+          comma_or_blank = "";
+          std::string frag = "";
+          std::string page = "";
+          std::string row = "";
+          if (DEFAULT_FRAGMENT_ROWS != context.table_details.fragment_size) {
+            frag = " FRAGMENT_SIZE = " + std::to_string(context.table_details.fragment_size);
+            comma_or_blank = ",";
+          }
+          if (DEFAULT_PAGE_SIZE != context.table_details.page_size) {
+            page = comma_or_blank + " PAGE_SIZE = " + std::to_string(context.table_details.page_size);
+            comma_or_blank = ",";
+          }
+          if (DEFAULT_MAX_ROWS != context.table_details.max_rows) {
+            row = comma_or_blank + " MAX_ROW = " + std::to_string(context.table_details.max_rows);
+          }
+          std::string with = frag + page + row;
+          if (with.length() > 0) {
+            std::cout << "WITH (" << with << ")\n";
+          }
+        }
       }
       return;
     }

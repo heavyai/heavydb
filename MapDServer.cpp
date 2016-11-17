@@ -677,6 +677,21 @@ class MapDHandler : virtual public MapDIf {
     }
   }
 
+  void get_table_details(TTableDetails& _return, const TSessionId session, const std::string& table_name) override {
+    const auto session_info = get_session(session);
+    auto& cat = session_info.get_catalog();
+    auto td = cat.getMetadataForTable(table_name);
+    if (!td) {
+      TMapDException ex;
+      ex.error_msg = "Table doesn't exist";
+      LOG(ERROR) << ex.error_msg;
+      throw ex;
+    }
+    _return.fragment_size = td->maxFragRows;
+    _return.page_size = td->fragPageSize;
+    _return.max_rows = td->maxRows;
+  }
+
   void get_row_descriptor(TRowDescriptor& _return, const TSessionId session, const std::string& table_name) override {
     const auto session_info = get_session(session);
     auto& cat = session_info.get_catalog();
