@@ -42,7 +42,7 @@ class ColumnarResults {
       CHECK(!target_types[i].is_array());
       CHECK(!target_types[i].is_string() ||
             (target_types[i].get_compression() == kENCODING_DICT && target_types[i].get_logical_size() == 4));
-      column_buffers_[i] = static_cast<const int8_t*>(checked_malloc(num_rows_ * target_types[i].get_size()));
+      column_buffers_[i] = reinterpret_cast<const int8_t*>(checked_malloc(num_rows_ * target_types[i].get_size()));
       row_set_mem_owner->addColBuffer(column_buffers_[i]);
     }
     size_t row_idx{0};
@@ -117,7 +117,7 @@ class ColumnarResults {
       const auto buf_size = num_rows_ * (get_bit_width(target_types[i]) / 8);
       // TODO(miyu): copy offset ptr into frag buffer of 'table' instead of alloc'ing new buffer
       //             if it's proved to survive 'this' b/c it's already columnar.
-      column_buffers_[i] = static_cast<const int8_t*>(checked_malloc(buf_size));
+      column_buffers_[i] = reinterpret_cast<const int8_t*>(checked_malloc(buf_size));
       memcpy(((void*)column_buffers_[i]), &fragment.data[col_base_off], buf_size);
       row_set_mem_owner->addColBuffer(column_buffers_[i]);
     }
@@ -129,7 +129,7 @@ class ColumnarResults {
                   const SQLTypeInfo& target_type)
       : column_buffers_(1), num_rows_(num_rows), target_types_{target_type} {
     const auto buf_size = num_rows * get_bit_width(target_type) / 8;
-    column_buffers_[0] = static_cast<const int8_t*>(checked_malloc(buf_size));
+    column_buffers_[0] = reinterpret_cast<const int8_t*>(checked_malloc(buf_size));
     memcpy(((void*)column_buffers_[0]), one_col_buffer, buf_size);
     row_set_mem_owner->addColBuffer(column_buffers_[0]);
   }
@@ -146,7 +146,7 @@ class ColumnarResults {
     CHECK(filtered_vals->column_buffers_.empty());
     for (size_t col_idx = 0; col_idx < col_count; ++col_idx) {
       const auto byte_width = get_bit_width(values.getColumnType(col_idx)) / 8;
-      auto write_ptr = static_cast<int8_t*>(checked_malloc(byte_width * row_count));
+      auto write_ptr = reinterpret_cast<int8_t*>(checked_malloc(byte_width * row_count));
       filtered_vals->column_buffers_.push_back(write_ptr);
       row_set_mem_owner->addColBuffer(write_ptr);
 
@@ -171,6 +171,25 @@ class ColumnarResults {
       }
     }
     return filtered_vals;
+  }
+
+  static std::unique_ptr<ColumnarResults> createOffsetResults(
+      const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+      const ColumnarResults& values,
+      const int col_idx,
+      const uint64_t offset) {
+    const auto row_count = values.num_rows_;
+    std::unique_ptr<ColumnarResults> offset_vals(new ColumnarResults(row_count, values.target_types_));
+    CHECK(offset_vals->column_buffers_.empty());
+    CHECK_EQ(64, get_bit_width(values.getColumnType(col_idx)));
+    const size_t buf_size = sizeof(int64_t) * row_count;
+    auto write_ptr = reinterpret_cast<int64_t*>(checked_malloc(buf_size));
+    offset_vals->column_buffers_.push_back(reinterpret_cast<int8_t*>(write_ptr));
+    row_set_mem_owner->addColBuffer(write_ptr);
+    auto read_ptr = reinterpret_cast<const int64_t*>(values.column_buffers_[col_idx]);
+    memcpy(write_ptr, read_ptr, buf_size);
+    std::for_each(write_ptr, write_ptr + row_count, [offset](int64_t& n) { n += offset; });
+    return offset_vals;
   }
 
   const std::vector<const int8_t*>& getColumnBuffers() const { return column_buffers_; }

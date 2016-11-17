@@ -545,6 +545,7 @@ class Executor {
                             const int col_id,
                             const Data_Namespace::MemoryLevel memory_level,
                             const int device_id) const;
+    uint64_t getFragOffset(const int frag_id, const int table_id) const;
 
     void runImpl(const ExecutorDeviceType chosen_device_type,
                  int chosen_device_id,
@@ -596,7 +597,8 @@ class Executor {
                             const int frag_id,
                             const std::map<int, const TableFragments*>& all_tables_fragments,
                             const Data_Namespace::MemoryLevel memory_level,
-                            const int device_id) const;
+                            const int device_id,
+                            const bool is_rowid) const;
 
     static const int8_t* getColumn(const ColumnarResults* columnar_results,
                                    const int col_id,
