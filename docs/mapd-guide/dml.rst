@@ -47,8 +47,8 @@ Returns a Relational Algebra tree describing the high level plan that will be fo
 
 
 	
-``Table Expression and Join Support``
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Table Expression and Join Support
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ::
 
