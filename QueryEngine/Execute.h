@@ -6,6 +6,7 @@
 #include "InValuesBitmap.h"
 #include "InputMetadata.h"
 #include "JoinHashTable.h"
+#include "LLVMGlobalContext.h"
 #include "NvidiaKernel.h"
 #include "RelAlgExecutionUnit.h"
 #include "TargetMetaInfo.h"
@@ -881,7 +882,7 @@ class Executor {
     CgenState(const std::vector<InputTableInfo>& query_infos, const bool is_outer_join)
         : module_(nullptr),
           row_func_(nullptr),
-          context_(llvm::getGlobalContext()),
+          context_(getGlobalLLVMContext()),
           ir_builder_(context_),
           is_outer_join_(is_outer_join),
           outer_join_cond_lv_(nullptr),
