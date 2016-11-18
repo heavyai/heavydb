@@ -1,7 +1,7 @@
 #ifndef SHARED_UNREACHABLE_H
 #define SHARED_UNREACHABLE_H
 
-#ifdef __CUDACC__
+#ifndef __CUDACC__
 #include <glog/logging.h>
 
 #define UNREACHABLE() CHECK(false)

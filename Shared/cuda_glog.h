@@ -3,14 +3,14 @@
 
 #define CHECK(cond) \
   {                 \
-    if (!cond) {    \
+    if (!(cond)) {  \
       abort();      \
     }               \
   }
 
 #define CHECK_EQ(ref, val) \
   {                        \
-    if (val != ref) {      \
+    if ((val) != (ref)) {  \
       abort();             \
     }                      \
   }
