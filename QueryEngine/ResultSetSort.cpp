@@ -7,6 +7,7 @@
  */
 
 #ifdef HAVE_CUDA
+#include "Execute.h"
 #include "ResultSet.h"
 #include "ResultSetSortImpl.h"
 
@@ -18,9 +19,9 @@
 
 #include <future>
 
-void ResultSet::baselineSort(const ExecutorDeviceType device_type,
-                             const std::list<Analyzer::OrderEntry>& order_entries,
-                             const size_t top_n) {
+void ResultSet::doBaselineSort(const ExecutorDeviceType device_type,
+                               const std::list<Analyzer::OrderEntry>& order_entries,
+                               const size_t top_n) {
   CHECK_EQ(size_t(1), order_entries.size());
   CHECK_EQ(size_t(0), query_mem_desc_.entry_count_small);
   CHECK(!query_mem_desc_.output_columnar);
@@ -39,15 +40,26 @@ void ResultSet::baselineSort(const ExecutorDeviceType device_type,
   GroupByBufferLayoutInfo layout{query_mem_desc_.entry_count, col_off, col_bytes, row_bytes, targets_[oe.tle_no - 1]};
   PodOrderEntry pod_oe{oe.tle_no, oe.is_desc, oe.nulls_first};
   auto groupby_buffer = storage_->getUnderlyingBuffer();
-  if (device_type == ExecutorDeviceType::CPU) {
+  CHECK(executor_ && executor_->catalog_);
+  auto& data_mgr = executor_->catalog_->get_dataMgr();
+  if (device_type == ExecutorDeviceType::GPU) {
+    CHECK(data_mgr.gpusPresent());
+    CHECK(data_mgr.cudaMgr_);
+  }
+  const auto step =
+      static_cast<size_t>(device_type == ExecutorDeviceType::GPU ? data_mgr.cudaMgr_->getDeviceCount() : cpu_threads());
+  CHECK_GE(step, size_t(1));
+  if (step > 1) {
     std::vector<std::future<void>> top_futures;
-    const auto step = static_cast<size_t>(cpu_threads());
     std::vector<std::vector<uint32_t>> strided_permutations(step);
     for (size_t start = 0; start < step; ++start) {
+      if (device_type == ExecutorDeviceType::GPU) {
+        data_mgr.cudaMgr_->setContext(start);
+      }
       top_futures.emplace_back(std::async(
           std::launch::async, [&strided_permutations, device_type, groupby_buffer, pod_oe, layout, top_n, start, step] {
             strided_permutations[start] =
-                baseline_sort(device_type, 0, groupby_buffer, pod_oe, layout, top_n, start, step);
+                baseline_sort(device_type, start, groupby_buffer, pod_oe, layout, top_n, start, step);
           }));
     }
     for (auto& top_future : top_futures) {
@@ -60,8 +72,9 @@ void ResultSet::baselineSort(const ExecutorDeviceType device_type,
     auto compare = createComparator(order_entries, true, true);
     topPermutation(permutation_, top_n, compare);
     return;
+  } else {
+    permutation_ = baseline_sort(device_type, 0, groupby_buffer, pod_oe, layout, top_n, 0, 1);
   }
-  permutation_ = baseline_sort(device_type, 0, groupby_buffer, pod_oe, layout, top_n, 0, 1);
 }
 
 bool ResultSet::canUseFastBaselineSort(const std::list<Analyzer::OrderEntry>& order_entries, const size_t top_n) {

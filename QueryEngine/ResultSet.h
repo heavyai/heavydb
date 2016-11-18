@@ -278,9 +278,11 @@ class ResultSet {
 
   void parallelTop(const std::list<Analyzer::OrderEntry>& order_entries, const size_t top_n);
 
-  void baselineSort(const ExecutorDeviceType device_type,
-                    const std::list<Analyzer::OrderEntry>& order_entries,
-                    const size_t top_n);
+  void baselineSort(const std::list<Analyzer::OrderEntry>& order_entries, const size_t top_n);
+
+  void doBaselineSort(const ExecutorDeviceType device_type,
+                      const std::list<Analyzer::OrderEntry>& order_entries,
+                      const size_t top_n);
 
   bool canUseFastBaselineSort(const std::list<Analyzer::OrderEntry>& order_entries, const size_t top_n);
 
