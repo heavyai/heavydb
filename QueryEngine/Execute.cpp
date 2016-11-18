@@ -2278,7 +2278,7 @@ llvm::Value* Executor::codegenCastToFp(llvm::Value* operand_lv, const SQLTypeInf
 llvm::Value* Executor::codegenCastFromFp(llvm::Value* operand_lv,
                                          const SQLTypeInfo& operand_ti,
                                          const SQLTypeInfo& ti) {
-  if (!operand_ti.is_fp() || !ti.is_number()) {
+  if (!operand_ti.is_fp() || !ti.is_number() || ti.is_decimal()) {
     throw std::runtime_error("Cast from " + operand_ti.get_type_name() + " to " + ti.get_type_name() +
                              " not supported");
   }
