@@ -68,7 +68,7 @@ inline RelAlgExecutionUnit create_ndv_execution_unit(const RelAlgExecutionUnit& 
           {},
           {},
           {},
-          makeExpr<const Analyzer::NDVEstimator>(ra_exe_unit.groupby_exprs),
+          makeExpr<Analyzer::NDVEstimator>(ra_exe_unit.groupby_exprs),
           SortInfo{{}, SortAlgorithm::Default, 0, 0},
           0};
 }

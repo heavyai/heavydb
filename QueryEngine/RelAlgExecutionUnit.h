@@ -47,7 +47,7 @@ struct RelAlgExecutionUnit {
   const std::list<std::shared_ptr<Analyzer::Expr>> groupby_exprs;
   const std::vector<Analyzer::Expr*> target_exprs;
   const std::vector<Analyzer::Expr*> orig_target_exprs;
-  const std::shared_ptr<const Analyzer::NDVEstimator> estimator;
+  const std::shared_ptr<Analyzer::NDVEstimator> estimator;
   const SortInfo sort_info;
   size_t scan_limit;
 };
