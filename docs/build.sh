@@ -42,7 +42,7 @@ fi
 sphinx-build -Q -b dirhtml -d $BUILD/doctrees $VERSION . $BUILD/dirhtml > $BUILD/log-uber-$TS.txt 2>&1
 cp -R $BUILD/dirhtml/* "$DIST"
 
-for i in immerse-user-guide mapd-guide; do
+for i in immerse-user-guide mapd-guide release-notes; do
 	pushd $i
 	if [ "$VENV" = true ] ; then
 		pip install -r requirements.txt > $BUILD/log-$i-pip-$TS.txt  2>&1

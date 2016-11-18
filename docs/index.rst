@@ -11,3 +11,4 @@ MapD Documentation
 
    mapd-guide/index
    immerse-user-guide/index
+   release-notes/index
