@@ -1294,12 +1294,11 @@ TEST(Select, OverflowAndUnderFlow) {
                  std::runtime_error);
     EXPECT_THROW(run_multiple_agg("SELECT COUNT(*) FROM test WHERE -92233720368547758 - ofq <= 0;", dt),
                  std::runtime_error);
-    EXPECT_THROW(run_multiple_agg(
-                     "SELECT cast((z - -32666) *0.000190 as int) as key0, "
-                     "COUNT(*) AS val FROM test WHERE (z >= -32666 AND z < 31496) "
-                     "GROUP BY key0 HAVING key0 >= 0 AND key0 < 12 ORDER BY val "
-                     "DESC LIMIT 50 OFFSET 0;",
-                     dt),
+    EXPECT_THROW(run_multiple_agg("SELECT cast((z - -32666) *0.000190 as int) as key0, "
+                                  "COUNT(*) AS val FROM test WHERE (z >= -32666 AND z < 31496) "
+                                  "GROUP BY key0 HAVING key0 >= 0 AND key0 < 12 ORDER BY val "
+                                  "DESC LIMIT 50 OFFSET 0;",
+                                  dt),
                  std::runtime_error);
     EXPECT_THROW(run_multiple_agg("SELECT dd * 2000000000000000 FROM test LIMIT 5;", dt), std::runtime_error);
     c("SELECT dd * 200000000000000 FROM test LIMIT 5;", dt);  // overflow avoided through decimal mul optimization
@@ -2253,11 +2252,11 @@ TEST(Select, UnsupportedPatterns) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 #ifndef ENABLE_JOIN_EXEC
-    EXPECT_THROW(run_multiple_agg(
-                     "SELECT count(*) FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c ON "
-                     "b.str = c.str;",
-                     dt),
-                 std::runtime_error);
+    EXPECT_THROW(
+        run_multiple_agg("SELECT count(*) FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c ON "
+                         "b.str = c.str;",
+                         dt),
+        std::runtime_error);
     EXPECT_THROW(run_multiple_agg(
                      "SELECT count(*) FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str = "
                      "c.str JOIN join_test AS d ON c.x = d.x;",
