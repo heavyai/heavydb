@@ -60,16 +60,14 @@ IteratorTable::IteratorTable(const std::vector<TargetInfo>& targets,
       query_mem_desc_(query_mem_desc),
       row_set_mem_owner_(row_set_mem_owner),
       device_type_(device_type),
-      just_explain_(false) {
-}
+      just_explain_(false) {}
 
 IteratorTable::IteratorTable()
     : targets_{},
       query_mem_desc_{},
       row_set_mem_owner_(nullptr),
       device_type_(ExecutorDeviceType::CPU),
-      just_explain_(false) {
-}
+      just_explain_(false) {}
 
 size_t IteratorTable::rowCount() const {
   size_t row_count{0};

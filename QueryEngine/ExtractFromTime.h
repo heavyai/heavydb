@@ -71,6 +71,7 @@ extern "C" __attribute__((noinline))
 #ifdef __CUDACC__
 __device__
 #endif
-    int64_t ExtractFromTime(ExtractField field, time_t timeval);
+    int64_t
+    ExtractFromTime(ExtractField field, time_t timeval);
 
 #endif  // QUERYENGINE_EXTRACTFROMTIME_H

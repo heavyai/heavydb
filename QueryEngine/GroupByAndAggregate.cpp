@@ -2280,8 +2280,8 @@ llvm::Value* GroupByAndAggregate::convertNullIfAny(const SQLTypeInfo& arg_type,
     arg_null = executor_->inlineFpNull(arg_type);
     if (agg_type.is_fp()) {
       agg_null = executor_->inlineFpNull(agg_type);
-      if (!static_cast<llvm::ConstantFP*>(arg_null)
-               ->isExactlyValue(static_cast<llvm::ConstantFP*>(agg_null)->getValueAPF())) {
+      if (!static_cast<llvm::ConstantFP*>(arg_null)->isExactlyValue(
+              static_cast<llvm::ConstantFP*>(agg_null)->getValueAPF())) {
         need_conversion = true;
       }
     } else {

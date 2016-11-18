@@ -298,12 +298,12 @@ extern "C" uint64_t string_decompress(const int32_t string_id, const int64_t str
   ARRAY_STR_ANY(int64_t, oper_name, oper)            \
   ARRAY_STR_ALL(int64_t, oper_name, oper)
 
-ARRAY_STR_ALL_ANY_ALL_TYPES(eq, == )
-ARRAY_STR_ALL_ANY_ALL_TYPES(ne, != )
-ARRAY_STR_ALL_ANY_ALL_TYPES(lt, < )
-ARRAY_STR_ALL_ANY_ALL_TYPES(le, <= )
-ARRAY_STR_ALL_ANY_ALL_TYPES(gt, > )
-ARRAY_STR_ALL_ANY_ALL_TYPES(ge, >= )
+ARRAY_STR_ALL_ANY_ALL_TYPES(eq, ==)
+ARRAY_STR_ALL_ANY_ALL_TYPES(ne, !=)
+ARRAY_STR_ALL_ANY_ALL_TYPES(lt, <)
+ARRAY_STR_ALL_ANY_ALL_TYPES(le, <=)
+ARRAY_STR_ALL_ANY_ALL_TYPES(gt, >)
+ARRAY_STR_ALL_ANY_ALL_TYPES(ge, >=)
 
 #undef ARRAY_ALL_ANY_ALL_TYPES
 #undef ARRAY_STR_ALL

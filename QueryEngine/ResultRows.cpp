@@ -9,8 +9,7 @@
 
 #include <future>
 
-ResultRows::ResultRows(std::shared_ptr<ResultSet> result_set) : result_set_(result_set) {
-}
+ResultRows::ResultRows(std::shared_ptr<ResultSet> result_set) : result_set_(result_set) {}
 
 ResultRows::ResultRows(const QueryMemoryDescriptor& query_mem_desc,
                        const std::vector<Analyzer::Expr*>& targets,

@@ -25,8 +25,7 @@ extern "C" __device__ const int64_t* init_shared_mem_nop(const int64_t* groups_b
   return groups_buffer;
 }
 
-extern "C" __device__ void write_back_nop(int64_t* dest, int64_t* src, const int32_t sz) {
-}
+extern "C" __device__ void write_back_nop(int64_t* dest, int64_t* src, const int32_t sz) {}
 
 extern "C" __device__ const int64_t* init_shared_mem(const int64_t* groups_buffer, const int32_t groups_buffer_size) {
   extern __shared__ int64_t fast_bins[];

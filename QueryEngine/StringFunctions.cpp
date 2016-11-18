@@ -15,8 +15,9 @@ extern "C" NEVER_INLINE DEVICE int32_t char_length_encoded(const char* str, cons
   return char_count;
 }
 
-extern "C" NEVER_INLINE DEVICE int32_t
-    char_length_encoded_nullable(const char* str, const int32_t str_len, const int32_t int_null) {  // assumes utf8
+extern "C" NEVER_INLINE DEVICE int32_t char_length_encoded_nullable(const char* str,
+                                                                    const int32_t str_len,
+                                                                    const int32_t int_null) {  // assumes utf8
   if (!str) {
     return int_null;
   }

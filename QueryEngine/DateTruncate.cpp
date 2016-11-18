@@ -9,7 +9,8 @@ extern "C" __attribute__((noinline))
 #ifdef __CUDACC__
 __device__
 #endif
-    time_t create_epoch(int year) {
+    time_t
+    create_epoch(int year) {
   // Note this is not general purpose
   // it has a final assumption that the year being passed can never be a leap
   // year
@@ -56,7 +57,8 @@ extern "C" __attribute__((noinline))
 #ifdef __CUDACC__
 __device__
 #endif
-    time_t DateTruncate(DatetruncField field, time_t timeval) {
+    time_t
+    DateTruncate(DatetruncField field, time_t timeval) {
   const int month_lengths[2][MONSPERYEAR] = {{31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31},
                                              {31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}};
   switch (field) {
@@ -183,7 +185,8 @@ extern "C"
 #ifdef __CUDACC__
     __device__
 #endif
-        time_t DateTruncateNullable(DatetruncField field, time_t timeval, const int64_t null_val) {
+        time_t
+        DateTruncateNullable(DatetruncField field, time_t timeval, const int64_t null_val) {
   if (timeval == null_val) {
     return null_val;
   }
@@ -194,7 +197,8 @@ extern "C"
 #ifdef __CUDACC__
     __device__
 #endif
-        int64_t DateDiff(const DatetruncField datepart, time_t startdate, time_t enddate) {
+        int64_t
+        DateDiff(const DatetruncField datepart, time_t startdate, time_t enddate) {
   int64_t res = 0;
   time_t crt = enddate;
   while (crt > startdate) {
@@ -213,7 +217,7 @@ extern "C"
     __device__
 #endif
         int64_t
-            DateDiffNullable(const DatetruncField datepart, time_t startdate, time_t enddate, const int64_t null_val) {
+        DateDiffNullable(const DatetruncField datepart, time_t startdate, time_t enddate, const int64_t null_val) {
   if (startdate == null_val || enddate == null_val) {
     return null_val;
   }

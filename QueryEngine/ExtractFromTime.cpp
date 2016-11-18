@@ -8,7 +8,8 @@ extern "C" __attribute__((noinline))
 #ifdef __CUDACC__
 __device__
 #endif
-    int extract_hour(const time_t* tim_p) {
+    int
+    extract_hour(const time_t* tim_p) {
   long days, rem;
   const time_t lcltime = *tim_p;
   days = ((long)lcltime) / SECSPERDAY - EPOCH_ADJUSTMENT_DAYS;
@@ -177,7 +178,8 @@ extern "C" __attribute__((noinline))
 #ifdef __CUDACC__
 __device__
 #endif
-    int64_t ExtractFromTime(ExtractField field, time_t timeval) {
+    int64_t
+    ExtractFromTime(ExtractField field, time_t timeval) {
 
   // We have fast paths for the 5 fields below - do not need to do full gmtime
   switch (field) {
@@ -243,7 +245,8 @@ extern "C"
 #ifdef __CUDACC__
     __device__
 #endif
-        int64_t ExtractFromTimeNullable(ExtractField field, time_t timeval, const int64_t null_val) {
+        int64_t
+        ExtractFromTimeNullable(ExtractField field, time_t timeval, const int64_t null_val) {
   if (timeval == null_val) {
     return null_val;
   }

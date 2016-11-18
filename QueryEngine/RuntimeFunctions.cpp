@@ -69,57 +69,57 @@
   DEF_ARITH_NULLABLE(type, null_type, add, +)        \
   DEF_ARITH_NULLABLE(type, null_type, sub, -)        \
   DEF_ARITH_NULLABLE(type, null_type, mul, *)        \
-  DEF_ARITH_NULLABLE(type, null_type, div, / )       \
+  DEF_ARITH_NULLABLE(type, null_type, div, /)        \
   DEF_ARITH_NULLABLE_LHS(type, null_type, add, +)    \
   DEF_ARITH_NULLABLE_LHS(type, null_type, sub, -)    \
   DEF_ARITH_NULLABLE_LHS(type, null_type, mul, *)    \
-  DEF_ARITH_NULLABLE_LHS(type, null_type, div, / )   \
+  DEF_ARITH_NULLABLE_LHS(type, null_type, div, /)    \
   DEF_ARITH_NULLABLE_RHS(type, null_type, add, +)    \
   DEF_ARITH_NULLABLE_RHS(type, null_type, sub, -)    \
   DEF_ARITH_NULLABLE_RHS(type, null_type, mul, *)    \
-  DEF_ARITH_NULLABLE_RHS(type, null_type, div, / )   \
-  DEF_CMP_NULLABLE(type, null_type, eq, == )         \
-  DEF_CMP_NULLABLE(type, null_type, ne, != )         \
-  DEF_CMP_NULLABLE(type, null_type, lt, < )          \
-  DEF_CMP_NULLABLE(type, null_type, gt, > )          \
-  DEF_CMP_NULLABLE(type, null_type, le, <= )         \
-  DEF_CMP_NULLABLE(type, null_type, ge, >= )         \
-  DEF_CMP_NULLABLE_LHS(type, null_type, eq, == )     \
-  DEF_CMP_NULLABLE_LHS(type, null_type, ne, != )     \
-  DEF_CMP_NULLABLE_LHS(type, null_type, lt, < )      \
-  DEF_CMP_NULLABLE_LHS(type, null_type, gt, > )      \
-  DEF_CMP_NULLABLE_LHS(type, null_type, le, <= )     \
-  DEF_CMP_NULLABLE_LHS(type, null_type, ge, >= )     \
-  DEF_CMP_NULLABLE_RHS(type, null_type, eq, == )     \
-  DEF_CMP_NULLABLE_RHS(type, null_type, ne, != )     \
-  DEF_CMP_NULLABLE_RHS(type, null_type, lt, < )      \
-  DEF_CMP_NULLABLE_RHS(type, null_type, gt, > )      \
-  DEF_CMP_NULLABLE_RHS(type, null_type, le, <= )     \
-  DEF_CMP_NULLABLE_RHS(type, null_type, ge, >= )
+  DEF_ARITH_NULLABLE_RHS(type, null_type, div, /)    \
+  DEF_CMP_NULLABLE(type, null_type, eq, ==)          \
+  DEF_CMP_NULLABLE(type, null_type, ne, !=)          \
+  DEF_CMP_NULLABLE(type, null_type, lt, <)           \
+  DEF_CMP_NULLABLE(type, null_type, gt, >)           \
+  DEF_CMP_NULLABLE(type, null_type, le, <=)          \
+  DEF_CMP_NULLABLE(type, null_type, ge, >=)          \
+  DEF_CMP_NULLABLE_LHS(type, null_type, eq, ==)      \
+  DEF_CMP_NULLABLE_LHS(type, null_type, ne, !=)      \
+  DEF_CMP_NULLABLE_LHS(type, null_type, lt, <)       \
+  DEF_CMP_NULLABLE_LHS(type, null_type, gt, >)       \
+  DEF_CMP_NULLABLE_LHS(type, null_type, le, <=)      \
+  DEF_CMP_NULLABLE_LHS(type, null_type, ge, >=)      \
+  DEF_CMP_NULLABLE_RHS(type, null_type, eq, ==)      \
+  DEF_CMP_NULLABLE_RHS(type, null_type, ne, !=)      \
+  DEF_CMP_NULLABLE_RHS(type, null_type, lt, <)       \
+  DEF_CMP_NULLABLE_RHS(type, null_type, gt, >)       \
+  DEF_CMP_NULLABLE_RHS(type, null_type, le, <=)      \
+  DEF_CMP_NULLABLE_RHS(type, null_type, ge, >=)
 
 DEF_BINARY_NULLABLE_ALL_OPS(int16_t, int64_t)
 DEF_BINARY_NULLABLE_ALL_OPS(int32_t, int64_t)
 DEF_BINARY_NULLABLE_ALL_OPS(int64_t, int64_t)
 DEF_BINARY_NULLABLE_ALL_OPS(float, float)
 DEF_BINARY_NULLABLE_ALL_OPS(double, double)
-DEF_CMP_NULLABLE(int8_t, int64_t, eq, == )
-DEF_CMP_NULLABLE(int8_t, int64_t, ne, != )
-DEF_CMP_NULLABLE_LHS(int8_t, int64_t, eq, == )
-DEF_CMP_NULLABLE_LHS(int8_t, int64_t, ne, != )
-DEF_CMP_NULLABLE_RHS(int8_t, int64_t, eq, == )
-DEF_CMP_NULLABLE_RHS(int8_t, int64_t, ne, != )
-DEF_ARITH_NULLABLE(int8_t, int64_t, mod, % )
-DEF_ARITH_NULLABLE(int16_t, int64_t, mod, % )
-DEF_ARITH_NULLABLE(int32_t, int64_t, mod, % )
-DEF_ARITH_NULLABLE(int64_t, int64_t, mod, % )
-DEF_ARITH_NULLABLE_LHS(int8_t, int64_t, mod, % )
-DEF_ARITH_NULLABLE_LHS(int16_t, int64_t, mod, % )
-DEF_ARITH_NULLABLE_LHS(int32_t, int64_t, mod, % )
-DEF_ARITH_NULLABLE_LHS(int64_t, int64_t, mod, % )
-DEF_ARITH_NULLABLE_RHS(int8_t, int64_t, mod, % )
-DEF_ARITH_NULLABLE_RHS(int16_t, int64_t, mod, % )
-DEF_ARITH_NULLABLE_RHS(int32_t, int64_t, mod, % )
-DEF_ARITH_NULLABLE_RHS(int64_t, int64_t, mod, % )
+DEF_CMP_NULLABLE(int8_t, int64_t, eq, ==)
+DEF_CMP_NULLABLE(int8_t, int64_t, ne, !=)
+DEF_CMP_NULLABLE_LHS(int8_t, int64_t, eq, ==)
+DEF_CMP_NULLABLE_LHS(int8_t, int64_t, ne, !=)
+DEF_CMP_NULLABLE_RHS(int8_t, int64_t, eq, ==)
+DEF_CMP_NULLABLE_RHS(int8_t, int64_t, ne, !=)
+DEF_ARITH_NULLABLE(int8_t, int64_t, mod, %)
+DEF_ARITH_NULLABLE(int16_t, int64_t, mod, %)
+DEF_ARITH_NULLABLE(int32_t, int64_t, mod, %)
+DEF_ARITH_NULLABLE(int64_t, int64_t, mod, %)
+DEF_ARITH_NULLABLE_LHS(int8_t, int64_t, mod, %)
+DEF_ARITH_NULLABLE_LHS(int16_t, int64_t, mod, %)
+DEF_ARITH_NULLABLE_LHS(int32_t, int64_t, mod, %)
+DEF_ARITH_NULLABLE_LHS(int64_t, int64_t, mod, %)
+DEF_ARITH_NULLABLE_RHS(int8_t, int64_t, mod, %)
+DEF_ARITH_NULLABLE_RHS(int16_t, int64_t, mod, %)
+DEF_ARITH_NULLABLE_RHS(int32_t, int64_t, mod, %)
+DEF_ARITH_NULLABLE_RHS(int64_t, int64_t, mod, %)
 
 #undef DEF_BINARY_NULLABLE_ALL_OPS
 #undef DEF_CMP_NULLABLE_RHS
@@ -213,8 +213,9 @@ extern "C" __attribute__((always_inline)) int8_t logical_not(const int8_t operan
   return operand == null_val ? operand : (operand ? 0 : 1);
 }
 
-extern "C" __attribute__((always_inline)) int8_t
-    logical_and(const int8_t lhs, const int8_t rhs, const int8_t null_val) {
+extern "C" __attribute__((always_inline)) int8_t logical_and(const int8_t lhs,
+                                                             const int8_t rhs,
+                                                             const int8_t null_val) {
   if (lhs == null_val || rhs == null_val) {
     return null_val;
   }
@@ -337,8 +338,9 @@ extern "C" __attribute__((always_inline)) void agg_id_int32(int32_t* agg, const 
   *agg = val;
 }
 
-extern "C" __attribute__((always_inline)) int64_t
-    agg_sum_skip_val(int64_t* agg, const int64_t val, const int64_t skip_val) {
+extern "C" __attribute__((always_inline)) int64_t agg_sum_skip_val(int64_t* agg,
+                                                                   const int64_t val,
+                                                                   const int64_t skip_val) {
   const auto old = *agg;
   if (val != skip_val) {
     if (old != skip_val) {
@@ -350,8 +352,9 @@ extern "C" __attribute__((always_inline)) int64_t
   return old;
 }
 
-extern "C" __attribute__((always_inline)) int32_t
-    agg_sum_int32_skip_val(int32_t* agg, const int32_t val, const int32_t skip_val) {
+extern "C" __attribute__((always_inline)) int32_t agg_sum_int32_skip_val(int32_t* agg,
+                                                                         const int32_t val,
+                                                                         const int32_t skip_val) {
   const auto old = *agg;
   if (val != skip_val) {
     if (old != skip_val) {
@@ -363,16 +366,18 @@ extern "C" __attribute__((always_inline)) int32_t
   return old;
 }
 
-extern "C" __attribute__((always_inline)) uint64_t
-    agg_count_skip_val(uint64_t* agg, const int64_t val, const int64_t skip_val) {
+extern "C" __attribute__((always_inline)) uint64_t agg_count_skip_val(uint64_t* agg,
+                                                                      const int64_t val,
+                                                                      const int64_t skip_val) {
   if (val != skip_val) {
     return agg_count(agg, val);
   }
   return *agg;
 }
 
-extern "C" __attribute__((always_inline)) uint32_t
-    agg_count_int32_skip_val(uint32_t* agg, const int32_t val, const int32_t skip_val) {
+extern "C" __attribute__((always_inline)) uint32_t agg_count_int32_skip_val(uint32_t* agg,
+                                                                            const int32_t val,
+                                                                            const int32_t skip_val) {
   if (val != skip_val) {
     return agg_count_int32(agg, val);
   }
@@ -461,16 +466,18 @@ extern "C" __attribute__((always_inline)) void agg_id_float(int32_t* agg, const 
   *agg = *(reinterpret_cast<const int32_t*>(&val));
 }
 
-extern "C" __attribute__((always_inline)) uint64_t
-    agg_count_double_skip_val(uint64_t* agg, const double val, const double skip_val) {
+extern "C" __attribute__((always_inline)) uint64_t agg_count_double_skip_val(uint64_t* agg,
+                                                                             const double val,
+                                                                             const double skip_val) {
   if (val != skip_val) {
     return agg_count_double(agg, val);
   }
   return *agg;
 }
 
-extern "C" __attribute__((always_inline)) uint32_t
-    agg_count_float_skip_val(uint32_t* agg, const float val, const float skip_val) {
+extern "C" __attribute__((always_inline)) uint32_t agg_count_float_skip_val(uint32_t* agg,
+                                                                            const float val,
+                                                                            const float skip_val) {
   if (val != skip_val) {
     return agg_count_float(agg, val);
   }
@@ -606,16 +613,18 @@ extern "C" __attribute__((noinline)) int64_t agg_sum_shared(int64_t* agg, const 
   abort();
 }
 
-extern "C" __attribute__((noinline)) int64_t
-    agg_sum_skip_val_shared(int64_t* agg, const int64_t val, const int64_t skip_val) {
+extern "C" __attribute__((noinline)) int64_t agg_sum_skip_val_shared(int64_t* agg,
+                                                                     const int64_t val,
+                                                                     const int64_t skip_val) {
   abort();
 }
 extern "C" __attribute__((noinline)) int32_t agg_sum_int32_shared(int32_t* agg, const int32_t val) {
   abort();
 }
 
-extern "C" __attribute__((noinline)) int32_t
-    agg_sum_int32_skip_val_shared(int32_t* agg, const int32_t val, const int32_t skip_val) {
+extern "C" __attribute__((noinline)) int32_t agg_sum_int32_skip_val_shared(int32_t* agg,
+                                                                           const int32_t val,
+                                                                           const int32_t skip_val) {
   abort();
 }
 
@@ -632,8 +641,9 @@ extern "C" __attribute__((noinline)) void agg_sum_float_shared(int32_t* agg, con
   abort();
 }
 
-extern "C"
-    __attribute__((noinline)) void agg_sum_float_skip_val_shared(int32_t* agg, const float val, const float skip_val) {
+extern "C" __attribute__((noinline)) void agg_sum_float_skip_val_shared(int32_t* agg,
+                                                                        const float val,
+                                                                        const float skip_val) {
   abort();
 }
 
@@ -673,8 +683,8 @@ extern "C" __attribute__((always_inline)) int32_t record_error_code(const int32_
 
 // group by helpers
 
-extern "C" __attribute__((noinline)) const int64_t
-    * init_shared_mem_nop(const int64_t* groups_buffer, const int32_t groups_buffer_size) {
+extern "C" __attribute__((noinline)) const int64_t* init_shared_mem_nop(const int64_t* groups_buffer,
+                                                                        const int32_t groups_buffer_size) {
   return groups_buffer;
 }
 
@@ -683,8 +693,8 @@ extern "C" __attribute__((noinline)) void write_back_nop(int64_t* dest, int64_t*
   assert(dest);
 }
 
-extern "C" __attribute__((noinline)) const int64_t
-    * init_shared_mem(const int64_t* groups_buffer, const int32_t groups_buffer_size) {
+extern "C" __attribute__((noinline)) const int64_t* init_shared_mem(const int64_t* groups_buffer,
+                                                                    const int32_t groups_buffer_size) {
   return init_shared_mem_nop(groups_buffer, groups_buffer_size);
 }
 
@@ -790,14 +800,14 @@ extern "C" __attribute__((always_inline)) int64_t* get_group_value_fast_keyless(
   return groups_buffer + row_size_quad * (key - min_key);
 }
 
-extern "C" __attribute__((always_inline)) int64_t
-    * get_group_value_fast_keyless_semiprivate(int64_t* groups_buffer,
-                                               const int64_t key,
-                                               const int64_t min_key,
-                                               const int64_t /* bucket */,
-                                               const uint32_t row_size_quad,
-                                               const uint8_t thread_warp_idx,
-                                               const uint8_t warp_size) {
+extern "C" __attribute__((always_inline)) int64_t* get_group_value_fast_keyless_semiprivate(
+    int64_t* groups_buffer,
+    const int64_t key,
+    const int64_t min_key,
+    const int64_t /* bucket */,
+    const uint32_t row_size_quad,
+    const uint8_t thread_warp_idx,
+    const uint8_t warp_size) {
   return groups_buffer + row_size_quad * (warp_size * (key - min_key) + thread_warp_idx);
 }
 
@@ -829,8 +839,9 @@ extern "C" ALWAYS_INLINE DEVICE int32_t char_length(const char* str, const int32
   return str_len;
 }
 
-extern "C" ALWAYS_INLINE DEVICE int32_t
-    char_length_nullable(const char* str, const int32_t str_len, const int32_t int_null) {
+extern "C" ALWAYS_INLINE DEVICE int32_t char_length_nullable(const char* str,
+                                                             const int32_t str_len,
+                                                             const int32_t int_null) {
   if (!str) {
     return int_null;
   }

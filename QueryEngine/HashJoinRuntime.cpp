@@ -106,8 +106,8 @@ void fill_hash_join_buff_on_device(int32_t* buff,
                                    const int64_t translated_null_val,
                                    const size_t block_size_x,
                                    const size_t grid_size_x) {
-  fill_hash_join_buff_wrapper<<<grid_size_x, block_size_x>>>
-      (buff, invalid_slot_val, col_buff, num_elems, elem_sz, min_val, null_val, translated_null_val, dev_err_buff);
+  fill_hash_join_buff_wrapper<<<grid_size_x, block_size_x>>>(
+      buff, invalid_slot_val, col_buff, num_elems, elem_sz, min_val, null_val, translated_null_val, dev_err_buff);
 }
 
 __global__ void init_hash_join_buff_wrapper(int32_t* buff,
@@ -121,7 +121,7 @@ void init_hash_join_buff_on_device(int32_t* buff,
                                    const int32_t invalid_slot_val,
                                    const size_t block_size_x,
                                    const size_t grid_size_x) {
-  init_hash_join_buff_wrapper<<<grid_size_x, block_size_x>>> (buff, hash_entry_count, invalid_slot_val);
+  init_hash_join_buff_wrapper<<<grid_size_x, block_size_x>>>(buff, hash_entry_count, invalid_slot_val);
 }
 
 #endif

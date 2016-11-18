@@ -11,8 +11,9 @@
 #include "../Shared/funcannotations.h"
 #include <stdint.h>
 
-extern "C" DEVICE ALWAYS_INLINE int64_t
-    SUFFIX(fixed_width_int_decode)(const int8_t* byte_stream, const int32_t byte_width, const int64_t pos) {
+extern "C" DEVICE ALWAYS_INLINE int64_t SUFFIX(fixed_width_int_decode)(const int8_t* byte_stream,
+                                                                       const int32_t byte_width,
+                                                                       const int64_t pos) {
   switch (byte_width) {
     case 1:
       return static_cast<int64_t>(byte_stream[pos * byte_width]);
@@ -32,8 +33,9 @@ extern "C" DEVICE ALWAYS_INLINE int64_t
   }
 }
 
-extern "C" DEVICE NEVER_INLINE int64_t
-    SUFFIX(fixed_width_int_decode_noinline)(const int8_t* byte_stream, const int32_t byte_width, const int64_t pos) {
+extern "C" DEVICE NEVER_INLINE int64_t SUFFIX(fixed_width_int_decode_noinline)(const int8_t* byte_stream,
+                                                                               const int32_t byte_width,
+                                                                               const int64_t pos) {
   return SUFFIX(fixed_width_int_decode)(byte_stream, byte_width, pos);
 }
 

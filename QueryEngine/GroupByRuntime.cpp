@@ -150,8 +150,10 @@ extern "C" ALWAYS_INLINE DEVICE int64_t* get_scan_output_slot(int64_t* output_bu
   return NULL;
 }
 
-extern "C" ALWAYS_INLINE DEVICE int64_t
-    hash_join_idx(int64_t hash_buff, const int64_t key, const int64_t min_key, const int64_t max_key) {
+extern "C" ALWAYS_INLINE DEVICE int64_t hash_join_idx(int64_t hash_buff,
+                                                      const int64_t key,
+                                                      const int64_t min_key,
+                                                      const int64_t max_key) {
   if (key >= min_key && key <= max_key) {
     return *SUFFIX(get_hash_slot)(reinterpret_cast<int32_t*>(hash_buff), key, min_key);
   }

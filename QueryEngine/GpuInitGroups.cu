@@ -174,8 +174,15 @@ void init_columnar_group_by_buffer_on_device(int64_t* groups_buffer,
                                              const int8_t key_size,
                                              const size_t block_size_x,
                                              const size_t grid_size_x) {
-  init_columnar_group_by_buffer_gpu_wrapper<<<grid_size_x, block_size_x>>>(
-      groups_buffer, init_vals, groups_buffer_entry_count, key_qw_count, agg_col_count, col_sizes, need_padding, keyless, key_size);
+  init_columnar_group_by_buffer_gpu_wrapper<<<grid_size_x, block_size_x>>>(groups_buffer,
+                                                                           init_vals,
+                                                                           groups_buffer_entry_count,
+                                                                           key_qw_count,
+                                                                           agg_col_count,
+                                                                           col_sizes,
+                                                                           need_padding,
+                                                                           keyless,
+                                                                           key_size);
 }
 
 void init_render_buffer_on_device(int64_t* render_buffer,

@@ -12,13 +12,13 @@
                ? binOp<int64_t>(other,                                                                             \
                                 [](const int64_t x, const int64_t y) { return int64_t(checked_int64_t(x) op y); }) \
                : binOp<double>(other, [](const double x, const double y) {                                         \
-      std::feclearexcept(FE_OVERFLOW);                                                                             \
-      std::feclearexcept(FE_UNDERFLOW);                                                                            \
-      auto result = x op y;                                                                                        \
-      if (std::fetestexcept(FE_OVERFLOW) || std::fetestexcept(FE_UNDERFLOW)) {                                     \
-        throw std::runtime_error("overflow / underflow");                                                          \
-      }                                                                                                            \
-      return result;                                                                                               \
+                   std::feclearexcept(FE_OVERFLOW);                                                                \
+                   std::feclearexcept(FE_UNDERFLOW);                                                               \
+                   auto result = x op y;                                                                           \
+                   if (std::fetestexcept(FE_OVERFLOW) || std::fetestexcept(FE_UNDERFLOW)) {                        \
+                     throw std::runtime_error("overflow / underflow");                                             \
+                   }                                                                                               \
+                   return result;                                                                                  \
                  });                                                                                               \
   }
 
@@ -243,30 +243,30 @@ ExpressionRange getExpressionRange(const Analyzer::Constant* constant_expr) {
   return ExpressionRange::makeInvalidRange();
 }
 
-#define FIND_STAT_FRAG(stat_name)                                                                            \
-  const auto stat_name##_frag =                                                                              \
-      std::stat_name##_element(fragments.begin(),                                                            \
-                               fragments.end(),                                                              \
-                               [&has_nulls, col_id, col_ti](const Fragmenter_Namespace::FragmentInfo& lhs,   \
-                                                            const Fragmenter_Namespace::FragmentInfo& rhs) { \
-    auto lhs_meta_it = lhs.chunkMetadataMap.find(col_id);                                                    \
-    if (lhs_meta_it == lhs.chunkMetadataMap.end()) {                                                         \
-      return false;                                                                                          \
-    }                                                                                                        \
-    auto rhs_meta_it = rhs.chunkMetadataMap.find(col_id);                                                    \
-    CHECK(rhs_meta_it != rhs.chunkMetadataMap.end());                                                        \
-    if (lhs_meta_it->second.chunkStats.has_nulls || rhs_meta_it->second.chunkStats.has_nulls) {              \
-      has_nulls = true;                                                                                      \
-    }                                                                                                        \
-    if (col_ti.is_fp()) {                                                                                    \
-      return extract_##stat_name##_stat_double(lhs_meta_it->second.chunkStats, col_ti) <                     \
-             extract_##stat_name##_stat_double(rhs_meta_it->second.chunkStats, col_ti);                      \
-    }                                                                                                        \
-    return extract_##stat_name##_stat(lhs_meta_it->second.chunkStats, col_ti) <                              \
-           extract_##stat_name##_stat(rhs_meta_it->second.chunkStats, col_ti);                               \
-      });                                                                                                    \
-  if (stat_name##_frag == fragments.end()) {                                                                 \
-    return ExpressionRange::makeInvalidRange();                                                              \
+#define FIND_STAT_FRAG(stat_name)                                                                   \
+  const auto stat_name##_frag = std::stat_name##_element(                                           \
+      fragments.begin(),                                                                            \
+      fragments.end(),                                                                              \
+      [&has_nulls, col_id, col_ti](const Fragmenter_Namespace::FragmentInfo& lhs,                   \
+                                   const Fragmenter_Namespace::FragmentInfo& rhs) {                 \
+        auto lhs_meta_it = lhs.chunkMetadataMap.find(col_id);                                       \
+        if (lhs_meta_it == lhs.chunkMetadataMap.end()) {                                            \
+          return false;                                                                             \
+        }                                                                                           \
+        auto rhs_meta_it = rhs.chunkMetadataMap.find(col_id);                                       \
+        CHECK(rhs_meta_it != rhs.chunkMetadataMap.end());                                           \
+        if (lhs_meta_it->second.chunkStats.has_nulls || rhs_meta_it->second.chunkStats.has_nulls) { \
+          has_nulls = true;                                                                         \
+        }                                                                                           \
+        if (col_ti.is_fp()) {                                                                       \
+          return extract_##stat_name##_stat_double(lhs_meta_it->second.chunkStats, col_ti) <        \
+                 extract_##stat_name##_stat_double(rhs_meta_it->second.chunkStats, col_ti);         \
+        }                                                                                           \
+        return extract_##stat_name##_stat(lhs_meta_it->second.chunkStats, col_ti) <                 \
+               extract_##stat_name##_stat(rhs_meta_it->second.chunkStats, col_ti);                  \
+      });                                                                                           \
+  if (stat_name##_frag == fragments.end()) {                                                        \
+    return ExpressionRange::makeInvalidRange();                                                     \
   }
 
 namespace {

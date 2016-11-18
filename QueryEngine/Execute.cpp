@@ -75,8 +75,7 @@ Executor::Executor(const int db_id,
       debug_file_(debug_file),
       db_id_(db_id),
       catalog_(nullptr),
-      temporary_tables_(nullptr) {
-}
+      temporary_tables_(nullptr) {}
 
 std::shared_ptr<Executor> Executor::getExecutor(const int db_id,
                                                 const std::string& debug_dir,
@@ -3300,10 +3299,10 @@ ResultPtr Executor::resultsUnion(ExecutionDispatch& execution_dispatch) {
   std::sort(results_per_device.begin(),
             results_per_device.end(),
             [](const IndexedResultRows& lhs, const IndexedResultRows& rhs) {
-    CHECK_EQ(size_t(1), lhs.second.size());
-    CHECK_EQ(size_t(1), rhs.second.size());
-    return lhs.second < rhs.second;
-  });
+              CHECK_EQ(size_t(1), lhs.second.size());
+              CHECK_EQ(size_t(1), rhs.second.size());
+              return lhs.second < rhs.second;
+            });
 
   if (boost::get<RowSetPtr>(&results_per_device.front().first)) {
     return get_merged_result<RowSetPtr>(results_per_device);
@@ -3392,9 +3391,9 @@ RowSetPtr Executor::reduceMultiDeviceResultSets(
                         results_per_device.end(),
                         size_t(0),
                         [](const size_t init, const std::pair<ResultPtr, std::vector<size_t>>& rs) {
-          const auto& r = boost::get<RowSetPtr>(rs.first);
-          return init + r->getResultSet()->getQueryMemDesc().entry_count;
-        });
+                          const auto& r = boost::get<RowSetPtr>(rs.first);
+                          return init + r->getResultSet()->getQueryMemDesc().entry_count;
+                        });
     CHECK(total_entry_count);
     const auto first_result = first->getResultSet();
     CHECK(first_result);
@@ -3590,7 +3589,7 @@ RowSetPtr Executor::executeResultPlan(const Planner::Result* result_plan,
                                         {},
                                         nullptr,
                                         {
-                                         order_entries, SortAlgorithm::Default, 0, 0,
+                                            order_entries, SortAlgorithm::Default, 0, 0,
                                         },
                                         0};
   if (*error_code) {
@@ -6306,8 +6305,7 @@ declare i8 @regexp_like_nullable(i8*, i32, i8*, i32, i8, i8);
 declare void @linear_probabilistic_count(i8*, i32, i8*, i32);
 declare i32 @record_error_code(i32, i32*);
 declare void @force_sync();
-)" +
-    gen_array_any_all_sigs();
+)" + gen_array_any_all_sigs();
 
 #ifdef HAVE_CUDA
 std::string extension_function_decls() {
@@ -6502,11 +6500,8 @@ void Executor::initializeNVPTXBackend() const {
   if (!target) {
     LOG(FATAL) << err;
   }
-  nvptx_target_machine_.reset(target->createTargetMachine("nvptx64-nvidia-cuda",
-                                                          "sm_30",
-                                                          "",
-                                                          llvm::TargetOptions(),
-                                                          llvm::Reloc::Static));
+  nvptx_target_machine_.reset(
+      target->createTargetMachine("nvptx64-nvidia-cuda", "sm_30", "", llvm::TargetOptions(), llvm::Reloc::Static));
 }
 
 int8_t Executor::warpSize() const {

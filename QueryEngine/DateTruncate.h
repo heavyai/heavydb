@@ -44,6 +44,7 @@ extern "C" __attribute__((noinline))
 #ifdef __CUDACC__
 __device__
 #endif
-    time_t DateTruncate(DatetruncField field, time_t timeval);
+    time_t
+    DateTruncate(DatetruncField field, time_t timeval);
 
 #endif  // QUERYENGINE_DATETRUNCATE_H

@@ -647,9 +647,7 @@ class RANodeIterator : public std::vector<std::shared_ptr<RelAlgNode>>::const_it
   enum class AdvancingMode { DUChain, InOrder };
 
   explicit RANodeIterator(const Container& nodes)
-      : Super(nodes.begin()),
-        owner_(nodes),
-        nodeCount_([&nodes]() -> size_t {
+      : Super(nodes.begin()), owner_(nodes), nodeCount_([&nodes]() -> size_t {
           size_t non_zero_count = 0;
           for (const auto& node : nodes) {
             if (node) {

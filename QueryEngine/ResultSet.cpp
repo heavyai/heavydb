@@ -71,8 +71,7 @@ ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
       executor_(executor),
       estimator_buffer_(nullptr),
       host_estimator_buffer_(nullptr),
-      data_mgr_(nullptr) {
-}
+      data_mgr_(nullptr) {}
 
 ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
                      const std::vector<ColumnLazyFetchInfo>& lazy_fetch_info,
@@ -98,8 +97,7 @@ ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
       col_buffers_(col_buffers),
       estimator_buffer_(nullptr),
       host_estimator_buffer_(nullptr),
-      data_mgr_(nullptr) {
-}
+      data_mgr_(nullptr) {}
 
 ResultSet::ResultSet(const std::shared_ptr<const Analyzer::NDVEstimator> estimator,
                      const ExecutorDeviceType device_type,
@@ -135,8 +133,7 @@ ResultSet::ResultSet()
       crt_row_buff_idx_(0),
       estimator_buffer_(nullptr),
       host_estimator_buffer_(nullptr),
-      data_mgr_(nullptr) {
-}
+      data_mgr_(nullptr) {}
 
 ResultSet::~ResultSet() {
   if (storage_) {

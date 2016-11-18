@@ -5,8 +5,7 @@
 
 #include <glog/logging.h>
 
-SpeculativeTopNMap::SpeculativeTopNMap() : unknown_(0) {
-}
+SpeculativeTopNMap::SpeculativeTopNMap() : unknown_(0) {}
 
 SpeculativeTopNMap::SpeculativeTopNMap(const ResultRows& rows,
                                        const std::vector<Analyzer::Expr*>& target_exprs,

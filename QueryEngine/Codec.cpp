@@ -7,8 +7,7 @@
 #include <llvm/IR/Value.h>
 #include <llvm/IR/Module.h>
 
-FixedWidthInt::FixedWidthInt(const size_t byte_width) : byte_width_{byte_width} {
-}
+FixedWidthInt::FixedWidthInt(const size_t byte_width) : byte_width_{byte_width} {}
 
 llvm::Instruction* FixedWidthInt::codegenDecode(llvm::Value* byte_stream,
                                                 llvm::Value* pos,
@@ -21,8 +20,7 @@ llvm::Instruction* FixedWidthInt::codegenDecode(llvm::Value* byte_stream,
 }
 
 DiffFixedWidthInt::DiffFixedWidthInt(const size_t byte_width, const int64_t baseline)
-    : byte_width_{byte_width}, baseline_{baseline} {
-}
+    : byte_width_{byte_width}, baseline_{baseline} {}
 
 llvm::Instruction* DiffFixedWidthInt::codegenDecode(llvm::Value* byte_stream,
                                                     llvm::Value* pos,
@@ -37,8 +35,7 @@ llvm::Instruction* DiffFixedWidthInt::codegenDecode(llvm::Value* byte_stream,
   return llvm::CallInst::Create(f, args);
 }
 
-FixedWidthReal::FixedWidthReal(const bool is_double) : is_double_(is_double) {
-}
+FixedWidthReal::FixedWidthReal(const bool is_double) : is_double_(is_double) {}
 
 llvm::Instruction* FixedWidthReal::codegenDecode(llvm::Value* byte_stream,
                                                  llvm::Value* pos,
