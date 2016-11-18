@@ -103,19 +103,19 @@ download_make_install https://github.com/google/glog/archive/v0.3.4.tar.gz glog-
 
 CFLAGS="-fPIC" download_make_install ftp://ftp.gnu.org/gnu/readline/readline-6.3.tar.gz
 
-# http://downloads.sourceforge.net/project/boost/boost/1.57.0/boost_1_57_0.tar.bz2
-download https://internal-dependencies.mapd.com/thirdparty/boost_1_57_0.tar.bz2
-extract boost_1_57_0.tar.bz2
-pushd boost_1_57_0
+# http://downloads.sourceforge.net/project/boost/boost/1.62.0/boost_1_62_0.tar.bz2
+download https://internal-dependencies.mapd.com/thirdparty/boost_1_62_0.tar.bz2
+extract boost_1_62_0.tar.bz2
+pushd boost_1_62_0
 ./bootstrap.sh --prefix=$PREFIX
 ./b2 install --prefix=$PREFIX || true
 popd
 
-# http://www.cmake.org/files/v3.4/cmake-3.4.1.tar.gz
-download_make_install https://internal-dependencies.mapd.com/thirdparty//cmake-3.4.1.tar.gz
+# http://www.cmake.org/files/v3.7/cmake-3.7.0.tar.gz
+download_make_install https://internal-dependencies.mapd.com/thirdparty/cmake-3.7.0.tar.gz
 
 # llvm
-VERS=3.8.1
+VERS=3.9.0
 download http://llvm.org/releases/$VERS/llvm-$VERS.src.tar.xz
 download http://llvm.org/releases/$VERS/cfe-$VERS.src.tar.xz
 download http://llvm.org/releases/$VERS/compiler-rt-$VERS.src.tar.xz
@@ -181,9 +181,9 @@ popd
 # http://download.sourceforge.net/libpng/libpng-1.6.21.tar.xz
 download_make_install https://internal-dependencies.mapd.com/thirdparty/libpng-1.6.21.tar.xz
 
-# https://storage.googleapis.com/golang/go1.6.2.linux-amd64.tar.gz
-download https://internal-dependencies.mapd.com/thirdparty/go1.6.2.linux-amd64.tar.gz
-extract go1.6.2.linux-amd64.tar.gz
+# https://storage.googleapis.com/golang/go1.7.3.linux-amd64.tar.gz
+download https://internal-dependencies.mapd.com/thirdparty/go1.7.3.linux-amd64.tar.gz
+extract go1.7.3.linux-amd64.tar.gz
 mv go $PREFIX
 
 sed -e "s|%MAPD_DEPS_ROOT%|$PREFIX|g" mapd-deps.modulefile.in > mapd-deps-$SUFFIX.modulefile

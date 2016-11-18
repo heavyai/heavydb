@@ -39,6 +39,7 @@ MapD has the following dependencies:
 - [libpng](http://libpng.org/pub/png/libpng.html)
 - [libcurl](https://curl.haxx.se/)
 - [crypto++](https://www.cryptopp.com/)
+- [gperftools](https://github.com/gperftools/gperftools)
 
 Generating the documentation requires `pip`, `virtualenv`, and `texlive` (specifically `pdflatex`). `sphinx` will be installed automatically via `pip`.
 
@@ -55,7 +56,8 @@ Dependencies for `mapd_web_server` and other Go utils are in [`ThirdParty/go`](T
                    openldap-devel \
                    git \
                    maven \
-                   java-1.8.0-openjdk{-devel,-headless}
+                   java-1.8.0-openjdk{-devel,-headless} \
+                   gperftools{,-devel,-libs}
 
 For generating the documentation you will also need:
 
@@ -132,7 +134,9 @@ Most build dependencies are available via APT. Thrift is the one exception and m
                     maven \
                     libldap2-dev \
                     libncurses5-dev \
-                    libglewmx-dev
+                    libglewmx-dev \
+                    google-perftools \
+                    libgoogle-perftools-dev
 
     apt-get build-dep thrift-compiler
     wget http://apache.claz.org/thrift/0.9.3/thrift-0.9.3.tar.gz
