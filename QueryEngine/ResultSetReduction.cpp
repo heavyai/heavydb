@@ -257,6 +257,7 @@ GroupValueInfo get_matching_group_value_columnar_reduction(int64_t* groups_buffe
   return {&groups_buffer[off], false};
 }
 
+// TODO(alex): fix synchronization when we enable it
 GroupValueInfo get_group_value_columnar_reduction(int64_t* groups_buffer,
                                                   const uint32_t groups_buffer_entry_count,
                                                   const int64_t* key,
@@ -279,6 +280,11 @@ GroupValueInfo get_group_value_columnar_reduction(int64_t* groups_buffer,
   return {nullptr, true};
 }
 
+#define cas_cst(ptr, expected, desired) \
+  __atomic_compare_exchange_n(ptr, expected, desired, false, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST)
+#define store_cst(ptr, val) __atomic_store_n(ptr, val, __ATOMIC_SEQ_CST)
+#define load_cst(ptr) __atomic_load_n(ptr, __ATOMIC_SEQ_CST)
+
 GroupValueInfo get_matching_group_value_reduction(int64_t* groups_buffer,
                                                   const uint32_t h,
                                                   const int64_t* key,
@@ -286,16 +292,28 @@ GroupValueInfo get_matching_group_value_reduction(int64_t* groups_buffer,
                                                   const uint32_t row_size_quad,
                                                   const int64_t* init_vals) {
   auto off = h * row_size_quad;
-  const auto old_key = __sync_val_compare_and_swap(&groups_buffer[off], EMPTY_KEY_64, *key);
-  if (old_key == EMPTY_KEY_64) {
-    memcpy(groups_buffer + off, key, key_qw_count * sizeof(*key));
+  int64_t empty_key = EMPTY_KEY_64;
+  const bool success = cas_cst(&groups_buffer[off], &empty_key, *key);
+  if (success && key_qw_count > 1) {
+    for (size_t i = 1; i <= key_qw_count - 1; ++i) {
+      store_cst(groups_buffer + off + i, key[i]);
+    }
     return {groups_buffer + off + key_qw_count, true};
+  }
+  if (key_qw_count > 1) {
+    while (load_cst(groups_buffer + off + key_qw_count - 1) == EMPTY_KEY_64) {
+      // spin until the winning thread has finished writing the entire key and the init value
+    }
   }
   if (memcmp(groups_buffer + off, key, key_qw_count * sizeof(*key)) == 0) {
     return {groups_buffer + off + key_qw_count, false};
   }
   return {nullptr, true};
 }
+
+#undef load_cst
+#undef store_cst
+#undef cas_cst
 
 GroupValueInfo get_group_value_reduction(int64_t* groups_buffer,
                                          const uint32_t groups_buffer_entry_count,
