@@ -67,7 +67,7 @@ class MapDPreparedStatement implements PreparedStatement {
     this.client = client;
     this.session = session;
     MAPDLOGGER.debug("Prepared statement is " + currentSQL);
-    //TODO in real life this needs to check if the ? isinside quotes befoer we assume it a parameter
+    //TODO in real life this needs to check if the ? isinside quotes before we assume it a parameter
     brokenSQL = currentSQL.split("\\?");
     parmCount = brokenSQL.length - 1;
     parmRep = new String[parmCount];
@@ -106,8 +106,6 @@ class MapDPreparedStatement implements PreparedStatement {
       qsql = currentSQL;
     }
 
-    // remove the AS if it is after a from this can be removed after calcite comes online
-    qsql = qsql.replace(" AS ", " ");
     qsql = qsql.replace(" WHERE 1=0", " LIMIT 1 ");
     MAPDLOGGER.debug("Query is now " + qsql);
     return qsql;

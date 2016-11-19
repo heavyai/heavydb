@@ -376,35 +376,33 @@ public class MapDStatement implements java.sql.Statement {
           Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
   private static final Pattern WEEK = Pattern.compile("\\sWEEK\\(([^\\{]*?)",
           Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
-  private static final Pattern CAST = Pattern.compile("(\\sINTEGER\\)|\\sDATE\\)|\\sTIMESTAMP\\)|\\sFLOAT\\))",
-          Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
   private static final Pattern QUARTER_TRUNC = Pattern.compile(
-          "\\(\\(\\(CAST\\((.*?) DATE\\) \\+  FLOOR\\(\\(\\-1 \\* \\( EXTRACT\\(DAY FROM .*?\\) \\- 1\\)\\)\\) \\* INTERVAL '1' DAY\\) \\+  FLOOR\\(\\(\\-1 \\* \\( EXTRACT\\(MONTH FROM .*?\\) \\- 1\\)\\)\\) \\* INTERVAL '1' MONTH\\) \\+  FLOOR\\(\\(3 \\* \\( FLOOR\\( EXTRACT\\(QUARTER FROM .*?\\)\\) - 1\\)\\)\\) \\* INTERVAL '1' MONTH\\)",
+          "\\(\\(\\(CAST\\(([^\\(]*?) AS DATE\\) \\+  FLOOR\\(\\(\\-1 \\* \\( EXTRACT\\(DAY FROM .*?\\) \\- 1\\)\\)\\) \\* INTERVAL '1' DAY\\) \\+  FLOOR\\(\\(\\-1 \\* \\( EXTRACT\\(MONTH FROM .*?\\) \\- 1\\)\\)\\) \\* INTERVAL '1' MONTH\\) \\+  FLOOR\\(\\(3 \\* \\( FLOOR\\( EXTRACT\\(QUARTER FROM .*?\\)\\) - 1\\)\\)\\) \\* INTERVAL '1' MONTH\\)",
           Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
   private static final Pattern MONTH_TRUNC = Pattern.compile(
-          "\\(CAST\\((.*?) DATE\\) \\+  FLOOR\\(\\(\\-1 \\* \\( EXTRACT\\(DAY FROM .*?\\) \\- 1\\)\\)\\) \\* INTERVAL '1' DAY\\)",
+          "\\(CAST\\(([^\\(]*?) AS DATE\\) \\+  FLOOR\\(\\(\\-1 \\* \\( EXTRACT\\(DAY FROM .*?\\) \\- 1\\)\\)\\) \\* INTERVAL '1' DAY\\)",
           Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
   private static final Pattern YEAR_TRUNC = Pattern.compile(
-          "\\(\\(CAST\\((.*?) DATE\\) \\+  FLOOR\\(\\(\\-1 \\* \\( EXTRACT\\(DAY FROM .*?\\) \\- 1\\)\\)\\) \\* INTERVAL '1' DAY\\) \\+  FLOOR\\(\\(\\-1\\ \\* \\( EXTRACT\\(MONTH FROM .*?\\) \\- 1\\)\\)\\) \\* INTERVAL '1' MONTH\\)",
+          "\\(\\(CAST\\(([^\\(]*?) AS DATE\\) \\+  FLOOR\\(\\(\\-1 \\* \\( EXTRACT\\(DAY FROM .*?\\) \\- 1\\)\\)\\) \\* INTERVAL '1' DAY\\) \\+  FLOOR\\(\\(\\-1\\ \\* \\( EXTRACT\\(MONTH FROM .*?\\) \\- 1\\)\\)\\) \\* INTERVAL '1' MONTH\\)",
           Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
 
   private static final Pattern MINUTE_TRUNC = Pattern.compile(
-          "\\(\\(CAST\\((.*?) DATE\\) \\+  EXTRACT\\(HOUR FROM .*?\\) \\* INTERVAL '1' HOUR\\) \\+  EXTRACT\\(MINUTE FROM .*?\\) \\* INTERVAL '1' MINUTE\\)",
+          "\\(\\(CAST\\(([^\\(]*?) AS DATE\\) \\+  EXTRACT\\(HOUR FROM .*?\\) \\* INTERVAL '1' HOUR\\) \\+  EXTRACT\\(MINUTE FROM .*?\\) \\* INTERVAL '1' MINUTE\\)",
           Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
   private static final Pattern SECOND_TRUNC = Pattern.compile(
-          "\\(\\(\\(CAST\\((.*?) DATE\\) \\+  EXTRACT\\(HOUR FROM .*?\\) \\* INTERVAL '1' HOUR\\) \\+  EXTRACT\\(MINUTE FROM .*?\\) \\* INTERVAL '1' MINUTE\\) \\+  EXTRACT\\(SECOND FROM .*?\\) \\* INTERVAL '1' SECOND\\)",
+          "\\(\\(\\(CAST\\(([^\\(]*?) AS DATE\\) \\+  EXTRACT\\(HOUR FROM .*?\\) \\* INTERVAL '1' HOUR\\) \\+  EXTRACT\\(MINUTE FROM .*?\\) \\* INTERVAL '1' MINUTE\\) \\+  EXTRACT\\(SECOND FROM .*?\\) \\* INTERVAL '1' SECOND\\)",
           Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
 
   private static final Pattern YEAR1_TRUNC = Pattern.compile(
-          "\\(CAST\\((.*?) DATE\\) \\+  FLOOR\\(\\(\\-1 \\* \\( EXTRACT\\(DOY FROM .*?\\) \\- 1\\)\\)\\) \\* INTERVAL '1' DAY\\)",
+          "\\(CAST\\(([^\\(]*?) AS DATE\\) \\+  FLOOR\\(\\(\\-1 \\* \\( EXTRACT\\(DOY FROM .*?\\) \\- 1\\)\\)\\) \\* INTERVAL '1' DAY\\)",
           Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
 
   private static final Pattern QUARTER1_TRUNC = Pattern.compile(
-          "\\(\\(CAST\\((.*?) DATE\\) \\+  FLOOR\\(\\(\\-1 \\* \\( EXTRACT\\(DOY FROM .*?\\) \\- 1\\)\\)\\) \\* INTERVAL '1' DAY\\) \\+  FLOOR\\(\\(3 \\* \\( FLOOR\\( EXTRACT\\(QUARTER FROM .*?\\)\\) \\- 1\\)\\)\\) \\* INTERVAL '1' MONTH\\)",
+          "\\(\\(CAST\\(([^\\(]*?) AS DATE\\) \\+  FLOOR\\(\\(\\-1 \\* \\( EXTRACT\\(DOY FROM .*?\\) \\- 1\\)\\)\\) \\* INTERVAL '1' DAY\\) \\+  FLOOR\\(\\(3 \\* \\( FLOOR\\( EXTRACT\\(QUARTER FROM .*?\\)\\) \\- 1\\)\\)\\) \\* INTERVAL '1' MONTH\\)",
           Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
 
   private static final Pattern WEEK_TRUNC = Pattern.compile(
-          "\\(CAST\\((.*?) DATE\\) \\+ \\(\\-1 \\* \\( EXTRACT\\(ISODOW FROM .*?\\) \\- 1\\)\\) \\* INTERVAL '1' DAY\\)",
+          "\\(CAST\\(([^\\(]*?) AS DATE\\) \\+ \\(\\-1 \\* \\( EXTRACT\\(ISODOW FROM .*?\\) \\- 1\\)\\) \\* INTERVAL '1' DAY\\)",
           Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
 
   public static String fnReplace(String sql) {
@@ -464,9 +462,6 @@ public class MapDStatement implements java.sql.Statement {
       start = sql;
       sql = WEEK.matcher(sql).replaceAll(" EXTRACT(WEEK FROM $1");
     } while (!sql.equals(start));
-
-    //todo MAT this is wrong it is not going to work with general purpose casts
-    sql = CAST.matcher(sql).replaceAll(" AS$1");
 
     return sql;
   }
