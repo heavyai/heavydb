@@ -139,7 +139,9 @@ bool RelProject::isIdentity() const {
 namespace {
 
 bool isRenamedInput(const RelAlgNode* node, const size_t index, const std::string& new_name) {
-  CHECK_LT(index, node->size());
+  if (index >= node->size()) {
+    return false;
+  }
   if (auto join = dynamic_cast<const RelJoin*>(node)) {
     CHECK_EQ(size_t(2), join->inputCount());
     const auto lhs_size = join->getInput(0)->size();
