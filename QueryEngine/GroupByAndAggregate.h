@@ -248,18 +248,6 @@ inline std::string datum_to_string(const TargetValue& tv, const SQLTypeInfo& ti,
   return nullable_str_to_string(*sptr);
 }
 
-class ScopedScratchBuffer {
- public:
-  ScopedScratchBuffer(const size_t num_bytes, Data_Namespace::DataMgr* data_mgr, const int device_id)
-      : data_mgr_(data_mgr), ab_(alloc_gpu_abstract_buffer(data_mgr_, num_bytes, device_id)) {}
-  ~ScopedScratchBuffer() { data_mgr_->freeAllBuffers(); }
-  CUdeviceptr getPtr() const { return reinterpret_cast<CUdeviceptr>(ab_->getMemoryPtr()); }
-
- private:
-  Data_Namespace::DataMgr* data_mgr_;
-  Data_Namespace::AbstractBuffer* ab_;
-};
-
 }  // namespace
 
 inline std::string row_col_to_string(const ResultRows& rows,
