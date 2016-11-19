@@ -10,6 +10,7 @@
 #define THRUSTALLOCATOR_H
 
 #include <unordered_map>
+#include <vector>
 
 namespace Data_Namespace {
 class DataMgr;
@@ -20,15 +21,23 @@ class ThrustAllocator {
  public:
   typedef int8_t value_type;
   ThrustAllocator(Data_Namespace::DataMgr* mgr, const int id) : data_mgr_(mgr), device_id_(id) {}
+  ~ThrustAllocator();
 
   int8_t* allocate(std::ptrdiff_t num_bytes);
   void deallocate(int8_t* ptr, size_t num_bytes);
+
+  int8_t* allocateScopedBuffer(std::ptrdiff_t num_bytes);
+
+  Data_Namespace::DataMgr* getDataMgr() const { return data_mgr_; }
+
+  int getDeviceId() const { return device_id_; }
 
  private:
   Data_Namespace::DataMgr* data_mgr_;
   const int device_id_;
   typedef std::unordered_map<int8_t*, Data_Namespace::AbstractBuffer*> PtrMapperType;
   PtrMapperType raw_to_ab_ptr_;
+  std::vector<Data_Namespace::AbstractBuffer*> scoped_buffers_;
 };
 
 #endif /* THRUSTALLOCATOR_H */

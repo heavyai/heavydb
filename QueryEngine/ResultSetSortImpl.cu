@@ -1,30 +1,53 @@
 #include "ResultSetSortImpl.h"
-#include "ResultSetBufferAccessors.h"
+#include "BufferCompaction.h"
+#include "GpuMemUtils.h"
 #include "GpuRtConstants.h"
+#include "ResultSetBufferAccessors.h"
+#include "ThrustAllocator.h"
+
+#include "../DataMgr/DataMgr.h"
 
 #include <thrust/copy.h>
 #include <thrust/device_vector.h>
+#include <thrust/execution_policy.h>
 #include <thrust/host_vector.h>
 #include <thrust/sort.h>
 
 namespace {
 
 template <class V, class I>
-std::vector<uint32_t> do_radix_sort(const int8_t* groupby_buffer,
-                                    V& dev_oe_col_buffer,
-                                    I& dev_idx_buff,
+std::vector<uint32_t> do_radix_sort(const ExecutorDeviceType device_type,
+                                    ThrustAllocator& thrust_allocator,
+                                    const int8_t* groupby_buffer,
+                                    V dev_oe_col_buffer_begin,
+                                    V dev_oe_col_buffer_end,
+                                    I dev_idx_buff_begin,
+                                    const size_t dev_idx_buff_size,
                                     const PodOrderEntry& oe,
                                     const GroupByBufferLayoutInfo& layout,
                                     const size_t top_n) {
   if (oe.is_desc) {
-    thrust::sort_by_key(
-        dev_oe_col_buffer.begin(), dev_oe_col_buffer.end(), dev_idx_buff.begin(), thrust::greater<int64_t>());
+    if (device_type == ExecutorDeviceType::GPU) {
+      thrust::sort_by_key(thrust::device(thrust_allocator),
+                          dev_oe_col_buffer_begin,
+                          dev_oe_col_buffer_end,
+                          dev_idx_buff_begin,
+                          thrust::greater<int64_t>());
+    } else {
+      thrust::sort_by_key(
+          dev_oe_col_buffer_begin, dev_oe_col_buffer_end, dev_idx_buff_begin, thrust::greater<int64_t>());
+    }
   } else {
-    thrust::sort_by_key(dev_oe_col_buffer.begin(), dev_oe_col_buffer.end(), dev_idx_buff.begin());
+    if (device_type == ExecutorDeviceType::GPU) {
+      thrust::sort_by_key(
+          thrust::device(thrust_allocator), dev_oe_col_buffer_begin, dev_oe_col_buffer_end, dev_idx_buff_begin);
+    } else {
+      thrust::sort_by_key(dev_oe_col_buffer_begin, dev_oe_col_buffer_end, dev_idx_buff_begin);
+    }
   }
   // Speculatively transfer only the top_n first, most of the time it'll be enough.
-  thrust::host_vector<uint32_t> host_vector_result(dev_idx_buff.begin(),
-                                                   dev_idx_buff.begin() + std::min(top_n, dev_idx_buff.size()));
+  thrust::host_vector<uint32_t> host_vector_result(dev_idx_buff_begin,
+                                                   dev_idx_buff_begin + std::min(top_n, dev_idx_buff_size));
   // Sometimes, radix sort can bring to the front entries which are empty.
   // For example, ascending sort on COUNT(*) will bring non-existent groups
   // to the front of dev_idx_buff since they're 0 in our system. Re-do the
@@ -34,8 +57,7 @@ std::vector<uint32_t> do_radix_sort(const int8_t* groupby_buffer,
     const auto entry_idx = host_vector_result[i];
     const auto key_ptr = groupby_buffer + entry_idx * layout.row_bytes;
     if (*reinterpret_cast<const int64_t*>(key_ptr) == EMPTY_KEY_64) {
-      host_vector_result =
-          thrust::host_vector<uint32_t>(dev_idx_buff.begin(), dev_idx_buff.begin() + dev_idx_buff.size());
+      host_vector_result = thrust::host_vector<uint32_t>(dev_idx_buff_begin, dev_idx_buff_begin + dev_idx_buff_size);
       break;
     }
   }
@@ -50,7 +72,22 @@ void add_nulls(std::vector<uint32_t>& idx_buff, const std::vector<uint32_t>& nul
   idx_buff.insert(insertion_point, null_idx_buff.begin(), null_idx_buff.end());
 }
 
+template <typename T>
+thrust::device_ptr<T> get_device_copy_ptr(const thrust::host_vector<T>& host_vec, ThrustAllocator& thrust_allocator) {
+  CHECK(!host_vec.empty());
+  const auto host_vec_bytes = host_vec.size() * sizeof(T);
+  T* dev_ptr = reinterpret_cast<T*>(thrust_allocator.allocateScopedBuffer(align_to_int64(host_vec_bytes)));
+  copy_to_gpu(thrust_allocator.getDataMgr(),
+              reinterpret_cast<CUdeviceptr>(dev_ptr),
+              &host_vec[0],
+              host_vec_bytes,
+              thrust_allocator.getDeviceId());
+  return thrust::device_ptr<T>(dev_ptr);
+}
+
 std::vector<uint32_t> baseline_sort_fp(const ExecutorDeviceType device_type,
+                                       const int device_id,
+                                       Data_Namespace::DataMgr* data_mgr,
                                        const int8_t* groupby_buffer,
                                        const thrust::host_vector<int64_t>& oe_col_buffer,
                                        const PodOrderEntry& oe,
@@ -86,23 +123,60 @@ std::vector<uint32_t> baseline_sort_fp(const ExecutorDeviceType device_type,
     }
   }
   std::vector<uint32_t> pos_result;
+  ThrustAllocator thrust_allocator(data_mgr, device_id);
   if (device_type == ExecutorDeviceType::GPU) {
-    thrust::device_vector<uint32_t> dev_pos_idx_buff = pos_idx_buff;
-    thrust::device_vector<int64_t> dev_pos_oe_col_buffer = pos_oe_col_buffer;
-    pos_result = do_radix_sort(groupby_buffer, dev_pos_oe_col_buffer, dev_pos_idx_buff, oe, layout, top_n);
+    const auto dev_pos_idx_buff = get_device_copy_ptr(pos_idx_buff, thrust_allocator);
+    const auto dev_pos_oe_col_buffer = get_device_copy_ptr(pos_oe_col_buffer, thrust_allocator);
+    pos_result = do_radix_sort(device_type,
+                               thrust_allocator,
+                               groupby_buffer,
+                               dev_pos_oe_col_buffer,
+                               dev_pos_oe_col_buffer + pos_oe_col_buffer.size(),
+                               dev_pos_idx_buff,
+                               pos_idx_buff.size(),
+                               oe,
+                               layout,
+                               top_n);
   } else {
     CHECK(device_type == ExecutorDeviceType::CPU);
-    pos_result = do_radix_sort(groupby_buffer, pos_oe_col_buffer, pos_idx_buff, oe, layout, top_n);
+    pos_result = do_radix_sort(device_type,
+                               thrust_allocator,
+                               groupby_buffer,
+                               pos_oe_col_buffer.begin(),
+                               pos_oe_col_buffer.end(),
+                               pos_idx_buff.begin(),
+                               pos_idx_buff.size(),
+                               oe,
+                               layout,
+                               top_n);
   }
   std::vector<uint32_t> neg_result;
   PodOrderEntry reverse_oe{oe.tle_no, !oe.is_desc, oe.nulls_first};
   if (device_type == ExecutorDeviceType::GPU) {
-    thrust::device_vector<uint32_t> dev_neg_idx_buff = neg_idx_buff;
-    thrust::device_vector<int64_t> dev_neg_oe_col_buffer = neg_oe_col_buffer;
-    neg_result = do_radix_sort(groupby_buffer, dev_neg_oe_col_buffer, dev_neg_idx_buff, reverse_oe, layout, top_n);
+    const auto dev_neg_idx_buff = get_device_copy_ptr(neg_idx_buff, thrust_allocator);
+    const auto dev_neg_oe_col_buffer = get_device_copy_ptr(neg_oe_col_buffer, thrust_allocator);
+    neg_result = do_radix_sort(device_type,
+                               thrust_allocator,
+                               groupby_buffer,
+                               dev_neg_oe_col_buffer,
+                               dev_neg_oe_col_buffer + neg_oe_col_buffer.size(),
+                               dev_neg_idx_buff,
+                               neg_idx_buff.size(),
+                               reverse_oe,
+                               layout,
+                               top_n);
   } else {
     CHECK(device_type == ExecutorDeviceType::CPU);
-    neg_result = do_radix_sort(groupby_buffer, neg_oe_col_buffer, neg_idx_buff, reverse_oe, layout, top_n);
+    neg_result = do_radix_sort(device_type,
+                               thrust_allocator,
+                               groupby_buffer,
+                               neg_oe_col_buffer.begin(),
+                               neg_oe_col_buffer.end(),
+                               neg_idx_buff.begin(),
+                               neg_idx_buff.size(),
+                               reverse_oe,
+                               layout,
+                               top_n);
   }
   if (oe.is_desc) {
     pos_result.insert(pos_result.end(), neg_result.begin(), neg_result.end());
@@ -115,6 +189,8 @@ std::vector<uint32_t> baseline_sort_fp(const ExecutorDeviceType device_type,
 }
 
 std::vector<uint32_t> baseline_sort_int(const ExecutorDeviceType device_type,
+                                        const int device_id,
+                                        Data_Namespace::DataMgr* data_mgr,
                                         const int8_t* groupby_buffer,
                                         const thrust::host_vector<int64_t>& oe_col_buffer,
                                         const PodOrderEntry& oe,
@@ -140,13 +216,32 @@ std::vector<uint32_t> baseline_sort_int(const ExecutorDeviceType device_type,
     }
   }
   std::vector<uint32_t> notnull_result;
+  ThrustAllocator thrust_allocator(data_mgr, device_id);
   if (device_type == ExecutorDeviceType::GPU) {
-    thrust::device_vector<uint32_t> dev_notnull_idx_buff = notnull_idx_buff;
-    thrust::device_vector<int64_t> dev_notnull_oe_col_buffer = notnull_oe_col_buffer;
-    notnull_result = do_radix_sort(groupby_buffer, dev_notnull_oe_col_buffer, dev_notnull_idx_buff, oe, layout, top_n);
+    const auto dev_notnull_idx_buff = get_device_copy_ptr(notnull_idx_buff, thrust_allocator);
+    const auto dev_notnull_oe_col_buffer = get_device_copy_ptr(notnull_oe_col_buffer, thrust_allocator);
+    notnull_result = do_radix_sort(device_type,
+                                   thrust_allocator,
+                                   groupby_buffer,
+                                   dev_notnull_oe_col_buffer,
+                                   dev_notnull_oe_col_buffer + notnull_oe_col_buffer.size(),
+                                   dev_notnull_idx_buff,
+                                   notnull_idx_buff.size(),
+                                   oe,
+                                   layout,
+                                   top_n);
   } else {
     CHECK(device_type == ExecutorDeviceType::CPU);
-    notnull_result = do_radix_sort(groupby_buffer, notnull_oe_col_buffer, notnull_idx_buff, oe, layout, top_n);
+    notnull_result = do_radix_sort(device_type,
+                                   thrust_allocator,
+                                   groupby_buffer,
+                                   notnull_oe_col_buffer.begin(),
+                                   notnull_oe_col_buffer.end(),
+                                   notnull_idx_buff.begin(),
+                                   notnull_idx_buff.size(),
+                                   oe,
+                                   layout,
+                                   top_n);
   }
   add_nulls(notnull_result, null_idx_buff, oe);
   return notnull_result;
@@ -180,10 +275,19 @@ thrust::host_vector<int64_t> collect_order_entry_column(const int8_t* groupby_bu
   return oe_col_buffer;
 }
 
+template <typename T>
+thrust::device_ptr<T> get_device_ptr(const size_t host_vec_size, ThrustAllocator& thrust_allocator) {
+  CHECK_GT(host_vec_size, size_t(0));
+  const auto host_vec_bytes = host_vec_size * sizeof(T);
+  T* dev_ptr = reinterpret_cast<T*>(thrust_allocator.allocateScopedBuffer(align_to_int64(host_vec_bytes)));
+  return thrust::device_ptr<T>(dev_ptr);
+}
+
 }  // namespace
 
 std::vector<uint32_t> baseline_sort(const ExecutorDeviceType device_type,
                                     const int device_id,
+                                    Data_Namespace::DataMgr* data_mgr,
                                     const int8_t* groupby_buffer,
                                     const PodOrderEntry& oe,
                                     const GroupByBufferLayoutInfo& layout,
@@ -194,23 +298,44 @@ std::vector<uint32_t> baseline_sort(const ExecutorDeviceType device_type,
   const auto& entry_ti = get_compact_type(layout.oe_target_info);
   CHECK(entry_ti.is_number());
   if (entry_ti.is_fp() || layout.oe_target_info.agg_kind == kAVG) {
-    return baseline_sort_fp(device_type, groupby_buffer, oe_col_buffer, oe, layout, top_n, start, step);
+    return baseline_sort_fp(
+        device_type, device_id, data_mgr, groupby_buffer, oe_col_buffer, oe, layout, top_n, start, step);
   }
   // Because of how we represent nulls for integral types, they'd be at the
   // wrong position in these two cases. Separate them into a different buffer.
   if ((oe.is_desc && oe.nulls_first) || (!oe.is_desc && !oe.nulls_first)) {
-    return baseline_sort_int(device_type, groupby_buffer, oe_col_buffer, oe, layout, top_n, start, step);
+    return baseline_sort_int(
+        device_type, device_id, data_mgr, groupby_buffer, oe_col_buffer, oe, layout, top_n, start, step);
   }
+  ThrustAllocator thrust_allocator(data_mgr, device_id);
   // Fastest path, no need to separate nulls away since they'll end up at the
   // right place as a side effect of how we're representing nulls.
   if (device_type == ExecutorDeviceType::GPU) {
-    thrust::device_vector<uint32_t> dev_idx_buff(oe_col_buffer.size());
-    thrust::sequence(dev_idx_buff.begin(), dev_idx_buff.end(), start, step);
-    thrust::device_vector<int64_t> dev_oe_col_buffer = oe_col_buffer;
-    return do_radix_sort(groupby_buffer, dev_oe_col_buffer, dev_idx_buff, oe, layout, top_n);
+    const auto dev_idx_buff = get_device_ptr<uint32_t>(oe_col_buffer.size(), thrust_allocator);
+    thrust::sequence(dev_idx_buff, dev_idx_buff + oe_col_buffer.size(), start, step);
+    const auto dev_oe_col_buffer = get_device_copy_ptr(oe_col_buffer, thrust_allocator);
+    return do_radix_sort(device_type,
+                         thrust_allocator,
+                         groupby_buffer,
+                         dev_oe_col_buffer,
+                         dev_oe_col_buffer + oe_col_buffer.size(),
+                         dev_idx_buff,
+                         oe_col_buffer.size(),
+                         oe,
+                         layout,
+                         top_n);
   }
   CHECK(device_type == ExecutorDeviceType::CPU);
   thrust::host_vector<uint32_t> host_idx_buff(oe_col_buffer.size());
   thrust::sequence(host_idx_buff.begin(), host_idx_buff.end(), start, step);
-  return do_radix_sort(groupby_buffer, oe_col_buffer, host_idx_buff, oe, layout, top_n);
+  return do_radix_sort(device_type,
+                       thrust_allocator,
+                       groupby_buffer,
+                       oe_col_buffer.begin(),
+                       oe_col_buffer.end(),
+                       host_idx_buff.begin(),
+                       host_idx_buff.size(),
+                       oe,
+                       layout,
+                       top_n);
 }

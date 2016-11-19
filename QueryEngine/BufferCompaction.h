@@ -25,7 +25,7 @@ inline unsigned compact_byte_width(unsigned qw, unsigned low_bound) {
 #endif
 
 template <typename T>
-FORCE_INLINE DEVICE T align_to_int64(T addr) {
+FORCE_INLINE HOST DEVICE T align_to_int64(T addr) {
   addr += sizeof(int64_t) - 1;
   return (T)(((uint64_t)addr >> 3) << 3);
 }

@@ -302,3 +302,15 @@ void ThrustAllocator::deallocate(int8_t* ptr, size_t num_bytes) {
   data_mgr_->free(ab_it->second);
   raw_to_ab_ptr_.erase(ab_it);
 }
+
+int8_t* ThrustAllocator::allocateScopedBuffer(std::ptrdiff_t num_bytes) {
+  Data_Namespace::AbstractBuffer* ab = alloc_gpu_abstract_buffer(data_mgr_, num_bytes, device_id_);
+  scoped_buffers_.push_back(ab);
+  return reinterpret_cast<int8_t*>(ab->getMemoryPtr());
+}
+
+ThrustAllocator::~ThrustAllocator() {
+  for (auto ab : scoped_buffers_) {
+    data_mgr_->free(ab);
+  }
+}

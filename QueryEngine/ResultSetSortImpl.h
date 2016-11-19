@@ -18,8 +18,15 @@ struct GroupByBufferLayoutInfo {
   const TargetInfo oe_target_info;
 };
 
+namespace Data_Namespace {
+
+class DataMgr;
+
+}  // Data_Namespace
+
 std::vector<uint32_t> baseline_sort(const ExecutorDeviceType device_type,
                                     const int device_id,
+                                    Data_Namespace::DataMgr* data_mgr,
                                     const int8_t* groupby_buffer,
                                     const PodOrderEntry& oe,
                                     const GroupByBufferLayoutInfo& layout,

@@ -57,9 +57,10 @@ void ResultSet::doBaselineSort(const ExecutorDeviceType device_type,
         data_mgr.cudaMgr_->setContext(start);
       }
       top_futures.emplace_back(std::async(
-          std::launch::async, [&strided_permutations, device_type, groupby_buffer, pod_oe, layout, top_n, start, step] {
+          std::launch::async,
+          [&strided_permutations, &data_mgr, device_type, groupby_buffer, pod_oe, layout, top_n, start, step] {
             strided_permutations[start] =
-                baseline_sort(device_type, start, groupby_buffer, pod_oe, layout, top_n, start, step);
+                baseline_sort(device_type, start, &data_mgr, groupby_buffer, pod_oe, layout, top_n, start, step);
           }));
     }
     for (auto& top_future : top_futures) {
@@ -73,7 +74,7 @@ void ResultSet::doBaselineSort(const ExecutorDeviceType device_type,
     topPermutation(permutation_, top_n, compare);
     return;
   } else {
-    permutation_ = baseline_sort(device_type, 0, groupby_buffer, pod_oe, layout, top_n, 0, 1);
+    permutation_ = baseline_sort(device_type, 0, &data_mgr, groupby_buffer, pod_oe, layout, top_n, 0, 1);
   }
 }
 
