@@ -40,7 +40,7 @@ var (
 	keyFile       string
 	docsDir       string
 	readOnly      bool
-	quiet         bool
+	verbose       bool
 	enableHttps   bool
 	profile       bool
 	compress      bool
@@ -95,7 +95,8 @@ func init() {
 	pflag.StringP("config", "c", "", "path to MapD configuration file")
 	pflag.StringP("docs", "", "docs", "path to documentation directory")
 	pflag.BoolP("read-only", "r", false, "enable read-only mode")
-	pflag.BoolP("quiet", "q", false, "suppress non-error messages")
+	pflag.BoolP("quiet", "q", true, "suppress non-error messages")
+	pflag.BoolP("verbose", "v", false, "print all log messages to stdout")
 	pflag.BoolP("enable-https", "", false, "enable HTTPS support")
 	pflag.StringP("cert", "", "cert.pem", "certificate file for HTTPS")
 	pflag.StringP("key", "", "key.pem", "key file for HTTPS")
@@ -107,6 +108,7 @@ func init() {
 	pflag.CommandLine.MarkHidden("compress")
 	pflag.CommandLine.MarkHidden("profile")
 	pflag.CommandLine.MarkHidden("metrics")
+	pflag.CommandLine.MarkHidden("quiet")
 
 	pflag.Parse()
 
@@ -128,6 +130,7 @@ func init() {
 	viper.BindPFlag("config", pflag.CommandLine.Lookup("config"))
 	viper.BindPFlag("read-only", pflag.CommandLine.Lookup("read-only"))
 	viper.BindPFlag("quiet", pflag.CommandLine.Lookup("quiet"))
+	viper.BindPFlag("verbose", pflag.CommandLine.Lookup("verbose"))
 	viper.BindPFlag("version", pflag.CommandLine.Lookup("version"))
 
 	viper.SetDefault("http-port", 9090)
@@ -160,9 +163,14 @@ func init() {
 	docsDir = viper.GetString("web.docs")
 	serversJson = viper.GetString("web.servers-json")
 
+	if viper.IsSet("quiet") && !viper.IsSet("verbose") {
+		log.Println("Option --quiet is deprecated and has been replaced by --verbose=false, which is enabled by default.")
+		verbose = !viper.GetBool("quiet")
+	} else {
+		verbose = viper.GetBool("verbose")
+	}
 	dataDir = viper.GetString("data")
 	readOnly = viper.GetBool("read-only")
-	quiet = viper.GetBool("quiet")
 	connTimeout = viper.GetDuration("web.timeout")
 	profile = viper.GetBool("web.profile")
 	compress = viper.GetBool("web.compress")
@@ -497,7 +505,7 @@ func main() {
 	defer alf.Close()
 
 	var alog io.Writer
-	if quiet {
+	if !verbose {
 		log.SetOutput(lf)
 		alog = alf
 	} else {

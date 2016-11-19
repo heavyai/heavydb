@@ -2,7 +2,7 @@ port = 9091
 http-port = 9090
 data = "data"
 read-only = false
-quiet = false
+verbose = false
 
 [web]
 port = 9092

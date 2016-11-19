@@ -57,6 +57,8 @@ while (( $# )); do
             HTTPS_KEY="--key $1" ;;
         --non-interactive)
             NON_INTERACTIVE=true ;;
+        --verbose)
+            VERBOSE="--verbose" ;;
         *)
             break ;;
     esac
@@ -104,7 +106,7 @@ if [ "$INSERT_SAMPLE_DATA" = true ]; then
 fi
 
 if [ -d frontend ] && [ -e ./bin/mapd_web_server ]; then
-    ./bin/mapd_web_server $RO --port $MAPD_WEB_PORT --backend-url "http://localhost:${MAPD_HTTP_PORT}" --data $MAPD_DATA $HTTPS $HTTPS_CERT $HTTPS_KEY &
+    ./bin/mapd_web_server $RO --port $MAPD_WEB_PORT --backend-url "http://localhost:${MAPD_HTTP_PORT}" --data $MAPD_DATA $HTTPS $HTTPS_CERT $HTTPS_KEY $VERBOSE &
 
     if [ ! -z "$HTTPS" ] ; then
         MAPDFRONTEND="https://localhost:${MAPD_WEB_PORT}"
