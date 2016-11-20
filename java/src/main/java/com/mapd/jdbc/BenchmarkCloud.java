@@ -44,13 +44,12 @@ public class BenchmarkCloud {
   Connection bencherCon;
   private List<String> LResult = new ArrayList<String>();
 
-  private String headDescriptor = "%3s  %8s %8s %8s %8s %8s %8s %8s %8s %8s %8s %8s %8s %8s %8s %8s %8s %8s %8s %8s %8s %8s %8s %8s %8s";
-  private String header2 = "Q       Total                             Execute                                                  JDBC                             Iterate                               First";
-  private String header1 = String.format(headDescriptor, "", "Avg", "Min", "Max", "85%",
-          "Avg", "Min", "Max", "85%", "25%", "StdD",
-          "Avg", "Min", "Max", "85%",
-          "Avg", "Min", "Max", "85%",
-          "Exec", "jdbc", "iter", "IT", "Total", "Acc");
+  private String headDescriptor = "%3s, %8s,%8s,%8s,%8s,%8s,%8s,%8s,%8s,%8s,%8s,%8s,%8s,%8s,%8s,%8s,%8s,%8s,%8s,%8s,%8s,%8s,%8s,%8s,%8s";
+  private String header2 = String.format(headDescriptor, "QRY", "T-Avg", "T-Min", "T-Max", "T-85%",
+          "E-Avg", "E-Min", "E-Max", "E-85%","E-25%", "E-StdD",
+          "J-Avg", "J-Min", "J-Max", "J-85%",
+          "I-Avg", "I-Min", "I-Max", "I-85%",
+          "F-Exec", "F-jdbc", "F-iter", "ITER", "Total", "Account");
   private String lineDescriptor = "%3s, %8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8d,%8d,%8d,%8d,%8d,%8d";
   private String insertDescriptor = "('%s','%s','%s','%s','%s',%s,'%s','%s',%d,'%s', %8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8.1f,%8d,%8d,%8d,%8d,%8d,%8d, '%s')";
 
@@ -135,7 +134,6 @@ public class BenchmarkCloud {
     storeResults();
 
     // All done dump out results
-    System.out.println(header1);
     System.out.println(header2);
     for (String s : resultArray) {
       System.out.println(s);
