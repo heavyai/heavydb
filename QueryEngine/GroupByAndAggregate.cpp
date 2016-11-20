@@ -1471,7 +1471,7 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
           (!sort_on_gpu_hint || !many_entries(col_range_info.max, col_range_info.min, col_range_info.bucket)) &&
           !col_range_info.bucket && keyless_info.keyless;
       size_t bin_count = getBucketedCardinality(col_range_info);
-      const size_t interleaved_max_threshold{20};
+      const size_t interleaved_max_threshold{256};
       bool interleaved_bins = keyless && (bin_count <= interleaved_max_threshold);
       query_mem_desc_ = {executor_,
                          allow_multifrag,
