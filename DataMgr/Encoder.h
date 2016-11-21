@@ -5,7 +5,6 @@
 #include "../Shared/types.h"
 #include "../Shared/sqltypes.h"
 
-#include <glog/logging.h>
 #include <vector>
 #include <iostream>
 #include <stdexcept>

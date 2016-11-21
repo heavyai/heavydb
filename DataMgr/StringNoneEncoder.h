@@ -11,6 +11,7 @@
 #include <vector>
 #include <string>
 #include <cassert>
+#include <glog/logging.h>
 #include "AbstractBuffer.h"
 #include "ChunkMetadata.h"
 #include "Encoder.h"

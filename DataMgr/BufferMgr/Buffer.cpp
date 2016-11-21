@@ -9,6 +9,7 @@
 //
 #include <cassert>
 #include <stdexcept>
+#include <glog/logging.h>
 
 #include "Buffer.h"
 #include "BufferMgr.h"

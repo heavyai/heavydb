@@ -1,6 +1,7 @@
 #include "GpuCudaBuffer.h"
 #include "../../../CudaMgr/CudaMgr.h"
 
+#include <glog/logging.h>
 #include <assert.h>
 
 namespace Buffer_Namespace {

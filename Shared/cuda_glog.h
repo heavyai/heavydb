@@ -15,4 +15,11 @@
     }                      \
   }
 
+#define CHECK_GT(val, ref) \
+  {                        \
+    if ((val) <= (ref)) {  \
+      abort();             \
+    }                      \
+  }
+
 #endif  // SHARED_CUDA_GLOG_H

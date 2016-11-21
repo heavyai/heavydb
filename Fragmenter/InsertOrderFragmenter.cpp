@@ -1,6 +1,7 @@
 #include "InsertOrderFragmenter.h"
 #include "../DataMgr/DataMgr.h"
 #include "../DataMgr/AbstractBuffer.h"
+#include <glog/logging.h>
 #include <math.h>
 #include <iostream>
 #include <thread>

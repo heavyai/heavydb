@@ -1,5 +1,6 @@
 #include "CpuBuffer.h"
 #include "../../../CudaMgr/CudaMgr.h"
+#include <glog/logging.h>
 #include <cstring>
 #include <assert.h>
 
