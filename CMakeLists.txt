@@ -298,6 +298,8 @@ target_link_libraries (initdb Shared Catalog Fragmenter Chunk SqliteConnector Da
 
 # Packaging
 set(CPACK_PACKAGE_VENDOR "MapD Technologies, Inc.")
+set(CPACK_PACKAGE_CONTACT "support@mapd.com")
+set(CPACK_PACKAGING_INSTALL_PREFIX "/opt/mapd")
 
 # Frontend
 if (MAPD_USE_IMMERSEV2)
