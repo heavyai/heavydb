@@ -1,37 +1,10 @@
-Client Interfaces
-=================
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
 
-``Apache Thrift``
-~~~~~~~~~~~~~~~~~
-
-MapD uses `Apache Thrift <https://thrift.apache.org>`__ to generate
-client-side interfaces. The *interface definitions* are in
-``$MAPD_PATH/mapd.thrift``. See Apache Thrift documentation on how to
-generate client-side interfaces for different programming languages with
-Thrift. Also see ``$MAPD_PATH/samples`` for sample client code.
-
-``JDBC``
-~~~~~~~~
-
-Mapd also supports JDBC connections
-
-The jar is available at ``$MAPD_PATH/bin/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar``
-
-The driver is ``com.mapd.jdbc.MapDDriver``
-
-The URL is ``jdbc:mapd:<machine>:<port>:<dbname>``
-
-Example java code, available in ``$MAPD_PATH/samples``:
-
-::
-
-  import java.sql.Connection;
-  import java.sql.DriverManager;
-  import java.sql.ResultSet;
-  import java.sql.SQLException;
-  import java.sql.Statement;
-
-  public class SampleJDBC {
+public class SampleJDBC {
 
   // JDBC driver name and database URL
   static final String JDBC_DRIVER = "com.mapd.jdbc.MapDDriver";
@@ -91,11 +64,4 @@ Example java code, available in ``$MAPD_PATH/samples``:
       }//end finally try
     }//end try
   }//end main
-  }//end SampleJDBC
-
-To compile and excute this example:
-
-::
-
-	javac SampleJDBC.java
-        java -cp $MAPD_PATH/bin/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar:./  SampleJDBC
+}//end SampleJDBC
