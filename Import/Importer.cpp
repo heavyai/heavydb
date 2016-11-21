@@ -961,8 +961,8 @@ ImportStatus Importer::import() {
   return importDelimited();
 }
 
-#define IMPORT_FILE_BUFFER_SIZE 100000000
-#define MIN_FILE_BUFFER_SIZE 1000000
+#define IMPORT_FILE_BUFFER_SIZE 100000000  //100M file size
+#define MIN_FILE_BUFFER_SIZE 50000  //50K min buffer
 
 ImportStatus Importer::importDelimited() {
   set_import_status(import_id, import_status);
@@ -976,9 +976,14 @@ ImportStatus Importer::importDelimited() {
     max_threads = sysconf(_SC_NPROCESSORS_CONF);
   else
     max_threads = copy_params.threads;
-  buffer[0] = (char*)checked_malloc(IMPORT_FILE_BUFFER_SIZE);
-  if (max_threads > 1)
-    buffer[1] = (char*)checked_malloc(IMPORT_FILE_BUFFER_SIZE);
+  // deal with small files
+  size_t alloc_size = IMPORT_FILE_BUFFER_SIZE;
+  if (file_size < alloc_size){
+    alloc_size = file_size;
+  }
+  buffer[0] = (char*)checked_malloc(alloc_size);
+  if (max_threads > 1 && file_size > alloc_size)
+    buffer[1] = (char*)checked_malloc(alloc_size);
   for (int i = 0; i < max_threads; i++) {
     import_buffers_vec.push_back(std::vector<std::unique_ptr<TypedImportBuffer>>());
     for (const auto cd : loader.get_column_descs())
@@ -988,7 +993,7 @@ ImportStatus Importer::importDelimited() {
   size_t current_pos = 0;
   size_t end_pos;
   (void)fseek(p_file, current_pos, SEEK_SET);
-  size_t size = fread((void*)buffer[which_buf], 1, IMPORT_FILE_BUFFER_SIZE, p_file);
+  size_t size = fread((void*)buffer[which_buf], 1, alloc_size, p_file);
   bool eof_reached = false;
   size_t begin_pos = 0;
   if (copy_params.has_header) {
@@ -1004,7 +1009,7 @@ ImportStatus Importer::importDelimited() {
       end_pos = size;
     else
       end_pos = find_end(buffer[which_buf], size, copy_params);
-    if (size < IMPORT_FILE_BUFFER_SIZE) {
+    if (size <= alloc_size) {
       max_threads = std::min(max_threads, (int)std::ceil((double)(end_pos - begin_pos) / MIN_FILE_BUFFER_SIZE));
     }
     if (max_threads == 1) {
