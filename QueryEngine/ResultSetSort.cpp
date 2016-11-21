@@ -70,7 +70,7 @@ void ResultSet::doBaselineSort(const ExecutorDeviceType device_type,
     for (const auto& strided_permutation : strided_permutations) {
       permutation_.insert(permutation_.end(), strided_permutation.begin(), strided_permutation.end());
     }
-    auto compare = createComparator(order_entries, true, true);
+    auto compare = createComparator(order_entries, true);
     topPermutation(permutation_, top_n, compare);
     return;
   } else {

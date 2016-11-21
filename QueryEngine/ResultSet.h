@@ -265,8 +265,7 @@ class ResultSet {
 
   std::function<bool(const uint32_t, const uint32_t)> createComparator(
       const std::list<Analyzer::OrderEntry>& order_entries,
-      const bool use_heap,
-      const bool remove_empty_entries) const;
+      const bool use_heap) const;
 
   static void topPermutation(std::vector<uint32_t>& to_sort,
                              const size_t n,

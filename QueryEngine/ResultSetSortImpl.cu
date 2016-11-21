@@ -15,6 +15,11 @@
 
 namespace {
 
+bool is_empty_entry(const size_t entry_idx, const int8_t* groupby_buffer, const GroupByBufferLayoutInfo& layout) {
+  const auto key_ptr = groupby_buffer + entry_idx * layout.row_bytes;
+  return (*reinterpret_cast<const int64_t*>(key_ptr) == EMPTY_KEY_64);
+}
+
 template <class V, class I>
 std::vector<uint32_t> do_radix_sort(const ExecutorDeviceType device_type,
                                     ThrustAllocator& thrust_allocator,
@@ -55,13 +60,23 @@ std::vector<uint32_t> do_radix_sort(const ExecutorDeviceType device_type,
   // in row iteration will take care of skipping the empty rows.
   for (size_t i = 0; i < host_vector_result.size(); ++i) {
     const auto entry_idx = host_vector_result[i];
-    const auto key_ptr = groupby_buffer + entry_idx * layout.row_bytes;
-    if (*reinterpret_cast<const int64_t*>(key_ptr) == EMPTY_KEY_64) {
+    if (is_empty_entry(entry_idx, groupby_buffer, layout)) {
       host_vector_result = thrust::host_vector<uint32_t>(dev_idx_buff_begin, dev_idx_buff_begin + dev_idx_buff_size);
       break;
     }
   }
-  return std::vector<uint32_t>(host_vector_result.begin(), host_vector_result.end());
+  std::vector<uint32_t> result;
+  result.reserve(std::min(top_n, host_vector_result.size()));
+  for (size_t i = 0; i < host_vector_result.size(); ++i) {
+    const auto entry_idx = host_vector_result[i];
+    if (!is_empty_entry(entry_idx, groupby_buffer, layout)) {
+      result.push_back(entry_idx);
+      if (result.size() >= top_n) {
+        break;
+      }
+    }
+  }
+  return result;
 }
 
 void add_nulls(std::vector<uint32_t>& idx_buff, const std::vector<uint32_t>& null_idx_buff, const PodOrderEntry& oe) {
@@ -110,7 +125,8 @@ std::vector<uint32_t> baseline_sort_fp(const ExecutorDeviceType device_type,
   const auto col_ti =
       layout.oe_target_info.agg_kind == kAVG ? SQLTypeInfo(kDOUBLE, false) : layout.oe_target_info.sql_type;
   for (size_t i = start; i < layout.entry_count; i += step, ++oe_col_buffer_idx) {
-    if (oe_col_buffer[oe_col_buffer_idx] == null_val_bit_pattern(col_ti)) {
+    if (!is_empty_entry(i, groupby_buffer, layout) &&
+        oe_col_buffer[oe_col_buffer_idx] == null_val_bit_pattern(col_ti)) {
       null_idx_buff.push_back(i);
       continue;
     }
@@ -208,7 +224,8 @@ std::vector<uint32_t> baseline_sort_int(const ExecutorDeviceType device_type,
   notnull_oe_col_buffer.reserve(slice_entry_count);
   size_t oe_col_buffer_idx = 0;
   for (size_t i = start; i < layout.entry_count; i += step, ++oe_col_buffer_idx) {
-    if (oe_col_buffer[oe_col_buffer_idx] == null_val_bit_pattern(entry_ti)) {
+    if (!is_empty_entry(i, groupby_buffer, layout) &&
+        oe_col_buffer[oe_col_buffer_idx] == null_val_bit_pattern(entry_ti)) {
       null_idx_buff.push_back(i);
     } else {
       notnull_idx_buff.push_back(i);
