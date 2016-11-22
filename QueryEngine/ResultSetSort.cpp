@@ -100,7 +100,7 @@ bool ResultSet::canUseFastBaselineSort(const std::list<Analyzer::OrderEntry>& or
     return false;
   }
   return query_mem_desc_.hash_type == GroupByColRangeType::MultiCol && !query_mem_desc_.getSmallBufferSizeQuad() &&
-         top_n && false;
+         top_n;
 }
 
 Data_Namespace::DataMgr* ResultSet::getDataManager() const {
