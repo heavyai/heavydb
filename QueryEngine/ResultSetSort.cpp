@@ -53,12 +53,12 @@ void ResultSet::doBaselineSort(const ExecutorDeviceType device_type,
     std::vector<std::future<void>> top_futures;
     std::vector<std::vector<uint32_t>> strided_permutations(step);
     for (size_t start = 0; start < step; ++start) {
-      if (device_type == ExecutorDeviceType::GPU) {
-        data_mgr.cudaMgr_->setContext(start);
-      }
       top_futures.emplace_back(std::async(
           std::launch::async,
           [&strided_permutations, &data_mgr, device_type, groupby_buffer, pod_oe, layout, top_n, start, step] {
+            if (device_type == ExecutorDeviceType::GPU) {
+              data_mgr.cudaMgr_->setContext(start);
+            }
             strided_permutations[start] =
                 baseline_sort(device_type, start, &data_mgr, groupby_buffer, pod_oe, layout, top_n, start, step);
           }));
