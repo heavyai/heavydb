@@ -10,6 +10,7 @@
 #define QUERYENGINE_TARGETVALUE_H
 
 #include <boost/variant.hpp>
+#include <glog/logging.h>
 
 #include <cstdint>
 #include <string>

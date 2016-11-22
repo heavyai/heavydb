@@ -5,6 +5,7 @@
  *
  * Copyright (c) 2014 MapD Technologies, Inc.  All rights reserved.
  */
+#include "ResultSetTestUtils.h"
 
 #include "../QueryEngine/ResultRows.h"
 #include "../QueryEngine/ResultSet.h"
@@ -33,14 +34,6 @@ TEST(Construct, Allocate) {
 }
 
 namespace {
-
-size_t get_slot_count(const std::vector<TargetInfo>& target_infos) {
-  size_t count = 0;
-  for (const auto& target_info : target_infos) {
-    count = advance_slot(count, target_info);
-  }
-  return count;
-}
 
 class NumberGenerator {
  public:
@@ -160,46 +153,6 @@ int8_t* fill_one_entry_no_collisions(int8_t* buff,
     target_idx = advance_slot(target_idx, target_info);
   }
   return slot_ptr;
-}
-
-void fill_one_entry_baseline(int64_t* value_slots,
-                             const int64_t v,
-                             const std::vector<TargetInfo>& target_infos,
-                             const size_t key_component_count,
-                             const size_t target_slot_count,
-                             const bool empty = false,
-                             const bool null_val = false) {
-  size_t target_slot = 0;
-  int64_t vv = 0;
-  for (const auto& target_info : target_infos) {
-    bool isNullable = !target_info.sql_type.get_notnull();
-    if ((isNullable && target_info.skip_null_val && null_val) || empty) {
-      vv = inline_int_null_val(target_info.sql_type);
-    } else {
-      vv = v;
-    }
-    switch (target_info.sql_type.get_type()) {
-      case kSMALLINT:
-      case kINT:
-      case kBIGINT:
-        value_slots[target_slot] = vv;
-        break;
-      case kDOUBLE: {
-        double di = vv;
-        value_slots[target_slot] = *reinterpret_cast<int64_t*>(&di);
-        break;
-      }
-      case kTEXT:
-        value_slots[target_slot] = -(vv + 2);
-        break;
-      default:
-        CHECK(false);
-    }
-    if (target_info.agg_kind == kAVG) {
-      value_slots[target_slot + 1] = 1;
-    }
-    target_slot = advance_slot(target_slot, target_info);
-  }
 }
 
 void fill_one_entry_one_col(int8_t* ptr1,
@@ -442,7 +395,7 @@ void fill_storage_buffer_baseline_rowwise(int8_t* buff,
     auto value_slots = get_group_value(
         i64_buff, query_mem_desc.entry_count, &key[0], key.size(), key_component_count + target_slot_count, nullptr);
     CHECK(value_slots);
-    fill_one_entry_baseline(value_slots, v, target_infos, key_component_count, target_slot_count);
+    fill_one_entry_baseline(value_slots, v, target_infos);
   }
 }
 
@@ -579,15 +532,6 @@ QueryMemoryDescriptor baseline_hash_two_col_desc(const std::vector<TargetInfo>& 
   }
   query_mem_desc.entry_count = query_mem_desc.max_val - query_mem_desc.min_val + 1;
   return query_mem_desc;
-}
-
-template <class T>
-T v(const TargetValue& r) {
-  auto scalar_r = boost::get<ScalarTargetValue>(&r);
-  CHECK(scalar_r);
-  auto p = boost::get<T>(scalar_r);
-  CHECK(p);
-  return *p;
 }
 
 template <class T>
@@ -1064,10 +1008,10 @@ void ResultSetEmulator::rse_fill_storage_buffer_baseline_rowwise(int8_t* buff,
       CHECK(value_slots);
       if ((rs_flow == 2) && (i >= rs_entry_count - 4)) {  // null_val test-cases: last four rows
         rs_values[i] = -1;
-        fill_one_entry_baseline(value_slots, v, rs_target_infos, key_component_count, target_slot_count, false, true);
+        fill_one_entry_baseline(value_slots, v, rs_target_infos, false, true);
       } else {
         rs_values[i] = v;
-        fill_one_entry_baseline(value_slots, v, rs_target_infos, key_component_count, target_slot_count, false, false);
+        fill_one_entry_baseline(value_slots, v, rs_target_infos, false, false);
       }
     }
   }

@@ -366,10 +366,8 @@ void ResultSet::sort(const std::list<Analyzer::OrderEntry>& order_entries, const
 
 #ifdef HAVE_CUDA
 void ResultSet::baselineSort(const std::list<Analyzer::OrderEntry>& order_entries, const size_t top_n) {
-  CHECK(executor_ && executor_->catalog_);
-  auto& data_mgr = executor_->catalog_->get_dataMgr();
   // If we only have on GPU, it's usually faster to do multi-threaded radix sort on CPU
-  if (data_mgr.gpusPresent() && data_mgr.cudaMgr_->getDeviceCount() > 1) {
+  if (getGpuCount() > 1) {
     try {
       doBaselineSort(ExecutorDeviceType::GPU, order_entries, top_n);
     } catch (...) {

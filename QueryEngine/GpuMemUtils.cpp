@@ -80,6 +80,12 @@ void copy_to_gpu(Data_Namespace::DataMgr* data_mgr,
                  const void* src,
                  const size_t num_bytes,
                  const int device_id) {
+#ifdef HAVE_CUDA
+  if (!data_mgr) {  // only for unit tests
+    cuMemcpyHtoD(dst, src, num_bytes);
+    return;
+  }
+#endif  // HAVE_CUDA
   CHECK(data_mgr->cudaMgr_);
   data_mgr->cudaMgr_->copyHostToDevice(
       reinterpret_cast<int8_t*>(dst), static_cast<const int8_t*>(src), num_bytes, device_id);
@@ -289,6 +295,14 @@ bool buffer_not_null(const QueryMemoryDescriptor& query_mem_desc,
 }
 
 int8_t* ThrustAllocator::allocate(std::ptrdiff_t num_bytes) {
+#ifdef HAVE_CUDA
+  if (!data_mgr_) {  // only for unit tests
+    CUdeviceptr ptr;
+    const auto err = cuMemAlloc(&ptr, num_bytes);
+    CHECK_EQ(CUDA_SUCCESS, err);
+    return reinterpret_cast<int8_t*>(ptr);
+  }
+#endif  // HAVE_CUDA
   Data_Namespace::AbstractBuffer* ab = alloc_gpu_abstract_buffer(data_mgr_, num_bytes, device_id_);
   int8_t* raw_ptr = reinterpret_cast<int8_t*>(ab->getMemoryPtr());
   CHECK(!raw_to_ab_ptr_.count(raw_ptr));
@@ -297,6 +311,13 @@ int8_t* ThrustAllocator::allocate(std::ptrdiff_t num_bytes) {
 }
 
 void ThrustAllocator::deallocate(int8_t* ptr, size_t num_bytes) {
+#ifdef HAVE_CUDA
+  if (!data_mgr_) {  // only for unit tests
+    const auto err = cuMemFree(reinterpret_cast<CUdeviceptr>(ptr));
+    CHECK_EQ(CUDA_SUCCESS, err);
+    return;
+  }
+#endif  // HAVE_CUDA
   PtrMapperType::iterator ab_it = raw_to_ab_ptr_.find(ptr);
   CHECK(ab_it != raw_to_ab_ptr_.end());
   data_mgr_->free(ab_it->second);
@@ -304,6 +325,15 @@ void ThrustAllocator::deallocate(int8_t* ptr, size_t num_bytes) {
 }
 
 int8_t* ThrustAllocator::allocateScopedBuffer(std::ptrdiff_t num_bytes) {
+#ifdef HAVE_CUDA
+  if (!data_mgr_) {  // only for unit tests
+    CUdeviceptr ptr;
+    const auto err = cuMemAlloc(&ptr, num_bytes);
+    CHECK_EQ(CUDA_SUCCESS, err);
+    default_alloc_scoped_buffers_.push_back(reinterpret_cast<int8_t*>(ptr));
+    return reinterpret_cast<int8_t*>(ptr);
+  }
+#endif  // HAVE_CUDA
   Data_Namespace::AbstractBuffer* ab = alloc_gpu_abstract_buffer(data_mgr_, num_bytes, device_id_);
   scoped_buffers_.push_back(ab);
   return reinterpret_cast<int8_t*>(ab->getMemoryPtr());
@@ -313,4 +343,10 @@ ThrustAllocator::~ThrustAllocator() {
   for (auto ab : scoped_buffers_) {
     data_mgr_->free(ab);
   }
+#ifdef HAVE_CUDA
+  for (auto ptr : default_alloc_scoped_buffers_) {
+    const auto err = cuMemFree(reinterpret_cast<CUdeviceptr>(ptr));
+    CHECK_EQ(CUDA_SUCCESS, err);
+  }
+#endif  // HAVE_CUDA
 }

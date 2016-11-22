@@ -19,6 +19,21 @@
 
 #include <future>
 
+std::unique_ptr<CudaMgr_Namespace::CudaMgr> g_cuda_mgr;  // for unit tests only
+
+namespace {
+
+void set_cuda_context(Data_Namespace::DataMgr* data_mgr, const int device_id) {
+  if (data_mgr) {
+    data_mgr->cudaMgr_->setContext(device_id);
+  }
+  // for unit tests only
+  CHECK(g_cuda_mgr);
+  g_cuda_mgr->setContext(device_id);
+}
+
+}  // namespace
+
 void ResultSet::doBaselineSort(const ExecutorDeviceType device_type,
                                const std::list<Analyzer::OrderEntry>& order_entries,
                                const size_t top_n) {
@@ -40,14 +55,8 @@ void ResultSet::doBaselineSort(const ExecutorDeviceType device_type,
   GroupByBufferLayoutInfo layout{query_mem_desc_.entry_count, col_off, col_bytes, row_bytes, targets_[oe.tle_no - 1]};
   PodOrderEntry pod_oe{oe.tle_no, oe.is_desc, oe.nulls_first};
   auto groupby_buffer = storage_->getUnderlyingBuffer();
-  CHECK(executor_ && executor_->catalog_);
-  auto& data_mgr = executor_->catalog_->get_dataMgr();
-  if (device_type == ExecutorDeviceType::GPU) {
-    CHECK(data_mgr.gpusPresent());
-    CHECK(data_mgr.cudaMgr_);
-  }
-  const auto step =
-      static_cast<size_t>(device_type == ExecutorDeviceType::GPU ? data_mgr.cudaMgr_->getDeviceCount() : cpu_threads());
+  auto data_mgr = getDataManager();
+  const auto step = static_cast<size_t>(device_type == ExecutorDeviceType::GPU ? getGpuCount() : cpu_threads());
   CHECK_GE(step, size_t(1));
   if (step > 1) {
     std::vector<std::future<void>> top_futures;
@@ -55,12 +64,12 @@ void ResultSet::doBaselineSort(const ExecutorDeviceType device_type,
     for (size_t start = 0; start < step; ++start) {
       top_futures.emplace_back(std::async(
           std::launch::async,
-          [&strided_permutations, &data_mgr, device_type, groupby_buffer, pod_oe, layout, top_n, start, step] {
+          [&strided_permutations, data_mgr, device_type, groupby_buffer, pod_oe, layout, top_n, start, step] {
             if (device_type == ExecutorDeviceType::GPU) {
-              data_mgr.cudaMgr_->setContext(start);
+              set_cuda_context(data_mgr, start);
             }
             strided_permutations[start] =
-                baseline_sort(device_type, start, &data_mgr, groupby_buffer, pod_oe, layout, top_n, start, step);
+                baseline_sort(device_type, start, data_mgr, groupby_buffer, pod_oe, layout, top_n, start, step);
           }));
     }
     for (auto& top_future : top_futures) {
@@ -74,7 +83,7 @@ void ResultSet::doBaselineSort(const ExecutorDeviceType device_type,
     topPermutation(permutation_, top_n, compare);
     return;
   } else {
-    permutation_ = baseline_sort(device_type, 0, &data_mgr, groupby_buffer, pod_oe, layout, top_n, 0, 1);
+    permutation_ = baseline_sort(device_type, 0, data_mgr, groupby_buffer, pod_oe, layout, top_n, 0, 1);
   }
 }
 
@@ -91,5 +100,21 @@ bool ResultSet::canUseFastBaselineSort(const std::list<Analyzer::OrderEntry>& or
   }
   return query_mem_desc_.hash_type == GroupByColRangeType::MultiCol && !query_mem_desc_.getSmallBufferSizeQuad() &&
          top_n && false;
+}
+
+Data_Namespace::DataMgr* ResultSet::getDataManager() const {
+  if (executor_) {
+    CHECK(executor_->catalog_);
+    return &executor_->catalog_->get_dataMgr();
+  }
+  return nullptr;
+}
+
+int ResultSet::getGpuCount() const {
+  const auto data_mgr = getDataManager();
+  if (!data_mgr) {
+    return g_cuda_mgr ? g_cuda_mgr->getDeviceCount() : 0;
+  }
+  return data_mgr->gpusPresent() ? data_mgr->cudaMgr_->getDeviceCount() : 0;
 }
 #endif  // HAVE_CUDA

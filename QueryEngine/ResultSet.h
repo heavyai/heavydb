@@ -285,6 +285,10 @@ class ResultSet {
 
   bool canUseFastBaselineSort(const std::list<Analyzer::OrderEntry>& order_entries, const size_t top_n);
 
+  Data_Namespace::DataMgr* getDataManager() const;
+
+  int getGpuCount() const;
+
   const std::vector<TargetInfo> targets_;
   const ExecutorDeviceType device_type_;
   const int device_id_;

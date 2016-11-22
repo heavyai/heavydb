@@ -38,6 +38,7 @@ class ThrustAllocator {
   typedef std::unordered_map<int8_t*, Data_Namespace::AbstractBuffer*> PtrMapperType;
   PtrMapperType raw_to_ab_ptr_;
   std::vector<Data_Namespace::AbstractBuffer*> scoped_buffers_;
+  std::vector<int8_t*> default_alloc_scoped_buffers_;  // for unit tests only
 };
 
 #endif /* THRUSTALLOCATOR_H */
