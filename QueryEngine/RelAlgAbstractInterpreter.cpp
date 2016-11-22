@@ -139,9 +139,7 @@ bool RelProject::isIdentity() const {
 namespace {
 
 bool isRenamedInput(const RelAlgNode* node, const size_t index, const std::string& new_name) {
-  if (index >= node->size()) {
-    return false;
-  }
+  CHECK_LT(index, node->size());
   if (auto join = dynamic_cast<const RelJoin*>(node)) {
     CHECK_EQ(size_t(2), join->inputCount());
     const auto lhs_size = join->getInput(0)->size();
@@ -149,7 +147,7 @@ bool isRenamedInput(const RelAlgNode* node, const size_t index, const std::strin
       return isRenamedInput(join->getInput(0), index, new_name);
     }
     CHECK_GE(index, lhs_size);
-    return isRenamedInput(join->getInput(0), index - lhs_size, new_name);
+    return isRenamedInput(join->getInput(1), index - lhs_size, new_name);
   }
 
   if (auto scan = dynamic_cast<const RelScan*>(node)) {
@@ -173,8 +171,11 @@ bool isRenamedInput(const RelAlgNode* node, const size_t index, const std::strin
 bool RelProject::isRenaming() const {
   if (!isSimple())
     return false;
+  CHECK_EQ(scalar_exprs_.size(), fields_.size());
   for (size_t i = 0; i < fields_.size(); ++i) {
-    if (isRenamedInput(inputs_[0].get(), i, fields_[i])) {
+    auto rex_in = dynamic_cast<const RexInput*>(scalar_exprs_[i].get());
+    CHECK(rex_in);
+    if (isRenamedInput(rex_in->getSourceNode(), rex_in->getIndex(), fields_[i])) {
       return true;
     }
   }

@@ -690,6 +690,7 @@ TEST(Select, Case) {
     c("SELECT CASE WHEN str IN ('foo') THEN 'FOO' WHEN str IN ('bar') THEN 'BAR' ELSE 'BAZ' END AS g, COUNT(*) "
       "FROM test GROUP BY g ORDER BY g DESC;",
       dt);
+    c("SELECT x, COUNT(case when y = 42 then 1 else 0 end) as n1, COUNT(*) as n2 FROM test group by x;", dt);
 #ifdef HAVE_CALCITE
     ASSERT_EQ(
         int64_t(1),
