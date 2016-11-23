@@ -4,14 +4,18 @@ package com.mapd.utility;
  * cool mapd License
  */
 import com.mapd.thrift.server.MapD;
+import com.mapd.thrift.server.TColumnType;
 import com.mapd.thrift.server.TQueryResult;
 import com.mapd.thrift.server.TStringRow;
 import com.mapd.thrift.server.TStringValue;
+import com.mapd.thrift.server.TTableDetails;
 import com.mapd.thrift.server.ThriftException;
 import static java.lang.System.exit;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.DefaultParser;
@@ -131,6 +135,11 @@ public class SQLImporter {
             .longOpt("database")
             .build();
 
+    Option truncate = Option.builder("tr")
+            .desc("Truncate table if it exists")
+            .longOpt("truncate")
+            .build();
+
     options.addOption(driver);
     options.addOption(sqlStmt);
     options.addOption(jdbcConnect);
@@ -144,13 +153,13 @@ public class SQLImporter {
     options.addOption(database);
     options.addOption(bufferSize);
     options.addOption(fragmentSize);
+    options.addOption(truncate);
 
     CommandLineParser parser = new DefaultParser();
 
     try {
       cmd = parser.parse(options, args);
-    }
-    catch (ParseException ex) {
+    } catch (ParseException ex) {
       LOGGER.error(ex.getLocalizedMessage());
       help(options);
       exit(0);
@@ -179,9 +188,9 @@ public class SQLImporter {
       long timer;
       ResultSet rs = stmt.executeQuery(cmd.getOptionValue("sqlStmt"));
 
-      //produce new table in MapD with the query metadata
+      //check if table already exists and is compatible in MapD with the query metadata
       ResultSetMetaData md = rs.getMetaData();
-      createMapDTable(md);
+      checkMapDTable(md);
 
       timer = System.currentTimeMillis();
 
@@ -232,34 +241,28 @@ public class SQLImporter {
 
       totalTime = System.currentTimeMillis() - startTime;
       conn.close();
-    }
-    catch (SQLException se) {
+    } catch (SQLException se) {
       LOGGER.error("SQLException - " + se.toString());
       se.printStackTrace();
-    }
-    catch (ThriftException ex) {
+    } catch (ThriftException ex) {
       LOGGER.error("ThriftException - " + ex.toString());
       ex.printStackTrace();
-    }
-    catch (TException ex) {
+    } catch (TException ex) {
       LOGGER.error("TException failed - " + ex.toString());
       ex.printStackTrace();
-    }
-    finally {
+    } finally {
       //finally block used to close resources
       try {
         if (stmt != null) {
           stmt.close();
         }
-      }
-      catch (SQLException se2) {
+      } catch (SQLException se2) {
       }// nothing we can do
       try {
         if (conn != null) {
           conn.close();
         }
-      }
-      catch (SQLException se) {
+      } catch (SQLException se) {
         LOGGER.error("SQlException in close - " + se.toString());
         se.printStackTrace();
       }//end finally try
@@ -272,12 +275,41 @@ public class SQLImporter {
     formatter.printHelp("SQLImporter", options);
   }
 
-  private void createMapDTable(ResultSetMetaData metaData) {
+  private void checkMapDTable(ResultSetMetaData md) throws SQLException {
     createMapDConnection();
+    String tName = cmd.getOptionValue("targetTable");
 
-    if (tableExists(cmd.getOptionValue("targetTable"))) {
-      executeMapDCommand("Drop table " + cmd.getOptionValue("targetTable"));
+    if (tableExists(tName)) {
+      // check if we want to truncate
+      if (cmd.hasOption("truncate")) {
+        executeMapDCommand("Drop table " + tName);
+        createMapDTable(md);
+      } else {
+        List<TColumnType> columnInfo = getColumnInfo(tName);
+        // table exists lets check it has same number of columns
+        if (md.getColumnCount() != columnInfo.size()) {
+          LOGGER.error("Table sizes do not match - Mapd " + columnInfo.size() + " versus Select " + md.getColumnCount());
+          exit(1);
+        }
+        // table exists lets check it is same layout - check names will do for now
+        for (int colNum = 1; colNum <= columnInfo.size(); colNum ++ ){
+          if (!columnInfo.get(colNum-1).col_name.equalsIgnoreCase(md.getColumnName(colNum))){
+            LOGGER.error("MapD Table does not have matching column in same order for column number" +
+                    colNum + " MapD column name is " + columnInfo.get(colNum-1).col_name +
+                    " versus Select "  + md.getColumnName(colNum));
+            exit(1);
+          }
+        }
+      }
+    } else {
+      createMapDTable(md);
     }
+  }
+
+  private void createMapDTable(ResultSetMetaData metaData) {
+
+
+
 
     StringBuilder sb = new StringBuilder();
     sb.append("Create table ").append(cmd.getOptionValue("targetTable")).append("(");
@@ -305,8 +337,7 @@ public class SQLImporter {
         sb.append(")");
       }
 
-    }
-    catch (SQLException ex) {
+    } catch (SQLException ex) {
       LOGGER.error("Error processing the metadata - " + ex.toString());
       exit(1);
     }
@@ -333,19 +364,31 @@ public class SQLImporter {
 
       LOGGER.debug("Connected session is " + session);
 
-    }
-    catch (TTransportException ex) {
+    } catch (TTransportException ex) {
       LOGGER.error("Connection failed - " + ex.toString());
       exit(1);
-    }
-    catch (ThriftException ex) {
+    } catch (ThriftException ex) {
       LOGGER.error("Connection failed - " + ex.toString());
       exit(2);
-    }
-    catch (TException ex) {
+    } catch (TException ex) {
       LOGGER.error("Connection failed - " + ex.toString());
       exit(3);
     }
+  }
+
+  private List<TColumnType>  getColumnInfo(String tName) {
+    LOGGER.debug("Getting columns for  " + tName);
+    List<TColumnType> row_descriptor = null;
+    try {
+      row_descriptor = client.get_row_descriptor(session, tName);
+    } catch (ThriftException ex) {
+      LOGGER.error("column check failed - " + ex.toString());
+      exit(3);
+    } catch (TException ex) {
+      LOGGER.error("column check failed - " + ex.toString());
+      exit(3);
+    }
+    return row_descriptor;
   }
 
   private boolean tableExists(String tName) {
@@ -357,12 +400,10 @@ public class SQLImporter {
           return true;
         }
       }
-    }
-    catch (ThriftException ex) {
+    } catch (ThriftException ex) {
       LOGGER.error("Table check failed - " + ex.toString());
       exit(3);
-    }
-    catch (TException ex) {
+    } catch (TException ex) {
       LOGGER.error("Table check failed - " + ex.toString());
       exit(3);
     }
@@ -374,18 +415,22 @@ public class SQLImporter {
 
     try {
       TQueryResult sqlResult = client.sql_execute(session, sql + ";", true, null);
-    }
-    catch (ThriftException ex) {
+    } catch (ThriftException ex) {
       LOGGER.error("SQL Execute failed - " + ex.toString());
       exit(1);
-    }
-    catch (TException ex) {
+    } catch (TException ex) {
       LOGGER.error("SQL Execute failed - " + ex.toString());
       exit(1);
     }
   }
 
   private String getColType(int cType, int precision, int scale) {
+    if (precision > 19) {
+      precision = 19;
+    }
+    if (scale > 19) {
+      scale = 18;
+    }
     switch (cType) {
       case java.sql.Types.TINYINT:
       case java.sql.Types.SMALLINT:
@@ -424,4 +469,6 @@ public class SQLImporter {
         throw new AssertionError("Column type " + cType + " not Supported");
     }
   }
+
+
 }

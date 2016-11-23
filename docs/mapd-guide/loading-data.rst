@@ -61,12 +61,48 @@ Example:
     -sp [external source password] -c "jdbc:[external
     source]://server:port;DatabaseName=some_database" -ss "[select statement]"
 
+::
+
+	usage: SQLImporter
+	-b,--bufferSize <arg>      transfer buffer size
+	-c,--jdbcConnect <arg>     JDBC Connection string
+ 	-d,--driver <arg>          JDBC driver class
+ 	-db,--database <arg>       MapD Database
+ 	-f,--fragmentSize <arg>    table fragment size
+ 	-p,--passwd <arg>          MapD Password
+    	--port <arg>               MapD Port
+ 	-r <arg>                   Row Load Limit
+ 	-s,--server <arg>          MapD Server
+ 	-sp,--sourcePasswd <arg>   Source Password
+ 	-ss,--sqlStmt <arg>        SQL Select statement
+ 	-su,--sourceUser <arg>     Source User
+ 	-t,--targetTable <arg>     MapD Target Table
+ 	-tr,--truncate             Truncate table if it exists
+ 	-u,--user <arg>            MapD User
+
+
+
 SQL Importer executes a select statement on another database via JDBC
-and brings the result set into MapD. Note: SQL Importer drops the MapD
-target table (if it exists) then creates the MapD table with appropriate
-datatypes and populates the table with the contents of the result set.
+and brings the result set into MapD.
+
+If the table doesn't exist it will create the table in MapD.
+
+If the truncate flag is set it will truncate the contents in the file.
+
+If the file exists and truncate is not set it will fail if the table
+does not match the SELECT statements metadata.
+
 It is recommended to use a service account with read-only permissions
 when accessing data from a remote database.
+
+MySQL Example:
+
+::
+
+	java -cp mapd-1.0-SNAPSHOT-jar-with-dependencies.jar:
+	mysql/mysql-connector-java-5.1.38/mysql-connector-java-5.1.38-bin.jar 
+	com.mapd.utility.SQLImporter -t test1 -sp mypassword -su myuser 
+	-c jdbc:mysql://localhost -ss "select * from employees.employees"
 
 SQLServer Example:
 
@@ -84,7 +120,8 @@ PostgreSQL Example:
 ::
 
     java -cp
-    /p/to/mapd/bin/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar:/p/to/postgresql-9.4.1208.jre6.jar
+    /p/to/mapd/bin/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar:
+    /p/to/postgresql-9.4.1208.jre6.jar
     com.mapd.utility.SQLImporter -t mapd_target_table -su source_user -sp
     source_pwd -c "jdbc:postgresql://server/database" -ss "select * from some_table
     where transaction_date > '2014-01-01'"
