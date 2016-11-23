@@ -105,9 +105,9 @@ void fill_storage_buffer_baseline_sort_fp(int8_t* buff,
 }
 
 template <class T>
-void check_sorted(const ResultSet& result_set, const int64_t upper_bound, const size_t top_n) {
+void check_sorted(const ResultSet& result_set, const int64_t bound, const size_t top_n, const size_t desc) {
   ASSERT_EQ(top_n, result_set.rowCount());
-  T ref_val = upper_bound;
+  T ref_val = bound;
   while (true) {
     const auto row = result_set.getNextRow(true, false);
     if (row.empty()) {
@@ -116,7 +116,11 @@ void check_sorted(const ResultSet& result_set, const int64_t upper_bound, const 
     ASSERT_EQ(size_t(3), row.size());
     const auto ival = v<T>(row[2]);
     ASSERT_EQ(ref_val, ival);
-    --ref_val;
+    if (desc) {
+      --ref_val;
+    } else {
+      ++ref_val;
+    }
   }
 }
 
@@ -124,10 +128,9 @@ std::vector<TargetInfo> get_sort_fp_target_infos() {
   std::vector<TargetInfo> target_infos;
   SQLTypeInfo null_ti(kNULLT, false);
   SQLTypeInfo fp_ti(kFLOAT, false);
-  SQLTypeInfo double_ti(kDOUBLE, false);
   target_infos.push_back(TargetInfo{false, kMIN, fp_ti, null_ti, false, false});
-  target_infos.push_back(TargetInfo{false, kMIN, double_ti, null_ti, false, false});
-  target_infos.push_back(TargetInfo{true, kSUM, fp_ti, fp_ti, false, false});
+  target_infos.push_back(TargetInfo{false, kMIN, fp_ti, null_ti, false, false});
+  target_infos.push_back(TargetInfo{true, kSUM, fp_ti, fp_ti, true, false});
   return target_infos;
 }
 
@@ -143,27 +146,30 @@ TEST(SortBaseline, Integers) {
   auto storage = rs->allocateStorage();
   fill_storage_buffer_baseline_sort_int(storage->getUnderlyingBuffer(), target_infos, query_mem_desc, upper_bound);
   std::list<Analyzer::OrderEntry> order_entries;
-  order_entries.emplace_back(3, true, false);
+  const bool desc = true;
+  order_entries.emplace_back(3, desc, false);
   const size_t top_n = 5;
   rs->sort(order_entries, top_n);
-  check_sorted<int64_t>(*rs, upper_bound, top_n);
+  check_sorted<int64_t>(*rs, upper_bound, top_n, desc);
 }
 
 TEST(SortBaseline, Floats) {
-  for (int tle_no = 1; tle_no <= 3; ++tle_no) {
-    const auto target_infos = get_sort_fp_target_infos();
-    const auto query_mem_desc = baseline_sort_desc(target_infos, 400);
-    const auto row_set_mem_owner = std::make_shared<RowSetMemoryOwner>();
-    const int64_t upper_bound = 200;
-    std::unique_ptr<ResultSet> rs(
-        new ResultSet(target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, nullptr));
-    auto storage = rs->allocateStorage();
-    fill_storage_buffer_baseline_sort_fp(storage->getUnderlyingBuffer(), target_infos, query_mem_desc, upper_bound);
-    std::list<Analyzer::OrderEntry> order_entries;
-    order_entries.emplace_back(tle_no, true, false);
-    const size_t top_n = 5;
-    rs->sort(order_entries, top_n);
-    check_sorted<float>(*rs, upper_bound, top_n);
+  for (const bool desc : {true, false}) {
+    for (int tle_no = 1; tle_no <= 3; ++tle_no) {
+      const auto target_infos = get_sort_fp_target_infos();
+      const auto query_mem_desc = baseline_sort_desc(target_infos, 400);
+      const auto row_set_mem_owner = std::make_shared<RowSetMemoryOwner>();
+      const int64_t upper_bound = 200;
+      std::unique_ptr<ResultSet> rs(
+          new ResultSet(target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, nullptr));
+      auto storage = rs->allocateStorage();
+      fill_storage_buffer_baseline_sort_fp(storage->getUnderlyingBuffer(), target_infos, query_mem_desc, upper_bound);
+      std::list<Analyzer::OrderEntry> order_entries;
+      order_entries.emplace_back(tle_no, desc, false);
+      const size_t top_n = 5;
+      rs->sort(order_entries, top_n);
+      check_sorted<float>(*rs, desc ? upper_bound : 1, top_n, desc);
+    }
   }
 }
 
