@@ -31,6 +31,9 @@ std::vector<uint32_t> do_radix_sort(const ExecutorDeviceType device_type,
                                     const PodOrderEntry& oe,
                                     const GroupByBufferLayoutInfo& layout,
                                     const size_t top_n) {
+  if (dev_idx_buff_size == 0) {
+    return {};
+  }
   if (oe.is_desc) {
     if (device_type == ExecutorDeviceType::GPU) {
       thrust::sort_by_key(thrust::device(thrust_allocator),
@@ -89,7 +92,9 @@ void add_nulls(std::vector<uint32_t>& idx_buff, const std::vector<uint32_t>& nul
 
 template <typename T>
 thrust::device_ptr<T> get_device_copy_ptr(const thrust::host_vector<T>& host_vec, ThrustAllocator& thrust_allocator) {
-  CHECK(!host_vec.empty());
+  if (host_vec.empty()) {
+    return thrust::device_ptr<T>(static_cast<T*>(nullptr));
+  }
   const auto host_vec_bytes = host_vec.size() * sizeof(T);
   T* dev_ptr = reinterpret_cast<T*>(thrust_allocator.allocateScopedBuffer(align_to_int64(host_vec_bytes)));
   copy_to_gpu(thrust_allocator.getDataMgr(),
@@ -328,6 +333,9 @@ std::vector<uint32_t> baseline_sort(const ExecutorDeviceType device_type,
   // Fastest path, no need to separate nulls away since they'll end up at the
   // right place as a side effect of how we're representing nulls.
   if (device_type == ExecutorDeviceType::GPU) {
+    if (oe_col_buffer.empty()) {
+      return {};
+    }
     const auto dev_idx_buff = get_device_ptr<uint32_t>(oe_col_buffer.size(), thrust_allocator);
     thrust::sequence(dev_idx_buff, dev_idx_buff + oe_col_buffer.size(), start, step);
     const auto dev_oe_col_buffer = get_device_copy_ptr(oe_col_buffer, thrust_allocator);
