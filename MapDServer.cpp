@@ -581,12 +581,8 @@ class MapDHandler : virtual public MapDIf {
   std::vector<TargetMetaInfo> validate_rel_alg(const std::string& query_str,
                                                const Catalog_Namespace::SessionInfo& session_info) {
     const auto query_ra = parse_to_ra(query_str, session_info);
-    rapidjson::Document query_ast;
-    query_ast.Parse(query_ra.c_str());
-    CHECK(!query_ast.HasParseError());
-    CHECK(query_ast.IsObject());
     const auto& cat = session_info.get_catalog();
-    const auto ra = ra_interpret(query_ast, cat);
+    const auto ra = deserialize_ra_dag(query_ra, cat);
     auto ed_list = get_execution_descriptors(ra.get());
     RelAlgExecutor ra_executor(nullptr, cat);
     return ra_executor.validateRelAlgSeq(ed_list);
@@ -1494,12 +1490,8 @@ class MapDHandler : virtual public MapDIf {
                        const Catalog_Namespace::SessionInfo& session_info,
                        const ExecutorDeviceType executor_device_type,
                        const bool just_explain) const {
-    rapidjson::Document query_ast;
-    query_ast.Parse(query_ra.c_str());
-    CHECK(!query_ast.HasParseError());
-    CHECK(query_ast.IsObject());
     const auto& cat = session_info.get_catalog();
-    const auto ra = ra_interpret(query_ast, cat);
+    const auto ra = deserialize_ra_dag(query_ra, cat);
     auto ed_list = get_execution_descriptors(ra.get());
     auto executor = Executor::getExecutor(
         cat.get_currentDB().dbId, jit_debug_ ? "/tmp" : "", jit_debug_ ? "mapdquery" : "", 0, 0, nullptr);
@@ -1614,11 +1606,7 @@ class MapDHandler : virtual public MapDIf {
                                           nullptr);
     RelAlgExecutor ra_executor(executor.get(), cat);
     auto clock_begin = timer_start();
-    rapidjson::Document query_ast;
-    query_ast.Parse(query_ra.c_str());
-    CHECK(!query_ast.HasParseError());
-    CHECK(query_ast.IsObject());
-    const auto ra = ra_interpret(query_ast, cat);
+    const auto ra = deserialize_ra_dag(query_ra, cat);
     auto ed_list = get_execution_descriptors(ra.get());
     rapidjson::Document render_config;
     render_config.Parse(render_type.c_str());
@@ -1891,10 +1879,29 @@ class MapDHandler : virtual public MapDIf {
                        const std::string& query,
                        const bool column_format,
                        const std::string& nonce) override {
+#ifdef HAVE_RAVM
+    const auto session_info = get_session(session);
+    const auto query_ra = parse_to_ra(query, session_info);
+    const auto& cat = session_info.get_catalog();
+    const auto ra = deserialize_ra_dag(query_ra, cat);
+    auto ed_list = get_execution_descriptors(ra.get());
+    CHECK(!ed_list.empty());
+#endif  // HAVE_RAVM
     TMapDException ex;
     ex.error_msg = "start_query not supported yet";
     throw ex;
   }
+
+#ifdef HAVE_RAVM
+  static std::shared_ptr<const RelAlgNode> deserialize_ra_dag(const std::string& query_ra,
+                                                              const Catalog_Namespace::Catalog& cat) {
+    rapidjson::Document query_ast;
+    query_ast.Parse(query_ra.c_str());
+    CHECK(!query_ast.HasParseError());
+    CHECK(query_ast.IsObject());
+    return ra_interpret(query_ast, cat);
+  }
+#endif  // HAVE_RAVM
 
   void execute_step(TStepResult& _return, const TQueryId query_id) override {
     TMapDException ex;
