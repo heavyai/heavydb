@@ -86,7 +86,7 @@ bool ResultSet::canUseFastBaselineSort(const std::list<Analyzer::OrderEntry>& or
   CHECK_GE(order_entry.tle_no, 1);
   CHECK_LE(static_cast<size_t>(order_entry.tle_no), targets_.size());
   const auto& target_info = targets_[order_entry.tle_no - 1];
-  if (!target_info.sql_type.is_number()) {
+  if (!target_info.sql_type.is_number() || target_info.is_distinct) {
     return false;
   }
   return query_mem_desc_.hash_type == GroupByColRangeType::MultiCol && !query_mem_desc_.getSmallBufferSizeQuad() &&
