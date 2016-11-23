@@ -26,6 +26,7 @@ namespace {
 void set_cuda_context(Data_Namespace::DataMgr* data_mgr, const int device_id) {
   if (data_mgr) {
     data_mgr->cudaMgr_->setContext(device_id);
+    return;
   }
   // for unit tests only
   CHECK(g_cuda_mgr);
