@@ -242,20 +242,20 @@ list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/gen-cpp/)
 if(ENABLE_CALCITE)
   add_custom_command(
       DEPENDS ${CMAKE_SOURCE_DIR}/mapd.thrift
-      OUTPUT ${CMAKE_SOURCE_DIR}/java/src/gen/com/mapd/thrift/server/MapD.java ${CMAKE_SOURCE_DIR}/java/src/gen/com/mapd/thrift/server/TRow.java
+      OUTPUT ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/mapd/thrift/server/MapD.java ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/mapd/thrift/server/TRow.java
       COMMAND mkdir
-      ARGS -p ${CMAKE_SOURCE_DIR}/java/src/gen
+      ARGS -p ${CMAKE_SOURCE_DIR}/java/thrift/src/gen
       COMMAND ${Thrift_EXECUTABLE}
-      ARGS -gen java -out ${CMAKE_SOURCE_DIR}/java/src/gen/ ${CMAKE_SOURCE_DIR}/mapd.thrift)
+      ARGS -gen java -out ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/ ${CMAKE_SOURCE_DIR}/mapd.thrift)
 
   add_custom_command(
-      DEPENDS ${CMAKE_SOURCE_DIR}/java/calciteserver.thrift
-      OUTPUT ${CMAKE_SOURCE_DIR}/java/src/gen/com/mapd/thrift/calciteserver/CalciteServer.java
+      DEPENDS ${CMAKE_SOURCE_DIR}/java/thrift/calciteserver.thrift
+      OUTPUT ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/mapd/thrift/calciteserver/CalciteServer.java
       COMMAND mkdir
-      ARGS -p ${CMAKE_SOURCE_DIR}/java/src/gen
+      ARGS -p ${CMAKE_SOURCE_DIR}/java/thrift/src/gen
       COMMAND ${Thrift_EXECUTABLE}
-      ARGS -gen java -out ${CMAKE_SOURCE_DIR}/java/src/gen/ ${CMAKE_SOURCE_DIR}/java/calciteserver.thrift)
-  list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_SOURCE_DIR}/java/src/gen/)
+      ARGS -gen java -out ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/ ${CMAKE_SOURCE_DIR}/java/thrift/calciteserver.thrift)
+  list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/)
 endif()
 
 execute_process(
@@ -389,12 +389,16 @@ if(ENABLE_CALCITE)
   endif()
   add_custom_target(mapd_java_components ALL
     COMMAND MVNPATH=${CMAKE_SOURCE_DIR}/java ${MVN_EXECUTABLE} -q install
-    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/java/target/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar ${CMAKE_BINARY_DIR}/bin
+    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/java/mapd/target/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar ${CMAKE_BINARY_DIR}/bin
+    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/java/mapdjdbc/target/mapdjdbc-1.0-SNAPSHOT-jar-with-dependencies.jar ${CMAKE_BINARY_DIR}/bin
+    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/java/calcite/target/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar ${CMAKE_BINARY_DIR}/bin
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/java
-    DEPENDS ${CMAKE_SOURCE_DIR}/java/src/gen/com/mapd/thrift/server/MapD.java  ${CMAKE_SOURCE_DIR}/java/src/gen/com/mapd/thrift/calciteserver/CalciteServer.java
+    DEPENDS ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/mapd/thrift/server/MapD.java  ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/mapd/thrift/calciteserver/CalciteServer.java
     SOURCES ${CMAKE_SOURCE_DIR}/java/pom.xml ${CMAKE_SOURCE_DIR}/mapd.thrift
     )
-  install(FILES ${CMAKE_SOURCE_DIR}/java/target/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar DESTINATION bin)
+  install(FILES ${CMAKE_SOURCE_DIR}/java/mapd/target/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar DESTINATION bin)
+  install(FILES ${CMAKE_SOURCE_DIR}/java/mapdjdbc/target/mapdjdbc-1.0-SNAPSHOT-jar-with-dependencies.jar DESTINATION bin)
+  install(FILES ${CMAKE_SOURCE_DIR}/java/calcite/target/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar DESTINATION bin)
 endif()
 
 set_directory_properties(PROPERTIES ADDITIONAL_MAKE_CLEAN_FILES "${ADDITIONAL_MAKE_CLEAN_FILES}")

@@ -15,7 +15,7 @@ Thrift. Also see ``$MAPD_PATH/samples`` for sample client code.
 
 Mapd also supports JDBC connections
 
-The jar is available at ``$MAPD_PATH/bin/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar``
+The jar is available at ``$MAPD_PATH/bin/mapdjdbc-1.0-SNAPSHOT-jar-with-dependencies.jar``
 
 The driver is ``com.mapd.jdbc.MapDDriver``
 
@@ -98,4 +98,4 @@ To compile and excute this example:
 ::
 
 	javac SampleJDBC.java
-        java -cp $MAPD_PATH/bin/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar:./  SampleJDBC
+        java -cp $MAPD_PATH/bin/mapdjdbc-1.0-SNAPSHOT-jar-with-dependencies.jar:./  SampleJDBC

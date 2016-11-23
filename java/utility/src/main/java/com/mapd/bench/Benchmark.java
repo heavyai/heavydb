@@ -1,4 +1,4 @@
-package com.mapd.jdbc;
+package com.mapd.bench;
 
 /*
  * To change this license header, choose License Headers in Project Properties.

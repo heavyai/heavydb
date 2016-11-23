@@ -1,4 +1,4 @@
-package com.mapd.jdbc;
+package com.mapd.bench;
 
 /*
  * cool mapd copyright 2016
