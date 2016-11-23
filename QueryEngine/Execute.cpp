@@ -847,7 +847,9 @@ llvm::Value* Executor::codegen(const Analyzer::LikeExpr* expr, const Compilation
   if (fast_dict_like_lv) {
     return fast_dict_like_lv;
   }
-  if (g_enable_watchdog) {
+  const auto& ti = expr->get_arg()->get_type_info();
+  CHECK(ti.is_string());
+  if (g_enable_watchdog && ti.get_compression() != kENCODING_NONE) {
     throw WatchdogException("Cannot do LIKE / ILIKE on this dictionary encoded column, its cardinality is too high");
   }
   auto str_lv = codegen(expr->get_arg(), true, co);
@@ -927,7 +929,9 @@ llvm::Value* Executor::codegen(const Analyzer::RegexpExpr* expr, const Compilati
   if (fast_dict_pattern_lv) {
     return fast_dict_pattern_lv;
   }
-  if (g_enable_watchdog) {
+  const auto& ti = expr->get_arg()->get_type_info();
+  CHECK(ti.is_string());
+  if (g_enable_watchdog && ti.get_compression() != kENCODING_NONE) {
     throw WatchdogException("Cannot do REGEXP_LIKE on this dictionary encoded column, its cardinality is too high");
   }
   auto str_lv = codegen(expr->get_arg(), true, co);
