@@ -2087,13 +2087,17 @@ int main(int argc, char** argv) {
 
     if (vm.count("help")) {
       std::cout << "Usage: mapd_server <catalog path> [<database name>] [--cpu|--gpu|--hybrid] [-p <port "
-                   "number>] [--http-port <http port number>] [--flush-log] [--version|-v]" << std::endl << std::endl;
+                   "number>] [--http-port <http port number>] [--flush-log] [--version|-v]"
+                << std::endl
+                << std::endl;
       std::cout << desc << std::endl;
       return 0;
     }
     if (vm.count("help-advanced")) {
       std::cout << "Usage: mapd_server <catalog path> [<database name>] [--cpu|--gpu|--hybrid] [-p <port "
-                   "number>] [--http-port <http port number>] [--flush-log] [--version|-v]" << std::endl << std::endl;
+                   "number>] [--http-port <http port number>] [--flush-log] [--version|-v]"
+                << std::endl
+                << std::endl;
       std::cout << desc_all << std::endl;
       return 0;
     }
