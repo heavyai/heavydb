@@ -621,10 +621,10 @@ class ResultSetEmulator {
   void emulateResultSets();
   void createResultSet(size_t rs_perc, std::vector<bool>& rs_groups);
   void mergeResultSets();
-  int8_t* rs1_buff, *rs2_buff;
+  int8_t *rs1_buff, *rs2_buff;
   const std::vector<TargetInfo> rs_target_infos;
   const QueryMemoryDescriptor rs_query_mem_desc;
-  NumberGenerator& rs1_gen, &rs2_gen;
+  NumberGenerator &rs1_gen, &rs2_gen;
   size_t rs1_perc, rs2_perc, rs_flow;
   size_t rs_entry_count;
   bool rs_silent;

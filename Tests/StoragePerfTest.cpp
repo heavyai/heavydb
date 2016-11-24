@@ -115,9 +115,8 @@ bool load_data_test(string table_name, size_t num_rows) {
 
 TEST(DataLoad, Numbers) {
   ASSERT_NO_THROW(run_ddl("drop table if exists numbers;"););
-  ASSERT_NO_THROW(run_ddl(
-                      "create table numbers (a smallint, b int, c bigint, d numeric(7,3), e "
-                      "double, f float);"););
+  ASSERT_NO_THROW(run_ddl("create table numbers (a smallint, b int, c bigint, d numeric(7,3), e "
+                          "double, f float);"););
   EXPECT_TRUE(load_data_test("numbers", LARGE));
   ASSERT_NO_THROW(run_ddl("drop table numbers;"););
 }
@@ -131,9 +130,8 @@ TEST(DataLoad, Strings) {
 
 TEST(StorageSmall, AllTypes) {
   ASSERT_NO_THROW(run_ddl("drop table if exists alltypes;"););
-  ASSERT_NO_THROW(run_ddl(
-                      "create table alltypes (a smallint, b int, c bigint, d numeric(7,3), e double, f float, "
-                      "g timestamp(0), h time(0), i date, x varchar(10), y text);"););
+  ASSERT_NO_THROW(run_ddl("create table alltypes (a smallint, b int, c bigint, d numeric(7,3), e double, f float, "
+                          "g timestamp(0), h time(0), i date, x varchar(10), y text);"););
   EXPECT_TRUE(load_data_test("alltypes", SMALL));
   ASSERT_NO_THROW(run_ddl("drop table alltypes;"););
 }

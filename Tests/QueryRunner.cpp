@@ -160,10 +160,12 @@ ResultRows run_multiple_agg(const std::string& query_str,
     const auto ra = parse_ravm_plan(query_str, session);
     auto ed_list = get_execution_descriptors(ra.get());
     RelAlgExecutor ra_executor(executor.get(), cat);
-    return ra_executor.executeRelAlgSeq(ed_list,
-                                        {device_type, true, ExecutorOptLevel::LoopStrengthReduction},
-                                        {false, true, false, true, false},
-                                        nullptr).getRows();
+    return ra_executor
+        .executeRelAlgSeq(ed_list,
+                          {device_type, true, ExecutorOptLevel::LoopStrengthReduction},
+                          {false, true, false, true, false},
+                          nullptr)
+        .getRows();
   }
 #endif  // HAVE_RAVM
 
