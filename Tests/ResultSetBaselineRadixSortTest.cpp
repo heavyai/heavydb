@@ -176,7 +176,11 @@ TEST(SortBaseline, Floats) {
 int main(int argc, char** argv) {
   testing::InitGoogleTest(&argc, argv);
 #ifdef HAVE_CUDA
-  g_cuda_mgr.reset(new CudaMgr_Namespace::CudaMgr(0));
+  try {
+    g_cuda_mgr.reset(new CudaMgr_Namespace::CudaMgr(0));
+  } catch (...) {
+    LOG(WARNING) << "Could not instantiate CudaMgr, will run on CPU";
+  }
 #endif  // HAVE_CUDA
   auto err = RUN_ALL_TESTS();
 #ifdef HAVE_CUDA
