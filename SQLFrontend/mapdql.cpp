@@ -317,7 +317,7 @@ void process_backslash_commands(char* command, ClientContext& context) {
             comma_or_blank = ",";
           }
           if (DEFAULT_MAX_ROWS != context.table_details.max_rows) {
-            row = comma_or_blank + " MAX_ROW = " + std::to_string(context.table_details.max_rows);
+            row = comma_or_blank + " MAX_ROWS = " + std::to_string(context.table_details.max_rows);
           }
           std::string with = frag + page + row;
           if (with.length() > 0) {
