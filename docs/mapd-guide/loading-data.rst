@@ -6,12 +6,13 @@ Loading Data
 
 ::
 
-    COPY <table> FROM '<file path>' [WITH (<property> = value, ...)];
+    COPY <table> FROM '<file pattern>' [WITH (<property> = value, ...)];
 
-``<file path>`` must be a path on the server. There is a way to import
-client-side files (``\copy`` command in mapdql) but it will be
-significantly slower. For large files, it is recommended to first scp
-the file to the server and then issue the COPY command.
+``<file pattern>`` must be local on the server, the file pattern can contain
+wildcards if there are multiple files to be loaded.
+There is a way to import client-side files (``\copy`` command in mapdql)
+but it will be significantly slower. For large files, it is recommended
+to first scp the file to the server and then issue the COPY command.
 
 ``<property>`` in the optional WITH clause can be:
 
