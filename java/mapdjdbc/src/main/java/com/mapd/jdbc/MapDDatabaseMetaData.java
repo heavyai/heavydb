@@ -182,23 +182,24 @@ class MapDDatabaseMetaData implements DatabaseMetaData {
 
   @Override
   public String getNumericFunctions() throws SQLException { //logger.debug("Entered");
-    return "ACOS(float), ACOS(number), ASIN, ATAN2, CEIL, COS, COT, DEGREES, EXP, FLOOR, LN, LOG, PI(), POWER, SQRT, RADIANS, ROUND, SIN, TAN";
+    return "ACOS(float), ACOS(number), ASIN, ATAN2, CEIL, COS, COT, DEGREES, EXP, FLOOR, LN, LOG, PI(), POWER, SQRT"
+            +", RADIANS, ROUND, SIN, TAN, ATAN, ABS, MOD SIGN, TRUNCATE";
   }
 
   @Override
   public String getStringFunctions() throws SQLException { //logger.debug("Entered");
-    return "";
+    return "CHAR_LENGTH, CHAR";
   }
 
   @Override
   public String getSystemFunctions() throws SQLException { //logger.debug("Entered");
-    return "ACOS(float), ACOS(number), ASIN, ATAN2, CEIL, COS, COT, DEGREES, EXP, FLOOR, LN, LOG, PI(), POWER, SQRT, RADIANS, ROUND, SIN, TAN";
+    return "";
   }
 
   @Override
   public String getTimeDateFunctions() throws SQLException { //logger.debug("Entered");
     //return "NOW,CURDATE,SECOND,HOUR,YEAR,EXTRACT,QUARTER,WEEK,MONTH,DATETRUNC";
-    return "SECOND, MINUTE, WEEK, HOUR, MONTH, QUARTER, DATETRUNC, NOW, CURDATE, EXTRACT, DATENAME, DATEPART, DATEDIFF, DATETIME";
+    return "DATE_TRUNC, NOW, EXTRACT";
   }
 
   @Override
@@ -223,12 +224,12 @@ class MapDDatabaseMetaData implements DatabaseMetaData {
 
   @Override
   public boolean supportsColumnAliasing() throws SQLException { //logger.debug("Entered");
-    return false;
+    return true;
   }
 
   @Override
   public boolean nullPlusNonNullIsNull() throws SQLException { //logger.debug("Entered");
-    return false;
+    return true;
   }
 
   @Override
@@ -258,7 +259,7 @@ class MapDDatabaseMetaData implements DatabaseMetaData {
 
   @Override
   public boolean supportsOrderByUnrelated() throws SQLException { //logger.debug("Entered");
-    return false;
+    return true;
   }
 
   @Override
@@ -318,12 +319,12 @@ class MapDDatabaseMetaData implements DatabaseMetaData {
 
   @Override
   public boolean supportsANSI92IntermediateSQL() throws SQLException { //logger.debug("Entered");
-    return true;
+    return false;
   }
 
   @Override
   public boolean supportsANSI92FullSQL() throws SQLException { //logger.debug("Entered");
-    return true;
+    return false;
   }
 
   @Override
@@ -343,7 +344,7 @@ class MapDDatabaseMetaData implements DatabaseMetaData {
 
   @Override
   public boolean supportsLimitedOuterJoins() throws SQLException { //logger.debug("Entered");
-    return false;
+    return true;
   }
 
   @Override
@@ -443,22 +444,22 @@ class MapDDatabaseMetaData implements DatabaseMetaData {
 
   @Override
   public boolean supportsSubqueriesInComparisons() throws SQLException { //logger.debug("Entered");
-    return false;
+    return true;
   }
 
   @Override
   public boolean supportsSubqueriesInExists() throws SQLException { //logger.debug("Entered");
-    return false;
+    return true;
   }
 
   @Override
   public boolean supportsSubqueriesInIns() throws SQLException { //logger.debug("Entered");
-    return false;
+    return true;
   }
 
   @Override
   public boolean supportsSubqueriesInQuantifieds() throws SQLException { //logger.debug("Entered");
-    return false;
+    return true;
   }
 
   @Override
