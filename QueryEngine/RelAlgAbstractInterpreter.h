@@ -212,6 +212,32 @@ class RexOperator : public RexScalar {
 
 class RelAlgNode;
 
+class ExecutionResult;
+
+class RexSubQuery : public RexScalar {
+ public:
+  RexSubQuery(const RelAlgNode* node, const SQLTypeInfo& type, std::shared_ptr<const ExecutionResult> result)
+      : node_(node), type_(type), result_(result) {}
+
+  const RelAlgNode* getSourceNode() const { return node_; }
+
+  const SQLTypeInfo& getType() const { return type_; }
+  std::shared_ptr<const ExecutionResult> get_execution_result() const { return result_; }
+
+  bool operator==(const RexSubQuery& that) const { return node_ == that.getSourceNode(); }
+
+  std::string toString() const override {
+    return "(RexSubQuery " + std::to_string(reinterpret_cast<const uint64_t>(node_)) + ")";
+  }
+
+  std::unique_ptr<RexSubQuery> deepCopy() const { return boost::make_unique<RexSubQuery>(node_, type_, result_); }
+
+ private:
+  const RelAlgNode* node_;
+  const SQLTypeInfo type_;
+  std::shared_ptr<const ExecutionResult> result_;
+};
+
 // The actual input node understood by the Executor.
 // The in_index_ is relative to the output of node_.
 class RexInput : public RexAbstractInput {
@@ -784,7 +810,10 @@ class QueryNotSupported : public std::runtime_error {
   QueryNotSupported(const std::string& reason) : std::runtime_error(reason) {}
 };
 
-std::shared_ptr<const RelAlgNode> ra_interpret(const rapidjson::Value&, const Catalog_Namespace::Catalog&);
+std::shared_ptr<const RelAlgNode> ra_interpret(const rapidjson::Value&,
+                                               const Catalog_Namespace::Catalog&,
+                                               const CompilationOptions& co,
+                                               const ExecutionOptions& eo);
 
 std::string tree_string(const RelAlgNode*, const size_t indent = 0);
 

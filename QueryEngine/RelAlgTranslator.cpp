@@ -6,6 +6,7 @@
 #include "DateTimePlusRewrite.h"
 #include "ExtensionFunctionsWhitelist.h"
 #include "RelAlgAbstractInterpreter.h"
+#include "RelAlgExecutionDescriptor.h"
 
 #include "../Analyzer/Analyzer.h"
 #include "../Parser/ParserNode.h"
@@ -69,6 +70,10 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateScalarRex(const RexSc
   if (rex_case) {
     return translateCase(rex_case);
   }
+  const auto rex_subquery = dynamic_cast<const RexSubQuery*>(rex);
+  if (rex_subquery) {
+    return translateSubQuery(rex_subquery);
+  }
   CHECK(false);
   return nullptr;
 }
@@ -130,6 +135,52 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLiteral(const RexLite
     default: { LOG(FATAL) << "Unexpected literal type " << lit_ti.get_type_name(); }
   }
   return nullptr;
+}
+
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateSubQuery(const RexSubQuery* rex_subquery) const {
+  CHECK(rex_subquery);
+  auto result = rex_subquery->get_execution_result();
+  auto& row_set = result->getRows();
+  CHECK_EQ(size_t(1), row_set.rowCount());
+  auto first_row = row_set.getNextRow(false, false);
+  auto scalar_tv = boost::get<ScalarTargetValue>(&first_row[0]);
+  auto ti = rex_subquery->getType();
+  Datum d;
+  switch (ti.get_type()) {
+    case kSMALLINT: {
+      const auto ival = boost::get<int64_t>(scalar_tv);
+      CHECK(ival);
+      d.smallintval = *ival;
+      break;
+    }
+    case kINT: {
+      const auto ival = boost::get<int64_t>(scalar_tv);
+      CHECK(ival);
+      d.intval = *ival;
+      break;
+    }
+    case kBIGINT: {
+      const auto ival = boost::get<int64_t>(scalar_tv);
+      CHECK(*ival);
+      d.bigintval = *ival;
+      break;
+    }
+    case kDOUBLE: {
+      const auto dval = boost::get<double>(scalar_tv);
+      CHECK(dval);
+      d.doubleval = *dval;
+      break;
+    }
+    case kFLOAT: {
+      const auto fval = boost::get<float>(scalar_tv);
+      CHECK(fval);
+      d.floatval = *fval;
+      break;
+    }
+    default:
+      CHECK(false);
+  }
+  return makeExpr<Analyzer::Constant>(ti, false, d);
 }
 
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInput(const RexInput* rex_input) const {
@@ -205,12 +256,73 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUoper(const RexOperat
   return nullptr;
 }
 
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInOper(const RexOperator* rex_operator) const {
+  CHECK(rex_operator->size() == 2);
+  const auto lhs = translateScalarRex(rex_operator->getOperand(0));
+  const auto rhs = rex_operator->getOperand(1);
+  const auto rex_subquery = dynamic_cast<const RexSubQuery*>(rhs);
+  CHECK(rex_subquery);
+  auto ti = lhs->get_type_info();
+  auto result = rex_subquery->get_execution_result();
+  auto& row_set = result->getRows();
+  if (row_set.rowCount() > 10000) {
+    throw std::runtime_error("Unable to handle 'expr IN (subquery)', subquery returned 10000+ rows.");
+  }
+  std::list<std::shared_ptr<Analyzer::Expr>> value_exprs;
+  while (true) {
+    auto row = row_set.getNextRow(false, false);
+    if (row.empty())
+      break;
+    auto scalar_tv = boost::get<ScalarTargetValue>(&row[0]);
+    Datum d;
+    switch (ti.get_type()) {
+      case kSMALLINT: {
+        const auto ival = boost::get<int64_t>(scalar_tv);
+        CHECK(ival);
+        d.smallintval = *ival;
+        break;
+      }
+      case kINT: {
+        const auto ival = boost::get<int64_t>(scalar_tv);
+        CHECK(ival);
+        d.intval = *ival;
+        break;
+      }
+      case kBIGINT: {
+        const auto ival = boost::get<int64_t>(scalar_tv);
+        CHECK(ival);
+        d.bigintval = *ival;
+        break;
+      }
+      case kDOUBLE: {
+        const auto dval = boost::get<double>(scalar_tv);
+        CHECK(dval);
+        d.doubleval = *dval;
+        break;
+      }
+      case kFLOAT: {
+        const auto fval = boost::get<float>(scalar_tv);
+        CHECK(fval);
+        d.floatval = *fval;
+        break;
+      }
+      default:
+        CHECK(false);
+    }
+    value_exprs.push_back(makeExpr<Analyzer::Constant>(ti, false, d));
+  }
+  return makeExpr<Analyzer::InValues>(lhs, value_exprs);
+}
+
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateOper(const RexOperator* rex_operator) const {
   CHECK_GT(rex_operator->size(), size_t(0));
   if (rex_operator->size() == 1) {
     return translateUoper(rex_operator);
   }
   const auto sql_op = rex_operator->getOperator();
+  if (sql_op == kIN) {
+    return translateInOper(rex_operator);
+  }
   auto lhs = translateScalarRex(rex_operator->getOperand(0));
   for (size_t i = 1; i < rex_operator->size(); ++i) {
     std::shared_ptr<Analyzer::Expr> rhs;

@@ -17,6 +17,10 @@ class RexVisitorBase {
     if (rex_literal) {
       return visitLiteral(rex_literal);
     }
+    const auto rex_subquery = dynamic_cast<const RexSubQuery*>(rex_scalar);
+    if (rex_subquery) {
+      return visitSubQuery(rex_subquery);
+    }
     const auto rex_operator = dynamic_cast<const RexOperator*>(rex_scalar);
     if (rex_operator) {
       return visitOperator(rex_operator);
@@ -37,6 +41,8 @@ class RexVisitorBase {
 
   virtual T visitLiteral(const RexLiteral*) const = 0;
 
+  virtual T visitSubQuery(const RexSubQuery*) const = 0;
+
   virtual T visitRef(const RexRef*) const = 0;
 
   virtual T visitOperator(const RexOperator* rex_operator) const = 0;
@@ -53,6 +59,8 @@ class RexVisitor : public RexVisitorBase<T> {
   T visitInput(const RexInput*) const override { return defaultResult(); }
 
   T visitLiteral(const RexLiteral*) const override { return defaultResult(); }
+
+  T visitSubQuery(const RexSubQuery*) const override { return defaultResult(); }
 
   T visitRef(const RexRef*) const override { return defaultResult(); }
 
@@ -94,6 +102,8 @@ class RexDeepCopyVisitor : public RexVisitorBase<std::unique_ptr<const RexScalar
   RetType visitInput(const RexInput* input) const override { return input->deepCopy(); }
 
   RetType visitLiteral(const RexLiteral* literal) const override { return literal->deepCopy(); }
+
+  RetType visitSubQuery(const RexSubQuery* subquery) const override { return subquery->deepCopy(); }
 
   RetType visitRef(const RexRef* ref) const override { return ref->deepCopy(); }
 

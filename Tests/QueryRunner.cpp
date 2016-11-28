@@ -127,7 +127,9 @@ Planner::RootPlan* parse_plan(const std::string& query_str,
 #ifdef HAVE_RAVM
 
 std::shared_ptr<const RelAlgNode> parse_ravm_plan(const std::string& query_str,
-                                                  const std::unique_ptr<Catalog_Namespace::SessionInfo>& session) {
+                                                  const std::unique_ptr<Catalog_Namespace::SessionInfo>& session,
+                                                  const CompilationOptions& co,
+                                                  const ExecutionOptions& eo) {
   const auto& cat = session->get_catalog();
   auto& calcite_mgr = cat.get_calciteMgr();
   const auto query_ra = calcite_mgr.process(session->get_currentUser().userName,
@@ -140,7 +142,7 @@ std::shared_ptr<const RelAlgNode> parse_ravm_plan(const std::string& query_str,
   query_ast.Parse(query_ra.c_str());
   CHECK(!query_ast.HasParseError());
   CHECK(query_ast.IsObject());
-  return ra_interpret(query_ast, cat);
+  return ra_interpret(query_ast, cat, co, eo);
 }
 
 #endif  // HAVE_RAVM
@@ -157,15 +159,12 @@ ResultRows run_multiple_agg(const std::string& query_str,
 #ifdef HAVE_RAVM
   ParserWrapper pw{query_str};
   if (!(pw.is_other_explain || pw.is_ddl || pw.is_update_dml)) {
-    const auto ra = parse_ravm_plan(query_str, session);
+    CompilationOptions co = {device_type, true, ExecutorOptLevel::LoopStrengthReduction};
+    ExecutionOptions eo = {false, true, false, true, false, false};
+    const auto ra = parse_ravm_plan(query_str, session, co, eo);
     auto ed_list = get_execution_descriptors(ra.get());
     RelAlgExecutor ra_executor(executor.get(), cat);
-    return ra_executor
-        .executeRelAlgSeq(ed_list,
-                          {device_type, true, ExecutorOptLevel::LoopStrengthReduction},
-                          {false, true, false, true, false},
-                          nullptr)
-        .getRows();
+    return ra_executor.executeRelAlgSeq(ed_list, co, eo, nullptr).getRows();
   }
 #endif  // HAVE_RAVM
 

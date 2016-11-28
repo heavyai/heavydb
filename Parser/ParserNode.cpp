@@ -1303,6 +1303,8 @@ std::string OperExpr::to_string() const {
     str = left->to_string() + "[" + right->to_string() + "]";
   else if (optype == kUNNEST)
     str = "UNNEST(" + left->to_string() + ")";
+  else if (optype == kIN)
+    str = "(" + left->to_string() + " IN " + right->to_string() + ")";
   else
     str = "(" + left->to_string() + op_str[optype] + right->to_string() + ")";
   return str;
@@ -1910,19 +1912,18 @@ ResultRows getResultRows(const Catalog_Namespace::SessionInfo& session,
                                             pg_shim(select_stmt),
                                             true,
                                             false);
+  CompilationOptions co = {device_type, true, ExecutorOptLevel::LoopStrengthReduction};
+  ExecutionOptions eo = {false, true, false, true, false, false};
   rapidjson::Document query_ast;
   query_ast.Parse(query_ra.c_str());
   CHECK(!query_ast.HasParseError());
   CHECK(query_ast.IsObject());
-  const auto ra = ra_interpret(query_ast, catalog);
+  const auto ra = ra_interpret(query_ast, catalog, co, eo);
 
   auto ed_list = get_execution_descriptors(ra.get());
   RelAlgExecutor ra_executor(executor.get(), catalog);
   ExecutionResult result{ResultRows({}, {}, nullptr, nullptr, {}, device_type), {}};
-  result = ra_executor.executeRelAlgSeq(ed_list,
-                                        {device_type, true, ExecutorOptLevel::LoopStrengthReduction},
-                                        {false, true, false, true, false},
-                                        nullptr);
+  result = ra_executor.executeRelAlgSeq(ed_list, co, eo, nullptr);
   targets = result.getTargetsMeta();
 
   return result.getRows();

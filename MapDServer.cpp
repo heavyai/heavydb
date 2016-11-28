@@ -582,7 +582,9 @@ class MapDHandler : virtual public MapDIf {
                                                const Catalog_Namespace::SessionInfo& session_info) {
     const auto query_ra = parse_to_ra(query_str, session_info);
     const auto& cat = session_info.get_catalog();
-    const auto ra = deserialize_ra_dag(query_ra, cat);
+    CompilationOptions co = {session_info.get_executor_device_type(), true, ExecutorOptLevel::Default};
+    ExecutionOptions eo = {false, allow_multifrag_, false, allow_loop_joins_, g_enable_watchdog, jit_debug_};
+    const auto ra = deserialize_ra_dag(query_ra, cat, co, eo);
     auto ed_list = get_execution_descriptors(ra.get());
     RelAlgExecutor ra_executor(nullptr, cat);
     return ra_executor.validateRelAlgSeq(ed_list);
@@ -1491,19 +1493,16 @@ class MapDHandler : virtual public MapDIf {
                        const ExecutorDeviceType executor_device_type,
                        const bool just_explain) const {
     const auto& cat = session_info.get_catalog();
-    const auto ra = deserialize_ra_dag(query_ra, cat);
+    CompilationOptions co = {executor_device_type, true, ExecutorOptLevel::Default};
+    ExecutionOptions eo = {false, allow_multifrag_, just_explain, allow_loop_joins_, g_enable_watchdog, jit_debug_};
+    const auto ra = deserialize_ra_dag(query_ra, cat, co, eo);
     auto ed_list = get_execution_descriptors(ra.get());
     auto executor = Executor::getExecutor(
         cat.get_currentDB().dbId, jit_debug_ ? "/tmp" : "", jit_debug_ ? "mapdquery" : "", 0, 0, nullptr);
     RelAlgExecutor ra_executor(executor.get(), cat);
     ExecutionResult result{ResultRows({}, {}, nullptr, nullptr, {}, executor_device_type), {}};
-    _return.execution_time_ms += measure<>::execution([&]() {
-      result =
-          ra_executor.executeRelAlgSeq(ed_list,
-                                       {executor_device_type, true, ExecutorOptLevel::Default},
-                                       {false, allow_multifrag_, just_explain, allow_loop_joins_, g_enable_watchdog},
-                                       nullptr);
-    });
+    _return.execution_time_ms +=
+        measure<>::execution([&]() { result = ra_executor.executeRelAlgSeq(ed_list, co, eo, nullptr); });
     // reduce execution time by the time spent during queue waiting
     _return.execution_time_ms -= result.getRows().getQueueTime();
     if (just_explain) {
@@ -1606,7 +1605,9 @@ class MapDHandler : virtual public MapDIf {
                                           nullptr);
     RelAlgExecutor ra_executor(executor.get(), cat);
     auto clock_begin = timer_start();
-    const auto ra = deserialize_ra_dag(query_ra, cat);
+    CompilationOptions co = {session_info.get_executor_device_type(), true, ExecutorOptLevel::Default};
+    ExecutionOptions eo = {false, allow_multifrag_, false, allow_loop_joins_, g_enable_watchdog, jit_debug_};
+    const auto ra = deserialize_ra_dag(query_ra, cat, co, eo);
     auto ed_list = get_execution_descriptors(ra.get());
     rapidjson::Document render_config;
     render_config.Parse(render_type.c_str());
@@ -1615,11 +1616,7 @@ class MapDHandler : virtual public MapDIf {
 
     std::unique_ptr<RenderInfo> render_info(
         new RenderInfo(session_info.get_session_id(), 1, render_type, (poly_data_desc == nullptr)));
-    const auto exe_result =
-        ra_executor.executeRelAlgSeq(ed_list,
-                                     {session_info.get_executor_device_type(), true, ExecutorOptLevel::Default},
-                                     {false, allow_multifrag_, false, allow_loop_joins_, g_enable_watchdog},
-                                     render_info.get());
+    const auto exe_result = ra_executor.executeRelAlgSeq(ed_list, co, eo, render_info.get());
     const auto& results = exe_result.getRows();
     if (poly_data_desc) {
       CHECK(false);
@@ -1892,7 +1889,9 @@ class MapDHandler : virtual public MapDIf {
     const auto session_info = get_session(session);
     const auto query_ra = parse_to_ra(query, session_info);
     const auto& cat = session_info.get_catalog();
-    const auto ra = deserialize_ra_dag(query_ra, cat);
+    CompilationOptions co = {session_info.get_executor_device_type(), true, ExecutorOptLevel::Default};
+    ExecutionOptions eo = {false, allow_multifrag_, false, allow_loop_joins_, g_enable_watchdog, jit_debug_};
+    const auto ra = deserialize_ra_dag(query_ra, cat, co, eo);
     auto ed_list = get_execution_descriptors(ra.get());
     CHECK(!ed_list.empty());
 #endif  // HAVE_RAVM
@@ -1903,12 +1902,14 @@ class MapDHandler : virtual public MapDIf {
 
 #ifdef HAVE_RAVM
   static std::shared_ptr<const RelAlgNode> deserialize_ra_dag(const std::string& query_ra,
-                                                              const Catalog_Namespace::Catalog& cat) {
+                                                              const Catalog_Namespace::Catalog& cat,
+                                                              const CompilationOptions& co,
+                                                              const ExecutionOptions& eo) {
     rapidjson::Document query_ast;
     query_ast.Parse(query_ra.c_str());
     CHECK(!query_ast.HasParseError());
     CHECK(query_ast.IsObject());
-    return ra_interpret(query_ast, cat);
+    return ra_interpret(query_ast, cat, co, eo);
   }
 #endif  // HAVE_RAVM
 

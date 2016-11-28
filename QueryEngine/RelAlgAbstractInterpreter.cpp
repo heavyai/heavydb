@@ -1,8 +1,9 @@
 #ifdef HAVE_CALCITE
 #include "RelAlgAbstractInterpreter.h"
-#include "RelAlgOptimizer.h"
 #include "CalciteDeserializerUtils.h"
 #include "JsonAccessors.h"
+#include "RelAlgExecutor.h"
+#include "RelAlgOptimizer.h"
 #include "RexVisitor.h"
 
 #include <glog/logging.h>
@@ -337,7 +338,14 @@ std::unique_ptr<RexLiteral> parse_literal(const rapidjson::Value& expr) {
   return nullptr;
 }
 
-std::unique_ptr<const RexScalar> parse_scalar_expr(const rapidjson::Value& expr);
+std::unique_ptr<const RexScalar> parse_scalar_expr(const rapidjson::Value& expr,
+                                                   const Catalog_Namespace::Catalog& cat,
+                                                   const CompilationOptions& co,
+                                                   const ExecutionOptions& eo);
+std::unique_ptr<const RexSubQuery> parse_subquery(const rapidjson::Value& expr,
+                                                  const Catalog_Namespace::Catalog& cat,
+                                                  const CompilationOptions& co,
+                                                  const ExecutionOptions& eo);
 
 SQLTypeInfo parse_type(const rapidjson::Value& type_obj) {
   CHECK(type_obj.IsObject() && (type_obj.MemberCount() >= 2 && type_obj.MemberCount() <= 4));
@@ -353,7 +361,10 @@ SQLTypeInfo parse_type(const rapidjson::Value& type_obj) {
   return ti;
 }
 
-std::unique_ptr<RexOperator> parse_operator(const rapidjson::Value& expr) {
+std::unique_ptr<RexOperator> parse_operator(const rapidjson::Value& expr,
+                                            const Catalog_Namespace::Catalog& cat,
+                                            const CompilationOptions& co,
+                                            const ExecutionOptions& eo) {
   const auto op_name = json_str(field(expr, "op"));
   const bool is_quantifier = op_name == std::string("PG_ANY") || op_name == std::string("PG_ALL");
   const auto op = is_quantifier ? kFUNCTION : to_sql_op(op_name);
@@ -362,31 +373,72 @@ std::unique_ptr<RexOperator> parse_operator(const rapidjson::Value& expr) {
   std::vector<std::unique_ptr<const RexScalar>> operands;
   for (auto operators_json_arr_it = operators_json_arr.Begin(); operators_json_arr_it != operators_json_arr.End();
        ++operators_json_arr_it) {
-    operands.emplace_back(parse_scalar_expr(*operators_json_arr_it));
+    operands.emplace_back(parse_scalar_expr(*operators_json_arr_it, cat, co, eo));
   }
   const auto type_it = expr.FindMember("type");
   CHECK(type_it != expr.MemberEnd());
   const auto ti = parse_type(type_it->value);
+  if (op == kIN && expr.HasMember("subquery")) {
+    auto subquery = parse_subquery(expr, cat, co, eo);
+    operands.emplace_back(std::move(subquery));
+  }
   return std::unique_ptr<RexOperator>(op == kFUNCTION ? new RexFunctionOperator(op_name, operands, ti)
                                                       : new RexOperator(op, operands, ti));
 }
 
-std::unique_ptr<RexCase> parse_case(const rapidjson::Value& expr) {
+std::unique_ptr<RexCase> parse_case(const rapidjson::Value& expr,
+                                    const Catalog_Namespace::Catalog& cat,
+                                    const CompilationOptions& co,
+                                    const ExecutionOptions& eo) {
   const auto& operands = field(expr, "operands");
   CHECK(operands.IsArray());
   CHECK_GE(operands.Size(), unsigned(2));
   std::unique_ptr<const RexScalar> else_expr;
   std::vector<std::pair<std::unique_ptr<const RexScalar>, std::unique_ptr<const RexScalar>>> expr_pair_list;
   for (auto operands_it = operands.Begin(); operands_it != operands.End();) {
-    auto when_expr = parse_scalar_expr(*operands_it++);
+    auto when_expr = parse_scalar_expr(*operands_it++, cat, co, eo);
     if (operands_it == operands.End()) {
       else_expr = std::move(when_expr);
       break;
     }
-    auto then_expr = parse_scalar_expr(*operands_it++);
+    auto then_expr = parse_scalar_expr(*operands_it++, cat, co, eo);
     expr_pair_list.emplace_back(std::move(when_expr), std::move(then_expr));
   }
   return std::unique_ptr<RexCase>(new RexCase(expr_pair_list, else_expr));
+}
+
+std::unique_ptr<const RexSubQuery> parse_subquery(const rapidjson::Value& expr,
+                                                  const Catalog_Namespace::Catalog& cat,
+                                                  const CompilationOptions& co,
+                                                  const ExecutionOptions& eo) {
+  const auto& operands = field(expr, "operands");
+  CHECK(operands.IsArray());
+  CHECK_GE(operands.Size(), unsigned(0));
+  const auto type_it = expr.FindMember("type");
+  CHECK(type_it != expr.MemberEnd());
+  const auto ti = parse_type(type_it->value);
+  const auto subquery_str = json_str(field(expr, "subquery"));
+
+  rapidjson::Document subquery_ast;
+  subquery_ast.Parse(subquery_str.c_str());
+  CHECK(!subquery_ast.HasParseError());
+  CHECK(subquery_ast.IsObject());
+
+  const auto ra = ra_interpret(subquery_ast, cat, co, eo);
+
+  // Execute the subquery and cache the result.
+  auto ed_list = get_execution_descriptors(ra.get());
+  auto executor = Executor::getExecutor(
+      cat.get_currentDB().dbId, eo.jit_debug ? "/tmp" : "", eo.jit_debug ? "mapdquery" : "", 0, 0, nullptr);
+  RelAlgExecutor ra_executor(executor.get(), cat);
+  auto result = ra_executor.executeRelAlgSeq(ed_list, co, eo, nullptr);
+  auto row_set = &result.getRows();
+  CHECK(row_set);
+  if (row_set) {
+    CHECK_LT(size_t(0), row_set->colCount());
+  }
+
+  return std::unique_ptr<const RexSubQuery>(new RexSubQuery(ra.get(), ti, std::make_shared<ExecutionResult>(result)));
 }
 
 std::vector<std::string> strings_from_json_array(const rapidjson::Value& json_str_arr) noexcept {
@@ -428,7 +480,10 @@ std::unique_ptr<const RexAgg> parse_aggregate_expr(const rapidjson::Value& expr)
   return std::unique_ptr<const RexAgg>(new RexAgg(agg, distinct, agg_ti, operands.empty() ? -1 : operands[0]));
 }
 
-std::unique_ptr<const RexScalar> parse_scalar_expr(const rapidjson::Value& expr) {
+std::unique_ptr<const RexScalar> parse_scalar_expr(const rapidjson::Value& expr,
+                                                   const Catalog_Namespace::Catalog& cat,
+                                                   const CompilationOptions& co,
+                                                   const ExecutionOptions& eo) {
   CHECK(expr.IsObject());
   if (expr.IsObject() && expr.HasMember("input")) {
     return std::unique_ptr<const RexScalar>(parse_abstract_input(expr));
@@ -439,9 +494,12 @@ std::unique_ptr<const RexScalar> parse_scalar_expr(const rapidjson::Value& expr)
   if (expr.IsObject() && expr.HasMember("op")) {
     const auto op_str = json_str(field(expr, "op"));
     if (op_str == std::string("CASE")) {
-      return std::unique_ptr<const RexScalar>(parse_case(expr));
+      return std::unique_ptr<const RexScalar>(parse_case(expr, cat, co, eo));
     }
-    return std::unique_ptr<const RexScalar>(parse_operator(expr));
+    if (op_str == std::string("$SCALAR_QUERY")) {
+      return std::unique_ptr<const RexScalar>(parse_subquery(expr, cat, co, eo));
+    }
+    return std::unique_ptr<const RexScalar>(parse_operator(expr, cat, co, eo));
   }
   throw QueryNotSupported("Expression node " + json_node_to_string(expr) + " not supported");
 }
@@ -484,6 +542,10 @@ std::unique_ptr<const RexScalar> disambiguate_rex(const RexScalar* rex_scalar, c
   if (rex_abstract_input) {
     CHECK_LT(static_cast<size_t>(rex_abstract_input->getIndex()), ra_output.size());
     return std::unique_ptr<const RexInput>(new RexInput(ra_output[rex_abstract_input->getIndex()]));
+  }
+  const auto rex_subquery = dynamic_cast<const RexSubQuery*>(rex_scalar);
+  if (rex_subquery) {
+    return std::unique_ptr<const RexSubQuery>(new RexSubQuery(*rex_subquery));
   }
   const auto rex_operator = dynamic_cast<const RexOperator*>(rex_scalar);
   if (rex_operator) {
@@ -809,8 +871,11 @@ void check_empty_inputs_field(const rapidjson::Value& node) noexcept {
 
 class RaAbstractInterp {
  public:
-  RaAbstractInterp(const rapidjson::Value& query_ast, const Catalog_Namespace::Catalog& cat)
-      : query_ast_(query_ast), cat_(cat) {}
+  RaAbstractInterp(const rapidjson::Value& query_ast,
+                   const Catalog_Namespace::Catalog& cat,
+                   const CompilationOptions& co,
+                   const ExecutionOptions& eo)
+      : query_ast_(query_ast), cat_(cat), co_(co), eo_(eo) {}
 
   std::shared_ptr<const RelAlgNode> run() {
     const auto& rels = field(query_ast_, "rels");
@@ -874,7 +939,7 @@ class RaAbstractInterp {
     CHECK(exprs_json.IsArray());
     std::vector<std::unique_ptr<const RexScalar>> exprs;
     for (auto exprs_json_it = exprs_json.Begin(); exprs_json_it != exprs_json.End(); ++exprs_json_it) {
-      exprs.emplace_back(parse_scalar_expr(*exprs_json_it));
+      exprs.emplace_back(parse_scalar_expr(*exprs_json_it, cat_, co_, eo_));
     }
     const auto& fields = field(proj_ra, "fields");
     return std::make_shared<RelProject>(exprs, strings_from_json_array(fields), inputs.front());
@@ -885,7 +950,7 @@ class RaAbstractInterp {
     CHECK_EQ(size_t(1), inputs.size());
     const auto id = node_id(filter_ra);
     CHECK(id);
-    auto condition = parse_scalar_expr(field(filter_ra, "condition"));
+    auto condition = parse_scalar_expr(field(filter_ra, "condition"), cat_, co_, eo_);
     return std::make_shared<RelFilter>(condition, inputs.front());
   }
 
@@ -910,7 +975,7 @@ class RaAbstractInterp {
     const auto inputs = getRelAlgInputs(join_ra);
     CHECK_EQ(size_t(2), inputs.size());
     const auto join_type = to_join_type(json_str(field(join_ra, "joinType")));
-    auto filter_rex = parse_scalar_expr(field(join_ra, "condition"));
+    auto filter_rex = parse_scalar_expr(field(join_ra, "condition"), cat_, co_, eo_);
     return std::make_shared<RelJoin>(inputs[0], inputs[1], filter_rex, join_type);
   }
 
@@ -970,14 +1035,18 @@ class RaAbstractInterp {
 
   const rapidjson::Value& query_ast_;
   const Catalog_Namespace::Catalog& cat_;
+  const CompilationOptions& co_;
+  const ExecutionOptions& eo_;
   std::vector<std::shared_ptr<RelAlgNode>> nodes_;
 };
 
 }  // namespace
 
 std::shared_ptr<const RelAlgNode> ra_interpret(const rapidjson::Value& query_ast,
-                                               const Catalog_Namespace::Catalog& cat) {
-  RaAbstractInterp interp(query_ast, cat);
+                                               const Catalog_Namespace::Catalog& cat,
+                                               const CompilationOptions& co,
+                                               const ExecutionOptions& eo) {
+  RaAbstractInterp interp(query_ast, cat, co, eo);
   return interp.run();
 }
 

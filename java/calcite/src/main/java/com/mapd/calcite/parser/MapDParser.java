@@ -32,6 +32,7 @@ import org.apache.calcite.sql.type.SqlTypeFactoryImpl;
 import org.apache.calcite.sql.validate.SqlConformance;
 import org.apache.calcite.sql.validate.SqlValidator;
 import org.apache.calcite.sql2rel.SqlToRelConverter;
+import org.apache.calcite.sql2rel.SqlToRelConverter.Config;
 import org.apache.calcite.sql2rel.StandardConvertletTable;
 import org.apache.calcite.util.ConversionUtil;
 import org.slf4j.Logger;
@@ -65,8 +66,9 @@ public final class MapDParser {
                 SqlConformance.DEFAULT);
         final RexBuilder rexBuilder = new RexBuilder(typeFactory);
         final RelOptCluster cluster = RelOptCluster.create(new MapDRelOptPlanner(), rexBuilder);
+        Config config = SqlToRelConverter.configBuilder().withExpand(true).build();
         converter = new SqlToRelConverter(null, validator, catalogReader, cluster,
-                StandardConvertletTable.INSTANCE);
+                StandardConvertletTable.INSTANCE, config);
     }
 
     public String getRelAlgebra(String sql, final boolean legacy_syntax, final MapDUser mapDUser, final boolean isExplain)
