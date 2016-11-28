@@ -81,6 +81,7 @@ struct QueryMemoryDescriptor {
 
   std::vector<int8_t> group_col_widths;
   std::vector<ColWidths> agg_col_widths;
+  std::vector<ssize_t> target_groupby_indices;
   size_t entry_count;        // the number of entries in the main buffer
   size_t entry_count_small;  // the number of entries in the small buffer
   int64_t min_val;           // meaningful for OneColKnownRange, MultiColPerfectHash only

@@ -274,7 +274,10 @@ thrust::host_vector<int64_t> collect_order_entry_column(const int8_t* groupby_bu
                                                         const size_t start,
                                                         const size_t step) {
   thrust::host_vector<int64_t> oe_col_buffer;
-  const int8_t* crt_group_ptr1 = groupby_buffer + start * layout.row_bytes + layout.col_off;
+  const auto row_ptr = groupby_buffer + start * layout.row_bytes;
+  // TODO(alex): Add support for 32-bit keys.
+  auto crt_group_ptr1 = layout.target_groupby_index >= 0 ? row_ptr + layout.target_groupby_index * sizeof(int64_t)
+                                                         : row_ptr + layout.col_off;
   const int8_t* crt_group_ptr2{nullptr};
   if (layout.oe_target_info.agg_kind == kAVG) {
     crt_group_ptr2 = crt_group_ptr1 + layout.col_bytes;
@@ -282,7 +285,7 @@ thrust::host_vector<int64_t> collect_order_entry_column(const int8_t* groupby_bu
   const auto& entry_ti = get_compact_type(layout.oe_target_info);
   const auto step_bytes = layout.row_bytes * step;
   for (size_t i = start; i < layout.entry_count; i += step) {
-    auto val1 = read_int_from_buff(crt_group_ptr1, layout.col_bytes);
+    auto val1 = read_int_from_buff(crt_group_ptr1, layout.col_bytes > 0 ? layout.col_bytes : sizeof(int64_t));
     if (crt_group_ptr2) {
       const auto val2 = read_int_from_buff(crt_group_ptr2, 8);
       const auto avg_val = pair_to_double({val1, val2}, entry_ti);

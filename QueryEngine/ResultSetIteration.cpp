@@ -112,17 +112,16 @@ std::vector<TargetValue> ResultSet::getNextRowImpl(const bool translate_strings,
   CHECK(buff);
   std::vector<TargetValue> row;
   size_t agg_col_idx = 0;
-  const auto buffer_col_count = get_buffer_col_slot_count(storage_->query_mem_desc_);
   const int8_t* rowwise_target_ptr{nullptr};
+  const int8_t* keys_ptr{nullptr};
   const int8_t* crt_col_ptr{nullptr};
   if (query_mem_desc_.output_columnar) {
     crt_col_ptr = get_cols_ptr(buff, query_mem_desc_);
   } else {
-    rowwise_target_ptr =
-        row_ptr_rowwise(buff, query_mem_desc_, entry_buff_idx) + get_key_bytes_rowwise(query_mem_desc_);
+    keys_ptr = row_ptr_rowwise(buff, query_mem_desc_, entry_buff_idx);
+    rowwise_target_ptr = keys_ptr + get_key_bytes_rowwise(query_mem_desc_);
   }
   for (size_t target_idx = 0; target_idx < storage_->targets_.size(); ++target_idx) {
-    CHECK_LT(agg_col_idx, buffer_col_count);
     const auto& agg_info = storage_->targets_[target_idx];
     if (query_mem_desc_.output_columnar) {
       const auto next_col_ptr = advance_to_next_columnar_target_buff(crt_col_ptr, query_mem_desc_, agg_col_idx);
@@ -144,6 +143,7 @@ std::vector<TargetValue> ResultSet::getNextRowImpl(const bool translate_strings,
       }
     } else {
       row.push_back(getTargetValueFromBufferRowwise(rowwise_target_ptr,
+                                                    keys_ptr,
                                                     orig_entry_buff_idx,
                                                     agg_info,
                                                     target_idx,
@@ -172,19 +172,19 @@ InternalTargetValue ResultSet::getColumnInternal(const int8_t* buff,
                                                  const size_t target_logical_idx,
                                                  const StorageLookupResult& storage_lookup_result) const {
   CHECK(buff);
-  const auto buffer_col_count = get_buffer_col_slot_count(storage_->query_mem_desc_);
   const int8_t* rowwise_target_ptr{nullptr};
+  const int8_t* keys_ptr{nullptr};
   const int8_t* crt_col_ptr{nullptr};
   if (query_mem_desc_.output_columnar) {
     crt_col_ptr = get_cols_ptr(buff, query_mem_desc_);
   } else {
-    rowwise_target_ptr = row_ptr_rowwise(buff, query_mem_desc_, entry_idx) + get_key_bytes_rowwise(query_mem_desc_);
+    keys_ptr = row_ptr_rowwise(buff, query_mem_desc_, entry_idx);
+    rowwise_target_ptr = keys_ptr + get_key_bytes_rowwise(query_mem_desc_);
   }
   CHECK_LT(target_logical_idx, storage_->targets_.size());
   size_t agg_col_idx = 0;
   // TODO(alex): remove this loop, offsets can be computed only once
   for (size_t target_idx = 0; target_idx < storage_->targets_.size(); ++target_idx) {
-    CHECK_LT(agg_col_idx, buffer_col_count);
     const auto& agg_info = storage_->targets_[target_idx];
     if (query_mem_desc_.output_columnar) {
       const auto next_col_ptr = advance_to_next_columnar_target_buff(crt_col_ptr, query_mem_desc_, agg_col_idx);
@@ -209,8 +209,17 @@ InternalTargetValue ResultSet::getColumnInternal(const int8_t* buff,
         crt_col_ptr = advance_to_next_columnar_target_buff(crt_col_ptr, query_mem_desc_, agg_col_idx + 1);
       }
     } else {
-      const auto ptr1 = rowwise_target_ptr;
-      const auto compact_sz1 = query_mem_desc_.agg_col_widths[agg_col_idx].compact;
+      // TODO(alex): Add support for 32-bit keys.
+      auto ptr1 = rowwise_target_ptr;
+      if (!query_mem_desc_.target_groupby_indices.empty()) {
+        CHECK_LT(target_logical_idx, query_mem_desc_.target_groupby_indices.size());
+        if (query_mem_desc_.target_groupby_indices[target_logical_idx] >= 0) {
+          ptr1 = keys_ptr + query_mem_desc_.target_groupby_indices[target_logical_idx] * sizeof(int64_t);
+        }
+      }
+      const auto compact_sz1 = query_mem_desc_.agg_col_widths[agg_col_idx].compact
+                                   ? query_mem_desc_.agg_col_widths[agg_col_idx].compact
+                                   : sizeof(int64_t);
       const int8_t* ptr2{nullptr};
       int8_t compact_sz2{0};
       if (agg_info.is_agg && agg_info.agg_kind == kAVG) {
@@ -469,6 +478,7 @@ TargetValue ResultSet::getTargetValueFromBufferColwise(const int8_t* col1_ptr,
 
 // Gets the TargetValue stored in slot_idx (and slot_idx for AVG) of rowwise_target_ptr.
 TargetValue ResultSet::getTargetValueFromBufferRowwise(const int8_t* rowwise_target_ptr,
+                                                       const int8_t* keys_ptr,
                                                        const size_t entry_buff_idx,
                                                        const TargetInfo& target_info,
                                                        const size_t target_logical_idx,
@@ -486,8 +496,18 @@ TargetValue ResultSet::getTargetValueFromBufferRowwise(const int8_t* rowwise_tar
                : makeRealStringTargetValue(
                      ptr1, compact_sz1, ptr2, compact_sz2, target_info, target_logical_idx, entry_buff_idx);
   }
+  if (query_mem_desc_.target_groupby_indices.empty()) {
+    return makeTargetValue(
+        ptr1, compact_sz1, target_info, target_logical_idx, translate_strings, decimal_to_double, entry_buff_idx);
+  }
+  CHECK_LT(target_logical_idx, query_mem_desc_.target_groupby_indices.size());
+  if (query_mem_desc_.target_groupby_indices[target_logical_idx] < 0) {
+    return makeTargetValue(
+        ptr1, compact_sz1, target_info, target_logical_idx, translate_strings, decimal_to_double, entry_buff_idx);
+  }
+  ptr1 = keys_ptr + query_mem_desc_.target_groupby_indices[target_logical_idx] * sizeof(int64_t);
   return makeTargetValue(
-      ptr1, compact_sz1, target_info, target_logical_idx, translate_strings, decimal_to_double, entry_buff_idx);
+      ptr1, sizeof(int64_t), target_info, target_logical_idx, translate_strings, decimal_to_double, entry_buff_idx);
 }
 
 // Returns true iff the entry at position entry_idx in buff contains a valid row.

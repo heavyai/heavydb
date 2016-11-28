@@ -59,7 +59,8 @@ class ResultSetStorage {
                              const size_t that_slot,
                              const TargetInfo& target_info,
                              const size_t target_logical_idx,
-                             const size_t target_slot_idx) const;
+                             const size_t target_slot_idx,
+                             const size_t init_agg_val_idx) const;
 
   void reduceOneSlot(int8_t* this_ptr1,
                      int8_t* this_ptr2,
@@ -67,7 +68,8 @@ class ResultSetStorage {
                      const int8_t* that_ptr2,
                      const TargetInfo& target_info,
                      const size_t target_logical_idx,
-                     const size_t target_slot_idx) const;
+                     const size_t target_slot_idx,
+                     const size_t init_agg_val_idx) const;
 
   void reduceOneCountDistinctSlot(int8_t* this_ptr1,
                                   const int8_t* that_ptr1,
@@ -211,6 +213,7 @@ class ResultSet {
   static bool isNull(const SQLTypeInfo& ti, const InternalTargetValue& val);
 
   TargetValue getTargetValueFromBufferRowwise(const int8_t* rowwise_target_ptr,
+                                              const int8_t* keys_ptr,
                                               const size_t entry_buff_idx,
                                               const TargetInfo& target_info,
                                               const size_t target_logical_idx,

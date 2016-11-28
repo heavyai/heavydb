@@ -175,7 +175,7 @@ void ResultSetStorage::reduceOneEntryNoCollisionsColWise(const size_t entry_idx,
       this_ptr2 = this_next_col_ptr + entry_idx * query_mem_desc_.agg_col_widths[agg_col_idx + 1].compact;
       that_ptr2 = that_next_col_ptr + entry_idx * query_mem_desc_.agg_col_widths[agg_col_idx + 1].compact;
     }
-    reduceOneSlot(this_ptr1, this_ptr2, that_ptr1, that_ptr2, agg_info, target_idx, agg_col_idx);
+    reduceOneSlot(this_ptr1, this_ptr2, that_ptr1, that_ptr2, agg_info, target_idx, agg_col_idx, agg_col_idx);
     this_crt_col_ptr = this_next_col_ptr;
     that_crt_col_ptr = that_next_col_ptr;
     if (agg_info.is_agg && agg_info.agg_kind == kAVG) {
@@ -221,8 +221,14 @@ void ResultSetStorage::reduceOneEntryNoCollisionsRowWise(const size_t entry_idx,
       this_ptr2 = this_targets_ptr + query_mem_desc_.agg_col_widths[target_slot_idx].compact;
       that_ptr2 = that_targets_ptr + query_mem_desc_.agg_col_widths[target_slot_idx].compact;
     }
-    reduceOneSlot(
-        this_targets_ptr, this_ptr2, that_targets_ptr, that_ptr2, target_info, target_logical_idx, target_slot_idx);
+    reduceOneSlot(this_targets_ptr,
+                  this_ptr2,
+                  that_targets_ptr,
+                  that_ptr2,
+                  target_info,
+                  target_logical_idx,
+                  target_slot_idx,
+                  target_slot_idx);
     this_targets_ptr = advance_target_ptr(this_targets_ptr, target_info, target_slot_idx, query_mem_desc_);
     that_targets_ptr = advance_target_ptr(that_targets_ptr, target_info, target_slot_idx, query_mem_desc_);
     target_slot_idx = advance_slot(target_slot_idx, target_info);
@@ -393,12 +399,13 @@ void ResultSetStorage::reduceOneEntrySlotsBaseline(int64_t* this_entry_slots,
   const auto slot_count = get_buffer_col_slot_count(query_mem_desc_);
   const auto key_count = get_groupby_col_count(query_mem_desc_);
   size_t j = 0;
+  size_t init_agg_val_idx = 0;
   for (size_t target_logical_idx = 0; target_logical_idx < targets_.size(); ++target_logical_idx) {
     const auto& target_info = targets_[target_logical_idx];
     const auto that_slot_off = query_mem_desc_.output_columnar
                                    ? slot_offset_colwise(that_entry_idx, j, key_count, that_entry_count)
-                                   : slot_offset_rowwise(that_entry_idx, j, key_count, slot_count);
-    const auto this_slot_off = query_mem_desc_.output_columnar ? j * query_mem_desc_.entry_count : j;
+                                   : slot_offset_rowwise(that_entry_idx, init_agg_val_idx, key_count, slot_count);
+    const auto this_slot_off = query_mem_desc_.output_columnar ? j * query_mem_desc_.entry_count : init_agg_val_idx;
     reduceOneSlotBaseline(this_entry_slots,
                           this_slot_off,
                           that_buff,
@@ -406,7 +413,16 @@ void ResultSetStorage::reduceOneEntrySlotsBaseline(int64_t* this_entry_slots,
                           that_slot_off,
                           target_info,
                           target_logical_idx,
-                          j);
+                          j,
+                          init_agg_val_idx);
+    if (query_mem_desc_.target_groupby_indices.empty()) {
+      init_agg_val_idx = advance_slot(init_agg_val_idx, target_info);
+    } else {
+      CHECK_LT(target_logical_idx, query_mem_desc_.target_groupby_indices.size());
+      if (query_mem_desc_.target_groupby_indices[target_logical_idx] < 0) {
+        init_agg_val_idx = advance_slot(init_agg_val_idx, target_info);
+      }
+    }
     j = advance_slot(j, target_info);
   }
 }
@@ -418,7 +434,8 @@ void ResultSetStorage::reduceOneSlotBaseline(int64_t* this_buff,
                                              const size_t that_slot,
                                              const TargetInfo& target_info,
                                              const size_t target_logical_idx,
-                                             const size_t target_slot_idx) const {
+                                             const size_t target_slot_idx,
+                                             const size_t init_agg_val_idx) const {
   int8_t* this_ptr2{nullptr};
   const int8_t* that_ptr2{nullptr};
   if (target_info.is_agg && target_info.agg_kind == kAVG) {
@@ -433,7 +450,8 @@ void ResultSetStorage::reduceOneSlotBaseline(int64_t* this_buff,
                 that_ptr2,
                 target_info,
                 target_logical_idx,
-                target_slot_idx);
+                target_slot_idx,
+                init_agg_val_idx);
 }
 
 // During the reduction of two result sets using the baseline strategy, we first create a big
@@ -741,11 +759,18 @@ void ResultSetStorage::reduceOneSlot(int8_t* this_ptr1,
                                      const int8_t* that_ptr2,
                                      const TargetInfo& target_info,
                                      const size_t target_logical_idx,
-                                     const size_t target_slot_idx) const {
-  CHECK_LT(target_slot_idx, target_init_vals_.size());
+                                     const size_t target_slot_idx,
+                                     const size_t init_agg_val_idx) const {
+  if (!query_mem_desc_.target_groupby_indices.empty()) {
+    CHECK_LT(target_logical_idx, query_mem_desc_.target_groupby_indices.size());
+    if (query_mem_desc_.target_groupby_indices[target_logical_idx] >= 0) {
+      return;
+    }
+  }
+  CHECK_LT(init_agg_val_idx, target_init_vals_.size());
   CHECK_LT(target_slot_idx, query_mem_desc_.agg_col_widths.size());
   const auto chosen_bytes = query_mem_desc_.agg_col_widths[target_slot_idx].compact;
-  auto init_val = target_init_vals_[target_slot_idx];
+  auto init_val = target_init_vals_[init_agg_val_idx];
   if (target_info.is_agg) {
     switch (target_info.agg_kind) {
       case kCOUNT: {
@@ -792,6 +817,9 @@ void ResultSetStorage::reduceOneSlot(int8_t* this_ptr1,
         if (rhs_proj_col) {
           *reinterpret_cast<int64_t*>(this_ptr1) = rhs_proj_col;
         }
+        break;
+      }
+      case 0: {
         break;
       }
       default:

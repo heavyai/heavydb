@@ -44,16 +44,24 @@ void ResultSet::doBaselineSort(const ExecutorDeviceType device_type,
   const auto& oe = order_entries.front();
   CHECK_GT(oe.tle_no, 0);
   CHECK_LE(static_cast<size_t>(oe.tle_no), targets_.size());
-  size_t slot_idx = 0;
+  size_t logical_slot_idx = 0;
+  size_t physical_slot_idx = 0;
   for (size_t i = 0; i < static_cast<size_t>(oe.tle_no - 1); ++i) {
-    slot_idx = advance_slot(slot_idx, targets_[i]);
+    if (query_mem_desc_.agg_col_widths[logical_slot_idx].compact) {
+      physical_slot_idx = advance_slot(physical_slot_idx, targets_[i]);
+    }
+    logical_slot_idx = advance_slot(logical_slot_idx, targets_[i]);
   }
   const auto slot_count = get_buffer_col_slot_count(query_mem_desc_);
   const auto key_count = get_groupby_col_count(query_mem_desc_);
-  const auto col_off = slot_offset_rowwise(0, slot_idx, key_count, slot_count) * 8;
-  const size_t col_bytes = query_mem_desc_.agg_col_widths[slot_idx].compact;
+  const auto col_off = slot_offset_rowwise(0, physical_slot_idx, key_count, slot_count) * sizeof(int64_t);
+  const size_t col_bytes = query_mem_desc_.agg_col_widths[logical_slot_idx].compact;
   const auto row_bytes = get_row_bytes(query_mem_desc_);
-  GroupByBufferLayoutInfo layout{query_mem_desc_.entry_count, col_off, col_bytes, row_bytes, targets_[oe.tle_no - 1]};
+  const auto& target_groupby_indices = query_mem_desc_.target_groupby_indices;
+  CHECK(target_groupby_indices.empty() || static_cast<size_t>(oe.tle_no) <= target_groupby_indices.size());
+  const ssize_t target_groupby_index{target_groupby_indices.empty() ? -1 : target_groupby_indices[oe.tle_no - 1]};
+  GroupByBufferLayoutInfo layout{
+      query_mem_desc_.entry_count, col_off, col_bytes, row_bytes, targets_[oe.tle_no - 1], target_groupby_index};
   PodOrderEntry pod_oe{oe.tle_no, oe.is_desc, oe.nulls_first};
   auto groupby_buffer = storage_->getUnderlyingBuffer();
   auto data_mgr = getDataManager();

@@ -166,12 +166,15 @@ void QueryExecutionContext::initColumnPerRow(const QueryMemoryDescriptor& query_
                                              const int64_t* init_vals,
                                              const std::vector<ssize_t>& bitmap_sizes) {
   int8_t* col_ptr = row_ptr;
+  size_t init_vec_idx = 0;
   for (size_t col_idx = 0; col_idx < query_mem_desc.agg_col_widths.size();
        col_ptr += query_mem_desc.getNextColOffInBytes(col_ptr, bin, col_idx++)) {
     const ssize_t bm_sz{bitmap_sizes[col_idx]};
     int64_t init_val{0};
     if (!bm_sz) {
-      init_val = init_vals[col_idx];
+      if (query_mem_desc.agg_col_widths[col_idx].compact > 0) {
+        init_val = init_vals[init_vec_idx++];
+      }
     } else {
       CHECK_EQ(static_cast<size_t>(query_mem_desc.agg_col_widths[col_idx].compact), sizeof(int64_t));
       init_val = bm_sz > 0 ? allocateCountDistinctBitmap(bm_sz) : allocateCountDistinctSet();
@@ -189,6 +192,8 @@ void QueryExecutionContext::initColumnPerRow(const QueryMemoryDescriptor& query_
       case 8:
         *reinterpret_cast<int64_t*>(col_ptr) = init_val;
         break;
+      case 0:
+        continue;
       default:
         CHECK(false);
     }
@@ -953,8 +958,21 @@ size_t QueryMemoryDescriptor::getCompactByteWidth() const {
   if (agg_col_widths.empty()) {
     return 8;
   }
-  const auto compact_width = agg_col_widths.front().compact;
+  size_t compact_width{0};
   for (const auto col_width : agg_col_widths) {
+    if (col_width.compact != 0) {
+      compact_width = col_width.compact;
+      break;
+    }
+  }
+  if (!compact_width) {
+    return 0;
+  }
+  CHECK_GT(compact_width, size_t(0));
+  for (const auto col_width : agg_col_widths) {
+    if (col_width.compact == 0) {
+      continue;
+    }
     CHECK_EQ(col_width.compact, compact_width);
   }
   return compact_width;
@@ -1400,12 +1418,36 @@ int8_t pick_target_compact_width(const RelAlgExecutionUnit& ra_exe_unit,
                : crt_min_byte_width;
   } else {
     // TODO(miyu): relax this condition to allow more cases just w/o padding
-    for (auto wid : get_col_byte_widths(ra_exe_unit.target_exprs)) {
+    for (auto wid : get_col_byte_widths(ra_exe_unit.target_exprs, {})) {
       compact_width = std::max(compact_width, wid);
     }
     return compact_width;
   }
 }
+
+namespace {
+
+std::vector<ssize_t> target_expr_group_by_indices(const std::list<std::shared_ptr<Analyzer::Expr>>& groupby_exprs,
+                                                  const std::vector<Analyzer::Expr*>& target_exprs) {
+  std::vector<ssize_t> indices(target_exprs.size(), -1);
+  for (size_t target_idx = 0; target_idx < target_exprs.size(); ++target_idx) {
+    const auto target_expr = target_exprs[target_idx];
+    if (dynamic_cast<const Analyzer::AggExpr*>(target_expr)) {
+      continue;
+    }
+    size_t group_idx = 0;
+    for (const auto groupby_expr : groupby_exprs) {
+      if (*target_expr == *groupby_expr) {
+        indices[target_idx] = group_idx;
+        break;
+      }
+      ++group_idx;
+    }
+  }
+  return indices;
+}
+
+}  // namespace
 
 void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
                                                     const size_t max_groups_buffer_entry_count,
@@ -1423,10 +1465,10 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
 
   std::vector<ColWidths> agg_col_widths;
   const auto min_byte_width = pick_target_compact_width(ra_exe_unit_, query_infos_, crt_min_byte_width);
-  for (auto wid : get_col_byte_widths(ra_exe_unit_.target_exprs)) {
+  for (auto wid : get_col_byte_widths(ra_exe_unit_.target_exprs, {})) {
     agg_col_widths.push_back({wid, static_cast<int8_t>(compact_byte_width(wid, min_byte_width))});
   }
-  auto group_col_widths = get_col_byte_widths(ra_exe_unit_.groupby_exprs);
+  auto group_col_widths = get_col_byte_widths(ra_exe_unit_.groupby_exprs, {});
 
   const bool is_group_by{!group_col_widths.empty()};
   if (!is_group_by) {
@@ -1440,6 +1482,7 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
                        0,
                        group_col_widths,
                        agg_col_widths,
+                       {},
                        1,
                        0,
                        0,
@@ -1482,6 +1525,7 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
                          keyless_info.init_val,
                          group_col_widths,
                          agg_col_widths,
+                         {},
                          bin_count,
                          0,
                          col_range_info.min,
@@ -1506,6 +1550,7 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
                          0,
                          group_col_widths,
                          agg_col_widths,
+                         {},
                          max_groups_buffer_entry_count,
                          small_groups_buffer_entry_count,
                          col_range_info.min,
@@ -1522,6 +1567,12 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
     }
     case GroupByColRangeType::MultiCol: {
       CHECK(!render_output);
+      const auto target_group_by_indices =
+          target_expr_group_by_indices(ra_exe_unit_.groupby_exprs, ra_exe_unit_.target_exprs);
+      agg_col_widths.clear();
+      for (auto wid : get_col_byte_widths(ra_exe_unit_.target_exprs, target_group_by_indices)) {
+        agg_col_widths.push_back({wid, static_cast<int8_t>(wid ? compact_byte_width(wid, min_byte_width) : 0)});
+      }
       query_mem_desc_ = {executor_,
                          allow_multifrag,
                          col_range_info.hash_type_,
@@ -1531,6 +1582,7 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
                          0,
                          group_col_widths,
                          agg_col_widths,
+                         target_group_by_indices,
                          max_groups_buffer_entry_count,
                          0,
                          0,
@@ -1557,6 +1609,7 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
                          0,
                          group_col_widths,
                          agg_col_widths,
+                         {},
                          group_slots,
                          0,
                          col_range_info.min,
@@ -1582,6 +1635,7 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
                          0,
                          group_col_widths,
                          agg_col_widths,
+                         {},
                          static_cast<size_t>(col_range_info.max),
                          0,
                          col_range_info.min,
@@ -2380,6 +2434,11 @@ bool GroupByAndAggregate::codegenAggCalls(const std::tuple<llvm::Value*, llvm::V
   for (size_t target_idx = 0; target_idx < ra_exe_unit_.target_exprs.size(); ++target_idx) {
     auto target_expr = ra_exe_unit_.target_exprs[target_idx];
     CHECK(target_expr);
+    if (query_mem_desc_.agg_col_widths[agg_out_off].compact == 0) {
+      CHECK(!dynamic_cast<const Analyzer::AggExpr*>(target_expr));
+      ++agg_out_off;
+      continue;
+    }
     if (dynamic_cast<Analyzer::UOper*>(target_expr) &&
         static_cast<Analyzer::UOper*>(target_expr)->get_optype() == kUNNEST) {
       throw std::runtime_error("UNNEST not supported in the projection list yet.");

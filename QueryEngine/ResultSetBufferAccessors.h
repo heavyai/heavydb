@@ -17,6 +17,8 @@
 
 #include "QueryMemoryDescriptor.h"
 
+#include <algorithm>
+
 inline bool is_real_str_or_array(const TargetInfo& target_info) {
   return !target_info.is_agg &&
          (target_info.sql_type.is_array() ||
@@ -72,7 +74,13 @@ inline size_t get_key_count_for_descriptor(const QueryMemoryDescriptor& query_me
 }
 
 inline size_t get_buffer_col_slot_count(const QueryMemoryDescriptor& query_mem_desc) {
-  return query_mem_desc.agg_col_widths.size();
+  if (query_mem_desc.target_groupby_indices.empty()) {
+    return query_mem_desc.agg_col_widths.size();
+  }
+  const auto& target_groupby_indices = query_mem_desc.target_groupby_indices;
+  return query_mem_desc.agg_col_widths.size() - std::count_if(target_groupby_indices.begin(),
+                                                              target_groupby_indices.end(),
+                                                              [](const ssize_t i) { return i >= 0; });
 }
 
 template <class T>

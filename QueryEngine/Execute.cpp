@@ -3658,7 +3658,7 @@ RowSetPtr Executor::executeResultPlan(const Planner::Result* result_plan,
                                           ExecutorDeviceType::CPU);
   }
   std::vector<ColWidths> agg_col_widths;
-  for (auto wid : get_col_byte_widths(target_exprs)) {
+  for (auto wid : get_col_byte_widths(target_exprs, {})) {
     agg_col_widths.push_back(
         {wid, int8_t(compact_byte_width(wid, pick_target_compact_width(res_ra_unit, {}, get_min_byte_width())))});
   }
@@ -3671,6 +3671,7 @@ RowSetPtr Executor::executeResultPlan(const Planner::Result* result_plan,
                                        0,
                                        {sizeof(int64_t)},
                                        agg_col_widths,
+                                       {},
                                        row_count,
                                        small_groups_buffer_entry_count_,
                                        0,

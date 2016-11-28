@@ -641,9 +641,19 @@ inline int64_t extract_max_stat(const ChunkStats& stats, const SQLTypeInfo& ti) 
 }  // namespace
 
 template <class T>
-inline std::vector<int8_t> get_col_byte_widths(const T& col_expr_list) {
+inline std::vector<int8_t> get_col_byte_widths(const T& col_expr_list,
+                                               const std::vector<ssize_t>& target_group_by_indices) {
+  if (!target_group_by_indices.empty()) {
+    CHECK_EQ(col_expr_list.size(), target_group_by_indices.size());
+  }
   std::vector<int8_t> col_widths;
+  size_t col_expr_idx = 0;
   for (const auto col_expr : col_expr_list) {
+    if (!target_group_by_indices.empty() && target_group_by_indices[col_expr_idx] != -1) {
+      col_widths.push_back(0);
+      ++col_expr_idx;
+      continue;
+    }
     if (!col_expr) {
       // row index
       col_widths.push_back(sizeof(int64_t));
@@ -653,6 +663,7 @@ inline std::vector<int8_t> get_col_byte_widths(const T& col_expr_list) {
       if ((chosen_type.is_string() && chosen_type.get_compression() == kENCODING_NONE) || chosen_type.is_array()) {
         col_widths.push_back(sizeof(int64_t));
         col_widths.push_back(sizeof(int64_t));
+        ++col_expr_idx;
         continue;
       }
       const auto col_expr_bitwidth = get_bit_width(chosen_type);
@@ -664,6 +675,7 @@ inline std::vector<int8_t> get_col_byte_widths(const T& col_expr_list) {
         col_widths.push_back(sizeof(int64_t));
       }
     }
+    ++col_expr_idx;
   }
   return col_widths;
 }

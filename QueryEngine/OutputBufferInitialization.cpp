@@ -8,19 +8,28 @@ namespace {
 
 inline std::vector<int64_t> init_agg_val_vec(const std::vector<TargetInfo>& targets,
                                              const QueryMemoryDescriptor& query_mem_desc) {
-  const auto agg_col_count = query_mem_desc.agg_col_widths.size();
-  std::vector<int64_t> agg_init_vals(agg_col_count, 0);
+  std::vector<int64_t> agg_init_vals;
+  agg_init_vals.reserve(query_mem_desc.agg_col_widths.size());
   const bool is_group_by{!query_mem_desc.group_col_widths.empty()};
-  for (size_t target_idx = 0, agg_col_idx = 0; target_idx < targets.size() && agg_col_idx < agg_col_count;
-       ++target_idx, ++agg_col_idx) {
+  for (size_t target_idx = 0, agg_col_idx = 0; target_idx < targets.size(); ++target_idx, ++agg_col_idx) {
+    CHECK_LT(agg_col_idx, query_mem_desc.agg_col_widths.size());
     const auto agg_info = targets[target_idx];
     if (!agg_info.is_agg) {
+      if (query_mem_desc.agg_col_widths[agg_col_idx].compact > 0) {
+        agg_init_vals.push_back(0);
+      }
+      if (agg_info.sql_type.is_array() ||
+          (agg_info.sql_type.is_string() && agg_info.sql_type.get_compression() == kENCODING_NONE)) {
+        agg_init_vals.push_back(0);
+      }
       continue;
     }
-    agg_init_vals[agg_col_idx] = get_agg_initial_val(
-        agg_info.agg_kind, get_compact_type(agg_info), is_group_by, query_mem_desc.getCompactByteWidth());
+    CHECK_GT(query_mem_desc.agg_col_widths[agg_col_idx].compact, 0);
+    agg_init_vals.push_back(get_agg_initial_val(
+        agg_info.agg_kind, get_compact_type(agg_info), is_group_by, query_mem_desc.getCompactByteWidth()));
     if (kAVG == agg_info.agg_kind) {
-      agg_init_vals[++agg_col_idx] = 0;
+      ++agg_col_idx;
+      agg_init_vals.push_back(0);
     }
   }
   return agg_init_vals;
