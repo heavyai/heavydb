@@ -194,6 +194,9 @@ class CalciteAdapter {
       auto str_arg = getExprFromNode(operands[0], scan_targets);
       return makeExpr<Analyzer::CharLengthExpr>(str_arg->decompress(), op_str == std::string("CHAR_LENGTH"));
     }
+    if (op_str == std::string("$SCALAR_QUERY")) {
+      throw std::runtime_error("Subqueries not supported");
+    }
     if (operands.Size() == 1) {
       return translateUnaryOp(expr, scan_targets);
     }
@@ -257,7 +260,7 @@ class CalciteAdapter {
         return makeExpr<Analyzer::UOper>(ti.get_elem_type(), false, kUNNEST, operand_expr);
       }
       default: {
-        CHECK_EQ(kFUNCTION, sql_op);
+        CHECK(sql_op == kFUNCTION || sql_op == kIN);
         throw std::runtime_error(std::string("Unsupported unary operator: ") + op_str);
       }
     }
