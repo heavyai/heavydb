@@ -265,16 +265,18 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInOper(const RexOpera
   auto ti = lhs->get_type_info();
   auto result = rex_subquery->get_execution_result();
   auto& row_set = result->getRows();
+  row_set.moveToBegin();
   if (row_set.rowCount() > 10000) {
     throw std::runtime_error("Unable to handle 'expr IN (subquery)', subquery returned 10000+ rows.");
   }
   std::list<std::shared_ptr<Analyzer::Expr>> value_exprs;
   while (true) {
-    auto row = row_set.getNextRow(false, false);
+    auto row = row_set.getNextRow(true, false);
     if (row.empty())
       break;
     auto scalar_tv = boost::get<ScalarTargetValue>(&row[0]);
-    Datum d;
+    Datum d{0};
+    bool is_null_const{false};
     switch (ti.get_type()) {
       case kSMALLINT: {
         const auto ival = boost::get<int64_t>(scalar_tv);
@@ -288,6 +290,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInOper(const RexOpera
         d.intval = *ival;
         break;
       }
+      case kDECIMAL:
+      case kNUMERIC:
       case kBIGINT: {
         const auto ival = boost::get<int64_t>(scalar_tv);
         CHECK(ival);
@@ -306,10 +310,31 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInOper(const RexOpera
         d.floatval = *fval;
         break;
       }
+      case kTEXT:
+      case kVARCHAR:
+      case kCHAR: {
+        auto nullable_sptr = boost::get<NullableString>(scalar_tv);
+        CHECK(nullable_sptr);
+        if (boost::get<void*>(nullable_sptr)) {
+          is_null_const = true;
+        } else {
+          auto sptr = boost::get<std::string>(nullable_sptr);
+          d.stringval = new std::string(*sptr);
+        }
+        break;
+      }
       default:
         CHECK(false);
     }
-    value_exprs.push_back(makeExpr<Analyzer::Constant>(ti, false, d));
+    if (ti.is_string() && ti.get_compression() != kENCODING_NONE) {
+      auto ti_none_encoded = ti;
+      ti_none_encoded.set_compression(kENCODING_NONE);
+      auto none_encoded_string = makeExpr<Analyzer::Constant>(ti, is_null_const, d);
+      auto dict_encoded_string = std::make_shared<Analyzer::UOper>(ti, false, kCAST, none_encoded_string);
+      value_exprs.push_back(dict_encoded_string);
+    } else {
+      value_exprs.push_back(makeExpr<Analyzer::Constant>(ti, is_null_const, d));
+    }
   }
   return makeExpr<Analyzer::InValues>(lhs, value_exprs);
 }
