@@ -662,10 +662,33 @@ class RexRebindInputsVisitor : public RexVisitor<void*> {
   const RelAlgNode* new_input_;
 };
 
-void try_insert_coalesable_proj(std::vector<std::shared_ptr<RelAlgNode>>& nodes,
-                                std::unordered_map<const RelAlgNode*, std::unordered_set<size_t>>& liveouts,
-                                std::unordered_map<const RelAlgNode*, std::unordered_set<const RelAlgNode*>>& du_web,
-                                std::unordered_map<const RelAlgNode*, RelAlgNode*>& deconst_mapping) {
+std::string get_field_name(const RelAlgNode* node, size_t index) {
+  CHECK_LT(index, node->size());
+  if (auto scan = dynamic_cast<const RelScan*>(node)) {
+    return scan->getFieldName(index);
+  }
+  if (auto aggregate = dynamic_cast<const RelAggregate*>(node)) {
+    CHECK_EQ(aggregate->size(), aggregate->getFields().size());
+    return aggregate->getFieldName(index);
+  }
+  if (auto join = dynamic_cast<const RelJoin*>(node)) {
+    const auto lhs_size = join->getInput(0)->size();
+    if (index < lhs_size) {
+      return get_field_name(join->getInput(0), index);
+    }
+    return get_field_name(join->getInput(1), index - lhs_size);
+  }
+  if (auto project = dynamic_cast<const RelProject*>(node)) {
+    return project->getFieldName(index);
+  }
+  CHECK(dynamic_cast<const RelSort*>(node) || dynamic_cast<const RelFilter*>(node));
+  return get_field_name(node->getInput(0), index);
+}
+
+void try_insert_coalesceable_proj(std::vector<std::shared_ptr<RelAlgNode>>& nodes,
+                                  std::unordered_map<const RelAlgNode*, std::unordered_set<size_t>>& liveouts,
+                                  std::unordered_map<const RelAlgNode*, std::unordered_set<const RelAlgNode*>>& du_web,
+                                  std::unordered_map<const RelAlgNode*, RelAlgNode*>& deconst_mapping) {
   std::vector<std::shared_ptr<RelAlgNode>> new_nodes;
   for (auto node : nodes) {
     new_nodes.push_back(node);
@@ -690,8 +713,8 @@ void try_insert_coalesable_proj(std::vector<std::shared_ptr<RelAlgNode>>& nodes,
     std::vector<std::unique_ptr<const RexScalar>> exprs;
     std::vector<std::string> fields;
     for (size_t i = 0; i < filter->size(); ++i) {
-      exprs.emplace_back(boost::make_unique<RexAbstractInput>(i));
-      fields.push_back("$f" + std::to_string(i));
+      exprs.push_back(boost::make_unique<RexInput>(filter, i));
+      fields.push_back(get_field_name(filter, i));
     }
     auto project_owner = std::make_shared<RelProject>(exprs, fields, node);
     auto project = project_owner.get();
@@ -714,6 +737,10 @@ void try_insert_coalesable_proj(std::vector<std::shared_ptr<RelAlgNode>>& nodes,
   }
   if (new_nodes.size() > nodes.size()) {
     nodes.swap(new_nodes);
+    deconst_mapping.clear();
+    for (auto node : nodes) {
+      deconst_mapping.insert(std::make_pair(node.get(), node.get()));
+    }
   }
 }
 
@@ -878,7 +905,7 @@ void eliminate_dead_columns(std::vector<std::shared_ptr<RelAlgNode>>& nodes) noe
     deconst_mapping.insert(std::make_pair(node.get(), node.get()));
   }
   auto web = build_du_web(nodes);
-  try_insert_coalesable_proj(nodes, old_liveouts, web, deconst_mapping);
+  try_insert_coalesceable_proj(nodes, old_liveouts, web, deconst_mapping);
 
   // Sweep
   std::unordered_map<const RelAlgNode*, std::unordered_map<size_t, size_t>> liveout_renumbering;
