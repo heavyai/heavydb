@@ -161,7 +161,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateSubQuery(const RexSub
     }
     case kBIGINT: {
       const auto ival = boost::get<int64_t>(scalar_tv);
-      CHECK(*ival);
+      CHECK(ival);
       d.bigintval = *ival;
       break;
     }
