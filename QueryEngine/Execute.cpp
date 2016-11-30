@@ -321,7 +321,7 @@ RowSetPtr Executor::executeSelectPlan(const Planner::Plan* plan,
     CHECK(check_plan_sanity(plan));
     const bool is_agg = dynamic_cast<const Planner::AggPlan*>(plan);
     const auto order_entries = sort_plan_in ? sort_plan_in->get_order_entries() : std::list<Analyzer::OrderEntry>{};
-    const auto query_infos = get_table_infos(input_descs, cat, TemporaryTables{});
+    const auto query_infos = get_table_infos(input_descs, this);
     const size_t scan_limit = get_scan_limit(plan, limit);
     const size_t scan_total_limit = scan_limit ? get_scan_limit(plan, scan_limit + offset) : 0;
     const auto ra_exe_unit_in = RelAlgExecutionUnit{
@@ -596,6 +596,14 @@ bool Executor::isCPUOnly() const {
 
 const ColumnDescriptor* Executor::getColumnDescriptor(const Analyzer::ColumnVar* col_var) const {
   return get_column_descriptor_maybe(col_var->get_column_id(), col_var->get_table_id(), *catalog_);
+}
+
+const Catalog_Namespace::Catalog* Executor::getCatalog() const {
+  return catalog_;
+}
+
+const TemporaryTables* Executor::getTemporaryTables() const {
+  return temporary_tables_;
 }
 
 std::vector<int8_t> Executor::serializeLiterals(const std::unordered_map<int, Executor::LiteralValues>& literals,
@@ -3538,7 +3546,7 @@ RowSetPtr Executor::executeResultPlan(const Planner::Result* result_plan,
   }
   const auto join_quals = join_plan ? join_plan->get_quals() : std::list<std::shared_ptr<Analyzer::Expr>>{};
   CHECK(check_plan_sanity(agg_plan));
-  const auto query_infos = get_table_infos(input_descs, cat, TemporaryTables{});
+  const auto query_infos = get_table_infos(input_descs, this);
   const auto ra_exe_unit_in = RelAlgExecutionUnit{input_descs,
                                                   {},
                                                   input_col_descs,

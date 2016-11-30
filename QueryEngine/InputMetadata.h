@@ -10,6 +10,8 @@ namespace Catalog_Namespace {
 class Catalog;
 }  // Catalog_Namespace
 
+class Executor;
+
 typedef std::unordered_map<int, const ResultPtr&> TemporaryTables;
 
 struct InputTableInfo {
@@ -21,12 +23,8 @@ size_t get_frag_count_of_table(const int table_id,
                                const Catalog_Namespace::Catalog& cat,
                                const TemporaryTables& temporary_tables);
 
-std::vector<InputTableInfo> get_table_infos(const std::vector<InputDescriptor>& input_descs,
-                                            const Catalog_Namespace::Catalog& cat,
-                                            const TemporaryTables& temporary_tables);
+std::vector<InputTableInfo> get_table_infos(const std::vector<InputDescriptor>& input_descs, Executor* executor);
 
-std::vector<InputTableInfo> get_table_infos(const RelAlgExecutionUnit& ra_exe_unit,
-                                            const Catalog_Namespace::Catalog& cat,
-                                            const TemporaryTables& temporary_tables);
+std::vector<InputTableInfo> get_table_infos(const RelAlgExecutionUnit& ra_exe_unit, Executor* executor);
 
 #endif  // QUERYENGINE_INPUTMETADATA_H

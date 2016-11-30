@@ -304,6 +304,10 @@ class Executor {
 
   const ColumnDescriptor* getColumnDescriptor(const Analyzer::ColumnVar*) const;
 
+  const Catalog_Namespace::Catalog* getCatalog() const;
+
+  const TemporaryTables* getTemporaryTables() const;
+
   typedef boost::variant<int8_t, int16_t, int32_t, int64_t, float, double, std::pair<std::string, int>, std::string>
       LiteralValue;
   typedef std::vector<LiteralValue> LiteralValues;

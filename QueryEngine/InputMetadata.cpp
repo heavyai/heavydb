@@ -98,14 +98,17 @@ Fragmenter_Namespace::TableInfo synthesize_table_info(const IterTabPtr& table) {
 
 void collect_table_infos(std::vector<InputTableInfo>& table_infos,
                          const std::vector<InputDescriptor>& input_descs,
-                         const Catalog_Namespace::Catalog& cat,
-                         const TemporaryTables& temporary_tables) {
+                         Executor* executor) {
+  const auto temporary_tables = executor->getTemporaryTables();
+  const auto cat = executor->getCatalog();
+  CHECK(cat);
   for (const auto& input_desc : input_descs) {
     if (input_desc.getSourceType() == InputSourceType::RESULT) {
       const int temp_table_id = input_desc.getTableId();
       CHECK_LT(temp_table_id, 0);
-      const auto it = temporary_tables.find(temp_table_id);
-      CHECK(it != temporary_tables.end());
+      CHECK(temporary_tables);
+      const auto it = temporary_tables->find(temp_table_id);
+      CHECK(it != temporary_tables->end());
       if (const auto rows = boost::get<RowSetPtr>(&it->second)) {
         CHECK(*rows);
         table_infos.push_back({temp_table_id, synthesize_table_info(*rows)});
@@ -118,7 +121,7 @@ void collect_table_infos(std::vector<InputTableInfo>& table_infos,
       continue;
     }
     CHECK(input_desc.getSourceType() == InputSourceType::TABLE);
-    const auto td = cat.getMetadataForTable(input_desc.getTableId());
+    const auto td = cat->getMetadataForTable(input_desc.getTableId());
     CHECK(td);
     const auto fragmenter = td->fragmenter;
     CHECK(fragmenter);
@@ -145,19 +148,15 @@ size_t get_frag_count_of_table(const int table_id,
   }
 }
 
-std::vector<InputTableInfo> get_table_infos(const std::vector<InputDescriptor>& input_descs,
-                                            const Catalog_Namespace::Catalog& cat,
-                                            const TemporaryTables& temporary_tables) {
+std::vector<InputTableInfo> get_table_infos(const std::vector<InputDescriptor>& input_descs, Executor* executor) {
   std::vector<InputTableInfo> table_infos;
-  collect_table_infos(table_infos, input_descs, cat, temporary_tables);
+  collect_table_infos(table_infos, input_descs, executor);
   return table_infos;
 }
 
-std::vector<InputTableInfo> get_table_infos(const RelAlgExecutionUnit& ra_exe_unit,
-                                            const Catalog_Namespace::Catalog& cat,
-                                            const TemporaryTables& temporary_tables) {
+std::vector<InputTableInfo> get_table_infos(const RelAlgExecutionUnit& ra_exe_unit, Executor* executor) {
   std::vector<InputTableInfo> table_infos;
-  collect_table_infos(table_infos, ra_exe_unit.input_descs, cat, temporary_tables);
-  collect_table_infos(table_infos, ra_exe_unit.extra_input_descs, cat, temporary_tables);
+  collect_table_infos(table_infos, ra_exe_unit.input_descs, executor);
+  collect_table_infos(table_infos, ra_exe_unit.extra_input_descs, executor);
   return table_infos;
 }

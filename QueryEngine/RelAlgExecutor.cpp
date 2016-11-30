@@ -950,7 +950,7 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(const RelAlgExecutor::WorkUnit& 
 
   auto ra_exe_unit = work_unit.exe_unit;
 
-  const auto table_infos = get_table_infos(ra_exe_unit, cat_, temporary_tables_);
+  const auto table_infos = get_table_infos(ra_exe_unit, executor_);
 
   auto max_groups_buffer_entry_guess = work_unit.max_groups_buffer_entry_guess;
 
@@ -1030,7 +1030,7 @@ size_t RelAlgExecutor::getNDVEstimation(const WorkUnit& work_unit,
   const auto estimator_result = executor_->executeWorkUnit(&error_code,
                                                            one,
                                                            is_agg,
-                                                           get_table_infos(work_unit.exe_unit, cat_, temporary_tables_),
+                                                           get_table_infos(work_unit.exe_unit, executor_),
                                                            estimator_exe_unit,
                                                            co,
                                                            eo,
@@ -1052,7 +1052,7 @@ ssize_t RelAlgExecutor::getFilteredCountAll(const WorkUnit& work_unit,
                                             const bool is_agg,
                                             const CompilationOptions& co,
                                             const ExecutionOptions& eo) {
-  const auto table_infos = get_table_infos(work_unit.exe_unit, cat_, temporary_tables_);
+  const auto table_infos = get_table_infos(work_unit.exe_unit, executor_);
   if (table_infos.size() == 1 && table_infos.front().info.numTuples <= 10000) {
     return table_infos.front().info.numTuples;
   }
@@ -1065,7 +1065,7 @@ ssize_t RelAlgExecutor::getFilteredCountAll(const WorkUnit& work_unit,
     count_all_result = executor_->executeWorkUnit(&error_code,
                                                   one,
                                                   is_agg,
-                                                  get_table_infos(work_unit.exe_unit, cat_, temporary_tables_),
+                                                  get_table_infos(work_unit.exe_unit, executor_),
                                                   count_all_exe_unit,
                                                   co,
                                                   eo,
@@ -1142,7 +1142,7 @@ ExecutionResult RelAlgExecutor::handleRetry(const int32_t error_code_in,
     result = {executor_->executeWorkUnit(&error_code,
                                          max_groups_buffer_entry_guess,
                                          is_agg,
-                                         get_table_infos(work_unit.exe_unit, cat_, temporary_tables_),
+                                         get_table_infos(work_unit.exe_unit, executor_),
                                          work_unit.exe_unit,
                                          co,
                                          eo_no_multifrag,
@@ -1163,7 +1163,7 @@ ExecutionResult RelAlgExecutor::handleRetry(const int32_t error_code_in,
       result = {executor_->executeWorkUnit(&error_code,
                                            max_groups_buffer_entry_guess,
                                            is_agg,
-                                           get_table_infos(work_unit.exe_unit, cat_, temporary_tables_),
+                                           get_table_infos(work_unit.exe_unit, executor_),
                                            work_unit.exe_unit,
                                            co_cpu,
                                            eo_no_multifrag,
@@ -1354,7 +1354,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(const RelCompoun
                                         nullptr,
                                         sort_info,
                                         0};
-  const auto query_infos = get_table_infos(exe_unit.input_descs, cat_, temporary_tables_);
+  const auto query_infos = get_table_infos(exe_unit.input_descs, executor_);
   QueryRewriter* query_rewriter = new QueryRewriter(exe_unit, query_infos, executor_, nullptr);
   const auto rewritten_exe_unit = query_rewriter->rewrite();
   const auto targets_meta = get_targets_meta(compound, rewritten_exe_unit.target_exprs);
