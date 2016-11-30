@@ -80,7 +80,7 @@ class RelAlgExecutor {
     std::unique_ptr<QueryRewriter> query_rewriter;
   };
 
-  WorkUnit createSortInputWorkUnit(const RelSort*);
+  WorkUnit createSortInputWorkUnit(const RelSort*, const bool just_explain);
 
   ExecutionResult executeWorkUnit(const WorkUnit& work_unit,
                                   const std::vector<TargetMetaInfo>& targets_meta,
@@ -116,17 +116,17 @@ class RelAlgExecutor {
                               const ExecutionOptions& eo,
                               const int64_t queue_time_ms);
 
-  WorkUnit createWorkUnit(const RelAlgNode*, const SortInfo&);
+  WorkUnit createWorkUnit(const RelAlgNode*, const SortInfo&, const bool just_explain);
 
-  WorkUnit createCompoundWorkUnit(const RelCompound*, const SortInfo&);
+  WorkUnit createCompoundWorkUnit(const RelCompound*, const SortInfo&, const bool just_explain);
 
-  WorkUnit createAggregateWorkUnit(const RelAggregate*, const SortInfo&);
+  WorkUnit createAggregateWorkUnit(const RelAggregate*, const SortInfo&, const bool just_explain);
 
-  WorkUnit createProjectWorkUnit(const RelProject*, const SortInfo&);
+  WorkUnit createProjectWorkUnit(const RelProject*, const SortInfo&, const bool just_explain);
 
-  WorkUnit createFilterWorkUnit(const RelFilter*, const SortInfo&);
+  WorkUnit createFilterWorkUnit(const RelFilter*, const SortInfo&, const bool just_explain);
 
-  WorkUnit createJoinWorkUnit(const RelJoin*, const SortInfo&);
+  WorkUnit createJoinWorkUnit(const RelJoin*, const SortInfo&, const bool just_explain);
 
   void addTemporaryTable(const int table_id, const ResultPtr& result) {
     auto row_set = boost::get<RowSetPtr>(&result);

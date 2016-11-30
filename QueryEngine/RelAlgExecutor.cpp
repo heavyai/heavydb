@@ -121,19 +121,19 @@ std::vector<TargetMetaInfo> RelAlgExecutor::validateRelAlgSeq(const std::vector<
     const auto compound = dynamic_cast<const RelCompound*>(body);
     SortInfo dummy{{}, SortAlgorithm::Default, 0, 0};
     if (compound) {
-      createCompoundWorkUnit(compound, dummy);
+      createCompoundWorkUnit(compound, dummy, false);
       addTemporaryTable(-compound->getId(), result.getDataPtr());
       continue;
     }
     const auto project = dynamic_cast<const RelProject*>(body);
     if (project) {
-      createProjectWorkUnit(project, dummy);
+      createProjectWorkUnit(project, dummy, false);
       addTemporaryTable(-project->getId(), result.getDataPtr());
       continue;
     }
     const auto filter = dynamic_cast<const RelFilter*>(body);
     if (filter) {
-      createFilterWorkUnit(filter, dummy);
+      createFilterWorkUnit(filter, dummy, false);
       addTemporaryTable(-filter->getId(), result.getDataPtr());
       continue;
     }
@@ -142,7 +142,7 @@ std::vector<TargetMetaInfo> RelAlgExecutor::validateRelAlgSeq(const std::vector<
       CHECK_EQ(size_t(1), sort->inputCount());
       const auto source = sort->getInput(0);
       CHECK(!dynamic_cast<const RelSort*>(source));
-      createSortInputWorkUnit(sort);
+      createSortInputWorkUnit(sort, false);
       addTemporaryTable(-sort->getId(), result.getDataPtr());
       continue;
     }
@@ -721,7 +721,7 @@ ExecutionResult RelAlgExecutor::executeCompound(const RelCompound* compound,
                                                 const ExecutionOptions& eo,
                                                 RenderInfo* render_info,
                                                 const int64_t queue_time_ms) {
-  const auto work_unit = createCompoundWorkUnit(compound, {{}, SortAlgorithm::Default, 0, 0});
+  const auto work_unit = createCompoundWorkUnit(compound, {{}, SortAlgorithm::Default, 0, 0}, eo.just_explain);
   return executeWorkUnit(
       work_unit, compound->getOutputMetainfo(), compound->isAggregate(), co, eo, render_info, queue_time_ms);
 }
@@ -731,7 +731,7 @@ ExecutionResult RelAlgExecutor::executeAggregate(const RelAggregate* aggregate,
                                                  const ExecutionOptions& eo,
                                                  RenderInfo* render_info,
                                                  const int64_t queue_time_ms) {
-  const auto work_unit = createAggregateWorkUnit(aggregate, {{}, SortAlgorithm::Default, 0, 0});
+  const auto work_unit = createAggregateWorkUnit(aggregate, {{}, SortAlgorithm::Default, 0, 0}, eo.just_explain);
   return executeWorkUnit(work_unit, aggregate->getOutputMetainfo(), true, co, eo, render_info, queue_time_ms);
 }
 
@@ -740,7 +740,7 @@ ExecutionResult RelAlgExecutor::executeProject(const RelProject* project,
                                                const ExecutionOptions& eo,
                                                RenderInfo* render_info,
                                                const int64_t queue_time_ms) {
-  auto work_unit = createProjectWorkUnit(project, {{}, SortAlgorithm::Default, 0, 0});
+  auto work_unit = createProjectWorkUnit(project, {{}, SortAlgorithm::Default, 0, 0}, eo.just_explain);
   CompilationOptions co_project = co;
   if (project->isSimple()) {
     CHECK_EQ(size_t(1), project->inputCount());
@@ -761,7 +761,7 @@ ExecutionResult RelAlgExecutor::executeFilter(const RelFilter* filter,
                                               const ExecutionOptions& eo,
                                               RenderInfo* render_info,
                                               const int64_t queue_time_ms) {
-  const auto work_unit = createFilterWorkUnit(filter, {{}, SortAlgorithm::Default, 0, 0});
+  const auto work_unit = createFilterWorkUnit(filter, {{}, SortAlgorithm::Default, 0, 0}, eo.just_explain);
   return executeWorkUnit(work_unit, filter->getOutputMetainfo(), false, co, eo, render_info, queue_time_ms);
 }
 
@@ -770,7 +770,7 @@ ExecutionResult RelAlgExecutor::executeJoin(const RelJoin* join,
                                             const ExecutionOptions& eo,
                                             RenderInfo* render_info,
                                             const int64_t queue_time_ms) {
-  const auto work_unit = createJoinWorkUnit(join, {{}, SortAlgorithm::Default, 0, 0});
+  const auto work_unit = createJoinWorkUnit(join, {{}, SortAlgorithm::Default, 0, 0}, eo.just_explain);
   return executeWorkUnit(work_unit, join->getOutputMetainfo(), false, co, eo, render_info, queue_time_ms);
 }
 
@@ -821,7 +821,7 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
     std::list<std::shared_ptr<Analyzer::Expr>> groupby_exprs;
     bool is_desc{false};
     try {
-      const auto source_work_unit = createSortInputWorkUnit(sort);
+      const auto source_work_unit = createSortInputWorkUnit(sort, eo.just_explain);
       is_desc = first_oe_is_desc(source_work_unit.exe_unit.sort_info.order_entries);
       groupby_exprs = source_work_unit.exe_unit.groupby_exprs;
       auto source_result = executeWorkUnit(
@@ -855,7 +855,7 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
   return {ResultRows({}, {}, nullptr, nullptr, {}, co.device_type_), {}};
 }
 
-RelAlgExecutor::WorkUnit RelAlgExecutor::createSortInputWorkUnit(const RelSort* sort) {
+RelAlgExecutor::WorkUnit RelAlgExecutor::createSortInputWorkUnit(const RelSort* sort, const bool just_explain) {
   const auto source = sort->getInput(0);
   const size_t limit = sort->getLimit();
   const size_t offset = sort->getOffset();
@@ -865,7 +865,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createSortInputWorkUnit(const RelSort* 
   SortAlgorithm sort_algorithm{SortAlgorithm::SpeculativeTopN};
   const auto order_entries = get_order_entries(sort);
   SortInfo sort_info{order_entries, sort_algorithm, limit, offset};
-  auto source_work_unit = createWorkUnit(source, sort_info);
+  auto source_work_unit = createWorkUnit(source, sort_info, just_explain);
   const auto& source_exe_unit = source_work_unit.exe_unit;
   if (source_exe_unit.groupby_exprs.size() == 1 && source_exe_unit.groupby_exprs.front() &&
       speculative_topn_blacklist_.contains(source_exe_unit.groupby_exprs.front(), first_oe_is_desc(order_entries))) {
@@ -1189,22 +1189,24 @@ ExecutionResult RelAlgExecutor::handleRetry(const int32_t error_code_in,
   return result;
 }
 
-RelAlgExecutor::WorkUnit RelAlgExecutor::createWorkUnit(const RelAlgNode* node, const SortInfo& sort_info) {
+RelAlgExecutor::WorkUnit RelAlgExecutor::createWorkUnit(const RelAlgNode* node,
+                                                        const SortInfo& sort_info,
+                                                        const bool just_explain) {
   const auto compound = dynamic_cast<const RelCompound*>(node);
   if (compound) {
-    return createCompoundWorkUnit(compound, sort_info);
+    return createCompoundWorkUnit(compound, sort_info, just_explain);
   }
   const auto project = dynamic_cast<const RelProject*>(node);
   if (project) {
-    return createProjectWorkUnit(project, sort_info);
+    return createProjectWorkUnit(project, sort_info, just_explain);
   }
   const auto aggregate = dynamic_cast<const RelAggregate*>(node);
   if (aggregate) {
-    return createAggregateWorkUnit(aggregate, sort_info);
+    return createAggregateWorkUnit(aggregate, sort_info, just_explain);
   }
   const auto filter = dynamic_cast<const RelFilter*>(node);
   CHECK(filter);
-  return createFilterWorkUnit(filter, sort_info);
+  return createFilterWorkUnit(filter, sort_info, just_explain);
 }
 
 namespace {
@@ -1318,14 +1320,15 @@ std::vector<InputDescriptor> separate_extra_input_descs(std::vector<InputDescrip
 }  // namespace
 
 RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(const RelCompound* compound,
-                                                                const SortInfo& sort_info) {
+                                                                const SortInfo& sort_info,
+                                                                const bool just_explain) {
   std::vector<InputDescriptor> input_descs;
   std::list<std::shared_ptr<const InputColDescriptor>> input_col_descs;
   const auto input_to_nest_level = get_input_nest_levels(compound);
   std::tie(input_descs, input_col_descs, std::ignore) = get_input_desc(compound, input_to_nest_level);
   const auto extra_input_descs = separate_extra_input_descs(input_descs);
   const auto join_type = get_join_type(compound);
-  RelAlgTranslator translator(cat_, input_to_nest_level, join_type, now_);
+  RelAlgTranslator translator(cat_, input_to_nest_level, join_type, now_, just_explain);
   const auto scalar_sources = translate_scalar_sources(compound, translator);
   const auto groupby_exprs = translate_groupby_exprs(compound, scalar_sources);
   const auto quals_cf = translate_quals(compound, translator);
@@ -1426,14 +1429,16 @@ std::pair<std::vector<TargetMetaInfo>, std::vector<std::shared_ptr<Analyzer::Exp
 
 }  // namespace
 
-RelAlgExecutor::WorkUnit RelAlgExecutor::createJoinWorkUnit(const RelJoin* join, const SortInfo& sort_info) {
+RelAlgExecutor::WorkUnit RelAlgExecutor::createJoinWorkUnit(const RelJoin* join,
+                                                            const SortInfo& sort_info,
+                                                            const bool just_explain) {
   std::vector<InputDescriptor> input_descs;
   std::list<std::shared_ptr<const InputColDescriptor>> input_col_descs;
   const auto input_to_nest_level = get_input_nest_levels(join);
   std::tie(input_descs, input_col_descs, std::ignore) = get_input_desc(join, input_to_nest_level);
   const auto extra_input_descs = separate_extra_input_descs(input_descs);
   const auto join_type = join->getJoinType();
-  RelAlgTranslator translator(cat_, input_to_nest_level, join_type, now_);
+  RelAlgTranslator translator(cat_, input_to_nest_level, join_type, now_, just_explain);
   auto inner_join_quals = get_inner_join_quals(join, translator);
   auto outer_join_quals = get_outer_join_quals(join, translator);
   CHECK((join_type == JoinType::INNER && outer_join_quals.empty()) ||
@@ -1492,7 +1497,8 @@ std::vector<std::shared_ptr<Analyzer::Expr>> synthesize_inputs(
 }  // namespace
 
 RelAlgExecutor::WorkUnit RelAlgExecutor::createAggregateWorkUnit(const RelAggregate* aggregate,
-                                                                 const SortInfo& sort_info) {
+                                                                 const SortInfo& sort_info,
+                                                                 const bool just_explain) {
   std::vector<InputDescriptor> input_descs;
   std::list<std::shared_ptr<const InputColDescriptor>> input_col_descs;
   std::vector<std::shared_ptr<RexInput>> used_inputs_owned;
@@ -1500,7 +1506,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createAggregateWorkUnit(const RelAggreg
   std::tie(input_descs, input_col_descs, used_inputs_owned) = get_input_desc(aggregate, input_to_nest_level);
   const auto extra_input_descs = separate_extra_input_descs(input_descs);
   const auto join_type = get_join_type(aggregate);
-  RelAlgTranslator translator(cat_, input_to_nest_level, join_type, now_);
+  RelAlgTranslator translator(cat_, input_to_nest_level, join_type, now_, just_explain);
   CHECK_EQ(size_t(1), aggregate->inputCount());
   const auto source = aggregate->getInput(0);
   const auto& in_metainfo = source->getOutputMetainfo();
@@ -1529,14 +1535,16 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createAggregateWorkUnit(const RelAggreg
           nullptr};
 }
 
-RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(const RelProject* project, const SortInfo& sort_info) {
+RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(const RelProject* project,
+                                                               const SortInfo& sort_info,
+                                                               const bool just_explain) {
   std::vector<InputDescriptor> input_descs;
   std::list<std::shared_ptr<const InputColDescriptor>> input_col_descs;
   const auto input_to_nest_level = get_input_nest_levels(project);
   std::tie(input_descs, input_col_descs, std::ignore) = get_input_desc(project, input_to_nest_level);
   const auto extra_input_descs = separate_extra_input_descs(input_descs);
   const auto join_type = get_join_type(project);
-  RelAlgTranslator translator(cat_, input_to_nest_level, join_type, now_);
+  RelAlgTranslator translator(cat_, input_to_nest_level, join_type, now_, just_explain);
   const auto target_exprs_owned = translate_scalar_sources(project, translator);
   target_exprs_owned_.insert(target_exprs_owned_.end(), target_exprs_owned.begin(), target_exprs_owned.end());
   const auto target_exprs = get_exprs_not_owned(target_exprs_owned);
@@ -1598,7 +1606,9 @@ std::pair<std::vector<TargetMetaInfo>, std::vector<std::shared_ptr<Analyzer::Exp
 
 }  // namespace
 
-RelAlgExecutor::WorkUnit RelAlgExecutor::createFilterWorkUnit(const RelFilter* filter, const SortInfo& sort_info) {
+RelAlgExecutor::WorkUnit RelAlgExecutor::createFilterWorkUnit(const RelFilter* filter,
+                                                              const SortInfo& sort_info,
+                                                              const bool just_explain) {
   CHECK_EQ(size_t(1), filter->inputCount());
   std::vector<InputDescriptor> input_descs;
   std::list<std::shared_ptr<const InputColDescriptor>> input_col_descs;
@@ -1610,7 +1620,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createFilterWorkUnit(const RelFilter* f
   std::tie(input_descs, input_col_descs, used_inputs_owned) = get_input_desc(filter, input_to_nest_level);
   const auto extra_input_descs = separate_extra_input_descs(input_descs);
   const auto join_type = get_join_type(filter);
-  RelAlgTranslator translator(cat_, input_to_nest_level, join_type, now_);
+  RelAlgTranslator translator(cat_, input_to_nest_level, join_type, now_, just_explain);
   std::tie(in_metainfo, target_exprs_owned) =
       get_inputs_meta(filter, translator, used_inputs_owned, input_to_nest_level);
   const auto qual = translator.translateScalarRex(filter->getCondition());

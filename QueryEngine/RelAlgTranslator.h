@@ -25,8 +25,13 @@ class RelAlgTranslator {
   RelAlgTranslator(const Catalog_Namespace::Catalog& cat,
                    const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
                    const JoinType join_type,
-                   const time_t now)
-      : cat_(cat), input_to_nest_level_(input_to_nest_level), join_type_(join_type), now_(now) {}
+                   const time_t now,
+                   const bool just_explain)
+      : cat_(cat),
+        input_to_nest_level_(input_to_nest_level),
+        join_type_(join_type),
+        now_(now),
+        just_explain_(just_explain) {}
 
   std::shared_ptr<Analyzer::Expr> translateScalarRex(const RexScalar* rex) const;
 
@@ -83,6 +88,7 @@ class RelAlgTranslator {
   const std::unordered_map<const RelAlgNode*, int> input_to_nest_level_;
   const JoinType join_type_;
   time_t now_;
+  const bool just_explain_;
 };
 
 #endif  // QUERYENGINE_RELALGTRANSLATOR_H

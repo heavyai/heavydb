@@ -138,6 +138,9 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLiteral(const RexLite
 }
 
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateSubQuery(const RexSubQuery* rex_subquery) const {
+  if (just_explain_) {
+    throw std::runtime_error("EXPLAIN is not supported with sub-queries");
+  }
   CHECK(rex_subquery);
   auto result = rex_subquery->get_execution_result();
   auto& row_set = result->getRows();
@@ -259,6 +262,9 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUoper(const RexOperat
 }
 
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInOper(const RexOperator* rex_operator) const {
+  if (just_explain_) {
+    throw std::runtime_error("EXPLAIN is not supported with sub-queries");
+  }
   CHECK(rex_operator->size() == 2);
   const auto lhs = translateScalarRex(rex_operator->getOperand(0));
   const auto rhs = rex_operator->getOperand(1);
