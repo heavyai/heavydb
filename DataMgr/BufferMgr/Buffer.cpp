@@ -42,8 +42,7 @@ Buffer::Buffer(BufferMgr* bm,
  }
  */
 
-Buffer::~Buffer() {
-}
+Buffer::~Buffer() {}
 
 void Buffer::reserve(const size_t numBytes) {
 #ifdef BUFFER_MUTEX

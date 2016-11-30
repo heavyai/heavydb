@@ -1782,10 +1782,10 @@ class MapDHandler : virtual public MapDIf {
         // check for COPY TO stmt replace as required parser expects #~# markers
         auto result = query_str;
         {
-          //boost::regex copy_to{R"(COPY\s\((.*)\)\sTO\s(.*))", boost::regex::extended | boost::regex::icase};
+          // boost::regex copy_to{R"(COPY\s\((.*)\)\sTO\s(.*))", boost::regex::extended | boost::regex::icase};
           boost::regex copy_to{R"(COPY\s*\(([^#])(.+)\)\s+TO\s)", boost::regex::extended | boost::regex::icase};
           apply_shim(result, copy_to, [](std::string& result, const boost::smatch& what) {
-            result.replace(what.position(), what.length(), "COPY (#~#" + what[1]+what[2] + "#~#) TO  ");
+            result.replace(what.position(), what.length(), "COPY (#~#" + what[1] + what[2] + "#~#) TO  ");
           });
         }
         num_parse_errors = parser.parse(result, parse_trees, last_parsed);

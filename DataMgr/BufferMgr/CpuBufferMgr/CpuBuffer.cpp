@@ -12,8 +12,7 @@ CpuBuffer::CpuBuffer(BufferMgr* bm,
                      CudaMgr_Namespace::CudaMgr* cudaMgr,
                      const size_t pageSize,
                      const size_t numBytes)
-    : Buffer(bm, segIt, deviceId, pageSize, numBytes), cudaMgr_(cudaMgr) {
-}
+    : Buffer(bm, segIt, deviceId, pageSize, numBytes), cudaMgr_(cudaMgr) {}
 
 void CpuBuffer::readData(int8_t* const dst,
                          const size_t numBytes,

@@ -400,28 +400,23 @@ bool RegexpExpr::translate_to_like_pattern(std::string& pattern_str, char escape
   char prev_prev_char = '\0';
   std::string like_str;
   for (char& cur_char : pattern_str) {
-    if (prev_char == escape_char ||
-	isalnum(cur_char) ||
-	cur_char == ' ' ||
-	cur_char == '.') {
+    if (prev_char == escape_char || isalnum(cur_char) || cur_char == ' ' || cur_char == '.') {
       like_str.push_back((cur_char == '.') ? '_' : cur_char);
       prev_prev_char = prev_char;
       prev_char = cur_char;
       continue;
     }
-    if (prev_char == '.' &&
-	prev_prev_char != escape_char) {
-      if (cur_char == '*' ||
-	  cur_char == '+') {
-	if (cur_char == '*') {
-	  like_str.pop_back();
-	}
-	// .* --> %
-	// .+ --> _%
-	like_str.push_back('%');
-	prev_prev_char = prev_char;
-	prev_char = cur_char;
-	continue;
+    if (prev_char == '.' && prev_prev_char != escape_char) {
+      if (cur_char == '*' || cur_char == '+') {
+        if (cur_char == '*') {
+          like_str.pop_back();
+        }
+        // .* --> %
+        // .+ --> _%
+        like_str.push_back('%');
+        prev_prev_char = prev_char;
+        prev_char = cur_char;
+        continue;
       }
     }
     return false;
@@ -1927,7 +1922,7 @@ ResultRows getResultRows(const Catalog_Namespace::SessionInfo& session,
   targets = result.getTargetsMeta();
 
   return result.getRows();
-#else  // HAVE_RAVM
+#else   // HAVE_RAVM
   LOG(FATAL) << "unsupported legacy parser path";
   ResultRows* result;
   return *result;

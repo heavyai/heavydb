@@ -155,14 +155,14 @@ void FileBuffer::freePages() {
 }
 
 struct readThreadDS {
-  FileMgr* t_fm;             // ptr to FileMgr
-  size_t t_startPage;        // start page for the thread
-  size_t t_endPage;          // last page for the thread
-  int8_t* t_curPtr;          // pointer to the current location of the target for the thread
-  size_t t_bytesLeft;        // number of bytes to be read in the thread
-  size_t t_startPageOffset;  // offset - used for the first page of the buffer
-  bool t_isFirstPage;        // true - for first page of the buffer, false - otherwise
-  std::vector<MultiPage> multiPages; // MultiPages of the FileBuffer passed to the thread
+  FileMgr* t_fm;                      // ptr to FileMgr
+  size_t t_startPage;                 // start page for the thread
+  size_t t_endPage;                   // last page for the thread
+  int8_t* t_curPtr;                   // pointer to the current location of the target for the thread
+  size_t t_bytesLeft;                 // number of bytes to be read in the thread
+  size_t t_startPageOffset;           // offset - used for the first page of the buffer
+  bool t_isFirstPage;                 // true - for first page of the buffer, false - otherwise
+  std::vector<MultiPage> multiPages;  // MultiPages of the FileBuffer passed to the thread
 };
 
 static size_t readForThread(FileBuffer* fileBuffer, const readThreadDS threadDS) {
@@ -259,7 +259,8 @@ void FileBuffer::read(int8_t* const dst,
   threadDS.t_startPageOffset = offset % pageDataSize_;
   threadDS.t_isFirstPage = true;
 
-  bytesLeftForThread = min(((threadDS.t_endPage - threadDS.t_startPage) * pageDataSize_ - threadDS.t_startPageOffset), numBytesCurrent);
+  bytesLeftForThread =
+      min(((threadDS.t_endPage - threadDS.t_startPage) * pageDataSize_ - threadDS.t_startPageOffset), numBytesCurrent);
   threadDS.t_bytesLeft = bytesLeftForThread;
   threadDS.multiPages = getMultiPage();
 

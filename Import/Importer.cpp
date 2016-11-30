@@ -961,8 +961,8 @@ ImportStatus Importer::import() {
   return importDelimited();
 }
 
-#define IMPORT_FILE_BUFFER_SIZE 100000000  //100M file size
-#define MIN_FILE_BUFFER_SIZE 50000  //50K min buffer
+#define IMPORT_FILE_BUFFER_SIZE 100000000  // 100M file size
+#define MIN_FILE_BUFFER_SIZE 50000         // 50K min buffer
 
 ImportStatus Importer::importDelimited() {
   set_import_status(import_id, import_status);
@@ -978,7 +978,7 @@ ImportStatus Importer::importDelimited() {
     max_threads = copy_params.threads;
   // deal with small files
   size_t alloc_size = IMPORT_FILE_BUFFER_SIZE;
-  if (file_size < alloc_size){
+  if (file_size < alloc_size) {
     alloc_size = file_size;
   }
   buffer[0] = (char*)checked_malloc(alloc_size);

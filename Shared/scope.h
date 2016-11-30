@@ -6,8 +6,7 @@
 class ScopeGuard {
  public:
   template <class Callable>
-  ScopeGuard(Callable&& at_exit)
-      : at_exit_(std::forward<Callable>(at_exit)) {}
+  ScopeGuard(Callable&& at_exit) : at_exit_(std::forward<Callable>(at_exit)) {}
 
   // make it non-copyable
   ScopeGuard(const ScopeGuard&) = delete;

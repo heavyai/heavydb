@@ -52,8 +52,7 @@ InsertOrderFragmenter::InsertOrderFragmenter(const vector<int> chunkKeyPrefix,
   getChunkMetadata();
 }
 
-InsertOrderFragmenter::~InsertOrderFragmenter() {
-}
+InsertOrderFragmenter::~InsertOrderFragmenter() {}
 
 void InsertOrderFragmenter::getChunkMetadata() {
   std::vector<std::pair<ChunkKey, ChunkMetadata>> chunkMetadataVec;
@@ -66,8 +65,9 @@ void InsertOrderFragmenter::getChunkMetadata() {
   int fragmentSubKey = 3;
   std::sort(chunkMetadataVec.begin(),
             chunkMetadataVec.end(),
-            [&](const std::pair<ChunkKey, ChunkMetadata>& pair1,
-                const std::pair<ChunkKey, ChunkMetadata>& pair2) { return pair1.first[3] < pair2.first[3]; });
+            [&](const std::pair<ChunkKey, ChunkMetadata>& pair1, const std::pair<ChunkKey, ChunkMetadata>& pair2) {
+              return pair1.first[3] < pair2.first[3];
+            });
 
   for (auto chunkIt = chunkMetadataVec.begin(); chunkIt != chunkMetadataVec.end(); ++chunkIt) {
     int curFragmentId = chunkIt->first[fragmentSubKey];

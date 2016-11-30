@@ -395,7 +395,8 @@ std::string BufferMgr::printSlab(size_t slabNum) {
 
 std::string BufferMgr::printSlabs() {
   std::ostringstream tss;
-  tss << std::endl << "Slabs Contents: "
+  tss << std::endl
+      << "Slabs Contents: "
       << " " << getStringMgrType() << ":" << deviceId_ << std::endl;
   size_t numSlabs = slabSegments_.size();
   for (size_t slabNum = 0; slabNum != numSlabs; ++slabNum) {
@@ -457,7 +458,8 @@ std::string BufferMgr::printSeg(BufferList::iterator& segIt) {
 std::string BufferMgr::printMap() {
   std::ostringstream tss;
   int segNum = 1;
-  tss << std::endl << "Map Contents: "
+  tss << std::endl
+      << "Map Contents: "
       << " " << getStringMgrType() << ":" << deviceId_ << std::endl;
   for (auto segIt = chunkIndex_.begin(); segIt != chunkIndex_.end(); ++segIt, ++segNum) {
     //    tss << "Map Entry " << segNum << ": ";

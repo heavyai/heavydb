@@ -12,8 +12,7 @@ GpuCudaBufferMgr::GpuCudaBufferMgr(const int deviceId,
                                    const size_t bufferAllocIncrement,
                                    const size_t pageSize,
                                    AbstractBufferMgr* parentMgr)
-    : BufferMgr(deviceId, maxBufferSize, bufferAllocIncrement, pageSize, parentMgr), cudaMgr_(cudaMgr) {
-}
+    : BufferMgr(deviceId, maxBufferSize, bufferAllocIncrement, pageSize, parentMgr), cudaMgr_(cudaMgr) {}
 
 GpuCudaBufferMgr::~GpuCudaBufferMgr() {
   freeAllMem();

@@ -14,8 +14,7 @@ CpuBufferMgr::CpuBufferMgr(const int deviceId,
                            AbstractBufferMgr* parentMgr)
     : BufferMgr(deviceId, maxBufferSize, bufferAllocIncrement, pageSize, parentMgr),
       cpuBufferMgrMemType_(cpuBufferMgrMemType),
-      cudaMgr_(cudaMgr) {
-}
+      cudaMgr_(cudaMgr) {}
 
 CpuBufferMgr::~CpuBufferMgr() {
   freeAllMem();

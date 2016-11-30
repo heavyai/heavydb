@@ -70,5 +70,4 @@ ParserWrapper::ParserWrapper(std::string query_string) {
   }
 }
 
-ParserWrapper::~ParserWrapper() {
-}
+ParserWrapper::~ParserWrapper() {}
