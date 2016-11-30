@@ -124,29 +124,6 @@ Planner::RootPlan* parse_plan(const std::string& query_str,
   return plan;
 }
 
-#ifdef HAVE_RAVM
-
-std::shared_ptr<const RelAlgNode> parse_ravm_plan(const std::string& query_str,
-                                                  const std::unique_ptr<Catalog_Namespace::SessionInfo>& session,
-                                                  const CompilationOptions& co,
-                                                  const ExecutionOptions& eo) {
-  const auto& cat = session->get_catalog();
-  auto& calcite_mgr = cat.get_calciteMgr();
-  const auto query_ra = calcite_mgr.process(session->get_currentUser().userName,
-                                            session->get_currentUser().passwd,
-                                            cat.get_currentDB().dbName,
-                                            pg_shim(query_str),
-                                            true,
-                                            false);
-  rapidjson::Document query_ast;
-  query_ast.Parse(query_ra.c_str());
-  CHECK(!query_ast.HasParseError());
-  CHECK(query_ast.IsObject());
-  return ra_interpret(query_ast, cat, co, eo);
-}
-
-#endif  // HAVE_RAVM
-
 }  // namespace
 
 ResultRows run_multiple_agg(const std::string& query_str,
@@ -161,10 +138,15 @@ ResultRows run_multiple_agg(const std::string& query_str,
   if (!(pw.is_other_explain || pw.is_ddl || pw.is_update_dml)) {
     CompilationOptions co = {device_type, true, ExecutorOptLevel::LoopStrengthReduction};
     ExecutionOptions eo = {false, true, false, true, false, false};
-    const auto ra = parse_ravm_plan(query_str, session, co, eo);
-    auto ed_list = get_execution_descriptors(ra.get());
+    auto& calcite_mgr = cat.get_calciteMgr();
+    const auto query_ra = calcite_mgr.process(session->get_currentUser().userName,
+                                              session->get_currentUser().passwd,
+                                              cat.get_currentDB().dbName,
+                                              pg_shim(query_str),
+                                              true,
+                                              false);
     RelAlgExecutor ra_executor(executor.get(), cat);
-    return ra_executor.executeRelAlgSeq(ed_list, co, eo, nullptr).getRows();
+    return ra_executor.executeRelAlgQuery(query_ra, co, eo, nullptr).getRows();
   }
 #endif  // HAVE_RAVM
 

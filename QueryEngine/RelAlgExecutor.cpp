@@ -9,14 +9,27 @@
 
 #include "../Shared/measure.h"
 
-ExecutionResult RelAlgExecutor::executeRelAlgSeq(std::vector<RaExecutionDesc>& exec_descs,
-                                                 const CompilationOptions& co,
-                                                 const ExecutionOptions& eo,
-                                                 RenderInfo* render_info) {
+ExecutionResult RelAlgExecutor::executeRelAlgQuery(const std::string& query_ra,
+                                                   const CompilationOptions& co,
+                                                   const ExecutionOptions& eo,
+                                                   RenderInfo* render_info) {
   // capture the lock acquistion time
   auto clock_begin = timer_start();
   std::lock_guard<std::mutex> lock(executor_->execute_mutex_);
   int64_t queue_time_ms = timer_stop(clock_begin);
+  const auto ra = deserialize_ra_dag(query_ra, cat_, co, eo);
+  auto ed_list = get_execution_descriptors(ra.get());
+  if (render_info) {  // save the table names for render queries
+    table_names_ = getScanTableNamesInRelAlgSeq(ed_list);
+  }
+  return executeRelAlgSeq(ed_list, co, eo, render_info, queue_time_ms);
+}
+
+ExecutionResult RelAlgExecutor::executeRelAlgSeq(std::vector<RaExecutionDesc>& exec_descs,
+                                                 const CompilationOptions& co,
+                                                 const ExecutionOptions& eo,
+                                                 RenderInfo* render_info,
+                                                 const int64_t queue_time_ms) {
   Executor::RowSetHolder row_set_holder(executor_);
   decltype(temporary_tables_)().swap(temporary_tables_);
   decltype(target_exprs_owned_)().swap(target_exprs_owned_);
@@ -135,6 +148,10 @@ std::vector<TargetMetaInfo> RelAlgExecutor::validateRelAlgSeq(const std::vector<
     }
   }
   return exec_descs.back().getBody()->getOutputMetainfo();
+}
+
+const std::vector<std::string>& RelAlgExecutor::getScanTableNamesInRelAlgSeq() const {
+  return table_names_;
 }
 
 std::vector<std::string> RelAlgExecutor::getScanTableNamesInRelAlgSeq(std::vector<RaExecutionDesc>& exec_descs) {

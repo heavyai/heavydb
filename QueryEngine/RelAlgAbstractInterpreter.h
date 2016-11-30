@@ -810,10 +810,10 @@ class QueryNotSupported : public std::runtime_error {
   QueryNotSupported(const std::string& reason) : std::runtime_error(reason) {}
 };
 
-std::shared_ptr<const RelAlgNode> ra_interpret(const rapidjson::Value&,
-                                               const Catalog_Namespace::Catalog&,
-                                               const CompilationOptions& co,
-                                               const ExecutionOptions& eo);
+std::shared_ptr<const RelAlgNode> deserialize_ra_dag(const std::string& query_ra,
+                                                     const Catalog_Namespace::Catalog& cat,
+                                                     const CompilationOptions& co,
+                                                     const ExecutionOptions& eo);
 
 std::string tree_string(const RelAlgNode*, const size_t indent = 0);
 

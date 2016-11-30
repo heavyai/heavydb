@@ -13,10 +13,16 @@ class RelAlgExecutor {
  public:
   RelAlgExecutor(Executor* executor, const Catalog_Namespace::Catalog& cat) : executor_(executor), cat_(cat), now_(0) {}
 
-  ExecutionResult executeRelAlgSeq(std::vector<RaExecutionDesc>&,
-                                   const CompilationOptions&,
-                                   const ExecutionOptions&,
-                                   RenderInfo*);
+  ExecutionResult executeRelAlgQuery(const std::string& query_ra,
+                                     const CompilationOptions& co,
+                                     const ExecutionOptions& eo,
+                                     RenderInfo* render_info);
+
+  ExecutionResult executeRelAlgSeq(std::vector<RaExecutionDesc>& ed_list,
+                                   const CompilationOptions& co,
+                                   const ExecutionOptions& eo,
+                                   RenderInfo* render_info,
+                                   const int64_t queue_time_ms);
 
   void executeRelAlgStep(const size_t step_idx,
                          std::vector<RaExecutionDesc>&,
@@ -25,9 +31,9 @@ class RelAlgExecutor {
                          RenderInfo*,
                          const int64_t queue_time_ms);
 
-  static std::vector<std::string> getScanTableNamesInRelAlgSeq(std::vector<RaExecutionDesc>& exec_descs);
-
   std::vector<TargetMetaInfo> validateRelAlgSeq(const std::vector<RaExecutionDesc>&);
+
+  const std::vector<std::string>& getScanTableNamesInRelAlgSeq() const;
 
  private:
   ExecutionResult executeCompound(const RelCompound*,
@@ -134,11 +140,14 @@ class RelAlgExecutor {
 
   void handleNop(const RelAlgNode*);
 
+  static std::vector<std::string> getScanTableNamesInRelAlgSeq(std::vector<RaExecutionDesc>& exec_descs);
+
   Executor* executor_;
   const Catalog_Namespace::Catalog& cat_;
   TemporaryTables temporary_tables_;
   time_t now_;
   std::vector<std::shared_ptr<Analyzer::Expr>> target_exprs_owned_;  // TODO(alex): remove
+  std::vector<std::string> table_names_;  // used by poly rendering only, lazily initialized by executeRelAlgQuery()
   static SpeculativeTopNBlacklist speculative_topn_blacklist_;
   static const size_t max_groups_buffer_entry_default_guess{16384};
 };

@@ -1909,16 +1909,9 @@ ResultRows getResultRows(const Catalog_Namespace::SessionInfo& session,
                                             false);
   CompilationOptions co = {device_type, true, ExecutorOptLevel::LoopStrengthReduction};
   ExecutionOptions eo = {false, true, false, true, false, false};
-  rapidjson::Document query_ast;
-  query_ast.Parse(query_ra.c_str());
-  CHECK(!query_ast.HasParseError());
-  CHECK(query_ast.IsObject());
-  const auto ra = ra_interpret(query_ast, catalog, co, eo);
-
-  auto ed_list = get_execution_descriptors(ra.get());
   RelAlgExecutor ra_executor(executor.get(), catalog);
   ExecutionResult result{ResultRows({}, {}, nullptr, nullptr, {}, device_type), {}};
-  result = ra_executor.executeRelAlgSeq(ed_list, co, eo, nullptr);
+  result = ra_executor.executeRelAlgQuery(query_ra, co, eo, nullptr);
   targets = result.getTargetsMeta();
 
   return result.getRows();
