@@ -222,7 +222,7 @@ class RexSubQuery : public RexScalar {
   const RelAlgNode* getSourceNode() const { return node_; }
 
   const SQLTypeInfo& getType() const { return type_; }
-  std::shared_ptr<const ExecutionResult> get_execution_result() const { return result_; }
+  std::shared_ptr<const ExecutionResult> getExecutionResult() const { return result_; }
 
   bool operator==(const RexSubQuery& that) const { return node_ == that.getSourceNode(); }
 

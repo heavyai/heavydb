@@ -142,7 +142,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateSubQuery(const RexSub
     throw std::runtime_error("EXPLAIN is not supported with sub-queries");
   }
   CHECK(rex_subquery);
-  auto result = rex_subquery->get_execution_result();
+  auto result = rex_subquery->getExecutionResult();
   auto& row_set = result->getRows();
   CHECK_EQ(size_t(1), row_set.rowCount());
   auto first_row = row_set.getNextRow(false, false);
@@ -271,7 +271,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInOper(const RexOpera
   const auto rex_subquery = dynamic_cast<const RexSubQuery*>(rhs);
   CHECK(rex_subquery);
   auto ti = lhs->get_type_info();
-  auto result = rex_subquery->get_execution_result();
+  auto result = rex_subquery->getExecutionResult();
   auto& row_set = result->getRows();
   row_set.moveToBegin();
   if (row_set.rowCount() > 10000) {
