@@ -1021,9 +1021,6 @@ std::unique_ptr<const RexSubQuery> parse_subquery(const rapidjson::Value& expr,
   const auto& operands = field(expr, "operands");
   CHECK(operands.IsArray());
   CHECK_GE(operands.Size(), unsigned(0));
-  const auto type_it = expr.FindMember("type");
-  CHECK(type_it != expr.MemberEnd());
-  const auto ti = parse_type(type_it->value);
   const auto subquery_str = json_str(field(expr, "subquery"));
 
   rapidjson::Document subquery_ast;
@@ -1041,10 +1038,8 @@ std::unique_ptr<const RexSubQuery> parse_subquery(const rapidjson::Value& expr,
   auto result = ra_executor.executeRelAlgSeq(ed_list, co, eo, nullptr, 0);
   auto row_set = &result.getRows();
   CHECK(row_set);
-  if (row_set) {
-    CHECK_LT(size_t(0), row_set->colCount());
-  }
-
+  CHECK_EQ(size_t(1), row_set->colCount());
+  const auto ti = row_set->getColType(0);
   return std::unique_ptr<const RexSubQuery>(new RexSubQuery(ra.get(), ti, std::make_shared<ExecutionResult>(result)));
 }
 
