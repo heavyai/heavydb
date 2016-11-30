@@ -159,6 +159,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateSubQuery(const RexSub
       d.intval = *ival;
       break;
     }
+    case kDECIMAL:
+    case kNUMERIC:
     case kBIGINT: {
       const auto ival = boost::get<int64_t>(scalar_tv);
       CHECK(ival);
