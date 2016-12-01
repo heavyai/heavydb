@@ -73,7 +73,10 @@ std::pair<Datum, bool> datum_from_scalar_tv(const ScalarTargetValue* scalar_tv, 
     }
     case kDECIMAL:
     case kNUMERIC:
-    case kBIGINT: {
+    case kBIGINT:
+    case kDATE:
+    case kTIME:
+    case kTIMESTAMP: {
       const auto ival = boost::get<int64_t>(scalar_tv);
       CHECK(ival);
       if (*ival == inline_int_null_val(ti)) {
