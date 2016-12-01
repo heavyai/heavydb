@@ -16,6 +16,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQuery(const std::string& query_ra,
   // capture the lock acquistion time
   auto clock_begin = timer_start();
   std::lock_guard<std::mutex> lock(executor_->execute_mutex_);
+  InputTableInfoCacheScope input_table_info_cache_scope(executor_);
   int64_t queue_time_ms = timer_stop(clock_begin);
   const auto ra = deserialize_ra_dag(query_ra, cat_, co, eo);
   auto ed_list = get_execution_descriptors(ra.get());
@@ -1282,18 +1283,16 @@ std::list<std::shared_ptr<Analyzer::Expr>> get_inner_join_quals(const RelAlgNode
   return {};
 }
 
-std::vector<std::pair<int, size_t>> get_join_dimensions(const RelAlgNode* ra,
-                                                        const Catalog_Namespace::Catalog& cat,
-                                                        const TemporaryTables& temp_tables) {
+std::vector<std::pair<int, size_t>> get_join_dimensions(const RelAlgNode* ra, Executor* executor) {
   std::vector<std::pair<int, size_t>> dims;
   for (auto join = dynamic_cast<const RelJoin*>(ra); join; join = static_cast<const RelJoin*>(join->getInput(0))) {
     CHECK_EQ(size_t(2), join->inputCount());
     const auto id = table_id_from_ra(join->getInput(1));
-    dims.emplace_back(id, get_frag_count_of_table(id, cat, temp_tables));
+    dims.emplace_back(id, get_frag_count_of_table(id, executor));
     auto lhs = join->getInput(0);
     if (!dynamic_cast<const RelJoin*>(lhs)) {
       const auto id = table_id_from_ra(lhs);
-      dims.emplace_back(id, get_frag_count_of_table(id, cat, temp_tables));
+      dims.emplace_back(id, get_frag_count_of_table(id, executor));
       break;
     }
   }
@@ -1345,7 +1344,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(const RelCompoun
                                         quals_cf.simple_quals,
                                         separated_quals.regular_quals,
                                         join_type,
-                                        get_join_dimensions(get_data_sink(compound), cat_, temporary_tables_),
+                                        get_join_dimensions(get_data_sink(compound), executor_),
                                         inner_join_quals,
                                         get_outer_join_quals(compound, translator),
                                         groupby_exprs,
@@ -1456,7 +1455,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createJoinWorkUnit(const RelJoin* join,
            {},
            {},
            join_type,
-           get_join_dimensions(join, cat_, temporary_tables_),
+           get_join_dimensions(join, executor_),
            inner_join_quals,
            outer_join_quals,
            {nullptr},
@@ -1522,7 +1521,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createAggregateWorkUnit(const RelAggreg
            {},
            {},
            join_type,
-           get_join_dimensions(get_data_sink(aggregate), cat_, temporary_tables_),
+           get_join_dimensions(get_data_sink(aggregate), executor_),
            get_inner_join_quals(aggregate, translator),
            get_outer_join_quals(aggregate, translator),
            groupby_exprs,
@@ -1556,7 +1555,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(const RelProject*
            {},
            {},
            join_type,
-           get_join_dimensions(get_data_sink(project), cat_, temporary_tables_),
+           get_join_dimensions(get_data_sink(project), executor_),
            get_inner_join_quals(project, translator),
            get_outer_join_quals(project, translator),
            {nullptr},
@@ -1635,7 +1634,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createFilterWorkUnit(const RelFilter* f
            {},
            separated_quals.regular_quals,
            join_type,
-           get_join_dimensions(get_data_sink(filter), cat_, temporary_tables_),
+           get_join_dimensions(get_data_sink(filter), executor_),
            separated_quals.join_quals,
            get_outer_join_quals(filter, translator),
            {nullptr},

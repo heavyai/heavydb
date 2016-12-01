@@ -19,9 +19,20 @@ struct InputTableInfo {
   Fragmenter_Namespace::TableInfo info;
 };
 
-size_t get_frag_count_of_table(const int table_id,
-                               const Catalog_Namespace::Catalog& cat,
-                               const TemporaryTables& temporary_tables);
+class InputTableInfoCache {
+ public:
+  InputTableInfoCache(Executor* executor);
+
+  Fragmenter_Namespace::TableInfo getTableInfo(const int table_id);
+
+  void clear();
+
+ private:
+  std::unordered_map<int, Fragmenter_Namespace::TableInfo> cache_;
+  Executor* executor_;
+};
+
+size_t get_frag_count_of_table(const int table_id, Executor* executor);
 
 std::vector<InputTableInfo> get_table_infos(const std::vector<InputDescriptor>& input_descs, Executor* executor);
 

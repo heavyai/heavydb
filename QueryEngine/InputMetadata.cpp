@@ -1,6 +1,42 @@
 #include "InputMetadata.h"
 #include "Execute.h"
 
+InputTableInfoCache::InputTableInfoCache(Executor* executor) : executor_(executor) {}
+
+namespace {
+
+Fragmenter_Namespace::TableInfo build_table_info(const Fragmenter_Namespace::TableInfo& table_info) {
+  Fragmenter_Namespace::TableInfo table_info_copy;
+  table_info_copy.chunkKeyPrefix = table_info.chunkKeyPrefix;
+  table_info_copy.fragments = table_info.fragments;
+  table_info_copy.numTuples = table_info.numTuples;
+  return table_info_copy;
+}
+
+}  // namespace
+
+Fragmenter_Namespace::TableInfo InputTableInfoCache::getTableInfo(const int table_id) {
+  const auto it = cache_.find(table_id);
+  if (it != cache_.end()) {
+    const auto& table_info = it->second;
+    return build_table_info(table_info);
+  }
+  const auto cat = executor_->getCatalog();
+  CHECK(cat);
+  const auto td = cat->getMetadataForTable(table_id);
+  CHECK(td);
+  const auto fragmenter = td->fragmenter;
+  CHECK(fragmenter);
+  auto table_info = fragmenter->getFragmentsForQuery();
+  auto it_ok = cache_.emplace(table_id, build_table_info(table_info));
+  CHECK(it_ok.second);
+  return build_table_info(table_info);
+}
+
+void InputTableInfoCache::clear() {
+  decltype(cache_)().swap(cache_);
+}
+
 namespace {
 
 bool uses_int_meta(const SQLTypeInfo& col_ti) {
@@ -121,30 +157,24 @@ void collect_table_infos(std::vector<InputTableInfo>& table_infos,
       continue;
     }
     CHECK(input_desc.getSourceType() == InputSourceType::TABLE);
-    const auto td = cat->getMetadataForTable(input_desc.getTableId());
-    CHECK(td);
-    const auto fragmenter = td->fragmenter;
-    CHECK(fragmenter);
-    table_infos.push_back({td->tableId, fragmenter->getFragmentsForQuery()});
+    const auto table_id = input_desc.getTableId();
+    table_infos.push_back({table_id, executor->getTableInfo(table_id)});
   }
 }
 
 }  // namespace
 
-size_t get_frag_count_of_table(const int table_id,
-                               const Catalog_Namespace::Catalog& cat,
-                               const TemporaryTables& temporary_tables) {
-  auto it = temporary_tables.find(table_id);
-  if (it != temporary_tables.end()) {
+size_t get_frag_count_of_table(const int table_id, Executor* executor) {
+  const auto temporary_tables = executor->getTemporaryTables();
+  CHECK(temporary_tables);
+  auto it = temporary_tables->find(table_id);
+  if (it != temporary_tables->end()) {
     CHECK_GE(int(0), table_id);
     CHECK(boost::get<RowSetPtr>(&it->second));
     return size_t(1);
   } else {
-    const auto td = cat.getMetadataForTable(table_id);
-    CHECK(td);
-    const auto fragmenter = td->fragmenter;
-    CHECK(fragmenter);
-    return fragmenter->getFragmentsForQuery().fragments.size();
+    const auto table_info = executor->getTableInfo(table_id);
+    return table_info.fragments.size();
   }
 }
 

@@ -75,7 +75,8 @@ Executor::Executor(const int db_id,
       debug_file_(debug_file),
       db_id_(db_id),
       catalog_(nullptr),
-      temporary_tables_(nullptr) {}
+      temporary_tables_(nullptr),
+      input_table_info_cache_(this) {}
 
 std::shared_ptr<Executor> Executor::getExecutor(const int db_id,
                                                 const std::string& debug_dir,
@@ -451,6 +452,7 @@ ResultRows Executor::execute(const Planner::RootPlan* root_plan,
   // capture the lock acquistion time
   auto clock_begin = timer_start();
   std::lock_guard<std::mutex> lock(execute_mutex_);
+  InputTableInfoCacheScope input_table_info_cache_scope(this);
   int64_t queue_time_ms = timer_stop(clock_begin);
   RowSetHolder row_set_holder(this);
   switch (stmt_type) {
@@ -604,6 +606,14 @@ const Catalog_Namespace::Catalog* Executor::getCatalog() const {
 
 const TemporaryTables* Executor::getTemporaryTables() const {
   return temporary_tables_;
+}
+
+Fragmenter_Namespace::TableInfo Executor::getTableInfo(const int table_id) {
+  return input_table_info_cache_.getTableInfo(table_id);
+}
+
+void Executor::clearInputTableInfoCache() {
+  input_table_info_cache_.clear();
 }
 
 std::vector<int8_t> Executor::serializeLiterals(const std::unordered_map<int, Executor::LiteralValues>& literals,

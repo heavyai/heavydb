@@ -308,11 +308,15 @@ class Executor {
 
   const TemporaryTables* getTemporaryTables() const;
 
+  Fragmenter_Namespace::TableInfo getTableInfo(const int table_id);
+
   typedef boost::variant<int8_t, int16_t, int32_t, int64_t, float, double, std::pair<std::string, int>, std::string>
       LiteralValue;
   typedef std::vector<LiteralValue> LiteralValues;
 
  private:
+  void clearInputTableInfoCache();
+
   template <class T>
   llvm::ConstantInt* ll_int(const T v) const {
     return static_cast<llvm::ConstantInt*>(
@@ -1134,6 +1138,8 @@ class Executor {
   const Catalog_Namespace::Catalog* catalog_;
   const TemporaryTables* temporary_tables_;
 
+  InputTableInfoCache input_table_info_cache_;
+
   static std::map<std::pair<int, ::QueryRenderer::QueryRenderManager*>, std::shared_ptr<Executor>> executors_;
   static std::mutex execute_mutex_;
   static mapd_shared_mutex executors_cache_mutex_;
@@ -1157,6 +1163,17 @@ class Executor {
   friend class QueryRewriter;
   friend class RelAlgExecutor;
   friend class ExecutionDispatch;
+  friend class InputTableInfoCacheScope;
+};
+
+class InputTableInfoCacheScope {
+ public:
+  InputTableInfoCacheScope(Executor* executor) : executor_(executor) {}
+
+  ~InputTableInfoCacheScope() { executor_->clearInputTableInfoCache(); }
+
+ private:
+  Executor* executor_;
 };
 
 #endif  // QUERYENGINE_EXECUTE_H
