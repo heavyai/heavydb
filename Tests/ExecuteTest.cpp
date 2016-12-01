@@ -2105,6 +2105,9 @@ TEST(Select, Subqueries) {
       "d1.deptno LIMIT 10;",
       dt);
     c("SELECT x FROM (SELECT x, MAX(y), COUNT(*) AS n FROM test GROUP BY x HAVING MAX(y) > 42 ORDER BY n);", dt);
+    c("SELECT CASE WHEN test.x IN (SELECT x FROM test_inner) THEN x ELSE NULL END AS c, COUNT(*) AS n FROM test WHERE "
+      "y > 40 GROUP BY c ORDER BY n DESC;",
+      dt);
 #ifdef ENABLE_JOIN_EXEC
     c("SELECT SUM((x - (SELECT AVG(x) FROM test)) * (x - (SELECT AVG(x) FROM test)) / ((SELECT COUNT(x) FROM test) - "
       "1)) FROM test;",

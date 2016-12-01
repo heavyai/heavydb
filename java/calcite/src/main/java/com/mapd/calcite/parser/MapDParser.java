@@ -66,7 +66,7 @@ public final class MapDParser {
                 SqlConformance.DEFAULT);
         final RexBuilder rexBuilder = new RexBuilder(typeFactory);
         final RelOptCluster cluster = RelOptCluster.create(new MapDRelOptPlanner(), rexBuilder);
-        Config config = SqlToRelConverter.configBuilder().withExpand(true).build();
+        Config config = SqlToRelConverter.configBuilder().withExpand(false).build();
         converter = new SqlToRelConverter(null, validator, catalogReader, cluster,
                 StandardConvertletTable.INSTANCE, config);
     }
