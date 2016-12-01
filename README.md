@@ -83,7 +83,7 @@ The Java server lib directory containing `libjvm.so` must also be added to your 
 
 [scripts/mapd-deps-osx.sh](scripts/mapd-deps-osx.sh) is provided that will automatically install and/or update [Homebrew](http://brew.sh/) and use that to install all dependencies. Please make sure OS X is completely update to date and Xcode is installed before running.
 
-Note: installing LLVM 3.8 via Homebrew requires some slight modifications to the build config arguments. [scripts/mapd-deps-osx.sh](scripts/mapd-deps-osx.sh) will run `brew edit llvm35`, which opens up the build config in your editor. Jump to the configure args (should be around lines 196-203) and add this line, if running on OS X 10.11:
+Note: installing LLVM 3.8 via Homebrew requires some slight modifications to the build config arguments. [scripts/mapd-deps-osx.sh](scripts/mapd-deps-osx.sh) will run `brew edit llvm38`, which opens up the build config in your editor. Jump to the configure args (should be around lines 196-203) and add this line, if running on OS X 10.11:
 
     "--with-c-include-dirs=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.11.sdk/usr/include",
 
@@ -100,6 +100,14 @@ For generating the documentation you will also need:
 ### CUDA
 
 `mapd-deps-osx.sh` will automatically install CUDA via Homebrew and add the correct environment variables to `~/.bash_profile`.
+
+### Java
+
+The JDK should be downloaded and installed from [Oracle](http://www.oracle.com/technetwork/java/javase/downloads/index.html). You will then also need to set the `JAVA_HOME` env var and add the lib dir to `DYLD_LIBRARY_PATH`. To do so, add the following to your `~/.bash_profile` or similar:
+
+    DYLD_LIBRARY_PATH=$(/usr/libexec/java_home)/jre/lib/server:$DYLD_LIBRARY_PATH
+    JAVA_HOME=$(/usr/libexec/java_home)
+    export DYLD_LIBRARY_PATH JAVA_HOME
 
 ## Ubuntu 16.04, 16.10
 
