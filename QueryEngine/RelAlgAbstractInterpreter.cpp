@@ -1053,7 +1053,9 @@ std::shared_ptr<const RelAlgNode> deserialize_ra_dag(const std::string& query_ra
                                                      Executor* executor) {
   rapidjson::Document query_ast;
   query_ast.Parse(query_ra.c_str());
-  CHECK(!query_ast.HasParseError());
+  if (query_ast.HasParseError()) {
+    throw std::runtime_error("Failed to deserialize the query");
+  }
   CHECK(query_ast.IsObject());
   return ra_interpret(query_ast, cat, co, eo, executor);
 }
