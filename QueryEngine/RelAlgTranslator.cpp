@@ -47,222 +47,6 @@ std::pair<std::shared_ptr<Analyzer::Expr>, SQLQualifier> get_quantified_rhs(cons
   return std::make_pair(rhs, sql_qual);
 }
 
-}  // namespace
-
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateScalarRex(const RexScalar* rex) const {
-  const auto rex_input = dynamic_cast<const RexInput*>(rex);
-  if (rex_input) {
-    return translateInput(rex_input);
-  }
-  const auto rex_literal = dynamic_cast<const RexLiteral*>(rex);
-  if (rex_literal) {
-    return translateLiteral(rex_literal);
-  }
-  const auto rex_function = dynamic_cast<const RexFunctionOperator*>(rex);
-  if (rex_function) {
-    return translateFunction(rex_function);
-  }
-  const auto rex_operator = dynamic_cast<const RexOperator*>(rex);
-  if (rex_operator) {
-    return translateOper(rex_operator);
-  }
-  const auto rex_case = dynamic_cast<const RexCase*>(rex);
-  if (rex_case) {
-    return translateCase(rex_case);
-  }
-  const auto rex_subquery = dynamic_cast<const RexSubQuery*>(rex);
-  if (rex_subquery) {
-    return translateSubQuery(rex_subquery);
-  }
-  CHECK(false);
-  return nullptr;
-}
-
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateAggregateRex(
-    const RexAgg* rex,
-    const std::vector<std::shared_ptr<Analyzer::Expr>>& scalar_sources) {
-  const auto agg_kind = rex->getKind();
-  const bool is_distinct = rex->isDistinct();
-  const auto operand = rex->getOperand();
-  const bool takes_arg{operand >= 0};
-  if (takes_arg) {
-    CHECK_LT(operand, static_cast<ssize_t>(scalar_sources.size()));
-  }
-  const auto arg_expr = takes_arg ? scalar_sources[operand] : nullptr;
-  const auto agg_ti = get_agg_type(agg_kind, arg_expr.get());
-  return makeExpr<Analyzer::AggExpr>(agg_ti, agg_kind, arg_expr, is_distinct);
-}
-
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLiteral(const RexLiteral* rex_literal) {
-  const auto lit_ti = build_type_info(rex_literal->getType(), rex_literal->getScale(), rex_literal->getPrecision());
-  const auto target_ti =
-      build_type_info(rex_literal->getTargetType(), rex_literal->getTypeScale(), rex_literal->getTypePrecision());
-  switch (rex_literal->getType()) {
-    case kDECIMAL: {
-      const auto val = rex_literal->getVal<int64_t>();
-      const int precision = rex_literal->getPrecision();
-      const int scale = rex_literal->getScale();
-      if (target_ti.is_fp() && !scale) {
-        return make_fp_constant(val, target_ti);
-      }
-      auto lit_expr =
-          scale ? Parser::FixedPtLiteral::analyzeValue(val, scale, precision) : Parser::IntLiteral::analyzeValue(val);
-      return scale && lit_ti != target_ti ? lit_expr->add_cast(target_ti) : lit_expr;
-    }
-    case kTEXT: {
-      return Parser::StringLiteral::analyzeValue(rex_literal->getVal<std::string>());
-    }
-    case kBOOLEAN: {
-      Datum d;
-      d.boolval = rex_literal->getVal<bool>();
-      return makeExpr<Analyzer::Constant>(kBOOLEAN, false, d);
-    }
-    case kDOUBLE: {
-      Datum d;
-      d.doubleval = rex_literal->getVal<double>();
-      auto lit_expr = makeExpr<Analyzer::Constant>(kDOUBLE, false, d);
-      return lit_ti != target_ti ? lit_expr->add_cast(target_ti) : lit_expr;
-    }
-    case kINTERVAL_DAY_TIME:
-    case kINTERVAL_YEAR_MONTH: {
-      Datum d;
-      d.timeval = rex_literal->getVal<int64_t>();
-      return makeExpr<Analyzer::Constant>(rex_literal->getType(), false, d);
-    }
-    case kNULLT: {
-      return makeExpr<Analyzer::Constant>(rex_literal->getTargetType(), true, Datum{0});
-    }
-    default: { LOG(FATAL) << "Unexpected literal type " << lit_ti.get_type_name(); }
-  }
-  return nullptr;
-}
-
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateSubQuery(const RexSubQuery* rex_subquery) const {
-  if (just_explain_) {
-    throw std::runtime_error("EXPLAIN is not supported with sub-queries");
-  }
-  CHECK(rex_subquery);
-  auto result = rex_subquery->getExecutionResult();
-  auto& row_set = result->getRows();
-  CHECK_EQ(size_t(1), row_set.rowCount());
-  auto first_row = row_set.getNextRow(false, false);
-  auto scalar_tv = boost::get<ScalarTargetValue>(&first_row[0]);
-  auto ti = rex_subquery->getType();
-  Datum d;
-  switch (ti.get_type()) {
-    case kSMALLINT: {
-      const auto ival = boost::get<int64_t>(scalar_tv);
-      CHECK(ival);
-      d.smallintval = *ival;
-      break;
-    }
-    case kINT: {
-      const auto ival = boost::get<int64_t>(scalar_tv);
-      CHECK(ival);
-      d.intval = *ival;
-      break;
-    }
-    case kDECIMAL:
-    case kNUMERIC:
-    case kBIGINT: {
-      const auto ival = boost::get<int64_t>(scalar_tv);
-      CHECK(ival);
-      d.bigintval = *ival;
-      break;
-    }
-    case kDOUBLE: {
-      const auto dval = boost::get<double>(scalar_tv);
-      CHECK(dval);
-      d.doubleval = *dval;
-      break;
-    }
-    case kFLOAT: {
-      const auto fval = boost::get<float>(scalar_tv);
-      CHECK(fval);
-      d.floatval = *fval;
-      break;
-    }
-    default:
-      CHECK(false);
-  }
-  return makeExpr<Analyzer::Constant>(ti, false, d);
-}
-
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInput(const RexInput* rex_input) const {
-  const auto source = rex_input->getSourceNode();
-  const auto it_rte_idx = input_to_nest_level_.find(source);
-  CHECK(it_rte_idx != input_to_nest_level_.end());
-  const int rte_idx = it_rte_idx->second;
-  const auto scan_source = dynamic_cast<const RelScan*>(source);
-  const auto& in_metainfo = source->getOutputMetainfo();
-  if (scan_source) {
-    // We're at leaf (scan) level and not supposed to have input metadata,
-    // the name and type information come directly from the catalog.
-    CHECK(in_metainfo.empty());
-    const auto table_desc = scan_source->getTableDescriptor();
-    const auto cd = cat_.getMetadataForColumn(table_desc->tableId, rex_input->getIndex() + 1);
-    CHECK(cd);
-    auto col_ti = cd->columnType;
-    if (cd->isVirtualCol) {
-      // TODO(alex): remove at some point, we only need this fixup for backwards compatibility with old imported data
-      CHECK_EQ("rowid", cd->columnName);
-      col_ti.set_size(8);
-    }
-    if (rte_idx > 0 && join_type_ == JoinType::LEFT) {
-      col_ti.set_notnull(false);
-    }
-    return std::make_shared<Analyzer::ColumnVar>(col_ti, table_desc->tableId, cd->columnId, rte_idx);
-  }
-  CHECK(!in_metainfo.empty());
-  CHECK_GE(rte_idx, 0);
-  const size_t col_id = rex_input->getIndex();
-  CHECK_LT(col_id, in_metainfo.size());
-  auto col_ti = in_metainfo[col_id].get_type_info();
-  if (rte_idx > 0 && join_type_ == JoinType::LEFT) {
-    col_ti.set_notnull(false);
-  }
-  return std::make_shared<Analyzer::ColumnVar>(col_ti, -source->getId(), col_id, rte_idx);
-}
-
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUoper(const RexOperator* rex_operator) const {
-  CHECK_EQ(size_t(1), rex_operator->size());
-  const auto operand_expr = translateScalarRex(rex_operator->getOperand(0));
-  const auto sql_op = rex_operator->getOperator();
-  switch (sql_op) {
-    case kCAST: {
-      const auto& target_ti = rex_operator->getType();
-      CHECK_NE(kNULLT, target_ti.get_type());
-      const auto& operand_ti = operand_expr->get_type_info();
-      if (target_ti.is_time() || operand_ti.is_string()) {  // TODO(alex): check and unify with the rest of the cases
-        return operand_expr->add_cast(target_ti);
-      }
-      return std::make_shared<Analyzer::UOper>(target_ti, false, sql_op, operand_expr);
-    }
-    case kNOT:
-    case kISNULL: {
-      return std::make_shared<Analyzer::UOper>(kBOOLEAN, sql_op, operand_expr);
-    }
-    case kISNOTNULL: {
-      auto is_null = std::make_shared<Analyzer::UOper>(kBOOLEAN, kISNULL, operand_expr);
-      return std::make_shared<Analyzer::UOper>(kBOOLEAN, kNOT, is_null);
-    }
-    case kMINUS: {
-      const auto& ti = operand_expr->get_type_info();
-      return std::make_shared<Analyzer::UOper>(ti, false, kUMINUS, operand_expr);
-    }
-    case kUNNEST: {
-      const auto& ti = operand_expr->get_type_info();
-      CHECK(ti.is_array());
-      return makeExpr<Analyzer::UOper>(ti.get_elem_type(), false, kUNNEST, operand_expr);
-    }
-    default:
-      CHECK(false);
-  }
-  return nullptr;
-}
-
-namespace {
-
 std::pair<Datum, bool> datum_from_scalar_tv(const ScalarTargetValue* scalar_tv, const SQLTypeInfo& ti) noexcept {
   Datum d{0};
   bool is_null_const{false};
@@ -339,6 +123,184 @@ std::pair<Datum, bool> datum_from_scalar_tv(const ScalarTargetValue* scalar_tv, 
 }
 
 }  // namespace
+
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateScalarRex(const RexScalar* rex) const {
+  const auto rex_input = dynamic_cast<const RexInput*>(rex);
+  if (rex_input) {
+    return translateInput(rex_input);
+  }
+  const auto rex_literal = dynamic_cast<const RexLiteral*>(rex);
+  if (rex_literal) {
+    return translateLiteral(rex_literal);
+  }
+  const auto rex_function = dynamic_cast<const RexFunctionOperator*>(rex);
+  if (rex_function) {
+    return translateFunction(rex_function);
+  }
+  const auto rex_operator = dynamic_cast<const RexOperator*>(rex);
+  if (rex_operator) {
+    return translateOper(rex_operator);
+  }
+  const auto rex_case = dynamic_cast<const RexCase*>(rex);
+  if (rex_case) {
+    return translateCase(rex_case);
+  }
+  const auto rex_subquery = dynamic_cast<const RexSubQuery*>(rex);
+  if (rex_subquery) {
+    return translateScalarSubquery(rex_subquery);
+  }
+  CHECK(false);
+  return nullptr;
+}
+
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateAggregateRex(
+    const RexAgg* rex,
+    const std::vector<std::shared_ptr<Analyzer::Expr>>& scalar_sources) {
+  const auto agg_kind = rex->getKind();
+  const bool is_distinct = rex->isDistinct();
+  const auto operand = rex->getOperand();
+  const bool takes_arg{operand >= 0};
+  if (takes_arg) {
+    CHECK_LT(operand, static_cast<ssize_t>(scalar_sources.size()));
+  }
+  const auto arg_expr = takes_arg ? scalar_sources[operand] : nullptr;
+  const auto agg_ti = get_agg_type(agg_kind, arg_expr.get());
+  return makeExpr<Analyzer::AggExpr>(agg_ti, agg_kind, arg_expr, is_distinct);
+}
+
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLiteral(const RexLiteral* rex_literal) {
+  const auto lit_ti = build_type_info(rex_literal->getType(), rex_literal->getScale(), rex_literal->getPrecision());
+  const auto target_ti =
+      build_type_info(rex_literal->getTargetType(), rex_literal->getTypeScale(), rex_literal->getTypePrecision());
+  switch (rex_literal->getType()) {
+    case kDECIMAL: {
+      const auto val = rex_literal->getVal<int64_t>();
+      const int precision = rex_literal->getPrecision();
+      const int scale = rex_literal->getScale();
+      if (target_ti.is_fp() && !scale) {
+        return make_fp_constant(val, target_ti);
+      }
+      auto lit_expr =
+          scale ? Parser::FixedPtLiteral::analyzeValue(val, scale, precision) : Parser::IntLiteral::analyzeValue(val);
+      return scale && lit_ti != target_ti ? lit_expr->add_cast(target_ti) : lit_expr;
+    }
+    case kTEXT: {
+      return Parser::StringLiteral::analyzeValue(rex_literal->getVal<std::string>());
+    }
+    case kBOOLEAN: {
+      Datum d;
+      d.boolval = rex_literal->getVal<bool>();
+      return makeExpr<Analyzer::Constant>(kBOOLEAN, false, d);
+    }
+    case kDOUBLE: {
+      Datum d;
+      d.doubleval = rex_literal->getVal<double>();
+      auto lit_expr = makeExpr<Analyzer::Constant>(kDOUBLE, false, d);
+      return lit_ti != target_ti ? lit_expr->add_cast(target_ti) : lit_expr;
+    }
+    case kINTERVAL_DAY_TIME:
+    case kINTERVAL_YEAR_MONTH: {
+      Datum d;
+      d.timeval = rex_literal->getVal<int64_t>();
+      return makeExpr<Analyzer::Constant>(rex_literal->getType(), false, d);
+    }
+    case kNULLT: {
+      return makeExpr<Analyzer::Constant>(rex_literal->getTargetType(), true, Datum{0});
+    }
+    default: { LOG(FATAL) << "Unexpected literal type " << lit_ti.get_type_name(); }
+  }
+  return nullptr;
+}
+
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateScalarSubquery(const RexSubQuery* rex_subquery) const {
+  if (just_explain_) {
+    throw std::runtime_error("EXPLAIN is not supported with sub-queries");
+  }
+  CHECK(rex_subquery);
+  auto result = rex_subquery->getExecutionResult();
+  auto& row_set = result->getRows();
+  CHECK_EQ(size_t(1), row_set.rowCount());
+  auto first_row = row_set.getNextRow(false, false);
+  auto scalar_tv = boost::get<ScalarTargetValue>(&first_row[0]);
+  auto ti = rex_subquery->getType();
+  Datum d{0};
+  bool is_null_const{false};
+  std::tie(d, is_null_const) = datum_from_scalar_tv(scalar_tv, ti);
+  return makeExpr<Analyzer::Constant>(ti, is_null_const, d);
+}
+
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInput(const RexInput* rex_input) const {
+  const auto source = rex_input->getSourceNode();
+  const auto it_rte_idx = input_to_nest_level_.find(source);
+  CHECK(it_rte_idx != input_to_nest_level_.end());
+  const int rte_idx = it_rte_idx->second;
+  const auto scan_source = dynamic_cast<const RelScan*>(source);
+  const auto& in_metainfo = source->getOutputMetainfo();
+  if (scan_source) {
+    // We're at leaf (scan) level and not supposed to have input metadata,
+    // the name and type information come directly from the catalog.
+    CHECK(in_metainfo.empty());
+    const auto table_desc = scan_source->getTableDescriptor();
+    const auto cd = cat_.getMetadataForColumn(table_desc->tableId, rex_input->getIndex() + 1);
+    CHECK(cd);
+    auto col_ti = cd->columnType;
+    if (cd->isVirtualCol) {
+      // TODO(alex): remove at some point, we only need this fixup for backwards compatibility with old imported data
+      CHECK_EQ("rowid", cd->columnName);
+      col_ti.set_size(8);
+    }
+    if (rte_idx > 0 && join_type_ == JoinType::LEFT) {
+      col_ti.set_notnull(false);
+    }
+    return std::make_shared<Analyzer::ColumnVar>(col_ti, table_desc->tableId, cd->columnId, rte_idx);
+  }
+  CHECK(!in_metainfo.empty());
+  CHECK_GE(rte_idx, 0);
+  const size_t col_id = rex_input->getIndex();
+  CHECK_LT(col_id, in_metainfo.size());
+  auto col_ti = in_metainfo[col_id].get_type_info();
+  if (rte_idx > 0 && join_type_ == JoinType::LEFT) {
+    col_ti.set_notnull(false);
+  }
+  return std::make_shared<Analyzer::ColumnVar>(col_ti, -source->getId(), col_id, rte_idx);
+}
+
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUoper(const RexOperator* rex_operator) const {
+  CHECK_EQ(size_t(1), rex_operator->size());
+  const auto operand_expr = translateScalarRex(rex_operator->getOperand(0));
+  const auto sql_op = rex_operator->getOperator();
+  switch (sql_op) {
+    case kCAST: {
+      const auto& target_ti = rex_operator->getType();
+      CHECK_NE(kNULLT, target_ti.get_type());
+      const auto& operand_ti = operand_expr->get_type_info();
+      if (target_ti.is_time() || operand_ti.is_string()) {  // TODO(alex): check and unify with the rest of the cases
+        return operand_expr->add_cast(target_ti);
+      }
+      return std::make_shared<Analyzer::UOper>(target_ti, false, sql_op, operand_expr);
+    }
+    case kNOT:
+    case kISNULL: {
+      return std::make_shared<Analyzer::UOper>(kBOOLEAN, sql_op, operand_expr);
+    }
+    case kISNOTNULL: {
+      auto is_null = std::make_shared<Analyzer::UOper>(kBOOLEAN, kISNULL, operand_expr);
+      return std::make_shared<Analyzer::UOper>(kBOOLEAN, kNOT, is_null);
+    }
+    case kMINUS: {
+      const auto& ti = operand_expr->get_type_info();
+      return std::make_shared<Analyzer::UOper>(ti, false, kUMINUS, operand_expr);
+    }
+    case kUNNEST: {
+      const auto& ti = operand_expr->get_type_info();
+      CHECK(ti.is_array());
+      return makeExpr<Analyzer::UOper>(ti.get_elem_type(), false, kUNNEST, operand_expr);
+    }
+    default:
+      CHECK(false);
+  }
+  return nullptr;
+}
 
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInOper(const RexOperator* rex_operator) const {
   if (just_explain_) {
