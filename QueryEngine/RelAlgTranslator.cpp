@@ -261,6 +261,85 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUoper(const RexOperat
   return nullptr;
 }
 
+namespace {
+
+std::pair<Datum, bool> datum_from_scalar_tv(const ScalarTargetValue* scalar_tv, const SQLTypeInfo& ti) noexcept {
+  Datum d{0};
+  bool is_null_const{false};
+  switch (ti.get_type()) {
+    case kSMALLINT: {
+      const auto ival = boost::get<int64_t>(scalar_tv);
+      CHECK(ival);
+      if (*ival == inline_int_null_val(ti)) {
+        is_null_const = true;
+      } else {
+        d.smallintval = *ival;
+      }
+      break;
+    }
+    case kINT: {
+      const auto ival = boost::get<int64_t>(scalar_tv);
+      CHECK(ival);
+      if (*ival == inline_int_null_val(ti)) {
+        is_null_const = true;
+      } else {
+        d.intval = *ival;
+      }
+      break;
+    }
+    case kDECIMAL:
+    case kNUMERIC:
+    case kBIGINT: {
+      const auto ival = boost::get<int64_t>(scalar_tv);
+      CHECK(ival);
+      if (*ival == inline_int_null_val(ti)) {
+        is_null_const = true;
+      } else {
+        d.bigintval = *ival;
+      }
+      break;
+    }
+    case kDOUBLE: {
+      const auto dval = boost::get<double>(scalar_tv);
+      CHECK(dval);
+      if (*dval == inline_fp_null_val(ti)) {
+        is_null_const = true;
+      } else {
+        d.doubleval = *dval;
+      }
+      break;
+    }
+    case kFLOAT: {
+      const auto fval = boost::get<float>(scalar_tv);
+      CHECK(fval);
+      if (*fval == inline_fp_null_val(ti)) {
+        is_null_const = true;
+      } else {
+        d.floatval = *fval;
+      }
+      break;
+    }
+    case kTEXT:
+    case kVARCHAR:
+    case kCHAR: {
+      auto nullable_sptr = boost::get<NullableString>(scalar_tv);
+      CHECK(nullable_sptr);
+      if (boost::get<void*>(nullable_sptr)) {
+        is_null_const = true;
+      } else {
+        auto sptr = boost::get<std::string>(nullable_sptr);
+        d.stringval = new std::string(*sptr);
+      }
+      break;
+    }
+    default:
+      CHECK(false);
+  }
+  return {d, is_null_const};
+}
+
+}  // namespace
+
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInOper(const RexOperator* rex_operator) const {
   if (just_explain_) {
     throw std::runtime_error("EXPLAIN is not supported with sub-queries");
@@ -285,55 +364,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInOper(const RexOpera
     auto scalar_tv = boost::get<ScalarTargetValue>(&row[0]);
     Datum d{0};
     bool is_null_const{false};
-    switch (ti.get_type()) {
-      case kSMALLINT: {
-        const auto ival = boost::get<int64_t>(scalar_tv);
-        CHECK(ival);
-        d.smallintval = *ival;
-        break;
-      }
-      case kINT: {
-        const auto ival = boost::get<int64_t>(scalar_tv);
-        CHECK(ival);
-        d.intval = *ival;
-        break;
-      }
-      case kDECIMAL:
-      case kNUMERIC:
-      case kBIGINT: {
-        const auto ival = boost::get<int64_t>(scalar_tv);
-        CHECK(ival);
-        d.bigintval = *ival;
-        break;
-      }
-      case kDOUBLE: {
-        const auto dval = boost::get<double>(scalar_tv);
-        CHECK(dval);
-        d.doubleval = *dval;
-        break;
-      }
-      case kFLOAT: {
-        const auto fval = boost::get<float>(scalar_tv);
-        CHECK(fval);
-        d.floatval = *fval;
-        break;
-      }
-      case kTEXT:
-      case kVARCHAR:
-      case kCHAR: {
-        auto nullable_sptr = boost::get<NullableString>(scalar_tv);
-        CHECK(nullable_sptr);
-        if (boost::get<void*>(nullable_sptr)) {
-          is_null_const = true;
-        } else {
-          auto sptr = boost::get<std::string>(nullable_sptr);
-          d.stringval = new std::string(*sptr);
-        }
-        break;
-      }
-      default:
-        CHECK(false);
-    }
+    std::tie(d, is_null_const) = datum_from_scalar_tv(scalar_tv, ti);
     if (ti.is_string() && ti.get_compression() != kENCODING_NONE) {
       auto ti_none_encoded = ti;
       ti_none_encoded.set_compression(kENCODING_NONE);
