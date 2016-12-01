@@ -12,14 +12,14 @@
 
 #include <iostream>
 #include <map>
-#include <set>
 #include <mutex>
+#include <set>
 
-#include "Page.h"
-#include "FileBuffer.h"
-#include "FileInfo.h"
 #include "../AbstractBuffer.h"
 #include "../AbstractBufferMgr.h"
+#include "FileBuffer.h"
+#include "FileInfo.h"
+#include "Page.h"
 
 using namespace Data_Namespace;
 
@@ -70,8 +70,8 @@ class FileMgr : public AbstractBufferMgr {  // implements
   FileMgr(const int deviceId,
           std::string basePath = ".",
           const size_t num_reader_threads = 0,
-          const size_t defaultPageSize = 2097152,
-          const int epoch = -1);
+          const int epoch = -1,
+          const size_t defaultPageSize = 2097152);
 
   /// Destructor
   virtual ~FileMgr();

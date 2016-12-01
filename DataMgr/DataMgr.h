@@ -5,13 +5,15 @@
 #ifndef DATAMGR_H
 #define DATAMGR_H
 
-#include "AbstractBufferMgr.h"
 #include "AbstractBuffer.h"
+#include "AbstractBufferMgr.h"
 #include "MemoryLevel.h"
 
+#include <iomanip>
+#include <iostream>
 #include <map>
-#include <vector>
 #include <string>
+#include <vector>
 
 namespace File_Namespace {
 class FileBuffer;
@@ -45,6 +47,7 @@ class DataMgr {
           const int numGpus,
           const int startGpu = 0,
           const size_t reservedGpuMem = (1 << 27),
+          const int start_epoch = -1,
           const size_t numReaderThreads = 0); /* 0 means use default for # of reader threads */
   ~DataMgr();
   AbstractBuffer* createChunkBuffer(const ChunkKey& key, const MemoryLevel memoryLevel, const int deviceId = 0);
@@ -78,7 +81,9 @@ class DataMgr {
 
  private:
   size_t getTotalSystemMemory();
-  void populateMgrs(const size_t userSpecifiedCpuBufferSize, const size_t userSpecifiedNumReaderThreads);
+  void populateMgrs(const size_t userSpecifiedCpuBufferSize,
+                    const size_t userSpecifiedNumReaderThreads,
+                    const int start_epoch);
   std::vector<std::vector<AbstractBufferMgr*>> bufferMgrs_;
   std::string dataDir_;
   bool hasGpus_;

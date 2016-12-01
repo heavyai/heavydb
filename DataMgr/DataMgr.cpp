@@ -4,14 +4,14 @@
  */
 
 #include "DataMgr.h"
-#include "FileMgr/FileMgr.h"
 #include "../CudaMgr/CudaMgr.h"
 #include "BufferMgr/CpuBufferMgr/CpuBufferMgr.h"
 #include "BufferMgr/GpuCudaBufferMgr/GpuCudaBufferMgr.h"
+#include "FileMgr/FileMgr.h"
 
 #ifdef __APPLE__
-#include <sys/types.h>
 #include <sys/sysctl.h>
+#include <sys/types.h>
 #else
 #include <unistd.h>
 #endif
@@ -31,6 +31,7 @@ DataMgr::DataMgr(const string& dataDir,
                  const int numGpus,
                  const int startGpu,
                  const size_t reservedGpuMem,
+                 const int start_epoch,
                  const size_t numReaderThreads)
     : dataDir_(dataDir) {
   if (useGpus) {
@@ -47,7 +48,7 @@ DataMgr::DataMgr(const string& dataDir,
     cudaMgr_ = 0;
   }
 
-  populateMgrs(cpuBufferSize, numReaderThreads);
+  populateMgrs(cpuBufferSize, numReaderThreads, start_epoch);
 }
 
 DataMgr::~DataMgr() {
@@ -81,9 +82,11 @@ size_t DataMgr::getTotalSystemMemory() {
 #endif
 }
 
-void DataMgr::populateMgrs(const size_t userSpecifiedCpuBufferSize, const size_t userSpecifiedNumReaderThreads) {
+void DataMgr::populateMgrs(const size_t userSpecifiedCpuBufferSize,
+                           const size_t userSpecifiedNumReaderThreads,
+                           const int start_epoch) {
   bufferMgrs_.resize(2);
-  bufferMgrs_[0].push_back(new FileMgr(0, dataDir_, userSpecifiedNumReaderThreads));
+  bufferMgrs_[0].push_back(new FileMgr(0, dataDir_, userSpecifiedNumReaderThreads, start_epoch));
   levelSizes_.push_back(1);
   size_t cpuBufferSize = userSpecifiedCpuBufferSize;
   if (cpuBufferSize == 0)                          // if size is not specified

@@ -6,16 +6,16 @@
 
 #include "FileMgr.h"
 #include "File.h"
-#include <string>
 #include <boost/filesystem.hpp>
 #include <boost/lexical_cast.hpp>
+#include <string>
 
-#include <vector>
-#include <utility>
 #include <algorithm>
-#include <unistd.h>
 #include <fcntl.h>
 #include <thread>
+#include <unistd.h>
+#include <utility>
+#include <vector>
 
 #define EPOCH_FILENAME "epoch"
 
@@ -42,8 +42,8 @@ bool headerCompare(const HeaderInfo& firstElem, const HeaderInfo& secondElem) {
 FileMgr::FileMgr(const int deviceId,
                  std::string basePath,
                  const size_t num_reader_threads,
-                 const size_t defaultPageSize,
-                 const int epoch)
+                 const int epoch,
+                 const size_t defaultPageSize)
     : AbstractBufferMgr(deviceId),
       basePath_(basePath),
       defaultPageSize_(defaultPageSize),
@@ -69,10 +69,9 @@ void FileMgr::init(const size_t num_reader_threads) {
   if (basePath_.size() > 0 && basePath_[basePath_.size() - 1] != '/')
     basePath_.push_back('/');
   if (boost::filesystem::exists(path)) {
-    // std::cout << "Path exists" << std::endl;
     if (!boost::filesystem::is_directory(path))
       LOG(FATAL) << "Specified path is not a directory.";
-    // std::cout << basePath_ << " exists." << std::endl;
+    LOG(INFO) << "Data directory is " << basePath_;
     if (epoch_ != -1) {  // if opening at previous epoch
       int epochCopy = epoch_;
       openEpochFile(EPOCH_FILENAME);
@@ -80,6 +79,7 @@ void FileMgr::init(const size_t num_reader_threads) {
     } else {
       openEpochFile(EPOCH_FILENAME);
     }
+    LOG(INFO) << "Current Epoch is " << epoch_;
 
     boost::filesystem::directory_iterator endItr;  // default construction yields past-the-end
     int maxFileId = -1;
@@ -110,8 +110,7 @@ void FileMgr::init(const size_t num_reader_threads) {
           assert(fileSize % pageSize == 0);  // should be no partial pages
           size_t numPages = fileSize / pageSize;
 
-          // std::cout << "File id: " << fileId << " Page size: " << pageSize << " Num pages: " << numPages <<
-          // std::endl;
+          VLOG(1) << "File id: " << fileId << " Page size: " << pageSize << " Num pages: " << numPages;
           openExistingFile(filePath, fileId, pageSize, numPages, headerVec);
         }
       }
@@ -128,7 +127,7 @@ void FileMgr::init(const size_t num_reader_threads) {
      * sorted headerVec of the same ChunkId, which we
      * can then initiate a FileBuffer with */
 
-    // std::cout << "Header vec size: " << headerVec.size() << std::endl;
+    VLOG(1) << "Number of Headers in Vector: " << headerVec.size();
     if (headerVec.size() > 0) {
       ChunkKey lastChunkKey = headerVec.begin()->chunkKey;
       auto startIt = headerVec.begin();
@@ -300,9 +299,8 @@ void FileMgr::deleteBuffersWithPrefix(const ChunkKey& keyPrefix, const bool purg
     return;  // should we throw?
   }
   while (chunkIt != chunkIndex_.end() &&
-         std::search(
-             chunkIt->first.begin(), chunkIt->first.begin() + keyPrefix.size(), keyPrefix.begin(), keyPrefix.end()) !=
-             chunkIt->first.begin() + keyPrefix.size()) {
+         std::search(chunkIt->first.begin(), chunkIt->first.begin() + keyPrefix.size(), keyPrefix.begin(),
+                     keyPrefix.end()) != chunkIt->first.begin() + keyPrefix.size()) {
     /*
     cout << "Freeing pages for chunk ";
     for (auto vecIt = chunkIt->first.begin(); vecIt != chunkIt->first.end(); ++vecIt) {
@@ -322,8 +320,10 @@ void FileMgr::deleteBuffersWithPrefix(const ChunkKey& keyPrefix, const bool purg
 AbstractBuffer* FileMgr::getBuffer(const ChunkKey& key, const size_t numBytes) {
   std::unique_lock<std::mutex> chunkIndexLock(chunkIndexMutex_);
   auto chunkIt = chunkIndex_.find(key);
-  if (chunkIt == chunkIndex_.end())
-    LOG(FATAL) << "Chunk does not exist.";
+  if (chunkIt == chunkIndex_.end()) {
+    LOG(ERROR) << "Failed to get chunk " << showChunk(key);
+    LOG(FATAL) << "Chunk does not exist." << showChunk(key);
+  }
   chunkIndexLock.unlock();
   return chunkIt->second;
 }
@@ -353,11 +353,8 @@ void FileMgr::fetchBuffer(const ChunkKey& key, AbstractBuffer* destBuffer, const
   if (chunk->isUpdated()) {
     chunk->read(destBuffer->getMemoryPtr(), chunkSize, 0, destBuffer->getType(), destBuffer->getDeviceId());
   } else {
-    chunk->read(destBuffer->getMemoryPtr() + destBuffer->size(),
-                chunkSize - destBuffer->size(),
-                destBuffer->size(),
-                destBuffer->getType(),
-                destBuffer->getDeviceId());
+    chunk->read(destBuffer->getMemoryPtr() + destBuffer->size(), chunkSize - destBuffer->size(), destBuffer->size(),
+                destBuffer->getType(), destBuffer->getDeviceId());
   }
   destBuffer->setSize(chunkSize);
   destBuffer->syncEncoder(chunk);
@@ -387,9 +384,7 @@ AbstractBuffer* FileMgr::putBuffer(const ChunkKey& key, AbstractBuffer* srcBuffe
     chunk->write((int8_t*)srcBuffer->getMemoryPtr(), newChunkSize, 0, srcBuffer->getType(), srcBuffer->getDeviceId());
   } else if (srcBuffer->isAppended()) {
     assert(oldChunkSize < newChunkSize);
-    chunk->append((int8_t*)srcBuffer->getMemoryPtr() + oldChunkSize,
-                  newChunkSize - oldChunkSize,
-                  srcBuffer->getType(),
+    chunk->append((int8_t*)srcBuffer->getMemoryPtr() + oldChunkSize, newChunkSize - oldChunkSize, srcBuffer->getType(),
                   srcBuffer->getDeviceId());
   }
   // chunk->clearDirtyBits(); // Hack: because write and append will set dirty bits
@@ -504,9 +499,7 @@ FileInfo* FileMgr::createFile(const size_t pageSize, const size_t numPages) {
     LOG(FATAL) << "File creation failed: pageSize and numPages must be greater than 0.";
 
   // create the new file
-  FILE* f = create(basePath_,
-                   nextFileId_,
-                   pageSize,
+  FILE* f = create(basePath_, nextFileId_, pageSize,
                    numPages);  // TM: not sure if I like naming scheme here - should be in separate namespace?
   if (f == nullptr)
     LOG(FATAL) << "Unable to create the new file.";
@@ -556,9 +549,8 @@ void FileMgr::getChunkMetadataVecForKeyPrefix(std::vector<std::pair<ChunkKey, Ch
     return;  // throw?
   }
   while (chunkIt != chunkIndex_.end() &&
-         std::search(
-             chunkIt->first.begin(), chunkIt->first.begin() + keyPrefix.size(), keyPrefix.begin(), keyPrefix.end()) !=
-             chunkIt->first.begin() + keyPrefix.size()) {
+         std::search(chunkIt->first.begin(), chunkIt->first.begin() + keyPrefix.size(), keyPrefix.begin(),
+                     keyPrefix.end()) != chunkIt->first.begin() + keyPrefix.size()) {
     /*
     for (auto vecIt = chunkIt->first.begin(); vecIt != chunkIt->first.end(); ++vecIt) {
         std::cout << *vecIt << ",";

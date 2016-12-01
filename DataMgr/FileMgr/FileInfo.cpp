@@ -1,6 +1,6 @@
 #include "FileInfo.h"
-#include "Page.h"
 #include "File.h"
+#include "Page.h"
 #include <glog/logging.h>
 #include <iostream>
 
@@ -46,6 +46,10 @@ size_t FileInfo::read(const size_t offset, const size_t size, int8_t* buf) {
 
 void FileInfo::openExistingFile(std::vector<HeaderInfo>& headerVec, const int fileMgrEpoch) {
   // HeaderInfo is defined in Page.h
+  ChunkKey oldChunkKey(4);
+  int oldPageId = -99;
+  int oldVersionEpoch = -99;
+  int skipped = 0;
   for (size_t pageNum = 0; pageNum < numPages; ++pageNum) {
     int headerSize;
     fseek(f, pageNum * pageSize, SEEK_SET);
@@ -57,17 +61,32 @@ void FileInfo::openExistingFile(std::vector<HeaderInfo>& headerVec, const int fi
       assert(numHeaderElems >= 2);
       // Last two elements of header are always PageId and Version
       // epoch - these are not in the chunk key so seperate them
-      std::vector<int> chunkKey(numHeaderElems - 2);
+      ChunkKey chunkKey(numHeaderElems - 2);
       int pageId;
       int versionEpoch;
       // size_t chunkSize;
       // We don't want to read headerSize in our header - so start
       // reading 4 bytes past it
       fread((int8_t*)(&chunkKey[0]), headerSize - 2 * sizeof(int), 1, f);
-      // cout << "Chunk key: " << chunkKey[0] << endl;
+      // cout << "Chunk key: " << showChunk(chunkKey) << endl;
       fread((int8_t*)(&pageId), sizeof(int), 1, f);
       // cout << "Page id: " << pageId << endl;
       fread((int8_t*)(&versionEpoch), sizeof(int), 1, f);
+      if (chunkKey != oldChunkKey || oldPageId != pageId - (1 + skipped)) {
+        if (skipped > 0) {
+          VLOG(1) << "\tChunk key: " << showChunk(oldChunkKey) << " Page id from : " << oldPageId
+                  << " to : " << oldPageId + skipped << " Epoch: " << oldVersionEpoch;
+        } else if (oldPageId != -99) {
+          VLOG(1) << "\tChunk key: " << showChunk(oldChunkKey) << " Page id: " << oldPageId
+                  << " Epoch: " << oldVersionEpoch;
+        }
+        oldPageId = pageId;
+        oldVersionEpoch = versionEpoch;
+        oldChunkKey = chunkKey;
+        skipped = 0;
+      } else {
+        skipped++;
+      }
       // read(f,pageNum*pageSize+sizeof(int),headerSize-2*sizeof(int),(int8_t *)(&chunkKey[0]));
       // read(f,pageNum*pageSize+sizeof(int) + headerSize - 2*sizeof(int),sizeof(int),(int8_t *)(&pageId));
       // read(f,pageNum*pageSize+sizeof(int) + headerSize - sizeof(int),sizeof(int),(int8_t *)(&versionEpoch));
@@ -86,7 +105,8 @@ void FileInfo::openExistingFile(std::vector<HeaderInfo>& headerVec, const int fi
         File_Namespace::write(f, pageNum * pageSize, sizeof(int), (int8_t*)&headerSize);
         // Now add page to free list
         freePages.insert(pageNum);
-        // std::cout << "Not checkpointed" << std::endl;
+        LOG(WARNING) << "Was not checkpointed: Chunk key: " << showChunk(chunkKey) << " Page id: " << pageId
+                     << " Epoch: " << versionEpoch << " FileMgrEpoch " << fileMgrEpoch << endl;
 
       } else {  // page was checkpointed properly
         Page page(fileId, pageNum);
@@ -95,6 +115,16 @@ void FileInfo::openExistingFile(std::vector<HeaderInfo>& headerVec, const int fi
       }
     } else {  // no header for this page - insert into free list
       freePages.insert(pageNum);
+    }
+  }
+  // printlast
+  if (oldPageId != -99) {
+    if (skipped > 0) {
+      VLOG(1) << "\tChunk key: " << showChunk(oldChunkKey) << " Page id from : " << oldPageId
+              << " to : " << oldPageId + skipped << " Epoch: " << oldVersionEpoch;
+    } else {
+      VLOG(1) << "\tChunk key: " << showChunk(oldChunkKey) << " Page id: " << oldPageId
+              << " Epoch: " << oldVersionEpoch;
     }
   }
 }

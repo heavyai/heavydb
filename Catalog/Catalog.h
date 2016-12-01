@@ -6,8 +6,7 @@
  * This file contains the Catalog class specification. The Catalog class is responsible for storing metadata
  * about stored objects in the system (currently just relations).  At this point it does not take advantage of the
  * database storage infrastructure; this likely will change in the future as the buildout continues. Although it
- *persists
- * the metainfo on disk, at database startup it reads everything into in-memory dictionaries for fast access.
+ * persists the metainfo on disk, at database startup it reads everything into in-memory dictionaries for fast access.
  *
  */
 
@@ -15,20 +14,20 @@
 #define CATALOG_H
 
 #include <atomic>
-#include <string>
-#include <map>
-#include <list>
-#include <utility>
-#include <mutex>
 #include <cstdint>
 #include <ctime>
+#include <list>
+#include <map>
+#include <mutex>
+#include <string>
+#include <utility>
 
-#include "TableDescriptor.h"
 #include "ColumnDescriptor.h"
 #include "DictDescriptor.h"
 #include "FrontendViewDescriptor.h"
-#include "LinkDescriptor.h"
 #include "LdapServer.h"
+#include "LinkDescriptor.h"
+#include "TableDescriptor.h"
 
 #include "../DataMgr/DataMgr.h"
 #include "../QueryEngine/CompilationOptions.h"
@@ -273,6 +272,7 @@ class Catalog {
   DBMetadata currentDB_;
   std::shared_ptr<Data_Namespace::DataMgr> dataMgr_;
   mutable std::mutex cat_mutex_;
+
   std::unique_ptr<LdapServer> ldap_server_;
 #ifdef HAVE_CALCITE
   std::shared_ptr<Calcite> calciteMgr_;

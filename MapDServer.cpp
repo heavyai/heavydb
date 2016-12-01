@@ -178,6 +178,7 @@ class MapDHandler : virtual public MapDIf {
               const int start_gpu,
               const size_t reserved_gpu_mem,
               const size_t num_reader_threads,
+              const int start_epoch,
               const LdapMetadata ldapMetadata,
 #ifdef HAVE_CALCITE
               const int calcite_port,
@@ -229,6 +230,7 @@ class MapDHandler : virtual public MapDIf {
                                                 num_gpus,
                                                 start_gpu,
                                                 total_reserved,
+                                                start_epoch,
                                                 num_reader_threads));
 #ifdef HAVE_CALCITE
     calcite_.reset(new Calcite(calcite_port, base_data_path_));
@@ -1991,6 +1993,7 @@ int main(int argc, char** argv) {
   int start_gpu = 0;
   int tthreadpool_size = 8;
   size_t num_reader_threads = 0;  // number of threads used when loading data
+  int start_epoch = -1;
 
   namespace po = boost::program_options;
 
@@ -2053,6 +2056,9 @@ int main(int argc, char** argv) {
   desc_adv.add_options()("enable-watchdog",
                          po::bool_switch(&enable_watchdog)->default_value(enable_watchdog)->implicit_value(true),
                          "Enable watchdog");
+  desc_adv.add_options()("start-epoch",
+                         po::value<int>(&start_epoch)->default_value(start_epoch),
+                         "Value of epoch to 'rollback' to");
 
   po::positional_options_description positionalOptions;
   positionalOptions.add("data", 1);
@@ -2199,6 +2205,7 @@ int main(int argc, char** argv) {
                                                   start_gpu,
                                                   reserved_gpu_mem,
                                                   num_reader_threads,
+                                                  start_epoch,
                                                   ldapMetadata,
                                                   calcite_port,
                                                   enable_legacy_syntax));
