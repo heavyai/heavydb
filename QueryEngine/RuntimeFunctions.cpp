@@ -1,4 +1,9 @@
+#ifdef __CUDACC__
+#error This code is not intended to be compiled with a CUDA C++ compiler
+#endif  // __CUDACC__
+
 #include "RuntimeFunctions.h"
+#include "../Shared/funcannotations.h"
 
 #include <algorithm>
 #include <cstring>
@@ -11,35 +16,34 @@
 
 // arithmetic operator implementations
 
-#define DEF_ARITH_NULLABLE(type, null_type, opname, opsym)                                        \
-  extern "C" __attribute__((always_inline))                                                       \
-      type opname##_##type##_nullable(const type lhs, const type rhs, const null_type null_val) { \
-    if (lhs != null_val && rhs != null_val) {                                                     \
-      return lhs opsym rhs;                                                                       \
-    }                                                                                             \
-    return null_val;                                                                              \
+#define DEF_ARITH_NULLABLE(type, null_type, opname, opsym)                                                             \
+  extern "C" ALWAYS_INLINE type opname##_##type##_nullable(const type lhs, const type rhs, const null_type null_val) { \
+    if (lhs != null_val && rhs != null_val) {                                                                          \
+      return lhs opsym rhs;                                                                                            \
+    }                                                                                                                  \
+    return null_val;                                                                                                   \
   }
 
-#define DEF_ARITH_NULLABLE_LHS(type, null_type, opname, opsym)                                        \
-  extern "C" __attribute__((always_inline))                                                           \
-      type opname##_##type##_nullable_lhs(const type lhs, const type rhs, const null_type null_val) { \
-    if (lhs != null_val) {                                                                            \
-      return lhs opsym rhs;                                                                           \
-    }                                                                                                 \
-    return null_val;                                                                                  \
+#define DEF_ARITH_NULLABLE_LHS(type, null_type, opname, opsym)    \
+  extern "C" ALWAYS_INLINE type opname##_##type##_nullable_lhs(   \
+      const type lhs, const type rhs, const null_type null_val) { \
+    if (lhs != null_val) {                                        \
+      return lhs opsym rhs;                                       \
+    }                                                             \
+    return null_val;                                              \
   }
 
-#define DEF_ARITH_NULLABLE_RHS(type, null_type, opname, opsym)                                        \
-  extern "C" __attribute__((always_inline))                                                           \
-      type opname##_##type##_nullable_rhs(const type lhs, const type rhs, const null_type null_val) { \
-    if (rhs != null_val) {                                                                            \
-      return lhs opsym rhs;                                                                           \
-    }                                                                                                 \
-    return null_val;                                                                                  \
+#define DEF_ARITH_NULLABLE_RHS(type, null_type, opname, opsym)    \
+  extern "C" ALWAYS_INLINE type opname##_##type##_nullable_rhs(   \
+      const type lhs, const type rhs, const null_type null_val) { \
+    if (rhs != null_val) {                                        \
+      return lhs opsym rhs;                                       \
+    }                                                             \
+    return null_val;                                              \
   }
 
 #define DEF_CMP_NULLABLE(type, null_type, opname, opsym)                                      \
-  extern "C" __attribute__((always_inline)) int8_t opname##_##type##_nullable(                \
+  extern "C" ALWAYS_INLINE int8_t opname##_##type##_nullable(                                 \
       const type lhs, const type rhs, const null_type null_val, const int8_t null_bool_val) { \
     if (lhs != null_val && rhs != null_val) {                                                 \
       return lhs opsym rhs;                                                                   \
@@ -48,7 +52,7 @@
   }
 
 #define DEF_CMP_NULLABLE_LHS(type, null_type, opname, opsym)                                  \
-  extern "C" __attribute__((always_inline)) int8_t opname##_##type##_nullable_lhs(            \
+  extern "C" ALWAYS_INLINE int8_t opname##_##type##_nullable_lhs(                             \
       const type lhs, const type rhs, const null_type null_val, const int8_t null_bool_val) { \
     if (lhs != null_val) {                                                                    \
       return lhs opsym rhs;                                                                   \
@@ -57,7 +61,7 @@
   }
 
 #define DEF_CMP_NULLABLE_RHS(type, null_type, opname, opsym)                                  \
-  extern "C" __attribute__((always_inline)) int8_t opname##_##type##_nullable_rhs(            \
+  extern "C" ALWAYS_INLINE int8_t opname##_##type##_nullable_rhs(                             \
       const type lhs, const type rhs, const null_type null_val, const int8_t null_bool_val) { \
     if (rhs != null_val) {                                                                    \
       return lhs opsym rhs;                                                                   \
@@ -129,13 +133,13 @@ DEF_ARITH_NULLABLE_RHS(int64_t, int64_t, mod, %)
 #undef DEF_ARITH_NULLABLE_LHS
 #undef DEF_ARITH_NULLABLE
 
-#define DEF_MUL_DECIMAL(type)                                                                                \
-  extern "C" __attribute__((always_inline))                                                                  \
-      type mul_##type##_decimal(const type lhs, const type rhs, const uint64_t scale, const type null_val) { \
-    if (lhs != null_val && rhs != null_val) {                                                                \
-      return (static_cast<double>(lhs) * rhs) / scale;                                                       \
-    }                                                                                                        \
-    return null_val;                                                                                         \
+#define DEF_MUL_DECIMAL(type)                                                      \
+  extern "C" ALWAYS_INLINE type mul_##type##_decimal(                              \
+      const type lhs, const type rhs, const uint64_t scale, const type null_val) { \
+    if (lhs != null_val && rhs != null_val) {                                      \
+      return (static_cast<double>(lhs) * rhs) / scale;                             \
+    }                                                                              \
+    return null_val;                                                               \
   }
 
 DEF_MUL_DECIMAL(int16_t)
@@ -144,13 +148,13 @@ DEF_MUL_DECIMAL(int64_t)
 
 #undef DEF_MUL_DECIMAL
 
-#define DEF_MUL_DECIMAL_NO_DOWNSCALE(type)                                                          \
-  extern "C" __attribute__((always_inline))                                                         \
-      type mul_##type##_decimal_no_downscale(const type lhs, const type rhs, const type null_val) { \
-    if (lhs != null_val && rhs != null_val) {                                                       \
-      return (static_cast<double>(lhs) * rhs);                                                      \
-    }                                                                                               \
-    return null_val;                                                                                \
+#define DEF_MUL_DECIMAL_NO_DOWNSCALE(type)                         \
+  extern "C" ALWAYS_INLINE type mul_##type##_decimal_no_downscale( \
+      const type lhs, const type rhs, const type null_val) {       \
+    if (lhs != null_val && rhs != null_val) {                      \
+      return (static_cast<double>(lhs) * rhs);                     \
+    }                                                              \
+    return null_val;                                               \
   }
 
 DEF_MUL_DECIMAL_NO_DOWNSCALE(int16_t)
@@ -159,17 +163,16 @@ DEF_MUL_DECIMAL_NO_DOWNSCALE(int64_t)
 
 #undef DEF_MUL_DECIMAL_NO_DOWNSCALE
 
-extern "C" __attribute__((always_inline)) int64_t scale_decimal(const int64_t operand,
-                                                                const uint64_t scale,
-                                                                const int64_t operand_null_val,
-                                                                const int64_t result_null_val) {
+extern "C" ALWAYS_INLINE int64_t scale_decimal(const int64_t operand,
+                                               const uint64_t scale,
+                                               const int64_t operand_null_val,
+                                               const int64_t result_null_val) {
   return operand != operand_null_val ? operand * scale : result_null_val;
 }
 
-#define DEF_UMINUS_NULLABLE(type, null_type)                                        \
-  extern "C" __attribute__((always_inline))                                         \
-      type uminus_##type##_nullable(const type operand, const null_type null_val) { \
-    return operand == null_val ? null_val : -operand;                               \
+#define DEF_UMINUS_NULLABLE(type, null_type)                                                             \
+  extern "C" ALWAYS_INLINE type uminus_##type##_nullable(const type operand, const null_type null_val) { \
+    return operand == null_val ? null_val : -operand;                                                    \
   }
 
 DEF_UMINUS_NULLABLE(int16_t, int16_t)
@@ -180,10 +183,10 @@ DEF_UMINUS_NULLABLE(double, double)
 
 #undef DEF_UMINUS_NULLABLE
 
-#define DEF_CAST_NULLABLE(from_type, to_type)                                                   \
-  extern "C" __attribute__((always_inline)) to_type cast_##from_type##_to_##to_type##_nullable( \
-      const from_type operand, const from_type from_null_val, const to_type to_null_val) {      \
-    return operand == from_null_val ? to_null_val : operand;                                    \
+#define DEF_CAST_NULLABLE(from_type, to_type)                                              \
+  extern "C" ALWAYS_INLINE to_type cast_##from_type##_to_##to_type##_nullable(             \
+      const from_type operand, const from_type from_null_val, const to_type to_null_val) { \
+    return operand == from_null_val ? to_null_val : operand;                               \
   }
 
 #define DEF_CAST_NULLABLE_BIDIR(type1, type2) \
@@ -209,20 +212,18 @@ DEF_CAST_NULLABLE_BIDIR(double, int64_t)
 #undef DEF_CAST_NULLABLE_BIDIR
 #undef DEF_CAST_NULLABLE
 
-extern "C" __attribute__((always_inline)) int8_t logical_not(const int8_t operand, const int8_t null_val) {
+extern "C" ALWAYS_INLINE int8_t logical_not(const int8_t operand, const int8_t null_val) {
   return operand == null_val ? operand : (operand ? 0 : 1);
 }
 
-extern "C" __attribute__((always_inline)) int8_t logical_and(const int8_t lhs,
-                                                             const int8_t rhs,
-                                                             const int8_t null_val) {
+extern "C" ALWAYS_INLINE int8_t logical_and(const int8_t lhs, const int8_t rhs, const int8_t null_val) {
   if (lhs == null_val || rhs == null_val) {
     return null_val;
   }
   return (lhs && rhs) ? 1 : 0;
 }
 
-extern "C" __attribute__((always_inline)) int8_t logical_or(const int8_t lhs, const int8_t rhs, const int8_t null_val) {
+extern "C" ALWAYS_INLINE int8_t logical_or(const int8_t lhs, const int8_t rhs, const int8_t null_val) {
   if (lhs == null_val) {
     return rhs;
   }
@@ -233,7 +234,7 @@ extern "C" __attribute__((always_inline)) int8_t logical_or(const int8_t lhs, co
 }
 
 #define DEF_TRANSLATE_NULL_KEY(key_type)                                            \
-  extern "C" __attribute__((always_inline)) int64_t translate_null_key_##key_type(  \
+  extern "C" ALWAYS_INLINE int64_t translate_null_key_##key_type(                   \
       const key_type key, const key_type null_val, const key_type translated_val) { \
     if (key == null_val) {                                                          \
       return translated_val;                                                        \
@@ -250,27 +251,25 @@ DEF_TRANSLATE_NULL_KEY(int64_t)
 
 // aggregator implementations
 
-extern "C" __attribute__((always_inline)) uint64_t agg_count(uint64_t* agg, const int64_t) {
+extern "C" ALWAYS_INLINE uint64_t agg_count(uint64_t* agg, const int64_t) {
   return (*agg)++;
 }
 
-extern "C" __attribute__((always_inline)) void agg_count_distinct(int64_t* agg, const int64_t val) {
+extern "C" ALWAYS_INLINE void agg_count_distinct(int64_t* agg, const int64_t val) {
   reinterpret_cast<std::set<int64_t>*>(*agg)->insert(val);
 }
 
-extern "C" __attribute__((always_inline)) void agg_count_distinct_bitmap(int64_t* agg,
-                                                                         const int64_t val,
-                                                                         const int64_t min_val) {
+extern "C" ALWAYS_INLINE void agg_count_distinct_bitmap(int64_t* agg, const int64_t val, const int64_t min_val) {
   const uint64_t bitmap_idx = val - min_val;
   reinterpret_cast<int8_t*>(*agg)[bitmap_idx >> 3] |= (1 << (bitmap_idx & 7));
 }
 
-extern "C" __attribute__((always_inline)) int8_t bit_is_set(const int64_t bitset,
-                                                            const int64_t val,
-                                                            const int64_t min_val,
-                                                            const int64_t max_val,
-                                                            const int64_t null_val,
-                                                            const int8_t null_bool_val) {
+extern "C" ALWAYS_INLINE int8_t bit_is_set(const int64_t bitset,
+                                           const int64_t val,
+                                           const int64_t min_val,
+                                           const int64_t max_val,
+                                           const int64_t null_val,
+                                           const int8_t null_bool_val) {
   if (val == null_val) {
     return null_bool_val;
   }
@@ -281,66 +280,62 @@ extern "C" __attribute__((always_inline)) int8_t bit_is_set(const int64_t bitset
   return (reinterpret_cast<const int8_t*>(bitset))[bitmap_idx >> 3] & (1 << (bitmap_idx & 7)) ? 1 : 0;
 }
 
-extern "C" __attribute__((always_inline)) int64_t agg_sum(int64_t* agg, const int64_t val) {
+extern "C" ALWAYS_INLINE int64_t agg_sum(int64_t* agg, const int64_t val) {
   const auto old = *agg;
   *agg += val;
   return old;
 }
 
-extern "C" __attribute__((always_inline)) void agg_max(int64_t* agg, const int64_t val) {
+extern "C" ALWAYS_INLINE void agg_max(int64_t* agg, const int64_t val) {
   *agg = std::max(*agg, val);
 }
 
-extern "C" __attribute__((always_inline)) void agg_min(int64_t* agg, const int64_t val) {
+extern "C" ALWAYS_INLINE void agg_min(int64_t* agg, const int64_t val) {
   *agg = std::min(*agg, val);
 }
 
-extern "C" __attribute__((always_inline)) void agg_id(int64_t* agg, const int64_t val) {
+extern "C" ALWAYS_INLINE void agg_id(int64_t* agg, const int64_t val) {
   *agg = val;
 }
 
-extern "C" __attribute__((always_inline)) void agg_count_distinct_skip_val(int64_t* agg,
-                                                                           const int64_t val,
-                                                                           const int64_t skip_val) {
+extern "C" ALWAYS_INLINE void agg_count_distinct_skip_val(int64_t* agg, const int64_t val, const int64_t skip_val) {
   if (val != skip_val) {
     agg_count_distinct(agg, val);
   }
 }
 
-extern "C" __attribute__((always_inline)) void agg_count_distinct_bitmap_skip_val(int64_t* agg,
-                                                                                  const int64_t val,
-                                                                                  const int64_t min_val,
-                                                                                  const int64_t skip_val) {
+extern "C" ALWAYS_INLINE void agg_count_distinct_bitmap_skip_val(int64_t* agg,
+                                                                 const int64_t val,
+                                                                 const int64_t min_val,
+                                                                 const int64_t skip_val) {
   if (val != skip_val) {
     agg_count_distinct_bitmap(agg, val, min_val);
   }
 }
 
-extern "C" __attribute__((always_inline)) uint32_t agg_count_int32(uint32_t* agg, const int32_t) {
+extern "C" ALWAYS_INLINE uint32_t agg_count_int32(uint32_t* agg, const int32_t) {
   return (*agg)++;
 }
 
-extern "C" __attribute__((always_inline)) int32_t agg_sum_int32(int32_t* agg, const int32_t val) {
+extern "C" ALWAYS_INLINE int32_t agg_sum_int32(int32_t* agg, const int32_t val) {
   const auto old = *agg;
   *agg += val;
   return old;
 }
 
-extern "C" __attribute__((always_inline)) void agg_max_int32(int32_t* agg, const int32_t val) {
+extern "C" ALWAYS_INLINE void agg_max_int32(int32_t* agg, const int32_t val) {
   *agg = std::max(*agg, val);
 }
 
-extern "C" __attribute__((always_inline)) void agg_min_int32(int32_t* agg, const int32_t val) {
+extern "C" ALWAYS_INLINE void agg_min_int32(int32_t* agg, const int32_t val) {
   *agg = std::min(*agg, val);
 }
 
-extern "C" __attribute__((always_inline)) void agg_id_int32(int32_t* agg, const int32_t val) {
+extern "C" ALWAYS_INLINE void agg_id_int32(int32_t* agg, const int32_t val) {
   *agg = val;
 }
 
-extern "C" __attribute__((always_inline)) int64_t agg_sum_skip_val(int64_t* agg,
-                                                                   const int64_t val,
-                                                                   const int64_t skip_val) {
+extern "C" ALWAYS_INLINE int64_t agg_sum_skip_val(int64_t* agg, const int64_t val, const int64_t skip_val) {
   const auto old = *agg;
   if (val != skip_val) {
     if (old != skip_val) {
@@ -352,9 +347,7 @@ extern "C" __attribute__((always_inline)) int64_t agg_sum_skip_val(int64_t* agg,
   return old;
 }
 
-extern "C" __attribute__((always_inline)) int32_t agg_sum_int32_skip_val(int32_t* agg,
-                                                                         const int32_t val,
-                                                                         const int32_t skip_val) {
+extern "C" ALWAYS_INLINE int32_t agg_sum_int32_skip_val(int32_t* agg, const int32_t val, const int32_t skip_val) {
   const auto old = *agg;
   if (val != skip_val) {
     if (old != skip_val) {
@@ -366,43 +359,37 @@ extern "C" __attribute__((always_inline)) int32_t agg_sum_int32_skip_val(int32_t
   return old;
 }
 
-extern "C" __attribute__((always_inline)) uint64_t agg_count_skip_val(uint64_t* agg,
-                                                                      const int64_t val,
-                                                                      const int64_t skip_val) {
+extern "C" ALWAYS_INLINE uint64_t agg_count_skip_val(uint64_t* agg, const int64_t val, const int64_t skip_val) {
   if (val != skip_val) {
     return agg_count(agg, val);
   }
   return *agg;
 }
 
-extern "C" __attribute__((always_inline)) uint32_t agg_count_int32_skip_val(uint32_t* agg,
-                                                                            const int32_t val,
-                                                                            const int32_t skip_val) {
+extern "C" ALWAYS_INLINE uint32_t agg_count_int32_skip_val(uint32_t* agg, const int32_t val, const int32_t skip_val) {
   if (val != skip_val) {
     return agg_count_int32(agg, val);
   }
   return *agg;
 }
 
-#define DEF_SKIP_AGG_ADD(base_agg_func)                                    \
-  extern "C" __attribute__((always_inline)) void base_agg_func##_skip_val( \
-      DATA_T* agg, const DATA_T val, const DATA_T skip_val) {              \
-    if (val != skip_val) {                                                 \
-      base_agg_func(agg, val);                                             \
-    }                                                                      \
+#define DEF_SKIP_AGG_ADD(base_agg_func)                                                                          \
+  extern "C" ALWAYS_INLINE void base_agg_func##_skip_val(DATA_T* agg, const DATA_T val, const DATA_T skip_val) { \
+    if (val != skip_val) {                                                                                       \
+      base_agg_func(agg, val);                                                                                   \
+    }                                                                                                            \
   }
 
-#define DEF_SKIP_AGG(base_agg_func)                                        \
-  extern "C" __attribute__((always_inline)) void base_agg_func##_skip_val( \
-      DATA_T* agg, const DATA_T val, const DATA_T skip_val) {              \
-    if (val != skip_val) {                                                 \
-      const DATA_T old_agg = *agg;                                         \
-      if (old_agg != skip_val) {                                           \
-        base_agg_func(agg, val);                                           \
-      } else {                                                             \
-        *agg = val;                                                        \
-      }                                                                    \
-    }                                                                      \
+#define DEF_SKIP_AGG(base_agg_func)                                                                              \
+  extern "C" ALWAYS_INLINE void base_agg_func##_skip_val(DATA_T* agg, const DATA_T val, const DATA_T skip_val) { \
+    if (val != skip_val) {                                                                                       \
+      const DATA_T old_agg = *agg;                                                                               \
+      if (old_agg != skip_val) {                                                                                 \
+        base_agg_func(agg, val);                                                                                 \
+      } else {                                                                                                   \
+        *agg = val;                                                                                              \
+      }                                                                                                          \
+    }                                                                                                            \
   }
 
 #define DATA_T int64_t
@@ -420,89 +407,83 @@ DEF_SKIP_AGG(agg_min_int32)
 
 // TODO(alex): fix signature
 
-extern "C" __attribute__((always_inline)) uint64_t agg_count_double(uint64_t* agg, const double val) {
+extern "C" ALWAYS_INLINE uint64_t agg_count_double(uint64_t* agg, const double val) {
   return (*agg)++;
 }
 
-extern "C" __attribute__((always_inline)) void agg_sum_double(int64_t* agg, const double val) {
+extern "C" ALWAYS_INLINE void agg_sum_double(int64_t* agg, const double val) {
   const auto r = *reinterpret_cast<const double*>(agg) + val;
   *agg = *reinterpret_cast<const int64_t*>(&r);
 }
 
-extern "C" __attribute__((always_inline)) void agg_max_double(int64_t* agg, const double val) {
+extern "C" ALWAYS_INLINE void agg_max_double(int64_t* agg, const double val) {
   const auto r = std::max(*reinterpret_cast<const double*>(agg), val);
   *agg = *(reinterpret_cast<const int64_t*>(&r));
 }
 
-extern "C" __attribute__((always_inline)) void agg_min_double(int64_t* agg, const double val) {
+extern "C" ALWAYS_INLINE void agg_min_double(int64_t* agg, const double val) {
   const auto r = std::min(*reinterpret_cast<const double*>(agg), val);
   *agg = *(reinterpret_cast<const int64_t*>(&r));
 }
 
-extern "C" __attribute__((always_inline)) void agg_id_double(int64_t* agg, const double val) {
+extern "C" ALWAYS_INLINE void agg_id_double(int64_t* agg, const double val) {
   *agg = *(reinterpret_cast<const int64_t*>(&val));
 }
 
-extern "C" __attribute__((always_inline)) uint32_t agg_count_float(uint32_t* agg, const float val) {
+extern "C" ALWAYS_INLINE uint32_t agg_count_float(uint32_t* agg, const float val) {
   return (*agg)++;
 }
 
-extern "C" __attribute__((always_inline)) void agg_sum_float(int32_t* agg, const float val) {
+extern "C" ALWAYS_INLINE void agg_sum_float(int32_t* agg, const float val) {
   const auto r = *reinterpret_cast<const float*>(agg) + val;
   *agg = *reinterpret_cast<const int32_t*>(&r);
 }
 
-extern "C" __attribute__((always_inline)) void agg_max_float(int32_t* agg, const float val) {
+extern "C" ALWAYS_INLINE void agg_max_float(int32_t* agg, const float val) {
   const auto r = std::max(*reinterpret_cast<const float*>(agg), val);
   *agg = *(reinterpret_cast<const int32_t*>(&r));
 }
 
-extern "C" __attribute__((always_inline)) void agg_min_float(int32_t* agg, const float val) {
+extern "C" ALWAYS_INLINE void agg_min_float(int32_t* agg, const float val) {
   const auto r = std::min(*reinterpret_cast<const float*>(agg), val);
   *agg = *(reinterpret_cast<const int32_t*>(&r));
 }
 
-extern "C" __attribute__((always_inline)) void agg_id_float(int32_t* agg, const float val) {
+extern "C" ALWAYS_INLINE void agg_id_float(int32_t* agg, const float val) {
   *agg = *(reinterpret_cast<const int32_t*>(&val));
 }
 
-extern "C" __attribute__((always_inline)) uint64_t agg_count_double_skip_val(uint64_t* agg,
-                                                                             const double val,
-                                                                             const double skip_val) {
+extern "C" ALWAYS_INLINE uint64_t agg_count_double_skip_val(uint64_t* agg, const double val, const double skip_val) {
   if (val != skip_val) {
     return agg_count_double(agg, val);
   }
   return *agg;
 }
 
-extern "C" __attribute__((always_inline)) uint32_t agg_count_float_skip_val(uint32_t* agg,
-                                                                            const float val,
-                                                                            const float skip_val) {
+extern "C" ALWAYS_INLINE uint32_t agg_count_float_skip_val(uint32_t* agg, const float val, const float skip_val) {
   if (val != skip_val) {
     return agg_count_float(agg, val);
   }
   return *agg;
 }
 
-#define DEF_SKIP_AGG_ADD(base_agg_func)                                    \
-  extern "C" __attribute__((always_inline)) void base_agg_func##_skip_val( \
-      ADDR_T* agg, const DATA_T val, const DATA_T skip_val) {              \
-    if (val != skip_val) {                                                 \
-      base_agg_func(agg, val);                                             \
-    }                                                                      \
+#define DEF_SKIP_AGG_ADD(base_agg_func)                                                                          \
+  extern "C" ALWAYS_INLINE void base_agg_func##_skip_val(ADDR_T* agg, const DATA_T val, const DATA_T skip_val) { \
+    if (val != skip_val) {                                                                                       \
+      base_agg_func(agg, val);                                                                                   \
+    }                                                                                                            \
   }
 
-#define DEF_SKIP_AGG(base_agg_func)                                        \
-  extern "C" __attribute__((always_inline)) void base_agg_func##_skip_val( \
-      ADDR_T* agg, const DATA_T val, const DATA_T skip_val) {              \
-    if (val != skip_val) {                                                 \
-      const ADDR_T old_agg = *agg;                                         \
-      if (old_agg != *reinterpret_cast<const ADDR_T*>(&skip_val)) {        \
-        base_agg_func(agg, val);                                           \
-      } else {                                                             \
-        *agg = *reinterpret_cast<const ADDR_T*>(&val);                     \
-      }                                                                    \
-    }                                                                      \
+#define DEF_SKIP_AGG(base_agg_func)                                                                              \
+  extern "C" ALWAYS_INLINE void base_agg_func##_skip_val(ADDR_T* agg, const DATA_T val, const DATA_T skip_val) { \
+    if (val != skip_val) {                                                                                       \
+      const ADDR_T old_agg = *agg;                                                                               \
+      if (old_agg != *reinterpret_cast<const ADDR_T*>(&skip_val)) {                                              \
+        base_agg_func(agg, val);                                                                                 \
+      } else {                                                                                                   \
+        *agg = *reinterpret_cast<const ADDR_T*>(&val);                                                           \
+      }                                                                                                          \
+    }                                                                                                            \
   }
 
 #define DATA_T double
@@ -524,7 +505,7 @@ DEF_SKIP_AGG(agg_min_float)
 #undef DEF_SKIP_AGG_ADD
 #undef DEF_SKIP_AGG
 
-extern "C" __attribute__((always_inline)) int64_t decimal_floor(const int64_t x, const int64_t scale) {
+extern "C" ALWAYS_INLINE int64_t decimal_floor(const int64_t x, const int64_t scale) {
   if (x >= 0) {
     return x / scale * scale;
   }
@@ -534,7 +515,7 @@ extern "C" __attribute__((always_inline)) int64_t decimal_floor(const int64_t x,
   return x / scale * scale - scale;
 }
 
-extern "C" __attribute__((always_inline)) int64_t decimal_ceil(const int64_t x, const int64_t scale) {
+extern "C" ALWAYS_INLINE int64_t decimal_ceil(const int64_t x, const int64_t scale) {
   return decimal_floor(x, scale) + (x % scale ? scale : 0);
 }
 
@@ -674,7 +655,7 @@ extern "C" __attribute__((noinline)) int8_t thread_warp_idx(const int8_t warp_sz
   abort();
 }
 
-extern "C" __attribute__((always_inline)) int32_t record_error_code(const int32_t err_code, int32_t* error_codes) {
+extern "C" ALWAYS_INLINE int32_t record_error_code(const int32_t err_code, int32_t* error_codes) {
   if (err_code) {
     error_codes[pos_start_impl(nullptr)] = err_code;
   }
@@ -736,12 +717,12 @@ extern "C" __attribute__((noinline)) void init_group_by_buffer_impl(int64_t* gro
   assert(groups_buffer);
 }
 
-extern "C" __attribute__((always_inline)) int64_t* get_matching_group_value(int64_t* groups_buffer,
-                                                                            const uint32_t h,
-                                                                            const int64_t* key,
-                                                                            const uint32_t key_qw_count,
-                                                                            const uint32_t row_size_quad,
-                                                                            const int64_t* init_vals) {
+extern "C" ALWAYS_INLINE int64_t* get_matching_group_value(int64_t* groups_buffer,
+                                                           const uint32_t h,
+                                                           const int64_t* key,
+                                                           const uint32_t key_qw_count,
+                                                           const uint32_t row_size_quad,
+                                                           const int64_t* init_vals) {
   auto off = h * row_size_quad;
   if (groups_buffer[off] == EMPTY_KEY_64) {
     memcpy(groups_buffer + off, key, key_qw_count * sizeof(*key));
@@ -753,11 +734,11 @@ extern "C" __attribute__((always_inline)) int64_t* get_matching_group_value(int6
   return nullptr;
 }
 
-extern "C" __attribute__((always_inline)) int64_t* get_matching_group_value_columnar(int64_t* groups_buffer,
-                                                                                     const uint32_t h,
-                                                                                     const int64_t* key,
-                                                                                     const uint32_t key_qw_count,
-                                                                                     const size_t entry_count) {
+extern "C" ALWAYS_INLINE int64_t* get_matching_group_value_columnar(int64_t* groups_buffer,
+                                                                    const uint32_t h,
+                                                                    const int64_t* key,
+                                                                    const uint32_t key_qw_count,
+                                                                    const size_t entry_count) {
   auto off = h;
   if (groups_buffer[off] == EMPTY_KEY_64) {
     for (size_t i = 0; i < key_qw_count; ++i) {
@@ -776,11 +757,11 @@ extern "C" __attribute__((always_inline)) int64_t* get_matching_group_value_colu
   return &groups_buffer[off];
 }
 
-extern "C" __attribute__((always_inline)) int64_t* get_matching_group_value_perfect_hash(int64_t* groups_buffer,
-                                                                                         const uint32_t h,
-                                                                                         const int64_t* key,
-                                                                                         const uint32_t key_qw_count,
-                                                                                         const uint32_t row_size_quad) {
+extern "C" ALWAYS_INLINE int64_t* get_matching_group_value_perfect_hash(int64_t* groups_buffer,
+                                                                        const uint32_t h,
+                                                                        const int64_t* key,
+                                                                        const uint32_t key_qw_count,
+                                                                        const uint32_t row_size_quad) {
   uint32_t off = h * row_size_quad;
   if (groups_buffer[off] == EMPTY_KEY_64) {
     for (uint32_t i = 0; i < key_qw_count; ++i) {
@@ -792,30 +773,29 @@ extern "C" __attribute__((always_inline)) int64_t* get_matching_group_value_perf
 
 #include "GroupByRuntime.cpp"
 
-extern "C" __attribute__((always_inline)) int64_t* get_group_value_fast_keyless(int64_t* groups_buffer,
-                                                                                const int64_t key,
-                                                                                const int64_t min_key,
-                                                                                const int64_t /* bucket */,
-                                                                                const uint32_t row_size_quad) {
+extern "C" ALWAYS_INLINE int64_t* get_group_value_fast_keyless(int64_t* groups_buffer,
+                                                               const int64_t key,
+                                                               const int64_t min_key,
+                                                               const int64_t /* bucket */,
+                                                               const uint32_t row_size_quad) {
   return groups_buffer + row_size_quad * (key - min_key);
 }
 
-extern "C" __attribute__((always_inline)) int64_t* get_group_value_fast_keyless_semiprivate(
-    int64_t* groups_buffer,
-    const int64_t key,
-    const int64_t min_key,
-    const int64_t /* bucket */,
-    const uint32_t row_size_quad,
-    const uint8_t thread_warp_idx,
-    const uint8_t warp_size) {
+extern "C" ALWAYS_INLINE int64_t* get_group_value_fast_keyless_semiprivate(int64_t* groups_buffer,
+                                                                           const int64_t key,
+                                                                           const int64_t min_key,
+                                                                           const int64_t /* bucket */,
+                                                                           const uint32_t row_size_quad,
+                                                                           const uint8_t thread_warp_idx,
+                                                                           const uint8_t warp_size) {
   return groups_buffer + row_size_quad * (warp_size * (key - min_key) + thread_warp_idx);
 }
 
-extern "C" __attribute__((always_inline)) int8_t* extract_str_ptr(const uint64_t str_and_len) {
+extern "C" ALWAYS_INLINE int8_t* extract_str_ptr(const uint64_t str_and_len) {
   return reinterpret_cast<int8_t*>(str_and_len & 0xffffffffffff);
 }
 
-extern "C" __attribute__((always_inline)) int32_t extract_str_len(const uint64_t str_and_len) {
+extern "C" ALWAYS_INLINE int32_t extract_str_len(const uint64_t str_and_len) {
   return static_cast<int64_t>(str_and_len) >> 48;
 }
 
@@ -827,7 +807,7 @@ extern "C" __attribute__((noinline)) int32_t extract_str_len_noinline(const uint
   return extract_str_len(str_and_len);
 }
 
-extern "C" __attribute__((always_inline)) uint64_t string_pack(const int8_t* ptr, const int32_t len) {
+extern "C" ALWAYS_INLINE uint64_t string_pack(const int8_t* ptr, const int32_t len) {
   return (reinterpret_cast<const uint64_t>(ptr) & 0xffffffffffff) | (static_cast<const uint64_t>(len) << 48);
 }
 
