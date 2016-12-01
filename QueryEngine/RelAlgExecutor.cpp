@@ -18,7 +18,15 @@ ExecutionResult RelAlgExecutor::executeRelAlgQuery(const std::string& query_ra,
   std::lock_guard<std::mutex> lock(executor_->execute_mutex_);
   InputTableInfoCacheScope input_table_info_cache_scope(executor_);
   int64_t queue_time_ms = timer_stop(clock_begin);
-  const auto ra = deserialize_ra_dag(query_ra, cat_, co, eo);
+  return executeRelAlgQueryUnlocked(query_ra, co, eo, render_info, queue_time_ms);
+}
+
+ExecutionResult RelAlgExecutor::executeRelAlgQueryUnlocked(const std::string& query_ra,
+                                                           const CompilationOptions& co,
+                                                           const ExecutionOptions& eo,
+                                                           RenderInfo* render_info,
+                                                           const int64_t queue_time_ms) {
+  const auto ra = deserialize_ra_dag(query_ra, cat_, co, eo, executor_);
   auto ed_list = get_execution_descriptors(ra.get());
   if (render_info) {  // save the table names for render queries
     table_names_ = getScanTableNamesInRelAlgSeq(ed_list);

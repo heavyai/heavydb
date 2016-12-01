@@ -216,24 +216,19 @@ class ExecutionResult;
 
 class RexSubQuery : public RexScalar {
  public:
-  RexSubQuery(const RelAlgNode* node, const SQLTypeInfo& type, std::shared_ptr<const ExecutionResult> result)
-      : node_(node), type_(type), result_(result) {}
-
-  const RelAlgNode* getSourceNode() const { return node_; }
+  RexSubQuery(const SQLTypeInfo& type, std::shared_ptr<const ExecutionResult> result) : type_(type), result_(result) {}
 
   const SQLTypeInfo& getType() const { return type_; }
+
   std::shared_ptr<const ExecutionResult> getExecutionResult() const { return result_; }
 
-  bool operator==(const RexSubQuery& that) const { return node_ == that.getSourceNode(); }
-
   std::string toString() const override {
-    return "(RexSubQuery " + std::to_string(reinterpret_cast<const uint64_t>(node_)) + ")";
+    return "(RexSubQuery " + std::to_string(reinterpret_cast<const uint64_t>(this)) + ")";
   }
 
-  std::unique_ptr<RexSubQuery> deepCopy() const { return boost::make_unique<RexSubQuery>(node_, type_, result_); }
+  std::unique_ptr<RexSubQuery> deepCopy() const { return boost::make_unique<RexSubQuery>(type_, result_); }
 
  private:
-  const RelAlgNode* node_;
   const SQLTypeInfo type_;
   std::shared_ptr<const ExecutionResult> result_;
 };
@@ -810,10 +805,13 @@ class QueryNotSupported : public std::runtime_error {
   QueryNotSupported(const std::string& reason) : std::runtime_error(reason) {}
 };
 
+class Executor;
+
 std::shared_ptr<const RelAlgNode> deserialize_ra_dag(const std::string& query_ra,
                                                      const Catalog_Namespace::Catalog& cat,
                                                      const CompilationOptions& co,
-                                                     const ExecutionOptions& eo);
+                                                     const ExecutionOptions& eo,
+                                                     Executor* executor);
 
 std::string tree_string(const RelAlgNode*, const size_t indent = 0);
 

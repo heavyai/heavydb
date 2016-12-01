@@ -18,11 +18,11 @@ class RelAlgExecutor {
                                      const ExecutionOptions& eo,
                                      RenderInfo* render_info);
 
-  ExecutionResult executeRelAlgSeq(std::vector<RaExecutionDesc>& ed_list,
-                                   const CompilationOptions& co,
-                                   const ExecutionOptions& eo,
-                                   RenderInfo* render_info,
-                                   const int64_t queue_time_ms);
+  ExecutionResult executeRelAlgQueryUnlocked(const std::string& query_ra,
+                                             const CompilationOptions& co,
+                                             const ExecutionOptions& eo,
+                                             RenderInfo* render_info,
+                                             const int64_t queue_time_ms);
 
   void executeRelAlgStep(const size_t step_idx,
                          std::vector<RaExecutionDesc>&,
@@ -36,6 +36,12 @@ class RelAlgExecutor {
   const std::vector<std::string>& getScanTableNamesInRelAlgSeq() const;
 
  private:
+  ExecutionResult executeRelAlgSeq(std::vector<RaExecutionDesc>& ed_list,
+                                   const CompilationOptions& co,
+                                   const ExecutionOptions& eo,
+                                   RenderInfo* render_info,
+                                   const int64_t queue_time_ms);
+
   ExecutionResult executeCompound(const RelCompound*,
                                   const CompilationOptions&,
                                   const ExecutionOptions&,

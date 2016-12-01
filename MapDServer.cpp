@@ -584,7 +584,7 @@ class MapDHandler : virtual public MapDIf {
     const auto& cat = session_info.get_catalog();
     CompilationOptions co = {session_info.get_executor_device_type(), true, ExecutorOptLevel::Default};
     ExecutionOptions eo = {false, allow_multifrag_, false, allow_loop_joins_, g_enable_watchdog, jit_debug_};
-    const auto ra = deserialize_ra_dag(query_ra, cat, co, eo);
+    const auto ra = deserialize_ra_dag(query_ra, cat, co, eo, nullptr);
     auto ed_list = get_execution_descriptors(ra.get());
     RelAlgExecutor ra_executor(nullptr, cat);
     return ra_executor.validateRelAlgSeq(ed_list);
@@ -1887,7 +1887,9 @@ class MapDHandler : virtual public MapDIf {
     const auto& cat = session_info.get_catalog();
     CompilationOptions co = {session_info.get_executor_device_type(), true, ExecutorOptLevel::Default};
     ExecutionOptions eo = {false, allow_multifrag_, false, allow_loop_joins_, g_enable_watchdog, jit_debug_};
-    const auto ra = deserialize_ra_dag(query_ra, cat, co, eo);
+    auto executor = Executor::getExecutor(
+        cat.get_currentDB().dbId, eo.jit_debug ? "/tmp" : "", eo.jit_debug ? "mapdquery" : "", 0, 0, nullptr);
+    const auto ra = deserialize_ra_dag(query_ra, cat, co, eo, executor.get());
     auto ed_list = get_execution_descriptors(ra.get());
     CHECK(!ed_list.empty());
 #endif  // HAVE_RAVM
