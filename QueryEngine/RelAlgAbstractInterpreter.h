@@ -807,6 +807,12 @@ class QueryNotSupported : public std::runtime_error {
 
 class Executor;
 
+std::shared_ptr<const RelAlgNode> ra_interpret(const rapidjson::Value& query_ast,
+                                               const Catalog_Namespace::Catalog& cat,
+                                               const CompilationOptions& co,
+                                               const ExecutionOptions& eo,
+                                               Executor* executor);
+
 std::shared_ptr<const RelAlgNode> deserialize_ra_dag(const std::string& query_ra,
                                                      const Catalog_Namespace::Catalog& cat,
                                                      const CompilationOptions& co,

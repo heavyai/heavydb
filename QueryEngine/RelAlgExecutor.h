@@ -18,11 +18,11 @@ class RelAlgExecutor {
                                      const ExecutionOptions& eo,
                                      RenderInfo* render_info);
 
-  ExecutionResult executeRelAlgQueryUnlocked(const std::string& query_ra,
-                                             const CompilationOptions& co,
-                                             const ExecutionOptions& eo,
-                                             RenderInfo* render_info,
-                                             const int64_t queue_time_ms);
+  ExecutionResult executeRelAlgSubQuery(const rapidjson::Value& query_ast,
+                                        const CompilationOptions& co,
+                                        const ExecutionOptions& eo,
+                                        RenderInfo* render_info,
+                                        const int64_t queue_time_ms);
 
   void executeRelAlgStep(const size_t step_idx,
                          std::vector<RaExecutionDesc>&,

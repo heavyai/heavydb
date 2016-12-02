@@ -146,9 +146,13 @@ public class MapDRelJsonWriter implements RelWriter {
    * explained.
    */
   public String asString() {
+    return jsonBuilder.toJsonString(asJsonMap());
+  }
+
+  public Map<String, Object> asJsonMap() {
     final Map<String, Object> map = jsonBuilder.map();
     map.put("rels", relList);
-    return jsonBuilder.toJsonString(map);
+    return map;
   }
 }
 

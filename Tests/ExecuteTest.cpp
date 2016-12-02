@@ -2108,6 +2108,9 @@ TEST(Select, Subqueries) {
     c("SELECT CASE WHEN test.x IN (SELECT x FROM test_inner) THEN x ELSE NULL END AS c, COUNT(*) AS n FROM test WHERE "
       "y > 40 GROUP BY c ORDER BY n DESC;",
       dt);
+    c("SELECT COUNT(*) FROM test WHERE x IN (SELECT x FROM test WHERE x > (SELECT COUNT(*) FROM test WHERE x > 7) + 2 "
+      "GROUP BY x);",
+      dt);
 #ifdef ENABLE_JOIN_EXEC
     c("SELECT SUM((x - (SELECT AVG(x) FROM test)) * (x - (SELECT AVG(x) FROM test)) / ((SELECT COUNT(x) FROM test) - "
       "1)) FROM test;",

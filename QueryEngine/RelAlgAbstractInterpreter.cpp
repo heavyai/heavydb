@@ -1014,15 +1014,6 @@ class RaAbstractInterp {
   Executor* executor_;
 };
 
-std::shared_ptr<const RelAlgNode> ra_interpret(const rapidjson::Value& query_ast,
-                                               const Catalog_Namespace::Catalog& cat,
-                                               const CompilationOptions& co,
-                                               const ExecutionOptions& eo,
-                                               Executor* executor) {
-  RaAbstractInterp interp(query_ast, cat, co, eo, executor);
-  return interp.run();
-}
-
 std::unique_ptr<const RexSubQuery> parse_subquery(const rapidjson::Value& expr,
                                                   const Catalog_Namespace::Catalog& cat,
                                                   const CompilationOptions& co,
@@ -1031,11 +1022,11 @@ std::unique_ptr<const RexSubQuery> parse_subquery(const rapidjson::Value& expr,
   const auto& operands = field(expr, "operands");
   CHECK(operands.IsArray());
   CHECK_GE(operands.Size(), unsigned(0));
-  const auto subquery_str = json_str(field(expr, "subquery"));
+  const auto& subquery_ast = field(expr, "subquery");
 
   // Execute the subquery and cache the result.
   RelAlgExecutor ra_executor(executor, cat);
-  auto result = ra_executor.executeRelAlgQueryUnlocked(subquery_str, co, eo, nullptr, 0);
+  auto result = ra_executor.executeRelAlgSubQuery(subquery_ast, co, eo, nullptr, 0);
 
   auto row_set = &result.getRows();
   CHECK(row_set);
@@ -1046,6 +1037,15 @@ std::unique_ptr<const RexSubQuery> parse_subquery(const rapidjson::Value& expr,
 
 }  // namespace
 
+std::shared_ptr<const RelAlgNode> ra_interpret(const rapidjson::Value& query_ast,
+                                               const Catalog_Namespace::Catalog& cat,
+                                               const CompilationOptions& co,
+                                               const ExecutionOptions& eo,
+                                               Executor* executor) {
+  RaAbstractInterp interp(query_ast, cat, co, eo, executor);
+  return interp.run();
+}
+
 std::shared_ptr<const RelAlgNode> deserialize_ra_dag(const std::string& query_ra,
                                                      const Catalog_Namespace::Catalog& cat,
                                                      const CompilationOptions& co,
@@ -1053,9 +1053,7 @@ std::shared_ptr<const RelAlgNode> deserialize_ra_dag(const std::string& query_ra
                                                      Executor* executor) {
   rapidjson::Document query_ast;
   query_ast.Parse(query_ra.c_str());
-  if (query_ast.HasParseError()) {
-    throw std::runtime_error("Failed to deserialize the query");
-  }
+  CHECK(!query_ast.HasParseError());
   CHECK(query_ast.IsObject());
   return ra_interpret(query_ast, cat, co, eo, executor);
 }

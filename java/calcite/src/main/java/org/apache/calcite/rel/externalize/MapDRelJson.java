@@ -338,7 +338,9 @@ public class MapDRelJson {
         map.put("operands", list);
         map.put("type", toJson(node.getType()));
         if (node instanceof RexSubQuery) {
-          map.put("subquery", MapDSerializer.toString(((RexSubQuery) node).rel));
+          final MapDRelJsonWriter subqueryWriter = new MapDRelJsonWriter();
+          ((RexSubQuery) node).rel.explain(subqueryWriter);
+          map.put("subquery", subqueryWriter.asJsonMap());
         }
         if (call.getOperator() instanceof SqlFunction) {
           switch (((SqlFunction) call.getOperator()).getFunctionType()) {
