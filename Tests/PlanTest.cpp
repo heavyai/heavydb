@@ -24,7 +24,7 @@ using namespace Planner;
 #define BASE_PATH "./tmp"
 #endif
 
-#ifdef RUN_ASAN
+#ifdef STANDALONE_CALCITE
 #define CALCITEPORT 9093
 #else
 #define CALCITEPORT -1

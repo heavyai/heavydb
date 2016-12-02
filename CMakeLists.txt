@@ -85,13 +85,23 @@ else (ENABLE_LLVM_DBG)
 set(llvm_config_cmd llvm-config)
 endif (ENABLE_LLVM_DBG)
 
-# address sanitizer
+# address and thread sanitizer
+option(ENABLE_STANDALONE_CALCITE "Require standalone Calcite server" OFF)
 option(ENABLE_ASAN "Enable address sanitizer" OFF)
+option(ENABLE_TSAN "Enable thread sanitizer" OFF)
 if(ENABLE_ASAN)
-  set(ASAN_FLAGS "-fsanitize=address -O1 -fno-omit-frame-pointer")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${ASAN_FLAGS}")
-  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${ASAN_FLAGS}")
-  add_definitions("-DRUN_ASAN")
+  set(SAN_FLAGS "-fsanitize=address -O1 -fno-omit-frame-pointer")
+elseif(ENABLE_TSAN)
+  set(SAN_FLAGS "-fsanitize=thread -fPIC -O1 -fno-omit-frame-pointer")
+endif()
+if(ENABLE_ASAN OR ENABLE_TSAN)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${SAN_FLAGS}")
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${SAN_FLAGS}")
+  set(ENABLE_STANDALONE_CALCITE ON)
+endif()
+
+if (ENABLE_STANDALONE_CALCITE)
+  add_definitions("-DSTANDALONE_CALCITE")
 endif()
 
 set(llvm_config_inc_arg "--includedir")

@@ -14,7 +14,7 @@
 
 #include <boost/filesystem/operations.hpp>
 
-#ifdef RUN_ASAN
+#ifdef STANDALONE_CALCITE
 #define CALCITEPORT 9093
 #else
 #define CALCITEPORT -1
