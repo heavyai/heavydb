@@ -1023,6 +1023,35 @@ void BinOper::group_predicates(std::list<const Expr*>& scan_predicates,
     const_predicates.push_back(this);
 }
 
+namespace {
+
+bool is_expr_nullable(const Analyzer::Expr* expr) {
+  const auto const_expr = dynamic_cast<const Analyzer::Constant*>(expr);
+  if (const_expr) {
+    return const_expr->get_is_null();
+  }
+  const auto& expr_ti = expr->get_type_info();
+  return !expr_ti.get_notnull();
+}
+
+bool is_in_values_nullable(const std::shared_ptr<Analyzer::Expr>& a,
+                           const std::list<std::shared_ptr<Analyzer::Expr>>& l) {
+  if (is_expr_nullable(a.get())) {
+    return true;
+  }
+  for (const auto& v : l) {
+    if (is_expr_nullable(v.get())) {
+      return true;
+    }
+  }
+  return false;
+}
+
+}  // namespace
+
+InValues::InValues(std::shared_ptr<Analyzer::Expr> a, const std::list<std::shared_ptr<Analyzer::Expr>>& l)
+    : Expr(kBOOLEAN, !is_in_values_nullable(a, l)), arg(a), value_list(l) {}
+
 void InValues::group_predicates(std::list<const Expr*>& scan_predicates,
                                 std::list<const Expr*>& join_predicates,
                                 std::list<const Expr*>& const_predicates) const {

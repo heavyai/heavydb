@@ -2111,6 +2111,10 @@ TEST(Select, Subqueries) {
     c("SELECT COUNT(*) FROM test WHERE x IN (SELECT x FROM test WHERE x > (SELECT COUNT(*) FROM test WHERE x > 7) + 2 "
       "GROUP BY x);",
       dt);
+    c("SELECT COUNT(*) FROM test WHERE ofd IN (SELECT ofd FROM test GROUP BY ofd);", dt);
+    c("SELECT COUNT(*) FROM test WHERE ofd NOT IN (SELECT ofd FROM test GROUP BY ofd);", dt);
+    c("SELECT COUNT(*) FROM test WHERE ss IN (SELECT ss FROM test GROUP BY ss);", dt);
+    c("SELECT COUNT(*) FROM test WHERE ss NOT IN (SELECT ss FROM test GROUP BY ss);", dt);
 #ifdef ENABLE_JOIN_EXEC
     c("SELECT SUM((x - (SELECT AVG(x) FROM test)) * (x - (SELECT AVG(x) FROM test)) / ((SELECT COUNT(x) FROM test) - "
       "1)) FROM test;",

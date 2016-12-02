@@ -1022,15 +1022,16 @@ llvm::Value* Executor::codegen(const Analyzer::InValues* expr, const Compilation
       return in_vals_bitmap->codegen(lhs_lvs.front(), this);
     }
   }
-  const auto& arg_ti = in_arg->get_type_info();
-  llvm::Value* result = llvm::ConstantInt::get(llvm::IntegerType::getInt1Ty(cgen_state_->context_), false);
-  if (arg_ti.get_notnull()) {
+  const auto& expr_ti = expr->get_type_info();
+  llvm::Value* result{nullptr};
+  if (expr_ti.get_notnull()) {
+    result = llvm::ConstantInt::get(llvm::IntegerType::getInt1Ty(cgen_state_->context_), false);
     for (auto in_val : expr->get_value_list()) {
       result = cgen_state_->ir_builder_.CreateOr(
           result, toBool(codegenCmp(kEQ, kONE, lhs_lvs, in_arg->get_type_info(), in_val.get(), co)));
     }
   } else {
-    result = castToTypeIn(result, 8);
+    result = inlineIntNull(SQLTypeInfo(kBOOLEAN, false));
     const auto& expr_ti = expr->get_type_info();
     CHECK(expr_ti.is_boolean());
     for (auto in_val : expr->get_value_list()) {
@@ -1038,6 +1039,7 @@ llvm::Value* Executor::codegen(const Analyzer::InValues* expr, const Compilation
       result = cgen_state_->emitCall("logical_or", {result, crt, inlineIntNull(expr_ti)});
     }
   }
+  CHECK(result);
   return result;
 }
 

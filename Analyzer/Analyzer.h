@@ -455,8 +455,7 @@ class Subquery : public Expr {
  */
 class InValues : public Expr {
  public:
-  InValues(std::shared_ptr<Analyzer::Expr> a, const std::list<std::shared_ptr<Analyzer::Expr>>& l)
-      : Expr(kBOOLEAN, true), arg(a), value_list(l) {}
+  InValues(std::shared_ptr<Analyzer::Expr> a, const std::list<std::shared_ptr<Analyzer::Expr>>& l);
   const Expr* get_arg() const { return arg.get(); }
   const std::shared_ptr<Analyzer::Expr> get_own_arg() const { return arg; }
   const std::list<std::shared_ptr<Analyzer::Expr>>& get_value_list() const { return value_list; }
