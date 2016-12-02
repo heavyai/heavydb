@@ -1061,7 +1061,7 @@ InValuesBitmap* Executor::createInValuesBitmap(const Analyzer::InValues* in_valu
       CHECK(in_val_ti == ti);
       if (ti.is_string()) {
         CHECK(sd);
-        const auto string_id = sd->get(*in_val_const->get_constval().stringval);
+        const auto string_id = in_val_const->get_is_null() ? -1 : sd->get(*in_val_const->get_constval().stringval);
         if (string_id >= 0) {
           values.push_back(string_id);
         }
