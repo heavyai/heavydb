@@ -16,6 +16,8 @@ ExecutionResult RelAlgExecutor::executeRelAlgQuery(const std::string& query_ra,
   // capture the lock acquistion time
   auto clock_begin = timer_start();
   std::lock_guard<std::mutex> lock(executor_->execute_mutex_);
+  Executor::RowSetHolder row_set_holder(executor_);
+  executor_->row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>();
   InputTableInfoCacheScope input_table_info_cache_scope(executor_);
   int64_t queue_time_ms = timer_stop(clock_begin);
   const auto ra = deserialize_ra_dag(query_ra, cat_, co, eo, executor_);
@@ -41,10 +43,8 @@ ExecutionResult RelAlgExecutor::executeRelAlgSeq(std::vector<RaExecutionDesc>& e
                                                  const ExecutionOptions& eo,
                                                  RenderInfo* render_info,
                                                  const int64_t queue_time_ms) {
-  Executor::RowSetHolder row_set_holder(executor_);
   decltype(temporary_tables_)().swap(temporary_tables_);
   decltype(target_exprs_owned_)().swap(target_exprs_owned_);
-  executor_->row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>();
   executor_->catalog_ = &cat_;
   executor_->temporary_tables_ = &temporary_tables_;
   time(&now_);
