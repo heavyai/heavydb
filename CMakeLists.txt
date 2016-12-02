@@ -217,9 +217,6 @@ enable_testing()
 ADD_SUBDIRECTORY    (Tests)
 ADD_SUBDIRECTORY    (SampleCode)
 
-set(mapd_source_files main.cpp ${CMAKE_BINARY_DIR}/MapDRelease.h)
-add_executable(mapd ${mapd_source_files})
-
 set(initdb_source_files initdb.cpp)
 add_executable(initdb ${initdb_source_files})
 
@@ -277,7 +274,6 @@ add_custom_target(rerun_cmake ALL
   COMMAND cmake .
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
   )
-add_dependencies(mapd rerun_cmake)
 add_dependencies(mapd_server rerun_cmake)
 
 set_source_files_properties(${CMAKE_BINARY_DIR}/gen-cpp/MapD.cpp GENERATED)
@@ -292,7 +288,6 @@ endif()
 
 MESSAGE( STATUS "Boost_LIBRARIES: " ${Boost_LIBRARIES} )
 
-target_link_libraries (mapd ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${Glog_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${LLVM_LINKER_FLAGS} "-lz -lncurses")
 target_link_libraries (mapd_server ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${Glog_LIBRARIES} ${Thrift_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${LLVM_LINKER_FLAGS} ${PROFILER_LIBS} poly2tri "-lz -lncurses")
 target_link_libraries (initdb Shared Catalog Fragmenter Chunk SqliteConnector DataMgr StringDictionary ${Boost_LIBRARIES} ${CMAKE_DL_LIBS})
 
