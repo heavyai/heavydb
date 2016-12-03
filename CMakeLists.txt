@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 2.8)
 
 PROJECT(mapd)
 
-set(MAPD_VERSION_RAW "2.0.0dev")
+set(MAPD_VERSION_RAW "2.0.1dev")
 set(MAPD_IMMERSE_URL "http://builds.mapd.com/frontend/mapd2-dashboard-v1-latest-release.zip")
 set(MAPD_IMMERSEV2_URL "http://builds.mapd.com/frontend/mapd2-dashboard-v2-latest-release.zip")
 option(MAPD_USE_IMMERSEV2 "Bundle Immerse v2 as default" ON)
