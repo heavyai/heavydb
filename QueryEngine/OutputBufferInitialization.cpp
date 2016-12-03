@@ -7,18 +7,18 @@
 namespace {
 
 inline std::vector<int64_t> init_agg_val_vec(const std::vector<TargetInfo>& targets,
-                                             size_t agg_col_count,
-                                             const bool is_group_by,
-                                             const size_t min_byte_width_to_compact) {
+                                             const QueryMemoryDescriptor& query_mem_desc) {
+  const auto agg_col_count = query_mem_desc.agg_col_widths.size();
   std::vector<int64_t> agg_init_vals(agg_col_count, 0);
+  const bool is_group_by{!query_mem_desc.group_col_widths.empty()};
   for (size_t target_idx = 0, agg_col_idx = 0; target_idx < targets.size() && agg_col_idx < agg_col_count;
        ++target_idx, ++agg_col_idx) {
     const auto agg_info = targets[target_idx];
     if (!agg_info.is_agg) {
       continue;
     }
-    agg_init_vals[agg_col_idx] =
-        get_agg_initial_val(agg_info.agg_kind, get_compact_type(agg_info), is_group_by, min_byte_width_to_compact);
+    agg_init_vals[agg_col_idx] = get_agg_initial_val(
+        agg_info.agg_kind, get_compact_type(agg_info), is_group_by, query_mem_desc.getCompactByteWidth());
     if (kAVG == agg_info.agg_kind) {
       agg_init_vals[++agg_col_idx] = 0;
     }
@@ -171,11 +171,10 @@ int64_t get_initial_val(const TargetInfo& target_info, const size_t min_byte_wid
 
 std::vector<int64_t> init_agg_val_vec(const std::vector<Analyzer::Expr*>& targets,
                                       const std::list<std::shared_ptr<Analyzer::Expr>>& quals,
-                                      size_t agg_col_count,
-                                      const bool is_group_by,
-                                      const size_t min_byte_width_to_compact) {
+                                      const QueryMemoryDescriptor& query_mem_desc) {
   std::vector<TargetInfo> target_infos;
   target_infos.reserve(targets.size());
+  const auto agg_col_count = query_mem_desc.agg_col_widths.size();
   for (size_t target_idx = 0, agg_col_idx = 0; target_idx < targets.size() && agg_col_idx < agg_col_count;
        ++target_idx, ++agg_col_idx) {
     const auto target_expr = targets[target_idx];
@@ -189,7 +188,7 @@ std::vector<int64_t> init_agg_val_vec(const std::vector<Analyzer::Expr*>& target
     }
     target_infos.push_back(target);
   }
-  return init_agg_val_vec(target_infos, agg_col_count, is_group_by, min_byte_width_to_compact);
+  return init_agg_val_vec(target_infos, query_mem_desc);
 }
 
 const Analyzer::Expr* agg_arg(const Analyzer::Expr* expr) {

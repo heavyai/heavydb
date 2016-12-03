@@ -17,6 +17,8 @@ namespace Analyzer {
 class Expr;
 }  // Analyzer
 
+class QueryMemoryDescriptor;
+
 std::pair<int64_t, int64_t> inline_int_max_min(const size_t byte_width);
 
 std::pair<uint64_t, uint64_t> inline_uint_max_min(const size_t byte_width);
@@ -30,9 +32,7 @@ int64_t get_agg_initial_val(const SQLAgg agg,
 
 std::vector<int64_t> init_agg_val_vec(const std::vector<Analyzer::Expr*>& targets,
                                       const std::list<std::shared_ptr<Analyzer::Expr>>& quals,
-                                      size_t agg_col_count,
-                                      const bool is_group_by,
-                                      const size_t min_byte_width_to_compact);
+                                      const QueryMemoryDescriptor& query_mem_desc);
 
 const Analyzer::Expr* agg_arg(const Analyzer::Expr* expr);
 
