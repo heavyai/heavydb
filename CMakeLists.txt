@@ -2,10 +2,10 @@ cmake_minimum_required(VERSION 2.8)
 
 PROJECT(mapd)
 
-set(MAPD_VERSION_RAW "1.2.11dev")
+set(MAPD_VERSION_RAW "2.0.0dev")
 set(MAPD_IMMERSE_URL "http://builds.mapd.com/frontend/mapd2-dashboard-v1-latest-release.zip")
 set(MAPD_IMMERSEV2_URL "http://builds.mapd.com/frontend/mapd2-dashboard-v2-latest-release.zip")
-option(MAPD_USE_IMMERSEV2 "Only bundle Immerse v2" OFF)
+option(MAPD_USE_IMMERSEV2 "Bundle Immerse v2 as default" ON)
 string(TIMESTAMP MAPD_BUILD_DATE "%Y%m%d")
 
 if($ENV{BUILD_NUMBER})
@@ -297,7 +297,8 @@ set(CPACK_PACKAGE_VENDOR "MapD Technologies, Inc.")
 # Frontend
 if (MAPD_USE_IMMERSEV2)
   set(MAPD_IMMERSE_URL ${MAPD_IMMERSEV2_URL})
-  set(MAPD_PACKAGE_FLAGS "${MAPD_PACKAGE_FLAGS}-v2")
+else()
+  set(MAPD_PACKAGE_FLAGS "${MAPD_PACKAGE_FLAGS}-v1")
 endif()
 option(MAPD2_FRONTEND_DOWNLOAD "Download mapd2-frontend for packaging" ON)
 set(MAPD_IMMERSE_URL ${MAPD_IMMERSE_URL} CACHE STRING "URL to bundled frontend")
