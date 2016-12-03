@@ -474,8 +474,9 @@ func main() {
 	mux.HandleFunc("/metrics/", metricsHandler)
 	mux.HandleFunc("/metrics/reset/", metricsResetHandler)
 
-	// Required while Immerse V2 beta is deployed to the `/v2/` subdir of Immerse
-	// V1. To be removed once Immerse V1 is officially deprecated.
+	// Required while Immerse V1 or V2 is deployed to a subdir of the frontend.
+	// To be removed once Immerse V1 is no longer distributed.
+	mux.HandleFunc("/v1/servers.json", serversHandler)
 	mux.HandleFunc("/v2/servers.json", serversHandler)
 
 	if profile {
