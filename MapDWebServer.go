@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net"
@@ -44,6 +45,7 @@ var (
 	compress      bool
 	enableMetrics bool
 	connTimeout   time.Duration
+	version       string
 )
 
 var (
@@ -99,6 +101,7 @@ func init() {
 	pflag.Bool("profile", false, "enable profiling, accessible from /debug/pprof")
 	pflag.Bool("compress", false, "enable gzip compression")
 	pflag.Bool("metrics", false, "enable Thrift call metrics, accessible from /metrics")
+	pflag.Bool("version", false, "return version")
 	pflag.CommandLine.MarkHidden("compress")
 	pflag.CommandLine.MarkHidden("profile")
 	pflag.CommandLine.MarkHidden("metrics")
@@ -122,6 +125,7 @@ func init() {
 	viper.BindPFlag("config", pflag.CommandLine.Lookup("config"))
 	viper.BindPFlag("read-only", pflag.CommandLine.Lookup("read-only"))
 	viper.BindPFlag("quiet", pflag.CommandLine.Lookup("quiet"))
+	viper.BindPFlag("version", pflag.CommandLine.Lookup("version"))
 
 	viper.SetDefault("http-port", 9090)
 
@@ -134,6 +138,11 @@ func init() {
 	viper.AddConfigPath("/etc/mapd")
 	viper.AddConfigPath("$HOME/.config/mapd")
 	viper.AddConfigPath(".")
+
+	if viper.GetBool("version") {
+		fmt.Println("mapd_web_server " + version)
+		os.Exit(0)
+	}
 
 	if viper.IsSet("config") {
 		viper.SetConfigFile(viper.GetString("config"))
