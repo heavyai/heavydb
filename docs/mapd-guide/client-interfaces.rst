@@ -4,7 +4,7 @@ Client Interfaces
 ``Apache Thrift``
 ~~~~~~~~~~~~~~~~~
 
-MapD uses `Apache Thrift <https://thrift.apache.org>`__ to generate
+MapD Core uses `Apache Thrift <https://thrift.apache.org>`__ to generate
 client-side interfaces. The *interface definitions* are in
 ``$MAPD_PATH/mapd.thrift``. See Apache Thrift documentation on how to
 generate client-side interfaces for different programming languages with
@@ -13,7 +13,7 @@ Thrift. Also see ``$MAPD_PATH/samples`` for sample client code.
 ``JDBC``
 ~~~~~~~~
 
-Mapd also supports JDBC connections
+Mapd Core also supports JDBC connections
 
 The jar is available at ``$MAPD_PATH/bin/mapdjdbc-1.0-SNAPSHOT-jar-with-dependencies.jar``
 
@@ -103,7 +103,7 @@ To compile and excute this example:
 ``RJDBC``
 ~~~~~~~~
 
-Mapd also supports R via `RJDBC <https://www.rforge.net/RJDBC>`__.
+Mapd Core also supports R via `RJDBC <https://www.rforge.net/RJDBC>`__.
 
 Simple example on local host
 

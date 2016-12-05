@@ -6,7 +6,7 @@ Installation
 Common Dependencies / CPU-only Installation
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-All installations of MapD depend on Java 1.6+/\ ``libjvm``, provided by
+All installations of MapD Core depend on Java 1.6+/\ ``libjvm``, provided by
 a Java Runtime Environment (JRE), and ``libldap``, provided by OpenLDAP
 and similar packages. ``libldap`` is available by default on most common
 Linux distributions and therefore does not require any special
@@ -28,7 +28,7 @@ By default a symlink pointing to the newly installed JRE will be placed
 at ``/usr/lib/jvm/jre-1.8.0-openjdk``, with the ``libjvm`` library
 residing in the subdirectory ``lib/amd64/server``. This subdirectory
 must be added to your ``LD_LIBRARY_PATH`` environment variable in order
-to start MapD:
+to start the MapD Core Server:
 
 ::
 
@@ -52,7 +52,7 @@ By default a symlink pointing to the newly installed JRE will be placed
 at ``/usr/lib/jvm/default-java``, with the ``libjvm`` library residing
 in the subdirectory ``jre/lib/amd64/server``. This subdirectory must be
 added to your ``LD_LIBRARY_PATH`` environment variable in order to start
-MapD:
+the MapD Core Server:
 
 ::
 
@@ -65,9 +65,9 @@ This command may be added to any file managing your environment such as
 Xorg and NVIDIA GPU Driver Installation
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-CUDA-enabled installations of MapD depend on ``libcuda``, which is
+CUDA-enabled installations of MapD Core depend on ``libcuda``, which is
 provided by the NVIDIA GPU Drivers and NVIDIA CUDA Toolkit. The backend
-rendering feature of MapD additionally requires a working installation
+rendering feature of MapD Core additionally requires a working installation
 of Xorg.
 
 The NVIDIA CUDA Toolkit, which includes the NVIDIA GPU drivers, is
@@ -101,7 +101,7 @@ instructions for enabling this repository.
        sudo yum install epel-release
 
 2. Install Xorg and required libraries. This is only required to take
-   advantage of the backend rendering features of MapD.
+   advantage of the backend rendering features of MapD Core.
 
    ::
 
@@ -121,7 +121,7 @@ instructions for enabling this repository.
    install the GPU drivers. ``yum`` will automatically install some
    additional dependencies for the ``cuda-drivers`` package, including:
    ``dkms``, ``gcc``, ``kernel-devel``, and ``kernel-headers``. The CUDA
-   Toolkit (package ``cuda``) is *not* required to run MapD, but the GPU
+   Toolkit (package ``cuda``) is *not* required to run MapD Core, but the GPU
    drivers (package ``cuda-drivers``, which include libcuda) are.
 
    ::
@@ -144,7 +144,7 @@ Zone <https://developer.nvidia.com/cuda-downloads>`__.
 
 1. Install Xorg and required libraries, and disable the automatically
    enabled ``graphical`` target. This is only required to take advantage
-   of the backend rendering features of MapD.
+   of the backend rendering features of MapD Core.
 
    ::
 
@@ -178,11 +178,11 @@ CUDA.
 Environment Variables
 ---------------------
 
-For CPU-only installations of MapD, skip to section `MapD
+For CPU-only installations of MapD Core, skip to section `MapD
 Installation <#mapd-installation>`__ below.
 
-MapD depends on ``libcuda``, which must be available in your environment
-in order to run MapD. The NVIDIA GPU drivers usually make ``libcuda``
+MapD Core Server depends on ``libcuda``, which must be available in your environment
+in order to run MapD Core. The NVIDIA GPU drivers usually make ``libcuda``
 available by default by installing it to a system-wide ``lib`` directory
 such as ``/usr/lib64`` (on CentOS/RHEL) or ``/usr/lib/x86_64-linux-gnu``
 (on Ubuntu).
@@ -301,7 +301,7 @@ these cases the Xorg BusIDs would be of the form ``PCI:0:3:0``.
 MapD Installation
 ~~~~~~~~~~~~~~~~~
 
-MapD is distributed as a .tar.gz archive. Other package types are
+MapD Core is distributed as a .tar.gz archive. Other package types are
 available upon request.
 
 To install, move the archive to the desired installation directory

@@ -1,9 +1,9 @@
 Dependencies
 ============
 
-MapD is distributed as a group of mostly statically-linked executables,
+MapD Core is distributed as a group of mostly statically-linked executables,
 which minimizes the number of dependencies required. The following are
-the minimum requirements for running MapD.
+the minimum requirements for running MapD Core.
 
 Basic installation instructions for all dependencies are provided in the
 :ref:`installation` section.
@@ -32,4 +32,4 @@ Libraries and Drivers
 -  libjvm, provided by Java 1.6 or later.
 -  libldap.
 -  NVIDIA GPU Drivers. Not required for CPU-only installations.
--  Xorg. Only required to utilize MapD's backend rendering feature.
+-  Xorg. Only required to utilize MapD Core's backend rendering feature.

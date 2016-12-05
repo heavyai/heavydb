@@ -1,7 +1,7 @@
 Configuration
 =============
 
-Before starting MapD, the ``data`` directory must be initialized. To do
+Before starting MapD Core, the ``data`` directory must be initialized. To do
 so, first create an empty directory at the desired path (``$MAPD_DATA``)
 and change the owner to the user that the server will run as
 (``$MAPD_USER``):
@@ -13,7 +13,7 @@ and change the owner to the user that the server will run as
 
 where ``$MAPD_USER`` is the system user account that the server will run
 as, such as ``mapd``, and ``$MAPD_DATA`` is the desired path to the MapD
-``data`` directory, such as ``/var/lib/mapd/data``.
+Core ``data`` directory, such as ``/var/lib/mapd/data``.
 
 Finally, run ``$MAPD_PATH/bin/initdb`` with the data directory path as
 the argument:
@@ -25,8 +25,8 @@ the argument:
 Configuration file
 ~~~~~~~~~~~~~~~~~~
 
-MapD supports storing options in a configuration file. This is useful
-if, for example, you need to run the MapD database and/or web servers on
+MapD Core supports storing options in a configuration file. This is useful
+if, for example, you need to run the MapD Core Server and/ Web Server on
 different ports than the default. An example configuration file is
 provided under ``$MAPD_PATH/mapd.conf.sample``.
 

@@ -84,9 +84,9 @@ Example:
 
 
 SQL Importer executes a select statement on another database via JDBC
-and brings the result set into MapD.
+and brings the result set into MapD Core.
 
-If the table doesn't exist it will create the table in MapD.
+If the table doesn't exist it will create the table in MapD Core.
 
 If the truncate flag is set it will truncate the contents in the file.
 
@@ -135,11 +135,11 @@ PostgreSQL Example:
     <data stream> | StreamInsert <table> <mapd database> --host <localhost> --port 9091
     -u <mapd_user> -p <mapd_pwd> --delim '\t' --batch 1000
 
-Stream data into MapD by attaching the StreamInsert program onto the end
+Stream data into MapD Core by attaching the StreamInsert program onto the end
 of a data stream. The data stream could be another program printing to
 standard out, a Kafka endpoint, or any other real-time stream output.
 Users may specify the appropriate batch size according to the expected
-stream rates and desired insert frequency. The MapD target table must
+stream rates and desired insert frequency. The target table must
 already exist before attempting to stream data into the table.
 
 Example:
@@ -152,7 +152,7 @@ Example:
 ``HDFS``
 ~~~~~~~~
 
-Consume a CSV or Parquet file residing in HDFS into MapD
+Consume a CSV or Parquet file residing in HDFS into MapD Core.
 
 Copy the MapD JDBC driver into the sqoop lib, normally
 /usr/lib/sqoop/lib/

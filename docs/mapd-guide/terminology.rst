@@ -8,9 +8,9 @@ Environment variables:
 
 Programs and scripts:
 
--  ``mapd_server``: MapD database server. Located at
+-  ``mapd_server``: MapD Core Server. Located at
    ``$MAPD_PATH/bin/mapd_server``.
--  ``mapd_web_server``: Web server which hosts the web-based frontend
+-  ``mapd_web_server``: MapD Core Web Server which hosts the MapD Immerse frontend
    and provides database access over HTTP(S). Located at
    ``$MAPD_PATH/bin/mapd_web_server``.
 -  ``initdb``: Initializes the MapD data directory. Located at
@@ -25,5 +25,5 @@ Programs and scripts:
 Other
 
 -  ``systemd``: init system used by most major Linux distributions.
-   Sample ``systemd`` target files for starting MapD are provided in
+   Sample ``systemd`` target files for starting MapD Core are provided in
    ``$MAPD_PATH/systemd``.

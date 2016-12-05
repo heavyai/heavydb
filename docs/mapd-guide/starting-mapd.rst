@@ -1,16 +1,16 @@
-Starting and Stopping MapD Services
-===================================
+Starting and Stopping MapD Core Services
+========================================
 
-MapD consists of two system services: ``mapd_server`` and
+MapD Core consists of two system services: ``mapd_server`` and
 ``mapd_web_server``. These services may be started individually using
 ``systemd`` or run via the interactive script ``startmapd``. For
 permanent installations, it is recommended that you use ``systemd`` to
-manage the MapD services.
+manage the MapD Core services.
 
-MapD Via ``startmapd``
-~~~~~~~~~~~~~~~~~~~~~~
+MapD Core Via ``startmapd``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-MapD may be run via the ``startmapd`` script provided in
+MapD Core may be run via the ``startmapd`` script provided in
 ``$MAPD_PATH/startmapd``. This script handles creating the ``data``
 directory if it does not exist, inserting a sample dataset if desired,
 and starting both ``mapd_server`` and ``mapd_web_server``.
@@ -23,10 +23,10 @@ environment variable before running ``startmapd``:
     sudo X :1 &
     export DISPLAY=:1
 
-Starting MapD Via ``startmapd``
--------------------------------
+Starting MapD Core Via ``startmapd``
+------------------------------------
 
-To use ``startmapd`` to start MapD, run:
+To use ``startmapd`` to start MapD Core, run:
 
 ::
 
@@ -40,22 +40,22 @@ if using a configuration file, or
 
 to explicitly specify the ``$MAPD_DATA`` directory.
 
-Stopping MapD Via ``startmapd``
--------------------------------
+Stopping MapD Core Via ``startmapd``
+------------------------------------
 
-To stop an instance of MapD that was started with the ``startmapd``
+To stop an instance of MapD Core that was started with the ``startmapd``
 script, simply kill the ``startmapd`` process via ``CTRL-C`` or
 ``pkill startmapd``. You can also use ``pkill mapd`` to ensure all
 processes have been killed.
 
-MapD Via ``systemd``
-~~~~~~~~~~~~~~~~~~~~
+MapD Core Via ``systemd``
+~~~~~~~~~~~~~~~~~~~~~~~~~
 
-For permanent installations of MapD, it is recommended that you use
-``systemd`` to manage the MapD services. ``systemd`` automatically
+For permanent installations of MapD Core, it is recommended that you use
+``systemd`` to manage the MapD Core services. ``systemd`` automatically
 handles tasks such as log management, starting the services on restart,
 and restarting the services in case they die. Instructions for
-configuring your system to start MapD via ``systemd`` are in the
+configuring your system to start MapD Core via ``systemd`` are in the
 `Initial Setup <#initial-setup>`__ section below.
 
 Initial Setup
@@ -72,12 +72,12 @@ into the correct location.
 
 This script will ask for the location of the following directories:
 
--  ``MAPD_PATH``: path to the MapD installation directory
--  ``MAPD_STORAGE``: path to the storage directory for MapD data and
+-  ``MAPD_PATH``: path to the MapD Core installation directory
+-  ``MAPD_STORAGE``: path to the storage directory for MapD Core data and
    configuration files
--  ``MAPD_USER``: user to run MapD as. User must exist prior to running
+-  ``MAPD_USER``: user to run MapD Core as. User must exist prior to running
    the script.
--  ``MAPD_GROUP``: group to run MapD as. Group must exist prior to
+-  ``MAPD_GROUP``: group to run MapD Core as. Group must exist prior to
    running the script.
 -  ``MAPD_LIBJVM_DIR``: path to the ``libjvm`` library directory, as
    determined in the *Common Dependencies* section above.
@@ -94,30 +94,30 @@ to utilize backend rendering:
     sudo systemctl start mapd_xorg
     sudo systemctl enable mapd_xorg # start mapd_xorg on startup
 
-Starting MapD Via ``systemd``
------------------------------
+Starting MapD Core Via ``systemd``
+----------------------------------
 
-To manually start MapD via ``systemd``, run:
+To manually start MapD Core via ``systemd``, run:
 
 ::
 
     sudo systemctl start mapd_server
     sudo systemctl start mapd_web_server
 
-Stopping MapD Via ``systemd``
------------------------------
+Stopping MapD Core Via ``systemd``
+----------------------------------
 
-To manually stop MapD via ``systemd``, run:
+To manually stop MapD Core via ``systemd``, run:
 
 ::
 
     sudo systemctl stop mapd_server
     sudo systemctl stop mapd_web_server
 
-Enabling MapD on Startup
-------------------------
+Enabling MapD Core on Startup
+-----------------------------
 
-To enable the MapD services to be started on restart, run:
+To enable the MapD Core services to be started on restart, run:
 
 ::
 

@@ -2,7 +2,7 @@ Users and Databases
 ===================
 
 Users and databases can only be manipulated when connected to the MapD
-system database ``mapd`` as a super user. MapD ships with a default
+Core system database ``mapd`` as a super user. MapD Core ships with a default
 super user named ``mapd`` with default password ``HyperInteractive``.
 
 ``CREATE USER``

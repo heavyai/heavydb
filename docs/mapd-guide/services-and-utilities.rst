@@ -1,7 +1,7 @@
-MapD Services and Utilities
-===========================
+MapD Core Services and Utilities
+================================
 
-Assuming ``$MAPD_PATH`` is the directory where MapD software is
+Assuming ``$MAPD_PATH`` is the directory where MapD Core is
 installed, make sure that ``$MAPD_PATH/bin`` is in ``PATH``:
 
 ::
@@ -29,15 +29,15 @@ Services
                            [--version|-v]
                            [--help|-h]
 
-This command starts the MapD server process. ``$MAPD_DATA`` must match
+This command starts the MapD Core Server process. ``$MAPD_DATA`` must match
 that in the ``initdb`` command when it was run. The options are:
 
 -  ``[--cpu|--gpu]``: Execute queries on CPU-only or on both GPU and
    CPU. The default is ``--gpu``.
 -  ``[--config]``: Path to mapd.conf.
--  ``[{-p|--port} <port number>]``: Specify the port for MapD's
+-  ``[{-p|--port} <port number>]``: Specify the port for MapD Core Server's
    binary-over-TCP protocol. The default is port 9091.
--  ``[{--http-port} <port number>]``: Specify the port for MapD's
+-  ``[{--http-port} <port number>]``: Specify the port for MapD Core Server's
    JSON-over-HTTP protocol. The default is port 9090.
 -  ``[--ldap-uri <string>]``: LDAP URI for authentication, for example
    ldap://ldap.mycompany.com
@@ -69,9 +69,9 @@ that in the ``initdb`` command when it was run. The options are:
                     [{--tmpdir} </path/to/tmp>]
                     [{--timeout} <1h0m0s>]
 
-This command starts the MapD web server. This server provides access to
-MapD's visualization frontend and allows the frontend to communicate
-with the MapD Server. HTTPS certificates and keys may be generated via
+This command starts the MapD Core Web Server. This server provides access to
+the MapD Immerse visualization frontend and allows MapD Immerse to communicate
+with MapD Core Server. HTTPS certificates and keys may be generated via
 the provided ``generate_cert`` utility, or provided by your Certificate
 Authority. The options are:
 
@@ -82,8 +82,8 @@ Authority. The options are:
 -  ``[{--backend-url} <backend URL>]``: Specify the URL to the backend
    HTTP server. The default is ``http://localhost:9090``.
 -  ``[{--frontend} <path/to/frontend>]``: Specify the path to the
-   frontend directory. The default is ``frontend``.
--  ``[{--enable-https} <bool>]``: Enable HTTPS for serving the frontend.
+   MapD Immerse directory. The default is ``frontend``.
+-  ``[{--enable-https} <bool>]``: Enable HTTPS for serving MapD Immerse.
    The default is ``false``.
 -  ``[{--cert} <cert.pem>]``: Path to the HTTPS certificate file. The
    default is ``cert.pem``.
@@ -96,7 +96,7 @@ Authority. The options are:
 
 The temporary directory is used as a staging location for file uploads.
 It is sometimes desirable to place this directory on the same file
-system as the MapD data directory. If not specified on the command line,
+system as the MapD Core data directory. If not specified on the command line,
 ``mapd_web_server`` also respects the standard ``TMPDIR`` environment
 variable as well as a specific ``MAPD_TMPDIR`` environment variable, the
 latter of which takes precedence. Defaults to the system default
@@ -117,7 +117,7 @@ Utilities
 ``initdb``
 ----------
 
-The very first step before using MapD is to initialize the MapD data
+The very first step before using MapD Core is to initialize the data
 directory via ``initdb``:
 
 ::
@@ -126,9 +126,9 @@ directory via ``initdb``:
 
 This creates three subdirectories:
 
--  ``mapd_catalogs``: stores MapD catalogs
--  ``mapd_data``: stores MapD data
--  ``mapd_log``: contains all MapD log files. MapD uses
+-  ``mapd_catalogs``: stores MapD Core's catalogs
+-  ``mapd_data``: stores MapD Core's data
+-  ``mapd_log``: contains all MapD Core's log files. MapD Core uses
    `glog <https://code.google.com/p/google-glog/>`__ for logging.
 
 The ``-f`` flag forces ``initdb`` to overwrite existing data and
@@ -175,18 +175,16 @@ server. The options are:
            [--http]
 
 ``mapdql`` is the client-side SQL console. All SQL statements can be
-submitted to the MapD Server and the results are returned and displayed.
+submitted to the MapD Core Server and the results are returned and displayed.
 The options are:
 
--  ``[<database>]``: Database to connect to. Not connected to any
-   database if omitted.
--  ``[{--user|-u} <user>]``: User to connect as. Not connected to MapD
-   Server if omitted.
+-  ``[<database>]``: Database to connect to. The default is `mapd`.
+-  ``[{--user|-u} <user>]``: User name. The default is `mapd`.
 -  ``[{--passwd|-p} <password>]``: User password.
--  ``[--port <port number>]``: Port number of MapD Server. The default
-   is port 9091.
--  ``[{--server|-s} <server host>]``: MapD Server hostname in DNS name
-   or IP address. The default is localhost.
+-  ``[--port <port number>]``: Port number of MapD Core Server. The default
+   is port `9091`.
+-  ``[{--server|-s} <server host>]``: MapD Core Server hostname in DNS name
+   or IP address. The default is `localhost`.
 -  ``[--http]``: Use the Thrift HTTP transport instead of the default TCP
    transport. Must set ``--port`` to ``mapd_web_server``'s port (default 9092).
 
@@ -203,7 +201,7 @@ of backslash commands:
 -  ``\cpu``: Switch to CPU mode in the current session.
 -  ``\timing``: Print timing information.
 -  ``\notiming``: Do not print timing information.
--  ``\version``: Print MapD Server version.
+-  ``\version``: Print MapD Core Server version.
 -  ``\memory_summary``: Print memory usage summary.
 -  ``\copy <file path> <table>``: Copy data from file on client side to
    table. The file is assumed to be in CSV format unless the file name
