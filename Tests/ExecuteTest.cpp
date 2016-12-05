@@ -2258,6 +2258,16 @@ TEST(Select, RuntimeFunctions) {
         static_cast<float>(4129511.320307),
         v<double>(run_simple_agg(
             "SELECT DISTANCE_IN_METERS(-74.0059, 40.7217,-122.416667 , 37.783333) FROM test LIMIT 1;", dt)));
+    ASSERT_FLOAT_EQ(static_cast<int64_t>(1000),
+                    v<int64_t>(run_simple_agg("SELECT TRUNCATE(CAST(1171 AS SMALLINT),-3) FROM test LIMIT 1;", dt)));
+    ASSERT_FLOAT_EQ(static_cast<float>(1000),
+                    v<float>(run_simple_agg("SELECT TRUNCATE(CAST(1171.123 AS FLOAT),-3) FROM test LIMIT 1;", dt)));
+    ASSERT_FLOAT_EQ(static_cast<double>(1000),
+                    v<double>(run_simple_agg("SELECT TRUNCATE(CAST(1171.123 AS DOUBLE),-3) FROM test LIMIT 1;", dt)));
+    ASSERT_FLOAT_EQ(static_cast<double>(1171.10),
+                    v<double>(run_simple_agg("SELECT TRUNCATE(CAST(1171.123 AS DOUBLE),1) FROM test LIMIT 1;", dt)));
+    ASSERT_FLOAT_EQ(static_cast<float>(1171.11),
+                    v<float>(run_simple_agg("SELECT TRUNCATE(CAST(1171.113 AS FLOAT),2) FROM test LIMIT 1;", dt)));
   }
 }
 
