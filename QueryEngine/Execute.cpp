@@ -1647,8 +1647,7 @@ llvm::Value* Executor::codegenCase(const Analyzer::CaseExpr* case_expr,
   CHECK(else_expr);
   auto else_lvs = codegen(else_expr, true, co);
   llvm::Value* else_lv{nullptr};
-  if (is_real_str && dynamic_cast<const Analyzer::Constant*>(else_expr)) {
-    CHECK_EQ(size_t(3), else_lvs.size());
+  if (else_lvs.size() == 3) {
     else_lv = cgen_state_->emitCall("string_pack", {else_lvs[1], else_lvs[2]});
   } else {
     else_lv = else_lvs.front();
