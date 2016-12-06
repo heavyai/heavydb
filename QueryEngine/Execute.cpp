@@ -3797,6 +3797,17 @@ size_t get_context_count(const ExecutorDeviceType device_type, const size_t cpu_
                                                                   : static_cast<size_t>(cpu_count);
 }
 
+std::string get_table_name(const InputDescriptor& input_desc, const Catalog_Namespace::Catalog& cat) {
+  const auto source_type = input_desc.getSourceType();
+  if (source_type == InputSourceType::TABLE) {
+    const auto td = cat.getMetadataForTable(input_desc.getTableId());
+    CHECK(td);
+    return td->tableName;
+  } else {
+    return "$TEMPORARY_TABLE" + std::to_string(-input_desc.getTableId());
+  }
+}
+
 void checkWorkUnitWatchdog(const RelAlgExecutionUnit& ra_exe_unit, const Catalog_Namespace::Catalog& cat) {
   for (const auto target_expr : ra_exe_unit.target_exprs) {
     if (dynamic_cast<const Analyzer::AggExpr*>(target_expr)) {
@@ -3808,14 +3819,7 @@ void checkWorkUnitWatchdog(const RelAlgExecutionUnit& ra_exe_unit, const Catalog
     std::vector<std::string> table_names;
     const auto& input_descs = ra_exe_unit.input_descs;
     for (const auto& input_desc : input_descs) {
-      const auto source_type = input_desc.getSourceType();
-      if (source_type == InputSourceType::TABLE) {
-        const auto td = cat.getMetadataForTable(input_desc.getTableId());
-        CHECK(td);
-        table_names.push_back(td->tableName);
-      } else {
-        table_names.emplace_back("$TEMPORARY_TABLE" + std::to_string(-input_desc.getTableId()));
-      }
+      table_names.push_back(get_table_name(input_desc, cat));
     }
     throw WatchdogException("Query would require a scan without a limit on table(s): " +
                             boost::algorithm::join(table_names, ", "));
@@ -4833,9 +4837,12 @@ void Executor::dispatchFragments(const std::function<void(const ExecutorDeviceTy
         if (inner_frags.first == outer_table_id) {
           fragments_per_device[device_id][inner_frags.first].push_back(frag_id);
         } else {
+          CHECK_LT(size_t(1), ra_exe_unit.input_descs.size());
+          CHECK_EQ(inner_frags.first, ra_exe_unit.input_descs[1].getTableId());
           std::vector<size_t> all_frag_ids(inner_frags.second->size());
           if (all_frag_ids.size() > 1) {
-            throw std::runtime_error("Multi-fragment inner table not supported yet");
+            throw std::runtime_error("Multi-fragment inner table '" +
+                                     get_table_name(ra_exe_unit.input_descs[1], *catalog_) + "' not supported yet");
           }
           std::iota(all_frag_ids.begin(), all_frag_ids.end(), 0);
           fragments_per_device[device_id][inner_frags.first] = all_frag_ids;
@@ -4882,9 +4889,12 @@ void Executor::dispatchFragments(const std::function<void(const ExecutorDeviceTy
         if (inner_frags.first == outer_table_id) {
           frag_ids_for_table[inner_frags.first] = {i};
         } else {
+          CHECK_LT(size_t(1), ra_exe_unit.input_descs.size());
+          CHECK_EQ(inner_frags.first, ra_exe_unit.input_descs[1].getTableId());
           std::vector<size_t> all_frag_ids(inner_frags.second->size());
           if (all_frag_ids.size() > 1) {
-            throw std::runtime_error("Multi-fragment inner table not supported yet");
+            throw std::runtime_error("Multi-fragment inner table '" +
+                                     get_table_name(ra_exe_unit.input_descs[1], *catalog_) + "' not supported yet");
           }
           std::iota(all_frag_ids.begin(), all_frag_ids.end(), 0);
           frag_ids_for_table[inner_frags.first] = all_frag_ids;
