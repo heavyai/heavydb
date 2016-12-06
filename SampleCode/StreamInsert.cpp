@@ -139,6 +139,7 @@ void stream_insert(const std::string& table_name,
   std::vector<TStringRow> input_rows;
   TStringRow row;
 
+  std::ios_base::sync_with_stdio(false);
   std::istream_iterator<char> eos;
   std::cin >> std::noskipws;
   std::istream_iterator<char> iit(std::cin);
