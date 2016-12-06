@@ -3,6 +3,7 @@
 #include <cstdint>
 #endif
 #include <cmath>
+#include <cstdlib>
 
 #define EXTENSION_NOINLINE extern "C" NEVER_INLINE DEVICE
 
