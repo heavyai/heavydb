@@ -1501,7 +1501,7 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
   const auto col_range_info = getColRangeInfo();
 
   if (g_enable_watchdog && col_range_info.hash_type_ == GroupByColRangeType::MultiCol &&
-      max_groups_buffer_entry_count > 20000000) {
+      max_groups_buffer_entry_count > 60000000) {
     throw WatchdogException("Query would use too much memory");
   }
 
