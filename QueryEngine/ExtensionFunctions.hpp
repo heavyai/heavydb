@@ -2,7 +2,7 @@
 #ifndef __CUDACC__
 #include <cstdint>
 #endif
-#include <math.h>
+#include <cmath>
 
 #define EXTENSION_NOINLINE extern "C" NEVER_INLINE DEVICE
 
@@ -188,7 +188,7 @@ int16_t Truncate__1(const int16_t x, const int32_t y) {
   if (y >= 0) {
     return x;
   }
-  int32_t p = pow((float)10L, abs(y));
+  int32_t p = pow((float)10L, std::abs(y));
   int64_t temp = x / p;
   return temp * p;
 }
@@ -198,7 +198,7 @@ int32_t Truncate__2(const int32_t x, const int32_t y) {
   if (y >= 0) {
     return x;
   }
-  int32_t p = pow((float)10L, abs(y));
+  int32_t p = pow((float)10L, std::abs(y));
   int64_t temp = x / p;
   return temp * p;
 }
@@ -208,7 +208,7 @@ int64_t Truncate__3(const int64_t x, const int32_t y) {
   if (y >= 0) {
     return x;
   }
-  int64_t p = pow((double)10L, abs(y));
+  int64_t p = pow((double)10L, std::abs(y));
   int64_t temp = x / p;
   return temp * p;
 }
