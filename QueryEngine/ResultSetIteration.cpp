@@ -427,7 +427,7 @@ TargetValue ResultSet::makeTargetValue(const int8_t* ptr,
   }
   if (chosen_type.is_string() && chosen_type.get_compression() == kENCODING_DICT) {
     if (translate_strings) {
-      if (ival == NULL_INT) {
+      if (static_cast<int32_t>(ival) == NULL_INT) {  // TODO(alex): this isn't nice, fix it
         return NullableString(nullptr);
       }
       const auto sd = executor_ ? executor_->getStringDictionary(chosen_type.get_comp_param(), row_set_mem_owner_)
