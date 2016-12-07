@@ -2212,14 +2212,14 @@ std::tuple<llvm::Value*, llvm::Value*> GroupByAndAggregate::codegenGroupBy(const
       int32_t subkey_idx = 0;
       for (const auto group_expr : ra_exe_unit_.groupby_exprs) {
         auto col_range_info = getExprRangeInfo(group_expr.get());
-        const auto group_expr_lv =
-            executor_->groupByColumnCodegen(group_expr.get(),
-                                            co,
-                                            col_range_info.has_nulls,
-                                            col_range_info.max + (col_range_info.bucket ? col_range_info.bucket : 1),
-                                            diamond_codegen,
-                                            array_loops,
-                                            query_mem_desc_.threadsShareMemory());
+        const auto group_expr_lv = executor_->groupByColumnCodegen(
+            group_expr.get(),
+            co,
+            col_range_info.has_nulls && query_mem_desc_.hash_type != GroupByColRangeType::MultiCol,
+            col_range_info.max + (col_range_info.bucket ? col_range_info.bucket : 1),
+            diamond_codegen,
+            array_loops,
+            query_mem_desc_.threadsShareMemory());
         // store the sub-key to the buffer
         LL_BUILDER.CreateStore(group_expr_lv, LL_BUILDER.CreateGEP(group_key, LL_INT(subkey_idx++)));
       }
