@@ -531,6 +531,10 @@ ResultSet* ResultSetManager::reduce(std::vector<ResultSet*>& result_sets) {
   return result_rs;
 }
 
+std::unique_ptr<ResultSet>& ResultSetManager::getOwnResultSet() {
+  return rs_;
+}
+
 void ResultSetStorage::fillOneEntryRowWise(const std::vector<int64_t>& entry) {
   const auto slot_count = get_buffer_col_slot_count(query_mem_desc_);
   const auto key_count = get_groupby_col_count(query_mem_desc_);

@@ -516,7 +516,8 @@ class MapDHandler : virtual public MapDIf {
     }
     const auto session_info = get_session(session);
     if (leaf_aggregator_.leafCount() > 0) {
-      leaf_aggregator_.execute(_return, session_info, query_str, column_format, nonce);
+      const auto result = leaf_aggregator_.execute(session_info, query_str, column_format, nonce);
+      convert_rows(_return, result.targets_meta, *(result.rs), column_format);
     } else {
       sql_execute_impl(_return, session_info, query_str, column_format, nonce);
     }
@@ -1636,29 +1637,34 @@ class MapDHandler : virtual public MapDIf {
     return result;
   }
 
+  static TRowDescriptor convert_target_metainfo(const std::vector<TargetMetaInfo>& targets) {
+    TRowDescriptor row_desc;
+    TColumnType proj_info;
+    size_t i = 0;
+    for (const auto target : targets) {
+      proj_info.col_name = target.get_resname();
+      if (proj_info.col_name.empty()) {
+        proj_info.col_name = "result_" + std::to_string(i + 1);
+      }
+      const auto& target_ti = target.get_type_info();
+      proj_info.col_type.type = type_to_thrift(target_ti);
+      proj_info.col_type.encoding = encoding_to_thrift(target_ti);
+      proj_info.col_type.nullable = !target_ti.get_notnull();
+      proj_info.col_type.is_array = target_ti.get_type() == kARRAY;
+      proj_info.col_type.precision = target_ti.get_precision();
+      proj_info.col_type.scale = target_ti.get_scale();
+      row_desc.push_back(proj_info);
+      ++i;
+    }
+    return row_desc;
+  }
+
+  template <class R>
   static void convert_rows(TQueryResult& _return,
                            const std::vector<TargetMetaInfo>& targets,
-                           const ResultRows& results,
+                           const R& results,
                            const bool column_format) {
-    {
-      TColumnType proj_info;
-      size_t i = 0;
-      for (const auto target : targets) {
-        proj_info.col_name = target.get_resname();
-        if (proj_info.col_name.empty()) {
-          proj_info.col_name = "result_" + std::to_string(i + 1);
-        }
-        const auto& target_ti = target.get_type_info();
-        proj_info.col_type.type = type_to_thrift(target_ti);
-        proj_info.col_type.encoding = encoding_to_thrift(target_ti);
-        proj_info.col_type.nullable = !target_ti.get_notnull();
-        proj_info.col_type.is_array = target_ti.get_type() == kARRAY;
-        proj_info.col_type.precision = target_ti.get_precision();
-        proj_info.col_type.scale = target_ti.get_scale();
-        _return.row_set.row_desc.push_back(proj_info);
-        ++i;
-      }
-    }
+    _return.row_set.row_desc = convert_target_metainfo(targets);
     if (column_format) {
       _return.row_set.is_columnar = true;
       std::vector<TColumn> tcolumns(results.colCount());
@@ -1884,20 +1890,37 @@ class MapDHandler : virtual public MapDIf {
                           const bool column_format,
                           const std::string& nonce) override {
 #ifdef HAVE_RAVM
-    const auto session_info = get_session(session);
-    const auto& cat = session_info.get_catalog();
-    CompilationOptions co = {executor_device_type_, true, ExecutorOptLevel::Default};
-    ExecutionOptions eo = {false, allow_multifrag_, false, allow_loop_joins_, g_enable_watchdog, jit_debug_};
-    auto executor = Executor::getExecutor(
-        cat.get_currentDB().dbId, jit_debug_ ? "/tmp" : "", jit_debug_ ? "mapdquery" : "", 0, 0, nullptr);
-    RelAlgExecutor ra_executor(executor.get(), cat);
-    ExecutionResult result{ResultRows({}, {}, nullptr, nullptr, {}, executor_device_type_), {}};
-    const auto query_ra = parse_to_ra(query, session_info);
-    ra_executor.executeRelAlgQueryFirstStep(query_ra, co, eo, nullptr);
+    try {
+      const auto session_info = get_session(session);
+      const auto& cat = session_info.get_catalog();
+      CompilationOptions co = {executor_device_type_, true, ExecutorOptLevel::Default};
+      ExecutionOptions eo = {false, allow_multifrag_, false, allow_loop_joins_, g_enable_watchdog, jit_debug_};
+      auto executor = Executor::getExecutor(
+          cat.get_currentDB().dbId, jit_debug_ ? "/tmp" : "", jit_debug_ ? "mapdquery" : "", 0, 0, nullptr);
+      RelAlgExecutor ra_executor(executor.get(), cat);
+      const auto query_ra = parse_to_ra(query, session_info);
+      const auto first_step_result = ra_executor.executeRelAlgQueryFirstStep(query_ra, co, eo, nullptr);
+      auto result_set = first_step_result.getRows().getResultSet();
+      if (!result_set) {
+        QueryMemoryDescriptor empty_query_mem_desc{};
+        std::vector<TargetInfo> empty_target_infos;
+        result_set = std::make_shared<ResultSet>(
+            empty_target_infos, ExecutorDeviceType::CPU, empty_query_mem_desc, nullptr, nullptr);
+      }
+      _return.serialized_rows = result_set->serialize();
+      _return.execution_finished = true;        // TODO(alex)
+      _return.merge_type = TMergeType::REDUCE;  // TODO(alex)
+      _return.sharded = true;                   // TODO(alex)
+      _return.row_desc = convert_target_metainfo(first_step_result.getTargetsMeta());
+    } catch (std::exception& e) {
+      TMapDException ex;
+      ex.error_msg = std::string("Exception: ") + e.what();
+      LOG(ERROR) << ex.error_msg;
+      throw ex;
+    }
+#else
+    CHECK(false);
 #endif  // HAVE_RAVM
-    TMapDException ex;
-    ex.error_msg = "execute_first_step not supported yet";
-    throw ex;
   }
 
   void broadcast_serialized_rows(const std::string& serialized_rows) override {

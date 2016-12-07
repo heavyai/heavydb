@@ -332,6 +332,8 @@ class ResultSetManager {
  public:
   ResultSet* reduce(std::vector<ResultSet*>&);
 
+  std::unique_ptr<ResultSet>& getOwnResultSet();
+
  private:
   std::unique_ptr<ResultSet> rs_;
 };
