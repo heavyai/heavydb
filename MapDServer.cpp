@@ -1878,10 +1878,11 @@ class MapDHandler : virtual public MapDIf {
   }
 #endif  // HAVE_CALCITE
 
-  TQueryId start_query(const TSessionId session,
-                       const std::string& query,
-                       const bool column_format,
-                       const std::string& nonce) override {
+  void execute_first_step(TStepResult& _return,
+                          const TSessionId session,
+                          const std::string& query,
+                          const bool column_format,
+                          const std::string& nonce) override {
 #ifdef HAVE_RAVM
     const auto session_info = get_session(session);
     const auto query_ra = parse_to_ra(query, session_info);
@@ -1895,13 +1896,7 @@ class MapDHandler : virtual public MapDIf {
     CHECK(!ed_list.empty());
 #endif  // HAVE_RAVM
     TMapDException ex;
-    ex.error_msg = "start_query not supported yet";
-    throw ex;
-  }
-
-  void execute_step(TStepResult& _return, const TQueryId query_id) override {
-    TMapDException ex;
-    ex.error_msg = "execute_step not supported yet";
+    ex.error_msg = "execute_first_step not supported yet";
     throw ex;
   }
 
@@ -2056,9 +2051,8 @@ int main(int argc, char** argv) {
   desc_adv.add_options()("enable-watchdog",
                          po::bool_switch(&enable_watchdog)->default_value(enable_watchdog)->implicit_value(true),
                          "Enable watchdog");
-  desc_adv.add_options()("start-epoch",
-                         po::value<int>(&start_epoch)->default_value(start_epoch),
-                         "Value of epoch to 'rollback' to");
+  desc_adv.add_options()(
+      "start-epoch", po::value<int>(&start_epoch)->default_value(start_epoch), "Value of epoch to 'rollback' to");
 
   po::positional_options_description positionalOptions;
   positionalOptions.add("data", 1);
