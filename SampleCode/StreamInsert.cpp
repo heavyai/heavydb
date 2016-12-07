@@ -260,7 +260,7 @@ void stream_insert(const std::string& table_name,
 }
 
 int main(int argc, char** argv) {
-  std::string server_host("localhost");  // default to localohost
+  std::string server_host("localhost");  // default to localhost
   int port = 9091;                       // default port number
   std::string table_name;
   std::string db_name;
@@ -276,21 +276,25 @@ int main(int argc, char** argv) {
   namespace po = boost::program_options;
 
   po::options_description desc("Options");
-  desc.add_options()("help,h", "Print help messages ")(
-      "table", po::value<std::string>(&table_name)->required(), "Table Name")(
-      "database", po::value<std::string>(&db_name)->required(), "Database Name")(
-      "user,u", po::value<std::string>(&user_name)->required(), "User Name")(
-      "passwd,p", po::value<std::string>(&passwd)->required(), "User Password")(
-      "host", po::value<std::string>(&server_host), "MapD Server Hostname")(
-      "port", po::value<int>(&port), "MapD Server Port Number")(
-      "delim", po::value<std::string>(&delim_str), "Field delimiter")(
-      "null", po::value<std::string>(&nulls), "NULL string")(
-      "line", po::value<std::string>(&line_delim_str), "Line delimiter")(
-      "batch", po::value<size_t>(&batch_size), "Insert batch size")(
-      "retry_count", po::value<size_t>(&retry_count), "Number of time to retry an insert")(
-      "retry_wait", po::value<size_t>(&retry_wait), "wait in secs between retries")(
-      "transform,t", po::value<std::vector<std::string>>(&xforms)->multitoken(), "Column Transformations")(
-      "print_error", "Print Error Rows")("print_transform", "Print Transformations");
+  desc.add_options()("help,h", "Print help messages ");
+  desc.add_options()("table", po::value<std::string>(&table_name)->required(), "Table Name");
+  desc.add_options()("database", po::value<std::string>(&db_name)->required(), "Database Name");
+  desc.add_options()("user,u", po::value<std::string>(&user_name)->required(), "User Name");
+  desc.add_options()("passwd,p", po::value<std::string>(&passwd)->required(), "User Password");
+  desc.add_options()("host", po::value<std::string>(&server_host)->default_value(server_host), "MapD Server Hostname");
+  desc.add_options()("port", po::value<int>(&port)->default_value(port), "MapD Server Port Number");
+  desc.add_options()("delim", po::value<std::string>(&delim_str)->default_value(delim_str), "Field delimiter");
+  desc.add_options()("null", po::value<std::string>(&nulls), "NULL string");
+  desc.add_options()("line", po::value<std::string>(&line_delim_str), "Line delimiter");
+  desc.add_options()("batch", po::value<size_t>(&batch_size)->default_value(batch_size), "Insert batch size");
+  desc.add_options()(
+      "retry_count", po::value<size_t>(&retry_count)->default_value(retry_count), "Number of time to retry an insert");
+  desc.add_options()(
+      "retry_wait", po::value<size_t>(&retry_wait)->default_value(retry_wait), "wait in secs between retries");
+  desc.add_options()(
+      "transform,t", po::value<std::vector<std::string>>(&xforms)->multitoken(), "Column Transformations");
+  desc.add_options()("print_error", "Print Error Rows");
+  desc.add_options()("print_transform", "Print Transformations");
 
   po::positional_options_description positionalOptions;
   positionalOptions.add("table", 1);
@@ -305,7 +309,8 @@ int main(int argc, char** argv) {
           << "Usage: <table name> <database name> {-u|--user} <user> {-p|--passwd} <password> [{--host} "
              "<hostname>][--port <port number>][--delim <delimiter>][--null <null string>][--line <line "
              "delimiter>][--batch <batch size>][{-t|--transform} transformation "
-             "...][--retry_count <num_of_retries>] [--retry_wait <wait in secs>][--print_error][--print_transform]\n";
+             "...][--retry_count <num_of_retries>] [--retry_wait <wait in secs>][--print_error][--print_transform]\n\n";
+      std::cout << desc << std::endl;
       return 0;
     }
     if (vm.count("print_error"))
@@ -342,7 +347,8 @@ int main(int argc, char** argv) {
               << "\\t" << std::endl;
   else if (delim == '\n')
     std::cout << "Field Delimiter: "
-              << "\\n" << std::endl;
+              << "\\n"
+              << std::endl;
   else
     std::cout << "Field Delimiter: \\x" << std::hex << (int)delim << std::endl;
   char line_delim = line_delim_str[0];
@@ -369,7 +375,8 @@ int main(int argc, char** argv) {
               << "\\t" << std::endl;
   else if (line_delim == '\n')
     std::cout << "Line Delimiter: "
-              << "\\n" << std::endl;
+              << "\\n"
+              << std::endl;
   else
     std::cout << "Line Delimiter: \\x" << std::hex << (int)line_delim << std::endl;
   std::cout << "Null String: " << nulls << std::endl;
