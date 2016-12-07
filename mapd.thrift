@@ -100,6 +100,7 @@ struct TStepResult {
   2: bool execution_finished
   3: TMergeType merge_type
   4: bool sharded
+  5: TRowDescriptor row_desc
 }
 
 struct TRowSet {

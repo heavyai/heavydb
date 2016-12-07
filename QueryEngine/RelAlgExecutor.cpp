@@ -28,6 +28,24 @@ ExecutionResult RelAlgExecutor::executeRelAlgQuery(const std::string& query_ra,
   return executeRelAlgSeq(ed_list, co, eo, render_info, queue_time_ms);
 }
 
+ExecutionResult RelAlgExecutor::executeRelAlgQueryFirstStep(const std::string& query_ra,
+                                                            const CompilationOptions& co,
+                                                            const ExecutionOptions& eo,
+                                                            RenderInfo* render_info) {
+  // capture the lock acquistion time
+  auto clock_begin = timer_start();
+  std::lock_guard<std::mutex> lock(executor_->execute_mutex_);
+  Executor::RowSetHolder row_set_holder(executor_);
+  executor_->row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>();
+  InputTableInfoCacheScope input_table_info_cache_scope(executor_);
+  int64_t queue_time_ms = timer_stop(clock_begin);
+  const auto ra = deserialize_ra_dag(query_ra, cat_, co, eo, executor_);
+  auto ed_list = get_execution_descriptors(ra.get());
+  CHECK(!ed_list.empty());
+  std::vector<RaExecutionDesc> first_exec_desc{ed_list.front()};
+  return executeRelAlgSeq(first_exec_desc, co, eo, render_info, queue_time_ms);
+}
+
 ExecutionResult RelAlgExecutor::executeRelAlgSubQuery(const rapidjson::Value& query_ast,
                                                       const CompilationOptions& co,
                                                       const ExecutionOptions& eo,

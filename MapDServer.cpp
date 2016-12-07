@@ -1885,15 +1885,15 @@ class MapDHandler : virtual public MapDIf {
                           const std::string& nonce) override {
 #ifdef HAVE_RAVM
     const auto session_info = get_session(session);
-    const auto query_ra = parse_to_ra(query, session_info);
     const auto& cat = session_info.get_catalog();
-    CompilationOptions co = {session_info.get_executor_device_type(), true, ExecutorOptLevel::Default};
+    CompilationOptions co = {executor_device_type_, true, ExecutorOptLevel::Default};
     ExecutionOptions eo = {false, allow_multifrag_, false, allow_loop_joins_, g_enable_watchdog, jit_debug_};
     auto executor = Executor::getExecutor(
-        cat.get_currentDB().dbId, eo.jit_debug ? "/tmp" : "", eo.jit_debug ? "mapdquery" : "", 0, 0, nullptr);
-    const auto ra = deserialize_ra_dag(query_ra, cat, co, eo, executor.get());
-    auto ed_list = get_execution_descriptors(ra.get());
-    CHECK(!ed_list.empty());
+        cat.get_currentDB().dbId, jit_debug_ ? "/tmp" : "", jit_debug_ ? "mapdquery" : "", 0, 0, nullptr);
+    RelAlgExecutor ra_executor(executor.get(), cat);
+    ExecutionResult result{ResultRows({}, {}, nullptr, nullptr, {}, executor_device_type_), {}};
+    const auto query_ra = parse_to_ra(query, session_info);
+    ra_executor.executeRelAlgQueryFirstStep(query_ra, co, eo, nullptr);
 #endif  // HAVE_RAVM
     TMapDException ex;
     ex.error_msg = "execute_first_step not supported yet";
