@@ -106,7 +106,7 @@ std::string gen_date() {
 
 // output to std::cout num_rows number of rows conforming to table_desc.
 // each column value is separated by delimiter.
-void data_gen(const TTableDescriptor& table_desc, const char* delimiter, int num_rows) {
+void data_gen(const TRowDescriptor& table_desc, const char* delimiter, int num_rows) {
   for (int i = 0; i < num_rows; i++) {
     bool not_first = false;
     for (auto p = table_desc.begin(); p != table_desc.end(); ++p) {
@@ -114,7 +114,7 @@ void data_gen(const TTableDescriptor& table_desc, const char* delimiter, int num
         std::cout << delimiter;
       else
         not_first = true;
-      switch (p->second.col_type.type) {
+      switch (p->col_type.type) {
         case TDatumType::SMALLINT:
         case TDatumType::INT:
         case TDatumType::BIGINT:
@@ -183,8 +183,8 @@ int main(int argc, char** argv) {
   try {
     transport->open();                                     // open transport
     session = client.connect(user_name, passwd, db_name);  // connect to mapd_server
-    TTableDescriptor table_desc;
-    client.get_table_descriptor(table_desc, session, table_name);
+    TRowDescriptor table_desc;
+    client.get_row_descriptor(table_desc, session, table_name);
     data_gen(table_desc, delimiter, num_rows);
     client.disconnect(session);  // disconnect from mapd_server
     transport->close();          // close transport
