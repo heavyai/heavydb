@@ -94,6 +94,8 @@ class JoinHashTable {
 
   llvm::Value* codegenSlot(const bool hoist_literals) noexcept;
 
+  const InputTableInfo& getInnerQueryInfo(const Analyzer::ColumnVar* inner_col);
+
   std::shared_ptr<Analyzer::BinOper> qual_bin_oper_;
   const Catalog_Namespace::Catalog& cat_;
   const std::vector<InputTableInfo>& query_infos_;
@@ -121,6 +123,8 @@ class JoinHashTable {
 
   static std::vector<std::pair<JoinHashTableCacheKey, std::shared_ptr<std::vector<int32_t>>>> join_hash_table_cache_;
   static std::mutex join_hash_table_cache_mutex_;
+
+  static const int ERR_MULTI_FRAG{-2};
 
   friend class Executor;
 };

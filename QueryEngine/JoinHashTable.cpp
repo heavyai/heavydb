@@ -65,6 +65,15 @@ std::pair<const Analyzer::ColumnVar*, const Analyzer::ColumnVar*> get_cols(
   return {inner_col, outer_col};
 }
 
+std::string get_table_name(const int table_id, const Catalog_Namespace::Catalog& cat) {
+  if (table_id >= 1) {
+    const auto td = cat.getMetadataForTable(table_id);
+    CHECK(td);
+    return td->tableName;
+  }
+  return "$TEMPORARY_TABLE" + std::to_string(-table_id);
+}
+
 }  // namespace
 
 std::vector<std::pair<JoinHashTable::JoinHashTableCacheKey, std::shared_ptr<std::vector<int32_t>>>>
@@ -106,6 +115,14 @@ std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(
       new JoinHashTable(qual_bin_oper, inner_col, cat, query_infos, memory_level, col_range, executor));
   const int err = join_hash_table->reify(device_count);
   if (err) {
+    if (err == ERR_MULTI_FRAG) {
+      const auto cols = get_cols(qual_bin_oper, cat, executor->temporary_tables_);
+      const auto inner_col = cols.first;
+      CHECK(inner_col);
+      const auto& table_info = join_hash_table->getInnerQueryInfo(inner_col);
+      throw HashJoinFail("Multi-fragment inner table '" + get_table_name(table_info.table_id, cat) +
+                         "' not supported yet");
+    }
     throw HashJoinFail("Could not build a 1-to-1 correspondence for columns involved in equijoin");
   }
   return join_hash_table;
@@ -116,20 +133,12 @@ int JoinHashTable::reify(const int device_count) noexcept {
   const auto cols = get_cols(qual_bin_oper_, cat_, executor_->temporary_tables_);
   const auto inner_col = cols.first;
   CHECK(inner_col);
-  ssize_t ti_idx = -1;
-  for (size_t i = 0; i < query_infos_.size(); ++i) {
-    if (inner_col->get_table_id() == query_infos_[i].table_id) {
-      ti_idx = i;
-      break;
-    }
-  }
-  CHECK_NE(ssize_t(-1), ti_idx);
-  const auto& query_info = query_infos_[ti_idx].info;
+  const auto& query_info = getInnerQueryInfo(inner_col).info;
   if (query_info.fragments.empty()) {
     return 0;
   }
   if (query_info.fragments.size() != 1) {  // we don't support multiple fragment inner tables (yet)
-    return -1;
+    return ERR_MULTI_FRAG;
   }
   const auto& fragment = query_info.fragments.front();
   auto chunk_meta_it = fragment.chunkMetadataMap.find(inner_col->get_column_id());
@@ -405,4 +414,16 @@ llvm::Value* JoinHashTable::codegenSlot(const bool hoist_literals) noexcept {
   const auto slot_valid_lv =
       executor_->cgen_state_->ir_builder_.CreateICmp(llvm::ICmpInst::ICMP_SGE, slot_lv, executor_->ll_int(int64_t(0)));
   return slot_valid_lv;
+}
+
+const InputTableInfo& JoinHashTable::getInnerQueryInfo(const Analyzer::ColumnVar* inner_col) {
+  ssize_t ti_idx = -1;
+  for (size_t i = 0; i < query_infos_.size(); ++i) {
+    if (inner_col->get_table_id() == query_infos_[i].table_id) {
+      ti_idx = i;
+      break;
+    }
+  }
+  CHECK_NE(ssize_t(-1), ti_idx);
+  return query_infos_[ti_idx];
 }
