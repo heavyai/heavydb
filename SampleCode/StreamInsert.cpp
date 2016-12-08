@@ -160,11 +160,7 @@ void stream_insert(const std::string& table_name,
   }
 
   while (iit != eos) {
-    {
-      // free previous row's memory
-      std::vector<TStringValue> empty;
-      row.cols.swap(empty);
-    }
+    row.cols.clear();
     // construct a row
     while (iit != eos) {
       if (*iit == copy_params.delimiter || *iit == copy_params.line_delim) {
@@ -224,11 +220,7 @@ void stream_insert(const std::string& table_name,
       input_rows.push_back(row);
       if (input_rows.size() >= copy_params.batch_size) {
         do_load(nrows, nskipped, input_rows, table_name, copy_params, conn_details);
-        {
-          // free rowset that has already been loaded
-          std::vector<TStringRow> empty;
-          input_rows.swap(empty);
-        }
+        input_rows.clear();
       }
     } else {
       ++nskipped;

@@ -41,11 +41,7 @@ void stream_insert(MapDClient& client,
   TStringRow row;
   boost::char_separator<char> sep{delimiter, "", boost::keep_empty_tokens};
   while (std::getline(std::cin, line)) {
-    {
-      // free previous row's memory
-      std::vector<TStringValue> empty;
-      row.cols.swap(empty);
-    }
+    row.cols.clear();
     boost::tokenizer<boost::char_separator<char>> tok{line, sep};
     for (const auto& s : tok) {
       TStringValue ts;
@@ -65,11 +61,7 @@ void stream_insert(MapDClient& client,
       } catch (TMapDException& e) {
         std::cerr << e.error_msg << std::endl;
       }
-      {
-        // free rowset that has already been loaded
-        std::vector<TStringRow> empty;
-        input_rows.swap(empty);
-      }
+      input_rows.clear();
     }
   }
   // load remaining rowset if any

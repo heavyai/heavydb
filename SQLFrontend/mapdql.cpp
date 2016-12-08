@@ -180,10 +180,7 @@ void copy_table(char* filepath, char* table, ClientContext& context) {
   boost::char_separator<char> sep{delim, "", boost::keep_empty_tokens};
   try {
     while (std::getline(infile, line)) {
-      {
-        std::vector<TStringValue> empty;
-        row.cols.swap(empty);
-      }
+      row.cols.clear();
       boost::tokenizer<boost::char_separator<char>> tok{line, sep};
       for (const auto& s : tok) {
         TStringValue ts;
@@ -210,10 +207,7 @@ void copy_table(char* filepath, char* table, ClientContext& context) {
         } catch (TMapDException& e) {
           std::cerr << e.error_msg << std::endl;
         }
-        {
-          std::vector<TStringRow> empty;
-          input_rows.swap(empty);
-        }
+        input_rows.clear();
       }
     }
     if (input_rows.size() > 0)
