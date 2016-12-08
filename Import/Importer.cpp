@@ -572,10 +572,7 @@ static ImportStatus import_thread(int thread_id,
       p->clear();
     std::vector<std::string> row;
     for (const char* p = thread_buf; p < thread_buf_end; p++) {
-      {
-        decltype(row) empty;
-        row.swap(empty);
-      }
+      row.clear();
       if (debug_timing) {
         us = measure<std::chrono::microseconds>::execution([&]() {
           p = get_row(p,
