@@ -41,7 +41,7 @@ MapD has the following dependencies:
 - [crypto++](https://www.cryptopp.com/)
 - [gperftools](https://github.com/gperftools/gperftools)
 
-Generating the documentation requires `pip`, `virtualenv`, and `texlive` (specifically `pdflatex`). `sphinx` will be installed automatically via `pip`.
+Generating the documentation requires ((`pip` && `virtualenv`) || `sphinx`), and `texlive` (specifically `pdflatex`). `pip` and `virtualenv` will attempt to install `sphinx` if it is not available.
 
 Dependencies for `mapd_web_server` and other Go utils are in [`ThirdParty/go`](ThirdParty/go). See [`ThirdParty/go/src/mapd/vendor/README.md`](ThirdParty/go/src/mapd/vendor/README.md) for instructions on how to add new deps.
 
@@ -63,6 +63,7 @@ For generating the documentation you will also need:
 
     yum install -y python-pip python-virtualenv
     yum install -y texlive texlive-latex-bin-bin "texlive-*"
+    pip install sphinx==1.4.9
 
 Instructions for installing CUDA are below.
 
@@ -96,6 +97,7 @@ For generating the documentation you will also need:
     sudo easy_install pip
     sudo pip install virtualenv
     brew cask install mactex
+    sudo pip install sphinx==1.4.9
 
 ### CUDA
 
@@ -168,6 +170,7 @@ For generating the documentation you will also need:
 
     apt-get install python-pip virtualenv
     apt-get install texlive-latex-base texlive-full
+    pip install sphinx==1.4.9
 
 ### CUDA
 

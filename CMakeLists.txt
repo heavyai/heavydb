@@ -346,15 +346,20 @@ option(ENABLE_DOCS "Enable compilation of MapD docs" ON)
 find_program(PIP_EXECUTABLE NAMES pip)
 find_program(VENV_EXECUTABLE NAMES virtualenv)
 find_program(PDFLATEX_EXECUTABLE NAMES pdflatex)
+find_program(SPHINX_EXECUTABLE NAMES sphinx-build)
 #configure_file(
 #  "${CMAKE_SOURCE_DIR}/docs/MapDGuide.in.rst"
 #  "${CMAKE_BINARY_DIR}/docs/MapDGuide.rst"
 #  @ONLY
 #  )
-if(PIP_EXECUTABLE AND VENV_EXECUTABLE AND PDFLATEX_EXECUTABLE AND ENABLE_DOCS)
+if(NOT SPHINX_EXECUTABLE)
+  set(VENV_OPTION "--venv")
+endif()
+if(((PIP_EXECUTABLE AND VENV_EXECUTABLE) OR SPHINX_EXECUTABLE) AND PDFLATEX_EXECUTABLE AND ENABLE_DOCS)
   file(GLOB_RECURSE DOCS_FILES "*.rst")
   add_custom_target(docs ALL
     COMMAND ./build.sh
+    ${VENV_OPTION}
     ${MAPD_VERSION_RAW}
     ${CMAKE_BINARY_DIR}/docs/
     SOURCES ${DOCS_FILES}
@@ -365,6 +370,7 @@ if(PIP_EXECUTABLE AND VENV_EXECUTABLE AND PDFLATEX_EXECUTABLE AND ENABLE_DOCS)
   list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/docs/)
 elseif(ENABLE_DOCS)
   message(WARNING "pip, virtualenv, or pdflatex not found. Skipping generating docs.")
+  set(ENABLE_DOCS OFF)
 endif()
 install(DIRECTORY docs/release-notes DESTINATION docs)
 
