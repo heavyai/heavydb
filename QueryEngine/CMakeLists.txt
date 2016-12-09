@@ -74,6 +74,10 @@ else ()
 set(llvm_clangpp_cmd clang++)
 endif (ENABLE_LLVM_DBG)
 
+list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/)
+include_directories(${CMAKE_CURRENT_BINARY_DIR})
+
+
 add_custom_command(
     DEPENDS RuntimeFunctions.cpp RuntimeFunctions.h ${CMAKE_SOURCE_DIR}/Utils/StringLike.cpp GroupByRuntime.cpp
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctions.bc
