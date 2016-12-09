@@ -979,7 +979,7 @@ ImportStatus Importer::importDelimited() {
     alloc_size = file_size;
   }
   buffer[0] = (char*)checked_malloc(alloc_size);
-  if (max_threads > 1 && file_size > alloc_size)
+  if (max_threads > 1)
     buffer[1] = (char*)checked_malloc(alloc_size);
   for (int i = 0; i < max_threads; i++) {
     import_buffers_vec.push_back(std::vector<std::unique_ptr<TypedImportBuffer>>());
