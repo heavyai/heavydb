@@ -531,7 +531,7 @@ ResultSet* ResultSetManager::reduce(std::vector<ResultSet*>& result_sets) {
   return result_rs;
 }
 
-std::unique_ptr<ResultSet>& ResultSetManager::getOwnResultSet() {
+std::shared_ptr<ResultSet> ResultSetManager::getOwnResultSet() {
   return rs_;
 }
 

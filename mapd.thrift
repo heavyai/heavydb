@@ -101,6 +101,7 @@ struct TStepResult {
   3: TMergeType merge_type
   4: bool sharded
   5: TRowDescriptor row_desc
+  6: i32 node_id
 }
 
 struct TRowSet {

@@ -644,6 +644,8 @@ class ResultRows {
     return targets_[col_idx].agg_kind == kAVG ? SQLTypeInfo(kDOUBLE, false) : targets_[col_idx].sql_type;
   }
 
+  const std::vector<TargetInfo>& getTargetInfos() const { return targets_; }
+
   int64_t getQueueTime() const {
     if (result_set_) {
       return result_set_->getQueueTime();

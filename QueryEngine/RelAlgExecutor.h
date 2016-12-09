@@ -9,6 +9,11 @@
 
 #include <ctime>
 
+struct FirstStepExecutionResult {
+  ExecutionResult result;
+  const unsigned node_id;
+};
+
 class RelAlgExecutor {
  public:
   RelAlgExecutor(Executor* executor, const Catalog_Namespace::Catalog& cat) : executor_(executor), cat_(cat), now_(0) {}
@@ -18,10 +23,10 @@ class RelAlgExecutor {
                                      const ExecutionOptions& eo,
                                      RenderInfo* render_info);
 
-  ExecutionResult executeRelAlgQueryFirstStep(const std::string& query_ra,
-                                              const CompilationOptions& co,
-                                              const ExecutionOptions& eo,
-                                              RenderInfo* render_info);
+  FirstStepExecutionResult executeRelAlgQueryFirstStep(const std::string& query_ra,
+                                                       const CompilationOptions& co,
+                                                       const ExecutionOptions& eo,
+                                                       RenderInfo* render_info);
 
   ExecutionResult executeRelAlgSubQuery(const rapidjson::Value& query_ast,
                                         const CompilationOptions& co,

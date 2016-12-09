@@ -516,7 +516,8 @@ class MapDHandler : virtual public MapDIf {
     }
     const auto session_info = get_session(session);
     if (leaf_aggregator_.leafCount() > 0) {
-      const auto result = leaf_aggregator_.execute(session_info, query_str, column_format, nonce);
+      const auto query_ra = parse_to_ra(query_str, session_info);
+      const auto result = leaf_aggregator_.execute(session_info, query_ra, column_format, nonce);
       convert_rows(_return, result.targets_meta, *(result.rs), column_format);
     } else {
       sql_execute_impl(_return, session_info, query_str, column_format, nonce);
@@ -1886,7 +1887,7 @@ class MapDHandler : virtual public MapDIf {
 
   void execute_first_step(TStepResult& _return,
                           const TSessionId session,
-                          const std::string& query,
+                          const std::string& query_ra,
                           const bool column_format,
                           const std::string& nonce) override {
 #ifdef HAVE_RAVM
@@ -1898,20 +1899,20 @@ class MapDHandler : virtual public MapDIf {
       auto executor = Executor::getExecutor(
           cat.get_currentDB().dbId, jit_debug_ ? "/tmp" : "", jit_debug_ ? "mapdquery" : "", 0, 0, nullptr);
       RelAlgExecutor ra_executor(executor.get(), cat);
-      const auto query_ra = parse_to_ra(query, session_info);
       const auto first_step_result = ra_executor.executeRelAlgQueryFirstStep(query_ra, co, eo, nullptr);
-      auto result_set = first_step_result.getRows().getResultSet();
+      const auto& result_rows = first_step_result.result.getRows();
+      auto result_set = result_rows.getResultSet();
       if (!result_set) {
         QueryMemoryDescriptor empty_query_mem_desc{};
-        std::vector<TargetInfo> empty_target_infos;
         result_set = std::make_shared<ResultSet>(
-            empty_target_infos, ExecutorDeviceType::CPU, empty_query_mem_desc, nullptr, nullptr);
+            result_rows.getTargetInfos(), ExecutorDeviceType::CPU, empty_query_mem_desc, nullptr, nullptr);
       }
       _return.serialized_rows = result_set->serialize();
       _return.execution_finished = true;        // TODO(alex)
       _return.merge_type = TMergeType::REDUCE;  // TODO(alex)
       _return.sharded = true;                   // TODO(alex)
-      _return.row_desc = convert_target_metainfo(first_step_result.getTargetsMeta());
+      _return.row_desc = convert_target_metainfo(first_step_result.result.getTargetsMeta());
+      _return.node_id = first_step_result.node_id;
     } catch (std::exception& e) {
       TMapDException ex;
       ex.error_msg = std::string("Exception: ") + e.what();

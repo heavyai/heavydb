@@ -28,10 +28,10 @@ ExecutionResult RelAlgExecutor::executeRelAlgQuery(const std::string& query_ra,
   return executeRelAlgSeq(ed_list, co, eo, render_info, queue_time_ms);
 }
 
-ExecutionResult RelAlgExecutor::executeRelAlgQueryFirstStep(const std::string& query_ra,
-                                                            const CompilationOptions& co,
-                                                            const ExecutionOptions& eo,
-                                                            RenderInfo* render_info) {
+FirstStepExecutionResult RelAlgExecutor::executeRelAlgQueryFirstStep(const std::string& query_ra,
+                                                                     const CompilationOptions& co,
+                                                                     const ExecutionOptions& eo,
+                                                                     RenderInfo* render_info) {
   // capture the lock acquistion time
   auto clock_begin = timer_start();
   std::lock_guard<std::mutex> lock(executor_->execute_mutex_);
@@ -43,7 +43,8 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryFirstStep(const std::string& q
   auto ed_list = get_execution_descriptors(ra.get());
   CHECK(!ed_list.empty());
   std::vector<RaExecutionDesc> first_exec_desc{ed_list.front()};
-  return executeRelAlgSeq(first_exec_desc, co, eo, render_info, queue_time_ms);
+  return {executeRelAlgSeq(first_exec_desc, co, eo, render_info, queue_time_ms),
+          first_exec_desc.front().getBody()->getId()};
 }
 
 ExecutionResult RelAlgExecutor::executeRelAlgSubQuery(const rapidjson::Value& query_ast,

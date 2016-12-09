@@ -332,10 +332,10 @@ class ResultSetManager {
  public:
   ResultSet* reduce(std::vector<ResultSet*>&);
 
-  std::unique_ptr<ResultSet>& getOwnResultSet();
+  std::shared_ptr<ResultSet> getOwnResultSet();
 
  private:
-  std::unique_ptr<ResultSet> rs_;
+  std::shared_ptr<ResultSet> rs_;
 };
 
 class RowSortException : public std::runtime_error {
