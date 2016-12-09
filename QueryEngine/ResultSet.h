@@ -199,10 +199,6 @@ class ResultSet {
   }
   void holdLiterals(std::vector<int8_t>& literal_buff) { literal_buffers_.push_back(std::move(literal_buff)); }
 
-  std::string serialize() const;
-
-  static std::unique_ptr<ResultSet> unserialize(const std::string&);
-
  private:
   std::vector<TargetValue> getNextRowImpl(const bool translate_strings, const bool decimal_to_double) const;
 
