@@ -69,6 +69,7 @@ class BufferMgr : public AbstractBufferMgr {  // implements
 
   std::string printSlab(size_t slabNum);
   std::string printSlabs();
+  void clearSlabs();
   std::string printMap();
   void printSegs();
   std::string printSeg(BufferList::iterator& segIt);

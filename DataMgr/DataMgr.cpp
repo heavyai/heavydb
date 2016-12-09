@@ -105,7 +105,6 @@ void DataMgr::populateMgrs(const size_t userSpecifiedCpuBufferSize, const size_t
       size_t gpuSlabSize = std::min(static_cast<size_t>(1L << 31), gpuMaxMemSize);
       gpuSlabSize -= gpuSlabSize % 512 == 0 ? 0 : 512 - (gpuSlabSize % 512);
       LOG(INFO) << "gpuSlabSize is " << (float)gpuSlabSize / (1024 * 1024) << "M";
-      ;
       bufferMgrs_[2].push_back(
           new GpuCudaBufferMgr(gpuNum, gpuMaxMemSize, cudaMgr_, gpuSlabSize, 512, bufferMgrs_[1][0]));
     }
@@ -166,6 +165,19 @@ std::string DataMgr::dumpLevel(const MemoryLevel memLevel) {
     return tss.str();
   } else {
     return bufferMgrs_[memLevel][0]->printSlabs();
+  }
+}
+
+void DataMgr::clearMemory(const MemoryLevel memLevel) {
+  // if gpu we need to iterate through all the buffermanagers for each card
+  if (memLevel == MemoryLevel::GPU_LEVEL) {
+    int numGpus = cudaMgr_->getDeviceCount();
+    for (int gpuNum = 0; gpuNum < numGpus; ++gpuNum) {
+      LOG(INFO) << "clear slabs on gpu " << gpuNum;
+      bufferMgrs_[memLevel][gpuNum]->clearSlabs();
+    }
+  } else {
+    bufferMgrs_[memLevel][0]->clearSlabs();
   }
 }
 

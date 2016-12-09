@@ -61,6 +61,7 @@ class DataMgr {
   bool isBufferOnDevice(const ChunkKey& key, const MemoryLevel memLevel, const int deviceId);
   memorySummary getMemorySummary();
   std::string dumpLevel(const MemoryLevel memLevel);
+  void clearMemory(const MemoryLevel memLevel);
 
   // const std::map<ChunkKey, File_Namespace::FileBuffer *> & getChunkMap();
   const std::map<ChunkKey, File_Namespace::FileBuffer*>& getChunkMap();

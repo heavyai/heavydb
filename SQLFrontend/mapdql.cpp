@@ -83,7 +83,8 @@ enum ThriftService {
   kGET_ROW_DESC,
   kGET_MEMORY_GPU,
   kGET_MEMORY_SUMMARY,
-  kGET_TABLE_DETAILS
+  kGET_TABLE_DETAILS,
+  kCLEAR_MEMORY_GPU
 };
 
 namespace {
@@ -129,6 +130,9 @@ bool thrift_with_retry(ThriftService which_service, ClientContext& context, cons
         break;
       case kGET_TABLE_DETAILS:
         context.client.get_table_details(context.table_details, context.session, arg);
+        break;
+      case kCLEAR_MEMORY_GPU:
+        context.client.clear_gpu_memory();
         break;
     }
   } catch (TMapDException& e) {
@@ -699,6 +703,13 @@ int main(int argc, char** argv) {
     } else if (!strncmp(line, "\\memory_gpu", 11)) {
       if (thrift_with_retry(kGET_MEMORY_GPU, context, nullptr)) {
         std::cout << "MapD Server GPU Detailed Memory Usage " << context.memory_usage << std::endl;
+      } else {
+        std::cout << "Cannot connect to MapD Server." << std::endl;
+      }
+
+    } else if (!strncmp(line, "\\clear_gpu", 11)) {
+      if (thrift_with_retry(kCLEAR_MEMORY_GPU, context, nullptr)) {
+        std::cout << "MapD Server GPU memory Cleared " << std::endl;
       } else {
         std::cout << "Cannot connect to MapD Server." << std::endl;
       }

@@ -274,4 +274,5 @@ service MapD {
   TStepResult execute_step(1: TQueryId query_id) throws (1: TMapDException e 2: ThriftException te)
   void broadcast_serialized_rows(1: string serialized_rows)
   TTableDetails get_table_details(1: TSessionId session, 2: string table_name) throws (1: TMapDException e 2: ThriftException te)
+  void clear_gpu_memory() throws (1: TMapDException e 2: ThriftException te)
 }

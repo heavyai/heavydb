@@ -774,6 +774,8 @@ class MapDHandler : virtual public MapDIf {
     memory = sys_cat_->get_dataMgr().dumpLevel(MemoryLevel::GPU_LEVEL);
   }
 
+  void clear_gpu_memory() { sys_cat_->get_dataMgr().clearMemory(MemoryLevel::GPU_LEVEL); }
+
   // void get_memory_summary(std::string& memory) { memory = sys_cat_->get_dataMgr().getMemorySummary(); }
 
   void get_memory_summary(TMemorySummary& memory) override {

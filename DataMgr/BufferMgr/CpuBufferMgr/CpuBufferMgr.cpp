@@ -22,20 +22,11 @@ CpuBufferMgr::~CpuBufferMgr() {
 
 void CpuBufferMgr::addSlab(const size_t slabSize) {
   slabs_.resize(slabs_.size() + 1);
-  if (cpuBufferMgrMemType_ == CUDA_HOST) {
-    try {
-      slabs_.back() = cudaMgr_->allocatePinnedHostMem(slabSize);
-    } catch (std::runtime_error& error) {
-      slabs_.resize(slabs_.size() - 1);
-      throw FailedToCreateSlab();
-    }
-  } else {
-    try {
-      slabs_.back() = new int8_t[slabSize];
-    } catch (std::runtime_error& error) {
-      slabs_.resize(slabs_.size() - 1);
-      throw FailedToCreateSlab();
-    }
+  try {
+    slabs_.back() = new int8_t[slabSize];
+  } catch (std::runtime_error& error) {
+    slabs_.resize(slabs_.size() - 1);
+    throw FailedToCreateSlab();
   }
   slabSegments_.resize(slabSegments_.size() + 1);
   slabSegments_[slabSegments_.size() - 1].push_back(BufferSeg(0, slabSize / pageSize_));
@@ -43,11 +34,7 @@ void CpuBufferMgr::addSlab(const size_t slabSize) {
 
 void CpuBufferMgr::freeAllMem() {
   for (auto bufIt = slabs_.begin(); bufIt != slabs_.end(); ++bufIt) {
-    if (cpuBufferMgrMemType_ == CUDA_HOST) {
-      cudaMgr_->freePinnedHostMem(*bufIt);
-    } else {
-      delete[] * bufIt;
-    }
+    delete[] * bufIt;
   }
 }
 

@@ -5,6 +5,7 @@
  */
 #include "BufferMgr.h"
 #include "Buffer.h"
+#include "Shared/measure.h"
 
 #include <algorithm>
 #include <cassert>
@@ -250,9 +251,10 @@ BufferList::iterator BufferMgr::findFreeBuffer(size_t numBytes) {
       if (pagesLeft < currentMaxSlabPageSize_)
         currentMaxSlabPageSize_ = pagesLeft;
       if (numPagesRequested <= currentMaxSlabPageSize_) {  // don't try to allocate if the new slab won't be big enough
-        addSlab(currentMaxSlabPageSize_ * pageSize_);
+        auto alloc_ms = measure<>::execution([&]() { addSlab(currentMaxSlabPageSize_ * pageSize_); });
         LOG(INFO) << "ALLOCATION slab of " << currentMaxSlabPageSize_ << " pages ("
-                  << currentMaxSlabPageSize_ * pageSize_ << "B) created " << getStringMgrType() << ":" << deviceId_;
+                  << currentMaxSlabPageSize_ * pageSize_ << "B) created in " << alloc_ms << " ms " << getStringMgrType()
+                  << ":" << deviceId_;
       } else
         break;
       // if here then addSlab succeeded
@@ -354,7 +356,7 @@ BufferList::iterator BufferMgr::findFreeBuffer(size_t numBytes) {
     }
   }
   if (bestEvictionStart == slabSegments_[0].end()) {
-    LOG(ERROR) << "ALLOCATION failed to find " << numBytes << "B throwing out of memory" << getStringMgrType() << ":"
+    LOG(ERROR) << "ALLOCATION failed to find " << numBytes << "B throwing out of memory " << getStringMgrType() << ":"
                << deviceId_;
     printSlabs();
     throw OutOfMemory();
@@ -404,6 +406,19 @@ std::string BufferMgr::printSlabs() {
   }
   tss << "--------------------" << std::endl;
   return tss.str();
+}
+
+void BufferMgr::clearSlabs() {
+  size_t numSlabs = slabSegments_.size();
+  for (size_t slabNum = 0; slabNum != numSlabs; ++slabNum) {
+    for (auto segIt = slabSegments_[slabNum].begin(); segIt != slabSegments_[slabNum].end(); ++segIt) {
+      if (segIt->memStatus == FREE) {
+        // no need to free
+      } else {
+        deleteBuffer(segIt->chunkKey, true);
+      }
+    }
+  }
 }
 
 // return the maximum size this buffer can be in bytes

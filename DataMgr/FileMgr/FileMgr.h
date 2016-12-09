@@ -110,6 +110,8 @@ class FileMgr : public AbstractBufferMgr {  // implements
   virtual inline MgrType getMgrType() { return FILE_MGR; };
   virtual inline std::string getStringMgrType() { return ToString(FILE_MGR); }
   virtual inline std::string printSlabs() { return "Not Implemented"; }
+  virtual inline void clearSlabs() { /* noop */
+  }
   virtual inline size_t getMaxSize() { return 0; }
   virtual inline size_t getInUseSize() { return 0; }
   virtual inline size_t getAllocated() { return 0; }
