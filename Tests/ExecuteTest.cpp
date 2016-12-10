@@ -2122,6 +2122,7 @@ TEST(Select, Subqueries) {
       "1)) FROM test;",
       dt);
 #endif
+    EXPECT_THROW(run_simple_agg("SELECT AVG(SELECT x FROM test LIMIT 5) FROM test;", dt), std::runtime_error);
   }
 }
 
