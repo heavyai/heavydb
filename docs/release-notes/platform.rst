@@ -1,7 +1,82 @@
 MapD Platform Release Notes
 ===========================
 
-The latest version of the MapD Platform is 1.2.10.
+The latest version of the MapD Platform is 2.0.0.
+
+**Version 2.0**
+-----------------
+
+**2.0.0** - Released December 13, 2016
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+MapD Core
++++++++++
+
+.. note:: Please note this version introduces a filesystem-level change to the on-disk
+    data.  After the automated migration to this version has occurred, your data
+    directory will no longer be compatible with previous versions. Any risk is low,
+    but please confirm prior to starting a new version of MapD that your backups
+    are current and available.
+
+.. note:: This release breaks API compatibility with the previous JDBC driver. You
+    must use the new JDBC driver included in this release with any MapD Core 2.0
+    instances.
+
+New
+'''
+
+- Queries with multiple ``GROUP BY`` columns perform significantly better than before, particularly for queries which generate a high number of groups
+- Projection queries without a limit are now allowed most of the time, depending on filter selectivity
+- Multi-column ``GROUP BY`` now uses less memory
+- ``COPY TO`` now accepts any query allowed elsewhere in the system
+- More ``IN`` / ``NOT IN`` subqueries are supported and have better performance
+- ``ATAN`` function support
+- Up to 30% faster StreamInsert and ``COPY FROM`` import performance
+- Support for polygon hit testing (checking whether a backend-rendered pixel has an underlying polygon)
+- In addition to standard CSS-string color representations, colors can now be represented in a packed 32-bit integer format
+- SQL watchdog now enabled by default, to catch queries which would consume excessive resources
+- Glob support for ``COPY FROM`` statement, allowing multiple delimited files to be specified for import
+- Newly available ``EXPLAIN CALCITE`` statement show human-readable relational algebra
+- Full schema now reported in MapDQL when using ``\d`` option
+- Improved import times for small files
+- Smaller, 2MB JDBC driver now available
+- SQLImporter default behavior changed to append, if appropriate table is already available. Truncate option is now required to be specified if you want to import into an empty table.
+
+Fixed
+'''''
+
+- Issue with ``ORDER BY`` non-``COUNT`` aggregates for queries which generate many groups
+- Data race condition with 3+ way ``JOIN``
+- Issue with ``ORDER BY`` negative floats
+- Issue with ``ORDER BY`` a column when a function of that column is projected
+- Issue with ``IN`` subqueries when inner query is a projection query
+- Robustness issues with simple top count queries which generate many groups before the top operation
+- Issue with ``LIKE`` / ``REGEX`` on non-dictionary encoded strings
+- Issue when ``CASE`` expression is an argument to a COUNT aggregate expression
+- Issue when ``TRUNCATE`` on integers when second argument is negative
+- Issue when using ``SELECT *`` from a 3+ way ``JOIN`` query
+- Fixing edge-case Rendering bugs when updating Vega-only without changing SQL query
+- Render polygon stroking issue when two adjacent polygon edges overlap one another
+- Cleanup long-lasting HTTP connections caused by misbehaving clients.  Timeout duration is configurable.
+- Issue in a scenario where a table had been named A then renamed to B, then dropped and recreated as A
+- Greater precision is now maintained for Lat/lon on rendered maps
+- JDBC connector mishandling of ``AS`` in SQL statements
+- Issue with importing ``DATE`` or ``TIMESTAMP`` as a negative UNIX ``epoch`` time representation
+- Issue with ``COPY TO`` for ``TIME`` columns
+- Issue with Linux kernel memory fragmentation
+- Issue with JMeter support in the JDBC driver
+
+
+MapD Immerse
+++++++++++++
+
+.. note:: Version 2 of the MapD visualization web client, Immerse, now is available at
+    the root of the host, e.g. ``yourserver/``.  Version 1 of Immerse is still
+    available at ``yourserver/v1/``.  Links to saved version 1 dashboards will
+    resolve to the correct address. Version 1 is deprecated, but will continue to
+    be included in the MapD install, with sufficient notice to be given before it
+    is removed.  Henceforth, updates to Immerse will be noted in these release
+    notes.
 
 **Version 1.2**
 -----------------
