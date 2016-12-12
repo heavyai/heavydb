@@ -2082,7 +2082,14 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
         }
         if (is_null)
           outfile << copy_params.null_str;
-        else
+        else if (ti.get_type() == kTIME) {
+          time_t t = int_val;
+          std::tm tm_struct;
+          gmtime_r(&t, &tm_struct);
+          char buf[9];
+          strftime(buf, 9, "%T", &tm_struct);
+          outfile << buf;
+        } else
           outfile << int_val;
       } else if (boost::get<double>(scalar_tv)) {
         auto real_val = *(boost::get<double>(scalar_tv));
@@ -2090,6 +2097,16 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
           is_null = (real_val == NULL_FLOAT);
         } else {
           is_null = (real_val == NULL_DOUBLE);
+        }
+        if (is_null)
+          outfile << copy_params.null_str;
+        else
+          outfile << real_val;
+      } else if (boost::get<float>(scalar_tv)) {
+        CHECK_EQ(kFLOAT, ti.get_type());
+        auto real_val = *(boost::get<float>(scalar_tv));
+        if (ti.get_type() == kFLOAT) {
+          is_null = (real_val == NULL_FLOAT);
         }
         if (is_null)
           outfile << copy_params.null_str;
