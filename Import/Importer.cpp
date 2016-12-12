@@ -416,7 +416,7 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
     case kTIME:
     case kTIMESTAMP:
     case kDATE:
-      if (!is_null && isdigit(val[0])) {
+      if (!is_null && (isdigit(val[0]) || val[0] == '-')) {
         SQLTypeInfo ti = cd->columnType;
         Datum d = StringToDatum(val, ti);
         addTime(d.timeval);
