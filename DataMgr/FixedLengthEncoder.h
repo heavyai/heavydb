@@ -28,7 +28,7 @@ class FixedLengthEncoder : public Encoder {
                           std::to_string(encodedData.get()[i]);
       } else {
         T data = unencodedData[i];
-        if (data == std::numeric_limits<T>::min())
+        if (data == std::numeric_limits<V>::min())
           has_nulls = true;
         else {
           dataMin = std::min(dataMin, data);
@@ -49,6 +49,35 @@ class FixedLengthEncoder : public Encoder {
   void getMetadata(ChunkMetadata& chunkMetadata) {
     Encoder::getMetadata(chunkMetadata);  // call on parent class
     chunkMetadata.fillChunkStats(dataMin, dataMax, has_nulls);
+  }
+
+  // Only called from the executor for synthesized meta-information.
+  ChunkMetadata getMetadata(const SQLTypeInfo& ti) {
+    ChunkMetadata chunk_metadata{ti, 0, 0, ChunkStats{}};
+    chunk_metadata.fillChunkStats(dataMin, dataMax, has_nulls);
+    return chunk_metadata;
+  }
+
+  // Only called from the executor for synthesized meta-information.
+  void updateStats(const int64_t val, const bool is_null) {
+    if (is_null) {
+      has_nulls = true;
+    } else {
+      const auto data = static_cast<T>(val);
+      dataMin = std::min(dataMin, data);
+      dataMax = std::max(dataMax, data);
+    }
+  }
+
+  // Only called from the executor for synthesized meta-information.
+  void updateStats(const double val, const bool is_null) {
+    if (is_null) {
+      has_nulls = true;
+    } else {
+      const auto data = static_cast<T>(val);
+      dataMin = std::min(dataMin, data);
+      dataMax = std::max(dataMax, data);
+    }
   }
 
   void copyMetadata(const Encoder* copyFromEncoder) {

@@ -30,6 +30,17 @@ class ReductionRanOutOfSlots : public std::runtime_error {
   ReductionRanOutOfSlots() : std::runtime_error("ReductionRanOutOfSlots") {}
 };
 
+inline int64_t fixed_encoding_nullable_val(const int64_t val, const SQLTypeInfo& type_info) {
+  if (type_info.get_compression() != kENCODING_NONE) {
+    CHECK(type_info.get_compression() == kENCODING_FIXED || type_info.get_compression() == kENCODING_DICT);
+    auto logical_ti = get_logical_type_info(type_info);
+    if (val == inline_int_null_val(logical_ti)) {
+      return inline_fixed_encoding_null_val(type_info);
+    }
+  }
+  return val;
+}
+
 class ColumnarResults {
  public:
   ColumnarResults(const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
@@ -56,19 +67,21 @@ class ColumnarResults {
         const auto scalar_col_val = boost::get<ScalarTargetValue>(&col_val);
         CHECK(scalar_col_val);
         auto i64_p = boost::get<int64_t>(scalar_col_val);
+        const auto& type_info = target_types[i];
         if (i64_p) {
+          const auto val = fixed_encoding_nullable_val(*i64_p, type_info);
           switch (target_types[i].get_size()) {
             case 1:
-              ((int8_t*)column_buffers_[i])[row_idx] = static_cast<int8_t>(*i64_p);
+              ((int8_t*)column_buffers_[i])[row_idx] = static_cast<int8_t>(val);
               break;
             case 2:
-              ((int16_t*)column_buffers_[i])[row_idx] = static_cast<int16_t>(*i64_p);
+              ((int16_t*)column_buffers_[i])[row_idx] = static_cast<int16_t>(val);
               break;
             case 4:
-              ((int32_t*)column_buffers_[i])[row_idx] = static_cast<int32_t>(*i64_p);
+              ((int32_t*)column_buffers_[i])[row_idx] = static_cast<int32_t>(val);
               break;
             case 8:
-              ((int64_t*)column_buffers_[i])[row_idx] = *i64_p;
+              ((int64_t*)column_buffers_[i])[row_idx] = val;
               break;
             default:
               CHECK(false);

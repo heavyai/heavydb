@@ -477,6 +477,20 @@ std::string DatumToString(Datum d, const SQLTypeInfo& ti);
 #include "../QueryEngine/ExtractFromTime.h"
 #include "../QueryEngine/DateTruncate.h"
 
+inline SQLTypeInfo get_logical_type_info(const SQLTypeInfo& type_info) {
+  EncodingType encoding = type_info.get_compression();
+  if (encoding == kENCODING_FIXED) {
+    encoding = kENCODING_NONE;
+  }
+  return SQLTypeInfo(type_info.get_type(),
+                     type_info.get_dimension(),
+                     type_info.get_scale(),
+                     false,
+                     encoding,
+                     0,
+                     type_info.get_subtype());
+}
+
 typedef int32_t StringOffsetT;
 
 #endif  // SQLTYPES_H

@@ -316,8 +316,9 @@ ExpressionRange getExpressionRange(const Analyzer::ColumnVar* col_expr,
                                    const std::vector<InputTableInfo>& query_infos,
                                    const Executor* executor) {
   int col_id = col_expr->get_column_id();
-  const auto& col_ti =
+  const auto& col_phys_ti =
       col_expr->get_type_info().is_array() ? col_expr->get_type_info().get_elem_type() : col_expr->get_type_info();
+  const auto col_ti = get_logical_type_info(col_phys_ti);
   switch (col_ti.get_type()) {
     case kTEXT:
     case kCHAR:
