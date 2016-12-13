@@ -343,9 +343,6 @@ Subquery Expression Support
 +------------+------------------------------------------+-----------------------+
 | Expression | Example                                  | Description           |
 +============+==========================================+=======================+
-| EXISTS     | EXISTS (**subquery**)                    | evaluates whether the |
-|            |                                          | subquery returns rows |
-+------------+------------------------------------------+-----------------------+
 | IN         | **expr** IN (**subquery** or **list of   | evaluates whether     |
 |            | values**)                                | **expr** equals any   |
 |            |                                          | value of the IN list  |
