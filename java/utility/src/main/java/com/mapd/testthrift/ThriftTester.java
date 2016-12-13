@@ -77,7 +77,7 @@ public class ThriftTester {
       logger.info("Connected session is " + session);
 
       // lets fetch databases from mapd
-      List<TDBInfo> dbs = client.get_databases();
+      List<TDBInfo> dbs = client.get_databases(session);
 
       for (TDBInfo db : dbs) {
         logger.info("db is " + db.toString());

@@ -135,7 +135,7 @@ public class LogRunner {
 
   private void theRest(MapD.Client client, int session) throws TException {
     // lets fetch databases from mapd
-    List<TDBInfo> dbs = client.get_databases();
+    List<TDBInfo> dbs = client.get_databases(session);
 
     for (TDBInfo db : dbs) {
       logger.info("db is " + db.toString());

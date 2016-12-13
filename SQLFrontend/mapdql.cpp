@@ -111,10 +111,10 @@ bool thrift_with_retry(ThriftService which_service, ClientContext& context, cons
         context.client.get_tables(context.names_return, context.session);
         break;
       case kGET_DATABASES:
-        context.client.get_databases(context.dbinfos_return);
+        context.client.get_databases(context.dbinfos_return, context.session);
         break;
       case kGET_USERS:
-        context.client.get_users(context.names_return);
+        context.client.get_users(context.names_return, context.session);
         break;
       case kSET_EXECUTION_MODE:
         context.client.set_execution_mode(context.session, context.execution_mode);
@@ -123,16 +123,16 @@ bool thrift_with_retry(ThriftService which_service, ClientContext& context, cons
         context.client.get_version(context.version);
         break;
       case kGET_MEMORY_GPU:
-        context.client.get_memory_gpu(context.memory_usage);
+        context.client.get_memory_gpu(context.memory_usage, context.session);
         break;
       case kGET_MEMORY_SUMMARY:
-        context.client.get_memory_summary(context.memory_summary);
+        context.client.get_memory_summary(context.memory_summary, context.session);
         break;
       case kGET_TABLE_DETAILS:
         context.client.get_table_details(context.table_details, context.session, arg);
         break;
       case kCLEAR_MEMORY_GPU:
-        context.client.clear_gpu_memory();
+        context.client.clear_gpu_memory(context.session);
         break;
     }
   } catch (TMapDException& e) {
@@ -150,6 +150,9 @@ bool thrift_with_retry(ThriftService which_service, ClientContext& context, cons
       return thrift_with_retry(which_service, context, arg);
     } catch (TException& te1) {
       std::cerr << "Thrift error: " << te1.what() << std::endl;
+      return false;
+    } catch (TMapDException& te1) {
+      std::cerr << "Error: " << te1.what() << std::endl;
       return false;
     }
   }

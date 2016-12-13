@@ -769,7 +769,8 @@ class MapDHandler : virtual public MapDIf {
     }
   }
 
-  void get_users(std::vector<std::string>& user_names) override {
+  void get_users(std::vector<std::string>& user_names, const TSessionId session) override {
+    const auto session_info = get_session(session);
     std::list<Catalog_Namespace::UserMetadata> user_list = sys_cat_->getAllUserMetadata();
     for (auto u : user_list) {
       user_names.push_back(u.userName);
@@ -778,15 +779,20 @@ class MapDHandler : virtual public MapDIf {
 
   void get_version(std::string& version) override { version = MapDRelease; }
 
-  void get_memory_gpu(std::string& memory) override {
+  void get_memory_gpu(std::string& memory, const TSessionId session) override {
+    const auto session_info = get_session(session);
     memory = sys_cat_->get_dataMgr().dumpLevel(MemoryLevel::GPU_LEVEL);
   }
 
-  void clear_gpu_memory() { sys_cat_->get_dataMgr().clearMemory(MemoryLevel::GPU_LEVEL); }
+  void clear_gpu_memory(const TSessionId session) override {
+    const auto session_info = get_session(session);
+    sys_cat_->get_dataMgr().clearMemory(MemoryLevel::GPU_LEVEL);
+  }
 
   // void get_memory_summary(std::string& memory) { memory = sys_cat_->get_dataMgr().getMemorySummary(); }
 
-  void get_memory_summary(TMemorySummary& memory) override {
+  void get_memory_summary(TMemorySummary& memory, const TSessionId session) override {
+    const auto session_info = get_session(session);
     Data_Namespace::memorySummary internal_memory = sys_cat_->get_dataMgr().getMemorySummary();
     memory.cpu_memory_in_use = internal_memory.cpuMemoryInUse;
     for (auto gpu : internal_memory.gpuSummary) {
@@ -799,7 +805,8 @@ class MapDHandler : virtual public MapDIf {
     }
   }
 
-  void get_databases(std::vector<TDBInfo>& dbinfos) override {
+  void get_databases(std::vector<TDBInfo>& dbinfos, const TSessionId session) override {
+    const auto session_info = get_session(session);
     std::list<Catalog_Namespace::DBMetadata> db_list = sys_cat_->getAllDBMetadata();
     std::list<Catalog_Namespace::UserMetadata> user_list = sys_cat_->getAllUserMetadata();
     for (auto d : db_list) {
@@ -1409,7 +1416,8 @@ class MapDHandler : virtual public MapDIf {
     _return.rows_rejected = is.rows_rejected;
   }
 
-  void start_heap_profile() override {
+  void start_heap_profile(const TSessionId session) override {
+    const auto session_info = get_session(session);
 #ifdef HAVE_PROFILER
     if (IsHeapProfilerRunning()) {
       throw_profile_exception("Profiler already started");
@@ -1420,7 +1428,8 @@ class MapDHandler : virtual public MapDIf {
 #endif  // HAVE_PROFILER
   }
 
-  void stop_heap_profile() override {
+  void stop_heap_profile(const TSessionId session) override {
+    const auto session_info = get_session(session);
 #ifdef HAVE_PROFILER
     if (!IsHeapProfilerRunning()) {
       throw_profile_exception("Profiler not running");
@@ -1431,7 +1440,8 @@ class MapDHandler : virtual public MapDIf {
 #endif  // HAVE_PROFILER
   }
 
-  void get_heap_profile(std::string& profile) override {
+  void get_heap_profile(std::string& profile, const TSessionId session) override {
+    const auto session_info = get_session(session);
 #ifdef HAVE_PROFILER
     if (!IsHeapProfilerRunning()) {
       throw_profile_exception("Profiler not running");

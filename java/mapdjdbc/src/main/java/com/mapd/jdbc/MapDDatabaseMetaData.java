@@ -763,7 +763,7 @@ SQLException - if a database access error occurs
     List<TDBInfo> databases = null;
 
     try {
-      databases = con.client.get_databases();
+      databases = con.client.get_databases(con.session);
     } catch (TException ex) {
       throw new SQLException("get_database failed " + ex.toString());
     }
