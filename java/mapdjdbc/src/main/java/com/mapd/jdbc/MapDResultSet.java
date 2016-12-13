@@ -52,9 +52,9 @@ class MapDResultSet implements java.sql.ResultSet {
   private TRowSet rowSet = null;
   private List<TColumnType> rowDesc;
   private boolean wasNull = false;
-  private String warnings = null;
   private Map<String, Integer> columnMap;
   private int fetchSize = 0;
+  private SQLWarning warnings = null;
 
   public MapDResultSet(TQueryResult tsqlResult, String sql) throws SQLException { //logger.debug("Entered "+ sql );
     sqlResult = tsqlResult;
@@ -505,9 +505,7 @@ class MapDResultSet implements java.sql.ResultSet {
 
   @Override
   public SQLWarning getWarnings() throws SQLException { //logger.debug("Entered "+ sql );
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    return warnings;
   }
 
   @Override

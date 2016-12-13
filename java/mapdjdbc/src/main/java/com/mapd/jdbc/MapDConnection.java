@@ -48,20 +48,21 @@ public class MapDConnection implements java.sql.Connection {
   protected Properties properties = null;
   protected String user;
   protected TTransport transport;
+  protected SQLWarning warnings;
 
   public MapDConnection(String url, Properties info) throws SQLException { //logger.debug("Entered");
     this.url = url;
     this.properties = info;
 
-    //logger.info("We got to here " + url + " info: " + info.toString());
+    //logger.debug("We got to here " + url + " info: " + info.toString());
     String[] temp = url.split(":");
 
     //for (int i = 0; i < temp.length; i++) {
-    //  logger.info("temp  " + i + " " + temp[i].toString());
+    //  logger.debug("temp  " + i + " " + temp[i].toString());
     //}
     String machine = temp[2];
 
-    //logger.info("machine : " + machine);
+    //logger.debug("machine : " + machine);
     int port = Integer.valueOf(temp[3]);
     String db = temp[4];
 
@@ -151,9 +152,10 @@ public class MapDConnection implements java.sql.Connection {
 
   @Override
   public boolean isClosed() throws SQLException { //logger.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    if (session == 0){
+      return true;
+    }
+    return false;
   }
 
   @Override
@@ -200,16 +202,12 @@ public class MapDConnection implements java.sql.Connection {
 
   @Override
   public SQLWarning getWarnings() throws SQLException { //logger.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    return warnings;
   }
 
   @Override
   public void clearWarnings() throws SQLException { //logger.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+      warnings = null;
   }
 
   @Override
@@ -362,9 +360,16 @@ public class MapDConnection implements java.sql.Connection {
 
   @Override
   public boolean isValid(int timeout) throws SQLException { //logger.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    try {
+      client.get_server_status(session);
+    } catch (TTransportException ex) {
+      throw new SQLException("Connection failed - " + ex.toString());
+    } catch (ThriftException ex) {
+      throw new SQLException("Connection failed - " + ex.toString());
+    } catch (TException ex) {
+      throw new SQLException("Connection failed - " + ex.toString());
+    }
+    return true;
   }
 
   @Override

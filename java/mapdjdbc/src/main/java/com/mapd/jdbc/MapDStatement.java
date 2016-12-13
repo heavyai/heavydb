@@ -29,6 +29,7 @@ public class MapDStatement implements java.sql.Statement {
   private TQueryResult sqlResult = null;
   private int maxRows = 100000; // add limit to unlimited queries
   private boolean escapeProcessing = false;
+  private int queryTimeout;
 
   MapDStatement(int tsession, MapD.Client tclient) {
     session = tsession;
@@ -124,9 +125,7 @@ public class MapDStatement implements java.sql.Statement {
 
   @Override
   public void setQueryTimeout(int seconds) throws SQLException { //logger.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    queryTimeout = seconds;
   }
 
   @Override
