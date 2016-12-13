@@ -92,7 +92,8 @@ void RelAlgExecutor::executeRelAlgStep(const size_t i,
                                       eo.just_explain,
                                       eo.allow_loop_joins,
                                       eo.with_watchdog && (i == 0 || dynamic_cast<const RelProject*>(body)),
-                                      eo.jit_debug};
+                                      eo.jit_debug,
+                                      eo.just_validate};
   const auto compound = dynamic_cast<const RelCompound*>(body);
   if (compound) {
     exec_desc.setResult(executeCompound(compound, co, eo_work_unit, render_info, queue_time_ms));
@@ -132,52 +133,6 @@ void RelAlgExecutor::executeRelAlgStep(const size_t i,
   }
 #endif
   CHECK(false);
-}
-
-std::vector<TargetMetaInfo> RelAlgExecutor::validateRelAlgSeq(const std::vector<RaExecutionDesc>& exec_descs) {
-  CHECK(!exec_descs.empty());
-  for (const auto& exec_desc : exec_descs) {
-    const auto body = exec_desc.getBody();
-    const auto result = exec_desc.getResult();
-    CHECK(result.empty());
-    if (body->isNop()) {
-      CHECK(dynamic_cast<const RelAggregate*>(body));
-      CHECK_EQ(size_t(1), body->inputCount());
-      const auto input = body->getInput(0);
-      body->setOutputMetainfo(input->getOutputMetainfo());
-      addTemporaryTable(-body->getId(), result.getDataPtr());
-      continue;
-    }
-    const auto compound = dynamic_cast<const RelCompound*>(body);
-    SortInfo dummy{{}, SortAlgorithm::Default, 0, 0};
-    if (compound) {
-      createCompoundWorkUnit(compound, dummy, false);
-      addTemporaryTable(-compound->getId(), result.getDataPtr());
-      continue;
-    }
-    const auto project = dynamic_cast<const RelProject*>(body);
-    if (project) {
-      createProjectWorkUnit(project, dummy, false);
-      addTemporaryTable(-project->getId(), result.getDataPtr());
-      continue;
-    }
-    const auto filter = dynamic_cast<const RelFilter*>(body);
-    if (filter) {
-      createFilterWorkUnit(filter, dummy, false);
-      addTemporaryTable(-filter->getId(), result.getDataPtr());
-      continue;
-    }
-    const auto sort = dynamic_cast<const RelSort*>(body);
-    if (sort) {
-      CHECK_EQ(size_t(1), sort->inputCount());
-      const auto source = sort->getInput(0);
-      CHECK(!dynamic_cast<const RelSort*>(source));
-      createSortInputWorkUnit(sort, false);
-      addTemporaryTable(-sort->getId(), result.getDataPtr());
-      continue;
-    }
-  }
-  return exec_descs.back().getBody()->getOutputMetainfo();
 }
 
 const std::vector<std::string>& RelAlgExecutor::getScanTableNamesInRelAlgSeq() const {
@@ -1166,7 +1121,7 @@ ExecutionResult RelAlgExecutor::handleRetry(const int32_t error_code_in,
   auto error_code = error_code_in;
   auto max_groups_buffer_entry_guess = work_unit.max_groups_buffer_entry_guess;
   ExecutionOptions eo_no_multifrag{
-      eo.output_columnar_hint, false, false, eo.allow_loop_joins, eo.with_watchdog, eo.jit_debug};
+      eo.output_columnar_hint, false, false, eo.allow_loop_joins, eo.with_watchdog, eo.jit_debug, false};
   ExecutionResult result{ResultRows({}, {}, nullptr, nullptr, {}, co.device_type_), {}};
   if (error_code == Executor::ERR_OUT_OF_GPU_MEM) {
     result = {executor_->executeWorkUnit(&error_code,

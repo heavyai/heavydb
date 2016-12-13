@@ -345,17 +345,18 @@ RowSetPtr Executor::executeSelectPlan(const Planner::Plan* plan,
     const auto ra_exe_unit = query_rewriter.rewrite();
     if (limit || offset) {
       size_t max_groups_buffer_entry_guess_limit{scan_total_limit ? scan_total_limit : max_groups_buffer_entry_guess};
-      auto result = executeWorkUnit(error_code,
-                                    max_groups_buffer_entry_guess_limit,
-                                    is_agg,
-                                    query_infos,
-                                    ra_exe_unit,
-                                    {device_type, hoist_literals, opt_level},
-                                    {false, allow_multifrag, just_explain, allow_loop_joins, g_enable_watchdog, false},
-                                    cat,
-                                    row_set_mem_owner_,
-                                    render_allocator_map,
-                                    true);
+      auto result =
+          executeWorkUnit(error_code,
+                          max_groups_buffer_entry_guess_limit,
+                          is_agg,
+                          query_infos,
+                          ra_exe_unit,
+                          {device_type, hoist_literals, opt_level},
+                          {false, allow_multifrag, just_explain, allow_loop_joins, g_enable_watchdog, false, false},
+                          cat,
+                          row_set_mem_owner_,
+                          render_allocator_map,
+                          true);
       auto& rows = boost::get<RowSetPtr>(result);
       max_groups_buffer_entry_guess = max_groups_buffer_entry_guess_limit;
       CHECK(rows);
@@ -365,17 +366,18 @@ RowSetPtr Executor::executeSelectPlan(const Planner::Plan* plan,
       }
       return std::move(rows);
     }
-    auto result = executeWorkUnit(error_code,
-                                  max_groups_buffer_entry_guess,
-                                  is_agg,
-                                  query_infos,
-                                  ra_exe_unit,
-                                  {device_type, hoist_literals, opt_level},
-                                  {false, allow_multifrag, just_explain, allow_loop_joins, g_enable_watchdog, false},
-                                  cat,
-                                  row_set_mem_owner_,
-                                  render_allocator_map,
-                                  true);
+    auto result =
+        executeWorkUnit(error_code,
+                        max_groups_buffer_entry_guess,
+                        is_agg,
+                        query_infos,
+                        ra_exe_unit,
+                        {device_type, hoist_literals, opt_level},
+                        {false, allow_multifrag, just_explain, allow_loop_joins, g_enable_watchdog, false, false},
+                        cat,
+                        row_set_mem_owner_,
+                        render_allocator_map,
+                        true);
     auto& rows = boost::get<RowSetPtr>(result);
     CHECK(rows);
     return std::move(rows);
@@ -3575,17 +3577,18 @@ RowSetPtr Executor::executeResultPlan(const Planner::Result* result_plan,
                                                   0};
   QueryRewriter query_rewriter(ra_exe_unit_in, query_infos, this, result_plan);
   const auto ra_exe_unit = query_rewriter.rewrite();
-  auto result = executeWorkUnit(error_code,
-                                max_groups_buffer_entry_guess,
-                                true,
-                                query_infos,
-                                ra_exe_unit,
-                                {device_type, hoist_literals, opt_level},
-                                {false, allow_multifrag, just_explain, allow_loop_joins, g_enable_watchdog, false},
-                                cat,
-                                row_set_mem_owner_,
-                                nullptr,
-                                true);
+  auto result =
+      executeWorkUnit(error_code,
+                      max_groups_buffer_entry_guess,
+                      true,
+                      query_infos,
+                      ra_exe_unit,
+                      {device_type, hoist_literals, opt_level},
+                      {false, allow_multifrag, just_explain, allow_loop_joins, g_enable_watchdog, false, false},
+                      cat,
+                      row_set_mem_owner_,
+                      nullptr,
+                      true);
   auto& rows = boost::get<RowSetPtr>(result);
   CHECK(rows);
   if (just_explain) {
@@ -3963,16 +3966,18 @@ ResultPtr Executor::executeWorkUnit(int32_t* error_code,
     if (render_allocator_map && cgen_state_->must_run_on_cpu_) {
       throw std::runtime_error("Query has to run on CPU, cannot render its results");
     }
-    dispatchFragments(dispatch,
-                      execution_dispatch,
-                      options,
-                      is_agg,
-                      selected_tables_fragments,
-                      context_count,
-                      scheduler_cv,
-                      scheduler_mutex,
-                      available_gpus,
-                      available_cpus);
+    if (!options.just_validate) {
+      dispatchFragments(dispatch,
+                        execution_dispatch,
+                        options,
+                        is_agg,
+                        selected_tables_fragments,
+                        context_count,
+                        scheduler_cv,
+                        scheduler_mutex,
+                        available_gpus,
+                        available_cpus);
+    }
     cat.get_dataMgr().freeAllBuffers();
     if (*error_code == ERR_OVERFLOW_OR_UNDERFLOW) {
       crt_min_byte_width <<= 1;

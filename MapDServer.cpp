@@ -540,20 +540,7 @@ class MapDHandler : virtual public MapDIf {
       throw ex;
     }
 #ifdef HAVE_RAVM
-    const auto targets_meta = validate_rel_alg(query_str, session_info);
-    for (const auto& target : targets_meta) {
-      const auto& target_ti = target.get_type_info();
-      TColumnType col_type;
-      col_type.col_type.type = type_to_thrift(target_ti);
-      col_type.col_type.encoding = encoding_to_thrift(target_ti);
-      col_type.col_type.nullable = !target_ti.get_notnull();
-      col_type.col_type.is_array = target_ti.get_type() == kARRAY;
-      col_type.col_name = target.get_resname();
-      col_type.col_type.precision = target_ti.get_precision();
-      col_type.col_type.scale = target_ti.get_scale();
-      const auto it_ok = _return.insert(std::make_pair(col_type.col_name, col_type));
-      CHECK(it_ok.second);
-    }
+    validate_rel_alg(_return, query_str, session_info);
 #else   // HAVE_RAVM
     root_plan.reset(parse_to_plan(query_str, session_info));
 #endif  // !HAVE_RAVM
@@ -586,16 +573,17 @@ class MapDHandler : virtual public MapDIf {
   }
 
 #ifdef HAVE_RAVM
-  std::vector<TargetMetaInfo> validate_rel_alg(const std::string& query_str,
-                                               const Catalog_Namespace::SessionInfo& session_info) {
+  void validate_rel_alg(TTableDescriptor& _return,
+                        const std::string& query_str,
+                        const Catalog_Namespace::SessionInfo& session_info) {
     const auto query_ra = parse_to_ra(query_str, session_info);
-    const auto& cat = session_info.get_catalog();
-    CompilationOptions co = {session_info.get_executor_device_type(), true, ExecutorOptLevel::Default};
-    ExecutionOptions eo = {false, allow_multifrag_, false, allow_loop_joins_, g_enable_watchdog, jit_debug_};
-    const auto ra = deserialize_ra_dag(query_ra, cat, co, eo, nullptr);
-    auto ed_list = get_execution_descriptors(ra.get());
-    RelAlgExecutor ra_executor(nullptr, cat);
-    return ra_executor.validateRelAlgSeq(ed_list);
+    TQueryResult result;
+    execute_rel_alg(result, query_ra, true, session_info, ExecutorDeviceType::CPU, false, true);
+    const auto& row_desc = result.row_set.row_desc;
+    for (const auto col_desc : row_desc) {
+      const auto it_ok = _return.insert(std::make_pair(col_desc.col_name, col_desc));
+      CHECK(it_ok.second);
+    }
   }
 #endif  // HAVE_RAVM
 
@@ -1508,10 +1496,17 @@ class MapDHandler : virtual public MapDIf {
                        const bool column_format,
                        const Catalog_Namespace::SessionInfo& session_info,
                        const ExecutorDeviceType executor_device_type,
-                       const bool just_explain) const {
+                       const bool just_explain,
+                       const bool just_validate) const {
     const auto& cat = session_info.get_catalog();
     CompilationOptions co = {executor_device_type, true, ExecutorOptLevel::Default};
-    ExecutionOptions eo = {false, allow_multifrag_, just_explain, allow_loop_joins_, g_enable_watchdog, jit_debug_};
+    ExecutionOptions eo = {false,
+                           allow_multifrag_,
+                           just_explain,
+                           allow_loop_joins_ || just_validate,
+                           g_enable_watchdog,
+                           jit_debug_,
+                           just_validate};
     auto executor = Executor::getExecutor(
         cat.get_currentDB().dbId, jit_debug_ ? "/tmp" : "", jit_debug_ ? "mapdquery" : "", 0, 0, nullptr);
     RelAlgExecutor ra_executor(executor.get(), cat);
@@ -1621,7 +1616,7 @@ class MapDHandler : virtual public MapDIf {
     RelAlgExecutor ra_executor(executor.get(), cat);
     auto clock_begin = timer_start();
     CompilationOptions co = {session_info.get_executor_device_type(), true, ExecutorOptLevel::Default};
-    ExecutionOptions eo = {false, allow_multifrag_, false, allow_loop_joins_, g_enable_watchdog, jit_debug_};
+    ExecutionOptions eo = {false, allow_multifrag_, false, allow_loop_joins_, g_enable_watchdog, jit_debug_, false};
     rapidjson::Document render_config;
     render_config.Parse(render_type.c_str());
 
@@ -1776,7 +1771,8 @@ class MapDHandler : virtual public MapDIf {
             convert_explain(_return, ResultRows(query_ra, 0), true);
             return;
           }
-          execute_rel_alg(_return, query_ra, column_format, session_info, executor_device_type, pw.is_select_explain);
+          execute_rel_alg(
+              _return, query_ra, column_format, session_info, executor_device_type, pw.is_select_explain, false);
           return;
         }
 #else
@@ -1909,7 +1905,7 @@ class MapDHandler : virtual public MapDIf {
       const auto session_info = get_session(session);
       const auto& cat = session_info.get_catalog();
       CompilationOptions co = {executor_device_type_, true, ExecutorOptLevel::Default};
-      ExecutionOptions eo = {false, allow_multifrag_, false, allow_loop_joins_, g_enable_watchdog, jit_debug_};
+      ExecutionOptions eo = {false, allow_multifrag_, false, allow_loop_joins_, g_enable_watchdog, jit_debug_, false};
       auto executor = Executor::getExecutor(
           cat.get_currentDB().dbId, jit_debug_ ? "/tmp" : "", jit_debug_ ? "mapdquery" : "", 0, 0, nullptr);
       RelAlgExecutor ra_executor(executor.get(), cat);

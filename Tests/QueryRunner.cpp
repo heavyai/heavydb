@@ -137,7 +137,7 @@ ResultRows run_multiple_agg(const std::string& query_str,
   ParserWrapper pw{query_str};
   if (!(pw.is_other_explain || pw.is_ddl || pw.is_update_dml)) {
     CompilationOptions co = {device_type, true, ExecutorOptLevel::LoopStrengthReduction};
-    ExecutionOptions eo = {false, true, false, true, false, false};
+    ExecutionOptions eo = {false, true, false, true, false, false, false};
     auto& calcite_mgr = cat.get_calciteMgr();
     const auto query_ra = calcite_mgr.process(session->get_currentUser().userName,
                                               session->get_currentUser().passwd,

@@ -41,8 +41,6 @@ class RelAlgExecutor {
                          RenderInfo*,
                          const int64_t queue_time_ms);
 
-  std::vector<TargetMetaInfo> validateRelAlgSeq(const std::vector<RaExecutionDesc>&);
-
   const std::vector<std::string>& getScanTableNamesInRelAlgSeq() const;
 
  private:

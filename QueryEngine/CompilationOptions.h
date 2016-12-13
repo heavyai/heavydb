@@ -18,6 +18,7 @@ struct ExecutionOptions {
   const bool allow_loop_joins;
   const bool with_watchdog;  // Per work unit, not global.
   const bool jit_debug;
+  const bool just_validate;
 };
 
 #endif  // QUERYENGINE_COMPILATIONOPTIONS_H
