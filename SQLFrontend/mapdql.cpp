@@ -151,9 +151,6 @@ bool thrift_with_retry(ThriftService which_service, ClientContext& context, cons
     } catch (TException& te1) {
       std::cerr << "Thrift error: " << te1.what() << std::endl;
       return false;
-    } catch (TMapDException& te1) {
-      std::cerr << "Error: " << te1.what() << std::endl;
-      return false;
     }
   }
   return true;
