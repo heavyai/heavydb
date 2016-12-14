@@ -1,4 +1,5 @@
 @import '_normalize';
+@import '_theme_rst';
 
 $gray1: #f5f5f5;
 $gray2: #e2e2e2;
@@ -46,6 +47,12 @@ ul {
 ol {
     li {
         list-style: decimal;
+    }
+}
+
+.loweralpha {
+    li {
+        list-style: lower-alpha;
     }
 }
 
@@ -502,6 +509,14 @@ p + .section {
         }
     }
     margin-bottom: 32px;
+}
+
+.arabic, .lower-alpha {
+    li {
+        &:after {
+            background: none !important;
+        }
+    }
 }
 
 .version {
