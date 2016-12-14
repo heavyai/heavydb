@@ -919,6 +919,8 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(const RelAlgExecutor::WorkUnit& 
                                                 const ExecutionOptions& eo,
                                                 RenderInfo* render_info,
                                                 const int64_t queue_time_ms) {
+  const auto body = work_unit.body;
+  CHECK(body);
   int32_t error_code{0};
   if (render_info && render_info->do_render) {
     if (co.device_type_ != ExecutorDeviceType::GPU) {
