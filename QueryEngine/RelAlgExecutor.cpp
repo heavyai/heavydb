@@ -42,9 +42,16 @@ FirstStepExecutionResult RelAlgExecutor::executeRelAlgQueryFirstStep(const std::
   const auto ra = deserialize_ra_dag(query_ra, cat_, co, eo, executor_);
   auto ed_list = get_execution_descriptors(ra.get());
   CHECK(!ed_list.empty());
-  std::vector<RaExecutionDesc> first_exec_desc{ed_list.front()};
-  return {executeRelAlgSeq(first_exec_desc, co, eo, render_info, queue_time_ms),
-          first_exec_desc.front().getBody()->getId()};
+  auto first_exec_desc = ed_list.front();
+  const auto sort = dynamic_cast<const RelSort*>(first_exec_desc.getBody());
+  if (sort) {
+    // No point in sorting on the leaf, only execute the input to the sort node.
+    CHECK_EQ(size_t(1), sort->inputCount());
+    first_exec_desc = RaExecutionDesc(sort->getInput(0));
+  }
+  std::vector<RaExecutionDesc> first_exec_desc_singleton_list{first_exec_desc};
+  return {executeRelAlgSeq(first_exec_desc_singleton_list, co, eo, render_info, queue_time_ms),
+          first_exec_desc.getBody()->getId()};
 }
 
 ExecutionResult RelAlgExecutor::executeRelAlgSubQuery(const rapidjson::Value& query_ast,
