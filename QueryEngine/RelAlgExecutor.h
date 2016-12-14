@@ -90,6 +90,7 @@ class RelAlgExecutor {
   //             we deprecate the plan-based executor paths and remove WorkUnit
   struct WorkUnit {
     RelAlgExecutionUnit exe_unit;
+    const RelAlgNode* body;
     const size_t max_groups_buffer_entry_guess;
     std::unique_ptr<QueryRewriter> query_rewriter;
   };
