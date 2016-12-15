@@ -517,9 +517,16 @@ class MapDHandler : virtual public MapDIf {
     const auto session_info = get_session(session);
     if (leaf_aggregator_.leafCount() > 0) {
 #ifdef HAVE_RAVM
-      const auto query_ra = parse_to_ra(query_str, session_info);
-      const auto result = leaf_aggregator_.execute(session_info, query_ra, column_format, nonce);
-      convert_rows(_return, result.targets_meta, *(result.rs), column_format);
+      try {
+        const auto query_ra = parse_to_ra(query_str, session_info);
+        const auto result = leaf_aggregator_.execute(session_info, query_ra, column_format, nonce);
+        convert_rows(_return, result.targets_meta, *(result.rs), column_format);
+      } catch (std::exception& e) {
+        TMapDException ex;
+        ex.error_msg = std::string("Exception: ") + e.what();
+        LOG(ERROR) << ex.error_msg;
+        throw ex;
+      }
 #else
       CHECK(false);
 #endif  // HAVE_RAVM
