@@ -583,13 +583,20 @@ class MapDHandler : virtual public MapDIf {
   void validate_rel_alg(TTableDescriptor& _return,
                         const std::string& query_str,
                         const Catalog_Namespace::SessionInfo& session_info) {
-    const auto query_ra = parse_to_ra(query_str, session_info);
-    TQueryResult result;
-    execute_rel_alg(result, query_ra, true, session_info, ExecutorDeviceType::CPU, false, true);
-    const auto& row_desc = result.row_set.row_desc;
-    for (const auto col_desc : row_desc) {
-      const auto it_ok = _return.insert(std::make_pair(col_desc.col_name, col_desc));
-      CHECK(it_ok.second);
+    try {
+      const auto query_ra = parse_to_ra(query_str, session_info);
+      TQueryResult result;
+      execute_rel_alg(result, query_ra, true, session_info, ExecutorDeviceType::CPU, false, true);
+      const auto& row_desc = result.row_set.row_desc;
+      for (const auto col_desc : row_desc) {
+        const auto it_ok = _return.insert(std::make_pair(col_desc.col_name, col_desc));
+        CHECK(it_ok.second);
+      }
+    } catch (std::exception& e) {
+      TMapDException ex;
+      ex.error_msg = std::string("Exception: ") + e.what();
+      LOG(ERROR) << ex.error_msg;
+      throw ex;
     }
   }
 #endif  // HAVE_RAVM
