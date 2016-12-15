@@ -43,6 +43,8 @@ class RelAlgExecutor {
 
   const std::vector<std::string>& getScanTableNamesInRelAlgSeq() const;
 
+  Executor* getExecutor() const { return executor_; }
+
  private:
   ExecutionResult executeRelAlgSeq(std::vector<RaExecutionDesc>& ed_list,
                                    const CompilationOptions& co,

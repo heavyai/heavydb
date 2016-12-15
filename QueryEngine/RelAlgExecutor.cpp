@@ -20,7 +20,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQuery(const std::string& query_ra,
   executor_->row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>();
   InputTableInfoCacheScope input_table_info_cache_scope(executor_);
   int64_t queue_time_ms = timer_stop(clock_begin);
-  const auto ra = deserialize_ra_dag(query_ra, cat_, co, eo, executor_);
+  const auto ra = deserialize_ra_dag(query_ra, cat_, co, eo, this);
   auto ed_list = get_execution_descriptors(ra.get());
   if (render_info) {  // save the table names for render queries
     table_names_ = getScanTableNamesInRelAlgSeq(ed_list);
@@ -39,7 +39,7 @@ FirstStepExecutionResult RelAlgExecutor::executeRelAlgQueryFirstStep(const std::
   executor_->row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>();
   InputTableInfoCacheScope input_table_info_cache_scope(executor_);
   int64_t queue_time_ms = timer_stop(clock_begin);
-  const auto ra = deserialize_ra_dag(query_ra, cat_, co, eo, executor_);
+  const auto ra = deserialize_ra_dag(query_ra, cat_, co, eo, this);
   auto ed_list = get_execution_descriptors(ra.get());
   CHECK(!ed_list.empty());
   auto first_exec_desc = ed_list.front();
@@ -59,7 +59,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgSubQuery(const rapidjson::Value& qu
                                                       const ExecutionOptions& eo,
                                                       RenderInfo* render_info,
                                                       const int64_t queue_time_ms) {
-  const auto ra = ra_interpret(query_ast, cat_, co, eo, executor_);
+  const auto ra = ra_interpret(query_ast, cat_, co, eo, this);
   auto ed_list = get_execution_descriptors(ra.get());
   return executeRelAlgSeq(ed_list, co, eo, render_info, queue_time_ms);
 }
