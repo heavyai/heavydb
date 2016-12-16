@@ -486,6 +486,7 @@ TEST(Select, FilterAndGroupBy) {
                  std::runtime_error);
     EXPECT_THROW(run_multiple_agg("SELECT x, MAX(real_str) FROM test GROUP BY x ORDER BY x DESC;", dt),
                  std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("SELECT MIN(str) FROM test GROUP BY x;", dt), std::runtime_error);
 #endif
   }
 }

@@ -1816,7 +1816,7 @@ GroupByAndAggregate::KeylessInfo GroupByAndAggregate::getKeylessInfo(
         case kMIN: {
           CHECK(agg_expr && agg_expr->get_arg());
           const auto& arg_ti = agg_expr->get_arg()->get_type_info();
-          if (arg_ti.is_string() && arg_ti.get_compression() == kENCODING_NONE) {
+          if (arg_ti.is_string() || arg_ti.is_array()) {
             break;
           }
           auto expr_range_info = getExpressionRange(agg_expr->get_arg(), query_infos_, executor_);
@@ -1845,7 +1845,7 @@ GroupByAndAggregate::KeylessInfo GroupByAndAggregate::getKeylessInfo(
         case kMAX: {
           CHECK(agg_expr && agg_expr->get_arg());
           const auto& arg_ti = agg_expr->get_arg()->get_type_info();
-          if (arg_ti.is_string() && arg_ti.get_compression() == kENCODING_NONE) {
+          if (arg_ti.is_string() || arg_ti.is_array()) {
             break;
           }
           auto expr_range_info = getExpressionRange(agg_expr->get_arg(), query_infos_, executor_);
