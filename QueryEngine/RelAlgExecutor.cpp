@@ -25,6 +25,13 @@ ExecutionResult RelAlgExecutor::executeRelAlgQuery(const std::string& query_ra,
   if (render_info) {  // save the table names for render queries
     table_names_ = getScanTableNamesInRelAlgSeq(ed_list);
   }
+  // Dispatch the subqueries first
+  for (auto subquery : subqueries_) {
+    // Execute the subquery and cache the result.
+    RelAlgExecutor ra_executor(executor_, cat_);
+    auto result = ra_executor.executeRelAlgSubQuery(subquery->getRelAlg(), co, eo, nullptr, 0);
+    subquery->setExecutionResult(std::make_shared<ExecutionResult>(result));
+  }
   return executeRelAlgSeq(ed_list, co, eo, render_info, queue_time_ms);
 }
 
@@ -54,13 +61,12 @@ FirstStepExecutionResult RelAlgExecutor::executeRelAlgQueryFirstStep(const std::
           first_exec_desc.getBody()->getId()};
 }
 
-ExecutionResult RelAlgExecutor::executeRelAlgSubQuery(const rapidjson::Value& query_ast,
+ExecutionResult RelAlgExecutor::executeRelAlgSubQuery(const RelAlgNode* subquery_ra,
                                                       const CompilationOptions& co,
                                                       const ExecutionOptions& eo,
                                                       RenderInfo* render_info,
                                                       const int64_t queue_time_ms) {
-  const auto ra = ra_interpret(query_ast, cat_, co, eo, this);
-  auto ed_list = get_execution_descriptors(ra.get());
+  auto ed_list = get_execution_descriptors(subquery_ra);
   return executeRelAlgSeq(ed_list, co, eo, render_info, queue_time_ms);
 }
 

@@ -28,12 +28,6 @@ class RelAlgExecutor {
                                                        const ExecutionOptions& eo,
                                                        RenderInfo* render_info);
 
-  ExecutionResult executeRelAlgSubQuery(const rapidjson::Value& query_ast,
-                                        const CompilationOptions& co,
-                                        const ExecutionOptions& eo,
-                                        RenderInfo* render_info,
-                                        const int64_t queue_time_ms);
-
   void executeRelAlgStep(const size_t step_idx,
                          std::vector<RaExecutionDesc>&,
                          const CompilationOptions&,
@@ -45,12 +39,20 @@ class RelAlgExecutor {
 
   Executor* getExecutor() const { return executor_; }
 
+  void registerSubquery(RexSubQuery* subquery) noexcept { subqueries_.push_back(subquery); }
+
  private:
   ExecutionResult executeRelAlgSeq(std::vector<RaExecutionDesc>& ed_list,
                                    const CompilationOptions& co,
                                    const ExecutionOptions& eo,
                                    RenderInfo* render_info,
                                    const int64_t queue_time_ms);
+
+  ExecutionResult executeRelAlgSubQuery(const RelAlgNode* subquery_ra,
+                                        const CompilationOptions& co,
+                                        const ExecutionOptions& eo,
+                                        RenderInfo* render_info,
+                                        const int64_t queue_time_ms);
 
   ExecutionResult executeCompound(const RelCompound*,
                                   const CompilationOptions&,
@@ -165,6 +167,7 @@ class RelAlgExecutor {
   time_t now_;
   std::vector<std::shared_ptr<Analyzer::Expr>> target_exprs_owned_;  // TODO(alex): remove
   std::vector<std::string> table_names_;  // used by poly rendering only, lazily initialized by executeRelAlgQuery()
+  std::vector<RexSubQuery*> subqueries_;
   static SpeculativeTopNBlacklist speculative_topn_blacklist_;
   static const size_t max_groups_buffer_entry_default_guess{16384};
 };

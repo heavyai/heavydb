@@ -15,6 +15,14 @@
 
 unsigned RelAlgNode::crt_id_ = 1;
 
+void RexSubQuery::setExecutionResult(const std::shared_ptr<const ExecutionResult> result) {
+  auto row_set = &result->getRows();
+  CHECK(row_set);
+  CHECK_EQ(size_t(1), row_set->colCount());
+  type_ = row_set->getColType(0);
+  result_ = result;
+}
+
 namespace {
 
 class RexRebindInputsVisitor : public RexVisitor<void*> {
@@ -348,7 +356,7 @@ std::unique_ptr<const RexSubQuery> parse_subquery(const rapidjson::Value& expr,
                                                   const Catalog_Namespace::Catalog& cat,
                                                   const CompilationOptions& co,
                                                   const ExecutionOptions& eo,
-                                                  RelAlgExecutor* parent_ra_executor);
+                                                  RelAlgExecutor* ra_executor);
 
 SQLTypeInfo parse_type(const rapidjson::Value& type_obj) {
   CHECK(type_obj.IsObject() && (type_obj.MemberCount() >= 2 && type_obj.MemberCount() <= 4));
@@ -492,7 +500,12 @@ std::unique_ptr<const RexOperator> disambiguate_operator(const RexOperator* rex_
                                                          const RANodeOutput& ra_output) noexcept {
   std::vector<std::unique_ptr<const RexScalar>> disambiguated_operands;
   for (size_t i = 0; i < rex_operator->size(); ++i) {
-    disambiguated_operands.emplace_back(disambiguate_rex(rex_operator->getOperand(i), ra_output));
+    auto operand = rex_operator->getOperand(i);
+    if (dynamic_cast<const RexSubQuery*>(operand)) {
+      disambiguated_operands.emplace_back(rex_operator->getAndRelease(i));
+    } else {
+      disambiguated_operands.emplace_back(disambiguate_rex(operand, ra_output));
+    }
   }
   return rex_operator->getDisambiguated(disambiguated_operands);
 }
@@ -515,10 +528,6 @@ std::unique_ptr<const RexScalar> disambiguate_rex(const RexScalar* rex_scalar, c
     CHECK_LT(static_cast<size_t>(rex_abstract_input->getIndex()), ra_output.size());
     return std::unique_ptr<const RexInput>(new RexInput(ra_output[rex_abstract_input->getIndex()]));
   }
-  const auto rex_subquery = dynamic_cast<const RexSubQuery*>(rex_scalar);
-  if (rex_subquery) {
-    return std::unique_ptr<const RexSubQuery>(new RexSubQuery(*rex_subquery));
-  }
   const auto rex_operator = dynamic_cast<const RexOperator*>(rex_scalar);
   if (rex_operator) {
     return disambiguate_operator(rex_operator, ra_output);
@@ -536,7 +545,12 @@ void bind_project_to_input(RelProject* project_node, const RANodeOutput& input) 
   CHECK_EQ(size_t(1), project_node->inputCount());
   std::vector<std::unique_ptr<const RexScalar>> disambiguated_exprs;
   for (size_t i = 0; i < project_node->size(); ++i) {
-    disambiguated_exprs.emplace_back(disambiguate_rex(project_node->getProjectAt(i), input));
+    const auto projected_expr = project_node->getProjectAt(i);
+    if (dynamic_cast<const RexSubQuery*>(projected_expr)) {
+      disambiguated_exprs.emplace_back(project_node->getProjectAtAndRelease(i));
+    } else {
+      disambiguated_exprs.emplace_back(disambiguate_rex(projected_expr, input));
+    }
   }
   project_node->setExpressions(disambiguated_exprs);
 }
@@ -1018,21 +1032,16 @@ std::unique_ptr<const RexSubQuery> parse_subquery(const rapidjson::Value& expr,
                                                   const Catalog_Namespace::Catalog& cat,
                                                   const CompilationOptions& co,
                                                   const ExecutionOptions& eo,
-                                                  RelAlgExecutor* parent_ra_executor) {
+                                                  RelAlgExecutor* ra_executor) {
   const auto& operands = field(expr, "operands");
   CHECK(operands.IsArray());
   CHECK_GE(operands.Size(), unsigned(0));
   const auto& subquery_ast = field(expr, "subquery");
 
-  // Execute the subquery and cache the result.
-  RelAlgExecutor ra_executor(parent_ra_executor->getExecutor(), cat);
-  auto result = ra_executor.executeRelAlgSubQuery(subquery_ast, co, eo, nullptr, 0);
-
-  auto row_set = &result.getRows();
-  CHECK(row_set);
-  CHECK_EQ(size_t(1), row_set->colCount());
-  const auto ti = row_set->getColType(0);
-  return std::unique_ptr<const RexSubQuery>(new RexSubQuery(ti, std::make_shared<ExecutionResult>(result)));
+  const auto ra = ra_interpret(subquery_ast, cat, co, eo, ra_executor);
+  auto subquery = new RexSubQuery(ra);
+  ra_executor->registerSubquery(subquery);
+  return std::unique_ptr<const RexSubQuery>(subquery);
 }
 
 }  // namespace

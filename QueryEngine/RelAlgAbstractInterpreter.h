@@ -192,6 +192,11 @@ class RexOperator : public RexScalar {
     return operands_[idx].get();
   }
 
+  const RexScalar* getAndRelease(const size_t idx) const {
+    CHECK(idx < operands_.size());
+    return operands_[idx].release();
+  }
+
   SQLOps getOperator() const { return op_; }
 
   const SQLTypeInfo& getType() const { return type_; }
@@ -206,7 +211,7 @@ class RexOperator : public RexScalar {
 
  protected:
   const SQLOps op_;
-  std::vector<std::unique_ptr<const RexScalar>> operands_;
+  mutable std::vector<std::unique_ptr<const RexScalar>> operands_;
   const SQLTypeInfo type_;
 };
 
@@ -216,21 +221,40 @@ class ExecutionResult;
 
 class RexSubQuery : public RexScalar {
  public:
-  RexSubQuery(const SQLTypeInfo& type, std::shared_ptr<const ExecutionResult> result) : type_(type), result_(result) {}
+  RexSubQuery(const std::shared_ptr<const RelAlgNode> ra) : type_(SQLTypeInfo(kNULLT, false)), ra_(ra) {}
 
-  const SQLTypeInfo& getType() const { return type_; }
+  RexSubQuery(const RexSubQuery&) = delete;
 
-  std::shared_ptr<const ExecutionResult> getExecutionResult() const { return result_; }
+  RexSubQuery& operator=(const RexSubQuery&) = delete;
+
+  RexSubQuery(RexSubQuery&&) = delete;
+
+  RexSubQuery& operator=(RexSubQuery&&) = delete;
+
+  const SQLTypeInfo& getType() const {
+    CHECK_NE(kNULLT, type_.get_type());
+    return type_;
+  }
+
+  std::shared_ptr<const ExecutionResult> getExecutionResult() const {
+    CHECK(result_);
+    return result_;
+  }
+
+  const RelAlgNode* getRelAlg() const { return ra_.get(); }
 
   std::string toString() const override {
     return "(RexSubQuery " + std::to_string(reinterpret_cast<const uint64_t>(this)) + ")";
   }
 
-  std::unique_ptr<RexSubQuery> deepCopy() const { return boost::make_unique<RexSubQuery>(type_, result_); }
+  std::unique_ptr<RexSubQuery> deepCopy() const { throw std::runtime_error("Sub-query not supported in this context"); }
+
+  void setExecutionResult(const std::shared_ptr<const ExecutionResult> result);
 
  private:
-  const SQLTypeInfo type_;
+  SQLTypeInfo type_;
   std::shared_ptr<const ExecutionResult> result_;
+  const std::shared_ptr<const RelAlgNode> ra_;
 };
 
 // The actual input node understood by the Executor.
@@ -502,6 +526,11 @@ class RelProject : public RelAlgNode {
     return scalar_exprs_[idx].get();
   }
 
+  const RexScalar* getProjectAtAndRelease(const size_t idx) const {
+    CHECK(idx < scalar_exprs_.size());
+    return scalar_exprs_[idx].release();
+  }
+
   std::vector<std::unique_ptr<const RexScalar>> getExpressionsAndRelease() { return std::move(scalar_exprs_); }
 
   const std::vector<std::string>& getFields() const { return fields_; }
@@ -520,7 +549,7 @@ class RelProject : public RelAlgNode {
   }
 
  private:
-  std::vector<std::unique_ptr<const RexScalar>> scalar_exprs_;
+  mutable std::vector<std::unique_ptr<const RexScalar>> scalar_exprs_;
   std::vector<std::string> fields_;
 };
 
