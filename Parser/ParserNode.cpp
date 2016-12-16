@@ -2105,10 +2105,7 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
       } else if (boost::get<float>(scalar_tv)) {
         CHECK_EQ(kFLOAT, ti.get_type());
         auto real_val = *(boost::get<float>(scalar_tv));
-        if (ti.get_type() == kFLOAT) {
-          is_null = (real_val == NULL_FLOAT);
-        }
-        if (is_null)
+        if (real_val == NULL_FLOAT)
           outfile << copy_params.null_str;
         else
           outfile << real_val;
