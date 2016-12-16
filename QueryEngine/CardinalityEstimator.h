@@ -47,7 +47,7 @@ class NDVEstimator : public Analyzer::Expr {
 
   void print() const override { CHECK(false); }
 
-  size_t getEstimatorBufferSize() const { return 512 * 1024; }
+  size_t getEstimatorBufferSize() const { return 1024 * 1024; }
 
  private:
   const std::list<std::shared_ptr<Analyzer::Expr>> expr_tuple_;
