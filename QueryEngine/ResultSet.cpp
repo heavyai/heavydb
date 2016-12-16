@@ -258,7 +258,7 @@ size_t ResultSet::getNDVEstimator() const {
   const auto unset_bits = total_bits - bits_set;
   const auto ratio = static_cast<double>(unset_bits) / total_bits;
   if (ratio == 0.) {
-    return total_bits;
+    throw std::runtime_error("Failed to get a high quality cardinality estimation");
   }
   return -static_cast<double>(total_bits) * log(ratio);
 }
