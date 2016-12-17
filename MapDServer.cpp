@@ -255,7 +255,6 @@ class MapDHandler : virtual public MapDIf {
         break;
       case ExecutorDeviceType::Hybrid:
         LOG(INFO) << "Started in Hybrid mode" << std::endl;
-        break;
     }
 
 
@@ -512,11 +511,6 @@ class MapDHandler : virtual public MapDIf {
                    const std::string& query_str,
                    const bool column_format,
                    const std::string& nonce) override {
-    std::unique_ptr<std::lock_guard<std::mutex>> render_lock;
-    ParserWrapper pw{query_str};
-    if (enable_rendering_ && !pw.is_ddl && !pw.is_update_dml) {
-      render_lock.reset(new std::lock_guard<std::mutex>(render_mutex_));
-    }
     const auto session_info = get_session(session);
     if (leaf_aggregator_.leafCount() > 0) {
 #ifdef HAVE_RAVM
@@ -534,7 +528,7 @@ class MapDHandler : virtual public MapDIf {
       CHECK(false);
 #endif  // HAVE_RAVM
     } else {
-      sql_execute_impl(_return, session_info, query_str, column_format, nonce);
+      sql_execute_impl(_return, session_info, query_str, column_format, nonce, session_info.get_executor_device_type());
     }
   }
 
@@ -1793,11 +1787,11 @@ class MapDHandler : virtual public MapDIf {
                         const Catalog_Namespace::SessionInfo& session_info,
                         const std::string& query_str,
                         const bool column_format,
-                        const std::string& nonce) {
+                        const std::string& nonce,
+                        const ExecutorDeviceType executor_device_type) {
     _return.nonce = nonce;
     _return.execution_time_ms = 0;
     auto& cat = session_info.get_catalog();
-    auto executor_device_type = session_info.get_executor_device_type();
     LOG(INFO) << query_str;
     _return.total_time_ms = measure<>::execution([&]() {
       SQLParser parser;
