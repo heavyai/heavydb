@@ -6045,6 +6045,22 @@ void Executor::allocateInnerScansIterators(const std::vector<InputDescriptor>& i
   }
 }
 
+namespace {
+
+std::string get_self_joined_table_name(const std::vector<InputTableInfo>& query_infos,
+                                       const Catalog_Namespace::Catalog& cat) {
+  std::unordered_set<int> table_ids;
+  for (const auto& query_info : query_infos) {
+    const auto it_ok = table_ids.insert(query_info.table_id);
+    if (!it_ok.second) {
+      return get_table_name_by_id(query_info.table_id, cat);
+    }
+  }
+  return "";
+}
+
+}  // namespace
+
 Executor::JoinInfo Executor::chooseJoinType(const std::list<std::shared_ptr<Analyzer::Expr>>& join_quals,
                                             const std::vector<InputTableInfo>& query_infos,
                                             const std::list<std::shared_ptr<const InputColDescriptor>>& input_col_descs,
@@ -6078,6 +6094,10 @@ Executor::JoinInfo Executor::chooseJoinType(const std::list<std::shared_ptr<Anal
         hash_join_fail_reason = e.what();
       }
     }
+  }
+  const auto self_joined_table_name = get_self_joined_table_name(query_infos, *catalog_);
+  if (!self_joined_table_name.empty()) {
+    hash_join_fail_reason = "Self joins not supported yet, table: " + self_joined_table_name;
   }
   return Executor::JoinInfo(
       JoinImplType::Loop, std::vector<std::shared_ptr<Analyzer::BinOper>>{}, nullptr, hash_join_fail_reason);

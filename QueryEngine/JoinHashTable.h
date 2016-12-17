@@ -129,4 +129,13 @@ class JoinHashTable {
   friend class Executor;
 };
 
+inline std::string get_table_name_by_id(const int table_id, const Catalog_Namespace::Catalog& cat) {
+  if (table_id >= 1) {
+    const auto td = cat.getMetadataForTable(table_id);
+    CHECK(td);
+    return td->tableName;
+  }
+  return "$TEMPORARY_TABLE" + std::to_string(-table_id);
+}
+
 #endif  // QUERYENGINE_JOINHASHTABLE_H

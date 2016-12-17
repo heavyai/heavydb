@@ -65,15 +65,6 @@ std::pair<const Analyzer::ColumnVar*, const Analyzer::ColumnVar*> get_cols(
   return {inner_col, outer_col};
 }
 
-std::string get_table_name(const int table_id, const Catalog_Namespace::Catalog& cat) {
-  if (table_id >= 1) {
-    const auto td = cat.getMetadataForTable(table_id);
-    CHECK(td);
-    return td->tableName;
-  }
-  return "$TEMPORARY_TABLE" + std::to_string(-table_id);
-}
-
 }  // namespace
 
 std::vector<std::pair<JoinHashTable::JoinHashTableCacheKey, std::shared_ptr<std::vector<int32_t>>>>
@@ -120,7 +111,7 @@ std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(
       const auto inner_col = cols.first;
       CHECK(inner_col);
       const auto& table_info = join_hash_table->getInnerQueryInfo(inner_col);
-      throw HashJoinFail("Multi-fragment inner table '" + get_table_name(table_info.table_id, cat) +
+      throw HashJoinFail("Multi-fragment inner table '" + get_table_name_by_id(table_info.table_id, cat) +
                          "' not supported yet");
     }
     throw HashJoinFail("Could not build a 1-to-1 correspondence for columns involved in equijoin");
