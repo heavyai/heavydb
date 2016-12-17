@@ -457,6 +457,8 @@ class RelAlgNode {
 
   virtual size_t size() const = 0;
 
+  static void resetRelAlgFirstId() noexcept;
+
  protected:
   std::vector<std::shared_ptr<const RelAlgNode>> inputs_;
   const unsigned id_;

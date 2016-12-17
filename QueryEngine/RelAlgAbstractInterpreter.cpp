@@ -13,7 +13,17 @@
 #include <string>
 #include <unordered_set>
 
-unsigned RelAlgNode::crt_id_ = 1;
+namespace {
+
+const unsigned FIRST_RA_NODE_ID = 1;
+
+}  // namespace
+
+unsigned RelAlgNode::crt_id_ = FIRST_RA_NODE_ID;
+
+void RelAlgNode::resetRelAlgFirstId() noexcept {
+  crt_id_ = FIRST_RA_NODE_ID;
+}
 
 void RexSubQuery::setExecutionResult(const std::shared_ptr<const ExecutionResult> result) {
   auto row_set = &result->getRows();

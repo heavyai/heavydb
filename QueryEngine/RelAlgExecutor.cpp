@@ -20,6 +20,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQuery(const std::string& query_ra,
   executor_->row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>();
   InputTableInfoCacheScope input_table_info_cache_scope(executor_);
   int64_t queue_time_ms = timer_stop(clock_begin);
+  RelAlgNode::resetRelAlgFirstId();
   const auto ra = deserialize_ra_dag(query_ra, cat_, co, eo, this);
   auto ed_list = get_execution_descriptors(ra.get());
   if (render_info) {  // save the table names for render queries
@@ -46,6 +47,7 @@ FirstStepExecutionResult RelAlgExecutor::executeRelAlgQueryFirstStep(const std::
   executor_->row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>();
   InputTableInfoCacheScope input_table_info_cache_scope(executor_);
   int64_t queue_time_ms = timer_stop(clock_begin);
+  RelAlgNode::resetRelAlgFirstId();
   const auto ra = deserialize_ra_dag(query_ra, cat_, co, eo, this);
   auto ed_list = get_execution_descriptors(ra.get());
   CHECK(!ed_list.empty());
