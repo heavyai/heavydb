@@ -1,10 +1,48 @@
 MapD Platform Release Notes
 ===========================
 
-The latest version of the MapD Platform is 2.0.0.
+The latest version of the MapD Platform is 2.0.1.
 
 **Version 2.0**
 -----------------
+
+.. note:: Please note this version introduces a filesystem-level change to the on-disk
+    data.  After the automated migration to this version has occurred, your data
+    directory will no longer be compatible with previous versions. Any risk is low,
+    but please confirm prior to starting a new version of MapD that your backups
+    are current and available.
+
+.. note:: This release breaks API compatibility with the previous JDBC driver. You
+    must use the new JDBC driver included in this release with any MapD Core 2.0
+    instances.
+
+.. note:: Version 2 of the MapD visualization web client, Immerse, now is available at
+    the root of the host, e.g. ``yourserver/``.  Version 1 of Immerse is still
+    available at ``yourserver/v1/``.  Links to saved version 1 dashboards will
+    resolve to the correct address. Version 1 is deprecated, but will continue to
+    be included in the MapD install, with sufficient notice to be given before it
+    is removed.  Henceforth, updates to Immerse will be noted in these release
+    notes.
+
+**2.0.1** - Released December 16, 2016
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+MapD Core
++++++++++
+
+Fixed
+'''''
+
+- Issue when calling ``MIN``/``MAX`` on a ``TEXT ENCODING DICT`` column
+- Performance regression with a high cardinality ``GROUP BY``
+
+MapD Immerse
+++++++++++++
+
+Fixed
+'''''
+
+- Issue with pointmap related to handling of out-of-bounds latitude/longitude values
 
 **2.0.0** - Released December 13, 2016
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
