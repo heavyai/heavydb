@@ -37,8 +37,6 @@ class RelAlgExecutor {
 
   const std::vector<std::string>& getScanTableNamesInRelAlgSeq() const;
 
-  Executor* getExecutor() const { return executor_; }
-
   void registerSubquery(RexSubQuery* subquery) noexcept { subqueries_.push_back(subquery); }
 
  private:
