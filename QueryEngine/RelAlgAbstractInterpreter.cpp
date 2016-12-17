@@ -502,7 +502,7 @@ std::unique_ptr<const RexOperator> disambiguate_operator(const RexOperator* rex_
   for (size_t i = 0; i < rex_operator->size(); ++i) {
     auto operand = rex_operator->getOperand(i);
     if (dynamic_cast<const RexSubQuery*>(operand)) {
-      disambiguated_operands.emplace_back(rex_operator->getAndRelease(i));
+      disambiguated_operands.emplace_back(rex_operator->getOperandAndRelease(i));
     } else {
       disambiguated_operands.emplace_back(disambiguate_rex(operand, ra_output));
     }

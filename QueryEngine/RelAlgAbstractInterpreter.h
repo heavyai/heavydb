@@ -192,7 +192,7 @@ class RexOperator : public RexScalar {
     return operands_[idx].get();
   }
 
-  const RexScalar* getAndRelease(const size_t idx) const {
+  const RexScalar* getOperandAndRelease(const size_t idx) const {
     CHECK(idx < operands_.size());
     return operands_[idx].release();
   }
