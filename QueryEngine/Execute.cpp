@@ -23,6 +23,7 @@
 #include "Parser/ParserNode.h"
 #include "Shared/checked_alloc.h"
 #include "Shared/mapdpath.h"
+#include "Shared/scope.h"
 
 #include <llvm/Bitcode/ReaderWriter.h>
 #include <llvm/ExecutionEngine/MCJIT.h>
@@ -454,7 +455,7 @@ ResultRows Executor::execute(const Planner::RootPlan* root_plan,
   // capture the lock acquistion time
   auto clock_begin = timer_start();
   std::lock_guard<std::mutex> lock(execute_mutex_);
-  InputTableInfoCacheScope input_table_info_cache_scope(this);
+  ScopeGuard restore_input_table_info_cache = [this] { clearInputTableInfoCache(); };
   int64_t queue_time_ms = timer_stop(clock_begin);
   RowSetHolder row_set_holder(this);
   switch (stmt_type) {

@@ -8,6 +8,7 @@
 #include "ScalarExprVisitor.h"
 
 #include "../Shared/measure.h"
+#include "../Shared/scope.h"
 
 ExecutionResult RelAlgExecutor::executeRelAlgQuery(const std::string& query_ra,
                                                    const CompilationOptions& co,
@@ -18,7 +19,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQuery(const std::string& query_ra,
   std::lock_guard<std::mutex> lock(executor_->execute_mutex_);
   Executor::RowSetHolder row_set_holder(executor_);
   executor_->row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>();
-  InputTableInfoCacheScope input_table_info_cache_scope(executor_);
+  ScopeGuard restore_input_table_info_cache = [this] { executor_->clearInputTableInfoCache(); };
   int64_t queue_time_ms = timer_stop(clock_begin);
   RelAlgNode::resetRelAlgFirstId();
   const auto ra = deserialize_ra_dag(query_ra, cat_, co, eo, this);
@@ -45,7 +46,7 @@ FirstStepExecutionResult RelAlgExecutor::executeRelAlgQueryFirstStep(const std::
   std::lock_guard<std::mutex> lock(executor_->execute_mutex_);
   Executor::RowSetHolder row_set_holder(executor_);
   executor_->row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>();
-  InputTableInfoCacheScope input_table_info_cache_scope(executor_);
+  ScopeGuard restore_input_table_info_cache = [this] { executor_->clearInputTableInfoCache(); };
   int64_t queue_time_ms = timer_stop(clock_begin);
   RelAlgNode::resetRelAlgFirstId();
   const auto ra = deserialize_ra_dag(query_ra, cat_, co, eo, this);

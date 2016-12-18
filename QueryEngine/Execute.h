@@ -1166,17 +1166,6 @@ class Executor {
   friend class QueryRewriter;
   friend class RelAlgExecutor;
   friend class ExecutionDispatch;
-  friend class InputTableInfoCacheScope;
-};
-
-class InputTableInfoCacheScope {
- public:
-  InputTableInfoCacheScope(Executor* executor) : executor_(executor) {}
-
-  ~InputTableInfoCacheScope() { executor_->clearInputTableInfoCache(); }
-
- private:
-  Executor* executor_;
 };
 
 #endif  // QUERYENGINE_EXECUTE_H
