@@ -5486,7 +5486,7 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
       case kTIMESTAMP:
       case kDATE: {
         auto col_data = reinterpret_cast<time_t*>(checked_malloc(sizeof(time_t)));
-        *col_data = col_datum.timeval;
+        *col_data = col_cv->get_is_null() ? inline_fixed_encoding_null_val(cd->columnType) : col_datum.timeval;
         col_buffers[col_ids[col_idx]] = reinterpret_cast<int8_t*>(col_data);
         break;
       }

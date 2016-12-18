@@ -151,8 +151,9 @@ SQLTypeInfo BinOper::analyze_type_info(SQLOps op,
                 throw std::runtime_error("Cannont compare between TIMESTAMP and TIME.");
                 break;
               case kDATE:
-                *new_left_type = left_type;
-                *new_right_type = left_type;
+                *new_left_type =
+                    SQLTypeInfo(left_type.get_type(), left_type.get_dimension(), 0, left_type.get_notnull());
+                *new_right_type = *new_left_type;
                 break;
               case kTIMESTAMP:
                 *new_left_type = SQLTypeInfo(kTIMESTAMP,
@@ -191,12 +192,14 @@ SQLTypeInfo BinOper::analyze_type_info(SQLOps op,
           case kDATE:
             switch (right_type.get_type()) {
               case kTIMESTAMP:
-                *new_left_type = right_type;
-                *new_right_type = right_type;
+                *new_left_type =
+                    SQLTypeInfo(right_type.get_type(), right_type.get_dimension(), 0, right_type.get_notnull());
+                *new_right_type = *new_left_type;
                 break;
               case kDATE:
-                *new_left_type = left_type;
-                *new_right_type = left_type;
+                *new_left_type =
+                    SQLTypeInfo(left_type.get_type(), left_type.get_dimension(), 0, left_type.get_notnull());
+                *new_right_type = *new_left_type;
                 break;
               case kTIME:
                 throw std::runtime_error("Cannont compare between DATE and TIME.");
