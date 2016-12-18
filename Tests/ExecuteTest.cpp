@@ -370,6 +370,8 @@ TEST(Select, FilterAndSimpleAggregation) {
     c("SELECT COUNT(*) FROM test WHERE null IS NOT NULL;", dt);
     c("SELECT COUNT(*) FROM test WHERE o1 > '1999-09-08';", dt);
     c("SELECT COUNT(*) FROM test WHERE o1 <= '1999-09-08';", dt);
+    c("SELECT COUNT(*) FROM test WHERE o1 = '1999-09-08';", dt);
+    c("SELECT COUNT(*) FROM test WHERE o1 <> '1999-09-08';", dt);
 #endif  // HAVE_CALCITE
     ASSERT_EQ(15, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE MOD(x, 7) = 0;", dt)));
     ASSERT_EQ(0, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE MOD(x, 7) = 7;", dt)));

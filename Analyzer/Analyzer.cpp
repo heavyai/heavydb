@@ -459,9 +459,13 @@ SQLTypeInfo BinOper::common_numeric_type(const SQLTypeInfo& type1, const SQLType
 std::shared_ptr<Analyzer::Expr> Expr::decompress() {
   if (type_info.get_compression() == kENCODING_NONE)
     return shared_from_this();
-  SQLTypeInfo new_type_info = type_info;
-  new_type_info.set_compression(kENCODING_NONE);
-  new_type_info.set_comp_param(0);
+  SQLTypeInfo new_type_info(type_info.get_type(),
+                            type_info.get_dimension(),
+                            type_info.get_scale(),
+                            type_info.get_notnull(),
+                            kENCODING_NONE,
+                            0,
+                            type_info.get_subtype());
   return makeExpr<UOper>(new_type_info, contains_agg, kCAST, shared_from_this());
 }
 
