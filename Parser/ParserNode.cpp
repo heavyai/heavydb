@@ -1610,7 +1610,7 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
       int comp_param;
       if (boost::iequals(comp, "fixed")) {
         if (!cd.columnType.is_integer() && !cd.columnType.is_time())
-          throw std::runtime_error("Fixed encoding is only supported for integer or time columns.");
+          throw std::runtime_error(cd.columnName + ": Fixed encoding is only supported for integer or time columns.");
         // fixed-bits encoding
         SQLTypes type = cd.columnType.get_type();
         if (type == kARRAY)
@@ -1618,25 +1618,29 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
         switch (type) {
           case kSMALLINT:
             if (compression->get_encoding_param() != 8)
-              throw std::runtime_error("Compression parameter for Fixed encoding on SMALLINT must be 8.");
+              throw std::runtime_error(cd.columnName +
+                                       ": Compression parameter for Fixed encoding on SMALLINT must be 8.");
             break;
           case kINT:
             if (compression->get_encoding_param() != 8 && compression->get_encoding_param() != 16)
-              throw std::runtime_error("Compression parameter for Fixed encoding on INTEGER must be 8 or 16.");
+              throw std::runtime_error(cd.columnName +
+                                       ": Compression parameter for Fixed encoding on INTEGER must be 8 or 16.");
             break;
           case kBIGINT:
             if (compression->get_encoding_param() != 8 && compression->get_encoding_param() != 16 &&
                 compression->get_encoding_param() != 32)
-              throw std::runtime_error("Compression parameter for Fixed encoding on BIGINT must be 8 or 16 or 32.");
+              throw std::runtime_error(cd.columnName +
+                                       ": Compression parameter for Fixed encoding on BIGINT must be 8 or 16 or 32.");
             break;
           case kTIMESTAMP:
           case kDATE:
           case kTIME:
             if (compression->get_encoding_param() != 32)
-              throw std::runtime_error("Compression parameter for Fixed encoding on TIME, DATE or TIMESTAMP must 32.");
+              throw std::runtime_error(
+                  cd.columnName + ": Compression parameter for Fixed encoding on TIME, DATE or TIMESTAMP must 32.");
             break;
           default:
-            throw std::runtime_error("Cannot apply FIXED encoding to " + t->to_string());
+            throw std::runtime_error(cd.columnName + ": Cannot apply FIXED encoding to " + t->to_string());
         }
         cd.columnType.set_compression(kENCODING_FIXED);
         cd.columnType.set_comp_param(compression->get_encoding_param());
@@ -1652,41 +1656,44 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
         // throw std::runtime_error("DIFF(differential) encoding not supported yet.");
       } else if (boost::iequals(comp, "dict")) {
         if (!cd.columnType.is_string() && !cd.columnType.is_string_array())
-          throw std::runtime_error("Dictionary encoding is only supported on string or string array columns.");
+          throw std::runtime_error(cd.columnName +
+                                   ": Dictionary encoding is only supported on string or string array columns.");
         if (compression->get_encoding_param() == 0)
           comp_param = 32;  // default to 32-bits
         else
           comp_param = compression->get_encoding_param();
         if (cd.columnType.is_string_array() && comp_param != 32) {
-          throw std::runtime_error("Compression parameter for string arrays must be 32");
+          throw std::runtime_error(cd.columnName + ": Compression parameter for string arrays must be 32");
         }
         if (comp_param != 8 && comp_param != 16 && comp_param != 32)
-          throw std::runtime_error("Compression parameter for Dictionary encoding must be 8 or 16 or 32.");
+          throw std::runtime_error(cd.columnName +
+                                   ": Compression parameter for Dictionary encoding must be 8 or 16 or 32.");
         // diciontary encoding
         cd.columnType.set_compression(kENCODING_DICT);
         cd.columnType.set_comp_param(comp_param);
       } else if (boost::iequals(comp, "NONE")) {
         if (!cd.columnType.is_string() && !cd.columnType.is_string_array())
-          throw std::runtime_error("None encoding is only supported on string or string array columns.");
+          throw std::runtime_error(cd.columnName +
+                                   ": None encoding is only supported on string or string array columns.");
         cd.columnType.set_compression(kENCODING_NONE);
         cd.columnType.set_comp_param(0);
       } else if (boost::iequals(comp, "sparse")) {
         // sparse column encoding with mostly NULL values
         if (cd.columnType.get_notnull())
-          throw std::runtime_error("Cannot do sparse column encoding on a NOT NULL column.");
+          throw std::runtime_error(cd.columnName + ": Cannot do sparse column encoding on a NOT NULL column.");
         if (compression->get_encoding_param() == 0 || compression->get_encoding_param() % 8 != 0 ||
             compression->get_encoding_param() > 48)
-          throw std::runtime_error(
-              "Must specify number of bits as 8, 16, 24, 32 or 48 as the parameter to "
-              "sparse-column encoding.");
+          throw std::runtime_error(cd.columnName +
+                                   "Must specify number of bits as 8, 16, 24, 32 or 48 as the parameter to "
+                                   "sparse-column encoding.");
         cd.columnType.set_compression(kENCODING_SPARSE);
         cd.columnType.set_comp_param(compression->get_encoding_param());
         // throw std::runtime_error("SPARSE encoding not supported yet.");
       } else
-        throw std::runtime_error("Invalid column compression scheme " + comp);
+        throw std::runtime_error(cd.columnName + ": Invalid column compression scheme " + comp);
     }
     if (cd.columnType.is_string_array() && cd.columnType.get_compression() != kENCODING_DICT)
-      throw std::runtime_error("Array of strings must be dictionary encoded. Specify ENCODING DICT");
+      throw std::runtime_error(cd.columnName + ": Array of strings must be dictionary encoded. Specify ENCODING DICT");
     cd.columnType.set_fixed_size();
     cd.isSystemCol = false;
     cd.isVirtualCol = false;
