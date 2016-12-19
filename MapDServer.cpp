@@ -2090,6 +2090,9 @@ int main(int argc, char** argv) {
   desc_adv.add_options()("num-reader-threads",
                          po::value<size_t>(&num_reader_threads)->default_value(num_reader_threads),
                          "Number of reader threads to use");
+  desc_adv.add_options()("enable-watchdog",
+                         po::bool_switch(&enable_watchdog)->default_value(enable_watchdog)->implicit_value(true),
+                         "Enable watchdog");
   desc_adv.add_options()("disable-watchdog",
                          po::bool_switch(&enable_watchdog)->default_value(enable_watchdog)->implicit_value(false),
                          "Disable watchdog");
