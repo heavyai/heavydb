@@ -21,6 +21,7 @@
 #endif  // HAVE_CALCITE
 
 #ifdef HAVE_RAVM
+#include "QueryEngine/PendingExecutionClosure.h"
 #include "QueryEngine/RelAlgExecutor.h"
 #endif  // HAVE_RAVM
 
@@ -1943,6 +1944,37 @@ class MapDHandler : virtual public MapDIf {
       LOG(ERROR) << ex.error_msg;
       throw ex;
     }
+#else
+    CHECK(false);
+#endif  // HAVE_RAVM
+  }
+
+  TQueryId start_query(const TSessionId session,
+                       const std::string& query_ra,
+                       const bool column_format,
+                       const std::string& nonce) override {
+#ifdef HAVE_RAVM
+    const auto session_info = get_session(session);
+    const auto& cat = session_info.get_catalog();
+    CompilationOptions co = {executor_device_type_, true, ExecutorOptLevel::Default};
+    ExecutionOptions eo = {false, allow_multifrag_, false, allow_loop_joins_, g_enable_watchdog, jit_debug_, false};
+    RelAlgExecutionOptions ra_eo{co, eo, nullptr, 0};
+    // TODO
+    auto executor = Executor::getExecutor(
+        cat.get_currentDB().dbId, jit_debug_ ? "/tmp" : "", jit_debug_ ? "mapdquery" : "", 0, 0, nullptr);
+    auto ra_executor = boost::make_unique<RelAlgExecutor>(executor.get(), cat);
+    const auto ra = deserialize_ra_dag(query_ra, cat, co, eo, ra_executor.get());
+    auto closure = PendingExecutionClosure::create(ra, ra_executor, cat, ra_eo);
+    return closure->getId();
+#else
+    CHECK(false);
+    return -1;
+#endif  // HAVE_RAVM
+  }
+
+  void execute_step(TStepResult& _return, const TQueryId query_id) override {
+#ifdef HAVE_RAVM
+    CHECK(false);
 #else
     CHECK(false);
 #endif  // HAVE_RAVM
