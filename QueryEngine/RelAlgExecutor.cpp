@@ -37,7 +37,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQuery(const std::string& query_ra,
   return executeRelAlgSeq(ed_list, co, eo, render_info, queue_time_ms);
 }
 
-FirstStepExecutionResult RelAlgExecutor::executeRelAlgQueryFirstStep(const std::string& query_ra,
+FirstStepExecutionResult RelAlgExecutor::executeRelAlgQueryFirstStep(const RelAlgNode* ra,
                                                                      const CompilationOptions& co,
                                                                      const ExecutionOptions& eo,
                                                                      RenderInfo* render_info) {
@@ -49,8 +49,7 @@ FirstStepExecutionResult RelAlgExecutor::executeRelAlgQueryFirstStep(const std::
   ScopeGuard restore_input_table_info_cache = [this] { executor_->clearInputTableInfoCache(); };
   int64_t queue_time_ms = timer_stop(clock_begin);
   RelAlgNode::resetRelAlgFirstId();
-  const auto ra = deserialize_ra_dag(query_ra, cat_, co, eo, this);
-  auto ed_list = get_execution_descriptors(ra.get());
+  auto ed_list = get_execution_descriptors(ra);
   CHECK(!ed_list.empty());
   auto first_exec_desc = ed_list.front();
   const auto sort = dynamic_cast<const RelSort*>(first_exec_desc.getBody());
@@ -61,7 +60,8 @@ FirstStepExecutionResult RelAlgExecutor::executeRelAlgQueryFirstStep(const std::
   }
   std::vector<RaExecutionDesc> first_exec_desc_singleton_list{first_exec_desc};
   return {executeRelAlgSeq(first_exec_desc_singleton_list, co, eo, render_info, queue_time_ms),
-          first_exec_desc.getBody()->getId()};
+          first_exec_desc.getBody()->getId(),
+          false};
 }
 
 ExecutionResult RelAlgExecutor::executeRelAlgSubQuery(const RelAlgNode* subquery_ra,

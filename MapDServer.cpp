@@ -1910,21 +1910,10 @@ class MapDHandler : virtual public MapDIf {
   }
 #endif  // HAVE_CALCITE
 
-  void execute_first_step(TStepResult& _return,
-                          const TSessionId session,
-                          const std::string& query_ra,
-                          const bool column_format,
-                          const std::string& nonce) override {
+  void execute_first_step(TStepResult& _return, const TQueryId query_id) override {
 #ifdef HAVE_RAVM
     try {
-      const auto session_info = get_session(session);
-      const auto& cat = session_info.get_catalog();
-      CompilationOptions co = {executor_device_type_, true, ExecutorOptLevel::Default};
-      ExecutionOptions eo = {false, allow_multifrag_, false, allow_loop_joins_, g_enable_watchdog, jit_debug_, false};
-      auto executor = Executor::getExecutor(
-          cat.get_currentDB().dbId, jit_debug_ ? "/tmp" : "", jit_debug_ ? "mapdquery" : "", 0, 0, nullptr);
-      RelAlgExecutor ra_executor(executor.get(), cat);
-      const auto first_step_result = ra_executor.executeRelAlgQueryFirstStep(query_ra, co, eo, nullptr);
+      const auto first_step_result = PendingExecutionClosure::executeNextStep(query_id);
       const auto& result_rows = first_step_result.result.getRows();
       auto result_set = result_rows.getResultSet();
       if (!result_set) {
@@ -1949,10 +1938,7 @@ class MapDHandler : virtual public MapDIf {
 #endif  // HAVE_RAVM
   }
 
-  TQueryId start_query(const TSessionId session,
-                       const std::string& query_ra,
-                       const bool column_format,
-                       const std::string& nonce) override {
+  TQueryId start_query(const TSessionId session, const std::string& query_ra) override {
 #ifdef HAVE_RAVM
     const auto session_info = get_session(session);
     const auto& cat = session_info.get_catalog();
