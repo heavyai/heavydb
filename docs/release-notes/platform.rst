@@ -1,7 +1,7 @@
 MapD Platform Release Notes
 ===========================
 
-The latest version of the MapD Platform is 2.0.1.
+The latest version of the MapD Platform is 2.0.1.1.
 
 **Version 2.0**
 -----------------
@@ -23,6 +23,18 @@ The latest version of the MapD Platform is 2.0.1.
     be included in the MapD install, with sufficient notice to be given before it
     is removed.  Henceforth, updates to Immerse will be noted in these release
     notes.
+
+**2.0.1.1** - Released December 20, 2016
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+MapD Core
++++++++++
+
+Fixed
+'''''
+
+- Issue related to comparisons with ``DATE ENCODING FIXED`` columns
+- Added option to disable query watchdog via the command line option ``--enable-watchdog=false``
 
 **2.0.1** - Released December 16, 2016
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
