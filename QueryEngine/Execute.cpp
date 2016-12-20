@@ -5365,7 +5365,9 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
   const auto plan = root_plan->get_plan();
   CHECK(plan);
   const auto values_plan = dynamic_cast<const Planner::ValuesScan*>(plan);
-  CHECK(values_plan);
+  if (!values_plan) {
+    throw std::runtime_error("Only simple INSERT of immediate tuples is currently supported");
+  }
   const auto& targets = values_plan->get_targetlist();
   const int table_id = root_plan->get_result_table_id();
   const auto& col_id_list = root_plan->get_result_col_list();
