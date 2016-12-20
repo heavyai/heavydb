@@ -457,7 +457,7 @@ ResultRows Executor::execute(const Planner::RootPlan* root_plan,
   std::lock_guard<std::mutex> lock(execute_mutex_);
   ScopeGuard restore_input_table_info_cache = [this] { clearInputTableInfoCache(); };
   int64_t queue_time_ms = timer_stop(clock_begin);
-  RowSetHolder row_set_holder(this);
+  ScopeGuard row_set_holder = [this] { row_set_mem_owner_ = nullptr; };
   switch (stmt_type) {
     case kSELECT: {
       int32_t error_code{0};

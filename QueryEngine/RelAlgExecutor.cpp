@@ -17,7 +17,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQuery(const std::string& query_ra,
   // capture the lock acquistion time
   auto clock_begin = timer_start();
   std::lock_guard<std::mutex> lock(executor_->execute_mutex_);
-  Executor::RowSetHolder row_set_holder(executor_);
+  ScopeGuard row_set_holder = [this] { executor_->row_set_mem_owner_ = nullptr; };
   executor_->row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>();
   ScopeGuard restore_input_table_info_cache = [this] { executor_->clearInputTableInfoCache(); };
   int64_t queue_time_ms = timer_stop(clock_begin);
@@ -44,7 +44,7 @@ FirstStepExecutionResult RelAlgExecutor::executeRelAlgQueryFirstStep(const std::
   // capture the lock acquistion time
   auto clock_begin = timer_start();
   std::lock_guard<std::mutex> lock(executor_->execute_mutex_);
-  Executor::RowSetHolder row_set_holder(executor_);
+  ScopeGuard row_set_holder = [this] { executor_->row_set_mem_owner_ = nullptr; };
   executor_->row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>();
   ScopeGuard restore_input_table_info_cache = [this] { executor_->clearInputTableInfoCache(); };
   int64_t queue_time_ms = timer_stop(clock_begin);

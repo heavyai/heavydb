@@ -1104,13 +1104,6 @@ class Executor {
 
   llvm::Value* spillDoubleElement(llvm::Value* elem_val, llvm::Type* elem_ty);
 
-  struct RowSetHolder {
-    RowSetHolder(Executor* executor) : executor_(executor) {}
-
-    ~RowSetHolder() { executor_->row_set_mem_owner_ = nullptr; }
-    Executor* executor_;
-  };
-
   std::unique_ptr<PlanState> plan_state_;
   std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
 
