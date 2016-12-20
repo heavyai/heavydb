@@ -9,7 +9,7 @@
 #define MAPDSERVER_H
 
 #include "gen-cpp/mapd_types.h"
-#include "Shared/sqltypes.h"
+#include "QueryEngine/TargetMetaInfo.h"
 
 #include <glog/logging.h>
 
@@ -158,6 +158,14 @@ inline SQLTypeInfo type_info_from_thrift(const TTypeInfo& thrift_ti) {
                      thrift_to_encoding(thrift_ti.encoding),
                      thrift_ti.comp_param,
                      base_type);
+}
+
+inline std::vector<TargetMetaInfo> target_meta_infos_from_thrift(const TRowDescriptor& row_desc) {
+  std::vector<TargetMetaInfo> target_meta_infos;
+  for (const auto& col : row_desc) {
+    target_meta_infos.emplace_back(col.col_name, type_info_from_thrift(col.col_type));
+  }
+  return target_meta_infos;
 }
 
 #endif  // MAPDSERVER_H

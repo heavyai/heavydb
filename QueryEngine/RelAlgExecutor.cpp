@@ -48,7 +48,6 @@ FirstStepExecutionResult RelAlgExecutor::executeRelAlgQueryFirstStep(const RelAl
   executor_->row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>();
   ScopeGuard restore_input_table_info_cache = [this] { executor_->clearInputTableInfoCache(); };
   int64_t queue_time_ms = timer_stop(clock_begin);
-  RelAlgNode::resetRelAlgFirstId();
   auto ed_list = get_execution_descriptors(ra);
   CHECK(!ed_list.empty());
   auto first_exec_desc = ed_list.front();

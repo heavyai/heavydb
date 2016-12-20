@@ -1922,7 +1922,7 @@ class MapDHandler : virtual public MapDIf {
             result_rows.getTargetInfos(), ExecutorDeviceType::CPU, empty_query_mem_desc, nullptr, nullptr);
       }
       _return.serialized_rows = result_set->serialize();
-      _return.execution_finished = true;        // TODO(alex)
+      _return.execution_finished = first_step_result.is_outermost_query;
       _return.merge_type = TMergeType::REDUCE;  // TODO(alex)
       _return.sharded = true;                   // TODO(alex)
       _return.row_desc = convert_target_metainfo(first_step_result.result.getTargetsMeta());
@@ -1949,6 +1949,7 @@ class MapDHandler : virtual public MapDIf {
     auto executor = Executor::getExecutor(
         cat.get_currentDB().dbId, jit_debug_ ? "/tmp" : "", jit_debug_ ? "mapdquery" : "", 0, 0, nullptr);
     auto ra_executor = boost::make_unique<RelAlgExecutor>(executor.get(), cat);
+    RelAlgNode::resetRelAlgFirstId();
     const auto ra = deserialize_ra_dag(query_ra, cat, co, eo, ra_executor.get());
     auto closure = PendingExecutionClosure::create(ra, ra_executor, cat, ra_eo);
     return closure->getId();
@@ -1966,10 +1967,14 @@ class MapDHandler : virtual public MapDIf {
 #endif  // HAVE_RAVM
   }
 
-  void broadcast_serialized_rows(const std::string& serialized_rows) override {
-    TMapDException ex;
-    ex.error_msg = "broadcast_serialized_rows not supported yet";
-    throw ex;
+  void broadcast_serialized_rows(const std::string& serialized_rows,
+                                 const TRowDescriptor& row_desc,
+                                 const TQueryId query_id) override {
+    auto result_set = ResultSet::unserialize(serialized_rows);
+    ResultRows rows(std::shared_ptr<ResultSet>(result_set.release()));
+    const auto target_meta = target_meta_infos_from_thrift(row_desc);
+    const auto subquery_result = std::make_shared<const ExecutionResult>(rows, target_meta);
+    PendingExecutionClosure::setCurrentSubqueryResult(query_id, subquery_result);
   }
 
   void throw_profile_exception(const std::string& error_msg) {
