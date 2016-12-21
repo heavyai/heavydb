@@ -1959,14 +1959,6 @@ class MapDHandler : virtual public MapDIf {
 #endif  // HAVE_RAVM
   }
 
-  void execute_step(TStepResult& _return, const TQueryId query_id) override {
-#ifdef HAVE_RAVM
-    CHECK(false);
-#else
-    CHECK(false);
-#endif  // HAVE_RAVM
-  }
-
   void broadcast_serialized_rows(const std::string& serialized_rows,
                                  const TRowDescriptor& row_desc,
                                  const TQueryId query_id) override {
