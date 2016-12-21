@@ -1970,11 +1970,15 @@ class MapDHandler : virtual public MapDIf {
   void broadcast_serialized_rows(const std::string& serialized_rows,
                                  const TRowDescriptor& row_desc,
                                  const TQueryId query_id) override {
+#ifdef HAVE_RAVM
     auto result_set = ResultSet::unserialize(serialized_rows);
     ResultRows rows(std::shared_ptr<ResultSet>(result_set.release()));
     const auto target_meta = target_meta_infos_from_thrift(row_desc);
     const auto subquery_result = std::make_shared<const ExecutionResult>(rows, target_meta);
     PendingExecutionClosure::setCurrentSubqueryResult(query_id, subquery_result);
+#else
+    CHECK(false);
+#endif  // HAVE_RAVM
   }
 
   void throw_profile_exception(const std::string& error_msg) {
