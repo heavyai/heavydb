@@ -845,7 +845,7 @@ void Catalog::createTable(TableDescriptor& td, const list<ColumnDescriptor>& col
                                  std::to_string(td.maxChunkSize),
                                  std::to_string(td.fragPageSize),
                                  std::to_string(td.maxRows),
-                                 ""});
+                                 td.partitions});
     // now get the auto generated tableid
     sqliteConnector_.query_with_text_param("SELECT tableid FROM mapd_tables WHERE name = ?", td.tableName);
     td.tableId = sqliteConnector_.getData<int>(0, 0);

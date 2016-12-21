@@ -1744,9 +1744,17 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
           throw std::runtime_error("MAX_ROWS must be a positive number.");
         }
         td.maxRows = max_rows;
+      } else if (boost::iequals(*p->get_name(), "partitions")) {
+        const auto partitions = static_cast<const StringLiteral*>(p->get_value())->get_stringval();
+        CHECK(partitions);
+        const auto partitions_uc = boost::to_upper_copy<std::string>(*partitions);
+        if (partitions_uc != "SHARDED" && partitions_uc != "REPLICATED") {
+          throw std::runtime_error("PARTITIONS must be SHARDED or REPLICATED");
+        }
+        td.partitions = partitions_uc;
       } else {
         throw std::runtime_error("Invalid CREATE TABLE option " + *p->get_name() +
-                                 ".  Should be FRAGMENT_SIZE, PAGE_SIZE or MAX_ROWS.");
+                                 ".  Should be FRAGMENT_SIZE, PAGE_SIZE, MAX_ROWS or PARTITIONS.");
       }
     }
   }
