@@ -1156,6 +1156,7 @@ class Executor {
   friend class IteratorTable;
   friend class InValuesBitmap;
   friend class JoinHashTable;
+  friend class LeafAggregator;
   friend class QueryRewriter;
   friend class RelAlgExecutor;
   friend class ExecutionDispatch;

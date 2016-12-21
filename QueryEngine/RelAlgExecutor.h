@@ -34,13 +34,6 @@ class RelAlgExecutor {
                                                        const ExecutionOptions& eo,
                                                        RenderInfo* render_info);
 
-  const std::vector<std::string>& getScanTableNamesInRelAlgSeq() const;
-
-  void registerSubquery(RexSubQuery* subquery) noexcept { subqueries_.push_back(subquery); }
-
-  const std::vector<RexSubQuery*>& getSubqueries() const noexcept { return subqueries_; };
-
- private:
   ExecutionResult executeRelAlgSubQuery(const RelAlgNode* subquery_ra,
                                         const CompilationOptions& co,
                                         const ExecutionOptions& eo);
@@ -51,6 +44,13 @@ class RelAlgExecutor {
                                    RenderInfo* render_info,
                                    const int64_t queue_time_ms);
 
+  const std::vector<std::string>& getScanTableNamesInRelAlgSeq() const;
+
+  void registerSubquery(RexSubQuery* subquery) noexcept { subqueries_.push_back(subquery); }
+
+  const std::vector<RexSubQuery*>& getSubqueries() const noexcept { return subqueries_; };
+
+ private:
   void executeRelAlgStep(const size_t step_idx,
                          std::vector<RaExecutionDesc>&,
                          const CompilationOptions&,
