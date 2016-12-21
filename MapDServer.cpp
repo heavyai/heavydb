@@ -520,7 +520,7 @@ class MapDHandler : virtual public MapDIf {
 #ifdef HAVE_RAVM
       try {
         const auto query_ra = parse_to_ra(query_str, session_info);
-        const auto result = leaf_aggregator_.execute(session_info, query_ra, column_format, nonce);
+        const auto result = leaf_aggregator_.execute(session_info, query_ra);
         convert_rows(_return, result.targets_meta, *(result.rs), column_format);
       } catch (std::exception& e) {
         TMapDException ex;
