@@ -24,6 +24,11 @@ class RelAlgExecutor {
                                      const ExecutionOptions& eo,
                                      RenderInfo* render_info);
 
+  ExecutionResult executeRelAlgQuery(const RelAlgNode* ra,
+                                     const CompilationOptions& co,
+                                     const ExecutionOptions& eo,
+                                     RenderInfo* render_info);
+
   FirstStepExecutionResult executeRelAlgQueryFirstStep(const RelAlgNode* ra,
                                                        const CompilationOptions& co,
                                                        const ExecutionOptions& eo,

@@ -467,7 +467,7 @@ class RelAlgNode {
   mutable const void* context_data_;
   bool is_nop_;
   mutable std::vector<TargetMetaInfo> targets_metainfo_;
-  static unsigned crt_id_;
+  static thread_local unsigned crt_id_;
 };
 
 class RelScan : public RelAlgNode {

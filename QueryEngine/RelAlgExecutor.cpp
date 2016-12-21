@@ -14,6 +14,14 @@ ExecutionResult RelAlgExecutor::executeRelAlgQuery(const std::string& query_ra,
                                                    const CompilationOptions& co,
                                                    const ExecutionOptions& eo,
                                                    RenderInfo* render_info) {
+  const auto ra = deserialize_ra_dag(query_ra, cat_, this);
+  return executeRelAlgQuery(ra.get(), co, eo, render_info);
+}
+
+ExecutionResult RelAlgExecutor::executeRelAlgQuery(const RelAlgNode* ra,
+                                                   const CompilationOptions& co,
+                                                   const ExecutionOptions& eo,
+                                                   RenderInfo* render_info) {
   // capture the lock acquistion time
   auto clock_begin = timer_start();
   std::lock_guard<std::mutex> lock(executor_->execute_mutex_);
@@ -21,9 +29,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQuery(const std::string& query_ra,
   executor_->row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>();
   ScopeGuard restore_input_table_info_cache = [this] { executor_->clearInputTableInfoCache(); };
   int64_t queue_time_ms = timer_stop(clock_begin);
-  RelAlgNode::resetRelAlgFirstId();
-  const auto ra = deserialize_ra_dag(query_ra, cat_, this);
-  auto ed_list = get_execution_descriptors(ra.get());
+  auto ed_list = get_execution_descriptors(ra);
   if (render_info) {  // save the table names for render queries
     table_names_ = getScanTableNamesInRelAlgSeq(ed_list);
   }

@@ -19,7 +19,7 @@ const unsigned FIRST_RA_NODE_ID = 1;
 
 }  // namespace
 
-unsigned RelAlgNode::crt_id_ = FIRST_RA_NODE_ID;
+thread_local unsigned RelAlgNode::crt_id_ = FIRST_RA_NODE_ID;
 
 void RelAlgNode::resetRelAlgFirstId() noexcept {
   crt_id_ = FIRST_RA_NODE_ID;
@@ -1054,6 +1054,7 @@ std::shared_ptr<const RelAlgNode> deserialize_ra_dag(const std::string& query_ra
   query_ast.Parse(query_ra.c_str());
   CHECK(!query_ast.HasParseError());
   CHECK(query_ast.IsObject());
+  RelAlgNode::resetRelAlgFirstId();
   return ra_interpret(query_ast, cat, ra_executor);
 }
 
