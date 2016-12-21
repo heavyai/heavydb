@@ -838,16 +838,8 @@ class QueryNotSupported : public std::runtime_error {
 
 class RelAlgExecutor;
 
-std::shared_ptr<const RelAlgNode> ra_interpret(const rapidjson::Value& query_ast,
-                                               const Catalog_Namespace::Catalog& cat,
-                                               const CompilationOptions& co,
-                                               const ExecutionOptions& eo,
-                                               RelAlgExecutor* ra_executor);
-
 std::shared_ptr<const RelAlgNode> deserialize_ra_dag(const std::string& query_ra,
                                                      const Catalog_Namespace::Catalog& cat,
-                                                     const CompilationOptions& co,
-                                                     const ExecutionOptions& eo,
                                                      RelAlgExecutor* ra_executor);
 
 std::string tree_string(const RelAlgNode*, const size_t indent = 0);

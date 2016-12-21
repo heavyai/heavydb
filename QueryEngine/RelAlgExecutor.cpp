@@ -22,7 +22,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQuery(const std::string& query_ra,
   ScopeGuard restore_input_table_info_cache = [this] { executor_->clearInputTableInfoCache(); };
   int64_t queue_time_ms = timer_stop(clock_begin);
   RelAlgNode::resetRelAlgFirstId();
-  const auto ra = deserialize_ra_dag(query_ra, cat_, co, eo, this);
+  const auto ra = deserialize_ra_dag(query_ra, cat_, this);
   auto ed_list = get_execution_descriptors(ra.get());
   if (render_info) {  // save the table names for render queries
     table_names_ = getScanTableNamesInRelAlgSeq(ed_list);

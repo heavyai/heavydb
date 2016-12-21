@@ -1950,7 +1950,7 @@ class MapDHandler : virtual public MapDIf {
         cat.get_currentDB().dbId, jit_debug_ ? "/tmp" : "", jit_debug_ ? "mapdquery" : "", 0, 0, nullptr);
     auto ra_executor = boost::make_unique<RelAlgExecutor>(executor.get(), cat);
     RelAlgNode::resetRelAlgFirstId();
-    const auto ra = deserialize_ra_dag(query_ra, cat, co, eo, ra_executor.get());
+    const auto ra = deserialize_ra_dag(query_ra, cat, ra_executor.get());
     auto closure = PendingExecutionClosure::create(ra, ra_executor, cat, ra_eo);
     return closure->getId();
 #else
