@@ -308,7 +308,7 @@ RowSetPtr Executor::executeSelectPlan(const Planner::Plan* plan,
   if (dynamic_cast<const Planner::Scan*>(plan) || dynamic_cast<const Planner::AggPlan*>(plan) ||
       dynamic_cast<const Planner::Join*>(plan)) {
     row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>();
-    lit_str_dict_ = nullptr;
+    lit_str_dict_proxy_ = nullptr;
     const auto target_exprs = get_agg_target_exprs(plan);
     const auto scan_plan = get_scan_child(plan);
     auto simple_quals = scan_plan ? scan_plan->get_simple_quals() : std::list<std::shared_ptr<Analyzer::Expr>>{};
@@ -593,25 +593,25 @@ ResultRows Executor::execute(const Planner::RootPlan* root_plan,
 }
 
 
-StringDictionary* Executor::getStringDictionary(const int dict_id_in,
-                                                std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner) const {
+StringDictionaryProxy* Executor::getStringDictionaryProxy(const int dict_id_in,
+                                                          std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner) const {
   const int dict_id{dict_id_in < 0 ? REGULAR_DICT(dict_id_in) : dict_id_in};
   CHECK(catalog_);
   const auto dd = catalog_->getMetadataForDict(dict_id);
   std::lock_guard<std::mutex> lock(str_dict_mutex_);
   if (dd) {
-    if (row_set_mem_owner) {
-      CHECK(dd->stringDict);
-      row_set_mem_owner->addStringDict(dd->stringDict.get(), dict_id);
-    }
+    CHECK(dd->stringDict);
     CHECK_LE(dd->dictNBits, 32);
-    return dd->stringDict.get();
+    if (row_set_mem_owner) {
+      return row_set_mem_owner->addStringDict(dd->stringDict, dict_id);
+    }
   }
   CHECK_EQ(0, dict_id);
-  if (!lit_str_dict_) {
-    lit_str_dict_.reset(new StringDictionary(""));
+  if (!lit_str_dict_proxy_) {
+    std::shared_ptr<StringDictionary> tsd = std::make_shared<StringDictionary>("");
+    lit_str_dict_proxy_.reset(new StringDictionaryProxy(tsd));
   }
-  return lit_str_dict_.get();
+  return lit_str_dict_proxy_.get();
 }
 
 bool Executor::isCPUOnly() const {
@@ -627,6 +627,10 @@ const Catalog_Namespace::Catalog* Executor::getCatalog() const {
   return catalog_;
 }
 
+const std::shared_ptr<RowSetMemoryOwner> Executor::getRowSetMemoryOwner() const {
+  return row_set_mem_owner_;
+}
+
 const TemporaryTables* Executor::getTemporaryTables() const {
   return temporary_tables_;
 }
@@ -637,10 +641,6 @@ Fragmenter_Namespace::TableInfo Executor::getTableInfo(const int table_id) {
 
 ExpressionRange Executor::getColRange(const PhysicalInput& phys_input) const {
   return agg_col_range_cache_.getColRange(phys_input);
-}
-
-std::shared_ptr<RowSetMemoryOwner> Executor::getRowSetMemoryOwner() const {
-  return row_set_mem_owner_;
 }
 
 void Executor::clearMetaInfoCache() {
@@ -720,7 +720,7 @@ std::vector<int8_t> Executor::serializeLiterals(const std::unordered_map<int, Ex
       case 6: {
         const auto p = boost::get<std::pair<std::string, int>>(&lit);
         CHECK(p);
-        const auto str_id = getStringDictionary(p->second, row_set_mem_owner_)->get(p->first);
+        const auto str_id = getStringDictionaryProxy(p->second, row_set_mem_owner_)->get(p->first);
         memcpy(&serialized[off - lit_bytes], &str_id, lit_bytes);
         break;
       }
@@ -842,8 +842,8 @@ extern "C" uint64_t string_decompress(const int32_t string_id, const int64_t str
   if (string_id == NULL_INT) {
     return 0;
   }
-  auto string_dict = reinterpret_cast<const StringDictionary*>(string_dict_handle);
-  auto string_bytes = string_dict->getStringBytes(string_id);
+  auto string_dict_proxy = reinterpret_cast<const StringDictionaryProxy*>(string_dict_handle);
+  auto string_bytes = string_dict_proxy->getStringBytes(string_id);
   CHECK(string_bytes.first);
   return (reinterpret_cast<uint64_t>(string_bytes.first) & 0xffffffffffff) |
          (static_cast<uint64_t>(string_bytes.second) << 48);
@@ -852,8 +852,8 @@ extern "C" uint64_t string_decompress(const int32_t string_id, const int64_t str
 extern "C" int32_t string_compress(const int64_t ptr_and_len, const int64_t string_dict_handle) {
   std::string raw_str(reinterpret_cast<char*>(extract_str_ptr_noinline(ptr_and_len)),
                       extract_str_len_noinline(ptr_and_len));
-  auto string_dict = reinterpret_cast<const StringDictionary*>(string_dict_handle);
-  return string_dict->get(raw_str);
+  auto string_dict_proxy = reinterpret_cast<const StringDictionaryProxy*>(string_dict_handle);
+  return string_dict_proxy->get(raw_str);
 }
 
 llvm::Value* Executor::codegen(const Analyzer::CharLengthExpr* expr, const CompilationOptions& co) {
@@ -945,8 +945,8 @@ llvm::Value* Executor::codegenDictLike(const std::shared_ptr<Analyzer::Expr> lik
   const auto& dict_like_arg_ti = dict_like_arg->get_type_info();
   CHECK(dict_like_arg_ti.is_string());
   CHECK_EQ(kENCODING_DICT, dict_like_arg_ti.get_compression());
-  const auto sd = getStringDictionary(dict_like_arg_ti.get_comp_param(), row_set_mem_owner_);
-  if (sd->size() > 200000000) {
+  const auto sdp = getStringDictionaryProxy(dict_like_arg_ti.get_comp_param(), row_set_mem_owner_);
+  if (sdp->size() > 200000000) {
     return nullptr;
   }
   const auto& pattern_ti = pattern->get_type_info();
@@ -954,7 +954,7 @@ llvm::Value* Executor::codegenDictLike(const std::shared_ptr<Analyzer::Expr> lik
   CHECK_EQ(kENCODING_NONE, pattern_ti.get_compression());
   const auto& pattern_datum = pattern->get_constval();
   const auto& pattern_str = *pattern_datum.stringval;
-  const auto matching_strings = sd->getLike(pattern_str, ilike, is_simple, escape_char);
+  const auto matching_strings = sdp->getLike(pattern_str, ilike, is_simple, escape_char);
   std::list<std::shared_ptr<Analyzer::Expr>> matching_str_exprs;
   for (const auto& matching_string : matching_strings) {
     auto const_val = Parser::StringLiteral::analyzeValue(matching_string);
@@ -1024,8 +1024,8 @@ llvm::Value* Executor::codegenDictRegexp(const std::shared_ptr<Analyzer::Expr> p
   const auto& dict_regexp_arg_ti = dict_regexp_arg->get_type_info();
   CHECK(dict_regexp_arg_ti.is_string());
   CHECK_EQ(kENCODING_DICT, dict_regexp_arg_ti.get_compression());
-  const auto sd = getStringDictionary(dict_regexp_arg_ti.get_comp_param(), row_set_mem_owner_);
-  if (sd->size() > 15000000) {
+  const auto sdp = getStringDictionaryProxy(dict_regexp_arg_ti.get_comp_param(), row_set_mem_owner_);
+  if (sdp->size() > 15000000) {
     return nullptr;
   }
   const auto& pattern_ti = pattern->get_type_info();
@@ -1033,7 +1033,7 @@ llvm::Value* Executor::codegenDictRegexp(const std::shared_ptr<Analyzer::Expr> p
   CHECK_EQ(kENCODING_NONE, pattern_ti.get_compression());
   const auto& pattern_datum = pattern->get_constval();
   const auto& pattern_str = *pattern_datum.stringval;
-  const auto matching_strings = sd->getRegexpLike(pattern_str, escape_char);
+  const auto matching_strings = sdp->getRegexpLike(pattern_str, escape_char);
   std::list<std::shared_ptr<Analyzer::Expr>> matching_str_exprs;
   for (const auto& matching_string : matching_strings) {
     auto const_val = Parser::StringLiteral::analyzeValue(matching_string);
@@ -1090,7 +1090,7 @@ std::unique_ptr<InValuesBitmap> Executor::createInValuesBitmap(const Analyzer::I
   if (!(ti.is_integer() || (ti.is_string() && ti.get_compression() == kENCODING_DICT))) {
     return nullptr;
   }
-  const auto sd = ti.is_string() ? getStringDictionary(ti.get_comp_param(), row_set_mem_owner_) : nullptr;
+  const auto sdp = ti.is_string() ? getStringDictionaryProxy(ti.get_comp_param(), row_set_mem_owner_) : nullptr;
   if (value_list.size() > 3) {
     const auto needle_null_val = inline_int_null_val(ti);
     for (const auto in_val : value_list) {
@@ -1101,9 +1101,9 @@ std::unique_ptr<InValuesBitmap> Executor::createInValuesBitmap(const Analyzer::I
       const auto& in_val_ti = in_val->get_type_info();
       CHECK(in_val_ti == ti);
       if (ti.is_string()) {
-        CHECK(sd);
+        CHECK(sdp);
         const auto string_id =
-            in_val_const->get_is_null() ? needle_null_val : sd->get(*in_val_const->get_constval().stringval);
+            in_val_const->get_is_null() ? needle_null_val : sdp->get(*in_val_const->get_constval().stringval);
         if (string_id >= 0 || string_id == needle_null_val) {
           values.push_back(string_id);
         }
@@ -1553,7 +1553,7 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Constant* constant,
       }
       const auto& str_const = *constant->get_constval().stringval;
       if (enc_type == kENCODING_DICT) {
-        return {ll_int(getStringDictionary(dict_id, row_set_mem_owner_)->get(str_const))};
+        return {ll_int(getStringDictionaryProxy(dict_id, row_set_mem_owner_)->get(str_const))};
       }
       return {ll_int(int64_t(0)),
               cgen_state_->addStringConstant(str_const),
@@ -2018,7 +2018,7 @@ llvm::Value* Executor::codegenQualifierCmp(const SQLOps optype,
          posArg(arr_expr),
          lhs_lvs[1],
          lhs_lvs[2],
-         ll_int(int64_t(getStringDictionary(elem_ti.get_comp_param(), row_set_mem_owner_))),
+         ll_int(int64_t(getStringDictionaryProxy(elem_ti.get_comp_param(), row_set_mem_owner_))),
          inlineIntNull(elem_ti)});
   }
   if (target_ti.is_integer() || target_ti.is_boolean() || target_ti.is_string()) {
@@ -2265,7 +2265,7 @@ llvm::Value* Executor::codegenCastFromString(llvm::Value* operand_lv,
     return cgen_state_->emitExternalCall(
         "string_compress",
         get_int_type(32, cgen_state_->context_),
-        {operand_lv, ll_int(int64_t(getStringDictionary(ti.get_comp_param(), row_set_mem_owner_)))});
+        {operand_lv, ll_int(int64_t(getStringDictionaryProxy(ti.get_comp_param(), row_set_mem_owner_)))});
   }
   CHECK(operand_lv->getType()->isIntegerTy(32));
   if (ti.get_compression() == kENCODING_NONE) {
@@ -2277,7 +2277,7 @@ llvm::Value* Executor::codegenCastFromString(llvm::Value* operand_lv,
     return cgen_state_->emitExternalCall(
         "string_decompress",
         get_int_type(64, cgen_state_->context_),
-        {operand_lv, ll_int(int64_t(getStringDictionary(operand_ti.get_comp_param(), row_set_mem_owner_)))});
+        {operand_lv, ll_int(int64_t(getStringDictionaryProxy(operand_ti.get_comp_param(), row_set_mem_owner_)))});
   }
   CHECK(operand_is_const);
   CHECK_EQ(kENCODING_DICT, ti.get_compression());
@@ -3445,7 +3445,7 @@ RowSetPtr Executor::reduceMultiDeviceResults(const RelAlgExecutionUnit& ra_exe_u
     reduced_results->reduce(**next, query_mem_desc, output_columnar);
   }
 
-  row_set_mem_owner->addLiteralStringDict(lit_str_dict_);
+  row_set_mem_owner->addLiteralStringDictProxy(lit_str_dict_proxy_);
 
   return reduced_results;
 }
@@ -3595,7 +3595,7 @@ RowSetPtr Executor::executeResultPlan(const Planner::Result* result_plan,
     throw std::runtime_error("Query not supported yet, child plan needs to be an aggregate plan.");
   }
   row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>();
-  lit_str_dict_ = nullptr;
+  lit_str_dict_proxy_ = nullptr;
   const auto scan_plan = dynamic_cast<const Planner::Scan*>(agg_plan->get_child_plan());
   auto simple_quals = scan_plan ? scan_plan->get_simple_quals() : std::list<std::shared_ptr<Analyzer::Expr>>{};
   auto quals = scan_plan ? scan_plan->get_quals() : std::list<std::shared_ptr<Analyzer::Expr>>{};
@@ -5418,7 +5418,8 @@ int8_t* insert_one_dict_str(const ColumnDescriptor* cd,
   } else {
     const int dict_id = cd->columnType.get_comp_param();
     const auto col_datum = col_cv->get_constval();
-    const int32_t str_id = executor->getStringDictionary(dict_id, row_set_mem_owner)->getOrAdd(*col_datum.stringval);
+    const int32_t str_id =
+        executor->getStringDictionaryProxy(dict_id, row_set_mem_owner)->getOrAdd(*col_datum.stringval);
     *col_data = str_id;
   }
   return reinterpret_cast<int8_t*>(col_data);
@@ -5433,6 +5434,7 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
   if (!values_plan) {
     throw std::runtime_error("Only simple INSERT of immediate tuples is currently supported");
   }
+  row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>();
   const auto& targets = values_plan->get_targetlist();
   const int table_id = root_plan->get_result_table_id();
   const auto& col_id_list = root_plan->get_result_col_list();

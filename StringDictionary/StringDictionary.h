@@ -21,7 +21,6 @@ class StringDictionary {
   int32_t getOrAdd(const std::string& str) noexcept;
   template <class T>
   void getOrAddBulk(const std::vector<std::string>& string_vec, T* encoded_vec) noexcept;
-  int32_t getOrAddTransient(const std::string& str) noexcept;
   int32_t get(const std::string& str) const noexcept;
   std::string getString(int32_t string_id) const noexcept;
   std::pair<char*, size_t> getStringBytes(int32_t string_id) const noexcept;
@@ -34,7 +33,6 @@ class StringDictionary {
 
   std::vector<std::string> getRegexpLike(const std::string& pattern, const char escape) const noexcept;
 
-  void clearTransient() noexcept;
   bool checkpoint() noexcept;
 
   static const int32_t INVALID_STR_ID;
@@ -71,8 +69,6 @@ class StringDictionary {
   size_t offset_file_size_;
   size_t payload_file_size_;
   size_t payload_file_off_;
-  std::map<int32_t, std::string> transient_int_to_str_;
-  std::map<std::string, int32_t> transient_str_to_int_;
   mutable mapd_shared_mutex rw_mutex_;
   mutable std::map<std::tuple<std::string, bool, bool, char>, std::vector<std::string>> like_cache_;
   mutable std::map<std::pair<std::string, char>, std::vector<std::string>> regex_cache_;

@@ -935,9 +935,9 @@ void ResultRows::sort(const std::list<Analyzer::OrderEntry>& order_entries,
         CHECK(rhs_v.isInt());
         if (UNLIKELY(is_dict)) {
           CHECK_EQ(4, entry_ti.get_logical_size());
-          auto string_dict = executor_->getStringDictionary(entry_ti.get_comp_param(), row_set_mem_owner_);
-          auto lhs_str = string_dict->getString(lhs_v.i1);
-          auto rhs_str = string_dict->getString(rhs_v.i1);
+          auto string_dict_proxy = executor_->getStringDictionaryProxy(entry_ti.get_comp_param(), row_set_mem_owner_);
+          auto lhs_str = string_dict_proxy->getString(lhs_v.i1);
+          auto rhs_str = string_dict_proxy->getString(rhs_v.i1);
           if (lhs_str == rhs_str) {
             continue;
           }
@@ -1139,7 +1139,7 @@ TargetValue result_rows_get_impl(const InternalTargetValue& col_val,
       }
       return string_id == NULL_INT
                  ? TargetValue(nullptr)
-                 : TargetValue(executor->getStringDictionary(dict_id, row_set_mem_owner)->getString(string_id));
+                 : TargetValue(executor->getStringDictionaryProxy(dict_id, row_set_mem_owner)->getString(string_id));
     } else {
       CHECK_EQ(kENCODING_NONE, chosen_type.get_compression());
       return col_val.isNull() ? TargetValue(nullptr) : TargetValue(col_val.strVal());
@@ -1172,7 +1172,7 @@ TargetValue result_rows_get_impl(const InternalTargetValue& col_val,
         tv_arr.emplace_back(
             string_id == NULL_INT
                 ? NullableString(nullptr)
-                : NullableString(executor->getStringDictionary(dict_id, row_set_mem_owner)->getString(string_id)));
+                : NullableString(executor->getStringDictionaryProxy(dict_id, row_set_mem_owner)->getString(string_id)));
       }
     } else {
       CHECK(false);

@@ -1669,11 +1669,11 @@ void GroupByAndAggregate::addTransientStringLiterals() {
     const auto& group_ti = group_expr->get_type_info();
     if (cast_expr && cast_expr->get_optype() == kCAST && group_ti.is_string()) {
       CHECK_EQ(kENCODING_DICT, group_ti.get_compression());
-      auto sd = executor_->getStringDictionary(group_ti.get_comp_param(), row_set_mem_owner_);
-      CHECK(sd);
+      auto sdp = executor_->getStringDictionaryProxy(group_ti.get_comp_param(), row_set_mem_owner_);
+      CHECK(sdp);
       const auto str_lit_expr = dynamic_cast<const Analyzer::Constant*>(cast_expr->get_operand());
       if (str_lit_expr && str_lit_expr->get_constval().stringval) {
-        sd->getOrAddTransient(*str_lit_expr->get_constval().stringval);
+        sdp->getOrAddTransient(*str_lit_expr->get_constval().stringval);
       }
       continue;
     }
@@ -1688,15 +1688,15 @@ void GroupByAndAggregate::addTransientStringLiterals() {
     }
     if (group_ti.is_string()) {
       CHECK_EQ(kENCODING_DICT, group_ti.get_compression());
-      auto sd = executor_->getStringDictionary(group_ti.get_comp_param(), row_set_mem_owner_);
-      CHECK(sd);
+      auto sdp = executor_->getStringDictionaryProxy(group_ti.get_comp_param(), row_set_mem_owner_);
+      CHECK(sdp);
       for (const auto domain_expr : domain_set) {
         const auto cast_expr = dynamic_cast<const Analyzer::UOper*>(domain_expr);
         const auto str_lit_expr = cast_expr && cast_expr->get_optype() == kCAST
                                       ? dynamic_cast<const Analyzer::Constant*>(cast_expr->get_operand())
                                       : dynamic_cast<const Analyzer::Constant*>(domain_expr);
         if (str_lit_expr && str_lit_expr->get_constval().stringval) {
-          sd->getOrAddTransient(*str_lit_expr->get_constval().stringval);
+          sdp->getOrAddTransient(*str_lit_expr->get_constval().stringval);
         }
       }
     }

@@ -512,9 +512,10 @@ std::function<bool(const uint32_t, const uint32_t)> ResultSet::createComparator(
         CHECK(rhs_v.isInt());
         if (UNLIKELY(entry_ti.is_string() && entry_ti.get_compression() == kENCODING_DICT)) {
           CHECK_EQ(4, entry_ti.get_logical_size());
-          const auto string_dict = executor_->getStringDictionary(entry_ti.get_comp_param(), row_set_mem_owner_);
-          auto lhs_str = string_dict->getString(lhs_v.i1);
-          auto rhs_str = string_dict->getString(rhs_v.i1);
+          const auto string_dict_proxy =
+              executor_->getStringDictionaryProxy(entry_ti.get_comp_param(), row_set_mem_owner_);
+          auto lhs_str = string_dict_proxy->getString(lhs_v.i1);
+          auto rhs_str = string_dict_proxy->getString(rhs_v.i1);
           if (lhs_str == rhs_str) {
             continue;
           }

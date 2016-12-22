@@ -485,12 +485,12 @@ ExpressionRange getExpressionRange(const Analyzer::UOper* u_expr,
   }
   const auto& ti = u_expr->get_type_info();
   if (ti.is_string() && ti.get_compression() == kENCODING_DICT) {
-    const auto sd = executor->getStringDictionary(ti.get_comp_param(), nullptr);
-    CHECK(sd);
+    const auto sdp = executor->getStringDictionaryProxy(ti.get_comp_param(), executor->getRowSetMemoryOwner());
+    CHECK(sdp);
     const auto const_operand = dynamic_cast<const Analyzer::Constant*>(u_expr->get_operand());
     CHECK(const_operand);
     CHECK(const_operand->get_constval().stringval);
-    const int64_t v = sd->get(*const_operand->get_constval().stringval);
+    const int64_t v = sdp->get(*const_operand->get_constval().stringval);
     return ExpressionRange::makeIntRange(v, v, 0, false);
   }
   const auto arg_range = getExpressionRange(u_expr->get_operand(), query_infos, executor);

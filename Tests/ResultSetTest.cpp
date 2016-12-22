@@ -1306,15 +1306,15 @@ bool approx_eq(const double v, const double target, const double eps = 0.01) {
   return target - eps < v && v < target + eps;
 }
 
-StringDictionary g_sd("");
+std::shared_ptr<StringDictionary> g_sd = std::make_shared<StringDictionary>("");
 
 void test_iterate(const std::vector<TargetInfo>& target_infos, const QueryMemoryDescriptor& query_mem_desc) {
   SQLTypeInfo double_ti(kDOUBLE, false);
   auto row_set_mem_owner = std::make_shared<RowSetMemoryOwner>();
-  row_set_mem_owner->addStringDict(&g_sd, 1);
+  StringDictionaryProxy* sdp = row_set_mem_owner->addStringDict(g_sd, 1);
   ResultSet result_set(target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, nullptr);
   for (size_t i = 0; i < query_mem_desc.entry_count; ++i) {
-    g_sd.getOrAddTransient(std::to_string(i));
+    sdp->getOrAddTransient(std::to_string(i));
   }
   const auto storage = result_set.allocateStorage();
   EvenNumberGenerator generator;
@@ -1424,7 +1424,7 @@ void test_reduce(const std::vector<TargetInfo>& target_infos,
   const ResultSetStorage* storage1{nullptr};
   const ResultSetStorage* storage2{nullptr};
   const auto row_set_mem_owner = std::make_shared<RowSetMemoryOwner>();
-  row_set_mem_owner->addStringDict(&g_sd, 1);
+  row_set_mem_owner->addStringDict(g_sd, 1);
   const auto rs1 =
       boost::make_unique<ResultSet>(target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, nullptr);
   storage1 = rs1->allocateStorage();

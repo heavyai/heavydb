@@ -5,6 +5,7 @@
 #else
 #include "RuntimeFunctions.h"
 #include "../StringDictionary/StringDictionary.h"
+#include "../StringDictionary/StringDictionaryProxy.h"
 #include <glog/logging.h>
 #endif
 #include "../Shared/funcannotations.h"
@@ -40,8 +41,8 @@ DEVICE int SUFFIX(fill_hash_join_buff)(int32_t* buff,
                                        const int64_t min_val,
                                        const int64_t null_val,
                                        const int64_t translated_null_val,
-                                       const void* sd_inner,
-                                       const void* sd_outer,
+                                       const void* sd_inner_proxy,
+                                       const void* sd_outer_proxy,
                                        const int32_t cpu_thread_idx,
                                        const int32_t cpu_thread_count) {
 #ifdef __CUDACC__
@@ -57,12 +58,12 @@ DEVICE int SUFFIX(fill_hash_join_buff)(int32_t* buff,
       elem = translated_null_val;
     }
 #ifndef __CUDACC__
-    if (sd_inner && elem != translated_null_val) {
-      CHECK(sd_outer);
-      const auto sd_inner_dict = static_cast<const StringDictionary*>(sd_inner);
-      const auto sd_outer_dict = static_cast<const StringDictionary*>(sd_outer);
-      const auto elem_str = sd_inner_dict->getString(elem);
-      const auto outer_id = sd_outer_dict->get(elem_str);
+    if (sd_inner_proxy && elem != translated_null_val) {
+      CHECK(sd_outer_proxy);
+      const auto sd_inner_dict_proxy = static_cast<const StringDictionaryProxy*>(sd_inner_proxy);
+      const auto sd_outer_dict_proxy = static_cast<const StringDictionaryProxy*>(sd_outer_proxy);
+      const auto elem_str = sd_inner_dict_proxy->getString(elem);
+      const auto outer_id = sd_outer_dict_proxy->get(elem_str);
       if (outer_id == StringDictionary::INVALID_STR_ID) {
         continue;
       }

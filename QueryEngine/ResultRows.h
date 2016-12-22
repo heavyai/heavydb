@@ -14,7 +14,7 @@
 
 #include "../Analyzer/Analyzer.h"
 #include "../Shared/TargetInfo.h"
-#include "../StringDictionary/StringDictionary.h"
+#include "../StringDictionary/StringDictionaryProxy.h"
 
 #include <boost/noncopyable.hpp>
 #include <glog/logging.h>
@@ -86,16 +86,6 @@ typedef std::vector<int64_t> ValueTuple;
 
 class ChunkIter;
 
-class DictStrLiteralsOwner {
- public:
-  DictStrLiteralsOwner(StringDictionary* string_dict) : string_dict_(string_dict) {}
-
-  ~DictStrLiteralsOwner() { string_dict_->clearTransient(); }
-
- private:
-  StringDictionary* string_dict_;
-};
-
 class RowSetMemoryOwner : boost::noncopyable {
  public:
   void setCountDistinctDescriptors(const CountDistinctDescriptors& count_distinct_descriptors) {
@@ -133,27 +123,28 @@ class RowSetMemoryOwner : boost::noncopyable {
     return &arrays_.back();
   }
 
-  void addStringDict(StringDictionary* str_dict, const int dict_id) {
+  StringDictionaryProxy* addStringDict(std::shared_ptr<StringDictionary> str_dict, const int dict_id) {
     std::lock_guard<std::mutex> lock(state_mutex_);
-    auto it = str_dict_owned_.find(dict_id);
-    if (it != str_dict_owned_.end()) {
-      CHECK_EQ(it->second, str_dict);
-      return;
+    auto it = str_dict_proxy_owned_.find(dict_id);
+    if (it != str_dict_proxy_owned_.end()) {
+      CHECK_EQ(it->second->getDictionary(), str_dict.get());
+      return it->second;
     }
-    str_dict_owned_.emplace(dict_id, str_dict);
-    str_dict_owners_.emplace_back(new DictStrLiteralsOwner(str_dict));
+    StringDictionaryProxy* str_dict_proxy = new StringDictionaryProxy(str_dict);
+    str_dict_proxy_owned_.emplace(dict_id, str_dict_proxy);
+    return str_dict_proxy;
   }
 
-  StringDictionary* getStringDict(const int dict_id) const {
+  StringDictionaryProxy* getStringDictProxy(const int dict_id) const {
     std::lock_guard<std::mutex> lock(state_mutex_);
-    auto it = str_dict_owned_.find(dict_id);
-    CHECK(it != str_dict_owned_.end());
+    auto it = str_dict_proxy_owned_.find(dict_id);
+    CHECK(it != str_dict_proxy_owned_.end());
     return it->second;
   }
 
-  void addLiteralStringDict(std::shared_ptr<StringDictionary> lit_str_dict) {
+  void addLiteralStringDictProxy(std::shared_ptr<StringDictionaryProxy> lit_str_dict_proxy) {
     std::lock_guard<std::mutex> lock(state_mutex_);
-    lit_str_dict_ = lit_str_dict;
+    lit_str_dict_proxy_ = lit_str_dict_proxy;
   }
 
   void addColBuffer(const void* col_buffer) {
@@ -174,10 +165,14 @@ class RowSetMemoryOwner : boost::noncopyable {
     for (auto col_buffer : col_buffers_) {
       free(col_buffer);
     }
-    decltype(str_dict_owners_)().swap(str_dict_owners_);
-    decltype(str_dict_owned_)().swap(str_dict_owned_);
-    if (lit_str_dict_) {
-      lit_str_dict_->clearTransient();
+
+    for (auto dict_proxy : str_dict_proxy_owned_) {
+      delete dict_proxy.second;
+    }
+
+    if (lit_str_dict_proxy_) {
+      lit_str_dict_proxy_.reset();
+      lit_str_dict_proxy_ = nullptr;
     }
   }
 
@@ -188,9 +183,8 @@ class RowSetMemoryOwner : boost::noncopyable {
   std::vector<int64_t*> group_by_buffers_;
   std::list<std::string> strings_;
   std::list<std::vector<int64_t>> arrays_;
-  std::unordered_map<int, StringDictionary*> str_dict_owned_;
-  std::vector<std::unique_ptr<DictStrLiteralsOwner>> str_dict_owners_;
-  std::shared_ptr<StringDictionary> lit_str_dict_;
+  std::unordered_map<int, StringDictionaryProxy*> str_dict_proxy_owned_;
+  std::shared_ptr<StringDictionaryProxy> lit_str_dict_proxy_;
   std::vector<void*> col_buffers_;
   mutable std::mutex state_mutex_;
 

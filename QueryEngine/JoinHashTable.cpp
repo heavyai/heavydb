@@ -214,14 +214,15 @@ int JoinHashTable::initHashTableOnCpu(const int8_t* col_buff,
   int err = 0;
   if (!cpu_hash_table_buff_) {
     cpu_hash_table_buff_ = std::make_shared<std::vector<int32_t>>(hash_entry_count);
-    const StringDictionary* sd_inner{nullptr};
-    const StringDictionary* sd_outer{nullptr};
+    const StringDictionaryProxy* sd_inner_proxy{nullptr};
+    const StringDictionaryProxy* sd_outer_proxy{nullptr};
     if (ti.is_string()) {
       CHECK_EQ(kENCODING_DICT, ti.get_compression());
-      sd_inner = executor_->getStringDictionary(inner_col->get_comp_param(), executor_->row_set_mem_owner_);
-      CHECK(sd_inner);
-      sd_outer = executor_->getStringDictionary(cols.second->get_comp_param(), executor_->row_set_mem_owner_);
-      CHECK(sd_outer);
+      sd_inner_proxy = executor_->getStringDictionaryProxy(inner_col->get_comp_param(), executor_->row_set_mem_owner_);
+      CHECK(sd_inner_proxy);
+      sd_outer_proxy =
+          executor_->getStringDictionaryProxy(cols.second->get_comp_param(), executor_->row_set_mem_owner_);
+      CHECK(sd_outer_proxy);
     }
     int thread_count = cpu_threads();
     std::vector<std::thread> init_cpu_buff_threads;
@@ -241,8 +242,8 @@ int JoinHashTable::initHashTableOnCpu(const int8_t* col_buff,
                                           hash_entry_count,
                                           col_buff,
                                           num_elements,
-                                          sd_inner,
-                                          sd_outer,
+                                          sd_inner_proxy,
+                                          sd_outer_proxy,
                                           thread_idx,
                                           thread_count,
                                           &ti,
@@ -255,8 +256,8 @@ int JoinHashTable::initHashTableOnCpu(const int8_t* col_buff,
                                               col_range_.getIntMin(),
                                               inline_fixed_encoding_null_val(ti),
                                               col_range_.getIntMax() + 1,
-                                              sd_inner,
-                                              sd_outer,
+                                              sd_inner_proxy,
+                                              sd_outer_proxy,
                                               thread_idx,
                                               thread_count);
         __sync_val_compare_and_swap(&err, 0, partial_err);

@@ -1523,7 +1523,6 @@ class MapDHandler : virtual public MapDIf {
         }
         session_ptr->set_executor_device_type(ExecutorDeviceType::Hybrid);
         LOG(INFO) << "User " << user_name << " sets HYBRID mode.";
-        break;
     }
   }
 
@@ -2358,6 +2357,9 @@ int main(int argc, char** argv) {
     FLAGS_logbuflevel = -1;
   // Initialize Google's logging library.
   google::InitGoogleLogging(argv[0]);
+
+  // add all parameters to be displayed on startup
+  LOG(INFO) << " Watchdog is set to " << enable_watchdog;
 
   try {
     if (vm.count("disable-fork")) {

@@ -156,28 +156,6 @@ template void StringDictionary::getOrAddBulk(const std::vector<std::string>& str
 template void StringDictionary::getOrAddBulk(const std::vector<std::string>& string_vec, int16_t* encoded_vec) noexcept;
 template void StringDictionary::getOrAddBulk(const std::vector<std::string>& string_vec, int32_t* encoded_vec) noexcept;
 
-int32_t StringDictionary::getOrAddTransient(const std::string& str) noexcept {
-  mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
-  auto transient_id = getUnlocked(str);
-  if (transient_id != INVALID_STR_ID) {
-    return transient_id;
-  }
-  const auto it = transient_str_to_int_.find(str);
-  if (it != transient_str_to_int_.end()) {
-    return it->second;
-  }
-  transient_id = -(transient_str_to_int_.size() + 2);  // make sure it's not INVALID_STR_ID
-  {
-    auto it_ok = transient_str_to_int_.insert(std::make_pair(str, transient_id));
-    CHECK(it_ok.second);
-  }
-  {
-    auto it_ok = transient_int_to_str_.insert(std::make_pair(transient_id, str));
-    CHECK(it_ok.second);
-  }
-  return transient_id;
-}
-
 int32_t StringDictionary::get(const std::string& str) const noexcept {
   mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
   return getUnlocked(str);
@@ -185,11 +163,7 @@ int32_t StringDictionary::get(const std::string& str) const noexcept {
 
 int32_t StringDictionary::getUnlocked(const std::string& str) const noexcept {
   auto str_id = str_ids_[computeBucket(str, str_ids_, false)];
-  if (str_id != INVALID_STR_ID || transient_str_to_int_.empty()) {
-    return str_id;
-  }
-  auto it = transient_str_to_int_.find(str);
-  return it != transient_str_to_int_.end() ? it->second : INVALID_STR_ID;
+  return str_id;
 }
 
 std::string StringDictionary::getString(int32_t string_id) const noexcept {
@@ -198,14 +172,8 @@ std::string StringDictionary::getString(int32_t string_id) const noexcept {
 }
 
 std::string StringDictionary::getStringUnlocked(int32_t string_id) const noexcept {
-  if (string_id >= 0) {
-    CHECK_LT(string_id, static_cast<int32_t>(str_count_));
-    return getStringChecked(string_id);
-  }
-  CHECK_NE(INVALID_STR_ID, string_id);
-  auto it = transient_int_to_str_.find(string_id);
-  CHECK(it != transient_int_to_str_.end());
-  return it->second;
+  CHECK_LT(string_id, static_cast<int32_t>(str_count_));
+  return getStringChecked(string_id);
 }
 
 std::pair<char*, size_t> StringDictionary::getStringBytes(int32_t string_id) const noexcept {
@@ -266,12 +234,7 @@ std::vector<std::string> StringDictionary::getLike(const std::string& pattern,
   for (const auto& worker_result : worker_results) {
     result.insert(result.end(), worker_result.begin(), worker_result.end());
   }
-  for (const auto& kv : transient_int_to_str_) {
-    const auto str = getStringUnlocked(kv.first);
-    if (is_like(str, pattern, icase, is_simple, escape)) {
-      result.push_back(str);
-    }
-  }
+  // place result into cache for reuse if similar query
   const auto it_ok = like_cache_.insert(std::make_pair(cache_key, result));
   CHECK(it_ok.second);
   return result;
@@ -313,21 +276,9 @@ std::vector<std::string> StringDictionary::getRegexpLike(const std::string& patt
   for (const auto& worker_result : worker_results) {
     result.insert(result.end(), worker_result.begin(), worker_result.end());
   }
-  for (const auto& kv : transient_int_to_str_) {
-    const auto str = getStringUnlocked(kv.first);
-    if (is_regexp_like(str, pattern, escape)) {
-      result.push_back(str);
-    }
-  }
   const auto it_ok = regex_cache_.insert(std::make_pair(cache_key, result));
   CHECK(it_ok.second);
   return result;
-}
-
-void StringDictionary::clearTransient() noexcept {
-  mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
-  decltype(transient_int_to_str_)().swap(transient_int_to_str_);
-  decltype(transient_str_to_int_)().swap(transient_str_to_int_);
 }
 
 bool StringDictionary::fillRateIsHigh() const noexcept {
@@ -387,7 +338,7 @@ int32_t StringDictionary::computeBucket(const std::string& str,
                                         const bool unique) const noexcept {
   auto bucket = rk_hash(str) & (data.size() - 1);
   while (true) {
-    if (data[bucket] == INVALID_STR_ID) {
+    if (data[bucket] == INVALID_STR_ID) {  // In this case it means the slot is available for use
       break;
     }
     // if records are unique I don't need to do this test as I know it will not be the same
