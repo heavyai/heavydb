@@ -43,9 +43,7 @@ class RelAlgExecutor {
  private:
   ExecutionResult executeRelAlgSubQuery(const RelAlgNode* subquery_ra,
                                         const CompilationOptions& co,
-                                        const ExecutionOptions& eo,
-                                        RenderInfo* render_info,
-                                        const int64_t queue_time_ms);
+                                        const ExecutionOptions& eo);
 
   ExecutionResult executeRelAlgSeq(std::vector<RaExecutionDesc>& ed_list,
                                    const CompilationOptions& co,

@@ -37,7 +37,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQuery(const RelAlgNode* ra,
   for (auto subquery : subqueries_) {
     // Execute the subquery and cache the result.
     RelAlgExecutor ra_executor(executor_, cat_);
-    auto result = ra_executor.executeRelAlgSubQuery(subquery->getRelAlg(), co, eo, nullptr, 0);
+    auto result = ra_executor.executeRelAlgSubQuery(subquery->getRelAlg(), co, eo);
     subquery->setExecutionResult(std::make_shared<ExecutionResult>(result));
   }
   return executeRelAlgSeq(ed_list, co, eo, render_info, queue_time_ms);
@@ -71,11 +71,9 @@ FirstStepExecutionResult RelAlgExecutor::executeRelAlgQueryFirstStep(const RelAl
 
 ExecutionResult RelAlgExecutor::executeRelAlgSubQuery(const RelAlgNode* subquery_ra,
                                                       const CompilationOptions& co,
-                                                      const ExecutionOptions& eo,
-                                                      RenderInfo* render_info,
-                                                      const int64_t queue_time_ms) {
+                                                      const ExecutionOptions& eo) {
   auto ed_list = get_execution_descriptors(subquery_ra);
-  return executeRelAlgSeq(ed_list, co, eo, render_info, queue_time_ms);
+  return executeRelAlgSeq(ed_list, co, eo, nullptr, 0);
 }
 
 ExecutionResult RelAlgExecutor::executeRelAlgSeq(std::vector<RaExecutionDesc>& exec_descs,
