@@ -292,6 +292,9 @@ void FileBuffer::read(int8_t* const dst,
     }
 
     for (auto& p : threads) {
+      p.wait();
+    }
+    for (auto& p : threads) {
       bytesRead += p.get();
     }
   }

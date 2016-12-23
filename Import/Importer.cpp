@@ -1031,6 +1031,8 @@ ImportStatus Importer::importDelimited() {
       if (size < IMPORT_FILE_BUFFER_SIZE && feof(p_file))
         eof_reached = true;
       for (auto& p : threads)
+        p.wait();
+      for (auto& p : threads)
         import_status += p.get();
     }
     import_status.rows_estimated = ((float)file_size / current_pos) * import_status.rows_completed;

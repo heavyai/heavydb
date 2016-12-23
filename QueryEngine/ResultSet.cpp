@@ -406,6 +406,9 @@ void ResultSet::parallelTop(const std::list<Analyzer::OrderEntry>& order_entries
     }));
   }
   for (auto& init_future : init_futures) {
+    init_future.wait();
+  }
+  for (auto& init_future : init_futures) {
     init_future.get();
   }
   auto compare = createComparator(order_entries, true);
@@ -414,6 +417,9 @@ void ResultSet::parallelTop(const std::list<Analyzer::OrderEntry>& order_entries
     top_futures.emplace_back(std::async(std::launch::async, [&strided_permutation, &compare, top_n] {
       topPermutation(strided_permutation, top_n, compare);
     }));
+  }
+  for (auto& top_future : top_futures) {
+    top_future.wait();
   }
   for (auto& top_future : top_futures) {
     top_future.get();

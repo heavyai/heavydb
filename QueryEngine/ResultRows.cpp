@@ -617,6 +617,9 @@ void ResultRows::reduceInPlace(int64_t** group_by_buffer_ptr,
                                            end));
     }
     for (auto& child : reducer_threads) {
+      child.wait();
+    }
+    for (auto& child : reducer_threads) {
       child.get();
     }
   } else {
@@ -740,6 +743,9 @@ void ResultRows::reduce(const ResultRows& other_results,
                                              query_mem_desc,
                                              start,
                                              end));
+      }
+      for (auto& child : reducer_threads) {
+        child.wait();
       }
       for (auto& child : reducer_threads) {
         child.get();

@@ -94,6 +94,9 @@ void ResultSetStorage::reduce(const ResultSetStorage& that) const {
             }));
       }
       for (auto& reduction_thread : reduction_threads) {
+        reduction_thread.wait();
+      }
+      for (auto& reduction_thread : reduction_threads) {
         reduction_thread.get();
       }
     } else {
@@ -128,6 +131,9 @@ void ResultSetStorage::reduce(const ResultSetStorage& that) const {
               }
             }
           }));
+    }
+    for (auto& reduction_thread : reduction_threads) {
+      reduction_thread.wait();
     }
     for (auto& reduction_thread : reduction_threads) {
       reduction_thread.get();

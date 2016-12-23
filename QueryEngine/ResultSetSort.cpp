@@ -82,6 +82,9 @@ void ResultSet::doBaselineSort(const ExecutorDeviceType device_type,
           }));
     }
     for (auto& top_future : top_futures) {
+      top_future.wait();
+    }
+    for (auto& top_future : top_futures) {
       top_future.get();
     }
     permutation_.reserve(strided_permutations.size() * top_n);
