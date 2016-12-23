@@ -34,6 +34,8 @@ class InValuesBitmap {
 
   llvm::Value* codegen(llvm::Value* needle, Executor* executor);
 
+  bool isEmpty() const;
+
  private:
   std::vector<int8_t*> bitsets_;
   int64_t min_val_;

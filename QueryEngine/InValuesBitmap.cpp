@@ -29,7 +29,7 @@ InValuesBitmap::InValuesBitmap(const std::vector<int64_t>& values,
   CHECK_EQ(Data_Namespace::CPU_LEVEL, memory_level_);
 #endif  // HAVE_CUDA
   if (values.empty()) {
-    throw FailedToCreateBitmap();
+    return;
   }
   min_val_ = std::numeric_limits<int64_t>::max();
   max_val_ = std::numeric_limits<int64_t>::min();
@@ -109,4 +109,8 @@ llvm::Value* InValuesBitmap::codegen(llvm::Value* needle, Executor* executor) {
                                           executor->ll_int(max_val_),
                                           executor->ll_int(null_val_),
                                           executor->ll_int(null_bool_val)});
+}
+
+bool InValuesBitmap::isEmpty() const {
+  return bitsets_.empty();
 }

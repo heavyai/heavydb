@@ -1016,16 +1016,22 @@ llvm::Value* Executor::codegen(const Analyzer::InValues* expr, const Compilation
   if (is_unnest(in_arg)) {
     throw std::runtime_error("IN not supported for unnested expressions");
   }
+  const auto& expr_ti = expr->get_type_info();
+  CHECK(expr_ti.is_boolean());
   const auto lhs_lvs = codegen(in_arg, true, co);
   if (co.hoist_literals_) {  // TODO(alex): remove this constraint
     const auto in_vals_bitmap = createInValuesBitmap(expr, co);
     if (in_vals_bitmap) {
+      if (in_vals_bitmap->isEmpty()) {
+        return expr_ti.get_notnull()
+                   ? llvm::ConstantInt::get(llvm::IntegerType::getInt1Ty(cgen_state_->context_), false)
+                   : ll_int(int8_t(0));
+      }
       cgen_state_->addInValuesBitmap(in_vals_bitmap);
       CHECK_EQ(size_t(1), lhs_lvs.size());
       return in_vals_bitmap->codegen(lhs_lvs.front(), this);
     }
   }
-  const auto& expr_ti = expr->get_type_info();
   llvm::Value* result{nullptr};
   if (expr_ti.get_notnull()) {
     result = llvm::ConstantInt::get(llvm::IntegerType::getInt1Ty(cgen_state_->context_), false);
@@ -1035,8 +1041,6 @@ llvm::Value* Executor::codegen(const Analyzer::InValues* expr, const Compilation
     }
   } else {
     result = inlineIntNull(SQLTypeInfo(kBOOLEAN, false));
-    const auto& expr_ti = expr->get_type_info();
-    CHECK(expr_ti.is_boolean());
     for (auto in_val : expr->get_value_list()) {
       const auto crt = codegenCmp(kEQ, kONE, lhs_lvs, in_arg->get_type_info(), in_val.get(), co);
       result = cgen_state_->emitCall("logical_or", {result, crt, inlineIntNull(expr_ti)});
