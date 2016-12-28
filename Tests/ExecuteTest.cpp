@@ -2619,6 +2619,9 @@ int main(int argc, char** argv) {
   const std::string drop_dept_table{"DROP TABLE dept;"};
   g_sqlite_comparator.query(drop_dept_table);
   run_ddl_statement(drop_dept_table);
+  const std::string drop_test_in_bitmap{"DROP TABLE test_in_bitmap;"};
+  g_sqlite_comparator.query(drop_test_in_bitmap);
+  run_ddl_statement(drop_test_in_bitmap);
   g_session.reset(nullptr);
   return err;
 }
