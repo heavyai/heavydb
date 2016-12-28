@@ -36,8 +36,11 @@ class InValuesBitmap {
 
   bool isEmpty() const;
 
+  bool hasNull() const;
+
  private:
   std::vector<int8_t*> bitsets_;
+  bool rhs_has_null_;
   int64_t min_val_;
   int64_t max_val_;
   const int64_t null_val_;

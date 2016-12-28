@@ -2123,6 +2123,8 @@ TEST(Select, Subqueries) {
     c("SELECT COUNT(*) FROM test WHERE ofd NOT IN (SELECT ofd FROM test GROUP BY ofd);", dt);
     c("SELECT COUNT(*) FROM test WHERE ss IN (SELECT ss FROM test GROUP BY ss);", dt);
     c("SELECT COUNT(*) FROM test WHERE ss NOT IN (SELECT ss FROM test GROUP BY ss);", dt);
+    c("SELECT COUNT(*) FROM test WHERE str IN (SELECT str FROM test_in_bitmap GROUP BY str);", dt);
+    c("SELECT COUNT(*) FROM test WHERE str NOT IN (SELECT str FROM test_in_bitmap GROUP BY str);", dt);
 #ifdef ENABLE_JOIN_EXEC
     c("SELECT SUM((x - (SELECT AVG(x) FROM test)) * (x - (SELECT AVG(x) FROM test)) / ((SELECT COUNT(x) FROM test) - "
       "1)) FROM test;",
@@ -2536,6 +2538,37 @@ int main(int argc, char** argv) {
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'empty'";
     return -EEXIST;
+  }
+  try {
+    const std::string drop_old_test_in_bitmap{"DROP TABLE IF EXISTS test_in_bitmap;"};
+    run_ddl_statement(drop_old_test_in_bitmap);
+    g_sqlite_comparator.query(drop_old_test_in_bitmap);
+    const std::string create_test_in_bitmap{"CREATE TABLE test_in_bitmap(str TEXT ENCODING DICT);"};
+    run_ddl_statement(create_test_in_bitmap);
+    g_sqlite_comparator.query("CREATE TABLE test_in_bitmap(str TEXT);");
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'test_in_bitmap'";
+    return -EEXIST;
+  }
+  {
+    std::string insert_query{"INSERT INTO test_in_bitmap VALUES('a');"};
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query);
+  }
+  {
+    std::string insert_query{"INSERT INTO test_in_bitmap VALUES('b');"};
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query);
+  }
+  {
+    std::string insert_query{"INSERT INTO test_in_bitmap VALUES('c');"};
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query);
+  }
+  {
+    std::string insert_query{"INSERT INTO test_in_bitmap VALUES(NULL);"};
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query);
   }
   int err{0};
   try {

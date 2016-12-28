@@ -22,7 +22,7 @@ InValuesBitmap::InValuesBitmap(const std::vector<int64_t>& values,
                                const Data_Namespace::MemoryLevel memory_level,
                                const int device_count,
                                Data_Namespace::DataMgr* data_mgr)
-    : null_val_(null_val), memory_level_(memory_level), device_count_(device_count) {
+    : rhs_has_null_(false), null_val_(null_val), memory_level_(memory_level), device_count_(device_count) {
 #ifdef HAVE_CUDA
   CHECK(memory_level_ == Data_Namespace::CPU_LEVEL || memory_level == Data_Namespace::GPU_LEVEL);
 #else
@@ -35,6 +35,7 @@ InValuesBitmap::InValuesBitmap(const std::vector<int64_t>& values,
   max_val_ = std::numeric_limits<int64_t>::min();
   for (const auto value : values) {
     if (value == null_val) {
+      rhs_has_null_ = true;
       continue;
     }
     if (value < min_val_) {
@@ -47,7 +48,8 @@ InValuesBitmap::InValuesBitmap(const std::vector<int64_t>& values,
   if (max_val_ < min_val_) {
     CHECK_EQ(std::numeric_limits<int64_t>::max(), min_val_);
     CHECK_EQ(std::numeric_limits<int64_t>::min(), max_val_);
-    throw FailedToCreateBitmap();
+    CHECK(rhs_has_null_);
+    return;
   }
   const int64_t MAX_BITMAP_BITS{8 * 1000 * 1000 * 1000L};
   const auto bitmap_sz_bits = static_cast<int64_t>(checked_int64_t(max_val_) - min_val_ + 1);
@@ -113,4 +115,8 @@ llvm::Value* InValuesBitmap::codegen(llvm::Value* needle, Executor* executor) {
 
 bool InValuesBitmap::isEmpty() const {
   return bitsets_.empty();
+}
+
+bool InValuesBitmap::hasNull() const {
+  return rhs_has_null_;
 }
