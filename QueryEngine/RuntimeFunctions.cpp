@@ -225,10 +225,10 @@ extern "C" ALWAYS_INLINE int8_t logical_and(const int8_t lhs, const int8_t rhs, 
 
 extern "C" ALWAYS_INLINE int8_t logical_or(const int8_t lhs, const int8_t rhs, const int8_t null_val) {
   if (lhs == null_val) {
-    return rhs;
+    return rhs == 0 ? null_val : rhs;
   }
   if (rhs == null_val) {
-    return lhs;
+    return lhs == 0 ? null_val : lhs;
   }
   return (lhs || rhs) ? 1 : 0;
 }

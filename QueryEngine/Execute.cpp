@@ -1019,37 +1019,35 @@ llvm::Value* Executor::codegen(const Analyzer::InValues* expr, const Compilation
   const auto& expr_ti = expr->get_type_info();
   CHECK(expr_ti.is_boolean());
   const auto lhs_lvs = codegen(in_arg, true, co);
+  llvm::Value* result{nullptr};
+  if (expr_ti.get_notnull()) {
+    result = llvm::ConstantInt::get(llvm::IntegerType::getInt1Ty(cgen_state_->context_), false);
+  } else {
+    result = ll_int(int8_t(0));
+  }
+  CHECK(result);
   if (co.hoist_literals_) {  // TODO(alex): remove this constraint
     const auto in_vals_bitmap = createInValuesBitmap(expr, co);
     if (in_vals_bitmap) {
       if (in_vals_bitmap->isEmpty()) {
-        if (in_vals_bitmap->hasNull()) {
-          return inlineIntNull(SQLTypeInfo(kBOOLEAN, false));
-        }
-        return expr_ti.get_notnull()
-                   ? llvm::ConstantInt::get(llvm::IntegerType::getInt1Ty(cgen_state_->context_), false)
-                   : ll_int(int8_t(0));
+        return in_vals_bitmap->hasNull() ? inlineIntNull(SQLTypeInfo(kBOOLEAN, false)) : result;
       }
       cgen_state_->addInValuesBitmap(in_vals_bitmap);
       CHECK_EQ(size_t(1), lhs_lvs.size());
       return in_vals_bitmap->codegen(lhs_lvs.front(), this);
     }
   }
-  llvm::Value* result{nullptr};
   if (expr_ti.get_notnull()) {
-    result = llvm::ConstantInt::get(llvm::IntegerType::getInt1Ty(cgen_state_->context_), false);
     for (auto in_val : expr->get_value_list()) {
       result = cgen_state_->ir_builder_.CreateOr(
           result, toBool(codegenCmp(kEQ, kONE, lhs_lvs, in_arg->get_type_info(), in_val.get(), co)));
     }
   } else {
-    result = inlineIntNull(SQLTypeInfo(kBOOLEAN, false));
     for (auto in_val : expr->get_value_list()) {
       const auto crt = codegenCmp(kEQ, kONE, lhs_lvs, in_arg->get_type_info(), in_val.get(), co);
       result = cgen_state_->emitCall("logical_or", {result, crt, inlineIntNull(expr_ti)});
     }
   }
-  CHECK(result);
   return result;
 }
 
