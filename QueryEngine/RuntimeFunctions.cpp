@@ -217,8 +217,11 @@ extern "C" ALWAYS_INLINE int8_t logical_not(const int8_t operand, const int8_t n
 }
 
 extern "C" ALWAYS_INLINE int8_t logical_and(const int8_t lhs, const int8_t rhs, const int8_t null_val) {
-  if (lhs == null_val || rhs == null_val) {
-    return null_val;
+  if (lhs == null_val) {
+    return rhs == 0 ? rhs : null_val;
+  }
+  if (rhs == null_val) {
+    return lhs == 0 ? lhs : null_val;
   }
   return (lhs && rhs) ? 1 : 0;
 }
