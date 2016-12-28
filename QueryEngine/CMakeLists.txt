@@ -25,6 +25,7 @@ set(query_engine_source_files
     MaxwellCodegenPatch.cpp
     NvidiaKernel.cpp
     OutputBufferInitialization.cpp
+    QueryPhysicalInputsCollector.cpp
     QueryRewrite.cpp
     QueryTemplateGenerator.cpp
     RelAlgAbstractInterpreter.cpp
