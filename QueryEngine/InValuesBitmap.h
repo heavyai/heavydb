@@ -32,7 +32,7 @@ class InValuesBitmap {
                  Data_Namespace::DataMgr* data_mgr);
   ~InValuesBitmap();
 
-  llvm::Value* codegen(llvm::Value* needle, Executor* executor);
+  llvm::Value* codegen(llvm::Value* needle, Executor* executor) const;
 
   bool isEmpty() const;
 

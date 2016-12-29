@@ -81,13 +81,16 @@ InValuesBitmap::InValuesBitmap(const std::vector<int64_t>& values,
 }
 
 InValuesBitmap::~InValuesBitmap() {
+  if (bitsets_.empty()) {
+    return;
+  }
   if (memory_level_ == Data_Namespace::CPU_LEVEL) {
     CHECK_EQ(size_t(1), bitsets_.size());
     free(bitsets_.front());
   }
 }
 
-llvm::Value* InValuesBitmap::codegen(llvm::Value* needle, Executor* executor) {
+llvm::Value* InValuesBitmap::codegen(llvm::Value* needle, Executor* executor) const {
   CHECK(!bitsets_.empty());
   std::vector<std::shared_ptr<const Analyzer::Constant>> constants_owned;
   std::vector<const Analyzer::Constant*> constants;

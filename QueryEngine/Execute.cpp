@@ -1027,14 +1027,13 @@ llvm::Value* Executor::codegen(const Analyzer::InValues* expr, const Compilation
   }
   CHECK(result);
   if (co.hoist_literals_) {  // TODO(alex): remove this constraint
-    const auto in_vals_bitmap = createInValuesBitmap(expr, co);
+    auto in_vals_bitmap = createInValuesBitmap(expr, co);
     if (in_vals_bitmap) {
       if (in_vals_bitmap->isEmpty()) {
         return in_vals_bitmap->hasNull() ? inlineIntNull(SQLTypeInfo(kBOOLEAN, false)) : result;
       }
-      cgen_state_->addInValuesBitmap(in_vals_bitmap);
       CHECK_EQ(size_t(1), lhs_lvs.size());
-      return in_vals_bitmap->codegen(lhs_lvs.front(), this);
+      return cgen_state_->addInValuesBitmap(in_vals_bitmap)->codegen(lhs_lvs.front(), this);
     }
   }
   if (expr_ti.get_notnull()) {
@@ -1051,7 +1050,8 @@ llvm::Value* Executor::codegen(const Analyzer::InValues* expr, const Compilation
   return result;
 }
 
-InValuesBitmap* Executor::createInValuesBitmap(const Analyzer::InValues* in_values, const CompilationOptions& co) {
+std::unique_ptr<InValuesBitmap> Executor::createInValuesBitmap(const Analyzer::InValues* in_values,
+                                                               const CompilationOptions& co) {
   const auto& value_list = in_values->get_value_list();
   std::vector<int64_t> values;
   const auto& ti = in_values->get_arg()->get_type_info();
@@ -1080,7 +1080,7 @@ InValuesBitmap* Executor::createInValuesBitmap(const Analyzer::InValues* in_valu
       }
     }
     try {
-      return new InValuesBitmap(
+      return boost::make_unique<InValuesBitmap>(
           values,
           needle_null_val,
           co.device_type_ == ExecutorDeviceType::GPU ? Data_Namespace::GPU_LEVEL : Data_Namespace::CPU_LEVEL,

@@ -372,7 +372,7 @@ class Executor {
                                  const char escape_char,
                                  const CompilationOptions&);
   llvm::Value* codegen(const Analyzer::InValues*, const CompilationOptions&);
-  InValuesBitmap* createInValuesBitmap(const Analyzer::InValues*, const CompilationOptions&);
+  std::unique_ptr<InValuesBitmap> createInValuesBitmap(const Analyzer::InValues*, const CompilationOptions&);
   llvm::Value* codegenCmp(const Analyzer::BinOper*, const CompilationOptions&);
   llvm::Value* codegenCmp(const SQLOps,
                           const SQLQualifier,
@@ -966,8 +966,9 @@ class Executor {
       return str_lv;
     }
 
-    void addInValuesBitmap(const InValuesBitmap* in_values_bitmap) {
-      in_values_bitmaps_.emplace_back(in_values_bitmap);
+    const InValuesBitmap* addInValuesBitmap(std::unique_ptr<InValuesBitmap>& in_values_bitmap) {
+      in_values_bitmaps_.emplace_back(std::move(in_values_bitmap));
+      return in_values_bitmaps_.back().get();
     }
     // look up a runtime function based on the name, return type and type of
     // the arguments and call it; x64 only, don't call from GPU codegen
