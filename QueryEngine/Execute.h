@@ -83,6 +83,8 @@ inline llvm::Type* get_int_type(const int width, llvm::LLVMContext& context) {
     default:
       LOG(FATAL) << "Unsupported integer width: " << width;
   }
+  CHECK(false);
+  return nullptr;
 }
 
 inline llvm::Value* get_arg_by_name(llvm::Function* func, const std::string& name) {
