@@ -1,6 +1,7 @@
 #ifndef QUERYENGINE_EXECUTE_H
 #define QUERYENGINE_EXECUTE_H
 
+#include "AggregatedColRange.h"
 #include "BufferCompaction.h"
 #include "GroupByAndAggregate.h"
 #include "InValuesBitmap.h"
@@ -317,7 +318,7 @@ class Executor {
   typedef std::vector<LiteralValue> LiteralValues;
 
  private:
-  void clearInputTableInfoCache();
+  void clearMetaInfoCache();
 
   template <class T>
   llvm::ConstantInt* ll_int(const T v) const {
@@ -1138,6 +1139,7 @@ class Executor {
   const TemporaryTables* temporary_tables_;
 
   InputTableInfoCache input_table_info_cache_;
+  AggregatedColRange agg_col_range_cache_;
 
   static std::map<std::pair<int, ::QueryRenderer::QueryRenderManager*>, std::shared_ptr<Executor>> executors_;
   static std::mutex execute_mutex_;

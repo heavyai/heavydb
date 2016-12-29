@@ -31,6 +31,7 @@
 #include <llvm/IR/Attributes.h>
 #include <llvm/IR/InstIterator.h>
 #include "llvm/IR/Intrinsics.h"
+#include "AggregatedColRange.h"
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/MDBuilder.h>
 #include <llvm/IR/Verifier.h>
@@ -455,7 +456,7 @@ ResultRows Executor::execute(const Planner::RootPlan* root_plan,
   // capture the lock acquistion time
   auto clock_begin = timer_start();
   std::lock_guard<std::mutex> lock(execute_mutex_);
-  ScopeGuard restore_input_table_info_cache = [this] { clearInputTableInfoCache(); };
+  ScopeGuard restore_metainfo_cache = [this] { clearMetaInfoCache(); };
   int64_t queue_time_ms = timer_stop(clock_begin);
   ScopeGuard row_set_holder = [this] { row_set_mem_owner_ = nullptr; };
   switch (stmt_type) {
@@ -615,8 +616,9 @@ Fragmenter_Namespace::TableInfo Executor::getTableInfo(const int table_id) {
   return input_table_info_cache_.getTableInfo(table_id);
 }
 
-void Executor::clearInputTableInfoCache() {
+void Executor::clearMetaInfoCache() {
   input_table_info_cache_.clear();
+  agg_col_range_cache_.clear();
 }
 
 std::vector<int8_t> Executor::serializeLiterals(const std::unordered_map<int, Executor::LiteralValues>& literals,

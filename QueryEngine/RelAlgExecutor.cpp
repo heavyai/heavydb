@@ -27,7 +27,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQuery(const RelAlgNode* ra,
   std::lock_guard<std::mutex> lock(executor_->execute_mutex_);
   ScopeGuard row_set_holder = [this] { executor_->row_set_mem_owner_ = nullptr; };
   executor_->row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>();
-  ScopeGuard restore_input_table_info_cache = [this] { executor_->clearInputTableInfoCache(); };
+  ScopeGuard restore_metainfo_cache = [this] { executor_->clearMetaInfoCache(); };
   int64_t queue_time_ms = timer_stop(clock_begin);
   auto ed_list = get_execution_descriptors(ra);
   if (render_info) {  // save the table names for render queries
@@ -52,7 +52,7 @@ FirstStepExecutionResult RelAlgExecutor::executeRelAlgQueryFirstStep(const RelAl
   std::lock_guard<std::mutex> lock(executor_->execute_mutex_);
   ScopeGuard row_set_holder = [this] { executor_->row_set_mem_owner_ = nullptr; };
   executor_->row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>();
-  ScopeGuard restore_input_table_info_cache = [this] { executor_->clearInputTableInfoCache(); };
+  ScopeGuard restore_metainfo_cache = [this] { executor_->clearMetaInfoCache(); };
   int64_t queue_time_ms = timer_stop(clock_begin);
   auto ed_list = get_execution_descriptors(ra);
   CHECK(!ed_list.empty());
