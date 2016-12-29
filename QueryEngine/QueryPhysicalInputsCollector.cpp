@@ -25,7 +25,7 @@ class RexPhysicalInputsVisitor : public RexVisitor<PhysicalInputSet> {
   PhysicalInputSet visitInput(const RexInput* input) const override {
     const auto scan_ra = dynamic_cast<const RelScan*>(input->getSourceNode());
     if (!scan_ra) {
-      return {};
+      return PhysicalInputSet{};
     }
     const auto scan_td = scan_ra->getTableDescriptor();
     CHECK(scan_td);
@@ -79,7 +79,7 @@ PhysicalInputSet RelAlgPhysicalInputsVisitor::visitFilter(const RelFilter* filte
 PhysicalInputSet RelAlgPhysicalInputsVisitor::visitJoin(const RelJoin* join) const {
   const auto condition = join->getCondition();
   if (!condition) {
-    return {};
+    return PhysicalInputSet{};
   }
   RexPhysicalInputsVisitor visitor;
   return visitor.visit(condition);
