@@ -49,6 +49,28 @@ extern "C" __device__ void write_back(int64_t* dest, int64_t* src, const int32_t
 
 #undef init_group_by_buffer_gpu_impl
 
+
+__device__ int64_t cycle_start = 0LL;
+__device__ int64_t cycle_budget = 0LL;
+
+extern "C" __device__ bool dynamic_watchdog(int64_t init_budget) {
+  //static int64_t cycle_start = 0LL;
+  //static int64_t cycle_budget = 0LL;
+  if (init_budget > 0LL) {
+    __syncthreads();
+    if (threadIdx.x == 0) {
+      cycle_budget = init_budget;
+      cycle_start = (int64_t)clock64();
+    }
+    return false;
+  }
+  if (cycle_budget > 0LL) {
+    int64_t cycles = (int64_t)clock64() - cycle_start;
+    return (cycle_budget - cycles) < 0LL;
+  }
+  return false;
+}
+
 extern "C" __device__ int64_t* get_matching_group_value(int64_t* groups_buffer,
                                                         const uint32_t h,
                                                         const int64_t* key,

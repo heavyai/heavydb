@@ -1521,7 +1521,9 @@ class MapDHandler : virtual public MapDIf {
                            allow_loop_joins_ || just_validate,
                            g_enable_watchdog,
                            jit_debug_,
-                           just_validate};
+                           just_validate,
+                           g_enable_dynamic_watchdog,
+                           g_dynamic_watchdog_factor};
     auto executor = Executor::getExecutor(
         cat.get_currentDB().dbId, jit_debug_ ? "/tmp" : "", jit_debug_ ? "mapdquery" : "", 0, 0, nullptr);
     RelAlgExecutor ra_executor(executor.get(), cat);
@@ -1631,7 +1633,15 @@ class MapDHandler : virtual public MapDIf {
     RelAlgExecutor ra_executor(executor.get(), cat);
     auto clock_begin = timer_start();
     CompilationOptions co = {session_info.get_executor_device_type(), true, ExecutorOptLevel::Default};
-    ExecutionOptions eo = {false, allow_multifrag_, false, allow_loop_joins_, g_enable_watchdog, jit_debug_, false};
+    ExecutionOptions eo = {false,
+                           allow_multifrag_,
+                           false,
+                           allow_loop_joins_,
+                           g_enable_watchdog,
+                           jit_debug_,
+                           false,
+                           g_enable_dynamic_watchdog,
+                           g_dynamic_watchdog_factor};
     rapidjson::Document render_config;
     render_config.Parse(render_type.c_str());
 
@@ -1943,7 +1953,15 @@ class MapDHandler : virtual public MapDIf {
     const auto session_info = get_session(session);
     const auto& cat = session_info.get_catalog();
     CompilationOptions co = {executor_device_type_, true, ExecutorOptLevel::Default};
-    ExecutionOptions eo = {false, allow_multifrag_, false, allow_loop_joins_, g_enable_watchdog, jit_debug_, false};
+    ExecutionOptions eo = {false,
+                           allow_multifrag_,
+                           false,
+                           allow_loop_joins_,
+                           g_enable_watchdog,
+                           jit_debug_,
+                           false,
+                           g_enable_dynamic_watchdog,
+                           g_dynamic_watchdog_factor};
     RelAlgExecutionOptions ra_eo{co, eo, nullptr, 0};
     // TODO
     auto executor = Executor::getExecutor(
@@ -2047,6 +2065,8 @@ int main(int argc, char** argv) {
   LdapMetadata ldapMetadata;
   bool enable_rendering = false;
   bool enable_watchdog = true;
+  bool enable_dynamic_watchdog = false;
+  int dynamic_watchdog_factor = 4;
 
   size_t cpu_buffer_mem_bytes = 0;  // 0 will cause DataMgr to auto set this based on available memory
   size_t render_mem_bytes = 500000000;
@@ -2118,6 +2138,14 @@ int main(int argc, char** argv) {
                          po::value<bool>(&enable_watchdog)->default_value(enable_watchdog)->implicit_value(true),
                          "Enable watchdog");
   desc_adv.add_options()(
+      "enable-dynamic-watchdog",
+      po::value<bool>(&enable_dynamic_watchdog)->default_value(enable_dynamic_watchdog)->implicit_value(true),
+      "Enable dynamic watchdog");
+  desc_adv.add_options()(
+      "dynamic-watchdog-factor",
+      po::value<int>(&dynamic_watchdog_factor)->default_value(dynamic_watchdog_factor)->implicit_value(4),
+      "Dynamic watchdog factor to increase the time budget");
+  desc_adv.add_options()(
       "start-epoch", po::value<int>(&start_epoch)->default_value(start_epoch), "Value of epoch to 'rollback' to");
 
   po::positional_options_description positionalOptions;
@@ -2178,6 +2206,8 @@ int main(int argc, char** argv) {
       enable_rendering = false;
 
     g_enable_watchdog = enable_watchdog;
+    g_enable_dynamic_watchdog = enable_dynamic_watchdog;
+    g_dynamic_watchdog_factor = dynamic_watchdog_factor;
   } catch (boost::program_options::error& e) {
     std::cerr << "Usage Error: " << e.what() << std::endl;
     return 1;

@@ -1261,7 +1261,7 @@ GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getExprRangeInfo(const An
               expr_range.getBucket(),
               expr_range.hasNulls()};
     case ExpressionRangeType::FloatingPoint:
-      if (g_enable_watchdog) {
+      if (g_enable_watchdog && !g_enable_dynamic_watchdog) {
         throw WatchdogException("Group by float / double would be slow");
       }
     case ExpressionRangeType::Invalid:

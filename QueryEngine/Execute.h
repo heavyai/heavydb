@@ -41,6 +41,8 @@
 #include <unordered_set>
 
 extern bool g_enable_watchdog;
+extern bool g_enable_dynamic_watchdog;
+extern int g_dynamic_watchdog_factor;
 
 struct RenderInfo {
   bool do_render;
@@ -791,7 +793,9 @@ class Executor {
                                     const JoinInfo& join_info,
                                     const bool has_cardinality_estimation);
 
-  void createErrorCheckControlFlow(llvm::Function* query_func);
+  void initDynamicWatchdog(llvm::Function* query_func, int64_t budget);
+
+  void createErrorCheckControlFlow(llvm::Function* query_func, bool run_with_dynamic_watchdog);
 
   void codegenInnerScanNextRow();
 
@@ -824,6 +828,8 @@ class Executor {
   int8_t warpSize() const;
   unsigned gridSize() const;
   unsigned blockSize() const;
+
+  int64_t deviceCycles(int milliseconds) const;
 
   llvm::Value* groupByColumnCodegen(Analyzer::Expr* group_by_col,
                                     const CompilationOptions&,
@@ -1153,6 +1159,7 @@ class Executor {
   static const int32_t ERR_OUT_OF_CPU_MEM{6};
   static const int32_t ERR_OVERFLOW_OR_UNDERFLOW{7};
   static const int32_t ERR_SPECULATIVE_TOP_OOM{8};
+  static const int32_t ERR_OUT_OF_TIME{9};
   friend class GroupByAndAggregate;
   friend struct QueryMemoryDescriptor;
   friend class QueryExecutionContext;

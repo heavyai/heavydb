@@ -72,6 +72,8 @@ void CudaMgr::fillDeviceProperties() {
     checkError(cuDeviceGetAttribute(&deviceProperties[deviceNum].pciDeviceId,
                                     CU_DEVICE_ATTRIBUTE_PCI_DEVICE_ID,
                                     deviceProperties[deviceNum].device));
+    checkError(cuDeviceGetAttribute(
+        &deviceProperties[deviceNum].clockKhz, CU_DEVICE_ATTRIBUTE_CLOCK_RATE, deviceProperties[deviceNum].device));
     checkError(cuDeviceGetAttribute(&deviceProperties[deviceNum].memoryClockKhz,
                                     CU_DEVICE_ATTRIBUTE_MEMORY_CLOCK_RATE,
                                     deviceProperties[deviceNum].device));
@@ -108,6 +110,7 @@ void CudaMgr::printDeviceProperties() const {
   cout << "Num devices: " << deviceCount_ << endl << endl;
   for (int d = 0; d < deviceCount_; ++d) {
     cout << "Device: " << deviceProperties[d].device << endl;
+    cout << "Clock (khz): " << deviceProperties[d].clockKhz << endl;
     cout << "Compute Major: " << deviceProperties[d].computeMajor << endl;
     cout << "Compute Minor: " << deviceProperties[d].computeMinor << endl;
     cout << "PCI bus id: " << deviceProperties[d].pciBusId << endl;

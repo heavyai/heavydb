@@ -9,6 +9,8 @@
 #include <cstring>
 #include <set>
 #include <tuple>
+//#include <ctime>
+#include <chrono>
 
 // decoder implementations
 
@@ -633,6 +635,34 @@ extern "C" __attribute__((noinline)) void agg_sum_float_skip_val_shared(int32_t*
 
 extern "C" __attribute__((noinline)) void force_sync() {
   abort();
+}
+
+// x64 timeout detection
+extern "C" __attribute__((noinline)) bool dynamic_watchdog(int64_t init_budget) {
+  static std::chrono::steady_clock::time_point start;
+  static int64_t ms_budget = 0LL;
+  if (init_budget > 0LL) {
+    ms_budget = init_budget;
+    start = std::chrono::steady_clock::now();
+    return false;
+  }
+  if (ms_budget > 0LL) {
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start);
+    return (duration.count() > ms_budget);
+  }
+  return false;
+
+#if 0
+  static clock_t cycle_start = 0;
+  static int64_t cycle_budget = 0;
+  if (init_budget > 0) {
+    cycle_budget = init_budget;
+    cycle_start = std::clock();
+    return false;
+  }
+  int64_t cycles = (int64_t)(std::clock() - cycle_start);
+  return (cycles > cycle_budget);
+#endif
 }
 
 // x64 stride functions

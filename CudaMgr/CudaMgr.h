@@ -28,6 +28,7 @@ struct DeviceProperties {
   int memoryClockKhz;
   int memoryBusWidth;  // in bits
   float memoryBandwidthGBs;
+  int clockKhz;
 };
 
 class CudaMgr {

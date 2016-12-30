@@ -59,6 +59,8 @@
 #include <set>
 
 bool g_enable_watchdog{false};
+bool g_enable_dynamic_watchdog{false};
+int g_dynamic_watchdog_factor{4};
 
 std::mutex Executor::ExecutionDispatch::reduce_mutex_;
 
@@ -347,18 +349,25 @@ RowSetPtr Executor::executeSelectPlan(const Planner::Plan* plan,
     const auto ra_exe_unit = query_rewriter.rewrite();
     if (limit || offset) {
       size_t max_groups_buffer_entry_guess_limit{scan_total_limit ? scan_total_limit : max_groups_buffer_entry_guess};
-      auto result =
-          executeWorkUnit(error_code,
-                          max_groups_buffer_entry_guess_limit,
-                          is_agg,
-                          query_infos,
-                          ra_exe_unit,
-                          {device_type, hoist_literals, opt_level},
-                          {false, allow_multifrag, just_explain, allow_loop_joins, g_enable_watchdog, false, false},
-                          cat,
-                          row_set_mem_owner_,
-                          render_allocator_map,
-                          true);
+      auto result = executeWorkUnit(error_code,
+                                    max_groups_buffer_entry_guess_limit,
+                                    is_agg,
+                                    query_infos,
+                                    ra_exe_unit,
+                                    {device_type, hoist_literals, opt_level},
+                                    {false,
+                                     allow_multifrag,
+                                     just_explain,
+                                     allow_loop_joins,
+                                     g_enable_watchdog,
+                                     false,
+                                     false,
+                                     g_enable_dynamic_watchdog,
+                                     g_dynamic_watchdog_factor},
+                                    cat,
+                                    row_set_mem_owner_,
+                                    render_allocator_map,
+                                    true);
       auto& rows = boost::get<RowSetPtr>(result);
       max_groups_buffer_entry_guess = max_groups_buffer_entry_guess_limit;
       CHECK(rows);
@@ -368,18 +377,25 @@ RowSetPtr Executor::executeSelectPlan(const Planner::Plan* plan,
       }
       return std::move(rows);
     }
-    auto result =
-        executeWorkUnit(error_code,
-                        max_groups_buffer_entry_guess,
-                        is_agg,
-                        query_infos,
-                        ra_exe_unit,
-                        {device_type, hoist_literals, opt_level},
-                        {false, allow_multifrag, just_explain, allow_loop_joins, g_enable_watchdog, false, false},
-                        cat,
-                        row_set_mem_owner_,
-                        render_allocator_map,
-                        true);
+    auto result = executeWorkUnit(error_code,
+                                  max_groups_buffer_entry_guess,
+                                  is_agg,
+                                  query_infos,
+                                  ra_exe_unit,
+                                  {device_type, hoist_literals, opt_level},
+                                  {false,
+                                   allow_multifrag,
+                                   just_explain,
+                                   allow_loop_joins,
+                                   g_enable_watchdog,
+                                   false,
+                                   false,
+                                   g_enable_dynamic_watchdog,
+                                   g_dynamic_watchdog_factor},
+                                  cat,
+                                  row_set_mem_owner_,
+                                  render_allocator_map,
+                                  true);
     auto& rows = boost::get<RowSetPtr>(result);
     CHECK(rows);
     return std::move(rows);
@@ -506,6 +522,9 @@ ResultRows Executor::execute(const Planner::RootPlan* root_plan,
       }
       if (error_code == ERR_UNSUPPORTED_SELF_JOIN) {
         throw std::runtime_error("Self joins not supported yet");
+      }
+      if (error_code == ERR_OUT_OF_TIME) {
+        throw std::runtime_error("Query execution has exceeded the time limit");
       }
       if (error_code == ERR_OUT_OF_CPU_MEM) {
         throw std::runtime_error("Not enough host memory to execute the query");
@@ -3587,18 +3606,25 @@ RowSetPtr Executor::executeResultPlan(const Planner::Result* result_plan,
                                                   0};
   QueryRewriter query_rewriter(ra_exe_unit_in, query_infos, this, result_plan);
   const auto ra_exe_unit = query_rewriter.rewrite();
-  auto result =
-      executeWorkUnit(error_code,
-                      max_groups_buffer_entry_guess,
-                      true,
-                      query_infos,
-                      ra_exe_unit,
-                      {device_type, hoist_literals, opt_level},
-                      {false, allow_multifrag, just_explain, allow_loop_joins, g_enable_watchdog, false, false},
-                      cat,
-                      row_set_mem_owner_,
-                      nullptr,
-                      true);
+  auto result = executeWorkUnit(error_code,
+                                max_groups_buffer_entry_guess,
+                                true,
+                                query_infos,
+                                ra_exe_unit,
+                                {device_type, hoist_literals, opt_level},
+                                {false,
+                                 allow_multifrag,
+                                 just_explain,
+                                 allow_loop_joins,
+                                 g_enable_watchdog,
+                                 false,
+                                 false,
+                                 g_enable_dynamic_watchdog,
+                                 g_dynamic_watchdog_factor},
+                                cat,
+                                row_set_mem_owner_,
+                                nullptr,
+                                true);
   auto& rows = boost::get<RowSetPtr>(result);
   CHECK(rows);
   if (just_explain) {
@@ -3702,7 +3728,15 @@ RowSetPtr Executor::executeResultPlan(const Planner::Result* result_plan,
                       {},
                       res_ra_unit,
                       {ExecutorDeviceType::CPU, hoist_literals, opt_level},
-                      {false, allow_multifrag, just_explain, allow_loop_joins, g_enable_watchdog, false, false},
+                      {false,
+                       allow_multifrag,
+                       just_explain,
+                       allow_loop_joins,
+                       g_enable_watchdog,
+                       false,
+                       false,
+                       g_enable_dynamic_watchdog,
+                       g_dynamic_watchdog_factor},
                       nullptr,
                       false,
                       row_set_mem_owner_,
@@ -3763,7 +3797,7 @@ RowSetPtr Executor::executeSortPlan(const Planner::Sort* sort_plan,
                                         allow_loop_joins,
                                         nullptr);
   CHECK(rows_to_sort);
-  if (just_explain || *error_code == ERR_OUT_OF_GPU_MEM) {
+  if (just_explain || *error_code == ERR_OUT_OF_GPU_MEM || *error_code == ERR_OUT_OF_TIME) {
     return rows_to_sort;
   }
   rows_to_sort->sort(sort_plan->get_order_entries(), sort_plan->get_remove_duplicates(), limit + offset);
@@ -5160,7 +5194,8 @@ int32_t Executor::executePlanWithoutGroupBy(const RelAlgExecutionUnit& ra_exe_un
       LOG(FATAL) << "Error launching the GPU kernel: " << e.what();
     }
   }
-  if (error_code == Executor::ERR_OVERFLOW_OR_UNDERFLOW || error_code == Executor::ERR_DIV_BY_ZERO) {
+  if (error_code == Executor::ERR_OVERFLOW_OR_UNDERFLOW || error_code == Executor::ERR_DIV_BY_ZERO ||
+      error_code == Executor::ERR_OUT_OF_TIME) {
     return error_code;
   }
   if (ra_exe_unit.estimator) {
@@ -5321,7 +5356,8 @@ int32_t Executor::executePlanWithGroupBy(const RelAlgExecutionUnit& ra_exe_unit,
     }
   }
 
-  if (error_code == Executor::ERR_OVERFLOW_OR_UNDERFLOW || error_code == Executor::ERR_DIV_BY_ZERO) {
+  if (error_code == Executor::ERR_OVERFLOW_OR_UNDERFLOW || error_code == Executor::ERR_DIV_BY_ZERO ||
+      error_code == Executor::ERR_OUT_OF_TIME) {
     return error_code;
   }
 
@@ -5906,10 +5942,32 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
   }
   CHECK(filter_lv->getType()->isIntegerTy(1));
 
+  bool run_with_dynamic_watchdog = false;
+  if (eo.with_dynamic_watchdog) {
+    int64_t budget;
+    if (co.device_type_ == ExecutorDeviceType::GPU) {
+      // Use remaining time budget or 25 seconds, whichever is lower
+      int ms_budget = 25000;
+      int fudge_factor = eo.dynamic_watchdog_factor;
+      // Translate milliseconds to device cycles
+      budget = deviceCycles(ms_budget * fudge_factor);
+      run_with_dynamic_watchdog = true;
+    } else if (co.device_type_ == ExecutorDeviceType::CPU) {
+      // Use remaining time budget or 2 minutes, whichever is lower
+      unsigned ms_budget = 120000;
+      // budget = CLOCKS_PER_SEC * ms_budget / 1000;
+      budget = ms_budget;
+      run_with_dynamic_watchdog = true;
+    }
+    if (run_with_dynamic_watchdog) {
+      initDynamicWatchdog(query_func, budget);
+    }
+  }
+
   const bool needs_error_check = group_by_and_aggregate.codegen(filter_lv, co);
 
-  if (needs_error_check || cgen_state_->needs_error_check_) {
-    createErrorCheckControlFlow(query_func);
+  if (needs_error_check || cgen_state_->needs_error_check_ || run_with_dynamic_watchdog) {
+    createErrorCheckControlFlow(query_func, run_with_dynamic_watchdog);
   }
 
   // iterate through all the instruction in the query template function and
@@ -5971,7 +6029,21 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
       llvm_ir};
 }
 
-void Executor::createErrorCheckControlFlow(llvm::Function* query_func) {
+void Executor::initDynamicWatchdog(llvm::Function* query_func, int64_t budget) {
+  auto& entry_bb = query_func->front();
+  auto watchdog_error_bb = llvm::BasicBlock::Create(cgen_state_->context_, ".watchdog_error", query_func, &entry_bb);
+  llvm::ReturnInst::Create(cgen_state_->context_, watchdog_error_bb);
+  auto watchdog_init_bb =
+      llvm::BasicBlock::Create(cgen_state_->context_, ".watchdog_init", query_func, watchdog_error_bb);
+  llvm::IRBuilder<> ir_builder(watchdog_init_bb);
+  auto status = ir_builder.CreateCall(cgen_state_->module_->getFunction("dynamic_watchdog"),
+                                      std::vector<llvm::Value*>{ll_int(budget)});
+  llvm::Value* err_lv = ir_builder.CreateICmp(llvm::ICmpInst::ICMP_NE, status, ll_bool(0));
+  ir_builder.CreateCondBr(
+      err_lv, watchdog_error_bb, &entry_bb, llvm::MDBuilder(cgen_state_->context_).createBranchWeights(1, 100));
+}
+
+void Executor::createErrorCheckControlFlow(llvm::Function* query_func, bool run_with_dynamic_watchdog) {
   // check whether the row processing was successful; currently, it can
   // fail by running out of group by buffer slots
   bool done_splitting = false;
@@ -5988,6 +6060,11 @@ void Executor::createErrorCheckControlFlow(llvm::Function* query_func) {
         auto& br_instr = bb_it->back();
         llvm::IRBuilder<> ir_builder(&br_instr);
         llvm::Value* err_lv = &*inst_it;
+        if (run_with_dynamic_watchdog) {
+          llvm::Value* detected = ir_builder.CreateCall(cgen_state_->module_->getFunction("dynamic_watchdog"),
+                                                        std::vector<llvm::Value*>{ll_int(int64_t(0LL))});
+          err_lv = ir_builder.CreateSelect(detected, ll_int(Executor::ERR_OUT_OF_TIME), err_lv);
+        }
         auto& error_code_arg = query_func->getArgumentList().back();
         CHECK(error_code_arg.getName() == "error_code");
         err_lv = ir_builder.CreateCall(cgen_state_->module_->getFunction("record_error_code"),
@@ -6398,6 +6475,7 @@ declare i1 @regexp_like(i8*, i32, i8*, i32, i8);
 declare i8 @regexp_like_nullable(i8*, i32, i8*, i32, i8, i8);
 declare void @linear_probabilistic_count(i8*, i32, i8*, i32);
 declare i32 @record_error_code(i32, i32*);
+declare i1 @dynamic_watchdog(i64);
 declare void @force_sync();
 )" + gen_array_any_all_sigs();
 
@@ -6442,6 +6520,7 @@ std::vector<void*> Executor::optimizeAndCodegenGPU(llvm::Function* query_func,
             get_gv_call.getCalledFunction()->getName() == "get_matching_group_value_perfect_hash" ||
             get_gv_call.getCalledFunction()->getName() == "string_decode" ||
             get_gv_call.getCalledFunction()->getName() == "array_size" ||
+            // get_gv_call.getCalledFunction()->getName() == "dynamic_watchdog" ||
             get_gv_call.getCalledFunction()->getName() == "linear_probabilistic_count") {
           llvm::AttributeSet no_inline_attrs;
           no_inline_attrs = no_inline_attrs.addAttribute(cgen_state_->context_, 0, llvm::Attribute::NoInline);
@@ -6618,6 +6697,13 @@ unsigned Executor::blockSize() const {
   CHECK(catalog_->get_dataMgr().cudaMgr_);
   const auto& dev_props = catalog_->get_dataMgr().cudaMgr_->deviceProperties;
   return block_size_x_ ? block_size_x_ : dev_props.front().maxThreadsPerBlock;
+}
+
+int64_t Executor::deviceCycles(int milliseconds) const {
+  CHECK(catalog_);
+  CHECK(catalog_->get_dataMgr().cudaMgr_);
+  const auto& dev_props = catalog_->get_dataMgr().cudaMgr_->deviceProperties;
+  return (int64_t)dev_props.front().clockKhz * milliseconds;
 }
 
 llvm::Value* Executor::castToFP(llvm::Value* val) {
