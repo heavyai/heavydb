@@ -6701,7 +6701,7 @@ int64_t Executor::deviceCycles(int milliseconds) const {
   CHECK(catalog_);
   CHECK(catalog_->get_dataMgr().cudaMgr_);
   const auto& dev_props = catalog_->get_dataMgr().cudaMgr_->deviceProperties;
-  return (int64_t)dev_props.front().clockKhz * milliseconds;
+  return static_cast<int64_t>(dev_props.front().clockKhz) * milliseconds;
 }
 
 llvm::Value* Executor::castToFP(llvm::Value* val) {

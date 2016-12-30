@@ -61,12 +61,12 @@ extern "C" __device__ bool dynamic_watchdog(int64_t init_budget) {
     __syncthreads();
     if (threadIdx.x == 0) {
       cycle_budget = init_budget;
-      cycle_start = (int64_t)clock64();
+      cycle_start = static_cast<int64_t>(clock64());
     }
     return false;
   }
   // Check if out of time
-  int64_t cycles = (int64_t)clock64() - cycle_start;
+  int64_t cycles = static_cast<int64_t>(clock64()) - cycle_start;
   return (cycle_budget - cycles) < 0LL;
 }
 

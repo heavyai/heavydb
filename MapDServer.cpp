@@ -1963,7 +1963,6 @@ class MapDHandler : virtual public MapDIf {
                            g_enable_dynamic_watchdog,
                            g_dynamic_watchdog_factor};
     RelAlgExecutionOptions ra_eo{co, eo, nullptr, 0};
-    // TODO
     auto executor = Executor::getExecutor(
         cat.get_currentDB().dbId, jit_debug_ ? "/tmp" : "", jit_debug_ ? "mapdquery" : "", 0, 0, nullptr);
     auto ra_executor = boost::make_unique<RelAlgExecutor>(executor.get(), cat);
