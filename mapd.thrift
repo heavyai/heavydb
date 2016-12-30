@@ -236,6 +236,29 @@ struct TTableDetails {
   4: i64 max_rows
 }
 
+enum TExpressionRangeType {
+  INVALID,
+  INTEGER,
+  FLOATINGPOINT
+}
+
+struct TColumnRange {
+  1: TExpressionRangeType type
+  2: i32 col_id
+  3: i32 table_id
+  4: bool has_nulls
+  5: i64 int_min
+  6: i64 int_max
+  7: i64 bucket
+  8: double fp_min
+  9: double fp_max
+}
+
+struct TPendingQuery {
+  1: TQueryId id
+  2: list<TColumnRange> column_ranges
+}
+
 service MapD {
   TSessionId connect(1: string user, 2: string passwd, 3: string dbname) throws (1: TMapDException e 2: ThriftException te)
   void disconnect(1: TSessionId session) throws (1: TMapDException e 2: ThriftException te)
@@ -272,8 +295,8 @@ service MapD {
   void stop_heap_profile(1: TSessionId session) throws (1: TMapDException e 2: ThriftException te)
   string get_heap_profile(1: TSessionId session) throws (1: TMapDException e 2: ThriftException te)
   void import_geo_table(1: TSessionId session, 2: string file_name, 3: string table_name, 4: TCopyParams copy_params) throws (1: TMapDException e 2: ThriftException te)
-  TStepResult execute_first_step(1: TQueryId query_id) throws (1: TMapDException e 2: ThriftException te)
-  TQueryId start_query(1: TSessionId session, 2: string query_ra) throws (1: TMapDException e 2: ThriftException te)
+  TPendingQuery start_query(1: TSessionId session, 2: string query_ra) throws (1: TMapDException e 2: ThriftException te)
+  TStepResult execute_first_step(1: TPendingQuery pending_query) throws (1: TMapDException e 2: ThriftException te)
   void broadcast_serialized_rows(1: string serialized_rows, 2: TRowDescriptor row_desc, 3: TQueryId query_id) throws (1: TMapDException e 2: ThriftException te)
   TTableDetails get_table_details(1: TSessionId session, 2: string table_name) throws (1: TMapDException e 2: ThriftException te)
   void clear_gpu_memory(1: TSessionId session) throws (1: TMapDException e 2: ThriftException te)

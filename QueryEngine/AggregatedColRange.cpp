@@ -11,6 +11,10 @@ void AggregatedColRange::setColRange(const PhysicalInput& phys_input, const Expr
   CHECK(it_ok.second);
 }
 
+const std::unordered_map<PhysicalInput, ExpressionRange>& AggregatedColRange::asMap() const {
+  return cache_;
+}
+
 void AggregatedColRange::clear() {
   decltype(cache_)().swap(cache_);
 }

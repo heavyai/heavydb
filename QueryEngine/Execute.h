@@ -315,6 +315,8 @@ class Executor {
 
   Fragmenter_Namespace::TableInfo getTableInfo(const int table_id);
 
+  ExpressionRange getColRange(const PhysicalInput&) const;
+
   typedef boost::variant<int8_t, int16_t, int32_t, int64_t, float, double, std::pair<std::string, int>, std::string>
       LiteralValue;
   typedef std::vector<LiteralValue> LiteralValues;

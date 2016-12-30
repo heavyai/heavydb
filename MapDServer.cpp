@@ -1920,10 +1920,11 @@ class MapDHandler : virtual public MapDIf {
   }
 #endif  // HAVE_CALCITE
 
-  void execute_first_step(TStepResult& _return, const TQueryId query_id) override {
+  void execute_first_step(TStepResult& _return, const TPendingQuery& pending_query) override {
 #ifdef HAVE_RAVM
     try {
-      const auto first_step_result = PendingExecutionClosure::executeNextStep(query_id);
+      const auto first_step_result = PendingExecutionClosure::executeNextStep(
+          pending_query.id, column_ranges_from_thrift(pending_query.column_ranges));
       const auto& result_rows = first_step_result.result.getRows();
       auto result_set = result_rows.getResultSet();
       if (!result_set) {
@@ -1948,7 +1949,7 @@ class MapDHandler : virtual public MapDIf {
 #endif  // HAVE_RAVM
   }
 
-  TQueryId start_query(const TSessionId session, const std::string& query_ra) override {
+  void start_query(TPendingQuery& _return, const TSessionId session, const std::string& query_ra) override {
 #ifdef HAVE_RAVM
     const auto session_info = get_session(session);
     const auto& cat = session_info.get_catalog();
@@ -1968,11 +1969,72 @@ class MapDHandler : virtual public MapDIf {
     auto ra_executor = boost::make_unique<RelAlgExecutor>(executor.get(), cat);
     const auto ra = deserialize_ra_dag(query_ra, cat, ra_executor.get());
     auto closure = PendingExecutionClosure::create(ra, ra_executor, cat, ra_eo);
-    return closure->getId();
+    _return.id = closure->getId();
+    _return.column_ranges = column_ranges_to_thrift(closure->getColRangeCache());
 #else
     CHECK(false);
-    return -1;
 #endif  // HAVE_RAVM
+  }
+
+  static std::vector<TColumnRange> column_ranges_to_thrift(const AggregatedColRange& column_ranges) {
+    std::vector<TColumnRange> thrift_column_ranges;
+    const auto& column_ranges_map = column_ranges.asMap();
+    for (const auto& kv : column_ranges_map) {
+      TColumnRange thrift_column_range;
+      thrift_column_range.col_id = kv.first.col_id;
+      thrift_column_range.table_id = kv.first.table_id;
+      const auto& expr_range = kv.second;
+      switch (expr_range.getType()) {
+        case ExpressionRangeType::Integer:
+          thrift_column_range.type = TExpressionRangeType::INTEGER;
+          thrift_column_range.int_min = expr_range.getIntMin();
+          thrift_column_range.int_max = expr_range.getIntMax();
+          thrift_column_range.bucket = expr_range.getBucket();
+          thrift_column_range.has_nulls = expr_range.hasNulls();
+          break;
+        case ExpressionRangeType::FloatingPoint:
+          thrift_column_range.type = TExpressionRangeType::FLOATINGPOINT;
+          thrift_column_range.fp_min = expr_range.getFpMin();
+          thrift_column_range.fp_max = expr_range.getFpMax();
+          thrift_column_range.has_nulls = expr_range.hasNulls();
+          break;
+        case ExpressionRangeType::Invalid:
+          thrift_column_range.type = TExpressionRangeType::INVALID;
+          break;
+        default:
+          CHECK(false);
+      }
+      thrift_column_ranges.push_back(thrift_column_range);
+    }
+    return thrift_column_ranges;
+  }
+
+  static AggregatedColRange column_ranges_from_thrift(const std::vector<TColumnRange>& thrift_column_ranges) {
+    AggregatedColRange column_ranges;
+    for (const auto& thrift_column_range : thrift_column_ranges) {
+      PhysicalInput phys_input{thrift_column_range.col_id, thrift_column_range.table_id};
+      switch (thrift_column_range.type) {
+        case TExpressionRangeType::INTEGER:
+          column_ranges.setColRange(phys_input,
+                                    ExpressionRange::makeIntRange(thrift_column_range.int_min,
+                                                                  thrift_column_range.int_max,
+                                                                  thrift_column_range.bucket,
+                                                                  thrift_column_range.has_nulls));
+          break;
+        case TExpressionRangeType::FLOATINGPOINT:
+          column_ranges.setColRange(
+              phys_input,
+              ExpressionRange::makeFpRange(
+                  thrift_column_range.fp_min, thrift_column_range.fp_max, thrift_column_range.has_nulls));
+          break;
+        case TExpressionRangeType::INVALID:
+          column_ranges.setColRange(phys_input, ExpressionRange::makeInvalidRange());
+          break;
+        default:
+          CHECK(false);
+      }
+    }
+    return column_ranges;
   }
 
   void broadcast_serialized_rows(const std::string& serialized_rows,

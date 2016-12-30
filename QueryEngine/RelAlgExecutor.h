@@ -32,7 +32,8 @@ class RelAlgExecutor {
   FirstStepExecutionResult executeRelAlgQueryFirstStep(const RelAlgNode* ra,
                                                        const CompilationOptions& co,
                                                        const ExecutionOptions& eo,
-                                                       RenderInfo* render_info);
+                                                       RenderInfo* render_info,
+                                                       const AggregatedColRange& agg_col_range);
 
   ExecutionResult executeRelAlgSubQuery(const RelAlgNode* subquery_ra,
                                         const CompilationOptions& co,
@@ -49,6 +50,8 @@ class RelAlgExecutor {
   void registerSubquery(RexSubQuery* subquery) noexcept { subqueries_.push_back(subquery); }
 
   const std::vector<RexSubQuery*>& getSubqueries() const noexcept { return subqueries_; };
+
+  AggregatedColRange computeColRangesCache(const RelAlgNode* ra);
 
  private:
   void executeRelAlgStep(const size_t step_idx,
@@ -162,6 +165,8 @@ class RelAlgExecutor {
   }
 
   void handleNop(const RelAlgNode*);
+
+  void setColRangesCache(const RelAlgNode* ra);
 
   static std::vector<std::string> getScanTableNamesInRelAlgSeq(std::vector<RaExecutionDesc>& exec_descs);
 

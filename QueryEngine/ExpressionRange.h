@@ -170,6 +170,11 @@ inline double getMax<double>(const ExpressionRange& e) {
 class Executor;
 struct InputTableInfo;
 
+ExpressionRange getLeafColumnRange(const Analyzer::ColumnVar*,
+                                   const std::vector<InputTableInfo>&,
+                                   const Executor*,
+                                   const bool is_outer_join_proj);
+
 ExpressionRange getExpressionRange(const Analyzer::Expr*, const std::vector<InputTableInfo>&, const Executor*);
 
 #endif  // QUERYENGINE_EXPRESSIONRANGE_H

@@ -20,6 +20,8 @@ class AggregatedColRange {
 
   void setColRange(const PhysicalInput&, const ExpressionRange&);
 
+  const std::unordered_map<PhysicalInput, ExpressionRange>& asMap() const;
+
   void clear();
 
  private:

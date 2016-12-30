@@ -3,6 +3,7 @@
 #include "DateTruncate.h"
 #include "GroupByAndAggregate.h"
 #include "Execute.h"
+#include "QueryPhysicalInputsCollector.h"
 
 #include <cfenv>
 
@@ -312,9 +313,11 @@ int64_t get_conservative_datetrunc_bucket(const DatetruncField datetrunc_field) 
 
 }  // namespace
 
-ExpressionRange getExpressionRange(const Analyzer::ColumnVar* col_expr,
+ExpressionRange getLeafColumnRange(const Analyzer::ColumnVar* col_expr,
                                    const std::vector<InputTableInfo>& query_infos,
-                                   const Executor* executor) {
+                                   const Executor* executor,
+                                   const bool is_outer_join_proj) {
+  bool has_nulls = is_outer_join_proj;
   int col_id = col_expr->get_column_id();
   const auto& col_phys_ti =
       col_expr->get_type_info().is_array() ? col_expr->get_type_info().get_elem_type() : col_expr->get_type_info();
@@ -335,9 +338,6 @@ ExpressionRange getExpressionRange(const Analyzer::ColumnVar* col_expr,
     case kTIME:
     case kFLOAT:
     case kDOUBLE: {
-      const int rte_idx = col_expr->get_rte_idx();
-      CHECK_GE(rte_idx, 0);
-      CHECK_LT(static_cast<size_t>(rte_idx), query_infos.size());
       ssize_t ti_idx = -1;
       for (size_t i = 0; i < query_infos.size(); ++i) {
         if (col_expr->get_table_id() == query_infos[i].table_id) {
@@ -348,7 +348,6 @@ ExpressionRange getExpressionRange(const Analyzer::ColumnVar* col_expr,
       CHECK_NE(ssize_t(-1), ti_idx);
       const auto& query_info = query_infos[ti_idx].info;
       const auto& fragments = query_info.fragments;
-      bool has_nulls = rte_idx > 0 && executor->isOuterJoin();
       const auto cd = executor->getColumnDescriptor(col_expr);
       if (cd && cd->isVirtualCol) {
         CHECK(cd->columnName == "rowid");
@@ -397,6 +396,25 @@ ExpressionRange getExpressionRange(const Analyzer::ColumnVar* col_expr,
       break;
   }
   return ExpressionRange::makeInvalidRange();
+}
+
+ExpressionRange getExpressionRange(const Analyzer::ColumnVar* col_expr,
+                                   const std::vector<InputTableInfo>& query_infos,
+                                   const Executor* executor) {
+  const int rte_idx = col_expr->get_rte_idx();
+  CHECK_GE(rte_idx, 0);
+  CHECK_LT(static_cast<size_t>(rte_idx), query_infos.size());
+  bool is_outer_join_proj = rte_idx > 0 && executor->isOuterJoin();
+#ifdef HAVE_RAVM
+  if (col_expr->get_table_id() > 0) {
+    auto col_range = executor->getColRange(PhysicalInput{col_expr->get_column_id(), col_expr->get_table_id()});
+    if (is_outer_join_proj) {
+      col_range.setHasNulls();
+    }
+    return col_range;
+  }
+#endif  // HAVE_RAVM
+  return getLeafColumnRange(col_expr, query_infos, executor, is_outer_join_proj);
 }
 
 #undef FIND_STAT_FRAG

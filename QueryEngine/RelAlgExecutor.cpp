@@ -4,11 +4,14 @@
 
 #include "CardinalityEstimator.h"
 #include "InputMetadata.h"
+#include "QueryPhysicalInputsCollector.h"
 #include "RexVisitor.h"
 #include "ScalarExprVisitor.h"
 
 #include "../Shared/measure.h"
 #include "../Shared/scope.h"
+
+#include <algorithm>
 
 ExecutionResult RelAlgExecutor::executeRelAlgQuery(const std::string& query_ra,
                                                    const CompilationOptions& co,
@@ -17,6 +20,18 @@ ExecutionResult RelAlgExecutor::executeRelAlgQuery(const std::string& query_ra,
   const auto ra = deserialize_ra_dag(query_ra, cat_, this);
   return executeRelAlgQuery(ra.get(), co, eo, render_info);
 }
+
+namespace {
+
+std::unordered_set<int> get_physical_table_ids(const std::unordered_set<PhysicalInput>& phys_inputs) {
+  std::unordered_set<int> physical_table_ids;
+  for (const auto& phys_input : phys_inputs) {
+    physical_table_ids.insert(phys_input.table_id);
+  }
+  return physical_table_ids;
+}
+
+}  // namespace
 
 ExecutionResult RelAlgExecutor::executeRelAlgQuery(const RelAlgNode* ra,
                                                    const CompilationOptions& co,
@@ -27,6 +42,8 @@ ExecutionResult RelAlgExecutor::executeRelAlgQuery(const RelAlgNode* ra,
   std::lock_guard<std::mutex> lock(executor_->execute_mutex_);
   ScopeGuard row_set_holder = [this] { executor_->row_set_mem_owner_ = nullptr; };
   executor_->row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>();
+  executor_->catalog_ = &cat_;
+  setColRangesCache(ra);
   ScopeGuard restore_metainfo_cache = [this] { executor_->clearMetaInfoCache(); };
   int64_t queue_time_ms = timer_stop(clock_begin);
   auto ed_list = get_execution_descriptors(ra);
@@ -43,15 +60,45 @@ ExecutionResult RelAlgExecutor::executeRelAlgQuery(const RelAlgNode* ra,
   return executeRelAlgSeq(ed_list, co, eo, render_info, queue_time_ms);
 }
 
+void RelAlgExecutor::setColRangesCache(const RelAlgNode* ra) {
+  executor_->agg_col_range_cache_ = computeColRangesCache(ra);
+}
+
+AggregatedColRange RelAlgExecutor::computeColRangesCache(const RelAlgNode* ra) {
+  AggregatedColRange agg_col_range_cache;
+  const auto phys_inputs = get_physical_inputs(ra);
+  const auto phys_table_ids = get_physical_table_ids(phys_inputs);
+  std::vector<InputTableInfo> query_infos;
+  executor_->catalog_ = &cat_;
+  for (const int table_id : phys_table_ids) {
+    query_infos.emplace_back(InputTableInfo{table_id, executor_->getTableInfo(table_id)});
+  }
+  for (const auto& phys_input : phys_inputs) {
+    const auto cd = cat_.getMetadataForColumn(phys_input.table_id, phys_input.col_id);
+    CHECK(cd);
+    const auto& col_ti = cd->columnType.is_array() ? cd->columnType.get_elem_type() : cd->columnType;
+    if (col_ti.is_number() || col_ti.is_boolean() || col_ti.is_time() ||
+        (col_ti.is_string() && col_ti.get_compression() == kENCODING_DICT)) {
+      const auto col_var =
+          boost::make_unique<Analyzer::ColumnVar>(cd->columnType, phys_input.table_id, phys_input.col_id, 0);
+      const auto col_range = getLeafColumnRange(col_var.get(), query_infos, executor_, false);
+      agg_col_range_cache.setColRange(phys_input, col_range);
+    }
+  }
+  return agg_col_range_cache;
+}
+
 FirstStepExecutionResult RelAlgExecutor::executeRelAlgQueryFirstStep(const RelAlgNode* ra,
                                                                      const CompilationOptions& co,
                                                                      const ExecutionOptions& eo,
-                                                                     RenderInfo* render_info) {
+                                                                     RenderInfo* render_info,
+                                                                     const AggregatedColRange& agg_col_range) {
   // capture the lock acquistion time
   auto clock_begin = timer_start();
   std::lock_guard<std::mutex> lock(executor_->execute_mutex_);
   ScopeGuard row_set_holder = [this] { executor_->row_set_mem_owner_ = nullptr; };
   executor_->row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>();
+  executor_->agg_col_range_cache_ = agg_col_range;
   ScopeGuard restore_metainfo_cache = [this] { executor_->clearMetaInfoCache(); };
   int64_t queue_time_ms = timer_stop(clock_begin);
   auto ed_list = get_execution_descriptors(ra);
