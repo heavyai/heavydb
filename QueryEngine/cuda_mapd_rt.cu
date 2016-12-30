@@ -49,7 +49,6 @@ extern "C" __device__ void write_back(int64_t* dest, int64_t* src, const int32_t
 
 #undef init_group_by_buffer_gpu_impl
 
-
 __device__ int64_t cycle_start = 0LL;
 __device__ int64_t cycle_budget = 0LL;
 
@@ -566,7 +565,7 @@ extern "C" __device__ void linear_probabilistic_count(uint8_t* bitmap,
   const uint32_t bit_pos = MurmurHash1(key_bytes, key_len, 0) % (bitmap_bytes * 8);
   const uint32_t word_idx = bit_pos / 32;
   const uint32_t bit_idx = bit_pos % 32;
-  atomicOr(((uint32_t*) bitmap) + word_idx, 1 << bit_idx);
+  atomicOr(((uint32_t*)bitmap) + word_idx, 1 << bit_idx);
 }
 
 extern "C" __device__ void force_sync() {
