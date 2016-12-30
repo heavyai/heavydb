@@ -54,8 +54,10 @@ __device__ int64_t cycle_start = 0LL;
 __device__ int64_t cycle_budget = 0LL;
 
 extern "C" __device__ bool dynamic_watchdog(int64_t init_budget) {
-  //static int64_t cycle_start = 0LL;
-  //static int64_t cycle_budget = 0LL;
+  // Bail out right away if there's an attempt to check on an uninitialized watchdog
+  if (init_budget == 0LL && cycle_budget == 0LL)
+    return false;
+  // Initialize watchdog
   if (init_budget > 0LL) {
     __syncthreads();
     if (threadIdx.x == 0) {
@@ -64,11 +66,9 @@ extern "C" __device__ bool dynamic_watchdog(int64_t init_budget) {
     }
     return false;
   }
-  if (cycle_budget > 0LL) {
-    int64_t cycles = (int64_t)clock64() - cycle_start;
-    return (cycle_budget - cycles) < 0LL;
-  }
-  return false;
+  // Check if out of time
+  int64_t cycles = (int64_t)clock64() - cycle_start;
+  return (cycle_budget - cycles) < 0LL;
 }
 
 extern "C" __device__ int64_t* get_matching_group_value(int64_t* groups_buffer,

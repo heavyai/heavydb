@@ -67,11 +67,6 @@ extern "C" NEVER_INLINE DEVICE int64_t* get_group_value(int64_t* groups_buffer,
       return matching_group;
     }
     h_probe = (h_probe + 1) % groups_buffer_entry_count;
-    if (h_probe == 0) {
-      if (dynamic_watchdog(0LL)) {
-        return NULL;
-      }
-    }
   }
   return NULL;
 }
@@ -94,11 +89,6 @@ extern "C" NEVER_INLINE DEVICE int64_t* get_group_value_columnar(int64_t* groups
       return matching_group;
     }
     h_probe = (h_probe + 1) % groups_buffer_entry_count;
-    if (h_probe == 0) {
-      if (dynamic_watchdog(0LL)) {
-        return NULL;
-      }
-    }
   }
   return NULL;
 }

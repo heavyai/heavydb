@@ -5955,7 +5955,6 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
     } else if (co.device_type_ == ExecutorDeviceType::CPU) {
       // Use remaining time budget or 2 minutes, whichever is lower
       unsigned ms_budget = 120000;
-      // budget = CLOCKS_PER_SEC * ms_budget / 1000;
       budget = ms_budget;
       run_with_dynamic_watchdog = true;
     }
@@ -6520,7 +6519,6 @@ std::vector<void*> Executor::optimizeAndCodegenGPU(llvm::Function* query_func,
             get_gv_call.getCalledFunction()->getName() == "get_matching_group_value_perfect_hash" ||
             get_gv_call.getCalledFunction()->getName() == "string_decode" ||
             get_gv_call.getCalledFunction()->getName() == "array_size" ||
-            // get_gv_call.getCalledFunction()->getName() == "dynamic_watchdog" ||
             get_gv_call.getCalledFunction()->getName() == "linear_probabilistic_count") {
           llvm::AttributeSet no_inline_attrs;
           no_inline_attrs = no_inline_attrs.addAttribute(cgen_state_->context_, 0, llvm::Attribute::NoInline);
