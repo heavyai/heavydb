@@ -62,7 +62,15 @@ std::vector<RexInput> n_outputs(const RelAlgNode* node, const size_t n) {
   return outputs;
 }
 
-typedef std::vector<RexInput> RANodeOutput;
+}  // namespace
+
+void RelProject::replaceInput(std::shared_ptr<const RelAlgNode> old_input, std::shared_ptr<const RelAlgNode> input) {
+  RelAlgNode::replaceInput(old_input, input);
+  RexRebindInputsVisitor rebind_inputs(old_input.get(), input.get());
+  for (const auto& scalar_expr : scalar_exprs_) {
+    rebind_inputs.visit(scalar_expr.get());
+  }
+}
 
 RANodeOutput get_node_output(const RelAlgNode* ra_node) {
   RANodeOutput outputs;
@@ -116,16 +124,6 @@ RANodeOutput get_node_output(const RelAlgNode* ra_node) {
   }
   CHECK(false);
   return outputs;
-}
-
-}  // namespace
-
-void RelProject::replaceInput(std::shared_ptr<const RelAlgNode> old_input, std::shared_ptr<const RelAlgNode> input) {
-  RelAlgNode::replaceInput(old_input, input);
-  RexRebindInputsVisitor rebind_inputs(old_input.get(), input.get());
-  for (const auto& scalar_expr : scalar_exprs_) {
-    rebind_inputs.visit(scalar_expr.get());
-  }
 }
 
 bool RelProject::isIdentity() const {

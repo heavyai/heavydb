@@ -844,4 +844,8 @@ std::shared_ptr<const RelAlgNode> deserialize_ra_dag(const std::string& query_ra
 
 std::string tree_string(const RelAlgNode*, const size_t indent = 0);
 
+typedef std::vector<RexInput> RANodeOutput;
+
+RANodeOutput get_node_output(const RelAlgNode* ra_node);
+
 #endif  // QUERYENGINE_RELALGABSTRACTINTERPRETER_H

@@ -23,8 +23,15 @@ class RelAlgPhysicalInputsVisitor : public RelAlgVisitor<PhysicalInputSet> {
 class RexPhysicalInputsVisitor : public RexVisitor<PhysicalInputSet> {
  public:
   PhysicalInputSet visitInput(const RexInput* input) const override {
-    const auto scan_ra = dynamic_cast<const RelScan*>(input->getSourceNode());
+    const auto source_ra = input->getSourceNode();
+    const auto scan_ra = dynamic_cast<const RelScan*>(source_ra);
     if (!scan_ra) {
+      const auto join_ra = dynamic_cast<const RelJoin*>(source_ra);
+      if (join_ra) {
+        const auto node_inputs = get_node_output(join_ra);
+        CHECK_LT(input->getIndex(), node_inputs.size());
+        return visitInput(&node_inputs[input->getIndex()]);
+      }
       return PhysicalInputSet{};
     }
     const auto scan_td = scan_ra->getTableDescriptor();
