@@ -185,7 +185,7 @@ WORK          TOK(WORK)
 		unput(c);	/* just peeking */
 		if(c != '\'') {
 			/* remove quotes */
-      char escape_removed[yyleng - 2];
+      char escape_removed[yyleng - 1];
       char *p = yytext + 1;
       int j = 0;
       int len = yyleng - 2;
