@@ -16,6 +16,7 @@ extern "C" NEVER_INLINE DEVICE int64_t* get_group_value(int64_t* groups_buffer,
   if (matching_group) {
     return matching_group;
   }
+  uint32_t watchdog_countdown = 100;
   uint32_t h_probe = (h + 1) % groups_buffer_entry_count;
   while (h_probe != h) {
     matching_group = get_matching_group_value(groups_buffer, h_probe, key, key_qw_count, row_size_quad, init_vals);
@@ -23,6 +24,12 @@ extern "C" NEVER_INLINE DEVICE int64_t* get_group_value(int64_t* groups_buffer,
       return matching_group;
     }
     h_probe = (h_probe + 1) % groups_buffer_entry_count;
+    if (--watchdog_countdown == 0) {
+      if (dynamic_watchdog(0LL)) {
+        return NULL;
+      }
+      watchdog_countdown = 100;
+    }
   }
   return NULL;
 }
@@ -37,6 +44,7 @@ extern "C" NEVER_INLINE DEVICE int64_t* get_group_value_columnar(int64_t* groups
   if (matching_group) {
     return matching_group;
   }
+  uint32_t watchdog_countdown = 100;
   uint32_t h_probe = (h + 1) % groups_buffer_entry_count;
   while (h_probe != h) {
     matching_group =
@@ -45,6 +53,12 @@ extern "C" NEVER_INLINE DEVICE int64_t* get_group_value_columnar(int64_t* groups
       return matching_group;
     }
     h_probe = (h_probe + 1) % groups_buffer_entry_count;
+    if (--watchdog_countdown == 0) {
+      if (dynamic_watchdog(0LL)) {
+        return NULL;
+      }
+      watchdog_countdown = 100;
+    }
   }
   return NULL;
 }

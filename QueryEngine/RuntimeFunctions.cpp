@@ -10,6 +10,7 @@
 #include <cstring>
 #include <set>
 #include <tuple>
+#include <thread>
 #include <chrono>
 
 // decoder implementations
@@ -674,22 +675,32 @@ extern "C" __attribute__((noinline)) void force_sync() {
   abort();
 }
 
+static __inline__ uint64_t rdtsc(void) {
+  unsigned hi, lo;
+  __asm__ __volatile__("rdtsc" : "=a"(lo), "=d"(hi));
+  return (static_cast<uint64_t>(hi) << 32) | static_cast<uint64_t>(lo);
+}
+
 // x64 timeout detection
 extern "C" __attribute__((noinline)) bool dynamic_watchdog(int64_t init_budget) {
-  static std::chrono::steady_clock::time_point start;
-  static int64_t ms_budget = 0LL;
+  static uint64_t start = 0ULL;
+  static uint64_t ms_budget = 0ULL;
+  static uint64_t freq_kHz = 0ULL;
   // Uninitialized watchdog can't check time
-  if (init_budget == 0LL && ms_budget == 0LL)
+  if (init_budget == 0LL && ms_budget == 0ULL)
     return false;
   // Initialize watchdog
   if (init_budget > 0LL) {
-    ms_budget = init_budget;
-    start = std::chrono::steady_clock::now();
+    ms_budget = static_cast<uint64_t>(init_budget);
+    start = rdtsc();
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    freq_kHz = rdtsc() - start;
     return false;
   }
   // Check if out of time
-  auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start);
-  return (duration.count() > ms_budget);
+  auto cycles = rdtsc() - start;
+  auto ms = cycles / freq_kHz;
+  return (ms > ms_budget);
 }
 
 // x64 stride functions
