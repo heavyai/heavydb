@@ -9,7 +9,6 @@
 #include "ScalarExprVisitor.h"
 
 #include "../Shared/measure.h"
-#include "../Shared/scope.h"
 
 #include <algorithm>
 
@@ -114,6 +113,17 @@ FirstStepExecutionResult RelAlgExecutor::executeRelAlgQueryFirstStep(const RelAl
   return {executeRelAlgSeq(first_exec_desc_singleton_list, co, eo, render_info, queue_time_ms),
           first_exec_desc.getBody()->getId(),
           false};
+}
+
+void RelAlgExecutor::prepareLeafExecution(const AggregatedColRange& agg_col_range) {
+  leaf_execution_cleanup_.reset(new ScopeGuard([this] {
+    executor_->row_set_mem_owner_ = nullptr;
+    executor_->clearMetaInfoCache();
+    executor_->execute_mutex_.unlock();
+  }));
+  executor_->execute_mutex_.lock();
+  executor_->row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>();
+  executor_->agg_col_range_cache_ = agg_col_range;
 }
 
 ExecutionResult RelAlgExecutor::executeRelAlgSubQuery(const RelAlgNode* subquery_ra,
