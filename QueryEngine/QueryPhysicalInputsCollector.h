@@ -14,8 +14,8 @@
 class RelAlgNode;
 
 struct PhysicalInput {
-  const int col_id;
-  const int table_id;
+  int col_id;
+  int table_id;
 
   bool operator==(const PhysicalInput& that) const { return col_id == that.col_id && table_id == that.table_id; }
 };
