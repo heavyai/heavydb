@@ -15,6 +15,7 @@ struct ColumnDescriptor {
   int tableId;
   int columnId;
   std::string columnName;
+  std::string sourceName;
   SQLTypeInfo columnType;
   std::string chunks;
   bool isSystemCol;
@@ -26,6 +27,7 @@ struct ColumnDescriptor {
       : tableId(tableId),
         columnId(columnId),
         columnName(columnName),
+        sourceName(columnName),
         columnType(columnType),
         isSystemCol(false),
         isVirtualCol(false) {}

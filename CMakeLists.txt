@@ -55,6 +55,11 @@ find_package(Git)
 find_package(Glog REQUIRED)
 find_package(Thrift REQUIRED)
 include_directories(${Thrift_INCLUDE_DIRS})
+find_package(PNG REQUIRED)
+find_package(GDAL REQUIRED)
+find_package(GDALExtra REQUIRED)
+list(APPEND GDAL_LIBRARIES ${PNG_LIBRARIES} ${GDALExtra_LIBRARIES})
+include_directories(${GDAL_INCLUDE_DIRS})
 
 set(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR}/bin)
 if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux" AND (("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang"

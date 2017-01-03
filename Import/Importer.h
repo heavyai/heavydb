@@ -18,6 +18,8 @@
 #include <glog/logging.h>
 #include <poly2tri/poly2tri.h>
 #include <shapelib/shapefil.h>
+#include <ogrsf_frmts.h>
+#include <gdal.h>
 #include "../Catalog/TableDescriptor.h"
 #include "../Catalog/Catalog.h"
 #include "../Fragmenter/Fragmenter.h"
@@ -28,6 +30,8 @@
 class TDatum;
 
 namespace Importer_NS {
+
+enum class TableType { DELIMITED, POLYGON };
 
 struct CopyParams {
   char delimiter;
@@ -42,6 +46,7 @@ struct CopyParams {
   char array_end;
   int threads;
   size_t max_reject;  // maximum number of records that can be rejected before copy is failed
+  TableType table_type;
 
   CopyParams()
       : delimiter(','),
@@ -55,7 +60,8 @@ struct CopyParams {
         array_begin('{'),
         array_end('}'),
         threads(0),
-        max_reject(10000) {}
+        max_reject(10000),
+        table_type(TableType::DELIMITED) {}
 };
 
 class TypedImportBuffer : boost::noncopyable {
@@ -597,6 +603,7 @@ class Importer {
   ImportStatus import();
   ImportStatus importDelimited();
   ImportStatus importShapefile();
+  ImportStatus importGDAL(std::map<std::string, std::string> colname_to_src);
   const CopyParams& get_copy_params() const { return copy_params; }
   const std::list<const ColumnDescriptor*>& get_column_descs() const { return loader.get_column_descs(); }
   void load(const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers, size_t row_count) {
@@ -609,6 +616,10 @@ class Importer {
   static ImportStatus get_import_status(const std::string& id);
   static void set_import_status(const std::string& id, const ImportStatus is);
   static const std::list<ColumnDescriptor> shapefileToColumnDescriptors(const std::string& fileName);
+  static const std::list<ColumnDescriptor> gdalToColumnDescriptors(const std::string& fileName);
+  static void readMetadataSampleGDAL(const std::string& fileName,
+                                     std::map<std::string, std::vector<std::string>>& metadata,
+                                     int rowLimit);
 
  private:
   void readVerticesFromShapefile(const std::string& fileName, std::vector<PolyData2d>& polys);
@@ -616,6 +627,10 @@ class Importer {
                                          SHPObject* polygonObj,
                                          PolyData2d& poly,
                                          bool hasZ);
+  void readVerticesFromGDAL(const std::string& fileName,
+                            std::vector<PolyData2d>& polys,
+                            std::pair<std::map<std::string, size_t>, std::vector<std::vector<std::string>>>& metadata);
+  void readVerticesFromGDALGeometryZ(const std::string& fileName, OGRPolygon* poPolygon, PolyData2d& poly, bool hasZ);
   const std::string& file_path;
   std::string import_id;
   const CopyParams& copy_params;

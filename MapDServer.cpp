@@ -677,6 +677,7 @@ class MapDHandler : virtual public MapDIf {
   TColumnType populateThriftColumnType(const Catalog_Namespace::Catalog* cat, const ColumnDescriptor* cd) {
     TColumnType col_type;
     col_type.col_name = cd->columnName;
+    col_type.src_name = cd->sourceName;
     col_type.col_type.type = type_to_thrift(cd->columnType);
     col_type.col_type.encoding = encoding_to_thrift(cd->columnType);
     col_type.col_type.nullable = !cd->columnType.get_notnull();
@@ -994,6 +995,14 @@ class MapDHandler : virtual public MapDIf {
       copy_params.array_end = unescape_char(cp.array_end);
     if (cp.threads != 0)
       copy_params.threads = cp.threads;
+    switch (cp.table_type) {
+      case TTableType::POLYGON:
+        copy_params.table_type = Importer_NS::TableType::POLYGON;
+        break;
+      default:
+        copy_params.table_type = Importer_NS::TableType::DELIMITED;
+        break;
+    }
     return copy_params;
   }
 
@@ -1010,60 +1019,104 @@ class MapDHandler : virtual public MapDIf {
     copy_params.array_begin = cp.array_begin;
     copy_params.array_end = cp.array_end;
     copy_params.threads = cp.threads;
+    switch (cp.table_type) {
+      case Importer_NS::TableType::POLYGON:
+        copy_params.table_type = TTableType::POLYGON;
+        break;
+      default:
+        copy_params.table_type = TTableType::DELIMITED;
+        break;
+    }
     return copy_params;
   }
 
   void detect_column_types(TDetectResult& _return,
                            const TSessionId session,
-                           const std::string& file_name,
+                           const std::string& file_name_in,
                            const TCopyParams& cp) override {
     check_read_only("detect_column_types");
     get_session(session);
 
-    auto file_path = import_path_ / std::to_string(session) / boost::filesystem::path(file_name).filename();
+    // Assume relative paths are relative to data_path / mapd_import / <session>
+    std::string file_name{file_name_in};
+    auto file_path = boost::filesystem::path(file_name);
+    if (!boost::filesystem::path(file_name).is_absolute()) {
+      file_path = import_path_ / std::to_string(session) / boost::filesystem::path(file_name).filename();
+      file_name = file_path.string();
+    }
+
     if (!boost::filesystem::exists(file_path)) {
       TMapDException ex;
-      ex.error_msg = "File does not exist.";
+      ex.error_msg = "File does not exist: " + file_path.string();
       LOG(ERROR) << ex.error_msg;
       throw ex;
     }
 
     Importer_NS::CopyParams copy_params = thrift_to_copyparams(cp);
 
-    Importer_NS::Detector detector(file_path, copy_params);
-    std::vector<SQLTypes> best_types = detector.best_sqltypes;
-    std::vector<EncodingType> best_encodings = detector.best_encodings;
-    std::vector<std::string> headers = detector.get_headers();
-    copy_params = detector.get_copy_params();
+    try {
+      if (copy_params.table_type == Importer_NS::TableType::DELIMITED) {
+        Importer_NS::Detector detector(file_path, copy_params);
+        std::vector<SQLTypes> best_types = detector.best_sqltypes;
+        std::vector<EncodingType> best_encodings = detector.best_encodings;
+        std::vector<std::string> headers = detector.get_headers();
+        copy_params = detector.get_copy_params();
 
-    _return.copy_params = copyparams_to_thrift(copy_params);
-    _return.row_set.row_desc.resize(best_types.size());
-    TColumnType col;
-    for (size_t col_idx = 0; col_idx < best_types.size(); col_idx++) {
-      SQLTypes t = best_types[col_idx];
-      EncodingType encodingType = best_encodings[col_idx];
-      SQLTypeInfo* ti = new SQLTypeInfo(t, false, encodingType);
-      col.col_type.type = type_to_thrift(*ti);
-      col.col_type.encoding = encoding_to_thrift(*ti);
-      col.col_name = headers[col_idx];
-      col.is_reserved_keyword =
-          reserved_keywords.find(boost::to_upper_copy<std::string>(col.col_name)) != reserved_keywords.end();
-      _return.row_set.row_desc[col_idx] = col;
-    }
+        _return.copy_params = copyparams_to_thrift(copy_params);
+        _return.row_set.row_desc.resize(best_types.size());
+        TColumnType col;
+        for (size_t col_idx = 0; col_idx < best_types.size(); col_idx++) {
+          SQLTypes t = best_types[col_idx];
+          EncodingType encodingType = best_encodings[col_idx];
+          SQLTypeInfo* ti = new SQLTypeInfo(t, false, encodingType);
+          col.col_type.type = type_to_thrift(*ti);
+          col.col_type.encoding = encoding_to_thrift(*ti);
+          col.col_name = headers[col_idx];
+          col.is_reserved_keyword =
+              reserved_keywords.find(boost::to_upper_copy<std::string>(col.col_name)) != reserved_keywords.end();
+          _return.row_set.row_desc[col_idx] = col;
+        }
+        size_t num_samples = 100;
+        auto sample_data = detector.get_sample_rows(num_samples);
 
-    size_t num_samples = 100;
-    auto sample_data = detector.get_sample_rows(num_samples);
-
-    TRow sample_row;
-    for (auto row : sample_data) {
-      sample_row.cols.clear();
-      for (const auto& s : row) {
-        TDatum td;
-        td.val.str_val = s;
-        td.is_null = s.empty();
-        sample_row.cols.push_back(td);
+        TRow sample_row;
+        for (auto row : sample_data) {
+          sample_row.cols.clear();
+          for (const auto& s : row) {
+            TDatum td;
+            td.val.str_val = s;
+            td.is_null = s.empty();
+            sample_row.cols.push_back(td);
+          }
+          _return.row_set.rows.push_back(sample_row);
+        }
+      } else if (copy_params.table_type == Importer_NS::TableType::POLYGON) {
+        check_geospatial_files(file_path);
+        std::list<ColumnDescriptor> cds = Importer_NS::Importer::gdalToColumnDescriptors(file_path.string());
+        for (auto cd : cds) {
+          cd.columnName = sanitize_name(cd.columnName);
+          _return.row_set.row_desc.push_back(populateThriftColumnType(nullptr, &cd));
+        }
+        std::map<std::string, std::vector<std::string>> sample_data;
+        Importer_NS::Importer::readMetadataSampleGDAL(file_path.string(), sample_data, 100);
+        if (sample_data.size() > 0) {
+          for (size_t i = 0; i < sample_data.begin()->second.size(); i++) {
+            TRow sample_row;
+            for (auto cd : cds) {
+              TDatum td;
+              td.val.str_val = sample_data[cd.sourceName].at(i);
+              td.is_null = td.val.str_val.empty();
+              sample_row.cols.push_back(td);
+            }
+            _return.row_set.rows.push_back(sample_row);
+          }
+        }
       }
-      _return.row_set.rows.push_back(sample_row);
+    } catch (const std::exception& e) {
+      TMapDException ex;
+      ex.error_msg = "detect_column_types error: " + std::string(e.what());
+      LOG(ERROR) << ex.error_msg;
+      throw ex;
     }
   }
 
@@ -1262,10 +1315,39 @@ class MapDHandler : virtual public MapDIf {
   std::string sanitize_name(const std::string& name) {
     boost::regex invalid_chars{R"([^0-9a-z_])", boost::regex::extended | boost::regex::icase};
 
-    return boost::regex_replace(name, invalid_chars, "");
+    std::string col_name = boost::regex_replace(name, invalid_chars, "");
+    if (reserved_keywords.find(boost::to_upper_copy<std::string>(col_name)) != reserved_keywords.end()) {
+      col_name += "_";
+    }
+    return col_name;
   }
 
-  void create_table(const TSessionId session, const std::string& table_name, const TRowDescriptor& rd) override {
+  TColumnType create_array_column(const TDatumType::type type, const std::string& name) {
+    TColumnType ct;
+    ct.col_name = name;
+    ct.col_type.type = type;
+    ct.col_type.is_array = true;
+    return ct;
+  }
+
+  void check_geospatial_files(const boost::filesystem::path file_path) {
+    const std::list<std::string> shp_ext{".shp", ".shx", ".dbf"};
+    if (std::find(shp_ext.begin(), shp_ext.end(), boost::algorithm::to_lower_copy(file_path.extension().string())) !=
+        shp_ext.end()) {
+      for (auto ext : shp_ext) {
+        auto aux_file = file_path;
+        if (!boost::filesystem::exists(aux_file.replace_extension(boost::algorithm::to_upper_copy(ext))) &&
+            !boost::filesystem::exists(aux_file.replace_extension(ext))) {
+          throw std::runtime_error("required file for shapefile does not exist: " + aux_file.filename().string());
+        }
+      }
+    }
+  }
+
+  void create_table(const TSessionId session,
+                    const std::string& table_name,
+                    const TRowDescriptor& rd,
+                    const TTableType::type table_type) override {
     check_read_only("create_table");
 
     if (table_name != sanitize_name(table_name)) {
@@ -1274,10 +1356,20 @@ class MapDHandler : virtual public MapDIf {
       LOG(ERROR) << ex.error_msg;
       throw ex;
     }
+
+    auto rds = rd;
+
+    if (table_type == TTableType::POLYGON) {
+      rds.push_back(create_array_column(TDatumType::DOUBLE, MAPD_GEO_PREFIX + "coords"));
+      rds.push_back(create_array_column(TDatumType::INT, MAPD_GEO_PREFIX + "indices"));
+      rds.push_back(create_array_column(TDatumType::INT, MAPD_GEO_PREFIX + "linedrawinfo"));
+      rds.push_back(create_array_column(TDatumType::INT, MAPD_GEO_PREFIX + "polydrawinfo"));
+    }
+
     std::string stmt{"CREATE TABLE " + table_name};
     std::vector<std::string> col_stmts;
 
-    for (auto col : rd) {
+    for (auto col : rds) {
       if (col.col_name != sanitize_name(col.col_name)) {
         TMapDException ex;
         ex.error_msg = "Invalid characters in column name: " + col.col_name;
@@ -1339,8 +1431,8 @@ class MapDHandler : virtual public MapDIf {
     auto file_path = import_path_ / std::to_string(session) / boost::filesystem::path(file_name).filename();
     if (!boost::filesystem::exists(file_path)) {
       TMapDException ex;
-      ex.error_msg = "File does not exist.";
-      LOG(ERROR) << ex.error_msg;
+      ex.error_msg = "File does not exist: " + file_path.filename().string();
+      LOG(ERROR) << ex.error_msg << " at " << file_path.string();
       throw ex;
     }
 
@@ -1362,20 +1454,11 @@ class MapDHandler : virtual public MapDIf {
   void import_geo_table(const TSessionId session,
                         const std::string& table_name,
                         const std::string& file_name_in,
-                        const TCopyParams& cp) override {
+                        const TCopyParams& cp,
+                        const TRowDescriptor& row_desc) override {
     check_read_only("import_table");
-    check_read_only("create_table");
     const auto session_info = get_session(session);
     auto& cat = session_info.get_catalog();
-
-    LOG(INFO) << "create_geo_table: " << table_name;
-
-    if (cat.getMetadataForTable(table_name) != nullptr) {
-      TMapDException ex;
-      ex.error_msg = "Table " + table_name + " already exists. Appending shapefiles is not currently supported.";
-      LOG(ERROR) << ex.error_msg;
-      throw ex;
-    }
 
     // Assume relative paths are relative to data_path / mapd_import / <session>
     std::string file_name{file_name_in};
@@ -1384,36 +1467,46 @@ class MapDHandler : virtual public MapDIf {
       file_name = file_path.string();
     }
 
-    {
-      TableDescriptor td;
-      td.tableName = table_name;
-      td.isView = false;
-      td.fragType = Fragmenter_Namespace::FragmenterType::INSERT_ORDER;
-      td.maxFragRows = DEFAULT_FRAGMENT_ROWS;
-      td.maxChunkSize = DEFAULT_MAX_CHUNK_SIZE;
-      td.fragPageSize = DEFAULT_PAGE_SIZE;
-      td.maxRows = DEFAULT_MAX_ROWS;
+    LOG(INFO) << "import_geo_table " << table_name << " from " << file_name;
 
-      try {
-        std::list<ColumnDescriptor> cds = Importer_NS::Importer::shapefileToColumnDescriptors(file_name);
-        td.nColumns = cds.size();
-        td.isMaterialized = false;
-        td.storageOption = kDISK;
-        td.refreshOption = kMANUAL;
-        td.checkOption = false;
-        td.isReady = true;
-        td.fragmenter = nullptr;
-
-        cat.createTable(td, cds);
-      } catch (const std::exception& e) {
-        TMapDException ex;
-        ex.error_msg = std::string("create_geo_table failed: ") + e.what();
-        LOG(ERROR) << ex.error_msg;
-        throw ex;
-      }
+    auto file_path = boost::filesystem::path(file_name);
+    if (!boost::filesystem::exists(file_path)) {
+      TMapDException ex;
+      ex.error_msg = "File does not exist: " + file_path.filename().string();
+      LOG(ERROR) << ex.error_msg << " at " << file_path.string();
+      throw ex;
+    }
+    try {
+      check_geospatial_files(file_path);
+    } catch (const std::exception& e) {
+      TMapDException ex;
+      ex.error_msg = "import_geo_table error: " + std::string(e.what());
+      LOG(ERROR) << ex.error_msg;
+      throw ex;
     }
 
-    LOG(INFO) << "import_geo_table " << table_name << " from " << file_name;
+    TRowDescriptor rd;
+    if (cat.getMetadataForTable(table_name) == nullptr) {
+      TDetectResult cds;
+      TCopyParams cp;
+      cp.table_type = TTableType::POLYGON;
+      detect_column_types(cds, session, file_name_in, cp);
+      create_table(session, table_name, cds.row_set.row_desc, TTableType::POLYGON);
+      rd = cds.row_set.row_desc;
+    } else if (row_desc.size() > 0) {
+      rd = row_desc;
+    } else {
+      TMapDException ex;
+      ex.error_msg =
+          "Could not append file " + file_path.filename().string() + " to " + table_name + ": not currently supported.";
+      LOG(ERROR) << ex.error_msg;
+      throw ex;
+    }
+
+    std::map<std::string, std::string> colname_to_src;
+    for (auto r : rd) {
+      colname_to_src[r.col_name] = r.src_name.length() > 0 ? r.src_name : sanitize_name(r.src_name);
+    }
 
     const TableDescriptor* td = cat.getMetadataForTable(table_name);
     if (td == nullptr) {
@@ -1423,19 +1516,11 @@ class MapDHandler : virtual public MapDIf {
       throw ex;
     }
 
-    auto file_path = boost::filesystem::path(file_name);
-    if (!boost::filesystem::exists(file_path)) {
-      TMapDException ex;
-      ex.error_msg = "File does not exist: ";
-      LOG(ERROR) << ex.error_msg << file_path;
-      throw ex;
-    }
-
     Importer_NS::CopyParams copy_params = thrift_to_copyparams(cp);
 
     try {
       Importer_NS::Importer importer(cat, td, file_path.string(), copy_params);
-      auto ms = measure<>::execution([&]() { importer.importShapefile(); });
+      auto ms = measure<>::execution([&]() { importer.importGDAL(colname_to_src); });
       std::cout << "Total Import Time: " << (double)ms / 1000.0 << " Seconds." << std::endl;
     } catch (const std::exception& e) {
       TMapDException ex;
