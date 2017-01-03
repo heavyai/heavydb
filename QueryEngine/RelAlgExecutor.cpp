@@ -90,16 +90,7 @@ AggregatedColRange RelAlgExecutor::computeColRangesCache(const RelAlgNode* ra) {
 FirstStepExecutionResult RelAlgExecutor::executeRelAlgQueryFirstStep(const RelAlgNode* ra,
                                                                      const CompilationOptions& co,
                                                                      const ExecutionOptions& eo,
-                                                                     RenderInfo* render_info,
-                                                                     const AggregatedColRange& agg_col_range) {
-  // capture the lock acquistion time
-  auto clock_begin = timer_start();
-  std::lock_guard<std::mutex> lock(executor_->execute_mutex_);
-  ScopeGuard row_set_holder = [this] { executor_->row_set_mem_owner_ = nullptr; };
-  executor_->row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>();
-  executor_->agg_col_range_cache_ = agg_col_range;
-  ScopeGuard restore_metainfo_cache = [this] { executor_->clearMetaInfoCache(); };
-  int64_t queue_time_ms = timer_stop(clock_begin);
+                                                                     RenderInfo* render_info) {
   auto ed_list = get_execution_descriptors(ra);
   CHECK(!ed_list.empty());
   auto first_exec_desc = ed_list.front();
@@ -110,18 +101,21 @@ FirstStepExecutionResult RelAlgExecutor::executeRelAlgQueryFirstStep(const RelAl
     first_exec_desc = RaExecutionDesc(sort->getInput(0));
   }
   std::vector<RaExecutionDesc> first_exec_desc_singleton_list{first_exec_desc};
-  return {executeRelAlgSeq(first_exec_desc_singleton_list, co, eo, render_info, queue_time_ms),
+  return {executeRelAlgSeq(first_exec_desc_singleton_list, co, eo, render_info, queue_time_ms_),
           first_exec_desc.getBody()->getId(),
           false};
 }
 
 void RelAlgExecutor::prepareLeafExecution(const AggregatedColRange& agg_col_range) {
+  // capture the lock acquistion time
+  auto clock_begin = timer_start();
   leaf_execution_cleanup_.reset(new ScopeGuard([this] {
     executor_->row_set_mem_owner_ = nullptr;
     executor_->clearMetaInfoCache();
     executor_->execute_mutex_.unlock();
   }));
   executor_->execute_mutex_.lock();
+  queue_time_ms_ = timer_stop(clock_begin);
   executor_->row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>();
   executor_->agg_col_range_cache_ = agg_col_range;
 }

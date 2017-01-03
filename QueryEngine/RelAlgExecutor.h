@@ -18,7 +18,8 @@ struct FirstStepExecutionResult {
 
 class RelAlgExecutor {
  public:
-  RelAlgExecutor(Executor* executor, const Catalog_Namespace::Catalog& cat) : executor_(executor), cat_(cat), now_(0) {}
+  RelAlgExecutor(Executor* executor, const Catalog_Namespace::Catalog& cat)
+      : executor_(executor), cat_(cat), now_(0), queue_time_ms_(0) {}
 
   ExecutionResult executeRelAlgQuery(const std::string& query_ra,
                                      const CompilationOptions& co,
@@ -33,8 +34,7 @@ class RelAlgExecutor {
   FirstStepExecutionResult executeRelAlgQueryFirstStep(const RelAlgNode* ra,
                                                        const CompilationOptions& co,
                                                        const ExecutionOptions& eo,
-                                                       RenderInfo* render_info,
-                                                       const AggregatedColRange& agg_col_range);
+                                                       RenderInfo* render_info);
 
   void prepareLeafExecution(const AggregatedColRange& agg_col_range);
 
@@ -181,6 +181,7 @@ class RelAlgExecutor {
   std::vector<std::string> table_names_;  // used by poly rendering only, lazily initialized by executeRelAlgQuery()
   std::vector<RexSubQuery*> subqueries_;
   std::unique_ptr<ScopeGuard> leaf_execution_cleanup_;
+  int64_t queue_time_ms_;
   static SpeculativeTopNBlacklist speculative_topn_blacklist_;
   static const size_t max_groups_buffer_entry_default_guess{16384};
 };
