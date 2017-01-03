@@ -1345,7 +1345,7 @@ class MapDHandler : virtual public MapDIf {
   }
 
   void import_geo_table(const TSessionId session,
-                        const std::string& file_name,
+                        const std::string& file_name_in,
                         const std::string& table_name,
                         const TCopyParams& cp) override {
     check_read_only("import_table");
@@ -1360,6 +1360,13 @@ class MapDHandler : virtual public MapDIf {
       ex.error_msg = "Table " + table_name + " already exists. Appending shapefiles is not currently supported.";
       LOG(ERROR) << ex.error_msg;
       throw ex;
+    }
+
+    // Assume relative paths are relative to data_path / mapd_import / <session>
+    std::string file_name{file_name_in};
+    if (!boost::filesystem::path(file_name).is_absolute()) {
+      auto file_path = import_path_ / std::to_string(session) / boost::filesystem::path(file_name).filename();
+      file_name = file_path.string();
     }
 
     {
