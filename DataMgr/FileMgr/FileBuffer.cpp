@@ -84,13 +84,16 @@ FileBuffer::FileBuffer(FileMgr* fm,
       metadataPages_.pageVersions.push_back(vecIt->page);
     } else {
       if (curPageId != lastPageId) {
+        // protect from bad data on disk, and give diagnostics
+        if (curPageId != lastPageId + 1)
+          LOG(FATAL) << "Failure reading DB file " << showChunk(chunkKey) << " Current page " << curPageId
+                     << " last page " << lastPageId << " epoch " << vecIt->versionEpoch;
         if (lastPageId == -1) {
           // If we are on first real page
           CHECK(metadataPages_.pageVersions.back().fileId != -1);  // was initialized
           readMetadata(metadataPages_.pageVersions.back());
           pageDataSize_ = pageSize_ - reservedHeaderSize_;
         }
-        CHECK(curPageId == lastPageId + 1);
         MultiPage multiPage(pageSize_);
         multiPages_.push_back(multiPage);
         lastPageId = curPageId;
