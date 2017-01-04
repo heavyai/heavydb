@@ -226,7 +226,11 @@ public final class MapDParser {
         }
         SqlBasicCall basic_call = (SqlBasicCall) node;
         for (SqlNode operator : basic_call.getOperands()) {
-            desugarExpression(operator);
+            if (operator instanceof SqlOrderBy) {
+                desugarExpression(((SqlOrderBy) operator).query);
+            } else {
+                desugarExpression(operator);
+            }
         }
     }
 

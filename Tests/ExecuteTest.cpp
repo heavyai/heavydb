@@ -2375,6 +2375,11 @@ TEST(Select, DesugarTransform) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     c("SELECT * FROM empty ORDER BY empty.x;", dt);
+#ifdef HAVE_RAVM
+    c("SELECT COUNT(*) FROM TEST WHERE x IN (SELECT x + 1 AS foo FROM test GROUP BY foo ORDER BY COUNT(*) DESC LIMIT "
+      "1);",
+      dt);
+#endif  // HAVE_RAVM
   }
 }
 
