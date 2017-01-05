@@ -87,6 +87,16 @@ AggregatedColRange RelAlgExecutor::computeColRangesCache(const RelAlgNode* ra) {
   return agg_col_range_cache;
 }
 
+namespace {
+
+bool node_is_aggregate(const RelAlgNode* ra) {
+  const auto compound = dynamic_cast<const RelCompound*>(ra);
+  const auto aggregate = dynamic_cast<const RelAggregate*>(ra);
+  return ((compound && compound->isAggregate()) || aggregate);
+}
+
+}  // namespace
+
 FirstStepExecutionResult RelAlgExecutor::executeRelAlgQueryFirstStep(const RelAlgNode* ra,
                                                                      const CompilationOptions& co,
                                                                      const ExecutionOptions& eo,
@@ -101,10 +111,7 @@ FirstStepExecutionResult RelAlgExecutor::executeRelAlgQueryFirstStep(const RelAl
     first_exec_desc = RaExecutionDesc(sort->getInput(0));
   }
   std::vector<RaExecutionDesc> first_exec_desc_singleton_list{first_exec_desc};
-  const auto merge_type = (dynamic_cast<const RelAggregate*>(first_exec_desc.getBody()) ||
-                           dynamic_cast<const RelCompound*>(first_exec_desc.getBody()))
-                              ? MergeType::Reduce
-                              : MergeType::Union;
+  const auto merge_type = node_is_aggregate(first_exec_desc.getBody()) ? MergeType::Reduce : MergeType::Union;
   return {executeRelAlgSeq(first_exec_desc_singleton_list, co, eo, render_info, queue_time_ms_),
           merge_type,
           first_exec_desc.getBody()->getId(),
@@ -876,9 +883,7 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
   if (dynamic_cast<const RelSort*>(source)) {
     throw std::runtime_error("Sort node not supported as input to another sort");
   }
-  const auto compound = dynamic_cast<const RelCompound*>(source);
-  const auto aggregate = dynamic_cast<const RelAggregate*>(source);
-  const bool is_aggregate = ((compound && compound->isAggregate()) || aggregate);
+  const bool is_aggregate = node_is_aggregate(source);
   while (true) {
     std::list<std::shared_ptr<Analyzer::Expr>> groupby_exprs;
     bool is_desc{false};
