@@ -65,6 +65,9 @@ struct ClientContext {
   std::string memory_usage;
   TMemorySummary memory_summary;
   TTableDetails table_details;
+  std::string table_name;
+  std::string file_name;
+  TCopyParams copy_params;
 
   ClientContext(TTransport& t, MapDClient& c)
       : transport(t), client(c), session(INVALID_SESSION_ID), execution_mode(TExecuteMode::GPU) {}
@@ -84,7 +87,8 @@ enum ThriftService {
   kGET_MEMORY_GPU,
   kGET_MEMORY_SUMMARY,
   kGET_TABLE_DETAILS,
-  kCLEAR_MEMORY_GPU
+  kCLEAR_MEMORY_GPU,
+  kIMPORT_GEO_TABLE
 };
 
 namespace {
@@ -133,6 +137,9 @@ bool thrift_with_retry(ThriftService which_service, ClientContext& context, cons
         break;
       case kCLEAR_MEMORY_GPU:
         context.client.clear_gpu_memory(context.session);
+        break;
+      case kIMPORT_GEO_TABLE:
+        context.client.import_geo_table(context.session, context.table_name, context.file_name, context.copy_params);
         break;
     }
   } catch (TMapDException& e) {
@@ -237,21 +244,6 @@ void detect_table(char* file_name, TCopyParams& copy_params, ClientContext& cont
     std::cerr << e.error_msg << std::endl;
   } catch (TException& te) {
     std::cerr << "Thrift error in detect_table: " << te.what() << std::endl;
-  }
-}
-
-void import_geo_table(char* file_name, char* table_name, TCopyParams& copy_params, ClientContext& context) {
-  if (context.session == INVALID_SESSION_ID) {
-    std::cerr << "Not connected to any databases." << std::endl;
-    return;
-  }
-
-  try {
-    context.client.import_geo_table(context.session, file_name, table_name, copy_params);
-  } catch (TMapDException& e) {
-    std::cerr << e.error_msg << std::endl;
-  } catch (TException& te) {
-    std::cerr << "Thrift error in import_geo_table: " << te.what() << std::endl;
   }
 }
 
@@ -737,10 +729,9 @@ int main(int argc, char** argv) {
         std::cout << "Cannot connect to MapD Server." << std::endl;
       }
     } else if (!strncmp(line, "\\copygeo", 8)) {
-      char* filepath = strtok(line + 9, " ");
-      char* table = strtok(nullptr, " ");
-      TCopyParams copy_params;
-      import_geo_table(filepath, table, copy_params, context);
+      context.file_name = strtok(line + 9, " ");
+      context.table_name = strtok(nullptr, " ");
+      (void)thrift_with_retry(kIMPORT_GEO_TABLE, context, nullptr);
     } else if (!strncmp(line, "\\copy", 5)) {
       char* filepath = strtok(line + 6, " ");
       char* table = strtok(NULL, " ");

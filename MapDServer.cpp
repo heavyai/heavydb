@@ -1345,8 +1345,8 @@ class MapDHandler : virtual public MapDIf {
   }
 
   void import_geo_table(const TSessionId session,
-                        const std::string& file_name_in,
                         const std::string& table_name,
+                        const std::string& file_name_in,
                         const TCopyParams& cp) override {
     check_read_only("import_table");
     check_read_only("create_table");
@@ -1379,17 +1379,23 @@ class MapDHandler : virtual public MapDIf {
       td.fragPageSize = DEFAULT_PAGE_SIZE;
       td.maxRows = DEFAULT_MAX_ROWS;
 
-      std::list<ColumnDescriptor> cds = Importer_NS::Importer::shapefileToColumnDescriptors(file_name);
+      try {
+        std::list<ColumnDescriptor> cds = Importer_NS::Importer::shapefileToColumnDescriptors(file_name);
+        td.nColumns = cds.size();
+        td.isMaterialized = false;
+        td.storageOption = kDISK;
+        td.refreshOption = kMANUAL;
+        td.checkOption = false;
+        td.isReady = true;
+        td.fragmenter = nullptr;
 
-      td.nColumns = cds.size();
-      td.isMaterialized = false;
-      td.storageOption = kDISK;
-      td.refreshOption = kMANUAL;
-      td.checkOption = false;
-      td.isReady = true;
-      td.fragmenter = nullptr;
-
-      cat.createTable(td, cds);
+        cat.createTable(td, cds);
+      } catch (const std::exception& e) {
+        TMapDException ex;
+        ex.error_msg = std::string("create_geo_table failed: ") + e.what();
+        LOG(ERROR) << ex.error_msg;
+        throw ex;
+      }
     }
 
     LOG(INFO) << "import_geo_table " << table_name << " from " << file_name;
@@ -1412,9 +1418,16 @@ class MapDHandler : virtual public MapDIf {
 
     Importer_NS::CopyParams copy_params = thrift_to_copyparams(cp);
 
-    Importer_NS::Importer importer(cat, td, file_path.string(), copy_params);
-    auto ms = measure<>::execution([&]() { importer.importShapefile(); });
-    std::cout << "Total Import Time: " << (double)ms / 1000.0 << " Seconds." << std::endl;
+    try {
+      Importer_NS::Importer importer(cat, td, file_path.string(), copy_params);
+      auto ms = measure<>::execution([&]() { importer.importShapefile(); });
+      std::cout << "Total Import Time: " << (double)ms / 1000.0 << " Seconds." << std::endl;
+    } catch (const std::exception& e) {
+      TMapDException ex;
+      ex.error_msg = std::string("import_geo_table failed: ") + e.what();
+      LOG(ERROR) << ex.error_msg;
+      throw ex;
+    }
   }
 
   void import_table_status(TImportStatus& _return, const TSessionId session, const std::string& import_id) override {
