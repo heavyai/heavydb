@@ -10,8 +10,11 @@
 
 #include <ctime>
 
+enum class MergeType { Union, Reduce };
+
 struct FirstStepExecutionResult {
   ExecutionResult result;
+  const MergeType merge_type;
   const unsigned node_id;
   bool is_outermost_query;
 };

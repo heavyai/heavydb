@@ -1941,8 +1941,8 @@ class MapDHandler : virtual public MapDIf {
       }
       _return.serialized_rows = result_set->serialize();
       _return.execution_finished = first_step_result.is_outermost_query;
-      _return.merge_type = TMergeType::REDUCE;  // TODO(alex)
-      _return.sharded = true;                   // TODO(alex)
+      _return.merge_type = first_step_result.merge_type == MergeType::Reduce ? TMergeType::REDUCE : TMergeType::UNION;
+      _return.sharded = true;  // TODO(alex)
       _return.row_desc = convert_target_metainfo(first_step_result.result.getTargetsMeta());
       _return.node_id = first_step_result.node_id;
     } catch (std::exception& e) {

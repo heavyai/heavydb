@@ -101,7 +101,12 @@ FirstStepExecutionResult RelAlgExecutor::executeRelAlgQueryFirstStep(const RelAl
     first_exec_desc = RaExecutionDesc(sort->getInput(0));
   }
   std::vector<RaExecutionDesc> first_exec_desc_singleton_list{first_exec_desc};
+  const auto merge_type = (dynamic_cast<const RelAggregate*>(first_exec_desc.getBody()) ||
+                           dynamic_cast<const RelCompound*>(first_exec_desc.getBody()))
+                              ? MergeType::Reduce
+                              : MergeType::Union;
   return {executeRelAlgSeq(first_exec_desc_singleton_list, co, eo, render_info, queue_time_ms_),
+          merge_type,
           first_exec_desc.getBody()->getId(),
           false};
 }
