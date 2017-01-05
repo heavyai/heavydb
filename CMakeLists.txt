@@ -152,6 +152,24 @@ add_subdirectory(ThirdParty/poly2tri)
 include_directories(ThirdParty/shapelib)
 add_subdirectory(ThirdParty/shapelib)
 
+add_custom_command(
+    DEPENDS ${CMAKE_SOURCE_DIR}/mapd.thrift
+    OUTPUT
+        ${CMAKE_BINARY_DIR}/gen-cpp/MapD.cpp
+        ${CMAKE_BINARY_DIR}/gen-cpp/MapD.h
+        ${CMAKE_BINARY_DIR}/gen-cpp/mapd_constants.cpp
+        ${CMAKE_BINARY_DIR}/gen-cpp/mapd_types.cpp
+    COMMAND ${Thrift_EXECUTABLE}
+    ARGS -gen cpp -o ${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR}/mapd.thrift)
+list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/gen-cpp/)
+
+add_library(mapd_thrift
+    ${CMAKE_BINARY_DIR}/gen-cpp/MapD.cpp
+    ${CMAKE_BINARY_DIR}/gen-cpp/MapD.h
+    ${CMAKE_BINARY_DIR}/gen-cpp/mapd_constants.cpp
+    ${CMAKE_BINARY_DIR}/gen-cpp/mapd_types.cpp)
+target_link_libraries(mapd_thrift ${Thrift_LIBRARIES})
+
 
 
 option(ENABLE_CALCITE "Build Calcite adapter" ON)
@@ -234,26 +252,17 @@ ADD_SUBDIRECTORY    (SampleCode)
 set(initdb_source_files initdb.cpp)
 add_executable(initdb ${initdb_source_files})
 
-set(mapd_server_source_files LeafAggregator.cpp LeafHostInfo.cpp MapDServer.cpp ${CMAKE_BINARY_DIR}/gen-cpp/MapD.cpp ${CMAKE_BINARY_DIR}/gen-cpp/mapd_constants.cpp ${CMAKE_BINARY_DIR}/gen-cpp/mapd_types.cpp ${CMAKE_BINARY_DIR}/MapDRelease.h)
-
-if(ENABLE_CALCITE)
-    list(APPEND mapd_server_source_files ${CMAKE_BINARY_DIR}/gen-cpp/CalciteServer.cpp ${CMAKE_BINARY_DIR}/gen-cpp/calciteserver_constants.cpp ${CMAKE_BINARY_DIR}/gen-cpp/calciteserver_types.cpp)
-endif()
+set(mapd_server_source_files LeafAggregator.cpp LeafHostInfo.cpp MapDServer.cpp ${CMAKE_BINARY_DIR}/MapDRelease.h)
 
 add_executable(mapd_server ${mapd_server_source_files})
 set_target_properties(mapd_server PROPERTIES COMPILE_DEFINITIONS "${TIME_LIMITED_DEFINITIONS}")
 
-add_custom_command(
-    DEPENDS ${CMAKE_SOURCE_DIR}/mapd.thrift
-    OUTPUT ${CMAKE_BINARY_DIR}/gen-cpp/MapD.cpp
-    COMMAND ${Thrift_EXECUTABLE}
-    ARGS -gen cpp -o ${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR}/mapd.thrift)
-list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/gen-cpp/)
-
 if(ENABLE_CALCITE)
   add_custom_command(
       DEPENDS ${CMAKE_SOURCE_DIR}/mapd.thrift
-      OUTPUT ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/mapd/thrift/server/MapD.java ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/mapd/thrift/server/TRow.java
+      OUTPUT
+          ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/mapd/thrift/server/MapD.java
+          ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/mapd/thrift/server/TRow.java
       COMMAND mkdir
       ARGS -p ${CMAKE_SOURCE_DIR}/java/thrift/src/gen
       COMMAND ${Thrift_EXECUTABLE}
@@ -293,19 +302,7 @@ add_custom_target(rerun_cmake ALL
   )
 add_dependencies(mapd_server rerun_cmake)
 
-set_source_files_properties(${CMAKE_BINARY_DIR}/gen-cpp/MapD.cpp GENERATED)
-set_source_files_properties(${CMAKE_BINARY_DIR}/gen-cpp/mapd_constants.cpp GENERATED)
-set_source_files_properties(${CMAKE_BINARY_DIR}/gen-cpp/mapd_types.cpp GENERATED)
-
-if(ENABLE_CALCITE)
-    set_source_files_properties(${CMAKE_BINARY_DIR}/gen-cpp/CalciteServer.cpp GENERATED)
-    set_source_files_properties(${CMAKE_BINARY_DIR}/gen-cpp/calciteserver_constants.cpp GENERATED)
-    set_source_files_properties(${CMAKE_BINARY_DIR}/gen-cpp/calciteserver_types.cpp GENERATED)
-endif()
-
-MESSAGE( STATUS "Boost_LIBRARIES: " ${Boost_LIBRARIES} )
-
-target_link_libraries (mapd_server ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${Glog_LIBRARIES} ${Thrift_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${LLVM_LINKER_FLAGS} ${PROFILER_LIBS} poly2tri "-lz -lncurses")
+target_link_libraries (mapd_server mapd_thrift ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${Glog_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${LLVM_LINKER_FLAGS} ${PROFILER_LIBS} poly2tri "-lz -lncurses")
 target_link_libraries (initdb Shared Catalog Fragmenter Chunk SqliteConnector DataMgr StringDictionary ${Boost_LIBRARIES} ${CMAKE_DL_LIBS})
 
 # Packaging
