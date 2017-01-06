@@ -6083,7 +6083,14 @@ void Executor::createErrorCheckControlFlow(llvm::Function* query_func, bool run_
   // fail by running out of group by buffer slots
   bool done_splitting = false;
   for (auto bb_it = query_func->begin(); bb_it != query_func->end() && !done_splitting; ++bb_it) {
+    llvm::Value* pos = nullptr;
     for (auto inst_it = bb_it->begin(); inst_it != bb_it->end(); ++inst_it) {
+      if (run_with_dynamic_watchdog && llvm::isa<llvm::PHINode>(*inst_it)) {
+        if (inst_it->getName() == "pos") {
+          pos = &*inst_it;
+        }
+        continue;
+      }
       if (!llvm::isa<llvm::CallInst>(*inst_it)) {
         continue;
       }
@@ -6096,9 +6103,31 @@ void Executor::createErrorCheckControlFlow(llvm::Function* query_func, bool run_
         llvm::IRBuilder<> ir_builder(&br_instr);
         llvm::Value* err_lv = &*inst_it;
         if (run_with_dynamic_watchdog) {
-          llvm::Value* detected = ir_builder.CreateCall(cgen_state_->module_->getFunction("dynamic_watchdog"),
-                                                        std::vector<llvm::Value*>{ll_int(int64_t(0LL))});
-          err_lv = ir_builder.CreateSelect(detected, ll_int(Executor::ERR_OUT_OF_TIME), err_lv);
+          CHECK(pos);
+          // run watchdog after every 64 rows
+          auto and_lv = ir_builder.CreateAnd(pos, uint64_t(0x3f));
+          auto call_watchdog_lv = ir_builder.CreateICmp(llvm::ICmpInst::ICMP_EQ, and_lv, ll_int(int64_t(0LL)));
+
+          auto error_check_bb = bb_it->splitBasicBlock(llvm::BasicBlock::iterator(br_instr), ".error_check");
+          auto& watchdog_br_instr = bb_it->back();
+
+          auto watchdog_check_bb =
+              llvm::BasicBlock::Create(cgen_state_->context_, ".watchdog_check", query_func, error_check_bb);
+          llvm::IRBuilder<> watchdog_ir_builder(watchdog_check_bb);
+          auto detected_timeout = watchdog_ir_builder.CreateCall(cgen_state_->module_->getFunction("dynamic_watchdog"),
+                                                                 std::vector<llvm::Value*>{ll_int(int64_t(0LL))});
+          auto timeout_err_lv =
+              watchdog_ir_builder.CreateSelect(detected_timeout, ll_int(Executor::ERR_OUT_OF_TIME), err_lv);
+          watchdog_ir_builder.CreateBr(error_check_bb);
+
+          llvm::ReplaceInstWithInst(&watchdog_br_instr,
+                                    llvm::BranchInst::Create(watchdog_check_bb, error_check_bb, call_watchdog_lv));
+          ir_builder.SetInsertPoint(&br_instr);
+          auto unified_err_lv = ir_builder.CreatePHI(err_lv->getType(), 2);
+
+          unified_err_lv->addIncoming(timeout_err_lv, watchdog_check_bb);
+          unified_err_lv->addIncoming(err_lv, &*bb_it);
+          err_lv = unified_err_lv;
         }
         auto& error_code_arg = query_func->getArgumentList().back();
         CHECK(error_code_arg.getName() == "error_code");
