@@ -296,6 +296,8 @@ class ResultSet {
 
   int getGpuCount() const;
 
+  std::string serializeProjection() const;
+
   const std::vector<TargetInfo> targets_;
   const ExecutorDeviceType device_type_;
   const int device_id_;
