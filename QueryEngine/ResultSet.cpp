@@ -71,7 +71,8 @@ ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
       executor_(executor),
       estimator_buffer_(nullptr),
       host_estimator_buffer_(nullptr),
-      data_mgr_(nullptr) {}
+      data_mgr_(nullptr),
+      none_encoded_strings_valid_(false) {}
 
 ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
                      const std::vector<ColumnLazyFetchInfo>& lazy_fetch_info,
@@ -97,7 +98,8 @@ ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
       col_buffers_(col_buffers),
       estimator_buffer_(nullptr),
       host_estimator_buffer_(nullptr),
-      data_mgr_(nullptr) {}
+      data_mgr_(nullptr),
+      none_encoded_strings_valid_(false) {}
 
 ResultSet::ResultSet(const std::shared_ptr<const Analyzer::NDVEstimator> estimator,
                      const ExecutorDeviceType device_type,
@@ -110,7 +112,8 @@ ResultSet::ResultSet(const std::shared_ptr<const Analyzer::NDVEstimator> estimat
       estimator_(estimator),
       estimator_buffer_(nullptr),
       host_estimator_buffer_(nullptr),
-      data_mgr_(data_mgr) {
+      data_mgr_(data_mgr),
+      none_encoded_strings_valid_(false) {
   std::unique_ptr<int8_t, CheckedAllocDeleter> zeros(
       static_cast<int8_t*>(checked_calloc(estimator_->getEstimatorBufferSize(), 1)));
   if (device_type == ExecutorDeviceType::GPU) {
@@ -133,7 +136,8 @@ ResultSet::ResultSet()
       crt_row_buff_idx_(0),
       estimator_buffer_(nullptr),
       host_estimator_buffer_(nullptr),
-      data_mgr_(nullptr) {}
+      data_mgr_(nullptr),
+      none_encoded_strings_valid_(false) {}
 
 ResultSet::~ResultSet() {
   if (storage_) {
@@ -181,6 +185,11 @@ void ResultSet::append(ResultSet& that) {
   chunks_.insert(chunks_.end(), that.chunks_.begin(), that.chunks_.end());
   col_buffers_.insert(col_buffers_.end(), that.col_buffers_.begin(), that.col_buffers_.end());
   chunk_iters_.insert(chunk_iters_.end(), that.chunk_iters_.begin(), that.chunk_iters_.end());
+  if (none_encoded_strings_valid_) {
+    CHECK(that.none_encoded_strings_valid_);
+    none_encoded_strings_.insert(
+        none_encoded_strings_.end(), that.none_encoded_strings_.begin(), that.none_encoded_strings_.end());
+  }
   for (auto& buff : that.literal_buffers_) {
     literal_buffers_.push_back(std::move(buff));
   }

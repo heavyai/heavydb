@@ -334,6 +334,17 @@ TargetValue ResultSet::makeRealStringTargetValue(const int8_t* ptr1,
                                                  const size_t target_logical_idx,
                                                  const size_t entry_buff_idx) const {
   auto string_ptr = read_int_from_buff(ptr1, compact_sz1);
+  if (none_encoded_strings_valid_) {
+    if (string_ptr < 0) {
+      CHECK_EQ(-1, string_ptr);
+      return TargetValue(nullptr);
+    }
+    const auto storage_idx = getStorageIndex(entry_buff_idx);
+    CHECK_LT(static_cast<size_t>(storage_idx.first), none_encoded_strings_.size());
+    const auto none_encoded_strings = none_encoded_strings_[storage_idx.first];
+    CHECK_LT(static_cast<size_t>(string_ptr), none_encoded_strings.size());
+    return none_encoded_strings[string_ptr];
+  }
   if (!lazy_fetch_info_.empty()) {
     CHECK_LT(target_logical_idx, lazy_fetch_info_.size());
     const auto& col_lazy_fetch = lazy_fetch_info_[target_logical_idx];

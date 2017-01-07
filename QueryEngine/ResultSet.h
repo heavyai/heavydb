@@ -327,6 +327,10 @@ class ResultSet {
   mutable int8_t* host_estimator_buffer_;
   Data_Namespace::DataMgr* data_mgr_;
 
+  // only used by serialization
+  std::vector<std::vector<std::string>> none_encoded_strings_;
+  bool none_encoded_strings_valid_;
+
   friend class ResultSetManager;
 };
 
