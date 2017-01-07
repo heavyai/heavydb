@@ -675,20 +675,24 @@ extern "C" __attribute__((noinline)) void force_sync() {
   abort();
 }
 
+#if (defined(__x86_64__) || defined(__x86_64))
 static __inline__ uint64_t rdtsc(void) {
   unsigned hi, lo;
   __asm__ __volatile__("rdtsc" : "=a"(lo), "=d"(hi));
   return (static_cast<uint64_t>(hi) << 32) | static_cast<uint64_t>(lo);
 }
+#endif
 
-// x64 timeout detection
+// timeout detection
 extern "C" __attribute__((noinline)) bool dynamic_watchdog(int64_t init_budget) {
+#if (defined(__x86_64__) || defined(__x86_64))
   static uint64_t start = 0ULL;
   static uint64_t ms_budget = 0ULL;
   static uint64_t freq_kHz = 0ULL;
   // Uninitialized watchdog can't check time
-  if (init_budget == 0LL && ms_budget == 0ULL)
+  if (init_budget == 0LL && ms_budget == 0ULL) {
     return false;
+  }
   // Initialize watchdog
   if (init_budget > 0LL) {
     ms_budget = static_cast<uint64_t>(init_budget);
@@ -701,6 +705,9 @@ extern "C" __attribute__((noinline)) bool dynamic_watchdog(int64_t init_budget) 
   auto cycles = rdtsc() - start;
   auto ms = cycles / freq_kHz;
   return (ms > ms_budget);
+#else
+  return false;
+#endif
 }
 
 // x64 stride functions
