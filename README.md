@@ -156,10 +156,9 @@ Most build dependencies are available via APT. Thrift is the one exception and m
 
 
     apt-get build-dep thrift-compiler
-    wget --continue http://apache.claz.org/thrift/0.9.3/thrift-0.9.3.tar.gz
-    tar xvf thrift-0.9.3.tar.gz
-    pushd thrift-0.9.3
-    patch -p1 < /path/to/mapd2/scripts/mapd-deps-thrift-refill-buffer.patch
+    wget http://apache.claz.org/thrift/0.10.0/thrift-0.10.0.tar.gz
+    tar xvf thrift-0.10.0.tar.gz
+    cd thrift-0.10.0
     ./configure --with-lua=no --with-python=no --with-php=no --with-ruby=no --prefix=/usr/local/mapd-deps
     make -j $(nproc)
     make install

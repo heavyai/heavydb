@@ -207,12 +207,10 @@ PREFIX=$PREFIX make install
 popd
 
 # thrift
-VERS=0.9.3
+VERS=0.10.0
 download http://apache.claz.org/thrift/$VERS/thrift-$VERS.tar.gz
 extract thrift-$VERS.tar.gz
 pushd thrift-$VERS
-# see: https://issues.apache.org/jira/browse/THRIFT-3704
-patch -p1 < ../mapd-deps-thrift-refill-buffer.patch
 CFLAGS="-fPIC" CXXFLAGS="-fPIC" JAVA_PREFIX=$PREFIX/lib ./configure --prefix=$PREFIX --with-lua=no --with-python=no --with-php=no --with-boost-libdir=$PREFIX/lib
 makej
 make install

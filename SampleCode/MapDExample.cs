@@ -16,7 +16,7 @@ thrift -gen csharp mapd.thrift
 
 Dependencies:
 /thrift/gen-csharp
-ApacheThrift 0.9.3
+ApacheThrift 0.10.0
 
 Connection samples:
 HTTP client - get_client('http://test.mapd.com:9091', null, true)

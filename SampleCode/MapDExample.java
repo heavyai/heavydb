@@ -19,7 +19,7 @@ Install Thrift and generate MapD Thrift client
 thrift -gen java mapd.thrift
 
 Dependencies:
-/thrift-0.9.3/lib/java/src/
+/thrift-0.10.0/lib/java/src/
 /slf4j-api-1.7.21.jar
 /slf4j-simple-1.7.21.jar
 /thrift/gen-java/
@@ -27,10 +27,10 @@ Dependencies:
 /httpclient-4.2.3.jar
 
 Compile statement:
-javac -cp /path/to/thrift-0.9.3/lib/java/src:/path/to/slf4j-api-1.7.21.jar:/path/to/thrift/gen-java/:/path/to/httpcore-4.2.3.jar:/path/to/httpclient-4.2.3.jar:. MapDExample.java
+javac -cp /path/to/thrift-0.10.0/lib/java/src:/path/to/slf4j-api-1.7.21.jar:/path/to/thrift/gen-java/:/path/to/httpcore-4.2.3.jar:/path/to/httpclient-4.2.3.jar:. MapDExample.java
 
 Execution example:
-java -cp /path/to/thrift-0.9.3/lib/java/src:/path/to/slf4j-api-1.7.21.jar:/path/to/gen-java/:/path/to/httpcore-4.2.3.jar:/path/to/httpclient-4.2.3.jar:. MapDExample
+java -cp /path/to/thrift-0.10.0/lib/java/src:/path/to/slf4j-api-1.7.21.jar:/path/to/gen-java/:/path/to/httpcore-4.2.3.jar:/path/to/httpclient-4.2.3.jar:. MapDExample
 
 Connection samples:
 HTTP client - get_client('http://test.mapd.com:9091', null, true)
