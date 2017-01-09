@@ -5,8 +5,11 @@ set -x
 
 SUFFIX=${SUFFIX:=$(date +%Y%m%d)}
 PREFIX=${MAPD_PATH:="/usr/local/mapd-deps/$SUFFIX"}
-sudo mkdir -p $PREFIX
-sudo chown -R $USER $PREFIX
+if [ ! -w $(dirname $PREFIX) ] ; then
+    SUDO=sudo
+fi
+$SUDO mkdir -p $PREFIX
+$SUDO chown -R $USER $PREFIX
 
 export PATH=$PREFIX/bin:$PATH
 export LD_LIBRARY_PATH=$PREFIX/lib64:$PREFIX/lib:$LD_LIBRARY_PATH
@@ -190,3 +193,7 @@ sed -e "s|%MAPD_DEPS_ROOT%|$PREFIX|g" mapd-deps.modulefile.in > mapd-deps-$SUFFI
 sed -e "s|%MAPD_DEPS_ROOT%|$PREFIX|g" mapd-deps.sh.in > mapd-deps-$SUFFIX.sh
 
 cp mapd-deps-$SUFFIX.sh mapd-deps-$SUFFIX.modulefile $PREFIX
+
+if [ "$1" = "--compress" ] ; then
+    tar azvf mapd-deps-$SUFFIX.tar.xz -C $(dirname $PREFIX) $SUFFIX
+fi
