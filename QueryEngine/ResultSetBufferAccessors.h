@@ -200,6 +200,9 @@ inline int64_t read_int_from_buff(const int8_t* ptr, const int8_t compact_sz) {
     case 2: {
       return *reinterpret_cast<const int16_t*>(ptr);
     }
+    case 1: {
+      return *reinterpret_cast<const int8_t*>(ptr);
+    }
     default:
       UNREACHABLE();
   }
