@@ -195,5 +195,5 @@ sed -e "s|%MAPD_DEPS_ROOT%|$PREFIX|g" mapd-deps.sh.in > mapd-deps-$SUFFIX.sh
 cp mapd-deps-$SUFFIX.sh mapd-deps-$SUFFIX.modulefile $PREFIX
 
 if [ "$1" = "--compress" ] ; then
-    tar azvf mapd-deps-$SUFFIX.tar.xz -C $(dirname $PREFIX) $SUFFIX
+    tar acvf mapd-deps-$SUFFIX.tar.xz -C $(dirname $PREFIX) $SUFFIX
 fi
