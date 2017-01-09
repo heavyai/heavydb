@@ -856,6 +856,9 @@ llvm::Value* Executor::codegen(const Analyzer::CharLengthExpr* expr, const Compi
   auto str_lv = codegen(expr->get_arg(), true, co);
   if (str_lv.size() != 3) {
     CHECK_EQ(size_t(1), str_lv.size());
+    if (g_enable_watchdog) {
+      throw WatchdogException("LENGTH / CHAR_LENGTH on dictionary-encoded strings would be slow");
+    }
     str_lv.push_back(cgen_state_->emitCall("extract_str_ptr", {str_lv.front()}));
     str_lv.push_back(cgen_state_->emitCall("extract_str_len", {str_lv.front()}));
     cgen_state_->must_run_on_cpu_ = true;
@@ -1989,6 +1992,9 @@ llvm::Value* Executor::codegenQualifierCmp(const SQLOps optype,
   const auto& target_ti = rhs_ti.get_elem_type();
   const bool is_real_string{target_ti.is_string() && target_ti.get_compression() != kENCODING_DICT};
   if (is_real_string) {
+    if (g_enable_watchdog) {
+      throw WatchdogException("Comparison between a dictionary-encoded and a none-encoded string would be slow");
+    }
     cgen_state_->must_run_on_cpu_ = true;
     CHECK_EQ(kENCODING_NONE, target_ti.get_compression());
     fname += "_str";
@@ -2245,6 +2251,9 @@ llvm::Value* Executor::codegenCastFromString(llvm::Value* operand_lv,
   }
   // dictionary encode non-constant
   if (operand_ti.get_compression() != kENCODING_DICT && !operand_is_const) {
+    if (g_enable_watchdog) {
+      throw WatchdogException("Cast from none-encoded string to dictionary-encoded would be slow");
+    }
     CHECK_EQ(kENCODING_NONE, operand_ti.get_compression());
     CHECK_EQ(kENCODING_DICT, ti.get_compression());
     CHECK(operand_lv->getType()->isIntegerTy(64));
@@ -2256,6 +2265,9 @@ llvm::Value* Executor::codegenCastFromString(llvm::Value* operand_lv,
   }
   CHECK(operand_lv->getType()->isIntegerTy(32));
   if (ti.get_compression() == kENCODING_NONE) {
+    if (g_enable_watchdog) {
+      throw WatchdogException("Cast from dictionary-encoded string to none-encoded would be slow");
+    }
     CHECK_EQ(kENCODING_DICT, operand_ti.get_compression());
     cgen_state_->must_run_on_cpu_ = true;
     return cgen_state_->emitExternalCall(
