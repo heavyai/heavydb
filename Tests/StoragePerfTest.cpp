@@ -95,6 +95,7 @@ class SQLTestEnv : public ::testing::Environment {
                                                              dataMgr
 #ifdef HAVE_CALCITE
                                                              ,
+                                                             std::vector<LeafHostInfo>{},
                                                              calcite
 #endif  // HAVE_CALCITE
                                                              ),

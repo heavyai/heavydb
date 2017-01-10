@@ -62,6 +62,7 @@ Catalog_Namespace::SessionInfo* get_session(const char* db_path) {
                                                                                          dataMgr
 #ifdef HAVE_CALCITE
                                                                                          ,
+                                                                                         std::vector<LeafHostInfo>{},
                                                                                          calcite
 #endif  // HAVE_CALCITE
                                                                                          ),

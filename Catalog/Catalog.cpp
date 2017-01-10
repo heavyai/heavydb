@@ -285,6 +285,7 @@ Catalog::Catalog(const string& basePath,
                  std::shared_ptr<Data_Namespace::DataMgr> dataMgr
 #ifdef HAVE_CALCITE
                  ,
+                 const std::vector<LeafHostInfo>& string_dict_hosts,
                  std::shared_ptr<Calcite> calcite
 #endif  // HAVE_CALCITE
                  )
@@ -294,6 +295,7 @@ Catalog::Catalog(const string& basePath,
       dataMgr_(dataMgr)
 #ifdef HAVE_CALCITE
       ,
+      string_dict_hosts_(string_dict_hosts),
       calciteMgr_(calcite)
 #endif  // HAVE_CALCITE
 {
@@ -694,8 +696,13 @@ const DictDescriptor* Catalog::getMetadataForDict(int dictId) const {
   const auto& dd = dictDescIt->second;
   {
     std::lock_guard<std::mutex> lock(cat_mutex_);
-    if (!dd->stringDict)
-      dd->stringDict = std::make_shared<StringDictionary>(dd->dictFolderPath);
+    if (!dd->stringDict) {
+      if (string_dict_hosts_.empty()) {
+        dd->stringDict = std::make_shared<StringDictionary>(dd->dictFolderPath);
+      } else {
+        dd->stringDict = std::make_shared<StringDictionary>(string_dict_hosts_.front(), dd->dictId);
+      }
+    }
   }
   return dd.get();
 }

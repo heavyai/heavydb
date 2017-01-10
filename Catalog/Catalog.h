@@ -30,6 +30,7 @@
 #include "TableDescriptor.h"
 
 #include "../DataMgr/DataMgr.h"
+#include "../LeafHostInfo.h"
 #include "../QueryEngine/CompilationOptions.h"
 #include "../SqliteConnector/SqliteConnector.h"
 
@@ -159,6 +160,7 @@ class Catalog {
           std::shared_ptr<Data_Namespace::DataMgr> dataMgr
 #ifdef HAVE_CALCITE
           ,
+          const std::vector<LeafHostInfo>& string_dict_hosts,
           std::shared_ptr<Calcite> calcite
 #endif  // HAVE_CALCITE
           );
@@ -274,6 +276,7 @@ class Catalog {
   mutable std::mutex cat_mutex_;
 
   std::unique_ptr<LdapServer> ldap_server_;
+  const std::vector<LeafHostInfo> string_dict_hosts_;
 #ifdef HAVE_CALCITE
   std::shared_ptr<Calcite> calciteMgr_;
 #endif  // HAVE_CALCITE
