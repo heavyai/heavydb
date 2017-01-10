@@ -17,6 +17,7 @@ brew install gflags
 brew install glog
 brew install thrift
 brew install cryptopp
+brew install llvm
 
 # install CUDA (even if you don't have an nvidia GPU - some headers req'd for compilation)
 brew tap Caskroom/cask
@@ -30,39 +31,16 @@ tar xvf bisonpp-1.21-45.tar.gz
 cd bison++-1.21
 ./configure && make && make install
 
-# LLVM 3.5
-# We currently require LLVM 3.5 as we use the older JIT api (replaced by MCJIT
-# in 3.6). This version is provided by Homebrew's `versions` tap.
-
-brew tap homebrew/versions
-
-cat << EOS
-
-llvm35 requires a slight modification to the build config. See the README for details.
-
-Add the following to the configure args, somewhere around lines 196-203:
-
-For OS X 10.11:
-   "--with-c-include-dirs=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.11.sdk/usr/include",
-For OS X 10.12 or later:
-   "--with-c-include-dirs=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include",
-
-Hit enter to edit the config.
-
-EOS
-read -r
-
-brew edit llvm38
-brew install llvm38 --with-all-targets
-
 # Finally, add a few components of llvm to your path PATH.
+# Not adding full llvm/bin to PATH since brew's `clang` breaks CUDA
 mkdir -p ~/bin/
-for i in clang++ llc llvm-config; do
-  ln -sf "$(brew --prefix llvm38)/bin/$i-3.8" ~/bin/$i
+for i in clang++ llc llvm-config clang-format; do
+  ln -sf "$(brew --prefix llvm)/bin/$i" ~/bin/$i
 done
 export PATH=~/bin:$PATH
 
 cat >> ~/.bash_profile <<EOF
+#mapd-deps cuda
 CUDA_ROOT=\$(ls -d /Developer/NVIDIA/CUDA-* | tail -n 1)
 DYLD_LIBRARY_PATH=\$CUDA_ROOT/lib:\$DYLD_LIBRARY_PATH
 PATH=\$CUDA_ROOT/bin:\$PATH
@@ -74,6 +52,30 @@ brew install nodejs
 brew install golang
 brew install glfw3
 brew install glew
+
+brew cask install java
+cat >> ~/.bash_profile <<EOF
+# mapd-deps java
+DYLD_LIBRARY_PATH=$(/usr/libexec/java_home)/jre/lib/server:$DYLD_LIBRARY_PATH
+JAVA_HOME=$(/usr/libexec/java_home)
+export DYLD_LIBRARY_PATH JAVA_HOME
+EOF
+source ~/.bash_profile
+brew install maven
+
+echo "Installing documentation dependencies. Sudo may ask for your password."
+if ! hash pip &> /dev/null; then
+  sudo easy_install pip
+  sudo easy_install --upgrade six
+fi
+if ! hash virtualenv &> /dev/null; then
+  sudo pip install virtualenv
+fi
+sudo pip install sphinx==1.4.9
+
+if ! hash pdflatex &> /dev/null; then
+  brew cask install mactex
+fi
 
 #done!
 #git clone mapd2 && cd mapd2 && mkdir build && cd build && ccmake ..
