@@ -207,6 +207,17 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLiteral(const RexLite
       d.timeval = rex_literal->getVal<int64_t>();
       return makeExpr<Analyzer::Constant>(rex_literal->getType(), false, d);
     }
+    case kTIME:
+    case kTIMESTAMP: {
+      Datum d;
+      d.timeval = rex_literal->getVal<int64_t>() / 1000;
+      return makeExpr<Analyzer::Constant>(rex_literal->getType(), false, d);
+    }
+    case kDATE: {
+      Datum d;
+      d.timeval = rex_literal->getVal<int64_t>() * 24 * 3600;
+      return makeExpr<Analyzer::Constant>(rex_literal->getType(), false, d);
+    }
     case kNULLT: {
       return makeExpr<Analyzer::Constant>(rex_literal->getTargetType(), true, Datum{0});
     }

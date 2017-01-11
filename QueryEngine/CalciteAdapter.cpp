@@ -458,6 +458,19 @@ class CalciteAdapter {
         d.timeval = json_val->GetInt64();
         return makeExpr<Analyzer::Constant>(lit_ti.get_type(), false, d);
       }
+      case kTIME:
+      case kTIMESTAMP: {
+        CHECK(json_val->IsInt64());
+        Datum d;
+        d.timeval = json_val->GetInt64() / 1000;
+        return makeExpr<Analyzer::Constant>(lit_ti.get_type(), false, d);
+      }
+      case kDATE: {
+        CHECK(json_val->IsInt64());
+        Datum d;
+        d.timeval = json_val->GetInt64() * 24 * 3600;
+        return makeExpr<Analyzer::Constant>(lit_ti.get_type(), false, d);
+      }
       case kTEXT: {
         CHECK(json_val->IsString());
         const auto val = json_val->GetString();
@@ -480,11 +493,6 @@ class CalciteAdapter {
       case kNULLT: {
         const auto& target_ti = std::get<2>(parsed_lit);
         return makeExpr<Analyzer::Constant>(target_ti.get_type(), true, Datum{0});
-      }
-      case kTIME:
-      case kTIMESTAMP:
-      case kDATE: {
-        throw std::runtime_error("Unsupported literal type " + lit_ti.get_type_name());
       }
       default: { LOG(FATAL) << "Unexpected literal type " << lit_ti.get_type_name(); }
     }

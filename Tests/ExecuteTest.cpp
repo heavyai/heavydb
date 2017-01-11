@@ -372,6 +372,7 @@ TEST(Select, FilterAndSimpleAggregation) {
     c("SELECT COUNT(*) FROM test WHERE o1 <= '1999-09-08';", dt);
     c("SELECT COUNT(*) FROM test WHERE o1 = '1999-09-08';", dt);
     c("SELECT COUNT(*) FROM test WHERE o1 <> '1999-09-08';", dt);
+    c("SELECT COUNT(*) FROM test WHERE o >= CAST('1999-09-09' AS DATE);", dt);
 #endif  // HAVE_CALCITE
     ASSERT_EQ(15, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE MOD(x, 7) = 0;", dt)));
     ASSERT_EQ(0, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE MOD(x, 7) = 7;", dt)));
@@ -1212,6 +1213,7 @@ TEST(Select, Time) {
     ASSERT_EQ(
         32,
         v<int64_t>(run_simple_agg("SELECT DATEPART('s', CAST('2007-10-30 12:15:32' AS TIMESTAMP)) FROM test;", dt)));
+    ASSERT_EQ(32, v<int64_t>(run_simple_agg("SELECT DATEPART('s', TIMESTAMP '2007-10-30 12:15:32') FROM test;", dt)));
     ASSERT_EQ(3,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('year', CAST('2006-01-07 00:00:00' as TIMESTAMP), CAST('2009-01-07 00:00:00' AS "
@@ -1238,8 +1240,6 @@ TEST(Select, Time) {
               v<int64_t>(run_simple_agg(
                   "SELECT CAST(CAST('2012-05-08 20:15:12' AS TIMESTAMP) AS DATE) FROM test LIMIT 1;", dt)));
     ASSERT_EQ(g_num_rows * 2, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test GROUP BY CAST(m AS date);", dt)));
-    EXPECT_THROW(run_simple_agg("SELECT DATEPART('s', TIMESTAMP '2007-10-30 12:15:32') FROM test;", dt),
-                 std::runtime_error);
     const auto rows = run_multiple_agg(
         "SELECT DATE_TRUNC(month, CAST(o AS TIMESTAMP(0))) AS key0, str AS key1, COUNT(*) AS val FROM test GROUP BY "
         "key0, key1 ORDER BY val DESC, key1;",

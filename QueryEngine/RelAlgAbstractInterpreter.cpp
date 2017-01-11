@@ -328,6 +328,9 @@ std::unique_ptr<RexLiteral> parse_literal(const rapidjson::Value& expr) {
     case kDECIMAL:
     case kINTERVAL_DAY_TIME:
     case kINTERVAL_YEAR_MONTH:
+    case kTIME:
+    case kTIMESTAMP:
+    case kDATE:
       return std::unique_ptr<RexLiteral>(
           new RexLiteral(json_i64(literal), type, target_type, scale, precision, type_scale, type_precision));
     case kDOUBLE:
@@ -341,12 +344,6 @@ std::unique_ptr<RexLiteral> parse_literal(const rapidjson::Value& expr) {
           new RexLiteral(json_bool(literal), type, target_type, scale, precision, type_scale, type_precision));
     case kNULLT:
       return std::unique_ptr<RexLiteral>(new RexLiteral(target_type));
-    case kTIME:
-    case kTIMESTAMP:
-    case kDATE: {
-      SQLTypeInfo lit_ti(type, false);
-      throw std::runtime_error("Unsupported literal type " + lit_ti.get_type_name());
-    }
     default:
       CHECK(false);
   }
