@@ -1,6 +1,7 @@
 #ifndef STRINGDICTIONARY_STRINGDICTIONARY_H
 #define STRINGDICTIONARY_STRINGDICTIONARY_H
 
+#include "../LeafHostInfo.h"
 #include "../Shared/mapd_shared_mutex.h"
 
 #include <sys/mman.h>
@@ -13,9 +14,12 @@
 #include <tuple>
 #include <vector>
 
+class StringDictionaryClient;
+
 class StringDictionary {
  public:
   StringDictionary(const std::string& folder, const bool recover = true, size_t initial_capacity = 256) noexcept;
+  StringDictionary(const LeafHostInfo& host, const int dict_id) noexcept;
   ~StringDictionary() noexcept;
 
   int32_t getOrAdd(const std::string& str) noexcept;
@@ -72,6 +76,7 @@ class StringDictionary {
   mutable mapd_shared_mutex rw_mutex_;
   mutable std::map<std::tuple<std::string, bool, bool, char>, std::vector<std::string>> like_cache_;
   mutable std::map<std::pair<std::string, char>, std::vector<std::string>> regex_cache_;
+  std::unique_ptr<StringDictionaryClient> client_;
 
   static char* CANARY_BUFFER;
 };

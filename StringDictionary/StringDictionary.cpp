@@ -1,4 +1,5 @@
 #include "StringDictionary.h"
+#include "StringDictionaryClient.h"
 #include "../Shared/sqltypes.h"
 #include "../Utils/StringLike.h"
 #include "../Utils/Regexp.h"
@@ -126,6 +127,9 @@ StringDictionary::StringDictionary(const std::string& folder, const bool recover
   }
 }
 
+StringDictionary::StringDictionary(const LeafHostInfo& host, const int dict_id) noexcept
+    : client_(new StringDictionaryClient(host, dict_id)) {}
+
 StringDictionary::~StringDictionary() noexcept {
   if (payload_map_) {
     CHECK(offset_map_);
@@ -158,6 +162,9 @@ template void StringDictionary::getOrAddBulk(const std::vector<std::string>& str
 
 int32_t StringDictionary::get(const std::string& str) const noexcept {
   mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
+  if (client_) {
+    return client_->get(str);
+  }
   return getUnlocked(str);
 }
 
@@ -168,6 +175,11 @@ int32_t StringDictionary::getUnlocked(const std::string& str) const noexcept {
 
 std::string StringDictionary::getString(int32_t string_id) const noexcept {
   mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
+  if (client_) {
+    std::string ret;
+    client_->get_string(ret, string_id);
+    return ret;
+  }
   return getStringUnlocked(string_id);
 }
 
