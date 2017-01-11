@@ -201,7 +201,7 @@ class ResultSet {
 
   std::string serialize() const;
 
-  static std::unique_ptr<ResultSet> unserialize(const std::string&);
+  static std::unique_ptr<ResultSet> unserialize(const std::string&, const Executor*);
 
  private:
   std::vector<TargetValue> getNextRowImpl(const bool translate_strings, const bool decimal_to_double) const;

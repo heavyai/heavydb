@@ -87,6 +87,10 @@ AggregatedColRange RelAlgExecutor::computeColRangesCache(const RelAlgNode* ra) {
   return agg_col_range_cache;
 }
 
+Executor* RelAlgExecutor::getExecutor() const {
+  return executor_;
+}
+
 namespace {
 
 bool node_is_aggregate(const RelAlgNode* ra) {

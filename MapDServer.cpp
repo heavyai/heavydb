@@ -2029,39 +2029,11 @@ class MapDHandler : virtual public MapDIf {
     return thrift_column_ranges;
   }
 
-  static AggregatedColRange column_ranges_from_thrift(const std::vector<TColumnRange>& thrift_column_ranges) {
-    AggregatedColRange column_ranges;
-    for (const auto& thrift_column_range : thrift_column_ranges) {
-      PhysicalInput phys_input{thrift_column_range.col_id, thrift_column_range.table_id};
-      switch (thrift_column_range.type) {
-        case TExpressionRangeType::INTEGER:
-          column_ranges.setColRange(phys_input,
-                                    ExpressionRange::makeIntRange(thrift_column_range.int_min,
-                                                                  thrift_column_range.int_max,
-                                                                  thrift_column_range.bucket,
-                                                                  thrift_column_range.has_nulls));
-          break;
-        case TExpressionRangeType::FLOATINGPOINT:
-          column_ranges.setColRange(
-              phys_input,
-              ExpressionRange::makeFpRange(
-                  thrift_column_range.fp_min, thrift_column_range.fp_max, thrift_column_range.has_nulls));
-          break;
-        case TExpressionRangeType::INVALID:
-          column_ranges.setColRange(phys_input, ExpressionRange::makeInvalidRange());
-          break;
-        default:
-          CHECK(false);
-      }
-    }
-    return column_ranges;
-  }
-
   void broadcast_serialized_rows(const std::string& serialized_rows,
                                  const TRowDescriptor& row_desc,
                                  const TQueryId query_id) override {
 #ifdef HAVE_RAVM
-    auto result_set = ResultSet::unserialize(serialized_rows);
+    auto result_set = ResultSet::unserialize(serialized_rows, PendingExecutionClosure::getExecutor(query_id));
     ResultRows rows(std::shared_ptr<ResultSet>(result_set.release()));
     const auto target_meta = target_meta_infos_from_thrift(row_desc);
     const auto subquery_result = std::make_shared<const ExecutionResult>(rows, target_meta);
@@ -2102,6 +2074,34 @@ class MapDHandler : virtual public MapDIf {
   const bool legacy_syntax_;
 #endif  // HAVE_CALCITE
 };
+
+AggregatedColRange column_ranges_from_thrift(const std::vector<TColumnRange>& thrift_column_ranges) {
+  AggregatedColRange column_ranges;
+  for (const auto& thrift_column_range : thrift_column_ranges) {
+    PhysicalInput phys_input{thrift_column_range.col_id, thrift_column_range.table_id};
+    switch (thrift_column_range.type) {
+      case TExpressionRangeType::INTEGER:
+        column_ranges.setColRange(phys_input,
+                                  ExpressionRange::makeIntRange(thrift_column_range.int_min,
+                                                                thrift_column_range.int_max,
+                                                                thrift_column_range.bucket,
+                                                                thrift_column_range.has_nulls));
+        break;
+      case TExpressionRangeType::FLOATINGPOINT:
+        column_ranges.setColRange(
+            phys_input,
+            ExpressionRange::makeFpRange(
+                thrift_column_range.fp_min, thrift_column_range.fp_max, thrift_column_range.has_nulls));
+        break;
+      case TExpressionRangeType::INVALID:
+        column_ranges.setColRange(phys_input, ExpressionRange::makeInvalidRange());
+        break;
+      default:
+        CHECK(false);
+    }
+  }
+  return column_ranges;
+}
 
 void mapd_signal_handler(int signal_number) {
   LOG(INFO) << "Interrupt signal (" << signal_number << ") received.\n";

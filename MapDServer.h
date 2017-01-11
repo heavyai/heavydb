@@ -9,6 +9,7 @@
 #define MAPDSERVER_H
 
 #include "gen-cpp/mapd_types.h"
+#include "QueryEngine/AggregatedColRange.h"
 #include "QueryEngine/TargetMetaInfo.h"
 
 #include <glog/logging.h>
@@ -167,5 +168,7 @@ inline std::vector<TargetMetaInfo> target_meta_infos_from_thrift(const TRowDescr
   }
   return target_meta_infos;
 }
+
+AggregatedColRange column_ranges_from_thrift(const std::vector<TColumnRange>& thrift_column_ranges);
 
 #endif  // MAPDSERVER_H

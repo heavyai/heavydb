@@ -59,6 +59,8 @@ class RelAlgExecutor {
 
   AggregatedColRange computeColRangesCache(const RelAlgNode* ra);
 
+  Executor* getExecutor() const;
+
  private:
   void executeRelAlgStep(const size_t step_idx,
                          std::vector<RaExecutionDesc>&,

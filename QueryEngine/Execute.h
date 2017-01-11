@@ -317,6 +317,8 @@ class Executor {
 
   ExpressionRange getColRange(const PhysicalInput&) const;
 
+  std::shared_ptr<RowSetMemoryOwner> getRowSetMemoryOwner() const;
+
   typedef boost::variant<int8_t, int16_t, int32_t, int64_t, float, double, std::pair<std::string, int>, std::string>
       LiteralValue;
   typedef std::vector<LiteralValue> LiteralValues;
