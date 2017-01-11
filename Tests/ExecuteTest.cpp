@@ -1078,44 +1078,52 @@ TEST(Select, Time) {
                   "select DATE_TRUNC(quarter, CAST('1900-03-21 12:12:12' AS timestamp)) FROM test limit 1;", dt)));
     // test DATE format processing
     ASSERT_EQ(1434844800L, v<int64_t>(run_simple_agg("select CAST('2015-06-21' AS DATE) FROM test limit 1;", dt)));
-    ASSERT_EQ(1434844800L, v<int64_t>(run_simple_agg("select CAST('06/21/2015' AS DATE) FROM test limit 1;", dt)));
-    ASSERT_EQ(1434844800L, v<int64_t>(run_simple_agg("select CAST('21-Jun-15' AS DATE) FROM test limit 1;", dt)));
-    ASSERT_EQ(1434844800L, v<int64_t>(run_simple_agg("select CAST('21/Jun/2015' AS DATE) FROM test limit 1;", dt)));
-    ASSERT_EQ(1434844800L, v<int64_t>(run_simple_agg("select CAST('1434844800' AS DATE) FROM test limit 1;", dt)));
+    ASSERT_EQ(g_num_rows + g_num_rows / 2,
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE o < CAST('06/21/2015' AS DATE);", dt)));
+    ASSERT_EQ(g_num_rows + g_num_rows / 2,
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE o < CAST('21-Jun-15' AS DATE);", dt)));
+    ASSERT_EQ(g_num_rows + g_num_rows / 2,
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE o < CAST('21/Jun/2015' AS DATE);", dt)));
+    ASSERT_EQ(g_num_rows + g_num_rows / 2,
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE o < CAST('1434844800' AS DATE);", dt)));
 
     // test different input formats
     // added new format for customer
     ASSERT_EQ(1434896116L,
               v<int64_t>(run_simple_agg("select CAST('2015-06-21 14:15:16' AS timestamp) FROM test limit 1;", dt)));
-    ASSERT_EQ(1434896116L,
-              v<int64_t>(run_simple_agg("select CAST('2015-06-21:141516' AS timestamp) FROM test limit 1;", dt)));
     ASSERT_EQ(
-        1434896116L,
-        v<int64_t>(run_simple_agg("select CAST('21-JUN-15 2.15.16.12345 PM' AS timestamp) FROM test limit 1;", dt)));
-    ASSERT_EQ(
-        1434852916L,
-        v<int64_t>(run_simple_agg("select CAST('21-JUN-15 2.15.16.12345 AM' AS timestamp) FROM test limit 1;", dt)));
-    ASSERT_EQ(1434852916L,
-              v<int64_t>(run_simple_agg("select CAST('21-JUN-15 2:15:16 AM' AS timestamp) FROM test limit 1;", dt)));
+        2 * g_num_rows,
+        v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE m <= CAST('2015-06-21:141516' AS TIMESTAMP);", dt)));
+    ASSERT_EQ(2 * g_num_rows,
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM test WHERE m <= CAST('21-JUN-15 2.15.16.12345 PM' AS TIMESTAMP);", dt)));
+    ASSERT_EQ(2 * g_num_rows,
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM test WHERE m <= CAST('21-JUN-15 2.15.16.12345 AM' AS TIMESTAMP);", dt)));
+    ASSERT_EQ(2 * g_num_rows,
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM test WHERE m <= CAST('21-JUN-15 2:15:16 AM' AS TIMESTAMP);", dt)));
 
-    ASSERT_EQ(1434896116L,
-              v<int64_t>(run_simple_agg("select CAST('06/21/2015 14:15:16' AS timestamp) FROM test limit 1;", dt)));
+    ASSERT_EQ(2 * g_num_rows,
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM test WHERE m <= CAST('06/21/2015 14:15:16' AS TIMESTAMP);", dt)));
 
     // Support ISO date offset format
-    ASSERT_EQ(
-        1440180794L,
-        v<int64_t>(run_simple_agg("select CAST('21/Aug/2015:12:13:14 -0600' AS timestamp) FROM test limit 1;", dt)));
-    ASSERT_EQ(
-        1440180794L,
-        v<int64_t>(run_simple_agg("select CAST('2015-08-21T12:13:14 -0600' AS timestamp) FROM test limit 1;", dt)));
-    ASSERT_EQ(
-        1440180794L,
-        v<int64_t>(run_simple_agg("select CAST('21-Aug-15 12:13:14 -0600' AS timestamp) FROM test limit 1;", dt)));
-    ASSERT_EQ(
-        1440180794L,
-        v<int64_t>(run_simple_agg("select CAST('21/Aug/2015:13:13:14 -0500' AS timestamp) FROM test limit 1;", dt)));
-    ASSERT_EQ(1440180794L,
-              v<int64_t>(run_simple_agg("select CAST('2015-08-21T18:13:14' AS timestamp) FROM test limit 1;", dt)));
+    ASSERT_EQ(2 * g_num_rows,
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM test WHERE m <= CAST('21/Aug/2015:12:13:14 -0600' AS TIMESTAMP);", dt)));
+    ASSERT_EQ(2 * g_num_rows,
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM test WHERE m <= CAST('2015-08-21T12:13:14 -0600' AS TIMESTAMP);", dt)));
+    ASSERT_EQ(2 * g_num_rows,
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM test WHERE m <= CAST('21-Aug-15 12:13:14 -0600' AS TIMESTAMP);", dt)));
+    ASSERT_EQ(2 * g_num_rows,
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM test WHERE m <= CAST('21/Aug/2015:13:13:14 -0500' AS TIMESTAMP);", dt)));
+    ASSERT_EQ(2 * g_num_rows,
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM test WHERE m <= CAST('2015-08-21T18:13:14' AS TIMESTAMP);", dt)));
     // add test for quarterday behaviour
     ASSERT_EQ(1L,
               v<int64_t>(run_simple_agg(
