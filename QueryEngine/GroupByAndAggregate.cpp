@@ -1730,8 +1730,7 @@ CountDistinctDescriptors GroupByAndAggregate::initCountDistinctDescriptors() {
       if (g_enable_watchdog && count_distinct_impl_type == CountDistinctImplType::StdSet) {
         throw WatchdogException("Cannot use a fast path for COUNT distinct");
       }
-      CountDistinctDescriptor count_distinct_desc{
-          executor_, count_distinct_impl_type, arg_range_info.min, bitmap_sz_bits};
+      CountDistinctDescriptor count_distinct_desc{count_distinct_impl_type, arg_range_info.min, bitmap_sz_bits};
       auto it_ok = count_distinct_descriptors.insert(std::make_pair(target_idx, count_distinct_desc));
       CHECK(it_ok.second);
     }

@@ -54,7 +54,6 @@ inline size_t bitmap_size_bytes(const size_t bitmap_sz) {
 }
 
 struct CountDistinctDescriptor {
-  const Executor* executor_;
   CountDistinctImplType impl_type_;
   int64_t min_val;
   int64_t bitmap_sz_bits;
