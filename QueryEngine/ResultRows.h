@@ -104,9 +104,9 @@ class RowSetMemoryOwner : boost::noncopyable {
     }
   }
 
-  void addCountDistinctBuffer(int8_t* count_distinct_buffer) {
+  void addCountDistinctBuffer(int8_t* count_distinct_buffer, const size_t bytes) {
     std::lock_guard<std::mutex> lock(state_mutex_);
-    count_distinct_bitmaps_.push_back(count_distinct_buffer);
+    count_distinct_bitmaps_.emplace_back(count_distinct_buffer, bytes);
   }
 
   void addCountDistinctSet(std::set<int64_t>* count_distinct_set) {
@@ -162,8 +162,8 @@ class RowSetMemoryOwner : boost::noncopyable {
   }
 
   ~RowSetMemoryOwner() {
-    for (auto count_distinct_buffer : count_distinct_bitmaps_) {
-      free(count_distinct_buffer);
+    for (const auto& count_distinct_buffer : count_distinct_bitmaps_) {
+      free(count_distinct_buffer.first);
     }
     for (auto count_distinct_set : count_distinct_sets_) {
       delete count_distinct_set;
@@ -183,7 +183,7 @@ class RowSetMemoryOwner : boost::noncopyable {
 
  private:
   CountDistinctDescriptors count_distinct_descriptors_;
-  std::vector<int8_t*> count_distinct_bitmaps_;
+  std::vector<std::pair<int8_t*, size_t>> count_distinct_bitmaps_;
   std::vector<std::set<int64_t>*> count_distinct_sets_;
   std::vector<int64_t*> group_by_buffers_;
   std::list<std::string> strings_;
@@ -195,6 +195,7 @@ class RowSetMemoryOwner : boost::noncopyable {
   mutable std::mutex state_mutex_;
 
   friend class ResultRows;
+  friend class ResultSet;
 };
 
 class InternalRow {

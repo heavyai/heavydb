@@ -521,10 +521,10 @@ std::function<bool(const uint32_t, const uint32_t)> ResultSet::createComparator(
           return use_desc_cmp ? lhs_str > rhs_str : lhs_str < rhs_str;
         }
         if (UNLIKELY(targets_[order_entry.tle_no - 1].is_distinct)) {
-          const auto lhs_sz =
-              bitmap_set_size(lhs_v.i1, order_entry.tle_no - 1, row_set_mem_owner_->getCountDistinctDescriptors());
-          const auto rhs_sz =
-              bitmap_set_size(rhs_v.i1, order_entry.tle_no - 1, row_set_mem_owner_->getCountDistinctDescriptors());
+          const auto lhs_sz = bitmap_set_size(
+              storage_->mappedPtr(lhs_v.i1), order_entry.tle_no - 1, row_set_mem_owner_->getCountDistinctDescriptors());
+          const auto rhs_sz = bitmap_set_size(
+              storage_->mappedPtr(rhs_v.i1), order_entry.tle_no - 1, row_set_mem_owner_->getCountDistinctDescriptors());
           if (lhs_sz == rhs_sz) {
             continue;
           }
@@ -642,4 +642,18 @@ void ResultSet::radixSortOnCpu(const std::list<Analyzer::OrderEntry>& order_entr
       apply_permutation_cpu(satellite_val_buff, &idx_buff[0], query_mem_desc_.entry_count, &tmp_buff[0], chosen_bytes);
     }
   }
+}
+
+void ResultSetStorage::addCountDistinctSetPointerMapping(const int64_t remote_ptr, const int64_t ptr) {
+  const auto it_ok = count_distinct_sets_mapping_.emplace(remote_ptr, ptr);
+  CHECK(it_ok.second);
+}
+
+int64_t ResultSetStorage::mappedPtr(const int64_t remote_ptr) const {
+  if (count_distinct_sets_mapping_.empty()) {
+    return remote_ptr;
+  }
+  const auto it = count_distinct_sets_mapping_.find(remote_ptr);
+  CHECK(it != count_distinct_sets_mapping_.end());
+  return it->second;
 }

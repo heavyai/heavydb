@@ -31,11 +31,17 @@ class ResultSetStorage {
   void moveEntriesToBuffer(int8_t* new_buff, const size_t new_entry_count) const;
 
  private:
-  void reduceOneEntryNoCollisionsColWise(const size_t i, int8_t* this_buff, const int8_t* that_buff) const;
+  void reduceOneEntryNoCollisionsColWise(const size_t i,
+                                         int8_t* this_buff,
+                                         const int8_t* that_buff,
+                                         const ResultSetStorage& that) const;
 
   void copyKeyColWise(const size_t entry_idx, int8_t* this_buff, const int8_t* that_buff) const;
 
-  void reduceOneEntryNoCollisionsRowWise(const size_t i, int8_t* this_buff, const int8_t* that_buff) const;
+  void reduceOneEntryNoCollisionsRowWise(const size_t i,
+                                         int8_t* this_buff,
+                                         const int8_t* that_buff,
+                                         const ResultSetStorage& that) const;
 
   bool isEmptyEntry(const size_t entry_idx, const int8_t* buff) const;
   bool isEmptyEntry(const size_t entry_idx) const;
@@ -43,12 +49,14 @@ class ResultSetStorage {
   void reduceOneEntryBaseline(int8_t* this_buff,
                               const int8_t* that_buff,
                               const size_t i,
-                              const size_t that_entry_count) const;
+                              const size_t that_entry_count,
+                              const ResultSetStorage& that) const;
 
   void reduceOneEntrySlotsBaseline(int64_t* this_entry_slots,
                                    const int64_t* that_buff,
                                    const size_t that_entry_idx,
-                                   const size_t that_entry_count) const;
+                                   const size_t that_entry_count,
+                                   const ResultSetStorage& that) const;
 
   void initializeBaselineValueSlots(int64_t* this_entry_slots) const;
 
@@ -60,7 +68,8 @@ class ResultSetStorage {
                              const TargetInfo& target_info,
                              const size_t target_logical_idx,
                              const size_t target_slot_idx,
-                             const size_t init_agg_val_idx) const;
+                             const size_t init_agg_val_idx,
+                             const ResultSetStorage& that) const;
 
   void reduceOneSlot(int8_t* this_ptr1,
                      int8_t* this_ptr2,
@@ -69,12 +78,13 @@ class ResultSetStorage {
                      const TargetInfo& target_info,
                      const size_t target_logical_idx,
                      const size_t target_slot_idx,
-                     const size_t init_agg_val_idx) const;
+                     const size_t init_agg_val_idx,
+                     const ResultSetStorage& that) const;
 
   void reduceOneCountDistinctSlot(int8_t* this_ptr1,
                                   const int8_t* that_ptr1,
-                                  const TargetInfo& target_info,
-                                  const size_t target_logical_idx) const;
+                                  const size_t target_logical_idx,
+                                  const ResultSetStorage& that) const;
 
   void fillOneEntryRowWise(const std::vector<int64_t>& entry);
 
@@ -82,11 +92,22 @@ class ResultSetStorage {
 
   void initializeColWise() const;
 
+  // TODO(alex): remove the following two methods, see comment about count_distinct_sets_mapping_.
+  void addCountDistinctSetPointerMapping(const int64_t remote_ptr, const int64_t ptr);
+
+  int64_t mappedPtr(const int64_t) const;
+
   const std::vector<TargetInfo> targets_;
   const QueryMemoryDescriptor query_mem_desc_;
   int8_t* buff_;
   const bool buff_is_provided_;
   std::vector<int64_t> target_init_vals_;
+  // Provisional field used for multi-node until we improve the count distinct
+  // and flatten the main group by buffer and the distinct buffers in a single,
+  // contiguous buffer which we'll be able to serialize as a no-op. Used to
+  // re-route the pointers in the result set received over the wire to this
+  // machine address-space. Not efficient at all, just a placeholder!
+  std::unordered_map<int64_t, int64_t> count_distinct_sets_mapping_;
 
   friend class ResultSet;
   friend class ResultSetManager;
@@ -107,6 +128,8 @@ struct ColumnLazyFetchInfo {
   const int local_col_id;
   const SQLTypeInfo type;
 };
+
+class TSerializedRows;
 
 class ResultSet {
  public:
@@ -297,6 +320,10 @@ class ResultSet {
   int getGpuCount() const;
 
   std::string serializeProjection() const;
+
+  void serializeCountDistinctColumns(TSerializedRows&) const;
+
+  void unserializeCountDistinctColumns(const TSerializedRows&);
 
   const std::vector<TargetInfo> targets_;
   const ExecutorDeviceType device_type_;

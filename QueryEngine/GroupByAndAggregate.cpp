@@ -379,7 +379,7 @@ std::vector<ssize_t> QueryExecutionContext::allocateCountDistinctBuffers(const b
 int64_t QueryExecutionContext::allocateCountDistinctBitmap(const size_t bitmap_sz) {
   auto bitmap_byte_sz = bitmap_size_bytes(bitmap_sz);
   auto count_distinct_buffer = static_cast<int8_t*>(checked_calloc(bitmap_byte_sz, 1));
-  row_set_mem_owner_->addCountDistinctBuffer(count_distinct_buffer);
+  row_set_mem_owner_->addCountDistinctBuffer(count_distinct_buffer, bitmap_byte_sz);
   return reinterpret_cast<int64_t>(count_distinct_buffer);
 }
 

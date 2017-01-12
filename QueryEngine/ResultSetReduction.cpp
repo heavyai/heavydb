@@ -89,7 +89,7 @@ void ResultSetStorage::reduce(const ResultSetStorage& that) const {
         reduction_threads.emplace_back(
             std::async(std::launch::async, [this, thread_idx, thread_count, this_buff, that_buff, &that] {
               for (size_t i = thread_idx; i < that.query_mem_desc_.entry_count; i += thread_count) {
-                reduceOneEntryBaseline(this_buff, that_buff, i, that.query_mem_desc_.entry_count);
+                reduceOneEntryBaseline(this_buff, that_buff, i, that.query_mem_desc_.entry_count, that);
               }
             }));
       }
@@ -101,7 +101,7 @@ void ResultSetStorage::reduce(const ResultSetStorage& that) const {
       }
     } else {
       for (size_t i = 0; i < that.query_mem_desc_.entry_count; ++i) {
-        reduceOneEntryBaseline(this_buff, that_buff, i, that.query_mem_desc_.entry_count);
+        reduceOneEntryBaseline(this_buff, that_buff, i, that.query_mem_desc_.entry_count, that);
       }
     }
     return;
@@ -109,7 +109,7 @@ void ResultSetStorage::reduce(const ResultSetStorage& that) const {
   if (query_mem_desc_.hash_type == GroupByColRangeType::OneColGuessedRange) {
     CHECK(!query_mem_desc_.output_columnar);
     for (size_t i = 0; i < that.query_mem_desc_.entry_count; ++i) {
-      reduceOneEntryBaseline(this_buff, that_buff, i, that.query_mem_desc_.entry_count);
+      reduceOneEntryBaseline(this_buff, that_buff, i, that.query_mem_desc_.entry_count, that);
     }
     entry_count = query_mem_desc_.entry_count_small;
     const auto row_bytes = get_row_bytes(query_mem_desc_);
@@ -122,12 +122,12 @@ void ResultSetStorage::reduce(const ResultSetStorage& that) const {
     std::vector<std::future<void>> reduction_threads;
     for (size_t thread_idx = 0; thread_idx < thread_count; ++thread_idx) {
       reduction_threads.emplace_back(
-          std::async(std::launch::async, [this, thread_idx, entry_count, this_buff, that_buff, thread_count] {
+          std::async(std::launch::async, [this, that, thread_idx, entry_count, this_buff, that_buff, thread_count] {
             for (size_t i = thread_idx; i < entry_count; i += thread_count) {
               if (query_mem_desc_.output_columnar) {
-                reduceOneEntryNoCollisionsColWise(i, this_buff, that_buff);
+                reduceOneEntryNoCollisionsColWise(i, this_buff, that_buff, that);
               } else {
-                reduceOneEntryNoCollisionsRowWise(i, this_buff, that_buff);
+                reduceOneEntryNoCollisionsRowWise(i, this_buff, that_buff, that);
               }
             }
           }));
@@ -141,9 +141,9 @@ void ResultSetStorage::reduce(const ResultSetStorage& that) const {
   } else {
     for (size_t i = 0; i < entry_count; ++i) {
       if (query_mem_desc_.output_columnar) {
-        reduceOneEntryNoCollisionsColWise(i, this_buff, that_buff);
+        reduceOneEntryNoCollisionsColWise(i, this_buff, that_buff, that);
       } else {
-        reduceOneEntryNoCollisionsRowWise(i, this_buff, that_buff);
+        reduceOneEntryNoCollisionsRowWise(i, this_buff, that_buff, that);
       }
     }
   }
@@ -152,7 +152,8 @@ void ResultSetStorage::reduce(const ResultSetStorage& that) const {
 // Reduces entry at position entry_idx in that_buff into the same position in this_buff, columnar format.
 void ResultSetStorage::reduceOneEntryNoCollisionsColWise(const size_t entry_idx,
                                                          int8_t* this_buff,
-                                                         const int8_t* that_buff) const {
+                                                         const int8_t* that_buff,
+                                                         const ResultSetStorage& that) const {
   CHECK(query_mem_desc_.output_columnar);
   CHECK(query_mem_desc_.hash_type == GroupByColRangeType::OneColKnownRange ||
         query_mem_desc_.hash_type == GroupByColRangeType::MultiColPerfectHash ||
@@ -181,7 +182,7 @@ void ResultSetStorage::reduceOneEntryNoCollisionsColWise(const size_t entry_idx,
       this_ptr2 = this_next_col_ptr + entry_idx * query_mem_desc_.agg_col_widths[agg_col_idx + 1].compact;
       that_ptr2 = that_next_col_ptr + entry_idx * query_mem_desc_.agg_col_widths[agg_col_idx + 1].compact;
     }
-    reduceOneSlot(this_ptr1, this_ptr2, that_ptr1, that_ptr2, agg_info, target_idx, agg_col_idx, agg_col_idx);
+    reduceOneSlot(this_ptr1, this_ptr2, that_ptr1, that_ptr2, agg_info, target_idx, agg_col_idx, agg_col_idx, that);
     this_crt_col_ptr = this_next_col_ptr;
     that_crt_col_ptr = that_next_col_ptr;
     if (agg_info.is_agg && agg_info.agg_kind == kAVG) {
@@ -207,7 +208,8 @@ void ResultSetStorage::copyKeyColWise(const size_t entry_idx, int8_t* this_buff,
 // Reduces entry at position entry_idx in that_buff into the same position in this_buff, row-wise format.
 void ResultSetStorage::reduceOneEntryNoCollisionsRowWise(const size_t entry_idx,
                                                          int8_t* this_buff,
-                                                         const int8_t* that_buff) const {
+                                                         const int8_t* that_buff,
+                                                         const ResultSetStorage& that) const {
   CHECK(!query_mem_desc_.output_columnar);
   if (isEmptyEntry(entry_idx, that_buff)) {
     return;
@@ -234,7 +236,8 @@ void ResultSetStorage::reduceOneEntryNoCollisionsRowWise(const size_t entry_idx,
                   target_info,
                   target_logical_idx,
                   target_slot_idx,
-                  target_slot_idx);
+                  target_slot_idx,
+                  that);
     this_targets_ptr = advance_target_ptr(this_targets_ptr, target_info, target_slot_idx, query_mem_desc_);
     that_targets_ptr = advance_target_ptr(that_targets_ptr, target_info, target_slot_idx, query_mem_desc_);
     target_slot_idx = advance_slot(target_slot_idx, target_info);
@@ -357,7 +360,8 @@ GroupValueInfo get_group_value_reduction(int64_t* groups_buffer,
 void ResultSetStorage::reduceOneEntryBaseline(int8_t* this_buff,
                                               const int8_t* that_buff,
                                               const size_t that_entry_idx,
-                                              const size_t that_entry_count) const {
+                                              const size_t that_entry_count,
+                                              const ResultSetStorage& that) const {
   const auto slot_count = get_buffer_col_slot_count(query_mem_desc_);
   const auto key_count = get_groupby_col_count(query_mem_desc_);
   CHECK(GroupByColRangeType::MultiCol == query_mem_desc_.hash_type ||
@@ -395,13 +399,14 @@ void ResultSetStorage::reduceOneEntryBaseline(int8_t* this_buff,
                query_mem_desc_);
     return;
   }
-  reduceOneEntrySlotsBaseline(this_entry_slots, that_buff_i64, that_entry_idx, that_entry_count);
+  reduceOneEntrySlotsBaseline(this_entry_slots, that_buff_i64, that_entry_idx, that_entry_count, that);
 }
 
 void ResultSetStorage::reduceOneEntrySlotsBaseline(int64_t* this_entry_slots,
                                                    const int64_t* that_buff,
                                                    const size_t that_entry_idx,
-                                                   const size_t that_entry_count) const {
+                                                   const size_t that_entry_count,
+                                                   const ResultSetStorage& that) const {
   const auto slot_count = get_buffer_col_slot_count(query_mem_desc_);
   const auto key_count = get_groupby_col_count(query_mem_desc_);
   size_t j = 0;
@@ -420,7 +425,8 @@ void ResultSetStorage::reduceOneEntrySlotsBaseline(int64_t* this_entry_slots,
                           target_info,
                           target_logical_idx,
                           j,
-                          init_agg_val_idx);
+                          init_agg_val_idx,
+                          that);
     if (query_mem_desc_.target_groupby_indices.empty()) {
       init_agg_val_idx = advance_slot(init_agg_val_idx, target_info);
     } else {
@@ -441,7 +447,8 @@ void ResultSetStorage::reduceOneSlotBaseline(int64_t* this_buff,
                                              const TargetInfo& target_info,
                                              const size_t target_logical_idx,
                                              const size_t target_slot_idx,
-                                             const size_t init_agg_val_idx) const {
+                                             const size_t init_agg_val_idx,
+                                             const ResultSetStorage& that) const {
   int8_t* this_ptr2{nullptr};
   const int8_t* that_ptr2{nullptr};
   if (target_info.is_agg && target_info.agg_kind == kAVG) {
@@ -457,7 +464,8 @@ void ResultSetStorage::reduceOneSlotBaseline(int64_t* this_buff,
                 target_info,
                 target_logical_idx,
                 target_slot_idx,
-                init_agg_val_idx);
+                init_agg_val_idx,
+                that);
 }
 
 // During the reduction of two result sets using the baseline strategy, we first create a big
@@ -770,7 +778,8 @@ void ResultSetStorage::reduceOneSlot(int8_t* this_ptr1,
                                      const TargetInfo& target_info,
                                      const size_t target_logical_idx,
                                      const size_t target_slot_idx,
-                                     const size_t init_agg_val_idx) const {
+                                     const size_t init_agg_val_idx,
+                                     const ResultSetStorage& that) const {
   if (!query_mem_desc_.target_groupby_indices.empty()) {
     CHECK_LT(target_logical_idx, query_mem_desc_.target_groupby_indices.size());
     if (query_mem_desc_.target_groupby_indices[target_logical_idx] >= 0) {
@@ -788,7 +797,7 @@ void ResultSetStorage::reduceOneSlot(int8_t* this_ptr1,
           CHECK(target_info.is_agg);
           CHECK_EQ(kCOUNT, target_info.agg_kind);
           CHECK_EQ(static_cast<size_t>(chosen_bytes), sizeof(int64_t));
-          reduceOneCountDistinctSlot(this_ptr1, that_ptr1, target_info, target_logical_idx);
+          reduceOneCountDistinctSlot(this_ptr1, that_ptr1, target_logical_idx, that);
           break;
         }
         AGGREGATE_ONE_NULLABLE_COUNT(this_ptr1, that_ptr1, init_val, chosen_bytes, target_info);
@@ -840,20 +849,20 @@ void ResultSetStorage::reduceOneSlot(int8_t* this_ptr1,
 
 void ResultSetStorage::reduceOneCountDistinctSlot(int8_t* this_ptr1,
                                                   const int8_t* that_ptr1,
-                                                  const TargetInfo& target_info,
-                                                  const size_t target_logical_idx) const {
+                                                  const size_t target_logical_idx,
+                                                  const ResultSetStorage& that) const {
   auto count_distinct_desc_it = query_mem_desc_.count_distinct_descriptors_.find(target_logical_idx);
   CHECK(count_distinct_desc_it != query_mem_desc_.count_distinct_descriptors_.end());
   auto old_set_ptr = reinterpret_cast<const int64_t*>(this_ptr1);
   auto new_set_ptr = reinterpret_cast<const int64_t*>(that_ptr1);
   if (count_distinct_desc_it->second.impl_type_ == CountDistinctImplType::Bitmap) {
-    auto old_set = reinterpret_cast<int8_t*>(*old_set_ptr);
-    auto new_set = reinterpret_cast<int8_t*>(*new_set_ptr);
+    auto old_set = reinterpret_cast<int8_t*>(mappedPtr(*old_set_ptr));
+    auto new_set = reinterpret_cast<int8_t*>(that.mappedPtr(*new_set_ptr));
     bitmap_set_unify(new_set, old_set, count_distinct_desc_it->second.bitmapSizeBytes());
   } else {
     CHECK(count_distinct_desc_it->second.impl_type_ == CountDistinctImplType::StdSet);
-    auto old_set = reinterpret_cast<std::set<int64_t>*>(*old_set_ptr);
-    auto new_set = reinterpret_cast<std::set<int64_t>*>(*new_set_ptr);
+    auto old_set = reinterpret_cast<std::set<int64_t>*>(mappedPtr(*old_set_ptr));
+    auto new_set = reinterpret_cast<std::set<int64_t>*>(that.mappedPtr(*new_set_ptr));
     old_set->insert(new_set->begin(), new_set->end());
     new_set->insert(old_set->begin(), old_set->end());
   }
