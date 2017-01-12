@@ -16,12 +16,16 @@
 #include <set>
 #include <type_traits>
 #include <glog/logging.h>
+#include "../Catalog/TableDescriptor.h"
 #include "../Shared/sqltypes.h"
 #include "../Shared/sqldefs.h"
-#include "../Catalog/Catalog.h"
 
 namespace Analyzer {
 class Expr;
+}
+
+namespace Catalog_Namespace {
+class Catalog;
 }
 
 template <typename Tp, typename... Args>

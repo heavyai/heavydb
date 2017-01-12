@@ -2,6 +2,8 @@
 
 #include "../Analyzer/Analyzer.h"
 
+#include <algorithm>
+
 namespace {
 
 unsigned narrowing_conversion_score(const SQLTypeInfo& arg_ti, const SQLTypeInfo& arg_target_ti) {
