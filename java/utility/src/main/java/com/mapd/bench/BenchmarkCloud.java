@@ -31,9 +31,12 @@ public class BenchmarkCloud {
   static final String USER = "mapd";
   static final String PASS = "HyperInteractive";
 
+  static final String QUERY_RESULT_MACHINE = "bencher";
+
   private String driver;
   private String url;
   private String iUser;
+  private String queryResultMachine;
   private String iPasswd;
   private String rid;
   private String rTimestamp;
@@ -65,11 +68,12 @@ public class BenchmarkCloud {
     // parm1 file containing sql queries {contains quoted query, expected result count]
     // parm2 table name
     // parm3 run label
-    // parm4 optional gpu count
-    // parm5 optional DB URL
-    // parm6 optional JDBC Driver class name
-    // parm7 optionsl user
-    // parm8 optional passwd
+    // parm4 gpu count
+    // parm5 optional query and result machine
+    // parm6 optional DB URL
+    // parm7 optional JDBC Driver class name
+    // parm8 optional user
+    // parm9 optional passwd
     int iterations = Integer.valueOf(args[0]);
     logger.debug("Iterations per query is " + iterations);
 
@@ -79,11 +83,12 @@ public class BenchmarkCloud {
     gpuCount = args[4];
 
     //int expectedResults = Integer.valueOf(args[2]);
-    url = (args.length > 5) ? args[5] : DB_URL;
-    driver = (args.length > 6) ? args[6] : JDBC_DRIVER;
+    queryResultMachine = (args.length > 5) ? args[5] : QUERY_RESULT_MACHINE;
+    url = (args.length > 6) ? args[6] : DB_URL;
+    driver = (args.length > 7) ? args[7] : JDBC_DRIVER;
 
-    iUser = (args.length > 7) ? args[7] : USER;
-    iPasswd = (args.length > 8) ? args[8] : PASS;
+    iUser = (args.length > 8) ? args[8] : USER;
+    iPasswd = (args.length > 9) ? args[9] : PASS;
 
     //register the driver
     try {
@@ -124,7 +129,7 @@ public class BenchmarkCloud {
       System.exit(3);
     }
 
-    bencherCon = getConnection("jdbc:mapd:bencher:9091:mapd", "mapd", "HyperInteractive");
+    bencherCon = getConnection("jdbc:mapd:"+queryResultMachine+":9091:mapd", "mapd", "HyperInteractive");
 
     getQueries(queryIDMap, bencherCon, tableName);
 
@@ -152,7 +157,7 @@ public class BenchmarkCloud {
 
       return conn;
     } catch (SQLException ex) {
-      logger.error("Exception making connection to" + url + " text is " + ex.getMessage());
+      logger.error("Exception making connection to " + url + " text is " + ex.getMessage());
       System.exit(2);
     }
     return null;
