@@ -40,6 +40,7 @@ MapD has the following dependencies:
 - [libcurl](https://curl.haxx.se/)
 - [crypto++](https://www.cryptopp.com/)
 - [gperftools](https://github.com/gperftools/gperftools)
+- [gdal](http://gdal.org/)
 
 Generating the documentation requires ((`pip` && `virtualenv`) || `sphinx`), and `texlive` (specifically `pdflatex`). `pip` and `virtualenv` will attempt to install `sphinx` if it is not available.
 
@@ -129,7 +130,8 @@ Most build dependencies are available via APT. Thrift is the one exception and m
                     libncurses5-dev \
                     libglewmx-dev \
                     google-perftools \
-                    libgoogle-perftools-dev
+                    libgoogle-perftools-dev \
+                    libgdal-dev
 
     apt-get build-dep thrift-compiler
     wget http://apache.claz.org/thrift/0.9.3/thrift-0.9.3.tar.gz

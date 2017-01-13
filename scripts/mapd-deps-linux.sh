@@ -184,6 +184,23 @@ popd
 # http://download.sourceforge.net/libpng/libpng-1.6.21.tar.xz
 download_make_install https://internal-dependencies.mapd.com/thirdparty/libpng-1.6.21.tar.xz
 
+# geo
+# https://downloads.sourceforge.net/project/expat/expat/2.2.0/expat-2.2.0.tar.bz2
+download_make_install https://internal-dependencies.mapd.com/thirdparty/expat-2.2.0.tar.bz2
+
+# https://github.com/google/libkml/archive/master.zip
+download https://internal-dependencies.mapd.com/thirdparty/libkml-master.zip
+unzip -u libkml-master.zip
+pushd libkml-master
+./autogen.sh || true
+./configure --with-expat-include-dir=$PREFIX/include/ --with-expat-lib-dir=$PREFIX/lib --prefix=$PREFIX --enable-static --disable-java --disable-python --disable-swig
+makej
+make install
+popd
+
+download_make_install http://download.osgeo.org/proj/proj-4.9.3.tar.gz
+download_make_install http://download.osgeo.org/gdal/1.11.5/gdal-1.11.5.tar.xz "" "--without-curl --without-geos --with-libkml=$PREFIX --with-static-proj4=$PREFIX"
+
 # https://storage.googleapis.com/golang/go1.7.3.linux-amd64.tar.gz
 download https://internal-dependencies.mapd.com/thirdparty/go1.7.3.linux-amd64.tar.gz
 extract go1.7.3.linux-amd64.tar.gz

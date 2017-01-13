@@ -53,6 +53,8 @@ brew install golang
 brew install glfw3
 brew install glew
 
+brew install gdal --with-libkml
+
 brew cask install java
 cat >> ~/.bash_profile <<EOF
 # mapd-deps java
