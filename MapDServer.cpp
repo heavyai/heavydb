@@ -2014,8 +2014,10 @@ class MapDHandler : virtual public MapDIf {
           thrift_column_range.bucket = expr_range.getBucket();
           thrift_column_range.has_nulls = expr_range.hasNulls();
           break;
-        case ExpressionRangeType::FloatingPoint:
-          thrift_column_range.type = TExpressionRangeType::FLOATINGPOINT;
+        case ExpressionRangeType::Float:
+        case ExpressionRangeType::Double:
+          thrift_column_range.type = expr_range.getType() == ExpressionRangeType::Float ? TExpressionRangeType::FLOAT
+                                                                                        : TExpressionRangeType::DOUBLE;
           thrift_column_range.fp_min = expr_range.getFpMin();
           thrift_column_range.fp_max = expr_range.getFpMax();
           thrift_column_range.has_nulls = expr_range.hasNulls();
@@ -2090,10 +2092,16 @@ AggregatedColRange column_ranges_from_thrift(const std::vector<TColumnRange>& th
                                                                 thrift_column_range.bucket,
                                                                 thrift_column_range.has_nulls));
         break;
-      case TExpressionRangeType::FLOATINGPOINT:
+      case TExpressionRangeType::FLOAT:
         column_ranges.setColRange(
             phys_input,
-            ExpressionRange::makeFpRange(
+            ExpressionRange::makeFloatRange(
+                thrift_column_range.fp_min, thrift_column_range.fp_max, thrift_column_range.has_nulls));
+        break;
+      case TExpressionRangeType::DOUBLE:
+        column_ranges.setColRange(
+            phys_input,
+            ExpressionRange::makeDoubleRange(
                 thrift_column_range.fp_min, thrift_column_range.fp_max, thrift_column_range.has_nulls));
         break;
       case TExpressionRangeType::INVALID:

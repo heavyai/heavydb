@@ -7,20 +7,41 @@
 
 #include <cfenv>
 
-#define DEF_OPERATOR(fname, op)                                                                                    \
-  ExpressionRange fname(const ExpressionRange& other) const {                                                      \
-    return (type_ == ExpressionRangeType::Integer && other.type_ == ExpressionRangeType::Integer)                  \
-               ? binOp<int64_t>(other,                                                                             \
-                                [](const int64_t x, const int64_t y) { return int64_t(checked_int64_t(x) op y); }) \
-               : binOp<double>(other, [](const double x, const double y) {                                         \
-                   std::feclearexcept(FE_OVERFLOW);                                                                \
-                   std::feclearexcept(FE_UNDERFLOW);                                                               \
-                   auto result = x op y;                                                                           \
-                   if (std::fetestexcept(FE_OVERFLOW) || std::fetestexcept(FE_UNDERFLOW)) {                        \
-                     throw std::runtime_error("overflow / underflow");                                             \
-                   }                                                                                               \
-                   return result;                                                                                  \
-                 });                                                                                               \
+#define DEF_OPERATOR(fname, op)                                                                                   \
+  ExpressionRange fname(const ExpressionRange& other) const {                                                     \
+    if (type_ == ExpressionRangeType::Invalid || other.type_ == ExpressionRangeType::Invalid) {                   \
+      return ExpressionRange::makeInvalidRange();                                                                 \
+    }                                                                                                             \
+    CHECK(type_ == other.type_);                                                                                  \
+    switch (type_) {                                                                                              \
+      case ExpressionRangeType::Integer:                                                                          \
+        return binOp<int64_t>(other,                                                                              \
+                              [](const int64_t x, const int64_t y) { return int64_t(checked_int64_t(x) op y); }); \
+      case ExpressionRangeType::Float:                                                                            \
+        return binOp<float>(other, [](const float x, const float y) {                                             \
+          std::feclearexcept(FE_OVERFLOW);                                                                        \
+          std::feclearexcept(FE_UNDERFLOW);                                                                       \
+          auto result = x op y;                                                                                   \
+          if (std::fetestexcept(FE_OVERFLOW) || std::fetestexcept(FE_UNDERFLOW)) {                                \
+            throw std::runtime_error("overflow / underflow");                                                     \
+          }                                                                                                       \
+          return result;                                                                                          \
+        });                                                                                                       \
+      case ExpressionRangeType::Double:                                                                           \
+        return binOp<double>(other, [](const double x, const double y) {                                          \
+          std::feclearexcept(FE_OVERFLOW);                                                                        \
+          std::feclearexcept(FE_UNDERFLOW);                                                                       \
+          auto result = x op y;                                                                                   \
+          if (std::fetestexcept(FE_OVERFLOW) || std::fetestexcept(FE_UNDERFLOW)) {                                \
+            throw std::runtime_error("overflow / underflow");                                                     \
+          }                                                                                                       \
+          return result;                                                                                          \
+        });                                                                                                       \
+      default:                                                                                                    \
+        CHECK(false);                                                                                             \
+    }                                                                                                             \
+    CHECK(false);                                                                                                 \
+    return ExpressionRange::makeInvalidRange();                                                                   \
   }
 
 DEF_OPERATOR(ExpressionRange::operator+, +)
@@ -55,8 +76,9 @@ ExpressionRange ExpressionRange::operator||(const ExpressionRange& other) const 
       result.int_max_ = std::max(int_max_, other.int_max_);
       break;
     }
-    case ExpressionRangeType::FloatingPoint: {
-      result.type_ = ExpressionRangeType::FloatingPoint;
+    case ExpressionRangeType::Float:
+    case ExpressionRangeType::Double: {
+      result.type_ = type_;
       result.has_nulls_ = has_nulls_ || other.has_nulls_;
       result.fp_min_ = std::min(fp_min_, other.fp_min_);
       result.fp_max_ = std::max(fp_max_, other.fp_max_);
@@ -78,7 +100,8 @@ bool ExpressionRange::operator==(const ExpressionRange& other) const {
     case ExpressionRangeType::Integer: {
       return has_nulls_ == other.has_nulls_ && int_min_ == other.int_min_ && int_max_ == other.int_max_;
     }
-    case ExpressionRangeType::FloatingPoint: {
+    case ExpressionRangeType::Float:
+    case ExpressionRangeType::Double: {
       return has_nulls_ == other.has_nulls_ && fp_min_ == other.fp_min_ && fp_max_ == other.fp_max_;
     }
     default:
@@ -233,10 +256,11 @@ ExpressionRange getExpressionRange(const Analyzer::Constant* constant_expr) {
       const int64_t v = datum.timeval;
       return ExpressionRange::makeIntRange(v, v, 0, false);
     }
-    case kFLOAT:
+    case kFLOAT: {
+      return ExpressionRange::makeFloatRange(datum.floatval, datum.floatval, false);
+    }
     case kDOUBLE: {
-      const double v = constant_type == kDOUBLE ? datum.doubleval : datum.floatval;
-      return ExpressionRange::makeFpRange(v, v, false);
+      return ExpressionRange::makeDoubleRange(datum.doubleval, datum.doubleval, false);
     }
     default:
       break;
@@ -376,9 +400,10 @@ ExpressionRange getLeafColumnRange(const Analyzer::ColumnVar* col_expr,
         }
       }
       if (col_ti.is_fp()) {
-        return ExpressionRange::makeFpRange(extract_min_stat_double(min_it->second.chunkStats, col_ti),
-                                            extract_max_stat_double(max_it->second.chunkStats, col_ti),
-                                            has_nulls);
+        const auto min_val = extract_min_stat_double(min_it->second.chunkStats, col_ti);
+        const auto max_val = extract_max_stat_double(max_it->second.chunkStats, col_ti);
+        return col_ti.get_type() == kFLOAT ? ExpressionRange::makeFloatRange(min_val, max_val, has_nulls)
+                                           : ExpressionRange::makeDoubleRange(min_val, max_val, has_nulls);
       }
       const auto min_val = extract_min_stat(min_it->second.chunkStats, col_ti);
       const auto max_val = extract_max_stat(max_it->second.chunkStats, col_ti);
@@ -476,9 +501,12 @@ ExpressionRange getExpressionRange(const Analyzer::UOper* u_expr,
     return getExpressionRange(dt_expr.get(), query_infos, executor);
   }
   switch (arg_range.getType()) {
-    case ExpressionRangeType::FloatingPoint: {
+    case ExpressionRangeType::Float:
+    case ExpressionRangeType::Double: {
       if (ti.is_fp() && ti.get_logical_size() >= arg_ti.get_logical_size()) {
-        return arg_range;
+        return ti.get_type() == kDOUBLE
+                   ? ExpressionRange::makeDoubleRange(arg_range.getFpMin(), arg_range.getFpMax(), arg_range.hasNulls())
+                   : arg_range;
       }
       if (ti.is_integer()) {
         return ExpressionRange::makeIntRange(arg_range.getFpMin(), arg_range.getFpMax(), 0, arg_range.hasNulls());
@@ -501,8 +529,11 @@ ExpressionRange getExpressionRange(const Analyzer::UOper* u_expr,
       if (ti.is_integer() || ti.is_time()) {
         return arg_range;
       }
+      if (ti.get_type() == kFLOAT) {
+        return ExpressionRange::makeFloatRange(arg_range.getIntMin(), arg_range.getIntMax(), arg_range.hasNulls());
+      }
       if (ti.get_type() == kDOUBLE) {
-        return ExpressionRange::makeFpRange(arg_range.getIntMin(), arg_range.getIntMax(), arg_range.hasNulls());
+        return ExpressionRange::makeDoubleRange(arg_range.getIntMin(), arg_range.getIntMax(), arg_range.hasNulls());
       }
       break;
     }

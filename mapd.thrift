@@ -240,7 +240,8 @@ struct TTableDetails {
 enum TExpressionRangeType {
   INVALID,
   INTEGER,
-  FLOATINGPOINT
+  FLOAT,
+  DOUBLE
 }
 
 struct TColumnRange {

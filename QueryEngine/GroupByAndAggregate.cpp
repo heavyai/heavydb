@@ -1260,7 +1260,8 @@ GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getExprRangeInfo(const An
               expr_range.getIntMax(),
               expr_range.getBucket(),
               expr_range.hasNulls()};
-    case ExpressionRangeType::FloatingPoint:
+    case ExpressionRangeType::Float:
+    case ExpressionRangeType::Double:
       if (g_enable_watchdog && !g_enable_dynamic_watchdog) {
         throw WatchdogException("Group by float / double would be slow");
       }
@@ -1798,7 +1799,8 @@ GroupByAndAggregate::KeylessInfo GroupByAndAggregate::getKeylessInfo(
             init_val = 0;
             auto expr_range_info = getExpressionRange(arg_expr, query_infos_, executor_);
             switch (expr_range_info.getType()) {
-              case ExpressionRangeType::FloatingPoint:
+              case ExpressionRangeType::Float:
+              case ExpressionRangeType::Double:
                 if (expr_range_info.getFpMax() < 0 || expr_range_info.getFpMin() > 0) {
                   found = true;
                 }
@@ -1824,7 +1826,8 @@ GroupByAndAggregate::KeylessInfo GroupByAndAggregate::getKeylessInfo(
           auto init_max =
               get_agg_initial_val(agg_info.agg_kind, chosen_type, is_group_by, query_mem_desc_.getCompactByteWidth());
           switch (expr_range_info.getType()) {
-            case ExpressionRangeType::FloatingPoint: {
+            case ExpressionRangeType::Float:
+            case ExpressionRangeType::Double: {
               init_val = init_max;
               auto double_max = *reinterpret_cast<const double*>(&init_max);
               if (expr_range_info.getFpMax() < double_max) {
@@ -1853,7 +1856,8 @@ GroupByAndAggregate::KeylessInfo GroupByAndAggregate::getKeylessInfo(
           auto init_min =
               get_agg_initial_val(agg_info.agg_kind, chosen_type, is_group_by, query_mem_desc_.getCompactByteWidth());
           switch (expr_range_info.getType()) {
-            case ExpressionRangeType::FloatingPoint: {
+            case ExpressionRangeType::Float:
+            case ExpressionRangeType::Double: {
               init_val = init_min;
               auto double_min = *reinterpret_cast<const double*>(&init_min);
               if (expr_range_info.getFpMin() > double_min) {
