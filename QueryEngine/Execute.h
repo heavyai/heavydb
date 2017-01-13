@@ -51,7 +51,8 @@ struct RenderInfo {
   std::unique_ptr<RenderAllocatorMap> render_allocator_map_ptr;
   const std::string render_vega;
 
-  std::shared_ptr<QueryRenderer::QueryDataLayout> result_query_data_layout;
+  std::shared_ptr<QueryRenderer::QueryDataLayout> vbo_result_query_data_layout;
+  std::shared_ptr<QueryRenderer::QueryDataLayout> ubo_result_query_data_layout;
 
   RenderInfo(const int session_id,
              const int render_widget_id,
@@ -295,7 +296,8 @@ class Executor {
                             const rapidjson::Value& data_desc,
                             const std::string* render_config_json = nullptr,
                             const bool is_projection_query = true,
-                            const std::string& poly_table_name = "");
+                            const std::string& poly_table_name = "",
+                            RenderInfo* render_query_data = nullptr);
 
 
   StringDictionary* getStringDictionary(const int dictId,
