@@ -30,11 +30,9 @@ import com.mapd.metadata.MetaConnect;
 import com.mapd.thrift.server.TColumnType;
 import com.mapd.thrift.server.TDatumType;
 import com.mapd.thrift.server.TTypeInfo;
-import java.util.ArrayList;
 
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import org.slf4j.Logger;
