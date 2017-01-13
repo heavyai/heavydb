@@ -4047,7 +4047,7 @@ ResultPtr Executor::executeWorkUnit(int32_t* error_code,
       crt_min_byte_width <<= 1;
       continue;
     }
-    if (*error_code == ERR_SPECULATIVE_TOP_OOM) {
+    if (*error_code != 0) {
       return boost::make_unique<ResultRows>(QueryMemoryDescriptor{},
                                             std::vector<Analyzer::Expr*>{},
                                             nullptr,
