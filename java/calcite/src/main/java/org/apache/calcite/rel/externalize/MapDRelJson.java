@@ -34,7 +34,6 @@ import org.apache.calcite.util.JsonBuilder;
 import org.apache.calcite.util.Util;
 
 import com.google.common.collect.ImmutableList;
-import com.mapd.calcite.parser.MapDSerializer;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
