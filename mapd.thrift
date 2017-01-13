@@ -174,6 +174,7 @@ struct TServerStatus {
   1: bool read_only
   2: string version
   3: bool rendering_enabled
+  4: i64 start_time
 }
 
 typedef map<string, TRenderProperty> TRenderPropertyMap
