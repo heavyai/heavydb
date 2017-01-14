@@ -189,7 +189,7 @@ void ResultSetStorage::reduceOneEntryNoCollisionsColWise(const size_t entry_idx,
       this_crt_col_ptr = advance_to_next_columnar_target_buff(this_crt_col_ptr, query_mem_desc_, agg_col_idx + 1);
       that_crt_col_ptr = advance_to_next_columnar_target_buff(that_crt_col_ptr, query_mem_desc_, agg_col_idx + 1);
     }
-    agg_col_idx = advance_slot(agg_col_idx, agg_info);
+    agg_col_idx = advance_slot(agg_col_idx, agg_info, false);
   }
 }
 
@@ -238,9 +238,9 @@ void ResultSetStorage::reduceOneEntryNoCollisionsRowWise(const size_t entry_idx,
                   target_slot_idx,
                   target_slot_idx,
                   that);
-    this_targets_ptr = advance_target_ptr(this_targets_ptr, target_info, target_slot_idx, query_mem_desc_);
-    that_targets_ptr = advance_target_ptr(that_targets_ptr, target_info, target_slot_idx, query_mem_desc_);
-    target_slot_idx = advance_slot(target_slot_idx, target_info);
+    this_targets_ptr = advance_target_ptr(this_targets_ptr, target_info, target_slot_idx, query_mem_desc_, false);
+    that_targets_ptr = advance_target_ptr(that_targets_ptr, target_info, target_slot_idx, query_mem_desc_, false);
+    target_slot_idx = advance_slot(target_slot_idx, target_info, false);
   }
 }
 
@@ -428,14 +428,14 @@ void ResultSetStorage::reduceOneEntrySlotsBaseline(int64_t* this_entry_slots,
                           init_agg_val_idx,
                           that);
     if (query_mem_desc_.target_groupby_indices.empty()) {
-      init_agg_val_idx = advance_slot(init_agg_val_idx, target_info);
+      init_agg_val_idx = advance_slot(init_agg_val_idx, target_info, false);
     } else {
       CHECK_LT(target_logical_idx, query_mem_desc_.target_groupby_indices.size());
       if (query_mem_desc_.target_groupby_indices[target_logical_idx] < 0) {
-        init_agg_val_idx = advance_slot(init_agg_val_idx, target_info);
+        init_agg_val_idx = advance_slot(init_agg_val_idx, target_info, false);
       }
     }
-    j = advance_slot(j, target_info);
+    j = advance_slot(j, target_info, false);
   }
 }
 

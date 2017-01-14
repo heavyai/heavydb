@@ -60,7 +60,8 @@ size_t get_byteoff_of_slot(const size_t slot_idx, const QueryMemoryDescriptor& q
 const int8_t* advance_col_buff_to_slot(const int8_t* buff,
                                        const QueryMemoryDescriptor& query_mem_desc,
                                        const std::vector<TargetInfo>& targets,
-                                       const size_t slot_idx) {
+                                       const size_t slot_idx,
+                                       const bool none_encoded_strings_valid) {
   auto crt_col_ptr = get_cols_ptr(buff, query_mem_desc);
   const auto buffer_col_count = get_buffer_col_slot_count(query_mem_desc);
   size_t agg_col_idx{0};
@@ -77,7 +78,7 @@ const int8_t* advance_col_buff_to_slot(const int8_t* buff,
       }
       crt_col_ptr = advance_to_next_columnar_target_buff(crt_col_ptr, query_mem_desc, agg_col_idx + 1);
     }
-    agg_col_idx = advance_slot(agg_col_idx, agg_info);
+    agg_col_idx = advance_slot(agg_col_idx, agg_info, none_encoded_strings_valid);
   }
   CHECK(false);
   return nullptr;
@@ -150,9 +151,10 @@ std::vector<TargetValue> ResultSet::getNextRowImpl(const bool translate_strings,
                                                     agg_col_idx,
                                                     translate_strings,
                                                     decimal_to_double));
-      rowwise_target_ptr = advance_target_ptr(rowwise_target_ptr, agg_info, agg_col_idx, query_mem_desc_);
+      rowwise_target_ptr =
+          advance_target_ptr(rowwise_target_ptr, agg_info, agg_col_idx, query_mem_desc_, none_encoded_strings_valid_);
     }
-    agg_col_idx = advance_slot(agg_col_idx, agg_info);
+    agg_col_idx = advance_slot(agg_col_idx, agg_info, none_encoded_strings_valid_);
   }
   ++crt_row_buff_idx_;
   ++fetched_so_far_;
@@ -235,9 +237,10 @@ InternalTargetValue ResultSet::getColumnInternal(const int8_t* buff,
           return InternalTargetValue(i1);
         }
       }
-      rowwise_target_ptr = advance_target_ptr(rowwise_target_ptr, agg_info, agg_col_idx, query_mem_desc_);
+      rowwise_target_ptr =
+          advance_target_ptr(rowwise_target_ptr, agg_info, agg_col_idx, query_mem_desc_, none_encoded_strings_valid_);
     }
-    agg_col_idx = advance_slot(agg_col_idx, agg_info);
+    agg_col_idx = advance_slot(agg_col_idx, agg_info, none_encoded_strings_valid_);
   }
   CHECK(false);
   return InternalTargetValue(int64_t(0));
@@ -498,6 +501,7 @@ TargetValue ResultSet::getTargetValueFromBufferRowwise(const int8_t* rowwise_tar
                                                        const bool translate_strings,
                                                        const bool decimal_to_double) const {
   auto ptr1 = rowwise_target_ptr;
+  CHECK_LT(slot_idx, query_mem_desc_.agg_col_widths.size());
   auto compact_sz1 = query_mem_desc_.agg_col_widths[slot_idx].compact;
   if (target_info.agg_kind == kAVG || is_real_str_or_array(target_info)) {
     const auto ptr2 = rowwise_target_ptr + query_mem_desc_.agg_col_widths[slot_idx].compact;
@@ -534,7 +538,7 @@ bool ResultSetStorage::isEmptyEntry(const size_t entry_idx, const int8_t* buff) 
     CHECK_LT(static_cast<size_t>(query_mem_desc_.idx_target_as_key), target_init_vals_.size());
     if (query_mem_desc_.output_columnar) {
       const auto col_buff =
-          advance_col_buff_to_slot(buff, query_mem_desc_, targets_, query_mem_desc_.idx_target_as_key);
+          advance_col_buff_to_slot(buff, query_mem_desc_, targets_, query_mem_desc_.idx_target_as_key, false);
       const auto entry_buff =
           col_buff + entry_idx * query_mem_desc_.agg_col_widths[query_mem_desc_.idx_target_as_key].compact;
       return read_int_from_buff(entry_buff,

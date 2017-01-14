@@ -150,7 +150,7 @@ int8_t* fill_one_entry_no_collisions(int8_t* buff,
       }
       slot_ptr += count_slot_bytes;
     }
-    target_idx = advance_slot(target_idx, target_info);
+    target_idx = advance_slot(target_idx, target_info, false);
   }
   return slot_ptr;
 }
@@ -307,7 +307,7 @@ void fill_storage_buffer_perfect_hash_colwise(int8_t* buff,
     if (target_info.is_agg && target_info.agg_kind == kAVG) {
       col_ptr = advance_to_next_columnar_target_buff(col_ptr, query_mem_desc, slot_idx + 1);
     }
-    slot_idx = advance_slot(slot_idx, target_info);
+    slot_idx = advance_slot(slot_idx, target_info, false);
     generator.reset();
   }
 }
@@ -865,7 +865,7 @@ void ResultSetEmulator::rse_fill_storage_buffer_perfect_hash_colwise(int8_t* buf
     if (target_info.is_agg && target_info.agg_kind == kAVG) {
       col_ptr = advance_to_next_columnar_target_buff(col_ptr, rs_query_mem_desc, slot_idx + 1);
     }
-    slot_idx = advance_slot(slot_idx, target_info);
+    slot_idx = advance_slot(slot_idx, target_info, false);
     generator.reset();
   }
 }

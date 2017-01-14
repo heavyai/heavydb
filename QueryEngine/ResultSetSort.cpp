@@ -48,9 +48,9 @@ void ResultSet::doBaselineSort(const ExecutorDeviceType device_type,
   size_t physical_slot_idx = 0;
   for (size_t i = 0; i < static_cast<size_t>(oe.tle_no - 1); ++i) {
     if (query_mem_desc_.agg_col_widths[logical_slot_idx].compact) {
-      physical_slot_idx = advance_slot(physical_slot_idx, targets_[i]);
+      physical_slot_idx = advance_slot(physical_slot_idx, targets_[i], none_encoded_strings_valid_);
     }
-    logical_slot_idx = advance_slot(logical_slot_idx, targets_[i]);
+    logical_slot_idx = advance_slot(logical_slot_idx, targets_[i], none_encoded_strings_valid_);
   }
   const auto slot_count = get_buffer_col_slot_count(query_mem_desc_);
   const auto key_count = get_groupby_col_count(query_mem_desc_);

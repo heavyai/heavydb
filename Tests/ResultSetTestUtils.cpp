@@ -36,14 +36,14 @@ void fill_one_entry_baseline(int64_t* value_slots,
     if (target_info.agg_kind == kAVG) {
       value_slots[target_slot + 1] = 1;
     }
-    target_slot = advance_slot(target_slot, target_info);
+    target_slot = advance_slot(target_slot, target_info, false);
   }
 }
 
 size_t get_slot_count(const std::vector<TargetInfo>& target_infos) {
   size_t count = 0;
   for (const auto& target_info : target_infos) {
-    count = advance_slot(count, target_info);
+    count = advance_slot(count, target_info, false);
   }
   return count;
 }
