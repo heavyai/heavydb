@@ -502,6 +502,10 @@ struct IntFracRepr {
 };
 
 IntFracRepr decimal_to_int_frac(const int64_t dec, const SQLTypeInfo& ti) {
+  if (ti.get_scale() > 18) {
+    throw std::runtime_error("Decimal constant " + std::to_string(dec) + " scale too big: " +
+                             std::to_string(ti.get_scale()));
+  }
   int64_t integral_part = dec;
   int64_t scale = 1;
   for (int i = 0; i < ti.get_scale(); i++) {
