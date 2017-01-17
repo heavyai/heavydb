@@ -1230,6 +1230,9 @@ ExecutionResult RelAlgExecutor::handleRetry(const int32_t error_code_in,
                                    eo.dynamic_watchdog_factor};
   ExecutionResult result{ResultRows({}, {}, nullptr, nullptr, {}, co.device_type_), {}};
   if (error_code == Executor::ERR_OUT_OF_GPU_MEM) {
+    if (g_enable_watchdog) {
+      throw std::runtime_error("Query couldn't keep the entire working set of columns in GPU memory");
+    }
     result = {executor_->executeWorkUnit(&error_code,
                                          max_groups_buffer_entry_guess,
                                          is_agg,
@@ -1245,7 +1248,14 @@ ExecutionResult RelAlgExecutor::handleRetry(const int32_t error_code_in,
     result.setQueueTime(queue_time_ms);
   }
   if (co.device_type_ == ExecutorDeviceType::GPU) {
-    LOG(INFO) << "Query ran out of GPU memory, punt to CPU";
+    std::string out_of_memory{"Query ran out of GPU memory, punt to CPU"};
+    LOG(INFO) << out_of_memory;
+    if (g_enable_watchdog) {
+      throw std::runtime_error(out_of_memory);
+    }
+  }
+  if (g_enable_watchdog) {
+    throw std::runtime_error("Query ran out of output slots in the result");
   }
   CompilationOptions co_cpu{ExecutorDeviceType::CPU, co.hoist_literals_, co.opt_level_};
   if (error_code) {
