@@ -21,10 +21,9 @@ CudaMgr::CudaMgr(const int numGpus, const int startGpu) : startGpu_(startGpu) {
   } else {
     CHECK_EQ(startGpu_, 0);  // if we are using all gpus we cannot start on a gpu other than 0
   }
-
-  LOG(INFO) << "Using " << deviceCount_ << " Gpus." << std::endl;
   fillDeviceProperties();
   createDeviceContexts();
+  printDeviceProperties();
 #else
   CHECK(false);
 #endif  // HAVE_CUDA
@@ -107,18 +106,26 @@ void CudaMgr::createDeviceContexts() {
 
 void CudaMgr::printDeviceProperties() const {
 #ifdef HAVE_CUDA
-  cout << "Num devices: " << deviceCount_ << endl << endl;
+  LOG(INFO) << "Using " << deviceCount_ << " Gpus.";
   for (int d = 0; d < deviceCount_; ++d) {
-    cout << "Device: " << deviceProperties[d].device << endl;
-    cout << "Clock (khz): " << deviceProperties[d].clockKhz << endl;
-    cout << "Compute Major: " << deviceProperties[d].computeMajor << endl;
-    cout << "Compute Minor: " << deviceProperties[d].computeMinor << endl;
-    cout << "PCI bus id: " << deviceProperties[d].pciBusId << endl;
-    cout << "PCI deviceId id: " << deviceProperties[d].pciDeviceId << endl;
-    cout << "Total Global memory: " << deviceProperties[d].globalMem / 1073741824.0 << " GB" << endl;
-    cout << "Memory clock (khz): " << deviceProperties[d].memoryClockKhz << endl;
-    cout << "Memory bandwidth: " << deviceProperties[d].memoryBandwidthGBs << " GB/sec" << endl;
-    cout << endl;
+    VLOG(1) << "Device: " << deviceProperties[d].device;
+    VLOG(1) << "Clock (khz): " << deviceProperties[d].clockKhz;
+    VLOG(1) << "Compute Major: " << deviceProperties[d].computeMajor;
+    VLOG(1) << "Compute Minor: " << deviceProperties[d].computeMinor;
+    VLOG(1) << "PCI bus id: " << deviceProperties[d].pciBusId;
+    VLOG(1) << "PCI deviceId id: " << deviceProperties[d].pciDeviceId;
+    VLOG(1) << "Total Global memory: " << deviceProperties[d].globalMem / 1073741824.0 << " GB";
+    VLOG(1) << "Memory clock (khz): " << deviceProperties[d].memoryClockKhz;
+    VLOG(1) << "Memory bandwidth: " << deviceProperties[d].memoryBandwidthGBs << " GB/sec";
+
+    VLOG(1) << "Constant Memory: " << deviceProperties[d].constantMem;
+    VLOG(1) << "Shared memory per block: " << deviceProperties[d].sharedMemPerBlock;
+    VLOG(1) << "Number of MPs: " << deviceProperties[d].numMPs;
+    VLOG(1) << "Warp Size: " << deviceProperties[d].warpSize;
+    VLOG(1) << "Max threads per block: " << deviceProperties[d].maxThreadsPerBlock;
+    VLOG(1) << "Max registers per block: " << deviceProperties[d].maxRegistersPerBlock;
+    VLOG(1) << "Max register per MP: " << deviceProperties[d].maxRegistersPerMP;
+    VLOG(1) << "Memory bus width in bits: " << deviceProperties[d].memoryBusWidth;
   }
 #endif
 }
