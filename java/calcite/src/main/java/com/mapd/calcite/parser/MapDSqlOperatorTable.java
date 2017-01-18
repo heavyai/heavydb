@@ -15,6 +15,7 @@ import java.util.List;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.sql.SqlFunction;
+import org.apache.calcite.sql.SqlAggFunction;
 import org.apache.calcite.sql.SqlFunctionCategory;
 import org.apache.calcite.sql.SqlIdentifier;
 import org.apache.calcite.sql.SqlKind;
@@ -113,6 +114,7 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
         opTab.addOperator(new Unlikely());
         opTab.addOperator(new Sign());
         opTab.addOperator(new Truncate());
+        opTab.addOperator(new ApproxCountDistinct());
         if (extSigs == null) {
             return;
         }
@@ -565,6 +567,20 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
             truncate_sig.add(SqlTypeFamily.NUMERIC);
             truncate_sig.add(SqlTypeFamily.INTEGER);
             return truncate_sig;
+        }
+    }
+
+    static class ApproxCountDistinct extends SqlAggFunction {
+
+        ApproxCountDistinct() {
+            super("APPROX_COUNT_DISTINCT", null, SqlKind.OTHER_FUNCTION, null, null, OperandTypes.ANY, SqlFunctionCategory.SYSTEM);
+        }
+
+        @Override
+        public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+            final RelDataTypeFactory typeFactory
+                    = opBinding.getTypeFactory();
+            return typeFactory.createSqlType(SqlTypeName.BIGINT);
         }
     }
 
