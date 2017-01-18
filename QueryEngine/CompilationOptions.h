@@ -9,6 +9,7 @@ struct CompilationOptions {
   ExecutorDeviceType device_type_;
   const bool hoist_literals_;
   const ExecutorOptLevel opt_level_;
+  const bool with_dynamic_watchdog_;
 };
 
 struct ExecutionOptions {
@@ -19,8 +20,8 @@ struct ExecutionOptions {
   const bool with_watchdog;  // Per work unit, not global.
   const bool jit_debug;
   const bool just_validate;
-  const bool with_dynamic_watchdog;   // Per work unit, not global.
-  const int dynamic_watchdog_factor;  // Dynamic watchdog fudge factor.
+  const bool with_dynamic_watchdog;     // Per work unit, not global.
+  const float dynamic_watchdog_factor;  // Dynamic watchdog fudge factor.
 };
 
 #endif  // QUERYENGINE_COMPILATIONOPTIONS_H

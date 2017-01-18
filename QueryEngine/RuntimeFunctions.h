@@ -68,12 +68,14 @@ extern "C" int64_t* get_group_value(int64_t* groups_buffer,
                                     const int64_t* key,
                                     const uint32_t key_qw_count,
                                     const uint32_t row_size_quad,
-                                    const int64_t* init_val = nullptr);
+                                    const int64_t* init_val = nullptr,
+                                    const int8_t run_with_watchdog = 0);
 
 extern "C" int64_t* get_group_value_columnar(int64_t* groups_buffer,
                                              const uint32_t groups_buffer_entry_count,
                                              const int64_t* key,
-                                             const uint32_t key_qw_count);
+                                             const uint32_t key_qw_count,
+                                             const int8_t run_with_watchdog = 0);
 
 extern "C" int64_t* get_group_value_fast(int64_t* groups_buffer,
                                          const int64_t key,
@@ -99,7 +101,8 @@ extern "C" int64_t* get_group_value_one_key(int64_t* groups_buffer,
                                             const int64_t key,
                                             const int64_t min_key,
                                             const uint32_t row_size_quad,
-                                            const int64_t* init_vals);
+                                            const int64_t* init_vals,
+                                            const int8_t run_with_watchdog = 0);
 
 extern "C" int32_t* get_hash_slot(int32_t* buff, const int64_t key, const int64_t min_key);
 

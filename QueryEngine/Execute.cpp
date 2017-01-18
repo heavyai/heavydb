@@ -61,7 +61,7 @@
 
 bool g_enable_watchdog{false};
 bool g_enable_dynamic_watchdog{false};
-int g_dynamic_watchdog_factor{4};
+float g_dynamic_watchdog_factor{1.0};
 
 std::mutex Executor::ExecutionDispatch::reduce_mutex_;
 
@@ -355,7 +355,7 @@ RowSetPtr Executor::executeSelectPlan(const Planner::Plan* plan,
                                     is_agg,
                                     query_infos,
                                     ra_exe_unit,
-                                    {device_type, hoist_literals, opt_level},
+                                    {device_type, hoist_literals, opt_level, g_enable_dynamic_watchdog},
                                     {false,
                                      allow_multifrag,
                                      just_explain,
@@ -383,7 +383,7 @@ RowSetPtr Executor::executeSelectPlan(const Planner::Plan* plan,
                                   is_agg,
                                   query_infos,
                                   ra_exe_unit,
-                                  {device_type, hoist_literals, opt_level},
+                                  {device_type, hoist_literals, opt_level, g_enable_dynamic_watchdog},
                                   {false,
                                    allow_multifrag,
                                    just_explain,
@@ -1373,7 +1373,7 @@ std::vector<llvm::Value*> Executor::codegenOuterJoinNullPlaceholder(const std::v
   const auto& null_ti = col_var->get_type_info();
   const auto null_constant = makeExpr<Analyzer::Constant>(null_ti, true, Datum{0});
   const auto null_target_lvs = codegen(
-      null_constant.get(), false, CompilationOptions{ExecutorDeviceType::CPU, false, ExecutorOptLevel::Default});
+      null_constant.get(), false, CompilationOptions{ExecutorDeviceType::CPU, false, ExecutorOptLevel::Default, false});
   cgen_state_->ir_builder_.CreateBr(phi_bb);
   CHECK_EQ(orig_lvs.size(), null_target_lvs.size());
   cgen_state_->ir_builder_.SetInsertPoint(phi_bb);
@@ -3631,7 +3631,7 @@ RowSetPtr Executor::executeResultPlan(const Planner::Result* result_plan,
                                 true,
                                 query_infos,
                                 ra_exe_unit,
-                                {device_type, hoist_literals, opt_level},
+                                {device_type, hoist_literals, opt_level, g_enable_dynamic_watchdog},
                                 {false,
                                  allow_multifrag,
                                  just_explain,
@@ -3747,7 +3747,7 @@ RowSetPtr Executor::executeResultPlan(const Planner::Result* result_plan,
       compileWorkUnit(false,
                       {},
                       res_ra_unit,
-                      {ExecutorDeviceType::CPU, hoist_literals, opt_level},
+                      {ExecutorDeviceType::CPU, hoist_literals, opt_level, g_enable_dynamic_watchdog},
                       {false,
                        allow_multifrag,
                        just_explain,
@@ -3975,7 +3975,7 @@ ResultPtr Executor::executeWorkUnit(int32_t* error_code,
                                          ra_exe_unit,
                                          query_infos,
                                          cat,
-                                         {device_type, co.hoist_literals_, co.opt_level_},
+                                         {device_type, co.hoist_literals_, co.opt_level_, co.with_dynamic_watchdog_},
                                          context_count,
                                          row_set_mem_owner,
                                          error_code,
@@ -4642,7 +4642,8 @@ int8_t Executor::ExecutionDispatch::compile(const Executor::JoinInfo& join_info,
                                             const bool has_cardinality_estimation) {
   int8_t actual_min_byte_width{MAX_BYTE_WIDTH_SUPPORTED};
   auto compile_on_cpu = [&]() {
-    const CompilationOptions co_cpu{ExecutorDeviceType::CPU, co_.hoist_literals_, co_.opt_level_};
+    const CompilationOptions co_cpu{
+        ExecutorDeviceType::CPU, co_.hoist_literals_, co_.opt_level_, co_.with_dynamic_watchdog_};
     try {
       compilation_result_cpu_ =
           executor_->compileWorkUnit(false,
@@ -4687,7 +4688,8 @@ int8_t Executor::ExecutionDispatch::compile(const Executor::JoinInfo& join_info,
 
   if (co_.device_type_ == ExecutorDeviceType::GPU ||
       (co_.device_type_ == ExecutorDeviceType::Hybrid && cat_.get_dataMgr().gpusPresent())) {
-    const CompilationOptions co_gpu{ExecutorDeviceType::GPU, co_.hoist_literals_, co_.opt_level_};
+    const CompilationOptions co_gpu{
+        ExecutorDeviceType::GPU, co_.hoist_literals_, co_.opt_level_, co_.with_dynamic_watchdog_};
     try {
       compilation_result_gpu_ =
           executor_->compileWorkUnit(render_allocator_map_,
@@ -5982,17 +5984,23 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
   if (eo.with_dynamic_watchdog) {
     int64_t budget;
     if (co.device_type_ == ExecutorDeviceType::GPU) {
-      // Use remaining time budget or 25 seconds, whichever is lower
-      int ms_budget = 25000;
-      int fudge_factor = eo.dynamic_watchdog_factor;
+      // Use remaining time budget or 10 seconds, whichever is lower
+      int ms_budget = 10000;
       // Translate milliseconds to device cycles
-      budget = deviceCycles(ms_budget * fudge_factor);
+      budget = deviceCycles(ms_budget);
+      // Apply fudge factor
+      budget = static_cast<int64_t>(budget * eo.dynamic_watchdog_factor);
       run_with_dynamic_watchdog = true;
+      LOG(INFO) << "Dynamic Watchdog budget: " << std::to_string(ms_budget * eo.dynamic_watchdog_factor) << "ms, "
+                << std::to_string(budget) << " cycles\n";
     } else if (co.device_type_ == ExecutorDeviceType::CPU) {
       // Use remaining time budget or 2 minutes, whichever is lower
       unsigned ms_budget = 120000;
       budget = ms_budget;
+      // Apply fudge factor
+      budget = static_cast<int64_t>(budget * eo.dynamic_watchdog_factor);
       run_with_dynamic_watchdog = true;
+      LOG(INFO) << "Dynamic Watchdog budget: " << std::to_string(budget) << "ms\n";
     }
     if (run_with_dynamic_watchdog) {
       initDynamicWatchdog(query_func, budget);
@@ -6448,10 +6456,10 @@ declare i64* @init_shared_mem_nop(i64*, i32);
 declare void @write_back(i64*, i64*, i32);
 declare void @write_back_nop(i64*, i64*, i32);
 declare void @init_group_by_buffer_gpu(i64*, i64*, i32, i32, i32, i1, i8);
-declare i64* @get_group_value(i64*, i32, i64*, i32, i32, i64*);
+declare i64* @get_group_value(i64*, i32, i64*, i32, i32, i64*, i8);
 declare i64* @get_group_value_fast(i64*, i64, i64, i64, i32);
 declare i32 @get_columnar_group_bin_offset(i64*, i64, i64, i64);
-declare i64* @get_group_value_one_key(i64*, i32, i64*, i32, i64, i64, i32, i64*);
+declare i64* @get_group_value_one_key(i64*, i32, i64*, i32, i64, i64, i32, i64*, i8);
 declare i64 @agg_count_shared(i64*, i64);
 declare i64 @agg_count_skip_val_shared(i64*, i64, i64);
 declare i32 @agg_count_int32_shared(i32*, i32);

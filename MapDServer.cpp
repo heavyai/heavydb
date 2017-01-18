@@ -1548,7 +1548,7 @@ class MapDHandler : virtual public MapDIf {
                        const bool just_explain,
                        const bool just_validate) const {
     const auto& cat = session_info.get_catalog();
-    CompilationOptions co = {executor_device_type, true, ExecutorOptLevel::Default};
+    CompilationOptions co = {executor_device_type, true, ExecutorOptLevel::Default, g_enable_dynamic_watchdog};
     ExecutionOptions eo = {false,
                            allow_multifrag_,
                            just_explain,
@@ -1663,7 +1663,8 @@ class MapDHandler : virtual public MapDIf {
                                           nullptr);
     RelAlgExecutor ra_executor(executor.get(), cat);
     auto clock_begin = timer_start();
-    CompilationOptions co = {session_info.get_executor_device_type(), true, ExecutorOptLevel::Default};
+    CompilationOptions co = {
+        session_info.get_executor_device_type(), true, ExecutorOptLevel::Default, g_enable_dynamic_watchdog};
     ExecutionOptions eo = {false,
                            allow_multifrag_,
                            false,
@@ -1984,7 +1985,7 @@ class MapDHandler : virtual public MapDIf {
 #ifdef HAVE_RAVM
     const auto session_info = get_session(session);
     const auto& cat = session_info.get_catalog();
-    CompilationOptions co = {executor_device_type_, true, ExecutorOptLevel::Default};
+    CompilationOptions co = {executor_device_type_, true, ExecutorOptLevel::Default, g_enable_dynamic_watchdog};
     ExecutionOptions eo = {false,
                            allow_multifrag_,
                            false,
@@ -2170,7 +2171,7 @@ int main(int argc, char** argv) {
   bool enable_rendering = false;
   bool enable_watchdog = true;
   bool enable_dynamic_watchdog = false;
-  int dynamic_watchdog_factor = 4;
+  float dynamic_watchdog_factor = 1.0;
 
   size_t cpu_buffer_mem_bytes = 0;  // 0 will cause DataMgr to auto set this based on available memory
   size_t render_mem_bytes = 500000000;
@@ -2248,8 +2249,8 @@ int main(int argc, char** argv) {
       "Enable dynamic watchdog");
   desc_adv.add_options()(
       "dynamic-watchdog-factor",
-      po::value<int>(&dynamic_watchdog_factor)->default_value(dynamic_watchdog_factor)->implicit_value(4),
-      "Dynamic watchdog factor to increase the time budget");
+      po::value<float>(&dynamic_watchdog_factor)->default_value(dynamic_watchdog_factor)->implicit_value(1.0),
+      "Dynamic watchdog factor to adjust the time budget");
   desc_adv.add_options()(
       "start-epoch", po::value<int>(&start_epoch)->default_value(start_epoch), "Value of epoch to 'rollback' to");
   desc_adv.add_options()(

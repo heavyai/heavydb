@@ -1257,7 +1257,7 @@ ExecutionResult RelAlgExecutor::handleRetry(const int32_t error_code_in,
   if (g_enable_watchdog) {
     throw std::runtime_error("Query ran out of output slots in the result");
   }
-  CompilationOptions co_cpu{ExecutorDeviceType::CPU, co.hoist_literals_, co.opt_level_};
+  CompilationOptions co_cpu{ExecutorDeviceType::CPU, co.hoist_literals_, co.opt_level_, co.with_dynamic_watchdog_};
   if (error_code) {
     max_groups_buffer_entry_guess = 0;
     while (true) {

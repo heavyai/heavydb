@@ -691,6 +691,7 @@ extern "C" __attribute__((noinline)) bool dynamic_watchdog(int64_t init_budget) 
   static uint64_t freq_kHz = 0ULL;
   // Uninitialized watchdog can't check time
   if (init_budget == 0LL && ms_budget == 0ULL) {
+    // Attempt to use uninitialized dynamic_watchdog
     return false;
   }
   // Initialize watchdog

@@ -137,7 +137,7 @@ ResultRows run_multiple_agg(const std::string& query_str,
 #ifdef HAVE_RAVM
   ParserWrapper pw{query_str};
   if (!(pw.is_other_explain || pw.is_ddl || pw.is_update_dml)) {
-    CompilationOptions co = {device_type, true, ExecutorOptLevel::LoopStrengthReduction};
+    CompilationOptions co = {device_type, true, ExecutorOptLevel::LoopStrengthReduction, false};
     ExecutionOptions eo = {false, true, false, true, false, false, false, false, 0};
     auto& calcite_mgr = cat.get_calciteMgr();
     const auto query_ra = calcite_mgr.process(session->get_currentUser().userName,

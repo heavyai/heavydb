@@ -651,6 +651,18 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const RelAlgExecution
   uint32_t num_fragments = col_buffers.size();
   std::vector<int32_t> error_codes(grid_size_x * block_size_x);
 
+  CUevent start0, stop0;  // preparation
+  cuEventCreate(&start0, 0);
+  cuEventCreate(&stop0, 0);
+  CUevent start1, stop1;  // cuLaunchKernel
+  cuEventCreate(&start1, 0);
+  cuEventCreate(&stop1, 0);
+  CUevent start2, stop2;  // finish
+  cuEventCreate(&start2, 0);
+  cuEventCreate(&stop2, 0);
+
+  cuEventRecord(start0, 0);
+
   auto kernel_params = prepareKernelParams(col_buffers,
                                            literal_buff,
                                            num_rows,
@@ -692,6 +704,15 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const RelAlgExecution
     for (auto& param : kernel_params) {
       param_ptrs.push_back(&param);
     }
+
+    cuEventRecord(stop0, 0);
+    cuEventSynchronize(stop0);
+    float milliseconds0 = 0;
+    cuEventElapsedTime(&milliseconds0, start0, stop0);
+    LOG(INFO) << "Device " << std::to_string(device_id)
+              << ": launchGpuCode: group-by prepare: " << std::to_string(milliseconds0) << " ms\n";
+
+    cuEventRecord(start1, 0);
     if (hoist_literals) {
       checkCudaErrors(cuLaunchKernel(cu_func,
                                      grid_size_x,
@@ -718,6 +739,15 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const RelAlgExecution
                                      &param_ptrs[0],
                                      nullptr));
     }
+    cuEventRecord(stop1, 0);
+    cuEventSynchronize(stop1);
+    float milliseconds1 = 0;
+    cuEventElapsedTime(&milliseconds1, start1, stop1);
+    LOG(INFO) << "Device " << std::to_string(device_id)
+              << ": launchGpuCode: group-by cuLaunchKernel: " << std::to_string(milliseconds1) << " ms\n";
+
+    cuEventRecord(start2, 0);
+
     copy_from_gpu(data_mgr, &error_codes[0], err_desc, error_codes.size() * sizeof(error_codes[0]), device_id);
     *error_code = 0;
     for (const auto err : error_codes) {
@@ -764,6 +794,16 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const RelAlgExecution
     for (auto& param : kernel_params) {
       param_ptrs.push_back(&param);
     }
+
+    cuEventRecord(stop0, 0);
+    cuEventSynchronize(stop0);
+    float milliseconds0 = 0;
+    cuEventElapsedTime(&milliseconds0, start0, stop0);
+    LOG(INFO) << "Device " << std::to_string(device_id) << ": launchGpuCode: prepare: " << std::to_string(milliseconds0)
+              << " ms\n";
+
+    cuEventRecord(start1, 0);
+
     if (hoist_literals) {
       checkCudaErrors(cuLaunchKernel(cu_func,
                                      grid_size_x,
@@ -790,6 +830,16 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const RelAlgExecution
                                      &param_ptrs[0],
                                      nullptr));
     }
+
+    cuEventRecord(stop1, 0);
+    cuEventSynchronize(stop1);
+    float milliseconds1 = 0;
+    cuEventElapsedTime(&milliseconds1, start1, stop1);
+    LOG(INFO) << "Device " << std::to_string(device_id)
+              << ": launchGpuCode: cuLaunchKernel: " << std::to_string(milliseconds1) << " ms\n";
+
+    cuEventRecord(start2, 0);
+
     copy_from_gpu(data_mgr, &error_codes[0], err_desc, error_codes.size() * sizeof(error_codes[0]), device_id);
     *error_code = 0;
     for (const auto err : error_codes) {
@@ -823,6 +873,14 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const RelAlgExecution
                   count_distinct_bitmap_mem_bytes_,
                   device_id);
   }
+
+  cuEventRecord(stop2, 0);
+  cuEventSynchronize(stop2);
+  float milliseconds2 = 0;
+  cuEventElapsedTime(&milliseconds2, start2, stop2);
+  LOG(INFO) << "Device " << std::to_string(device_id) << ": launchGpuCode: finish: " << std::to_string(milliseconds2)
+            << " ms\n";
+
   return out_vec;
 #else
   return {};
@@ -2317,7 +2375,8 @@ std::tuple<llvm::Value*, llvm::Value*> GroupByAndAggregate::codegenGroupBy(const
                                          &*group_expr_lv,
                                          LL_INT(query_mem_desc_.min_val),
                                          LL_INT(row_size_quad),
-                                         &*(++arg_it)}),
+                                         &*(++arg_it),
+                                         LL_INT(co.with_dynamic_watchdog_)}),
                                nullptr);
       }
       break;
@@ -2359,7 +2418,8 @@ std::tuple<llvm::Value*, llvm::Value*> GroupByAndAggregate::codegenGroupBy(const
                                        &*group_key,
                                        &*key_size_lv,
                                        LL_INT(row_size_quad),
-                                       &*(++arg_it)}),
+                                       &*(++arg_it),
+                                       LL_INT(co.with_dynamic_watchdog_)}),
                              nullptr);
       break;
     }

@@ -1922,7 +1922,7 @@ ResultRows getResultRows(const Catalog_Namespace::SessionInfo& session,
                                             pg_shim(select_stmt),
                                             true,
                                             false);
-  CompilationOptions co = {device_type, true, ExecutorOptLevel::LoopStrengthReduction};
+  CompilationOptions co = {device_type, true, ExecutorOptLevel::LoopStrengthReduction, false};
   ExecutionOptions eo = {false, true, false, true, false, false, false, false, 0};
   RelAlgExecutor ra_executor(executor.get(), catalog);
   ExecutionResult result{ResultRows({}, {}, nullptr, nullptr, {}, device_type), {}};
