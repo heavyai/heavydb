@@ -268,6 +268,14 @@ extern "C" ALWAYS_INLINE void agg_count_distinct_bitmap(int64_t* agg, const int6
   reinterpret_cast<int8_t*>(*agg)[bitmap_idx >> 3] |= (1 << (bitmap_idx & 7));
 }
 
+extern "C" NEVER_INLINE void agg_count_distinct_bitmap_gpu(int64_t*,
+                                                           const int64_t,
+                                                           const int64_t,
+                                                           const int64_t,
+                                                           const int64_t) {
+  abort();
+}
+
 extern "C" ALWAYS_INLINE int8_t bit_is_set(const int64_t bitset,
                                            const int64_t val,
                                            const int64_t min_val,
@@ -315,6 +323,15 @@ extern "C" ALWAYS_INLINE void agg_count_distinct_bitmap_skip_val(int64_t* agg,
   if (val != skip_val) {
     agg_count_distinct_bitmap(agg, val, min_val);
   }
+}
+
+extern "C" NEVER_INLINE void agg_count_distinct_bitmap_skip_val_gpu(int64_t*,
+                                                                    const int64_t,
+                                                                    const int64_t,
+                                                                    const int64_t,
+                                                                    const int64_t,
+                                                                    const int64_t) {
+  abort();
 }
 
 extern "C" ALWAYS_INLINE uint32_t agg_count_int32(uint32_t* agg, const int32_t) {

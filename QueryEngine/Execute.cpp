@@ -1496,9 +1496,7 @@ llvm::Value* Executor::rowsPerScan() const {
   abort();
 }
 
-namespace {
-
-llvm::Value* getLiteralBuffArg(llvm::Function* row_func) {
+llvm::Value* get_literal_buff_arg(llvm::Function* row_func) {
   auto arg_it = row_func->arg_begin();
   while (arg_it != row_func->arg_end()) {
     if (arg_it->getType()->isIntegerTy()) {
@@ -1512,8 +1510,6 @@ llvm::Value* getLiteralBuffArg(llvm::Function* row_func) {
   CHECK(arg_it != row_func->arg_end());
   return &*arg_it;
 }
-
-}  // namespace
 
 std::vector<llvm::Value*> Executor::codegen(const Analyzer::Constant* constant,
                                             const EncodingType enc_type,
@@ -1570,7 +1566,7 @@ std::vector<llvm::Value*> Executor::codegenHoistedConstants(const std::vector<co
                                                             const int dict_id) {
   CHECK(!constants.empty());
   const auto& type_info = constants.front()->get_type_info();
-  auto lit_buff_lv = getLiteralBuffArg(cgen_state_->row_func_);
+  auto lit_buff_lv = get_literal_buff_arg(cgen_state_->row_func_);
   int16_t lit_off{-1};
   for (size_t device_id = 0; device_id < constants.size(); ++device_id) {
     const auto constant = constants[device_id];
@@ -4111,11 +4107,6 @@ ExecutorDeviceType Executor::getDeviceTypeForTargets(const RelAlgExecutionUnit& 
                                                      const ExecutorDeviceType requested_device_type) {
   for (const auto target_expr : ra_exe_unit.target_exprs) {
     const auto agg_info = target_info(target_expr);
-    if (agg_info.is_distinct) {
-      // TODO(alex): count distinct can't be executed on the GPU yet, punt to CPU
-      CHECK_EQ(kCOUNT, agg_info.agg_kind);
-      return ExecutorDeviceType::CPU;
-    }
     if (!ra_exe_unit.groupby_exprs.empty() && !isArchPascal(requested_device_type)) {
       if ((agg_info.agg_kind == kAVG || agg_info.agg_kind == kSUM) && agg_info.agg_arg_type.is_fp()) {
         return ExecutorDeviceType::CPU;
@@ -5237,13 +5228,20 @@ int32_t Executor::executePlanWithoutGroupBy(const RelAlgExecutionUnit& ra_exe_un
       const auto agg_info = target_info(target_expr);
       CHECK(agg_info.is_agg);
       int64_t val1;
-      std::tie(val1, error_code) = reduceResults(agg_info.agg_kind,
-                                                 agg_info.sql_type,
-                                                 query_exe_context->init_agg_vals_[out_vec_idx],
-                                                 query_exe_context->query_mem_desc_.agg_col_widths[out_vec_idx].compact,
-                                                 out_vec[out_vec_idx],
-                                                 entry_count,
-                                                 false);
+      if (agg_info.is_distinct) {
+        CHECK_EQ(kCOUNT, agg_info.agg_kind);
+        val1 = out_vec[out_vec_idx][0];
+        error_code = 0;
+      } else {
+        std::tie(val1, error_code) =
+            reduceResults(agg_info.agg_kind,
+                          agg_info.sql_type,
+                          query_exe_context->init_agg_vals_[out_vec_idx],
+                          query_exe_context->query_mem_desc_.agg_col_widths[out_vec_idx].compact,
+                          out_vec[out_vec_idx],
+                          entry_count,
+                          false);
+      }
       if (error_code) {
         break;
       }
@@ -5863,6 +5861,14 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
   }
 
   const bool output_columnar = group_by_and_aggregate.outputColumnar();
+
+  if (co.device_type_ == ExecutorDeviceType::GPU) {
+    for (const auto& count_distinct_descriptor_kv : query_mem_desc.count_distinct_descriptors_) {
+      if (count_distinct_descriptor_kv.second.impl_type_ == CountDistinctImplType::StdSet) {
+        cgen_state_->must_run_on_cpu_ = true;
+      }
+    }
+  }
 
   if (co.device_type_ == ExecutorDeviceType::GPU &&
       query_mem_desc.hash_type == GroupByColRangeType::MultiColPerfectHash) {
@@ -6495,6 +6501,8 @@ declare i8 @string_ne_nullable(i8*, i32, i8*, i32, i8);
 declare i1 @regexp_like(i8*, i32, i8*, i32, i8);
 declare i8 @regexp_like_nullable(i8*, i32, i8*, i32, i8, i8);
 declare void @linear_probabilistic_count(i8*, i32, i8*, i32);
+declare void @agg_count_distinct_bitmap_gpu(i64*, i64, i64, i64, i64);
+declare void @agg_count_distinct_bitmap_skip_val_gpu(i64*, i64, i64, i64, i64, i64);
 declare i32 @record_error_code(i32, i32*);
 declare i1 @dynamic_watchdog(i64);
 declare void @force_sync();

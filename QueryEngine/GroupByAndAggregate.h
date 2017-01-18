@@ -348,7 +348,7 @@ class QueryExecutionContext : boost::noncopyable {
                                       int32_t* error_code,
                                       const uint32_t num_tables,
                                       const int64_t join_hash_table,
-                                      RenderAllocatorMap* render_allocator_map) const;
+                                      RenderAllocatorMap* render_allocator_map);
 
   std::vector<int64_t*> launchCpuCode(const RelAlgExecutionUnit& ra_exe_unit,
                                       const std::vector<void*>& fn_ptrs,
@@ -446,6 +446,8 @@ class QueryExecutionContext : boost::noncopyable {
 
   std::vector<ColumnLazyFetchInfo> getColLazyFetchInfo(const std::vector<Analyzer::Expr*>& target_exprs) const;
 
+  void allocateCountDistinctGpuMem();
+
   const QueryMemoryDescriptor& query_mem_desc_;
   std::vector<int64_t> init_agg_vals_;
   const Executor* executor_;
@@ -463,6 +465,10 @@ class QueryExecutionContext : boost::noncopyable {
 
   mutable std::vector<std::unique_ptr<ResultSet>> result_sets_;
   mutable std::unique_ptr<ResultSet> estimator_result_set_;
+  CUdeviceptr count_distinct_bitmap_mem_;
+  int8_t* count_distinct_bitmap_host_mem_;
+  int8_t* count_distinct_bitmap_crt_ptr_;
+  size_t count_distinct_bitmap_mem_bytes_;
 
   friend class Executor;
   friend void copy_group_by_buffers_from_gpu(Data_Namespace::DataMgr* data_mgr,

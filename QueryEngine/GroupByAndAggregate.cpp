@@ -51,8 +51,14 @@ QueryExecutionContext::QueryExecutionContext(const RelAlgExecutionUnit& ra_exe_u
                        : executor->blockSize() * (query_mem_desc_.blocksShareMemory() ? 1 : executor->gridSize())},
       row_set_mem_owner_(row_set_mem_owner),
       output_columnar_(output_columnar),
-      sort_on_gpu_(sort_on_gpu) {
+      sort_on_gpu_(sort_on_gpu),
+      count_distinct_bitmap_mem_(0),
+      count_distinct_bitmap_host_mem_(nullptr),
+      count_distinct_bitmap_crt_ptr_(nullptr) {
   CHECK(!sort_on_gpu_ || output_columnar);
+  if (device_type_ == ExecutorDeviceType::GPU) {
+    allocateCountDistinctGpuMem();
+  }
   if (render_allocator_map || query_mem_desc_.group_col_widths.empty()) {
     allocateCountDistinctBuffers(false);
     if (render_allocator_map) {
@@ -143,6 +149,26 @@ QueryExecutionContext::QueryExecutionContext(const RelAlgExecutionUnit& ra_exe_u
   }
 }
 
+void QueryExecutionContext::allocateCountDistinctGpuMem() {
+  if (query_mem_desc_.count_distinct_descriptors_.empty()) {
+    return;
+  }
+  CHECK(executor_);
+  auto data_mgr = &executor_->catalog_->get_dataMgr();
+  size_t total_bytes_per_entry{0};
+  for (const auto& count_distinct_desc : query_mem_desc_.count_distinct_descriptors_) {
+    total_bytes_per_entry += align_to_int64(count_distinct_desc.second.bitmapSizeBytes());
+  }
+  count_distinct_bitmap_mem_bytes_ =
+      total_bytes_per_entry * (query_mem_desc_.entry_count + query_mem_desc_.entry_count_small);
+  std::vector<int8_t> zeros(count_distinct_bitmap_mem_bytes_);
+  count_distinct_bitmap_mem_ = alloc_gpu_mem(data_mgr, count_distinct_bitmap_mem_bytes_, device_id_, nullptr);
+  copy_to_gpu(data_mgr, count_distinct_bitmap_mem_, &zeros[0], count_distinct_bitmap_mem_bytes_, device_id_);
+  count_distinct_bitmap_crt_ptr_ = count_distinct_bitmap_host_mem_ =
+      static_cast<int8_t*>(checked_malloc(count_distinct_bitmap_mem_bytes_));
+  row_set_mem_owner_->addCountDistinctBuffer(count_distinct_bitmap_host_mem_, count_distinct_bitmap_mem_bytes_);
+}
+
 std::vector<ColumnLazyFetchInfo> QueryExecutionContext::getColLazyFetchInfo(
     const std::vector<Analyzer::Expr*>& target_exprs) const {
   std::vector<ColumnLazyFetchInfo> col_lazy_fetch_info;
@@ -171,7 +197,7 @@ void QueryExecutionContext::initColumnPerRow(const QueryMemoryDescriptor& query_
        col_ptr += query_mem_desc.getNextColOffInBytes(col_ptr, bin, col_idx++)) {
     const ssize_t bm_sz{bitmap_sizes[col_idx]};
     int64_t init_val{0};
-    if (!bm_sz) {
+    if (!bm_sz || query_mem_desc.group_col_widths.empty()) {
       if (query_mem_desc.agg_col_widths[col_idx].compact > 0) {
         init_val = init_vals[init_vec_idx++];
       }
@@ -378,6 +404,12 @@ std::vector<ssize_t> QueryExecutionContext::allocateCountDistinctBuffers(const b
 
 int64_t QueryExecutionContext::allocateCountDistinctBitmap(const size_t bitmap_sz) {
   auto bitmap_byte_sz = bitmap_size_bytes(bitmap_sz);
+  if (count_distinct_bitmap_host_mem_) {
+    CHECK(count_distinct_bitmap_crt_ptr_);
+    auto ptr = count_distinct_bitmap_crt_ptr_;
+    count_distinct_bitmap_crt_ptr_ += align_to_int64(bitmap_byte_sz);
+    return reinterpret_cast<int64_t>(ptr);
+  }
   auto count_distinct_buffer = static_cast<int8_t*>(checked_calloc(bitmap_byte_sz, 1));
   row_set_mem_owner_->addCountDistinctBuffer(count_distinct_buffer, bitmap_byte_sz);
   return reinterpret_cast<int64_t>(count_distinct_buffer);
@@ -451,9 +483,24 @@ std::vector<CUdeviceptr> QueryExecutionContext::prepareKernelParams(
   }
   params[NUM_FRAGMENTS] = alloc_gpu_mem(data_mgr, sizeof(uint32_t), device_id, nullptr);
   copy_to_gpu(data_mgr, params[NUM_FRAGMENTS], &num_fragments, sizeof(uint32_t), device_id);
+  CUdeviceptr literals_and_addr_mapping =
+      alloc_gpu_mem(data_mgr, literal_buff.size() + 2 * sizeof(int64_t), device_id, nullptr);
+  CHECK_EQ(0, literals_and_addr_mapping % 8);
+  std::vector<int64_t> additional_literal_bytes;
+  if (count_distinct_bitmap_mem_) {
+    // Store host and device addresses
+    CHECK(count_distinct_bitmap_host_mem_);
+    additional_literal_bytes.push_back(reinterpret_cast<int64_t>(count_distinct_bitmap_host_mem_));
+    additional_literal_bytes.push_back(static_cast<int64_t>(count_distinct_bitmap_mem_));
+    copy_to_gpu(data_mgr,
+                literals_and_addr_mapping,
+                &additional_literal_bytes[0],
+                additional_literal_bytes.size() * sizeof(additional_literal_bytes[0]),
+                device_id);
+  }
+  params[LITERALS] = literals_and_addr_mapping + additional_literal_bytes.size() * sizeof(additional_literal_bytes[0]);
   if (!literal_buff.empty()) {
     CHECK(hoist_literals);
-    params[LITERALS] = alloc_gpu_mem(data_mgr, literal_buff.size(), device_id, nullptr);
     copy_to_gpu(data_mgr, params[LITERALS], &literal_buff[0], literal_buff.size(), device_id);
   }
   params[NUM_ROWS] = alloc_gpu_mem(data_mgr, sizeof(int64_t) * num_rows.size(), device_id, nullptr);
@@ -574,7 +621,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const RelAlgExecution
                                                            int32_t* error_code,
                                                            const uint32_t num_tables,
                                                            const int64_t join_hash_table,
-                                                           RenderAllocatorMap* render_allocator_map) const {
+                                                           RenderAllocatorMap* render_allocator_map) {
 #ifdef HAVE_CUDA
   bool is_group_by{!query_mem_desc_.group_col_widths.empty()};
   data_mgr->cudaMgr_->setContext(device_id);
@@ -753,6 +800,13 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const RelAlgExecution
                     device_id);
       out_vec.push_back(host_out_vec);
     }
+  }
+  if (count_distinct_bitmap_mem_) {
+    copy_from_gpu(data_mgr,
+                  count_distinct_bitmap_host_mem_,
+                  count_distinct_bitmap_mem_,
+                  count_distinct_bitmap_mem_bytes_,
+                  device_id);
   }
   return out_vec;
 #else
@@ -1518,7 +1572,7 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
           !col_range_info.bucket && keyless_info.keyless;
       size_t bin_count = getBucketedCardinality(col_range_info);
       const size_t interleaved_max_threshold{512};
-      bool interleaved_bins = keyless && (bin_count <= interleaved_max_threshold);
+      bool interleaved_bins = keyless && (bin_count <= interleaved_max_threshold) && count_distinct_descriptors.empty();
       query_mem_desc_ = {executor_,
                          allow_multifrag,
                          col_range_info.hash_type_,
@@ -1939,6 +1993,9 @@ bool QueryMemoryDescriptor::threadsShareMemory() const {
 }
 
 bool QueryMemoryDescriptor::blocksShareMemory() const {
+  if (!count_distinct_descriptors_.empty()) {
+    return true;
+  }
   if (executor_->isCPUOnly() || render_output || hash_type == GroupByColRangeType::MultiCol ||
       hash_type == GroupByColRangeType::Projection || hash_type == GroupByColRangeType::MultiColPerfectHash) {
     return true;
@@ -1947,7 +2004,8 @@ bool QueryMemoryDescriptor::blocksShareMemory() const {
 }
 
 bool QueryMemoryDescriptor::lazyInitGroups(const ExecutorDeviceType device_type) const {
-  return device_type == ExecutorDeviceType::GPU && !render_output && !getSmallBufferSizeQuad();
+  return device_type == ExecutorDeviceType::GPU && !render_output && !getSmallBufferSizeQuad() &&
+         count_distinct_descriptors_.empty();
 }
 
 bool QueryMemoryDescriptor::interleavedBins(const ExecutorDeviceType device_type) const {
@@ -2675,6 +2733,8 @@ void GroupByAndAggregate::codegenEstimator(std::stack<llvm::BasicBlock*>& array_
   emitCall("linear_probabilistic_count", {bitmap, &*bitmap_size_lv, key_bytes, &*estimator_comp_bytes_lv});
 }
 
+llvm::Value* get_literal_buff_arg(llvm::Function* row_func);
+
 void GroupByAndAggregate::codegenCountDistinct(const size_t target_idx,
                                                const Analyzer::Expr* target_expr,
                                                std::vector<llvm::Value*>& agg_args,
@@ -2686,7 +2746,6 @@ void GroupByAndAggregate::codegenCountDistinct(const size_t target_idx,
     agg_args.back() = executor_->cgen_state_->ir_builder_.CreateBitCast(
         agg_args.back(), get_int_type(64, executor_->cgen_state_->context_));
   }
-  CHECK(device_type == ExecutorDeviceType::CPU);
   auto it_count_distinct = query_mem_desc.count_distinct_descriptors_.find(target_idx);
   CHECK(it_count_distinct != query_mem_desc.count_distinct_descriptors_.end());
   std::string agg_fname{"agg_count_distinct"};
@@ -2703,6 +2762,17 @@ void GroupByAndAggregate::codegenCountDistinct(const size_t target_idx,
         executor_->cgen_state_->ir_builder_.CreateBitCast(null_lv, get_int_type(64, executor_->cgen_state_->context_));
     agg_fname += "_skip_val";
     agg_args.push_back(null_lv);
+  }
+  if (device_type == ExecutorDeviceType::GPU && !executor_->cgen_state_->must_run_on_cpu_) {
+    CHECK(it_count_distinct->second.impl_type_ == CountDistinctImplType::Bitmap);
+    agg_fname += "_gpu";
+    const auto lit_buff_lv = get_literal_buff_arg(ROW_FUNC);
+    const auto base_dev_addr = LL_BUILDER.CreateLoad(LL_BUILDER.CreateGEP(
+        LL_BUILDER.CreateBitCast(lit_buff_lv, llvm::PointerType::get(get_int_type(64, LL_CONTEXT), 0)), LL_INT(-1)));
+    const auto base_host_addr = LL_BUILDER.CreateLoad(LL_BUILDER.CreateGEP(
+        LL_BUILDER.CreateBitCast(lit_buff_lv, llvm::PointerType::get(get_int_type(64, LL_CONTEXT), 0)), LL_INT(-2)));
+    agg_args.push_back(base_dev_addr);
+    agg_args.push_back(base_host_addr);
   }
   if (it_count_distinct->second.impl_type_ == CountDistinctImplType::Bitmap) {
     emitCall(agg_fname, agg_args);
