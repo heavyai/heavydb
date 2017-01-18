@@ -161,6 +161,17 @@ Example code is available in ``$MAPD_PATH/SampleCode``:
 
     plt.show()
     
+    import jaydebeapi
+     
+    def connect(dbname, user, host, password):
+         jar = './mapdjdbc-1.0-SNAPSHOT-jar-with-dependencies.jar' #may want to parametrize
+         try:
+             return jaydebeapi.connect('com.mapd.jdbc.MapDDriver', 
+                     ['jdbc:mapd:' + host + ':' + dbname + ':.', user, password],
+                     jar,)
+         except Exception as e:
+             print ( "Error: %s" % str(e) )
+             raise e
 
 ``RJDBC``
 ~~~~~~~~
@@ -185,4 +196,3 @@ More complex example to remote machine
 	drv <- JDBC("com.mapd.jdbc.MapDDriver","/home/mapd/bin/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar",identifier.quote="'")
 	conn <- dbConnect(drv, "jdbc:mapd:colossus.mapd.com:9091:mapd", "mapd", "HyperInteractive")
 	dbGetQuery(conn, "SELECT date_trunc(month, taxi_weather_tracts_factual.pickup_datetime) as key0, AVG(CASE WHEN 'Hyatt' = ANY taxi_weather_tracts_factual.dropoff_store_chains THEN 1 ELSE 0 END) AS series_1 FROM taxi_weather_tracts_factual WHERE (taxi_weather_tracts_factual.dropoff_merc_x >= -8254165.98668337 AND taxi_weather_tracts_factual.dropoff_merc_x < -8218688.304677745) AND (taxi_weather_tracts_factual.dropoff_merc_y >= 4966267.65475399 AND taxi_weather_tracts_factual.dropoff_merc_y < 4989291.122013792) AND (taxi_weather_tracts_factual.pickup_datetime >= TIMESTAMP(0) '2009-12-20 08:13:47' AND taxi_weather_tracts_factual.pickup_datetime < TIMESTAMP(0) '2015-12-31 23:59:59') GROUP BY key0 ORDER BY key0")
-
