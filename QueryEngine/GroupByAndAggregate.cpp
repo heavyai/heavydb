@@ -2367,17 +2367,17 @@ std::tuple<llvm::Value*, llvm::Value*> GroupByAndAggregate::codegenGroupBy(const
         if (group_expr) {
           LOG(INFO) << "Use get_group_value_one_key";
         }
-        return std::make_tuple(emitCall("get_group_value_one_key",
-                                        {&*groups_buffer,
-                                         LL_INT(static_cast<int32_t>(query_mem_desc_.entry_count)),
-                                         &*small_groups_buffer,
-                                         LL_INT(static_cast<int32_t>(query_mem_desc_.entry_count_small)),
-                                         &*group_expr_lv,
-                                         LL_INT(query_mem_desc_.min_val),
-                                         LL_INT(row_size_quad),
-                                         &*(++arg_it),
-                                         LL_INT(co.with_dynamic_watchdog_)}),
-                               nullptr);
+        return std::make_tuple(
+            emitCall(co.with_dynamic_watchdog_ ? "get_group_value_one_key_with_watchdog" : "get_group_value_one_key",
+                     {&*groups_buffer,
+                      LL_INT(static_cast<int32_t>(query_mem_desc_.entry_count)),
+                      &*small_groups_buffer,
+                      LL_INT(static_cast<int32_t>(query_mem_desc_.entry_count_small)),
+                      &*group_expr_lv,
+                      LL_INT(query_mem_desc_.min_val),
+                      LL_INT(row_size_quad),
+                      &*(++arg_it)}),
+            nullptr);
       }
       break;
     }
@@ -2412,14 +2412,13 @@ std::tuple<llvm::Value*, llvm::Value*> GroupByAndAggregate::codegenGroupBy(const
                                         {&*groups_buffer, hash_lv, group_key, key_size_lv, LL_INT(row_size_quad)}),
                                nullptr);
       }
-      return std::make_tuple(emitCall("get_group_value",
+      return std::make_tuple(emitCall(co.with_dynamic_watchdog_ ? "get_group_value_with_watchdog" : "get_group_value",
                                       {&*groups_buffer,
                                        LL_INT(static_cast<int32_t>(query_mem_desc_.entry_count)),
                                        &*group_key,
                                        &*key_size_lv,
                                        LL_INT(row_size_quad),
-                                       &*(++arg_it),
-                                       LL_INT(co.with_dynamic_watchdog_)}),
+                                       &*(++arg_it)}),
                              nullptr);
       break;
     }
