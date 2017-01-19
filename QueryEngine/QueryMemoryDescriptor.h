@@ -10,6 +10,7 @@
 #define QUERYENGINE_QUERYMEMORYDESCRIPTOR_H
 
 #include "CompilationOptions.h"
+#include "CountDistinct.h"
 
 #include <glog/logging.h>
 
@@ -42,29 +43,6 @@ struct ColWidths {
 // Private: each thread has its own memory, no atomic operations required
 // Shared: threads in the same block share memory, atomic operations required
 enum class GroupByMemSharing { Private, Shared };
-
-enum class CountDistinctImplType { Invalid, Bitmap, StdSet };
-
-inline size_t bitmap_size_bytes(const size_t bitmap_sz) {
-  size_t bitmap_byte_sz = bitmap_sz / 8;
-  if (bitmap_sz % 8) {
-    ++bitmap_byte_sz;
-  }
-  return bitmap_byte_sz;
-}
-
-struct CountDistinctDescriptor {
-  CountDistinctImplType impl_type_;
-  int64_t min_val;
-  int64_t bitmap_sz_bits;
-
-  size_t bitmapSizeBytes() const {
-    CHECK(impl_type_ == CountDistinctImplType::Bitmap);
-    return bitmap_size_bytes(bitmap_sz_bits);
-  }
-};
-
-typedef std::vector<CountDistinctDescriptor> CountDistinctDescriptors;
 
 struct RelAlgExecutionUnit;
 

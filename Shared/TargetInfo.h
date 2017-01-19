@@ -18,4 +18,8 @@ struct TargetInfo {
   bool is_distinct;
 };
 
+inline bool is_distinct_target(const TargetInfo& target_info) {
+  return target_info.is_distinct || target_info.agg_kind == kAPPROX_COUNT_DISTINCT;
+}
+
 #endif  // QUERYENGINE_TARGETINFO_H

@@ -28,6 +28,36 @@
 #include <numeric>
 #include <thread>
 
+namespace {
+
+void check_total_bitmap_memory(const CountDistinctDescriptors& count_distinct_descriptors,
+                               const int32_t groups_buffer_entry_count) {
+  if (g_enable_watchdog) {
+    checked_int64_t total_bytes_per_group = 0;
+    for (const auto& count_distinct_desc : count_distinct_descriptors) {
+      if (count_distinct_desc.impl_type_ != CountDistinctImplType::Bitmap) {
+        continue;
+      }
+      total_bytes_per_group += count_distinct_desc.bitmapPaddedSizeBytes();
+    }
+    int64_t total_bytes{0};
+    // Need to use OutOfHostMemory since it's the only type of exception
+    // QueryExecutionContext is supposed to throw.
+    try {
+      total_bytes = static_cast<int64_t>(total_bytes_per_group * groups_buffer_entry_count);
+    } catch (...) {
+      // Absurd amount of memory, merely computing the number of bits overflows int64_t.
+      // Don't bother to report the real amount, this is unlikely to ever happen.
+      throw OutOfHostMemory(std::numeric_limits<int64_t>::max() / 8);
+    }
+    if (total_bytes >= 2 * 1000 * 1000 * 1000L) {
+      throw OutOfHostMemory(total_bytes);
+    }
+  }
+}
+
+}  // namespace
+
 QueryExecutionContext::QueryExecutionContext(const RelAlgExecutionUnit& ra_exe_unit,
                                              const QueryMemoryDescriptor& query_mem_desc,
                                              const std::vector<int64_t>& init_agg_vals,
@@ -57,6 +87,8 @@ QueryExecutionContext::QueryExecutionContext(const RelAlgExecutionUnit& ra_exe_u
       count_distinct_bitmap_host_mem_(nullptr),
       count_distinct_bitmap_crt_ptr_(nullptr) {
   CHECK(!sort_on_gpu_ || output_columnar);
+  check_total_bitmap_memory(query_mem_desc_.count_distinct_descriptors_,
+                            query_mem_desc_.entry_count + query_mem_desc_.entry_count_small);
   if (device_type_ == ExecutorDeviceType::GPU) {
     allocateCountDistinctGpuMem();
   }
@@ -172,13 +204,14 @@ void QueryExecutionContext::allocateCountDistinctGpuMem() {
     if (count_distinct_desc.impl_type_ == CountDistinctImplType::Invalid) {
       continue;
     }
-    total_bytes_per_entry += align_to_int64(count_distinct_desc.bitmapSizeBytes());
+    CHECK(count_distinct_desc.impl_type_ == CountDistinctImplType::Bitmap);
+    total_bytes_per_entry += count_distinct_desc.bitmapPaddedSizeBytes();
   }
   count_distinct_bitmap_mem_bytes_ =
       total_bytes_per_entry * (query_mem_desc_.entry_count + query_mem_desc_.entry_count_small);
-  std::vector<int8_t> zeros(count_distinct_bitmap_mem_bytes_);
   count_distinct_bitmap_mem_ = alloc_gpu_mem(data_mgr, count_distinct_bitmap_mem_bytes_, device_id_, nullptr);
-  copy_to_gpu(data_mgr, count_distinct_bitmap_mem_, &zeros[0], count_distinct_bitmap_mem_bytes_, device_id_);
+  data_mgr->cudaMgr_->zeroDeviceMem(
+      reinterpret_cast<int8_t*>(count_distinct_bitmap_mem_), count_distinct_bitmap_mem_bytes_, device_id_);
   count_distinct_bitmap_crt_ptr_ = count_distinct_bitmap_host_mem_ =
       static_cast<int8_t*>(checked_malloc(count_distinct_bitmap_mem_bytes_));
   row_set_mem_owner_->addCountDistinctBuffer(count_distinct_bitmap_host_mem_, count_distinct_bitmap_mem_bytes_);
@@ -219,6 +252,7 @@ void QueryExecutionContext::initColumnPerRow(const QueryMemoryDescriptor& query_
     } else {
       CHECK_EQ(static_cast<size_t>(query_mem_desc.agg_col_widths[col_idx].compact), sizeof(int64_t));
       init_val = bm_sz > 0 ? allocateCountDistinctBitmap(bm_sz) : allocateCountDistinctSet();
+      ++init_vec_idx;
     }
     switch (query_mem_desc.agg_col_widths[col_idx].compact) {
       case 1:
@@ -241,38 +275,6 @@ void QueryExecutionContext::initColumnPerRow(const QueryMemoryDescriptor& query_
   }
 }
 
-namespace {
-
-void check_total_bitmap_memory(const std::vector<ssize_t>& agg_bitmap_size,
-                               const int32_t groups_buffer_entry_count,
-                               const bool keyless,
-                               const size_t warp_size) {
-  if (g_enable_watchdog) {
-    checked_int64_t total_bits_per_group = 0;
-    for (const auto col_bitmap_size : agg_bitmap_size) {
-      if (col_bitmap_size <= 0) {
-        continue;
-      }
-      total_bits_per_group += col_bitmap_size;
-    }
-    int64_t total_bits{0};
-    // Need to use OutOfHostMemory since it's the only type of exception
-    // QueryExecutionContext is supposed to throw.
-    try {
-      total_bits = static_cast<int64_t>(total_bits_per_group * groups_buffer_entry_count * (keyless ? warp_size : 1));
-    } catch (...) {
-      // Absurd amount of memory, merely computing the number of bits overflows int64_t.
-      // Don't bother to report the real amount, this is unlikely to ever happen.
-      throw OutOfHostMemory(std::numeric_limits<int64_t>::max() / 8);
-    }
-    if (total_bits >= 8 * 1000 * 1000 * 1000L) {
-      throw OutOfHostMemory(static_cast<int64_t>(total_bits) / 8);
-    }
-  }
-}
-
-}  // namespace
-
 void QueryExecutionContext::initGroups(int64_t* groups_buffer,
                                        const int64_t* init_vals,
                                        const int32_t groups_buffer_entry_count,
@@ -284,8 +286,6 @@ void QueryExecutionContext::initGroups(int64_t* groups_buffer,
 
   auto agg_bitmap_size = allocateCountDistinctBuffers(true);
   auto buffer_ptr = reinterpret_cast<int8_t*>(groups_buffer);
-
-  check_total_bitmap_memory(agg_bitmap_size, groups_buffer_entry_count, keyless, warp_size);
 
   const auto query_mem_desc_fixedup = can_use_result_set(query_mem_desc_, device_type_)
                                           ? ResultSet::fixupQueryMemoryDescriptor(query_mem_desc_)
@@ -388,17 +388,18 @@ std::vector<ssize_t> QueryExecutionContext::allocateCountDistinctBuffers(const b
        ++target_idx, ++agg_col_idx) {
     const auto target_expr = executor_->plan_state_->target_exprs_[target_idx];
     const auto agg_info = target_info(target_expr);
-    if (agg_info.is_distinct) {
-      CHECK(agg_info.is_agg && agg_info.agg_kind == kCOUNT);
+    if (is_distinct_target(agg_info)) {
+      CHECK(agg_info.is_agg && (agg_info.agg_kind == kCOUNT || agg_info.agg_kind == kAPPROX_COUNT_DISTINCT));
       CHECK_EQ(static_cast<size_t>(query_mem_desc_.agg_col_widths[agg_col_idx].actual), sizeof(int64_t));
       CHECK_LT(target_idx, query_mem_desc_.count_distinct_descriptors_.size());
       const auto& count_distinct_desc = query_mem_desc_.count_distinct_descriptors_[target_idx];
       CHECK(count_distinct_desc.impl_type_ != CountDistinctImplType::Invalid);
       if (count_distinct_desc.impl_type_ == CountDistinctImplType::Bitmap) {
+        const auto bitmap_byte_sz = count_distinct_desc.bitmapPaddedSizeBytes();
         if (deferred) {
-          agg_bitmap_size[agg_col_idx] = count_distinct_desc.bitmap_sz_bits;
+          agg_bitmap_size[agg_col_idx] = bitmap_byte_sz;
         } else {
-          init_agg_vals_[agg_col_idx] = allocateCountDistinctBitmap(count_distinct_desc.bitmap_sz_bits);
+          init_agg_vals_[agg_col_idx] = allocateCountDistinctBitmap(bitmap_byte_sz);
         }
       } else {
         CHECK(count_distinct_desc.impl_type_ == CountDistinctImplType::StdSet);
@@ -417,12 +418,11 @@ std::vector<ssize_t> QueryExecutionContext::allocateCountDistinctBuffers(const b
   return agg_bitmap_size;
 }
 
-int64_t QueryExecutionContext::allocateCountDistinctBitmap(const size_t bitmap_sz) {
-  auto bitmap_byte_sz = bitmap_size_bytes(bitmap_sz);
+int64_t QueryExecutionContext::allocateCountDistinctBitmap(const size_t bitmap_byte_sz) {
   if (count_distinct_bitmap_host_mem_) {
     CHECK(count_distinct_bitmap_crt_ptr_);
     auto ptr = count_distinct_bitmap_crt_ptr_;
-    count_distinct_bitmap_crt_ptr_ += align_to_int64(bitmap_byte_sz);
+    count_distinct_bitmap_crt_ptr_ += bitmap_byte_sz;
     return reinterpret_cast<int64_t>(ptr);
   }
   auto count_distinct_buffer = static_cast<int8_t*>(checked_calloc(bitmap_byte_sz, 1));
@@ -1382,7 +1382,11 @@ GroupByAndAggregate::GroupByAndAggregate(Executor* executor,
                                          const int8_t crt_min_byte_width,
                                          const bool allow_multifrag,
                                          const bool output_columnar_hint)
-    : executor_(executor), ra_exe_unit_(ra_exe_unit), query_infos_(query_infos), row_set_mem_owner_(row_set_mem_owner) {
+    : executor_(executor),
+      ra_exe_unit_(ra_exe_unit),
+      query_infos_(query_infos),
+      row_set_mem_owner_(row_set_mem_owner),
+      device_type_(device_type) {
   for (const auto groupby_expr : ra_exe_unit.groupby_exprs) {
     if (!groupby_expr) {
       continue;
@@ -1778,33 +1782,47 @@ CountDistinctDescriptors GroupByAndAggregate::initCountDistinctDescriptors() {
   CountDistinctDescriptors count_distinct_descriptors;
   for (const auto target_expr : ra_exe_unit_.target_exprs) {
     auto agg_info = target_info(target_expr);
-    if (agg_info.is_distinct) {
+    if (is_distinct_target(agg_info)) {
       CHECK(agg_info.is_agg);
-      CHECK_EQ(kCOUNT, agg_info.agg_kind);
+      CHECK(agg_info.agg_kind == kCOUNT || agg_info.agg_kind == kAPPROX_COUNT_DISTINCT);
       const auto agg_expr = static_cast<const Analyzer::AggExpr*>(target_expr);
       const auto& arg_ti = agg_expr->get_arg()->get_type_info();
       if (arg_ti.is_string() && arg_ti.get_compression() != kENCODING_DICT) {
         throw std::runtime_error("Strings must be dictionary-encoded in COUNT(DISTINCT).");
       }
-      auto arg_range_info = getExprRangeInfo(agg_expr->get_arg());
+      if (agg_info.agg_kind == kAPPROX_COUNT_DISTINCT && arg_ti.is_array()) {
+        throw std::runtime_error("APPROX_COUNT_DISTINCT on arrays not supported yet");
+      }
+      GroupByAndAggregate::ColRangeInfo no_range_info{GroupByColRangeType::OneColGuessedRange, 0, 0, 0, false};
+      auto arg_range_info = arg_ti.is_fp() ? no_range_info : getExprRangeInfo(agg_expr->get_arg());
       CountDistinctImplType count_distinct_impl_type{CountDistinctImplType::StdSet};
-      int64_t bitmap_sz_bits{0};
+      int64_t bitmap_sz_bits{agg_info.agg_kind == kCOUNT ? 0 : HLL_MASK_WIDTH};
       if (arg_range_info.hash_type_ == GroupByColRangeType::OneColKnownRange &&
           !arg_ti.is_array()) {  // TODO(alex): allow bitmap implementation for arrays
         count_distinct_impl_type = CountDistinctImplType::Bitmap;
-        bitmap_sz_bits = arg_range_info.max - arg_range_info.min + 1;
-        const int64_t MAX_BITMAP_BITS{8 * 1000 * 1000 * 1000L};
-        if (bitmap_sz_bits <= 0 || bitmap_sz_bits > MAX_BITMAP_BITS) {
-          count_distinct_impl_type = CountDistinctImplType::StdSet;
+        if (agg_info.agg_kind == kCOUNT) {
+          bitmap_sz_bits = arg_range_info.max - arg_range_info.min + 1;
+          const int64_t MAX_BITMAP_BITS{8 * 1000 * 1000 * 1000L};
+          if (bitmap_sz_bits <= 0 || bitmap_sz_bits > MAX_BITMAP_BITS) {
+            count_distinct_impl_type = CountDistinctImplType::StdSet;
+          }
         }
+      }
+      if (agg_info.agg_kind == kAPPROX_COUNT_DISTINCT && count_distinct_impl_type == CountDistinctImplType::StdSet &&
+          !arg_ti.is_array()) {
+        count_distinct_impl_type = CountDistinctImplType::Bitmap;
       }
       if (g_enable_watchdog && count_distinct_impl_type == CountDistinctImplType::StdSet) {
         throw WatchdogException("Cannot use a fast path for COUNT distinct");
       }
-      count_distinct_descriptors.emplace_back(
-          CountDistinctDescriptor{count_distinct_impl_type, arg_range_info.min, bitmap_sz_bits});
+      count_distinct_descriptors.emplace_back(CountDistinctDescriptor{count_distinct_impl_type,
+                                                                      arg_range_info.min,
+                                                                      bitmap_sz_bits,
+                                                                      agg_info.agg_kind == kAPPROX_COUNT_DISTINCT,
+                                                                      device_type_});
     } else {
-      count_distinct_descriptors.emplace_back(CountDistinctDescriptor{CountDistinctImplType::Invalid, 0, 0});
+      count_distinct_descriptors.emplace_back(
+          CountDistinctDescriptor{CountDistinctImplType::Invalid, 0, 0, false, device_type_});
     }
   }
   return count_distinct_descriptors;
@@ -1977,7 +1995,7 @@ bool GroupByAndAggregate::gpuCanHandleOrderEntries(const std::list<Analyzer::Ord
     // TODO(alex): relax the restrictions
     auto agg_expr = static_cast<Analyzer::AggExpr*>(target_expr);
     if (agg_expr->get_is_distinct() || agg_expr->get_aggtype() == kAVG || agg_expr->get_aggtype() == kMIN ||
-        agg_expr->get_aggtype() == kMAX) {
+        agg_expr->get_aggtype() == kMAX || agg_expr->get_aggtype() == kAPPROX_COUNT_DISTINCT) {
       return false;
     }
     if (agg_expr->get_arg()) {
@@ -2392,6 +2410,8 @@ std::vector<std::string> agg_fn_base_names(const TargetInfo& target_info) {
       return {"agg_min"};
     case kSUM:
       return {"agg_sum"};
+    case kAPPROX_COUNT_DISTINCT:
+      return {"agg_approximate_count_distinct"};
     default:
       abort();
   }
@@ -2453,7 +2473,7 @@ bool GroupByAndAggregate::detectOverflowAndUnderflow(llvm::Value* agg_col_val,
                                                      const std::string& agg_base_name) {
   const auto& chosen_type = get_compact_type(agg_info);
   if (!agg_info.is_agg || (agg_base_name != "agg_sum" && agg_base_name != "agg_count") ||
-      (agg_info.agg_kind == kCOUNT && agg_info.is_distinct) || !chosen_type.is_integer()) {
+      is_distinct_target(agg_info) || !chosen_type.is_integer()) {
     return false;
   }
   auto bb_no_null = LL_BUILDER.GetInsertBlock();
@@ -2682,10 +2702,9 @@ bool GroupByAndAggregate::codegenAggCalls(const std::tuple<llvm::Value*, llvm::V
         agg_fname += "_int32";
       }
 
-      if (agg_info.is_distinct) {
+      if (is_distinct_target(agg_info)) {
         CHECK_EQ(chosen_bytes, sizeof(int64_t));
         CHECK(!chosen_type.is_fp());
-        CHECK_EQ("agg_count_distinct", agg_base_name);
         codegenCountDistinct(target_idx, target_expr, agg_args, query_mem_desc_, co.device_type_);
       } else {
         const auto& arg_ti = agg_info.agg_arg_type;
@@ -2765,6 +2784,20 @@ void GroupByAndAggregate::codegenCountDistinct(const size_t target_idx,
   CHECK_LT(target_idx, query_mem_desc_.count_distinct_descriptors_.size());
   const auto& count_distinct_descriptor = query_mem_desc.count_distinct_descriptors_[target_idx];
   CHECK(count_distinct_descriptor.impl_type_ != CountDistinctImplType::Invalid);
+  if (agg_info.agg_kind == kAPPROX_COUNT_DISTINCT) {
+    CHECK(count_distinct_descriptor.impl_type_ == CountDistinctImplType::Bitmap);
+    agg_args.push_back(LL_INT(int32_t(count_distinct_descriptor.bitmap_sz_bits)));
+    if (device_type == ExecutorDeviceType::GPU) {
+      const auto base_dev_addr = getAdditionalLiteral(-1);
+      const auto base_host_addr = getAdditionalLiteral(-2);
+      agg_args.push_back(base_dev_addr);
+      agg_args.push_back(base_host_addr);
+      emitCall("agg_approximate_count_distinct_gpu", agg_args);
+    } else {
+      emitCall("agg_approximate_count_distinct", agg_args);
+    }
+    return;
+  }
   std::string agg_fname{"agg_count_distinct"};
   if (count_distinct_descriptor.impl_type_ == CountDistinctImplType::Bitmap) {
     agg_fname += "_bitmap";
@@ -2783,11 +2816,9 @@ void GroupByAndAggregate::codegenCountDistinct(const size_t target_idx,
   if (device_type == ExecutorDeviceType::GPU && !executor_->cgen_state_->must_run_on_cpu_) {
     CHECK(count_distinct_descriptor.impl_type_ == CountDistinctImplType::Bitmap);
     agg_fname += "_gpu";
-    const auto lit_buff_lv = get_literal_buff_arg(ROW_FUNC);
-    const auto base_dev_addr = LL_BUILDER.CreateLoad(LL_BUILDER.CreateGEP(
-        LL_BUILDER.CreateBitCast(lit_buff_lv, llvm::PointerType::get(get_int_type(64, LL_CONTEXT), 0)), LL_INT(-1)));
-    const auto base_host_addr = LL_BUILDER.CreateLoad(LL_BUILDER.CreateGEP(
-        LL_BUILDER.CreateBitCast(lit_buff_lv, llvm::PointerType::get(get_int_type(64, LL_CONTEXT), 0)), LL_INT(-2)));
+    const auto base_dev_addr = getAdditionalLiteral(-1);
+    const auto base_host_addr = getAdditionalLiteral(-2);
+    ;
     agg_args.push_back(base_dev_addr);
     agg_args.push_back(base_host_addr);
   }
@@ -2796,6 +2827,13 @@ void GroupByAndAggregate::codegenCountDistinct(const size_t target_idx,
   } else {
     emitCall(agg_fname, agg_args);
   }
+}
+
+llvm::Value* GroupByAndAggregate::getAdditionalLiteral(const int32_t off) {
+  CHECK_LT(off, 0);
+  const auto lit_buff_lv = get_literal_buff_arg(ROW_FUNC);
+  return LL_BUILDER.CreateLoad(LL_BUILDER.CreateGEP(
+      LL_BUILDER.CreateBitCast(lit_buff_lv, llvm::PointerType::get(get_int_type(64, LL_CONTEXT), 0)), LL_INT(off)));
 }
 
 std::vector<llvm::Value*> GroupByAndAggregate::codegenAggArg(const Analyzer::Expr* target_expr,

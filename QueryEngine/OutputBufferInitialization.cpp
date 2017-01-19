@@ -124,6 +124,7 @@ int64_t get_agg_initial_val(const SQLAgg agg,
       }
     }
     case kCOUNT:
+    case kAPPROX_COUNT_DISTINCT:
       return 0;
     case kMIN: {
       switch (byte_width) {

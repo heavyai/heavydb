@@ -441,7 +441,7 @@ class QueryExecutionContext : boost::noncopyable {
 #endif
 
   std::vector<ssize_t> allocateCountDistinctBuffers(const bool deferred);
-  int64_t allocateCountDistinctBitmap(const size_t bitmap_sz);
+  int64_t allocateCountDistinctBitmap(const size_t bitmap_byte_sz);
   int64_t allocateCountDistinctSet();
 
   std::vector<ColumnLazyFetchInfo> getColLazyFetchInfo(const std::vector<Analyzer::Expr*>& target_exprs) const;
@@ -587,6 +587,8 @@ class GroupByAndAggregate {
                             const QueryMemoryDescriptor&,
                             const ExecutorDeviceType);
 
+  llvm::Value* getAdditionalLiteral(const int32_t off);
+
   std::vector<llvm::Value*> codegenAggArg(const Analyzer::Expr* target_expr, const CompilationOptions& co);
 
   llvm::Value* emitCall(const std::string& fname, const std::vector<llvm::Value*>& args);
@@ -603,6 +605,7 @@ class GroupByAndAggregate {
   const std::vector<InputTableInfo>& query_infos_;
   std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
   bool output_columnar_;
+  const ExecutorDeviceType device_type_;
 
   friend class Executor;
 };

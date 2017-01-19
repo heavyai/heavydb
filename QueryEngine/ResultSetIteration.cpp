@@ -431,9 +431,9 @@ TargetValue ResultSet::makeTargetValue(const int8_t* ptr,
     }
   }
   if (chosen_type.is_integer() | chosen_type.is_boolean() || chosen_type.is_time() || chosen_type.is_timeinterval()) {
-    if (target_info.is_distinct) {
-      return TargetValue(
-          bitmap_set_size(storage_->mappedPtr(ival), target_logical_idx, query_mem_desc_.count_distinct_descriptors_));
+    if (is_distinct_target(target_info)) {
+      return TargetValue(count_distinct_set_size(
+          storage_->mappedPtr(ival), target_logical_idx, query_mem_desc_.count_distinct_descriptors_));
     }
     if (inline_int_null_val(chosen_type) == ival) {
       return inline_int_null_val(target_info.sql_type);

@@ -792,10 +792,9 @@ void ResultSetStorage::reduceOneSlot(int8_t* this_ptr1,
   auto init_val = target_init_vals_[init_agg_val_idx];
   if (target_info.is_agg) {
     switch (target_info.agg_kind) {
-      case kCOUNT: {
-        if (target_info.is_distinct) {
-          CHECK(target_info.is_agg);
-          CHECK_EQ(kCOUNT, target_info.agg_kind);
+      case kCOUNT:
+      case kAPPROX_COUNT_DISTINCT: {
+        if (is_distinct_target(target_info)) {
           CHECK_EQ(static_cast<size_t>(chosen_bytes), sizeof(int64_t));
           reduceOneCountDistinctSlot(this_ptr1, that_ptr1, target_logical_idx, that);
           break;
@@ -854,17 +853,8 @@ void ResultSetStorage::reduceOneCountDistinctSlot(int8_t* this_ptr1,
   CHECK_LT(target_logical_idx, query_mem_desc_.count_distinct_descriptors_.size());
   const auto& count_distinct_desc = query_mem_desc_.count_distinct_descriptors_[target_logical_idx];
   CHECK(count_distinct_desc.impl_type_ != CountDistinctImplType::Invalid);
+  CHECK(this_ptr1 && that_ptr1);
   auto old_set_ptr = reinterpret_cast<const int64_t*>(this_ptr1);
   auto new_set_ptr = reinterpret_cast<const int64_t*>(that_ptr1);
-  if (count_distinct_desc.impl_type_ == CountDistinctImplType::Bitmap) {
-    auto old_set = reinterpret_cast<int8_t*>(mappedPtr(*old_set_ptr));
-    auto new_set = reinterpret_cast<int8_t*>(that.mappedPtr(*new_set_ptr));
-    bitmap_set_unify(new_set, old_set, count_distinct_desc.bitmapSizeBytes());
-  } else {
-    CHECK(count_distinct_desc.impl_type_ == CountDistinctImplType::StdSet);
-    auto old_set = reinterpret_cast<std::set<int64_t>*>(mappedPtr(*old_set_ptr));
-    auto new_set = reinterpret_cast<std::set<int64_t>*>(that.mappedPtr(*new_set_ptr));
-    old_set->insert(new_set->begin(), new_set->end());
-    new_set->insert(old_set->begin(), old_set->end());
-  }
+  count_distinct_set_union(*new_set_ptr, *old_set_ptr, count_distinct_desc);
 }

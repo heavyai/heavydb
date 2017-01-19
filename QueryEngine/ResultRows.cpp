@@ -242,10 +242,11 @@ bool ResultRows::reduceSingleRow(const int8_t* row_ptr,
       const auto chosen_bytes = query_mem_desc_.agg_col_widths[agg_col_idx].compact;
       auto partial_bin_val = get_component(row_ptr + query_mem_desc_.getColOnlyOffInBytes(agg_col_idx), chosen_bytes);
       partial_agg_vals[agg_col_idx] = partial_bin_val;
-      if (agg_info.is_distinct) {
+      if (is_distinct_target(agg_info)) {
         CHECK_EQ(int8_t(1), warp_count);
-        CHECK(agg_info.is_agg && agg_info.agg_kind == kCOUNT);
-        partial_bin_val = bitmap_set_size(partial_bin_val, target_idx, row_set_mem_owner_->count_distinct_descriptors_);
+        CHECK(agg_info.is_agg && (agg_info.agg_kind == kCOUNT || agg_info.agg_kind == kAPPROX_COUNT_DISTINCT));
+        partial_bin_val =
+            count_distinct_set_size(partial_bin_val, target_idx, row_set_mem_owner_->count_distinct_descriptors_);
         if (replace_bitmap_ptr_with_bitmap_sz) {
           partial_agg_vals[agg_col_idx] = partial_bin_val;
         }
@@ -278,6 +279,7 @@ bool ResultRows::reduceSingleRow(const int8_t* row_ptr,
         try {
           switch (agg_info.agg_kind) {
             case kCOUNT:
+            case kAPPROX_COUNT_DISTINCT:
               AGGREGATE_ONE_NULLABLE_COUNT(reinterpret_cast<int8_t*>(&agg_vals[agg_col_idx]),
                                            reinterpret_cast<int8_t*>(&partial_agg_vals[agg_col_idx]),
                                            agg_init_vals_[agg_col_idx],
@@ -395,9 +397,10 @@ void ResultRows::reduceSingleColumn(int8_t* crt_val_i1,
         chosen_type.is_string() || chosen_type.is_fp() || chosen_type.is_timeinterval());
   switch (agg_info.agg_kind) {
     case kCOUNT:
-      if (agg_info.is_distinct) {
+    case kAPPROX_COUNT_DISTINCT:
+      if (is_distinct_target(agg_info)) {
         CHECK(agg_info.is_agg);
-        CHECK_EQ(kCOUNT, agg_info.agg_kind);
+        CHECK(agg_info.agg_kind == kCOUNT || agg_info.agg_kind == kAPPROX_COUNT_DISTINCT);
         CHECK_EQ(crt_byte_width, sizeof(int64_t));
         auto crt_val_i1_ptr = reinterpret_cast<int64_t*>(crt_val_i1);
         CHECK_LT(target_idx, row_set_mem_owner_->count_distinct_descriptors_.size());
@@ -405,17 +408,8 @@ void ResultRows::reduceSingleColumn(int8_t* crt_val_i1,
         CHECK(count_distinct_desc.impl_type_ != CountDistinctImplType::Invalid);
         auto old_set_ptr = reinterpret_cast<const int64_t*>(crt_val_i1_ptr);
         auto new_set_ptr = reinterpret_cast<const int64_t*>(new_val_i1);
-        if (count_distinct_desc.impl_type_ == CountDistinctImplType::Bitmap) {
-          auto old_set = reinterpret_cast<int8_t*>(*old_set_ptr);
-          auto new_set = reinterpret_cast<int8_t*>(*new_set_ptr);
-          bitmap_set_unify(new_set, old_set, count_distinct_desc.bitmapSizeBytes());
-        } else {
-          CHECK(count_distinct_desc.impl_type_ == CountDistinctImplType::StdSet);
-          auto old_set = reinterpret_cast<std::set<int64_t>*>(*old_set_ptr);
-          auto new_set = reinterpret_cast<std::set<int64_t>*>(*new_set_ptr);
-          old_set->insert(new_set->begin(), new_set->end());
-          new_set->insert(old_set->begin(), old_set->end());
-        }
+        CHECK(old_set_ptr && new_set_ptr);
+        count_distinct_set_union(*new_set_ptr, *old_set_ptr, count_distinct_desc);
         break;
       }
       AGGREGATE_ONE_NULLABLE_COUNT(crt_val_i1, new_val_i1, agg_skip_val, crt_byte_width, agg_info);
@@ -944,11 +938,11 @@ void ResultRows::sort(const std::list<Analyzer::OrderEntry>& order_entries,
           }
           return use_desc_cmp ? lhs_str > rhs_str : lhs_str < rhs_str;
         }
-        if (UNLIKELY(targets_[order_entry.tle_no - 1].is_distinct)) {
-          const auto lhs_sz =
-              bitmap_set_size(lhs_v.i1, order_entry.tle_no - 1, row_set_mem_owner_->count_distinct_descriptors_);
-          const auto rhs_sz =
-              bitmap_set_size(rhs_v.i1, order_entry.tle_no - 1, row_set_mem_owner_->count_distinct_descriptors_);
+        if (UNLIKELY(is_distinct_target(targets_[order_entry.tle_no - 1]))) {
+          const auto lhs_sz = count_distinct_set_size(
+              lhs_v.i1, order_entry.tle_no - 1, row_set_mem_owner_->count_distinct_descriptors_);
+          const auto rhs_sz = count_distinct_set_size(
+              rhs_v.i1, order_entry.tle_no - 1, row_set_mem_owner_->count_distinct_descriptors_);
           if (lhs_sz == rhs_sz) {
             continue;
           }
@@ -1117,8 +1111,9 @@ TargetValue result_rows_get_impl(const InternalTargetValue& col_val,
   }
   if (chosen_type.is_integer() || chosen_type.is_decimal() || chosen_type.is_boolean() || chosen_type.is_time() ||
       chosen_type.is_timeinterval()) {
-    if (agg_info.is_distinct) {
-      return TargetValue(bitmap_set_size(col_val.i1, col_idx, row_set_mem_owner->getCountDistinctDescriptors()));
+    if (is_distinct_target(agg_info)) {
+      return TargetValue(
+          count_distinct_set_size(col_val.i1, col_idx, row_set_mem_owner->getCountDistinctDescriptors()));
     }
     CHECK(col_val.isInt());
     if (chosen_type.is_decimal() && decimal_to_double) {
@@ -1374,7 +1369,7 @@ bool ResultRows::fetchLazyOrBuildRow(std::vector<TargetValue>& row,
       for (size_t target_idx = 0, agg_col_idx = 0; target_idx < targets_.size() && agg_col_idx < agg_col_count;
            ++target_idx, ++agg_col_idx) {
         const auto& agg_info = targets_[target_idx];
-        if (agg_info.is_distinct) {
+        if (is_distinct_target(agg_info)) {
           row.emplace_back(agg_vals[agg_col_idx]);
         } else {
           const auto chosen_bytes = query_mem_desc_.agg_col_widths[agg_col_idx].compact;

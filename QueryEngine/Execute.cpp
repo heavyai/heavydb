@@ -3566,6 +3566,9 @@ std::vector<std::string> get_agg_fnames(const std::vector<Analyzer::Expr*>& targ
       case kCOUNT:
         result.push_back(agg_expr->get_is_distinct() ? "agg_count_distinct" : "agg_count");
         break;
+      case kAPPROX_COUNT_DISTINCT:
+        result.push_back("agg_approximate_count_distinct");
+        break;
       default:
         CHECK(false);
     }
@@ -5232,8 +5235,8 @@ int32_t Executor::executePlanWithoutGroupBy(const RelAlgExecutionUnit& ra_exe_un
       const auto agg_info = target_info(target_expr);
       CHECK(agg_info.is_agg);
       int64_t val1;
-      if (agg_info.is_distinct) {
-        CHECK_EQ(kCOUNT, agg_info.agg_kind);
+      if (is_distinct_target(agg_info)) {
+        CHECK(agg_info.agg_kind == kCOUNT || agg_info.agg_kind == kAPPROX_COUNT_DISTINCT);
         val1 = out_vec[out_vec_idx][0];
         error_code = 0;
       } else {
@@ -6507,6 +6510,7 @@ declare i8 @regexp_like_nullable(i8*, i32, i8*, i32, i8, i8);
 declare void @linear_probabilistic_count(i8*, i32, i8*, i32);
 declare void @agg_count_distinct_bitmap_gpu(i64*, i64, i64, i64, i64);
 declare void @agg_count_distinct_bitmap_skip_val_gpu(i64*, i64, i64, i64, i64, i64);
+declare void @agg_approximate_count_distinct_gpu(i64*, i64, i32, i64, i64);
 declare i32 @record_error_code(i32, i32*);
 declare i1 @dynamic_watchdog(i64);
 declare void @force_sync();

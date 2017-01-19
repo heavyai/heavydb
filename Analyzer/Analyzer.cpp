@@ -1770,6 +1770,9 @@ void AggExpr::print() const {
     case kCOUNT:
       agg = "COUNT ";
       break;
+    case kAPPROX_COUNT_DISTINCT:
+      agg = "APPROX_COUNT_DISTINCT";
+      break;
   }
   std::cout << "(" << agg;
   if (is_distinct)

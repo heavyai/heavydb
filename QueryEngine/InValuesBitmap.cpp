@@ -56,7 +56,7 @@ InValuesBitmap::InValuesBitmap(const std::vector<int64_t>& values,
   if (bitmap_sz_bits > MAX_BITMAP_BITS) {
     throw FailedToCreateBitmap();
   }
-  const auto bitmap_sz_bytes = bitmap_size_bytes(bitmap_sz_bits);
+  const auto bitmap_sz_bytes = bitmap_bits_to_bytes(bitmap_sz_bits);
   auto cpu_bitset = static_cast<int8_t*>(checked_calloc(bitmap_sz_bytes, 1));
   for (const auto value : values) {
     if (value == null_val) {

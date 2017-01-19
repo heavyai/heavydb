@@ -114,16 +114,10 @@ ResultSet::ResultSet(const std::shared_ptr<const Analyzer::NDVEstimator> estimat
       host_estimator_buffer_(nullptr),
       data_mgr_(data_mgr),
       none_encoded_strings_valid_(false) {
-  std::unique_ptr<int8_t, CheckedAllocDeleter> zeros(
-      static_cast<int8_t*>(checked_calloc(estimator_->getEstimatorBufferSize(), 1)));
   if (device_type == ExecutorDeviceType::GPU) {
     estimator_buffer_ =
         reinterpret_cast<int8_t*>(alloc_gpu_mem(data_mgr_, estimator_->getEstimatorBufferSize(), device_id_, nullptr));
-    copy_to_gpu(data_mgr,
-                reinterpret_cast<CUdeviceptr>(estimator_buffer_),
-                zeros.get(),
-                estimator_->getEstimatorBufferSize(),
-                device_id_);
+    data_mgr->cudaMgr_->zeroDeviceMem(estimator_buffer_, estimator_->getEstimatorBufferSize(), device_id_);
   } else {
     host_estimator_buffer_ = static_cast<int8_t*>(checked_calloc(estimator_->getEstimatorBufferSize(), 1));
   }
@@ -517,10 +511,10 @@ std::function<bool(const uint32_t, const uint32_t)> ResultSet::createComparator(
           }
           return use_desc_cmp ? lhs_str > rhs_str : lhs_str < rhs_str;
         }
-        if (UNLIKELY(targets_[order_entry.tle_no - 1].is_distinct)) {
-          const auto lhs_sz = bitmap_set_size(
+        if (UNLIKELY(is_distinct_target(targets_[order_entry.tle_no - 1]))) {
+          const auto lhs_sz = count_distinct_set_size(
               storage_->mappedPtr(lhs_v.i1), order_entry.tle_no - 1, row_set_mem_owner_->getCountDistinctDescriptors());
-          const auto rhs_sz = bitmap_set_size(
+          const auto rhs_sz = count_distinct_set_size(
               storage_->mappedPtr(rhs_v.i1), order_entry.tle_no - 1, row_set_mem_owner_->getCountDistinctDescriptors());
           if (lhs_sz == rhs_sz) {
             continue;

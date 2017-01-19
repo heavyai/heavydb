@@ -74,16 +74,26 @@ class SQLiteComparator {
   void query(const std::string& query_string) { connector_.query(query_string); }
 
   void compare(const std::string& query_string, const ExecutorDeviceType device_type) {
-    compare_impl(query_string, device_type, false);
+    compare_impl(query_string, query_string, device_type, false);
+  }
+
+  void compare(const std::string& query_string,
+               const std::string& sqlite_query_string,
+               const ExecutorDeviceType device_type) {
+    compare_impl(query_string, sqlite_query_string, device_type, false);
   }
 
   // added to deal with time shift for now testing
   void compare_timstamp_approx(const std::string& query_string, const ExecutorDeviceType device_type) {
-    compare_impl(query_string, device_type, true);
+    compare_impl(query_string, query_string, device_type, true);
   }
 
-  void compare_impl(const std::string& query_string, const ExecutorDeviceType device_type, bool timestamp_approx) {
-    connector_.query(query_string);
+ private:
+  void compare_impl(const std::string& query_string,
+                    const std::string& sqlite_query_string,
+                    const ExecutorDeviceType device_type,
+                    bool timestamp_approx) {
+    connector_.query(sqlite_query_string);
     const auto mapd_results = run_multiple_agg(query_string, device_type);
     ASSERT_EQ(connector_.getNumRows(), mapd_results.rowCount());
     const int num_rows{static_cast<int>(connector_.getNumRows())};
@@ -262,6 +272,10 @@ SQLiteComparator g_sqlite_comparator;
 
 void c(const std::string& query_string, const ExecutorDeviceType device_type) {
   g_sqlite_comparator.compare(query_string, device_type);
+}
+
+void c(const std::string& query_string, const std::string& sqlite_query_string, const ExecutorDeviceType device_type) {
+  g_sqlite_comparator.compare(query_string, sqlite_query_string, device_type);
 }
 
 /* timestamp approximate checking for NOW() */
@@ -547,6 +561,39 @@ TEST(Select, CountDistinct) {
     EXPECT_THROW(run_multiple_agg("SELECT COUNT(distinct real_str) FROM test;", dt), std::runtime_error);
   }
 }
+
+#ifdef HAVE_RAVM
+TEST(Select, ApproxCountDistinct) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT APPROX_COUNT_DISTINCT(x) FROM test;", "SELECT COUNT(distinct x) FROM test;", dt);
+    c("SELECT APPROX_COUNT_DISTINCT(b) FROM test;", "SELECT COUNT(distinct b) FROM test;", dt);
+    c("SELECT APPROX_COUNT_DISTINCT(f) FROM test;", "SELECT COUNT(distinct f) FROM test;", dt);
+    c("SELECT APPROX_COUNT_DISTINCT(d) FROM test;", "SELECT COUNT(distinct d) FROM test;", dt);
+    c("SELECT APPROX_COUNT_DISTINCT(str) FROM test;", "SELECT COUNT(distinct str) FROM test;", dt);
+    c("SELECT APPROX_COUNT_DISTINCT(ss) FROM test WHERE ss IS NOT NULL;", "SELECT COUNT(distinct ss) FROM test;", dt);
+    c("SELECT APPROX_COUNT_DISTINCT(x + 1) FROM test;", "SELECT COUNT(distinct x + 1) FROM test;", dt);
+    c("SELECT COUNT(*), MIN(x), MAX(x), AVG(y), SUM(z) AS n, APPROX_COUNT_DISTINCT(x) FROM test GROUP BY y ORDER "
+      "BY n;",
+      "SELECT COUNT(*), MIN(x), MAX(x), AVG(y), SUM(z) AS n, COUNT(distinct x) FROM test GROUP BY y ORDER BY n;",
+      dt);
+    c("SELECT COUNT(*), MIN(x), MAX(x), AVG(y), SUM(z) AS n, APPROX_COUNT_DISTINCT(x + 1) FROM test GROUP BY y "
+      "ORDER BY n;",
+      "SELECT COUNT(*), MIN(x), MAX(x), AVG(y), SUM(z) AS n, COUNT(distinct x + 1) FROM test GROUP BY y ORDER BY n;",
+      dt);
+    c("SELECT APPROX_COUNT_DISTINCT(dd) AS n FROM test GROUP BY y ORDER BY n;",
+      "SELECT COUNT(distinct dd) AS n FROM test GROUP BY y ORDER BY n;",
+      dt);
+    c("SELECT z, str, AVG(z), APPROX_COUNT_DISTINCT(z) FROM test GROUP BY z, str;",
+      "SELECT z, str, AVG(z), COUNT(distinct z) FROM test GROUP BY z, str;",
+      dt);
+    c("SELECT AVG(z), APPROX_COUNT_DISTINCT(x) AS dx FROM test GROUP BY y HAVING dx > 1;",
+      "SELECT AVG(z), COUNT(distinct x) AS dx FROM test GROUP BY y HAVING dx > 1;",
+      dt);
+    EXPECT_THROW(run_multiple_agg("SELECT APPROX_COUNT_DISTINCT(real_str) FROM test;", dt), std::runtime_error);
+  }
+}
+#endif  // HAVE_RAVM
 
 TEST(Select, ScanNoAggregation) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {

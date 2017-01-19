@@ -8,6 +8,7 @@
 #ifndef QUERYENGINE_RESULTROWS_H
 #define QUERYENGINE_RESULTROWS_H
 
+#include "HyperLogLog.h"
 #include "QueryMemoryDescriptor.h"
 #include "ResultSet.h"
 #include "TargetValue.h"
@@ -27,25 +28,6 @@
 struct QueryMemoryDescriptor;
 struct RelAlgExecutionUnit;
 class RowSetMemoryOwner;
-
-inline int64_t bitmap_set_size(const int64_t bitmap_ptr,
-                               const int target_idx,
-                               const CountDistinctDescriptors& count_distinct_descriptors) {
-  CHECK_LT(target_idx, count_distinct_descriptors.size());
-  const auto& count_distinct_desc = count_distinct_descriptors[target_idx];
-  if (count_distinct_desc.impl_type_ == CountDistinctImplType::Bitmap) {
-    auto set_vals = reinterpret_cast<const int8_t*>(bitmap_ptr);
-    return bitmap_set_size(set_vals, count_distinct_desc.bitmapSizeBytes());
-  }
-  CHECK(count_distinct_desc.impl_type_ == CountDistinctImplType::StdSet);
-  return reinterpret_cast<std::set<int64_t>*>(bitmap_ptr)->size();
-}
-
-inline void bitmap_set_unify(int8_t* lhs, int8_t* rhs, const size_t bitmap_sz) {
-  for (size_t i = 0; i < bitmap_sz; ++i) {
-    lhs[i] = rhs[i] = lhs[i] | rhs[i];
-  }
-}
 
 inline int64_t get_component(const int8_t* group_by_buffer, const size_t comp_sz, const size_t index = 0) {
   int64_t ret = std::numeric_limits<int64_t>::min();

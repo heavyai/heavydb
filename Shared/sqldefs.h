@@ -44,7 +44,7 @@ enum SQLOps {
 
 enum SQLQualifier { kONE, kANY, kALL };
 
-enum SQLAgg { kAVG, kMIN, kMAX, kSUM, kCOUNT };
+enum SQLAgg { kAVG, kMIN, kMAX, kSUM, kCOUNT, kAPPROX_COUNT_DISTINCT };
 
 enum SQLStmtType { kSELECT, kUPDATE, kINSERT, kDELETE, kCREATE_TABLE };
 

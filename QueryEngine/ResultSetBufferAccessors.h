@@ -18,7 +18,6 @@
 #include "QueryMemoryDescriptor.h"
 
 #include <algorithm>
-#include <bitset>
 
 inline bool is_real_str_or_array(const TargetInfo& target_info) {
   return !target_info.is_agg &&
@@ -145,23 +144,6 @@ inline T advance_target_ptr(T target_ptr,
     return result + query_mem_desc.agg_col_widths[slot_idx + 1].compact;
   }
   return result;
-}
-
-inline size_t bitmap_set_size(const int8_t* bitmap, const size_t bitmap_byte_sz) {
-  const auto bitmap_word_count = bitmap_byte_sz >> 3;
-  const auto bitmap_rem_bytes = bitmap_byte_sz & 7;
-  const auto bitmap64 = reinterpret_cast<const int64_t*>(bitmap);
-  size_t set_size = 0;
-  for (size_t i = 0; i < bitmap_word_count; ++i) {
-    std::bitset<64> word_bitset(bitmap64[i]);
-    set_size += word_bitset.count();
-  }
-  const auto rem_bitmap = reinterpret_cast<const int8_t*>(&bitmap64[bitmap_word_count]);
-  for (size_t i = 0; i < bitmap_rem_bytes; ++i) {
-    std::bitset<8> byte_bitset(rem_bitmap[i]);
-    set_size += byte_bitset.count();
-  }
-  return set_size;
 }
 
 #endif  // __CUDACC__
