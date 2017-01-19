@@ -444,6 +444,29 @@ class ResultRows {
         queue_time_ms_(queue_time_ms),
         render_time_ms_(render_time_ms) {}
 
+  ResultRows(const std::string& explanation,
+             int64_t queue_time_ms,
+             int64_t render_time_ms,
+             const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner)
+      : result_set_(nullptr),
+        query_mem_desc_{},
+        row_set_mem_owner_(row_set_mem_owner),
+        group_by_buffer_idx_(0),
+        output_columnar_(false),
+        in_place_(false),
+        device_type_(ExecutorDeviceType::Hybrid),
+        device_id_(-1),
+        crt_row_idx_(0),
+        crt_row_buff_idx_(0),
+        drop_first_(0),
+        keep_first_(0),
+        fetch_started_(false),
+        in_place_buff_idx_(0),
+        just_explain_(true),
+        explanation_(explanation),
+        queue_time_ms_(queue_time_ms),
+        render_time_ms_(render_time_ms) {}
+
   explicit ResultRows(const std::string& explanation)
       : result_set_(nullptr),
         query_mem_desc_{},
@@ -700,6 +723,8 @@ class ResultRows {
       result_set_->holdChunkIterators(chunk_iters);
     }
   }
+
+  std::shared_ptr<RowSetMemoryOwner> getRowSetMemOwner() const { return row_set_mem_owner_; }
 
  private:
   void reduceSingleColumn(int8_t* crt_val_i1,
