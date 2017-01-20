@@ -1,7 +1,7 @@
 MapD Platform Release Notes
 ===========================
 
-The latest version of the MapD Platform is 2.0.1.1.
+The latest version of the MapD Platform is 2.0.2.
 
 **Version 2.0**
 -----------------
@@ -23,6 +23,75 @@ The latest version of the MapD Platform is 2.0.1.1.
     be included in the MapD install, with sufficient notice to be given before it
     is removed.  Henceforth, updates to Immerse will be noted in these release
     notes.
+
+**2.0.2** - Released January 20, 2016
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+MapD Core
++++++++++
+
+New
+'''
+
+- New Python interface to support standard Python database APIs
+- More groups now possible in multi-column `GROUP BY` queries
+- Error messages for unsupported joins now specify problem table
+- Error messages for `CREATE TABLE` now specify problem column
+- Now can use alias for `GROUP BY` in an ORDER BY query
+- Column and table names may now start with an underscore (_)
+- Thrift’s get_server_status call now provides server start time
+- Now supporting explicit `CAST` from string literal to `DATE`, `TIME` or `TIMESTAMP`
+
+Fixed
+'''''
+
+- Problem with `HAVING` queries which use fixed encoding columns
+- Problem with some `IN` subqueries which return no results
+- Problem with `NULL` handling for `NOT IN` subqueries
+- Fixed the result of `NULL OR TRUE` operations
+- Fixed conversion to floating point for decimal literals with more than 18 decimal places
+
+MapD Iris Rendering Engine
+++++++++++++++++++++++++++
+.. note:: Changes to MapD Core's GPU rendering engine, the "Iris Rendering Engine," will be tracked in this section going forward.
+
+New
+'''
+
+- Added support for HSL, LAB, and HCL color spaces
+- Now supporting rendering of `DECIMAL` and `BIGINT` types
+
+Fixed
+'''''
+- Bug when new columns are added to results of embedded vega query w/ no other change
+
+
+MapD Immerse
+++++++++++++
+
+New
+'''
+
+- Pointmap: Zoom to geocoded location
+- Changed labelling for "row" chart to "bar" chart
+- Added area chart view for line chart
+- Global filters for `IS NULL` / `IS NOT NULL`
+- Multi-series line chart now has option to display non-enumerated items as "All Others"
+
+Fixed
+'''''
+
+- Browser crash when removing dimension sorts on table chart
+- Re-added visible border around mapbox shift zoom
+- Continuous Legend's user-applied min/max will no longer reset when changing colors on point map
+- Range chart can now be removed from IE 11
+- No longer re-rendering all charts when entering chart editor mode
+- No longer updating deleted charts
+- Color Widget will no longer save empty values
+- Switching between custom color and quantitative color will no longer cause 2 different types of legend to appear and overlap
+- DC: No longer updating Range Chart after user has completed brushing of Range Chart
+- DC: Make zoom to bounds safe by snapping to global view if lat/lon values are invalid
+- CF: Update binning precision to address occasional incorrect forming of bins
 
 **2.0.1.1** - Released December 20, 2016
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
