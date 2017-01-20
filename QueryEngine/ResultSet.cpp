@@ -257,11 +257,7 @@ void ResultSet::syncEstimatorBuffer() const {
 
 size_t ResultSet::getNDVEstimator() const {
   CHECK(host_estimator_buffer_);
-  size_t bits_set = 0;
-  for (size_t i = 0; i < estimator_->getEstimatorBufferSize(); ++i) {
-    const auto bitfield = host_estimator_buffer_[i];
-    bits_set += std::bitset<8>(bitfield).count();
-  }
+  auto bits_set = bitmap_set_size(host_estimator_buffer_, estimator_->getEstimatorBufferSize());
   const auto total_bits = estimator_->getEstimatorBufferSize() * 8;
   CHECK_LE(bits_set, total_bits);
   const auto unset_bits = total_bits - bits_set;

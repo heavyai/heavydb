@@ -32,21 +32,12 @@ inline int64_t bitmap_set_size(const int64_t bitmap_ptr,
                                const CountDistinctDescriptors& count_distinct_descriptors) {
   CHECK_LT(target_idx, count_distinct_descriptors.size());
   const auto& count_distinct_desc = count_distinct_descriptors[target_idx];
-  CHECK(count_distinct_desc.impl_type_ != CountDistinctImplType::Invalid);
-  if (count_distinct_desc.impl_type_ != CountDistinctImplType::Bitmap) {
-    CHECK(count_distinct_desc.impl_type_ == CountDistinctImplType::StdSet);
-    return reinterpret_cast<std::set<int64_t>*>(bitmap_ptr)->size();
+  if (count_distinct_desc.impl_type_ == CountDistinctImplType::Bitmap) {
+    auto set_vals = reinterpret_cast<const int8_t*>(bitmap_ptr);
+    return bitmap_set_size(set_vals, count_distinct_desc.bitmapSizeBytes());
   }
-  int64_t set_size{0};
-  auto set_vals = reinterpret_cast<const int8_t*>(bitmap_ptr);
-  for (size_t i = 0; i < count_distinct_desc.bitmapSizeBytes(); ++i) {
-    for (auto bit_idx = 0; bit_idx < 8; ++bit_idx) {
-      if (set_vals[i] & (1 << bit_idx)) {
-        ++set_size;
-      }
-    }
-  }
-  return set_size;
+  CHECK(count_distinct_desc.impl_type_ == CountDistinctImplType::StdSet);
+  return reinterpret_cast<std::set<int64_t>*>(bitmap_ptr)->size();
 }
 
 inline void bitmap_set_unify(int8_t* lhs, int8_t* rhs, const size_t bitmap_sz) {
