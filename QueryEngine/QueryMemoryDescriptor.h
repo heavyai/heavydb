@@ -43,7 +43,7 @@ struct ColWidths {
 // Shared: threads in the same block share memory, atomic operations required
 enum class GroupByMemSharing { Private, Shared };
 
-enum class CountDistinctImplType { Bitmap, StdSet };
+enum class CountDistinctImplType { Invalid, Bitmap, StdSet };
 
 inline size_t bitmap_size_bytes(const size_t bitmap_sz) {
   size_t bitmap_byte_sz = bitmap_sz / 8;
@@ -64,7 +64,7 @@ struct CountDistinctDescriptor {
   }
 };
 
-typedef std::unordered_map<size_t, CountDistinctDescriptor> CountDistinctDescriptors;
+typedef std::vector<CountDistinctDescriptor> CountDistinctDescriptors;
 
 struct RelAlgExecutionUnit;
 

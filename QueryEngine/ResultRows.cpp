@@ -400,16 +400,17 @@ void ResultRows::reduceSingleColumn(int8_t* crt_val_i1,
         CHECK_EQ(kCOUNT, agg_info.agg_kind);
         CHECK_EQ(crt_byte_width, sizeof(int64_t));
         auto crt_val_i1_ptr = reinterpret_cast<int64_t*>(crt_val_i1);
-        auto count_distinct_desc_it = row_set_mem_owner_->count_distinct_descriptors_.find(target_idx);
-        CHECK(count_distinct_desc_it != row_set_mem_owner_->count_distinct_descriptors_.end());
+        CHECK_LT(target_idx, row_set_mem_owner_->count_distinct_descriptors_.size());
+        const auto& count_distinct_desc = row_set_mem_owner_->count_distinct_descriptors_[target_idx];
+        CHECK(count_distinct_desc.impl_type_ != CountDistinctImplType::Invalid);
         auto old_set_ptr = reinterpret_cast<const int64_t*>(crt_val_i1_ptr);
         auto new_set_ptr = reinterpret_cast<const int64_t*>(new_val_i1);
-        if (count_distinct_desc_it->second.impl_type_ == CountDistinctImplType::Bitmap) {
+        if (count_distinct_desc.impl_type_ == CountDistinctImplType::Bitmap) {
           auto old_set = reinterpret_cast<int8_t*>(*old_set_ptr);
           auto new_set = reinterpret_cast<int8_t*>(*new_set_ptr);
-          bitmap_set_unify(new_set, old_set, count_distinct_desc_it->second.bitmapSizeBytes());
+          bitmap_set_unify(new_set, old_set, count_distinct_desc.bitmapSizeBytes());
         } else {
-          CHECK(count_distinct_desc_it->second.impl_type_ == CountDistinctImplType::StdSet);
+          CHECK(count_distinct_desc.impl_type_ == CountDistinctImplType::StdSet);
           auto old_set = reinterpret_cast<std::set<int64_t>*>(*old_set_ptr);
           auto new_set = reinterpret_cast<std::set<int64_t>*>(*new_set_ptr);
           old_set->insert(new_set->begin(), new_set->end());

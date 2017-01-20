@@ -5863,8 +5863,8 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
   const bool output_columnar = group_by_and_aggregate.outputColumnar();
 
   if (co.device_type_ == ExecutorDeviceType::GPU) {
-    for (const auto& count_distinct_descriptor_kv : query_mem_desc.count_distinct_descriptors_) {
-      if (count_distinct_descriptor_kv.second.impl_type_ == CountDistinctImplType::StdSet) {
+    for (const auto& count_distinct_descriptor : query_mem_desc.count_distinct_descriptors_) {
+      if (count_distinct_descriptor.impl_type_ == CountDistinctImplType::StdSet) {
         cgen_state_->must_run_on_cpu_ = true;
       }
     }

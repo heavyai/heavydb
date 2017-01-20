@@ -24,6 +24,7 @@
 #include <llvm/IR/MDBuilder.h>
 #endif
 
+#include <algorithm>
 #include <numeric>
 #include <thread>
 
@@ -149,15 +150,29 @@ QueryExecutionContext::QueryExecutionContext(const RelAlgExecutionUnit& ra_exe_u
   }
 }
 
+namespace {
+
+bool countDescriptorsLogicallyEmpty(const CountDistinctDescriptors& count_distinct_descriptors) {
+  return std::all_of(
+      count_distinct_descriptors.begin(), count_distinct_descriptors.end(), [](const CountDistinctDescriptor& desc) {
+        return desc.impl_type_ == CountDistinctImplType::Invalid;
+      });
+}
+
+}  // namespace
+
 void QueryExecutionContext::allocateCountDistinctGpuMem() {
-  if (query_mem_desc_.count_distinct_descriptors_.empty()) {
+  if (countDescriptorsLogicallyEmpty(query_mem_desc_.count_distinct_descriptors_)) {
     return;
   }
   CHECK(executor_);
   auto data_mgr = &executor_->catalog_->get_dataMgr();
   size_t total_bytes_per_entry{0};
   for (const auto& count_distinct_desc : query_mem_desc_.count_distinct_descriptors_) {
-    total_bytes_per_entry += align_to_int64(count_distinct_desc.second.bitmapSizeBytes());
+    if (count_distinct_desc.impl_type_ == CountDistinctImplType::Invalid) {
+      continue;
+    }
+    total_bytes_per_entry += align_to_int64(count_distinct_desc.bitmapSizeBytes());
   }
   count_distinct_bitmap_mem_bytes_ =
       total_bytes_per_entry * (query_mem_desc_.entry_count + query_mem_desc_.entry_count_small);
@@ -376,9 +391,9 @@ std::vector<ssize_t> QueryExecutionContext::allocateCountDistinctBuffers(const b
     if (agg_info.is_distinct) {
       CHECK(agg_info.is_agg && agg_info.agg_kind == kCOUNT);
       CHECK_EQ(static_cast<size_t>(query_mem_desc_.agg_col_widths[agg_col_idx].actual), sizeof(int64_t));
-      auto count_distinct_it = query_mem_desc_.count_distinct_descriptors_.find(target_idx);
-      CHECK(count_distinct_it != query_mem_desc_.count_distinct_descriptors_.end());
-      const auto& count_distinct_desc = count_distinct_it->second;
+      CHECK_LT(target_idx, query_mem_desc_.count_distinct_descriptors_.size());
+      const auto& count_distinct_desc = query_mem_desc_.count_distinct_descriptors_[target_idx];
+      CHECK(count_distinct_desc.impl_type_ != CountDistinctImplType::Invalid);
       if (count_distinct_desc.impl_type_ == CountDistinctImplType::Bitmap) {
         if (deferred) {
           agg_bitmap_size[agg_col_idx] = count_distinct_desc.bitmap_sz_bits;
@@ -1759,7 +1774,6 @@ void GroupByAndAggregate::addTransientStringLiterals() {
 
 CountDistinctDescriptors GroupByAndAggregate::initCountDistinctDescriptors() {
   CountDistinctDescriptors count_distinct_descriptors;
-  size_t target_idx{0};
   for (const auto target_expr : ra_exe_unit_.target_exprs) {
     auto agg_info = target_info(target_expr);
     if (agg_info.is_distinct) {
@@ -1785,11 +1799,11 @@ CountDistinctDescriptors GroupByAndAggregate::initCountDistinctDescriptors() {
       if (g_enable_watchdog && count_distinct_impl_type == CountDistinctImplType::StdSet) {
         throw WatchdogException("Cannot use a fast path for COUNT distinct");
       }
-      CountDistinctDescriptor count_distinct_desc{count_distinct_impl_type, arg_range_info.min, bitmap_sz_bits};
-      auto it_ok = count_distinct_descriptors.insert(std::make_pair(target_idx, count_distinct_desc));
-      CHECK(it_ok.second);
+      count_distinct_descriptors.emplace_back(
+          CountDistinctDescriptor{count_distinct_impl_type, arg_range_info.min, bitmap_sz_bits});
+    } else {
+      count_distinct_descriptors.emplace_back(CountDistinctDescriptor{CountDistinctImplType::Invalid, 0, 0});
     }
-    ++target_idx;
   }
   return count_distinct_descriptors;
 }
@@ -1993,7 +2007,7 @@ bool QueryMemoryDescriptor::threadsShareMemory() const {
 }
 
 bool QueryMemoryDescriptor::blocksShareMemory() const {
-  if (!count_distinct_descriptors_.empty()) {
+  if (!countDescriptorsLogicallyEmpty(count_distinct_descriptors_)) {
     return true;
   }
   if (executor_->isCPUOnly() || render_output || hash_type == GroupByColRangeType::MultiCol ||
@@ -2005,7 +2019,7 @@ bool QueryMemoryDescriptor::blocksShareMemory() const {
 
 bool QueryMemoryDescriptor::lazyInitGroups(const ExecutorDeviceType device_type) const {
   return device_type == ExecutorDeviceType::GPU && !render_output && !getSmallBufferSizeQuad() &&
-         count_distinct_descriptors_.empty();
+         countDescriptorsLogicallyEmpty(count_distinct_descriptors_);
 }
 
 bool QueryMemoryDescriptor::interleavedBins(const ExecutorDeviceType device_type) const {
@@ -2746,12 +2760,13 @@ void GroupByAndAggregate::codegenCountDistinct(const size_t target_idx,
     agg_args.back() = executor_->cgen_state_->ir_builder_.CreateBitCast(
         agg_args.back(), get_int_type(64, executor_->cgen_state_->context_));
   }
-  auto it_count_distinct = query_mem_desc.count_distinct_descriptors_.find(target_idx);
-  CHECK(it_count_distinct != query_mem_desc.count_distinct_descriptors_.end());
+  CHECK_LT(target_idx, query_mem_desc_.count_distinct_descriptors_.size());
+  const auto& count_distinct_descriptor = query_mem_desc.count_distinct_descriptors_[target_idx];
+  CHECK(count_distinct_descriptor.impl_type_ != CountDistinctImplType::Invalid);
   std::string agg_fname{"agg_count_distinct"};
-  if (it_count_distinct->second.impl_type_ == CountDistinctImplType::Bitmap) {
+  if (count_distinct_descriptor.impl_type_ == CountDistinctImplType::Bitmap) {
     agg_fname += "_bitmap";
-    agg_args.push_back(LL_INT(static_cast<int64_t>(it_count_distinct->second.min_val)));
+    agg_args.push_back(LL_INT(static_cast<int64_t>(count_distinct_descriptor.min_val)));
   }
   if (agg_info.skip_null_val) {
     auto null_lv =
@@ -2764,7 +2779,7 @@ void GroupByAndAggregate::codegenCountDistinct(const size_t target_idx,
     agg_args.push_back(null_lv);
   }
   if (device_type == ExecutorDeviceType::GPU && !executor_->cgen_state_->must_run_on_cpu_) {
-    CHECK(it_count_distinct->second.impl_type_ == CountDistinctImplType::Bitmap);
+    CHECK(count_distinct_descriptor.impl_type_ == CountDistinctImplType::Bitmap);
     agg_fname += "_gpu";
     const auto lit_buff_lv = get_literal_buff_arg(ROW_FUNC);
     const auto base_dev_addr = LL_BUILDER.CreateLoad(LL_BUILDER.CreateGEP(
@@ -2774,7 +2789,7 @@ void GroupByAndAggregate::codegenCountDistinct(const size_t target_idx,
     agg_args.push_back(base_dev_addr);
     agg_args.push_back(base_host_addr);
   }
-  if (it_count_distinct->second.impl_type_ == CountDistinctImplType::Bitmap) {
+  if (count_distinct_descriptor.impl_type_ == CountDistinctImplType::Bitmap) {
     emitCall(agg_fname, agg_args);
   } else {
     emitCall(agg_fname, agg_args);

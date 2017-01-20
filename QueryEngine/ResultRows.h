@@ -30,15 +30,16 @@ class RowSetMemoryOwner;
 inline int64_t bitmap_set_size(const int64_t bitmap_ptr,
                                const int target_idx,
                                const CountDistinctDescriptors& count_distinct_descriptors) {
-  const auto count_distinct_desc_it = count_distinct_descriptors.find(target_idx);
-  CHECK(count_distinct_desc_it != count_distinct_descriptors.end());
-  if (count_distinct_desc_it->second.impl_type_ != CountDistinctImplType::Bitmap) {
-    CHECK(count_distinct_desc_it->second.impl_type_ == CountDistinctImplType::StdSet);
+  CHECK_LT(target_idx, count_distinct_descriptors.size());
+  const auto& count_distinct_desc = count_distinct_descriptors[target_idx];
+  CHECK(count_distinct_desc.impl_type_ != CountDistinctImplType::Invalid);
+  if (count_distinct_desc.impl_type_ != CountDistinctImplType::Bitmap) {
+    CHECK(count_distinct_desc.impl_type_ == CountDistinctImplType::StdSet);
     return reinterpret_cast<std::set<int64_t>*>(bitmap_ptr)->size();
   }
   int64_t set_size{0};
   auto set_vals = reinterpret_cast<const int8_t*>(bitmap_ptr);
-  for (size_t i = 0; i < count_distinct_desc_it->second.bitmapSizeBytes(); ++i) {
+  for (size_t i = 0; i < count_distinct_desc.bitmapSizeBytes(); ++i) {
     for (auto bit_idx = 0; bit_idx < 8; ++bit_idx) {
       if (set_vals[i] & (1 << bit_idx)) {
         ++set_size;
