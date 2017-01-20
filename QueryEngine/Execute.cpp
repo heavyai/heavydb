@@ -6594,6 +6594,7 @@ std::vector<void*> Executor::optimizeAndCodegenGPU(llvm::Function* query_func,
       if (llvm::isa<llvm::CallInst>(*it)) {
         auto& get_gv_call = llvm::cast<llvm::CallInst>(*it);
         if (get_gv_call.getCalledFunction()->getName() == "get_group_value" ||
+            get_gv_call.getCalledFunction()->getName() == "get_group_value_with_watchdog" ||
             get_gv_call.getCalledFunction()->getName() == "get_matching_group_value_perfect_hash" ||
             get_gv_call.getCalledFunction()->getName() == "string_decode" ||
             get_gv_call.getCalledFunction()->getName() == "array_size" ||

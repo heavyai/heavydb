@@ -87,8 +87,8 @@ extern "C" __device__ bool dynamic_watchdog(int64_t init_budget) {
         }
         sm_cycle_start[threadIdx.x] = 0LL;
       }
-      __syncthreads();
     }
+    return false;
   }
   int64_t cycle_start = sm_cycle_start[smid];
   // The first block that gets on an SM initializes this SM's cycle start
