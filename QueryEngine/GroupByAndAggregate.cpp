@@ -2041,7 +2041,7 @@ size_t QueryMemoryDescriptor::sharedMemBytes(const ExecutorDeviceType device_typ
 
 bool QueryMemoryDescriptor::canOutputColumnar() const {
   return usesGetGroupValueFast() && threadsShareMemory() && blocksShareMemory() &&
-         !interleavedBins(ExecutorDeviceType::GPU);
+         !interleavedBins(ExecutorDeviceType::GPU) && countDescriptorsLogicallyEmpty(count_distinct_descriptors_);
 }
 
 bool QueryMemoryDescriptor::sortOnGpu() const {
