@@ -104,7 +104,7 @@ To compile and excute this example:
 ``Python (via JayDeBeApi)``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-MapD Core supports Python via `JayDeBeApi <https://pypi.python.org/pypi/JayDeBeApi/>`__.  ``mapd_jdbc.py`` in the sample code directory is a wrapper around ``jaydebeapi`` that returns a standard Python Connection object.  The code assumes that the MapD JDBC driver (``mapdjdbc-1.0-SNAPSHOT-jar-with-dependencies.jar``)is available in the same directory. Users may create a cursor object using the returned connection object.  Please be sure to close the connection at the end of your Python script.
+MapD Core supports Python via `JayDeBeApi <https://pypi.python.org/pypi/JayDeBeApi/>`__.  ``mapd_jdbc.py`` in the sample code directory is a wrapper around ``jaydebeapi`` that returns a standard Python Connection object.  The code assumes that the MapD JDBC driver (``mapdjdbc-1.0-SNAPSHOT-jar-with-dependencies.jar``) is available in the same directory. Users may create a cursor object using the returned connection object.  Please be sure to close the connection at the end of your Python script.
 
 Before using, ensure that ``jaydebeapi`` is installed by running:
 
@@ -116,7 +116,7 @@ The jar is available at ``$MAPD_PATH/bin/mapdjdbc-1.0-SNAPSHOT-jar-with-dependen
 
 The host is ``<machine>:<port>`` with the standard port of 9091
 
-The following example uses the mapd_jdbc to query MapD Core and plot the results with pyplot. The code is available in ``$MAPD_PATH/SampleCode`` as ``mapd_jdbc_example.py``:
+The following example uses the ``mapd_jdbc`` wrapper to query MapD Core and plot the results with pyplot. The code is available in ``$MAPD_PATH/SampleCode`` as ``mapd_jdbc_example.py``:
 
 ::
 
