@@ -474,6 +474,24 @@ ExpressionRange getExpressionRange(const Analyzer::CaseExpr* case_expr,
   return expr_range || getExpressionRange(else_expr, query_infos, executor);
 }
 
+namespace {
+
+ExpressionRange fpRangeFromDecimal(const ExpressionRange& arg_range,
+                                   const int64_t scale,
+                                   const SQLTypeInfo& target_ti) {
+  CHECK(target_ti.is_fp());
+  if (target_ti.get_type() == kFLOAT) {
+    return ExpressionRange::makeFloatRange(static_cast<float>(arg_range.getIntMin()) / scale,
+                                           static_cast<float>(arg_range.getIntMax()) / scale,
+                                           arg_range.hasNulls());
+  }
+  return ExpressionRange::makeDoubleRange(static_cast<double>(arg_range.getIntMin()) / scale,
+                                          static_cast<double>(arg_range.getIntMax()) / scale,
+                                          arg_range.hasNulls());
+}
+
+}  // namespace
+
 ExpressionRange getExpressionRange(const Analyzer::UOper* u_expr,
                                    const std::vector<InputTableInfo>& query_infos,
                                    const Executor* executor) {
@@ -523,6 +541,9 @@ ExpressionRange getExpressionRange(const Analyzer::UOper* u_expr,
       if (arg_ti.is_decimal()) {
         CHECK_EQ(int64_t(0), arg_range.getBucket());
         const int64_t scale = exp_to_scale(arg_ti.get_scale());
+        if (ti.is_fp()) {
+          return fpRangeFromDecimal(arg_range, scale, ti);
+        }
         return ExpressionRange::makeIntRange(
             arg_range.getIntMin() / scale, arg_range.getIntMax() / scale, 0, arg_range.hasNulls());
       }

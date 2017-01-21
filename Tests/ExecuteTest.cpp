@@ -451,6 +451,8 @@ TEST(Select, FloatAndDoubleTests) {
     c("SELECT MIN(x + y) AS n FROM test WHERE x + y > 47 AND x + y < 53 GROUP BY f + 1, f + d ORDER BY n;", dt);
     c("SELECT f + d AS s FROM test GROUP BY s ORDER BY s DESC;", dt);
     c("SELECT f + 1 AS s, AVG(u * f) FROM test GROUP BY s ORDER BY s DESC;", dt);
+    c("SELECT (CAST(dd AS float) * 0.5) AS key FROM test GROUP BY key ORDER BY key DESC;", dt);
+    c("SELECT (CAST(dd AS double) * 0.5) AS key FROM test GROUP BY key ORDER BY key DESC;", dt);
   }
 }
 
