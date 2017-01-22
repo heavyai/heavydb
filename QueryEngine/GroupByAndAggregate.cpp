@@ -1643,7 +1643,9 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
           target_expr_group_by_indices(ra_exe_unit_.groupby_exprs, ra_exe_unit_.target_exprs);
       agg_col_widths.clear();
       for (auto wid : get_col_byte_widths(ra_exe_unit_.target_exprs, target_group_by_indices)) {
-        agg_col_widths.push_back({wid, static_cast<int8_t>(wid ? compact_byte_width(wid, min_byte_width) : 0)});
+        // Baseline layout goes through new result set and ResultSetStorage::initializeRowWise
+        // assumes everything is padded to 8 bytes, make it so.
+        agg_col_widths.push_back({wid, static_cast<int8_t>(wid ? 8 : 0)});
       }
       query_mem_desc_ = {executor_,
                          allow_multifrag,

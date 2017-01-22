@@ -487,6 +487,7 @@ TEST(Select, FilterAndGroupBy) {
     c("SELECT x, AVG(u), COUNT(*) AS n FROM test GROUP BY x ORDER BY n DESC;", dt);
     c("SELECT f, ss FROM test GROUP BY f, ss ORDER BY f DESC;", dt);
     c("SELECT fx, COUNT(*) FROM test GROUP BY fx HAVING COUNT(*) > 5;", dt);
+    c("SELECT CASE WHEN x > 8 THEN 100000000 ELSE 42 END AS c, COUNT(*) FROM test GROUP BY c;", dt);
 #ifdef HAVE_CALCITE
     c("SELECT x, COUNT(real_str) FROM test GROUP BY x ORDER BY x DESC;", dt);
     EXPECT_THROW(run_multiple_agg("SELECT x, MIN(real_str) FROM test GROUP BY x ORDER BY x DESC;", dt),
