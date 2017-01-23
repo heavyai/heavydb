@@ -290,6 +290,9 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUoper(const RexOperat
       const auto& target_ti = rex_operator->getType();
       CHECK_NE(kNULLT, target_ti.get_type());
       const auto& operand_ti = operand_expr->get_type_info();
+      if (operand_ti.is_decimal() && target_ti.is_decimal() && operand_ti.get_scale() != target_ti.get_scale()) {
+        throw std::runtime_error("Cast between different DECIMAL scales not supported");
+      }
       if (target_ti.is_time() || operand_ti.is_string()) {  // TODO(alex): check and unify with the rest of the cases
         return operand_expr->add_cast(target_ti);
       }
