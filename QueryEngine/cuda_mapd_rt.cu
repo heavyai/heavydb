@@ -128,6 +128,7 @@ extern "C" __device__ int64_t* get_matching_group_value_columnar(int64_t* groups
   return &groups_buffer[off];
 }
 
+#include "MurmurHash.cpp"
 #include "GroupByRuntime.cpp"
 
 __device__ int64_t atomicMax64(int64_t* address, int64_t val) {

@@ -24,6 +24,7 @@ set(query_engine_source_files
     IteratorTable.cpp
     LLVMGlobalContext.cpp
     MaxwellCodegenPatch.cpp
+    MurmurHash.cpp
     NvidiaKernel.cpp
     OutputBufferInitialization.cpp
     QueryPhysicalInputsCollector.cpp
@@ -53,6 +54,7 @@ set(query_engine_source_files
 
 set(group_by_hash_test_files
     GroupByHashTest.cpp
+    MurmurHash.cpp
     RuntimeFunctions.cpp
    )
 

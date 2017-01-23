@@ -2,6 +2,7 @@
 #error This code is not intended to be compiled with a CUDA C++ compiler
 #endif  // __CUDACC__
 
+#include "MurmurHash.h"
 #include "RuntimeFunctions.h"
 #include "../Shared/funcannotations.h"
 
@@ -273,6 +274,26 @@ extern "C" NEVER_INLINE void agg_count_distinct_bitmap_gpu(int64_t*,
                                                            const int64_t,
                                                            const int64_t,
                                                            const int64_t) {
+  abort();
+}
+
+extern "C" ALWAYS_INLINE uint8_t get_rank(uint64_t x, uint32_t b) {
+  return std::min(b, static_cast<uint32_t>(x ? __builtin_clzl(x) : 64)) + 1;
+}
+
+extern "C" NEVER_INLINE void agg_approximate_count_distinct(int64_t* agg, const int64_t key, const uint32_t b) {
+  const uint64_t hash = MurmurHash64A(&key, sizeof(key), 0);
+  const uint32_t index = hash >> (64 - b);
+  const uint8_t rank = get_rank(hash << b, 64 - b);
+  uint8_t* M = reinterpret_cast<uint8_t*>(*agg);
+  M[index] = std::max(M[index], rank);
+}
+
+extern "C" NEVER_INLINE void agg_approximate_count_distinct_gpu(int64_t*,
+                                                                const int64_t,
+                                                                const uint32_t,
+                                                                const int64_t,
+                                                                const int64_t) {
   abort();
 }
 
@@ -811,26 +832,6 @@ extern "C" ALWAYS_INLINE int64_t* get_matching_group_value_perfect_hash(int64_t*
 }
 
 #include "GroupByRuntime.cpp"
-
-extern "C" ALWAYS_INLINE uint8_t get_rank(uint64_t x, uint32_t b) {
-  return std::min(b, static_cast<uint32_t>(x ? __builtin_clzl(x) : 64)) + 1;
-}
-
-extern "C" NEVER_INLINE void agg_approximate_count_distinct(int64_t* agg, const int64_t key, const uint32_t b) {
-  const uint64_t hash = MurmurHash64A(&key, sizeof(key), 0);
-  const uint32_t index = hash >> (64 - b);
-  const uint8_t rank = get_rank(hash << b, 64 - b);
-  uint8_t* M = reinterpret_cast<uint8_t*>(*agg);
-  M[index] = std::max(M[index], rank);
-}
-
-extern "C" NEVER_INLINE void agg_approximate_count_distinct_gpu(int64_t*,
-                                                                const int64_t,
-                                                                const uint32_t,
-                                                                const int64_t,
-                                                                const int64_t) {
-  abort();
-}
 
 extern "C" ALWAYS_INLINE int64_t* get_group_value_fast_keyless(int64_t* groups_buffer,
                                                                const int64_t key,
