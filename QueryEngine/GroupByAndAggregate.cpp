@@ -1999,6 +1999,10 @@ bool GroupByAndAggregate::gpuCanHandleOrderEntries(const std::list<Analyzer::Ord
       return false;
     }
     if (agg_expr->get_arg()) {
+      const auto& arg_ti = agg_expr->get_arg()->get_type_info();
+      if (arg_ti.is_fp()) {
+        return false;
+      }
       auto expr_range_info = getExprRangeInfo(agg_expr->get_arg());
       if ((expr_range_info.hash_type_ != GroupByColRangeType::OneColKnownRange || expr_range_info.has_nulls) &&
           order_entry.is_desc == order_entry.nulls_first) {
