@@ -608,8 +608,8 @@ extern "C" __device__ void agg_count_distinct_bitmap_skip_val_gpu(int64_t* agg,
   }
 }
 
-extern "C" __device__ int32_t get_rank(uint32_t x, uint32_t b) {
-  return min(b, static_cast<uint32_t>(x ? __clz(x) : 32)) + 1;
+extern "C" __device__ int32_t get_rank(uint64_t x, uint32_t b) {
+  return min(b, static_cast<uint32_t>(x ? __clzll(x) : 64)) + 1;
 }
 
 extern "C" __device__ void agg_approximate_count_distinct_gpu(int64_t* agg,
@@ -617,9 +617,9 @@ extern "C" __device__ void agg_approximate_count_distinct_gpu(int64_t* agg,
                                                               const uint32_t b,
                                                               const int64_t base_dev_addr,
                                                               const int64_t base_host_addr) {
-  const uint32_t hash = MurmurHash1(&key, sizeof(key), 0);
-  const uint32_t index = hash >> (32 - b);
-  const int32_t rank = get_rank(hash << b, 32 - b);
+  const uint64_t hash = MurmurHash64A(&key, sizeof(key), 0);
+  const uint32_t index = hash >> (64 - b);
+  const int32_t rank = get_rank(hash << b, 64 - b);
   const int64_t host_addr = *agg;
   int32_t* M = (int32_t*)(base_dev_addr + host_addr - base_host_addr);
   atomicMax(&M[index], rank);

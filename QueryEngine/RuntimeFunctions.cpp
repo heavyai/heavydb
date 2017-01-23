@@ -812,14 +812,14 @@ extern "C" ALWAYS_INLINE int64_t* get_matching_group_value_perfect_hash(int64_t*
 
 #include "GroupByRuntime.cpp"
 
-extern "C" ALWAYS_INLINE uint8_t get_rank(uint32_t x, uint32_t b) {
-  return std::min(static_cast<int>(b), x ? __builtin_clz(x) : 32) + 1;
+extern "C" ALWAYS_INLINE uint8_t get_rank(uint64_t x, uint32_t b) {
+  return std::min(b, static_cast<uint32_t>(x ? __builtin_clzl(x) : 64)) + 1;
 }
 
 extern "C" NEVER_INLINE void agg_approximate_count_distinct(int64_t* agg, const int64_t key, const uint32_t b) {
-  const uint32_t hash = MurmurHash1(&key, sizeof(key), 0);
-  const uint32_t index = hash >> (32 - b);
-  const uint8_t rank = get_rank(hash << b, 32 - b);
+  const uint64_t hash = MurmurHash64A(&key, sizeof(key), 0);
+  const uint32_t index = hash >> (64 - b);
+  const uint8_t rank = get_rank(hash << b, 64 - b);
   uint8_t* M = reinterpret_cast<uint8_t*>(*agg);
   M[index] = std::max(M[index], rank);
 }

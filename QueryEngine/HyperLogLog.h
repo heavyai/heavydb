@@ -30,8 +30,6 @@ inline double hll_alpha(const size_t m) {
 
 template <class T>
 inline size_t hll_size(const T* M, const CountDistinctDescriptor& count_distinct_descriptor) {
-  const double neg_pow_2_32 = -4294967296.0;
-  const double pow_2_32 = 4294967296.0;
   size_t m = 1 << count_distinct_descriptor.bitmap_sz_bits;
   double sum{0};
   for (size_t i = 0; i < m; i++) {
@@ -48,9 +46,8 @@ inline size_t hll_size(const T* M, const CountDistinctDescriptor& count_distinct
     if (zeros != 0) {
       estimate = m * log(static_cast<double>(m) / zeros);
     }
-  } else if (estimate > (1.0 / 30.0) * pow_2_32) {
-    estimate = neg_pow_2_32 * log(1.0 - (estimate / pow_2_32));
   }
+  // No correction for large estimates since we're using 64-bit hashes.
   return estimate;
 }
 
