@@ -73,8 +73,7 @@ extern "C" __device__ bool dynamic_watchdog(int64_t init_budget) {
     return false;  // uninitialized watchdog can't check time
   if (dw_abort == 1)
     return true;
-  uint32_t smid = get_smid();
-  if (smid >= 64)
+  if (get_smid() >= 64)
     return false;
   // Initialize watchdog
   if (init_budget > 0LL) {
@@ -85,19 +84,29 @@ extern "C" __device__ bool dynamic_watchdog(int64_t init_budget) {
         if (threadIdx.x == 0) {
           dw_cycle_budget = init_budget;
         }
-        sm_cycle_start[threadIdx.x] = 0LL;
+        sm_cycle_start[threadIdx.x] = -1LL;
       }
     }
     return false;
   }
+  uint32_t smid = get_smid();
   int64_t cycle_start = sm_cycle_start[smid];
   // The first block that gets on an SM initializes this SM's cycle start
-  if (cycle_start == 0LL) {
+  if (cycle_start == -1LL) {
     if (threadIdx.x == 0) {
-      sm_cycle_start[smid] = static_cast<int64_t>(clock64());
+      // Make sure the block hasn't switched SMs
+      if (smid == get_smid()) {
+        // Start the clock on this SM
+        sm_cycle_start[smid] = static_cast<int64_t>(clock64());
+      }
+      // If it did switch SMs mid-watchdog invocation, leave the old SM's clock
+      // untouched - it will be started by next uninterrupted watchdog invocation
     }
     return false;
   }
+  // Bail out if the block switched SMs
+  if (smid != get_smid())
+    return false;
   // Check if we're out of time on this particular SM
   int64_t cycles = static_cast<int64_t>(clock64()) - cycle_start;
   return (cycles > dw_cycle_budget);
