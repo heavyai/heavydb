@@ -687,25 +687,25 @@ static __inline__ uint64_t rdtsc(void) {
 extern "C" __attribute__((noinline)) bool dynamic_watchdog(int64_t init_budget) {
 #if (defined(__x86_64__) || defined(__x86_64))
   static uint64_t start = 0ULL;
-  static uint64_t ms_budget = 0ULL;
+  static uint64_t cycle_budget = 0ULL;
   static uint64_t freq_kHz = 0ULL;
   // Uninitialized watchdog can't check time
-  if (init_budget == 0LL && ms_budget == 0ULL) {
+  if (init_budget == 0LL && cycle_budget == 0ULL) {
     // Attempt to use uninitialized dynamic_watchdog
     return false;
   }
   // Initialize watchdog
   if (init_budget > 0LL) {
-    ms_budget = static_cast<uint64_t>(init_budget);
     start = rdtsc();
     std::this_thread::sleep_for(std::chrono::milliseconds(1));
     freq_kHz = rdtsc() - start;
+    uint64_t ms_budget = static_cast<uint64_t>(init_budget);
+    cycle_budget = freq_kHz * ms_budget;
     return false;
   }
   // Check if out of time
   auto cycles = rdtsc() - start;
-  auto ms = cycles / freq_kHz;
-  return (ms > ms_budget);
+  return (cycles > cycle_budget);
 #else
   return false;
 #endif
