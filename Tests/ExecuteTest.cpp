@@ -2430,6 +2430,13 @@ TEST(Select, CaseInsensitive) {
     c("SELECT X, COUNT(*) AS N FROM test GROUP BY teSt.x ORDER BY n DESC;", dt);
   }
 }
+
+TEST(Select, Deserialization) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT CAST(CAST(x AS float) * 0.0000000000 AS INT) FROM test;", dt);
+  }
+}
 #endif  // HAVE_CALCITE
 
 TEST(Select, DesugarTransform) {

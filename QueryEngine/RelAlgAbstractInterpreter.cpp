@@ -333,9 +333,15 @@ std::unique_ptr<RexLiteral> parse_literal(const rapidjson::Value& expr) {
     case kDATE:
       return std::unique_ptr<RexLiteral>(
           new RexLiteral(json_i64(literal), type, target_type, scale, precision, type_scale, type_precision));
-    case kDOUBLE:
-      return std::unique_ptr<RexLiteral>(
-          new RexLiteral(json_double(literal), type, target_type, scale, precision, type_scale, type_precision));
+    case kDOUBLE: {
+      if (literal.IsDouble()) {
+        return std::unique_ptr<RexLiteral>(
+            new RexLiteral(json_double(literal), type, target_type, scale, precision, type_scale, type_precision));
+      }
+      CHECK(literal.IsInt64());
+      return std::unique_ptr<RexLiteral>(new RexLiteral(
+          static_cast<double>(json_i64(literal)), type, target_type, scale, precision, type_scale, type_precision));
+    }
     case kTEXT:
       return std::unique_ptr<RexLiteral>(
           new RexLiteral(json_str(literal), type, target_type, scale, precision, type_scale, type_precision));
