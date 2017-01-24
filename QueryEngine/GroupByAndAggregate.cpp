@@ -1803,7 +1803,7 @@ CountDistinctDescriptors GroupByAndAggregate::initCountDistinctDescriptors() {
       const auto agg_expr = static_cast<const Analyzer::AggExpr*>(target_expr);
       const auto& arg_ti = agg_expr->get_arg()->get_type_info();
       if (arg_ti.is_string() && arg_ti.get_compression() != kENCODING_DICT) {
-        throw std::runtime_error("Strings must be dictionary-encoded in COUNT(DISTINCT).");
+        throw std::runtime_error("Strings must be dictionary-encoded for COUNT(DISTINCT).");
       }
       if (agg_info.agg_kind == kAPPROX_COUNT_DISTINCT && arg_ti.is_array()) {
         throw std::runtime_error("APPROX_COUNT_DISTINCT on arrays not supported yet");
