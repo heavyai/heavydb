@@ -304,21 +304,30 @@ GroupValueInfo get_matching_group_value_reduction(int64_t* groups_buffer,
                                                   const uint32_t h,
                                                   const int64_t* key,
                                                   const uint32_t key_qw_count,
-                                                  const uint32_t row_size_quad,
-                                                  const int64_t* init_vals) {
+                                                  const QueryMemoryDescriptor& query_mem_desc,
+                                                  const int64_t* that_buff_i64,
+                                                  const size_t that_entry_idx,
+                                                  const size_t that_entry_count,
+                                                  const uint32_t row_size_quad) {
   auto off = h * row_size_quad;
   int64_t empty_key = EMPTY_KEY_64;
-  const bool success = cas_cst(&groups_buffer[off], &empty_key, *key);
-  if (success && key_qw_count > 1) {
-    for (size_t i = 1; i <= key_qw_count - 1; ++i) {
-      store_cst(groups_buffer + off + i, key[i]);
+  int64_t write_pending = EMPTY_KEY_64 - 1;
+  const bool success = cas_cst(&groups_buffer[off], &empty_key, write_pending);
+  if (success) {
+    fill_slots(groups_buffer + off + key_qw_count,
+               query_mem_desc.entry_count,
+               that_buff_i64,
+               that_entry_idx,
+               that_entry_count,
+               query_mem_desc);
+    if (key_qw_count > 1) {
+      memcpy(groups_buffer + off + 1, key + 1, (key_qw_count - 1) * sizeof(*key));
     }
+    store_cst(&groups_buffer[off], *key);
     return {groups_buffer + off + key_qw_count, true};
   }
-  if (key_qw_count > 1) {
-    while (load_cst(groups_buffer + off + key_qw_count - 1) == EMPTY_KEY_64) {
-      // spin until the winning thread has finished writing the entire key and the init value
-    }
+  while (load_cst(&groups_buffer[off]) == write_pending) {
+    // spin until the winning thread has finished writing the entire key and the init value
   }
   if (memcmp(groups_buffer + off, key, key_qw_count * sizeof(*key)) == 0) {
     return {groups_buffer + off + key_qw_count, false};
@@ -334,17 +343,35 @@ GroupValueInfo get_group_value_reduction(int64_t* groups_buffer,
                                          const uint32_t groups_buffer_entry_count,
                                          const int64_t* key,
                                          const uint32_t key_qw_count,
-                                         const uint32_t row_size_quad,
-                                         const int64_t* init_vals) {
+                                         const QueryMemoryDescriptor& query_mem_desc,
+                                         const int64_t* that_buff_i64,
+                                         const size_t that_entry_idx,
+                                         const size_t that_entry_count,
+                                         const uint32_t row_size_quad) {
   uint32_t h = key_hash(key, key_qw_count) % groups_buffer_entry_count;
-  auto matching_gvi = get_matching_group_value_reduction(groups_buffer, h, key, key_qw_count, row_size_quad, init_vals);
+  auto matching_gvi = get_matching_group_value_reduction(groups_buffer,
+                                                         h,
+                                                         key,
+                                                         key_qw_count,
+                                                         query_mem_desc,
+                                                         that_buff_i64,
+                                                         that_entry_idx,
+                                                         that_entry_count,
+                                                         row_size_quad);
   if (matching_gvi.first) {
     return matching_gvi;
   }
   uint32_t h_probe = (h + 1) % groups_buffer_entry_count;
   while (h_probe != h) {
-    matching_gvi =
-        get_matching_group_value_reduction(groups_buffer, h_probe, key, key_qw_count, row_size_quad, init_vals);
+    matching_gvi = get_matching_group_value_reduction(groups_buffer,
+                                                      h_probe,
+                                                      key,
+                                                      key_qw_count,
+                                                      query_mem_desc,
+                                                      that_buff_i64,
+                                                      that_entry_idx,
+                                                      that_entry_count,
+                                                      row_size_quad);
     if (matching_gvi.first) {
       return matching_gvi;
     }
@@ -382,21 +409,27 @@ void ResultSetStorage::reduceOneEntryBaseline(int8_t* this_buff,
     std::tie(this_entry_slots, empty_entry) =
         get_group_value_columnar_reduction(this_buff_i64, query_mem_desc_.entry_count, &key[0], key_count);
   } else {
+    const uint32_t row_size_quad = get_row_qw_count(query_mem_desc_);
     std::tie(this_entry_slots, empty_entry) = get_group_value_reduction(this_buff_i64,
                                                                         query_mem_desc_.entry_count,
                                                                         &that_buff_i64[key_off],
                                                                         key_count,
-                                                                        get_row_qw_count(query_mem_desc_),
-                                                                        nullptr);
+                                                                        query_mem_desc_,
+                                                                        that_buff_i64,
+                                                                        that_entry_idx,
+                                                                        that_entry_count,
+                                                                        row_size_quad);
   }
   CHECK(this_entry_slots);
   if (empty_entry) {
-    fill_slots(this_entry_slots,
-               query_mem_desc_.entry_count,
-               that_buff_i64,
-               that_entry_idx,
-               that_entry_count,
-               query_mem_desc_);
+    if (query_mem_desc_.output_columnar) {
+      fill_slots(this_entry_slots,
+                 query_mem_desc_.entry_count,
+                 that_buff_i64,
+                 that_entry_idx,
+                 that_entry_count,
+                 query_mem_desc_);
+    }
     return;
   }
   reduceOneEntrySlotsBaseline(this_entry_slots, that_buff_i64, that_entry_idx, that_entry_count, that);
