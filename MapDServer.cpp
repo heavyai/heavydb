@@ -198,6 +198,7 @@ class MapDHandler : virtual public MapDIf {
               const size_t num_reader_threads,
               const int start_epoch,
               const LdapMetadata ldapMetadata,
+              const MapDParameters& mapd_parameters,
 #ifdef HAVE_CALCITE
               const int calcite_port,
               const bool legacy_syntax)
@@ -214,6 +215,7 @@ class MapDHandler : virtual public MapDIf {
         allow_multifrag_(allow_multifrag),
         read_only_(read_only),
         allow_loop_joins_(allow_loop_joins),
+        mapd_parameters_(mapd_parameters),
 #ifdef HAVE_CALCITE
         enable_rendering_(enable_rendering),
         legacy_syntax_(legacy_syntax) {
@@ -1198,13 +1200,10 @@ class MapDHandler : virtual public MapDIf {
       auto session_info_ptr = session_it->second.get();
 
       const auto& cat = session_info_ptr->get_catalog();
-      size_t block_size_x = 0;
-      size_t grid_size_x = 0;
       auto executor = Executor::getExecutor(cat.get_currentDB().dbId,
                                             jit_debug_ ? "/tmp" : "",
                                             jit_debug_ ? "mapdquery" : "",
-                                            block_size_x,
-                                            grid_size_x,
+                                            mapd_parameters_,
                                             nullptr);
 
     });
@@ -1560,7 +1559,7 @@ class MapDHandler : virtual public MapDIf {
                            g_enable_dynamic_watchdog,
                            g_dynamic_watchdog_factor};
     auto executor = Executor::getExecutor(
-        cat.get_currentDB().dbId, jit_debug_ ? "/tmp" : "", jit_debug_ ? "mapdquery" : "", 0, 0, nullptr);
+        cat.get_currentDB().dbId, jit_debug_ ? "/tmp" : "", jit_debug_ ? "mapdquery" : "", mapd_parameters_, nullptr);
     RelAlgExecutor ra_executor(executor.get(), cat);
     ExecutionResult result{ResultRows({}, {}, nullptr, nullptr, {}, executor_device_type), {}};
     _return.execution_time_ms +=
@@ -1583,8 +1582,7 @@ class MapDHandler : virtual public MapDIf {
     auto executor = Executor::getExecutor(root_plan->get_catalog().get_currentDB().dbId,
                                           jit_debug_ ? "/tmp" : "",
                                           jit_debug_ ? "mapdquery" : "",
-                                          0,
-                                          0,
+                                          mapd_parameters_,
                                           nullptr);
     ResultRows results({}, {}, nullptr, nullptr, {}, executor_device_type);
     _return.execution_time_ms += measure<>::execution([&]() {
@@ -1627,8 +1625,7 @@ class MapDHandler : virtual public MapDIf {
     auto executor = Executor::getExecutor(root_plan->get_catalog().get_currentDB().dbId,
                                           jit_debug_ ? "/tmp" : "",
                                           jit_debug_ ? "mapdquery" : "",
-                                          0,
-                                          0,
+                                          mapd_parameters_,
                                           nullptr);
 
     auto clock_begin = timer_start();
@@ -1662,8 +1659,7 @@ class MapDHandler : virtual public MapDIf {
     auto executor = Executor::getExecutor(cat.get_currentDB().dbId,
                                           jit_debug_ ? "/tmp" : "",
                                           jit_debug_ ? "mapdquery" : "",
-                                          0,
-                                          0,
+                                          mapd_parameters_,
                                           nullptr);
     RelAlgExecutor ra_executor(executor.get(), cat);
     auto clock_begin = timer_start();
@@ -2000,7 +1996,7 @@ class MapDHandler : virtual public MapDIf {
                            g_dynamic_watchdog_factor};
     RelAlgExecutionOptions ra_eo{co, eo, nullptr, 0};
     auto executor = Executor::getExecutor(
-        cat.get_currentDB().dbId, jit_debug_ ? "/tmp" : "", jit_debug_ ? "mapdquery" : "", 0, 0, nullptr);
+        cat.get_currentDB().dbId, jit_debug_ ? "/tmp" : "", jit_debug_ ? "mapdquery" : "", mapd_parameters_, nullptr);
     auto ra_executor = boost::make_unique<RelAlgExecutor>(executor.get(), cat);
     const auto ra = deserialize_ra_dag(query_ra, cat, ra_executor.get());
     auto closure = PendingExecutionClosure::create(ra, ra_executor, cat, ra_eo);
@@ -2083,11 +2079,12 @@ class MapDHandler : virtual public MapDIf {
   const bool allow_multifrag_;
   const bool read_only_;
   const bool allow_loop_joins_;
-  bool enable_rendering_;
   bool cpu_mode_only_;
   mapd_shared_mutex sessions_mutex_;
   std::mutex render_mutex_;
   int64_t start_time_;
+  const MapDParameters& mapd_parameters_;
+  bool enable_rendering_;
 #ifdef HAVE_CALCITE
   std::shared_ptr<Calcite> calcite_;
   const bool legacy_syntax_;
@@ -2169,6 +2166,7 @@ int main(int argc, char** argv) {
   bool allow_loop_joins = false;
   bool enable_legacy_syntax = true;
   LdapMetadata ldapMetadata;
+  MapDParameters mapd_parameters;
   bool enable_rendering = false;
   bool enable_watchdog = true;
   bool enable_dynamic_watchdog = false;
@@ -2254,6 +2252,14 @@ int main(int argc, char** argv) {
       "Dynamic watchdog factor to increase the time budget");
   desc_adv.add_options()(
       "start-epoch", po::value<int>(&start_epoch)->default_value(start_epoch), "Value of epoch to 'rollback' to");
+  desc_adv.add_options()(
+      "cuda-block-size",
+      po::value<size_t>(&mapd_parameters.cuda_block_size)->default_value(mapd_parameters.cuda_block_size),
+      "Size of block to use on GPU");
+  desc_adv.add_options()(
+      "cuda-grid-size",
+      po::value<size_t>(&mapd_parameters.cuda_grid_size)->default_value(mapd_parameters.cuda_grid_size),
+      "Size of grid to use on GPU");
 
   po::positional_options_description positionalOptions;
   positionalOptions.add("data", 1);
@@ -2382,6 +2388,8 @@ int main(int argc, char** argv) {
 
   // add all parameters to be displayed on startup
   LOG(INFO) << " Watchdog is set to " << enable_watchdog;
+  LOG(INFO) << " cuda block size " << mapd_parameters.cuda_block_size;
+  LOG(INFO) << " cuda grid size  " << mapd_parameters.cuda_grid_size;
 
   try {
     if (vm.count("disable-fork")) {
@@ -2414,6 +2422,7 @@ int main(int argc, char** argv) {
                                                   num_reader_threads,
                                                   start_epoch,
                                                   ldapMetadata,
+                                                  mapd_parameters,
                                                   calcite_port,
                                                   enable_legacy_syntax));
 

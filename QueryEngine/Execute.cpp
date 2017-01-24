@@ -23,6 +23,7 @@
 #include "Parser/ParserNode.h"
 #include "Shared/checked_alloc.h"
 #include "Shared/mapdpath.h"
+#include "Shared/MapDParameters.h"
 #include "Shared/scope.h"
 
 #include <llvm/Bitcode/ReaderWriter.h>
@@ -85,8 +86,7 @@ Executor::Executor(const int db_id,
 std::shared_ptr<Executor> Executor::getExecutor(const int db_id,
                                                 const std::string& debug_dir,
                                                 const std::string& debug_file,
-                                                const size_t block_size_x,
-                                                const size_t grid_size_x,
+                                                const MapDParameters mapd_parameters,
                                                 ::QueryRenderer::QueryRenderManager* render_manager) {
   const auto executor_key = std::make_pair(db_id, render_manager);
   {
@@ -102,7 +102,8 @@ std::shared_ptr<Executor> Executor::getExecutor(const int db_id,
     if (it != executors_.end()) {
       return it->second;
     }
-    auto executor = std::make_shared<Executor>(db_id, block_size_x, grid_size_x, debug_dir, debug_file, render_manager);
+    auto executor = std::make_shared<Executor>(
+        db_id, mapd_parameters.cuda_block_size, mapd_parameters.cuda_grid_size, debug_dir, debug_file, render_manager);
     auto it_ok = executors_.insert(std::make_pair(executor_key, executor));
     CHECK(it_ok.second);
     return executor;

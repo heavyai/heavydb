@@ -17,6 +17,7 @@
 #include "../Planner/Planner.h"
 #include "../Shared/measure.h"
 #include "../Shared/thread_count.h"
+#include "../Shared/MapDParameters.h"
 #include "../StringDictionary/StringDictionary.h"
 #include "../StringDictionary/StringDictionaryProxy.h"
 
@@ -262,8 +263,7 @@ class Executor {
   static std::shared_ptr<Executor> getExecutor(const int db_id,
                                                const std::string& debug_dir = "",
                                                const std::string& debug_file = "",
-                                               const size_t block_size_x = 0,
-                                               const size_t grid_size_x = 0,
+                                               const MapDParameters mapd_parameters = MapDParameters(),
                                                ::QueryRenderer::QueryRenderManager* render_manager = nullptr);
 
   static void nukeCacheOfExecutors() {
