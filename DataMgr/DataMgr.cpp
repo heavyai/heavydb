@@ -99,8 +99,7 @@ void DataMgr::populateMgrs(const size_t userSpecifiedCpuBufferSize,
     LOG(INFO) << "reserved GPU memory is " << (float)reservedGpuMem_ / (1024 * 1024)
               << "M includes render buffer allocation";
     bufferMgrs_.resize(3);
-    bufferMgrs_[1].push_back(
-        new CpuBufferMgr(0, cpuBufferSize, CUDA_HOST, cudaMgr_, cpuSlabSize, 512, bufferMgrs_[0][0]));
+    bufferMgrs_[1].push_back(new CpuBufferMgr(0, cpuBufferSize, cudaMgr_, cpuSlabSize, 512, bufferMgrs_[0][0]));
     levelSizes_.push_back(1);
     int numGpus = cudaMgr_->getDeviceCount();
     for (int gpuNum = 0; gpuNum < numGpus; ++gpuNum) {
@@ -113,8 +112,7 @@ void DataMgr::populateMgrs(const size_t userSpecifiedCpuBufferSize,
     }
     levelSizes_.push_back(numGpus);
   } else {
-    bufferMgrs_[1].push_back(
-        new CpuBufferMgr(0, cpuBufferSize, CPU_HOST, cudaMgr_, cpuSlabSize, 512, bufferMgrs_[0][0]));
+    bufferMgrs_[1].push_back(new CpuBufferMgr(0, cpuBufferSize, cudaMgr_, cpuSlabSize, 512, bufferMgrs_[0][0]));
     levelSizes_.push_back(1);
   }
 }

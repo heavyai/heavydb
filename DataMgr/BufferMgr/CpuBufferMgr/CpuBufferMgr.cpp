@@ -7,14 +7,11 @@ namespace Buffer_Namespace {
 
 CpuBufferMgr::CpuBufferMgr(const int deviceId,
                            const size_t maxBufferSize,
-                           const CpuBufferMgrMemType cpuBufferMgrMemType,
                            CudaMgr_Namespace::CudaMgr* cudaMgr,
                            const size_t bufferAllocIncrement,
                            const size_t pageSize,
                            AbstractBufferMgr* parentMgr)
-    : BufferMgr(deviceId, maxBufferSize, bufferAllocIncrement, pageSize, parentMgr),
-      cpuBufferMgrMemType_(cpuBufferMgrMemType),
-      cudaMgr_(cudaMgr) {}
+    : BufferMgr(deviceId, maxBufferSize, bufferAllocIncrement, pageSize, parentMgr), cudaMgr_(cudaMgr) {}
 
 CpuBufferMgr::~CpuBufferMgr() {
   freeAllMem();

@@ -274,9 +274,11 @@ void c(const std::string& query_string, const ExecutorDeviceType device_type) {
   g_sqlite_comparator.compare(query_string, device_type);
 }
 
+#ifdef HAVE_RAVM
 void c(const std::string& query_string, const std::string& sqlite_query_string, const ExecutorDeviceType device_type) {
   g_sqlite_comparator.compare(query_string, sqlite_query_string, device_type);
 }
+#endif  // HAVE_RAVM
 
 /* timestamp approximate checking for NOW() */
 void cta(const std::string& query_string, const ExecutorDeviceType device_type) {
@@ -1629,7 +1631,6 @@ void import_gpu_sort_test() {
   const std::string drop_old_gpu_sort_test{"DROP TABLE IF EXISTS gpu_sort_test;"};
   run_ddl_statement(drop_old_gpu_sort_test);
   g_sqlite_comparator.query(drop_old_gpu_sort_test);
-  const std::string create_gpu_sort_test{"CREATE TABLE gpu_sort_test(x int);"};
   run_ddl_statement("CREATE TABLE gpu_sort_test(x int) WITH (fragment_size=2);");
   g_sqlite_comparator.query("CREATE TABLE gpu_sort_test(x int);");
   for (size_t i = 0; i < 4; ++i) {
