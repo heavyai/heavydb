@@ -1272,9 +1272,21 @@ bool expr_is_rowid(const Analyzer::Expr* expr, const Catalog_Namespace::Catalog&
   return true;
 }
 
+bool has_count_distinct(const RelAlgExecutionUnit& ra_exe_unit) {
+  for (const auto& target_expr : ra_exe_unit.target_exprs) {
+    const auto agg_info = target_info(target_expr);
+    if (agg_info.is_agg && is_distinct_target(agg_info)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 }  // namespace
 
 GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getColRangeInfo() {
+  const int64_t baseline_threshold =
+      has_count_distinct(ra_exe_unit_) ? (device_type_ == ExecutorDeviceType::GPU ? 250000 : 1000000) : 2000000;
   if (ra_exe_unit_.groupby_exprs.size() != 1) {
     try {
       checked_int64_t cardinality{1};
@@ -1291,7 +1303,7 @@ GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getColRangeInfo() {
           has_nulls = true;
         }
       }
-      if (cardinality > 2000000) {  // more than 2M groups is a lot
+      if (cardinality > baseline_threshold) {  // more than 2M groups is a lot
         return {GroupByColRangeType::MultiCol, 0, 0, 0, false};
       }
       return {GroupByColRangeType::MultiColPerfectHash, 0, int64_t(cardinality), 0, has_nulls};
@@ -1305,7 +1317,10 @@ GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getColRangeInfo() {
   }
   static const int64_t MAX_BUFFER_SIZE = 1 << 30;
   const int64_t col_count = ra_exe_unit_.groupby_exprs.size() + ra_exe_unit_.target_exprs.size();
-  const int64_t max_entry_count = MAX_BUFFER_SIZE / (col_count * sizeof(int64_t));
+  int64_t max_entry_count = MAX_BUFFER_SIZE / (col_count * sizeof(int64_t));
+  if (has_count_distinct(ra_exe_unit_)) {
+    max_entry_count = std::min(max_entry_count, baseline_threshold);
+  }
   if ((!ra_exe_unit_.groupby_exprs.front()->get_type_info().is_string() &&
        !expr_is_rowid(ra_exe_unit_.groupby_exprs.front().get(), *executor_->catalog_)) &&
       col_range_info.max >= col_range_info.min + max_entry_count && !col_range_info.bucket) {
