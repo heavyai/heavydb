@@ -35,7 +35,7 @@ In addition to presenting row-level, non-grouped information from the
 database, table charts can also used to group information by a
 Dimension, similar to most other chart types.  Since other chart types
 have a limit on the number of measures which can be aggregated
-(Scatterplot has the most, at 4), Table charts are useful if you’re
+(Bubble chart has the most, at 4), Table charts are useful if you’re
 looking to view even more aggregated measures, since there is no
 restriction on the number of columns which may be viewed.
 
@@ -167,7 +167,7 @@ is also possible to manually set the colors of categories arbitrarily.
 
 --------------
 
-Scatter plot
+Bubble chart
 ------------
 
 .. image:: ./images/scatter-header.*
@@ -175,22 +175,22 @@ Scatter plot
 What it is
 ~~~~~~~~~~
 
-The Scatter plot groups data into dots, and places those dots along an x
+The Bubble chart groups data into dots, and places those dots along an x
 and y axis, with each axis representing a measure.  The dots can
 optionally be sized or colored by further measures, making the
-scatterplot capable of representing up to four measures for each group
+bubble chart capable of representing up to four measures for each group
 (x, y, size, and color).
 
 When to use it
 ~~~~~~~~~~~~~~
 
-A scatterplot can be useful in a few different situations, including: 1)
+A Bubble chart can be useful in a few different situations, including: 1)
 a dataset where you expect there may be a correlation between the x
 measure and the y measure; 2) a dataset where a correlation is not
 necessarily expected but where you simply are looking to understand the
 distribution and influence of multiple factors, or to spot outliers.
 
-For example, you might use a scatter plot to examine automotive engine
+For example, you might use a Bubble chart to examine automotive engine
 performance by plotting horsepower on the X axis and engine displacement
 on the Y axis.  More displacement usually means more horsepower, so you
 would expect the dots to cluster along an angled line rising from left
@@ -201,7 +201,7 @@ unusually high efficiency.
 How to set it up
 ~~~~~~~~~~~~~~~~
 
-The animation below shows a scatter plot being created for an airline
+The animation below shows a Bubble chart being created for an airline
 flights dataset, with the dots representing airlines, the x and y axes
 representing flight arrival delay and departure delay, size representing
 the number of flights, and color representing the average length of
