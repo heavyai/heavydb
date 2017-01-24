@@ -20,11 +20,6 @@ SQLTypeInfo build_type_info(const SQLTypes sql_type, const int scale, const int 
   return ti;
 }
 
-std::shared_ptr<Analyzer::Expr> remove_cast(const std::shared_ptr<Analyzer::Expr> expr) {
-  const auto cast_expr = std::dynamic_pointer_cast<const Analyzer::UOper>(expr);
-  return cast_expr && cast_expr->get_optype() == kCAST ? cast_expr->get_own_operand() : expr;
-}
-
 std::pair<std::shared_ptr<Analyzer::Expr>, SQLQualifier> get_quantified_rhs(const RexScalar* rex_scalar,
                                                                             const RelAlgTranslator& translator) {
   std::shared_ptr<Analyzer::Expr> rhs;
@@ -378,10 +373,6 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateOper(const RexOperato
       rhs = translateScalarRex(rhs_op);
     }
     CHECK(rhs);
-    if (sql_op == kEQ || sql_op == kNE) {
-      lhs = remove_cast(lhs);
-      rhs = remove_cast(rhs);
-    }
     lhs = Parser::OperExpr::normalize(sql_op, sql_qual, lhs, rhs);
   }
   return lhs;

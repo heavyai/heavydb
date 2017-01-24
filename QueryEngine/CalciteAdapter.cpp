@@ -69,11 +69,6 @@ std::shared_ptr<Analyzer::Expr> set_transient_dict(const std::shared_ptr<Analyze
   return expr->add_cast(transient_dict_ti);
 }
 
-std::shared_ptr<Analyzer::Expr> remove_cast(const std::shared_ptr<Analyzer::Expr> expr) {
-  const auto cast_expr = std::dynamic_pointer_cast<Analyzer::UOper>(expr);
-  return cast_expr && cast_expr->get_optype() == kCAST ? cast_expr->get_own_operand() : expr;
-}
-
 class CalciteAdapter {
  public:
   CalciteAdapter(const Catalog_Namespace::Catalog& cat, const rapidjson::Value& rels) : cat_(cat) {
@@ -214,10 +209,6 @@ class CalciteAdapter {
       const auto sql_op = to_sql_op(op_str);
       if (sql_op == kFUNCTION) {
         throw std::runtime_error(std::string("Unsupported operator: ") + op_str);
-      }
-      if (sql_op == kEQ || sql_op == kNE) {
-        lhs = remove_cast(lhs);
-        rhs = remove_cast(rhs);
       }
       lhs = Parser::OperExpr::normalize(sql_op, sql_qual, lhs, rhs);
     }
