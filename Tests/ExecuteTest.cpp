@@ -2442,6 +2442,14 @@ TEST(Select, DesugarTransform) {
   }
 }
 
+TEST(Select, WatchdogTest) {
+  g_enable_watchdog = true;
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT x, SUM(f) AS n FROM test GROUP BY x ORDER BY n DESC LIMIT 5;", dt);
+  }
+}
+
 int main(int argc, char** argv) {
   google::InitGoogleLogging(argv[0]);
   LOG(INFO) << " after initialization";
