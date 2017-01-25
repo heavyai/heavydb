@@ -2213,6 +2213,9 @@ TEST(Select, InnerJoins) {
     c("SELECT count(*) FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str = c.str JOIN "
       "join_test AS d ON c.x = d.x;",
       dt);
+    c("SELECT a.y, count(*) FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str = c.str "
+      "GROUP BY a.y;",
+      dt);
     c("SELECT a.x AS x, y, b.str FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str = c.str "
       "ORDER BY y;",
       dt);
