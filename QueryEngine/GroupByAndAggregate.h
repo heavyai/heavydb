@@ -504,6 +504,10 @@ class GroupByAndAggregate {
   // is required -- slow path group by queries for now
   bool codegen(llvm::Value* filter_result, const CompilationOptions& co);
 
+  static void addTransientStringLiterals(const RelAlgExecutionUnit& ra_exe_unit,
+                                         Executor* executor,
+                                         std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner);
+
  private:
   struct ColRangeInfo {
     const GroupByColRangeType hash_type_;
@@ -539,6 +543,7 @@ class GroupByAndAggregate {
                                  const int8_t crt_min_byte_width,
                                  const bool sort_on_gpu_hint,
                                  const bool render_output);
+
   void addTransientStringLiterals();
 
   CountDistinctDescriptors initCountDistinctDescriptors();

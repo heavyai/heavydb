@@ -1751,7 +1751,13 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
 }
 
 void GroupByAndAggregate::addTransientStringLiterals() {
-  for (const auto group_expr : ra_exe_unit_.groupby_exprs) {
+  addTransientStringLiterals(ra_exe_unit_, executor_, row_set_mem_owner_);
+}
+
+void GroupByAndAggregate::addTransientStringLiterals(const RelAlgExecutionUnit& ra_exe_unit,
+                                                     Executor* executor,
+                                                     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner) {
+  for (const auto group_expr : ra_exe_unit.groupby_exprs) {
     if (!group_expr) {
       continue;
     }
@@ -1759,7 +1765,7 @@ void GroupByAndAggregate::addTransientStringLiterals() {
     const auto& group_ti = group_expr->get_type_info();
     if (cast_expr && cast_expr->get_optype() == kCAST && group_ti.is_string()) {
       CHECK_EQ(kENCODING_DICT, group_ti.get_compression());
-      auto sdp = executor_->getStringDictionaryProxy(group_ti.get_comp_param(), row_set_mem_owner_);
+      auto sdp = executor->getStringDictionaryProxy(group_ti.get_comp_param(), row_set_mem_owner);
       CHECK(sdp);
       const auto str_lit_expr = dynamic_cast<const Analyzer::Constant*>(cast_expr->get_operand());
       if (str_lit_expr && str_lit_expr->get_constval().stringval) {
@@ -1778,7 +1784,7 @@ void GroupByAndAggregate::addTransientStringLiterals() {
     }
     if (group_ti.is_string()) {
       CHECK_EQ(kENCODING_DICT, group_ti.get_compression());
-      auto sdp = executor_->getStringDictionaryProxy(group_ti.get_comp_param(), row_set_mem_owner_);
+      auto sdp = executor->getStringDictionaryProxy(group_ti.get_comp_param(), row_set_mem_owner);
       CHECK(sdp);
       for (const auto domain_expr : domain_set) {
         const auto cast_expr = dynamic_cast<const Analyzer::UOper*>(domain_expr);
