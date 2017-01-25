@@ -21,8 +21,6 @@ class StringDictionaryProxy {
 
   int32_t getOrAdd(const std::string& str) noexcept;
   StringDictionary* getDictionary() noexcept;
-  //  template <class T>
-  //  void getOrAddBulk(const std::vector<std::string>& string_vec, T* encoded_vec) noexcept;
   int32_t getOrAddTransient(const std::string& str) noexcept;
   int32_t get(const std::string& str) const noexcept;
   std::string getString(int32_t string_id) const noexcept;
@@ -37,7 +35,6 @@ class StringDictionaryProxy {
   std::vector<std::string> getRegexpLike(const std::string& pattern, const char escape) const noexcept;
 
   void clearTransient() noexcept;
-  // bool checkpoint() noexcept;
 
  private:
   std::shared_ptr<StringDictionary> string_dict_;
