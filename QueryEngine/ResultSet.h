@@ -81,10 +81,7 @@ class ResultSetStorage {
                      const size_t init_agg_val_idx,
                      const ResultSetStorage& that) const;
 
-  void reduceOneCountDistinctSlot(int8_t* this_ptr1,
-                                  const int8_t* that_ptr1,
-                                  const size_t target_logical_idx,
-                                  const ResultSetStorage& that) const;
+  void reduceOneCountDistinctSlot(int8_t* this_ptr1, const int8_t* that_ptr1, const size_t target_logical_idx) const;
 
   void fillOneEntryRowWise(const std::vector<int64_t>& entry);
 

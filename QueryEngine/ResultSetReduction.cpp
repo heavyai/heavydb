@@ -829,7 +829,7 @@ void ResultSetStorage::reduceOneSlot(int8_t* this_ptr1,
       case kAPPROX_COUNT_DISTINCT: {
         if (is_distinct_target(target_info)) {
           CHECK_EQ(static_cast<size_t>(chosen_bytes), sizeof(int64_t));
-          reduceOneCountDistinctSlot(this_ptr1, that_ptr1, target_logical_idx, that);
+          reduceOneCountDistinctSlot(this_ptr1, that_ptr1, target_logical_idx);
           break;
         }
         AGGREGATE_ONE_NULLABLE_COUNT(this_ptr1, that_ptr1, init_val, chosen_bytes, target_info);
@@ -881,8 +881,7 @@ void ResultSetStorage::reduceOneSlot(int8_t* this_ptr1,
 
 void ResultSetStorage::reduceOneCountDistinctSlot(int8_t* this_ptr1,
                                                   const int8_t* that_ptr1,
-                                                  const size_t target_logical_idx,
-                                                  const ResultSetStorage& that) const {
+                                                  const size_t target_logical_idx) const {
   CHECK_LT(target_logical_idx, query_mem_desc_.count_distinct_descriptors_.size());
   const auto& count_distinct_desc = query_mem_desc_.count_distinct_descriptors_[target_logical_idx];
   CHECK(count_distinct_desc.impl_type_ != CountDistinctImplType::Invalid);
