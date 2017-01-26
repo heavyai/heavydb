@@ -12,8 +12,6 @@
 
 StringDictionaryProxy::StringDictionaryProxy(std::shared_ptr<StringDictionary> sd) noexcept : string_dict_(sd) {}
 
-StringDictionaryProxy::~StringDictionaryProxy() noexcept {}
-
 int32_t StringDictionaryProxy::getOrAddTransient(const std::string& str) noexcept {
   mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
   auto transient_id = string_dict_->get(str);
@@ -104,12 +102,6 @@ std::vector<std::string> StringDictionaryProxy::getRegexpLike(const std::string&
     }
   }
   return result;
-}
-
-void StringDictionaryProxy::clearTransient() noexcept {
-  mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
-  decltype(transient_int_to_str_)().swap(transient_int_to_str_);
-  decltype(transient_str_to_int_)().swap(transient_str_to_int_);
 }
 
 int32_t StringDictionaryProxy::getOrAdd(const std::string& str) noexcept {

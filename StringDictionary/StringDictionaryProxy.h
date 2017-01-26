@@ -17,7 +17,6 @@
 class StringDictionaryProxy {
  public:
   StringDictionaryProxy(std::shared_ptr<StringDictionary> sd) noexcept;
-  ~StringDictionaryProxy() noexcept;
 
   int32_t getOrAdd(const std::string& str) noexcept;
   StringDictionary* getDictionary() noexcept;
@@ -33,8 +32,6 @@ class StringDictionaryProxy {
                                    const char escape) const noexcept;
 
   std::vector<std::string> getRegexpLike(const std::string& pattern, const char escape) const noexcept;
-
-  void clearTransient() noexcept;
 
  private:
   std::shared_ptr<StringDictionary> string_dict_;
