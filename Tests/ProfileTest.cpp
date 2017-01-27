@@ -8,7 +8,7 @@
 #include "ProfileTest.h"
 #include "Shared/measure.h"
 #include "../QueryEngine/ResultRows.h"
-#include "../../QueryEngine/ResultSet.h"
+#include "../QueryEngine/ResultSet.h"
 
 #if defined(HAVE_CUDA) && CUDA_VERSION >= 8000
 #include <cuda_runtime.h>
