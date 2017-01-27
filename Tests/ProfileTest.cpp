@@ -1169,6 +1169,7 @@ TEST(Reduction, Baseline) {
   const size_t entry_count = 20000000;
   const bool is_columnar = false;
   const size_t result_count = std::max(size_t(2), get_gpu_count());
+  const float fill_rate = 0.5f;
 
   const size_t col_count = key_count + val_count;
   const std::vector<size_t> col_widths(col_count, sizeof(int64_t));
@@ -1248,7 +1249,11 @@ TEST(Reduction, Baseline) {
     if (generate_columns_on_device(
             dev_input_buffer, entry_count, col_count, col_widths, ranges, is_columnar, distributions)) {
       actual_row_count = deduplicate_rows_on_device(dev_input_buffer, entry_count, key_count, col_widths, is_columnar);
-      cudaMemcpy(input_buffer, dev_input_buffer, input_size, cudaMemcpyDeviceToHost);
+      auto dev_input_copy =
+          get_hashed_copy(dev_input_buffer, entry_count, entry_count, col_widths, agg_ops, init_vals, is_columnar);
+      cudaFree(dev_input_buffer);
+      actual_row_count = drop_rows(dev_input_copy, entry_count, row_size, actual_row_count, fill_rate, is_columnar);
+      cudaMemcpy(input_buffer, dev_input_copy, input_size, cudaMemcpyDeviceToHost);
     } else
 #endif
     {
@@ -1342,8 +1347,6 @@ TEST(Reduction, Baseline) {
                                                                 has_multi_gpus ? dev_id + stride : dev_id,
                                                                 rs_entry_count[dev_id + stride],
                                                                 rs_row_counts[dev_id + stride],
-                                                                key_count,
-                                                                val_count,
                                                                 col_widths,
                                                                 agg_ops,
                                                                 init_vals,

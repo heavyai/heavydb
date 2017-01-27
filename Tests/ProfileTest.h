@@ -94,6 +94,21 @@ size_t deduplicate_rows_on_device(int8_t* row_buffer,
                                   const std::vector<size_t>& col_widths,
                                   const bool is_columnar);
 
+int8_t* get_hashed_copy(int8_t* dev_buffer,
+                        const size_t entry_count,
+                        const size_t new_entry_count,
+                        const std::vector<size_t>& col_widths,
+                        const std::vector<OP_KIND>& agg_ops,
+                        const std::vector<size_t>& init_vals,
+                        const bool is_columnar);
+
+size_t drop_rows(int8_t* row_buffer,
+                 const size_t entry_count,
+                 const size_t entry_size,
+                 const size_t row_count,
+                 const float fill_rate,
+                 const bool is_columnar);
+
 void reduce_on_device(int8_t*& this_dev_buffer,
                       const size_t this_dev_id,
                       size_t& this_entry_count,
@@ -101,8 +116,6 @@ void reduce_on_device(int8_t*& this_dev_buffer,
                       const size_t that_dev_id,
                       const size_t that_entry_count,
                       const size_t that_actual_row_count,
-                      const size_t key_count,
-                      const size_t val_count,
                       const std::vector<size_t>& col_widths,
                       const std::vector<OP_KIND>& agg_ops,
                       const std::vector<size_t>& init_vals,

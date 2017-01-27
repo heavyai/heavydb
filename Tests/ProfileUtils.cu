@@ -1079,6 +1079,55 @@ size_t deduplicate_rows_on_device(int8_t* row_buffer,
 }
 
 namespace {
+template <bool isColumnar = false, typename T = int64_t>
+struct Dropper {
+  static_assert(thrust::detail::is_same<T, int64_t>::value,
+                "Unsupported template parameter other than int64_t for now");
+  Dropper(int8_t* buff, uint32_t* ub, const size_t row_cnt, const size_t entry_sz)
+      : buff_ptr(buff), upper_bound(ub), row_count(row_cnt), entry_size(entry_sz) {}
+  __device__ void operator()(const int index) {
+    auto key_ptr = reinterpret_cast<T*>(buff_ptr + (isColumnar ? sizeof(T) : entry_size) * index);
+    if (is_empty_slot(*key_ptr)) {
+      return;
+    }
+    if (atomicAdd(upper_bound, 1UL) <= row_count) {
+      reset_entry(key_ptr);
+    }
+  }
+
+  int8_t* buff_ptr;
+  uint32_t* upper_bound;
+  const uint32_t row_count;
+  const size_t entry_size;
+};
+
+}  // namespace
+
+size_t drop_rows(int8_t* row_buffer,
+                 const size_t entry_count,
+                 const size_t entry_size,
+                 const size_t row_count,
+                 const float fill_rate,
+                 const bool is_columnar) {
+  auto limit = static_cast<size_t>(entry_count * fill_rate);
+  if (row_count < limit) {
+    return row_count;
+  }
+  thrust::device_vector<uint32_t> upper_bound(1, static_cast<uint32_t>(limit));
+
+  if (is_columnar) {
+    thrust::for_each(thrust::make_counting_iterator(size_t(0)),
+                     thrust::make_counting_iterator(entry_count),
+                     Dropper<true>(row_buffer, thrust::raw_pointer_cast(upper_bound.data()), row_count, entry_size));
+  } else {
+    thrust::for_each(thrust::make_counting_iterator(size_t(0)),
+                     thrust::make_counting_iterator(entry_count),
+                     Dropper<false>(row_buffer, thrust::raw_pointer_cast(upper_bound.data()), row_count, entry_size));
+  }
+  return limit;
+}
+
+namespace {
 
 __device__ inline void reduce_func(int8_t* write_base,
                                    const size_t write_stride,
@@ -1178,6 +1227,63 @@ __global__ void row_reducer(int8_t* this_buffer,
 
 }  // namespace
 
+int8_t* get_hashed_copy(int8_t* dev_buffer,
+                        const size_t entry_count,
+                        const size_t new_entry_count,
+                        const std::vector<size_t>& col_widths,
+                        const std::vector<OP_KIND>& agg_ops,
+                        const std::vector<size_t>& init_vals,
+                        const bool is_columnar) {
+  const size_t val_count = agg_ops.size();
+  const size_t key_count = col_widths.size() - val_count;
+  size_t entry_size = 0;
+  for (size_t i = 0; i < col_widths.size(); ++i) {
+    entry_size += col_widths[i];
+  }
+  thrust::device_vector<size_t> dev_col_widths(col_widths);
+  thrust::device_vector<OP_KIND> dev_agg_ops(agg_ops);
+  thrust::device_vector<size_t> dev_init_vals(init_vals);
+
+  int8_t* dev_copy = nullptr;
+  cudaMalloc(&dev_copy, entry_size * new_entry_count);
+  if (is_columnar) {
+    init_group<true><<<compute_grid_dim(new_entry_count), c_block_size>>>(
+        dev_copy,
+        new_entry_count,
+        dev_col_widths.size(),
+        thrust::raw_pointer_cast(dev_col_widths.data()),
+        thrust::raw_pointer_cast(dev_init_vals.data()));
+    column_reducer<<<compute_grid_dim(entry_count), c_block_size>>>(
+        dev_copy,
+        new_entry_count,
+        dev_buffer,
+        entry_count,
+        entry_size,
+        key_count,
+        val_count,
+        thrust::raw_pointer_cast(dev_col_widths.data() + key_count),
+        thrust::raw_pointer_cast(dev_agg_ops.data()));
+  } else {
+    init_group<false><<<compute_grid_dim(new_entry_count), c_block_size>>>(
+        dev_copy,
+        new_entry_count,
+        col_widths.size(),
+        thrust::raw_pointer_cast(dev_col_widths.data()),
+        thrust::raw_pointer_cast(dev_init_vals.data()));
+    row_reducer<<<compute_grid_dim(entry_count), c_block_size>>>(
+        dev_copy,
+        new_entry_count,
+        dev_buffer,
+        entry_count,
+        entry_size,
+        key_count,
+        val_count,
+        thrust::raw_pointer_cast(dev_col_widths.data() + key_count),
+        thrust::raw_pointer_cast(dev_agg_ops.data()));
+  }
+  return dev_copy;
+}
+
 void reduce_on_device(int8_t*& this_dev_buffer,
                       const size_t this_dev_id,
                       size_t& this_entry_count,
@@ -1185,14 +1291,13 @@ void reduce_on_device(int8_t*& this_dev_buffer,
                       const size_t that_dev_id,
                       const size_t that_entry_count,
                       const size_t that_actual_row_count,
-                      const size_t key_count,
-                      const size_t val_count,
                       const std::vector<size_t>& col_widths,
                       const std::vector<OP_KIND>& agg_ops,
                       const std::vector<size_t>& init_vals,
                       const bool is_columnar) {
-  CHECK_EQ(val_count, agg_ops.size());
-  CHECK_EQ(key_count + val_count, col_widths.size());
+  CHECK_EQ(col_widths.size(), init_vals.size());
+  const size_t val_count = agg_ops.size();
+  const size_t key_count = col_widths.size() - val_count;
   size_t entry_size = 0;
   for (size_t i = 0; i < col_widths.size(); ++i) {
     entry_size += col_widths[i];
@@ -1207,43 +1312,8 @@ void reduce_on_device(int8_t*& this_dev_buffer,
   if (threshold > this_entry_count) {
     total_row_count = std::min(threshold, this_entry_count + that_entry_count);
     thrust::device_vector<size_t> dev_init_vals(init_vals);
-    int8_t* this_dev_copy = nullptr;
-    cudaMalloc(&this_dev_copy, entry_size * total_row_count);
-    if (is_columnar) {
-      init_group<true><<<compute_grid_dim(total_row_count), c_block_size>>>(
-          this_dev_copy,
-          total_row_count,
-          col_widths.size(),
-          thrust::raw_pointer_cast(dev_col_widths.data()),
-          thrust::raw_pointer_cast(dev_init_vals.data()));
-      column_reducer<<<compute_grid_dim(that_entry_count), c_block_size>>>(
-          this_dev_copy,
-          total_row_count,
-          this_dev_buffer,
-          this_entry_count,
-          entry_size,
-          key_count,
-          val_count,
-          thrust::raw_pointer_cast(dev_col_widths.data() + key_count),
-          thrust::raw_pointer_cast(dev_agg_ops.data()));
-    } else {
-      init_group<false><<<compute_grid_dim(total_row_count), c_block_size>>>(
-          this_dev_copy,
-          total_row_count,
-          col_widths.size(),
-          thrust::raw_pointer_cast(dev_col_widths.data()),
-          thrust::raw_pointer_cast(dev_init_vals.data()));
-      row_reducer<<<compute_grid_dim(this_entry_count), c_block_size>>>(
-          this_dev_copy,
-          total_row_count,
-          this_dev_buffer,
-          this_entry_count,
-          entry_size,
-          key_count,
-          val_count,
-          thrust::raw_pointer_cast(dev_col_widths.data() + key_count),
-          thrust::raw_pointer_cast(dev_agg_ops.data()));
-    }
+    auto this_dev_copy = get_hashed_copy(
+        this_dev_buffer, this_entry_count, total_row_count, col_widths, agg_ops, init_vals, is_columnar);
 
     cudaFree(this_dev_buffer);
     this_dev_buffer = this_dev_copy;
