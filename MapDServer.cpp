@@ -538,8 +538,9 @@ class MapDHandler : virtual public MapDIf {
         const auto result = leaf_aggregator_.execute(session_info, query_ra);
         convert_rows(_return, result.targets_meta, *(result.rs), column_format);
       } catch (std::exception& e) {
+        const auto mapd_exception = dynamic_cast<const TMapDException*>(&e);
         TMapDException ex;
-        ex.error_msg = std::string("Exception: ") + e.what();
+        ex.error_msg = mapd_exception ? mapd_exception->error_msg : (std::string("Exception: ") + e.what());
         LOG(ERROR) << ex.error_msg;
         throw ex;
       }
