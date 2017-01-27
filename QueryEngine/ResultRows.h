@@ -63,12 +63,6 @@ class ChunkIter;
 
 class RowSetMemoryOwner : boost::noncopyable {
  public:
-  void setCountDistinctDescriptors(const CountDistinctDescriptors& count_distinct_descriptors) {
-    if (count_distinct_descriptors_.empty()) {
-      count_distinct_descriptors_ = count_distinct_descriptors;
-    }
-  }
-
   void addCountDistinctBuffer(int8_t* count_distinct_buffer, const size_t bytes) {
     std::lock_guard<std::mutex> lock(state_mutex_);
     count_distinct_bitmaps_.emplace_back(count_distinct_buffer, bytes);
@@ -78,8 +72,6 @@ class RowSetMemoryOwner : boost::noncopyable {
     std::lock_guard<std::mutex> lock(state_mutex_);
     count_distinct_sets_.push_back(count_distinct_set);
   }
-
-  const CountDistinctDescriptors& getCountDistinctDescriptors() const { return count_distinct_descriptors_; }
 
   void addGroupByBuffer(int64_t* group_by_buffer) {
     std::lock_guard<std::mutex> lock(state_mutex_);
@@ -152,7 +144,6 @@ class RowSetMemoryOwner : boost::noncopyable {
   }
 
  private:
-  CountDistinctDescriptors count_distinct_descriptors_;
   std::vector<std::pair<int8_t*, size_t>> count_distinct_bitmaps_;
   std::vector<std::set<int64_t>*> count_distinct_sets_;
   std::vector<int64_t*> group_by_buffers_;

@@ -1547,10 +1547,6 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
   addTransientStringLiterals();
 
   const auto count_distinct_descriptors = initCountDistinctDescriptors();
-  if (!count_distinct_descriptors.empty()) {
-    CHECK(row_set_mem_owner_);
-    row_set_mem_owner_->setCountDistinctDescriptors(count_distinct_descriptors);
-  }
 
   std::vector<ColWidths> agg_col_widths;
   const auto min_byte_width = pick_target_compact_width(ra_exe_unit_, query_infos_, crt_min_byte_width);

@@ -593,6 +593,11 @@ TEST(Select, ApproxCountDistinct) {
     c("SELECT AVG(z), APPROX_COUNT_DISTINCT(x) AS dx FROM test GROUP BY y HAVING dx > 1;",
       "SELECT AVG(z), COUNT(distinct x) AS dx FROM test GROUP BY y HAVING dx > 1;",
       dt);
+    c("SELECT approx_value, exact_value FROM (SELECT APPROX_COUNT_DISTINCT(x) AS approx_value FROM test), (SELECT "
+      "COUNT(distinct x) AS exact_value FROM test);",
+      "SELECT approx_value, exact_value FROM (SELECT COUNT(distinct x) AS approx_value FROM test), (SELECT "
+      "COUNT(distinct x) AS exact_value FROM test);",
+      dt);
     EXPECT_THROW(run_multiple_agg("SELECT APPROX_COUNT_DISTINCT(real_str) FROM test;", dt), std::runtime_error);
   }
 }

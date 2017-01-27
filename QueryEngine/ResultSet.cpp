@@ -513,9 +513,9 @@ std::function<bool(const uint32_t, const uint32_t)> ResultSet::createComparator(
         }
         if (UNLIKELY(is_distinct_target(targets_[order_entry.tle_no - 1]))) {
           const auto lhs_sz = count_distinct_set_size(
-              storage_->mappedPtr(lhs_v.i1), order_entry.tle_no - 1, row_set_mem_owner_->getCountDistinctDescriptors());
+              storage_->mappedPtr(lhs_v.i1), order_entry.tle_no - 1, query_mem_desc_.count_distinct_descriptors_);
           const auto rhs_sz = count_distinct_set_size(
-              storage_->mappedPtr(rhs_v.i1), order_entry.tle_no - 1, row_set_mem_owner_->getCountDistinctDescriptors());
+              storage_->mappedPtr(rhs_v.i1), order_entry.tle_no - 1, query_mem_desc_.count_distinct_descriptors_);
           if (lhs_sz == rhs_sz) {
             continue;
           }

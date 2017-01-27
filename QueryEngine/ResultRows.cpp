@@ -246,7 +246,7 @@ bool ResultRows::reduceSingleRow(const int8_t* row_ptr,
         CHECK_EQ(int8_t(1), warp_count);
         CHECK(agg_info.is_agg && (agg_info.agg_kind == kCOUNT || agg_info.agg_kind == kAPPROX_COUNT_DISTINCT));
         partial_bin_val =
-            count_distinct_set_size(partial_bin_val, target_idx, row_set_mem_owner_->count_distinct_descriptors_);
+            count_distinct_set_size(partial_bin_val, target_idx, query_mem_desc_.count_distinct_descriptors_);
         if (replace_bitmap_ptr_with_bitmap_sz) {
           partial_agg_vals[agg_col_idx] = partial_bin_val;
         }
@@ -403,8 +403,8 @@ void ResultRows::reduceSingleColumn(int8_t* crt_val_i1,
         CHECK(agg_info.agg_kind == kCOUNT || agg_info.agg_kind == kAPPROX_COUNT_DISTINCT);
         CHECK_EQ(crt_byte_width, sizeof(int64_t));
         auto crt_val_i1_ptr = reinterpret_cast<int64_t*>(crt_val_i1);
-        CHECK_LT(target_idx, row_set_mem_owner_->count_distinct_descriptors_.size());
-        const auto& count_distinct_desc = row_set_mem_owner_->count_distinct_descriptors_[target_idx];
+        CHECK_LT(target_idx, query_mem_desc_.count_distinct_descriptors_.size());
+        const auto& count_distinct_desc = query_mem_desc_.count_distinct_descriptors_[target_idx];
         CHECK(count_distinct_desc.impl_type_ != CountDistinctImplType::Invalid);
         auto old_set_ptr = reinterpret_cast<const int64_t*>(crt_val_i1_ptr);
         auto new_set_ptr = reinterpret_cast<const int64_t*>(new_val_i1);
@@ -939,10 +939,10 @@ void ResultRows::sort(const std::list<Analyzer::OrderEntry>& order_entries,
           return use_desc_cmp ? lhs_str > rhs_str : lhs_str < rhs_str;
         }
         if (UNLIKELY(is_distinct_target(targets_[order_entry.tle_no - 1]))) {
-          const auto lhs_sz = count_distinct_set_size(
-              lhs_v.i1, order_entry.tle_no - 1, row_set_mem_owner_->count_distinct_descriptors_);
-          const auto rhs_sz = count_distinct_set_size(
-              rhs_v.i1, order_entry.tle_no - 1, row_set_mem_owner_->count_distinct_descriptors_);
+          const auto lhs_sz =
+              count_distinct_set_size(lhs_v.i1, order_entry.tle_no - 1, query_mem_desc_.count_distinct_descriptors_);
+          const auto rhs_sz =
+              count_distinct_set_size(rhs_v.i1, order_entry.tle_no - 1, query_mem_desc_.count_distinct_descriptors_);
           if (lhs_sz == rhs_sz) {
             continue;
           }
@@ -1102,7 +1102,8 @@ TargetValue result_rows_get_impl(const InternalTargetValue& col_val,
                                  const bool decimal_to_double,
                                  const bool translate_strings,
                                  const Executor* executor,
-                                 const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner) {
+                                 const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+                                 const QueryMemoryDescriptor& query_mem_desc) {
   const auto& chosen_type = get_compact_type(agg_info);
   if (agg_info.agg_kind == kAVG) {
     CHECK(!chosen_type.is_string());
@@ -1112,8 +1113,7 @@ TargetValue result_rows_get_impl(const InternalTargetValue& col_val,
   if (chosen_type.is_integer() || chosen_type.is_decimal() || chosen_type.is_boolean() || chosen_type.is_time() ||
       chosen_type.is_timeinterval()) {
     if (is_distinct_target(agg_info)) {
-      return TargetValue(
-          count_distinct_set_size(col_val.i1, col_idx, row_set_mem_owner->getCountDistinctDescriptors()));
+      return TargetValue(count_distinct_set_size(col_val.i1, col_idx, query_mem_desc.count_distinct_descriptors_));
     }
     CHECK(col_val.isInt());
     if (chosen_type.is_decimal() && decimal_to_double) {
@@ -1265,7 +1265,8 @@ TargetValue ResultRows::getRowAt(const size_t row_idx,
                               decimal_to_double,
                               translate_strings,
                               executor_,
-                              row_set_mem_owner_);
+                              row_set_mem_owner_,
+                              query_mem_desc_);
 }
 
 std::vector<TargetValue> ResultRows::getNextRow(const bool translate_strings, const bool decimal_to_double) const {
@@ -1387,7 +1388,8 @@ bool ResultRows::fetchLazyOrBuildRow(std::vector<TargetValue>& row,
                                              decimal_to_double,
                                              translate_strings,
                                              executor_,
-                                             row_set_mem_owner_));
+                                             row_set_mem_owner_,
+                                             query_mem_desc_));
           if (kAVG == agg_info.agg_kind) {
             ++agg_col_idx;
           }
@@ -1600,7 +1602,8 @@ bool ResultRows::fetchLazyOrBuildRow(std::vector<TargetValue>& row,
                                              decimal_to_double,
                                              translate_strings,
                                              executor_,
-                                             row_set_mem_owner_));
+                                             row_set_mem_owner_,
+                                             query_mem_desc_));
         }
         if (next_col_ptr) {
           col_ptr = next_col_ptr;
