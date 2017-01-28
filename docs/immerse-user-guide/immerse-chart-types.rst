@@ -211,6 +211,33 @@ flight.
 
 --------------
 
+Scatter plot
+------------
+
+.. image:: ./images/scatter.png
+
+What it is
+~~~~~~~~~~
+The Scatter plot displays unaggregated, row-level data as points, plotting the points along an x and y axis with each axis representing a quantitative measure.  Points can optionally be sized or colored by further measures, making the scatter plot capable of representing up to four measures for each group (x, y, size, and color).  Scatter plot resembles Bubble chart, but is used to view unaggregated data, as compared with Bubble chart’s aggregate view.
+
+When to use it
+~~~~~~~~~~~~~~
+
+Similar to Bubble chart, use a Scatter plot when you want to study the correlation between two measures, or simply visualize the distribution of data to spot outliers or patterns.  Scatter plots can be used to visualize any size of dataset, but they really shine in their ability to quickly visualize large amounts of data.
+
+How to set it up
+~~~~~~~~~~~~~~~~
+
+The animation below shows a scatter plot being created for an airline flights dataset, with each point representing a flight, the x and y axes representing flight arrival delay and departure delay, size representing the flight duration, and color representing the airline carrier.
+
+On the right hand side of the screen, a popup box is configured, which displays columns of information whenever one of the points on the map is moused over.
+
+Note also that once the Size measure is added on the left of the screen, controls become available on the right of the screen for “Domain” and “Range.”  Domain is used to establish limits on the data that is considered for sizing, Range is used to set the range of sizes (in pixels) for the points.  Domain and Range controls function in the same way in the Pointmap chart type, and a more detailed explanation of these controls’ use can be found there.
+
+.. image:: ./images/scatter.*
+
+--------------
+
 Heatmap
 -------
 
