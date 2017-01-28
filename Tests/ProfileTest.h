@@ -120,6 +120,33 @@ void reduce_on_device(int8_t*& this_dev_buffer,
                       const std::vector<OP_KIND>& agg_ops,
                       const std::vector<size_t>& init_vals,
                       const bool is_columnar);
+
+int8_t* fetch_segs_from_others(std::vector<int8_t*>& dev_reduced_buffers,
+                               const size_t entry_count,
+                               const size_t dev_id,
+                               const size_t dev_count,
+                               const std::vector<size_t>& col_widths,
+                               const bool is_columnar,
+                               const size_t start,
+                               const size_t end);
+
+std::pair<int8_t*, size_t> get_perfect_hashed_copy(int8_t* dev_buffer,
+                                                   const size_t entry_count,
+                                                   const std::vector<size_t>& col_widths,
+                                                   const std::vector<std::pair<int64_t, int64_t>>& ranges,
+                                                   const std::vector<OP_KIND>& agg_ops,
+                                                   const std::vector<size_t>& init_vals,
+                                                   const bool is_columnar);
+
+void reduce_segment_on_device(int8_t* dev_seg_buf,
+                              const int8_t* dev_other_segs,
+                              const size_t entry_count,
+                              const size_t seg_count,
+                              const std::vector<size_t>& col_widths,
+                              const std::vector<OP_KIND>& agg_ops,
+                              const bool is_columnar,
+                              const size_t start,
+                              const size_t end);
 #endif
 
 #endif /* PROFILETEST_H */
