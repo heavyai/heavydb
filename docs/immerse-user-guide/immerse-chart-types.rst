@@ -232,7 +232,7 @@ The animation below shows a scatter plot being created for an airline flights da
 
 On the right hand side of the screen, a popup box is configured, which displays columns of information whenever one of the points on the map is moused over.
 
-Note also that once the Size measure is added on the left of the screen, controls become available on the right of the screen for “Domain” and “Range.”  Domain is used to establish limits on the data that is considered for sizing, Range is used to set the range of sizes (in pixels) for the points.  Domain and Range controls function in the same way in the Pointmap chart type, and a more detailed explanation of these controls’ use can be found there.
+Note also that once the Size measure is added on the left of the screen, controls become available on the right of the screen for “Domain” and “Range.”  Domain is used to establish limits on the data that is considered for sizing, Range is used to set the range of sizes (in pixels) for the points.  Domain and Range controls function in the same way in the Pointmap chart type, and a more detailed explanation of these controls’ use can be found in section :ref:`size-domain`.
 
 .. image:: ./images/scatter.*
 
@@ -383,6 +383,8 @@ measures to plot the location of points, and the selection of color and
 size measures, to add additional detail.  The animation also shows the
 adjustment of settings for “Size Domain” and “Size Range,” which are
 used to adjust how points are sized.  
+
+.. _size-domain:
 
 Size Domain
 ^^^^^^^^^^^
