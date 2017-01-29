@@ -1,9 +1,8 @@
-cmake_minimum_required(VERSION 2.8)
 find_package(CUDA)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unused-result")
 
-SET (datamgr_source_files
+set(datamgr_source_files
     DataMgr.cpp
     Encoder.cpp
     StringNoneEncoder.cpp
@@ -19,7 +18,6 @@ SET (datamgr_source_files
     BufferMgr/Buffer.cpp
 )
 
-ADD_LIBRARY(DataMgr ${datamgr_source_files})
+add_library(DataMgr ${datamgr_source_files})
 
-TARGET_LINK_LIBRARIES (DataMgr CudaMgr ${Boost_THREAD_LIBRARY} ${Glog_LIBRARIES})
-
+target_link_libraries(DataMgr CudaMgr ${Boost_THREAD_LIBRARY} ${Glog_LIBRARIES})

@@ -1,5 +1,3 @@
-cmake_minimum_required(VERSION 2.8)
-
 add_custom_command(
     DEPENDS ${CMAKE_SOURCE_DIR}/java/thrift/calciteserver.thrift
     OUTPUT
@@ -18,8 +16,6 @@ target_link_libraries(calciteserver_thrift ${Thrift_LIBRARIES})
 
 find_package(JNI REQUIRED)
 include_directories(${JNI_INCLUDE_DIRS})
-
-include_directories("/usr/local/include")
 
 add_library(Calcite Calcite.cpp Calcite.h)
 

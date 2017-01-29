@@ -1,14 +1,11 @@
-cmake_minimum_required(VERSION 2.8)
-
-#SET (CMAKE_CXX_FLAGS "-std=c++0x -g")
 set_source_files_properties(sqlite3.c PROPERTIES COMPILE_FLAGS -O0)
-SET (sqliteconnector_source_files
+set(sqliteconnector_source_files
     SqliteConnector.cpp
     SqliteConnector.h
     sqlite3.c
     sqlite3.h
 )
 
-ADD_LIBRARY (SqliteConnector ${sqliteconnector_source_files})
+add_library(SqliteConnector ${sqliteconnector_source_files})
 
-TARGET_LINK_LIBRARIES (SqliteConnector ${Boost_THREAD_LIBRARY} )
+target_link_libraries(SqliteConnector ${Boost_THREAD_LIBRARY})

@@ -1,15 +1,14 @@
-CMAKE_MINIMUM_REQUIRED(VERSION 2.8)
-
-SET(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/Modules/")
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/Modules/")
 
 find_package(Bisonpp REQUIRED)
 find_package(Flexpp REQUIRED)
 
-Set(BisonppOutput ${CMAKE_CURRENT_BINARY_DIR}/Parser.cpp)
+set(BisonppOutput ${CMAKE_CURRENT_BINARY_DIR}/Parser.cpp)
 
-#IF(BISONPP_EXECUTABLE)
-ADD_CUSTOM_COMMAND(
-    OUTPUT ${BisonppOutput}
+add_custom_command(
+    OUTPUT
+      ${BisonppOutput}
+      ${CMAKE_CURRENT_BINARY_DIR}/parser.h
     COMMAND ${BISONPP_EXECUTABLE}
     -d
     -h${CMAKE_CURRENT_BINARY_DIR}/parser.h
@@ -18,13 +17,11 @@ ADD_CUSTOM_COMMAND(
     DEPENDS parser.y
     COMMENT "Generating Parser.cpp"
 )
-#ENDIF()
 
-Set(FlexppOutput ${CMAKE_CURRENT_BINARY_DIR}/Scanner.cpp)
+set(FlexppOutput ${CMAKE_CURRENT_BINARY_DIR}/Scanner.cpp)
 
-Set(FlexppOutput Scanner.cpp)
-#IF (FLEXPP_EXECUTABLE)
-ADD_CUSTOM_COMMAND(
+set(FlexppOutput Scanner.cpp)
+add_custom_command(
     OUTPUT ${FlexppOutput}
     COMMAND ${FLEXPP_EXECUTABLE}
         -d
@@ -34,27 +31,22 @@ ADD_CUSTOM_COMMAND(
     DEPENDS scanner.l
     COMMENT "Generating Scanner.cpp"
 )
-#ENDIF()
 
-
-SET_SOURCE_FILES_PROPERTIES(${BisonppOutput} GENERATED)
-SET_SOURCE_FILES_PROPERTIES(${FlexppOutput} GENERATED)
-SET_SOURCE_FILES_PROPERTIES(${CMAKE_CURRENT_BINARY_DIR}/parser.h GENERATED)
-
-ADD_CUSTOM_TARGET(ParserFiles DEPENDS ${BisonppOutput})
-ADD_CUSTOM_TARGET(ScannerFiles DEPENDS ${FlexppOutput})
+add_custom_target(ParserFiles DEPENDS ${BisonppOutput})
+add_custom_target(ScannerFiles DEPENDS ${FlexppOutput})
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated-register -Wno-write-strings -Wno-unused-function -Wno-unused-label -Wno-sign-compare")
 
-SET (parser_source_files
-	ParserNode.cpp
-	ParserNode.h
-  ParserWrapper.cpp
-  ParserWrapper.h
-	${CMAKE_CURRENT_SOURCE_DIR}/../QueryEngine/ExtractFromTime.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../QueryEngine/DateTruncate.cpp
+set(parser_source_files
+    ParserNode.cpp
+    ParserNode.h
+    ParserWrapper.cpp
+    ParserWrapper.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../QueryEngine/ExtractFromTime.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../QueryEngine/DateTruncate.cpp
 )
 
-ADD_LIBRARY (Parser ${BisonppOutput} ${FlexppOutput} ${CMAKE_CURRENT_BINARY_DIR}/parser.h ${parser_source_files})
-TARGET_LINK_LIBRARIES (Parser Shared CsvImport QueryEngine)
+add_library(Parser ${BisonppOutput} ${FlexppOutput} ${CMAKE_CURRENT_BINARY_DIR}/parser.h ${parser_source_files})
+add_dependencies(Parser ParserFiles ScannerFiles)
+target_link_libraries(Parser Shared CsvImport QueryEngine)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})

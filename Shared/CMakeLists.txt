@@ -1,10 +1,8 @@
-cmake_minimum_required(VERSION 2.8)
-#SET(CMAKE_CXX_FLAGS "-std=c++0x -O3")
-SET (shared_source_files
+set(shared_source_files
     Datum.cpp
     timegm.cpp
     mapd_glob.cpp
     StringTransform.cpp
 )
 
-ADD_LIBRARY (Shared ${shared_source_files})
+add_library(Shared ${shared_source_files})

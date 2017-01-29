@@ -1,5 +1,3 @@
-cmake_minimum_required(VERSION 2.8)
-
 set(EXECUTABLE_OUTPUT_PATH ${CMAKE_CURRENT_BINARY_DIR})
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-strict-aliasing")
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
@@ -12,6 +10,7 @@ add_executable(RunQueryLoop RunQueryLoop.cpp QueryRunner.cpp)
 add_executable(StringDictionaryTest StringDictionaryTest.cpp)
 add_executable(PlanTest PlanTest.cpp)
 add_executable(ProfileTest ProfileTest.cpp)
+
 if(ENABLE_CUDA)
   set(MAPD_DEFINITIONS -DHAVE_CUDA)
   add_custom_command(
@@ -34,6 +33,7 @@ if(ENABLE_CUDA)
   add_dependencies(ProfileTest ProfileUtils)
   target_link_libraries(ProfileTest ${CMAKE_CURRENT_BINARY_DIR}/libProfileUtils.so)
 endif()
+
 add_executable(ResultSetTest ResultSetTest.cpp ResultSetTestUtils.cpp)
 add_executable(ResultSetBaselineRadixSortTest ResultSetBaselineRadixSortTest.cpp ResultSetTestUtils.cpp)
 add_executable(UtilTest UtilTest.cpp)

@@ -1,4 +1,3 @@
-cmake_minimum_required(VERSION 2.8)
 set(EXECUTABLE_OUTPUT_PATH ${CMAKE_CURRENT_BINARY_DIR})
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS -Wall -Wno-attributes -Wno-strict-aliasing")
@@ -56,7 +55,7 @@ set(group_by_hash_test_files
     GroupByHashTest.cpp
     MurmurHash.cpp
     RuntimeFunctions.cpp
-   )
+)
 
 execute_process(COMMAND ${llvm_config_cmd} "--includedir"
                 OUTPUT_VARIABLE LLVM_INC_FLAGS)
@@ -64,7 +63,7 @@ execute_process(COMMAND ${llvm_config_cmd} "--includedir"
 include_directories(.. ${LLVM_INC_FLAGS} "/usr/local/cuda/nvvm/include/" "/usr/local/cuda/include/" "/usr/local/cuda/nvvm/libnvvm-samples/common/include/" ${Boost_INCLUDE_DIR})
 
 if(ENABLE_CUDA)
-    set(MAPD_DEFINITIONS "-DHAVE_CUDA")
+  set(MAPD_DEFINITIONS "-DHAVE_CUDA")
 endif()
 
 if(ENABLE_LLVM_DBG)
@@ -72,11 +71,11 @@ set(CLANG_SDK_INC "-I/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX
 set(CLANG_CRT_INC "-I/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include/c++/v1/")
 endif()
 
-if (ENABLE_LLVM_DBG)
-set(llvm_clangpp_cmd "${LLVM_BIN_DIR}/clang++")
-else ()
-set(llvm_clangpp_cmd clang++)
-endif (ENABLE_LLVM_DBG)
+if(ENABLE_LLVM_DBG)
+  set(llvm_clangpp_cmd "${LLVM_BIN_DIR}/clang++")
+else()
+  set(llvm_clangpp_cmd clang++)
+endif()
 
 list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/)
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
@@ -109,15 +108,15 @@ endif()
 
 
 if(ENABLE_CUDA)
-    add_library(QueryEngine ${query_engine_source_files} ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.a ${CMAKE_CURRENT_BINARY_DIR}/InPlaceSortImpl.o ${CMAKE_CURRENT_BINARY_DIR}/ResultSetSortImpl.o ${CMAKE_CURRENT_BINARY_DIR}/GpuInitGroups.o ${CMAKE_CURRENT_BINARY_DIR}/HashJoinRuntimeGpu.o)
+  add_library(QueryEngine ${query_engine_source_files} ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.a ${CMAKE_CURRENT_BINARY_DIR}/InPlaceSortImpl.o ${CMAKE_CURRENT_BINARY_DIR}/ResultSetSortImpl.o ${CMAKE_CURRENT_BINARY_DIR}/GpuInitGroups.o ${CMAKE_CURRENT_BINARY_DIR}/HashJoinRuntimeGpu.o)
 else()
-    add_library(QueryEngine ${query_engine_source_files})
+  add_library(QueryEngine ${query_engine_source_files})
 endif()
 
 if(ENABLE_RENDERING)
-    target_link_libraries(QueryEngine CsvImport Planner StringDictionary Utils QueryRenderer)
+  target_link_libraries(QueryEngine CsvImport Planner StringDictionary Utils QueryRenderer)
 else()
-    target_link_libraries(QueryEngine CsvImport Planner StringDictionary Utils)
+  target_link_libraries(QueryEngine CsvImport Planner StringDictionary Utils)
 endif()
 
 

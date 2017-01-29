@@ -1,10 +1,3 @@
-cmake_minimum_required(VERSION 2.8)
+add_library(Fragmenter InsertOrderFragmenter.cpp)
 
-SET (fragmenter_source_files
-    InsertOrderFragmenter.cpp
-)
-
-ADD_LIBRARY(Fragmenter ${fragmenter_source_files})
-
-TARGET_LINK_LIBRARIES (Fragmenter ${Boost_THREAD_LIBRARY})
-
+target_link_libraries(Fragmenter ${Boost_THREAD_LIBRARY})
