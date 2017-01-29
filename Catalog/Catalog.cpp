@@ -688,13 +688,13 @@ const TableDescriptor* Catalog::getMetadataForTable(int tableId) const {
   return td;  // returns pointer to table descriptor
 }
 
-const DictDescriptor* Catalog::getMetadataForDict(int dictId) const {
+const DictDescriptor* Catalog::getMetadataForDict(int dictId, bool loadDict) const {
   auto dictDescIt = dictDescriptorMapById_.find(dictId);
   if (dictDescIt == dictDescriptorMapById_.end()) {  // check to make sure dictionary exists
     return nullptr;
   }
   const auto& dd = dictDescIt->second;
-  {
+  if (loadDict) {
     std::lock_guard<std::mutex> lock(cat_mutex_);
     if (!dd->stringDict) {
       if (string_dict_hosts_.empty()) {

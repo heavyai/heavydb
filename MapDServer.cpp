@@ -685,7 +685,7 @@ class MapDHandler : virtual public MapDIf {
     col_type.col_type.scale = cd->columnType.get_scale();
     if (cd->columnType.get_compression() == EncodingType::kENCODING_DICT) {
       // have to get the actual size of the encoding from the dictionary definition
-      auto dd = cat.getMetadataForDict(cd->columnType.get_comp_param());
+      auto dd = cat.getMetadataForDict(cd->columnType.get_comp_param(), false);
       if (!dd) {
         TMapDException ex;
         ex.error_msg = "Dictionary doesn't exist";
