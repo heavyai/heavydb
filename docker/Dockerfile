@@ -1,8 +1,5 @@
-FROM nvidia/cuda:8.0-ubuntu16.04
+FROM nvidia/cuda:8.0-runtime-ubuntu16.04
 MAINTAINER Andrew Seidl <andrew@mapd.com>
-
-ENV LD_LIBRARY_PATH /usr/lib/x86_64-linux-gnu:${LD_LIBRARY_PATH}:/usr/local/cuda-8.0/targets/x86_64-linux/lib/stubs
-RUN ln -sf /usr/local/cuda-8.0/targets/x86_64-linux/lib/stubs/libcuda.so /usr/local/cuda-8.0/targets/x86_64-linux/lib/stubs/libcuda.so.1
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         libglu1-mesa-dev \
@@ -18,10 +15,6 @@ ENV LD_LIBRARY_PATH /usr/lib/jvm/default-java/jre/lib/amd64/server:/mapd/bin:${L
 
 ADD mapd2-latest-Linux-x86_64.tar.gz /installs
 RUN rm -f /mapd && ln -s $(ls -dtr /installs/mapd* | head -n 1) /mapd
-
-RUN mkdir -p /mapd-storage/data \
-  && /mapd/bin/initdb /mapd-storage/data \
-  && touch /mapd-storage/mapd.conf
 
 WORKDIR /mapd
 

@@ -56,9 +56,3 @@ Note: the `Dockerfile` currently uses `startmapd` to start both `mapd_web_server
 An EGL-enabled build must be used for backend rendering due to issues related to running X inside a container. To build a container, rename the provided EGL-enabled tarball to `mapd2-latest-Linux-x86_64.tar.gz` and then build the container with:
 
     nvidia-docker build .
-
-There is an issue in certain drivers where EGL+CUDA code will segfault if `libEGL.so` does not exist in your `LD_LIBRARY_PATH`. While this symlink is created by the NVIDIA driver install, it is not currently created by the drivers that are brought in by `nvidia-docker`. You can work around the issue by bind mounting the library in from the host:
-
-    nvidia-docker run -v /usr/lib/nvidia-367/libEGL.so.1:/usr/lib/libEGL.so ...
-
-This assumes that you are running NVIDIA driver 367.xx and the file `libEGL.so.1` exists under `/usr/lib/nvidia-367`. Adjust if necessary for your driver version and distro.
