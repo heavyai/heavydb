@@ -2424,7 +2424,8 @@ llvm::Value* Executor::codegenUMinus(const Analyzer::UOper* uoper, const Compila
     cgen_state_->ir_builder_.CreateCondBr(overflow, uminus_fail, uminus_ok);
     cgen_state_->ir_builder_.SetInsertPoint(uminus_ok);
   }
-  auto ret = ti.get_notnull() ? cgen_state_->ir_builder_.CreateNeg(operand_lv)
+  auto ret = ti.get_notnull() ? (ti.is_fp() ? cgen_state_->ir_builder_.CreateFNeg(operand_lv)
+                                            : cgen_state_->ir_builder_.CreateNeg(operand_lv))
                               : cgen_state_->emitCall("uminus_" + numeric_type_name(ti) + "_nullable",
                                                       {operand_lv,
                                                        ti.is_fp() ? static_cast<llvm::Value*>(inlineFpNull(ti))

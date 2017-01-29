@@ -2277,6 +2277,7 @@ TEST(Select, RuntimeFunctions) {
     c("SELECT SUM(ABS(-dd + 1)) FROM test;", dt);
     c("SELECT SUM(ABS(-f + 1)) FROM test;", dt);
     c("SELECT SUM(ABS(-d + 1)) FROM test;", dt);
+    c("SELECT COUNT(*) FROM test WHERE ABS(CAST(x AS float)) >= 0;", dt);
     EXPECT_THROW(run_multiple_agg("SELECT MIN(ABS(-ofd + 2)) FROM test;", dt), std::runtime_error);
     ASSERT_EQ(static_cast<int64_t>(2 * g_num_rows),
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE SIGN(-dd) = -1;", dt)));
