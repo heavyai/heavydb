@@ -42,6 +42,10 @@ struct ColWidths {
   int8_t compact;  // with padding
 };
 
+inline bool operator==(const ColWidths& lhs, const ColWidths& rhs) {
+  return lhs.actual == rhs.actual && lhs.compact == rhs.compact;
+}
+
 // Private: each thread has its own memory, no atomic operations required
 // Shared: threads in the same block share memory, atomic operations required
 enum class GroupByMemSharing { Private, Shared };

@@ -43,4 +43,9 @@ struct CountDistinctDescriptor {
   }
 };
 
+inline bool operator==(const CountDistinctDescriptor& lhs, const CountDistinctDescriptor& rhs) {
+  return lhs.impl_type_ == rhs.impl_type_ && lhs.min_val == rhs.min_val && lhs.bitmap_sz_bits == rhs.bitmap_sz_bits &&
+         lhs.approximate == rhs.approximate && lhs.device_type == rhs.device_type;
+}
+
 #endif  // QUERYENGINE_COUNTDISTINCTDESCRIPTOR_H
