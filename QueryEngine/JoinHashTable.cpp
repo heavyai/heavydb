@@ -119,7 +119,7 @@ std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(
   return join_hash_table;
 }
 
-int JoinHashTable::reify(const int device_count) noexcept {
+int JoinHashTable::reify(const int device_count) {
   CHECK_LT(0, device_count);
   const auto cols = get_cols(qual_bin_oper_, cat_, executor_->temporary_tables_);
   const auto inner_col = cols.first;

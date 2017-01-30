@@ -10,9 +10,9 @@
 
 #include <thread>
 
-StringDictionaryProxy::StringDictionaryProxy(std::shared_ptr<StringDictionary> sd) noexcept : string_dict_(sd) {}
+StringDictionaryProxy::StringDictionaryProxy(std::shared_ptr<StringDictionary> sd) : string_dict_(sd) {}
 
-int32_t StringDictionaryProxy::getOrAddTransient(const std::string& str) noexcept {
+int32_t StringDictionaryProxy::getOrAddTransient(const std::string& str) {
   mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
   auto transient_id = string_dict_->getIdOfString(str);
   if (transient_id != StringDictionary::INVALID_STR_ID) {
@@ -34,7 +34,7 @@ int32_t StringDictionaryProxy::getOrAddTransient(const std::string& str) noexcep
   return transient_id;
 }
 
-int32_t StringDictionaryProxy::getIdOfString(const std::string& str) const noexcept {
+int32_t StringDictionaryProxy::getIdOfString(const std::string& str) const {
   mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
   auto str_id = string_dict_->getIdOfString(str);
   if (str_id != StringDictionary::INVALID_STR_ID || transient_str_to_int_.empty()) {
@@ -44,7 +44,7 @@ int32_t StringDictionaryProxy::getIdOfString(const std::string& str) const noexc
   return it != transient_str_to_int_.end() ? it->second : StringDictionary::INVALID_STR_ID;
 }
 
-std::string StringDictionaryProxy::getString(int32_t string_id) const noexcept {
+std::string StringDictionaryProxy::getString(int32_t string_id) const {
   mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
   if (string_id >= 0) {
     return string_dict_->getString(string_id);

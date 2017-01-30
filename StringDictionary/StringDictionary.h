@@ -19,14 +19,14 @@ class StringDictionaryClient;
 class StringDictionary {
  public:
   StringDictionary(const std::string& folder, const bool recover = true, size_t initial_capacity = 256) noexcept;
-  StringDictionary(const LeafHostInfo& host, const int dict_id) noexcept;
+  StringDictionary(const LeafHostInfo& host, const int dict_id);
   ~StringDictionary() noexcept;
 
   int32_t getOrAdd(const std::string& str) noexcept;
   template <class T>
   void getOrAddBulk(const std::vector<std::string>& string_vec, T* encoded_vec) noexcept;
-  int32_t getIdOfString(const std::string& str) const noexcept;
-  std::string getString(int32_t string_id) const noexcept;
+  int32_t getIdOfString(const std::string& str) const;
+  std::string getString(int32_t string_id) const;
   std::pair<char*, size_t> getStringBytes(int32_t string_id) const noexcept;
   size_t storageEntryCount() const noexcept;
 

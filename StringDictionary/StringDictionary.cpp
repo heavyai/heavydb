@@ -127,7 +127,7 @@ StringDictionary::StringDictionary(const std::string& folder, const bool recover
   }
 }
 
-StringDictionary::StringDictionary(const LeafHostInfo& host, const int dict_id) noexcept
+StringDictionary::StringDictionary(const LeafHostInfo& host, const int dict_id)
     : client_(new StringDictionaryClient(host, dict_id)) {}
 
 StringDictionary::~StringDictionary() noexcept {
@@ -160,7 +160,7 @@ template void StringDictionary::getOrAddBulk(const std::vector<std::string>& str
 template void StringDictionary::getOrAddBulk(const std::vector<std::string>& string_vec, int16_t* encoded_vec) noexcept;
 template void StringDictionary::getOrAddBulk(const std::vector<std::string>& string_vec, int32_t* encoded_vec) noexcept;
 
-int32_t StringDictionary::getIdOfString(const std::string& str) const noexcept {
+int32_t StringDictionary::getIdOfString(const std::string& str) const {
   mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
   if (client_) {
     return client_->get(str);
@@ -173,7 +173,7 @@ int32_t StringDictionary::getUnlocked(const std::string& str) const noexcept {
   return str_id;
 }
 
-std::string StringDictionary::getString(int32_t string_id) const noexcept {
+std::string StringDictionary::getString(int32_t string_id) const {
   mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
   if (client_) {
     std::string ret;

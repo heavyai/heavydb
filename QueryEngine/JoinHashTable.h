@@ -74,7 +74,7 @@ class JoinHashTable {
     CHECK(col_range.getType() == ExpressionRangeType::Integer);
   }
 
-  int reify(const int device_count) noexcept;
+  int reify(const int device_count);
   int initHashTableForDevice(const ChunkKey& chunk_key,
                              const int8_t* col_buff,
                              const size_t num_elements,

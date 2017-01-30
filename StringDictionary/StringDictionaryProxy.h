@@ -16,13 +16,13 @@
 // used to access a StringDictionary when transient strings are involved
 class StringDictionaryProxy {
  public:
-  StringDictionaryProxy(std::shared_ptr<StringDictionary> sd) noexcept;
+  StringDictionaryProxy(std::shared_ptr<StringDictionary> sd);
 
   int32_t getOrAdd(const std::string& str) noexcept;
   StringDictionary* getDictionary() noexcept;
-  int32_t getOrAddTransient(const std::string& str) noexcept;
-  int32_t getIdOfString(const std::string& str) const noexcept;
-  std::string getString(int32_t string_id) const noexcept;
+  int32_t getOrAddTransient(const std::string& str);
+  int32_t getIdOfString(const std::string& str) const;
+  std::string getString(int32_t string_id) const;
   std::pair<char*, size_t> getStringBytes(int32_t string_id) const noexcept;
   size_t storageEntryCount() const noexcept;
 
