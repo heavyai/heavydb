@@ -20,6 +20,8 @@
 #include <unordered_map>
 #include <vector>
 
+extern bool g_cluster;
+
 class Executor;
 class QueryExecutionContext;
 class RenderAllocatorMap;
@@ -131,7 +133,7 @@ struct QueryMemoryDescriptor {
 };
 
 inline bool can_use_result_set(const QueryMemoryDescriptor& query_mem_desc, const ExecutorDeviceType) {
-  return query_mem_desc.hash_type == GroupByColRangeType::MultiCol;
+  return g_cluster || query_mem_desc.hash_type == GroupByColRangeType::MultiCol;
 }
 
 #endif  // QUERYENGINE_QUERYMEMORYDESCRIPTOR_H

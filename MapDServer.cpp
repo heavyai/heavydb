@@ -2291,6 +2291,7 @@ int main(int argc, char** argv) {
         db_leaves = only_db_leaves(all_nodes);
       }
       string_leaves = only_string_leaves(all_nodes);
+      g_cluster = true;
     }
 
     if (vm.count("help")) {

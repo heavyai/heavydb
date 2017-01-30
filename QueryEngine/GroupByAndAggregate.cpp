@@ -28,6 +28,8 @@
 #include <numeric>
 #include <thread>
 
+bool g_cluster{false};
+
 namespace {
 
 void check_total_bitmap_memory(const CountDistinctDescriptors& count_distinct_descriptors,
@@ -1659,7 +1661,7 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
           (!sort_on_gpu_hint || !many_entries(col_range_info.max, col_range_info.min, col_range_info.bucket)) &&
           !col_range_info.bucket && keyless_info.keyless;
       size_t bin_count = getBucketedCardinality(col_range_info);
-      const size_t interleaved_max_threshold{512};
+      const size_t interleaved_max_threshold = g_cluster ? 0 : 512;
       bool interleaved_bins = keyless && (bin_count <= interleaved_max_threshold) && count_distinct_descriptors.empty();
       query_mem_desc_ = {executor_,
                          allow_multifrag,
@@ -2106,6 +2108,9 @@ bool QueryMemoryDescriptor::threadsShareMemory() const {
 }
 
 bool QueryMemoryDescriptor::blocksShareMemory() const {
+  if (g_cluster) {
+    return true;
+  }
   if (!countDescriptorsLogicallyEmpty(count_distinct_descriptors_)) {
     return true;
   }
