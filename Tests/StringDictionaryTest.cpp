@@ -17,7 +17,7 @@ TEST(StringDictionary, AddAndGet) {
   ASSERT_EQ(0, id1);
   auto id3 = string_dict.getOrAdd("baz");
   ASSERT_EQ(1, id3);
-  auto id4 = string_dict.get("foo bar");
+  auto id4 = string_dict.getIdOfString("foo bar");
   ASSERT_EQ(id1, id4);
   ASSERT_EQ("foo bar", string_dict.getString(id4));
 }

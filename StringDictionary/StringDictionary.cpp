@@ -160,7 +160,7 @@ template void StringDictionary::getOrAddBulk(const std::vector<std::string>& str
 template void StringDictionary::getOrAddBulk(const std::vector<std::string>& string_vec, int16_t* encoded_vec) noexcept;
 template void StringDictionary::getOrAddBulk(const std::vector<std::string>& string_vec, int32_t* encoded_vec) noexcept;
 
-int32_t StringDictionary::get(const std::string& str) const noexcept {
+int32_t StringDictionary::getIdOfString(const std::string& str) const noexcept {
   mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
   if (client_) {
     return client_->get(str);
@@ -195,7 +195,7 @@ std::pair<char*, size_t> StringDictionary::getStringBytes(int32_t string_id) con
   return getStringBytesChecked(string_id);
 }
 
-size_t StringDictionary::size() const noexcept {
+size_t StringDictionary::storageEntryCount() const noexcept {
   mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
   return str_count_;
 }

@@ -21,10 +21,10 @@ class StringDictionaryProxy {
   int32_t getOrAdd(const std::string& str) noexcept;
   StringDictionary* getDictionary() noexcept;
   int32_t getOrAddTransient(const std::string& str) noexcept;
-  int32_t get(const std::string& str) const noexcept;
+  int32_t getIdOfString(const std::string& str) const noexcept;
   std::string getString(int32_t string_id) const noexcept;
   std::pair<char*, size_t> getStringBytes(int32_t string_id) const noexcept;
-  size_t size() const noexcept;
+  size_t storageEntryCount() const noexcept;
 
   std::vector<std::string> getLike(const std::string& pattern,
                                    const bool icase,

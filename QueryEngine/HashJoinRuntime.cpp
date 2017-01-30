@@ -63,7 +63,7 @@ DEVICE int SUFFIX(fill_hash_join_buff)(int32_t* buff,
       const auto sd_inner_dict_proxy = static_cast<const StringDictionaryProxy*>(sd_inner_proxy);
       const auto sd_outer_dict_proxy = static_cast<const StringDictionaryProxy*>(sd_outer_proxy);
       const auto elem_str = sd_inner_dict_proxy->getString(elem);
-      const auto outer_id = sd_outer_dict_proxy->get(elem_str);
+      const auto outer_id = sd_outer_dict_proxy->getIdOfString(elem_str);
       if (outer_id == StringDictionary::INVALID_STR_ID) {
         continue;
       }

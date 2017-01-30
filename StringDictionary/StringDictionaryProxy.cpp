@@ -14,7 +14,7 @@ StringDictionaryProxy::StringDictionaryProxy(std::shared_ptr<StringDictionary> s
 
 int32_t StringDictionaryProxy::getOrAddTransient(const std::string& str) noexcept {
   mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
-  auto transient_id = string_dict_->get(str);
+  auto transient_id = string_dict_->getIdOfString(str);
   if (transient_id != StringDictionary::INVALID_STR_ID) {
     return transient_id;
   }
@@ -34,9 +34,9 @@ int32_t StringDictionaryProxy::getOrAddTransient(const std::string& str) noexcep
   return transient_id;
 }
 
-int32_t StringDictionaryProxy::get(const std::string& str) const noexcept {
+int32_t StringDictionaryProxy::getIdOfString(const std::string& str) const noexcept {
   mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
-  auto str_id = string_dict_->get(str);
+  auto str_id = string_dict_->getIdOfString(str);
   if (str_id != StringDictionary::INVALID_STR_ID || transient_str_to_int_.empty()) {
     return str_id;
   }
@@ -112,8 +112,8 @@ std::pair<char*, size_t> StringDictionaryProxy::getStringBytes(int32_t string_id
   return string_dict_.get()->getStringBytes(string_id);
 }
 
-size_t StringDictionaryProxy::size() const noexcept {
-  return string_dict_.get()->size();
+size_t StringDictionaryProxy::storageEntryCount() const noexcept {
+  return string_dict_.get()->storageEntryCount();
 }
 
 StringDictionary* StringDictionaryProxy::getDictionary() noexcept {

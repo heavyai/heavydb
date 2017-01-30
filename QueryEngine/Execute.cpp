@@ -721,7 +721,7 @@ std::vector<int8_t> Executor::serializeLiterals(const std::unordered_map<int, Ex
       case 6: {
         const auto p = boost::get<std::pair<std::string, int>>(&lit);
         CHECK(p);
-        const auto str_id = getStringDictionaryProxy(p->second, row_set_mem_owner_)->get(p->first);
+        const auto str_id = getStringDictionaryProxy(p->second, row_set_mem_owner_)->getIdOfString(p->first);
         memcpy(&serialized[off - lit_bytes], &str_id, lit_bytes);
         break;
       }
@@ -854,7 +854,7 @@ extern "C" int32_t string_compress(const int64_t ptr_and_len, const int64_t stri
   std::string raw_str(reinterpret_cast<char*>(extract_str_ptr_noinline(ptr_and_len)),
                       extract_str_len_noinline(ptr_and_len));
   auto string_dict_proxy = reinterpret_cast<const StringDictionaryProxy*>(string_dict_handle);
-  return string_dict_proxy->get(raw_str);
+  return string_dict_proxy->getIdOfString(raw_str);
 }
 
 llvm::Value* Executor::codegen(const Analyzer::CharLengthExpr* expr, const CompilationOptions& co) {
@@ -947,7 +947,7 @@ llvm::Value* Executor::codegenDictLike(const std::shared_ptr<Analyzer::Expr> lik
   CHECK(dict_like_arg_ti.is_string());
   CHECK_EQ(kENCODING_DICT, dict_like_arg_ti.get_compression());
   const auto sdp = getStringDictionaryProxy(dict_like_arg_ti.get_comp_param(), row_set_mem_owner_);
-  if (sdp->size() > 200000000) {
+  if (sdp->storageEntryCount() > 200000000) {
     return nullptr;
   }
   const auto& pattern_ti = pattern->get_type_info();
@@ -1026,7 +1026,7 @@ llvm::Value* Executor::codegenDictRegexp(const std::shared_ptr<Analyzer::Expr> p
   CHECK(dict_regexp_arg_ti.is_string());
   CHECK_EQ(kENCODING_DICT, dict_regexp_arg_ti.get_compression());
   const auto sdp = getStringDictionaryProxy(dict_regexp_arg_ti.get_comp_param(), row_set_mem_owner_);
-  if (sdp->size() > 15000000) {
+  if (sdp->storageEntryCount() > 15000000) {
     return nullptr;
   }
   const auto& pattern_ti = pattern->get_type_info();
@@ -1104,7 +1104,7 @@ std::unique_ptr<InValuesBitmap> Executor::createInValuesBitmap(const Analyzer::I
       if (ti.is_string()) {
         CHECK(sdp);
         const auto string_id =
-            in_val_const->get_is_null() ? needle_null_val : sdp->get(*in_val_const->get_constval().stringval);
+            in_val_const->get_is_null() ? needle_null_val : sdp->getIdOfString(*in_val_const->get_constval().stringval);
         if (string_id >= 0 || string_id == needle_null_val) {
           values.push_back(string_id);
         }
@@ -1550,7 +1550,7 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Constant* constant,
       }
       const auto& str_const = *constant->get_constval().stringval;
       if (enc_type == kENCODING_DICT) {
-        return {ll_int(getStringDictionaryProxy(dict_id, row_set_mem_owner_)->get(str_const))};
+        return {ll_int(getStringDictionaryProxy(dict_id, row_set_mem_owner_)->getIdOfString(str_const))};
       }
       return {ll_int(int64_t(0)),
               cgen_state_->addStringConstant(str_const),

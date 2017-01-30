@@ -25,10 +25,10 @@ class StringDictionary {
   int32_t getOrAdd(const std::string& str) noexcept;
   template <class T>
   void getOrAddBulk(const std::vector<std::string>& string_vec, T* encoded_vec) noexcept;
-  int32_t get(const std::string& str) const noexcept;
+  int32_t getIdOfString(const std::string& str) const noexcept;
   std::string getString(int32_t string_id) const noexcept;
   std::pair<char*, size_t> getStringBytes(int32_t string_id) const noexcept;
-  size_t size() const noexcept;
+  size_t storageEntryCount() const noexcept;
 
   std::vector<std::string> getLike(const std::string& pattern,
                                    const bool icase,
