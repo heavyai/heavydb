@@ -17,7 +17,7 @@ The following `cmake`/`ccmake` options can enable/disable different features:
 - `-DENABLE_CALCITE=on` enable Calcite SQL parser. Default `on`.
 - `-DENABLE_RENDERING=on` enable backend rendering. Default `off`.
 - `-DENABLE_CUDA=off` disable CUDA. Default `on`.
-- `-DMAPD2_FRONTEND_DOWNLOAD=on` download the latest pre-built `mapd2-frontend`. Default `on`.
+- `-DMAPD_IMMERSE_DOWNLOAD=on` download the latest master build of Immerse / `mapd2-frontend`. Default `on`.
 - `-DPREFER_STATIC_LIBS=on` static link dependencies, if available. Default `off`.
 
 # Dependencies

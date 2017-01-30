@@ -7,9 +7,7 @@ set(MAPD_VERSION_MINOR "0")
 set(MAPD_VERSION_PATCH "3")
 set(MAPD_VERSION_EXTRA "dev")
 set(MAPD_VERSION_RAW "${MAPD_VERSION_MAJOR}.${MAPD_VERSION_MINOR}.${MAPD_VERSION_PATCH}${MAPD_VERSION_EXTRA}")
-set(MAPD_IMMERSE_URL "http://builds.mapd.com/frontend/mapd2-dashboard-v1-latest-master-prod.zip")
-set(MAPD_IMMERSEV2_URL "http://builds.mapd.com/frontend/mapd2-dashboard-v2-latest-master-prod.zip")
-option(MAPD_USE_IMMERSEV2 "Bundle Immerse v2 as default" ON)
+set(MAPD_IMMERSE_URL "http://builds.mapd.com/frontend/mapd2-dashboard-v2-latest-master-prod.zip")
 string(TIMESTAMP MAPD_BUILD_DATE "%Y%m%d")
 
 if($ENV{BUILD_NUMBER})
@@ -305,14 +303,9 @@ target_link_libraries(initdb Shared Catalog Fragmenter Chunk SqliteConnector Dat
 set(CPACK_PACKAGE_VENDOR "MapD Technologies, Inc.")
 
 # Frontend
-if(MAPD_USE_IMMERSEV2)
-  set(MAPD_IMMERSE_URL ${MAPD_IMMERSEV2_URL})
-else()
-  set(MAPD_PACKAGE_FLAGS "${MAPD_PACKAGE_FLAGS}-v1")
-endif()
-option(MAPD2_FRONTEND_DOWNLOAD "Download mapd2-frontend for packaging" ON)
+option(MAPD_IMMERSE_DOWNLOAD "Download MapD Immerse for packaging" ON)
 set(MAPD_IMMERSE_URL ${MAPD_IMMERSE_URL} CACHE STRING "URL to bundled frontend")
-if(MAPD2_FRONTEND_DOWNLOAD)
+if(MAPD_IMMERSE_DOWNLOAD)
   include(ExternalProject)
   externalproject_add(frontend
     URL ${MAPD_IMMERSE_URL}
