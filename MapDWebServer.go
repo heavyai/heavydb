@@ -452,6 +452,18 @@ func serversHandler(rw http.ResponseWriter, r *http.Request) {
 	rw.Write(j)
 }
 
+func versionHandler(rw http.ResponseWriter, r *http.Request) {
+	outVers := "Core:\n" + version
+	versTxt := frontend + "/version.txt"
+	feVers, err := ioutil.ReadFile(versTxt)
+	if err == nil {
+		outVers += "\n\n"
+		outVers += "Immerse:\n"
+		outVers += string(feVers)
+	}
+	rw.Write([]byte(outVers))
+}
+
 func main() {
 	if _, err := os.Stat(dataDir + "/mapd_log/"); os.IsNotExist(err) {
 		os.MkdirAll(dataDir+"/mapd_log/", 0755)
@@ -486,6 +498,7 @@ func main() {
 	mux.HandleFunc("/", thriftOrFrontendHandler)
 	mux.HandleFunc("/metrics/", metricsHandler)
 	mux.HandleFunc("/metrics/reset/", metricsResetHandler)
+	mux.HandleFunc("/version.txt", versionHandler)
 
 	// Required while Immerse V1 or V2 is deployed to a subdir of the frontend.
 	// To be removed once Immerse V1 is no longer distributed.
