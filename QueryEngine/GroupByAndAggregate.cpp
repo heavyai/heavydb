@@ -216,7 +216,7 @@ void QueryExecutionContext::allocateCountDistinctGpuMem() {
       reinterpret_cast<int8_t*>(count_distinct_bitmap_mem_), count_distinct_bitmap_mem_bytes_, device_id_);
   count_distinct_bitmap_crt_ptr_ = count_distinct_bitmap_host_mem_ =
       static_cast<int8_t*>(checked_malloc(count_distinct_bitmap_mem_bytes_));
-  row_set_mem_owner_->addCountDistinctBuffer(count_distinct_bitmap_host_mem_, count_distinct_bitmap_mem_bytes_);
+  row_set_mem_owner_->addCountDistinctBuffer(count_distinct_bitmap_host_mem_, count_distinct_bitmap_mem_bytes_, true);
 }
 
 std::vector<ColumnLazyFetchInfo> QueryExecutionContext::getColLazyFetchInfo(
@@ -425,10 +425,11 @@ int64_t QueryExecutionContext::allocateCountDistinctBitmap(const size_t bitmap_b
     CHECK(count_distinct_bitmap_crt_ptr_);
     auto ptr = count_distinct_bitmap_crt_ptr_;
     count_distinct_bitmap_crt_ptr_ += bitmap_byte_sz;
+    row_set_mem_owner_->addCountDistinctBuffer(ptr, bitmap_byte_sz, false);
     return reinterpret_cast<int64_t>(ptr);
   }
   auto count_distinct_buffer = static_cast<int8_t*>(checked_calloc(bitmap_byte_sz, 1));
-  row_set_mem_owner_->addCountDistinctBuffer(count_distinct_buffer, bitmap_byte_sz);
+  row_set_mem_owner_->addCountDistinctBuffer(count_distinct_buffer, bitmap_byte_sz, true);
   return reinterpret_cast<int64_t>(count_distinct_buffer);
 }
 

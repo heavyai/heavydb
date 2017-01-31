@@ -63,9 +63,9 @@ class ChunkIter;
 
 class RowSetMemoryOwner : boost::noncopyable {
  public:
-  void addCountDistinctBuffer(int8_t* count_distinct_buffer, const size_t bytes) {
+  void addCountDistinctBuffer(int8_t* count_distinct_buffer, const size_t bytes, const bool system_allocated) {
     std::lock_guard<std::mutex> lock(state_mutex_);
-    count_distinct_bitmaps_.emplace_back(count_distinct_buffer, bytes);
+    count_distinct_bitmaps_.emplace_back(CountDistinctBitmapBuffer{count_distinct_buffer, bytes, system_allocated});
   }
 
   void addCountDistinctSet(std::set<int64_t>* count_distinct_set) {
@@ -121,7 +121,9 @@ class RowSetMemoryOwner : boost::noncopyable {
 
   ~RowSetMemoryOwner() {
     for (const auto& count_distinct_buffer : count_distinct_bitmaps_) {
-      free(count_distinct_buffer.first);
+      if (count_distinct_buffer.system_allocated) {
+        free(count_distinct_buffer.ptr);
+      }
     }
     for (auto count_distinct_set : count_distinct_sets_) {
       delete count_distinct_set;
@@ -144,7 +146,13 @@ class RowSetMemoryOwner : boost::noncopyable {
   }
 
  private:
-  std::vector<std::pair<int8_t*, size_t>> count_distinct_bitmaps_;
+  struct CountDistinctBitmapBuffer {
+    int8_t* ptr;
+    const size_t size;
+    const bool system_allocated;
+  };
+
+  std::vector<CountDistinctBitmapBuffer> count_distinct_bitmaps_;
   std::vector<std::set<int64_t>*> count_distinct_sets_;
   std::vector<int64_t*> group_by_buffers_;
   std::list<std::string> strings_;
