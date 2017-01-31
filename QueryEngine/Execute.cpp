@@ -1993,6 +1993,10 @@ llvm::Value* Executor::codegenQualifierCmp(const SQLOps optype,
   const auto& target_ti = rhs_ti.get_elem_type();
   const bool is_real_string{target_ti.is_string() && target_ti.get_compression() != kENCODING_DICT};
   if (is_real_string) {
+    if (g_cluster) {
+      throw std::runtime_error(
+          "Comparison between a dictionary-encoded and a none-encoded string not supported for distributed queries");
+    }
     if (g_enable_watchdog) {
       throw WatchdogException("Comparison between a dictionary-encoded and a none-encoded string would be slow");
     }
@@ -2252,6 +2256,10 @@ llvm::Value* Executor::codegenCastFromString(llvm::Value* operand_lv,
   }
   // dictionary encode non-constant
   if (operand_ti.get_compression() != kENCODING_DICT && !operand_is_const) {
+    if (g_cluster) {
+      throw std::runtime_error(
+          "Cast from none-encoded string to dictionary-encoded not supported for distributed queries");
+    }
     if (g_enable_watchdog) {
       throw WatchdogException("Cast from none-encoded string to dictionary-encoded would be slow");
     }
@@ -2266,6 +2274,10 @@ llvm::Value* Executor::codegenCastFromString(llvm::Value* operand_lv,
   }
   CHECK(operand_lv->getType()->isIntegerTy(32));
   if (ti.get_compression() == kENCODING_NONE) {
+    if (g_cluster) {
+      throw std::runtime_error(
+          "Cast from dictionary-encoded string to none-encoded not supported for distributed queries");
+    }
     if (g_enable_watchdog) {
       throw WatchdogException("Cast from dictionary-encoded string to none-encoded would be slow");
     }

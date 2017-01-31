@@ -190,6 +190,7 @@ std::string StringDictionary::getStringUnlocked(int32_t string_id) const noexcep
 
 std::pair<char*, size_t> StringDictionary::getStringBytes(int32_t string_id) const noexcept {
   mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
+  CHECK(!client_);
   CHECK_LE(0, string_id);
   CHECK_LT(string_id, static_cast<int32_t>(str_count_));
   return getStringBytesChecked(string_id);
