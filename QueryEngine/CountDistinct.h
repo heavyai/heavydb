@@ -64,30 +64,51 @@ inline void bitmap_set_union(int8_t* lhs, int8_t* rhs, const size_t bitmap_sz) {
 
 inline void count_distinct_set_union(const int64_t new_set_handle,
                                      const int64_t old_set_handle,
-                                     const CountDistinctDescriptor& count_distinct_desc) {
-  if (count_distinct_desc.impl_type_ == CountDistinctImplType::Bitmap) {
-    auto old_set = reinterpret_cast<int8_t*>(old_set_handle);
+                                     const CountDistinctDescriptor& new_count_distinct_desc,
+                                     const CountDistinctDescriptor& old_count_distinct_desc) {
+  if (new_count_distinct_desc.impl_type_ == CountDistinctImplType::Bitmap) {
     auto new_set = reinterpret_cast<int8_t*>(new_set_handle);
-    if (count_distinct_desc.approximate) {
-      if (count_distinct_desc.device_type == ExecutorDeviceType::GPU) {
+    auto old_set = reinterpret_cast<int8_t*>(old_set_handle);
+    if (new_count_distinct_desc.approximate) {
+      CHECK(old_count_distinct_desc.approximate);
+      if (new_count_distinct_desc.device_type == ExecutorDeviceType::GPU &&
+          old_count_distinct_desc.device_type == ExecutorDeviceType::GPU) {
         hll_unify(reinterpret_cast<int32_t*>(new_set),
                   reinterpret_cast<int32_t*>(old_set),
-                  1 << count_distinct_desc.bitmap_sz_bits);
+                  1 << old_count_distinct_desc.bitmap_sz_bits);
+      } else if (new_count_distinct_desc.device_type == ExecutorDeviceType::GPU &&
+                 old_count_distinct_desc.device_type == ExecutorDeviceType::CPU) {
+        hll_unify(reinterpret_cast<int32_t*>(new_set),
+                  reinterpret_cast<int8_t*>(old_set),
+                  1 << old_count_distinct_desc.bitmap_sz_bits);
+      } else if (new_count_distinct_desc.device_type == ExecutorDeviceType::CPU &&
+                 old_count_distinct_desc.device_type == ExecutorDeviceType::GPU) {
+        hll_unify(reinterpret_cast<int8_t*>(new_set),
+                  reinterpret_cast<int32_t*>(old_set),
+                  1 << old_count_distinct_desc.bitmap_sz_bits);
       } else {
+        CHECK(old_count_distinct_desc.device_type == ExecutorDeviceType::CPU &&
+              new_count_distinct_desc.device_type == ExecutorDeviceType::CPU);
         hll_unify(reinterpret_cast<int8_t*>(new_set),
                   reinterpret_cast<int8_t*>(old_set),
-                  1 << count_distinct_desc.bitmap_sz_bits);
+                  1 << old_count_distinct_desc.bitmap_sz_bits);
       }
     } else {
-      bitmap_set_union(new_set, old_set, count_distinct_desc.bitmapSizeBytes());
+      bitmap_set_union(new_set, old_set, old_count_distinct_desc.bitmapSizeBytes());
     }
   } else {
-    CHECK(count_distinct_desc.impl_type_ == CountDistinctImplType::StdSet);
+    CHECK(old_count_distinct_desc.impl_type_ == CountDistinctImplType::StdSet);
     auto old_set = reinterpret_cast<std::set<int64_t>*>(old_set_handle);
     auto new_set = reinterpret_cast<std::set<int64_t>*>(new_set_handle);
     new_set->insert(old_set->begin(), old_set->end());
     old_set->insert(new_set->begin(), new_set->end());
   }
+}
+
+inline void count_distinct_set_union(const int64_t new_set_handle,
+                                     const int64_t old_set_handle,
+                                     const CountDistinctDescriptor& count_distinct_desc) {
+  count_distinct_set_union(new_set_handle, old_set_handle, count_distinct_desc, count_distinct_desc);
 }
 
 #endif

@@ -51,10 +51,10 @@ inline size_t hll_size(const T* M, const CountDistinctDescriptor& count_distinct
   return estimate;
 }
 
-template <class T>
-inline void hll_unify(T* lhs, T* rhs, const size_t m) {
+template <class T1, class T2>
+inline void hll_unify(T1* lhs, T2* rhs, const size_t m) {
   for (size_t r = 0; r < m; ++r) {
-    rhs[r] = lhs[r] = std::max(lhs[r], rhs[r]);
+    rhs[r] = lhs[r] = std::max(static_cast<int8_t>(lhs[r]), static_cast<int8_t>(rhs[r]));
   }
 }
 
