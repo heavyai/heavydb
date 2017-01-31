@@ -3,6 +3,7 @@
 #include "RelAlgTranslator.h"
 
 #include "CardinalityEstimator.h"
+#include "ExpressionRewrite.h"
 #include "InputMetadata.h"
 #include "QueryPhysicalInputsCollector.h"
 #include "RexVisitor.h"
@@ -996,6 +997,56 @@ bool can_use_scan_limit(const RelAlgExecutionUnit& ra_exe_unit) {
   return false;
 }
 
+RelAlgExecutionUnit decide_approx_count_distinct_implementation(
+    const RelAlgExecutionUnit& ra_exe_unit_in,
+    const std::vector<InputTableInfo>& table_infos,
+    const Executor* executor,
+    const ExecutorDeviceType device_type_in,
+    std::vector<std::shared_ptr<Analyzer::Expr>>& target_exprs_owned) {
+  RelAlgExecutionUnit ra_exe_unit = ra_exe_unit_in;
+  for (size_t i = 0; i < ra_exe_unit.target_exprs.size(); ++i) {
+    const auto target_expr = ra_exe_unit.target_exprs[i];
+    const auto agg_info = target_info(target_expr);
+    if (agg_info.agg_kind != kAPPROX_COUNT_DISTINCT) {
+      continue;
+    }
+    const auto arg = dynamic_cast<const Analyzer::AggExpr*>(target_expr)->get_own_arg();
+    CHECK(arg);
+    const auto& arg_ti = arg->get_type_info();
+    // Avoid calling getExpressionRange for variable length types (string and array),
+    // it'd trigger an assertion since that API expects to be called only for types
+    // for which the notion of range is well-defined. A bit of a kludge, but the
+    // logic to reject these types anyway is at lower levels in the stack and not
+    // really worth pulling into a separate function for now.
+    if (!(arg_ti.is_number() || arg_ti.is_boolean() || arg_ti.is_time() ||
+          (arg_ti.is_string() && arg_ti.get_compression() == kENCODING_DICT))) {
+      continue;
+    }
+    const auto arg_range =
+        getExpressionRange(redirect_expr(arg.get(), ra_exe_unit.input_col_descs).get(), table_infos, executor);
+    if (arg_range.getType() != ExpressionRangeType::Integer) {
+      continue;
+    }
+    // When running distributed, the threshold for using the precise implementation
+    // must be consistent across all leaves, otherwise we could have a mix of precise
+    // and approximate bitmaps and we cannot aggregate them.
+    const auto device_type = g_cluster ? ExecutorDeviceType::GPU : device_type_in;
+    CountDistinctDescriptor approx_count_distinct_desc{
+        CountDistinctImplType::Bitmap, arg_range.getIntMin(), HLL_MASK_WIDTH, true, device_type};
+    CountDistinctDescriptor precise_count_distinct_desc{CountDistinctImplType::Bitmap,
+                                                        arg_range.getIntMin(),
+                                                        arg_range.getIntMax() - arg_range.getIntMin() + 1,
+                                                        false,
+                                                        device_type};
+    if (approx_count_distinct_desc.bitmapPaddedSizeBytes() >= precise_count_distinct_desc.bitmapPaddedSizeBytes()) {
+      auto precise_count_distinct = makeExpr<Analyzer::AggExpr>(arg_ti, kCOUNT, arg, true);
+      target_exprs_owned.push_back(precise_count_distinct);
+      ra_exe_unit.target_exprs[i] = precise_count_distinct.get();
+    }
+  }
+  return ra_exe_unit;
+}
+
 }  // namespace
 
 ExecutionResult RelAlgExecutor::executeWorkUnit(const RelAlgExecutor::WorkUnit& work_unit,
@@ -1024,10 +1075,10 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(const RelAlgExecutor::WorkUnit& 
     }
   }
 
-  auto ra_exe_unit = work_unit.exe_unit;
+  const auto table_infos = get_table_infos(work_unit.exe_unit, executor_);
 
-  const auto table_infos = get_table_infos(ra_exe_unit, executor_);
-
+  auto ra_exe_unit = decide_approx_count_distinct_implementation(
+      work_unit.exe_unit, table_infos, executor_, co.device_type_, target_exprs_owned_);
   auto max_groups_buffer_entry_guess = work_unit.max_groups_buffer_entry_guess;
 
   if (!eo.just_explain && can_use_scan_limit(ra_exe_unit) && !isRowidLookup(work_unit)) {
@@ -1229,15 +1280,18 @@ ExecutionResult RelAlgExecutor::handleRetry(const int32_t error_code_in,
                                    eo.with_dynamic_watchdog,
                                    eo.dynamic_watchdog_factor};
   ExecutionResult result{ResultRows({}, {}, nullptr, nullptr, {}, co.device_type_), {}};
+  const auto table_infos = get_table_infos(work_unit.exe_unit, executor_);
   if (error_code == Executor::ERR_OUT_OF_GPU_MEM) {
     if (g_enable_watchdog) {
       throw std::runtime_error("Query couldn't keep the entire working set of columns in GPU memory");
     }
+    const auto ra_exe_unit = decide_approx_count_distinct_implementation(
+        work_unit.exe_unit, table_infos, executor_, co.device_type_, target_exprs_owned_);
     result = {executor_->executeWorkUnit(&error_code,
                                          max_groups_buffer_entry_guess,
                                          is_agg,
-                                         get_table_infos(work_unit.exe_unit, executor_),
-                                         work_unit.exe_unit,
+                                         table_infos,
+                                         ra_exe_unit,
                                          co,
                                          eo_no_multifrag,
                                          cat_,
@@ -1261,11 +1315,13 @@ ExecutionResult RelAlgExecutor::handleRetry(const int32_t error_code_in,
   if (error_code) {
     max_groups_buffer_entry_guess = 0;
     while (true) {
+      const auto ra_exe_unit = decide_approx_count_distinct_implementation(
+          work_unit.exe_unit, table_infos, executor_, co_cpu.device_type_, target_exprs_owned_);
       result = {executor_->executeWorkUnit(&error_code,
                                            max_groups_buffer_entry_guess,
                                            is_agg,
-                                           get_table_infos(work_unit.exe_unit, executor_),
-                                           work_unit.exe_unit,
+                                           table_infos,
+                                           ra_exe_unit,
                                            co_cpu,
                                            eo_no_multifrag,
                                            cat_,

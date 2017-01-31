@@ -704,6 +704,7 @@ class AggExpr : public Expr {
         is_distinct(d) {}
   SQLAgg get_aggtype() const { return aggtype; }
   Expr* get_arg() const { return arg.get(); }
+  std::shared_ptr<Analyzer::Expr> get_own_arg() const { return arg; }
   bool get_is_distinct() const { return is_distinct; }
   virtual std::shared_ptr<Analyzer::Expr> deep_copy() const;
   virtual void group_predicates(std::list<const Expr*>& scan_predicates,
