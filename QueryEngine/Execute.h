@@ -481,8 +481,6 @@ class Executor {
   llvm::Value* colByteStream(const Analyzer::ColumnVar* col_var, const bool fetch_column, const bool hoist_literals);
   llvm::Value* posArg(const Analyzer::Expr*) const;
   const Analyzer::ColumnVar* hashJoinLhs(const Analyzer::ColumnVar* rhs) const;
-  llvm::Value* fragRowOff() const;
-  llvm::Value* rowsPerScan() const;
   llvm::ConstantInt* inlineIntNull(const SQLTypeInfo&);
   llvm::ConstantFP* inlineFpNull(const SQLTypeInfo&);
   std::pair<llvm::ConstantInt*, llvm::ConstantInt*> inlineIntMaxMin(const size_t byte_width, const bool is_signed);

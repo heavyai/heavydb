@@ -972,7 +972,7 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(const RelAlgExecution
   }
   const int8_t*** multifrag_cols_ptr{multifrag_col_buffers.empty() ? nullptr : &multifrag_col_buffers[0]};
   int64_t** small_group_by_buffers_ptr{small_group_by_buffers_.empty() ? nullptr : &small_group_by_buffers_[0]};
-  const uint32_t num_fragments = multifrag_cols_ptr ? col_buffers.size() : 0; // TODO(miyu): check 0
+  const uint32_t num_fragments = multifrag_cols_ptr ? col_buffers.size() : 0;  // TODO(miyu): check 0
 
   CHECK_EQ(num_rows.size(), col_buffers.size());
   std::vector<int64_t> flatened_num_rows;
@@ -2969,8 +2969,6 @@ void GroupByAndAggregate::codegenEstimator(std::stack<llvm::BasicBlock*>& array_
   emitCall("linear_probabilistic_count", {bitmap, &*bitmap_size_lv, key_bytes, &*estimator_comp_bytes_lv});
 }
 
-llvm::Value* get_literal_buff_arg(llvm::Function* row_func);
-
 void GroupByAndAggregate::codegenCountDistinct(const size_t target_idx,
                                                const Analyzer::Expr* target_expr,
                                                std::vector<llvm::Value*>& agg_args,
@@ -3032,7 +3030,7 @@ void GroupByAndAggregate::codegenCountDistinct(const size_t target_idx,
 
 llvm::Value* GroupByAndAggregate::getAdditionalLiteral(const int32_t off) {
   CHECK_LT(off, 0);
-  const auto lit_buff_lv = get_literal_buff_arg(ROW_FUNC);
+  const auto lit_buff_lv = get_arg_by_name(ROW_FUNC, "literals");
   return LL_BUILDER.CreateLoad(LL_BUILDER.CreateGEP(
       LL_BUILDER.CreateBitCast(lit_buff_lv, llvm::PointerType::get(get_int_type(64, LL_CONTEXT), 0)), LL_INT(off)));
 }

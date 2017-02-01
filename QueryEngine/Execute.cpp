@@ -1261,7 +1261,8 @@ std::vector<llvm::Value*> Executor::codegenColVar(const Analyzer::ColumnVar* col
         // is meaningless, the relative position in the scan is the rowid
         return {posArg(col_var)};
       }
-      return {cgen_state_->ir_builder_.CreateAdd(posArg(col_var), fragRowOff())};
+      return {
+          cgen_state_->ir_builder_.CreateAdd(posArg(col_var), get_arg_by_name(cgen_state_->row_func_, "frag_row_off"))};
     }
   }
   const auto grouped_col_lv = resolveGroupedColumnReference(col_var);
@@ -1516,42 +1517,6 @@ const Analyzer::ColumnVar* Executor::hashJoinLhs(const Analyzer::ColumnVar* rhs)
   return nullptr;
 }
 
-llvm::Value* Executor::fragRowOff() const {
-  for (auto arg_it = cgen_state_->row_func_->arg_begin(); arg_it != cgen_state_->row_func_->arg_end(); ++arg_it) {
-    if (arg_it->getType()->isIntegerTy()) {
-      ++arg_it;
-      return &*arg_it;
-    }
-  }
-  abort();
-}
-
-llvm::Value* Executor::rowsPerScan() const {
-  for (auto arg_it = cgen_state_->row_func_->arg_begin(); arg_it != cgen_state_->row_func_->arg_end(); ++arg_it) {
-    if (arg_it->getType()->isIntegerTy()) {
-      ++arg_it;
-      ++arg_it;
-      return &*arg_it;
-    }
-  }
-  abort();
-}
-
-llvm::Value* get_literal_buff_arg(llvm::Function* row_func) {
-  auto arg_it = row_func->arg_begin();
-  while (arg_it != row_func->arg_end()) {
-    if (arg_it->getType()->isIntegerTy()) {
-      ++arg_it;
-      ++arg_it;
-      ++arg_it;
-      break;
-    }
-    ++arg_it;
-  }
-  CHECK(arg_it != row_func->arg_end());
-  return &*arg_it;
-}
-
 std::vector<llvm::Value*> Executor::codegen(const Analyzer::Constant* constant,
                                             const EncodingType enc_type,
                                             const int dict_id,
@@ -1613,7 +1578,7 @@ std::vector<llvm::Value*> Executor::codegenHoistedConstants(const std::vector<co
                                                             const int dict_id) {
   CHECK(!constants.empty());
   const auto& type_info = constants.front()->get_type_info();
-  auto lit_buff_lv = get_literal_buff_arg(cgen_state_->row_func_);
+  auto lit_buff_lv = get_arg_by_name(cgen_state_->row_func_, "literals");
   int16_t lit_off{-1};
   for (size_t device_id = 0; device_id < constants.size(); ++device_id) {
     const auto constant = constants[device_id];
@@ -6337,7 +6302,8 @@ void Executor::allocateInnerScansIterators(const std::vector<InputDescriptor>& i
       CHECK(it_ok.second);
     }
     {
-      auto rows_per_scan_ptr = cgen_state_->ir_builder_.CreateGEP(rowsPerScan(), ll_int(int32_t(inner_scan_idx)));
+      auto rows_per_scan_ptr = cgen_state_->ir_builder_.CreateGEP(
+          get_arg_by_name(cgen_state_->row_func_, "num_rows_per_scan"), ll_int(int32_t(inner_scan_idx)));
       auto rows_per_scan = cgen_state_->ir_builder_.CreateLoad(rows_per_scan_ptr, "rows_per_scan");
       auto have_more_inner_rows =
           cgen_state_->ir_builder_.CreateICmp(llvm::ICmpInst::ICMP_ULT, inner_scan_pos, rows_per_scan);
