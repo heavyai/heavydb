@@ -2,6 +2,7 @@
 #include "RelAlgExecutor.h"
 #include "RelAlgTranslator.h"
 
+#include "CalciteDeserializerUtils.h"
 #include "CardinalityEstimator.h"
 #include "ExpressionRewrite.h"
 #include "InputMetadata.h"
@@ -1039,7 +1040,7 @@ RelAlgExecutionUnit decide_approx_count_distinct_implementation(
                                                         false,
                                                         device_type};
     if (approx_count_distinct_desc.bitmapPaddedSizeBytes() >= precise_count_distinct_desc.bitmapPaddedSizeBytes()) {
-      auto precise_count_distinct = makeExpr<Analyzer::AggExpr>(arg_ti, kCOUNT, arg, true);
+      auto precise_count_distinct = makeExpr<Analyzer::AggExpr>(get_agg_type(kCOUNT, arg.get()), kCOUNT, arg, true);
       target_exprs_owned.push_back(precise_count_distinct);
       ra_exe_unit.target_exprs[i] = precise_count_distinct.get();
     }
