@@ -19,35 +19,16 @@ ExecutionResult RelAlgExecutor::executeRelAlgQuery(const std::string& query_ra,
                                                    const ExecutionOptions& eo,
                                                    RenderInfo* render_info) {
   const auto ra = deserialize_ra_dag(query_ra, cat_, this);
-  return executeRelAlgQuery(ra.get(), co, eo, render_info);
-}
-
-namespace {
-
-std::unordered_set<int> get_physical_table_ids(const std::unordered_set<PhysicalInput>& phys_inputs) {
-  std::unordered_set<int> physical_table_ids;
-  for (const auto& phys_input : phys_inputs) {
-    physical_table_ids.insert(phys_input.table_id);
-  }
-  return physical_table_ids;
-}
-
-}  // namespace
-
-ExecutionResult RelAlgExecutor::executeRelAlgQuery(const RelAlgNode* ra,
-                                                   const CompilationOptions& co,
-                                                   const ExecutionOptions& eo,
-                                                   RenderInfo* render_info) {
   // capture the lock acquistion time
   auto clock_begin = timer_start();
   std::lock_guard<std::mutex> lock(executor_->execute_mutex_);
   ScopeGuard row_set_holder = [this] { executor_->row_set_mem_owner_ = nullptr; };
   executor_->row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>();
   executor_->catalog_ = &cat_;
-  setColRangesCache(ra);
+  executor_->agg_col_range_cache_ = computeColRangesCache(ra.get());
   ScopeGuard restore_metainfo_cache = [this] { executor_->clearMetaInfoCache(); };
   int64_t queue_time_ms = timer_stop(clock_begin);
-  auto ed_list = get_execution_descriptors(ra);
+  auto ed_list = get_execution_descriptors(ra.get());
   if (render_info) {  // save the table names for render queries
     table_names_ = getScanTableNamesInRelAlgSeq(ed_list);
   }
@@ -61,9 +42,17 @@ ExecutionResult RelAlgExecutor::executeRelAlgQuery(const RelAlgNode* ra,
   return executeRelAlgSeq(ed_list, co, eo, render_info, queue_time_ms);
 }
 
-void RelAlgExecutor::setColRangesCache(const RelAlgNode* ra) {
-  executor_->agg_col_range_cache_ = computeColRangesCache(ra);
+namespace {
+
+std::unordered_set<int> get_physical_table_ids(const std::unordered_set<PhysicalInput>& phys_inputs) {
+  std::unordered_set<int> physical_table_ids;
+  for (const auto& phys_input : phys_inputs) {
+    physical_table_ids.insert(phys_input.table_id);
+  }
+  return physical_table_ids;
 }
+
+}  // namespace
 
 AggregatedColRange RelAlgExecutor::computeColRangesCache(const RelAlgNode* ra) {
   AggregatedColRange agg_col_range_cache;
