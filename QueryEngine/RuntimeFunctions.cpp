@@ -684,7 +684,7 @@ static __inline__ uint64_t rdtsc(void) {
 #endif
 
 // timeout detection
-extern "C" __attribute__((noinline)) bool dynamic_watchdog(int64_t init_budget) {
+extern "C" __attribute__((noinline)) bool dynamic_watchdog(int64_t init_budget, int32_t frag_idx) {
 #if (defined(__x86_64__) || defined(__x86_64))
   static uint64_t start = 0ULL;
   static uint64_t cycle_budget = 0ULL;

@@ -6084,8 +6084,9 @@ void Executor::initDynamicWatchdog(llvm::Function* query_func, int64_t budget) {
   auto watchdog_init_bb =
       llvm::BasicBlock::Create(cgen_state_->context_, ".watchdog_init", query_func, watchdog_error_bb);
   llvm::IRBuilder<> ir_builder(watchdog_init_bb);
-  auto status = ir_builder.CreateCall(cgen_state_->module_->getFunction("dynamic_watchdog"),
-                                      std::vector<llvm::Value*>{ll_int(budget)});
+  auto status =
+      ir_builder.CreateCall(cgen_state_->module_->getFunction("dynamic_watchdog"),
+                            std::vector<llvm::Value*>{ll_int(budget), get_arg_by_name(query_func, "frag_idx")});
   llvm::Value* err_lv = ir_builder.CreateICmp(llvm::ICmpInst::ICMP_NE, status, ll_bool(0));
   ir_builder.CreateCondBr(
       err_lv, watchdog_error_bb, &entry_bb, llvm::MDBuilder(cgen_state_->context_).createBranchWeights(1, 100));
@@ -6127,8 +6128,9 @@ void Executor::createErrorCheckControlFlow(llvm::Function* query_func, bool run_
           auto watchdog_check_bb =
               llvm::BasicBlock::Create(cgen_state_->context_, ".watchdog_check", query_func, error_check_bb);
           llvm::IRBuilder<> watchdog_ir_builder(watchdog_check_bb);
-          auto detected_timeout = watchdog_ir_builder.CreateCall(cgen_state_->module_->getFunction("dynamic_watchdog"),
-                                                                 std::vector<llvm::Value*>{ll_int(int64_t(0LL))});
+          auto detected_timeout = watchdog_ir_builder.CreateCall(
+              cgen_state_->module_->getFunction("dynamic_watchdog"),
+              std::vector<llvm::Value*>{ll_int(int64_t(0LL)), get_arg_by_name(query_func, "frag_idx")});
           auto timeout_err_lv =
               watchdog_ir_builder.CreateSelect(detected_timeout, ll_int(Executor::ERR_OUT_OF_TIME), err_lv);
           watchdog_ir_builder.CreateBr(error_check_bb);
@@ -6557,7 +6559,7 @@ declare void @agg_count_distinct_bitmap_gpu(i64*, i64, i64, i64, i64);
 declare void @agg_count_distinct_bitmap_skip_val_gpu(i64*, i64, i64, i64, i64, i64);
 declare void @agg_approximate_count_distinct_gpu(i64*, i64, i32, i64, i64);
 declare i32 @record_error_code(i32, i32*);
-declare i1 @dynamic_watchdog(i64);
+declare i1 @dynamic_watchdog(i64, i32);
 declare void @force_sync();
 )" + gen_array_any_all_sigs();
 

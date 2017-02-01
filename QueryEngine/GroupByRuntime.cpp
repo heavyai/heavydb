@@ -47,7 +47,7 @@ extern "C" NEVER_INLINE DEVICE int64_t* get_group_value_with_watchdog(int64_t* g
     }
     h_probe = (h_probe + 1) % groups_buffer_entry_count;
     if (--watchdog_countdown == 0) {
-      if (dynamic_watchdog(0LL)) {
+      if (dynamic_watchdog(0LL, 0)) {
         return NULL;
       }
       watchdog_countdown = 100;
@@ -98,7 +98,7 @@ extern "C" NEVER_INLINE DEVICE int64_t* get_group_value_columnar_with_watchdog(i
     }
     h_probe = (h_probe + 1) % groups_buffer_entry_count;
     if (--watchdog_countdown == 0) {
-      if (dynamic_watchdog(0LL)) {
+      if (dynamic_watchdog(0LL, 0)) {
         return NULL;
       }
       watchdog_countdown = 100;

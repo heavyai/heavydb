@@ -68,7 +68,7 @@ __inline__ __device__ uint64_t get_globaltimer(void) {
   return ret;
 }
 
-extern "C" __device__ bool dynamic_watchdog(int64_t init_budget) {
+extern "C" __device__ bool dynamic_watchdog(int64_t init_budget, int32_t frag_idx) {
   if (init_budget == 0LL && dw_cycle_budget == 0LL)
     return false;  // uninitialized watchdog can't check time
   if (dw_abort == 1)
@@ -81,10 +81,12 @@ extern "C" __device__ bool dynamic_watchdog(int64_t init_budget) {
       if (blockDim.x < 64)
         return false;
       if (threadIdx.x < 64) {
-        if (threadIdx.x == 0) {
+        if (threadIdx.x == 0 && frag_idx == 0) {
           dw_cycle_budget = init_budget;
         }
-        sm_cycle_start[threadIdx.x] = -1LL;
+        if (frag_idx == 0) {
+          sm_cycle_start[threadIdx.x] = -1LL;
+        }
       }
     }
     return false;
