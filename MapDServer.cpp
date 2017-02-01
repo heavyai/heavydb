@@ -674,7 +674,7 @@ class MapDHandler : virtual public MapDIf {
     }
   }
 
-  TColumnType populateThriftColumnType(const Catalog_Namespace::Catalog& cat, const ColumnDescriptor* cd) {
+  TColumnType populateThriftColumnType(const Catalog_Namespace::Catalog* cat, const ColumnDescriptor* cd) {
     TColumnType col_type;
     col_type.col_name = cd->columnName;
     col_type.col_type.type = type_to_thrift(cd->columnType);
@@ -683,9 +683,9 @@ class MapDHandler : virtual public MapDIf {
     col_type.col_type.is_array = cd->columnType.get_type() == kARRAY;
     col_type.col_type.precision = cd->columnType.get_precision();
     col_type.col_type.scale = cd->columnType.get_scale();
-    if (cd->columnType.get_compression() == EncodingType::kENCODING_DICT) {
+    if (cd->columnType.get_compression() == EncodingType::kENCODING_DICT && cat != nullptr) {
       // have to get the actual size of the encoding from the dictionary definition
-      auto dd = cat.getMetadataForDict(cd->columnType.get_comp_param(), false);
+      auto dd = cat->getMetadataForDict(cd->columnType.get_comp_param(), false);
       if (!dd) {
         TMapDException ex;
         ex.error_msg = "Dictionary doesn't exist";
@@ -713,7 +713,7 @@ class MapDHandler : virtual public MapDIf {
     }
     const auto col_descriptors = cat.getAllColumnMetadataForTable(td->tableId, false, true);
     for (const auto cd : col_descriptors) {
-      _return.insert(std::make_pair(cd->columnName, populateThriftColumnType(cat, cd)));
+      _return.insert(std::make_pair(cd->columnName, populateThriftColumnType(&cat, cd)));
     }
   }
 
@@ -744,7 +744,7 @@ class MapDHandler : virtual public MapDIf {
     }
     const auto col_descriptors = cat.getAllColumnMetadataForTable(td->tableId, false, true);
     for (const auto cd : col_descriptors) {
-      _return.push_back(populateThriftColumnType(cat, cd));
+      _return.push_back(populateThriftColumnType(&cat, cd));
     }
   }
 
