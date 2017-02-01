@@ -147,12 +147,48 @@ int32_t StringDictionary::getOrAdd(const std::string& str) noexcept {
   return getOrAddImpl(str, false);
 }
 
+namespace {
+
+template <class T>
+struct NullStringId {
+  static int32_t value();
+};
+
+template <>
+struct NullStringId<int8_t> {
+  static int32_t value() { return NULL_TINYINT; }
+};
+
+template <>
+struct NullStringId<int16_t> {
+  static int32_t value() { return NULL_SMALLINT; }
+};
+
+template <>
+struct NullStringId<int32_t> {
+  static int32_t value() { return NULL_INT; }
+};
+
+template <class T>
+void log_encoding_error(const std::string& str) {
+  LOG(ERROR) << "Could not encode string: " << str << ", the encoded value doesn't fit in " << sizeof(T) * 8
+             << " bits. Will store NULL instead.";
+}
+
+}  // namespace
+
 template <class T>
 void StringDictionary::getOrAddBulk(const std::vector<std::string>& string_vec, T* encoded_vec) noexcept {
   mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
   size_t out_idx{0};
   for (const auto& str : string_vec) {
-    encoded_vec[out_idx++] = getOrAddImpl(str, false);
+    const auto string_id = getOrAddImpl(str, false);
+    if (string_id >= std::numeric_limits<T>::max() || string_id < 0) {
+      log_encoding_error<T>(str);
+      encoded_vec[out_idx++] = NullStringId<T>::value();
+      continue;
+    }
+    encoded_vec[out_idx++] = string_id;
   }
 }
 
