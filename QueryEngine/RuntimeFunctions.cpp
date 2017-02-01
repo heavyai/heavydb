@@ -675,9 +675,40 @@ extern "C" __attribute__((noinline)) void force_sync() {
   abort();
 }
 
+#if (defined(__x86_64__) || defined(__x86_64))
+static __inline__ uint64_t rdtsc(void) {
+  unsigned hi, lo;
+  __asm__ __volatile__("rdtsc" : "=a"(lo), "=d"(hi));
+  return (static_cast<uint64_t>(hi) << 32) | static_cast<uint64_t>(lo);
+}
+#endif
+
 // timeout detection
 extern "C" __attribute__((noinline)) bool dynamic_watchdog(int64_t init_budget, int32_t frag_idx) {
+#if (defined(__x86_64__) || defined(__x86_64))
+  static uint64_t start = 0ULL;
+  static uint64_t cycle_budget = 0ULL;
+  static uint64_t freq_kHz = 0ULL;
+  // Uninitialized watchdog can't check time
+  if (init_budget == 0LL && cycle_budget == 0ULL) {
+    // Attempt to use uninitialized dynamic_watchdog
+    return false;
+  }
+  // Initialize watchdog
+  if (init_budget > 0LL) {
+    start = rdtsc();
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    freq_kHz = rdtsc() - start;
+    uint64_t ms_budget = static_cast<uint64_t>(init_budget);
+    cycle_budget = freq_kHz * ms_budget;
+    return false;
+  }
+  // Check if out of time
+  auto cycles = rdtsc() - start;
+  return (cycles > cycle_budget);
+#else
   return false;
+#endif
 }
 
 // x64 stride functions
