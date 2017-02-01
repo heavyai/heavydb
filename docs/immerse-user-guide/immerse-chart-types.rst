@@ -435,7 +435,7 @@ Choropleth
 What it is
 ~~~~~~~~~~
 
-The choropleth, from the Greek ```choros`  (area) `pleth`  (value), is a map
+The choropleth, from the Greek `choros` (area) `pleth` (value), is a map
 which allows comparison of numerical information across regions, by
 coloring regions based on the relative size of a numerical measure
 across regions.  The map is colored from a low intensity color to a high
