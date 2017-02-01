@@ -713,7 +713,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const RelAlgExecution
     float milliseconds0 = 0;
     cuEventElapsedTime(&milliseconds0, start0, stop0);
     LOG(INFO) << "Device " << std::to_string(device_id)
-              << ": launchGpuCode: group-by prepare: " << std::to_string(milliseconds0) << " ms\n";
+              << ": launchGpuCode: group-by prepare: " << std::to_string(milliseconds0) << " ms";
 
     cuEventRecord(start1, 0);
     if (hoist_literals) {
@@ -747,7 +747,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const RelAlgExecution
     float milliseconds1 = 0;
     cuEventElapsedTime(&milliseconds1, start1, stop1);
     LOG(INFO) << "Device " << std::to_string(device_id)
-              << ": launchGpuCode: group-by cuLaunchKernel: " << std::to_string(milliseconds1) << " ms\n";
+              << ": launchGpuCode: group-by cuLaunchKernel: " << std::to_string(milliseconds1) << " ms";
 
     cuEventRecord(start2, 0);
 
@@ -803,7 +803,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const RelAlgExecution
     float milliseconds0 = 0;
     cuEventElapsedTime(&milliseconds0, start0, stop0);
     LOG(INFO) << "Device " << std::to_string(device_id) << ": launchGpuCode: prepare: " << std::to_string(milliseconds0)
-              << " ms\n";
+              << " ms";
 
     cuEventRecord(start1, 0);
 
@@ -839,7 +839,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const RelAlgExecution
     float milliseconds1 = 0;
     cuEventElapsedTime(&milliseconds1, start1, stop1);
     LOG(INFO) << "Device " << std::to_string(device_id)
-              << ": launchGpuCode: cuLaunchKernel: " << std::to_string(milliseconds1) << " ms\n";
+              << ": launchGpuCode: cuLaunchKernel: " << std::to_string(milliseconds1) << " ms";
 
     cuEventRecord(start2, 0);
 
@@ -882,7 +882,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const RelAlgExecution
   float milliseconds2 = 0;
   cuEventElapsedTime(&milliseconds2, start2, stop2);
   LOG(INFO) << "Device " << std::to_string(device_id) << ": launchGpuCode: finish: " << std::to_string(milliseconds2)
-            << " ms\n";
+            << " ms";
 
   return out_vec;
 #else
