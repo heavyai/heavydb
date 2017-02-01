@@ -182,7 +182,7 @@ void RelAlgExecutor::executeRelAlgStep(const size_t i,
                                       eo.jit_debug,
                                       eo.just_validate,
                                       eo.with_dynamic_watchdog,
-                                      eo.dynamic_watchdog_factor};
+                                      eo.dynamic_watchdog_time_limit};
   const auto compound = dynamic_cast<const RelCompound*>(body);
   if (compound) {
     exec_desc.setResult(executeCompound(compound, co, eo_work_unit, render_info, queue_time_ms));
@@ -1278,7 +1278,7 @@ ExecutionResult RelAlgExecutor::handleRetry(const int32_t error_code_in,
                                    eo.jit_debug,
                                    false,
                                    eo.with_dynamic_watchdog,
-                                   eo.dynamic_watchdog_factor};
+                                   eo.dynamic_watchdog_time_limit};
   ExecutionResult result{ResultRows({}, {}, nullptr, nullptr, {}, co.device_type_), {}};
   const auto table_infos = get_table_infos(work_unit.exe_unit, executor_);
   if (error_code == Executor::ERR_OUT_OF_GPU_MEM) {

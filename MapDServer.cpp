@@ -1557,7 +1557,7 @@ class MapDHandler : virtual public MapDIf {
                            jit_debug_,
                            just_validate,
                            g_enable_dynamic_watchdog,
-                           g_dynamic_watchdog_factor};
+                           g_dynamic_watchdog_time_limit};
     auto executor = Executor::getExecutor(
         cat.get_currentDB().dbId, jit_debug_ ? "/tmp" : "", jit_debug_ ? "mapdquery" : "", mapd_parameters_, nullptr);
     RelAlgExecutor ra_executor(executor.get(), cat);
@@ -1673,7 +1673,7 @@ class MapDHandler : virtual public MapDIf {
                            jit_debug_,
                            false,
                            g_enable_dynamic_watchdog,
-                           g_dynamic_watchdog_factor};
+                           g_dynamic_watchdog_time_limit};
     rapidjson::Document render_config;
     render_config.Parse(render_type.c_str());
 
@@ -1994,7 +1994,7 @@ class MapDHandler : virtual public MapDIf {
                            jit_debug_,
                            false,
                            g_enable_dynamic_watchdog,
-                           g_dynamic_watchdog_factor};
+                           g_dynamic_watchdog_time_limit};
     RelAlgExecutionOptions ra_eo{co, eo, nullptr, 0};
     auto executor = Executor::getExecutor(
         cat.get_currentDB().dbId, jit_debug_ ? "/tmp" : "", jit_debug_ ? "mapdquery" : "", mapd_parameters_, nullptr);
@@ -2171,7 +2171,7 @@ int main(int argc, char** argv) {
   bool enable_rendering = false;
   bool enable_watchdog = true;
   bool enable_dynamic_watchdog = false;
-  float dynamic_watchdog_factor = 1.0;
+  unsigned dynamic_watchdog_time_limit = 10000;
 
   size_t cpu_buffer_mem_bytes = 0;  // 0 will cause DataMgr to auto set this based on available memory
   size_t render_mem_bytes = 500000000;
@@ -2247,10 +2247,11 @@ int main(int argc, char** argv) {
       "enable-dynamic-watchdog",
       po::value<bool>(&enable_dynamic_watchdog)->default_value(enable_dynamic_watchdog)->implicit_value(true),
       "Enable dynamic watchdog");
-  desc_adv.add_options()(
-      "dynamic-watchdog-factor",
-      po::value<float>(&dynamic_watchdog_factor)->default_value(dynamic_watchdog_factor)->implicit_value(1.0),
-      "Dynamic watchdog factor to adjust the time budget");
+  desc_adv.add_options()("dynamic-watchdog-time-limit",
+                         po::value<unsigned>(&dynamic_watchdog_time_limit)
+                             ->default_value(dynamic_watchdog_time_limit)
+                             ->implicit_value(10000),
+                         "Dynamic watchdog time limit, in milliseconds");
   desc_adv.add_options()(
       "start-epoch", po::value<int>(&start_epoch)->default_value(start_epoch), "Value of epoch to 'rollback' to");
   desc_adv.add_options()(
@@ -2328,7 +2329,7 @@ int main(int argc, char** argv) {
 
     g_enable_watchdog = enable_watchdog;
     g_enable_dynamic_watchdog = enable_dynamic_watchdog;
-    g_dynamic_watchdog_factor = dynamic_watchdog_factor;
+    g_dynamic_watchdog_time_limit = dynamic_watchdog_time_limit;
   } catch (boost::program_options::error& e) {
     std::cerr << "Usage Error: " << e.what() << std::endl;
     return 1;

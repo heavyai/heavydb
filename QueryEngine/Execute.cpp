@@ -61,7 +61,7 @@
 
 bool g_enable_watchdog{false};
 bool g_enable_dynamic_watchdog{false};
-float g_dynamic_watchdog_factor{1.0};
+unsigned g_dynamic_watchdog_time_limit{10000};
 
 std::mutex Executor::ExecutionDispatch::reduce_mutex_;
 
@@ -364,7 +364,7 @@ RowSetPtr Executor::executeSelectPlan(const Planner::Plan* plan,
                                      false,
                                      false,
                                      g_enable_dynamic_watchdog,
-                                     g_dynamic_watchdog_factor},
+                                     g_dynamic_watchdog_time_limit},
                                     cat,
                                     row_set_mem_owner_,
                                     render_allocator_map,
@@ -392,7 +392,7 @@ RowSetPtr Executor::executeSelectPlan(const Planner::Plan* plan,
                                    false,
                                    false,
                                    g_enable_dynamic_watchdog,
-                                   g_dynamic_watchdog_factor},
+                                   g_dynamic_watchdog_time_limit},
                                   cat,
                                   row_set_mem_owner_,
                                   render_allocator_map,
@@ -3653,7 +3653,7 @@ RowSetPtr Executor::executeResultPlan(const Planner::Result* result_plan,
                                  false,
                                  false,
                                  g_enable_dynamic_watchdog,
-                                 g_dynamic_watchdog_factor},
+                                 g_dynamic_watchdog_time_limit},
                                 cat,
                                 row_set_mem_owner_,
                                 nullptr,
@@ -3769,7 +3769,7 @@ RowSetPtr Executor::executeResultPlan(const Planner::Result* result_plan,
                        false,
                        false,
                        g_enable_dynamic_watchdog,
-                       g_dynamic_watchdog_factor},
+                       g_dynamic_watchdog_time_limit},
                       nullptr,
                       false,
                       row_set_mem_owner_,
@@ -5995,25 +5995,17 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
 
   bool run_with_dynamic_watchdog = false;
   if (eo.with_dynamic_watchdog) {
-    int64_t budget;
+    int64_t budget{0};
     if (co.device_type_ == ExecutorDeviceType::GPU) {
-      // Use remaining time budget or 10 seconds, whichever is lower
-      int ms_budget = 10000;
       // Translate milliseconds to device cycles
-      budget = deviceCycles(ms_budget);
-      // Apply fudge factor
-      budget = static_cast<int64_t>(budget * eo.dynamic_watchdog_factor);
+      budget = deviceCycles(eo.dynamic_watchdog_time_limit);
       run_with_dynamic_watchdog = true;
-      LOG(INFO) << "Dynamic Watchdog budget: " << std::to_string(ms_budget * eo.dynamic_watchdog_factor) << "ms, "
-                << std::to_string(budget) << " cycles\n";
+      LOG(INFO) << "Dynamic Watchdog budget: " << std::to_string(eo.dynamic_watchdog_time_limit) << "ms, "
+                << std::to_string(budget) << " cycles";
     } else if (co.device_type_ == ExecutorDeviceType::CPU) {
-      // Use remaining time budget or 2 minutes, whichever is lower
-      unsigned ms_budget = 120000;
-      budget = ms_budget;
-      // Apply fudge factor
-      budget = static_cast<int64_t>(budget * eo.dynamic_watchdog_factor);
+      budget = eo.dynamic_watchdog_time_limit;
       run_with_dynamic_watchdog = true;
-      LOG(INFO) << "Dynamic Watchdog budget: " << std::to_string(budget) << "ms\n";
+      LOG(INFO) << "Dynamic Watchdog budget: " << std::to_string(eo.dynamic_watchdog_time_limit) << "ms";
     }
     if (run_with_dynamic_watchdog) {
       initDynamicWatchdog(query_func, budget);

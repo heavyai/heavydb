@@ -20,8 +20,8 @@ struct ExecutionOptions {
   const bool with_watchdog;  // Per work unit, not global.
   const bool jit_debug;
   const bool just_validate;
-  const bool with_dynamic_watchdog;     // Per work unit, not global.
-  const float dynamic_watchdog_factor;  // Dynamic watchdog fudge factor.
+  const bool with_dynamic_watchdog;            // Per work unit, not global.
+  const unsigned dynamic_watchdog_time_limit;  // Dynamic watchdog time limit, in milliseconds.
 };
 
 #endif  // QUERYENGINE_COMPILATIONOPTIONS_H

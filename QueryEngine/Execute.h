@@ -44,7 +44,7 @@
 
 extern bool g_enable_watchdog;
 extern bool g_enable_dynamic_watchdog;
-extern float g_dynamic_watchdog_factor;
+extern unsigned g_dynamic_watchdog_time_limit;
 
 struct RenderInfo {
   bool do_render;

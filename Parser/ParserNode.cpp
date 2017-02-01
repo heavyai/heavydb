@@ -1923,7 +1923,7 @@ ResultRows getResultRows(const Catalog_Namespace::SessionInfo& session,
                                             true,
                                             false);
   CompilationOptions co = {device_type, true, ExecutorOptLevel::LoopStrengthReduction, false};
-  ExecutionOptions eo = {false, true, false, true, false, false, false, false, 1.0};
+  ExecutionOptions eo = {false, true, false, true, false, false, false, false, 10000};
   RelAlgExecutor ra_executor(executor.get(), catalog);
   ExecutionResult result{ResultRows({}, {}, nullptr, nullptr, {}, device_type), {}};
   result = ra_executor.executeRelAlgQuery(query_ra, co, eo, nullptr);
