@@ -90,10 +90,10 @@ class TypedImportBuffer : boost::noncopyable {
         if (col_desc->columnType.get_compression() == kENCODING_DICT) {
           switch (col_desc->columnType.get_size()) {
             case 1:
-              string_dict_i8_buffer_ = new std::vector<int8_t>();
+              string_dict_i8_buffer_ = new std::vector<uint8_t>();
               break;
             case 2:
-              string_dict_i16_buffer_ = new std::vector<int16_t>();
+              string_dict_i16_buffer_ = new std::vector<uint16_t>();
               break;
             case 4:
               string_dict_i32_buffer_ = new std::vector<int32_t>();
@@ -382,8 +382,8 @@ class TypedImportBuffer : boost::noncopyable {
     std::vector<std::vector<std::string>>* string_array_buffer_;
   };
   union {
-    std::vector<int8_t>* string_dict_i8_buffer_;
-    std::vector<int16_t>* string_dict_i16_buffer_;
+    std::vector<uint8_t>* string_dict_i8_buffer_;
+    std::vector<uint16_t>* string_dict_i16_buffer_;
     std::vector<int32_t>* string_dict_i32_buffer_;
     std::vector<ArrayDatum>* string_array_dict_buffer_;
   };

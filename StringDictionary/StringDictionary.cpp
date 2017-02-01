@@ -175,8 +175,9 @@ void StringDictionary::getOrAddBulk(const std::vector<std::string>& string_vec, 
   }
 }
 
-template void StringDictionary::getOrAddBulk(const std::vector<std::string>& string_vec, int8_t* encoded_vec) noexcept;
-template void StringDictionary::getOrAddBulk(const std::vector<std::string>& string_vec, int16_t* encoded_vec) noexcept;
+template void StringDictionary::getOrAddBulk(const std::vector<std::string>& string_vec, uint8_t* encoded_vec) noexcept;
+template void StringDictionary::getOrAddBulk(const std::vector<std::string>& string_vec,
+                                             uint16_t* encoded_vec) noexcept;
 template void StringDictionary::getOrAddBulk(const std::vector<std::string>& string_vec, int32_t* encoded_vec) noexcept;
 
 int32_t StringDictionary::getIdOfString(const std::string& str) const {

@@ -136,6 +136,10 @@ extern "C" int64_t fixed_width_int_decode_noinline(const int8_t* byte_stream,
                                                    const int32_t byte_width,
                                                    const int64_t pos);
 
+extern "C" int64_t fixed_width_unsigned_decode_noinline(const int8_t* byte_stream,
+                                                        const int32_t byte_width,
+                                                        const int64_t pos);
+
 extern "C" float fixed_width_float_decode_noinline(const int8_t* byte_stream, const int64_t pos);
 
 extern "C" double fixed_width_double_decode_noinline(const int8_t* byte_stream, const int64_t pos);

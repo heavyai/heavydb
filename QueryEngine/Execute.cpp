@@ -1203,6 +1203,9 @@ std::shared_ptr<Decoder> get_col_decoder(const Analyzer::ColumnVar* col_var) {
     }
     case kENCODING_DICT:
       CHECK(ti.is_string());
+      if (ti.get_size() < ti.get_logical_size()) {
+        return std::make_shared<FixedWidthUnsigned>(ti.get_size());
+      }
       return std::make_shared<FixedWidthInt>(ti.get_size());
     case kENCODING_FIXED: {
       const auto bit_width = col_var->get_comp_param();
@@ -1344,9 +1347,25 @@ SQLTypes get_phys_int_type(const size_t byte_sz) {
 llvm::Value* Executor::codgenAdjustFixedEncNull(llvm::Value* val, const SQLTypeInfo& col_ti) {
   CHECK_LT(col_ti.get_size(), col_ti.get_logical_size());
   const auto col_phys_width = col_ti.get_size() * 8;
-  const auto from_typename = "int" + std::to_string(col_phys_width) + "_t";
+  auto from_typename = "int" + std::to_string(col_phys_width) + "_t";
   auto adjusted = cgen_state_->ir_builder_.CreateCast(
       llvm::Instruction::CastOps::Trunc, val, get_int_type(col_phys_width, cgen_state_->context_));
+  if (col_ti.get_compression() == kENCODING_DICT) {
+    from_typename = "u" + from_typename;
+    llvm::Value* from_null{nullptr};
+    switch (col_ti.get_size()) {
+      case 1:
+        from_null = ll_int(std::numeric_limits<uint8_t>::max());
+        break;
+      case 2:
+        from_null = ll_int(std::numeric_limits<uint16_t>::max());
+        break;
+      default:
+        CHECK(false);
+    }
+    return cgen_state_->emitCall("cast_" + from_typename + "_to_" + numeric_type_name(col_ti) + "_nullable",
+                                 {adjusted, from_null, inlineIntNull(col_ti)});
+  }
   SQLTypeInfo col_phys_ti(get_phys_int_type(col_ti.get_size()),
                           col_ti.get_dimension(),
                           col_ti.get_scale(),

@@ -307,7 +307,9 @@ int64_t lazy_decode(const ColumnLazyFetchInfo& col_lazy_fetch, const int8_t* byt
     type_bitwidth = 8 * type_info.get_size();
   }
   CHECK_EQ(size_t(0), type_bitwidth % 8);
-  auto val = fixed_width_int_decode_noinline(byte_stream, type_bitwidth / 8, pos);
+  auto val = type_info.get_compression() == kENCODING_DICT && type_info.get_size() < type_info.get_logical_size()
+                 ? fixed_width_unsigned_decode_noinline(byte_stream, type_bitwidth / 8, pos)
+                 : fixed_width_int_decode_noinline(byte_stream, type_bitwidth / 8, pos);
   if (type_info.get_compression() != kENCODING_NONE) {
     CHECK(type_info.get_compression() == kENCODING_FIXED || type_info.get_compression() == kENCODING_DICT);
     auto encoding = type_info.get_compression();

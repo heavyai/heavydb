@@ -33,10 +33,38 @@ extern "C" DEVICE ALWAYS_INLINE int64_t SUFFIX(fixed_width_int_decode)(const int
   }
 }
 
+extern "C" DEVICE ALWAYS_INLINE int64_t SUFFIX(fixed_width_unsigned_decode)(const int8_t* byte_stream,
+                                                                            const int32_t byte_width,
+                                                                            const int64_t pos) {
+  switch (byte_width) {
+    case 1:
+      return reinterpret_cast<const uint8_t*>(byte_stream)[pos * byte_width];
+    case 2:
+      return *(reinterpret_cast<const uint16_t*>(&byte_stream[pos * byte_width]));
+    case 4:
+      return *(reinterpret_cast<const uint32_t*>(&byte_stream[pos * byte_width]));
+    case 8:
+      return *(reinterpret_cast<const uint64_t*>(&byte_stream[pos * byte_width]));
+    default:
+// TODO(alex)
+#ifdef __CUDACC__
+      return -1;
+#else
+      return std::numeric_limits<int64_t>::min() + 1;
+#endif
+  }
+}
+
 extern "C" DEVICE NEVER_INLINE int64_t SUFFIX(fixed_width_int_decode_noinline)(const int8_t* byte_stream,
                                                                                const int32_t byte_width,
                                                                                const int64_t pos) {
   return SUFFIX(fixed_width_int_decode)(byte_stream, byte_width, pos);
+}
+
+extern "C" DEVICE NEVER_INLINE int64_t SUFFIX(fixed_width_unsigned_decode_noinline)(const int8_t* byte_stream,
+                                                                                    const int32_t byte_width,
+                                                                                    const int64_t pos) {
+  return SUFFIX(fixed_width_unsigned_decode)(byte_stream, byte_width, pos);
 }
 
 extern "C" DEVICE ALWAYS_INLINE int64_t SUFFIX(diff_fixed_width_int_decode)(const int8_t* byte_stream,

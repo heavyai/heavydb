@@ -123,10 +123,10 @@ Encoder* Encoder::Create(Data_Namespace::AbstractBuffer* buffer, const SQLTypeIn
         CHECK(sqlType.is_string());
         switch (sqlType.get_size()) {
           case 1:
-            return new NoneEncoder<int8_t>(buffer);
+            return new NoneEncoder<uint8_t>(buffer);
             break;
           case 2:
-            return new NoneEncoder<int16_t>(buffer);
+            return new NoneEncoder<uint16_t>(buffer);
             break;
           case 4:
             return new NoneEncoder<int32_t>(buffer);

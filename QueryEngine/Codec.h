@@ -19,6 +19,15 @@ class FixedWidthInt : public Decoder {
   const size_t byte_width_;
 };
 
+class FixedWidthUnsigned : public Decoder {
+ public:
+  FixedWidthUnsigned(const size_t byte_width);
+  llvm::Instruction* codegenDecode(llvm::Value* byte_stream, llvm::Value* pos, llvm::Module* module) const override;
+
+ private:
+  const size_t byte_width_;
+};
+
 class DiffFixedWidthInt : public Decoder {
  public:
   DiffFixedWidthInt(const size_t byte_width, const int64_t baseline);

@@ -16,6 +16,7 @@
 #include <limits>
 #include <memory>
 #include <string>
+#include <type_traits>
 #include <vector>
 #include <cassert>
 
@@ -494,12 +495,12 @@ inline SQLTypeInfo get_logical_type_info(const SQLTypeInfo& type_info) {
 
 template <class T>
 inline int64_t inline_int_null_value() {
-  return std::numeric_limits<T>::min();
+  return std::is_signed<T>::value ? std::numeric_limits<T>::min() : std::numeric_limits<T>::max();
 }
 
 template <class T>
 inline int64_t max_valid_int_value() {
-  return std::numeric_limits<T>::max();
+  return std::is_signed<T>::value ? std::numeric_limits<T>::max() : std::numeric_limits<T>::max() - 1;
 }
 
 typedef int32_t StringOffsetT;
