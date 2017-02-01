@@ -1,30 +1,61 @@
 MapD Platform Release Notes
 ===========================
 
-The latest version of the MapD Platform is 2.0.2.
+The latest version of the MapD Platform is 2.0.3.
 
-**Version 2.0**
------------------
+**2.0.3** - Released February 1, 2017
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. note:: Please note this version introduces a filesystem-level change to the on-disk
-    data.  After the automated migration to this version has occurred, your data
-    directory will no longer be compatible with previous versions. Any risk is low,
-    but please confirm prior to starting a new version of MapD that your backups
-    are current and available.
+MapD Core
++++++++++
 
-.. note:: This release breaks API compatibility with the previous JDBC driver. You
-    must use the new JDBC driver included in this release with any MapD Core 2.0
-    instances.
+New
+'''
 
-.. note:: Version 2 of the MapD visualization web client, Immerse, now is available at
-    the root of the host, e.g. ``yourserver/``.  Version 1 of Immerse is still
-    available at ``yourserver/v1/``.  Links to saved version 1 dashboards will
-    resolve to the correct address. Version 1 is deprecated, but will continue to
-    be included in the MapD install, with sufficient notice to be given before it
-    is removed.  Henceforth, updates to Immerse will be noted in these release
-    notes.
+- Now running ``COUNT DISTINCT`` on GPU. >10x speedup over old implementation.
+- Added ``APPROX_COUNT_DISTINCT`` (HyperLogLog algorithm)
+- Improved concurrency in CPU-based portions of query execution yielding 15-20% latency improvement, particularly for queries that are complex or have large result sets.
 
-**2.0.2** - Released January 20, 2016
+Fixed
+'''''
+
+- Problems with ``CAST``: decimal to floating point; decimal to decimal; nested ``CAST``
+- Problem with floating point zero literal
+- Problem with ``COUNT(*)`` in a 3+ way join query
+- Problem with unary minus or ``ABS`` on a ``NOT NULL`` floating point
+- Delay while reading table metadata
+
+MapD Iris Rendering Engine
+++++++++++++++++++++++++++
+
+Fixed
+'''''
+
+- Problem rendering polygons when ``start_GPU`` configuration parameter is not zero
+- Problem in determining the appropriate data type for scales in the render vega
+- Problem with mismatched colors for dictionary-encoded strings when using blended categorical color accumulation
+- Problem when moving from blended accumulation to density accumulation or vice versa
+
+
+MapD Immerse
+++++++++++++
+
+New
+'''
+
+- Enabled ``APPROX_COUNT_DISTINCT`` aggregation for all types other than non-encoded strings. This appears in Immerse as the Measures aggregate button “# Unique”
+
+Fixed
+'''''
+
+- Problem escaping single quotes (') for multi-series line charts
+- Problem with inaccurate bin label when switching dimensions from a binned time dimension to a binned non-time dimension
+- Cancelling a chart edit caused Range Chart to disappear
+- Problem with number of requested bins not matching the number of rendered bins
+- Various errors switching between chart types
+- Dragging measures between slots for backend rendered chart fails to update chart
+
+**2.0.2** - Released January 20, 2017
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 MapD Core
@@ -34,21 +65,21 @@ New
 '''
 
 - New Python interface to support standard Python database APIs
-- More groups now possible in multi-column `GROUP BY` queries
+- More groups now possible in multi-column ``GROUP BY`` queries
 - Error messages for unsupported joins now specify problem table
-- Error messages for `CREATE TABLE` now specify problem column
-- Now can use alias for `GROUP BY` in an ORDER BY query
+- Error messages for ``CREATE TABLE`` now specify problem column
+- Now can use alias for ``GROUP BY`` in an ``ORDER BY`` query
 - Column and table names may now start with an underscore (_)
 - Thrift’s get_server_status call now provides server start time
-- Now supporting explicit `CAST` from string literal to `DATE`, `TIME` or `TIMESTAMP`
+- Now supporting explicit ``CAST`` from string literal to ``DATE``, ``TIME`` or ``TIMESTAMP``
 
 Fixed
 '''''
 
-- Problem with `HAVING` queries which use fixed encoding columns
-- Problem with some `IN` subqueries which return no results
-- Problem with `NULL` handling for `NOT IN` subqueries
-- Fixed the result of `NULL OR TRUE` operations
+- Problem with ``HAVING`` queries which use fixed encoding columns
+- Problem with some ``IN`` subqueries which return no results
+- Problem with ``NULL`` handling for ``NOT IN`` subqueries
+- Fixed the result of ``NULL OR TRUE`` operations
 - Fixed conversion to floating point for decimal literals with more than 18 decimal places
 
 MapD Iris Rendering Engine
@@ -59,7 +90,7 @@ New
 '''
 
 - Added support for HSL, LAB, and HCL color spaces
-- Now supporting rendering of `DECIMAL` and `BIGINT` types
+- Now supporting rendering of ``DECIMAL`` and ``BIGINT`` types
 
 Fixed
 '''''
@@ -75,7 +106,7 @@ New
 - Pointmap: Zoom to geocoded location
 - Changed labelling for "row" chart to "bar" chart
 - Added area chart view for line chart
-- Global filters for `IS NULL` / `IS NOT NULL`
+- Global filters for ``IS NULL`` / ``IS NOT NULL``
 - Multi-series line chart now has option to display non-enumerated items as "All Others"
 
 Fixed
@@ -124,6 +155,28 @@ Fixed
 '''''
 
 - Issue with pointmap related to handling of out-of-bounds latitude/longitude values
+
+
+**Version 2.0**
+-----------------
+
+.. note:: Please note this version introduces a filesystem-level change to the on-disk
+    data.  After the automated migration to this version has occurred, your data
+    directory will no longer be compatible with previous versions. Any risk is low,
+    but please confirm prior to starting a new version of MapD that your backups
+    are current and available.
+
+.. note:: This release breaks API compatibility with the previous JDBC driver. You
+    must use the new JDBC driver included in this release with any MapD Core 2.0
+    instances.
+
+.. note:: Version 2 of the MapD visualization web client, Immerse, now is available at
+    the root of the host, e.g. ``yourserver/``.  Version 1 of Immerse is still
+    available at ``yourserver/v1/``.  Links to saved version 1 dashboards will
+    resolve to the correct address. Version 1 is deprecated, but will continue to
+    be included in the MapD install, with sufficient notice to be given before it
+    is removed.  Henceforth, updates to Immerse will be noted in these release
+    notes.
 
 **2.0.0** - Released December 13, 2016
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
