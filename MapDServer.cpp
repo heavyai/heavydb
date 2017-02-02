@@ -254,7 +254,7 @@ class MapDHandler : virtual public MapDIf {
                                                 start_epoch,
                                                 num_reader_threads));
 #ifdef HAVE_CALCITE
-    calcite_.reset(new Calcite(calcite_port, base_data_path_));
+    calcite_.reset(new Calcite(calcite_port, base_data_path_, mapd_parameters_.calcite_max_mem));
 #ifdef HAVE_RAVM
     ExtensionFunctionsWhitelist::add(calcite_->getExtensionFunctionWhitelist());
 #endif  // HAVE_RAVM
@@ -2262,6 +2262,10 @@ int main(int argc, char** argv) {
       "cuda-grid-size",
       po::value<size_t>(&mapd_parameters.cuda_grid_size)->default_value(mapd_parameters.cuda_grid_size),
       "Size of grid to use on GPU");
+  desc_adv.add_options()(
+      "calcite-max-mem",
+      po::value<size_t>(&mapd_parameters.calcite_max_mem)->default_value(mapd_parameters.calcite_max_mem),
+      "Max memory available to calcite JVM");
 
   po::positional_options_description positionalOptions;
   positionalOptions.add("data", 1);
@@ -2393,6 +2397,7 @@ int main(int argc, char** argv) {
   LOG(INFO) << " Watchdog is set to " << enable_watchdog;
   LOG(INFO) << " cuda block size " << mapd_parameters.cuda_block_size;
   LOG(INFO) << " cuda grid size  " << mapd_parameters.cuda_grid_size;
+  LOG(INFO) << " calcite JVM max memory  " << mapd_parameters.calcite_max_mem;
 
   try {
     if (vm.count("disable-fork")) {

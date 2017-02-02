@@ -32,7 +32,7 @@ Catalog_Namespace::SessionInfo* get_session(const char* db_path) {
   Catalog_Namespace::UserMetadata user;
   Catalog_Namespace::DBMetadata db;
 #ifdef HAVE_CALCITE
-  auto calcite = std::make_shared<Calcite>(CALCITEPORT, db_path);
+  auto calcite = std::make_shared<Calcite>(CALCITEPORT, db_path, 1024);
 #ifdef HAVE_RAVM
   ExtensionFunctionsWhitelist::add(calcite->getExtensionFunctionWhitelist());
 #endif  // HAVE_RAVM

@@ -17,7 +17,7 @@
 
 class Calcite {
  public:
-  Calcite(int port, std::string data_dir);
+  Calcite(int port, std::string data_dir, size_t calcite_max_mem);
   std::string process(std::string user,
                       std::string passwd,
                       std::string catalog,
@@ -29,7 +29,7 @@ class Calcite {
   virtual ~Calcite();
 
  private:
-  void runJNI(int port, std::string data_dir);
+  void runJNI(int port, std::string data_dir, size_t calcite_max_memory);
   void runServer(int port, std::string data_dir);
   std::string handle_java_return(JNIEnv* env, jobject process_result);
   JNIEnv* checkJNIConnection();

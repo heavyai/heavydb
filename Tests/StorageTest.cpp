@@ -58,7 +58,7 @@ class SQLTestEnv : public ::testing::Environment {
     UserMetadata user;
     DBMetadata db;
 #ifdef HAVE_CALCITE
-    auto calcite = std::make_shared<Calcite>(CALCITEPORT, data_dir.string());
+    auto calcite = std::make_shared<Calcite>(CALCITEPORT, data_dir.string(), 1024);
 #endif  // HAVE_CALCITE
     {
       auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), 0, false, 0);

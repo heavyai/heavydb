@@ -83,7 +83,7 @@ int main(int argc, char* argv[]) {
   try {
     auto dummy = std::make_shared<Data_Namespace::DataMgr>(data_path, 0, false, 0);
 #ifdef HAVE_CALCITE
-    auto dummy_calcite = std::make_shared<Calcite>(CALCITEPORT, base_path);
+    auto dummy_calcite = std::make_shared<Calcite>(CALCITEPORT, base_path, 1024);
 #endif  // HAVE_CALCITE
     Catalog_Namespace::SysCatalog sys_cat(base_path,
                                           dummy,

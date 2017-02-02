@@ -26,12 +26,13 @@ using namespace apache::thrift;
 using namespace apache::thrift::protocol;
 using namespace apache::thrift::transport;
 
-void Calcite::runJNI(int port, std::string data_dir) {
+void Calcite::runJNI(int port, std::string data_dir, size_t calcite_max_mem) {
   LOG(INFO) << "Creating Calcite Server local as JNI instance, jar expected in " << mapd_root_abs_path() << "/bin";
   const int kNumOptions = 2;
   std::string jar_file{"-Djava.class.path=" + mapd_root_abs_path() +
-                       "/bin/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar"};
-  JavaVMOption options[kNumOptions] = {{const_cast<char*>("-Xmx256m"), NULL},
+                       "/bin/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar"};                  
+  std::string max_mem_setting{"-Xmx" + std::to_string(calcite_max_mem) + "m"};
+  JavaVMOption options[kNumOptions] = {{const_cast<char*>(max_mem_setting.c_str()), NULL},
                                        {const_cast<char*>(jar_file.c_str()), NULL}};
 
   JavaVMInitArgs vm_args;
@@ -115,10 +116,11 @@ void Calcite::runServer(int port, std::string data_dir) {
   }
 }
 
-Calcite::Calcite(int port, std::string data_dir) : server_available_(false), jni_(true), jvm_(NULL) {
+Calcite::Calcite(int port, std::string data_dir, size_t calcite_max_mem)
+    : server_available_(false), jni_(true), jvm_(NULL) {
   LOG(INFO) << "Creating Calcite Handler,  Calcite Port is " << port << " base data dir is " << data_dir;
   if (port == -1) {
-    runJNI(port, data_dir);
+    runJNI(port, data_dir, calcite_max_mem);
   } else {
     remote_calcite_port_ = port;
     runServer(port, data_dir);
