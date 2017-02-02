@@ -664,7 +664,9 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const RelAlgExecution
   cuEventCreate(&start2, 0);
   cuEventCreate(&stop2, 0);
 
-  cuEventRecord(start0, 0);
+  if (g_enable_dynamic_watchdog) {
+    cuEventRecord(start0, 0);
+  }
 
   auto kernel_params = prepareKernelParams(col_buffers,
                                            literal_buff,
@@ -708,14 +710,16 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const RelAlgExecution
       param_ptrs.push_back(&param);
     }
 
-    cuEventRecord(stop0, 0);
-    cuEventSynchronize(stop0);
-    float milliseconds0 = 0;
-    cuEventElapsedTime(&milliseconds0, start0, stop0);
-    LOG(INFO) << "Device " << std::to_string(device_id)
+    if (g_enable_dynamic_watchdog) {
+      cuEventRecord(stop0, 0);
+      cuEventSynchronize(stop0);
+      float milliseconds0 = 0;
+      cuEventElapsedTime(&milliseconds0, start0, stop0);
+      VLOG(1) << "Device " << std::to_string(device_id)
               << ": launchGpuCode: group-by prepare: " << std::to_string(milliseconds0) << " ms";
+      cuEventRecord(start1, 0);
+    }
 
-    cuEventRecord(start1, 0);
     if (hoist_literals) {
       checkCudaErrors(cuLaunchKernel(cu_func,
                                      grid_size_x,
@@ -742,14 +746,15 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const RelAlgExecution
                                      &param_ptrs[0],
                                      nullptr));
     }
-    cuEventRecord(stop1, 0);
-    cuEventSynchronize(stop1);
-    float milliseconds1 = 0;
-    cuEventElapsedTime(&milliseconds1, start1, stop1);
-    LOG(INFO) << "Device " << std::to_string(device_id)
+    if (g_enable_dynamic_watchdog) {
+      cuEventRecord(stop1, 0);
+      cuEventSynchronize(stop1);
+      float milliseconds1 = 0;
+      cuEventElapsedTime(&milliseconds1, start1, stop1);
+      VLOG(1) << "Device " << std::to_string(device_id)
               << ": launchGpuCode: group-by cuLaunchKernel: " << std::to_string(milliseconds1) << " ms";
-
-    cuEventRecord(start2, 0);
+      cuEventRecord(start2, 0);
+    }
 
     copy_from_gpu(data_mgr, &error_codes[0], err_desc, error_codes.size() * sizeof(error_codes[0]), device_id);
     *error_code = 0;
@@ -798,14 +803,15 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const RelAlgExecution
       param_ptrs.push_back(&param);
     }
 
-    cuEventRecord(stop0, 0);
-    cuEventSynchronize(stop0);
-    float milliseconds0 = 0;
-    cuEventElapsedTime(&milliseconds0, start0, stop0);
-    LOG(INFO) << "Device " << std::to_string(device_id) << ": launchGpuCode: prepare: " << std::to_string(milliseconds0)
+    if (g_enable_dynamic_watchdog) {
+      cuEventRecord(stop0, 0);
+      cuEventSynchronize(stop0);
+      float milliseconds0 = 0;
+      cuEventElapsedTime(&milliseconds0, start0, stop0);
+      VLOG(1) << "Device " << std::to_string(device_id) << ": launchGpuCode: prepare: " << std::to_string(milliseconds0)
               << " ms";
-
-    cuEventRecord(start1, 0);
+      cuEventRecord(start1, 0);
+    }
 
     if (hoist_literals) {
       checkCudaErrors(cuLaunchKernel(cu_func,
@@ -834,14 +840,15 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const RelAlgExecution
                                      nullptr));
     }
 
-    cuEventRecord(stop1, 0);
-    cuEventSynchronize(stop1);
-    float milliseconds1 = 0;
-    cuEventElapsedTime(&milliseconds1, start1, stop1);
-    LOG(INFO) << "Device " << std::to_string(device_id)
+    if (g_enable_dynamic_watchdog) {
+      cuEventRecord(stop1, 0);
+      cuEventSynchronize(stop1);
+      float milliseconds1 = 0;
+      cuEventElapsedTime(&milliseconds1, start1, stop1);
+      VLOG(1) << "Device " << std::to_string(device_id)
               << ": launchGpuCode: cuLaunchKernel: " << std::to_string(milliseconds1) << " ms";
-
-    cuEventRecord(start2, 0);
+      cuEventRecord(start2, 0);
+    }
 
     copy_from_gpu(data_mgr, &error_codes[0], err_desc, error_codes.size() * sizeof(error_codes[0]), device_id);
     *error_code = 0;
@@ -877,12 +884,14 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const RelAlgExecution
                   device_id);
   }
 
-  cuEventRecord(stop2, 0);
-  cuEventSynchronize(stop2);
-  float milliseconds2 = 0;
-  cuEventElapsedTime(&milliseconds2, start2, stop2);
-  LOG(INFO) << "Device " << std::to_string(device_id) << ": launchGpuCode: finish: " << std::to_string(milliseconds2)
+  if (g_enable_dynamic_watchdog) {
+    cuEventRecord(stop2, 0);
+    cuEventSynchronize(stop2);
+    float milliseconds2 = 0;
+    cuEventElapsedTime(&milliseconds2, start2, stop2);
+    VLOG(1) << "Device " << std::to_string(device_id) << ": launchGpuCode: finish: " << std::to_string(milliseconds2)
             << " ms";
+  }
 
   return out_vec;
 #else
