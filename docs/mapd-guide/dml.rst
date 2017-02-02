@@ -312,19 +312,33 @@ Accepted date, time, and timestamp formats
 Aggregate Function Support
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-+----------------+----------------------------------------------------+
-| Function       | Description                                        |
-+================+====================================================+
-| AVG(\ **x**)   | returns the average value of **x**                 |
-+----------------+----------------------------------------------------+
-| COUNT()        | returns the count of the number of rows returned   |
-+----------------+----------------------------------------------------+
-| MAX(\ **x**)   | returns the maximum value of **x**                 |
-+----------------+----------------------------------------------------+
-| MIN(\ **x**)   | returns the minimum value of **x**                 |
-+----------------+----------------------------------------------------+
-| SUM(\ **x**)   | returns the sum of the values of **x**             |
-+----------------+----------------------------------------------------+
++--------------------------------+-----------------------------------------------------------+
+| Function                       | Description                                               |
++================================+===========================================================+
+| AVG(\ **x**)                   | returns the average value of **x**                        |
++--------------------------------+-----------------------------------------------------------+
+| COUNT()                        | returns the count of the number of rows returned          |
++--------------------------------+-----------------------------------------------------------+
+| COUNT(DISTINCT **x**)          | returns the count of distinct values of **x**             |
++--------------------------------+-----------------------------------------------------------+
+| APPROX_COUNT_DISTINCT(\ **x**) | returns the approximate count of distinct values of **x** |
++--------------------------------+-----------------------------------------------------------+
+| MAX(\ **x**)                   | returns the maximum value of **x**                        |
++--------------------------------+-----------------------------------------------------------+
+| MIN(\ **x**)                   | returns the minimum value of **x**                        |
++--------------------------------+-----------------------------------------------------------+
+| SUM(\ **x**)                   | returns the sum of the values of **x**                    |
++--------------------------------+-----------------------------------------------------------+
+
+**Usage notes**
+
+- COUNT(DISTINCT **x** ), especially when used in conjunction with GROUP BY, can require a very
+  large amount of memory to keep track of all distinct values in large tables with large 
+  cardinality.  To avoid this large overhead APPROX_COUNT_DICTINCT (\ **x**) gives a very close
+  approximation (within 4%)  of the distinct values for a column while keeping performance and
+  memory usage reasonable.  It is recommended on large table with large cardinalities to use
+  APPROX_COUNT_DISTINCT when possible. 
+
 
 Conditional Expression Support
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
