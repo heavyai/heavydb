@@ -809,6 +809,8 @@ class Executor {
 
   void codegenInnerScanNextRow();
 
+  void preloadFragOffsets(const std::vector<InputDescriptor>& input_descs);
+
   void allocateInnerScansIterators(const std::vector<InputDescriptor>& input_descs);
 
   JoinInfo chooseJoinType(const std::list<std::shared_ptr<Analyzer::Expr>>&,
@@ -1027,6 +1029,7 @@ class Executor {
     std::unordered_map<int, std::vector<llvm::Value*>> fetch_cache_;
     std::vector<llvm::Value*> group_by_expr_cache_;
     std::vector<llvm::Value*> str_constants_;
+    std::vector<llvm::Value*> frag_offsets_;
     std::unordered_map<InputDescriptor, std::pair<llvm::Value*, llvm::Value*>> scan_to_iterator_;
     const bool is_outer_join_;
     llvm::Value* outer_join_cond_lv_;

@@ -119,7 +119,7 @@ llvm::Function* row_process(llvm::Module* mod,
   func_args.push_back(pi64_type);  // aggregate init values
 
   func_args.push_back(i64_type);
-  func_args.push_back(i64_type);
+  func_args.push_back(pi64_type);
   func_args.push_back(pi64_type);
   if (hoist_literals) {
     func_args.push_back(PointerType::get(i8_type, 0));
@@ -302,8 +302,6 @@ llvm::Function* query_template(llvm::Module* mod,
 
   LoadInst* row_count = new LoadInst(row_count_ptr, "row_count", false, bb_entry);
   row_count->setAlignment(8);
-  LoadInst* frag_row_off = new LoadInst(frag_row_off_ptr, "frag_row_off", false, bb_entry);
-  frag_row_off->setAlignment(8);
 
   std::vector<Value*> agg_init_val_vec;
   if (!is_estimate_query) {
@@ -360,7 +358,7 @@ llvm::Function* query_template(llvm::Module* mod,
   }
   row_process_params.push_back(agg_init_val);
   row_process_params.push_back(pos);
-  row_process_params.push_back(frag_row_off);
+  row_process_params.push_back(frag_row_off_ptr);
   row_process_params.push_back(row_count_ptr);
   if (hoist_literals) {
     CHECK(literals);
@@ -578,8 +576,6 @@ llvm::Function* query_group_by_template(llvm::Module* mod,
   // Block  .entry
   LoadInst* row_count = new LoadInst(row_count_ptr, "", false, bb_entry);
   row_count->setAlignment(8);
-  LoadInst* frag_row_off = new LoadInst(frag_row_off_ptr, "", false, bb_entry);
-  frag_row_off->setAlignment(8);
   LoadInst* max_matched = new LoadInst(max_matched_ptr, "", false, bb_entry);
   max_matched->setAlignment(4);
   auto crt_matched_ptr = new AllocaInst(i32_type, "crt_matched", bb_entry);
@@ -654,7 +650,7 @@ llvm::Function* query_group_by_template(llvm::Module* mod,
   row_process_params.push_back(old_total_matched_ptr);
   row_process_params.push_back(agg_init_val);
   row_process_params.push_back(pos);
-  row_process_params.push_back(frag_row_off);
+  row_process_params.push_back(frag_row_off_ptr);
   row_process_params.push_back(row_count_ptr);
   if (hoist_literals) {
     CHECK(literals);

@@ -1252,17 +1252,17 @@ std::vector<llvm::Value*> Executor::codegenColVar(const Analyzer::ColumnVar* col
                                                   const bool fetch_column,
                                                   const bool hoist_literals) {
   auto col_id = col_var->get_column_id();
+  const auto rte_idx = col_var->get_rte_idx();
   if (col_var->get_table_id() > 0) {
     auto cd = get_column_descriptor(col_id, col_var->get_table_id(), *catalog_);
     if (cd->isVirtualCol) {
       CHECK(cd->columnName == "rowid");
-      if (col_var->get_rte_idx() > 0) {
+      if (rte_idx > 0) {
         // rowid for inner scan, the fragment offset from the outer scan
         // is meaningless, the relative position in the scan is the rowid
         return {posArg(col_var)};
       }
-      return {
-          cgen_state_->ir_builder_.CreateAdd(posArg(col_var), get_arg_by_name(cgen_state_->row_func_, "frag_row_off"))};
+      return {cgen_state_->ir_builder_.CreateAdd(posArg(col_var), cgen_state_->frag_offsets_[rte_idx])};
     }
   }
   const auto grouped_col_lv = resolveGroupedColumnReference(col_var);
@@ -5847,7 +5847,7 @@ std::pair<llvm::Function*, std::vector<llvm::Value*>> create_row_function(const 
   row_process_arg_types.push_back(llvm::Type::getInt64Ty(context));
 
   // fragment row offset argument
-  row_process_arg_types.push_back(llvm::Type::getInt64Ty(context));
+  row_process_arg_types.push_back(llvm::Type::getInt64PtrTy(context));
 
   // number of rows for each scan
   row_process_arg_types.push_back(llvm::Type::getInt64PtrTy(context));
@@ -6087,6 +6087,7 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
 
   auto bb = llvm::BasicBlock::Create(cgen_state_->context_, "entry", cgen_state_->row_func_);
   cgen_state_->ir_builder_.SetInsertPoint(bb);
+  preloadFragOffsets(ra_exe_unit.input_descs);
 
   allocateInnerScansIterators(ra_exe_unit.input_descs);
 
@@ -6273,6 +6274,22 @@ void Executor::codegenInnerScanNextRow() {
     cgen_state_->ir_builder_.CreateStore(inner_it_inc, inner_it_val_and_ptr.second);
     CHECK_EQ(size_t(1), cgen_state_->inner_scan_labels_.size());
     cgen_state_->ir_builder_.CreateBr(cgen_state_->inner_scan_labels_.front());
+  }
+}
+
+void Executor::preloadFragOffsets(const std::vector<InputDescriptor>& input_descs) {
+#ifdef ENABLE_MULFRAG_JOIN
+  const auto ld_count = input_descs.size();
+#else
+  const size_t ld_count = 1;
+#endif
+  auto frag_off_ptr = get_arg_by_name(cgen_state_->row_func_, "frag_row_off");
+  for (size_t i = 0; i < ld_count; ++i) {
+    auto input_off_ptr = frag_off_ptr;
+    if (!i) {
+      input_off_ptr = cgen_state_->ir_builder_.CreateGEP(frag_off_ptr, ll_int(int32_t(i)));
+    }
+    cgen_state_->frag_offsets_.push_back(cgen_state_->ir_builder_.CreateLoad(input_off_ptr));
   }
 }
 
