@@ -33,6 +33,7 @@
 #include <llvm/IR/InstIterator.h>
 #include "llvm/IR/Intrinsics.h"
 #include "AggregatedColRange.h"
+#include "StringDictionaryGenerations.h"
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/MDBuilder.h>
 #include <llvm/IR/Verifier.h>
@@ -604,13 +605,14 @@ StringDictionaryProxy* Executor::getStringDictionaryProxy(const int dict_id_in,
     CHECK(dd->stringDict);
     CHECK_LE(dd->dictNBits, 32);
     if (row_set_mem_owner) {
-      return row_set_mem_owner->addStringDict(dd->stringDict, dict_id);
+      return row_set_mem_owner->addStringDict(
+          dd->stringDict, dict_id, string_dictionary_generations_.getGeneration(dict_id));
     }
   }
   CHECK_EQ(0, dict_id);
   if (!lit_str_dict_proxy_) {
     std::shared_ptr<StringDictionary> tsd = std::make_shared<StringDictionary>("");
-    lit_str_dict_proxy_.reset(new StringDictionaryProxy(tsd));
+    lit_str_dict_proxy_.reset(new StringDictionaryProxy(tsd, 0));
   }
   return lit_str_dict_proxy_.get();
 }
@@ -647,6 +649,7 @@ ExpressionRange Executor::getColRange(const PhysicalInput& phys_input) const {
 void Executor::clearMetaInfoCache() {
   input_table_info_cache_.clear();
   agg_col_range_cache_.clear();
+  string_dictionary_generations_.clear();
 }
 
 std::vector<int8_t> Executor::serializeLiterals(const std::unordered_map<int, Executor::LiteralValues>& literals,
@@ -5431,8 +5434,7 @@ namespace {
 template <class T>
 int8_t* insert_one_dict_str(const ColumnDescriptor* cd,
                             const Analyzer::Constant* col_cv,
-                            const Executor* executor,
-                            std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner) {
+                            const Catalog_Namespace::Catalog& catalog) {
   auto col_data = reinterpret_cast<T*>(checked_malloc(sizeof(T)));
   if (col_cv->get_is_null()) {
     *col_data = inline_fixed_encoding_null_val(cd->columnType);
@@ -5440,7 +5442,9 @@ int8_t* insert_one_dict_str(const ColumnDescriptor* cd,
     const int dict_id = cd->columnType.get_comp_param();
     const auto col_datum = col_cv->get_constval();
     const auto& str = *col_datum.stringval;
-    int32_t str_id = executor->getStringDictionaryProxy(dict_id, row_set_mem_owner)->getOrAdd(str);
+    const auto dd = catalog.getMetadataForDict(dict_id);
+    CHECK(dd && dd->stringDict);
+    int32_t str_id = dd->stringDict->getOrAdd(str);
     const bool invalid = str_id > max_valid_int_value<T>();
     if (invalid || str_id == inline_int_null_value<int32_t>()) {
       if (invalid) {
@@ -5563,13 +5567,13 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
           case kENCODING_DICT: {
             switch (cd->columnType.get_size()) {
               case 1:
-                col_buffers[col_ids[col_idx]] = insert_one_dict_str<int8_t>(cd, col_cv, this, row_set_mem_owner_);
+                col_buffers[col_ids[col_idx]] = insert_one_dict_str<int8_t>(cd, col_cv, cat);
                 break;
               case 2:
-                col_buffers[col_ids[col_idx]] = insert_one_dict_str<int16_t>(cd, col_cv, this, row_set_mem_owner_);
+                col_buffers[col_ids[col_idx]] = insert_one_dict_str<int16_t>(cd, col_cv, cat);
                 break;
               case 4:
-                col_buffers[col_ids[col_idx]] = insert_one_dict_str<int32_t>(cd, col_cv, this, row_set_mem_owner_);
+                col_buffers[col_ids[col_idx]] = insert_one_dict_str<int32_t>(cd, col_cv, cat);
                 break;
               default:
                 CHECK(false);

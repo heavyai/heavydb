@@ -34,7 +34,8 @@ class RelAlgExecutor {
                                                        const ExecutionOptions& eo,
                                                        RenderInfo* render_info);
 
-  void prepareLeafExecution(const AggregatedColRange& agg_col_range);
+  void prepareLeafExecution(const AggregatedColRange& agg_col_range,
+                            const StringDictionaryGenerations& string_dictionary_generations);
 
   ExecutionResult executeRelAlgSubQuery(const RelAlgNode* subquery_ra,
                                         const CompilationOptions& co,
@@ -53,6 +54,8 @@ class RelAlgExecutor {
   const std::vector<RexSubQuery*>& getSubqueries() const noexcept { return subqueries_; };
 
   AggregatedColRange computeColRangesCache(const RelAlgNode* ra);
+
+  StringDictionaryGenerations computeStringDictionaryGenerations(const RelAlgNode* ra);
 
   Executor* getExecutor() const;
 

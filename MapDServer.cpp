@@ -1956,7 +1956,9 @@ class MapDHandler : virtual public MapDIf {
 #ifdef HAVE_RAVM
     try {
       const auto first_step_result = PendingExecutionClosure::executeNextStep(
-          pending_query.id, column_ranges_from_thrift(pending_query.column_ranges));
+          pending_query.id,
+          column_ranges_from_thrift(pending_query.column_ranges),
+          string_dictionary_generations_from_thrift(pending_query.dictionary_generations));
       const auto& result_rows = first_step_result.result.getRows();
       auto result_set = result_rows.getResultSet();
       if (!result_set) {
@@ -2003,6 +2005,7 @@ class MapDHandler : virtual public MapDIf {
     auto closure = PendingExecutionClosure::create(ra, ra_executor, cat, ra_eo);
     _return.id = closure->getId();
     _return.column_ranges = column_ranges_to_thrift(closure->getColRangeCache());
+    _return.dictionary_generations = string_dictionary_generations_to_thrift(closure->getStringDictionaryGenerations());
 #else
     CHECK(false);
 #endif  // HAVE_RAVM
@@ -2041,6 +2044,18 @@ class MapDHandler : virtual public MapDIf {
       thrift_column_ranges.push_back(thrift_column_range);
     }
     return thrift_column_ranges;
+  }
+
+  static std::vector<TDictionaryGeneration> string_dictionary_generations_to_thrift(
+      const StringDictionaryGenerations& dictionary_generations) {
+    std::vector<TDictionaryGeneration> thrift_dictionary_generations;
+    for (const auto& kv : dictionary_generations.asMap()) {
+      TDictionaryGeneration thrift_dictionary_generation;
+      thrift_dictionary_generation.dict_id = kv.first;
+      thrift_dictionary_generation.entry_count = kv.second;
+      thrift_dictionary_generations.push_back(thrift_dictionary_generation);
+    }
+    return thrift_dictionary_generations;
   }
 
   void broadcast_serialized_rows(const std::string& serialized_rows,
@@ -2124,6 +2139,16 @@ AggregatedColRange column_ranges_from_thrift(const std::vector<TColumnRange>& th
     }
   }
   return column_ranges;
+}
+
+StringDictionaryGenerations string_dictionary_generations_from_thrift(
+    const std::vector<TDictionaryGeneration>& thrift_string_dictionary_generations) {
+  StringDictionaryGenerations string_dictionary_generations;
+  for (const auto& thrift_string_dictionary_generation : thrift_string_dictionary_generations) {
+    string_dictionary_generations.setGeneration(thrift_string_dictionary_generation.dict_id,
+                                                thrift_string_dictionary_generation.entry_count);
+  }
+  return string_dictionary_generations;
 }
 
 void mapd_signal_handler(int signal_number) {

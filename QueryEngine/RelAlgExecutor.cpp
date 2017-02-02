@@ -26,6 +26,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQuery(const std::string& query_ra,
   executor_->row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>();
   executor_->catalog_ = &cat_;
   executor_->agg_col_range_cache_ = computeColRangesCache(ra.get());
+  executor_->string_dictionary_generations_ = computeStringDictionaryGenerations(ra.get());
   ScopeGuard restore_metainfo_cache = [this] { executor_->clearMetaInfoCache(); };
   int64_t queue_time_ms = timer_stop(clock_begin);
   auto ed_list = get_execution_descriptors(ra.get());
@@ -78,6 +79,23 @@ AggregatedColRange RelAlgExecutor::computeColRangesCache(const RelAlgNode* ra) {
   return agg_col_range_cache;
 }
 
+StringDictionaryGenerations RelAlgExecutor::computeStringDictionaryGenerations(const RelAlgNode* ra) {
+  StringDictionaryGenerations string_dictionary_generations;
+  const auto phys_inputs = get_physical_inputs(ra);
+  for (const auto& phys_input : phys_inputs) {
+    const auto cd = cat_.getMetadataForColumn(phys_input.table_id, phys_input.col_id);
+    CHECK(cd);
+    const auto& col_ti = cd->columnType.is_array() ? cd->columnType.get_elem_type() : cd->columnType;
+    if (col_ti.is_string() && col_ti.get_compression() == kENCODING_DICT) {
+      const int dict_id = col_ti.get_comp_param();
+      const auto dd = cat_.getMetadataForDict(dict_id);
+      CHECK(dd && dd->stringDict);
+      string_dictionary_generations.setGeneration(dict_id, dd->stringDict->storageEntryCount());
+    }
+  }
+  return string_dictionary_generations;
+}
+
 Executor* RelAlgExecutor::getExecutor() const {
   return executor_;
 }
@@ -113,7 +131,8 @@ FirstStepExecutionResult RelAlgExecutor::executeRelAlgQueryFirstStep(const RelAl
           false};
 }
 
-void RelAlgExecutor::prepareLeafExecution(const AggregatedColRange& agg_col_range) {
+void RelAlgExecutor::prepareLeafExecution(const AggregatedColRange& agg_col_range,
+                                          const StringDictionaryGenerations& string_dictionary_generations) {
   // capture the lock acquistion time
   auto clock_begin = timer_start();
   leaf_execution_cleanup_.reset(new ScopeGuard([this] {
@@ -125,6 +144,7 @@ void RelAlgExecutor::prepareLeafExecution(const AggregatedColRange& agg_col_rang
   queue_time_ms_ = timer_stop(clock_begin);
   executor_->row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>();
   executor_->agg_col_range_cache_ = agg_col_range;
+  executor_->string_dictionary_generations_ = string_dictionary_generations;
 }
 
 ExecutionResult RelAlgExecutor::executeRelAlgSubQuery(const RelAlgNode* subquery_ra,

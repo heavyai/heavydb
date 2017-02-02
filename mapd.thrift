@@ -256,9 +256,15 @@ struct TColumnRange {
   9: double fp_max
 }
 
+struct TDictionaryGeneration {
+  1: i32 dict_id
+  2: i64 entry_count
+}
+
 struct TPendingQuery {
   1: TQueryId id
   2: list<TColumnRange> column_ranges
+  3: list<TDictionaryGeneration> dictionary_generations
 }
 
 service MapD {

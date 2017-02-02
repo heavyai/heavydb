@@ -16,7 +16,7 @@
 // used to access a StringDictionary when transient strings are involved
 class StringDictionaryProxy {
  public:
-  StringDictionaryProxy(std::shared_ptr<StringDictionary> sd);
+  StringDictionaryProxy(std::shared_ptr<StringDictionary> sd, const ssize_t generation);
 
   int32_t getOrAdd(const std::string& str) noexcept;
   StringDictionary* getDictionary() noexcept;
@@ -37,6 +37,7 @@ class StringDictionaryProxy {
   std::shared_ptr<StringDictionary> string_dict_;
   std::map<int32_t, std::string> transient_int_to_str_;
   std::map<std::string, int32_t> transient_str_to_int_;
+  const ssize_t generation_;
   mutable mapd_shared_mutex rw_mutex_;
 };
 #endif  // STRINGDICTIONARY_STRINGDICTIONARYPROXY_H

@@ -90,14 +90,16 @@ class RowSetMemoryOwner : boost::noncopyable {
     return &arrays_.back();
   }
 
-  StringDictionaryProxy* addStringDict(std::shared_ptr<StringDictionary> str_dict, const int dict_id) {
+  StringDictionaryProxy* addStringDict(std::shared_ptr<StringDictionary> str_dict,
+                                       const int dict_id,
+                                       const size_t generation) {
     std::lock_guard<std::mutex> lock(state_mutex_);
     auto it = str_dict_proxy_owned_.find(dict_id);
     if (it != str_dict_proxy_owned_.end()) {
       CHECK_EQ(it->second->getDictionary(), str_dict.get());
       return it->second;
     }
-    StringDictionaryProxy* str_dict_proxy = new StringDictionaryProxy(str_dict);
+    StringDictionaryProxy* str_dict_proxy = new StringDictionaryProxy(str_dict, generation);
     str_dict_proxy_owned_.emplace(dict_id, str_dict_proxy);
     return str_dict_proxy;
   }

@@ -10,11 +10,25 @@
 
 #include <thread>
 
-StringDictionaryProxy::StringDictionaryProxy(std::shared_ptr<StringDictionary> sd) : string_dict_(sd) {}
+StringDictionaryProxy::StringDictionaryProxy(std::shared_ptr<StringDictionary> sd, const ssize_t generation)
+    : string_dict_(sd), generation_(generation) {}
+
+namespace {
+
+int32_t truncate_to_generation(const int32_t id, const size_t generation) {
+  if (id == StringDictionary::INVALID_STR_ID) {
+    return id;
+  }
+  CHECK_GE(id, 0);
+  return static_cast<size_t>(id) >= generation ? StringDictionary::INVALID_STR_ID : id;
+}
+
+}  // namespace
 
 int32_t StringDictionaryProxy::getOrAddTransient(const std::string& str) {
   mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
-  auto transient_id = string_dict_->getIdOfString(str);
+  CHECK_GE(generation_, 0);
+  auto transient_id = truncate_to_generation(string_dict_->getIdOfString(str), generation_);
   if (transient_id != StringDictionary::INVALID_STR_ID) {
     return transient_id;
   }
@@ -36,7 +50,8 @@ int32_t StringDictionaryProxy::getOrAddTransient(const std::string& str) {
 
 int32_t StringDictionaryProxy::getIdOfString(const std::string& str) const {
   mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
-  auto str_id = string_dict_->getIdOfString(str);
+  CHECK_GE(generation_, 0);
+  auto str_id = truncate_to_generation(string_dict_->getIdOfString(str), generation_);
   if (str_id != StringDictionary::INVALID_STR_ID || transient_str_to_int_.empty()) {
     return str_id;
   }
@@ -74,7 +89,8 @@ std::vector<std::string> StringDictionaryProxy::getLike(const std::string& patte
                                                         const bool icase,
                                                         const bool is_simple,
                                                         const char escape) const noexcept {
-  auto result = string_dict_->getLike(pattern, icase, is_simple, escape);
+  CHECK_GE(generation_, 0);
+  auto result = string_dict_->getLike(pattern, icase, is_simple, escape, generation_);
   for (const auto& kv : transient_int_to_str_) {
     const auto str = getString(kv.first);
     if (is_like(str, pattern, icase, is_simple, escape)) {
@@ -94,7 +110,8 @@ bool is_regexp_like(const std::string& str, const std::string& pattern, const ch
 
 std::vector<std::string> StringDictionaryProxy::getRegexpLike(const std::string& pattern, const char escape) const
     noexcept {
-  auto result = string_dict_->getRegexpLike(pattern, escape);
+  CHECK_GE(generation_, 0);
+  auto result = string_dict_->getRegexpLike(pattern, escape, generation_);
   for (const auto& kv : transient_int_to_str_) {
     const auto str = getString(kv.first);
     if (is_regexp_like(str, pattern, escape)) {

@@ -33,9 +33,11 @@ class StringDictionary {
   std::vector<std::string> getLike(const std::string& pattern,
                                    const bool icase,
                                    const bool is_simple,
-                                   const char escape) const noexcept;
+                                   const char escape,
+                                   const size_t generation) const noexcept;
 
-  std::vector<std::string> getRegexpLike(const std::string& pattern, const char escape) const noexcept;
+  std::vector<std::string> getRegexpLike(const std::string& pattern, const char escape, const size_t generation) const
+      noexcept;
 
   bool checkpoint() noexcept;
 

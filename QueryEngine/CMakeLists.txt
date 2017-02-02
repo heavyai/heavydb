@@ -42,6 +42,7 @@ set(query_engine_source_files
     RuntimeFunctions.cpp
     RuntimeFunctions.bc
     SpeculativeTopN.cpp
+    StringDictionaryGenerations.cpp
     StringFunctions.cpp
     RegexpFunctions.cpp
     JoinHashTable.cpp

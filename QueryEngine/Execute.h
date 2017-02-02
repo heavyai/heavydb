@@ -10,6 +10,7 @@
 #include "LLVMGlobalContext.h"
 #include "NvidiaKernel.h"
 #include "RelAlgExecutionUnit.h"
+#include "StringDictionaryGenerations.h"
 #include "TargetMetaInfo.h"
 
 #include "../Analyzer/Analyzer.h"
@@ -1153,6 +1154,7 @@ class Executor {
 
   InputTableInfoCache input_table_info_cache_;
   AggregatedColRange agg_col_range_cache_;
+  StringDictionaryGenerations string_dictionary_generations_;
 
   static std::map<std::pair<int, ::QueryRenderer::QueryRenderManager*>, std::shared_ptr<Executor>> executors_;
   static std::mutex execute_mutex_;
