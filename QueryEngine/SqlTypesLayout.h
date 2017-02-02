@@ -69,19 +69,19 @@ inline int64_t inline_int_null_val(const SQLTypeInfo& ti) {
   }
   switch (type) {
     case kBOOLEAN:
-      return std::numeric_limits<int8_t>::min();
+      return inline_int_null_value<int8_t>();
     case kSMALLINT:
-      return std::numeric_limits<int16_t>::min();
+      return inline_int_null_value<int16_t>();
     case kINT:
-      return std::numeric_limits<int32_t>::min();
+      return inline_int_null_value<int32_t>();
     case kBIGINT:
-      return std::numeric_limits<int64_t>::min();
+      return inline_int_null_value<int64_t>();
     case kTIMESTAMP:
     case kTIME:
     case kDATE:
     case kINTERVAL_DAY_TIME:
     case kINTERVAL_YEAR_MONTH:
-      return std::numeric_limits<int64_t>::min();
+      return inline_int_null_value<int64_t>();
     default:
       abort();
   }

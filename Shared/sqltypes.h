@@ -13,6 +13,7 @@
 #include <stdint.h>
 #include <ctime>
 #include <cfloat>
+#include <limits>
 #include <memory>
 #include <string>
 #include <vector>
@@ -489,6 +490,16 @@ inline SQLTypeInfo get_logical_type_info(const SQLTypeInfo& type_info) {
                      encoding,
                      0,
                      type_info.get_subtype());
+}
+
+template <class T>
+inline int64_t inline_int_null_value() {
+  return std::numeric_limits<T>::min();
+}
+
+template <class T>
+inline int64_t max_valid_int_value() {
+  return std::numeric_limits<T>::max();
 }
 
 typedef int32_t StringOffsetT;

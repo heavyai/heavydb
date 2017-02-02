@@ -150,26 +150,6 @@ int32_t StringDictionary::getOrAdd(const std::string& str) noexcept {
 namespace {
 
 template <class T>
-struct NullStringId {
-  static int32_t value();
-};
-
-template <>
-struct NullStringId<int8_t> {
-  static int32_t value() { return NULL_TINYINT; }
-};
-
-template <>
-struct NullStringId<int16_t> {
-  static int32_t value() { return NULL_SMALLINT; }
-};
-
-template <>
-struct NullStringId<int32_t> {
-  static int32_t value() { return NULL_INT; }
-};
-
-template <class T>
 void log_encoding_error(const std::string& str) {
   LOG(ERROR) << "Could not encode string: " << str << ", the encoded value doesn't fit in " << sizeof(T) * 8
              << " bits. Will store NULL instead.";
@@ -183,9 +163,12 @@ void StringDictionary::getOrAddBulk(const std::vector<std::string>& string_vec, 
   size_t out_idx{0};
   for (const auto& str : string_vec) {
     const auto string_id = getOrAddImpl(str, false);
-    if (string_id >= std::numeric_limits<T>::max() || string_id < 0) {
-      log_encoding_error<T>(str);
-      encoded_vec[out_idx++] = NullStringId<T>::value();
+    const bool invalid = string_id > max_valid_int_value<T>();
+    if (invalid || string_id == inline_int_null_value<int32_t>()) {
+      if (invalid) {
+        log_encoding_error<T>(str);
+      }
+      encoded_vec[out_idx++] = inline_int_null_value<T>();
       continue;
     }
     encoded_vec[out_idx++] = string_id;
@@ -349,7 +332,7 @@ void StringDictionary::increaseCapacity() noexcept {
 int32_t StringDictionary::getOrAddImpl(const std::string& str, bool recover) noexcept {
   // @TODO(wei) treat empty string as NULL for now
   if (str.size() == 0)
-    return NULL_INT;
+    return inline_int_null_value<int32_t>();
   CHECK(str.size() <= MAX_STRLEN);
   int32_t bucket = computeBucket(str, str_ids_, recover);
   if (str_ids_[bucket] == INVALID_STR_ID) {

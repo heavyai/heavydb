@@ -5441,9 +5441,12 @@ int8_t* insert_one_dict_str(const ColumnDescriptor* cd,
     const auto col_datum = col_cv->get_constval();
     const auto& str = *col_datum.stringval;
     int32_t str_id = executor->getStringDictionaryProxy(dict_id, row_set_mem_owner)->getOrAdd(str);
-    if (str_id >= std::numeric_limits<T>::max() || str_id < 0) {
-      LOG(ERROR) << "Could not encode string: " << str << ", the encoded value doesn't fit in " << sizeof(T) * 8
-                 << " bits. Will store NULL instead.";
+    const bool invalid = str_id > max_valid_int_value<T>();
+    if (invalid || str_id == inline_int_null_value<int32_t>()) {
+      if (invalid) {
+        LOG(ERROR) << "Could not encode string: " << str << ", the encoded value doesn't fit in " << sizeof(T) * 8
+                   << " bits. Will store NULL instead.";
+      }
       str_id = inline_fixed_encoding_null_val(cd->columnType);
     }
     *col_data = str_id;

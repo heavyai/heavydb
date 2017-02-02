@@ -17,7 +17,7 @@ class NoneEncoder : public Encoder {
     T* unencodedData = reinterpret_cast<T*>(srcData);
     for (size_t i = 0; i < numAppendElems; ++i) {
       T data = unencodedData[i];
-      if (data == std::numeric_limits<T>::min())
+      if (data == inline_int_null_value<T>())
         has_nulls = true;
       else {
         dataMin = std::min(dataMin, data);
