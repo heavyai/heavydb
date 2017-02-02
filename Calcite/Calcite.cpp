@@ -30,7 +30,7 @@ void Calcite::runJNI(int port, std::string data_dir, size_t calcite_max_mem) {
   LOG(INFO) << "Creating Calcite Server local as JNI instance, jar expected in " << mapd_root_abs_path() << "/bin";
   const int kNumOptions = 2;
   std::string jar_file{"-Djava.class.path=" + mapd_root_abs_path() +
-                       "/bin/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar"};                  
+                       "/bin/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar"};
   std::string max_mem_setting{"-Xmx" + std::to_string(calcite_max_mem) + "m"};
   JavaVMOption options[kNumOptions] = {{const_cast<char*>(max_mem_setting.c_str()), NULL},
                                        {const_cast<char*>(jar_file.c_str()), NULL}};
