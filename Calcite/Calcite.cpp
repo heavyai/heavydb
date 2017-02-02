@@ -136,7 +136,9 @@ JNIEnv* Calcite::checkJNIConnection() {
     args.name = NULL;                // you might want to give the java thread a name
     args.group = NULL;               // you might want to assign the java thread to a ThreadGroup
     int res = jvm_->AttachCurrentThread((void**)&env, &args);
-    CHECK_EQ(res, JNI_OK);
+    if (res != JNI_OK) {
+      throw std::runtime_error("Failed to create a JNI interface pointer");
+    }
   }
   CHECK(calciteDirectObject_);
   CHECK(processMID_);
