@@ -482,7 +482,7 @@ FileInfo* FileMgr::openExistingFile(const std::string& path,
                                     const size_t numPages,
                                     std::vector<HeaderInfo>& headerVec) {
   FILE* f = open(path);
-  FileInfo* fInfo = new FileInfo(fileId, f, pageSize, numPages, false);  // false means don't init file
+  FileInfo* fInfo = new FileInfo(this, fileId, f, pageSize, numPages, false);  // false means don't init file
 
   fInfo->openExistingFile(headerVec, epoch_);
   if (fileId >= static_cast<int>(files_.size())) {
@@ -506,7 +506,7 @@ FileInfo* FileMgr::createFile(const size_t pageSize, const size_t numPages) {
 
   // instantiate a new FileInfo for the newly created file
   int fileId = nextFileId_++;
-  FileInfo* fInfo = new FileInfo(fileId, f, pageSize, numPages, true);  // true means init file
+  FileInfo* fInfo = new FileInfo(this, fileId, f, pageSize, numPages, true);  // true means init file
   assert(fInfo);
 
   // update file manager data structures
@@ -564,6 +564,14 @@ void FileMgr::getChunkMetadataVecForKeyPrefix(std::vector<std::pair<ChunkKey, Ch
     }
     chunkIt++;
   }
+}
+
+int FileMgr::getDBVersion() const {
+    return gfm_->getDBVersion();
+}
+
+bool FileMgr::getDBConvert() const {
+    return gfm_->getDBConvert();
 }
 
 }  // File_Namespace

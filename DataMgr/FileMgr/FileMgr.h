@@ -172,6 +172,8 @@ class FileMgr : public AbstractBufferMgr {  // implements
   }
   ChunkKeyToChunkMap chunkIndex_;  /// Index for looking up chunks
                                    // #TM Not sure if we need this below
+  int getDBVersion() const;
+  bool getDBConvert() const;
 
  private:
   std::string basePath_;          /// The OS file system path containing the files.
