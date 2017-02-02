@@ -68,6 +68,7 @@ QueryExecutionContext::QueryExecutionContext(const RelAlgExecutionUnit& ra_exe_u
                                              const int device_id,
                                              const std::vector<std::vector<const int8_t*>>& col_buffers,
                                              const std::vector<std::vector<const int8_t*>>& iter_buffers,
+                                             const std::vector<std::vector<uint64_t>>& frag_offsets,
                                              std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                                              const bool output_columnar,
                                              const bool sort_on_gpu,
@@ -79,6 +80,8 @@ QueryExecutionContext::QueryExecutionContext(const RelAlgExecutionUnit& ra_exe_u
       device_id_(device_id),
       col_buffers_(col_buffers),
       iter_buffers_(iter_buffers),
+      frag_offsets_(frag_offsets),
+      consistent_frag_sizes_(get_consistent_frags_sizes(frag_offsets)),
       num_buffers_{device_type == ExecutorDeviceType::CPU
                        ? 1
                        : executor->blockSize() * (query_mem_desc_.blocksShareMemory() ? 1 : executor->gridSize())},
@@ -1108,6 +1111,7 @@ std::unique_ptr<QueryExecutionContext> QueryMemoryDescriptor::getQueryExecutionC
     const int device_id,
     const std::vector<std::vector<const int8_t*>>& col_buffers,
     const std::vector<std::vector<const int8_t*>>& iter_buffers,
+    const std::vector<std::vector<uint64_t>>& frag_offsets,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
     const bool output_columnar,
     const bool sort_on_gpu,
@@ -1120,6 +1124,7 @@ std::unique_ptr<QueryExecutionContext> QueryMemoryDescriptor::getQueryExecutionC
                                                                           device_id,
                                                                           col_buffers,
                                                                           iter_buffers,
+                                                                          frag_offsets,
                                                                           row_set_mem_owner,
                                                                           output_columnar,
                                                                           sort_on_gpu,

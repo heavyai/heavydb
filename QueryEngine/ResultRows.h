@@ -23,6 +23,7 @@
 #include <list>
 #include <mutex>
 #include <set>
+#include <limits>
 #include <unordered_set>
 
 struct QueryMemoryDescriptor;
@@ -55,6 +56,61 @@ inline int64_t get_component(const int8_t* group_by_buffer, const size_t comp_sz
       CHECK(false);
   }
   return ret;
+}
+
+inline int64_t get_consistent_frag_size(const std::vector<uint64_t>& frag_offsets) {
+  if (frag_offsets.size() < 2) {
+    return ssize_t(-1);
+  }
+  const auto frag_size = frag_offsets[1] - frag_offsets[0];
+  for (size_t i = 2; i < frag_offsets.size(); ++i) {
+    const auto curr_size = frag_offsets[i] - frag_offsets[i - 1];
+    if (curr_size != frag_size) {
+      return int64_t(-1);
+    }
+  }
+  return !frag_size ? std::numeric_limits<int64_t>::max() : static_cast<int64_t>(frag_size);
+}
+
+inline std::pair<int64_t, int64_t> get_frag_id_and_local_idx(const std::vector<uint64_t>& frag_offsets,
+                                                             const int64_t global_idx) {
+  CHECK_GE(global_idx, int64_t(0));
+  for (int64_t frag_id = frag_offsets.size() - 1; frag_id > 0; --frag_id) {
+    const auto frag_off = static_cast<int64_t>(frag_offsets[frag_id]);
+    if (frag_off < global_idx) {
+      return {frag_id, global_idx - frag_off};
+    }
+  }
+  return {-1, -1};
+}
+
+inline std::vector<int64_t> get_consistent_frags_sizes(const std::vector<std::vector<uint64_t>>& frag_offsets) {
+  if (frag_offsets.empty()) {
+    return {};
+  }
+  std::vector<int64_t> frag_sizes;
+  for (size_t tab_idx = 0; tab_idx < frag_offsets[0].size(); ++tab_idx) {
+    std::vector<uint64_t> tab_offs;
+    for (auto& offsets : frag_offsets) {
+      tab_offs.push_back(offsets[tab_idx]);
+    }
+    frag_sizes.push_back(get_consistent_frag_size(tab_offs));
+  }
+  return frag_sizes;
+}
+
+inline std::pair<int64_t, int64_t> get_frag_id_and_local_idx(const std::vector<std::vector<uint64_t>>& frag_offsets,
+                                                             const size_t tab_idx,
+                                                             const int64_t global_idx) {
+  CHECK_GE(global_idx, int64_t(0));
+  for (int64_t frag_id = frag_offsets.size() - 1; frag_id > 0; --frag_id) {
+    CHECK_LT(tab_idx, frag_offsets[frag_id].size());
+    const auto frag_off = static_cast<int64_t>(frag_offsets[frag_id][tab_idx]);
+    if (frag_off < global_idx) {
+      return {frag_id, global_idx - frag_off};
+    }
+  }
+  return {-1, -1};
 }
 
 typedef std::vector<int64_t> ValueTuple;

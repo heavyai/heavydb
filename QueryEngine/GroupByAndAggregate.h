@@ -147,6 +147,62 @@ class ColumnarResults {
     row_set_mem_owner->addColBuffer(column_buffers_[0]);
   }
 
+#ifdef ENABLE_MULFRAG_JOIN
+  static std::unique_ptr<ColumnarResults> createIndexedResults(
+      const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+      const std::vector<const ColumnarResults*>& val_frags,
+      const std::vector<uint64_t>& frag_offsets,
+      const ColumnarResults& indices,
+      const int which) {
+    const auto idx_buf = reinterpret_cast<const int64_t*>(indices.column_buffers_[which]);
+    const auto row_count = indices.num_rows_;
+    CHECK_EQ(frag_offsets.size(), val_frags.size());
+    CHECK_GT(val_frags.size(), size_t(0));
+    CHECK(val_frags[0] != nullptr);
+    const auto col_count = val_frags[0]->column_buffers_.size();
+    std::unique_ptr<ColumnarResults> filtered_vals(new ColumnarResults(row_count, val_frags[0]->target_types_));
+    CHECK(filtered_vals->column_buffers_.empty());
+    const auto consist_frag_size = get_consistent_frag_size(frag_offsets);
+    for (size_t col_idx = 0; col_idx < col_count; ++col_idx) {
+      const auto byte_width = get_bit_width(val_frags[0]->getColumnType(col_idx)) / 8;
+      auto write_ptr = reinterpret_cast<int8_t*>(checked_malloc(byte_width * row_count));
+      filtered_vals->column_buffers_.push_back(write_ptr);
+      row_set_mem_owner->addColBuffer(write_ptr);
+
+      for (size_t row_idx = 0; row_idx < row_count; ++row_idx, write_ptr += byte_width) {
+        int64_t frag_id = 0;
+        int64_t local_idx = idx_buf[row_idx];
+        if (val_frags.size() > size_t(1)) {
+          if (consist_frag_size != ssize_t(-1)) {
+            frag_id = idx_buf[row_idx] / consist_frag_size;
+            local_idx = idx_buf[row_idx] % consist_frag_size;
+          } else {
+            std::tie(frag_id, local_idx) = get_frag_id_and_local_idx(frag_offsets, idx_buf[row_idx]);
+          }
+        }
+        const int8_t* read_ptr = val_frags[frag_id]->column_buffers_[col_idx] + local_idx * byte_width;
+        switch (byte_width) {
+          case 8:
+            *reinterpret_cast<int64_t*>(write_ptr) = *reinterpret_cast<const int64_t*>(read_ptr);
+            break;
+          case 4:
+            *reinterpret_cast<int32_t*>(write_ptr) = *reinterpret_cast<const int32_t*>(read_ptr);
+            break;
+          case 2:
+            *reinterpret_cast<int16_t*>(write_ptr) = *reinterpret_cast<const int16_t*>(read_ptr);
+            break;
+          case 1:
+            *reinterpret_cast<int8_t*>(write_ptr) = *reinterpret_cast<const int8_t*>(read_ptr);
+            break;
+          default:
+            CHECK(false);
+        }
+      }
+    }
+    return filtered_vals;
+  }
+#endif
+
   static std::unique_ptr<ColumnarResults> createIndexedResults(
       const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
       const ColumnarResults& values,
@@ -309,6 +365,7 @@ class QueryExecutionContext : boost::noncopyable {
                         const int device_id,
                         const std::vector<std::vector<const int8_t*>>& col_buffers,
                         const std::vector<std::vector<const int8_t*>>& iter_buffers,
+                        const std::vector<std::vector<uint64_t>>& frag_offsets,
                         std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                         const bool output_columnar,
                         const bool sort_on_gpu,
@@ -364,6 +421,7 @@ class QueryExecutionContext : boost::noncopyable {
                                       const int64_t join_hash_table);
 
  private:
+  const std::vector<const int8_t*>& getColumnFrag(const size_t table_idx, int64_t& global_idx) const;
   bool isEmptyBin(const int64_t* group_by_buffer, const size_t bin, const size_t key_idx) const;
   void outputBin(ResultRows& results,
                  const std::vector<Analyzer::Expr*>& targets,
@@ -457,6 +515,8 @@ class QueryExecutionContext : boost::noncopyable {
   const int device_id_;
   const std::vector<std::vector<const int8_t*>>& col_buffers_;
   const std::vector<std::vector<const int8_t*>>& iter_buffers_;
+  const std::vector<std::vector<uint64_t>>& frag_offsets_;
+  const std::vector<int64_t> consistent_frag_sizes_;
   const size_t num_buffers_;
 
   std::vector<int64_t*> group_by_buffers_;

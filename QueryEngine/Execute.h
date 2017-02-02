@@ -345,6 +345,7 @@ class Executor {
   llvm::ConstantInt* ll_bool(const bool v) const {
     return static_cast<llvm::ConstantInt*>(llvm::ConstantInt::get(get_int_type(1, cgen_state_->context_), v));
   }
+
   std::vector<llvm::Value*> codegen(const Analyzer::Expr*, const bool fetch_columns, const CompilationOptions&);
   llvm::Value* codegen(const Analyzer::BinOper*, const CompilationOptions&);
   llvm::Value* codegen(const Analyzer::UOper*, const CompilationOptions&);
@@ -570,13 +571,16 @@ class Executor {
     mutable std::unordered_map<InputColDescriptor, std::unordered_map<CacheKey, std::unique_ptr<const ColumnarResults>>>
         columnarized_ref_table_cache_;
 
+    std::vector<const ColumnarResults*> getAllScanColumnFrags(
+        const int table_id,
+        const int col_id,
+        const std::map<int, const TableFragments*>& all_tables_fragments) const;
     const int8_t* getColumn(const ResultPtr& buffer,
                             const int table_id,
                             const int frag_id,
                             const int col_id,
                             const Data_Namespace::MemoryLevel memory_level,
                             const int device_id) const;
-    uint64_t getFragOffset(const int frag_id, const int table_id) const;
 
     void runImpl(const ExecutorDeviceType chosen_device_type,
                  int chosen_device_id,
@@ -627,6 +631,7 @@ class Executor {
     const int8_t* getColumn(const InputColDescriptor* col_desc,
                             const int frag_id,
                             const std::map<int, const TableFragments*>& all_tables_fragments,
+                            const std::map<size_t, std::vector<uint64_t>>& tab_id_to_frag_offsets,
                             const Data_Namespace::MemoryLevel memory_level,
                             const int device_id,
                             const bool is_rowid) const;

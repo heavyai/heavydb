@@ -1666,6 +1666,30 @@ void ResultRows::fillOneRow(const std::vector<int64_t>& row) {
   }
 }
 
+const std::vector<const int8_t*>& QueryExecutionContext::getColumnFrag(const size_t table_idx,
+                                                                       int64_t& global_idx) const {
+#ifdef ENABLE_MULFRAG_JOIN
+  if (col_buffers_.size() > 1) {
+    int64_t frag_id = 0;
+    int64_t local_idx = global_idx;
+    if (consistent_frag_sizes_[table_idx] != -1) {
+      frag_id = global_idx / consistent_frag_sizes_[table_idx];
+      local_idx = global_idx % consistent_frag_sizes_[table_idx];
+    } else {
+      std::tie(frag_id, local_idx) = get_frag_id_and_local_idx(frag_offsets_, table_idx, global_idx);
+    }
+    CHECK_GE(frag_id, int64_t(0));
+    CHECK_LT(frag_id, col_buffers_.size());
+    global_idx = local_idx;
+    return col_buffers_[frag_id];
+  } else
+#endif
+  {
+    CHECK_EQ(size_t(1), col_buffers_.size());
+    return col_buffers_.front();
+  }
+}
+
 void QueryExecutionContext::outputBin(ResultRows& results,
                                       const std::vector<Analyzer::Expr*>& targets,
                                       int64_t* group_by_buffer,
@@ -1715,8 +1739,8 @@ void QueryExecutionContext::outputBin(ResultRows& results,
         CHECK_GE(global_col_id, 0);
         CHECK(col_var);
         auto col_id = query_mem_desc_.executor_->getLocalColumnId(col_var, false);
-        CHECK_EQ(size_t(1), col_buffers_.size());
-        auto& frag_col_buffers = col_buffers_.front();
+        auto& frag_col_buffers = getColumnFrag(col_var->get_rte_idx(), str_ptr);
+        str_len = str_ptr;
         if (is_real_string) {
           VarlenDatum vd;
           ChunkIter_get_nth(reinterpret_cast<ChunkIter*>(const_cast<int8_t*>(frag_col_buffers[col_id])),
@@ -1833,8 +1857,7 @@ void QueryExecutionContext::outputBin(ResultRows& results,
         CHECK_GE(global_col_id, 0);
         CHECK(col_var);
         auto col_id = query_mem_desc_.executor_->getLocalColumnId(col_var, false);
-        CHECK_EQ(size_t(1), col_buffers_.size());
-        auto& frag_col_buffers = col_buffers_.front();
+        auto& frag_col_buffers = getColumnFrag(col_var->get_rte_idx(), val1);
         val1 = lazy_decode(static_cast<Analyzer::ColumnVar*>(target_expr), frag_col_buffers[col_id], val1);
       }
       const auto agg_info = target_info(target_expr);
