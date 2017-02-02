@@ -170,7 +170,7 @@ is also possible to manually set the colors of categories arbitrarily.
 Bubble chart
 ------------
 
-.. image:: ./images/scatter-header.*
+.. image:: ./images/bubble-header.png
 
 What it is
 ~~~~~~~~~~
@@ -207,14 +207,14 @@ representing flight arrival delay and departure delay, size representing
 the number of flights, and color representing the average length of
 flight.
 
-.. image:: ./images/scatter-create.*
+.. image:: ./images/bubble-create.*
 
 --------------
 
 Scatter plot
 ------------
 
-.. image:: ./images/scatter.png
+.. image:: ./images/scatter-header.png
 
 What it is
 ~~~~~~~~~~
@@ -234,7 +234,7 @@ On the right hand side of the screen, a popup box is configured, which displays 
 
 Note also that once the Size measure is added on the left of the screen, controls become available on the right of the screen for “Domain” and “Range.”  Domain is used to establish limits on the data that is considered for sizing, Range is used to set the range of sizes (in pixels) for the points.  Domain and Range controls function in the same way in the Pointmap chart type, and a more detailed explanation of these controls’ use can be found in section :ref:`size-domain`.
 
-.. image:: ./images/scatter.*
+.. image:: ./images/scatter-create.*
 
 --------------
 
