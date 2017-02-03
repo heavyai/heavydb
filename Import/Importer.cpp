@@ -962,6 +962,7 @@ ImportStatus Importer::import() {
 #define MIN_FILE_BUFFER_SIZE 50000         // 50K min buffer
 
 ImportStatus Importer::importDelimited() {
+  bool load_truncated = false;
   set_import_status(import_id, import_status);
   p_file = fopen(file_path.c_str(), "rb");
   if (!p_file) {
@@ -1038,6 +1039,11 @@ ImportStatus Importer::importDelimited() {
     import_status.rows_estimated = ((float)file_size / current_pos) * import_status.rows_completed;
     set_import_status(import_id, import_status);
     begin_pos = 0;
+    if (import_status.rows_rejected > copy_params.max_reject) {
+      load_truncated = true;
+      LOG(ERROR) << "Maximum rows rejected exceeded. Halting load";
+      break;
+    }
   }
   auto ms = measure<>::execution([&]() {
     if (!load_failed) {
@@ -1062,6 +1068,7 @@ ImportStatus Importer::importDelimited() {
   fclose(p_file);
   p_file = nullptr;
 
+  import_status.load_truncated = load_truncated;
   return import_status;
 }
 

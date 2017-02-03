@@ -41,6 +41,7 @@ struct CopyParams {
   char array_begin;
   char array_end;
   int threads;
+  size_t max_reject;  // maximum number of records that can be rejected before copy is failed
 
   CopyParams()
       : delimiter(','),
@@ -53,7 +54,8 @@ struct CopyParams {
         array_delim(','),
         array_begin('{'),
         array_end('}'),
-        threads(0) {}
+        threads(0),
+        max_reject(10000) {}
 };
 
 class TypedImportBuffer : boost::noncopyable {
@@ -467,8 +469,14 @@ struct ImportStatus {
   size_t rows_estimated;
   size_t rows_rejected;
   std::chrono::duration<size_t, std::milli> elapsed;
+  bool load_truncated;
   ImportStatus()
-      : start(std::chrono::steady_clock::now()), rows_completed(0), rows_estimated(0), rows_rejected(0), elapsed(0) {}
+      : start(std::chrono::steady_clock::now()),
+        rows_completed(0),
+        rows_estimated(0),
+        rows_rejected(0),
+        elapsed(0),
+        load_truncated(0) {}
 
   ImportStatus& operator+=(const ImportStatus& is) {
     rows_completed += is.rows_completed;

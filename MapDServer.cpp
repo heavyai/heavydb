@@ -1767,9 +1767,21 @@ class MapDHandler : virtual public MapDIf {
   }
 
   static void convert_explain(TQueryResult& _return, const ResultRows& results, const bool column_format) {
+    create_simple_result(_return, results, column_format, "Explanation");
+  }
+
+  static void convert_result(TQueryResult& _return, const ResultRows& results, const bool column_format) {
+    create_simple_result(_return, results, column_format, "Result");
+  }
+
+  // create simple result set to return a single column result
+  static void create_simple_result(TQueryResult& _return,
+                                   const ResultRows& results,
+                                   const bool column_format,
+                                   const std::string label) {
     CHECK_EQ(size_t(1), results.rowCount());
     TColumnType proj_info;
-    proj_info.col_name = "Explanation";
+    proj_info.col_name = label;
     proj_info.col_type.type = TDatumType::STR;
     proj_info.col_type.nullable = false;
     proj_info.col_type.is_array = false;
@@ -1884,6 +1896,12 @@ class MapDHandler : virtual public MapDIf {
             explain_stmt = dynamic_cast<Parser::ExplainStmt*>(ddl);
           if (ddl != nullptr && explain_stmt == nullptr) {
             _return.execution_time_ms += measure<>::execution([&]() { ddl->execute(session_info); });
+            // check if it was a copy statement gather response message
+            Parser::CopyTableStmt* copy_stmt = nullptr;
+            copy_stmt = dynamic_cast<Parser::CopyTableStmt*>(ddl);
+            if (copy_stmt != nullptr) {
+              convert_result(_return, ResultRows(*copy_stmt->return_message.get(), 0), true);
+            }
           } else {
             const Parser::DMLStmt* dml;
             if (explain_stmt != nullptr)

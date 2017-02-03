@@ -893,6 +893,7 @@ class CopyTableStmt : public DDLStmt {
     }
   }
   virtual void execute(const Catalog_Namespace::SessionInfo& session);
+  std::unique_ptr<std::string> return_message;
 
  private:
   std::unique_ptr<std::string> table;

@@ -1820,7 +1820,12 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     Importer_NS::CopyParams copy_params;
     if (!options.empty()) {
       for (auto& p : options) {
-        if (boost::iequals(*p->get_name(), "threads")) {
+        if (boost::iequals(*p->get_name(), "max_reject")) {
+          const IntLiteral* int_literal = dynamic_cast<const IntLiteral*>(p->get_value());
+          if (int_literal == nullptr)
+            throw std::runtime_error("Threads option must be an integer.");
+          copy_params.max_reject = int_literal->get_intval();
+        } else if (boost::iequals(*p->get_name(), "threads")) {
           const IntLiteral* int_literal = dynamic_cast<const IntLiteral*>(p->get_value());
           if (int_literal == nullptr)
             throw std::runtime_error("Threads option must be an integer.");
@@ -1900,8 +1905,31 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
       }
     }
     Importer_NS::Importer importer(catalog, td, file_path, copy_params);
-    auto ms = measure<>::execution([&]() { importer.import(); });
-    std::cout << "Total Import Time: " << (double)ms / 1000.0 << " Seconds." << std::endl;
+
+    std::string m;
+
+    size_t rows_completed;
+    size_t rows_rejected;
+    bool load_truncated;
+    auto ms = measure<>::execution([&]() {
+      auto res = importer.import();
+      rows_completed = res.rows_completed;
+      rows_rejected = res.rows_rejected;
+      load_truncated = res.load_truncated;
+    });
+    std::string tr;
+
+    if (!load_truncated) {
+      tr = std::string("Loaded: " + std::to_string(rows_completed) + " recs, Rejected: " +
+                       std::to_string(rows_rejected) + " recs in " + std::to_string((double)ms / 1000.0) + " secs");
+    } else {
+      tr = std::string("Loader truncated due to reject count.  Processed : " + std::to_string(rows_completed) +
+                       " recs, Rejected: " + std::to_string(rows_rejected) + " recs in " +
+                       std::to_string((double)ms / 1000.0) + " secs");
+    }
+
+    return_message.reset(new std::string(tr));
+    LOG(INFO) << m;
   }
 }
 
