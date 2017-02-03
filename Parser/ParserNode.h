@@ -1109,7 +1109,6 @@ class CreateViewStmt : public DDLStmt {
       }
       delete o;
     }
-    throw std::runtime_error("Views are not supported yet.");
   }
   const std::string* get_view_name() const { return view_name.get(); }
   const std::list<std::unique_ptr<std::string>>& get_column_list() const { return column_list; }

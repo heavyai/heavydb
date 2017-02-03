@@ -23,6 +23,7 @@ import org.apache.calcite.rel.logical.LogicalTableScan;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.rel.type.RelDataTypeField;
+import org.apache.calcite.schema.TranslatableTable;
 import org.apache.calcite.sql.SqlAccessType;
 import org.apache.calcite.sql.validate.SqlModality;
 import org.apache.calcite.sql.validate.SqlMonotonicity;
@@ -42,7 +43,7 @@ public class MapDTable implements Prepare.PreparingTable {
   private final boolean stream;
   private final List<Map.Entry<String, RelDataType>> columnList
           = Lists.newArrayList();
-  private RelDataType rowType;
+  public RelDataType rowType;
   private List<RelCollation> collationList;
   protected final List<String> names;
   private final Set<String> monotonicColumnSet = Sets.newHashSet();
@@ -110,7 +111,11 @@ public class MapDTable implements Prepare.PreparingTable {
 
   @Override
   public RelNode toRel(RelOptTable.ToRelContext context) {
-    return LogicalTableScan.create(context.getCluster(), this);
+    if (this instanceof TranslatableTable) {
+      return ((TranslatableTable) this).toRel(context, this);
+    } else {
+      return LogicalTableScan.create(context.getCluster(), this);
+    }
   }
 
   @Override

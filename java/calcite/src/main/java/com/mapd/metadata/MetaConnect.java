@@ -201,6 +201,90 @@ public class MetaConnect {
     return res;
   }
 
+  public int getTableId(String tableName) {
+    Statement stmt = null;
+    ResultSet rs = null;
+    int tableId = 0;
+    try {
+      stmt = catConn.createStatement();
+      rs = stmt.executeQuery(String.format(
+              "SELECT tableid FROM mapd_tables where name = '%s' COLLATE NOCASE;",
+              tableName));
+      while (rs.next()) {
+        tableId = rs.getInt("tableid");
+        MAPDLOGGER.debug("tableId = " + tableId);
+        MAPDLOGGER.debug("");
+      }
+      rs.close();
+      stmt.close();
+    } catch (Exception e) {
+      String err = "error trying to read from mapd_views, error was " + e.getMessage();
+      MAPDLOGGER.error(err);
+      throw new RuntimeException(err);
+    }
+    return (tableId);
+  }
+
+  public boolean isView(String tableName) {
+    Statement stmt = null;
+    ResultSet rs = null;
+    int viewFlag = 0;
+    try {
+      stmt = catConn.createStatement();
+      rs = stmt.executeQuery(String.format(
+              "SELECT isview FROM mapd_tables where name = '%s' COLLATE NOCASE;", tableName));
+      while (rs.next()) {
+        viewFlag = rs.getInt("isview");
+        MAPDLOGGER.debug("viewFlag = " + viewFlag);
+        MAPDLOGGER.debug("");
+      }
+      rs.close();
+      stmt.close();
+    } catch (Exception e) {
+      String err = "error trying to read from mapd_views, error was " + e.getMessage();
+      MAPDLOGGER.error(err);
+      throw new RuntimeException(err);
+    }
+    return (viewFlag == 1);
+  }
+
+  public String getViewSql(String tableName) {
+    return getViewSql(getTableId(tableName));
+  }
+
+  public String getViewSql(int tableId) {
+    Statement stmt = null;
+    ResultSet rs = null;
+    String sqlText = "";
+    try {
+      stmt = catConn.createStatement();
+      rs = stmt.executeQuery(String.format(
+              "SELECT sql FROM mapd_views where tableid = '%s' COLLATE NOCASE;", tableId));
+      while (rs.next()) {
+        sqlText = rs.getString("sql");
+        MAPDLOGGER.debug("View definition = " + sqlText);
+        MAPDLOGGER.debug("");
+      }
+      rs.close();
+      stmt.close();
+    } catch (Exception e) {
+      String err = "error trying to read from mapd_views, error was " + e.getMessage();
+      MAPDLOGGER.error(err);
+      throw new RuntimeException(err);
+    }
+    if (sqlText == null || sqlText.length() == 0) {
+      String err = "No view text found";
+      MAPDLOGGER.error(err);
+      throw new RuntimeException(err);
+    }
+    /* return string without the sqlite's trailing semicolon */
+    if (sqlText.charAt(sqlText.length() - 1) == ';') {
+      return (sqlText.substring(0, sqlText.length() - 1));
+    } else {
+      return (sqlText);
+    }
+  }
+
   private TDatumType typeToThrift(int type) {
     switch (type) {
       case KBOOLEAN:

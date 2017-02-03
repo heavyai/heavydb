@@ -119,7 +119,14 @@ public class MapDCatalogReader implements Prepare.CatalogReader {
     MAPDLOGGER.debug("Database is " + currentMapDUser.getDB());
 
     MAPDLOGGER.debug("\t table  is " + tableName);
-    MapDTable mtable = MapDTable.create(this, db, tableName, false);
+    MapDTable mtable = null;
+
+    if (metaConnect.isView(tableName)) {
+      mtable = new MapDViewImpl(this, db.getCatalogName(), db.getSchemaName(), tableName,
+              false, metaConnect.getViewSql(tableName));
+    } else {
+      mtable = MapDTable.create(this, db, tableName, false);
+    }
 
     // if we have a table descriptor from mapd server
     if (tableDescriptor != null) {

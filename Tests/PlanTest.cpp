@@ -294,21 +294,15 @@ TEST(ParseAnalyzePlan, Insert) {
 }
 
 TEST(ParseAnalyzePlan, Views) {
-  EXPECT_THROW(run_ddl("create view if not exists voo as select * from skinny where a > 15;");, std::runtime_error);
-  EXPECT_THROW(run_ddl("create materialized view if not exists moo as select * from skinny where a > 15;");
-               , std::runtime_error);
-  EXPECT_THROW(run_ddl("create materialized view if not exists goo with (storage = 'gpu', refresh = "
-                       "'auto') as select * from skinny where a > 15;");
-               , std::runtime_error);
-  EXPECT_THROW(run_ddl("create materialized view if not exists mic (col, avg_b) with (storage = 'mic', refresh "
-                       "= 'manual') as select c, avg(b) from skinny where a > 10 group by c;");
-               , std::runtime_error);
-  EXPECT_THROW(run_ddl("create materialized view if not exists fatview with (storage = 'cpu', "
-                       "refresh = 'immediate') as select a, d, g from fat where f > 100 and g is "
-                       "not null or k <= 100000000000 and c = 'xyz';");
-               , std::runtime_error);
-  EXPECT_THROW(run_ddl("refresh materialized view fatview;");, std::runtime_error);
-  EXPECT_THROW({ unique_ptr<RootPlan> plan_ptr(plan_dml("select * from fatview;")); }, std::runtime_error);
+  EXPECT_NO_THROW(run_ddl("create view if not exists voo as select * from skinny where a > 15;"););
+  EXPECT_NO_THROW(run_ddl("create materialized view if not exists moo as select * from skinny where a > 15;"););
+  EXPECT_NO_THROW(run_ddl("create materialized view if not exists mic (col, avg_b) with (storage = 'mic', refresh "
+                          "= 'manual') as select c, avg(b) from skinny where a > 10 group by c;"););
+  EXPECT_NO_THROW(run_ddl("create materialized view if not exists fatview with (storage = 'cpu', "
+                          "refresh = 'immediate') as select a, d, g from fat where f > 100 and g is "
+                          "not null or k <= 100000000000 and c = 'xyz';"););
+  EXPECT_NO_THROW(run_ddl("refresh materialized view fatview;"););
+  EXPECT_NO_THROW({ unique_ptr<RootPlan> plan_ptr(plan_dml("select * from fatview;")); });
 }
 
 TEST(ParseAnalyzePlan, Drop) {

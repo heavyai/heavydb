@@ -6,11 +6,14 @@ package com.mapd.calcite.parser;
 import java.util.Map;
 
 import com.mapd.parser.server.ExtensionFunction;
+import java.util.List;
 import org.apache.calcite.avatica.util.Casing;
 import org.apache.calcite.plan.RelOptCluster;
+import org.apache.calcite.plan.RelOptTable;
 import org.apache.calcite.plan.RelOptUtil;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.RelRoot;
+import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.rel.type.RelDataTypeSystem;
 import org.apache.calcite.rex.RexBuilder;
@@ -67,8 +70,25 @@ public final class MapDParser {
         final RexBuilder rexBuilder = new RexBuilder(typeFactory);
         final RelOptCluster cluster = RelOptCluster.create(new MapDRelOptPlanner(), rexBuilder);
         Config config = SqlToRelConverter.configBuilder().withExpand(false).build();
-        converter = new SqlToRelConverter(null, validator, catalogReader, cluster,
+        converter = new SqlToRelConverter(new Expander(), validator, catalogReader, cluster,
                 StandardConvertletTable.INSTANCE, config);
+    }
+
+    public class Expander implements RelOptTable.ViewExpander {
+
+        @Override
+        public RelRoot expandView(RelDataType rowType, String queryString,
+                List<String> schemaPath, List<String> viewPath) {
+            try {
+                final boolean legacySyntax = true;
+                final SqlNode node = processSQL(queryString, legacySyntax);
+                final SqlNode validated = validator.validate(node);
+                final RelRoot root = converter.convertQuery(validated, false, false);
+                return root.withRel(converter.flattenTypes(root.rel, true));
+            } catch (SqlParseException e) {
+                return null;
+            }
+        }
     }
 
     public String getRelAlgebra(String sql, final boolean legacy_syntax, final MapDUser mapDUser, final boolean isExplain)
