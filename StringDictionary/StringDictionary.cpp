@@ -243,7 +243,10 @@ std::vector<std::string> StringDictionary::getLike(const std::string& pattern,
                                                    const bool is_simple,
                                                    const char escape,
                                                    const size_t generation) const noexcept {
-  mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
+  mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
+  if (client_) {
+    return client_->get_like(pattern, icase, is_simple, escape, generation);
+  }
   const auto cache_key = std::make_tuple(pattern, icase, is_simple, escape);
   const auto it = like_cache_.find(cache_key);
   if (it != like_cache_.end()) {
@@ -289,7 +292,10 @@ bool is_regexp_like(const std::string& str, const std::string& pattern, const ch
 std::vector<std::string> StringDictionary::getRegexpLike(const std::string& pattern,
                                                          const char escape,
                                                          const size_t generation) const noexcept {
-  mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
+  mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
+  if (client_) {
+    return client_->get_regexp_like(pattern, escape, generation);
+  }
   const auto cache_key = std::make_pair(pattern, escape);
   const auto it = regex_cache_.find(cache_key);
   if (it != regex_cache_.end()) {
