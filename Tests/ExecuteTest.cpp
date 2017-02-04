@@ -2148,6 +2148,8 @@ TEST(Select, Empty) {
     c("SELECT SUM(d) FROM test WHERE x > 8;", dt);
     c("SELECT SUM(dd) FROM test WHERE x > 8;", dt);
     c("SELECT SUM(dd) FROM empty GROUP BY x, y;", dt);
+    c("SELECT COUNT(DISTINCT x) FROM empty;", dt);
+    c("SELECT APPROX_COUNT_DISTINCT(x * 1000000) FROM empty;", "SELECT COUNT(DISTINCT x * 1000000) FROM empty;", dt);
   }
 }
 

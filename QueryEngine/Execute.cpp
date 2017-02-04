@@ -4828,7 +4828,7 @@ RowSetPtr build_row_for_empty_input(const std::vector<Analyzer::Expr*>& target_e
   for (const auto target_expr : target_exprs) {
     const auto agg_info = target_info(target_expr);
     CHECK(agg_info.is_agg);
-    if (agg_info.agg_kind == kCOUNT) {
+    if (agg_info.agg_kind == kCOUNT || agg_info.agg_kind == kAPPROX_COUNT_DISTINCT) {
       result_rows->addValue(0);
     } else if (agg_info.agg_kind == kAVG) {
       result_rows->addValue(inline_null_val(agg_info.agg_arg_type), 0);
