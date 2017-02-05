@@ -8,6 +8,7 @@ set(MAPD_VERSION_PATCH "4")
 set(MAPD_VERSION_EXTRA "dev")
 set(MAPD_VERSION_RAW "${MAPD_VERSION_MAJOR}.${MAPD_VERSION_MINOR}.${MAPD_VERSION_PATCH}${MAPD_VERSION_EXTRA}")
 set(MAPD_IMMERSE_URL "http://builds.mapd.com/frontend/mapd2-dashboard-v2-latest-master-prod.zip")
+set(MAPD_DOCS_URL "http://docs.builds.mapd.com/master/docs-master.zip")
 string(TIMESTAMP MAPD_BUILD_DATE "%Y%m%d")
 
 if($ENV{BUILD_NUMBER})
@@ -337,38 +338,24 @@ list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/go)
 
 add_subdirectory(ThirdParty/generate_cert)
 
-# Docs
-option(ENABLE_DOCS "Enable compilation of MapD docs" ON)
-find_program(PIP_EXECUTABLE NAMES pip)
-find_program(VENV_EXECUTABLE NAMES virtualenv)
-find_program(PDFLATEX_EXECUTABLE NAMES pdflatex)
-find_program(SPHINX_EXECUTABLE NAMES sphinx-build)
-#configure_file(
-#  "${CMAKE_SOURCE_DIR}/docs/MapDGuide.in.rst"
-#  "${CMAKE_BINARY_DIR}/docs/MapDGuide.rst"
-#  @ONLY
-#  )
-if(NOT SPHINX_EXECUTABLE)
-  set(VENV_OPTION "--venv")
-endif()
-if(((PIP_EXECUTABLE AND VENV_EXECUTABLE) OR SPHINX_EXECUTABLE) AND PDFLATEX_EXECUTABLE AND ENABLE_DOCS)
-  file(GLOB_RECURSE DOCS_FILES "*.rst")
-  add_custom_target(docs ALL
-    COMMAND ./build.sh
-    ${VENV_OPTION}
-    ${MAPD_VERSION_RAW}
-    ${CMAKE_BINARY_DIR}/docs/
-    SOURCES ${DOCS_FILES}
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/docs
+# docs
+option(MAPD_DOCS_DOWNLOAD "Download MapD documentation for packaging" OFF)
+set(MAPD_DOCS_URL ${MAPD_DOCS_URL} CACHE STRING "URL to bundled docs")
+if(MAPD_DOCS_DOWNLOAD)
+  include(ExternalProject)
+  externalproject_add(docs
+    URL ${MAPD_DOCS_URL}
+    PREFIX external
+    CONFIGURE_COMMAND ""
+    UPDATE_COMMAND ""
+    BUILD_COMMAND ""
+    INSTALL_COMMAND ""
     )
-  install(DIRECTORY ${CMAKE_BINARY_DIR}/docs/ DESTINATION docs)
-  list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_SOURCE_DIR}/docs/build/)
-  list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/docs/)
-elseif(ENABLE_DOCS)
-  message(WARNING "pip, virtualenv, or pdflatex not found. Skipping generating docs.")
-  set(ENABLE_DOCS OFF)
+  externalproject_get_property(docs source_dir)
+  install(DIRECTORY ${source_dir}/ DESTINATION "docs/" PATTERN .git EXCLUDE)
+  add_custom_command(TARGET docs COMMAND ${CMAKE_COMMAND} -E copy_directory ${source_dir} docs)
 endif()
-install(DIRECTORY docs/release-notes DESTINATION docs)
+
 
 # systemd
 if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
