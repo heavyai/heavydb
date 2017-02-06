@@ -59,6 +59,16 @@ int32_t StringDictionaryProxy::getIdOfString(const std::string& str) const {
   return it != transient_str_to_int_.end() ? it->second : StringDictionary::INVALID_STR_ID;
 }
 
+int32_t StringDictionaryProxy::getIdOfStringNoGeneration(const std::string& str) const {
+  mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
+  auto str_id = string_dict_->getIdOfString(str);
+  if (str_id != StringDictionary::INVALID_STR_ID || transient_str_to_int_.empty()) {
+    return str_id;
+  }
+  auto it = transient_str_to_int_.find(str);
+  return it != transient_str_to_int_.end() ? it->second : StringDictionary::INVALID_STR_ID;
+}
+
 std::string StringDictionaryProxy::getString(int32_t string_id) const {
   mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
   if (string_id >= 0) {
