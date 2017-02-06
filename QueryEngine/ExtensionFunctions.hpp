@@ -259,10 +259,27 @@ EXTENSION_NOINLINE
 double distance_in_meters__(const float fromlon, const float fromlat, const float tolon, const float tolat) {
   float latitudeArc = (fromlat - tolat) * 0.017453292519943295769236907684886;
   float longitudeArc = (fromlon - tolon) * 0.017453292519943295769236907684886;
-  float latitudeH = sin(latitudeArc * 0.5);
+  float latitudeH = sinf(latitudeArc * 0.5);
   latitudeH *= latitudeH;
-  float lontitudeH = sin(longitudeArc * 0.5);
+  float lontitudeH = sinf(longitudeArc * 0.5);
   lontitudeH *= lontitudeH;
-  float tmp = cos(fromlat * 0.017453292519943295769236907684886) * cos(tolat * 0.017453292519943295769236907684886);
-  return 6372797.560856 * (2.0 * asin(sqrt(latitudeH + tmp * lontitudeH)));
+  float tmp = cosf(fromlat * 0.017453292519943295769236907684886) * cosf(tolat * 0.017453292519943295769236907684886);
+  return 6372797.560856 * (2.0 * asinf(sqrtf(latitudeH + tmp * lontitudeH)));
+}
+
+EXTENSION_NOINLINE
+double approx_distance_in_meters(const float fromlon, const float fromlat, const float tolon, const float tolat) {
+#ifdef __CUDACC__
+  float latitudeArc = (fromlat - tolat) * 0.017453292519943295769236907684886;
+  float longitudeArc = (fromlon - tolon) * 0.017453292519943295769236907684886;
+  float latitudeH = __sinf(latitudeArc * 0.5);
+  latitudeH *= latitudeH;
+  float lontitudeH = __sinf(longitudeArc * 0.5);
+  lontitudeH *= lontitudeH;
+  float tmp =
+      __cosf(fromlat * 0.017453292519943295769236907684886) * __cosf(tolat * 0.017453292519943295769236907684886);
+  return 6372797.560856 * (2.0 * asinf(__fsqrt_rd(latitudeH + tmp * lontitudeH)));
+#else
+  return distance_in_meters__(fromlon, fromlat, tolon, tolat);
+#endif
 }
