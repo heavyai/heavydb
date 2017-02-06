@@ -2149,7 +2149,9 @@ TEST(Select, Empty) {
     c("SELECT SUM(dd) FROM test WHERE x > 8;", dt);
     c("SELECT SUM(dd) FROM empty GROUP BY x, y;", dt);
     c("SELECT COUNT(DISTINCT x) FROM empty;", dt);
+#ifdef HAVE_RAVM
     c("SELECT APPROX_COUNT_DISTINCT(x * 1000000) FROM empty;", "SELECT COUNT(DISTINCT x * 1000000) FROM empty;", dt);
+#endif  // HAVE_RAVM
   }
 }
 

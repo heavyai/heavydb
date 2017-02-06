@@ -605,8 +605,12 @@ StringDictionaryProxy* Executor::getStringDictionaryProxy(const int dict_id_in,
     CHECK(dd->stringDict);
     CHECK_LE(dd->dictNBits, 32);
     if (row_set_mem_owner) {
-      return row_set_mem_owner->addStringDict(
-          dd->stringDict, dict_id, string_dictionary_generations_.getGeneration(dict_id));
+#ifdef HAVE_RAVM
+      const auto generation = string_dictionary_generations_.getGeneration(dict_id);
+#else
+      const ssize_t generation = dd->stringDict->storageEntryCount();
+#endif  // HAVE_RAVM
+      return row_set_mem_owner->addStringDict(dd->stringDict, dict_id, generation);
     }
   }
   CHECK_EQ(0, dict_id);
