@@ -199,7 +199,7 @@ make install
 popd
 
 download_make_install http://download.osgeo.org/proj/proj-4.9.3.tar.gz
-download_make_install http://download.osgeo.org/gdal/1.11.5/gdal-1.11.5.tar.xz "" "--without-curl --without-geos --with-libkml=$PREFIX --with-static-proj4=$PREFIX"
+download_make_install http://download.osgeo.org/gdal/2.0.3/gdal-2.0.3.tar.xz "" "--without-curl --without-geos --with-libkml=$PREFIX --with-static-proj4=$PREFIX"
 
 # https://storage.googleapis.com/golang/go1.7.3.linux-amd64.tar.gz
 download https://internal-dependencies.mapd.com/thirdparty/go1.7.3.linux-amd64.tar.gz
