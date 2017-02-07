@@ -1720,6 +1720,7 @@ class MapDHandler : virtual public MapDIf {
       proj_info.col_type.is_array = target_ti.get_type() == kARRAY;
       proj_info.col_type.precision = target_ti.get_precision();
       proj_info.col_type.scale = target_ti.get_scale();
+      proj_info.col_type.comp_param = target_ti.get_comp_param();
       row_desc.push_back(proj_info);
       ++i;
     }
