@@ -60,6 +60,7 @@ Dependencies for `mapd_web_server` and other Go utils are in [`ThirdParty/go`](T
                    maven \
                    java-1.8.0-openjdk{-devel,-headless} \
                    gperftools{,-devel,-libs}
+   yum install -y mesa-libGL-devel libX11-devel
 
 For generating the documentation you will also need:
 
