@@ -98,7 +98,7 @@ bool is_like(const std::string& str,
 std::vector<std::string> StringDictionaryProxy::getLike(const std::string& pattern,
                                                         const bool icase,
                                                         const bool is_simple,
-                                                        const char escape) const noexcept {
+                                                        const char escape) const {
   CHECK_GE(generation_, 0);
   auto result = string_dict_->getLike(pattern, icase, is_simple, escape, generation_);
   for (const auto& kv : transient_int_to_str_) {
@@ -118,8 +118,7 @@ bool is_regexp_like(const std::string& str, const std::string& pattern, const ch
 
 }  // namespace
 
-std::vector<std::string> StringDictionaryProxy::getRegexpLike(const std::string& pattern, const char escape) const
-    noexcept {
+std::vector<std::string> StringDictionaryProxy::getRegexpLike(const std::string& pattern, const char escape) const {
   CHECK_GE(generation_, 0);
   auto result = string_dict_->getRegexpLike(pattern, escape, generation_);
   for (const auto& kv : transient_int_to_str_) {
@@ -139,7 +138,7 @@ std::pair<char*, size_t> StringDictionaryProxy::getStringBytes(int32_t string_id
   return string_dict_.get()->getStringBytes(string_id);
 }
 
-size_t StringDictionaryProxy::storageEntryCount() const noexcept {
+size_t StringDictionaryProxy::storageEntryCount() const {
   return string_dict_.get()->storageEntryCount();
 }
 

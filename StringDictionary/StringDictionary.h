@@ -28,16 +28,15 @@ class StringDictionary {
   int32_t getIdOfString(const std::string& str) const;
   std::string getString(int32_t string_id) const;
   std::pair<char*, size_t> getStringBytes(int32_t string_id) const noexcept;
-  size_t storageEntryCount() const noexcept;
+  size_t storageEntryCount() const;
 
   std::vector<std::string> getLike(const std::string& pattern,
                                    const bool icase,
                                    const bool is_simple,
                                    const char escape,
-                                   const size_t generation) const noexcept;
+                                   const size_t generation) const;
 
-  std::vector<std::string> getRegexpLike(const std::string& pattern, const char escape, const size_t generation) const
-      noexcept;
+  std::vector<std::string> getRegexpLike(const std::string& pattern, const char escape, const size_t generation) const;
 
   bool checkpoint() noexcept;
 

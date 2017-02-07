@@ -216,7 +216,7 @@ std::pair<char*, size_t> StringDictionary::getStringBytes(int32_t string_id) con
   return getStringBytesChecked(string_id);
 }
 
-size_t StringDictionary::storageEntryCount() const noexcept {
+size_t StringDictionary::storageEntryCount() const {
   mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
   if (client_) {
     return client_->storage_entry_count();
@@ -243,7 +243,7 @@ std::vector<std::string> StringDictionary::getLike(const std::string& pattern,
                                                    const bool icase,
                                                    const bool is_simple,
                                                    const char escape,
-                                                   const size_t generation) const noexcept {
+                                                   const size_t generation) const {
   mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
   if (client_) {
     return client_->get_like(pattern, icase, is_simple, escape, generation);
@@ -292,7 +292,7 @@ bool is_regexp_like(const std::string& str, const std::string& pattern, const ch
 
 std::vector<std::string> StringDictionary::getRegexpLike(const std::string& pattern,
                                                          const char escape,
-                                                         const size_t generation) const noexcept {
+                                                         const size_t generation) const {
   mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
   if (client_) {
     return client_->get_regexp_like(pattern, escape, generation);

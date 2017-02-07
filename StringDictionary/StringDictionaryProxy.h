@@ -25,15 +25,15 @@ class StringDictionaryProxy {
   int32_t getIdOfStringNoGeneration(const std::string& str) const;  // disregard generation, only used by QueryRenderer
   std::string getString(int32_t string_id) const;
   std::pair<char*, size_t> getStringBytes(int32_t string_id) const noexcept;
-  size_t storageEntryCount() const noexcept;
+  size_t storageEntryCount() const;
   void updateGeneration(const ssize_t generation) noexcept;
 
   std::vector<std::string> getLike(const std::string& pattern,
                                    const bool icase,
                                    const bool is_simple,
-                                   const char escape) const noexcept;
+                                   const char escape) const;
 
-  std::vector<std::string> getRegexpLike(const std::string& pattern, const char escape) const noexcept;
+  std::vector<std::string> getRegexpLike(const std::string& pattern, const char escape) const;
 
  private:
   std::shared_ptr<StringDictionary> string_dict_;
