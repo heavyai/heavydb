@@ -26,6 +26,7 @@ class StringDictionaryProxy {
   std::string getString(int32_t string_id) const;
   std::pair<char*, size_t> getStringBytes(int32_t string_id) const noexcept;
   size_t storageEntryCount() const noexcept;
+  void updateGeneration(const ssize_t generation) noexcept;
 
   std::vector<std::string> getLike(const std::string& pattern,
                                    const bool icase,
@@ -38,7 +39,7 @@ class StringDictionaryProxy {
   std::shared_ptr<StringDictionary> string_dict_;
   std::map<int32_t, std::string> transient_int_to_str_;
   std::map<std::string, int32_t> transient_str_to_int_;
-  const ssize_t generation_;
+  ssize_t generation_;
   mutable mapd_shared_mutex rw_mutex_;
 };
 #endif  // STRINGDICTIONARY_STRINGDICTIONARYPROXY_H

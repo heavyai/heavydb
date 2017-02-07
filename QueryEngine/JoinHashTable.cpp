@@ -218,10 +218,11 @@ int JoinHashTable::initHashTableOnCpu(const int8_t* col_buff,
     const StringDictionaryProxy* sd_outer_proxy{nullptr};
     if (ti.is_string()) {
       CHECK_EQ(kENCODING_DICT, ti.get_compression());
-      sd_inner_proxy = executor_->getStringDictionaryProxy(inner_col->get_comp_param(), executor_->row_set_mem_owner_);
+      sd_inner_proxy =
+          executor_->getStringDictionaryProxy(inner_col->get_comp_param(), executor_->row_set_mem_owner_, true);
       CHECK(sd_inner_proxy);
       sd_outer_proxy =
-          executor_->getStringDictionaryProxy(cols.second->get_comp_param(), executor_->row_set_mem_owner_);
+          executor_->getStringDictionaryProxy(cols.second->get_comp_param(), executor_->row_set_mem_owner_, true);
       CHECK(sd_outer_proxy);
     }
     int thread_count = cpu_threads();

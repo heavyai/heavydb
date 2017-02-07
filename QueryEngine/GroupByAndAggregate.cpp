@@ -1831,7 +1831,7 @@ void GroupByAndAggregate::addTransientStringLiterals(const RelAlgExecutionUnit& 
     const auto& group_ti = group_expr->get_type_info();
     if (cast_expr && cast_expr->get_optype() == kCAST && group_ti.is_string()) {
       CHECK_EQ(kENCODING_DICT, group_ti.get_compression());
-      auto sdp = executor->getStringDictionaryProxy(group_ti.get_comp_param(), row_set_mem_owner);
+      auto sdp = executor->getStringDictionaryProxy(group_ti.get_comp_param(), row_set_mem_owner, true);
       CHECK(sdp);
       const auto str_lit_expr = dynamic_cast<const Analyzer::Constant*>(cast_expr->get_operand());
       if (str_lit_expr && str_lit_expr->get_constval().stringval) {
@@ -1850,7 +1850,7 @@ void GroupByAndAggregate::addTransientStringLiterals(const RelAlgExecutionUnit& 
     }
     if (group_ti.is_string()) {
       CHECK_EQ(kENCODING_DICT, group_ti.get_compression());
-      auto sdp = executor->getStringDictionaryProxy(group_ti.get_comp_param(), row_set_mem_owner);
+      auto sdp = executor->getStringDictionaryProxy(group_ti.get_comp_param(), row_set_mem_owner, true);
       CHECK(sdp);
       for (const auto domain_expr : domain_set) {
         const auto cast_expr = dynamic_cast<const Analyzer::UOper*>(domain_expr);

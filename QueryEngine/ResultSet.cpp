@@ -503,7 +503,7 @@ std::function<bool(const uint32_t, const uint32_t)> ResultSet::createComparator(
         if (UNLIKELY(entry_ti.is_string() && entry_ti.get_compression() == kENCODING_DICT)) {
           CHECK_EQ(4, entry_ti.get_logical_size());
           const auto string_dict_proxy =
-              executor_->getStringDictionaryProxy(entry_ti.get_comp_param(), row_set_mem_owner_);
+              executor_->getStringDictionaryProxy(entry_ti.get_comp_param(), row_set_mem_owner_, false);
           auto lhs_str = string_dict_proxy->getString(lhs_v.i1);
           auto rhs_str = string_dict_proxy->getString(rhs_v.i1);
           if (lhs_str == rhs_str) {

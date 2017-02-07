@@ -596,7 +596,8 @@ ResultRows Executor::execute(const Planner::RootPlan* root_plan,
 
 
 StringDictionaryProxy* Executor::getStringDictionaryProxy(const int dict_id_in,
-                                                          std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner) const {
+                                                          std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+                                                          const bool with_generation) const {
   const int dict_id{dict_id_in < 0 ? REGULAR_DICT(dict_id_in) : dict_id_in};
   CHECK(catalog_);
   const auto dd = catalog_->getMetadataForDict(dict_id);
@@ -606,7 +607,7 @@ StringDictionaryProxy* Executor::getStringDictionaryProxy(const int dict_id_in,
     CHECK_LE(dd->dictNBits, 32);
     if (row_set_mem_owner) {
 #ifdef HAVE_RAVM
-      const auto generation = string_dictionary_generations_.getGeneration(dict_id);
+      const auto generation = with_generation ? string_dictionary_generations_.getGeneration(dict_id) : ssize_t(-1);
 #else
       const ssize_t generation = dd->stringDict->storageEntryCount();
 #endif  // HAVE_RAVM
@@ -728,7 +729,7 @@ std::vector<int8_t> Executor::serializeLiterals(const std::unordered_map<int, Ex
       case 6: {
         const auto p = boost::get<std::pair<std::string, int>>(&lit);
         CHECK(p);
-        const auto str_id = getStringDictionaryProxy(p->second, row_set_mem_owner_)->getIdOfString(p->first);
+        const auto str_id = getStringDictionaryProxy(p->second, row_set_mem_owner_, true)->getIdOfString(p->first);
         memcpy(&serialized[off - lit_bytes], &str_id, lit_bytes);
         break;
       }
@@ -953,7 +954,7 @@ llvm::Value* Executor::codegenDictLike(const std::shared_ptr<Analyzer::Expr> lik
   const auto& dict_like_arg_ti = dict_like_arg->get_type_info();
   CHECK(dict_like_arg_ti.is_string());
   CHECK_EQ(kENCODING_DICT, dict_like_arg_ti.get_compression());
-  const auto sdp = getStringDictionaryProxy(dict_like_arg_ti.get_comp_param(), row_set_mem_owner_);
+  const auto sdp = getStringDictionaryProxy(dict_like_arg_ti.get_comp_param(), row_set_mem_owner_, true);
   if (sdp->storageEntryCount() > 200000000) {
     return nullptr;
   }
@@ -1032,7 +1033,7 @@ llvm::Value* Executor::codegenDictRegexp(const std::shared_ptr<Analyzer::Expr> p
   const auto& dict_regexp_arg_ti = dict_regexp_arg->get_type_info();
   CHECK(dict_regexp_arg_ti.is_string());
   CHECK_EQ(kENCODING_DICT, dict_regexp_arg_ti.get_compression());
-  const auto sdp = getStringDictionaryProxy(dict_regexp_arg_ti.get_comp_param(), row_set_mem_owner_);
+  const auto sdp = getStringDictionaryProxy(dict_regexp_arg_ti.get_comp_param(), row_set_mem_owner_, true);
   if (sdp->storageEntryCount() > 15000000) {
     return nullptr;
   }
@@ -1098,7 +1099,7 @@ std::unique_ptr<InValuesBitmap> Executor::createInValuesBitmap(const Analyzer::I
   if (!(ti.is_integer() || (ti.is_string() && ti.get_compression() == kENCODING_DICT))) {
     return nullptr;
   }
-  const auto sdp = ti.is_string() ? getStringDictionaryProxy(ti.get_comp_param(), row_set_mem_owner_) : nullptr;
+  const auto sdp = ti.is_string() ? getStringDictionaryProxy(ti.get_comp_param(), row_set_mem_owner_, true) : nullptr;
   if (value_list.size() > 3) {
     const auto needle_null_val = inline_int_null_val(ti);
     for (const auto in_val : value_list) {
@@ -1576,7 +1577,7 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Constant* constant,
       }
       const auto& str_const = *constant->get_constval().stringval;
       if (enc_type == kENCODING_DICT) {
-        return {ll_int(getStringDictionaryProxy(dict_id, row_set_mem_owner_)->getIdOfString(str_const))};
+        return {ll_int(getStringDictionaryProxy(dict_id, row_set_mem_owner_, true)->getIdOfString(str_const))};
       }
       return {ll_int(int64_t(0)),
               cgen_state_->addStringConstant(str_const),
@@ -2045,7 +2046,7 @@ llvm::Value* Executor::codegenQualifierCmp(const SQLOps optype,
          posArg(arr_expr),
          lhs_lvs[1],
          lhs_lvs[2],
-         ll_int(int64_t(getStringDictionaryProxy(elem_ti.get_comp_param(), row_set_mem_owner_))),
+         ll_int(int64_t(getStringDictionaryProxy(elem_ti.get_comp_param(), row_set_mem_owner_, true))),
          inlineIntNull(elem_ti)});
   }
   if (target_ti.is_integer() || target_ti.is_boolean() || target_ti.is_string()) {
@@ -2296,7 +2297,7 @@ llvm::Value* Executor::codegenCastFromString(llvm::Value* operand_lv,
     return cgen_state_->emitExternalCall(
         "string_compress",
         get_int_type(32, cgen_state_->context_),
-        {operand_lv, ll_int(int64_t(getStringDictionaryProxy(ti.get_comp_param(), row_set_mem_owner_)))});
+        {operand_lv, ll_int(int64_t(getStringDictionaryProxy(ti.get_comp_param(), row_set_mem_owner_, true)))});
   }
   CHECK(operand_lv->getType()->isIntegerTy(32));
   if (ti.get_compression() == kENCODING_NONE) {
@@ -2312,7 +2313,7 @@ llvm::Value* Executor::codegenCastFromString(llvm::Value* operand_lv,
     return cgen_state_->emitExternalCall(
         "string_decompress",
         get_int_type(64, cgen_state_->context_),
-        {operand_lv, ll_int(int64_t(getStringDictionaryProxy(operand_ti.get_comp_param(), row_set_mem_owner_)))});
+        {operand_lv, ll_int(int64_t(getStringDictionaryProxy(operand_ti.get_comp_param(), row_set_mem_owner_, true)))});
   }
   CHECK(operand_is_const);
   CHECK_EQ(kENCODING_DICT, ti.get_compression());

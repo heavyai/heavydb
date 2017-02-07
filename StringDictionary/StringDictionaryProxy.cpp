@@ -143,6 +143,17 @@ size_t StringDictionaryProxy::storageEntryCount() const noexcept {
   return string_dict_.get()->storageEntryCount();
 }
 
+void StringDictionaryProxy::updateGeneration(const ssize_t generation) noexcept {
+  if (generation == -1) {
+    return;
+  }
+  if (generation_ != -1) {
+    CHECK_EQ(generation_, generation);
+    return;
+  }
+  generation_ = generation;
+}
+
 StringDictionary* StringDictionaryProxy::getDictionary() noexcept {
   return string_dict_.get();
 }

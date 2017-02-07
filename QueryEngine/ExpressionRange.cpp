@@ -503,7 +503,7 @@ ExpressionRange getExpressionRange(const Analyzer::UOper* u_expr,
   }
   const auto& ti = u_expr->get_type_info();
   if (ti.is_string() && ti.get_compression() == kENCODING_DICT) {
-    const auto sdp = executor->getStringDictionaryProxy(ti.get_comp_param(), executor->getRowSetMemoryOwner());
+    const auto sdp = executor->getStringDictionaryProxy(ti.get_comp_param(), executor->getRowSetMemoryOwner(), true);
     CHECK(sdp);
     const auto const_operand = dynamic_cast<const Analyzer::Constant*>(u_expr->get_operand());
     CHECK(const_operand);

@@ -447,8 +447,9 @@ TargetValue ResultSet::makeTargetValue(const int8_t* ptr,
       if (static_cast<int32_t>(ival) == NULL_INT) {  // TODO(alex): this isn't nice, fix it
         return NullableString(nullptr);
       }
-      const auto sdp = executor_ ? executor_->getStringDictionaryProxy(chosen_type.get_comp_param(), row_set_mem_owner_)
-                                 : row_set_mem_owner_->getStringDictProxy(chosen_type.get_comp_param());
+      const auto sdp =
+          executor_ ? executor_->getStringDictionaryProxy(chosen_type.get_comp_param(), row_set_mem_owner_, false)
+                    : row_set_mem_owner_->getStringDictProxy(chosen_type.get_comp_param());
       return NullableString(sdp->getString(ival));
     } else {
       return ival;

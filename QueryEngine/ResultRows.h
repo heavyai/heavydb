@@ -97,6 +97,7 @@ class RowSetMemoryOwner : boost::noncopyable {
     auto it = str_dict_proxy_owned_.find(dict_id);
     if (it != str_dict_proxy_owned_.end()) {
       CHECK_EQ(it->second->getDictionary(), str_dict.get());
+      it->second->updateGeneration(generation);
       return it->second;
     }
     StringDictionaryProxy* str_dict_proxy = new StringDictionaryProxy(str_dict, generation);
