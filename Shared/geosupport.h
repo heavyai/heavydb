@@ -6,7 +6,7 @@
 
 const std::string MAPD_GEO_PREFIX{"mapd_geo_"};
 
-std::pair<double, double> geotransform_4326_to_900913(const double lon, const double lat) {
+inline std::pair<double, double> geotransform_4326_to_900913(const double lon, const double lat) {
   static const double e_circ = 40075016.68;  // Earth's circumference, meters
   static const double e_circ_360 = e_circ / 360;
   static const double pi = std::acos(-1);
@@ -17,10 +17,10 @@ std::pair<double, double> geotransform_4326_to_900913(const double lon, const do
   return ll;
 }
 
-std::pair<double, double> geotransform(const std::string& src_proj,
-                                       const std::string& dst_proj,
-                                       const double x,
-                                       const double y) {
+inline std::pair<double, double> geotransform(const std::string& src_proj,
+                                              const std::string& dst_proj,
+                                              const double x,
+                                              const double y) {
   return geotransform_4326_to_900913(x, y);
 }
 

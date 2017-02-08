@@ -31,6 +31,11 @@ enum TExecuteMode {
   CPU
 }
 
+enum TTableType {
+  DELIMITED,
+  POLYGON
+}
+
 /* union */ struct TDatumVal {
   1: i64 int_val,
   2: double real_val,
@@ -61,7 +66,8 @@ struct TTypeInfo {
 struct TColumnType {
   1: string col_name,
   2: TTypeInfo col_type,
-  3: bool is_reserved_keyword
+  3: bool is_reserved_keyword,
+  4: string src_name
 }
 
 struct TRow {
@@ -148,6 +154,7 @@ struct TCopyParams {
   9: string array_begin
   10: string array_end
   11: i32 threads
+  12: TTableType table_type=TTableType.DELIMITED
 }
 
 struct TDetectResult {
@@ -291,7 +298,7 @@ service MapD {
   TRenderResult render_vega(1: TSessionId session, 2: i64 widget_id, 3: string vega_json, 4: i32 compression_level, 5: string nonce) throws (1: TMapDException e 2: ThriftException te)
   void create_frontend_view(1: TSessionId session, 2: string view_name, 3: string view_state, 4: string image_hash, 5: string view_metadata) throws (1: TMapDException e 2: ThriftException te)
   TDetectResult detect_column_types(1: TSessionId session, 2: string file_name, 3: TCopyParams copy_params) throws (1: TMapDException e 2: ThriftException te)
-  void create_table(1: TSessionId session, 2: string table_name, 3: TRowDescriptor row_desc) throws (1: TMapDException e 2: ThriftException te)
+  void create_table(1: TSessionId session, 2: string table_name, 3: TRowDescriptor row_desc, 4: TTableType table_type=TTableType.DELIMITED) throws (1: TMapDException e 2: ThriftException te)
   void import_table(1: TSessionId session, 2: string table_name, 3: string file_name, 4: TCopyParams copy_params) throws (1: TMapDException e 2: ThriftException te)
   TImportStatus import_table_status(1: TSessionId session, 2: string import_id) throws (1: TMapDException e 2: ThriftException te)
   TFrontendView get_link_view(1: TSessionId session, 2: string link) throws (1: TMapDException e 2: ThriftException te)
@@ -302,7 +309,7 @@ service MapD {
   void start_heap_profile(1: TSessionId session) throws (1: TMapDException e 2: ThriftException te)
   void stop_heap_profile(1: TSessionId session) throws (1: TMapDException e 2: ThriftException te)
   string get_heap_profile(1: TSessionId session) throws (1: TMapDException e 2: ThriftException te)
-  void import_geo_table(1: TSessionId session, 2: string table_name, 3: string file_name, 4: TCopyParams copy_params) throws (1: TMapDException e 2: ThriftException te)
+  void import_geo_table(1: TSessionId session, 2: string table_name, 3: string file_name, 4: TCopyParams copy_params, 5: TRowDescriptor row_desc) throws (1: TMapDException e 2: ThriftException te)
   TPendingQuery start_query(1: TSessionId session, 2: string query_ra) throws (1: TMapDException e 2: ThriftException te)
   TStepResult execute_first_step(1: TPendingQuery pending_query) throws (1: TMapDException e 2: ThriftException te)
   void broadcast_serialized_rows(1: string serialized_rows, 2: TRowDescriptor row_desc, 3: TQueryId query_id) throws (1: TMapDException e 2: ThriftException te)

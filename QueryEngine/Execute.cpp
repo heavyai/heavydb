@@ -16,6 +16,7 @@
 #include "QueryRewrite.h"
 #include "QueryTemplateGenerator.h"
 #include "RuntimeFunctions.h"
+#include "DynamicWatchdog.h"
 #include "SpeculativeTopN.h"
 
 #include "CudaMgr/CudaMgr.h"
@@ -4000,6 +4001,13 @@ ResultPtr Executor::executeWorkUnit(int32_t* error_code,
     throw std::runtime_error("Hash join failed, reason: " + join_info.hash_join_fail_reason_);
   }
 
+  if (options.with_dynamic_watchdog) {
+    CHECK_GT(options.dynamic_watchdog_time_limit, 0);
+    auto cycle_budget = dynamic_watchdog_bark(options.dynamic_watchdog_time_limit);
+    LOG(INFO) << "Dynamic Watchdog budget: CPU: " << std::to_string(options.dynamic_watchdog_time_limit) << "ms, "
+              << std::to_string(cycle_budget) << " cycles";
+  }
+
   int8_t crt_min_byte_width{get_min_byte_width()};
   do {
     *error_code = 0;
@@ -6029,29 +6037,10 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
   }
   CHECK(filter_lv->getType()->isIntegerTy(1));
 
-  bool run_with_dynamic_watchdog = false;
-  if (eo.with_dynamic_watchdog) {
-    int64_t budget{0};
-    if (co.device_type_ == ExecutorDeviceType::GPU) {
-      // Translate milliseconds to device cycles
-      budget = deviceCycles(eo.dynamic_watchdog_time_limit);
-      run_with_dynamic_watchdog = true;
-      LOG(INFO) << "Dynamic Watchdog budget: " << std::to_string(eo.dynamic_watchdog_time_limit) << "ms, "
-                << std::to_string(budget) << " cycles";
-    } else if (co.device_type_ == ExecutorDeviceType::CPU) {
-      budget = eo.dynamic_watchdog_time_limit;
-      run_with_dynamic_watchdog = true;
-      LOG(INFO) << "Dynamic Watchdog budget: " << std::to_string(eo.dynamic_watchdog_time_limit) << "ms";
-    }
-    if (run_with_dynamic_watchdog) {
-      initDynamicWatchdog(query_func, budget);
-    }
-  }
-
   const bool needs_error_check = group_by_and_aggregate.codegen(filter_lv, co);
 
-  if (needs_error_check || cgen_state_->needs_error_check_ || run_with_dynamic_watchdog) {
-    createErrorCheckControlFlow(query_func, run_with_dynamic_watchdog);
+  if (needs_error_check || cgen_state_->needs_error_check_ || eo.with_dynamic_watchdog) {
+    createErrorCheckControlFlow(query_func, eo.with_dynamic_watchdog);
   }
 
   // iterate through all the instruction in the query template function and
@@ -6113,21 +6102,6 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
       llvm_ir};
 }
 
-void Executor::initDynamicWatchdog(llvm::Function* query_func, int64_t budget) {
-  auto& entry_bb = query_func->front();
-  auto watchdog_error_bb = llvm::BasicBlock::Create(cgen_state_->context_, ".watchdog_error", query_func, &entry_bb);
-  llvm::ReturnInst::Create(cgen_state_->context_, watchdog_error_bb);
-  auto watchdog_init_bb =
-      llvm::BasicBlock::Create(cgen_state_->context_, ".watchdog_init", query_func, watchdog_error_bb);
-  llvm::IRBuilder<> ir_builder(watchdog_init_bb);
-  auto status =
-      ir_builder.CreateCall(cgen_state_->module_->getFunction("dynamic_watchdog"),
-                            std::vector<llvm::Value*>{ll_int(budget), get_arg_by_name(query_func, "frag_idx")});
-  llvm::Value* err_lv = ir_builder.CreateICmp(llvm::ICmpInst::ICMP_NE, status, ll_bool(0));
-  ir_builder.CreateCondBr(
-      err_lv, watchdog_error_bb, &entry_bb, llvm::MDBuilder(cgen_state_->context_).createBranchWeights(1, 100));
-}
-
 void Executor::createErrorCheckControlFlow(llvm::Function* query_func, bool run_with_dynamic_watchdog) {
   // check whether the row processing was successful; currently, it can
   // fail by running out of group by buffer slots
@@ -6164,9 +6138,8 @@ void Executor::createErrorCheckControlFlow(llvm::Function* query_func, bool run_
           auto watchdog_check_bb =
               llvm::BasicBlock::Create(cgen_state_->context_, ".watchdog_check", query_func, error_check_bb);
           llvm::IRBuilder<> watchdog_ir_builder(watchdog_check_bb);
-          auto detected_timeout = watchdog_ir_builder.CreateCall(
-              cgen_state_->module_->getFunction("dynamic_watchdog"),
-              std::vector<llvm::Value*>{ll_int(int64_t(0LL)), get_arg_by_name(query_func, "frag_idx")});
+          auto detected_timeout =
+              watchdog_ir_builder.CreateCall(cgen_state_->module_->getFunction("dynamic_watchdog"), {});
           auto timeout_err_lv =
               watchdog_ir_builder.CreateSelect(detected_timeout, ll_int(Executor::ERR_OUT_OF_TIME), err_lv);
           watchdog_ir_builder.CreateBr(error_check_bb);
@@ -6369,16 +6342,18 @@ void optimizeIR(llvm::Function* query_func,
 
 }  // namespace
 
-std::vector<void*> Executor::getCodeFromCache(
+std::vector<std::pair<void*, void*>> Executor::getCodeFromCache(
     const CodeCacheKey& key,
     const std::map<CodeCacheKey, std::pair<CodeCacheVal, llvm::Module*>>& cache) {
   auto it = cache.find(key);
   if (it != cache.end()) {
     delete cgen_state_->module_;
     cgen_state_->module_ = it->second.second;
-    std::vector<void*> native_functions;
+    std::vector<std::pair<void*, void*>> native_functions;
     for (auto& native_code : it->second.first) {
-      native_functions.push_back(std::get<0>(native_code));
+      GpuCompilationContext* gpu_context = std::get<2>(native_code).get();
+      native_functions.push_back(
+          std::make_pair(std::get<0>(native_code), gpu_context ? gpu_context->module() : nullptr));
     }
     return native_functions;
   }
@@ -6401,11 +6376,11 @@ void Executor::addCodeToCache(
   CHECK(it_ok.second);
 }
 
-std::vector<void*> Executor::optimizeAndCodegenCPU(llvm::Function* query_func,
-                                                   llvm::Function* multifrag_query_func,
-                                                   std::unordered_set<llvm::Function*>& live_funcs,
-                                                   llvm::Module* module,
-                                                   const CompilationOptions& co) {
+std::vector<std::pair<void*, void*>> Executor::optimizeAndCodegenCPU(llvm::Function* query_func,
+                                                                     llvm::Function* multifrag_query_func,
+                                                                     std::unordered_set<llvm::Function*>& live_funcs,
+                                                                     llvm::Module* module,
+                                                                     const CompilationOptions& co) {
   CodeCacheKey key{serialize_llvm_object(query_func), serialize_llvm_object(cgen_state_->row_func_)};
   for (const auto helper : cgen_state_->helper_functions_) {
     key.push_back(serialize_llvm_object(helper));
@@ -6449,7 +6424,7 @@ std::vector<void*> Executor::optimizeAndCodegenCPU(llvm::Function* query_func,
   CHECK(native_code);
   addCodeToCache(key, {{std::make_tuple(native_code, execution_engine, nullptr)}}, module, cpu_code_cache_);
 
-  return {native_code};
+  return {std::make_pair(native_code, nullptr)};
 }
 
 namespace {
@@ -6595,7 +6570,7 @@ declare void @agg_count_distinct_bitmap_gpu(i64*, i64, i64, i64, i64);
 declare void @agg_count_distinct_bitmap_skip_val_gpu(i64*, i64, i64, i64, i64, i64);
 declare void @agg_approximate_count_distinct_gpu(i64*, i64, i32, i64, i64);
 declare i32 @record_error_code(i32, i32*);
-declare i1 @dynamic_watchdog(i64, i32);
+declare i1 @dynamic_watchdog();
 declare void @force_sync();
 )" + gen_array_any_all_sigs();
 
@@ -6608,13 +6583,13 @@ std::string extension_function_decls() {
 
 }  // namespace
 
-std::vector<void*> Executor::optimizeAndCodegenGPU(llvm::Function* query_func,
-                                                   llvm::Function* multifrag_query_func,
-                                                   std::unordered_set<llvm::Function*>& live_funcs,
-                                                   llvm::Module* module,
-                                                   const bool no_inline,
-                                                   const CudaMgr_Namespace::CudaMgr* cuda_mgr,
-                                                   const CompilationOptions& co) {
+std::vector<std::pair<void*, void*>> Executor::optimizeAndCodegenGPU(llvm::Function* query_func,
+                                                                     llvm::Function* multifrag_query_func,
+                                                                     std::unordered_set<llvm::Function*>& live_funcs,
+                                                                     llvm::Module* module,
+                                                                     const bool no_inline,
+                                                                     const CudaMgr_Namespace::CudaMgr* cuda_mgr,
+                                                                     const CompilationOptions& co) {
 #ifdef HAVE_CUDA
   CHECK(cuda_mgr);
   CodeCacheKey key{serialize_llvm_object(query_func), serialize_llvm_object(cgen_state_->row_func_)};
@@ -6704,7 +6679,7 @@ std::vector<void*> Executor::optimizeAndCodegenGPU(llvm::Function* query_func,
 
   auto cuda_llir = cuda_rt_decls + extension_function_decls() + ss.str();
 
-  std::vector<void*> native_functions;
+  std::vector<std::pair<void*, void*>> native_functions;
   std::vector<std::tuple<void*, llvm::ExecutionEngine*, GpuCompilationContext*>> cached_functions;
 
   const auto ptx = generatePTX(cuda_llir);
@@ -6721,8 +6696,10 @@ std::vector<void*> Executor::optimizeAndCodegenGPU(llvm::Function* query_func,
     auto gpu_context = new GpuCompilationContext(
         cubin, func_name, device_id, cuda_mgr, num_options, &option_keys[0], &option_values[0]);
     auto native_code = gpu_context->kernel();
+    auto native_module = gpu_context->module();
     CHECK(native_code);
-    native_functions.push_back(native_code);
+    CHECK(native_module);
+    native_functions.push_back(std::make_pair(native_code, native_module));
     cached_functions.emplace_back(native_code, nullptr, gpu_context);
   }
   addCodeToCache(key, cached_functions, module, gpu_code_cache_);

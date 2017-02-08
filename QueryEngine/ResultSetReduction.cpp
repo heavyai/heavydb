@@ -563,10 +563,10 @@ ResultSet* ResultSetManager::reduce(std::vector<ResultSet*>& result_sets) {
         });
     CHECK(total_entry_count);
     auto query_mem_desc = first_result.query_mem_desc_;
-    query_mem_desc.entry_count = total_entry_count * 2;
+    query_mem_desc.entry_count = total_entry_count;
     rs_.reset(
-        new ResultSet(first_result.targets_, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, nullptr));
-    auto result_storage = rs_->allocateStorage();
+        new ResultSet(first_result.targets_, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, executor));
+    auto result_storage = rs_->allocateStorage(first_result.target_init_vals_);
     rs_->initializeStorage();
     first_result.moveEntriesToBuffer(result_storage->getUnderlyingBuffer(), query_mem_desc.entry_count);
     result = rs_->storage_.get();

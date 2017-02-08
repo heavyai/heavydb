@@ -51,9 +51,9 @@ extern "C" __device__ void write_back(int64_t* dest, int64_t* src, const int32_t
 
 // Dynamic watchdog: monitoring up to 64 SMs. E.g. GP100 config may have 60:
 // 6 Graphics Processing Clusters (GPCs) * 10 Streaming Multiprocessors
-__device__ int64_t sm_cycle_start[64];   // TBD: reset from host before launching the kernel
-__device__ int64_t dw_cycle_budget = 0;  // TBD: set from host before launching the kernel
-__device__ int32_t dw_abort = 0;         // TBD: set from host (async)
+__device__ int64_t dw_sm_cycle_start[64];  // Set from host before launching the kernel
+__device__ int64_t dw_cycle_budget = 0;    // Set from host before launching the kernel
+__device__ int32_t dw_abort = 0;           // TBD: set from host (async)
 
 __inline__ __device__ uint32_t get_smid(void) {
   uint32_t ret;
@@ -68,38 +68,22 @@ __inline__ __device__ uint64_t get_globaltimer(void) {
   return ret;
 }
 
-extern "C" __device__ bool dynamic_watchdog(int64_t init_budget, int32_t frag_idx) {
-  if (init_budget == 0LL && dw_cycle_budget == 0LL)
-    return false;  // uninitialized watchdog can't check time
+extern "C" __device__ bool dynamic_watchdog() {
+  if (dw_cycle_budget == 0LL)
+    return false;  // Uninitialized watchdog can't check time
   if (dw_abort == 1)
-    return true;
-  if (get_smid() >= 64)
-    return false;
-  // Initialize watchdog
-  if (init_budget > 0LL) {
-    if (blockIdx.x == 0) {
-      if (blockDim.x < 64)
-        return false;
-      if (threadIdx.x < 64) {
-        if (threadIdx.x == 0 && frag_idx == 0) {
-          dw_cycle_budget = init_budget;
-        }
-        if (frag_idx == 0) {
-          sm_cycle_start[threadIdx.x] = -1LL;
-        }
-      }
-    }
-    return false;
-  }
+    return true;  // Received host request to abort
   uint32_t smid = get_smid();
-  int64_t cycle_start = sm_cycle_start[smid];
+  if (smid >= 64)
+    return false;
+  int64_t cycle_start = dw_sm_cycle_start[smid];
   // The first block that gets on an SM initializes this SM's cycle start
-  if (cycle_start == -1LL) {
+  if (cycle_start == 0LL) {
     if (threadIdx.x == 0) {
       // Make sure the block hasn't switched SMs
       if (smid == get_smid()) {
         // Start the clock on this SM
-        sm_cycle_start[smid] = static_cast<int64_t>(clock64());
+        dw_sm_cycle_start[smid] = static_cast<int64_t>(clock64());
       }
       // If it did switch SMs mid-watchdog invocation, leave the old SM's clock
       // untouched - it will be started by next uninterrupted watchdog invocation

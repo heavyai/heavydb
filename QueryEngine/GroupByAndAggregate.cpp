@@ -624,7 +624,7 @@ GpuQueryMemory QueryExecutionContext::prepareGroupByDevBuffer(Data_Namespace::Da
 #endif
 
 std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const RelAlgExecutionUnit& ra_exe_unit,
-                                                           const std::vector<void*>& cu_functions,
+                                                           const std::vector<std::pair<void*, void*>>& cu_functions,
                                                            const bool hoist_literals,
                                                            const std::vector<int8_t>& literal_buff,
                                                            std::vector<std::vector<const int8_t*>> col_buffers,
@@ -649,7 +649,9 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const RelAlgExecution
     render_allocator = render_allocator_map->getRenderAllocator(device_id);
   }
 
-  auto cu_func = static_cast<CUfunction>(cu_functions[device_id]);
+  auto cu_func = static_cast<CUfunction>(cu_functions[device_id].first);
+  auto cu_module = static_cast<CUmodule>(cu_functions[device_id].second);
+  CHECK(cu_module);
   std::vector<int64_t*> out_vec;
   uint32_t num_fragments = col_buffers.size();
   std::vector<int32_t> error_codes(grid_size_x * block_size_x);
@@ -666,6 +668,33 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const RelAlgExecution
 
   if (g_enable_dynamic_watchdog) {
     cuEventRecord(start0, 0);
+  }
+
+  if (g_enable_dynamic_watchdog) {
+    CUevent start, stop;
+    cuEventCreate(&start, 0);
+    cuEventCreate(&stop, 0);
+    cuEventRecord(start, 0);
+    CUdeviceptr dw_cycle_budget;
+    size_t dw_cycle_budget_size;
+    // Translate milliseconds to device cycles
+    uint64_t cycle_budget = executor_->deviceCycles(g_dynamic_watchdog_time_limit);
+    LOG(INFO) << "Dynamic Watchdog budget: GPU: " << std::to_string(g_dynamic_watchdog_time_limit) << "ms, "
+              << std::to_string(cycle_budget) << " cycles";
+    checkCudaErrors(cuModuleGetGlobal(&dw_cycle_budget, &dw_cycle_budget_size, cu_module, "dw_cycle_budget"));
+    CHECK_EQ(dw_cycle_budget_size, sizeof(uint64_t));
+    checkCudaErrors(cuMemcpyHtoD(dw_cycle_budget, reinterpret_cast<void*>(&cycle_budget), sizeof(uint64_t)));
+    CUdeviceptr dw_sm_cycle_start;
+    size_t dw_sm_cycle_start_size;
+    checkCudaErrors(cuModuleGetGlobal(&dw_sm_cycle_start, &dw_sm_cycle_start_size, cu_module, "dw_sm_cycle_start"));
+    CHECK_EQ(dw_sm_cycle_start_size, 64 * sizeof(uint64_t));
+    checkCudaErrors(cuMemsetD32(dw_sm_cycle_start, 0, 64 * 2));
+    cuEventRecord(stop, 0);
+    cuEventSynchronize(stop);
+    float milliseconds = 0;
+    cuEventElapsedTime(&milliseconds, start, stop);
+    VLOG(1) << "Device " << std::to_string(device_id)
+            << ": launchGpuCode: dynamic watchdog init: " << std::to_string(milliseconds) << " ms\n";
   }
 
   auto kernel_params = prepareKernelParams(col_buffers,
@@ -900,7 +929,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const RelAlgExecution
 }
 
 std::vector<int64_t*> QueryExecutionContext::launchCpuCode(const RelAlgExecutionUnit& ra_exe_unit,
-                                                           const std::vector<void*>& fn_ptrs,
+                                                           const std::vector<std::pair<void*, void*>>& fn_ptrs,
                                                            const bool hoist_literals,
                                                            const std::vector<int8_t>& literal_buff,
                                                            std::vector<std::vector<const int8_t*>> col_buffers,
@@ -958,33 +987,33 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(const RelAlgExecution
                               const uint32_t* num_tables,
                               const int64_t* join_hash_table_ptr);
     if (is_group_by) {
-      reinterpret_cast<agg_query>(fn_ptrs[0])(multifrag_cols_ptr,
-                                              &num_fragments,
-                                              &literal_buff[0],
-                                              num_rows_ptr,
-                                              &frag_row_offsets[0],
-                                              &scan_limit,
-                                              &total_matched_init,
-                                              &cmpt_val_buff[0],
-                                              &group_by_buffers_[0],
-                                              small_group_by_buffers_ptr,
-                                              error_code,
-                                              &num_tables,
-                                              &join_hash_table);
+      reinterpret_cast<agg_query>(fn_ptrs[0].first)(multifrag_cols_ptr,
+                                                    &num_fragments,
+                                                    &literal_buff[0],
+                                                    num_rows_ptr,
+                                                    &frag_row_offsets[0],
+                                                    &scan_limit,
+                                                    &total_matched_init,
+                                                    &cmpt_val_buff[0],
+                                                    &group_by_buffers_[0],
+                                                    small_group_by_buffers_ptr,
+                                                    error_code,
+                                                    &num_tables,
+                                                    &join_hash_table);
     } else {
-      reinterpret_cast<agg_query>(fn_ptrs[0])(multifrag_cols_ptr,
-                                              &num_fragments,
-                                              &literal_buff[0],
-                                              num_rows_ptr,
-                                              &frag_row_offsets[0],
-                                              &scan_limit,
-                                              &total_matched_init,
-                                              &init_agg_vals[0],
-                                              &out_vec[0],
-                                              nullptr,
-                                              error_code,
-                                              &num_tables,
-                                              &join_hash_table);
+      reinterpret_cast<agg_query>(fn_ptrs[0].first)(multifrag_cols_ptr,
+                                                    &num_fragments,
+                                                    &literal_buff[0],
+                                                    num_rows_ptr,
+                                                    &frag_row_offsets[0],
+                                                    &scan_limit,
+                                                    &total_matched_init,
+                                                    &init_agg_vals[0],
+                                                    &out_vec[0],
+                                                    nullptr,
+                                                    error_code,
+                                                    &num_tables,
+                                                    &join_hash_table);
     }
   } else {
     typedef void (*agg_query)(const int8_t*** col_buffers,
@@ -1000,31 +1029,31 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(const RelAlgExecution
                               const uint32_t* num_tables,
                               const int64_t* join_hash_table_ptr);
     if (is_group_by) {
-      reinterpret_cast<agg_query>(fn_ptrs[0])(multifrag_cols_ptr,
-                                              &num_fragments,
-                                              num_rows_ptr,
-                                              &frag_row_offsets[0],
-                                              &scan_limit,
-                                              &total_matched_init,
-                                              &cmpt_val_buff[0],
-                                              &group_by_buffers_[0],
-                                              small_group_by_buffers_ptr,
-                                              error_code,
-                                              &num_tables,
-                                              &join_hash_table);
+      reinterpret_cast<agg_query>(fn_ptrs[0].first)(multifrag_cols_ptr,
+                                                    &num_fragments,
+                                                    num_rows_ptr,
+                                                    &frag_row_offsets[0],
+                                                    &scan_limit,
+                                                    &total_matched_init,
+                                                    &cmpt_val_buff[0],
+                                                    &group_by_buffers_[0],
+                                                    small_group_by_buffers_ptr,
+                                                    error_code,
+                                                    &num_tables,
+                                                    &join_hash_table);
     } else {
-      reinterpret_cast<agg_query>(fn_ptrs[0])(multifrag_cols_ptr,
-                                              &num_fragments,
-                                              num_rows_ptr,
-                                              &frag_row_offsets[0],
-                                              &scan_limit,
-                                              &total_matched_init,
-                                              &init_agg_vals[0],
-                                              &out_vec[0],
-                                              nullptr,
-                                              error_code,
-                                              &num_tables,
-                                              &join_hash_table);
+      reinterpret_cast<agg_query>(fn_ptrs[0].first)(multifrag_cols_ptr,
+                                                    &num_fragments,
+                                                    num_rows_ptr,
+                                                    &frag_row_offsets[0],
+                                                    &scan_limit,
+                                                    &total_matched_init,
+                                                    &init_agg_vals[0],
+                                                    &out_vec[0],
+                                                    nullptr,
+                                                    error_code,
+                                                    &num_tables,
+                                                    &join_hash_table);
     }
   }
 
@@ -1420,7 +1449,8 @@ GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getExprRangeInfo(const An
         throw WatchdogException("Group by float / double would be slow");
       }
     case ExpressionRangeType::Invalid:
-      return {GroupByColRangeType::OneColGuessedRange, 0, guessed_range_max, 0, false};
+      return g_cluster ? ColRangeInfo{GroupByColRangeType::MultiCol, 0, 0, 0, false}
+                       : ColRangeInfo{GroupByColRangeType::OneColGuessedRange, 0, guessed_range_max, 0, false};
     default:
       CHECK(false);
   }

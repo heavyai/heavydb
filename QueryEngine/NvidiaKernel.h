@@ -31,6 +31,7 @@ class GpuCompilationContext {
                         void** option_vals);
   ~GpuCompilationContext();
   CUfunction kernel() { return kernel_; }
+  CUmodule module() { return module_; }
 
  private:
   CUmodule module_;

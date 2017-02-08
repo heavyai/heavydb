@@ -139,7 +139,7 @@ bool thrift_with_retry(ThriftService which_service, ClientContext& context, cons
         context.client.clear_gpu_memory(context.session);
         break;
       case kIMPORT_GEO_TABLE:
-        context.client.import_geo_table(context.session, context.table_name, context.file_name, context.copy_params);
+        context.client.import_geo_table(context.session, context.table_name, context.file_name, context.copy_params, TRowDescriptor());
         break;
     }
   } catch (TMapDException& e) {

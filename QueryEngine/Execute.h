@@ -503,7 +503,7 @@ class Executor {
                               RenderAllocatorMap* render_allocator_map);
 
   struct CompilationResult {
-    std::vector<void*> native_functions;
+    std::vector<std::pair<void*, void*>> native_functions;
     std::unordered_map<int, LiteralValues> literal_values;
     QueryMemoryDescriptor query_mem_desc;
     bool output_columnar;
@@ -802,8 +802,6 @@ class Executor {
                                     const JoinInfo& join_info,
                                     const bool has_cardinality_estimation);
 
-  void initDynamicWatchdog(llvm::Function* query_func, int64_t budget);
-
   void createErrorCheckControlFlow(llvm::Function* query_func, bool run_with_dynamic_watchdog);
 
   void codegenInnerScanNextRow();
@@ -819,18 +817,18 @@ class Executor {
                     const JoinInfo& join_info,
                     const std::vector<InputTableInfo>& query_infos,
                     const std::list<std::shared_ptr<Analyzer::Expr>>& outer_join_quals);
-  std::vector<void*> optimizeAndCodegenCPU(llvm::Function*,
-                                           llvm::Function*,
-                                           std::unordered_set<llvm::Function*>&,
-                                           llvm::Module*,
-                                           const CompilationOptions&);
-  std::vector<void*> optimizeAndCodegenGPU(llvm::Function*,
-                                           llvm::Function*,
-                                           std::unordered_set<llvm::Function*>&,
-                                           llvm::Module*,
-                                           const bool no_inline,
-                                           const CudaMgr_Namespace::CudaMgr* cuda_mgr,
-                                           const CompilationOptions&);
+  std::vector<std::pair<void*, void*>> optimizeAndCodegenCPU(llvm::Function*,
+                                                             llvm::Function*,
+                                                             std::unordered_set<llvm::Function*>&,
+                                                             llvm::Module*,
+                                                             const CompilationOptions&);
+  std::vector<std::pair<void*, void*>> optimizeAndCodegenGPU(llvm::Function*,
+                                                             llvm::Function*,
+                                                             std::unordered_set<llvm::Function*>&,
+                                                             llvm::Module*,
+                                                             const bool no_inline,
+                                                             const CudaMgr_Namespace::CudaMgr* cuda_mgr,
+                                                             const CompilationOptions&);
   std::string generatePTX(const std::string&) const;
   void initializeNVPTXBackend() const;
 
@@ -864,8 +862,9 @@ class Executor {
   typedef std::vector<std::string> CodeCacheKey;
   typedef std::vector<std::tuple<void*, std::unique_ptr<llvm::ExecutionEngine>, std::unique_ptr<GpuCompilationContext>>>
       CodeCacheVal;
-  std::vector<void*> getCodeFromCache(const CodeCacheKey&,
-                                      const std::map<CodeCacheKey, std::pair<CodeCacheVal, llvm::Module*>>&);
+  std::vector<std::pair<void*, void*>> getCodeFromCache(
+      const CodeCacheKey&,
+      const std::map<CodeCacheKey, std::pair<CodeCacheVal, llvm::Module*>>&);
   void addCodeToCache(const CodeCacheKey&,
                       const std::vector<std::tuple<void*, llvm::ExecutionEngine*, GpuCompilationContext*>>&,
                       llvm::Module*,

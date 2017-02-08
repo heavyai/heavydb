@@ -21,6 +21,8 @@
 #include <boost/filesystem.hpp>
 #include <glog/logging.h>
 #include <shapelib/shapefil.h>
+#include <ogrsf_frmts.h>
+#include <gdal.h>
 #include "../QueryEngine/SqlTypesLayout.h"
 #include "../Shared/measure.h"
 #include "../Shared/geosupport.h"
@@ -1072,6 +1074,10 @@ ImportStatus Importer::importDelimited() {
   return import_status;
 }
 
+void GDALErrorHandler(CPLErr eErrClass, int err_no, const char* msg) {
+  throw std::runtime_error("GDAL error: " + std::string(msg));
+}
+
 ImportStatus Importer::importShapefile() {
   set_import_status(import_id, import_status);
   std::vector<PolyData2d> polys;
@@ -1168,6 +1174,97 @@ ImportStatus Importer::importShapefile() {
   return import_status;
 }
 
+void Importer::readVerticesFromGDALGeometryZ(const std::string& fileName,
+                                             OGRPolygon* poPolygon,
+                                             PolyData2d& poly,
+                                             bool) {
+  std::vector<std::shared_ptr<p2t::Point>> vertexShPtrs;
+  std::vector<p2t::Point*> vertexPtrs;
+  std::vector<int> tris;
+  std::unordered_map<p2t::Point*, int> pointIndices;
+  OGRPoint ptTemp;
+
+  OGRLinearRing* poExteriorRing = poPolygon->getExteriorRing();
+  int NumberOfExteriorRingVertices = poExteriorRing->getNumPoints();
+
+  if (!poExteriorRing->isClockwise()) {
+    poExteriorRing->reverseWindingOrder();
+  }
+  if (!poExteriorRing->isClockwise()) {
+    return;
+  }
+
+  poly.beginLine();
+
+  poExteriorRing->closeRings();
+  for (int k = 0; k < NumberOfExteriorRingVertices - 1; k++) {
+    poExteriorRing->getPoint(k, &ptTemp);
+    auto xy = std::make_pair(ptTemp.getX(), ptTemp.getY());
+    if (k > 0 && vertexPtrs.back()->x == xy.first && vertexPtrs.back()->y == xy.second) {
+      continue;
+    }
+    vertexShPtrs.emplace_back(new p2t::Point(xy.first, xy.second));
+    poly.addLinePoint(vertexShPtrs.back());
+    vertexPtrs.push_back(vertexShPtrs.back().get());
+    pointIndices.insert({vertexShPtrs.back().get(), vertexPtrs.size() - 1});
+  }
+
+  if (poly.endLine()) {
+    p2t::Point* lastVert = vertexPtrs.back();
+    vertexPtrs.pop_back();
+    pointIndices.erase(lastVert);
+    vertexShPtrs.pop_back();
+  }
+
+  p2t::CDT triangulator(vertexPtrs);
+
+  triangulator.Triangulate();
+
+  int idx0, idx1, idx2;
+
+  std::unordered_map<p2t::Point*, int>::iterator itr;
+
+  poly.beginPoly();
+  for (p2t::Triangle* tri : triangulator.GetTriangles()) {
+    itr = pointIndices.find(tri->GetPoint(0));
+    if (itr == pointIndices.end()) {
+      throw std::runtime_error("Failed to triangulate polygon.");
+    }
+    idx0 = itr->second;
+
+    itr = pointIndices.find(tri->GetPoint(1));
+    if (itr == pointIndices.end()) {
+      throw std::runtime_error("Failed to triangulate polygon.");
+    }
+    idx1 = itr->second;
+
+    itr = pointIndices.find(tri->GetPoint(2));
+    if (itr == pointIndices.end()) {
+      throw std::runtime_error("Failed to triangulate polygon.");
+    }
+    idx2 = itr->second;
+
+    poly.addTriangle(idx0, idx1, idx2);
+  }
+  poly.endPoly();
+}
+
+static OGRDataSource* openGDALDataset(const std::string& fileName) {
+  GDALAllRegister();
+  OGRRegisterAll();
+  CPLSetErrorHandler(*GDALErrorHandler);
+  OGRDataSource* poDS;
+#if GDAL_VERSION_MAJOR == 1
+  poDS = (OGRDataSource*)OGRSFDriverRegistrar::Open(fileName.c_str(), false);
+#else
+  poDS = (OGRDataSource*)GDALOpenEx(fileName.c_str(), GDAL_OF_VECTOR, nullptr, nullptr, nullptr);
+#endif
+  if (poDS == nullptr) {
+    LOG(INFO) << "ogr error: " << CPLGetLastErrorMsg();
+  }
+  return poDS;
+}
+
 void Importer::readVerticesFromShapefilePolygonZ(const std::string& fileName,
                                                  SHPObject* polygonObj,
                                                  PolyData2d& poly,
@@ -1252,6 +1349,114 @@ void Importer::readVerticesFromShapefilePolygonZ(const std::string& fileName,
   }
 }
 
+void Importer::readMetadataSampleGDAL(const std::string& fileName,
+                                      std::map<std::string, std::vector<std::string>>& metadata,
+                                      int rowLimit) {
+  auto poDS = openGDALDataset(fileName);
+  if (poDS == nullptr) {
+    throw std::runtime_error("Unable to open geo file " + fileName);
+  }
+  OGRLayer* poLayer;
+  poLayer = poDS->GetLayer(0);
+  if (poLayer == nullptr) {
+    throw std::runtime_error("No layers found in " + fileName);
+  }
+  OGRFeatureDefn* poFDefn = poLayer->GetLayerDefn();
+
+  // typeof GetFeatureCount() is different between GDAL 1.x (int32_t) and 2.x (int64_t)
+  auto nFeats = poLayer->GetFeatureCount();
+  size_t numFeatures =
+      std::max(static_cast<decltype(nFeats)>(0), std::min(static_cast<decltype(nFeats)>(rowLimit), nFeats));
+  for (auto iField = 0; iField < poFDefn->GetFieldCount(); iField++) {
+    OGRFieldDefn* poFieldDefn = poFDefn->GetFieldDefn(iField);
+    // FIXME(andrewseidl): change this to the faster one used by readVerticesFromGDAL
+    metadata.emplace(poFieldDefn->GetNameRef(), std::vector<std::string>(numFeatures));
+  }
+  OGRFeature* poFeature;
+  poLayer->ResetReading();
+  size_t iFeature = 0;
+  while ((poFeature = poLayer->GetNextFeature()) != nullptr && iFeature < numFeatures) {
+    OGRGeometry* poGeometry;
+    poGeometry = poFeature->GetGeometryRef();
+    if (poGeometry != nullptr) {
+      for (auto i : metadata) {
+        auto iField = poFeature->GetFieldIndex(i.first.c_str());
+        metadata[i.first].at(iFeature) = std::string(poFeature->GetFieldAsString(iField));
+      }
+      OGRFeature::DestroyFeature(poFeature);
+    }
+    iFeature++;
+  }
+  GDALClose(poDS);
+}
+
+void Importer::readVerticesFromGDAL(
+    const std::string& fileName,
+    std::vector<PolyData2d>& polys,
+    std::pair<std::map<std::string, size_t>, std::vector<std::vector<std::string>>>& metadata) {
+  auto poDS = openGDALDataset(fileName);
+  if (poDS == nullptr) {
+    throw std::runtime_error("Unable to open geo file " + fileName);
+  }
+  OGRLayer* poLayer;
+  poLayer = poDS->GetLayer(0);
+  if (poLayer == nullptr) {
+    throw std::runtime_error("No layers found in " + fileName);
+  }
+  OGRFeatureDefn* poFDefn = poLayer->GetLayerDefn();
+  size_t numFeatures = poLayer->GetFeatureCount();
+  size_t nFields = poFDefn->GetFieldCount();
+  for (size_t iField = 0; iField < nFields; iField++) {
+    OGRFieldDefn* poFieldDefn = poFDefn->GetFieldDefn(iField);
+    metadata.first[poFieldDefn->GetNameRef()] = iField;
+    metadata.second.push_back(std::vector<std::string>(numFeatures));
+  }
+  OGRFeature* poFeature;
+  poLayer->ResetReading();
+  auto poSR = new OGRSpatialReference();
+  poSR->importFromEPSG(3857);
+  auto iFeature = 0;
+  while ((poFeature = poLayer->GetNextFeature()) != nullptr) {
+    OGRGeometry* poGeometry;
+    poGeometry = poFeature->GetGeometryRef();
+    if (poGeometry != nullptr) {
+      poGeometry->transformTo(poSR);
+      if (polys.size()) {
+        polys.emplace_back(polys.back().startVert() + polys.back().numVerts(),
+                           polys.back().startIdx() + polys.back().numIndices());
+      } else {
+        polys.emplace_back();
+      }
+      switch (wkbFlatten(poGeometry->getGeometryType())) {
+        case wkbPolygon: {
+          OGRPolygon* poPolygon = (OGRPolygon*)poGeometry;
+          readVerticesFromGDALGeometryZ(fileName, poPolygon, polys.back(), false);
+          break;
+        }
+        case wkbMultiPolygon: {
+          OGRMultiPolygon* poMultiPolygon = (OGRMultiPolygon*)poGeometry;
+          int NumberOfGeometries = poMultiPolygon->getNumGeometries();
+          for (auto j = 0; j < NumberOfGeometries; j++) {
+            OGRGeometry* poPolygonGeometry = poMultiPolygon->getGeometryRef(j);
+            OGRPolygon* poPolygon = (OGRPolygon*)poPolygonGeometry;
+            readVerticesFromGDALGeometryZ(fileName, poPolygon, polys.back(), false);
+          }
+          break;
+        }
+        case wkbPoint:
+        default:
+          throw std::runtime_error("Unsupported geometry type: " + std::string(poGeometry->getGeometryName()));
+      }
+      for (size_t iField = 0; iField < nFields; iField++) {
+        metadata.second[iField][iFeature] = std::string(poFeature->GetFieldAsString(iField));
+      }
+      OGRFeature::DestroyFeature(poFeature);
+    }
+    iFeature++;
+  }
+  GDALClose(poDS);
+}
+
 void Importer::readVerticesFromShapefile(const std::string& fileName, std::vector<PolyData2d>& polys) {
   SHPHandle shapeHandle = SHPOpen(fileName.c_str(), "rb");
   if (shapeHandle == nullptr) {
@@ -1313,6 +1518,39 @@ SQLTypes dbf_to_type(const DBFFieldType& dbf_type) {
   throw std::runtime_error("Unknown DBF field type: " + std::to_string(dbf_type));
 }
 
+std::pair<SQLTypes, bool> ogr_to_type(const OGRFieldType& ogr_type) {
+  switch (ogr_type) {
+    case OFTInteger:
+      return std::make_pair(kINT, false);
+    case OFTIntegerList:
+      return std::make_pair(kINT, true);
+#if GDAL_VERSION_MAJOR > 1
+    case OFTInteger64:
+      return std::make_pair(kBIGINT, false);
+    case OFTInteger64List:
+      return std::make_pair(kBIGINT, true);
+#endif
+    case OFTReal:
+      return std::make_pair(kDOUBLE, false);
+    case OFTRealList:
+      return std::make_pair(kDOUBLE, true);
+    case OFTString:
+      return std::make_pair(kTEXT, false);
+    case OFTStringList:
+      return std::make_pair(kTEXT, true);
+    case OFTDate:
+      return std::make_pair(kDATE, false);
+    case OFTTime:
+      return std::make_pair(kTIME, false);
+    case OFTDateTime:
+      return std::make_pair(kTIMESTAMP, false);
+    case OFTBinary:
+    default:
+      break;
+  }
+  throw std::runtime_error("Unknown OGR field type: " + std::to_string(ogr_type));
+}
+
 ColumnDescriptor create_array_column(const SQLTypes& type, const std::string& name) {
   ColumnDescriptor cd;
   cd.columnName = name;
@@ -1361,6 +1599,145 @@ const std::list<ColumnDescriptor> Importer::shapefileToColumnDescriptors(const s
   cds.push_back(create_array_column(kINT, MAPD_GEO_PREFIX + "polydrawinfo"));
 
   return cds;
+}
+
+const std::list<ColumnDescriptor> Importer::gdalToColumnDescriptors(const std::string& fileName) {
+  std::list<ColumnDescriptor> cds;
+  auto poDS = openGDALDataset(fileName);
+  try {
+    if (poDS == nullptr) {
+      throw std::runtime_error("Unable to open geo file " + fileName + " : " + CPLGetLastErrorMsg());
+    }
+    OGRLayer* poLayer;
+    poLayer = poDS->GetLayer(0);
+    if (poLayer == nullptr) {
+      throw std::runtime_error("No layers found in " + fileName);
+    }
+    OGRFeature* poFeature;
+    poLayer->ResetReading();
+    // TODO(andrewseidl): support multiple features
+    if ((poFeature = poLayer->GetNextFeature()) != nullptr) {
+      OGRFeatureDefn* poFDefn = poLayer->GetLayerDefn();
+      int iField;
+      for (iField = 0; iField < poFDefn->GetFieldCount(); iField++) {
+        OGRFieldDefn* poFieldDefn = poFDefn->GetFieldDefn(iField);
+        auto typePair = ogr_to_type(poFieldDefn->GetType());
+        ColumnDescriptor cd;
+        cd.columnName = poFieldDefn->GetNameRef();
+        cd.sourceName = poFieldDefn->GetNameRef();
+        SQLTypeInfo ti;
+        if (typePair.second) {
+          ti.set_type(kARRAY);
+          ti.set_subtype(typePair.first);
+        } else {
+          ti.set_type(typePair.first);
+        }
+        if (typePair.first == kTEXT) {
+          ti.set_compression(kENCODING_DICT);
+          ti.set_comp_param(32);
+        }
+        ti.set_fixed_size();
+        cd.columnType = ti;
+        cds.push_back(cd);
+      }
+    }
+  } catch (const std::exception& e) {
+    GDALClose(poDS);
+    throw;
+  }
+  GDALClose(poDS);
+
+  return cds;
+}
+
+ImportStatus Importer::importGDAL(std::map<std::string, std::string> colname_to_src) {
+  set_import_status(import_id, import_status);
+  std::vector<PolyData2d> polys;
+  std::pair<std::map<std::string, size_t>, std::vector<std::vector<std::string>>> metadata;
+
+  readVerticesFromGDAL(file_path.c_str(), polys, metadata);
+
+  std::vector<std::unique_ptr<TypedImportBuffer>> import_buffers_vec;
+  for (const auto cd : loader.get_column_descs())
+    import_buffers_vec.push_back(
+        std::unique_ptr<TypedImportBuffer>(new TypedImportBuffer(cd, loader.get_string_dict(cd))));
+
+  for (size_t ipoly = 0; ipoly < polys.size(); ++ipoly) {
+    auto poly = polys[ipoly];
+    try {
+      auto icol = 0;
+      for (auto cd : loader.get_column_descs()) {
+        if (cd->columnName == MAPD_GEO_PREFIX + "coords") {
+          std::vector<TDatum> coords;
+          for (auto coord : poly.coords) {
+            TDatum td;
+            td.val.real_val = coord;
+            coords.push_back(td);
+          }
+          TDatum tdd;
+          tdd.val.arr_val = coords;
+          tdd.is_null = false;
+          import_buffers_vec[icol++]->add_value(cd, tdd, false);
+        } else if (cd->columnName == MAPD_GEO_PREFIX + "indices") {
+          std::vector<TDatum> indices;
+          for (auto tris : poly.triangulation_indices) {
+            TDatum td;
+            td.val.int_val = tris;
+            indices.push_back(td);
+          }
+          TDatum tdd;
+          tdd.val.arr_val = indices;
+          tdd.is_null = false;
+          import_buffers_vec[icol++]->add_value(cd, tdd, false);
+        } else if (cd->columnName == MAPD_GEO_PREFIX + "linedrawinfo") {
+          std::vector<TDatum> ldis;
+          ldis.resize(4 * poly.lineDrawInfo.size());
+          size_t ildi = 0;
+          for (auto ldi : poly.lineDrawInfo) {
+            ldis[ildi++].val.int_val = ldi.count;
+            ldis[ildi++].val.int_val = ldi.instanceCount;
+            ldis[ildi++].val.int_val = ldi.firstIndex;
+            ldis[ildi++].val.int_val = ldi.baseInstance;
+          }
+          TDatum tdd;
+          tdd.val.arr_val = ldis;
+          tdd.is_null = false;
+          import_buffers_vec[icol++]->add_value(cd, tdd, false);
+        } else if (cd->columnName == MAPD_GEO_PREFIX + "polydrawinfo") {
+          std::vector<TDatum> pdis;
+          pdis.resize(5 * poly.polyDrawInfo.size());
+          size_t ipdi = 0;
+          for (auto pdi : poly.polyDrawInfo) {
+            pdis[ipdi++].val.int_val = pdi.count;
+            pdis[ipdi++].val.int_val = pdi.instanceCount;
+            pdis[ipdi++].val.int_val = pdi.firstIndex;
+            pdis[ipdi++].val.int_val = pdi.baseVertex;
+            pdis[ipdi++].val.int_val = pdi.baseInstance;
+          }
+          TDatum tdd;
+          tdd.val.arr_val = pdis;
+          tdd.is_null = false;
+          import_buffers_vec[icol++]->add_value(cd, tdd, false);
+        } else {
+          auto ifield = metadata.first.at(colname_to_src[cd->columnName]);
+          auto str = metadata.second.at(ifield).at(ipoly);
+          import_buffers_vec[icol++]->add_value(cd, str, false, copy_params);
+        }
+      }
+    } catch (const std::exception& e) {
+      LOG(WARNING) << "importGDAL exception thrown: " << e.what() << ". Row discarded.";
+    }
+  }
+
+  try {
+    loader.load(import_buffers_vec, polys.size());
+    loader.checkpoint();
+    return import_status;
+  } catch (const std::exception& e) {
+    LOG(WARNING) << e.what();
+  }
+
+  return import_status;
 }
 
 }  // Namespace Importer
