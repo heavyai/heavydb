@@ -51,9 +51,9 @@ extern "C" __device__ void write_back(int64_t* dest, int64_t* src, const int32_t
 
 // Dynamic watchdog: monitoring up to 64 SMs. E.g. GP100 config may have 60:
 // 6 Graphics Processing Clusters (GPCs) * 10 Streaming Multiprocessors
-__device__ int64_t dw_sm_cycle_start[64]; // Set from host before launching the kernel
-__device__ int64_t dw_cycle_budget = 0;   // Set from host before launching the kernel
-__device__ int32_t dw_abort = 0;          // TBD: set from host (async)
+__device__ int64_t dw_sm_cycle_start[64];  // Set from host before launching the kernel
+__device__ int64_t dw_cycle_budget = 0;    // Set from host before launching the kernel
+__device__ int32_t dw_abort = 0;           // TBD: set from host (async)
 
 __inline__ __device__ uint32_t get_smid(void) {
   uint32_t ret;
@@ -72,7 +72,7 @@ extern "C" __device__ bool dynamic_watchdog() {
   if (dw_cycle_budget == 0LL)
     return false;  // Uninitialized watchdog can't check time
   if (dw_abort == 1)
-    return true;   // Received host request to abort
+    return true;  // Received host request to abort
   uint32_t smid = get_smid();
   if (smid >= 64)
     return false;
