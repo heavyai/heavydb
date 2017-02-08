@@ -61,7 +61,7 @@ struct CopyParams {
         array_begin('{'),
         array_end('}'),
         threads(0),
-        max_reject(10000),
+        max_reject(100000),
         table_type(TableType::DELIMITED) {}
 };
 

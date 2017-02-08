@@ -1823,7 +1823,7 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
         if (boost::iequals(*p->get_name(), "max_reject")) {
           const IntLiteral* int_literal = dynamic_cast<const IntLiteral*>(p->get_value());
           if (int_literal == nullptr)
-            throw std::runtime_error("Threads option must be an integer.");
+            throw std::runtime_error("max_reject option must be an integer.");
           copy_params.max_reject = int_literal->get_intval();
         } else if (boost::iequals(*p->get_name(), "threads")) {
           const IntLiteral* int_literal = dynamic_cast<const IntLiteral*>(p->get_value());
@@ -1906,8 +1906,6 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     }
     Importer_NS::Importer importer(catalog, td, file_path, copy_params);
 
-    std::string m;
-
     size_t rows_completed;
     size_t rows_rejected;
     bool load_truncated;
@@ -1929,7 +1927,7 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     }
 
     return_message.reset(new std::string(tr));
-    LOG(INFO) << m;
+    LOG(INFO) << tr;
   }
 }
 
