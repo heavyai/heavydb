@@ -4835,8 +4835,52 @@ int64_t inline_null_val(const SQLTypeInfo& ti) {
   return inline_int_null_val(ti);
 }
 
+void fill_entries_for_empty_input(std::vector<TargetInfo>& target_infos,
+                                  std::vector<int64_t>& entry,
+                                  const std::vector<Analyzer::Expr*>& target_exprs,
+                                  const QueryMemoryDescriptor& query_mem_desc) {
+  for (size_t target_idx = 0; target_idx < target_exprs.size(); ++target_idx) {
+    const auto target_expr = target_exprs[target_idx];
+    const auto agg_info = target_info(target_expr);
+    CHECK(agg_info.is_agg);
+    target_infos.push_back(agg_info);
+    if (g_cluster) {
+      CHECK(query_mem_desc.executor_);
+      auto row_set_mem_owner = query_mem_desc.executor_->getRowSetMemoryOwner();
+      CHECK(row_set_mem_owner);
+      CHECK_LT(target_idx, query_mem_desc.count_distinct_descriptors_.size());
+      const auto& count_distinct_desc = query_mem_desc.count_distinct_descriptors_[target_idx];
+      if (count_distinct_desc.impl_type_ == CountDistinctImplType::Bitmap) {
+        auto count_distinct_buffer =
+            static_cast<int8_t*>(checked_calloc(count_distinct_desc.bitmapPaddedSizeBytes(), 1));
+        CHECK(row_set_mem_owner);
+        row_set_mem_owner->addCountDistinctBuffer(
+            count_distinct_buffer, count_distinct_desc.bitmapPaddedSizeBytes(), true);
+        entry.push_back(reinterpret_cast<int64_t>(count_distinct_buffer));
+        continue;
+      }
+      if (count_distinct_desc.impl_type_ == CountDistinctImplType::StdSet) {
+        auto count_distinct_set = new std::set<int64_t>();
+        CHECK(row_set_mem_owner);
+        row_set_mem_owner->addCountDistinctSet(count_distinct_set);
+        entry.push_back(reinterpret_cast<int64_t>(count_distinct_set));
+        continue;
+      }
+    }
+    if (agg_info.agg_kind == kCOUNT || agg_info.agg_kind == kAPPROX_COUNT_DISTINCT) {
+      entry.push_back(0);
+    } else if (agg_info.agg_kind == kAVG) {
+      entry.push_back(inline_null_val(agg_info.agg_arg_type));
+      entry.push_back(0);
+    } else {
+      entry.push_back(inline_null_val(agg_info.sql_type));
+    }
+  }
+}
+
 RowSetPtr build_row_for_empty_input(const std::vector<Analyzer::Expr*>& target_exprs_in,
-                                    const QueryMemoryDescriptor& query_mem_desc) {
+                                    const QueryMemoryDescriptor& query_mem_desc,
+                                    const ExecutorDeviceType device_type) {
   std::vector<std::shared_ptr<Analyzer::Expr>> target_exprs_owned_copies;
   std::vector<Analyzer::Expr*> target_exprs;
   for (const auto target_expr : target_exprs_in) {
@@ -4855,21 +4899,13 @@ RowSetPtr build_row_for_empty_input(const std::vector<Analyzer::Expr*>& target_e
   }
   std::vector<TargetInfo> target_infos;
   std::vector<int64_t> entry;
-  for (const auto target_expr : target_exprs) {
-    const auto agg_info = target_info(target_expr);
-    CHECK(agg_info.is_agg);
-    target_infos.push_back(agg_info);
-    if (agg_info.agg_kind == kCOUNT || agg_info.agg_kind == kAPPROX_COUNT_DISTINCT) {
-      entry.push_back(0);
-    } else if (agg_info.agg_kind == kAVG) {
-      entry.push_back(inline_null_val(agg_info.agg_arg_type));
-      entry.push_back(0);
-    } else {
-      entry.push_back(inline_null_val(agg_info.sql_type));
-    }
-  }
+  fill_entries_for_empty_input(target_infos, entry, target_exprs, query_mem_desc);
   if (can_use_result_set(query_mem_desc, ExecutorDeviceType::CPU)) {
-    auto rs = std::make_shared<ResultSet>(target_infos, ExecutorDeviceType::CPU, query_mem_desc, nullptr, nullptr);
+    const auto executor = query_mem_desc.executor_;
+    CHECK(executor);
+    auto row_set_mem_owner = executor->getRowSetMemoryOwner();
+    CHECK(row_set_mem_owner);
+    auto rs = std::make_shared<ResultSet>(target_infos, device_type, query_mem_desc, row_set_mem_owner, executor);
     rs->allocateStorage();
     rs->fillOneEntry(entry);
     return boost::make_unique<ResultRows>(rs);
@@ -4912,7 +4948,7 @@ RowSetPtr Executor::collectAllDeviceResults(ExecutionDispatch& execution_dispatc
   }
   auto& result_per_device = execution_dispatch.getFragmentResults();
   if (result_per_device.empty() && query_mem_desc.hash_type == GroupByColRangeType::Scan) {
-    return build_row_for_empty_input(target_exprs, query_mem_desc);
+    return build_row_for_empty_input(target_exprs, query_mem_desc, execution_dispatch.getDeviceType());
   }
   if (use_speculative_top_n(ra_exe_unit, query_mem_desc)) {
     return reduceSpeculativeTopN(ra_exe_unit, result_per_device, row_set_mem_owner, query_mem_desc);
