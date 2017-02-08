@@ -4853,19 +4853,41 @@ RowSetPtr build_row_for_empty_input(const std::vector<Analyzer::Expr*>& target_e
     target_exprs_owned_copies.push_back(target_expr_copy);
     target_exprs.push_back(target_expr_copy.get());
   }
+  std::vector<TargetInfo> target_infos;
+  std::vector<int64_t> entry;
+  for (const auto target_expr : target_exprs) {
+    const auto agg_info = target_info(target_expr);
+    CHECK(agg_info.is_agg);
+    target_infos.push_back(agg_info);
+    if (agg_info.agg_kind == kCOUNT || agg_info.agg_kind == kAPPROX_COUNT_DISTINCT) {
+      entry.push_back(0);
+    } else if (agg_info.agg_kind == kAVG) {
+      entry.push_back(inline_null_val(agg_info.agg_arg_type));
+      entry.push_back(0);
+    } else {
+      entry.push_back(inline_null_val(agg_info.sql_type));
+    }
+  }
+  if (can_use_result_set(query_mem_desc, ExecutorDeviceType::CPU)) {
+    auto rs = std::make_shared<ResultSet>(target_infos, ExecutorDeviceType::CPU, query_mem_desc, nullptr, nullptr);
+    rs->allocateStorage();
+    rs->fillOneEntry(entry);
+    return boost::make_unique<ResultRows>(rs);
+  }
   auto result_rows = boost::make_unique<ResultRows>(
       query_mem_desc, target_exprs, nullptr, nullptr, std::vector<int64_t>{}, ExecutorDeviceType::CPU);
 
   result_rows->beginRow();
-  for (const auto target_expr : target_exprs) {
-    const auto agg_info = target_info(target_expr);
+  for (size_t target_idx = 0, entry_idx = 0; target_idx < target_infos.size(); ++target_idx, ++entry_idx) {
+    const auto agg_info = target_infos[target_idx];
     CHECK(agg_info.is_agg);
-    if (agg_info.agg_kind == kCOUNT || agg_info.agg_kind == kAPPROX_COUNT_DISTINCT) {
-      result_rows->addValue(0);
-    } else if (agg_info.agg_kind == kAVG) {
-      result_rows->addValue(inline_null_val(agg_info.agg_arg_type), 0);
+    CHECK_LT(entry_idx, entry.size());
+    if (agg_info.agg_kind == kAVG) {
+      CHECK_LT(entry_idx + 1, entry.size());
+      result_rows->addValue(entry[entry_idx], entry[entry_idx + 1]);
+      ++entry_idx;
     } else {
-      result_rows->addValue(inline_null_val(agg_info.sql_type));
+      result_rows->addValue(entry[entry_idx]);
     }
   }
   return result_rows;
