@@ -1199,7 +1199,8 @@ void Importer::readVerticesFromGDALGeometryZ(const std::string& fileName,
   poExteriorRing->closeRings();
   for (int k = 0; k < NumberOfExteriorRingVertices - 1; k++) {
     poExteriorRing->getPoint(k, &ptTemp);
-    auto xy = std::make_pair(ptTemp.getX(), ptTemp.getY());
+    // auto xy = std::make_pair(ptTemp.getX(), ptTemp.getY());
+    auto xy = geotransform("4326", "900913", ptTemp.getX(), ptTemp.getY());
     if (k > 0 && vertexPtrs.back()->x == xy.first && vertexPtrs.back()->y == xy.second) {
       continue;
     }
@@ -1420,7 +1421,7 @@ void Importer::readVerticesFromGDAL(
     OGRGeometry* poGeometry;
     poGeometry = poFeature->GetGeometryRef();
     if (poGeometry != nullptr) {
-      poGeometry->transformTo(poSR);
+      // poGeometry->transformTo(poSR);
       if (polys.size()) {
         polys.emplace_back(polys.back().startVert() + polys.back().numVerts(),
                            polys.back().startIdx() + polys.back().numIndices());
