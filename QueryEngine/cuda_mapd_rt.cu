@@ -76,14 +76,17 @@ extern "C" __device__ bool dynamic_watchdog() {
   uint32_t smid = get_smid();
   if (smid >= 64)
     return false;
-  int64_t cycle_start = dw_sm_cycle_start[smid];
+  int64_t cycle_start =
+      static_cast<int64_t>(atomicAdd(reinterpret_cast<unsigned long long*>(&dw_sm_cycle_start[smid]), 0ULL));
   // The first block that gets on an SM initializes this SM's cycle start
   if (cycle_start == 0LL) {
     if (threadIdx.x == 0) {
       // Make sure the block hasn't switched SMs
       if (smid == get_smid()) {
         // Start the clock on this SM
-        dw_sm_cycle_start[smid] = static_cast<int64_t>(clock64());
+        atomicCAS(reinterpret_cast<unsigned long long*>(&dw_sm_cycle_start[smid]),
+                  0ULL,
+                  static_cast<unsigned long long>(clock64()));
       }
       // If it did switch SMs mid-watchdog invocation, leave the old SM's clock
       // untouched - it will be started by next uninterrupted watchdog invocation

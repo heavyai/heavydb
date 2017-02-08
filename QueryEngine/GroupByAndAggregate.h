@@ -417,6 +417,8 @@ class QueryExecutionContext : boost::noncopyable {
       KERN_PARAM_COUNT,
   };
 
+  void initializeDynamicWatchdog(void* module, const int device_id) const;
+
   std::vector<CUdeviceptr> prepareKernelParams(const std::vector<std::vector<const int8_t*>>& col_buffers,
                                                const std::vector<int8_t>& literal_buff,
                                                const std::vector<int64_t>& num_rows,
