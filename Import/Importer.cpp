@@ -1187,36 +1187,33 @@ void Importer::readVerticesFromGDALGeometryZ(const std::string& fileName,
   OGRPoint ptTemp;
 
   OGRLinearRing* poExteriorRing = poPolygon->getExteriorRing();
-  int NumberOfExteriorRingVertices = poExteriorRing->getNumPoints();
-
   if (!poExteriorRing->isClockwise()) {
     poExteriorRing->reverseWindingOrder();
   }
   if (!poExteriorRing->isClockwise()) {
     return;
   }
+  poExteriorRing->closeRings();
+  int nExtVerts = poExteriorRing->getNumPoints();
+  std::set<std::pair<double,double>> dedupe;
 
   poly.beginLine();
-
-  poExteriorRing->closeRings();
-  for (int k = 0; k < NumberOfExteriorRingVertices - 1; k++) {
+  for (int k = 0; k < nExtVerts - 1; k++) {
     poExteriorRing->getPoint(k, &ptTemp);
     auto xy = std::make_pair(ptTemp.getX(), ptTemp.getY());
     if (k > 0 && vertexPtrs.back()->x == xy.first && vertexPtrs.back()->y == xy.second) {
       continue;
+    }
+    auto a = dedupe.insert(std::make_pair(xy.first, xy.second));
+    if (!a.second) {
+      throw std::runtime_error("invalid geometry: duplicate vertex found");
     }
     vertexShPtrs.emplace_back(new p2t::Point(xy.first, xy.second));
     poly.addLinePoint(vertexShPtrs.back());
     vertexPtrs.push_back(vertexShPtrs.back().get());
     pointIndices.insert({vertexShPtrs.back().get(), vertexPtrs.size() - 1});
   }
-
-  if (poly.endLine()) {
-    p2t::Point* lastVert = vertexPtrs.back();
-    vertexPtrs.pop_back();
-    pointIndices.erase(lastVert);
-    vertexShPtrs.pop_back();
-  }
+  poly.endLine();
 
   p2t::CDT triangulator(vertexPtrs);
 
