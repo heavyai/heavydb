@@ -467,8 +467,8 @@ bool QueryExecutionContext::isEmptyBin(const int64_t* group_by_buffer, const siz
 }
 
 #ifdef HAVE_CUDA
-void QueryExecutionContext::initializeDynamicWatchdog(void* module, const int device_id) const {
-  auto cu_module = static_cast<CUmodule>(module);
+void QueryExecutionContext::initializeDynamicWatchdog(void* native_module, const int device_id) const {
+  auto cu_module = static_cast<CUmodule>(native_module);
   CHECK(cu_module);
   CUevent start, stop;
   cuEventCreate(&start, 0);
