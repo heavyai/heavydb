@@ -18,6 +18,7 @@
 #include <glog/logging.h>
 #include <poly2tri/poly2tri.h>
 #include <shapelib/shapefil.h>
+#include "../Shared/fixautotools.h"
 #include <ogrsf_frmts.h>
 #include <gdal.h>
 #include "../Catalog/TableDescriptor.h"
