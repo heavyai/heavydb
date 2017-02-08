@@ -632,6 +632,7 @@ class Importer {
                             std::vector<PolyData2d>& polys,
                             std::pair<std::map<std::string, size_t>, std::vector<std::vector<std::string>>>& metadata);
   void readVerticesFromGDALGeometryZ(const std::string& fileName, OGRPolygon* poPolygon, PolyData2d& poly, bool hasZ);
+  void initGDAL();
   const std::string& file_path;
   std::string import_id;
   const CopyParams& copy_params;

@@ -8,6 +8,7 @@
 #include <fstream>
 #include <iomanip>
 #include <cstdio>
+#include <cstdlib>
 #include <unistd.h>
 #include <stdexcept>
 #include <list>
@@ -24,6 +25,7 @@
 #include <ogrsf_frmts.h>
 #include <gdal.h>
 #include "../QueryEngine/SqlTypesLayout.h"
+#include "../Shared/mapdpath.h"
 #include "../Shared/measure.h"
 #include "../Shared/geosupport.h"
 #include "Importer.h"
@@ -1249,9 +1251,19 @@ void Importer::readVerticesFromGDALGeometryZ(const std::string& fileName,
   poly.endPoly();
 }
 
+void initGDAL() {
+  static bool gdal_initialized = false;
+  if (!gdal_initialized) {
+    // FIXME(andrewseidl): investigate if CPLPushFinderLocation can be public
+    setenv("GDAL_DATA", std::string(mapd_root_abs_path() + "/ThirdParty/gdal-data").c_str(), true);
+    GDALAllRegister();
+    OGRRegisterAll();
+    gdal_initialized = true;
+  }
+}
+
 static OGRDataSource* openGDALDataset(const std::string& fileName) {
-  GDALAllRegister();
-  OGRRegisterAll();
+  initGDAL();
   CPLSetErrorHandler(*GDALErrorHandler);
   OGRDataSource* poDS;
 #if GDAL_VERSION_MAJOR == 1
