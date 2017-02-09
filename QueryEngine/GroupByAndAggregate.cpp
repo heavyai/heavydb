@@ -478,8 +478,10 @@ void QueryExecutionContext::initializeDynamicWatchdog(void* native_module, const
   size_t dw_cycle_budget_size;
   // Translate milliseconds to device cycles
   uint64_t cycle_budget = executor_->deviceCycles(g_dynamic_watchdog_time_limit);
-  LOG(INFO) << "Dynamic Watchdog budget: GPU: " << std::to_string(g_dynamic_watchdog_time_limit) << "ms, "
-            << std::to_string(cycle_budget) << " cycles";
+  if (device_id == 0) {
+    LOG(INFO) << "Dynamic Watchdog budget: GPU: " << std::to_string(g_dynamic_watchdog_time_limit) << "ms, "
+              << std::to_string(cycle_budget) << " cycles";
+  }
   checkCudaErrors(cuModuleGetGlobal(&dw_cycle_budget, &dw_cycle_budget_size, cu_module, "dw_cycle_budget"));
   CHECK_EQ(dw_cycle_budget_size, sizeof(uint64_t));
   checkCudaErrors(cuMemcpyHtoD(dw_cycle_budget, reinterpret_cast<void*>(&cycle_budget), sizeof(uint64_t)));

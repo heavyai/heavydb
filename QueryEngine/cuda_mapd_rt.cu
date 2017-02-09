@@ -76,29 +76,26 @@ extern "C" __device__ bool dynamic_watchdog() {
   uint32_t smid = get_smid();
   if (smid >= 64)
     return false;
-  int64_t cycle_start =
-      static_cast<int64_t>(atomicAdd(reinterpret_cast<unsigned long long*>(&dw_sm_cycle_start[smid]), 0ULL));
-  // The first block that gets on an SM initializes this SM's cycle start
-  if (cycle_start == 0LL) {
-    if (threadIdx.x == 0) {
-      // Make sure the block hasn't switched SMs
-      if (smid == get_smid()) {
-        // Start the clock on this SM
-        atomicCAS(reinterpret_cast<unsigned long long*>(&dw_sm_cycle_start[smid]),
-                  0ULL,
-                  static_cast<unsigned long long>(clock64()));
-      }
-      // If it did switch SMs mid-watchdog invocation, leave the old SM's clock
-      // untouched - it will be started by next uninterrupted watchdog invocation
+  __shared__ int64_t dw_block_cycle_start;  // Thread block shared cycle start
+  int64_t cycle_count = static_cast<int64_t>(clock64());
+  if (threadIdx.x == 0) {
+    // Make sure the block hasn't switched SMs
+    if (smid == get_smid()) {
+      dw_block_cycle_start =
+          static_cast<int64_t>(atomicCAS(reinterpret_cast<unsigned long long*>(&dw_sm_cycle_start[smid]),
+                                         0ULL,
+                                         static_cast<unsigned long long>(cycle_count)));
     }
-    return false;
   }
-  // Bail out if the block switched SMs
-  if (smid != get_smid())
-    return false;
-  // Check if we're out of time on this particular SM
-  int64_t cycles = static_cast<int64_t>(clock64()) - cycle_start;
-  return (cycles > dw_cycle_budget);
+  __syncthreads();
+  if (dw_block_cycle_start > 0LL) {
+    if (smid == get_smid()) {
+      // Check if we're out of time on this particular SM
+      int64_t cycles = cycle_count - dw_block_cycle_start;
+      return (cycles > dw_cycle_budget);
+    }
+  }
+  return false;
 }
 
 extern "C" __device__ int64_t* get_matching_group_value(int64_t* groups_buffer,
