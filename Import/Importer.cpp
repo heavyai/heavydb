@@ -1195,7 +1195,7 @@ void Importer::readVerticesFromGDALGeometryZ(const std::string& fileName,
   }
   poExteriorRing->closeRings();
   int nExtVerts = poExteriorRing->getNumPoints();
-  std::set<std::pair<double,double>> dedupe;
+  std::set<std::pair<double, double>> dedupe;
 
   poly.beginLine();
   for (int k = 0; k < nExtVerts - 1; k++) {
@@ -1227,19 +1227,19 @@ void Importer::readVerticesFromGDALGeometryZ(const std::string& fileName,
   for (p2t::Triangle* tri : triangulator.GetTriangles()) {
     itr = pointIndices.find(tri->GetPoint(0));
     if (itr == pointIndices.end()) {
-      throw std::runtime_error("Failed to triangulate polygon.");
+      throw std::runtime_error("failed to triangulate polygon");
     }
     idx0 = itr->second;
 
     itr = pointIndices.find(tri->GetPoint(1));
     if (itr == pointIndices.end()) {
-      throw std::runtime_error("Failed to triangulate polygon.");
+      throw std::runtime_error("failed to triangulate polygon");
     }
     idx1 = itr->second;
 
     itr = pointIndices.find(tri->GetPoint(2));
     if (itr == pointIndices.end()) {
-      throw std::runtime_error("Failed to triangulate polygon.");
+      throw std::runtime_error("failed to triangulate polygon");
     }
     idx2 = itr->second;
 
@@ -1388,6 +1388,13 @@ void Importer::readMetadataSampleGDAL(const std::string& fileName,
     OGRGeometry* poGeometry;
     poGeometry = poFeature->GetGeometryRef();
     if (poGeometry != nullptr) {
+      switch (wkbFlatten(poGeometry->getGeometryType())) {
+        case wkbPolygon:
+        case wkbMultiPolygon:
+          break;
+        default:
+          throw std::runtime_error("Unsupported geometry type: " + std::string(poGeometry->getGeometryName()));
+      }
       for (auto i : metadata) {
         auto iField = poFeature->GetFieldIndex(i.first.c_str());
         metadata[i.first].at(iFeature) = std::string(poFeature->GetFieldAsString(iField));
@@ -1424,44 +1431,54 @@ void Importer::readVerticesFromGDAL(
   poLayer->ResetReading();
   auto poSR = new OGRSpatialReference();
   poSR->importFromEPSG(3857);
-  auto iFeature = 0;
-  while ((poFeature = poLayer->GetNextFeature()) != nullptr) {
-    OGRGeometry* poGeometry;
-    poGeometry = poFeature->GetGeometryRef();
-    if (poGeometry != nullptr) {
-      poGeometry->transformTo(poSR);
-      if (polys.size()) {
-        polys.emplace_back(polys.back().startVert() + polys.back().numVerts(),
-                           polys.back().startIdx() + polys.back().numIndices());
-      } else {
-        polys.emplace_back();
-      }
-      switch (wkbFlatten(poGeometry->getGeometryType())) {
-        case wkbPolygon: {
-          OGRPolygon* poPolygon = (OGRPolygon*)poGeometry;
-          readVerticesFromGDALGeometryZ(fileName, poPolygon, polys.back(), false);
-          break;
-        }
-        case wkbMultiPolygon: {
-          OGRMultiPolygon* poMultiPolygon = (OGRMultiPolygon*)poGeometry;
-          int NumberOfGeometries = poMultiPolygon->getNumGeometries();
-          for (auto j = 0; j < NumberOfGeometries; j++) {
-            OGRGeometry* poPolygonGeometry = poMultiPolygon->getGeometryRef(j);
-            OGRPolygon* poPolygon = (OGRPolygon*)poPolygonGeometry;
-            readVerticesFromGDALGeometryZ(fileName, poPolygon, polys.back(), false);
-          }
-          break;
-        }
-        case wkbPoint:
-        default:
-          throw std::runtime_error("Unsupported geometry type: " + std::string(poGeometry->getGeometryName()));
-      }
-      for (size_t iField = 0; iField < nFields; iField++) {
-        metadata.second[iField][iFeature] = std::string(poFeature->GetFieldAsString(iField));
-      }
-      OGRFeature::DestroyFeature(poFeature);
+
+  // typeof GetFeatureCount() is different between GDAL 1.x (int32_t) and 2.x (int64_t)
+  auto nFeats = poLayer->GetFeatureCount();
+  decltype(nFeats) iFeature = 0;
+  for (iFeature = 0; iFeature < nFeats; iFeature++) {
+    poFeature = poLayer->GetNextFeature();
+    if (poFeature == nullptr) {
+      break;
     }
-    iFeature++;
+    try {
+      OGRGeometry* poGeometry;
+      poGeometry = poFeature->GetGeometryRef();
+      if (poGeometry != nullptr) {
+        poGeometry->transformTo(poSR);
+        if (polys.size()) {
+          polys.emplace_back(polys.back().startVert() + polys.back().numVerts(),
+                             polys.back().startIdx() + polys.back().numIndices());
+        } else {
+          polys.emplace_back();
+        }
+        switch (wkbFlatten(poGeometry->getGeometryType())) {
+          case wkbPolygon: {
+            OGRPolygon* poPolygon = (OGRPolygon*)poGeometry;
+            readVerticesFromGDALGeometryZ(fileName, poPolygon, polys.back(), false);
+            break;
+          }
+          case wkbMultiPolygon: {
+            OGRMultiPolygon* poMultiPolygon = (OGRMultiPolygon*)poGeometry;
+            int NumberOfGeometries = poMultiPolygon->getNumGeometries();
+            for (auto j = 0; j < NumberOfGeometries; j++) {
+              OGRGeometry* poPolygonGeometry = poMultiPolygon->getGeometryRef(j);
+              OGRPolygon* poPolygon = (OGRPolygon*)poPolygonGeometry;
+              readVerticesFromGDALGeometryZ(fileName, poPolygon, polys.back(), false);
+            }
+            break;
+          }
+          case wkbPoint:
+          default:
+            throw std::runtime_error("Unsupported geometry type: " + std::string(poGeometry->getGeometryName()));
+        }
+        for (size_t iField = 0; iField < nFields; iField++) {
+          metadata.second[iField][iFeature] = std::string(poFeature->GetFieldAsString(iField));
+        }
+        OGRFeature::DestroyFeature(poFeature);
+      }
+    } catch (const std::exception& e) {
+      throw std::runtime_error(e.what() + std::string(" Feature: ") + std::to_string(iFeature + 1));
+    }
   }
   GDALClose(poDS);
 }
