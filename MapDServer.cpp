@@ -539,7 +539,16 @@ class MapDHandler : virtual public MapDIf {
 #ifdef HAVE_RAVM
       try {
         const auto query_ra = parse_to_ra(query_str, session_info);
-        const auto result = leaf_aggregator_.execute(session_info, query_ra);
+        ExecutionOptions eo = {false,
+                               allow_multifrag_,
+                               false,
+                               allow_loop_joins_,
+                               g_enable_watchdog,
+                               jit_debug_,
+                               false,
+                               g_enable_dynamic_watchdog,
+                               g_dynamic_watchdog_time_limit};
+        const auto result = leaf_aggregator_.execute(session_info, query_ra, eo);
         convert_rows(_return, result.targets_meta, *(result.rs), column_format);
       } catch (std::exception& e) {
         const auto mapd_exception = dynamic_cast<const TMapDException*>(&e);
