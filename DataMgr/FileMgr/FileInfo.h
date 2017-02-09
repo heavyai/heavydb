@@ -12,6 +12,8 @@
 
 namespace File_Namespace {
 
+class FileMgr;  // forward declaration
+
 struct Page;
 
 /**
@@ -29,6 +31,7 @@ struct Page;
  * Helper functions are provided: size(), available(), and used().
  */
 struct FileInfo {
+  FileMgr* fm_;     /// a reference to FileMgr is needed to support mapd dbVersion compatibility
   int fileId;       /// unique file identifier (i.e., used for a file name)
   FILE* f;          /// file stream object for the represented file
   size_t pageSize;  /// the fixed size of each page in the file
@@ -39,7 +42,7 @@ struct FileInfo {
   std::mutex readWriteMutex_;
 
   /// Constructor
-  FileInfo(const int fileId, FILE* f, const size_t pageSize, const size_t numPages, const bool init = false);
+  FileInfo(FileMgr* fm, const int fileId, FILE* f, const size_t pageSize, const size_t numPages, const bool init = false);
 
   /// Destructor
   ~FileInfo();

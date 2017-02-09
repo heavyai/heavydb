@@ -1,5 +1,6 @@
 #include "FileInfo.h"
 #include "File.h"
+#include "FileMgr.h"
 #include "Page.h"
 #include <glog/logging.h>
 #include <iostream>
@@ -9,8 +10,8 @@ using namespace std;
 
 namespace File_Namespace {
 
-FileInfo::FileInfo(const int fileId, FILE* f, const size_t pageSize, size_t numPages, bool init)
-    : fileId(fileId), f(f), pageSize(pageSize), numPages(numPages) {
+FileInfo::FileInfo(FileMgr* fm, const int fileId, FILE* f, const size_t pageSize, size_t numPages, bool init)
+    : fm_(fm), fileId(fileId), f(f), pageSize(pageSize), numPages(numPages) {
   if (init) {
     initNewFile();
   }
@@ -50,6 +51,10 @@ void FileInfo::openExistingFile(std::vector<HeaderInfo>& headerVec, const int fi
   int oldPageId = -99;
   int oldVersionEpoch = -99;
   int skipped = 0;
+  int numNonChunkKeyHeaderElems = 3;
+  if (fm_->getDBConvert()) {
+    numNonChunkKeyHeaderElems = 2;
+  }
   for (size_t pageNum = 0; pageNum < numPages; ++pageNum) {
     int headerSize;
     fseek(f, pageNum * pageSize, SEEK_SET);
@@ -59,19 +64,32 @@ void FileInfo::openExistingFile(std::vector<HeaderInfo>& headerVec, const int fi
       // We're tying ourself to headers of ints here
       size_t numHeaderElems = headerSize / sizeof(int);
       assert(numHeaderElems >= 2);
-      // Last two elements of header are always PageId and Version
+      // Last three elements of header are always PageId, EpochVersion 
+      // as well as dbVersion (which was introduced in 02/2017)
       // epoch - these are not in the chunk key so seperate them
-      ChunkKey chunkKey(numHeaderElems - 2);
+      ChunkKey chunkKey(numHeaderElems - numNonChunkKeyHeaderElems);
       int pageId;
       int versionEpoch;
+      int dbVersion;
       // size_t chunkSize;
       // We don't want to read headerSize in our header - so start
       // reading 4 bytes past it
-      fread((int8_t*)(&chunkKey[0]), headerSize - 2 * sizeof(int), 1, f);
+      fread((int8_t*)(&chunkKey[0]), headerSize - numNonChunkKeyHeaderElems * sizeof(int), 1, f);
       // cout << "Chunk key: " << showChunk(chunkKey) << endl;
       fread((int8_t*)(&pageId), sizeof(int), 1, f);
       // cout << "Page id: " << pageId << endl;
       fread((int8_t*)(&versionEpoch), sizeof(int), 1, f);
+      if (!fm_->getDBConvert()) {
+        if (numHeaderElems < 7) {
+          LOG(FATAL) << "DB version incompatible with the version of mapd software used. Please use option --db-convert to convert DB.";
+        } else {
+          fread((int8_t*)(&dbVersion), sizeof(int), 1, f);
+          dbVersion = dbVersion >> sizeof(int) / 2 * 8;
+          if (dbVersion > fm_->getDBVersion()) {
+            LOG(FATAL) << "DB forward compatibility is not supported. Version of mapd software used is older than the version of DB being read: " << dbVersion;
+          }
+        }
+      }
       if (chunkKey != oldChunkKey || oldPageId != pageId - (1 + skipped)) {
         if (skipped > 0) {
           VLOG(1) << "\tChunk key: " << showChunk(oldChunkKey) << " Page id from : " << oldPageId

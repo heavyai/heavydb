@@ -199,6 +199,7 @@ class MapDHandler : virtual public MapDIf {
               const int start_epoch,
               const LdapMetadata ldapMetadata,
               const MapDParameters& mapd_parameters,
+              const std::string& db_convert_dir,
 #ifdef HAVE_CALCITE
               const int calcite_port,
               const bool legacy_syntax)
@@ -249,6 +250,7 @@ class MapDHandler : virtual public MapDIf {
                                                 cpu_buffer_mem_bytes,
                                                 !cpu_mode_only_,
                                                 num_gpus,
+                                                db_convert_dir,
                                                 start_gpu,
                                                 total_reserved,
                                                 start_epoch,
@@ -2309,6 +2311,7 @@ int main(int argc, char** argv) {
   int tthreadpool_size = 8;
   size_t num_reader_threads = 0;  // number of threads used when loading data
   int start_epoch = -1;
+  std::string db_convert_dir("");     // path to mapd DB to convert from; if path is empty, no conversion is requested
 
   namespace po = boost::program_options;
 
@@ -2342,6 +2345,7 @@ int main(int argc, char** argv) {
   desc.add_options()("num-gpus", po::value<int>(&num_gpus)->default_value(num_gpus), "Number of gpus to use");
   desc.add_options()("start-gpu", po::value<int>(&start_gpu)->default_value(start_gpu), "First gpu to use");
   desc.add_options()("version,v", "Print Release Version Number");
+  desc.add_options()("db-convert", po::value<std::string>(&db_convert_dir), "Directory path to mapd DB to convert from");
 
   po::options_description desc_adv("Advanced options");
   desc_adv.add_options()("help-advanced", "Print advanced help messages");
@@ -2468,6 +2472,11 @@ int main(int argc, char** argv) {
     return 1;
   }
 
+  boost::algorithm::trim_if(db_convert_dir, boost::is_any_of("\"'"));
+  if (db_convert_dir.length() > 0 && !boost::filesystem::exists(db_convert_dir)) {
+    std::cerr << "Data conversion source directory " << db_convert_dir << " does not exist." << std::endl;
+    return 1;
+  }
   boost::algorithm::trim_if(base_path, boost::is_any_of("\"'"));
   if (!boost::filesystem::exists(base_path)) {
     std::cerr << "Data directory " << base_path << " does not exist." << std::endl;
@@ -2560,6 +2569,7 @@ int main(int argc, char** argv) {
                                                   start_epoch,
                                                   ldapMetadata,
                                                   mapd_parameters,
+                                                  db_convert_dir,
                                                   calcite_port,
                                                   enable_legacy_syntax));
 
