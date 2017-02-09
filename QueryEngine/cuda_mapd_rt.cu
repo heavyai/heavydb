@@ -79,6 +79,7 @@ extern "C" __device__ bool dynamic_watchdog() {
   __shared__ int64_t dw_block_cycle_start;  // Thread block shared cycle start
   int64_t cycle_count = static_cast<int64_t>(clock64());
   if (threadIdx.x == 0) {
+    dw_block_cycle_start = 0LL;
     // Make sure the block hasn't switched SMs
     if (smid == get_smid()) {
       dw_block_cycle_start =
