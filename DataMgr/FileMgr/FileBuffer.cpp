@@ -130,11 +130,7 @@ void FileBuffer::calcHeaderBuffer() {
   // 3 * sizeof(int) is for headerSize, for pageId and versionEpoch
   // sizeof(size_t) is for chunkSize
   // reservedHeaderSize_ = (chunkKey_.size() + 3) * sizeof(int) + sizeof(size_t);
-  int numNonChunkKeyHeaderElems = 4;
-  if (fm_->getDBConvert()) { // --db-convert option suport
-    numNonChunkKeyHeaderElems = 3;
-  }
-  reservedHeaderSize_ = (chunkKey_.size() + numNonChunkKeyHeaderElems) * sizeof(int);
+  reservedHeaderSize_ = (chunkKey_.size() + 3) * sizeof(int);
   size_t headerMod = reservedHeaderSize_ % headerBufferOffset_;
   if (headerMod > 0) {
     reservedHeaderSize_ += headerBufferOffset_ - headerMod;
@@ -334,23 +330,14 @@ Page FileBuffer::addNewMultiPage(const int epoch) {
 }
 
 void FileBuffer::writeHeader(Page& page, const int pageId, const int epoch, const bool writeMetadata) {
-  int intHeaderSize = chunkKey_.size() + 4;  // does not include chunkSize
+  int intHeaderSize = chunkKey_.size() + 3;  // does not include chunkSize
   vector<int> header(intHeaderSize);
   // in addition to chunkkey we need size of header, pageId, version
   header[0] = (intHeaderSize - 1) *
               sizeof(int);  // don't need to include size of headerSize value - sizeof(size_t) is for chunkSize
   std::copy(chunkKey_.begin(), chunkKey_.end(), header.begin() + 1);
-  header[intHeaderSize - 3] = pageId;
-  header[intHeaderSize - 2] = epoch;
-  int fileBufferReadabilityAncor, dbVersion = fm_->getDBVersion();
-  dbVersion = dbVersion << sizeof(int) / 2 * 8;
-  if (sizeof(int) == 4) {
-    fileBufferReadabilityAncor = 0xAAAA;
-  } else {  // sizeof(int) = 2
-    fileBufferReadabilityAncor = 0xAA;
-  }
-  dbVersion |= fileBufferReadabilityAncor;
-  header[intHeaderSize - 1] = dbVersion;
+  header[intHeaderSize - 2] = pageId;
+  header[intHeaderSize - 1] = epoch;
   FileInfo* fileInfo = fm_->getFileInfoForFileId(page.fileId);
   size_t pageSize = writeMetadata ? METADATA_PAGE_SIZE : pageSize_;
   fileInfo->write(page.pageNum * pageSize, (intHeaderSize) * sizeof(int), (int8_t*)&header[0]);

@@ -77,9 +77,3 @@ add_custom_target(all_tests
     COMMAND initdb -f ${TEST_BASE_PATH}
     COMMAND ${CMAKE_CTEST_COMMAND} --verbose
     DEPENDS PlanTest ProfileTest UtilTest ExecuteTest ResultSetTest ResultSetBaselineRadixSortTest RunQueryLoop StringDictionaryTest StorageTest StoragePerfTest)
-
-add_custom_target(storage_perf_tests
-    COMMAND mkdir -p ${TEST_BASE_PATH}
-    COMMAND initdb -f ${TEST_BASE_PATH}
-    COMMAND ${CMAKE_CTEST_COMMAND} --verbose --tests-regex "\"(StoragePerfTest)\""
-    DEPENDS StoragePerfTest)

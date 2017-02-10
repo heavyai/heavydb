@@ -25,7 +25,6 @@ using namespace Data_Namespace;
 
 namespace File_Namespace {
 
-class GlobalFileMgr; // forward declaration
 /**
  * @type PageSizeFileMMap
  * @brief Maps logical page sizes to files.
@@ -65,20 +64,14 @@ typedef std::map<ChunkKey, FileBuffer*> ChunkKeyToChunkMap;
  * @brief
  */
 class FileMgr : public AbstractBufferMgr {  // implements
- friend class GlobalFileMgr;
 
  public:
   /// Constructor
   FileMgr(const int deviceId,
-          GlobalFileMgr* gfm,
-          const std::pair<const int, const int> fileMgrKey,
+          std::string basePath = ".",
           const size_t num_reader_threads = 0,
           const int epoch = -1,
           const size_t defaultPageSize = 2097152);
-
-  FileMgr(GlobalFileMgr* gfm,
-          const size_t defaultPageSize,
-          std::string basePath);
 
   /// Destructor
   virtual ~FileMgr();
@@ -127,10 +120,6 @@ class FileMgr : public AbstractBufferMgr {  // implements
   inline FileInfo* getFileInfoForFileId(const int fileId) { return files_[fileId]; }
 
   void init(const size_t num_reader_threads);
-  void init(const std::string dataPathToConvertFrom);
-
-  void copyPage(Page& srcPage, FileMgr* destFileMgr, Page& destPage,
-                const size_t reservedHeaderSize, const size_t numBytes, const size_t offset);
 
   /**
    * @brief Obtains free pages -- creates new files if necessary -- of the requested size.
@@ -183,13 +172,9 @@ class FileMgr : public AbstractBufferMgr {  // implements
   }
   ChunkKeyToChunkMap chunkIndex_;  /// Index for looking up chunks
                                    // #TM Not sure if we need this below
-  int getDBVersion() const;
-  bool getDBConvert() const;
 
  private:
-  GlobalFileMgr* gfm_;            /// Global FileMgr
-  std::pair<const int, const int> fileMgrKey_;
-  std::string fileMgrBasePath_;   /// The OS file system path containing files related to this FileMgr
+  std::string basePath_;          /// The OS file system path containing the files.
   std::vector<FileInfo*> files_;  /// A vector of files accessible via a file identifier.
   PageSizeFileMMap fileIndex_;    /// Maps page sizes to FileInfo objects.
   size_t num_reader_threads_;     /// number of threads used when loading data

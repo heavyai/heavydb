@@ -7,7 +7,7 @@
 #include "../CudaMgr/CudaMgr.h"
 #include "BufferMgr/CpuBufferMgr/CpuBufferMgr.h"
 #include "BufferMgr/GpuCudaBufferMgr/GpuCudaBufferMgr.h"
-#include "FileMgr/GlobalFileMgr.h"
+#include "FileMgr/FileMgr.h"
 
 #ifdef __APPLE__
 #include <sys/sysctl.h>
@@ -15,8 +15,6 @@
 #else
 #include <unistd.h>
 #endif
-
-#include <boost/filesystem.hpp>
 
 #include <algorithm>
 #include <limits>
@@ -31,13 +29,11 @@ DataMgr::DataMgr(const string& dataDir,
                  const size_t cpuBufferSize,
                  const bool useGpus,
                  const int numGpus,
-                 const string& dbConvertDir,
                  const int startGpu,
                  const size_t reservedGpuMem,
                  const int start_epoch,
                  const size_t numReaderThreads)
-    : dataDir_(dataDir),
-      dbConvertDir_(dbConvertDir) {
+    : dataDir_(dataDir) {
   if (useGpus) {
     try {
       cudaMgr_ = new CudaMgr_Namespace::CudaMgr(numGpus, startGpu);
@@ -53,11 +49,6 @@ DataMgr::DataMgr(const string& dataDir,
   }
 
   populateMgrs(cpuBufferSize, numReaderThreads, start_epoch);
-
-  if (dbConvertDir_.size() > 0) {  // i.e. "--db_convert" option was used
-    dynamic_cast<GlobalFileMgr*>(bufferMgrs_[0][0])->setDBConvert(true);
-    convertDB(dbConvertDir_);      // dbConvertDir_ is path to DB directory with old data structure
-  }
 }
 
 DataMgr::~DataMgr() {
@@ -95,7 +86,7 @@ void DataMgr::populateMgrs(const size_t userSpecifiedCpuBufferSize,
                            const size_t userSpecifiedNumReaderThreads,
                            const int start_epoch) {
   bufferMgrs_.resize(2);
-  bufferMgrs_[0].push_back(new GlobalFileMgr(0, dataDir_, userSpecifiedNumReaderThreads, start_epoch));
+  bufferMgrs_[0].push_back(new FileMgr(0, dataDir_, userSpecifiedNumReaderThreads, start_epoch));
   levelSizes_.push_back(1);
   size_t cpuBufferSize = userSpecifiedCpuBufferSize;
   if (cpuBufferSize == 0)                          // if size is not specified
@@ -124,29 +115,6 @@ void DataMgr::populateMgrs(const size_t userSpecifiedCpuBufferSize,
     bufferMgrs_[1].push_back(new CpuBufferMgr(0, cpuBufferSize, cudaMgr_, cpuSlabSize, 512, bufferMgrs_[0][0]));
     levelSizes_.push_back(1);
   }
-}
-
-void DataMgr::convertDB(const std::string basePath) {
-  /* check that "mapd_data" directory exists and it's empty */
-  std::string  mapdDataPath(basePath + "/../mapd_data/");
-  boost::filesystem::path path(mapdDataPath);
-  if (boost::filesystem::exists(path)) {
-    if (!boost::filesystem::is_directory(path)) {
-      LOG(FATAL) << "Path to directory mapd_data to convert DB is not a directory.";
-    }
-  } else {  // data directory does not exist
-    LOG(FATAL) << "Path to directory mapd_data to convert DB does not exist.";
-  }
-
-  GlobalFileMgr* gfm = dynamic_cast<GlobalFileMgr*>(bufferMgrs_[0][0]);
-  size_t defaultPageSize = gfm->getDefaultPageSize();
-  LOG(INFO) << "Database conversion started.";
-  FileMgr* fm_base_db = new FileMgr(gfm, defaultPageSize, basePath); // this call also copies data into new DB structure
-  delete fm_base_db;
-
-  /* write content of DB into newly created/converted DB structure & location */
-  checkpoint(); // outputs data files as well as metadata files
-  LOG(INFO) << "Database conversion completed.";
 }
 
 memorySummary DataMgr::getMemorySummary() {
