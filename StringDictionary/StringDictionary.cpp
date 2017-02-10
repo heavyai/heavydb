@@ -158,7 +158,11 @@ void log_encoding_error(const std::string& str) {
 }  // namespace
 
 template <class T>
-void StringDictionary::getOrAddBulk(const std::vector<std::string>& string_vec, T* encoded_vec) noexcept {
+void StringDictionary::getOrAddBulk(const std::vector<std::string>& string_vec, T* encoded_vec) {
+  if (client_) {
+    getOrAddBulkRemote(string_vec, encoded_vec);
+    return;
+  }
   mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
   size_t out_idx{0};
   for (const auto& str : string_vec) {
@@ -175,10 +179,33 @@ void StringDictionary::getOrAddBulk(const std::vector<std::string>& string_vec, 
   }
 }
 
-template void StringDictionary::getOrAddBulk(const std::vector<std::string>& string_vec, uint8_t* encoded_vec) noexcept;
-template void StringDictionary::getOrAddBulk(const std::vector<std::string>& string_vec,
-                                             uint16_t* encoded_vec) noexcept;
-template void StringDictionary::getOrAddBulk(const std::vector<std::string>& string_vec, int32_t* encoded_vec) noexcept;
+template void StringDictionary::getOrAddBulk(const std::vector<std::string>& string_vec, uint8_t* encoded_vec);
+template void StringDictionary::getOrAddBulk(const std::vector<std::string>& string_vec, uint16_t* encoded_vec);
+template void StringDictionary::getOrAddBulk(const std::vector<std::string>& string_vec, int32_t* encoded_vec);
+
+template <class T>
+void StringDictionary::getOrAddBulkRemote(const std::vector<std::string>& string_vec, T* encoded_vec) {
+  CHECK(client_);
+  std::vector<int32_t> string_ids;
+  client_->get_or_add_bulk(string_ids, string_vec);
+  size_t out_idx{0};
+  for (size_t i = 0; i < string_ids.size(); ++i) {
+    const auto string_id = string_ids[i];
+    const bool invalid = string_id > max_valid_int_value<T>();
+    if (invalid || string_id == inline_int_null_value<int32_t>()) {
+      if (invalid) {
+        log_encoding_error<T>(string_vec[i]);
+      }
+      encoded_vec[out_idx++] = inline_int_null_value<T>();
+      continue;
+    }
+    encoded_vec[out_idx++] = string_id;
+  }
+}
+
+template void StringDictionary::getOrAddBulkRemote(const std::vector<std::string>& string_vec, uint8_t* encoded_vec);
+template void StringDictionary::getOrAddBulkRemote(const std::vector<std::string>& string_vec, uint16_t* encoded_vec);
+template void StringDictionary::getOrAddBulkRemote(const std::vector<std::string>& string_vec, int32_t* encoded_vec);
 
 int32_t StringDictionary::getIdOfString(const std::string& str) const {
   mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
@@ -473,6 +500,13 @@ void StringDictionary::invalidateInvertedIndex() noexcept {
 char* StringDictionary::CANARY_BUFFER{nullptr};
 
 bool StringDictionary::checkpoint() noexcept {
+  if (client_) {
+    try {
+      return client_->checkpoint();
+    } catch (...) {
+      return false;
+    }
+  }
   bool ret = true;
   ret = ret && (msync((void*)offset_map_, offset_file_size_, MS_SYNC) == 0);
   ret = ret && (msync((void*)payload_map_, payload_file_size_, MS_SYNC) == 0);

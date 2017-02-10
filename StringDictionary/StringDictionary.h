@@ -24,7 +24,7 @@ class StringDictionary {
 
   int32_t getOrAdd(const std::string& str) noexcept;
   template <class T>
-  void getOrAddBulk(const std::vector<std::string>& string_vec, T* encoded_vec) noexcept;
+  void getOrAddBulk(const std::vector<std::string>& string_vec, T* encoded_vec);
   int32_t getIdOfString(const std::string& str) const;
   std::string getString(int32_t string_id) const;
   std::pair<char*, size_t> getStringBytes(int32_t string_id) const noexcept;
@@ -52,6 +52,8 @@ class StringDictionary {
   bool fillRateIsHigh() const noexcept;
   void increaseCapacity() noexcept;
   int32_t getOrAddImpl(const std::string& str, bool recover) noexcept;
+  template <class T>
+  void getOrAddBulkRemote(const std::vector<std::string>& string_vec, T* encoded_vec);
   int32_t getUnlocked(const std::string& str) const noexcept;
   std::string getStringUnlocked(int32_t string_id) const noexcept;
   std::string getStringChecked(const int string_id) const noexcept;
