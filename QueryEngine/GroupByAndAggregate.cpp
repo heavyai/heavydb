@@ -1708,7 +1708,8 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
           !col_range_info.bucket && keyless_info.keyless;
       size_t bin_count = getBucketedCardinality(col_range_info);
       const size_t interleaved_max_threshold = g_cluster ? 0 : 512;
-      bool interleaved_bins = keyless && (bin_count <= interleaved_max_threshold) && count_distinct_descriptors.empty();
+      bool interleaved_bins = keyless && (bin_count <= interleaved_max_threshold) &&
+                              countDescriptorsLogicallyEmpty(count_distinct_descriptors);
       query_mem_desc_ = {executor_,
                          allow_multifrag,
                          col_range_info.hash_type_,
