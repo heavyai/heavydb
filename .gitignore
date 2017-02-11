@@ -49,3 +49,7 @@ ThirdParty/go/src/*
 *.pyc
 docs/build/
 docs/generated-docs/
+
+# java-generated files
+java/**/target/
+java/thrift/src/
