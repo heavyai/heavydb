@@ -384,15 +384,30 @@ if(ENABLE_CALCITE)
   if(NOT MVN_EXECUTABLE)
     message(FATAL_ERROR "mvn not found. Install Apache Maven.")
   endif()
-  add_custom_target(mapd_java_components ALL
+  file(GLOB_RECURSE JAVA_POM RELATIVE ${CMAKE_SOURCE_DIR} java/**/pom.xml)
+  file(GLOB_RECURSE JAVA_SOURCES RELATIVE ${CMAKE_SOURCE_DIR} java/**/*.java)
+  add_custom_command(
+    OUTPUT
+      ${CMAKE_BINARY_DIR}/bin/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar
+      ${CMAKE_BINARY_DIR}/bin/mapdjdbc-1.0-SNAPSHOT-jar-with-dependencies.jar
+      ${CMAKE_BINARY_DIR}/bin/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar
     COMMAND MVNPATH=${CMAKE_SOURCE_DIR}/java ${MVN_EXECUTABLE} -q install
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/java/mapd/target/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar ${CMAKE_BINARY_DIR}/bin
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/java/mapdjdbc/target/mapdjdbc-1.0-SNAPSHOT-jar-with-dependencies.jar ${CMAKE_BINARY_DIR}/bin
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/java/calcite/target/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar ${CMAKE_BINARY_DIR}/bin
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/java
-    DEPENDS ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/mapd/thrift/server/MapD.java  ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/mapd/thrift/calciteserver/CalciteServer.java
-    SOURCES ${CMAKE_SOURCE_DIR}/java/pom.xml ${CMAKE_SOURCE_DIR}/mapd.thrift
+    DEPENDS
+      ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/mapd/thrift/server/MapD.java
+      ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/mapd/thrift/calciteserver/CalciteServer.java
+      ${CMAKE_SOURCE_DIR}/java/pom.xml
+      ${CMAKE_SOURCE_DIR}/mapd.thrift
+      ${JAVA_POM}
+      ${JAVA_SOURCES}
     )
+  add_custom_target(mapd_java_components ALL DEPENDS
+    ${CMAKE_BINARY_DIR}/bin/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar
+    ${CMAKE_BINARY_DIR}/bin/mapdjdbc-1.0-SNAPSHOT-jar-with-dependencies.jar
+    ${CMAKE_BINARY_DIR}/bin/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar)
   install(FILES ${CMAKE_SOURCE_DIR}/java/mapd/target/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar DESTINATION bin)
   install(FILES ${CMAKE_SOURCE_DIR}/java/mapdjdbc/target/mapdjdbc-1.0-SNAPSHOT-jar-with-dependencies.jar DESTINATION bin)
   install(FILES ${CMAKE_SOURCE_DIR}/java/calcite/target/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar DESTINATION bin)
