@@ -121,7 +121,10 @@ FirstStepExecutionResult RelAlgExecutor::executeRelAlgQueryFirstStep(const RelAl
   if (sort) {
     // No point in sorting on the leaf, only execute the input to the sort node.
     CHECK_EQ(size_t(1), sort->inputCount());
-    first_exec_desc = RaExecutionDesc(sort->getInput(0));
+    const auto source = sort->getInput(0);
+    if (sort->collationCount() || node_is_aggregate(source)) {
+      first_exec_desc = RaExecutionDesc(source);
+    }
   }
   std::vector<RaExecutionDesc> first_exec_desc_singleton_list{first_exec_desc};
   const auto merge_type = node_is_aggregate(first_exec_desc.getBody()) ? MergeType::Reduce : MergeType::Union;
