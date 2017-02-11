@@ -1,10 +1,12 @@
 #include "JoinHashTable.h"
+#include "ThrustAllocator.h"
 #include "Execute.h"
 #include "ExpressionRewrite.h"
 #include "HashJoinRuntime.h"
 #include "RuntimeFunctions.h"
 
 #include <glog/logging.h>
+#include <numeric>
 #include <thread>
 
 namespace {
@@ -106,6 +108,7 @@ std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(
       new JoinHashTable(qual_bin_oper, inner_col, cat, query_infos, memory_level, col_range, executor));
   const int err = join_hash_table->reify(device_count);
   if (err) {
+#ifndef ENABLE_MULFRAG_JOIN
     if (err == ERR_MULTI_FRAG) {
       const auto cols = get_cols(qual_bin_oper, cat, executor->temporary_tables_);
       const auto inner_col = cols.first;
@@ -114,9 +117,88 @@ std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(
       throw HashJoinFail("Multi-fragment inner table '" + get_table_name_by_id(table_info.table_id, cat) +
                          "' not supported yet");
     }
+#endif
     throw HashJoinFail("Could not build a 1-to-1 correspondence for columns involved in equijoin");
   }
   return join_hash_table;
+}
+
+std::pair<const int8_t*, size_t> JoinHashTable::getColumnFragment(
+    const Analyzer::ColumnVar& hash_col,
+    const Fragmenter_Namespace::FragmentInfo& fragment,
+    const Data_Namespace::MemoryLevel effective_mem_lvl,
+    const int device_id,
+    std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
+    std::map<int, std::shared_ptr<const ColumnarResults>>& frags_owner) noexcept {
+  auto chunk_meta_it = fragment.chunkMetadataMap.find(hash_col.get_column_id());
+  CHECK(chunk_meta_it != fragment.chunkMetadataMap.end());
+  const auto cd = get_column_descriptor_maybe(hash_col.get_column_id(), hash_col.get_table_id(), cat_);
+  CHECK(!cd || !(cd->isVirtualCol));
+  const int8_t* col_buff = nullptr;
+  if (cd) {
+    ChunkKey chunk_key{
+        cat_.get_currentDB().dbId, hash_col.get_table_id(), hash_col.get_column_id(), fragment.fragmentId};
+    const auto chunk = Chunk_NS::Chunk::getChunk(cd,
+                                                 &cat_.get_dataMgr(),
+                                                 chunk_key,
+                                                 effective_mem_lvl,
+                                                 effective_mem_lvl == Data_Namespace::CPU_LEVEL ? 0 : device_id,
+                                                 chunk_meta_it->second.numBytes,
+                                                 chunk_meta_it->second.numElements);
+    chunks_owner.push_back(chunk);
+    CHECK(chunk);
+    auto ab = chunk->get_buffer();
+    CHECK(ab->getMemoryPtr());
+    col_buff = reinterpret_cast<int8_t*>(ab->getMemoryPtr());
+  } else {
+    const auto frag_id = fragment.fragmentId;
+    auto frag_it = frags_owner.find(frag_id);
+    if (frag_it == frags_owner.end()) {
+      std::shared_ptr<const ColumnarResults> col_frag(
+          columnarize_result(executor_->row_set_mem_owner_,
+                             get_temporary_table(executor_->temporary_tables_, hash_col.get_table_id()),
+                             frag_id));
+      auto res = frags_owner.insert(std::make_pair(frag_id, col_frag));
+      CHECK(res.second);
+      frag_it = res.first;
+    }
+    col_buff = Executor::ExecutionDispatch::getColumn(frag_it->second.get(),
+                                                      hash_col.get_column_id(),
+                                                      &cat_.get_dataMgr(),
+                                                      effective_mem_lvl,
+                                                      effective_mem_lvl == Data_Namespace::CPU_LEVEL ? 0 : device_id);
+  }
+  return {col_buff, fragment.numTuples};
+}
+
+std::pair<const int8_t*, size_t> JoinHashTable::getAllColumnFragments(
+    const Analyzer::ColumnVar& hash_col,
+    const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
+    std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
+    std::map<int, std::shared_ptr<const ColumnarResults>>& frags_owner) {
+  CHECK(!fragments.empty());
+  const size_t elem_width = hash_col.get_type_info().get_size();
+  std::vector<const int8_t*> col_frags;
+  std::vector<size_t> elem_counts;
+  for (auto& frag : fragments) {
+    const int8_t* col_frag = nullptr;
+    size_t elem_count = 0;
+    std::tie(col_frag, elem_count) =
+        getColumnFragment(hash_col, frag, Data_Namespace::CPU_LEVEL, 0, chunks_owner, frags_owner);
+    CHECK(col_frag != nullptr);
+    CHECK_NE(elem_count, size_t(0));
+    col_frags.push_back(col_frag);
+    elem_counts.push_back(elem_count);
+  }
+  CHECK(!col_frags.empty());
+  CHECK_EQ(col_frags.size(), elem_counts.size());
+  const auto total_elem_count = std::accumulate(elem_counts.begin(), elem_counts.end(), size_t(0));
+  auto col_buff = reinterpret_cast<int8_t*>(checked_malloc(total_elem_count * elem_width));
+  for (size_t i = 0, offset = 0; i < col_frags.size(); ++i) {
+    memcpy(col_buff + offset, col_frags[i], elem_counts[i] * elem_width);
+    offset += elem_counts[i] * elem_width;
+  }
+  return {col_buff, total_elem_count};
 }
 
 int JoinHashTable::reify(const int device_count) {
@@ -128,12 +210,13 @@ int JoinHashTable::reify(const int device_count) {
   if (query_info.fragments.empty()) {
     return 0;
   }
+#ifndef ENABLE_MULFRAG_JOIN
   if (query_info.fragments.size() != 1) {  // we don't support multiple fragment inner tables (yet)
     return ERR_MULTI_FRAG;
   }
-  const auto& fragment = query_info.fragments.front();
-  auto chunk_meta_it = fragment.chunkMetadataMap.find(inner_col->get_column_id());
-  CHECK(chunk_meta_it != fragment.chunkMetadataMap.end());
+#else
+  const bool has_multi_frag = query_info.fragments.size() > 1;
+#endif
   const auto cd = get_column_descriptor_maybe(inner_col->get_column_id(), inner_col->get_table_id(), cat_);
   CHECK(!cd || !(cd->isVirtualCol));
   const auto& ti =
@@ -147,46 +230,55 @@ int JoinHashTable::reify(const int device_count) {
   std::vector<int> errors(device_count);
   std::vector<std::thread> init_threads;
   std::vector<std::shared_ptr<Chunk_NS::Chunk>> chunks_owner;
-  std::unique_ptr<const ColumnarResults> columnar_results;
-  if (!cd) {
-    columnar_results.reset(
-        columnarize_result(executor_->row_set_mem_owner_,
-                           get_temporary_table(executor_->temporary_tables_, inner_col->get_table_id()),
-                           fragment.fragmentId));
+  std::map<int, std::shared_ptr<const ColumnarResults>> frags_owner;
+  const auto& first_frag = query_info.fragments.front();
+  ChunkKey chunk_key{cat_.get_currentDB().dbId, inner_col->get_table_id(), inner_col->get_column_id()};
+  const int8_t* col_buff = nullptr;
+  size_t elem_count = 0;
+
+#ifdef ENABLE_MULFRAG_JOIN
+  const size_t elem_width = inner_col->get_type_info().get_size();
+  auto& data_mgr = cat_.get_dataMgr();
+  RowSetMemoryOwner col_buff_owner;
+  std::vector<ThrustAllocator> dev_buff_owner;
+  if (has_multi_frag) {
+    try {
+      std::tie(col_buff, elem_count) =
+          getAllColumnFragments(*inner_col, query_info.fragments, chunks_owner, frags_owner);
+      col_buff_owner.addColBuffer(col_buff);
+    } catch (...) {
+      return -1;
+    }
+  } else
+#endif
+  {
+    chunk_key.push_back(first_frag.fragmentId);
   }
-  ChunkKey chunk_key{
-      cat_.get_currentDB().dbId, inner_col->get_table_id(), inner_col->get_column_id(), fragment.fragmentId};
-  const JoinHashTableCacheKey cache_key{col_range_, *inner_col, *cols.second, fragment.numTuples, chunk_key};
+
   for (int device_id = 0; device_id < device_count; ++device_id) {
-    const int8_t* col_buff{nullptr};
-    if (cd) {
-      CHECK(!columnar_results);
-      const auto chunk = Chunk_NS::Chunk::getChunk(cd,
-                                                   &cat_.get_dataMgr(),
-                                                   chunk_key,
-                                                   effective_memory_level,
-                                                   effective_memory_level == Data_Namespace::CPU_LEVEL ? 0 : device_id,
-                                                   chunk_meta_it->second.numBytes,
-                                                   chunk_meta_it->second.numElements);
-      chunks_owner.push_back(chunk);
-      CHECK(chunk);
-      auto ab = chunk->get_buffer();
-      CHECK(ab->getMemoryPtr());
-      col_buff = reinterpret_cast<int8_t*>(ab->getMemoryPtr());
-    } else {
-      CHECK(columnar_results);
-      col_buff =
-          Executor::ExecutionDispatch::getColumn(columnar_results.get(),
-                                                 inner_col->get_column_id(),
-                                                 &cat_.get_dataMgr(),
-                                                 effective_memory_level,
-                                                 effective_memory_level == Data_Namespace::CPU_LEVEL ? 0 : device_id);
+#ifdef ENABLE_MULFRAG_JOIN
+    dev_buff_owner.emplace_back(&data_mgr, device_id);
+    if (has_multi_frag) {
+      if (effective_memory_level == Data_Namespace::GPU_LEVEL) {
+        CHECK(col_buff != nullptr);
+        CHECK_NE(elem_count, size_t(0));
+        int8_t* dev_col_buff = nullptr;
+        dev_col_buff = dev_buff_owner[device_id].allocate(elem_count * elem_width);
+        copy_to_gpu(
+            &data_mgr, reinterpret_cast<CUdeviceptr>(dev_col_buff), col_buff, elem_count * elem_width, device_id);
+        col_buff = dev_col_buff;
+      }
+    } else
+#endif
+    {
+      std::tie(col_buff, elem_count) =
+          getColumnFragment(*inner_col, first_frag, effective_memory_level, device_id, chunks_owner, frags_owner);
     }
     init_threads.emplace_back(
-        [&errors, &chunk_key, &chunk_meta_it, &cols, &fragment, col_buff, effective_memory_level, device_id, this] {
+        [&errors, &chunk_key, &cols, elem_count, col_buff, effective_memory_level, device_id, this] {
           try {
-            errors[device_id] = initHashTableForDevice(
-                chunk_key, col_buff, fragment.numTuples, cols, effective_memory_level, device_id);
+            errors[device_id] =
+                initHashTableForDevice(chunk_key, col_buff, elem_count, cols, effective_memory_level, device_id);
           } catch (...) {
             errors[device_id] = -1;
           }

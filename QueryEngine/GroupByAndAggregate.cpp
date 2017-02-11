@@ -506,6 +506,7 @@ std::vector<CUdeviceptr> QueryExecutionContext::prepareKernelParams(
     const std::vector<int8_t>& literal_buff,
     const std::vector<std::vector<int64_t>>& num_rows,
     const std::vector<std::vector<uint64_t>>& frag_offsets,
+    const uint32_t frag_stride,
     const int32_t scan_limit,
     const std::vector<int64_t>& init_agg_vals,
     const std::vector<int32_t>& error_codes,
@@ -516,7 +517,7 @@ std::vector<CUdeviceptr> QueryExecutionContext::prepareKernelParams(
     const bool hoist_literals,
     const bool is_group_by) const {
   std::vector<CUdeviceptr> params(KERN_PARAM_COUNT, 0);
-  uint32_t num_fragments = col_buffers.size();
+  const uint32_t num_fragments = col_buffers.size();
   const size_t col_count{num_fragments > 0 ? col_buffers.front().size() : 0};
   if (col_count) {
     std::vector<CUdeviceptr> multifrag_col_dev_buffers;
@@ -535,6 +536,10 @@ std::vector<CUdeviceptr> QueryExecutionContext::prepareKernelParams(
   }
   params[NUM_FRAGMENTS] = alloc_gpu_mem(data_mgr, sizeof(uint32_t), device_id, nullptr);
   copy_to_gpu(data_mgr, params[NUM_FRAGMENTS], &num_fragments, sizeof(uint32_t), device_id);
+
+  params[FRAG_STRIDE] = alloc_gpu_mem(data_mgr, sizeof(uint32_t), device_id, nullptr);
+  copy_to_gpu(data_mgr, params[FRAG_STRIDE], &frag_stride, sizeof(uint32_t), device_id);
+
   CUdeviceptr literals_and_addr_mapping =
       alloc_gpu_mem(data_mgr, literal_buff.size() + 2 * sizeof(int64_t), device_id, nullptr);
   CHECK_EQ(0, literals_and_addr_mapping % 8);
@@ -681,6 +686,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const RelAlgExecution
                                                            std::vector<std::vector<const int8_t*>> col_buffers,
                                                            const std::vector<std::vector<int64_t>>& num_rows,
                                                            const std::vector<std::vector<uint64_t>>& frag_offsets,
+                                                           const uint32_t frag_stride,
                                                            const int32_t scan_limit,
                                                            const std::vector<int64_t>& init_agg_vals,
                                                            Data_Namespace::DataMgr* data_mgr,
@@ -727,6 +733,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const RelAlgExecution
                                            literal_buff,
                                            num_rows,
                                            frag_offsets,
+                                           frag_stride,
                                            scan_limit,
                                            init_agg_vals,
                                            error_codes,
@@ -833,6 +840,8 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const RelAlgExecution
                                      can_sort_on_gpu && query_mem_desc_.keyless_hash);
     }
   } else {
+    CHECK_EQ(num_fragments % frag_stride, 0u);
+    const auto num_out_frags = num_fragments / frag_stride;
     std::vector<CUdeviceptr> out_vec_dev_buffers;
     const size_t agg_col_count{ra_exe_unit.estimator ? size_t(1) : init_agg_vals.size()};
     if (ra_exe_unit.estimator) {
@@ -841,9 +850,9 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const RelAlgExecution
     } else {
       for (size_t i = 0; i < agg_col_count; ++i) {
         auto out_vec_dev_buffer =
-            num_fragments
+            num_out_frags
                 ? alloc_gpu_mem(
-                      data_mgr, block_size_x * grid_size_x * sizeof(int64_t) * num_fragments, device_id, nullptr)
+                      data_mgr, block_size_x * grid_size_x * sizeof(int64_t) * num_out_frags, device_id, nullptr)
                 : 0;
         out_vec_dev_buffers.push_back(out_vec_dev_buffer);
       }
@@ -922,11 +931,11 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const RelAlgExecution
       return {};
     }
     for (size_t i = 0; i < agg_col_count; ++i) {
-      int64_t* host_out_vec = new int64_t[block_size_x * grid_size_x * sizeof(int64_t) * num_fragments];
+      int64_t* host_out_vec = new int64_t[block_size_x * grid_size_x * sizeof(int64_t) * num_out_frags];
       copy_from_gpu(data_mgr,
                     host_out_vec,
                     out_vec_dev_buffers[i],
-                    block_size_x * grid_size_x * sizeof(int64_t) * num_fragments,
+                    block_size_x * grid_size_x * sizeof(int64_t) * num_out_frags,
                     device_id);
       out_vec.push_back(host_out_vec);
     }
@@ -961,11 +970,23 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(const RelAlgExecution
                                                            std::vector<std::vector<const int8_t*>> col_buffers,
                                                            const std::vector<std::vector<int64_t>>& num_rows,
                                                            const std::vector<std::vector<uint64_t>>& frag_offsets,
+                                                           const uint32_t frag_stride,
                                                            const int32_t scan_limit,
                                                            const std::vector<int64_t>& init_agg_vals,
                                                            int32_t* error_code,
                                                            const uint32_t num_tables,
                                                            const int64_t join_hash_table) {
+  std::vector<const int8_t**> multifrag_col_buffers;
+  for (auto& col_buffer : col_buffers) {
+    multifrag_col_buffers.push_back(&col_buffer[0]);
+  }
+  const int8_t*** multifrag_cols_ptr{multifrag_col_buffers.empty() ? nullptr : &multifrag_col_buffers[0]};
+  int64_t** small_group_by_buffers_ptr{small_group_by_buffers_.empty() ? nullptr : &small_group_by_buffers_[0]};
+  const uint32_t num_fragments =
+      multifrag_cols_ptr ? static_cast<uint32_t>(col_buffers.size()) : 0u;  // TODO(miyu): check 0
+  CHECK_EQ(num_fragments % frag_stride, 0u);
+  const auto num_out_frags = multifrag_cols_ptr ? num_fragments / frag_stride : 0u;
+
   const bool is_group_by{!query_mem_desc_.group_col_widths.empty()};
   std::vector<int64_t*> out_vec;
   if (ra_exe_unit.estimator) {
@@ -974,19 +995,11 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(const RelAlgExecution
   } else {
     if (!is_group_by) {
       for (size_t i = 0; i < init_agg_vals.size(); ++i) {
-        auto buff = new int64_t[1];
+        auto buff = new int64_t[num_out_frags];
         out_vec.push_back(static_cast<int64_t*>(buff));
       }
     }
   }
-
-  std::vector<const int8_t**> multifrag_col_buffers;
-  for (auto& col_buffer : col_buffers) {
-    multifrag_col_buffers.push_back(&col_buffer[0]);
-  }
-  const int8_t*** multifrag_cols_ptr{multifrag_col_buffers.empty() ? nullptr : &multifrag_col_buffers[0]};
-  int64_t** small_group_by_buffers_ptr{small_group_by_buffers_.empty() ? nullptr : &small_group_by_buffers_[0]};
-  const uint32_t num_fragments = multifrag_cols_ptr ? col_buffers.size() : 0;
 
   CHECK_EQ(num_rows.size(), col_buffers.size());
   std::vector<int64_t> flatened_num_rows;
@@ -1010,6 +1023,7 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(const RelAlgExecution
   if (hoist_literals) {
     typedef void (*agg_query)(const int8_t*** col_buffers,
                               const uint32_t* num_fragments,
+                              const uint32_t* frag_stride,
                               const int8_t* literals,
                               const int64_t* num_rows,
                               const uint64_t* frag_row_offsets,
@@ -1022,37 +1036,40 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(const RelAlgExecution
                               const uint32_t* num_tables,
                               const int64_t* join_hash_table_ptr);
     if (is_group_by) {
-      reinterpret_cast<agg_query>(fn_ptrs[0])(multifrag_cols_ptr,
-                                              &num_fragments,
-                                              &literal_buff[0],
-                                              num_rows_ptr,
-                                              &flatened_frag_offsets[0],
-                                              &scan_limit,
-                                              &total_matched_init,
-                                              &cmpt_val_buff[0],
-                                              &group_by_buffers_[0],
-                                              small_group_by_buffers_ptr,
-                                              error_code,
-                                              &num_tables,
-                                              &join_hash_table);
+      reinterpret_cast<agg_query>(fn_ptrs[0].first)(multifrag_cols_ptr,
+                                                    &num_fragments,
+                                                    &frag_stride,
+                                                    &literal_buff[0],
+                                                    num_rows_ptr,
+                                                    &flatened_frag_offsets[0],
+                                                    &scan_limit,
+                                                    &total_matched_init,
+                                                    &cmpt_val_buff[0],
+                                                    &group_by_buffers_[0],
+                                                    small_group_by_buffers_ptr,
+                                                    error_code,
+                                                    &num_tables,
+                                                    &join_hash_table);
     } else {
-      reinterpret_cast<agg_query>(fn_ptrs[0])(multifrag_cols_ptr,
-                                              &num_fragments,
-                                              &literal_buff[0],
-                                              num_rows_ptr,
-                                              &flatened_frag_offsets[0],
-                                              &scan_limit,
-                                              &total_matched_init,
-                                              &init_agg_vals[0],
-                                              &out_vec[0],
-                                              nullptr,
-                                              error_code,
-                                              &num_tables,
-                                              &join_hash_table);
+      reinterpret_cast<agg_query>(fn_ptrs[0].first)(multifrag_cols_ptr,
+                                                    &num_fragments,
+                                                    &frag_stride,
+                                                    &literal_buff[0],
+                                                    num_rows_ptr,
+                                                    &flatened_frag_offsets[0],
+                                                    &scan_limit,
+                                                    &total_matched_init,
+                                                    &init_agg_vals[0],
+                                                    &out_vec[0],
+                                                    nullptr,
+                                                    error_code,
+                                                    &num_tables,
+                                                    &join_hash_table);
     }
   } else {
     typedef void (*agg_query)(const int8_t*** col_buffers,
                               const uint32_t* num_fragments,
+                              const uint32_t* frag_stride,
                               const int64_t* num_rows,
                               const uint64_t* frag_row_offsets,
                               const int32_t* max_matched,
@@ -1064,31 +1081,33 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(const RelAlgExecution
                               const uint32_t* num_tables,
                               const int64_t* join_hash_table_ptr);
     if (is_group_by) {
-      reinterpret_cast<agg_query>(fn_ptrs[0])(multifrag_cols_ptr,
-                                              &num_fragments,
-                                              num_rows_ptr,
-                                              &flatened_frag_offsets[0],
-                                              &scan_limit,
-                                              &total_matched_init,
-                                              &cmpt_val_buff[0],
-                                              &group_by_buffers_[0],
-                                              small_group_by_buffers_ptr,
-                                              error_code,
-                                              &num_tables,
-                                              &join_hash_table);
+      reinterpret_cast<agg_query>(fn_ptrs[0].first)(multifrag_cols_ptr,
+                                                    &num_fragments,
+                                                    &frag_stride,
+                                                    num_rows_ptr,
+                                                    &flatened_frag_offsets[0],
+                                                    &scan_limit,
+                                                    &total_matched_init,
+                                                    &cmpt_val_buff[0],
+                                                    &group_by_buffers_[0],
+                                                    small_group_by_buffers_ptr,
+                                                    error_code,
+                                                    &num_tables,
+                                                    &join_hash_table);
     } else {
-      reinterpret_cast<agg_query>(fn_ptrs[0])(multifrag_cols_ptr,
-                                              &num_fragments,
-                                              num_rows_ptr,
-                                              &flatened_frag_offsets[0],
-                                              &scan_limit,
-                                              &total_matched_init,
-                                              &init_agg_vals[0],
-                                              &out_vec[0],
-                                              nullptr,
-                                              error_code,
-                                              &num_tables,
-                                              &join_hash_table);
+      reinterpret_cast<agg_query>(fn_ptrs[0].first)(multifrag_cols_ptr,
+                                                    &num_fragments,
+                                                    &frag_stride,
+                                                    num_rows_ptr,
+                                                    &flatened_frag_offsets[0],
+                                                    &scan_limit,
+                                                    &total_matched_init,
+                                                    &init_agg_vals[0],
+                                                    &out_vec[0],
+                                                    nullptr,
+                                                    error_code,
+                                                    &num_tables,
+                                                    &join_hash_table);
     }
   }
 

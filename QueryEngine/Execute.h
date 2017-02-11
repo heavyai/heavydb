@@ -571,6 +571,8 @@ class Executor {
     mutable std::unordered_map<InputColDescriptor, std::unordered_map<CacheKey, std::unique_ptr<const ColumnarResults>>>
         columnarized_ref_table_cache_;
 
+    uint32_t getFragmentStride(const std::map<int, std::vector<size_t>>& frag_ids) const;
+
     std::vector<const ColumnarResults*> getAllScanColumnFrags(
         const int table_id,
         const int col_id,
@@ -755,6 +757,7 @@ class Executor {
                                  QueryExecutionContext*,
                                  const std::vector<std::vector<int64_t>>& num_rows,
                                  const std::vector<std::vector<uint64_t>>& frag_offsets,
+                                 const uint32_t frag_stride,
                                  Data_Namespace::DataMgr*,
                                  const int device_id,
                                  const int64_t limit,
@@ -772,6 +775,7 @@ class Executor {
                                     QueryExecutionContext* query_exe_context,
                                     const std::vector<std::vector<int64_t>>& num_rows,
                                     const std::vector<std::vector<uint64_t>>& frag_offsets,
+                                    const uint32_t frag_stride,
                                     Data_Namespace::DataMgr* data_mgr,
                                     const int device_id,
                                     const uint32_t start_rowid,

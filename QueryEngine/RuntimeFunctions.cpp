@@ -901,6 +901,7 @@ extern "C" __attribute__((noinline)) void query_stub_hoisted_literals(const int8
 
 extern "C" void multifrag_query_hoisted_literals(const int8_t*** col_buffers,
                                                  const uint32_t* num_fragments,
+                                                 const uint32_t* frag_stride,
                                                  const int8_t* literals,
                                                  const int64_t* num_rows,
                                                  const uint64_t* frag_row_offsets,
@@ -912,7 +913,7 @@ extern "C" void multifrag_query_hoisted_literals(const int8_t*** col_buffers,
                                                  int32_t* error_code,
                                                  const uint32_t* num_tables_ptr,
                                                  const int64_t* join_hash_table_ptr) {
-  for (uint32_t i = 0; i < *num_fragments; ++i) {
+  for (uint32_t i = 0; i < *num_fragments; i += *frag_stride) {
     query_stub_hoisted_literals(col_buffers ? col_buffers[i] : nullptr,
                                 literals,
                                 &num_rows[i * (*num_tables_ptr)],
@@ -925,7 +926,7 @@ extern "C" void multifrag_query_hoisted_literals(const int8_t*** col_buffers,
                                 init_agg_value,
                                 out,
                                 out2,
-                                i,
+                                i / *frag_stride,
                                 *join_hash_table_ptr,
                                 total_matched,
                                 error_code);
@@ -956,6 +957,7 @@ extern "C" __attribute__((noinline)) void query_stub(const int8_t** col_buffers,
 
 extern "C" void multifrag_query(const int8_t*** col_buffers,
                                 const uint32_t* num_fragments,
+                                const uint32_t* frag_stride,
                                 const int64_t* num_rows,
                                 const uint64_t* frag_row_offsets,
                                 const int32_t* max_matched,
@@ -966,7 +968,7 @@ extern "C" void multifrag_query(const int8_t*** col_buffers,
                                 int32_t* error_code,
                                 const uint32_t* num_tables_ptr,
                                 const int64_t* join_hash_table_ptr) {
-  for (uint32_t i = 0; i < *num_fragments; ++i) {
+  for (uint32_t i = 0; i < *num_fragments; i += *frag_stride) {
     query_stub(col_buffers ? col_buffers[i] : nullptr,
                &num_rows[i * (*num_tables_ptr)],
 #ifdef ENABLE_MULFRAG_JOIN
@@ -978,7 +980,7 @@ extern "C" void multifrag_query(const int8_t*** col_buffers,
                init_agg_value,
                out,
                out2,
-               i,
+               i / *frag_stride,
                *join_hash_table_ptr,
                total_matched,
                error_code);

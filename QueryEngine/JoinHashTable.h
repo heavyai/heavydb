@@ -9,6 +9,7 @@
 #define QUERYENGINE_JOINHASHTABLE_H
 
 #include "ExpressionRange.h"
+#include "ColumnarResults.h"
 #include "InputDescriptors.h"
 #include "InputMetadata.h"
 #include "../Analyzer/Analyzer.h"
@@ -73,6 +74,20 @@ class JoinHashTable {
         executor_(executor) {
     CHECK(col_range.getType() == ExpressionRangeType::Integer);
   }
+
+  std::pair<const int8_t*, size_t> getColumnFragment(
+      const Analyzer::ColumnVar& hash_col,
+      const Fragmenter_Namespace::FragmentInfo& fragment,
+      const Data_Namespace::MemoryLevel effective_mem_lvl,
+      const int device_id,
+      std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
+      std::map<int, std::shared_ptr<const ColumnarResults>>& frags_owner) noexcept;
+
+  std::pair<const int8_t*, size_t> getAllColumnFragments(
+      const Analyzer::ColumnVar& hash_col,
+      const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
+      std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
+      std::map<int, std::shared_ptr<const ColumnarResults>>& frags_owner);
 
   int reify(const int device_count);
   int initHashTableForDevice(const ChunkKey& chunk_key,
