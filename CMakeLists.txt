@@ -324,6 +324,7 @@ if(MAPD_IMMERSE_DOWNLOAD)
   externalproject_get_property(frontend source_dir)
   install(DIRECTORY ${source_dir}/ DESTINATION "frontend/" PATTERN .git EXCLUDE PATTERN node_modules EXCLUDE)
   add_custom_command(TARGET frontend COMMAND ${CMAKE_COMMAND} -E copy_directory ${source_dir} frontend)
+  list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/frontend)
 endif()
 
 ## Go web server
@@ -361,6 +362,7 @@ if(MAPD_DOCS_DOWNLOAD)
   externalproject_get_property(docs source_dir)
   install(DIRECTORY ${source_dir}/ DESTINATION "docs/" PATTERN .git EXCLUDE)
   add_custom_command(TARGET docs COMMAND ${CMAKE_COMMAND} -E copy_directory ${source_dir} docs)
+  list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/docs)
 endif()
 
 
@@ -379,6 +381,10 @@ if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
     install(FILES systemd/mapd_xorg.service DESTINATION systemd)
   endif()
 endif()
+
+add_custom_target(clean-all
+  COMMAND ${CMAKE_BUILD_TOOL} clean
+  )
 
 if(ENABLE_CALCITE)
   ## mvn process for java code
@@ -410,6 +416,11 @@ if(ENABLE_CALCITE)
     ${CMAKE_BINARY_DIR}/bin/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar
     ${CMAKE_BINARY_DIR}/bin/mapdjdbc-1.0-SNAPSHOT-jar-with-dependencies.jar
     ${CMAKE_BINARY_DIR}/bin/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar)
+  add_custom_target(mapd_java_clean
+    COMMAND MVNPATH=${CMAKE_SOURCE_DIR}/java ${MVN_EXECUTABLE} -q clean
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/java
+    )
+  add_dependencies(clean-all mapd_java_clean)
   install(FILES ${CMAKE_SOURCE_DIR}/java/mapd/target/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar DESTINATION bin)
   install(FILES ${CMAKE_SOURCE_DIR}/java/mapdjdbc/target/mapdjdbc-1.0-SNAPSHOT-jar-with-dependencies.jar DESTINATION bin)
   install(FILES ${CMAKE_SOURCE_DIR}/java/calcite/target/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar DESTINATION bin)
