@@ -3429,6 +3429,9 @@ namespace {
 
 RowSetPtr reduce_estimator_results(const RelAlgExecutionUnit& ra_exe_unit,
                                    std::vector<std::pair<ResultPtr, std::vector<size_t>>>& results_per_device) {
+  if (results_per_device.empty()) {
+    return nullptr;
+  }
   auto first = boost::get<RowSetPtr>(&results_per_device.front().first);
   CHECK(first && *first);
   const auto result_set = (*first)->getResultSet();
@@ -3457,6 +3460,10 @@ RowSetPtr Executor::reduceMultiDeviceResults(const RelAlgExecutionUnit& ra_exe_u
                                              const QueryMemoryDescriptor& query_mem_desc,
                                              const bool output_columnar,
                                              const ExecutorDeviceType dt_for_all) const {
+  if (ra_exe_unit.estimator) {
+    return reduce_estimator_results(ra_exe_unit, results_per_device);
+  }
+
   if (results_per_device.empty()) {
     return boost::make_unique<ResultRows>(
         query_mem_desc, ra_exe_unit.target_exprs, nullptr, nullptr, std::vector<int64_t>{}, ExecutorDeviceType::CPU);
@@ -3469,10 +3476,6 @@ RowSetPtr Executor::reduceMultiDeviceResults(const RelAlgExecutionUnit& ra_exe_u
 
   auto first = boost::get<RowSetPtr>(&results_per_device.front().first);
   CHECK(first && *first);
-
-  if (ra_exe_unit.estimator) {
-    return reduce_estimator_results(ra_exe_unit, results_per_device);
-  }
 
   auto reduced_results = boost::make_unique<ResultRows>(**first);
   CHECK(reduced_results);

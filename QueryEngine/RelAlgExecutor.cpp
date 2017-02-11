@@ -1190,7 +1190,9 @@ size_t RelAlgExecutor::getNDVEstimation(const WorkUnit& work_unit,
     throw std::runtime_error("Failed to run the cardinality estimation query");
   }
   const auto& estimator_result_rows = boost::get<RowSetPtr>(estimator_result);
-  CHECK(estimator_result_rows);
+  if (!estimator_result_rows) {
+    return 1;
+  }
   const auto estimator_result_set = estimator_result_rows->getResultSet();
   CHECK(estimator_result_set);
   return std::max(estimator_result_set->getNDVEstimator(), size_t(1));
