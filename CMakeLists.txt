@@ -331,12 +331,14 @@ find_program(GO_EXECUTABLE NAMES go)
 if(NOT GO_EXECUTABLE)
   message(FATAL_ERROR "go not found. Install Go(lang).")
 endif()
-# fake GO15VENDOREXPERIMENT since Go 1.5 is not available on all build platforms
-add_custom_target(mapd_web_server ALL
+file(GLOB_RECURSE GOLANG_SOURCES RELATIVE ${CMAKE_SOURCE_DIR} ThirdParty/go/src/mapd/vendor/**/*.go)
+add_custom_command(
+  OUTPUT ${CMAKE_BINARY_DIR}/bin/mapd_web_server
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/ThirdParty/go/src/mapd/vendor/ ${CMAKE_BINARY_DIR}/go/src/
   COMMAND GOPATH=${CMAKE_BINARY_DIR}/go ${GO_EXECUTABLE} build -ldflags "-X main.version=${CPACK_PACKAGE_VERSION}" -o ${CMAKE_BINARY_DIR}/bin/mapd_web_server ${CMAKE_SOURCE_DIR}/MapDWebServer.go
-  SOURCES MapDWebServer.go
+  DEPENDS MapDWebServer.go ${GOLANG_SOURCES}
   )
+add_custom_target(mapd_web_server ALL DEPENDS ${CMAKE_BINARY_DIR}/bin/mapd_web_server)
 install(PROGRAMS ${CMAKE_BINARY_DIR}/bin/mapd_web_server DESTINATION bin)
 list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/bin/mapd_web_server)
 list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/go)
