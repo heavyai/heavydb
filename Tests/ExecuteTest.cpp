@@ -2469,6 +2469,7 @@ TEST(Select, WatchdogTest) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     c("SELECT x, SUM(f) AS n FROM test GROUP BY x ORDER BY n DESC LIMIT 5;", dt);
+    c("SELECT COUNT(*) FROM test WHERE str = 'abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz';", dt);
   }
 }
 
