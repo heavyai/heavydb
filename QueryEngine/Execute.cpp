@@ -2162,6 +2162,14 @@ llvm::Value* Executor::codegenLogical(const Analyzer::BinOper* bin_oper, const C
   const auto rhs = bin_oper->get_right_operand();
   auto lhs_lv = codegen(lhs, true, co).front();
   auto rhs_lv = codegen(rhs, true, co).front();
+  CHECK(lhs_lv->getType()->isIntegerTy(1) || lhs_lv->getType()->isIntegerTy(8));
+  CHECK(rhs_lv->getType()->isIntegerTy(1) || rhs_lv->getType()->isIntegerTy(8));
+  if (lhs_lv->getType()->isIntegerTy(1)) {
+    lhs_lv = castToTypeIn(lhs_lv, 8);
+  }
+  if (rhs_lv->getType()->isIntegerTy(1)) {
+    rhs_lv = castToTypeIn(rhs_lv, 8);
+  }
   const auto& ti = bin_oper->get_type_info();
   if (ti.get_notnull()) {
     switch (optype) {
@@ -2172,14 +2180,6 @@ llvm::Value* Executor::codegenLogical(const Analyzer::BinOper* bin_oper, const C
       default:
         CHECK(false);
     }
-  }
-  CHECK(lhs_lv->getType()->isIntegerTy(1) || lhs_lv->getType()->isIntegerTy(8));
-  CHECK(rhs_lv->getType()->isIntegerTy(1) || rhs_lv->getType()->isIntegerTy(8));
-  if (lhs_lv->getType()->isIntegerTy(1)) {
-    lhs_lv = castToTypeIn(lhs_lv, 8);
-  }
-  if (rhs_lv->getType()->isIntegerTy(1)) {
-    rhs_lv = castToTypeIn(rhs_lv, 8);
   }
   switch (optype) {
     case kAND:

@@ -1405,6 +1405,7 @@ TEST(Select, BooleanColumn) {
     ASSERT_EQ(g_num_rows + g_num_rows / 2,
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE x < 8 AND b;", dt)));
     ASSERT_EQ(0, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE x < 8 AND NOT b;", dt)));
+    ASSERT_EQ(5, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE x > 7 OR false;", dt)));
     ASSERT_EQ(7, v<int64_t>(run_simple_agg("SELECT MAX(x) FROM test WHERE b = CAST('t' AS boolean);", dt)));
     ASSERT_EQ(3 * g_num_rows,
               v<int64_t>(run_simple_agg(" SELECT SUM(2 *(CASE when x = 7 then 1 else 0 END)) FROM test;", dt)));
