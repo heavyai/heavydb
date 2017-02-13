@@ -546,7 +546,10 @@ class MapDHandler : virtual public MapDIf {
                                false,
                                g_enable_dynamic_watchdog,
                                g_dynamic_watchdog_time_limit};
+        const auto clock_begin = timer_start();
         const auto result = leaf_aggregator_.execute(session_info, query_ra, eo);
+        _return.total_time_ms = timer_stop(clock_begin);
+        _return.execution_time_ms = _return.total_time_ms - result.rs->getQueueTime();
         convert_rows(_return, result.targets_meta, *(result.rs), column_format);
       } catch (std::exception& e) {
         const auto mapd_exception = dynamic_cast<const TMapDException*>(&e);
