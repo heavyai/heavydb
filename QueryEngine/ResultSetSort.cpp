@@ -100,7 +100,7 @@ void ResultSet::doBaselineSort(const ExecutorDeviceType device_type,
 }
 
 bool ResultSet::canUseFastBaselineSort(const std::list<Analyzer::OrderEntry>& order_entries, const size_t top_n) {
-  if (order_entries.size() != 1) {
+  if (order_entries.size() != 1 || query_mem_desc_.keyless_hash || query_mem_desc_.sortOnGpu()) {
     return false;
   }
   const auto& order_entry = order_entries.front();
@@ -110,8 +110,9 @@ bool ResultSet::canUseFastBaselineSort(const std::list<Analyzer::OrderEntry>& or
   if (!target_info.sql_type.is_number() || is_distinct_target(target_info)) {
     return false;
   }
-  return query_mem_desc_.hash_type == GroupByColRangeType::MultiCol && !query_mem_desc_.getSmallBufferSizeQuad() &&
-         top_n;
+  return (query_mem_desc_.hash_type == GroupByColRangeType::MultiCol ||
+          query_mem_desc_.hash_type == GroupByColRangeType::OneColKnownRange) &&
+         !query_mem_desc_.getSmallBufferSizeQuad() && top_n;
 }
 
 Data_Namespace::DataMgr* ResultSet::getDataManager() const {

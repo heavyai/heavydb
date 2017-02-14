@@ -221,6 +221,7 @@ void ResultSetStorage::reduceOneEntryNoCollisionsRowWise(const size_t entry_idx,
     memcpy(this_targets_ptr - key_bytes, that_targets_ptr - key_bytes, key_bytes);
   }
   size_t target_slot_idx = 0;
+  size_t init_agg_val_idx = 0;
   for (size_t target_logical_idx = 0; target_logical_idx < targets_.size(); ++target_logical_idx) {
     const auto& target_info = targets_[target_logical_idx];
     int8_t* this_ptr2{nullptr};
@@ -236,11 +237,19 @@ void ResultSetStorage::reduceOneEntryNoCollisionsRowWise(const size_t entry_idx,
                   target_info,
                   target_logical_idx,
                   target_slot_idx,
-                  target_slot_idx,
+                  init_agg_val_idx,
                   that);
     this_targets_ptr = advance_target_ptr(this_targets_ptr, target_info, target_slot_idx, query_mem_desc_, false);
     that_targets_ptr = advance_target_ptr(that_targets_ptr, target_info, target_slot_idx, query_mem_desc_, false);
     target_slot_idx = advance_slot(target_slot_idx, target_info, false);
+    if (query_mem_desc_.target_groupby_indices.empty()) {
+      init_agg_val_idx = advance_slot(init_agg_val_idx, target_info, false);
+    } else {
+      CHECK_LT(target_logical_idx, query_mem_desc_.target_groupby_indices.size());
+      if (query_mem_desc_.target_groupby_indices[target_logical_idx] < 0) {
+        init_agg_val_idx = advance_slot(init_agg_val_idx, target_info, false);
+      }
+    }
   }
 }
 

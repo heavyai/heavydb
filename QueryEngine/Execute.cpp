@@ -3795,6 +3795,9 @@ RowSetPtr Executor::executeResultPlan(const Planner::Result* result_plan,
                                        false,
                                        true,
                                        false,
+                                       false,
+                                       {},
+                                       {},
                                        false};
   auto compilation_result =
       compileWorkUnit(false,
@@ -6548,6 +6551,7 @@ declare void @init_group_by_buffer_gpu(i64*, i64*, i32, i32, i32, i1, i8);
 declare i64* @get_group_value(i64*, i32, i64*, i32, i32, i64*);
 declare i64* @get_group_value_with_watchdog(i64*, i32, i64*, i32, i32, i64*);
 declare i64* @get_group_value_fast(i64*, i64, i64, i64, i32);
+declare i64* @get_group_value_fast_with_original_key(i64*, i64, i64, i64, i64, i32);
 declare i32 @get_columnar_group_bin_offset(i64*, i64, i64, i64);
 declare i64* @get_group_value_one_key(i64*, i32, i64*, i32, i64, i64, i32, i64*);
 declare i64* @get_group_value_one_key_with_watchdog(i64*, i32, i64*, i32, i64, i64, i32, i64*);
@@ -6939,13 +6943,13 @@ llvm::Value* Executor::castToIntPtrTyIn(llvm::Value* val, const size_t bitWidth)
 #include "StringFunctions.cpp"
 #undef EXECUTE_INCLUDE
 
-llvm::Value* Executor::groupByColumnCodegen(Analyzer::Expr* group_by_col,
-                                            const CompilationOptions& co,
-                                            const bool translate_null_val,
-                                            const int64_t translated_null_val,
-                                            GroupByAndAggregate::DiamondCodegen& diamond_codegen,
-                                            std::stack<llvm::BasicBlock*>& array_loops,
-                                            const bool thread_mem_shared) {
+Executor::GroupColLLVMValue Executor::groupByColumnCodegen(Analyzer::Expr* group_by_col,
+                                                           const CompilationOptions& co,
+                                                           const bool translate_null_val,
+                                                           const int64_t translated_null_val,
+                                                           GroupByAndAggregate::DiamondCodegen& diamond_codegen,
+                                                           std::stack<llvm::BasicBlock*>& array_loops,
+                                                           const bool thread_mem_shared) {
   auto group_key = codegen(group_by_col, true, co).front();
   auto key_to_cache = group_key;
   if (dynamic_cast<Analyzer::UOper*>(group_by_col) &&
@@ -6990,9 +6994,11 @@ llvm::Value* Executor::groupByColumnCodegen(Analyzer::Expr* group_by_col,
     array_loops.push(array_loop_head);
   }
   cgen_state_->group_by_expr_cache_.push_back(key_to_cache);
+  llvm::Value* orig_group_key{nullptr};
   if (translate_null_val) {
     const auto& ti = group_by_col->get_type_info();
     const auto key_type = get_int_type(ti.get_logical_size() * 8, cgen_state_->context_);
+    orig_group_key = group_key;
     group_key =
         cgen_state_->emitCall("translate_null_key_" + numeric_type_name(ti),
                               {group_key,
@@ -7001,7 +7007,11 @@ llvm::Value* Executor::groupByColumnCodegen(Analyzer::Expr* group_by_col,
   }
   group_key =
       cgen_state_->ir_builder_.CreateBitCast(castToTypeIn(group_key, 64), get_int_type(64, cgen_state_->context_));
-  return group_key;
+  if (orig_group_key) {
+    orig_group_key = cgen_state_->ir_builder_.CreateBitCast(castToTypeIn(orig_group_key, 64),
+                                                            get_int_type(64, cgen_state_->context_));
+  }
+  return {group_key, orig_group_key};
 }
 
 void Executor::allocateLocalColumnIds(const std::list<std::shared_ptr<const InputColDescriptor>>& global_col_ids) {

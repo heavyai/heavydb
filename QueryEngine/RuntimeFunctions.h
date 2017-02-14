@@ -93,6 +93,13 @@ extern "C" int64_t* get_group_value_fast(int64_t* groups_buffer,
                                          const int64_t bucket,
                                          const uint32_t row_size_quad);
 
+extern "C" int64_t* get_group_value_fast_with_original_key(int64_t* groups_buffer,
+                                                           const int64_t key,
+                                                           const int64_t orig_key,
+                                                           const int64_t min_key,
+                                                           const int64_t bucket,
+                                                           const uint32_t row_size_quad);
+
 extern "C" uint32_t get_columnar_group_bin_offset(int64_t* key_base_ptr,
                                                   const int64_t key,
                                                   const int64_t min_key,

@@ -838,13 +838,18 @@ class Executor {
 
   int64_t deviceCycles(int milliseconds) const;
 
-  llvm::Value* groupByColumnCodegen(Analyzer::Expr* group_by_col,
-                                    const CompilationOptions&,
-                                    const bool translate_null_val,
-                                    const int64_t translated_null_val,
-                                    GroupByAndAggregate::DiamondCodegen&,
-                                    std::stack<llvm::BasicBlock*>&,
-                                    const bool thread_mem_shared);
+  struct GroupColLLVMValue {
+    llvm::Value* translated_value;
+    llvm::Value* original_value;
+  };
+
+  GroupColLLVMValue groupByColumnCodegen(Analyzer::Expr* group_by_col,
+                                         const CompilationOptions&,
+                                         const bool translate_null_val,
+                                         const int64_t translated_null_val,
+                                         GroupByAndAggregate::DiamondCodegen&,
+                                         std::stack<llvm::BasicBlock*>&,
+                                         const bool thread_mem_shared);
 
   llvm::Value* castToFP(llvm::Value* val);
   llvm::Value* castToTypeIn(llvm::Value* val, const size_t bit_width);

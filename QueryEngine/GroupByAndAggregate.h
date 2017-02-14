@@ -544,7 +544,8 @@ class GroupByAndAggregate {
                                  const size_t small_groups_buffer_entry_count,
                                  const int8_t crt_min_byte_width,
                                  const bool sort_on_gpu_hint,
-                                 const bool render_output);
+                                 const bool render_output,
+                                 const bool must_use_baseline_sort);
 
   void addTransientStringLiterals();
 

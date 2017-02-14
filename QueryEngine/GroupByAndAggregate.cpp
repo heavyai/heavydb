@@ -1523,21 +1523,37 @@ GroupByAndAggregate::GroupByAndAggregate(Executor* executor,
   bool sort_on_gpu_hint = device_type == ExecutorDeviceType::GPU && allow_multifrag &&
                           !ra_exe_unit.sort_info.order_entries.empty() &&
                           gpuCanHandleOrderEntries(ra_exe_unit.sort_info.order_entries);
-  initQueryMemoryDescriptor(allow_multifrag,
-                            max_groups_buffer_entry_count,
-                            small_groups_buffer_entry_count,
-                            crt_min_byte_width,
-                            sort_on_gpu_hint,
-                            render_output);
-  if (device_type != ExecutorDeviceType::GPU) {
-    // TODO(miyu): remove w/ interleaving
-    query_mem_desc_.interleaved_bins_on_gpu = false;
+  // must_use_baseline_sort is true iff we'd sort on GPU with the old algorithm
+  // but the total output buffer size would be too big. For the sake of managing
+  // risk, use the new result set way very selectively for this case only (alongside
+  // the baseline layout we've enabled for a while now).
+  bool must_use_baseline_sort = false;
+  while (true) {
+    initQueryMemoryDescriptor(allow_multifrag,
+                              max_groups_buffer_entry_count,
+                              small_groups_buffer_entry_count,
+                              crt_min_byte_width,
+                              sort_on_gpu_hint,
+                              render_output,
+                              must_use_baseline_sort);
+    if (device_type != ExecutorDeviceType::GPU) {
+      // TODO(miyu): remove w/ interleaving
+      query_mem_desc_.interleaved_bins_on_gpu = false;
+    }
+    query_mem_desc_.sort_on_gpu_ =
+        sort_on_gpu_hint && query_mem_desc_.canOutputColumnar() && !query_mem_desc_.keyless_hash;
+    query_mem_desc_.is_sort_plan = !ra_exe_unit.sort_info.order_entries.empty() && !query_mem_desc_.sort_on_gpu_;
+    output_columnar_ = (output_columnar_hint && query_mem_desc_.canOutputColumnar()) || query_mem_desc_.sortOnGpu();
+    query_mem_desc_.output_columnar = output_columnar_;
+    if (query_mem_desc_.sortOnGpu() &&
+        (query_mem_desc_.getBufferSizeBytes(device_type_) +
+         align_to_int64(query_mem_desc_.entry_count * sizeof(int32_t))) > 2 * 1024 * 1024 * 1024L) {
+      must_use_baseline_sort = true;
+      sort_on_gpu_hint = false;
+    } else {
+      break;
+    }
   }
-  query_mem_desc_.sort_on_gpu_ =
-      sort_on_gpu_hint && query_mem_desc_.canOutputColumnar() && !query_mem_desc_.keyless_hash;
-  query_mem_desc_.is_sort_plan = !ra_exe_unit.sort_info.order_entries.empty() && !query_mem_desc_.sort_on_gpu_;
-  output_columnar_ = (output_columnar_hint && query_mem_desc_.canOutputColumnar()) || query_mem_desc_.sortOnGpu();
-  query_mem_desc_.output_columnar = output_columnar_;
 }
 
 int8_t pick_target_compact_width(const RelAlgExecutionUnit& ra_exe_unit,
@@ -1649,7 +1665,8 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
                                                     const size_t small_groups_buffer_entry_count,
                                                     const int8_t crt_min_byte_width,
                                                     const bool sort_on_gpu_hint,
-                                                    const bool render_output) {
+                                                    const bool render_output,
+                                                    const bool must_use_baseline_sort) {
   addTransientStringLiterals();
 
   const auto count_distinct_descriptors = initCountDistinctDescriptors();
@@ -1663,6 +1680,7 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
 
   const bool is_group_by{!group_col_widths.empty()};
   if (!is_group_by) {
+    CHECK(!must_use_baseline_sort);
     CHECK(!render_output);
     query_mem_desc_ = {executor_,
                        allow_multifrag,
@@ -1685,6 +1703,9 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
                        false,
                        false,
                        false,
+                       false,
+                       {},
+                       {},
                        false};
     return;
   }
@@ -1705,11 +1726,19 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
       const auto keyless_info = getKeylessInfo(get_exprs_not_owned(redirected_targets), is_group_by);
       bool keyless =
           (!sort_on_gpu_hint || !many_entries(col_range_info.max, col_range_info.min, col_range_info.bucket)) &&
-          !col_range_info.bucket && keyless_info.keyless;
+          !col_range_info.bucket && !must_use_baseline_sort && keyless_info.keyless;
       size_t bin_count = getBucketedCardinality(col_range_info);
       const size_t interleaved_max_threshold = g_cluster ? 0 : 512;
       bool interleaved_bins = keyless && (bin_count <= interleaved_max_threshold) &&
                               countDescriptorsLogicallyEmpty(count_distinct_descriptors);
+      std::vector<ssize_t> target_group_by_indices;
+      if (must_use_baseline_sort) {
+        target_group_by_indices = target_expr_group_by_indices(ra_exe_unit_.groupby_exprs, ra_exe_unit_.target_exprs);
+        agg_col_widths.clear();
+        for (auto wid : get_col_byte_widths(ra_exe_unit_.target_exprs, target_group_by_indices)) {
+          agg_col_widths.push_back({wid, static_cast<int8_t>(wid ? 8 : 0)});
+        }
+      }
       query_mem_desc_ = {executor_,
                          allow_multifrag,
                          col_range_info.hash_type_,
@@ -1719,7 +1748,7 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
                          keyless_info.init_val,
                          group_col_widths,
                          agg_col_widths,
-                         {},
+                         target_group_by_indices,
                          bin_count,
                          0,
                          col_range_info.min,
@@ -1731,10 +1760,14 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
                          false,
                          false,
                          false,
-                         false};
+                         false,
+                         {},
+                         {},
+                         must_use_baseline_sort};
       return;
     }
     case GroupByColRangeType::OneColGuessedRange: {
+      CHECK(!must_use_baseline_sort);
       query_mem_desc_ = {executor_,
                          allow_multifrag,
                          col_range_info.hash_type_,
@@ -1756,7 +1789,10 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
                          false,
                          false,
                          false,
-                         render_output};
+                         render_output,
+                         {},
+                         {},
+                         false};
       return;
     }
     case GroupByColRangeType::MultiCol: {
@@ -1769,6 +1805,7 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
         // assumes everything is padded to 8 bytes, make it so.
         agg_col_widths.push_back({wid, static_cast<int8_t>(wid ? 8 : 0)});
       }
+      CHECK(!must_use_baseline_sort);
       query_mem_desc_ = {executor_,
                          allow_multifrag,
                          col_range_info.hash_type_,
@@ -1790,10 +1827,14 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
                          false,
                          false,
                          false,
+                         false,
+                         {},
+                         {},
                          false};
       return;
     }
     case GroupByColRangeType::Projection: {
+      CHECK(!must_use_baseline_sort);
       size_t group_slots =
           ra_exe_unit_.scan_limit ? static_cast<size_t>(ra_exe_unit_.scan_limit) : max_groups_buffer_entry_count;
       query_mem_desc_ = {executor_,
@@ -1817,11 +1858,15 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
                          false,
                          false,
                          false,
-                         render_output};
+                         render_output,
+                         {},
+                         {},
+                         false};
       return;
     }
     case GroupByColRangeType::MultiColPerfectHash: {
       CHECK(!render_output);
+      CHECK(!must_use_baseline_sort);
       query_mem_desc_ = {executor_,
                          allow_multifrag,
                          col_range_info.hash_type_,
@@ -1843,6 +1888,9 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
                          false,
                          false,
                          false,
+                         false,
+                         {},
+                         {},
                          false};
       return;
     }
@@ -2372,7 +2420,7 @@ std::tuple<llvm::Value*, llvm::Value*> GroupByAndAggregate::codegenGroupBy(const
     case GroupByColRangeType::Scan: {
       CHECK_EQ(size_t(1), ra_exe_unit_.groupby_exprs.size());
       const auto group_expr = ra_exe_unit_.groupby_exprs.front();
-      const auto group_expr_lv = executor_->groupByColumnCodegen(
+      const auto group_expr_lvs = executor_->groupByColumnCodegen(
           group_expr.get(),
           co,
           query_mem_desc_.has_nulls,
@@ -2380,6 +2428,7 @@ std::tuple<llvm::Value*, llvm::Value*> GroupByAndAggregate::codegenGroupBy(const
           diamond_codegen,
           array_loops,
           query_mem_desc_.threadsShareMemory());
+      const auto group_expr_lv = group_expr_lvs.translated_value;
       auto small_groups_buffer = arg_it;
       if (query_mem_desc_.usesGetGroupValueFast()) {
         std::string get_group_fn_name{outputColumnar() && !query_mem_desc_.keyless_hash
@@ -2393,8 +2442,14 @@ std::tuple<llvm::Value*, llvm::Value*> GroupByAndAggregate::codegenGroupBy(const
           CHECK(query_mem_desc_.keyless_hash);
           get_group_fn_name += "_semiprivate";
         }
-        std::vector<llvm::Value*> get_group_fn_args{
-            &*groups_buffer, &*group_expr_lv, LL_INT(query_mem_desc_.min_val), LL_INT(query_mem_desc_.bucket)};
+        std::vector<llvm::Value*> get_group_fn_args{&*groups_buffer, &*group_expr_lv};
+        if (group_expr_lvs.original_value && get_group_fn_name == "get_group_value_fast" &&
+            query_mem_desc_.must_use_baseline_sort) {
+          get_group_fn_name += "_with_original_key";
+          get_group_fn_args.push_back(group_expr_lvs.original_value);
+        }
+        get_group_fn_args.push_back(LL_INT(query_mem_desc_.min_val));
+        get_group_fn_args.push_back(LL_INT(query_mem_desc_.bucket));
         if (!query_mem_desc_.keyless_hash) {
           if (!outputColumnar()) {
             get_group_fn_args.push_back(LL_INT(row_size_quad));
@@ -2441,7 +2496,7 @@ std::tuple<llvm::Value*, llvm::Value*> GroupByAndAggregate::codegenGroupBy(const
       int32_t subkey_idx = 0;
       for (const auto group_expr : ra_exe_unit_.groupby_exprs) {
         auto col_range_info = getExprRangeInfo(group_expr.get());
-        const auto group_expr_lv = executor_->groupByColumnCodegen(
+        const auto group_expr_lvs = executor_->groupByColumnCodegen(
             group_expr.get(),
             co,
             col_range_info.has_nulls && query_mem_desc_.hash_type != GroupByColRangeType::MultiCol,
@@ -2449,6 +2504,7 @@ std::tuple<llvm::Value*, llvm::Value*> GroupByAndAggregate::codegenGroupBy(const
             diamond_codegen,
             array_loops,
             query_mem_desc_.threadsShareMemory());
+        const auto group_expr_lv = group_expr_lvs.translated_value;
         // store the sub-key to the buffer
         LL_BUILDER.CreateStore(group_expr_lv, LL_BUILDER.CreateGEP(group_key, LL_INT(subkey_idx++)));
       }
@@ -2887,8 +2943,10 @@ void GroupByAndAggregate::codegenEstimator(std::stack<llvm::BasicBlock*>& array_
   auto estimator_key_lv = LL_BUILDER.CreateAlloca(llvm::Type::getInt64Ty(LL_CONTEXT), estimator_comp_count_lv);
   int32_t subkey_idx = 0;
   for (const auto estimator_arg_comp : estimator_arg) {
-    const auto estimator_arg_comp_lv =
+    const auto estimator_arg_comp_lvs =
         executor_->groupByColumnCodegen(estimator_arg_comp.get(), co, false, 0, diamond_codegen, array_loops, true);
+    CHECK(!estimator_arg_comp_lvs.original_value);
+    const auto estimator_arg_comp_lv = estimator_arg_comp_lvs.translated_value;
     // store the sub-key to the buffer
     LL_BUILDER.CreateStore(estimator_arg_comp_lv, LL_BUILDER.CreateGEP(estimator_key_lv, LL_INT(subkey_idx++)));
   }

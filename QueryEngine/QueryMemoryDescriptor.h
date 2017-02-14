@@ -79,6 +79,7 @@ struct QueryMemoryDescriptor {
   bool render_output;
   std::vector<int8_t> key_column_pad_bytes;
   std::vector<int8_t> target_column_pad_bytes;
+  bool must_use_baseline_sort;
 
   std::unique_ptr<QueryExecutionContext> getQueryExecutionContext(
       const RelAlgExecutionUnit&,
@@ -137,7 +138,8 @@ struct QueryMemoryDescriptor {
 };
 
 inline bool can_use_result_set(const QueryMemoryDescriptor& query_mem_desc, const ExecutorDeviceType) {
-  return g_cluster || query_mem_desc.hash_type == GroupByColRangeType::MultiCol;
+  return g_cluster || query_mem_desc.must_use_baseline_sort ||
+         query_mem_desc.hash_type == GroupByColRangeType::MultiCol;
 }
 
 #endif  // QUERYENGINE_QUERYMEMORYDESCRIPTOR_H

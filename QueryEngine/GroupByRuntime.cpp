@@ -125,6 +125,23 @@ extern "C" ALWAYS_INLINE DEVICE int64_t* get_group_value_fast(int64_t* groups_bu
   return groups_buffer + off + 1;
 }
 
+extern "C" ALWAYS_INLINE DEVICE int64_t* get_group_value_fast_with_original_key(int64_t* groups_buffer,
+                                                                                const int64_t key,
+                                                                                const int64_t orig_key,
+                                                                                const int64_t min_key,
+                                                                                const int64_t bucket,
+                                                                                const uint32_t row_size_quad) {
+  int64_t key_diff = key - min_key;
+  if (bucket) {
+    key_diff /= bucket;
+  }
+  int64_t off = key_diff * row_size_quad;
+  if (groups_buffer[off] == EMPTY_KEY_64) {
+    groups_buffer[off] = orig_key;
+  }
+  return groups_buffer + off + 1;
+}
+
 extern "C" ALWAYS_INLINE DEVICE uint32_t get_columnar_group_bin_offset(int64_t* key_base_ptr,
                                                                        const int64_t key,
                                                                        const int64_t min_key,
