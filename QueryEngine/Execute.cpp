@@ -1552,7 +1552,10 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Constant* constant,
   const auto type = type_info.is_decimal() ? decimal_to_int_type(type_info) : type_info.get_type();
   switch (type) {
     case kBOOLEAN:
-      return {llvm::ConstantInt::get(get_int_type(8, cgen_state_->context_), constant->get_constval().boolval)};
+      return type_info.get_notnull() ? std::vector<llvm::Value*>{llvm::ConstantInt::get(
+                                           get_int_type(1, cgen_state_->context_), constant->get_constval().boolval)}
+                                     : std::vector<llvm::Value*>{llvm::ConstantInt::get(
+                                           get_int_type(8, cgen_state_->context_), constant->get_constval().boolval)};
     case kSMALLINT:
     case kINT:
     case kBIGINT:
@@ -1635,6 +1638,9 @@ std::vector<llvm::Value*> Executor::codegenHoistedConstants(const std::vector<co
   }
   auto lit_lv =
       cgen_state_->ir_builder_.CreateLoad(cgen_state_->ir_builder_.CreateBitCast(lit_buf_start, val_ptr_type));
+  if (type_info.is_boolean() && type_info.get_notnull()) {
+    return {toBool(lit_lv)};
+  }
   return {lit_lv};
 }
 
@@ -2162,14 +2168,6 @@ llvm::Value* Executor::codegenLogical(const Analyzer::BinOper* bin_oper, const C
   const auto rhs = bin_oper->get_right_operand();
   auto lhs_lv = codegen(lhs, true, co).front();
   auto rhs_lv = codegen(rhs, true, co).front();
-  CHECK(lhs_lv->getType()->isIntegerTy(1) || lhs_lv->getType()->isIntegerTy(8));
-  CHECK(rhs_lv->getType()->isIntegerTy(1) || rhs_lv->getType()->isIntegerTy(8));
-  if (lhs_lv->getType()->isIntegerTy(1)) {
-    lhs_lv = castToTypeIn(lhs_lv, 8);
-  }
-  if (rhs_lv->getType()->isIntegerTy(1)) {
-    rhs_lv = castToTypeIn(rhs_lv, 8);
-  }
   const auto& ti = bin_oper->get_type_info();
   if (ti.get_notnull()) {
     switch (optype) {
@@ -2180,6 +2178,14 @@ llvm::Value* Executor::codegenLogical(const Analyzer::BinOper* bin_oper, const C
       default:
         CHECK(false);
     }
+  }
+  CHECK(lhs_lv->getType()->isIntegerTy(1) || lhs_lv->getType()->isIntegerTy(8));
+  CHECK(rhs_lv->getType()->isIntegerTy(1) || rhs_lv->getType()->isIntegerTy(8));
+  if (lhs_lv->getType()->isIntegerTy(1)) {
+    lhs_lv = castToTypeIn(lhs_lv, 8);
+  }
+  if (rhs_lv->getType()->isIntegerTy(1)) {
+    rhs_lv = castToTypeIn(rhs_lv, 8);
   }
   switch (optype) {
     case kAND:
