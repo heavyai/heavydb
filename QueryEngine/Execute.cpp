@@ -1575,6 +1575,9 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Constant* constant,
     case kTEXT: {
       CHECK(constant->get_constval().stringval || constant->get_is_null());
       if (constant->get_is_null()) {
+        if (enc_type == kENCODING_DICT) {
+          return {ll_int(static_cast<int32_t>(inline_int_null_val(type_info)))};
+        }
         return {ll_int(int64_t(0)),
                 llvm::Constant::getNullValue(llvm::PointerType::get(get_int_type(8, cgen_state_->context_), 0)),
                 ll_int(int32_t(0))};
@@ -5998,7 +6001,8 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
 
   if (co.device_type_ == ExecutorDeviceType::GPU) {
     for (const auto& count_distinct_descriptor : query_mem_desc.count_distinct_descriptors_) {
-      if (count_distinct_descriptor.impl_type_ == CountDistinctImplType::StdSet) {
+      if (count_distinct_descriptor.impl_type_ == CountDistinctImplType::StdSet ||
+          (count_distinct_descriptor.impl_type_ != CountDistinctImplType::Invalid && !co.hoist_literals_)) {
         cgen_state_->must_run_on_cpu_ = true;
       }
     }
