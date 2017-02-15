@@ -348,7 +348,7 @@ void ResultSet::sort(const std::list<Analyzer::OrderEntry>& order_entries, const
     return;
   }
 
-  if (g_enable_watchdog && (entryCount() > 100000)) {
+  if (g_enable_watchdog && (entryCount() > 1000000)) {
     throw WatchdogException("Sorting the result would be too slow");
   }
 
