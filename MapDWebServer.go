@@ -38,6 +38,7 @@ var (
 	tmpDir        string
 	certFile      string
 	keyFile       string
+	docsDir       string
 	readOnly      bool
 	quiet         bool
 	enableHttps   bool
@@ -92,6 +93,7 @@ func init() {
 	pflag.StringP("data", "d", "data", "path to MapD data directory")
 	pflag.StringP("tmpdir", "", "", "path for temporary file storage [/tmp]")
 	pflag.StringP("config", "c", "", "path to MapD configuration file")
+	pflag.StringP("docs", "", "docs", "path to documentation directory")
 	pflag.BoolP("read-only", "r", false, "enable read-only mode")
 	pflag.BoolP("quiet", "q", false, "suppress non-error messages")
 	pflag.BoolP("enable-https", "", false, "enable HTTPS support")
@@ -119,6 +121,7 @@ func init() {
 	viper.BindPFlag("web.profile", pflag.CommandLine.Lookup("profile"))
 	viper.BindPFlag("web.compress", pflag.CommandLine.Lookup("compress"))
 	viper.BindPFlag("web.metrics", pflag.CommandLine.Lookup("metrics"))
+	viper.BindPFlag("web.docs", pflag.CommandLine.Lookup("docs"))
 
 	viper.BindPFlag("data", pflag.CommandLine.Lookup("data"))
 	viper.BindPFlag("tmpdir", pflag.CommandLine.Lookup("tmpdir"))
@@ -154,6 +157,7 @@ func init() {
 
 	port = viper.GetInt("web.port")
 	frontend = viper.GetString("web.frontend")
+	docsDir = viper.GetString("web.docs")
 	serversJson = viper.GetString("web.servers-json")
 
 	dataDir = viper.GetString("data")
@@ -388,6 +392,11 @@ func metricsResetHandler(rw http.ResponseWriter, r *http.Request) {
 	metricsHandler(rw, r)
 }
 
+func docsHandler(rw http.ResponseWriter, r *http.Request) {
+	h := http.StripPrefix("/docs/", http.FileServer(http.Dir(docsDir)))
+	h.ServeHTTP(rw, r)
+}
+
 func thriftOrFrontendHandler(rw http.ResponseWriter, r *http.Request) {
 	h := http.StripPrefix("/", http.FileServer(http.Dir(frontend)))
 
@@ -496,6 +505,7 @@ func main() {
 	mux.HandleFunc("/deleteUpload", deleteUploadHandler)
 	mux.HandleFunc("/servers.json", serversHandler)
 	mux.HandleFunc("/", thriftOrFrontendHandler)
+	mux.HandleFunc("/docs/", docsHandler)
 	mux.HandleFunc("/metrics/", metricsHandler)
 	mux.HandleFunc("/metrics/reset/", metricsResetHandler)
 	mux.HandleFunc("/version.txt", versionHandler)
