@@ -1746,10 +1746,11 @@ void import_join_test() {
   g_sqlite_comparator.query(drop_old_test);
   const std::string create_test{
 #ifdef ENABLE_MULFRAG_JOIN
-      "CREATE TABLE join_test(x int not null, str text encoding dict) WITH (fragment_size=2);"};
+      "CREATE TABLE join_test(x int not null, str text encoding dict) WITH (fragment_size=2);"
 #else
-      "CREATE TABLE join_test(x int not null, str text encoding dict) WITH (fragment_size=3);"};
+      "CREATE TABLE join_test(x int not null, str text encoding dict) WITH (fragment_size=3);"
 #endif
+  };
   run_ddl_statement(create_test);
   g_sqlite_comparator.query("CREATE TABLE join_test(x int not null, str text);");
   {
@@ -1761,6 +1762,36 @@ void import_join_test() {
   }
   {
     const std::string insert_query{"INSERT INTO join_test VALUES(8, 'bar');"};
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query);
+  }
+}
+
+void import_hash_join_test() {
+  const std::string drop_old_test{"DROP TABLE IF EXISTS hash_join_test;"};
+  run_ddl_statement(drop_old_test);
+  g_sqlite_comparator.query(drop_old_test);
+  const std::string create_test{
+#ifdef ENABLE_MULFRAG_JOIN
+      "CREATE TABLE hash_join_test(x int not null, str text encoding dict) WITH (fragment_size=2);"
+#else
+      "CREATE TABLE hash_join_test(x int not null, str text encoding dict) WITH (fragment_size=3);"
+#endif
+  };
+  run_ddl_statement(create_test);
+  g_sqlite_comparator.query("CREATE TABLE hash_join_test(x int not null, str text);");
+  {
+    const std::string insert_query{"INSERT INTO hash_join_test VALUES(7, 'foo');"};
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query);
+  }
+  {
+    const std::string insert_query{"INSERT INTO hash_join_test VALUES(8, 'bar');"};
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query);
+  }
+  {
+    const std::string insert_query{"INSERT INTO hash_join_test VALUES(9, 'the');"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
@@ -2262,12 +2293,41 @@ TEST(Select, InnerJoins) {
       "WHERE a.y "
       "= 43 group by b.str;",
       dt);
+    c("SELECT a.x, b.x, b.str, c.str FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.x = c.x "
+      "ORDER BY b.str;",
+      dt);
     c("SELECT a.str as key0,a.fixed_str as key1,COUNT(*) AS color FROM test a JOIN (select str,count(*) "
       "from test group by str order by COUNT(*) desc limit 40) b on a.str=b.str JOIN (select "
       "fixed_str,count(*) from test group by fixed_str order by count(*) desc limit 40) c on "
       "c.fixed_str=a.fixed_str GROUP BY key0, key1 ORDER BY key0,key1;",
       dt);
     c("SELECT a.x, b.x, c.x FROM test a JOIN test_inner b ON a.x = b.x JOIN join_test c ON b.x = c.x;", dt);
+
+    c("SELECT count(*) FROM test AS a JOIN hash_join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str = c.str;",
+      dt);
+    c("SELECT count(*) FROM test AS a JOIN hash_join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str = c.str JOIN "
+      "hash_join_test AS d ON c.x = d.x;",
+      dt);
+    c("SELECT count(*) FROM test AS a JOIN hash_join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str = c.str JOIN "
+      "join_test AS d ON c.x = d.x;",
+      dt);
+    c("SELECT count(*) FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str = c.str JOIN "
+      "hash_join_test AS d ON c.x = d.x;",
+      dt);
+    c("SELECT a.x AS x, y, b.str FROM test AS a JOIN hash_join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str = "
+      "c.str "
+      "ORDER BY y;",
+      dt);
+    c("SELECT count(*) FROM test AS a JOIN hash_join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str = c.str "
+      "WHERE a.y "
+      "< 43;",
+      dt);
+    c("SELECT SUM(a.x), b.str FROM test AS a JOIN hash_join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str = "
+      "c.str "
+      "WHERE a.y "
+      "= 43 group by b.str;",
+      dt);
+    c("SELECT a.x, b.x, c.x FROM test a JOIN test_inner b ON a.x = b.x JOIN hash_join_test c ON b.x = c.x;", dt);
 #endif
   }
 }
@@ -2645,6 +2705,12 @@ int main(int argc, char** argv) {
     return -EEXIST;
   }
   try {
+    import_hash_join_test();
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'hash_join_test'";
+    return -EEXIST;
+  }
+  try {
     import_emp_table();
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'emp'";
@@ -2734,6 +2800,8 @@ int main(int argc, char** argv) {
   run_ddl_statement("DROP TABLE text_group_by_test;");
   const std::string drop_join_test{"DROP TABLE join_test;"};
   g_sqlite_comparator.query(drop_join_test);
+  const std::string drop_hash_join_test{"DROP TABLE hash_join_test;"};
+  g_sqlite_comparator.query(drop_hash_join_test);
   run_ddl_statement(drop_join_test);
   const std::string drop_emp_table{"DROP TABLE emp;"};
   g_sqlite_comparator.query(drop_emp_table);
