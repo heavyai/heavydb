@@ -207,6 +207,11 @@ if(ENABLE_COMPACTION)
   add_definitions("-DENABLE_COMPACTION")
 endif()
 
+option(ENABLE_MULFRAG_JOIN "Enable Join on Multi-frag table" OFF)
+if(ENABLE_MULFRAG_JOIN)
+    add_definitions("-DENABLE_MULFRAG_JOIN")
+endif()
+
 option(ENABLE_PROFILER "Enable google perftools" OFF)
 if(ENABLE_PROFILER)
   find_package(Gperftools REQUIRED COMPONENTS TCMALLOC PROFILER)

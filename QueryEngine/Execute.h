@@ -691,16 +691,18 @@ class Executor {
                                                const InputDescriptor& table_desc,
                                                const int device_id);
 
-  std::pair<std::vector<std::vector<const int8_t*>>, std::vector<std::vector<const int8_t*>>> fetchChunks(
-      const ExecutionDispatch&,
-      const RelAlgExecutionUnit& ra_exe_unit,
-      const int device_id,
-      const Data_Namespace::MemoryLevel,
-      const std::map<int, const TableFragments*>&,
-      const std::map<int, std::vector<size_t>>& selected_fragments,
-      const Catalog_Namespace::Catalog&,
-      std::list<ChunkIter>&,
-      std::list<std::shared_ptr<Chunk_NS::Chunk>>&);
+  std::tuple<std::vector<std::vector<const int8_t*>>,
+             std::vector<std::vector<const int8_t*>>,
+             std::vector<std::vector<int64_t>>>
+  fetchChunks(const ExecutionDispatch&,
+              const RelAlgExecutionUnit& ra_exe_unit,
+              const int device_id,
+              const Data_Namespace::MemoryLevel,
+              const std::map<int, const TableFragments*>&,
+              const std::map<int, std::vector<size_t>>& selected_fragments,
+              const Catalog_Namespace::Catalog&,
+              std::list<ChunkIter>&,
+              std::list<std::shared_ptr<Chunk_NS::Chunk>>&);
 
   void buildSelectedFragsMapping(std::vector<std::vector<size_t>>& selected_fragments_crossjoin,
                                  std::vector<size_t>& local_col_to_frag_pos,
@@ -740,7 +742,7 @@ class Executor {
                                  std::vector<std::vector<const int8_t*>>& col_buffers,
                                  const std::vector<size_t> outer_tab_frag_ids,
                                  QueryExecutionContext*,
-                                 const std::vector<int64_t>& num_rows,
+                                 const std::vector<std::vector<int64_t>>& num_rows,
                                  const std::vector<uint64_t>& dev_frag_row_offsets,
                                  Data_Namespace::DataMgr*,
                                  const int device_id,
@@ -757,7 +759,7 @@ class Executor {
                                     const ExecutorDeviceType device_type,
                                     std::vector<std::vector<const int8_t*>>& col_buffers,
                                     QueryExecutionContext* query_exe_context,
-                                    const std::vector<int64_t>& num_rows,
+                                    const std::vector<std::vector<int64_t>>& num_rows,
                                     const std::vector<uint64_t>& dev_frag_row_offsets,
                                     Data_Namespace::DataMgr* data_mgr,
                                     const int device_id,

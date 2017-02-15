@@ -501,7 +501,7 @@ void QueryExecutionContext::initializeDynamicWatchdog(void* native_module, const
 std::vector<CUdeviceptr> QueryExecutionContext::prepareKernelParams(
     const std::vector<std::vector<const int8_t*>>& col_buffers,
     const std::vector<int8_t>& literal_buff,
-    const std::vector<int64_t>& num_rows,
+    const std::vector<std::vector<int64_t>>& num_rows,
     const std::vector<uint64_t>& frag_row_offsets,
     const int32_t scan_limit,
     const std::vector<int64_t>& init_agg_vals,
@@ -552,8 +552,14 @@ std::vector<CUdeviceptr> QueryExecutionContext::prepareKernelParams(
     CHECK(hoist_literals);
     copy_to_gpu(data_mgr, params[LITERALS], &literal_buff[0], literal_buff.size(), device_id);
   }
-  params[NUM_ROWS] = alloc_gpu_mem(data_mgr, sizeof(int64_t) * num_rows.size(), device_id, nullptr);
-  copy_to_gpu(data_mgr, params[NUM_ROWS], &num_rows[0], sizeof(int64_t) * num_rows.size(), device_id);
+  CHECK_EQ(num_rows.size(), col_buffers.size());
+  std::vector<int64_t> flatened_num_rows;
+  for (auto& nums : num_rows) {
+    CHECK_EQ(nums.size(), num_tables);
+    flatened_num_rows.insert(flatened_num_rows.end(), nums.begin(), nums.end());
+  }
+  params[NUM_ROWS] = alloc_gpu_mem(data_mgr, sizeof(int64_t) * flatened_num_rows.size(), device_id, nullptr);
+  copy_to_gpu(data_mgr, params[NUM_ROWS], &flatened_num_rows[0], sizeof(int64_t) * flatened_num_rows.size(), device_id);
   params[FRAG_ROW_OFFSETS] = alloc_gpu_mem(data_mgr, sizeof(int64_t) * frag_row_offsets.size(), device_id, nullptr);
   copy_to_gpu(
       data_mgr, params[FRAG_ROW_OFFSETS], &frag_row_offsets[0], sizeof(int64_t) * frag_row_offsets.size(), device_id);
@@ -659,7 +665,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const RelAlgExecution
                                                            const bool hoist_literals,
                                                            const std::vector<int8_t>& literal_buff,
                                                            std::vector<std::vector<const int8_t*>> col_buffers,
-                                                           const std::vector<int64_t>& num_rows,
+                                                           const std::vector<std::vector<int64_t>>& num_rows,
                                                            const std::vector<uint64_t>& frag_row_offsets,
                                                            const int32_t scan_limit,
                                                            const std::vector<int64_t>& init_agg_vals,
@@ -939,7 +945,7 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(const RelAlgExecution
                                                            const bool hoist_literals,
                                                            const std::vector<int8_t>& literal_buff,
                                                            std::vector<std::vector<const int8_t*>> col_buffers,
-                                                           const std::vector<int64_t>& num_rows,
+                                                           const std::vector<std::vector<int64_t>>& num_rows,
                                                            const std::vector<uint64_t>& frag_row_offsets,
                                                            const int32_t scan_limit,
                                                            const std::vector<int64_t>& init_agg_vals,
@@ -966,10 +972,15 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(const RelAlgExecution
   }
   const int8_t*** multifrag_cols_ptr{multifrag_col_buffers.empty() ? nullptr : &multifrag_col_buffers[0]};
   int64_t** small_group_by_buffers_ptr{small_group_by_buffers_.empty() ? nullptr : &small_group_by_buffers_[0]};
-  const uint32_t num_fragments = multifrag_cols_ptr ? 1 : 0;
+  const uint32_t num_fragments = multifrag_cols_ptr ? col_buffers.size() : 0; // TODO(miyu): check 0
 
+  CHECK_EQ(num_rows.size(), col_buffers.size());
+  std::vector<int64_t> flatened_num_rows;
+  for (auto& nums : num_rows) {
+    flatened_num_rows.insert(flatened_num_rows.end(), nums.begin(), nums.end());
+  }
   int64_t rowid_lookup_num_rows{*error_code ? *error_code + 1 : 0};
-  auto num_rows_ptr = rowid_lookup_num_rows ? &rowid_lookup_num_rows : &num_rows[0];
+  auto num_rows_ptr = rowid_lookup_num_rows ? &rowid_lookup_num_rows : &flatened_num_rows[0];
   int32_t total_matched_init{0};
 
   std::vector<int64_t> cmpt_val_buff;
