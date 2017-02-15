@@ -2,12 +2,14 @@
 
 import jaydebeapi
 
+
 def connect(dbname, user, host, password):
-    jar = './mapdjdbc-1.0-SNAPSHOT-jar-with-dependencies.jar' #may want to parametrize
+    jar = './mapdjdbc-1.0-SNAPSHOT-jar-with-dependencies.jar'  # may want to parametrize
     try:
-        return jaydebeapi.connect('com.mapd.jdbc.MapDDriver', 
-                ['jdbc:mapd:' + host + ':' + dbname + ':.', user, password],
-                jar,)
+        return jaydebeapi.connect('com.mapd.jdbc.MapDDriver',
+                                  'jdbc:mapd:{}:{}:.'.format(host, dbname),
+                                  {'user': user, 'password': password},
+                                  jar)
     except Exception as e:
-        print ( "Error: %s" % str(e) )
+        print('Error: {}'.format(str(e)))
         raise e
