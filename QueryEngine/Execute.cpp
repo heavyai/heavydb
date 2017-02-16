@@ -773,6 +773,13 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Expr* expr,
   }
   auto iter_expr = dynamic_cast<const Analyzer::IterExpr*>(expr);
   if (iter_expr) {
+#ifdef ENABLE_MULFRAG_JOIN
+    auto frag_row_ptr = get_arg_by_name(cgen_state_->row_func_, "frag_row_off");
+    if (iter_expr->get_rte_idx() > 0) {
+      frag_row_ptr = cgen_state_->ir_builder_.CreateGEP(frag_row_ptr, ll_int(int32_t(iter_expr->get_rte_idx())));
+      return {cgen_state_->ir_builder_.CreateAdd(posArg(iter_expr), frag_row_ptr)};
+    }
+#endif
     return {posArg(iter_expr)};
   }
   auto bin_oper = dynamic_cast<const Analyzer::BinOper*>(expr);
@@ -1253,15 +1260,20 @@ std::vector<llvm::Value*> Executor::codegenColVar(const Analyzer::ColumnVar* col
                                                   const bool hoist_literals) {
   auto col_id = col_var->get_column_id();
   const auto rte_idx = col_var->get_rte_idx();
+#ifdef ENABLE_MULFRAG_JOIN
+  CHECK_LT(rte_idx, cgen_state_->frag_offsets_.size());
+#endif
   if (col_var->get_table_id() > 0) {
     auto cd = get_column_descriptor(col_id, col_var->get_table_id(), *catalog_);
     if (cd->isVirtualCol) {
       CHECK(cd->columnName == "rowid");
+#ifndef ENABLE_MULFRAG_JOIN
       if (rte_idx > 0) {
         // rowid for inner scan, the fragment offset from the outer scan
         // is meaningless, the relative position in the scan is the rowid
         return {posArg(col_var)};
       }
+#endif
       return {cgen_state_->ir_builder_.CreateAdd(posArg(col_var), cgen_state_->frag_offsets_[rte_idx])};
     }
   }
@@ -1287,6 +1299,11 @@ std::vector<llvm::Value*> Executor::codegenColVar(const Analyzer::ColumnVar* col
   auto col_byte_stream = colByteStream(col_var, fetch_column, hoist_literals);
   if (plan_state_->isLazyFetchColumn(col_var)) {
     plan_state_->columns_to_not_fetch_.insert(std::make_pair(col_var->get_table_id(), col_var->get_column_id()));
+#ifdef ENABLE_MULFRAG_JOIN
+    if (rte_idx > 0) {
+      return {cgen_state_->ir_builder_.CreateAdd(pos_arg, cgen_state_->frag_offsets_[rte_idx])};
+    }
+#endif
     return {pos_arg};
   }
   const auto& col_ti = col_var->get_type_info();
@@ -3812,7 +3829,7 @@ RowSetPtr Executor::executeResultPlan(const Planner::Result* result_plan,
                                    hoist_buf,
                                    multi_frag_col_buffers,
                                    {{static_cast<int64_t>(result_columns.size())}},
-                                   {0},
+                                   {{0}},
                                    0,
                                    init_agg_vals,
                                    error_code,
@@ -4229,7 +4246,6 @@ void Executor::ExecutionDispatch::runImpl(const ExecutorDeviceType chosen_device
                                           const int64_t rowid_lookup_key) {
   const auto memory_level =
       chosen_device_type == ExecutorDeviceType::GPU ? Data_Namespace::GPU_LEVEL : Data_Namespace::CPU_LEVEL;
-  std::vector<uint64_t> dev_frag_row_offsets;
   const int outer_table_id = ra_exe_unit_.input_descs.front().getTableId();
   const auto outer_it = frag_ids.find(outer_table_id);
   CHECK(outer_it != frag_ids.end());
@@ -4238,7 +4254,6 @@ void Executor::ExecutionDispatch::runImpl(const ExecutorDeviceType chosen_device
     if (co_.device_type_ != ExecutorDeviceType::Hybrid) {
       chosen_device_id = outer_fragment.deviceIds[static_cast<int>(memory_level)];
     }
-    dev_frag_row_offsets.push_back(all_frag_row_offsets_[frag_id]);
   }
   CHECK_GE(chosen_device_id, 0);
   CHECK_LT(chosen_device_id, max_gpu_count);
@@ -4249,9 +4264,7 @@ void Executor::ExecutionDispatch::runImpl(const ExecutorDeviceType chosen_device
   if (chosen_device_type == ExecutorDeviceType::GPU) {
     gpu_lock.reset(new std::lock_guard<std::mutex>(executor_->gpu_exec_mutex_[chosen_device_id]));
   }
-  std::vector<std::vector<const int8_t*>> col_buffers;
-  std::vector<std::vector<int64_t>> num_rows;
-  std::vector<std::vector<const int8_t*>> iter_buffers;
+  FetchResult fetch_result;
   try {
     std::map<int, const TableFragments*> all_tables_fragments;
     for (size_t tab_idx = 0, tab_cnt = ra_exe_unit_.input_descs.size(); tab_idx < tab_cnt; ++tab_idx) {
@@ -4274,15 +4287,15 @@ void Executor::ExecutionDispatch::runImpl(const ExecutorDeviceType chosen_device
       const auto& fragments = query_infos_[extra_tab_base + tab_idx].info.fragments;
       all_tables_fragments.insert(std::make_pair(table_id, &fragments));
     }
-    std::tie(col_buffers, iter_buffers, num_rows) = executor_->fetchChunks(*this,
-                                                                           ra_exe_unit_,
-                                                                           chosen_device_id,
-                                                                           memory_level,
-                                                                           all_tables_fragments,
-                                                                           frag_ids,
-                                                                           cat_,
-                                                                           *chunk_iterators_ptr,
-                                                                           chunks);
+    fetch_result = executor_->fetchChunks(*this,
+                                          ra_exe_unit_,
+                                          chosen_device_id,
+                                          memory_level,
+                                          all_tables_fragments,
+                                          frag_ids,
+                                          cat_,
+                                          *chunk_iterators_ptr,
+                                          chunks);
   } catch (const OutOfMemory&) {
     std::lock_guard<std::mutex> lock(reduce_mutex_);
     *error_code_ = ERR_OUT_OF_GPU_MEM;
@@ -4302,8 +4315,8 @@ void Executor::ExecutionDispatch::runImpl(const ExecutorDeviceType chosen_device
                                                                          executor_,
                                                                          chosen_device_type,
                                                                          chosen_device_id,
-                                                                         col_buffers,
-                                                                         iter_buffers,
+                                                                         fetch_result.col_buffers,
+                                                                         fetch_result.iter_buffers,
                                                                          row_set_mem_owner_,
                                                                          compilation_result.output_columnar,
                                                                          compilation_result.query_mem_desc.sortOnGpu(),
@@ -4326,8 +4339,8 @@ void Executor::ExecutionDispatch::runImpl(const ExecutorDeviceType chosen_device
                                                                        executor_,
                                                                        chosen_device_type,
                                                                        chosen_device_id,
-                                                                       col_buffers,
-                                                                       iter_buffers,
+                                                                       fetch_result.col_buffers,
+                                                                       fetch_result.iter_buffers,
                                                                        row_set_mem_owner_,
                                                                        compilation_result.output_columnar,
                                                                        compilation_result.query_mem_desc.sortOnGpu(),
@@ -4359,10 +4372,10 @@ void Executor::ExecutionDispatch::runImpl(const ExecutorDeviceType chosen_device
                                                device_results,
                                                ra_exe_unit_.target_exprs,
                                                chosen_device_type,
-                                               col_buffers,
+                                               fetch_result.col_buffers,
                                                query_exe_context,
-                                               num_rows,
-                                               dev_frag_row_offsets,
+                                               fetch_result.num_rows,
+                                               fetch_result.frag_offsets,
                                                &cat_.get_dataMgr(),
                                                chosen_device_id,
                                                start_rowid,
@@ -4374,11 +4387,11 @@ void Executor::ExecutionDispatch::runImpl(const ExecutorDeviceType chosen_device
                                             co_.hoist_literals_,
                                             device_results,
                                             chosen_device_type,
-                                            col_buffers,
+                                            fetch_result.col_buffers,
                                             outer_it->second,
                                             query_exe_context,
-                                            num_rows,
-                                            dev_frag_row_offsets,
+                                            fetch_result.num_rows,
+                                            fetch_result.frag_offsets,
                                             &cat_.get_dataMgr(),
                                             chosen_device_id,
                                             ra_exe_unit_.scan_limit,
@@ -5113,18 +5126,33 @@ const SQLTypeInfo get_column_type(const InputColDescriptor* col_desc,
 
 }  // namespace
 
-std::tuple<std::vector<std::vector<const int8_t*>>,
-           std::vector<std::vector<const int8_t*>>,
-           std::vector<std::vector<int64_t>>>
-Executor::fetchChunks(const ExecutionDispatch& execution_dispatch,
-                      const RelAlgExecutionUnit& ra_exe_unit,
-                      const int device_id,
-                      const Data_Namespace::MemoryLevel memory_level,
-                      const std::map<int, const TableFragments*>& all_tables_fragments,
-                      const std::map<int, std::vector<size_t>>& selected_fragments,
-                      const Catalog_Namespace::Catalog& cat,
-                      std::list<ChunkIter>& chunk_iterators,
-                      std::list<std::shared_ptr<Chunk_NS::Chunk>>& chunks) {
+std::map<size_t, std::vector<uint64_t>> Executor::getAllFragOffsets(
+    const std::vector<InputDescriptor>& input_descs,
+    const std::map<int, const TableFragments*>& all_tables_fragments) {
+  std::map<size_t, std::vector<uint64_t>> tab_id_to_frag_offsets;
+  for (auto& desc : input_descs) {
+    const auto fragments_it = all_tables_fragments.find(desc.getTableId());
+    CHECK(fragments_it != all_tables_fragments.end());
+    const auto& fragments = *fragments_it->second;
+    std::vector<uint64_t> frag_offsets(fragments.size(), 0);
+    for (size_t i = 0, off = 0; i < fragments.size(); ++i) {
+      frag_offsets[i] = off;
+      off += fragments[i].numTuples;
+    }
+    tab_id_to_frag_offsets.insert(std::make_pair(desc.getTableId(), frag_offsets));
+  }
+  return tab_id_to_frag_offsets;
+}
+
+Executor::FetchResult Executor::fetchChunks(const ExecutionDispatch& execution_dispatch,
+                                            const RelAlgExecutionUnit& ra_exe_unit,
+                                            const int device_id,
+                                            const Data_Namespace::MemoryLevel memory_level,
+                                            const std::map<int, const TableFragments*>& all_tables_fragments,
+                                            const std::map<int, std::vector<size_t>>& selected_fragments,
+                                            const Catalog_Namespace::Catalog& cat,
+                                            std::list<ChunkIter>& chunk_iterators,
+                                            std::list<std::shared_ptr<Chunk_NS::Chunk>>& chunks) {
   CHECK_GE(all_tables_fragments.size(), selected_fragments.size());
 
   const auto& col_global_ids = ra_exe_unit.input_col_descs;
@@ -5136,15 +5164,15 @@ Executor::fetchChunks(const ExecutionDispatch& execution_dispatch,
 
   CartesianProduct<std::vector<std::vector<size_t>>> frag_ids_crossjoin(selected_fragments_crossjoin);
 
-  std::vector<std::vector<const int8_t*>> all_frag_col_buffers;
-  std::vector<std::vector<int64_t>> all_num_rows;
-  std::vector<std::vector<const int8_t*>> all_frag_iter_buffers;
-  const bool needs_fetch_iterators =
-      ra_exe_unit.join_dimensions.size() > 2 && dynamic_cast<Analyzer::IterExpr*>(ra_exe_unit.target_exprs.front());
+  const auto tab_id_to_frag_offsets = getAllFragOffsets(input_descs, all_tables_fragments);
 
+  std::vector<std::vector<const int8_t*>> all_frag_col_buffers;
+  std::vector<std::vector<const int8_t*>> all_frag_iter_buffers;
+  std::vector<std::vector<int64_t>> all_num_rows;
+  std::vector<std::vector<uint64_t>> all_frag_offsets;
   for (const auto& selected_frag_ids : frag_ids_crossjoin) {
-    std::vector<const int8_t*> frag_col_buffers(plan_state_->global_to_local_col_ids_.size());
     std::vector<int64_t> num_rows;
+    std::vector<uint64_t> frag_offsets;
     CHECK_EQ(selected_frag_ids.size(), input_descs.size());
     for (size_t tab_idx = 0; tab_idx < input_descs.size(); ++tab_idx) {
       const auto frag_id = selected_frag_ids[tab_idx];
@@ -5153,8 +5181,22 @@ Executor::fetchChunks(const ExecutionDispatch& execution_dispatch,
       const auto& fragments = *fragments_it->second;
       const auto& fragment = fragments[frag_id];
       num_rows.push_back(fragment.numTuples);
+      const auto frag_offsets_it = tab_id_to_frag_offsets.find(input_descs[tab_idx].getTableId());
+      CHECK(frag_offsets_it != tab_id_to_frag_offsets.end());
+      const auto& offsets = frag_offsets_it->second;
+      CHECK_LT(frag_id, offsets.size());
+      frag_offsets.push_back(offsets[frag_id]);
     }
     all_num_rows.push_back(num_rows);
+    // Each dispatch has only one fragment of outer table.
+    frag_offsets[0] = 0;
+    all_frag_offsets.push_back(frag_offsets);
+  }
+  const bool needs_fetch_iterators =
+      ra_exe_unit.join_dimensions.size() > 2 && dynamic_cast<Analyzer::IterExpr*>(ra_exe_unit.target_exprs.front());
+
+  for (const auto& selected_frag_ids : frag_ids_crossjoin) {
+    std::vector<const int8_t*> frag_col_buffers(plan_state_->global_to_local_col_ids_.size());
     for (const auto& col_id : col_global_ids) {
       CHECK(col_id);
       const int table_id = col_id->getScanDesc().getTableId();
@@ -5204,7 +5246,7 @@ Executor::fetchChunks(const ExecutionDispatch& execution_dispatch,
           fetchIterTabFrags(selected_frag_ids[0], execution_dispatch, ra_exe_unit.input_descs[0], device_id));
     }
   }
-  return {all_frag_col_buffers, all_frag_iter_buffers, all_num_rows};
+  return {all_frag_col_buffers, all_frag_iter_buffers, all_num_rows, all_frag_offsets};
 }
 
 void Executor::buildSelectedFragsMapping(std::vector<std::vector<size_t>>& selected_fragments_crossjoin,
@@ -5260,7 +5302,7 @@ int32_t Executor::executePlanWithoutGroupBy(const RelAlgExecutionUnit& ra_exe_un
                                             std::vector<std::vector<const int8_t*>>& col_buffers,
                                             QueryExecutionContext* query_exe_context,
                                             const std::vector<std::vector<int64_t>>& num_rows,
-                                            const std::vector<uint64_t>& dev_frag_row_offsets,
+                                            const std::vector<std::vector<uint64_t>>& frag_offsets,
                                             Data_Namespace::DataMgr* data_mgr,
                                             const int device_id,
                                             const uint32_t start_rowid,
@@ -5283,7 +5325,7 @@ int32_t Executor::executePlanWithoutGroupBy(const RelAlgExecutionUnit& ra_exe_un
                                                hoist_buf,
                                                col_buffers,
                                                num_rows,
-                                               dev_frag_row_offsets,
+                                               frag_offsets,
                                                0,
                                                query_exe_context->init_agg_vals_,
                                                &error_code,
@@ -5298,7 +5340,7 @@ int32_t Executor::executePlanWithoutGroupBy(const RelAlgExecutionUnit& ra_exe_un
                                                  hoist_buf,
                                                  col_buffers,
                                                  num_rows,
-                                                 dev_frag_row_offsets,
+                                                 frag_offsets,
                                                  0,
                                                  query_exe_context->init_agg_vals_,
                                                  data_mgr,
@@ -5418,7 +5460,7 @@ int32_t Executor::executePlanWithGroupBy(const RelAlgExecutionUnit& ra_exe_unit,
                                          const std::vector<size_t> outer_tab_frag_ids,
                                          QueryExecutionContext* query_exe_context,
                                          const std::vector<std::vector<int64_t>>& num_rows,
-                                         const std::vector<uint64_t>& dev_frag_row_offsets,
+                                         const std::vector<std::vector<uint64_t>>& frag_offsets,
                                          Data_Namespace::DataMgr* data_mgr,
                                          const int device_id,
                                          const int64_t scan_limit,
@@ -5449,7 +5491,7 @@ int32_t Executor::executePlanWithGroupBy(const RelAlgExecutionUnit& ra_exe_unit,
                                      hoist_buf,
                                      col_buffers,
                                      num_rows,
-                                     dev_frag_row_offsets,
+                                     frag_offsets,
                                      scan_limit,
                                      query_exe_context->init_agg_vals_,
                                      &error_code,
@@ -5463,7 +5505,7 @@ int32_t Executor::executePlanWithGroupBy(const RelAlgExecutionUnit& ra_exe_unit,
                                        hoist_buf,
                                        col_buffers,
                                        num_rows,
-                                       dev_frag_row_offsets,
+                                       frag_offsets,
                                        scan_limit,
                                        query_exe_context->init_agg_vals_,
                                        data_mgr,

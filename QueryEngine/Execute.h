@@ -532,7 +532,18 @@ class Executor {
     std::string hash_join_fail_reason_;
   };
 
+  struct FetchResult {
+    std::vector<std::vector<const int8_t*>> col_buffers;
+    std::vector<std::vector<const int8_t*>> iter_buffers;
+    std::vector<std::vector<int64_t>> num_rows;
+    std::vector<std::vector<uint64_t>> frag_offsets;
+  };
+
   typedef std::deque<Fragmenter_Namespace::FragmentInfo> TableFragments;
+
+  std::map<size_t, std::vector<uint64_t>> getAllFragOffsets(
+      const std::vector<InputDescriptor>& input_descs,
+      const std::map<int, const TableFragments*>& all_tables_fragments);
 
   class ExecutionDispatch {
    private:
@@ -689,18 +700,15 @@ class Executor {
                                                const InputDescriptor& table_desc,
                                                const int device_id);
 
-  std::tuple<std::vector<std::vector<const int8_t*>>,
-             std::vector<std::vector<const int8_t*>>,
-             std::vector<std::vector<int64_t>>>
-  fetchChunks(const ExecutionDispatch&,
-              const RelAlgExecutionUnit& ra_exe_unit,
-              const int device_id,
-              const Data_Namespace::MemoryLevel,
-              const std::map<int, const TableFragments*>&,
-              const std::map<int, std::vector<size_t>>& selected_fragments,
-              const Catalog_Namespace::Catalog&,
-              std::list<ChunkIter>&,
-              std::list<std::shared_ptr<Chunk_NS::Chunk>>&);
+  FetchResult fetchChunks(const ExecutionDispatch&,
+                          const RelAlgExecutionUnit& ra_exe_unit,
+                          const int device_id,
+                          const Data_Namespace::MemoryLevel,
+                          const std::map<int, const TableFragments*>&,
+                          const std::map<int, std::vector<size_t>>& selected_fragments,
+                          const Catalog_Namespace::Catalog&,
+                          std::list<ChunkIter>&,
+                          std::list<std::shared_ptr<Chunk_NS::Chunk>>&);
 
   void buildSelectedFragsMapping(std::vector<std::vector<size_t>>& selected_fragments_crossjoin,
                                  std::vector<size_t>& local_col_to_frag_pos,
@@ -741,7 +749,7 @@ class Executor {
                                  const std::vector<size_t> outer_tab_frag_ids,
                                  QueryExecutionContext*,
                                  const std::vector<std::vector<int64_t>>& num_rows,
-                                 const std::vector<uint64_t>& dev_frag_row_offsets,
+                                 const std::vector<std::vector<uint64_t>>& frag_offsets,
                                  Data_Namespace::DataMgr*,
                                  const int device_id,
                                  const int64_t limit,
@@ -758,7 +766,7 @@ class Executor {
                                     std::vector<std::vector<const int8_t*>>& col_buffers,
                                     QueryExecutionContext* query_exe_context,
                                     const std::vector<std::vector<int64_t>>& num_rows,
-                                    const std::vector<uint64_t>& dev_frag_row_offsets,
+                                    const std::vector<std::vector<uint64_t>>& frag_offsets,
                                     Data_Namespace::DataMgr* data_mgr,
                                     const int device_id,
                                     const uint32_t start_rowid,
