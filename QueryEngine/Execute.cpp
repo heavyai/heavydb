@@ -280,11 +280,23 @@ Weight get_weight(const Analyzer::Expr* expr, int depth = 0) {
   return Weight();
 }
 
-bool contains_division(const Analyzer::Expr* expr) {
+bool contains_unsafe_division(const Analyzer::Expr* expr) {
   auto is_div = [](const Analyzer::Expr* e) -> bool {
     auto bin_oper = dynamic_cast<const Analyzer::BinOper*>(e);
-    if (bin_oper && bin_oper->get_optype() == kDIVIDE)
-      return true;
+    if (bin_oper && bin_oper->get_optype() == kDIVIDE) {
+      auto rhs = bin_oper->get_right_operand();
+      auto rhs_constant = dynamic_cast<const Analyzer::Constant*>(rhs);
+      if (!rhs_constant || rhs_constant->get_is_null())
+        return true;
+      const auto& datum = rhs_constant->get_constval();
+      const auto& ti = rhs_constant->get_type_info();
+      const auto type = ti.is_decimal() ? decimal_to_int_type(ti) : ti.get_type();
+      if ((type == kBOOLEAN && datum.boolval == 0) || (type == kSMALLINT && datum.smallintval == 0) ||
+          (type == kINT && datum.intval == 0) || (type == kBIGINT && datum.bigintval == 0LL) ||
+          (type == kFLOAT && datum.floatval == 0.0) || (type == kDOUBLE && datum.doubleval == 0.0)) {
+        return true;
+      }
+    }
     return false;
   };
   std::list<const Analyzer::Expr*> binoper_list;
@@ -2079,9 +2091,9 @@ llvm::Value* Executor::codegenLogicalShortCircuit(const Analyzer::BinOper* bin_o
   auto lhs = bin_oper->get_left_operand();
   auto rhs = bin_oper->get_right_operand();
 
-  if (contains_division(rhs)) {
+  if (contains_unsafe_division(rhs)) {
     // rhs contains a possible div-by-0: short-circuit
-  } else if (contains_division(lhs)) {
+  } else if (contains_unsafe_division(lhs)) {
     // lhs contains a possible div-by-0: swap and short-circuit
     std::swap(rhs, lhs);
   } else if (((optype == kOR && get_likelihood(lhs) > 0.90) || (optype == kAND && get_likelihood(lhs) < 0.10)) &&
@@ -5967,6 +5979,57 @@ void Executor::nukeOldState(const bool allow_lazy_fetch,
   plan_state_.reset(new PlanState(allow_lazy_fetch && outer_join_quals.empty(), join_info, this));
 }
 
+bool Executor::prioritizeQuals(const RelAlgExecutionUnit& ra_exe_unit,
+                               std::vector<Analyzer::Expr*>& primary_quals,
+                               std::vector<Analyzer::Expr*>& deferred_quals) {
+  std::vector<Analyzer::Expr*> unlikely_quals;
+  std::vector<Analyzer::Expr*> short_circuited_quals;
+
+  for (auto expr : ra_exe_unit.inner_join_quals) {
+    primary_quals.push_back(expr.get());
+    short_circuited_quals.push_back(expr.get());
+  }
+
+  for (auto expr : ra_exe_unit.simple_quals) {
+    if (get_likelihood(expr.get()) < 0.10 && !contains_unsafe_division(expr.get())) {
+      unlikely_quals.push_back(expr.get());
+      continue;
+    }
+    if (should_defer_eval(expr)) {
+      deferred_quals.push_back(expr.get());
+      short_circuited_quals.push_back(expr.get());
+      continue;
+    }
+    primary_quals.push_back(expr.get());
+    short_circuited_quals.push_back(expr.get());
+  }
+  for (auto expr : ra_exe_unit.quals) {
+    if (get_likelihood(expr.get()) < 0.10 && !contains_unsafe_division(expr.get())) {
+      unlikely_quals.push_back(expr.get());
+      continue;
+    }
+    if (should_defer_eval(expr)) {
+      deferred_quals.push_back(expr.get());
+      short_circuited_quals.push_back(expr.get());
+      continue;
+    }
+    auto qual_expr = rewrite_expr(expr.get());
+    if (!qual_expr) {
+      qual_expr = expr;
+    }
+    primary_quals.push_back(expr.get());
+    short_circuited_quals.push_back(expr.get());
+  }
+
+  if (!unlikely_quals.empty() && !short_circuited_quals.empty()) {
+    primary_quals.swap(unlikely_quals);
+    deferred_quals.swap(short_circuited_quals);
+    return true;
+  }
+
+  return false;
+}
+
 Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
                                                       const std::vector<InputTableInfo>& query_infos,
                                                       const RelAlgExecutionUnit& ra_exe_unit,
@@ -6071,31 +6134,20 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
     }
   }
 
+  std::vector<Analyzer::Expr*> primary_quals;
   std::vector<Analyzer::Expr*> deferred_quals;
+  bool short_circuited = prioritizeQuals(ra_exe_unit, primary_quals, deferred_quals);
+  if (short_circuited) {
+    VLOG(1) << "Prioritized " << std::to_string(primary_quals.size()) << " unlikely quals, "
+            << "short-circuited " << std::to_string(deferred_quals.size()) << " quals";
+  }
+
   llvm::Value* filter_lv = llvm::ConstantInt::get(llvm::IntegerType::getInt1Ty(cgen_state_->context_), true);
-
-  for (auto expr : ra_exe_unit.inner_join_quals) {
-    filter_lv = cgen_state_->ir_builder_.CreateAnd(filter_lv, toBool(codegen(expr.get(), true, co).front()));
+  for (auto expr : primary_quals) {
+    // Generate the filter for primary quals
+    filter_lv = cgen_state_->ir_builder_.CreateAnd(filter_lv, toBool(codegen(expr, true, co).front()));
   }
-
-  for (auto expr : ra_exe_unit.simple_quals) {
-    if (should_defer_eval(expr)) {
-      deferred_quals.push_back(expr.get());
-      continue;
-    }
-    filter_lv = cgen_state_->ir_builder_.CreateAnd(filter_lv, toBool(codegen(expr.get(), true, co).front()));
-  }
-  for (auto expr : ra_exe_unit.quals) {
-    if (should_defer_eval(expr)) {
-      deferred_quals.push_back(expr.get());
-      continue;
-    }
-    auto qual_expr = rewrite_expr(expr.get());
-    if (!qual_expr) {
-      qual_expr = expr;
-    }
-    filter_lv = cgen_state_->ir_builder_.CreateAnd(filter_lv, toBool(codegen(qual_expr.get(), true, co).front()));
-  }
+  CHECK(filter_lv->getType()->isIntegerTy(1));
 
   if (!deferred_quals.empty()) {
     auto sc_true = llvm::BasicBlock::Create(cgen_state_->context_, "sc_true", cgen_state_->row_func_);

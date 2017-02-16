@@ -472,6 +472,26 @@ TEST(Select, FloatAndDoubleTests) {
   }
 }
 
+TEST(Select, FilterShortCircuit) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT COUNT(*) FROM test WHERE x > 6 AND x < 8 AND z > 100 AND z < 102 AND t > 1000 AND UNLIKELY(t < 1002);",
+      dt);
+    c("SELECT COUNT(*) FROM test WHERE x > 6 AND x < 8 AND z > 100 AND z < 102 AND t > 1000 AND t > 1000 AND t > 1001 "
+      "AND t > 1002 AND t > 1003 AND t > 1004 AND UNLIKELY(t < 1002);",
+      dt);
+    c("SELECT COUNT(*) FROM test WHERE x > 6 AND x < 8 AND z > 100 AND z < 102 AND t > 1000 AND t > 1000 AND t > 1001 "
+      "AND t > 1002 AND t > 1003 AND t > 1004 AND t > 1005 AND UNLIKELY(t < 1002);",
+      dt);
+    c("SELECT COUNT(*) FROM test WHERE x > 6 AND x < 8 AND z > 100 AND z < 102 AND t > 1000 AND t > 1000 AND t > 1001 "
+      "AND t > 1002 AND t > 1003 AND UNLIKELY(t < 111) AND (str LIKE 'f__%%');",
+      dt);
+    c("SELECT COUNT(*) FROM test WHERE x > 6 AND x < 8 AND UNLIKELY(z < 200) AND z > 100 AND z < 102 AND t > 1000 AND "
+      "t > 1000 AND t > 1001  AND UNLIKELY(t < 1111 AND t > 1100) AND (str LIKE 'f__%%') AND t > 1002 AND t > 1003;",
+      dt);
+  }
+}
+
 TEST(Select, FilterAndMultipleAggregation) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
