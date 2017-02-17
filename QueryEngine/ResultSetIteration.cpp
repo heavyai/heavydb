@@ -234,13 +234,24 @@ InternalTargetValue ResultSet::getColumnInternal(const int8_t* buff,
           const auto i2 = read_int_from_buff(ptr2, compact_sz2);
           return InternalTargetValue(i1, i2);
         } else {
-          if (!lazy_fetch_info_.empty() && agg_info.sql_type.is_string() &&
-              agg_info.sql_type.get_compression() == kENCODING_NONE) {
+          if (agg_info.sql_type.is_string() && agg_info.sql_type.get_compression() == kENCODING_NONE) {
             CHECK(!agg_info.is_agg);
-            CHECK_LT(target_logical_idx, lazy_fetch_info_.size());
-            const auto& col_lazy_fetch = lazy_fetch_info_[target_logical_idx];
-            if (col_lazy_fetch.is_lazily_fetched) {
-              return InternalTargetValue(reinterpret_cast<const std::string*>(i1));
+            if (!lazy_fetch_info_.empty()) {
+              CHECK_LT(target_logical_idx, lazy_fetch_info_.size());
+              const auto& col_lazy_fetch = lazy_fetch_info_[target_logical_idx];
+              if (col_lazy_fetch.is_lazily_fetched) {
+                return InternalTargetValue(reinterpret_cast<const std::string*>(i1));
+              }
+            }
+            if (none_encoded_strings_valid_) {
+              if (i1 < 0) {
+                CHECK_EQ(-1, i1);
+                return InternalTargetValue(static_cast<const std::string*>(nullptr));
+              }
+              CHECK_LT(i1, none_encoded_strings_.size());
+              CHECK_LT(storage_lookup_result.storage_idx, none_encoded_strings_.size());
+              const auto& none_encoded_strings_for_fragment = none_encoded_strings_[storage_lookup_result.storage_idx];
+              return InternalTargetValue(&none_encoded_strings_for_fragment[i1]);
             }
           }
           return InternalTargetValue(i1);
