@@ -39,7 +39,7 @@ DataMgr::DataMgr(const string& dataDir,
       cudaMgr_ = new CudaMgr_Namespace::CudaMgr(numGpus, startGpu);
       reservedGpuMem_ = reservedGpuMem;
       hasGpus_ = true;
-    } catch (std::runtime_error& error) {
+    } catch (OutOfMemory& error) {
       hasGpus_ = false;
       cudaMgr_ = 0;
     }
