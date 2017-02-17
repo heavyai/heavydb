@@ -266,13 +266,13 @@ class ResultSet {
                               const bool decimal_to_double,
                               const size_t entry_buff_idx) const;
 
-  TargetValue makeRealStringTargetValue(const int8_t* ptr1,
-                                        const int8_t compact_sz1,
-                                        const int8_t* ptr2,
-                                        const int8_t compact_sz2,
-                                        const TargetInfo& target_info,
-                                        const size_t target_logical_idx,
-                                        const size_t entry_buff_idx) const;
+  TargetValue makeVarlenTargetValue(const int8_t* ptr1,
+                                    const int8_t compact_sz1,
+                                    const int8_t* ptr2,
+                                    const int8_t compact_sz2,
+                                    const TargetInfo& target_info,
+                                    const size_t target_logical_idx,
+                                    const size_t entry_buff_idx) const;
 
   struct StorageLookupResult {
     const ResultSetStorage* storage_ptr;

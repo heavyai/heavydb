@@ -368,25 +368,115 @@ int64_t lazy_decode(const ColumnLazyFetchInfo& col_lazy_fetch, const int8_t* byt
   return val;
 }
 
-// Interprets ptr1, ptr2 as the ptr and len pair used for raw string.
-TargetValue ResultSet::makeRealStringTargetValue(const int8_t* ptr1,
-                                                 const int8_t compact_sz1,
-                                                 const int8_t* ptr2,
-                                                 const int8_t compact_sz2,
-                                                 const TargetInfo& target_info,
-                                                 const size_t target_logical_idx,
-                                                 const size_t entry_buff_idx) const {
-  auto string_ptr = read_int_from_buff(ptr1, compact_sz1);
+namespace {
+
+template <class T>
+ScalarTargetValue make_scalar_tv(const T val) {
+  return ScalarTargetValue(static_cast<int64_t>(val));
+}
+
+template <>
+ScalarTargetValue make_scalar_tv(const float val) {
+  return ScalarTargetValue(val);
+}
+
+template <>
+ScalarTargetValue make_scalar_tv(const double val) {
+  return ScalarTargetValue(val);
+}
+
+template <class T>
+TargetValue build_array_target_value(const int8_t* buff,
+                                     const size_t buff_sz,
+                                     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner) {
+  std::vector<ScalarTargetValue> values;
+  auto buff_elems = reinterpret_cast<const T*>(buff);
+  CHECK_EQ(size_t(0), buff_sz % sizeof(T));
+  const size_t num_elems = buff_sz / sizeof(T);
+  for (size_t i = 0; i < num_elems; ++i) {
+    values.push_back(make_scalar_tv<T>(buff_elems[i]));
+  }
+  return TargetValue(values);
+}
+
+TargetValue build_string_array_target_value(const int32_t* buff,
+                                            const size_t buff_sz,
+                                            const int dict_id,
+                                            std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+                                            const Executor* executor) {
+  std::vector<ScalarTargetValue> values;
+  CHECK_EQ(size_t(0), buff_sz % sizeof(int32_t));
+  const size_t num_elems = buff_sz / sizeof(int32_t);
+  for (size_t i = 0; i < num_elems; ++i) {
+    const auto string_id = buff[i];
+    values.emplace_back(
+        string_id == NULL_INT
+            ? NullableString(nullptr)
+            : NullableString(
+                  executor->getStringDictionaryProxy(dict_id, row_set_mem_owner, false)->getString(string_id)));
+  }
+  return values;
+}
+
+TargetValue build_array_target_value(const SQLTypeInfo& array_ti,
+                                     const int8_t* buff,
+                                     const size_t buff_sz,
+                                     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+                                     const Executor* executor) {
+  CHECK(array_ti.is_array());
+  const auto& elem_ti = array_ti.get_elem_type();
+  CHECK_EQ(elem_ti.get_size(), elem_ti.get_logical_size());  // no fixed encoding for arrays yet
+  if (elem_ti.is_string()) {
+    CHECK_EQ(kENCODING_DICT, elem_ti.get_compression());
+    CHECK_EQ(size_t(4), elem_ti.get_size());
+    return build_string_array_target_value(
+        reinterpret_cast<const int32_t*>(buff), buff_sz, elem_ti.get_comp_param(), row_set_mem_owner, executor);
+  }
+  switch (elem_ti.get_size()) {
+    case 1:
+      return build_array_target_value<int8_t>(buff, buff_sz, row_set_mem_owner);
+    case 2:
+      return build_array_target_value<int16_t>(buff, buff_sz, row_set_mem_owner);
+    case 4:
+      if (elem_ti.is_fp()) {
+        return build_array_target_value<float>(buff, buff_sz, row_set_mem_owner);
+      } else {
+        return build_array_target_value<int32_t>(buff, buff_sz, row_set_mem_owner);
+      }
+    case 8:
+      if (elem_ti.is_fp()) {
+        return build_array_target_value<double>(buff, buff_sz, row_set_mem_owner);
+      } else {
+        return build_array_target_value<int64_t>(buff, buff_sz, row_set_mem_owner);
+      }
+    default:
+      CHECK(false);
+  }
+  CHECK(false);
+  return TargetValue(nullptr);
+}
+
+}  // namespace
+
+// Interprets ptr1, ptr2 as the ptr and len pair used for variable length data.
+TargetValue ResultSet::makeVarlenTargetValue(const int8_t* ptr1,
+                                             const int8_t compact_sz1,
+                                             const int8_t* ptr2,
+                                             const int8_t compact_sz2,
+                                             const TargetInfo& target_info,
+                                             const size_t target_logical_idx,
+                                             const size_t entry_buff_idx) const {
+  auto varlen_ptr = read_int_from_buff(ptr1, compact_sz1);
   if (none_encoded_strings_valid_) {
-    if (string_ptr < 0) {
-      CHECK_EQ(-1, string_ptr);
+    if (varlen_ptr < 0) {
+      CHECK_EQ(-1, varlen_ptr);
       return TargetValue(nullptr);
     }
     const auto storage_idx = getStorageIndex(entry_buff_idx);
     CHECK_LT(static_cast<size_t>(storage_idx.first), none_encoded_strings_.size());
     const auto none_encoded_strings = none_encoded_strings_[storage_idx.first];
-    CHECK_LT(static_cast<size_t>(string_ptr), none_encoded_strings.size());
-    return none_encoded_strings[string_ptr];
+    CHECK_LT(static_cast<size_t>(varlen_ptr), none_encoded_strings.size());
+    return none_encoded_strings[varlen_ptr];
   }
   if (!lazy_fetch_info_.empty()) {
     CHECK_LT(target_logical_idx, lazy_fetch_info_.size());
@@ -396,35 +486,61 @@ TargetValue ResultSet::makeRealStringTargetValue(const int8_t* ptr1,
       CHECK_LT(static_cast<size_t>(storage_idx.first), col_buffers_.size());
       auto& frag_col_buffers = col_buffers_[storage_idx.first];
       bool is_end{false};
-      VarlenDatum vd;
-      ChunkIter_get_nth(
-          reinterpret_cast<ChunkIter*>(const_cast<int8_t*>(frag_col_buffers[col_lazy_fetch.local_col_id])),
-          string_ptr,
-          false,
-          &vd,
-          &is_end);
-      CHECK(!is_end);
-      if (vd.is_null) {
-        return TargetValue(nullptr);
+      if (target_info.sql_type.is_string()) {
+        VarlenDatum vd;
+        ChunkIter_get_nth(
+            reinterpret_cast<ChunkIter*>(const_cast<int8_t*>(frag_col_buffers[col_lazy_fetch.local_col_id])),
+            varlen_ptr,
+            false,
+            &vd,
+            &is_end);
+        CHECK(!is_end);
+        if (vd.is_null) {
+          return TargetValue(nullptr);
+        }
+        CHECK(vd.pointer);
+        CHECK_GT(vd.length, 0);
+        std::string fetched_str(reinterpret_cast<char*>(vd.pointer), vd.length);
+        return fetched_str;
+      } else {
+        CHECK(target_info.sql_type.is_array());
+        ArrayDatum ad;
+        ChunkIter_get_nth(
+            reinterpret_cast<ChunkIter*>(const_cast<int8_t*>(frag_col_buffers[col_lazy_fetch.local_col_id])),
+            varlen_ptr,
+            &ad,
+            &is_end);
+        CHECK(!is_end);
+        if (ad.is_null) {
+          std::vector<ScalarTargetValue> empty_array;
+          return TargetValue(empty_array);
+        }
+        CHECK(ad.pointer);
+        CHECK_GT(ad.length, 0);
+        return build_array_target_value(target_info.sql_type, ad.pointer, ad.length, row_set_mem_owner_, executor_);
       }
-      CHECK(vd.pointer);
-      CHECK_GT(vd.length, 0);
-      std::string fetched_str(reinterpret_cast<char*>(vd.pointer), vd.length);
-      return fetched_str;
     }
   }
-  if (!string_ptr) {
+  if (!varlen_ptr) {
     return TargetValue(nullptr);
   }
-  const auto length = read_int_from_buff(ptr2, compact_sz2);
+  auto length = read_int_from_buff(ptr2, compact_sz2);
+  if (target_info.sql_type.is_array()) {
+    const auto& elem_ti = target_info.sql_type.get_elem_type();
+    length *= elem_ti.get_logical_size();
+  }
   std::vector<int8_t> cpu_buffer;
-  if (string_ptr && device_type_ == ExecutorDeviceType::GPU) {
+  if (varlen_ptr && device_type_ == ExecutorDeviceType::GPU) {
     cpu_buffer.resize(length);
     auto& data_mgr = query_mem_desc_.executor_->catalog_->get_dataMgr();
-    copy_from_gpu(&data_mgr, &cpu_buffer[0], static_cast<CUdeviceptr>(string_ptr), length, device_id_);
-    string_ptr = reinterpret_cast<int64_t>(&cpu_buffer[0]);
+    copy_from_gpu(&data_mgr, &cpu_buffer[0], static_cast<CUdeviceptr>(varlen_ptr), length, device_id_);
+    varlen_ptr = reinterpret_cast<int64_t>(&cpu_buffer[0]);
   }
-  return std::string(reinterpret_cast<char*>(string_ptr), length);
+  if (target_info.sql_type.is_array()) {
+    return build_array_target_value(
+        target_info.sql_type, reinterpret_cast<const int8_t*>(varlen_ptr), length, row_set_mem_owner_, executor_);
+  }
+  return std::string(reinterpret_cast<char*>(varlen_ptr), length);
 }
 
 // Reads an integer or a float from ptr based on the type and the byte width.
@@ -525,7 +641,7 @@ TargetValue ResultSet::getTargetValueFromBufferColwise(const int8_t* col1_ptr,
     const auto ptr2 = columnar_elem_ptr(entry_idx, col2_ptr, compact_sz2);
     return target_info.agg_kind == kAVG
                ? make_avg_target_value(ptr1, compact_sz1, ptr2, compact_sz2, target_info)
-               : makeRealStringTargetValue(
+               : makeVarlenTargetValue(
                      ptr1, compact_sz1, ptr2, compact_sz2, target_info, target_logical_idx, entry_idx);
   }
   return makeTargetValue(
@@ -550,7 +666,7 @@ TargetValue ResultSet::getTargetValueFromBufferRowwise(const int8_t* rowwise_tar
     CHECK(ptr2);
     return target_info.agg_kind == kAVG
                ? make_avg_target_value(ptr1, compact_sz1, ptr2, compact_sz2, target_info)
-               : makeRealStringTargetValue(
+               : makeVarlenTargetValue(
                      ptr1, compact_sz1, ptr2, compact_sz2, target_info, target_logical_idx, entry_buff_idx);
   }
   if (query_mem_desc_.target_groupby_indices.empty()) {
