@@ -22,7 +22,7 @@ void GpuCudaBufferMgr::addSlab(const size_t slabSize) {
   slabs_.resize(slabs_.size() + 1);
   try {
     slabs_.back() = cudaMgr_->allocateDeviceMem(slabSize, deviceId_);
-  } catch (OutOfMemory& error) {
+  } catch (std::runtime_error& error) {
     slabs_.resize(slabs_.size() - 1);
     throw FailedToCreateSlab();
   }

@@ -21,7 +21,7 @@ void CpuBufferMgr::addSlab(const size_t slabSize) {
   slabs_.resize(slabs_.size() + 1);
   try {
     slabs_.back() = new int8_t[slabSize];
-  } catch (std::exception& error) {
+  } catch (std::bad_alloc&) {
     slabs_.resize(slabs_.size() - 1);
     throw FailedToCreateSlab();
   }

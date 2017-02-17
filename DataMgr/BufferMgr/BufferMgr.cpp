@@ -262,7 +262,7 @@ BufferList::iterator BufferMgr::findFreeBuffer(size_t numBytes) {
       return findFreeBufferInSlab(
           numSlabs,
           numPagesRequested);  // has to succeed since we made sure to request a slab big enough to accomodate request
-    } catch (OutOfMemory& error) {  // failed to allocate slab
+    } catch (std::runtime_error& error) {  // failed to allocate slab
       LOG(INFO) << "ALLOCATION Attempted slab of " << currentMaxSlabPageSize_ << " pages ("
                 << currentMaxSlabPageSize_ * pageSize_ << "B) failed " << getStringMgrType() << ":" << deviceId_;
       // check if there is any point halving currentMaxSlabSize and trying again
@@ -636,7 +636,7 @@ AbstractBuffer* BufferMgr::getBuffer(const ChunkKey& key, const size_t numBytes)
     AbstractBuffer* buffer = createBuffer(key, pageSize_, numBytes);  // createChunk pins for us
     try {
       parentMgr_->fetchBuffer(key, buffer, numBytes);  // this should put buffer in a BufferSegment
-    } catch (OutOfMemory& error) {
+    } catch (std::runtime_error& error) {
       // if here, fetch chunk was unsuccessful - delete chunk we just
       // created
       cout << "Could not find chunk: ";
@@ -672,7 +672,7 @@ void BufferMgr::fetchBuffer(const ChunkKey& key, AbstractBuffer* destBuffer, con
     buffer = createBuffer(key, pageSize_, numBytes);  // will pin buffer
     try {
       parentMgr_->fetchBuffer(key, buffer, numBytes);
-    } catch (OutOfMemory& error) {
+    } catch (std::runtime_error& error) {
       assert(false);
     }
   } else {
@@ -681,7 +681,7 @@ void BufferMgr::fetchBuffer(const ChunkKey& key, AbstractBuffer* destBuffer, con
     if (numBytes > buffer->size()) {
       try {
         parentMgr_->fetchBuffer(key, buffer, numBytes);
-      } catch (OutOfMemory& error) {
+      } catch (std::runtime_error& error) {
         assert(false);
       }
     }
