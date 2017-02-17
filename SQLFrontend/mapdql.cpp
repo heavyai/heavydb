@@ -139,7 +139,8 @@ bool thrift_with_retry(ThriftService which_service, ClientContext& context, cons
         context.client.clear_gpu_memory(context.session);
         break;
       case kIMPORT_GEO_TABLE:
-        context.client.import_geo_table(context.session, context.table_name, context.file_name, context.copy_params, TRowDescriptor());
+        context.client.import_geo_table(
+            context.session, context.table_name, context.file_name, context.copy_params, TRowDescriptor());
         break;
     }
   } catch (TMapDException& e) {
@@ -279,13 +280,14 @@ void process_backslash_commands(char* command, ClientContext& context) {
         for (TColumnType p : context.rowdesc_return) {
           std::string encoding;
           if (p.col_type.type == TDatumType::STR) {
-            encoding =
-                (p.col_type.encoding == 0 ? " ENCODING NONE" : " ENCODING " + thrift_to_encoding_name(p.col_type) +
-                                                                   "(" + std::to_string(p.col_type.comp_param) + ")");
+            encoding = (p.col_type.encoding == 0 ? " ENCODING NONE"
+                                                 : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
+                                                       std::to_string(p.col_type.comp_param) + ")");
 
           } else {
-            encoding = (p.col_type.encoding == 0 ? "" : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
-                                                            std::to_string(p.col_type.comp_param) + ")");
+            encoding = (p.col_type.encoding == 0 ? ""
+                                                 : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
+                                                       std::to_string(p.col_type.comp_param) + ")");
           }
           std::cout << comma_or_blank << p.col_name << " " << thrift_to_name(p.col_type)
                     << (p.col_type.nullable ? "" : " NOT NULL") << encoding;
