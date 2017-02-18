@@ -138,27 +138,33 @@ void collect_table_infos(std::vector<InputTableInfo>& table_infos,
   const auto temporary_tables = executor->getTemporaryTables();
   const auto cat = executor->getCatalog();
   CHECK(cat);
+  std::unordered_map<int, Fragmenter_Namespace::TableInfo*> info_cache;
   for (const auto& input_desc : input_descs) {
+    const auto table_id = input_desc.getTableId();
+    if (info_cache.count(table_id)) {
+      CHECK(info_cache[table_id]);
+      table_infos.push_back({table_id, build_table_info(*info_cache[table_id])});
+      continue;
+    }
     if (input_desc.getSourceType() == InputSourceType::RESULT) {
-      const int temp_table_id = input_desc.getTableId();
-      CHECK_LT(temp_table_id, 0);
+      CHECK_LT(table_id, 0);
       CHECK(temporary_tables);
-      const auto it = temporary_tables->find(temp_table_id);
+      const auto it = temporary_tables->find(table_id);
       CHECK(it != temporary_tables->end());
       if (const auto rows = boost::get<RowSetPtr>(&it->second)) {
         CHECK(*rows);
-        table_infos.push_back({temp_table_id, synthesize_table_info(*rows)});
+        table_infos.push_back({table_id, synthesize_table_info(*rows)});
       } else if (const auto table = boost::get<IterTabPtr>(&it->second)) {
         CHECK(*table);
-        table_infos.push_back({temp_table_id, synthesize_table_info(*table)});
+        table_infos.push_back({table_id, synthesize_table_info(*table)});
       } else {
         CHECK(false);
       }
-      continue;
+    } else {
+      CHECK(input_desc.getSourceType() == InputSourceType::TABLE);
+      table_infos.push_back({table_id, executor->getTableInfo(table_id)});
     }
-    CHECK(input_desc.getSourceType() == InputSourceType::TABLE);
-    const auto table_id = input_desc.getTableId();
-    table_infos.push_back({table_id, executor->getTableInfo(table_id)});
+    info_cache.insert(std::make_pair(table_id, &table_infos.back().info));
   }
 }
 

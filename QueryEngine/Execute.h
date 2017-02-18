@@ -571,7 +571,7 @@ class Executor {
     mutable std::unordered_map<InputColDescriptor, std::unordered_map<CacheKey, std::unique_ptr<const ColumnarResults>>>
         columnarized_ref_table_cache_;
 
-    uint32_t getFragmentStride(const std::map<int, std::vector<size_t>>& frag_ids) const;
+    uint32_t getFragmentStride(const std::vector<std::pair<int, std::vector<size_t>>>& frag_ids) const;
 
     std::vector<const ColumnarResults*> getAllScanColumnFrags(
         const int table_id,
@@ -586,7 +586,7 @@ class Executor {
 
     void runImpl(const ExecutorDeviceType chosen_device_type,
                  int chosen_device_id,
-                 const std::map<int, std::vector<size_t>>& frag_ids,
+                 const std::vector<std::pair<int, std::vector<size_t>>>& frag_ids,
                  const size_t ctx_idx,
                  const int64_t rowid_lookup_key);
 
@@ -617,7 +617,7 @@ class Executor {
 
     void run(const ExecutorDeviceType chosen_device_type,
              int chosen_device_id,
-             const std::map<int, std::vector<size_t>>& frag_ids,
+             const std::vector<std::pair<int, std::vector<size_t>>>& frag_ids,
              const size_t ctx_idx,
              const int64_t rowid_lookup_key) noexcept;
 
@@ -690,13 +690,13 @@ class Executor {
 
   void dispatchFragments(const std::function<void(const ExecutorDeviceType chosen_device_type,
                                                   int chosen_device_id,
-                                                  const std::map<int, std::vector<size_t>>& frag_ids,
+                                                  const std::vector<std::pair<int, std::vector<size_t>>>& frag_ids,
                                                   const size_t ctx_idx,
                                                   const int64_t rowid_lookup_key)> dispatch,
                          const ExecutionDispatch& execution_dispatch,
                          const ExecutionOptions& eo,
                          const bool is_agg,
-                         const std::map<int, const TableFragments*>& selected_tables_fragments,
+                         std::map<int, const TableFragments*>& selected_tables_fragments,
                          const size_t context_count,
                          std::condition_variable& scheduler_cv,
                          std::mutex& scheduler_mutex,
@@ -712,7 +712,7 @@ class Executor {
                           const int device_id,
                           const Data_Namespace::MemoryLevel,
                           const std::map<int, const TableFragments*>&,
-                          const std::map<int, std::vector<size_t>>& selected_fragments,
+                          const std::vector<std::pair<int, std::vector<size_t>>>& selected_fragments,
                           const Catalog_Namespace::Catalog&,
                           std::list<ChunkIter>&,
                           std::list<std::shared_ptr<Chunk_NS::Chunk>>&);
@@ -720,7 +720,7 @@ class Executor {
   void buildSelectedFragsMapping(std::vector<std::vector<size_t>>& selected_fragments_crossjoin,
                                  std::vector<size_t>& local_col_to_frag_pos,
                                  const std::list<std::shared_ptr<const InputColDescriptor>>& col_global_ids,
-                                 const std::map<int, std::vector<size_t>>& selected_fragments,
+                                 const std::vector<std::pair<int, std::vector<size_t>>>& selected_fragments,
                                  const std::vector<InputDescriptor>& input_descs);
 
   RowSetPtr executeResultPlan(const Planner::Result* result_plan,

@@ -207,7 +207,7 @@ class QueryExecutionContext : boost::noncopyable {
                               const bool was_auto_device) const;
 
   uint32_t getFragmentStride(const RelAlgExecutionUnit& ra_exe_unit,
-                             const std::map<int, std::vector<size_t>>& frag_ids) const;
+                             const std::vector<std::pair<int, std::vector<size_t>>>& frag_ids) const;
 
 #ifdef HAVE_CUDA
   enum {

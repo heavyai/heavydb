@@ -2328,6 +2328,8 @@ TEST(Select, InnerJoins) {
       "= 43 group by b.str;",
       dt);
     c("SELECT a.x, b.x, c.x FROM test a JOIN test_inner b ON a.x = b.x JOIN hash_join_test c ON b.x = c.x;", dt);
+    c("SELECT a.x, b.x FROM test_inner a JOIN test_inner b ON a.x = b.x ORDER BY a.x;", dt);
+    c("SELECT a.x, b.x FROM join_test a JOIN join_test b ON a.x = b.x ORDER BY a.x;", dt);
 #endif
   }
 }
