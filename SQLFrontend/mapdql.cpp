@@ -617,8 +617,6 @@ int main(int argc, char** argv) {
     /* Do something with the string. */
     if (line[0] != '\0' && line[0] != '\\') {
       // printf("echo: '%s'\n", line);
-      linenoiseHistoryAdd(line);                  /* Add to the history. */
-      linenoiseHistorySave("mapdql_history.txt"); /* Save the history on disk. */
       if (context.session == INVALID_SESSION_ID) {
         std::cerr << "Not connected to any MapD databases." << std::endl;
         continue;
@@ -626,6 +624,8 @@ int main(int argc, char** argv) {
       current_line.append(" ").append(std::string(line));
       boost::algorithm::trim(current_line);
       if (current_line.back() == ';') {
+        linenoiseHistoryAdd(current_line.c_str());  /* Add to the history. */
+        linenoiseHistorySave("mapdql_history.txt"); /* Save the history on disk. */
         std::string query(current_line);
         current_line.clear();
         prompt.assign("mapdql> ");
