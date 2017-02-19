@@ -118,21 +118,37 @@ popd
 download_make_install https://internal-dependencies.mapd.com/thirdparty/cmake-3.7.0.tar.gz
 
 # llvm
-VERS=3.9.0
-download http://llvm.org/releases/$VERS/llvm-$VERS.src.tar.xz
-download http://llvm.org/releases/$VERS/cfe-$VERS.src.tar.xz
-download http://llvm.org/releases/$VERS/compiler-rt-$VERS.src.tar.xz
+download_make_install http://thrysoee.dk/editline/libedit-20160903-3.1.tar.gz
+VERS=4.0.0
+download http://releases.llvm.org/$VERS/llvm-$VERS.src.tar.xz
+download http://releases.llvm.org/$VERS/cfe-$VERS.src.tar.xz
+download http://releases.llvm.org/$VERS/compiler-rt-$VERS.src.tar.xz
+download http://releases.llvm.org/$VERS/lldb-$VERS.src.tar.xz
+download http://releases.llvm.org/$VERS/lld-$VERS.src.tar.xz
+download http://releases.llvm.org/$VERS/libcxx-$VERS.src.tar.xz
+download http://releases.llvm.org/$VERS/libcxxabi-$VERS.src.tar.xz
 rm -rf llvm-$VERS.src
 extract llvm-$VERS.src.tar.xz
 extract cfe-$VERS.src.tar.xz
 extract compiler-rt-$VERS.src.tar.xz
+extract lld-$VERS.src.tar.xz
+extract lldb-$VERS.src.tar.xz
+extract libcxx-$VERS.src.tar.xz
+extract libcxxabi-$VERS.src.tar.xz
 mv cfe-$VERS.src llvm-$VERS.src/tools/clang
 mv compiler-rt-$VERS.src llvm-$VERS.src/projects/compiler-rt
+mv lld-$VERS.src llvm-$VERS.src/tools/lld
+mv lldb-$VERS.src llvm-$VERS.src/tools/lldb
+mv libcxx-$VERS.src llvm-$VERS.src/projects/libcxx
+mv libcxxabi-$VERS.src llvm-$VERS.src/projects/libcxxabi
 rm -rf build.llvm-$VERS
 mkdir build.llvm-$VERS
 pushd build.llvm-$VERS
 cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$PREFIX -DLLVM_ENABLE_RTTI=on ../llvm-$VERS.src
 makej
+if [ ! -d "lib/python2.7" ]; then
+    cp -R lib64/python2.7 lib/python2.7
+fi
 make install
 popd
 
