@@ -13,23 +13,23 @@
   <dependencies>
     <dependency>
       <groupId>com.mapd</groupId>
-  <artifactId>thrift</artifactId>
-  <version>1.0-SNAPSHOT</version>
+      <artifactId>thrift</artifactId>
+      <version>1.0-SNAPSHOT</version>
     </dependency>
     <dependency>
       <groupId>com.mapd</groupId>
-  <artifactId>utility</artifactId>
-  <version>1.0-SNAPSHOT</version>
+      <artifactId>utility</artifactId>
+      <version>1.0-SNAPSHOT</version>
     </dependency>
     <dependency>
       <groupId>com.mapd</groupId>
-  <artifactId>calcite</artifactId>
-  <version>1.0-SNAPSHOT</version>
+      <artifactId>calcite</artifactId>
+      <version>1.0-SNAPSHOT</version>
     </dependency>
     <dependency>
       <groupId>com.mapd</groupId>
-  <artifactId>mapdjdbc</artifactId>
-  <version>1.0-SNAPSHOT</version>
+      <artifactId>mapdjdbc</artifactId>
+      <version>1.0-SNAPSHOT</version>
     </dependency>
   </dependencies>
   <build>
@@ -48,8 +48,10 @@
         </configuration>
         <executions>
           <execution>
-            <id>make-assembly</id> <!-- this is used for inheritance merges -->
-            <phase>package</phase> <!-- bind to the packaging phase -->
+            <id>make-assembly</id>
+            <!-- this is used for inheritance merges -->
+            <phase>package</phase>
+            <!-- bind to the packaging phase -->
             <goals>
               <goal>single</goal>
             </goals>
