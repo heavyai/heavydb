@@ -66,6 +66,19 @@ find_program(Thrift_EXECUTABLE
   /usr/local/homebrew/bin
   /opt/local/bin)
 
+execute_process(COMMAND ${Thrift_EXECUTABLE} --version
+  OUTPUT_VARIABLE Thrift_version_output
+  ERROR_VARIABLE Thrift_version_output
+  RESULT_VARIABLE Thrift_version_result)
+if(SWIG_version_result)
+  message(SEND_ERROR "Failed to get Thrift version: ${Thrift_version_output}")
+else()
+  string(REGEX REPLACE "^[^0-9]+" ""
+    Thrift_version_output "${Thrift_version_output}")
+  string(STRIP "${Thrift_version_output}" Thrift_version_output)
+  set(Thrift_VERSION ${Thrift_version_output} CACHE STRING "Thrift version" FORCE)
+endif()
+
 if(Thrift_USE_STATIC_LIBS)
   set(CMAKE_FIND_LIBRARY_SUFFIXES ${_CMAKE_FIND_LIBRARY_SUFFIXES})
 endif()
@@ -76,4 +89,4 @@ set(Thrift_LIBRARY_DIRS ${Thrift_LIBRARY_DIR})
 set(Thrift_INCLUDE_DIRS ${Thrift_LIBRARY_DIR}/../include)
 
 include(FindPackageHandleStandardArgs)
-find_package_handle_standard_args(Thrift REQUIRED_VARS Thrift_LIBRARY)
+find_package_handle_standard_args(Thrift REQUIRED_VARS Thrift_LIBRARY Thrift_VERSION)

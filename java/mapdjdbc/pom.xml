@@ -10,6 +10,12 @@
   <artifactId>mapdjdbc</artifactId>
   <version>1.0-SNAPSHOT</version>
   <packaging>jar</packaging>
+  <properties>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <maven.compiler.source>1.6</maven.compiler.source>
+    <maven.compiler.target>1.6</maven.compiler.target>
+    <thrift.version>0.9.3</thrift.version>
+  </properties>
   <dependencies>
     <dependency>
       <groupId>com.mapd</groupId>
@@ -19,7 +25,7 @@
     <dependency>
       <groupId>org.apache.thrift</groupId>
       <artifactId>libthrift</artifactId>
-      <version>0.9.3</version>
+      <version>${thrift.version}</version>
       <exclusions>
         <exclusion>
           <groupId>org.apache.httpcomponents</groupId>
@@ -44,11 +50,6 @@
       <type>jar</type>
     </dependency>
   </dependencies>
-  <properties>
-    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <maven.compiler.source>1.6</maven.compiler.source>
-    <maven.compiler.target>1.6</maven.compiler.target>
-  </properties>
   <build>
     <plugins>
       <plugin>
