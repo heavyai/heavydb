@@ -61,6 +61,12 @@ find_package(GDALExtra REQUIRED)
 list(APPEND GDAL_LIBRARIES ${PNG_LIBRARIES} ${GDALExtra_LIBRARIES})
 include_directories(${GDAL_INCLUDE_DIRS})
 
+find_package(Curses REQUIRED)
+include_directories(${CURSES_INCLUDE_DIRS})
+if (CURSES_HAVE_NCURSES_CURSES_H AND NOT CURSES_HAVE_CURSES_H)
+  include_directories(${CURSES_INCLUDE_DIRS}/ncurses/)
+endif()
+
 set(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR}/bin)
 if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux" AND (("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang"
     AND (CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 3.6 OR CMAKE_CXX_COMPILER_VERSION VERSION_EQUAL 3.6))
@@ -302,7 +308,7 @@ add_custom_target(rerun_cmake ALL
   )
 add_dependencies(mapd_server rerun_cmake)
 
-target_link_libraries(mapd_server mapd_thrift ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${Glog_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${LLVM_LINKER_FLAGS} ${PROFILER_LIBS} poly2tri "-lz -lncurses")
+target_link_libraries(mapd_server mapd_thrift ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${Glog_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${LLVM_LINKER_FLAGS} ${PROFILER_LIBS} ${CURSES_LIBRARIES} poly2tri "-lz")
 target_link_libraries(initdb Shared Catalog Fragmenter Chunk SqliteConnector DataMgr StringDictionary ${Boost_LIBRARIES} ${CMAKE_DL_LIBS})
 
 # Packaging
