@@ -13,6 +13,7 @@
 #include <iostream>
 #include <iomanip>
 #include <fstream>
+#include <termios.h>
 #include <boost/algorithm/string/join.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/algorithm/string/trim.hpp>
@@ -21,6 +22,7 @@
 #include <boost/tokenizer.hpp>
 
 #include "../Fragmenter/InsertOrderFragmenter.h"
+#include "Shared/checked_alloc.h"
 #include "gen-cpp/MapD.h"
 #include "MapDServer.h"
 #include "MapDRelease.h"
@@ -489,6 +491,28 @@ TDatum columnar_val_to_datum(const TColumn& col, const size_t row_idx, const TTy
   return datum;
 }
 
+// based on http://www.gnu.org/software/libc/manual/html_node/getpass.html
+std::string mapd_getpass() {
+  struct termios origterm, tmpterm;
+  int nread;
+
+  size_t MAX_PASSWORD_LENGTH{256};
+  char* password = (char*)checked_malloc(MAX_PASSWORD_LENGTH);
+
+  tcgetattr(STDIN_FILENO, &origterm);
+  tmpterm = origterm;
+  tmpterm.c_lflag &= ~ECHO;
+  tcsetattr(STDIN_FILENO, TCSAFLUSH, &tmpterm);
+
+  std::cout << "Password: ";
+  nread = getline(&password, &MAX_PASSWORD_LENGTH, stdin);
+  std::cout << std::endl;
+
+  tcsetattr(STDIN_FILENO, TCSAFLUSH, &origterm);
+
+  return std::string(password, nread - 1);
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -546,8 +570,8 @@ int main(int argc, char** argv) {
     }
     if (vm.count("no-header"))
       print_header = false;
-    if (vm.count("db") && (!vm.count("user") || !vm.count("passwd"))) {
-      std::cerr << "Must specify a user name and password to access database " << db_name << std::endl;
+    if (vm.count("db") && !vm.count("user")) {
+      std::cerr << "Must specify a user name to access database " << db_name << std::endl;
       return 1;
     }
 
@@ -555,6 +579,10 @@ int main(int argc, char** argv) {
   } catch (boost::program_options::error& e) {
     std::cerr << "Usage Error: " << e.what() << std::endl;
     return 1;
+  }
+
+  if (!vm.count("passwd")) {
+    passwd = mapd_getpass();
   }
 
   shared_ptr<TTransport> transport;
