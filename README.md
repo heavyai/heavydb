@@ -56,11 +56,16 @@ Dependencies for `mapd_web_server` and other Go utils are in [`ThirdParty/go`](T
                    libssh \
                    openssl-devel \
                    openldap-devel \
+                   ncurses-devel \
                    git \
                    maven \
                    java-1.8.0-openjdk{-devel,-headless} \
-                   gperftools{,-devel,-libs}
-   yum install -y mesa-libGL-devel libX11-devel
+                   gperftools{,-devel,-libs} \
+                   libX11-devel \
+                   libXv \
+                   mesa-libGL-devel \
+                   mesa-libGLU \
+                   xorg-x11-server-Xorg
 
 For generating the documentation you will also need:
 
