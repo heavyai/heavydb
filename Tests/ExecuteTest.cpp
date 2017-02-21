@@ -2807,6 +2807,7 @@ int main(int argc, char** argv) {
   const std::string drop_join_test{"DROP TABLE join_test;"};
   g_sqlite_comparator.query(drop_join_test);
   const std::string drop_hash_join_test{"DROP TABLE hash_join_test;"};
+  run_ddl_statement(drop_hash_join_test);
   g_sqlite_comparator.query(drop_hash_join_test);
   run_ddl_statement(drop_join_test);
   const std::string drop_emp_table{"DROP TABLE emp;"};
