@@ -330,6 +330,7 @@ target_link_libraries(initdb Shared Catalog Fragmenter Chunk SqliteConnector Dat
 set(CPACK_PACKAGE_VENDOR "MapD Technologies, Inc.")
 set(CPACK_PACKAGE_CONTACT "support@mapd.com")
 set(CPACK_PROJECT_CONFIG_FILE ${CMAKE_SOURCE_DIR}/CMakePackaging.txt)
+set(CPACK_STRIP_FILES ON)
 
 
 install(DIRECTORY ThirdParty/licenses DESTINATION "ThirdParty/")
