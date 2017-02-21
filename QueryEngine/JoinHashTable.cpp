@@ -108,7 +108,7 @@ std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(
       new JoinHashTable(qual_bin_oper, inner_col, cat, query_infos, memory_level, col_range, executor));
   const int err = join_hash_table->reify(device_count);
   if (err) {
-#ifndef ENABLE_MULFRAG_JOIN
+#ifndef ENABLE_MULTIFRAG_JOIN
     if (err == ERR_MULTI_FRAG) {
       const auto cols = get_cols(qual_bin_oper, cat, executor->temporary_tables_);
       const auto inner_col = cols.first;
@@ -210,7 +210,7 @@ int JoinHashTable::reify(const int device_count) {
   if (query_info.fragments.empty()) {
     return 0;
   }
-#ifndef ENABLE_MULFRAG_JOIN
+#ifndef ENABLE_MULTIFRAG_JOIN
   if (query_info.fragments.size() != 1) {  // we don't support multiple fragment inner tables (yet)
     return ERR_MULTI_FRAG;
   }
@@ -236,7 +236,7 @@ int JoinHashTable::reify(const int device_count) {
   const int8_t* col_buff = nullptr;
   size_t elem_count = 0;
 
-#ifdef ENABLE_MULFRAG_JOIN
+#ifdef ENABLE_MULTIFRAG_JOIN
   const size_t elem_width = inner_col->get_type_info().get_size();
   auto& data_mgr = cat_.get_dataMgr();
   RowSetMemoryOwner col_buff_owner;
@@ -256,7 +256,7 @@ int JoinHashTable::reify(const int device_count) {
   }
 
   for (int device_id = 0; device_id < device_count; ++device_id) {
-#ifdef ENABLE_MULFRAG_JOIN
+#ifdef ENABLE_MULTIFRAG_JOIN
     dev_buff_owner.emplace_back(&data_mgr, device_id);
     if (has_multi_frag) {
       if (effective_memory_level == Data_Namespace::GPU_LEVEL) {

@@ -1668,7 +1668,7 @@ void ResultRows::fillOneRow(const std::vector<int64_t>& row) {
 
 const std::vector<const int8_t*>& QueryExecutionContext::getColumnFrag(const size_t table_idx,
                                                                        int64_t& global_idx) const {
-#ifdef ENABLE_MULFRAG_JOIN
+#ifdef ENABLE_MULTIFRAG_JOIN
   if (col_buffers_.size() > 1) {
     int64_t frag_id = 0;
     int64_t local_idx = global_idx;

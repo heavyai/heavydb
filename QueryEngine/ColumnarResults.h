@@ -125,7 +125,7 @@ class ColumnarResults {
     row_set_mem_owner->addColBuffer(column_buffers_[0]);
   }
 
-#ifdef ENABLE_MULFRAG_JOIN
+#ifdef ENABLE_MULTIFRAG_JOIN
   static std::unique_ptr<ColumnarResults> createIndexedResults(
       const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
       const std::vector<const ColumnarResults*>& val_frags,

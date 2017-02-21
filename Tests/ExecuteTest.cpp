@@ -1745,7 +1745,7 @@ void import_join_test() {
   run_ddl_statement(drop_old_test);
   g_sqlite_comparator.query(drop_old_test);
   const std::string create_test{
-#ifdef ENABLE_MULFRAG_JOIN
+#ifdef ENABLE_MULTIFRAG_JOIN
       "CREATE TABLE join_test(x int not null, str text encoding dict) WITH (fragment_size=2);"
 #else
       "CREATE TABLE join_test(x int not null, str text encoding dict) WITH (fragment_size=3);"
@@ -1772,7 +1772,7 @@ void import_hash_join_test() {
   run_ddl_statement(drop_old_test);
   g_sqlite_comparator.query(drop_old_test);
   const std::string create_test{
-#ifdef ENABLE_MULFRAG_JOIN
+#ifdef ENABLE_MULTIFRAG_JOIN
       "CREATE TABLE hash_join_test(x int not null, str text encoding dict) WITH (fragment_size=2);"
 #else
       "CREATE TABLE hash_join_test(x int not null, str text encoding dict) WITH (fragment_size=3);"

@@ -773,7 +773,7 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Expr* expr,
   }
   auto iter_expr = dynamic_cast<const Analyzer::IterExpr*>(expr);
   if (iter_expr) {
-#ifdef ENABLE_MULFRAG_JOIN
+#ifdef ENABLE_MULTIFRAG_JOIN
     if (iter_expr->get_rte_idx() > 0) {
       return {
           cgen_state_->ir_builder_.CreateAdd(posArg(iter_expr), cgen_state_->frag_offsets_[iter_expr->get_rte_idx()])};
@@ -1259,14 +1259,14 @@ std::vector<llvm::Value*> Executor::codegenColVar(const Analyzer::ColumnVar* col
                                                   const bool hoist_literals) {
   auto col_id = col_var->get_column_id();
   const auto rte_idx = col_var->get_rte_idx() == -1 ? int(0) : col_var->get_rte_idx();
-#ifdef ENABLE_MULFRAG_JOIN
+#ifdef ENABLE_MULTIFRAG_JOIN
   CHECK_LT(rte_idx, cgen_state_->frag_offsets_.size());
 #endif
   if (col_var->get_table_id() > 0) {
     auto cd = get_column_descriptor(col_id, col_var->get_table_id(), *catalog_);
     if (cd->isVirtualCol) {
       CHECK(cd->columnName == "rowid");
-#ifndef ENABLE_MULFRAG_JOIN
+#ifndef ENABLE_MULTIFRAG_JOIN
       if (rte_idx > 0) {
         // rowid for inner scan, the fragment offset from the outer scan
         // is meaningless, the relative position in the scan is the rowid
@@ -1298,7 +1298,7 @@ std::vector<llvm::Value*> Executor::codegenColVar(const Analyzer::ColumnVar* col
   auto col_byte_stream = colByteStream(col_var, fetch_column, hoist_literals);
   if (plan_state_->isLazyFetchColumn(col_var)) {
     plan_state_->columns_to_not_fetch_.insert(std::make_pair(col_var->get_table_id(), col_var->get_column_id()));
-#ifdef ENABLE_MULFRAG_JOIN
+#ifdef ENABLE_MULTIFRAG_JOIN
     if (rte_idx > 0) {
       return {cgen_state_->ir_builder_.CreateAdd(pos_arg, cgen_state_->frag_offsets_[rte_idx])};
     }
@@ -4521,7 +4521,7 @@ const int8_t* Executor::ExecutionDispatch::getScanColumn(
 
 uint32_t Executor::ExecutionDispatch::getFragmentStride(
     const std::vector<std::pair<int, std::vector<size_t>>>& frag_ids) const {
-#ifdef ENABLE_MULFRAG_JOIN
+#ifdef ENABLE_MULTIFRAG_JOIN
   const bool is_hash_join = executor_->plan_state_->join_info_.join_impl_type_ == Executor::JoinImplType::HashOneToOne;
   if (is_hash_join) {
     CHECK_EQ(ra_exe_unit_.input_descs.size(), size_t(2));
@@ -4663,7 +4663,7 @@ const int8_t* Executor::ExecutionDispatch::getColumn(
               ColumnarResults::createOffsetResults(
                   row_set_mem_owner_, *frag_id_to_iters[frag_id], iter_col_id, frag_offsets[ref_frag_id])));
         } else {
-#ifdef ENABLE_MULFRAG_JOIN
+#ifdef ENABLE_MULTIFRAG_JOIN
           // Each dispatch has only one fragment of outer table.
           if (ref_table_id != ra_exe_unit_.join_dimensions[0].first) {
             auto ref_frags = getAllScanColumnFrags(ref_table_id, ref_col_id, all_tables_fragments);
@@ -5087,7 +5087,7 @@ void Executor::dispatchFragments(
             CHECK_LT(size_t(1), ra_exe_unit.input_descs.size());
             CHECK_EQ(table_id, ra_exe_unit.input_descs[1].getTableId());
             std::vector<size_t> all_frag_ids(inner_frags->size());
-#ifndef ENABLE_MULFRAG_JOIN
+#ifndef ENABLE_MULTIFRAG_JOIN
             if (all_frag_ids.size() > 1) {
               throw std::runtime_error("Multi-fragment inner table '" +
                                        get_table_name(ra_exe_unit.input_descs[1], *catalog_) + "' not supported yet");
@@ -5154,7 +5154,7 @@ void Executor::dispatchFragments(
           CHECK_LT(size_t(1), ra_exe_unit.input_descs.size());
           CHECK_EQ(table_id, ra_exe_unit.input_descs[1].getTableId());
           std::vector<size_t> all_frag_ids(inner_frags->size());
-#ifndef ENABLE_MULFRAG_JOIN
+#ifndef ENABLE_MULTIFRAG_JOIN
           if (all_frag_ids.size() > 1) {
             throw std::runtime_error("Multi-fragment inner table '" +
                                      get_table_name(ra_exe_unit.input_descs[1], *catalog_) + "' not supported yet");
@@ -6428,7 +6428,7 @@ void Executor::codegenInnerScanNextRow() {
 }
 
 void Executor::preloadFragOffsets(const std::vector<InputDescriptor>& input_descs) {
-#ifdef ENABLE_MULFRAG_JOIN
+#ifdef ENABLE_MULTIFRAG_JOIN
   const auto ld_count = input_descs.size();
 #else
   const size_t ld_count = 1;
