@@ -10,6 +10,9 @@
 
 #include "../Analyzer/Analyzer.h"
 #include "../Parser/ParserNode.h"
+#include "../Shared/thread_count.h"
+
+#include <future>
 
 namespace {
 
@@ -319,6 +322,64 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUoper(const RexOperat
   return nullptr;
 }
 
+namespace {
+
+std::shared_ptr<Analyzer::Expr> get_in_values_expr(std::shared_ptr<Analyzer::Expr> arg, const ResultRows& val_rows) {
+  if (auto val_sets = val_rows.getResultSet()) {
+    std::list<std::shared_ptr<Analyzer::Expr>> value_exprs;
+    const int fetcher_count = cpu_threads();
+    std::vector<std::list<std::shared_ptr<Analyzer::Expr>>> expr_set(fetcher_count,
+                                                                     std::list<std::shared_ptr<Analyzer::Expr>>());
+    std::vector<std::future<void>> fetcher_threads;
+    const auto& ti = arg->get_type_info();
+    const auto entry_count = val_sets->entryCount();
+    for (size_t i = 0, start_entry = 0, stride = (entry_count + fetcher_count - 1) / fetcher_count;
+         i < fetcher_count && start_entry < entry_count;
+         ++i, start_entry += stride) {
+      const auto end_entry = std::min(start_entry + stride, entry_count);
+      fetcher_threads.push_back(std::async(
+          std::launch::async,
+          [&](std::list<std::shared_ptr<Analyzer::Expr>>& in_vals, const size_t start, const size_t end) {
+            for (auto index = start; index < end; ++index) {
+              auto row = val_sets->getRowAt(index);
+              if (row.empty()) {
+                continue;
+              }
+              auto scalar_tv = boost::get<ScalarTargetValue>(&row[0]);
+              Datum d{0};
+              bool is_null_const{false};
+              std::tie(d, is_null_const) = datum_from_scalar_tv(scalar_tv, ti);
+              if (ti.is_string() && ti.get_compression() != kENCODING_NONE) {
+                auto ti_none_encoded = ti;
+                ti_none_encoded.set_compression(kENCODING_NONE);
+                auto none_encoded_string = makeExpr<Analyzer::Constant>(ti, is_null_const, d);
+                auto dict_encoded_string = std::make_shared<Analyzer::UOper>(ti, false, kCAST, none_encoded_string);
+                in_vals.push_back(dict_encoded_string);
+              } else {
+                in_vals.push_back(makeExpr<Analyzer::Constant>(ti, is_null_const, d));
+              }
+            }
+          },
+          std::ref(expr_set[i]),
+          start_entry,
+          end_entry));
+    }
+    for (auto& child : fetcher_threads) {
+      child.get();
+    }
+
+    val_sets->moveToBegin();
+    for (auto& exprs : expr_set) {
+      value_exprs.splice(value_exprs.end(), exprs);
+    }
+    return makeExpr<Analyzer::InValues>(arg, value_exprs);
+  } else {
+    return nullptr;
+  }
+}
+
+}  // namespace
+
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInOper(const RexOperator* rex_operator) const {
   if (just_explain_) {
     throw std::runtime_error("EXPLAIN is not supported with sub-queries");
@@ -332,8 +393,16 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInOper(const RexOpera
   auto result = rex_subquery->getExecutionResult();
   auto& row_set = result->getRows();
   row_set.moveToBegin();
-  if (row_set.rowCount() > 10000) {
-    throw std::runtime_error("Unable to handle 'expr IN (subquery)', subquery returned 10000+ rows.");
+  const auto row_count = row_set.rowCount();
+  if (row_count > 10000) {
+    if (row_count > 1000000) {
+      throw std::runtime_error("Unable to handle 'expr IN (subquery)', subquery returned 1M+ rows.");
+    }
+    if (auto expr = get_in_values_expr(lhs, row_set)) {
+      return expr;
+    } else {
+      throw std::runtime_error("Unable to handle 'expr IN (subquery)', subquery returned 10000+ rows.");
+    }
   }
   std::list<std::shared_ptr<Analyzer::Expr>> value_exprs;
   while (true) {

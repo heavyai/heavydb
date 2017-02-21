@@ -86,29 +86,16 @@ const int8_t* advance_col_buff_to_slot(const int8_t* buff,
 
 }  // namespace
 
-std::vector<TargetValue> ResultSet::getNextRow(const bool translate_strings, const bool decimal_to_double) const {
-  while (fetched_so_far_ < drop_first_) {
-    const auto row = getNextRowImpl(translate_strings, decimal_to_double);
-    if (row.empty()) {
-      return row;
-    }
-  }
-  return getNextRowImpl(translate_strings, decimal_to_double);
-}
-
-std::vector<TargetValue> ResultSet::getNextRowImpl(const bool translate_strings, const bool decimal_to_double) const {
-  auto entry_buff_idx = advanceCursorToNextEntry();
-  const auto orig_entry_buff_idx = entry_buff_idx;
-  if (keep_first_ && fetched_so_far_ >= drop_first_ + keep_first_) {
-    return {};
-  }
-  if (crt_row_buff_idx_ >= entryCount()) {
-    CHECK_EQ(entryCount(), crt_row_buff_idx_);
-    return {};
-  }
-  const auto storage_lookup_result = findStorage(entry_buff_idx);
+std::vector<TargetValue> ResultSet::getRowAt(const size_t global_entry_idx,
+                                             const bool translate_strings,
+                                             const bool decimal_to_double) const {
+  const auto storage_lookup_result = findStorage(global_entry_idx);
   const auto storage = storage_lookup_result.storage_ptr;
-  entry_buff_idx = storage_lookup_result.fixedup_entry_idx;
+  const auto local_entry_idx = storage_lookup_result.fixedup_entry_idx;
+  if (storage->isEmptyEntry(local_entry_idx)) {
+    return {};
+  }
+
   const auto buff = storage->buff_;
   CHECK(buff);
   std::vector<TargetValue> row;
@@ -119,7 +106,7 @@ std::vector<TargetValue> ResultSet::getNextRowImpl(const bool translate_strings,
   if (query_mem_desc_.output_columnar) {
     crt_col_ptr = get_cols_ptr(buff, query_mem_desc_);
   } else {
-    keys_ptr = row_ptr_rowwise(buff, query_mem_desc_, entry_buff_idx);
+    keys_ptr = row_ptr_rowwise(buff, query_mem_desc_, local_entry_idx);
     rowwise_target_ptr = keys_ptr + get_key_bytes_rowwise(query_mem_desc_);
   }
   for (size_t target_idx = 0; target_idx < storage_->targets_.size(); ++target_idx) {
@@ -133,7 +120,7 @@ std::vector<TargetValue> ResultSet::getNextRowImpl(const bool translate_strings,
                                                     query_mem_desc_.agg_col_widths[agg_col_idx].compact,
                                                     col2_ptr,
                                                     compact_sz2,
-                                                    orig_entry_buff_idx,
+                                                    global_entry_idx,
                                                     agg_info,
                                                     target_idx,
                                                     translate_strings,
@@ -145,7 +132,7 @@ std::vector<TargetValue> ResultSet::getNextRowImpl(const bool translate_strings,
     } else {
       row.push_back(getTargetValueFromBufferRowwise(rowwise_target_ptr,
                                                     keys_ptr,
-                                                    orig_entry_buff_idx,
+                                                    global_entry_idx,
                                                     agg_info,
                                                     target_idx,
                                                     agg_col_idx,
@@ -156,8 +143,43 @@ std::vector<TargetValue> ResultSet::getNextRowImpl(const bool translate_strings,
     }
     agg_col_idx = advance_slot(agg_col_idx, agg_info, none_encoded_strings_valid_);
   }
+
+  return row;
+}
+
+std::vector<TargetValue> ResultSet::getRowAt(const size_t logical_index) const {
+  if (logical_index >= entryCount()) {
+    return {};
+  }
+  const auto entry_idx = permutation_.empty() ? logical_index : permutation_[logical_index];
+  return getRowAt(entry_idx, true, false);
+}
+
+std::vector<TargetValue> ResultSet::getNextRow(const bool translate_strings, const bool decimal_to_double) const {
+  while (fetched_so_far_ < drop_first_) {
+    const auto row = getNextRowImpl(translate_strings, decimal_to_double);
+    if (row.empty()) {
+      return row;
+    }
+  }
+  return getNextRowImpl(translate_strings, decimal_to_double);
+}
+
+std::vector<TargetValue> ResultSet::getNextRowImpl(const bool translate_strings, const bool decimal_to_double) const {
+  auto entry_buff_idx = advanceCursorToNextEntry();
+  if (keep_first_ && fetched_so_far_ >= drop_first_ + keep_first_) {
+    return {};
+  }
+
+  if (crt_row_buff_idx_ >= entryCount()) {
+    CHECK_EQ(entryCount(), crt_row_buff_idx_);
+    return {};
+  }
+  auto row = getRowAt(entry_buff_idx, translate_strings, decimal_to_double);
+  CHECK(!row.empty());
   ++crt_row_buff_idx_;
   ++fetched_so_far_;
+
   return row;
 }
 

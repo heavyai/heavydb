@@ -166,6 +166,8 @@ class ResultSet {
 
   std::vector<TargetValue> getNextRow(const bool translate_strings, const bool decimal_to_double) const;
 
+  std::vector<TargetValue> getRowAt(const size_t index) const;
+
   void sort(const std::list<Analyzer::OrderEntry>& order_entries, const size_t top_n);
 
   bool isEmptyInitializer() const;
@@ -183,6 +185,8 @@ class ResultSet {
   SQLTypeInfo getColType(const size_t col_idx) const;
 
   size_t rowCount() const;
+
+  size_t entryCount() const;
 
   bool definitelyHasNoRows() const;
 
@@ -229,9 +233,11 @@ class ResultSet {
  private:
   std::vector<TargetValue> getNextRowImpl(const bool translate_strings, const bool decimal_to_double) const;
 
-  size_t advanceCursorToNextEntry() const;
+  std::vector<TargetValue> getRowAt(const size_t index,
+                                    const bool translate_strings,
+                                    const bool decimal_to_double) const;
 
-  size_t entryCount() const;
+  size_t advanceCursorToNextEntry() const;
 
   void radixSortOnGpu(const std::list<Analyzer::OrderEntry>& order_entries) const;
 
