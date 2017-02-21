@@ -17,8 +17,6 @@ std::pair<const Analyzer::ColumnVar*, const Analyzer::ColumnVar*> get_cols(
   const auto rhs = qual_bin_oper->get_right_operand();
   const auto& lhs_ti = lhs->get_type_info();
   const auto& rhs_ti = rhs->get_type_info();
-  CHECK_EQ(kENCODING_NONE, lhs_ti.get_compression());
-  CHECK_EQ(kENCODING_NONE, rhs_ti.get_compression());
   if (lhs_ti.get_type() != rhs_ti.get_type()) {
     throw HashJoinFail("Equijoin types must be identical, found: " + lhs_ti.get_type_name() + ", " +
                        rhs_ti.get_type_name());
@@ -32,6 +30,8 @@ std::pair<const Analyzer::ColumnVar*, const Analyzer::ColumnVar*> get_cols(
       (rhs_cast && rhs_cast->get_optype() != kCAST)) {
     throw HashJoinFail("Cannot use hash join for given expression");
   }
+  CHECK_EQ(kENCODING_NONE, lhs_ti.get_compression());
+  CHECK_EQ(kENCODING_NONE, rhs_ti.get_compression());
   const auto lhs_col = lhs_cast ? dynamic_cast<const Analyzer::ColumnVar*>(lhs_cast->get_operand())
                                 : dynamic_cast<const Analyzer::ColumnVar*>(lhs);
   const auto rhs_col = rhs_cast ? dynamic_cast<const Analyzer::ColumnVar*>(rhs_cast->get_operand())
