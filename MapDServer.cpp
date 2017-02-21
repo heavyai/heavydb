@@ -2407,6 +2407,9 @@ int main(int argc, char** argv) {
       "calcite-max-mem",
       po::value<size_t>(&mapd_parameters.calcite_max_mem)->default_value(mapd_parameters.calcite_max_mem),
       "Max memory available to calcite JVM");
+  desc_adv.add_options()("use-result-set",
+                         po::bool_switch(&g_use_result_set)->default_value(g_use_result_set)->implicit_value(true),
+                         "Use the new result set");
 
   po::positional_options_description positionalOptions;
   positionalOptions.add("data", 1);

@@ -21,6 +21,7 @@
 #include <vector>
 
 extern bool g_cluster;
+extern bool g_use_result_set;
 
 class Executor;
 class QueryExecutionContext;
@@ -139,7 +140,7 @@ struct QueryMemoryDescriptor {
 };
 
 inline bool can_use_result_set(const QueryMemoryDescriptor& query_mem_desc, const ExecutorDeviceType) {
-  return g_cluster || query_mem_desc.must_use_baseline_sort ||
+  return (g_cluster || g_use_result_set) || query_mem_desc.must_use_baseline_sort ||
          query_mem_desc.hash_type == GroupByColRangeType::MultiCol;
 }
 
