@@ -5282,8 +5282,7 @@ Executor::FetchResult Executor::fetchChunks(const ExecutionDispatch& execution_d
       frag_offsets.push_back(offsets[frag_id]);
     }
     all_num_rows.push_back(num_rows);
-    // Each dispatch has only one fragment of outer table.
-    frag_offsets[0] = 0;
+    // Fragment offsets of outer table should be ONLY used by rowid for now.
     all_frag_offsets.push_back(frag_offsets);
   }
   const auto extra_tab_id_to_frag_offsets = getAllFragOffsets(ra_exe_unit.extra_input_descs, all_tables_fragments);
