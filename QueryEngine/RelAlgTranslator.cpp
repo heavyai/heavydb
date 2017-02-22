@@ -327,7 +327,7 @@ namespace {
 std::shared_ptr<Analyzer::Expr> get_in_values_expr(std::shared_ptr<Analyzer::Expr> arg, const ResultRows& val_rows) {
   if (auto val_sets = val_rows.getResultSet()) {
     std::list<std::shared_ptr<Analyzer::Expr>> value_exprs;
-    const int fetcher_count = cpu_threads();
+    const size_t fetcher_count = cpu_threads();
     std::vector<std::list<std::shared_ptr<Analyzer::Expr>>> expr_set(fetcher_count,
                                                                      std::list<std::shared_ptr<Analyzer::Expr>>());
     std::vector<std::future<void>> fetcher_threads;

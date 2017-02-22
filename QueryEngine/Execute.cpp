@@ -56,6 +56,7 @@
 #ifdef HAVE_CUDA
 #include <cuda.h>
 #endif  // HAVE_CUDA
+#include <future>
 #include <memory>
 #include <numeric>
 #include <thread>
@@ -1117,30 +1118,69 @@ llvm::Value* Executor::codegen(const Analyzer::InValues* expr, const Compilation
 std::unique_ptr<InValuesBitmap> Executor::createInValuesBitmap(const Analyzer::InValues* in_values,
                                                                const CompilationOptions& co) {
   const auto& value_list = in_values->get_value_list();
-  std::vector<int64_t> values;
+  const auto val_count = value_list.size();
   const auto& ti = in_values->get_arg()->get_type_info();
   if (!(ti.is_integer() || (ti.is_string() && ti.get_compression() == kENCODING_DICT))) {
     return nullptr;
   }
   const auto sdp = ti.is_string() ? getStringDictionaryProxy(ti.get_comp_param(), row_set_mem_owner_, true) : nullptr;
-  if (value_list.size() > 3) {
+  if (val_count > 3) {
+    typedef decltype(value_list.begin()) ListIterator;
+    std::vector<int64_t> values;
     const auto needle_null_val = inline_int_null_val(ti);
-    for (const auto in_val : value_list) {
-      const auto in_val_const = dynamic_cast<const Analyzer::Constant*>(extract_cast_arg(in_val.get()));
-      if (!in_val_const) {
-        return nullptr;
+    const int worker_count = val_count > 10000 ? cpu_threads() : int(1);
+    std::vector<std::vector<int64_t>> values_set(worker_count, std::vector<int64_t>());
+    std::vector<std::future<bool>> worker_threads;
+    auto start_it = value_list.begin();
+    for (size_t i = 0, start_val = 0, stride = (val_count + worker_count - 1) / worker_count;
+         i < val_count && start_val < val_count;
+         ++i, start_val += stride, std::advance(start_it, stride)) {
+      auto end_it = start_it;
+      std::advance(end_it, std::min(stride, val_count - start_val));
+      worker_threads.push_back(std::async(
+          std::launch::async,
+          [&](std::vector<int64_t>& out_vals, const ListIterator start, const ListIterator end) -> bool {
+            for (auto val_it = start; val_it != end; ++val_it) {
+              const auto& in_val = *val_it;
+              const auto in_val_const = dynamic_cast<const Analyzer::Constant*>(extract_cast_arg(in_val.get()));
+              if (!in_val_const) {
+                return false;
+              }
+              const auto& in_val_ti = in_val->get_type_info();
+              CHECK(in_val_ti == ti);
+              if (ti.is_string()) {
+                CHECK(sdp);
+                const auto string_id = in_val_const->get_is_null()
+                                           ? needle_null_val
+                                           : sdp->getIdOfString(*in_val_const->get_constval().stringval);
+                if (string_id >= 0 || string_id == needle_null_val) {
+                  out_vals.push_back(string_id);
+                }
+              } else {
+                out_vals.push_back(codegenIntConst(in_val_const)->getSExtValue());
+              }
+            }
+            return true;
+          },
+          worker_count > 1 ? std::ref(values_set[i]) : std::ref(values),
+          start_it,
+          end_it));
+    }
+    bool success = true;
+    for (auto& worker : worker_threads) {
+      success &= worker.get();
+    }
+    if (!success) {
+      return nullptr;
+    }
+    if (worker_count > 1) {
+      size_t total_val_count = 0;
+      for (auto& vals : values_set) {
+        total_val_count += vals.size();
       }
-      const auto& in_val_ti = in_val->get_type_info();
-      CHECK(in_val_ti == ti);
-      if (ti.is_string()) {
-        CHECK(sdp);
-        const auto string_id =
-            in_val_const->get_is_null() ? needle_null_val : sdp->getIdOfString(*in_val_const->get_constval().stringval);
-        if (string_id >= 0 || string_id == needle_null_val) {
-          values.push_back(string_id);
-        }
-      } else {
-        values.push_back(codegenIntConst(in_val_const)->getSExtValue());
+      values.reserve(total_val_count);
+      for (auto& vals : values_set) {
+        values.insert(values.end(), vals.begin(), vals.end());
       }
     }
     try {
