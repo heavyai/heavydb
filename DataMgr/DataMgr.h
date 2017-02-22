@@ -38,13 +38,14 @@ struct memorySummary {
 };
 
 class DataMgr {
-  friend class FileMgr;
+  friend class GlobalFileMgr;
 
  public:
   DataMgr(const std::string& dataDir,
           const size_t cpuBufferSize /* 0 means auto set size */,
           const bool useGpus,
           const int numGpus,
+          const std::string& dbConvertDir = "",
           const int startGpu = 0,
           const size_t reservedGpuMem = (1 << 27),
           const int start_epoch = -1,
@@ -84,10 +85,12 @@ class DataMgr {
   void populateMgrs(const size_t userSpecifiedCpuBufferSize,
                     const size_t userSpecifiedNumReaderThreads,
                     const int start_epoch);
+  void convertDB(const std::string basePath);
   std::vector<std::vector<AbstractBufferMgr*>> bufferMgrs_;
   std::string dataDir_;
   bool hasGpus_;
   size_t reservedGpuMem_;
+  std::string dbConvertDir_;
 };
 }  // Data_Namespace
 
