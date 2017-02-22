@@ -2330,8 +2330,6 @@ int main(int argc, char** argv) {
   po::options_description desc("Options");
   desc.add_options()("help,h", "Print help messages");
   desc.add_options()("config", po::value<std::string>(&config_file), "Path to mapd.conf");
-  desc.add_options()("cluster", po::value<std::string>(&cluster_file), "Path to data leaves list JSON file");
-  desc.add_options()("string-servers", po::value<std::string>(&cluster_file), "Path to string servers list JSON file");
   desc.add_options()(
       "data", po::value<std::string>(&base_path)->required()->default_value("data"), "Directory path to MapD catalogs");
   desc.add_options()("cpu", "Run on CPU only");
@@ -2414,6 +2412,8 @@ int main(int argc, char** argv) {
   desc_adv.add_options()("use-result-set",
                          po::bool_switch(&g_use_result_set)->default_value(g_use_result_set)->implicit_value(true),
                          "Use the new result set");
+  desc_adv.add_options()("cluster", po::value<std::string>(&cluster_file), "Path to data leaves list JSON file");
+  desc_adv.add_options()("string-servers", po::value<std::string>(&cluster_file), "Path to string servers list JSON file");
 
   po::positional_options_description positionalOptions;
   positionalOptions.add("data", 1);
