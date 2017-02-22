@@ -2131,7 +2131,7 @@ TEST(Select, BigDecimalRange) {
   }
 }
 
-TEST(Select, AfterDrop) {
+TEST(Drop, AfterDrop) {
   run_ddl_statement("create table droptest (i1 integer);");
   run_multiple_agg("insert into droptest values(1);", ExecutorDeviceType::CPU);
   run_multiple_agg("insert into droptest values(2);", ExecutorDeviceType::CPU);
@@ -2144,7 +2144,7 @@ TEST(Select, AfterDrop) {
   run_ddl_statement("drop table droptest;");
 }
 
-TEST(Select, AfterAlterTableName) {
+TEST(Alter, AfterAlterTableName) {
   run_ddl_statement("create table alter_name_test (i1 integer);");
   run_multiple_agg("insert into alter_name_test values(1);", ExecutorDeviceType::CPU);
   run_multiple_agg("insert into alter_name_test values(2);", ExecutorDeviceType::CPU);
@@ -2157,7 +2157,7 @@ TEST(Select, AfterAlterTableName) {
   run_ddl_statement("drop table alter_name_test_after;");
 }
 
-TEST(Select, AfterAlterColumnName) {
+TEST(Alter, AfterAlterColumnName) {
   run_ddl_statement("create table alter_column_test (i1 integer);");
   run_multiple_agg("insert into alter_column_test values(1);", ExecutorDeviceType::CPU);
   run_multiple_agg("insert into alter_column_test values(2);", ExecutorDeviceType::CPU);
@@ -2567,28 +2567,9 @@ TEST(Select, WatchdogTest) {
   }
 }
 
-int main(int argc, char** argv) {
-  google::InitGoogleLogging(argv[0]);
-  LOG(INFO) << " after initialization";
-  testing::InitGoogleTest(&argc, argv);
-  namespace po = boost::program_options;
+namespace {
 
-  po::options_description desc("Options");
-  desc.add_options()("disable-literal-hoisting", "Disable literal hoisting");
-  desc.add_options()("use-result-set", "Use the new result set");
-
-  po::variables_map vm;
-  po::store(po::command_line_parser(argc, argv).options(desc).run(), vm);
-
-  if (vm.count("disable-literal-hoisting"))
-    g_hoist_literals = false;
-
-  if (vm.count("use-result-set")) {
-    g_use_result_set = true;
-  }
-
-  g_session.reset(get_session(BASE_PATH));
-
+int create_and_populate_tables() {
   try {
     const std::string drop_old_test{"DROP TABLE IF EXISTS test;"};
     run_ddl_statement(drop_old_test);
@@ -2778,13 +2759,10 @@ int main(int argc, char** argv) {
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
-  int err{0};
-  try {
-    err = RUN_ALL_TESTS();
-  } catch (const std::exception& e) {
-    LOG(ERROR) << e.what();
-  }
-  Executor::nukeCacheOfExecutors();
+  return 0;
+}
+
+void drop_tables() {
   const std::string drop_test{"DROP TABLE test;"};
   run_ddl_statement(drop_test);
   g_sqlite_comparator.query(drop_test);
@@ -2825,6 +2803,56 @@ int main(int argc, char** argv) {
   const std::string drop_test_in_bitmap{"DROP TABLE test_in_bitmap;"};
   g_sqlite_comparator.query(drop_test_in_bitmap);
   run_ddl_statement(drop_test_in_bitmap);
+}
+
+}  // namespace
+
+int main(int argc, char** argv) {
+  google::InitGoogleLogging(argv[0]);
+  LOG(INFO) << " after initialization";
+  testing::InitGoogleTest(&argc, argv);
+  namespace po = boost::program_options;
+
+  po::options_description desc("Options");
+  desc.add_options()("disable-literal-hoisting", "Disable literal hoisting");
+  desc.add_options()("use-result-set", "Use the new result set");
+  desc.add_options()("keep-data", "Don't drop tables at the end of the tests");
+  desc.add_options()("use-existing-data",
+                     "Don't create and drop tables and only run select tests (it implies --keep-data).");
+
+  po::variables_map vm;
+  po::store(po::command_line_parser(argc, argv).options(desc).run(), vm);
+
+  if (vm.count("disable-literal-hoisting"))
+    g_hoist_literals = false;
+
+  if (vm.count("use-result-set")) {
+    g_use_result_set = true;
+  }
+
+  g_session.reset(get_session(BASE_PATH));
+
+  const bool use_existing_data = vm.count("use-existing-data");
+  int err{0};
+  if (use_existing_data) {
+    testing::GTEST_FLAG(filter) = "Select*";
+  } else {
+    err = create_and_populate_tables();
+  }
+  if (err) {
+    return err;
+  }
+
+  try {
+    err = RUN_ALL_TESTS();
+  } catch (const std::exception& e) {
+    LOG(ERROR) << e.what();
+  }
+
+  Executor::nukeCacheOfExecutors();
+  if (!use_existing_data && !vm.count("keep-data")) {
+    drop_tables();
+  }
   g_session.reset(nullptr);
   return err;
 }
