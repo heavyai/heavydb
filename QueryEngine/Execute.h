@@ -826,7 +826,8 @@ class Executor {
 
   void codegenInnerScanNextRow();
 
-  void preloadFragOffsets(const std::vector<InputDescriptor>& input_descs);
+  void preloadFragOffsets(const std::vector<InputDescriptor>& input_descs,
+                          const std::vector<InputTableInfo>& query_infos);
 
   void allocateInnerScansIterators(const std::vector<InputDescriptor>& input_descs);
 

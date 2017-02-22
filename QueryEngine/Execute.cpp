@@ -775,8 +775,12 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Expr* expr,
   if (iter_expr) {
 #ifdef ENABLE_MULTIFRAG_JOIN
     if (iter_expr->get_rte_idx() > 0) {
-      return {
-          cgen_state_->ir_builder_.CreateAdd(posArg(iter_expr), cgen_state_->frag_offsets_[iter_expr->get_rte_idx()])};
+      const auto offset = cgen_state_->frag_offsets_[iter_expr->get_rte_idx()];
+      if (offset) {
+        return {cgen_state_->ir_builder_.CreateAdd(posArg(iter_expr), offset)};
+      } else {
+        return {posArg(iter_expr)};
+      }
     }
 #endif
     return {posArg(iter_expr)};
@@ -1273,7 +1277,12 @@ std::vector<llvm::Value*> Executor::codegenColVar(const Analyzer::ColumnVar* col
         return {posArg(col_var)};
       }
 #endif
-      return {cgen_state_->ir_builder_.CreateAdd(posArg(col_var), cgen_state_->frag_offsets_[rte_idx])};
+      const auto offset = cgen_state_->frag_offsets_[rte_idx];
+      if (offset) {
+        return {cgen_state_->ir_builder_.CreateAdd(posArg(col_var), offset)};
+      } else {
+        return {posArg(col_var)};
+      }
     }
   }
   const auto grouped_col_lv = resolveGroupedColumnReference(col_var);
@@ -1300,7 +1309,12 @@ std::vector<llvm::Value*> Executor::codegenColVar(const Analyzer::ColumnVar* col
     plan_state_->columns_to_not_fetch_.insert(std::make_pair(col_var->get_table_id(), col_var->get_column_id()));
 #ifdef ENABLE_MULTIFRAG_JOIN
     if (rte_idx > 0) {
-      return {cgen_state_->ir_builder_.CreateAdd(pos_arg, cgen_state_->frag_offsets_[rte_idx])};
+      const auto offset = cgen_state_->frag_offsets_[rte_idx];
+      if (offset) {
+        return {cgen_state_->ir_builder_.CreateAdd(pos_arg, offset)};
+      } else {
+        return {pos_arg};
+      }
     }
 #endif
     return {pos_arg};
@@ -6236,7 +6250,7 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
 
   auto bb = llvm::BasicBlock::Create(cgen_state_->context_, "entry", cgen_state_->row_func_);
   cgen_state_->ir_builder_.SetInsertPoint(bb);
-  preloadFragOffsets(ra_exe_unit.input_descs);
+  preloadFragOffsets(ra_exe_unit.input_descs, query_infos);
 
   allocateInnerScansIterators(ra_exe_unit.input_descs);
 
@@ -6426,7 +6440,8 @@ void Executor::codegenInnerScanNextRow() {
   }
 }
 
-void Executor::preloadFragOffsets(const std::vector<InputDescriptor>& input_descs) {
+void Executor::preloadFragOffsets(const std::vector<InputDescriptor>& input_descs,
+                                  const std::vector<InputTableInfo>& query_infos) {
 #ifdef ENABLE_MULTIFRAG_JOIN
   const auto ld_count = input_descs.size();
 #else
@@ -6434,8 +6449,13 @@ void Executor::preloadFragOffsets(const std::vector<InputDescriptor>& input_desc
 #endif
   auto frag_off_ptr = get_arg_by_name(cgen_state_->row_func_, "frag_row_off");
   for (size_t i = 0; i < ld_count; ++i) {
-    auto input_off_ptr = !i ? frag_off_ptr : cgen_state_->ir_builder_.CreateGEP(frag_off_ptr, ll_int(int32_t(i)));
-    cgen_state_->frag_offsets_.push_back(cgen_state_->ir_builder_.CreateLoad(input_off_ptr));
+    const auto frag_count = query_infos[i].info.fragments.size();
+    if (frag_count > 1) {
+      auto input_off_ptr = !i ? frag_off_ptr : cgen_state_->ir_builder_.CreateGEP(frag_off_ptr, ll_int(int32_t(i)));
+      cgen_state_->frag_offsets_.push_back(cgen_state_->ir_builder_.CreateLoad(input_off_ptr));
+    } else {
+      cgen_state_->frag_offsets_.push_back(nullptr);
+    }
   }
 }
 
