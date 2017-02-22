@@ -43,7 +43,7 @@ public class MapDTable implements Prepare.PreparingTable {
   private final boolean stream;
   private final List<Map.Entry<String, RelDataType>> columnList
           = Lists.newArrayList();
-  public RelDataType rowType;
+  private RelDataType rowType;
   private List<RelCollation> collationList;
   protected final List<String> names;
   private final Set<String> monotonicColumnSet = Sets.newHashSet();

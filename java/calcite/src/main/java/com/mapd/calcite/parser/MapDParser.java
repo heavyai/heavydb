@@ -57,7 +57,7 @@ public final class MapDParser {
         System.setProperty("saffron.default.nationalcharset", ConversionUtil.NATIVE_UTF16_CHARSET_NAME);
         System.setProperty("saffron.default.collation.name", ConversionUtil.NATIVE_UTF16_CHARSET_NAME + "$en_US");
         typeFactory = new SqlTypeFactoryImpl(RelDataTypeSystem.DEFAULT);
-        catalogReader = new MapDCatalogReader(typeFactory, dataDir);
+        catalogReader = new MapDCatalogReader(typeFactory, dataDir, this);
         validator = new MapDValidator(
                 createOperatorTable(extSigs),
                 catalogReader,
@@ -99,7 +99,7 @@ public final class MapDParser {
         return res;
     }
 
-    private RelRoot queryToSqlNode(final String sql, final boolean legacy_syntax) throws SqlParseException {
+    RelRoot queryToSqlNode(final String sql, final boolean legacy_syntax) throws SqlParseException {
         SqlNode node = processSQL(sql, legacy_syntax);
         if (legacy_syntax) {
             node = processSQL(node.toSqlString(SqlDialect.CALCITE).toString(), false);

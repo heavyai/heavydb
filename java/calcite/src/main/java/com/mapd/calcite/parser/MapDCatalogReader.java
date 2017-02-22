@@ -60,6 +60,7 @@ public class MapDCatalogReader implements Prepare.CatalogReader {
 //  private final EnumMap<TDatumType, ArrayList<ArrayList<RelDataType>>> mapDTypes;
   private MapDUser currentMapDUser;
   private final String dataDir;
+  private final MapDParser parser;
 
   //~ Constructors -----------------------------------------------------------
   /**
@@ -72,9 +73,10 @@ public class MapDCatalogReader implements Prepare.CatalogReader {
    * @param dataDir directory containing the mapd data
    *
    */
-  public MapDCatalogReader(RelDataTypeFactory typeFactory, String dataDir) {
+  public MapDCatalogReader(RelDataTypeFactory typeFactory, String dataDir, final MapDParser parser) {
     this.typeFactory = typeFactory;
     this.dataDir = dataDir;
+    this.parser = parser;
 
 //    // add all the MapD datatype into this structure
 //    // it is indexed with the TDatumType,  isArray , isNullable
@@ -121,9 +123,10 @@ public class MapDCatalogReader implements Prepare.CatalogReader {
     MAPDLOGGER.debug("\t table  is " + tableName);
     MapDTable mtable = null;
 
-    if (metaConnect.isView(tableName)) {
+    final boolean isView = metaConnect.isView(tableName);
+    if (isView) {
       mtable = new MapDViewImpl(this, db.getCatalogName(), db.getSchemaName(), tableName,
-              false, metaConnect.getViewSql(tableName));
+              false, metaConnect.getViewSql(tableName), parser);
     } else {
       mtable = MapDTable.create(this, db, tableName, false);
     }
