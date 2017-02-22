@@ -1,12 +1,8 @@
-/*
- * Some cool MapD Header
- */
 package com.mapd.calcite.parser;
-
-import java.util.Map;
 
 import com.mapd.parser.server.ExtensionFunction;
 import java.util.List;
+import java.util.Map;
 import org.apache.calcite.avatica.util.Casing;
 import org.apache.calcite.plan.RelOptCluster;
 import org.apache.calcite.plan.RelOptTable;
@@ -96,22 +92,14 @@ public final class MapDParser {
         callCount++;
         catalogReader.setCurrentMapDUser(mapDUser);
         final RelRoot sqlRel = queryToSqlNode(sql, legacy_syntax);
-        //final RelNode sqlRel = converter.convertSelect((SqlSelect)node, true);
-        //RexNode convertExpression = converter.convertExpression(node);
-
-        //MAPDLOGGER.debug("After convert relNode is "+ convertExpression.toString());
-        //MAPDLOGGER.debug("After convert relRoot kind is " + sqlRel.kind);
-        //MAPDLOGGER.debug("After convert relRoot project is " + sqlRel.project().toString());
-        //MAPDLOGGER.debug("After convert relalgebra is \n" + RelOptUtil.toString(sqlRel.project()));
         RelNode project = sqlRel.project();
-        //MAPDLOGGER.info("After convert relalgebra is \n" + RelOptUtil.toString(sqlRel.project()));
-        if (isExplain){
-          return RelOptUtil.toString(sqlRel.project());
+
+        if (isExplain) {
+            return RelOptUtil.toString(sqlRel.project());
         }
 
         String res = MapDSerializer.toString(project);
 
-        //logger.info("After convert relalgebra is \n" + res);
         return res;
     }
 
