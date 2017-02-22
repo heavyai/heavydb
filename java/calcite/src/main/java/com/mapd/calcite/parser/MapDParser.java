@@ -76,11 +76,7 @@ public final class MapDParser {
         public RelRoot expandView(RelDataType rowType, String queryString,
                 List<String> schemaPath, List<String> viewPath) {
             try {
-                final boolean legacySyntax = true;
-                final SqlNode node = processSQL(queryString, legacySyntax);
-                final SqlNode validated = validator.validate(node);
-                final RelRoot root = converter.convertQuery(validated, false, false);
-                return root.withRel(converter.flattenTypes(root.rel, true));
+                return queryToSqlNode(queryString, true);
             } catch (SqlParseException e) {
                 return null;
             }
