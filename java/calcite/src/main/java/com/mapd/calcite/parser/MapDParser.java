@@ -94,13 +94,34 @@ public final class MapDParser {
     public String getRelAlgebra(String sql, final boolean legacy_syntax, final MapDUser mapDUser, final boolean isExplain)
             throws SqlParseException {
         callCount++;
+        catalogReader.setCurrentMapDUser(mapDUser);
+        final RelRoot sqlRel = queryToSqlNode(sql, legacy_syntax);
+        //final RelNode sqlRel = converter.convertSelect((SqlSelect)node, true);
+        //RexNode convertExpression = converter.convertExpression(node);
+
+        //MAPDLOGGER.debug("After convert relNode is "+ convertExpression.toString());
+        //MAPDLOGGER.debug("After convert relRoot kind is " + sqlRel.kind);
+        //MAPDLOGGER.debug("After convert relRoot project is " + sqlRel.project().toString());
+        //MAPDLOGGER.debug("After convert relalgebra is \n" + RelOptUtil.toString(sqlRel.project()));
+        RelNode project = sqlRel.project();
+        //MAPDLOGGER.info("After convert relalgebra is \n" + RelOptUtil.toString(sqlRel.project()));
+        if (isExplain){
+          return RelOptUtil.toString(sqlRel.project());
+        }
+
+        String res = MapDSerializer.toString(project);
+
+        //logger.info("After convert relalgebra is \n" + res);
+        return res;
+    }
+
+    private RelRoot queryToSqlNode(final String sql, final boolean legacy_syntax) throws SqlParseException {
         SqlNode node = processSQL(sql, legacy_syntax);
         if (legacy_syntax) {
             node = processSQL(node.toSqlString(SqlDialect.CALCITE).toString(), false);
         }
 
         boolean is_select_star = isSelectStar(node);
-        catalogReader.setCurrentMapDUser(mapDUser);
         SqlNode validate = validator.validate(node);
 
         SqlSelect validate_select = getSelectChild(validate);
@@ -119,24 +140,7 @@ public final class MapDParser {
             validate_select.setSelectList(new_proj_exprs);
         }
 
-        final RelRoot sqlRel = converter.convertQuery(validate, true, true);
-        //final RelNode sqlRel = converter.convertSelect((SqlSelect)node, true);
-        //RexNode convertExpression = converter.convertExpression(node);
-
-        //MAPDLOGGER.debug("After convert relNode is "+ convertExpression.toString());
-        //MAPDLOGGER.debug("After convert relRoot kind is " + sqlRel.kind);
-        //MAPDLOGGER.debug("After convert relRoot project is " + sqlRel.project().toString());
-        //MAPDLOGGER.debug("After convert relalgebra is \n" + RelOptUtil.toString(sqlRel.project()));
-        RelNode project = sqlRel.project();
-        //MAPDLOGGER.info("After convert relalgebra is \n" + RelOptUtil.toString(sqlRel.project()));
-        if (isExplain){
-          return RelOptUtil.toString(sqlRel.project());
-        }
-
-        String res = MapDSerializer.toString(project);
-
-        //logger.info("After convert relalgebra is \n" + res);
-        return res;
+        return converter.convertQuery(validate, true, true);
     }
 
     private static SqlNode getUnaliasedExpression(final SqlNode node) {
