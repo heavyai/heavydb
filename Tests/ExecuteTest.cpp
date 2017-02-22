@@ -400,6 +400,7 @@ TEST(Select, FilterAndSimpleAggregation) {
               numeric_limits<int64_t>::max());
     ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT MIN(x) FROM test WHERE t <> 1001 AND t <> 1002;", dt)),
               numeric_limits<int64_t>::max());
+    ASSERT_EQ(19, v<int64_t>(run_simple_agg("SELECT rowid FROM test WHERE rowid = 19;", dt)));
   }
 }
 
