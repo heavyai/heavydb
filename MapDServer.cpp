@@ -620,8 +620,8 @@ class MapDHandler : virtual public MapDIf {
       const auto query_ra = parse_to_ra(query_str, session_info);
       TQueryResult result;
       execute_rel_alg(result, query_ra, true, session_info, ExecutorDeviceType::CPU, false, true);
-      const auto& row_desc = result.row_set.row_desc;
-      for (const auto col_desc : row_desc) {
+      const auto& row_desc = fixup_row_descriptor(result.row_set.row_desc, session_info.get_catalog());
+      for (const auto& col_desc : row_desc) {
         const auto it_ok = _return.insert(std::make_pair(col_desc.col_name, col_desc));
         CHECK(it_ok.second);
       }
@@ -762,7 +762,7 @@ class MapDHandler : virtual public MapDIf {
         const auto query_ra = parse_to_ra(td->viewSQL, session_info);
         TQueryResult result;
         execute_rel_alg(result, query_ra, true, session_info, ExecutorDeviceType::CPU, false, true);
-        _return = result.row_set.row_desc;
+        _return = fixup_row_descriptor(result.row_set.row_desc, cat);
         return;
       } catch (std::exception& e) {
         TMapDException ex;
@@ -1886,6 +1886,19 @@ class MapDHandler : virtual public MapDIf {
 
   static void convert_result(TQueryResult& _return, const ResultRows& results, const bool column_format) {
     create_simple_result(_return, results, column_format, "Result");
+  }
+
+  static TRowDescriptor fixup_row_descriptor(const TRowDescriptor& row_desc, const Catalog_Namespace::Catalog& cat) {
+    TRowDescriptor fixedup_row_desc;
+    for (const TColumnType& col_desc : row_desc) {
+      auto fixedup_col_desc = col_desc;
+      if (col_desc.col_type.encoding == TEncodingType::DICT && col_desc.col_type.comp_param > 0) {
+        const auto dd = cat.getMetadataForDict(col_desc.col_type.comp_param, false);
+        fixedup_col_desc.col_type.comp_param = dd->dictNBits;
+      }
+      fixedup_row_desc.push_back(fixedup_col_desc);
+    }
+    return fixedup_row_desc;
   }
 
   // create simple result set to return a single column result
