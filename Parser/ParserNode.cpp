@@ -2222,33 +2222,9 @@ void CreateViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
                                  ".  Should be STORAGE or REFRESH.");
     }
   }
-  Analyzer::Query analyzed_query;
-  query->analyze(catalog, analyzed_query);
-  const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& tlist = analyzed_query.get_targetlist();
-  // @TODO check column name uniqueness.  for now let sqlite enforce.
-  if (!column_list.empty()) {
-    if (column_list.size() != tlist.size())
-      throw std::runtime_error("Number of column names does not match the number of expressions in SELECT clause.");
-    auto it = column_list.cbegin();
-    for (auto tle : tlist) {
-      tle->set_resname(**it);
-      ++it;
-    }
-  }
-  std::list<ColumnDescriptor> columns;
-  for (auto tle : tlist) {
-    ColumnDescriptor cd;
-    if (tle->get_resname().empty())
-      throw std::runtime_error("Must specify a column name for expression.");
-    cd.columnName = tle->get_resname();
-    cd.columnType = tle->get_expr()->get_type_info();
-    cd.columnType.set_compression(kENCODING_NONE);
-    cd.columnType.set_comp_param(0);
-    columns.push_back(cd);
-  }
   TableDescriptor td;
   td.tableName = *view_name;
-  td.nColumns = columns.size();
+  td.nColumns = 0;
   td.isView = true;
   td.isMaterialized = is_materialized;
   td.viewSQL = query->to_string();
@@ -2262,7 +2238,7 @@ void CreateViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   td.maxChunkSize = DEFAULT_MAX_CHUNK_SIZE;  // @todo this stuff should not be InsertOrderFragmenter
   td.fragPageSize = DEFAULT_PAGE_SIZE;
   td.maxRows = DEFAULT_MAX_ROWS;
-  catalog.createTable(td, columns);
+  catalog.createTable(td, {});
 }
 
 void RefreshViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {

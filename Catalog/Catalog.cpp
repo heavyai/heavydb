@@ -671,7 +671,7 @@ const TableDescriptor* Catalog::getMetadataForTable(const string& tableName) con
     return nullptr;
   }
   TableDescriptor* td = tableDescIt->second;
-  if (td->fragmenter == nullptr)
+  if (td->fragmenter == nullptr && !td->isView)
     instantiateFragmenter(td);
   return td;  // returns pointer to table descriptor
 }
