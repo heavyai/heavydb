@@ -757,6 +757,20 @@ class MapDHandler : virtual public MapDIf {
       LOG(ERROR) << ex.error_msg;
       throw ex;
     }
+    if (td->isView) {
+      try {
+        const auto query_ra = parse_to_ra(td->viewSQL, session_info);
+        TQueryResult result;
+        execute_rel_alg(result, query_ra, true, session_info, ExecutorDeviceType::CPU, false, true);
+        _return = result.row_set.row_desc;
+        return;
+      } catch (std::exception& e) {
+        TMapDException ex;
+        ex.error_msg = std::string("Exception: ") + e.what();
+        LOG(ERROR) << ex.error_msg;
+        throw ex;
+      }
+    }
     const auto col_descriptors = cat.getAllColumnMetadataForTable(td->tableId, false, true);
     for (const auto cd : col_descriptors) {
       _return.push_back(populateThriftColumnType(&cat, cd));
