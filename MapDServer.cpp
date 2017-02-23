@@ -2337,7 +2337,7 @@ int main(int argc, char** argv) {
   int tthreadpool_size = 8;
   size_t num_reader_threads = 0;  // number of threads used when loading data
   int start_epoch = -1;
-  std::string db_convert_dir("");     // path to mapd DB to convert from; if path is empty, no conversion is requested
+  std::string db_convert_dir("");  // path to mapd DB to convert from; if path is empty, no conversion is requested
 
   namespace po = boost::program_options;
 
@@ -2369,7 +2369,8 @@ int main(int argc, char** argv) {
   desc.add_options()("num-gpus", po::value<int>(&num_gpus)->default_value(num_gpus), "Number of gpus to use");
   desc.add_options()("start-gpu", po::value<int>(&start_gpu)->default_value(start_gpu), "First gpu to use");
   desc.add_options()("version,v", "Print Release Version Number");
-  desc.add_options()("db-convert", po::value<std::string>(&db_convert_dir), "Directory path to mapd DB to convert from");
+  desc.add_options()(
+      "db-convert", po::value<std::string>(&db_convert_dir), "Directory path to mapd DB to convert from");
 
   po::options_description desc_adv("Advanced options");
   desc_adv.add_options()("help-advanced", "Print advanced help messages");
@@ -2427,7 +2428,8 @@ int main(int argc, char** argv) {
                          po::bool_switch(&g_use_result_set)->default_value(g_use_result_set)->implicit_value(true),
                          "Use the new result set");
   desc_adv.add_options()("cluster", po::value<std::string>(&cluster_file), "Path to data leaves list JSON file");
-  desc_adv.add_options()("string-servers", po::value<std::string>(&cluster_file), "Path to string servers list JSON file");
+  desc_adv.add_options()(
+      "string-servers", po::value<std::string>(&cluster_file), "Path to string servers list JSON file");
 
   po::positional_options_description positionalOptions;
   positionalOptions.add("data", 1);
