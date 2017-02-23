@@ -2222,12 +2222,17 @@ void CreateViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
                                  ".  Should be STORAGE or REFRESH.");
     }
   }
+#ifdef HAVE_CALCITE
+  const auto query_str = query->to_string();
+  const auto& user_metadata = session.get_currentUser();
+  catalog.get_calciteMgr().process(
+      user_metadata.userName, user_metadata.passwd, catalog.get_currentDB().dbName, pg_shim(query_str), true, true);
   TableDescriptor td;
   td.tableName = *view_name;
   td.nColumns = 0;
   td.isView = true;
   td.isMaterialized = is_materialized;
-  td.viewSQL = query->to_string();
+  td.viewSQL = query_str;
   td.checkOption = checkoption;
   td.storageOption = matview_storage;
   td.refreshOption = matview_refresh;
@@ -2239,6 +2244,9 @@ void CreateViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   td.fragPageSize = DEFAULT_PAGE_SIZE;
   td.maxRows = DEFAULT_MAX_ROWS;
   catalog.createTable(td, {});
+#else
+  throw std::runtime_error("CREATE VIEW not supported with legacy parser");
+#endif  // HAVE_CALCITE
 }
 
 void RefreshViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {

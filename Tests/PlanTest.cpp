@@ -43,7 +43,7 @@ class SQLTestEnv : public ::testing::Environment {
     UserMetadata user;
     DBMetadata db;
 #ifdef HAVE_CALCITE
-    auto calcite = std::make_shared<Calcite>(CALCITEPORT, data_dir.string(), 1024);
+    auto calcite = std::make_shared<Calcite>(CALCITEPORT, base_path.string(), 1024);
 #endif  // HAVE_CALCITE
     {
       auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), 0, false, 0);
@@ -293,6 +293,7 @@ TEST(ParseAnalyzePlan, Insert) {
   EXPECT_NO_THROW({ unique_ptr<RootPlan> plan_ptr(plan_dml("insert into skinny select 2*a, 2*b, 2*c from skinny;")); });
 }
 
+#ifdef HAVE_CALCITE
 TEST(ParseAnalyzePlan, Views) {
   EXPECT_NO_THROW(run_ddl("create view if not exists voo as select * from skinny where a > 15;"););
   EXPECT_NO_THROW(run_ddl("create materialized view if not exists moo as select * from skinny where a > 15;"););
@@ -304,6 +305,7 @@ TEST(ParseAnalyzePlan, Views) {
   EXPECT_NO_THROW(run_ddl("refresh materialized view fatview;"););
   EXPECT_NO_THROW({ unique_ptr<RootPlan> plan_ptr(plan_dml("select * from fatview;")); });
 }
+#endif  // HAVE_CALCITE
 
 TEST(ParseAnalyzePlan, Drop) {
   EXPECT_NO_THROW(run_ddl("drop view if exists voo;"));
