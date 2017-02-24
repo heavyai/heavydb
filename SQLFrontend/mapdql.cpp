@@ -327,6 +327,8 @@ void process_backslash_commands(char* command, ClientContext& context) {
               std::cout << "WITH (" << with << ")\n";
             }
           }
+        } else {
+          std::cout << "\n";
         }
       }
       return;
