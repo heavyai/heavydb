@@ -2183,6 +2183,7 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 }
 
 void CreateViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+#ifdef HAVE_CALCITE
   auto& catalog = session.get_catalog();
   if (catalog.getMetadataForTable(*view_name) != nullptr) {
     if (if_not_exists)
@@ -2222,7 +2223,6 @@ void CreateViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
                                  ".  Should be STORAGE or REFRESH.");
     }
   }
-#ifdef HAVE_CALCITE
   const auto query_str = query->to_string();
   const auto& user_metadata = session.get_currentUser();
   catalog.get_calciteMgr().process(

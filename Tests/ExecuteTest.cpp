@@ -389,6 +389,8 @@ TEST(Select, FilterAndSimpleAggregation) {
     c("SELECT COUNT(*) FROM test WHERE o1 = '1999-09-08';", dt);
     c("SELECT COUNT(*) FROM test WHERE o1 <> '1999-09-08';", dt);
     c("SELECT COUNT(*) FROM test WHERE o >= CAST('1999-09-09' AS DATE);", dt);
+    ASSERT_EQ(19, v<int64_t>(run_simple_agg("SELECT rowid FROM test WHERE rowid = 19;", dt)));
+    ASSERT_EQ(2 * g_num_rows, v<int64_t>(run_simple_agg("SELECT MAX(rowid) - MIN(rowid) + 1 FROM test;", dt)));
 #endif  // HAVE_CALCITE
     ASSERT_EQ(15, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE MOD(x, 7) = 0;", dt)));
     ASSERT_EQ(0, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE MOD(x, 7) = 7;", dt)));
@@ -400,7 +402,6 @@ TEST(Select, FilterAndSimpleAggregation) {
               numeric_limits<int64_t>::max());
     ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT MIN(x) FROM test WHERE t <> 1001 AND t <> 1002;", dt)),
               numeric_limits<int64_t>::max());
-    ASSERT_EQ(19, v<int64_t>(run_simple_agg("SELECT rowid FROM test WHERE rowid = 19;", dt)));
   }
 }
 
@@ -2212,7 +2213,6 @@ TEST(Select, Empty) {
     c("SELECT SUM(dd) FROM test WHERE x > 8;", dt);
     c("SELECT SUM(dd) FROM empty GROUP BY x, y;", dt);
     c("SELECT COUNT(DISTINCT x) FROM empty;", dt);
-    ASSERT_EQ(2 * g_num_rows, v<int64_t>(run_simple_agg("SELECT MAX(rowid) - MIN(rowid) + 1 FROM test;", dt)));
 #ifdef HAVE_RAVM
     c("SELECT APPROX_COUNT_DISTINCT(x * 1000000) FROM empty;", "SELECT COUNT(DISTINCT x * 1000000) FROM empty;", dt);
 #endif  // HAVE_RAVM

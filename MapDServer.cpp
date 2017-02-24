@@ -759,6 +759,7 @@ class MapDHandler : virtual public MapDIf {
       throw ex;
     }
     if (td->isView) {
+#ifdef HAVE_CALCITE
       try {
         const auto query_ra = parse_to_ra(td->viewSQL, session_info);
         TQueryResult result;
@@ -771,6 +772,12 @@ class MapDHandler : virtual public MapDIf {
         LOG(ERROR) << ex.error_msg;
         throw ex;
       }
+#else
+      TMapDException ex;
+      ex.error_msg = "Views not supported with legacy parser";
+      LOG(ERROR) << ex.error_msg;
+      throw ex;
+#endif  // HAVE_CALCITE
     }
     const auto col_descriptors = cat.getAllColumnMetadataForTable(td->tableId, false, true);
     for (const auto cd : col_descriptors) {

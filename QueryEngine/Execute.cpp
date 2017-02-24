@@ -6449,7 +6449,12 @@ void Executor::preloadFragOffsets(const std::vector<InputDescriptor>& input_desc
 #endif
   auto frag_off_ptr = get_arg_by_name(cgen_state_->row_func_, "frag_row_off");
   for (size_t i = 0; i < ld_count; ++i) {
+#ifdef HAVE_CALCITE
+    CHECK_LT(i, query_infos.size());
     const auto frag_count = query_infos[i].info.fragments.size();
+#else
+    const size_t frag_count = 1;
+#endif  // HAVE_CALCITE
     if (frag_count > 1) {
       auto input_off_ptr = !i ? frag_off_ptr : cgen_state_->ir_builder_.CreateGEP(frag_off_ptr, ll_int(int32_t(i)));
       cgen_state_->frag_offsets_.push_back(cgen_state_->ir_builder_.CreateLoad(input_off_ptr));
