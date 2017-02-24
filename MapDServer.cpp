@@ -745,6 +745,7 @@ class MapDHandler : virtual public MapDIf {
     _return.fragment_size = td->maxFragRows;
     _return.page_size = td->fragPageSize;
     _return.max_rows = td->maxRows;
+    _return.view_sql = td->viewSQL;
   }
 
   void get_row_descriptor(TRowDescriptor& _return, const TSessionId session, const std::string& table_name) override {

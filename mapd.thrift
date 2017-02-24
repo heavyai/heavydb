@@ -239,6 +239,7 @@ struct TMemorySummary {
 }
 
 struct TTableDetails {
+  1: string view_sql
   2: i64 fragment_size
   3: i64 page_size
   4: i64 max_rows
