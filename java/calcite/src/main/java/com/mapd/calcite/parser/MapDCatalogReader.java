@@ -125,7 +125,7 @@ public class MapDCatalogReader implements Prepare.CatalogReader {
 
     final boolean isView = metaConnect.isView(tableName);
     if (isView) {
-      mtable = new MapDViewImpl(this, db.getCatalogName(), db.getSchemaName(), tableName,
+      mtable = new MapDView(this, db.getCatalogName(), db.getSchemaName(), tableName,
               false, metaConnect.getViewSql(tableName), parser);
     } else {
       mtable = MapDTable.create(this, db, tableName, false);

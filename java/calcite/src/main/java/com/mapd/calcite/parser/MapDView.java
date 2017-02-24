@@ -8,17 +8,19 @@ import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.schema.Schema;
 import org.apache.calcite.schema.Statistic;
 import org.apache.calcite.schema.Statistics;
+import org.apache.calcite.schema.TranslatableTable;
 import org.apache.calcite.sql.parser.SqlParseException;
 
-public class MapDViewImpl extends MapDViewTable {
+class MapDView extends MapDTable implements TranslatableTable {
 
-    MapDViewImpl(MapDCatalogReader catalogReader, String catalogName, String schemaName,
+    MapDView(MapDCatalogReader catalogReader, String catalogName, String schemaName,
             String name, boolean stream, String viewSql, final MapDParser parser) {
-        super(catalogReader, catalogName, schemaName, name, stream, viewSql);
+        super(catalogReader, catalogName, schemaName, name, stream);
+        this.viewSql = viewSql;
         this.parser = parser;
     }
 
-    public String getViewSql() {
+    String getViewSql() {
         return viewSql;
     }
 
@@ -53,5 +55,6 @@ public class MapDViewImpl extends MapDViewTable {
         return context.expandView(relOptTable.getRowType(), viewSql, null, null).rel;
     }
 
+    private final String viewSql;
     private final MapDParser parser;
 }
