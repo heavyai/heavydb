@@ -521,10 +521,10 @@ ExpressionRange getExpressionRange(const Analyzer::UOper* u_expr,
   switch (arg_range.getType()) {
     case ExpressionRangeType::Float:
     case ExpressionRangeType::Double: {
-      if (ti.is_fp() && ti.get_logical_size() >= arg_ti.get_logical_size()) {
+      if (ti.is_fp()) {
         return ti.get_type() == kDOUBLE
                    ? ExpressionRange::makeDoubleRange(arg_range.getFpMin(), arg_range.getFpMax(), arg_range.hasNulls())
-                   : arg_range;
+                   : ExpressionRange::makeFloatRange(arg_range.getFpMin(), arg_range.getFpMax(), arg_range.hasNulls());
       }
       if (ti.is_integer()) {
         return ExpressionRange::makeIntRange(arg_range.getFpMin(), arg_range.getFpMax(), 0, arg_range.hasNulls());
