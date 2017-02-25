@@ -19,6 +19,7 @@
 #include <vector>
 
 #define EPOCH_FILENAME "epoch"
+#define DB_META_FILENAME "dbmeta"
 
 using namespace std;
 
@@ -383,6 +384,47 @@ void FileMgr::writeAndSyncEpochToDisk() {
   ++epoch_;
 }
 
+void FileMgr::createDBMetaFile(const std::string& DBMetaFileName) {
+  std::string DBMetaFilePath(fileMgrBasePath_ + DBMetaFileName);
+  if (boost::filesystem::exists(DBMetaFilePath)) {
+    LOG(FATAL) << "DB metadata file already exists.";
+  }
+  DBMetaFile_ = create(DBMetaFilePath, sizeof(int));
+  int db_ver = getDBVersion();
+  write(DBMetaFile_, 0, sizeof(int), (int8_t*)&db_ver);
+  LOG(INFO) << "DB metadata file has been created."; 
+}
+
+bool FileMgr::openDBMetaFile(const std::string& DBMetaFileName) {
+  std::string DBMetaFilePath(fileMgrBasePath_ + DBMetaFileName);
+  
+  if (!boost::filesystem::exists(DBMetaFilePath)) {
+    LOG(INFO) << "DB metadata file does not exist, one will be created.";
+    return false;
+  }
+  if (!boost::filesystem::is_regular_file(DBMetaFilePath)) {
+    LOG(INFO) << "DB metadata file is not a regular file, one will be created.";
+    return false;
+  }
+  if (boost::filesystem::file_size(DBMetaFilePath) < 4) {
+    LOG(INFO) << "DB metadata file is not sized properly, one will be created.";
+    return false;
+  }
+  DBMetaFile_ = open(DBMetaFilePath);
+  read(DBMetaFile_, 0, sizeof(int), (int8_t*)&db_version_);
+
+  return true;
+}
+
+void FileMgr::writeAndSyncDBMetaToDisk() {
+  int db_ver = getDBVersion();
+  write(DBMetaFile_, 0, sizeof(int), (int8_t*)&db_ver);
+  int status = fflush(DBMetaFile_);
+  if (status != 0) {
+    LOG(FATAL) << "Could not sync DB metadata file to disk";
+  }
+}
+
 void FileMgr::checkpoint() {
   // std::cout << "Checkpointing " << epoch_ <<  std::endl;
   std::unique_lock<std::mutex> chunkIndexLock(chunkIndexMutex_);
@@ -728,6 +770,16 @@ int FileMgr::getDBVersion() const {
 
 bool FileMgr::getDBConvert() const {
     return gfm_->getDBConvert();
+}
+
+void FileMgr::createTopLevelMetadata() {
+  if (openDBMetaFile(DB_META_FILENAME)) {
+    if (db_version_ > getDBVersion()) {
+      LOG(FATAL) << "DB forward compatibility is not supported. Version of mapd software used is older than the version of DB being read: " << db_version_;
+    }      
+  } else {
+    createDBMetaFile(DB_META_FILENAME);
+  }
 }
 
 }  // File_Namespace

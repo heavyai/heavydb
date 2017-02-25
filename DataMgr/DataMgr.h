@@ -86,6 +86,7 @@ class DataMgr {
                     const size_t userSpecifiedNumReaderThreads,
                     const int start_epoch);
   void convertDB(const std::string basePath);
+  void createTopLevelMetadata() const;
   std::vector<std::vector<AbstractBufferMgr*>> bufferMgrs_;
   std::string dataDir_;
   bool hasGpus_;

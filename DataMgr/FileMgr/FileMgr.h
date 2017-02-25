@@ -185,6 +185,7 @@ class FileMgr : public AbstractBufferMgr {  // implements
                                    // #TM Not sure if we need this below
   int getDBVersion() const;
   bool getDBConvert() const;
+  void createTopLevelMetadata(); // create metadata shared by all tables of all DBs
 
  private:
   GlobalFileMgr* gfm_;            /// Global FileMgr
@@ -197,7 +198,9 @@ class FileMgr : public AbstractBufferMgr {  // implements
   unsigned nextFileId_;  /// the index of the next file id
   int epoch_;            /// the current epoch (time of last checkpoint)
   FILE* epochFile_;
-  // bool isDirty_;                      /// true if metadata changed since last writeState()
+  int db_version_;       /// DB version from dbmeta file, should be compatible with GlobalFileMgr::mapd_db_version_ 
+  FILE* DBMetaFile_;     /// pointer to DB level metadata
+  // bool isDirty_;      /// true if metadata changed since last writeState()
   std::mutex getPageMutex_;
   std::mutex chunkIndexMutex_;
 
@@ -225,6 +228,9 @@ class FileMgr : public AbstractBufferMgr {  // implements
   void createEpochFile(const std::string& epochFileName);
   void openEpochFile(const std::string& epochFileName);
   void writeAndSyncEpochToDisk();
+  void createDBMetaFile(const std::string& DBMetaFileName);
+  bool openDBMetaFile(const std::string& DBMetaFileName);
+  void writeAndSyncDBMetaToDisk();
 };
 
 }  // File_Namespace

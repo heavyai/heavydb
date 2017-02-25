@@ -53,6 +53,7 @@ DataMgr::DataMgr(const string& dataDir,
   }
 
   populateMgrs(cpuBufferSize, numReaderThreads, start_epoch);
+  createTopLevelMetadata();
 
   if (dbConvertDir_.size() > 0) {  // i.e. "--db_convert" option was used
     dynamic_cast<GlobalFileMgr*>(bufferMgrs_[0][0])->setDBConvert(true);
@@ -148,6 +149,16 @@ void DataMgr::convertDB(const std::string basePath) {
   /* write content of DB into newly created/converted DB structure & location */
   checkpoint(); // outputs data files as well as metadata files
   LOG(INFO) << "Database conversion completed.";
+}
+
+void DataMgr::createTopLevelMetadata() const { // create metadata shared by all tables of all DBs 
+  ChunkKey chunkKey(2);
+  chunkKey[0] = 0; // top level db_id
+  chunkKey[1] = 0; // top level tb_id
+
+  GlobalFileMgr* gfm = dynamic_cast<GlobalFileMgr*>(bufferMgrs_[0][0]);
+  FileMgr* fm_top = gfm->getFileMgr(chunkKey);
+  fm_top->createTopLevelMetadata();
 }
 
 memorySummary DataMgr::getMemorySummary() {
