@@ -1137,34 +1137,35 @@ std::unique_ptr<InValuesBitmap> Executor::createInValuesBitmap(const Analyzer::I
          ++i, start_val += stride, std::advance(start_it, stride)) {
       auto end_it = start_it;
       std::advance(end_it, std::min(stride, val_count - start_val));
-      worker_threads.push_back(std::async(
-          std::launch::async,
-          [&](std::vector<int64_t>& out_vals, const ListIterator start, const ListIterator end) -> bool {
-            for (auto val_it = start; val_it != end; ++val_it) {
-              const auto& in_val = *val_it;
-              const auto in_val_const = dynamic_cast<const Analyzer::Constant*>(extract_cast_arg(in_val.get()));
-              if (!in_val_const) {
-                return false;
-              }
-              const auto& in_val_ti = in_val->get_type_info();
-              CHECK(in_val_ti == ti);
-              if (ti.is_string()) {
-                CHECK(sdp);
-                const auto string_id = in_val_const->get_is_null()
-                                           ? needle_null_val
-                                           : sdp->getIdOfString(*in_val_const->get_constval().stringval);
-                if (string_id >= 0 || string_id == needle_null_val) {
-                  out_vals.push_back(string_id);
-                }
-              } else {
-                out_vals.push_back(codegenIntConst(in_val_const)->getSExtValue());
-              }
+      const auto do_work = [&](
+          std::vector<int64_t>& out_vals, const ListIterator start, const ListIterator end) -> bool {
+        for (auto val_it = start; val_it != end; ++val_it) {
+          const auto& in_val = *val_it;
+          const auto in_val_const = dynamic_cast<const Analyzer::Constant*>(extract_cast_arg(in_val.get()));
+          if (!in_val_const) {
+            return false;
+          }
+          const auto& in_val_ti = in_val->get_type_info();
+          CHECK(in_val_ti == ti);
+          if (ti.is_string()) {
+            CHECK(sdp);
+            const auto string_id = in_val_const->get_is_null()
+                                       ? needle_null_val
+                                       : sdp->getIdOfString(*in_val_const->get_constval().stringval);
+            if (string_id >= 0 || string_id == needle_null_val) {
+              out_vals.push_back(string_id);
             }
-            return true;
-          },
-          worker_count > 1 ? std::ref(values_set[i]) : std::ref(values),
-          start_it,
-          end_it));
+          } else {
+            out_vals.push_back(codegenIntConst(in_val_const)->getSExtValue());
+          }
+        }
+        return true;
+      };
+      if (worker_count > 1) {
+        worker_threads.push_back(std::async(std::launch::async, do_work, std::ref(values_set[i]), start_it, end_it));
+      } else {
+        do_work(std::ref(values), start_it, end_it);
+      }
     }
     bool success = true;
     for (auto& worker : worker_threads) {
