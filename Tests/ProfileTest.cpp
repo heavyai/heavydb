@@ -1169,6 +1169,9 @@ TEST(Reduction, Baseline) {
   const size_t entry_count = 20000000;
   const bool is_columnar = false;
   const size_t result_count = std::max(size_t(2), get_gpu_count());
+#if defined(HAVE_CUDA) && CUDA_VERSION >= 8000
+  const float fill_rate = 0.5f;
+#endif
 
   const size_t col_count = key_count + val_count;
   const std::vector<size_t> col_widths(col_count, sizeof(int64_t));
@@ -1248,7 +1251,11 @@ TEST(Reduction, Baseline) {
     if (generate_columns_on_device(
             dev_input_buffer, entry_count, col_count, col_widths, ranges, is_columnar, distributions)) {
       actual_row_count = deduplicate_rows_on_device(dev_input_buffer, entry_count, key_count, col_widths, is_columnar);
-      cudaMemcpy(input_buffer, dev_input_buffer, input_size, cudaMemcpyDeviceToHost);
+      auto dev_input_copy =
+          get_hashed_copy(dev_input_buffer, entry_count, entry_count, col_widths, agg_ops, init_vals, is_columnar);
+      cudaFree(dev_input_buffer);
+      actual_row_count = drop_rows(dev_input_copy, entry_count, row_size, actual_row_count, fill_rate, is_columnar);
+      cudaMemcpy(input_buffer, dev_input_copy, input_size, cudaMemcpyDeviceToHost);
     } else
 #endif
     {
@@ -1342,8 +1349,6 @@ TEST(Reduction, Baseline) {
                                                                 has_multi_gpus ? dev_id + stride : dev_id,
                                                                 rs_entry_count[dev_id + stride],
                                                                 rs_row_counts[dev_id + stride],
-                                                                key_count,
-                                                                val_count,
                                                                 col_widths,
                                                                 agg_ops,
                                                                 init_vals,
@@ -1368,6 +1373,284 @@ TEST(Reduction, Baseline) {
       dev_reduced_buffers[i] = nullptr;
     }
     gpu_reduced_result.swap(temp_buffer);
+  }
+#endif
+  ASSERT_TRUE(emulator.compare(reduced_result->getStorage()->getUnderlyingBuffer(),
+                               key_count,
+                               val_count,
+                               reduced_result->getQueryMemDesc().entry_count,
+                               is_columnar,
+                               ref_reduced_result));
+#if defined(HAVE_CUDA) && CUDA_VERSION >= 8000
+  ASSERT_TRUE(emulator.compare(reinterpret_cast<int8_t*>(&gpu_reduced_result[0]),
+                               key_count,
+                               val_count,
+                               gpu_reduced_result.size() / col_count,
+                               is_columnar,
+                               ref_reduced_result));
+
+#endif
+}
+
+TEST(Reduction, PerfectHash) {
+  // Config
+  std::vector<OP_KIND> agg_ops{OP_SUM, OP_MAX};
+  const size_t key_count = 1;
+  const size_t val_count = 2;
+  const size_t entry_count = 2000000;
+  const bool is_columnar = false;
+  const size_t result_count = std::max(size_t(2), get_gpu_count());
+
+  const size_t col_count = key_count + val_count;
+  const std::vector<size_t> col_widths(col_count, sizeof(int64_t));
+  std::vector<size_t> init_vals(key_count, EMPTY_KEY_64);
+  for (size_t i = 0; i < val_count; ++i) {
+    init_vals.push_back(get_default_value(agg_ops[i]));
+  }
+  std::vector<TargetInfo> target_infos;
+  const SQLTypeInfo bigint_ti(kBIGINT, true);
+  switch (val_count) {
+    case 3:
+      target_infos.push_back(TargetInfo{true, kMIN, bigint_ti, bigint_ti, true, false});
+    case 2:
+      target_infos.push_back(TargetInfo{true, kMAX, bigint_ti, bigint_ti, true, false});
+    case 1:
+      target_infos.push_back(TargetInfo{true, kSUM, bigint_ti, bigint_ti, true, false});
+      break;
+    default:
+      CHECK(false);
+  }
+  std::reverse(target_infos.begin(), target_infos.end());
+
+  const auto device_type = ExecutorDeviceType::CPU;
+  QueryMemoryDescriptor query_mem_desc{};
+  query_mem_desc.keyless_hash = false;
+  query_mem_desc.has_nulls = false;
+  query_mem_desc.hash_type =
+      key_count == 1 ? GroupByColRangeType::OneColKnownRange : GroupByColRangeType::MultiColPerfectHash;
+  query_mem_desc.output_columnar = is_columnar;
+  query_mem_desc.entry_count = entry_count;
+  size_t row_size = 0;
+  for (size_t k = 0; k < key_count; ++k) {
+    query_mem_desc.group_col_widths.emplace_back(sizeof(int64_t));
+    row_size += sizeof(int64_t);
+  }
+  for (const auto& target_info : target_infos) {
+    const auto slot_bytes = std::max(int8_t(8), static_cast<int8_t>(target_info.sql_type.get_size()));
+    query_mem_desc.agg_col_widths.emplace_back(ColWidths{slot_bytes, slot_bytes});
+    row_size += slot_bytes;
+  }
+
+#if defined(HAVE_CUDA) && CUDA_VERSION >= 8000
+  const bool has_multi_gpus = get_gpu_count() > 1;
+  const auto input_size = query_mem_desc.getBufferSizeBytes(device_type);
+#else
+  const bool has_multi_gpus = false;
+#endif  // HAVE_CUDA
+  const auto row_set_mem_owner = std::make_shared<RowSetMemoryOwner>();
+  std::vector<std::unique_ptr<ResultSet>> results;
+  for (size_t i = 0; i < result_count; ++i) {
+    auto rs = boost::make_unique<ResultSet>(target_infos, device_type, query_mem_desc, row_set_mem_owner, nullptr);
+    rs->allocateStorage();
+    results.push_back(std::move(rs));
+  }
+
+  std::vector<std::pair<int64_t, int64_t>> ranges(
+      key_count, {0, (static_cast<int64_t>(std::exp((std::log(entry_count) / key_count))) - 1)});
+
+  for (size_t v = 0; v < val_count; ++v) {
+    ranges.push_back(get_default_range(agg_ops[v]));
+  }
+  std::vector<DIST_KIND> distributions(col_count, DIST_KIND::UNI);
+
+  std::cout << "ResultSet Count: " << results.size() << std::endl;
+  std::vector<size_t> rs_row_counts(results.size(), entry_count);
+  // Generate random data.
+  auto gen_func = [&](int8_t* input_buffer, const size_t device_id) -> size_t {
+    auto actual_row_count = entry_count;
+#if defined(HAVE_CUDA) && CUDA_VERSION >= 8000
+    if (has_multi_gpus) {
+      cudaSetDevice(device_id);
+    }
+    int8_t* dev_input_buffer = nullptr;
+    cudaMalloc(&dev_input_buffer, input_size);
+    if (generate_columns_on_device(
+            dev_input_buffer, entry_count, col_count, col_widths, ranges, is_columnar, distributions)) {
+      int8_t* dev_input_copy = nullptr;
+      std::tie(dev_input_copy, actual_row_count) =
+          get_perfect_hashed_copy(dev_input_buffer, entry_count, col_widths, ranges, agg_ops, init_vals, is_columnar);
+      cudaFree(dev_input_buffer);
+      cudaMemcpy(input_buffer, dev_input_copy, input_size, cudaMemcpyDeviceToHost);
+    } else
+#endif
+    {
+      generate_columns_on_host(input_buffer, entry_count, col_count, col_widths, ranges, is_columnar, distributions);
+      actual_row_count = Deduplicater<false>(input_buffer, row_size, entry_count, key_count).run();
+    }
+#if defined(HAVE_CUDA) && CUDA_VERSION >= 8000
+    if (dev_input_buffer) {
+      cudaFree(dev_input_buffer);
+    }
+#endif
+    return actual_row_count;
+  };
+
+  if (has_multi_gpus) {
+    std::vector<std::future<size_t>> gener_threads;
+    for (size_t i = 0; i < results.size(); ++i) {
+      gener_threads.push_back(
+          std::async(std::launch::async, gen_func, results[i]->getStorage()->getUnderlyingBuffer(), i));
+    }
+
+    for (size_t i = 0; i < gener_threads.size(); ++i) {
+      rs_row_counts[i] = gener_threads[i].get();
+    }
+  } else {
+    for (size_t i = 0; i < results.size(); ++i) {
+      rs_row_counts[i] = gen_func(results[i]->getStorage()->getUnderlyingBuffer(), i);
+    }
+  }
+
+  for (size_t i = 0; i < rs_row_counts.size(); ++i) {
+    std::cout << "ResultSet " << i << " has " << rs_row_counts[i] << " rows and " << entry_count - rs_row_counts[i]
+              << " empty buckets\n";
+  }
+  AggregateEmulator<int64_t, int64_t> emulator(agg_ops);
+  std::vector<decltype(emulator)::ResultType> ref_results;
+  for (auto& rs : results) {
+    auto ref_rs = emulator.run(rs->getStorage()->getUnderlyingBuffer(), key_count, val_count, entry_count, is_columnar);
+    ref_results.push_back(std::move(ref_rs));
+  }
+  auto ref_reduced_result = emulator.reduce(ref_results);
+  ResultSetManager rs_manager;
+  std::vector<ResultSet*> storage_set;
+  for (auto& rs : results) {
+    storage_set.push_back(rs.get());
+  }
+#if defined(HAVE_CUDA) && CUDA_VERSION >= 8000
+  CHECK_GT(results.size(), 0);
+  std::vector<int64_t> gpu_reduced_result(input_size / sizeof(int64_t), 0);
+  memcpy(&gpu_reduced_result[0], results[0]->getStorage()->getUnderlyingBuffer(), input_size);
+#endif
+  ResultSet* reduced_result = nullptr;
+  std::cout << "CPU reduction: ";
+  auto elapsedTime = measure<>::execution([&]() {
+    // Do calculation on host
+    reduced_result = rs_manager.reduce(storage_set);
+  });
+  CHECK(reduced_result != nullptr);
+  std::cout << "Current reduction took " << elapsedTime << " ms and got reduced " << reduced_result->rowCount()
+            << " rows\n";
+#if defined(HAVE_CUDA) && CUDA_VERSION >= 8000
+  std::vector<int8_t*> host_reduced_buffers(result_count, nullptr);
+  host_reduced_buffers[0] = reinterpret_cast<int8_t*>(&gpu_reduced_result[0]);
+  for (size_t i = 1; i < storage_set.size(); ++i) {
+    host_reduced_buffers[i] = storage_set[i]->getStorage()->getUnderlyingBuffer();
+  }
+  std::vector<int8_t*> dev_reduced_buffers(result_count, nullptr);
+  std::vector<int8_t*> dev_seg_copies(result_count, nullptr);
+  const auto seg_count = has_multi_gpus ? result_count : size_t(1);
+  const auto stride = (entry_count + (seg_count - 1)) / seg_count;
+
+  std::cout << "GPU reduction: ";
+  elapsedTime = measure<>::execution([&]() {
+    std::vector<std::future<void>> uploader_threads;
+    for (size_t device_id = 0; device_id < result_count; ++device_id) {
+      uploader_threads.push_back(
+          std::async(std::launch::async,
+                     [&](const size_t dev_id) {
+                       if (has_multi_gpus) {
+                         cudaSetDevice(dev_id);
+                       }
+                       int8_t* dev_reduced_buffer = nullptr;
+                       cudaMalloc(&dev_reduced_buffer, input_size);
+                       cudaMemcpy(dev_reduced_buffer, host_reduced_buffers[dev_id], input_size, cudaMemcpyHostToDevice);
+                       dev_reduced_buffers[dev_id] = dev_reduced_buffer;
+                     },
+                     device_id));
+    }
+    for (auto& child : uploader_threads) {
+      child.get();
+    }
+  });
+  std::cout << "Current reduction took " << elapsedTime << " ms to upload to VRAM and ";
+
+  elapsedTime = measure<>::execution([&]() {
+    // Redistribute across devices
+    if (has_multi_gpus) {
+      std::vector<std::future<void>> redis_threads;
+      for (size_t device_id = 0, start_entry = 0; device_id < result_count; ++device_id, start_entry += stride) {
+        const auto end_entry = std::min(start_entry + stride, entry_count);
+        redis_threads.push_back(std::async(
+            std::launch::async,
+            [&](const size_t dev_id, const size_t start, const size_t end) {
+              cudaSetDevice(dev_id);
+              dev_seg_copies[dev_id] = fetch_segs_from_others(
+                  dev_reduced_buffers, entry_count, dev_id, result_count, col_widths, is_columnar, start, end);
+            },
+            device_id,
+            start_entry,
+            end_entry));
+      }
+      for (auto& child : redis_threads) {
+        child.get();
+      }
+    } else {
+      CHECK_EQ(dev_reduced_buffers.size(), size_t(2));
+      dev_seg_copies[0] = dev_reduced_buffers[1];
+    }
+    // Reduce
+    std::vector<std::future<void>> reducer_threads;
+    for (size_t device_id = 0, start_entry = 0; device_id < seg_count; ++device_id, start_entry += stride) {
+      const auto end_entry = std::min(start_entry + stride, entry_count);
+      reducer_threads.push_back(std::async(std::launch::async,
+                                           [&](const size_t dev_id, const size_t start, const size_t end) {
+                                             if (has_multi_gpus) {
+                                               cudaSetDevice(dev_id);
+                                             }
+                                             reduce_segment_on_device(dev_reduced_buffers[dev_id],
+                                                                      dev_seg_copies[dev_id],
+                                                                      entry_count,
+                                                                      seg_count,
+                                                                      col_widths,
+                                                                      agg_ops,
+                                                                      is_columnar,
+                                                                      start,
+                                                                      end);
+                                           },
+                                           device_id,
+                                           start_entry,
+                                           end_entry));
+    }
+    for (auto& child : reducer_threads) {
+      child.get();
+    }
+  });
+  std::cout << elapsedTime << " ms to reduce.\n";
+  {
+    for (size_t device_id = 0, start = 0; device_id < seg_count; ++device_id, start += stride) {
+      const auto end = std::min(start + stride, entry_count);
+      if (has_multi_gpus) {
+        cudaSetDevice(device_id);
+        cudaFree(dev_seg_copies[device_id]);
+        dev_seg_copies[device_id] = nullptr;
+      }
+      if (is_columnar) {
+        for (size_t c = 0, col_base = start; c < col_count; ++c, col_base += entry_count) {
+          cudaMemcpy(&gpu_reduced_result[col_base],
+                     dev_reduced_buffers[device_id] + col_base * sizeof(int64_t),
+                     (end - start) * sizeof(int64_t),
+                     cudaMemcpyDeviceToHost);
+        }
+      } else {
+        cudaMemcpy(&gpu_reduced_result[start * col_count],
+                   dev_reduced_buffers[device_id] + start * row_size,
+                   (end - start) * row_size,
+                   cudaMemcpyDeviceToHost);
+      }
+      cudaFree(dev_reduced_buffers[device_id]);
+      dev_reduced_buffers[device_id] = nullptr;
+    }
   }
 #endif
   ASSERT_TRUE(emulator.compare(reduced_result->getStorage()->getUnderlyingBuffer(),
