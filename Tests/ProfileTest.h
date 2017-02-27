@@ -17,6 +17,10 @@
 #include "../Shared/cuda_glog.h"
 #endif  // __CUDACC__
 
+#ifdef HAVE_CUDA
+#include <cuda_runtime_api.h>
+#endif
+
 #if defined(HAVE_CUDA) && CUDA_VERSION >= 8000
 #include <cuda.h>
 
