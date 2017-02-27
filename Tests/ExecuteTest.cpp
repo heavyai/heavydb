@@ -2638,7 +2638,8 @@ int create_and_populate_tables() {
     run_ddl_statement(drop_old_test);
     g_sqlite_comparator.query(drop_old_test);
     const std::string create_test{
-        "CREATE TABLE test_inner(x int not null, str text encoding dict) WITH (fragment_size=2);"};
+        "CREATE TABLE test_inner(x int not null, str text encoding dict) WITH (fragment_size=2, "
+        "partitions='REPLICATED');"};
     run_ddl_statement(create_test);
     g_sqlite_comparator.query("CREATE TABLE test_inner(x int not null, str text encoding none);");
   } catch (...) {
@@ -2656,7 +2657,7 @@ int create_and_populate_tables() {
         "encoding "
         "dict, "
         "arr_float float[], arr_double double[], arr_bool boolean[], real_str text encoding none) WITH "
-        "(fragment_size=4000000);"};
+        "(fragment_size=4000000, partitions='REPLICATED');"};
     run_ddl_statement(create_array_test);
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'array_test_inner'";
@@ -2723,9 +2724,9 @@ int create_and_populate_tables() {
     g_sqlite_comparator.query(drop_old_empty);
     const std::string create_empty{
         "CREATE TABLE empty(x int, y int not null, t bigint not null, f float not null, d double not null, dd "
-        "decimal(10, 2) not null, ts timestamp);"};
-    run_ddl_statement(create_empty);
-    g_sqlite_comparator.query(create_empty);
+        "decimal(10, 2) not null, ts timestamp)"};
+    run_ddl_statement(create_empty + " WITH (partitions='REPLICATED');");
+    g_sqlite_comparator.query(create_empty + ";");
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'empty'";
     return -EEXIST;
