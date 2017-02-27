@@ -10,7 +10,7 @@ Environment=DISPLAY=:1
 Environment="LD_LIBRARY_PATH=@MAPD_LIBJVM_DIR@"
 ExecStart=@MAPD_PATH@/bin/mapd_server --config @MAPD_STORAGE@/%I/mapd.conf
 KillMode=control-group
-LimitNOFILE=16384
+LimitNOFILE=65536
 Restart=always
 
 [Install]
