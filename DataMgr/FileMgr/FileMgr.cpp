@@ -392,22 +392,22 @@ void FileMgr::createDBMetaFile(const std::string& DBMetaFileName) {
   DBMetaFile_ = create(DBMetaFilePath, sizeof(int));
   int db_ver = getDBVersion();
   write(DBMetaFile_, 0, sizeof(int), (int8_t*)&db_ver);
-  LOG(INFO) << "DB metadata file has been created."; 
+  // LOG(INFO) << "DB metadata file has been created."; 
 }
 
 bool FileMgr::openDBMetaFile(const std::string& DBMetaFileName) {
   std::string DBMetaFilePath(fileMgrBasePath_ + DBMetaFileName);
   
   if (!boost::filesystem::exists(DBMetaFilePath)) {
-    LOG(INFO) << "DB metadata file does not exist, one will be created.";
+    // LOG(INFO) << "DB metadata file does not exist, one will be created.";
     return false;
   }
   if (!boost::filesystem::is_regular_file(DBMetaFilePath)) {
-    LOG(INFO) << "DB metadata file is not a regular file, one will be created.";
+    // LOG(INFO) << "DB metadata file is not a regular file, one will be created.";
     return false;
   }
   if (boost::filesystem::file_size(DBMetaFilePath) < 4) {
-    LOG(INFO) << "DB metadata file is not sized properly, one will be created.";
+    // LOG(INFO) << "DB metadata file is not sized properly, one will be created.";
     return false;
   }
   DBMetaFile_ = open(DBMetaFilePath);

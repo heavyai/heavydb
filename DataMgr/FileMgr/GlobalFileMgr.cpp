@@ -28,7 +28,7 @@ GlobalFileMgr::GlobalFileMgr(const int deviceId, std::string basePath, const siz
       num_reader_threads_(num_reader_threads),
       epoch_(epoch),
       defaultPageSize_(defaultPageSize) {
-  mapd_db_version_ = 1; // DS changes triggered by implementing individual FileMgr per table
+  mapd_db_version_ = 1; // DS changes triggered by individual FileMgr per table project (release 2.1.0)
   dbConvert_ = false;
   init();
 }
