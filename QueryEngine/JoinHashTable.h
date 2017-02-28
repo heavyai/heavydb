@@ -81,7 +81,7 @@ class JoinHashTable {
       const Data_Namespace::MemoryLevel effective_mem_lvl,
       const int device_id,
       std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
-      std::map<int, std::shared_ptr<const ColumnarResults>>& frags_owner) noexcept;
+      std::map<int, std::shared_ptr<const ColumnarResults>>& frags_owner);
 
   std::pair<const int8_t*, size_t> getAllColumnFragments(
       const Analyzer::ColumnVar& hash_col,
@@ -141,6 +141,7 @@ class JoinHashTable {
   static std::mutex join_hash_table_cache_mutex_;
 
   static const int ERR_MULTI_FRAG{-2};
+  static const int ERR_FAILED_TO_FETCH_COLUMN{-3};
 
   friend class Executor;
 };

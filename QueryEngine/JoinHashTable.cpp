@@ -118,6 +118,9 @@ std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(
                          "' not supported yet");
     }
 #endif
+    if (err == ERR_FAILED_TO_FETCH_COLUMN) {
+      throw HashJoinFail("Not enough memory for the columns involved in join");
+    }
     throw HashJoinFail("Could not build a 1-to-1 correspondence for columns involved in equijoin");
   }
   return join_hash_table;
@@ -129,7 +132,7 @@ std::pair<const int8_t*, size_t> JoinHashTable::getColumnFragment(
     const Data_Namespace::MemoryLevel effective_mem_lvl,
     const int device_id,
     std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
-    std::map<int, std::shared_ptr<const ColumnarResults>>& frags_owner) noexcept {
+    std::map<int, std::shared_ptr<const ColumnarResults>>& frags_owner) {
   auto chunk_meta_it = fragment.chunkMetadataMap.find(hash_col.get_column_id());
   CHECK(chunk_meta_it != fragment.chunkMetadataMap.end());
   const auto cd = get_column_descriptor_maybe(hash_col.get_column_id(), hash_col.get_table_id(), cat_);
@@ -247,7 +250,7 @@ int JoinHashTable::reify(const int device_count) {
           getAllColumnFragments(*inner_col, query_info.fragments, chunks_owner, frags_owner);
       col_buff_owner.addColBuffer(col_buff);
     } catch (...) {
-      return -1;
+      return ERR_FAILED_TO_FETCH_COLUMN;
     }
   } else
 #endif
@@ -271,8 +274,12 @@ int JoinHashTable::reify(const int device_count) {
     } else
 #endif
     {
-      std::tie(col_buff, elem_count) =
-          getColumnFragment(*inner_col, first_frag, effective_memory_level, device_id, chunks_owner, frags_owner);
+      try {
+        std::tie(col_buff, elem_count) =
+            getColumnFragment(*inner_col, first_frag, effective_memory_level, device_id, chunks_owner, frags_owner);
+      } catch (...) {
+        return ERR_FAILED_TO_FETCH_COLUMN;
+      }
     }
     init_threads.emplace_back(
         [&errors, &chunk_key, &cols, elem_count, col_buff, effective_memory_level, device_id, this] {
