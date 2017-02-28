@@ -876,6 +876,7 @@ class RaAbstractInterp {
     mark_nops(nodes_);
     simplify_sort(nodes_);
     eliminate_identical_copy(nodes_);
+    fold_filters(nodes_);
     eliminate_dead_columns(nodes_);
     coalesce_nodes(nodes_);
     CHECK(nodes_.back().unique());

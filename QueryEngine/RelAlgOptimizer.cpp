@@ -10,9 +10,9 @@
 
 namespace {
 
-class RexRedirectInputsVisitor : public RexDeepCopyVisitor {
+class RexProjectInputRedirector : public RexDeepCopyVisitor {
  public:
-  RexRedirectInputsVisitor(const std::unordered_set<const RelProject*>& crt_inputs) : crt_projects_(crt_inputs) {}
+  RexProjectInputRedirector(const std::unordered_set<const RelProject*>& crt_inputs) : crt_projects_(crt_inputs) {}
 
   RetType visitInput(const RexInput* input) const {
     auto source = dynamic_cast<const RelProject*>(input->getSourceNode());
@@ -32,7 +32,7 @@ class RexRedirectInputsVisitor : public RexDeepCopyVisitor {
 };
 
 void redirect_inputs_of(std::shared_ptr<RelAlgNode> node, const std::unordered_set<const RelProject*>& projects) {
-  RexRedirectInputsVisitor visitor(projects);
+  RexProjectInputRedirector visitor(projects);
   std::shared_ptr<const RelProject> src_project = nullptr;
   for (size_t i = 0; i < node->inputCount(); ++i) {
     if (auto project = std::dynamic_pointer_cast<const RelProject>(node->getAndOwnInput(i))) {
@@ -122,7 +122,7 @@ void redirect_inputs_of(std::shared_ptr<RelAlgNode> node, const std::unordered_s
 void cleanup_dead_nodes(std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
   for (auto nodeIt = nodes.rbegin(); nodeIt != nodes.rend(); ++nodeIt) {
     if (nodeIt->unique()) {
-      LOG(WARNING) << (*nodeIt)->toString() << " deleted!";
+      LOG(INFO) << (*nodeIt)->toString() << " deleted!";
       nodeIt->reset();
     }
   }
@@ -944,6 +944,109 @@ void eliminate_dead_columns(std::vector<std::shared_ptr<RelAlgNode>>& nodes) noe
   // Propagate
   propagate_input_renumbering(
       liveout_renumbering, ready_nodes, old_liveouts, deconst_mapping, intact_nodes, web, orig_node_sizes);
+}
+
+namespace {
+
+class RexInputRedirector : public RexDeepCopyVisitor {
+ public:
+  RexInputRedirector(const RelAlgNode* old_src, const RelAlgNode* new_src) : old_src_(old_src), new_src_(new_src) {}
+
+  RetType visitInput(const RexInput* input) const {
+    CHECK_EQ(old_src_, input->getSourceNode());
+    CHECK_NE(old_src_, new_src_);
+    auto actual_new_src = new_src_;
+    if (auto join = dynamic_cast<const RelJoin*>(new_src_)) {
+      actual_new_src = join->getInput(0);
+      CHECK_EQ(join->inputCount(), size_t(2));
+      auto src2_input_base = actual_new_src->size();
+      if (input->getIndex() >= src2_input_base) {
+        actual_new_src = join->getInput(1);
+        return boost::make_unique<RexInput>(actual_new_src, input->getIndex() - src2_input_base);
+      }
+    }
+
+    return boost::make_unique<RexInput>(actual_new_src, input->getIndex());
+  }
+
+ private:
+  const RelAlgNode* old_src_;
+  const RelAlgNode* new_src_;
+};
+
+void replace_all_usages(std::shared_ptr<const RelAlgNode> old_def_node,
+                        std::shared_ptr<const RelAlgNode> new_def_node,
+                        std::unordered_map<const RelAlgNode*, std::shared_ptr<RelAlgNode>>& deconst_mapping,
+                        std::unordered_map<const RelAlgNode*, std::unordered_set<const RelAlgNode*>>& du_web) {
+  auto usrs_it = du_web.find(old_def_node.get());
+  CHECK(usrs_it != du_web.end());
+  for (auto usr : usrs_it->second) {
+    auto usr_it = deconst_mapping.find(usr);
+    CHECK(usr_it != deconst_mapping.end());
+    usr_it->second->replaceInput(old_def_node, new_def_node);
+  }
+  auto new_usrs_it = du_web.find(new_def_node.get());
+  CHECK(new_usrs_it != du_web.end());
+  new_usrs_it->second.insert(usrs_it->second.begin(), usrs_it->second.end());
+  usrs_it->second.clear();
+}
+
+}  // namespace
+
+void fold_filters(std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept {
+  std::unordered_map<const RelAlgNode*, std::shared_ptr<RelAlgNode>> deconst_mapping;
+  for (auto node : nodes) {
+    deconst_mapping.insert(std::make_pair(node.get(), node));
+  }
+
+  auto web = build_du_web(nodes);
+  for (auto node_it = nodes.rbegin(); node_it != nodes.rend(); ++node_it) {
+    auto& node = *node_it;
+    if (auto filter = std::dynamic_pointer_cast<RelFilter>(node)) {
+      CHECK_EQ(filter->inputCount(), size_t(1));
+      auto src_filter = dynamic_cast<const RelFilter*>(filter->getInput(0));
+      if (!src_filter) {
+        continue;
+      }
+      auto siblings_it = web.find(src_filter);
+      if (siblings_it == web.end() || siblings_it->second.size() != size_t(1)) {
+        continue;
+      }
+      auto src_it = deconst_mapping.find(src_filter);
+      CHECK(src_it != deconst_mapping.end());
+      auto folded_filter = std::dynamic_pointer_cast<RelFilter>(src_it->second);
+      CHECK(folded_filter);
+      // TODO(miyu) : drop filter w/ only expression valued constant TRUE?
+      if (auto rex_operator = dynamic_cast<const RexOperator*>(filter->getCondition())) {
+        LOG(INFO) << filter->toString() << " folded into " << folded_filter->toString() << std::endl;
+        std::vector<std::unique_ptr<const RexScalar>> operands;
+        operands.emplace_back(folded_filter->getAndReleaseCondition());
+        auto old_condition = dynamic_cast<const RexOperator*>(operands.back().get());
+        CHECK(old_condition && old_condition->getType().get_type() == kBOOLEAN);
+        RexInputRedirector redirector(folded_filter.get(), folded_filter->getInput(0));
+        operands.push_back(redirector.visit(rex_operator));
+        auto other_condition = dynamic_cast<const RexOperator*>(operands.back().get());
+        CHECK(other_condition && other_condition->getType().get_type() == kBOOLEAN);
+        const bool notnull = old_condition->getType().get_notnull() && other_condition->getType().get_notnull();
+        auto new_condition =
+            std::unique_ptr<const RexScalar>(new RexOperator(kAND, operands, SQLTypeInfo(kBOOLEAN, notnull)));
+        folded_filter->setCondition(new_condition);
+        replace_all_usages(filter, folded_filter, deconst_mapping, web);
+        deconst_mapping.erase(filter.get());
+        web.erase(filter.get());
+        node.reset();
+      }
+    }
+  }
+
+  if (!nodes.empty()) {
+    auto sink = nodes.back();
+    for (auto node_it = std::next(nodes.rend()); !sink && node_it != nodes.rbegin(); ++node_it) {
+      sink = *node_it;
+    }
+    CHECK(sink);
+    cleanup_dead_nodes(nodes);
+  }
 }
 
 // For some reason, Calcite generates Sort, Project, Sort sequences where the
