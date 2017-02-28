@@ -148,6 +148,8 @@ class RelAlgExecutor {
                               const ExecutionOptions& eo,
                               const int64_t queue_time_ms);
 
+  static void handlePersistentError(const int32_t error_code);
+
   WorkUnit createWorkUnit(const RelAlgNode*, const SortInfo&, const bool just_explain);
 
   WorkUnit createCompoundWorkUnit(const RelCompound*, const SortInfo&, const bool just_explain);

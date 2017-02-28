@@ -1141,24 +1141,7 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(const RelAlgExecutor::WorkUnit& 
   if (!error_code) {
     return result;
   }
-  if (error_code == Executor::ERR_OVERFLOW_OR_UNDERFLOW) {
-    throw std::runtime_error("Overflow or underflow");
-  }
-  if (error_code == Executor::ERR_DIV_BY_ZERO) {
-    throw std::runtime_error("Division by zero");
-  }
-  if (error_code == Executor::ERR_UNSUPPORTED_SELF_JOIN) {
-    throw std::runtime_error("Self joins not supported yet");
-  }
-  if (error_code == Executor::ERR_OUT_OF_TIME) {
-    throw std::runtime_error("Query execution has exceeded the time limit");
-  }
-  if (error_code == Executor::ERR_OUT_OF_CPU_MEM) {
-    throw std::runtime_error("Not enough host memory to execute the query");
-  }
-  if (error_code == Executor::ERR_SPECULATIVE_TOP_OOM) {
-    throw SpeculativeTopNFailed();
-  }
+  handlePersistentError(error_code);
   return handleRetry(error_code,
                      {ra_exe_unit, work_unit.body, max_groups_buffer_entry_guess},
                      targets_meta,
@@ -1315,7 +1298,11 @@ ExecutionResult RelAlgExecutor::handleRetry(const int32_t error_code_in,
                                          true),
               targets_meta};
     result.setQueueTime(queue_time_ms);
+    if (!error_code) {
+      return result;
+    }
   }
+  handlePersistentError(error_code);
   if (co.device_type_ == ExecutorDeviceType::GPU) {
     std::string out_of_memory{"Query ran out of GPU memory, punt to CPU"};
     LOG(INFO) << out_of_memory;
@@ -1348,12 +1335,7 @@ ExecutionResult RelAlgExecutor::handleRetry(const int32_t error_code_in,
       if (!error_code) {
         return result;
       }
-      if (error_code == Executor::ERR_OUT_OF_CPU_MEM) {
-        throw std::runtime_error("Not enough host memory to execute the query");
-      }
-      if (error_code == Executor::ERR_OUT_OF_TIME) {
-        throw std::runtime_error("Query execution has exceeded the time limit");
-      }
+      handlePersistentError(error_code);
       // Even the conservative guess failed; it should only happen when we group
       // by a huge cardinality array. Maybe we should throw an exception instead?
       // Such a heavy query is entirely capable of exhausting all the host memory.
@@ -1362,6 +1344,27 @@ ExecutionResult RelAlgExecutor::handleRetry(const int32_t error_code_in,
     }
   }
   return result;
+}
+
+void RelAlgExecutor::handlePersistentError(const int32_t error_code) {
+  if (error_code == Executor::ERR_OVERFLOW_OR_UNDERFLOW) {
+    throw std::runtime_error("Overflow or underflow");
+  }
+  if (error_code == Executor::ERR_DIV_BY_ZERO) {
+    throw std::runtime_error("Division by zero");
+  }
+  if (error_code == Executor::ERR_UNSUPPORTED_SELF_JOIN) {
+    throw std::runtime_error("Self joins not supported yet");
+  }
+  if (error_code == Executor::ERR_OUT_OF_TIME) {
+    throw std::runtime_error("Query execution has exceeded the time limit");
+  }
+  if (error_code == Executor::ERR_OUT_OF_CPU_MEM) {
+    throw std::runtime_error("Not enough host memory to execute the query");
+  }
+  if (error_code == Executor::ERR_SPECULATIVE_TOP_OOM) {
+    throw SpeculativeTopNFailed();
+  }
 }
 
 RelAlgExecutor::WorkUnit RelAlgExecutor::createWorkUnit(const RelAlgNode* node,
