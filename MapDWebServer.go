@@ -405,6 +405,11 @@ func thriftOrFrontendHandler(rw http.ResponseWriter, r *http.Request) {
 		rw.Header().Del("Access-Control-Allow-Origin")
 	}
 
+	if r.Method == "GET" && r.URL.Path == "/" {
+		rw.Header().Del("Cache-Control")
+		rw.Header().Add("Cache-Control", "no-cache, no-store, must-revalidate")
+	}
+
 	h.ServeHTTP(rw, r)
 }
 
@@ -458,6 +463,8 @@ func serversHandler(rw http.ResponseWriter, r *http.Request) {
 		ss := []Server{s}
 		j, _ = json.Marshal(ss)
 	}
+	rw.Header().Del("Cache-Control")
+	rw.Header().Add("Cache-Control", "no-cache, no-store, must-revalidate")
 	rw.Write(j)
 }
 
