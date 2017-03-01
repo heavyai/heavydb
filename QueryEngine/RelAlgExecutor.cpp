@@ -1280,7 +1280,7 @@ ExecutionResult RelAlgExecutor::handleRetry(const int32_t error_code_in,
   ExecutionResult result{ResultRows({}, {}, nullptr, nullptr, {}, co.device_type_), {}};
   const auto table_infos = get_table_infos(work_unit.exe_unit, executor_);
   if (error_code == Executor::ERR_OUT_OF_GPU_MEM) {
-    if (g_enable_watchdog) {
+    if (g_enable_watchdog && !g_allow_cpu_retry) {
       throw std::runtime_error("Query couldn't keep the entire working set of columns in GPU memory");
     }
     const auto ra_exe_unit = decide_approx_count_distinct_implementation(
@@ -1306,7 +1306,7 @@ ExecutionResult RelAlgExecutor::handleRetry(const int32_t error_code_in,
   if (co.device_type_ == ExecutorDeviceType::GPU) {
     std::string out_of_memory{"Query ran out of GPU memory, punt to CPU"};
     LOG(INFO) << out_of_memory;
-    if (g_enable_watchdog) {
+    if (g_enable_watchdog && !g_allow_cpu_retry) {
       throw std::runtime_error(out_of_memory);
     }
   }

@@ -65,6 +65,7 @@
 bool g_enable_watchdog{false};
 bool g_enable_dynamic_watchdog{false};
 unsigned g_dynamic_watchdog_time_limit{10000};
+bool g_allow_cpu_retry{false};
 
 std::mutex Executor::ExecutionDispatch::reduce_mutex_;
 
