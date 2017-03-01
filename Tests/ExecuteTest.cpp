@@ -378,6 +378,7 @@ TEST(Select, FilterAndSimpleAggregation) {
     c("SELECT SUM(-d) FROM test;", dt);
     c("SELECT COUNT(*) FROM test WHERE ofq >= 0 OR ofq IS NULL;", dt);
     c("SELECT COUNT(*) AS val FROM test WHERE (test.dd = 0.5 OR test.dd = 3);", dt);
+    c("SELECT MAX(dd_notnull * 1) FROM test;", dt);
 #ifdef HAVE_CALCITE
     c("SELECT COUNT(*) FROM test WHERE d = 2.2", dt);
     c("SELECT COUNT(*) FROM test WHERE fx + 1 IS NULL;", dt);
@@ -2580,17 +2581,15 @@ int create_and_populate_tables() {
     const std::string create_test{
         "CREATE TABLE test(x int not null, y int, z smallint, t bigint, b boolean, f float, d double, str text "
         "encoding dict, fixed_str text encoding dict(16), real_str text encoding none, m timestamp(0), n time(0), o "
-        "date, o1 date encoding fixed(32), fx int "
-        "encoding fixed(16), dd decimal(10, "
-        "2), ss text encoding dict, u int, ofd int, ufd int not null, ofq bigint, ufq bigint not null) WITH "
+        "date, o1 date encoding fixed(32), fx int encoding fixed(16), dd decimal(10, 2), dd_notnull decimal(10, 2) not "
+        "null, ss text encoding dict, u int, ofd int, ufd int not null, ofq bigint, ufq bigint not null) WITH "
         "(fragment_size=2);"};
     run_ddl_statement(create_test);
     g_sqlite_comparator.query(
         "CREATE TABLE test(x int not null, y int, z smallint, t bigint, b boolean, f float, d double, str text, "
-        "fixed_str text, real_str text, m timestamp(0), n time(0), o date, o1 date, fx int, dd decimal(10, 2), ss "
-        "text, u int, "
-        "ofd int, ufd int "
-        "not null, ofq bigint, ufq bigint not null);");
+        "fixed_str text, real_str text, m timestamp(0), n time(0), o date, o1 date, fx int, dd decimal(10, 2), "
+        "dd_notnull decimal(10, 2) not null, ss text, u int, ofd int, ufd int not null, ofq bigint, ufq bigint not "
+        "null);");
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'test'";
     return -EEXIST;
@@ -2599,24 +2598,22 @@ int create_and_populate_tables() {
   for (ssize_t i = 0; i < g_num_rows; ++i) {
     const std::string insert_query{
         "INSERT INTO test VALUES(7, 42, 101, 1001, 't', 1.1, 2.2, 'foo', 'foo', 'real_foo', '2014-12-13 22:23:15', "
-        "'15:13:14', "
-        "'1999-09-09', '1999-09-09', 9, 111.1, 'fish', null, 2147483647, -2147483648, null, -1);"};
+        "'15:13:14', '1999-09-09', '1999-09-09', 9, 111.1, 111.1, 'fish', null, 2147483647, -2147483648, null, -1);"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
   for (ssize_t i = 0; i < g_num_rows / 2; ++i) {
     const std::string insert_query{
         "INSERT INTO test VALUES(8, 43, 102, 1002, 'f', 1.2, 2.4, 'bar', 'bar', 'real_bar', '2014-12-13 22:23:15', "
-        "'15:13:14', "
-        "NULL, NULL, NULL, 222.2, null, null, null, -1, 9223372036854775807, -9223372036854775808);"};
+        "'15:13:14', NULL, NULL, NULL, 222.2, 222.2, null, null, null, -1, 9223372036854775807, "
+        "-9223372036854775808);"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
   for (ssize_t i = 0; i < g_num_rows / 2; ++i) {
     const std::string insert_query{
         "INSERT INTO test VALUES(7, 43, 102, 1002, 't', 1.3, 2.6, 'baz', 'baz', 'real_baz', '2014-12-13 22:23:15', "
-        "'15:13:14', "
-        "'1999-09-09', '1999-09-09', 11, 333.3, 'boat', null, 1, -1, 1, -9223372036854775808);"};
+        "'15:13:14', '1999-09-09', '1999-09-09', 11, 333.3, 333.3, 'boat', null, 1, -1, 1, -9223372036854775808);"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }

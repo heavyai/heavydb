@@ -3119,12 +3119,13 @@ llvm::Value* Executor::codegenMul(const Analyzer::BinOper* bin_oper,
   }
   llvm::Value* ret{nullptr};
   if (ti.is_decimal()) {
+    const auto decimal_null_typename = null_typename.empty() ? "int64_t" : null_typename;
     if (downscale) {
       ret = cgen_state_->emitCall(
-          "mul_" + null_typename + "_decimal",
+          "mul_" + decimal_null_typename + "_decimal",
           {lhs_lv, rhs_lv, ll_int(exp_to_scale(ti.get_scale())), ll_int(inline_int_null_val(ti))});
     } else {
-      ret = cgen_state_->emitCall("mul_" + null_typename + "_decimal_no_downscale",
+      ret = cgen_state_->emitCall("mul_" + decimal_null_typename + "_decimal_no_downscale",
                                   {lhs_lv, rhs_lv, ll_int(inline_int_null_val(ti))});
     }
   } else {
