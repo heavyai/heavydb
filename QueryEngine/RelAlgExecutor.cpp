@@ -1441,8 +1441,12 @@ std::list<std::shared_ptr<Analyzer::Expr>> get_outer_join_quals(const RelAlgNode
                                                      : dynamic_cast<const RelJoin*>(ra->getInput(0));
   if (join && join->getCondition() && !is_literal_true(join->getCondition()) && join->getJoinType() == JoinType::LEFT) {
     const auto join_cond_cf = qual_to_conjunctive_form(translator.translateScalarRex(join->getCondition()));
-    CHECK(join_cond_cf.simple_quals.empty());
-    return join_cond_cf.quals;
+    if (join_cond_cf.simple_quals.empty()) {
+      return join_cond_cf.quals;
+    }
+    std::list<std::shared_ptr<Analyzer::Expr>> all_quals = join_cond_cf.simple_quals;
+    all_quals.insert(all_quals.end(), join_cond_cf.quals.begin(), join_cond_cf.quals.end());
+    return all_quals;
   }
   return {};
 }
@@ -1454,8 +1458,12 @@ std::list<std::shared_ptr<Analyzer::Expr>> get_inner_join_quals(const RelAlgNode
   if (join && join->getCondition() && !is_literal_true(join->getCondition()) &&
       join->getJoinType() == JoinType::INNER) {
     const auto join_cond_cf = qual_to_conjunctive_form(translator.translateScalarRex(join->getCondition()));
-    CHECK(join_cond_cf.simple_quals.empty());
-    return join_cond_cf.quals;
+    if (join_cond_cf.simple_quals.empty()) {
+      return join_cond_cf.quals;
+    }
+    std::list<std::shared_ptr<Analyzer::Expr>> all_quals = join_cond_cf.simple_quals;
+    all_quals.insert(all_quals.end(), join_cond_cf.quals.begin(), join_cond_cf.quals.end());
+    return all_quals;
   }
   return {};
 }

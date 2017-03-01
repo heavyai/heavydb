@@ -2282,6 +2282,7 @@ TEST(Select, InnerJoins) {
     c("SELECT COUNT(*) FROM test JOIN test_inner ON test.x = test_inner.x;", dt);
     c("SELECT y, z FROM test JOIN test_inner ON test.x = test_inner.x order by y;", dt);
     c("SELECT COUNT(*) FROM test, test_inner WHERE test.real_str = test_inner.str;", dt);
+    c("SELECT COUNT(*) FROM test JOIN test_inner ON test.str = test_inner.str AND test.x = 7;", dt);
 #ifdef ENABLE_JOIN_EXEC
     c("SELECT count(*) FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str = c.str;", dt);
     c("SELECT count(*) FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str = c.str JOIN "
