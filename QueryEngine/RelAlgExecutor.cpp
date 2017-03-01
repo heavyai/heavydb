@@ -1310,9 +1310,6 @@ ExecutionResult RelAlgExecutor::handleRetry(const int32_t error_code_in,
       throw std::runtime_error(out_of_memory);
     }
   }
-  if (g_enable_watchdog) {
-    throw std::runtime_error("Query ran out of output slots in the result");
-  }
   CompilationOptions co_cpu{ExecutorDeviceType::CPU, co.hoist_literals_, co.opt_level_, co.with_dynamic_watchdog_};
   if (error_code) {
     max_groups_buffer_entry_guess = 0;
@@ -1340,6 +1337,9 @@ ExecutionResult RelAlgExecutor::handleRetry(const int32_t error_code_in,
       // by a huge cardinality array. Maybe we should throw an exception instead?
       // Such a heavy query is entirely capable of exhausting all the host memory.
       CHECK(max_groups_buffer_entry_guess);
+      if (g_enable_watchdog) {
+        throw std::runtime_error("Query ran out of output slots in the result");
+      }
       max_groups_buffer_entry_guess *= 2;
     }
   }
