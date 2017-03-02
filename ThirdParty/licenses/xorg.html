@@ -1,0 +1,736 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"><head>
+<link rel="canonical" href="/releases/X11R7.7/doc/xorg-docs/License.html" />
+<link rel="home" href="http://www.x.org/" />
+<link rel="icon" href="/releases/X11R7.7/favicon.ico" />
+<link rel="up" href="/releases/X11R7.7/doc/index.html" />
+<link rel="up up" href="/releases/X11R7.7/" />
+<link rel="alternate" href="License.pdf" type="application/pdf" />
+<link rel="alternate" href="License.ps" type="application/postscript" />
+<link rel="alternate" href="License.txt" type="text/plain;charset=utf-8" />
+<link rel="alternate" href="License.xml" type="application/xml" />
+
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" /><title>Licenses</title><meta name="generator" content="DocBook XSL Stylesheets Vsnapshot_9276" /><style xmlns="" type="text/css">/*
+ * Copyright (c) 2011 Gaetan Nadon
+ * Copyright (c) 2010, Oracle and/or its affiliates. All rights reserved.
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the "Software"),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice (including the next
+ * paragraph) shall be included in all copies or substantial portions of the
+ * Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+ * DEALINGS IN THE SOFTWARE.
+ */
+
+/*
+ * Shared stylesheet for X.Org documentation translated to HTML format
+ * http://www.sagehill.net/docbookxsl/UsingCSS.html
+ * http://www.w3schools.com/css/default.asp
+ * https://addons.mozilla.org/en-US/firefox/addon/web-developer/developers
+ * https://addons.mozilla.org/en-US/firefox/addon/font-finder/
+ */
+
+/*
+ * The sans-serif fonts are considered more legible on a computer screen
+ * http://dry.sailingissues.com/linux-equivalents-verdana-arial.html
+ *
+ */
+body {
+  font-family: "Bitstream Vera Sans", "DejaVu Sans", Tahoma, Geneva, Arial, Sans-serif;
+  /* In support of using "em" font size unit, the w3c recommended method */
+  font-size: 100%;
+}
+
+/*
+ * Selection: all elements requiring mono spaced fonts.
+ *
+ * The family names attempt to match the proportionally spaced font
+ * family names such that the same font name is used for both.
+ * We'd like to use Bitstream, for example, in both proportionally and
+ * mono spaced font text.
+ */
+.command,
+.errorcode,
+.errorname,
+.errortype,
+.filename,
+.funcsynopsis,
+.function,
+.parameter,
+.programlisting,
+.property,
+.screen,
+.structname,
+.symbol,
+.synopsis,
+.type
+{
+  font-family:  "Bitstream Vera Sans Mono", "DejaVu Sans Mono", Courier, "Liberation Mono", Monospace;
+}
+
+/*
+ * Books have a title page, a preface, some chapters and appendices,
+ * a glossary, an index and a bibliography, in that order.
+ *
+ * An Article has no preface and no chapters. It has sections, appendices,
+ * a glossary, an index and a bibliography.
+ */
+
+/*
+ * Selection: book main title and subtitle
+ */
+div.book>div.titlepage h1.title,
+div.book>div.titlepage h2.subtitle {
+  text-align: center;
+}
+
+/*
+ * Selection: article main title and subtitle
+ */
+div.article>div.titlepage h2.title,
+div.article>div.titlepage h3.subtitle,
+div.article>div.sect1>div.titlepage h2.title,
+div.article>div.section>div.titlepage h2.title {
+  text-align: center;
+}
+
+/*
+ * Selection: various types of authors and collaborators, individuals or corporate
+ *
+ * These authors are not always contained inside an authorgroup.
+ * They can be contained inside a lot of different parent types where they might
+ * not be centered.
+ * Reducing the margin at the bottom makes a visual separation between authors
+ * We specify here the ones on the title page, others may be added based on merit.
+ */
+div.titlepage .authorgroup,
+div.titlepage .author,
+div.titlepage .collab,
+div.titlepage .corpauthor,
+div.titlepage .corpcredit,
+div.titlepage .editor,
+div.titlepage .othercredit {
+  text-align: center;
+  margin-bottom: 0.25em;
+}
+
+/*
+ * Selection: the affiliation of various types of authors and collaborators,
+ * individuals or corporate.
+ */
+div.titlepage .affiliation {
+  text-align: center;
+}
+
+/*
+ * Selection: product release information (X Version 11, Release 7)
+ *
+ * The releaseinfo element can be contained inside a lot of different parent
+ * types where it might not be centered.
+ * We specify here the one on the title page, others may be added based on merit.
+ */
+div.titlepage p.releaseinfo {
+  font-weight: bold;
+  text-align: center;
+}
+
+/*
+ * Selection: publishing date
+ */
+div.titlepage .pubdate {
+  text-align: center;
+}
+
+/*
+ * The legal notices are displayed in smaller sized fonts
+ * Justification is only supported in IE and therefore not requested.
+ *
+ */
+.legalnotice {
+  font-size: small;
+  font-style: italic;
+}
+
+/*
+ * For documentation having multiple licenses, the copyright and legalnotice
+ * elements sequence cannot instantiated multiple times.
+ * The copyright notice and license text are therefore coded inside a legalnotice
+ * element. The role attribute on the paragraph is used to allow styling of the
+ * copyright notice text which should not be italicized.
+ */
+p.multiLicensing {
+  font-style: normal;
+  font-size: medium;
+}
+
+/*
+ * Selection: book or article main ToC title
+ * A paragraph is generated for the title rather than a level 2 heading.
+ * We do not want to select chapters sub table of contents, only the main one
+ */
+div.book>div.toc>p,
+div.article>div.toc>p {
+  font-size: 1.5em;
+  text-align: center;
+}
+
+/*
+ * Selection: major sections of a book or an article
+ *
+ * Unlike books, articles do not have a titlepage element for appendix.
+ * Using the selector "div.titlepage h2.title" would be too general.
+ */
+div.book>div.preface>div.titlepage h2.title,
+div.book>div.chapter>div.titlepage h2.title,
+div.article>div.sect1>div.titlepage h2.title,
+div.article>div.section>div.titlepage h2.title,
+div.book>div.appendix>div.titlepage h2.title,
+div.article>div.appendix h2.title,
+div.glossary>div.titlepage h2.title,
+div.index>div.titlepage h2.title,
+div.bibliography>div.titlepage h2.title {
+   /* Add a border top over the major parts, just like printed books */
+   /* The Gray color is already used for the ruler over the main ToC. */
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: Gray;
+  /* Put some space between the border and the title */
+  padding-top: 0.2em;
+  text-align: center;
+}
+
+/*
+ * A Screen is a verbatim environment for displaying text that the user might
+ * see on a computer terminal. It is often used to display the results of a command.
+ *
+ * http://www.css3.info/preview/rounded-border/
+ */
+.screen {
+  background: #e0ffff;
+  border-width: 1px;
+  border-style: solid;
+  border-color: #B0C4DE;
+  border-radius: 1.0em;
+  /* Browser's vendor properties prior to CSS 3 */
+  -moz-border-radius: 1.0em;
+  -webkit-border-radius: 1.0em;
+  -khtml-border-radius: 1.0em;
+  margin-left: 1.0em;
+  margin-right: 1.0em;
+  padding: 0.5em;
+}
+
+/*
+ * Emphasis program listings with a light shade of gray similar to what
+ * DocBook XSL guide does: http://www.sagehill.net/docbookxsl/ProgramListings.html
+ * Found many C API docs on the web using like shades of gray.
+ */
+.programlisting {
+  background: #F4F4F4;
+  border-width: 1px;
+  border-style: solid;
+  border-color: Gray;
+  padding: 0.5em;
+}
+
+/*
+ * Emphasis functions synopsis using a darker shade of gray.
+ * Add a border such that it stands out more.
+ * Set the padding so the text does not touch the border.
+ */
+.funcsynopsis, .synopsis {
+  background: #e6e6fa;
+  border-width: 1px;
+  border-style: solid;
+  border-color: Gray;
+  clear: both;
+  margin: 0.5em;
+  padding: 0.25em;
+}
+
+/*
+ * Selection: paragraphs inside synopsis
+ *
+ * Removes the default browser margin, let the container set the padding.
+ * Paragraphs are not always used in synopsis
+ */
+.funcsynopsis p,
+.synopsis p {
+  margin: 0;
+  padding: 0;
+}
+
+/*
+ * Selection: variable lists, informal tables and tables
+ *
+ * Note the parameter name "variablelist.as.table" in xorg-xhtml.xsl
+ * A table with rows and columns is constructed inside div.variablelist
+ *
+ * Set the left margin so it is indented to the right
+ * Display informal tables with single line borders
+ */
+table {
+  margin-left: 0.5em;
+  border-collapse: collapse;
+}
+
+/*
+ * Selection: paragraphs inside tables
+ *
+ * Removes the default browser margin, let the container set the padding.
+ * Paragraphs are not always used in tables
+ */
+td p {
+  margin: 0;
+  padding: 0;
+}
+
+/*
+ * Add some space between the left and right column.
+ * The vertical alignment helps the reader associate a term
+ * with a multi-line definition.
+ */
+td, th {
+  padding-left: 1.0em;
+  padding-right: 1.0em;
+  vertical-align: top;
+}
+
+.warning {
+  border: 1px solid red;
+  background: #FFFF66;
+  padding-left: 0.5em;
+}
+</style></head><body><div class="article"><div class="titlepage"><div><div><h2 class="title"><a id="License"></a>Licenses</h2></div><div><h3 class="corpauthor">The X.Org Foundation</h3></div><div><p class="pubdate">June 2012</p></div></div><hr /></div><div class="toc"><p><strong>Table of Contents</strong></p><dl><dt><span class="sect1"><a href="#Introduction">Introduction</a></span></dt><dt><span class="sect1"><a href="#X.Org_Preferred_License">X.Org Preferred License</a></span></dt><dt><span class="sect1"><a href="#XFree86_License_1.0">XFree86 License 1.0</a></span></dt><dt><span class="sect1"><a href="#Other_Licenses">Other Licenses</a></span></dt><dd><dl><dt><span class="sect2"><a href="#X_MIT_Copyrights">X/MIT Copyrights</a></span></dt><dt><span class="sect2"><a href="#Berkeley-based_copyrights">Berkeley-based copyrights</a></span></dt><dt><span class="sect2"><a href="#SGI_Free_Software_License_B">SGI Free Software License B</a></span></dt><dt><span class="sect2"><a href="#Bigelow_Holmes_Inc_and_URW_GmbH_Luxi_font_license">Bigelow &amp; Holmes Inc and URW++ GmbH Luxi font license</a></span></dt></dl></dd></dl></div><div class="sect1"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a id="Introduction"></a>Introduction</h2></div></div></div><p>
+The X.Org Foundation X Window System distribution is a compilation of code and
+documentation from many sources.  This document is intended primarily
+as a guide to the licenses used in the distribution: you must check
+each file and/or package for precise redistribution
+terms. None-the-less, this summary may be useful to many users.
+</p><p>
+This document is based on the compilation from XFree86.
+If you find any errors or significant omissions in this document, please
+contact us with details at <code class="email">&lt;<a class="email" href="mailto:xorg@lists.freedesktop.org">xorg@lists.freedesktop.org</a>&gt;</code>.
+</p><p>
+Most of these licenses are based on the MIT, X Consortium, or BSD
+(original and revised) licenses.  All of them are consistent with the
+<a class="ulink" href="http://www.opensource.org/docs/definition.php" target="_top">Open Source Definition</a>, and most are
+consistent with the Free Software Foundation's <a class="ulink" href="http://www.fsf.org/philosophy/free-sw.html" target="_top">Free Software
+Definition</a>.
+</p><p>
+While the current licenses are all open source licenses, the
+X.Org Foundation is attempting, over time, to bring as much as
+possible of the code's licenses in the distribution into compliance with the
+<a class="ulink" href="http://www.debian.org/social_contract#guidelines" target="_top">Debian Free Software Guidelines</a>.
+</p></div><div class="sect1"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a id="X.Org_Preferred_License"></a>X.Org Preferred License</h2></div></div></div><p>
+The X.Org Foundation has chosen the following format of the MIT
+License as the preferred format for code included in the X Window System
+distribution.   This is a slight variant of the common MIT license
+form published by the Open Source Initiative at
+<a class="ulink" href="http://www.opensource.org/licenses/mit-license.php" target="_top">http://www.opensource.org/licenses/mit-license.php</a>.
+</p><div class="blockquote"><blockquote class="blockquote"><p>
+Copyright ©<em class="parameter"><code>[year]</code></em> <em class="parameter"><code>[copyright holder]</code></em>
+</p><p>
+Permission is hereby granted, free of charge, to any person obtaining a
+copy of this software and associated documentation files (the "Software"),
+to deal in the Software without restriction, including without limitation
+the rights to use, copy, modify, merge, publish, distribute, sublicense,
+and/or sell copies of the Software, and to permit persons to whom the
+Software is furnished to do so, subject to the following conditions:
+</p><p>
+The above copyright notice and this permission notice (including the next
+paragraph) shall be included in all copies or substantial portions of the
+Software.
+</p><p>
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+</p></blockquote></div><p>
+When listing multiple copyright holders with the license statement,
+please sort by surname for people, and by the full name for other
+entities (e.g. Juliusz Chroboczek sorts before Intel Corporation sorts
+before Daniel Stone).
+</p></div><div class="sect1"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a id="XFree86_License_1.0"></a>XFree86 License 1.0</h2></div></div></div><p>
+XFree86 code without an explicit copyright is covered by the following
+copyright/license:
+</p><div class="blockquote"><blockquote class="blockquote"><p>
+Copyright (C) 1994-2003 The XFree86 Project, Inc.  All Rights Reserved.
+</p><p>
+Permission is hereby granted, free of charge, to any person obtaining a
+copy of this software and associated documentation files (the "Software"),
+to deal in the Software without restriction, including without limitation
+the rights to use, copy, modify, merge, publish, distribute, sublicense,
+and/or sell copies of the Software, and to permit persons to whom the
+Software is furnished to do so, subject to the following conditions:
+</p><p>
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+</p><p>
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+THE XFREE86 PROJECT BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF
+OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+</p><p>
+Except as contained in this notice, the name of the XFree86 Project shall
+not be used in advertising or otherwise to promote the sale, use or other
+dealings in this Software without prior written authorization from the
+XFree86 Project.
+</p></blockquote></div><p>
+No software incorporating the XFree86 1.1 license has been incorporated.
+</p></div><div class="sect1"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a id="Other_Licenses"></a>Other Licenses</h2></div></div></div><p>
+Portions of code are covered by the following licenses/copyrights.  See
+individual files for the copyright dates.
+</p><div class="sect2"><div class="titlepage"><div><div><h3 class="title"><a id="X_MIT_Copyrights"></a>X/MIT Copyrights</h3></div></div></div><div class="sect3"><div class="titlepage"><div><div><h4 class="title"><a id="X_Consortium"></a>X Consortium</h4></div></div></div><p>
+Copyright (C) <span class="emphasis"><em>&lt;date&gt;</em></span> X Consortium
+</p><p>
+Permission is hereby granted, free of charge, to any person obtaining a
+copy of this software and associated documentation files (the "Software"),
+to deal in the Software without restriction, including without
+limitation the rights to use, copy, modify, merge, publish, distribute,
+sublicense, and/or sell copies of the Software, and to permit persons to
+whom the Software is furnished to do so, subject to the following conditions:
+</p><p>
+The above copyright notice and this permission notice shall be included
+in all copies or substantial portions of the Software.
+</p><p>
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT
+SHALL THE X CONSORTIUM BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+IN THE SOFTWARE.
+</p><p>
+Except as contained in this notice, the name of the X Consortium shall
+not be used in advertising or otherwise to promote the sale, use or
+other dealings in this Software without prior written authorization from
+the X Consortium.
+</p><p>
+X Window System is a trademark of X Consortium, Inc.
+</p></div><div class="sect3"><div class="titlepage"><div><div><h4 class="title"><a id="The_Open_Group"></a>The Open Group</h4></div></div></div><p>
+Copyright <span class="emphasis"><em>&lt;date&gt;</em></span>  The Open Group
+</p><p>
+Permission to use, copy, modify, distribute, and sell this software and its
+documentation for any purpose is hereby granted without fee, provided that
+the above copyright notice appear in all copies and that both that
+copyright notice and this permission notice appear in supporting
+documentation.
+</p><p>
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+</p><p>
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
+OPEN GROUP BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN
+AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+</p><p>
+Except as contained in this notice, the name of The Open Group shall not be
+used in advertising or otherwise to promote the sale, use or other dealings
+in this Software without prior written authorization from The Open Group.
+</p></div></div><div class="sect2"><div class="titlepage"><div><div><h3 class="title"><a id="Berkeley-based_copyrights"></a>Berkeley-based copyrights</h3></div></div></div><div class="sect3"><div class="titlepage"><div><div><h4 class="title"><a id="General"></a>General</h4></div></div></div><p>
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions
+are met:
+</p><p>
+
+</p><div class="orderedlist"><ol class="orderedlist" type="1"><li class="listitem"><p>
+Redistributions of source code must retain the above copyright
+notice, this list of conditions and the following disclaimer.
+</p></li><li class="listitem"><p>
+Redistributions in binary form must reproduce the above copyright
+notice, this list of conditions and the following disclaimer in the
+documentation and/or other materials provided with the distribution.
+</p></li><li class="listitem"><p>
+The name of the author may not be used to endorse or promote products
+derived from this software without specific prior written permission.
+</p></li></ol></div><p>
+
+</p><p>
+THIS SOFTWARE IS PROVIDED BY THE AUTHOR <span class="quote">“<span class="quote">AS IS</span>”</span> AND ANY EXPRESS OR
+IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT,
+INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
+NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+</p></div><div class="sect3"><div class="titlepage"><div><div><h4 class="title"><a id="UCB_LBL"></a>UCB/LBL</h4></div></div></div><p>
+Copyright (c) 1993
+The Regents of the University of California.  All rights reserved.
+</p><p>
+This software was developed by the Computer Systems Engineering group
+at Lawrence Berkeley Laboratory under DARPA contract BG 91-66 and
+contributed to Berkeley.
+</p><p>
+All advertising materials mentioning features or use of this software
+must display the following acknowledgement:
+This product includes software developed by the University of
+California, Lawrence Berkeley Laboratory.
+</p><p>
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions
+are met:
+</p><p>
+
+</p><div class="orderedlist"><ol class="orderedlist" type="1"><li class="listitem"><p>
+Redistributions of source code must retain the above copyright
+notice, this list of conditions and the following disclaimer.
+</p></li><li class="listitem"><p>
+Redistributions in binary form must reproduce the above copyright
+notice, this list of conditions and the following disclaimer in the
+documentation and/or other materials provided with the distribution.
+</p></li><li class="listitem"><p>
+All advertising materials mentioning features or use of this software
+must display the following acknowledgement:
+This product includes software developed by the University of
+California, Berkeley and its contributors.
+</p></li><li class="listitem"><p>
+Neither the name of the University nor the names of its contributors
+may be used to endorse or promote products derived from this software
+without specific prior written permission.
+</p></li></ol></div><p>
+
+</p><p>
+THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS <span class="quote">“<span class="quote">AS IS</span>”</span> AND
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED.  IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+SUCH DAMAGE.
+</p></div><div class="sect3"><div class="titlepage"><div><div><h4 class="title"><a id="The_NetBSD_Foundation_Inc."></a>The NetBSD Foundation, Inc.</h4></div></div></div><p>
+Copyright (c) 2003 The NetBSD Foundation, Inc.
+All rights reserved.
+</p><p>
+This code is derived from software contributed to The NetBSD Foundation
+by Ben Collver &lt;collver1@attbi.com&gt;
+</p><p>
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions
+are met:
+
+</p><div class="orderedlist"><ol class="orderedlist" type="1"><li class="listitem"><p>
+ Redistributions of source code must retain the above copyright
+notice, this list of conditions and the following disclaimer.
+</p></li><li class="listitem"><p>
+ Redistributions in binary form must reproduce the above copyright
+notice, this list of conditions and the following disclaimer in the
+documentation and/or other materials provided with the distribution.
+</p></li></ol></div><p>
+
+</p><p>
+THIS SOFTWARE IS PROVIDED BY THE NETBSD FOUNDATION, INC. AND CONTRIBUTORS
+<span class="quote">“<span class="quote">AS IS</span>”</span> AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE FOUNDATION OR CONTRIBUTORS
+BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
+</p></div><div class="sect3"><div class="titlepage"><div><div><h4 class="title"><a id="Theodore_Tso"></a>Theodore Ts'o</h4></div></div></div><p>
+Copyright Theodore Ts'o, 1994, 1995, 1996, 1997, 1998, 1999.  All
+rights reserved.
+</p><p>
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions
+are met:
+
+</p><div class="orderedlist"><ol class="orderedlist" type="1"><li class="listitem"><p>
+Redistributions of source code must retain the above copyright
+notice, and the entire permission notice in its entirety,
+including the disclaimer of warranties.
+</p></li><li class="listitem"><p>
+Redistributions in binary form must reproduce the above copyright
+notice, this list of conditions and the following disclaimer in the
+documentation and/or other materials provided with the distribution.
+</p></li><li class="listitem"><p>
+The name of the author may not be used to endorse or promote
+products derived from this software without specific prior
+written permission.
+</p></li></ol></div><p>
+
+</p><p>
+THIS SOFTWARE IS PROVIDED <span class="quote">“<span class="quote">AS IS</span>”</span> AND ANY EXPRESS OR IMPLIED
+WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE, ALL OF
+WHICH ARE HEREBY DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR BE
+LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT
+OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
+USE OF THIS SOFTWARE, EVEN IF NOT ADVISED OF THE POSSIBILITY OF SUCH
+DAMAGE.
+</p></div><div class="sect3"><div class="titlepage"><div><div><h4 class="title"><a id="Theo_de_Raadt_and_Damien_Miller"></a>Theo de Raadt and Damien Miller</h4></div></div></div><p>
+Copyright (c) 1995,1999 Theo de Raadt.  All rights reserved.
+Copyright (c) 2001-2002 Damien Miller.  All rights reserved.
+</p><p>
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions
+are met:
+
+</p><div class="orderedlist"><ol class="orderedlist" type="1"><li class="listitem"><p>
+ Redistributions of source code must retain the above copyright
+notice, this list of conditions and the following disclaimer.
+</p></li><li class="listitem"><p>
+ Redistributions in binary form must reproduce the above copyright
+notice, this list of conditions and the following disclaimer in the
+documentation and/or other materials provided with the distribution.
+</p></li></ol></div><p>
+
+</p><p>
+THIS SOFTWARE IS PROVIDED BY THE AUTHOR <span class="quote">“<span class="quote">AS IS</span>”</span> AND ANY EXPRESS OR
+IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT,
+INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
+NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+</p></div><div class="sect3"><div class="titlepage"><div><div><h4 class="title"><a id="Todd_C._Miller"></a>Todd C. Miller</h4></div></div></div><p>
+Copyright (c) 1998 Todd C. Miller &lt;Todd.Miller@courtesan.com&gt;
+</p><p>
+Permission to use, copy, modify, and distribute this software for any
+purpose with or without fee is hereby granted, provided that the above
+copyright notice and this permission notice appear in all copies.
+</p><p>
+THE SOFTWARE IS PROVIDED "AS IS" AND TODD C. MILLER DISCLAIMS ALL
+WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES
+OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL TODD C. MILLER BE LIABLE
+FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION
+OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
+CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+</p></div><div class="sect3"><div class="titlepage"><div><div><h4 class="title"><a id="Thomas_Winischhofer"></a>Thomas Winischhofer</h4></div></div></div><p>
+Copyright (C) 2001-2004 Thomas Winischhofer
+</p><p>
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+</p><p>
+
+</p><div class="orderedlist"><ol class="orderedlist" type="1"><li class="listitem"><p>
+ Redistributions of source code must retain the above copyright
+notice, this list of conditions and the following disclaimer.
+</p></li><li class="listitem"><p>
+ Redistributions in binary form must reproduce the above copyright
+notice, this list of conditions and the following disclaimer in the
+documentation and/or other materials provided with the distribution.
+</p></li><li class="listitem"><p>
+ The name of the author may not be used to endorse or promote products
+derived from this software without specific prior written permission.
+</p></li></ol></div><p>
+
+</p><p>
+THIS SOFTWARE IS PROVIDED BY THE AUTHOR <span class="quote">“<span class="quote">AS IS</span>”</span> AND ANY EXPRESSED OR
+IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT,
+INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
+</p></div></div><div class="sect2"><div class="titlepage"><div><div><h3 class="title"><a id="SGI_Free_Software_License_B"></a>SGI Free Software License B</h3></div></div></div><p>
+SGI FREE SOFTWARE LICENSE B (Version 2.0, Sept. 18, 2008)
+</p><p>
+Copyright (C) 1991-2000 Silicon Graphics, Inc. All Rights Reserved.
+</p><p>
+Permission is hereby granted, free of charge, to any person obtaining a
+copy of this software and associated documentation files (the "Software"),
+to deal in the Software without restriction, including without limitation
+the rights to use, copy, modify, merge, publish, distribute, sublicense,
+and/or sell copies of the Software, and to permit persons to whom the
+Software is furnished to do so, subject to the following conditions:
+</p><p>
+The above copyright notice including the dates of first publication and
+either this permission notice or a reference to
+<a class="ulink" href="http://oss.sgi.com/projects/FreeB/" target="_top">http://oss.sgi.com/projects/FreeB/</a>
+shall be included in all copies or substantial portions of the Software.
+</p><p>
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+SILICON GRAPHICS, INC. BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF
+OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+</p></div><div class="sect2"><div class="titlepage"><div><div><h3 class="title"><a id="Bigelow_Holmes_Inc_and_URW_GmbH_Luxi_font_license"></a>Bigelow &amp; Holmes Inc and URW++ GmbH Luxi font license</h3></div></div></div><p>
+Luxi fonts copyright (c) 2001 by Bigelow &amp; Holmes Inc. Luxi font
+instruction code copyright (c) 2001 by URW++ GmbH. All Rights
+Reserved. Luxi is a registered trademark of Bigelow &amp; Holmes Inc.
+</p><p>
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of these Fonts and associated documentation files (the "Font
+Software"), to deal in the Font Software, including without
+limitation the rights to use, copy, merge, publish, distribute,
+sublicense, and/or sell copies of the Font Software, and to permit
+persons to whom the Font Software is furnished to do so, subject to
+the following conditions:
+</p><p>
+The above copyright and trademark notices and this permission notice
+shall be included in all copies of one or more of the Font Software.
+</p><p>
+The Font Software may not be modified, altered, or added to, and in
+particular the designs of glyphs or characters in the Fonts may not
+be modified nor may additional glyphs or characters be added to the
+Fonts. This License becomes null and void when the Fonts or Font
+Software have been modified.
+</p><p>
+THE FONT SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT
+OF COPYRIGHT, PATENT, TRADEMARK, OR OTHER RIGHT.  IN NO EVENT SHALL
+BIGELOW &amp; HOLMES INC. OR URW++ GMBH. BE LIABLE FOR ANY CLAIM, DAMAGES
+OR OTHER LIABILITY, INCLUDING ANY GENERAL, SPECIAL, INDIRECT,
+INCIDENTAL, OR CONSEQUENTIAL DAMAGES, WHETHER IN AN ACTION OF
+CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF THE USE OR
+INABILITY TO USE THE FONT SOFTWARE OR FROM OTHER DEALINGS IN THE FONT
+SOFTWARE.
+</p><p>
+Except as contained in this notice, the names of Bigelow &amp; Holmes
+Inc. and URW++ GmbH. shall not be used in advertising or otherwise to
+promote the sale, use or other dealings in this Font Software without
+prior written authorization from Bigelow &amp; Holmes Inc. and URW++ GmbH.
+</p><p>
+For further information, contact:
+</p><p>
+info@urwpp.de
+or
+design@bigelowandholmes.com
+</p></div></div></div></body></html>
+

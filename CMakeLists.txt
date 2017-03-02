@@ -318,6 +318,9 @@ target_link_libraries(initdb Shared Catalog Fragmenter Chunk SqliteConnector Dat
 # Packaging
 set(CPACK_PACKAGE_VENDOR "MapD Technologies, Inc.")
 
+
+install(DIRECTORY ThirdParty/licenses DESTINATION "ThirdParty/")
+
 # Frontend
 option(MAPD_IMMERSE_DOWNLOAD "Download MapD Immerse for packaging" ON)
 set(MAPD_IMMERSE_URL ${MAPD_IMMERSE_URL} CACHE STRING "URL to bundled frontend")
@@ -446,7 +449,7 @@ endif()
 install(FILES mapd.thrift DESTINATION ".")
 
 if(NOT PREFER_STATIC_LIBS)
-  install(FILES ${Boost_LIBRARIES} DESTINATION thirdparty)
+  install(FILES ${Boost_LIBRARIES} DESTINATION ThirdParty/lib)
 endif()
 
 if(EXISTS "${CMAKE_SOURCE_DIR}/LICENSE.md")
