@@ -1,10 +1,7 @@
 #include "MapDServer.h"
 #include "ThriftHandler/MapDHandler.h"
-#include "LeafAggregator.h"
-#include "gen-cpp/MapD.h"
-#ifdef HAVE_PROFILER
-#include <gperftools/heap-profiler.h>
-#endif  // HAVE_PROFILER
+#include "ThriftHandler/HAHandler.h"
+
 #include <thrift/concurrency/ThreadManager.h>
 #include <thrift/concurrency/PlatformThreadFactory.h>
 #include <thrift/protocol/TBinaryProtocol.h>
@@ -17,43 +14,14 @@
 
 #include "MapDRelease.h"
 
-#ifdef HAVE_CALCITE
-#include "Calcite/Calcite.h"
-#endif  // HAVE_CALCITE
+#include "Shared/MapDParameters.h"
 
-#ifdef HAVE_RAVM
-#include "QueryEngine/PendingExecutionClosure.h"
-#include "QueryEngine/RelAlgExecutor.h"
-#endif  // HAVE_RAVM
-
-#include "Catalog/Catalog.h"
-#include "Fragmenter/InsertOrderFragmenter.h"
-#include "Import/Importer.h"
-#include <boost/algorithm/string.hpp>
-#include <boost/algorithm/string/replace.hpp>
-#include <boost/algorithm/string/trim.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/make_shared.hpp>
 #include <boost/program_options.hpp>
-#include <boost/regex.hpp>
-#include <boost/tokenizer.hpp>
-#include <memory>
-#include <string>
-#include <fstream>
-#include <sys/time.h>
-#include <sys/types.h>
-#include <sys/wait.h>
-#include <random>
-#include <map>
-#include <cmath>
-#include <typeinfo>
 #include <thread>
 #include <glog/logging.h>
 #include <signal.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <regex>
-
 
 using namespace ::apache::thrift;
 using namespace ::apache::thrift::concurrency;
@@ -106,6 +74,22 @@ StringDictionaryGenerations string_dictionary_generations_from_thrift(
                                                 thrift_string_dictionary_generation.entry_count);
   }
   return string_dictionary_generations;
+}
+
+std::vector<LeafHostInfo> only_db_leaves(const std::vector<LeafHostInfo>& all_leaves) {
+  std::vector<LeafHostInfo> data_leaves;
+  std::copy_if(all_leaves.begin(), all_leaves.end(), std::back_inserter(data_leaves), [](const LeafHostInfo& leaf) {
+    return leaf.getRole() == NodeRole::DbLeaf;
+  });
+  return data_leaves;
+}
+
+std::vector<LeafHostInfo> only_string_leaves(const std::vector<LeafHostInfo>& all_leaves) {
+  std::vector<LeafHostInfo> string_leaves;
+  std::copy_if(all_leaves.begin(), all_leaves.end(), std::back_inserter(string_leaves), [](const LeafHostInfo& leaf) {
+    return leaf.getRole() == NodeRole::String;
+  });
+  return string_leaves;
 }
 
 void mapd_signal_handler(int signal_number) {
@@ -249,6 +233,16 @@ int main(int argc, char** argv) {
       "calcite-max-mem",
       po::value<size_t>(&mapd_parameters.calcite_max_mem)->default_value(mapd_parameters.calcite_max_mem),
       "Max memory available to calcite JVM");
+  desc_adv.add_options()("ha-port",
+                         po::value<size_t>(&mapd_parameters.ha_port)->default_value(mapd_parameters.ha_port),
+                         "Port number for High Availability binary requests");
+  desc_adv.add_options()("ha-http-port",
+                         po::value<size_t>(&mapd_parameters.ha_http_port)->default_value(mapd_parameters.ha_http_port),
+                         "Port number for High Availability HTTP requests");
+  desc_adv.add_options()(
+      "enable-ha",
+      po::value<bool>(&mapd_parameters.enable_ha)->default_value(mapd_parameters.enable_ha)->implicit_value(false),
+      "Enable server in HA Mode");
   desc_adv.add_options()("use-result-set",
                          po::bool_switch(&g_use_result_set)->default_value(g_use_result_set)->implicit_value(true),
                          "Use the new result set");
@@ -392,6 +386,7 @@ int main(int argc, char** argv) {
 
   // add all parameters to be displayed on startup
   LOG(INFO) << " Watchdog is set to " << enable_watchdog;
+  LOG(INFO) << " HA is set to " << mapd_parameters.enable_ha;
   LOG(INFO) << " cuda block size " << mapd_parameters.cuda_block_size;
   LOG(INFO) << " cuda grid size  " << mapd_parameters.cuda_grid_size;
   LOG(INFO) << " calcite JVM max memory  " << mapd_parameters.calcite_max_mem;
@@ -451,6 +446,36 @@ int main(int argc, char** argv) {
 
   std::thread bufThread(start_server, std::ref(bufServer));
   std::thread httpThread(start_server, std::ref(httpServer));
+
+  if (mapd_parameters.enable_ha) {
+    // Now start the HA server if required
+    shared_ptr<HAHandler> ha_handler(new HAHandler(mapd_parameters, handler));
+
+    shared_ptr<TProcessor> ha_processor(new MapDProcessor(ha_handler));
+
+    shared_ptr<ThreadManager> ha_threadManager = ThreadManager::newSimpleThreadManager(tthreadpool_size);
+    ha_threadManager->threadFactory(make_shared<PlatformThreadFactory>());
+    ha_threadManager->start();
+
+    shared_ptr<TServerTransport> ha_bufServerTransport(new TServerSocket(mapd_parameters.ha_port));
+    shared_ptr<TTransportFactory> ha_bufTransportFactory(new TBufferedTransportFactory());
+    shared_ptr<TProtocolFactory> ha_bufProtocolFactory(new TBinaryProtocolFactory());
+    TThreadPoolServer ha_bufServer(
+        ha_processor, ha_bufServerTransport, ha_bufTransportFactory, ha_bufProtocolFactory, ha_threadManager);
+
+    shared_ptr<TServerTransport> ha_httpServerTransport(new TServerSocket(mapd_parameters.ha_http_port));
+    shared_ptr<TTransportFactory> ha_httpTransportFactory(new THttpServerTransportFactory());
+    shared_ptr<TProtocolFactory> ha_httpProtocolFactory(new TJSONProtocolFactory());
+    TThreadPoolServer ha_httpServer(
+        ha_processor, ha_httpServerTransport, ha_httpTransportFactory, ha_httpProtocolFactory, ha_threadManager);
+
+    std::thread ha_bufThread(start_server, std::ref(ha_bufServer));
+    std::thread ha_httpThread(start_server, std::ref(ha_httpServer));
+
+    // join all for shutdown
+    ha_bufThread.join();
+    ha_httpThread.join();
+  }
 
   bufThread.join();
   httpThread.join();

@@ -236,6 +236,7 @@ add_subdirectory(Chunk)
 add_subdirectory(Shared)
 add_subdirectory(Utils)
 add_subdirectory(SQLFrontend)
+add_subdirectory(ThriftHandler)
 
 option(ENABLE_ODBC "Build ODBC driver" OFF)
 if(ENABLE_ODBC)
@@ -312,7 +313,7 @@ add_custom_target(rerun_cmake ALL
   )
 add_dependencies(mapd_server rerun_cmake)
 
-target_link_libraries(mapd_server mapd_thrift ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${Glog_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${LLVM_LINKER_FLAGS} ${PROFILER_LIBS} ${CURSES_LIBRARIES} poly2tri "-lz")
+target_link_libraries(mapd_server mapd_thrift thrift_handler ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${Glog_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${LLVM_LINKER_FLAGS} ${PROFILER_LIBS} ${CURSES_LIBRARIES} poly2tri "-lz")
 target_link_libraries(initdb Shared Catalog Fragmenter Chunk SqliteConnector DataMgr StringDictionary ${Boost_LIBRARIES} ${CMAKE_DL_LIBS})
 
 # Packaging
