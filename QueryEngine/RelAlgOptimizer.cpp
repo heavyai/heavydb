@@ -31,6 +31,90 @@ class RexProjectInputRedirector : public RexDeepCopyVisitor {
   const std::unordered_set<const RelProject*>& crt_projects_;
 };
 
+std::unordered_map<const RelAlgNode*, std::unordered_set<const RelAlgNode*>> build_du_web(
+    const std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
+  std::unordered_map<const RelAlgNode*, std::unordered_set<const RelAlgNode*>> web;
+  std::unordered_set<const RelAlgNode*> visited;
+  std::vector<const RelAlgNode*> work_set;
+  for (auto node : nodes) {
+    if (std::dynamic_pointer_cast<RelScan>(node) || visited.count(node.get())) {
+      continue;
+    }
+    work_set.push_back(node.get());
+    while (!work_set.empty()) {
+      auto walker = work_set.back();
+      work_set.pop_back();
+      if (visited.count(walker)) {
+        continue;
+      }
+      CHECK(!web.count(walker));
+      auto it_ok = web.insert(std::make_pair(walker, std::unordered_set<const RelAlgNode*>{}));
+      CHECK(it_ok.second);
+      visited.insert(walker);
+      const auto join = dynamic_cast<const RelJoin*>(walker);
+      const auto project = dynamic_cast<const RelProject*>(walker);
+      const auto aggregate = dynamic_cast<const RelAggregate*>(walker);
+      const auto filter = dynamic_cast<const RelFilter*>(walker);
+      const auto sort = dynamic_cast<const RelSort*>(walker);
+      CHECK(join || project || aggregate || filter || sort);
+      for (size_t i = 0; i < walker->inputCount(); ++i) {
+        auto src = walker->getInput(i);
+        if (dynamic_cast<const RelScan*>(src)) {
+          continue;
+        }
+        if (web.empty() || !web.count(src)) {
+          web.insert(std::make_pair(src, std::unordered_set<const RelAlgNode*>{}));
+        }
+        web[src].insert(walker);
+        work_set.push_back(src);
+      }
+    }
+  }
+  return web;
+}
+
+bool is_identical_copy(const RelProject* project,
+                       const std::unordered_map<const RelAlgNode*, std::unordered_set<const RelAlgNode*>>& du_web) {
+  auto source = project->getInput(0);
+  if (project->size() > source->size()) {
+    return false;
+  }
+
+  if (project->size() < source->size()) {
+    auto usrs_it = du_web.find(project);
+    CHECK(usrs_it != du_web.end());
+    bool guard_found = false;
+    while (usrs_it->second.size() == size_t(1)) {
+      auto only_usr = *usrs_it->second.begin();
+      if (dynamic_cast<const RelProject*>(only_usr)) {
+        guard_found = true;
+        break;
+      }
+      if (dynamic_cast<const RelAggregate*>(only_usr) || dynamic_cast<const RelSort*>(only_usr) ||
+          dynamic_cast<const RelJoin*>(only_usr)) {
+        return false;
+      }
+      CHECK(dynamic_cast<const RelFilter*>(only_usr));
+      usrs_it = du_web.find(only_usr);
+      CHECK(usrs_it != du_web.end());
+    }
+
+    if (!guard_found) {
+      return false;
+    }
+  }
+
+  for (size_t i = 0; i < project->size(); ++i) {
+    auto target = dynamic_cast<const RexInput*>(project->getProjectAt(i));
+    CHECK(target);
+    if (i != target->getIndex()) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 void redirect_inputs_of(std::shared_ptr<RelAlgNode> node, const std::unordered_set<const RelProject*>& projects) {
   RexProjectInputRedirector visitor(projects);
   std::shared_ptr<const RelProject> src_project = nullptr;
@@ -46,31 +130,11 @@ void redirect_inputs_of(std::shared_ptr<RelAlgNode> node, const std::unordered_s
     return;
   }
   if (auto join = std::dynamic_pointer_cast<RelJoin>(node)) {
-    if (src_project->size() != src_project->getInput(0)->size()) {
-      return;
-    }
-    for (size_t i = 0; i < src_project->size(); ++i) {
-      auto target = dynamic_cast<const RexInput*>(src_project->getProjectAt(i));
-      CHECK(target);
-      if (i != target->getIndex()) {
-        return;
-      }
-    }
     join->replaceInput(src_project, src_project->getAndOwnInput(0));
     auto other_project = src_project == node->getAndOwnInput(0)
                              ? std::dynamic_pointer_cast<const RelProject>(node->getAndOwnInput(1))
                              : std::dynamic_pointer_cast<const RelProject>(node->getAndOwnInput(0));
     if (other_project && projects.count(other_project.get())) {
-      if (other_project->size() != other_project->getInput(0)->size()) {
-        return;
-      }
-      for (size_t i = 0; i < other_project->size(); ++i) {
-        auto target = dynamic_cast<const RexInput*>(other_project->getProjectAt(i));
-        CHECK(target);
-        if (i != target->getIndex()) {
-          return;
-        }
-      }
       join->replaceInput(other_project, other_project->getAndOwnInput(0));
     }
     auto new_condition = visitor.visit(join->getCondition());
@@ -87,16 +151,6 @@ void redirect_inputs_of(std::shared_ptr<RelAlgNode> node, const std::unordered_s
     return;
   }
   if (auto filter = std::dynamic_pointer_cast<RelFilter>(node)) {
-    if (src_project->size() != src_project->getInput(0)->size()) {
-      return;
-    }
-    for (size_t i = 0; i < src_project->size(); ++i) {
-      auto target = dynamic_cast<const RexInput*>(src_project->getProjectAt(i));
-      CHECK(target);
-      if (i != target->getIndex()) {
-        return;
-      }
-    }
     auto new_condition = visitor.visit(filter->getCondition());
     filter->setCondition(new_condition);
     filter->replaceInput(src_project, src_project->getAndOwnInput(0));
@@ -106,16 +160,6 @@ void redirect_inputs_of(std::shared_ptr<RelAlgNode> node, const std::unordered_s
     return;
   }
   CHECK(std::dynamic_pointer_cast<RelAggregate>(node) || std::dynamic_pointer_cast<RelSort>(node));
-  if (src_project->size() != src_project->getInput(0)->size()) {
-    return;
-  }
-  for (size_t i = 0; i < src_project->size(); ++i) {
-    auto target = dynamic_cast<const RexInput*>(src_project->getProjectAt(i));
-    CHECK(target);
-    if (i != target->getIndex()) {
-      return;
-    }
-  }
   node->replaceInput(src_project, src_project->getAndOwnInput(0));
 }
 
@@ -229,11 +273,14 @@ void eliminate_identical_copy(std::vector<std::shared_ptr<RelAlgNode>>& nodes) n
   }
   decltype(copies)().swap(copies);
 
+  auto web = build_du_web(nodes);
+
   std::unordered_set<const RelProject*> projects;
   auto visible_projs = get_visible_projects(nodes.back().get());
   for (auto node : nodes) {
     auto project = std::dynamic_pointer_cast<RelProject>(node);
-    if (project && project->isSimple() && (!visible_projs.count(project.get()) || !project->isRenaming())) {
+    if (project && project->isSimple() && (!visible_projs.count(project.get()) || !project->isRenaming()) &&
+        is_identical_copy(project.get(), web)) {
       projects.insert(project.get());
     }
   }
@@ -280,48 +327,6 @@ class RexInputCollector : public RexVisitor<std::unordered_set<RexInput>> {
     return result;
   }
 };
-
-std::unordered_map<const RelAlgNode*, std::unordered_set<const RelAlgNode*>> build_du_web(
-    const std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
-  std::unordered_map<const RelAlgNode*, std::unordered_set<const RelAlgNode*>> web;
-  std::unordered_set<const RelAlgNode*> visited;
-  std::vector<const RelAlgNode*> work_set;
-  for (auto node : nodes) {
-    if (std::dynamic_pointer_cast<RelScan>(node) || visited.count(node.get())) {
-      continue;
-    }
-    work_set.push_back(node.get());
-    while (!work_set.empty()) {
-      auto walker = work_set.back();
-      work_set.pop_back();
-      if (visited.count(walker)) {
-        continue;
-      }
-      CHECK(!web.count(walker));
-      auto it_ok = web.insert(std::make_pair(walker, std::unordered_set<const RelAlgNode*>{}));
-      CHECK(it_ok.second);
-      visited.insert(walker);
-      const auto join = dynamic_cast<const RelJoin*>(walker);
-      const auto project = dynamic_cast<const RelProject*>(walker);
-      const auto aggregate = dynamic_cast<const RelAggregate*>(walker);
-      const auto filter = dynamic_cast<const RelFilter*>(walker);
-      const auto sort = dynamic_cast<const RelSort*>(walker);
-      CHECK(join || project || aggregate || filter || sort);
-      for (size_t i = 0; i < walker->inputCount(); ++i) {
-        auto src = walker->getInput(i);
-        if (dynamic_cast<const RelScan*>(src)) {
-          continue;
-        }
-        if (web.empty() || !web.count(src)) {
-          web.insert(std::make_pair(src, std::unordered_set<const RelAlgNode*>{}));
-        }
-        web[src].insert(walker);
-        work_set.push_back(src);
-      }
-    }
-  }
-  return web;
-}
 
 size_t pick_always_live_col_idx(const RelAlgNode* node) {
   CHECK(node->size());
