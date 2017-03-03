@@ -269,10 +269,17 @@ struct TDictionaryGeneration {
   2: i64 entry_count
 }
 
+struct TTableGeneration {
+  1: i32 table_id
+  2: i64 tuple_count
+  3: i64 start_rowid
+}
+
 struct TPendingQuery {
   1: TQueryId id
   2: list<TColumnRange> column_ranges
   3: list<TDictionaryGeneration> dictionary_generations
+  4: list<TTableGeneration> table_generations
 }
 
 service MapD {

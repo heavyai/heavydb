@@ -50,6 +50,7 @@
 #include "QueryEngine/GpuMemUtils.h"
 #include "QueryEngine/ExtensionFunctionsWhitelist.h"
 #include "QueryEngine/JsonAccessors.h"
+#include "QueryEngine/TableGenerations.h"
 #include "Shared/geosupport.h"
 #include "Shared/mapd_shared_mutex.h"
 #include "Shared/measure.h"
@@ -330,6 +331,8 @@ class MapDHandler : public MapDIf {
 
   std::vector<TDictionaryGeneration> string_dictionary_generations_to_thrift(
       const StringDictionaryGenerations& dictionary_generations);
+
+  static std::vector<TTableGeneration> table_generations_to_thrift(const TableGenerations& table_generations);
 
   Planner::RootPlan* parse_to_plan_legacy(const std::string& query_str,
                                           const Catalog_Namespace::SessionInfo& session_info,

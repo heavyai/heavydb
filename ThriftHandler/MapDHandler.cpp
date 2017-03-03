@@ -2183,6 +2183,18 @@ std::vector<TDictionaryGeneration> MapDHandler::string_dictionary_generations_to
   return thrift_dictionary_generations;
 }
 
+std::vector<TTableGeneration> MapDHandler::table_generations_to_thrift(const TableGenerations& table_generations) {
+  std::vector<TTableGeneration> thrift_table_generations;
+  for (const auto& kv : table_generations.asMap()) {
+    TTableGeneration table_generation;
+    table_generation.table_id = kv.first;
+    table_generation.start_rowid = kv.second.start_rowid;
+    table_generation.tuple_count = kv.second.tuple_count;
+    thrift_table_generations.push_back(table_generation);
+  }
+  return thrift_table_generations;
+}
+
 
 void MapDHandler::throw_profile_exception(const std::string& error_msg) {
   TMapDException ex;

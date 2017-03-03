@@ -11,6 +11,7 @@
 #include "NvidiaKernel.h"
 #include "RelAlgExecutionUnit.h"
 #include "StringDictionaryGenerations.h"
+#include "TableGenerations.h"
 #include "TargetMetaInfo.h"
 
 #include "../Analyzer/Analyzer.h"
@@ -355,10 +356,10 @@ class Executor {
   std::vector<llvm::Value*> codegen(const Analyzer::Expr*, const bool fetch_columns, const CompilationOptions&);
   llvm::Value* codegen(const Analyzer::BinOper*, const CompilationOptions&);
   llvm::Value* codegen(const Analyzer::UOper*, const CompilationOptions&);
-  std::vector<llvm::Value*> codegen(const Analyzer::ColumnVar*, const bool fetch_column, const bool hoist_literals);
+  std::vector<llvm::Value*> codegen(const Analyzer::ColumnVar*, const bool fetch_column, const CompilationOptions&);
   std::vector<llvm::Value*> codegenColVar(const Analyzer::ColumnVar*,
                                           const bool fetch_column,
-                                          const bool hoist_literals);
+                                          const CompilationOptions&);
   llvm::Value* codgenAdjustFixedEncNull(llvm::Value*, const SQLTypeInfo&);
   std::vector<llvm::Value*> codegenOuterJoinNullPlaceholder(const std::vector<llvm::Value*>&,
                                                             const Analyzer::ColumnVar*);
@@ -1195,6 +1196,7 @@ class Executor {
   InputTableInfoCache input_table_info_cache_;
   AggregatedColRange agg_col_range_cache_;
   StringDictionaryGenerations string_dictionary_generations_;
+  TableGenerations table_generations_;
 
   static std::map<std::pair<int, ::QueryRenderer::QueryRenderManager*>, std::shared_ptr<Executor>> executors_;
   static std::mutex execute_mutex_;

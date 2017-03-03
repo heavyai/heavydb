@@ -680,6 +680,7 @@ void Executor::clearMetaInfoCache() {
   input_table_info_cache_.clear();
   agg_col_range_cache_.clear();
   string_dictionary_generations_.clear();
+  table_generations_.clear();
 }
 
 std::vector<int8_t> Executor::serializeLiterals(const std::unordered_map<int, Executor::LiteralValues>& literals,
@@ -807,7 +808,7 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Expr* expr,
   }
   auto col_var = dynamic_cast<const Analyzer::ColumnVar*>(expr);
   if (col_var) {
-    return codegen(col_var, fetch_columns, co.hoist_literals_);
+    return codegen(col_var, fetch_columns, co);
   }
   auto constant = dynamic_cast<const Analyzer::Constant*>(expr);
   if (constant) {
@@ -1302,8 +1303,8 @@ size_t get_col_bit_width(const Analyzer::ColumnVar* col_var) {
 
 std::vector<llvm::Value*> Executor::codegen(const Analyzer::ColumnVar* col_var,
                                             const bool fetch_column,
-                                            const bool hoist_literals) {
-  const auto col_var_lvs = codegenColVar(col_var, fetch_column, hoist_literals);
+                                            const CompilationOptions& co) {
+  const auto col_var_lvs = codegenColVar(col_var, fetch_column, co);
   if (!cgen_state_->outer_join_cond_lv_ || col_var->get_rte_idx() == 0) {
     return col_var_lvs;
   }
@@ -1312,7 +1313,8 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::ColumnVar* col_var,
 
 std::vector<llvm::Value*> Executor::codegenColVar(const Analyzer::ColumnVar* col_var,
                                                   const bool fetch_column,
-                                                  const bool hoist_literals) {
+                                                  const CompilationOptions& co) {
+  const bool hoist_literals = co.hoist_literals_;
   auto col_id = col_var->get_column_id();
   const auto rte_idx = col_var->get_rte_idx() == -1 ? int(0) : col_var->get_rte_idx();
 #ifdef ENABLE_MULTIFRAG_JOIN
@@ -1331,7 +1333,18 @@ std::vector<llvm::Value*> Executor::codegenColVar(const Analyzer::ColumnVar* col
 #endif
       const auto offset = cgen_state_->frag_offsets_[rte_idx];
       if (offset) {
-        return {cgen_state_->ir_builder_.CreateAdd(posArg(col_var), offset)};
+        const auto& table_generation = table_generations_.getGeneration(col_var->get_table_id());
+        if (table_generation.start_rowid > 0) {
+          Datum d;
+          d.bigintval = table_generation.start_rowid;
+          const auto start_rowid = makeExpr<Analyzer::Constant>(kBIGINT, false, d);
+          const auto start_rowid_lvs = codegen(start_rowid.get(), kENCODING_NONE, -1, co);
+          CHECK_EQ(size_t(1), start_rowid_lvs.size());
+          return {cgen_state_->ir_builder_.CreateAdd(cgen_state_->ir_builder_.CreateAdd(posArg(col_var), offset),
+                                                     start_rowid_lvs.front())};
+        } else {
+          return {cgen_state_->ir_builder_.CreateAdd(posArg(col_var), offset)};
+        }
       } else {
         return {posArg(col_var)};
       }
@@ -1353,7 +1366,7 @@ std::vector<llvm::Value*> Executor::codegenColVar(const Analyzer::ColumnVar* col
     if (plan_state_->isLazyFetchColumn(col_var)) {
       plan_state_->columns_to_fetch_.insert(std::make_pair(col_var->get_table_id(), col_var->get_column_id()));
     }
-    return codegen(hash_join_lhs, fetch_column, hoist_literals);
+    return codegen(hash_join_lhs, fetch_column, co);
   }
   auto pos_arg = posArg(col_var);
   auto col_byte_stream = colByteStream(col_var, fetch_column, hoist_literals);
@@ -1992,7 +2005,7 @@ std::string get_null_check_suffix(const SQLTypeInfo& lhs_ti, const SQLTypeInfo& 
 llvm::Value* Executor::codegenCmp(const Analyzer::BinOper* bin_oper, const CompilationOptions& co) {
   for (const auto equi_join_tautology : plan_state_->join_info_.equi_join_tautologies_) {
     if (*equi_join_tautology == *bin_oper) {
-      return plan_state_->join_info_.join_hash_table_->codegenSlot(co.hoist_literals_);
+      return plan_state_->join_info_.join_hash_table_->codegenSlot(co);
     }
   }
   const auto optype = bin_oper->get_optype();
@@ -7421,11 +7434,14 @@ std::pair<bool, int64_t> Executor::skipFragment(const InputDescriptor& table_des
     int64_t chunk_min{0};
     int64_t chunk_max{0};
     bool is_rowid{false};
+    size_t start_rowid{0};
     if (chunk_meta_it == fragment.getChunkMetadataMap().end()) {
       auto cd = get_column_descriptor(col_id, table_id, *catalog_);
       CHECK(cd->isVirtualCol && cd->columnName == "rowid");
-      chunk_min = all_frag_row_offsets[frag_idx];
-      chunk_max = all_frag_row_offsets[frag_idx + 1] - 1;
+      const auto& table_generation = table_generations_.getGeneration(table_id);
+      start_rowid = table_generation.start_rowid;
+      chunk_min = all_frag_row_offsets[frag_idx] + start_rowid;
+      chunk_max = all_frag_row_offsets[frag_idx + 1] - 1 + start_rowid;
       is_rowid = true;
     } else {
       const auto& chunk_type = lhs->get_type_info();
@@ -7458,7 +7474,7 @@ std::pair<bool, int64_t> Executor::skipFragment(const InputDescriptor& table_des
         if (chunk_min > rhs_val || chunk_max < rhs_val) {
           return {true, -1};
         } else if (is_rowid) {
-          return {false, rhs_val};
+          return {false, rhs_val - start_rowid};
         }
         break;
       default:

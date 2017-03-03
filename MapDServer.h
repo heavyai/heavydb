@@ -11,6 +11,7 @@
 #include "gen-cpp/mapd_types.h"
 #include "QueryEngine/AggregatedColRange.h"
 #include "QueryEngine/StringDictionaryGenerations.h"
+#include "QueryEngine/TableGenerations.h"
 #include "QueryEngine/TargetMetaInfo.h"
 
 #include <glog/logging.h>
@@ -174,5 +175,7 @@ AggregatedColRange column_ranges_from_thrift(const std::vector<TColumnRange>& th
 
 StringDictionaryGenerations string_dictionary_generations_from_thrift(
     const std::vector<TDictionaryGeneration>& thrift_string_dictionary_generations);
+
+TableGenerations table_generations_from_thrift(const std::vector<TTableGeneration>& table_generations);
 
 #endif  // MAPDSERVER_H

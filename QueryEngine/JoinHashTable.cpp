@@ -481,14 +481,14 @@ void JoinHashTable::putHashTableOnCpuToCache(
   join_hash_table_cache_.emplace_back(cache_key, cpu_hash_table_buff_);
 }
 
-llvm::Value* JoinHashTable::codegenSlot(const bool hoist_literals) noexcept {
+llvm::Value* JoinHashTable::codegenSlot(const CompilationOptions& co) noexcept {
   CHECK(executor_->plan_state_->join_info_.join_impl_type_ == Executor::JoinImplType::HashOneToOne);
   const auto cols = get_cols(qual_bin_oper_, cat_, executor_->temporary_tables_);
   auto key_col = cols.second;
   CHECK(key_col);
   auto val_col = cols.first;
   CHECK(val_col);
-  const auto key_lvs = executor_->codegen(key_col, true, hoist_literals);
+  const auto key_lvs = executor_->codegen(key_col, true, co);
   CHECK_EQ(size_t(1), key_lvs.size());
   CHECK(executor_->plan_state_->join_info_.join_hash_table_);
   auto hash_ptr = get_arg_by_name(executor_->cgen_state_->row_func_, "join_hash_table");

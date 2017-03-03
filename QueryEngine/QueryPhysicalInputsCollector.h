@@ -30,5 +30,6 @@ struct hash<PhysicalInput> {
 }  // std
 
 std::unordered_set<PhysicalInput> get_physical_inputs(const RelAlgNode*);
+std::unordered_set<int> get_physical_table_inputs(const RelAlgNode*);
 
 #endif  // QUERYENGINE_QUERYPHYSICALINPUTSCOLLECTOR_H

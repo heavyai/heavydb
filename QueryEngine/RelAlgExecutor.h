@@ -35,7 +35,8 @@ class RelAlgExecutor {
                                                        RenderInfo* render_info);
 
   void prepareLeafExecution(const AggregatedColRange& agg_col_range,
-                            const StringDictionaryGenerations& string_dictionary_generations);
+                            const StringDictionaryGenerations& string_dictionary_generations,
+                            const TableGenerations& table_generations);
 
   ExecutionResult executeRelAlgSubQuery(const RelAlgNode* subquery_ra,
                                         const CompilationOptions& co,
@@ -56,6 +57,8 @@ class RelAlgExecutor {
   AggregatedColRange computeColRangesCache(const RelAlgNode* ra);
 
   StringDictionaryGenerations computeStringDictionaryGenerations(const RelAlgNode* ra);
+
+  TableGenerations computeTableGenerations(const RelAlgNode* ra);
 
   Executor* getExecutor() const;
 

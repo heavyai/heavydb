@@ -76,6 +76,16 @@ StringDictionaryGenerations string_dictionary_generations_from_thrift(
   return string_dictionary_generations;
 }
 
+TableGenerations table_generations_from_thrift(const std::vector<TTableGeneration>& thrift_table_generations) {
+  TableGenerations table_generations;
+  for (const auto& thrift_table_generation : thrift_table_generations) {
+    table_generations.setGeneration(thrift_table_generation.table_id,
+                                    TableGeneration{static_cast<size_t>(thrift_table_generation.tuple_count),
+                                                    static_cast<size_t>(thrift_table_generation.start_rowid)});
+  }
+  return table_generations;
+}
+
 std::vector<LeafHostInfo> only_db_leaves(const std::vector<LeafHostInfo>& all_leaves) {
   std::vector<LeafHostInfo> data_leaves;
   std::copy_if(all_leaves.begin(), all_leaves.end(), std::back_inserter(data_leaves), [](const LeafHostInfo& leaf) {

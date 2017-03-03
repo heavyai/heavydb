@@ -30,6 +30,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQuery(const std::string& query_ra,
   executor_->catalog_ = &cat_;
   executor_->agg_col_range_cache_ = computeColRangesCache(ra.get());
   executor_->string_dictionary_generations_ = computeStringDictionaryGenerations(ra.get());
+  executor_->table_generations_ = computeTableGenerations(ra.get());
   ScopeGuard restore_metainfo_cache = [this] { executor_->clearMetaInfoCache(); };
   int64_t queue_time_ms = timer_stop(clock_begin);
   auto ed_list = get_execution_descriptors(ra.get());
@@ -102,6 +103,16 @@ StringDictionaryGenerations RelAlgExecutor::computeStringDictionaryGenerations(c
   return string_dictionary_generations;
 }
 
+TableGenerations RelAlgExecutor::computeTableGenerations(const RelAlgNode* ra) {
+  const auto phys_table_ids = get_physical_table_inputs(ra);
+  TableGenerations table_generations;
+  for (const int table_id : phys_table_ids) {
+    const auto table_info = executor_->getTableInfo(table_id);
+    table_generations.setGeneration(table_id, TableGeneration{table_info.numTuples, 0});
+  }
+  return table_generations;
+}
+
 Executor* RelAlgExecutor::getExecutor() const {
   return executor_;
 }
@@ -141,7 +152,8 @@ FirstStepExecutionResult RelAlgExecutor::executeRelAlgQueryFirstStep(const RelAl
 }
 
 void RelAlgExecutor::prepareLeafExecution(const AggregatedColRange& agg_col_range,
-                                          const StringDictionaryGenerations& string_dictionary_generations) {
+                                          const StringDictionaryGenerations& string_dictionary_generations,
+                                          const TableGenerations& table_generations) {
   // capture the lock acquistion time
   auto clock_begin = timer_start();
   leaf_execution_cleanup_.reset(new ScopeGuard([this] {
@@ -155,6 +167,7 @@ void RelAlgExecutor::prepareLeafExecution(const AggregatedColRange& agg_col_rang
   }
   queue_time_ms_ = timer_stop(clock_begin);
   executor_->row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>();
+  executor_->table_generations_ = table_generations;
   executor_->agg_col_range_cache_ = agg_col_range;
   executor_->string_dictionary_generations_ = string_dictionary_generations;
 }
