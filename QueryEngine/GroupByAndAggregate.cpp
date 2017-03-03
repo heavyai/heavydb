@@ -1506,8 +1506,9 @@ GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getExprRangeInfo(const An
         throw WatchdogException("Group by float / double would be slow");
       }
     case ExpressionRangeType::Invalid:
-      return g_cluster ? ColRangeInfo{GroupByColRangeType::MultiCol, 0, 0, 0, false}
-                       : ColRangeInfo{GroupByColRangeType::OneColGuessedRange, 0, guessed_range_max, 0, false};
+      return (g_cluster || g_use_result_set)
+                 ? ColRangeInfo{GroupByColRangeType::MultiCol, 0, 0, 0, false}
+                 : ColRangeInfo{GroupByColRangeType::OneColGuessedRange, 0, guessed_range_max, 0, false};
     default:
       CHECK(false);
   }
