@@ -64,6 +64,11 @@ struct QueryMemoryDescriptor {
   int64_t init_val;
 
   std::vector<int8_t> group_col_widths;
+#ifdef ENABLE_KEY_COMPACTION
+  int8_t group_col_compact_width;  // compact width for all group cols if able to
+                                   // be consistent otherwise 0
+#endif
+
   std::vector<ColWidths> agg_col_widths;
   std::vector<ssize_t> target_groupby_indices;
   size_t entry_count;        // the number of entries in the main buffer
