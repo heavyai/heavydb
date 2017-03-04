@@ -1,8 +1,10 @@
 #include "JoinHashImpl.h"
 #include "MurmurHash.h"
 
-extern "C" ALWAYS_INLINE DEVICE uint32_t key_hash(const int64_t* key, const uint32_t key_qw_count) {
-  return MurmurHash1(key, 8 * key_qw_count, 0);
+extern "C" ALWAYS_INLINE DEVICE uint32_t key_hash(const int64_t* key,
+                                                  const uint32_t key_count,
+                                                  const uint32_t key_byte_width) {
+  return MurmurHash1(key, key_byte_width * key_count, 0);
 }
 
 extern "C" NEVER_INLINE DEVICE int64_t* get_group_value(int64_t* groups_buffer,
@@ -11,7 +13,7 @@ extern "C" NEVER_INLINE DEVICE int64_t* get_group_value(int64_t* groups_buffer,
                                                         const uint32_t key_qw_count,
                                                         const uint32_t row_size_quad,
                                                         const int64_t* init_vals) {
-  uint32_t h = key_hash(key, key_qw_count) % groups_buffer_entry_count;
+  uint32_t h = key_hash(key, key_qw_count, sizeof(int64_t)) % groups_buffer_entry_count;
   int64_t* matching_group = get_matching_group_value(groups_buffer, h, key, key_qw_count, row_size_quad, init_vals);
   if (matching_group) {
     return matching_group;
@@ -35,7 +37,7 @@ extern "C" NEVER_INLINE DEVICE int64_t* get_group_value_with_watchdog(int64_t* g
                                                                       const uint32_t key_qw_count,
                                                                       const uint32_t row_size_quad,
                                                                       const int64_t* init_vals) {
-  uint32_t h = key_hash(key, key_qw_count) % groups_buffer_entry_count;
+  uint32_t h = key_hash(key, key_qw_count, sizeof(int64_t)) % groups_buffer_entry_count;
   int64_t* matching_group = get_matching_group_value(groups_buffer, h, key, key_qw_count, row_size_quad, init_vals);
   if (matching_group) {
     return matching_group;
@@ -62,7 +64,7 @@ extern "C" NEVER_INLINE DEVICE int64_t* get_group_value_columnar(int64_t* groups
                                                                  const uint32_t groups_buffer_entry_count,
                                                                  const int64_t* key,
                                                                  const uint32_t key_qw_count) {
-  uint32_t h = key_hash(key, key_qw_count) % groups_buffer_entry_count;
+  uint32_t h = key_hash(key, key_qw_count, sizeof(int64_t)) % groups_buffer_entry_count;
   int64_t* matching_group =
       get_matching_group_value_columnar(groups_buffer, h, key, key_qw_count, groups_buffer_entry_count);
   if (matching_group) {
@@ -84,7 +86,7 @@ extern "C" NEVER_INLINE DEVICE int64_t* get_group_value_columnar_with_watchdog(i
                                                                                const uint32_t groups_buffer_entry_count,
                                                                                const int64_t* key,
                                                                                const uint32_t key_qw_count) {
-  uint32_t h = key_hash(key, key_qw_count) % groups_buffer_entry_count;
+  uint32_t h = key_hash(key, key_qw_count, sizeof(int64_t)) % groups_buffer_entry_count;
   int64_t* matching_group =
       get_matching_group_value_columnar(groups_buffer, h, key, key_qw_count, groups_buffer_entry_count);
   if (matching_group) {

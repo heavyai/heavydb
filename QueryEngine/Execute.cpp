@@ -7389,31 +7389,36 @@ llvm::Value* Executor::castToFP(llvm::Value* val) {
   return cgen_state_->ir_builder_.CreateSIToFP(val, dest_ty);
 }
 
-llvm::Value* Executor::castToTypeIn(llvm::Value* val, const size_t bit_width) {
+llvm::Value* Executor::castToTypeIn(llvm::Value* val, const size_t dst_bits) {
+  auto src_bits = val->getType()->getScalarSizeInBits();
+  if (src_bits == dst_bits) {
+    return val;
+  }
   if (val->getType()->isIntegerTy()) {
-    auto val_width = static_cast<llvm::IntegerType*>(val->getType())->getBitWidth();
-    if (val_width == bit_width) {
-      return val;
-    }
-
-    CHECK_LT(val_width, bit_width);
-    const auto cast_op = val_width == 1 ? llvm::Instruction::CastOps::ZExt : llvm::Instruction::CastOps::SExt;
-    return val_width < bit_width
-               ? cgen_state_->ir_builder_.CreateCast(cast_op, val, get_int_type(bit_width, cgen_state_->context_))
-               : val;
+    return cgen_state_->ir_builder_.CreateIntCast(val, get_int_type(dst_bits, cgen_state_->context_), src_bits != 1);
   }
   // real (not dictionary-encoded) strings; store the pointer to the payload
   if (val->getType()->isPointerTy()) {
     const auto val_ptr_type = static_cast<llvm::PointerType*>(val->getType());
     CHECK(val_ptr_type->getElementType()->isIntegerTy(8));
-    return cgen_state_->ir_builder_.CreatePointerCast(val, get_int_type(bit_width, cgen_state_->context_));
+    return cgen_state_->ir_builder_.CreatePointerCast(val, get_int_type(dst_bits, cgen_state_->context_));
   }
 
   CHECK(val->getType()->isFloatTy() || val->getType()->isDoubleTy());
 
-  return val->getType()->isFloatTy() && bit_width == 64
-             ? cgen_state_->ir_builder_.CreateFPExt(val, llvm::Type::getDoubleTy(cgen_state_->context_))
-             : val;
+  llvm::Type* dst_type = nullptr;
+  switch (dst_bits) {
+    case 64:
+      dst_type = llvm::Type::getDoubleTy(cgen_state_->context_);
+      break;
+    case 32:
+      dst_type = llvm::Type::getFloatTy(cgen_state_->context_);
+      break;
+    default:
+      CHECK(false);
+  }
+
+  return cgen_state_->ir_builder_.CreateFPCast(val, dst_type);
 }
 
 llvm::Value* Executor::castToIntPtrTyIn(llvm::Value* val, const size_t bitWidth) {
@@ -7435,12 +7440,18 @@ llvm::Value* Executor::castToIntPtrTyIn(llvm::Value* val, const size_t bitWidth)
 #undef EXECUTE_INCLUDE
 
 Executor::GroupColLLVMValue Executor::groupByColumnCodegen(Analyzer::Expr* group_by_col,
+                                                           const size_t col_width,
                                                            const CompilationOptions& co,
                                                            const bool translate_null_val,
                                                            const int64_t translated_null_val,
                                                            GroupByAndAggregate::DiamondCodegen& diamond_codegen,
                                                            std::stack<llvm::BasicBlock*>& array_loops,
                                                            const bool thread_mem_shared) {
+#ifdef ENABLE_KEY_COMPACTION
+  CHECK_GE(col_width, sizeof(int32_t));
+#else
+  CHECK_EQ(col_width, sizeof(int64_t));
+#endif
   auto group_key = codegen(group_by_col, true, co).front();
   auto key_to_cache = group_key;
   if (dynamic_cast<Analyzer::UOper*>(group_by_col) &&
@@ -7487,20 +7498,22 @@ Executor::GroupColLLVMValue Executor::groupByColumnCodegen(Analyzer::Expr* group
   cgen_state_->group_by_expr_cache_.push_back(key_to_cache);
   llvm::Value* orig_group_key{nullptr};
   if (translate_null_val) {
+    const std::string translator_func_name(col_width == sizeof(int32_t) ? "translate_null_key_i32_"
+                                                                        : "translate_null_key_");
     const auto& ti = group_by_col->get_type_info();
     const auto key_type = get_int_type(ti.get_logical_size() * 8, cgen_state_->context_);
     orig_group_key = group_key;
     group_key =
-        cgen_state_->emitCall("translate_null_key_" + numeric_type_name(ti),
+        cgen_state_->emitCall(translator_func_name + numeric_type_name(ti),
                               {group_key,
                                static_cast<llvm::Value*>(llvm::ConstantInt::get(key_type, inline_int_null_val(ti))),
                                static_cast<llvm::Value*>(llvm::ConstantInt::get(key_type, translated_null_val))});
   }
-  group_key =
-      cgen_state_->ir_builder_.CreateBitCast(castToTypeIn(group_key, 64), get_int_type(64, cgen_state_->context_));
+  group_key = cgen_state_->ir_builder_.CreateBitCast(castToTypeIn(group_key, col_width * 8),
+                                                     get_int_type(col_width * 8, cgen_state_->context_));
   if (orig_group_key) {
-    orig_group_key = cgen_state_->ir_builder_.CreateBitCast(castToTypeIn(orig_group_key, 64),
-                                                            get_int_type(64, cgen_state_->context_));
+    orig_group_key = cgen_state_->ir_builder_.CreateBitCast(castToTypeIn(orig_group_key, col_width * 8),
+                                                            get_int_type(col_width * 8, cgen_state_->context_));
   }
   return {group_key, orig_group_key};
 }

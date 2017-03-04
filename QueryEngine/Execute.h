@@ -897,6 +897,7 @@ class Executor {
   };
 
   GroupColLLVMValue groupByColumnCodegen(Analyzer::Expr* group_by_col,
+                                         const size_t col_width,
                                          const CompilationOptions&,
                                          const bool translate_null_val,
                                          const int64_t translated_null_val,

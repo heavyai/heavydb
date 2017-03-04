@@ -322,7 +322,7 @@ GroupValueInfo get_group_value_columnar_reduction(int64_t* groups_buffer,
                                                   const uint32_t groups_buffer_entry_count,
                                                   const int64_t* key,
                                                   const uint32_t key_qw_count) {
-  uint32_t h = key_hash(key, key_qw_count) % groups_buffer_entry_count;
+  uint32_t h = key_hash(key, key_qw_count, sizeof(int64_t)) % groups_buffer_entry_count;
   auto matching_gvi =
       get_matching_group_value_columnar_reduction(groups_buffer, h, key, key_qw_count, groups_buffer_entry_count);
   if (matching_gvi.first) {
@@ -393,7 +393,7 @@ GroupValueInfo get_group_value_reduction(int64_t* groups_buffer,
                                          const size_t that_entry_idx,
                                          const size_t that_entry_count,
                                          const uint32_t row_size_quad) {
-  uint32_t h = key_hash(key, key_qw_count) % groups_buffer_entry_count;
+  uint32_t h = key_hash(key, key_qw_count, sizeof(int64_t)) % groups_buffer_entry_count;
   auto matching_gvi = get_matching_group_value_reduction(groups_buffer,
                                                          h,
                                                          key,

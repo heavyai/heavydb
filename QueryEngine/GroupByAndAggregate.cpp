@@ -1204,7 +1204,8 @@ size_t QueryMemoryDescriptor::getRowSize() const {
   if (keyless_hash) {
     CHECK_EQ(size_t(1), group_col_widths.size());
   } else {
-    total_bytes += group_col_widths.size() * sizeof(int64_t);
+    total_bytes += group_col_widths.size() * getEffectiveKeyWidth();
+    total_bytes = align_to_int64(total_bytes);
   }
   total_bytes += getColsSize();
   return align_to_int64(total_bytes);
@@ -1275,7 +1276,7 @@ size_t QueryMemoryDescriptor::getKeyOffInBytes(const size_t bin, const size_t ke
   CHECK_LT(key_idx, group_col_widths.size());
   auto offset = bin * getRowSize();
   CHECK_EQ(size_t(0), offset % sizeof(int64_t));
-  offset += key_idx * sizeof(int64_t);
+  offset += key_idx * getEffectiveKeyWidth();
   return offset;
 }
 
@@ -1285,7 +1286,7 @@ size_t QueryMemoryDescriptor::getNextKeyOffInBytes(const size_t crt_idx) const {
   if (output_columnar) {
     CHECK_EQ(size_t(0), crt_idx);
   }
-  return sizeof(int64_t);
+  return getEffectiveKeyWidth();
 }
 
 size_t QueryMemoryDescriptor::getColOnlyOffInBytes(const size_t col_idx) const {
@@ -1332,7 +1333,8 @@ size_t QueryMemoryDescriptor::getColOffInBytes(const size_t bin, const size_t co
   if (keyless_hash) {
     CHECK_EQ(size_t(1), group_col_widths.size());
   } else {
-    offset += group_col_widths.size() * sizeof(int64_t);
+    offset += group_col_widths.size() * getEffectiveKeyWidth();
+    offset = align_to_int64(offset);
   }
   offset += getColOnlyOffInBytes(col_idx);
   return offset;
@@ -2593,6 +2595,7 @@ std::tuple<llvm::Value*, llvm::Value*> GroupByAndAggregate::codegenGroupBy(const
       const auto group_expr = ra_exe_unit_.groupby_exprs.front();
       const auto group_expr_lvs = executor_->groupByColumnCodegen(
           group_expr.get(),
+          sizeof(int64_t),
           co,
           query_mem_desc_.has_nulls,
           query_mem_desc_.max_val + (query_mem_desc_.bucket ? query_mem_desc_.bucket : 1),
@@ -2662,13 +2665,23 @@ std::tuple<llvm::Value*, llvm::Value*> GroupByAndAggregate::codegenGroupBy(const
     case GroupByColRangeType::MultiCol:
     case GroupByColRangeType::MultiColPerfectHash: {
       auto key_size_lv = LL_INT(static_cast<int32_t>(query_mem_desc_.group_col_widths.size()));
-      // create the key buffer
-      auto group_key = LL_BUILDER.CreateAlloca(llvm::Type::getInt64Ty(LL_CONTEXT), key_size_lv);
+// create the key buffer
+#ifdef ENABLE_KEY_COMPACTION
+      const auto key_width = query_mem_desc_.getEffectiveKeyWidth();
+      llvm::Value* group_key =
+          query_mem_desc_.hash_type == GroupByColRangeType::MultiCol && key_width == sizeof(int32_t)
+              ? LL_BUILDER.CreateAlloca(llvm::Type::getInt32Ty(LL_CONTEXT), key_size_lv)
+              : LL_BUILDER.CreateAlloca(llvm::Type::getInt64Ty(LL_CONTEXT), key_size_lv);
+#else
+      const auto key_width = sizeof(int64_t);
+      llvm::Value* group_key = LL_BUILDER.CreateAlloca(llvm::Type::getInt64Ty(LL_CONTEXT), key_size_lv);
+#endif
       int32_t subkey_idx = 0;
       for (const auto group_expr : ra_exe_unit_.groupby_exprs) {
         auto col_range_info = getExprRangeInfo(group_expr.get());
         const auto group_expr_lvs = executor_->groupByColumnCodegen(
             group_expr.get(),
+            key_width,
             co,
             col_range_info.has_nulls && query_mem_desc_.hash_type != GroupByColRangeType::MultiCol,
             col_range_info.max + (col_range_info.bucket ? col_range_info.bucket : 1),
@@ -2691,6 +2704,12 @@ std::tuple<llvm::Value*, llvm::Value*> GroupByAndAggregate::codegenGroupBy(const
                                         {&*groups_buffer, hash_lv, group_key, key_size_lv, LL_INT(row_size_quad)}),
                                nullptr);
       }
+#ifdef ENABLE_KEY_COMPACTION
+      if (group_key->getType() != llvm::Type::getInt64PtrTy(LL_CONTEXT)) {
+        CHECK(query_mem_desc_.hash_type == GroupByColRangeType::MultiCol && key_width == sizeof(int32_t));
+        group_key = LL_BUILDER.CreatePointerCast(group_key, llvm::Type::getInt64PtrTy(LL_CONTEXT));
+      }
+#endif
       return std::make_tuple(emitCall(co.with_dynamic_watchdog_ ? "get_group_value_with_watchdog" : "get_group_value",
                                       {&*groups_buffer,
                                        LL_INT(static_cast<int32_t>(query_mem_desc_.entry_count)),
@@ -3114,8 +3133,8 @@ void GroupByAndAggregate::codegenEstimator(std::stack<llvm::BasicBlock*>& array_
   auto estimator_key_lv = LL_BUILDER.CreateAlloca(llvm::Type::getInt64Ty(LL_CONTEXT), estimator_comp_count_lv);
   int32_t subkey_idx = 0;
   for (const auto estimator_arg_comp : estimator_arg) {
-    const auto estimator_arg_comp_lvs =
-        executor_->groupByColumnCodegen(estimator_arg_comp.get(), co, false, 0, diamond_codegen, array_loops, true);
+    const auto estimator_arg_comp_lvs = executor_->groupByColumnCodegen(
+        estimator_arg_comp.get(), sizeof(int64_t), co, false, 0, diamond_codegen, array_loops, true);
     CHECK(!estimator_arg_comp_lvs.original_value);
     const auto estimator_arg_comp_lv = estimator_arg_comp_lvs.translated_value;
     // store the sub-key to the buffer

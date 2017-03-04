@@ -140,6 +140,14 @@ struct QueryMemoryDescriptor {
   bool isCompactLayoutIsometric() const;
   size_t getConsistColOffInBytes(const size_t bin, const size_t col_idx) const;
 
+  inline size_t getEffectiveKeyWidth() const {
+#ifdef ENABLE_KEY_COMPACTION
+    return group_col_compact_width ? group_col_compact_width : sizeof(int64_t);
+#else
+    return sizeof(int64_t);
+#endif
+  }
+
  private:
   size_t getTotalBytesOfColumnarBuffers(const std::vector<ColWidths>& col_widths) const;
 };
