@@ -319,6 +319,19 @@ std::string generate_random_string(const size_t len) {
   return str;
 }
 
+// internal connection for connections with no password
+void MapDHandler::internal_connect(TSessionId& session, const std::string& user, const std::string& dbname) {
+  mapd_lock_guard<mapd_shared_mutex> write_lock(sessions_mutex_);
+  Catalog_Namespace::UserMetadata user_meta;
+  if (!sys_cat_->getMetadataForUser(user, user_meta)) {
+    TMapDException ex;
+    ex.error_msg = std::string("User ") + user + " does not exist.";
+    LOG(ERROR) << ex.error_msg;
+    throw ex;
+  }
+  connectImpl(session, user, std::string(""), dbname, user_meta);
+}
+
 void MapDHandler::connect(TSessionId& session,
                           const std::string& user,
                           const std::string& passwd,
@@ -339,6 +352,14 @@ void MapDHandler::connect(TSessionId& session,
       throw ex;
     }
   }
+  connectImpl(session, user, passwd, dbname, user_meta);
+}
+
+void MapDHandler::connectImpl(TSessionId& session,
+                              const std::string& user,
+                              const std::string& passwd,
+                              const std::string& dbname,
+                              Catalog_Namespace::UserMetadata& user_meta) {
   Catalog_Namespace::DBMetadata db_meta;
   if (!sys_cat_->getMetadataForDB(dbname, db_meta)) {
     TMapDException ex;

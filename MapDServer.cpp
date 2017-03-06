@@ -1,6 +1,5 @@
 #include "MapDServer.h"
 #include "ThriftHandler/MapDHandler.h"
-#include "ThriftHandler/HAHandler.h"
 
 #include <thrift/concurrency/ThreadManager.h>
 #include <thrift/concurrency/PlatformThreadFactory.h>
@@ -139,52 +138,63 @@ void releaseWarmupSession(TSessionId& sessionId, std::ifstream& query_file) {
   }
 }
 
-void run_warmup_queries(std::string base_path, std::string query_file_path) {
-  std::string db_info;
-  std::string user_keyword, user_name, db_name;
-  std::ifstream query_file;
-  Catalog_Namespace::UserMetadata user;
-  Catalog_Namespace::DBMetadata db;
-  TSessionId sessionId = warmup_handler->getInvalidSessionId();
+void run_warmup_queries(boost::shared_ptr<MapDHandler> handler, std::string base_path, std::string query_file_path) {
+  // run warmup queries to load cache if requested
+  if (query_file_path.empty()) {
+    return;
+  }
+  LOG(INFO) << "Running DB warmup with queries from " << query_file_path;
+  try {
+    warmup_handler = handler;
+    std::string db_info;
+    std::string user_keyword, user_name, db_name;
+    std::ifstream query_file;
+    Catalog_Namespace::UserMetadata user;
+    Catalog_Namespace::DBMetadata db;
+    TSessionId sessionId = warmup_handler->getInvalidSessionId();
 
-  ScopeGuard session_guard = [&] { releaseWarmupSession(sessionId, query_file); };
-  query_file.open(query_file_path);
-  while (std::getline(query_file, db_info)) {
-    if (db_info.length() == 0) {
-      continue;
-    }
-    std::istringstream iss(db_info);
-    iss >> user_keyword >> user_name >> db_name;
-    if (user_keyword.compare(0, 4, "USER") == 0) {
-      // connect to DB for given user_name/db_name with super_user_rights (without password), & start session
-      warmup_handler->super_user_rights_ = true;
-      warmup_handler->connect(sessionId, user_name, "", db_name);
-      warmup_handler->super_user_rights_ = false;
-
-      // read and run one query at a time for the DB with the setup connection
-      TQueryResult ret;
-      std::string single_query;
-      while (std::getline(query_file, single_query)) {
-        if (single_query.length() == 0) {
-          continue;
-        }
-        if (single_query.compare("}") == 0) {
-          single_query.clear();
-          break;
-        }
-        warmup_handler->sql_execute(ret, sessionId, single_query, true, "", -1);
-        single_query.clear();
+    ScopeGuard session_guard = [&] { releaseWarmupSession(sessionId, query_file); };
+    query_file.open(query_file_path);
+    while (std::getline(query_file, db_info)) {
+      if (db_info.length() == 0) {
+        continue;
       }
+      std::istringstream iss(db_info);
+      iss >> user_keyword >> user_name >> db_name;
+      if (user_keyword.compare(0, 4, "USER") == 0) {
+        // connect to DB for given user_name/db_name with super_user_rights (without password), & start session
+        warmup_handler->super_user_rights_ = true;
+        warmup_handler->connect(sessionId, user_name, "", db_name);
+        warmup_handler->super_user_rights_ = false;
 
-      // stop session and disconnect from the DB
-      warmup_handler->disconnect(sessionId);
-      sessionId = warmup_handler->getInvalidSessionId();
-    } else {
-      LOG(WARNING) << "\nSyntax error in the file: " << query_file_path.c_str()
-                   << " Missing expected keyword USER. Following line will be ignored: " << db_info.c_str()
-                   << std::endl;
+        // read and run one query at a time for the DB with the setup connection
+        TQueryResult ret;
+        std::string single_query;
+        while (std::getline(query_file, single_query)) {
+          if (single_query.length() == 0) {
+            continue;
+          }
+          if (single_query.compare("}") == 0) {
+            single_query.clear();
+            break;
+          }
+          warmup_handler->sql_execute(ret, sessionId, single_query, true, "", -1);
+          single_query.clear();
+        }
+
+        // stop session and disconnect from the DB
+        warmup_handler->disconnect(sessionId);
+        sessionId = warmup_handler->getInvalidSessionId();
+      } else {
+        LOG(WARNING) << "\nSyntax error in the file: " << query_file_path.c_str()
+                     << " Missing expected keyword USER. Following line will be ignored: " << db_info.c_str()
+                     << std::endl;
+      }
+      db_info.clear();
     }
-    db_info.clear();
+  } catch (...) {
+    LOG(WARNING) << "Exception while executing warmup queries. "
+                 << "Warmup may not be fully completed. Will proceed nevertheless." << std::endl;
   }
 }
 
@@ -308,16 +318,17 @@ int main(int argc, char** argv) {
       "Max memory available to calcite JVM");
   desc_adv.add_options()(
       "db-convert", po::value<std::string>(&db_convert_dir), "Directory path to mapd DB to convert from");
-  desc_adv.add_options()("ha-port",
-                         po::value<size_t>(&mapd_parameters.ha_port)->default_value(mapd_parameters.ha_port),
-                         "Port number for High Availability binary requests");
-  desc_adv.add_options()("ha-http-port",
-                         po::value<size_t>(&mapd_parameters.ha_http_port)->default_value(mapd_parameters.ha_http_port),
-                         "Port number for High Availability HTTP requests");
   desc_adv.add_options()(
-      "enable-ha",
-      po::value<bool>(&mapd_parameters.enable_ha)->default_value(mapd_parameters.enable_ha)->implicit_value(false),
-      "Enable server in HA Mode");
+      "ha-group-id", po::value<std::string>(&mapd_parameters.ha_group_id), "Id of the HA group this server is in");
+  desc_adv.add_options()("ha-unique-server-id",
+                         po::value<std::string>(&mapd_parameters.ha_unique_server_id),
+                         "Unique id to identify this server in the HA group");
+  desc_adv.add_options()(
+      "ha-brokers", po::value<std::string>(&mapd_parameters.ha_brokers), "Location of the HA brokers");
+  desc.add_options()("ha-shared-data",
+                     po::value<std::string>(&mapd_parameters.ha_shared_data),
+                     "Directory path to shared MapD directory");
+
   desc_adv.add_options()("use-result-set",
                          po::value<bool>(&g_use_result_set)->default_value(g_use_result_set)->implicit_value(true),
                          "Use the new result set");
@@ -357,7 +368,11 @@ int main(int argc, char** argv) {
       boost::algorithm::trim_if(cluster_file, boost::is_any_of("\"'"));
       const auto all_nodes = LeafHostInfo::parseClusterConfig(cluster_file);
       if (vm.count("cluster")) {
+        LOG(INFO) << "Cluster file specified running as aggreator with config " << cluster_file;
         db_leaves = only_db_leaves(all_nodes);
+      }
+      if (vm.count("string-servers")) {
+        LOG(INFO) << "String servers file specified running as dbleaf with config " << cluster_file;
       }
       string_leaves = only_string_leaves(all_nodes);
       g_cluster = true;
@@ -467,7 +482,27 @@ int main(int argc, char** argv) {
 
   // add all parameters to be displayed on startup
   LOG(INFO) << " Watchdog is set to " << enable_watchdog;
-  LOG(INFO) << " HA is set to " << mapd_parameters.enable_ha;
+  if (!mapd_parameters.ha_group_id.empty()) {
+    LOG(INFO) << " HA group id " << mapd_parameters.ha_group_id;
+    if (mapd_parameters.ha_unique_server_id.empty()) {
+      std::cerr << "Starting server in HA mode --ha-unique-server-id must be set " << std::endl;
+      return 5;
+    } else {
+      LOG(INFO) << " HA unique server id " << mapd_parameters.ha_unique_server_id;
+    }
+    if (mapd_parameters.ha_brokers.empty()) {
+      std::cerr << "Starting server in HA mode --ha-brokers must be set " << std::endl;
+      return 6;
+    } else {
+      LOG(INFO) << " HA brokers " << mapd_parameters.ha_brokers;
+    }
+    if (mapd_parameters.ha_shared_data.empty()) {
+      std::cerr << "Starting server in HA mode --ha-shared-data must be set " << std::endl;
+      return 7;
+    } else {
+      LOG(INFO) << " HA shared data is " << mapd_parameters.ha_unique_server_id;
+    }
+  }
   LOG(INFO) << " cuda block size " << mapd_parameters.cuda_block_size;
   LOG(INFO) << " cuda grid size  " << mapd_parameters.cuda_grid_size;
   LOG(INFO) << " calcite JVM max memory  " << mapd_parameters.calcite_max_mem;
@@ -498,70 +533,34 @@ int main(int argc, char** argv) {
                                                   calcite_port,
                                                   enable_legacy_syntax));
 
-  shared_ptr<TProcessor> processor(new MapDProcessor(handler));
+  if (mapd_parameters.ha_group_id.empty()) {
+    shared_ptr<TProcessor> processor(new MapDProcessor(handler));
 
-  shared_ptr<ThreadManager> threadManager = ThreadManager::newSimpleThreadManager(tthreadpool_size);
-  threadManager->threadFactory(make_shared<PlatformThreadFactory>());
-  threadManager->start();
-  shared_ptr<TServerTransport> bufServerTransport(new TServerSocket(port));
+    shared_ptr<ThreadManager> threadManager = ThreadManager::newSimpleThreadManager(tthreadpool_size);
+    threadManager->threadFactory(make_shared<PlatformThreadFactory>());
+    threadManager->start();
+    shared_ptr<TServerTransport> bufServerTransport(new TServerSocket(port));
 
-  // run warmup queries to load cache if requested
-  if (db_query_file.length() > 0) {
-    try {
-      warmup_handler = handler;
-      run_warmup_queries(base_path, db_query_file);
-    } catch (...) {
-      LOG(WARNING) << "Exception while executing warmup queries. "
-                   << "Warmup may not be fully completed. Will proceed nevertheless." << std::endl;
-    }
-    warmup_handler = 0;
+    shared_ptr<TTransportFactory> bufTransportFactory(new TBufferedTransportFactory());
+    shared_ptr<TProtocolFactory> bufProtocolFactory(new TBinaryProtocolFactory());
+    TThreadPoolServer bufServer(processor, bufServerTransport, bufTransportFactory, bufProtocolFactory, threadManager);
+
+    shared_ptr<TServerTransport> httpServerTransport(new TServerSocket(http_port));
+    shared_ptr<TTransportFactory> httpTransportFactory(new THttpServerTransportFactory());
+    shared_ptr<TProtocolFactory> httpProtocolFactory(new TJSONProtocolFactory());
+    TThreadPoolServer httpServer(
+        processor, httpServerTransport, httpTransportFactory, httpProtocolFactory, threadManager);
+
+    std::thread bufThread(start_server, std::ref(bufServer));
+    std::thread httpThread(start_server, std::ref(httpServer));
+
+    // run warm up queries if any exists
+    run_warmup_queries(handler, base_path, db_query_file);
+
+    bufThread.join();
+    httpThread.join();
+  } else {  // running ha server
+    LOG(FATAL) << "No High Availabilty module avilable, please contact MapD support";
   }
-
-  shared_ptr<TTransportFactory> bufTransportFactory(new TBufferedTransportFactory());
-  shared_ptr<TProtocolFactory> bufProtocolFactory(new TBinaryProtocolFactory());
-  TThreadPoolServer bufServer(processor, bufServerTransport, bufTransportFactory, bufProtocolFactory, threadManager);
-
-  shared_ptr<TServerTransport> httpServerTransport(new TServerSocket(http_port));
-  shared_ptr<TTransportFactory> httpTransportFactory(new THttpServerTransportFactory());
-  shared_ptr<TProtocolFactory> httpProtocolFactory(new TJSONProtocolFactory());
-  TThreadPoolServer httpServer(
-      processor, httpServerTransport, httpTransportFactory, httpProtocolFactory, threadManager);
-
-  std::thread bufThread(start_server, std::ref(bufServer));
-  std::thread httpThread(start_server, std::ref(httpServer));
-
-  if (mapd_parameters.enable_ha) {
-    // Now start the HA server if required
-    shared_ptr<HAHandler> ha_handler(new HAHandler(mapd_parameters, handler));
-
-    shared_ptr<TProcessor> ha_processor(new MapDProcessor(ha_handler));
-
-    shared_ptr<ThreadManager> ha_threadManager = ThreadManager::newSimpleThreadManager(tthreadpool_size);
-    ha_threadManager->threadFactory(make_shared<PlatformThreadFactory>());
-    ha_threadManager->start();
-
-    shared_ptr<TServerTransport> ha_bufServerTransport(new TServerSocket(mapd_parameters.ha_port));
-    shared_ptr<TTransportFactory> ha_bufTransportFactory(new TBufferedTransportFactory());
-    shared_ptr<TProtocolFactory> ha_bufProtocolFactory(new TBinaryProtocolFactory());
-    TThreadPoolServer ha_bufServer(
-        ha_processor, ha_bufServerTransport, ha_bufTransportFactory, ha_bufProtocolFactory, ha_threadManager);
-
-    shared_ptr<TServerTransport> ha_httpServerTransport(new TServerSocket(mapd_parameters.ha_http_port));
-    shared_ptr<TTransportFactory> ha_httpTransportFactory(new THttpServerTransportFactory());
-    shared_ptr<TProtocolFactory> ha_httpProtocolFactory(new TJSONProtocolFactory());
-    TThreadPoolServer ha_httpServer(
-        ha_processor, ha_httpServerTransport, ha_httpTransportFactory, ha_httpProtocolFactory, ha_threadManager);
-
-    std::thread ha_bufThread(start_server, std::ref(ha_bufServer));
-    std::thread ha_httpThread(start_server, std::ref(ha_httpServer));
-
-    // join all for shutdown
-    ha_bufThread.join();
-    ha_httpThread.join();
-  }
-
-  bufThread.join();
-  httpThread.join();
-
   return 0;
 }

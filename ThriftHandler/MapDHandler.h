@@ -114,6 +114,12 @@ class MapDHandler : public MapDIf {
   ~MapDHandler();
 
   void connect(TSessionId& session, const std::string& user, const std::string& passwd, const std::string& dbname);
+  void internal_connect(TSessionId& session, const std::string& user, const std::string& dbname);
+  void connectImpl(TSessionId& session,
+                   const std::string& user,
+                   const std::string& passwd,
+                   const std::string& dbname,
+                   Catalog_Namespace::UserMetadata& user_meta);
   void disconnect(const TSessionId& session);
   void interrupt(const TSessionId& session);
   void get_server_status(TServerStatus& _return, const TSessionId& session);
@@ -251,13 +257,13 @@ class MapDHandler : public MapDIf {
   std::shared_ptr<Calcite> calcite_;
   const bool legacy_syntax_;
 #endif  // HAVE_CALCITE
+  Catalog_Namespace::SessionInfo get_session(const TSessionId& session);
 
  private:
   void check_read_only(const std::string& str);
   SessionMap::iterator get_session_it(const TSessionId& session);
   static void value_to_thrift_column(const TargetValue& tv, const SQLTypeInfo& ti, TColumn& column);
   static TDatum value_to_thrift(const TargetValue& tv, const SQLTypeInfo& ti);
-  Catalog_Namespace::SessionInfo get_session(const TSessionId& session);
   std::string parse_to_ra(const std::string& query_str, const Catalog_Namespace::SessionInfo& session_info);
 
   void sql_execute_impl(TQueryResult& _return,
@@ -352,7 +358,9 @@ class MapDHandler : public MapDIf {
                                           const std::string& action /* render or validate */);
 
   bool super_user_rights_;  // default is "false"; setting to "true" ignores passwd checks in "connect(..)" method
-  friend void run_warmup_queries(std::string base_path, std::string query_file_path);
+  friend void run_warmup_queries(boost::shared_ptr<MapDHandler> handler,
+                                 std::string base_path,
+                                 std::string query_file_path);
 };
 
 #endif /* MAPDHANDLER_H */

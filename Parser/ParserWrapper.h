@@ -10,6 +10,7 @@
 
 #include <string>
 #include <vector>
+#include <boost/regex.hpp>
 
 class ParserWrapper {
  public:
@@ -26,6 +27,7 @@ class ParserWrapper {
   bool is_ddl = false;
   bool is_update_dml = false;
   bool is_copy = false;
+  bool is_copy_to = false;
   std::string actual_query;
 
  private:
