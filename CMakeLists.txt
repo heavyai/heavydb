@@ -1,5 +1,10 @@
 cmake_minimum_required(VERSION 2.8)
 
+find_program(CCACHE_EXE ccache)
+if(CCACHE_EXE)
+  set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "${CCACHE_EXE}")
+endif()
+
 project(mapd)
 
 set(MAPD_VERSION_MAJOR "2")
