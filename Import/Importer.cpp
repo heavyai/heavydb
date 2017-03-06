@@ -1059,7 +1059,7 @@ ImportStatus Importer::importDelimited() {
         }
       }
       if (!load_failed)
-        loader.checkpoint();
+        loader.checkpoint(loader.get_catalog().get_currentDB().dbId, loader.get_table_desc()->tableId);
     }
   });
   if (debug_timing)
@@ -1167,7 +1167,7 @@ ImportStatus Importer::importShapefile() {
 
   try {
     loader.load(import_buffers_vec, polys.size());
-    loader.checkpoint();
+    loader.checkpoint(loader.get_catalog().get_currentDB().dbId, loader.get_table_desc()->tableId);
     return import_status;
   } catch (const std::exception& e) {
     LOG(WARNING) << e.what();
@@ -1757,7 +1757,7 @@ ImportStatus Importer::importGDAL(std::map<std::string, std::string> colname_to_
 
   try {
     loader.load(import_buffers_vec, polys.size());
-    loader.checkpoint();
+    loader.checkpoint(loader.get_catalog().get_currentDB().dbId, loader.get_table_desc()->tableId);
     return import_status;
   } catch (const std::exception& e) {
     LOG(WARNING) << e.what();

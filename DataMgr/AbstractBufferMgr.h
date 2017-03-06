@@ -69,6 +69,7 @@ class AbstractBufferMgr {
   virtual bool isAllocationCapped() = 0;
 
   virtual void checkpoint() = 0;
+  virtual void checkpoint(const int db_id, const int tb_id) = 0;
 
   // Buffer API
   virtual AbstractBuffer* alloc(const size_t numBytes = 0) = 0;

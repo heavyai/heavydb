@@ -99,6 +99,7 @@ class BufferMgr : public AbstractBufferMgr {  // implements
   virtual void fetchBuffer(const ChunkKey& key, AbstractBuffer* destBuffer, const size_t numBytes = 0);
   virtual AbstractBuffer* putBuffer(const ChunkKey& key, AbstractBuffer* d, const size_t numBytes = 0);
   void checkpoint();
+  void checkpoint(const int db_id, const int tb_id);
 
   // Buffer API
   virtual AbstractBuffer* alloc(const size_t numBytes = 0);

@@ -5904,7 +5904,7 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
   insert_data.numRows = 1;
   const auto table_descriptor = cat.getMetadataForTable(table_id);
   table_descriptor->fragmenter->insertData(insert_data);
-  cat.get_dataMgr().checkpoint();
+  cat.get_dataMgr().checkpoint(cat.get_currentDB().dbId, table_id);
   for (const auto kv : col_buffers) {
     free(kv.second);
   }

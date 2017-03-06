@@ -156,6 +156,9 @@ class FileMgr : public AbstractBufferMgr {  // implements
    */
 
   void checkpoint();
+  void checkpoint(const int db_id, const int tb_id) {
+    LOG(FATAL) << "Operation not supported, api checkpoint() should be used instead";
+  }
   /**
    * @brief Returns current value of epoch - should be
    * one greater than recorded at last checkpoint

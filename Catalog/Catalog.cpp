@@ -165,7 +165,8 @@ void SysCatalog::dropDatabase(const int32_t dbid, const std::string& name) {
   calciteMgr_->updateMetadata(name, "");
 #endif  // HAVE_CALCITE
   dataMgr_->deleteChunksWithPrefix(chunkKeyPrefix);
-  dataMgr_->checkpoint();
+  /* don't need to checkpoint as database is being dropped */
+  // dataMgr_->checkpoint(); 
 }
 
 bool SysCatalog::checkPasswordForUser(const std::string& passwd, UserMetadata& user) {
@@ -939,7 +940,8 @@ void Catalog::dropTable(const TableDescriptor* td) {
     ChunkKey chunkKeyPrefix = {currentDB_.dbId, td->tableId};
     // assuming deleteChunksWithPrefix is atomic
     dataMgr_->deleteChunksWithPrefix(chunkKeyPrefix);
-    dataMgr_->checkpoint();
+    /* checkpoint table for now, may revise this code when cleaning dir at drop_table */
+    dataMgr_->checkpoint(currentDB_.dbId, td->tableId);
   } catch (std::exception& e) {
     sqliteConnector_.query("ROLLBACK TRANSACTION");
     throw;

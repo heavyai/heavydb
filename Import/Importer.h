@@ -415,7 +415,9 @@ class Loader {
     return dict_map.at(cd->columnId);
   }
   bool load(const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers, size_t row_count);
-  void checkpoint() { catalog.get_dataMgr().checkpoint(); }
+  void checkpoint(const int db_id, const int tb_id) {
+    catalog.get_dataMgr().checkpoint(db_id, tb_id);
+  }
 
  private:
   const Catalog_Namespace::Catalog& catalog;

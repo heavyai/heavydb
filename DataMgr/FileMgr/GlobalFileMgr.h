@@ -107,6 +107,7 @@ class GlobalFileMgr : public AbstractBufferMgr {  // implements
    * fsyncs that
    */
   void checkpoint();
+  void checkpoint(const int db_id, const int tb_id);
 
   /**
    * @brief Returns number of threads defined by parameter num-reader-threads

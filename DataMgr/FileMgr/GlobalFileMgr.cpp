@@ -63,6 +63,10 @@ void GlobalFileMgr::checkpoint() {
   }
 }
 
+void GlobalFileMgr::checkpoint(const int db_id, const int tb_id) {
+  getFileMgr(db_id, tb_id)->checkpoint();
+}
+
 size_t GlobalFileMgr::getNumChunks() {
   {
     mapd_shared_lock<mapd_shared_mutex> fileMgrsMutex(fileMgrs_mutex_);

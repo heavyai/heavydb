@@ -611,6 +611,13 @@ void BufferMgr::checkpoint() {
   }
 }
 
+void BufferMgr::checkpoint(const int db_id, const int tb_id) {
+  /* Don't change original behavior of BufferMgr::checkpoint() api to support checkpoint() per
+   * table as it's not related to this feature. Redirect this call to the original proc instead.
+   */ 
+  checkpoint();
+}
+
 /// Returns a pointer to the Buffer holding the chunk, if it exists; otherwise,
 /// throws a runtime_error.
 AbstractBuffer* BufferMgr::getBuffer(const ChunkKey& key, const size_t numBytes) {

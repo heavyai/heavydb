@@ -69,7 +69,7 @@ class DataMgr {
 
   // const std::map<ChunkKey, File_Namespace::FileBuffer *> & getChunkMap();
   const std::map<ChunkKey, File_Namespace::FileBuffer*>& getChunkMap();
-  void checkpoint();
+  void checkpoint(const int db_id, const int tb_id); // checkpoint for individual table of DB
   void getChunkMetadataVec(std::vector<std::pair<ChunkKey, ChunkMetadata>>& chunkMetadataVec);
   void getChunkMetadataVecForKeyPrefix(std::vector<std::pair<ChunkKey, ChunkMetadata>>& chunkMetadataVec,
                                        const ChunkKey& keyPrefix);
@@ -86,6 +86,7 @@ class DataMgr {
                     const size_t userSpecifiedNumReaderThreads,
                     const int start_epoch);
   void convertDB(const std::string basePath);
+  void checkpoint(); // checkpoint for whole DB, called from convertDB proc only
   void createTopLevelMetadata() const;
   std::vector<std::vector<AbstractBufferMgr*>> bufferMgrs_;
   std::string dataDir_;

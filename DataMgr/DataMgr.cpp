@@ -291,6 +291,15 @@ void DataMgr::copy(AbstractBuffer* destBuffer, AbstractBuffer* srcBuffer) {
 // destOffset, const size_t srcOffset) {
 //} /
 
+void DataMgr::checkpoint(const int db_id, const int tb_id) {
+  for (auto levelIt = bufferMgrs_.rbegin(); levelIt != bufferMgrs_.rend(); ++levelIt) {
+    // use reverse iterator so we start at GPU level, then CPU then DISK
+    for (auto deviceIt = levelIt->begin(); deviceIt != levelIt->end(); ++deviceIt) {
+      (*deviceIt)->checkpoint(db_id, tb_id);
+    }
+  }
+}
+
 void DataMgr::checkpoint() {
   for (auto levelIt = bufferMgrs_.rbegin(); levelIt != bufferMgrs_.rend(); ++levelIt) {
     // use reverse iterator so we start at GPU level, then CPU then DISK
