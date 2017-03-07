@@ -2087,7 +2087,7 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
         outfile << copy_params.quote;
       const auto& ti = td[i].get_type_info();
       if (!scalar_tv) {
-        outfile << row_col_to_string(crt_row, i, ti, " | ");
+        outfile << datum_to_string(crt_row[i], ti, " | ");
         if (copy_params.quoted) {
           outfile << copy_params.quote;
         }

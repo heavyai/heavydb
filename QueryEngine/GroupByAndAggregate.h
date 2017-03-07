@@ -85,22 +85,6 @@ inline std::string datum_to_string(const TargetValue& tv, const SQLTypeInfo& ti,
 
 }  // namespace
 
-inline std::string row_col_to_string(const ResultRows& rows,
-                                     const size_t row_idx,
-                                     const size_t i,
-                                     const std::string& delim = ", ") {
-  const auto tv = rows.getRowAt(row_idx, i, true);
-  const auto ti = rows.getColType(i);
-  return datum_to_string(tv, ti, delim);
-}
-
-inline std::string row_col_to_string(const std::vector<TargetValue>& row,
-                                     const size_t i,
-                                     const SQLTypeInfo& ti,
-                                     const std::string& delim = ", ") {
-  return datum_to_string(row[i], ti, delim);
-}
-
 class QueryExecutionContext : boost::noncopyable {
  public:
   // TODO(alex): move init_agg_vals to GroupByBufferDescriptor, remove device_type
