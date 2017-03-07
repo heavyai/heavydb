@@ -1754,6 +1754,181 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   catalog.createTable(td, columns);
 }
 
+ResultRows getResultRows(const Catalog_Namespace::SessionInfo& session,
+                         const std::string select_stmt,
+                         std::vector<TargetMetaInfo>& targets) {
+  auto& catalog = session.get_catalog();
+
+  auto executor = Executor::getExecutor(catalog.get_currentDB().dbId);
+
+#ifdef HAVE_RAVM
+  auto device_type = session.get_executor_device_type();
+  auto& calcite_mgr = catalog.get_calciteMgr();
+
+  const auto query_ra = calcite_mgr.process(session.get_currentUser().userName,
+                                            session.get_currentUser().passwd,
+                                            catalog.get_currentDB().dbName,
+                                            pg_shim(select_stmt),
+                                            true,
+                                            false);
+  CompilationOptions co = {device_type, true, ExecutorOptLevel::LoopStrengthReduction, false};
+  ExecutionOptions eo = {false, true, false, true, false, false, false, false, 10000};
+  RelAlgExecutor ra_executor(executor.get(), catalog);
+  ExecutionResult result{ResultRows({}, {}, nullptr, nullptr, {}, device_type), {}};
+  result = ra_executor.executeRelAlgQuery(query_ra, co, eo, nullptr);
+  targets = result.getTargetsMeta();
+
+  return result.getRows();
+#else   // HAVE_RAVM
+  LOG(FATAL) << "unsupported legacy parser path";
+  ResultRows* result;
+  return *result;
+#endif  // HAVE_RAVM
+}
+
+namespace {
+
+template <class T>
+void translate_strings(T* dest_ids_buffer,
+                       StringDictionary* dest_dict,
+                       const T* source_ids_buffer,
+                       const StringDictionary* source_dict,
+                       const size_t num_rows) {
+  const auto source_ids = reinterpret_cast<const T*>(source_ids_buffer);
+  auto dest_ids = reinterpret_cast<T*>(dest_ids_buffer);
+  for (size_t i = 0; i < num_rows; ++i) {
+    dest_ids[i] = dest_dict->getOrAdd(source_dict->getString(source_ids[i]));
+  }
+}
+
+int8_t* fill_dict_column(std::vector<std::unique_ptr<int8_t[]>>& dest_string_ids_owner,
+                         StringDictionary* dest_dict,
+                         const int8_t* source_ids_buffer,
+                         const StringDictionary* source_dict,
+                         const size_t num_rows,
+                         const SQLTypeInfo& ti) {
+  dest_string_ids_owner.emplace_back(new int8_t[num_rows * ti.get_size()]);
+  switch (ti.get_size()) {
+    case 1:
+      translate_strings(reinterpret_cast<int8_t*>(dest_string_ids_owner.back().get()),
+                        dest_dict,
+                        reinterpret_cast<const int8_t*>(source_ids_buffer),
+                        source_dict,
+                        num_rows);
+      break;
+    case 2:
+      translate_strings(reinterpret_cast<int16_t*>(dest_string_ids_owner.back().get()),
+                        dest_dict,
+                        reinterpret_cast<const int16_t*>(source_ids_buffer),
+                        source_dict,
+                        num_rows);
+      break;
+    case 4: {
+      translate_strings(reinterpret_cast<int32_t*>(dest_string_ids_owner.back().get()),
+                        dest_dict,
+                        reinterpret_cast<const int32_t*>(source_ids_buffer),
+                        source_dict,
+                        num_rows);
+      break;
+    }
+    default:
+      CHECK(false);
+  }
+  return dest_string_ids_owner.back().get();
+}
+
+}  // namespace
+
+void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+  if (g_cluster) {
+    throw std::runtime_error("Distributed CTAS not supported yet");
+  }
+  auto& catalog = session.get_catalog();
+  if (catalog.getMetadataForTable(table_name_) != nullptr) {
+    throw std::runtime_error("Table " + table_name_ + " already exists.");
+  }
+  std::vector<TargetMetaInfo> target_metainfos;
+  const auto result_rows = getResultRows(session, select_query_, target_metainfos);
+  std::list<ColumnDescriptor> column_descriptors;
+  std::vector<SQLTypeInfo> logical_column_types;
+  for (const auto& target_metainfo : target_metainfos) {
+    ColumnDescriptor cd;
+    cd.columnName = target_metainfo.get_resname();
+    cd.columnType = target_metainfo.get_type_info();
+    if (cd.columnType.get_size() < 0) {
+      throw std::runtime_error("Variable-length type " + cd.columnType.get_type_name() + " not supported in CTAS");
+    }
+    if (cd.columnType.get_compression() == kENCODING_FIXED) {
+      throw std::runtime_error("Fixed encoding integers not supported in CTAS");
+    }
+    if (cd.columnType.get_compression() == kENCODING_DICT) {
+      cd.columnType.set_comp_param(cd.columnType.get_size() * 8);
+      logical_column_types.push_back(target_metainfo.get_type_info());
+    } else {
+      logical_column_types.push_back(get_logical_type_info(target_metainfo.get_type_info()));
+    }
+    column_descriptors.push_back(cd);
+  }
+  TableDescriptor td;
+  td.tableName = table_name_;
+  td.nColumns = column_descriptors.size();
+  td.isView = false;
+  td.fragmenter = nullptr;
+  td.fragType = Fragmenter_Namespace::FragmenterType::INSERT_ORDER;
+  td.maxFragRows = DEFAULT_FRAGMENT_ROWS;
+  td.maxChunkSize = DEFAULT_MAX_CHUNK_SIZE;
+  td.fragPageSize = DEFAULT_PAGE_SIZE;
+  td.maxRows = DEFAULT_MAX_ROWS;
+  catalog.createTable(td, column_descriptors);
+  const TableDescriptor* created_td{nullptr};
+  try {
+    const auto row_set_mem_owner =
+        result_rows.getResultSet() ? result_rows.getResultSet()->getRowSetMemOwner() : result_rows.getRowSetMemOwner();
+    ColumnarResults columnar_results(row_set_mem_owner, result_rows, column_descriptors.size(), logical_column_types);
+    Fragmenter_Namespace::InsertData insert_data;
+    insert_data.databaseId = catalog.get_currentDB().dbId;
+    created_td = catalog.getMetadataForTable(table_name_);
+    CHECK(created_td);
+    insert_data.tableId = created_td->tableId;
+    std::vector<int> column_ids;
+    const auto& column_buffers = columnar_results.getColumnBuffers();
+    CHECK_EQ(column_descriptors.size(), column_buffers.size());
+    size_t col_idx = 0;
+    std::vector<std::unique_ptr<int8_t[]>> dest_string_ids_owner;
+    for (const auto cd : column_descriptors) {
+      DataBlockPtr p;
+      const auto created_cd = catalog.getMetadataForColumn(insert_data.tableId, cd.columnName);
+      CHECK(created_cd);
+      column_ids.push_back(created_cd->columnId);
+      if (created_cd->columnType.get_compression() == kENCODING_DICT) {
+        const auto source_dd = catalog.getMetadataForDict(target_metainfos[col_idx].get_type_info().get_comp_param());
+        CHECK(source_dd);
+        const auto dest_dd = catalog.getMetadataForDict(created_cd->columnType.get_comp_param());
+        CHECK(dest_dd);
+        const auto dest_ids = fill_dict_column(dest_string_ids_owner,
+                                               dest_dd->stringDict.get(),
+                                               column_buffers[col_idx],
+                                               source_dd->stringDict.get(),
+                                               columnar_results.size(),
+                                               created_cd->columnType);
+        p.numbersPtr = reinterpret_cast<int8_t*>(dest_ids);
+      } else {
+        p.numbersPtr = const_cast<int8_t*>(column_buffers[col_idx]);
+      }
+      insert_data.data.push_back(p);
+      ++col_idx;
+    }
+    insert_data.columnIds = column_ids;
+    insert_data.numRows = columnar_results.size();
+    created_td->fragmenter->insertData(insert_data);
+  } catch (...) {
+    if (created_td) {
+      catalog.dropTable(created_td);
+    }
+    throw;
+  }
+}
+
 void DropTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.get_catalog();
   const TableDescriptor* td = catalog.getMetadataForTable(*table);
@@ -1945,38 +2120,6 @@ void CopyTableStmt::execute(
 
   return_message.reset(new std::string(tr));
   LOG(INFO) << tr;
-}
-
-ResultRows getResultRows(const Catalog_Namespace::SessionInfo& session,
-                         const std::string select_stmt,
-                         std::vector<TargetMetaInfo>& targets) {
-  auto& catalog = session.get_catalog();
-
-  auto executor = Executor::getExecutor(catalog.get_currentDB().dbId);
-
-#ifdef HAVE_RAVM
-  auto device_type = session.get_executor_device_type();
-  auto& calcite_mgr = catalog.get_calciteMgr();
-
-  const auto query_ra = calcite_mgr.process(session.get_currentUser().userName,
-                                            session.get_currentUser().passwd,
-                                            catalog.get_currentDB().dbName,
-                                            pg_shim(select_stmt),
-                                            true,
-                                            false);
-  CompilationOptions co = {device_type, true, ExecutorOptLevel::LoopStrengthReduction, false};
-  ExecutionOptions eo = {false, true, false, true, false, false, false, false, 10000};
-  RelAlgExecutor ra_executor(executor.get(), catalog);
-  ExecutionResult result{ResultRows({}, {}, nullptr, nullptr, {}, device_type), {}};
-  result = ra_executor.executeRelAlgQuery(query_ra, co, eo, nullptr);
-  targets = result.getTargetsMeta();
-
-  return result.getRows();
-#else   // HAVE_RAVM
-  LOG(FATAL) << "unsupported legacy parser path";
-  ResultRows* result;
-  return *result;
-#endif  // HAVE_RAVM
 }
 
 void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {

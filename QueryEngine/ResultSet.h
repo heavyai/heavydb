@@ -242,6 +242,8 @@ class ResultSet {
   }
   void holdLiterals(std::vector<int8_t>& literal_buff) { literal_buffers_.push_back(std::move(literal_buff)); }
 
+  std::shared_ptr<RowSetMemoryOwner> getRowSetMemOwner() const { return row_set_mem_owner_; }
+
   std::string serialize() const;
 
   static std::unique_ptr<ResultSet> unserialize(const std::string&, const Executor*);

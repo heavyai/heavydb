@@ -7,6 +7,7 @@
   int parse(const std::string & inputStr, std::list<std::unique_ptr<Stmt>>& parseTrees, std::string &lastParsed) {      \
     boost::regex create_view_expr{R"(CREATE\s+VIEW\s+(IF\s+NOT\s+EXISTS\s+)?([A-Za-z_][A-Za-z0-9\$_]*)\s+AS\s+(.*);?)", \
                                   boost::regex::extended | boost::regex::icase};                                        \
+    std::lock_guard<std::mutex> lock(mutex_);                                                                           \
     boost::smatch what;                                                                                                 \
     const auto trimmed_input = boost::algorithm::trim_copy(inputStr);                                                   \
     if (boost::regex_match(trimmed_input.cbegin(), trimmed_input.cend(), what, create_view_expr)) {                     \
@@ -16,7 +17,14 @@
       parseTrees.emplace_back(new CreateViewStmt(view_name, select_query, if_not_exists));                              \
       return 0;                                                                                                         \
     }                                                                                                                   \
-    std::lock_guard<std::mutex> lock(mutex_);                                                                           \
+    boost::regex create_table_as_expr{R"(CREATE\s+TABLE\s+([A-Za-z_][A-Za-z0-9\$_]*)\s+AS\s+(.*);?)",                   \
+                                      boost::regex::extended | boost::regex::icase};                                    \
+    if (boost::regex_match(trimmed_input.cbegin(), trimmed_input.cend(), what, create_table_as_expr)) {                 \
+      const auto table_name = what[1].str();                                                                            \
+      const auto select_query = what[2].str();                                                                          \
+      parseTrees.emplace_back(new CreateTableAsSelectStmt(table_name, select_query));                                   \
+      return 0;                                                                                                         \
+    }                                                                                                                   \
     std::istringstream ss(inputStr);                                                                                    \
     lexer.switch_streams(&ss,0);                                                                                        \
     yyparse(parseTrees);                                                                                                \

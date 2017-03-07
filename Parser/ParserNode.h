@@ -851,6 +851,22 @@ class CreateTableStmt : public DDLStmt {
 };
 
 /*
+ * @type CreateTableAsSelectStmt
+ * @brief CREATE TABLE AS SELECT statement
+ */
+class CreateTableAsSelectStmt : public DDLStmt {
+ public:
+  CreateTableAsSelectStmt(const std::string& table_name, const std::string& select_query)
+      : table_name_(table_name), select_query_(select_query) {}
+
+  virtual void execute(const Catalog_Namespace::SessionInfo& session);
+
+ private:
+  const std::string table_name_;
+  const std::string select_query_;
+};
+
+/*
  * @type DropTableStmt
  * @brief DROP TABLE statement
  */
