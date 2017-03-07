@@ -66,14 +66,16 @@ extern "C" uint32_t key_hash(const int64_t* key, const uint32_t key_qw_count, co
 extern "C" int64_t* get_group_value(int64_t* groups_buffer,
                                     const uint32_t groups_buffer_entry_count,
                                     const int64_t* key,
-                                    const uint32_t key_qw_count,
+                                    const uint32_t key_count,
+                                    const uint32_t key_width,
                                     const uint32_t row_size_quad,
                                     const int64_t* init_val = nullptr);
 
 extern "C" int64_t* get_group_value_with_watchdog(int64_t* groups_buffer,
                                                   const uint32_t groups_buffer_entry_count,
                                                   const int64_t* key,
-                                                  const uint32_t key_qw_count,
+                                                  const uint32_t key_count,
+                                                  const uint32_t key_width,
                                                   const uint32_t row_size_quad,
                                                   const int64_t* init_val = nullptr);
 

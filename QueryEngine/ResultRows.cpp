@@ -505,8 +505,12 @@ void ResultRows::reduceInPlaceDispatch(int64_t** group_by_buffer_ptr,
             *group_by_buffer_ptr, bin, other_key_buff, group_by_col_count, row_size_quad);
         break;
       case GroupByColRangeType::MultiCol:
-        group_val_buff = get_group_value(
-            *group_by_buffer_ptr, groups_buffer_entry_count, other_key_buff, group_by_col_count, row_size_quad);
+        group_val_buff = get_group_value(*group_by_buffer_ptr,
+                                         groups_buffer_entry_count,
+                                         other_key_buff,
+                                         group_by_col_count,
+                                         query_mem_desc_.getEffectiveKeyWidth(),
+                                         row_size_quad);
         break;
       default:
         CHECK(false);

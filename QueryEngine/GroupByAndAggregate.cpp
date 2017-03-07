@@ -2715,6 +2715,7 @@ std::tuple<llvm::Value*, llvm::Value*> GroupByAndAggregate::codegenGroupBy(const
                                        LL_INT(static_cast<int32_t>(query_mem_desc_.entry_count)),
                                        &*group_key,
                                        &*key_size_lv,
+                                       LL_INT(static_cast<int32_t>(key_width)),
                                        LL_INT(row_size_quad),
                                        &*(++arg_it)}),
                              nullptr);
@@ -3133,8 +3134,14 @@ void GroupByAndAggregate::codegenEstimator(std::stack<llvm::BasicBlock*>& array_
   auto estimator_key_lv = LL_BUILDER.CreateAlloca(llvm::Type::getInt64Ty(LL_CONTEXT), estimator_comp_count_lv);
   int32_t subkey_idx = 0;
   for (const auto estimator_arg_comp : estimator_arg) {
-    const auto estimator_arg_comp_lvs = executor_->groupByColumnCodegen(
-        estimator_arg_comp.get(), sizeof(int64_t), co, false, 0, diamond_codegen, array_loops, true);
+    const auto estimator_arg_comp_lvs = executor_->groupByColumnCodegen(estimator_arg_comp.get(),
+                                                                        query_mem_desc_.getEffectiveKeyWidth(),
+                                                                        co,
+                                                                        false,
+                                                                        0,
+                                                                        diamond_codegen,
+                                                                        array_loops,
+                                                                        true);
     CHECK(!estimator_arg_comp_lvs.original_value);
     const auto estimator_arg_comp_lv = estimator_arg_comp_lvs.translated_value;
     // store the sub-key to the buffer

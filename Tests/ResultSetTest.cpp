@@ -392,8 +392,13 @@ void fill_storage_buffer_baseline_rowwise(int8_t* buff,
   for (size_t i = 0; i < query_mem_desc.entry_count; i += step) {
     const auto v = generator.getNextValue();
     std::vector<int64_t> key(key_component_count, v);
-    auto value_slots = get_group_value(
-        i64_buff, query_mem_desc.entry_count, &key[0], key.size(), key_component_count + target_slot_count, nullptr);
+    auto value_slots = get_group_value(i64_buff,
+                                       query_mem_desc.entry_count,
+                                       &key[0],
+                                       key.size(),
+                                       sizeof(int64_t),
+                                       key_component_count + target_slot_count,
+                                       nullptr);
     CHECK(value_slots);
     fill_one_entry_baseline(value_slots, v, target_infos);
   }
@@ -1003,8 +1008,13 @@ void ResultSetEmulator::rse_fill_storage_buffer_baseline_rowwise(int8_t* buff,
     const auto v = generator.getNextValue();
     if (rs_groups[i]) {
       std::vector<int64_t> key(key_component_count, v);
-      auto value_slots = get_group_value(
-          i64_buff, rs_entry_count, &key[0], key.size(), key_component_count + target_slot_count, nullptr);
+      auto value_slots = get_group_value(i64_buff,
+                                         rs_entry_count,
+                                         &key[0],
+                                         key.size(),
+                                         sizeof(int64_t),
+                                         key_component_count + target_slot_count,
+                                         nullptr);
       CHECK(value_slots);
       if ((rs_flow == 2) && (i >= rs_entry_count - 4)) {  // null_val test-cases: last four rows
         rs_values[i] = -1;

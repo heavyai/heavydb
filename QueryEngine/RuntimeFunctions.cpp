@@ -2,6 +2,7 @@
 #error This code is not intended to be compiled with a CUDA C++ compiler
 #endif  // __CUDACC__
 
+#include "BufferCompaction.h"
 #include "MurmurHash.h"
 #include "RuntimeFunctions.h"
 #include "../Shared/funcannotations.h"
@@ -752,19 +753,51 @@ extern "C" __attribute__((noinline)) void init_group_by_buffer_impl(int64_t* gro
   assert(groups_buffer);
 }
 
+template <typename T = int64_t>
+ALWAYS_INLINE T get_empty_key() {
+  static_assert(std::is_same<T, int64_t>::value, "Unsupported template parameter other than int64_t for now");
+  return EMPTY_KEY_64;
+}
+
+template <>
+ALWAYS_INLINE int32_t get_empty_key() {
+  return EMPTY_KEY_32;
+}
+
+template <typename T>
+ALWAYS_INLINE int64_t* get_matching_group_value(int64_t* groups_buffer,
+                                                const uint32_t h,
+                                                const T* key,
+                                                const uint32_t key_count,
+                                                const uint32_t row_size_quad) {
+  auto off = h * row_size_quad;
+  auto row_ptr = reinterpret_cast<T*>(groups_buffer + off);
+  if (*row_ptr == get_empty_key<T>()) {
+    memcpy(row_ptr, key, key_count * sizeof(T));
+    auto row_ptr_i8 = reinterpret_cast<int8_t*>(row_ptr + key_count);
+    return reinterpret_cast<int64_t*>(align_to_int64(row_ptr_i8));
+  }
+  if (memcmp(row_ptr, key, key_count * sizeof(T)) == 0) {
+    auto row_ptr_i8 = reinterpret_cast<int8_t*>(row_ptr + key_count);
+    return reinterpret_cast<int64_t*>(align_to_int64(row_ptr_i8));
+  }
+  return nullptr;
+}
+
 extern "C" ALWAYS_INLINE int64_t* get_matching_group_value(int64_t* groups_buffer,
                                                            const uint32_t h,
                                                            const int64_t* key,
-                                                           const uint32_t key_qw_count,
+                                                           const uint32_t key_count,
+                                                           const uint32_t key_width,
                                                            const uint32_t row_size_quad,
                                                            const int64_t* init_vals) {
-  auto off = h * row_size_quad;
-  if (groups_buffer[off] == EMPTY_KEY_64) {
-    memcpy(groups_buffer + off, key, key_qw_count * sizeof(*key));
-    return groups_buffer + off + key_qw_count;
-  }
-  if (memcmp(groups_buffer + off, key, key_qw_count * sizeof(*key)) == 0) {
-    return groups_buffer + off + key_qw_count;
+  switch (key_width) {
+    case 4:
+      return get_matching_group_value(
+          groups_buffer, h, reinterpret_cast<const int32_t*>(key), key_count, row_size_quad);
+    case 8:
+      return get_matching_group_value(groups_buffer, h, key, key_count, row_size_quad);
+    default:;
   }
   return nullptr;
 }

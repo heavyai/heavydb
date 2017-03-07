@@ -1,6 +1,7 @@
 #include <stdint.h>
 #include <cuda.h>
 #include <limits>
+#include "BufferCompaction.h"
 #include "ExtensionFunctions.hpp"
 #include "GpuRtConstants.h"
 
@@ -99,35 +100,70 @@ extern "C" __device__ bool dynamic_watchdog() {
   return false;
 }
 
-extern "C" __device__ int64_t* get_matching_group_value(int64_t* groups_buffer,
-                                                        const uint32_t h,
-                                                        const int64_t* key,
-                                                        const uint32_t key_qw_count,
-                                                        const uint32_t row_size_quad,
-                                                        const int64_t* init_vals) {
+template <typename T = unsigned long long>
+inline __device__ T get_empty_key() {
+  return EMPTY_KEY_64;
+}
+
+template <>
+inline __device__ unsigned int get_empty_key() {
+  return EMPTY_KEY_32;
+}
+
+template <typename T>
+inline __device__ int64_t* get_matching_group_value(int64_t* groups_buffer,
+                                                    const uint32_t h,
+                                                    const T* key,
+                                                    const uint32_t key_count,
+                                                    const uint32_t row_size_quad) {
+  const T empty_key = get_empty_key<T>();
   uint32_t off = h * row_size_quad;
+  auto row_ptr = reinterpret_cast<T*>(groups_buffer + off);
   {
-    const uint64_t old = atomicCAS(reinterpret_cast<unsigned long long*>(groups_buffer + off), EMPTY_KEY_64, *key);
-    if (EMPTY_KEY_64 == old && key_qw_count > 1) {
-      for (size_t i = 1; i <= key_qw_count - 1; ++i) {
-        atomicExch(reinterpret_cast<unsigned long long*>(groups_buffer + off + i), key[i]);
+    const T old = atomicCAS(row_ptr, empty_key, *key);
+    if (empty_key == old && key_count > 1) {
+      for (size_t i = 1; i <= key_count - 1; ++i) {
+        atomicExch(row_ptr + i, key[i]);
       }
     }
   }
-  if (key_qw_count > 1) {
-    while (atomicAdd(reinterpret_cast<unsigned long long*>(groups_buffer + off + key_qw_count - 1), 0) ==
-           EMPTY_KEY_64) {
+  if (key_count > 1) {
+    while (atomicAdd(row_ptr + key_count - 1, 0) == empty_key) {
       // spin until the winning thread has finished writing the entire key and the init value
     }
   }
   bool match = true;
-  for (uint32_t i = 0; i < key_qw_count; ++i) {
-    if (groups_buffer[off + i] != key[i]) {
+  for (uint32_t i = 0; i < key_count; ++i) {
+    if (row_ptr[i] != key[i]) {
       match = false;
       break;
     }
   }
-  return match ? groups_buffer + off + key_qw_count : NULL;
+
+  if (match) {
+    auto row_ptr_i8 = reinterpret_cast<int8_t*>(row_ptr + key_count);
+    return reinterpret_cast<int64_t*>(align_to_int64(row_ptr_i8));
+  }
+  return NULL;
+}
+
+extern "C" __device__ int64_t* get_matching_group_value(int64_t* groups_buffer,
+                                                        const uint32_t h,
+                                                        const int64_t* key,
+                                                        const uint32_t key_count,
+                                                        const uint32_t key_width,
+                                                        const uint32_t row_size_quad,
+                                                        const int64_t* init_vals) {
+  switch (key_width) {
+    case 4:
+      return get_matching_group_value(
+          groups_buffer, h, reinterpret_cast<const unsigned int*>(key), key_count, row_size_quad);
+    case 8:
+      return get_matching_group_value(
+          groups_buffer, h, reinterpret_cast<const unsigned long long*>(key), key_count, row_size_quad);
+    default:
+      return NULL;
+  }
 }
 
 extern "C" __device__ int64_t* get_matching_group_value_columnar(int64_t* groups_buffer,

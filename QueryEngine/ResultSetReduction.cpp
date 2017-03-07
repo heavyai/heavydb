@@ -569,8 +569,13 @@ void ResultSetStorage::moveEntriesToBuffer(int8_t* new_buff, const size_t new_en
       const auto key = make_key(&this_buff[key_off], query_mem_desc_.entry_count, key_count);
       new_entries_ptr = get_group_value_columnar(new_buff_i64, new_entry_count, &key[0], key_count);
     } else {
-      new_entries_ptr = get_group_value(
-          new_buff_i64, new_entry_count, &this_buff[key_off], key_count, get_row_qw_count(query_mem_desc_), nullptr);
+      new_entries_ptr = get_group_value(new_buff_i64,
+                                        new_entry_count,
+                                        &this_buff[key_off],
+                                        key_count,
+                                        sizeof(int64_t),
+                                        get_row_qw_count(query_mem_desc_),
+                                        nullptr);
     }
     CHECK(new_entries_ptr);
     fill_slots(new_entries_ptr, new_entry_count, this_buff, i, query_mem_desc_.entry_count, query_mem_desc_);

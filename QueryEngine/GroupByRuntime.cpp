@@ -10,17 +10,20 @@ extern "C" ALWAYS_INLINE DEVICE uint32_t key_hash(const int64_t* key,
 extern "C" NEVER_INLINE DEVICE int64_t* get_group_value(int64_t* groups_buffer,
                                                         const uint32_t groups_buffer_entry_count,
                                                         const int64_t* key,
-                                                        const uint32_t key_qw_count,
+                                                        const uint32_t key_count,
+                                                        const uint32_t key_width,
                                                         const uint32_t row_size_quad,
                                                         const int64_t* init_vals) {
-  uint32_t h = key_hash(key, key_qw_count, sizeof(int64_t)) % groups_buffer_entry_count;
-  int64_t* matching_group = get_matching_group_value(groups_buffer, h, key, key_qw_count, row_size_quad, init_vals);
+  uint32_t h = key_hash(key, key_count, key_width) % groups_buffer_entry_count;
+  int64_t* matching_group =
+      get_matching_group_value(groups_buffer, h, key, key_count, key_width, row_size_quad, init_vals);
   if (matching_group) {
     return matching_group;
   }
   uint32_t h_probe = (h + 1) % groups_buffer_entry_count;
   while (h_probe != h) {
-    matching_group = get_matching_group_value(groups_buffer, h_probe, key, key_qw_count, row_size_quad, init_vals);
+    matching_group =
+        get_matching_group_value(groups_buffer, h_probe, key, key_count, key_width, row_size_quad, init_vals);
     if (matching_group) {
       return matching_group;
     }
@@ -34,18 +37,21 @@ extern "C" NEVER_INLINE DEVICE bool dynamic_watchdog();
 extern "C" NEVER_INLINE DEVICE int64_t* get_group_value_with_watchdog(int64_t* groups_buffer,
                                                                       const uint32_t groups_buffer_entry_count,
                                                                       const int64_t* key,
-                                                                      const uint32_t key_qw_count,
+                                                                      const uint32_t key_count,
+                                                                      const uint32_t key_width,
                                                                       const uint32_t row_size_quad,
                                                                       const int64_t* init_vals) {
-  uint32_t h = key_hash(key, key_qw_count, sizeof(int64_t)) % groups_buffer_entry_count;
-  int64_t* matching_group = get_matching_group_value(groups_buffer, h, key, key_qw_count, row_size_quad, init_vals);
+  uint32_t h = key_hash(key, key_count, key_width) % groups_buffer_entry_count;
+  int64_t* matching_group =
+      get_matching_group_value(groups_buffer, h, key, key_count, key_width, row_size_quad, init_vals);
   if (matching_group) {
     return matching_group;
   }
   uint32_t watchdog_countdown = 100;
   uint32_t h_probe = (h + 1) % groups_buffer_entry_count;
   while (h_probe != h) {
-    matching_group = get_matching_group_value(groups_buffer, h_probe, key, key_qw_count, row_size_quad, init_vals);
+    matching_group =
+        get_matching_group_value(groups_buffer, h_probe, key, key_count, key_width, row_size_quad, init_vals);
     if (matching_group) {
       return matching_group;
     }
@@ -170,7 +176,7 @@ extern "C" ALWAYS_INLINE DEVICE int64_t* get_group_value_one_key(int64_t* groups
   if (0 <= off && off < small_groups_buffer_qw_count) {
     return get_group_value_fast(small_groups_buffer, key, min_key, 0, row_size_quad);
   }
-  return get_group_value(groups_buffer, groups_buffer_entry_count, &key, 1, row_size_quad, init_vals);
+  return get_group_value(groups_buffer, groups_buffer_entry_count, &key, 1, sizeof(int64_t), row_size_quad, init_vals);
 }
 
 extern "C" ALWAYS_INLINE DEVICE int64_t* get_group_value_one_key_with_watchdog(
@@ -186,7 +192,8 @@ extern "C" ALWAYS_INLINE DEVICE int64_t* get_group_value_one_key_with_watchdog(
   if (0 <= off && off < small_groups_buffer_qw_count) {
     return get_group_value_fast(small_groups_buffer, key, min_key, 0, row_size_quad);
   }
-  return get_group_value_with_watchdog(groups_buffer, groups_buffer_entry_count, &key, 1, row_size_quad, init_vals);
+  return get_group_value_with_watchdog(
+      groups_buffer, groups_buffer_entry_count, &key, 1, sizeof(int64_t), row_size_quad, init_vals);
 }
 
 extern "C" ALWAYS_INLINE DEVICE int64_t* get_scan_output_slot(int64_t* output_buffer,
