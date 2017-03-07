@@ -59,7 +59,7 @@ class ColumnarResults {
       : num_rows_(num_rows), target_types_(target_types) {}
 
   std::vector<const int8_t*> column_buffers_;
-  const size_t num_rows_;
+  size_t num_rows_;
   const std::vector<SQLTypeInfo> target_types_;
 };
 

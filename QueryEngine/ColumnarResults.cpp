@@ -1,5 +1,10 @@
 #include "ColumnarResults.h"
 
+#include "../Shared/thread_count.h"
+
+#include <atomic>
+#include <future>
+
 namespace {
 
 int64_t fixed_encoding_nullable_val(const int64_t val, const SQLTypeInfo& type_info) {
@@ -13,13 +18,19 @@ int64_t fixed_encoding_nullable_val(const int64_t val, const SQLTypeInfo& type_i
   return val;
 }
 
+bool use_parallel_conversion(const ResultRows& rows) {
+  return rows.getResultSet() && rows.getResultSet()->entryCount() >= 100000;
+}
+
 }  // namespace
 
 ColumnarResults::ColumnarResults(const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                                  const ResultRows& rows,
                                  const size_t num_columns,
                                  const std::vector<SQLTypeInfo>& target_types)
-    : column_buffers_(num_columns), num_rows_(rows.rowCount()), target_types_(target_types) {
+    : column_buffers_(num_columns),
+      num_rows_(use_parallel_conversion(rows) ? rows.getResultSet()->entryCount() : rows.rowCount()),
+      target_types_(target_types) {
   column_buffers_.resize(num_columns);
   for (size_t i = 0; i < num_columns; ++i) {
     CHECK(!target_types[i].is_array());
@@ -28,12 +39,9 @@ ColumnarResults::ColumnarResults(const std::shared_ptr<RowSetMemoryOwner> row_se
     column_buffers_[i] = reinterpret_cast<const int8_t*>(checked_malloc(num_rows_ * target_types[i].get_size()));
     row_set_mem_owner->addColBuffer(column_buffers_[i]);
   }
-  size_t row_idx{0};
-  while (true) {
-    const auto crt_row = rows.getNextRow(false, false);
-    if (crt_row.empty()) {
-      break;
-    }
+  std::atomic<size_t> row_idx{0};
+  const auto do_work = [num_columns, &target_types, this](const std::vector<TargetValue>& crt_row,
+                                                          const size_t row_idx) {
     for (size_t i = 0; i < num_columns; ++i) {
       const auto col_val = crt_row[i];
       const auto scalar_col_val = boost::get<ScalarTargetValue>(&col_val);
@@ -76,6 +84,42 @@ ColumnarResults::ColumnarResults(const std::shared_ptr<RowSetMemoryOwner> row_se
         }
       }
     }
+  };
+  if (use_parallel_conversion(rows)) {
+    const size_t worker_count = cpu_threads();
+    std::vector<std::future<void>> conversion_threads;
+    const auto entry_count = rows.getResultSet()->entryCount();
+    for (size_t i = 0, start_entry = 0, stride = (entry_count + worker_count - 1) / worker_count;
+         i < worker_count && start_entry < entry_count;
+         ++i, start_entry += stride) {
+      const auto end_entry = std::min(start_entry + stride, entry_count);
+      conversion_threads.push_back(std::async(std::launch::async,
+                                              [&rows, &do_work, &row_idx](const size_t start, const size_t end) {
+                                                for (size_t i = start; i < end; ++i) {
+                                                  const auto crt_row = rows.getResultSet()->getRowAtNoTranslations(i);
+                                                  if (!crt_row.empty()) {
+                                                    do_work(crt_row, row_idx.fetch_add(1));
+                                                  }
+                                                }
+                                              },
+                                              start_entry,
+                                              end_entry));
+    }
+    for (auto& child : conversion_threads) {
+      child.wait();
+    }
+    for (auto& child : conversion_threads) {
+      child.get();
+    }
+    num_rows_ = row_idx;
+    return;
+  }
+  while (true) {
+    const auto crt_row = rows.getNextRow(false, false);
+    if (crt_row.empty()) {
+      break;
+    }
+    do_work(crt_row, row_idx);
     ++row_idx;
   }
   rows.moveToBegin();

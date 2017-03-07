@@ -203,6 +203,9 @@ SQLTypeInfo ResultSet::getColType(const size_t col_idx) const {
 }
 
 size_t ResultSet::rowCount() const {
+  if (entryCount() > 100000) {
+    return parallelRowCount();
+  }
   moveToBegin();
   size_t row_count{0};
   while (true) {
@@ -213,6 +216,37 @@ size_t ResultSet::rowCount() const {
     ++row_count;
   }
   moveToBegin();
+  return row_count;
+}
+
+size_t ResultSet::parallelRowCount() const {
+  size_t row_count{0};
+  const size_t worker_count = cpu_threads();
+  std::vector<std::future<size_t>> counter_threads;
+  for (size_t i = 0, start_entry = 0, stride = (entryCount() + worker_count - 1) / worker_count;
+       i < worker_count && start_entry < entryCount();
+       ++i, start_entry += stride) {
+    const auto end_entry = std::min(start_entry + stride, entryCount());
+    counter_threads.push_back(std::async(std::launch::async,
+                                         [this](const size_t start, const size_t end) {
+                                           size_t row_count{0};
+                                           for (size_t i = start; i < end; ++i) {
+                                             const auto crt_row = getRowAtNoTranslations(i);
+                                             if (!crt_row.empty()) {
+                                               ++row_count;
+                                             }
+                                           }
+                                           return row_count;
+                                         },
+                                         start_entry,
+                                         end_entry));
+  }
+  for (auto& child : counter_threads) {
+    child.wait();
+  }
+  for (auto& child : counter_threads) {
+    row_count += child.get();
+  }
   return row_count;
 }
 

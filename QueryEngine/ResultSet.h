@@ -168,6 +168,8 @@ class ResultSet {
 
   std::vector<TargetValue> getRowAt(const size_t index) const;
 
+  std::vector<TargetValue> getRowAtNoTranslations(const size_t index) const;
+
   void sort(const std::list<Analyzer::OrderEntry>& order_entries, const size_t top_n);
 
   bool isEmptyInitializer() const;
@@ -236,6 +238,8 @@ class ResultSet {
   std::vector<TargetValue> getRowAt(const size_t index,
                                     const bool translate_strings,
                                     const bool decimal_to_double) const;
+
+  size_t parallelRowCount() const;
 
   size_t advanceCursorToNextEntry() const;
 

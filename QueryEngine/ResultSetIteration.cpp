@@ -155,6 +155,14 @@ std::vector<TargetValue> ResultSet::getRowAt(const size_t logical_index) const {
   return getRowAt(entry_idx, true, false);
 }
 
+std::vector<TargetValue> ResultSet::getRowAtNoTranslations(const size_t logical_index) const {
+  if (logical_index >= entryCount()) {
+    return {};
+  }
+  const auto entry_idx = permutation_.empty() ? logical_index : permutation_[logical_index];
+  return getRowAt(entry_idx, false, false);
+}
+
 std::vector<TargetValue> ResultSet::getNextRow(const bool translate_strings, const bool decimal_to_double) const {
   while (fetched_so_far_ < drop_first_) {
     const auto row = getNextRowImpl(translate_strings, decimal_to_double);
