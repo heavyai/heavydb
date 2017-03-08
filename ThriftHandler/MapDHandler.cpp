@@ -722,18 +722,10 @@ TColumnType MapDHandler::populateThriftColumnType(const Catalog_Namespace::Catal
 void MapDHandler::get_table_descriptor(TTableDescriptor& _return,
                                        const TSessionId session,
                                        const std::string& table_name) {
-  const auto session_info = get_session(session);
-  auto& cat = session_info.get_catalog();
-  auto td = cat.getMetadataForTable(table_name);
-  if (!td) {
-    TMapDException ex;
-    ex.error_msg = "Table doesn't exist";
-    LOG(ERROR) << ex.error_msg;
-    throw ex;
-  }
-  const auto col_descriptors = cat.getAllColumnMetadataForTable(td->tableId, false, true);
-  for (const auto cd : col_descriptors) {
-    _return.insert(std::make_pair(cd->columnName, populateThriftColumnType(&cat, cd)));
+  TRowDescriptor rd;
+  get_row_descriptor(rd, session, table_name);
+  for (const auto cd : rd) {
+    _return.insert(std::make_pair(cd.col_name, cd));
   }
 }
 
