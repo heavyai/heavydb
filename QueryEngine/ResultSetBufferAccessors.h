@@ -9,6 +9,7 @@
 #ifndef QUERYENGINE_RESULTSETBUFFERACCESSORS_H
 #define QUERYENGINE_RESULTSETBUFFERACCESSORS_H
 
+#include "BufferCompaction.h"
 #include "SqlTypesLayout.h"
 
 #include "../Shared/unreachable.h"
@@ -112,14 +113,18 @@ inline size_t get_key_bytes_rowwise(const QueryMemoryDescriptor& query_mem_desc)
     return 0;
   }
   size_t result = 0;
-  for (const auto& group_width : query_mem_desc.group_col_widths) {
-    result += group_width;
+  if (auto consist_key_width = query_mem_desc.getEffectiveKeyWidth()) {
+    result += consist_key_width * query_mem_desc.group_col_widths.size();
+  } else {
+    for (const auto& group_width : query_mem_desc.group_col_widths) {
+      result += group_width;
+    }
   }
   return result;
 }
 
 inline size_t get_row_bytes(const QueryMemoryDescriptor& query_mem_desc) {
-  size_t result = get_key_bytes_rowwise(query_mem_desc);
+  size_t result = align_to_int64(get_key_bytes_rowwise(query_mem_desc));  // plus padding
   for (const auto& target_width : query_mem_desc.agg_col_widths) {
     result += target_width.compact;
   }

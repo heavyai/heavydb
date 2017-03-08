@@ -753,17 +753,6 @@ extern "C" __attribute__((noinline)) void init_group_by_buffer_impl(int64_t* gro
   assert(groups_buffer);
 }
 
-template <typename T = int64_t>
-ALWAYS_INLINE T get_empty_key() {
-  static_assert(std::is_same<T, int64_t>::value, "Unsupported template parameter other than int64_t for now");
-  return EMPTY_KEY_64;
-}
-
-template <>
-ALWAYS_INLINE int32_t get_empty_key() {
-  return EMPTY_KEY_32;
-}
-
 template <typename T>
 ALWAYS_INLINE int64_t* get_matching_group_value(int64_t* groups_buffer,
                                                 const uint32_t h,

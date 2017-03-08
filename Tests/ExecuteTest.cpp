@@ -385,6 +385,7 @@ TEST(Select, FilterAndSimpleAggregation) {
     c("SELECT COUNT(*) FROM test WHERE ofq >= 0 OR ofq IS NULL;", dt);
     c("SELECT COUNT(*) AS val FROM test WHERE (test.dd = 0.5 OR test.dd = 3);", dt);
     c("SELECT MAX(dd_notnull * 1) FROM test;", dt);
+    c("SELECT x, COUNT(*) AS n FROM test GROUP BY x, ufd ORDER BY x, n;", dt);
 #ifdef HAVE_CALCITE
     c("SELECT COUNT(*) FROM test WHERE d = 2.2", dt);
     c("SELECT COUNT(*) FROM test WHERE fx + 1 IS NULL;", dt);
@@ -2725,7 +2726,7 @@ int create_and_populate_tables() {
   for (ssize_t i = 0; i < g_num_rows / 2; ++i) {
     const std::string insert_query{
         "INSERT INTO test VALUES(8, 43, 102, 1002, 'f', 1.2, 2.4, 'bar', 'bar', 'real_bar', '2014-12-13 22:23:15', "
-        "'15:13:14', NULL, NULL, NULL, 222.2, 222.2, null, null, null, -1, 9223372036854775807, "
+        "'15:13:14', NULL, NULL, NULL, 222.2, 222.2, null, null, null, -2147483647, 9223372036854775807, "
         "-9223372036854775808);"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);

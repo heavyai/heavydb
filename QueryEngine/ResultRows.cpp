@@ -1715,6 +1715,7 @@ void QueryExecutionContext::outputBin(ResultRows& results,
     return;
   }
 
+  const size_t key_width{query_mem_desc_.getEffectiveKeyWidth()};
   const size_t group_by_col_count{query_mem_desc_.group_col_widths.size()};
   size_t out_vec_idx = 0;
   int8_t* buffer_ptr = reinterpret_cast<int8_t*>(group_by_buffer) + query_mem_desc_.getKeyOffInBytes(bin);
@@ -1723,18 +1724,17 @@ void QueryExecutionContext::outputBin(ResultRows& results,
     std::vector<int64_t> multi_key;
     CHECK(!output_columnar_);
     for (size_t key_idx = 0; key_idx < group_by_col_count; ++key_idx) {
-      const auto key_comp = get_component(
-          buffer_ptr,
-          compact_byte_width(query_mem_desc_.group_col_widths[key_idx], query_mem_desc_.getCompactByteWidth()));
+      const auto key_comp = get_component(buffer_ptr, key_width);
       multi_key.push_back(key_comp);
       buffer_ptr += query_mem_desc_.getNextKeyOffInBytes(key_idx);
     }
     results.beginRow(multi_key);
   } else {
-    const auto key_comp = get_component(buffer_ptr, sizeof(int64_t));
+    const auto key_comp = get_component(buffer_ptr, key_width);
     results.beginRow(key_comp);
     buffer_ptr += query_mem_desc_.getNextKeyOffInBytes(0);
   }
+  buffer_ptr = align_to_int64(buffer_ptr);
   for (const auto target_expr : targets) {
     bool is_real_string = (target_expr && target_expr->get_type_info().is_string() &&
                            target_expr->get_type_info().get_compression() == kENCODING_NONE);

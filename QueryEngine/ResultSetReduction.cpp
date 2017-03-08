@@ -15,6 +15,7 @@
 #include "Shared/likely.h"
 #include "Shared/thread_count.h"
 
+#include <algorithm>
 #include <future>
 #include <numeric>
 
@@ -30,6 +31,10 @@ size_t get_row_qw_count(const QueryMemoryDescriptor& query_mem_desc) {
   const auto row_bytes = get_row_bytes(query_mem_desc);
   CHECK_EQ(size_t(0), row_bytes % 8);
   return row_bytes / 8;
+}
+
+size_t get_slot_off_quad(const QueryMemoryDescriptor& query_mem_desc) {
+  return align_to_int64(get_key_bytes_rowwise(query_mem_desc)) / sizeof(int64_t);
 }
 
 std::vector<int64_t> make_key(const int64_t* buff, const size_t entry_count, const size_t key_count) {
@@ -55,13 +60,30 @@ void fill_slots(int64_t* dst_entry,
       dst_entry[dst_slot_off] = src_buff[slot_offset_colwise(src_entry_idx, i, key_count, src_entry_count)];
     }
   } else {
+    const auto row_ptr = src_buff + get_row_qw_count(query_mem_desc) * src_entry_idx;
+    const auto slot_off_quad = get_slot_off_quad(query_mem_desc);
     for (size_t i = 0; i < slot_count; ++i) {
-      dst_entry[i] = src_buff[slot_offset_rowwise(src_entry_idx, i, key_count, slot_count)];
+      dst_entry[i] = row_ptr[slot_off_quad + i];
     }
   }
 }
 
 }  // namespace
+
+void reset_keys(void* key_ptr, const size_t key_count, const size_t key_width) {
+  switch (key_width) {
+    case 4: {
+      auto key_ptr_i32 = reinterpret_cast<int32_t*>(key_ptr);
+      std::fill(key_ptr_i32, key_ptr_i32 + key_count, EMPTY_KEY_32);
+    } break;
+    case 8: {
+      auto key_ptr_i64 = reinterpret_cast<int64_t*>(key_ptr);
+      std::fill(key_ptr_i64, key_ptr_i64 + key_count, EMPTY_KEY_64);
+    } break;
+    default:
+      CHECK(false);
+  }
+}
 
 // Driver method for various buffer layouts, actual work is done by reduceOne* methods.
 // Reduces the entries of `that` into the buffer of this ResultSetStorage object.
@@ -251,10 +273,11 @@ void ResultSetStorage::reduceOneEntryNoCollisionsRowWise(const size_t entry_idx,
     return;
   }
   const auto key_bytes = get_key_bytes_rowwise(query_mem_desc_);
-  auto this_targets_ptr = row_ptr_rowwise(this_buff, query_mem_desc_, entry_idx) + key_bytes;
-  auto that_targets_ptr = row_ptr_rowwise(that_buff, query_mem_desc_, entry_idx) + key_bytes;
+  const auto key_bytes_with_padding = align_to_int64(key_bytes);
+  auto this_targets_ptr = row_ptr_rowwise(this_buff, query_mem_desc_, entry_idx) + key_bytes_with_padding;
+  auto that_targets_ptr = row_ptr_rowwise(that_buff, query_mem_desc_, entry_idx) + key_bytes_with_padding;
   if (key_bytes) {  // copy the key from right hand side
-    memcpy(this_targets_ptr - key_bytes, that_targets_ptr - key_bytes, key_bytes);
+    memcpy(this_targets_ptr - key_bytes_with_padding, that_targets_ptr - key_bytes_with_padding, key_bytes);
   }
   size_t target_slot_idx = 0;
   size_t init_agg_val_idx = 0;
@@ -345,37 +368,40 @@ GroupValueInfo get_group_value_columnar_reduction(int64_t* groups_buffer,
 #define store_cst(ptr, val) __atomic_store_n(ptr, val, __ATOMIC_SEQ_CST)
 #define load_cst(ptr) __atomic_load_n(ptr, __ATOMIC_SEQ_CST)
 
+template <typename T = int64_t>
 GroupValueInfo get_matching_group_value_reduction(int64_t* groups_buffer,
                                                   const uint32_t h,
-                                                  const int64_t* key,
-                                                  const uint32_t key_qw_count,
+                                                  const T* key,
+                                                  const uint32_t key_count,
                                                   const QueryMemoryDescriptor& query_mem_desc,
                                                   const int64_t* that_buff_i64,
                                                   const size_t that_entry_idx,
                                                   const size_t that_entry_count,
                                                   const uint32_t row_size_quad) {
   auto off = h * row_size_quad;
-  int64_t empty_key = EMPTY_KEY_64;
-  int64_t write_pending = EMPTY_KEY_64 - 1;
-  const bool success = cas_cst(&groups_buffer[off], &empty_key, write_pending);
+  T empty_key = get_empty_key<T>();
+  T write_pending = get_empty_key<T>() - 1;
+  auto row_ptr = reinterpret_cast<T*>(groups_buffer + off);
+  const auto slot_off_quad = get_slot_off_quad(query_mem_desc);
+  const bool success = cas_cst(row_ptr, &empty_key, write_pending);
   if (success) {
-    fill_slots(groups_buffer + off + key_qw_count,
+    fill_slots(groups_buffer + off + slot_off_quad,
                query_mem_desc.entry_count,
                that_buff_i64,
                that_entry_idx,
                that_entry_count,
                query_mem_desc);
-    if (key_qw_count > 1) {
-      memcpy(groups_buffer + off + 1, key + 1, (key_qw_count - 1) * sizeof(*key));
+    if (key_count > 1) {
+      memcpy(row_ptr + 1, key + 1, (key_count - 1) * sizeof(T));
     }
-    store_cst(&groups_buffer[off], *key);
-    return {groups_buffer + off + key_qw_count, true};
+    store_cst(row_ptr, *key);
+    return {groups_buffer + off + slot_off_quad, true};
   }
-  while (load_cst(&groups_buffer[off]) == write_pending) {
+  while (load_cst(row_ptr) == write_pending) {
     // spin until the winning thread has finished writing the entire key and the init value
   }
-  if (memcmp(groups_buffer + off, key, key_qw_count * sizeof(*key)) == 0) {
-    return {groups_buffer + off + key_qw_count, false};
+  if (memcmp(row_ptr, key, key_count * sizeof(T)) == 0) {
+    return {groups_buffer + off + slot_off_quad, false};
   }
   return {nullptr, true};
 }
@@ -384,20 +410,59 @@ GroupValueInfo get_matching_group_value_reduction(int64_t* groups_buffer,
 #undef store_cst
 #undef cas_cst
 
+inline GroupValueInfo get_matching_group_value_reduction(int64_t* groups_buffer,
+                                                         const uint32_t h,
+                                                         const int64_t* key,
+                                                         const uint32_t key_count,
+                                                         const size_t key_width,
+                                                         const QueryMemoryDescriptor& query_mem_desc,
+                                                         const int64_t* that_buff_i64,
+                                                         const size_t that_entry_idx,
+                                                         const size_t that_entry_count,
+                                                         const uint32_t row_size_quad) {
+  switch (key_width) {
+    case 4:
+      return get_matching_group_value_reduction(groups_buffer,
+                                                h,
+                                                reinterpret_cast<const int32_t*>(key),
+                                                key_count,
+                                                query_mem_desc,
+                                                that_buff_i64,
+                                                that_entry_idx,
+                                                that_entry_count,
+                                                row_size_quad);
+    case 8:
+      return get_matching_group_value_reduction(groups_buffer,
+                                                h,
+                                                key,
+                                                key_count,
+                                                query_mem_desc,
+                                                that_buff_i64,
+                                                that_entry_idx,
+                                                that_entry_count,
+                                                row_size_quad);
+    default:
+      CHECK(false);
+      return {nullptr, true};
+  }
+}
+
 GroupValueInfo get_group_value_reduction(int64_t* groups_buffer,
                                          const uint32_t groups_buffer_entry_count,
                                          const int64_t* key,
-                                         const uint32_t key_qw_count,
+                                         const uint32_t key_count,
+                                         const size_t key_width,
                                          const QueryMemoryDescriptor& query_mem_desc,
                                          const int64_t* that_buff_i64,
                                          const size_t that_entry_idx,
                                          const size_t that_entry_count,
                                          const uint32_t row_size_quad) {
-  uint32_t h = key_hash(key, key_qw_count, sizeof(int64_t)) % groups_buffer_entry_count;
+  uint32_t h = key_hash(key, key_count, key_width) % groups_buffer_entry_count;
   auto matching_gvi = get_matching_group_value_reduction(groups_buffer,
                                                          h,
                                                          key,
-                                                         key_qw_count,
+                                                         key_count,
+                                                         key_width,
                                                          query_mem_desc,
                                                          that_buff_i64,
                                                          that_entry_idx,
@@ -411,7 +476,8 @@ GroupValueInfo get_group_value_reduction(int64_t* groups_buffer,
     matching_gvi = get_matching_group_value_reduction(groups_buffer,
                                                       h_probe,
                                                       key,
-                                                      key_qw_count,
+                                                      key_count,
+                                                      key_width,
                                                       query_mem_desc,
                                                       that_buff_i64,
                                                       that_entry_idx,
@@ -435,14 +501,13 @@ void ResultSetStorage::reduceOneEntryBaseline(int8_t* this_buff,
                                               const size_t that_entry_count,
                                               const ResultSetStorage& that) const {
   check_watchdog(that_entry_idx);
-  const auto slot_count = get_buffer_col_slot_count(query_mem_desc_);
   const auto key_count = get_groupby_col_count(query_mem_desc_);
   CHECK(GroupByColRangeType::MultiCol == query_mem_desc_.hash_type ||
         GroupByColRangeType::OneColGuessedRange == query_mem_desc_.hash_type);
   CHECK(!query_mem_desc_.keyless_hash);
   const auto key_off = query_mem_desc_.output_columnar
                            ? key_offset_colwise(that_entry_idx, 0, query_mem_desc_.output_columnar)
-                           : key_offset_rowwise(that_entry_idx, key_count, slot_count);
+                           : get_row_qw_count(query_mem_desc_) * that_entry_idx;
   if (isEmptyEntry(that_entry_idx, that_buff)) {
     return;
   }
@@ -460,6 +525,7 @@ void ResultSetStorage::reduceOneEntryBaseline(int8_t* this_buff,
                                                                         query_mem_desc_.entry_count,
                                                                         &that_buff_i64[key_off],
                                                                         key_count,
+                                                                        query_mem_desc_.getEffectiveKeyWidth(),
                                                                         query_mem_desc_,
                                                                         that_buff_i64,
                                                                         that_entry_idx,
@@ -486,7 +552,6 @@ void ResultSetStorage::reduceOneEntrySlotsBaseline(int64_t* this_entry_slots,
                                                    const size_t that_entry_idx,
                                                    const size_t that_entry_count,
                                                    const ResultSetStorage& that) const {
-  const auto slot_count = get_buffer_col_slot_count(query_mem_desc_);
   const auto key_count = get_groupby_col_count(query_mem_desc_);
   size_t j = 0;
   size_t init_agg_val_idx = 0;
@@ -494,7 +559,8 @@ void ResultSetStorage::reduceOneEntrySlotsBaseline(int64_t* this_entry_slots,
     const auto& target_info = targets_[target_logical_idx];
     const auto that_slot_off = query_mem_desc_.output_columnar
                                    ? slot_offset_colwise(that_entry_idx, j, key_count, that_entry_count)
-                                   : slot_offset_rowwise(that_entry_idx, init_agg_val_idx, key_count, slot_count);
+                                   : get_row_qw_count(query_mem_desc_) * that_entry_idx +
+                                         get_slot_off_quad(query_mem_desc_) + init_agg_val_idx;
     const auto this_slot_off = query_mem_desc_.output_columnar ? j * query_mem_desc_.entry_count : init_agg_val_idx;
     reduceOneSlotBaseline(this_entry_slots,
                           this_slot_off,
@@ -554,14 +620,13 @@ void ResultSetStorage::moveEntriesToBuffer(int8_t* new_buff, const size_t new_en
   CHECK(!query_mem_desc_.keyless_hash);
   CHECK_GT(new_entry_count, query_mem_desc_.entry_count);
   auto new_buff_i64 = reinterpret_cast<int64_t*>(new_buff);
-  const auto slot_count = get_buffer_col_slot_count(query_mem_desc_);
   const auto key_count = get_groupby_col_count(query_mem_desc_);
   CHECK(GroupByColRangeType::MultiCol == query_mem_desc_.hash_type);
   const auto this_buff = reinterpret_cast<const int64_t*>(buff_);
   for (size_t i = 0; i < query_mem_desc_.entry_count; ++i) {
     const auto key_off = query_mem_desc_.output_columnar ? key_offset_colwise(i, 0, query_mem_desc_.entry_count)
-                                                         : key_offset_rowwise(i, key_count, slot_count);
-    if (this_buff[key_off] == EMPTY_KEY_64) {
+                                                         : get_row_qw_count(query_mem_desc_) * i;
+    if (isEmptyEntry(i, buff_)) {
       continue;
     }
     int64_t* new_entries_ptr{nullptr};
@@ -573,7 +638,7 @@ void ResultSetStorage::moveEntriesToBuffer(int8_t* new_buff, const size_t new_en
                                         new_entry_count,
                                         &this_buff[key_off],
                                         key_count,
-                                        sizeof(int64_t),
+                                        query_mem_desc_.getEffectiveKeyWidth(),
                                         get_row_qw_count(query_mem_desc_),
                                         nullptr);
     }
@@ -641,6 +706,7 @@ void ResultSetStorage::fillOneEntryRowWise(const std::vector<int64_t>& entry) {
   CHECK(!query_mem_desc_.output_columnar);
   CHECK_EQ(size_t(1), query_mem_desc_.entry_count);
   const auto key_off = key_offset_rowwise(0, key_count, slot_count);
+  CHECK_EQ(query_mem_desc_.getEffectiveKeyWidth(), sizeof(int64_t));
   for (size_t i = 0; i < key_count; ++i) {
     this_buff[key_off + i] = entry[i];
   }
@@ -651,18 +717,17 @@ void ResultSetStorage::fillOneEntryRowWise(const std::vector<int64_t>& entry) {
 }
 
 void ResultSetStorage::initializeRowWise() const {
-  const auto slot_count = get_buffer_col_slot_count(query_mem_desc_);
   const auto key_count = get_groupby_col_count(query_mem_desc_);
-  auto this_buff = reinterpret_cast<int64_t*>(buff_);
+  const auto row_size = get_row_bytes(query_mem_desc_);
+  CHECK_EQ(row_size % 8, 0);
+  const auto key_bytes_with_padding = align_to_int64(get_key_bytes_rowwise(query_mem_desc_));
   CHECK(!query_mem_desc_.keyless_hash);
   for (size_t i = 0; i < query_mem_desc_.entry_count; ++i) {
-    const auto key_off = key_offset_rowwise(i, key_count, slot_count);
-    for (size_t j = 0; j < key_count; ++j) {
-      this_buff[key_off + j] = EMPTY_KEY_64;
-    }
-    const auto first_slot_off = slot_offset_rowwise(i, 0, key_count, slot_count);
+    auto row_ptr = buff_ + i * row_size;
+    reset_keys(row_ptr, key_count, query_mem_desc_.getEffectiveKeyWidth());
+    auto slot_ptr = reinterpret_cast<int64_t*>(row_ptr + key_bytes_with_padding);
     for (size_t j = 0; j < target_init_vals_.size(); ++j) {
-      this_buff[first_slot_off + j] = target_init_vals_[j];
+      slot_ptr[j] = target_init_vals_[j];
     }
   }
 }

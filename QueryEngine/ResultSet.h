@@ -415,4 +415,6 @@ class RowSortException : public std::runtime_error {
 
 int64_t lazy_decode(const ColumnLazyFetchInfo& col_lazy_fetch, const int8_t* byte_stream, const int64_t pos);
 
+void reset_keys(void* key_ptr, const size_t key_count, const size_t key_width);
+
 #endif  // QUERYENGINE_RESULTSET_H

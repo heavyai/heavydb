@@ -24,7 +24,6 @@
 #include <llvm/IR/MDBuilder.h>
 #endif
 
-#include <algorithm>
 #include <numeric>
 #include <thread>
 
@@ -295,7 +294,7 @@ void QueryExecutionContext::initGroups(int64_t* groups_buffer,
                                        const int32_t groups_buffer_entry_count,
                                        const bool keyless,
                                        const size_t warp_size) {
-  const size_t key_qw_count{query_mem_desc_.group_col_widths.size()};
+  const size_t key_count{query_mem_desc_.group_col_widths.size()};
   const size_t row_size{query_mem_desc_.getRowSize()};
   const size_t col_base_off{query_mem_desc_.getColOffInBytes(0, 0)};
 
@@ -308,7 +307,7 @@ void QueryExecutionContext::initGroups(int64_t* groups_buffer,
 
   if (keyless) {
     CHECK(warp_size >= 1);
-    CHECK(key_qw_count == 1);
+    CHECK(key_count == 1);
     for (size_t warp_idx = 0; warp_idx < warp_size; ++warp_idx) {
       for (size_t bin = 0; bin < static_cast<size_t>(groups_buffer_entry_count); ++bin, buffer_ptr += row_size) {
         initColumnPerRow(query_mem_desc_fixedup, &buffer_ptr[col_base_off], bin, init_vals, agg_bitmap_size);
@@ -318,9 +317,7 @@ void QueryExecutionContext::initGroups(int64_t* groups_buffer,
   }
 
   for (size_t bin = 0; bin < static_cast<size_t>(groups_buffer_entry_count); ++bin, buffer_ptr += row_size) {
-    for (size_t key_idx = 0; key_idx < key_qw_count; ++key_idx) {
-      reinterpret_cast<int64_t*>(buffer_ptr)[key_idx] = EMPTY_KEY_64;
-    }
+    reset_keys(buffer_ptr, key_count, query_mem_desc_.getEffectiveKeyWidth());
     initColumnPerRow(query_mem_desc_fixedup, &buffer_ptr[col_base_off], bin, init_vals, agg_bitmap_size);
   }
 }
@@ -472,9 +469,20 @@ RowSetPtr QueryExecutionContext::getRowSet(const RelAlgExecutionUnit& ra_exe_uni
 }
 
 bool QueryExecutionContext::isEmptyBin(const int64_t* group_by_buffer, const size_t bin, const size_t key_idx) const {
-  const size_t key_off = query_mem_desc_.getKeyOffInBytes(bin, key_idx) / sizeof(int64_t);
-  if (group_by_buffer[key_off] == EMPTY_KEY_64) {
-    return true;
+  auto key_ptr = reinterpret_cast<const int8_t*>(group_by_buffer) + query_mem_desc_.getKeyOffInBytes(bin, key_idx);
+  switch (query_mem_desc_.getEffectiveKeyWidth()) {
+    case 4:
+      if (*reinterpret_cast<const int32_t*>(key_ptr) == EMPTY_KEY_32) {
+        return true;
+      }
+      break;
+    case 8:
+      if (*reinterpret_cast<const int64_t*>(key_ptr) == EMPTY_KEY_64) {
+        return true;
+      }
+      break;
+    default:
+      CHECK(false);
   }
   return false;
 }
@@ -688,6 +696,7 @@ GpuQueryMemory QueryExecutionContext::prepareGroupByDevBuffer(Data_Namespace::Da
                                        reinterpret_cast<int64_t*>(init_agg_vals_dev_ptr),
                                        query_mem_desc_.entry_count,
                                        query_mem_desc_.group_col_widths.size(),
+                                       query_mem_desc_.getEffectiveKeyWidth(),
                                        query_mem_desc_.getRowSize() / sizeof(int64_t),
                                        query_mem_desc_.keyless_hash,
                                        warp_count,

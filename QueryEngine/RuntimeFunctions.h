@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <ctime>
 #include <limits>
+#include <type_traits>
 
 extern "C" int64_t agg_sum(int64_t* agg, const int64_t val);
 
@@ -156,5 +157,16 @@ extern "C" double fixed_width_double_decode_noinline(const int8_t* byte_stream, 
 extern "C" int8_t* extract_str_ptr_noinline(const uint64_t str_and_len);
 
 extern "C" int32_t extract_str_len_noinline(const uint64_t str_and_len);
+
+template <typename T = int64_t>
+inline T get_empty_key() {
+  static_assert(std::is_same<T, int64_t>::value, "Unsupported template parameter other than int64_t for now");
+  return EMPTY_KEY_64;
+}
+
+template <>
+inline int32_t get_empty_key() {
+  return EMPTY_KEY_32;
+}
 
 #endif  // QUERYENGINE_RUNTIMEFUNCTIONS_H

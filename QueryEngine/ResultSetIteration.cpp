@@ -107,7 +107,8 @@ std::vector<TargetValue> ResultSet::getRowAt(const size_t global_entry_idx,
     crt_col_ptr = get_cols_ptr(buff, query_mem_desc_);
   } else {
     keys_ptr = row_ptr_rowwise(buff, query_mem_desc_, local_entry_idx);
-    rowwise_target_ptr = keys_ptr + get_key_bytes_rowwise(query_mem_desc_);
+    const auto key_bytes_with_padding = align_to_int64(get_key_bytes_rowwise(query_mem_desc_));
+    rowwise_target_ptr = keys_ptr + key_bytes_with_padding;
   }
   for (size_t target_idx = 0; target_idx < storage_->targets_.size(); ++target_idx) {
     const auto& agg_info = storage_->targets_[target_idx];
@@ -225,11 +226,13 @@ InternalTargetValue ResultSet::getColumnInternal(const int8_t* buff,
   const int8_t* rowwise_target_ptr{nullptr};
   const int8_t* keys_ptr{nullptr};
   const int8_t* crt_col_ptr{nullptr};
+  const size_t key_width{query_mem_desc_.getEffectiveKeyWidth()};
   if (query_mem_desc_.output_columnar) {
     crt_col_ptr = get_cols_ptr(buff, query_mem_desc_);
   } else {
     keys_ptr = row_ptr_rowwise(buff, query_mem_desc_, entry_idx);
-    rowwise_target_ptr = keys_ptr + get_key_bytes_rowwise(query_mem_desc_);
+    const auto key_bytes_with_padding = align_to_int64(get_key_bytes_rowwise(query_mem_desc_));
+    rowwise_target_ptr = keys_ptr + key_bytes_with_padding;
   }
   CHECK_LT(target_logical_idx, storage_->targets_.size());
   size_t agg_col_idx = 0;
@@ -259,17 +262,16 @@ InternalTargetValue ResultSet::getColumnInternal(const int8_t* buff,
         crt_col_ptr = advance_to_next_columnar_target_buff(crt_col_ptr, query_mem_desc_, agg_col_idx + 1);
       }
     } else {
-      // TODO(alex): Add support for 32-bit keys.
       auto ptr1 = rowwise_target_ptr;
       if (!query_mem_desc_.target_groupby_indices.empty()) {
         CHECK_LT(target_logical_idx, query_mem_desc_.target_groupby_indices.size());
         if (query_mem_desc_.target_groupby_indices[target_logical_idx] >= 0) {
-          ptr1 = keys_ptr + query_mem_desc_.target_groupby_indices[target_logical_idx] * sizeof(int64_t);
+          ptr1 = keys_ptr + query_mem_desc_.target_groupby_indices[target_logical_idx] * key_width;
         }
       }
       const auto compact_sz1 = query_mem_desc_.agg_col_widths[agg_col_idx].compact
                                    ? query_mem_desc_.agg_col_widths[agg_col_idx].compact
-                                   : sizeof(int64_t);
+                                   : key_width;
       const int8_t* ptr2{nullptr};
       int8_t compact_sz2{0};
       if (agg_info.is_agg && agg_info.agg_kind == kAVG) {
@@ -755,9 +757,10 @@ TargetValue ResultSet::getTargetValueFromBufferRowwise(const int8_t* rowwise_tar
     return makeTargetValue(
         ptr1, compact_sz1, target_info, target_logical_idx, translate_strings, decimal_to_double, entry_buff_idx);
   }
-  ptr1 = keys_ptr + query_mem_desc_.target_groupby_indices[target_logical_idx] * sizeof(int64_t);
+  const auto key_width = query_mem_desc_.getEffectiveKeyWidth();
+  ptr1 = keys_ptr + query_mem_desc_.target_groupby_indices[target_logical_idx] * key_width;
   return makeTargetValue(
-      ptr1, sizeof(int64_t), target_info, target_logical_idx, translate_strings, decimal_to_double, entry_buff_idx);
+      ptr1, key_width, target_info, target_logical_idx, translate_strings, decimal_to_double, entry_buff_idx);
 }
 
 // Returns true iff the entry at position entry_idx in buff contains a valid row.
@@ -779,8 +782,8 @@ bool ResultSetStorage::isEmptyEntry(const size_t entry_idx, const int8_t* buff) 
                                 query_mem_desc_.agg_col_widths[query_mem_desc_.idx_target_as_key].compact) ==
              target_init_vals_[query_mem_desc_.idx_target_as_key];
     }
-    const auto rowwise_target_ptr =
-        row_ptr_rowwise(buff, query_mem_desc_, entry_idx) + get_key_bytes_rowwise(query_mem_desc_);
+    const auto key_bytes_with_padding = align_to_int64(get_key_bytes_rowwise(query_mem_desc_));
+    const auto rowwise_target_ptr = row_ptr_rowwise(buff, query_mem_desc_, entry_idx) + key_bytes_with_padding;
     const auto target_slot_off = get_byteoff_of_slot(query_mem_desc_.idx_target_as_key, query_mem_desc_);
     return read_int_from_buff(rowwise_target_ptr + target_slot_off,
                               query_mem_desc_.agg_col_widths[query_mem_desc_.idx_target_as_key].compact) ==
@@ -791,7 +794,16 @@ bool ResultSetStorage::isEmptyEntry(const size_t entry_idx, const int8_t* buff) 
     return reinterpret_cast<const int64_t*>(buff)[entry_idx] == EMPTY_KEY_64;
   }
   const auto keys_ptr = row_ptr_rowwise(buff, query_mem_desc_, entry_idx);
-  return *reinterpret_cast<const int64_t*>(keys_ptr) == EMPTY_KEY_64;
+  switch (query_mem_desc_.getEffectiveKeyWidth()) {
+    case 4:
+      CHECK(GroupByColRangeType::MultiCol == query_mem_desc_.hash_type);
+      return *reinterpret_cast<const int32_t*>(keys_ptr) == EMPTY_KEY_32;
+    case 8:
+      return *reinterpret_cast<const int64_t*>(keys_ptr) == EMPTY_KEY_64;
+    default:
+      CHECK(false);
+      return true;
+  }
 }
 
 bool ResultSetStorage::isEmptyEntry(const size_t entry_idx) const {
