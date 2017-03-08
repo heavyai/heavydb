@@ -48,15 +48,11 @@ bool uses_int_meta(const SQLTypeInfo& col_ti) {
          (col_ti.is_string() && col_ti.get_compression() == kENCODING_DICT);
 }
 
-bool use_parallel_synthesize_metadata(const ResultRows& rows) {
-  return rows.getResultSet() && rows.getResultSet()->entryCount() >= 100000;
-}
-
 // TODO(alex): Placeholder, provide an efficient implementation for this
 std::map<int, ChunkMetadata> synthesize_metadata(const ResultRows* rows) {
   rows->moveToBegin();
   std::vector<std::vector<std::unique_ptr<Encoder>>> dummy_encoders;
-  const size_t worker_count = use_parallel_synthesize_metadata(*rows) ? cpu_threads() : 1;
+  const size_t worker_count = use_parallel_algorithms(*rows) ? cpu_threads() : 1;
   for (size_t worker_idx = 0; worker_idx < worker_count; ++worker_idx) {
     dummy_encoders.emplace_back();
     std::vector<std::unique_ptr<Encoder>> worker_dummy_encoders;
@@ -98,7 +94,7 @@ std::map<int, ChunkMetadata> synthesize_metadata(const ResultRows* rows) {
       }
     }
   };
-  if (use_parallel_synthesize_metadata(*rows)) {
+  if (use_parallel_algorithms(*rows)) {
     const size_t worker_count = cpu_threads();
     std::vector<std::future<void>> compute_stats_threads;
     const auto entry_count = rows->getResultSet()->entryCount();

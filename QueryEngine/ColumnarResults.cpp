@@ -18,10 +18,6 @@ int64_t fixed_encoding_nullable_val(const int64_t val, const SQLTypeInfo& type_i
   return val;
 }
 
-bool use_parallel_conversion(const ResultRows& rows) {
-  return rows.getResultSet() && rows.getResultSet()->entryCount() >= 100000;
-}
-
 }  // namespace
 
 ColumnarResults::ColumnarResults(const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
@@ -29,7 +25,7 @@ ColumnarResults::ColumnarResults(const std::shared_ptr<RowSetMemoryOwner> row_se
                                  const size_t num_columns,
                                  const std::vector<SQLTypeInfo>& target_types)
     : column_buffers_(num_columns),
-      num_rows_(use_parallel_conversion(rows) ? rows.getResultSet()->entryCount() : rows.rowCount()),
+      num_rows_(use_parallel_algorithms(rows) ? rows.getResultSet()->entryCount() : rows.rowCount()),
       target_types_(target_types) {
   column_buffers_.resize(num_columns);
   for (size_t i = 0; i < num_columns; ++i) {
@@ -85,7 +81,7 @@ ColumnarResults::ColumnarResults(const std::shared_ptr<RowSetMemoryOwner> row_se
       }
     }
   };
-  if (use_parallel_conversion(rows)) {
+  if (use_parallel_algorithms(rows)) {
     const size_t worker_count = cpu_threads();
     std::vector<std::future<void>> conversion_threads;
     const auto entry_count = rows.getResultSet()->entryCount();

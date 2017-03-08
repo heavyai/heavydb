@@ -880,4 +880,8 @@ class ResultRows {
 // hold iterator table as well and move decls elsewhere
 typedef std::unique_ptr<ResultRows> RowSetPtr;
 
+inline bool use_parallel_algorithms(const ResultRows& rows) {
+  return rows.getResultSet() && rows.getResultSet()->entryCount() >= 30000;
+}
+
 #endif  // QUERYENGINE_RESULTROWS_H
