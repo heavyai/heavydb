@@ -366,6 +366,9 @@ int JoinHashTable::initHashTableOnCpu(const int8_t* col_buff,
     for (auto& t : init_cpu_buff_threads) {
       t.join();
     }
+    if (err) {
+      cpu_hash_table_buff_.reset();
+    }
   }
   return err;
 }
