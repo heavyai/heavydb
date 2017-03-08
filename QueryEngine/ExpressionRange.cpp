@@ -274,12 +274,12 @@ ExpressionRange getExpressionRange(const Analyzer::Constant* constant_expr) {
       fragments.end(),                                                                              \
       [&has_nulls, col_id, col_ti](const Fragmenter_Namespace::FragmentInfo& lhs,                   \
                                    const Fragmenter_Namespace::FragmentInfo& rhs) {                 \
-        auto lhs_meta_it = lhs.chunkMetadataMap.find(col_id);                                       \
-        if (lhs_meta_it == lhs.chunkMetadataMap.end()) {                                            \
+        auto lhs_meta_it = lhs.getChunkMetadataMap().find(col_id);                                  \
+        if (lhs_meta_it == lhs.getChunkMetadataMap().end()) {                                       \
           return false;                                                                             \
         }                                                                                           \
-        auto rhs_meta_it = rhs.chunkMetadataMap.find(col_id);                                       \
-        CHECK(rhs_meta_it != rhs.chunkMetadataMap.end());                                           \
+        auto rhs_meta_it = rhs.getChunkMetadataMap().find(col_id);                                  \
+        CHECK(rhs_meta_it != rhs.getChunkMetadataMap().end());                                      \
         if (lhs_meta_it->second.chunkStats.has_nulls || rhs_meta_it->second.chunkStats.has_nulls) { \
           has_nulls = true;                                                                         \
         }                                                                                           \
@@ -385,15 +385,15 @@ ExpressionRange getLeafColumnRange(const Analyzer::ColumnVar* col_expr,
       }
       FIND_STAT_FRAG(min);
       FIND_STAT_FRAG(max);
-      const auto min_it = min_frag->chunkMetadataMap.find(col_id);
-      if (min_it == min_frag->chunkMetadataMap.end()) {
+      const auto min_it = min_frag->getChunkMetadataMap().find(col_id);
+      if (min_it == min_frag->getChunkMetadataMap().end()) {
         return ExpressionRange::makeInvalidRange();
       }
-      const auto max_it = max_frag->chunkMetadataMap.find(col_id);
-      CHECK(max_it != max_frag->chunkMetadataMap.end());
+      const auto max_it = max_frag->getChunkMetadataMap().find(col_id);
+      CHECK(max_it != max_frag->getChunkMetadataMap().end());
       for (const auto& fragment : fragments) {
-        const auto it = fragment.chunkMetadataMap.find(col_id);
-        if (it != fragment.chunkMetadataMap.end()) {
+        const auto it = fragment.getChunkMetadataMap().find(col_id);
+        if (it != fragment.getChunkMetadataMap().end()) {
           if (it->second.chunkStats.has_nulls) {
             has_nulls = true;
           }

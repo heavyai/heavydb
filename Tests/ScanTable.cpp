@@ -101,7 +101,7 @@ vector<size_t> scan_table_return_hash(const string& table_name, const Catalog& c
   for (auto frag : query_info.fragments) {
     int i = 0;
     for (auto cd : cds) {
-      auto chunk_meta_it = frag.chunkMetadataMap.find(cd->columnId);
+      auto chunk_meta_it = frag.getChunkMetadataMapPhysical().find(cd->columnId);
       ChunkKey chunk_key{cat.get_currentDB().dbId, td->tableId, cd->columnId, frag.fragmentId};
       total_bytes += chunk_meta_it->second.numBytes;
       auto ms = measure<>::execution([&]() {
@@ -134,7 +134,7 @@ vector<size_t> scan_table_return_hash_non_iter(const string& table_name, const C
   for (auto frag : query_info.fragments) {
     int i = 0;
     for (auto cd : cds) {
-      auto chunk_meta_it = frag.chunkMetadataMap.find(cd->columnId);
+      auto chunk_meta_it = frag.getChunkMetadataMapPhysical().find(cd->columnId);
       ChunkKey chunk_key{cat.get_currentDB().dbId, td->tableId, cd->columnId, frag.fragmentId};
       total_bytes += chunk_meta_it->second.numBytes;
       auto ms = measure<>::execution([&]() {

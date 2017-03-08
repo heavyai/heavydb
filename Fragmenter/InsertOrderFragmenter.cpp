@@ -88,7 +88,7 @@ void InsertOrderFragmenter::getChunkMetadata() {
       }
     }
     int columnId = chunkIt->first[2];
-    fragmentInfoVec_.back().chunkMetadataMap[columnId] = chunkIt->second;
+    fragmentInfoVec_.back().setChunkMetadata(columnId, chunkIt->second);
   }
 
   ssize_t maxFixedColSize = 0;
@@ -260,7 +260,7 @@ void InsertOrderFragmenter::insertData(const InsertData& insertDataStruct) {
   mapd_unique_lock<mapd_shared_mutex> writeLock(fragmentInfoMutex_);
   for (auto partIt = fragmentInfoVec_.begin() + startFragment; partIt != fragmentInfoVec_.end(); ++partIt) {
     partIt->numTuples = partIt->shadowNumTuples;
-    partIt->chunkMetadataMap = partIt->shadowChunkMetadataMap;
+    partIt->setChunkMetadataMap(partIt->shadowChunkMetadataMap);
   }
   numTuples_ += insertDataStruct.numRows;
   dropFragmentsToSize(maxRows_);

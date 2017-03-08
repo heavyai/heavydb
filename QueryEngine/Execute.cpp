@@ -4536,8 +4536,8 @@ const int8_t* Executor::ExecutionDispatch::getScanColumn(
   const auto fragments = fragments_it->second;
   const auto& fragment = (*fragments)[frag_id];
   std::shared_ptr<Chunk_NS::Chunk> chunk;
-  auto chunk_meta_it = fragment.chunkMetadataMap.find(col_id);
-  CHECK(chunk_meta_it != fragment.chunkMetadataMap.end());
+  auto chunk_meta_it = fragment.getChunkMetadataMap().find(col_id);
+  CHECK(chunk_meta_it != fragment.getChunkMetadataMap().end());
   CHECK(table_id > 0);
   auto cd = get_column_descriptor(col_id, table_id, cat_);
   CHECK(cd);
@@ -4557,7 +4557,7 @@ const int8_t* Executor::ExecutionDispatch::getScanColumn(
   const bool is_real_string = col_type.is_string() && col_type.get_compression() == kENCODING_NONE;
   if (is_real_string || col_type.is_array()) {
     CHECK_GT(table_id, 0);
-    CHECK(chunk_meta_it != fragment.chunkMetadataMap.end());
+    CHECK(chunk_meta_it != fragment.getChunkMetadataMap().end());
     chunk_iter_holder.push_back(chunk->begin_iterator(chunk_meta_it->second));
     auto& chunk_iter = chunk_iter_holder.back();
     if (memory_level == Data_Namespace::CPU_LEVEL) {
@@ -4610,7 +4610,7 @@ std::vector<const ColumnarResults*> Executor::ExecutionDispatch::getAllScanColum
       std::list<std::shared_ptr<Chunk_NS::Chunk>> chunk_holder;
       std::list<ChunkIter> chunk_iter_holder;
       const auto& fragment = (*fragments)[frag_id];
-      auto chunk_meta_it = fragment.chunkMetadataMap.find(col_id);
+      auto chunk_meta_it = fragment.getChunkMetadataMap().find(col_id);
       auto col_buffer = getScanColumn(table_id,
                                       frag_id,
                                       col_id,
@@ -4735,8 +4735,8 @@ const int8_t* Executor::ExecutionDispatch::getColumn(
             CHECK(fragments_it != all_tables_fragments.end());
             const auto fragments = fragments_it->second;
             const auto& fragment = (*fragments)[ref_frag_id];
-            auto chunk_meta_it = fragment.chunkMetadataMap.find(ref_col_id);
-            CHECK(chunk_meta_it != fragment.chunkMetadataMap.end());
+            auto chunk_meta_it = fragment.getChunkMetadataMap().find(ref_col_id);
+            CHECK(chunk_meta_it != fragment.getChunkMetadataMap().end());
             std::list<std::shared_ptr<Chunk_NS::Chunk>> chunk_holder;
             std::list<ChunkIter> chunk_iter_holder;
             auto col_buffer = getScanColumn(ref_table_id,
@@ -7310,11 +7310,11 @@ std::pair<bool, int64_t> Executor::skipFragment(const InputDescriptor& table_des
       return {false, -1};
     }
     const int col_id = lhs_col->get_column_id();
-    auto chunk_meta_it = fragment.chunkMetadataMap.find(col_id);
+    auto chunk_meta_it = fragment.getChunkMetadataMap().find(col_id);
     int64_t chunk_min{0};
     int64_t chunk_max{0};
     bool is_rowid{false};
-    if (chunk_meta_it == fragment.chunkMetadataMap.end()) {
+    if (chunk_meta_it == fragment.getChunkMetadataMap().end()) {
       auto cd = get_column_descriptor(col_id, table_id, *catalog_);
       CHECK(cd->isVirtualCol && cd->columnName == "rowid");
       chunk_min = all_frag_row_offsets[frag_idx];

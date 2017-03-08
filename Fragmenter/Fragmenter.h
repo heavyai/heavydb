@@ -13,6 +13,8 @@ namespace Data_Namespace {
 class AbstractBuffer;
 }
 
+class ResultRows;
+
 namespace Fragmenter_Namespace {
 
 /**
@@ -45,22 +47,35 @@ struct InsertData {
 };
 
 /**
- * @struct FragmentInfo
+ * @class FragmentInfo
  * @brief Used by Fragmenter classes to store info about each
  * fragment - the fragment id and number of tuples(rows)
  * currently stored by that fragment
  */
 
-struct FragmentInfo {
-  // std::vector<int>fragmentKeys;
+class FragmentInfo {
+ public:
+  FragmentInfo() : fragmentId(-1), numTuples(0), shadowNumTuples(0), resultSet(nullptr) {}
+
+  void setChunkMetadataMap(const std::map<int, ChunkMetadata>& chunkMetadataMap) {
+    this->chunkMetadataMap = chunkMetadataMap;
+  }
+
+  void setChunkMetadata(const int col, const ChunkMetadata& chunkMetadata) { chunkMetadataMap[col] = chunkMetadata; }
+
+  const std::map<int, ChunkMetadata>& getChunkMetadataMap() const;
+
+  const std::map<int, ChunkMetadata>& getChunkMetadataMapPhysical() const { return chunkMetadataMap; }
+
   int fragmentId;
   size_t numTuples;
   size_t shadowNumTuples;
   std::vector<int> deviceIds;
-  std::map<int, ChunkMetadata> chunkMetadataMap;
   std::map<int, ChunkMetadata> shadowChunkMetadataMap;
+  mutable ResultRows* resultSet;
 
-  FragmentInfo() : fragmentId(-1), numTuples(0), shadowNumTuples(0) {}
+ private:
+  mutable std::map<int, ChunkMetadata> chunkMetadataMap;
 };
 
 /**

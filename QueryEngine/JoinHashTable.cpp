@@ -133,8 +133,8 @@ std::pair<const int8_t*, size_t> JoinHashTable::getColumnFragment(
     const int device_id,
     std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
     std::map<int, std::shared_ptr<const ColumnarResults>>& frags_owner) {
-  auto chunk_meta_it = fragment.chunkMetadataMap.find(hash_col.get_column_id());
-  CHECK(chunk_meta_it != fragment.chunkMetadataMap.end());
+  auto chunk_meta_it = fragment.getChunkMetadataMap().find(hash_col.get_column_id());
+  CHECK(chunk_meta_it != fragment.getChunkMetadataMap().end());
   const auto cd = get_column_descriptor_maybe(hash_col.get_column_id(), hash_col.get_table_id(), cat_);
   CHECK(!cd || !(cd->isVirtualCol));
   const int8_t* col_buff = nullptr;

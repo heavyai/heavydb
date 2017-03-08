@@ -1,6 +1,8 @@
 #include "InputMetadata.h"
 #include "Execute.h"
 
+#include "../Fragmenter/Fragmenter.h"
+
 InputTableInfoCache::InputTableInfoCache(Executor* executor) : executor_(executor) {}
 
 namespace {
@@ -45,7 +47,7 @@ bool uses_int_meta(const SQLTypeInfo& col_ti) {
 }
 
 // TODO(alex): Placeholder, provide an efficient implementation for this
-std::map<int, ChunkMetadata> synthesize_metadata(const RowSetPtr& rows) {
+std::map<int, ChunkMetadata> synthesize_metadata(const ResultRows* rows) {
   rows->moveToBegin();
   std::vector<std::unique_ptr<Encoder>> dummy_encoders;
   for (size_t i = 0; i < rows->colCount(); ++i) {
@@ -106,7 +108,7 @@ Fragmenter_Namespace::TableInfo synthesize_table_info(const RowSetPtr& rows) {
     fragment.fragmentId = 0;
     fragment.numTuples = row_count;
     fragment.deviceIds.resize(3);
-    fragment.chunkMetadataMap = synthesize_metadata(rows);
+    fragment.resultSet = rows.get();
   }
   Fragmenter_Namespace::TableInfo table_info;
   table_info.fragments = result;
@@ -195,4 +197,12 @@ std::vector<InputTableInfo> get_table_infos(const RelAlgExecutionUnit& ra_exe_un
   collect_table_infos(table_infos, ra_exe_unit.input_descs, executor);
   collect_table_infos(table_infos, ra_exe_unit.extra_input_descs, executor);
   return table_infos;
+}
+
+const std::map<int, ChunkMetadata>& Fragmenter_Namespace::FragmentInfo::getChunkMetadataMap() const {
+  if (resultSet) {
+    chunkMetadataMap = synthesize_metadata(resultSet);
+    resultSet = nullptr;
+  }
+  return chunkMetadataMap;
 }
