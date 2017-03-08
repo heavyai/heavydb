@@ -164,10 +164,10 @@ int main(int argc, char** argv) {
   desc.add_options()("port,p", po::value<int>(&port)->default_value(port), "Port number");
   desc.add_options()(
       "ldap-uri", po::value<std::string>(&ldapMetadata.uri)->default_value(std::string("")), "ldap server uri");
-  desc.add_options()(
-      "ldap-ou-dc",
-      po::value<std::string>(&ldapMetadata.orgUnit)->default_value(std::string("ou=users,dc=mapd,dc=com")),
-      "ldap Organizational Unit and Domain Component");
+  desc.add_options()("ldap-dn",
+                     po::value<std::string>(&ldapMetadata.distinguishedName)
+                         ->default_value(std::string("uid=%s,cn=users,cn=accounts,dc=mapd,dc=com")),
+                     "ldap DN Distinguished Name");
   desc.add_options()("http-port", po::value<int>(&http_port)->default_value(http_port), "HTTP port number");
 #ifdef HAVE_CALCITE
   desc.add_options()("calcite-port", po::value<int>(&calcite_port)->default_value(calcite_port), "Calcite port number");
