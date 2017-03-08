@@ -55,7 +55,6 @@ std::map<int, ChunkMetadata> synthesize_metadata(const ResultRows* rows) {
   const size_t worker_count = use_parallel_algorithms(*rows) ? cpu_threads() : 1;
   for (size_t worker_idx = 0; worker_idx < worker_count; ++worker_idx) {
     dummy_encoders.emplace_back();
-    std::vector<std::unique_ptr<Encoder>> worker_dummy_encoders;
     for (size_t i = 0; i < rows->colCount(); ++i) {
       const auto& col_ti = rows->getColType(i);
       dummy_encoders.back().emplace_back(Encoder::Create(nullptr, col_ti));
