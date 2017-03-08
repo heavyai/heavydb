@@ -3,6 +3,8 @@
 
 #include "../Fragmenter/Fragmenter.h"
 
+#include <future>
+
 InputTableInfoCache::InputTableInfoCache(Executor* executor) : executor_(executor) {}
 
 namespace {
@@ -46,19 +48,25 @@ bool uses_int_meta(const SQLTypeInfo& col_ti) {
          (col_ti.is_string() && col_ti.get_compression() == kENCODING_DICT);
 }
 
+bool use_parallel_synthesize_metadata(const ResultRows& rows) {
+  return rows.getResultSet() && rows.getResultSet()->entryCount() >= 100000;
+}
+
 // TODO(alex): Placeholder, provide an efficient implementation for this
 std::map<int, ChunkMetadata> synthesize_metadata(const ResultRows* rows) {
   rows->moveToBegin();
-  std::vector<std::unique_ptr<Encoder>> dummy_encoders;
-  for (size_t i = 0; i < rows->colCount(); ++i) {
-    const auto& col_ti = rows->getColType(i);
-    dummy_encoders.emplace_back(Encoder::Create(nullptr, col_ti));
-  }
-  while (true) {
-    auto crt_row = rows->getNextRow(false, false);
-    if (crt_row.empty()) {
-      break;
+  std::vector<std::vector<std::unique_ptr<Encoder>>> dummy_encoders;
+  const size_t worker_count = use_parallel_synthesize_metadata(*rows) ? cpu_threads() : 1;
+  for (size_t worker_idx = 0; worker_idx < worker_count; ++worker_idx) {
+    dummy_encoders.emplace_back();
+    std::vector<std::unique_ptr<Encoder>> worker_dummy_encoders;
+    for (size_t i = 0; i < rows->colCount(); ++i) {
+      const auto& col_ti = rows->getColType(i);
+      dummy_encoders.back().emplace_back(Encoder::Create(nullptr, col_ti));
     }
+  }
+  const auto do_work = [rows](const std::vector<TargetValue>& crt_row,
+                              std::vector<std::unique_ptr<Encoder>>& dummy_encoders) {
     for (size_t i = 0; i < rows->colCount(); ++i) {
       const auto& col_ti = rows->getColType(i);
       const auto& col_val = crt_row[i];
@@ -89,11 +97,55 @@ std::map<int, ChunkMetadata> synthesize_metadata(const ResultRows* rows) {
         throw std::runtime_error(col_ti.get_type_name() + " is not supported in temporary table.");
       }
     }
+  };
+  if (use_parallel_synthesize_metadata(*rows)) {
+    const size_t worker_count = cpu_threads();
+    std::vector<std::future<void>> compute_stats_threads;
+    const auto entry_count = rows->getResultSet()->entryCount();
+    for (size_t i = 0, start_entry = 0, stride = (entry_count + worker_count - 1) / worker_count;
+         i < worker_count && start_entry < entry_count;
+         ++i, start_entry += stride) {
+      const auto end_entry = std::min(start_entry + stride, entry_count);
+      compute_stats_threads.push_back(
+          std::async(std::launch::async,
+                     [rows, &do_work, &dummy_encoders](const size_t start, const size_t end, const size_t worker_idx) {
+                       for (size_t i = start; i < end; ++i) {
+                         const auto crt_row = rows->getResultSet()->getRowAtNoTranslations(i);
+                         if (!crt_row.empty()) {
+                           do_work(crt_row, dummy_encoders[worker_idx]);
+                         }
+                       }
+                     },
+                     start_entry,
+                     end_entry,
+                     i));
+    }
+    for (auto& child : compute_stats_threads) {
+      child.wait();
+    }
+    for (auto& child : compute_stats_threads) {
+      child.get();
+    }
+  } else {
+    while (true) {
+      auto crt_row = rows->getNextRow(false, false);
+      if (crt_row.empty()) {
+        break;
+      }
+      do_work(crt_row, dummy_encoders[0]);
+    }
+    rows->moveToBegin();
   }
-  rows->moveToBegin();
   std::map<int, ChunkMetadata> metadata_map;
+  for (size_t worker_idx = 1; worker_idx < worker_count; ++worker_idx) {
+    CHECK_LT(worker_idx, dummy_encoders.size());
+    const auto& worker_encoders = dummy_encoders[worker_idx];
+    for (size_t i = 0; i < rows->colCount(); ++i) {
+      dummy_encoders[0][i]->reduceStats(*worker_encoders[i]);
+    }
+  }
   for (size_t i = 0; i < rows->colCount(); ++i) {
-    const auto it_ok = metadata_map.emplace(i, dummy_encoders[i]->getMetadata(rows->getColType(i)));
+    const auto it_ok = metadata_map.emplace(i, dummy_encoders[0][i]->getMetadata(rows->getColType(i)));
     CHECK(it_ok.second);
   }
   return metadata_map;

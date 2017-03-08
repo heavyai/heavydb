@@ -165,3 +165,7 @@ void Encoder::updateStats(const int64_t, const bool) {
 void Encoder::updateStats(const double, const bool) {
   CHECK(false);
 }
+
+void Encoder::reduceStats(const Encoder&) {
+  CHECK(false);
+}

@@ -80,6 +80,16 @@ class FixedLengthEncoder : public Encoder {
     }
   }
 
+  // Only called from the executor for synthesized meta-information.
+  void reduceStats(const Encoder& that) {
+    const auto that_typed = static_cast<const FixedLengthEncoder<T, V>&>(that);
+    if (that_typed.has_nulls) {
+      has_nulls = true;
+    }
+    dataMin = std::min(dataMin, that_typed.dataMin);
+    dataMax = std::max(dataMax, that_typed.dataMax);
+  }
+
   void copyMetadata(const Encoder* copyFromEncoder) {
     numElems = copyFromEncoder->numElems;
     auto castedEncoder = reinterpret_cast<const FixedLengthEncoder<T, V>*>(copyFromEncoder);

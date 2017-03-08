@@ -66,6 +66,16 @@ class NoneEncoder : public Encoder {
     }
   }
 
+  // Only called from the executor for synthesized meta-information.
+  void reduceStats(const Encoder& that) {
+    const auto that_typed = static_cast<const NoneEncoder&>(that);
+    if (that_typed.has_nulls) {
+      has_nulls = true;
+    }
+    dataMin = std::min(dataMin, that_typed.dataMin);
+    dataMax = std::max(dataMax, that_typed.dataMax);
+  }
+
   void writeMetadata(FILE* f) {
     // assumes pointer is already in right place
     fwrite((int8_t*)&numElems, sizeof(size_t), 1, f);
