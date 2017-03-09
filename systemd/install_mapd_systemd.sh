@@ -57,6 +57,7 @@ sed -e "s#@MAPD_PATH@#${vars['MAPD_PATH']}#g" \
     -e "s#@MAPD_LIBJVM_DIR@#${vars['MAPD_LIBJVM_DIR']}#g" \
     mapd.conf.in > mapd.conf
 sudo cp mapd.conf ${vars['MAPD_STORAGE']}
+sudo chown ${vars['MAPD_USER']}:${vars['MAPD_GROUP']} "${vars['MAPD_STORAGE']}/mapd.conf"
 
 sudo systemctl daemon-reload
 
