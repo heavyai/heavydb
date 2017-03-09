@@ -1465,7 +1465,7 @@ void InsertStmt::analyze(const Catalog_Namespace::Catalog& catalog, Analyzer::Qu
   const TableDescriptor* td = catalog.getMetadataForTable(*table);
   if (td == nullptr)
     throw std::runtime_error("Table " + *table + " does not exist.");
-  if (td->isView && !td->isMaterialized)
+  if (td->isView)
     throw std::runtime_error("Insert to views is not supported yet.");
   query.set_result_table_id(td->tableId);
   std::list<int> result_col_list;
@@ -1702,11 +1702,6 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   td.tableName = *table;
   td.nColumns = columns.size();
   td.isView = false;
-  td.isMaterialized = false;
-  td.storageOption = kDISK;
-  td.refreshOption = kMANUAL;
-  td.checkOption = false;
-  td.isReady = true;
   td.fragmenter = nullptr;
   td.fragType = Fragmenter_Namespace::FragmenterType::INSERT_ORDER;
   td.maxFragRows = DEFAULT_FRAGMENT_ROWS;
@@ -2185,58 +2180,19 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 void CreateViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 #ifdef HAVE_CALCITE
   auto& catalog = session.get_catalog();
-  if (catalog.getMetadataForTable(*view_name) != nullptr) {
-    if (if_not_exists)
+  if (catalog.getMetadataForTable(view_name_) != nullptr) {
+    if (if_not_exists_)
       return;
-    throw std::runtime_error("Table or View " + *view_name + " already exists.");
+    throw std::runtime_error("Table or View " + view_name_ + " already exists.");
   }
-  StorageOption matview_storage = kDISK;
-  ViewRefreshOption matview_refresh = kMANUAL;
-  if (!matview_options.empty()) {
-    for (auto& p : matview_options) {
-      if (boost::iequals(*p->get_name(), "storage")) {
-        if (!dynamic_cast<const StringLiteral*>(p->get_value()))
-          throw std::runtime_error("Storage option must be a string literal.");
-        const std::string* str = static_cast<const StringLiteral*>(p->get_value())->get_stringval();
-        if (boost::iequals(*str, "gpu") || boost::iequals(*str, "mic"))
-          matview_storage = kGPU;
-        else if (boost::iequals(*str, "cpu"))
-          matview_storage = kCPU;
-        else if (boost::iequals(*str, "disk"))
-          matview_storage = kDISK;
-        else
-          throw std::runtime_error("Invalid storage option " + *str + ". Should be GPU, MIC, CPU or DISK.");
-      } else if (boost::iequals(*p->get_name(), "refresh")) {
-        if (!dynamic_cast<const StringLiteral*>(p->get_value()))
-          throw std::runtime_error("Refresh option must be a string literal.");
-        const std::string* str = static_cast<const StringLiteral*>(p->get_value())->get_stringval();
-        if (boost::iequals(*str, "auto"))
-          matview_refresh = kAUTO;
-        else if (boost::iequals(*str, "manual"))
-          matview_refresh = kMANUAL;
-        else if (boost::iequals(*str, "immediate"))
-          matview_refresh = kIMMEDIATE;
-        else
-          throw std::runtime_error("Invalid refresh option " + *str + ". Should be AUTO, MANUAL or IMMEDIATE.");
-      } else
-        throw std::runtime_error("Invalid CREATE MATERIALIZED VIEW option " + *p->get_name() +
-                                 ".  Should be STORAGE or REFRESH.");
-    }
-  }
-  const auto query_str = query->to_string();
   const auto& user_metadata = session.get_currentUser();
   catalog.get_calciteMgr().process(
-      user_metadata.userName, user_metadata.passwd, catalog.get_currentDB().dbName, pg_shim(query_str), true, true);
+      user_metadata.userName, user_metadata.passwd, catalog.get_currentDB().dbName, pg_shim(select_query_), true, true);
   TableDescriptor td;
-  td.tableName = *view_name;
+  td.tableName = view_name_;
   td.nColumns = 0;
   td.isView = true;
-  td.isMaterialized = is_materialized;
-  td.viewSQL = query_str;
-  td.checkOption = checkoption;
-  td.storageOption = matview_storage;
-  td.refreshOption = matview_refresh;
-  td.isReady = !is_materialized;
+  td.viewSQL = select_query_;
   td.fragmenter = nullptr;
   td.fragType = Fragmenter_Namespace::FragmenterType::INSERT_ORDER;
   td.maxFragRows = DEFAULT_FRAGMENT_ROWS;    // @todo this stuff should not be InsertOrderFragmenter
@@ -2247,32 +2203,6 @@ void CreateViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 #else
   throw std::runtime_error("CREATE VIEW not supported with legacy parser");
 #endif  // HAVE_CALCITE
-}
-
-void RefreshViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
-  auto& catalog = session.get_catalog();
-  const TableDescriptor* td = catalog.getMetadataForTable(*view_name);
-  if (td == nullptr)
-    throw std::runtime_error("Materialied view " + *view_name + " does not exist.");
-  if (!td->isView)
-    throw std::runtime_error(*view_name + " is a table not a materialized view.");
-  if (!td->isMaterialized)
-    throw std::runtime_error(*view_name + " is not a materialized view.");
-  SQLParser parser;
-  std::list<std::unique_ptr<Stmt>> parse_trees;
-  std::string last_parsed;
-  std::string query_str = "INSERT INTO " + *view_name + " " + td->viewSQL;
-  int numErrors = parser.parse(query_str, parse_trees, last_parsed);
-  if (numErrors > 0)
-    throw std::runtime_error("Internal Error: syntax error at: " + last_parsed);
-  DMLStmt* view_stmt = dynamic_cast<DMLStmt*>(parse_trees.front().get());
-  Analyzer::Query query;
-  view_stmt->analyze(catalog, query);
-  Planner::Optimizer optimizer(query, catalog);
-  Planner::RootPlan* plan = optimizer.optimize();
-  std::unique_ptr<Planner::RootPlan> plan_ptr(plan);  // make sure it's deleted
-                                                      // @TODO execute plan
-                                                      // plan->print();
 }
 
 void DropViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {

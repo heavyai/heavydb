@@ -1089,50 +1089,16 @@ class ExportQueryStmt : public DDLStmt {
  */
 class CreateViewStmt : public DDLStmt {
  public:
-  CreateViewStmt(std::string* v,
-                 std::list<std::string*>* c,
-                 QuerySpec* q,
-                 bool ck,
-                 bool m,
-                 std::list<NameValueAssign*>* o,
-                 bool i)
-      : view_name(v), query(q), checkoption(ck), is_materialized(m), if_not_exists(i) {
-    if (c) {
-      for (const auto e : *c) {
-        column_list.emplace_back(e);
-      }
-      delete c;
-    }
-    if (o) {
-      for (const auto e : *o) {
-        matview_options.emplace_back(e);
-      }
-      delete o;
-    }
-  }
-  const std::string* get_view_name() const { return view_name.get(); }
-  const std::list<std::unique_ptr<std::string>>& get_column_list() const { return column_list; }
-  const QuerySpec* get_query() const { return query.get(); }
-  bool get_checkoption() const { return checkoption; }
+  CreateViewStmt(const std::string& view_name, const std::string& select_query, const bool if_not_exists)
+      : view_name_(view_name), select_query_(select_query), if_not_exists_(if_not_exists) {}
+  const std::string& get_view_name() const { return view_name_; }
+  const std::string& get_select_query() const { return select_query_; }
   virtual void execute(const Catalog_Namespace::SessionInfo& session);
 
  private:
-  std::unique_ptr<std::string> view_name;
-  std::list<std::unique_ptr<std::string>> column_list;
-  std::unique_ptr<QuerySpec> query;
-  bool checkoption;
-  bool is_materialized;
-  std::list<std::unique_ptr<NameValueAssign>> matview_options;
-  bool if_not_exists;
-};
-
-class RefreshViewStmt : public DDLStmt {
- public:
-  explicit RefreshViewStmt(std::string* v) : view_name(v) {}
-  virtual void execute(const Catalog_Namespace::SessionInfo& session);
-
- private:
-  std::unique_ptr<std::string> view_name;
+  const std::string view_name_;
+  const std::string select_query_;
+  const bool if_not_exists_;
 };
 
 /*

@@ -143,9 +143,7 @@ void SysCatalog::createDatabase(const string& name, int owner) {
       "integer, colsubtype integer, coldim integer, colscale integer, is_notnull boolean, compression integer, "
       "comp_param integer, size integer, chunks text, is_systemcol boolean, is_virtualcol boolean, virtual_expr text, "
       "primary key(tableid, columnid), unique(tableid, name))");
-  dbConn.query(
-      "CREATE TABLE mapd_views (tableid integer references mapd_tables, sql text, materialized boolean, storage int, "
-      "refresh int)");
+  dbConn.query("CREATE TABLE mapd_views (tableid integer references mapd_tables, sql text)");
   dbConn.query(
       "CREATE TABLE mapd_frontend_views (viewid integer primary key, name text unique, userid integer references "
       "mapd_users, view_state text, image_hash text, update_time timestamp, view_metadata text)");
@@ -166,7 +164,7 @@ void SysCatalog::dropDatabase(const int32_t dbid, const std::string& name) {
 #endif  // HAVE_CALCITE
   dataMgr_->deleteChunksWithPrefix(chunkKeyPrefix);
   /* don't need to checkpoint as database is being dropped */
-  // dataMgr_->checkpoint(); 
+  // dataMgr_->checkpoint();
 }
 
 bool SysCatalog::checkPasswordForUser(const std::string& passwd, UserMetadata& user) {
@@ -496,12 +494,6 @@ void Catalog::buildMaps() {
     td->maxRows = sqliteConnector_.getData<int64_t>(r, 9);
     td->partitions = sqliteConnector_.getData<string>(r, 10);
     if (!td->isView) {
-      // initialize view fields even though irrelevant
-      td->isMaterialized = false;
-      td->storageOption = kDISK;
-      td->refreshOption = kMANUAL;
-      td->checkOption = false;
-      td->isReady = true;
       td->fragmenter = nullptr;
     }
     tableDescriptorMap_[to_upper(td->tableName)] = td;
@@ -534,17 +526,13 @@ void Catalog::buildMaps() {
     ColumnIdKey columnIdKey(cd->tableId, cd->columnId);
     columnDescriptorMapById_[columnIdKey] = cd;
   }
-  string viewQuery("SELECT tableid, sql, materialized, storage, refresh FROM mapd_views");
+  string viewQuery("SELECT tableid, sql FROM mapd_views");
   sqliteConnector_.query(viewQuery);
   numRows = sqliteConnector_.getNumRows();
   for (size_t r = 0; r < numRows; ++r) {
     int32_t tableId = sqliteConnector_.getData<int>(r, 0);
     TableDescriptor* td = tableDescriptorMapById_[tableId];
     td->viewSQL = sqliteConnector_.getData<string>(r, 1);
-    td->isMaterialized = sqliteConnector_.getData<bool>(r, 2);
-    td->storageOption = (StorageOption)sqliteConnector_.getData<int>(r, 3);
-    td->refreshOption = (ViewRefreshOption)sqliteConnector_.getData<int>(r, 4);
-    td->isReady = !td->isMaterialized;
     td->fragmenter = nullptr;
   }
 
@@ -904,13 +892,8 @@ void Catalog::createTable(TableDescriptor& td, const list<ColumnDescriptor>& col
       cds.push_back(cd);
     }
     if (td.isView) {
-      sqliteConnector_.query_with_text_params(
-          "INSERT INTO mapd_views (tableid, sql, materialized, storage, refresh) VALUES (?,?,?,?,?)",
-          std::vector<std::string>{std::to_string(td.tableId),
-                                   td.viewSQL,
-                                   std::to_string(td.isMaterialized),
-                                   std::to_string(td.storageOption),
-                                   std::to_string(td.refreshOption)});
+      sqliteConnector_.query_with_text_params("INSERT INTO mapd_views (tableid, sql) VALUES (?,?)",
+                                              std::vector<std::string>{std::to_string(td.tableId), td.viewSQL});
     }
   } catch (std::exception& e) {
     sqliteConnector_.query("ROLLBACK TRANSACTION");

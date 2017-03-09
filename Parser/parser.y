@@ -2,12 +2,30 @@
 %define CLASS SQLParser
 %define LVAL yylval
 %define CONSTRUCTOR_INIT : lexer(yylval)
-%define MEMBERS                 \
-		virtual ~SQLParser() {} \
-    int parse(const std::string & inputStr, std::list<std::unique_ptr<Stmt>>& parseTrees, std::string &lastParsed) { std::lock_guard<std::mutex> lock(mutex_); std::istringstream ss(inputStr); lexer.switch_streams(&ss,0);  yyparse(parseTrees); lastParsed = lexer.YYText(); return yynerrs; } \
-    private:                   \
-       SQLLexer lexer;         \
-       std::mutex mutex_;
+%define MEMBERS                                                                                                         \
+  virtual ~SQLParser() {}                                                                                               \
+  int parse(const std::string & inputStr, std::list<std::unique_ptr<Stmt>>& parseTrees, std::string &lastParsed) {      \
+    boost::regex create_view_expr{R"(CREATE\s+VIEW\s+(IF\s+NOT\s+EXISTS\s+)?([A-Za-z_][A-Za-z0-9\$_]*)\s+AS\s+(.*);)",  \
+                                  boost::regex::extended | boost::regex::icase};                                        \
+    boost::smatch what;                                                                                                 \
+    const auto trimmed_input = boost::algorithm::trim_copy(inputStr);                                                   \
+    if (boost::regex_match(trimmed_input.cbegin(), trimmed_input.cend(), what, create_view_expr)) {                     \
+      const bool if_not_exists = what[1].length() > 0;                                                                  \
+      const auto view_name = what[2].str();                                                                             \
+      const auto select_query = what[3].str();                                                                          \
+      parseTrees.emplace_back(new CreateViewStmt(view_name, select_query, if_not_exists));                              \
+      return 0;                                                                                                         \
+    }                                                                                                                   \
+    std::lock_guard<std::mutex> lock(mutex_);                                                                           \
+    std::istringstream ss(inputStr);                                                                                    \
+    lexer.switch_streams(&ss,0);                                                                                        \
+    yyparse(parseTrees);                                                                                                \
+    lastParsed = lexer.YYText();                                                                                        \
+    return yynerrs;                                                                                                     \
+  }                                                                                                                     \
+ private:                                                                                                               \
+  SQLLexer lexer;                                                                                                       \
+  std::mutex mutex_;
 %define LEX_BODY {return lexer.yylex();}
 %define ERROR_BODY {} /*{ std::cerr << "Syntax error on line " << lexer.lineno() << ". Last word parsed: " << lexer.YYText() << std::endl; } */
 
@@ -22,6 +40,8 @@
 #include <utility>
 #include <stdexcept>
 #include <boost/algorithm/string/predicate.hpp>
+#include <boost/algorithm/string/trim.hpp>
+#include <boost/regex.hpp>
 #include <FlexLexer.h>
 #include "ParserNode.h"
 
@@ -95,11 +115,9 @@ sql_list:
 	/* schema definition language */
 sql:		/* schema {	$<nodeval>$ = $<nodeval>1; } */
 	 create_table_statement { $<nodeval>$ = $<nodeval>1; }
-	| create_view_statement { $<nodeval>$ = $<nodeval>1; }
 	| show_table_schema { $<nodeval>$ = $<nodeval>1; }
 	/* | prvililege_def { $<nodeval>$ = $<nodeval>1; } */
 	| drop_view_statement { $<nodeval>$ = $<nodeval>1; }
-	| refresh_view_statement { $<nodeval>$ = $<nodeval>1; }
 	| drop_table_statement { $<nodeval>$ = $<nodeval>1; }
 	| rename_table_statement { $<nodeval>$ = $<nodeval>1; }
 	| rename_column_statement { $<nodeval>$ = $<nodeval>1; }
@@ -339,46 +357,12 @@ opt_with_option_list:
 		{ $<listval>$ = nullptr; }
 		;
 
-create_view_statement:
-		CREATE VIEW opt_if_not_exists table opt_column_commalist
-		AS query_spec opt_with_check_option
-		{
-			$<nodeval>$ = new CreateViewStmt($<stringval>4, $<slistval>5, dynamic_cast<QuerySpec*>($<nodeval>7), $<boolval>8, false, nullptr, $<boolval>3);
-		}
-		| CREATE NAME VIEW opt_if_not_exists table opt_column_commalist opt_with_option_list
-		AS query_spec
-		{
-			if (!boost::iequals(*$<stringval>2, "materialized"))
-				throw std::runtime_error("Invalid word " + *$<stringval>2);
-			delete $<stringval>2;
-			$<nodeval>$ = new CreateViewStmt($<stringval>5, $<slistval>6, dynamic_cast<QuerySpec*>($<nodeval>9), false, true, reinterpret_cast<std::list<NameValueAssign*>*>($<listval>7), $<boolval>4);
-		}
-	;
-
-refresh_view_statement:
-		NAME NAME VIEW table
-		{
-			if (!boost::iequals(*$<stringval>1, "refresh"))
-				throw std::runtime_error("Invalid word " + *$<stringval>1);
-			if (!boost::iequals(*$<stringval>2, "materialized"))
-				throw std::runtime_error("Invalid word " + *$<stringval>2);
-			delete $<stringval>1;
-			delete $<stringval>2;
-			$<nodeval>$ = new RefreshViewStmt($<stringval>4);
-		}
-		;
-
 drop_view_statement:
 		DROP VIEW opt_if_exists table
 		{
 			$<nodeval>$ = new DropViewStmt($<stringval>4, $<boolval>3);
 		}
 		;
-
-opt_with_check_option:
-		/* empty */	{	$<boolval>$ = false; }
-	|	WITH CHECK OPTION { $<boolval>$ = true; }
-	;
 
 opt_column_commalist:
 		/* empty */ { $<slistval>$ = nullptr; }
