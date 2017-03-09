@@ -102,16 +102,32 @@ void GlobalFileMgr::getChunkMetadataVec(std::vector<std::pair<ChunkKey, ChunkMet
   }
 }
 
-FileMgr* GlobalFileMgr::getFileMgr(const int db_id, const int tb_id) {
+FileMgr* GlobalFileMgr::findFileMgr(const int db_id, const int tb_id, const bool removeFromMap) {
+  FileMgr* fm = 0;
   const auto file_mgr_key = std::make_pair(db_id, tb_id);
   {
-    mapd_shared_lock<mapd_shared_mutex> read_lock(fileMgrs_mutex_);
+    mapd_lock_guard<mapd_shared_mutex> read_lock(fileMgrs_mutex_);
     auto it = fileMgrs_.find(file_mgr_key);
     if (it != fileMgrs_.end()) {
-      return it->second;
+      fm = it->second;
+      if (removeFromMap) {
+        fileMgrs_.erase(it);
+      }
     }
   }
-  {
+  return fm;
+}
+
+FileMgr* GlobalFileMgr::getFileMgr(const int db_id, const int tb_id) {
+  { /* check if FileMgr already exists for (db_id, tb_id) */
+    FileMgr* fm = findFileMgr(db_id, tb_id);
+    if (fm != 0) {
+      return fm;
+    }
+  }
+
+  { /* create new FileMgr for (db_id, tb_id) */
+    const auto file_mgr_key = std::make_pair(db_id, tb_id);
     mapd_lock_guard<mapd_shared_mutex> write_lock(fileMgrs_mutex_);
     auto it = fileMgrs_.find(file_mgr_key);
     if (it != fileMgrs_.end()) {
@@ -135,6 +151,23 @@ void GlobalFileMgr::writeFileMgrData(FileMgr* fileMgr) { // this function is not
       chunkIt->second->write((int8_t*)chunkIt->second, chunkIt->second->size(), 0);
       // chunkIt->second->write((int8_t*)chunkIt->second, chunkIt->second->size(), 0, CPU_LEVEL, -1);
     }
+  }
+}
+
+void GlobalFileMgr::removeTableRelatedDS(const int db_id, const int tb_id) {
+  FileMgr* fm = findFileMgr(db_id, tb_id, true);
+  if (fm == 0) {
+    LOG(FATAL) << "Drop table failed. Table " << db_id << " " << tb_id << " does not exist.";
+  }
+
+  /* remove directory containing table related data */
+  boost::system::error_code ec;
+  boost::filesystem::path pathToTableDS(fm->getFileMgrBasePath());
+  boost::filesystem::remove_all(pathToTableDS, ec);
+
+  /* remove table related in-memory DS only if directory was removed successfully */
+  if (ec == 0) { 
+    delete fm;
   }
 }
 

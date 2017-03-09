@@ -189,6 +189,7 @@ class FileMgr : public AbstractBufferMgr {  // implements
   int getDBVersion() const;
   bool getDBConvert() const;
   void createTopLevelMetadata(); // create metadata shared by all tables of all DBs
+  std::string getFileMgrBasePath() const { return fileMgrBasePath_; }
 
  private:
   GlobalFileMgr* gfm_;            /// Global FileMgr

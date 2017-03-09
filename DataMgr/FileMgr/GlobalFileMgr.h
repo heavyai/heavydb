@@ -117,6 +117,7 @@ class GlobalFileMgr : public AbstractBufferMgr {  // implements
 
   size_t getNumChunks();
 
+  FileMgr* findFileMgr(const int db_id, const int tb_id, const bool removeFromMap = false);
   FileMgr* getFileMgr(const int db_id, const int tb_id);
   FileMgr* getFileMgr(const ChunkKey& key) {
     return getFileMgr(key[0], key[1]);
@@ -133,6 +134,8 @@ class GlobalFileMgr : public AbstractBufferMgr {  // implements
   inline int getDBVersion() const { return mapd_db_version_; }
   inline bool getDBConvert() const { return dbConvert_; }
   inline void setDBConvert(bool val) { dbConvert_ = val; }
+
+  void removeTableRelatedDS(const int db_id, const int tb_id);
 
  private:
   std::string basePath_;          /// The OS file system path containing the files.

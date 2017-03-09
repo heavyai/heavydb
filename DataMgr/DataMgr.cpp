@@ -308,4 +308,8 @@ void DataMgr::checkpoint() {
     }
   }
 }
+
+void DataMgr::removeTableRelatedDS(const int db_id, const int tb_id) {
+  dynamic_cast<GlobalFileMgr*>(bufferMgrs_[0][0])->removeTableRelatedDS(db_id, tb_id);
+}
 }  // Data_Namespace

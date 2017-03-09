@@ -74,6 +74,7 @@ class DataMgr {
   void getChunkMetadataVecForKeyPrefix(std::vector<std::pair<ChunkKey, ChunkMetadata>>& chunkMetadataVec,
                                        const ChunkKey& keyPrefix);
   inline bool gpusPresent() { return hasGpus_; }
+  void removeTableRelatedDS(const int db_id, const int tb_id);
 
   CudaMgr_Namespace::CudaMgr* cudaMgr_;
 

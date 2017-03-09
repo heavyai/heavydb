@@ -235,32 +235,37 @@ TEST(DataLoad, NumbersTable_Parallel_CreateDropTable) {
                       "create table numbers_5 (a smallint, b int, c bigint, d numeric(7,3), e "
                       "double, f float);"););
 
-  /* load data into tables using parallel threads */
+  /* Load table numbers_4 with data in the main thread, so it will be available for sure when drop_table on it will be
+   * executed later. Don't use new thread for loading table numbers_4 (see commented out), as one can't be sure that
+   * this action in the new/independent thread will be completed before executing drop_table in the main thread.
+   * It's enough to load just 1 row of data in the table numbers_4 to make sure it exists in the storage layer.
+   *
+   * threads.push_back(std::async(std::launch::async, load_data_for_thread_test_4, 1, table_name_temp));
+   */
+  string table_name("numbers_");
+  string table_name_temp(table_name + to_string(4));
+  EXPECT_TRUE(load_data_test(table_name_temp, 1));
+
+  /* load data into tables numbers_1/2/3/5 using parallel threads */
   int numThreads = 5;
   vector<string> db_table;
   std::vector<std::future<size_t>> threads;
-  string table_name("numbers_");
-
-  /* start action with table numbers_4 ahead of time: insert only one row, so it finishes asap, and table can be dropped */
-  string table_name_temp(table_name + to_string(4));
-  threads.push_back(std::async(std::launch::async, load_data_for_thread_test_2, 1, table_name_temp));
-
   int num_rows = SMALL;
   for (int i = 1; i <= numThreads; i++) {
     int num_table_rows = num_rows * (numThreads - i + 1);
     db_table.push_back(table_name + to_string(i));
     if (i == 4)
-      continue; // action for table numbers_4  have been started already ahead of time just before this "for" loop
+      continue; // table numbers_4 has been loaded already
     threads.push_back(std::async(std::launch::async, load_data_for_thread_test_2, num_table_rows, db_table[i-1]));
   }
 
-  /* drop table numbers_4 */
+  /* drop table numbers_4  while loading other tables in independent threads */
   ASSERT_NO_THROW(run_ddl("drop table numbers_4;"););
-  /* create table numbers_6 */
+
+  /* create table numbers_6 and load it with data */
   ASSERT_NO_THROW(run_ddl(
                       "create table numbers_6 (a smallint, b int, c bigint, d numeric(7,3), e "
                       "double, f float);"););
-  /* load rows into table numbers_6 */
   int num_table_rows = SMALL;
   db_table.push_back(table_name + to_string(6));
   threads.push_back(std::async(std::launch::async, load_data_for_thread_test_2, num_table_rows, db_table[5]));
@@ -301,46 +306,51 @@ TEST(DataLoad, NumbersTable_Parallel_CreateDropCreateTable_InsertRows) {
                       "create table numbers_5 (a smallint, b int, c bigint, d numeric(7,3), e "
                       "double, f float);"););
 
-  /* load data into tables using parallel threads */
+  /* Load table numbers_2 with data in the main thread, so it will be available for sure when drop_table on it will be
+   * executed later. Don't use new thread for loading table numbers_2 (see commented out), as one can't be sure that
+   * this action in the new/independent thread will be completed before executing drop_table in the main thread.
+   * It's enough to load just 1 row of data in the table numbers_2 to make sure it exists in the storage layer.
+   *
+   * threads.push_back(std::async(std::launch::async, load_data_for_thread_test_2, 1, table_name_temp));
+   */ 
+  string table_name("numbers_");
+  string table_name_temp(table_name + to_string(2));
+  EXPECT_TRUE(load_data_test(table_name_temp, 1));
+
+
+  /* load data into tables numbers_1/3/4/5 using parallel threads */
   int numThreads = 5;
   vector<string> db_table;
   std::vector<std::future<size_t>> threads;
-  string table_name("numbers_");
-
-  /* start action with table numbers_2 ahead of time: insert only one row, so it finishes asap, and table can be dropped */
-  string table_name_temp(table_name + to_string(2));
-  threads.push_back(std::async(std::launch::async, load_data_for_thread_test_2, 1, table_name_temp));
   
   int num_rows = SMALL;
   for (int i = 1; i <= numThreads; i++) {
     int num_table_rows = num_rows * (numThreads - i + 1);
     db_table.push_back(table_name + to_string(i));
     if (i == 2)
-      continue; // action for table numbers_2  have been started already ahead of time just before this "for" loop
+      continue; // table numbers_2  has been loaded already
     threads.push_back(std::async(std::launch::async, load_data_for_thread_test_2, num_table_rows, db_table[i-1]));
   }
 
-  /* drop table numbers_2 */
+  /* drop table numbers_2 while loading other tables in independent threads */
   ASSERT_NO_THROW(run_ddl("drop table numbers_2;"););
 
-  /* create table numbers_6 */
+  /* create table numbers_6 and load it with data */
   ASSERT_NO_THROW(run_ddl(
                       "create table numbers_6 (a smallint, b int, c bigint, d numeric(7,3), e "
                       "double, f float);"););
-  /* load rows into table numbers_6 */
   int num_table_rows = SMALL;
   db_table.push_back(table_name + to_string(6));
   threads.push_back(std::async(std::launch::async, load_data_for_thread_test_2, num_table_rows, db_table[5]));
 
   /* recreate table numbers_2, this table will have new tb_id which will be different from
    * the tb_id of dropped table numbers_2;
-   * this is true when new table's schema is same and/or is different than ithe one for the dropped table.
+   * this is true when new table's schema is same and/or is different than the one for the dropped table.
    */
-
   ASSERT_NO_THROW(run_ddl(
                       "create table numbers_2 (e "
                       "double, f double, g double, h double, i double, j double);"););
-  /* insert rows in table numbers_2, this table have been dropped and recreated, so this should now be allowed and working just fine */
+  /* insert rows in table numbers_2, this table have been dropped and recreated, so data can be loaded */
   int num_rows_for_dropped_table = SMALL * 2;
   threads.push_back(std::async(std::launch::async, load_data_for_thread_test_2, num_rows_for_dropped_table, table_name_temp));
 

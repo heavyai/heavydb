@@ -923,8 +923,8 @@ void Catalog::dropTable(const TableDescriptor* td) {
     ChunkKey chunkKeyPrefix = {currentDB_.dbId, td->tableId};
     // assuming deleteChunksWithPrefix is atomic
     dataMgr_->deleteChunksWithPrefix(chunkKeyPrefix);
-    /* checkpoint table for now, may revise this code when cleaning dir at drop_table */
     dataMgr_->checkpoint(currentDB_.dbId, td->tableId);
+    dataMgr_->removeTableRelatedDS(currentDB_.dbId, td->tableId);
   } catch (std::exception& e) {
     sqliteConnector_.query("ROLLBACK TRANSACTION");
     throw;
