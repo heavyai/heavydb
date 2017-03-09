@@ -73,14 +73,29 @@ std::unordered_map<const RelAlgNode*, std::unordered_set<const RelAlgNode*>> bui
   return web;
 }
 
+size_t get_actual_source_size(const RelProject* curr_project,
+                              const std::unordered_set<const RelProject*>& projects_to_remove) {
+  auto source = curr_project->getInput(0);
+  while (auto filter = dynamic_cast<const RelFilter*>(source)) {
+    source = filter->getInput(0);
+  }
+  if (auto src_project = dynamic_cast<const RelProject*>(source)) {
+    if (projects_to_remove.count(src_project)) {
+      return get_actual_source_size(src_project, projects_to_remove);
+    }
+  }
+  return curr_project->getInput(0)->size();
+}
+
 bool is_identical_copy(const RelProject* project,
-                       const std::unordered_map<const RelAlgNode*, std::unordered_set<const RelAlgNode*>>& du_web) {
-  auto source = project->getInput(0);
-  if (project->size() > source->size()) {
+                       const std::unordered_map<const RelAlgNode*, std::unordered_set<const RelAlgNode*>>& du_web,
+                       const std::unordered_set<const RelProject*>& projects_to_remove) {
+  auto source_size = get_actual_source_size(project, projects_to_remove);
+  if (project->size() > source_size) {
     return false;
   }
 
-  if (project->size() < source->size()) {
+  if (project->size() < source_size) {
     auto usrs_it = du_web.find(project);
     CHECK(usrs_it != du_web.end());
     bool guard_found = false;
@@ -166,7 +181,7 @@ void redirect_inputs_of(std::shared_ptr<RelAlgNode> node, const std::unordered_s
 void cleanup_dead_nodes(std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
   for (auto nodeIt = nodes.rbegin(); nodeIt != nodes.rend(); ++nodeIt) {
     if (nodeIt->unique()) {
-      LOG(INFO) << (*nodeIt)->toString() << " deleted!";
+      LOG(INFO) << "ID=" << (*nodeIt)->getId() << " " << (*nodeIt)->toString() << " deleted!";
       nodeIt->reset();
     }
   }
@@ -280,7 +295,7 @@ void eliminate_identical_copy(std::vector<std::shared_ptr<RelAlgNode>>& nodes) n
   for (auto node : nodes) {
     auto project = std::dynamic_pointer_cast<RelProject>(node);
     if (project && project->isSimple() && (!visible_projs.count(project.get()) || !project->isRenaming()) &&
-        is_identical_copy(project.get(), web)) {
+        is_identical_copy(project.get(), web, projects)) {
       projects.insert(project.get());
     }
   }
@@ -984,11 +999,30 @@ void replace_all_usages(std::shared_ptr<const RelAlgNode> old_def_node,
                         std::unordered_map<const RelAlgNode*, std::shared_ptr<RelAlgNode>>& deconst_mapping,
                         std::unordered_map<const RelAlgNode*, std::unordered_set<const RelAlgNode*>>& du_web) {
   auto usrs_it = du_web.find(old_def_node.get());
+  RexInputRedirector redirector(new_def_node.get(), old_def_node.get());
   CHECK(usrs_it != du_web.end());
   for (auto usr : usrs_it->second) {
     auto usr_it = deconst_mapping.find(usr);
     CHECK(usr_it != deconst_mapping.end());
     usr_it->second->replaceInput(old_def_node, new_def_node);
+    if (auto join = std::dynamic_pointer_cast<RelJoin>(usr_it->second)) {
+      auto new_condition = redirector.visit(join->getCondition());
+      join->setCondition(new_condition);
+      continue;
+    }
+    if (auto filter = std::dynamic_pointer_cast<RelFilter>(usr_it->second)) {
+      auto new_condition = redirector.visit(filter->getCondition());
+      filter->setCondition(new_condition);
+      continue;
+    }
+    if (auto project = std::dynamic_pointer_cast<RelProject>(usr_it->second)) {
+      std::vector<std::unique_ptr<const RexScalar>> new_exprs;
+      for (size_t i = 0; i < project->size(); ++i) {
+        new_exprs.push_back(redirector.visit(project->getProjectAt(i)));
+      }
+      project->setExpressions(new_exprs);
+      continue;
+    }
   }
   auto new_usrs_it = du_web.find(new_def_node.get());
   CHECK(new_usrs_it != du_web.end());
@@ -1023,7 +1057,8 @@ void fold_filters(std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept {
       CHECK(folded_filter);
       // TODO(miyu) : drop filter w/ only expression valued constant TRUE?
       if (auto rex_operator = dynamic_cast<const RexOperator*>(filter->getCondition())) {
-        LOG(INFO) << filter->toString() << " folded into " << folded_filter->toString() << std::endl;
+        LOG(INFO) << "ID=" << filter->getId() << " " << filter->toString() << " folded into "
+                  << "ID=" << folded_filter->getId() << " " << folded_filter->toString() << std::endl;
         std::vector<std::unique_ptr<const RexScalar>> operands;
         operands.emplace_back(folded_filter->getAndReleaseCondition());
         auto old_condition = dynamic_cast<const RexOperator*>(operands.back().get());
