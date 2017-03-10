@@ -31,6 +31,47 @@ class RexProjectInputRedirector : public RexDeepCopyVisitor {
   const std::unordered_set<const RelProject*>& crt_projects_;
 };
 
+class RexRebindInputsVisitor : public RexVisitor<void*> {
+ public:
+  RexRebindInputsVisitor(const RelAlgNode* old_input, const RelAlgNode* new_input)
+      : old_input_(old_input), new_input_(new_input) {}
+
+  void* visitInput(const RexInput* rex_input) const override {
+    const auto old_source = rex_input->getSourceNode();
+    if (old_source == old_input_) {
+      rex_input->setSourceNode(new_input_);
+    }
+    return nullptr;
+  };
+
+  void visitNode(const RelAlgNode* node) const {
+    if (dynamic_cast<const RelAggregate*>(node) || dynamic_cast<const RelSort*>(node)) {
+      return;
+    }
+    if (auto join = dynamic_cast<const RelJoin*>(node)) {
+      if (auto condition = join->getCondition()) {
+        visit(condition);
+      }
+      return;
+    }
+    if (auto project = dynamic_cast<const RelProject*>(node)) {
+      for (size_t i = 0; i < project->size(); ++i) {
+        visit(project->getProjectAt(i));
+      }
+      return;
+    }
+    if (auto filter = dynamic_cast<const RelFilter*>(node)) {
+      visit(filter->getCondition());
+      return;
+    }
+    CHECK(false);
+  }
+
+ private:
+  const RelAlgNode* old_input_;
+  const RelAlgNode* new_input_;
+};
+
 std::unordered_map<const RelAlgNode*, std::unordered_set<const RelAlgNode*>> build_du_web(
     const std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
   std::unordered_map<const RelAlgNode*, std::unordered_set<const RelAlgNode*>> web;
@@ -130,7 +171,9 @@ bool is_identical_copy(const RelProject* project,
   return true;
 }
 
-void redirect_inputs_of(std::shared_ptr<RelAlgNode> node, const std::unordered_set<const RelProject*>& projects) {
+void redirect_inputs_of(std::shared_ptr<RelAlgNode> node,
+                        const std::unordered_set<const RelProject*>& projects,
+                        std::unordered_map<const RelAlgNode*, std::unordered_set<const RelAlgNode*>>& du_web) {
   RexProjectInputRedirector visitor(projects);
   std::shared_ptr<const RelProject> src_project = nullptr;
   for (size_t i = 0; i < node->inputCount(); ++i) {
@@ -145,29 +188,30 @@ void redirect_inputs_of(std::shared_ptr<RelAlgNode> node, const std::unordered_s
     return;
   }
   if (auto join = std::dynamic_pointer_cast<RelJoin>(node)) {
-    join->replaceInput(src_project, src_project->getAndOwnInput(0));
     auto other_project = src_project == node->getAndOwnInput(0)
                              ? std::dynamic_pointer_cast<const RelProject>(node->getAndOwnInput(1))
                              : std::dynamic_pointer_cast<const RelProject>(node->getAndOwnInput(0));
+    join->replaceInput(src_project, src_project->getAndOwnInput(0));
+    RexRebindInputsVisitor rebinder(src_project.get(), src_project->getInput(0));
+    for (auto usr : du_web[join.get()]) {
+      rebinder.visitNode(usr);
+    }
+
     if (other_project && projects.count(other_project.get())) {
       join->replaceInput(other_project, other_project->getAndOwnInput(0));
+      RexRebindInputsVisitor other_rebinder(other_project.get(), other_project->getInput(0));
+      for (auto usr : du_web[join.get()]) {
+        other_rebinder.visitNode(usr);
+      }
     }
-    auto new_condition = visitor.visit(join->getCondition());
-    join->setCondition(new_condition);
+
     return;
   }
   if (auto project = std::dynamic_pointer_cast<RelProject>(node)) {
-    std::vector<std::unique_ptr<const RexScalar>> new_exprs;
-    for (size_t i = 0; i < project->size(); ++i) {
-      new_exprs.push_back(visitor.visit(project->getProjectAt(i)));
-    }
-    project->setExpressions(new_exprs);
     project->replaceInput(src_project, src_project->getAndOwnInput(0));
     return;
   }
   if (auto filter = std::dynamic_pointer_cast<RelFilter>(node)) {
-    auto new_condition = visitor.visit(filter->getCondition());
-    filter->setCondition(new_condition);
     filter->replaceInput(src_project, src_project->getAndOwnInput(0));
     return;
   }
@@ -301,7 +345,7 @@ void eliminate_identical_copy(std::vector<std::shared_ptr<RelAlgNode>>& nodes) n
   }
 
   for (auto node : nodes) {
-    redirect_inputs_of(node, projects);
+    redirect_inputs_of(node, projects, web);
   }
 
   cleanup_dead_nodes(nodes);
@@ -664,47 +708,6 @@ std::unordered_map<const RelAlgNode*, std::unordered_set<size_t>> mark_live_colu
   return live_outs;
 }
 
-class RexRebindInputsVisitor : public RexVisitor<void*> {
- public:
-  RexRebindInputsVisitor(const RelAlgNode* old_input, const RelAlgNode* new_input)
-      : old_input_(old_input), new_input_(new_input) {}
-
-  void* visitInput(const RexInput* rex_input) const override {
-    const auto old_source = rex_input->getSourceNode();
-    if (old_source == old_input_) {
-      rex_input->setSourceNode(new_input_);
-    }
-    return nullptr;
-  };
-
-  void visitNode(const RelAlgNode* node) const {
-    if (dynamic_cast<const RelAggregate*>(node) || dynamic_cast<const RelSort*>(node)) {
-      return;
-    }
-    if (auto join = dynamic_cast<const RelJoin*>(node)) {
-      if (auto condition = join->getCondition()) {
-        visit(condition);
-      }
-      return;
-    }
-    if (auto project = dynamic_cast<const RelProject*>(node)) {
-      for (size_t i = 0; i < project->size(); ++i) {
-        visit(project->getProjectAt(i));
-      }
-      return;
-    }
-    if (auto filter = dynamic_cast<const RelFilter*>(node)) {
-      visit(filter->getCondition());
-      return;
-    }
-    CHECK(false);
-  }
-
- private:
-  const RelAlgNode* old_input_;
-  const RelAlgNode* new_input_;
-};
-
 std::string get_field_name(const RelAlgNode* node, size_t index) {
   CHECK_LT(index, node->size());
   if (auto scan = dynamic_cast<const RelScan*>(node)) {
@@ -1005,24 +1008,6 @@ void replace_all_usages(std::shared_ptr<const RelAlgNode> old_def_node,
     auto usr_it = deconst_mapping.find(usr);
     CHECK(usr_it != deconst_mapping.end());
     usr_it->second->replaceInput(old_def_node, new_def_node);
-    if (auto join = std::dynamic_pointer_cast<RelJoin>(usr_it->second)) {
-      auto new_condition = redirector.visit(join->getCondition());
-      join->setCondition(new_condition);
-      continue;
-    }
-    if (auto filter = std::dynamic_pointer_cast<RelFilter>(usr_it->second)) {
-      auto new_condition = redirector.visit(filter->getCondition());
-      filter->setCondition(new_condition);
-      continue;
-    }
-    if (auto project = std::dynamic_pointer_cast<RelProject>(usr_it->second)) {
-      std::vector<std::unique_ptr<const RexScalar>> new_exprs;
-      for (size_t i = 0; i < project->size(); ++i) {
-        new_exprs.push_back(redirector.visit(project->getProjectAt(i)));
-      }
-      project->setExpressions(new_exprs);
-      continue;
-    }
   }
   auto new_usrs_it = du_web.find(new_def_node.get());
   CHECK(new_usrs_it != du_web.end());
@@ -1074,6 +1059,7 @@ void fold_filters(std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept {
         replace_all_usages(filter, folded_filter, deconst_mapping, web);
         deconst_mapping.erase(filter.get());
         web.erase(filter.get());
+        web[filter->getInput(0)].erase(filter.get());
         node.reset();
       }
     }
