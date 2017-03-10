@@ -289,10 +289,6 @@ public final class MapDParser {
         return tempOpTab;
     }
 
-    protected SqlNode parseStmt(String sql) throws SqlParseException {
-        return getSqlParser(sql).parseStmt();
-    }
-
     protected SqlParser getSqlParser(String sql) {
         return SqlParser.create(sql,
                 SqlParser.configBuilder()
