@@ -10,7 +10,6 @@ import org.apache.calcite.plan.RelOptUtil;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.RelRoot;
 import org.apache.calcite.rel.type.RelDataType;
-import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.rel.type.RelDataTypeSystem;
 import org.apache.calcite.rex.RexBuilder;
 import org.apache.calcite.sql.SqlAsOperator;
@@ -29,7 +28,7 @@ import org.apache.calcite.sql.parser.SqlParser;
 import org.apache.calcite.sql.parser.SqlParserPos;
 import org.apache.calcite.sql.type.SqlTypeFactoryImpl;
 import org.apache.calcite.sql.validate.SqlConformance;
-import org.apache.calcite.sql.validate.SqlValidator;
+import org.apache.calcite.sql.validate.SqlValidatorImpl;
 import org.apache.calcite.sql2rel.SqlToRelConverter;
 import org.apache.calcite.sql2rel.SqlToRelConverter.Config;
 import org.apache.calcite.sql2rel.StandardConvertletTable;
@@ -45,10 +44,12 @@ public final class MapDParser {
 
     final static Logger MAPDLOGGER = LoggerFactory.getLogger(MapDParser.class);
 
-    private final RelDataTypeFactory typeFactory;
-    private final MapDCatalogReader catalogReader;
-    private final SqlValidator validator;
-    private final SqlToRelConverter converter;
+    private SqlTypeFactoryImpl typeFactory;
+    private MapDCatalogReader catalogReader;
+    private SqlValidatorImpl validator;
+    private SqlToRelConverter converter;
+    private final Map<String, ExtensionFunction> extSigs;
+    private final String dataDir;
 
     private int callCount = 0;
 
@@ -56,18 +57,8 @@ public final class MapDParser {
         System.setProperty("saffron.default.charset", ConversionUtil.NATIVE_UTF16_CHARSET_NAME);
         System.setProperty("saffron.default.nationalcharset", ConversionUtil.NATIVE_UTF16_CHARSET_NAME);
         System.setProperty("saffron.default.collation.name", ConversionUtil.NATIVE_UTF16_CHARSET_NAME + "$en_US");
-        typeFactory = new SqlTypeFactoryImpl(RelDataTypeSystem.DEFAULT);
-        catalogReader = new MapDCatalogReader(typeFactory, dataDir, this);
-        validator = new MapDValidator(
-                createOperatorTable(extSigs),
-                catalogReader,
-                typeFactory,
-                SqlConformance.DEFAULT);
-        final RexBuilder rexBuilder = new RexBuilder(typeFactory);
-        final RelOptCluster cluster = RelOptCluster.create(new MapDRelOptPlanner(), rexBuilder);
-        Config config = SqlToRelConverter.configBuilder().withExpand(false).build();
-        converter = new SqlToRelConverter(new Expander(), validator, catalogReader, cluster,
-                StandardConvertletTable.INSTANCE, config);
+        this.dataDir = dataDir;
+        this.extSigs = extSigs;
     }
 
     public class Expander implements RelOptTable.ViewExpander {
@@ -86,6 +77,7 @@ public final class MapDParser {
     public String getRelAlgebra(String sql, final boolean legacy_syntax, final MapDUser mapDUser, final boolean isExplain)
             throws SqlParseException {
         callCount++;
+        catalogReader = new MapDCatalogReader(new SqlTypeFactoryImpl(RelDataTypeSystem.DEFAULT), dataDir, this);
         catalogReader.setCurrentMapDUser(mapDUser);
         final RelRoot sqlRel = queryToSqlNode(sql, legacy_syntax);
         RelNode project = sqlRel.project();
@@ -106,6 +98,15 @@ public final class MapDParser {
         }
 
         boolean is_select_star = isSelectStar(node);
+
+        typeFactory = new SqlTypeFactoryImpl(RelDataTypeSystem.DEFAULT);
+
+        validator = new MapDValidator(
+                createOperatorTable(extSigs),
+                catalogReader,
+                typeFactory,
+                SqlConformance.DEFAULT);
+
         SqlNode validate = validator.validate(node);
 
         SqlSelect validate_select = getSelectChild(validate);
@@ -123,6 +124,12 @@ public final class MapDParser {
             }
             validate_select.setSelectList(new_proj_exprs);
         }
+
+        final RexBuilder rexBuilder = new RexBuilder(typeFactory);
+        final RelOptCluster cluster = RelOptCluster.create(new MapDRelOptPlanner(), rexBuilder);
+        final Config config = SqlToRelConverter.configBuilder().withExpand(false).build();
+        converter = new SqlToRelConverter(new Expander(), validator, catalogReader, cluster,
+                StandardConvertletTable.INSTANCE, config);
 
         return converter.convertQuery(validate, true, true);
     }
