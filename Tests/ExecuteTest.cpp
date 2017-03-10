@@ -1754,22 +1754,29 @@ void import_join_test() {
   g_sqlite_comparator.query(drop_old_test);
   const std::string create_test{
 #ifdef ENABLE_MULTIFRAG_JOIN
-      "CREATE TABLE join_test(x int not null, str text encoding dict) WITH (fragment_size=2);"
+      "CREATE TABLE join_test(x int not null, str text encoding dict, dup_str text encoding dict) WITH "
+      "(fragment_size=2);"
 #else
-      "CREATE TABLE join_test(x int not null, str text encoding dict) WITH (fragment_size=3);"
+      "CREATE TABLE join_test(x int not null, str text encoding dict, dup_str text encoding dict) WITH "
+      "(fragment_size=3);"
 #endif
   };
   run_ddl_statement(create_test);
-  g_sqlite_comparator.query("CREATE TABLE join_test(x int not null, str text);");
+  g_sqlite_comparator.query("CREATE TABLE join_test(x int not null, str text, dup_str text);");
   {
-    const std::string insert_query{"INSERT INTO join_test VALUES(7, 'foo');"};
+    const std::string insert_query{"INSERT INTO join_test VALUES(7, 'foo', 'foo');"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
     g_sqlite_comparator.query(insert_query);
   }
   {
-    const std::string insert_query{"INSERT INTO join_test VALUES(8, 'bar');"};
+    const std::string insert_query{"INSERT INTO join_test VALUES(8, 'bar', 'foo');"};
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query);
+  }
+  {
+    const std::string insert_query{"INSERT INTO join_test VALUES(9, 'baz', 'bar');"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
@@ -2062,6 +2069,9 @@ TEST(Select, Joins) {
                   "array_test.x = "
                   "test_inner.x;",
                   dt)));
+    c("SELECT COUNT(*) FROM test, join_test WHERE test.str = join_test.dup_str;", dt);
+    // Intentionally duplicate previous string join to cover hash table building.
+    c("SELECT COUNT(*) FROM test, join_test WHERE test.str = join_test.dup_str;", dt);
   }
 }
 
