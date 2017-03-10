@@ -478,6 +478,7 @@ void QueryExecutionContext::initializeDynamicWatchdog(void* native_module, const
   cuEventCreate(&start, 0);
   cuEventCreate(&stop, 0);
   cuEventRecord(start, 0);
+
   CUdeviceptr dw_cycle_budget;
   size_t dw_cycle_budget_size;
   // Translate milliseconds to device cycles
@@ -489,11 +490,22 @@ void QueryExecutionContext::initializeDynamicWatchdog(void* native_module, const
   checkCudaErrors(cuModuleGetGlobal(&dw_cycle_budget, &dw_cycle_budget_size, cu_module, "dw_cycle_budget"));
   CHECK_EQ(dw_cycle_budget_size, sizeof(uint64_t));
   checkCudaErrors(cuMemcpyHtoD(dw_cycle_budget, reinterpret_cast<void*>(&cycle_budget), sizeof(uint64_t)));
+
   CUdeviceptr dw_sm_cycle_start;
   size_t dw_sm_cycle_start_size;
   checkCudaErrors(cuModuleGetGlobal(&dw_sm_cycle_start, &dw_sm_cycle_start_size, cu_module, "dw_sm_cycle_start"));
   CHECK_EQ(dw_sm_cycle_start_size, 64 * sizeof(uint64_t));
   checkCudaErrors(cuMemsetD32(dw_sm_cycle_start, 0, 64 * 2));
+
+  if (!executor_->interrupted_) {
+    // Executor is not marked as interrupted, make sure dynamic watchdog doesn't block execution
+    CUdeviceptr dw_abort;
+    size_t dw_abort_size;
+    checkCudaErrors(cuModuleGetGlobal(&dw_abort, &dw_abort_size, cu_module, "dw_abort"));
+    CHECK_EQ(dw_abort_size, sizeof(uint32_t));
+    checkCudaErrors(cuMemsetD32(dw_abort, 0, 1));
+  }
+
   cuEventRecord(stop, 0);
   cuEventSynchronize(stop);
   float milliseconds = 0;
@@ -810,8 +822,10 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const RelAlgExecution
                                      nullptr));
     }
     if (g_enable_dynamic_watchdog) {
+      executor_->registerActiveModule(cu_functions[device_id].second, device_id);
       cuEventRecord(stop1, 0);
       cuEventSynchronize(stop1);
+      executor_->unregisterActiveModule(cu_functions[device_id].second, device_id);
       float milliseconds1 = 0;
       cuEventElapsedTime(&milliseconds1, start1, stop1);
       VLOG(1) << "Device " << std::to_string(device_id)
@@ -826,6 +840,9 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const RelAlgExecution
         *error_code = err;
         break;
       }
+    }
+    if (*error_code > 0) {
+      return {};
     }
     if (!render_allocator) {
       if (use_speculative_top_n(ra_exe_unit, query_mem_desc_)) {
@@ -906,8 +923,10 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const RelAlgExecution
     }
 
     if (g_enable_dynamic_watchdog) {
+      executor_->registerActiveModule(cu_functions[device_id].second, device_id);
       cuEventRecord(stop1, 0);
       cuEventSynchronize(stop1);
+      executor_->unregisterActiveModule(cu_functions[device_id].second, device_id);
       float milliseconds1 = 0;
       cuEventElapsedTime(&milliseconds1, start1, stop1);
       VLOG(1) << "Device " << std::to_string(device_id)

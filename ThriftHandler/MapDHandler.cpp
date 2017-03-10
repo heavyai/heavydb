@@ -379,6 +379,30 @@ void MapDHandler::disconnect(const TSessionId session) {
   sessions_.erase(session_it);
 }
 
+void MapDHandler::interrupt(const TSessionId session) {
+  if (g_enable_dynamic_watchdog) {
+    mapd_lock_guard<mapd_shared_mutex> read_lock(sessions_mutex_);
+    auto session_it = get_session_it(session);
+    const auto dbname = session_it->second->get_catalog().get_currentDB().dbName;
+    auto session_info_ptr = session_it->second.get();
+    if (session_info_ptr->get_executor_device_type() != ExecutorDeviceType::GPU)
+      return;
+    auto& cat = session_info_ptr->get_catalog();
+    auto executor = Executor::getExecutor(
+        cat.get_currentDB().dbId, jit_debug_ ? "/tmp" : "", jit_debug_ ? "mapdquery" : "", mapd_parameters_, nullptr);
+    CHECK(executor);
+
+    VLOG(1) << "Received interrupt: "
+            << "Session " << session << ", Executor " << executor << ", leafCount " << leaf_aggregator_.leafCount()
+            << ", User " << session_it->second->get_currentUser().userName << ", Database " << dbname << std::endl;
+
+    executor->interrupt();
+
+    LOG(INFO) << "User " << session_it->second->get_currentUser().userName << " interrupted session with database "
+              << dbname << std::endl;
+  }
+}
+
 void MapDHandler::get_server_status(TServerStatus& _return, const TSessionId session) {
   _return.read_only = read_only_;
   _return.version = MapDRelease;

@@ -14,6 +14,7 @@
 #include <iomanip>
 #include <fstream>
 #include <termios.h>
+#include <signal.h>
 #include <boost/algorithm/string/join.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/algorithm/string/trim.hpp>
@@ -90,7 +91,8 @@ enum ThriftService {
   kGET_MEMORY_SUMMARY,
   kGET_TABLE_DETAILS,
   kCLEAR_MEMORY_GPU,
-  kIMPORT_GEO_TABLE
+  kIMPORT_GEO_TABLE,
+  kINTERRUPT
 };
 
 namespace {
@@ -103,6 +105,9 @@ bool thrift_with_retry(ThriftService which_service, ClientContext& context, cons
         break;
       case kDISCONNECT:
         context.client.disconnect(context.session);
+        break;
+      case kINTERRUPT:
+        context.client.interrupt(context.session);
         break;
       case kSQL:
         context.client.sql_execute(context.query_return, context.session, arg, true, "");
@@ -525,6 +530,28 @@ std::string mapd_getpass() {
   return std::string(password, nread - 1);
 }
 
+ClientContext* backchannel_context = nullptr;
+
+void mapdql_signal_handler(int signal_number) {
+  std::cout << "\nInterrupt signal (" << signal_number << ") received.\n" << std::flush;
+
+  if (backchannel_context) {
+    std::cout << "Asking server to interrupt query.\n" << std::flush;
+    thrift_with_retry(kINTERRUPT, *backchannel_context, nullptr);
+    backchannel_context = nullptr;
+    return;
+  }
+
+  // terminate program
+  exit(signal_number);
+}
+
+void register_signal_handler() {
+  signal(SIGTERM, mapdql_signal_handler);
+  signal(SIGKILL, mapdql_signal_handler);
+  signal(SIGINT, mapdql_signal_handler);
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -630,6 +657,38 @@ int main(int argc, char** argv) {
       }
   }
 
+  shared_ptr<TTransport> transport2;
+  shared_ptr<TProtocol> protocol2;
+  shared_ptr<TTransport> socket2;
+  if (http) {
+    transport2 = shared_ptr<TTransport>(new THttpClient(server_host, port, "/"));
+    protocol2 = shared_ptr<TProtocol>(new TJSONProtocol(transport2));
+  } else {
+    socket2 = shared_ptr<TTransport>(new TSocket(server_host, port));
+    transport2 = shared_ptr<TTransport>(new TBufferedTransport(socket2));
+    protocol2 = shared_ptr<TProtocol>(new TBinaryProtocol(transport2));
+  }
+  MapDClient c2(protocol2);
+  ClientContext context2(*transport2, c2);
+
+  context2.db_name = db_name;
+  context2.user_name = user_name;
+  context2.passwd = passwd;
+
+  context2.session = INVALID_SESSION_ID;
+
+  transport2->open();
+
+  if (context2.db_name.empty()) {
+    std::cout << "Not connected to database backchannel.  Only \\u and \\l commands are allowed in this state.  See "
+                 "\\h for help."
+              << std::endl;
+  } else {
+    (void)thrift_with_retry(kCONNECT, context2, nullptr);
+  }
+
+  register_signal_handler();
+
   /* Set the completion callback. This will be called every time the
    * user uses the <tab> key. */
   linenoiseSetCompletionCallback(completion);
@@ -669,6 +728,7 @@ int main(int argc, char** argv) {
         std::string query(current_line);
         current_line.clear();
         prompt.assign("mapdql> ");
+        backchannel_context = &context2;
         if (thrift_with_retry(kSQL, context, query.c_str())) {
           if (context.query_return.row_set.row_desc.empty()) {
             continue;
@@ -715,10 +775,13 @@ int main(int argc, char** argv) {
                       << " Total time: " << context.query_return.total_time_ms << " ms" << std::endl;
           }
         }
+        backchannel_context = nullptr;
       } else {
         // change the prommpt
         prompt.assign("..> ");
       }
+    } else if (!strncmp(line, "\\interrupt", 10)) {
+      (void)thrift_with_retry(kINTERRUPT, context, nullptr);
     } else if (!strncmp(line, "\\cpu", 4)) {
       context.execution_mode = TExecuteMode::CPU;
       (void)thrift_with_retry(kSET_EXECUTION_MODE, context, nullptr);
@@ -813,5 +876,11 @@ int main(int argc, char** argv) {
     }
   }
   transport->close();
+
+  if (context2.session != INVALID_SESSION_ID) {
+    (void)thrift_with_retry(kDISCONNECT, context2, nullptr);
+  }
+  transport2->close();
+
   return 0;
 }

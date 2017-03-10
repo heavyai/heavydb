@@ -77,6 +77,8 @@ Executor::Executor(const int db_id,
                    ::QueryRenderer::QueryRenderManager* render_manager)
     : cgen_state_(new CgenState({}, false)),
       is_nested_(false),
+      gpu_active_modules_device_mask_(0x0),
+      interrupted_(false),
       render_manager_(render_manager),
       block_size_x_(block_size_x),
       grid_size_x_(grid_size_x),
@@ -489,6 +491,9 @@ ResultRows Executor::execute(const Planner::RootPlan* root_plan,
   // capture the lock acquistion time
   auto clock_begin = timer_start();
   std::lock_guard<std::mutex> lock(execute_mutex_);
+  if (g_enable_dynamic_watchdog) {
+    resetInterrupt();
+  }
   ScopeGuard restore_metainfo_cache = [this] { clearMetaInfoCache(); };
   int64_t queue_time_ms = timer_stop(clock_begin);
   ScopeGuard row_set_holder = [this] { row_set_mem_owner_ = nullptr; };
@@ -541,7 +546,12 @@ ResultRows Executor::execute(const Planner::RootPlan* root_plan,
         throw std::runtime_error("Self joins not supported yet");
       }
       if (error_code == ERR_OUT_OF_TIME) {
-        throw std::runtime_error("Query execution has exceeded the time limit");
+        if (!interrupted_)
+          throw std::runtime_error("Query execution has exceeded the time limit");
+        error_code = ERR_INTERRUPTED;
+      }
+      if (error_code == ERR_INTERRUPTED) {
+        throw std::runtime_error("Query execution has been interrupted");
       }
       if (error_code == ERR_OUT_OF_CPU_MEM) {
         throw std::runtime_error("Not enough host memory to execute the query");
@@ -3934,7 +3944,8 @@ RowSetPtr Executor::executeSortPlan(const Planner::Sort* sort_plan,
                                         allow_loop_joins,
                                         nullptr);
   CHECK(rows_to_sort);
-  if (just_explain || *error_code == ERR_OUT_OF_GPU_MEM || *error_code == ERR_OUT_OF_TIME) {
+  if (just_explain || *error_code == ERR_OUT_OF_GPU_MEM || *error_code == ERR_OUT_OF_TIME ||
+      *error_code == ERR_INTERRUPTED) {
     return rows_to_sort;
   }
   rows_to_sort->sort(sort_plan->get_order_entries(), sort_plan->get_remove_duplicates(), limit + offset);
@@ -4168,6 +4179,9 @@ ResultPtr Executor::executeWorkUnit(int32_t* error_code,
                         scheduler_mutex,
                         available_gpus,
                         available_cpus);
+    }
+    if (options.with_dynamic_watchdog && interrupted_ && *error_code == ERR_OUT_OF_TIME) {
+      *error_code = ERR_INTERRUPTED;
     }
     cat.get_dataMgr().freeAllBuffers();
     if (*error_code == ERR_OVERFLOW_OR_UNDERFLOW) {
@@ -5490,6 +5504,9 @@ int32_t Executor::executePlanWithoutGroupBy(const RelAlgExecutionUnit& ra_exe_un
                                                join_hash_table_ptr);
     output_memory_scope.reset(new OutVecOwner(out_vec));
   } else {
+    if (g_enable_dynamic_watchdog && interrupted_) {
+      return ERR_INTERRUPTED;
+    }
     try {
       out_vec = query_exe_context->launchGpuCode(ra_exe_unit,
                                                  compilation_result.native_functions,
@@ -5517,7 +5534,7 @@ int32_t Executor::executePlanWithoutGroupBy(const RelAlgExecutionUnit& ra_exe_un
     }
   }
   if (error_code == Executor::ERR_OVERFLOW_OR_UNDERFLOW || error_code == Executor::ERR_DIV_BY_ZERO ||
-      error_code == Executor::ERR_OUT_OF_TIME) {
+      error_code == Executor::ERR_OUT_OF_TIME || error_code == Executor::ERR_INTERRUPTED) {
     return error_code;
   }
   if (ra_exe_unit.estimator) {
@@ -5661,6 +5678,9 @@ int32_t Executor::executePlanWithGroupBy(const RelAlgExecutionUnit& ra_exe_unit,
                                      num_tables,
                                      join_hash_table_ptr);
   } else {
+    if (g_enable_dynamic_watchdog && interrupted_) {
+      return ERR_INTERRUPTED;
+    }
     try {
       query_exe_context->launchGpuCode(ra_exe_unit,
                                        compilation_result.native_functions,
@@ -5692,7 +5712,7 @@ int32_t Executor::executePlanWithGroupBy(const RelAlgExecutionUnit& ra_exe_unit,
   }
 
   if (error_code == Executor::ERR_OVERFLOW_OR_UNDERFLOW || error_code == Executor::ERR_DIV_BY_ZERO ||
-      error_code == Executor::ERR_OUT_OF_TIME) {
+      error_code == Executor::ERR_OUT_OF_TIME || error_code == Executor::ERR_INTERRUPTED) {
     return error_code;
   }
 
@@ -7110,6 +7130,93 @@ int64_t Executor::deviceCycles(int milliseconds) const {
   CHECK(catalog_->get_dataMgr().cudaMgr_);
   const auto& dev_props = catalog_->get_dataMgr().cudaMgr_->deviceProperties;
   return static_cast<int64_t>(dev_props.front().clockKhz) * milliseconds;
+}
+
+void Executor::registerActiveModule(void* module, const int device_id) const {
+#ifdef HAVE_CUDA
+  std::lock_guard<std::mutex> lock(gpu_active_modules_mutex_);
+  CHECK_LT(device_id, max_gpu_count);
+  gpu_active_modules_device_mask_ |= (1 << device_id);
+  gpu_active_modules_[device_id] = module;
+  VLOG(1) << "Executor " << this << ", mask 0x" << std::hex << gpu_active_modules_device_mask_ << ": Registered module "
+          << module << " on device " << std::to_string(device_id);
+#endif
+}
+
+void Executor::unregisterActiveModule(void* module, const int device_id) const {
+#ifdef HAVE_CUDA
+  std::lock_guard<std::mutex> lock(gpu_active_modules_mutex_);
+  CHECK_LT(device_id, max_gpu_count);
+  if ((gpu_active_modules_device_mask_ & (1 << device_id)) == 0)
+    return;
+  CHECK_EQ(gpu_active_modules_[device_id], module);
+  gpu_active_modules_device_mask_ ^= (1 << device_id);
+  VLOG(1) << "Executor " << this << ", mask 0x" << std::hex << gpu_active_modules_device_mask_
+          << ": Unregistered module " << module << " on device " << std::to_string(device_id);
+#endif
+}
+
+void Executor::interrupt() {
+#ifdef HAVE_CUDA
+  std::lock_guard<std::mutex> lock(gpu_active_modules_mutex_);
+  VLOG(1) << "Executor " << this << ": Interrupting Active Modules: mask 0x" << std::hex
+          << gpu_active_modules_device_mask_;
+  interrupted_ = true;
+  CUcontext old_cu_context;
+  checkCudaErrors(cuCtxGetCurrent(&old_cu_context));
+  for (int device_id = 0; device_id < max_gpu_count; device_id++) {
+    if (gpu_active_modules_device_mask_ & (1 << device_id)) {
+      void* module = gpu_active_modules_[device_id];
+      auto cu_module = static_cast<CUmodule>(module);
+      if (!cu_module)
+        continue;
+      VLOG(1) << "Terminating module " << module << " on device " << std::to_string(device_id)
+              << ", gpu_active_modules_device_mask_: " << std::hex << std::to_string(gpu_active_modules_device_mask_);
+
+      catalog_->get_dataMgr().cudaMgr_->setContext(device_id);
+
+      // Create high priority non-blocking communication stream
+      CUstream cu_stream1;
+      checkCudaErrors(cuStreamCreateWithPriority(&cu_stream1, CU_STREAM_NON_BLOCKING, 1));
+
+      CUevent start, stop;
+      cuEventCreate(&start, 0);
+      cuEventCreate(&stop, 0);
+      cuEventRecord(start, cu_stream1);
+
+      CUdeviceptr dw_abort;
+      size_t dw_abort_size;
+      if (cuModuleGetGlobal(&dw_abort, &dw_abort_size, cu_module, "dw_abort") == CUDA_SUCCESS) {
+        CHECK_EQ(dw_abort_size, sizeof(uint32_t));
+        int32_t abort_val = 1;
+        checkCudaErrors(cuMemcpyHtoDAsync(dw_abort, reinterpret_cast<void*>(&abort_val), sizeof(int32_t), cu_stream1));
+
+        if (device_id == 0) {
+          LOG(INFO) << "GPU: Async Abort submitted to Device " << std::to_string(device_id);
+        }
+      }
+
+      cuEventRecord(stop, cu_stream1);
+      cuEventSynchronize(stop);
+      float milliseconds = 0;
+      cuEventElapsedTime(&milliseconds, start, stop);
+      VLOG(1) << "Device " << std::to_string(device_id)
+              << ": submitted async request to abort: " << std::to_string(milliseconds) << " ms\n";
+      checkCudaErrors(cuStreamDestroy(cu_stream1));
+    }
+  }
+  checkCudaErrors(cuCtxSetCurrent(old_cu_context));
+#endif
+}
+
+void Executor::resetInterrupt() {
+#ifdef HAVE_CUDA
+  std::lock_guard<std::mutex> lock(gpu_active_modules_mutex_);
+  if (!interrupted_)
+    return;
+  interrupted_ = false;
+  VLOG(1) << "RESET Executor " << this << " that had previously been interrupted";
+#endif
 }
 
 llvm::Value* Executor::castToFP(llvm::Value* val) {

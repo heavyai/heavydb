@@ -278,6 +278,7 @@ struct TPendingQuery {
 service MapD {
   TSessionId connect(1: string user, 2: string passwd, 3: string dbname) throws (1: TMapDException e 2: ThriftException te)
   void disconnect(1: TSessionId session) throws (1: TMapDException e 2: ThriftException te)
+  void interrupt(1: TSessionId session) throws (1: TMapDException e 2: ThriftException te)
   TServerStatus get_server_status(1: TSessionId session) throws (1: TMapDException e 2: ThriftException te)
   TQueryResult sql_execute(1: TSessionId session, 2: string query 3: bool column_format, 4: string nonce) throws (1: TMapDException e 2: ThriftException te)
   TTableDescriptor sql_validate(1: TSessionId session, 2: string query) throws (1: TMapDException e 2: ThriftException te)

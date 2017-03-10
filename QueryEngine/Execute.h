@@ -329,6 +329,11 @@ class Executor {
       LiteralValue;
   typedef std::vector<LiteralValue> LiteralValues;
 
+  void registerActiveModule(void* module, const int device_id) const;
+  void unregisterActiveModule(void* module, const int device_id) const;
+  void interrupt();
+  void resetInterrupt();
+
  private:
   void clearMetaInfoCache();
 
@@ -1160,6 +1165,11 @@ class Executor {
   static const int max_gpu_count{16};
   std::mutex gpu_exec_mutex_[max_gpu_count];
 
+  mutable std::mutex gpu_active_modules_mutex_;
+  mutable uint32_t gpu_active_modules_device_mask_;
+  mutable void* gpu_active_modules_[max_gpu_count];
+  bool interrupted_;
+
   mutable std::shared_ptr<StringDictionaryProxy> lit_str_dict_proxy_;
   mutable std::mutex str_dict_mutex_;
 
@@ -1199,6 +1209,7 @@ class Executor {
   static const int32_t ERR_OVERFLOW_OR_UNDERFLOW{7};
   static const int32_t ERR_SPECULATIVE_TOP_OOM{8};
   static const int32_t ERR_OUT_OF_TIME{9};
+  static const int32_t ERR_INTERRUPTED{10};
   friend class GroupByAndAggregate;
   friend struct QueryMemoryDescriptor;
   friend class QueryExecutionContext;

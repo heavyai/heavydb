@@ -22,6 +22,9 @@ ExecutionResult RelAlgExecutor::executeRelAlgQuery(const std::string& query_ra,
   // capture the lock acquistion time
   auto clock_begin = timer_start();
   std::lock_guard<std::mutex> lock(executor_->execute_mutex_);
+  if (g_enable_dynamic_watchdog) {
+    executor_->resetInterrupt();
+  }
   ScopeGuard row_set_holder = [this] { executor_->row_set_mem_owner_ = nullptr; };
   executor_->row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>();
   executor_->catalog_ = &cat_;
@@ -144,6 +147,9 @@ void RelAlgExecutor::prepareLeafExecution(const AggregatedColRange& agg_col_rang
     executor_->execute_mutex_.unlock();
   }));
   executor_->execute_mutex_.lock();
+  if (g_enable_dynamic_watchdog) {
+    executor_->resetInterrupt();
+  }
   queue_time_ms_ = timer_stop(clock_begin);
   executor_->row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>();
   executor_->agg_col_range_cache_ = agg_col_range;
@@ -1169,6 +1175,12 @@ size_t RelAlgExecutor::getNDVEstimation(const WorkUnit& work_unit,
                                                            executor_->row_set_mem_owner_,
                                                            nullptr,
                                                            false);
+  if (error_code == Executor::ERR_OUT_OF_TIME) {
+    throw std::runtime_error("Cardinality estimation query ran out of time");
+  }
+  if (error_code == Executor::ERR_INTERRUPTED) {
+    throw std::runtime_error("Cardinality estimation query has been interrupted");
+  }
   if (error_code) {
     throw std::runtime_error("Failed to run the cardinality estimation query");
   }
@@ -1358,6 +1370,9 @@ void RelAlgExecutor::handlePersistentError(const int32_t error_code) {
   }
   if (error_code == Executor::ERR_OUT_OF_TIME) {
     throw std::runtime_error("Query execution has exceeded the time limit");
+  }
+  if (error_code == Executor::ERR_INTERRUPTED) {
+    throw std::runtime_error("Query execution has been interrupted");
   }
   if (error_code == Executor::ERR_OUT_OF_CPU_MEM) {
     throw std::runtime_error("Not enough host memory to execute the query");
