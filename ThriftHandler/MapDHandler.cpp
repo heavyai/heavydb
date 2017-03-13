@@ -382,6 +382,9 @@ void MapDHandler::disconnect(const TSessionId session) {
 void MapDHandler::interrupt(const TSessionId session) {
   if (g_enable_dynamic_watchdog) {
     mapd_lock_guard<mapd_shared_mutex> read_lock(sessions_mutex_);
+    if (leaf_aggregator_.leafCount() > 0) {
+      leaf_aggregator_.interrupt(session);
+    }
     auto session_it = get_session_it(session);
     const auto dbname = session_it->second->get_catalog().get_currentDB().dbName;
     auto session_info_ptr = session_it->second.get();
