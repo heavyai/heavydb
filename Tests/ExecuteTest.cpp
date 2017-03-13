@@ -2539,6 +2539,13 @@ TEST(Select, UnsupportedExtensions) {
   }
 }
 
+TEST(Select, Views) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT x, COUNT(*) FROM view_test WHERE y > 41 GROUP BY x;", dt);
+  }
+}
+
 #endif  // HAVE_RAVM
 
 #ifdef HAVE_CALCITE
@@ -2777,6 +2784,21 @@ int create_and_populate_tables() {
   return 0;
 }
 
+int create_views() {
+#ifdef HAVE_RAVM
+  try {
+    const std::string create_view_test{
+        "CREATE VIEW view_test AS SELECT test.*, test_inner.* FROM test, test_inner WHERE test.str = test_inner.str;"};
+    run_ddl_statement(create_view_test);
+    g_sqlite_comparator.query(create_view_test);
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create view 'view_test'";
+    return -EEXIST;
+  }
+#endif  // HAVE_RAVM
+  return 0;
+}
+
 void drop_tables() {
   const std::string drop_test{"DROP TABLE test;"};
   run_ddl_statement(drop_test);
@@ -2820,6 +2842,14 @@ void drop_tables() {
   run_ddl_statement(drop_test_in_bitmap);
 }
 
+void drop_views() {
+#ifdef HAVE_RAVM
+  const std::string drop_view_test{"DROP VIEW view_test;"};
+  run_ddl_statement(drop_view_test);
+  g_sqlite_comparator.query(drop_view_test);
+#endif  // HAVE_RAVM
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -2853,6 +2883,9 @@ int main(int argc, char** argv) {
     testing::GTEST_FLAG(filter) = "Select*";
   } else {
     err = create_and_populate_tables();
+    if (!err) {
+      err = create_views();
+    }
   }
   if (err) {
     return err;
@@ -2867,6 +2900,7 @@ int main(int argc, char** argv) {
   Executor::nukeCacheOfExecutors();
   if (!use_existing_data && !vm.count("keep-data")) {
     drop_tables();
+    drop_views();
   }
   g_session.reset(nullptr);
   return err;
