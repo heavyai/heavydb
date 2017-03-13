@@ -310,6 +310,7 @@ public final class MapDParser {
 
     public void updateMetaData(String catalog, String table) {
         MAPDLOGGER.debug("catalog :" + catalog + " table :" + table);
+        catalogReader = new MapDCatalogReader(new SqlTypeFactoryImpl(RelDataTypeSystem.DEFAULT), dataDir, this);
         catalogReader.updateMetaData(catalog, table);
     }
 }
