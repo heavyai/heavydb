@@ -572,7 +572,28 @@ void MapDHandler::sql_execute(TQueryResult& _return,
   }
 }
 
+namespace {
+
+std::string apply_copy_to_shim(const std::string& query_str) {
+  auto result = query_str;
+  {
+    // boost::regex copy_to{R"(COPY\s\((.*)\)\sTO\s(.*))", boost::regex::extended | boost::regex::icase};
+    boost::regex copy_to{R"(COPY\s*\(([^#])(.+)\)\s+TO\s)", boost::regex::extended | boost::regex::icase};
+    apply_shim(result, copy_to, [](std::string& result, const boost::smatch& what) {
+      result.replace(what.position(), what.length(), "COPY (#~#" + what[1] + what[2] + "#~#) TO  ");
+    });
+  }
+  return result;
+}
+
+}  // namespace
+
 #ifdef HAVE_RAVM
+namespace {
+
+
+}  // namespace
+
 #endif  // HAVE_RAVM
 
 void MapDHandler::sql_validate(TTableDescriptor& _return, const TSessionId session, const std::string& query_str) {
@@ -1203,7 +1224,6 @@ Planner::RootPlan* MapDHandler::parse_to_plan_legacy(const std::string& query_st
   auto dml = static_cast<Parser::DMLStmt*>(stmt);
   Analyzer::Query query;
   dml->analyze(cat, query);
-  CHECK_EQ(kSELECT, query.get_stmt_type());
   Planner::Optimizer optimizer(query, cat);
   return optimizer.optimize();
 }
@@ -2014,14 +2034,7 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
 #endif  // HAVE_CALCITE
     try {
       // check for COPY TO stmt replace as required parser expects #~# markers
-      auto result = query_str;
-      {
-        // boost::regex copy_to{R"(COPY\s\((.*)\)\sTO\s(.*))", boost::regex::extended | boost::regex::icase};
-        boost::regex copy_to{R"(COPY\s*\(([^#])(.+)\)\s+TO\s)", boost::regex::extended | boost::regex::icase};
-        apply_shim(result, copy_to, [](std::string& result, const boost::smatch& what) {
-          result.replace(what.position(), what.length(), "COPY (#~#" + what[1] + what[2] + "#~#) TO  ");
-        });
-      }
+      const auto result = apply_copy_to_shim(query_str);
       num_parse_errors = parser.parse(result, parse_trees, last_parsed);
     } catch (std::exception& e) {
       TMapDException ex;
