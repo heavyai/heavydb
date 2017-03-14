@@ -881,7 +881,7 @@ class ResultRows {
 typedef std::unique_ptr<ResultRows> RowSetPtr;
 
 inline bool use_parallel_algorithms(const ResultRows& rows) {
-  return rows.getResultSet() && rows.getResultSet()->entryCount() >= 30000;
+  return rows.getResultSet() && !rows.getResultSet()->isTruncated() && rows.getResultSet()->entryCount() >= 30000;
 }
 
 #endif  // QUERYENGINE_RESULTROWS_H

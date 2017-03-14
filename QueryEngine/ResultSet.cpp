@@ -203,7 +203,7 @@ SQLTypeInfo ResultSet::getColType(const size_t col_idx) const {
 }
 
 size_t ResultSet::rowCount() const {
-  if (entryCount() > 100000) {
+  if (entryCount() > 100000 && !isTruncated()) {
     return parallelRowCount();
   }
   moveToBegin();
@@ -307,6 +307,10 @@ int64_t ResultSet::getQueueTime() const {
 void ResultSet::moveToBegin() const {
   crt_row_buff_idx_ = 0;
   fetched_so_far_ = 0;
+}
+
+bool ResultSet::isTruncated() const {
+  return keep_first_ + drop_first_;
 }
 
 QueryMemoryDescriptor ResultSet::fixupQueryMemoryDescriptor(const QueryMemoryDescriptor& query_mem_desc) {

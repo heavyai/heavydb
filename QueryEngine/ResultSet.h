@@ -210,6 +210,8 @@ class ResultSet {
 
   void moveToBegin() const;
 
+  bool isTruncated() const;
+
   // Called from the executor because in the new ResultSet we assume the 'compact' field
   // in ColWidths already contains the padding, whereas in the executor it's computed.
   // Once the buffer initialization moves to ResultSet we can remove this method.

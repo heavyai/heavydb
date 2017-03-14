@@ -325,6 +325,9 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUoper(const RexOperat
 namespace {
 
 std::shared_ptr<Analyzer::Expr> get_in_values_expr(std::shared_ptr<Analyzer::Expr> arg, const ResultRows& val_rows) {
+  if (!use_parallel_algorithms(val_rows)) {
+    return nullptr;
+  }
   if (auto val_sets = val_rows.getResultSet()) {
     std::list<std::shared_ptr<Analyzer::Expr>> value_exprs;
     const size_t fetcher_count = cpu_threads();
