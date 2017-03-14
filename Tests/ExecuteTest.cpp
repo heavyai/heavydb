@@ -680,6 +680,9 @@ TEST(Select, ComplexQueries) {
     c("SELECT x + y AS a, COUNT(*) * MAX(y) - SUM(z) AS b FROM test "
       "WHERE z BETWEEN 100 AND 200 GROUP BY a, y;",
       dt);
+    c("SELECT COUNT(*) FROM test a JOIN (SELECT * FROM test WHERE y < 43) b ON a.x = b.x JOIN join_test c ON a.x = c.x "
+      "WHERE a.fixed_str = 'foo';",
+      dt);
     const auto rows = run_multiple_agg(
         "SELECT x + y AS a, COUNT(*) * MAX(y) - SUM(z) AS b FROM test "
         "WHERE z BETWEEN 100 AND 200 GROUP BY x, y ORDER BY a DESC LIMIT 2;",

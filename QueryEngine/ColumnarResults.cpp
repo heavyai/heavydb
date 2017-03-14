@@ -139,7 +139,7 @@ ColumnarResults::ColumnarResults(const std::shared_ptr<RowSetMemoryOwner> row_se
   }
   for (size_t i = 0, col_base_off = 0; i < col_count; ++i, col_base_off += num_rows_) {
     CHECK(target_types[i].get_type() == kBIGINT);
-    const auto buf_size = num_rows_ * (get_bit_width(target_types[i]) / 8);
+    const auto buf_size = num_rows_ * target_types[i].get_size();
     // TODO(miyu): copy offset ptr into frag buffer of 'table' instead of alloc'ing new buffer
     //             if it's proved to survive 'this' b/c it's already columnar.
     column_buffers_[i] = reinterpret_cast<const int8_t*>(checked_malloc(buf_size));
@@ -153,7 +153,7 @@ ColumnarResults::ColumnarResults(const std::shared_ptr<RowSetMemoryOwner> row_se
                                  const size_t num_rows,
                                  const SQLTypeInfo& target_type)
     : column_buffers_(1), num_rows_(num_rows), target_types_{target_type} {
-  const auto buf_size = num_rows * get_bit_width(target_type) / 8;
+  const auto buf_size = num_rows * target_type.get_size();
   column_buffers_[0] = reinterpret_cast<const int8_t*>(checked_malloc(buf_size));
   memcpy(((void*)column_buffers_[0]), one_col_buffer, buf_size);
   row_set_mem_owner->addColBuffer(column_buffers_[0]);
@@ -176,7 +176,7 @@ std::unique_ptr<ColumnarResults> ColumnarResults::createIndexedResults(
   CHECK(filtered_vals->column_buffers_.empty());
   const auto consist_frag_size = get_consistent_frag_size(frag_offsets);
   for (size_t col_idx = 0; col_idx < col_count; ++col_idx) {
-    const auto byte_width = get_bit_width(val_frags[0]->getColumnType(col_idx)) / 8;
+    const auto byte_width = val_frags[0]->getColumnType(col_idx).get_size();
     auto write_ptr = reinterpret_cast<int8_t*>(checked_malloc(byte_width * row_count));
     filtered_vals->column_buffers_.push_back(write_ptr);
     row_set_mem_owner->addColBuffer(write_ptr);
@@ -226,7 +226,7 @@ std::unique_ptr<ColumnarResults> ColumnarResults::createIndexedResults(
   std::unique_ptr<ColumnarResults> filtered_vals(new ColumnarResults(row_count, values.target_types_));
   CHECK(filtered_vals->column_buffers_.empty());
   for (size_t col_idx = 0; col_idx < col_count; ++col_idx) {
-    const auto byte_width = get_bit_width(values.getColumnType(col_idx)) / 8;
+    const auto byte_width = values.getColumnType(col_idx).get_size();
     auto write_ptr = reinterpret_cast<int8_t*>(checked_malloc(byte_width * row_count));
     filtered_vals->column_buffers_.push_back(write_ptr);
     row_set_mem_owner->addColBuffer(write_ptr);
@@ -262,7 +262,7 @@ std::unique_ptr<ColumnarResults> ColumnarResults::createOffsetResults(
   const auto row_count = values.num_rows_;
   std::unique_ptr<ColumnarResults> offset_vals(new ColumnarResults(row_count, values.target_types_));
   CHECK(offset_vals->column_buffers_.empty());
-  CHECK_EQ(64, get_bit_width(values.getColumnType(col_idx)));
+  CHECK_EQ(64, values.getColumnType(col_idx).get_size());
   const size_t buf_size = sizeof(int64_t) * row_count;
   auto write_ptr = reinterpret_cast<int64_t*>(checked_malloc(buf_size));
   offset_vals->column_buffers_.push_back(reinterpret_cast<int8_t*>(write_ptr));
