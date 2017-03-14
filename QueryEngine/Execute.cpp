@@ -4256,7 +4256,8 @@ RowSetPtr Executor::executeExplain(const ExecutionDispatch& execution_dispatch) 
     explained_plan +=
         (std::string(llvm_ir_cpu.empty() ? "" : "\n") + "IR for the GPU:\n===============\n" + llvm_ir_gpu);
   }
-  return boost::make_unique<ResultRows>(explained_plan);
+  return (g_cluster || g_use_result_set) ? boost::make_unique<ResultRows>(std::make_shared<ResultSet>(explained_plan))
+                                         : boost::make_unique<ResultRows>(explained_plan);
 }
 
 // Looks at the targets and returns a feasible device type. We only punt

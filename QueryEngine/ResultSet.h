@@ -153,6 +153,8 @@ class ResultSet {
             const int device_id,
             Data_Namespace::DataMgr* data_mgr);
 
+  ResultSet(const std::string& explanation);
+
   // Empty result set constructor
   ResultSet();
 
@@ -369,6 +371,7 @@ class ResultSet {
   // only used by serialization
   std::vector<std::vector<std::string>> none_encoded_strings_;
   bool none_encoded_strings_valid_;
+  std::string explanation_;
 
   friend class ResultSetManager;
 };

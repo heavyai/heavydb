@@ -164,6 +164,13 @@ std::vector<TargetValue> ResultSet::getRowAtNoTranslations(const size_t logical_
 }
 
 std::vector<TargetValue> ResultSet::getNextRow(const bool translate_strings, const bool decimal_to_double) const {
+  if (!explanation_.empty()) {
+    if (fetched_so_far_) {
+      return {};
+    }
+    fetched_so_far_ = 1;
+    return {explanation_};
+  }
   while (fetched_so_far_ < drop_first_) {
     const auto row = getNextRowImpl(translate_strings, decimal_to_double);
     if (row.empty()) {

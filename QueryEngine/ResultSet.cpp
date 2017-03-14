@@ -123,6 +123,17 @@ ResultSet::ResultSet(const std::shared_ptr<const Analyzer::NDVEstimator> estimat
   }
 }
 
+ResultSet::ResultSet(const std::string& explanation)
+    : device_type_(ExecutorDeviceType::CPU),
+      device_id_(-1),
+      fetched_so_far_(0),
+      queue_time_ms_(0),
+      render_time_ms_(0),
+      estimator_buffer_(nullptr),
+      host_estimator_buffer_(nullptr),
+      none_encoded_strings_valid_(false),
+      explanation_(explanation) {}
+
 ResultSet::ResultSet()
     : device_type_(ExecutorDeviceType::CPU),
       device_id_(-1),
@@ -194,15 +205,21 @@ const ResultSetStorage* ResultSet::getStorage() const {
 }
 
 size_t ResultSet::colCount() const {
-  return targets_.size();
+  return explanation_.empty() ? targets_.size() : 1;
 }
 
 SQLTypeInfo ResultSet::getColType(const size_t col_idx) const {
+  if (!explanation_.empty()) {
+    return SQLTypeInfo(kTEXT, false);
+  }
   CHECK_LT(col_idx, targets_.size());
   return targets_[col_idx].agg_kind == kAVG ? SQLTypeInfo(kDOUBLE, false) : targets_[col_idx].sql_type;
 }
 
 size_t ResultSet::rowCount() const {
+  if (!explanation_.empty()) {
+    return 1;
+  }
   if (entryCount() > 100000 && !isTruncated()) {
     return parallelRowCount();
   }
@@ -251,7 +268,7 @@ size_t ResultSet::parallelRowCount() const {
 }
 
 bool ResultSet::definitelyHasNoRows() const {
-  return !storage_ && !estimator_;
+  return !storage_ && !estimator_ && explanation_.empty();
 }
 
 const QueryMemoryDescriptor& ResultSet::getQueryMemDesc() const {

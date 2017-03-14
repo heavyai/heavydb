@@ -319,7 +319,7 @@ service MapD {
   void stop_heap_profile(1: TSessionId session) throws (1: TMapDException e 2: ThriftException te)
   string get_heap_profile(1: TSessionId session) throws (1: TMapDException e 2: ThriftException te)
   void import_geo_table(1: TSessionId session, 2: string table_name, 3: string file_name, 4: TCopyParams copy_params, 5: TRowDescriptor row_desc) throws (1: TMapDException e 2: ThriftException te)
-  TPendingQuery start_query(1: TSessionId session, 2: string query_ra) throws (1: TMapDException e 2: ThriftException te)
+  TPendingQuery start_query(1: TSessionId session, 2: string query_ra, 3: bool just_explain) throws (1: TMapDException e 2: ThriftException te)
   TStepResult execute_first_step(1: TPendingQuery pending_query) throws (1: TMapDException e 2: ThriftException te)
   void broadcast_serialized_rows(1: string serialized_rows, 2: TRowDescriptor row_desc, 3: TQueryId query_id) throws (1: TMapDException e 2: ThriftException te)
   TTableDetails get_table_details(1: TSessionId session, 2: string table_name) throws (1: TMapDException e 2: ThriftException te)

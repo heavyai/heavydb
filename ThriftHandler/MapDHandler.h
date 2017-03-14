@@ -210,7 +210,10 @@ class MapDHandler : public MapDIf {
                         const std::string& file_name,
                         const TCopyParams& copy_params,
                         const TRowDescriptor& row_desc);
-  void start_query(TPendingQuery& _return, const TSessionId session, const std::string& query_ra);
+  void start_query(TPendingQuery& _return,
+                   const TSessionId session,
+                   const std::string& query_ra,
+                   const bool just_explain);
   void execute_first_step(TStepResult& _return, const TPendingQuery& pending_query);
   void broadcast_serialized_rows(const std::string& serialized_rows,
                                  const TRowDescriptor& row_desc,
