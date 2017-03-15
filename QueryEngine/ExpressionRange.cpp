@@ -74,6 +74,7 @@ ExpressionRange ExpressionRange::operator||(const ExpressionRange& other) const 
       result.has_nulls_ = has_nulls_ || other.has_nulls_;
       result.int_min_ = std::min(int_min_, other.int_min_);
       result.int_max_ = std::max(int_max_, other.int_max_);
+      result.bucket_ = std::min(bucket_, other.bucket_);
       break;
     }
     case ExpressionRangeType::Float:

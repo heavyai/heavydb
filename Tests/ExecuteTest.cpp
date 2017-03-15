@@ -787,6 +787,14 @@ TEST(Select, Case) {
       "FROM test GROUP BY g ORDER BY g DESC;",
       dt);
     c("SELECT x, COUNT(case when y = 42 then 1 else 0 end) as n1, COUNT(*) as n2 FROM test group by x;", dt);
+    ASSERT_EQ(int64_t(1418428800),
+              v<int64_t>(run_simple_agg("SELECT CASE WHEN 1 > 0 THEN DATE_TRUNC(day, m) ELSE DATE_TRUNC(year, m) END "
+                                        "AS date_bin FROM test GROUP BY date_bin;",
+                                        dt)));
+    ASSERT_EQ(int64_t(1388534400),
+              v<int64_t>(run_simple_agg("SELECT CASE WHEN 1 < 0 THEN DATE_TRUNC(day, m) ELSE DATE_TRUNC(year, m) END "
+                                        "AS date_bin FROM test GROUP BY date_bin;",
+                                        dt)));
 #ifdef HAVE_CALCITE
     c("SELECT COUNT(CASE WHEN str IN ('foo', 'bar') THEN 'foo_bar' END) from test;", dt);
     ASSERT_EQ(
