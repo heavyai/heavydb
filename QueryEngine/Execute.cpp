@@ -5501,6 +5501,9 @@ int32_t Executor::executePlanWithoutGroupBy(const RelAlgExecutionUnit& ra_exe_un
   const auto hoist_buf = serializeLiterals(compilation_result.literal_values, device_id);
   const auto join_hash_table_ptr = getJoinHashTablePtr(device_type, device_id);
   std::unique_ptr<OutVecOwner> output_memory_scope;
+  if (g_enable_dynamic_watchdog && interrupted_) {
+    return ERR_INTERRUPTED;
+  }
   if (device_type == ExecutorDeviceType::CPU) {
     out_vec = query_exe_context->launchCpuCode(ra_exe_unit,
                                                compilation_result.native_functions,
@@ -5517,9 +5520,6 @@ int32_t Executor::executePlanWithoutGroupBy(const RelAlgExecutionUnit& ra_exe_un
                                                join_hash_table_ptr);
     output_memory_scope.reset(new OutVecOwner(out_vec));
   } else {
-    if (g_enable_dynamic_watchdog && interrupted_) {
-      return ERR_INTERRUPTED;
-    }
     try {
       out_vec = query_exe_context->launchGpuCode(ra_exe_unit,
                                                  compilation_result.native_functions,
@@ -5676,6 +5676,9 @@ int32_t Executor::executePlanWithGroupBy(const RelAlgExecutionUnit& ra_exe_unit,
   auto hoist_buf = serializeLiterals(compilation_result.literal_values, device_id);
   int32_t error_code = device_type == ExecutorDeviceType::GPU ? 0 : start_rowid;
   const auto join_hash_table_ptr = getJoinHashTablePtr(device_type, device_id);
+  if (g_enable_dynamic_watchdog && interrupted_) {
+    return ERR_INTERRUPTED;
+  }
   if (device_type == ExecutorDeviceType::CPU) {
     query_exe_context->launchCpuCode(ra_exe_unit,
                                      compilation_result.native_functions,
@@ -5691,9 +5694,6 @@ int32_t Executor::executePlanWithGroupBy(const RelAlgExecutionUnit& ra_exe_unit,
                                      num_tables,
                                      join_hash_table_ptr);
   } else {
-    if (g_enable_dynamic_watchdog && interrupted_) {
-      return ERR_INTERRUPTED;
-    }
     try {
       query_exe_context->launchGpuCode(ra_exe_unit,
                                        compilation_result.native_functions,
@@ -7174,7 +7174,6 @@ void Executor::interrupt() {
   std::lock_guard<std::mutex> lock(gpu_active_modules_mutex_);
   VLOG(1) << "Executor " << this << ": Interrupting Active Modules: mask 0x" << std::hex
           << gpu_active_modules_device_mask_;
-  interrupted_ = true;
   CUcontext old_cu_context;
   checkCudaErrors(cuCtxGetCurrent(&old_cu_context));
   for (int device_id = 0; device_id < max_gpu_count; device_id++) {
@@ -7220,16 +7219,29 @@ void Executor::interrupt() {
   }
   checkCudaErrors(cuCtxSetCurrent(old_cu_context));
 #endif
+
+#if (defined(__x86_64__) || defined(__x86_64))
+  dynamic_watchdog_bark(static_cast<unsigned>(DW_ABORT));
+#endif
+
+  interrupted_ = true;
+  VLOG(1) << "INTERRUPT Executor " << this;
 }
 
 void Executor::resetInterrupt() {
 #ifdef HAVE_CUDA
   std::lock_guard<std::mutex> lock(gpu_active_modules_mutex_);
+#endif
+
   if (!interrupted_)
     return;
+
+#if (defined(__x86_64__) || defined(__x86_64))
+  dynamic_watchdog_bark(static_cast<unsigned>(DW_RESET));
+#endif
+
   interrupted_ = false;
   VLOG(1) << "RESET Executor " << this << " that had previously been interrupted";
-#endif
 }
 
 llvm::Value* Executor::castToFP(llvm::Value* val) {

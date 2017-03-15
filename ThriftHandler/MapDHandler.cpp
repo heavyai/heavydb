@@ -389,8 +389,6 @@ void MapDHandler::interrupt(const TSessionId session) {
     auto session_it = get_session_it(session);
     const auto dbname = session_it->second->get_catalog().get_currentDB().dbName;
     auto session_info_ptr = session_it->second.get();
-    if (session_info_ptr->get_executor_device_type() != ExecutorDeviceType::GPU)
-      return;
     auto& cat = session_info_ptr->get_catalog();
     auto executor = Executor::getExecutor(
         cat.get_currentDB().dbId, jit_debug_ ? "/tmp" : "", jit_debug_ ? "mapdquery" : "", mapd_parameters_, nullptr);

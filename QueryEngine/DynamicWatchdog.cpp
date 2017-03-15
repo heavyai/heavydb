@@ -16,9 +16,20 @@ extern "C" uint64_t dynamic_watchdog_bark(unsigned ms_budget) {
 #if (defined(__x86_64__) || defined(__x86_64))
   static uint64_t dw_cycle_start = 0ULL;
   static uint64_t dw_cycle_budget = 0ULL;
-  if (ms_budget == 0) {
+  static bool dw_abort = false;
+  if (ms_budget == static_cast<unsigned>(DW_DEADLINE)) {
+    if (dw_abort)
+      return 0LL;
     // Return the deadline
     return dw_cycle_start + dw_cycle_budget;
+  }
+  if (ms_budget == static_cast<unsigned>(DW_ABORT)) {
+    dw_abort = true;
+    return 0LL;
+  }
+  if (ms_budget == static_cast<unsigned>(DW_RESET)) {
+    dw_abort = false;
+    return 0LL;
   }
   // Init cycle start, measure freq, set and return cycle budget
   dw_cycle_start = rdtsc();
@@ -39,7 +50,7 @@ extern "C" bool dynamic_watchdog() {
 #if (defined(__x86_64__) || defined(__x86_64))
   // Check if out of time
   auto clock = rdtsc();
-  auto dw_deadline = dynamic_watchdog_bark(0);
+  auto dw_deadline = dynamic_watchdog_bark(static_cast<unsigned>(DW_DEADLINE));
   if (clock > dw_deadline) {
     LOG(INFO) << "TIMEOUT: thread " << std::this_thread::get_id() << ": clock " << clock << ", deadline "
               << dw_deadline;
