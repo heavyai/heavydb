@@ -34,7 +34,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQuery(const std::string& query_ra,
   int64_t queue_time_ms = timer_stop(clock_begin);
   auto ed_list = get_execution_descriptors(ra.get());
   if (render_info && render_info->do_render && ed_list.size() > 1) {
-    throw std::runtime_error("Cannot render point map queries which need more than one execution step");
+    throw std::runtime_error("Cannot render queries which need more than one execution step");
   }
   if (render_info) {  // save the table names for render queries
     table_names_ = getScanTableNamesInRelAlgSeq(ed_list);
