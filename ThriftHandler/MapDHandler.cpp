@@ -925,6 +925,15 @@ void MapDHandler::get_frontend_views(std::vector<TFrontendView>& view_names, con
 void MapDHandler::set_execution_mode(const TSessionId session, const TExecuteMode::type mode) {
   mapd_lock_guard<mapd_shared_mutex> write_lock(sessions_mutex_);
   auto session_it = get_session_it(session);
+  if (leaf_aggregator_.leafCount() > 0) {
+    leaf_aggregator_.set_execution_mode(session, mode);
+    try {
+      MapDHandler::set_execution_mode_nolock(session_it->second.get(), mode);
+    } catch (const TMapDException& e) {
+      LOG(INFO) << "Aggregator failed to set execution mode: " << e.error_msg;
+    }
+    return;
+  }
   MapDHandler::set_execution_mode_nolock(session_it->second.get(), mode);
 }
 
