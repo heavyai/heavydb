@@ -89,10 +89,11 @@ ColumnarResults::ColumnarResults(const std::shared_ptr<RowSetMemoryOwner> row_se
          i < worker_count && start_entry < entry_count;
          ++i, start_entry += stride) {
       const auto end_entry = std::min(start_entry + stride, entry_count);
+      const auto rs = rows.getResultSet().get();
       conversion_threads.push_back(std::async(std::launch::async,
-                                              [&rows, &do_work, &row_idx](const size_t start, const size_t end) {
+                                              [rs, &do_work, &row_idx](const size_t start, const size_t end) {
                                                 for (size_t i = start; i < end; ++i) {
-                                                  const auto crt_row = rows.getResultSet()->getRowAtNoTranslations(i);
+                                                  const auto crt_row = rs->getRowAtNoTranslations(i);
                                                   if (!crt_row.empty()) {
                                                     do_work(crt_row, row_idx.fetch_add(1));
                                                   }

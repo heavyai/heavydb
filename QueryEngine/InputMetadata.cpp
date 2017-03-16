@@ -48,7 +48,6 @@ bool uses_int_meta(const SQLTypeInfo& col_ti) {
          (col_ti.is_string() && col_ti.get_compression() == kENCODING_DICT);
 }
 
-// TODO(alex): Placeholder, provide an efficient implementation for this
 std::map<int, ChunkMetadata> synthesize_metadata(const ResultRows* rows) {
   rows->moveToBegin();
   std::vector<std::vector<std::unique_ptr<Encoder>>> dummy_encoders;
@@ -101,11 +100,12 @@ std::map<int, ChunkMetadata> synthesize_metadata(const ResultRows* rows) {
          i < worker_count && start_entry < entry_count;
          ++i, start_entry += stride) {
       const auto end_entry = std::min(start_entry + stride, entry_count);
+      const auto rs = rows->getResultSet().get();
       compute_stats_threads.push_back(
           std::async(std::launch::async,
-                     [rows, &do_work, &dummy_encoders](const size_t start, const size_t end, const size_t worker_idx) {
+                     [rs, &do_work, &dummy_encoders](const size_t start, const size_t end, const size_t worker_idx) {
                        for (size_t i = start; i < end; ++i) {
-                         const auto crt_row = rows->getResultSet()->getRowAtNoTranslations(i);
+                         const auto crt_row = rs->getRowAtNoTranslations(i);
                          if (!crt_row.empty()) {
                            do_work(crt_row, dummy_encoders[worker_idx]);
                          }
