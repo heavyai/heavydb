@@ -4,8 +4,8 @@
 #include <unordered_map>
 
 struct TableGeneration {
-  const size_t tuple_count;
-  const size_t start_rowid;
+  size_t tuple_count;
+  size_t start_rowid;
 };
 
 class TableGenerations {
