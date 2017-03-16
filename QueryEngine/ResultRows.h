@@ -554,6 +554,15 @@ class ResultRows {
                        const bool replace_bitmap_ptr_with_bitmap_sz,
                        std::vector<int64_t>& agg_vals) const;
 
+  static bool reduceSingleRow(const int8_t* row_ptr,
+                              const int8_t warp_count,
+                              const bool is_columnar,
+                              const bool replace_bitmap_ptr_with_bitmap_sz,
+                              std::vector<int64_t>& agg_vals,
+                              const QueryMemoryDescriptor& query_mem_desc,
+                              const std::vector<TargetInfo>& targets,
+                              const std::vector<int64_t>& agg_init_vals);
+
   void addKeylessGroupByBuffer(const int64_t* group_by_buffer,
                                const int32_t groups_buffer_entry_count,
                                const int64_t min_val,

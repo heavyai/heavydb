@@ -226,27 +226,45 @@ bool ResultRows::reduceSingleRow(const int8_t* row_ptr,
                                  const bool replace_bitmap_ptr_with_bitmap_sz,
                                  std::vector<int64_t>& agg_vals) const {
   CHECK(!result_set_);
+  return reduceSingleRow(row_ptr,
+                         warp_count,
+                         is_columnar,
+                         replace_bitmap_ptr_with_bitmap_sz,
+                         agg_vals,
+                         query_mem_desc_,
+                         targets_,
+                         agg_init_vals_);
+}
+
+bool ResultRows::reduceSingleRow(const int8_t* row_ptr,
+                                 const int8_t warp_count,
+                                 const bool is_columnar,
+                                 const bool replace_bitmap_ptr_with_bitmap_sz,
+                                 std::vector<int64_t>& agg_vals,
+                                 const QueryMemoryDescriptor& query_mem_desc,
+                                 const std::vector<TargetInfo>& targets,
+                                 const std::vector<int64_t>& agg_init_vals) {
   const size_t agg_col_count{agg_vals.size()};
-  const auto row_size = query_mem_desc_.getRowSize();
-  CHECK_EQ(agg_col_count, query_mem_desc_.agg_col_widths.size());
-  CHECK_GE(agg_col_count, targets_.size());
-  CHECK_EQ(is_columnar, query_mem_desc_.output_columnar);
-  CHECK(query_mem_desc_.keyless_hash);
+  const auto row_size = query_mem_desc.getRowSize();
+  CHECK_EQ(agg_col_count, query_mem_desc.agg_col_widths.size());
+  CHECK_GE(agg_col_count, targets.size());
+  CHECK_EQ(is_columnar, query_mem_desc.output_columnar);
+  CHECK(query_mem_desc.keyless_hash);
   std::vector<int64_t> partial_agg_vals(agg_col_count, 0);
   bool discard_row = true;
   for (int8_t warp_idx = 0; warp_idx < warp_count; ++warp_idx) {
     bool discard_partial_result = true;
-    for (size_t target_idx = 0, agg_col_idx = 0; target_idx < targets_.size() && agg_col_idx < agg_col_count;
+    for (size_t target_idx = 0, agg_col_idx = 0; target_idx < targets.size() && agg_col_idx < agg_col_count;
          ++target_idx, ++agg_col_idx) {
-      const auto& agg_info = targets_[target_idx];
-      const auto chosen_bytes = query_mem_desc_.agg_col_widths[agg_col_idx].compact;
-      auto partial_bin_val = get_component(row_ptr + query_mem_desc_.getColOnlyOffInBytes(agg_col_idx), chosen_bytes);
+      const auto& agg_info = targets[target_idx];
+      const auto chosen_bytes = query_mem_desc.agg_col_widths[agg_col_idx].compact;
+      auto partial_bin_val = get_component(row_ptr + query_mem_desc.getColOnlyOffInBytes(agg_col_idx), chosen_bytes);
       partial_agg_vals[agg_col_idx] = partial_bin_val;
       if (is_distinct_target(agg_info)) {
         CHECK_EQ(int8_t(1), warp_count);
         CHECK(agg_info.is_agg && (agg_info.agg_kind == kCOUNT || agg_info.agg_kind == kAPPROX_COUNT_DISTINCT));
         partial_bin_val =
-            count_distinct_set_size(partial_bin_val, target_idx, query_mem_desc_.count_distinct_descriptors_);
+            count_distinct_set_size(partial_bin_val, target_idx, query_mem_desc.count_distinct_descriptors_);
         if (replace_bitmap_ptr_with_bitmap_sz) {
           partial_agg_vals[agg_col_idx] = partial_bin_val;
         }
@@ -255,11 +273,11 @@ bool ResultRows::reduceSingleRow(const int8_t* row_ptr,
         CHECK(agg_info.is_agg && !agg_info.is_distinct);
         ++agg_col_idx;
         partial_bin_val = partial_agg_vals[agg_col_idx] =
-            get_component(row_ptr + query_mem_desc_.getColOnlyOffInBytes(agg_col_idx),
-                          query_mem_desc_.agg_col_widths[agg_col_idx].compact);
+            get_component(row_ptr + query_mem_desc.getColOnlyOffInBytes(agg_col_idx),
+                          query_mem_desc.agg_col_widths[agg_col_idx].compact);
       }
-      if (agg_col_idx == static_cast<size_t>(query_mem_desc_.idx_target_as_key) &&
-          partial_bin_val != agg_init_vals_[query_mem_desc_.idx_target_as_key]) {
+      if (agg_col_idx == static_cast<size_t>(query_mem_desc.idx_target_as_key) &&
+          partial_bin_val != agg_init_vals[query_mem_desc.idx_target_as_key]) {
         CHECK(agg_info.is_agg);
         discard_partial_result = false;
       }
@@ -269,11 +287,11 @@ bool ResultRows::reduceSingleRow(const int8_t* row_ptr,
       continue;
     }
     discard_row = false;
-    for (size_t target_idx = 0, agg_col_idx = 0; target_idx < targets_.size() && agg_col_idx < agg_col_count;
+    for (size_t target_idx = 0, agg_col_idx = 0; target_idx < targets.size() && agg_col_idx < agg_col_count;
          ++target_idx, ++agg_col_idx) {
-      const auto& agg_info = targets_[target_idx];
+      const auto& agg_info = targets[target_idx];
       auto partial_bin_val = partial_agg_vals[agg_col_idx];
-      const auto chosen_bytes = query_mem_desc_.agg_col_widths[agg_col_idx].compact;
+      const auto chosen_bytes = query_mem_desc.agg_col_widths[agg_col_idx].compact;
       const auto& chosen_type = get_compact_type(agg_info);
       if (agg_info.is_agg) {
         try {
@@ -282,7 +300,7 @@ bool ResultRows::reduceSingleRow(const int8_t* row_ptr,
             case kAPPROX_COUNT_DISTINCT:
               AGGREGATE_ONE_NULLABLE_COUNT(reinterpret_cast<int8_t*>(&agg_vals[agg_col_idx]),
                                            reinterpret_cast<int8_t*>(&partial_agg_vals[agg_col_idx]),
-                                           agg_init_vals_[agg_col_idx],
+                                           agg_init_vals[agg_col_idx],
                                            chosen_bytes,
                                            agg_info);
               break;
@@ -296,7 +314,7 @@ bool ResultRows::reduceSingleRow(const int8_t* row_ptr,
               AGGREGATE_ONE_NULLABLE_VALUE(sum,
                                            reinterpret_cast<int8_t*>(&agg_vals[agg_col_idx]),
                                            reinterpret_cast<int8_t*>(&partial_agg_vals[agg_col_idx]),
-                                           agg_init_vals_[agg_col_idx],
+                                           agg_init_vals[agg_col_idx],
                                            chosen_bytes,
                                            agg_info);
               break;
@@ -304,7 +322,7 @@ bool ResultRows::reduceSingleRow(const int8_t* row_ptr,
               AGGREGATE_ONE_NULLABLE_VALUE(min,
                                            reinterpret_cast<int8_t*>(&agg_vals[agg_col_idx]),
                                            reinterpret_cast<int8_t*>(&partial_agg_vals[agg_col_idx]),
-                                           agg_init_vals_[agg_col_idx],
+                                           agg_init_vals[agg_col_idx],
                                            chosen_bytes,
                                            agg_info);
               break;
@@ -312,7 +330,7 @@ bool ResultRows::reduceSingleRow(const int8_t* row_ptr,
               AGGREGATE_ONE_NULLABLE_VALUE(max,
                                            reinterpret_cast<int8_t*>(&agg_vals[agg_col_idx]),
                                            reinterpret_cast<int8_t*>(&partial_agg_vals[agg_col_idx]),
-                                           agg_init_vals_[agg_col_idx],
+                                           agg_init_vals[agg_col_idx],
                                            chosen_bytes,
                                            agg_info);
               break;
@@ -330,7 +348,7 @@ bool ResultRows::reduceSingleRow(const int8_t* row_ptr,
               break;
             case 4: {
               int32_t ret = *reinterpret_cast<const int32_t*>(&agg_vals[agg_col_idx]);
-              if (!(agg_info.agg_kind == kCOUNT && ret != agg_init_vals_[agg_col_idx])) {
+              if (!(agg_info.agg_kind == kCOUNT && ret != agg_init_vals[agg_col_idx])) {
                 agg_vals[agg_col_idx] = static_cast<int64_t>(ret);
               }
               break;
