@@ -6803,6 +6803,16 @@ std::string gen_array_any_all_sigs() {
   return result;
 }
 
+std::string gen_translate_null_key_sigs() {
+  std::string result;
+  for (const std::string key_type : {"int8_t", "int16_t", "int32_t", "int64_t"}) {
+    const auto key_llvm_type = cpp_to_llvm_name(key_type);
+    result += "declare i64 @translate_null_key_" + key_type + "(" + key_llvm_type + ", " + key_llvm_type + ", " +
+              key_llvm_type + ");\n";
+  }
+  return result;
+}
+
 const std::string cuda_rt_decls =
     R"(
 declare void @llvm.lifetime.start(i64, i8* nocapture) nounwind
@@ -6915,7 +6925,8 @@ declare void @agg_approximate_count_distinct_gpu(i64*, i64, i32, i64, i64);
 declare i32 @record_error_code(i32, i32*);
 declare i1 @dynamic_watchdog();
 declare void @force_sync();
-)" + gen_array_any_all_sigs();
+)" + gen_array_any_all_sigs() +
+    gen_translate_null_key_sigs();
 
 #ifdef HAVE_CUDA
 std::string extension_function_decls() {

@@ -241,22 +241,6 @@ extern "C" ALWAYS_INLINE int8_t logical_or(const int8_t lhs, const int8_t rhs, c
   return (lhs || rhs) ? 1 : 0;
 }
 
-#define DEF_TRANSLATE_NULL_KEY(key_type)                                            \
-  extern "C" ALWAYS_INLINE int64_t translate_null_key_##key_type(                   \
-      const key_type key, const key_type null_val, const key_type translated_val) { \
-    if (key == null_val) {                                                          \
-      return translated_val;                                                        \
-    }                                                                               \
-    return key;                                                                     \
-  }
-
-DEF_TRANSLATE_NULL_KEY(int8_t)
-DEF_TRANSLATE_NULL_KEY(int16_t)
-DEF_TRANSLATE_NULL_KEY(int32_t)
-DEF_TRANSLATE_NULL_KEY(int64_t)
-
-#undef DEF_TRANSLATE_NULL_KEY
-
 // aggregator implementations
 
 extern "C" ALWAYS_INLINE uint64_t agg_count(uint64_t* agg, const int64_t) {

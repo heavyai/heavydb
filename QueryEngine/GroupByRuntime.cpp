@@ -220,3 +220,19 @@ extern "C" ALWAYS_INLINE DEVICE int64_t hash_join_idx_nullable(int64_t hash_buff
   const int64_t translated_key = max_key + 1;
   return hash_join_idx(hash_buff, translated_key, min_key, translated_key);
 }
+
+#define DEF_TRANSLATE_NULL_KEY(key_type)                                            \
+  extern "C" NEVER_INLINE DEVICE int64_t translate_null_key_##key_type(             \
+      const key_type key, const key_type null_val, const key_type translated_val) { \
+    if (key == null_val) {                                                          \
+      return translated_val;                                                        \
+    }                                                                               \
+    return key;                                                                     \
+  }
+
+DEF_TRANSLATE_NULL_KEY(int8_t)
+DEF_TRANSLATE_NULL_KEY(int16_t)
+DEF_TRANSLATE_NULL_KEY(int32_t)
+DEF_TRANSLATE_NULL_KEY(int64_t)
+
+#undef DEF_TRANSLATE_NULL_KEY
