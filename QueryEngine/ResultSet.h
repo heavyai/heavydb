@@ -19,7 +19,6 @@
 class ResultSetStorage {
  public:
   ResultSetStorage(const std::vector<TargetInfo>& targets,
-                   const ExecutorDeviceType device_type,
                    const QueryMemoryDescriptor& query_mem_desc,
                    int8_t* buff,
                    const bool buff_is_provided);

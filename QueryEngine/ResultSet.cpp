@@ -22,7 +22,6 @@
 #include <numeric>
 
 ResultSetStorage::ResultSetStorage(const std::vector<TargetInfo>& targets,
-                                   const ExecutorDeviceType device_type,
                                    const QueryMemoryDescriptor& query_mem_desc,
                                    int8_t* buff,
                                    const bool buff_is_provided)
@@ -160,13 +159,13 @@ ResultSet::~ResultSet() {
 const ResultSetStorage* ResultSet::allocateStorage() const {
   CHECK(!storage_);
   auto buff = static_cast<int8_t*>(checked_malloc(query_mem_desc_.getBufferSizeBytes(device_type_)));
-  storage_.reset(new ResultSetStorage(targets_, device_type_, query_mem_desc_, buff, false));
+  storage_.reset(new ResultSetStorage(targets_, query_mem_desc_, buff, false));
   return storage_.get();
 }
 
 const ResultSetStorage* ResultSet::allocateStorage(int8_t* buff, const std::vector<int64_t>& target_init_vals) const {
   CHECK(buff);
-  storage_.reset(new ResultSetStorage(targets_, device_type_, query_mem_desc_, buff, true));
+  storage_.reset(new ResultSetStorage(targets_, query_mem_desc_, buff, true));
   storage_->target_init_vals_ = target_init_vals;
   return storage_.get();
 }
@@ -174,7 +173,7 @@ const ResultSetStorage* ResultSet::allocateStorage(int8_t* buff, const std::vect
 const ResultSetStorage* ResultSet::allocateStorage(const std::vector<int64_t>& target_init_vals) const {
   CHECK(!storage_);
   auto buff = static_cast<int8_t*>(checked_malloc(query_mem_desc_.getBufferSizeBytes(device_type_)));
-  storage_.reset(new ResultSetStorage(targets_, device_type_, query_mem_desc_, buff, false));
+  storage_.reset(new ResultSetStorage(targets_, query_mem_desc_, buff, false));
   storage_->target_init_vals_ = target_init_vals;
   return storage_.get();
 }
