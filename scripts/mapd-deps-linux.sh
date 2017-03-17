@@ -56,7 +56,7 @@ download_make_install ftp://ftp.gnu.org/gnu/autoconf/autoconf-2.69.tar.xz # "" "
 download_make_install ftp://ftp.gnu.org/gnu/automake/automake-1.14.1.tar.xz
 
 # gcc
-VERS=4.9.3
+VERS=5.4.0
 download ftp://ftp.gnu.org/gnu/gcc/gcc-$VERS/gcc-$VERS.tar.bz2
 extract gcc-$VERS.tar.bz2
 pushd gcc-$VERS
@@ -95,7 +95,7 @@ makej
 make install PREFIX=$PREFIX
 popd
 
-CFLAGS="-fPIC" download_make_install ftp://ftp.gnu.org/pub/gnu/ncurses/ncurses-5.9.tar.gz # "" "--build=powerpc64le-unknown-linux-gnu"
+CFLAGS="-fPIC" download_make_install ftp://ftp.gnu.org/pub/gnu/ncurses/ncurses-6.0.tar.gz # "" "--build=powerpc64le-unknown-linux-gnu"
 
 download_make_install ftp://ftp.gnu.org/gnu/bison/bison-2.5.1.tar.xz # "" "--build=powerpc64le-unknown-linux-gnu"
 
