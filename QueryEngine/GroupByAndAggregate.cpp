@@ -1799,7 +1799,7 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
           (!sort_on_gpu_hint || !many_entries(col_range_info.max, col_range_info.min, col_range_info.bucket)) &&
           !col_range_info.bucket && !must_use_baseline_sort && keyless_info.keyless;
       size_t bin_count = getBucketedCardinality(col_range_info);
-      const size_t interleaved_max_threshold = (g_cluster || g_use_result_set) ? 0 : 512;
+      const size_t interleaved_max_threshold{512};
       bool interleaved_bins = keyless && (bin_count <= interleaved_max_threshold) &&
                               countDescriptorsLogicallyEmpty(count_distinct_descriptors);
       std::vector<ssize_t> target_group_by_indices;

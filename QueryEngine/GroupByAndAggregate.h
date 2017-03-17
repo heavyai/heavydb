@@ -246,6 +246,8 @@ class QueryExecutionContext : boost::noncopyable {
 
   void allocateCountDistinctGpuMem();
 
+  RowSetPtr groupBufferToDeinterleavedResults(const size_t i) const;
+
   const QueryMemoryDescriptor& query_mem_desc_;
   std::vector<int64_t> init_agg_vals_;
   const Executor* executor_;

@@ -1899,6 +1899,9 @@ RowSetPtr QueryExecutionContext::groupBufferToResults(const size_t i,
                                                       const std::vector<Analyzer::Expr*>& targets,
                                                       const bool was_auto_device) const {
   if (can_use_result_set(query_mem_desc_, device_type_)) {
+    if (query_mem_desc_.interleavedBins(device_type_)) {
+      return groupBufferToDeinterleavedResults(i);
+    }
     CHECK_LT(i, result_sets_.size());
     return boost::make_unique<ResultRows>(std::shared_ptr<ResultSet>(result_sets_[i].release()));
   }
@@ -1968,4 +1971,45 @@ RowSetPtr QueryExecutionContext::groupBufferToResults(const size_t i,
   } else {
     return more_results;
   }
+}
+
+RowSetPtr QueryExecutionContext::groupBufferToDeinterleavedResults(const size_t i) const {
+  CHECK(!output_columnar_);
+  const auto& result_set = result_sets_[i];
+  auto deinterleaved_query_mem_desc = ResultSet::fixupQueryMemoryDescriptor(query_mem_desc_);
+  deinterleaved_query_mem_desc.interleaved_bins_on_gpu = false;
+  for (auto& col_widths : deinterleaved_query_mem_desc.agg_col_widths) {
+    col_widths.actual = col_widths.compact = 8;
+  }
+  auto deinterleaved_result_set = std::make_shared<ResultSet>(result_set->getTargetInfos(),
+                                                              std::vector<ColumnLazyFetchInfo>{},
+                                                              std::vector<std::vector<const int8_t*>>{},
+                                                              ExecutorDeviceType::CPU,
+                                                              -1,
+                                                              deinterleaved_query_mem_desc,
+                                                              row_set_mem_owner_,
+                                                              executor_);
+  auto deinterleaved_storage = deinterleaved_result_set->allocateStorage(executor_->plan_state_->init_agg_vals_);
+  auto deinterleaved_buffer = reinterpret_cast<int64_t*>(deinterleaved_storage->getUnderlyingBuffer());
+  const auto rows_ptr = result_set->getStorage()->getUnderlyingBuffer();
+  size_t deinterleaved_buffer_idx = 0;
+  const size_t agg_col_count{query_mem_desc_.agg_col_widths.size()};
+  for (size_t bin_base_off = query_mem_desc_.getColOffInBytes(0, 0), bin_idx = 0; bin_idx < result_set->entryCount();
+       ++bin_idx, bin_base_off += query_mem_desc_.getColOffInBytesInNextBin(0)) {
+    std::vector<int64_t> agg_vals(agg_col_count, 0);
+    memcpy(&agg_vals[0], &executor_->plan_state_->init_agg_vals_[0], agg_col_count * sizeof(agg_vals[0]));
+    ResultRows::reduceSingleRow(rows_ptr + bin_base_off,
+                                executor_->warpSize(),
+                                false,
+                                true,
+                                agg_vals,
+                                query_mem_desc_,
+                                result_set->getTargetInfos(),
+                                executor_->plan_state_->init_agg_vals_);
+    for (size_t agg_idx = 0; agg_idx < agg_col_count; ++agg_idx, ++deinterleaved_buffer_idx) {
+      deinterleaved_buffer[deinterleaved_buffer_idx] = agg_vals[agg_idx];
+    }
+  }
+  result_sets_[i].reset();
+  return boost::make_unique<ResultRows>(deinterleaved_result_set);
 }
