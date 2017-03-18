@@ -537,6 +537,7 @@ TEST(Select, FilterAndGroupBy) {
     c("SELECT CASE WHEN x > 8 THEN 100000000 ELSE 42 END AS c, COUNT(*) FROM test GROUP BY c;", dt);
     c("SELECT COUNT(*) FROM test WHERE CAST((CAST(x AS FLOAT) - 0) * 0.2 AS INT) = 1;", dt);
     c("SELECT CAST(CAST(d AS FLOAT) AS INTEGER) AS key, COUNT(*) FROM test GROUP BY key;", dt);
+    c("SELECT x * 2 AS x2, COUNT(DISTINCT y) AS n FROM test GROUP BY x2 ORDER BY n DESC;", dt);
 #ifdef HAVE_CALCITE
     c("SELECT x, COUNT(real_str) FROM test GROUP BY x ORDER BY x DESC;", dt);
     EXPECT_THROW(run_multiple_agg("SELECT x, MIN(real_str) FROM test GROUP BY x ORDER BY x DESC;", dt),

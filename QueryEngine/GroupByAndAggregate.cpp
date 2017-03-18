@@ -2088,7 +2088,7 @@ GroupByAndAggregate::KeylessInfo GroupByAndAggregate::getKeylessInfo(
   for (const auto target_expr : target_expr_list) {
     const auto agg_info = target_info(target_expr);
     const auto& chosen_type = get_compact_type(agg_info);
-    if (!found && agg_info.is_agg) {
+    if (!found && agg_info.is_agg && !is_distinct_target(agg_info)) {
       auto agg_expr = dynamic_cast<const Analyzer::AggExpr*>(target_expr);
       CHECK(agg_expr);
       const auto arg_expr = agg_arg(target_expr);
