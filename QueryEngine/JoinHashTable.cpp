@@ -121,6 +121,9 @@ std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(
     if (err == ERR_FAILED_TO_FETCH_COLUMN) {
       throw HashJoinFail("Not enough memory for the columns involved in join");
     }
+    if (err == ERR_FAILED_TO_JOIN_ON_VIRTUAL_COLUMN) {
+      throw HashJoinFail("Cannot join on rowid");
+    }
     throw HashJoinFail("Could not build a 1-to-1 correspondence for columns involved in equijoin");
   }
   return join_hash_table;
@@ -221,6 +224,9 @@ int JoinHashTable::reify(const int device_count) {
   const bool has_multi_frag = query_info.fragments.size() > 1;
 #endif
   const auto cd = get_column_descriptor_maybe(inner_col->get_column_id(), inner_col->get_table_id(), cat_);
+  if (cd && cd->isVirtualCol) {
+    return ERR_FAILED_TO_JOIN_ON_VIRTUAL_COLUMN;
+  }
   CHECK(!cd || !(cd->isVirtualCol));
   const auto& ti =
       get_column_type(inner_col->get_column_id(), inner_col->get_table_id(), cd, executor_->temporary_tables_);

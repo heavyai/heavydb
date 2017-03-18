@@ -20,8 +20,14 @@ namespace {
 std::unique_ptr<Catalog_Namespace::SessionInfo> g_session;
 bool g_hoist_literals{true};
 
+ResultRows run_multiple_agg(const string& query_str,
+                            const ExecutorDeviceType device_type,
+                            const bool allow_loop_joins) {
+  return run_multiple_agg(query_str, g_session, device_type, g_hoist_literals, allow_loop_joins);
+}
+
 ResultRows run_multiple_agg(const string& query_str, const ExecutorDeviceType device_type) {
-  return run_multiple_agg(query_str, g_session, device_type, g_hoist_literals);
+  return run_multiple_agg(query_str, device_type, true);
 }
 
 TargetValue run_simple_agg(const string& query_str, const ExecutorDeviceType device_type) {
@@ -680,9 +686,11 @@ TEST(Select, ComplexQueries) {
     c("SELECT x + y AS a, COUNT(*) * MAX(y) - SUM(z) AS b FROM test "
       "WHERE z BETWEEN 100 AND 200 GROUP BY a, y;",
       dt);
+#ifdef HAVE_RAVM
     c("SELECT COUNT(*) FROM test a JOIN (SELECT * FROM test WHERE y < 43) b ON a.x = b.x JOIN join_test c ON a.x = c.x "
       "WHERE a.fixed_str = 'foo';",
       dt);
+#endif  // HAVE_RAVM
     const auto rows = run_multiple_agg(
         "SELECT x + y AS a, COUNT(*) * MAX(y) - SUM(z) AS b FROM test "
         "WHERE z BETWEEN 100 AND 200 GROUP BY x, y ORDER BY a DESC LIMIT 2;",
@@ -2080,9 +2088,14 @@ TEST(Select, Joins) {
                   "array_test.x = "
                   "test_inner.x;",
                   dt)));
+#ifdef HAVE_RAVM
     c("SELECT COUNT(*) FROM test, join_test WHERE test.str = join_test.dup_str;", dt);
     // Intentionally duplicate previous string join to cover hash table building.
     c("SELECT COUNT(*) FROM test, join_test WHERE test.str = join_test.dup_str;", dt);
+#endif  // HAVE_RAVM
+    EXPECT_THROW(
+        run_multiple_agg("SELECT COUNT(*) FROM test, join_test WHERE test.rowid = join_test.rowid;", dt, false),
+        std::runtime_error);
   }
 }
 

@@ -130,7 +130,8 @@ Planner::RootPlan* parse_plan(const std::string& query_str,
 ResultRows run_multiple_agg(const std::string& query_str,
                             const std::unique_ptr<Catalog_Namespace::SessionInfo>& session,
                             const ExecutorDeviceType device_type,
-                            const bool hoist_literals) {
+                            const bool hoist_literals,
+                            const bool allow_loop_joins) {
   const auto& cat = session->get_catalog();
   auto executor = Executor::getExecutor(cat.get_currentDB().dbId);
 
@@ -138,7 +139,7 @@ ResultRows run_multiple_agg(const std::string& query_str,
   ParserWrapper pw{query_str};
   if (!(pw.is_other_explain || pw.is_ddl || pw.is_update_dml)) {
     CompilationOptions co = {device_type, true, ExecutorOptLevel::LoopStrengthReduction, false};
-    ExecutionOptions eo = {false, true, false, true, false, false, false, false, 10000};
+    ExecutionOptions eo = {false, true, false, allow_loop_joins, false, false, false, false, 10000};
     auto& calcite_mgr = cat.get_calciteMgr();
     const auto query_ra = calcite_mgr.process(session->get_currentUser().userName,
                                               session->get_currentUser().passwd,
@@ -156,9 +157,9 @@ ResultRows run_multiple_agg(const std::string& query_str,
   std::unique_ptr<Planner::RootPlan> plan_ptr(plan);  // make sure it's deleted
 #ifdef HAVE_CUDA
   return executor->execute(
-      plan, *session, hoist_literals, device_type, ExecutorOptLevel::LoopStrengthReduction, true, true);
+      plan, *session, hoist_literals, device_type, ExecutorOptLevel::LoopStrengthReduction, true, allow_loop_joins);
 #else
   return executor->execute(
-      plan, *session, hoist_literals, device_type, ExecutorOptLevel::LoopStrengthReduction, false, true);
+      plan, *session, hoist_literals, device_type, ExecutorOptLevel::LoopStrengthReduction, false, allow_loop_joins);
 #endif
 }

@@ -142,6 +142,7 @@ class JoinHashTable {
 
   static const int ERR_MULTI_FRAG{-2};
   static const int ERR_FAILED_TO_FETCH_COLUMN{-3};
+  static const int ERR_FAILED_TO_JOIN_ON_VIRTUAL_COLUMN{-4};
 
   friend class Executor;
 };

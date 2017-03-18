@@ -41,7 +41,7 @@ int main(int argc, char** argv) {
 
   std::unique_ptr<Catalog_Namespace::SessionInfo> session(get_session(db_path.c_str()));
   for (size_t i = 0; i < iter; ++i) {
-    run_multiple_agg(query, session, device_type, true);
+    run_multiple_agg(query, session, device_type, true, true);
   }
   return 0;
 }
