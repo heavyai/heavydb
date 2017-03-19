@@ -1800,6 +1800,11 @@ void RenameColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 }
 
 void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+  size_t rows_completed = 0;
+  size_t rows_rejected = 0;
+  size_t total_time = 0;
+  bool load_truncated = false;
+
   auto& catalog = session.get_catalog();
   const TableDescriptor* td = catalog.getMetadataForTable(*table);
   if (td == nullptr)
@@ -1899,29 +1904,32 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     }
     Importer_NS::Importer importer(catalog, td, file_path, copy_params);
 
-    size_t rows_completed;
-    size_t rows_rejected;
-    bool load_truncated;
     auto ms = measure<>::execution([&]() {
       auto res = importer.import();
-      rows_completed = res.rows_completed;
-      rows_rejected = res.rows_rejected;
+      rows_completed += res.rows_completed;
+      rows_rejected += res.rows_rejected;
       load_truncated = res.load_truncated;
     });
-    std::string tr;
-
-    if (!load_truncated) {
-      tr = std::string("Loaded: " + std::to_string(rows_completed) + " recs, Rejected: " +
-                       std::to_string(rows_rejected) + " recs in " + std::to_string((double)ms / 1000.0) + " secs");
-    } else {
-      tr = std::string("Loader truncated due to reject count.  Processed : " + std::to_string(rows_completed) +
-                       " recs, Rejected: " + std::to_string(rows_rejected) + " recs in " +
-                       std::to_string((double)ms / 1000.0) + " secs");
+    total_time += ms;
+    if (load_truncated || rows_rejected > copy_params.max_reject) {
+      LOG(ERROR) << "COPY exited early due to reject records count during multi file processing ";
+      // if we have crossed the truncated load threshold
+      load_truncated = true;
+      break;
     }
-
-    return_message.reset(new std::string(tr));
-    LOG(INFO) << tr;
   }
+  std::string tr;
+  if (!load_truncated) {
+    tr = std::string("Loaded: " + std::to_string(rows_completed) + " recs, Rejected: " + std::to_string(rows_rejected) +
+                     " recs in " + std::to_string((double)total_time / 1000.0) + " secs");
+  } else {
+    tr = std::string("Loader truncated due to reject count.  Processed : " + std::to_string(rows_completed) +
+                     " recs, Rejected: " + std::to_string(rows_rejected) + " recs in " +
+                     std::to_string((double)total_time / 1000.0) + " secs");
+  }
+
+  return_message.reset(new std::string(tr));
+  LOG(INFO) << tr;
 }
 
 ResultRows getResultRows(const Catalog_Namespace::SessionInfo& session,
