@@ -207,6 +207,9 @@ void InsertOrderFragmenter::insertData(const InsertData& insertDataStruct) {
 
     if (rowsLeftInCurrentFragment == 0 || numRowsToInsert == 0) {
       currentFragment = createNewFragment();
+      if (numRowsInserted == 0) {
+        startFragment++;
+      }
       rowsLeftInCurrentFragment = maxFragmentRows_;
       for (auto& varLenColInfoIt : varLenColInfo_) {
         varLenColInfoIt.second = 0;  // reset byte counter
