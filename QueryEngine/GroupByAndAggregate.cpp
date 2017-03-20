@@ -29,7 +29,7 @@
 #include <thread>
 
 bool g_cluster{false};
-bool g_use_result_set{false};
+bool g_use_result_set{true};
 
 namespace {
 
