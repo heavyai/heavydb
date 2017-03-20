@@ -4103,7 +4103,7 @@ ResultPtr Executor::executeWorkUnit(int32_t* error_code,
 
   if (options.with_dynamic_watchdog) {
     CHECK_GT(options.dynamic_watchdog_time_limit, 0);
-    auto cycle_budget = dynamic_watchdog_bark(options.dynamic_watchdog_time_limit);
+    auto cycle_budget = dynamic_watchdog_init(options.dynamic_watchdog_time_limit);
     LOG(INFO) << "Dynamic Watchdog budget: CPU: " << std::to_string(options.dynamic_watchdog_time_limit) << "ms, "
               << std::to_string(cycle_budget) << " cycles";
   }
@@ -7232,9 +7232,7 @@ void Executor::interrupt() {
   checkCudaErrors(cuCtxSetCurrent(old_cu_context));
 #endif
 
-#if (defined(__x86_64__) || defined(__x86_64))
-  dynamic_watchdog_bark(static_cast<unsigned>(DW_ABORT));
-#endif
+  dynamic_watchdog_init(static_cast<unsigned>(DW_ABORT));
 
   interrupted_ = true;
   VLOG(1) << "INTERRUPT Executor " << this;
@@ -7248,9 +7246,7 @@ void Executor::resetInterrupt() {
   if (!interrupted_)
     return;
 
-#if (defined(__x86_64__) || defined(__x86_64))
-  dynamic_watchdog_bark(static_cast<unsigned>(DW_RESET));
-#endif
+  dynamic_watchdog_init(static_cast<unsigned>(DW_RESET));
 
   interrupted_ = false;
   VLOG(1) << "RESET Executor " << this << " that had previously been interrupted";
