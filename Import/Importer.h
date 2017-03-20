@@ -414,8 +414,8 @@ class Loader {
       return nullptr;
     return dict_map.at(cd->columnId);
   }
-  bool load(const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers, size_t row_count);
-  void checkpoint(const int db_id, const int tb_id) {
+  virtual bool load(const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers, size_t row_count);
+  virtual void checkpoint(const int db_id, const int tb_id) {
     catalog.get_dataMgr().checkpoint(db_id, tb_id);
   }
 
@@ -602,15 +602,16 @@ struct PolyData2d {
 class Importer {
  public:
   Importer(const Catalog_Namespace::Catalog& c, const TableDescriptor* t, const std::string& f, const CopyParams& p);
+  Importer(Loader* providedLoader, const std::string& f, const CopyParams& p);
   ~Importer();
   ImportStatus import();
   ImportStatus importDelimited();
   ImportStatus importShapefile();
   ImportStatus importGDAL(std::map<std::string, std::string> colname_to_src);
   const CopyParams& get_copy_params() const { return copy_params; }
-  const std::list<const ColumnDescriptor*>& get_column_descs() const { return loader.get_column_descs(); }
+  const std::list<const ColumnDescriptor*>& get_column_descs() const { return loader->get_column_descs(); }
   void load(const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers, size_t row_count) {
-    if (!loader.load(import_buffers, row_count))
+    if (!loader->load(import_buffers, row_count))
       load_failed = true;
   }
   std::vector<std::vector<std::unique_ptr<TypedImportBuffer>>>& get_import_buffers_vec() { return import_buffers_vec; }
@@ -644,7 +645,7 @@ class Importer {
   char* buffer[2];
   int which_buf;
   std::vector<std::vector<std::unique_ptr<TypedImportBuffer>>> import_buffers_vec;
-  Loader loader;
+  std::unique_ptr<Loader> loader;
   bool load_failed;
   std::unique_ptr<bool[]> is_array_a;
   ImportStatus import_status;

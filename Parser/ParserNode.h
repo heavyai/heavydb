@@ -17,6 +17,15 @@
 #include "../Analyzer/Analyzer.h"
 #include "../Catalog/Catalog.h"
 
+#include <functional>
+
+namespace Importer_NS {
+
+struct CopyParams;
+class Importer;
+
+}  // Importer_NS
+
 namespace Parser {
 
 /*
@@ -893,6 +902,12 @@ class CopyTableStmt : public DDLStmt {
     }
   }
   virtual void execute(const Catalog_Namespace::SessionInfo& session);
+  void execute(
+      const Catalog_Namespace::SessionInfo& session,
+      const std::function<std::unique_ptr<Importer_NS::Importer>(const Catalog_Namespace::Catalog&,
+                                                                 const TableDescriptor*,
+                                                                 const std::string&,
+                                                                 const Importer_NS::CopyParams&)>& importer_factory);
   std::unique_ptr<std::string> return_message;
 
  private:

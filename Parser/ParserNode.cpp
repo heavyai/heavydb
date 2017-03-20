@@ -1800,6 +1800,21 @@ void RenameColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 }
 
 void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+  auto importer_factory = [](const Catalog_Namespace::Catalog& catalog,
+                             const TableDescriptor* td,
+                             const std::string& file_path,
+                             const Importer_NS::CopyParams& copy_params) {
+    return boost::make_unique<Importer_NS::Importer>(catalog, td, file_path, copy_params);
+  };
+  return execute(session, importer_factory);
+}
+
+void CopyTableStmt::execute(
+    const Catalog_Namespace::SessionInfo& session,
+    const std::function<std::unique_ptr<Importer_NS::Importer>(const Catalog_Namespace::Catalog&,
+                                                               const TableDescriptor*,
+                                                               const std::string&,
+                                                               const Importer_NS::CopyParams&)>& importer_factory) {
   size_t rows_completed = 0;
   size_t rows_rejected = 0;
   size_t total_time = 0;
@@ -1902,10 +1917,10 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
           throw std::runtime_error("Invalid option for COPY: " + *p->get_name());
       }
     }
-    Importer_NS::Importer importer(catalog, td, file_path, copy_params);
+    auto importer = importer_factory(catalog, td, file_path, copy_params);
 
     auto ms = measure<>::execution([&]() {
-      auto res = importer.import();
+      auto res = importer->import();
       rows_completed += res.rows_completed;
       rows_rejected += res.rows_rejected;
       load_truncated = res.load_truncated;

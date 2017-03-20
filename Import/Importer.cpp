@@ -43,7 +43,10 @@ Importer::Importer(const Catalog_Namespace::Catalog& c,
                    const TableDescriptor* t,
                    const std::string& f,
                    const CopyParams& p)
-    : file_path(f), copy_params(p), loader(c, t), load_failed(false) {
+    : Importer(new Loader(c, t), f, p) {}
+
+Importer::Importer(Loader* providedLoader, const std::string& f, const CopyParams& p)
+    : file_path(f), copy_params(p), loader(providedLoader), load_failed(false) {
   import_id = boost::filesystem::path(file_path).filename().string();
   file_size = 0;
   max_threads = 0;
@@ -51,10 +54,10 @@ Importer::Importer(const Catalog_Namespace::Catalog& c,
   buffer[0] = nullptr;
   buffer[1] = nullptr;
   which_buf = 0;
-  auto is_array = std::unique_ptr<bool[]>(new bool[loader.get_column_descs().size()]);
+  auto is_array = std::unique_ptr<bool[]>(new bool[loader->get_column_descs().size()]);
   int i = 0;
   bool has_array = false;
-  for (auto& p : loader.get_column_descs()) {
+  for (auto& p : loader->get_column_descs()) {
     if (p->columnType.get_type() == kARRAY) {
       is_array.get()[i] = true;
       has_array = true;
@@ -988,9 +991,9 @@ ImportStatus Importer::importDelimited() {
     buffer[1] = (char*)checked_malloc(alloc_size);
   for (int i = 0; i < max_threads; i++) {
     import_buffers_vec.push_back(std::vector<std::unique_ptr<TypedImportBuffer>>());
-    for (const auto cd : loader.get_column_descs())
+    for (const auto cd : loader->get_column_descs())
       import_buffers_vec[i].push_back(
-          std::unique_ptr<TypedImportBuffer>(new TypedImportBuffer(cd, loader.get_string_dict(cd))));
+          std::unique_ptr<TypedImportBuffer>(new TypedImportBuffer(cd, loader->get_string_dict(cd))));
   }
   size_t current_pos = 0;
   size_t end_pos;
@@ -1059,7 +1062,7 @@ ImportStatus Importer::importDelimited() {
         }
       }
       if (!load_failed)
-        loader.checkpoint(loader.get_catalog().get_currentDB().dbId, loader.get_table_desc()->tableId);
+        loader->checkpoint(loader->get_catalog().get_currentDB().dbId, loader->get_table_desc()->tableId);
     }
   });
   if (debug_timing)
@@ -1091,15 +1094,15 @@ ImportStatus Importer::importShapefile() {
   }
 
   std::vector<std::unique_ptr<TypedImportBuffer>> import_buffers_vec;
-  for (const auto cd : loader.get_column_descs())
+  for (const auto cd : loader->get_column_descs())
     import_buffers_vec.push_back(
-        std::unique_ptr<TypedImportBuffer>(new TypedImportBuffer(cd, loader.get_string_dict(cd))));
+        std::unique_ptr<TypedImportBuffer>(new TypedImportBuffer(cd, loader->get_string_dict(cd))));
 
   for (size_t ipoly = 0; ipoly < polys.size(); ++ipoly) {
     auto poly = polys[ipoly];
     try {
       auto icol = 0;
-      for (auto cd : loader.get_column_descs()) {
+      for (auto cd : loader->get_column_descs()) {
         if (cd->columnName == MAPD_GEO_PREFIX + "coords") {
           std::vector<TDatum> coords;
           for (auto coord : poly.coords) {
@@ -1166,8 +1169,8 @@ ImportStatus Importer::importShapefile() {
   }
 
   try {
-    loader.load(import_buffers_vec, polys.size());
-    loader.checkpoint(loader.get_catalog().get_currentDB().dbId, loader.get_table_desc()->tableId);
+    loader->load(import_buffers_vec, polys.size());
+    loader->checkpoint(loader->get_catalog().get_currentDB().dbId, loader->get_table_desc()->tableId);
     return import_status;
   } catch (const std::exception& e) {
     LOG(WARNING) << e.what();
@@ -1684,15 +1687,15 @@ ImportStatus Importer::importGDAL(std::map<std::string, std::string> colname_to_
   readVerticesFromGDAL(file_path.c_str(), polys, metadata);
 
   std::vector<std::unique_ptr<TypedImportBuffer>> import_buffers_vec;
-  for (const auto cd : loader.get_column_descs())
+  for (const auto cd : loader->get_column_descs())
     import_buffers_vec.push_back(
-        std::unique_ptr<TypedImportBuffer>(new TypedImportBuffer(cd, loader.get_string_dict(cd))));
+        std::unique_ptr<TypedImportBuffer>(new TypedImportBuffer(cd, loader->get_string_dict(cd))));
 
   for (size_t ipoly = 0; ipoly < polys.size(); ++ipoly) {
     auto poly = polys[ipoly];
     try {
       auto icol = 0;
-      for (auto cd : loader.get_column_descs()) {
+      for (auto cd : loader->get_column_descs()) {
         if (cd->columnName == MAPD_GEO_PREFIX + "coords") {
           std::vector<TDatum> coords;
           for (auto coord : poly.coords) {
@@ -1756,8 +1759,8 @@ ImportStatus Importer::importGDAL(std::map<std::string, std::string> colname_to_
   }
 
   try {
-    loader.load(import_buffers_vec, polys.size());
-    loader.checkpoint(loader.get_catalog().get_currentDB().dbId, loader.get_table_desc()->tableId);
+    loader->load(import_buffers_vec, polys.size());
+    loader->checkpoint(loader->get_catalog().get_currentDB().dbId, loader->get_table_desc()->tableId);
     return import_status;
   } catch (const std::exception& e) {
     LOG(WARNING) << e.what();
