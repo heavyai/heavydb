@@ -282,6 +282,24 @@ struct TPendingQuery {
   4: list<TTableGeneration> table_generations
 }
 
+struct TVarLen {
+  1: binary fixed_len_data
+  2: bool is_null
+}
+
+union TDataBlockPtr {
+  1: binary fixed_len_data
+  2: list<TVarLen> var_len_data
+}
+
+struct TInsertData {
+  1: i32 db_id
+  2: i32 table_id
+  3: list<i32> column_ids
+  4: list<TDataBlockPtr> data
+  5: i64 num_rows
+}
+
 service MapD {
   TSessionId connect(1: string user, 2: string passwd, 3: string dbname) throws (1: TMapDException e 2: ThriftException te)
   void disconnect(1: TSessionId session) throws (1: TMapDException e 2: ThriftException te)
@@ -322,6 +340,8 @@ service MapD {
   TPendingQuery start_query(1: TSessionId session, 2: string query_ra, 3: bool just_explain) throws (1: TMapDException e 2: ThriftException te)
   TStepResult execute_first_step(1: TPendingQuery pending_query) throws (1: TMapDException e 2: ThriftException te)
   void broadcast_serialized_rows(1: string serialized_rows, 2: TRowDescriptor row_desc, 3: TQueryId query_id) throws (1: TMapDException e 2: ThriftException te)
+  void insert_data(1: TSessionId session, 2: TInsertData insert_data) throws (1: TMapDException e 2: ThriftException te)
+  void checkpoint(1: TSessionId session, 2: i32 db_id, 3: i32 table_id) throws (1: TMapDException e 2: ThriftException te)
   TTableDetails get_table_details(1: TSessionId session, 2: string table_name) throws (1: TMapDException e 2: ThriftException te)
   void clear_gpu_memory(1: TSessionId session) throws (1: TMapDException e 2: ThriftException te)
 }

@@ -2195,6 +2195,54 @@ std::vector<TTableGeneration> MapDHandler::table_generations_to_thrift(const Tab
 }
 
 
+void MapDHandler::insert_data(const TSessionId session, const TInsertData& thrift_insert_data) {
+  static std::mutex insert_mutex;  // TODO: split lock, make it per table
+  CHECK_EQ(thrift_insert_data.column_ids.size(), thrift_insert_data.data.size());
+  const auto session_info = get_session(session);
+  auto& cat = session_info.get_catalog();
+  Fragmenter_Namespace::InsertData insert_data;
+  insert_data.databaseId = thrift_insert_data.db_id;
+  insert_data.tableId = thrift_insert_data.table_id;
+  insert_data.columnIds = thrift_insert_data.column_ids;
+  for (size_t col_idx = 0; col_idx < insert_data.columnIds.size(); ++col_idx) {
+    const int column_id = insert_data.columnIds[col_idx];
+    DataBlockPtr p;
+    const auto cd = cat.getMetadataForColumn(insert_data.tableId, column_id);
+    CHECK(cd);
+    const auto& ti = cd->columnType;
+    if (ti.is_number() || ti.is_time() || ti.is_boolean()) {
+      p.numbersPtr = (int8_t*)thrift_insert_data.data[col_idx].fixed_len_data.data();
+    } else if (ti.is_string()) {
+      if (ti.get_compression() == kENCODING_DICT) {
+        p.numbersPtr = (int8_t*)thrift_insert_data.data[col_idx].fixed_len_data.data();
+      } else {
+        CHECK(false);
+      }
+    } else {
+      CHECK(ti.is_array());
+      CHECK(false);
+    }
+    insert_data.data.push_back(p);
+  }
+  insert_data.numRows = thrift_insert_data.num_rows;
+  const auto td = cat.getMetadataForTable(insert_data.tableId);
+  std::lock_guard<std::mutex> lock(const_cast<std::mutex&>(insert_mutex));
+  try {
+    td->fragmenter->insertData(insert_data);
+  } catch (const std::exception& e) {
+    TMapDException ex;
+    ex.error_msg = std::string("Exception: ") + e.what();
+    LOG(ERROR) << ex.error_msg;
+    throw ex;
+  }
+}
+
+void MapDHandler::checkpoint(const TSessionId session, const int32_t db_id, const int32_t table_id) {
+  const auto session_info = get_session(session);
+  auto& cat = session_info.get_catalog();
+  cat.get_dataMgr().checkpoint(db_id, table_id);
+}
+
 void MapDHandler::throw_profile_exception(const std::string& error_msg) {
   TMapDException ex;
   ex.error_msg = error_msg;
