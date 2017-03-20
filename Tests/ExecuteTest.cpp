@@ -2885,20 +2885,19 @@ int main(int argc, char** argv) {
 
   po::options_description desc("Options");
   desc.add_options()("disable-literal-hoisting", "Disable literal hoisting");
-  desc.add_options()("use-result-set", "Use the new result set");
+  desc.add_options()("use-result-set",
+                     po::value<bool>(&g_use_result_set)->default_value(g_use_result_set)->implicit_value(true),
+                     "Use the new result set");
   desc.add_options()("keep-data", "Don't drop tables at the end of the tests");
   desc.add_options()("use-existing-data",
                      "Don't create and drop tables and only run select tests (it implies --keep-data).");
 
   po::variables_map vm;
   po::store(po::command_line_parser(argc, argv).options(desc).run(), vm);
+  po::notify(vm);
 
   if (vm.count("disable-literal-hoisting"))
     g_hoist_literals = false;
-
-  if (vm.count("use-result-set")) {
-    g_use_result_set = true;
-  }
 
   g_session.reset(get_session(BASE_PATH));
 

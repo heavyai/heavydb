@@ -254,7 +254,7 @@ int main(int argc, char** argv) {
       po::value<bool>(&mapd_parameters.enable_ha)->default_value(mapd_parameters.enable_ha)->implicit_value(false),
       "Enable server in HA Mode");
   desc_adv.add_options()("use-result-set",
-                         po::bool_switch(&g_use_result_set)->default_value(g_use_result_set)->implicit_value(true),
+                         po::value<bool>(&g_use_result_set)->default_value(g_use_result_set)->implicit_value(true),
                          "Use the new result set");
   desc_adv.add_options()("allow-cpu-retry",
                          po::bool_switch(&g_allow_cpu_retry)->default_value(g_allow_cpu_retry)->implicit_value(true),
