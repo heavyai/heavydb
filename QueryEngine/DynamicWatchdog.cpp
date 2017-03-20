@@ -19,29 +19,19 @@ static __inline__ uint64_t read_cycle_counter(void) {
 extern "C" uint64_t dynamic_watchdog_init(unsigned ms_budget) {
   static uint64_t dw_cycle_start = 0ULL;
   static uint64_t dw_cycle_budget = 0ULL;
-  static bool dw_abort = false;
-  static std::atomic_flag dw_is_updating = ATOMIC_FLAG_INIT;
+  static std::atomic_bool dw_abort{false};
 
   if (ms_budget == static_cast<unsigned>(DW_DEADLINE)) {
-    uint64_t deadline;
-    while (dw_is_updating.test_and_set())
-      ;
-    deadline = (dw_abort) ? 0LL : dw_cycle_start + dw_cycle_budget;
-    dw_is_updating.clear();
-    return deadline;
+    if (dw_abort.load())
+      return 0LL;
+    return dw_cycle_start + dw_cycle_budget;
   }
   if (ms_budget == static_cast<unsigned>(DW_ABORT)) {
-    while (dw_is_updating.test_and_set())
-      ;
     dw_abort = true;
-    dw_is_updating.clear();
     return 0LL;
   }
   if (ms_budget == static_cast<unsigned>(DW_RESET)) {
-    while (dw_is_updating.test_and_set())
-      ;
     dw_abort = false;
-    dw_is_updating.clear();
     return 0LL;
   }
 
