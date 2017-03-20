@@ -273,7 +273,7 @@ add_subdirectory(SampleCode)
 set(initdb_source_files initdb.cpp)
 add_executable(initdb ${initdb_source_files})
 
-set(mapd_server_source_files LeafAggregator.cpp LeafHostInfo.cpp MapDServer.cpp ${CMAKE_BINARY_DIR}/MapDRelease.h)
+set(mapd_server_source_files MapDServer.cpp ${CMAKE_BINARY_DIR}/MapDRelease.h)
 
 add_executable(mapd_server ${mapd_server_source_files})
 set_target_properties(mapd_server PROPERTIES COMPILE_DEFINITIONS "${TIME_LIMITED_DEFINITIONS}")

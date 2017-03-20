@@ -277,6 +277,31 @@ class TypedImportBuffer : boost::noncopyable {
     }
   }
 
+  size_t getElementSize() const {
+    switch (column_desc_->columnType.get_type()) {
+      case kBOOLEAN:
+        return sizeof((*bool_buffer_)[0]);
+      case kSMALLINT:
+        return sizeof((*smallint_buffer_)[0]);
+      case kINT:
+        return sizeof((*int_buffer_)[0]);
+      case kBIGINT:
+      case kNUMERIC:
+      case kDECIMAL:
+        return sizeof((*bigint_buffer_)[0]);
+      case kFLOAT:
+        return sizeof((*float_buffer_)[0]);
+      case kDOUBLE:
+        return sizeof((*double_buffer_)[0]);
+      case kTIME:
+      case kTIMESTAMP:
+      case kDATE:
+        return sizeof((*time_buffer_)[0]);
+      default:
+        abort();
+    }
+  }
+
   std::vector<std::string>* getStringBuffer() const { return string_buffer_; }
 
   std::vector<ArrayDatum>* getArrayBuffer() const { return array_buffer_; }
@@ -419,7 +444,7 @@ class Loader {
     catalog.get_dataMgr().checkpoint(db_id, tb_id);
   }
 
- private:
+ protected:
   const Catalog_Namespace::Catalog& catalog;
   const TableDescriptor* table_desc;
   std::list<const ColumnDescriptor*> column_descs;

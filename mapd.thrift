@@ -283,7 +283,7 @@ struct TPendingQuery {
 }
 
 struct TVarLen {
-  1: binary fixed_len_data
+  1: binary payload
   2: bool is_null
 }
 
