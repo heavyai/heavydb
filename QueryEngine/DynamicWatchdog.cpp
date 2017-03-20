@@ -24,19 +24,22 @@ extern "C" uint64_t dynamic_watchdog_init(unsigned ms_budget) {
 
   if (ms_budget == static_cast<unsigned>(DW_DEADLINE)) {
     uint64_t deadline;
-    while (dw_is_updating.test_and_set());
+    while (dw_is_updating.test_and_set())
+      ;
     deadline = (dw_abort) ? 0LL : dw_cycle_start + dw_cycle_budget;
     dw_is_updating.clear();
     return deadline;
   }
   if (ms_budget == static_cast<unsigned>(DW_ABORT)) {
-    while (dw_is_updating.test_and_set());
+    while (dw_is_updating.test_and_set())
+      ;
     dw_abort = true;
     dw_is_updating.clear();
     return 0LL;
   }
   if (ms_budget == static_cast<unsigned>(DW_RESET)) {
-    while (dw_is_updating.test_and_set());
+    while (dw_is_updating.test_and_set())
+      ;
     dw_abort = false;
     dw_is_updating.clear();
     return 0LL;
