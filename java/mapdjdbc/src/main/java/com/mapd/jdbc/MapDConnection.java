@@ -27,8 +27,10 @@ import java.util.Properties;
 import java.util.concurrent.Executor;
 import org.apache.thrift.TException;
 import org.apache.thrift.protocol.TBinaryProtocol;
+import org.apache.thrift.protocol.TJSONProtocol;
 import org.apache.thrift.protocol.TProtocol;
 import org.apache.thrift.transport.TSocket;
+import org.apache.thrift.transport.THttpClient;
 import org.apache.thrift.transport.TTransport;
 import org.apache.thrift.transport.TTransportException;
 import org.slf4j.Logger;
@@ -53,6 +55,7 @@ public class MapDConnection implements java.sql.Connection {
   public MapDConnection(String url, Properties info) throws SQLException { //logger.debug("Entered");
     this.url = url;
     this.properties = info;
+    boolean http_session = false;
 
     //logger.debug("We got to here " + url + " info: " + info.toString());
     String[] temp = url.split(":");
@@ -65,14 +68,25 @@ public class MapDConnection implements java.sql.Connection {
     //logger.debug("machine : " + machine);
     int port = Integer.valueOf(temp[3]);
     String db = temp[4];
-
+    //test for http protocol request (we could consider usinig properties)
+    if (temp.length == 6){
+        if (temp[5].equals("http")){
+            http_session = true;
+        } else {
+            throw new SQLException("Connection failed invalid protocol option- " + temp[5]);
+        }
+    }
     try {
-      transport = new TSocket(machine, port);
-
-      transport.open();
-
-      TProtocol protocol = new TBinaryProtocol(transport);
-
+      TProtocol protocol = null;
+      if (http_session){
+        transport = new THttpClient("http://" + machine + ":" + port);
+        transport.open();
+        protocol = new TJSONProtocol(transport);
+      }  else {
+        transport = new TSocket(machine, port);
+        transport.open();
+        protocol = new TBinaryProtocol(transport);
+      }
       client = new MapD.Client(protocol);
 
       session = client.connect(info.getProperty("user"), info.getProperty("password"), db);

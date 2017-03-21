@@ -22,7 +22,7 @@ public class FirstTry {
 
   // JDBC driver name and database URL
   static final String JDBC_DRIVER = "com.mapd.jdbc.MapDDriver";
-  static final String DB_URL = "jdbc:mapd:localhost:9091:mapd";
+  static final String DB_URL = "jdbc:mapd:localhost:9092:mapd:http";
 
   //  Database credentials
   static final String USER = "mapd";
@@ -41,33 +41,34 @@ public class FirstTry {
 
       String sql;
 
-      logger.info("Doing prepared statement");
+//      logger.info("Doing prepared statement");
+//
+        PreparedStatement ps = null;
+        ResultSet rs = null;
+//      sql = "INSERT INTO alltypes (b1, s1, i1, b2, f1, d1, c1, v1, t1, t2, t3, d2) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+//      ps = conn.prepareStatement(sql);
+//
+//      ps.setBoolean(1, true);
+//      ps.setShort(2, (short)1);
+//      ps.setInt(3, 20);
+//      ps.setInt(4, 400);
+//      ps.setFloat(5, (float)4000.04);
+//      ps.setBigDecimal(6, new BigDecimal(12.2));
+//      ps.setString(7, "String1");
+//      ps.setString(8, "String2");
+//      ps.setString(9, "String3");
+//      ps.setTime(10, new Time(0));
+//      ps.setTimestamp(11, new Timestamp(0));
+//      ps.setDate(12, new Date(0));
+//
 
-      PreparedStatement ps = null;
-      sql = "INSERT INTO alltypes (b1, s1, i1, b2, f1, d1, c1, v1, t1, t2, t3, d2) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-      ps = conn.prepareStatement(sql);
-
-      ps.setBoolean(1, true);
-      ps.setShort(2, (short)1);
-      ps.setInt(3, 20);
-      ps.setInt(4, 400);
-      ps.setFloat(5, (float)4000.04);
-      ps.setBigDecimal(6, new BigDecimal(12.2));
-      ps.setString(7, "String1");
-      ps.setString(8, "String2");
-      ps.setString(9, "String3");
-      ps.setTime(10, new Time(0));
-      ps.setTimestamp(11, new Timestamp(0));
-      ps.setDate(12, new Date(0));
-
-      ResultSet rs = ps.executeQuery();
-
+//    ResultSet rs = ps.executeQuery();
 
       //STEP 4: Execute a query
       logger.info("Creating statement...");
       stmt = conn.createStatement();
 
-      sql = "SELECT uniquecarrier from flights limit 5";
+      sql = "SELECT uniquecarrier from flights_2008_7M limit 5";
       rs = stmt.executeQuery(sql);
 
       //STEP 5: Extract data from result set
