@@ -1786,8 +1786,6 @@ void import_join_test() {
   {
     const std::string insert_query{"INSERT INTO join_test VALUES(7, 'foo', 'foo');"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
-    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
-    g_sqlite_comparator.query(insert_query);
     g_sqlite_comparator.query(insert_query);
   }
   {

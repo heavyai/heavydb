@@ -4618,6 +4618,52 @@ uint32_t Executor::ExecutionDispatch::getFragmentStride(
   return 1u;
 }
 
+#ifdef ENABLE_MULTIFRAG_JOIN
+const int8_t* Executor::ExecutionDispatch::getAllScanColumnFrags(
+    const int table_id,
+    const int col_id,
+    const std::map<int, const TableFragments*>& all_tables_fragments,
+    const Data_Namespace::MemoryLevel memory_level,
+    const int device_id) const {
+  const auto fragments_it = all_tables_fragments.find(table_id);
+  CHECK(fragments_it != all_tables_fragments.end());
+  const auto fragments = fragments_it->second;
+  const auto frag_count = fragments->size();
+  std::vector<std::unique_ptr<ColumnarResults>> column_frags;
+  const ColumnarResults* table_column = nullptr;
+  const InputColDescriptor col_desc(col_id, table_id, int(0));
+  CHECK(col_desc.getScanDesc().getSourceType() == InputSourceType::TABLE);
+  {
+    std::lock_guard<std::mutex> columnar_conversion_guard(columnar_conversion_mutex_);
+    auto column_it = columnarized_scan_table_cache_.find(col_desc);
+    if (column_it == columnarized_scan_table_cache_.end()) {
+      columnarized_scan_table_cache_.insert(std::make_pair(col_desc, nullptr));
+      column_it = columnarized_scan_table_cache_.find(col_desc);
+      for (size_t frag_id = 0; frag_id < frag_count; ++frag_id) {
+        std::list<std::shared_ptr<Chunk_NS::Chunk>> chunk_holder;
+        std::list<ChunkIter> chunk_iter_holder;
+        const auto& fragment = (*fragments)[frag_id];
+        auto chunk_meta_it = fragment.getChunkMetadataMap().find(col_id);
+        auto col_buffer = getScanColumn(table_id,
+                                        static_cast<int>(frag_id),
+                                        col_id,
+                                        all_tables_fragments,
+                                        chunk_holder,
+                                        chunk_iter_holder,
+                                        Data_Namespace::CPU_LEVEL,
+                                        int(0));
+        column_frags.push_back(boost::make_unique<ColumnarResults>(
+            row_set_mem_owner_, col_buffer, fragment.numTuples, chunk_meta_it->second.sqlType));
+      }
+      column_it->second = ColumnarResults::mergeResults(row_set_mem_owner_, column_frags);
+    }
+    CHECK(column_it != columnarized_scan_table_cache_.end());
+    table_column = column_it->second.get();
+  }
+  return getColumn(table_column, 0, &cat_.get_dataMgr(), memory_level, device_id);
+}
+#endif
+
 std::vector<const ColumnarResults*> Executor::ExecutionDispatch::getAllScanColumnFrags(
     const int table_id,
     const int col_id,
@@ -5325,6 +5371,21 @@ std::map<size_t, std::vector<uint64_t>> Executor::getAllFragOffsets(
   return tab_id_to_frag_offsets;
 }
 
+#ifdef ENABLE_MULTIFRAG_JOIN
+// Only fetch columns of hash-joined inner fact table whose fetch are not deferred from all the table fragments.
+bool Executor::needFetchAllFragments(const InputColDescriptor& inner_col_desc,
+                                     const std::vector<InputDescriptor>& input_descs) const {
+  if (inner_col_desc.getScanDesc().getNestLevel() < 1 ||
+      inner_col_desc.getScanDesc().getSourceType() != InputSourceType::TABLE ||
+      plan_state_->join_info_.join_impl_type_ != JoinImplType::HashOneToOne || input_descs.size() < 2 ||
+      plan_state_->isLazyFetchColumn(inner_col_desc)) {
+    return false;
+  }
+  auto inner_table_desc = input_descs[1];
+  return inner_col_desc.getScanDesc().getTableId() == inner_table_desc.getTableId();
+}
+#endif
+
 Executor::FetchResult Executor::fetchChunks(const ExecutionDispatch& execution_dispatch,
                                             const RelAlgExecutionUnit& ra_exe_unit,
                                             const int device_id,
@@ -5413,14 +5474,22 @@ Executor::FetchResult Executor::fetchChunks(const ExecutionDispatch& execution_d
                                                                     device_id,
                                                                     is_rowid);
       } else {
-        frag_col_buffers[it->second] = execution_dispatch.getScanColumn(table_id,
-                                                                        frag_id,
-                                                                        col_id->getColId(),
-                                                                        all_tables_fragments,
-                                                                        chunks,
-                                                                        chunk_iterators,
-                                                                        memory_level_for_column,
-                                                                        device_id);
+#ifdef ENABLE_MULTIFRAG_JOIN
+        if (needFetchAllFragments(*col_id, input_descs)) {
+          frag_col_buffers[it->second] = execution_dispatch.getAllScanColumnFrags(
+              table_id, col_id->getColId(), all_tables_fragments, memory_level_for_column, device_id);
+        } else
+#endif
+        {
+          frag_col_buffers[it->second] = execution_dispatch.getScanColumn(table_id,
+                                                                          frag_id,
+                                                                          col_id->getColId(),
+                                                                          all_tables_fragments,
+                                                                          chunks,
+                                                                          chunk_iterators,
+                                                                          memory_level_for_column,
+                                                                          device_id);
+        }
       }
     }
     all_frag_col_buffers.push_back(frag_col_buffers);

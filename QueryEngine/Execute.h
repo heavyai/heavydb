@@ -553,6 +553,10 @@ class Executor {
       const std::vector<InputDescriptor>& input_descs,
       const std::map<int, const TableFragments*>& all_tables_fragments);
 
+#ifdef ENABLE_MULTIFRAG_JOIN
+  bool needFetchAllFragments(const InputColDescriptor& col_desc, const std::vector<InputDescriptor>& input_descs) const;
+#endif
+
   class ExecutionDispatch {
    private:
     Executor* executor_;
@@ -577,6 +581,10 @@ class Executor {
         columnarized_table_cache_;
     mutable std::unordered_map<InputColDescriptor, std::unordered_map<CacheKey, std::unique_ptr<const ColumnarResults>>>
         columnarized_ref_table_cache_;
+#ifdef ENABLE_MULTIFRAG_JOIN
+    mutable std::unordered_map<InputColDescriptor, std::unique_ptr<const ColumnarResults>>
+        columnarized_scan_table_cache_;
+#endif
 
     uint32_t getFragmentStride(const std::vector<std::pair<int, std::vector<size_t>>>& frag_ids) const;
 
@@ -636,6 +644,13 @@ class Executor {
                                 std::list<ChunkIter>& chunk_iter_holder,
                                 const Data_Namespace::MemoryLevel memory_level,
                                 const int device_id) const;
+#ifdef ENABLE_MULTIFRAG_JOIN
+    const int8_t* getAllScanColumnFrags(const int table_id,
+                                        const int col_id,
+                                        const std::map<int, const TableFragments*>& all_tables_fragments,
+                                        const Data_Namespace::MemoryLevel memory_level,
+                                        const int device_id) const;
+#endif
 
     const int8_t* getColumn(const InputColDescriptor* col_desc,
                             const int frag_id,
@@ -1150,6 +1165,16 @@ class Executor {
       return columns_to_fetch_.find(std::make_pair(do_not_fetch_column->get_table_id(),
                                                    do_not_fetch_column->get_column_id())) == columns_to_fetch_.end();
     }
+
+#ifdef ENABLE_MULTIFRAG_JOIN
+    bool isLazyFetchColumn(const InputColDescriptor& col_desc) {
+      Analyzer::ColumnVar column(SQLTypeInfo(),
+                                 col_desc.getScanDesc().getTableId(),
+                                 col_desc.getColId(),
+                                 col_desc.getScanDesc().getNestLevel());
+      return isLazyFetchColumn(&column);
+    }
+#endif
   };
 
   std::unordered_set<llvm::Function*> markDeadRuntimeFuncs(llvm::Module& module,

@@ -30,6 +30,10 @@ class ColumnarResults {
       const std::vector<uint64_t>& frag_offsets,
       const ColumnarResults& indices,
       const int which);
+
+  static std::unique_ptr<ColumnarResults> mergeResults(
+      const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+      const std::vector<std::unique_ptr<ColumnarResults>>& sub_results);
 #endif  // ENABLE_MULTIFRAG_JOIN
 
   static std::unique_ptr<ColumnarResults> createIndexedResults(
