@@ -58,6 +58,9 @@ ParserWrapper::ParserWrapper(std::string query_string) {
   for (std::string ddl : ddl_cmd) {
     is_ddl = boost::istarts_with(query_string, ddl);
     if (is_ddl) {
+      if (ddl == "COPY") {
+        is_copy = true;
+      }
       return;
     }
   }

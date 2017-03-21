@@ -25,6 +25,7 @@ class ParserWrapper {
   bool is_other_explain = false;
   bool is_ddl = false;
   bool is_update_dml = false;
+  bool is_copy = false;
   std::string actual_query;
 
  private:

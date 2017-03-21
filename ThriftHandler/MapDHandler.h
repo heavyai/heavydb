@@ -264,6 +264,8 @@ class MapDHandler : public MapDIf {
                         const std::string& nonce,
                         const ExecutorDeviceType executor_device_type);
 
+  void execute_distributed_copy_statement(Parser::CopyTableStmt*, const Catalog_Namespace::SessionInfo& session_info);
+
   void validate_rel_alg(TTableDescriptor& _return,
                         const std::string& query_str,
                         const Catalog_Namespace::SessionInfo& session_info);

@@ -10,6 +10,7 @@
  */
 
 #include "MapDHandler.h"
+#include "DistributedLoader.h"
 #include "MapDServer.h"
 #ifdef HAVE_PROFILER
 #include <gperftools/heap-profiler.h>
@@ -1518,8 +1519,14 @@ void MapDHandler::import_table(const TSessionId session,
     }
   }
 
-  Importer_NS::Importer importer(cat, td, file_path.string(), copy_params);
-  auto ms = measure<>::execution([&]() { importer.import(); });
+  std::unique_ptr<Importer_NS::Importer> importer;
+  if (leaf_aggregator_.leafCount() > 0) {
+    importer.reset(new Importer_NS::Importer(
+        new DistributedLoader(session_info, td, &leaf_aggregator_), file_path.string(), copy_params));
+  } else {
+    importer.reset(new Importer_NS::Importer(cat, td, file_path.string(), copy_params));
+  }
+  auto ms = measure<>::execution([&]() { importer->import(); });
   std::cout << "Total Import Time: " << (double)ms / 1000.0 << " Seconds." << std::endl;
 }
 
@@ -1591,8 +1598,14 @@ void MapDHandler::import_geo_table(const TSessionId session,
   Importer_NS::CopyParams copy_params = thrift_to_copyparams(cp);
 
   try {
-    Importer_NS::Importer importer(cat, td, file_path.string(), copy_params);
-    auto ms = measure<>::execution([&]() { importer.importGDAL(colname_to_src); });
+    std::unique_ptr<Importer_NS::Importer> importer;
+    if (leaf_aggregator_.leafCount() > 0) {
+      importer.reset(new Importer_NS::Importer(
+          new DistributedLoader(session_info, td, &leaf_aggregator_), file_path.string(), copy_params));
+    } else {
+      importer.reset(new Importer_NS::Importer(cat, td, file_path.string(), copy_params));
+    }
+    auto ms = measure<>::execution([&]() { importer->importGDAL(colname_to_src); });
     std::cout << "Total Import Time: " << (double)ms / 1000.0 << " Seconds." << std::endl;
   } catch (const std::exception& e) {
     TMapDException ex;
@@ -2058,11 +2071,15 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
         if (ddl != nullptr)
           explain_stmt = dynamic_cast<Parser::ExplainStmt*>(ddl);
         if (ddl != nullptr && explain_stmt == nullptr) {
-          _return.execution_time_ms += measure<>::execution([&]() { ddl->execute(session_info); });
+          const auto copy_stmt = dynamic_cast<Parser::CopyTableStmt*>(ddl);
+          if (copy_stmt && leaf_aggregator_.leafCount() > 0) {
+            _return.execution_time_ms +=
+                measure<>::execution([&]() { execute_distributed_copy_statement(copy_stmt, session_info); });
+          } else {
+            _return.execution_time_ms += measure<>::execution([&]() { ddl->execute(session_info); });
+          }
           // check if it was a copy statement gather response message
-          Parser::CopyTableStmt* copy_stmt = nullptr;
-          copy_stmt = dynamic_cast<Parser::CopyTableStmt*>(ddl);
-          if (copy_stmt != nullptr) {
+          if (copy_stmt) {
             convert_result(_return, ResultRows(*copy_stmt->return_message.get(), 0), true);
           }
         } else {
@@ -2091,6 +2108,18 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
     }
   });
   LOG(INFO) << "Total: " << _return.total_time_ms << " (ms), Execution: " << _return.execution_time_ms << " (ms)";
+}
+
+void MapDHandler::execute_distributed_copy_statement(Parser::CopyTableStmt* copy_stmt,
+                                                     const Catalog_Namespace::SessionInfo& session_info) {
+  auto importer_factory = [&session_info, this](const Catalog_Namespace::Catalog& catalog,
+                                                const TableDescriptor* td,
+                                                const std::string& file_path,
+                                                const Importer_NS::CopyParams& copy_params) {
+    return boost::make_unique<Importer_NS::Importer>(
+        new DistributedLoader(session_info, td, &leaf_aggregator_), file_path, copy_params);
+  };
+  copy_stmt->execute(session_info, importer_factory);
 }
 
 #ifdef HAVE_CALCITE
