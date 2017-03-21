@@ -11,8 +11,6 @@
 
 #include "MapDHandler.h"
 #include "MapDServer.h"
-#include "LeafAggregator.h"
-#include "gen-cpp/MapD.h"
 #ifdef HAVE_PROFILER
 #include <gperftools/heap-profiler.h>
 #endif  // HAVE_PROFILER
