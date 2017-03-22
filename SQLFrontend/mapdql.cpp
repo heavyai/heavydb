@@ -55,6 +55,9 @@ struct ClientContext {
   std::string user_name;
   std::string passwd;
   std::string db_name;
+  std::string server_host;
+  int port;
+  bool http;
   TTransport& transport;
   MapDClient& client;
   TSessionId session;
@@ -530,15 +533,73 @@ std::string mapd_getpass() {
   return std::string(password, nread - 1);
 }
 
-ClientContext* backchannel_context = nullptr;
+enum Action { INITIALIZE, TURN_ON, TURN_OFF, INTERRUPT };
+
+bool backchannel(int action, ClientContext *cc) {
+  enum State { UNINITIALIZED, INITIALIZED, INTERRUPTIBLE };
+  static int state = UNINITIALIZED;
+  static ClientContext* context{nullptr};
+
+  if (action == INITIALIZE) {
+    CHECK(cc);
+    context = cc;
+    state = INITIALIZED;
+    return false;
+  }
+  if (state == INITIALIZED && action == TURN_ON) {
+    state = INTERRUPTIBLE;
+    return false;
+  }
+  if (state == INTERRUPTIBLE && action == TURN_OFF) {
+    state = INITIALIZED;
+    return false;
+  }
+  if (state == INTERRUPTIBLE && action == INTERRUPT) {
+    CHECK(context);
+    shared_ptr<TTransport> transport2;
+    shared_ptr<TProtocol> protocol2;
+    shared_ptr<TTransport> socket2;
+    if (context->http) {
+      transport2 = shared_ptr<TTransport>(new THttpClient(context->server_host, context->port, "/"));
+      protocol2 = shared_ptr<TProtocol>(new TJSONProtocol(transport2));
+    } else {
+      socket2 = shared_ptr<TTransport>(new TSocket(context->server_host, context->port));
+      transport2 = shared_ptr<TTransport>(new TBufferedTransport(socket2));
+      protocol2 = shared_ptr<TProtocol>(new TBinaryProtocol(transport2));
+    }
+    MapDClient c2(protocol2);
+    ClientContext context2(*transport2, c2);
+
+    context2.db_name = context->db_name;
+    context2.user_name = context->user_name;
+    context2.passwd = context->passwd;
+
+    context2.session = INVALID_SESSION_ID;
+
+    transport2->open();
+    if (!transport2->isOpen()) {
+      std::cout << "Unable to send interrupt to the server.\n" << std::flush;
+      return false;
+    }
+
+    (void)thrift_with_retry(kCONNECT, context2, nullptr);
+
+    std::cout << "Asking server to interrupt query.\n" << std::flush;
+    (void)thrift_with_retry(kINTERRUPT, context2, nullptr);
+
+    if (context2.session != INVALID_SESSION_ID) {
+      (void)thrift_with_retry(kDISCONNECT, context2, nullptr);
+    }
+    transport2->close();
+    return true;
+  }
+  return false;
+}
 
 void mapdql_signal_handler(int signal_number) {
   std::cout << "\nInterrupt signal (" << signal_number << ") received.\n" << std::flush;
 
-  if (backchannel_context) {
-    std::cout << "Asking server to interrupt query.\n" << std::flush;
-    thrift_with_retry(kINTERRUPT, *backchannel_context, nullptr);
-    backchannel_context = nullptr;
+  if (backchannel(INTERRUPT, nullptr)) {
     return;
   }
 
@@ -641,6 +702,9 @@ int main(int argc, char** argv) {
   context.db_name = db_name;
   context.user_name = user_name;
   context.passwd = passwd;
+  context.server_host = server_host;
+  context.port = port;
+  context.http = http;
 
   context.session = INVALID_SESSION_ID;
 
@@ -657,37 +721,8 @@ int main(int argc, char** argv) {
       }
   }
 
-  shared_ptr<TTransport> transport2;
-  shared_ptr<TProtocol> protocol2;
-  shared_ptr<TTransport> socket2;
-  if (http) {
-    transport2 = shared_ptr<TTransport>(new THttpClient(server_host, port, "/"));
-    protocol2 = shared_ptr<TProtocol>(new TJSONProtocol(transport2));
-  } else {
-    socket2 = shared_ptr<TTransport>(new TSocket(server_host, port));
-    transport2 = shared_ptr<TTransport>(new TBufferedTransport(socket2));
-    protocol2 = shared_ptr<TProtocol>(new TBinaryProtocol(transport2));
-  }
-  MapDClient c2(protocol2);
-  ClientContext context2(*transport2, c2);
-
-  context2.db_name = db_name;
-  context2.user_name = user_name;
-  context2.passwd = passwd;
-
-  context2.session = INVALID_SESSION_ID;
-
-  transport2->open();
-
-  if (context2.db_name.empty()) {
-    std::cout << "Not connected to database backchannel.  Only \\u and \\l commands are allowed in this state.  See "
-                 "\\h for help."
-              << std::endl;
-  } else {
-    (void)thrift_with_retry(kCONNECT, context2, nullptr);
-  }
-
   register_signal_handler();
+  (void)backchannel(INITIALIZE, &context);
 
   /* Set the completion callback. This will be called every time the
    * user uses the <tab> key. */
@@ -728,7 +763,7 @@ int main(int argc, char** argv) {
         std::string query(current_line);
         current_line.clear();
         prompt.assign("mapdql> ");
-        backchannel_context = &context2;
+	(void)backchannel(TURN_ON, nullptr);
         if (thrift_with_retry(kSQL, context, query.c_str())) {
           if (context.query_return.row_set.row_desc.empty()) {
             continue;
@@ -775,7 +810,7 @@ int main(int argc, char** argv) {
                       << " Total time: " << context.query_return.total_time_ms << " ms" << std::endl;
           }
         }
-        backchannel_context = nullptr;
+	(void)backchannel(TURN_OFF, nullptr);
       } else {
         // change the prommpt
         prompt.assign("..> ");
@@ -876,11 +911,6 @@ int main(int argc, char** argv) {
     }
   }
   transport->close();
-
-  if (context2.session != INVALID_SESSION_ID) {
-    (void)thrift_with_retry(kDISCONNECT, context2, nullptr);
-  }
-  transport2->close();
 
   return 0;
 }
