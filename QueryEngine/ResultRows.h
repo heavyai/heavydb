@@ -99,19 +99,53 @@ inline std::vector<int64_t> get_consistent_frags_sizes(const std::vector<std::ve
   return frag_sizes;
 }
 
-inline std::pair<int64_t, int64_t> get_frag_id_and_local_idx(const std::vector<std::vector<uint64_t>>& frag_offsets,
-                                                             const size_t tab_idx,
+template <typename T>
+inline std::pair<int64_t, int64_t> get_frag_id_and_local_idx(const std::vector<std::vector<T>>& frag_offsets,
+                                                             const size_t tab_or_col_idx,
                                                              const int64_t global_idx) {
   CHECK_GE(global_idx, int64_t(0));
   for (int64_t frag_id = frag_offsets.size() - 1; frag_id > 0; --frag_id) {
-    CHECK_LT(tab_idx, frag_offsets[frag_id].size());
-    const auto frag_off = static_cast<int64_t>(frag_offsets[frag_id][tab_idx]);
+    CHECK_LT(tab_or_col_idx, frag_offsets[frag_id].size());
+    const auto frag_off = static_cast<int64_t>(frag_offsets[frag_id][tab_or_col_idx]);
     if (frag_off < global_idx) {
       return {frag_id, global_idx - frag_off};
     }
   }
   return {-1, -1};
 }
+
+#ifdef ENABLE_MULTIFRAG_JOIN
+inline std::vector<int64_t> get_consistent_frags_sizes(const std::vector<Analyzer::Expr*>& target_exprs,
+                                                       const std::vector<int64_t>& table_frag_sizes) {
+  std::vector<int64_t> col_frag_sizes;
+  for (auto expr : target_exprs) {
+    if (const auto col_var = dynamic_cast<Analyzer::ColumnVar*>(expr)) {
+      col_frag_sizes.push_back(table_frag_sizes[col_var->get_rte_idx()]);
+    } else {
+      col_frag_sizes.push_back(int64_t(-1));
+    }
+  }
+  return col_frag_sizes;
+}
+
+inline std::vector<std::vector<int64_t>> get_col_frag_offsets(
+    const std::vector<Analyzer::Expr*>& target_exprs,
+    const std::vector<std::vector<uint64_t>>& table_frag_offsets) {
+  std::vector<std::vector<int64_t>> col_frag_offsets;
+  for (auto& table_offsets : table_frag_offsets) {
+    std::vector<int64_t> col_offsets;
+    for (auto expr : target_exprs) {
+      if (const auto col_var = dynamic_cast<Analyzer::ColumnVar*>(expr)) {
+        col_offsets.push_back(static_cast<int64_t>(table_offsets[col_var->get_rte_idx()]));
+      } else {
+        col_offsets.push_back(int64_t(-1));
+      }
+    }
+    col_frag_offsets.push_back(col_offsets);
+  }
+  return col_frag_offsets;
+}
+#endif
 
 typedef std::vector<int64_t> ValueTuple;
 

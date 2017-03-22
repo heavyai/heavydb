@@ -76,6 +76,10 @@ ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
 ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
                      const std::vector<ColumnLazyFetchInfo>& lazy_fetch_info,
                      const std::vector<std::vector<const int8_t*>>& col_buffers,
+#ifdef ENABLE_MULTIFRAG_JOIN
+                     const std::vector<std::vector<int64_t>>& frag_offsets,
+                     const std::vector<int64_t>& consistent_frag_sizes,
+#endif
                      const ExecutorDeviceType device_type,
                      const int device_id,
                      const QueryMemoryDescriptor& query_mem_desc,
@@ -94,11 +98,16 @@ ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
       render_time_ms_(0),
       executor_(executor),
       lazy_fetch_info_(lazy_fetch_info),
-      col_buffers_(col_buffers),
+      col_buffers_{col_buffers},
+#ifdef ENABLE_MULTIFRAG_JOIN
+      frag_offsets_{frag_offsets},
+      consistent_frag_sizes_{consistent_frag_sizes},
+#endif
       estimator_buffer_(nullptr),
       host_estimator_buffer_(nullptr),
       data_mgr_(nullptr),
-      none_encoded_strings_valid_(false) {}
+      none_encoded_strings_valid_(false) {
+}
 
 ResultSet::ResultSet(const std::shared_ptr<const Analyzer::NDVEstimator> estimator,
                      const ExecutorDeviceType device_type,
@@ -188,6 +197,11 @@ void ResultSet::append(ResultSet& that) {
   query_mem_desc_.entry_count_small += appended_storage_.back()->query_mem_desc_.entry_count_small;
   chunks_.insert(chunks_.end(), that.chunks_.begin(), that.chunks_.end());
   col_buffers_.insert(col_buffers_.end(), that.col_buffers_.begin(), that.col_buffers_.end());
+#ifdef ENABLE_MULTIFRAG_JOIN
+  frag_offsets_.insert(frag_offsets_.end(), that.frag_offsets_.begin(), that.frag_offsets_.end());
+  consistent_frag_sizes_.insert(
+      consistent_frag_sizes_.end(), that.consistent_frag_sizes_.begin(), that.consistent_frag_sizes_.end());
+#endif
   chunk_iters_.insert(chunk_iters_.end(), that.chunk_iters_.begin(), that.chunk_iters_.end());
   if (none_encoded_strings_valid_) {
     CHECK(that.none_encoded_strings_valid_);

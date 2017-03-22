@@ -1984,6 +1984,10 @@ RowSetPtr QueryExecutionContext::groupBufferToDeinterleavedResults(const size_t 
   auto deinterleaved_result_set = std::make_shared<ResultSet>(result_set->getTargetInfos(),
                                                               std::vector<ColumnLazyFetchInfo>{},
                                                               std::vector<std::vector<const int8_t*>>{},
+#ifdef ENABLE_MULTIFRAG_JOIN
+                                                              std::vector<std::vector<int64_t>>{},
+                                                              std::vector<int64_t>{},
+#endif
                                                               ExecutorDeviceType::CPU,
                                                               -1,
                                                               deinterleaved_query_mem_desc,

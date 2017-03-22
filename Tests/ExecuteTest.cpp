@@ -2078,6 +2078,8 @@ TEST(Select, Joins) {
       dt);
     c("SELECT COUNT(*) FROM test, test_inner WHERE test.real_str LIKE 'real_ba%' AND test.x = test_inner.x;", dt);
     c("SELECT COUNT(*) FROM test, test_inner WHERE LENGTH(test.real_str) = 8 AND test.x = test_inner.x;", dt);
+    c("SELECT a.x, b.str FROM test a, join_test b WHERE a.str = b.str GROUP BY a.x, b.str ORDER BY a.x, b.str;", dt);
+    c("SELECT a.x, b.str FROM test a, join_test b WHERE a.str = b.str ORDER BY a.x, b.str;", dt);
     ASSERT_EQ(
         int64_t(g_array_test_row_count / 2 + g_array_test_row_count / 4),
         v<int64_t>(run_simple_agg(

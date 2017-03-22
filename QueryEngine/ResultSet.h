@@ -141,6 +141,10 @@ class ResultSet {
   ResultSet(const std::vector<TargetInfo>& targets,
             const std::vector<ColumnLazyFetchInfo>& lazy_fetch_info,
             const std::vector<std::vector<const int8_t*>>& col_buffers,
+#ifdef ENABLE_MULTIFRAG_JOIN
+            const std::vector<std::vector<int64_t>>& frag_offsets,
+            const std::vector<int64_t>& consistent_frag_sizes,
+#endif
             const ExecutorDeviceType device_type,
             const int device_id,
             const QueryMemoryDescriptor& query_mem_desc,
@@ -304,6 +308,10 @@ class ResultSet {
 
   std::pair<ssize_t, size_t> getStorageIndex(const size_t entry_idx) const;
 
+  const std::vector<const int8_t*>& getColumnFrag(const size_t storge_idx,
+                                                  const size_t col_logical_idx,
+                                                  int64_t& global_idx) const;
+
   StorageLookupResult findStorage(const size_t entry_idx) const;
 
   std::function<bool(const uint32_t, const uint32_t)> createComparator(
@@ -360,7 +368,11 @@ class ResultSet {
   //   setting offset instead of ptr in group by buffer.
   std::vector<std::vector<int8_t>> literal_buffers_;
   const std::vector<ColumnLazyFetchInfo> lazy_fetch_info_;
-  std::vector<std::vector<const int8_t*>> col_buffers_;
+  std::vector<std::vector<std::vector<const int8_t*>>> col_buffers_;
+#ifdef ENABLE_MULTIFRAG_JOIN
+  std::vector<std::vector<std::vector<int64_t>>> frag_offsets_;
+  std::vector<std::vector<int64_t>> consistent_frag_sizes_;
+#endif
 
   const std::shared_ptr<const Analyzer::NDVEstimator> estimator_;
   int8_t* estimator_buffer_;

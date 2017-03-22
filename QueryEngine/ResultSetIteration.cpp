@@ -311,7 +311,9 @@ int64_t ResultSet::lazyReadInt(const int64_t ival,
     const auto& col_lazy_fetch = lazy_fetch_info_[target_logical_idx];
     if (col_lazy_fetch.is_lazily_fetched) {
       CHECK_LT(static_cast<size_t>(storage_lookup_result.storage_idx), col_buffers_.size());
-      auto& frag_col_buffers = col_buffers_[storage_lookup_result.storage_idx];
+      int64_t ival_copy = ival;
+      auto& frag_col_buffers =
+          getColumnFrag(static_cast<size_t>(storage_lookup_result.storage_idx), target_logical_idx, ival_copy);
       auto& frag_col_buffer = frag_col_buffers[col_lazy_fetch.local_col_id];
       CHECK_LT(target_logical_idx, targets_.size());
       const TargetInfo& target_info = targets_[target_logical_idx];
@@ -331,7 +333,7 @@ int64_t ResultSet::lazyReadInt(const int64_t ival,
         std::string fetched_str(reinterpret_cast<char*>(vd.pointer), vd.length);
         return reinterpret_cast<int64_t>(row_set_mem_owner_->addString(fetched_str));
       }
-      return lazy_decode(col_lazy_fetch, frag_col_buffer, ival);
+      return lazy_decode(col_lazy_fetch, frag_col_buffer, ival_copy);
     }
   }
   return ival;
@@ -495,6 +497,33 @@ TargetValue build_array_target_value(const SQLTypeInfo& array_ti,
 
 }  // namespace
 
+const std::vector<const int8_t*>& ResultSet::getColumnFrag(const size_t storage_idx,
+                                                           const size_t col_logical_idx,
+                                                           int64_t& global_idx) const {
+  CHECK_LT(static_cast<size_t>(storage_idx), col_buffers_.size());
+#ifdef ENABLE_MULTIFRAG_JOIN
+  if (col_buffers_[storage_idx].size() > 1) {
+    int64_t frag_id = 0;
+    int64_t local_idx = global_idx;
+    if (consistent_frag_sizes_[storage_idx][col_logical_idx] != -1) {
+      frag_id = global_idx / consistent_frag_sizes_[storage_idx][col_logical_idx];
+      local_idx = global_idx % consistent_frag_sizes_[storage_idx][col_logical_idx];
+    } else {
+      std::tie(frag_id, local_idx) = get_frag_id_and_local_idx(frag_offsets_[storage_idx], col_logical_idx, global_idx);
+      CHECK_LE(local_idx, global_idx);
+    }
+    CHECK_GE(frag_id, int64_t(0));
+    CHECK_LT(frag_id, col_buffers_[storage_idx].size());
+    global_idx = local_idx;
+    return col_buffers_[storage_idx][frag_id];
+  } else
+#endif
+  {
+    CHECK_EQ(size_t(1), col_buffers_[storage_idx].size());
+    return col_buffers_[storage_idx][0];
+  }
+}
+
 // Interprets ptr1, ptr2 as the ptr and len pair used for variable length data.
 TargetValue ResultSet::makeVarlenTargetValue(const int8_t* ptr1,
                                              const int8_t compact_sz1,
@@ -521,7 +550,7 @@ TargetValue ResultSet::makeVarlenTargetValue(const int8_t* ptr1,
     if (col_lazy_fetch.is_lazily_fetched) {
       const auto storage_idx = getStorageIndex(entry_buff_idx);
       CHECK_LT(static_cast<size_t>(storage_idx.first), col_buffers_.size());
-      auto& frag_col_buffers = col_buffers_[storage_idx.first];
+      auto& frag_col_buffers = getColumnFrag(storage_idx.first, target_logical_idx, varlen_ptr);
       bool is_end{false};
       if (target_info.sql_type.is_string()) {
         VarlenDatum vd;
@@ -596,7 +625,7 @@ TargetValue ResultSet::makeTargetValue(const int8_t* ptr,
     if (col_lazy_fetch.is_lazily_fetched) {
       const auto storage_idx = getStorageIndex(entry_buff_idx);
       CHECK_LT(static_cast<size_t>(storage_idx.first), col_buffers_.size());
-      auto& frag_col_buffers = col_buffers_[storage_idx.first];
+      auto& frag_col_buffers = getColumnFrag(storage_idx.first, target_logical_idx, ival);
       ival = lazy_decode(col_lazy_fetch, frag_col_buffers[col_lazy_fetch.local_col_id], ival);
       if (chosen_type.is_fp()) {
         if (chosen_type.get_type() == kFLOAT) {
