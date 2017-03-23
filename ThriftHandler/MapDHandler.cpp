@@ -2204,6 +2204,7 @@ void MapDHandler::insert_data(const TSessionId session, const TInsertData& thrif
   insert_data.databaseId = thrift_insert_data.db_id;
   insert_data.tableId = thrift_insert_data.table_id;
   insert_data.columnIds = thrift_insert_data.column_ids;
+  std::vector<std::unique_ptr<std::vector<std::string>>> none_encoded_string_columns;
   for (size_t col_idx = 0; col_idx < insert_data.columnIds.size(); ++col_idx) {
     const int column_id = insert_data.columnIds[col_idx];
     DataBlockPtr p;
@@ -2216,7 +2217,15 @@ void MapDHandler::insert_data(const TSessionId session, const TInsertData& thrif
       if (ti.get_compression() == kENCODING_DICT) {
         p.numbersPtr = (int8_t*)thrift_insert_data.data[col_idx].fixed_len_data.data();
       } else {
-        CHECK(false);
+        CHECK_EQ(kENCODING_NONE, ti.get_compression());
+        none_encoded_string_columns.emplace_back(new std::vector<std::string>());
+        auto& none_encoded_strings = none_encoded_string_columns.back();
+        CHECK_EQ(static_cast<size_t>(thrift_insert_data.num_rows),
+                 thrift_insert_data.data[col_idx].var_len_data.size());
+        for (const auto& varlen_str : thrift_insert_data.data[col_idx].var_len_data) {
+          none_encoded_strings->push_back(varlen_str.payload);
+        }
+        p.stringsPtr = none_encoded_strings.get();
       }
     } else {
       CHECK(ti.is_array());
