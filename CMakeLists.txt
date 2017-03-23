@@ -232,12 +232,12 @@ endif()
 
 add_subdirectory(SqliteConnector)
 
+add_subdirectory(StringDictionary)
 add_subdirectory(Catalog)
 add_subdirectory(Parser)
 add_subdirectory(Analyzer)
 add_subdirectory(Planner)
 add_subdirectory(Import)
-add_subdirectory(StringDictionary)
 add_subdirectory(QueryEngine)
 add_subdirectory(DataMgr)
 add_subdirectory(CudaMgr)
