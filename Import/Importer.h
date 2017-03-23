@@ -440,9 +440,7 @@ class Loader {
     return dict_map.at(cd->columnId);
   }
   virtual bool load(const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers, size_t row_count);
-  virtual void checkpoint(const int db_id, const int tb_id) {
-    catalog.get_dataMgr().checkpoint(db_id, tb_id);
-  }
+  virtual void checkpoint(const int db_id, const int tb_id) { catalog.get_dataMgr().checkpoint(db_id, tb_id); }
 
  protected:
   const Catalog_Namespace::Catalog& catalog;
