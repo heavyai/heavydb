@@ -17,6 +17,7 @@
 #include "../Fragmenter/Fragmenter.h"
 #include "../Fragmenter/InsertOrderFragmenter.h"
 #include "../Shared/StringTransform.h"
+#include "../StringDictionary/StringDictionaryClient.h"
 
 using std::runtime_error;
 using std::string;
@@ -587,7 +588,14 @@ void Catalog::addTableToMap(TableDescriptor& td,
     ColumnIdKey columnIdKey(new_cd->tableId, new_cd->columnId);
     columnDescriptorMapById_[columnIdKey] = new_cd;
   }
+  std::unique_ptr<StringDictionaryClient> client;
+  if (!string_dict_hosts_.empty()) {
+    client.reset(new StringDictionaryClient(string_dict_hosts_.front(), -1));
+  }
   for (auto dd : dicts) {
+    if (client) {
+      client->create(dd.dictId, currentDB_.dbId);
+    }
     DictDescriptor* new_dd = new DictDescriptor(dd);
     dictDescriptorMapById_[dd.dictId].reset(new_dd);
     boost::filesystem::create_directory(new_dd->dictFolderPath);
