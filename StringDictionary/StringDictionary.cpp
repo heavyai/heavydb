@@ -128,7 +128,8 @@ StringDictionary::StringDictionary(const std::string& folder, const bool recover
 }
 
 StringDictionary::StringDictionary(const LeafHostInfo& host, const int dict_id)
-    : client_(new StringDictionaryClient(host, dict_id)) {}
+    : client_(new StringDictionaryClient(host, dict_id, true)),
+      client_no_timeout_(new StringDictionaryClient(host, dict_id, false)) {}
 
 StringDictionary::~StringDictionary() noexcept {
   if (payload_map_) {
@@ -165,7 +166,7 @@ void log_encoding_error(const std::string& str) {
 
 template <class T>
 void StringDictionary::getOrAddBulk(const std::vector<std::string>& string_vec, T* encoded_vec) {
-  if (client_) {
+  if (client_no_timeout_) {
     getOrAddBulkRemote(string_vec, encoded_vec);
     return;
   }
@@ -191,9 +192,9 @@ template void StringDictionary::getOrAddBulk(const std::vector<std::string>& str
 
 template <class T>
 void StringDictionary::getOrAddBulkRemote(const std::vector<std::string>& string_vec, T* encoded_vec) {
-  CHECK(client_);
+  CHECK(client_no_timeout_);
   std::vector<int32_t> string_ids;
-  client_->get_or_add_bulk(string_ids, string_vec);
+  client_no_timeout_->get_or_add_bulk(string_ids, string_vec);
   size_t out_idx{0};
   for (size_t i = 0; i < string_ids.size(); ++i) {
     const auto string_id = string_ids[i];

@@ -590,7 +590,7 @@ void Catalog::addTableToMap(TableDescriptor& td,
   }
   std::unique_ptr<StringDictionaryClient> client;
   if (!string_dict_hosts_.empty()) {
-    client.reset(new StringDictionaryClient(string_dict_hosts_.front(), -1));
+    client.reset(new StringDictionaryClient(string_dict_hosts_.front(), -1, true));
   }
   for (auto dd : dicts) {
     if (client) {

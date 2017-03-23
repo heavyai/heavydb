@@ -80,6 +80,7 @@ class StringDictionary {
   mutable std::map<std::tuple<std::string, bool, bool, char>, std::vector<std::string>> like_cache_;
   mutable std::map<std::pair<std::string, char>, std::vector<std::string>> regex_cache_;
   std::unique_ptr<StringDictionaryClient> client_;
+  std::unique_ptr<StringDictionaryClient> client_no_timeout_;
 
   static char* CANARY_BUFFER;
 };
