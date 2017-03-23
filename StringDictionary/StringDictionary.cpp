@@ -143,6 +143,12 @@ StringDictionary::~StringDictionary() noexcept {
 }
 
 int32_t StringDictionary::getOrAdd(const std::string& str) noexcept {
+  if (client_) {
+    std::vector<int32_t> string_ids;
+    client_->get_or_add_bulk(string_ids, {str});
+    CHECK_EQ(size_t(1), string_ids.size());
+    return string_ids.front();
+  }
   mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
   return getOrAddImpl(str, false);
 }
