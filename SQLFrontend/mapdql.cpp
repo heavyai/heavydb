@@ -535,7 +535,7 @@ std::string mapd_getpass() {
 
 enum Action { INITIALIZE, TURN_ON, TURN_OFF, INTERRUPT };
 
-bool backchannel(int action, ClientContext *cc) {
+bool backchannel(int action, ClientContext* cc) {
   enum State { UNINITIALIZED, INITIALIZED, INTERRUPTIBLE };
   static int state = UNINITIALIZED;
   static ClientContext* context{nullptr};
@@ -763,7 +763,7 @@ int main(int argc, char** argv) {
         std::string query(current_line);
         current_line.clear();
         prompt.assign("mapdql> ");
-	(void)backchannel(TURN_ON, nullptr);
+        (void)backchannel(TURN_ON, nullptr);
         if (thrift_with_retry(kSQL, context, query.c_str())) {
           if (context.query_return.row_set.row_desc.empty()) {
             continue;
@@ -810,7 +810,7 @@ int main(int argc, char** argv) {
                       << " Total time: " << context.query_return.total_time_ms << " ms" << std::endl;
           }
         }
-	(void)backchannel(TURN_OFF, nullptr);
+        (void)backchannel(TURN_OFF, nullptr);
       } else {
         // change the prommpt
         prompt.assign("..> ");
