@@ -120,7 +120,12 @@ inline std::vector<int64_t> get_consistent_frags_sizes(const std::vector<Analyze
   std::vector<int64_t> col_frag_sizes;
   for (auto expr : target_exprs) {
     if (const auto col_var = dynamic_cast<Analyzer::ColumnVar*>(expr)) {
-      col_frag_sizes.push_back(table_frag_sizes[col_var->get_rte_idx()]);
+      if (col_var->get_rte_idx() < 0) {
+        CHECK_EQ(-1, col_var->get_rte_idx());
+        col_frag_sizes.push_back(int64_t(-1));
+      } else {
+        col_frag_sizes.push_back(table_frag_sizes[col_var->get_rte_idx()]);
+      }
     } else {
       col_frag_sizes.push_back(int64_t(-1));
     }
@@ -136,7 +141,13 @@ inline std::vector<std::vector<int64_t>> get_col_frag_offsets(
     std::vector<int64_t> col_offsets;
     for (auto expr : target_exprs) {
       if (const auto col_var = dynamic_cast<Analyzer::ColumnVar*>(expr)) {
-        col_offsets.push_back(static_cast<int64_t>(table_offsets[col_var->get_rte_idx()]));
+        if (col_var->get_rte_idx() < 0) {
+          CHECK_EQ(-1, col_var->get_rte_idx());
+          col_offsets.push_back(int64_t(-1));
+        } else {
+          CHECK_LT(static_cast<size_t>(col_var->get_rte_idx()), table_offsets.size());
+          col_offsets.push_back(static_cast<int64_t>(table_offsets[col_var->get_rte_idx()]));
+        }
       } else {
         col_offsets.push_back(int64_t(-1));
       }
