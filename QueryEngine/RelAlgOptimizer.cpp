@@ -128,6 +128,21 @@ size_t get_actual_source_size(const RelProject* curr_project,
   return curr_project->getInput(0)->size();
 }
 
+bool safe_to_redirect(const RelProject* project,
+                      const std::unordered_map<const RelAlgNode*, std::unordered_set<const RelAlgNode*>>& du_web) {
+  if (!project->isSimple()) {
+    return false;
+  }
+  auto usrs_it = du_web.find(project);
+  CHECK(usrs_it != du_web.end());
+  for (auto usr : usrs_it->second) {
+    if (!dynamic_cast<const RelProject*>(usr)) {
+      return false;
+    }
+  }
+  return true;
+}
+
 bool is_identical_copy(const RelProject* project,
                        const std::unordered_map<const RelAlgNode*, std::unordered_set<const RelAlgNode*>>& du_web,
                        const std::unordered_set<const RelProject*>& projects_to_remove) {
@@ -160,21 +175,22 @@ bool is_identical_copy(const RelProject* project,
     }
   }
 
+  bool identical = true;
   for (size_t i = 0; i < project->size(); ++i) {
     auto target = dynamic_cast<const RexInput*>(project->getProjectAt(i));
     CHECK(target);
     if (i != target->getIndex()) {
-      return false;
+      identical = false;
+      break;
     }
   }
 
-  return true;
+  return identical || safe_to_redirect(project, du_web);
 }
 
 void redirect_inputs_of(std::shared_ptr<RelAlgNode> node,
                         const std::unordered_set<const RelProject*>& projects,
                         std::unordered_map<const RelAlgNode*, std::unordered_set<const RelAlgNode*>>& du_web) {
-  RexProjectInputRedirector visitor(projects);
   std::shared_ptr<const RelProject> src_project = nullptr;
   for (size_t i = 0; i < node->inputCount(); ++i) {
     if (auto project = std::dynamic_pointer_cast<const RelProject>(node->getAndOwnInput(i))) {
@@ -208,7 +224,13 @@ void redirect_inputs_of(std::shared_ptr<RelAlgNode> node,
     return;
   }
   if (auto project = std::dynamic_pointer_cast<RelProject>(node)) {
-    project->replaceInput(src_project, src_project->getAndOwnInput(0));
+    project->RelAlgNode::replaceInput(src_project, src_project->getAndOwnInput(0));
+    RexProjectInputRedirector redirector(projects);
+    std::vector<std::unique_ptr<const RexScalar>> new_exprs;
+    for (size_t i = 0; i < project->size(); ++i) {
+      new_exprs.push_back(redirector.visit(project->getProjectAt(i)));
+    }
+    project->setExpressions(new_exprs);
     return;
   }
   if (auto filter = std::dynamic_pointer_cast<RelFilter>(node)) {
