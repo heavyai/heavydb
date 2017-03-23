@@ -103,7 +103,7 @@ class ArrayNoneEncoder : public Encoder {
           break;
         char* dest = (char*)inbuf + size;
         if (len > 0)
-          std::memcpy((void*)dest, (void*)(*srcData)[i].data_ptr.get(), len);
+          std::memcpy((void*)dest, (void*)(*srcData)[i].pointer, len);
         size += len;
       }
       if (size > 0)

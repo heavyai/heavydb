@@ -2234,6 +2234,7 @@ void MapDHandler::insert_data(const TSessionId session, const TInsertData& thrif
   insert_data.tableId = thrift_insert_data.table_id;
   insert_data.columnIds = thrift_insert_data.column_ids;
   std::vector<std::unique_ptr<std::vector<std::string>>> none_encoded_string_columns;
+  std::vector<std::unique_ptr<std::vector<ArrayDatum>>> array_columns;
   for (size_t col_idx = 0; col_idx < insert_data.columnIds.size(); ++col_idx) {
     const int column_id = insert_data.columnIds[col_idx];
     DataBlockPtr p;
@@ -2258,7 +2259,21 @@ void MapDHandler::insert_data(const TSessionId session, const TInsertData& thrif
       }
     } else {
       CHECK(ti.is_array());
-      CHECK(false);
+      array_columns.emplace_back(new std::vector<ArrayDatum>());
+      auto& array_column = array_columns.back();
+      CHECK_EQ(static_cast<size_t>(thrift_insert_data.num_rows), thrift_insert_data.data[col_idx].var_len_data.size());
+      for (const auto& t_arr_datum : thrift_insert_data.data[col_idx].var_len_data) {
+        if (t_arr_datum.is_null) {
+          array_column->emplace_back(0, nullptr, true);
+        } else {
+          ArrayDatum arr_datum;
+          arr_datum.length = t_arr_datum.payload.size();
+          arr_datum.pointer = (int8_t*)t_arr_datum.payload.data();
+          arr_datum.is_null = false;
+          array_column->push_back(arr_datum);
+        }
+      }
+      p.arraysPtr = array_column.get();
     }
     insert_data.data.push_back(p);
   }
