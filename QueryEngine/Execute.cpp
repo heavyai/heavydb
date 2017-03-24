@@ -3007,7 +3007,23 @@ llvm::Value* Executor::codegenArith(const Analyzer::BinOper* bin_oper, const Com
   return nullptr;
 }
 
+namespace {
+
+bool is_temporary_column(const Analyzer::Expr* expr) {
+  const auto col_expr = dynamic_cast<const Analyzer::ColumnVar*>(expr);
+  if (!col_expr) {
+    return false;
+  }
+  return col_expr->get_table_id() < 0;
+}
+
+}  // namespace
+
 bool Executor::checkExpressionRanges(const Analyzer::BinOper* bin_oper, int64_t min, int64_t max) {
+  if (is_temporary_column(bin_oper->get_left_operand()) || is_temporary_column(bin_oper->get_right_operand())) {
+    // Computing the range for temporary columns is a lot more expensive than the overflow check.
+    return false;
+  }
   if (bin_oper->get_type_info().is_decimal())
     return false;
 
