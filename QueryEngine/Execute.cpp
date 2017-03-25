@@ -6049,7 +6049,11 @@ llvm::Module* read_template_module(llvm::LLVMContext& context) {
   auto module = llvm::parseBitcodeFile(buffer, context).get();
 #else
   auto owner = llvm::parseBitcodeFile(buffer->getMemBufferRef(), context);
+#if LLVM_VERSION_MAJOR < 4
   CHECK(!owner.getError());
+#else
+  CHECK(!owner.takeError());
+#endif
   auto module = owner.get().release();
 #endif
   CHECK(module);
