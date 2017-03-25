@@ -2209,13 +2209,14 @@ void CreateViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     throw std::runtime_error("Table or View " + view_name_ + " already exists.");
   }
   const auto& user_metadata = session.get_currentUser();
+  const auto query_after_shim = pg_shim(select_query_);
   catalog.get_calciteMgr().process(
-      user_metadata.userName, user_metadata.passwd, catalog.get_currentDB().dbName, pg_shim(select_query_), true, true);
+      user_metadata.userName, user_metadata.passwd, catalog.get_currentDB().dbName, query_after_shim, true, true);
   TableDescriptor td;
   td.tableName = view_name_;
   td.nColumns = 0;
   td.isView = true;
-  td.viewSQL = select_query_;
+  td.viewSQL = query_after_shim;
   td.fragmenter = nullptr;
   td.fragType = Fragmenter_Namespace::FragmenterType::INSERT_ORDER;
   td.maxFragRows = DEFAULT_FRAGMENT_ROWS;    // @todo this stuff should not be InsertOrderFragmenter
