@@ -52,6 +52,9 @@
 #include <llvm/Support/raw_os_ostream.h>
 #include <llvm/Transforms/Instrumentation.h>
 #include <llvm/Transforms/IPO.h>
+#if LLVM_VERSION_MAJOR >= 4
+#include <llvm/Transforms/IPO/AlwaysInliner.h>
+#endif
 #include <llvm/Transforms/Scalar.h>
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
 
@@ -6742,7 +6745,11 @@ void optimizeIR(llvm::Function* query_func,
                 const std::string& debug_dir,
                 const std::string& debug_file) {
   llvm::legacy::PassManager pass_manager;
+#if LLVM_VERSION_MAJOR < 4
   pass_manager.add(llvm::createAlwaysInlinerPass());
+#else
+  pass_manager.add(llvm::createAlwaysInlinerLegacyPass());
+#endif
   pass_manager.add(llvm::createPromoteMemoryToRegisterPass());
   pass_manager.add(llvm::createInstructionSimplifierPass());
   pass_manager.add(llvm::createInstructionCombiningPass());
