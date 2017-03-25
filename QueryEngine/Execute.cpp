@@ -27,7 +27,12 @@
 #include "Shared/MapDParameters.h"
 #include "Shared/scope.h"
 
+#if LLVM_VERSION_MAJOR >= 4
+#include <llvm/Bitcode/BitcodeReader.h>
+#include <llvm/Bitcode/BitcodeWriter.h>
+#else
 #include <llvm/Bitcode/ReaderWriter.h>
+#endif
 #include <llvm/ExecutionEngine/MCJIT.h>
 #include <llvm/IRReader/IRReader.h>
 #include <llvm/IR/Attributes.h>
