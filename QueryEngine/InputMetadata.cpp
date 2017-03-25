@@ -153,9 +153,9 @@ Fragmenter_Namespace::TableInfo synthesize_table_info(const RowSetPtr& rows) {
     result.resize(1);
     auto& fragment = result.front();
     fragment.fragmentId = 0;
-    fragment.numTuples = row_count;
     fragment.deviceIds.resize(3);
     fragment.resultSet = rows.get();
+    fragment.resultSetMutex.reset(new std::mutex());
   }
   Fragmenter_Namespace::TableInfo table_info;
   table_info.fragments = result;
@@ -171,9 +171,9 @@ Fragmenter_Namespace::TableInfo synthesize_table_info(const IterTabPtr& table) {
     for (size_t i = 0; i < table->fragCount(); ++i) {
       auto& fragment = table_info.fragments[i];
       fragment.fragmentId = i;
-      fragment.numTuples = table->getFragAt(i).row_count;
+      fragment.setPhysicalNumTuples(table->getFragAt(i).row_count);
       fragment.deviceIds.resize(3);
-      total_row_count += fragment.numTuples;
+      total_row_count += fragment.getPhysicalNumTuples();
     }
   }
 
@@ -247,9 +247,21 @@ std::vector<InputTableInfo> get_table_infos(const RelAlgExecutionUnit& ra_exe_un
 }
 
 const std::map<int, ChunkMetadata>& Fragmenter_Namespace::FragmentInfo::getChunkMetadataMap() const {
-  if (resultSet) {
+  if (resultSet && !synthesizedMetadataIsValid) {
     chunkMetadataMap = synthesize_metadata(resultSet);
-    resultSet = nullptr;
+    synthesizedMetadataIsValid = true;
   }
   return chunkMetadataMap;
+}
+
+size_t Fragmenter_Namespace::FragmentInfo::getNumTuples() const {
+  std::unique_ptr<std::lock_guard<std::mutex>> lock;
+  if (resultSetMutex) {
+    lock.reset(new std::lock_guard<std::mutex>(*resultSetMutex));
+  }
+  if (resultSet && !synthesizedNumTuplesIsValid) {
+    numTuples = resultSet->rowCount();
+    synthesizedNumTuplesIsValid = true;
+  }
+  return numTuples;
 }

@@ -55,7 +55,13 @@ struct InsertData {
 
 class FragmentInfo {
  public:
-  FragmentInfo() : fragmentId(-1), numTuples(0), shadowNumTuples(0), resultSet(nullptr) {}
+  FragmentInfo()
+      : fragmentId(-1),
+        shadowNumTuples(0),
+        resultSet(nullptr),
+        numTuples(0),
+        synthesizedNumTuplesIsValid(false),
+        synthesizedMetadataIsValid(false) {}
 
   void setChunkMetadataMap(const std::map<int, ChunkMetadata>& chunkMetadataMap) {
     this->chunkMetadataMap = chunkMetadataMap;
@@ -67,15 +73,24 @@ class FragmentInfo {
 
   const std::map<int, ChunkMetadata>& getChunkMetadataMapPhysical() const { return chunkMetadataMap; }
 
+  size_t getNumTuples() const;
+
+  size_t getPhysicalNumTuples() const { return numTuples; }
+
+  void setPhysicalNumTuples(const size_t physNumTuples) { numTuples = physNumTuples; }
+
   int fragmentId;
-  size_t numTuples;
   size_t shadowNumTuples;
   std::vector<int> deviceIds;
   std::map<int, ChunkMetadata> shadowChunkMetadataMap;
   mutable ResultRows* resultSet;
+  mutable std::shared_ptr<std::mutex> resultSetMutex;
 
  private:
+  mutable size_t numTuples;
   mutable std::map<int, ChunkMetadata> chunkMetadataMap;
+  mutable bool synthesizedNumTuplesIsValid;
+  mutable bool synthesizedMetadataIsValid;
 };
 
 /**

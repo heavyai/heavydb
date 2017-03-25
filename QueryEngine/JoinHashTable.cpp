@@ -174,7 +174,7 @@ std::pair<const int8_t*, size_t> JoinHashTable::getColumnFragment(
                                                       effective_mem_lvl,
                                                       effective_mem_lvl == Data_Namespace::CPU_LEVEL ? 0 : device_id);
   }
-  return {col_buff, fragment.numTuples};
+  return {col_buff, fragment.getNumTuples()};
 }
 
 std::pair<const int8_t*, size_t> JoinHashTable::getAllColumnFragments(

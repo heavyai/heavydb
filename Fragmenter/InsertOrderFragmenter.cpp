@@ -76,14 +76,14 @@ void InsertOrderFragmenter::getChunkMetadata() {
       maxFragmentId_ = curFragmentId;
       fragmentInfoVec_.push_back(FragmentInfo());
       fragmentInfoVec_.back().fragmentId = curFragmentId;
-      fragmentInfoVec_.back().numTuples = chunkIt->second.numElements;
-      numTuples_ += fragmentInfoVec_.back().numTuples;
+      fragmentInfoVec_.back().setPhysicalNumTuples(chunkIt->second.numElements);
+      numTuples_ += fragmentInfoVec_.back().getPhysicalNumTuples();
       for (const auto levelSize : dataMgr_->levelSizes_) {
         fragmentInfoVec_.back().deviceIds.push_back(curFragmentId % levelSize);
       }
-      fragmentInfoVec_.back().shadowNumTuples = fragmentInfoVec_.back().numTuples;
+      fragmentInfoVec_.back().shadowNumTuples = fragmentInfoVec_.back().getPhysicalNumTuples();
     } else {
-      if (chunkIt->second.numElements != fragmentInfoVec_.back().numTuples) {
+      if (chunkIt->second.numElements != fragmentInfoVec_.back().getPhysicalNumTuples()) {
         throw std::runtime_error("Inconsistency in num tuples within fragment");
       }
     }
@@ -134,7 +134,7 @@ void InsertOrderFragmenter::dropFragmentsToSize(const size_t maxRows) {
     size_t targetRows = maxRows * DROP_FRAGMENT_FACTOR;
     while (numTuples_ > targetRows) {
       assert(fragmentInfoVec_.size() > 0);
-      size_t numFragTuples = fragmentInfoVec_[0].numTuples;
+      size_t numFragTuples = fragmentInfoVec_[0].getPhysicalNumTuples();
       dropFragIds.push_back(fragmentInfoVec_[0].fragmentId);
       fragmentInfoVec_.pop_front();
       assert(numTuples_ >= numFragTuples);
@@ -256,13 +256,13 @@ void InsertOrderFragmenter::insertData(const InsertData& insertDataStruct) {
       delete[] rowIdData;
     }
 
-    currentFragment->shadowNumTuples = fragmentInfoVec_.back().numTuples + numRowsToInsert;
+    currentFragment->shadowNumTuples = fragmentInfoVec_.back().getPhysicalNumTuples() + numRowsToInsert;
     numRowsLeft -= numRowsToInsert;
     numRowsInserted += numRowsToInsert;
   }
   mapd_unique_lock<mapd_shared_mutex> writeLock(fragmentInfoMutex_);
   for (auto partIt = fragmentInfoVec_.begin() + startFragment; partIt != fragmentInfoVec_.end(); ++partIt) {
-    partIt->numTuples = partIt->shadowNumTuples;
+    partIt->setPhysicalNumTuples(partIt->shadowNumTuples);
     partIt->setChunkMetadataMap(partIt->shadowChunkMetadataMap);
   }
   numTuples_ += insertDataStruct.numRows;
@@ -277,7 +277,7 @@ FragmentInfo* InsertOrderFragmenter::createNewFragment(const Data_Namespace::Mem
   FragmentInfo newFragmentInfo;
   newFragmentInfo.fragmentId = maxFragmentId_;
   newFragmentInfo.shadowNumTuples = 0;
-  newFragmentInfo.numTuples = 0;
+  newFragmentInfo.setPhysicalNumTuples(0);
   for (const auto levelSize : dataMgr_->levelSizes_) {
     newFragmentInfo.deviceIds.push_back(newFragmentInfo.fragmentId % levelSize);
   }
@@ -307,7 +307,7 @@ TableInfo InsertOrderFragmenter::getFragmentsForQuery() {
   queryInfo.numTuples = 0;
   auto partIt = queryInfo.fragments.begin();
   while (partIt != queryInfo.fragments.end()) {
-    if (partIt->numTuples == 0) {
+    if (partIt->getPhysicalNumTuples() == 0) {
       // this means that a concurrent insert query inserted tuples into a new fragment but when the query came in we
       // didn't have this fragment.
       // To make sure we don't mess up the executor we delete this
@@ -315,7 +315,7 @@ TableInfo InsertOrderFragmenter::getFragmentsForQuery() {
       // 2015-05-08)
       partIt = queryInfo.fragments.erase(partIt);
     } else {
-      queryInfo.numTuples += partIt->numTuples;
+      queryInfo.numTuples += partIt->getPhysicalNumTuples();
       ++partIt;
     }
   }

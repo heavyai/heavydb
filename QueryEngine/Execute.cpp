@@ -4011,11 +4011,11 @@ size_t compute_buffer_entry_guess(const std::vector<InputTableInfo>& query_infos
   size_t max_groups_buffer_entry_guess = 1;
   for (const auto& query_info : query_infos) {
     CHECK(!query_info.info.fragments.empty());
-    auto it =
-        std::max_element(query_info.info.fragments.begin(),
-                         query_info.info.fragments.end(),
-                         [](const FragmentInfo& f1, const FragmentInfo& f2) { return f1.numTuples < f2.numTuples; });
-    max_groups_buffer_entry_guess *= it->numTuples;
+    auto it = std::max_element(
+        query_info.info.fragments.begin(),
+        query_info.info.fragments.end(),
+        [](const FragmentInfo& f1, const FragmentInfo& f2) { return f1.getNumTuples() < f2.getNumTuples(); });
+    max_groups_buffer_entry_guess *= it->getNumTuples();
   }
   return max_groups_buffer_entry_guess;
 }
@@ -4332,7 +4332,7 @@ Executor::ExecutionDispatch::ExecutionDispatch(Executor* executor,
       render_allocator_map_(render_allocator_map) {
   all_frag_row_offsets_.resize(query_infos.front().info.fragments.size() + 1);
   for (size_t i = 1; i <= query_infos.front().info.fragments.size(); ++i) {
-    all_frag_row_offsets_[i] = all_frag_row_offsets_[i - 1] + query_infos_.front().info.fragments[i - 1].numTuples;
+    all_frag_row_offsets_[i] = all_frag_row_offsets_[i - 1] + query_infos_.front().info.fragments[i - 1].getNumTuples();
   }
   all_fragment_results_.reserve(query_infos_.front().info.fragments.size());
 }
@@ -4686,7 +4686,7 @@ const int8_t* Executor::ExecutionDispatch::getAllScanColumnFrags(
                                         Data_Namespace::CPU_LEVEL,
                                         int(0));
         column_frags.push_back(boost::make_unique<ColumnarResults>(
-            row_set_mem_owner_, col_buffer, fragment.numTuples, chunk_meta_it->second.sqlType));
+            row_set_mem_owner_, col_buffer, fragment.getNumTuples(), chunk_meta_it->second.sqlType));
       }
       column_it->second = ColumnarResults::mergeResults(row_set_mem_owner_, column_frags);
     }
@@ -4729,7 +4729,7 @@ std::vector<const ColumnarResults*> Executor::ExecutionDispatch::getAllScanColum
       frags_it->second.insert(
           std::make_pair(CacheKey{frag_id},
                          boost::make_unique<ColumnarResults>(
-                             row_set_mem_owner_, col_buffer, fragment.numTuples, chunk_meta_it->second.sqlType)));
+                             row_set_mem_owner_, col_buffer, fragment.getNumTuples(), chunk_meta_it->second.sqlType)));
     }
   }
   CHECK(frags_it != columnarized_ref_table_cache_.end());
@@ -4855,7 +4855,7 @@ const int8_t* Executor::ExecutionDispatch::getColumn(
                                             Data_Namespace::CPU_LEVEL,
                                             device_id);
             ColumnarResults ref_values(
-                row_set_mem_owner_, col_buffer, fragment.numTuples, chunk_meta_it->second.sqlType);
+                row_set_mem_owner_, col_buffer, fragment.getNumTuples(), chunk_meta_it->second.sqlType);
             frag_id_to_result.insert(
                 std::make_pair(sub_key,
                                ColumnarResults::createIndexedResults(
@@ -5338,7 +5338,7 @@ void Executor::dispatchFragments(
                                           frag_list_idx % context_count,
                                           rowid_lookup_key));
       ++frag_list_idx;
-      if (is_sample_query(ra_exe_unit) && fragment.numTuples >= ra_exe_unit.scan_limit) {
+      if (is_sample_query(ra_exe_unit) && fragment.getNumTuples() >= ra_exe_unit.scan_limit) {
         break;
       }
     }
@@ -5397,7 +5397,7 @@ std::map<size_t, std::vector<uint64_t>> Executor::getAllFragOffsets(
     std::vector<uint64_t> frag_offsets(fragments.size(), 0);
     for (size_t i = 0, off = 0; i < fragments.size(); ++i) {
       frag_offsets[i] = off;
-      off += fragments[i].numTuples;
+      off += fragments[i].getNumTuples();
     }
     tab_id_to_frag_offsets.insert(std::make_pair(desc.getTableId(), frag_offsets));
   }
@@ -5453,7 +5453,7 @@ Executor::FetchResult Executor::fetchChunks(const ExecutionDispatch& execution_d
       CHECK(fragments_it != all_tables_fragments.end());
       const auto& fragments = *fragments_it->second;
       const auto& fragment = fragments[frag_id];
-      num_rows.push_back(fragment.numTuples);
+      num_rows.push_back(fragment.getNumTuples());
       const auto frag_offsets_it = tab_id_to_frag_offsets.find(input_descs[tab_idx].getTableId());
       CHECK(frag_offsets_it != tab_id_to_frag_offsets.end());
       const auto& offsets = frag_offsets_it->second;
