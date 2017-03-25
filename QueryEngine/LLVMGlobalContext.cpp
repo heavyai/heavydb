@@ -1,6 +1,8 @@
 #include "LLVMGlobalContext.h"
 
-#if LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 9
+#define MAPD_LLVM_VERSION (LLVM_VERSION_MAJOR * 10000 + LLVM_VERSION_MINOR * 100 + LLVM_VERSION_PATCH)
+
+#if MAPD_LLVM_VERSION >= 30900
 
 #include <llvm/Support/ManagedStatic.h>
 
