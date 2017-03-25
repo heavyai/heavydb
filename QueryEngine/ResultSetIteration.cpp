@@ -799,6 +799,9 @@ bool ResultSetStorage::isEmptyEntry(const size_t entry_idx) const {
 }
 
 bool ResultSet::isNull(const SQLTypeInfo& ti, const InternalTargetValue& val) {
+  if (ti.get_notnull()) {
+    return false;
+  }
   if (val.isInt()) {
     return val.i1 == null_val_bit_pattern(ti);
   }
