@@ -2290,25 +2290,6 @@ void MapDHandler::insert_data(const TSessionId session, const TInsertData& thrif
   }
 }
 
-namespace {
-
-void convert_raw_pixel_data(TRawPixelDataResult& thrift_raw_pixel_data,
-                            const QueryRenderer::RawPixelData& raw_pixel_data) {
-  thrift_raw_pixel_data.width = raw_pixel_data.width;
-  thrift_raw_pixel_data.height = raw_pixel_data.height;
-  thrift_raw_pixel_data.num_channels = raw_pixel_data.numChannels;
-  const size_t num_pixels = static_cast<size_t>(raw_pixel_data.width) * raw_pixel_data.height;
-  thrift_raw_pixel_data.pixels =
-      std::string((char*)raw_pixel_data.pixels.get(), num_pixels * raw_pixel_data.numChannels);
-  thrift_raw_pixel_data.row_ids_A =
-      std::string((char*)raw_pixel_data.rowIdsA.get(), num_pixels * sizeof(*raw_pixel_data.rowIdsA));
-  thrift_raw_pixel_data.row_ids_B =
-      std::string((char*)raw_pixel_data.rowIdsB.get(), num_pixels * sizeof(*raw_pixel_data.rowIdsB));
-  thrift_raw_pixel_data.table_ids =
-      std::string((char*)raw_pixel_data.tableIds.get(), num_pixels * sizeof(*raw_pixel_data.tableIds));
-}
-
-}  // namespace
 
 /*
  * There's a lot of code duplication between this endpoint and render_vega,
