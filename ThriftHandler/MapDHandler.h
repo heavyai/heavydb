@@ -218,6 +218,10 @@ class MapDHandler : public MapDIf {
                                  const TRowDescriptor& row_desc,
                                  const TQueryId query_id);
   void insert_data(const TSessionId session, const TInsertData& insert_data);
+  void render_vega_raw_pixels(TRawPixelDataResult& _return,
+                              const TSessionId session,
+                              const int64_t widget_id,
+                              const std::string& vega_json);
   void checkpoint(const TSessionId session, const int32_t db_id, const int32_t table_id);
   void get_table_details(TTableDetails& _return, const TSessionId session, const std::string& table_name);
   void clear_gpu_memory(const TSessionId session);

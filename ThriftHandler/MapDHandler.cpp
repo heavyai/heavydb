@@ -2290,6 +2290,63 @@ void MapDHandler::insert_data(const TSessionId session, const TInsertData& thrif
   }
 }
 
+namespace {
+
+void convert_raw_pixel_data(TRawPixelDataResult& thrift_raw_pixel_data,
+                            const QueryRenderer::RawPixelData& raw_pixel_data) {
+  thrift_raw_pixel_data.width = raw_pixel_data.width;
+  thrift_raw_pixel_data.height = raw_pixel_data.height;
+  thrift_raw_pixel_data.num_channels = raw_pixel_data.numChannels;
+  const size_t num_pixels = static_cast<size_t>(raw_pixel_data.width) * raw_pixel_data.height;
+  thrift_raw_pixel_data.pixels =
+      std::string((char*)raw_pixel_data.pixels.get(), num_pixels * raw_pixel_data.numChannels);
+  thrift_raw_pixel_data.row_ids_A =
+      std::string((char*)raw_pixel_data.rowIdsA.get(), num_pixels * sizeof(*raw_pixel_data.rowIdsA));
+  thrift_raw_pixel_data.row_ids_B =
+      std::string((char*)raw_pixel_data.rowIdsB.get(), num_pixels * sizeof(*raw_pixel_data.rowIdsB));
+  thrift_raw_pixel_data.table_ids =
+      std::string((char*)raw_pixel_data.tableIds.get(), num_pixels * sizeof(*raw_pixel_data.tableIds));
+}
+
+}  // namespace
+
+/*
+ * There's a lot of code duplication between this endpoint and render_vega,
+ * we need to do something about it ASAP. A helper to create the QueryExecCB
+ * lambda looks like an option, but there might be better ones.
+ */
+void MapDHandler::render_vega_raw_pixels(TRawPixelDataResult& _return,
+                                         const TSessionId session,
+                                         const int64_t widget_id,
+                                         const std::string& vega_json) {
+  CHECK_EQ(size_t(0), leaf_aggregator_.leafCount());
+  _return.total_time_ms = measure<>::execution([&]() {
+    _return.execution_time_ms = 0;
+    _return.render_time_ms = 0;
+    if (!enable_rendering_) {
+      TMapDException ex;
+      ex.error_msg = "Backend rendering is disabled.";
+      LOG(ERROR) << ex.error_msg;
+      throw ex;
+    }
+
+    std::lock_guard<std::mutex> render_lock(render_mutex_);
+    mapd_shared_lock<mapd_shared_mutex> read_lock(sessions_mutex_);
+    auto session_it = get_session_it(session);
+    auto session_info_ptr = session_it->second.get();
+
+    const auto& cat = session_info_ptr->get_catalog();
+    auto executor = Executor::getExecutor(cat.get_currentDB().dbId,
+                                          jit_debug_ ? "/tmp" : "",
+                                          jit_debug_ ? "mapdquery" : "",
+                                          mapd_parameters_,
+                                          nullptr);
+
+  });
+  LOG(INFO) << "Total: " << _return.total_time_ms << " (ms), Total Execution: " << _return.execution_time_ms
+            << " (ms), Total Render: " << _return.render_time_ms << " (ms)";
+}
+
 void MapDHandler::checkpoint(const TSessionId session, const int32_t db_id, const int32_t table_id) {
   const auto session_info = get_session(session);
   auto& cat = session_info.get_catalog();

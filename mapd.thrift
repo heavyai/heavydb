@@ -300,6 +300,19 @@ struct TInsertData {
   5: i64 num_rows
 }
 
+struct TRawPixelDataResult {
+  1: i32 width
+  2: i32 height
+  3: i32 num_channels
+  4: binary pixels
+  5: binary row_ids_A
+  6: binary row_ids_B
+  7: binary table_ids
+  8: i64 execution_time_ms
+  9: i64 render_time_ms
+  10: i64 total_time_ms
+}
+
 service MapD {
   TSessionId connect(1: string user, 2: string passwd, 3: string dbname) throws (1: TMapDException e 2: ThriftException te)
   void disconnect(1: TSessionId session) throws (1: TMapDException e 2: ThriftException te)
@@ -340,6 +353,7 @@ service MapD {
   TPendingQuery start_query(1: TSessionId session, 2: string query_ra, 3: bool just_explain) throws (1: TMapDException e 2: ThriftException te)
   TStepResult execute_first_step(1: TPendingQuery pending_query) throws (1: TMapDException e 2: ThriftException te)
   void broadcast_serialized_rows(1: string serialized_rows, 2: TRowDescriptor row_desc, 3: TQueryId query_id) throws (1: TMapDException e 2: ThriftException te)
+  TRawPixelDataResult render_vega_raw_pixels(1: TSessionId session, 2: i64 widget_id, 3: string vega_json) throws (1: TMapDException e 2: ThriftException te)
   void insert_data(1: TSessionId session, 2: TInsertData insert_data) throws (1: TMapDException e 2: ThriftException te)
   void checkpoint(1: TSessionId session, 2: i32 db_id, 3: i32 table_id) throws (1: TMapDException e 2: ThriftException te)
   TTableDetails get_table_details(1: TSessionId session, 2: string table_name) throws (1: TMapDException e 2: ThriftException te)
