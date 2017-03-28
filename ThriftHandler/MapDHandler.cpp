@@ -1299,16 +1299,6 @@ void MapDHandler::render_vega(TRenderResult& _return,
                               const std::string& vega_json,
                               const int compressionLevel,
                               const std::string& nonce) {
-  if (leaf_aggregator_.leafCount() > 0) {
-#ifdef HAVE_RAVM
-    const auto session_info = MapDHandler::get_session(session);
-    _return.image = leaf_aggregator_.render(session_info, vega_json, widget_id, compressionLevel);
-    _return.nonce = nonce;
-    return;
-#else
-    CHECK(false);
-#endif  // HAVE_RAVM
-  }
   _return.total_time_ms = measure<>::execution([&]() {
     _return.execution_time_ms = 0;
     _return.render_time_ms = 0;
