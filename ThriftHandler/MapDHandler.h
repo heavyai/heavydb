@@ -126,7 +126,8 @@ class MapDHandler : public MapDIf {
                    const TSessionId session,
                    const std::string& query,
                    const bool column_format,
-                   const std::string& nonce);
+                   const std::string& nonce,
+                   const int32_t first_n);
   void sql_validate(TTableDescriptor& _return, const TSessionId session, const std::string& query);
   void get_table_descriptor(TTableDescriptor& _return, const TSessionId session, const std::string& table_name);
   void get_row_descriptor(TRowDescriptor& _return, const TSessionId session, const std::string& table_name);
@@ -266,7 +267,8 @@ class MapDHandler : public MapDIf {
                         const std::string& query_str,
                         const bool column_format,
                         const std::string& nonce,
-                        const ExecutorDeviceType executor_device_type);
+                        const ExecutorDeviceType executor_device_type,
+                        const int32_t first_n);
 
   void execute_distributed_copy_statement(Parser::CopyTableStmt*, const Catalog_Namespace::SessionInfo& session_info);
 
@@ -279,6 +281,7 @@ class MapDHandler : public MapDIf {
                        const bool column_format,
                        const Catalog_Namespace::SessionInfo& session_info,
                        const ExecutorDeviceType executor_device_type,
+                       const int32_t first_n,
                        const bool just_explain,
                        const bool just_validate) const;
 #endif
@@ -307,7 +310,8 @@ class MapDHandler : public MapDIf {
   void convert_rows(TQueryResult& _return,
                     const std::vector<TargetMetaInfo>& targets,
                     const R& results,
-                    const bool column_format) const;
+                    const bool column_format,
+                    const int32_t first_n) const;
 
   void create_simple_result(TQueryResult& _return,
                             const ResultRows& results,
@@ -318,7 +322,8 @@ class MapDHandler : public MapDIf {
                          const Planner::RootPlan* root_plan,
                          const bool column_format,
                          const Catalog_Namespace::SessionInfo& session_info,
-                         const ExecutorDeviceType executor_device_type) const;
+                         const ExecutorDeviceType executor_device_type,
+                         const int32_t first_n) const;
 
   std::vector<TargetMetaInfo> getTargetMetaInfo(
       const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& targets) const;
