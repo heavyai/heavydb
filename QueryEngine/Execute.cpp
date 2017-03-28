@@ -4095,7 +4095,7 @@ bool is_trivial_loop_join(const std::vector<InputTableInfo>& query_infos, const 
     }
   }
   CHECK_NE(ssize_t(-1), inner_table_idx);
-  return query_infos[inner_table_idx].info.numTuples == 1;
+  return query_infos[inner_table_idx].info.getNumTuples() == 1;
 }
 
 }  // namespace

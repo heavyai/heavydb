@@ -102,14 +102,27 @@ class FragmentInfo {
  * ChunkKey)
  */
 
-struct TableInfo {
+class TableInfo {
+ public:
+  TableInfo() : tableMutex(nullptr), numTuples(0) {}
+
+  TableInfo(mapd_shared_mutex* tableMutexIn) : tableMutex(tableMutexIn), tableLock(*tableMutex), numTuples(0) {}
+
+  size_t getNumTuples() const;
+
+  size_t getNumTuplesUpperBound() const;
+
+  size_t getPhysicalNumTuples() const { return numTuples; }
+
+  void setPhysicalNumTuples(const size_t physNumTuples) { numTuples = physNumTuples; }
+
   std::vector<int> chunkKeyPrefix;
   std::deque<FragmentInfo> fragments;
-  size_t numTuples;
   mapd_shared_mutex* tableMutex;
   mapd_shared_lock<mapd_shared_mutex> tableLock;
-  TableInfo() : tableMutex(nullptr) {}
-  TableInfo(mapd_shared_mutex* tableMutexIn) : tableMutex(tableMutexIn), tableLock(*tableMutex) {}
+
+ private:
+  mutable size_t numTuples;
 };
 
 }  // Fragmenter_Namespace

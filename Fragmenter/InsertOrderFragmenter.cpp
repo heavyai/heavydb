@@ -304,7 +304,7 @@ TableInfo InsertOrderFragmenter::getFragmentsForQuery() {
   // right now we don't test predicate, so just return (copy of) all fragments
   queryInfo.fragments = fragmentInfoVec_;  // makes a copy
   readLock.unlock();
-  queryInfo.numTuples = 0;
+  queryInfo.setPhysicalNumTuples(0);
   auto partIt = queryInfo.fragments.begin();
   while (partIt != queryInfo.fragments.end()) {
     if (partIt->getPhysicalNumTuples() == 0) {
@@ -315,7 +315,7 @@ TableInfo InsertOrderFragmenter::getFragmentsForQuery() {
       // 2015-05-08)
       partIt = queryInfo.fragments.erase(partIt);
     } else {
-      queryInfo.numTuples += partIt->getPhysicalNumTuples();
+      queryInfo.setPhysicalNumTuples(queryInfo.getPhysicalNumTuples() + partIt->getPhysicalNumTuples());
       ++partIt;
     }
   }

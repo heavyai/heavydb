@@ -108,7 +108,7 @@ TableGenerations RelAlgExecutor::computeTableGenerations(const RelAlgNode* ra) {
   TableGenerations table_generations;
   for (const int table_id : phys_table_ids) {
     const auto table_info = executor_->getTableInfo(table_id);
-    table_generations.setGeneration(table_id, TableGeneration{table_info.numTuples, 0});
+    table_generations.setGeneration(table_id, TableGeneration{table_info.getPhysicalNumTuples(), 0});
   }
   return table_generations;
 }
@@ -1004,10 +1004,10 @@ namespace {
 size_t groups_approx_upper_bound(const std::vector<InputTableInfo>& table_infos) {
   CHECK(!table_infos.empty());
   const auto& first_table = table_infos.front();
-  size_t max_num_groups = first_table.info.numTuples;
+  size_t max_num_groups = first_table.info.getNumTuplesUpperBound();
   for (const auto& table_info : table_infos) {
-    if (table_info.info.numTuples > max_num_groups) {
-      max_num_groups = table_info.info.numTuples;
+    if (table_info.info.getNumTuplesUpperBound() > max_num_groups) {
+      max_num_groups = table_info.info.getNumTuplesUpperBound();
     }
   }
   return std::max(max_num_groups, size_t(1));
@@ -1208,8 +1208,8 @@ ssize_t RelAlgExecutor::getFilteredCountAll(const WorkUnit& work_unit,
                                             const CompilationOptions& co,
                                             const ExecutionOptions& eo) {
   const auto table_infos = get_table_infos(work_unit.exe_unit, executor_);
-  if (table_infos.size() == 1 && table_infos.front().info.numTuples <= 10000) {
-    return table_infos.front().info.numTuples;
+  if (table_infos.size() == 1 && table_infos.front().info.getNumTuplesUpperBound() <= 50000) {
+    return table_infos.front().info.getNumTuplesUpperBound();
   }
   const auto count = makeExpr<Analyzer::AggExpr>(SQLTypeInfo(kINT, false), kCOUNT, nullptr, false);
   const auto count_all_exe_unit = create_count_all_execution_unit(work_unit.exe_unit, count);

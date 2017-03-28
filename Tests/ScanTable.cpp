@@ -119,8 +119,8 @@ vector<size_t> scan_table_return_hash(const string& table_name, const Catalog& c
       i++;
     }
   }
-  cout << "Scanned " << query_info.numTuples << " rows " << total_bytes << " bytes in " << elapsed_time << " ms. at "
-       << (double)total_bytes / (elapsed_time / 1000.0) / 1e6 << " MB/sec." << std::endl;
+  cout << "Scanned " << query_info.getPhysicalNumTuples() << " rows " << total_bytes << " bytes in " << elapsed_time
+       << " ms. at " << (double)total_bytes / (elapsed_time / 1000.0) / 1e6 << " MB/sec." << std::endl;
   return col_hashs;
 }
 
@@ -152,7 +152,7 @@ vector<size_t> scan_table_return_hash_non_iter(const string& table_name, const C
       i++;
     }
   }
-  cout << "Scanned " << query_info.numTuples << " rows " << total_bytes << " bytes in " << elapsed_time << " ms. at "
-       << (double)total_bytes / (elapsed_time / 1000.0) / 1e6 << " MB/sec." << std::endl;
+  cout << "Scanned " << query_info.getPhysicalNumTuples() << " rows " << total_bytes << " bytes in " << elapsed_time
+       << " ms. at " << (double)total_bytes / (elapsed_time / 1000.0) / 1e6 << " MB/sec." << std::endl;
   return col_hashs;
 }

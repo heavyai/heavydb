@@ -1701,7 +1701,7 @@ int8_t pick_target_compact_width(const RelAlgExecutionUnit& ra_exe_unit,
   if (!compact_width) {
     size_t total_tuples{0};
     for (const auto& qi : query_infos) {
-      total_tuples += qi.info.numTuples;
+      total_tuples += qi.info.getNumTuples();
     }
     return total_tuples <= static_cast<size_t>(std::numeric_limits<uint32_t>::max()) ||
                    unnest_array_col_id != std::numeric_limits<int>::min()

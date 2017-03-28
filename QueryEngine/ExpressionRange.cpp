@@ -377,10 +377,10 @@ ExpressionRange getLeafColumnRange(const Analyzer::ColumnVar* col_expr,
       if (cd && cd->isVirtualCol) {
         CHECK(cd->columnName == "rowid");
         CHECK_EQ(kBIGINT, col_ti.get_type());
-        const int64_t num_tuples = query_info.numTuples;
+        const int64_t num_tuples = query_info.getNumTuples();
         return ExpressionRange::makeIntRange(0, std::max(num_tuples - 1, int64_t(0)), 0, has_nulls);
       }
-      if (query_info.numTuples == 0 && !col_ti.is_fp()) {
+      if (query_info.getNumTuples() == 0 && !col_ti.is_fp()) {
         // The column doesn't contain any values, synthesize an empty range.
         return ExpressionRange::makeIntRange(0, -1, 0, false);
       }

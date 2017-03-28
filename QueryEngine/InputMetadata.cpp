@@ -13,7 +13,7 @@ Fragmenter_Namespace::TableInfo build_table_info(const Fragmenter_Namespace::Tab
   Fragmenter_Namespace::TableInfo table_info_copy;
   table_info_copy.chunkKeyPrefix = table_info.chunkKeyPrefix;
   table_info_copy.fragments = table_info.fragments;
-  table_info_copy.numTuples = table_info.numTuples;
+  table_info_copy.setPhysicalNumTuples(table_info.getPhysicalNumTuples());
   return table_info_copy;
 }
 
@@ -148,8 +148,7 @@ std::map<int, ChunkMetadata> synthesize_metadata(const ResultRows* rows) {
 
 Fragmenter_Namespace::TableInfo synthesize_table_info(const RowSetPtr& rows) {
   std::deque<Fragmenter_Namespace::FragmentInfo> result;
-  const size_t row_count = rows ? rows->rowCount() : 0;  // rows can be null only for query validation
-  if (row_count) {
+  if (rows) {
     result.resize(1);
     auto& fragment = result.front();
     fragment.fragmentId = 0;
@@ -159,7 +158,6 @@ Fragmenter_Namespace::TableInfo synthesize_table_info(const RowSetPtr& rows) {
   }
   Fragmenter_Namespace::TableInfo table_info;
   table_info.fragments = result;
-  table_info.numTuples = row_count;
   return table_info;
 }
 
@@ -177,7 +175,7 @@ Fragmenter_Namespace::TableInfo synthesize_table_info(const IterTabPtr& table) {
     }
   }
 
-  table_info.numTuples = total_row_count;
+  table_info.setPhysicalNumTuples(total_row_count);
   return table_info;
 }
 
@@ -262,6 +260,25 @@ size_t Fragmenter_Namespace::FragmentInfo::getNumTuples() const {
   if (resultSet && !synthesizedNumTuplesIsValid) {
     numTuples = resultSet->rowCount();
     synthesizedNumTuplesIsValid = true;
+  }
+  return numTuples;
+}
+
+size_t Fragmenter_Namespace::TableInfo::getNumTuples() const {
+  if (!fragments.empty() && fragments.front().resultSet) {
+    return fragments.front().getNumTuples();
+  }
+  return numTuples;
+}
+
+size_t Fragmenter_Namespace::TableInfo::getNumTuplesUpperBound() const {
+  if (!fragments.empty() && fragments.front().resultSet) {
+    const auto result_set = fragments.front().resultSet->getResultSet();
+    if (!result_set) {
+      CHECK(fragments.front().resultSet->definitelyHasNoRows());
+      return 0;
+    }
+    return result_set->entryCount();
   }
   return numTuples;
 }
