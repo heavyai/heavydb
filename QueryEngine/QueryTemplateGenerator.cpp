@@ -603,7 +603,7 @@ llvm::Function* query_group_by_template(llvm::Module* mod,
   CHECK(Ty);
   GetElementPtrInst* group_by_buffers_gep = GetElementPtrInst::Create(
 #if !(LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR == 5)
-      Ty->getArrayElementType(),
+      Ty->getElementType(),
 #endif
       group_by_buffers,
       group_buff_idx,
@@ -615,7 +615,7 @@ llvm::Function* query_group_by_template(llvm::Module* mod,
   if (query_mem_desc.getSmallBufferSizeBytes()) {
     auto small_buffer_gep = GetElementPtrInst::Create(
 #if !(LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR == 5)
-        Ty->getArrayElementType(),
+        Ty->getElementType(),
 #endif
         small_groups_buffer,
         group_buff_idx,
