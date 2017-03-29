@@ -5,7 +5,7 @@
 %define MEMBERS                                                                                                         \
   virtual ~SQLParser() {}                                                                                               \
   int parse(const std::string & inputStr, std::list<std::unique_ptr<Stmt>>& parseTrees, std::string &lastParsed) {      \
-    boost::regex create_view_expr{R"(CREATE\s+VIEW\s+(IF\s+NOT\s+EXISTS\s+)?([A-Za-z_][A-Za-z0-9\$_]*)\s+AS\s+(.*);)",  \
+    boost::regex create_view_expr{R"(CREATE\s+VIEW\s+(IF\s+NOT\s+EXISTS\s+)?([A-Za-z_][A-Za-z0-9\$_]*)\s+AS\s+(.*);?)", \
                                   boost::regex::extended | boost::regex::icase};                                        \
     boost::smatch what;                                                                                                 \
     const auto trimmed_input = boost::algorithm::trim_copy(inputStr);                                                   \
