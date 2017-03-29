@@ -258,6 +258,67 @@ void detect_table(char* file_name, TCopyParams& copy_params, ClientContext& cont
   }
 }
 
+size_t get_row_count(const TQueryResult& query_result) {
+  CHECK(!query_result.row_set.row_desc.empty());
+  if (query_result.row_set.columns.empty()) {
+    return 0;
+  }
+  CHECK_EQ(query_result.row_set.columns.size(), query_result.row_set.row_desc.size());
+  return query_result.row_set.columns.front().nulls.size();
+}
+
+// runs a simple single integer value query and returns that single int value returned
+int run_query(ClientContext& context, std::string query) {
+  thrift_with_retry(kSQL, context, query.c_str());
+  CHECK(get_row_count(context.query_return));
+  // std::cerr << "return value is " <<  context.query_return.row_set.columns[0].data.int_col[0];
+  return context.query_return.row_set.columns[0].data.int_col[0];
+  // col.data.int_col[row_idx];
+  // return 4;
+}
+
+int get_optimal_size(ClientContext& context, std::string table_name, std::string col_name, int col_type) {
+  switch (col_type) {
+    case TDatumType::STR: {
+      int strings = run_query(context, "select count(distinct " + col_name + ") from " + table_name + ";");
+      if (strings < pow(2, 8)) {
+        return 8;
+      } else {
+        if (strings < pow(2, 16)) {
+          return 16;
+        } else {
+          return 32;
+        }
+      }
+    }
+    case TDatumType::TIME: {
+      return 32;
+    }
+    case TDatumType::DATE:
+    case TDatumType::TIMESTAMP: {
+      return run_query(context,
+                       "select case when (extract( epoch from mn)  > -2147483648 and extract (epoch from mx) < "
+                       "2147483647) then 32 else 0 end from (select min(" +
+                           col_name + ") mn, max(" + col_name + ") mx from " + table_name + " );");
+    }
+    case TDatumType::BIGINT: {
+      return run_query(context,
+                       "select  case when (mn > -128 and mx < 127) then 8 else case when (mn > -32768 and mx < 32767) "
+                       "then 16 else case when (mn  > -2147483648 and mx < 2147483647) then 32 else 0 end end end from "
+                       "(select min(" +
+                           col_name + ") mn, max(" + col_name + ") mx from " + table_name + " );");
+    }
+    case TDatumType::INT: {
+      return run_query(context,
+                       "select  case when (mn > -128 and mx < 127) then 8 else case when (mn > -32768 and mx < 32767) "
+                       "then 16 else 0 end end from "
+                       "(select min(" +
+                           col_name + ") mn, max(" + col_name + ") mx from " + table_name + " );");
+    }
+  }
+  return 0;
+}
+
 void process_backslash_commands(char* command, ClientContext& context) {
   switch (command[1]) {
     case 'h':
@@ -306,6 +367,71 @@ void process_backslash_commands(char* command, ClientContext& context) {
           } else {
             encoding = (p.col_type.encoding == 0 ? "" : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
                                                             std::to_string(p.col_type.comp_param) + ")");
+          }
+          std::cout << comma_or_blank << p.col_name << " " << thrift_to_name(p.col_type)
+                    << (p.col_type.nullable ? "" : " NOT NULL") << encoding;
+          comma_or_blank = ",\n";
+        }
+        // push final "\n";
+        if (table_details.view_sql.empty()) {
+          std::cout << ")\n";
+          if (thrift_with_retry(kGET_TABLE_DETAILS, context, command + 3)) {
+            comma_or_blank = "";
+            std::string frag = "";
+            std::string page = "";
+            std::string row = "";
+            if (DEFAULT_FRAGMENT_ROWS != context.table_details.fragment_size) {
+              frag = " FRAGMENT_SIZE = " + std::to_string(context.table_details.fragment_size);
+              comma_or_blank = ",";
+            }
+            if (DEFAULT_PAGE_SIZE != context.table_details.page_size) {
+              page = comma_or_blank + " PAGE_SIZE = " + std::to_string(context.table_details.page_size);
+              comma_or_blank = ",";
+            }
+            if (DEFAULT_MAX_ROWS != context.table_details.max_rows) {
+              row = comma_or_blank + " MAX_ROWS = " + std::to_string(context.table_details.max_rows);
+            }
+            std::string with = frag + page + row;
+            if (with.length() > 0) {
+              std::cout << "WITH (" << with << ")\n";
+            }
+          }
+        } else {
+          std::cout << "\n";
+        }
+      }
+      return;
+    }
+    case 'o': {
+      if (command[2] != ' ') {
+        std::cerr << "Invalid \\o command usage.  Do \\o <table name>" << std::endl;
+        return;
+      }
+      std::string table_name(command + 3);
+      if (!thrift_with_retry(kGET_TABLE_DETAILS, context, command + 3)) {
+        return;
+      }
+      const auto table_details = context.table_details;
+      if (thrift_with_retry(kGET_ROW_DESC, context, command + 3)) {
+        if (table_details.view_sql.empty()) {
+          std::cout << "CREATE TABLE " + table_name + " (\n";
+        } else {
+          std::cerr << "Can't optimize a view, only the underlying tables\n";
+          return;
+        }
+        std::string comma_or_blank("");
+        for (TColumnType p : context.rowdesc_return) {
+          std::string encoding;
+          if (p.col_type.type == TDatumType::STR) {
+            encoding =
+                (p.col_type.encoding == 0
+                     ? " ENCODING NONE"
+                     : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
+                           std::to_string(get_optimal_size(context, table_name, p.col_name, p.col_type.type)) + ")");
+
+          } else {
+            int opt_size = get_optimal_size(context, table_name, p.col_name, p.col_type.type);
+            encoding = (opt_size == 0 ? "" : " ENCODING FIXED(" + std::to_string(opt_size) + ")");
           }
           std::cout << comma_or_blank << p.col_name << " " << thrift_to_name(p.col_type)
                     << (p.col_type.nullable ? "" : " NOT NULL") << encoding;
@@ -454,15 +580,6 @@ std::string datum_to_string(const TDatum& datum, const TTypeInfo& type_info) {
     return "{" + boost::algorithm::join(elem_strs, ", ") + "}";
   }
   return scalar_datum_to_string(datum, type_info);
-}
-
-size_t get_row_count(const TQueryResult& query_result) {
-  CHECK(!query_result.row_set.row_desc.empty());
-  if (query_result.row_set.columns.empty()) {
-    return 0;
-  }
-  CHECK_EQ(query_result.row_set.columns.size(), query_result.row_set.row_desc.size());
-  return query_result.row_set.columns.front().nulls.size();
 }
 
 TDatum columnar_val_to_datum(const TColumn& col, const size_t row_idx, const TTypeInfo& col_type) {
