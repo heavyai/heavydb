@@ -414,7 +414,7 @@ public class SQLImporter {
     LOGGER.info(" run comamnd :" + sql);
 
     try {
-      TQueryResult sqlResult = client.sql_execute(session, sql + ";", true, null);
+      TQueryResult sqlResult = client.sql_execute(session, sql + ";", true, null, -1);
     } catch (ThriftException ex) {
       LOGGER.error("SQL Execute failed - " + ex.toString());
       exit(1);

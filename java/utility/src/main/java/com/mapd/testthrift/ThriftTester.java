@@ -119,7 +119,7 @@ public class ThriftTester {
       //client.set_execution_mode(session, TExecuteMode.CPU);
       logger.info(" -- before query -- ");
 
-      TQueryResult sql_execute = client.sql_execute(session, "Select uniquecarrier,flightnum  from flights LIMIT 3;", true, null);
+      TQueryResult sql_execute = client.sql_execute(session, "Select uniquecarrier,flightnum  from flights LIMIT 3;", true, null, -1);
       //client.send_sql_execute(session, "Select BRAND  from ACV ;", true);
       //logger.info(" -- before query recv -- ");
       //TQueryResult sql_execute = client.recv_sql_execute();

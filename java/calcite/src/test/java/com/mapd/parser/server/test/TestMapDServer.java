@@ -109,7 +109,7 @@ public class TestMapDServer {
 
   private void executeQuery(ConnInfo conn, String query, int resultCount) {
     try {
-      TQueryResult res = conn.client.sql_execute(conn.session, query, true, null);
+      TQueryResult res = conn.client.sql_execute(conn.session, query, true, null, -1);
       if (resultCount != res.row_set.columns.get(0).nulls.size()) {
         fail("result doesn't match " + resultCount + " != " + res.row_set.columns.get(0).nulls.size());
       }

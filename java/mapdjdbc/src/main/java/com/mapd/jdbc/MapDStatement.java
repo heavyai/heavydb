@@ -54,7 +54,7 @@ public class MapDStatement implements java.sql.Statement {
     String afterFnSQL = fnReplace(sql);
     logger.debug("afterFnSQL is :'" + afterFnSQL + "'");
     try {
-      sqlResult = client.sql_execute(session, afterFnSQL + ";", true, null);
+      sqlResult = client.sql_execute(session, afterFnSQL + ";", true, null, -1);
     }
     catch (ThriftException ex) {
       throw new SQLException("Query failed : " + ex.getError_msg());
@@ -70,7 +70,7 @@ public class MapDStatement implements java.sql.Statement {
   @Override
   public int executeUpdate(String sql) throws SQLException { //logger.debug("Entered");
     try {
-      sqlResult = client.sql_execute(session, sql + ";", true, null);
+      sqlResult = client.sql_execute(session, sql + ";", true, null, -1);
     }
     catch (ThriftException ex) {
       throw new SQLException("Query failed : " + ex.getError_msg());
