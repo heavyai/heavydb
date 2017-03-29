@@ -358,4 +358,5 @@ service MapD {
   void checkpoint(1: TSessionId session, 2: i32 db_id, 3: i32 table_id) throws (1: TMapDException e 2: ThriftException te)
   TTableDetails get_table_details(1: TSessionId session, 2: string table_name) throws (1: TMapDException e 2: ThriftException te)
   void clear_gpu_memory(1: TSessionId session) throws (1: TMapDException e 2: ThriftException te)
+  void clear_cpu_memory(1: TSessionId session) throws (1: TMapDException e 2: ThriftException te) 
 }

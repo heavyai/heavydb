@@ -94,6 +94,7 @@ enum ThriftService {
   kGET_MEMORY_SUMMARY,
   kGET_TABLE_DETAILS,
   kCLEAR_MEMORY_GPU,
+  kCLEAR_MEMORY_CPU,
   kIMPORT_GEO_TABLE,
   kINTERRUPT
 };
@@ -147,6 +148,9 @@ bool thrift_with_retry(ThriftService which_service, ClientContext& context, cons
         break;
       case kCLEAR_MEMORY_GPU:
         context.client.clear_gpu_memory(context.session);
+        break;
+      case kCLEAR_MEMORY_CPU:
+        context.client.clear_cpu_memory(context.session);
         break;
       case kIMPORT_GEO_TABLE:
         context.client.import_geo_table(
@@ -959,6 +963,12 @@ int main(int argc, char** argv) {
     } else if (!strncmp(line, "\\clear_gpu", 11)) {
       if (thrift_with_retry(kCLEAR_MEMORY_GPU, context, nullptr)) {
         std::cout << "MapD Server GPU memory Cleared " << std::endl;
+      } else {
+        std::cout << "Cannot connect to MapD Server." << std::endl;
+      }
+    } else if (!strncmp(line, "\\clear_cpu", 11)) {
+      if (thrift_with_retry(kCLEAR_MEMORY_CPU, context, nullptr)) {
+        std::cout << "MapD Server CPU memory Cleared " << std::endl;
       } else {
         std::cout << "Cannot connect to MapD Server." << std::endl;
       }
