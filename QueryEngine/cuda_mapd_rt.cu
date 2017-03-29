@@ -57,14 +57,14 @@ __device__ int32_t dw_abort = 0;           // TBD: set from host (async)
 
 __inline__ __device__ uint32_t get_smid(void) {
   uint32_t ret;
-  asm("mov.u32 %0, %smid;" : "=r"(ret));
+  asm("mov.u32 %0, %%smid;" : "=r"(ret));
   return ret;
 }
 
 // Global nanosecond counter
 __inline__ __device__ uint64_t get_globaltimer(void) {
   uint64_t ret;
-  asm("mov.u64 %0, %globaltimer;" : "=r"(ret));
+  asm("mov.u64 %0, %%globaltimer;" : "=r"(ret));
   return ret;
 }
 
