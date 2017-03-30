@@ -227,7 +227,7 @@ WORK          TOK(WORK)
 			yymore();
 	}
 
-'[^'\n]*$	{	YY_FATAL_ERROR("Unterminated string"); }
+'[^'\n]*$	{	throw std::runtime_error("Unterminated string"); }
 
 	/*
 \n		{ lineno++; }
