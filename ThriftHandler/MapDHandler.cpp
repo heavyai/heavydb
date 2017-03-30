@@ -2354,6 +2354,7 @@ void MapDHandler::insert_data(const TSessionId& session, const TInsertData& thri
 void MapDHandler::render_vega_raw_pixels(TRawPixelDataResult& _return,
                                          const TSessionId& session,
                                          const int64_t widget_id,
+                                         const int16_t node_idx,
                                          const std::string& vega_json) {
   CHECK_EQ(size_t(0), leaf_aggregator_.leafCount());
   _return.total_time_ms = measure<>::execution([&]() {

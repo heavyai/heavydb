@@ -297,14 +297,20 @@ struct TInsertData {
   5: i64 num_rows
 }
 
+struct TRawRenderPassDataResult {
+  1: i32 num_channels
+  2: binary pixels
+  3: binary row_ids_A
+  4: binary row_ids_B
+  5: binary table_ids
+}
+
+typedef map<i32, TRawRenderPassDataResult> TRenderPassMap
+
 struct TRawPixelDataResult {
   1: i32 width
   2: i32 height
-  3: i32 num_channels
-  4: binary pixels
-  5: binary row_ids_A
-  6: binary row_ids_B
-  7: binary table_ids
+  3: TRenderPassMap render_pass_map
   8: i64 execution_time_ms
   9: i64 render_time_ms
   10: i64 total_time_ms
@@ -353,7 +359,7 @@ service MapD {
   TPendingQuery start_query(1: TSessionId session, 2: string query_ra, 3: bool just_explain) throws (1: TMapDException e)
   TStepResult execute_first_step(1: TPendingQuery pending_query) throws (1: TMapDException e)
   void broadcast_serialized_rows(1: string serialized_rows, 2: TRowDescriptor row_desc, 3: TQueryId query_id) throws (1: TMapDException e)
-  TRawPixelDataResult render_vega_raw_pixels(1: TSessionId session, 2: i64 widget_id, 3: string vega_json) throws (1: TMapDException e)
+  TRawPixelDataResult render_vega_raw_pixels(1: TSessionId session, 2: i64 widget_id, 3: i16 node_idx 4: string vega_json) throws (1: TMapDException e)
   void insert_data(1: TSessionId session, 2: TInsertData insert_data) throws (1: TMapDException e)
   # deprecated
   TTableDescriptor get_table_descriptor(1: TSessionId session, 2: string table_name) throws (1: TMapDException e)
