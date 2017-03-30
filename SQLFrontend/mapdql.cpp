@@ -357,8 +357,8 @@ void process_backslash_commands(char* command, ClientContext& context) {
         if (table_details.view_sql.empty()) {
           std::cout << "CREATE TABLE " + table_name + " (\n";
         } else {
-          std::cout << "View defined as: " << table_details.view_sql << "\n";
-          std::cout << "Column types:\n";
+          std::cout << "CREATE VIEW " + table_name + " AS " + table_details.view_sql << "\n";
+          return;
         }
         std::string comma_or_blank("");
         for (TColumnType p : context.rowdesc_return) {
@@ -474,7 +474,21 @@ void process_backslash_commands(char* command, ClientContext& context) {
     case 't': {
       if (thrift_with_retry(kGET_TABLES, context, nullptr))
         for (auto p : context.names_return)
-          std::cout << p << std::endl;
+          if (thrift_with_retry(kGET_TABLE_DETAILS, context, p.c_str()))
+            if (context.table_details.view_sql.empty()) {
+              std::cout << p << std::endl;
+            }
+
+      return;
+    }
+    case 'v': {
+      if (thrift_with_retry(kGET_TABLES, context, nullptr))
+        for (auto p : context.names_return)
+          if (thrift_with_retry(kGET_TABLE_DETAILS, context, p.c_str()))
+            if (!context.table_details.view_sql.empty()) {
+              std::cout << p << std::endl;
+            }
+
       return;
     }
     case 'c': {
