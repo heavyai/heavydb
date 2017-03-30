@@ -110,6 +110,9 @@ ColumnarResults::ColumnarResults(const std::shared_ptr<RowSetMemoryOwner> row_se
       child.get();
     }
     num_rows_ = row_idx;
+    if (rows.getResultSet()) {
+      rows.getResultSet()->setCachedRowCount(num_rows_);
+    }
     return;
   }
   while (true) {

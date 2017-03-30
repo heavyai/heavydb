@@ -193,6 +193,8 @@ class ResultSet {
 
   size_t rowCount() const;
 
+  void setCachedRowCount(const size_t row_count);
+
   size_t entryCount() const;
 
   bool definitelyHasNoRows() const;
@@ -383,6 +385,7 @@ class ResultSet {
   std::vector<std::vector<std::string>> none_encoded_strings_;
   bool none_encoded_strings_valid_;
   std::string explanation_;
+  ssize_t cached_row_count_;
 
   friend class ResultSetManager;
 };

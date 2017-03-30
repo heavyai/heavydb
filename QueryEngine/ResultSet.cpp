@@ -44,10 +44,12 @@ int8_t* ResultSetStorage::getUnderlyingBuffer() const {
 }
 
 void ResultSet::keepFirstN(const size_t n) {
+  CHECK_EQ(-1, cached_row_count_);
   keep_first_ = n;
 }
 
 void ResultSet::dropFirstN(const size_t n) {
+  CHECK_EQ(-1, cached_row_count_);
   drop_first_ = n;
 }
 
@@ -71,7 +73,8 @@ ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
       estimator_buffer_(nullptr),
       host_estimator_buffer_(nullptr),
       data_mgr_(nullptr),
-      none_encoded_strings_valid_(false) {}
+      none_encoded_strings_valid_(false),
+      cached_row_count_(-1) {}
 
 ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
                      const std::vector<ColumnLazyFetchInfo>& lazy_fetch_info,
@@ -106,7 +109,8 @@ ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
       estimator_buffer_(nullptr),
       host_estimator_buffer_(nullptr),
       data_mgr_(nullptr),
-      none_encoded_strings_valid_(false) {
+      none_encoded_strings_valid_(false),
+      cached_row_count_(-1) {
 }
 
 ResultSet::ResultSet(const std::shared_ptr<const Analyzer::NDVEstimator> estimator,
@@ -121,7 +125,8 @@ ResultSet::ResultSet(const std::shared_ptr<const Analyzer::NDVEstimator> estimat
       estimator_buffer_(nullptr),
       host_estimator_buffer_(nullptr),
       data_mgr_(data_mgr),
-      none_encoded_strings_valid_(false) {
+      none_encoded_strings_valid_(false),
+      cached_row_count_(-1) {
   if (device_type == ExecutorDeviceType::GPU) {
     estimator_buffer_ =
         reinterpret_cast<int8_t*>(alloc_gpu_mem(data_mgr_, estimator_->getEstimatorBufferSize(), device_id_, nullptr));
@@ -140,7 +145,8 @@ ResultSet::ResultSet(const std::string& explanation)
       estimator_buffer_(nullptr),
       host_estimator_buffer_(nullptr),
       none_encoded_strings_valid_(false),
-      explanation_(explanation) {}
+      explanation_(explanation),
+      cached_row_count_(-1) {}
 
 ResultSet::ResultSet()
     : device_type_(ExecutorDeviceType::CPU),
@@ -150,7 +156,8 @@ ResultSet::ResultSet()
       estimator_buffer_(nullptr),
       host_estimator_buffer_(nullptr),
       data_mgr_(nullptr),
-      none_encoded_strings_valid_(false) {}
+      none_encoded_strings_valid_(false),
+      cached_row_count_(-1) {}
 
 ResultSet::~ResultSet() {
   if (storage_) {
@@ -188,6 +195,7 @@ const ResultSetStorage* ResultSet::allocateStorage(const std::vector<int64_t>& t
 }
 
 void ResultSet::append(ResultSet& that) {
+  CHECK_EQ(-1, cached_row_count_);
   CHECK(!query_mem_desc_.output_columnar);  // TODO(miyu)
   if (!that.storage_) {
     return;
@@ -236,6 +244,10 @@ size_t ResultSet::rowCount() const {
   if (!permutation_.empty()) {
     return permutation_.size();
   }
+  if (cached_row_count_ != -1) {
+    CHECK_GE(cached_row_count_, 0);
+    return cached_row_count_;
+  }
   if (entryCount() > 100000 && !isTruncated()) {
     return parallelRowCount();
   }
@@ -250,6 +262,11 @@ size_t ResultSet::rowCount() const {
   }
   moveToBegin();
   return row_count;
+}
+
+void ResultSet::setCachedRowCount(const size_t row_count) {
+  CHECK(cached_row_count_ == -1 || cached_row_count_ == static_cast<ssize_t>(row_count));
+  cached_row_count_ = row_count;
 }
 
 size_t ResultSet::parallelRowCount() const {
@@ -381,6 +398,7 @@ QueryMemoryDescriptor ResultSet::fixupQueryMemoryDescriptor(const QueryMemoryDes
 }
 
 void ResultSet::sort(const std::list<Analyzer::OrderEntry>& order_entries, const size_t top_n) {
+  CHECK_EQ(-1, cached_row_count_);
   if (isEmptyInitializer()) {
     return;
   }
