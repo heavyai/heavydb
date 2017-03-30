@@ -640,6 +640,7 @@ StringDictionaryProxy* Executor::getStringDictionaryProxy(const int dict_id_in,
     CHECK_LE(dd->dictNBits, 32);
     if (row_set_mem_owner) {
 #ifdef HAVE_RAVM
+      CHECK(!with_generation || !execute_mutex_.try_lock());
       const auto generation = with_generation ? string_dictionary_generations_.getGeneration(dict_id) : ssize_t(-1);
 #else
       const ssize_t generation = dd->stringDict->storageEntryCount();
@@ -677,14 +678,22 @@ const TemporaryTables* Executor::getTemporaryTables() const {
 }
 
 Fragmenter_Namespace::TableInfo Executor::getTableInfo(const int table_id) {
+  CHECK(!execute_mutex_.try_lock());
   return input_table_info_cache_.getTableInfo(table_id);
 }
 
+const TableGeneration& Executor::getTableGeneration(const int table_id) const {
+  CHECK(!execute_mutex_.try_lock());
+  return table_generations_.getGeneration(table_id);
+}
+
 ExpressionRange Executor::getColRange(const PhysicalInput& phys_input) const {
+  CHECK(!execute_mutex_.try_lock());
   return agg_col_range_cache_.getColRange(phys_input);
 }
 
 void Executor::clearMetaInfoCache() {
+  CHECK(!execute_mutex_.try_lock());
   input_table_info_cache_.clear();
   agg_col_range_cache_.clear();
   string_dictionary_generations_.clear();
@@ -1341,7 +1350,7 @@ std::vector<llvm::Value*> Executor::codegenColVar(const Analyzer::ColumnVar* col
 #endif
       const auto offset = cgen_state_->frag_offsets_[rte_idx];
       if (offset) {
-        const auto& table_generation = table_generations_.getGeneration(col_var->get_table_id());
+        const auto& table_generation = getTableGeneration(col_var->get_table_id());
         if (table_generation.start_rowid > 0) {
           Datum d;
           d.bigintval = table_generation.start_rowid;
@@ -7559,7 +7568,7 @@ std::pair<bool, int64_t> Executor::skipFragment(const InputDescriptor& table_des
     if (chunk_meta_it == fragment.getChunkMetadataMap().end()) {
       auto cd = get_column_descriptor(col_id, table_id, *catalog_);
       CHECK(cd->isVirtualCol && cd->columnName == "rowid");
-      const auto& table_generation = table_generations_.getGeneration(table_id);
+      const auto& table_generation = getTableGeneration(table_id);
       start_rowid = table_generation.start_rowid;
       chunk_min = all_frag_row_offsets[frag_idx] + start_rowid;
       chunk_max = all_frag_row_offsets[frag_idx + 1] - 1 + start_rowid;

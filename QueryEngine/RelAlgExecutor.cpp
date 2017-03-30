@@ -156,12 +156,6 @@ void RelAlgExecutor::prepareLeafExecution(const AggregatedColRange& agg_col_rang
                                           const TableGenerations& table_generations) {
   // capture the lock acquistion time
   auto clock_begin = timer_start();
-  leaf_execution_cleanup_.reset(new ScopeGuard([this] {
-    executor_->row_set_mem_owner_ = nullptr;
-    executor_->clearMetaInfoCache();
-    executor_->execute_mutex_.unlock();
-  }));
-  executor_->execute_mutex_.lock();
   if (g_enable_dynamic_watchdog) {
     executor_->resetInterrupt();
   }

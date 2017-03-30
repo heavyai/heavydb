@@ -324,6 +324,8 @@ class Executor {
 
   Fragmenter_Namespace::TableInfo getTableInfo(const int table_id);
 
+  const TableGeneration& getTableGeneration(const int table_id) const;
+
   ExpressionRange getColRange(const PhysicalInput&) const;
 
   typedef boost::variant<int8_t, int16_t, int32_t, int64_t, float, double, std::pair<std::string, int>, std::string>
@@ -1247,6 +1249,7 @@ class Executor {
   friend class JoinHashTable;
   friend class LeafAggregator;
   friend class QueryRewriter;
+  friend class PendingExecutionClosure;
   friend class RelAlgExecutor;
   friend class ExecutionDispatch;
 };
