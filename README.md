@@ -143,12 +143,27 @@ Most build dependencies are available via APT. Thrift is the one exception and m
     apt-get build-dep thrift-compiler
     wget http://apache.claz.org/thrift/0.9.3/thrift-0.9.3.tar.gz
     tar xvf thrift-0.9.3.tar.gz
-    cd thrift-0.9.3
+    pushd thrift-0.9.3
     patch -p1 < /path/to/mapd2/scripts/mapd-deps-thrift-refill-buffer.patch
     ./configure --with-lua=no --with-python=no --with-php=no --with-ruby=no --prefix=/usr/local/mapd-deps
     make -j $(nproc)
     make install
+    popd
+
     apt-get install bison++
+
+    VERS=1.11.3
+    wget https://github.com/Blosc/c-blosc/archive/v$VERS.tar.gz
+    tar xvf v$VERS.tar.gz
+    BDIR="c-blosc-$VERS/build"
+    rm -rf "$BDIR"
+    mkdir -p "$BDIR"
+    pushd "$BDIR"
+    cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local/mapd-deps -DBUILD_BENCHMARKS=off -DBUILD_TESTS=off -DPREFER_EXTERNAL_SNAPPY=off -DPREFER_EXTERNAL_ZLIB=off -DPREFER_EXTERNAL_ZSTD=off ..
+    make -j $(nproc)
+    make install
+    popd
+
 
 Next you need to configure symlinks so that `clang`, etc point to the newly installed `clang-3.8`:
 

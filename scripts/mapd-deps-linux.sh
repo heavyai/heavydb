@@ -200,6 +200,19 @@ popd
 # http://download.sourceforge.net/libpng/libpng-1.6.21.tar.xz
 download_make_install https://internal-dependencies.mapd.com/thirdparty/libpng-1.6.21.tar.xz
 
+# c-blosc
+VERS=1.11.3
+download https://github.com/Blosc/c-blosc/archive/v$VERS.tar.gz
+extract v$VERS.tar.gz
+BDIR="c-blosc-$VERS/build"
+rm -rf "$BDIR"
+mkdir -p "$BDIR"
+pushd "$BDIR"
+cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$PREFIX -DBUILD_BENCHMARKS=off -DBUILD_TESTS=off -DPREFER_EXTERNAL_SNAPPY=off -DPREFER_EXTERNAL_ZLIB=off -DPREFER_EXTERNAL_ZSTD=off ..
+makej
+make install
+popd
+
 # geo
 # https://downloads.sourceforge.net/project/expat/expat/2.2.0/expat-2.2.0.tar.bz2
 download_make_install https://internal-dependencies.mapd.com/thirdparty/expat-2.2.0.tar.bz2
