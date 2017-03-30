@@ -5440,33 +5440,10 @@ Executor::FetchResult Executor::fetchChunks(const ExecutionDispatch& execution_d
 
   CartesianProduct<std::vector<std::vector<size_t>>> frag_ids_crossjoin(selected_fragments_crossjoin);
 
-  const auto tab_id_to_frag_offsets = getAllFragOffsets(input_descs, all_tables_fragments);
-
   std::vector<std::vector<const int8_t*>> all_frag_col_buffers;
   std::vector<std::vector<const int8_t*>> all_frag_iter_buffers;
   std::vector<std::vector<int64_t>> all_num_rows;
   std::vector<std::vector<uint64_t>> all_frag_offsets;
-  for (const auto& selected_frag_ids : frag_ids_crossjoin) {
-    std::vector<int64_t> num_rows;
-    std::vector<uint64_t> frag_offsets;
-    CHECK_EQ(selected_frag_ids.size(), input_descs.size());
-    for (size_t tab_idx = 0; tab_idx < input_descs.size(); ++tab_idx) {
-      const auto frag_id = selected_frag_ids[tab_idx];
-      const auto fragments_it = all_tables_fragments.find(input_descs[tab_idx].getTableId());
-      CHECK(fragments_it != all_tables_fragments.end());
-      const auto& fragments = *fragments_it->second;
-      const auto& fragment = fragments[frag_id];
-      num_rows.push_back(fragment.getNumTuples());
-      const auto frag_offsets_it = tab_id_to_frag_offsets.find(input_descs[tab_idx].getTableId());
-      CHECK(frag_offsets_it != tab_id_to_frag_offsets.end());
-      const auto& offsets = frag_offsets_it->second;
-      CHECK_LT(frag_id, offsets.size());
-      frag_offsets.push_back(offsets[frag_id]);
-    }
-    all_num_rows.push_back(num_rows);
-    // Fragment offsets of outer table should be ONLY used by rowid for now.
-    all_frag_offsets.push_back(frag_offsets);
-  }
   const auto extra_tab_id_to_frag_offsets = getAllFragOffsets(ra_exe_unit.extra_input_descs, all_tables_fragments);
   const bool needs_fetch_iterators =
       ra_exe_unit.join_dimensions.size() > 2 && dynamic_cast<Analyzer::IterExpr*>(ra_exe_unit.target_exprs.front());
@@ -5534,6 +5511,28 @@ Executor::FetchResult Executor::fetchChunks(const ExecutionDispatch& execution_d
       all_frag_iter_buffers.push_back(
           fetchIterTabFrags(selected_frag_ids[0], execution_dispatch, ra_exe_unit.input_descs[0], device_id));
     }
+  }
+  const auto tab_id_to_frag_offsets = getAllFragOffsets(input_descs, all_tables_fragments);
+  for (const auto& selected_frag_ids : frag_ids_crossjoin) {
+    std::vector<int64_t> num_rows;
+    std::vector<uint64_t> frag_offsets;
+    CHECK_EQ(selected_frag_ids.size(), input_descs.size());
+    for (size_t tab_idx = 0; tab_idx < input_descs.size(); ++tab_idx) {
+      const auto frag_id = selected_frag_ids[tab_idx];
+      const auto fragments_it = all_tables_fragments.find(input_descs[tab_idx].getTableId());
+      CHECK(fragments_it != all_tables_fragments.end());
+      const auto& fragments = *fragments_it->second;
+      const auto& fragment = fragments[frag_id];
+      num_rows.push_back(fragment.getNumTuples());
+      const auto frag_offsets_it = tab_id_to_frag_offsets.find(input_descs[tab_idx].getTableId());
+      CHECK(frag_offsets_it != tab_id_to_frag_offsets.end());
+      const auto& offsets = frag_offsets_it->second;
+      CHECK_LT(frag_id, offsets.size());
+      frag_offsets.push_back(offsets[frag_id]);
+    }
+    all_num_rows.push_back(num_rows);
+    // Fragment offsets of outer table should be ONLY used by rowid for now.
+    all_frag_offsets.push_back(frag_offsets);
   }
   return {all_frag_col_buffers, all_frag_iter_buffers, all_num_rows, all_frag_offsets};
 }
