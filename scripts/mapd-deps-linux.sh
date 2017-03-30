@@ -47,8 +47,8 @@ download_make_install() {
 # note: if gmp fails on POWER8:
 # wget https://gmplib.org/repo/gmp/raw-rev/4a6d258b467f
 # patch -p1 < 4a6d258b467f
-# https://gmplib.org/download/gmp/gmp-6.1.0.tar.xz
-download_make_install https://internal-dependencies.mapd.com/thirdparty/gmp-6.1.0.tar.xz
+# https://gmplib.org/download/gmp/gmp-6.1.2.tar.xz
+download_make_install https://internal-dependencies.mapd.com/thirdparty/gmp-6.1.2.tar.xz "" "--enable-fat"
 # http://www.mpfr.org/mpfr-current/mpfr-3.1.5.tar.xz
 download_make_install https://internal-dependencies.mapd.com/thirdparty/mpfr-3.1.5.tar.xz "" "--with-gmp=$PREFIX"
 download_make_install ftp://ftp.gnu.org/gnu/mpc/mpc-1.0.3.tar.gz "" "--with-gmp=$PREFIX"
