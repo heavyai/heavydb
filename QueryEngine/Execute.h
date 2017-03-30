@@ -568,7 +568,8 @@ class Executor {
     CompilationOptions co_;
     CompilationResult compilation_result_cpu_;
     CompilationResult compilation_result_gpu_;
-    std::vector<uint64_t> all_frag_row_offsets_;
+    mutable std::vector<uint64_t> all_frag_row_offsets_;
+    mutable std::mutex all_frag_row_offsets_mutex_;
     std::vector<std::unique_ptr<QueryExecutionContext>> query_contexts_;
     std::vector<std::mutex> query_context_mutexes_;
     const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
@@ -908,7 +909,7 @@ class Executor {
   std::pair<bool, int64_t> skipFragment(const InputDescriptor& table_desc,
                                         const Fragmenter_Namespace::FragmentInfo& frag_info,
                                         const std::list<std::shared_ptr<Analyzer::Expr>>& simple_quals,
-                                        const std::vector<uint64_t>& all_frag_row_offsets,
+                                        const ExecutionDispatch& execution_dispatch,
                                         const size_t frag_idx);
 
   typedef std::vector<std::string> CodeCacheKey;

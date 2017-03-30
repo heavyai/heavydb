@@ -233,6 +233,9 @@ size_t ResultSet::rowCount() const {
   if (!explanation_.empty()) {
     return 1;
   }
+  if (!permutation_.empty()) {
+    return permutation_.size();
+  }
   if (entryCount() > 100000 && !isTruncated()) {
     return parallelRowCount();
   }

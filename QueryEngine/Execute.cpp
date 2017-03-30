@@ -4330,10 +4330,6 @@ Executor::ExecutionDispatch::ExecutionDispatch(Executor* executor,
       row_set_mem_owner_(row_set_mem_owner),
       error_code_(error_code),
       render_allocator_map_(render_allocator_map) {
-  all_frag_row_offsets_.resize(query_infos.front().info.fragments.size() + 1);
-  for (size_t i = 1; i <= query_infos.front().info.fragments.size(); ++i) {
-    all_frag_row_offsets_[i] = all_frag_row_offsets_[i - 1] + query_infos_.front().info.fragments[i - 1].getNumTuples();
-  }
   all_fragment_results_.reserve(query_infos_.front().info.fragments.size());
 }
 
@@ -4492,7 +4488,8 @@ void Executor::ExecutionDispatch::runImpl(const ExecutorDeviceType chosen_device
   if (rowid_lookup_key >= 0) {
     CHECK_LE(frag_ids.size(), size_t(1));
     if (!frag_ids.empty()) {
-      start_rowid = rowid_lookup_key - all_frag_row_offsets_[frag_ids.begin()->second.front()];
+      const auto& all_frag_row_offsets = getFragOffsets();
+      start_rowid = rowid_lookup_key - all_frag_row_offsets[frag_ids.begin()->second.front()];
     }
   }
 
@@ -5044,6 +5041,14 @@ const bool Executor::ExecutionDispatch::outputColumnar() const {
 }
 
 const std::vector<uint64_t>& Executor::ExecutionDispatch::getFragOffsets() const {
+  std::lock_guard<std::mutex> lock(all_frag_row_offsets_mutex_);
+  if (all_frag_row_offsets_.empty()) {
+    all_frag_row_offsets_.resize(query_infos_.front().info.fragments.size() + 1);
+    for (size_t i = 1; i <= query_infos_.front().info.fragments.size(); ++i) {
+      all_frag_row_offsets_[i] =
+          all_frag_row_offsets_[i - 1] + query_infos_.front().info.fragments[i - 1].getNumTuples();
+    }
+  }
   return all_frag_row_offsets_;
 }
 
@@ -5218,7 +5223,6 @@ void Executor::dispatchFragments(
   CHECK(it != selected_tables_fragments.end());
   const auto fragments = it->second;
   const auto device_type = execution_dispatch.getDeviceType();
-  const auto& all_frag_row_offsets = execution_dispatch.getFragOffsets();
 
   const auto& query_mem_desc = execution_dispatch.getQueryMemoryDescriptor();
   const bool allow_multifrag =
@@ -5234,7 +5238,7 @@ void Executor::dispatchFragments(
     for (size_t frag_id = 0; frag_id < fragments->size(); ++frag_id) {
       const auto& fragment = (*fragments)[frag_id];
       const auto skip_frag =
-          skipFragment(outer_table_desc, fragment, ra_exe_unit.simple_quals, all_frag_row_offsets, frag_id);
+          skipFragment(outer_table_desc, fragment, ra_exe_unit.simple_quals, execution_dispatch, frag_id);
       if (skip_frag.first) {
         continue;
       }
@@ -5282,8 +5286,7 @@ void Executor::dispatchFragments(
   } else {
     for (size_t i = 0; i < fragments->size(); ++i) {
       const auto& fragment = (*fragments)[i];
-      const auto skip_frag =
-          skipFragment(outer_table_desc, fragment, ra_exe_unit.simple_quals, all_frag_row_offsets, i);
+      const auto skip_frag = skipFragment(outer_table_desc, fragment, ra_exe_unit.simple_quals, execution_dispatch, i);
       if (skip_frag.first) {
         continue;
       }
@@ -7532,7 +7535,7 @@ int Executor::getLocalColumnId(const Analyzer::ColumnVar* col_var, const bool fe
 std::pair<bool, int64_t> Executor::skipFragment(const InputDescriptor& table_desc,
                                                 const Fragmenter_Namespace::FragmentInfo& fragment,
                                                 const std::list<std::shared_ptr<Analyzer::Expr>>& simple_quals,
-                                                const std::vector<uint64_t>& all_frag_row_offsets,
+                                                const ExecutionDispatch& execution_dispatch,
                                                 const size_t frag_idx) {
   const int table_id = table_desc.getTableId();
   if (table_desc.getSourceType() == InputSourceType::RESULT &&
@@ -7570,6 +7573,7 @@ std::pair<bool, int64_t> Executor::skipFragment(const InputDescriptor& table_des
       CHECK(cd->isVirtualCol && cd->columnName == "rowid");
       const auto& table_generation = getTableGeneration(table_id);
       start_rowid = table_generation.start_rowid;
+      const auto& all_frag_row_offsets = execution_dispatch.getFragOffsets();
       chunk_min = all_frag_row_offsets[frag_idx] + start_rowid;
       chunk_max = all_frag_row_offsets[frag_idx + 1] - 1 + start_rowid;
       is_rowid = true;
