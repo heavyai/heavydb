@@ -726,6 +726,7 @@ bool backchannel(int action, ClientContext* cc) {
       (void)thrift_with_retry(kDISCONNECT, context2, nullptr);
     }
     transport2->close();
+    state = INITIALIZED;
     return true;
   }
   return false;
@@ -900,6 +901,7 @@ int main(int argc, char** argv) {
         prompt.assign("mapdql> ");
         (void)backchannel(TURN_ON, nullptr);
         if (thrift_with_retry(kSQL, context, query.c_str())) {
+          (void)backchannel(TURN_OFF, nullptr);
           if (context.query_return.row_set.row_desc.empty()) {
             continue;
           }
@@ -944,8 +946,9 @@ int main(int argc, char** argv) {
             std::cout << "Execution time: " << context.query_return.execution_time_ms << " ms,"
                       << " Total time: " << context.query_return.total_time_ms << " ms" << std::endl;
           }
+        } else {
+          (void)backchannel(TURN_OFF, nullptr);
         }
-        (void)backchannel(TURN_OFF, nullptr);
       } else {
         // change the prommpt
         prompt.assign("..> ");
