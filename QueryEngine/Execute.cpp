@@ -4056,7 +4056,7 @@ void checkWorkUnitWatchdog(const RelAlgExecutionUnit& ra_exe_unit, const Catalog
     }
   }
   if (ra_exe_unit.groupby_exprs.size() == 1 && !ra_exe_unit.groupby_exprs.front() &&
-      (!ra_exe_unit.scan_limit || ra_exe_unit.scan_limit > 10000000)) {
+      (!ra_exe_unit.scan_limit || ra_exe_unit.scan_limit > Executor::high_scan_limit)) {
     std::vector<std::string> table_names;
     const auto& input_descs = ra_exe_unit.input_descs;
     for (const auto& input_desc : input_descs) {

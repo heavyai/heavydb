@@ -1020,7 +1020,7 @@ bool can_use_scan_limit(const RelAlgExecutionUnit& ra_exe_unit) {
     }
   }
   if (ra_exe_unit.groupby_exprs.size() == 1 && !ra_exe_unit.groupby_exprs.front() &&
-      (!ra_exe_unit.scan_limit || ra_exe_unit.scan_limit > 10000000)) {
+      (!ra_exe_unit.scan_limit || ra_exe_unit.scan_limit > Executor::high_scan_limit)) {
     return true;
   }
   return false;
