@@ -361,7 +361,8 @@ void ResultSet::moveToBegin() const {
 }
 
 bool ResultSet::isTruncated() const {
-  return keep_first_ + drop_first_;
+  const auto rows_to_keep = keep_first_ + drop_first_;
+  return rows_to_keep && (rows_to_keep < entryCount());
 }
 
 QueryMemoryDescriptor ResultSet::fixupQueryMemoryDescriptor(const QueryMemoryDescriptor& query_mem_desc) {
