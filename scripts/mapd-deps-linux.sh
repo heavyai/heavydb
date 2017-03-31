@@ -114,8 +114,8 @@ pushd boost_1_62_0
 ./b2 install --prefix=$PREFIX || true
 popd
 
-# http://www.cmake.org/files/v3.7/cmake-3.7.0.tar.gz
-download_make_install https://internal-dependencies.mapd.com/thirdparty/cmake-3.7.0.tar.gz
+# http://www.cmake.org/files/v3.7/cmake-3.7.2.tar.gz
+download_make_install https://internal-dependencies.mapd.com/thirdparty/cmake-3.7.2.tar.gz
 
 # llvm
 download_make_install http://thrysoee.dk/editline/libedit-20160903-3.1.tar.gz
@@ -230,9 +230,9 @@ popd
 download_make_install http://download.osgeo.org/proj/proj-4.9.3.tar.gz
 download_make_install http://download.osgeo.org/gdal/2.0.3/gdal-2.0.3.tar.xz "" "--without-curl --without-geos --with-libkml=$PREFIX --with-static-proj4=$PREFIX"
 
-# https://storage.googleapis.com/golang/go1.7.3.linux-amd64.tar.gz
-download https://internal-dependencies.mapd.com/thirdparty/go1.7.3.linux-amd64.tar.gz
-extract go1.7.3.linux-amd64.tar.gz
+# https://storage.googleapis.com/golang/go1.8.1.linux-amd64.tar.gz
+download https://internal-dependencies.mapd.com/thirdparty/go1.8.1.linux-amd64.tar.gz
+extract go1.8.1.linux-amd64.tar.gz
 mv go $PREFIX
 
 sed -e "s|%MAPD_DEPS_ROOT%|$PREFIX|g" mapd-deps.modulefile.in > mapd-deps-$SUFFIX.modulefile
