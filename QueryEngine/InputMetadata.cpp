@@ -257,6 +257,7 @@ size_t Fragmenter_Namespace::FragmentInfo::getNumTuples() const {
   if (resultSetMutex) {
     lock.reset(new std::lock_guard<std::mutex>(*resultSetMutex));
   }
+  CHECK_EQ(!!resultSet, !!resultSetMutex);
   if (resultSet && !synthesizedNumTuplesIsValid) {
     numTuples = resultSet->rowCount();
     synthesizedNumTuplesIsValid = true;
