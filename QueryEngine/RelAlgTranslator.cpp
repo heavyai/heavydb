@@ -14,6 +14,8 @@
 
 #include <future>
 
+extern bool g_enable_watchdog;
+
 namespace {
 
 SQLTypeInfo build_type_info(const SQLTypes sql_type, const int scale, const int precision) {
@@ -398,12 +400,12 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInOper(const RexOpera
   row_set.moveToBegin();
   const auto row_count = row_set.rowCount();
   if (row_count > 10000) {
-    if (row_count > 1000000) {
-      throw std::runtime_error("Unable to handle 'expr IN (subquery)', subquery returned 1M+ rows.");
+    if (row_count > 5000000 && g_enable_watchdog) {
+      throw std::runtime_error("Unable to handle 'expr IN (subquery)', subquery returned 5M+ rows.");
     }
     if (auto expr = get_in_values_expr(lhs, row_set)) {
       return expr;
-    } else {
+    } else if (g_enable_watchdog) {
       throw std::runtime_error("Unable to handle 'expr IN (subquery)', subquery returned 10000+ rows.");
     }
   }
