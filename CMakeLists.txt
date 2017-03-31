@@ -168,10 +168,6 @@ include_directories(ThirdParty/rapidjson)
 include_directories(ThirdParty/poly2tri)
 add_subdirectory(ThirdParty/poly2tri)
 
-# ShapeLib
-include_directories(ThirdParty/shapelib)
-add_subdirectory(ThirdParty/shapelib)
-
 add_custom_command(
     DEPENDS ${CMAKE_SOURCE_DIR}/mapd.thrift
     OUTPUT

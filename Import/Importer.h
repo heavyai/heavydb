@@ -17,7 +17,6 @@
 #include <boost/tokenizer.hpp>
 #include <glog/logging.h>
 #include <poly2tri/poly2tri.h>
-#include <shapelib/shapefil.h>
 #include "../Shared/fixautotools.h"
 #include <ogrsf_frmts.h>
 #include <gdal.h>
@@ -642,18 +641,12 @@ class Importer {
   const bool* get_is_array() const { return is_array_a.get(); }
   static ImportStatus get_import_status(const std::string& id);
   static void set_import_status(const std::string& id, const ImportStatus is);
-  static const std::list<ColumnDescriptor> shapefileToColumnDescriptors(const std::string& fileName);
   static const std::list<ColumnDescriptor> gdalToColumnDescriptors(const std::string& fileName);
   static void readMetadataSampleGDAL(const std::string& fileName,
                                      std::map<std::string, std::vector<std::string>>& metadata,
                                      int rowLimit);
 
  private:
-  void readVerticesFromShapefile(const std::string& fileName, std::vector<PolyData2d>& polys);
-  void readVerticesFromShapefilePolygonZ(const std::string& fileName,
-                                         SHPObject* polygonObj,
-                                         PolyData2d& poly,
-                                         bool hasZ);
   void readVerticesFromGDAL(const std::string& fileName,
                             std::vector<PolyData2d>& polys,
                             std::pair<std::map<std::string, size_t>, std::vector<std::vector<std::string>>>& metadata);

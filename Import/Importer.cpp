@@ -21,7 +21,6 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/filesystem.hpp>
 #include <glog/logging.h>
-#include <shapelib/shapefil.h>
 #include <ogrsf_frmts.h>
 #include <gdal.h>
 #include "../QueryEngine/SqlTypesLayout.h"
@@ -1083,102 +1082,6 @@ void GDALErrorHandler(CPLErr eErrClass, int err_no, const char* msg) {
   throw std::runtime_error("GDAL error: " + std::string(msg));
 }
 
-ImportStatus Importer::importShapefile() {
-  set_import_status(import_id, import_status);
-  std::vector<PolyData2d> polys;
-  readVerticesFromShapefile(file_path.c_str(), polys);
-
-  DBFHandle dbfHandle = DBFOpen(file_path.c_str(), "rb");
-  if (dbfHandle == nullptr) {
-    throw std::runtime_error("Unable to open dbf file " + file_path);
-  }
-
-  std::vector<std::unique_ptr<TypedImportBuffer>> import_buffers_vec;
-  for (const auto cd : loader->get_column_descs())
-    import_buffers_vec.push_back(
-        std::unique_ptr<TypedImportBuffer>(new TypedImportBuffer(cd, loader->get_string_dict(cd))));
-
-  for (size_t ipoly = 0; ipoly < polys.size(); ++ipoly) {
-    auto poly = polys[ipoly];
-    try {
-      auto icol = 0;
-      for (auto cd : loader->get_column_descs()) {
-        if (cd->columnName == MAPD_GEO_PREFIX + "coords") {
-          std::vector<TDatum> coords;
-          for (auto coord : poly.coords) {
-            TDatum td;
-            td.val.real_val = coord;
-            coords.push_back(td);
-          }
-          TDatum tdd;
-          tdd.val.arr_val = coords;
-          tdd.is_null = false;
-          import_buffers_vec[icol++]->add_value(cd, tdd, false);
-        } else if (cd->columnName == MAPD_GEO_PREFIX + "indices") {
-          std::vector<TDatum> indices;
-          for (auto tris : poly.triangulation_indices) {
-            TDatum td;
-            td.val.int_val = tris;
-            indices.push_back(td);
-          }
-          TDatum tdd;
-          tdd.val.arr_val = indices;
-          tdd.is_null = false;
-          import_buffers_vec[icol++]->add_value(cd, tdd, false);
-        } else if (cd->columnName == MAPD_GEO_PREFIX + "linedrawinfo") {
-          std::vector<TDatum> ldis;
-          ldis.resize(4 * poly.lineDrawInfo.size());
-          size_t ildi = 0;
-          for (auto ldi : poly.lineDrawInfo) {
-            ldis[ildi++].val.int_val = ldi.count;
-            ldis[ildi++].val.int_val = ldi.instanceCount;
-            ldis[ildi++].val.int_val = ldi.firstIndex;
-            ldis[ildi++].val.int_val = ldi.baseInstance;
-          }
-          TDatum tdd;
-          tdd.val.arr_val = ldis;
-          tdd.is_null = false;
-          import_buffers_vec[icol++]->add_value(cd, tdd, false);
-        } else if (cd->columnName == MAPD_GEO_PREFIX + "polydrawinfo") {
-          std::vector<TDatum> pdis;
-          pdis.resize(5 * poly.polyDrawInfo.size());
-          size_t ipdi = 0;
-          for (auto pdi : poly.polyDrawInfo) {
-            pdis[ipdi++].val.int_val = pdi.count;
-            pdis[ipdi++].val.int_val = pdi.instanceCount;
-            pdis[ipdi++].val.int_val = pdi.firstIndex;
-            pdis[ipdi++].val.int_val = pdi.baseVertex;
-            pdis[ipdi++].val.int_val = pdi.baseInstance;
-          }
-          TDatum tdd;
-          tdd.val.arr_val = pdis;
-          tdd.is_null = false;
-          import_buffers_vec[icol++]->add_value(cd, tdd, false);
-        } else {
-          auto fi = DBFGetFieldIndex(dbfHandle, cd->columnName.c_str());
-          if (fi < 0) {
-            throw std::runtime_error("Column not found in DBF file: " + cd->columnName);
-          }
-          std::string str{DBFReadStringAttribute(dbfHandle, ipoly, fi)};
-          import_buffers_vec[icol++]->add_value(cd, str, false, copy_params);
-        }
-      }
-    } catch (const std::exception& e) {
-      LOG(WARNING) << "importShapefile exception thrown: " << e.what() << ". Row discarded.";
-    }
-  }
-
-  try {
-    loader->load(import_buffers_vec, polys.size());
-    loader->checkpoint(loader->get_catalog().get_currentDB().dbId, loader->get_table_desc()->tableId);
-    return import_status;
-  } catch (const std::exception& e) {
-    LOG(WARNING) << e.what();
-  }
-
-  return import_status;
-}
-
 void Importer::readVerticesFromGDALGeometryZ(const std::string& fileName,
                                              OGRPolygon* poPolygon,
                                              PolyData2d& poly,
@@ -1275,90 +1178,6 @@ static OGRDataSource* openGDALDataset(const std::string& fileName) {
     LOG(INFO) << "ogr error: " << CPLGetLastErrorMsg();
   }
   return poDS;
-}
-
-void Importer::readVerticesFromShapefilePolygonZ(const std::string& fileName,
-                                                 SHPObject* polygonObj,
-                                                 PolyData2d& poly,
-                                                 bool) {
-  int partType, startIdx, endIdx;
-  int id = polygonObj->nShapeId;
-  int numParts = polygonObj->nParts;
-  double x, y;
-
-  std::vector<std::shared_ptr<p2t::Point>> vertexShPtrs;
-  std::vector<p2t::Point*> vertexPtrs;
-  std::vector<int> tris;
-  std::unordered_map<p2t::Point*, int> pointIndices;
-
-  for (int i = 0; i < numParts; ++i) {
-    vertexPtrs.clear();
-    vertexShPtrs.clear();
-    tris.clear();
-    pointIndices.clear();
-
-    partType = polygonObj->panPartType[i];
-    if (partType != SHPP_RING) {
-      throw std::runtime_error("Unsupported part type " + std::to_string(partType) + " for object " +
-                               std::to_string(id) + " in shapefile " + fileName +
-                               ". Only SHPP_RING is currently supported.");
-    }
-
-    startIdx = polygonObj->panPartStart[i];
-    endIdx = (i == numParts - 1 ? polygonObj->nVertices : polygonObj->panPartStart[i + 1]);
-
-    poly.beginLine();
-
-    for (int j = startIdx; j < endIdx; ++j) {
-      // NOTE: Might need to do the projection transformation here
-      // x = lon2x_d(polygonObj->padfX[j]);
-      // y = lat2y_d(polygonObj->padfY[j]);
-      auto xy = geotransform("4326", "900913", polygonObj->padfX[j], polygonObj->padfY[j]);
-      x = xy.first;
-      y = xy.second;
-
-      if (!vertexPtrs.size() || vertexPtrs.back()->x != x || vertexPtrs.back()->y != y) {
-        vertexShPtrs.emplace_back(new p2t::Point(x, y));
-        poly.addLinePoint(vertexShPtrs.back());
-        vertexPtrs.push_back(vertexShPtrs.back().get());
-
-        pointIndices.insert({vertexShPtrs.back().get(), vertexPtrs.size() - 1});
-      }
-    }
-
-    if (poly.endLine()) {
-      p2t::Point* lastVert = vertexPtrs.back();
-      vertexPtrs.pop_back();
-      pointIndices.erase(lastVert);
-      vertexShPtrs.pop_back();
-    }
-
-    p2t::CDT triangulator(vertexPtrs);
-
-    triangulator.Triangulate();
-
-    int idx0, idx1, idx2;
-
-    std::unordered_map<p2t::Point*, int>::iterator itr;
-
-    poly.beginPoly();
-    for (p2t::Triangle* tri : triangulator.GetTriangles()) {
-      itr = pointIndices.find(tri->GetPoint(0));
-      CHECK(itr != pointIndices.end());
-      idx0 = itr->second;
-
-      itr = pointIndices.find(tri->GetPoint(1));
-      CHECK(itr != pointIndices.end());
-      idx1 = itr->second;
-
-      itr = pointIndices.find(tri->GetPoint(2));
-      CHECK(itr != pointIndices.end());
-      idx2 = itr->second;
-
-      poly.addTriangle(idx0, idx1, idx2);
-    }
-    poly.endPoly();
-  }
 }
 
 void Importer::readMetadataSampleGDAL(const std::string& fileName,
@@ -1486,67 +1305,6 @@ void Importer::readVerticesFromGDAL(
   GDALClose(poDS);
 }
 
-void Importer::readVerticesFromShapefile(const std::string& fileName, std::vector<PolyData2d>& polys) {
-  SHPHandle shapeHandle = SHPOpen(fileName.c_str(), "rb");
-  if (shapeHandle == nullptr) {
-    throw std::runtime_error("Unable to open shape file " + fileName);
-    return;
-  }
-
-  int numEntities, shapeType;
-  SHPGetInfo(shapeHandle, &numEntities, &shapeType, nullptr, nullptr);
-
-  SHPObject* entity;
-  for (int i = 0; i < numEntities; ++i) {
-    entity = SHPReadObject(shapeHandle, i);
-    if (!entity) {
-      throw std::runtime_error("Unable to read object " + std::to_string(i) + " from the shapefile: " + fileName);
-    }
-
-    if (polys.size()) {
-      polys.emplace_back(polys.back().startVert() + polys.back().numVerts(),
-                         polys.back().startIdx() + polys.back().numIndices());
-    } else {
-      polys.emplace_back();
-    }
-
-    switch (entity->nSHPType) {
-      case SHPT_POLYGON:
-        readVerticesFromShapefilePolygonZ(fileName, entity, polys.back(), false);
-        break;
-      case SHPT_POLYGONZ:
-        readVerticesFromShapefilePolygonZ(fileName, entity, polys.back(), true);
-        break;
-      default:
-        throw std::runtime_error(
-            "Object " + std::to_string(i) + " in the shapefile " + fileName +
-            " has an unsupported type. We currently only support reading polygons (SHPT_POLYGON or "
-            "SHPT_POLYGONZ) from shapefiles.");
-        break;
-    }
-
-    SHPDestroyObject(entity);
-  }
-
-  SHPClose(shapeHandle);
-}
-
-SQLTypes dbf_to_type(const DBFFieldType& dbf_type) {
-  switch (dbf_type) {
-    case FTString:
-      return kTEXT;
-    case FTInteger:
-      return kINT;
-    case FTDouble:
-      return kDECIMAL;
-    case FTLogical:
-      return kBOOLEAN;
-    case FTInvalid:
-      break;
-  }
-  throw std::runtime_error("Unknown DBF field type: " + std::to_string(dbf_type));
-}
-
 std::pair<SQLTypes, bool> ogr_to_type(const OGRFieldType& ogr_type) {
   switch (ogr_type) {
     case OFTInteger:
@@ -1589,45 +1347,6 @@ ColumnDescriptor create_array_column(const SQLTypes& type, const std::string& na
   ti.set_fixed_size();
   cd.columnType = ti;
   return cd;
-}
-
-const std::list<ColumnDescriptor> Importer::shapefileToColumnDescriptors(const std::string& fileName) {
-  std::list<ColumnDescriptor> cds;
-  DBFHandle dbfHandle = DBFOpen(fileName.c_str(), "rb");
-  if (dbfHandle == nullptr) {
-    throw std::runtime_error("Unable to open dbf file " + fileName);
-  }
-
-  size_t nFields = DBFGetFieldCount(dbfHandle);
-
-  for (size_t i = 0; i < nFields; i++) {
-    char name[12];
-    int colLen;
-    int decimalLen;
-    auto dbfType = DBFGetFieldInfo(dbfHandle, i, name, &colLen, &decimalLen);
-    auto type = dbf_to_type(dbfType);
-    ColumnDescriptor cd;
-    cd.columnName = name;
-    SQLTypeInfo ti;
-    ti.set_type(type);
-    if (type == kTEXT) {
-      ti.set_compression(kENCODING_DICT);
-      ti.set_comp_param(32);
-    }
-    if (type == kDECIMAL) {
-      ti.set_precision(decimalLen);
-    }
-    ti.set_fixed_size();
-    cd.columnType = ti;
-    cds.push_back(cd);
-  }
-
-  cds.push_back(create_array_column(kDOUBLE, MAPD_GEO_PREFIX + "coords"));
-  cds.push_back(create_array_column(kINT, MAPD_GEO_PREFIX + "indices"));
-  cds.push_back(create_array_column(kINT, MAPD_GEO_PREFIX + "linedrawinfo"));
-  cds.push_back(create_array_column(kINT, MAPD_GEO_PREFIX + "polydrawinfo"));
-
-  return cds;
 }
 
 const std::list<ColumnDescriptor> Importer::gdalToColumnDescriptors(const std::string& fileName) {
