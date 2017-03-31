@@ -14,6 +14,7 @@
 #include "TargetValue.h"
 #include "../Chunk/Chunk.h"
 
+#include <atomic>
 #include <list>
 
 class ResultSetStorage {
@@ -385,7 +386,8 @@ class ResultSet {
   std::vector<std::vector<std::string>> none_encoded_strings_;
   bool none_encoded_strings_valid_;
   std::string explanation_;
-  ssize_t cached_row_count_;
+  std::atomic<ssize_t> cached_row_count_;
+  mutable std::mutex row_count_mutex_;
 
   friend class ResultSetManager;
 };

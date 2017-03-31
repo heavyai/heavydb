@@ -251,6 +251,7 @@ size_t ResultSet::rowCount() const {
   if (entryCount() > 100000 && !isTruncated()) {
     return parallelRowCount();
   }
+  std::lock_guard<std::mutex> lock(row_count_mutex_);
   moveToBegin();
   size_t row_count{0};
   while (true) {
