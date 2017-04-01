@@ -362,7 +362,17 @@ void ResultSet::moveToBegin() const {
 
 bool ResultSet::isTruncated() const {
   const auto rows_to_keep = keep_first_ + drop_first_;
-  return rows_to_keep && (rows_to_keep < entryCount());
+  if (!rows_to_keep) {
+    return false;
+  }
+  if (rows_to_keep < storage_->query_mem_desc_.entry_count) {
+    return true;
+  }
+  return std::count_if(appended_storage_.begin(),
+                       appended_storage_.end(),
+                       [rows_to_keep](const std::unique_ptr<ResultSetStorage>& storage) {
+                         return rows_to_keep < storage->query_mem_desc_.entry_count;
+                       });
 }
 
 QueryMemoryDescriptor ResultSet::fixupQueryMemoryDescriptor(const QueryMemoryDescriptor& query_mem_desc) {
