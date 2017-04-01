@@ -95,6 +95,14 @@ namespace arrow {
     }                             \
   } while (0)
 
+#define RETURN_IF_NOT_OK(s) \
+  do {                      \
+    arrow::Status _s = (s); \
+    if (!_s.ok()) {         \
+      return nullptr;       \
+    }                       \
+  } while (0);
+
 TypePtr get_arrow_type(const SQLTypeInfo& mapd_type) {
   switch (get_physical_type(mapd_type)) {
     case kBOOLEAN:
@@ -315,6 +323,27 @@ void append_value_array(ValueArray& dst, const ValueArray& src, const Field& fie
   }
 }
 
+std::shared_ptr<PoolBuffer> serialize_arrow_records(const RecordBatch& rb) {
+  int64_t rb_sz = 0;
+  ASSERT_OK(ipc::GetRecordBatchSize(rb, &rb_sz));
+  auto buffer = std::make_shared<PoolBuffer>(default_memory_pool());
+  buffer->Reserve(rb_sz);
+  io::BufferOutputStream sink(buffer);
+  std::shared_ptr<ipc::StreamWriter> writer;
+  RETURN_IF_NOT_OK(ipc::StreamWriter::Open(&sink, rb.schema(), &writer));
+  RETURN_IF_NOT_OK(writer->WriteRecordBatch(rb));
+  writer->Close();
+  return buffer;
+}
+
+std::shared_ptr<Buffer> serialize_arrow_schema(const Schema& schema) {
+  ipc::DictionaryMemo memo;
+  std::shared_ptr<Buffer> buffer;
+  ASSERT_OK(ipc::WriteSchemaMessage(schema, &memo, &buffer));
+  return buffer;
+}
+
+#undef RETURN_IF_NOT_OK
 #undef ASSERT_OK
 
 }  // namespace arrow
@@ -443,6 +472,16 @@ arrow::RecordBatch ResultSet::convertToArrow() const {
     std::tie(columns, row_count) = getArrowColumns(fields);
   }
   return arrow::RecordBatch(schema, row_count, columns);
+}
+
+std::pair<std::shared_ptr<arrow::Buffer>, void*> ResultSet::getArrowDeviceCopy(Data_Namespace::DataMgr* data_mgr,
+                                                                               const size_t device_id) const {
+  auto arrow_copy = convertToArrow();
+  auto serialized_records = serialize_arrow_records(arrow_copy);
+  auto serialized_schema = serialize_arrow_schema(*arrow_copy.schema());
+  auto dev_ptr = alloc_gpu_mem(data_mgr, serialized_records->size(), device_id, nullptr);
+  copy_to_gpu(data_mgr, dev_ptr, serialized_records->data(), serialized_records->size(), device_id);
+  return {serialized_schema, reinterpret_cast<void*>(dev_ptr)};
 }
 
 #endif  // ENABLE_ARROW_CONVERTER

@@ -268,6 +268,11 @@ class ResultSet {
 
   static std::unique_ptr<ResultSet> unserialize(const std::string&, const Executor*);
 
+#ifdef ENABLE_ARROW_CONVERTER
+  std::pair<std::shared_ptr<arrow::Buffer>, void*> getArrowDeviceCopy(Data_Namespace::DataMgr* data_mgr,
+                                                                      const size_t device_id) const;
+#endif
+
  private:
   std::vector<TargetValue> getNextRowImpl(const bool translate_strings, const bool decimal_to_double) const;
 
