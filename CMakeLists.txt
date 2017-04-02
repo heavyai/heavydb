@@ -5,6 +5,14 @@ if(CCACHE_EXE)
   set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "${CCACHE_EXE}")
 endif()
 
+option(ENABLE_IWYU "Enable include-what-you-use" OFF)
+if(ENABLE_IWYU)
+  find_program(IWYU_EXE include-what-you-use)
+  if(IWYU_EXE)
+    set(CMAKE_CXX_INCLUDE_WHAT_YOU_USE "${IWYU_EXE}")
+  endif()
+endif()
+
 project(mapd)
 
 set(MAPD_VERSION_MAJOR "2")
