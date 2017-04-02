@@ -20,6 +20,7 @@
 #include "../Shared/fixautotools.h"
 #include <ogrsf_frmts.h>
 #include <gdal.h>
+#include "../Shared/fixautotools.h"
 #include "../Catalog/TableDescriptor.h"
 #include "../Catalog/Catalog.h"
 #include "../Fragmenter/Fragmenter.h"
