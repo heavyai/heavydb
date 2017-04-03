@@ -287,6 +287,7 @@ int main(int argc, char** argv) {
 
     if (vm.count("cluster") || vm.count("string-servers")) {
       CHECK_NE(!!vm.count("cluster"), !!vm.count("string-servers"));
+      boost::algorithm::trim_if(cluster_file, boost::is_any_of("\"'"));
       const auto all_nodes = LeafHostInfo::parseClusterConfig(cluster_file);
       if (vm.count("cluster")) {
         db_leaves = only_db_leaves(all_nodes);
