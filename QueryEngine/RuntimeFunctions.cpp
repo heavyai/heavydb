@@ -685,7 +685,13 @@ extern "C" __attribute__((noinline)) int8_t thread_warp_idx(const int8_t warp_sz
 }
 
 extern "C" ALWAYS_INLINE int32_t record_error_code(const int32_t err_code, int32_t* error_codes) {
-  if (err_code) {
+  // NB: never override persistent error codes (with code greater than zero).
+  // On GPU, a projection query with a limit can run out of slots without it
+  // being an actual error if the limit has been hit. If a persistent error
+  // (division by zero, for example) occurs before running out of slots, we
+  // have to avoid overriding it, because there's a risk that the query would
+  // go through if we override with a potentially benign out-of-slots code.
+  if (err_code && error_codes[pos_start_impl(nullptr)] <= 0) {
     error_codes[pos_start_impl(nullptr)] = err_code;
   }
   return err_code;
