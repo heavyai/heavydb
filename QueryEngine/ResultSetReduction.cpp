@@ -8,6 +8,7 @@
 
 #include "ResultRows.h"
 #include "ResultSet.h"
+#include "DynamicWatchdog.h"
 #include "RuntimeFunctions.h"
 #include "SqlTypesLayout.h"
 
@@ -15,6 +16,8 @@
 
 #include <future>
 #include <numeric>
+
+extern bool g_enable_dynamic_watchdog;
 
 namespace {
 
@@ -149,11 +152,24 @@ void ResultSetStorage::reduce(const ResultSetStorage& that) const {
   }
 }
 
+namespace {
+
+ALWAYS_INLINE void check_watchdog(const size_t sample_seed) {
+  if (g_enable_dynamic_watchdog && (sample_seed & 0x3F) == 0 && dynamic_watchdog()) {
+    // TODO(alex): distinguish between the deadline and interrupt
+    throw std::runtime_error(
+        "Query execution has exceeded the time limit or was interrupted during result set reduction");
+  }
+}
+
+}  // namespace
+
 // Reduces entry at position entry_idx in that_buff into the same position in this_buff, columnar format.
 void ResultSetStorage::reduceOneEntryNoCollisionsColWise(const size_t entry_idx,
                                                          int8_t* this_buff,
                                                          const int8_t* that_buff,
                                                          const ResultSetStorage& that) const {
+  check_watchdog(entry_idx);
   CHECK(query_mem_desc_.output_columnar);
   CHECK(query_mem_desc_.hash_type == GroupByColRangeType::OneColKnownRange ||
         query_mem_desc_.hash_type == GroupByColRangeType::MultiColPerfectHash ||
@@ -210,6 +226,7 @@ void ResultSetStorage::reduceOneEntryNoCollisionsRowWise(const size_t entry_idx,
                                                          int8_t* this_buff,
                                                          const int8_t* that_buff,
                                                          const ResultSetStorage& that) const {
+  check_watchdog(entry_idx);
   CHECK(!query_mem_desc_.output_columnar);
   if (isEmptyEntry(entry_idx, that_buff)) {
     return;
@@ -398,6 +415,7 @@ void ResultSetStorage::reduceOneEntryBaseline(int8_t* this_buff,
                                               const size_t that_entry_idx,
                                               const size_t that_entry_count,
                                               const ResultSetStorage& that) const {
+  check_watchdog(that_entry_idx);
   const auto slot_count = get_buffer_col_slot_count(query_mem_desc_);
   const auto key_count = get_groupby_col_count(query_mem_desc_);
   CHECK(GroupByColRangeType::MultiCol == query_mem_desc_.hash_type ||
