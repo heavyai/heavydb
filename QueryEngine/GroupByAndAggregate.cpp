@@ -699,6 +699,25 @@ GpuQueryMemory QueryExecutionContext::prepareGroupByDevBuffer(Data_Namespace::Da
   }
   return gpu_query_mem;
 }
+
+namespace {
+
+int32_t aggregate_error_codes(const std::vector<int32_t>& error_codes) {
+  // Check overflow / division by zero / interrupt first
+  for (const auto err : error_codes) {
+    if (err > 0) {
+      return err;
+    }
+  }
+  for (const auto err : error_codes) {
+    if (err) {
+      return err;
+    }
+  }
+  return 0;
+}
+
+}  // namespace
 #endif
 
 std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const RelAlgExecutionUnit& ra_exe_unit,
@@ -843,13 +862,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const RelAlgExecution
     }
 
     copy_from_gpu(data_mgr, &error_codes[0], err_desc, error_codes.size() * sizeof(error_codes[0]), device_id);
-    *error_code = 0;
-    for (const auto err : error_codes) {
-      if (err < 0 || (err > 0 && (!*error_code || err > *error_code))) {
-        *error_code = err;
-        break;
-      }
-    }
+    *error_code = aggregate_error_codes(error_codes);
     if (*error_code > 0) {
       return {};
     }
@@ -944,13 +957,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const RelAlgExecution
     }
 
     copy_from_gpu(data_mgr, &error_codes[0], err_desc, error_codes.size() * sizeof(error_codes[0]), device_id);
-    *error_code = 0;
-    for (const auto err : error_codes) {
-      if (err < 0 || (err > 0 && (!*error_code || err > *error_code))) {
-        *error_code = err;
-        break;
-      }
-    }
+    *error_code = aggregate_error_codes(error_codes);
     if (*error_code > 0) {
       return {};
     }
