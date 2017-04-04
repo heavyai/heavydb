@@ -31,10 +31,11 @@ class ResultSetStorage {
   void moveEntriesToBuffer(int8_t* new_buff, const size_t new_entry_count) const;
 
  private:
-  void reduceOneEntryNoCollisionsColWise(const size_t i,
-                                         int8_t* this_buff,
-                                         const int8_t* that_buff,
-                                         const ResultSetStorage& that) const;
+  void reduceEntriesNoCollisionsColWise(int8_t* this_buff,
+                                        const int8_t* that_buff,
+                                        const ResultSetStorage& that,
+                                        const size_t start_index,
+                                        const size_t end_index) const;
 
   void copyKeyColWise(const size_t entry_idx, int8_t* this_buff, const int8_t* that_buff) const;
 
@@ -71,6 +72,7 @@ class ResultSetStorage {
                              const size_t init_agg_val_idx,
                              const ResultSetStorage& that) const;
 
+  ALWAYS_INLINE
   void reduceOneSlot(int8_t* this_ptr1,
                      int8_t* this_ptr2,
                      const int8_t* that_ptr1,

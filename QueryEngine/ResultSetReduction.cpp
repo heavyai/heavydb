@@ -67,6 +67,11 @@ void fill_slots(int64_t* dst_entry,
 void ResultSetStorage::reduce(const ResultSetStorage& that) const {
   auto entry_count = query_mem_desc_.entry_count;
   CHECK_GT(entry_count, size_t(0));
+  if (query_mem_desc_.output_columnar) {
+    CHECK(query_mem_desc_.hash_type == GroupByColRangeType::OneColKnownRange ||
+          query_mem_desc_.hash_type == GroupByColRangeType::MultiColPerfectHash ||
+          query_mem_desc_.hash_type == GroupByColRangeType::MultiCol);
+  }
   switch (query_mem_desc_.hash_type) {
     case GroupByColRangeType::MultiCol:
       CHECK_EQ(size_t(0), query_mem_desc_.entry_count_small);
@@ -124,16 +129,22 @@ void ResultSetStorage::reduce(const ResultSetStorage& that) const {
     const size_t thread_count = cpu_threads();
     std::vector<std::future<void>> reduction_threads;
     for (size_t thread_idx = 0; thread_idx < thread_count; ++thread_idx) {
-      reduction_threads.emplace_back(
-          std::async(std::launch::async, [this, that, thread_idx, entry_count, this_buff, that_buff, thread_count] {
-            for (size_t i = thread_idx; i < entry_count; i += thread_count) {
-              if (query_mem_desc_.output_columnar) {
-                reduceOneEntryNoCollisionsColWise(i, this_buff, that_buff, that);
-              } else {
-                reduceOneEntryNoCollisionsRowWise(i, this_buff, that_buff, that);
+      const auto thread_entry_count = (entry_count + thread_count - 1) / thread_count;
+      const auto start_index = thread_idx * thread_entry_count;
+      const auto end_index = std::min(start_index + thread_entry_count, entry_count);
+      if (query_mem_desc_.output_columnar) {
+        reduction_threads.emplace_back(std::async(
+            std::launch::async, [this, that, thread_idx, entry_count, this_buff, that_buff, start_index, end_index] {
+              reduceEntriesNoCollisionsColWise(this_buff, that_buff, that, start_index, end_index);
+            }));
+      } else {
+        reduction_threads.emplace_back(std::async(
+            std::launch::async, [this, that, thread_idx, entry_count, this_buff, that_buff, start_index, end_index] {
+              for (size_t entry_idx = start_index; entry_idx < end_index; ++entry_idx) {
+                reduceOneEntryNoCollisionsRowWise(entry_idx, this_buff, that_buff, that);
               }
-            }
-          }));
+            }));
+      }
     }
     for (auto& reduction_thread : reduction_threads) {
       reduction_thread.wait();
@@ -142,10 +153,10 @@ void ResultSetStorage::reduce(const ResultSetStorage& that) const {
       reduction_thread.get();
     }
   } else {
-    for (size_t i = 0; i < entry_count; ++i) {
-      if (query_mem_desc_.output_columnar) {
-        reduceOneEntryNoCollisionsColWise(i, this_buff, that_buff, that);
-      } else {
+    if (query_mem_desc_.output_columnar) {
+      reduceEntriesNoCollisionsColWise(this_buff, that_buff, that, 0, query_mem_desc_.entry_count);
+    } else {
+      for (size_t i = 0; i < entry_count; ++i) {
         reduceOneEntryNoCollisionsRowWise(i, this_buff, that_buff, that);
       }
     }
@@ -164,23 +175,11 @@ ALWAYS_INLINE void check_watchdog(const size_t sample_seed) {
 
 }  // namespace
 
-// Reduces entry at position entry_idx in that_buff into the same position in this_buff, columnar format.
-void ResultSetStorage::reduceOneEntryNoCollisionsColWise(const size_t entry_idx,
-                                                         int8_t* this_buff,
-                                                         const int8_t* that_buff,
-                                                         const ResultSetStorage& that) const {
-  check_watchdog(entry_idx);
-  CHECK(query_mem_desc_.output_columnar);
-  CHECK(query_mem_desc_.hash_type == GroupByColRangeType::OneColKnownRange ||
-        query_mem_desc_.hash_type == GroupByColRangeType::MultiColPerfectHash ||
-        query_mem_desc_.hash_type == GroupByColRangeType::MultiCol);
-  if (isEmptyEntry(entry_idx, that_buff)) {
-    return;
-  }
-  // copy the key from right hand side
-  if (!query_mem_desc_.keyless_hash) {
-    copyKeyColWise(entry_idx, this_buff, that_buff);
-  }
+void ResultSetStorage::reduceEntriesNoCollisionsColWise(int8_t* this_buff,
+                                                        const int8_t* that_buff,
+                                                        const ResultSetStorage& that,
+                                                        const size_t start_index,
+                                                        const size_t end_index) const {
   auto this_crt_col_ptr = get_cols_ptr(this_buff, query_mem_desc_);
   auto that_crt_col_ptr = get_cols_ptr(that_buff, query_mem_desc_);
   size_t agg_col_idx = 0;
@@ -190,15 +189,31 @@ void ResultSetStorage::reduceOneEntryNoCollisionsColWise(const size_t entry_idx,
     const auto& agg_info = targets_[target_idx];
     const auto this_next_col_ptr = advance_to_next_columnar_target_buff(this_crt_col_ptr, query_mem_desc_, agg_col_idx);
     const auto that_next_col_ptr = advance_to_next_columnar_target_buff(that_crt_col_ptr, query_mem_desc_, agg_col_idx);
-    auto this_ptr1 = this_crt_col_ptr + entry_idx * query_mem_desc_.agg_col_widths[agg_col_idx].compact;
-    auto that_ptr1 = that_crt_col_ptr + entry_idx * query_mem_desc_.agg_col_widths[agg_col_idx].compact;
-    int8_t* this_ptr2{nullptr};
-    const int8_t* that_ptr2{nullptr};
-    if (agg_info.is_agg && agg_info.agg_kind == kAVG) {
-      this_ptr2 = this_next_col_ptr + entry_idx * query_mem_desc_.agg_col_widths[agg_col_idx + 1].compact;
-      that_ptr2 = that_next_col_ptr + entry_idx * query_mem_desc_.agg_col_widths[agg_col_idx + 1].compact;
+    for (size_t entry_idx = start_index; entry_idx < end_index; ++entry_idx) {
+      check_watchdog(entry_idx);
+      if (__builtin_expect(query_mem_desc_.keyless_hash, 0)) {
+        if (isEmptyEntry(entry_idx, that_buff)) {
+          continue;
+        }
+      } else {
+        // We should probably optimize the layout of ResultSetStorage::isEmptyEntry so
+        // that we can use it here and avoid this intrusive micro-optimization.
+        if (reinterpret_cast<const int64_t*>(that_buff)[entry_idx] == EMPTY_KEY_64) {
+          continue;
+        }
+        // copy the key from right hand side
+        copyKeyColWise(entry_idx, this_buff, that_buff);
+      }
+      auto this_ptr1 = this_crt_col_ptr + entry_idx * query_mem_desc_.agg_col_widths[agg_col_idx].compact;
+      auto that_ptr1 = that_crt_col_ptr + entry_idx * query_mem_desc_.agg_col_widths[agg_col_idx].compact;
+      int8_t* this_ptr2{nullptr};
+      const int8_t* that_ptr2{nullptr};
+      if (agg_info.is_agg && agg_info.agg_kind == kAVG) {
+        this_ptr2 = this_next_col_ptr + entry_idx * query_mem_desc_.agg_col_widths[agg_col_idx + 1].compact;
+        that_ptr2 = that_next_col_ptr + entry_idx * query_mem_desc_.agg_col_widths[agg_col_idx + 1].compact;
+      }
+      reduceOneSlot(this_ptr1, this_ptr2, that_ptr1, that_ptr2, agg_info, target_idx, agg_col_idx, agg_col_idx, that);
     }
-    reduceOneSlot(this_ptr1, this_ptr2, that_ptr1, that_ptr2, agg_info, target_idx, agg_col_idx, agg_col_idx, that);
     this_crt_col_ptr = this_next_col_ptr;
     that_crt_col_ptr = that_next_col_ptr;
     if (agg_info.is_agg && agg_info.agg_kind == kAVG) {
