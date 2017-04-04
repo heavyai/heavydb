@@ -148,6 +148,28 @@ std::vector<TargetValue> ResultSet::getRowAt(const size_t global_entry_idx,
   return row;
 }
 
+OneIntegerColumnRow ResultSet::getOneColRow(const size_t global_entry_idx) const {
+  const auto storage_lookup_result = findStorage(global_entry_idx);
+  const auto storage = storage_lookup_result.storage_ptr;
+  const auto local_entry_idx = storage_lookup_result.fixedup_entry_idx;
+  if (storage->isEmptyEntry(local_entry_idx)) {
+    return {0, false};
+  }
+  const auto buff = storage->buff_;
+  CHECK(buff);
+  CHECK(!query_mem_desc_.output_columnar);
+  const auto keys_ptr = row_ptr_rowwise(buff, query_mem_desc_, local_entry_idx);
+  const auto key_bytes_with_padding = align_to_int64(get_key_bytes_rowwise(query_mem_desc_));
+  const auto rowwise_target_ptr = keys_ptr + key_bytes_with_padding;
+  const auto tv = getTargetValueFromBufferRowwise(
+      rowwise_target_ptr, keys_ptr, global_entry_idx, targets_.front(), 0, 0, false, false);
+  const auto scalar_tv = boost::get<ScalarTargetValue>(&tv);
+  CHECK(scalar_tv);
+  const auto ival_ptr = boost::get<int64_t>(scalar_tv);
+  CHECK(ival_ptr);
+  return {*ival_ptr, true};
+}
+
 std::vector<TargetValue> ResultSet::getRowAt(const size_t logical_index) const {
   if (logical_index >= entryCount()) {
     return {};

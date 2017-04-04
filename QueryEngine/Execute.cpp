@@ -874,6 +874,10 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Expr* expr,
   if (in_expr) {
     return {codegen(in_expr, co)};
   }
+  auto in_integer_set_expr = dynamic_cast<const Analyzer::InIntegerSet*>(expr);
+  if (in_integer_set_expr) {
+    return {codegen(in_integer_set_expr, co)};
+  }
   auto function_oper_with_custom_type_handling_expr =
       dynamic_cast<const Analyzer::FunctionOperWithCustomTypeHandling*>(expr);
   if (function_oper_with_custom_type_handling_expr) {
@@ -1142,6 +1146,36 @@ llvm::Value* Executor::codegen(const Analyzer::InValues* expr, const Compilation
     }
   }
   return result;
+}
+
+llvm::Value* Executor::codegen(const Analyzer::InIntegerSet* in_integer_set, const CompilationOptions& co) {
+  const auto in_arg = in_integer_set->get_arg();
+  if (is_unnest(in_arg)) {
+    throw std::runtime_error("IN not supported for unnested expressions");
+  }
+  const auto& ti = in_integer_set->get_arg()->get_type_info();
+  const auto needle_null_val = inline_int_null_val(ti);
+  auto in_vals_bitmap = boost::make_unique<InValuesBitmap>(
+      in_integer_set->get_value_list(),
+      needle_null_val,
+      co.device_type_ == ExecutorDeviceType::GPU ? Data_Namespace::GPU_LEVEL : Data_Namespace::CPU_LEVEL,
+      deviceCount(co.device_type_),
+      &catalog_->get_dataMgr());
+  const auto& in_integer_set_ti = in_integer_set->get_type_info();
+  CHECK(in_integer_set_ti.is_boolean());
+  const auto lhs_lvs = codegen(in_arg, true, co);
+  llvm::Value* result{nullptr};
+  if (in_integer_set_ti.get_notnull()) {
+    result = llvm::ConstantInt::get(llvm::IntegerType::getInt1Ty(cgen_state_->context_), false);
+  } else {
+    result = ll_int(int8_t(0));
+  }
+  CHECK(result);
+  if (in_vals_bitmap->isEmpty()) {
+    return in_vals_bitmap->hasNull() ? inlineIntNull(SQLTypeInfo(kBOOLEAN, false)) : result;
+  }
+  CHECK_EQ(size_t(1), lhs_lvs.size());
+  return cgen_state_->addInValuesBitmap(in_vals_bitmap)->codegen(lhs_lvs.front(), this);
 }
 
 std::unique_ptr<InValuesBitmap> Executor::createInValuesBitmap(const Analyzer::InValues* in_values,

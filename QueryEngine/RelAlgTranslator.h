@@ -50,6 +50,9 @@ class RelAlgTranslator {
 
   std::shared_ptr<Analyzer::Expr> translateInOper(const RexOperator*) const;
 
+  std::shared_ptr<Analyzer::Expr> getInIntegerSetExpr(std::shared_ptr<Analyzer::Expr> arg,
+                                                      const ResultRows& val_rows) const;
+
   std::shared_ptr<Analyzer::Expr> translateOper(const RexOperator*) const;
 
   std::shared_ptr<Analyzer::Expr> translateCase(const RexCase*) const;

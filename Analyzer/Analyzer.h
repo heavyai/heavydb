@@ -488,6 +488,33 @@ class InValues : public Expr {
 };
 
 /*
+ * @type InIntegerSet
+ * @brief represents predicate expr IN (v1, v2, ...) for the case where the right
+ *        hand side is a list of integers or dictionary-encoded strings generated
+ *        by a IN subquery. Avoids the overhead of storing a list of shared pointers
+ *        to Constant objects, making it more suitable for IN sub-queries usage.
+ * v1, v2, ... are integers
+ */
+class InIntegerSet : public Expr {
+ public:
+  InIntegerSet(std::shared_ptr<Analyzer::Expr> a, const std::vector<int64_t>& values, const bool not_null);
+
+  const Expr* get_arg() const { return arg.get(); }
+
+  const std::vector<int64_t>& get_value_list() const { return value_list; }
+
+  std::shared_ptr<Analyzer::Expr> deep_copy() const override;
+
+  bool operator==(const Expr& rhs) const override;
+
+  void print() const override;
+
+ private:
+  const std::shared_ptr<Analyzer::Expr> arg;  // the argument left of IN
+  const std::vector<int64_t> value_list;      // the list of values right of IN
+};
+
+/*
  * @type CharLengthExpr
  * @brief expression for the CHAR_LENGTH expression.
  * arg must evaluate to char, varchar or text.

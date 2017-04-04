@@ -131,6 +131,11 @@ struct ColumnLazyFetchInfo {
   const SQLTypeInfo type;
 };
 
+struct OneIntegerColumnRow {
+  const int64_t value;
+  const bool valid;
+};
+
 class TSerializedRows;
 
 class ResultSet {
@@ -175,6 +180,11 @@ class ResultSet {
   std::vector<TargetValue> getNextRow(const bool translate_strings, const bool decimal_to_double) const;
 
   std::vector<TargetValue> getRowAt(const size_t index) const;
+
+  // Specialized random access getter for result sets with a single column to
+  // avoid the overhead of building a std::vector<TargetValue> result with only
+  // one element. Only used by RelAlgTranslator::getInIntegerSetExpr currently.
+  OneIntegerColumnRow getOneColRow(const size_t index) const;
 
   std::vector<TargetValue> getRowAtNoTranslations(const size_t index) const;
 

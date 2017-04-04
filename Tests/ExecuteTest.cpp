@@ -2338,6 +2338,7 @@ TEST(Select, Subqueries) {
     ASSERT_EQ(int64_t(0), v<int64_t>(run_simple_agg("SELECT * FROM (SELECT rowid FROM test WHERE rowid = 0);", dt)));
     c("SELECT COUNT(*) FROM test WHERE x NOT IN (SELECT x FROM test GROUP BY x ORDER BY COUNT(*));", dt);
     c("SELECT COUNT(*) FROM test WHERE x NOT IN (SELECT x FROM test GROUP BY x);", dt);
+    c("SELECT COUNT(*) FROM test WHERE f IN (SELECT DISTINCT f FROM test WHERE x > 7);", dt);
     c("SELECT empty.x, CASE WHEN empty.y IN (SELECT empty.y FROM empty GROUP BY empty.y) then empty.y END yy, sum(x) "
       "FROM empty GROUP BY empty.x, yy;",
       dt);

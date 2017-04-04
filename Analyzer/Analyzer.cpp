@@ -1090,6 +1090,9 @@ void InValues::group_predicates(std::list<const Expr*>& scan_predicates,
     const_predicates.push_back(this);
 }
 
+InIntegerSet::InIntegerSet(std::shared_ptr<Analyzer::Expr> a, const std::vector<int64_t>& l, const bool not_null)
+    : Expr(kBOOLEAN, not_null), arg(a), value_list(l) {}
+
 void CharLengthExpr::group_predicates(std::list<const Expr*>& scan_predicates,
                                       std::list<const Expr*>& join_predicates,
                                       std::list<const Expr*>& const_predicates) const {
@@ -1725,6 +1728,28 @@ void InValues::print() const {
   std::cout << "(";
   for (auto e : value_list)
     e->print();
+  std::cout << ") ";
+}
+
+std::shared_ptr<Analyzer::Expr> InIntegerSet::deep_copy() const {
+  return std::make_shared<InIntegerSet>(arg, value_list, get_type_info().get_notnull());
+}
+
+bool InIntegerSet::operator==(const Expr& rhs) const {
+  if (!dynamic_cast<const InIntegerSet*>(&rhs)) {
+    return false;
+  }
+  const auto& rhs_in_integer_set = static_cast<const InIntegerSet&>(rhs);
+  return *arg == *rhs_in_integer_set.arg && value_list == rhs_in_integer_set.value_list;
+}
+
+void InIntegerSet::print() const {
+  std::cout << "(IN_INTEGER_SET ";
+  arg->print();
+  std::cout << "( ";
+  for (const auto e : value_list) {
+    std::cout << e << " ";
+  }
   std::cout << ") ";
 }
 

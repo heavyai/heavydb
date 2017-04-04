@@ -10,6 +10,8 @@
 
 #include "../Analyzer/Analyzer.h"
 #include "../Parser/ParserNode.h"
+#include "../Shared/likely.h"
+#include "../Shared/measure.h"
 #include "../Shared/thread_count.h"
 
 #include <future>
@@ -330,61 +332,67 @@ std::shared_ptr<Analyzer::Expr> get_in_values_expr(std::shared_ptr<Analyzer::Exp
   if (!can_use_parallel_algorithms(val_rows)) {
     return nullptr;
   }
-  if (auto val_sets = val_rows.getResultSet()) {
-    std::list<std::shared_ptr<Analyzer::Expr>> value_exprs;
-    const size_t fetcher_count = cpu_threads();
-    std::vector<std::list<std::shared_ptr<Analyzer::Expr>>> expr_set(fetcher_count,
-                                                                     std::list<std::shared_ptr<Analyzer::Expr>>());
-    std::vector<std::future<void>> fetcher_threads;
-    const auto& ti = arg->get_type_info();
-    const auto entry_count = val_sets->entryCount();
-    for (size_t i = 0, start_entry = 0, stride = (entry_count + fetcher_count - 1) / fetcher_count;
-         i < fetcher_count && start_entry < entry_count;
-         ++i, start_entry += stride) {
-      const auto end_entry = std::min(start_entry + stride, entry_count);
-      fetcher_threads.push_back(std::async(
-          std::launch::async,
-          [&](std::list<std::shared_ptr<Analyzer::Expr>>& in_vals, const size_t start, const size_t end) {
-            for (auto index = start; index < end; ++index) {
-              auto row = val_sets->getRowAt(index);
-              if (row.empty()) {
-                continue;
-              }
-              auto scalar_tv = boost::get<ScalarTargetValue>(&row[0]);
-              Datum d{0};
-              bool is_null_const{false};
-              std::tie(d, is_null_const) = datum_from_scalar_tv(scalar_tv, ti);
-              if (ti.is_string() && ti.get_compression() != kENCODING_NONE) {
-                auto ti_none_encoded = ti;
-                ti_none_encoded.set_compression(kENCODING_NONE);
-                auto none_encoded_string = makeExpr<Analyzer::Constant>(ti, is_null_const, d);
-                auto dict_encoded_string = std::make_shared<Analyzer::UOper>(ti, false, kCAST, none_encoded_string);
-                in_vals.push_back(dict_encoded_string);
-              } else {
-                in_vals.push_back(makeExpr<Analyzer::Constant>(ti, is_null_const, d));
-              }
-            }
-          },
-          std::ref(expr_set[i]),
-          start_entry,
-          end_entry));
-    }
-    for (auto& child : fetcher_threads) {
-      child.get();
-    }
-
-    val_sets->moveToBegin();
-    for (auto& exprs : expr_set) {
-      value_exprs.splice(value_exprs.end(), exprs);
-    }
-    return makeExpr<Analyzer::InValues>(arg, value_exprs);
-  } else {
-    return nullptr;
+  const auto val_sets = val_rows.getResultSet();
+  CHECK(val_sets);
+  if (val_sets->rowCount() > 5000000 && g_enable_watchdog) {
+    throw std::runtime_error("Unable to handle 'expr IN (subquery)', subquery returned 5M+ rows.");
   }
+  std::list<std::shared_ptr<Analyzer::Expr>> value_exprs;
+  const size_t fetcher_count = cpu_threads();
+  std::vector<std::list<std::shared_ptr<Analyzer::Expr>>> expr_set(fetcher_count,
+                                                                   std::list<std::shared_ptr<Analyzer::Expr>>());
+  std::vector<std::future<void>> fetcher_threads;
+  const auto& ti = arg->get_type_info();
+  const auto entry_count = val_sets->entryCount();
+  for (size_t i = 0, start_entry = 0, stride = (entry_count + fetcher_count - 1) / fetcher_count;
+       i < fetcher_count && start_entry < entry_count;
+       ++i, start_entry += stride) {
+    const auto end_entry = std::min(start_entry + stride, entry_count);
+    fetcher_threads.push_back(std::async(
+        std::launch::async,
+        [&](std::list<std::shared_ptr<Analyzer::Expr>>& in_vals, const size_t start, const size_t end) {
+          for (auto index = start; index < end; ++index) {
+            auto row = val_sets->getRowAt(index);
+            if (row.empty()) {
+              continue;
+            }
+            auto scalar_tv = boost::get<ScalarTargetValue>(&row[0]);
+            Datum d{0};
+            bool is_null_const{false};
+            std::tie(d, is_null_const) = datum_from_scalar_tv(scalar_tv, ti);
+            if (ti.is_string() && ti.get_compression() != kENCODING_NONE) {
+              auto ti_none_encoded = ti;
+              ti_none_encoded.set_compression(kENCODING_NONE);
+              auto none_encoded_string = makeExpr<Analyzer::Constant>(ti, is_null_const, d);
+              auto dict_encoded_string = std::make_shared<Analyzer::UOper>(ti, false, kCAST, none_encoded_string);
+              in_vals.push_back(dict_encoded_string);
+            } else {
+              in_vals.push_back(makeExpr<Analyzer::Constant>(ti, is_null_const, d));
+            }
+          }
+        },
+        std::ref(expr_set[i]),
+        start_entry,
+        end_entry));
+  }
+  for (auto& child : fetcher_threads) {
+    child.get();
+  }
+
+  val_sets->moveToBegin();
+  for (auto& exprs : expr_set) {
+    value_exprs.splice(value_exprs.end(), exprs);
+  }
+  return makeExpr<Analyzer::InValues>(arg, value_exprs);
 }
 
 }  // namespace
 
+// Creates an Analyzer expression for an IN subquery which subsequently goes through
+// the regular Executor::codegen() mechanism. The creation of the expression out of
+// the result set of the subquery is parallelizes whenever possible. In addition, it
+// takes advantage of the additional information that all the elements in the right
+// hand side are constants created out of the result set through getInIntegerSetExpr().
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInOper(const RexOperator* rex_operator) const {
   if (just_explain_) {
     throw std::runtime_error("EXPLAIN is not supported with sub-queries");
@@ -398,15 +406,16 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInOper(const RexOpera
   auto result = rex_subquery->getExecutionResult();
   auto& row_set = result->getRows();
   row_set.moveToBegin();
-  const auto row_count = row_set.rowCount();
-  if (row_count > 10000) {
-    if (row_count > 5000000 && g_enable_watchdog) {
-      throw std::runtime_error("Unable to handle 'expr IN (subquery)', subquery returned 5M+ rows.");
+  if (row_set.getResultSet() && row_set.getResultSet()->entryCount() > 10000) {
+    std::shared_ptr<Analyzer::Expr> expr;
+    if ((ti.is_integer() || (ti.is_string() && ti.get_compression() == kENCODING_DICT)) &&
+        !row_set.getQueryMemDesc().output_columnar) {
+      expr = getInIntegerSetExpr(lhs, row_set);
+    } else {
+      expr = get_in_values_expr(lhs, row_set);
     }
-    if (auto expr = get_in_values_expr(lhs, row_set)) {
+    if (expr) {
       return expr;
-    } else if (g_enable_watchdog) {
-      throw std::runtime_error("Unable to handle 'expr IN (subquery)', subquery returned 10000+ rows.");
     }
   }
   std::list<std::shared_ptr<Analyzer::Expr>> value_exprs;
@@ -414,6 +423,9 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInOper(const RexOpera
     auto row = row_set.getNextRow(true, false);
     if (row.empty())
       break;
+    if (g_enable_watchdog && value_exprs.size() >= 10000) {
+      throw std::runtime_error("Unable to handle 'expr IN (subquery)', subquery returned 10000+ rows.");
+    }
     auto scalar_tv = boost::get<ScalarTargetValue>(&row[0]);
     Datum d{0};
     bool is_null_const{false};
@@ -429,6 +441,120 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInOper(const RexOpera
     }
   }
   return makeExpr<Analyzer::InValues>(lhs, value_exprs);
+}
+
+namespace {
+
+const size_t g_max_integer_set_size{1 << 25};
+
+void fill_dictionary_encoded_in_vals(std::vector<int64_t>& in_vals,
+                                     std::atomic<size_t>& total_in_vals_count,
+                                     const ResultSet* values_rowset,
+                                     const std::pair<int64_t, int64_t> values_rowset_slice,
+                                     const StringDictionary* source_dict,
+                                     const StringDictionary* dest_dict,
+                                     const int64_t needle_null_val) {
+  CHECK(in_vals.empty());
+  for (auto index = values_rowset_slice.first; index < values_rowset_slice.second; ++index) {
+    const auto row = values_rowset->getOneColRow(index);
+    if (row.valid) {
+      const int string_id =
+          row.value == needle_null_val ? needle_null_val : dest_dict->getIdOfString(source_dict->getString(row.value));
+      if (string_id >= 0 || string_id == needle_null_val) {
+        in_vals.push_back(string_id);
+        if (UNLIKELY(g_enable_watchdog && (in_vals.size() & 1023) == 0 &&
+                     total_in_vals_count.fetch_add(1024) >= g_max_integer_set_size)) {
+          throw std::runtime_error("Unable to handle 'expr IN (subquery)', subquery returned 30M+ rows.");
+        }
+      }
+    }
+  }
+}
+
+void fill_integer_in_vals(std::vector<int64_t>& in_vals,
+                          std::atomic<size_t>& total_in_vals_count,
+                          const ResultSet* values_rowset,
+                          const std::pair<int64_t, int64_t> values_rowset_slice) {
+  CHECK(in_vals.empty());
+  for (auto index = values_rowset_slice.first; index < values_rowset_slice.second; ++index) {
+    const auto row = values_rowset->getOneColRow(index);
+    if (row.valid) {
+      in_vals.push_back(row.value);
+      if (UNLIKELY(g_enable_watchdog && (in_vals.size() & 1023) == 0 &&
+                   total_in_vals_count.fetch_add(1024) >= g_max_integer_set_size)) {
+        throw std::runtime_error("Unable to handle 'expr IN (subquery)', subquery returned 30M+ rows.");
+      }
+    }
+  }
+}
+
+}  // namespace
+
+// The typical IN subquery involves either dictionary-encoded strings or integers.
+// Analyzer::InValues is a very heavy representation of the right hand side of such
+// a query since we already know the right hand would be a list of Analyzer::Constant
+// shared pointers. We can avoid the big overhead of each Analyzer::Constant and the
+// refcounting associated with shared pointers by creating an abbreviated InIntegerSet
+// representation of the IN expression which takes advantage of the this information.
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::getInIntegerSetExpr(std::shared_ptr<Analyzer::Expr> arg,
+                                                                      const ResultRows& val_rows) const {
+  if (!can_use_parallel_algorithms(val_rows)) {
+    return nullptr;
+  }
+  auto values_rowset = val_rows.getResultSet();
+  CHECK(values_rowset);
+  std::vector<int64_t> value_exprs;
+  const size_t fetcher_count = cpu_threads();
+  std::vector<std::vector<int64_t>> expr_set(fetcher_count);
+  std::vector<std::future<void>> fetcher_threads;
+  const auto& arg_type = arg->get_type_info();
+  const auto entry_count = values_rowset->entryCount();
+  CHECK_EQ(size_t(1), values_rowset->colCount());
+  const auto& col_type = values_rowset->getColType(0);
+  std::atomic<size_t> total_in_vals_count{0};
+  for (size_t i = 0, start_entry = 0, stride = (entry_count + fetcher_count - 1) / fetcher_count;
+       i < fetcher_count && start_entry < entry_count;
+       ++i, start_entry += stride) {
+    expr_set[i].reserve(entry_count / fetcher_count);
+    const auto end_entry = std::min(start_entry + stride, entry_count);
+    if (arg_type.is_string()) {
+      CHECK_EQ(kENCODING_DICT, arg_type.get_compression());
+      const auto dd = cat_.getMetadataForDict(arg_type.get_comp_param())->stringDict.get();
+      const auto sd = cat_.getMetadataForDict(col_type.get_comp_param())->stringDict.get();
+      CHECK(sd);
+      const auto needle_null_val = inline_int_null_val(arg_type);
+      fetcher_threads.push_back(
+          std::async(std::launch::async,
+                     [&values_rowset, &total_in_vals_count, sd, dd, needle_null_val](
+                         std::vector<int64_t>& in_vals, const size_t start, const size_t end) {
+                       fill_dictionary_encoded_in_vals(
+                           in_vals, total_in_vals_count, values_rowset.get(), {start, end}, sd, dd, needle_null_val);
+                     },
+                     std::ref(expr_set[i]),
+                     start_entry,
+                     end_entry));
+    } else {
+      CHECK(arg_type.is_integer());
+      fetcher_threads.push_back(std::async(
+          std::launch::async,
+          [&values_rowset, &total_in_vals_count](std::vector<int64_t>& in_vals, const size_t start, const size_t end) {
+            fill_integer_in_vals(in_vals, total_in_vals_count, values_rowset.get(), {start, end});
+          },
+          std::ref(expr_set[i]),
+          start_entry,
+          end_entry));
+    }
+  }
+  for (auto& child : fetcher_threads) {
+    child.get();
+  }
+
+  values_rowset->moveToBegin();
+  value_exprs.reserve(entry_count);
+  for (auto& exprs : expr_set) {
+    value_exprs.insert(value_exprs.end(), exprs.begin(), exprs.end());
+  }
+  return makeExpr<Analyzer::InIntegerSet>(arg, value_exprs, arg_type.get_notnull() && col_type.get_notnull());
 }
 
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateOper(const RexOperator* rex_operator) const {
