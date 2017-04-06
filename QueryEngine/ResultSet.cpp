@@ -248,7 +248,7 @@ size_t ResultSet::rowCount() const {
     CHECK_GE(cached_row_count_, 0);
     return cached_row_count_;
   }
-  if (entryCount() > 100000 && !isTruncated()) {
+  if (entryCount() > 100000) {
     return parallelRowCount();
   }
   std::lock_guard<std::mutex> lock(row_count_mutex_);
@@ -297,6 +297,10 @@ size_t ResultSet::parallelRowCount() const {
   }
   for (auto& child : counter_threads) {
     row_count += child.get();
+  }
+  if (keep_first_ + drop_first_) {
+    const auto limited_row_count = std::min(keep_first_ + drop_first_, row_count);
+    return limited_row_count < drop_first_ ? 0 : limited_row_count - drop_first_;
   }
   return row_count;
 }
@@ -361,18 +365,7 @@ void ResultSet::moveToBegin() const {
 }
 
 bool ResultSet::isTruncated() const {
-  const auto rows_to_keep = keep_first_ + drop_first_;
-  if (!rows_to_keep) {
-    return false;
-  }
-  if (rows_to_keep < storage_->query_mem_desc_.entry_count) {
-    return true;
-  }
-  return std::count_if(appended_storage_.begin(),
-                       appended_storage_.end(),
-                       [rows_to_keep](const std::unique_ptr<ResultSetStorage>& storage) {
-                         return rows_to_keep < storage->query_mem_desc_.entry_count;
-                       });
+  return keep_first_ + drop_first_;
 }
 
 QueryMemoryDescriptor ResultSet::fixupQueryMemoryDescriptor(const QueryMemoryDescriptor& query_mem_desc) {
