@@ -94,10 +94,13 @@ void ResultSetStorage::reduce(const ResultSetStorage& that) const {
       const size_t thread_count = cpu_threads();
       std::vector<std::future<void>> reduction_threads;
       for (size_t thread_idx = 0; thread_idx < thread_count; ++thread_idx) {
+        const auto thread_entry_count = (that.query_mem_desc_.entry_count + thread_count - 1) / thread_count;
+        const auto start_index = thread_idx * thread_entry_count;
+        const auto end_index = std::min(start_index + thread_entry_count, that.query_mem_desc_.entry_count);
         reduction_threads.emplace_back(
-            std::async(std::launch::async, [this, thread_idx, thread_count, this_buff, that_buff, &that] {
-              for (size_t i = thread_idx; i < that.query_mem_desc_.entry_count; i += thread_count) {
-                reduceOneEntryBaseline(this_buff, that_buff, i, that.query_mem_desc_.entry_count, that);
+            std::async(std::launch::async, [this, this_buff, that_buff, start_index, end_index, &that] {
+              for (size_t entry_idx = start_index; entry_idx < end_index; ++entry_idx) {
+                reduceOneEntryBaseline(this_buff, that_buff, entry_idx, that.query_mem_desc_.entry_count, that);
               }
             }));
       }
