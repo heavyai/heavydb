@@ -1051,6 +1051,7 @@ ImportStatus Importer::importDelimited() {
       break;
     }
   }
+  // todo MAT we need to review whether this checkpoint process makes sense
   auto ms = measure<>::execution([&]() {
     if (!load_failed) {
       for (auto& p : import_buffers_vec[0]) {
@@ -1060,8 +1061,6 @@ ImportStatus Importer::importDelimited() {
           break;
         }
       }
-      if (!load_failed)
-        loader->checkpoint(loader->get_catalog().get_currentDB().dbId, loader->get_table_desc()->tableId);
     }
   });
   if (debug_timing)

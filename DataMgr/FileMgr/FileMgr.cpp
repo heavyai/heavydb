@@ -59,7 +59,7 @@ FileMgr::FileMgr(const int deviceId,
 FileMgr::FileMgr(GlobalFileMgr* gfm, const size_t defaultPageSize, std::string basePath)
     : AbstractBufferMgr(0),
       gfm_(gfm),
-      fileMgrKey_(0,0),
+      fileMgrKey_(0, 0),
       fileMgrBasePath_(basePath),
       defaultPageSize_(defaultPageSize),
       nextFileId_(0),
@@ -82,9 +82,10 @@ void FileMgr::init(const size_t num_reader_threads) {
   // if epoch = -1 this means open from epoch file
   const std::string fileMgrDirPrefix("table");
   const std::string FileMgrDirDelim("_");
-  fileMgrBasePath_ = (gfm_->getBasePath() + fileMgrDirPrefix +
-                      FileMgrDirDelim + std::to_string(fileMgrKey_.first) +         // db_id
-                      FileMgrDirDelim + std::to_string(fileMgrKey_.second) + "/");  // tb_id
+  fileMgrBasePath_ =
+      (gfm_->getBasePath() + fileMgrDirPrefix + FileMgrDirDelim + std::to_string(fileMgrKey_.first) +  // db_id
+       FileMgrDirDelim +
+       std::to_string(fileMgrKey_.second) + "/");  // tb_id
   boost::filesystem::path path(fileMgrBasePath_);
   if (boost::filesystem::exists(path)) {
     if (!boost::filesystem::is_directory(path))
@@ -228,7 +229,7 @@ void FileMgr::init(const std::string dataPathToConvertFrom) {
         // note that boost::filesystem leaves preceding dot on
         // extension - hence MAPD_FILE_EXT is ".mapd"
         std::string extension(fileIt->path().extension().string());
-        
+
         if (extension == MAPD_FILE_EXT) {
           std::string fileStem(fileIt->path().stem().string());
           // remove trailing dot if any
@@ -278,12 +279,13 @@ void FileMgr::init(const std::string dataPathToConvertFrom) {
           c_fm_->chunkIndex_[lastChunkKey] = destBuf;
           destBuf->syncEncoder(srcBuf);
           destBuf->setSize(srcBuf->size());
-          destBuf->setDirty(); // this needs to be set to force writing out metadata files from "checkpoint()" call
+          destBuf->setDirty();  // this needs to be set to force writing out metadata files from "checkpoint()" call
 
           size_t totalNumPages = srcBuf->getMultiPage().size();
           for (size_t pageNum = 0; pageNum < totalNumPages; pageNum++) {
             Page srcPage = srcBuf->getMultiPage()[pageNum].current();
-            Page destPage = c_fm_->requestFreePage(srcBuf->pageSize(), false); // may modify and use api "FileBuffer::addNewMultiPage" instead
+            Page destPage = c_fm_->requestFreePage(
+                srcBuf->pageSize(), false);  // may modify and use api "FileBuffer::addNewMultiPage" instead
             MultiPage multiPage(srcBuf->pageSize());
             multiPage.epochs.push_back(converted_data_epoch);
             multiPage.pageVersions.push_back(destPage);
@@ -294,7 +296,7 @@ void FileMgr::init(const std::string dataPathToConvertFrom) {
           }
           lastChunkKey = headerIt->chunkKey;
           startIt = headerIt;
-        } 
+        }
       }
 
       // now need to insert last Chunk
@@ -305,12 +307,13 @@ void FileMgr::init(const std::string dataPathToConvertFrom) {
       c_fm_->chunkIndex_[lastChunkKey] = destBuf;
       destBuf->syncEncoder(srcBuf);
       destBuf->setSize(srcBuf->size());
-      destBuf->setDirty(); // this needs to be set to write out metadata file from the "checkpoint()" call
+      destBuf->setDirty();  // this needs to be set to write out metadata file from the "checkpoint()" call
 
       size_t totalNumPages = srcBuf->getMultiPage().size();
       for (size_t pageNum = 0; pageNum < totalNumPages; pageNum++) {
         Page srcPage = srcBuf->getMultiPage()[pageNum].current();
-        Page destPage = c_fm_->requestFreePage(srcBuf->pageSize(), false); // may modify and use api "FileBuffer::addNewMultiPage" instead
+        Page destPage = c_fm_->requestFreePage(srcBuf->pageSize(),
+                                               false);  // may modify and use api "FileBuffer::addNewMultiPage" instead
         MultiPage multiPage(srcBuf->pageSize());
         multiPage.epochs.push_back(converted_data_epoch);
         multiPage.pageVersions.push_back(destPage);
@@ -329,14 +332,18 @@ void FileMgr::init(const std::string dataPathToConvertFrom) {
 }
 
 void FileMgr::copyPage(Page& srcPage,
-                       FileMgr* destFileMgr, Page& destPage,
-                       const size_t reservedHeaderSize, const size_t numBytes, const size_t offset) {
+                       FileMgr* destFileMgr,
+                       Page& destPage,
+                       const size_t reservedHeaderSize,
+                       const size_t numBytes,
+                       const size_t offset) {
   CHECK(offset + numBytes <= defaultPageSize_);
   FileInfo* srcFileInfo = getFileInfoForFileId(srcPage.fileId);
   FileInfo* destFileInfo = destFileMgr->getFileInfoForFileId(destPage.fileId);
   int8_t* buffer = new int8_t[numBytes];
 
-  size_t bytesRead = srcFileInfo->read(srcPage.pageNum * defaultPageSize_ + offset + reservedHeaderSize, numBytes, buffer);
+  size_t bytesRead =
+      srcFileInfo->read(srcPage.pageNum * defaultPageSize_ + offset + reservedHeaderSize, numBytes, buffer);
   CHECK(bytesRead == numBytes);
   size_t bytesWritten =
       destFileInfo->write(destPage.pageNum * defaultPageSize_ + offset + reservedHeaderSize, numBytes, buffer);
@@ -392,12 +399,12 @@ void FileMgr::createDBMetaFile(const std::string& DBMetaFileName) {
   DBMetaFile_ = create(DBMetaFilePath, sizeof(int));
   int db_ver = getDBVersion();
   write(DBMetaFile_, 0, sizeof(int), (int8_t*)&db_ver);
-  // LOG(INFO) << "DB metadata file has been created."; 
+  // LOG(INFO) << "DB metadata file has been created.";
 }
 
 bool FileMgr::openDBMetaFile(const std::string& DBMetaFileName) {
   std::string DBMetaFilePath(fileMgrBasePath_ + DBMetaFileName);
-  
+
   if (!boost::filesystem::exists(DBMetaFilePath)) {
     // LOG(INFO) << "DB metadata file does not exist, one will be created.";
     return false;
@@ -427,7 +434,7 @@ void FileMgr::writeAndSyncDBMetaToDisk() {
 
 void FileMgr::checkpoint() {
   // std::cout << "Checkpointing " << epoch_ <<  std::endl;
-  std::unique_lock<std::mutex> chunkIndexLock(chunkIndexMutex_);
+  mapd_unique_lock<mapd_shared_mutex> chunkIndexWriteLock(chunkIndexMutex_);
   for (auto chunkIt = chunkIndex_.begin(); chunkIt != chunkIndex_.end(); ++chunkIt) {
     /*
     for (auto vecIt = chunkIt->first.begin(); vecIt != chunkIt->first.end(); ++vecIt) {
@@ -440,7 +447,9 @@ void FileMgr::checkpoint() {
       chunkIt->second->clearDirtyBits();
     }
   }
-  chunkIndexLock.unlock();
+  chunkIndexWriteLock.unlock();
+
+  mapd_shared_lock<mapd_shared_mutex> read_lock(files_rw_mutex_);
   for (auto fileIt = files_.begin(); fileIt != files_.end(); ++fileIt) {
     int status = (*fileIt)->syncToDisk();
     if (status != 0)
@@ -458,29 +467,29 @@ AbstractBuffer* FileMgr::createBuffer(const ChunkKey& key, const size_t pageSize
   /// @todo Make all accesses to chunkIndex_ thread-safe
   // we will do this lazily and not allocate space for the Chunk (i.e.
   // FileBuffer yet)
-  std::unique_lock<std::mutex> chunkIndexLock(chunkIndexMutex_);
+  mapd_unique_lock<mapd_shared_mutex> chunkIndexWriteLock(chunkIndexMutex_);
 
   if (chunkIndex_.find(key) != chunkIndex_.end()) {
     LOG(FATAL) << "Chunk already exists.";
   }
   chunkIndex_[key] = new FileBuffer(this, actualPageSize, key, numBytes);
-  chunkIndexLock.unlock();
+  chunkIndexWriteLock.unlock();
   return (chunkIndex_[key]);
 }
 
 bool FileMgr::isBufferOnDevice(const ChunkKey& key) {
-  std::lock_guard<std::mutex> chunkIndexLock(chunkIndexMutex_);
+  mapd_shared_lock<mapd_shared_mutex> chunkIndexReadLock(chunkIndexMutex_);
   return chunkIndex_.find(key) != chunkIndex_.end();
 }
 
 void FileMgr::deleteBuffer(const ChunkKey& key, const bool purge) {
-  std::unique_lock<std::mutex> chunkIndexLock(chunkIndexMutex_);
+  mapd_unique_lock<mapd_shared_mutex> chunkIndexWriteLock(chunkIndexMutex_);
   auto chunkIt = chunkIndex_.find(key);
   // ensure the Chunk exists
   if (chunkIt == chunkIndex_.end()) {
     LOG(FATAL) << "Chunk does not exist.";
   }
-  chunkIndexLock.unlock();
+  chunkIndexWriteLock.unlock();
   // chunkIt->second->writeMetadata(-1); // writes -1 as epoch - signifies deleted
   if (purge) {
     chunkIt->second->freePages();
@@ -491,14 +500,15 @@ void FileMgr::deleteBuffer(const ChunkKey& key, const bool purge) {
 }
 
 void FileMgr::deleteBuffersWithPrefix(const ChunkKey& keyPrefix, const bool purge) {
-  std::lock_guard<std::mutex> chunkIndexLock(chunkIndexMutex_);
+  mapd_unique_lock<mapd_shared_mutex> chunkIndexWriteLock(chunkIndexMutex_);
   auto chunkIt = chunkIndex_.lower_bound(keyPrefix);
   if (chunkIt == chunkIndex_.end()) {
     return;  // should we throw?
   }
   while (chunkIt != chunkIndex_.end() &&
-         std::search(chunkIt->first.begin(), chunkIt->first.begin() + keyPrefix.size(), keyPrefix.begin(),
-                     keyPrefix.end()) != chunkIt->first.begin() + keyPrefix.size()) {
+         std::search(
+             chunkIt->first.begin(), chunkIt->first.begin() + keyPrefix.size(), keyPrefix.begin(), keyPrefix.end()) !=
+             chunkIt->first.begin() + keyPrefix.size()) {
     /*
     cout << "Freeing pages for chunk ";
     for (auto vecIt = chunkIt->first.begin(); vecIt != chunkIt->first.end(); ++vecIt) {
@@ -516,29 +526,28 @@ void FileMgr::deleteBuffersWithPrefix(const ChunkKey& keyPrefix, const bool purg
 }
 
 AbstractBuffer* FileMgr::getBuffer(const ChunkKey& key, const size_t numBytes) {
-  std::unique_lock<std::mutex> chunkIndexLock(chunkIndexMutex_);
+  mapd_shared_lock<mapd_shared_mutex> chunkIndexReadLock(chunkIndexMutex_);
   auto chunkIt = chunkIndex_.find(key);
   if (chunkIt == chunkIndex_.end()) {
     LOG(ERROR) << "Failed to get chunk " << showChunk(key);
     LOG(FATAL) << "Chunk does not exist." << showChunk(key);
   }
-  chunkIndexLock.unlock();
   return chunkIt->second;
 }
 
 void FileMgr::fetchBuffer(const ChunkKey& key, AbstractBuffer* destBuffer, const size_t numBytes) {
   // reads chunk specified by ChunkKey into AbstractBuffer provided by
   // destBuffer
-  std::unique_lock<std::mutex> chunkIndexLock(chunkIndexMutex_);
-
+  if (destBuffer->isDirty()) {
+    LOG(FATAL) << " Chunk inconsitency - fetchChunk";
+  }
+  mapd_shared_lock<mapd_shared_mutex> chunkIndexReadLock(chunkIndexMutex_);
   auto chunkIt = chunkIndex_.find(key);
   if (chunkIt == chunkIndex_.end()) {
     LOG(FATAL) << "Chunk does not exist";
   }
-  chunkIndexLock.unlock();
-  if (destBuffer->isDirty()) {
-    LOG(FATAL) << " Chunk inconsitency - fetchChunk";
-  }
+  chunkIndexReadLock.unlock();
+
   AbstractBuffer* chunk = chunkIt->second;
   // ChunkSize is either specified in function call with numBytes or we
   // just look at pageSize * numPages in FileBuffer
@@ -551,8 +560,11 @@ void FileMgr::fetchBuffer(const ChunkKey& key, AbstractBuffer* destBuffer, const
   if (chunk->isUpdated()) {
     chunk->read(destBuffer->getMemoryPtr(), chunkSize, 0, destBuffer->getType(), destBuffer->getDeviceId());
   } else {
-    chunk->read(destBuffer->getMemoryPtr() + destBuffer->size(), chunkSize - destBuffer->size(), destBuffer->size(),
-                destBuffer->getType(), destBuffer->getDeviceId());
+    chunk->read(destBuffer->getMemoryPtr() + destBuffer->size(),
+                chunkSize - destBuffer->size(),
+                destBuffer->size(),
+                destBuffer->getType(),
+                destBuffer->getDeviceId());
   }
   destBuffer->setSize(chunkSize);
   destBuffer->syncEncoder(chunk);
@@ -560,7 +572,7 @@ void FileMgr::fetchBuffer(const ChunkKey& key, AbstractBuffer* destBuffer, const
 
 AbstractBuffer* FileMgr::putBuffer(const ChunkKey& key, AbstractBuffer* srcBuffer, const size_t numBytes) {
   // obtain a pointer to the Chunk
-  std::unique_lock<std::mutex> chunkIndexLock(chunkIndexMutex_);
+  mapd_unique_lock<mapd_shared_mutex> chunkIndexWriteLock(chunkIndexMutex_);
   auto chunkIt = chunkIndex_.find(key);
   AbstractBuffer* chunk;
   if (chunkIt == chunkIndex_.end()) {
@@ -568,7 +580,7 @@ AbstractBuffer* FileMgr::putBuffer(const ChunkKey& key, AbstractBuffer* srcBuffe
   } else {
     chunk = chunkIt->second;
   }
-  chunkIndexLock.unlock();
+  chunkIndexWriteLock.unlock();
   size_t oldChunkSize = chunk->size();
   // write the buffer's data to the Chunk
   // size_t newChunkSize = numBytes == 0 ? srcBuffer->size() : numBytes;
@@ -582,7 +594,9 @@ AbstractBuffer* FileMgr::putBuffer(const ChunkKey& key, AbstractBuffer* srcBuffe
     chunk->write((int8_t*)srcBuffer->getMemoryPtr(), newChunkSize, 0, srcBuffer->getType(), srcBuffer->getDeviceId());
   } else if (srcBuffer->isAppended()) {
     assert(oldChunkSize < newChunkSize);
-    chunk->append((int8_t*)srcBuffer->getMemoryPtr() + oldChunkSize, newChunkSize - oldChunkSize, srcBuffer->getType(),
+    chunk->append((int8_t*)srcBuffer->getMemoryPtr() + oldChunkSize,
+                  newChunkSize - oldChunkSize,
+                  srcBuffer->getType(),
                   srcBuffer->getDeviceId());
   }
   // chunk->clearDirtyBits(); // Hack: because write and append will set dirty bits
@@ -697,7 +711,9 @@ FileInfo* FileMgr::createFile(const size_t pageSize, const size_t numPages) {
     LOG(FATAL) << "File creation failed: pageSize and numPages must be greater than 0.";
 
   // create the new file
-  FILE* f = create(fileMgrBasePath_, nextFileId_, pageSize,
+  FILE* f = create(fileMgrBasePath_,
+                   nextFileId_,
+                   pageSize,
                    numPages);  // TM: not sure if I like naming scheme here - should be in separate namespace?
   if (f == nullptr)
     LOG(FATAL) << "Unable to create the new file.";
@@ -707,6 +723,7 @@ FileInfo* FileMgr::createFile(const size_t pageSize, const size_t numPages) {
   FileInfo* fInfo = new FileInfo(fileId, f, pageSize, numPages, true);  // true means init file
   assert(fInfo);
 
+  mapd_unique_lock<mapd_shared_mutex> write_lock(files_rw_mutex_);
   // update file manager data structures
   files_.push_back(fInfo);
   fileIndex_.insert(std::pair<size_t, int>(pageSize, fileId));
@@ -728,7 +745,7 @@ void FileMgr::getAllChunkMetaInfo(std::vector<std::pair<ChunkKey, int64_t> > &me
 }
 */
 void FileMgr::getChunkMetadataVec(std::vector<std::pair<ChunkKey, ChunkMetadata>>& chunkMetadataVec) {
-  std::lock_guard<std::mutex> chunkIndexLock(chunkIndexMutex_);
+  mapd_unique_lock<mapd_shared_mutex> chunkIndexWriteLock(chunkIndexMutex_);
   chunkMetadataVec.reserve(chunkIndex_.size());
   for (auto chunkIt = chunkIndex_.begin(); chunkIt != chunkIndex_.end(); ++chunkIt) {
     if (chunkIt->second->hasEncoder) {
@@ -741,14 +758,16 @@ void FileMgr::getChunkMetadataVec(std::vector<std::pair<ChunkKey, ChunkMetadata>
 
 void FileMgr::getChunkMetadataVecForKeyPrefix(std::vector<std::pair<ChunkKey, ChunkMetadata>>& chunkMetadataVec,
                                               const ChunkKey& keyPrefix) {
-  std::lock_guard<std::mutex> chunkIndexLock(chunkIndexMutex_);
+  mapd_unique_lock<mapd_shared_mutex> chunkIndexWriteLock(
+      chunkIndexMutex_);  // is this guarding the right structure?  it look slike we oly read here for chunk
   auto chunkIt = chunkIndex_.lower_bound(keyPrefix);
   if (chunkIt == chunkIndex_.end()) {
     return;  // throw?
   }
   while (chunkIt != chunkIndex_.end() &&
-         std::search(chunkIt->first.begin(), chunkIt->first.begin() + keyPrefix.size(), keyPrefix.begin(),
-                     keyPrefix.end()) != chunkIt->first.begin() + keyPrefix.size()) {
+         std::search(
+             chunkIt->first.begin(), chunkIt->first.begin() + keyPrefix.size(), keyPrefix.begin(), keyPrefix.end()) !=
+             chunkIt->first.begin() + keyPrefix.size()) {
     /*
     for (auto vecIt = chunkIt->first.begin(); vecIt != chunkIt->first.end(); ++vecIt) {
         std::cout << *vecIt << ",";
@@ -765,18 +784,20 @@ void FileMgr::getChunkMetadataVecForKeyPrefix(std::vector<std::pair<ChunkKey, Ch
 }
 
 int FileMgr::getDBVersion() const {
-    return gfm_->getDBVersion();
+  return gfm_->getDBVersion();
 }
 
 bool FileMgr::getDBConvert() const {
-    return gfm_->getDBConvert();
+  return gfm_->getDBConvert();
 }
 
 void FileMgr::createTopLevelMetadata() {
   if (openDBMetaFile(DB_META_FILENAME)) {
     if (db_version_ > getDBVersion()) {
-      LOG(FATAL) << "DB forward compatibility is not supported. Version of mapd software used is older than the version of DB being read: " << db_version_;
-    }      
+      LOG(FATAL) << "DB forward compatibility is not supported. Version of mapd software used is older than the "
+                    "version of DB being read: "
+                 << db_version_;
+    }
   } else {
     createDBMetaFile(DB_META_FILENAME);
   }

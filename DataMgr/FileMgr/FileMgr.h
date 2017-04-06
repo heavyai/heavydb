@@ -17,6 +17,7 @@
 
 #include "../AbstractBuffer.h"
 #include "../AbstractBufferMgr.h"
+#include "../Shared/mapd_shared_mutex.h"
 #include "FileBuffer.h"
 #include "FileInfo.h"
 #include "Page.h"
@@ -25,15 +26,15 @@ using namespace Data_Namespace;
 
 namespace File_Namespace {
 
-class GlobalFileMgr; // forward declaration
-/**
- * @type PageSizeFileMMap
- * @brief Maps logical page sizes to files.
- *
- * The file manager uses this type in order to quickly find files of a certain page size.
- * A multimap is used to associate the key (page size) with values (file identifiers of files
- * having the matching page size).
- */
+class GlobalFileMgr;  // forward declaration
+                      /**
+                       * @type PageSizeFileMMap
+                       * @brief Maps logical page sizes to files.
+                       *
+                       * The file manager uses this type in order to quickly find files of a certain page size.
+                       * A multimap is used to associate the key (page size) with values (file identifiers of files
+                       * having the matching page size).
+                       */
 typedef std::multimap<size_t, int> PageSizeFileMMap;
 
 /**
@@ -65,7 +66,7 @@ typedef std::map<ChunkKey, FileBuffer*> ChunkKeyToChunkMap;
  * @brief
  */
 class FileMgr : public AbstractBufferMgr {  // implements
- friend class GlobalFileMgr;
+  friend class GlobalFileMgr;
 
  public:
   /// Constructor
@@ -76,9 +77,7 @@ class FileMgr : public AbstractBufferMgr {  // implements
           const int epoch = -1,
           const size_t defaultPageSize = 2097152);
 
-  FileMgr(GlobalFileMgr* gfm,
-          const size_t defaultPageSize,
-          std::string basePath);
+  FileMgr(GlobalFileMgr* gfm, const size_t defaultPageSize, std::string basePath);
 
   /// Destructor
   virtual ~FileMgr();
@@ -129,8 +128,12 @@ class FileMgr : public AbstractBufferMgr {  // implements
   void init(const size_t num_reader_threads);
   void init(const std::string dataPathToConvertFrom);
 
-  void copyPage(Page& srcPage, FileMgr* destFileMgr, Page& destPage,
-                const size_t reservedHeaderSize, const size_t numBytes, const size_t offset);
+  void copyPage(Page& srcPage,
+                FileMgr* destFileMgr,
+                Page& destPage,
+                const size_t reservedHeaderSize,
+                const size_t numBytes,
+                const size_t offset);
 
   /**
    * @brief Obtains free pages -- creates new files if necessary -- of the requested size.
@@ -188,11 +191,11 @@ class FileMgr : public AbstractBufferMgr {  // implements
                                    // #TM Not sure if we need this below
   int getDBVersion() const;
   bool getDBConvert() const;
-  void createTopLevelMetadata(); // create metadata shared by all tables of all DBs
+  void createTopLevelMetadata();  // create metadata shared by all tables of all DBs
   std::string getFileMgrBasePath() const { return fileMgrBasePath_; }
 
  private:
-  GlobalFileMgr* gfm_;            /// Global FileMgr
+  GlobalFileMgr* gfm_;  /// Global FileMgr
   std::pair<const int, const int> fileMgrKey_;
   std::string fileMgrBasePath_;   /// The OS file system path containing files related to this FileMgr
   std::vector<FileInfo*> files_;  /// A vector of files accessible via a file identifier.
@@ -202,11 +205,12 @@ class FileMgr : public AbstractBufferMgr {  // implements
   unsigned nextFileId_;  /// the index of the next file id
   int epoch_;            /// the current epoch (time of last checkpoint)
   FILE* epochFile_;
-  int db_version_;       /// DB version from dbmeta file, should be compatible with GlobalFileMgr::mapd_db_version_ 
-  FILE* DBMetaFile_;     /// pointer to DB level metadata
+  int db_version_;    /// DB version from dbmeta file, should be compatible with GlobalFileMgr::mapd_db_version_
+  FILE* DBMetaFile_;  /// pointer to DB level metadata
   // bool isDirty_;      /// true if metadata changed since last writeState()
   std::mutex getPageMutex_;
-  std::mutex chunkIndexMutex_;
+  mutable mapd_shared_mutex chunkIndexMutex_;
+  mutable mapd_shared_mutex files_rw_mutex_;
 
   /**
    * @brief Adds a file to the file manager repository.

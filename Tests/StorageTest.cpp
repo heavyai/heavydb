@@ -1,9 +1,13 @@
 #include <iostream>
 #include <string>
 #include <cstring>
+
 #include <cstdlib>
 #include <exception>
 #include <memory>
+
+#include <thread>
+
 #include "boost/program_options.hpp"
 #include "boost/filesystem.hpp"
 #include <boost/functional/hash.hpp>
@@ -110,6 +114,24 @@ bool storage_test(const string& table_name, size_t num_rows) {
   vector<size_t> scan_col_hashs2 = scan_table_return_hash_non_iter(table_name, gsession->get_catalog());
   return insert_col_hashs == scan_col_hashs && insert_col_hashs == scan_col_hashs2;
 }
+
+void simple_thread_wrapper(const string& table_name, size_t num_rows, size_t thread_id) {
+  populate_table_random(table_name, num_rows, gsession->get_catalog());
+}
+
+bool storage_test_parallel(const string& table_name, size_t num_rows, size_t thread_count) {
+  // Constructs a number of threads and have them push records to the table in parallel
+  vector<std::thread> myThreads;
+  for (size_t i = 0; i < thread_count; i++) {
+    myThreads.push_back(std::thread(simple_thread_wrapper, table_name, num_rows / thread_count, i));
+  }
+  for (auto& t : myThreads) {
+    t.join();
+  }
+  vector<size_t> scan_col_hashs = scan_table_return_hash(table_name, gsession->get_catalog());
+  vector<size_t> scan_col_hashs2 = scan_table_return_hash_non_iter(table_name, gsession->get_catalog());
+  return scan_col_hashs == scan_col_hashs2;
+}
 }  // namespace
 
 #define SMALL 10000000
@@ -161,6 +183,14 @@ TEST(StorageRename, AllTypes) {
 
   ASSERT_NO_THROW(run_ddl("drop table original_table;"););
   ASSERT_NO_THROW(run_ddl("drop table new_table;"););
+}
+
+TEST(StorageSmallParallel, AllTypes) {
+  ASSERT_NO_THROW(run_ddl("drop table if exists alltypes;"););
+  ASSERT_NO_THROW(run_ddl("create table alltypes (a smallint, b int, c bigint, d numeric(7,3), e double, f float, "
+                          "g timestamp(0), h time(0), i date, x varchar(10) encoding none, y text encoding none);"););
+  EXPECT_TRUE(storage_test_parallel("alltypes", SMALL, std::thread::hardware_concurrency()));
+  ASSERT_NO_THROW(run_ddl("drop table alltypes;"););
 }
 
 int main(int argc, char* argv[]) {

@@ -267,7 +267,8 @@ void InsertOrderFragmenter::insertData(const InsertData& insertDataStruct) {
   }
   numTuples_ += insertDataStruct.numRows;
   dropFragmentsToSize(maxRows_);
-  // dataMgr_->checkpoint(); leave to upper layer to call checkpoint
+  dataMgr_->checkpoint(chunkKeyPrefix_[0],
+                       chunkKeyPrefix_[1]);  // need to checkpoint here to remove window for corruption
 }
 
 FragmentInfo* InsertOrderFragmenter::createNewFragment(const Data_Namespace::MemoryLevel memoryLevel) {
