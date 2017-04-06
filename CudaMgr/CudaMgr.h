@@ -54,6 +54,8 @@ class CudaMgr {
   inline bool isArchPascal() const { return (getDeviceCount() > 0 && deviceProperties[0].computeMajor == 6); }
   std::vector<DeviceProperties> deviceProperties;
 
+  const std::vector<CUcontext>& getDeviceContexts() const { return deviceContexts; }
+
  private:
   void fillDeviceProperties();
   void createDeviceContexts();
