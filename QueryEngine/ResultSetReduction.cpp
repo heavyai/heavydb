@@ -136,13 +136,13 @@ void ResultSetStorage::reduce(const ResultSetStorage& that) const {
       const auto start_index = thread_idx * thread_entry_count;
       const auto end_index = std::min(start_index + thread_entry_count, entry_count);
       if (query_mem_desc_.output_columnar) {
-        reduction_threads.emplace_back(std::async(
-            std::launch::async, [this, that, thread_idx, entry_count, this_buff, that_buff, start_index, end_index] {
+        reduction_threads.emplace_back(
+            std::async(std::launch::async, [this, this_buff, that_buff, start_index, end_index, &that] {
               reduceEntriesNoCollisionsColWise(this_buff, that_buff, that, start_index, end_index);
             }));
       } else {
-        reduction_threads.emplace_back(std::async(
-            std::launch::async, [this, that, thread_idx, entry_count, this_buff, that_buff, start_index, end_index] {
+        reduction_threads.emplace_back(
+            std::async(std::launch::async, [this, this_buff, that_buff, start_index, end_index, &that] {
               for (size_t entry_idx = start_index; entry_idx < end_index; ++entry_idx) {
                 reduceOneEntryNoCollisionsRowWise(entry_idx, this_buff, that_buff, that);
               }
