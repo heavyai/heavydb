@@ -160,7 +160,7 @@ void InsertOrderFragmenter::deleteFragments(const vector<int>& dropFragIds) {
 }
 
 void InsertOrderFragmenter::insertData(const InsertData& insertDataStruct) {
-  mapd_lock_guard<std::mutex> insertLock(
+  mapd_lock_guard<mapd_shared_mutex> insertLock(
       insertMutex_);  // prevent two threads from trying to insert into the same table simultaneously
 
   std::unordered_map<int, int> inverseInsertDataColIdMap;
