@@ -1346,7 +1346,14 @@ void MapDHandler::create_frontend_view(const TSessionId session,
   vd.viewMetadata = view_metadata;
   vd.userId = session_info.get_currentUser().userId;
 
-  cat.createFrontendView(vd);
+  try {
+    cat.createFrontendView(vd);
+  } catch (const std::exception& e) {
+    TMapDException ex;
+    ex.error_msg = std::string("Exception: ") + e.what();
+    LOG(ERROR) << ex.error_msg;
+    throw ex;
+  }
 }
 
 void MapDHandler::delete_frontend_view(const TSessionId session, const std::string& view_name) {
@@ -1360,7 +1367,14 @@ void MapDHandler::delete_frontend_view(const TSessionId session, const std::stri
     LOG(ERROR) << ex.error_msg;
     throw ex;
   }
-  cat.deleteMetadataForFrontendView(std::to_string(session_info.get_currentUser().userId), view_name);
+  try {
+    cat.deleteMetadataForFrontendView(std::to_string(session_info.get_currentUser().userId), view_name);
+  } catch (const std::exception& e) {
+    TMapDException ex;
+    ex.error_msg = std::string("Exception: ") + e.what();
+    LOG(ERROR) << ex.error_msg;
+    throw ex;
+  }
 }
 
 void MapDHandler::create_link(std::string& _return,
@@ -1376,7 +1390,14 @@ void MapDHandler::create_link(std::string& _return,
   ld.viewState = view_state;
   ld.viewMetadata = view_metadata;
 
-  _return = cat.createLink(ld, 6);
+  try {
+    _return = cat.createLink(ld, 6);
+  } catch (const std::exception& e) {
+    TMapDException ex;
+    ex.error_msg = std::string("Exception: ") + e.what();
+    LOG(ERROR) << ex.error_msg;
+    throw ex;
+  }
 }
 
 std::string MapDHandler::sanitize_name(const std::string& name) {
@@ -1513,15 +1534,22 @@ void MapDHandler::import_table(const TSessionId session,
     }
   }
 
-  std::unique_ptr<Importer_NS::Importer> importer;
-  if (leaf_aggregator_.leafCount() > 0) {
-    importer.reset(new Importer_NS::Importer(
-        new DistributedLoader(session_info, td, &leaf_aggregator_), file_path.string(), copy_params));
-  } else {
-    importer.reset(new Importer_NS::Importer(cat, td, file_path.string(), copy_params));
+  try {
+    std::unique_ptr<Importer_NS::Importer> importer;
+    if (leaf_aggregator_.leafCount() > 0) {
+      importer.reset(new Importer_NS::Importer(
+          new DistributedLoader(session_info, td, &leaf_aggregator_), file_path.string(), copy_params));
+    } else {
+      importer.reset(new Importer_NS::Importer(cat, td, file_path.string(), copy_params));
+    }
+    auto ms = measure<>::execution([&]() { importer->import(); });
+    std::cout << "Total Import Time: " << (double)ms / 1000.0 << " Seconds." << std::endl;
+  } catch (const std::exception& e) {
+    TMapDException ex;
+    ex.error_msg = "Exception: " + std::string(e.what());
+    LOG(ERROR) << ex.error_msg;
+    throw ex;
   }
-  auto ms = measure<>::execution([&]() { importer->import(); });
-  std::cout << "Total Import Time: " << (double)ms / 1000.0 << " Seconds." << std::endl;
 }
 
 void MapDHandler::import_geo_table(const TSessionId session,
