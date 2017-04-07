@@ -163,6 +163,17 @@ std::vector<TargetValue> ResultSet::getRowAtNoTranslations(const size_t logical_
   return getRowAt(entry_idx, false, false);
 }
 
+bool ResultSet::isRowAtEmpty(const size_t logical_index) const {
+  if (logical_index >= entryCount()) {
+    return true;
+  }
+  const auto entry_idx = permutation_.empty() ? logical_index : permutation_[logical_index];
+  const auto storage_lookup_result = findStorage(entry_idx);
+  const auto storage = storage_lookup_result.storage_ptr;
+  const auto local_entry_idx = storage_lookup_result.fixedup_entry_idx;
+  return storage->isEmptyEntry(local_entry_idx);
+}
+
 std::vector<TargetValue> ResultSet::getNextRow(const bool translate_strings, const bool decimal_to_double) const {
   if (!explanation_.empty()) {
     if (fetched_so_far_) {

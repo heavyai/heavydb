@@ -178,6 +178,8 @@ class ResultSet {
 
   std::vector<TargetValue> getRowAtNoTranslations(const size_t index) const;
 
+  bool isRowAtEmpty(const size_t index) const;
+
   void sort(const std::list<Analyzer::OrderEntry>& order_entries, const size_t top_n);
 
   bool isEmptyInitializer() const;

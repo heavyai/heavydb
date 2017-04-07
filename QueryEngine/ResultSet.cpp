@@ -282,8 +282,7 @@ size_t ResultSet::parallelRowCount() const {
                                          [this](const size_t start, const size_t end) {
                                            size_t row_count{0};
                                            for (size_t i = start; i < end; ++i) {
-                                             const auto crt_row = getRowAtNoTranslations(i);
-                                             if (!crt_row.empty()) {
+                                             if (!isRowAtEmpty(i)) {
                                                ++row_count;
                                              }
                                            }
