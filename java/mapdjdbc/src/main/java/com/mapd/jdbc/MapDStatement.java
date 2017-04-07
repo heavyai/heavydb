@@ -23,7 +23,7 @@ import org.slf4j.LoggerFactory;
 public class MapDStatement implements java.sql.Statement {
 
   final static org.slf4j.Logger logger = LoggerFactory.getLogger(MapDStatement.class);
-  private int session;
+  private String session;
   private MapD.Client client;
   private ResultSet currentRS = null;
   private TQueryResult sqlResult = null;
@@ -31,7 +31,7 @@ public class MapDStatement implements java.sql.Statement {
   private boolean escapeProcessing = false;
   private int queryTimeout;
 
-  MapDStatement(int tsession, MapD.Client tclient) {
+  MapDStatement(String tsession, MapD.Client tclient) {
     session = tsession;
     client = tclient;
   }

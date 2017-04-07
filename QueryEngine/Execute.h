@@ -55,7 +55,7 @@ struct RenderInfo {
                       // to CUDA-mapped opengl buffers for rendering. Should be set
                       // to false otherwise, meaning results are written to CPU first,
                       // and buffered back to GPU for rendering.
-  const int session_id;
+  const std::string session_id;
   const int render_widget_id;
   std::unique_ptr<RenderAllocatorMap> render_allocator_map_ptr;
   const std::string render_vega;
@@ -63,7 +63,7 @@ struct RenderInfo {
   std::shared_ptr<QueryRenderer::QueryDataLayout> vbo_result_query_data_layout;
   std::shared_ptr<QueryRenderer::QueryDataLayout> ubo_result_query_data_layout;
 
-  RenderInfo(const int session_id,
+  RenderInfo(const std::string& session_id,
              const int render_widget_id,
              const std::string& render_vega = "",
              const bool do_render = true)
@@ -296,7 +296,7 @@ class Executor {
 
   int64_t getRowidForPixel(const int64_t x,
                            const int64_t y,
-                           const int session_id,
+                           const std::string& session_id,
                            const int render_widget_id,
                            const int pixelRadius = 0);
 

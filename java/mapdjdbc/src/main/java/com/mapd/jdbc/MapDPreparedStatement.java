@@ -51,7 +51,7 @@ class MapDPreparedStatement implements PreparedStatement {
   private String brokenSQL[];
   private String parmRep[];
   private int repCount;
-  private int session;
+  private String session;
   private MapD.Client client;
   private MapDStatement stmt = null;
   private StringBuffer modQuery;
@@ -62,7 +62,7 @@ class MapDPreparedStatement implements PreparedStatement {
   private String warnings = null;
   private static final Pattern REGEX_PATTERN = Pattern.compile(" INTO (\\w+)");
 
-  MapDPreparedStatement(String sql, int session, MapD.Client client) {
+  MapDPreparedStatement(String sql, String session, MapD.Client client) {
     currentSQL = sql;
     this.client = client;
     this.session = session;

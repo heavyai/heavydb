@@ -71,7 +71,7 @@ public class ThriftTester {
 
       MapD.Client client = new MapD.Client(protocol);
 
-      int session = 0;
+      String session = null;
 
       session = client.connect("mapd", "HyperInteractive", "mapd");
 

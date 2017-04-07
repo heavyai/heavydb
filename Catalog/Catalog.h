@@ -350,7 +350,10 @@ class SysCatalog : public Catalog {
  */
 class SessionInfo {
  public:
-  SessionInfo(std::shared_ptr<Catalog> cat, const UserMetadata& user, const ExecutorDeviceType t, int32_t sid)
+  SessionInfo(std::shared_ptr<Catalog> cat,
+              const UserMetadata& user,
+              const ExecutorDeviceType t,
+              const std::string& sid)
       : catalog_(cat), currentUser_(user), executor_device_type_(t), session_id(sid), last_used_time(time(0)) {}
   SessionInfo(const SessionInfo& s)
       : catalog_(s.catalog_),
@@ -361,7 +364,7 @@ class SessionInfo {
   const UserMetadata& get_currentUser() const { return currentUser_; }
   const ExecutorDeviceType get_executor_device_type() const { return executor_device_type_; }
   void set_executor_device_type(ExecutorDeviceType t) { executor_device_type_ = t; }
-  int32_t get_session_id() const { return session_id; }
+  std::string get_session_id() const { return session_id; }
   time_t get_last_used_time() const { return last_used_time; }
   void update_time() { last_used_time = time(0); }
 
@@ -369,7 +372,7 @@ class SessionInfo {
   std::shared_ptr<Catalog> catalog_;
   const UserMetadata currentUser_;
   std::atomic<ExecutorDeviceType> executor_device_type_;
-  const int32_t session_id;
+  const std::string session_id;
   std::atomic<time_t> last_used_time;  // for cleaning up SessionInfo after client dies
 };
 

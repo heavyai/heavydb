@@ -74,8 +74,8 @@ void createConnection(ConnectionDetails con) {
   shared_ptr<TProtocol> protocol(new TBinaryProtocol(mytransport));
   client.reset(new MapDClient(protocol));
   try {
-    mytransport->open();                                                // open transport
-    session = client->connect(con.user_name, con.passwd, con.db_name);  // connect to mapd_server
+    mytransport->open();                                               // open transport
+    client->connect(session, con.user_name, con.passwd, con.db_name);  // connect to mapd_server
   } catch (TMapDException& e) {
     std::cerr << e.error_msg << std::endl;
   } catch (TException& te) {

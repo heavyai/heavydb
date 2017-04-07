@@ -85,7 +85,7 @@ public class LogRunner {
     logger.info("In doWork");
 
     MapD.Client client = getClient(args[0], Integer.valueOf(args[1]));
-    int session = getSession(client);
+    String session = getSession(client);
 
     try {
       while (true) {
@@ -121,19 +121,19 @@ public class LogRunner {
     return new MapD.Client(protocol);
   }
 
-  private int getSession(MapD.Client client) throws TTransportException, TMapDException, TException {
-    int session = client.connect("mapd", "HyperInteractive", "mapd");
+  private String getSession(MapD.Client client) throws TTransportException, TMapDException, TException {
+    String session = client.connect("mapd", "HyperInteractive", "mapd");
     logger.info("Connected session is " + session);
     return session;
   }
 
-  private void closeSession(MapD.Client client, int session) throws TMapDException, TException {
+  private void closeSession(MapD.Client client, String session) throws TMapDException, TException {
     // Now disconnect
     logger.info("Trying to disconnect session " + session);
     client.disconnect(session);
   }
 
-  private void theRest(MapD.Client client, int session) throws TException {
+  private void theRest(MapD.Client client, String session) throws TException {
     // lets fetch databases from mapd
     List<TDBInfo> dbs = client.get_databases(session);
 
@@ -225,7 +225,7 @@ public class LogRunner {
 
   }
 
-  private void process(String str, MapD.Client client, int session) throws TMapDException, TException {
+  private void process(String str, MapD.Client client, String session) throws TMapDException, TException {
     int logStart = str.indexOf(']');
     if (logStart != -1) {
 

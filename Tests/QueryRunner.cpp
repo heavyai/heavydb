@@ -68,7 +68,7 @@ Catalog_Namespace::SessionInfo* get_session(const char* db_path) {
                                                                                          ),
                                             user,
                                             ExecutorDeviceType::GPU,
-                                            0);
+                                            "");
 }
 
 namespace {

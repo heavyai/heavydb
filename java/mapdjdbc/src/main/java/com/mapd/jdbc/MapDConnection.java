@@ -44,7 +44,7 @@ public class MapDConnection implements java.sql.Connection {
 
   final static Logger logger = LoggerFactory.getLogger(MapDConnection.class);
 
-  protected int session = 0;
+  protected String session = null;
   protected MapD.Client client = null;
   protected String url = null;
   protected Properties properties = null;
@@ -152,10 +152,10 @@ public class MapDConnection implements java.sql.Connection {
   public void close() throws SQLException { //logger.debug("Entered");
     try {
       logger.debug("Session at close is " + session);
-      if (session != 0) {
+      if (session != null) {
         client.disconnect(session);
       }
-      session = 0;
+      session = null;
       transport.close();
     } catch (TMapDException ex) {
       throw new SQLException("disconnect failed." + ex.toString());
@@ -166,7 +166,7 @@ public class MapDConnection implements java.sql.Connection {
 
   @Override
   public boolean isClosed() throws SQLException { //logger.debug("Entered");
-    if (session == 0){
+    if (session == null){
       return true;
     }
     return false;

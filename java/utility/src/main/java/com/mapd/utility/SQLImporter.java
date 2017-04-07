@@ -34,7 +34,7 @@ import org.slf4j.LoggerFactory;
 
 public class SQLImporter {
 
-  protected int session = 0;
+  protected String session = null;
   protected MapD.Client client = null;
   private CommandLine cmd = null;
   final static Logger LOGGER = LoggerFactory.getLogger(SQLImporter.class);

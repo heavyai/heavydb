@@ -93,7 +93,7 @@ struct TStringRow {
 
 typedef list<TColumnType> TRowDescriptor
 typedef map<string, TColumnType> TTableDescriptor
-typedef i32 TSessionId
+typedef string TSessionId
 typedef i64 TQueryId
 
 enum TMergeType {

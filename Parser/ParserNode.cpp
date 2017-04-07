@@ -2220,7 +2220,7 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     if (!boost::filesystem::exists(*file_path))
       if (!boost::filesystem::create_directory(*file_path))
         throw std::runtime_error("Directory " + *file_path + " cannot be created.");
-    *file_path += std::to_string(session.get_session_id()) + ".txt";
+    *file_path += session.get_session_id() + ".txt";
   }
   outfile.open(*file_path);
   if (!outfile)

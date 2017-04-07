@@ -158,7 +158,7 @@ public class TestCalciteDirectMulti {
   }
 
   private ConnInfo createMapDConnection() {
-    int session = 0;
+    String session = null;
     TTransport transport = null;
     MapD.Client client = null;
     try {
@@ -197,11 +197,11 @@ public class TestCalciteDirectMulti {
 
   private static class ConnInfo {
 
-    public int session;
+    public String session;
     public TTransport transport;
     public MapD.Client client;
 
-    private ConnInfo(int session, TTransport transport, MapD.Client client) {
+    private ConnInfo(String session, TTransport transport, MapD.Client client) {
       this.session = session;
       this.transport = transport;
       this.client = client;

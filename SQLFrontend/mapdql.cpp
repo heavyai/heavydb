@@ -49,7 +49,7 @@ void completion(const char* buf, linenoiseCompletions* lc) {
   }
 }
 
-#define INVALID_SESSION_ID -1
+#define INVALID_SESSION_ID ""
 
 struct ClientContext {
   std::string user_name;
@@ -101,7 +101,7 @@ bool thrift_with_retry(ThriftService which_service, ClientContext& context, cons
   try {
     switch (which_service) {
       case kCONNECT:
-        context.session = context.client.connect(context.user_name, context.passwd, context.db_name);
+        context.client.connect(context.session, context.user_name, context.passwd, context.db_name);
         break;
       case kDISCONNECT:
         context.client.disconnect(context.session);

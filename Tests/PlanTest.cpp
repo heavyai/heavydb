@@ -86,7 +86,7 @@ class SQLTestEnv : public ::testing::Environment {
                                                                                 ),
                                    user,
                                    ExecutorDeviceType::GPU,
-                                   0));
+                                   ""));
   }
 };
 
