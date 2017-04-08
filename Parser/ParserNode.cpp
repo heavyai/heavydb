@@ -1815,17 +1815,17 @@ int8_t* fill_dict_column(std::vector<std::unique_ptr<int8_t[]>>& dest_string_ids
   dest_string_ids_owner.emplace_back(new int8_t[num_rows * ti.get_size()]);
   switch (ti.get_size()) {
     case 1:
-      translate_strings(reinterpret_cast<int8_t*>(dest_string_ids_owner.back().get()),
+      translate_strings(reinterpret_cast<uint8_t*>(dest_string_ids_owner.back().get()),
                         dest_dict,
-                        reinterpret_cast<const int8_t*>(source_ids_buffer),
+                        reinterpret_cast<const uint8_t*>(source_ids_buffer),
                         source_dict,
                         num_rows,
                         ti);
       break;
     case 2:
-      translate_strings(reinterpret_cast<int16_t*>(dest_string_ids_owner.back().get()),
+      translate_strings(reinterpret_cast<uint16_t*>(dest_string_ids_owner.back().get()),
                         dest_dict,
-                        reinterpret_cast<const int16_t*>(source_ids_buffer),
+                        reinterpret_cast<const uint16_t*>(source_ids_buffer),
                         source_dict,
                         num_rows,
                         ti);
