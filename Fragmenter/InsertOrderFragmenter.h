@@ -55,6 +55,8 @@ class InsertOrderFragmenter : public AbstractFragmenter {
   InsertOrderFragmenter(const std::vector<int> chunkKeyPrefix,
                         std::vector<Chunk_NS::Chunk>& chunkVec,
                         Data_Namespace::DataMgr* dataMgr,
+                        const int physicalTableId,
+                        const int shard,
                         const size_t maxFragmentRows = DEFAULT_FRAGMENT_ROWS,
                         const size_t maxChunkSize = DEFAULT_MAX_CHUNK_SIZE,
                         const size_t pageSize = DEFAULT_PAGE_SIZE /*default 1MB*/,
@@ -95,12 +97,13 @@ class InsertOrderFragmenter : public AbstractFragmenter {
   inline std::string getFragmenterType() { return fragmenterType_; }
 
  private:
-  int fragmenterId_; /**< Stores the id of the fragmenter - passed to constructor */
   std::vector<int> chunkKeyPrefix_;
   std::map<int, Chunk_NS::Chunk> columnMap_; /**< stores a map of column id to metadata about that column */
   std::deque<FragmentInfo> fragmentInfoVec_; /**< data about each fragment stored - id and number of rows */
   // int currentInsertBufferFragmentId_;
   Data_Namespace::DataMgr* dataMgr_;
+  const int physicalTableId_;
+  const int shard_;
   size_t maxFragmentRows_;
   size_t pageSize_; /* Page size in bytes of each page making up a given chunk - passed to BufferMgr in createChunk() */
   size_t numTuples_;
@@ -128,12 +131,6 @@ class InsertOrderFragmenter : public AbstractFragmenter {
   FragmentInfo* createNewFragment(const Data_Namespace::MemoryLevel memoryLevel = Data_Namespace::DISK_LEVEL);
   void deleteFragments(const std::vector<int>& dropFragIds);
 
-  /**
-   * @brief Called at readState to associate chunks of
-   * fragment with max id with pointer into buffer pool
-   */
-
-  void getInsertBufferChunks();
   void getChunkMetadata();
 
   void lockInsertCheckpointData(const InsertData& insertDataStruct);

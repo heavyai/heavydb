@@ -38,6 +38,8 @@ namespace Fragmenter_Namespace {
 InsertOrderFragmenter::InsertOrderFragmenter(const vector<int> chunkKeyPrefix,
                                              vector<Chunk>& chunkVec,
                                              Data_Namespace::DataMgr* dataMgr,
+                                             const int physicalTableId,
+                                             const int shard,
                                              const size_t maxFragmentRows,
                                              const size_t maxChunkSize,
                                              const size_t pageSize /*default 1MB*/,
@@ -45,6 +47,8 @@ InsertOrderFragmenter::InsertOrderFragmenter(const vector<int> chunkKeyPrefix,
                                              const Data_Namespace::MemoryLevel defaultInsertLevel)
     : chunkKeyPrefix_(chunkKeyPrefix),
       dataMgr_(dataMgr),
+      physicalTableId_(physicalTableId),
+      shard_(shard),
       maxFragmentRows_(maxFragmentRows),
       pageSize_(pageSize),
       numTuples_(0),
@@ -98,6 +102,8 @@ void InsertOrderFragmenter::getChunkMetadata() {
         fragmentInfoVec_.back().deviceIds.push_back(curFragmentId % levelSize);
       }
       fragmentInfoVec_.back().shadowNumTuples = fragmentInfoVec_.back().getPhysicalNumTuples();
+      fragmentInfoVec_.back().physicalTableId = physicalTableId_;
+      fragmentInfoVec_.back().shard = shard_;
     } else {
       if (chunkIt->second.numElements != fragmentInfoVec_.back().getPhysicalNumTuples()) {
         throw std::runtime_error("Inconsistency in num tuples within fragment");
@@ -308,6 +314,8 @@ FragmentInfo* InsertOrderFragmenter::createNewFragment(const Data_Namespace::Mem
   for (const auto levelSize : dataMgr_->levelSizes_) {
     newFragmentInfo.deviceIds.push_back(newFragmentInfo.fragmentId % levelSize);
   }
+  newFragmentInfo.physicalTableId = physicalTableId_;
+  newFragmentInfo.shard = shard_;
 
   for (map<int, Chunk>::iterator colMapIt = columnMap_.begin(); colMapIt != columnMap_.end(); ++colMapIt) {
     // colMapIt->second.unpin_buffer();
@@ -347,14 +355,6 @@ TableInfo InsertOrderFragmenter::getFragmentsForQuery() {
     }
   }
   return queryInfo;
-}
-
-void InsertOrderFragmenter::getInsertBufferChunks() {
-  for (map<int, Chunk>::iterator colMapIt = columnMap_.begin(); colMapIt != columnMap_.end(); ++colMapIt) {
-    // colMapIt->second.unpin_buffer();
-    ChunkKey chunkKey = {fragmenterId_, maxFragmentId_, colMapIt->second.get_column_desc()->columnId};
-    colMapIt->second.getChunkBuffer(dataMgr_, chunkKey, defaultInsertLevel_);
-  }
 }
 
 }  // Fragmenter_Namespace

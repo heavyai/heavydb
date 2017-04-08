@@ -73,6 +73,13 @@ typedef std::map<std::string, TableDescriptor*> TableDescriptorMap;
 typedef std::map<int, TableDescriptor*> TableDescriptorMapById;
 
 /**
+ * &type LogicalToPhysicalTableMap
+ * @brief Maps logical to physical tables by table IDs
+ */
+
+typedef std::map<int32_t, std::vector<int32_t>> LogicalToPhysicalTableMapById;
+
+/**
  * @type ColumnKey
  * @brief ColumnKey is composed of the integer tableId and the string name of the column
  */
@@ -202,7 +209,8 @@ class Catalog {
    */
   virtual ~Catalog();
 
-  void createTable(TableDescriptor& td, const std::list<ColumnDescriptor>& columns);
+  void createTable(TableDescriptor& td, const std::list<ColumnDescriptor>& columns, bool isPhysicalTable = true);
+  void createShardedTable(TableDescriptor& td, const std::list<ColumnDescriptor>& columns);
   void createFrontendView(FrontendViewDescriptor& vd);
   std::string createLink(LinkDescriptor& ld, size_t min_length);
   void dropTable(const TableDescriptor* td);
@@ -258,6 +266,8 @@ class Catalog {
 
   const std::vector<LeafHostInfo>& getStringDictionaryHosts() const;
 
+  std::vector<const TableDescriptor*> getPhysicalTablesDescriptors(const TableDescriptor* logicalTableDesc) const;
+
  protected:
   void CheckAndExecuteMigrations();
   void updateDictionaryNames();
@@ -265,6 +275,8 @@ class Catalog {
   void updateFrontendViewSchema();
   void updateLinkSchema();
   void updateFrontendViewAndLinkUsers();
+  void updateLogicalToPhysicalTableLinkSchema();
+  void updateLogicalToPhysicalTableMap(const int32_t logical_tb_id);
   void buildMaps();
   void addTableToMap(TableDescriptor& td,
                      const std::list<ColumnDescriptor>& columns,
@@ -272,12 +284,15 @@ class Catalog {
   void addFrontendViewToMap(FrontendViewDescriptor& vd);
   void addLinkToMap(LinkDescriptor& ld);
   void removeTableFromMap(const std::string& tableName, int tableId);
+  void doDropTable(const TableDescriptor* td);
+  void renamePhysicalTable(const TableDescriptor* td, const std::string& newTableName);
   void instantiateFragmenter(TableDescriptor* td) const;
   void getAllColumnMetadataForTable(const TableDescriptor* td,
                                     std::list<const ColumnDescriptor*>& colDescs,
                                     const bool fetchSystemColumns,
                                     const bool fetchVirtualColumns) const;
   std::string calculateSHA1(const std::string& data);
+  std::string generatePhysicalTableName(const std::string& logicalTableName, const int32_t& shardNumber);
 
   std::string basePath_; /**< The OS file system path containing the catalog files. */
   TableDescriptorMap tableDescriptorMap_;
@@ -298,6 +313,11 @@ class Catalog {
 #ifdef HAVE_CALCITE
   std::shared_ptr<Calcite> calciteMgr_;
 #endif  // HAVE_CALCITE
+
+  LogicalToPhysicalTableMapById logicalToPhysicalTableMapById_;
+  std::list<DictDescriptor> logicalTableDDS_;      // logical table DictDescriptor list (used for physical tables)
+  int logicalTableDictId_;                         // logical table DictId (used for physical tables)
+  static const std::string physicalTableNameTag_;  // extra component added to the name of each physical table
 };
 
 /*

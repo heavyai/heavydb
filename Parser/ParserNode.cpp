@@ -1761,13 +1761,31 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
           throw std::runtime_error("PARTITIONS must be SHARDED or REPLICATED");
         }
         td.partitions = partitions_uc;
+      } else if (boost::iequals(*p->get_name(), "num_shards")) {
+        if (!dynamic_cast<const IntLiteral*>(p->get_value()))
+          throw std::runtime_error("NUM_SHARDS must be an integer literal.");
+        int num_shards = static_cast<const IntLiteral*>(p->get_value())->get_intval();
+        if (num_shards <= 0)
+          throw std::runtime_error("NUM_SHARDS must be a positive number.");
+        td.nShards = num_shards;
+        throw std::runtime_error("Sharded tables are not supported yet");
+      } else if (boost::iequals(*p->get_name(), "sharded_column_num")) {
+        if (!dynamic_cast<const IntLiteral*>(p->get_value()))
+          throw std::runtime_error("SHARDED_COLUMN_NUM must be an integer literal.");
+        int sharded_column_num = static_cast<const IntLiteral*>(p->get_value())->get_intval();
+        if (sharded_column_num <= 0)
+          throw std::runtime_error("SHARDED_COLUMN_NUM must be a positive number.");
+        td.shardedColumnId = sharded_column_num;
+        throw std::runtime_error("Sharded tables are not supported yet");
       } else {
-        throw std::runtime_error("Invalid CREATE TABLE option " + *p->get_name() +
-                                 ".  Should be FRAGMENT_SIZE, PAGE_SIZE, MAX_ROWS or PARTITIONS.");
+        throw std::runtime_error(
+            "Invalid CREATE TABLE option " + *p->get_name() +
+            ".  Should be FRAGMENT_SIZE, PAGE_SIZE, MAX_ROWS, PARTITIONS, NUM_SHARDS or SHARDED_COLUMN_NUM.");
       }
     }
   }
-  catalog.createTable(td, columns);
+  td.isLogicalTable = true;
+  catalog.createShardedTable(td, columns);
 }
 
 ResultRows getResultRows(const Catalog_Namespace::SessionInfo& session,

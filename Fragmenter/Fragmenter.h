@@ -75,6 +75,8 @@ class FragmentInfo {
   FragmentInfo()
       : fragmentId(-1),
         shadowNumTuples(0),
+        physicalTableId(-1),
+        shard(-1),
         resultSet(nullptr),
         numTuples(0),
         synthesizedNumTuplesIsValid(false),
@@ -99,6 +101,8 @@ class FragmentInfo {
   int fragmentId;
   size_t shadowNumTuples;
   std::vector<int> deviceIds;
+  int physicalTableId;
+  int shard;
   std::map<int, ChunkMetadata> shadowChunkMetadataMap;
   mutable ResultRows* resultSet;
   mutable std::shared_ptr<std::mutex> resultSetMutex;
