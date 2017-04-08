@@ -409,6 +409,40 @@ TEST(Select, FilterAndSimpleAggregation) {
               numeric_limits<int64_t>::max());
     ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT MIN(x) FROM test WHERE t <> 1001 AND t <> 1002;", dt)),
               numeric_limits<int64_t>::max());
+    ASSERT_NEAR(static_cast<double>(0.5),
+                v<double>(run_simple_agg("SELECT STDDEV_POP(x) FROM test;", dt)),
+                static_cast<double>(0.2));
+    ASSERT_NEAR(static_cast<double>(0.5),
+                v<double>(run_simple_agg("SELECT STDDEV_SAMP(x) FROM test;", dt)),
+                static_cast<double>(0.2));
+    ASSERT_NEAR(static_cast<double>(0.2),
+                v<double>(run_simple_agg("SELECT VAR_POP(x) FROM test;", dt)),
+                static_cast<double>(0.1));
+    ASSERT_NEAR(static_cast<double>(0.2),
+                v<double>(run_simple_agg("SELECT VAR_SAMP(x) FROM test;", dt)),
+                static_cast<double>(0.1));
+    ASSERT_NEAR(static_cast<double>(92.0),
+                v<double>(run_simple_agg("SELECT STDDEV_POP(dd) FROM test;", dt)),
+                static_cast<double>(2.0));
+    ASSERT_NEAR(static_cast<double>(94.5),
+                v<double>(run_simple_agg("SELECT STDDEV_SAMP(dd) FROM test;", dt)),
+                static_cast<double>(1.0));
+    ASSERT_NEAR(
+        static_cast<double>(94.5),
+        v<double>(run_simple_agg(
+            "SELECT POWER(((SUM(dd * dd) - SUM(dd) * SUM(dd) / COUNT(dd)) / (COUNT(dd) - 1)), 0.5) FROM test;", dt)),
+        static_cast<double>(1.0));
+    ASSERT_NEAR(static_cast<double>(8485.0),
+                v<double>(run_simple_agg("SELECT VAR_POP(dd) FROM test;", dt)),
+                static_cast<double>(10.0));
+    ASSERT_NEAR(static_cast<double>(8932.0),
+                v<double>(run_simple_agg("SELECT VAR_SAMP(dd) FROM test;", dt)),
+                static_cast<double>(10.0));
+    ASSERT_EQ(20, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test HAVING STDDEV_POP(x) < 1.0;", dt)));
+    ASSERT_EQ(20, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test HAVING STDDEV_POP(x) * 5 < 3.0;", dt)));
+    ASSERT_NEAR(static_cast<double>(0.65),
+                v<double>(run_simple_agg("SELECT STDDEV(x) + VARIANCE(x) FROM test;", dt)),
+                static_cast<double>(0.10));
   }
 }
 
