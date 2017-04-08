@@ -266,10 +266,7 @@ vector<size_t> populate_table_random(const string& table_name, const size_t num_
   }
 
   // now load the data into table
-  auto ms = measure<>::execution([&]() {
-    td->fragmenter->insertData(insert_data);
-    cat.get_dataMgr().checkpoint(cat.get_currentDB().dbId, td->tableId);
-  });
+  auto ms = measure<>::execution([&]() { td->fragmenter->insertData(insert_data); });
   cout << "Loaded " << num_rows << " rows " << data_volumn << " bytes in " << ms << " ms. at "
        << (double)data_volumn / (ms / 1000.0) / 1e6 << " MB/sec." << std::endl;
 
