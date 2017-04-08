@@ -1793,11 +1793,16 @@ void translate_strings(T* dest_ids_buffer,
                        StringDictionary* dest_dict,
                        const T* source_ids_buffer,
                        const StringDictionary* source_dict,
-                       const size_t num_rows) {
+                       const size_t num_rows,
+                       const SQLTypeInfo& ti) {
   const auto source_ids = reinterpret_cast<const T*>(source_ids_buffer);
   auto dest_ids = reinterpret_cast<T*>(dest_ids_buffer);
   for (size_t i = 0; i < num_rows; ++i) {
-    dest_ids[i] = dest_dict->getOrAdd(source_dict->getString(source_ids[i]));
+    if (source_ids[i] != inline_fixed_encoding_null_val(ti)) {
+      dest_ids[i] = dest_dict->getOrAdd(source_dict->getString(source_ids[i]));
+    } else {
+      dest_ids[i] = source_ids[i];
+    }
   }
 }
 
@@ -1814,21 +1819,24 @@ int8_t* fill_dict_column(std::vector<std::unique_ptr<int8_t[]>>& dest_string_ids
                         dest_dict,
                         reinterpret_cast<const int8_t*>(source_ids_buffer),
                         source_dict,
-                        num_rows);
+                        num_rows,
+                        ti);
       break;
     case 2:
       translate_strings(reinterpret_cast<int16_t*>(dest_string_ids_owner.back().get()),
                         dest_dict,
                         reinterpret_cast<const int16_t*>(source_ids_buffer),
                         source_dict,
-                        num_rows);
+                        num_rows,
+                        ti);
       break;
     case 4: {
       translate_strings(reinterpret_cast<int32_t*>(dest_string_ids_owner.back().get()),
                         dest_dict,
                         reinterpret_cast<const int32_t*>(source_ids_buffer),
                         source_dict,
-                        num_rows);
+                        num_rows,
+                        ti);
       break;
     }
     default:
