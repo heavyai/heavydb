@@ -6,8 +6,8 @@
 package com.mapd.jdbc;
 
 import com.mapd.thrift.server.MapD;
+import com.mapd.thrift.server.TMapDException;
 import com.mapd.thrift.server.TQueryResult;
-import com.mapd.thrift.server.ThriftException;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -56,7 +56,7 @@ public class MapDStatement implements java.sql.Statement {
     try {
       sqlResult = client.sql_execute(session, afterFnSQL + ";", true, null, -1);
     }
-    catch (ThriftException ex) {
+    catch (TMapDException ex) {
       throw new SQLException("Query failed : " + ex.getError_msg());
     }
     catch (TException ex) {
@@ -72,7 +72,7 @@ public class MapDStatement implements java.sql.Statement {
     try {
       sqlResult = client.sql_execute(session, sql + ";", true, null, -1);
     }
-    catch (ThriftException ex) {
+    catch (TMapDException ex) {
       throw new SQLException("Query failed : " + ex.getError_msg());
     }
     catch (TException ex) {

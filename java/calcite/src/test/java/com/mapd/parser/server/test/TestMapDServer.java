@@ -4,7 +4,6 @@ import com.mapd.parser.server.CalciteServerWrapper;
 import com.mapd.thrift.server.MapD;
 import com.mapd.thrift.server.TMapDException;
 import com.mapd.thrift.server.TQueryResult;
-import com.mapd.thrift.server.ThriftException;
 
 import java.util.Random;
 import java.util.concurrent.ExecutorService;
@@ -113,8 +112,6 @@ public class TestMapDServer {
       if (resultCount != res.row_set.columns.get(0).nulls.size()) {
         fail("result doesn't match " + resultCount + " != " + res.row_set.columns.get(0).nulls.size());
       }
-    } catch (ThriftException x) {
-      fail("Exception on EXECUTE " + x.toString());
     } catch (TMapDException x) {
       fail("Exception on EXECUTE " + x.toString());
     } catch (TException x) {

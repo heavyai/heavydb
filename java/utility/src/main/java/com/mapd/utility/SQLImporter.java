@@ -9,7 +9,7 @@ import com.mapd.thrift.server.TQueryResult;
 import com.mapd.thrift.server.TStringRow;
 import com.mapd.thrift.server.TStringValue;
 import com.mapd.thrift.server.TTableDetails;
-import com.mapd.thrift.server.ThriftException;
+import com.mapd.thrift.server.TMapDException;
 import static java.lang.System.exit;
 import java.sql.*;
 import java.util.ArrayList;
@@ -244,8 +244,8 @@ public class SQLImporter {
     } catch (SQLException se) {
       LOGGER.error("SQLException - " + se.toString());
       se.printStackTrace();
-    } catch (ThriftException ex) {
-      LOGGER.error("ThriftException - " + ex.toString());
+    } catch (TMapDException ex) {
+      LOGGER.error("TMapDException - " + ex.toString());
       ex.printStackTrace();
     } catch (TException ex) {
       LOGGER.error("TException failed - " + ex.toString());
@@ -367,7 +367,7 @@ public class SQLImporter {
     } catch (TTransportException ex) {
       LOGGER.error("Connection failed - " + ex.toString());
       exit(1);
-    } catch (ThriftException ex) {
+    } catch (TMapDException ex) {
       LOGGER.error("Connection failed - " + ex.toString());
       exit(2);
     } catch (TException ex) {
@@ -382,7 +382,7 @@ public class SQLImporter {
     try {
       TTableDetails table_details = client.get_table_details(session, tName);
       row_descriptor = table_details.row_desc;
-    } catch (ThriftException ex) {
+    } catch (TMapDException ex) {
       LOGGER.error("column check failed - " + ex.toString());
       exit(3);
     } catch (TException ex) {
@@ -401,7 +401,7 @@ public class SQLImporter {
           return true;
         }
       }
-    } catch (ThriftException ex) {
+    } catch (TMapDException ex) {
       LOGGER.error("Table check failed - " + ex.toString());
       exit(3);
     } catch (TException ex) {
@@ -416,7 +416,7 @@ public class SQLImporter {
 
     try {
       TQueryResult sqlResult = client.sql_execute(session, sql + ";", true, null, -1);
-    } catch (ThriftException ex) {
+    } catch (TMapDException ex) {
       LOGGER.error("SQL Execute failed - " + ex.toString());
       exit(1);
     } catch (TException ex) {

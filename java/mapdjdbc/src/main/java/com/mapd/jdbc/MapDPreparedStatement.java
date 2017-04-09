@@ -6,7 +6,7 @@ package com.mapd.jdbc;
 import com.mapd.thrift.server.MapD;
 import com.mapd.thrift.server.TStringRow;
 import com.mapd.thrift.server.TStringValue;
-import com.mapd.thrift.server.ThriftException;
+import com.mapd.thrift.server.TMapDException;
 import java.io.InputStream;
 import java.io.Reader;
 import java.math.BigDecimal;
@@ -698,7 +698,7 @@ class MapDPreparedStatement implements PreparedStatement {
       try {
         // send the batch
         client.load_table(session, insertTableName, rows);
-      } catch (ThriftException ex) {
+      } catch (TMapDException ex) {
         throw new SQLException("addBatch failed : " + ex.getError_msg());
       } catch (TException ex) {
         throw new SQLException("addBatch failed : " + ex.toString());

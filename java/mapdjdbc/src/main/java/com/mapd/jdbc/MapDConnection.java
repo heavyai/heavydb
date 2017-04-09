@@ -6,7 +6,7 @@
 package com.mapd.jdbc;
 
 import com.mapd.thrift.server.MapD;
-import com.mapd.thrift.server.ThriftException;
+import com.mapd.thrift.server.TMapDException;
 import java.sql.Array;
 import java.sql.Blob;
 import java.sql.CallableStatement;
@@ -95,7 +95,7 @@ public class MapDConnection implements java.sql.Connection {
 
     } catch (TTransportException ex) {
       throw new SQLException("Connection failed - " + ex.toString());
-    } catch (ThriftException ex) {
+    } catch (TMapDException ex) {
       throw new SQLException("Connection failed - " + ex.toString());
     } catch (TException ex) {
       throw new SQLException("Connection failed - " + ex.toString());
@@ -157,7 +157,7 @@ public class MapDConnection implements java.sql.Connection {
       }
       session = 0;
       transport.close();
-    } catch (ThriftException ex) {
+    } catch (TMapDException ex) {
       throw new SQLException("disconnect failed." + ex.toString());
     } catch (TException ex) {
       throw new SQLException("disconnect failed." + ex.toString());
@@ -378,7 +378,7 @@ public class MapDConnection implements java.sql.Connection {
       client.get_server_status(session);
     } catch (TTransportException ex) {
       throw new SQLException("Connection failed - " + ex.toString());
-    } catch (ThriftException ex) {
+    } catch (TMapDException ex) {
       throw new SQLException("Connection failed - " + ex.toString());
     } catch (TException ex) {
       throw new SQLException("Connection failed - " + ex.toString());

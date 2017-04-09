@@ -26,7 +26,7 @@ import com.mapd.thrift.server.TRow;
 import com.mapd.thrift.server.TRowSet;
 import com.mapd.thrift.server.TTableDetails;
 import com.mapd.thrift.server.TTypeInfo;
-import com.mapd.thrift.server.ThriftException;
+import com.mapd.thrift.server.TMapDException;
 
 import java.util.List;
 import java.util.Map;
@@ -157,7 +157,7 @@ public class ThriftTester {
       // Now disconnect
       logger.info("Trying to disconnect session " + session);
       client.disconnect(session);
-    } catch (ThriftException ex) {
+    } catch (TMapDException ex) {
       logger.error(ex.toString());
       ex.printStackTrace();
     } catch (TException ex) {

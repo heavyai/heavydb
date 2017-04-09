@@ -28,7 +28,6 @@ import com.mapd.thrift.server.TRow;
 import com.mapd.thrift.server.TRowSet;
 import com.mapd.thrift.server.TTableDetails;
 import com.mapd.thrift.server.TTypeInfo;
-import com.mapd.thrift.server.ThriftException;
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
@@ -122,13 +121,13 @@ public class LogRunner {
     return new MapD.Client(protocol);
   }
 
-  private int getSession(MapD.Client client) throws TTransportException, ThriftException, TException {
+  private int getSession(MapD.Client client) throws TTransportException, TMapDException, TException {
     int session = client.connect("mapd", "HyperInteractive", "mapd");
     logger.info("Connected session is " + session);
     return session;
   }
 
-  private void closeSession(MapD.Client client, int session) throws ThriftException, TException {
+  private void closeSession(MapD.Client client, int session) throws TMapDException, TException {
     // Now disconnect
     logger.info("Trying to disconnect session " + session);
     client.disconnect(session);
@@ -226,7 +225,7 @@ public class LogRunner {
 
   }
 
-  private void process(String str, MapD.Client client, int session) throws ThriftException, TException {
+  private void process(String str, MapD.Client client, int session) throws TMapDException, TException {
     int logStart = str.indexOf(']');
     if (logStart != -1) {
 
