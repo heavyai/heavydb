@@ -179,20 +179,21 @@ int main(int argc, char** argv) {
                          ->default_value(std::string("uid=%s,cn=users,cn=accounts,dc=mapd,dc=com")),
                      "ldap DN Distinguished Name");
   desc.add_options()("http-port", po::value<int>(&http_port)->default_value(http_port), "HTTP port number");
-#ifdef HAVE_CALCITE
-  desc.add_options()("calcite-port", po::value<int>(&calcite_port)->default_value(calcite_port), "Calcite port number");
-#endif  // HAVE_CALCITE
   desc.add_options()("flush-log",
                      po::bool_switch(&flush_log)->default_value(flush_log)->implicit_value(true),
                      "Immediately flush logs to disk. Set to false if this is a performance bottleneck.");
   desc.add_options()("num-gpus", po::value<int>(&num_gpus)->default_value(num_gpus), "Number of gpus to use");
   desc.add_options()("start-gpu", po::value<int>(&start_gpu)->default_value(start_gpu), "First gpu to use");
   desc.add_options()("version,v", "Print Release Version Number");
-  desc.add_options()(
-      "db-convert", po::value<std::string>(&db_convert_dir), "Directory path to mapd DB to convert from");
+  desc.add_options()("cluster", po::value<std::string>(&cluster_file), "Path to data leaves list JSON file");
+  desc.add_options()("string-servers", po::value<std::string>(&cluster_file), "Path to string servers list JSON file");
 
   po::options_description desc_adv("Advanced options");
   desc_adv.add_options()("help-advanced", "Print advanced help messages");
+#ifdef HAVE_CALCITE
+  desc_adv.add_options()(
+      "calcite-port", po::value<int>(&calcite_port)->default_value(calcite_port), "Calcite port number");
+#endif  // HAVE_CALCITE
   desc_adv.add_options()("jit-debug",
                          po::bool_switch(&jit_debug)->default_value(jit_debug)->implicit_value(true),
                          "Enable debugger support for the JIT. The generated code can be found at /tmp/mapdquery");
@@ -209,8 +210,6 @@ int main(int argc, char** argv) {
       "disable-legacy-syntax",
       po::bool_switch(&enable_legacy_syntax)->default_value(enable_legacy_syntax)->implicit_value(false),
       "Enable legacy syntax");
-  // Deprecated on 2016-06-23
-  desc_adv.add_options()("disable-fork", "(Deprecated) Disable forking");
   desc_adv.add_options()("tthreadpool-size",
                          po::value<int>(&tthreadpool_size)->default_value(tthreadpool_size),
                          "Server thread pool size. Increasing may adversely affect render performance and stability.");
@@ -243,6 +242,8 @@ int main(int argc, char** argv) {
       "calcite-max-mem",
       po::value<size_t>(&mapd_parameters.calcite_max_mem)->default_value(mapd_parameters.calcite_max_mem),
       "Max memory available to calcite JVM");
+  desc_adv.add_options()(
+      "db-convert", po::value<std::string>(&db_convert_dir), "Directory path to mapd DB to convert from");
   desc_adv.add_options()("ha-port",
                          po::value<size_t>(&mapd_parameters.ha_port)->default_value(mapd_parameters.ha_port),
                          "Port number for High Availability binary requests");
@@ -259,9 +260,6 @@ int main(int argc, char** argv) {
   desc_adv.add_options()("allow-cpu-retry",
                          po::bool_switch(&g_allow_cpu_retry)->default_value(g_allow_cpu_retry)->implicit_value(true),
                          "Allow the queries which failed on GPU to retry on CPU, even when watchdog is enabled");
-  desc_adv.add_options()("cluster", po::value<std::string>(&cluster_file), "Path to data leaves list JSON file");
-  desc_adv.add_options()(
-      "string-servers", po::value<std::string>(&cluster_file), "Path to string servers list JSON file");
 
   po::positional_options_description positionalOptions;
   positionalOptions.add("data", 1);
