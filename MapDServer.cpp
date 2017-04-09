@@ -136,7 +136,7 @@ int main(int argc, char** argv) {
   std::string device("gpu");
   std::string config_file("mapd.conf");
   std::string cluster_file("cluster.conf");
-  bool flush_log = false;
+  bool flush_log = true;
   bool jit_debug = false;
   bool allow_multifrag = true;
   bool read_only = false;
@@ -184,7 +184,7 @@ int main(int argc, char** argv) {
 #endif  // HAVE_CALCITE
   desc.add_options()("flush-log",
                      po::bool_switch(&flush_log)->default_value(flush_log)->implicit_value(true),
-                     "Force aggressive log file flushes. Use when trouble-shooting.");
+                     "Immediately flush logs to disk. Set to false if this is a performance bottleneck.");
   desc.add_options()("num-gpus", po::value<int>(&num_gpus)->default_value(num_gpus), "Number of gpus to use");
   desc.add_options()("start-gpu", po::value<int>(&start_gpu)->default_value(start_gpu), "First gpu to use");
   desc.add_options()("version,v", "Print Release Version Number");
