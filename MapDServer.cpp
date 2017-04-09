@@ -167,7 +167,6 @@ int main(int argc, char** argv) {
       "data", po::value<std::string>(&base_path)->required()->default_value("data"), "Directory path to MapD catalogs");
   desc.add_options()("cpu", "Run on CPU only");
   desc.add_options()("gpu", "Run on GPUs (Default)");
-  desc.add_options()("hybrid", "Run on both CPU and GPUs");
   desc.add_options()("read-only",
                      po::bool_switch(&read_only)->default_value(read_only)->implicit_value(true),
                      "Enable read-only mode");
@@ -295,7 +294,7 @@ int main(int argc, char** argv) {
     }
 
     if (vm.count("help")) {
-      std::cout << "Usage: mapd_server <catalog path> [<database name>] [--cpu|--gpu|--hybrid] [-p <port "
+      std::cout << "Usage: mapd_server <catalog path> [<database name>] [--cpu|--gpu] [-p <port "
                    "number>] [--http-port <http port number>] [--flush-log] [--version|-v]"
                 << std::endl
                 << std::endl;
@@ -303,7 +302,7 @@ int main(int argc, char** argv) {
       return 0;
     }
     if (vm.count("help-advanced")) {
-      std::cout << "Usage: mapd_server <catalog path> [<database name>] [--cpu|--gpu|--hybrid] [-p <port "
+      std::cout << "Usage: mapd_server <catalog path> [<database name>] [--cpu|--gpu] [-p <port "
                    "number>] [--http-port <http port number>] [--flush-log] [--version|-v]"
                 << std::endl
                 << std::endl;
@@ -318,8 +317,6 @@ int main(int argc, char** argv) {
       device = "cpu";
     if (vm.count("gpu"))
       device = "gpu";
-    if (vm.count("hybrid"))
-      device = "hybrid";
     if (num_gpus == 0)
       device = "cpu";
 
