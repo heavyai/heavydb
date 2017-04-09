@@ -4135,13 +4135,6 @@ ResultPtr Executor::executeWorkUnit(int32_t* error_code,
     throw std::runtime_error("Hash join failed, reason: " + join_info.hash_join_fail_reason_);
   }
 
-  if (options.with_dynamic_watchdog) {
-    CHECK_GT(options.dynamic_watchdog_time_limit, 0);
-    auto cycle_budget = dynamic_watchdog_init(options.dynamic_watchdog_time_limit);
-    LOG(INFO) << "Dynamic Watchdog budget: CPU: " << std::to_string(options.dynamic_watchdog_time_limit) << "ms, "
-              << std::to_string(cycle_budget) << " cycles";
-  }
-
   int8_t crt_min_byte_width{get_min_byte_width()};
   do {
     *error_code = 0;
@@ -4180,26 +4173,27 @@ ResultPtr Executor::executeWorkUnit(int32_t* error_code,
 
     std::condition_variable scheduler_cv;
     std::mutex scheduler_mutex;
-    auto dispatch = [this, &execution_dispatch, &available_cpus, &available_gpus, &scheduler_mutex, &scheduler_cv](
-        const ExecutorDeviceType chosen_device_type,
-        int chosen_device_id,
-        const std::vector<std::pair<int, std::vector<size_t>>>& frag_ids,
-        const size_t ctx_idx,
-        const int64_t rowid_lookup_key) {
-      execution_dispatch.run(chosen_device_type, chosen_device_id, frag_ids, ctx_idx, rowid_lookup_key);
-      if (execution_dispatch.getDeviceType() == ExecutorDeviceType::Hybrid) {
-        std::unique_lock<std::mutex> scheduler_lock(scheduler_mutex);
-        if (chosen_device_type == ExecutorDeviceType::CPU) {
-          ++available_cpus;
-        } else {
-          CHECK(chosen_device_type == ExecutorDeviceType::GPU);
-          auto it_ok = available_gpus.insert(chosen_device_id);
-          CHECK(it_ok.second);
-        }
-        scheduler_lock.unlock();
-        scheduler_cv.notify_one();
-      }
-    };
+    auto dispatch =
+        [this, &execution_dispatch, &available_cpus, &available_gpus, &options, &scheduler_mutex, &scheduler_cv](
+            const ExecutorDeviceType chosen_device_type,
+            int chosen_device_id,
+            const std::vector<std::pair<int, std::vector<size_t>>>& frag_ids,
+            const size_t ctx_idx,
+            const int64_t rowid_lookup_key) {
+          execution_dispatch.run(chosen_device_type, chosen_device_id, options, frag_ids, ctx_idx, rowid_lookup_key);
+          if (execution_dispatch.getDeviceType() == ExecutorDeviceType::Hybrid) {
+            std::unique_lock<std::mutex> scheduler_lock(scheduler_mutex);
+            if (chosen_device_type == ExecutorDeviceType::CPU) {
+              ++available_cpus;
+            } else {
+              CHECK(chosen_device_type == ExecutorDeviceType::GPU);
+              auto it_ok = available_gpus.insert(chosen_device_id);
+              CHECK(it_ok.second);
+            }
+            scheduler_lock.unlock();
+            scheduler_cv.notify_one();
+          }
+        };
 
     const size_t input_desc_count{ra_exe_unit.input_descs.size()};
     std::map<int, const TableFragments*> selected_tables_fragments;
@@ -4330,7 +4324,8 @@ Executor::ExecutionDispatch::ExecutionDispatch(Executor* executor,
       query_context_mutexes_(context_count),
       row_set_mem_owner_(row_set_mem_owner),
       error_code_(error_code),
-      render_allocator_map_(render_allocator_map) {
+      render_allocator_map_(render_allocator_map),
+      dynamic_watchdog_set_(ATOMIC_FLAG_INIT) {
   all_fragment_results_.reserve(query_infos_.front().info.fragments.size());
 }
 
@@ -4351,11 +4346,12 @@ inline bool needs_skip_result(const ResultPtr& res) {
 
 void Executor::ExecutionDispatch::run(const ExecutorDeviceType chosen_device_type,
                                       int chosen_device_id,
+                                      const ExecutionOptions& options,
                                       const std::vector<std::pair<int, std::vector<size_t>>>& frag_ids,
                                       const size_t ctx_idx,
                                       const int64_t rowid_lookup_key) noexcept {
   try {
-    runImpl(chosen_device_type, chosen_device_id, frag_ids, ctx_idx, rowid_lookup_key);
+    runImpl(chosen_device_type, chosen_device_id, options, frag_ids, ctx_idx, rowid_lookup_key);
   } catch (const std::bad_alloc& e) {
     std::lock_guard<std::mutex> lock(reduce_mutex_);
     LOG(ERROR) << e.what();
@@ -4369,6 +4365,7 @@ void Executor::ExecutionDispatch::run(const ExecutorDeviceType chosen_device_typ
 
 void Executor::ExecutionDispatch::runImpl(const ExecutorDeviceType chosen_device_type,
                                           int chosen_device_id,
+                                          const ExecutionOptions& options,
                                           const std::vector<std::pair<int, std::vector<size_t>>>& frag_ids,
                                           const size_t ctx_idx,
                                           const int64_t rowid_lookup_key) {
@@ -4423,6 +4420,12 @@ void Executor::ExecutionDispatch::runImpl(const ExecutorDeviceType chosen_device
                                           cat_,
                                           *chunk_iterators_ptr,
                                           chunks);
+    if (options.with_dynamic_watchdog && !dynamic_watchdog_set_.test_and_set(std::memory_order_acquire)) {
+      CHECK_GT(options.dynamic_watchdog_time_limit, 0);
+      auto cycle_budget = dynamic_watchdog_init(options.dynamic_watchdog_time_limit);
+      LOG(INFO) << "Dynamic Watchdog budget: CPU: " << std::to_string(options.dynamic_watchdog_time_limit) << "ms, "
+                << std::to_string(cycle_budget) << " cycles";
+    }
   } catch (const OutOfMemory&) {
     std::lock_guard<std::mutex> lock(reduce_mutex_);
     *error_code_ = ERR_OUT_OF_GPU_MEM;
