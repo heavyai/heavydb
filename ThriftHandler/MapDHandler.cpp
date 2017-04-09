@@ -744,29 +744,14 @@ void MapDHandler::get_table_descriptor(TTableDescriptor& _return,
                                        const TSessionId session,
                                        const std::string& table_name) {
   TRowDescriptor rd;
-  get_row_descriptor(rd, session, table_name);
-  for (const auto cd : rd) {
+  TTableDetails table_details;
+  get_table_details(table_details, session, table_name);
+  for (const auto cd : table_details.table_desc) {
     _return.insert(std::make_pair(cd.col_name, cd));
   }
 }
 
 void MapDHandler::get_table_details(TTableDetails& _return, const TSessionId session, const std::string& table_name) {
-  const auto session_info = get_session(session);
-  auto& cat = session_info.get_catalog();
-  auto td = cat.getMetadataForTable(table_name);
-  if (!td) {
-    TMapDException ex;
-    ex.error_msg = "Table doesn't exist";
-    LOG(ERROR) << ex.error_msg;
-    throw ex;
-  }
-  _return.fragment_size = td->maxFragRows;
-  _return.page_size = td->fragPageSize;
-  _return.max_rows = td->maxRows;
-  _return.view_sql = td->viewSQL;
-}
-
-void MapDHandler::get_row_descriptor(TRowDescriptor& _return, const TSessionId session, const std::string& table_name) {
   const auto session_info = get_session(session);
   auto& cat = session_info.get_catalog();
   auto td = cat.getMetadataForTable(table_name);
@@ -782,8 +767,7 @@ void MapDHandler::get_row_descriptor(TRowDescriptor& _return, const TSessionId s
       const auto query_ra = parse_to_ra(td->viewSQL, session_info);
       TQueryResult result;
       execute_rel_alg(result, query_ra, true, session_info, ExecutorDeviceType::CPU, false, true, -1);
-      _return = fixup_row_descriptor(result.row_set.row_desc, cat);
-      return;
+      _return.table_desc = fixup_row_descriptor(result.row_set.row_desc, cat);
     } catch (std::exception& e) {
       TMapDException ex;
       ex.error_msg = std::string("Exception: ") + e.what();
@@ -796,11 +780,22 @@ void MapDHandler::get_row_descriptor(TRowDescriptor& _return, const TSessionId s
     LOG(ERROR) << ex.error_msg;
     throw ex;
 #endif  // HAVE_CALCITE
+  } else {
+    const auto col_descriptors = cat.getAllColumnMetadataForTable(td->tableId, false, true);
+    for (const auto cd : col_descriptors) {
+      _return.table_desc.push_back(populateThriftColumnType(&cat, cd));
+    }
   }
-  const auto col_descriptors = cat.getAllColumnMetadataForTable(td->tableId, false, true);
-  for (const auto cd : col_descriptors) {
-    _return.push_back(populateThriftColumnType(&cat, cd));
-  }
+  _return.fragment_size = td->maxFragRows;
+  _return.page_size = td->fragPageSize;
+  _return.max_rows = td->maxRows;
+  _return.view_sql = td->viewSQL;
+}
+
+void MapDHandler::get_row_descriptor(TRowDescriptor& _return, const TSessionId session, const std::string& table_name) {
+  TTableDetails table_details;
+  get_table_details(table_details, session, table_name);
+  _return = table_details.table_desc;
 }
 
 void MapDHandler::get_frontend_view(TFrontendView& _return, const TSessionId session, const std::string& view_name) {
