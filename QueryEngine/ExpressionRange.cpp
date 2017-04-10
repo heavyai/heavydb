@@ -380,9 +380,10 @@ ExpressionRange getLeafColumnRange(const Analyzer::ColumnVar* col_expr,
         const int64_t num_tuples = query_info.getNumTuples();
         return ExpressionRange::makeIntRange(0, std::max(num_tuples - 1, int64_t(0)), 0, has_nulls);
       }
-      if (query_info.getNumTuples() == 0 && !col_ti.is_fp()) {
+      if (query_info.getNumTuples() == 0) {
         // The column doesn't contain any values, synthesize an empty range.
-        return ExpressionRange::makeIntRange(0, -1, 0, false);
+        return col_ti.is_fp() ? ExpressionRange::makeFloatRange(0, -1, false)
+                              : ExpressionRange::makeIntRange(0, -1, 0, false);
       }
       FIND_STAT_FRAG(min);
       FIND_STAT_FRAG(max);
