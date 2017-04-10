@@ -1762,7 +1762,11 @@ ResultRows getResultRows(const Catalog_Namespace::SessionInfo& session,
   auto executor = Executor::getExecutor(catalog.get_currentDB().dbId);
 
 #ifdef HAVE_RAVM
-  auto device_type = session.get_executor_device_type();
+#ifdef HAVE_CUDA
+  const auto device_type = session.get_executor_device_type();
+#else
+  const auto device_type = ExecutorDeviceType::CPU;
+#endif  // HAVE_CUDA
   auto& calcite_mgr = catalog.get_calciteMgr();
 
   const auto query_ra = calcite_mgr.process(session.get_currentUser().userName,
