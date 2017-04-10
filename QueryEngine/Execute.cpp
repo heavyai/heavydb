@@ -4111,6 +4111,7 @@ ResultPtr Executor::executeWorkUnit(int32_t* error_code,
                                     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                                     RenderAllocatorMap* render_allocator_map,
                                     const bool has_cardinality_estimation) {
+  CHECK(!execute_mutex_.try_lock());
   const auto device_type = getDeviceTypeForTargets(ra_exe_unit, co.device_type_);
   CHECK(!query_infos.empty());
   if (!max_groups_buffer_entry_guess) {
