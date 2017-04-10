@@ -380,7 +380,8 @@ public class SQLImporter {
     LOGGER.debug("Getting columns for  " + tName);
     List<TColumnType> row_descriptor = null;
     try {
-      row_descriptor = client.get_row_descriptor(session, tName);
+      TTableDetails table_details = client.get_table_details(session, tName);
+      row_descriptor = table_details.table_desc;
     } catch (ThriftException ex) {
       LOGGER.error("column check failed - " + ex.toString());
       exit(3);

@@ -34,7 +34,7 @@ const size_t INSERT_BATCH_SIZE = 10000;
 void stream_insert(MapDClient& client,
                    const TSessionId session,
                    const std::string& table_name,
-                   const TTableDescriptor& table_desc,
+                   const TRowDescriptor& table_desc,
                    const char* delimiter) {
   std::string line;
   std::vector<TStringRow> input_rows;
@@ -100,9 +100,9 @@ int main(int argc, char** argv) {
   try {
     transport->open();                                     // open transport
     session = client.connect(user_name, passwd, db_name);  // connect to mapd_server
-    TTableDescriptor table_desc;
-    client.get_table_descriptor(table_desc, session, table_name);
-    stream_insert(client, session, table_name, table_desc, delimiter);
+    TTableDetails table_details;
+    client.get_table_details(table_details, session, table_name);
+    stream_insert(client, session, table_name, table_details.table_desc, delimiter);
     client.disconnect(session);  // disconnect from mapd_server
     transport->close();          // close transport
   } catch (TMapDException& e) {

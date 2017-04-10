@@ -24,6 +24,7 @@ import com.mapd.thrift.server.TDatum;
 import com.mapd.thrift.server.TQueryResult;
 import com.mapd.thrift.server.TRow;
 import com.mapd.thrift.server.TRowSet;
+import com.mapd.thrift.server.TTableDetails;
 import com.mapd.thrift.server.TTypeInfo;
 import com.mapd.thrift.server.ThriftException;
 
@@ -93,22 +94,9 @@ public class ThriftTester {
       // lets get the version
       logger.info("Version " + client.get_version());
 
-      // lets get table descriptor
-      // seems to not be the one to use -- Not all data is being populated correctly
-      Map<String, TColumnType> tab = client.get_table_descriptor(session, "flights");
-      for (Entry<String, TColumnType> entry : tab.entrySet()) {
-        TColumnType value = entry.getValue();
-        logger.info(entry.getKey()
-                + " \t'" + value.getCol_name() + "'"
-                + " \t'" + value.col_name + "'"
-                + " \t" + value.getCol_type().getEncoding()
-                + " \t" + value.getCol_type().getFieldValue(TTypeInfo._Fields.TYPE)
-        );
-      }
-
-      // get row_descriptor
-      List<TColumnType> row_descriptor = client.get_row_descriptor(session, "flights");
-      for (TColumnType col : row_descriptor) {
+      // get table_details
+      TTableDetails table_details = client.get_table_details(session, "flights");
+      for (TColumnType col : table_details.table_desc) {
         logger.info("col name :" + col.col_name);
         logger.info("\tcol encoding :" + col.col_type.encoding);
         logger.info("\tcol is_array :" + col.col_type.is_array);

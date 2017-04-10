@@ -64,8 +64,6 @@ struct ClientContext {
   TQueryResult query_return;
   std::vector<std::string> names_return;
   std::vector<TDBInfo> dbinfos_return;
-  TTableDescriptor columns_return;
-  TRowDescriptor rowdesc_return;
   TExecuteMode::type execution_mode;
   std::string version;
   std::string memory_usage;
@@ -83,13 +81,11 @@ enum ThriftService {
   kCONNECT,
   kDISCONNECT,
   kSQL,
-  kGET_COLUMNS,
   kGET_TABLES,
   kGET_DATABASES,
   kGET_USERS,
   kSET_EXECUTION_MODE,
   kGET_VERSION,
-  kGET_ROW_DESC,
   kGET_MEMORY_GPU,
   kGET_MEMORY_SUMMARY,
   kGET_TABLE_DETAILS,
@@ -115,12 +111,6 @@ bool thrift_with_retry(ThriftService which_service, ClientContext& context, cons
         break;
       case kSQL:
         context.client.sql_execute(context.query_return, context.session, arg, true, "", -1);
-        break;
-      case kGET_COLUMNS:
-        context.client.get_table_descriptor(context.columns_return, context.session, arg);
-        break;
-      case kGET_ROW_DESC:
-        context.client.get_row_descriptor(context.rowdesc_return, context.session, arg);
         break;
       case kGET_TABLES:
         context.client.get_tables(context.names_return, context.session);
@@ -189,11 +179,11 @@ void copy_table(char* filepath, char* table, ClientContext& context) {
     std::cerr << "File does not exist." << std::endl;
     return;
   }
-  if (!thrift_with_retry(kGET_COLUMNS, context, table)) {
+  if (!thrift_with_retry(kGET_TABLE_DETAILS, context, table)) {
     std::cerr << "Cannot connect to table." << std::endl;
     return;
   }
-  const TTableDescriptor& table_desc = context.columns_return;
+  const TRowDescriptor& table_desc = context.table_details.table_desc;
   std::ifstream infile(filepath);
   std::string line;
   const char* delim = ",";
@@ -353,56 +343,53 @@ void process_backslash_commands(char* command, ClientContext& context) {
         return;
       }
       const auto table_details = context.table_details;
-      if (thrift_with_retry(kGET_ROW_DESC, context, command + 3)) {
-        if (table_details.view_sql.empty()) {
-          std::cout << "CREATE TABLE " + table_name + " (\n";
-        } else {
-          std::cout << "CREATE VIEW " + table_name + " AS " + table_details.view_sql << "\n";
-          return;
-        }
-        std::string comma_or_blank("");
-        for (TColumnType p : context.rowdesc_return) {
-          std::string encoding;
-          if (p.col_type.type == TDatumType::STR) {
-            encoding =
-                (p.col_type.encoding == 0 ? " ENCODING NONE" : " ENCODING " + thrift_to_encoding_name(p.col_type) +
-                                                                   "(" + std::to_string(p.col_type.comp_param) + ")");
+      if (table_details.view_sql.empty()) {
+        std::cout << "CREATE TABLE " + table_name + " (\n";
+      } else {
+        std::cout << "CREATE VIEW " + table_name + " AS " + table_details.view_sql << "\n";
+        return;
+      }
+      std::string comma_or_blank("");
+      for (TColumnType p : table_details.table_desc) {
+        std::string encoding;
+        if (p.col_type.type == TDatumType::STR) {
+          encoding = (p.col_type.encoding == 0 ? " ENCODING NONE"
+                                               : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
+                                                     std::to_string(p.col_type.comp_param) + ")");
 
-          } else {
-            encoding = (p.col_type.encoding == 0 ? "" : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
-                                                            std::to_string(p.col_type.comp_param) + ")");
-          }
-          std::cout << comma_or_blank << p.col_name << " " << thrift_to_name(p.col_type)
-                    << (p.col_type.nullable ? "" : " NOT NULL") << encoding;
-          comma_or_blank = ",\n";
-        }
-        // push final "\n";
-        if (table_details.view_sql.empty()) {
-          std::cout << ")\n";
-          if (thrift_with_retry(kGET_TABLE_DETAILS, context, command + 3)) {
-            comma_or_blank = "";
-            std::string frag = "";
-            std::string page = "";
-            std::string row = "";
-            if (DEFAULT_FRAGMENT_ROWS != context.table_details.fragment_size) {
-              frag = " FRAGMENT_SIZE = " + std::to_string(context.table_details.fragment_size);
-              comma_or_blank = ",";
-            }
-            if (DEFAULT_PAGE_SIZE != context.table_details.page_size) {
-              page = comma_or_blank + " PAGE_SIZE = " + std::to_string(context.table_details.page_size);
-              comma_or_blank = ",";
-            }
-            if (DEFAULT_MAX_ROWS != context.table_details.max_rows) {
-              row = comma_or_blank + " MAX_ROWS = " + std::to_string(context.table_details.max_rows);
-            }
-            std::string with = frag + page + row;
-            if (with.length() > 0) {
-              std::cout << "WITH (" << with << ")\n";
-            }
-          }
         } else {
-          std::cout << "\n";
+          encoding = (p.col_type.encoding == 0 ? ""
+                                               : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
+                                                     std::to_string(p.col_type.comp_param) + ")");
         }
+        std::cout << comma_or_blank << p.col_name << " " << thrift_to_name(p.col_type)
+                  << (p.col_type.nullable ? "" : " NOT NULL") << encoding;
+        comma_or_blank = ",\n";
+      }
+      // push final "\n";
+      if (table_details.view_sql.empty()) {
+        std::cout << ")\n";
+        comma_or_blank = "";
+        std::string frag = "";
+        std::string page = "";
+        std::string row = "";
+        if (DEFAULT_FRAGMENT_ROWS != table_details.fragment_size) {
+          frag = " FRAGMENT_SIZE = " + std::to_string(table_details.fragment_size);
+          comma_or_blank = ",";
+        }
+        if (DEFAULT_PAGE_SIZE != table_details.page_size) {
+          page = comma_or_blank + " PAGE_SIZE = " + std::to_string(table_details.page_size);
+          comma_or_blank = ",";
+        }
+        if (DEFAULT_MAX_ROWS != table_details.max_rows) {
+          row = comma_or_blank + " MAX_ROWS = " + std::to_string(table_details.max_rows);
+        }
+        std::string with = frag + page + row;
+        if (with.length() > 0) {
+          std::cout << "WITH (" << with << ")\n";
+        }
+      } else {
+        std::cout << "\n";
       }
       return;
     }
@@ -416,58 +403,54 @@ void process_backslash_commands(char* command, ClientContext& context) {
         return;
       }
       const auto table_details = context.table_details;
-      if (thrift_with_retry(kGET_ROW_DESC, context, command + 3)) {
-        if (table_details.view_sql.empty()) {
-          std::cout << "CREATE TABLE " + table_name + " (\n";
-        } else {
-          std::cerr << "Can't optimize a view, only the underlying tables\n";
-          return;
-        }
-        std::string comma_or_blank("");
-        for (TColumnType p : context.rowdesc_return) {
-          std::string encoding;
-          if (p.col_type.type == TDatumType::STR) {
-            encoding =
-                (p.col_type.encoding == 0
-                     ? " ENCODING NONE"
-                     : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
-                           std::to_string(get_optimal_size(context, table_name, p.col_name, p.col_type.type)) + ")");
+      if (table_details.view_sql.empty()) {
+        std::cout << "CREATE TABLE " + table_name + " (\n";
+      } else {
+        std::cerr << "Can't optimize a view, only the underlying tables\n";
+        return;
+      }
+      std::string comma_or_blank("");
+      for (TColumnType p : table_details.table_desc) {
+        std::string encoding;
+        if (p.col_type.type == TDatumType::STR) {
+          encoding =
+              (p.col_type.encoding == 0
+                   ? " ENCODING NONE"
+                   : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
+                         std::to_string(get_optimal_size(context, table_name, p.col_name, p.col_type.type)) + ")");
 
-          } else {
-            int opt_size = get_optimal_size(context, table_name, p.col_name, p.col_type.type);
-            encoding = (opt_size == 0 ? "" : " ENCODING FIXED(" + std::to_string(opt_size) + ")");
-          }
-          std::cout << comma_or_blank << p.col_name << " " << thrift_to_name(p.col_type)
-                    << (p.col_type.nullable ? "" : " NOT NULL") << encoding;
-          comma_or_blank = ",\n";
-        }
-        // push final "\n";
-        if (table_details.view_sql.empty()) {
-          std::cout << ")\n";
-          if (thrift_with_retry(kGET_TABLE_DETAILS, context, command + 3)) {
-            comma_or_blank = "";
-            std::string frag = "";
-            std::string page = "";
-            std::string row = "";
-            if (DEFAULT_FRAGMENT_ROWS != context.table_details.fragment_size) {
-              frag = " FRAGMENT_SIZE = " + std::to_string(context.table_details.fragment_size);
-              comma_or_blank = ",";
-            }
-            if (DEFAULT_PAGE_SIZE != context.table_details.page_size) {
-              page = comma_or_blank + " PAGE_SIZE = " + std::to_string(context.table_details.page_size);
-              comma_or_blank = ",";
-            }
-            if (DEFAULT_MAX_ROWS != context.table_details.max_rows) {
-              row = comma_or_blank + " MAX_ROWS = " + std::to_string(context.table_details.max_rows);
-            }
-            std::string with = frag + page + row;
-            if (with.length() > 0) {
-              std::cout << "WITH (" << with << ")\n";
-            }
-          }
         } else {
-          std::cout << "\n";
+          int opt_size = get_optimal_size(context, table_name, p.col_name, p.col_type.type);
+          encoding = (opt_size == 0 ? "" : " ENCODING FIXED(" + std::to_string(opt_size) + ")");
         }
+        std::cout << comma_or_blank << p.col_name << " " << thrift_to_name(p.col_type)
+                  << (p.col_type.nullable ? "" : " NOT NULL") << encoding;
+        comma_or_blank = ",\n";
+      }
+      // push final "\n";
+      if (table_details.view_sql.empty()) {
+        std::cout << ")\n";
+        comma_or_blank = "";
+        std::string frag = "";
+        std::string page = "";
+        std::string row = "";
+        if (DEFAULT_FRAGMENT_ROWS != table_details.fragment_size) {
+          frag = " FRAGMENT_SIZE = " + std::to_string(table_details.fragment_size);
+          comma_or_blank = ",";
+        }
+        if (DEFAULT_PAGE_SIZE != table_details.page_size) {
+          page = comma_or_blank + " PAGE_SIZE = " + std::to_string(table_details.page_size);
+          comma_or_blank = ",";
+        }
+        if (DEFAULT_MAX_ROWS != table_details.max_rows) {
+          row = comma_or_blank + " MAX_ROWS = " + std::to_string(table_details.max_rows);
+        }
+        std::string with = frag + page + row;
+        if (with.length() > 0) {
+          std::cout << "WITH (" << with << ")\n";
+        }
+      } else {
+        std::cout << "\n";
       }
       return;
     }

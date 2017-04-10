@@ -411,9 +411,9 @@ int main(int argc, char** argv) {
   ConnectionDetails conn_details(server_host, port, db_name, user_name, passwd);
   createConnection(conn_details);
 
-  TRowDescriptor row_desc;
-  client->get_row_descriptor(row_desc, session, table_name);
-  stream_insert(table_name, row_desc, transformations, copy_params, conn_details);
+  TTableDetails table_details;
+  client->get_table_details(table_details, session, table_name);
+  stream_insert(table_name, table_details.table_desc, transformations, copy_params, conn_details);
 
   closeConnection();
 

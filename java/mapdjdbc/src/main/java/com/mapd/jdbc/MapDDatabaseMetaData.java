@@ -13,6 +13,7 @@ import com.mapd.thrift.server.TDatumType;
 import com.mapd.thrift.server.TEncodingType;
 import com.mapd.thrift.server.TQueryResult;
 import com.mapd.thrift.server.TRowSet;
+import com.mapd.thrift.server.TTableDetails;
 import com.mapd.thrift.server.TTypeInfo;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
@@ -984,19 +985,18 @@ SQLException - if a database access error occurs
         if (tableNamePattern == null || tableNamePattern.equals(tableName)) {
 
           // grab meta data for table
-          Map<String, TColumnType> tableDescriptor = con.client.get_table_descriptor(con.session, tableName);
+          TTableDetails tableDetails = con.client.get_table_details(con.session, tableName);
 
           int ordinal = 0;
           // iterate through the columns
-          for (Map.Entry<String, TColumnType> entry : tableDescriptor.entrySet()) {
-            TColumnType value = entry.getValue();
+          for (TColumnType value : tableDetails.table_desc) {
 
             ordinal++;
-            if (columnNamePattern == null || entry.getKey().matches(modifiedColumnPattern)) {
+            if (columnNamePattern == null || value.col_name.matches(modifiedColumnPattern)) {
               dataMap.get("TABLE_CAT").setNull(true);
               dataMap.get("TABLE_SCHEM").setNull(true);
               dataMap.get("TABLE_NAME").add(tableName);
-              dataMap.get("COLUMN_NAME").add(entry.getKey());
+              dataMap.get("COLUMN_NAME").add(value.col_name);
               dataMap.get("DATA_TYPE").add(MapDType.toJava(value.col_type.type));
               dataMap.get("TYPE_NAME").add((value.col_type.type.name() + (value.col_type.is_array ? "[]" : "")));
               if (value.col_type.type == TDatumType.DECIMAL)

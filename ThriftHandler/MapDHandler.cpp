@@ -740,6 +740,7 @@ TColumnType MapDHandler::populateThriftColumnType(const Catalog_Namespace::Catal
   return col_type;
 }
 
+// DEPRECATED(2017-04-17) - use get_table_details()
 void MapDHandler::get_table_descriptor(TTableDescriptor& _return,
                                        const TSessionId session,
                                        const std::string& table_name) {
@@ -792,6 +793,7 @@ void MapDHandler::get_table_details(TTableDetails& _return, const TSessionId ses
   _return.view_sql = td->viewSQL;
 }
 
+// DEPRECATED(2017-04-17) - use get_table_details()
 void MapDHandler::get_row_descriptor(TRowDescriptor& _return, const TSessionId session, const std::string& table_name) {
   TTableDetails table_details;
   get_table_details(table_details, session, table_name);
