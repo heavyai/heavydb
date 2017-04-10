@@ -68,12 +68,12 @@ class CalciteServerHandler implements CalciteServer.Iface {
     try {
       parser = (MapDParser) parserPool.borrowObject();
     } catch (Exception ex) {
-      String msg = "Could not get Parse Item from pool :" + ex.getMessage();
+      String msg = "Could not get Parse Item from pool: " + ex.getMessage();
       MAPDLOGGER.error(msg);
       throw new InvalidParseRequest(-1, msg);
     }
     MapDUser mapDUser = new MapDUser(user, passwd, catalog, mapDPort);
-    MAPDLOGGER.debug("process was called User:" + user + " Catalog:" + catalog + " sql :" + sqlText);
+    MAPDLOGGER.debug("process was called User: " + user + " Catalog: " + catalog + " sql: " + sqlText);
 
     // remove last charcter if it is a ;
     if (sqlText.charAt(sqlText.length() - 1) == ';') {
@@ -83,15 +83,15 @@ class CalciteServerHandler implements CalciteServer.Iface {
     try {
       relAlgebra = parser.getRelAlgebra(sqlText, legacySyntax, mapDUser, isExplain);
     } catch (SqlParseException ex) {
-      String msg = "Parse failed :" + ex.getMessage();
+      String msg = "Parse failed: " + ex.getMessage();
       MAPDLOGGER.error(msg);
       throw new InvalidParseRequest(-2, msg);
     } catch (CalciteContextException ex) {
-      String msg = "Validate failed :" + ex.getMessage();
+      String msg = "Validate failed: " + ex.getMessage();
       MAPDLOGGER.error(msg);
       throw new InvalidParseRequest(-3, msg);
     } catch (Exception ex) {
-      String msg = "Exception Occured :" + ex.getMessage();
+      String msg = "Exception occurred: " + ex.getMessage();
       MAPDLOGGER.error(msg);
       throw new InvalidParseRequest(-4, msg);
     }
@@ -100,7 +100,7 @@ class CalciteServerHandler implements CalciteServer.Iface {
         // put parser object back in pool for others to use
         parserPool.returnObject(parser);
       } catch (Exception ex) {
-        String msg = "Could not return parse object :" + ex.getMessage();
+        String msg = "Could not return parse object: " + ex.getMessage();
         MAPDLOGGER.error(msg);
         throw new InvalidParseRequest(-4, msg);
       }
@@ -133,7 +133,7 @@ class CalciteServerHandler implements CalciteServer.Iface {
     try {
       parser = (MapDParser) parserPool.borrowObject();
     } catch (Exception ex) {
-      String msg = "Could not get Parse Item from pool :" + ex.getMessage();
+      String msg = "Could not get Parse Item from pool: " + ex.getMessage();
       MAPDLOGGER.error(msg);
       return;
     }
@@ -145,7 +145,7 @@ class CalciteServerHandler implements CalciteServer.Iface {
         MAPDLOGGER.debug("Returning object to pool");
         parserPool.returnObject(parser);
       } catch (Exception ex) {
-        String msg = "Could not return parse object :" + ex.getMessage();
+        String msg = "Could not return parse object: " + ex.getMessage();
         MAPDLOGGER.error(msg);
       }
     }

@@ -102,7 +102,7 @@ public class TestMapDServer {
       client = new MapD.Client(protocol);
       session = client.connect("mapd", "HyperInteractive", "mapd");
     } catch (TException x) {
-      fail("Exception on create occured " + x.toString());
+      fail("Exception on create occurred " + x.toString());
     }
     return new ConnInfo(session, transport, client);
   }
@@ -127,7 +127,7 @@ public class TestMapDServer {
       conn.client.disconnect(conn.session);
       conn.transport.close();
     } catch (TException x) {
-      fail("Exception on close occured " + x.toString());
+      fail("Exception on close occurred " + x.toString());
     }
   }
 

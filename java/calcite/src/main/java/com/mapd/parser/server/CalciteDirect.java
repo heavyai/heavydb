@@ -86,7 +86,7 @@ final static Logger MAPDLOGGER = LoggerFactory.getLogger(CalciteDirect.class);
     try {
       parser = (MapDParser) parserPool.borrowObject();
     } catch (Exception ex) {
-      String msg = "Could not get Parse Item from pool :" + ex.getMessage();
+      String msg = "Could not get Parse Item from pool: " + ex.getMessage();
       MAPDLOGGER.error(msg);
       return new CalciteReturn("ERROR-- " +  msg, System.currentTimeMillis() - timer, true);
     }
@@ -98,7 +98,7 @@ final static Logger MAPDLOGGER = LoggerFactory.getLogger(CalciteDirect.class);
         MAPDLOGGER.debug("Returning object to pool");
         parserPool.returnObject(parser);
       } catch (Exception ex) {
-        String msg = "Could not return parse object :" + ex.getMessage();
+        String msg = "Could not return parse object: " + ex.getMessage();
         MAPDLOGGER.error(msg);
         return new CalciteReturn("ERROR-- " +  msg, System.currentTimeMillis() - timer, true);
       }
@@ -114,12 +114,12 @@ final static Logger MAPDLOGGER = LoggerFactory.getLogger(CalciteDirect.class);
     try {
       parser = (MapDParser) parserPool.borrowObject();
     } catch (Exception ex) {
-      String msg = "Could not get Parse Item from pool :" + ex.getMessage();
+      String msg = "Could not get Parse Item from pool: " + ex.getMessage();
       MAPDLOGGER.error(msg);
       return new CalciteReturn("ERROR-- " +  msg, System.currentTimeMillis() - timer, true);
     }
     MapDUser mapDUser = new MapDUser(user, passwd, catalog, mapDPort);  //TODO MAT must fix so catalog can be scanned
-    MAPDLOGGER.debug("process was called User:" + user + " Catalog:" + catalog + " sql :" + sqlText);
+    MAPDLOGGER.debug("process was called User: " + user + " Catalog: " + catalog + " sql: " + sqlText);
 
     // remove last charcter if it is a ;
     if (sqlText.charAt(sqlText.length() - 1) == ';') {
@@ -134,15 +134,15 @@ final static Logger MAPDLOGGER = LoggerFactory.getLogger(CalciteDirect.class);
       relAlgebra = parser.getRelAlgebra(sqlText, legacySyntax, mapDUser, isExplain);
       MAPDLOGGER.debug("After get relalgebra");
     } catch (SqlParseException ex) {
-      String msg = "Parse failed :" + ex.getPos() + ", " +  ex.getMessage();
+      String msg = "Parse failed: " + ex.getPos() + ", " +  ex.getMessage();
       MAPDLOGGER.error(msg);
       return new CalciteReturn("ERROR-- " +  msg, System.currentTimeMillis() - timer, true);
     } catch (CalciteContextException ex) {
-      String msg = "Validate failed :" + ex.getMessage();
+      String msg = "Validate failed: " + ex.getMessage();
       MAPDLOGGER.error(msg);
       return new CalciteReturn("ERROR-- " +  msg, System.currentTimeMillis() - timer, true);
     } catch (Exception ex) {
-      String msg = "Exception Occured :" + ex.getMessage();
+      String msg = "Exception occurred: " + ex.getMessage();
       ex.printStackTrace();
       //MAPDLOGGER.error(msg);
       return new CalciteReturn("ERROR-- " +  msg, System.currentTimeMillis() - timer, true);
@@ -152,7 +152,7 @@ final static Logger MAPDLOGGER = LoggerFactory.getLogger(CalciteDirect.class);
         MAPDLOGGER.debug("Returning object to pool");
         parserPool.returnObject(parser);
       } catch (Exception ex) {
-        String msg = "Could not return parse object :" + ex.getMessage();
+        String msg = "Could not return parse object: " + ex.getMessage();
         MAPDLOGGER.error(msg);
         return new CalciteReturn("ERROR-- " +  msg, System.currentTimeMillis() - timer, true);
       }

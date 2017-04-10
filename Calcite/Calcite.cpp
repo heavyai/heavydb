@@ -159,9 +159,9 @@ void Calcite::updateMetadata(string catalog, string table) {
 
     });
     if (env->ExceptionCheck()) {
-      LOG(ERROR) << "Exception occured ";
+      LOG(ERROR) << "Exception occurred ";
       env->ExceptionDescribe();
-      LOG(ERROR) << "Exception occured " << env->ExceptionOccurred();
+      LOG(ERROR) << "Exception occurred " << env->ExceptionOccurred();
       throw std::runtime_error("Calcite::updateMetadata failed");
     }
     LOG(INFO) << "Time to updateMetadata " << ms << " (ms)" << endl;
@@ -198,9 +198,9 @@ string Calcite::process(string user,
 
     });
     if (env->ExceptionCheck()) {
-      LOG(ERROR) << "Exception occured ";
+      LOG(ERROR) << "Exception occurred ";
       env->ExceptionDescribe();
-      LOG(ERROR) << "Exception occured " << env->ExceptionOccurred();
+      LOG(ERROR) << "Exception occurred " << env->ExceptionOccurred();
       throw std::runtime_error("Calcite::process failed");
     }
     CHECK(process_result);
@@ -261,9 +261,9 @@ string Calcite::getExtensionFunctionWhitelist() {
     const auto whitelist_result =
         static_cast<jstring>(env->CallObjectMethod(calciteDirectObject_, getExtensionFunctionWhitelistMID_));
     if (env->ExceptionCheck()) {
-      LOG(ERROR) << "Exception occured ";
+      LOG(ERROR) << "Exception occurred ";
       env->ExceptionDescribe();
-      LOG(ERROR) << "Exception occured " << env->ExceptionOccurred();
+      LOG(ERROR) << "Exception occurred " << env->ExceptionOccurred();
       throw std::runtime_error("Calcite::getExtensionFunctionWhitelist failed");
     }
     CHECK(whitelist_result);
