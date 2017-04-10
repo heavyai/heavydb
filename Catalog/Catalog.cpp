@@ -931,6 +931,8 @@ void Catalog::dropTable(const TableDescriptor* td) {
     ChunkKey chunkKeyPrefix = {currentDB_.dbId, td->tableId};
     // assuming deleteChunksWithPrefix is atomic
     dataMgr_->deleteChunksWithPrefix(chunkKeyPrefix);
+    // MAT TODO fix this
+    // NOTE This is unsafe , if there are updates occuring at same time
     dataMgr_->checkpoint(currentDB_.dbId, td->tableId);
     dataMgr_->removeTableRelatedDS(currentDB_.dbId, td->tableId);
   } catch (std::exception& e) {

@@ -1681,7 +1681,6 @@ void import_array_test(const std::string& table_name) {
     }
   }
   loader.load(import_buffers, g_array_test_row_count);
-  loader.checkpoint(loader.get_catalog().get_currentDB().dbId, loader.get_table_desc()->tableId);
 }
 
 void import_gpu_sort_test() {

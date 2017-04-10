@@ -2357,12 +2357,6 @@ void MapDHandler::render_vega_raw_pixels(TRawPixelDataResult& _return,
             << " (ms), Total Render: " << _return.render_time_ms << " (ms)";
 }
 
-void MapDHandler::checkpoint(const TSessionId session, const int32_t db_id, const int32_t table_id) {
-  const auto session_info = get_session(session);
-  auto& cat = session_info.get_catalog();
-  cat.get_dataMgr().checkpoint(db_id, table_id);
-}
-
 void MapDHandler::throw_profile_exception(const std::string& error_msg) {
   TMapDException ex;
   ex.error_msg = error_msg;
