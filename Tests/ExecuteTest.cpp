@@ -2572,6 +2572,16 @@ TEST(Select, Views) {
   }
 }
 
+TEST(Select, CreateTableAsSelect) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT fixed_str, COUNT(*) FROM ctas_test GROUP BY fixed_str;", dt);
+    c("SELECT x, COUNT(*) FROM ctas_test GROUP BY x;", dt);
+    c("SELECT f, COUNT(*) FROM ctas_test GROUP BY f;", dt);
+    c("SELECT d, COUNT(*) FROM ctas_test GROUP BY d;", dt);
+  }
+}
+
 #endif  // HAVE_RAVM
 
 #ifdef HAVE_CALCITE
@@ -2825,6 +2835,21 @@ int create_views() {
   return 0;
 }
 
+int create_as_select() {
+#ifdef HAVE_RAVM
+  try {
+    const std::string create_ctas_test{
+        "CREATE TABLE ctas_test AS SELECT x, f, d, str, fixed_str FROM test WHERE x > 7;"};
+    run_ddl_statement(create_ctas_test);
+    g_sqlite_comparator.query(create_ctas_test);
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'ctas_test'";
+    return -EEXIST;
+  }
+#endif  // HAVE_RAVM
+  return 0;
+}
+
 void drop_tables() {
   const std::string drop_test{"DROP TABLE test;"};
   run_ddl_statement(drop_test);
@@ -2866,6 +2891,11 @@ void drop_tables() {
   const std::string drop_test_in_bitmap{"DROP TABLE test_in_bitmap;"};
   g_sqlite_comparator.query(drop_test_in_bitmap);
   run_ddl_statement(drop_test_in_bitmap);
+#ifdef HAVE_RAVM
+  const std::string drop_ctas_test{"DROP TABLE ctas_test;"};
+  g_sqlite_comparator.query(drop_ctas_test);
+  run_ddl_statement(drop_ctas_test);
+#endif  // HAVE_RAVM
 }
 
 void drop_views() {
@@ -2910,6 +2940,9 @@ int main(int argc, char** argv) {
     err = create_and_populate_tables();
     if (!err) {
       err = create_views();
+    }
+    if (!err) {
+      err = create_as_select();
     }
   }
   if (err) {
