@@ -1,5 +1,5 @@
-#ifndef SHARED_CUDA_GLOG_H
-#define SHARED_CUDA_GLOG_H
+#ifndef SHARED_ALWAYS_ASSERT_H
+#define SHARED_ALWAYS_ASSERT_H
 
 #define CHECK(cond) \
   {                 \
@@ -22,4 +22,4 @@
     }                      \
   }
 
-#endif  // SHARED_CUDA_GLOG_H
+#endif  // SHARED_ALWAYS_ASSERT_H

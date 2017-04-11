@@ -11,7 +11,7 @@
 #ifndef __CUDACC__
 #include <glog/logging.h>
 #else
-#include "../Shared/cuda_glog.h"
+#include "../Shared/always_assert.h"
 #endif  // __CUDACC__
 
 #include <limits>
