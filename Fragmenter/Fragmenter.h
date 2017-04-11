@@ -4,6 +4,7 @@
 #include <map>
 #include <deque>
 #include <list>
+#include <mutex>
 #include "../Shared/types.h"
 #include "../Shared/mapd_shared_mutex.h"
 #include "../DataMgr/ChunkMetadata.h"
