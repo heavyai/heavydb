@@ -15,9 +15,9 @@ endif()
 
 project(mapd)
 
-set(MAPD_VERSION_MAJOR "2")
-set(MAPD_VERSION_MINOR "3")
-set(MAPD_VERSION_PATCH "1")
+set(MAPD_VERSION_MAJOR "3")
+set(MAPD_VERSION_MINOR "0")
+set(MAPD_VERSION_PATCH "0")
 set(MAPD_VERSION_EXTRA "dev")
 set(MAPD_VERSION_RAW "${MAPD_VERSION_MAJOR}.${MAPD_VERSION_MINOR}.${MAPD_VERSION_PATCH}${MAPD_VERSION_EXTRA}")
 set(MAPD_IMMERSE_URL "http://builds.mapd.com/frontend/mapd2-dashboard-v2-latest-master-prod.zip")
