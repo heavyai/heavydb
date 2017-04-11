@@ -991,6 +991,15 @@ void check_date_trunc_groups(const ResultRows& rows) {
   CHECK(crt_row.empty());
 }
 
+void check_one_date_trunc_group(const ResultRows& rows, const int64_t ref_ts) {
+  const auto crt_row = rows.getNextRow(true, true);
+  ASSERT_EQ(size_t(1), crt_row.size());
+  const auto actual_ts = v<int64_t>(crt_row[0]);
+  ASSERT_EQ(ref_ts, actual_ts);
+  const auto empty_row = rows.getNextRow(true, true);
+  ASSERT_TRUE(empty_row.empty());
+}
+
 }  // namespace
 
 TEST(Select, Time) {
@@ -1358,6 +1367,11 @@ TEST(Select, Time) {
         "key0, key1 ORDER BY val DESC, key1;",
         dt);
     check_date_trunc_groups(rows);
+    const auto one_row = run_multiple_agg(
+        "SELECT DATE_TRUNC(year, CASE WHEN str = 'foo' THEN m END) d FROM test GROUP BY d "
+        "HAVING d IS NOT NULL;",
+        dt);
+    check_one_date_trunc_group(one_row, 1388534400);
   }
 }
 
