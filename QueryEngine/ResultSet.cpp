@@ -535,7 +535,7 @@ std::pair<ssize_t, size_t> ResultSet::getStorageIndex(const size_t entry_idx) co
   }
   fixedup_entry_idx -= entry_count;
   for (size_t i = 0; i < appended_storage_.size(); ++i) {
-    const auto desc = appended_storage_[i]->query_mem_desc_;
+    const auto& desc = appended_storage_[i]->query_mem_desc_;
     CHECK_NE(is_rowwise_layout, desc.output_columnar);
     entry_count = desc.entry_count;
     if (is_rowwise_layout) {
