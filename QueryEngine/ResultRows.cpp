@@ -6,6 +6,7 @@
 #include "OutputBufferInitialization.h"
 
 #include "../DataMgr/BufferMgr/BufferMgr.h"
+#include "../Shared/likely.h"
 
 #include <future>
 
@@ -397,9 +398,6 @@ void ResultRows::addKeylessGroupByBuffer(const int64_t* group_by_buffer,
     addValues(agg_vals);
   }
 }
-
-#define LIKELY(x) __builtin_expect(!!(x), 1)
-#define UNLIKELY(x) __builtin_expect(!!(x), 0)
 
 void ResultRows::reduceSingleColumn(int8_t* crt_val_i1,
                                     int8_t* crt_val_i2,
@@ -1108,9 +1106,6 @@ void ResultRows::inplaceSortCpu(const std::list<Analyzer::OrderEntry>& order_ent
     }
   }
 }
-
-#undef UNLIKELY
-#undef LIKELY
 
 namespace {
 

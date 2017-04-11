@@ -14,6 +14,7 @@
 #include "SqlTypesLayout.h"
 #include "DataMgr/BufferMgr/BufferMgr.h"
 #include "Shared/checked_alloc.h"
+#include "Shared/likely.h"
 #include "Shared/thread_count.h"
 
 #include <algorithm>
@@ -559,9 +560,6 @@ ResultSet::StorageLookupResult ResultSet::findStorage(const size_t entry_idx) co
       stg_idx ? appended_storage_[stg_idx - 1].get() : storage_.get(), fixedup_entry_idx, static_cast<size_t>(stg_idx)};
 }
 
-#define LIKELY(x) __builtin_expect(!!(x), 1)
-#define UNLIKELY(x) __builtin_expect(!!(x), 0)
-
 std::function<bool(const uint32_t, const uint32_t)> ResultSet::createComparator(
     const std::list<Analyzer::OrderEntry>& order_entries,
     const bool use_heap) const {
@@ -646,9 +644,6 @@ std::function<bool(const uint32_t, const uint32_t)> ResultSet::createComparator(
     return false;
   };
 }
-
-#undef UNLIKELY
-#undef LIKELY
 
 void ResultSet::topPermutation(std::vector<uint32_t>& to_sort,
                                const size_t n,
