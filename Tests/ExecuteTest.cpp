@@ -409,6 +409,7 @@ TEST(Select, FilterAndSimpleAggregation) {
               numeric_limits<int64_t>::max());
     ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT MIN(x) FROM test WHERE t <> 1001 AND t <> 1002;", dt)),
               numeric_limits<int64_t>::max());
+#ifdef HAVE_CALCITE
     ASSERT_NEAR(static_cast<double>(0.5),
                 v<double>(run_simple_agg("SELECT STDDEV_POP(x) FROM test;", dt)),
                 static_cast<double>(0.2));
@@ -443,6 +444,7 @@ TEST(Select, FilterAndSimpleAggregation) {
     ASSERT_NEAR(static_cast<double>(0.65),
                 v<double>(run_simple_agg("SELECT STDDEV(x) + VARIANCE(x) FROM test;", dt)),
                 static_cast<double>(0.10));
+#endif  // HAVE_CALCITE
   }
 }
 
@@ -512,6 +514,14 @@ TEST(Select, FloatAndDoubleTests) {
     c("SELECT f + 1 AS s, AVG(u * f) FROM test GROUP BY s ORDER BY s DESC;", dt);
     c("SELECT (CAST(dd AS float) * 0.5) AS key FROM test GROUP BY key ORDER BY key DESC;", dt);
     c("SELECT (CAST(dd AS double) * 0.5) AS key FROM test GROUP BY key ORDER BY key DESC;", dt);
+#ifdef HAVE_CALCITE
+    ASSERT_NEAR(
+        static_cast<double>(1.3),
+        v<double>(run_simple_agg("SELECT AVG(f) AS n FROM test WHERE x = 7 GROUP BY z HAVING AVG(y) + STDDEV(y) "
+                                 "> 42.0 ORDER BY n + VARIANCE(y);",
+                                 dt)),
+        static_cast<double>(0.1));
+#endif  // HAVE_CALCITE
   }
 }
 

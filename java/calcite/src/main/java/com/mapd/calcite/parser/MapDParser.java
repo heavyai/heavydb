@@ -196,19 +196,25 @@ public final class MapDParser {
         SqlSelect select_node = null;
         if (node instanceof SqlSelect) {
             select_node = (SqlSelect) node;
+            desugar(select_node);
         } else if (node instanceof SqlOrderBy) {
             SqlOrderBy order_by_node = (SqlOrderBy) node;
             if (order_by_node.query instanceof SqlSelect) {
                 select_node = (SqlSelect) order_by_node.query;
+                SqlOrderBy new_order_by_node = desugar(select_node, order_by_node);
+                if (new_order_by_node != null) {
+                    return new_order_by_node;
+                }
             }
-        }
-        if (select_node != null) {
-            desugar(select_node);
         }
         return node;
     }
 
     private void desugar(SqlSelect select_node) {
+        desugar(select_node, null);
+    }
+
+    private SqlOrderBy desugar(SqlSelect select_node, SqlOrderBy order_by_node) {
         MAPDLOGGER.debug("desugar: before: " + select_node.toString());
         desugarExpression(select_node.getFrom());
         desugarExpression(select_node.getWhere());
@@ -240,8 +246,20 @@ public final class MapDParser {
         if (having != null) {
             expand(having, id_to_expr);
         }
+        SqlOrderBy new_order_by_node = null;
+        if (order_by_node != null
+                && order_by_node.orderList != null
+                && order_by_node.orderList.size() > 0) {
+            SqlNodeList new_order_by_list = expand(order_by_node.orderList, id_to_expr);
+            new_order_by_node = new SqlOrderBy(order_by_node.getParserPosition(),
+                    select_node,
+                    new_order_by_list,
+                    order_by_node.offset,
+                    order_by_node.fetch);
+        }
 
         MAPDLOGGER.debug("desugar:  after: " + select_node.toString());
+        return new_order_by_node;
     }
 
     private void desugarExpression(SqlNode node) {
