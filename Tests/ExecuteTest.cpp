@@ -2393,6 +2393,7 @@ TEST(Select, InnerJoins) {
     c("SELECT a.x, b.x, c.x FROM test a JOIN test_inner b ON a.x = b.x JOIN hash_join_test c ON b.x = c.x;", dt);
     c("SELECT a.x, b.x FROM test_inner a JOIN test_inner b ON a.x = b.x ORDER BY a.x;", dt);
     c("SELECT a.x, b.x FROM join_test a JOIN join_test b ON a.x = b.x ORDER BY a.x;", dt);
+    c("SELECT COUNT(1) FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c ON a.t = c.x;", dt);
 #endif
   }
 }

@@ -977,6 +977,23 @@ void eliminate_dead_columns(std::vector<std::shared_ptr<RelAlgNode>>& nodes) noe
   auto web = build_du_web(nodes);
   try_insert_coalesceable_proj(nodes, old_liveouts, web, deconst_mapping);
 
+  for (auto node : nodes) {
+    if (intact_nodes.count(node.get()) || does_redef_cols(node.get())) {
+      continue;
+    }
+    bool intact = true;
+    for (size_t i = 0; i < node->inputCount(); ++i) {
+      auto source = node->getInput(i);
+      if (!dynamic_cast<const RelScan*>(source) && !intact_nodes.count(source)) {
+        intact = false;
+        break;
+      }
+      if (intact) {
+        intact_nodes.insert(node.get());
+      }
+    }
+  }
+
   std::unordered_map<const RelAlgNode*, size_t> orig_node_sizes;
   for (auto node : nodes) {
     orig_node_sizes.insert(std::make_pair(node.get(), node->size()));
