@@ -453,6 +453,50 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
   }
 }
 
+void TypedImportBuffer::pop_value() {
+  const auto type = column_desc_->columnType.is_decimal() ? decimal_to_int_type(column_desc_->columnType)
+                                                          : column_desc_->columnType.get_type();
+  switch (type) {
+    case kBOOLEAN:
+      bool_buffer_->pop_back();
+      break;
+    case kSMALLINT:
+      smallint_buffer_->pop_back();
+      break;
+    case kINT:
+      int_buffer_->pop_back();
+      break;
+    case kBIGINT:
+      bigint_buffer_->pop_back();
+      break;
+    case kFLOAT:
+      float_buffer_->pop_back();
+      break;
+    case kDOUBLE:
+      double_buffer_->pop_back();
+      break;
+    case kTEXT:
+    case kVARCHAR:
+    case kCHAR:
+      string_buffer_->pop_back();
+      break;
+    case kTIME:
+    case kTIMESTAMP:
+    case kDATE:
+      time_buffer_->pop_back();
+      break;
+    case kARRAY:
+      if (IS_STRING(column_desc_->columnType.get_subtype())) {
+        string_array_buffer_->pop_back();
+      } else {
+        array_buffer_->pop_back();
+      }
+      break;
+    default:
+      CHECK(false);
+  }
+}
+
 void TypedImportBuffer::add_value(const ColumnDescriptor* cd, const TDatum& datum, const bool is_null) {
   const auto type = cd->columnType.is_decimal() ? decimal_to_int_type(cd->columnType) : cd->columnType.get_type();
   switch (type) {
@@ -609,8 +653,8 @@ static ImportStatus import_thread(int thread_id,
         continue;
       }
       us = measure<std::chrono::microseconds>::execution([&]() {
+        size_t col_idx = 0;
         try {
-          int col_idx = 0;
           for (const auto cd : col_descs) {
             bool is_null = (row[col_idx] == copy_params.null_str);
             if (!cd->columnType.is_string() && row[col_idx].empty())
@@ -620,6 +664,9 @@ static ImportStatus import_thread(int thread_id,
           }
           import_status.rows_completed++;
         } catch (const std::exception& e) {
+          for (size_t col_idx_to_pop = 0; col_idx_to_pop < col_idx; ++col_idx_to_pop) {
+            import_buffers[col_idx_to_pop]->pop_value();
+          }
           LOG(WARNING) << "Input exception thrown: " << e.what() << ". Row discarded.";
         }
       });
