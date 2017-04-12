@@ -115,9 +115,9 @@ inline double inline_fp_null_val(const SQLTypeInfo& ti) {
   const auto type = ti.get_type();
   switch (type) {
     case kFLOAT:
-      return NULL_FLOAT;
+      return inline_fp_null_value<float>();
     case kDOUBLE:
-      return NULL_DOUBLE;
+      return inline_fp_null_value<double>();
     default:
       abort();
   }

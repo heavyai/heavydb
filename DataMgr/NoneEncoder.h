@@ -5,6 +5,11 @@
 #include "Encoder.h"
 
 template <typename T>
+T none_encoded_null_value() {
+  return std::is_integral<T>::value ? inline_int_null_value<T>() : inline_fp_null_value<T>();
+}
+
+template <typename T>
 class NoneEncoder : public Encoder {
  public:
   NoneEncoder(Data_Namespace::AbstractBuffer* buffer)
@@ -17,7 +22,7 @@ class NoneEncoder : public Encoder {
     T* unencodedData = reinterpret_cast<T*>(srcData);
     for (size_t i = 0; i < numAppendElems; ++i) {
       T data = unencodedData[i];
-      if (data == inline_int_null_value<T>())
+      if (data == none_encoded_null_value<T>())
         has_nulls = true;
       else {
         dataMin = std::min(dataMin, data);

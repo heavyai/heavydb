@@ -503,6 +503,19 @@ inline int64_t max_valid_int_value() {
   return std::is_signed<T>::value ? std::numeric_limits<T>::max() : std::numeric_limits<T>::max() - 1;
 }
 
+template <typename T>
+T inline_fp_null_value();
+
+template <>
+inline float inline_fp_null_value<float>() {
+  return NULL_FLOAT;
+}
+
+template <>
+inline double inline_fp_null_value<double>() {
+  return NULL_DOUBLE;
+}
+
 typedef int32_t StringOffsetT;
 
 #endif  // SQLTYPES_H
