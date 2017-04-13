@@ -151,6 +151,10 @@ inline T advance_target_ptr(T target_ptr,
   return result;
 }
 
+inline size_t get_slot_off_quad(const QueryMemoryDescriptor& query_mem_desc) {
+  return align_to_int64(get_key_bytes_rowwise(query_mem_desc)) / sizeof(int64_t);
+}
+
 #endif  // __CUDACC__
 
 inline double pair_to_double(const std::pair<int64_t, int64_t>& fp_pair, const SQLTypeInfo& ti) {

@@ -25,6 +25,7 @@ class DataMgr;
 
 }  // Data_Namespace
 
+template <class K>
 std::vector<uint32_t> baseline_sort(const ExecutorDeviceType device_type,
                                     const int device_id,
                                     Data_Namespace::DataMgr* data_mgr,

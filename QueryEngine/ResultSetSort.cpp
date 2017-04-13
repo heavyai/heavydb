@@ -52,9 +52,7 @@ void ResultSet::doBaselineSort(const ExecutorDeviceType device_type,
     }
     logical_slot_idx = advance_slot(logical_slot_idx, targets_[i], none_encoded_strings_valid_);
   }
-  const auto slot_count = get_buffer_col_slot_count(query_mem_desc_);
-  const auto key_count = get_groupby_col_count(query_mem_desc_);
-  const auto col_off = slot_offset_rowwise(0, physical_slot_idx, key_count, slot_count) * sizeof(int64_t);
+  const auto col_off = (get_slot_off_quad(query_mem_desc_) + physical_slot_idx) * sizeof(int64_t);
   const size_t col_bytes = query_mem_desc_.agg_col_widths[logical_slot_idx].compact;
   const auto row_bytes = get_row_bytes(query_mem_desc_);
   const auto& target_groupby_indices = query_mem_desc_.target_groupby_indices;
@@ -67,19 +65,37 @@ void ResultSet::doBaselineSort(const ExecutorDeviceType device_type,
   auto data_mgr = getDataManager();
   const auto step = static_cast<size_t>(device_type == ExecutorDeviceType::GPU ? getGpuCount() : cpu_threads());
   CHECK_GE(step, size_t(1));
+#ifdef ENABLE_KEY_COMPACTION
+  const size_t key_bytewidth = query_mem_desc_.group_col_compact_width ? query_mem_desc_.group_col_compact_width : 8;
+#else
+  const size_t key_bytewidth = 8;
+#endif  // ENABLE_KEY_COMPACTION
   if (step > 1) {
     std::vector<std::future<void>> top_futures;
     std::vector<std::vector<uint32_t>> strided_permutations(step);
     for (size_t start = 0; start < step; ++start) {
-      top_futures.emplace_back(std::async(
-          std::launch::async,
-          [&strided_permutations, data_mgr, device_type, groupby_buffer, pod_oe, layout, top_n, start, step] {
-            if (device_type == ExecutorDeviceType::GPU) {
-              set_cuda_context(data_mgr, start);
-            }
-            strided_permutations[start] =
-                baseline_sort(device_type, start, data_mgr, groupby_buffer, pod_oe, layout, top_n, start, step);
-          }));
+      top_futures.emplace_back(
+          std::async(std::launch::async,
+                     [&strided_permutations,
+                      data_mgr,
+                      device_type,
+                      groupby_buffer,
+                      pod_oe,
+                      key_bytewidth,
+                      layout,
+                      top_n,
+                      start,
+                      step] {
+                       if (device_type == ExecutorDeviceType::GPU) {
+                         set_cuda_context(data_mgr, start);
+                       }
+                       strided_permutations[start] =
+                           (key_bytewidth == 4)
+                               ? baseline_sort<int32_t>(
+                                     device_type, start, data_mgr, groupby_buffer, pod_oe, layout, top_n, start, step)
+                               : baseline_sort<int64_t>(
+                                     device_type, start, data_mgr, groupby_buffer, pod_oe, layout, top_n, start, step);
+                     }));
     }
     for (auto& top_future : top_futures) {
       top_future.wait();
@@ -95,7 +111,9 @@ void ResultSet::doBaselineSort(const ExecutorDeviceType device_type,
     topPermutation(permutation_, top_n, compare);
     return;
   } else {
-    permutation_ = baseline_sort(device_type, 0, data_mgr, groupby_buffer, pod_oe, layout, top_n, 0, 1);
+    permutation_ = (key_bytewidth == 4)
+                       ? baseline_sort<int32_t>(device_type, 0, data_mgr, groupby_buffer, pod_oe, layout, top_n, 0, 1)
+                       : baseline_sort<int64_t>(device_type, 0, data_mgr, groupby_buffer, pod_oe, layout, top_n, 0, 1);
   }
 }
 

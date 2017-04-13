@@ -33,10 +33,6 @@ size_t get_row_qw_count(const QueryMemoryDescriptor& query_mem_desc) {
   return row_bytes / 8;
 }
 
-size_t get_slot_off_quad(const QueryMemoryDescriptor& query_mem_desc) {
-  return align_to_int64(get_key_bytes_rowwise(query_mem_desc)) / sizeof(int64_t);
-}
-
 std::vector<int64_t> make_key(const int64_t* buff, const size_t entry_count, const size_t key_count) {
   std::vector<int64_t> key;
   size_t off = 0;
