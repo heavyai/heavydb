@@ -1070,10 +1070,8 @@ ImportStatus Importer::importDelimited() {
   ChunkKey chunkKey = {loader->get_catalog().get_currentDB().dbId, loader->get_table_desc()->tableId};
   while (size > 0) {
     // for each process through a buffer take a table lock
-    LOG(ERROR) << "before lock";
     mapd_unique_lock<mapd_shared_mutex> tableLevelWriteLock(*loader->get_catalog().get_dataMgr().getMutexForChunkPrefix(
         chunkKey));  // prevent two threads from trying to insert into the same table simultaneously
-    LOG(ERROR) << "after lock";
     if (eof_reached)
       end_pos = size;
     else
@@ -1115,7 +1113,6 @@ ImportStatus Importer::importDelimited() {
       LOG(ERROR) << "Maximum rows rejected exceeded. Halting load";
       break;
     }
-    LOG(ERROR) << "About to run checkpoint in loader";
     // checkpoint before going again
     loader->get_catalog().get_dataMgr().checkpoint(loader->get_catalog().get_currentDB().dbId,
                                                    loader->get_table_desc()->tableId);
