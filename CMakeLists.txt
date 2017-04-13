@@ -409,8 +409,10 @@ endif()
 
 # systemd
 if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
+  install(FILES systemd/mapd_sd_server.service.in DESTINATION systemd)
   install(FILES systemd/mapd_web_server.service.in systemd/mapd_web_server@.service.in DESTINATION systemd)
   install(FILES systemd/mapd.conf.in DESTINATION systemd)
+  install(FILES systemd/mapd-sds.conf.in DESTINATION systemd)
   install(PROGRAMS systemd/find_libjvm_dir.sh DESTINATION systemd)
   install(PROGRAMS systemd/install_mapd_systemd.sh DESTINATION systemd)
 
