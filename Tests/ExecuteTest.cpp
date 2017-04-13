@@ -521,6 +521,10 @@ TEST(Select, FloatAndDoubleTests) {
                                  "> 42.0 ORDER BY n + VARIANCE(y);",
                                  dt)),
         static_cast<double>(0.1));
+    ASSERT_NEAR(
+        static_cast<double>(92.0),
+        v<double>(run_simple_agg("SELECT STDDEV_POP(dd) AS n FROM test ORDER BY n;", dt)),
+        static_cast<double>(1.0));
 #endif  // HAVE_CALCITE
   }
 }

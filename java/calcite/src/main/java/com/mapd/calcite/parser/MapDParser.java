@@ -231,7 +231,9 @@ public final class MapDParser {
                 MAPDLOGGER.debug("desugar: SqlBasicCall: " + proj_call.toString());
                 SqlNode[] operands = proj_call.getOperands();
                 SqlIdentifier id = (SqlIdentifier) operands[1];
-                id_to_expr.put(id.toString(), operands[0]);
+                SqlNode expanded_operand0 = expand(operands[0], id_to_expr);
+                id_to_expr.put(id.toString(), expanded_operand0);
+                proj_call.setOperand(0, expanded_operand0);
                 new_select_list.add(proj_call);
                 continue;
             }
