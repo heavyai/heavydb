@@ -18,8 +18,6 @@
 
 #define MAX_BYTE_WIDTH_SUPPORTED 8
 
-#define MIN_KEY_BYTE_WIDTH 4
-
 #ifndef __CUDACC__
 inline unsigned compact_byte_width(unsigned qw, unsigned low_bound) {
   return std::max(qw, low_bound);

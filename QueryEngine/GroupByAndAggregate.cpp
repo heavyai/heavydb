@@ -1737,66 +1737,31 @@ int8_t pick_target_compact_width(const RelAlgExecutionUnit& ra_exe_unit,
 namespace {
 
 #ifdef ENABLE_KEY_COMPACTION
-int8_t get_compact_size_per_range(const ExpressionRange& range) {
+int8_t pick_baseline_key_component_width(const ExpressionRange& range) {
   if (range.getType() == ExpressionRangeType::Invalid) {
-    return MAX_BYTE_WIDTH_SUPPORTED;
+    return sizeof(int64_t);
   }
-  for (int smaller_size = MIN_KEY_BYTE_WIDTH; smaller_size <= MAX_BYTE_WIDTH_SUPPORTED; smaller_size <<= 1) {
-    switch (range.getType()) {
-      case ExpressionRangeType::Integer: {
-        int64_t selected_empty_key = 0;
-        int64_t expected_lower_bound = 0;
-        int64_t expected_upper_bound = 0;
-        switch (smaller_size) {
-          case 1:
-            selected_empty_key = EMPTY_KEY_8;
-            expected_lower_bound = std::numeric_limits<int8_t>::min();
-            expected_upper_bound = std::numeric_limits<int8_t>::max();
-            break;
-          case 2:
-            selected_empty_key = EMPTY_KEY_16;
-            expected_lower_bound = std::numeric_limits<int16_t>::min();
-            expected_upper_bound = std::numeric_limits<int16_t>::max();
-            break;
-          case 4:
-            selected_empty_key = EMPTY_KEY_32;
-            expected_lower_bound = std::numeric_limits<int32_t>::min();
-            expected_upper_bound = std::numeric_limits<int32_t>::max();
-            break;
-          case 8:
-            selected_empty_key = EMPTY_KEY_64;
-            expected_lower_bound = std::numeric_limits<int64_t>::min();
-            expected_upper_bound = std::numeric_limits<int64_t>::max();
-            break;
-          default:
-            CHECK(false);
-        }
-        expected_lower_bound += range.hasNulls() ? 1 : 0;  // min is reserved for null
-
-        if (range.getIntMin() >= expected_lower_bound && range.getIntMax() <= expected_upper_bound &&
-            (selected_empty_key < range.getIntMin() || selected_empty_key > range.getIntMax())) {
-          return smaller_size;
-        }
-      } break;
-      case ExpressionRangeType::Float:
-      case ExpressionRangeType::Double:  // No compaction for double for now.
-        return MAX_BYTE_WIDTH_SUPPORTED;
-      default:
-        CHECK(false);
-    }
+  switch (range.getType()) {
+    case ExpressionRangeType::Integer:
+      return range.getIntMax() < EMPTY_KEY_32 - 1 ? sizeof(int32_t) : sizeof(int64_t);
+    case ExpressionRangeType::Float:
+    case ExpressionRangeType::Double:
+      return sizeof(int64_t);  // No compaction for floating point yet.
+    default:
+      CHECK(false);
   }
-  return MAX_BYTE_WIDTH_SUPPORTED;
+  return sizeof(int64_t);
 }
 
 // TODO(miyu): make sure following setting of compact width is correct in all cases.
-int8_t pick_group_col_compact_width(const RelAlgExecutionUnit& ra_exe_unit,
-                                    const std::vector<InputTableInfo>& query_infos,
-                                    const Executor* executor) {
-  int8_t compact_width{MIN_KEY_BYTE_WIDTH};
+int8_t pick_baseline_key_width(const RelAlgExecutionUnit& ra_exe_unit,
+                               const std::vector<InputTableInfo>& query_infos,
+                               const Executor* executor) {
+  int8_t compact_width{4};
   for (const auto groupby_expr : ra_exe_unit.groupby_exprs) {
     const auto actual_expr = redirect_expr(groupby_expr.get(), ra_exe_unit.input_col_descs);
     const auto expr_range = getExpressionRange(actual_expr.get(), query_infos, executor);
-    compact_width = std::max(compact_width, get_compact_size_per_range(expr_range));
+    compact_width = std::max(compact_width, pick_baseline_key_component_width(expr_range));
   }
   return compact_width;
 }
@@ -1988,7 +1953,7 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
                          0,
                          group_col_widths,
 #ifdef ENABLE_KEY_COMPACTION
-                         pick_group_col_compact_width(ra_exe_unit_, query_infos_, executor_),
+                         pick_baseline_key_width(ra_exe_unit_, query_infos_, executor_),
 #endif
                          agg_col_widths,
                          target_group_by_indices,
