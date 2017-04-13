@@ -36,8 +36,7 @@ DataMgr::DataMgr(const string& dataDir,
                  const size_t reservedGpuMem,
                  const int start_epoch,
                  const size_t numReaderThreads)
-    : dataDir_(dataDir),
-      dbConvertDir_(dbConvertDir) {
+    : dataDir_(dataDir), dbConvertDir_(dbConvertDir) {
   if (useGpus) {
     try {
       cudaMgr_ = new CudaMgr_Namespace::CudaMgr(numGpus, startGpu);
@@ -57,7 +56,7 @@ DataMgr::DataMgr(const string& dataDir,
 
   if (dbConvertDir_.size() > 0) {  // i.e. "--db_convert" option was used
     dynamic_cast<GlobalFileMgr*>(bufferMgrs_[0][0])->setDBConvert(true);
-    convertDB(dbConvertDir_);      // dbConvertDir_ is path to DB directory with old data structure
+    convertDB(dbConvertDir_);  // dbConvertDir_ is path to DB directory with old data structure
     dynamic_cast<GlobalFileMgr*>(bufferMgrs_[0][0])->setDBConvert(false);
   }
 }
@@ -130,7 +129,7 @@ void DataMgr::populateMgrs(const size_t userSpecifiedCpuBufferSize,
 
 void DataMgr::convertDB(const std::string basePath) {
   /* check that "mapd_data" directory exists and it's empty */
-  std::string  mapdDataPath(basePath + "/../mapd_data/");
+  std::string mapdDataPath(basePath + "/../mapd_data/");
   boost::filesystem::path path(mapdDataPath);
   if (boost::filesystem::exists(path)) {
     if (!boost::filesystem::is_directory(path)) {
@@ -143,18 +142,19 @@ void DataMgr::convertDB(const std::string basePath) {
   GlobalFileMgr* gfm = dynamic_cast<GlobalFileMgr*>(bufferMgrs_[0][0]);
   size_t defaultPageSize = gfm->getDefaultPageSize();
   LOG(INFO) << "Database conversion started.";
-  FileMgr* fm_base_db = new FileMgr(gfm, defaultPageSize, basePath); // this call also copies data into new DB structure
+  FileMgr* fm_base_db =
+      new FileMgr(gfm, defaultPageSize, basePath);  // this call also copies data into new DB structure
   delete fm_base_db;
 
   /* write content of DB into newly created/converted DB structure & location */
-  checkpoint(); // outputs data files as well as metadata files
+  checkpoint();  // outputs data files as well as metadata files
   LOG(INFO) << "Database conversion completed.";
 }
 
-void DataMgr::createTopLevelMetadata() const { // create metadata shared by all tables of all DBs 
+void DataMgr::createTopLevelMetadata() const {  // create metadata shared by all tables of all DBs
   ChunkKey chunkKey(2);
-  chunkKey[0] = 0; // top level db_id
-  chunkKey[1] = 0; // top level tb_id
+  chunkKey[0] = 0;  // top level db_id
+  chunkKey[1] = 0;  // top level tb_id
 
   GlobalFileMgr* gfm = dynamic_cast<GlobalFileMgr*>(bufferMgrs_[0][0]);
   FileMgr* fm_top = gfm->getFileMgr(chunkKey);
@@ -263,6 +263,24 @@ void DataMgr::deleteChunksWithPrefix(const ChunkKey& keyPrefix) {
       bufferMgrs_[level][device]->deleteBuffersWithPrefix(keyPrefix);
     }
   }
+}
+
+std::shared_ptr<mapd_shared_mutex> DataMgr::getMutexForChunkPrefix(const ChunkKey& keyPrefix) {
+  std::map<ChunkKey, std::shared_ptr<mapd_shared_mutex>>::iterator mapMutexIt = chunkMutexMap_.find(keyPrefix);
+  if (mapMutexIt == chunkMutexMap_.end()) {
+    // lock it
+    mapd_unique_lock<mapd_shared_mutex> chunkMutexMapWriteLock(chunkMutexMapMutex_);
+    // make sure no one beat me here
+    mapMutexIt = chunkMutexMap_.find(keyPrefix);
+    if (mapMutexIt != chunkMutexMap_.end()) {
+      return mapMutexIt->second;
+    }
+    // make new mutex
+    std::shared_ptr<mapd_shared_mutex> tMutex = std::make_shared<mapd_shared_mutex>();
+    chunkMutexMap_[keyPrefix] = tMutex;
+    return tMutex;
+  }
+  return mapMutexIt->second;
 }
 
 AbstractBuffer* DataMgr::alloc(const MemoryLevel memoryLevel, const int deviceId, const size_t numBytes) {

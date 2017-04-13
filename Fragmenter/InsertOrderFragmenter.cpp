@@ -160,9 +160,21 @@ void InsertOrderFragmenter::deleteFragments(const vector<int>& dropFragIds) {
 }
 
 void InsertOrderFragmenter::insertData(const InsertData& insertDataStruct) {
+  mapd_unique_lock<mapd_shared_mutex> tableLevelWriteLock(*dataMgr_->getMutexForChunkPrefix(
+      chunkKeyPrefix_));  // prevent two threads from trying to insert into the same table simultaneously
+                          // mutex comes from datamgr so that lock can span more than a single component
+  insertDataImpl(insertDataStruct);
+  dataMgr_->checkpoint(chunkKeyPrefix_[0],
+                       chunkKeyPrefix_[1]);  // need to checkpoint here to remove window for corruption
+}
+
+void InsertOrderFragmenter::insertDataNoCheckpoint(const InsertData& insertDataStruct) {
+  insertDataImpl(insertDataStruct);
+}
+
+void InsertOrderFragmenter::insertDataImpl(const InsertData& insertDataStruct) {
   mapd_unique_lock<mapd_shared_mutex> insertLock(
       insertMutex_);  // prevent two threads from trying to insert into the same table simultaneously
-
   std::unordered_map<int, int> inverseInsertDataColIdMap;
 
   for (size_t insertId = 0; insertId < insertDataStruct.columnIds.size(); ++insertId) {
@@ -267,8 +279,6 @@ void InsertOrderFragmenter::insertData(const InsertData& insertDataStruct) {
   }
   numTuples_ += insertDataStruct.numRows;
   dropFragmentsToSize(maxRows_);
-  dataMgr_->checkpoint(chunkKeyPrefix_[0],
-                       chunkKeyPrefix_[1]);  // need to checkpoint here to remove window for corruption
 }
 
 FragmentInfo* InsertOrderFragmenter::createNewFragment(const Data_Namespace::MemoryLevel memoryLevel) {

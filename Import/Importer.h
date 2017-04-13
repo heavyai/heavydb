@@ -441,6 +441,11 @@ class Loader {
     return dict_map.at(cd->columnId);
   }
   virtual bool load(const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers, size_t row_count);
+  virtual bool loadNoCheckpoint(const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers,
+                                size_t row_count);
+  virtual bool loadImpl(const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers,
+                        size_t row_count,
+                        bool checkpoint);
 
  protected:
   const Catalog_Namespace::Catalog& catalog;
@@ -633,8 +638,9 @@ class Importer {
   ImportStatus importGDAL(std::map<std::string, std::string> colname_to_src);
   const CopyParams& get_copy_params() const { return copy_params; }
   const std::list<const ColumnDescriptor*>& get_column_descs() const { return loader->get_column_descs(); }
+  // this is used by bulk loader to constrain the number of checkpoints performed
   void load(const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers, size_t row_count) {
-    if (!loader->load(import_buffers, row_count))
+    if (!loader->loadNoCheckpoint(import_buffers, row_count))
       load_failed = true;
   }
   std::vector<std::vector<std::unique_ptr<TypedImportBuffer>>>& get_import_buffers_vec() { return import_buffers_vec; }

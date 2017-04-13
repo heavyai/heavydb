@@ -8,6 +8,7 @@
 #include "AbstractBuffer.h"
 #include "AbstractBufferMgr.h"
 #include "MemoryLevel.h"
+#include "../Shared/mapd_shared_mutex.h"
 
 #include <iomanip>
 #include <iostream>
@@ -57,6 +58,8 @@ class DataMgr {
                                  const int deviceId = 0,
                                  const size_t numBytes = 0);
   void deleteChunksWithPrefix(const ChunkKey& keyPrefix);
+  std::shared_ptr<mapd_shared_mutex> getMutexForChunkPrefix(
+      const ChunkKey& keyPrefix);  // used to manage locks at higher level
   AbstractBuffer* alloc(const MemoryLevel memoryLevel, const int deviceId, const size_t numBytes);
   void free(AbstractBuffer* buffer);
   void freeAllBuffers();
@@ -69,7 +72,7 @@ class DataMgr {
 
   // const std::map<ChunkKey, File_Namespace::FileBuffer *> & getChunkMap();
   const std::map<ChunkKey, File_Namespace::FileBuffer*>& getChunkMap();
-  void checkpoint(const int db_id, const int tb_id); // checkpoint for individual table of DB
+  void checkpoint(const int db_id, const int tb_id);  // checkpoint for individual table of DB
   void getChunkMetadataVec(std::vector<std::pair<ChunkKey, ChunkMetadata>>& chunkMetadataVec);
   void getChunkMetadataVecForKeyPrefix(std::vector<std::pair<ChunkKey, ChunkMetadata>>& chunkMetadataVec,
                                        const ChunkKey& keyPrefix);
@@ -87,13 +90,15 @@ class DataMgr {
                     const size_t userSpecifiedNumReaderThreads,
                     const int start_epoch);
   void convertDB(const std::string basePath);
-  void checkpoint(); // checkpoint for whole DB, called from convertDB proc only
+  void checkpoint();  // checkpoint for whole DB, called from convertDB proc only
   void createTopLevelMetadata() const;
   std::vector<std::vector<AbstractBufferMgr*>> bufferMgrs_;
   std::string dataDir_;
   bool hasGpus_;
   size_t reservedGpuMem_;
   std::string dbConvertDir_;
+  std::map<ChunkKey, std::shared_ptr<mapd_shared_mutex>> chunkMutexMap_;
+  mapd_shared_mutex chunkMutexMapMutex_;
 };
 }  // Data_Namespace
 

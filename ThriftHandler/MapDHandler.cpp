@@ -2308,7 +2308,6 @@ void MapDHandler::insert_data(const TSessionId session, const TInsertData& thrif
   }
   insert_data.numRows = thrift_insert_data.num_rows;
   const auto td = cat.getMetadataForTable(insert_data.tableId);
-  std::lock_guard<std::mutex> lock(const_cast<std::mutex&>(insert_mutex));
   try {
     td->fragmenter->insertData(insert_data);
   } catch (const std::exception& e) {

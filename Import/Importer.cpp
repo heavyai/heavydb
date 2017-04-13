@@ -696,7 +696,17 @@ static size_t find_end(const char* buffer, size_t size, const CopyParams& copy_p
   return i + 1;
 }
 
+bool Loader::loadNoCheckpoint(const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers, size_t row_count) {
+  return loadImpl(import_buffers, row_count, false);
+}
+
 bool Loader::load(const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers, size_t row_count) {
+  return loadImpl(import_buffers, row_count, true);
+}
+
+bool Loader::loadImpl(const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers,
+                      size_t row_count,
+                      bool checkpoint) {
   Fragmenter_Namespace::InsertData ins_data(insert_data);
   ins_data.numRows = row_count;
   bool success = true;
@@ -726,9 +736,11 @@ bool Loader::load(const std::vector<std::unique_ptr<TypedImportBuffer>>& import_
     ins_data.data.push_back(p);
   }
   {
-    std::lock_guard<std::mutex> lock(const_cast<std::mutex&>(insert_mutex));
     try {
-      table_desc->fragmenter->insertData(ins_data);
+      if (checkpoint)
+        table_desc->fragmenter->insertData(ins_data);
+      else
+        table_desc->fragmenter->insertDataNoCheckpoint(ins_data);
     } catch (std::exception& e) {
       LOG(ERROR) << "Fragmenter Insert Exception: " << e.what();
       success = false;
@@ -1055,7 +1067,13 @@ ImportStatus Importer::importDelimited() {
       LOG(WARNING) << "No line delimiter in block." << std::endl;
     begin_pos = i + 1;
   }
+  ChunkKey chunkKey = {loader->get_catalog().get_currentDB().dbId, loader->get_table_desc()->tableId};
   while (size > 0) {
+    // for each process through a buffer take a table lock
+    LOG(ERROR) << "before lock";
+    mapd_unique_lock<mapd_shared_mutex> tableLevelWriteLock(*loader->get_catalog().get_dataMgr().getMutexForChunkPrefix(
+        chunkKey));  // prevent two threads from trying to insert into the same table simultaneously
+    LOG(ERROR) << "after lock";
     if (eof_reached)
       end_pos = size;
     else
@@ -1097,6 +1115,10 @@ ImportStatus Importer::importDelimited() {
       LOG(ERROR) << "Maximum rows rejected exceeded. Halting load";
       break;
     }
+    LOG(ERROR) << "About to run checkpoint in loader";
+    // checkpoint before going again
+    loader->get_catalog().get_dataMgr().checkpoint(loader->get_catalog().get_currentDB().dbId,
+                                                   loader->get_table_desc()->tableId);
   }
   // todo MAT we need to review whether this checkpoint process makes sense
   auto ms = measure<>::execution([&]() {

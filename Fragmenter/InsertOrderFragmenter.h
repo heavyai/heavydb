@@ -64,6 +64,9 @@ class InsertOrderFragmenter : public AbstractFragmenter {
    * multi-row insert before creating new fragment
    */
   virtual void insertData(const InsertData& insertDataStruct);
+
+  virtual void insertDataNoCheckpoint(const InsertData& insertDataStruct);
+
   virtual void dropFragmentsToSize(const size_t maxRows);
   /**
    * @brief get fragmenter's id
@@ -91,9 +94,8 @@ class InsertOrderFragmenter : public AbstractFragmenter {
   std::string fragmenterType_;
   mapd_shared_mutex fragmentInfoMutex_;  // to prevent read-write conflicts for fragmentInfoVec_
   mapd_shared_mutex tableMutex_;         // to prevent read-write conflicts for fragmentInfoVec_
-  mapd_shared_mutex
-      insertMutex_;  // to prevent race conditions on insert - only one insert statement should be going to a
-                     // table at a time
+  mapd_shared_mutex insertMutex_;  // to prevent race conditions on insert - only one insert statement should be going
+                                   // to a table at a time
   Data_Namespace::MemoryLevel defaultInsertLevel_;
   bool hasMaterializedRowId_;
   int rowIdColId_;
@@ -117,6 +119,9 @@ class InsertOrderFragmenter : public AbstractFragmenter {
 
   void getInsertBufferChunks();
   void getChunkMetadata();
+
+  void lockInsertCheckpointData(const InsertData& insertDataStruct);
+  void insertDataImpl(const InsertData& insertDataStruct);
 
   InsertOrderFragmenter(const InsertOrderFragmenter&);
   InsertOrderFragmenter& operator=(const InsertOrderFragmenter&);
