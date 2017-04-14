@@ -6,9 +6,12 @@ Boost | [Boost](<http://www.boost.org/LICENSE_1_0.txt>) | Multiple |
 cpr | [MIT](<https://github.com/whoshuu/cpr/blob/master/LICENSE>) | License verification |
 crypto++ | [Boost](<http://www.cryptopp.com/License.txt>) | Signature verification |
 CUDA | [NVIDIA EULA](<http://docs.nvidia.com/cuda/eula/index.html#redistribution-rights>) | GPU access |
+double-conversion | [BSD-like](<https://github.com/google/double-conversion/blob/master/COPYING>) | Folly |
 EGL, KHR | [MIT]() | Rendering Support |
+Folly | [Apache](https://github.com/facebook/folly/blob/master/LICENSE) | Multiple |
 GLEW | [Modified BSD](<http://glew.sourceforge.net/glew.txt>) | OpenGL management |
-Google glog | [BSD-like](<https://github.com/google/glog/blob/master/COPYING>) | C++ logging |
+gflags | [BSD-like](<https://github.com/gflags/gflags/blob/master/COPYING.txt>) | Folly |
+glog | [BSD-like](<https://github.com/google/glog/blob/master/COPYING>) | C++ logging |
 libcurl | [MIT](<https://curl.haxx.se/docs/copyright.html>) | AWS metadata download |
 libldap | varies, [OpenLDAP](<http://www.openldap.org/software/release/license.html>) | LDAP support; provided by OS (dynamic linked) |
 libpng | [libpng](<http://libpng.org/pub/png/src/libpng-LICENSE.txt>) | Render encoding / transport |

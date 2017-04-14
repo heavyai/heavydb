@@ -108,40 +108,55 @@ Note: as of 2016-10-17 CUDA 8 does not officially support GCC 6, which is the de
 
 Most build dependencies are available via APT. Thrift is the one exception and must be built by hand (Thrift 0.9.1 is available in APT, but that version is not supported by MapD).
 
-    apt-get update
-    apt-get install build-essential \
-                    cmake \
-                    cmake-curses-gui \
-                    clang-3.8 \
-                    clang-format-3.8 \
-                    llvm-3.8 \
-                    llvm-3.8-dev \
-                    libboost-all-dev \
-                    libgoogle-glog-dev \
-                    golang \
-                    libssl-dev \
-                    libevent-dev \
-                    libglew-dev \
-                    libglfw3-dev \
-                    libpng-dev \
-                    libcurl4-openssl-dev \
-                    libcrypto++-dev \
-                    xserver-xorg \
-                    libglu1-mesa \
-                    default-jre \
-                    default-jre-headless \
-                    default-jdk \
-                    default-jdk-headless \
-                    maven \
-                    libldap2-dev \
-                    libncurses5-dev \
-                    libglewmx-dev \
-                    google-perftools \
-                    libgoogle-perftools-dev \
-                    libgdal-dev
+    apt update
+    apt install build-essential \
+                cmake \
+                cmake-curses-gui \
+                clang-3.8 \
+                clang-format-3.8 \
+                llvm-3.8 \
+                llvm-3.8-dev \
+                libboost-all-dev \
+                libgoogle-glog-dev \
+                golang \
+                libssl-dev \
+                libevent-dev \
+                libglew-dev \
+                libglfw3-dev \
+                libpng-dev \
+                libcurl4-openssl-dev \
+                libcrypto++-dev \
+                xserver-xorg \
+                libglu1-mesa \
+                default-jre \
+                default-jre-headless \
+                default-jdk \
+                default-jdk-headless \
+                maven \
+                libldap2-dev \
+                libncurses5-dev \
+                libglewmx-dev \
+                binutils-dev \
+                google-perftools \
+                libdouble-conversion-dev \
+                libevent-dev \
+                libgdal-dev \
+                libgflags-dev \
+                libgoogle-perftools-dev \
+                libiberty-dev \
+                libjemalloc-dev \
+                liblz4-dev \
+                liblzma-dev \
+                libsnappy-dev \
+                zlib1g-dev \
+                autoconf \
+                autoconf-archive
+
+
+
 
     apt-get build-dep thrift-compiler
-    wget http://apache.claz.org/thrift/0.9.3/thrift-0.9.3.tar.gz
+    wget --continue http://apache.claz.org/thrift/0.9.3/thrift-0.9.3.tar.gz
     tar xvf thrift-0.9.3.tar.gz
     pushd thrift-0.9.3
     patch -p1 < /path/to/mapd2/scripts/mapd-deps-thrift-refill-buffer.patch
@@ -153,13 +168,22 @@ Most build dependencies are available via APT. Thrift is the one exception and m
     apt-get install bison++
 
     VERS=1.11.3
-    wget https://github.com/Blosc/c-blosc/archive/v$VERS.tar.gz
+    wget --continue https://github.com/Blosc/c-blosc/archive/v$VERS.tar.gz
     tar xvf v$VERS.tar.gz
     BDIR="c-blosc-$VERS/build"
     rm -rf "$BDIR"
     mkdir -p "$BDIR"
     pushd "$BDIR"
     cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local/mapd-deps -DBUILD_BENCHMARKS=off -DBUILD_TESTS=off -DPREFER_EXTERNAL_SNAPPY=off -DPREFER_EXTERNAL_ZLIB=off -DPREFER_EXTERNAL_ZSTD=off ..
+    make -j $(nproc)
+    make install
+    popd
+
+    wget --continue https://github.com/facebook/folly/archive/v2017.04.10.00.tar.gz
+    tar xvf v2017.04.10.00.tar.gz
+    pushd folly-2017.04.10.00/folly
+    /usr/bin/autoreconf -ivf
+    ./configure --prefix=/usr/local/mapd-deps
     make -j $(nproc)
     make install
     popd

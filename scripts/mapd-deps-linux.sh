@@ -102,8 +102,6 @@ download_make_install ftp://ftp.gnu.org/gnu/bison/bison-2.5.1.tar.xz # "" "--bui
 # https://storage.googleapis.com/google-code-archive-downloads/v2/code.google.com/flexpp-bisonpp/bisonpp-1.21-45.tar.gz
 download_make_install https://internal-dependencies.mapd.com/thirdparty/bisonpp-1.21-45.tar.gz bison++-1.21
 
-download_make_install https://github.com/google/glog/archive/v0.3.4.tar.gz glog-0.3.4 # --build=powerpc64le-unknown-linux-gnu"
-
 CFLAGS="-fPIC" download_make_install ftp://ftp.gnu.org/gnu/readline/readline-6.3.tar.gz
 
 # http://downloads.sourceforge.net/project/boost/boost/1.62.0/boost_1_62_0.tar.bz2
@@ -116,6 +114,42 @@ popd
 
 # http://www.cmake.org/files/v3.7/cmake-3.7.2.tar.gz
 download_make_install https://internal-dependencies.mapd.com/thirdparty/cmake-3.7.2.tar.gz
+
+# folly
+download https://github.com/google/double-conversion/archive/4abe3267170fa52f39460460456990dbae803f4d.tar.gz
+extract 4abe3267170fa52f39460460456990dbae803f4d.tar.gz
+mv double-conversion-4abe3267170fa52f39460460456990dbae803f4d google-double-conversion-4abe326
+mkdir -p google-double-conversion-4abe326/build
+pushd google-double-conversion-4abe326/build
+cmake -DCMAKE_CXX_FLAGS="-fPIC" -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$PREFIX ..
+makej
+make install
+popd
+
+download https://github.com/gflags/gflags/archive/v2.2.0.tar.gz
+extract v2.2.0.tar.gz
+mkdir -p gflags-2.2.0/build
+pushd gflags-2.2.0/build
+cmake -DCMAKE_CXX_FLAGS="-fPIC" -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$PREFIX ..
+makej
+make install
+popd
+
+CXXFLAGS="-fPIC" download_make_install https://github.com/google/glog/archive/v0.3.4.tar.gz glog-0.3.4 "--enable-shared=no" # --build=powerpc64le-unknown-linux-gnu"
+
+download_make_install https://github.com/libevent/libevent/releases/download/release-2.0.22-stable/libevent-2.0.22-stable.tar.gz
+
+download https://github.com/facebook/folly/archive/v2017.04.10.00.tar.gz
+extract v2017.04.10.00.tar.gz
+pushd folly-2017.04.10.00/folly
+OLDPATH=$PATH
+PATH=/usr/bin
+/usr/bin/autoreconf -ivf
+PATH=$OLDPATH
+CXXFLAGS="-fPIC -pthread" ./configure --prefix=$PREFIX --with-boost=$PREFIX --with-boost-libdir=$PREFIX/lib --enable-shared=no
+makej
+make install
+popd
 
 # llvm
 download_make_install http://thrysoee.dk/editline/libedit-20160903-3.1.tar.gz
@@ -174,7 +208,6 @@ popd
 
 # thrift
 VERS=0.9.3
-download_make_install https://github.com/libevent/libevent/releases/download/release-2.0.22-stable/libevent-2.0.22-stable.tar.gz
 download http://apache.claz.org/thrift/$VERS/thrift-$VERS.tar.gz
 extract thrift-$VERS.tar.gz
 pushd thrift-$VERS
