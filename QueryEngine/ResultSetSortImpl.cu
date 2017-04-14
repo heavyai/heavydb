@@ -5,8 +5,6 @@
 #include "ResultSetBufferAccessors.h"
 #include "ThrustAllocator.h"
 
-#include "../DataMgr/DataMgr.h"
-
 #include <thrust/copy.h>
 #include <thrust/device_vector.h>
 #include <thrust/execution_policy.h>
