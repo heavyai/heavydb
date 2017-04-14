@@ -33,11 +33,16 @@ std::vector<TargetInfo> get_sort_int_target_infos() {
   return target_infos;
 }
 
-QueryMemoryDescriptor baseline_sort_desc(const std::vector<TargetInfo>& target_infos, const size_t hash_entry_count) {
+QueryMemoryDescriptor baseline_sort_desc(const std::vector<TargetInfo>& target_infos,
+                                         const size_t hash_entry_count,
+                                         const size_t key_bytewidth) {
   QueryMemoryDescriptor query_mem_desc{};
   query_mem_desc.hash_type = GroupByColRangeType::MultiCol;
   query_mem_desc.group_col_widths.emplace_back(8);
   query_mem_desc.group_col_widths.emplace_back(8);
+#ifdef ENABLE_KEY_COMPACTION
+  query_mem_desc.group_col_compact_width = key_bytewidth;
+#endif  // ENABLE_KEY_COMPACTION
   static const size_t slot_bytes = 8;
   for (size_t i = 0; i < target_infos.size(); ++i) {
     query_mem_desc.agg_col_widths.emplace_back(ColWidths{slot_bytes, slot_bytes});
@@ -46,33 +51,38 @@ QueryMemoryDescriptor baseline_sort_desc(const std::vector<TargetInfo>& target_i
   return query_mem_desc;
 }
 
+template <class K>
 void fill_storage_buffer_baseline_sort_int(int8_t* buff,
                                            const std::vector<TargetInfo>& target_infos,
                                            const QueryMemoryDescriptor& query_mem_desc,
-                                           const int64_t upper_bound) {
+                                           const int64_t upper_bound,
+                                           const int64_t empty_key) {
   const auto key_component_count = get_key_count_for_descriptor(query_mem_desc);
-  const auto i64_buff = reinterpret_cast<int64_t*>(buff);
   const auto target_slot_count = get_slot_count(target_infos);
+  const auto row_bytes = get_row_bytes(query_mem_desc);
   for (size_t i = 0; i < query_mem_desc.entry_count; ++i) {
-    const auto first_key_comp_offset = key_offset_rowwise(i, key_component_count, target_slot_count);
+    const auto row_ptr = buff + i * row_bytes;
     for (size_t key_comp_idx = 0; key_comp_idx < key_component_count; ++key_comp_idx) {
-      i64_buff[first_key_comp_offset + key_comp_idx] = EMPTY_KEY_64;
+      reinterpret_cast<K*>(row_ptr)[key_comp_idx] = empty_key;
     }
     for (size_t target_slot = 0; target_slot < target_slot_count; ++target_slot) {
-      i64_buff[slot_offset_rowwise(i, target_slot, key_component_count, target_slot_count)] = 0xdeadbeef;
+      const auto cols_ptr = reinterpret_cast<int64_t*>(row_ptr + get_slot_off_quad(query_mem_desc) * sizeof(int64_t));
+      cols_ptr[target_slot] = 0xdeadbeef;
     }
   }
   std::vector<int64_t> values(upper_bound);
   std::iota(values.begin(), values.end(), 1);
   std::random_shuffle(values.begin(), values.end());
+  CHECK_EQ(size_t(0), row_bytes % 8);
+  const auto row_size_quad = row_bytes / 8;
   for (const auto val : values) {
-    std::vector<int64_t> key(key_component_count, val);
-    auto value_slots = get_group_value(i64_buff,
+    std::vector<K> key(key_component_count, val);
+    auto value_slots = get_group_value(reinterpret_cast<int64_t*>(buff),
                                        query_mem_desc.entry_count,
-                                       &key[0],
+                                       reinterpret_cast<const int64_t*>(&key[0]),
                                        key.size(),
-                                       sizeof(int64_t),
-                                       key_component_count + target_slot_count,
+                                       sizeof(K),
+                                       row_size_quad,
                                        nullptr);
     CHECK(value_slots);
     fill_one_entry_baseline(value_slots, val, target_infos);
@@ -144,17 +154,32 @@ std::vector<TargetInfo> get_sort_fp_target_infos() {
   return target_infos;
 }
 
-}  // namespace
+template <class K>
+int64_t empty_key_val();
 
-TEST(SortBaseline, Integers) {
+template <>
+int64_t empty_key_val<int64_t>() {
+  return EMPTY_KEY_64;
+}
+
+#ifdef ENABLE_KEY_COMPACTION
+template <>
+int64_t empty_key_val<int32_t>() {
+  return EMPTY_KEY_32;
+}
+#endif  // ENABLE_KEY_COMPACTION
+
+template <class K>
+void SortBaselineIntegersTestImpl() {
   const auto target_infos = get_sort_int_target_infos();
-  const auto query_mem_desc = baseline_sort_desc(target_infos, 400);
+  const auto query_mem_desc = baseline_sort_desc(target_infos, 400, sizeof(K));
   const auto row_set_mem_owner = std::make_shared<RowSetMemoryOwner>();
   const int64_t upper_bound = 200;
   std::unique_ptr<ResultSet> rs(
       new ResultSet(target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, nullptr));
   auto storage = rs->allocateStorage();
-  fill_storage_buffer_baseline_sort_int(storage->getUnderlyingBuffer(), target_infos, query_mem_desc, upper_bound);
+  fill_storage_buffer_baseline_sort_int<K>(
+      storage->getUnderlyingBuffer(), target_infos, query_mem_desc, upper_bound, empty_key_val<K>());
   std::list<Analyzer::OrderEntry> order_entries;
   const bool desc = true;
   order_entries.emplace_back(3, desc, false);
@@ -163,11 +188,23 @@ TEST(SortBaseline, Integers) {
   check_sorted<int64_t>(*rs, upper_bound, top_n, desc);
 }
 
+}  // namespace
+
+TEST(SortBaseline, IntegersKey64) {
+  SortBaselineIntegersTestImpl<int64_t>();
+}
+
+#ifdef ENABLE_KEY_COMPACTION
+TEST(SortBaseline, IntegersKey32) {
+  SortBaselineIntegersTestImpl<int32_t>();
+}
+#endif  // ENABLE_KEY_COMPACTION
+
 TEST(SortBaseline, Floats) {
   for (const bool desc : {true, false}) {
     for (int tle_no = 1; tle_no <= 3; ++tle_no) {
       const auto target_infos = get_sort_fp_target_infos();
-      const auto query_mem_desc = baseline_sort_desc(target_infos, 400);
+      const auto query_mem_desc = baseline_sort_desc(target_infos, 400, 8);
       const auto row_set_mem_owner = std::make_shared<RowSetMemoryOwner>();
       const int64_t upper_bound = 200;
       std::unique_ptr<ResultSet> rs(
