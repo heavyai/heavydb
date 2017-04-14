@@ -34,7 +34,6 @@ namespace Importer_NS {
 
 bool debug_timing = false;
 
-static std::mutex insert_mutex;
 static mapd_shared_mutex status_mutex;
 static std::map<std::string, ImportStatus> import_status_map;
 
