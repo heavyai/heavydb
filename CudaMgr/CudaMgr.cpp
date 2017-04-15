@@ -10,8 +10,8 @@ using std::endl;
 
 namespace CudaMgr_Namespace {
 
-CudaMgr::CudaMgr(const int numGpus, const int startGpu) : startGpu_(startGpu) {
 #ifdef HAVE_CUDA
+CudaMgr::CudaMgr(const int numGpus, const int startGpu) : startGpu_(startGpu) {
   checkError(cuInit(0));
   checkError(cuDeviceGetCount(&deviceCount_));
 
@@ -24,10 +24,12 @@ CudaMgr::CudaMgr(const int numGpus, const int startGpu) : startGpu_(startGpu) {
   fillDeviceProperties();
   createDeviceContexts();
   printDeviceProperties();
-#else
-  CHECK(false);
-#endif  // HAVE_CUDA
 }
+#else
+CudaMgr::CudaMgr(const int, const int) {
+  CHECK(false);
+}
+#endif  // HAVE_CUDA
 
 CudaMgr::~CudaMgr() {
 #ifdef HAVE_CUDA

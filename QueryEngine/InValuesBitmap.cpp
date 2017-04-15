@@ -76,6 +76,7 @@ InValuesBitmap::InValuesBitmap(const std::vector<int64_t>& values,
     bitsets_.push_back(cpu_bitset);
   }
 #else
+  CHECK_EQ(1, device_count_);
   bitsets_.push_back(cpu_bitset);
 #endif  // HAVE_CUDA
 }

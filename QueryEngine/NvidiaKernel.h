@@ -36,8 +36,10 @@ class GpuCompilationContext {
  private:
   CUmodule module_;
   CUfunction kernel_;
+#ifdef HAVE_CUDA
   const int device_id_;
   const void* cuda_mgr_;
+#endif  // HAVE_CUDA
 };
 
 #define checkCudaErrors(err) CHECK_EQ(err, CUDA_SUCCESS);

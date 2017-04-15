@@ -62,7 +62,9 @@ class CudaMgr {
   void checkError(CUresult cuResult);
 
   int deviceCount_;
+#ifdef HAVE_CUDA
   int startGpu_;
+#endif  // HAVE_CUDA
   std::vector<CUcontext> deviceContexts;
 
 };  // class CudaMgr
