@@ -215,10 +215,11 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
       mapd_parameters_(mapd_parameters),
 #ifdef HAVE_CALCITE
       enable_rendering_(enable_rendering),
-      legacy_syntax_(legacy_syntax) {
+      legacy_syntax_(legacy_syntax), 
 #else
-      enable_rendering_(enable_rendering) {
+      enable_rendering_(enable_rendering), 
 #endif  // HAVE_CALCITE
+      super_user_rights_(false) {
   LOG(INFO) << "MapD Server " << MapDRelease;
   if (executor_device == "gpu") {
 #ifdef HAVE_CUDA
@@ -330,11 +331,13 @@ void MapDHandler::connect(TSessionId& session,
     LOG(ERROR) << ex.error_msg;
     throw ex;
   }
-  if (!sys_cat_->checkPasswordForUser(passwd, user_meta)) {
-    TMapDException ex;
-    ex.error_msg = std::string("Password for User ") + user + " is incorrect.";
-    LOG(ERROR) << ex.error_msg;
-    throw ex;
+  if (!super_user_rights_) {
+    if (!sys_cat_->checkPasswordForUser(passwd, user_meta)) {
+      TMapDException ex;
+      ex.error_msg = std::string("Password for User ") + user + " is incorrect.";
+      LOG(ERROR) << ex.error_msg;
+      throw ex;
+    }
   }
   Catalog_Namespace::DBMetadata db_meta;
   if (!sys_cat_->getMetadataForDB(dbname, db_meta)) {
@@ -377,11 +380,13 @@ void MapDHandler::connect(TSessionId& session,
   } else
     sessions_[session].reset(
         new Catalog_Namespace::SessionInfo(cat_it->second, user_meta, executor_device_type_, session));
-  if (leaf_aggregator_.leafCount() > 0) {
-    const auto parent_session_info_ptr = sessions_[session];
-    CHECK(parent_session_info_ptr);
-    leaf_aggregator_.connect(*parent_session_info_ptr, user, passwd, dbname);
-    return;
+  if (!super_user_rights_) { // no need to connect to leaf_aggregator_ at this time while doing warmup
+    if (leaf_aggregator_.leafCount() > 0) {
+      const auto parent_session_info_ptr = sessions_[session];
+      CHECK(parent_session_info_ptr);
+      leaf_aggregator_.connect(*parent_session_info_ptr, user, passwd, dbname);
+      return;
+    }
   }
   LOG(INFO) << "User " << user << " connected to database " << dbname << std::endl;
 }
@@ -888,6 +893,10 @@ void MapDHandler::clear_gpu_memory(const TSessionId& session) {
 void MapDHandler::clear_cpu_memory(const TSessionId& session) {
   const auto session_info = get_session(session);
   sys_cat_->get_dataMgr().clearMemory(MemoryLevel::CPU_LEVEL);
+}
+
+TSessionId MapDHandler::getInvalidSessionId() const { 
+  return INVALID_SESSION_ID;
 }
 
 // void get_memory_summary(std::string& memory) { memory = sys_cat_->get_dataMgr().getMemorySummary(); }

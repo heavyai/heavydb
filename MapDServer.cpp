@@ -15,6 +15,7 @@
 #include "MapDRelease.h"
 
 #include "Shared/MapDParameters.h"
+#include "Shared/scope.h"
 
 #include <boost/filesystem.hpp>
 #include <boost/make_shared.hpp>
@@ -22,6 +23,7 @@
 #include <thread>
 #include <glog/logging.h>
 #include <signal.h>
+#include <sstream>
 
 using namespace ::apache::thrift;
 using namespace ::apache::thrift::concurrency;
@@ -127,6 +129,65 @@ void start_server(TThreadPoolServer& server) {
   }
 }
 
+shared_ptr<MapDHandler> warmup_handler = 0; // global "warmup_handler" needed to avoid circular dependency
+                                            // between "MapDHandler" & function "run_warmup_queries"
+                                            
+void releaseWarmupSession(TSessionId& sessionId, std::ifstream& query_file) {
+  query_file.close();
+  if (sessionId != warmup_handler->getInvalidSessionId()) {
+    warmup_handler->disconnect(sessionId);
+  }
+}
+
+void run_warmup_queries(std::string base_path, std::string query_file_path) {
+  std::string db_info;
+  std::string user_keyword, user_name, db_name;
+  std::ifstream query_file;
+  Catalog_Namespace::UserMetadata user;
+  Catalog_Namespace::DBMetadata db;
+  TSessionId sessionId = warmup_handler->getInvalidSessionId();
+
+  ScopeGuard session_guard = [&] { releaseWarmupSession(sessionId, query_file); };
+  query_file.open(query_file_path);
+  while (std::getline(query_file, db_info)) {
+    if (db_info.length() == 0) {
+      continue;
+    }
+    std::istringstream iss(db_info);
+    iss >> user_keyword >> user_name >> db_name;
+    if (user_keyword.compare(0, 4, "USER") == 0) {
+      // connect to DB for given user_name/db_name with super_user_rights (without password), & start session
+      warmup_handler->super_user_rights_ = true;
+      warmup_handler->connect(sessionId, user_name, "", db_name);
+      warmup_handler->super_user_rights_ = false;
+
+      // read and run one query at a time for the DB with the setup connection
+      TQueryResult ret;
+      std::string single_query;
+      while (std::getline(query_file, single_query)) {
+        if (single_query.length() == 0) {
+          continue;
+        }
+        if (single_query.compare("}") == 0) {
+          single_query.clear();
+          break;
+        }
+        warmup_handler->sql_execute(ret, sessionId, single_query, true, "", -1);
+        single_query.clear();
+      }
+
+      // stop session and disconnect from the DB
+      warmup_handler->disconnect(sessionId);
+      sessionId = warmup_handler->getInvalidSessionId(); 
+    } else { 
+      LOG(WARNING) << "\nSyntax error in the file: " << query_file_path.c_str()
+                   << " Missing expected keyword USER. Following line will be ignored: " 
+                   << db_info.c_str() << std::endl;
+    }
+    db_info.clear();
+  }
+}
+
 int main(int argc, char** argv) {
   int port = 9091;
   int http_port = 9090;
@@ -157,6 +218,7 @@ int main(int argc, char** argv) {
   size_t num_reader_threads = 0;  // number of threads used when loading data
   int start_epoch = -1;
   std::string db_convert_dir("");  // path to mapd DB to convert from; if path is empty, no conversion is requested
+  std::string db_query_file("");   // path to file containing warmup queries list
 
   namespace po = boost::program_options;
 
@@ -262,6 +324,8 @@ int main(int argc, char** argv) {
   desc_adv.add_options()("allow-cpu-retry",
                          po::value<bool>(&g_allow_cpu_retry)->default_value(g_allow_cpu_retry)->implicit_value(true),
                          "Allow the queries which failed on GPU to retry on CPU, even when watchdog is enabled");
+  desc_adv.add_options()(
+      "db-query-list", po::value<std::string>(&db_query_file), "Path to file containing mapd queries");
 
   po::positional_options_description positionalOptions;
   positionalOptions.add("data", 1);
@@ -334,6 +398,11 @@ int main(int argc, char** argv) {
     return 1;
   }
 
+  boost::algorithm::trim_if(db_query_file, boost::is_any_of("\"'"));
+  if (db_query_file.length() > 0 && !boost::filesystem::exists(db_query_file)) {
+    std::cerr << "File containing DB queries " << db_query_file << " does not exist." << std::endl;
+    return 1;
+  }
   boost::algorithm::trim_if(db_convert_dir, boost::is_any_of("\"'"));
   if (db_convert_dir.length() > 0 && !boost::filesystem::exists(db_convert_dir)) {
     std::cerr << "Data conversion source directory " << db_convert_dir << " does not exist." << std::endl;
@@ -431,8 +500,20 @@ int main(int argc, char** argv) {
   shared_ptr<ThreadManager> threadManager = ThreadManager::newSimpleThreadManager(tthreadpool_size);
   threadManager->threadFactory(make_shared<PlatformThreadFactory>());
   threadManager->start();
-
   shared_ptr<TServerTransport> bufServerTransport(new TServerSocket(port));
+
+  // run warmup queries to load cache if requested
+  if (db_query_file.length() > 0) {
+    try { 
+      warmup_handler = handler;
+      run_warmup_queries(base_path,  db_query_file);
+    } catch (...) {
+      LOG(WARNING) << "Exception while executing warmup queries. "
+                   << "Warmup may not be fully completed. Will proceed nevertheless." << std::endl;
+    } 
+    warmup_handler = 0;
+  }
+
   shared_ptr<TTransportFactory> bufTransportFactory(new TBufferedTransportFactory());
   shared_ptr<TProtocolFactory> bufProtocolFactory(new TBinaryProtocolFactory());
   TThreadPoolServer bufServer(processor, bufServerTransport, bufTransportFactory, bufProtocolFactory, threadManager);

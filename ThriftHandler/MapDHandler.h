@@ -222,6 +222,7 @@ class MapDHandler : public MapDIf {
   void get_table_details(TTableDetails& _return, const TSessionId& session, const std::string& table_name);
   void clear_gpu_memory(const TSessionId& session);
   void clear_cpu_memory(const TSessionId& session);
+  TSessionId getInvalidSessionId() const;
 
   std::unique_ptr<Catalog_Namespace::SysCatalog> sys_cat_;
   std::shared_ptr<Data_Namespace::DataMgr> data_mgr_;
@@ -348,6 +349,9 @@ class MapDHandler : public MapDIf {
   Planner::RootPlan* parse_to_plan_legacy(const std::string& query_str,
                                           const Catalog_Namespace::SessionInfo& session_info,
                                           const std::string& action /* render or validate */);
+
+  bool super_user_rights_; // default is "false"; setting to "true" ignores passwd checks in "connect(..)" method
+  friend void run_warmup_queries(std::string base_path, std::string query_file_path);
 };
 
 #endif /* MAPDHANDLER_H */
