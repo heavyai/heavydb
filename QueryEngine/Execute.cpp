@@ -4324,8 +4324,7 @@ Executor::ExecutionDispatch::ExecutionDispatch(Executor* executor,
       query_context_mutexes_(context_count),
       row_set_mem_owner_(row_set_mem_owner),
       error_code_(error_code),
-      render_allocator_map_(render_allocator_map),
-      dynamic_watchdog_set_{ATOMIC_FLAG_INIT} {
+      render_allocator_map_(render_allocator_map) {
   all_fragment_results_.reserve(query_infos_.front().info.fragments.size());
 }
 

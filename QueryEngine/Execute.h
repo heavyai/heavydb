@@ -578,7 +578,7 @@ class Executor {
     int32_t* error_code_;
     RenderAllocatorMap* render_allocator_map_;
     std::vector<std::pair<ResultPtr, std::vector<size_t>>> all_fragment_results_;
-    std::atomic_flag dynamic_watchdog_set_;
+    std::atomic_flag dynamic_watchdog_set_ = ATOMIC_FLAG_INIT;
     static std::mutex reduce_mutex_;
 
     typedef std::vector<int> CacheKey;
