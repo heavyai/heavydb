@@ -979,15 +979,24 @@ void BinOper::check_group_by(const std::list<std::shared_ptr<Analyzer::Expr>>& g
   right_operand->check_group_by(groupby);
 }
 
+namespace {
+
+template <class T>
+bool expr_is(const std::shared_ptr<Analyzer::Expr>& expr) {
+  return std::dynamic_pointer_cast<T>(expr) != nullptr;
+}
+
+}  // namespace
+
 std::shared_ptr<Analyzer::Expr> BinOper::normalize_simple_predicate(int& rte_idx) const {
   rte_idx = -1;
   if (!IS_COMPARISON(optype) || qualifier != kONE)
     return nullptr;
-  if (typeid(*left_operand) == typeid(ColumnVar) && typeid(*right_operand) == typeid(Constant)) {
+  if (expr_is<ColumnVar>(left_operand) && !expr_is<Var>(left_operand) && expr_is<Constant>(right_operand)) {
     auto cv = std::dynamic_pointer_cast<ColumnVar>(left_operand);
     rte_idx = cv->get_rte_idx();
     return this->deep_copy();
-  } else if (typeid(*left_operand) == typeid(Constant) && typeid(*right_operand) == typeid(ColumnVar)) {
+  } else if (expr_is<Constant>(left_operand) && expr_is<ColumnVar>(right_operand) && !expr_is<Var>(right_operand)) {
     auto cv = std::dynamic_pointer_cast<ColumnVar>(right_operand);
     rte_idx = cv->get_rte_idx();
     return makeExpr<BinOper>(type_info,

@@ -155,7 +155,7 @@ std::shared_ptr<Analyzer::Expr> OperExpr::normalize(const SQLOps optype,
   auto right_type = right_expr->get_type_info();
   if (qual != kONE) {
     // subquery not supported yet.
-    assert(typeid(*right_expr) != typeid(Analyzer::Subquery));
+    CHECK(!std::dynamic_pointer_cast<Analyzer::Subquery>(right_expr));
     if (right_type.get_type() != kARRAY)
       throw std::runtime_error(
           "Existential or universal qualifiers can only be used in front of a subquery or an "
@@ -1035,7 +1035,7 @@ void QuerySpec::analyze_group_by(const Catalog_Namespace::Catalog& catalog, Anal
         ti.set_fixed_size();
       }
       std::shared_ptr<Analyzer::Var> v;
-      if (typeid(*gexpr) == typeid(Analyzer::Var)) {
+      if (std::dynamic_pointer_cast<Analyzer::Var>(gexpr)) {
         v = std::static_pointer_cast<Analyzer::Var>(gexpr);
         int n = v->get_varno();
         gexpr = tlist[n - 1]->get_own_expr();
@@ -1104,7 +1104,7 @@ void QuerySpec::analyze_select_clause(const Catalog_Namespace::Catalog& catalog,
 
         if (p->get_alias() != nullptr)
           resname = *p->get_alias();
-        else if (typeid(*e) == typeid(Analyzer::ColumnVar)) {
+        else if (std::dynamic_pointer_cast<Analyzer::ColumnVar>(e) && !std::dynamic_pointer_cast<Analyzer::Var>(e)) {
           auto colvar = std::static_pointer_cast<Analyzer::ColumnVar>(e);
           const ColumnDescriptor* col_desc =
               catalog.getMetadataForColumn(colvar->get_table_id(), colvar->get_column_id());
@@ -1564,7 +1564,7 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   std::list<ColumnDescriptor> columns;
   std::unordered_set<std::string> uc_col_names;
   for (auto& e : table_element_list) {
-    if (typeid(*e) != typeid(ColumnDef))
+    if (!dynamic_cast<ColumnDef*>(e.get()))
       throw std::runtime_error("Table constraints are not supported yet.");
     ColumnDef* coldef = static_cast<ColumnDef*>(e.get());
     ColumnDescriptor cd;
