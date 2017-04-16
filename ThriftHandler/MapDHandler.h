@@ -32,11 +32,6 @@
 #include "Calcite/Calcite.h"
 #endif  // HAVE_CALCITE
 
-#ifdef HAVE_RAVM
-#include "QueryEngine/PendingExecutionClosure.h"
-#include "QueryEngine/RelAlgExecutor.h"
-#endif  // HAVE_RAVM
-
 #include "Catalog/Catalog.h"
 #include "Fragmenter/InsertOrderFragmenter.h"
 #include "Import/Importer.h"
