@@ -12,6 +12,7 @@
 #include "RuntimeFunctions.h"
 #include "SqlTypesLayout.h"
 
+#include "Shared/likely.h"
 #include "Shared/thread_count.h"
 
 #include <future>
@@ -169,7 +170,7 @@ void ResultSetStorage::reduce(const ResultSetStorage& that) const {
 namespace {
 
 ALWAYS_INLINE void check_watchdog(const size_t sample_seed) {
-  if (g_enable_dynamic_watchdog && (sample_seed & 0x3F) == 0 && dynamic_watchdog()) {
+  if (UNLIKELY(g_enable_dynamic_watchdog && (sample_seed & 0x3F) == 0 && dynamic_watchdog())) {
     // TODO(alex): distinguish between the deadline and interrupt
     throw std::runtime_error(
         "Query execution has exceeded the time limit or was interrupted during result set reduction");
