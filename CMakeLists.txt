@@ -80,6 +80,13 @@ find_package(GDALExtra REQUIRED)
 list(APPEND GDAL_LIBRARIES ${PNG_LIBRARIES} ${GDALExtra_LIBRARIES})
 include_directories(${GDAL_INCLUDE_DIRS})
 
+option(ENABLE_FOLLY "Use Folly" ON)
+if(ENABLE_FOLLY)
+  find_package(Folly REQUIRED)
+  include_directories(${Folly_INCLUDE_DIRS})
+  add_definitions("-DHAVE_FOLLY")
+endif()
+
 find_package(Curses REQUIRED)
 include_directories(${CURSES_INCLUDE_DIRS})
 if (CURSES_HAVE_NCURSES_CURSES_H AND NOT CURSES_HAVE_CURSES_H)
@@ -279,6 +286,9 @@ endif()
 set(MAPD_LIBRARIES Shared Catalog SqliteConnector Parser Analyzer Planner
   QueryEngine DataMgr Fragmenter Chunk)
 
+if(ENABLE_FOLLY)
+  list(APPEND MAPD_LIBRARIES ${Folly_LIBRARIES})
+endif()
 
 if(ENABLE_CALCITE)
   list(APPEND MAPD_LIBRARIES Calcite)
@@ -343,7 +353,11 @@ add_custom_target(rerun_cmake ALL
 add_dependencies(mapd_server rerun_cmake)
 
 target_link_libraries(mapd_server mapd_thrift thrift_handler ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${Glog_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${LLVM_LINKER_FLAGS} ${PROFILER_LIBS} ${CURSES_LIBRARIES} ${ZLIB_LIBRARIES} poly2tri)
+if(ENABLE_FOLLY)
+target_link_libraries(initdb Shared Catalog Fragmenter Chunk SqliteConnector DataMgr StringDictionary ${Boost_LIBRARIES} ${Folly_LIBRARIES} ${CMAKE_DL_LIBS})
+else()
 target_link_libraries(initdb Shared Catalog Fragmenter Chunk SqliteConnector DataMgr StringDictionary ${Boost_LIBRARIES} ${CMAKE_DL_LIBS})
+endif()
 
 # Packaging
 set(CPACK_PACKAGE_VENDOR "MapD Technologies, Inc.")
