@@ -66,7 +66,7 @@ void fill_slots(int64_t* dst_entry,
 
 }  // namespace
 
-void reset_keys(void* key_ptr, const size_t key_count, const size_t key_width) {
+void fill_empty_key(void* key_ptr, const size_t key_count, const size_t key_width) {
   switch (key_width) {
     case 4: {
       auto key_ptr_i32 = reinterpret_cast<int32_t*>(key_ptr);
@@ -720,7 +720,7 @@ void ResultSetStorage::initializeRowWise() const {
   CHECK(!query_mem_desc_.keyless_hash);
   for (size_t i = 0; i < query_mem_desc_.entry_count; ++i) {
     auto row_ptr = buff_ + i * row_size;
-    reset_keys(row_ptr, key_count, query_mem_desc_.getEffectiveKeyWidth());
+    fill_empty_key(row_ptr, key_count, query_mem_desc_.getEffectiveKeyWidth());
     auto slot_ptr = reinterpret_cast<int64_t*>(row_ptr + key_bytes_with_padding);
     for (size_t j = 0; j < target_init_vals_.size(); ++j) {
       slot_ptr[j] = target_init_vals_[j];

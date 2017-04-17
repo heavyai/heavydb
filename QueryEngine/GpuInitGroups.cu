@@ -90,11 +90,11 @@ __global__ void init_render_buffer_wrapper(int64_t* render_buffer, const uint32_
   init_render_buffer(render_buffer, qw_count);
 }
 
-inline __device__ bool try_reset_keys(int64_t* key_ptr_i64,
-                                      const uint32_t key_qw_idx,
-                                      const uint32_t key_count,
-                                      const uint32_t key_width,
-                                      const uint32_t row_size_quad) {
+inline __device__ bool fill_empty_device_key(int64_t* key_ptr_i64,
+                                             const uint32_t key_qw_idx,
+                                             const uint32_t key_count,
+                                             const uint32_t key_width,
+                                             const uint32_t row_size_quad) {
   switch (key_width) {
     case 4: {
       auto key_ptr_i32 = reinterpret_cast<int32_t*>(key_ptr_i64);
@@ -143,7 +143,7 @@ __global__ void init_group_by_buffer_gpu(int64_t* groups_buffer,
   const int32_t slot_off_quad = align_to_int64(key_count * key_width) / sizeof(int64_t);
   int32_t groups_buffer_entry_qw_count = groups_buffer_entry_count * row_size_quad;
   for (int32_t i = start; i < groups_buffer_entry_qw_count; i += step) {
-    if (!try_reset_keys(&groups_buffer[i], (i % row_size_quad), key_count, key_width, row_size_quad)) {
+    if (!fill_empty_device_key(&groups_buffer[i], (i % row_size_quad), key_count, key_width, row_size_quad)) {
       groups_buffer[i] = init_vals[(i % row_size_quad) - slot_off_quad];
     }
   }

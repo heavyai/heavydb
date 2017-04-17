@@ -317,7 +317,7 @@ void QueryExecutionContext::initGroups(int64_t* groups_buffer,
   }
 
   for (size_t bin = 0; bin < static_cast<size_t>(groups_buffer_entry_count); ++bin, buffer_ptr += row_size) {
-    reset_keys(buffer_ptr, key_count, query_mem_desc_.getEffectiveKeyWidth());
+    fill_empty_key(buffer_ptr, key_count, query_mem_desc_.getEffectiveKeyWidth());
     initColumnPerRow(query_mem_desc_fixedup, &buffer_ptr[col_base_off], bin, init_vals, agg_bitmap_size);
   }
 }
