@@ -827,7 +827,8 @@ class Executor {
                                             const int8_t out_byte_width,
                                             const int64_t* out_vec,
                                             const size_t out_vec_sz,
-                                            const bool is_group_by);
+                                            const bool is_group_by,
+                                            const bool float_argument_input);
   static ResultPtr resultsUnion(ExecutionDispatch& execution_dispatch);
   int64_t getJoinHashTablePtr(const ExecutorDeviceType device_type, const int device_id);
   RowSetPtr reduceMultiDeviceResults(const RelAlgExecutionUnit&,

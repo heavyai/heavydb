@@ -2168,6 +2168,7 @@ GroupByAndAggregate::KeylessInfo GroupByAndAggregate::getKeylessInfo(
       auto agg_expr = dynamic_cast<const Analyzer::AggExpr*>(target_expr);
       CHECK(agg_expr);
       const auto arg_expr = agg_arg(target_expr);
+      const bool float_argument_input = takes_float_argument(agg_info);
       switch (agg_info.agg_kind) {
         case kAVG:
           ++index;
@@ -2198,8 +2199,11 @@ GroupByAndAggregate::KeylessInfo GroupByAndAggregate::getKeylessInfo(
           if (!arg_expr->get_type_info().get_notnull()) {
             auto expr_range_info = getExpressionRange(arg_expr, query_infos_, executor_);
             if (expr_range_info.getType() != ExpressionRangeType::Invalid && !expr_range_info.hasNulls()) {
-              init_val = get_agg_initial_val(
-                  agg_info.agg_kind, arg_expr->get_type_info(), is_group_by, query_mem_desc_.getCompactByteWidth());
+              init_val =
+                  get_agg_initial_val(agg_info.agg_kind,
+                                      arg_expr->get_type_info(),
+                                      is_group_by || float_argument_input,
+                                      float_argument_input ? sizeof(float) : query_mem_desc_.getCompactByteWidth());
               found = true;
             }
           } else {
@@ -2231,7 +2235,10 @@ GroupByAndAggregate::KeylessInfo GroupByAndAggregate::getKeylessInfo(
           }
           auto expr_range_info = getExpressionRange(agg_expr->get_arg(), query_infos_, executor_);
           auto init_max =
-              get_agg_initial_val(agg_info.agg_kind, chosen_type, is_group_by, query_mem_desc_.getCompactByteWidth());
+              get_agg_initial_val(agg_info.agg_kind,
+                                  chosen_type,
+                                  is_group_by || float_argument_input,
+                                  float_argument_input ? sizeof(float) : query_mem_desc_.getCompactByteWidth());
           switch (expr_range_info.getType()) {
             case ExpressionRangeType::Float:
             case ExpressionRangeType::Double: {
@@ -2261,7 +2268,10 @@ GroupByAndAggregate::KeylessInfo GroupByAndAggregate::getKeylessInfo(
           }
           auto expr_range_info = getExpressionRange(agg_expr->get_arg(), query_infos_, executor_);
           auto init_min =
-              get_agg_initial_val(agg_info.agg_kind, chosen_type, is_group_by, query_mem_desc_.getCompactByteWidth());
+              get_agg_initial_val(agg_info.agg_kind,
+                                  chosen_type,
+                                  is_group_by || float_argument_input,
+                                  float_argument_input ? sizeof(float) : query_mem_desc_.getCompactByteWidth());
           switch (expr_range_info.getType()) {
             case ExpressionRangeType::Float:
             case ExpressionRangeType::Double: {
@@ -3028,41 +3038,48 @@ bool GroupByAndAggregate::codegenAggCalls(const std::tuple<llvm::Value*, llvm::V
         }
       }
 
+      const bool float_argument_input = takes_float_argument(agg_info);
+      const auto agg_chosen_bytes = float_argument_input ? sizeof(float) : chosen_bytes;
+      if (float_argument_input) {
+        CHECK_GE(chosen_bytes, sizeof(float));
+      }
+
       auto target_lv = target_lvs[target_lv_idx];
       const auto needs_unnest_double_patch = needsUnnestDoublePatch(target_lv, agg_base_name, co);
       const auto need_skip_null = !needs_unnest_double_patch && agg_info.skip_null_val;
       if (!needs_unnest_double_patch) {
         if (need_skip_null && agg_info.agg_kind != kCOUNT) {
-          target_lv = convertNullIfAny(arg_expr->get_type_info(), arg_type, chosen_bytes, target_lv);
+          target_lv = convertNullIfAny(arg_expr->get_type_info(), arg_type, agg_chosen_bytes, target_lv);
         } else if (is_fp_arg) {
           target_lv = executor_->castToFP(target_lv);
         }
         if (!dynamic_cast<const Analyzer::AggExpr*>(target_expr) || arg_expr) {
-          target_lv = executor_->castToTypeIn(target_lv, (chosen_bytes << 3));
+          target_lv = executor_->castToTypeIn(target_lv, (agg_chosen_bytes << 3));
         }
       }
 
       std::vector<llvm::Value*> agg_args{
-          is_group_by ? agg_col_ptr : executor_->castToIntPtrTyIn(agg_out_vec[agg_out_off], (chosen_bytes << 3)),
-          (is_simple_count && !arg_expr) ? (chosen_bytes == sizeof(int32_t) ? LL_INT(int32_t(0)) : LL_INT(int64_t(0)))
-                                         : (is_simple_count && arg_expr && str_target_lv ? str_target_lv : target_lv)};
+          executor_->castToIntPtrTyIn((is_group_by ? agg_col_ptr : agg_out_vec[agg_out_off]), (agg_chosen_bytes << 3)),
+          (is_simple_count && !arg_expr)
+              ? (agg_chosen_bytes == sizeof(int32_t) ? LL_INT(int32_t(0)) : LL_INT(int64_t(0)))
+              : (is_simple_count && arg_expr && str_target_lv ? str_target_lv : target_lv)};
       std::string agg_fname{agg_base_name};
       if (is_fp_arg) {
         if (!lazy_fetched) {
-          if (chosen_bytes == sizeof(float)) {
+          if (agg_chosen_bytes == sizeof(float)) {
             CHECK_EQ(arg_type.get_type(), kFLOAT);
             agg_fname += "_float";
           } else {
-            CHECK_EQ(chosen_bytes, sizeof(double));
+            CHECK_EQ(agg_chosen_bytes, sizeof(double));
             agg_fname += "_double";
           }
         }
-      } else if (chosen_bytes == sizeof(int32_t)) {
+      } else if (agg_chosen_bytes == sizeof(int32_t)) {
         agg_fname += "_int32";
       }
 
       if (is_distinct_target(agg_info)) {
-        CHECK_EQ(chosen_bytes, sizeof(int64_t));
+        CHECK_EQ(agg_chosen_bytes, sizeof(int64_t));
         CHECK(!chosen_type.is_fp());
         codegenCountDistinct(target_idx, target_expr, agg_args, query_mem_desc_, co.device_type_);
       } else {
@@ -3072,7 +3089,7 @@ bool GroupByAndAggregate::codegenAggCalls(const std::tuple<llvm::Value*, llvm::V
           auto null_lv =
               executor_->castToTypeIn(arg_ti.is_fp() ? static_cast<llvm::Value*>(executor_->inlineFpNull(arg_ti))
                                                      : static_cast<llvm::Value*>(executor_->inlineIntNull(arg_ti)),
-                                      (chosen_bytes << 3));
+                                      (agg_chosen_bytes << 3));
           agg_args.push_back(null_lv);
         }
         if (!agg_info.is_distinct) {
@@ -3087,8 +3104,8 @@ bool GroupByAndAggregate::codegenAggCalls(const std::tuple<llvm::Value*, llvm::V
 
 #ifdef ENABLE_COMPACTION
           CHECK_LE(size_t(2), agg_args.size());
-          can_return_error =
-              detectOverflowAndUnderflow(old_val, agg_args[1], agg_info, chosen_bytes, need_skip_null, agg_base_name);
+          can_return_error = detectOverflowAndUnderflow(
+              old_val, agg_args[1], agg_info, agg_chosen_bytes, need_skip_null, agg_base_name);
 #else
           static_cast<void>(old_val);
 #endif

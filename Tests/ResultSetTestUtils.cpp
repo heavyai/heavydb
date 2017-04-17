@@ -10,8 +10,9 @@ void fill_one_entry_baseline(int64_t* value_slots,
   int64_t vv = 0;
   for (const auto& target_info : target_infos) {
     bool isNullable = !target_info.sql_type.get_notnull();
+    const bool float_argument_input = takes_float_argument(target_info);
     if ((isNullable && target_info.skip_null_val && null_val) || empty) {
-      vv = null_val_bit_pattern(target_info.sql_type);
+      vv = null_val_bit_pattern(target_info.sql_type, float_argument_input);
     } else {
       vv = v;
     }
@@ -22,6 +23,12 @@ void fill_one_entry_baseline(int64_t* value_slots,
         value_slots[target_slot] = vv;
         break;
       case kFLOAT:
+        if (float_argument_input) {
+          float fi = vv;
+          int64_t fi_bin = *reinterpret_cast<int32_t*>(&fi);
+          value_slots[target_slot] = null_val ? vv : fi_bin;
+          break;
+        }
       case kDOUBLE: {
         double di = vv;
         value_slots[target_slot] = null_val ? vv : *reinterpret_cast<int64_t*>(&di);

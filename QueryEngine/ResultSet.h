@@ -273,7 +273,7 @@ class ResultSet {
 
   void radixSortOnCpu(const std::list<Analyzer::OrderEntry>& order_entries) const;
 
-  static bool isNull(const SQLTypeInfo& ti, const InternalTargetValue& val);
+  static bool isNull(const SQLTypeInfo& ti, const InternalTargetValue& val, const bool float_argument_input);
 
   TargetValue getTargetValueFromBufferRowwise(const int8_t* rowwise_target_ptr,
                                               const int8_t* keys_ptr,

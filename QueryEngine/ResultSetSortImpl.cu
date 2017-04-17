@@ -140,15 +140,20 @@ std::vector<uint32_t> baseline_sort_fp(const ExecutorDeviceType device_type,
   neg_oe_col_buffer.reserve(slice_entry_count);
   pos_oe_col_buffer.reserve(slice_entry_count);
   size_t oe_col_buffer_idx = 0;
-  const auto col_ti =
-      layout.oe_target_info.agg_kind == kAVG ? SQLTypeInfo(kDOUBLE, false) : layout.oe_target_info.sql_type;
+  const auto& oe_info = layout.oe_target_info;
+  const auto col_ti = oe_info.agg_kind == kAVG ? SQLTypeInfo(kDOUBLE, false) : oe_info.sql_type;
+  const bool float_argument_input = takes_float_argument(oe_info);
+
+  auto is_negtive = float_argument_input ? [](const int64_t v) -> bool { return (v & (1 << 31)) != 0; }
+  : [](const int64_t v) -> bool { return v < 0; };
+
   for (size_t i = start; i < layout.entry_count; i += step, ++oe_col_buffer_idx) {
     if (!is_empty_entry<K>(i, groupby_buffer, layout) &&
-        oe_col_buffer[oe_col_buffer_idx] == null_val_bit_pattern(col_ti)) {
+        oe_col_buffer[oe_col_buffer_idx] == null_val_bit_pattern(col_ti, float_argument_input)) {
       null_idx_buff.push_back(i);
       continue;
     }
-    if (oe_col_buffer[oe_col_buffer_idx] < 0) {  // sign bit works the same for integer and floating point
+    if (is_negtive(oe_col_buffer[oe_col_buffer_idx])) {  // sign bit works the same for integer and floating point
       neg_idx_buff.push_back(i);
       neg_oe_col_buffer.push_back(oe_col_buffer[oe_col_buffer_idx]);
     } else {
@@ -244,7 +249,7 @@ std::vector<uint32_t> baseline_sort_int(const ExecutorDeviceType device_type,
   size_t oe_col_buffer_idx = 0;
   for (size_t i = start; i < layout.entry_count; i += step, ++oe_col_buffer_idx) {
     if (!is_empty_entry<K>(i, groupby_buffer, layout) &&
-        oe_col_buffer[oe_col_buffer_idx] == null_val_bit_pattern(entry_ti)) {
+        oe_col_buffer[oe_col_buffer_idx] == null_val_bit_pattern(entry_ti, false)) {
       null_idx_buff.push_back(i);
     } else {
       notnull_idx_buff.push_back(i);

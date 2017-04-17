@@ -933,7 +933,9 @@ void ResultSetStorage::reduceOneSlot(int8_t* this_ptr1,
   }
   CHECK_LT(init_agg_val_idx, target_init_vals_.size());
   CHECK_LT(target_slot_idx, query_mem_desc_.agg_col_widths.size());
-  const auto chosen_bytes = query_mem_desc_.agg_col_widths[target_slot_idx].compact;
+  const bool float_argument_input = takes_float_argument(target_info);
+  const auto chosen_bytes = float_argument_input ? static_cast<int8_t>(sizeof(float))
+                                                 : query_mem_desc_.agg_col_widths[target_slot_idx].compact;
   auto init_val = target_init_vals_[init_agg_val_idx];
   if (target_info.is_agg) {
     switch (target_info.agg_kind) {

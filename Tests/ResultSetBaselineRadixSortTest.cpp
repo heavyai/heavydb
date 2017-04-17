@@ -107,7 +107,7 @@ void fill_storage_buffer_baseline_sort_fp(int8_t* buff,
   }
   std::vector<int64_t> values(upper_bound);
   std::iota(values.begin(), values.end(), 1);
-  const auto null_pattern = null_val_bit_pattern(target_infos.back().sql_type);
+  const auto null_pattern = null_val_bit_pattern(target_infos.back().sql_type, false);
   values.push_back(null_pattern);
   std::random_shuffle(values.begin(), values.end());
   for (const auto val : values) {

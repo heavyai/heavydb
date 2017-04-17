@@ -21,10 +21,14 @@ TargetValue make_avg_target_value(const int8_t* ptr1,
                                   const int8_t compact_sz2,
                                   const TargetInfo& target_info) {
   int64_t sum{0};
+  CHECK(target_info.agg_kind == kAVG);
+  const bool float_argument_input = takes_float_argument(target_info);
+  const auto actual_compact_sz1 = float_argument_input ? sizeof(float) : compact_sz1;
+  const auto actual_compact_sz2 = float_argument_input ? sizeof(int32_t) : compact_sz2;
   if (target_info.agg_arg_type.is_integer() || target_info.agg_arg_type.is_decimal()) {
-    sum = read_int_from_buff(ptr1, compact_sz1);
+    sum = read_int_from_buff(ptr1, actual_compact_sz1);
   } else if (target_info.agg_arg_type.is_fp()) {
-    switch (compact_sz1) {
+    switch (actual_compact_sz1) {
       case 8: {
         double d = *reinterpret_cast<const double*>(ptr1);
         sum = *reinterpret_cast<const int64_t*>(&d);
@@ -41,7 +45,7 @@ TargetValue make_avg_target_value(const int8_t* ptr1,
   } else {
     CHECK(false);
   }
-  const auto count = read_int_from_buff(ptr2, compact_sz2);
+  const auto count = read_int_from_buff(ptr2, actual_compact_sz2);
   return pair_to_double({sum, count}, target_info.sql_type);
 }
 
@@ -652,7 +656,10 @@ TargetValue ResultSet::makeTargetValue(const int8_t* ptr,
                                        const bool translate_strings,
                                        const bool decimal_to_double,
                                        const size_t entry_buff_idx) const {
-  auto ival = read_int_from_buff(ptr, compact_sz);
+  const bool float_argument_input = takes_float_argument(target_info);
+  const auto actual_compact_sz = float_argument_input ? sizeof(float) : compact_sz;
+
+  auto ival = read_int_from_buff(ptr, actual_compact_sz);
   const auto& chosen_type = get_compact_type(target_info);
   if (!lazy_fetch_info_.empty()) {
     CHECK_LT(target_logical_idx, lazy_fetch_info_.size());
@@ -673,7 +680,7 @@ TargetValue ResultSet::makeTargetValue(const int8_t* ptr,
     }
   }
   if (chosen_type.is_fp()) {
-    switch (compact_sz) {
+    switch (actual_compact_sz) {
       case 8: {
         const auto dval = *reinterpret_cast<const double*>(ptr);
         return chosen_type.get_type() == kFLOAT ? ScalarTargetValue(static_cast<const float>(dval))
@@ -832,12 +839,12 @@ bool ResultSetStorage::isEmptyEntry(const size_t entry_idx) const {
   return isEmptyEntry(entry_idx, buff_);
 }
 
-bool ResultSet::isNull(const SQLTypeInfo& ti, const InternalTargetValue& val) {
+bool ResultSet::isNull(const SQLTypeInfo& ti, const InternalTargetValue& val, const bool float_argument_input) {
   if (ti.get_notnull()) {
     return false;
   }
   if (val.isInt()) {
-    return val.i1 == null_val_bit_pattern(ti);
+    return val.i1 == null_val_bit_pattern(ti, float_argument_input);
   }
   if (val.isPair()) {
     return !val.i2 || pair_to_double({val.i1, val.i2}, ti) == NULL_DOUBLE;

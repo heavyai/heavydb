@@ -29,7 +29,7 @@ ResultSetStorage::ResultSetStorage(const std::vector<TargetInfo>& targets,
     : targets_(targets), query_mem_desc_(query_mem_desc), buff_(buff), buff_is_provided_(buff_is_provided) {
   for (const auto& target_info : targets_) {
     if (!target_info.sql_type.get_notnull()) {
-      int64_t init_val = null_val_bit_pattern(target_info.sql_type);
+      int64_t init_val = null_val_bit_pattern(target_info.sql_type, takes_float_argument(target_info));
       target_init_vals_.push_back(target_info.is_agg ? init_val : 0);
     } else {
       target_init_vals_.push_back(target_info.is_agg ? 0xdeadbeef : 0);
@@ -574,18 +574,20 @@ std::function<bool(const uint32_t, const uint32_t)> ResultSet::createComparator(
     const auto fixedup_rhs = rhs_storage_lookup_result.fixedup_entry_idx;
     for (const auto order_entry : order_entries) {
       CHECK_GE(order_entry.tle_no, 1);
-      const auto& entry_ti = get_compact_type(targets_[order_entry.tle_no - 1]);
+      const auto& agg_info = targets_[order_entry.tle_no - 1];
+      const auto& entry_ti = get_compact_type(agg_info);
+      const bool float_argument_input = takes_float_argument(agg_info);
       const auto lhs_v =
           getColumnInternal(lhs_storage->buff_, fixedup_lhs, order_entry.tle_no - 1, lhs_storage_lookup_result);
       const auto rhs_v =
           getColumnInternal(rhs_storage->buff_, fixedup_rhs, order_entry.tle_no - 1, rhs_storage_lookup_result);
-      if (UNLIKELY(isNull(entry_ti, lhs_v) && isNull(entry_ti, rhs_v))) {
+      if (UNLIKELY(isNull(entry_ti, lhs_v, float_argument_input) && isNull(entry_ti, rhs_v, float_argument_input))) {
         return false;
       }
-      if (UNLIKELY(isNull(entry_ti, lhs_v) && !isNull(entry_ti, rhs_v))) {
+      if (UNLIKELY(isNull(entry_ti, lhs_v, float_argument_input) && !isNull(entry_ti, rhs_v, float_argument_input))) {
         return use_heap ? !order_entry.nulls_first : order_entry.nulls_first;
       }
-      if (UNLIKELY(isNull(entry_ti, rhs_v) && !isNull(entry_ti, lhs_v))) {
+      if (UNLIKELY(isNull(entry_ti, rhs_v, float_argument_input) && !isNull(entry_ti, lhs_v, float_argument_input))) {
         return use_heap ? order_entry.nulls_first : !order_entry.nulls_first;
       }
       const bool use_desc_cmp = use_heap ? !order_entry.is_desc : order_entry.is_desc;
@@ -616,9 +618,15 @@ std::function<bool(const uint32_t, const uint32_t)> ResultSet::createComparator(
           continue;
         }
         if (entry_ti.is_fp()) {
-          const auto lhs_dval = *reinterpret_cast<const double*>(&lhs_v.i1);
-          const auto rhs_dval = *reinterpret_cast<const double*>(&rhs_v.i1);
-          return use_desc_cmp ? lhs_dval > rhs_dval : lhs_dval < rhs_dval;
+          if (float_argument_input) {
+            const auto lhs_dval = *reinterpret_cast<const float*>(&lhs_v.i1);
+            const auto rhs_dval = *reinterpret_cast<const float*>(&rhs_v.i1);
+            return use_desc_cmp ? lhs_dval > rhs_dval : lhs_dval < rhs_dval;
+          } else {
+            const auto lhs_dval = *reinterpret_cast<const double*>(&lhs_v.i1);
+            const auto rhs_dval = *reinterpret_cast<const double*>(&rhs_v.i1);
+            return use_desc_cmp ? lhs_dval > rhs_dval : lhs_dval < rhs_dval;
+          }
         }
         return use_desc_cmp ? lhs_v.i1 > rhs_v.i1 : lhs_v.i1 < rhs_v.i1;
       } else {

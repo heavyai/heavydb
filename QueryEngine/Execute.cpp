@@ -336,7 +336,8 @@ std::pair<int64_t, int32_t> Executor::reduceResults(const SQLAgg agg,
                                                     const int8_t out_byte_width,
                                                     const int64_t* out_vec,
                                                     const size_t out_vec_sz,
-                                                    const bool is_group_by) {
+                                                    const bool is_group_by,
+                                                    const bool float_argument_input) {
   const auto error_no = ERR_OVERFLOW_OR_UNDERFLOW;
   switch (agg) {
     case kAVG:
@@ -361,7 +362,10 @@ std::pair<int64_t, int32_t> Executor::reduceResults(const SQLAgg agg,
                                        *reinterpret_cast<const float*>(&out_vec[i]),
                                        *reinterpret_cast<const float*>(&agg_init_val));
               }
-              return {float_to_double_bin(static_cast<int32_t>(agg_result), true), 0};
+              const int64_t converted_bin = float_argument_input
+                                                ? static_cast<int64_t>(agg_result)
+                                                : float_to_double_bin(static_cast<int32_t>(agg_result), true);
+              return {converted_bin, 0};
             } break;
             case 8: {
               int64_t agg_result = agg_init_val;
@@ -435,7 +439,10 @@ std::pair<int64_t, int32_t> Executor::reduceResults(const SQLAgg agg,
                                      *reinterpret_cast<const float*>(&out_vec[i]),
                                      *reinterpret_cast<const float*>(&agg_init_val));
             }
-            return {float_to_double_bin(agg_result, true), 0};
+            const int64_t converted_bin = float_argument_input
+                                              ? static_cast<int64_t>(agg_result)
+                                              : float_to_double_bin(static_cast<int32_t>(agg_result), true);
+            return {converted_bin, 0};
           }
           case 8: {
             int64_t agg_result = agg_init_val;
@@ -467,7 +474,9 @@ std::pair<int64_t, int32_t> Executor::reduceResults(const SQLAgg agg,
                                      *reinterpret_cast<const float*>(&out_vec[i]),
                                      *reinterpret_cast<const float*>(&agg_init_val));
             }
-            return {float_to_double_bin(agg_result, !ti.get_notnull()), 0};
+            const int64_t converted_bin = float_argument_input ? static_cast<int64_t>(agg_result)
+                                                               : float_to_double_bin(agg_result, !ti.get_notnull());
+            return {converted_bin, 0};
           }
           case 8: {
             int64_t agg_result = agg_init_val;
@@ -973,9 +982,14 @@ ExecutorDeviceType Executor::getDeviceTypeForTargets(const RelAlgExecutionUnit& 
 
 namespace {
 
-int64_t inline_null_val(const SQLTypeInfo& ti) {
+int64_t inline_null_val(const SQLTypeInfo& ti, const bool float_argument_input) {
   CHECK(ti.is_number() || ti.is_time() || ti.is_boolean());
   if (ti.is_fp()) {
+    if (float_argument_input && ti.get_type() == kFLOAT) {
+      int64_t float_null_val = 0;
+      *reinterpret_cast<float*>(&float_null_val) = static_cast<float>(inline_fp_null_val(ti));
+      return float_null_val;
+    }
     const auto double_null_val = inline_fp_null_val(ti);
     return *reinterpret_cast<const int64_t*>(&double_null_val);
   }
@@ -1014,13 +1028,14 @@ void fill_entries_for_empty_input(std::vector<TargetInfo>& target_infos,
         continue;
       }
     }
+    const bool float_argument_input = takes_float_argument(agg_info);
     if (agg_info.agg_kind == kCOUNT || agg_info.agg_kind == kAPPROX_COUNT_DISTINCT) {
       entry.push_back(0);
     } else if (agg_info.agg_kind == kAVG) {
-      entry.push_back(inline_null_val(agg_info.agg_arg_type));
+      entry.push_back(inline_null_val(agg_info.agg_arg_type, float_argument_input));
       entry.push_back(0);
     } else {
-      entry.push_back(inline_null_val(agg_info.sql_type));
+      entry.push_back(inline_null_val(agg_info.sql_type, float_argument_input));
     }
   }
 }
@@ -1588,34 +1603,39 @@ int32_t Executor::executePlanWithoutGroupBy(const RelAlgExecutionUnit& ra_exe_un
       const auto agg_info = target_info(target_expr);
       CHECK(agg_info.is_agg);
       int64_t val1;
+      const bool float_argument_input = takes_float_argument(agg_info);
       if (is_distinct_target(agg_info)) {
         CHECK(agg_info.agg_kind == kCOUNT || agg_info.agg_kind == kAPPROX_COUNT_DISTINCT);
         val1 = out_vec[out_vec_idx][0];
         error_code = 0;
       } else {
-        std::tie(val1, error_code) =
-            reduceResults(agg_info.agg_kind,
-                          agg_info.sql_type,
-                          query_exe_context->init_agg_vals_[out_vec_idx],
-                          query_exe_context->query_mem_desc_.agg_col_widths[out_vec_idx].compact,
-                          out_vec[out_vec_idx],
-                          entry_count,
-                          false);
+        const auto chosen_bytes =
+            static_cast<size_t>(query_exe_context->query_mem_desc_.agg_col_widths[out_vec_idx].compact);
+        std::tie(val1, error_code) = reduceResults(agg_info.agg_kind,
+                                                   agg_info.sql_type,
+                                                   query_exe_context->init_agg_vals_[out_vec_idx],
+                                                   float_argument_input ? sizeof(int32_t) : chosen_bytes,
+                                                   out_vec[out_vec_idx],
+                                                   entry_count,
+                                                   false,
+                                                   float_argument_input);
       }
       if (error_code) {
         break;
       }
       reduced_outs.push_back(val1);
       if (agg_info.agg_kind == kAVG) {
+        const auto chosen_bytes =
+            static_cast<size_t>(query_exe_context->query_mem_desc_.agg_col_widths[out_vec_idx + 1].compact);
         int64_t val2;
-        std::tie(val2, error_code) =
-            reduceResults(kCOUNT,
-                          agg_info.sql_type,
-                          query_exe_context->init_agg_vals_[out_vec_idx + 1],
-                          query_exe_context->query_mem_desc_.agg_col_widths[out_vec_idx + 1].compact,
-                          out_vec[out_vec_idx + 1],
-                          entry_count,
-                          false);
+        std::tie(val2, error_code) = reduceResults(kCOUNT,
+                                                   agg_info.sql_type,
+                                                   query_exe_context->init_agg_vals_[out_vec_idx + 1],
+                                                   float_argument_input ? sizeof(int32_t) : chosen_bytes,
+                                                   out_vec[out_vec_idx + 1],
+                                                   entry_count,
+                                                   false,
+                                                   false);
         if (error_code) {
           break;
         }

@@ -258,7 +258,9 @@ bool ResultRows::reduceSingleRow(const int8_t* row_ptr,
     for (size_t target_idx = 0, agg_col_idx = 0; target_idx < targets.size() && agg_col_idx < agg_col_count;
          ++target_idx, ++agg_col_idx) {
       const auto& agg_info = targets[target_idx];
-      const auto chosen_bytes = query_mem_desc.agg_col_widths[agg_col_idx].compact;
+      const bool float_argument_input = takes_float_argument(agg_info);
+      const auto chosen_bytes =
+          float_argument_input ? sizeof(float) : query_mem_desc.agg_col_widths[agg_col_idx].compact;
       auto partial_bin_val = get_component(row_ptr + query_mem_desc.getColOnlyOffInBytes(agg_col_idx), chosen_bytes);
       partial_agg_vals[agg_col_idx] = partial_bin_val;
       if (is_distinct_target(agg_info)) {
@@ -274,8 +276,7 @@ bool ResultRows::reduceSingleRow(const int8_t* row_ptr,
         CHECK(agg_info.is_agg && !agg_info.is_distinct);
         ++agg_col_idx;
         partial_bin_val = partial_agg_vals[agg_col_idx] =
-            get_component(row_ptr + query_mem_desc.getColOnlyOffInBytes(agg_col_idx),
-                          query_mem_desc.agg_col_widths[agg_col_idx].compact);
+            get_component(row_ptr + query_mem_desc.getColOnlyOffInBytes(agg_col_idx), chosen_bytes);
       }
       if (agg_col_idx == static_cast<size_t>(query_mem_desc.idx_target_as_key) &&
           partial_bin_val != agg_init_vals[query_mem_desc.idx_target_as_key]) {
@@ -290,9 +291,11 @@ bool ResultRows::reduceSingleRow(const int8_t* row_ptr,
     discard_row = false;
     for (size_t target_idx = 0, agg_col_idx = 0; target_idx < targets.size() && agg_col_idx < agg_col_count;
          ++target_idx, ++agg_col_idx) {
-      const auto& agg_info = targets[target_idx];
       auto partial_bin_val = partial_agg_vals[agg_col_idx];
-      const auto chosen_bytes = query_mem_desc.agg_col_widths[agg_col_idx].compact;
+      const auto& agg_info = targets[target_idx];
+      const bool float_argument_input = takes_float_argument(agg_info);
+      const auto chosen_bytes =
+          float_argument_input ? sizeof(float) : query_mem_desc.agg_col_widths[agg_col_idx].compact;
       const auto& chosen_type = get_compact_type(agg_info);
       if (agg_info.is_agg) {
         try {
