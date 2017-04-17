@@ -35,7 +35,7 @@ sudo mkdir -p "${vars['MAPD_STORAGE']}"
 sudo chown -R ${vars['MAPD_USER']}:${vars['MAPD_GROUP']} "${vars['MAPD_DATA']}"
 sudo chown -R ${vars['MAPD_USER']}:${vars['MAPD_GROUP']} "${vars['MAPD_STORAGE']}"
 
-for f in mapd_server mapd_server@ mapd_sd_server mapd_web_server mapd_web_server@ ; do
+for f in mapd_server mapd_server@ mapd_sd_server mapd_sd_server@ mapd_web_server mapd_web_server@ ; do
   sed -e "s#@MAPD_PATH@#${vars['MAPD_PATH']}#g" \
       -e "s#@MAPD_STORAGE@#${vars['MAPD_STORAGE']}#g" \
       -e "s#@MAPD_DATA@#${vars['MAPD_DATA']}#g" \
