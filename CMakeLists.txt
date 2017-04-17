@@ -235,7 +235,7 @@ if(ENABLE_COMPACTION)
   add_definitions("-DENABLE_COMPACTION")
 endif()
 
-option(ENABLE_KEY_COMPACTION "Enable Key Compaction for Multi-column Baseline Hash" OFF)
+option(ENABLE_KEY_COMPACTION "Enable Key Compaction for Multi-column Baseline Hash" ON)
 if(ENABLE_KEY_COMPACTION)
   add_definitions("-DENABLE_KEY_COMPACTION")
 endif()
