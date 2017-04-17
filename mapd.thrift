@@ -239,7 +239,7 @@ struct TMemorySummary {
 }
 
 struct TTableDetails {
-  1: TRowDescriptor table_desc
+  1: TRowDescriptor row_desc
   2: i64 fragment_size
   3: i64 page_size
   4: i64 max_rows

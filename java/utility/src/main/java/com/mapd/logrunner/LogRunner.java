@@ -155,7 +155,7 @@ public class LogRunner {
 
     // get table_details
     TTableDetails table_details = client.get_table_details(session, "flights");
-    for (TColumnType col : table_details.table_desc) {
+    for (TColumnType col : table_details.row_desc) {
       logger.info("col name :" + col.col_name);
       logger.info("\tcol encoding :" + col.col_type.encoding);
       logger.info("\tcol is_array :" + col.col_type.is_array);

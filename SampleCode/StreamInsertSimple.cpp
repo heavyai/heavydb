@@ -34,7 +34,7 @@ const size_t INSERT_BATCH_SIZE = 10000;
 void stream_insert(MapDClient& client,
                    const TSessionId session,
                    const std::string& table_name,
-                   const TRowDescriptor& table_desc,
+                   const TRowDescriptor& row_desc,
                    const char* delimiter) {
   std::string line;
   std::vector<TStringRow> input_rows;
@@ -49,8 +49,8 @@ void stream_insert(MapDClient& client,
       ts.is_null = s.empty();
       row.cols.push_back(ts);
     }
-    if (row.cols.size() != table_desc.size()) {
-      std::cerr << "Incorrect number of columns: (" << row.cols.size() << " vs " << table_desc.size() << ") " << line
+    if (row.cols.size() != row_desc.size()) {
+      std::cerr << "Incorrect number of columns: (" << row.cols.size() << " vs " << row_desc.size() << ") " << line
                 << std::endl;
       continue;
     }
@@ -102,7 +102,7 @@ int main(int argc, char** argv) {
     session = client.connect(user_name, passwd, db_name);  // connect to mapd_server
     TTableDetails table_details;
     client.get_table_details(table_details, session, table_name);
-    stream_insert(client, session, table_name, table_details.table_desc, delimiter);
+    stream_insert(client, session, table_name, table_details.row_desc, delimiter);
     client.disconnect(session);  // disconnect from mapd_server
     transport->close();          // close transport
   } catch (TMapDException& e) {

@@ -989,7 +989,7 @@ SQLException - if a database access error occurs
 
           int ordinal = 0;
           // iterate through the columns
-          for (TColumnType value : tableDetails.table_desc) {
+          for (TColumnType value : tableDetails.row_desc) {
 
             ordinal++;
             if (columnNamePattern == null || value.col_name.matches(modifiedColumnPattern)) {

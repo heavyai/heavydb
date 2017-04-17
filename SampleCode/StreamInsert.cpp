@@ -413,7 +413,7 @@ int main(int argc, char** argv) {
 
   TTableDetails table_details;
   client->get_table_details(table_details, session, table_name);
-  stream_insert(table_name, table_details.table_desc, transformations, copy_params, conn_details);
+  stream_insert(table_name, table_details.row_desc, transformations, copy_params, conn_details);
 
   closeConnection();
 

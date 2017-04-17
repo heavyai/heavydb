@@ -183,7 +183,7 @@ void copy_table(char* filepath, char* table, ClientContext& context) {
     std::cerr << "Cannot connect to table." << std::endl;
     return;
   }
-  const TRowDescriptor& table_desc = context.table_details.table_desc;
+  const TRowDescriptor& row_desc = context.table_details.row_desc;
   std::ifstream infile(filepath);
   std::string line;
   const char* delim = ",";
@@ -211,8 +211,8 @@ void copy_table(char* filepath, char* table, ClientContext& context) {
       }
       std::cout << std::endl;
        */
-      if (row.cols.size() != table_desc.size()) {
-        std::cerr << "Incorrect number of columns: (" << row.cols.size() << " vs " << table_desc.size() << ") " << line
+      if (row.cols.size() != row_desc.size()) {
+        std::cerr << "Incorrect number of columns: (" << row.cols.size() << " vs " << row_desc.size() << ") " << line
                   << std::endl;
         continue;
       }
@@ -350,7 +350,7 @@ void process_backslash_commands(char* command, ClientContext& context) {
         return;
       }
       std::string comma_or_blank("");
-      for (TColumnType p : table_details.table_desc) {
+      for (TColumnType p : table_details.row_desc) {
         std::string encoding;
         if (p.col_type.type == TDatumType::STR) {
           encoding = (p.col_type.encoding == 0 ? " ENCODING NONE"
@@ -410,7 +410,7 @@ void process_backslash_commands(char* command, ClientContext& context) {
         return;
       }
       std::string comma_or_blank("");
-      for (TColumnType p : table_details.table_desc) {
+      for (TColumnType p : table_details.row_desc) {
         std::string encoding;
         if (p.col_type.type == TDatumType::STR) {
           encoding =

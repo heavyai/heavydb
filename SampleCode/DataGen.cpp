@@ -104,12 +104,12 @@ std::string gen_date() {
   return buf;
 }
 
-// output to std::cout num_rows number of rows conforming to table_desc.
+// output to std::cout num_rows number of rows conforming to row_desc.
 // each column value is separated by delimiter.
-void data_gen(const TRowDescriptor& table_desc, const char* delimiter, int num_rows) {
+void data_gen(const TRowDescriptor& row_desc, const char* delimiter, int num_rows) {
   for (int i = 0; i < num_rows; i++) {
     bool not_first = false;
-    for (auto p = table_desc.begin(); p != table_desc.end(); ++p) {
+    for (auto p = row_desc.begin(); p != row_desc.end(); ++p) {
       if (not_first)
         std::cout << delimiter;
       else
@@ -185,7 +185,7 @@ int main(int argc, char** argv) {
     session = client.connect(user_name, passwd, db_name);  // connect to mapd_server
     TTableDetails table_details;
     client.get_table_details(table_details, session, table_name);
-    data_gen(table_details.table_desc, delimiter, num_rows);
+    data_gen(table_details.row_desc, delimiter, num_rows);
     client.disconnect(session);  // disconnect from mapd_server
     transport->close();          // close transport
   } catch (TMapDException& e) {
