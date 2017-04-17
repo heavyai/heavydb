@@ -1845,7 +1845,7 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
   const auto col_range_info = getColRangeInfo();
 
   if (g_enable_watchdog &&
-      ((col_range_info.hash_type_ == GroupByColRangeType::MultiCol && max_groups_buffer_entry_count > 60000000) ||
+      ((col_range_info.hash_type_ == GroupByColRangeType::MultiCol && max_groups_buffer_entry_count > 120000000) ||
        (col_range_info.hash_type_ == GroupByColRangeType::OneColKnownRange &&
         col_range_info.max - col_range_info.min > 130000000 * std::max(col_range_info.bucket, int64_t(1))))) {
     throw WatchdogException("Query would use too much memory");
