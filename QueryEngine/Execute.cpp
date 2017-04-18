@@ -6301,45 +6301,45 @@ void Executor::nukeOldState(const bool allow_lazy_fetch,
 }
 
 bool Executor::prioritizeQuals(const RelAlgExecutionUnit& ra_exe_unit,
-                               std::vector<std::shared_ptr<Analyzer::Expr>>& primary_quals,
-                               std::vector<std::shared_ptr<Analyzer::Expr>>& deferred_quals) {
-  std::vector<std::shared_ptr<Analyzer::Expr>> unlikely_quals;
-  std::vector<std::shared_ptr<Analyzer::Expr>> short_circuited_quals;
+                               std::vector<Analyzer::Expr*>& primary_quals,
+                               std::vector<Analyzer::Expr*>& deferred_quals) {
+  std::vector<Analyzer::Expr*> unlikely_quals;
+  std::vector<Analyzer::Expr*> short_circuited_quals;
 
   for (auto expr : ra_exe_unit.inner_join_quals) {
-    primary_quals.push_back(expr);
-    short_circuited_quals.push_back(expr);
+    primary_quals.push_back(expr.get());
+    short_circuited_quals.push_back(expr.get());
   }
 
   for (auto expr : ra_exe_unit.simple_quals) {
     if (get_likelihood(expr.get()) < 0.10 && !contains_unsafe_division(expr.get())) {
-      unlikely_quals.push_back(expr);
+      unlikely_quals.push_back(expr.get());
       continue;
     }
     if (should_defer_eval(expr)) {
-      deferred_quals.push_back(expr);
-      short_circuited_quals.push_back(expr);
+      deferred_quals.push_back(expr.get());
+      short_circuited_quals.push_back(expr.get());
       continue;
     }
-    primary_quals.push_back(expr);
-    short_circuited_quals.push_back(expr);
+    primary_quals.push_back(expr.get());
+    short_circuited_quals.push_back(expr.get());
   }
   for (auto expr : ra_exe_unit.quals) {
     if (get_likelihood(expr.get()) < 0.10 && !contains_unsafe_division(expr.get())) {
-      unlikely_quals.push_back(expr);
+      unlikely_quals.push_back(expr.get());
       continue;
     }
     if (should_defer_eval(expr)) {
-      deferred_quals.push_back(expr);
-      short_circuited_quals.push_back(expr);
+      deferred_quals.push_back(expr.get());
+      short_circuited_quals.push_back(expr.get());
       continue;
     }
     auto qual_expr = rewrite_expr(expr.get());
     if (!qual_expr) {
       qual_expr = expr;
     }
-    primary_quals.push_back(qual_expr);
-    short_circuited_quals.push_back(qual_expr);
+    primary_quals.push_back(expr.get());
+    short_circuited_quals.push_back(expr.get());
   }
 
   if (!unlikely_quals.empty() && !short_circuited_quals.empty()) {
@@ -6456,8 +6456,8 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
     }
   }
 
-  std::vector<std::shared_ptr<Analyzer::Expr>> primary_quals;
-  std::vector<std::shared_ptr<Analyzer::Expr>> deferred_quals;
+  std::vector<Analyzer::Expr*> primary_quals;
+  std::vector<Analyzer::Expr*> deferred_quals;
   bool short_circuited = prioritizeQuals(ra_exe_unit, primary_quals, deferred_quals);
   if (short_circuited) {
     VLOG(1) << "Prioritized " << std::to_string(primary_quals.size()) << " unlikely quals, "
@@ -6465,9 +6465,9 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
   }
 
   llvm::Value* filter_lv = llvm::ConstantInt::get(llvm::IntegerType::getInt1Ty(cgen_state_->context_), true);
-  for (auto& expr : primary_quals) {
+  for (auto expr : primary_quals) {
     // Generate the filter for primary quals
-    filter_lv = cgen_state_->ir_builder_.CreateAnd(filter_lv, toBool(codegen(expr.get(), true, co).front()));
+    filter_lv = cgen_state_->ir_builder_.CreateAnd(filter_lv, toBool(codegen(expr, true, co).front()));
   }
   CHECK(filter_lv->getType()->isIntegerTy(1));
 
@@ -6480,8 +6480,8 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
     cgen_state_->ir_builder_.SetInsertPoint(sc_true);
   }
 
-  for (auto& expr : deferred_quals) {
-    filter_lv = cgen_state_->ir_builder_.CreateAnd(filter_lv, toBool(codegen(expr.get(), true, co).front()));
+  for (auto expr : deferred_quals) {
+    filter_lv = cgen_state_->ir_builder_.CreateAnd(filter_lv, toBool(codegen(expr, true, co).front()));
   }
   CHECK(filter_lv->getType()->isIntegerTy(1));
 
