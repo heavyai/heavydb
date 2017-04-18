@@ -988,9 +988,9 @@ void eliminate_dead_columns(std::vector<std::shared_ptr<RelAlgNode>>& nodes) noe
         intact = false;
         break;
       }
-      if (intact) {
-        intact_nodes.insert(node.get());
-      }
+    }
+    if (intact) {
+      intact_nodes.insert(node.get());
     }
   }
 
