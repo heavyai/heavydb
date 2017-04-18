@@ -836,8 +836,8 @@ class Executor {
   void executeSimpleInsert(const Planner::RootPlan* root_plan);
 
   bool prioritizeQuals(const RelAlgExecutionUnit& ra_exe_unit,
-                       std::vector<Analyzer::Expr*>& primary_quals,
-                       std::vector<Analyzer::Expr*>& deferred_quals);
+                       std::vector<std::shared_ptr<Analyzer::Expr>>& primary_quals,
+                       std::vector<std::shared_ptr<Analyzer::Expr>>& deferred_quals);
   CompilationResult compileWorkUnit(const bool render_output,
                                     const std::vector<InputTableInfo>& query_infos,
                                     const RelAlgExecutionUnit& ra_exe_unit,
