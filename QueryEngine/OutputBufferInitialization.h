@@ -38,4 +38,6 @@ const Analyzer::Expr* agg_arg(const Analyzer::Expr* expr);
 
 bool constrained_not_null(const Analyzer::Expr* expr, const std::list<std::shared_ptr<Analyzer::Expr>>& quals);
 
+void set_notnull(TargetInfo& target, const bool not_null);
+
 #endif  // QUERYENGINE_OUTPUTBUFFERINITIALIZATION_H

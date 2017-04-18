@@ -386,6 +386,7 @@ TEST(Select, FilterAndSimpleAggregation) {
     c("SELECT COUNT(*) AS val FROM test WHERE (test.dd = 0.5 OR test.dd = 3);", dt);
     c("SELECT MAX(dd_notnull * 1) FROM test;", dt);
     c("SELECT x, COUNT(*) AS n FROM test GROUP BY x, ufd ORDER BY x, n;", dt);
+    c("SELECT MIN(x), MAX(x) FROM test WHERE real_str LIKE '%nope%';", dt);
 #ifdef HAVE_CALCITE
     c("SELECT COUNT(*) FROM test WHERE d = 2.2", dt);
     c("SELECT COUNT(*) FROM test WHERE fx + 1 IS NULL;", dt);
@@ -404,12 +405,9 @@ TEST(Select, FilterAndSimpleAggregation) {
     ASSERT_EQ(0, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE MOD(x, 7) = 7;", dt)));
     ASSERT_EQ(5, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE MOD(x, 7) <> 0;", dt)));
     ASSERT_EQ(20, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE MOD(x, 7) <> 7;", dt)));
-    ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT MIN(x) FROM test WHERE x <> 7 AND x <> 8;", dt)),
-              numeric_limits<int64_t>::max());
-    ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT MIN(x) FROM test WHERE z <> 101 AND z <> 102;", dt)),
-              numeric_limits<int64_t>::max());
-    ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT MIN(x) FROM test WHERE t <> 1001 AND t <> 1002;", dt)),
-              numeric_limits<int64_t>::max());
+    c("SELECT MIN(x) FROM test WHERE x <> 7 AND x <> 8;", dt);
+    c("SELECT MIN(x) FROM test WHERE z <> 101 AND z <> 102;", dt);
+    c("SELECT MIN(x) FROM test WHERE t <> 1001 AND t <> 1002;", dt);
 #ifdef HAVE_CALCITE
     ASSERT_NEAR(static_cast<double>(0.5),
                 v<double>(run_simple_agg("SELECT STDDEV_POP(x) FROM test;", dt)),

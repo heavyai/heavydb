@@ -190,11 +190,13 @@ std::vector<int64_t> init_agg_val_vec(const std::vector<Analyzer::Expr*>& target
     const auto target_expr = targets[target_idx];
     auto target = target_info(target_expr);
     auto arg_expr = agg_arg(target_expr);
-    if (arg_expr && constrained_not_null(arg_expr, quals)) {
-      target.skip_null_val = false;
-      auto new_type = get_compact_type(target);
-      new_type.set_notnull(true);
-      set_compact_type(target, new_type);
+    if (arg_expr) {
+      if (query_mem_desc.hash_type == GroupByColRangeType::Scan && target.is_agg &&
+          (target.agg_kind == kMIN || target.agg_kind == kMAX)) {  // TODO(alex): fix SUM and AVG as well
+        set_notnull(target, false);
+      } else if (constrained_not_null(arg_expr, quals)) {
+        set_notnull(target, true);
+      }
     }
     target_infos.push_back(target);
   }
@@ -224,4 +226,11 @@ bool constrained_not_null(const Analyzer::Expr* expr, const std::list<std::share
     }
   }
   return false;
+}
+
+void set_notnull(TargetInfo& target, const bool not_null) {
+  target.skip_null_val = !not_null;
+  auto new_type = get_compact_type(target);
+  new_type.set_notnull(not_null);
+  set_compact_type(target, new_type);
 }

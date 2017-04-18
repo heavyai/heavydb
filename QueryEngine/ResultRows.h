@@ -9,6 +9,7 @@
 #define QUERYENGINE_RESULTROWS_H
 
 #include "HyperLogLog.h"
+#include "OutputBufferInitialization.h"
 #include "QueryMemoryDescriptor.h"
 #include "ResultSet.h"
 #include "TargetValue.h"
@@ -422,10 +423,15 @@ inline TargetInfo target_info(const PointerType target_expr) {
           is_distinct};
 }
 
-inline std::vector<TargetInfo> target_exprs_to_infos(const std::vector<Analyzer::Expr*>& targets) {
+inline std::vector<TargetInfo> target_exprs_to_infos(const std::vector<Analyzer::Expr*>& targets,
+                                                     const QueryMemoryDescriptor& query_mem_desc) {
   std::vector<TargetInfo> target_infos;
   for (const auto target_expr : targets) {
-    target_infos.push_back(target_info(target_expr));
+    auto target = target_info(target_expr);
+    if (query_mem_desc.hash_type == GroupByColRangeType::Scan) {
+      set_notnull(target, false);
+    }
+    target_infos.push_back(target);
   }
   return target_infos;
 }

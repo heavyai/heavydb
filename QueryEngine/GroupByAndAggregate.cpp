@@ -175,7 +175,7 @@ QueryExecutionContext::QueryExecutionContext(const RelAlgExecutionUnit& ra_exe_u
       const auto& table_frag_sizes = consistent_frag_sizes_;
       const auto column_frag_sizes = get_consistent_frags_sizes(ra_exe_unit.target_exprs, table_frag_sizes);
 #endif
-      result_sets_.emplace_back(new ResultSet(target_exprs_to_infos(ra_exe_unit.target_exprs),
+      result_sets_.emplace_back(new ResultSet(target_exprs_to_infos(ra_exe_unit.target_exprs, query_mem_desc_),
                                               getColLazyFetchInfo(ra_exe_unit.target_exprs),
                                               col_buffers,
 #ifdef ENABLE_MULTIFRAG_JOIN
@@ -2897,8 +2897,12 @@ bool GroupByAndAggregate::codegenAggCalls(const std::tuple<llvm::Value*, llvm::V
     }
     auto agg_info = target_info(target_expr);
     auto arg_expr = agg_arg(target_expr);
-    if (arg_expr && constrained_not_null(arg_expr, ra_exe_unit_.quals)) {
-      agg_info.skip_null_val = false;
+    if (arg_expr) {
+      if (query_mem_desc_.hash_type == GroupByColRangeType::Scan) {
+        agg_info.skip_null_val = true;
+      } else if (constrained_not_null(arg_expr, ra_exe_unit_.quals)) {
+        agg_info.skip_null_val = false;
+      }
     }
     const auto agg_fn_names = agg_fn_base_names(agg_info);
     auto target_lvs = codegenAggArg(target_expr, co);
