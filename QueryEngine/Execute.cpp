@@ -6334,10 +6334,6 @@ bool Executor::prioritizeQuals(const RelAlgExecutionUnit& ra_exe_unit,
       short_circuited_quals.push_back(expr.get());
       continue;
     }
-    auto qual_expr = rewrite_expr(expr.get());
-    if (!qual_expr) {
-      qual_expr = expr;
-    }
     primary_quals.push_back(expr.get());
     short_circuited_quals.push_back(expr.get());
   }
