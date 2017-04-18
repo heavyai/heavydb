@@ -723,7 +723,8 @@ QualsConjunctiveForm qual_to_conjunctive_form(const std::shared_ptr<Analyzer::Ex
   CHECK(qual_expr);
   const auto bin_oper = std::dynamic_pointer_cast<const Analyzer::BinOper>(qual_expr);
   if (!bin_oper) {
-    return {{}, {qual_expr}};
+    const auto rewritten_qual_expr = rewrite_expr(qual_expr.get());
+    return {{}, {rewritten_qual_expr ? rewritten_qual_expr : qual_expr}};
   }
   if (bin_oper->get_optype() == kAND) {
     const auto lhs_cf = qual_to_conjunctive_form(bin_oper->get_own_left_operand());
@@ -1443,7 +1444,8 @@ SeparatedQuals separate_join_quals(const std::list<std::shared_ptr<Analyzer::Exp
       CHECK_EQ(size_t(2), used_table_ids.size());
       join_quals.push_back(qual_candidate);
     } else {
-      regular_quals.push_back(qual_candidate);
+      const auto rewritten_qual_candidate = rewrite_expr(qual_candidate.get());
+      regular_quals.push_back(rewritten_qual_candidate ? rewritten_qual_candidate : qual_candidate);
     }
   }
   return {regular_quals, join_quals};
