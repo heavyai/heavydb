@@ -1114,6 +1114,159 @@ void fold_filters(std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept {
   }
 }
 
+const RexScalar* find_hoistable_condition(const RexScalar* condition,
+                                          const RelAlgNode* source,
+                                          const size_t first_col_idx,
+                                          const size_t last_col_idx) {
+  if (auto rex_op = dynamic_cast<const RexOperator*>(condition)) {
+    switch (rex_op->getOperator()) {
+      case kAND: {
+        auto lhs_cond = find_hoistable_condition(rex_op->getOperand(0), source, first_col_idx, last_col_idx);
+        auto rhs_cond = find_hoistable_condition(rex_op->getOperand(1), source, first_col_idx, last_col_idx);
+        if (lhs_cond) {
+          if (rhs_cond) {
+            return rex_op;
+          } else {
+            return lhs_cond;
+          }
+        } else {
+          if (rhs_cond) {
+            return rhs_cond;
+          } else {
+            return nullptr;
+          }
+        }
+      } break;
+      case kEQ: {
+        auto lhs_in = dynamic_cast<const RexInput*>(
+            find_hoistable_condition(rex_op->getOperand(0), source, first_col_idx, last_col_idx));
+        auto rhs_in = dynamic_cast<const RexInput*>(
+            find_hoistable_condition(rex_op->getOperand(1), source, first_col_idx, last_col_idx));
+        if (lhs_in && rhs_in) {
+          return rex_op;
+        }
+        return nullptr;
+      } break;
+      default:
+        break;
+    }
+    return nullptr;
+  }
+  if (auto rex_in = dynamic_cast<const RexInput*>(condition)) {
+    if (rex_in->getSourceNode() == source) {
+      const auto col_idx = rex_in->getIndex();
+      return (col_idx >= first_col_idx && col_idx <= last_col_idx ? condition : nullptr);
+    }
+    return nullptr;
+  }
+  return nullptr;
+}
+
+class JoinTargetRebaser : public RexDeepCopyVisitor {
+ public:
+  JoinTargetRebaser(const RelJoin* join, const unsigned old_base)
+      : join_(join), old_base_(old_base), src1_base_(join->getInput(0)->size()), target_count_(join->size()) {}
+  RetType visitInput(const RexInput* input) const override {
+    auto curr_idx = input->getIndex();
+    CHECK_GE(curr_idx, old_base_);
+    CHECK_LT(static_cast<size_t>(curr_idx), target_count_);
+    curr_idx -= old_base_;
+    if (curr_idx >= src1_base_) {
+      return boost::make_unique<RexInput>(join_->getInput(1), curr_idx - src1_base_);
+    } else {
+      return boost::make_unique<RexInput>(join_->getInput(0), curr_idx);
+    }
+  }
+
+ private:
+  const RelJoin* join_;
+  const unsigned old_base_;
+  const size_t src1_base_;
+  const size_t target_count_;
+};
+
+class SubConditionRemover : public RexDeepCopyVisitor {
+ public:
+  SubConditionRemover(const RexScalar* condition) : condition_(condition) {}
+  RetType visitOperator(const RexOperator* rex_operator) const override {
+    if (rex_operator == condition_) {
+      return boost::make_unique<RexLiteral>(
+          true, kBOOLEAN, kBOOLEAN, unsigned(-2147483648), 1, unsigned(-2147483648), 1);
+    }
+    return RexDeepCopyVisitor::visitOperator(rex_operator);
+  }
+
+ private:
+  const RexScalar* condition_;
+};
+
+void hoist_filter_cond_to_cross_join(std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept {
+  std::unordered_map<const RelAlgNode*, RelAlgNode*> deconst_mapping;
+  for (auto node : nodes) {
+    deconst_mapping.insert(std::make_pair(node.get(), node.get()));
+  }
+  std::unordered_set<const RelAlgNode*> visited;
+  auto web = build_du_web(nodes);
+  for (auto node : nodes) {
+    if (visited.count(node.get())) {
+      continue;
+    }
+    visited.insert(node.get());
+    if (auto join = dynamic_cast<RelJoin*>(node.get())) {
+      // Only allow cross join for now.
+      if (auto literal = dynamic_cast<const RexLiteral*>(join->getCondition())) {
+        // Assume Calcite always generates an inner join on constant boolean true for cross join.
+        CHECK(literal->getType() == kBOOLEAN && literal->getVal<bool>() && join->getJoinType() == JoinType::INNER);
+        size_t first_col_idx = 0;
+        const RelFilter* filter = nullptr;
+        std::vector<const RelJoin*> join_seq{join};
+        for (const RelJoin* curr_join = join; !filter;) {
+          auto usrs_it = web.find(curr_join);
+          CHECK(usrs_it != web.end());
+          if (usrs_it->second.size() != size_t(1)) {
+            break;
+          }
+          auto only_usr = *usrs_it->second.begin();
+          if (auto usr_join = dynamic_cast<const RelJoin*>(only_usr)) {
+            if (join == usr_join->getInput(1)) {
+              const auto src1_offset = usr_join->getInput(0)->size();
+              first_col_idx += src1_offset;
+            }
+            join_seq.push_back(usr_join);
+            curr_join = usr_join;
+            continue;
+          }
+
+          filter = dynamic_cast<const RelFilter*>(only_usr);
+          break;
+        }
+        if (!filter) {
+          visited.insert(join_seq.begin(), join_seq.end());
+          continue;
+        }
+        const auto src_join = dynamic_cast<const RelJoin*>(filter->getInput(0));
+        CHECK(src_join);
+        const auto src1_base = src_join->getInput(0)->size();
+        auto source = first_col_idx < src1_base ? src_join->getInput(0) : src_join->getInput(1);
+        first_col_idx = first_col_idx < src1_base ? first_col_idx : first_col_idx - src1_base;
+        if (auto join_condition = find_hoistable_condition(
+                filter->getCondition(), source, first_col_idx, first_col_idx + join->size() - 1)) {
+          JoinTargetRebaser rebaser(join, first_col_idx);
+          auto new_join_condition = rebaser.visit(join_condition);
+          join->setCondition(new_join_condition);
+          auto filter_it = deconst_mapping.find(filter);
+          CHECK(filter_it != deconst_mapping.end());
+          auto modified_filter = dynamic_cast<RelFilter*>(filter_it->second);
+          CHECK(modified_filter);
+          SubConditionRemover remover(join_condition);
+          auto new_filter_condition = remover.visit(filter->getCondition());
+          modified_filter->setCondition(new_filter_condition);
+        }
+      }
+    }
+  }
+}
+
 // For some reason, Calcite generates Sort, Project, Sort sequences where the
 // two Sort nodes are identical and the Project is identity. Simplify this
 // pattern by re-binding the input of the second sort to the input of the first.
