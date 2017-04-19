@@ -1193,7 +1193,7 @@ size_t RelAlgExecutor::getNDVEstimation(const WorkUnit& work_unit,
     throw std::runtime_error("Cardinality estimation query has been interrupted");
   }
   if (error_code) {
-    throw std::runtime_error("Failed to run the cardinality estimation query");
+    throw std::runtime_error("Failed to run the cardinality estimation query: " + getErrorMessageFromCode(error_code));
   }
   const auto& estimator_result_rows = boost::get<RowSetPtr>(estimator_result);
   if (!estimator_result_rows) {
@@ -1304,7 +1304,7 @@ ExecutionResult RelAlgExecutor::handleRetry(const int32_t error_code_in,
   const auto table_infos = get_table_infos(work_unit.exe_unit, executor_);
   if (error_code == Executor::ERR_OUT_OF_GPU_MEM) {
     if (g_enable_watchdog && !g_allow_cpu_retry) {
-      throw std::runtime_error("Query couldn't keep the entire working set of columns in GPU memory");
+      throw std::runtime_error(getErrorMessageFromCode(error_code));
     }
     const auto ra_exe_unit = decide_approx_count_distinct_implementation(
         work_unit.exe_unit, table_infos, executor_, co.device_type_, target_exprs_owned_);
@@ -1370,27 +1370,30 @@ ExecutionResult RelAlgExecutor::handleRetry(const int32_t error_code_in,
 }
 
 void RelAlgExecutor::handlePersistentError(const int32_t error_code) {
-  if (error_code == Executor::ERR_OVERFLOW_OR_UNDERFLOW) {
-    throw std::runtime_error("Overflow or underflow");
-  }
-  if (error_code == Executor::ERR_DIV_BY_ZERO) {
-    throw std::runtime_error("Division by zero");
-  }
-  if (error_code == Executor::ERR_UNSUPPORTED_SELF_JOIN) {
-    throw std::runtime_error("Self joins not supported yet");
-  }
-  if (error_code == Executor::ERR_OUT_OF_TIME) {
-    throw std::runtime_error("Query execution has exceeded the time limit");
-  }
-  if (error_code == Executor::ERR_INTERRUPTED) {
-    throw std::runtime_error("Query execution has been interrupted");
-  }
-  if (error_code == Executor::ERR_OUT_OF_CPU_MEM) {
-    throw std::runtime_error("Not enough host memory to execute the query");
-  }
   if (error_code == Executor::ERR_SPECULATIVE_TOP_OOM) {
     throw SpeculativeTopNFailed();
   }
+  throw std::runtime_error(getErrorMessageFromCode(error_code));
+}
+
+std::string RelAlgExecutor::getErrorMessageFromCode(const int32_t error_code) {
+  switch (error_code) {
+    case Executor::ERR_DIV_BY_ZERO:
+      return "Division by zero";
+    case Executor::ERR_OUT_OF_GPU_MEM:
+      return "Query couldn't keep the entire working set of columns in GPU memory";
+    case Executor::ERR_UNSUPPORTED_SELF_JOIN:
+      return "Self joins not supported yet";
+    case Executor::ERR_OUT_OF_CPU_MEM:
+      return "Not enough host memory to execute the query";
+    case Executor::ERR_OVERFLOW_OR_UNDERFLOW:
+      return "Overflow or underflow";
+    case Executor::ERR_OUT_OF_TIME:
+      return "Query execution has exceeded the time limit";
+    case Executor::ERR_INTERRUPTED:
+      return "Query execution has been interrupted";
+  }
+  return "Other error: code " + std::to_string(error_code);
 }
 
 RelAlgExecutor::WorkUnit RelAlgExecutor::createWorkUnit(const RelAlgNode* node,
