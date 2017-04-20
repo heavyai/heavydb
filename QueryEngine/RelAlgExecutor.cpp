@@ -44,7 +44,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQuery(const std::string& query_ra,
   for (auto subquery : subqueries_) {
     // Execute the subquery and cache the result.
     RelAlgExecutor ra_executor(executor_, cat_);
-    auto result = ra_executor.executeRelAlgSubQuery(subquery->getRelAlg(), co, eo);
+    auto result = ra_executor.executeRelAlgSubQuery(subquery, co, eo);
     subquery->setExecutionResult(std::make_shared<ExecutionResult>(result));
   }
   return executeRelAlgSeq(ed_list, co, eo, render_info, queue_time_ms);
@@ -166,10 +166,10 @@ void RelAlgExecutor::prepareLeafExecution(const AggregatedColRange& agg_col_rang
   executor_->string_dictionary_generations_ = string_dictionary_generations;
 }
 
-ExecutionResult RelAlgExecutor::executeRelAlgSubQuery(const RelAlgNode* subquery_ra,
+ExecutionResult RelAlgExecutor::executeRelAlgSubQuery(const RexSubQuery* subquery,
                                                       const CompilationOptions& co,
                                                       const ExecutionOptions& eo) {
-  auto ed_list = get_execution_descriptors(subquery_ra);
+  auto ed_list = get_execution_descriptors(subquery->getRelAlg());
   return executeRelAlgSeq(ed_list, co, eo, nullptr, 0);
 }
 

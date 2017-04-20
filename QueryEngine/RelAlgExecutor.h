@@ -38,7 +38,7 @@ class RelAlgExecutor {
                             const StringDictionaryGenerations& string_dictionary_generations,
                             const TableGenerations& table_generations);
 
-  ExecutionResult executeRelAlgSubQuery(const RelAlgNode* subquery_ra,
+  ExecutionResult executeRelAlgSubQuery(const RexSubQuery* subquery,
                                         const CompilationOptions& co,
                                         const ExecutionOptions& eo);
 
