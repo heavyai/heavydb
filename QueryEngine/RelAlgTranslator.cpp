@@ -11,7 +11,6 @@
 #include "../Analyzer/Analyzer.h"
 #include "../Parser/ParserNode.h"
 #include "../Shared/likely.h"
-#include "../Shared/measure.h"
 #include "../Shared/thread_count.h"
 
 #include <future>
@@ -388,11 +387,10 @@ std::shared_ptr<Analyzer::Expr> get_in_values_expr(std::shared_ptr<Analyzer::Exp
 
 }  // namespace
 
-// Creates an Analyzer expression for an IN subquery which subsequently goes through
-// the regular Executor::codegen() mechanism. The creation of the expression out of
-// the result set of the subquery is parallelizes whenever possible. In addition, it
-// takes advantage of the additional information that all the elements in the right
-// hand side are constants created out of the result set through getInIntegerSetExpr().
+// Creates an Analyzer expression for an IN subquery which subsequently goes through the
+// regular Executor::codegen() mechanism. The creation of the expression out of subquery's
+// result set is parallelized whenever possible. In addition, take advantage of additional
+// information that elements in the right hand side are constants; see getInIntegerSetExpr().
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInOper(const RexOperator* rex_operator) const {
   if (just_explain_) {
     throw std::runtime_error("EXPLAIN is not supported with sub-queries");
