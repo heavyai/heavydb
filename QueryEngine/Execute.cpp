@@ -1215,7 +1215,7 @@ std::unique_ptr<InValuesBitmap> Executor::createInValuesBitmap(const Analyzer::I
             const auto string_id = in_val_const->get_is_null()
                                        ? needle_null_val
                                        : sdp->getIdOfString(*in_val_const->get_constval().stringval);
-            if (string_id >= 0 || string_id == needle_null_val) {
+            if (string_id != StringDictionary::INVALID_STR_ID) {
               out_vals.push_back(string_id);
             }
           } else {

@@ -458,7 +458,7 @@ void fill_dictionary_encoded_in_vals(std::vector<int64_t>& in_vals,
     if (row.valid) {
       const int string_id =
           row.value == needle_null_val ? needle_null_val : dest_dict->getIdOfString(source_dict->getString(row.value));
-      if (string_id >= 0 || string_id == needle_null_val) {
+      if (string_id != StringDictionary::INVALID_STR_ID) {
         in_vals.push_back(string_id);
         if (UNLIKELY(g_enable_watchdog && (in_vals.size() & 1023) == 0 &&
                      total_in_vals_count.fetch_add(1024) >= g_max_integer_set_size)) {
