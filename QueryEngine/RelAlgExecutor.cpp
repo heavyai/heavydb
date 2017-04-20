@@ -299,8 +299,8 @@ std::vector<std::string> RelAlgExecutor::getScanTableNamesInRelAlgSeq(std::vecto
       const auto filter = dynamic_cast<const RelFilter*>(walker);
       const auto sort = dynamic_cast<const RelSort*>(walker);
       if (compound || join || project || aggregate || filter || sort) {
-        for (size_t i = 0; i < walker->inputCount(); ++i) {
-          work_set.push_back(walker->getInput(i));
+        for (int i = walker->inputCount(); i > 0; --i) {
+          work_set.push_back(walker->getInput(i - 1));
         }
         continue;
       }

@@ -51,6 +51,10 @@ extern bool g_allow_cpu_retry;
 
 struct RenderInfo {
   bool do_render;
+  bool in_situ_data;  // Should be set to true if query results are written directly
+                      // to CUDA-mapped opengl buffers for rendering. Should be set
+                      // to false otherwise, meaning results are written to CPU first,
+                      // and buffered back to GPU for rendering.
   const int session_id;
   const int render_widget_id;
   std::unique_ptr<RenderAllocatorMap> render_allocator_map_ptr;
@@ -63,7 +67,11 @@ struct RenderInfo {
              const int render_widget_id,
              const std::string& render_vega = "",
              const bool do_render = true)
-      : do_render(do_render), session_id(session_id), render_widget_id(render_widget_id), render_vega(render_vega) {}
+      : do_render(do_render),
+        in_situ_data(false),
+        session_id(session_id),
+        render_widget_id(render_widget_id),
+        render_vega(render_vega) {}
 };
 
 class WatchdogException : public std::runtime_error {
