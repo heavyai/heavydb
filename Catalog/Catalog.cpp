@@ -704,6 +704,10 @@ const DictDescriptor* Catalog::getMetadataForDict(int dictId, bool loadDict) con
   return dd.get();
 }
 
+const std::vector<LeafHostInfo>& Catalog::getStringDictionaryHosts() const {
+  return string_dict_hosts_;
+}
+
 const ColumnDescriptor* Catalog::getMetadataForColumn(int tableId, const string& columnName) const {
   ColumnKey columnKey(tableId, to_upper(columnName));
   auto colDescIt = columnDescriptorMap_.find(columnKey);
