@@ -521,3 +521,13 @@ bool StringDictionary::checkpoint() noexcept {
   ret = ret && (fsync(payload_fd_) == 0);
   return ret;
 }
+
+void translate_string_ids(std::vector<int32_t>& dest_ids,
+                          const LeafHostInfo& dict_server_host,
+                          const int32_t dest_dict_id,
+                          const std::vector<int32_t>& source_ids,
+                          const int32_t source_dict_id,
+                          const int32_t dest_generation) {
+  StringDictionaryClient string_client(dict_server_host, -1, true);
+  string_client.translate_string_ids(dest_ids, dest_dict_id, source_ids, source_dict_id, dest_generation);
+}

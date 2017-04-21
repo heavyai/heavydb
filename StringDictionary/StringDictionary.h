@@ -85,4 +85,13 @@ class StringDictionary {
   static char* CANARY_BUFFER;
 };
 
+int32_t truncate_to_generation(const int32_t id, const size_t generation);
+
+void translate_string_ids(std::vector<int32_t>& dest_ids,
+                          const LeafHostInfo& dict_server_host,
+                          const int32_t dest_dict_id,
+                          const std::vector<int32_t>& source_ids,
+                          const int32_t source_dict_id,
+                          const int32_t dest_generation);
+
 #endif  // STRINGDICTIONARY_STRINGDICTIONARY_H
