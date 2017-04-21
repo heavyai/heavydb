@@ -1,6 +1,7 @@
 #ifndef QUERYENGINE_RELALGTRANSLATOR_H
 #define QUERYENGINE_RELALGTRANSLATOR_H
 
+#include "Execute.h"
 #include "RelAlgAbstractInterpreter.h"
 
 #include <ctime>
@@ -23,11 +24,13 @@ class Catalog;
 class RelAlgTranslator {
  public:
   RelAlgTranslator(const Catalog_Namespace::Catalog& cat,
+                   const Executor* executor,
                    const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
                    const JoinType join_type,
                    const time_t now,
                    const bool just_explain)
       : cat_(cat),
+        executor_(executor),
         input_to_nest_level_(input_to_nest_level),
         join_type_(join_type),
         now_(now),
@@ -88,6 +91,7 @@ class RelAlgTranslator {
   std::vector<std::shared_ptr<Analyzer::Expr>> translateFunctionArgs(const RexFunctionOperator*) const;
 
   const Catalog_Namespace::Catalog& cat_;
+  const Executor* executor_;
   const std::unordered_map<const RelAlgNode*, int> input_to_nest_level_;
   const JoinType join_type_;
   time_t now_;

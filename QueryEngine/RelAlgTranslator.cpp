@@ -449,8 +449,8 @@ void fill_dictionary_encoded_in_vals(std::vector<int64_t>& in_vals,
                                      std::atomic<size_t>& total_in_vals_count,
                                      const ResultSet* values_rowset,
                                      const std::pair<int64_t, int64_t> values_rowset_slice,
-                                     const StringDictionary* source_dict,
-                                     const StringDictionary* dest_dict,
+                                     const StringDictionaryProxy* source_dict,
+                                     const StringDictionaryProxy* dest_dict,
                                      const int64_t needle_null_val) {
   CHECK(in_vals.empty());
   for (auto index = values_rowset_slice.first; index < values_rowset_slice.second; ++index) {
@@ -517,8 +517,10 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::getInIntegerSetExpr(std::share
     const auto end_entry = std::min(start_entry + stride, entry_count);
     if (arg_type.is_string()) {
       CHECK_EQ(kENCODING_DICT, arg_type.get_compression());
-      const auto dd = cat_.getMetadataForDict(arg_type.get_comp_param())->stringDict.get();
-      const auto sd = cat_.getMetadataForDict(col_type.get_comp_param())->stringDict.get();
+      const auto dd =
+          executor_->getStringDictionaryProxy(arg_type.get_comp_param(), values_rowset->getRowSetMemOwner(), true);
+      const auto sd =
+          executor_->getStringDictionaryProxy(col_type.get_comp_param(), values_rowset->getRowSetMemOwner(), true);
       CHECK(sd);
       const auto needle_null_val = inline_int_null_val(arg_type);
       fetcher_threads.push_back(
