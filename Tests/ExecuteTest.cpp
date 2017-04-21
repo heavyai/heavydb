@@ -2376,6 +2376,11 @@ TEST(Select, Subqueries) {
       dt);
 #endif
     EXPECT_THROW(run_simple_agg("SELECT AVG(SELECT x FROM test LIMIT 5) FROM test;", dt), std::runtime_error);
+#ifdef HAVE_CALCITE
+    ASSERT_NEAR(static_cast<double>(2.057),
+                v<double>(run_simple_agg("SELECT AVG(dd) / (SELECT STDDEV(dd) FROM test) FROM test;", dt)),
+                static_cast<double>(0.10));
+#endif  // HAVE_CALCITE
   }
 }
 

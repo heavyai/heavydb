@@ -300,6 +300,10 @@ public final class MapDParser {
                 return expanded_variance;
             }
         }
+        if (node instanceof SqlSelect) {
+            SqlSelect select_node = (SqlSelect) node;
+            desugar(select_node);
+        }
         return node;
     }
 
