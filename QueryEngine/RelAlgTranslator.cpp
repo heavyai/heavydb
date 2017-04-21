@@ -409,6 +409,12 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInOper(const RexOpera
     if ((ti.is_integer() || (ti.is_string() && ti.get_compression() == kENCODING_DICT)) &&
         !row_set.getQueryMemDesc().output_columnar) {
       expr = getInIntegerSetExpr(lhs, row_set);
+      // Handle the highly unlikely case when the InIntegerSet ended up being tiny.
+      // Just let it fall through the usual InValues path at the end of this method,
+      // its codegen knows to use inline comparisons for few values.
+      if (std::static_pointer_cast<Analyzer::InIntegerSet>(expr)->get_value_list().size() <= 100) {
+        expr = nullptr;
+      }
     } else {
       expr = get_in_values_expr(lhs, row_set);
     }

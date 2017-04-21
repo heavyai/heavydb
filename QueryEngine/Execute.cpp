@@ -1155,6 +1155,11 @@ llvm::Value* Executor::codegen(const Analyzer::InIntegerSet* in_integer_set, con
   }
   const auto& ti = in_integer_set->get_arg()->get_type_info();
   const auto needle_null_val = inline_int_null_val(ti);
+  if (!co.hoist_literals_) {
+    // We never run without literal hoisting in real world scenarios, this avoids a crash when testing.
+    throw std::runtime_error(
+        "IN subquery with many right-hand side values not supported when literal hoisting is disabled");
+  }
   auto in_vals_bitmap = boost::make_unique<InValuesBitmap>(
       in_integer_set->get_value_list(),
       needle_null_val,
