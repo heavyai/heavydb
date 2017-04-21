@@ -428,7 +428,7 @@ endif()
 
 # systemd
 if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
-  install(FILES systemd/mapd_sd_server.service.in DESTINATION systemd)
+  install(FILES systemd/mapd_sd_server.service.in systemd/mapd_sd_server@.service.in DESTINATION systemd)
   install(FILES systemd/mapd_web_server.service.in systemd/mapd_web_server@.service.in DESTINATION systemd)
   install(FILES systemd/mapd.conf.in DESTINATION systemd)
   install(FILES systemd/mapd-sds.conf.in DESTINATION systemd)
