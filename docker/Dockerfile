@@ -2,7 +2,6 @@ FROM nvidia/cuda:8.0-runtime-ubuntu16.04
 MAINTAINER Andrew Seidl <andrew@mapd.com>
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        libglu1-mesa-dev \
         libldap-2.4-2 \
         bsdmainutils \
         wget \
