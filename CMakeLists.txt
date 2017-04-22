@@ -117,6 +117,19 @@ if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated-declarations")
 endif()
 
+if(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
+  set(CMAKE_INSTALL_RPATH
+    "\$ORIGIN/../ThirdParty/java/jre/lib/amd64/server"
+    "/usr/lib/jvm/java-1.8.0-openjdk-amd64/jre/lib/amd64/server"
+    "/usr/lib/jvm/jre-1.8.0-openjdk/lib/amd64/server"
+    "/usr/lib/jvm/java-1.8.0-openjdk/jre/lib/amd64/server"
+    "/usr/lib/jvm/jre/lib/amd64/server"
+    "/usr/lib/jvm/java/jre/lib/amd64/server"
+    "/usr/lib/jvm/default-java/jre/lib/amd64/server"
+  )
+  set(CMAKE_BUILD_WITH_INSTALL_RPATH ON)
+endif()
+
 option(ENABLE_LLVM_DBG "switch to local debug version of llvm" OFF)
 if(ENABLE_LLVM_DBG)
   # NOTE: specify LLVM_BIN_DIR to use your local llvm
