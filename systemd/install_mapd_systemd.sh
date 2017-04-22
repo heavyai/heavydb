@@ -2,6 +2,7 @@
 
 declare -A descs
 declare -A vars
+
 descs["MAPD_PATH"]="MapD install directory"
 vars["MAPD_PATH"]=${MAPD_PATH:=$(dirname $(pwd))}
 
@@ -32,6 +33,12 @@ done
 vars["MAPD_DATA"]=${MAPD_DATA:="${vars['MAPD_STORAGE']}/data"}
 sudo mkdir -p "${vars['MAPD_DATA']}"
 sudo mkdir -p "${vars['MAPD_STORAGE']}"
+sudo mkdir -p "${vars['MAPD_STORAGE']}/sds"
+
+if [ ! -d "${vars['MAPD_DATA']}/mapd_catalogs" ]; then
+  sudo ${vars["MAPD_PATH"]}/bin/initdb ${vars['MAPD_DATA']}
+fi
+
 sudo chown -R ${vars['MAPD_USER']}:${vars['MAPD_GROUP']} "${vars['MAPD_DATA']}"
 sudo chown -R ${vars['MAPD_USER']}:${vars['MAPD_GROUP']} "${vars['MAPD_STORAGE']}"
 
@@ -67,9 +74,3 @@ sudo cp mapd.conf mapd-sds.conf ${vars['MAPD_STORAGE']}
 sudo chown ${vars['MAPD_USER']}:${vars['MAPD_GROUP']} "${vars['MAPD_STORAGE']}/mapd.conf" "${vars['MAPD_STORAGE']}/mapd-sds.conf"
 
 sudo systemctl daemon-reload
-
-if [ ! -d "${vars['MAPD_DATA']}/mapd_catalogs" ]; then
-  echo
-  echo "${vars['MAPD_DATA']}/mapd_catalogs does not exist. Please run:"
-  echo "  ${vars["MAPD_PATH"]}/bin/initdb ${vars['MAPD_DATA']}"
-fi
