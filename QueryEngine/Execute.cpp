@@ -230,7 +230,6 @@ bool contains_unsafe_division(const Analyzer::Expr* expr) {
 
 }  // namespace
 
-
 StringDictionaryProxy* Executor::getStringDictionaryProxy(const int dict_id_in,
                                                           std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                                                           const bool with_generation) const {
