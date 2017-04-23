@@ -22,6 +22,7 @@ set(query_engine_source_files
     InValuesBitmap.cpp
     InputMetadata.cpp
     IteratorTable.cpp
+    LegacyExecute.cpp
     LLVMGlobalContext.cpp
     MaxwellCodegenPatch.cpp
     MurmurHash.cpp
