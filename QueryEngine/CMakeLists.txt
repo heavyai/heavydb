@@ -27,6 +27,7 @@ set(query_engine_source_files
     LLVMGlobalContext.cpp
     MaxwellCodegenPatch.cpp
     MurmurHash.cpp
+    NativeCodegen.cpp
     NvidiaKernel.cpp
     OutputBufferInitialization.cpp
     QueryPhysicalInputsCollector.cpp
