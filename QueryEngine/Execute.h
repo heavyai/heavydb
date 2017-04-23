@@ -1285,4 +1285,9 @@ inline std::string get_null_check_suffix(const SQLTypeInfo& lhs_ti, const SQLTyp
   return null_check_suffix;
 }
 
+inline bool is_unnest(const Analyzer::Expr* expr) {
+  return dynamic_cast<const Analyzer::UOper*>(expr) &&
+         static_cast<const Analyzer::UOper*>(expr)->get_optype() == kUNNEST;
+}
+
 #endif  // QUERYENGINE_EXECUTE_H
