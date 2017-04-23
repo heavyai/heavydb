@@ -28,6 +28,7 @@ set(query_engine_source_files
     InputMetadata.cpp
     IteratorTable.cpp
     LegacyExecute.cpp
+    LikeIR.cpp
     LLVMGlobalContext.cpp
     MaxwellCodegenPatch.cpp
     MurmurHash.cpp
