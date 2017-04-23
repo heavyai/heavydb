@@ -355,39 +355,6 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Expr* expr,
 #endif
 }
 
-llvm::Value* Executor::codegenDictRegexp(const std::shared_ptr<Analyzer::Expr> pattern_arg,
-                                         const Analyzer::Constant* pattern,
-                                         const char escape_char,
-                                         const CompilationOptions& co) {
-  const auto cast_oper = std::dynamic_pointer_cast<Analyzer::UOper>(pattern_arg);
-  if (!cast_oper) {
-    return nullptr;
-  }
-  CHECK(cast_oper);
-  CHECK_EQ(kCAST, cast_oper->get_optype());
-  const auto dict_regexp_arg = cast_oper->get_own_operand();
-  const auto& dict_regexp_arg_ti = dict_regexp_arg->get_type_info();
-  CHECK(dict_regexp_arg_ti.is_string());
-  CHECK_EQ(kENCODING_DICT, dict_regexp_arg_ti.get_compression());
-  const auto sdp = getStringDictionaryProxy(dict_regexp_arg_ti.get_comp_param(), row_set_mem_owner_, true);
-  if (sdp->storageEntryCount() > 15000000) {
-    return nullptr;
-  }
-  const auto& pattern_ti = pattern->get_type_info();
-  CHECK(pattern_ti.is_string());
-  CHECK_EQ(kENCODING_NONE, pattern_ti.get_compression());
-  const auto& pattern_datum = pattern->get_constval();
-  const auto& pattern_str = *pattern_datum.stringval;
-  const auto matching_strings = sdp->getRegexpLike(pattern_str, escape_char);
-  std::list<std::shared_ptr<Analyzer::Expr>> matching_str_exprs;
-  for (const auto& matching_string : matching_strings) {
-    auto const_val = Parser::StringLiteral::analyzeValue(matching_string);
-    matching_str_exprs.push_back(const_val->add_cast(dict_regexp_arg_ti));
-  }
-  const auto in_values = makeExpr<Analyzer::InValues>(dict_regexp_arg, matching_str_exprs);
-  return codegen(in_values.get(), co);
-}
-
 llvm::Value* Executor::codegen(const Analyzer::InValues* expr, const CompilationOptions& co) {
   const auto in_arg = expr->get_arg();
   if (is_unnest(in_arg)) {
