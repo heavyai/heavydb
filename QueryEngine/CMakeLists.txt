@@ -20,6 +20,7 @@ set(query_engine_source_files
     ExtensionFunctionsBinding.cpp
     ExtensionFunctionsWhitelist.cpp
     ExtensionFunctions.ast
+    ExtensionsIR.cpp
     GpuMemUtils.cpp
     InPlaceSort.cpp
     GroupByAndAggregate.cpp
