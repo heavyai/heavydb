@@ -393,16 +393,6 @@ int main(int argc, char** argv) {
   // Initialize Google's logging library.
   google::InitGoogleLogging(argv[0]);
 
-  try {
-    if (vm.count("disable-rendering")) {
-      LOG(ERROR) << "Option --disable-rendering is deprecated and will be removed in the future. "
-                    "Use --rendering=false .";
-    }
-  } catch (boost::program_options::error& e) {
-    std::cerr << "Usage Error: " << e.what() << std::endl;
-    return 1;
-  }
-
   // add all parameters to be displayed on startup
   LOG(INFO) << " Watchdog is set to " << enable_watchdog;
   LOG(INFO) << " HA is set to " << mapd_parameters.enable_ha;
