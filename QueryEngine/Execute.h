@@ -1270,4 +1270,19 @@ class Executor {
   friend class RelAlgExecutor;
 };
 
+inline std::string get_null_check_suffix(const SQLTypeInfo& lhs_ti, const SQLTypeInfo& rhs_ti) {
+  if (lhs_ti.get_notnull() && rhs_ti.get_notnull()) {
+    return "";
+  }
+  std::string null_check_suffix{"_nullable"};
+  if (lhs_ti.get_notnull()) {
+    CHECK(!rhs_ti.get_notnull());
+    null_check_suffix += "_rhs";
+  } else if (rhs_ti.get_notnull()) {
+    CHECK(!lhs_ti.get_notnull());
+    null_check_suffix += "_lhs";
+  }
+  return null_check_suffix;
+}
+
 #endif  // QUERYENGINE_EXECUTE_H
