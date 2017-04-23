@@ -11,6 +11,7 @@ set(query_engine_source_files
     CastIR.cpp
     Codec.cpp
     ColumnarResults.cpp
+    ColumnIR.cpp
     CompareIR.cpp
     DateTimePlusRewrite.cpp
     Execute.cpp
