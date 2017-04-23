@@ -11,6 +11,7 @@ set(query_engine_source_files
     ColumnarResults.cpp
     DateTimePlusRewrite.cpp
     Execute.cpp
+    ExecutionDispatch.cpp
     ExpressionRange.cpp
     ExpressionRewrite.cpp
     ExtensionFunctionsBinding.cpp

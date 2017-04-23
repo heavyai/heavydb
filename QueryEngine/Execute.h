@@ -607,6 +607,7 @@ class Executor {
         const int table_id,
         const int col_id,
         const std::map<int, const TableFragments*>& all_tables_fragments) const;
+
     const int8_t* getColumn(const ResultPtr& buffer,
                             const int table_id,
                             const int frag_id,
@@ -1267,7 +1268,6 @@ class Executor {
   friend class QueryRewriter;
   friend class PendingExecutionClosure;
   friend class RelAlgExecutor;
-  friend class ExecutionDispatch;
 };
 
 #endif  // QUERYENGINE_EXECUTE_H
