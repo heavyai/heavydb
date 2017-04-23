@@ -8,6 +8,7 @@ set(query_engine_source_files
     ArrayOps.cpp
     CalciteAdapter.cpp
     CalciteDeserializerUtils.cpp
+    CastIR.cpp
     Codec.cpp
     ColumnarResults.cpp
     DateTimePlusRewrite.cpp
