@@ -1,0 +1,137 @@
+#!/bin/bash
+#
+
+mkl_meta_set "description" "name"      "librdkafka"
+mkl_meta_set "description" "oneline"   "The Apache Kafka C/C++ library"
+mkl_meta_set "description" "long"      "Full Apache Kafka protocol support, including producer and consumer"
+mkl_meta_set "description" "copyright" "Copyright (c) 2012-2015 Magnus Edenhill"
+
+# Enable generation of pkg-config .pc file
+mkl_mkvar_set "" GEN_PKG_CONFIG y
+
+
+mkl_require cxx
+mkl_require lib
+mkl_require pic
+mkl_require atomics
+mkl_require good_cflags
+mkl_require socket
+
+# Generate version variables from rdkafka.h hex version define
+# so we can use it as string version when generating a pkg-config file.
+
+verdef=$(grep '^#define  *RD_KAFKA_VERSION  *0x' src/rdkafka.h | sed 's/^#define  *RD_KAFKA_VERSION  *\(0x[a-f0-9]*\)\.*$/\1/')
+mkl_require parseversion hex2str "%d.%d.%d" "$verdef" RDKAFKA_VERSION_STR
+
+mkl_toggle_option "Development" ENABLE_DEVEL "--enable-devel" "Enable development asserts, checks, etc" "n"
+mkl_toggle_option "Development" ENABLE_VALGRIND "--enable-valgrind" "Enable in-code valgrind suppressions" "n"
+
+mkl_toggle_option "Development" ENABLE_REFCNT_DEBUG "--enable-refcnt-debug" "Enable refcnt debugging" "n"
+
+mkl_toggle_option "Development" ENABLE_SHAREDPTR_DEBUG "--enable-sharedptr-debug" "Enable sharedptr debugging" "n"
+
+mkl_toggle_option "Feature" ENABLE_LZ4_EXT "--enable-lz4" "Enable external LZ4 library support" "y"
+
+mkl_toggle_option "Feature" ENABLE_SSL "--enable-ssl" "Enable SSL support" "y"
+mkl_toggle_option "Feature" ENABLE_SASL "--enable-sasl" "Enable SASL support" "y"
+
+
+function checks {
+
+    # required libs
+    mkl_lib_check "libpthread" "" fail CC "-lpthread" \
+                  "#include <pthread.h>"
+
+    # optional libs
+    mkl_lib_check "zlib" "WITH_ZLIB" disable CC "-lz" \
+                  "#include <zlib.h>"
+    mkl_lib_check "libcrypto" "" disable CC "-lcrypto"
+
+    if [[ "$ENABLE_LZ4_EXT" == "y" ]]; then
+        mkl_lib_check --static=-llz4 "liblz4" "WITH_LZ4_EXT" disable CC "-llz4" \
+                      "#include <lz4frame.h>"
+    fi
+
+    # Snappy support is built-in
+    mkl_allvar_set WITH_SNAPPY WITH_SNAPPY y
+
+    # Enable sockem (tests)
+    mkl_allvar_set WITH_SOCKEM WITH_SOCKEM y
+
+    if [[ "$ENABLE_SSL" == "y" ]]; then
+	mkl_meta_set "libssl" "deb" "libssl-dev"
+        if [[ $MKL_DISTRO == "osx" ]]; then
+            # Add brew's OpenSSL pkg-config path on OSX
+            export PKG_CONFIG_PATH="$PKG_CONFIG_PATH:/usr/local/opt/openssl/lib/pkgconfig"
+        fi
+	mkl_lib_check "libssl" "WITH_SSL" disable CC "-lssl" \
+                      "#include <openssl/ssl.h>"
+    fi
+
+    if [[ "$ENABLE_SASL" == "y" ]]; then
+        mkl_meta_set "libsasl2" "deb" "libsasl2-dev"
+        if ! mkl_lib_check "libsasl2" "WITH_SASL" disable CC "-lsasl2" "#include <sasl/sasl.h>" ; then
+	    mkl_lib_check "libsasl" "WITH_SASL" disable CC "-lsasl" \
+                          "#include <sasl/sasl.h>"
+        fi
+    fi
+
+    # Check for libc regex
+    mkl_compile_check "regex" "HAVE_REGEX" disable CC "" \
+"
+#include <stddef.h>
+#include <regex.h>
+void foo (void) {
+   regcomp(NULL, NULL, 0);
+   regexec(NULL, NULL, 0, NULL, 0);
+   regerror(0, NULL, NULL, 0);
+   regfree(NULL);
+}"
+
+
+    # -lrt is needed on linux for clock_gettime: link it if it exists.
+    mkl_lib_check "librt" "" cont CC "-lrt"
+
+    # Older g++ (<=4.1?) gives invalid warnings for the C++ code.
+    mkl_mkvar_append CXXFLAGS CXXFLAGS "-Wno-non-virtual-dtor"
+
+    # Required on SunOS
+    if [[ $MKL_DISTRO == "SunOS" ]]; then
+	mkl_mkvar_append CPPFLAGS CPPFLAGS "-D_POSIX_PTHREAD_SEMANTICS -D_REENTRANT -D__EXTENSIONS__"
+    fi
+
+    # Check if strndup() is available (isn't on Solaris 10)
+    mkl_compile_check "strndup" "HAVE_STRNDUP" disable CC "" \
+"#include <string.h>
+int foo (void) {
+   return strndup(\"hi\", 2) ? 0 : 1;
+}"
+
+    # Figure out what tool to use for dumping public symbols.
+    # We rely on configure.cc setting up $NM if it exists.
+    if mkl_env_check "nm" "" cont "NM" ; then
+	# nm by future mk var
+	if [[ $MKL_DISTRO == "osx" || $MKL_DISTRO == "AIX" ]]; then
+	    mkl_mkvar_set SYMDUMPER SYMDUMPER '$(NM) -g'
+	else
+	    mkl_mkvar_set SYMDUMPER SYMDUMPER '$(NM) -D'
+	fi
+    else
+	# Fake symdumper
+	mkl_mkvar_set SYMDUMPER SYMDUMPER 'echo'
+    fi
+
+    # The linker-script generator (lds-gen.py) requires python
+    if [[ $WITH_LDS == y ]]; then
+        if ! mkl_command_check python "HAVE_PYTHON" "disable" "python -V"; then
+            mkl_err "disabling linker-script since python is not available"
+            mkl_mkvar_set WITH_LDS WITH_LDS "n"
+        fi
+    fi
+
+    if [[ "$ENABLE_VALGRIND" == "y" ]]; then
+	mkl_compile_check valgrind WITH_VALGRIND disable CC "" \
+			  "#include <valgrind/memcheck.h>"
+    fi
+}
+

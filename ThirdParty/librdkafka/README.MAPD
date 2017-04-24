@@ -1,0 +1,30 @@
+LIBRDKAFKA
+
+https://github.com/edenhill/librdkafka
+
+included 18th Apr 
+
+git repo cloned 
+
+branch 0.9.5.x
+
+
+Latest:
+
+commit 0d540ab4e78a3e3661fe07ee328e2f61fb77f2c3
+Author: Magnus Edenhill <magnus@edenhill.se>
+Date:   Wed Apr 12 10:36:34 2017 +0200
+
+    Remove LICENSE.xxhash (covered by LICENSE.lz4)
+
+
+
+Removed:
+
+.git
+
+Modified CMAKE to not make demo or tests
+
+option(RDKAFKA_BUILD_EXAMPLES "Build examples" OFF)
+option(RDKAFKA_BUILD_TESTS "Build tests" OFF)
+
