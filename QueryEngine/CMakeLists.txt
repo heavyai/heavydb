@@ -13,6 +13,7 @@ set(query_engine_source_files
     ColumnarResults.cpp
     ColumnIR.cpp
     CompareIR.cpp
+    ConstantIR.cpp
     DateTimePlusRewrite.cpp
     Execute.cpp
     ExecutionDispatch.cpp
