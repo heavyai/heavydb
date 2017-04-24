@@ -26,6 +26,7 @@ set(query_engine_source_files
     ExtensionsIR.cpp
     GpuMemUtils.cpp
     InPlaceSort.cpp
+    InValuesIR.cpp
     GroupByAndAggregate.cpp
     InValuesBitmap.cpp
     InputMetadata.cpp
