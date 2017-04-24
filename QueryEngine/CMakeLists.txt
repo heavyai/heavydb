@@ -29,6 +29,7 @@ set(query_engine_source_files
     GpuMemUtils.cpp
     InPlaceSort.cpp
     InValuesIR.cpp
+    IRCodegen.cpp
     GroupByAndAggregate.cpp
     InValuesBitmap.cpp
     InputMetadata.cpp
