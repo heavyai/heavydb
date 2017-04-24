@@ -857,6 +857,73 @@ std::unordered_set<llvm::Function*> Executor::markDeadRuntimeFuncs(llvm::Module&
   return live_funcs;
 }
 
+void Executor::createErrorCheckControlFlow(llvm::Function* query_func, bool run_with_dynamic_watchdog) {
+  // check whether the row processing was successful; currently, it can
+  // fail by running out of group by buffer slots
+  bool done_splitting = false;
+  for (auto bb_it = query_func->begin(); bb_it != query_func->end() && !done_splitting; ++bb_it) {
+    llvm::Value* pos = nullptr;
+    for (auto inst_it = bb_it->begin(); inst_it != bb_it->end(); ++inst_it) {
+      if (run_with_dynamic_watchdog && llvm::isa<llvm::PHINode>(*inst_it)) {
+        if (inst_it->getName() == "pos") {
+          pos = &*inst_it;
+        }
+        continue;
+      }
+      if (!llvm::isa<llvm::CallInst>(*inst_it)) {
+        continue;
+      }
+      auto& filter_call = llvm::cast<llvm::CallInst>(*inst_it);
+      if (std::string(filter_call.getCalledFunction()->getName()) == unique_name("row_process", is_nested_)) {
+        auto next_inst_it = inst_it;
+        ++next_inst_it;
+        auto new_bb = bb_it->splitBasicBlock(next_inst_it);
+        auto& br_instr = bb_it->back();
+        llvm::IRBuilder<> ir_builder(&br_instr);
+        llvm::Value* err_lv = &*inst_it;
+        if (run_with_dynamic_watchdog) {
+          CHECK(pos);
+          // run watchdog after every 64 rows
+          auto and_lv = ir_builder.CreateAnd(pos, uint64_t(0x3f));
+          auto call_watchdog_lv = ir_builder.CreateICmp(llvm::ICmpInst::ICMP_EQ, and_lv, ll_int(int64_t(0LL)));
+
+          auto error_check_bb = bb_it->splitBasicBlock(llvm::BasicBlock::iterator(br_instr), ".error_check");
+          auto& watchdog_br_instr = bb_it->back();
+
+          auto watchdog_check_bb =
+              llvm::BasicBlock::Create(cgen_state_->context_, ".watchdog_check", query_func, error_check_bb);
+          llvm::IRBuilder<> watchdog_ir_builder(watchdog_check_bb);
+          auto detected_timeout =
+              watchdog_ir_builder.CreateCall(cgen_state_->module_->getFunction("dynamic_watchdog"), {});
+          auto timeout_err_lv =
+              watchdog_ir_builder.CreateSelect(detected_timeout, ll_int(Executor::ERR_OUT_OF_TIME), err_lv);
+          watchdog_ir_builder.CreateBr(error_check_bb);
+
+          llvm::ReplaceInstWithInst(&watchdog_br_instr,
+                                    llvm::BranchInst::Create(watchdog_check_bb, error_check_bb, call_watchdog_lv));
+          ir_builder.SetInsertPoint(&br_instr);
+          auto unified_err_lv = ir_builder.CreatePHI(err_lv->getType(), 2);
+
+          unified_err_lv->addIncoming(timeout_err_lv, watchdog_check_bb);
+          unified_err_lv->addIncoming(err_lv, &*bb_it);
+          err_lv = unified_err_lv;
+        }
+        auto& error_code_arg = query_func->getArgumentList().back();
+        CHECK(error_code_arg.getName() == "error_code");
+        err_lv = ir_builder.CreateCall(cgen_state_->module_->getFunction("record_error_code"),
+                                       std::vector<llvm::Value*>{err_lv, &error_code_arg});
+        err_lv = ir_builder.CreateICmp(llvm::ICmpInst::ICMP_NE, err_lv, ll_int(int32_t(0)));
+        auto error_bb = llvm::BasicBlock::Create(cgen_state_->context_, ".error_exit", query_func, new_bb);
+        llvm::ReturnInst::Create(cgen_state_->context_, error_bb);
+        llvm::ReplaceInstWithInst(&br_instr, llvm::BranchInst::Create(error_bb, new_bb, err_lv));
+        done_splitting = true;
+        break;
+      }
+    }
+  }
+  CHECK(done_splitting);
+}
+
 Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
                                                       const std::vector<InputTableInfo>& query_infos,
                                                       const RelAlgExecutionUnit& ra_exe_unit,
