@@ -5,6 +5,30 @@
 
 namespace {
 
+bool contains_unsafe_division(const Analyzer::Expr* expr) {
+  auto is_div = [](const Analyzer::Expr* e) -> bool {
+    auto bin_oper = dynamic_cast<const Analyzer::BinOper*>(e);
+    if (bin_oper && bin_oper->get_optype() == kDIVIDE) {
+      auto rhs = bin_oper->get_right_operand();
+      auto rhs_constant = dynamic_cast<const Analyzer::Constant*>(rhs);
+      if (!rhs_constant || rhs_constant->get_is_null())
+        return true;
+      const auto& datum = rhs_constant->get_constval();
+      const auto& ti = rhs_constant->get_type_info();
+      const auto type = ti.is_decimal() ? decimal_to_int_type(ti) : ti.get_type();
+      if ((type == kBOOLEAN && datum.boolval == 0) || (type == kSMALLINT && datum.smallintval == 0) ||
+          (type == kINT && datum.intval == 0) || (type == kBIGINT && datum.bigintval == 0LL) ||
+          (type == kFLOAT && datum.floatval == 0.0) || (type == kDOUBLE && datum.doubleval == 0.0)) {
+        return true;
+      }
+    }
+    return false;
+  };
+  std::list<const Analyzer::Expr*> binoper_list;
+  expr->find_expr(is_div, binoper_list);
+  return !binoper_list.empty();
+}
+
 bool should_defer_eval(const std::shared_ptr<Analyzer::Expr> expr) {
   if (std::dynamic_pointer_cast<Analyzer::LikeExpr>(expr)) {
     return true;
@@ -16,6 +40,9 @@ bool should_defer_eval(const std::shared_ptr<Analyzer::Expr> expr) {
     return false;
   }
   const auto bin_expr = std::static_pointer_cast<Analyzer::BinOper>(expr);
+  if (contains_unsafe_division(bin_expr.get())) {
+    return true;
+  }
   const auto rhs = bin_expr->get_right_operand();
   return rhs->get_type_info().is_array();
 }
@@ -91,30 +118,6 @@ Weight get_weight(const Analyzer::Expr* expr, int depth = 0) {
     return Weight(1);
 
   return Weight();
-}
-
-bool contains_unsafe_division(const Analyzer::Expr* expr) {
-  auto is_div = [](const Analyzer::Expr* e) -> bool {
-    auto bin_oper = dynamic_cast<const Analyzer::BinOper*>(e);
-    if (bin_oper && bin_oper->get_optype() == kDIVIDE) {
-      auto rhs = bin_oper->get_right_operand();
-      auto rhs_constant = dynamic_cast<const Analyzer::Constant*>(rhs);
-      if (!rhs_constant || rhs_constant->get_is_null())
-        return true;
-      const auto& datum = rhs_constant->get_constval();
-      const auto& ti = rhs_constant->get_type_info();
-      const auto type = ti.is_decimal() ? decimal_to_int_type(ti) : ti.get_type();
-      if ((type == kBOOLEAN && datum.boolval == 0) || (type == kSMALLINT && datum.smallintval == 0) ||
-          (type == kINT && datum.intval == 0) || (type == kBIGINT && datum.bigintval == 0LL) ||
-          (type == kFLOAT && datum.floatval == 0.0) || (type == kDOUBLE && datum.doubleval == 0.0)) {
-        return true;
-      }
-    }
-    return false;
-  };
-  std::list<const Analyzer::Expr*> binoper_list;
-  expr->find_expr(is_div, binoper_list);
-  return !binoper_list.empty();
 }
 
 }  // namespace

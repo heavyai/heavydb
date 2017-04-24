@@ -387,6 +387,7 @@ TEST(Select, FilterAndSimpleAggregation) {
     c("SELECT MAX(dd_notnull * 1) FROM test;", dt);
     c("SELECT x, COUNT(*) AS n FROM test GROUP BY x, ufd ORDER BY x, n;", dt);
     c("SELECT MIN(x), MAX(x) FROM test WHERE real_str LIKE '%nope%';", dt);
+    c("SELECT COUNT(*) FROM test WHERE (x > 7 AND y / (x - 7) < 44);", dt);
 #ifdef HAVE_CALCITE
     c("SELECT COUNT(*) FROM test WHERE d = 2.2", dt);
     c("SELECT COUNT(*) FROM test WHERE fx + 1 IS NULL;", dt);
