@@ -1041,6 +1041,11 @@ std::vector<std::string> Detector::get_headers() {
   return headers;
 }
 
+void Importer::load(const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers, size_t row_count) {
+  if (!loader->loadNoCheckpoint(import_buffers, row_count))
+    load_failed = true;
+}
+
 ImportStatus Importer::import() {
   // TODO(andrew): add file type detection
   return importDelimited();
