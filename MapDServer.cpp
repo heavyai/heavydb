@@ -129,9 +129,9 @@ void start_server(TThreadPoolServer& server) {
   }
 }
 
-shared_ptr<MapDHandler> warmup_handler = 0; // global "warmup_handler" needed to avoid circular dependency
-                                            // between "MapDHandler" & function "run_warmup_queries"
-                                            
+shared_ptr<MapDHandler> warmup_handler = 0;  // global "warmup_handler" needed to avoid circular dependency
+                                             // between "MapDHandler" & function "run_warmup_queries"
+
 void releaseWarmupSession(TSessionId& sessionId, std::ifstream& query_file) {
   query_file.close();
   if (sessionId != warmup_handler->getInvalidSessionId()) {
@@ -178,11 +178,11 @@ void run_warmup_queries(std::string base_path, std::string query_file_path) {
 
       // stop session and disconnect from the DB
       warmup_handler->disconnect(sessionId);
-      sessionId = warmup_handler->getInvalidSessionId(); 
-    } else { 
+      sessionId = warmup_handler->getInvalidSessionId();
+    } else {
       LOG(WARNING) << "\nSyntax error in the file: " << query_file_path.c_str()
-                   << " Missing expected keyword USER. Following line will be ignored: " 
-                   << db_info.c_str() << std::endl;
+                   << " Missing expected keyword USER. Following line will be ignored: " << db_info.c_str()
+                   << std::endl;
     }
     db_info.clear();
   }
@@ -504,13 +504,13 @@ int main(int argc, char** argv) {
 
   // run warmup queries to load cache if requested
   if (db_query_file.length() > 0) {
-    try { 
+    try {
       warmup_handler = handler;
-      run_warmup_queries(base_path,  db_query_file);
+      run_warmup_queries(base_path, db_query_file);
     } catch (...) {
       LOG(WARNING) << "Exception while executing warmup queries. "
                    << "Warmup may not be fully completed. Will proceed nevertheless." << std::endl;
-    } 
+    }
     warmup_handler = 0;
   }
 

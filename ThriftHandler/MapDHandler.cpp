@@ -215,9 +215,9 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
       mapd_parameters_(mapd_parameters),
 #ifdef HAVE_CALCITE
       enable_rendering_(enable_rendering),
-      legacy_syntax_(legacy_syntax), 
+      legacy_syntax_(legacy_syntax),
 #else
-      enable_rendering_(enable_rendering), 
+      enable_rendering_(enable_rendering),
 #endif  // HAVE_CALCITE
       super_user_rights_(false) {
   LOG(INFO) << "MapD Server " << MapDRelease;
@@ -380,7 +380,7 @@ void MapDHandler::connect(TSessionId& session,
   } else
     sessions_[session].reset(
         new Catalog_Namespace::SessionInfo(cat_it->second, user_meta, executor_device_type_, session));
-  if (!super_user_rights_) { // no need to connect to leaf_aggregator_ at this time while doing warmup
+  if (!super_user_rights_) {  // no need to connect to leaf_aggregator_ at this time while doing warmup
     if (leaf_aggregator_.leafCount() > 0) {
       const auto parent_session_info_ptr = sessions_[session];
       CHECK(parent_session_info_ptr);
@@ -895,7 +895,7 @@ void MapDHandler::clear_cpu_memory(const TSessionId& session) {
   sys_cat_->get_dataMgr().clearMemory(MemoryLevel::CPU_LEVEL);
 }
 
-TSessionId MapDHandler::getInvalidSessionId() const { 
+TSessionId MapDHandler::getInvalidSessionId() const {
   return INVALID_SESSION_ID;
 }
 

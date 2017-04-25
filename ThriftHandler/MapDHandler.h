@@ -350,7 +350,7 @@ class MapDHandler : public MapDIf {
                                           const Catalog_Namespace::SessionInfo& session_info,
                                           const std::string& action /* render or validate */);
 
-  bool super_user_rights_; // default is "false"; setting to "true" ignores passwd checks in "connect(..)" method
+  bool super_user_rights_;  // default is "false"; setting to "true" ignores passwd checks in "connect(..)" method
   friend void run_warmup_queries(std::string base_path, std::string query_file_path);
 };
 
