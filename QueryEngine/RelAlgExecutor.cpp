@@ -1212,7 +1212,8 @@ ssize_t RelAlgExecutor::getFilteredCountAll(const WorkUnit& work_unit,
   if (table_infos.size() == 1 && table_infos.front().info.getNumTuplesUpperBound() <= 50000) {
     return table_infos.front().info.getNumTuplesUpperBound();
   }
-  const auto count = makeExpr<Analyzer::AggExpr>(SQLTypeInfo(kINT, false), kCOUNT, nullptr, false);
+  const auto count =
+      makeExpr<Analyzer::AggExpr>(SQLTypeInfo(g_bigint_count ? kBIGINT : kINT, false), kCOUNT, nullptr, false);
   const auto count_all_exe_unit = create_count_all_execution_unit(work_unit.exe_unit, count);
   int32_t error_code{0};
   size_t one{1};

@@ -4,10 +4,12 @@
 
 #include <boost/algorithm/string.hpp>
 
+extern bool g_bigint_count;
+
 SQLTypeInfo get_agg_type(const SQLAgg agg_kind, const Analyzer::Expr* arg_expr) {
   switch (agg_kind) {
     case kCOUNT:
-      return SQLTypeInfo(kINT, false);
+      return SQLTypeInfo(g_bigint_count ? kBIGINT : kINT, false);
     case kMIN:
     case kMAX:
       return arg_expr->get_type_info();

@@ -321,6 +321,9 @@ int main(int argc, char** argv) {
   desc_adv.add_options()("use-result-set",
                          po::value<bool>(&g_use_result_set)->default_value(g_use_result_set)->implicit_value(true),
                          "Use the new result set");
+  desc_adv.add_options()("bigint-count",
+                         po::value<bool>(&g_bigint_count)->default_value(g_bigint_count)->implicit_value(false),
+                         "Use 64-bit count");
   desc_adv.add_options()("allow-cpu-retry",
                          po::value<bool>(&g_allow_cpu_retry)->default_value(g_allow_cpu_retry)->implicit_value(true),
                          "Allow the queries which failed on GPU to retry on CPU, even when watchdog is enabled");

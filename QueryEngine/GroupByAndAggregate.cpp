@@ -29,6 +29,7 @@
 
 bool g_cluster{false};
 bool g_use_result_set{true};
+bool g_bigint_count{false};
 
 namespace {
 
@@ -1657,6 +1658,9 @@ GroupByAndAggregate::GroupByAndAggregate(Executor* executor,
 int8_t pick_target_compact_width(const RelAlgExecutionUnit& ra_exe_unit,
                                  const std::vector<InputTableInfo>& query_infos,
                                  const int8_t crt_min_byte_width) {
+  if (g_bigint_count) {
+    return sizeof(int64_t);
+  }
   int8_t compact_width{0};
   auto col_it = ra_exe_unit.input_col_descs.begin();
   int unnest_array_col_id{std::numeric_limits<int>::min()};

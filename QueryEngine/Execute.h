@@ -48,6 +48,7 @@ extern bool g_enable_watchdog;
 extern bool g_enable_dynamic_watchdog;
 extern unsigned g_dynamic_watchdog_time_limit;
 extern bool g_allow_cpu_retry;
+extern bool g_bigint_count;
 
 struct RenderInfo {
   bool do_render;

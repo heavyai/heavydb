@@ -27,6 +27,8 @@
 #include <limits>
 #include <unordered_set>
 
+extern bool g_bigint_count;
+
 struct QueryMemoryDescriptor;
 struct RelAlgExecutionUnit;
 class RowSetMemoryOwner;
@@ -405,7 +407,8 @@ inline TargetInfo target_info(const PointerType target_expr) {
   if (!agg_arg) {
     CHECK_EQ(kCOUNT, agg_type);
     CHECK(!agg_expr->get_is_distinct());
-    return {true, kCOUNT, SQLTypeInfo(kINT, notnull), SQLTypeInfo(kNULLT, false), false, false};
+    return {
+        true, kCOUNT, SQLTypeInfo(g_bigint_count ? kBIGINT : kINT, notnull), SQLTypeInfo(kNULLT, false), false, false};
   }
 
   const auto& agg_arg_ti = agg_arg->get_type_info();
@@ -416,7 +419,7 @@ inline TargetInfo target_info(const PointerType target_expr) {
 
   return {true,
           agg_expr->get_aggtype(),
-          agg_type == kCOUNT ? SQLTypeInfo(is_distinct ? kBIGINT : kINT, notnull)
+          agg_type == kCOUNT ? SQLTypeInfo((is_distinct || g_bigint_count) ? kBIGINT : kINT, notnull)
                              : (agg_type == kAVG ? agg_arg_ti : agg_expr->get_type_info()),
           agg_arg_ti,
           !agg_arg_ti.get_notnull(),

@@ -2989,6 +2989,9 @@ int main(int argc, char** argv) {
   desc.add_options()("use-result-set",
                      po::value<bool>(&g_use_result_set)->default_value(g_use_result_set)->implicit_value(true),
                      "Use the new result set");
+  desc.add_options()("bigint-count",
+                     po::value<bool>(&g_bigint_count)->default_value(g_bigint_count)->implicit_value(false),
+                     "Use 64-bit count");
   desc.add_options()("keep-data", "Don't drop tables at the end of the tests");
   desc.add_options()("use-existing-data",
                      "Don't create and drop tables and only run select tests (it implies --keep-data).");
