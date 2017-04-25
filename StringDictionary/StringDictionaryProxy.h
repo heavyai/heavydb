@@ -20,7 +20,6 @@ class StringDictionaryProxy {
 
   int32_t getOrAdd(const std::string& str) noexcept;
   StringDictionary* getDictionary() noexcept;
-  ssize_t getGeneration() const noexcept;
   int32_t getOrAddTransient(const std::string& str);
   int32_t getIdOfString(const std::string& str) const;
   int32_t getIdOfStringNoGeneration(const std::string& str) const;  // disregard generation, only used by QueryRenderer

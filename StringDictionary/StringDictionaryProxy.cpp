@@ -13,6 +13,8 @@
 StringDictionaryProxy::StringDictionaryProxy(std::shared_ptr<StringDictionary> sd, const ssize_t generation)
     : string_dict_(sd), generation_(generation) {}
 
+namespace {
+
 int32_t truncate_to_generation(const int32_t id, const size_t generation) {
   if (id == StringDictionary::INVALID_STR_ID) {
     return id;
@@ -20,6 +22,8 @@ int32_t truncate_to_generation(const int32_t id, const size_t generation) {
   CHECK_GE(id, 0);
   return static_cast<size_t>(id) >= generation ? StringDictionary::INVALID_STR_ID : id;
 }
+
+}  // namespace
 
 int32_t StringDictionaryProxy::getOrAddTransient(const std::string& str) {
   mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
@@ -151,8 +155,4 @@ void StringDictionaryProxy::updateGeneration(const ssize_t generation) noexcept 
 
 StringDictionary* StringDictionaryProxy::getDictionary() noexcept {
   return string_dict_.get();
-}
-
-ssize_t StringDictionaryProxy::getGeneration() const noexcept {
-  return generation_;
 }

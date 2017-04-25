@@ -13,8 +13,6 @@
 #include "../Shared/likely.h"
 #include "../Shared/thread_count.h"
 
-#include "../StringDictionary/StringDictionaryClient.h"
-
 #include <future>
 
 extern bool g_enable_watchdog;
@@ -494,54 +492,6 @@ void fill_integer_in_vals(std::vector<int64_t>& in_vals,
   }
 }
 
-// Multi-node counterpart of the other version. Saves round-trips, which is crucial
-// for a big right-hand side result. It only handles physical string dictionary ids,
-// therefore it won't be able to handle a right-hand side sub-query with a CASE
-// returning literals on some branches. That case isn't hard too handle either, but
-// it's not clear it's actually important in practice. RelAlgTranslator::getInIntegerSetExpr
-// makes sure, by checking the encodings, that this function isn't called in such cases.
-void fill_dictionary_encoded_in_vals(std::vector<int64_t>& in_vals,
-                                     std::atomic<size_t>& total_in_vals_count,
-                                     const ResultSet* values_rowset,
-                                     const std::pair<int64_t, int64_t> values_rowset_slice,
-                                     const std::vector<LeafHostInfo>& leaf_hosts,
-                                     const int32_t source_dict_id,
-                                     const int32_t dest_dict_id,
-                                     const int32_t dest_generation,
-                                     const int64_t needle_null_val) {
-  CHECK(in_vals.empty());
-  std::vector<int32_t> source_ids;
-  source_ids.reserve(values_rowset->entryCount());
-  bool has_nulls = false;
-  for (auto index = values_rowset_slice.first; index < values_rowset_slice.second; ++index) {
-    const auto row = values_rowset->getOneColRow(index);
-    if (row.valid) {
-      if (row.value != needle_null_val) {
-        source_ids.push_back(row.value);
-      } else {
-        has_nulls = true;
-      }
-    }
-  }
-  StringDictionaryClient string_client(leaf_hosts.front(), -1, true);
-  std::vector<int32_t> dest_ids;
-  string_client.translate_string_ids(dest_ids, dest_dict_id, source_ids, source_dict_id, dest_generation);
-  CHECK_EQ(dest_ids.size(), source_ids.size());
-  in_vals.reserve(dest_ids.size() + (has_nulls ? 1 : 0));
-  if (has_nulls) {
-    in_vals.push_back(needle_null_val);
-  }
-  for (const int32_t dest_id : dest_ids) {
-    if (dest_id != StringDictionary::INVALID_STR_ID) {
-      in_vals.push_back(dest_id);
-      if (UNLIKELY(g_enable_watchdog && (in_vals.size() & 1023) == 0 &&
-                   total_in_vals_count.fetch_add(1024) >= g_max_integer_set_size)) {
-        throw std::runtime_error("Unable to handle 'expr IN (subquery)', subquery returned 30M+ rows.");
-      }
-    }
-  }
-}
-
 }  // namespace
 
 // The typical IN subquery involves either dictionary-encoded strings or integers.
@@ -565,10 +515,6 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::getInIntegerSetExpr(std::share
   const auto entry_count = values_rowset->entryCount();
   CHECK_EQ(size_t(1), values_rowset->colCount());
   const auto& col_type = values_rowset->getColType(0);
-  if (g_cluster && arg_type.is_string() && (col_type.get_comp_param() <= 0 || arg_type.get_comp_param() <= 0)) {
-    // Skip this case for now, see comment for fill_dictionary_encoded_in_vals.
-    return nullptr;
-  }
   std::atomic<size_t> total_in_vals_count{0};
   for (size_t i = 0, start_entry = 0, stride = (entry_count + fetcher_count - 1) / fetcher_count;
        i < fetcher_count && start_entry < entry_count;
@@ -577,37 +523,22 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::getInIntegerSetExpr(std::share
     const auto end_entry = std::min(start_entry + stride, entry_count);
     if (arg_type.is_string()) {
       CHECK_EQ(kENCODING_DICT, arg_type.get_compression());
-      const int32_t dest_dict_id = arg_type.get_comp_param();
-      const int32_t source_dict_id = col_type.get_comp_param();
       const auto dd =
           executor_->getStringDictionaryProxy(arg_type.get_comp_param(), values_rowset->getRowSetMemOwner(), true);
       const auto sd =
           executor_->getStringDictionaryProxy(col_type.get_comp_param(), values_rowset->getRowSetMemOwner(), true);
       CHECK(sd);
       const auto needle_null_val = inline_int_null_val(arg_type);
-      fetcher_threads.push_back(std::async(
-          std::launch::async,
-          [this, &values_rowset, &total_in_vals_count, sd, dd, source_dict_id, dest_dict_id, needle_null_val](
-              std::vector<int64_t>& in_vals, const size_t start, const size_t end) {
-            if (g_cluster) {
-              CHECK_GE(dd->getGeneration(), 0);
-              fill_dictionary_encoded_in_vals(in_vals,
-                                              total_in_vals_count,
-                                              values_rowset.get(),
-                                              {start, end},
-                                              cat_.getStringDictionaryHosts(),
-                                              source_dict_id,
-                                              dest_dict_id,
-                                              dd->getGeneration(),
-                                              needle_null_val);
-            } else {
-              fill_dictionary_encoded_in_vals(
-                  in_vals, total_in_vals_count, values_rowset.get(), {start, end}, sd, dd, needle_null_val);
-            }
-          },
-          std::ref(expr_set[i]),
-          start_entry,
-          end_entry));
+      fetcher_threads.push_back(
+          std::async(std::launch::async,
+                     [&values_rowset, &total_in_vals_count, sd, dd, needle_null_val](
+                         std::vector<int64_t>& in_vals, const size_t start, const size_t end) {
+                       fill_dictionary_encoded_in_vals(
+                           in_vals, total_in_vals_count, values_rowset.get(), {start, end}, sd, dd, needle_null_val);
+                     },
+                     std::ref(expr_set[i]),
+                     start_entry,
+                     end_entry));
     } else {
       CHECK(arg_type.is_integer());
       fetcher_threads.push_back(std::async(

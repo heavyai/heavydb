@@ -85,6 +85,4 @@ class StringDictionary {
   static char* CANARY_BUFFER;
 };
 
-int32_t truncate_to_generation(const int32_t id, const size_t generation);
-
 #endif  // STRINGDICTIONARY_STRINGDICTIONARY_H

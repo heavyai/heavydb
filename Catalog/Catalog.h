@@ -238,9 +238,7 @@ class Catalog {
 #endif  // HAVE_CALCITE
   const std::string& get_basePath() const { return basePath_; }
 
-  const DictDescriptor* getMetadataForDict(int dictId, bool loadDict = true) const;
-
-  const std::vector<LeafHostInfo>& getStringDictionaryHosts() const;
+  const DictDescriptor* getMetadataForDict(int dictId, bool loadDict=true) const;
 
  protected:
   void CheckAndExecuteMigrations();
