@@ -759,6 +759,9 @@ TEST(Select, ComplexQueries) {
     c("SELECT COUNT(*) FROM test a JOIN (SELECT * FROM test WHERE y < 43) b ON a.x = b.x JOIN join_test c ON a.x = c.x "
       "WHERE a.fixed_str = 'foo';",
       dt);
+    c("SELECT x, y FROM (SELECT a.str AS str, b.x AS x, a.y AS y FROM test a, join_test b WHERE a.x = b.x) WHERE str = "
+      "'foo' ORDER BY x LIMIT 1;",
+      dt);
 #endif  // HAVE_RAVM
     const auto rows = run_multiple_agg(
         "SELECT x + y AS a, COUNT(*) * MAX(y) - SUM(z) AS b FROM test "
