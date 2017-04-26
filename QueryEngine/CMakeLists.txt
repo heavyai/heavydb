@@ -26,6 +26,7 @@ set(query_engine_source_files
     ExtensionFunctionsWhitelist.cpp
     ExtensionFunctions.ast
     ExtensionsIR.cpp
+    GpuInterrupt.cpp
     GpuMemUtils.cpp
     InPlaceSort.cpp
     InValuesIR.cpp
