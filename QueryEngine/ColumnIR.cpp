@@ -1,8 +1,12 @@
 #include "Codec.h"
 #include "Execute.h"
 
+// Code generation routines and helpers for working with column expressions.
+
 namespace {
 
+// Return the right decoder for a given column expression. Doesn't handle
+// variable length data. The decoder encapsulates the code generation logic.
 std::shared_ptr<Decoder> get_col_decoder(const Analyzer::ColumnVar* col_var) {
   const auto enc_type = col_var->get_compression();
   const auto& ti = col_var->get_type_info();
@@ -27,15 +31,14 @@ std::shared_ptr<Decoder> get_col_decoder(const Analyzer::ColumnVar* col_var) {
         case kDATE:
           return std::make_shared<FixedWidthInt>(sizeof(time_t));
         default:
-          // TODO(alex): make columnar results write the correct encoding
-          if (ti.is_string()) {
-            return std::make_shared<FixedWidthInt>(ti.get_size());
-          }
           CHECK(false);
       }
     }
     case kENCODING_DICT:
       CHECK(ti.is_string());
+      // For dictionary-encoded columns encoded on less than 4 bytes, we can use
+      // unsigned representation for double the maximum cardinality. The inline
+      // null value is going to be the maximum value of the underlying type.
       if (ti.get_size() < ti.get_logical_size()) {
         return std::make_shared<FixedWidthUnsigned>(ti.get_size());
       }
@@ -91,6 +94,8 @@ std::vector<llvm::Value*> Executor::codegenColVar(const Analyzer::ColumnVar* col
       if (offset) {
         const auto& table_generation = getTableGeneration(col_var->get_table_id());
         if (table_generation.start_rowid > 0) {
+          // Handle the multi-node case: each leaf receives a start rowid used
+          // to offset the local rowid and generate a cluster-wide unique rowid.
           Datum d;
           d.bigintval = table_generation.start_rowid;
           const auto start_rowid = makeExpr<Analyzer::Constant>(kBIGINT, false, d);
