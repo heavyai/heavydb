@@ -147,11 +147,23 @@ std::vector<llvm::Value*> Executor::codegenColVar(const Analyzer::ColumnVar* col
   if (col_ti.is_array()) {
     return {col_byte_stream};
   }
+  const auto fixed_length_column_lv = codegenFixedLengthColVar(col_var, col_byte_stream, pos_arg);
+  auto it_ok =
+      cgen_state_->fetch_cache_.insert(std::make_pair(local_col_id, std::vector<llvm::Value*>{fixed_length_column_lv}));
+  CHECK(it_ok.second);
+  return {it_ok.first->second};
+}
+
+// Generate code for fixed length column types (number, timestamp or date, dictionary-encoded string)
+llvm::Value* Executor::codegenFixedLengthColVar(const Analyzer::ColumnVar* col_var,
+                                                llvm::Value* col_byte_stream,
+                                                llvm::Value* pos_arg) {
   const auto decoder = get_col_decoder(col_var);
   auto dec_val = decoder->codegenDecode(col_byte_stream, pos_arg, cgen_state_->module_);
   cgen_state_->ir_builder_.Insert(dec_val);
   auto dec_type = dec_val->getType();
   llvm::Value* dec_val_cast{nullptr};
+  const auto& col_ti = col_var->get_type_info();
   if (dec_type->isIntegerTy()) {
     auto dec_width = static_cast<llvm::IntegerType*>(dec_type)->getBitWidth();
     auto col_width = get_col_bit_width(col_var);
@@ -176,9 +188,7 @@ std::vector<llvm::Value*> Executor::codegenColVar(const Analyzer::ColumnVar* col
     dec_val_cast = dec_val;
   }
   CHECK(dec_val_cast);
-  auto it_ok = cgen_state_->fetch_cache_.insert(std::make_pair(local_col_id, std::vector<llvm::Value*>{dec_val_cast}));
-  CHECK(it_ok.second);
-  return {it_ok.first->second};
+  return dec_val_cast;
 }
 
 llvm::Value* Executor::codegenRowId(const Analyzer::ColumnVar* col_var, const CompilationOptions& co) {
