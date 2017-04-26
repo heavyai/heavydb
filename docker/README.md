@@ -1,58 +1,51 @@
-## Docker Install
+## Docker and nvidia-docker Installation
 
 Install Docker and nvidia-docker:
 - https://docs.docker.com/engine/installation/
-  - Install from Docker's repos, not your distro's. Normal distros are often many versions behind.
+  - Be sure to use Docker's repositories for the latest version of Docker.
 - https://github.com/NVIDIA/nvidia-docker/blob/master/README.md
 
-If you want to run as a normal user, add the user to both the `docker` and `nvidia-docker` groups:
+To use Docker as a normal user, add the user to both the `docker` and `nvidia-docker` groups:
 
     sudo usermod -aG docker username
     sudo usermod -aG nvidia-docker username
 
 ## Building MapD container
 
-Provided `Dockerfile` is for CUDA 8, which means your host system must have up-to-date drivers installed (367 or later preferred).
-
-The `Dockerfile` assumes that there is a MapD tarball sitting in the same directory named `mapd2-latest-Linux-x86_64.tar.gz`.
+The `Dockerfile` assumes a copy of the MapD tarball is in the same directory as the Dockerfile and is named `mapd-latest-Linux-x86_64.tar.gz`.
 
 To build the container, run:
 
-    wget --ask-password https://user@builds.mapd.com/mapd2-latest-Linux-x86_64.tar.gz # use your own user/pass
+    mv ../../mapd-3.0.0-*egl-render.tar.gz mapd-latest-Linux-x86_64.tar.gz
     nvidia-docker build .
 
-The image id will be output on the last line of the `build` step. To assign a custom name do something like:
+where `../../mapd-3.0.0-*egl-render.tar.gz` is the path to the MapD tarball.
 
-    nvidia-docker build -t mapd/mapd-norender:v1.2.10
+The container image id will be output on the last line of the `build` step. To assign a custom name and tag:
 
-which will assign the name `mapd/mapd-norender` and the tag `v1.2.10` to the image.
+    nvidia-docker build -t mapd/mapd:v3.0.0 .
+
+which will assign the name `mapd/mapd` and the tag `v3.0.0` to the image.
 
 ### Image layout
 
-The tarball is extracted to `/installs`. The extracted tarball also gets symlinked to `/mapd`.
+The tarball is extracted to `/installs`. The extracted tarball is also symlinked to `/mapd`.
 
-Data directory lives at `/mapd-storage/data`.
+The data directory is at `/mapd-storage/data`.
 
-Config file lives at `/mapd-storage/mapd.conf`.
+The config file lives at `/mapd-storage/mapd.conf`.
 
 ## Running MapD inside a container
 
-    nvidia-docker run -p 19092:9092 mapd/mapd-norender:v1.2.10
+    nvidia-docker run -d \
+      -p 9092:9092 \
+      --name mapd \
+      -v /path/to/mapd-storage:/mapd-storage \
+      -v /usr/share/glvnd/egl_vendor.d:/usr/share/glvnd/egl_vendor.d \
+      mapd/mapd:v3.0.0
 
-will expose the web server on port `19092`.
+This starts the MapD Core Database inside a container named `mapd`, and exposes the Immerse visualization client on port 9092..
 
-Saved data inside containers is ephemeral. To preserve your data you probably want to use a data container or at least bind mount in a host directory.
+Data will be persisted to the host directory `/path/to/mapd-storage`.
 
-    nvidia-docker run -v /home/mapd/prod/mapd-storage:/mapd-storage -p 19092:9092 mapd/mapd-norender:v1.2.10
-
-will mount the host directory `/home/mapd/prod/mapd-storage` to `/mapd-storage` in the container.
-
-See the Docker docs for more info on how to run as a daemon, how to spawn a shell inside the container, how to autostart on reboot, etc.
-
-Note: the `Dockerfile` currently uses `startmapd` to start both `mapd_web_server` and `mapd_server`. It will automatically run `initdb` to create a data directory if one does not exist.
-
-## Rendering Support
-
-An EGL-enabled build must be used for backend rendering due to issues related to running X inside a container. To build a container, rename the provided EGL-enabled tarball to `mapd2-latest-Linux-x86_64.tar.gz` and then build the container with:
-
-    nvidia-docker build .
+The `/usr/share/glvnd/egl_vendor.d` directory is required for rendering support when using recent NVIDIA GPU drivers.

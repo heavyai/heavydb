@@ -12,7 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 ENV LD_LIBRARY_PATH /usr/lib/jvm/default-java/jre/lib/amd64/server:/mapd/bin:${LD_LIBRARY_PATH}
 
-ADD mapd2-latest-Linux-x86_64.tar.gz /installs
+ADD mapd-latest-Linux-x86_64.tar.gz /installs
 RUN rm -f /mapd && ln -s $(ls -dtr /installs/mapd* | head -n 1) /mapd
 
 WORKDIR /mapd
