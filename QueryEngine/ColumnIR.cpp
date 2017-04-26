@@ -58,6 +58,10 @@ size_t get_col_bit_width(const Analyzer::ColumnVar* col_var) {
   return get_bit_width(type_info);
 }
 
+int adjusted_range_table_index(const Analyzer::ColumnVar* col_var) {
+  return col_var->get_rte_idx() == -1 ? 0 : col_var->get_rte_idx();
+}
+
 }  // namespace
 
 std::vector<llvm::Value*> Executor::codegen(const Analyzer::ColumnVar* col_var,
@@ -75,7 +79,7 @@ std::vector<llvm::Value*> Executor::codegenColVar(const Analyzer::ColumnVar* col
                                                   const CompilationOptions& co) {
   const bool hoist_literals = co.hoist_literals_;
   auto col_id = col_var->get_column_id();
-  const auto rte_idx = col_var->get_rte_idx() == -1 ? int(0) : col_var->get_rte_idx();
+  const int rte_idx = adjusted_range_table_index(col_var);
 #ifdef ENABLE_MULTIFRAG_JOIN
   CHECK_LT(rte_idx, cgen_state_->frag_offsets_.size());
 #endif
@@ -90,25 +94,7 @@ std::vector<llvm::Value*> Executor::codegenColVar(const Analyzer::ColumnVar* col
         return {posArg(col_var)};
       }
 #endif
-      const auto offset = cgen_state_->frag_offsets_[rte_idx];
-      if (offset) {
-        const auto& table_generation = getTableGeneration(col_var->get_table_id());
-        if (table_generation.start_rowid > 0) {
-          // Handle the multi-node case: each leaf receives a start rowid used
-          // to offset the local rowid and generate a cluster-wide unique rowid.
-          Datum d;
-          d.bigintval = table_generation.start_rowid;
-          const auto start_rowid = makeExpr<Analyzer::Constant>(kBIGINT, false, d);
-          const auto start_rowid_lvs = codegen(start_rowid.get(), kENCODING_NONE, -1, co);
-          CHECK_EQ(size_t(1), start_rowid_lvs.size());
-          return {cgen_state_->ir_builder_.CreateAdd(cgen_state_->ir_builder_.CreateAdd(posArg(col_var), offset),
-                                                     start_rowid_lvs.front())};
-        } else {
-          return {cgen_state_->ir_builder_.CreateAdd(posArg(col_var), offset)};
-        }
-      } else {
-        return {posArg(col_var)};
-      }
+      return {codegenRowId(col_var, co)};
     }
   }
   const auto grouped_col_lv = resolveGroupedColumnReference(col_var);
@@ -193,6 +179,29 @@ std::vector<llvm::Value*> Executor::codegenColVar(const Analyzer::ColumnVar* col
   auto it_ok = cgen_state_->fetch_cache_.insert(std::make_pair(local_col_id, std::vector<llvm::Value*>{dec_val_cast}));
   CHECK(it_ok.second);
   return {it_ok.first->second};
+}
+
+llvm::Value* Executor::codegenRowId(const Analyzer::ColumnVar* col_var, const CompilationOptions& co) {
+  const auto offset = cgen_state_->frag_offsets_[adjusted_range_table_index(col_var)];
+  if (offset) {
+    const auto& table_generation = getTableGeneration(col_var->get_table_id());
+    if (table_generation.start_rowid > 0) {
+      // Handle the multi-node case: each leaf receives a start rowid used
+      // to offset the local rowid and generate a cluster-wide unique rowid.
+      Datum d;
+      d.bigintval = table_generation.start_rowid;
+      const auto start_rowid = makeExpr<Analyzer::Constant>(kBIGINT, false, d);
+      const auto start_rowid_lvs = codegen(start_rowid.get(), kENCODING_NONE, -1, co);
+      CHECK_EQ(size_t(1), start_rowid_lvs.size());
+      // Add the start rowid for the leaf.
+      return cgen_state_->ir_builder_.CreateAdd(cgen_state_->ir_builder_.CreateAdd(posArg(col_var), offset),
+                                                start_rowid_lvs.front());
+    } else {
+      return cgen_state_->ir_builder_.CreateAdd(posArg(col_var), offset);
+    }
+  }
+  // Handle the temporary table case
+  return posArg(col_var);
 }
 
 namespace {

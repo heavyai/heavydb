@@ -373,6 +373,7 @@ class Executor {
   std::vector<llvm::Value*> codegenColVar(const Analyzer::ColumnVar*,
                                           const bool fetch_column,
                                           const CompilationOptions&);
+  llvm::Value* codegenRowId(const Analyzer::ColumnVar* col_var, const CompilationOptions& co);
   llvm::Value* codgenAdjustFixedEncNull(llvm::Value*, const SQLTypeInfo&);
   std::vector<llvm::Value*> codegenOuterJoinNullPlaceholder(const std::vector<llvm::Value*>&,
                                                             const Analyzer::ColumnVar*);
