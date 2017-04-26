@@ -523,7 +523,7 @@ install(PROGRAMS startmapd DESTINATION ".")
 install(PROGRAMS insert_sample_data DESTINATION ".")
 
 if(_MAPDGL_EGL)
-  install(FILES docker/Dockerfile docker/README.md DESTINATION "docker")
+  install(DIRECTORY docker/ DESTINATION "docker")
 endif()
 
 exec_program(uname ARGS -m OUTPUT_VARIABLE MAPD_HOST_SYSTEM_ARCHITECTURE) # does not account for cross-compiling or Windows
