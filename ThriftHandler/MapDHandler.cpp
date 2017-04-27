@@ -791,7 +791,7 @@ void MapDHandler::get_table_details(TTableDetails& _return, const TSessionId& se
     try {
       const auto query_ra = parse_to_ra(td->viewSQL, session_info);
       TQueryResult result;
-      execute_rel_alg(result, query_ra, true, session_info, ExecutorDeviceType::CPU, false, true, -1);
+      execute_rel_alg(result, query_ra, true, session_info, ExecutorDeviceType::CPU, -1, false, true);
       _return.row_desc = fixup_row_descriptor(result.row_set.row_desc, cat);
     } catch (std::exception& e) {
       TMapDException ex;

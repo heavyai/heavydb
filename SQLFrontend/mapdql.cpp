@@ -347,7 +347,7 @@ void process_backslash_commands(char* command, ClientContext& context) {
         std::cout << "CREATE TABLE " + table_name + " (\n";
       } else {
         std::cout << "CREATE VIEW " + table_name + " AS " + table_details.view_sql << "\n";
-        return;
+        std::cout << "\n" << "View columns:" << "\n\n";
       }
       std::string comma_or_blank("");
       for (TColumnType p : table_details.row_desc) {
