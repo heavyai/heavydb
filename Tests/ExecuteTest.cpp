@@ -442,7 +442,7 @@ TEST(Select, FilterAndSimpleAggregation) {
     ASSERT_EQ(20, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test HAVING STDDEV_POP(x) < 1.0;", dt)));
     ASSERT_EQ(20, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test HAVING STDDEV_POP(x) * 5 < 3.0;", dt)));
     ASSERT_NEAR(static_cast<double>(0.65),
-                v<double>(run_simple_agg("SELECT STDDEV(x) + VARIANCE(x) FROM test;", dt)),
+                v<double>(run_simple_agg("SELECT stddev(x) + VARIANCE(x) FROM test;", dt)),
                 static_cast<double>(0.10));
 #endif  // HAVE_CALCITE
   }

@@ -334,15 +334,15 @@ public final class MapDParser {
         if (proj_call.getOperator().isName("STDDEV_POP")) {
             biased = true;
             sqrt = true;
-        } else if (proj_call.getOperator().isName("STDDEV")
-                || proj_call.getOperator().isName("STDDEV_SAMP")) {
+        } else if (proj_call.getOperator().isName("STDDEV_SAMP")
+                || proj_call.getOperator().getName().equalsIgnoreCase("STDDEV")) {
             biased = false;
             sqrt = true;
         } else if (proj_call.getOperator().isName("VAR_POP")) {
             biased = true;
             sqrt = false;
         } else if (proj_call.getOperator().isName("VAR_SAMP")
-                || proj_call.getOperator().isName("VARIANCE")) {
+                || proj_call.getOperator().getName().equalsIgnoreCase("VARIANCE")) {
             biased = false;
             sqrt = false;
         } else {
