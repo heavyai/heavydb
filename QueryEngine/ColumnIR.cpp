@@ -133,16 +133,10 @@ std::vector<llvm::Value*> Executor::codegenColVar(const Analyzer::ColumnVar* col
   }
   const auto& col_ti = col_var->get_type_info();
   if (col_ti.is_string() && col_ti.get_compression() == kENCODING_NONE) {
-    // real (not dictionary-encoded) strings; store the pointer to the payload
-    auto ptr_and_len = cgen_state_->emitExternalCall(
-        "string_decode", get_int_type(64, cgen_state_->context_), {col_byte_stream, pos_arg});
-    // Unpack the pointer + length, see string_decode function.
-    auto str_lv = cgen_state_->emitCall("extract_str_ptr", {ptr_and_len});
-    auto len_lv = cgen_state_->emitCall("extract_str_len", {ptr_and_len});
-    auto it_ok = cgen_state_->fetch_cache_.insert(
-        std::make_pair(local_col_id, std::vector<llvm::Value*>{ptr_and_len, str_lv, len_lv}));
+    const auto varlen_str_column_lvs = codegenVariableLengthStringColVar(col_byte_stream, pos_arg);
+    auto it_ok = cgen_state_->fetch_cache_.insert(std::make_pair(local_col_id, varlen_str_column_lvs));
     CHECK(it_ok.second);
-    return {ptr_and_len, str_lv, len_lv};
+    return varlen_str_column_lvs;
   }
   if (col_ti.is_array()) {
     return {col_byte_stream};
@@ -189,6 +183,17 @@ llvm::Value* Executor::codegenFixedLengthColVar(const Analyzer::ColumnVar* col_v
   }
   CHECK(dec_val_cast);
   return dec_val_cast;
+}
+
+std::vector<llvm::Value*> Executor::codegenVariableLengthStringColVar(llvm::Value* col_byte_stream,
+                                                                      llvm::Value* pos_arg) {
+  // real (not dictionary-encoded) strings; store the pointer to the payload
+  auto ptr_and_len = cgen_state_->emitExternalCall(
+      "string_decode", get_int_type(64, cgen_state_->context_), {col_byte_stream, pos_arg});
+  // Unpack the pointer + length, see string_decode function.
+  auto str_lv = cgen_state_->emitCall("extract_str_ptr", {ptr_and_len});
+  auto len_lv = cgen_state_->emitCall("extract_str_len", {ptr_and_len});
+  return {ptr_and_len, str_lv, len_lv};
 }
 
 llvm::Value* Executor::codegenRowId(const Analyzer::ColumnVar* col_var, const CompilationOptions& co) {
