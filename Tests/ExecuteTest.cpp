@@ -2669,6 +2669,7 @@ TEST(Select, CreateTableAsSelect) {
     c("SELECT x, COUNT(*) FROM ctas_test GROUP BY x;", dt);
     c("SELECT f, COUNT(*) FROM ctas_test GROUP BY f;", dt);
     c("SELECT d, COUNT(*) FROM ctas_test GROUP BY d;", dt);
+    c("SELECT COUNT(*) FROM empty_ctas_test;", dt);
   }
 }
 
@@ -2940,6 +2941,21 @@ int create_as_select() {
   return 0;
 }
 
+int create_as_select_empty() {
+#ifdef HAVE_RAVM
+  try {
+    const std::string create_ctas_test{
+        "CREATE TABLE empty_ctas_test AS SELECT x, f, d, str, fixed_str FROM test WHERE x > 8;"};
+    run_ddl_statement(create_ctas_test);
+    g_sqlite_comparator.query(create_ctas_test);
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'ctas_test'";
+    return -EEXIST;
+  }
+#endif  // HAVE_RAVM
+  return 0;
+}
+
 void drop_tables() {
   const std::string drop_test{"DROP TABLE test;"};
   run_ddl_statement(drop_test);
@@ -2985,6 +3001,9 @@ void drop_tables() {
   const std::string drop_ctas_test{"DROP TABLE ctas_test;"};
   g_sqlite_comparator.query(drop_ctas_test);
   run_ddl_statement(drop_ctas_test);
+  const std::string drop_empty_ctas_test{"DROP TABLE empty_ctas_test;"};
+  g_sqlite_comparator.query(drop_empty_ctas_test);
+  run_ddl_statement(drop_empty_ctas_test);
 #endif  // HAVE_RAVM
 }
 
@@ -3036,6 +3055,9 @@ int main(int argc, char** argv) {
     }
     if (!err) {
       err = create_as_select();
+    }
+    if (!err) {
+      err = create_as_select_empty();
     }
   }
   if (err) {

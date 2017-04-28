@@ -1892,6 +1892,9 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
   td.fragPageSize = DEFAULT_PAGE_SIZE;
   td.maxRows = DEFAULT_MAX_ROWS;
   catalog.createTable(td, column_descriptors);
+  if (result_rows.definitelyHasNoRows()) {
+    return;
+  }
   const TableDescriptor* created_td{nullptr};
   try {
     const auto row_set_mem_owner =
