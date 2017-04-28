@@ -2,6 +2,8 @@
 
 #include "Parser/ParserNode.h"
 
+// Code generation routines and helpers for basic arithmetic and unary minus.
+
 namespace {
 
 std::string numeric_or_time_interval_type_name(const SQLTypeInfo& ti1, const SQLTypeInfo& ti2) {
@@ -31,6 +33,8 @@ llvm::Value* Executor::codegenArith(const Analyzer::BinOper* bin_oper, const Com
 
   auto lhs_lv = codegen(lhs, true, co).front();
   auto rhs_lv = codegen(rhs, true, co).front();
+  // Handle operations when a time interval operand is involved, an operation
+  // between an integer and a time interval isn't normalized by the analyzer.
   if (lhs_type.is_timeinterval()) {
     rhs_lv = codegenCastBetweenIntTypes(rhs_lv, rhs_type, lhs_type);
   } else if (rhs_type.is_timeinterval()) {
@@ -38,52 +42,75 @@ llvm::Value* Executor::codegenArith(const Analyzer::BinOper* bin_oper, const Com
   } else {
     CHECK_EQ(lhs_type.get_type(), rhs_type.get_type());
   }
-  const auto& oper_type = rhs_type.is_timeinterval() ? rhs_type : lhs_type;
   if (lhs_type.is_decimal()) {
     CHECK_EQ(lhs_type.get_scale(), rhs_type.get_scale());
   }
-  const auto null_check_suffix = get_null_check_suffix(lhs_type, rhs_type);
   if (lhs_type.is_integer() || lhs_type.is_decimal() || lhs_type.is_timeinterval()) {
-    const auto int_typename = numeric_or_time_interval_type_name(lhs_type, rhs_type);
-    switch (optype) {
-      case kMINUS:
-        return codegenSub(
-            bin_oper, lhs_lv, rhs_lv, null_check_suffix.empty() ? "" : int_typename, null_check_suffix, oper_type);
-      case kPLUS:
-        return codegenAdd(
-            bin_oper, lhs_lv, rhs_lv, null_check_suffix.empty() ? "" : int_typename, null_check_suffix, oper_type);
-      case kMULTIPLY:
-        return codegenMul(
-            bin_oper, lhs_lv, rhs_lv, null_check_suffix.empty() ? "" : int_typename, null_check_suffix, oper_type);
-      case kDIVIDE:
-        return codegenDiv(lhs_lv, rhs_lv, null_check_suffix.empty() ? "" : int_typename, null_check_suffix, oper_type);
-      case kMODULO:
-        return codegenMod(lhs_lv, rhs_lv, null_check_suffix.empty() ? "" : int_typename, null_check_suffix, oper_type);
-      default:
-        CHECK(false);
-    }
+    return codegenIntArith(bin_oper, lhs_lv, rhs_lv);
   }
   if (lhs_type.is_fp()) {
-    const auto fp_typename = numeric_type_name(lhs_type);
-    llvm::ConstantFP* fp_null{lhs_type.get_type() == kFLOAT ? ll_fp(NULL_FLOAT) : ll_fp(NULL_DOUBLE)};
-    switch (optype) {
-      case kMINUS:
-        return null_check_suffix.empty()
-                   ? cgen_state_->ir_builder_.CreateFSub(lhs_lv, rhs_lv)
-                   : cgen_state_->emitCall("sub_" + fp_typename + null_check_suffix, {lhs_lv, rhs_lv, fp_null});
-      case kPLUS:
-        return null_check_suffix.empty()
-                   ? cgen_state_->ir_builder_.CreateFAdd(lhs_lv, rhs_lv)
-                   : cgen_state_->emitCall("add_" + fp_typename + null_check_suffix, {lhs_lv, rhs_lv, fp_null});
-      case kMULTIPLY:
-        return null_check_suffix.empty()
-                   ? cgen_state_->ir_builder_.CreateFMul(lhs_lv, rhs_lv)
-                   : cgen_state_->emitCall("mul_" + fp_typename + null_check_suffix, {lhs_lv, rhs_lv, fp_null});
-      case kDIVIDE:
-        return codegenDiv(lhs_lv, rhs_lv, null_check_suffix.empty() ? "" : fp_typename, null_check_suffix, lhs_type);
-      default:
-        CHECK(false);
-    }
+    return codegenFpArith(bin_oper, lhs_lv, rhs_lv);
+  }
+  CHECK(false);
+  return nullptr;
+}
+
+// Handle integer or integer-like (decimal, time, date) operand types.
+llvm::Value* Executor::codegenIntArith(const Analyzer::BinOper* bin_oper, llvm::Value* lhs_lv, llvm::Value* rhs_lv) {
+  const auto lhs = bin_oper->get_left_operand();
+  const auto rhs = bin_oper->get_right_operand();
+  const auto& lhs_type = lhs->get_type_info();
+  const auto& rhs_type = rhs->get_type_info();
+  const auto int_typename = numeric_or_time_interval_type_name(lhs_type, rhs_type);
+  const auto null_check_suffix = get_null_check_suffix(lhs_type, rhs_type);
+  const auto& oper_type = rhs_type.is_timeinterval() ? rhs_type : lhs_type;
+  switch (bin_oper->get_optype()) {
+    case kMINUS:
+      return codegenSub(
+          bin_oper, lhs_lv, rhs_lv, null_check_suffix.empty() ? "" : int_typename, null_check_suffix, oper_type);
+    case kPLUS:
+      return codegenAdd(
+          bin_oper, lhs_lv, rhs_lv, null_check_suffix.empty() ? "" : int_typename, null_check_suffix, oper_type);
+    case kMULTIPLY:
+      return codegenMul(
+          bin_oper, lhs_lv, rhs_lv, null_check_suffix.empty() ? "" : int_typename, null_check_suffix, oper_type);
+    case kDIVIDE:
+      return codegenDiv(lhs_lv, rhs_lv, null_check_suffix.empty() ? "" : int_typename, null_check_suffix, oper_type);
+    case kMODULO:
+      return codegenMod(lhs_lv, rhs_lv, null_check_suffix.empty() ? "" : int_typename, null_check_suffix, oper_type);
+    default:
+      CHECK(false);
+  }
+  CHECK(false);
+  return nullptr;
+}
+
+// Handle floating point operand types.
+llvm::Value* Executor::codegenFpArith(const Analyzer::BinOper* bin_oper, llvm::Value* lhs_lv, llvm::Value* rhs_lv) {
+  const auto lhs = bin_oper->get_left_operand();
+  const auto rhs = bin_oper->get_right_operand();
+  const auto& lhs_type = lhs->get_type_info();
+  const auto& rhs_type = rhs->get_type_info();
+  const auto fp_typename = numeric_type_name(lhs_type);
+  const auto null_check_suffix = get_null_check_suffix(lhs_type, rhs_type);
+  llvm::ConstantFP* fp_null{lhs_type.get_type() == kFLOAT ? ll_fp(NULL_FLOAT) : ll_fp(NULL_DOUBLE)};
+  switch (bin_oper->get_optype()) {
+    case kMINUS:
+      return null_check_suffix.empty()
+                 ? cgen_state_->ir_builder_.CreateFSub(lhs_lv, rhs_lv)
+                 : cgen_state_->emitCall("sub_" + fp_typename + null_check_suffix, {lhs_lv, rhs_lv, fp_null});
+    case kPLUS:
+      return null_check_suffix.empty()
+                 ? cgen_state_->ir_builder_.CreateFAdd(lhs_lv, rhs_lv)
+                 : cgen_state_->emitCall("add_" + fp_typename + null_check_suffix, {lhs_lv, rhs_lv, fp_null});
+    case kMULTIPLY:
+      return null_check_suffix.empty()
+                 ? cgen_state_->ir_builder_.CreateFMul(lhs_lv, rhs_lv)
+                 : cgen_state_->emitCall("mul_" + fp_typename + null_check_suffix, {lhs_lv, rhs_lv, fp_null});
+    case kDIVIDE:
+      return codegenDiv(lhs_lv, rhs_lv, null_check_suffix.empty() ? "" : fp_typename, null_check_suffix, lhs_type);
+    default:
+      CHECK(false);
   }
   CHECK(false);
   return nullptr;
@@ -101,6 +128,7 @@ bool is_temporary_column(const Analyzer::Expr* expr) {
 
 }  // namespace
 
+// Returns true iff runtime overflow checks aren't needed thanks to range information.
 bool Executor::checkExpressionRanges(const Analyzer::BinOper* bin_oper, int64_t min, int64_t max) {
   if (is_temporary_column(bin_oper->get_left_operand()) || is_temporary_column(bin_oper->get_right_operand())) {
     // Computing the range for temporary columns is a lot more expensive than the overflow check.
@@ -262,6 +290,11 @@ llvm::Value* Executor::codegenMul(const Analyzer::BinOper* bin_oper,
   return ret;
 }
 
+// Handle multiplication between a decimal and an integer constant, return null if
+// the expression doesn't match this pattern and let the general method kick in.
+// For said patterns, we can simply scale the decimal operand by the non-scaled
+// integer constant value instead of using the scaled value followed by a division.
+// It is both more efficient and avoids the overflow for a lot of practical cases.
 llvm::Value* Executor::codegenDeciMul(const Analyzer::BinOper* bin_oper, bool swap, const CompilationOptions& co) {
   auto lhs = swap ? bin_oper->get_right_operand() : bin_oper->get_left_operand();
   auto rhs = swap ? bin_oper->get_left_operand() : bin_oper->get_right_operand();
@@ -319,6 +352,7 @@ llvm::Value* Executor::codegenDiv(llvm::Value* lhs_lv,
                                                            {lhs_lv, scale_lv, ll_int(inline_int_null_val(ti))});
   }
   cgen_state_->needs_error_check_ = true;
+  // Generate control flow for division by zero error handling.
   auto div_ok = llvm::BasicBlock::Create(cgen_state_->context_, "div_ok", cgen_state_->row_func_);
   auto div_zero = llvm::BasicBlock::Create(cgen_state_->context_, "div_zero", cgen_state_->row_func_);
   auto zero_const = rhs_lv->getType()->isIntegerTy() ? llvm::ConstantInt::get(rhs_lv->getType(), 0, true)
@@ -353,6 +387,7 @@ llvm::Value* Executor::codegenMod(llvm::Value* lhs_lv,
   CHECK_EQ(lhs_lv->getType(), rhs_lv->getType());
   CHECK(ti.is_integer());
   cgen_state_->needs_error_check_ = true;
+  // Generate control flow for division by zero error handling.
   auto mod_ok = llvm::BasicBlock::Create(cgen_state_->context_, "mod_ok", cgen_state_->row_func_);
   auto mod_zero = llvm::BasicBlock::Create(cgen_state_->context_, "mod_zero", cgen_state_->row_func_);
   auto zero_const = llvm::ConstantInt::get(rhs_lv->getType(), 0, true);
@@ -368,6 +403,7 @@ llvm::Value* Executor::codegenMod(llvm::Value* lhs_lv,
   return ret;
 }
 
+// Returns true iff runtime overflow checks aren't needed thanks to range information.
 bool Executor::checkExpressionRanges(const Analyzer::UOper* uoper, int64_t min, int64_t max) {
   if (uoper->get_type_info().is_decimal())
     return false;
