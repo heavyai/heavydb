@@ -294,7 +294,7 @@ TEST(ParseAnalyzePlan, Insert) {
 }
 
 #ifdef HAVE_CALCITE
-TEST(ParseAnalyzePlan, Views) {
+TEST(DISABLED_ParseAnalyzePlan, Views) {
   EXPECT_NO_THROW(run_ddl("create view if not exists voo as select * from skinny where a > 15;"););
   EXPECT_NO_THROW(run_ddl("create view if not exists moo as select * from skinny where a > 15;"););
   EXPECT_NO_THROW(run_ddl("create view if not exists mic as select c, avg(b) from skinny where a > 10 group by c;"););
