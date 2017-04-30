@@ -294,7 +294,7 @@ TEST(ParseAnalyzePlan, Insert) {
 }
 
 #ifdef HAVE_CALCITE
-TEST(DISABLED_ParseAnalyzePlan, Views) {
+TEST(ParseAnalyzePlan, Views) {
   EXPECT_NO_THROW(run_ddl("create view if not exists voo as select * from skinny where a > 15;"););
   EXPECT_NO_THROW(run_ddl("create view if not exists moo as select * from skinny where a > 15;"););
   EXPECT_NO_THROW(run_ddl("create view if not exists mic as select c, avg(b) from skinny where a > 10 group by c;"););
@@ -304,7 +304,7 @@ TEST(DISABLED_ParseAnalyzePlan, Views) {
 }
 #endif  // HAVE_CALCITE
 
-TEST(ParseAnalyzePlan, Drop) {
+void drop_views_and_tables() {
   EXPECT_NO_THROW(run_ddl("drop view if exists voo;"));
   EXPECT_NO_THROW(run_ddl("drop view if exists moo;"));
   EXPECT_NO_THROW(run_ddl("drop view if exists goo;"));
@@ -320,5 +320,7 @@ int main(int argc, char* argv[]) {
   google::InitGoogleLogging(argv[0]);
   ::testing::InitGoogleTest(&argc, argv);
   ::testing::AddGlobalTestEnvironment(new SQLTestEnv);
-  return RUN_ALL_TESTS();
+  int err = RUN_ALL_TESTS();
+  drop_views_and_tables();
+  return err;
 }
