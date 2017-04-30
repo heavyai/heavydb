@@ -28,6 +28,7 @@ class ResultSetStorage {
 
   int8_t* getUnderlyingBuffer() const;
 
+  template <class KeyType>
   void moveEntriesToBuffer(int8_t* new_buff, const size_t new_entry_count) const;
 
  private:

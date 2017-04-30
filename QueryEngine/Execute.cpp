@@ -637,7 +637,18 @@ RowSetPtr Executor::reduceMultiDeviceResultSets(
         first_result->getTargetInfos(), ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, this);
     auto result_storage = reduced_results->allocateStorage(plan_state_->init_agg_vals_);
     reduced_results->initializeStorage();
-    first_result->getStorage()->moveEntriesToBuffer(result_storage->getUnderlyingBuffer(), query_mem_desc.entry_count);
+    switch (query_mem_desc.getEffectiveKeyWidth()) {
+      case 4:
+        first_result->getStorage()->moveEntriesToBuffer<int32_t>(result_storage->getUnderlyingBuffer(),
+                                                                 query_mem_desc.entry_count);
+        break;
+      case 8:
+        first_result->getStorage()->moveEntriesToBuffer<int64_t>(result_storage->getUnderlyingBuffer(),
+                                                                 query_mem_desc.entry_count);
+        break;
+      default:
+        CHECK(false);
+    }
   } else {
     reduced_results = first->getResultSet();
   }
