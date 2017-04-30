@@ -64,17 +64,31 @@ void fill_slots(int64_t* dst_entry,
   }
 }
 
+ALWAYS_INLINE
+void fill_empty_key_32(int32_t* key_ptr_i32, const size_t key_count) {
+  for (size_t i = 0; i < key_count; ++i) {
+    key_ptr_i32[i] = EMPTY_KEY_32;
+  }
+}
+
+ALWAYS_INLINE
+void fill_empty_key_64(int64_t* key_ptr_i64, const size_t key_count) {
+  for (size_t i = 0; i < key_count; ++i) {
+    key_ptr_i64[i] = EMPTY_KEY_64;
+  }
+}
+
 }  // namespace
 
 void fill_empty_key(void* key_ptr, const size_t key_count, const size_t key_width) {
   switch (key_width) {
     case 4: {
       auto key_ptr_i32 = reinterpret_cast<int32_t*>(key_ptr);
-      std::fill(key_ptr_i32, key_ptr_i32 + key_count, EMPTY_KEY_32);
+      fill_empty_key_32(key_ptr_i32, key_count);
     } break;
     case 8: {
       auto key_ptr_i64 = reinterpret_cast<int64_t*>(key_ptr);
-      std::fill(key_ptr_i64, key_ptr_i64 + key_count, EMPTY_KEY_64);
+      fill_empty_key_64(key_ptr_i64, key_count);
     } break;
     default:
       CHECK(false);
@@ -718,13 +732,31 @@ void ResultSetStorage::initializeRowWise() const {
   CHECK_EQ(row_size % 8, 0);
   const auto key_bytes_with_padding = align_to_int64(get_key_bytes_rowwise(query_mem_desc_));
   CHECK(!query_mem_desc_.keyless_hash);
-  for (size_t i = 0; i < query_mem_desc_.entry_count; ++i) {
-    auto row_ptr = buff_ + i * row_size;
-    fill_empty_key(row_ptr, key_count, query_mem_desc_.getEffectiveKeyWidth());
-    auto slot_ptr = reinterpret_cast<int64_t*>(row_ptr + key_bytes_with_padding);
-    for (size_t j = 0; j < target_init_vals_.size(); ++j) {
-      slot_ptr[j] = target_init_vals_[j];
+  switch (query_mem_desc_.getEffectiveKeyWidth()) {
+    case 4: {
+      for (size_t i = 0; i < query_mem_desc_.entry_count; ++i) {
+        auto row_ptr = buff_ + i * row_size;
+        fill_empty_key_32(reinterpret_cast<int32_t*>(row_ptr), key_count);
+        auto slot_ptr = reinterpret_cast<int64_t*>(row_ptr + key_bytes_with_padding);
+        for (size_t j = 0; j < target_init_vals_.size(); ++j) {
+          slot_ptr[j] = target_init_vals_[j];
+        }
+      }
+      break;
     }
+    case 8: {
+      for (size_t i = 0; i < query_mem_desc_.entry_count; ++i) {
+        auto row_ptr = buff_ + i * row_size;
+        fill_empty_key_64(reinterpret_cast<int64_t*>(row_ptr), key_count);
+        auto slot_ptr = reinterpret_cast<int64_t*>(row_ptr + key_bytes_with_padding);
+        for (size_t j = 0; j < target_init_vals_.size(); ++j) {
+          slot_ptr[j] = target_init_vals_[j];
+        }
+      }
+      break;
+    }
+    default:
+      CHECK(false);
   }
 }
 
