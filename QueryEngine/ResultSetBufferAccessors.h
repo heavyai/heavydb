@@ -158,12 +158,18 @@ inline size_t get_slot_off_quad(const QueryMemoryDescriptor& query_mem_desc) {
 
 #endif  // __CUDACC__
 
-inline double pair_to_double(const std::pair<int64_t, int64_t>& fp_pair, const SQLTypeInfo& ti) {
+inline double pair_to_double(const std::pair<int64_t, int64_t>& fp_pair,
+                             const SQLTypeInfo& ti,
+                             const bool float_argument_input) {
   double dividend{0.0};
   int64_t null_val{0};
   switch (ti.get_type()) {
     case kFLOAT: {
-      dividend = *reinterpret_cast<const double*>(may_alias_ptr(&fp_pair.first));
+      if (float_argument_input) {
+        dividend = static_cast<double>(*reinterpret_cast<const float*>(may_alias_ptr(&fp_pair.first)));
+      } else {
+        dividend = *reinterpret_cast<const double*>(may_alias_ptr(&fp_pair.first));
+      }
       double null_float = inline_fp_null_val(ti);
       null_val = *reinterpret_cast<const int64_t*>(may_alias_ptr(&null_float));
       break;

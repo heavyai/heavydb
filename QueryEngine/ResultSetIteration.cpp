@@ -47,7 +47,7 @@ TargetValue make_avg_target_value(const int8_t* ptr1,
     CHECK(false);
   }
   const auto count = read_int_from_buff(ptr2, actual_compact_sz2);
-  return pair_to_double({sum, count}, target_info.sql_type);
+  return pair_to_double({sum, count}, target_info.sql_type, false);
 }
 
 // Gets the byte offset, starting from the beginning of the row targets buffer, of
@@ -848,7 +848,7 @@ bool ResultSet::isNull(const SQLTypeInfo& ti, const InternalTargetValue& val, co
     return val.i1 == null_val_bit_pattern(ti, float_argument_input);
   }
   if (val.isPair()) {
-    return !val.i2 || pair_to_double({val.i1, val.i2}, ti) == NULL_DOUBLE;
+    return !val.i2 || pair_to_double({val.i1, val.i2}, ti, float_argument_input) == NULL_DOUBLE;
   }
   if (val.isStr()) {
     return !val.i1;

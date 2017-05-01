@@ -984,8 +984,8 @@ void ResultRows::sort(const std::list<Analyzer::OrderEntry>& order_entries,
       } else {
         if (lhs_v.isPair()) {
           CHECK(rhs_v.isPair());
-          const auto lhs = pair_to_double({lhs_v.i1, lhs_v.i2}, entry_ti);
-          const auto rhs = pair_to_double({rhs_v.i1, rhs_v.i2}, entry_ti);
+          const auto lhs = pair_to_double({lhs_v.i1, lhs_v.i2}, entry_ti, false);
+          const auto rhs = pair_to_double({rhs_v.i1, rhs_v.i2}, entry_ti, false);
           if (lhs == rhs) {
             continue;
           }
@@ -1129,7 +1129,7 @@ TargetValue result_rows_get_impl(const InternalTargetValue& col_val,
   if (agg_info.agg_kind == kAVG) {
     CHECK(!chosen_type.is_string());
     CHECK(col_val.isPair());
-    return pair_to_double({col_val.i1, col_val.i2}, chosen_type);
+    return pair_to_double({col_val.i1, col_val.i2}, chosen_type, false);
   }
   if (chosen_type.is_integer() || chosen_type.is_decimal() || chosen_type.is_boolean() || chosen_type.is_time() ||
       chosen_type.is_timeinterval()) {
@@ -1658,7 +1658,7 @@ bool ResultRows::isNull(const SQLTypeInfo& ti, const InternalTargetValue& val) {
     if (!val.i2) {
       LOG(ERROR) << "The AVG pair looks incorrect";
     }
-    return (val.i2 == 0) || pair_to_double({val.i1, val.i2}, ti) == NULL_DOUBLE;
+    return (val.i2 == 0) || pair_to_double({val.i1, val.i2}, ti, false) == NULL_DOUBLE;
   }
   if (val.isStr()) {
     return false;

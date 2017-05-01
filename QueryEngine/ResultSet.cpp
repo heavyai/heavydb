@@ -632,8 +632,8 @@ std::function<bool(const uint32_t, const uint32_t)> ResultSet::createComparator(
       } else {
         if (lhs_v.isPair()) {
           CHECK(rhs_v.isPair());
-          const auto lhs = pair_to_double({lhs_v.i1, lhs_v.i2}, entry_ti);
-          const auto rhs = pair_to_double({rhs_v.i1, rhs_v.i2}, entry_ti);
+          const auto lhs = pair_to_double({lhs_v.i1, lhs_v.i2}, entry_ti, float_argument_input);
+          const auto rhs = pair_to_double({rhs_v.i1, rhs_v.i2}, entry_ti, float_argument_input);
           if (lhs == rhs) {
             continue;
           }
