@@ -256,7 +256,6 @@ void Executor::ExecutionDispatch::runImpl(const ExecutorDeviceType chosen_device
   int32_t err{0};
   uint32_t start_rowid{0};
   if (rowid_lookup_key >= 0) {
-    CHECK_LE(frag_ids.size(), size_t(1));
     if (!frag_ids.empty()) {
       const auto& all_frag_row_offsets = getFragOffsets();
       start_rowid = rowid_lookup_key - all_frag_row_offsets[frag_ids.begin()->second.front()];
