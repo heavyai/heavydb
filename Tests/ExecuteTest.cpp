@@ -68,8 +68,8 @@ bool skip_tests(const ExecutorDeviceType device_type) {
 }
 
 bool approx_eq(const double v, const double target, const double eps = 0.01) {
-  const auto v_u64 = *reinterpret_cast<const uint64_t*>(&v);
-  const auto target_u64 = *reinterpret_cast<const uint64_t*>(&target);
+  const auto v_u64 = *reinterpret_cast<const uint64_t*>(may_alias_ptr(&v));
+  const auto target_u64 = *reinterpret_cast<const uint64_t*>(may_alias_ptr(&target));
   return v_u64 == target_u64 || (target - eps < v && v < target + eps);
 }
 

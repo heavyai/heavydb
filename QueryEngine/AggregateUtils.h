@@ -2,6 +2,7 @@
 #define QUERYENGINE_AGGREGATEUTILS_H
 
 #include "BufferCompaction.h"
+#include "TypePunning.h"
 #include "../Shared/sqltypes.h"
 
 #include <glog/logging.h>
@@ -36,13 +37,13 @@ inline void set_component(int8_t* group_by_buffer, const size_t comp_sz, const i
 }
 
 inline int64_t float_to_double_bin(int32_t val, bool nullable = false) {
-  float null_float = NULL_FLOAT;
-  if (nullable && val == *reinterpret_cast<int32_t*>(&null_float)) {
+  const float null_float = NULL_FLOAT;
+  if (nullable && val == *reinterpret_cast<const int32_t*>(may_alias_ptr(&null_float))) {
     double null_double = NULL_DOUBLE;
-    return *reinterpret_cast<int64_t*>(&null_double);
+    return *reinterpret_cast<const int64_t*>(may_alias_ptr(&null_double));
   }
-  double res = *reinterpret_cast<float*>(&val);
-  return *reinterpret_cast<int64_t*>(&res);
+  double res = *reinterpret_cast<const float*>(may_alias_ptr(&val));
+  return *reinterpret_cast<const int64_t*>(may_alias_ptr(&res));
 }
 
 inline std::vector<int64_t> compact_init_vals(const size_t cmpt_size,

@@ -848,11 +848,11 @@ const bool sum_check_flag = true;
         if (chosen_bytes__ == sizeof(float)) {                                                                   \
           agg_##agg_kind__##_float_skip_val(reinterpret_cast<int32_t*>(val_ptr__),                               \
                                             *reinterpret_cast<const float*>(other_ptr__),                        \
-                                            *reinterpret_cast<const float*>(&init_val__));                       \
+                                            *reinterpret_cast<const float*>(may_alias_ptr(&init_val__)));        \
         } else {                                                                                                 \
           agg_##agg_kind__##_double_skip_val(reinterpret_cast<int64_t*>(val_ptr__),                              \
                                              *reinterpret_cast<const double*>(other_ptr__),                      \
-                                             *reinterpret_cast<const double*>(&init_val__));                     \
+                                             *reinterpret_cast<const double*>(may_alias_ptr(&init_val__)));      \
         }                                                                                                        \
       } else {                                                                                                   \
         if (chosen_bytes__ == sizeof(int32_t)) {                                                                 \
@@ -918,11 +918,11 @@ const bool sum_check_flag = true;
         if (chosen_bytes__ == sizeof(float)) {                                                       \
           agg_sum_float_skip_val(reinterpret_cast<int32_t*>(val_ptr__),                              \
                                  *reinterpret_cast<const float*>(other_ptr__),                       \
-                                 *reinterpret_cast<const float*>(&init_val__));                      \
+                                 *reinterpret_cast<const float*>(may_alias_ptr(&init_val__)));       \
         } else {                                                                                     \
           agg_sum_double_skip_val(reinterpret_cast<int64_t*>(val_ptr__),                             \
                                   *reinterpret_cast<const double*>(other_ptr__),                     \
-                                  *reinterpret_cast<const double*>(&init_val__));                    \
+                                  *reinterpret_cast<const double*>(may_alias_ptr(&init_val__)));     \
         }                                                                                            \
       } else {                                                                                       \
         if (chosen_bytes__ == sizeof(int32_t)) {                                                     \

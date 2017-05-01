@@ -5,6 +5,7 @@
 #include "BufferCompaction.h"
 #include "MurmurHash.h"
 #include "RuntimeFunctions.h"
+#include "TypePunning.h"
 #include "../Shared/funcannotations.h"
 
 #include <algorithm>
@@ -443,21 +444,21 @@ extern "C" ALWAYS_INLINE uint64_t agg_count_double(uint64_t* agg, const double v
 
 extern "C" ALWAYS_INLINE void agg_sum_double(int64_t* agg, const double val) {
   const auto r = *reinterpret_cast<const double*>(agg) + val;
-  *agg = *reinterpret_cast<const int64_t*>(&r);
+  *agg = *reinterpret_cast<const int64_t*>(may_alias_ptr(&r));
 }
 
 extern "C" ALWAYS_INLINE void agg_max_double(int64_t* agg, const double val) {
   const auto r = std::max(*reinterpret_cast<const double*>(agg), val);
-  *agg = *(reinterpret_cast<const int64_t*>(&r));
+  *agg = *(reinterpret_cast<const int64_t*>(may_alias_ptr(&r)));
 }
 
 extern "C" ALWAYS_INLINE void agg_min_double(int64_t* agg, const double val) {
   const auto r = std::min(*reinterpret_cast<const double*>(agg), val);
-  *agg = *(reinterpret_cast<const int64_t*>(&r));
+  *agg = *(reinterpret_cast<const int64_t*>(may_alias_ptr(&r)));
 }
 
 extern "C" ALWAYS_INLINE void agg_id_double(int64_t* agg, const double val) {
-  *agg = *(reinterpret_cast<const int64_t*>(&val));
+  *agg = *(reinterpret_cast<const int64_t*>(may_alias_ptr(&val)));
 }
 
 extern "C" ALWAYS_INLINE uint32_t agg_count_float(uint32_t* agg, const float val) {
@@ -466,21 +467,21 @@ extern "C" ALWAYS_INLINE uint32_t agg_count_float(uint32_t* agg, const float val
 
 extern "C" ALWAYS_INLINE void agg_sum_float(int32_t* agg, const float val) {
   const auto r = *reinterpret_cast<const float*>(agg) + val;
-  *agg = *reinterpret_cast<const int32_t*>(&r);
+  *agg = *reinterpret_cast<const int32_t*>(may_alias_ptr(&r));
 }
 
 extern "C" ALWAYS_INLINE void agg_max_float(int32_t* agg, const float val) {
   const auto r = std::max(*reinterpret_cast<const float*>(agg), val);
-  *agg = *(reinterpret_cast<const int32_t*>(&r));
+  *agg = *(reinterpret_cast<const int32_t*>(may_alias_ptr(&r)));
 }
 
 extern "C" ALWAYS_INLINE void agg_min_float(int32_t* agg, const float val) {
   const auto r = std::min(*reinterpret_cast<const float*>(agg), val);
-  *agg = *(reinterpret_cast<const int32_t*>(&r));
+  *agg = *(reinterpret_cast<const int32_t*>(may_alias_ptr(&r)));
 }
 
 extern "C" ALWAYS_INLINE void agg_id_float(int32_t* agg, const float val) {
-  *agg = *(reinterpret_cast<const int32_t*>(&val));
+  *agg = *(reinterpret_cast<const int32_t*>(may_alias_ptr(&val)));
 }
 
 extern "C" ALWAYS_INLINE uint64_t agg_count_double_skip_val(uint64_t* agg, const double val, const double skip_val) {
@@ -508,10 +509,10 @@ extern "C" ALWAYS_INLINE uint32_t agg_count_float_skip_val(uint32_t* agg, const 
   extern "C" ALWAYS_INLINE void base_agg_func##_skip_val(ADDR_T* agg, const DATA_T val, const DATA_T skip_val) { \
     if (val != skip_val) {                                                                                       \
       const ADDR_T old_agg = *agg;                                                                               \
-      if (old_agg != *reinterpret_cast<const ADDR_T*>(&skip_val)) {                                              \
+      if (old_agg != *reinterpret_cast<const ADDR_T*>(may_alias_ptr(&skip_val))) {                               \
         base_agg_func(agg, val);                                                                                 \
       } else {                                                                                                   \
-        *agg = *reinterpret_cast<const ADDR_T*>(&val);                                                           \
+        *agg = *reinterpret_cast<const ADDR_T*>(may_alias_ptr(&val));                                            \
       }                                                                                                          \
     }                                                                                                            \
   }

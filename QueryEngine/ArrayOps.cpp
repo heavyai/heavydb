@@ -7,6 +7,7 @@
  **/
 
 #include <stdint.h>
+#include "TypePunning.h"
 #include "../Shared/funcannotations.h"
 #include "../Utils/ChunkIter.h"
 
@@ -195,11 +196,11 @@ extern "C" ALWAYS_INLINE int64_t elem_bitcast_int64_t(const int64_t val) {
 
 extern "C" ALWAYS_INLINE int64_t elem_bitcast_float(const float val) {
   const double dval{val};
-  return *reinterpret_cast<const int64_t*>(&dval);
+  return *reinterpret_cast<const int64_t*>(may_alias_ptr(&dval));
 }
 
 extern "C" ALWAYS_INLINE int64_t elem_bitcast_double(const double val) {
-  return *reinterpret_cast<const int64_t*>(&val);
+  return *reinterpret_cast<const int64_t*>(may_alias_ptr(&val));
 }
 
 #define COUNT_DISTINCT_ARRAY(type)                                                      \

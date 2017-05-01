@@ -92,12 +92,12 @@ void write_fp(int8_t* slot_ptr, const int64_t v, const size_t slot_bytes) {
   switch (slot_bytes) {
     case 4: {
       float fi = v;
-      *reinterpret_cast<int32_t*>(slot_ptr) = *reinterpret_cast<int32_t*>(&fi);
+      *reinterpret_cast<int32_t*>(slot_ptr) = *reinterpret_cast<const int32_t*>(may_alias_ptr(&fi));
       break;
     }
     case 8: {
       double di = v;
-      *reinterpret_cast<int64_t*>(slot_ptr) = *reinterpret_cast<int64_t*>(&di);
+      *reinterpret_cast<int64_t*>(slot_ptr) = *reinterpret_cast<const int64_t*>(may_alias_ptr(&di));
       break;
     }
     default:
@@ -179,7 +179,7 @@ void fill_one_entry_one_col(int8_t* ptr1,
     case 8:
       if (target_info.sql_type.is_fp()) {
         double di = vv;
-        *reinterpret_cast<int64_t*>(ptr1) = *reinterpret_cast<int64_t*>(&di);
+        *reinterpret_cast<int64_t*>(ptr1) = *reinterpret_cast<const int64_t*>(may_alias_ptr(&di));
       } else {
         *reinterpret_cast<int64_t*>(ptr1) = vv;
       }

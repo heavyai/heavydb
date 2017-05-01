@@ -25,13 +25,13 @@ void fill_one_entry_baseline(int64_t* value_slots,
       case kFLOAT:
         if (float_argument_input) {
           float fi = vv;
-          int64_t fi_bin = *reinterpret_cast<int32_t*>(&fi);
+          int64_t fi_bin = *reinterpret_cast<const int32_t*>(may_alias_ptr(&fi));
           value_slots[target_slot] = null_val ? vv : fi_bin;
           break;
         }
       case kDOUBLE: {
         double di = vv;
-        value_slots[target_slot] = null_val ? vv : *reinterpret_cast<int64_t*>(&di);
+        value_slots[target_slot] = null_val ? vv : *reinterpret_cast<const int64_t*>(may_alias_ptr(&di));
         break;
       }
       case kTEXT:

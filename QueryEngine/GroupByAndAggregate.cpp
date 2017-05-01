@@ -2247,7 +2247,7 @@ GroupByAndAggregate::KeylessInfo GroupByAndAggregate::getKeylessInfo(
             case ExpressionRangeType::Float:
             case ExpressionRangeType::Double: {
               init_val = init_max;
-              auto double_max = *reinterpret_cast<const double*>(&init_max);
+              auto double_max = *reinterpret_cast<const double*>(may_alias_ptr(&init_max));
               if (expr_range_info.getFpMax() < double_max) {
                 found = true;
               }
@@ -2280,7 +2280,7 @@ GroupByAndAggregate::KeylessInfo GroupByAndAggregate::getKeylessInfo(
             case ExpressionRangeType::Float:
             case ExpressionRangeType::Double: {
               init_val = init_min;
-              auto double_min = *reinterpret_cast<const double*>(&init_min);
+              auto double_min = *reinterpret_cast<const double*>(may_alias_ptr(&init_min));
               if (expr_range_info.getFpMin() > double_min) {
                 found = true;
               }

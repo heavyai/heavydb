@@ -2,6 +2,7 @@
 #define QUERYENGINE_RELALGABSTRACTINTERPRETER_H
 
 #include "TargetMetaInfo.h"
+#include "TypePunning.h"
 #include "../Catalog/Catalog.h"
 
 #include <boost/variant.hpp>
@@ -291,7 +292,7 @@ template <>
 struct hash<RexInput> {
   size_t operator()(const RexInput& rex_in) const {
     auto addr = rex_in.getSourceNode();
-    return *reinterpret_cast<const size_t*>(&addr) ^ rex_in.getIndex();
+    return *reinterpret_cast<const size_t*>(may_alias_ptr(&addr)) ^ rex_in.getIndex();
   }
 };
 

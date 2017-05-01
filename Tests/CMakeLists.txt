@@ -1,5 +1,4 @@
 set(EXECUTABLE_OUTPUT_PATH ${CMAKE_CURRENT_BINARY_DIR})
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-strict-aliasing")
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
 set(TEST_BASE_PATH "./tmp")

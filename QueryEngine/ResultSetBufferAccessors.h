@@ -11,6 +11,7 @@
 
 #include "BufferCompaction.h"
 #include "SqlTypesLayout.h"
+#include "TypePunning.h"
 
 #include "../Shared/unreachable.h"
 
@@ -162,15 +163,15 @@ inline double pair_to_double(const std::pair<int64_t, int64_t>& fp_pair, const S
   int64_t null_val{0};
   switch (ti.get_type()) {
     case kFLOAT: {
-      dividend = *reinterpret_cast<const double*>(&fp_pair.first);
+      dividend = *reinterpret_cast<const double*>(may_alias_ptr(&fp_pair.first));
       double null_float = inline_fp_null_val(ti);
-      null_val = *reinterpret_cast<int64_t*>(&null_float);
+      null_val = *reinterpret_cast<const int64_t*>(may_alias_ptr(&null_float));
       break;
     }
     case kDOUBLE: {
-      dividend = *reinterpret_cast<const double*>(&fp_pair.first);
+      dividend = *reinterpret_cast<const double*>(may_alias_ptr(&fp_pair.first));
       double null_double = inline_fp_null_val(ti);
-      null_val = *reinterpret_cast<int64_t*>(&null_double);
+      null_val = *reinterpret_cast<const int64_t*>(may_alias_ptr(&null_double));
       break;
     }
     default: {
@@ -193,11 +194,11 @@ inline int64_t null_val_bit_pattern(const SQLTypeInfo& ti, const bool float_argu
   if (ti.is_fp()) {
     if (float_argument_input && ti.get_type() == kFLOAT) {
       int64_t float_null_val = 0;
-      *reinterpret_cast<float*>(&float_null_val) = static_cast<float>(inline_fp_null_val(ti));
+      *reinterpret_cast<float*>(may_alias_ptr(&float_null_val)) = static_cast<float>(inline_fp_null_val(ti));
       return float_null_val;
     }
     const auto double_null_val = inline_fp_null_val(ti);
-    return *reinterpret_cast<const int64_t*>(&double_null_val);
+    return *reinterpret_cast<const int64_t*>(may_alias_ptr(&double_null_val));
   }
   if ((ti.is_string() && ti.get_compression() == kENCODING_NONE) || ti.is_array()) {
     return 0;

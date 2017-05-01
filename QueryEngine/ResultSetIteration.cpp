@@ -11,6 +11,7 @@
 #include "ResultRows.h"
 #include "RuntimeFunctions.h"
 #include "SqlTypesLayout.h"
+#include "TypePunning.h"
 
 namespace {
 
@@ -31,12 +32,12 @@ TargetValue make_avg_target_value(const int8_t* ptr1,
     switch (actual_compact_sz1) {
       case 8: {
         double d = *reinterpret_cast<const double*>(ptr1);
-        sum = *reinterpret_cast<const int64_t*>(&d);
+        sum = *reinterpret_cast<const int64_t*>(may_alias_ptr(&d));
         break;
       }
       case 4: {
         double d = *reinterpret_cast<const float*>(ptr1);
-        sum = *reinterpret_cast<const int64_t*>(&d);
+        sum = *reinterpret_cast<const int64_t*>(may_alias_ptr(&d));
         break;
       }
       default:
@@ -408,10 +409,10 @@ int64_t lazy_decode(const ColumnLazyFetchInfo& col_lazy_fetch, const int8_t* byt
   if (type_info.is_fp()) {
     if (type_info.get_type() == kFLOAT) {
       float fval = fixed_width_float_decode_noinline(byte_stream, pos);
-      return *reinterpret_cast<int32_t*>(&fval);
+      return *reinterpret_cast<const int32_t*>(may_alias_ptr(&fval));
     } else {
       double fval = fixed_width_double_decode_noinline(byte_stream, pos);
-      return *reinterpret_cast<int64_t*>(&fval);
+      return *reinterpret_cast<const int64_t*>(may_alias_ptr(&fval));
     }
   }
   CHECK(type_info.is_integer() || type_info.is_decimal() || type_info.is_time() || type_info.is_boolean() ||
@@ -672,9 +673,9 @@ TargetValue ResultSet::makeTargetValue(const int8_t* ptr,
       if (chosen_type.is_fp()) {
         if (chosen_type.get_type() == kFLOAT) {
           const auto fval_int = static_cast<const int32_t>(ival);
-          return ScalarTargetValue(*reinterpret_cast<const float*>(&fval_int));
+          return ScalarTargetValue(*reinterpret_cast<const float*>(may_alias_ptr(&fval_int)));
         } else {
-          return ScalarTargetValue(*reinterpret_cast<const double*>(&ival));
+          return ScalarTargetValue(*reinterpret_cast<const double*>(may_alias_ptr(&ival)));
         }
       }
     }

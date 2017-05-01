@@ -359,8 +359,8 @@ std::pair<int64_t, int32_t> Executor::reduceResults(const SQLAgg agg,
               int agg_result = static_cast<int32_t>(agg_init_val);
               for (size_t i = 0; i < out_vec_sz; ++i) {
                 agg_sum_float_skip_val(&agg_result,
-                                       *reinterpret_cast<const float*>(&out_vec[i]),
-                                       *reinterpret_cast<const float*>(&agg_init_val));
+                                       *reinterpret_cast<const float*>(may_alias_ptr(&out_vec[i])),
+                                       *reinterpret_cast<const float*>(may_alias_ptr(&agg_init_val)));
               }
               const int64_t converted_bin = float_argument_input
                                                 ? static_cast<int64_t>(agg_result)
@@ -371,8 +371,8 @@ std::pair<int64_t, int32_t> Executor::reduceResults(const SQLAgg agg,
               int64_t agg_result = agg_init_val;
               for (size_t i = 0; i < out_vec_sz; ++i) {
                 agg_sum_double_skip_val(&agg_result,
-                                        *reinterpret_cast<const double*>(&out_vec[i]),
-                                        *reinterpret_cast<const double*>(&agg_init_val));
+                                        *reinterpret_cast<const double*>(may_alias_ptr(&out_vec[i])),
+                                        *reinterpret_cast<const double*>(may_alias_ptr(&agg_init_val)));
               }
               return {agg_result, 0};
             } break;
@@ -396,16 +396,16 @@ std::pair<int64_t, int32_t> Executor::reduceResults(const SQLAgg agg,
           case 4: {
             double r = 0.;
             for (size_t i = 0; i < out_vec_sz; ++i) {
-              r += *reinterpret_cast<const float*>(&out_vec[i]);
+              r += *reinterpret_cast<const float*>(may_alias_ptr(&out_vec[i]));
             }
-            return {*reinterpret_cast<const int64_t*>(&r), 0};
+            return {*reinterpret_cast<const int64_t*>(may_alias_ptr(&r)), 0};
           }
           case 8: {
             double r = 0.;
             for (size_t i = 0; i < out_vec_sz; ++i) {
-              r += *reinterpret_cast<const double*>(&out_vec[i]);
+              r += *reinterpret_cast<const double*>(may_alias_ptr(&out_vec[i]));
             }
-            return {*reinterpret_cast<const int64_t*>(&r), 0};
+            return {*reinterpret_cast<const int64_t*>(may_alias_ptr(&r)), 0};
           }
           default:
             CHECK(false);
@@ -436,8 +436,8 @@ std::pair<int64_t, int32_t> Executor::reduceResults(const SQLAgg agg,
             int32_t agg_result = static_cast<int32_t>(agg_init_val);
             for (size_t i = 0; i < out_vec_sz; ++i) {
               agg_min_float_skip_val(&agg_result,
-                                     *reinterpret_cast<const float*>(&out_vec[i]),
-                                     *reinterpret_cast<const float*>(&agg_init_val));
+                                     *reinterpret_cast<const float*>(may_alias_ptr(&out_vec[i])),
+                                     *reinterpret_cast<const float*>(may_alias_ptr(&agg_init_val)));
             }
             const int64_t converted_bin = float_argument_input
                                               ? static_cast<int64_t>(agg_result)
@@ -448,8 +448,8 @@ std::pair<int64_t, int32_t> Executor::reduceResults(const SQLAgg agg,
             int64_t agg_result = agg_init_val;
             for (size_t i = 0; i < out_vec_sz; ++i) {
               agg_min_double_skip_val(&agg_result,
-                                      *reinterpret_cast<const double*>(&out_vec[i]),
-                                      *reinterpret_cast<const double*>(&agg_init_val));
+                                      *reinterpret_cast<const double*>(may_alias_ptr(&out_vec[i])),
+                                      *reinterpret_cast<const double*>(may_alias_ptr(&agg_init_val)));
             }
             return {agg_result, 0};
           }
@@ -471,8 +471,8 @@ std::pair<int64_t, int32_t> Executor::reduceResults(const SQLAgg agg,
             int32_t agg_result = static_cast<int32_t>(agg_init_val);
             for (size_t i = 0; i < out_vec_sz; ++i) {
               agg_max_float_skip_val(&agg_result,
-                                     *reinterpret_cast<const float*>(&out_vec[i]),
-                                     *reinterpret_cast<const float*>(&agg_init_val));
+                                     *reinterpret_cast<const float*>(may_alias_ptr(&out_vec[i])),
+                                     *reinterpret_cast<const float*>(may_alias_ptr(&agg_init_val)));
             }
             const int64_t converted_bin = float_argument_input ? static_cast<int64_t>(agg_result)
                                                                : float_to_double_bin(agg_result, !ti.get_notnull());
@@ -482,8 +482,8 @@ std::pair<int64_t, int32_t> Executor::reduceResults(const SQLAgg agg,
             int64_t agg_result = agg_init_val;
             for (size_t i = 0; i < out_vec_sz; ++i) {
               agg_max_double_skip_val(&agg_result,
-                                      *reinterpret_cast<const double*>(&out_vec[i]),
-                                      *reinterpret_cast<const double*>(&agg_init_val));
+                                      *reinterpret_cast<const double*>(may_alias_ptr(&out_vec[i])),
+                                      *reinterpret_cast<const double*>(may_alias_ptr(&agg_init_val)));
             }
             return {agg_result, 0};
           }
@@ -998,11 +998,11 @@ int64_t inline_null_val(const SQLTypeInfo& ti, const bool float_argument_input) 
   if (ti.is_fp()) {
     if (float_argument_input && ti.get_type() == kFLOAT) {
       int64_t float_null_val = 0;
-      *reinterpret_cast<float*>(&float_null_val) = static_cast<float>(inline_fp_null_val(ti));
+      *reinterpret_cast<float*>(may_alias_ptr(&float_null_val)) = static_cast<float>(inline_fp_null_val(ti));
       return float_null_val;
     }
     const auto double_null_val = inline_fp_null_val(ti);
-    return *reinterpret_cast<const int64_t*>(&double_null_val);
+    return *reinterpret_cast<const int64_t*>(may_alias_ptr(&double_null_val));
   }
   return inline_int_null_val(ti);
 }

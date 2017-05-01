@@ -619,12 +619,12 @@ std::function<bool(const uint32_t, const uint32_t)> ResultSet::createComparator(
         }
         if (entry_ti.is_fp()) {
           if (float_argument_input) {
-            const auto lhs_dval = *reinterpret_cast<const float*>(&lhs_v.i1);
-            const auto rhs_dval = *reinterpret_cast<const float*>(&rhs_v.i1);
+            const auto lhs_dval = *reinterpret_cast<const float*>(may_alias_ptr(&lhs_v.i1));
+            const auto rhs_dval = *reinterpret_cast<const float*>(may_alias_ptr(&rhs_v.i1));
             return use_desc_cmp ? lhs_dval > rhs_dval : lhs_dval < rhs_dval;
           } else {
-            const auto lhs_dval = *reinterpret_cast<const double*>(&lhs_v.i1);
-            const auto rhs_dval = *reinterpret_cast<const double*>(&rhs_v.i1);
+            const auto lhs_dval = *reinterpret_cast<const double*>(may_alias_ptr(&lhs_v.i1));
+            const auto rhs_dval = *reinterpret_cast<const double*>(may_alias_ptr(&rhs_v.i1));
             return use_desc_cmp ? lhs_dval > rhs_dval : lhs_dval < rhs_dval;
           }
         }

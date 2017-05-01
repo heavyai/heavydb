@@ -113,11 +113,11 @@ const bool sum_check_flag = true;
         if (chosen_bytes__ == sizeof(float)) {                                                                   \
           agg_##agg_kind__##_float_skip_val(reinterpret_cast<int32_t*>(val_ptr__),                               \
                                             *reinterpret_cast<const float*>(other_ptr__),                        \
-                                            *reinterpret_cast<const float*>(&init_val__));                       \
+                                            *reinterpret_cast<const float*>(may_alias_ptr(&init_val__)));        \
         } else {                                                                                                 \
           agg_##agg_kind__##_double_skip_val(reinterpret_cast<int64_t*>(val_ptr__),                              \
                                              *reinterpret_cast<const double*>(other_ptr__),                      \
-                                             *reinterpret_cast<const double*>(&init_val__));                     \
+                                             *reinterpret_cast<const double*>(may_alias_ptr(&init_val__)));      \
         }                                                                                                        \
       } else {                                                                                                   \
         if (chosen_bytes__ == sizeof(int32_t)) {                                                                 \
@@ -183,11 +183,11 @@ const bool sum_check_flag = true;
         if (chosen_bytes__ == sizeof(float)) {                                                       \
           agg_sum_float_skip_val(reinterpret_cast<int32_t*>(val_ptr__),                              \
                                  *reinterpret_cast<const float*>(other_ptr__),                       \
-                                 *reinterpret_cast<const float*>(&init_val__));                      \
+                                 *reinterpret_cast<const float*>(may_alias_ptr(&init_val__)));       \
         } else {                                                                                     \
           agg_sum_double_skip_val(reinterpret_cast<int64_t*>(val_ptr__),                             \
                                   *reinterpret_cast<const double*>(other_ptr__),                     \
-                                  *reinterpret_cast<const double*>(&init_val__));                    \
+                                  *reinterpret_cast<const double*>(may_alias_ptr(&init_val__)));     \
         }                                                                                            \
       } else {                                                                                       \
         if (chosen_bytes__ == sizeof(int32_t)) {                                                     \
@@ -976,8 +976,8 @@ void ResultRows::sort(const std::list<Analyzer::OrderEntry>& order_entries,
           continue;
         }
         if (entry_ti.is_fp()) {
-          const auto lhs_dval = *reinterpret_cast<const double*>(&lhs_v.i1);
-          const auto rhs_dval = *reinterpret_cast<const double*>(&rhs_v.i1);
+          const auto lhs_dval = *reinterpret_cast<const double*>(may_alias_ptr(&lhs_v.i1));
+          const auto rhs_dval = *reinterpret_cast<const double*>(may_alias_ptr(&rhs_v.i1));
           return use_desc_cmp ? lhs_dval > rhs_dval : lhs_dval < rhs_dval;
         }
         return use_desc_cmp ? lhs_v.i1 > rhs_v.i1 : lhs_v.i1 < rhs_v.i1;
@@ -1179,7 +1179,7 @@ TargetValue result_rows_get_impl(const InternalTargetValue& col_val,
         }
       } else {
         for (const auto x : int_arr) {
-          tv_arr.emplace_back(*reinterpret_cast<const double*>(&x));
+          tv_arr.emplace_back(*reinterpret_cast<const double*>(may_alias_ptr(&x)));
         }
       }
     } else if (elem_type.is_string()) {
@@ -1200,9 +1200,9 @@ TargetValue result_rows_get_impl(const InternalTargetValue& col_val,
   } else {
     CHECK(chosen_type.is_fp());
     if (chosen_type.get_type() == kFLOAT) {
-      return ScalarTargetValue(static_cast<float>(*reinterpret_cast<const double*>(&col_val.i1)));
+      return ScalarTargetValue(static_cast<float>(*reinterpret_cast<const double*>(may_alias_ptr(&col_val.i1))));
     }
-    return ScalarTargetValue(*reinterpret_cast<const double*>(&col_val.i1));
+    return ScalarTargetValue(*reinterpret_cast<const double*>(may_alias_ptr(&col_val.i1)));
   }
   CHECK(false);
 }
@@ -1213,10 +1213,10 @@ int64_t lazy_decode(const Analyzer::ColumnVar* col_var, const int8_t* byte_strea
   if (type_info.is_fp()) {
     if (type_info.get_type() == kFLOAT) {
       float fval = fixed_width_float_decode_noinline(byte_stream, pos);
-      return *reinterpret_cast<int32_t*>(&fval);
+      return *reinterpret_cast<const int32_t*>(may_alias_ptr(&fval));
     } else {
       double fval = fixed_width_double_decode_noinline(byte_stream, pos);
-      return *reinterpret_cast<int64_t*>(&fval);
+      return *reinterpret_cast<const int64_t*>(may_alias_ptr(&fval));
     }
   }
   CHECK(type_info.is_integer() || type_info.is_decimal() || type_info.is_time() || type_info.is_boolean() ||
@@ -1345,12 +1345,12 @@ int64_t arr_elem_bitcast(const T val) {
 template <>
 int64_t arr_elem_bitcast(const float val) {
   const double dval{val};
-  return *reinterpret_cast<const int64_t*>(&dval);
+  return *reinterpret_cast<const int64_t*>(may_alias_ptr(&dval));
 }
 
 template <>
 int64_t arr_elem_bitcast(const double val) {
-  return *reinterpret_cast<const int64_t*>(&val);
+  return *reinterpret_cast<const int64_t*>(may_alias_ptr(&val));
 }
 
 template <class T>
@@ -1650,7 +1650,7 @@ bool ResultRows::isNull(const SQLTypeInfo& ti, const InternalTargetValue& val) {
       return val.i1 == inline_int_null_val(ti);
     }
     const auto null_val = inline_fp_null_val(ti);
-    return val.i1 == *reinterpret_cast<const int64_t*>(&null_val);
+    return val.i1 == *reinterpret_cast<const int64_t*>(may_alias_ptr(&null_val));
   }
   if (val.isPair()) {
     // TODO(alex): Review this logic, we're not supposed to hit val.i2 == 0 anymore.
