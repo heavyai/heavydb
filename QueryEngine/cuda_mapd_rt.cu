@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include <float.h>
 #include <cuda.h>
 #include <limits>
 #include "BufferCompaction.h"
@@ -505,8 +506,9 @@ DEF_SKIP_AGG(agg_count_float)
 
 // Initial value for nullable column is FLOAT_MIN
 extern "C" __device__ void agg_max_float_skip_val_shared(int32_t* agg, const float val, const float skip_val) {
-  if (val != skip_val) {
-    agg_max_float_shared(agg, val);
+  if (__float_as_int(val) != __float_as_int(skip_val)) {
+    float old = atomicExch(reinterpret_cast<float*>(agg), -FLT_MAX);
+    atomicMax(reinterpret_cast<float*>(agg), __float_as_int(old) == __float_as_int(skip_val) ? val : fmaxf(old, val));
   }
 }
 
