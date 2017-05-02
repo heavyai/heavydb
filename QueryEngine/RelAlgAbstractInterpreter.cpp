@@ -310,6 +310,10 @@ unsigned node_id(const rapidjson::Value& ra_node) noexcept {
   return std::stoi(json_str(id));
 }
 
+// The parse_* functions below de-serialize expressions as they come from Calcite.
+// RelAlgAbstractInterpreter will take care of making the representation easy to
+// navigate for lower layers, for example by replacing RexAbstractInput with RexInput.
+
 std::unique_ptr<RexAbstractInput> parse_abstract_input(const rapidjson::Value& expr) noexcept {
   const auto& input = field(expr, "input");
   return std::unique_ptr<RexAbstractInput>(new RexAbstractInput(json_i64(input)));
@@ -523,6 +527,10 @@ std::unique_ptr<const RexCase> disambiguate_case(const RexCase* rex_case, const 
   return std::unique_ptr<const RexCase>(new RexCase(disambiguated_expr_pair_list, disambiguated_else));
 }
 
+// The inputs used by scalar expressions are given as indices in the serialized
+// representation of the query. This is hard to navigate; make the relationship
+// explicit by creating RexInput expressions which hold a pointer to the source
+// relational algebra node and the index relative to the output of that node.
 std::unique_ptr<const RexScalar> disambiguate_rex(const RexScalar* rex_scalar, const RANodeOutput& ra_output) {
   const auto rex_abstract_input = dynamic_cast<const RexAbstractInput*>(rex_scalar);
   if (rex_abstract_input) {
@@ -856,11 +864,18 @@ void check_empty_inputs_field(const rapidjson::Value& node) noexcept {
   CHECK(inputs_json.IsArray() && !inputs_json.Size());
 }
 
-class RaAbstractInterp {
+// Create an in-memory, easy to navigate relational algebra DAG from its serialized,
+// JSON representation. Also, apply high level optimizations which can be expressed
+// through relational algebra extended with RelCompound. The RelCompound node is an
+// equivalent representation for sequences of RelFilter, RelProject and RelAggregate
+// nodes. This coalescing minimizes the amount of intermediate buffers required to
+// evaluate a query. Lower level optimizations are taken care by lower levels, mainly
+// RelAlgTranslator and the IR code generation.
+class RelAlgAbstractInterpreter {
  public:
-  RaAbstractInterp(const rapidjson::Value& query_ast,
-                   const Catalog_Namespace::Catalog& cat,
-                   RelAlgExecutor* ra_executor)
+  RelAlgAbstractInterpreter(const rapidjson::Value& query_ast,
+                            const Catalog_Namespace::Catalog& cat,
+                            RelAlgExecutor* ra_executor)
       : query_ast_(query_ast), cat_(cat), ra_executor_(ra_executor) {}
 
   std::shared_ptr<const RelAlgNode> run() {
@@ -1030,7 +1045,7 @@ class RaAbstractInterp {
 std::shared_ptr<const RelAlgNode> ra_interpret(const rapidjson::Value& query_ast,
                                                const Catalog_Namespace::Catalog& cat,
                                                RelAlgExecutor* ra_executor) {
-  RaAbstractInterp interp(query_ast, cat, ra_executor);
+  RelAlgAbstractInterpreter interp(query_ast, cat, ra_executor);
   return interp.run();
 }
 
@@ -1050,6 +1065,7 @@ std::unique_ptr<const RexSubQuery> parse_subquery(const rapidjson::Value& expr,
 
 }  // namespace
 
+// Driver for the query de-serialization and high level optimization.
 std::shared_ptr<const RelAlgNode> deserialize_ra_dag(const std::string& query_ra,
                                                      const Catalog_Namespace::Catalog& cat,
                                                      RelAlgExecutor* ra_executor) {
@@ -1061,6 +1077,7 @@ std::shared_ptr<const RelAlgNode> deserialize_ra_dag(const std::string& query_ra
   return ra_interpret(query_ast, cat, ra_executor);
 }
 
+// Prints the relational algebra as a tree; useful for debugging.
 std::string tree_string(const RelAlgNode* ra, const size_t indent) {
   std::string result = std::string(indent, ' ') + ra->toString() + "\n";
   for (size_t i = 0; i < ra->inputCount(); ++i) {
