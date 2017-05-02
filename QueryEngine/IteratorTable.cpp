@@ -204,9 +204,8 @@ IterTabPtr QueryExecutionContext::groupBufferToTab(const size_t buf_idx,
                                                    const bool was_auto_device) const {
   CHECK_EQ(size_t(2), query_mem_desc_.agg_col_widths.size());
   const size_t group_by_col_count{query_mem_desc_.group_col_widths.size()};
-  const size_t agg_col_count{query_mem_desc_.agg_col_widths.size()};
   CHECK(!output_columnar_ || group_by_col_count == 1);
-  auto impl = [group_by_col_count, agg_col_count, was_auto_device, this, &targets](
+  auto impl = [this, &targets](
       const size_t groups_buffer_entry_count, int64_t* group_by_buffer, const ssize_t frag_idx) {
     IterTabPtr table = boost::make_unique<IteratorTable>(query_mem_desc_,
                                                          targets,

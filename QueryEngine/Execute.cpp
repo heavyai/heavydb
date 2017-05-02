@@ -858,27 +858,26 @@ ResultPtr Executor::executeWorkUnit(int32_t* error_code,
 
     std::condition_variable scheduler_cv;
     std::mutex scheduler_mutex;
-    auto dispatch =
-        [this, &execution_dispatch, &available_cpus, &available_gpus, &options, &scheduler_mutex, &scheduler_cv](
-            const ExecutorDeviceType chosen_device_type,
-            int chosen_device_id,
-            const std::vector<std::pair<int, std::vector<size_t>>>& frag_ids,
-            const size_t ctx_idx,
-            const int64_t rowid_lookup_key) {
-          execution_dispatch.run(chosen_device_type, chosen_device_id, options, frag_ids, ctx_idx, rowid_lookup_key);
-          if (execution_dispatch.getDeviceType() == ExecutorDeviceType::Hybrid) {
-            std::unique_lock<std::mutex> scheduler_lock(scheduler_mutex);
-            if (chosen_device_type == ExecutorDeviceType::CPU) {
-              ++available_cpus;
-            } else {
-              CHECK(chosen_device_type == ExecutorDeviceType::GPU);
-              auto it_ok = available_gpus.insert(chosen_device_id);
-              CHECK(it_ok.second);
-            }
-            scheduler_lock.unlock();
-            scheduler_cv.notify_one();
-          }
-        };
+    auto dispatch = [&execution_dispatch, &available_cpus, &available_gpus, &options, &scheduler_mutex, &scheduler_cv](
+        const ExecutorDeviceType chosen_device_type,
+        int chosen_device_id,
+        const std::vector<std::pair<int, std::vector<size_t>>>& frag_ids,
+        const size_t ctx_idx,
+        const int64_t rowid_lookup_key) {
+      execution_dispatch.run(chosen_device_type, chosen_device_id, options, frag_ids, ctx_idx, rowid_lookup_key);
+      if (execution_dispatch.getDeviceType() == ExecutorDeviceType::Hybrid) {
+        std::unique_lock<std::mutex> scheduler_lock(scheduler_mutex);
+        if (chosen_device_type == ExecutorDeviceType::CPU) {
+          ++available_cpus;
+        } else {
+          CHECK(chosen_device_type == ExecutorDeviceType::GPU);
+          auto it_ok = available_gpus.insert(chosen_device_id);
+          CHECK(it_ok.second);
+        }
+        scheduler_lock.unlock();
+        scheduler_cv.notify_one();
+      }
+    };
 
     const size_t input_desc_count{ra_exe_unit.input_descs.size()};
     std::map<int, const TableFragments*> selected_tables_fragments;
@@ -1232,9 +1231,8 @@ void Executor::dispatchFragments(
       int chosen_device_id = 0;
       if (device_type == ExecutorDeviceType::Hybrid) {
         std::unique_lock<std::mutex> scheduler_lock(scheduler_mutex);
-        scheduler_cv.wait(scheduler_lock, [this, &available_cpus, &available_gpus] {
-          return available_cpus || !available_gpus.empty();
-        });
+        scheduler_cv.wait(scheduler_lock,
+                          [&available_cpus, &available_gpus] { return available_cpus || !available_gpus.empty(); });
         if (!available_gpus.empty()) {
           chosen_device_type = ExecutorDeviceType::GPU;
           auto device_id_it = available_gpus.begin();

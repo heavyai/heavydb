@@ -1908,10 +1908,9 @@ RowSetPtr QueryExecutionContext::groupBufferToResults(const size_t i,
     return boost::make_unique<ResultRows>(std::shared_ptr<ResultSet>(result_sets_[i].release()));
   }
   const size_t group_by_col_count{query_mem_desc_.group_col_widths.size()};
-  const size_t agg_col_count{query_mem_desc_.agg_col_widths.size()};
   CHECK(!output_columnar_ || group_by_col_count == 1);
-  auto impl = [group_by_col_count, agg_col_count, was_auto_device, this, &targets](
-      const size_t groups_buffer_entry_count, int64_t* group_by_buffer) {
+  auto impl = [group_by_col_count, was_auto_device, this, &targets](const size_t groups_buffer_entry_count,
+                                                                    int64_t* group_by_buffer) {
     if (query_mem_desc_.keyless_hash) {
       CHECK(!sort_on_gpu_);
       CHECK_EQ(size_t(1), group_by_col_count);

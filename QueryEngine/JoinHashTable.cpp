@@ -345,7 +345,6 @@ int JoinHashTable::initHashTableOnCpu(const int8_t* col_buff,
     for (int thread_idx = 0; thread_idx < thread_count; ++thread_idx) {
       init_cpu_buff_threads.emplace_back([this,
                                           hash_join_invalid_val,
-                                          hash_entry_count,
                                           col_buff,
                                           num_elements,
                                           sd_inner_proxy,
