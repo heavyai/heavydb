@@ -4,6 +4,14 @@
 
 #include <algorithm>
 
+// A rather crude function binding logic based on the types of the arguments.
+// We want it to be possible to write specialized versions of functions to be
+// exposed as SQL extensions. This is important especially for performance
+// reasons, since double operations can be significantly slower than float. We
+// compute a score for each candidate signature based on conversions required to
+// from the function arguments as specified in the SQL query to the versions in
+// ExtensionFunctions.hpp.
+
 namespace {
 
 unsigned narrowing_conversion_score(const SQLTypeInfo& arg_ti, const SQLTypeInfo& arg_target_ti) {
@@ -140,6 +148,7 @@ SQLTypeInfo ext_arg_type_to_type_info(const ExtArgumentType ext_arg_type) {
   return SQLTypeInfo(kNULLT, false);
 }
 
+// Binds a SQL function operator to the best candidate (in terms of signature) in `ext_func_sigs`.
 const ExtensionFunction& bind_function(const Analyzer::FunctionOper* function_oper,
                                        const std::vector<ExtensionFunction>& ext_func_sigs) {
   CHECK(!ext_func_sigs.empty());

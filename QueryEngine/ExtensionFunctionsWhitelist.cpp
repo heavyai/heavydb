@@ -5,6 +5,7 @@
 
 #include <boost/algorithm/string/join.hpp>
 
+// Get the list of all type specializations for the given function name.
 std::vector<ExtensionFunction>* ExtensionFunctionsWhitelist::get(const std::string& name) {
   const auto it = functions_.find(to_upper(name));
   if (it == functions_.end()) {
@@ -15,6 +16,7 @@ std::vector<ExtensionFunction>* ExtensionFunctionsWhitelist::get(const std::stri
 
 namespace {
 
+// Returns the LLVM name for `type`.
 std::string serialize_type(const ExtArgumentType type) {
   switch (type) {
     case ExtArgumentType::Int16:
@@ -36,6 +38,7 @@ std::string serialize_type(const ExtArgumentType type) {
 
 }  // namespace
 
+// Converts the extension function signatures to their LLVM representation.
 std::vector<std::string> ExtensionFunctionsWhitelist::getLLVMDeclarations() {
   std::vector<std::string> declarations;
   for (const auto& kv : functions_) {
@@ -86,18 +89,22 @@ std::string drop_suffix(const std::string& str) {
 
 }  // namespace
 
-// Valid json_func_sigs example:
-// [
-//    {
-//       "name":"sum",
-//       "ret":"i32",
-//       "args":[
-//          "i32",
-//          "i32"
-//       ]
-//    }
-// ]
+// Calcite loads the available extensions from `ExtensionFunctions.ast`, adds
+// them to its operator table and shares the list with the execution layer in
+// JSON format. Build an in-memory representation of that list here so that it
+// can be used by getLLVMDeclarations(), when the LLVM IR codegen asks for it.
 void ExtensionFunctionsWhitelist::add(const std::string& json_func_sigs) {
+  // Valid json_func_sigs example:
+  // [
+  //    {
+  //       "name":"sum",
+  //       "ret":"i32",
+  //       "args":[
+  //          "i32",
+  //          "i32"
+  //       ]
+  //    }
+  // ]
   rapidjson::Document func_sigs;
   func_sigs.Parse(json_func_sigs.c_str());
   CHECK(func_sigs.IsArray());
