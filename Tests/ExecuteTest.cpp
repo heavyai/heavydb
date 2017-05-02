@@ -310,6 +310,10 @@ TEST(Select, FilterAndSimpleAggregation) {
     c("SELECT MAX(z) FROM test;", dt);
     c("SELECT MIN(t) FROM test;", dt);
     c("SELECT MAX(t) FROM test;", dt);
+    c("SELECT MIN(ff) FROM test;", dt);
+    c("SELECT MIN(fn) FROM test;", dt);
+    c("SELECT SUM(ff) FROM test;", dt);
+    c("SELECT SUM(fn) FROM test;", dt);
     c("SELECT SUM(x + y) FROM test;", dt);
     c("SELECT SUM(x + y + z) FROM test;", dt);
     c("SELECT SUM(x + y + z + t) FROM test;", dt);

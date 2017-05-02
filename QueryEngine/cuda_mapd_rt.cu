@@ -402,14 +402,8 @@ extern "C" __device__ void agg_max_int32_skip_val_shared(int32_t* agg, const int
 }
 
 __device__ int32_t atomicMin32SkipVal(int32_t* address, int32_t val, const int32_t skip_val) {
-  int32_t old = *address, assumed;
-
-  do {
-    assumed = old;
-    old = atomicCAS(address, assumed, assumed == skip_val ? val : min(val, assumed));
-  } while (assumed != old);
-
-  return old;
+  int32_t old = atomicExch(address, INT_MAX);
+  return atomicMin(address, old == skip_val ? val : min(old, val));
 }
 
 extern "C" __device__ void agg_min_int32_skip_val_shared(int32_t* agg, const int32_t val, const int32_t skip_val) {
@@ -512,31 +506,20 @@ extern "C" __device__ void agg_max_float_skip_val_shared(int32_t* agg, const flo
   }
 }
 
-__device__ double atomicMinFltSkipVal(int32_t* address, float val, const float skip_val) {
-  int32_t old = *address;
-  int32_t skip_val_as_int = __float_as_int(skip_val);
-  int32_t assumed;
-
-  do {
-    assumed = old;
-    old =
-        atomicCAS(address,
-                  assumed,
-                  assumed == skip_val_as_int ? __float_as_int(val) : __float_as_int(min(val, __int_as_float(assumed))));
-  } while (assumed != old);
-
-  return __float_as_int(old);
+__device__ float atomicMinFltSkipVal(int32_t* address, float val, const float skip_val) {
+  float old = atomicExch(reinterpret_cast<float*>(address), FLT_MAX);
+  return atomicMin(reinterpret_cast<float*>(address),
+                   __float_as_int(old) == __float_as_int(skip_val) ? val : fminf(old, val));
 }
 
 extern "C" __device__ void agg_min_float_skip_val_shared(int32_t* agg, const float val, const float skip_val) {
-  if (val != skip_val) {
+  if (__float_as_int(val) != __float_as_int(skip_val)) {
     atomicMinFltSkipVal(agg, val, skip_val);
   }
 }
 
 __device__ void atomicSumFltSkipVal(float* address, const float val, const float skip_val) {
-  unsigned int* address_as_int = (unsigned*)address;
-  float old = __int_as_float(atomicExch(address_as_int, __float_as_int(0.)));
+  float old = atomicExch(address, 0.f);
   atomicAdd(address, __float_as_int(old) == __float_as_int(skip_val) ? val : (val + old));
 }
 
