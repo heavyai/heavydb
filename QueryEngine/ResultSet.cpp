@@ -252,11 +252,11 @@ size_t ResultSet::rowCount() const {
   if (entryCount() > 100000) {
     return parallelRowCount();
   }
-  std::lock_guard<std::mutex> lock(row_count_mutex_);
+  std::lock_guard<std::mutex> lock(row_iteration_mutex_);
   moveToBegin();
   size_t row_count{0};
   while (true) {
-    auto crt_row = getNextRow(false, false);
+    auto crt_row = getNextRowUnlocked(false, false);
     if (crt_row.empty()) {
       break;
     }

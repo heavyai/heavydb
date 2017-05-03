@@ -203,6 +203,12 @@ bool ResultSet::isRowAtEmpty(const size_t logical_index) const {
 }
 
 std::vector<TargetValue> ResultSet::getNextRow(const bool translate_strings, const bool decimal_to_double) const {
+  std::lock_guard<std::mutex> lock(row_iteration_mutex_);
+  return getNextRowUnlocked(translate_strings, decimal_to_double);
+}
+
+std::vector<TargetValue> ResultSet::getNextRowUnlocked(const bool translate_strings,
+                                                       const bool decimal_to_double) const {
   if (!explanation_.empty()) {
     if (fetched_so_far_) {
       return {};

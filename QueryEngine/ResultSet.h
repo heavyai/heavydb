@@ -262,6 +262,8 @@ class ResultSet {
  private:
   std::vector<TargetValue> getNextRowImpl(const bool translate_strings, const bool decimal_to_double) const;
 
+  std::vector<TargetValue> getNextRowUnlocked(const bool translate_strings, const bool decimal_to_double) const;
+
   std::vector<TargetValue> getRowAt(const size_t index,
                                     const bool translate_strings,
                                     const bool decimal_to_double) const;
@@ -404,7 +406,7 @@ class ResultSet {
   bool none_encoded_strings_valid_;
   std::string explanation_;
   std::atomic<ssize_t> cached_row_count_;
-  mutable std::mutex row_count_mutex_;
+  mutable std::mutex row_iteration_mutex_;
 
   friend class ResultSetManager;
 };
