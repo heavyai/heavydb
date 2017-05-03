@@ -103,7 +103,7 @@ class SQLTestEnv : public ::testing::Environment {
                                                              ),
                                    user,
                                    ExecutorDeviceType::GPU,
-                                   0));
+                                   ""));
   }
 };
 
@@ -112,15 +112,15 @@ bool load_data_test(string table_name, size_t num_rows) {
   return true;
 }
 
-#define SMALL 10000000  // - 10M
-#define LARGE 100000000 // - 100M
+#define SMALL 10000000   // - 10M
+#define LARGE 100000000  // - 100M
 
 static size_t load_data_for_thread_test_2(int num_rows, string table_name) {
   int initial_num_rows, num_rows_step;
-  initial_num_rows = num_rows_step = SMALL / 2; // insert 5M rows per iteration
+  initial_num_rows = num_rows_step = SMALL / 2;  // insert 5M rows per iteration
   vector<size_t> insert_col_hashs;
 
-  if (num_rows < initial_num_rows) { // to handle special case when only few rows should be added
+  if (num_rows < initial_num_rows) {  // to handle special case when only few rows should be added
     insert_col_hashs = populate_table_random(table_name, num_rows, gsession->get_catalog());
   } else {
     for (int cur_num_rows = initial_num_rows; cur_num_rows <= num_rows; cur_num_rows += num_rows_step) {
@@ -135,7 +135,6 @@ static size_t load_data_for_thread_test_2(int num_rows, string table_name) {
 }
 
 }  // namespace
-
 
 TEST(DataLoad, Numbers) {
   ASSERT_NO_THROW(run_ddl("drop table if exists numbers;"););
@@ -168,22 +167,16 @@ TEST(DataLoad, Numbers_Parallel_Load) {
   ASSERT_NO_THROW(run_ddl("drop table if exists numbers_5;"););
 
   /* create tables in single thread */
-  ASSERT_NO_THROW(run_ddl(
-                      "create table numbers_1 (a smallint, b int, c bigint, d numeric(7,3), e "
-                      "double, f float);"););
-  ASSERT_NO_THROW(run_ddl(
-                      "create table numbers_2 (a smallint, b int, c bigint, d numeric(7,3), e "
-                      "double, f float);"););
-  ASSERT_NO_THROW(run_ddl(
-                      "create table numbers_3 (a smallint, b int, c bigint, d numeric(7,3), e "
-                      "double, f float);"););
-  ASSERT_NO_THROW(run_ddl(
-                      "create table numbers_4 (a smallint, b int, c bigint, d numeric(7,3), e "
-                      "double, f float);"););
-  ASSERT_NO_THROW(run_ddl(
-                      "create table numbers_5 (a smallint, b int, c bigint, d numeric(7,3), e "
-                      "double, f float);"););
-
+  ASSERT_NO_THROW(run_ddl("create table numbers_1 (a smallint, b int, c bigint, d numeric(7,3), e "
+                          "double, f float);"););
+  ASSERT_NO_THROW(run_ddl("create table numbers_2 (a smallint, b int, c bigint, d numeric(7,3), e "
+                          "double, f float);"););
+  ASSERT_NO_THROW(run_ddl("create table numbers_3 (a smallint, b int, c bigint, d numeric(7,3), e "
+                          "double, f float);"););
+  ASSERT_NO_THROW(run_ddl("create table numbers_4 (a smallint, b int, c bigint, d numeric(7,3), e "
+                          "double, f float);"););
+  ASSERT_NO_THROW(run_ddl("create table numbers_5 (a smallint, b int, c bigint, d numeric(7,3), e "
+                          "double, f float);"););
 
   /* load data into tables using parallel threads */
   int numThreads = 5;
@@ -195,12 +188,12 @@ TEST(DataLoad, Numbers_Parallel_Load) {
   for (int i = 1; i <= numThreads; i++) {
     int num_table_rows = num_rows * (numThreads - i + 1);
     db_table.push_back(table_name + to_string(i));
-    threads.push_back(std::async(std::launch::async, load_data_for_thread_test_2, num_table_rows, db_table[i-1]));
+    threads.push_back(std::async(std::launch::async, load_data_for_thread_test_2, num_table_rows, db_table[i - 1]));
   }
 
   for (auto& p : threads) {
     int num_columns_inserted = (int)p.get();
-    ASSERT_EQ(num_columns_inserted, 6); // each table was created with 6 columns
+    ASSERT_EQ(num_columns_inserted, 6);  // each table was created with 6 columns
   }
 
   /* delete tables in single thread */
@@ -219,21 +212,16 @@ TEST(DataLoad, NumbersTable_Parallel_CreateDropTable) {
   ASSERT_NO_THROW(run_ddl("drop table if exists numbers_5;"););
 
   /* create tables in single thread */
-  ASSERT_NO_THROW(run_ddl(
-                      "create table numbers_1 (a smallint, b int, c bigint, d numeric(7,3), e "
-                      "double, f float);"););
-  ASSERT_NO_THROW(run_ddl(
-                      "create table numbers_2 (a smallint, b int, c bigint, d numeric(7,3), e "
-                      "double, f float);"););
-  ASSERT_NO_THROW(run_ddl(
-                      "create table numbers_3 (a smallint, b int, c bigint, d numeric(7,3), e "
-                      "double, f float);"););
-  ASSERT_NO_THROW(run_ddl(
-                      "create table numbers_4 (a smallint, b int, c bigint, d numeric(7,3), e "
-                      "double, f float);"););
-  ASSERT_NO_THROW(run_ddl(
-                      "create table numbers_5 (a smallint, b int, c bigint, d numeric(7,3), e "
-                      "double, f float);"););
+  ASSERT_NO_THROW(run_ddl("create table numbers_1 (a smallint, b int, c bigint, d numeric(7,3), e "
+                          "double, f float);"););
+  ASSERT_NO_THROW(run_ddl("create table numbers_2 (a smallint, b int, c bigint, d numeric(7,3), e "
+                          "double, f float);"););
+  ASSERT_NO_THROW(run_ddl("create table numbers_3 (a smallint, b int, c bigint, d numeric(7,3), e "
+                          "double, f float);"););
+  ASSERT_NO_THROW(run_ddl("create table numbers_4 (a smallint, b int, c bigint, d numeric(7,3), e "
+                          "double, f float);"););
+  ASSERT_NO_THROW(run_ddl("create table numbers_5 (a smallint, b int, c bigint, d numeric(7,3), e "
+                          "double, f float);"););
 
   /* Load table numbers_4 with data in the main thread, so it will be available for sure when drop_table on it will be
    * executed later. Don't use new thread for loading table numbers_4 (see commented out), as one can't be sure that
@@ -255,24 +243,23 @@ TEST(DataLoad, NumbersTable_Parallel_CreateDropTable) {
     int num_table_rows = num_rows * (numThreads - i + 1);
     db_table.push_back(table_name + to_string(i));
     if (i == 4)
-      continue; // table numbers_4 has been loaded already
-    threads.push_back(std::async(std::launch::async, load_data_for_thread_test_2, num_table_rows, db_table[i-1]));
+      continue;  // table numbers_4 has been loaded already
+    threads.push_back(std::async(std::launch::async, load_data_for_thread_test_2, num_table_rows, db_table[i - 1]));
   }
 
   /* drop table numbers_4  while loading other tables in independent threads */
   ASSERT_NO_THROW(run_ddl("drop table numbers_4;"););
 
   /* create table numbers_6 and load it with data */
-  ASSERT_NO_THROW(run_ddl(
-                      "create table numbers_6 (a smallint, b int, c bigint, d numeric(7,3), e "
-                      "double, f float);"););
+  ASSERT_NO_THROW(run_ddl("create table numbers_6 (a smallint, b int, c bigint, d numeric(7,3), e "
+                          "double, f float);"););
   int num_table_rows = SMALL;
   db_table.push_back(table_name + to_string(6));
   threads.push_back(std::async(std::launch::async, load_data_for_thread_test_2, num_table_rows, db_table[5]));
 
   for (auto& p : threads) {
     int num_columns_inserted = (int)p.get();
-    ASSERT_EQ(num_columns_inserted, 6); // each table was created with 6 columns
+    ASSERT_EQ(num_columns_inserted, 6);  // each table was created with 6 columns
   }
 
   /* delete tables in single thread */
@@ -290,21 +277,16 @@ TEST(DataLoad, NumbersTable_Parallel_CreateDropCreateTable_InsertRows) {
   ASSERT_NO_THROW(run_ddl("drop table if exists numbers_3;"););
 
   /* create tables in single thread */
-  ASSERT_NO_THROW(run_ddl(
-                      "create table numbers_1 (a smallint, b int, c bigint, d numeric(7,3), e "
-                      "double, f float);"););
-  ASSERT_NO_THROW(run_ddl(
-                      "create table numbers_2 (a smallint, b int, c bigint, d numeric(7,3), e "
-                      "double, f float);"););
-  ASSERT_NO_THROW(run_ddl(
-                      "create table numbers_3 (a smallint, b int, c bigint, d numeric(7,3), e "
-                      "double, f float);"););
-  ASSERT_NO_THROW(run_ddl(
-                      "create table numbers_4 (a smallint, b int, c bigint, d numeric(7,3), e "
-                      "double, f float);"););
-  ASSERT_NO_THROW(run_ddl(
-                      "create table numbers_5 (a smallint, b int, c bigint, d numeric(7,3), e "
-                      "double, f float);"););
+  ASSERT_NO_THROW(run_ddl("create table numbers_1 (a smallint, b int, c bigint, d numeric(7,3), e "
+                          "double, f float);"););
+  ASSERT_NO_THROW(run_ddl("create table numbers_2 (a smallint, b int, c bigint, d numeric(7,3), e "
+                          "double, f float);"););
+  ASSERT_NO_THROW(run_ddl("create table numbers_3 (a smallint, b int, c bigint, d numeric(7,3), e "
+                          "double, f float);"););
+  ASSERT_NO_THROW(run_ddl("create table numbers_4 (a smallint, b int, c bigint, d numeric(7,3), e "
+                          "double, f float);"););
+  ASSERT_NO_THROW(run_ddl("create table numbers_5 (a smallint, b int, c bigint, d numeric(7,3), e "
+                          "double, f float);"););
 
   /* Load table numbers_2 with data in the main thread, so it will be available for sure when drop_table on it will be
    * executed later. Don't use new thread for loading table numbers_2 (see commented out), as one can't be sure that
@@ -312,33 +294,31 @@ TEST(DataLoad, NumbersTable_Parallel_CreateDropCreateTable_InsertRows) {
    * It's enough to load just 1 row of data in the table numbers_2 to make sure it exists in the storage layer.
    *
    * threads.push_back(std::async(std::launch::async, load_data_for_thread_test_2, 1, table_name_temp));
-   */ 
+   */
   string table_name("numbers_");
   string table_name_temp(table_name + to_string(2));
   EXPECT_TRUE(load_data_test(table_name_temp, 1));
-
 
   /* load data into tables numbers_1/3/4/5 using parallel threads */
   int numThreads = 5;
   vector<string> db_table;
   std::vector<std::future<size_t>> threads;
-  
+
   int num_rows = SMALL;
   for (int i = 1; i <= numThreads; i++) {
     int num_table_rows = num_rows * (numThreads - i + 1);
     db_table.push_back(table_name + to_string(i));
     if (i == 2)
-      continue; // table numbers_2  has been loaded already
-    threads.push_back(std::async(std::launch::async, load_data_for_thread_test_2, num_table_rows, db_table[i-1]));
+      continue;  // table numbers_2  has been loaded already
+    threads.push_back(std::async(std::launch::async, load_data_for_thread_test_2, num_table_rows, db_table[i - 1]));
   }
 
   /* drop table numbers_2 while loading other tables in independent threads */
   ASSERT_NO_THROW(run_ddl("drop table numbers_2;"););
 
   /* create table numbers_6 and load it with data */
-  ASSERT_NO_THROW(run_ddl(
-                      "create table numbers_6 (a smallint, b int, c bigint, d numeric(7,3), e "
-                      "double, f float);"););
+  ASSERT_NO_THROW(run_ddl("create table numbers_6 (a smallint, b int, c bigint, d numeric(7,3), e "
+                          "double, f float);"););
   int num_table_rows = SMALL;
   db_table.push_back(table_name + to_string(6));
   threads.push_back(std::async(std::launch::async, load_data_for_thread_test_2, num_table_rows, db_table[5]));
@@ -347,16 +327,16 @@ TEST(DataLoad, NumbersTable_Parallel_CreateDropCreateTable_InsertRows) {
    * the tb_id of dropped table numbers_2;
    * this is true when new table's schema is same and/or is different than the one for the dropped table.
    */
-  ASSERT_NO_THROW(run_ddl(
-                      "create table numbers_2 (e "
-                      "double, f double, g double, h double, i double, j double);"););
+  ASSERT_NO_THROW(run_ddl("create table numbers_2 (e "
+                          "double, f double, g double, h double, i double, j double);"););
   /* insert rows in table numbers_2, this table have been dropped and recreated, so data can be loaded */
   int num_rows_for_dropped_table = SMALL * 2;
-  threads.push_back(std::async(std::launch::async, load_data_for_thread_test_2, num_rows_for_dropped_table, table_name_temp));
+  threads.push_back(
+      std::async(std::launch::async, load_data_for_thread_test_2, num_rows_for_dropped_table, table_name_temp));
 
   for (auto& p : threads) {
     int num_columns_inserted = (int)p.get();
-    ASSERT_EQ(num_columns_inserted, 6); // each table was created with 6 columns
+    ASSERT_EQ(num_columns_inserted, 6);  // each table was created with 6 columns
   }
 
   /* delete tables in single thread */
@@ -366,9 +346,7 @@ TEST(DataLoad, NumbersTable_Parallel_CreateDropCreateTable_InsertRows) {
   ASSERT_NO_THROW(run_ddl("drop table numbers_4;"););
   ASSERT_NO_THROW(run_ddl("drop table numbers_5;"););
   ASSERT_NO_THROW(run_ddl("drop table numbers_6;"););
-
 }
-
 
 int main(int argc, char* argv[]) {
   google::InitGoogleLogging(argv[0]);
