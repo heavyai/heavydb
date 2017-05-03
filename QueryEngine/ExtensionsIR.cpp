@@ -58,18 +58,25 @@ llvm::Value* Executor::codegenFunctionOper(const Analyzer::FunctionOper* functio
     CHECK_EQ(size_t(1), arg_lvs.size());
     orig_arg_lvs.push_back(arg_lvs.front());
   }
+  // The extension function implementations don't handle NULL, they work under
+  // the assumption that the inputs are validated before calling them. Generate
+  // code to do the check at the call site: if any argument is NULL, return NULL
+  // without calling the function at all.
   const auto bbs = beginArgsNullcheck(function_oper, orig_arg_lvs);
   CHECK_EQ(orig_arg_lvs.size(), function_oper->getArity());
+  // Arguments must be converted to the types the extension function can handle.
   const auto args = codegenFunctionOperCastArgs(function_oper, &ext_func_sig, orig_arg_lvs);
   auto ext_call = cgen_state_->emitExternalCall(ext_func_sig.getName(), ret_ty, args);
   return endArgsNullcheck(bbs, ext_call, function_oper);
 }
 
+// Start the control flow needed for a call site check of NULL arguments.
 Executor::ArgNullcheckBBs Executor::beginArgsNullcheck(const Analyzer::FunctionOper* function_oper,
                                                        const std::vector<llvm::Value*>& orig_arg_lvs) {
   llvm::BasicBlock* args_null_bb{nullptr};
   llvm::BasicBlock* args_notnull_bb{nullptr};
   llvm::BasicBlock* orig_bb = cgen_state_->ir_builder_.GetInsertBlock();
+  // Only generate the check if required (at least one argument must be nullable).
   if (ext_func_call_requires_nullcheck(function_oper)) {
     const auto args_notnull_lv =
         cgen_state_->ir_builder_.CreateNot(codegenFunctionOperNullArg(function_oper, orig_arg_lvs));
@@ -81,6 +88,7 @@ Executor::ArgNullcheckBBs Executor::beginArgsNullcheck(const Analyzer::FunctionO
   return {args_null_bb, args_notnull_bb, orig_bb};
 }
 
+// Wrap up the control flow needed for NULL argument handling.
 llvm::Value* Executor::endArgsNullcheck(const ArgNullcheckBBs& bbs,
                                         llvm::Value* fn_ret_lv,
                                         const Analyzer::FunctionOper* function_oper) {
@@ -122,6 +130,7 @@ llvm::Value* Executor::codegenFunctionOperWithCustomTypeHandling(
     const Analyzer::FunctionOperWithCustomTypeHandling* function_oper,
     const CompilationOptions& co) {
   if (call_requires_custom_type_handling(function_oper)) {
+    // Some functions need the return type to be the same as the input type.
     if (function_oper->getName() == "FLOOR" || function_oper->getName() == "CEIL") {
       CHECK_EQ(size_t(1), function_oper->getArity());
       const auto arg = function_oper->getArg(0);
@@ -146,6 +155,7 @@ llvm::Value* Executor::codegenFunctionOperWithCustomTypeHandling(
   return codegenFunctionOper(function_oper, co);
 }
 
+// Generates code which returns true iff at least one of the arguments is NULL.
 llvm::Value* Executor::codegenFunctionOperNullArg(const Analyzer::FunctionOper* function_oper,
                                                   const std::vector<llvm::Value*>& orig_arg_lvs) {
   llvm::Value* one_arg_null = llvm::ConstantInt::get(llvm::IntegerType::getInt1Ty(cgen_state_->context_), false);
@@ -158,6 +168,7 @@ llvm::Value* Executor::codegenFunctionOperNullArg(const Analyzer::FunctionOper* 
   return one_arg_null;
 }
 
+// Generate CAST operations for arguments in `orig_arg_lvs` to the types required by `ext_func_sig`.
 std::vector<llvm::Value*> Executor::codegenFunctionOperCastArgs(const Analyzer::FunctionOper* function_oper,
                                                                 const ExtensionFunction* ext_func_sig,
                                                                 const std::vector<llvm::Value*>& orig_arg_lvs) {
