@@ -1033,8 +1033,8 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
   std::vector<Analyzer::Expr*> deferred_quals;
   bool short_circuited = prioritizeQuals(ra_exe_unit, primary_quals, deferred_quals);
   if (short_circuited) {
-    VLOG(1) << "Prioritized " << std::to_string(primary_quals.size()) << " unlikely quals, "
-            << "short-circuited " << std::to_string(deferred_quals.size()) << " quals";
+    VLOG(1) << "Prioritized " << std::to_string(primary_quals.size()) << " quals, "
+            << "short-circuited and deferred " << std::to_string(deferred_quals.size()) << " quals";
   }
 
   llvm::Value* filter_lv = llvm::ConstantInt::get(llvm::IntegerType::getInt1Ty(cgen_state_->context_), true);

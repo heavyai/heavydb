@@ -125,48 +125,36 @@ Weight get_weight(const Analyzer::Expr* expr, int depth = 0) {
 bool Executor::prioritizeQuals(const RelAlgExecutionUnit& ra_exe_unit,
                                std::vector<Analyzer::Expr*>& primary_quals,
                                std::vector<Analyzer::Expr*>& deferred_quals) {
-  std::vector<Analyzer::Expr*> unlikely_quals;
-  std::vector<Analyzer::Expr*> short_circuited_quals;
-
   for (auto expr : ra_exe_unit.inner_join_quals) {
     primary_quals.push_back(expr.get());
-    short_circuited_quals.push_back(expr.get());
   }
 
   for (auto expr : ra_exe_unit.simple_quals) {
-    if (get_likelihood(expr.get()) < 0.10 && !contains_unsafe_division(expr.get())) {
-      unlikely_quals.push_back(expr.get());
-      continue;
-    }
     if (should_defer_eval(expr)) {
       deferred_quals.push_back(expr.get());
-      short_circuited_quals.push_back(expr.get());
       continue;
     }
     primary_quals.push_back(expr.get());
-    short_circuited_quals.push_back(expr.get());
   }
+
+  bool short_circuit = false;
+
   for (auto expr : ra_exe_unit.quals) {
     if (get_likelihood(expr.get()) < 0.10 && !contains_unsafe_division(expr.get())) {
-      unlikely_quals.push_back(expr.get());
-      continue;
+      if (!short_circuit) {
+        primary_quals.push_back(expr.get());
+        short_circuit = true;
+        continue;
+      }
     }
-    if (should_defer_eval(expr)) {
+    if (short_circuit || should_defer_eval(expr)) {
       deferred_quals.push_back(expr.get());
-      short_circuited_quals.push_back(expr.get());
       continue;
     }
     primary_quals.push_back(expr.get());
-    short_circuited_quals.push_back(expr.get());
   }
 
-  if (!unlikely_quals.empty() && !short_circuited_quals.empty()) {
-    primary_quals.swap(unlikely_quals);
-    deferred_quals.swap(short_circuited_quals);
-    return true;
-  }
-
-  return false;
+  return short_circuit;
 }
 
 llvm::Value* Executor::codegenLogicalShortCircuit(const Analyzer::BinOper* bin_oper, const CompilationOptions& co) {
