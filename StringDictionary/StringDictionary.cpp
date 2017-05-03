@@ -369,7 +369,11 @@ bool StringDictionary::fillRateIsHigh() const noexcept {
 
 void StringDictionary::increaseCapacity() noexcept {
   const size_t MAX_STRCOUNT = 1 << 30;
-  CHECK(str_count_ < MAX_STRCOUNT);
+  if (str_count_ >= MAX_STRCOUNT) {
+    LOG(FATAL) << "Maximum number (" << str_count_
+               << ") of Dictionary encoded Strings reached for this column, offset path for column is  "
+               << offsets_path_;
+  }
   std::vector<int32_t> new_str_ids(str_ids_.size() * 2, INVALID_STR_ID);
   for (size_t i = 0; i < str_count_; ++i) {
     const auto str = getStringChecked(i);
