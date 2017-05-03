@@ -16,10 +16,10 @@ The `Dockerfile` assumes a copy of the MapD tarball is in the same directory as 
 
 To build the container, run:
 
-    mv ../../mapd-3.0.0-*egl-render.tar.gz mapd-latest-Linux-x86_64.tar.gz
+    mv ../../mapd-3.0.0-*-render.tar.gz mapd-latest-Linux-x86_64.tar.gz
     nvidia-docker build .
 
-where `../../mapd-3.0.0-*egl-render.tar.gz` is the path to the MapD tarball.
+where `../../mapd-3.0.0-*-render.tar.gz` is the path to the MapD tarball.
 
 The container image id will be output on the last line of the `build` step. To assign a custom name and tag:
 
