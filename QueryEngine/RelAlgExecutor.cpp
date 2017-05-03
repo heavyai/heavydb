@@ -1374,6 +1374,12 @@ void RelAlgExecutor::handlePersistentError(const int32_t error_code) {
   if (error_code == Executor::ERR_SPECULATIVE_TOP_OOM) {
     throw SpeculativeTopNFailed();
   }
+  if (error_code == Executor::ERR_OUT_OF_GPU_MEM && (!g_enable_watchdog || g_allow_cpu_retry)) {
+    // We ran out of GPU memory, this doesn't count as an error if the query is
+    // allowed to continue on CPU because either the watchdog is disabled or
+    // retry on CPU is explicitly allowed through --allow-cpu-retry.
+    return;
+  }
   throw std::runtime_error(getErrorMessageFromCode(error_code));
 }
 
