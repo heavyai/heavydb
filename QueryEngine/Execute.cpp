@@ -1177,24 +1177,7 @@ void Executor::dispatchFragments(
         const auto table_id = ra_exe_unit.input_descs[j].getTableId();
         auto table_frags_it = selected_tables_fragments.find(table_id);
         CHECK(table_frags_it != selected_tables_fragments.end());
-        const auto& frag_ids = [&]() -> std::vector<size_t> {
-          if (!j) {
-            return {frag_id};
-          } else {
-            auto& inner_frags = table_frags_it->second;
-            CHECK_LT(size_t(1), ra_exe_unit.input_descs.size());
-            CHECK_EQ(table_id, ra_exe_unit.input_descs[1].getTableId());
-            std::vector<size_t> all_frag_ids(inner_frags->size());
-#ifndef ENABLE_MULTIFRAG_JOIN
-            if (all_frag_ids.size() > 1) {
-              throw std::runtime_error("Multi-fragment inner table '" +
-                                       get_table_name(ra_exe_unit.input_descs[1], *catalog_) + "' not supported yet");
-            }
-#endif
-            std::iota(all_frag_ids.begin(), all_frag_ids.end(), 0);
-            return all_frag_ids;
-          }
-        }();
+        const auto frag_ids = getTableFragmentIndices(ra_exe_unit, j, frag_id, selected_tables_fragments);
         if (fragments_per_device[device_id].size() < j + 1) {
           fragments_per_device[device_id].emplace_back(table_id, frag_ids);
         } else if (!j) {
@@ -1278,6 +1261,31 @@ void Executor::dispatchFragments(
   for (auto& child : query_threads) {
     child.join();
   }
+}
+
+std::vector<size_t> Executor::getTableFragmentIndices(
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const size_t table_idx,
+    const size_t outer_frag_idx,
+    std::map<int, const Executor::TableFragments*>& selected_tables_fragments) {
+  const int table_id = ra_exe_unit.input_descs[table_idx].getTableId();
+  auto table_frags_it = selected_tables_fragments.find(table_id);
+  CHECK(table_frags_it != selected_tables_fragments.end());
+  if (!table_idx) {
+    return {outer_frag_idx};
+  }
+  auto& inner_frags = table_frags_it->second;
+  CHECK_LT(size_t(1), ra_exe_unit.input_descs.size());
+  CHECK_EQ(table_id, ra_exe_unit.input_descs[1].getTableId());
+  std::vector<size_t> all_frag_ids(inner_frags->size());
+#ifndef ENABLE_MULTIFRAG_JOIN
+  if (all_frag_ids.size() > 1) {
+    throw std::runtime_error("Multi-fragment inner table '" + get_table_name(ra_exe_unit.input_descs[1], *catalog_) +
+                             "' not supported yet");
+  }
+#endif
+  std::iota(all_frag_ids.begin(), all_frag_ids.end(), 0);
+  return all_frag_ids;
 }
 
 std::vector<const int8_t*> Executor::fetchIterTabFrags(const size_t frag_id,

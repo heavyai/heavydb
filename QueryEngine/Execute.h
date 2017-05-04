@@ -750,6 +750,13 @@ class Executor {
                          std::mutex& scheduler_mutex,
                          std::unordered_set<int>& available_gpus,
                          int& available_cpus);
+
+  static std::vector<size_t> getTableFragmentIndices(
+      const RelAlgExecutionUnit& ra_exe_unit,
+      const size_t table_idx,
+      const size_t outer_frag_idx,
+      std::map<int, const Executor::TableFragments*>& selected_tables_fragments);
+
   std::vector<const int8_t*> fetchIterTabFrags(const size_t frag_id,
                                                const ExecutionDispatch& execution_dispatch,
                                                const InputDescriptor& table_desc,
