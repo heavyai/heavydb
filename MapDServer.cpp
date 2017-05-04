@@ -368,11 +368,9 @@ int main(int argc, char** argv) {
       boost::algorithm::trim_if(cluster_file, boost::is_any_of("\"'"));
       const auto all_nodes = LeafHostInfo::parseClusterConfig(cluster_file);
       if (vm.count("cluster")) {
-        LOG(INFO) << "Cluster file specified running as aggreator with config " << cluster_file;
         db_leaves = only_db_leaves(all_nodes);
       }
       if (vm.count("string-servers")) {
-        LOG(INFO) << "String servers file specified running as dbleaf with config " << cluster_file;
       }
       string_leaves = only_string_leaves(all_nodes);
       g_cluster = true;
@@ -481,23 +479,30 @@ int main(int argc, char** argv) {
   google::InitGoogleLogging(argv[0]);
 
   // add all parameters to be displayed on startup
+  LOG(INFO) << "MapD started with data directory at '" << base_path << "'";
+  if (vm.count("cluster")) {
+    LOG(INFO) << "Cluster file specified running as aggregator with config at '" << cluster_file << "'";
+  }
+  if (vm.count("string-servers")) {
+    LOG(INFO) << "String servers file specified running as dbleaf with config at '" << cluster_file << "'";
+  }
   LOG(INFO) << " Watchdog is set to " << enable_watchdog;
   if (!mapd_parameters.ha_group_id.empty()) {
     LOG(INFO) << " HA group id " << mapd_parameters.ha_group_id;
     if (mapd_parameters.ha_unique_server_id.empty()) {
-      std::cerr << "Starting server in HA mode --ha-unique-server-id must be set " << std::endl;
+      LOG(ERROR) << "Starting server in HA mode --ha-unique-server-id must be set ";
       return 5;
     } else {
       LOG(INFO) << " HA unique server id " << mapd_parameters.ha_unique_server_id;
     }
     if (mapd_parameters.ha_brokers.empty()) {
-      std::cerr << "Starting server in HA mode --ha-brokers must be set " << std::endl;
+      LOG(ERROR) << "Starting server in HA mode --ha-brokers must be set ";
       return 6;
     } else {
       LOG(INFO) << " HA brokers " << mapd_parameters.ha_brokers;
     }
     if (mapd_parameters.ha_shared_data.empty()) {
-      std::cerr << "Starting server in HA mode --ha-shared-data must be set " << std::endl;
+      LOG(ERROR) << "Starting server in HA mode --ha-shared-data must be set ";
       return 7;
     } else {
       LOG(INFO) << " HA shared data is " << mapd_parameters.ha_unique_server_id;

@@ -89,8 +89,7 @@ void FileMgr::init(const size_t num_reader_threads) {
   boost::filesystem::path path(fileMgrBasePath_);
   if (boost::filesystem::exists(path)) {
     if (!boost::filesystem::is_directory(path))
-      LOG(FATAL) << "Specified path is not a directory.";
-    LOG(INFO) << "Data directory is " << fileMgrBasePath_;
+      LOG(FATAL) << "Specified path '" << fileMgrBasePath_ << "' for table data is not a directory.";
     if (epoch_ != -1) {  // if opening at previous epoch
       int epochCopy = epoch_;
       openEpochFile(EPOCH_FILENAME);
@@ -98,7 +97,7 @@ void FileMgr::init(const size_t num_reader_threads) {
     } else {
       openEpochFile(EPOCH_FILENAME);
     }
-    LOG(INFO) << "Current Epoch is " << epoch_;
+    LOG(INFO) << "Read table metadata, Epoch is " << epoch_ << " for table data at '" << fileMgrBasePath_ << "'";
 
     boost::filesystem::directory_iterator endItr;  // default construction yields past-the-end
     int maxFileId = -1;
