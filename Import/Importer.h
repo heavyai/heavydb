@@ -21,12 +21,12 @@
 #include <ogrsf_frmts.h>
 #include <gdal.h>
 #include "../Shared/fixautotools.h"
+#include "../Shared/ShapeDrawData.h"
 #include "../Catalog/TableDescriptor.h"
 #include "../Catalog/Catalog.h"
 #include "../Fragmenter/Fragmenter.h"
 #include "../Shared/checked_alloc.h"
 #include "../StringDictionary/StringDictionary.h"
-#include "../Shared/ShapeDrawData.h"
 
 class TDatum;
 
