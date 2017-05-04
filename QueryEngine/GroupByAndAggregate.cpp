@@ -1488,8 +1488,15 @@ bool has_count_distinct(const RelAlgExecutionUnit& ra_exe_unit) {
 }  // namespace
 
 GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getColRangeInfo() {
-  const int64_t baseline_threshold =
-      has_count_distinct(ra_exe_unit_) ? (device_type_ == ExecutorDeviceType::GPU ? 250000 : 1000000) : 2000000;
+  // Use baseline layout more eagerly on the GPU if the query uses count distinct,
+  // because our HyperLogLog implementation is 4x less memory efficient on GPU.
+  // Technically, this only applies to APPROX_COUNT_DISTINCT, but in practice we
+  // can expect this to be true anyway for grouped queries since the precise version
+  // uses significantly more memory.
+  const int64_t baseline_threshold = has_count_distinct(ra_exe_unit_)
+                                         ? (device_type_ == ExecutorDeviceType::GPU ? (Executor::baseline_threshold / 4)
+                                                                                    : Executor::baseline_threshold)
+                                         : Executor::baseline_threshold;
   if (ra_exe_unit_.groupby_exprs.size() != 1) {
     try {
       checked_int64_t cardinality{1};
@@ -1506,7 +1513,7 @@ GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getColRangeInfo() {
           has_nulls = true;
         }
       }
-      if (cardinality > baseline_threshold) {  // more than 2M groups is a lot
+      if (cardinality > baseline_threshold) {  // more than 1M groups is a lot
         return {GroupByColRangeType::MultiCol, 0, 0, 0, false};
       }
       return {GroupByColRangeType::MultiColPerfectHash, 0, int64_t(cardinality), 0, has_nulls};

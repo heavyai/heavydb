@@ -1236,6 +1236,7 @@ class Executor {
 
   const size_t small_groups_buffer_entry_count_{512};
   const size_t render_small_groups_buffer_entry_count_{2 * 1024 * 1024};
+  static const size_t baseline_threshold{1000000};  // if a perfect hash needs more entries, use baseline
 
   const unsigned block_size_x_;
   const unsigned grid_size_x_;
