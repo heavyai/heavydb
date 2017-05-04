@@ -1151,7 +1151,7 @@ void Executor::dispatchFragments(
   const int outer_table_id = outer_table_desc.getTableId();
   auto it = selected_tables_fragments.find(outer_table_id);
   CHECK(it != selected_tables_fragments.end());
-  const auto fragments = it->second;
+  const auto outer_fragments = it->second;
   const auto device_type = execution_dispatch.getDeviceType();
 
   const auto& query_mem_desc = execution_dispatch.getQueryMemoryDescriptor();
@@ -1165,10 +1165,14 @@ void Executor::dispatchFragments(
     //     running out of group by slots; also, for scan only queries (!agg_plan)
     //     we want the high-granularity, fragment by fragment execution instead.
     std::unordered_map<int, std::vector<std::pair<int, std::vector<size_t>>>> fragments_per_device;
-    for (size_t frag_id = 0; frag_id < fragments->size(); ++frag_id) {
-      const auto& fragment = (*fragments)[frag_id];
+    // Allocate all the fragments of the tables involved in the query to available
+    // devices. The basic idea: the device is decided by the outer table in the
+    // query (the first table in a join) and we need to broadcast the fragments
+    // in the inner table to each device. Sharding will change this model.
+    for (size_t outer_frag_id = 0; outer_frag_id < outer_fragments->size(); ++outer_frag_id) {
+      const auto& fragment = (*outer_fragments)[outer_frag_id];
       const auto skip_frag =
-          skipFragment(outer_table_desc, fragment, ra_exe_unit.simple_quals, execution_dispatch, frag_id);
+          skipFragment(outer_table_desc, fragment, ra_exe_unit.simple_quals, execution_dispatch, outer_frag_id);
       if (skip_frag.first) {
         continue;
       }
@@ -1177,7 +1181,7 @@ void Executor::dispatchFragments(
         const auto table_id = ra_exe_unit.input_descs[j].getTableId();
         auto table_frags_it = selected_tables_fragments.find(table_id);
         CHECK(table_frags_it != selected_tables_fragments.end());
-        const auto frag_ids = getTableFragmentIndices(ra_exe_unit, j, frag_id, selected_tables_fragments);
+        const auto frag_ids = getTableFragmentIndices(ra_exe_unit, j, outer_frag_id, selected_tables_fragments);
         if (fragments_per_device[device_id].size() < j + 1) {
           fragments_per_device[device_id].emplace_back(table_id, frag_ids);
         } else if (!j) {
@@ -1197,8 +1201,8 @@ void Executor::dispatchFragments(
           dispatch, ExecutorDeviceType::GPU, kv.first, kv.second, kv.first % context_count, rowid_lookup_key));
     }
   } else {
-    for (size_t i = 0; i < fragments->size(); ++i) {
-      const auto& fragment = (*fragments)[i];
+    for (size_t i = 0; i < outer_fragments->size(); ++i) {
+      const auto& fragment = (*outer_fragments)[i];
       const auto skip_frag = skipFragment(outer_table_desc, fragment, ra_exe_unit.simple_quals, execution_dispatch, i);
       if (skip_frag.first) {
         continue;
