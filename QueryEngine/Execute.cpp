@@ -100,7 +100,6 @@ StringDictionaryProxy* Executor::getStringDictionaryProxy(const int dict_id_in,
     CHECK_LE(dd->dictNBits, 32);
     if (row_set_mem_owner) {
 #ifdef HAVE_RAVM
-      CHECK(!with_generation || !execute_mutex_.try_lock());
       const auto generation = with_generation ? string_dictionary_generations_.getGeneration(dict_id) : ssize_t(-1);
 #else
       const ssize_t generation = dd->stringDict->storageEntryCount();
@@ -138,22 +137,18 @@ const TemporaryTables* Executor::getTemporaryTables() const {
 }
 
 Fragmenter_Namespace::TableInfo Executor::getTableInfo(const int table_id) {
-  CHECK(!execute_mutex_.try_lock());
   return input_table_info_cache_.getTableInfo(table_id);
 }
 
 const TableGeneration& Executor::getTableGeneration(const int table_id) const {
-  CHECK(!execute_mutex_.try_lock());
   return table_generations_.getGeneration(table_id);
 }
 
 ExpressionRange Executor::getColRange(const PhysicalInput& phys_input) const {
-  CHECK(!execute_mutex_.try_lock());
   return agg_col_range_cache_.getColRange(phys_input);
 }
 
 void Executor::clearMetaInfoCache() {
-  CHECK(!execute_mutex_.try_lock());
   input_table_info_cache_.clear();
   agg_col_range_cache_.clear();
   string_dictionary_generations_.clear();
@@ -796,7 +791,6 @@ ResultPtr Executor::executeWorkUnit(int32_t* error_code,
                                     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                                     RenderAllocatorMap* render_allocator_map,
                                     const bool has_cardinality_estimation) {
-  CHECK(!execute_mutex_.try_lock());
   const auto device_type = getDeviceTypeForTargets(ra_exe_unit, co.device_type_);
   CHECK(!query_infos.empty());
   if (!max_groups_buffer_entry_guess) {
