@@ -973,7 +973,7 @@ ExecutorDeviceType Executor::getDeviceTypeForTargets(const RelAlgExecutionUnit& 
   for (const auto target_expr : ra_exe_unit.target_exprs) {
     const auto agg_info = target_info(target_expr);
     if (!ra_exe_unit.groupby_exprs.empty() && !isArchPascal(requested_device_type)) {
-      if ((agg_info.agg_kind == kAVG || agg_info.agg_kind == kSUM) && agg_info.agg_arg_type.is_fp()) {
+      if ((agg_info.agg_kind == kAVG || agg_info.agg_kind == kSUM) && agg_info.agg_arg_type.get_type() == kDOUBLE) {
         return ExecutorDeviceType::CPU;
       }
     }
