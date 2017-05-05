@@ -142,7 +142,8 @@ std::vector<uint32_t> baseline_sort_fp(const ExecutorDeviceType device_type,
   size_t oe_col_buffer_idx = 0;
   const auto& oe_info = layout.oe_target_info;
   const auto col_ti = oe_info.agg_kind == kAVG ? SQLTypeInfo(kDOUBLE, false) : oe_info.sql_type;
-  const bool float_argument_input = takes_float_argument(oe_info);
+  // Execlude AVG b/c collect_order_entry_column already makes its pair collapse into a double
+  const bool float_argument_input = takes_float_argument(oe_info) && oe_info.agg_kind != kAVG;
 
   auto is_negtive = float_argument_input ? [](const int64_t v) -> bool { return (v & (1 << 31)) != 0; }
   : [](const int64_t v) -> bool { return v < 0; };
