@@ -1,8 +1,4 @@
 /*
- *  Some cool MapD License
- */
-
-/*
  * File:   Calcite.cpp
  * Author: michael
  *

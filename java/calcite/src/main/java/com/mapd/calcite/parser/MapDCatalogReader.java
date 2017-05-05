@@ -1,6 +1,3 @@
-/*
- * Clever MapD license
- */
 package com.mapd.calcite.parser;
 
 import org.apache.calcite.plan.RelOptPlanner;

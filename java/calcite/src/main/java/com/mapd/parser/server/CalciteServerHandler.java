@@ -1,6 +1,3 @@
-/*
- * Some cool MapD License
- */
 package com.mapd.parser.server;
 
 import com.mapd.calcite.parser.MapDParser;

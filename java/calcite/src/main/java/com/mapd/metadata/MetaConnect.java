@@ -1,6 +1,3 @@
-/*
- *  Some cool MapD License
- */
 package com.mapd.metadata;
 
 import com.mapd.thrift.server.TColumnType;

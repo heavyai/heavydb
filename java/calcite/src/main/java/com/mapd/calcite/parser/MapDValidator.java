@@ -1,6 +1,3 @@
-/*
- *  Some cool MapD License
- */
 package com.mapd.calcite.parser;
 
 import org.apache.calcite.rel.type.RelDataTypeFactory;

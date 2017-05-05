@@ -1,8 +1,4 @@
 /*
- *  Some cool MapD License
- */
-
-/*
  * File:   ParserWrapper.cpp
  * Author: michael
  *

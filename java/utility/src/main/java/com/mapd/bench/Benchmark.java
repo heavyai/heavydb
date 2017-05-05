@@ -1,10 +1,5 @@
 package com.mapd.bench;
 
-/*
- * To change this license header, choose License Headers in Project Properties.
- * To change this template file, choose Tools | Templates
- * and open the template in the editor.
- */
 //STEP 1. Import required packages
 import java.io.BufferedReader;
 import java.io.FileNotFoundException;

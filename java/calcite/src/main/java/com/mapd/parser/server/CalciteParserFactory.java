@@ -1,6 +1,3 @@
-/*
- *  Some cool MapD License
- */
 package com.mapd.parser.server;
 
 import java.util.Map;

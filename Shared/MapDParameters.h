@@ -1,8 +1,4 @@
 /*
- *  Some cool MapD License
- */
-
-/*
  * File:   parameters.h
  * Author: michael
  *

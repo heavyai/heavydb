@@ -1,8 +1,4 @@
 /*
- * cool mapd license
- */
-
-/*
  * File:   MapDHandler.cpp
  * Author: michael
  *

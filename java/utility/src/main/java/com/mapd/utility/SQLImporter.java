@@ -1,8 +1,5 @@
 package com.mapd.utility;
 
-/*
- * cool mapd License
- */
 import com.mapd.thrift.server.MapD;
 import com.mapd.thrift.server.TColumnType;
 import com.mapd.thrift.server.TQueryResult;
