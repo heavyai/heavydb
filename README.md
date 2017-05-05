@@ -14,8 +14,7 @@ MapD uses CMake for its build system. Only the `Unix Makefiles` and `Ninja` gene
 
 The following `cmake`/`ccmake` options can enable/disable different features:
 
-- `-DENABLE_CALCITE=on` enable Calcite SQL parser. Default `on`.
-- `-DENABLE_RENDERING=on` enable backend rendering. Default `off`.
+- `-DCMAKE_BUILD_TYPE=release` build type and compiler options to use. Options: `Debug`, `Release`, `RelWithDebInfo`, `MinSizeRel`, and unset.
 - `-DENABLE_CUDA=off` disable CUDA. Default `on`.
 - `-DMAPD_IMMERSE_DOWNLOAD=on` download the latest master build of Immerse / `mapd2-frontend`. Default `on`.
 - `-DMAPD_DOCS_DOWNLOAD=on` download the latest master build of the documentation / `docs.mapd.com`. Default `off`. Note: this is a >50MB download.
@@ -39,11 +38,8 @@ MapD has the following dependencies:
 - [GLFW 3.1.2+](http://www.glfw.org/)
 - [libpng](http://libpng.org/pub/png/libpng.html)
 - [libcurl](https://curl.haxx.se/)
-- [crypto++](https://www.cryptopp.com/)
 - [gperftools](https://github.com/gperftools/gperftools)
 - [gdal](http://gdal.org/)
-
-Generating the documentation requires ((`pip` && `virtualenv`) || `sphinx`), and `texlive` (specifically `pdflatex`). `pip` and `virtualenv` will attempt to install `sphinx` if it is not available.
 
 Dependencies for `mapd_web_server` and other Go utils are in [`ThirdParty/go`](ThirdParty/go). See [`ThirdParty/go/src/mapd/vendor/README.md`](ThirdParty/go/src/mapd/vendor/README.md) for instructions on how to add new deps.
 
@@ -125,7 +121,6 @@ Most build dependencies are available via APT. Thrift is the one exception and m
                 libglfw3-dev \
                 libpng-dev \
                 libcurl4-openssl-dev \
-                libcrypto++-dev \
                 xserver-xorg \
                 libglu1-mesa \
                 default-jre \
@@ -195,12 +190,6 @@ Next you need to configure symlinks so that `clang`, etc point to the newly inst
     update-alternatives --install /usr/bin/clang clang /usr/lib/llvm-3.8/bin/clang 1
     update-alternatives --install /usr/bin/clang++ clang++ /usr/lib/llvm-3.8/bin/clang++ 1
     update-alternatives --install /usr/bin/clang-format clang-format /usr/lib/llvm-3.8/bin/clang-format 1
-
-For generating the documentation you will also need:
-
-    apt-get install python-pip virtualenv
-    apt-get install texlive-latex-base texlive-full
-    pip install sphinx==1.4.9
 
 ### CUDA
 
