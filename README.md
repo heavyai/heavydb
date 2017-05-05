@@ -1,11 +1,32 @@
-mapd2
-=====
+MapD Core
+=========
 
-Central repo for the buildout of MapD V2
+MapD Core is an in-memory, column store, SQL relational database that was designed from the ground up to run on GPUs.
 
-# Building MapD
+# Table of Contents
 
-MapD uses CMake for its build system. Only the `Unix Makefiles` and `Ninja` generators are regularly used. Others, such as `Xcode` might need some work.
+- [License](#license)
+- [Contributing](#contributing)
+- [Building](#building)
+- [Testing](#testing)
+- [Code Style](#code-style)
+- [Dependencies](#dependencies)
+
+# License
+
+This project is licensed under the [Apache License, Version 2.0](https://www.apache.org/licenses/LICENSE-2.0).
+
+The repository includes a number of third party packages provided under separate licenses. Details about these packages and their respective licenses is at [ThirdParty/licenses/index.md](ThirdParty/licenses/index.md).
+
+# Contributing
+
+Pull requests are always welcome. Before any submitted code may be merged into the project, we ask that you complete, sign, and submit the [Contributor License Agreement]() to `contributors@mapd.com`.
+
+# Building
+
+If this is your first time building MapD Core, install the dependencies mentioned in the [Dependencies](#dependencies) section below.
+
+MapD uses CMake for its build system.
 
     mkdir build
     cd build
@@ -19,6 +40,24 @@ The following `cmake`/`ccmake` options can enable/disable different features:
 - `-DMAPD_IMMERSE_DOWNLOAD=on` download the latest master build of Immerse / `mapd2-frontend`. Default `on`.
 - `-DMAPD_DOCS_DOWNLOAD=on` download the latest master build of the documentation / `docs.mapd.com`. Default `off`. Note: this is a >50MB download.
 - `-DPREFER_STATIC_LIBS=on` static link dependencies, if available. Default `off`.
+
+# Testing
+
+MapD Core uses [Google Test](https://github.com/google/googletest) as its main testing framework. Tests reside under the [Tests](Tests) directory.
+
+The `sanity_tests` target runs the most common tests. If using Makefiles to build, the tests may be run using:
+
+    make sanity_tests
+
+# Code Style
+
+A [`.clang-format`](http://clang.llvm.org/docs/ClangFormat.html) style configuration, based on the Chromium style guide, is provided at the top level of the repository. Please format your code using a recent version (3.8+) of ClangFormat before submitting.
+
+To use:
+
+    clang-format -i File.cpp
+
+Contributed code should compile without generating warnings by recent compilers (gcc 4.9, gcc 5.3, clang 3.8) on most Linux distributions.
 
 # Dependencies
 
@@ -34,46 +73,61 @@ MapD has the following dependencies:
 - [Go 1.5+](https://golang.org/)
 - [OpenJDK](http://openjdk.java.net/)
 - [CUDA 7.0+](http://nvidia.com/cuda)
-- [GLEW](http://glew.sourceforge.net/)
-- [GLFW 3.1.2+](http://www.glfw.org/)
-- [libpng](http://libpng.org/pub/png/libpng.html)
-- [libcurl](https://curl.haxx.se/)
 - [gperftools](https://github.com/gperftools/gperftools)
 - [gdal](http://gdal.org/)
 
 Dependencies for `mapd_web_server` and other Go utils are in [`ThirdParty/go`](ThirdParty/go). See [`ThirdParty/go/src/mapd/vendor/README.md`](ThirdParty/go/src/mapd/vendor/README.md) for instructions on how to add new deps.
 
-## CentOS 6/7
+## CentOS 7
 
-[scripts/mapd-deps-linux.sh](scripts/mapd-deps-linux.sh) is provided that will automatically download, build, and install most dependencies. Before running this script, make sure you have the basic build tools installed:
+MapD Core requires a number of dependencies which are not provided in the common CentOS/RHEL package repositories. The script [scripts/mapd-deps-linux.sh](scripts/mapd-deps-linux.sh) is provided to automatically build and install these dependencies. A prebuilt package containing these dependencies is also provided for CentOS 7 (x86_64).
 
-    yum groupinstall -y "Development Tools"
-    yum install -y zlib-devel \
-                   libssh \
-                   openssl-devel \
-                   openldap-devel \
-                   ncurses-devel \
-                   git \
-                   maven \
-                   java-1.8.0-openjdk{-devel,-headless} \
-                   gperftools{,-devel,-libs} \
-                   libX11-devel \
-                   libXv \
-                   mesa-libGL-devel \
-                   mesa-libGLU \
-                   xorg-x11-server-Xorg
+First install the basic build tools:
 
-For generating the documentation you will also need:
+    sudo yum groupinstall -y "Development Tools"
+    sudo yum install -y \
+        zlib-devel \
+        epel-release \
+        libssh \
+        openssl-devel \
+        ncurses-devel \
+        git \
+        maven \
+        java-1.8.0-openjdk-devel \
+        java-1.8.0-openjdk-headless \
+        gperftools \
+        gperftools-devel \
+        gperftools-libs \
+        environment-modules
 
-    yum install -y python-pip python-virtualenv
-    yum install -y texlive texlive-latex-bin-bin "texlive-*"
-    pip install sphinx==1.4.9
+Next download and install the prebuilt dependencies:
+
+    curl -OJ https://internal-dependencies.mapd.com/mapd-deps/deploy.sh
+    sudo bash deploy.sh
+
+These dependencies will be installed to a directory under `/usr/local/mapd-deps`. The `deploy.sh` script also installs [Environment Modules](http://modules.sf.net) in order to simplify managing the required environment variables. Log out and log back in after running the `deploy.sh` script in order to active Environment Modules command, `module`.
+
+The `mapd-deps` environment module is disabled by default. To activate for your current session, run:
+
+    module load mapd-deps
+
+To disable the `mapd-deps` module:
+
+    module unload mapd-deps
+
+WARNING: The `mapd-deps` package contains newer versions of packages such as GCC and ncurses which might not be compatible with the rest of your environment. Make sure to disable the `mapd-deps` module before compiling other packages.
 
 Instructions for installing CUDA are below.
 
 ### CUDA
 
-CUDA should be installed via the .rpm method, following the instructions provided by Nvidia. Make sure you first enable EPEL via `yum install epel-release`.
+It is preferred, but not necessary, to install CUDA and the NVIDIA drivers using the .rpm using the [instructions provided by NVIDIA](https://developer.nvidia.com/cuda-downloads). The `rpm (network)` method (preferred) will ensure you always have the latest stable drivers, while the `rpm (local)` method allows you to install does not require Internet access.
+
+The .rpm method requires DKMS to be installed, which is available from the [Extra Packages for Enterprise Linux](https://fedoraproject.org/wiki/EPEL) repository:
+
+    sudo yum install epel-release
+
+Be sure to reboot after installing in order to activate the NVIDIA drivers.
 
 ### Environment Variables
 
@@ -84,11 +138,9 @@ The Java server lib directory containing `libjvm.so` must also be added to your 
     LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib/jvm/jre/lib/amd64/server
     LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib/jvm/java-1.8.0/jre/lib/amd64/server
 
-## Mac OS X
+## macOS
 
-[scripts/mapd-deps-osx.sh](scripts/mapd-deps-osx.sh) is provided that will automatically install and/or update [Homebrew](http://brew.sh/) and use that to install all dependencies. Please make sure OS X is completely update to date and Xcode is installed before running. Xcode can be installed from the App Store.
-
-The last command in `mapd-deps-osx.sh` installs MacTeX via Homebrew. Since this is a fairly large package, downloading and installing it may take some time. You can alternatively install directly from their website at [http://www.tug.org/mactex/mactex-download.html](http://www.tug.org/mactex/mactex-download.html).
+[scripts/mapd-deps-osx.sh](scripts/mapd-deps-osx.sh) is provided that will automatically install and/or update [Homebrew](http://brew.sh/) and use that to install all dependencies. Please make sure macOS is completely update to date and Xcode is installed before running. Xcode can be installed from the App Store.
 
 ### CUDA
 
@@ -100,66 +152,59 @@ The last command in `mapd-deps-osx.sh` installs MacTeX via Homebrew. Since this 
 
 ## Ubuntu 16.04, 16.10
 
-Note: as of 2016-10-17 CUDA 8 does not officially support GCC 6, which is the default in Ubuntu 16.10. For the time being it is recommended that you stick with Ubuntu 16.04 if your require CUDA support.
+Most build dependencies required by MapD Core are available via APT. Thrift, Blosc, and Folly must be built manually. The following will install all required dependencies and build the ones not available in the APT repositories.
 
-Most build dependencies are available via APT. Thrift is the one exception and must be built by hand (Thrift 0.9.1 is available in APT, but that version is not supported by MapD).
+    sudo apt update
+    sudo apt install -y \
+        build-essential \
+        cmake \
+        cmake-curses-gui \
+        git \
+        clang \
+        clang-format \
+        llvm \
+        llvm-dev \
+        libboost-all-dev \
+        libgoogle-glog-dev \
+        golang \
+        libssl-dev \
+        libevent-dev \
+        default-jre \
+        default-jre-headless \
+        default-jdk \
+        default-jdk-headless \
+        maven \
+        libncurses5-dev \
+        binutils-dev \
+        google-perftools \
+        libdouble-conversion-dev \
+        libevent-dev \
+        libgdal-dev \
+        libgflags-dev \
+        libgoogle-perftools-dev \
+        libiberty-dev \
+        libjemalloc-dev \
+        liblz4-dev \
+        liblzma-dev \
+        libsnappy-dev \
+        zlib1g-dev \
+        autoconf \
+        autoconf-archive
 
-    apt update
-    apt install build-essential \
-                cmake \
-                cmake-curses-gui \
-                clang-3.8 \
-                clang-format-3.8 \
-                llvm-3.8 \
-                llvm-3.8-dev \
-                libboost-all-dev \
-                libgoogle-glog-dev \
-                golang \
-                libssl-dev \
-                libevent-dev \
-                libglew-dev \
-                libglfw3-dev \
-                libpng-dev \
-                libcurl4-openssl-dev \
-                xserver-xorg \
-                libglu1-mesa \
-                default-jre \
-                default-jre-headless \
-                default-jdk \
-                default-jdk-headless \
-                maven \
-                libldap2-dev \
-                libncurses5-dev \
-                libglewmx-dev \
-                binutils-dev \
-                google-perftools \
-                libdouble-conversion-dev \
-                libevent-dev \
-                libgdal-dev \
-                libgflags-dev \
-                libgoogle-perftools-dev \
-                libiberty-dev \
-                libjemalloc-dev \
-                liblz4-dev \
-                liblzma-dev \
-                libsnappy-dev \
-                zlib1g-dev \
-                autoconf \
-                autoconf-archive
-
-
-
-
-    apt-get build-dep thrift-compiler
-    wget http://apache.claz.org/thrift/0.10.0/thrift-0.10.0.tar.gz
-    tar xvf thrift-0.10.0.tar.gz
-    cd thrift-0.10.0
-    ./configure --with-lua=no --with-python=no --with-php=no --with-ruby=no --prefix=/usr/local/mapd-deps
+    sudo apt build-dep -y thrift-compiler
+    VERS=0.10.0
+    wget http://apache.claz.org/thrift/$VERS/thrift-$VERS.tar.gz
+    tar xvf thrift-$VERS.tar.gz
+    pushd thrift-$VERS
+    ./configure \
+        --with-lua=no \
+        --with-python=no \
+        --with-php=no \
+        --with-ruby=no \
+        --prefix=/usr/local/mapd-deps
     make -j $(nproc)
-    make install
+    sudo make install
     popd
-
-    apt-get install bison++
 
     VERS=1.11.3
     wget --continue https://github.com/Blosc/c-blosc/archive/v$VERS.tar.gz
@@ -168,36 +213,47 @@ Most build dependencies are available via APT. Thrift is the one exception and m
     rm -rf "$BDIR"
     mkdir -p "$BDIR"
     pushd "$BDIR"
-    cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local/mapd-deps -DBUILD_BENCHMARKS=off -DBUILD_TESTS=off -DPREFER_EXTERNAL_SNAPPY=off -DPREFER_EXTERNAL_ZLIB=off -DPREFER_EXTERNAL_ZSTD=off ..
+    cmake \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_INSTALL_PREFIX=/usr/local/mapd-deps \
+        -DBUILD_BENCHMARKS=off \
+        -DBUILD_TESTS=off \
+        -DPREFER_EXTERNAL_SNAPPY=off \
+        -DPREFER_EXTERNAL_ZLIB=off \
+        -DPREFER_EXTERNAL_ZSTD=off \
+        ..
     make -j $(nproc)
-    make install
+    sudo make install
     popd
 
-    wget --continue https://github.com/facebook/folly/archive/v2017.04.10.00.tar.gz
-    tar xvf v2017.04.10.00.tar.gz
-    pushd folly-2017.04.10.00/folly
+    VERS=2017.04.10.00
+    wget --continue https://github.com/facebook/folly/archive/v$VERS.tar.gz
+    tar xvf v$VERS.tar.gz
+    pushd folly-$VERS/folly
     /usr/bin/autoreconf -ivf
     ./configure --prefix=/usr/local/mapd-deps
     make -j $(nproc)
-    make install
+    sudo make install
     popd
 
-
-Next you need to configure symlinks so that `clang`, etc point to the newly installed `clang-3.8`:
-
-    update-alternatives --install /usr/bin/llvm-config llvm-config /usr/lib/llvm-3.8/bin/llvm-config 1
-    update-alternatives --install /usr/bin/llc llc /usr/lib/llvm-3.8/bin/llc 1
-    update-alternatives --install /usr/bin/clang clang /usr/lib/llvm-3.8/bin/clang 1
-    update-alternatives --install /usr/bin/clang++ clang++ /usr/lib/llvm-3.8/bin/clang++ 1
-    update-alternatives --install /usr/bin/clang-format clang-format /usr/lib/llvm-3.8/bin/clang-format 1
+    VERS=1.21-45
+    wget --continue https://github.com/jarro2783/bisonpp/archive/$VERS.tar.gz
+    tar xvf $VERS.tar.gz
+    pushd bisonpp-$VERS
+    ./configure
+    make -j $(nproc)
+    sudo make install
+    popd
 
 ### CUDA
 
-CUDA should be installed via the .deb method, following the instructions provided by Nvidia.
+It is preferred, but not necessary, to install CUDA and the NVIDIA drivers using the .deb using the [instructions provided by NVIDIA](https://developer.nvidia.com/cuda-downloads). The `deb (network)` method (preferred) will ensure you always have the latest stable drivers, while the `deb (local)` method allows you to install does not require Internet access.
+
+Be sure to reboot after installing in order to activate the NVIDIA drivers.
 
 ### Environment Variables
 
-CUDA, Java, and mapd-deps need to be added to `LD_LIBRARY_PATH`; CUDA and mapd-deps also need to be added to `PATH`. The easiest way to do so is by creating a new file `/etc/profile.d/mapd-deps.sh` containing the following:
+The CUDA, Java, and mapd-deps `lib` directories need to be added to `LD_LIBRARY_PATH`; the CUDA and mapd-deps `bin` directories need to be added to `PATH`. The easiest way to do so is by creating a new file named `/etc/profile.d/mapd-deps.sh` containing the following:
 
     LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
     LD_LIBRARY_PATH=/usr/lib/jvm/default-java/jre/lib/amd64/server:$LD_LIBRARY_PATH
@@ -211,40 +267,35 @@ CUDA, Java, and mapd-deps need to be added to `LD_LIBRARY_PATH`; CUDA and mapd-d
 
 ## Arch
 
-Assuming you already have [yaourt](https://wiki.archlinux.org/index.php/Yaourt) or some other manager that supports the AUR installed:
+The following uses [yaourt](https://wiki.archlinux.org/index.php/Yaourt) to install packages from the [Arch User Repository](https://wiki.archlinux.org/index.php/Arch_User_Repository).
 
-    yaourt -S git cmake boost google-glog extra/jdk8-openjdk clang llvm thrift go cuda nvidia glew glfw libpng
-    wget https://flexpp-bisonpp.googlecode.com/files/bisonpp-1.21-45.tar.gz
-    tar xvf bisonpp-1.21-45.tar.gz
-    cd bison++-1.21
-    ./configure && make && make install
+    yaourt -S \
+        git \
+        cmake \
+        boost \
+        google-glog \
+        extra/jdk8-openjdk \
+        clang \
+        llvm \
+        thrift \
+        go \
+
+    VERS=1.21-45
+    wget --continue https://github.com/jarro2783/bisonpp/archive/$VERS.tar.gz
+    tar xvf $VERS.tar.gz
+    pushd bisonpp-$VERS
+    ./configure
+    make -j $(nproc)
+    sudo make install
+    popd
 
 ### CUDA
 
-CUDA is installed to `/opt/cuda` instead of the default `/usr/local/cuda`. You may have to add the following to `CMakeLists.txt` to support this:
+CUDA and the NVIDIA drivers may be installed using the following.
 
-    include_directories("/opt/cuda/include")
+    yaourt -S \
+        linux-headers \
+        cuda \
+        nvidia
 
-# Environment variables
-
-If using `mapd-deps-linux.sh` or Ubuntu 15.10, you will need to add following environment variables to your `~/.bashrc` or a file such as `/etc/profile.d/mapd-deps.sh` (or use [Environment Modules](http://modules.sourceforge.net/)):
-
-    MAPD_PATH=/usr/local/mapd-deps
-    PATH=$MAPD_PATH/bin:$PATH
-    LD_LIBRARY_PATH=$MAPD_PATH/lib:$LD_LIBRARY_PATH
-    LD_LIBRARY_PATH=$MAPD_PATH/lib64:$LD_LIBRARY_PATH
-    export PATH LD_LIBRARY_PATH
-
-CUDA requires the following environment variables, assuming CUDA was installed to `/usr/local/cuda`:
-
-    CUDA_PATH=/usr/local/cuda
-    PATH=$CUDA_PATH/bin:$PATH
-    LD_LIBRARY_PATH=$CUDA_PATH/lib64:$LD_LIBRARY_PATH
-    export PATH LD_LIBRARY_PATH
-
-CUDA on OS X is usually installed under `/Developer/NVIDIA/CUDA-7.5`:
-
-    CUDA_PATH=/Developer/NVIDIA/CUDA-7.5
-    PATH=$CUDA_PATH/bin:$PATH
-    DYLD_LIBRARY_PATH=$CUDA_PATH/lib64:$DYLD_LIBRARY_PATH
-    export PATH DYLD_LIBRARY_PATH
+Be sure to reboot after installing in order to activate the NVIDIA drivers.
