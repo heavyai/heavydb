@@ -216,7 +216,7 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
       enable_rendering_(enable_rendering),
 #endif  // HAVE_CALCITE
       super_user_rights_(false) {
-  LOG(INFO) << "MapD Server " << MapDRelease;
+  LOG(INFO) << "MapD Server " << MAPD_RELEASE;
   if (executor_device == "gpu") {
 #ifdef HAVE_CUDA
     executor_device_type_ = ExecutorDeviceType::GPU;
@@ -447,9 +447,10 @@ void MapDHandler::interrupt(const TSessionId& session) {
 
 void MapDHandler::get_server_status(TServerStatus& _return, const TSessionId& session) {
   _return.read_only = read_only_;
-  _return.version = MapDRelease;
+  _return.version = MAPD_RELEASE;
   _return.rendering_enabled = enable_rendering_;
   _return.start_time = start_time_;
+  _return.edition = MAPD_EDITION;
 }
 
 void MapDHandler::value_to_thrift_column(const TargetValue& tv, const SQLTypeInfo& ti, TColumn& column) {
@@ -894,7 +895,7 @@ void MapDHandler::get_users(std::vector<std::string>& user_names, const TSession
 }
 
 void MapDHandler::get_version(std::string& version) {
-  version = MapDRelease;
+  version = MAPD_RELEASE;
 }
 
 void MapDHandler::get_memory_gpu(std::string& memory, const TSessionId& session) {

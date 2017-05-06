@@ -39,7 +39,7 @@ using namespace ::apache::thrift;
 using namespace ::apache::thrift::protocol;
 using namespace ::apache::thrift::transport;
 
-const std::string MapDQLRelease(MapDRelease);
+const std::string MapDQLRelease(MAPD_RELEASE);
 
 using boost::shared_ptr;
 

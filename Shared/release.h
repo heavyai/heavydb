@@ -22,7 +22,8 @@ static const std::string MAPD_VERSION_EXTRA{"@MAPD_VERSION_EXTRA@"};
 static const std::string MAPD_VERSION_RAW{"@MAPD_VERSION_RAW@"};
 static const std::string MAPD_BUILD_DATE{"@MAPD_BUILD_DATE@"};
 static const std::string MAPD_GIT_HASH{"@MAPD_GIT_HASH@"};
+static const std::string MAPD_EDITION{"@MAPD_EDITION_LOWER@"};
 
-static const std::string MapDRelease{"@MAPD_VERSION_RAW@-@MAPD_BUILD_DATE@-@MAPD_GIT_HASH@"};
+static const std::string MAPD_RELEASE{"@MAPD_VERSION_RAW@-@MAPD_BUILD_DATE@-@MAPD_GIT_HASH@"};
 
 #endif  // RELEASE_H

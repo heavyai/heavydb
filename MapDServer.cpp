@@ -243,12 +243,6 @@ int main(int argc, char** argv) {
                      po::value<bool>(&read_only)->default_value(read_only)->implicit_value(true),
                      "Enable read-only mode");
   desc.add_options()("port,p", po::value<int>(&port)->default_value(port), "Port number");
-  desc.add_options()(
-      "ldap-uri", po::value<std::string>(&ldapMetadata.uri)->default_value(std::string("")), "ldap server uri");
-  desc.add_options()("ldap-dn",
-                     po::value<std::string>(&ldapMetadata.distinguishedName)
-                         ->default_value(std::string("uid=%s,cn=users,cn=accounts,dc=mapd,dc=com")),
-                     "ldap DN Distinguished Name");
   desc.add_options()("http-port", po::value<int>(&http_port)->default_value(http_port), "HTTP port number");
   desc.add_options()("flush-log",
                      po::value<bool>(&flush_log)->default_value(flush_log)->implicit_value(true),
@@ -259,8 +253,6 @@ int main(int argc, char** argv) {
   desc.add_options()("num-gpus", po::value<int>(&num_gpus)->default_value(num_gpus), "Number of gpus to use");
   desc.add_options()("start-gpu", po::value<int>(&start_gpu)->default_value(start_gpu), "First gpu to use");
   desc.add_options()("version,v", "Print Release Version Number");
-  desc.add_options()("cluster", po::value<std::string>(&cluster_file), "Path to data leaves list JSON file");
-  desc.add_options()("string-servers", po::value<std::string>(&cluster_file), "Path to string servers list JSON file");
 
   po::options_description desc_adv("Advanced options");
   desc_adv.add_options()("help-advanced", "Print advanced help messages");
@@ -318,16 +310,6 @@ int main(int argc, char** argv) {
       "Max memory available to calcite JVM");
   desc_adv.add_options()(
       "db-convert", po::value<std::string>(&db_convert_dir), "Directory path to mapd DB to convert from");
-  desc_adv.add_options()(
-      "ha-group-id", po::value<std::string>(&mapd_parameters.ha_group_id), "Id of the HA group this server is in");
-  desc_adv.add_options()("ha-unique-server-id",
-                         po::value<std::string>(&mapd_parameters.ha_unique_server_id),
-                         "Unique id to identify this server in the HA group");
-  desc_adv.add_options()(
-      "ha-brokers", po::value<std::string>(&mapd_parameters.ha_brokers), "Location of the HA brokers");
-  desc.add_options()("ha-shared-data",
-                     po::value<std::string>(&mapd_parameters.ha_shared_data),
-                     "Directory path to shared MapD directory");
 
   desc_adv.add_options()("use-result-set",
                          po::value<bool>(&g_use_result_set)->default_value(g_use_result_set)->implicit_value(true),
@@ -340,6 +322,7 @@ int main(int argc, char** argv) {
                          "Allow the queries which failed on GPU to retry on CPU, even when watchdog is enabled");
   desc_adv.add_options()(
       "db-query-list", po::value<std::string>(&db_query_file), "Path to file containing mapd queries");
+
 
   po::positional_options_description positionalOptions;
   positionalOptions.add("data", 1);
@@ -393,7 +376,7 @@ int main(int argc, char** argv) {
       return 0;
     }
     if (vm.count("version")) {
-      std::cout << "MapD Version: " << MapDRelease << std::endl;
+      std::cout << "MapD Version: " << MAPD_RELEASE << std::endl;
       return 0;
     }
     if (vm.count("cpu"))
