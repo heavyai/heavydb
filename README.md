@@ -5,6 +5,7 @@ MapD Core is an in-memory, column store, SQL relational database that was design
 
 # Table of Contents
 
+- [Links](#links)
 - [License](#license)
 - [Contributing](#contributing)
 - [Building](#building)
@@ -12,6 +13,14 @@ MapD Core is an in-memory, column store, SQL relational database that was design
 - [Using](#using)
 - [Code Style](#code-style)
 - [Dependencies](#dependencies)
+
+# Links
+
+- [Documentation](https://www.mapd.com/docs/)
+- [Release Notes](https://www.mapd.com/docs/latest/release-notes/platform/)
+- [Community Forum](https://community.mapd.com)
+- [MapD Homepage](https://www.mapd.com)
+- [MapD Blog](https://www.mapd.com/blog/)
 
 # License
 
