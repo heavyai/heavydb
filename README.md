@@ -9,6 +9,7 @@ MapD Core is an in-memory, column store, SQL relational database that was design
 - [Contributing](#contributing)
 - [Building](#building)
 - [Testing](#testing)
+- [Using](#using)
 - [Code Style](#code-style)
 - [Dependencies](#dependencies)
 
@@ -17,6 +18,8 @@ MapD Core is an in-memory, column store, SQL relational database that was design
 This project is licensed under the [Apache License, Version 2.0](https://www.apache.org/licenses/LICENSE-2.0).
 
 The repository includes a number of third party packages provided under separate licenses. Details about these packages and their respective licenses is at [ThirdParty/licenses/index.md](ThirdParty/licenses/index.md).
+
+The standard build process for this project downloads the Community Edition of the MapD Immerse visual analytics client. This version of MapD Immerse is governed by a separate license agreement, included in the file `EULA-CE.txt`, and may only be used for non-commercial purposes.
 
 # Contributing
 
@@ -48,6 +51,52 @@ MapD Core uses [Google Test](https://github.com/google/googletest) as its main t
 The `sanity_tests` target runs the most common tests. If using Makefiles to build, the tests may be run using:
 
     make sanity_tests
+
+# Using
+
+The [`startmapd`](startmapd) wrapper script may be used to start MapD Core in a testing environment. This script performs the following tasks:
+
+- initializes the `data` storage directory via `initdb`, if required
+- starts the main MapD Core server, `mapd_server`
+- starts the MapD Core web server, `mapd_web_server`, for serving MapD Immerse
+- offers to download and import a sample dataset, using the `insert_sample_data` script
+- attempts to open MapD Immerse in your web browser
+
+Assuming you are in the `build` directory, and it is a subdirectory of the `mapd-core` repository, `startmapd` may be run by:
+
+    ../startmapd
+
+## Starting Manually
+
+It is assumed that the following commands are run from inside the `build` directory.
+
+Initialize the `data` storage directory. This command only needs to be run once.
+
+    mkdir data && ./bin/initdb data
+
+Start the MapD Core server:
+
+    ./bin/mapd_server
+
+In a new terminal, start the MapD Core web server:
+
+    ./bin/mapd_web_server
+
+If desired, insert a sample dataset by running the `insert_sample_data` script in a new terminal:
+
+    ../insert_sample_data
+
+You can now start using the database. The `mapdql` utility may be used to interact with the database from the command line:
+
+    ./bin/mapdql -p HyperInteractive
+
+where `HyperInteractive` is the default password. The default user `mapd` is assumed if not provided.
+
+You can also interact with the database using the web-based MapD Immerse frontend by visiting the web server's default port of `9092`:
+
+    http://localhost:9092
+
+Note: usage of MapD Immerse is governed by a separate license agreement, provided under `EULA-CE.txt`. The version bundled with this project may only be used for non-commercial purposes.
 
 # Code Style
 
