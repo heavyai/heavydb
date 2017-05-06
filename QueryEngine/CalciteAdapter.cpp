@@ -1212,5 +1212,11 @@ std::string pg_shim(const std::string& query) {
       result.replace(what.position(), what.length(), "CAST(" + what[1] + " AS TIMESTAMP(0))");
     });
   }
+  {
+    boost::regex corr_expr{R"((\s+|,)(corr)\s*\()", boost::regex::extended | boost::regex::icase};
+    apply_shim(result, corr_expr, [](std::string& result, const boost::smatch& what) {
+      result.replace(what.position(), what.length(), what[1] + "CORRELATION(");
+    });
+  }
   return result;
 }
