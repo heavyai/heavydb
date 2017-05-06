@@ -269,8 +269,10 @@ class ResultSet {
   static std::unique_ptr<ResultSet> unserialize(const std::string&, const Executor*);
 
 #ifdef ENABLE_ARROW_CONVERTER
-  std::pair<std::shared_ptr<arrow::Buffer>, void*> getArrowDeviceCopy(Data_Namespace::DataMgr* data_mgr,
-                                                                      const size_t device_id) const;
+  std::tuple<std::shared_ptr<arrow::Buffer>, std::vector<char>, int64_t> getArrowDeviceCopy(
+      Data_Namespace::DataMgr* data_mgr,
+      const size_t device_id,
+      const std::vector<std::string>& col_names) const;
 #endif
 
  private:
@@ -377,7 +379,7 @@ class ResultSet {
   int getGpuCount() const;
 
 #ifdef ENABLE_ARROW_CONVERTER
-  arrow::RecordBatch convertToArrow() const;
+  arrow::RecordBatch convertToArrow(const std::vector<std::string>& col_names) const;
   std::pair<std::vector<std::shared_ptr<arrow::Array>>, size_t> getArrowColumns(
       const std::vector<std::shared_ptr<arrow::Field>>& fields) const;
 #endif

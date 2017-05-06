@@ -125,6 +125,11 @@ class MapDHandler : public MapDIf {
                    const bool column_format,
                    const std::string& nonce,
                    const int32_t first_n);
+  void sql_execute_gpudf(TGpuDataFrame& _return,
+                         const TSessionId& session,
+                         const std::string& query,
+                         const int32_t device_id,
+                         const int32_t first_n);
   void sql_validate(TTableDescriptor& _return, const TSessionId& session, const std::string& query);
   void get_table_descriptor(TTableDescriptor& _return, const TSessionId& session, const std::string& table_name);
   void get_row_descriptor(TRowDescriptor& _return, const TSessionId& session, const std::string& table_name);
@@ -284,6 +289,13 @@ class MapDHandler : public MapDIf {
                        const int32_t first_n,
                        const bool just_explain,
                        const bool just_validate) const;
+#ifdef ENABLE_ARROW_CONVERTER
+  void execute_rel_alg_gpudf(TGpuDataFrame& _return,
+                             const std::string& query_ra,
+                             const Catalog_Namespace::SessionInfo& session_info,
+                             const size_t device_id,
+                             const int32_t first_n) const;
+#endif
 #endif
   TColumnType populateThriftColumnType(const Catalog_Namespace::Catalog* cat, const ColumnDescriptor* cd);
   TRowDescriptor fixup_row_descriptor(const TRowDescriptor& row_desc, const Catalog_Namespace::Catalog& cat);
@@ -327,6 +339,18 @@ class MapDHandler : public MapDIf {
 
   std::vector<TargetMetaInfo> getTargetMetaInfo(
       const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& targets) const;
+
+#ifdef ENABLE_ARROW_CONVERTER
+  void execute_root_plan_gpudf(TGpuDataFrame& _return,
+                               const Planner::RootPlan* root_plan,
+                               const Catalog_Namespace::SessionInfo& session_info,
+                               const size_t device_id,
+                               const int32_t first_n) const;
+
+  std::vector<std::string> getTargetNames(const std::vector<TargetMetaInfo>& targets) const;
+
+  std::vector<std::string> getTargetNames(const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& targets) const;
+#endif
 
 
   void render_root_plan(TRenderResult& _return,

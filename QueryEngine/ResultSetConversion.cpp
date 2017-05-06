@@ -6,10 +6,15 @@
 #include "arrow/buffer.h"
 #include "arrow/io/memory.h"
 #include "arrow/ipc/metadata.h"
+#include "arrow/ipc/reader.h"
 #include "arrow/ipc/writer.h"
+#include "arrow/pretty_print.h"
 #include "arrow/memory_pool.h"
 #include "arrow/type.h"
 
+#ifdef HAVE_CUDA
+#include <cuda.h>
+#endif  // HAVE_CUDA
 #include <future>
 
 typedef boost::variant<std::vector<bool>,
@@ -129,7 +134,7 @@ TypePtr get_arrow_type(const SQLTypeInfo& mapd_type) {
     case kINTERVAL_DAY_TIME:
     case kINTERVAL_YEAR_MONTH:
     default:
-      CHECK(false);
+      throw std::runtime_error(mapd_type.get_type_name() + " is not supported in temporary table.");
   }
   return nullptr;
 }
@@ -323,6 +328,22 @@ void append_value_array(ValueArray& dst, const ValueArray& src, const Field& fie
   }
 }
 
+void print_serialization(const uint8_t* data, const size_t length) {
+  const auto record_buffer = std::make_shared<arrow::Buffer>(data, length);
+  auto buf_reader = std::make_shared<io::BufferReader>(record_buffer);
+  std::shared_ptr<ipc::StreamReader> reader;
+  ipc::StreamReader::Open(buf_reader, &reader);
+
+  std::shared_ptr<RecordBatch> batch;
+  reader->GetNextRecordBatch(&batch);
+  std::cout << "Schema: " << batch->schema()->ToString() << std::endl;
+  for (int i = 0; i < batch->num_columns(); ++i) {
+    const auto& column = *batch->column(i);
+    std::cout << "Column #" << i << ": ";
+    PrettyPrint(column, 0, &std::cout);
+  }
+}
+
 std::shared_ptr<PoolBuffer> serialize_arrow_records(const RecordBatch& rb) {
   int64_t rb_sz = 0;
   ASSERT_OK(ipc::GetRecordBatchSize(rb, &rb_sz));
@@ -459,11 +480,18 @@ std::pair<std::vector<std::shared_ptr<arrow::Array>>, size_t> ResultSet::getArro
   return {generate_columns(fields, null_bitmaps, column_values), row_count};
 }
 
-arrow::RecordBatch ResultSet::convertToArrow() const {
+arrow::RecordBatch ResultSet::convertToArrow(const std::vector<std::string>& col_names) const {
   const auto col_count = colCount();
   std::vector<std::shared_ptr<arrow::Field>> fields;
-  for (size_t i = 0; i < col_count; ++i) {
-    fields.push_back(arrow::make_field("", getColType(i)));
+  if (col_names.empty()) {
+    for (size_t i = 0; i < col_count; ++i) {
+      fields.push_back(arrow::make_field("", getColType(i)));
+    }
+  } else {
+    CHECK_EQ(col_names.size(), col_count);
+    for (size_t i = 0; i < col_count; ++i) {
+      fields.push_back(arrow::make_field(col_names[i], getColType(i)));
+    }
   }
   auto schema = std::make_shared<arrow::Schema>(fields);
   std::vector<std::shared_ptr<arrow::Array>> columns;
@@ -474,14 +502,39 @@ arrow::RecordBatch ResultSet::convertToArrow() const {
   return arrow::RecordBatch(schema, row_count, columns);
 }
 
-std::pair<std::shared_ptr<arrow::Buffer>, void*> ResultSet::getArrowDeviceCopy(Data_Namespace::DataMgr* data_mgr,
-                                                                               const size_t device_id) const {
-  auto arrow_copy = convertToArrow();
-  auto serialized_records = serialize_arrow_records(arrow_copy);
+// WARN(miyu): users are responsible to free all device copies, e.g.,
+//   cudaIpcMemHandle_t mem_handle = ...
+//   void* dev_ptr;
+//   cudaIpcOpenMemHandle(&dev_ptr, mem_handle, cudaIpcMemLazyEnablePeerAccess);
+//   ...
+//   cudaIpcCloseMemHandle(dev_ptr);
+//   cudaFree(dev_ptr);
+//
+// TODO(miyu): verify if the server still needs to free its own copies after last uses
+std::tuple<std::shared_ptr<arrow::Buffer>, std::vector<char>, int64_t> ResultSet::getArrowDeviceCopy(
+    Data_Namespace::DataMgr* data_mgr,
+    const size_t device_id,
+    const std::vector<std::string>& col_names) const {
+  auto arrow_copy = convertToArrow(col_names);
   auto serialized_schema = serialize_arrow_schema(*arrow_copy.schema());
-  auto dev_ptr = alloc_gpu_mem(data_mgr, serialized_records->size(), device_id, nullptr);
-  copy_to_gpu(data_mgr, dev_ptr, serialized_records->data(), serialized_records->size(), device_id);
-  return {serialized_schema, reinterpret_cast<void*>(dev_ptr)};
+#ifdef HAVE_CUDA
+  auto serialized_records = serialize_arrow_records(arrow_copy);
+  CHECK(data_mgr && data_mgr->cudaMgr_);
+  auto dev_ptr =
+      reinterpret_cast<CUdeviceptr>(data_mgr->cudaMgr_->allocateDeviceMem(serialized_records->size(), device_id));
+  CUipcMemHandle ipc_mem_handle;
+  cuIpcGetMemHandle(&ipc_mem_handle, dev_ptr);
+  data_mgr->cudaMgr_->copyHostToDevice(reinterpret_cast<int8_t*>(dev_ptr),
+                                       reinterpret_cast<const int8_t*>(serialized_records->data()),
+                                       serialized_records->size(),
+                                       device_id);
+  std::vector<char> handle_buffer(sizeof(ipc_mem_handle), 0);
+  memcpy(&handle_buffer[0], reinterpret_cast<unsigned char*>(&ipc_mem_handle), sizeof(ipc_mem_handle));
+  return std::tuple<std::shared_ptr<arrow::Buffer>, std::vector<char>, int64_t>{
+      serialized_schema, handle_buffer, serialized_records->size()};
+#else
+  return std::tuple<std::shared_ptr<arrow::Buffer>, std::vector<char>, int64_t>{serialized_schema, {}, 0};
+#endif
 }
 
 #endif  // ENABLE_ARROW_CONVERTER
