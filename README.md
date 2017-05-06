@@ -20,7 +20,7 @@ The repository includes a number of third party packages provided under separate
 
 # Contributing
 
-Pull requests are always welcome. Before any submitted code may be merged into the project, we ask that you complete, sign, and submit the [Contributor License Agreement]() to `contributors@mapd.com`.
+In order to clarify the intellectual property license granted with Contributions from any person or entity, MapD must have a Contributor License Agreement ("CLA") on file that has been signed by each Contributor, indicating agreement to the [Contributor License Agreement](CLA.txt). If you have not already done so, please complete and sign, then scan and email a pdf file of this Agreement to [contributors@mapd.com](mailto:contributors@mapd.com). Please read the agreement carefully before signing and keep a copy for your records.
 
 # Building
 
