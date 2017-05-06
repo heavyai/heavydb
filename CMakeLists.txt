@@ -59,7 +59,7 @@ if(ENABLE_CUDA)
   endif()
 else()
   set(CUDA_LIBRARIES "")
-  set(MAPD_PACKAGE_FLAGS "${MAPD_PACKAGE_FLAGS}-nocuda")
+  set(MAPD_PACKAGE_FLAGS "${MAPD_PACKAGE_FLAGS}-cpu")
 endif()
 
 if(XCODE)
