@@ -510,7 +510,6 @@ const int8_t* Executor::ExecutionDispatch::getScanColumn(
   CHECK(cd);
   {
     ChunkKey chunk_key{cat_.get_currentDB().dbId, table_id, col_id, fragment.fragmentId};
-    std::lock_guard<std::mutex> lock(str_dec_mutex);
     chunk = Chunk_NS::Chunk::getChunk(cd,
                                       &cat_.get_dataMgr(),
                                       chunk_key,
@@ -518,6 +517,7 @@ const int8_t* Executor::ExecutionDispatch::getScanColumn(
                                       memory_level == Data_Namespace::CPU_LEVEL ? 0 : device_id,
                                       chunk_meta_it->second.numBytes,
                                       chunk_meta_it->second.numElements);
+    std::lock_guard<std::mutex> lock(str_dec_mutex);
     chunk_holder.push_back(chunk);
   }
   const auto col_type = get_column_type(col_id, table_id, cd, executor_->temporary_tables_);
