@@ -212,6 +212,14 @@ endif()
 include_directories(ThirdParty/googletest)
 add_subdirectory(ThirdParty/googletest)
 
+# Arrow
+option(ENABLE_ARROW_CONVERTER "Enable arrow converter" OFF)
+if(ENABLE_ARROW_CONVERTER)
+  find_package(Arrow REQUIRED)
+  add_definitions("-DENABLE_ARROW_CONVERTER")
+  include_directories(${Arrow_INCLUDE_DIR})
+endif()
+
 # RapidJSON
 include_directories(ThirdParty/rapidjson)
 
@@ -320,6 +328,10 @@ if(ENABLE_CALCITE)
   list(APPEND MAPD_LIBRARIES Calcite)
 endif()
 
+
+if(ENABLE_ARROW_CONVERTER)
+  list(APPEND MAPD_LIBRARIES ${Arrow_LIBRARIES})
+endif()
 
 enable_testing()
 add_subdirectory(Tests)

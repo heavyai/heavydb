@@ -57,6 +57,7 @@ set(query_engine_source_files
     ResultSet.cpp
     ResultSetIteration.cpp
     ResultSetReduction.cpp
+    ResultSetConversion.cpp
     ResultSetSort.cpp
     RuntimeFunctions.cpp
     RuntimeFunctions.bc
@@ -134,10 +135,14 @@ else()
   add_library(QueryEngine ${query_engine_source_files})
 endif()
 
+if(ENABLE_ARROW_CONVERTER)
+  set(ARROW_LIBS arrow)
+endif()
+
 if(ENABLE_RENDERING)
-  target_link_libraries(QueryEngine CsvImport Planner StringDictionary Utils QueryRenderer)
+  target_link_libraries(QueryEngine CsvImport Planner StringDictionary Utils QueryRenderer ${ARROW_LIBS})
 else()
-  target_link_libraries(QueryEngine CsvImport Planner StringDictionary Utils)
+  target_link_libraries(QueryEngine CsvImport Planner StringDictionary Utils  ${ARROW_LIBS})
 endif()
 
 

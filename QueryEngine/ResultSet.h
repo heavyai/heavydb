@@ -14,6 +14,15 @@
 #include "TargetValue.h"
 #include "../Chunk/Chunk.h"
 
+#ifdef ENABLE_ARROW_CONVERTER
+#include "arrow/table.h"
+// Arrow defines macro UNUSED conflict w/ that in jni_md.h
+#ifdef UNUSED
+#undef UNUSED
+#endif
+#include "arrow/type.h"
+#endif
+
 #include <atomic>
 #include <list>
 
@@ -361,6 +370,12 @@ class ResultSet {
   Data_Namespace::DataMgr* getDataManager() const;
 
   int getGpuCount() const;
+
+#ifdef ENABLE_ARROW_CONVERTER
+  arrow::RecordBatch convertToArrow() const;
+  std::pair<std::vector<std::shared_ptr<arrow::Array>>, size_t> getArrowColumns(
+      const std::vector<std::shared_ptr<arrow::Field>>& fields) const;
+#endif
 
   std::string serializeProjection() const;
 
