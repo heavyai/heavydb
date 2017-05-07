@@ -36,6 +36,7 @@ HTTP client - get_client('http://test.mapd.com:9091', portno, True)
 Binary protocol - get_client('locahost', 9091, False)
 '''
 
+
 def get_client(host_or_uri, port, http):
   if http:
     transport = THttpClient.THttpClient(host_or_uri)
@@ -48,6 +49,7 @@ def get_client(host_or_uri, port, http):
   client = MapD.Client(protocol)
   transport.open()
   return client
+
 
 def main():
 
@@ -72,7 +74,8 @@ def main():
         number_of_columns = list(range(0, len(results.row_set.row_desc)))
         for n in number_of_rows:
             for i in number_of_columns:
-                column_type = ttypes.TDatumType._VALUES_TO_NAMES[results.row_set.row_desc[i].col_type.type]
+                column_type = ttypes.TDatumType._VALUES_TO_NAMES[
+                    results.row_set.row_desc[i].col_type.type]
                 column_name = results.row_set.row_desc[i].col_name
                 column_array = results.row_set.row_desc[i].col_type.is_array
                 if not column_array:
@@ -86,7 +89,8 @@ def main():
                     column_value = results.row_set.columns[i].data.arr_col[n].data.str_col
                 print(column_name)
                 if column_type in dates:
-                    print(time.strftime('%Y-%m-%d %H:%M:%S',time.localtime(column_value)))
+                    print(time.strftime('%Y-%m-%d %H:%M:%S',
+                                        time.localtime(column_value)))
                 else:
                     print(column_value)
 

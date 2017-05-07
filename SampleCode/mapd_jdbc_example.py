@@ -1,4 +1,5 @@
-# Note: The following example should be run in the same directory as map_jdbc.py and mapdjdbc-1.0-SNAPSHOT-jar-with-dependencies.jar
+# Note: The following example should be run in the same directory as
+# map_jdbc.py and mapdjdbc-1.0-SNAPSHOT-jar-with-dependencies.jar
 
 import mapd_jdbc
 import pandas
@@ -11,7 +12,8 @@ password = 'HyperInteractive'
 
 # Connect to the db
 
-mapd_con = mapd_jdbc.connect(dbname=dbname, user=user, host=host, password=password)
+mapd_con = mapd_jdbc.connect(
+    dbname=dbname, user=user, host=host, password=password)
 
 # Get a db cursor
 
@@ -27,12 +29,12 @@ mapd_cursor.execute(query)
 
 results = mapd_cursor.fetchall()
 
-# Make the results a Pandas DataFrame 
+# Make the results a Pandas DataFrame
 
 df = pandas.DataFrame(results)
 
 # Make a scatterplot of the results
 
-plt.scatter(df[1],df[2])
+plt.scatter(df[1], df[2])
 
 plt.show()
