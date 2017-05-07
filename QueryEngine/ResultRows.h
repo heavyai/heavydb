@@ -33,6 +33,8 @@ struct QueryMemoryDescriptor;
 struct RelAlgExecutionUnit;
 class RowSetMemoryOwner;
 
+// The legacy way of representing result sets. Don't change it, it's going away.
+
 inline int64_t get_component(const int8_t* group_by_buffer, const size_t comp_sz, const size_t index = 0) {
   int64_t ret = std::numeric_limits<int64_t>::min();
   switch (comp_sz) {
