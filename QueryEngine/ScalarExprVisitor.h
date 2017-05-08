@@ -145,6 +145,7 @@ class ScalarExprVisitor {
       result = aggregateResult(result, visit(expr_pair.first.get()));
       result = aggregateResult(result, visit(expr_pair.second.get()));
     }
+    result = aggregateResult(result, visit(case_->get_else_expr()));
     return result;
   }
 
