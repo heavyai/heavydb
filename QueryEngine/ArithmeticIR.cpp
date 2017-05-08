@@ -358,17 +358,44 @@ llvm::Value* Executor::codegenDiv(llvm::Value* lhs_lv,
                                   llvm::Value* rhs_lv,
                                   const std::string& null_typename,
                                   const std::string& null_check_suffix,
-                                  const SQLTypeInfo& ti) {
+                                  const SQLTypeInfo& ti,
+                                  bool upscale) {
   CHECK_EQ(lhs_lv->getType(), rhs_lv->getType());
   if (ti.is_decimal()) {
-    CHECK(lhs_lv->getType()->isIntegerTy());
-    const auto scale_lv = llvm::ConstantInt::get(lhs_lv->getType(), exp_to_scale(ti.get_scale()));
-    lhs_lv = null_typename.empty() ? cgen_state_->ir_builder_.CreateMul(lhs_lv, scale_lv)
-                                   : cgen_state_->emitCall("mul_" + numeric_type_name(ti) + null_check_suffix,
-                                                           {lhs_lv, scale_lv, ll_int(inline_int_null_val(ti))});
+    if (upscale) {
+      CHECK(lhs_lv->getType()->isIntegerTy());
+      const auto scale_lv = llvm::ConstantInt::get(lhs_lv->getType(), exp_to_scale(ti.get_scale()));
+
+      lhs_lv = cgen_state_->ir_builder_.CreateSExt(lhs_lv, get_int_type(64, cgen_state_->context_));
+      llvm::Value* chosen_max{nullptr};
+      llvm::Value* chosen_min{nullptr};
+      std::tie(chosen_max, chosen_min) = inlineIntMaxMin(8, true);
+      auto decimal_div_ok = llvm::BasicBlock::Create(cgen_state_->context_, "decimal_div_ok", cgen_state_->row_func_);
+      auto decimal_div_fail =
+          llvm::BasicBlock::Create(cgen_state_->context_, "decimal_div_fail", cgen_state_->row_func_);
+      auto lhs_max = static_cast<llvm::ConstantInt*>(chosen_max)->getSExtValue() / exp_to_scale(ti.get_scale());
+      auto lhs_max_lv = llvm::ConstantInt::get(get_int_type(64, cgen_state_->context_), lhs_max);
+      llvm::Value* detected{nullptr};
+      if (ti.get_notnull()) {
+        detected = cgen_state_->ir_builder_.CreateICmpSGT(lhs_lv, lhs_max_lv);
+      } else {
+        detected = toBool(cgen_state_->emitCall(
+            "gt_" + numeric_type_name(ti) + "_nullable",
+            {lhs_lv, lhs_max_lv, ll_int(inline_int_null_val(ti)), inlineIntNull(SQLTypeInfo(kBOOLEAN, false))}));
+      }
+      cgen_state_->ir_builder_.CreateCondBr(detected, decimal_div_fail, decimal_div_ok);
+
+      cgen_state_->ir_builder_.SetInsertPoint(decimal_div_fail);
+      cgen_state_->ir_builder_.CreateRet(ll_int(ERR_OVERFLOW_OR_UNDERFLOW));
+
+      cgen_state_->ir_builder_.SetInsertPoint(decimal_div_ok);
+
+      lhs_lv = null_typename.empty() ? cgen_state_->ir_builder_.CreateMul(lhs_lv, scale_lv)
+                                     : cgen_state_->emitCall("mul_" + numeric_type_name(ti) + null_check_suffix,
+                                                             {lhs_lv, scale_lv, ll_int(inline_int_null_val(ti))});
+    }
   }
   cgen_state_->needs_error_check_ = true;
-  // Generate control flow for division by zero error handling.
   auto div_ok = llvm::BasicBlock::Create(cgen_state_->context_, "div_ok", cgen_state_->row_func_);
   auto div_zero = llvm::BasicBlock::Create(cgen_state_->context_, "div_zero", cgen_state_->row_func_);
   auto zero_const = rhs_lv->getType()->isIntegerTy() ? llvm::ConstantInt::get(rhs_lv->getType(), 0, true)

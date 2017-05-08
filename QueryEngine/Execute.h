@@ -474,7 +474,8 @@ class Executor {
                           llvm::Value*,
                           const std::string& null_typename,
                           const std::string& null_check_suffix,
-                          const SQLTypeInfo&);
+                          const SQLTypeInfo&,
+                          bool upscale = true);
   llvm::Value* codegenMod(llvm::Value*,
                           llvm::Value*,
                           const std::string& null_typename,
