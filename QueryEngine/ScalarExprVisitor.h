@@ -52,6 +52,10 @@ class ScalarExprVisitor {
     if (in_values) {
       return visitInValues(in_values);
     }
+    const auto in_integer_set = dynamic_cast<const Analyzer::InIntegerSet*>(expr);
+    if (in_integer_set) {
+      return visitInIntegerSet(in_integer_set);
+    }
     const auto char_length = dynamic_cast<const Analyzer::CharLengthExpr*>(expr);
     if (char_length) {
       return visitCharLength(char_length);
@@ -59,6 +63,10 @@ class ScalarExprVisitor {
     const auto like_expr = dynamic_cast<const Analyzer::LikeExpr*>(expr);
     if (like_expr) {
       return visitLikeExpr(like_expr);
+    }
+    const auto regexp_expr = dynamic_cast<const Analyzer::RegexpExpr*>(expr);
+    if (regexp_expr) {
+      return visitRegexpExpr(regexp_expr);
     }
     const auto case_ = dynamic_cast<const Analyzer::CaseExpr*>(expr);
     if (case_) {
@@ -83,6 +91,10 @@ class ScalarExprVisitor {
     const auto datediff = dynamic_cast<const Analyzer::DatediffExpr*>(expr);
     if (datediff) {
       return visitDatediffExpr(datediff);
+    }
+    const auto likelihood = dynamic_cast<const Analyzer::LikelihoodExpr*>(expr);
+    if (likelihood) {
+      return visitLikelihood(likelihood);
     }
     const auto agg = dynamic_cast<const Analyzer::AggExpr*>(expr);
     if (agg) {
@@ -114,12 +126,16 @@ class ScalarExprVisitor {
   }
 
   virtual T visitInValues(const Analyzer::InValues* in_values) const {
-    T result = defaultResult();
+    T result = visit(in_values->get_arg());
     const auto& value_list = in_values->get_value_list();
     for (const auto in_value : value_list) {
       result = aggregateResult(result, visit(in_value.get()));
     }
     return result;
+  }
+
+  virtual T visitInIntegerSet(const Analyzer::InIntegerSet* in_integer_set) const {
+    return visit(in_integer_set->get_arg());
   }
 
   virtual T visitCharLength(const Analyzer::CharLengthExpr* char_length) const {
@@ -134,6 +150,16 @@ class ScalarExprVisitor {
     result = aggregateResult(result, visit(like->get_like_expr()));
     if (like->get_escape_expr()) {
       result = aggregateResult(result, visit(like->get_escape_expr()));
+    }
+    return result;
+  }
+
+  virtual T visitRegexpExpr(const Analyzer::RegexpExpr* regexp) const {
+    T result = defaultResult();
+    result = aggregateResult(result, visit(regexp->get_arg()));
+    result = aggregateResult(result, visit(regexp->get_pattern_expr()));
+    if (regexp->get_escape_expr()) {
+      result = aggregateResult(result, visit(regexp->get_escape_expr()));
     }
     return result;
   }
@@ -180,6 +206,8 @@ class ScalarExprVisitor {
     result = aggregateResult(result, visit(datediff->get_end_expr()));
     return result;
   }
+
+  virtual T visitLikelihood(const Analyzer::LikelihoodExpr* likelihood) const { return visit(likelihood->get_arg()); }
 
   virtual T visitAggExpr(const Analyzer::AggExpr* agg) const {
     T result = defaultResult();
