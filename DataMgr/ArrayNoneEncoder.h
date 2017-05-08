@@ -32,6 +32,7 @@
 #include "AbstractBuffer.h"
 #include "ChunkMetadata.h"
 #include "Encoder.h"
+#include <mutex>
 
 using Data_Namespace::AbstractBuffer;
 
@@ -178,9 +179,13 @@ class ArrayNoneEncoder : public Encoder {
   Datum elem_max;
   bool has_nulls;
   bool initialized;
-  void set_index_buf(AbstractBuffer* buf) { index_buf = buf; }
+  void set_index_buf(AbstractBuffer* buf) {
+    std::unique_lock<std::mutex> lock(EncoderMutex_);
+    index_buf = buf;
+  }
 
  private:
+  std::mutex EncoderMutex_;
   AbstractBuffer* index_buf;
   StringOffsetT last_offset;
 
