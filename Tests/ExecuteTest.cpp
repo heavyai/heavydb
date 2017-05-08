@@ -596,6 +596,7 @@ TEST(Select, FilterShortCircuit) {
     c("SELECT COUNT(*) FROM test WHERE x > 6 AND x < 8 AND UNLIKELY(z < 200) AND z > 100 AND z < 102 AND t > 1000 AND "
       "t > 1000 AND t > 1001  AND UNLIKELY(t < 1111 AND t > 1100) AND (str LIKE 'f__%%') AND t > 1002 AND t > 1003;",
       dt);
+    c("SELECT COUNT(*) FROM test WHERE UNLIKELY(x IN (7, 8, 9, 10)) AND y > 42;", dt);
   }
 }
 #endif  // HAVE_CALCITE

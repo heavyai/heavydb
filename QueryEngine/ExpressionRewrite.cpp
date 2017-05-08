@@ -211,17 +211,32 @@ class IndirectToDirectColVisitor : public DeepCopyVisitor {
   std::unordered_map<int, const InputColDescriptor*> ind_col_id_to_desc_;
 };
 
+const Analyzer::Expr* strip_likelihood(const Analyzer::Expr* expr) {
+  const auto with_likelihood = dynamic_cast<const Analyzer::LikelihoodExpr*>(expr);
+  if (!with_likelihood) {
+    return expr;
+  }
+  return with_likelihood->get_arg();
+}
+
 }  // namespace
 
 std::shared_ptr<Analyzer::Expr> rewrite_expr(const Analyzer::Expr* expr) {
+  const auto expr_no_likelihood = strip_likelihood(expr);
   // The following check is not strictly needed, but seems silly to transform a
   // simple string comparison to an IN just to codegen the same thing anyway.
-  const auto bin_oper = dynamic_cast<const Analyzer::BinOper*>(expr);
+  const auto bin_oper = dynamic_cast<const Analyzer::BinOper*>(expr_no_likelihood);
   if (!bin_oper || bin_oper->get_optype() != kOR) {
     return nullptr;
   }
   OrToInVisitor visitor;
-  return visitor.visit(expr);
+  auto rewritten_expr = visitor.visit(expr_no_likelihood);
+  const auto expr_with_likelihood = dynamic_cast<const Analyzer::LikelihoodExpr*>(expr);
+  if (expr_with_likelihood) {
+    // Add back likelihood
+    return std::make_shared<Analyzer::LikelihoodExpr>(rewritten_expr, expr_with_likelihood->get_likelihood());
+  }
+  return rewritten_expr;
 }
 
 std::list<std::shared_ptr<Analyzer::Expr>> redirect_exprs(
