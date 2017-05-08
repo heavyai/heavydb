@@ -1543,6 +1543,9 @@ TEST(Select, OverflowAndUnderFlow) {
                  std::runtime_error);
     EXPECT_THROW(run_multiple_agg("SELECT dd * 2000000000000000 FROM test LIMIT 5;", dt), std::runtime_error);
     c("SELECT dd * 200000000000000 FROM test LIMIT 5;", dt);  // overflow avoided through decimal mul optimization
+    c("SELECT COUNT(*) FROM test WHERE dd + 2.0000000000000009 > 110.0;", dt);  // no overflow in the cast
+    EXPECT_THROW(run_multiple_agg("SELECT COUNT(*) FROM test WHERE dd + 2.00000000000000099 > 110.0;", dt),
+                 std::runtime_error);  // overflow in the cast due to higher precision
     c("SELECT cast((cast(z as int) - -32666) *0.000190 as int) as key0, "
       "COUNT(*) AS val FROM test WHERE (z >= -32666 AND z < 31496) "
       "GROUP BY key0 HAVING key0 >= 0 AND key0 < 12 ORDER BY val "

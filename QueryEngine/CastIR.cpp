@@ -145,17 +145,48 @@ llvm::Value* Executor::codegenCastBetweenIntTypes(llvm::Value* operand_lv,
   if (ti.is_decimal()) {
     if (upscale) {
       CHECK(!operand_ti.is_decimal() || operand_ti.get_scale() <= ti.get_scale());
-      operand_lv = cgen_state_->ir_builder_.CreateSExt(operand_lv, get_int_type(64, cgen_state_->context_));
-      const auto scale_lv = llvm::ConstantInt::get(get_int_type(64, cgen_state_->context_),
-                                                   exp_to_scale(ti.get_scale() - operand_ti.get_scale()));
-      if (operand_ti.get_notnull()) {
-        operand_lv = cgen_state_->ir_builder_.CreateMul(operand_lv, scale_lv);
-      } else {
-        operand_lv = cgen_state_->emitCall("scale_decimal",
-                                           {operand_lv,
-                                            scale_lv,
-                                            ll_int(inline_int_null_val(operand_ti)),
-                                            inlineIntNull(SQLTypeInfo(kBIGINT, false))});
+      if (operand_ti.get_scale() < ti.get_scale()) {  // scale only if needed
+        auto scale = exp_to_scale(ti.get_scale() - operand_ti.get_scale());
+        const auto scale_lv = llvm::ConstantInt::get(get_int_type(64, cgen_state_->context_), scale);
+        operand_lv = cgen_state_->ir_builder_.CreateSExt(operand_lv, get_int_type(64, cgen_state_->context_));
+
+        llvm::Value* chosen_max{nullptr};
+        llvm::Value* chosen_min{nullptr};
+        std::tie(chosen_max, chosen_min) = inlineIntMaxMin(8, true);
+
+        cgen_state_->needs_error_check_ = true;
+        auto cast_to_decimal_ok =
+            llvm::BasicBlock::Create(cgen_state_->context_, "cast_to_decimal_ok", cgen_state_->row_func_);
+        auto cast_to_decimal_fail =
+            llvm::BasicBlock::Create(cgen_state_->context_, "cast_to_decimal_fail", cgen_state_->row_func_);
+        auto operand_max = static_cast<llvm::ConstantInt*>(chosen_max)->getSExtValue() / scale;
+        auto operand_max_lv = llvm::ConstantInt::get(get_int_type(64, cgen_state_->context_), operand_max);
+        llvm::Value* detected{nullptr};
+        if (operand_ti.get_notnull()) {
+          detected = cgen_state_->ir_builder_.CreateICmpSGT(operand_lv, operand_max_lv);
+        } else {
+          detected = toBool(cgen_state_->emitCall("gt_" + numeric_type_name(ti) + "_nullable_lhs",
+                                                  {operand_lv,
+                                                   operand_max_lv,
+                                                   ll_int(inline_int_null_val(operand_ti)),
+                                                   inlineIntNull(SQLTypeInfo(kBOOLEAN, false))}));
+        }
+        cgen_state_->ir_builder_.CreateCondBr(detected, cast_to_decimal_fail, cast_to_decimal_ok);
+
+        cgen_state_->ir_builder_.SetInsertPoint(cast_to_decimal_fail);
+        cgen_state_->ir_builder_.CreateRet(ll_int(ERR_OVERFLOW_OR_UNDERFLOW));
+
+        cgen_state_->ir_builder_.SetInsertPoint(cast_to_decimal_ok);
+
+        if (operand_ti.get_notnull()) {
+          operand_lv = cgen_state_->ir_builder_.CreateMul(operand_lv, scale_lv);
+        } else {
+          operand_lv = cgen_state_->emitCall("scale_decimal",
+                                             {operand_lv,
+                                              scale_lv,
+                                              ll_int(inline_int_null_val(operand_ti)),
+                                              inlineIntNull(SQLTypeInfo(kBIGINT, false))});
+        }
       }
     }
   } else if (operand_ti.is_decimal()) {
