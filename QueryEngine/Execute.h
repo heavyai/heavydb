@@ -476,6 +476,7 @@ class Executor {
                           const std::string& null_check_suffix,
                           const SQLTypeInfo&,
                           bool upscale = true);
+  llvm::Value* codegenDeciDiv(const Analyzer::BinOper*, const CompilationOptions&);
   llvm::Value* codegenMod(llvm::Value*,
                           llvm::Value*,
                           const std::string& null_typename,

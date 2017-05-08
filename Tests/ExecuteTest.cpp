@@ -1549,6 +1549,12 @@ TEST(Select, OverflowAndUnderFlow) {
     c("select dd/2.00000009 from test limit 1;", dt);  // dividend still fits after cast and division upscaling
     EXPECT_THROW(run_multiple_agg("select dd/2.000000099 from test limit 1;", dt),
                  std::runtime_error);  // dividend overflows after cast and division upscaling due to higher precision
+    c("select (dd-40.6364668888)/2 from test limit 1;", dt);  // decimal div by const optimization avoids overflow
+    c("select (dd-40.6364668888)/x from test limit 1;", dt);  // decimal div by int cast optimization avoids overflow
+    c("select (dd-40.63646688)/dd from test limit 1;",
+      dt);  // dividend still fits after upscaling from cast and division
+    EXPECT_THROW(run_multiple_agg("select (dd-40.6364668888)/dd from test limit 1;", dt),
+                 std::runtime_error);  // dividend overflows on upscaling on a slightly higher precision, test detection
     c("SELECT cast((cast(z as int) - -32666) *0.000190 as int) as key0, "
       "COUNT(*) AS val FROM test WHERE (z >= -32666 AND z < 31496) "
       "GROUP BY key0 HAVING key0 >= 0 AND key0 < 12 ORDER BY val "
