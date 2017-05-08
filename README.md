@@ -52,6 +52,7 @@ The following `cmake`/`ccmake` options can enable/disable different features:
 - `-DMAPD_IMMERSE_DOWNLOAD=on` download the latest master build of Immerse / `mapd2-frontend`. Default `on`.
 - `-DMAPD_DOCS_DOWNLOAD=on` download the latest master build of the documentation / `docs.mapd.com`. Default `off`. Note: this is a >50MB download.
 - `-DPREFER_STATIC_LIBS=on` static link dependencies, if available. Default `off`.
+- `-DENABLE_ARROW_CONVERTER=on` enable alpha support for the [GPU Data Frame](https://github.com/gpuopenanalytics), based on a subset of the [Apache Arrow specification](http://arrow.apache.org/). Default `off`.
 
 # Testing
 
