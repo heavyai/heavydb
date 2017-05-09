@@ -242,7 +242,7 @@ int main(int argc, char** argv) {
   int start_gpu = 0;
   int tthreadpool_size = 8;
   size_t num_reader_threads = 0;  // number of threads used when loading data
-  int start_epoch = -1;
+  std::string start_epoch(""); // epoch value for the table, presented as: table_name:epoch
   std::string db_convert_dir("");  // path to mapd DB to convert from; if path is empty, no conversion is requested
   std::string db_query_file("");   // path to file containing warmup queries list
 
@@ -311,7 +311,7 @@ int main(int argc, char** argv) {
                              ->implicit_value(10000),
                          "Dynamic watchdog time limit, in milliseconds");
   desc_adv.add_options()(
-      "start-epoch", po::value<int>(&start_epoch)->default_value(start_epoch), "Value of epoch to 'rollback' to");
+      "start-epoch", po::value<std::string>(&start_epoch), "Value of table epoch to 'rollback' to");
   desc_adv.add_options()(
       "cuda-block-size",
       po::value<size_t>(&mapd_parameters.cuda_block_size)->default_value(mapd_parameters.cuda_block_size),
@@ -511,6 +511,29 @@ int main(int argc, char** argv) {
   LOG(INFO) << " cuda grid size  " << mapd_parameters.cuda_grid_size;
   LOG(INFO) << " calcite JVM max memory  " << mapd_parameters.calcite_max_mem;
 
+  // extract and validate value of the epock to rollback to for the table if requested
+  std::string start_epoch_table("");
+  int start_epoch_int_value = -1;
+  if (start_epoch.length() > 0) {
+    std::string start_epoch_value("");
+    std::string start_epoch_delimiter(":");
+    size_t pos = start_epoch.find(start_epoch_delimiter);
+    if (pos == std::string::npos) {
+      LOG(ERROR) << "Value of option start-epoch does not contain delimiter: "
+                 << start_epoch << std::endl;
+      throw std::runtime_error("Option start-epoch is not correct.");
+    }
+    start_epoch_table = start_epoch.substr(0, pos);
+    start_epoch_value = start_epoch.substr(pos + 1, start_epoch.length());
+    try {
+      start_epoch_int_value = std::stoi(start_epoch_value);
+    } catch (std::exception& e) {
+      LOG(ERROR) << "Value of option start-epoch has incorrect epoch number: "
+                 << start_epoch << std::endl;
+      throw std::runtime_error("Option start-epoch is not correct.");
+    }
+  }
+
   // rudimetary signal handling to try to guarantee the logging gets flushed to files
   // on shutdown
   register_signal_handler();
@@ -530,7 +553,8 @@ int main(int argc, char** argv) {
                                                   start_gpu,
                                                   reserved_gpu_mem,
                                                   num_reader_threads,
-                                                  start_epoch,
+                                                  start_epoch_table,
+                                                  start_epoch_int_value,
                                                   ldapMetadata,
                                                   mapd_parameters,
                                                   db_convert_dir,
@@ -564,7 +588,7 @@ int main(int argc, char** argv) {
     bufThread.join();
     httpThread.join();
   } else {  // running ha server
-    LOG(FATAL) << "No High Availabilty module avilable, please contact MapD support";
+    LOG(FATAL) << "No High Availability module available, please contact MapD support";
   }
   return 0;
 }

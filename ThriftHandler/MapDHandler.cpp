@@ -208,6 +208,7 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
                          const int start_gpu,
                          const size_t reserved_gpu_mem,
                          const size_t num_reader_threads,
+                         const std::string& start_epoch_table_name,
                          const int start_epoch,
                          const LdapMetadata ldapMetadata,
                          const MapDParameters& mapd_parameters,
@@ -235,6 +236,8 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
 #else
       enable_rendering_(enable_rendering),
 #endif  // HAVE_CALCITE
+      start_epoch_table_name_(start_epoch_table_name),
+      start_epoch_(start_epoch),
       super_user_rights_(false) {
   LOG(INFO) << "MapD Server " << MAPD_RELEASE;
   if (executor_device == "gpu") {
@@ -266,7 +269,6 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
                                               db_convert_dir,
                                               start_gpu,
                                               total_reserved,
-                                              start_epoch,
                                               num_reader_threads));
 #ifdef HAVE_CALCITE
   calcite_.reset(new Calcite(calcite_port, base_data_path_, mapd_parameters_.calcite_max_mem));
@@ -414,9 +416,14 @@ void MapDHandler::connectImpl(TSessionId& session,
     cat_map_[dbname].reset(cat);
     sessions_[session].reset(
         new Catalog_Namespace::SessionInfo(cat_map_[dbname], user_meta, executor_device_type_, session));
-  } else
+    const auto start_epoch_session_info_ptr = sessions_[session];
+    set_table_start_epoch(*start_epoch_session_info_ptr);
+  } else {
     sessions_[session].reset(
         new Catalog_Namespace::SessionInfo(cat_it->second, user_meta, executor_device_type_, session));
+    const auto start_epoch_session_info_ptr = sessions_[session];
+    set_table_start_epoch(*start_epoch_session_info_ptr);
+  }
   if (!super_user_rights_) {  // no need to connect to leaf_aggregator_ at this time while doing warmup
     if (leaf_aggregator_.leafCount() > 0) {
       const auto parent_session_info_ptr = sessions_[session];
@@ -2613,22 +2620,6 @@ void MapDHandler::throw_profile_exception(const std::string& error_msg) {
   LOG(ERROR) << ex.error_msg;
   throw ex;
 }
-/*
- * Copyright 2017 MapD Technologies, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 
 void MapDHandler::execute_first_step(TStepResult &_return,
                                      const TPendingQuery &pending_query) {
@@ -2645,4 +2636,21 @@ void MapDHandler::broadcast_serialized_rows(const std::string &serialized_rows,
                                             const TRowDescriptor &row_desc,
                                             const TQueryId query_id) {
   CHECK(false);
+}
+
+void MapDHandler::set_table_start_epoch(const Catalog_Namespace::SessionInfo& session_info) {
+  if (start_epoch_table_name_.length() > 0) {
+      auto& cat = session_info.get_catalog();
+      auto td = cat.getMetadataForTable(start_epoch_table_name_);
+      if (!td) {
+        TMapDException ex;
+        ex.error_msg = "Unable to set epoch for table " + start_epoch_table_name_ +
+                       " because the table does not exist.";
+        LOG(ERROR) << ex.error_msg;
+        throw ex;
+      }
+      int tb_id = static_cast<int>(td->tableId);
+      int db_id = static_cast<int>(cat.get_currentDB().dbId);
+      data_mgr_->updateTableEpoch(db_id, tb_id, start_epoch_);
+  }
 }

@@ -49,7 +49,7 @@ class GlobalFileMgr : public AbstractBufferMgr {  // implements
  public:
   /// Constructor
   GlobalFileMgr(const int deviceId, std::string basePath = ".", const size_t num_reader_threads = 0,
-          const int epoch = -1, const size_t defaultPageSize = 2097152);
+                const size_t defaultPageSize = 2097152);
 
   /// Destructor
   virtual ~GlobalFileMgr();
@@ -152,11 +152,15 @@ class GlobalFileMgr : public AbstractBufferMgr {  // implements
   inline void setDBConvert(bool val) { dbConvert_ = val; }
 
   void removeTableRelatedDS(const int db_id, const int tb_id);
+  void updateTableEpoch(const int db_id, const int tb_id, const int start_epoch);
 
  private:
   std::string basePath_;          /// The OS file system path containing the files.
   size_t num_reader_threads_;     /// number of threads used when loading data
-  int epoch_;                     /// the current epoch (time of last checkpoint)
+  int epoch_;                     /* the current epoch (time of last checkpoint) will be used for all
+                                   * tables except of the one for which the value of the epoch has been reset
+                                   * using --start-epoch option at start up to rollback this table's updates.
+                                   */
   size_t defaultPageSize_;        /// default page size, used to set FileMgr defaultPageSize_
   // bool isDirty_;               /// true if metadata changed since last writeState()
   int mapd_db_version_;           /// DB version for DataMgr DS and corresponding file buffer read/write code

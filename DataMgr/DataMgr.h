@@ -65,7 +65,6 @@ class DataMgr {
           const std::string& dbConvertDir = "",
           const int startGpu = 0,
           const size_t reservedGpuMem = (1 << 27),
-          const int start_epoch = -1,
           const size_t numReaderThreads = 0); /* 0 means use default for # of reader threads */
   ~DataMgr();
   AbstractBuffer* createChunkBuffer(const ChunkKey& key, const MemoryLevel memoryLevel, const int deviceId = 0);
@@ -94,6 +93,7 @@ class DataMgr {
                                        const ChunkKey& keyPrefix);
   inline bool gpusPresent() { return hasGpus_; }
   void removeTableRelatedDS(const int db_id, const int tb_id);
+  void updateTableEpoch(const int db_id, const int tb_id, const int start_epoch);
 
   CudaMgr_Namespace::CudaMgr* cudaMgr_;
 
@@ -103,8 +103,7 @@ class DataMgr {
  private:
   size_t getTotalSystemMemory();
   void populateMgrs(const size_t userSpecifiedCpuBufferSize,
-                    const size_t userSpecifiedNumReaderThreads,
-                    const int start_epoch);
+                    const size_t userSpecifiedNumReaderThreads);
   void convertDB(const std::string basePath);
   void checkpoint();  // checkpoint for whole DB, called from convertDB proc only
   void createTopLevelMetadata() const;

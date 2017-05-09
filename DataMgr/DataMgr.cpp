@@ -50,7 +50,6 @@ DataMgr::DataMgr(const string& dataDir,
                  const string& dbConvertDir,
                  const int startGpu,
                  const size_t reservedGpuMem,
-                 const int start_epoch,
                  const size_t numReaderThreads)
     : dataDir_(dataDir), dbConvertDir_(dbConvertDir) {
   if (useGpus) {
@@ -67,7 +66,7 @@ DataMgr::DataMgr(const string& dataDir,
     cudaMgr_ = 0;
   }
 
-  populateMgrs(cpuBufferSize, numReaderThreads, start_epoch);
+  populateMgrs(cpuBufferSize, numReaderThreads);
   createTopLevelMetadata();
 
   if (dbConvertDir_.size() > 0) {  // i.e. "--db_convert" option was used
@@ -109,10 +108,9 @@ size_t DataMgr::getTotalSystemMemory() {
 }
 
 void DataMgr::populateMgrs(const size_t userSpecifiedCpuBufferSize,
-                           const size_t userSpecifiedNumReaderThreads,
-                           const int start_epoch) {
+                           const size_t userSpecifiedNumReaderThreads) {
   bufferMgrs_.resize(2);
-  bufferMgrs_[0].push_back(new GlobalFileMgr(0, dataDir_, userSpecifiedNumReaderThreads, start_epoch));
+  bufferMgrs_[0].push_back(new GlobalFileMgr(0, dataDir_, userSpecifiedNumReaderThreads));
   levelSizes_.push_back(1);
   size_t cpuBufferSize = userSpecifiedCpuBufferSize;
   if (cpuBufferSize == 0)                          // if size is not specified
@@ -346,4 +344,9 @@ void DataMgr::checkpoint() {
 void DataMgr::removeTableRelatedDS(const int db_id, const int tb_id) {
   dynamic_cast<GlobalFileMgr*>(bufferMgrs_[0][0])->removeTableRelatedDS(db_id, tb_id);
 }
+
+void DataMgr::updateTableEpoch(const int db_id, const int tb_id, const int start_epoch) {
+  dynamic_cast<GlobalFileMgr*>(bufferMgrs_[0][0])->updateTableEpoch(db_id, tb_id, start_epoch);
+}
+
 }  // Data_Namespace

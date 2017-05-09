@@ -400,9 +400,16 @@ void FileMgr::writeAndSyncEpochToDisk() {
   int status = fflush(epochFile_);
   // int status = fcntl(fileno(epochFile_),51);
   if (status != 0) {
+    LOG(FATAL) << "Could not flush epoch file to disk";
+  }
+#ifdef __APPLE__
+    status = fcntl(fileno(epochFile_), 51);
+#else
+    status = fsync(fileno(epochFile_));
+#endif
+  if (status != 0) {
     LOG(FATAL) << "Could not sync epoch file to disk";
   }
-
   ++epoch_;
 }
 
@@ -816,6 +823,11 @@ void FileMgr::createTopLevelMetadata() {
   } else {
     createDBMetaFile(DB_META_FILENAME);
   }
+}
+
+void FileMgr::setEpoch(int epoch) {
+  epoch_ = epoch;
+  writeAndSyncEpochToDisk();
 }
 
 }  // File_Namespace

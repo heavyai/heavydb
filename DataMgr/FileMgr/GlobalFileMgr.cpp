@@ -38,11 +38,11 @@ using namespace std;
 namespace File_Namespace {
 
 GlobalFileMgr::GlobalFileMgr(const int deviceId, std::string basePath, const size_t num_reader_threads,
-                 const int epoch, const size_t defaultPageSize)
+                             const size_t defaultPageSize)
     : AbstractBufferMgr(deviceId),
       basePath_(basePath),
       num_reader_threads_(num_reader_threads),
-      epoch_(epoch),
+      epoch_(-1), // set the default epoch for all tables corresponding to the time of last checkpoint
       defaultPageSize_(defaultPageSize) {
   mapd_db_version_ = 1; // DS changes triggered by individual FileMgr per table project (release 2.1.0)
   dbConvert_ = false;
@@ -184,6 +184,18 @@ void GlobalFileMgr::removeTableRelatedDS(const int db_id, const int tb_id) {
   /* remove table related in-memory DS only if directory was removed successfully */
   if (ec == 0) { 
     delete fm;
+  }
+}
+
+void GlobalFileMgr::updateTableEpoch(const int db_id, const int tb_id, const int start_epoch) {
+  FileMgr* fm = findFileMgr(db_id, tb_id);
+  if (fm != 0) {
+    fm->setEpoch(start_epoch);
+  } else {
+    /* FileMgr for the table is being created in the calling procedure as part of 
+     * the request for the table matadata.
+     */
+    LOG(ERROR) << "Unable to set epoch for table because the table does not exist.";
   }
 }
 
