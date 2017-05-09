@@ -37,20 +37,22 @@ using namespace std;
 
 namespace File_Namespace {
 
-GlobalFileMgr::GlobalFileMgr(const int deviceId, std::string basePath, const size_t num_reader_threads,
+GlobalFileMgr::GlobalFileMgr(const int deviceId,
+                             std::string basePath,
+                             const size_t num_reader_threads,
                              const size_t defaultPageSize)
     : AbstractBufferMgr(deviceId),
       basePath_(basePath),
       num_reader_threads_(num_reader_threads),
-      epoch_(-1), // set the default epoch for all tables corresponding to the time of last checkpoint
+      epoch_(-1),  // set the default epoch for all tables corresponding to the time of last checkpoint
       defaultPageSize_(defaultPageSize) {
-  mapd_db_version_ = 1; // DS changes triggered by individual FileMgr per table project (release 2.1.0)
+  mapd_db_version_ = 1;  // DS changes triggered by individual FileMgr per table project (release 2.1.0)
   dbConvert_ = false;
   init();
 }
 
 GlobalFileMgr::~GlobalFileMgr() {
-  mapd_lock_guard<mapd_shared_mutex> fileMgrsMutex(fileMgrs_mutex_); 
+  mapd_lock_guard<mapd_shared_mutex> fileMgrsMutex(fileMgrs_mutex_);
   for (auto fileMgrsIt = fileMgrs_.begin(); fileMgrsIt != fileMgrs_.end(); ++fileMgrsIt) {
     delete fileMgrsIt->second;
   }
@@ -99,7 +101,7 @@ void GlobalFileMgr::deleteBuffersWithPrefix(const ChunkKey& keyPrefix, const boo
   /* keyPrefix[0] can be -1 only for gpu or cpu buffers but not for FileMgr.
    * There is no assert here, as GlobalFileMgr is being called with -1 value as well in the same
    * loop with other buffers. So the case of -1 will just be ignored, as nothing needs to be done.
-   */ 
+   */
   if (keyPrefix[0] != -1) {
     return getFileMgr(keyPrefix)->deleteBuffersWithPrefix(keyPrefix, purge);
   }
@@ -157,7 +159,7 @@ FileMgr* GlobalFileMgr::getFileMgr(const int db_id, const int tb_id) {
   }
 }
 
-void GlobalFileMgr::writeFileMgrData(FileMgr* fileMgr) { // this function is not used, keep it for now for future needs
+void GlobalFileMgr::writeFileMgrData(FileMgr* fileMgr) {  // this function is not used, keep it for now for future needs
   for (auto fileMgrIt = fileMgrs_.begin(); fileMgrIt != fileMgrs_.end(); fileMgrIt++) {
     FileMgr* fm = fileMgrIt->second;
     if ((fileMgr != 0) && (fileMgr != fm)) {
@@ -182,7 +184,7 @@ void GlobalFileMgr::removeTableRelatedDS(const int db_id, const int tb_id) {
   boost::filesystem::remove_all(pathToTableDS, ec);
 
   /* remove table related in-memory DS only if directory was removed successfully */
-  if (ec == 0) { 
+  if (ec == 0) {
     delete fm;
   }
 }
@@ -192,7 +194,7 @@ void GlobalFileMgr::updateTableEpoch(const int db_id, const int tb_id, const int
   if (fm != 0) {
     fm->setEpoch(start_epoch);
   } else {
-    /* FileMgr for the table is being created in the calling procedure as part of 
+    /* FileMgr for the table is being created in the calling procedure as part of
      * the request for the table matadata.
      */
     LOG(ERROR) << "Unable to set epoch for table because the table does not exist.";

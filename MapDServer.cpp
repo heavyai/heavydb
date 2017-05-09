@@ -241,8 +241,8 @@ int main(int argc, char** argv) {
   int num_gpus = -1;  // Can be used to override number of gpus detected on system - -1 means do not override
   int start_gpu = 0;
   int tthreadpool_size = 8;
-  size_t num_reader_threads = 0;  // number of threads used when loading data
-  std::string start_epoch(""); // epoch value for the table, presented as: table_name:epoch
+  size_t num_reader_threads = 0;   // number of threads used when loading data
+  std::string start_epoch("");     // epoch value for the table, presented as: table_name:epoch
   std::string db_convert_dir("");  // path to mapd DB to convert from; if path is empty, no conversion is requested
   std::string db_query_file("");   // path to file containing warmup queries list
 
@@ -310,8 +310,7 @@ int main(int argc, char** argv) {
                              ->default_value(dynamic_watchdog_time_limit)
                              ->implicit_value(10000),
                          "Dynamic watchdog time limit, in milliseconds");
-  desc_adv.add_options()(
-      "start-epoch", po::value<std::string>(&start_epoch), "Value of table epoch to 'rollback' to");
+  desc_adv.add_options()("start-epoch", po::value<std::string>(&start_epoch), "Value of table epoch to 'rollback' to");
   desc_adv.add_options()(
       "cuda-block-size",
       po::value<size_t>(&mapd_parameters.cuda_block_size)->default_value(mapd_parameters.cuda_block_size),
@@ -519,8 +518,7 @@ int main(int argc, char** argv) {
     std::string start_epoch_delimiter(":");
     size_t pos = start_epoch.find(start_epoch_delimiter);
     if (pos == std::string::npos) {
-      LOG(ERROR) << "Value of option start-epoch does not contain delimiter: "
-                 << start_epoch << std::endl;
+      LOG(ERROR) << "Value of option start-epoch does not contain delimiter: " << start_epoch << std::endl;
       throw std::runtime_error("Option start-epoch is not correct.");
     }
     start_epoch_table = start_epoch.substr(0, pos);
@@ -528,8 +526,7 @@ int main(int argc, char** argv) {
     try {
       start_epoch_int_value = std::stoi(start_epoch_value);
     } catch (std::exception& e) {
-      LOG(ERROR) << "Value of option start-epoch has incorrect epoch number: "
-                 << start_epoch << std::endl;
+      LOG(ERROR) << "Value of option start-epoch has incorrect epoch number: " << start_epoch << std::endl;
       throw std::runtime_error("Option start-epoch is not correct.");
     }
   }

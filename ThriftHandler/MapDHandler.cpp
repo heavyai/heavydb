@@ -2640,17 +2640,16 @@ void MapDHandler::broadcast_serialized_rows(const std::string &serialized_rows,
 
 void MapDHandler::set_table_start_epoch(const Catalog_Namespace::SessionInfo& session_info) {
   if (start_epoch_table_name_.length() > 0) {
-      auto& cat = session_info.get_catalog();
-      auto td = cat.getMetadataForTable(start_epoch_table_name_);
-      if (!td) {
-        TMapDException ex;
-        ex.error_msg = "Unable to set epoch for table " + start_epoch_table_name_ +
-                       " because the table does not exist.";
-        LOG(ERROR) << ex.error_msg;
-        throw ex;
-      }
-      int tb_id = static_cast<int>(td->tableId);
-      int db_id = static_cast<int>(cat.get_currentDB().dbId);
-      data_mgr_->updateTableEpoch(db_id, tb_id, start_epoch_);
+    auto& cat = session_info.get_catalog();
+    auto td = cat.getMetadataForTable(start_epoch_table_name_);
+    if (!td) {
+      TMapDException ex;
+      ex.error_msg = "Unable to set epoch for table " + start_epoch_table_name_ + " because the table does not exist.";
+      LOG(ERROR) << ex.error_msg;
+      throw ex;
+    }
+    int tb_id = static_cast<int>(td->tableId);
+    int db_id = static_cast<int>(cat.get_currentDB().dbId);
+    data_mgr_->updateTableEpoch(db_id, tb_id, start_epoch_);
   }
 }

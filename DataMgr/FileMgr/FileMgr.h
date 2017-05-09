@@ -255,7 +255,7 @@ class FileMgr : public AbstractBufferMgr {  // implements
   void createDBMetaFile(const std::string& DBMetaFileName);
   bool openDBMetaFile(const std::string& DBMetaFileName);
   void writeAndSyncDBMetaToDisk();
-  void setEpoch(int epoch); // resets current value of epoch at startup
+  void setEpoch(int epoch);  // resets current value of epoch at startup
 };
 
 }  // File_Namespace

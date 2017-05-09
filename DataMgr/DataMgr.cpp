@@ -107,8 +107,7 @@ size_t DataMgr::getTotalSystemMemory() {
 #endif
 }
 
-void DataMgr::populateMgrs(const size_t userSpecifiedCpuBufferSize,
-                           const size_t userSpecifiedNumReaderThreads) {
+void DataMgr::populateMgrs(const size_t userSpecifiedCpuBufferSize, const size_t userSpecifiedNumReaderThreads) {
   bufferMgrs_.resize(2);
   bufferMgrs_[0].push_back(new GlobalFileMgr(0, dataDir_, userSpecifiedNumReaderThreads));
   levelSizes_.push_back(1);

@@ -102,8 +102,7 @@ class DataMgr {
 
  private:
   size_t getTotalSystemMemory();
-  void populateMgrs(const size_t userSpecifiedCpuBufferSize,
-                    const size_t userSpecifiedNumReaderThreads);
+  void populateMgrs(const size_t userSpecifiedCpuBufferSize, const size_t userSpecifiedNumReaderThreads);
   void convertDB(const std::string basePath);
   void checkpoint();  // checkpoint for whole DB, called from convertDB proc only
   void createTopLevelMetadata() const;
