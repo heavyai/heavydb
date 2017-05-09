@@ -90,35 +90,11 @@ __global__ void init_render_buffer_wrapper(int64_t* render_buffer, const uint32_
   init_render_buffer(render_buffer, qw_count);
 }
 
-inline __device__ bool fill_empty_device_key(int64_t* key_ptr_i64,
-                                             const uint32_t key_qw_idx,
-                                             const uint32_t key_count,
-                                             const uint32_t key_width,
-                                             const uint32_t row_size_quad) {
-  switch (key_width) {
-    case 4: {
-      auto key_ptr_i32 = reinterpret_cast<int32_t*>(key_ptr_i64);
-      if (key_qw_idx * 2 < key_count) {
-        key_ptr_i32[0] = EMPTY_KEY_32;
-        key_ptr_i32[1] = EMPTY_KEY_32;
-        return true;
-      } else if (key_qw_idx * 2 == key_count + 1) {
-        key_ptr_i32[0] = EMPTY_KEY_32;
-        key_ptr_i32[1] = 0;  // padding
-        return true;
-      }
-    } break;
-    case 8:
-      if (key_qw_idx < key_count) {
-        *key_ptr_i64 = EMPTY_KEY_64;
-        return true;
-      }
-      break;
-    default:
-      // FIXME(miyu): CUDA linker doesn't accept assertion on GPU yet now.
-      break;
+template <typename K>
+inline __device__ void fill_empty_device_key(K* keys_ptr, const uint32_t key_count, const K empty_key) {
+  for (uint32_t i = 0; i < key_count; ++i) {
+    keys_ptr[i] = empty_key;
   }
-  return false;
 }
 
 __global__ void init_group_by_buffer_gpu(int64_t* groups_buffer,
@@ -140,11 +116,26 @@ __global__ void init_group_by_buffer_gpu(int64_t* groups_buffer,
     return;
   }
 
-  const int32_t slot_off_quad = align_to_int64(key_count * key_width) / sizeof(int64_t);
-  int32_t groups_buffer_entry_qw_count = groups_buffer_entry_count * row_size_quad;
-  for (int32_t i = start; i < groups_buffer_entry_qw_count; i += step) {
-    if (!fill_empty_device_key(&groups_buffer[i], (i % row_size_quad), key_count, key_width, row_size_quad)) {
-      groups_buffer[i] = init_vals[(i % row_size_quad) - slot_off_quad];
+  for (int32_t i = start; i < groups_buffer_entry_count; i += step) {
+    int64_t* keys_ptr = groups_buffer + i * row_size_quad;
+    switch (key_width) {
+      case 4:
+        fill_empty_device_key(reinterpret_cast<int32_t*>(keys_ptr), key_count, EMPTY_KEY_32);
+        break;
+      case 8:
+        fill_empty_device_key(reinterpret_cast<int64_t*>(keys_ptr), key_count, EMPTY_KEY_64);
+        break;
+      default:
+        break;
+    }
+  }
+
+  const uint32_t values_off_quad = align_to_int64(key_count * key_width) / sizeof(int64_t);
+  for (uint32_t i = start; i < groups_buffer_entry_count; i += step) {
+    int64_t* vals_ptr = groups_buffer + i * row_size_quad + values_off_quad;
+    const uint32_t val_count = row_size_quad - values_off_quad;  // value slots are always 64-bit
+    for (uint32_t j = 0; j < val_count; ++j) {
+      vals_ptr[j] = init_vals[j];
     }
   }
   __syncthreads();

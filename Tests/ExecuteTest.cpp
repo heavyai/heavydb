@@ -412,6 +412,7 @@ TEST(Select, FilterAndSimpleAggregation) {
     c("SELECT x, MAX(fn) as val FROM test WHERE fn IS NOT NULL GROUP BY x ORDER BY val;", dt);
     c("SELECT MAX(dn) FROM test WHERE dn IS NOT NULL;", dt);
     c("SELECT x, MAX(dn) as val FROM test WHERE dn IS NOT NULL GROUP BY x ORDER BY val;", dt);
+    c("SELECT COUNT(*) as val FROM test GROUP BY x, y, ufd ORDER BY val;", dt);
     ASSERT_NEAR(static_cast<double>(-1000.3),
                 v<double>(run_simple_agg("SELECT AVG(fn) AS val FROM test GROUP BY rowid ORDER BY val LIMIT 1;", dt)),
                 static_cast<double>(0.2));
