@@ -227,6 +227,14 @@ include_directories(ThirdParty/rapidjson)
 include_directories(ThirdParty/poly2tri)
 add_subdirectory(ThirdParty/poly2tri)
 
+# Linenoise
+include_directories(ThirdParty/linenoise)
+add_subdirectory(ThirdParty/linenoise)
+
+# SQLite
+include_directories(ThirdParty/sqlite3)
+add_subdirectory(ThirdParty/sqlite3)
+
 add_custom_command(
     DEPENDS ${CMAKE_SOURCE_DIR}/mapd.thrift
     OUTPUT
