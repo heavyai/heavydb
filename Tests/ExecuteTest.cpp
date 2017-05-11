@@ -2431,6 +2431,7 @@ TEST(Select, Subqueries) {
       "1)) FROM test;",
       dt);
 #endif
+    EXPECT_THROW(run_multiple_agg("SELECT * FROM (SELECT * FROM test LIMIT 5);", dt), std::runtime_error);
     EXPECT_THROW(run_simple_agg("SELECT AVG(SELECT x FROM test LIMIT 5) FROM test;", dt), std::runtime_error);
 #ifdef HAVE_CALCITE
     ASSERT_NEAR(static_cast<double>(2.057),

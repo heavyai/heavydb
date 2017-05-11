@@ -501,6 +501,9 @@ void Executor::ExecutionDispatch::run(const ExecutorDeviceType chosen_device_typ
     std::lock_guard<std::mutex> lock(reduce_mutex_);
     LOG(ERROR) << e.what();
     *error_code_ = ERR_OUT_OF_GPU_MEM;
+  } catch (const ColumnarConversionNotSupported& e) {
+    std::lock_guard<std::mutex> lock(reduce_mutex_);
+    *error_code_ = ERR_COLUMNAR_CONVERSION_NOT_SUPPORTED;
   }
 }
 

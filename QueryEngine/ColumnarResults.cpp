@@ -46,9 +46,11 @@ ColumnarResults::ColumnarResults(const std::shared_ptr<RowSetMemoryOwner> row_se
       target_types_(target_types) {
   column_buffers_.resize(num_columns);
   for (size_t i = 0; i < num_columns; ++i) {
-    CHECK(!target_types[i].is_array());
-    CHECK(!target_types[i].is_string() ||
-          (target_types[i].get_compression() == kENCODING_DICT && target_types[i].get_logical_size() == 4));
+    const bool is_varlen = target_types[i].is_array() ||
+                           (target_types[i].is_string() && target_types[i].get_compression() == kENCODING_NONE);
+    if (is_varlen) {
+      throw ColumnarConversionNotSupported();
+    }
     column_buffers_[i] = reinterpret_cast<const int8_t*>(checked_malloc(num_rows_ * target_types[i].get_size()));
     row_set_mem_owner->addColBuffer(column_buffers_[i]);
   }

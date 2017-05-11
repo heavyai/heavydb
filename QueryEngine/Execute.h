@@ -1289,6 +1289,7 @@ class Executor {
   static const int32_t ERR_SPECULATIVE_TOP_OOM{8};
   static const int32_t ERR_OUT_OF_TIME{9};
   static const int32_t ERR_INTERRUPTED{10};
+  static const int32_t ERR_COLUMNAR_CONVERSION_NOT_SUPPORTED{11};
   friend class GroupByAndAggregate;
   friend struct QueryMemoryDescriptor;
   friend class QueryExecutionContext;

@@ -1415,6 +1415,8 @@ std::string RelAlgExecutor::getErrorMessageFromCode(const int32_t error_code) {
       return "Query execution has exceeded the time limit";
     case Executor::ERR_INTERRUPTED:
       return "Query execution has been interrupted";
+    case Executor::ERR_COLUMNAR_CONVERSION_NOT_SUPPORTED:
+      return "Columnar conversion not supported for variable length types";
   }
   return "Other error: code " + std::to_string(error_code);
 }

@@ -22,6 +22,12 @@
 
 #include "../Shared/checked_alloc.h"
 
+class ColumnarConversionNotSupported : public std::runtime_error {
+ public:
+  ColumnarConversionNotSupported()
+      : std::runtime_error("Columnar conversion not supported for variable length types") {}
+};
+
 class ColumnarResults {
  public:
   ColumnarResults(const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
