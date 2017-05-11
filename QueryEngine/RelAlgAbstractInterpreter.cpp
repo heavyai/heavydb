@@ -215,6 +215,21 @@ bool RelProject::isRenaming() const {
   return false;
 }
 
+void RelMultiJoin::append(std::shared_ptr<RelJoin> join) {
+  if (sequence_.empty()) {
+    const auto src0 = join->getAndOwnInput(0);
+    CHECK(!std::dynamic_pointer_cast<const RelJoin>(src0));
+    addManagedInput(src0);
+  } else {
+    CHECK_EQ(sequence_.back().get(), join->getInput(0));
+  }
+  addManagedInput(join->getAndOwnInput(1));
+  sequence_.push_back(join);
+  RexDeepCopyVisitor copier;
+  auto condition = copier.visit(join->getCondition());
+  conditions_.push_back(std::move(condition));
+}
+
 void RelJoin::replaceInput(std::shared_ptr<const RelAlgNode> old_input, std::shared_ptr<const RelAlgNode> input) {
   RelAlgNode::replaceInput(old_input, input);
   RexRebindInputsVisitor rebind_inputs(old_input.get(), input.get());
@@ -792,7 +807,334 @@ class RANodeIterator : public std::vector<std::shared_ptr<RelAlgNode>>::const_it
   std::unordered_set<size_t> visited_;
 };
 
+#ifdef ENABLE_EQUIJOIN_FOLD
+template <typename T>
+const RexOperator* get_equals_operator(const T* node) {
+  auto top_operator = dynamic_cast<const RexOperator*>(node->getCondition());
+  if (!top_operator) {
+    return nullptr;
+  }
+
+  std::vector<const RexOperator*> work_set{top_operator};
+  while (!work_set.empty()) {
+    auto rex_operator = work_set.back();
+    work_set.pop_back();
+    if (rex_operator->getOperator() == kAND) {
+      if (auto left_operator = dynamic_cast<const RexOperator*>(rex_operator->getOperand(0))) {
+        work_set.push_back(left_operator);
+      }
+      if (auto right_operator = dynamic_cast<const RexOperator*>(rex_operator->getOperand(1))) {
+        work_set.push_back(right_operator);
+      }
+      continue;
+    }
+    if (rex_operator->getOperator() != kEQ) {
+      continue;
+    }
+    std::unordered_set<const RelAlgNode*> source_nodes;
+    for (size_t i = 0; i < rex_operator->size(); ++i) {
+      if (auto rex_in = dynamic_cast<const RexInput*>(rex_operator->getOperand(i))) {
+        source_nodes.insert(rex_in->getSourceNode());
+      }
+    }
+    if (source_nodes.size() == size_t(2)) {
+      return rex_operator;
+    }
+  }
+  return nullptr;
+}
+
+const RexOperator* get_equijoin_condition(const RelJoin* join) {
+  if (!join || join->getJoinType() != JoinType::INNER) {
+    return nullptr;
+  }
+  return get_equals_operator(join);
+}
+
+std::vector<const RelJoin*> collect_coalescable_joins(
+    const RelJoin* head,
+    const std::unordered_map<const RelAlgNode*, std::unordered_set<const RelAlgNode*>>& du_web,
+    std::vector<const RexOperator*>& condition_set) {
+  CHECK(head);
+  // TODO(miyu): relax this limitation
+  if (!dynamic_cast<const RelScan*>(head->getInput(0)) || !dynamic_cast<const RelScan*>(head->getInput(1))) {
+    return {};
+  }
+
+  auto first_condition = get_equijoin_condition(head);
+  if (!first_condition) {
+    return {};
+  }
+
+  condition_set.push_back(first_condition);
+  std::vector<const RelJoin*> join_seq;
+  const size_t first_table_size = head->getInput(0)->size();
+  for (auto walker = head; walker;) {
+    join_seq.push_back(walker);
+    auto usrs_it = du_web.find(walker);
+    CHECK(usrs_it != du_web.end());
+    auto& usrs = usrs_it->second;
+    CHECK(!usrs.empty());
+    if (usrs.size() > size_t(1)) {
+      break;
+    }
+    auto usr_join = dynamic_cast<const RelJoin*>(*usrs.begin());
+    if (usr_join) {
+      if (usr_join->getInput(0) != join_seq.back() || !dynamic_cast<const RelScan*>(head->getInput(1))) {
+        break;
+      }
+      auto equal_condition = get_equijoin_condition(usr_join);
+      if (!equal_condition) {
+        break;
+      }
+      auto left_operand = dynamic_cast<const RexInput*>(equal_condition->getOperand(0));
+      CHECK(left_operand);
+      if (left_operand->getSourceNode() == walker) {
+        if (left_operand->getIndex() >= first_table_size) {
+          break;
+        }
+      } else {
+        auto right_operand = dynamic_cast<const RexInput*>(equal_condition->getOperand(1));
+        CHECK(right_operand);
+        if (right_operand->getSourceNode() == walker) {
+          if (right_operand->getIndex() >= first_table_size) {
+            break;
+          }
+        }
+      }
+      condition_set.push_back(equal_condition);
+    }
+    walker = usr_join;
+  }
+
+  if (join_seq.empty()) {
+    condition_set.clear();
+  } else {
+    // TODO(miyu): relax this limitation when mult-column hash join is supported.
+    auto usrs_it = du_web.find(join_seq.back());
+    CHECK(usrs_it != du_web.end());
+    for (auto usr : usrs_it->second) {
+      if (auto filter = dynamic_cast<const RelFilter*>(usr)) {
+        if (get_equals_operator(filter)) {
+          return {};
+        }
+      }
+    }
+  }
+  return join_seq;
+}
+
+class RexInputRedirector : public RexDeepCopyVisitor {
+ public:
+  RexInputRedirector(const std::unordered_set<const RelJoin*>& joins) : join_set_(joins) {}
+  RetType visitInput(const RexInput* input) const override { return getNonJoinInput(*input); }
+
+  void visitNode(RelAlgNode* node) const {
+    if (dynamic_cast<RelAggregate*>(node) || dynamic_cast<RelSort*>(node)) {
+      return;
+    }
+    if (auto join = dynamic_cast<RelJoin*>(node)) {
+      auto new_condition = visit(join->getCondition());
+      join->setCondition(new_condition);
+      return;
+    }
+    if (auto project = dynamic_cast<RelProject*>(node)) {
+      std::vector<std::unique_ptr<const RexScalar>> new_exprs;
+      for (size_t i = 0; i < project->size(); ++i) {
+        new_exprs.push_back(visit(project->getProjectAt(i)));
+      }
+      project->setExpressions(new_exprs);
+      return;
+    }
+    if (auto filter = dynamic_cast<RelFilter*>(node)) {
+      auto new_condition = visit(filter->getCondition());
+      filter->setCondition(new_condition);
+      return;
+    }
+    CHECK(false);
+  }
+
+ private:
+  RetType getNonJoinInput(const RexInput& rex_in) const {
+    const auto crt_source = rex_in.getSourceNode();
+    const auto col_id = rex_in.getIndex();
+    CHECK_LE(0, col_id);
+    const auto join = dynamic_cast<const RelJoin*>(crt_source);
+    if (!join || !join_set_.count(join)) {
+      return boost::make_unique<RexInput>(crt_source, col_id);
+    }
+    const auto lhs = join->getInput(0);
+    const auto rhs = join->getInput(1);
+    CHECK(!dynamic_cast<const RelJoin*>(rhs));
+    const auto src0_base = static_cast<unsigned>(lhs->size());
+    if (col_id >= src0_base) {
+      return boost::make_unique<RexInput>(rhs, col_id - src0_base);
+    }
+    if (dynamic_cast<const RelJoin*>(lhs)) {
+      return getNonJoinInput(RexInput(lhs, col_id));
+    }
+    return boost::make_unique<RexInput>(lhs, col_id);
+  }
+
+  const std::unordered_set<const RelJoin*>& join_set_;
+};
+
+void redirect_inputs(std::shared_ptr<RelMultiJoin> multi_join,
+                     const std::unordered_map<const RelAlgNode*, std::unordered_set<const RelAlgNode*>> du_web,
+                     const std::unordered_map<const RelAlgNode*, std::shared_ptr<RelAlgNode>>& deconst_mapping) {
+  CHECK(multi_join);
+  CHECK_LE(size_t(2), multi_join->joinCount());
+  std::unordered_set<const RelJoin*> joins;
+  for (size_t i = 0; i < multi_join->joinCount(); ++i) {
+    joins.insert(multi_join->getJoinAt(i));
+  }
+  RexInputRedirector redirector(joins);
+  auto tail = multi_join->getJoinAt(multi_join->joinCount() - 1);
+  auto usrs_it = du_web.find(tail);
+  CHECK(usrs_it != du_web.end());
+  for (auto usr : usrs_it->second) {
+    auto usr_it = deconst_mapping.find(usr);
+    CHECK(usr_it != deconst_mapping.end());
+    redirector.visitNode(usr_it->second.get());
+  }
+
+  std::vector<std::unique_ptr<const RexScalar>> new_conditions;
+  for (size_t i = 0; i < multi_join->joinCount(); ++i) {
+    auto old_condition = multi_join->getConditions()[i].get();
+    CHECK(old_condition);
+    auto new_condition = redirector.visit(old_condition);
+    new_conditions.push_back(std::move(new_condition));
+  }
+  multi_join->setConditions(new_conditions);
+}
+
+void replace_equijoin_keys(const std::shared_ptr<RelMultiJoin> multi_join,
+                           const std::vector<const RexOperator*>& condition_set,
+                           const std::unordered_map<const RelAlgNode*, std::unordered_set<const RelAlgNode*>> du_web,
+                           const std::unordered_map<const RelAlgNode*, std::shared_ptr<RelAlgNode>>& deconst_mapping) {
+  CHECK_LE(size_t(2), multi_join->joinCount());
+  auto tail = multi_join->getJoinAt(multi_join->joinCount() - 1);
+  auto usrs_it = du_web.find(tail);
+  CHECK(usrs_it != du_web.end());
+  CHECK_EQ(condition_set.size(), multi_join->joinCount());
+  std::unordered_map<size_t, size_t> old_to_new_idx;
+  for (size_t i = 0; i < condition_set.size(); ++i) {
+    auto lhs_table = multi_join->getJoinAt(i)->getInput(0);
+    auto rhs_table = multi_join->getJoinAt(i)->getInput(1);
+    auto rex_operator = condition_set[i];
+    CHECK(rex_operator->getOperator() == kEQ);
+    auto lhs = dynamic_cast<const RexInput*>(rex_operator->getOperand(0));
+    auto rhs = dynamic_cast<const RexInput*>(rex_operator->getOperand(1));
+    CHECK(lhs && rhs);
+    if (lhs->getSourceNode() == lhs_table) {
+      CHECK_EQ(rhs->getSourceNode(), rhs_table);
+      old_to_new_idx.insert(std::make_pair(rhs->getIndex(), lhs->getIndex()));
+    } else {
+      CHECK_EQ(rhs->getSourceNode(), lhs_table);
+      CHECK_EQ(lhs->getSourceNode(), rhs_table);
+      old_to_new_idx.insert(std::make_pair(lhs->getIndex(), rhs->getIndex()));
+    }
+  }
+  RexInputRenumber<true> renumber(old_to_new_idx);
+  std::vector<const RelAlgNode*> work_set(usrs_it->second.begin(), usrs_it->second.end());
+  while (!work_set.empty()) {
+    auto walker = work_set.back();
+    work_set.pop_back();
+    auto walker_it = deconst_mapping.find(walker);
+    CHECK(walker_it != deconst_mapping.end());
+    if (auto project = std::dynamic_pointer_cast<RelProject>(walker_it->second)) {
+      std::vector<std::unique_ptr<const RexScalar>> new_exprs;
+      for (size_t i = 0; i < project->size(); ++i) {
+        new_exprs.push_back(renumber.visit(project->getProjectAt(i)));
+      }
+      project->setExpressions(new_exprs);
+      continue;
+    }
+    if (auto filter = std::dynamic_pointer_cast<RelFilter>(walker_it->second)) {
+      auto new_condition = renumber.visit(filter->getCondition());
+      filter->setCondition(new_condition);
+      auto filter_usrs_it = du_web.find(filter.get());
+      CHECK(filter_usrs_it != du_web.end());
+      work_set.insert(work_set.end(), filter_usrs_it->second.begin(), filter_usrs_it->second.end());
+      continue;
+    }
+    CHECK(!dynamic_cast<const RelJoin*>(walker));
+  }
+}
+
+void coalesce_joins(std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
+  std::unordered_map<const RelAlgNode*, std::shared_ptr<RelAlgNode>> deconst_mapping;
+  for (auto node : nodes) {
+    deconst_mapping.insert(std::make_pair(node.get(), node));
+  }
+  auto web = build_du_web(nodes);
+
+  std::unordered_set<const RelAlgNode*> visited;
+  std::vector<std::shared_ptr<RelAlgNode>> new_nodes;
+  for (auto node : nodes) {
+    if (visited.count(node.get())) {
+      continue;
+    }
+    visited.insert(node.get());
+    if (auto join = std::dynamic_pointer_cast<RelJoin>(node)) {
+      std::vector<const RexOperator*> condition_set;
+      auto sequence = collect_coalescable_joins(join.get(), web, condition_set);
+      if (sequence.size() < 2) {
+        new_nodes.push_back(node);
+        continue;
+      }
+      CHECK_EQ(deconst_mapping.count(sequence.back()), size_t(1));
+      auto tail = deconst_mapping[sequence.back()];
+      CHECK_EQ(web.count(tail.get()), size_t(1));
+      for (auto usr : web[tail.get()]) {
+        // TODO(miyu): check if safe to relax this limitation
+        if (dynamic_cast<const RelJoin*>(usr) || dynamic_cast<const RelMultiJoin*>(usr)) {
+          new_nodes.push_back(node);
+          continue;
+        }
+      }
+      // TODO(miyu): relax this limitation after we support duplicate input tables
+      //             esp. for self-join.
+      std::unordered_set<const RelAlgNode*> inputs_to_sequence;
+      for (auto j : sequence) {
+        if (j == sequence.front()) {
+          inputs_to_sequence.insert(j->getInput(0));
+        }
+        inputs_to_sequence.insert(j->getInput(1));
+      }
+      if (inputs_to_sequence.size() != sequence.size() + 1) {
+        new_nodes.push_back(node);
+        continue;
+      }
+
+      visited.insert(sequence.begin(), sequence.end());
+      std::vector<std::shared_ptr<RelJoin>> managed_sequence;
+      for (auto j : sequence) {
+        CHECK_EQ(deconst_mapping.count(j), size_t(1));
+        auto mj = std::dynamic_pointer_cast<RelJoin>(deconst_mapping[j]);
+        CHECK(mj);
+        managed_sequence.push_back(mj);
+      }
+      auto multi_join = std::make_shared<RelMultiJoin>(managed_sequence);
+      for (auto usr : web[tail.get()]) {
+        CHECK_EQ(deconst_mapping.count(usr), size_t(1));
+        deconst_mapping[usr]->replaceInput(tail, multi_join);
+      }
+      replace_equijoin_keys(multi_join, condition_set, web, deconst_mapping);
+      redirect_inputs(multi_join, web, deconst_mapping);
+      new_nodes.push_back(multi_join);
+    } else {
+      new_nodes.push_back(node);
+    }
+  }
+  nodes.swap(new_nodes);
+}
+#endif
+
 void coalesce_nodes(std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept {
+#ifdef ENABLE_EQUIJOIN_FOLD
+  coalesce_joins(nodes);
+#endif
   enum class CoalesceState { Initial, Filter, FirstProject, Aggregate };
   std::vector<size_t> crt_pattern;
   CoalesceState crt_state{CoalesceState::Initial};

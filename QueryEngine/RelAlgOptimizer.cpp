@@ -21,8 +21,6 @@
 
 #include <numeric>
 #include <string>
-#include <unordered_set>
-#include <unordered_map>
 
 namespace {
 
@@ -92,48 +90,6 @@ class RexRebindInputsVisitor : public RexVisitor<void*> {
   const RelAlgNode* old_input_;
   const RelAlgNode* new_input_;
 };
-
-std::unordered_map<const RelAlgNode*, std::unordered_set<const RelAlgNode*>> build_du_web(
-    const std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
-  std::unordered_map<const RelAlgNode*, std::unordered_set<const RelAlgNode*>> web;
-  std::unordered_set<const RelAlgNode*> visited;
-  std::vector<const RelAlgNode*> work_set;
-  for (auto node : nodes) {
-    if (std::dynamic_pointer_cast<RelScan>(node) || visited.count(node.get())) {
-      continue;
-    }
-    work_set.push_back(node.get());
-    while (!work_set.empty()) {
-      auto walker = work_set.back();
-      work_set.pop_back();
-      if (visited.count(walker)) {
-        continue;
-      }
-      CHECK(!web.count(walker));
-      auto it_ok = web.insert(std::make_pair(walker, std::unordered_set<const RelAlgNode*>{}));
-      CHECK(it_ok.second);
-      visited.insert(walker);
-      const auto join = dynamic_cast<const RelJoin*>(walker);
-      const auto project = dynamic_cast<const RelProject*>(walker);
-      const auto aggregate = dynamic_cast<const RelAggregate*>(walker);
-      const auto filter = dynamic_cast<const RelFilter*>(walker);
-      const auto sort = dynamic_cast<const RelSort*>(walker);
-      CHECK(join || project || aggregate || filter || sort);
-      for (size_t i = 0; i < walker->inputCount(); ++i) {
-        auto src = walker->getInput(i);
-        if (dynamic_cast<const RelScan*>(src)) {
-          continue;
-        }
-        if (web.empty() || !web.count(src)) {
-          web.insert(std::make_pair(src, std::unordered_set<const RelAlgNode*>{}));
-        }
-        web[src].insert(walker);
-        work_set.push_back(src);
-      }
-    }
-  }
-  return web;
-}
 
 size_t get_actual_source_size(const RelProject* curr_project,
                               const std::unordered_set<const RelProject*>& projects_to_remove) {
@@ -219,19 +175,6 @@ bool is_identical_copy(const RelProject* project,
   return false;
 }
 
-class RexInputRenumber : public RexDeepCopyVisitor {
- public:
-  RexInputRenumber(const std::unordered_map<size_t, size_t>& new_numbering) : old_to_new_idx_(new_numbering) {}
-  RetType visitInput(const RexInput* input) const override {
-    auto renum_it = old_to_new_idx_.find(input->getIndex());
-    CHECK(renum_it != old_to_new_idx_.end());
-    return boost::make_unique<RexInput>(input->getSourceNode(), renum_it->second);
-  }
-
- private:
-  const std::unordered_map<size_t, size_t>& old_to_new_idx_;
-};
-
 void propagate_rex_input_renumber(
     const RelFilter* excluded_root,
     const std::unordered_map<const RelAlgNode*, std::unordered_set<const RelAlgNode*>>& du_web,
@@ -246,7 +189,7 @@ void propagate_rex_input_renumber(
     old_to_new_idx.insert(std::make_pair(i, rex_in->getIndex()));
   }
   CHECK(old_to_new_idx.size());
-  RexInputRenumber renumber(old_to_new_idx);
+  RexInputRenumber<false> renumber(old_to_new_idx);
   auto usrs_it = du_web.find(excluded_root);
   CHECK(usrs_it != du_web.end());
   std::vector<const RelAlgNode*> work_set(usrs_it->second.begin(), usrs_it->second.end());
@@ -410,6 +353,48 @@ bool is_distinct(const size_t input_idx, const RelAlgNode* node) {
 }
 
 }  // namespace
+
+std::unordered_map<const RelAlgNode*, std::unordered_set<const RelAlgNode*>> build_du_web(
+    const std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept {
+  std::unordered_map<const RelAlgNode*, std::unordered_set<const RelAlgNode*>> web;
+  std::unordered_set<const RelAlgNode*> visited;
+  std::vector<const RelAlgNode*> work_set;
+  for (auto node : nodes) {
+    if (std::dynamic_pointer_cast<RelScan>(node) || visited.count(node.get())) {
+      continue;
+    }
+    work_set.push_back(node.get());
+    while (!work_set.empty()) {
+      auto walker = work_set.back();
+      work_set.pop_back();
+      if (visited.count(walker)) {
+        continue;
+      }
+      CHECK(!web.count(walker));
+      auto it_ok = web.insert(std::make_pair(walker, std::unordered_set<const RelAlgNode*>{}));
+      CHECK(it_ok.second);
+      visited.insert(walker);
+      const auto join = dynamic_cast<const RelJoin*>(walker);
+      const auto project = dynamic_cast<const RelProject*>(walker);
+      const auto aggregate = dynamic_cast<const RelAggregate*>(walker);
+      const auto filter = dynamic_cast<const RelFilter*>(walker);
+      const auto sort = dynamic_cast<const RelSort*>(walker);
+      CHECK(join || project || aggregate || filter || sort);
+      for (size_t i = 0; i < walker->inputCount(); ++i) {
+        auto src = walker->getInput(i);
+        if (dynamic_cast<const RelScan*>(src)) {
+          continue;
+        }
+        if (web.empty() || !web.count(src)) {
+          web.insert(std::make_pair(src, std::unordered_set<const RelAlgNode*>{}));
+        }
+        web[src].insert(walker);
+        work_set.push_back(src);
+      }
+    }
+  }
+  return web;
+}
 
 // For now, the only target to eliminate is restricted to project-aggregate pair between scan/sort and join
 // TODO(miyu): allow more chance if proved safe

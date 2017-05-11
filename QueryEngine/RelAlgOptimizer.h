@@ -19,9 +19,13 @@
 
 #include <memory>
 #include <vector>
+#include <unordered_map>
+#include <unordered_set>
 
 class RelAlgNode;
 
+std::unordered_map<const RelAlgNode*, std::unordered_set<const RelAlgNode*>> build_du_web(
+    const std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept;
 void eliminate_identical_copy(std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept;
 void eliminate_dead_columns(std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept;
 void fold_filters(std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept;

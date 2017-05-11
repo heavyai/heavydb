@@ -145,4 +145,26 @@ class RexDeepCopyVisitor : public RexVisitorBase<std::unique_ptr<const RexScalar
   RetType defaultResult() const override { return nullptr; }
 };
 
+template <bool bAllowMissing>
+class RexInputRenumber : public RexDeepCopyVisitor {
+ public:
+  RexInputRenumber(const std::unordered_map<size_t, size_t>& new_numbering) : old_to_new_idx_(new_numbering) {}
+  RetType visitInput(const RexInput* input) const override {
+    auto renum_it = old_to_new_idx_.find(input->getIndex());
+    if (bAllowMissing) {
+      if (renum_it != old_to_new_idx_.end()) {
+        return boost::make_unique<RexInput>(input->getSourceNode(), renum_it->second);
+      } else {
+        return input->deepCopy();
+      }
+    } else {
+      CHECK(renum_it != old_to_new_idx_.end());
+      return boost::make_unique<RexInput>(input->getSourceNode(), renum_it->second);
+    }
+  }
+
+ private:
+  const std::unordered_map<size_t, size_t>& old_to_new_idx_;
+};
+
 #endif  // QUERYENGINE_REXVISITOR_H

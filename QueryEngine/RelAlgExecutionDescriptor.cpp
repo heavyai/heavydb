@@ -57,6 +57,10 @@ std::vector<Vertex> merge_join_with_non_join(const std::vector<Vertex>& vertices
   DAG::out_edge_iterator oe_iter, oe_end;
   std::unordered_set<Vertex> joins;
   for (const auto vert : vertices) {
+    if (dynamic_cast<const RelMultiJoin*>(graph[vert])) {
+      joins.insert(vert);
+      continue;
+    }
     if (!dynamic_cast<const RelJoin*>(graph[vert])) {
       continue;
     }
@@ -94,7 +98,8 @@ DAG build_dag(const RelAlgNode* sink) {
     }
 
     const auto input_num = node->inputCount();
-    CHECK(input_num == 1 || (input_num == 2 && dynamic_cast<const RelJoin*>(node)));
+    CHECK(input_num == 1 || (input_num == 2 && dynamic_cast<const RelJoin*>(node)) ||
+          (input_num > 2 && dynamic_cast<const RelMultiJoin*>(node) != nullptr));
     for (size_t i = 0; i < input_num; ++i) {
       const auto input = node->getInput(i);
       CHECK(input);
