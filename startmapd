@@ -10,31 +10,8 @@ MAPD_WEB_PORT=${MAPD_WEB_PORT:=9092}
 
 MAPD_DATA=${MAPD_DATA:="data"}
 
-have_gpu() {
-    if [[ "$(uname -s)" == "Darwin" ]]; then
-        system_profiler SPDisplaysDataType | grep -q -i nvidia
-        return $?
-    elif [[ "$(uname -s)" == "Linux" ]]; then
-        if [ -f /proc/bus/pci/devices ] ; then
-            grep -q -i nvidia /proc/bus/pci/devices
-        elif hash lspci ; then
-            lspci | grep -q -i nvidia
-        fi
-        return $?
-    fi
-    return 1
-}
-
 while (( $# )); do
     case "$1" in
-        --gpu)
-            DEVICE="--gpu" ;;
-        --cpu)
-            DEVICE="--cpu" ;;
-        --hybrid)
-            DEVICE="--hybrid" ;;
-        --auto)
-            DEVICE="" ;;
         --read-only)
             RO="--read-only" ;;
         --base-port)
@@ -69,13 +46,6 @@ echo "Backend TCP:  localhost:${MAPD_TCP_PORT}"
 echo "Backend HTTP: localhost:${MAPD_HTTP_PORT}"
 echo "Frontend Web: localhost:${MAPD_WEB_PORT}"
 
-if ! have_gpu ; then
-    if [[ "$DEVICE" != "--cpu" ]]; then
-        echo "WARNING: no GPUs detected; forcing CPU"
-    fi
-    DEVICE="--cpu"
-fi
-
 if [ ! -d $MAPD_DATA/mapd_data ]; then
     mkdir -p $MAPD_DATA
     ./bin/initdb -f --data $MAPD_DATA
@@ -91,7 +61,7 @@ if [ ! -d $MAPD_DATA/mapd_data ]; then
     fi
 fi
 
-./bin/mapd_server $MAPD_DATA $DEVICE $RO --port $MAPD_TCP_PORT --http-port $MAPD_HTTP_PORT $* &
+./bin/mapd_server $MAPD_DATA $RO --port $MAPD_TCP_PORT --http-port $MAPD_HTTP_PORT $* &
 MAPDPID=$!
 
 if [ "$INSERT_SAMPLE_DATA" = true ]; then
