@@ -150,8 +150,8 @@ bool storage_test_parallel(const string& table_name, size_t num_rows, size_t thr
 }
 }  // namespace
 
-#define SMALL 10000000
-#define LARGE 100000000
+#define SMALL 100000
+#define LARGE 1000000
 
 TEST(StorageLarge, Numbers) {
   ASSERT_NO_THROW(run_ddl("drop table if exists numbers;"););
