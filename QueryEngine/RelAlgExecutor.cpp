@@ -488,15 +488,26 @@ std::unordered_map<const RelAlgNode*, int> get_input_nest_levels(const RelAlgNod
 }
 
 std::unordered_set<const RexInput*> get_join_source_used_inputs(const RelAlgNode* ra_node) {
-  const bool is_join = dynamic_cast<const RelJoin*>(ra_node) != nullptr;
-  CHECK((is_join && 2 == ra_node->inputCount()) || (!is_join && 1 == ra_node->inputCount()));
-  const auto join_input =
-      is_join ? static_cast<const RelJoin*>(ra_node) : dynamic_cast<const RelJoin*>(ra_node->getInput(0));
-  if (join_input) {
-    const auto join_cond = join_input->getCondition();
+  const auto data_sink_node = get_data_sink(ra_node);
+  if (auto join = dynamic_cast<const RelJoin*>(data_sink_node)) {
+    CHECK_EQ(join->inputCount(), 2);
+    const auto condition = join->getCondition();
     RexUsedInputsVisitor visitor;
-    return visitor.visit(join_cond);
+    return visitor.visit(condition);
   }
+
+  if (auto multi_join = dynamic_cast<const RelMultiJoin*>(data_sink_node)) {
+    CHECK_GT(multi_join->inputCount(), 2);
+    RexUsedInputsVisitor visitor;
+    std::unordered_set<const RexInput*> input_set;
+    for (auto& condition : multi_join->getConditions()) {
+      auto inputs = visitor.visit(condition.get());
+      input_set.insert(inputs.begin(), inputs.end());
+    }
+    return input_set;
+  }
+
+  CHECK_EQ(ra_node->inputCount(), 1);
   return std::unordered_set<const RexInput*>{};
 }
 
@@ -1490,8 +1501,15 @@ SeparatedQuals separate_join_quals(const std::list<std::shared_ptr<Analyzer::Exp
 }
 
 JoinType get_join_type(const RelAlgNode* ra) {
-  const auto join_ra = dynamic_cast<const RelJoin*>(get_data_sink(ra));
-  return join_ra ? join_ra->getJoinType() : JoinType::INVALID;
+  auto sink = get_data_sink(ra);
+  if (auto join = dynamic_cast<const RelJoin*>(sink)) {
+    return join->getJoinType();
+  }
+  if (auto multi_join = dynamic_cast<const RelMultiJoin*>(sink)) {
+    return multi_join->getJoinType();
+  }
+
+  return JoinType::INVALID;
 }
 
 bool is_literal_true(const RexScalar* condition) {
@@ -1518,19 +1536,36 @@ std::list<std::shared_ptr<Analyzer::Expr>> get_outer_join_quals(const RelAlgNode
 
 std::list<std::shared_ptr<Analyzer::Expr>> get_inner_join_quals(const RelAlgNode* ra,
                                                                 const RelAlgTranslator& translator) {
-  const auto join = dynamic_cast<const RelJoin*>(ra) ? static_cast<const RelJoin*>(ra)
-                                                     : dynamic_cast<const RelJoin*>(ra->getInput(0));
-  if (join && join->getCondition() && !is_literal_true(join->getCondition()) &&
-      join->getJoinType() == JoinType::INNER) {
-    const auto join_cond_cf = qual_to_conjunctive_form(translator.translateScalarRex(join->getCondition()));
-    if (join_cond_cf.simple_quals.empty()) {
-      return join_cond_cf.quals;
+  std::vector<const RexScalar*> work_set;
+  if (auto join = dynamic_cast<const RelJoin*>(ra)) {
+    if (join->getJoinType() == JoinType::INNER) {
+      work_set.push_back(join->getCondition());
     }
-    std::list<std::shared_ptr<Analyzer::Expr>> all_quals = join_cond_cf.simple_quals;
-    all_quals.insert(all_quals.end(), join_cond_cf.quals.begin(), join_cond_cf.quals.end());
-    return all_quals;
+  } else {
+    CHECK_EQ(size_t(1), ra->inputCount());
+    auto only_src = ra->getInput(0);
+    if (auto join = dynamic_cast<const RelJoin*>(only_src)) {
+      if (join->getJoinType() == JoinType::INNER) {
+        work_set.push_back(join->getCondition());
+      }
+    } else if (auto multi_join = dynamic_cast<const RelMultiJoin*>(only_src)) {
+      CHECK_EQ(multi_join->joinCount(), multi_join->getConditions().size());
+      for (size_t i = 0; i < multi_join->joinCount(); ++i) {
+        if (multi_join->getJoinAt(i)->getJoinType() == JoinType::INNER) {
+          work_set.push_back(multi_join->getConditions()[i].get());
+        }
+      }
+    }
   }
-  return {};
+  std::list<std::shared_ptr<Analyzer::Expr>> quals;
+  for (auto condition : work_set) {
+    if (condition && !is_literal_true(condition)) {
+      const auto join_cond_cf = qual_to_conjunctive_form(translator.translateScalarRex(condition));
+      quals.insert(quals.end(), join_cond_cf.simple_quals.begin(), join_cond_cf.simple_quals.end());
+      quals.insert(quals.end(), join_cond_cf.quals.begin(), join_cond_cf.quals.end());
+    }
+  }
+  return quals;
 }
 
 std::vector<std::pair<int, size_t>> get_join_dimensions(const RelAlgNode* ra, Executor* executor) {
