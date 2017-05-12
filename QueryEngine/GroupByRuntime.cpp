@@ -246,6 +246,36 @@ extern "C" ALWAYS_INLINE DEVICE int64_t hash_join_idx_nullable(int64_t hash_buff
   return hash_join_idx(hash_buff, translated_key, min_key, translated_key);
 }
 
+extern "C" ALWAYS_INLINE DEVICE int64_t hash_join_idx_sharded(int64_t hash_buff,
+                                                              const int64_t key,
+                                                              const int64_t min_key,
+                                                              const int64_t max_key,
+                                                              const uint32_t entry_count_per_shard,
+                                                              const uint32_t num_shards,
+                                                              const uint32_t device_count) {
+  if (key >= min_key && key <= max_key) {
+    return *SUFFIX(get_hash_slot_sharded)(
+        reinterpret_cast<int32_t*>(hash_buff), key, min_key, entry_count_per_shard, num_shards, device_count);
+  }
+  return -1;
+}
+
+extern "C" ALWAYS_INLINE DEVICE int64_t hash_join_idx_sharded_nullable(int64_t hash_buff,
+                                                                       const int64_t key,
+                                                                       const int64_t min_key,
+                                                                       const int64_t max_key,
+                                                                       const uint32_t entry_count_per_shard,
+                                                                       const uint32_t num_shards,
+                                                                       const uint32_t device_count,
+                                                                       const int64_t null_val) {
+  if (key != null_val) {
+    return hash_join_idx_sharded(hash_buff, key, min_key, max_key, entry_count_per_shard, num_shards, device_count);
+  }
+  const int64_t translated_key = max_key + 1;
+  return hash_join_idx_sharded(
+      hash_buff, translated_key, min_key, translated_key, entry_count_per_shard, num_shards, device_count);
+}
+
 #define DEF_TRANSLATE_NULL_KEY(key_type)                                            \
   extern "C" NEVER_INLINE DEVICE int64_t translate_null_key_##key_type(             \
       const key_type key, const key_type null_val, const key_type translated_val) { \

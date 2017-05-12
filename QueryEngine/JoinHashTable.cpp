@@ -89,6 +89,10 @@ std::vector<std::pair<JoinHashTable::JoinHashTableCacheKey, std::shared_ptr<std:
     JoinHashTable::join_hash_table_cache_;
 std::mutex JoinHashTable::join_hash_table_cache_mutex_;
 
+size_t get_shard_count(const Analyzer::BinOper* join_condition, const Catalog_Namespace::Catalog& catalog) {
+  return 0;  // Sharded joins aren't enabled yet.
+}
+
 std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(
     const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
     const Catalog_Namespace::Catalog& cat,
@@ -121,7 +125,7 @@ std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(
                                               source_col_range.hasNulls());
   }
   auto join_hash_table = std::shared_ptr<JoinHashTable>(
-      new JoinHashTable(qual_bin_oper, inner_col, cat, query_infos, memory_level, col_range, executor));
+      new JoinHashTable(qual_bin_oper, inner_col, cat, query_infos, memory_level, col_range, executor, device_count));
   const int err = join_hash_table->reify(device_count);
   if (err) {
 #ifndef ENABLE_MULTIFRAG_JOIN
@@ -393,19 +397,41 @@ int JoinHashTable::initHashTableOnCpu(const int8_t* col_buff,
   return err;
 }
 
+namespace {
+
+// Number of entries per shard, rounded up.
+size_t get_entries_per_shard(const size_t total_entry_count, const size_t shard_count) {
+  CHECK_NE(size_t(0), shard_count);
+  return (total_entry_count + shard_count - 1) / shard_count;
+}
+
+// Number of entries required for the given range.
+size_t get_hash_entry_count(const ExpressionRange& col_range) {
+  CHECK_LE(col_range.getIntMin(), col_range.getIntMax());
+  return col_range.getIntMax() - col_range.getIntMin() + 1 + (col_range.hasNulls() ? 1 : 0);
+}
+
+}  // namespace
+
 int JoinHashTable::initHashTableForDevice(const ChunkKey& chunk_key,
                                           const int8_t* col_buff,
                                           const size_t num_elements,
                                           const std::pair<const Analyzer::ColumnVar*, const Analyzer::ColumnVar*>& cols,
                                           const Data_Namespace::MemoryLevel effective_memory_level,
                                           const int device_id) {
-  const int32_t hash_entry_count =
-      col_range_.getIntMax() - col_range_.getIntMin() + 1 + (col_range_.hasNulls() ? 1 : 0);
+  auto hash_entry_count = get_hash_entry_count(col_range_);
 #ifdef HAVE_CUDA
+  const auto shard_count = get_shard_count(qual_bin_oper_.get(), cat_);
+  const size_t entries_per_shard{shard_count ? get_entries_per_shard(hash_entry_count, shard_count) : 0};
   // Even if we join on dictionary encoded strings, the memory on the GPU is still needed
   // once the join hash table has been built on the CPU.
   if (memory_level_ == Data_Namespace::GPU_LEVEL) {
     auto& data_mgr = cat_.get_dataMgr();
+    if (shard_count) {
+      const auto shards_per_device = (shard_count + device_count_ - 1) / device_count_;
+      CHECK_GT(shards_per_device, 0);
+      hash_entry_count = entries_per_shard * shards_per_device;
+    }
     gpu_hash_table_buff_[device_id] = alloc_gpu_mem(&data_mgr, hash_entry_count * sizeof(int32_t), device_id, nullptr);
   }
 #else
@@ -454,16 +480,33 @@ int JoinHashTable::initHashTableForDevice(const ChunkKey& chunk_key,
                                   hash_join_invalid_val,
                                   executor_->blockSize(),
                                   executor_->gridSize());
-    fill_hash_join_buff_on_device(reinterpret_cast<int32_t*>(gpu_hash_table_buff_[device_id]),
-                                  hash_join_invalid_val,
-                                  reinterpret_cast<int*>(dev_err_buff),
-                                  {col_buff, num_elements},
-                                  {static_cast<size_t>(ti.get_size()),
-                                   col_range_.getIntMin(),
-                                   inline_fixed_encoding_null_val(ti),
-                                   col_range_.getIntMax() + 1},
-                                  executor_->blockSize(),
-                                  executor_->gridSize());
+    JoinColumn join_column{col_buff, num_elements};
+    JoinColumnTypeInfo type_info{static_cast<size_t>(ti.get_size()),
+                                 col_range_.getIntMin(),
+                                 inline_fixed_encoding_null_val(ti),
+                                 col_range_.getIntMax() + 1};
+    if (shard_count) {
+      CHECK_GT(device_count_, 0);
+      for (size_t shard = device_id; shard < shard_count; shard += device_count_) {
+        ShardInfo shard_info{shard, entries_per_shard, shard_count, device_count_};
+        fill_hash_join_buff_on_device_sharded(reinterpret_cast<int32_t*>(gpu_hash_table_buff_[device_id]),
+                                              hash_join_invalid_val,
+                                              reinterpret_cast<int*>(dev_err_buff),
+                                              join_column,
+                                              type_info,
+                                              shard_info,
+                                              executor_->blockSize(),
+                                              executor_->gridSize());
+      }
+    } else {
+      fill_hash_join_buff_on_device(reinterpret_cast<int32_t*>(gpu_hash_table_buff_[device_id]),
+                                    hash_join_invalid_val,
+                                    reinterpret_cast<int*>(dev_err_buff),
+                                    join_column,
+                                    type_info,
+                                    executor_->blockSize(),
+                                    executor_->gridSize());
+    }
     copy_from_gpu(&data_mgr, &err, dev_err_buff, sizeof(err), device_id);
 #else
     CHECK(false);
@@ -515,10 +558,21 @@ llvm::Value* JoinHashTable::codegenSlot(const CompilationOptions& co) noexcept {
                                                executor_->castToTypeIn(key_lvs.front(), 64),
                                                executor_->ll_int(col_range_.getIntMin()),
                                                executor_->ll_int(col_range_.getIntMax())};
+  const int shard_count = get_shard_count(qual_bin_oper_.get(), cat_);
+  if (shard_count) {
+    const auto hash_entry_count = get_hash_entry_count(col_range_);
+    const auto entry_count_per_shard = (hash_entry_count + shard_count - 1) / shard_count;
+    hash_join_idx_args.push_back(executor_->ll_int<uint32_t>(entry_count_per_shard));
+    hash_join_idx_args.push_back(executor_->ll_int<uint32_t>(shard_count));
+    hash_join_idx_args.push_back(executor_->ll_int<uint32_t>(device_count_));
+  }
   if (col_range_.hasNulls()) {
     hash_join_idx_args.push_back(executor_->ll_int(inline_fixed_encoding_null_val(key_col->get_type_info())));
   }
   std::string fname{"hash_join_idx"};
+  if (shard_count) {
+    fname += "_sharded";
+  }
   if (col_range_.hasNulls()) {
     fname += "_nullable";
   }

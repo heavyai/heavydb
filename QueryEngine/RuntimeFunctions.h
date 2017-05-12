@@ -150,6 +150,13 @@ extern "C" int64_t* get_group_value_one_key_with_watchdog(int64_t* groups_buffer
 
 extern "C" int32_t* get_hash_slot(int32_t* buff, const int64_t key, const int64_t min_key);
 
+extern "C" int32_t* get_hash_slot_sharded(int32_t* buff,
+                                          const int64_t key,
+                                          const int64_t min_key,
+                                          const uint32_t entry_count_per_shard,
+                                          const uint32_t num_shards,
+                                          const uint32_t device_count);
+
 extern "C" void linear_probabilistic_count(uint8_t* bitmap,
                                            const uint32_t bitmap_bytes,
                                            const uint8_t* key_bytes,

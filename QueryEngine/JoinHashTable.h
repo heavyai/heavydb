@@ -81,13 +81,15 @@ class JoinHashTable {
                 const std::vector<InputTableInfo>& query_infos,
                 const Data_Namespace::MemoryLevel memory_level,
                 const ExpressionRange& col_range,
-                Executor* executor)
+                Executor* executor,
+                const int device_count)
       : qual_bin_oper_(qual_bin_oper),
         cat_(cat),
         query_infos_(query_infos),
         memory_level_(memory_level),
         col_range_(col_range),
-        executor_(executor) {
+        executor_(executor),
+        device_count_(device_count) {
     CHECK(col_range.getType() == ExpressionRangeType::Integer);
   }
 
@@ -139,6 +141,7 @@ class JoinHashTable {
 #endif
   ExpressionRange col_range_;
   Executor* executor_;
+  const int device_count_;
 
   struct JoinHashTableCacheKey {
     const ExpressionRange col_range;
@@ -171,5 +174,7 @@ inline std::string get_table_name_by_id(const int table_id, const Catalog_Namesp
   }
   return "$TEMPORARY_TABLE" + std::to_string(-table_id);
 }
+
+size_t get_shard_count(const Analyzer::BinOper* join_condition, const Catalog_Namespace::Catalog& catalog);
 
 #endif  // QUERYENGINE_JOINHASHTABLE_H
