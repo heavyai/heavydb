@@ -353,15 +353,19 @@ class RexUsedInputsVisitor : public RexVisitor<std::unordered_set<const RexInput
 };
 
 const RelAlgNode* get_data_sink(const RelAlgNode* ra_node) {
-  const bool is_join = dynamic_cast<const RelJoin*>(ra_node) != nullptr;
-  CHECK((is_join && 2 == ra_node->inputCount()) || (!is_join && 1 == ra_node->inputCount()));
-  const auto join_input =
-      is_join ? static_cast<const RelJoin*>(ra_node) : dynamic_cast<const RelJoin*>(ra_node->getInput(0));
-  // If the input node is a join, the data is sourced from it instead of the initial node.
-  const auto data_sink_node =
-      join_input ? static_cast<const RelAlgNode*>(join_input) : static_cast<const RelAlgNode*>(ra_node);
-  CHECK(1 <= data_sink_node->inputCount() && data_sink_node->inputCount() <= 2);
-  return data_sink_node;
+  if (auto join = dynamic_cast<const RelJoin*>(ra_node)) {
+    CHECK_EQ(size_t(2), join->inputCount());
+    return join;
+  }
+  if (auto multi_join = dynamic_cast<const RelMultiJoin*>(ra_node)) {
+    CHECK_LT(2, multi_join->inputCount());
+    return multi_join;
+  }
+  CHECK_EQ(size_t(1), ra_node->inputCount());
+  auto only_src = ra_node->getInput(0);
+  const bool is_join =
+      dynamic_cast<const RelJoin*>(only_src) != nullptr || dynamic_cast<const RelMultiJoin*>(only_src) != nullptr;
+  return is_join ? only_src : ra_node;
 }
 
 std::pair<std::unordered_set<const RexInput*>, std::vector<std::shared_ptr<RexInput>>> get_used_inputs(
@@ -531,6 +535,12 @@ size_t get_target_list_size(const RelAlgNode* ra_node) {
 
 std::vector<const RelAlgNode*> get_join_sequence(const RelAlgNode* ra) {
   std::vector<const RelAlgNode*> seq;
+  if (auto multi_join = dynamic_cast<const RelMultiJoin*>(ra)) {
+    for (size_t i = 0; i < multi_join->joinCount(); ++i) {
+      seq.push_back(multi_join->getJoinAt(i));
+    }
+    return seq;
+  }
   for (auto join = dynamic_cast<const RelJoin*>(ra); join; join = static_cast<const RelJoin*>(join->getInput(0))) {
     CHECK_EQ(size_t(2), join->inputCount());
     seq.emplace_back(join->getInput(1));

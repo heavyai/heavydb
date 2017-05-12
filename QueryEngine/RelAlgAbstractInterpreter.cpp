@@ -131,6 +131,17 @@ RANodeOutput get_node_output(const RelAlgNode* ra_node) {
     lhs_out.insert(lhs_out.end(), rhs_out.begin(), rhs_out.end());
     return lhs_out;
   }
+  const auto multi_join_node = dynamic_cast<const RelMultiJoin*>(ra_node);
+  if (multi_join_node) {
+    CHECK_LT(size_t(2), multi_join_node->inputCount());
+    auto first_out = n_outputs(multi_join_node->getInput(0), get_node_output(multi_join_node->getInput(0)).size());
+    for (size_t i = 1; i < multi_join_node->inputCount(); ++i) {
+      const auto next_out =
+          n_outputs(multi_join_node->getInput(i), get_node_output(multi_join_node->getInput(i)).size());
+      first_out.insert(first_out.end(), next_out.begin(), next_out.end());
+    }
+    return first_out;
+  }
   const auto sort_node = dynamic_cast<const RelSort*>(ra_node);
   if (sort_node) {
     // Sort preserves shape
