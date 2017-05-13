@@ -399,11 +399,13 @@ int JoinHashTable::initHashTableOnCpu(const int8_t* col_buff,
 
 namespace {
 
+#ifdef HAVE_CUDA
 // Number of entries per shard, rounded up.
 size_t get_entries_per_shard(const size_t total_entry_count, const size_t shard_count) {
   CHECK_NE(size_t(0), shard_count);
   return (total_entry_count + shard_count - 1) / shard_count;
 }
+#endif  // HAVE_CUDA
 
 // Number of entries required for the given range.
 size_t get_hash_entry_count(const ExpressionRange& col_range) {
