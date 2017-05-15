@@ -93,7 +93,7 @@ class DataMgr {
                                        const ChunkKey& keyPrefix);
   inline bool gpusPresent() { return hasGpus_; }
   void removeTableRelatedDS(const int db_id, const int tb_id);
-  void updateTableEpoch(const int db_id, const int tb_id, const int start_epoch);
+  void updateTableEpoch(const int db_id, const int tb_id, const int start_epoch, bool is_decr_start_epoch);
 
   CudaMgr_Namespace::CudaMgr* cudaMgr_;
 

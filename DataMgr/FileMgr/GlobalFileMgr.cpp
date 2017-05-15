@@ -189,15 +189,40 @@ void GlobalFileMgr::removeTableRelatedDS(const int db_id, const int tb_id) {
   }
 }
 
-void GlobalFileMgr::updateTableEpoch(const int db_id, const int tb_id, const int start_epoch) {
+void GlobalFileMgr::updateTableEpoch(const int db_id,
+                                     const int tb_id,
+                                     const int start_epoch,
+                                     const bool is_decr_start_epoch) {
   FileMgr* fm = findFileMgr(db_id, tb_id);
   if (fm != 0) {
-    fm->setEpoch(start_epoch);
+    if (start_epoch > (fm->epoch() - 1)) {
+      /* extra -1 is deducted from the value returned by epoch() api, because this api
+       * returns the epoch value corresponding to the next insert which is one more than
+       * the value kept in the epoch file itself.
+       */
+      if (!is_decr_start_epoch) {
+        LOG(FATAL) << "Unable to set epoch for the table. Value of requested to be set epoch " << start_epoch
+                   << " exceeds current value of the epoch " << fm->epoch() - 1;
+      } else {
+        LOG(FATAL) << "Unable to decrement epoch for the table. Value of requested epoch decrement " << start_epoch
+                   << " exceeds current value of the epoch " << fm->epoch() - 1;
+      }
+    } else {
+      if (!is_decr_start_epoch) {
+        fm->setEpoch(start_epoch);
+      } else {
+        fm->setEpoch(fm->epoch() - 1 - start_epoch);
+      }
+    }
   } else {
     /* FileMgr for the table is being created in the calling procedure as part of
      * the request for the table matadata.
      */
-    LOG(ERROR) << "Unable to set epoch for table because the table does not exist.";
+    if (!is_decr_start_epoch) {
+      LOG(ERROR) << "Unable to set epoch for table because the table does not exist.";
+    } else {
+      LOG(ERROR) << "Unable to decrement epoch for table because the table does not exist.";
+    }
   }
 }
 

@@ -210,6 +210,7 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
                          const size_t num_reader_threads,
                          const std::string& start_epoch_table_name,
                          const int start_epoch,
+                         const bool is_decr_start_epoch,
                          const LdapMetadata ldapMetadata,
                          const MapDParameters& mapd_parameters,
                          const std::string& db_convert_dir,
@@ -238,6 +239,7 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
 #endif  // HAVE_CALCITE
       start_epoch_table_name_(start_epoch_table_name),
       start_epoch_(start_epoch),
+      is_decr_start_epoch_(is_decr_start_epoch),
       super_user_rights_(false) {
   LOG(INFO) << "MapD Server " << MAPD_RELEASE;
   if (executor_device == "gpu") {
@@ -2644,12 +2646,18 @@ void MapDHandler::set_table_start_epoch(const Catalog_Namespace::SessionInfo& se
     auto td = cat.getMetadataForTable(start_epoch_table_name_);
     if (!td) {
       TMapDException ex;
-      ex.error_msg = "Unable to set epoch for table " + start_epoch_table_name_ + " because the table does not exist.";
+      if (!is_decr_start_epoch_) {
+        ex.error_msg =
+            "Unable to set epoch for table " + start_epoch_table_name_ + " because the table does not exist.";
+      } else {
+        ex.error_msg =
+            "Unable to decrement epoch for table " + start_epoch_table_name_ + " because the table does not exist.";
+      }
       LOG(ERROR) << ex.error_msg;
       throw ex;
     }
     int tb_id = static_cast<int>(td->tableId);
     int db_id = static_cast<int>(cat.get_currentDB().dbId);
-    data_mgr_->updateTableEpoch(db_id, tb_id, start_epoch_);
+    data_mgr_->updateTableEpoch(db_id, tb_id, start_epoch_, is_decr_start_epoch_);
   }
 }

@@ -143,7 +143,7 @@ class GlobalFileMgr : public AbstractBufferMgr {  // implements
   inline void setDBConvert(bool val) { dbConvert_ = val; }
 
   void removeTableRelatedDS(const int db_id, const int tb_id);
-  void updateTableEpoch(const int db_id, const int tb_id, const int start_epoch);
+  void updateTableEpoch(const int db_id, const int tb_id, const int start_epoch, const bool is_decr_start_epoch);
 
  private:
   std::string basePath_;       /// The OS file system path containing the files.

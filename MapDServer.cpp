@@ -241,10 +241,11 @@ int main(int argc, char** argv) {
   int num_gpus = -1;  // Can be used to override number of gpus detected on system - -1 means do not override
   int start_gpu = 0;
   int tthreadpool_size = 8;
-  size_t num_reader_threads = 0;   // number of threads used when loading data
-  std::string start_epoch("");     // epoch value for the table, presented as: table_name:epoch
-  std::string db_convert_dir("");  // path to mapd DB to convert from; if path is empty, no conversion is requested
-  std::string db_query_file("");   // path to file containing warmup queries list
+  size_t num_reader_threads = 0;     // number of threads used when loading data
+  std::string start_epoch("");       // epoch value for the table, presented as: table_name:epoch
+  std::string decr_start_epoch("");  // value on which to decrement table's epoch, presented as: table_name:decrement
+  std::string db_convert_dir("");    // path to mapd DB to convert from; if path is empty, no conversion is requested
+  std::string db_query_file("");     // path to file containing warmup queries list
 
   namespace po = boost::program_options;
 
@@ -311,6 +312,9 @@ int main(int argc, char** argv) {
                              ->implicit_value(10000),
                          "Dynamic watchdog time limit, in milliseconds");
   desc_adv.add_options()("start-epoch", po::value<std::string>(&start_epoch), "Value of table epoch to 'rollback' to");
+  desc_adv.add_options()("decrement-start-epoch",
+                         po::value<std::string>(&decr_start_epoch),
+                         "Value on which to decrement epoch of the table");
   desc_adv.add_options()(
       "cuda-block-size",
       po::value<size_t>(&mapd_parameters.cuda_block_size)->default_value(mapd_parameters.cuda_block_size),
@@ -510,7 +514,16 @@ int main(int argc, char** argv) {
   LOG(INFO) << " cuda grid size  " << mapd_parameters.cuda_grid_size;
   LOG(INFO) << " calcite JVM max memory  " << mapd_parameters.calcite_max_mem;
 
-  // extract and validate value of the epock to rollback to for the table if requested
+  // extract and validate value of the epoch to rollback to for the table if requested
+  bool is_decr_start_epoch = false;
+  if ((start_epoch.length() > 0) && (decr_start_epoch.length() > 0)) {
+    LOG(ERROR) << "Options start-epoch and decrement-start-epoch can't be used simultaneously." << std::endl;
+    throw std::runtime_error("Improper usage of options start-epoch and decrement-start-epoch.");
+  }
+  if (decr_start_epoch.length() > 0) {
+    start_epoch = decr_start_epoch;
+    is_decr_start_epoch = true;
+  }
   std::string start_epoch_table("");
   int start_epoch_int_value = -1;
   if (start_epoch.length() > 0) {
@@ -518,16 +531,36 @@ int main(int argc, char** argv) {
     std::string start_epoch_delimiter(":");
     size_t pos = start_epoch.find(start_epoch_delimiter);
     if (pos == std::string::npos) {
-      LOG(ERROR) << "Value of option start-epoch does not contain delimiter: " << start_epoch << std::endl;
-      throw std::runtime_error("Option start-epoch is not correct.");
+      if (!is_decr_start_epoch) {
+        LOG(ERROR) << "Value of option start-epoch does not contain delimiter: " << start_epoch << std::endl;
+        throw std::runtime_error("Option start-epoch is not correct.");
+      } else {
+        LOG(ERROR) << "Value of option decrement-start-epoch does not contain delimiter: " << start_epoch << std::endl;
+        throw std::runtime_error("Option decrement-start-epoch is not correct.");
+      }
     }
     start_epoch_table = start_epoch.substr(0, pos);
     start_epoch_value = start_epoch.substr(pos + 1, start_epoch.length());
     try {
       start_epoch_int_value = std::stoi(start_epoch_value);
     } catch (std::exception& e) {
-      LOG(ERROR) << "Value of option start-epoch has incorrect epoch number: " << start_epoch << std::endl;
-      throw std::runtime_error("Option start-epoch is not correct.");
+      if (!is_decr_start_epoch) {
+        LOG(ERROR) << "Value of option start-epoch has incorrect epoch number: " << start_epoch << std::endl;
+        throw std::runtime_error("Option start-epoch is not correct.");
+      } else {
+        LOG(ERROR) << "Value of option decrement-start-epoch has incorrect decrement: " << start_epoch << std::endl;
+        throw std::runtime_error("Option decrement-start-epoch is not correct.");
+      }
+    }
+    if (start_epoch_int_value < 0) {
+      if (!is_decr_start_epoch) {
+        LOG(ERROR) << "Epoch value of option start-epoch can not be negative: " << start_epoch << std::endl;
+        throw std::runtime_error("Option start-epoch is not correct.");
+      } else {
+        LOG(ERROR) << "Epoch decrement value of option decrement-start-epoch can not be negative: " << start_epoch
+                   << std::endl;
+        throw std::runtime_error("Option decrement-start-epoch is not correct.");
+      }
     }
   }
 
@@ -552,6 +585,7 @@ int main(int argc, char** argv) {
                                                   num_reader_threads,
                                                   start_epoch_table,
                                                   start_epoch_int_value,
+                                                  is_decr_start_epoch,
                                                   ldapMetadata,
                                                   mapd_parameters,
                                                   db_convert_dir,

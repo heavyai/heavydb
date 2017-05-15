@@ -113,6 +113,7 @@ class MapDHandler : public MapDIf {
               const size_t num_reader_threads,
               const std::string& start_epoch_table_name,
               const int start_epoch,
+              const bool is_decr_start_epoch,
               const LdapMetadata ldapMetadata,
               const MapDParameters& mapd_parameters,
               const std::string& db_convert_dir,
@@ -398,6 +399,7 @@ class MapDHandler : public MapDIf {
 
   std::string start_epoch_table_name_;
   int start_epoch_;
+  bool is_decr_start_epoch_;
   bool super_user_rights_;  // default is "false"; setting to "true" ignores passwd checks in "connect(..)" method
   friend void run_warmup_queries(boost::shared_ptr<MapDHandler> handler,
                                  std::string base_path,
