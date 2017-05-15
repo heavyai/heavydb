@@ -564,18 +564,18 @@ class Executor {
   struct JoinInfo {
     JoinInfo(const JoinImplType join_impl_type,
              const std::vector<std::shared_ptr<Analyzer::BinOper>>& equi_join_tautologies,
-             std::shared_ptr<JoinHashTable> join_hash_table,
+             const std::vector<std::shared_ptr<JoinHashTable>>& join_hash_tables,
              const std::string& hash_join_fail_reason)
         : join_impl_type_(join_impl_type),
           equi_join_tautologies_(equi_join_tautologies),
-          join_hash_table_(join_hash_table),
+          join_hash_tables_(join_hash_tables),
           hash_join_fail_reason_(hash_join_fail_reason) {}
 
     JoinImplType join_impl_type_;
     std::vector<std::shared_ptr<Analyzer::BinOper>> equi_join_tautologies_;  // expressions we equi-join on are true by
                                                                              // definition when using a hash join; we'll
                                                                              // fold them to true during code generation
-    std::shared_ptr<JoinHashTable> join_hash_table_;
+    std::vector<std::shared_ptr<JoinHashTable>> join_hash_tables_;
     std::string hash_join_fail_reason_;
   };
 
@@ -863,7 +863,7 @@ class Executor {
                                             const bool is_group_by,
                                             const bool float_argument_input);
   static ResultPtr resultsUnion(ExecutionDispatch& execution_dispatch);
-  int64_t getJoinHashTablePtr(const ExecutorDeviceType device_type, const int device_id);
+  std::vector<int64_t> getJoinHashTablePtrs(const ExecutorDeviceType device_type, const int device_id);
   RowSetPtr reduceMultiDeviceResults(const RelAlgExecutionUnit&,
                                      std::vector<std::pair<ResultPtr, std::vector<size_t>>>& all_fragment_results,
                                      std::shared_ptr<RowSetMemoryOwner>,
@@ -907,7 +907,7 @@ class Executor {
 
   JoinInfo chooseJoinType(const std::list<std::shared_ptr<Analyzer::Expr>>&,
                           const std::vector<InputTableInfo>&,
-                          const std::list<std::shared_ptr<const InputColDescriptor>>&,
+                          const RelAlgExecutionUnit& ra_exe_unit,
                           const ExecutorDeviceType device_type);
 
   void nukeOldState(const bool allow_lazy_fetch,

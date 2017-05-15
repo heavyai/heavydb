@@ -120,9 +120,10 @@ std::string string_cmp_func(const SQLOps optype) {
 }  // namespace
 
 llvm::Value* Executor::codegenCmp(const Analyzer::BinOper* bin_oper, const CompilationOptions& co) {
-  for (const auto equi_join_tautology : plan_state_->join_info_.equi_join_tautologies_) {
+  for (size_t i = 0; i < plan_state_->join_info_.equi_join_tautologies_.size(); ++i) {
+    const auto& equi_join_tautology = plan_state_->join_info_.equi_join_tautologies_[i];
     if (*equi_join_tautology == *bin_oper) {
-      return plan_state_->join_info_.join_hash_table_->codegenSlot(co);
+      return plan_state_->join_info_.join_hash_tables_[i]->codegenSlot(co, i);
     }
   }
   const auto optype = bin_oper->get_optype();

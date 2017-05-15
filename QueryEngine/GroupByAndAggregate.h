@@ -152,7 +152,7 @@ class QueryExecutionContext : boost::noncopyable {
                                       const int device_id,
                                       int32_t* error_code,
                                       const uint32_t num_tables,
-                                      const int64_t join_hash_table,
+                                      const std::vector<int64_t>& join_hash_tables,
                                       RenderAllocatorMap* render_allocator_map);
 
   std::vector<int64_t*> launchCpuCode(const RelAlgExecutionUnit& ra_exe_unit,
@@ -167,7 +167,7 @@ class QueryExecutionContext : boost::noncopyable {
                                       const std::vector<int64_t>& init_agg_vals,
                                       int32_t* error_code,
                                       const uint32_t num_tables,
-                                      const int64_t join_hash_table);
+                                      const std::vector<int64_t>& join_hash_tables);
 
  private:
   const std::vector<const int8_t*>& getColumnFrag(const size_t table_idx, int64_t& global_idx) const;
@@ -224,7 +224,7 @@ class QueryExecutionContext : boost::noncopyable {
       SMALL_BUF,
       ERROR_CODE,
       NUM_TABLES,
-      JOIN_HASH_TABLE,
+      JOIN_HASH_TABLES,
       KERN_PARAM_COUNT,
   };
 
@@ -239,7 +239,7 @@ class QueryExecutionContext : boost::noncopyable {
                                                const std::vector<int64_t>& init_agg_vals,
                                                const std::vector<int32_t>& error_codes,
                                                const uint32_t num_tables,
-                                               const int64_t join_hash_table,
+                                               const std::vector<int64_t>& join_hash_tables,
                                                Data_Namespace::DataMgr* data_mgr,
                                                const int device_id,
                                                const bool hoist_literals,

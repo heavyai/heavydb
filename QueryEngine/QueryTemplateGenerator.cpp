@@ -214,7 +214,7 @@ llvm::Function* query_template(llvm::Module* mod,
   query_args.push_back(ppi64_type);
   query_args.push_back(ppi64_type);
   query_args.push_back(i32_type);
-  query_args.push_back(i64_type);
+  query_args.push_back(pi64_type);
   query_args.push_back(pi32_type);
   query_args.push_back(pi32_type);
 
@@ -293,8 +293,8 @@ llvm::Function* query_template(llvm::Module* mod,
   unused->setName("unused");
   Value* frag_idx = &*(++query_arg_it);
   frag_idx->setName("frag_idx");
-  Value* join_hash_table = &*(++query_arg_it);
-  join_hash_table->setName("join_hash_table");
+  Value* join_hash_tables = &*(++query_arg_it);
+  join_hash_tables->setName("join_hash_tables");
   Value* total_matched = &*(++query_arg_it);
   total_matched->setName("total_matched");
   Value* error_code = &*(++query_arg_it);
@@ -484,7 +484,7 @@ llvm::Function* query_group_by_template(llvm::Module* mod,
   query_args.push_back(ppi64_type);
   query_args.push_back(ppi64_type);
   query_args.push_back(i32_type);
-  query_args.push_back(i64_type);
+  query_args.push_back(pi64_type);
   query_args.push_back(pi32_type);
   query_args.push_back(pi32_type);
 
@@ -576,8 +576,8 @@ llvm::Function* query_group_by_template(llvm::Module* mod,
   small_groups_buffer->setName("small_groups_buffer");
   Value* frag_idx = &*(++query_arg_it);
   frag_idx->setName("frag_idx");
-  Value* join_hash_table = &*(++query_arg_it);
-  join_hash_table->setName("join_hash_table");
+  Value* join_hash_tables = &*(++query_arg_it);
+  join_hash_tables->setName("join_hash_tables");
   Value* total_matched = &*(++query_arg_it);
   total_matched->setName("total_matched");
   Value* error_code = &*(++query_arg_it);

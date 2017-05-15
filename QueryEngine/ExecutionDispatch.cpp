@@ -67,8 +67,7 @@ uint32_t Executor::ExecutionDispatch::getFragmentStride(
     const std::vector<std::pair<int, std::vector<size_t>>>& frag_ids) const {
 #ifdef ENABLE_MULTIFRAG_JOIN
   const bool is_hash_join = executor_->plan_state_->join_info_.join_impl_type_ == Executor::JoinImplType::HashOneToOne;
-  if (is_hash_join) {
-    CHECK_EQ(ra_exe_unit_.input_descs.size(), size_t(2));
+  if (is_hash_join && ra_exe_unit_.input_descs.size() == 2) {
     CHECK_EQ(frag_ids.size(), size_t(2));
     CHECK_EQ(ra_exe_unit_.input_descs.back().getTableId(), frag_ids[1].first);
     return static_cast<uint32_t>(frag_ids[1].second.size());
@@ -176,7 +175,9 @@ void Executor::ExecutionDispatch::runImpl(const ExecutorDeviceType chosen_device
       chosen_device_type == ExecutorDeviceType::GPU ? Data_Namespace::GPU_LEVEL : Data_Namespace::CPU_LEVEL;
   const int outer_table_id = ra_exe_unit_.input_descs[0].getTableId();
   CHECK_GE(frag_ids.size(), size_t(1));
+#ifndef ENABLE_EQUIJOIN_FOLD
   CHECK_LE(frag_ids.size(), size_t(2));
+#endif
   CHECK_EQ(frag_ids[0].first, outer_table_id);
   const auto& outer_tab_frag_ids = frag_ids[0].second;
   for (const auto frag_id : frag_ids[0].second) {

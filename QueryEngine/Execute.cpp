@@ -817,14 +817,20 @@ ResultPtr Executor::executeWorkUnit(int32_t* error_code,
     max_groups_buffer_entry_guess = compute_buffer_entry_guess(query_infos);
   }
 
-  auto join_info = JoinInfo(JoinImplType::Invalid, std::vector<std::shared_ptr<Analyzer::BinOper>>{}, nullptr, "");
+  auto join_info = JoinInfo(JoinImplType::Invalid, std::vector<std::shared_ptr<Analyzer::BinOper>>{}, {}, "");
   if (ra_exe_unit.input_descs.size() > 1) {
-    join_info = chooseJoinType(ra_exe_unit.inner_join_quals, query_infos, ra_exe_unit.input_col_descs, device_type);
+    join_info = chooseJoinType(ra_exe_unit.inner_join_quals, query_infos, ra_exe_unit, device_type);
   }
   if (join_info.join_impl_type_ == JoinImplType::Loop && !ra_exe_unit.outer_join_quals.empty()) {
-    join_info = chooseJoinType(ra_exe_unit.outer_join_quals, query_infos, ra_exe_unit.input_col_descs, device_type);
+    join_info = chooseJoinType(ra_exe_unit.outer_join_quals, query_infos, ra_exe_unit, device_type);
   }
 
+#ifdef ENABLE_EQUIJOIN_FOLD
+  if (join_info.join_impl_type_ == JoinImplType::Loop && ra_exe_unit.input_descs.size() > 2) {
+    throw std::runtime_error("Hash join failed, reason: Failed to build hash tables for " +
+                             std::to_string(ra_exe_unit.input_descs.size()) + "-way join");
+  }
+#endif
   if (join_info.join_impl_type_ == JoinImplType::Loop &&
       !(options.allow_loop_joins || is_trivial_loop_join(query_infos, ra_exe_unit))) {
     throw std::runtime_error("Hash join failed, reason: " + join_info.hash_join_fail_reason_);
@@ -1251,7 +1257,9 @@ void Executor::dispatchFragments(
         } else {
           auto& inner_frags = table_frags_it->second;
           CHECK_LT(size_t(1), ra_exe_unit.input_descs.size());
+#ifndef ENABLE_EQUIJOIN_FOLD
           CHECK_EQ(table_id, ra_exe_unit.input_descs[1].getTableId());
+#endif
           std::vector<size_t> all_frag_ids(inner_frags->size());
 #ifndef ENABLE_MULTIFRAG_JOIN
           if (all_frag_ids.size() > 1) {
@@ -1296,7 +1304,9 @@ std::vector<size_t> Executor::getTableFragmentIndices(
   }
   auto& inner_frags = table_frags_it->second;
   CHECK_LT(size_t(1), ra_exe_unit.input_descs.size());
+#ifndef ENABLE_EQUIJOIN_FOLD
   CHECK_EQ(table_id, ra_exe_unit.input_descs[1].getTableId());
+#endif
   std::vector<size_t> all_frag_ids(inner_frags->size());
 #ifndef ENABLE_MULTIFRAG_JOIN
   if (all_frag_ids.size() > 1) {
@@ -1494,6 +1504,17 @@ Executor::FetchResult Executor::fetchChunks(const ExecutionDispatch& execution_d
   return {all_frag_col_buffers, all_frag_iter_buffers, all_num_rows, all_frag_offsets};
 }
 
+std::vector<size_t> get_fragment_count(const std::vector<std::pair<int, std::vector<size_t>>>& selected_fragments,
+                                       const size_t scan_idx,
+                                       const std::vector<InputDescriptor>& input_descs) {
+  if (input_descs.size() > size_t(2) && scan_idx > 0) {
+    // Fetch all fragments
+    return {size_t(0)};
+  }
+
+  return selected_fragments[scan_idx].second;
+}
+
 void Executor::buildSelectedFragsMapping(std::vector<std::vector<size_t>>& selected_fragments_crossjoin,
                                          std::vector<size_t>& local_col_to_frag_pos,
                                          const std::list<std::shared_ptr<const InputColDescriptor>>& col_global_ids,
@@ -1504,7 +1525,7 @@ void Executor::buildSelectedFragsMapping(std::vector<std::vector<size_t>>& selec
   for (size_t scan_idx = 0; scan_idx < input_descs.size(); ++scan_idx) {
     const int table_id = input_descs[scan_idx].getTableId();
     CHECK_EQ(selected_fragments[scan_idx].first, table_id);
-    selected_fragments_crossjoin.push_back(selected_fragments[scan_idx].second);
+    selected_fragments_crossjoin.push_back(get_fragment_count(selected_fragments, scan_idx, input_descs));
     for (const auto& col_id : col_global_ids) {
       CHECK(col_id);
       const auto& input_desc = col_id->getScanDesc();
@@ -1561,7 +1582,7 @@ int32_t Executor::executePlanWithoutGroupBy(const RelAlgExecutionUnit& ra_exe_un
   int32_t error_code = device_type == ExecutorDeviceType::GPU ? 0 : start_rowid;
   std::vector<int64_t*> out_vec;
   const auto hoist_buf = serializeLiterals(compilation_result.literal_values, device_id);
-  const auto join_hash_table_ptr = getJoinHashTablePtr(device_type, device_id);
+  const auto join_hash_table_ptrs = getJoinHashTablePtrs(device_type, device_id);
   std::unique_ptr<OutVecOwner> output_memory_scope;
   if (g_enable_dynamic_watchdog && interrupted_) {
     return ERR_INTERRUPTED;
@@ -1579,7 +1600,7 @@ int32_t Executor::executePlanWithoutGroupBy(const RelAlgExecutionUnit& ra_exe_un
                                                query_exe_context->init_agg_vals_,
                                                &error_code,
                                                num_tables,
-                                               join_hash_table_ptr);
+                                               join_hash_table_ptrs);
     output_memory_scope.reset(new OutVecOwner(out_vec));
   } else {
     try {
@@ -1599,7 +1620,7 @@ int32_t Executor::executePlanWithoutGroupBy(const RelAlgExecutionUnit& ra_exe_un
                                                  device_id,
                                                  &error_code,
                                                  num_tables,
-                                                 join_hash_table_ptr,
+                                                 join_hash_table_ptrs,
                                                  render_allocator_map);
       output_memory_scope.reset(new OutVecOwner(out_vec));
     } catch (const OutOfMemory&) {
@@ -1742,7 +1763,7 @@ int32_t Executor::executePlanWithGroupBy(const RelAlgExecutionUnit& ra_exe_unit,
   // 3. Optimize runtime.
   auto hoist_buf = serializeLiterals(compilation_result.literal_values, device_id);
   int32_t error_code = device_type == ExecutorDeviceType::GPU ? 0 : start_rowid;
-  const auto join_hash_table_ptr = getJoinHashTablePtr(device_type, device_id);
+  const auto join_hash_table_ptrs = getJoinHashTablePtrs(device_type, device_id);
   if (g_enable_dynamic_watchdog && interrupted_) {
     return ERR_INTERRUPTED;
   }
@@ -1759,7 +1780,7 @@ int32_t Executor::executePlanWithGroupBy(const RelAlgExecutionUnit& ra_exe_unit,
                                      query_exe_context->init_agg_vals_,
                                      &error_code,
                                      num_tables,
-                                     join_hash_table_ptr);
+                                     join_hash_table_ptrs);
   } else {
     try {
       query_exe_context->launchGpuCode(ra_exe_unit,
@@ -1778,7 +1799,7 @@ int32_t Executor::executePlanWithGroupBy(const RelAlgExecutionUnit& ra_exe_unit,
                                        device_id,
                                        &error_code,
                                        num_tables,
-                                       join_hash_table_ptr,
+                                       join_hash_table_ptrs,
                                        render_allocator_map);
     } catch (const OutOfMemory&) {
       return ERR_OUT_OF_GPU_MEM;
@@ -1812,12 +1833,18 @@ int32_t Executor::executePlanWithGroupBy(const RelAlgExecutionUnit& ra_exe_unit,
   return 0;
 }
 
-int64_t Executor::getJoinHashTablePtr(const ExecutorDeviceType device_type, const int device_id) {
-  const auto join_hash_table = plan_state_->join_info_.join_hash_table_;
-  if (!join_hash_table) {
-    return 0;
+std::vector<int64_t> Executor::getJoinHashTablePtrs(const ExecutorDeviceType device_type, const int device_id) {
+  std::vector<int64_t> table_ptrs;
+  const auto& join_hash_tables = plan_state_->join_info_.join_hash_tables_;
+  for (auto hash_table : join_hash_tables) {
+    if (!hash_table) {
+      CHECK(table_ptrs.empty());
+      return {};
+    }
+    table_ptrs.push_back(
+        hash_table->getJoinHashBuffer(device_type, device_type == ExecutorDeviceType::GPU ? device_id : 0));
   }
-  return join_hash_table->getJoinHashBuffer(device_type, device_type == ExecutorDeviceType::GPU ? device_id : 0);
+  return table_ptrs;
 }
 
 namespace {
@@ -2084,13 +2111,17 @@ void Executor::allocateInnerScansIterators(const std::vector<InputDescriptor>& i
 
 Executor::JoinInfo Executor::chooseJoinType(const std::list<std::shared_ptr<Analyzer::Expr>>& join_quals,
                                             const std::vector<InputTableInfo>& query_infos,
-                                            const std::list<std::shared_ptr<const InputColDescriptor>>& input_col_descs,
+                                            const RelAlgExecutionUnit& ra_exe_unit,
                                             const ExecutorDeviceType device_type) {
   CHECK(device_type != ExecutorDeviceType::Hybrid);
   std::string hash_join_fail_reason{"No equijoin expression found"};
 
   const MemoryLevel memory_level{device_type == ExecutorDeviceType::GPU ? MemoryLevel::GPU_LEVEL
                                                                         : MemoryLevel::CPU_LEVEL};
+
+  std::set<int> rte_idx_set;
+  std::vector<std::shared_ptr<Analyzer::BinOper>> bin_ops;
+  std::vector<std::shared_ptr<JoinHashTable>> join_hash_tables;
   for (auto qual : join_quals) {
     auto qual_bin_oper = std::dynamic_pointer_cast<Analyzer::BinOper>(qual);
     if (!qual_bin_oper) {
@@ -2106,20 +2137,31 @@ Executor::JoinInfo Executor::chooseJoinType(const std::list<std::shared_ptr<Anal
       CHECK_GT(device_count, 0);
       try {
         const auto join_hash_table = JoinHashTable::getInstance(
-            qual_bin_oper, *catalog_, query_infos, input_col_descs, memory_level, device_count, this);
+            qual_bin_oper, *catalog_, query_infos, ra_exe_unit.input_col_descs, memory_level, device_count, this);
         CHECK(join_hash_table);
-        return Executor::JoinInfo(JoinImplType::HashOneToOne,
-                                  std::vector<std::shared_ptr<Analyzer::BinOper>>{qual_bin_oper},
-                                  join_hash_table,
-                                  "");
+        qual_bin_oper->collect_rte_idx(rte_idx_set);
+        bin_ops.push_back(qual_bin_oper);
+        join_hash_tables.push_back(join_hash_table);
       } catch (const HashJoinFail& e) {
         hash_join_fail_reason = e.what();
       }
     }
   }
 
+  bool found_missing_rte = false;
+  const auto nest_level_num = ra_exe_unit.input_descs.size();
+  for (size_t i = 0; i < nest_level_num; ++i) {
+    if (!rte_idx_set.count(i)) {
+      found_missing_rte = true;
+      break;
+    }
+  }
+  if (!found_missing_rte && join_hash_tables.size() >= nest_level_num - 1) {
+    return Executor::JoinInfo(JoinImplType::HashOneToOne, bin_ops, join_hash_tables, "");
+  }
+
   return Executor::JoinInfo(
-      JoinImplType::Loop, std::vector<std::shared_ptr<Analyzer::BinOper>>{}, nullptr, hash_join_fail_reason);
+      JoinImplType::Loop, std::vector<std::shared_ptr<Analyzer::BinOper>>{}, {}, hash_join_fail_reason);
 }
 
 int8_t Executor::warpSize() const {

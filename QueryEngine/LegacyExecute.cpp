@@ -463,7 +463,7 @@ RowSetPtr Executor::executeResultPlan(const Planner::Result* result_plan,
                       row_count,
                       small_groups_buffer_entry_count_,
                       get_min_byte_width(),
-                      JoinInfo(JoinImplType::Invalid, std::vector<std::shared_ptr<Analyzer::BinOper>>{}, nullptr, ""),
+                      JoinInfo(JoinImplType::Invalid, std::vector<std::shared_ptr<Analyzer::BinOper>>{}, {}, ""),
                       false);
   auto column_buffers = result_columns.getColumnBuffers();
   CHECK_EQ(column_buffers.size(), static_cast<size_t>(in_col_count));
@@ -495,7 +495,7 @@ RowSetPtr Executor::executeResultPlan(const Planner::Result* result_plan,
                                    init_agg_vals,
                                    error_code,
                                    1,
-                                   0);
+                                   {});
   CHECK_GE(*error_code, 0);
   return query_exe_context->groupBufferToResults(0, target_exprs, false);
 }

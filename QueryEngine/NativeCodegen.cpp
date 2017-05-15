@@ -687,7 +687,7 @@ void set_row_func_argnames(llvm::Function* row_func,
     ++arg_it;
   }
 
-  arg_it->setName("join_hash_table");
+  arg_it->setName("join_hash_tables");
 }
 
 std::pair<llvm::Function*, std::vector<llvm::Value*>> create_row_function(const size_t in_col_count,
@@ -744,7 +744,7 @@ std::pair<llvm::Function*, std::vector<llvm::Value*>> create_row_function(const 
   }
 
   // join hash table argument
-  row_process_arg_types.push_back(llvm::Type::getInt64Ty(context));
+  row_process_arg_types.push_back(llvm::Type::getInt64PtrTy(context));
 
   // generate the function
   auto ft = llvm::FunctionType::get(get_int_type(32, context), row_process_arg_types, false);
@@ -1093,7 +1093,7 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
         args.push_back(filter_call.getArgOperand(i));
       }
       args.insert(args.end(), col_heads.begin(), col_heads.end());
-      args.push_back(get_arg_by_name(query_func, "join_hash_table"));
+      args.push_back(get_arg_by_name(query_func, "join_hash_tables"));
       llvm::ReplaceInstWithInst(&filter_call, llvm::CallInst::Create(cgen_state_->row_func_, args, ""));
       break;
     }

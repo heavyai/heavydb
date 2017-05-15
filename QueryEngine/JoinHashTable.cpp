@@ -59,11 +59,20 @@ std::pair<const Analyzer::ColumnVar*, const Analyzer::ColumnVar*> get_cols(
   }
   const Analyzer::ColumnVar* inner_col{nullptr};
   const Analyzer::ColumnVar* outer_col{nullptr};
+#ifdef ENABLE_EQUIJOIN_FOLD
+  if (lhs_col->get_rte_idx() == 0 && rhs_col->get_rte_idx() > 0) {
+#else
   if (lhs_col->get_rte_idx() == 0 && rhs_col->get_rte_idx() == 1) {
+#endif
     inner_col = rhs_col;
     outer_col = lhs_col;
   } else {
-    CHECK((lhs_col->get_rte_idx() == 1 && rhs_col->get_rte_idx() == 0));
+#ifdef ENABLE_EQUIJOIN_FOLD
+    CHECK_GT(lhs_col->get_rte_idx(), 0);
+#else
+    CHECK_EQ(lhs_col->get_rte_idx(), 1);
+#endif
+    CHECK_EQ(rhs_col->get_rte_idx(), 0);
     inner_col = lhs_col;
     outer_col = rhs_col;
   }
@@ -545,7 +554,7 @@ void JoinHashTable::putHashTableOnCpuToCache(
   join_hash_table_cache_.emplace_back(cache_key, cpu_hash_table_buff_);
 }
 
-llvm::Value* JoinHashTable::codegenSlot(const CompilationOptions& co) noexcept {
+llvm::Value* JoinHashTable::codegenSlot(const CompilationOptions& co, const size_t index) noexcept {
   CHECK(executor_->plan_state_->join_info_.join_impl_type_ == Executor::JoinImplType::HashOneToOne);
   const auto cols = get_cols(qual_bin_oper_, cat_, executor_->temporary_tables_);
   auto key_col = cols.second;
@@ -554,8 +563,23 @@ llvm::Value* JoinHashTable::codegenSlot(const CompilationOptions& co) noexcept {
   CHECK(val_col);
   const auto key_lvs = executor_->codegen(key_col, true, co);
   CHECK_EQ(size_t(1), key_lvs.size());
-  CHECK(executor_->plan_state_->join_info_.join_hash_table_);
-  auto hash_ptr = get_arg_by_name(executor_->cgen_state_->row_func_, "join_hash_table");
+  const auto total_table_count = executor_->plan_state_->join_info_.join_hash_tables_.size();
+  CHECK_LT(index, total_table_count);
+  CHECK(executor_->plan_state_->join_info_.join_hash_tables_[index]);
+  llvm::Value* hash_ptr = nullptr;
+  if (total_table_count > 1) {
+    auto hash_tables_ptr = get_arg_by_name(executor_->cgen_state_->row_func_, "join_hash_tables");
+    auto hash_pptr = index > 0
+                         ? executor_->cgen_state_->ir_builder_.CreateGEP(hash_tables_ptr,
+                                                                         executor_->ll_int(static_cast<int64_t>(index)))
+                         : hash_tables_ptr;
+    hash_ptr = executor_->cgen_state_->ir_builder_.CreateLoad(hash_pptr);
+  } else {
+    hash_ptr = executor_->cgen_state_->ir_builder_.CreatePtrToInt(
+        get_arg_by_name(executor_->cgen_state_->row_func_, "join_hash_tables"),
+        llvm::Type::getInt64Ty(executor_->cgen_state_->context_));
+  }
+  CHECK(hash_ptr);
   std::vector<llvm::Value*> hash_join_idx_args{hash_ptr,
                                                executor_->castToTypeIn(key_lvs.front(), 64),
                                                executor_->ll_int(col_range_.getIntMin()),
