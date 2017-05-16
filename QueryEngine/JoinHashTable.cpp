@@ -1104,8 +1104,6 @@ llvm::Value* JoinHashTable::codegenOneToManyHashJoin(const CompilationOptions& c
   CHECK(key_col);
   auto val_col = cols.first;
   CHECK(val_col);
-  const auto key_lvs = executor_->codegen(key_col, true, co);
-  CHECK_EQ(size_t(1), key_lvs.size());
   auto pos_ptr = codegenHashTableLoad(index);
   CHECK(pos_ptr);
   const int shard_count = shardCount();

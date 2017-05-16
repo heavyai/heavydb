@@ -24,6 +24,7 @@
 #include "SpeculativeTopN.h"
 #include "StreamingTopN.h"
 #include "../Shared/scope.h"
+#include "../LeafAggregator.h"
 
 #include <ctime>
 
@@ -65,7 +66,10 @@ class RelAlgExecutor {
                                    RenderInfo* render_info,
                                    const int64_t queue_time_ms);
 
-  const std::vector<std::string>& getScanTableNamesInRelAlgSeq() const;
+  void addLeafResult(const unsigned id, const AggregatedResult& result) {
+    const auto it_ok = leaf_results_.emplace(id, result);
+    CHECK(it_ok.second);
+  }
 
   void registerSubquery(RexSubQuery* subquery) noexcept { subqueries_.push_back(subquery); }
 
@@ -209,8 +213,6 @@ class RelAlgExecutor {
 
   void handleNop(const RelAlgNode*);
 
-  static std::vector<std::string> getScanTableNamesInRelAlgSeq(std::vector<RaExecutionDesc>& exec_descs);
-
   JoinQualsPerNestingLevel translateLeftDeepJoinFilter(
       const RelLeftDeepInnerJoin* join,
       const std::vector<InputDescriptor>& input_descs,
@@ -222,8 +224,8 @@ class RelAlgExecutor {
   TemporaryTables temporary_tables_;
   time_t now_;
   std::vector<std::shared_ptr<Analyzer::Expr>> target_exprs_owned_;  // TODO(alex): remove
-  std::vector<std::string> table_names_;  // used by poly rendering only, lazily initialized by executeRelAlgQuery()
   std::vector<RexSubQuery*> subqueries_;
+  std::unordered_map<unsigned, AggregatedResult> leaf_results_;
   int64_t queue_time_ms_;
   static SpeculativeTopNBlacklist speculative_topn_blacklist_;
   static const size_t max_groups_buffer_entry_default_guess{16384};

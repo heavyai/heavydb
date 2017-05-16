@@ -126,7 +126,7 @@ RowSetPtr Executor::executeSelectPlan(const Planner::Plan* plan,
                                       const bool allow_multifrag,
                                       const bool just_explain,
                                       const bool allow_loop_joins,
-                                      RenderAllocatorMap* render_allocator_map) {
+                                      RenderInfo* render_info) {
   if (dynamic_cast<const Planner::Scan*>(plan) || dynamic_cast<const Planner::AggPlan*>(plan) ||
       dynamic_cast<const Planner::Join*>(plan)) {
     row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>();
@@ -189,7 +189,7 @@ RowSetPtr Executor::executeSelectPlan(const Planner::Plan* plan,
                                      g_dynamic_watchdog_time_limit},
                                     cat,
                                     row_set_mem_owner_,
-                                    render_allocator_map,
+                                    render_info,
                                     true);
       auto& rows = boost::get<RowSetPtr>(result);
       max_groups_buffer_entry_guess = max_groups_buffer_entry_guess_limit;
@@ -217,7 +217,7 @@ RowSetPtr Executor::executeSelectPlan(const Planner::Plan* plan,
                                    g_dynamic_watchdog_time_limit},
                                   cat,
                                   row_set_mem_owner_,
-                                  render_allocator_map,
+                                  render_info,
                                   true);
     auto& rows = boost::get<RowSetPtr>(result);
     CHECK(rows);
@@ -439,8 +439,7 @@ RowSetPtr Executor::executeResultPlan(const Planner::Result* result_plan,
                                        {},
                                        false};
   auto compilation_result =
-      compileWorkUnit(false,
-                      {},
+      compileWorkUnit({},
                       res_ra_unit,
                       {ExecutorDeviceType::CPU, hoist_literals, opt_level, g_enable_dynamic_watchdog},
                       {false,
@@ -571,15 +570,13 @@ std::shared_ptr<ResultSet> Executor::execute(const Planner::RootPlan* root_plan,
 
       std::unique_ptr<RenderInfo> render_info_ptr;
       if (root_plan->get_plan_dest() == Planner::RootPlan::kRENDER) {
-        if (device_type != ExecutorDeviceType::GPU) {
-          throw std::runtime_error("Backend rendering is only supported on GPU");
-        }
+        CHECK(render_info);
+
+        render_info->setInSituDataIfUnset(device_type == ExecutorDeviceType::GPU);
 
         if (!render_manager_) {
           throw std::runtime_error("This build doesn't support backend rendering");
         }
-
-        CHECK(render_info);
 
         if (!render_info->render_allocator_map_ptr) {
           // make backwards compatible, can be removed when MapDHandler::render(...)
@@ -588,21 +585,20 @@ std::shared_ptr<ResultSet> Executor::execute(const Planner::RootPlan* root_plan,
               new RenderAllocatorMap(catalog_->get_dataMgr().cudaMgr_, render_manager_, blockSize(), gridSize()));
         }
       }
-      auto rows = executeSelectPlan(
-          root_plan->get_plan(),
-          root_plan->get_limit(),
-          root_plan->get_offset(),
-          hoist_literals,
-          device_type,
-          opt_level,
-          root_plan->get_catalog(),
-          max_groups_buffer_entry_guess,
-          &error_code,
-          nullptr,
-          allow_multifrag,
-          root_plan->get_plan_dest() == Planner::RootPlan::kEXPLAIN,
-          allow_loop_joins,
-          render_info && render_info->do_render ? render_info->render_allocator_map_ptr.get() : nullptr);
+      auto rows = executeSelectPlan(root_plan->get_plan(),
+                                    root_plan->get_limit(),
+                                    root_plan->get_offset(),
+                                    hoist_literals,
+                                    device_type,
+                                    opt_level,
+                                    root_plan->get_catalog(),
+                                    max_groups_buffer_entry_guess,
+                                    &error_code,
+                                    nullptr,
+                                    allow_multifrag,
+                                    root_plan->get_plan_dest() == Planner::RootPlan::kEXPLAIN,
+                                    allow_loop_joins,
+                                    render_info);
       if (error_code == ERR_OVERFLOW_OR_UNDERFLOW) {
         throw std::runtime_error("Overflow or underflow");
       }

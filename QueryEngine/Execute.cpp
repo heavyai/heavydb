@@ -789,7 +789,7 @@ ResultPtr Executor::executeWorkUnit(int32_t* error_code,
                                     const ExecutionOptions& options,
                                     const Catalog_Namespace::Catalog& cat,
                                     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-                                    RenderAllocatorMap* render_allocator_map,
+                                    RenderInfo* render_info,
                                     const bool has_cardinality_estimation) {
   const auto device_type = getDeviceTypeForTargets(ra_exe_unit, co.device_type_);
   CHECK(!query_infos.empty());
@@ -841,7 +841,7 @@ ResultPtr Executor::executeWorkUnit(int32_t* error_code,
                                          context_count,
                                          row_set_mem_owner,
                                          error_code,
-                                         render_allocator_map);
+                                         render_info);
     try {
       crt_min_byte_width = execution_dispatch.compile(
           join_info, max_groups_buffer_entry_guess, crt_min_byte_width, options, has_cardinality_estimation);
@@ -891,8 +891,8 @@ ResultPtr Executor::executeWorkUnit(int32_t* error_code,
       }
     }
     const QueryMemoryDescriptor& query_mem_desc = execution_dispatch.getQueryMemoryDescriptor();
-    if (render_allocator_map && co.device_type_ == ExecutorDeviceType::CPU) {
-      throw std::runtime_error("Query has to run on CPU, cannot render its results");
+    if (render_info && co.device_type_ == ExecutorDeviceType::CPU) {
+      CHECK(!render_info->isPotentialInSituRender());
     }
     if (!options.just_validate) {
       dispatchFragments(dispatch,

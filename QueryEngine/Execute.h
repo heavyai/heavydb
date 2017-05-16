@@ -73,29 +73,78 @@ extern bool g_allow_cpu_retry;
 extern bool g_null_div_by_zero;
 extern bool g_bigint_count;
 
-struct RenderInfo {
-  bool do_render;
-  bool in_situ_data;  // Should be set to true if query results are written directly
-                      // to CUDA-mapped opengl buffers for rendering. Should be set
-                      // to false otherwise, meaning results are written to CPU first,
-                      // and buffered back to GPU for rendering.
+class ExecutionResult;
+
+class RenderInfo {
+ public:
+  std::unique_ptr<RenderAllocatorMap> render_allocator_map_ptr;
   const std::string session_id;
   const int render_widget_id;
-  std::unique_ptr<RenderAllocatorMap> render_allocator_map_ptr;
   const std::string render_vega;
-
-  std::shared_ptr<QueryRenderer::QueryDataLayout> vbo_result_query_data_layout;
-  std::shared_ptr<QueryRenderer::QueryDataLayout> ubo_result_query_data_layout;
+  const size_t render_small_groups_buffer_entry_count{2 * 1024 * 1024};
+  std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner;
 
   RenderInfo(const std::string& session_id,
              const int render_widget_id,
              const std::string& render_vega = "",
-             const bool do_render = true)
-      : do_render(do_render),
-        in_situ_data(false),
-        session_id(session_id),
+             const bool force_non_in_situ_data = false)
+      : session_id(session_id),
         render_widget_id(render_widget_id),
-        render_vega(render_vega) {}
+        render_vega(render_vega),
+        in_situ_data(force_non_in_situ_data ? InSituState::IS_NOT_IN_SITU : InSituState::UNSET) {}
+
+  bool hasInSituData() const { return in_situ_data == InSituState::IS_IN_SITU; }
+  bool isInSituDataFlagUnset() const { return in_situ_data == InSituState::UNSET; }
+  bool isPotentialInSituRender() const { return in_situ_data != InSituState::IS_NOT_IN_SITU; }
+  bool hasVega() const { return render_vega.length() > 0 && render_vega != "NONE"; }
+
+  std::shared_ptr<QueryRenderer::QueryDataLayout> getQueryVboLayout() const { return query_vbo_layout; }
+  void setQueryVboLayout(const std::shared_ptr<QueryRenderer::QueryDataLayout>& vbo_layout) {
+    CHECK(!query_vbo_layout);
+    query_vbo_layout = vbo_layout;
+  }
+  std::shared_ptr<QueryRenderer::QueryDataLayout> getQueryUboLayout() const { return query_ubo_layout; }
+  void setQueryUboLayout(const std::shared_ptr<QueryRenderer::QueryDataLayout>& ubo_layout) {
+    CHECK(!query_ubo_layout);
+    query_ubo_layout = ubo_layout;
+  }
+
+  std::vector<std::shared_ptr<Analyzer::TargetEntry>> targets;  // Info for all the column targets retrieved in
+                                                                // in a query. Used to extract column/table info
+                                                                // when rendering.
+
+  std::vector<std::string> table_names;  // the names of all the tables used in a query in hierarchical order.
+                                         // For example, for join queries, the outer join table will be the
+                                         // first item in this list
+
+  bool setInSituDataIfUnset(const bool is_in_situ_data) {
+    if (in_situ_data == InSituState::UNSET || !is_in_situ_data) {
+      in_situ_data = (is_in_situ_data ? InSituState::IS_IN_SITU : InSituState::IS_NOT_IN_SITU);
+      return true;
+    }
+    return false;
+  }
+
+  void reset() {
+    in_situ_data = InSituState::UNSET;
+    query_vbo_layout = nullptr;
+    query_ubo_layout = nullptr;
+    targets.clear();
+    table_names.clear();
+    row_set_mem_owner = nullptr;
+  }
+
+ private:
+  enum class InSituState { UNSET, IS_IN_SITU, IS_NOT_IN_SITU };
+  InSituState in_situ_data;  // Should be set to true if query results are written directly
+                             // to CUDA-mapped opengl buffers for rendering. Should be set
+                             // to false otherwise, meaning results are written to CPU first,
+                             // and buffered back to GPU for rendering.
+                             // Can also be set to false to force non-in-situ rendering
+                             // Can only be set once for the lifetime of the object.
+
+  std::shared_ptr<QueryRenderer::QueryDataLayout> query_vbo_layout;
+  std::shared_ptr<QueryRenderer::QueryDataLayout> query_ubo_layout;
 };
 
 class WatchdogException : public std::runtime_error {
@@ -309,7 +358,7 @@ class Executor {
                            const int pixelRadius = 0);
 
   std::shared_ptr<ResultSet> renderPolygons(const std::string& queryStr,
-                                            const ResultSet& rows,
+                                            const ExecutionResult& results,
                                             const Catalog_Namespace::SessionInfo& session,
                                             const int render_widget_id,
                                             const rapidjson::Value& data_desc,
@@ -319,12 +368,20 @@ class Executor {
                                             const std::string& poly_table_name = "");
 
   std::shared_ptr<ResultSet> renderNonInSituData(const std::string& queryStr,
-                                                 const ResultSet& rows,
+                                                 const ExecutionResult& results,
                                                  const Catalog_Namespace::SessionInfo& session,
                                                  const int render_widget_id,
                                                  const rapidjson::Value& data_desc,
                                                  RenderInfo* render_query_data,
                                                  const std::string* render_config_json = nullptr);
+
+  std::shared_ptr<ResultSet> renderLines(const std::string& queryStr,
+                                         const ExecutionResult& results,
+                                         const Catalog_Namespace::SessionInfo& session,
+                                         const int render_widget_id,
+                                         const rapidjson::Value& data_desc,
+                                         RenderInfo* render_query_data,
+                                         const bool is_projection_query = true);
 
   StringDictionaryProxy* getStringDictionaryProxy(const int dictId,
                                                   const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
@@ -567,7 +624,7 @@ class Executor {
                               const bool allow_multifrag,
                               const bool just_explain,
                               const bool allow_loop_joins,
-                              RenderAllocatorMap* render_allocator_map);
+                              RenderInfo* render_info);
 
   struct CompilationResult {
     std::vector<std::pair<void*, void*>> native_functions;
@@ -630,7 +687,7 @@ class Executor {
     std::vector<std::mutex> query_context_mutexes_;
     const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
     int32_t* error_code_;
-    RenderAllocatorMap* render_allocator_map_;
+    RenderInfo* render_info_;
     std::vector<std::pair<ResultPtr, std::vector<size_t>>> all_fragment_results_;
     std::atomic_flag dynamic_watchdog_set_ = ATOMIC_FLAG_INIT;
     static std::mutex reduce_mutex_;
@@ -676,7 +733,7 @@ class Executor {
                       const size_t context_count,
                       const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                       int32_t* error_code,
-                      RenderAllocatorMap* render_allocator_map);
+                      RenderInfo* render_info);
 
     ExecutionDispatch(const ExecutionDispatch&) = delete;
 
@@ -771,7 +828,7 @@ class Executor {
                             const ExecutionOptions& options,
                             const Catalog_Namespace::Catalog&,
                             std::shared_ptr<RowSetMemoryOwner>,
-                            RenderAllocatorMap* render_allocator_map,
+                            RenderInfo* render_info,
                             const bool has_cardinality_estimation);
 
   RowSetPtr executeExplain(const ExecutionDispatch&);
@@ -787,8 +844,7 @@ class Executor {
 
   RowSetPtr collectAllDeviceShardedTopResults(ExecutionDispatch& execution_dispatch) const;
 
-  std::string renderRows(const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& targets,
-                         RenderInfo* render_query_data);
+  std::string renderRows(RenderInfo* render_query_data);
 
   std::unordered_map<int, const Analyzer::BinOper*> getInnerTabIdToJoinCond() const;
 
@@ -938,8 +994,7 @@ class Executor {
   bool prioritizeQuals(const RelAlgExecutionUnit& ra_exe_unit,
                        std::vector<Analyzer::Expr*>& primary_quals,
                        std::vector<Analyzer::Expr*>& deferred_quals);
-  CompilationResult compileWorkUnit(const bool render_output,
-                                    const std::vector<InputTableInfo>& query_infos,
+  CompilationResult compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
                                     const RelAlgExecutionUnit& ra_exe_unit,
                                     const CompilationOptions& co,
                                     const ExecutionOptions& eo,
@@ -950,8 +1005,8 @@ class Executor {
                                     const size_t small_groups_buffer_entry_count,
                                     const int8_t crt_min_byte_width,
                                     const JoinInfo& join_info,
-                                    const bool has_cardinality_estimation);
-
+                                    const bool has_cardinality_estimation,
+                                    RenderInfo* render_info = nullptr);
   std::vector<JoinLoop> buildJoinLoops(RelAlgExecutionUnit& ra_exe_unit,
                                        const CompilationOptions& co,
                                        const ExecutionOptions& eo,
@@ -1358,7 +1413,6 @@ class Executor {
   ::QueryRenderer::QueryRenderManager* render_manager_;
 
   const size_t small_groups_buffer_entry_count_{512};
-  const size_t render_small_groups_buffer_entry_count_{2 * 1024 * 1024};
   static const size_t baseline_threshold{1000000};  // if a perfect hash needs more entries, use baseline
 
   const unsigned block_size_x_;

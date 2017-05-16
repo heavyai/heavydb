@@ -33,6 +33,79 @@
 #include <algorithm>
 #include <numeric>
 
+namespace {
+
+bool node_is_aggregate(const RelAlgNode* ra) {
+  const auto compound = dynamic_cast<const RelCompound*>(ra);
+  const auto aggregate = dynamic_cast<const RelAggregate*>(ra);
+  return ((compound && compound->isAggregate()) || aggregate);
+}
+
+void scanForTablesAndAggsInRelAlgSeqForRender(std::vector<RaExecutionDesc>& exec_descs, RenderInfo* render_info) {
+  CHECK(render_info);
+
+  std::vector<std::string>& rtn_table_names = render_info->table_names;
+  rtn_table_names.clear();
+  if (exec_descs.empty()) {
+    return;
+  }
+
+  std::unordered_set<std::string> table_names;
+  std::unordered_set<const RelAlgNode*> visited;
+  std::vector<const RelAlgNode*> work_set;
+  for (const auto& exec_desc : exec_descs) {
+    const auto body = exec_desc.getBody();
+    if (visited.count(body)) {
+      continue;
+    }
+    work_set.push_back(body);
+    while (!work_set.empty()) {
+      auto walker = work_set.back();
+      work_set.pop_back();
+      if (visited.count(walker)) {
+        continue;
+      }
+      visited.insert(walker);
+      if (walker->isNop()) {
+        CHECK_EQ(size_t(1), walker->inputCount());
+        work_set.push_back(walker->getInput(0));
+        continue;
+      }
+      if (const auto scan = dynamic_cast<const RelScan*>(walker)) {
+        auto td = scan->getTableDescriptor();
+        CHECK(td);
+        if (table_names.insert(td->tableName).second) {
+          // keeping the traversed table names in order
+          rtn_table_names.push_back(td->tableName);
+        }
+        continue;
+      }
+      if (node_is_aggregate(walker)) {
+        // set the render to be non in-situ if we have an
+        // aggregate node
+        render_info->setInSituDataIfUnset(false);
+      }
+      const auto compound = dynamic_cast<const RelCompound*>(walker);
+      const auto join = dynamic_cast<const RelJoin*>(walker);
+      const auto project = dynamic_cast<const RelProject*>(walker);
+      const auto aggregate = dynamic_cast<const RelAggregate*>(walker);
+      const auto filter = dynamic_cast<const RelFilter*>(walker);
+      const auto sort = dynamic_cast<const RelSort*>(walker);
+      const auto multijoin = dynamic_cast<const RelMultiJoin*>(walker);
+      const auto leftdeepinnerjoin = dynamic_cast<const RelLeftDeepInnerJoin*>(walker);
+      if (compound || join || project || aggregate || filter || sort || multijoin || leftdeepinnerjoin) {
+        for (int i = walker->inputCount(); i > 0; --i) {
+          work_set.push_back(walker->getInput(i - 1));
+        }
+        continue;
+      }
+      CHECK(false);
+    }
+  }
+}
+
+}  // namespace
+
 ExecutionResult RelAlgExecutor::executeRelAlgQuery(const std::string& query_ra,
                                                    const CompilationOptions& co,
                                                    const ExecutionOptions& eo,
@@ -60,7 +133,12 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const std::string& que
   if (g_enable_dynamic_watchdog) {
     executor_->resetInterrupt();
   }
-  ScopeGuard row_set_holder = [this] {
+  ScopeGuard row_set_holder = [this, &render_info] {
+    if (render_info) {
+      // need to hold onto the RowSetMemOwner for potential
+      // string id lookups during render vega validation
+      render_info->row_set_mem_owner = executor_->row_set_mem_owner_;
+    }
     executor_->row_set_mem_owner_ = nullptr;
     executor_->lit_str_dict_proxy_ = nullptr;
   };
@@ -71,11 +149,14 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const std::string& que
   executor_->table_generations_ = computeTableGenerations(ra.get());
   ScopeGuard restore_metainfo_cache = [this] { executor_->clearMetaInfoCache(); };
   auto ed_list = get_execution_descriptors(ra.get());
-  if (render_info && render_info->do_render && ed_list.size() > 1) {
-    throw std::runtime_error("Cannot render queries which need more than one execution step");
-  }
   if (render_info) {  // save the table names for render queries
-    table_names_ = getScanTableNamesInRelAlgSeq(ed_list);
+    // set whether the render will be done in-situ (in_situ_data = true) or
+    // set whether the query results will be transferred to the host and then
+    // back to the device for rendering (in_situ_data = false)
+    if (co.device_type_ != ExecutorDeviceType::GPU || ed_list.size() != 1) {
+      render_info->setInSituDataIfUnset(false);
+    }
+    scanForTablesAndAggsInRelAlgSeqForRender(ed_list, render_info);
   }
   // Dispatch the subqueries first
   for (auto subquery : subqueries_) {
@@ -154,16 +235,6 @@ Executor* RelAlgExecutor::getExecutor() const {
   return executor_;
 }
 
-namespace {
-
-bool node_is_aggregate(const RelAlgNode* ra) {
-  const auto compound = dynamic_cast<const RelCompound*>(ra);
-  const auto aggregate = dynamic_cast<const RelAggregate*>(ra);
-  return ((compound && compound->isAggregate()) || aggregate);
-}
-
-}  // namespace
-
 FirstStepExecutionResult RelAlgExecutor::executeRelAlgQueryFirstStep(const RelAlgNode* ra,
                                                                      const CompilationOptions& co,
                                                                      const ExecutionOptions& eo,
@@ -229,8 +300,10 @@ ExecutionResult RelAlgExecutor::executeRelAlgSeq(std::vector<RaExecutionDesc>& e
   CHECK(!exec_descs.empty());
   const auto exec_desc_count = eo.just_explain ? size_t(1) : exec_descs.size();
   for (size_t i = 0; i < exec_desc_count; ++i) {
-    executeRelAlgStep(i, exec_descs, co, eo, render_info, queue_time_ms);
+    // only render on the last step
+    executeRelAlgStep(i, exec_descs, co, eo, (i == exec_desc_count - 1 ? render_info : nullptr), queue_time_ms);
   }
+
   return exec_descs[exec_desc_count - 1].getResult();
 }
 
@@ -368,6 +441,16 @@ void RelAlgExecutor::executeRelAlgStep(const size_t i,
                                       eo.just_validate,
                                       eo.with_dynamic_watchdog,
                                       eo.dynamic_watchdog_time_limit};
+
+  if (render_info && !render_info->table_names.size() && leaf_results_.find(body->getId()) != leaf_results_.end()) {
+    // Save the table names for render queries for distributed aggregation queries.
+    // Doing this here as the aggregator calls executeRelAlgSeq() directly rather
+    // than going thru the executeRelAlg() path.
+    // TODO(croot): should we propagate these table names from the leaves instead
+    // of populating this here, or expose this api for the aggregator to call directly?
+    scanForTablesAndAggsInRelAlgSeqForRender(exec_descs, render_info);
+  }
+
   try {
     const auto compound = dynamic_cast<const RelCompound*>(body);
     if (compound) {
@@ -417,63 +500,6 @@ void RelAlgExecutor::executeRelAlgStep(const size_t i,
   } catch (const UnfoldedMultiJoinRequired&) {
     executeUnfoldedMultiJoin(body, exec_desc, co, eo, queue_time_ms);
   }
-}
-
-const std::vector<std::string>& RelAlgExecutor::getScanTableNamesInRelAlgSeq() const {
-  return table_names_;
-}
-
-std::vector<std::string> RelAlgExecutor::getScanTableNamesInRelAlgSeq(std::vector<RaExecutionDesc>& exec_descs) {
-  if (exec_descs.empty()) {
-    return {};
-  }
-  std::unordered_set<std::string> table_names;
-  std::vector<std::string> rtn_table_names;
-  std::unordered_set<const RelAlgNode*> visited;
-  std::vector<const RelAlgNode*> work_set;
-  for (const auto& exec_desc : exec_descs) {
-    const auto body = exec_desc.getBody();
-    if (visited.count(body)) {
-      continue;
-    }
-    work_set.push_back(body);
-    while (!work_set.empty()) {
-      auto walker = work_set.back();
-      work_set.pop_back();
-      if (visited.count(walker)) {
-        continue;
-      }
-      visited.insert(walker);
-      if (walker->isNop()) {
-        CHECK_EQ(size_t(1), walker->inputCount());
-        work_set.push_back(walker->getInput(0));
-        continue;
-      }
-      if (const auto scan = dynamic_cast<const RelScan*>(walker)) {
-        auto td = scan->getTableDescriptor();
-        CHECK(td);
-        if (table_names.insert(td->tableName).second) {
-          // keeping the traversed table names in order
-          rtn_table_names.push_back(td->tableName);
-        }
-        continue;
-      }
-      const auto compound = dynamic_cast<const RelCompound*>(walker);
-      const auto join = dynamic_cast<const RelJoin*>(walker);
-      const auto project = dynamic_cast<const RelProject*>(walker);
-      const auto aggregate = dynamic_cast<const RelAggregate*>(walker);
-      const auto filter = dynamic_cast<const RelFilter*>(walker);
-      const auto sort = dynamic_cast<const RelSort*>(walker);
-      if (compound || join || project || aggregate || filter || sort) {
-        for (int i = walker->inputCount(); i > 0; --i) {
-          work_set.push_back(walker->getInput(i - 1));
-        }
-        continue;
-      }
-      CHECK(false);
-    }
-  }
-  return rtn_table_names;
 }
 
 void RelAlgExecutor::handleNop(const RelAlgNode* body) {
@@ -1132,6 +1158,28 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
     throw std::runtime_error("Sort node not supported as input to another sort");
   }
   const bool is_aggregate = node_is_aggregate(source);
+  auto it = leaf_results_.find(sort->getId());
+  if (it != leaf_results_.end()) {
+    // Handle push-down for LIMIT for multi-node
+    auto& aggregated_result = it->second;
+    auto& result_rows = aggregated_result.rs;
+    const size_t limit = sort->getLimit();
+    const size_t offset = sort->getOffset();
+    const auto order_entries = get_order_entries(sort);
+    if (limit || offset) {
+      if (!order_entries.empty()) {
+        result_rows->sort(order_entries, limit + offset);
+      }
+      result_rows->dropFirstN(offset);
+      if (limit) {
+        result_rows->keepFirstN(limit);
+      }
+    }
+    ExecutionResult result(result_rows, aggregated_result.targets_meta);
+    sort->setOutputMetainfo(aggregated_result.targets_meta);
+
+    return result;
+  }
   while (true) {
     std::list<std::shared_ptr<Analyzer::Expr>> groupby_exprs;
     bool is_desc{false};
@@ -1141,7 +1189,7 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
       groupby_exprs = source_work_unit.exe_unit.groupby_exprs;
       auto source_result = executeWorkUnit(
           source_work_unit, source->getOutputMetainfo(), is_aggregate, co, eo, render_info, queue_time_ms);
-      if (render_info && render_info->do_render) {
+      if (render_info && render_info->isPotentialInSituRender()) {
         return source_result;
       }
       auto rows_to_sort = source_result.getRows();
@@ -1329,11 +1377,18 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(const RelAlgExecutor::WorkUnit& 
                                                 const int64_t queue_time_ms) {
   const auto body = work_unit.body;
   CHECK(body);
+  auto it = leaf_results_.find(body->getId());
+  if (it != leaf_results_.end()) {
+    GroupByAndAggregate::addTransientStringLiterals(work_unit.exe_unit, executor_, executor_->row_set_mem_owner_);
+    auto& aggregated_result = it->second;
+    auto& result_rows = aggregated_result.rs;
+    ExecutionResult result(result_rows, aggregated_result.targets_meta);
+    body->setOutputMetainfo(aggregated_result.targets_meta);
+    return result;
+  }
   int32_t error_code{0};
-  if (render_info && render_info->do_render) {
-    if (co.device_type_ != ExecutorDeviceType::GPU) {
-      throw std::runtime_error("Backend rendering is only supported on GPU");
-    }
+
+  if (render_info) {
     if (!executor_->render_manager_) {
       throw std::runtime_error("This build doesn't support backend rendering");
     }
@@ -1366,35 +1421,33 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(const RelAlgExecutor::WorkUnit& 
                          {}};
 
   try {
-    result = {executor_->executeWorkUnit(
-                  &error_code,
-                  max_groups_buffer_entry_guess,
-                  is_agg,
-                  table_infos,
-                  ra_exe_unit,
-                  co,
-                  eo,
-                  cat_,
-                  executor_->row_set_mem_owner_,
-                  (render_info && render_info->do_render ? render_info->render_allocator_map_ptr.get() : nullptr),
-                  groups_approx_upper_bound(table_infos) <= big_group_threshold),
+    result = {executor_->executeWorkUnit(&error_code,
+                                         max_groups_buffer_entry_guess,
+                                         is_agg,
+                                         table_infos,
+                                         ra_exe_unit,
+                                         co,
+                                         eo,
+                                         cat_,
+                                         executor_->row_set_mem_owner_,
+                                         render_info,
+                                         groups_approx_upper_bound(table_infos) <= big_group_threshold),
               targets_meta};
   } catch (const CardinalityEstimationRequired&) {
     max_groups_buffer_entry_guess =
         2 * std::min(groups_approx_upper_bound(table_infos), getNDVEstimation(work_unit, is_agg, co, eo));
     CHECK_GT(max_groups_buffer_entry_guess, size_t(0));
-    result = {executor_->executeWorkUnit(
-                  &error_code,
-                  max_groups_buffer_entry_guess,
-                  is_agg,
-                  table_infos,
-                  ra_exe_unit,
-                  co,
-                  eo,
-                  cat_,
-                  executor_->row_set_mem_owner_,
-                  (render_info && render_info->do_render ? render_info->render_allocator_map_ptr.get() : nullptr),
-                  true),
+    result = {executor_->executeWorkUnit(&error_code,
+                                         max_groups_buffer_entry_guess,
+                                         is_agg,
+                                         table_infos,
+                                         ra_exe_unit,
+                                         co,
+                                         eo,
+                                         cat_,
+                                         executor_->row_set_mem_owner_,
+                                         render_info,
+                                         true),
               targets_meta};
   }
 

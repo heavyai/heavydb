@@ -969,8 +969,7 @@ void Executor::createErrorCheckControlFlow(llvm::Function* query_func, bool run_
   CHECK(done_splitting);
 }
 
-Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
-                                                      const std::vector<InputTableInfo>& query_infos,
+Executor::CompilationResult Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
                                                       const RelAlgExecutionUnit& ra_exe_unit,
                                                       const CompilationOptions& co,
                                                       const ExecutionOptions& eo,
@@ -981,13 +980,14 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
                                                       const size_t small_groups_buffer_entry_count,
                                                       const int8_t crt_min_byte_width,
                                                       const JoinInfo& join_info,
-                                                      const bool has_cardinality_estimation) {
+                                                      const bool has_cardinality_estimation,
+                                                      RenderInfo* render_info) {
   nukeOldState(allow_lazy_fetch, join_info, query_infos, ra_exe_unit.outer_join_quals);
 
   GroupByAndAggregate group_by_and_aggregate(this,
                                              co.device_type_,
                                              ra_exe_unit,
-                                             render_output,
+                                             render_info,
                                              query_infos,
                                              row_set_mem_owner,
                                              max_groups_buffer_entry_guess,
@@ -998,7 +998,7 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
   const auto& query_mem_desc = group_by_and_aggregate.getQueryMemoryDescriptor();
 
   if (query_mem_desc.hash_type == GroupByColRangeType::MultiCol && !query_mem_desc.getSmallBufferSizeBytes() &&
-      !has_cardinality_estimation && !render_output && !eo.just_explain) {
+      !has_cardinality_estimation && (!render_info || !render_info->isPotentialInSituRender()) && !eo.just_explain) {
     throw CardinalityEstimationRequired();
   }
 
