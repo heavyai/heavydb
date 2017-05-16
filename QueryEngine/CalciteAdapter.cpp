@@ -93,7 +93,7 @@ class CalciteAdapter {
     for (auto rels_it = rels.Begin(); rels_it != rels.End(); ++rels_it) {
       const auto& scan_ra = *rels_it;
       CHECK(scan_ra.IsObject());
-      if (scan_ra["relOp"].GetString() != std::string("LogicalTableScan")) {
+      if (scan_ra["relOp"].GetString() != std::string("EnumerableTableScan")) {
         break;
       }
       col_names_.emplace_back(ColNames{getColNames(scan_ra), getTableFromScanNode(scan_ra)});
@@ -1000,11 +1000,11 @@ bool match_sort_seq(rapidjson::Value::ConstValueIterator& rels_it,
 // the nodes and reject queries which go beyond the legacy front-end.
 bool query_is_supported(const rapidjson::Value& rels) {
   rapidjson::Value::ConstValueIterator rels_it = rels.Begin();
-  if (std::string("LogicalTableScan") != get_op_name(*rels_it++)) {
+  if (std::string("EnumerableTableScan") != get_op_name(*rels_it++)) {
     return false;
   }
   const auto op_name = get_op_name(*rels_it);
-  if (op_name == std::string("LogicalTableScan")) {
+  if (op_name == std::string("EnumerableTableScan")) {
     ++rels_it;
     CHECK(rels_it != rels.End());
     if (get_op_name(*rels_it++) != std::string("LogicalJoin")) {
@@ -1062,7 +1062,7 @@ Planner::RootPlan* translate_query(const std::string& query, const Catalog_Names
     const auto rel_op_it = crt_node.FindMember("relOp");
     CHECK(rel_op_it != crt_node.MemberEnd());
     CHECK(rel_op_it->value.IsString());
-    if (rel_op_it->value.GetString() == std::string("LogicalTableScan") ||
+    if (rel_op_it->value.GetString() == std::string("EnumerableTableScan") ||
         rel_op_it->value.GetString() == std::string("LogicalSort")) {
       continue;
     }

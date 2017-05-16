@@ -47,16 +47,16 @@
     <dependency>
       <groupId>org.apache.calcite</groupId>
       <artifactId>calcite-core</artifactId>
-      <version>1.11.0</version>
+      <version>1.13.0</version>
       <exclusions>
         <exclusion>
           <groupId>org.pentaho</groupId>
           <artifactId>pentaho-aggdesigner-algorithm</artifactId>
         </exclusion>
-        <exclusion>
+<!--        <exclusion>
           <groupId>com.google.protobuf</groupId>
           <artifactId>protobuf-java</artifactId>
-        </exclusion>
+        </exclusion>-->
       </exclusions>
     </dependency>
     <dependency>

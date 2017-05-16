@@ -31,6 +31,7 @@ import java.util.ArrayList;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
+import org.apache.calcite.adapter.enumerable.EnumerableTableScan;
 
 /**
  * Callback for a relational expression to dump itself as JSON.
@@ -64,8 +65,8 @@ public class MapDRelJsonWriter implements RelWriter {
 
     map.put("id", null); // ensure that id is the first attribute
     map.put("relOp", relJson.classToTypeName(rel.getClass()));
-    if (rel instanceof LogicalTableScan) {
-      RelDataType row_type = ((LogicalTableScan) rel).getTable().getRowType();
+    if (rel instanceof EnumerableTableScan) {
+      RelDataType row_type = ((EnumerableTableScan) rel).getTable().getRowType();
       List<String> field_names = row_type.getFieldNames();
       map.put("fieldNames", field_names);
     }

@@ -1776,7 +1776,8 @@ TEST(Select, UnsupportedNodes) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     EXPECT_THROW(run_multiple_agg("SELECT 1 + 2;", dt), std::runtime_error);
-    EXPECT_THROW(run_multiple_agg("SELECT *;", dt), std::runtime_error);
+    // MAT No longer throws a logicalValues gets a regular parse error'
+    // EXPECT_THROW(run_multiple_agg("SELECT *;", dt), std::runtime_error);
     EXPECT_THROW(run_multiple_agg("SELECT x, COUNT(*) FROM test GROUP BY ROLLUP(x);", dt), std::runtime_error);
   }
 }
@@ -2303,8 +2304,8 @@ TEST(Select, Joins) {
     c("SELECT COUNT(*) FROM test, join_test WHERE test.str = join_test.dup_str;", dt);
     // Intentionally duplicate previous string join to cover hash table building.
     c("SELECT COUNT(*) FROM test, join_test WHERE test.str = join_test.dup_str;", dt);
-    c("SELECT test.x, empty.x FROM test, empty WHERE test.x = empty.x;", dt);
-    c("SELECT COUNT(*) FROM test, empty GROUP BY test.x;", dt);
+    c("SELECT test.x, emptytab. x FROM test, emptytab WHERE test.x = emptytab. x;", dt);
+    c("SELECT COUNT(*) FROM test, emptytab GROUP BY test.x;", dt);
     ASSERT_EQ(
         int64_t(3),
         v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test, join_test WHERE test.rowid = join_test.rowid;", dt)));
@@ -2425,45 +2426,47 @@ TEST(Alter, AfterAlterColumnName) {
 TEST(Select, Empty) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-    c("SELECT COUNT(*) FROM empty;", dt);
-    c("SELECT SUM(x) FROM empty;", dt);
-    c("SELECT SUM(y) FROM empty;", dt);
-    c("SELECT SUM(t) FROM empty;", dt);
-    c("SELECT SUM(f) FROM empty;", dt);
-    c("SELECT SUM(d) FROM empty;", dt);
-    c("SELECT SUM(dd) FROM empty;", dt);
-    c("SELECT MIN(x) FROM empty;", dt);
-    c("SELECT MIN(y) FROM empty;", dt);
-    c("SELECT MIN(t) FROM empty;", dt);
-    c("SELECT MIN(f) FROM empty;", dt);
-    c("SELECT MIN(d) FROM empty;", dt);
-    c("SELECT MIN(dd) FROM empty;", dt);
-    c("SELECT MAX(x) FROM empty;", dt);
-    c("SELECT MAX(y) FROM empty;", dt);
-    c("SELECT MAX(t) FROM empty;", dt);
-    c("SELECT MAX(f) FROM empty;", dt);
-    c("SELECT MAX(d) FROM empty;", dt);
-    c("SELECT MAX(dd) FROM empty;", dt);
-    c("SELECT AVG(x) FROM empty;", dt);
-    c("SELECT AVG(y) FROM empty;", dt);
-    c("SELECT AVG(t) FROM empty;", dt);
-    c("SELECT AVG(f) FROM empty;", dt);
-    c("SELECT AVG(d) FROM empty;", dt);
-    c("SELECT AVG(dd) FROM empty;", dt);
-    c("SELECT COUNT(*) FROM test, empty;", dt);
-    c("SELECT MIN(ts), MAX(ts) FROM empty;", dt);
-    c("SELECT SUM(test.x) FROM test, empty;", dt);
-    c("SELECT SUM(test.y) FROM test, empty;", dt);
-    c("SELECT SUM(empty.x) FROM test, empty;", dt);
-    c("SELECT SUM(empty.y) FROM test, empty;", dt);
+    c("SELECT COUNT(*) FROM emptytab;", dt);
+    c("SELECT SUM(x) FROM emptytab;", dt);
+    c("SELECT SUM(y) FROM emptytab;", dt);
+    c("SELECT SUM(t) FROM emptytab;", dt);
+    c("SELECT SUM(f) FROM emptytab;", dt);
+    c("SELECT SUM(d) FROM emptytab;", dt);
+    c("SELECT SUM(dd) FROM emptytab;", dt);
+    c("SELECT MIN(x) FROM emptytab;", dt);
+    c("SELECT MIN(y) FROM emptytab;", dt);
+    c("SELECT MIN(t) FROM emptytab;", dt);
+    c("SELECT MIN(f) FROM emptytab;", dt);
+    c("SELECT MIN(d) FROM emptytab;", dt);
+    c("SELECT MIN(dd) FROM emptytab;", dt);
+    c("SELECT MAX(x) FROM emptytab;", dt);
+    c("SELECT MAX(y) FROM emptytab;", dt);
+    c("SELECT MAX(t) FROM emptytab;", dt);
+    c("SELECT MAX(f) FROM emptytab;", dt);
+    c("SELECT MAX(d) FROM emptytab;", dt);
+    c("SELECT MAX(dd) FROM emptytab;", dt);
+    c("SELECT AVG(x) FROM emptytab;", dt);
+    c("SELECT AVG(y) FROM emptytab;", dt);
+    c("SELECT AVG(t) FROM emptytab;", dt);
+    c("SELECT AVG(f) FROM emptytab;", dt);
+    c("SELECT AVG(d) FROM emptytab;", dt);
+    c("SELECT AVG(dd) FROM emptytab;", dt);
+    c("SELECT COUNT(*) FROM test, emptytab;", dt);
+    c("SELECT MIN(ts), MAX(ts) FROM emptytab;", dt);
+    c("SELECT SUM(test.x) FROM test, emptytab;", dt);
+    c("SELECT SUM(test.y) FROM test, emptytab;", dt);
+    c("SELECT SUM(emptytab.x) FROM test, emptytab;", dt);
+    c("SELECT SUM(emptytab.y) FROM test, emptytab;", dt);
     c("SELECT COUNT(*) FROM test WHERE x > 8;", dt);
     c("SELECT SUM(x) FROM test WHERE x > 8;", dt);
     c("SELECT SUM(f) FROM test WHERE x > 8;", dt);
     c("SELECT SUM(d) FROM test WHERE x > 8;", dt);
     c("SELECT SUM(dd) FROM test WHERE x > 8;", dt);
-    c("SELECT SUM(dd) FROM empty GROUP BY x, y;", dt);
-    c("SELECT COUNT(DISTINCT x) FROM empty;", dt);
-    c("SELECT APPROX_COUNT_DISTINCT(x * 1000000) FROM empty;", "SELECT COUNT(DISTINCT x * 1000000) FROM empty;", dt);
+    c("SELECT SUM(dd) FROM emptytab GROUP BY x, y;", dt);
+    c("SELECT COUNT(DISTINCT x) FROM emptytab;", dt);
+    c("SELECT APPROX_COUNT_DISTINCT(x * 1000000) FROM emptytab;",
+      "SELECT COUNT(DISTINCT x * 1000000) FROM emptytab;",
+      dt);
   }
 }
 
@@ -2488,8 +2491,9 @@ TEST(Select, Subqueries) {
     c("SELECT COUNT(*) FROM test WHERE x NOT IN (SELECT x FROM test GROUP BY x ORDER BY COUNT(*));", dt);
     c("SELECT COUNT(*) FROM test WHERE x NOT IN (SELECT x FROM test GROUP BY x);", dt);
     c("SELECT COUNT(*) FROM test WHERE f IN (SELECT DISTINCT f FROM test WHERE x > 7);", dt);
-    c("SELECT empty.x, CASE WHEN empty.y IN (SELECT empty.y FROM empty GROUP BY empty.y) then empty.y END yy, sum(x) "
-      "FROM empty GROUP BY empty.x, yy;",
+    c("SELECT emptytab. x, CASE WHEN emptytab. y IN (SELECT emptytab. y FROM emptytab GROUP BY emptytab. y) then "
+      "emptytab. y END yy, sum(x) "
+      "FROM emptytab GROUP BY emptytab. x, yy;",
       dt);
     c("WITH d1 AS (SELECT deptno, dname FROM dept LIMIT 10) SELECT ename, dname FROM emp, d1 WHERE emp.deptno = "
       "d1.deptno LIMIT 10;",
@@ -2851,7 +2855,7 @@ TEST(Select, Deserialization) {
 TEST(Select, DesugarTransform) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-    c("SELECT * FROM empty ORDER BY empty.x;", dt);
+    c("SELECT * FROM emptytab ORDER BY emptytab. x;", dt);
     c("SELECT COUNT(*) FROM TEST WHERE x IN (SELECT x + 1 AS foo FROM test GROUP BY foo ORDER BY COUNT(*) DESC LIMIT "
       "1);",
       dt);
@@ -3024,16 +3028,16 @@ int create_and_populate_tables() {
     return -EEXIST;
   }
   try {
-    const std::string drop_old_empty{"DROP TABLE IF EXISTS empty;"};
+    const std::string drop_old_empty{"DROP TABLE IF EXISTS emptytab;"};
     run_ddl_statement(drop_old_empty);
     g_sqlite_comparator.query(drop_old_empty);
     const std::string create_empty{
-        "CREATE TABLE empty(x int, y int not null, t bigint not null, f float not null, d double not null, dd "
+        "CREATE TABLE emptytab(x int, y int not null, t bigint not null, f float not null, d double not null, dd "
         "decimal(10, 2) not null, ts timestamp)"};
     run_ddl_statement(create_empty + " WITH (partitions='REPLICATED');");
     g_sqlite_comparator.query(create_empty + ";");
   } catch (...) {
-    LOG(ERROR) << "Failed to (re-)create table 'empty'";
+    LOG(ERROR) << "Failed to (re-)create table 'emptytab'";
     return -EEXIST;
   }
   try {
@@ -3071,10 +3075,18 @@ int create_and_populate_tables() {
 }
 
 int create_views() {
+  const std::string create_view_test{
+      "CREATE VIEW view_test AS SELECT test.*, test_inner.* FROM test, test_inner WHERE test.str = test_inner.str;"};
+  const std::string drop_old_view{"DROP VIEW IF EXISTS view_test;"};
   try {
-    const std::string create_view_test{
-        "CREATE VIEW view_test AS SELECT test.*, test_inner.* FROM test, test_inner WHERE test.str = test_inner.str;"};
+    run_ddl_statement(drop_old_view);
     run_ddl_statement(create_view_test);
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create view 'view_test' -- run_ddl_statement";
+    return -EEXIST;
+  }
+  try {
+    g_sqlite_comparator.query(drop_old_view);
     g_sqlite_comparator.query(create_view_test);
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create view 'view_test'";
@@ -3085,6 +3097,9 @@ int create_views() {
 
 int create_as_select() {
   try {
+    const std::string drop_ctas_test{"DROP TABLE IF EXISTS ctas_test;"};
+    run_ddl_statement(drop_ctas_test);
+    g_sqlite_comparator.query(drop_ctas_test);
     const std::string create_ctas_test{
         "CREATE TABLE ctas_test AS SELECT x, f, d, str, fixed_str FROM test WHERE x > 7;"};
     run_ddl_statement(create_ctas_test);
@@ -3098,12 +3113,15 @@ int create_as_select() {
 
 int create_as_select_empty() {
   try {
+    const std::string drop_ctas_test{"DROP TABLE IF EXISTS empty_ctas_test;"};
+    run_ddl_statement(drop_ctas_test);
+    g_sqlite_comparator.query(drop_ctas_test);
     const std::string create_ctas_test{
         "CREATE TABLE empty_ctas_test AS SELECT x, f, d, str, fixed_str FROM test WHERE x > 8;"};
     run_ddl_statement(create_ctas_test);
     g_sqlite_comparator.query(create_ctas_test);
   } catch (...) {
-    LOG(ERROR) << "Failed to (re-)create table 'ctas_test'";
+    LOG(ERROR) << "Failed to (re-)create table 'empty_ctas_test'";
     return -EEXIST;
   }
   return 0;
@@ -3131,7 +3149,7 @@ void drop_tables() {
   const std::string drop_subquery_test{"DROP TABLE subquery_test;"};
   run_ddl_statement(drop_subquery_test);
   g_sqlite_comparator.query(drop_subquery_test);
-  const std::string drop_empty_test{"DROP TABLE empty;"};
+  const std::string drop_empty_test{"DROP TABLE emptytab;"};
   run_ddl_statement(drop_empty_test);
   g_sqlite_comparator.query(drop_empty_test);
   run_ddl_statement("DROP TABLE text_group_by_test;");

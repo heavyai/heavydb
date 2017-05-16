@@ -99,9 +99,7 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
         listOpTab.add(op);
     }
 
-    // MAT Nov 11 2015
-    // These are example of how to add custom functions
-    // left in as a starting point for when we need them
+    
     public static void addUDF(MapDSqlOperatorTable opTab, final Map<String, ExtensionFunction> extSigs) {
         // Don't use anonymous inner classes. They can't be instantiated
         // using reflection when we are deserializing from JSON.

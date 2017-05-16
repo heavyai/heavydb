@@ -15,6 +15,7 @@
  */
 package com.mapd.metadata;
 
+import com.mapd.calcite.parser.MapDParser;
 import com.mapd.calcite.parser.MapDUser;
 import com.mapd.thrift.server.MapD;
 import com.mapd.thrift.server.TColumnType;
@@ -28,6 +29,9 @@ import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.HashSet;
+import java.util.Set;
+import org.apache.calcite.schema.Table;
 import org.apache.thrift.TException;
 import org.apache.thrift.protocol.TBinaryProtocol;
 import org.apache.thrift.protocol.TProtocol;
@@ -36,6 +40,9 @@ import org.apache.thrift.transport.TTransport;
 import org.apache.thrift.transport.TTransportException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.mapd.calcite.parser.MapDTable;
+import com.mapd.calcite.parser.MapDView;
+import java.util.List;
 
 /**
  *
@@ -49,6 +56,7 @@ public class MetaConnect {
   private final MapDUser currentUser;
   private final int mapdPort;
   private Connection catConn;
+  private final MapDParser parser;
 
   private static final int KBOOLEAN = 1;
   private static final int KCHAR = 2;
@@ -72,11 +80,12 @@ public class MetaConnect {
     //x.getTableDescriptor("flights");
   }
 
-  public MetaConnect(int mapdPort, String dataDir, MapDUser currentMapDUser) {
+  public MetaConnect(int mapdPort, String dataDir, MapDUser currentMapDUser, MapDParser parser) {
     this.dataDir = dataDir;
     this.db = currentMapDUser.getDB();
     this.currentUser = currentMapDUser;
     this.mapdPort = mapdPort;
+    this.parser = parser;
   }
 
   private void connectToDBCatalog() {
@@ -110,6 +119,87 @@ public class MetaConnect {
       MAPDLOGGER.error(err);
       throw new RuntimeException(err);
     }
+  }
+
+  public Table getTable(String tableName) {
+    TTableDetails td = get_table_details(tableName);
+
+    if (td.getView_sql() == null || td.getView_sql().isEmpty()) {
+      MAPDLOGGER.debug("Processing a table");
+      return new MapDTable(td);
+    } else {
+      MAPDLOGGER.debug("Processing a view");
+      return new MapDView(getViewSql(tableName), td, parser);
+    }
+  }
+
+  public Set<String> getTables() {
+    if (mapdPort == -1) {
+      // use sql
+      connectToDBCatalog();
+      Set<String> ts = getTables_SQL();
+      disconnectFromDBCatalog();
+      return ts;
+    }
+    // use thrift direct to local server
+    try {
+      TProtocol protocol = null;
+
+      TTransport transport = new TSocket("localhost", mapdPort);
+      transport.open();
+      protocol = new TBinaryProtocol(transport);
+
+      MapD.Client client = new MapD.Client(protocol);
+
+      List<String> tablesList = client.get_tables(currentUser.getSession());
+      Set<String> ts = new HashSet<String>(tablesList.size());
+      for (String tableName : tablesList){
+        ts.add(tableName);
+      }
+      
+      transport.close();
+
+      return ts;
+
+    } catch (TTransportException ex) {
+      MAPDLOGGER.error(ex.toString());
+      throw new RuntimeException(ex.toString());
+    } catch (TMapDException ex) {
+      MAPDLOGGER.error(ex.toString());
+      throw new RuntimeException(ex.toString());
+    } catch (TException ex) {
+      MAPDLOGGER.error(ex.toString());
+      throw new RuntimeException(ex.toString());
+    }
+  }
+  
+  private Set<String> getTables_SQL() {
+    connectToDBCatalog();
+    Set<String> tableSet = new HashSet<String>();
+    Statement stmt = null;
+    ResultSet rs = null;
+    String sqlText = "";
+    try {
+      stmt = catConn.createStatement();
+
+      // get the tables
+      rs = stmt.executeQuery(
+              "SELECT name FROM mapd_tables ");
+      while (rs.next()) {
+        tableSet.add(rs.getString("name"));
+        /*--*/
+        MAPDLOGGER.debug("Object name = " + rs.getString("name"));
+      }
+      rs.close();
+      stmt.close();
+
+    } catch (Exception e) {
+      String err = "error trying to get all the tables, error was " + e.getMessage();
+      MAPDLOGGER.error(err);
+      throw new RuntimeException(err);
+    }
+    disconnectFromDBCatalog();
+    return tableSet;
   }
 
   public TTableDetails get_table_details(String tableName) {
@@ -284,8 +374,8 @@ public class MetaConnect {
   }
 
   private boolean isView(String tableName) {
-    Statement stmt = null;
-    ResultSet rs = null;
+    Statement stmt;
+    ResultSet rs;
     int viewFlag = 0;
     try {
       stmt = catConn.createStatement();
@@ -307,12 +397,44 @@ public class MetaConnect {
   }
 
   public String getViewSql(String tableName) {
-    return getViewSql(getTableId(tableName));
+    if (mapdPort == -1) {
+      // use sql
+      connectToDBCatalog();
+      String sql = getViewSql(getTableId(tableName));
+      disconnectFromDBCatalog();
+      return sql;
+    }
+    // use thrift direct to local server
+    try {
+      TProtocol protocol = null;
+
+      TTransport transport = new TSocket("localhost", mapdPort);
+      transport.open();
+      protocol = new TBinaryProtocol(transport);
+
+      MapD.Client client = new MapD.Client(protocol);
+
+      TTableDetails td = client.get_table_details(currentUser.getSession(), tableName);
+
+      transport.close();
+
+      return td.getView_sql();
+
+    } catch (TTransportException ex) {
+      MAPDLOGGER.error(ex.toString());
+      throw new RuntimeException(ex.toString());
+    } catch (TMapDException ex) {
+      MAPDLOGGER.error(ex.toString());
+      throw new RuntimeException(ex.toString());
+    } catch (TException ex) {
+      MAPDLOGGER.error(ex.toString());
+      throw new RuntimeException(ex.toString());
+    }
   }
 
   public String getViewSql(int tableId) {
-    Statement stmt = null;
-    ResultSet rs = null;
+    Statement stmt;
+    ResultSet rs;
     String sqlText = "";
     try {
       stmt = catConn.createStatement();

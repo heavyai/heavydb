@@ -1,241 +1,113 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * To change this license header, choose License Headers in Project Properties.
+ * To change this template file, choose Tools | Templates
+ * and open the template in the editor.
  */
-
 package com.mapd.calcite.parser;
 
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Sets;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import org.apache.calcite.linq4j.tree.Expression;
-import org.apache.calcite.plan.RelOptSchema;
-import org.apache.calcite.plan.RelOptTable;
-import org.apache.calcite.prepare.Prepare;
-import org.apache.calcite.rel.RelCollation;
-import org.apache.calcite.rel.RelCollations;
-import org.apache.calcite.rel.RelDistribution;
-import org.apache.calcite.rel.RelDistributions;
-import org.apache.calcite.rel.RelFieldCollation;
-import org.apache.calcite.rel.RelNode;
-import org.apache.calcite.rel.logical.LogicalTableScan;
+import com.mapd.thrift.server.TColumnType;
+import com.mapd.thrift.server.TDatumType;
+import com.mapd.thrift.server.TTableDetails;
+import com.mapd.thrift.server.TTypeInfo;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
-import org.apache.calcite.rel.type.RelDataTypeField;
-import org.apache.calcite.schema.TranslatableTable;
-import org.apache.calcite.sql.SqlAccessType;
-import org.apache.calcite.sql.validate.SqlModality;
-import org.apache.calcite.sql.validate.SqlMonotonicity;
-import org.apache.calcite.util.ImmutableBitSet;
-import org.apache.calcite.util.Pair;
+import org.apache.calcite.schema.Schema;
+import org.apache.calcite.schema.Statistic;
+import org.apache.calcite.schema.Statistics;
+import org.apache.calcite.schema.Table;
+import org.apache.calcite.sql.type.SqlTypeName;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  *
  * @author michael
  */
-/**
- * MapD implementation of {@link org.apache.calcite.prepare.Prepare.PreparingTable}.
- */
-public class MapDTable implements Prepare.PreparingTable {
+public class MapDTable implements Table {
 
-  protected final MapDCatalogReader catalogReader;
-  private final boolean stream;
-  private final List<Map.Entry<String, RelDataType>> columnList
-          = Lists.newArrayList();
-  private RelDataType rowType;
-  private List<RelCollation> collationList;
-  protected final List<String> names;
-  private final Set<String> monotonicColumnSet = Sets.newHashSet();
-  private double rowCount = 0l;
+  final static Logger MAPDLOGGER = LoggerFactory.getLogger(MapDTable.class);
+  private final TTableDetails rowInfo;
 
-  public MapDTable(MapDCatalogReader catalogReader, String catalogName,
-          String schemaName, String name, boolean stream) {
-    this.catalogReader = catalogReader;
-    this.stream = stream;
-    this.names = ImmutableList.of(catalogName, schemaName, name);
-  }
-
-  public static MapDTable create(MapDCatalogReader catalogReader,
-          MapDDatabase schema, String name, boolean stream) {
-    MapDTable table
-            = new MapDTable(catalogReader, schema.getCatalogName(), schema.getSchemaName(),
-                    name, stream);
-    schema.addTable(name);
-    return table;
-  }
-
-//    public <T> T unwrap(Class<T> clazz) {
-//      if (clazz.isInstance(this)) {
-//        return clazz.cast(this);
-//      }
-//      if (clazz.isAssignableFrom(Table.class)) {
-//        return clazz.cast(
-//            new JdbcTest.AbstractModifiableTable(Util.last(names)) {
-//              @Override public RelDataType
-//              getRowType(RelDataTypeFactory typeFactory) {
-//                return typeFactory.createStructType(rowType.getFieldList());
-//              }
-//
-//              @Override public Collection getModifiableCollection() {
-//                return null;
-//              }
-//
-//              @Override public <E> Queryable<E>
-//              asQueryable(QueryProvider queryProvider, SchemaPlus schema,
-//                  String tableName) {
-//                return null;
-//              }
-//
-//              @Override public Type getElementType() {
-//                return null;
-//              }
-//
-//              @Override public Expression getExpression(SchemaPlus schema,
-//                  String tableName, Class clazz) {
-//                return null;
-//              }
-//            });
-//      }
-//      return null;
-//    }
-  @Override
-  public double getRowCount() {
-    return rowCount;
+  public MapDTable(TTableDetails ri) {
+    rowInfo = ri;
   }
 
   @Override
-  public RelOptSchema getRelOptSchema() {
-    return catalogReader;
-  }
-
-  @Override
-  public RelNode toRel(RelOptTable.ToRelContext context) {
-    if (this instanceof TranslatableTable) {
-      return ((TranslatableTable) this).toRel(context, this);
-    } else {
-      return LogicalTableScan.create(context.getCluster(), this);
+  public RelDataType getRowType(RelDataTypeFactory rdtf) {
+    RelDataTypeFactory.FieldInfoBuilder builder = rdtf.builder();
+    for (TColumnType tct : rowInfo.getRow_desc()) {
+      MAPDLOGGER.debug("'" + tct.col_name + "'"
+              + " \t" + tct.getCol_type().getEncoding()
+              + " \t" + tct.getCol_type().getFieldValue(TTypeInfo._Fields.TYPE)
+              + " \t" + tct.getCol_type().nullable
+              + " \t" + tct.getCol_type().is_array
+              + " \t" + tct.getCol_type().precision
+              + " \t" + tct.getCol_type().scale
+      );
+      builder.add(tct.col_name, createType(tct, rdtf));
     }
+    return builder.build();
   }
 
   @Override
-  public List<RelCollation> getCollationList() {
-    return collationList;
+  public Statistic getStatistic() {
+    return Statistics.UNKNOWN;
   }
 
   @Override
-  public RelDistribution getDistribution() {
-    return RelDistributions.BROADCAST_DISTRIBUTED;
+  public Schema.TableType getJdbcTableType() {
+    return Schema.TableType.TABLE;
   }
 
-  @Override
-  public boolean isKey(ImmutableBitSet columns) {
-    return false;
-  }
-
-  @Override
-  public RelDataType getRowType() {
-    return rowType;
-  }
-
-  @Override
-  public boolean supportsModality(SqlModality modality) {
-    return modality == (stream ? SqlModality.STREAM : SqlModality.RELATION);
-  }
-
-  public void onRegister(RelDataTypeFactory typeFactory) {
-    rowType = typeFactory.createStructType(columnList);
-    collationList = deduceMonotonicity(this);
-  }
-
-    private static List<RelCollation> deduceMonotonicity(
-          Prepare.PreparingTable table) {
-    final List<RelCollation> collationList = Lists.newArrayList();
-
-    // Deduce which fields the table is sorted on.
-    int i = -1;
-    for (RelDataTypeField field : table.getRowType().getFieldList()) {
-      ++i;
-      final SqlMonotonicity monotonicity
-              = table.getMonotonicity(field.getName());
-      if (monotonicity != SqlMonotonicity.NOT_MONOTONIC) {
-        final RelFieldCollation.Direction direction
-                = monotonicity.isDecreasing()
-                        ? RelFieldCollation.Direction.DESCENDING
-                        : RelFieldCollation.Direction.ASCENDING;
-        collationList.add(
-                RelCollations.of(
-                        new RelFieldCollation(i, direction,
-                                RelFieldCollation.NullDirection.UNSPECIFIED)));
+  private RelDataType createType(TColumnType value, RelDataTypeFactory typeFactory) {
+    RelDataType cType = getRelDataType(value.col_type.type, value.col_type.precision, value.col_type.scale, typeFactory);
+    if (value.col_type.is_array) {
+      if (value.col_type.isNullable()) {
+        return typeFactory.createArrayType(typeFactory.createTypeWithNullability(cType, true), -1);
+      } else {
+        return typeFactory.createArrayType(cType, -1);
       }
+    } else if (value.col_type.isNullable()) {
+      return typeFactory.createTypeWithNullability(cType, true);
+    } else {
+      return cType;
     }
-    return collationList;
-
   }
 
-  @Override
-  public List<String> getQualifiedName() {
-    return names;
-  }
+  // Convert our TDataumn type in to a base calcite SqlType
+  // todo confirm whether it is ok to ignore thinsg like lengths
+  // since we do not use them on the validator side of the calcite 'fence'
+  private RelDataType getRelDataType(TDatumType dType, int precision, int scale, RelDataTypeFactory typeFactory) {
 
-  @Override
-  public SqlMonotonicity getMonotonicity(String columnName) {
-    return monotonicColumnSet.contains(columnName)
-            ? SqlMonotonicity.INCREASING
-            : SqlMonotonicity.NOT_MONOTONIC;
-  }
-
-  @Override
-  public SqlAccessType getAllowedAccess() {
-    return SqlAccessType.ALL;
-  }
-
-  @Override
-  public Expression getExpression(Class clazz) {
-    throw new UnsupportedOperationException();
-  }
-
-  public void addColumn(String name, RelDataType type) {
-    columnList.add(Pair.of(name, type));
-  }
-
-  public void addMonotonic(String name) {
-    monotonicColumnSet.add(name);
-    assert Pair.left(columnList).contains(name);
-  }
-
-  @Override
-  public RelOptTable extend(List<RelDataTypeField> extendedFields) {
-    final MapDTable table = new MapDTable(catalogReader, names.get(0),
-            names.get(1), names.get(2), stream);
-    table.columnList.addAll(columnList);
-    table.columnList.addAll(extendedFields);
-    table.onRegister(catalogReader.typeFactory);
-    return table;
-  }
-
-  @Override
-  public <T> T unwrap(Class<T> clazz) {
-    if (clazz.isInstance(this)) {
-      return clazz.cast(this);
+    switch (dType) {
+      case SMALLINT:
+        return typeFactory.createSqlType(SqlTypeName.SMALLINT);
+      case INT:
+        return typeFactory.createSqlType(SqlTypeName.INTEGER);
+      case BIGINT:
+        return typeFactory.createSqlType(SqlTypeName.BIGINT);
+      case FLOAT:
+        return typeFactory.createSqlType(SqlTypeName.FLOAT);
+      case DECIMAL:
+        return typeFactory.createSqlType(SqlTypeName.DECIMAL, precision, scale);
+      case DOUBLE:
+        return typeFactory.createSqlType(SqlTypeName.DOUBLE);
+      case STR:
+        return typeFactory.createSqlType(SqlTypeName.VARCHAR, 50);
+      case TIME:
+        return typeFactory.createSqlType(SqlTypeName.TIME);
+      case TIMESTAMP:
+        return typeFactory.createSqlType(SqlTypeName.TIMESTAMP);
+      case DATE:
+        return typeFactory.createSqlType(SqlTypeName.DATE);
+      case BOOL:
+        return typeFactory.createSqlType(SqlTypeName.BOOLEAN);
+      case INTERVAL_DAY_TIME:
+        return typeFactory.createSqlType(SqlTypeName.INTERVAL_DAY);
+      case INTERVAL_YEAR_MONTH:
+        return typeFactory.createSqlType(SqlTypeName.INTERVAL_YEAR_MONTH);
+      default:
+        throw new AssertionError(dType.name());
     }
-    return null;
-  }
-
-  void setRowCount(double rows) {
-    rowCount = rows;
   }
 }

@@ -86,6 +86,7 @@ class CalciteServerHandler implements CalciteServer.Iface {
     }
     MapDUser mapDUser = new MapDUser(user, session, catalog, mapdPort);
     MAPDLOGGER.debug("process was called User: " + user + " Catalog: " + catalog + " sql: " + sqlText);
+    parser.setUser(mapDUser);
 
     // remove last charcter if it is a ;
     if (sqlText.charAt(sqlText.length() - 1) == ';') {

@@ -1422,7 +1422,7 @@ class RelAlgAbstractInterpreter {
       CHECK(crt_node.IsObject());
       std::shared_ptr<RelAlgNode> ra_node = nullptr;
       const auto rel_op = json_str(field(crt_node, "relOp"));
-      if (rel_op == std::string("LogicalTableScan")) {
+      if (rel_op == std::string("EnumerableTableScan")) {
         ra_node = dispatchTableScan(crt_node);
       } else if (rel_op == std::string("LogicalProject")) {
         ra_node = dispatchProject(crt_node);
@@ -1523,8 +1523,8 @@ class RelAlgAbstractInterpreter {
   const TableDescriptor* getTableFromScanNode(const rapidjson::Value& scan_ra) const {
     const auto& table_json = field(scan_ra, "table");
     CHECK(table_json.IsArray());
-    CHECK_EQ(unsigned(3), table_json.Size());
-    const auto td = cat_.getMetadataForTable(table_json[2].GetString());
+    CHECK_EQ(unsigned(2), table_json.Size());
+    const auto td = cat_.getMetadataForTable(table_json[1].GetString());
     CHECK(td);
     return td;
   }

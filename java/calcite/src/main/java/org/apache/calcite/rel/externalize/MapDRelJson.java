@@ -74,6 +74,7 @@ public class MapDRelJson {
           "org.apache.calcite.rel.core.",
           "org.apache.calcite.rel.logical.",
           "org.apache.calcite.adapter.jdbc.",
+          "org.apache.calcite.adapter.enumerable.",
           "org.apache.calcite.adapter.jdbc.JdbcRules$");
 
   public MapDRelJson(JsonBuilder jsonBuilder) {

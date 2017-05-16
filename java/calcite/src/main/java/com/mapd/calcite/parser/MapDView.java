@@ -13,64 +13,73 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package com.mapd.calcite.parser;
 
+import com.mapd.thrift.server.TTableDetails;
 import org.apache.calcite.plan.RelOptTable;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.RelRoot;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.schema.Schema;
-import org.apache.calcite.schema.Statistic;
-import org.apache.calcite.schema.Statistics;
 import org.apache.calcite.schema.TranslatableTable;
 import org.apache.calcite.sql.parser.SqlParseException;
+import org.apache.calcite.tools.RelConversionException;
+import org.apache.calcite.tools.ValidationException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-class MapDView extends MapDTable implements TranslatableTable {
+public class MapDView extends MapDTable implements TranslatableTable {
 
-    MapDView(MapDCatalogReader catalogReader, String catalogName, String schemaName,
-            String name, boolean stream, String viewSql, final MapDParser parser) {
-        super(catalogReader, catalogName, schemaName, name, stream);
-        this.viewSql = viewSql;
-        this.parser = parser;
+  final static Logger MAPDLOGGER = LoggerFactory.getLogger(MapDView.class);
+  final MapDParser parser;
+  private final String viewSql;
+
+  public MapDView(String view_sql, TTableDetails ri, MapDParser mp) {
+    super(ri);
+    this.viewSql = view_sql;
+    parser = mp;
+  }
+
+  String getViewSql() {
+    return viewSql;
+  }
+
+  @Override
+  public Schema.TableType getJdbcTableType() {
+    return Schema.TableType.VIEW;
+  }
+
+  @Override
+  public RelNode toRel(RelOptTable.ToRelContext context, RelOptTable relOptTable) {
+    try {
+      return parser.queryToSqlNode(viewSql, true).rel;
+    } catch (SqlParseException ex) {
+      assert false;
+      return null;
+    } catch (ValidationException ex) {
+      assert false;
+      return null;
+    } catch (RelConversionException ex) {
+      assert false;
+      return null;
     }
+  }
 
-    String getViewSql() {
-        return viewSql;
+  @Override
+  public RelDataType getRowType(RelDataTypeFactory rdtf) {
+    try {
+      final RelRoot relAlg = parser.queryToSqlNode(viewSql, true);
+      return relAlg.validatedRowType;
+    } catch (SqlParseException e) {
+      assert false;
+      return null;
+    } catch (ValidationException ex) {
+      assert false;
+      return null;
+    } catch (RelConversionException ex) {
+      assert false;
+      return null;
     }
-
-    @Override
-    public Schema.TableType getJdbcTableType() {
-        return Schema.TableType.VIEW;
-    }
-
-    @Override
-    public Statistic getStatistic() {
-        return Statistics.UNKNOWN;
-    }
-
-    @Override
-    public RelDataType getRowType() {
-        try {
-            final RelRoot relAlg = parser.queryToSqlNode(viewSql, true);
-            return relAlg.validatedRowType;
-        } catch (SqlParseException e) {
-            assert false;
-            return null;
-        }
-    }
-
-    @Override
-    public RelDataType getRowType(RelDataTypeFactory typeFactory) {
-        return getRowType();
-    }
-
-    @Override
-    public RelNode toRel(RelOptTable.ToRelContext context, RelOptTable relOptTable) {
-        return context.expandView(relOptTable.getRowType(), viewSql, null, null).rel;
-    }
-
-    private final String viewSql;
-    private final MapDParser parser;
+  }
 }
