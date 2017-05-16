@@ -2160,6 +2160,11 @@ CountDistinctDescriptors GroupByAndAggregate::initCountDistinctDescriptors() {
       int64_t bitmap_sz_bits{agg_info.agg_kind == kCOUNT ? 0 : HLL_MASK_WIDTH};
       if (arg_range_info.hash_type_ == GroupByColRangeType::OneColKnownRange &&
           !arg_ti.is_array()) {  // TODO(alex): allow bitmap implementation for arrays
+        if (arg_range_info.isEmpty()) {
+          count_distinct_descriptors.emplace_back(CountDistinctDescriptor{
+              CountDistinctImplType::Bitmap, 0, 64, agg_info.agg_kind == kAPPROX_COUNT_DISTINCT, device_type_});
+          continue;
+        }
         count_distinct_impl_type = CountDistinctImplType::Bitmap;
         if (agg_info.agg_kind == kCOUNT) {
           bitmap_sz_bits = arg_range_info.max - arg_range_info.min + 1;

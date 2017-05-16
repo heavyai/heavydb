@@ -333,6 +333,7 @@ class GroupByAndAggregate {
     const int64_t max;
     const int64_t bucket;
     const bool has_nulls;
+    bool isEmpty() { return min == 0 && max == -1; }
   };
 
   struct DiamondCodegen {

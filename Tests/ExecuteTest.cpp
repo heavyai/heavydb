@@ -710,6 +710,7 @@ TEST(Select, ApproxCountDistinct) {
     c("SELECT APPROX_COUNT_DISTINCT(f) FROM test;", "SELECT COUNT(distinct f) FROM test;", dt);
     c("SELECT APPROX_COUNT_DISTINCT(d) FROM test;", "SELECT COUNT(distinct d) FROM test;", dt);
     c("SELECT APPROX_COUNT_DISTINCT(str) FROM test;", "SELECT COUNT(distinct str) FROM test;", dt);
+    c("SELECT APPROX_COUNT_DISTINCT(null_str) FROM test;", "SELECT COUNT(distinct null_str) FROM test;", dt);
     c("SELECT APPROX_COUNT_DISTINCT(ss) FROM test WHERE ss IS NOT NULL;", "SELECT COUNT(distinct ss) FROM test;", dt);
     c("SELECT APPROX_COUNT_DISTINCT(x + 1) FROM test;", "SELECT COUNT(distinct x + 1) FROM test;", dt);
     c("SELECT COUNT(*), MIN(x), MAX(x), AVG(y), SUM(z) AS n, APPROX_COUNT_DISTINCT(x) FROM test GROUP BY y ORDER "
@@ -725,6 +726,12 @@ TEST(Select, ApproxCountDistinct) {
       dt);
     c("SELECT z, str, AVG(z), APPROX_COUNT_DISTINCT(z) FROM test GROUP BY z, str;",
       "SELECT z, str, AVG(z), COUNT(distinct z) FROM test GROUP BY z, str;",
+      dt);
+    c("SELECT APPROX_COUNT_DISTINCT(null_str) AS n FROM test GROUP BY x ORDER BY n;",
+      "SELECT COUNT(distinct null_str) AS n FROM test GROUP BY x ORDER BY n;",
+      dt);
+    c("SELECT z, APPROX_COUNT_DISTINCT(null_str) AS n FROM test GROUP BY z ORDER BY z, n;",
+      "SELECT z, COUNT(distinct null_str) AS n FROM test GROUP BY z ORDER BY z, n;",
       dt);
     c("SELECT AVG(z), APPROX_COUNT_DISTINCT(x) AS dx FROM test GROUP BY y HAVING dx > 1;",
       "SELECT AVG(z), COUNT(distinct x) AS dx FROM test GROUP BY y HAVING dx > 1;",
@@ -2788,7 +2795,8 @@ int create_and_populate_tables() {
         "CREATE TABLE test(x int not null, y int, z smallint, t bigint, b boolean, f float, ff float, fn float, d "
         "double, dn double, str "
         "text "
-        "encoding dict, fixed_str text encoding dict(16), real_str text encoding none, m timestamp(0), n time(0), o "
+        "encoding dict, null_str text encoding dict, fixed_str text encoding dict(16), real_str text encoding none, m "
+        "timestamp(0), n time(0), o "
         "date, o1 date encoding fixed(32), fx int encoding fixed(16), dd decimal(10, 2), dd_notnull decimal(10, 2) not "
         "null, ss text encoding dict, u int, ofd int, ufd int not null, ofq bigint, ufq bigint not null) WITH "
         "(fragment_size=2);"};
@@ -2796,7 +2804,7 @@ int create_and_populate_tables() {
     g_sqlite_comparator.query(
         "CREATE TABLE test(x int not null, y int, z smallint, t bigint, b boolean, f float, ff float, fn float, d "
         "double, dn double, str "
-        "text, "
+        "text, null_str text,"
         "fixed_str text, real_str text, m timestamp(0), n time(0), o date, o1 date, fx int, dd decimal(10, 2), "
         "dd_notnull decimal(10, 2) not null, ss text, u int, ofd int, ufd int not null, ofq bigint, ufq bigint not "
         "null);");
@@ -2807,7 +2815,7 @@ int create_and_populate_tables() {
   CHECK_EQ(g_num_rows % 2, 0);
   for (ssize_t i = 0; i < g_num_rows; ++i) {
     const std::string insert_query{
-        "INSERT INTO test VALUES(7, 42, 101, 1001, 't', 1.1, 1.1, null, 2.2, null, 'foo', 'foo', 'real_foo', "
+        "INSERT INTO test VALUES(7, 42, 101, 1001, 't', 1.1, 1.1, null, 2.2, null, 'foo', null, 'foo', 'real_foo', "
         "'2014-12-13 "
         "22:23:15', "
         "'15:13:14', '1999-09-09', '1999-09-09', 9, 111.1, 111.1, 'fish', null, 2147483647, -2147483648, null, -1);"};
@@ -2816,7 +2824,8 @@ int create_and_populate_tables() {
   }
   for (ssize_t i = 0; i < g_num_rows / 2; ++i) {
     const std::string insert_query{
-        "INSERT INTO test VALUES(8, 43, 102, 1002, 'f', 1.2, 101.2, -101.2, 2.4, -2002.4, 'bar', 'bar', 'real_bar', "
+        "INSERT INTO test VALUES(8, 43, 102, 1002, 'f', 1.2, 101.2, -101.2, 2.4, -2002.4, 'bar', null, 'bar', "
+        "'real_bar', "
         "'2014-12-13 "
         "22:23:15', "
         "'15:13:14', NULL, NULL, NULL, 222.2, 222.2, null, null, null, -2147483647, 9223372036854775807, "
@@ -2826,7 +2835,8 @@ int create_and_populate_tables() {
   }
   for (ssize_t i = 0; i < g_num_rows / 2; ++i) {
     const std::string insert_query{
-        "INSERT INTO test VALUES(7, 43, 102, 1002, 't', 1.3, 1000.3, -1000.3, 2.6, -220.6, 'baz', 'baz', 'real_baz', "
+        "INSERT INTO test VALUES(7, 43, 102, 1002, 't', 1.3, 1000.3, -1000.3, 2.6, -220.6, 'baz', null, 'baz', "
+        "'real_baz', "
         "'2014-12-13 "
         "22:23:15', "
         "'15:13:14', '1999-09-09', '1999-09-09', 11, 333.3, 333.3, 'boat', null, 1, -1, 1, -9223372036854775808);"};
