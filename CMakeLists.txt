@@ -409,12 +409,32 @@ else()
 target_link_libraries(initdb Shared Catalog Fragmenter Chunk SqliteConnector DataMgr StringDictionary ${Boost_LIBRARIES} ${CMAKE_DL_LIBS})
 endif()
 
+macro(set_dpkg_arch arch_in arch_out)
+  if("${arch_in}" STREQUAL "x86_64")
+    set(${arch_out} "amd64")
+  elseif("${arch_in}" STREQUAL "aarch64")
+    set(${arch_out} "arm64")
+  elseif("${arch_in}" STREQUAL "ppc64le")
+    set(${arch_out} "ppc64el")
+  else()
+    set(${arch_out} "${arch_in}")
+  endif()
+endmacro()
+
 # Packaging
 set(CPACK_PACKAGE_VENDOR "MapD Technologies, Inc.")
 set(CPACK_PACKAGE_CONTACT "support@mapd.com")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "MapD Core Database")
 set(CPACK_PROJECT_CONFIG_FILE ${CMAKE_SOURCE_DIR}/CMakePackaging.txt)
 set(CPACK_STRIP_FILES ON)
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "java8-runtime-headless, bsdmainutils, curl | wget")
+set(CPACK_RPM_PACKAGE_REQUIRES "java-headless, util-linux, curl")
+set(CPACK_RPM_PACKAGE_AUTOREQ OFF)
+if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
+  set(CPACK_DEBIAN_PACKAGE_DEPENDS "${CPACK_DEBIAN_PACKAGE_DEPENDS}, libldap-2.4-2")
+endif()
 
+set_dpkg_arch(${CMAKE_SYSTEM_PROCESSOR} CPACK_DEBIAN_PACKAGE_ARCHITECTURE)
 
 install(DIRECTORY ThirdParty/licenses DESTINATION "ThirdParty/")
 
