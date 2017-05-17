@@ -412,6 +412,8 @@ class RexAgg : public Rex {
 
   const SQLTypeInfo& getType() const { return type_; }
 
+  std::unique_ptr<RexAgg> deepCopy() const { return boost::make_unique<RexAgg>(agg_, distinct_, type_, operand_); }
+
  private:
   const SQLAgg agg_;
   const bool distinct_;
@@ -474,6 +476,8 @@ class RelAlgNode {
 
   virtual size_t size() const = 0;
 
+  virtual std::shared_ptr<RelAlgNode> deepCopy() const = 0;
+
   static void resetRelAlgFirstId() noexcept;
 
  protected:
@@ -504,6 +508,11 @@ class RelScan : public RelAlgNode {
     return "(RelScan<" + std::to_string(reinterpret_cast<uint64_t>(this)) + "> " +
            std::to_string(reinterpret_cast<uint64_t>(td_)) + ")";
   }
+
+  std::shared_ptr<RelAlgNode> deepCopy() const override {
+    CHECK(false);
+    return nullptr;
+  };
 
  private:
   const TableDescriptor* td_;
@@ -567,6 +576,8 @@ class RelProject : public RelAlgNode {
     return result + ")";
   }
 
+  std::shared_ptr<RelAlgNode> deepCopy() const override;
+
  private:
   mutable std::vector<std::unique_ptr<const RexScalar>> scalar_exprs_;
   std::vector<std::string> fields_;
@@ -620,6 +631,8 @@ class RelAggregate : public RelAlgNode {
     return result + " ])";
   }
 
+  std::shared_ptr<RelAlgNode> deepCopy() const override;
+
  private:
   const size_t groupby_count_;
   std::vector<std::unique_ptr<const RexAgg>> agg_exprs_;
@@ -656,6 +669,8 @@ class RelJoin : public RelAlgNode {
   }
 
   size_t size() const override { return inputs_[0]->size() + inputs_[1]->size(); }
+
+  std::shared_ptr<RelAlgNode> deepCopy() const override;
 
  private:
   std::unique_ptr<const RexScalar> condition_;
@@ -716,6 +731,11 @@ class RelMultiJoin : public RelAlgNode {
     conditions_ = std::move(conditions);
   }
 
+  virtual std::shared_ptr<RelAlgNode> deepCopy() const override {
+    CHECK(false);
+    return nullptr;
+  }
+
  private:
   void append(std::shared_ptr<RelJoin> join);
 
@@ -749,6 +769,8 @@ class RelFilter : public RelAlgNode {
     result += filter_->toString();
     return result + ")";
   }
+
+  std::shared_ptr<RelAlgNode> deepCopy() const override;
 
  private:
   std::unique_ptr<const RexScalar> filter_;
@@ -788,6 +810,8 @@ class RelCompound : public RelAlgNode {
 
   const RexScalar* getFilterExpr() const { return filter_expr_.get(); }
 
+  void setFilterExpr(std::unique_ptr<const RexScalar>& new_expr) { filter_expr_ = std::move(new_expr); }
+
   const Rex* getTargetExpr(const size_t i) const { return target_exprs_[i]; }
 
   const std::vector<std::string>& getFields() const { return fields_; }
@@ -797,6 +821,11 @@ class RelCompound : public RelAlgNode {
   const size_t getScalarSourcesSize() const { return scalar_sources_.size(); }
 
   const RexScalar* getScalarSource(const size_t i) const { return scalar_sources_[i].get(); }
+
+  void setScalarSources(std::vector<std::unique_ptr<const RexScalar>>& new_sources) {
+    CHECK_EQ(new_sources.size(), scalar_sources_.size());
+    scalar_sources_ = std::move(new_sources);
+  }
 
   const size_t getGroupByCount() const { return groupby_count_; }
 
@@ -819,8 +848,10 @@ class RelCompound : public RelAlgNode {
     return result + " ])";
   }
 
+  std::shared_ptr<RelAlgNode> deepCopy() const override;
+
  private:
-  const std::unique_ptr<const RexScalar> filter_expr_;
+  std::unique_ptr<const RexScalar> filter_expr_;
   const std::vector<const Rex*> target_exprs_;
   const size_t groupby_count_;
   std::vector<std::unique_ptr<const RexAgg>> agg_exprs_;
@@ -900,6 +931,8 @@ class RelSort : public RelAlgNode {
   }
 
   size_t size() const override { return inputs_[0]->size(); }
+
+  virtual std::shared_ptr<RelAlgNode> deepCopy() const override;
 
  private:
   std::vector<SortField> collation_;

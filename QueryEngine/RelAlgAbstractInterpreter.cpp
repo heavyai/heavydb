@@ -266,6 +266,68 @@ void RelCompound::replaceInput(std::shared_ptr<const RelAlgNode> old_input, std:
   }
 }
 
+std::shared_ptr<RelAlgNode> RelProject::deepCopy() const {
+  RexDeepCopyVisitor copier;
+  std::vector<std::unique_ptr<const RexScalar>> exprs_copy;
+  for (auto& expr : scalar_exprs_) {
+    exprs_copy.push_back(copier.visit(expr.get()));
+  }
+  return std::make_shared<RelProject>(exprs_copy, fields_, inputs_[0]);
+}
+
+std::shared_ptr<RelAlgNode> RelFilter::deepCopy() const {
+  RexDeepCopyVisitor copier;
+  auto filter_copy = copier.visit(filter_.get());
+  return std::make_shared<RelFilter>(filter_copy, inputs_[0]);
+}
+
+std::shared_ptr<RelAlgNode> RelAggregate::deepCopy() const {
+  std::vector<std::unique_ptr<const RexAgg>> aggs_copy;
+  for (auto& agg : agg_exprs_) {
+    auto copy = agg->deepCopy();
+    aggs_copy.push_back(std::move(copy));
+  }
+  return std::make_shared<RelAggregate>(groupby_count_, aggs_copy, fields_, inputs_[0]);
+}
+
+std::shared_ptr<RelAlgNode> RelJoin::deepCopy() const {
+  RexDeepCopyVisitor copier;
+  auto condition_copy = copier.visit(condition_.get());
+  return std::make_shared<RelJoin>(inputs_[0], inputs_[1], condition_copy, join_type_);
+}
+
+std::shared_ptr<RelAlgNode> RelCompound::deepCopy() const {
+  RexDeepCopyVisitor copier;
+  auto filter_copy = filter_expr_ ? copier.visit(filter_expr_.get()) : nullptr;
+  std::unordered_map<const Rex*, const Rex*> old_to_new_target;
+  std::vector<const RexAgg*> aggs_copy;
+  for (auto& agg : agg_exprs_) {
+    auto copy = agg->deepCopy();
+    old_to_new_target.insert(std::make_pair(agg.get(), copy.get()));
+    aggs_copy.push_back(copy.release());
+  }
+  std::vector<std::unique_ptr<const RexScalar>> sources_copy;
+  for (size_t i = 0; i < scalar_sources_.size(); ++i) {
+    auto copy = copier.visit(scalar_sources_[i].get());
+    old_to_new_target.insert(std::make_pair(scalar_sources_[i].get(), copy.get()));
+    sources_copy.push_back(std::move(copy));
+  }
+  std::vector<const Rex*> target_exprs_copy;
+  for (auto target : target_exprs_) {
+    auto target_it = old_to_new_target.find(target);
+    CHECK(target_it != old_to_new_target.end());
+    target_exprs_copy.push_back(target_it->second);
+  }
+  auto new_compound = std::make_shared<RelCompound>(
+      filter_copy, target_exprs_copy, groupby_count_, aggs_copy, fields_, sources_copy, is_agg_);
+  new_compound->addManagedInput(inputs_[0]);
+  return new_compound;
+}
+
+std::shared_ptr<RelAlgNode> RelSort::deepCopy() const {
+  return std::make_shared<RelSort>(collation_, limit_, offset_, inputs_[0]);
+}
+
 namespace std {
 template <>
 struct hash<std::pair<const RelAlgNode*, int>> {
