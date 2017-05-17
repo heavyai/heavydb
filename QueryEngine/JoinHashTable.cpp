@@ -17,6 +17,7 @@
 #include "JoinHashTable.h"
 #include "ThrustAllocator.h"
 #include "Execute.h"
+#include "ExecutionException.h"
 #include "ExpressionRewrite.h"
 #include "HashJoinRuntime.h"
 #include "RuntimeFunctions.h"
@@ -554,7 +555,7 @@ void JoinHashTable::putHashTableOnCpuToCache(
   join_hash_table_cache_.emplace_back(cache_key, cpu_hash_table_buff_);
 }
 
-llvm::Value* JoinHashTable::codegenSlot(const CompilationOptions& co, const size_t index) noexcept {
+llvm::Value* JoinHashTable::codegenSlot(const CompilationOptions& co, const size_t index) {
   CHECK(executor_->plan_state_->join_info_.join_impl_type_ == Executor::JoinImplType::HashOneToOne);
   const auto cols = get_cols(qual_bin_oper_, cat_, executor_->temporary_tables_);
   auto key_col = cols.second;
@@ -604,7 +605,10 @@ llvm::Value* JoinHashTable::codegenSlot(const CompilationOptions& co, const size
   }
   const auto slot_lv = executor_->cgen_state_->emitCall(fname, hash_join_idx_args);
   const auto it_ok = executor_->cgen_state_->scan_idx_to_hash_pos_.emplace(val_col->get_rte_idx(), slot_lv);
-  CHECK(it_ok.second);
+  if (!it_ok.second) {
+    // TODO(miyu): support multi-column hash join
+    throw UnfoldedMultiJoinRequired();
+  }
   const auto slot_valid_lv =
       executor_->cgen_state_->ir_builder_.CreateICmp(llvm::ICmpInst::ICMP_SGE, slot_lv, executor_->ll_int(int64_t(0)));
   return slot_valid_lv;

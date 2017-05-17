@@ -161,4 +161,22 @@ std::vector<RaExecutionDesc> get_execution_descriptors(const RelAlgNode* ra_node
   return descs;
 }
 
+std::vector<RaExecutionDesc> get_execution_descriptors(const std::vector<const RelAlgNode*>& ra_nodes) {
+  CHECK(!ra_nodes.empty());
+
+  std::vector<RaExecutionDesc> descs;
+  for (const auto node : ra_nodes) {
+    if (dynamic_cast<const RelScan*>(node)) {
+      continue;
+    }
+    CHECK_GT(node->inputCount(), size_t(0));
+#ifdef ENABLE_JOIN_EXEC
+    CHECK((dynamic_cast<const RelJoin*>(node) && 2 == node->inputCount()) || (1 == node->inputCount()));
+#endif
+    descs.emplace_back(node);
+  }
+
+  return descs;
+}
+
 #endif  // HAVE_CALCITE

@@ -126,7 +126,7 @@ class JoinHashTable {
                          const int32_t hash_entry_count,
                          const int32_t hash_join_invalid_val);
 
-  llvm::Value* codegenSlot(const CompilationOptions&, const size_t) noexcept;
+  llvm::Value* codegenSlot(const CompilationOptions&, const size_t);
 
   const InputTableInfo& getInnerQueryInfo(const Analyzer::ColumnVar* inner_col);
 

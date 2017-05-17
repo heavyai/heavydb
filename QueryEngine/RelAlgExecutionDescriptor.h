@@ -137,5 +137,6 @@ class RaExecutionDesc {
 };
 
 std::vector<RaExecutionDesc> get_execution_descriptors(const RelAlgNode*);
+std::vector<RaExecutionDesc> get_execution_descriptors(const std::vector<const RelAlgNode*>&);
 
 #endif  // QUERYENGINE_RELALGEXECUTIONDESCRIPTOR_H

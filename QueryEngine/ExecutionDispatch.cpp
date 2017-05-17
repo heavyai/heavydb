@@ -16,6 +16,7 @@
 
 #include "DynamicWatchdog.h"
 #include "Execute.h"
+#include "ExecutionException.h"
 
 #include "DataMgr/BufferMgr/BufferMgr.h"
 
@@ -471,6 +472,7 @@ int8_t Executor::ExecutionDispatch::compile(const Executor::JoinInfo& join_info,
                                      join_info,
                                      has_cardinality_estimation);
     }
+
     for (auto wids : compilation_result_gpu_.query_mem_desc.agg_col_widths) {
       actual_min_byte_width = std::min(actual_min_byte_width, wids.compact);
     }

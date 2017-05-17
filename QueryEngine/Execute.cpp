@@ -18,6 +18,7 @@
 
 #include "AggregateUtils.h"
 #include "CartesianProduct.h"
+#include "ExecutionException.h"
 #include "ExpressionRewrite.h"
 #include "GpuMemUtils.h"
 #include "InPlaceSort.h"
@@ -827,8 +828,7 @@ ResultPtr Executor::executeWorkUnit(int32_t* error_code,
 
 #ifdef ENABLE_EQUIJOIN_FOLD
   if (join_info.join_impl_type_ == JoinImplType::Loop && ra_exe_unit.input_descs.size() > 2) {
-    throw std::runtime_error("Hash join failed, reason: Failed to build hash tables for " +
-                             std::to_string(ra_exe_unit.input_descs.size()) + "-way join");
+    throw UnfoldedMultiJoinRequired();
   }
 #endif
   if (join_info.join_impl_type_ == JoinImplType::Loop &&
@@ -863,7 +863,6 @@ ResultPtr Executor::executeWorkUnit(int32_t* error_code,
       crt_min_byte_width = MAX_BYTE_WIDTH_SUPPORTED;
       continue;
     }
-
     if (options.just_explain) {
       return executeExplain(execution_dispatch);
     }
