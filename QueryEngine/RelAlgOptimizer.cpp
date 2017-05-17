@@ -40,7 +40,12 @@ class RexProjectInputRedirector : public RexDeepCopyVisitor {
     if (!new_input) {
       return input->deepCopy();
     }
-    return boost::make_unique<RexInput>(new_source, new_input->getIndex());
+    if (auto join = dynamic_cast<const RelJoin*>(new_source)) {
+      CHECK(new_input->getSourceNode() == join->getInput(0) || new_input->getSourceNode() == join->getInput(1));
+    } else {
+      CHECK_EQ(new_input->getSourceNode(), new_source);
+    }
+    return new_input->deepCopy();
   }
 
  private:

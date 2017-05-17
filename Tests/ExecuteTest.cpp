@@ -794,6 +794,7 @@ TEST(Select, ComplexQueries) {
     c("SELECT x, y FROM (SELECT a.str AS str, b.x AS x, a.y AS y FROM test a, join_test b WHERE a.x = b.x) WHERE str = "
       "'foo' ORDER BY x LIMIT 1;",
       dt);
+    c("SELECT * FROM (SELECT y, b.str FROM test a JOIN join_test b ON a.x = b.x) ORDER BY y, str;", dt);
 #endif  // HAVE_RAVM
     const auto rows = run_multiple_agg(
         "SELECT x + y AS a, COUNT(*) * MAX(y) - SUM(z) AS b FROM test "
