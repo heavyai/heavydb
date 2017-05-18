@@ -29,7 +29,7 @@ class RelAlgPhysicalInputsVisitor : public RelAlgVisitor<PhysicalInputSet> {
   PhysicalInputSet visitCompound(const RelCompound* compound) const override;
   PhysicalInputSet visitFilter(const RelFilter* filter) const override;
   PhysicalInputSet visitJoin(const RelJoin* join) const override;
-  PhysicalInputSet visitMultijoin(const RelMultiJoin*) const override;
+  PhysicalInputSet visitMultiJoin(const RelMultiJoin*) const override;
   PhysicalInputSet visitProject(const RelProject* project) const override;
 
  protected:
@@ -115,7 +115,7 @@ PhysicalInputSet RelAlgPhysicalInputsVisitor::visitJoin(const RelJoin* join) con
   return visitor.visit(condition);
 }
 
-PhysicalInputSet RelAlgPhysicalInputsVisitor::visitMultijoin(const RelMultiJoin* multi_join) const {
+PhysicalInputSet RelAlgPhysicalInputsVisitor::visitMultiJoin(const RelMultiJoin* multi_join) const {
   PhysicalInputSet result;
   RexPhysicalInputsVisitor visitor;
   for (size_t i = 0; i < multi_join->joinCount(); ++i) {

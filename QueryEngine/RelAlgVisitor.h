@@ -45,7 +45,7 @@ class RelAlgVisitor {
     }
     const auto multi_join = dynamic_cast<const RelMultiJoin*>(rel_alg);
     if (multi_join) {
-      return aggregateResult(result, visitMultijoin(multi_join));
+      return aggregateResult(result, visitMultiJoin(multi_join));
     }
     const auto project = dynamic_cast<const RelProject*>(rel_alg);
     if (project) {
@@ -71,7 +71,7 @@ class RelAlgVisitor {
 
   virtual T visitJoin(const RelJoin*) const { return defaultResult(); }
 
-  virtual T visitMultijoin(const RelMultiJoin*) const { return defaultResult(); }
+  virtual T visitMultiJoin(const RelMultiJoin*) const { return defaultResult(); }
 
   virtual T visitProject(const RelProject*) const { return defaultResult(); }
 
