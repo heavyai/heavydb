@@ -1229,7 +1229,7 @@ std::string pg_shim(const std::string& query) {
     });
   }
   {
-    boost::regex corr_expr{R"((\s+|,)(corr)\s*\()", boost::regex::extended | boost::regex::icase};
+    boost::regex corr_expr{R"((\s+|,|\()(corr)\s*\()", boost::regex::extended | boost::regex::icase};
     apply_shim(result, corr_expr, [](std::string& result, const boost::smatch& what) {
       result.replace(what.position(), what.length(), what[1] + "CORRELATION(");
     });

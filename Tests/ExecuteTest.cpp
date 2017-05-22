@@ -490,6 +490,9 @@ TEST(Select, FilterAndSimpleAggregation) {
     ASSERT_NEAR(static_cast<double>(0.58),
                 v<double>(run_simple_agg("SELECT CORR(x, y) FROM test;", dt)),
                 static_cast<double>(0.01));
+    ASSERT_NEAR(static_cast<double>(0.33),
+                v<double>(run_simple_agg("SELECT POWER(CORR(x, y), 2) FROM test;", dt)),
+                static_cast<double>(0.01));
     ASSERT_NEAR(static_cast<double>(0.58),  // corr expansion
                 v<double>(run_simple_agg("SELECT (avg(x * y) - avg(x) * avg(y)) /"
                                          "(stddev_pop(x) * stddev_pop(y)) FROM test;",
