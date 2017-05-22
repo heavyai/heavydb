@@ -373,8 +373,9 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
     }
     case kSMALLINT: {
       if (!is_null && (isdigit(val[0]) || val[0] == '-')) {
-        addSmallint(cd->columnType.is_decimal() ? std::atof(val.c_str()) * pow(10, cd->columnType.get_scale())
-                                                : std::atoi(val.c_str()));
+        SQLTypeInfo ti = cd->columnType;
+        Datum d = StringToDatum(val, ti);
+        addSmallint(d.smallintval);
       } else {
         if (cd->columnType.get_notnull())
           throw std::runtime_error("NULL for column " + cd->columnName);
@@ -384,8 +385,9 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
     }
     case kINT: {
       if (!is_null && (isdigit(val[0]) || val[0] == '-')) {
-        addInt(cd->columnType.is_decimal() ? std::atof(val.c_str()) * pow(10, cd->columnType.get_scale())
-                                           : std::atoi(val.c_str()));
+        SQLTypeInfo ti = cd->columnType;
+        Datum d = StringToDatum(val, ti);
+        addInt(d.intval);
       } else {
         if (cd->columnType.get_notnull())
           throw std::runtime_error("NULL for column " + cd->columnName);
@@ -395,8 +397,9 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
     }
     case kBIGINT: {
       if (!is_null && (isdigit(val[0]) || val[0] == '-')) {
-        addBigint(cd->columnType.is_decimal() ? std::strtod(val.c_str(), NULL) * pow(10, cd->columnType.get_scale())
-                                              : std::atoll(val.c_str()));
+        SQLTypeInfo ti = cd->columnType;
+        Datum d = StringToDatum(val, ti);
+        addBigint(d.bigintval);
       } else {
         if (cd->columnType.get_notnull())
           throw std::runtime_error("NULL for column " + cd->columnName);
