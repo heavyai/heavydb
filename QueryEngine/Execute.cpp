@@ -2312,7 +2312,7 @@ std::pair<bool, int64_t> Executor::skipFragment(const InputDescriptor& table_des
     const auto lhs = comp_expr->get_left_operand();
     const auto lhs_col = dynamic_cast<const Analyzer::ColumnVar*>(lhs);
     if (!lhs_col || !lhs_col->get_table_id() || lhs_col->get_rte_idx()) {
-      return {false, -1};
+      continue;
     }
     const auto rhs = comp_expr->get_right_operand();
     const auto rhs_const = dynamic_cast<const Analyzer::Constant*>(rhs);
@@ -2321,7 +2321,7 @@ std::pair<bool, int64_t> Executor::skipFragment(const InputDescriptor& table_des
       return {false, -1};
     }
     if (!lhs->get_type_info().is_integer() && !lhs->get_type_info().is_time()) {
-      return {false, -1};
+      continue;
     }
     const int col_id = lhs_col->get_column_id();
     auto chunk_meta_it = fragment.getChunkMetadataMap().find(col_id);
