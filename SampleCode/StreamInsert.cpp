@@ -151,7 +151,8 @@ void stream_insert(const std::string& table_name,
                    const std::map<std::string, std::pair<std::unique_ptr<boost::regex>, std::unique_ptr<std::string>>>&
                        transformations,
                    const CopyParams& copy_params,
-                   const ConnectionDetails conn_details) {
+                   const ConnectionDetails conn_details, 
+                   const bool remove_quotes) {
   std::vector<TStringRow> input_rows;
   TStringRow row;
 
@@ -165,6 +166,7 @@ void stream_insert(const std::string& table_name,
 
   int nrows = 0;
   int nskipped = 0;
+  bool backEscape = false;
 
   const std::pair<std::unique_ptr<boost::regex>, std::unique_ptr<std::string>>* xforms[row_desc.size()];
   for (size_t i = 0; i < row_desc.size(); i++) {
@@ -220,7 +222,17 @@ void stream_insert(const std::string& table_name,
             break;  // found row
         }
       } else {
-        field[field_i++] = *iit;
+        if (*iit == '\\')
+        {
+           backEscape = true;
+        }
+        else if (backEscape || !remove_quotes || *iit != '\"')
+        {
+           field[field_i++] = *iit;
+           backEscape = false;
+        }
+        // else if unescaped double-quote, continue without adding the
+        // charactger to the field string.
       }
       if (field_i >= MAX_FIELD_LEN) {
         field[MAX_FIELD_LEN - 1] = '\0';
@@ -274,10 +286,11 @@ int main(int argc, char** argv) {
   std::string db_name;
   std::string user_name;
   std::string passwd;
-  std::string delim_str(","), nulls("\\N"), line_delim_str("\n");
+  std::string delim_str(","), nulls("\\N"), line_delim_str("\n"), quoted("true");
   size_t batch_size = 10000;
   size_t retry_count = 10;
   size_t retry_wait = 5;
+  bool remove_quotes = true;
   std::vector<std::string> xforms;
   std::map<std::string, std::pair<std::unique_ptr<boost::regex>, std::unique_ptr<std::string>>> transformations;
 
@@ -294,6 +307,7 @@ int main(int argc, char** argv) {
   desc.add_options()("delim", po::value<std::string>(&delim_str)->default_value(delim_str), "Field delimiter");
   desc.add_options()("null", po::value<std::string>(&nulls), "NULL string");
   desc.add_options()("line", po::value<std::string>(&line_delim_str), "Line delimiter");
+  desc.add_options()("quoted", po::value<std::string>(&quoted), "Whether the source contains quoted fields (true/false, default true)");
   desc.add_options()("batch", po::value<size_t>(&batch_size)->default_value(batch_size), "Insert batch size");
   desc.add_options()(
       "retry_count", po::value<size_t>(&retry_count)->default_value(retry_count), "Number of time to retry an insert");
@@ -316,7 +330,7 @@ int main(int argc, char** argv) {
       std::cout
           << "Usage: <table name> <database name> {-u|--user} <user> {-p|--passwd} <password> [{--host} "
              "<hostname>][--port <port number>][--delim <delimiter>][--null <null string>][--line <line "
-             "delimiter>][--batch <batch size>][{-t|--transform} transformation "
+             "delimiter>][--batch <batch size>][{-t|--transform} transformation [--quoted true|false] "
              "...][--retry_count <num_of_retries>] [--retry_wait <wait in secs>][--print_error][--print_transform]\n\n";
       std::cout << desc << std::endl;
       return 0;
@@ -390,6 +404,9 @@ int main(int argc, char** argv) {
   std::cout << "Null String: " << nulls << std::endl;
   std::cout << "Insert Batch Size: " << std::dec << batch_size << std::endl;
 
+  if (quoted == "false")
+      remove_quotes = false;
+
   for (auto& t : xforms) {
     auto n = t.find_first_of(':');
     if (n == std::string::npos) {
@@ -429,7 +446,7 @@ int main(int argc, char** argv) {
 
   TTableDetails table_details;
   client->get_table_details(table_details, session, table_name);
-  stream_insert(table_name, table_details.row_desc, transformations, copy_params, conn_details);
+  stream_insert(table_name, table_details.row_desc, transformations, copy_params, conn_details, remove_quotes);
 
   closeConnection();
 
