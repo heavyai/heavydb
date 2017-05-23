@@ -21,8 +21,8 @@ brew install llvm
 brew install folly
 
 # install CUDA (even if you don't have an nvidia GPU - some headers req'd for compilation)
-brew tap Caskroom/cask
-brew install Caskroom/cask/cuda
+brew tap caskroom/drivers
+brew cask install cuda
 CUDA_ROOT=$(ls -d /Developer/NVIDIA/CUDA-* | tail -n 1)
 export PATH=$CUDA_ROOT/bin/:$PATH
 
