@@ -151,7 +151,7 @@ void stream_insert(const std::string& table_name,
                    const std::map<std::string, std::pair<std::unique_ptr<boost::regex>, std::unique_ptr<std::string>>>&
                        transformations,
                    const CopyParams& copy_params,
-                   const ConnectionDetails conn_details, 
+                   const ConnectionDetails conn_details,
                    const bool remove_quotes) {
   std::vector<TStringRow> input_rows;
   TStringRow row;
@@ -222,14 +222,11 @@ void stream_insert(const std::string& table_name,
             break;  // found row
         }
       } else {
-        if (*iit == '\\')
-        {
-           backEscape = true;
-        }
-        else if (backEscape || !remove_quotes || *iit != '\"')
-        {
-           field[field_i++] = *iit;
-           backEscape = false;
+        if (*iit == '\\') {
+          backEscape = true;
+        } else if (backEscape || !remove_quotes || *iit != '\"') {
+          field[field_i++] = *iit;
+          backEscape = false;
         }
         // else if unescaped double-quote, continue without adding the
         // charactger to the field string.
@@ -307,7 +304,9 @@ int main(int argc, char** argv) {
   desc.add_options()("delim", po::value<std::string>(&delim_str)->default_value(delim_str), "Field delimiter");
   desc.add_options()("null", po::value<std::string>(&nulls), "NULL string");
   desc.add_options()("line", po::value<std::string>(&line_delim_str), "Line delimiter");
-  desc.add_options()("quoted", po::value<std::string>(&quoted), "Whether the source contains quoted fields (true/false, default true)");
+  desc.add_options()("quoted",
+                     po::value<std::string>(&quoted),
+                     "Whether the source contains quoted fields (true/false, default true)");
   desc.add_options()("batch", po::value<size_t>(&batch_size)->default_value(batch_size), "Insert batch size");
   desc.add_options()(
       "retry_count", po::value<size_t>(&retry_count)->default_value(retry_count), "Number of time to retry an insert");
@@ -405,7 +404,7 @@ int main(int argc, char** argv) {
   std::cout << "Insert Batch Size: " << std::dec << batch_size << std::endl;
 
   if (quoted == "false")
-      remove_quotes = false;
+    remove_quotes = false;
 
   for (auto& t : xforms) {
     auto n = t.find_first_of(':');
