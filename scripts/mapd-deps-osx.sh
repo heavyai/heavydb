@@ -66,19 +66,5 @@ EOF
 source ~/.bash_profile
 brew install maven
 
-echo "Installing documentation dependencies. Sudo may ask for your password."
-if ! hash pip &> /dev/null; then
-  sudo easy_install pip
-  sudo easy_install --upgrade six
-fi
-if ! hash virtualenv &> /dev/null; then
-  sudo pip install virtualenv
-fi
-sudo pip install sphinx==1.4.9
-
-if ! hash pdflatex &> /dev/null; then
-  brew cask install mactex
-fi
-
 #done!
 #git clone mapd2 && cd mapd2 && mkdir build && cd build && ccmake ..
