@@ -283,11 +283,11 @@ int main(int argc, char** argv) {
   std::string db_name;
   std::string user_name;
   std::string passwd;
-  std::string delim_str(","), nulls("\\N"), line_delim_str("\n"), quoted("true");
+  std::string delim_str(","), nulls("\\N"), line_delim_str("\n"), quoted("false");
   size_t batch_size = 10000;
   size_t retry_count = 10;
   size_t retry_wait = 5;
-  bool remove_quotes = true;
+  bool remove_quotes = false;
   std::vector<std::string> xforms;
   std::map<std::string, std::pair<std::unique_ptr<boost::regex>, std::unique_ptr<std::string>>> transformations;
 
@@ -306,7 +306,7 @@ int main(int argc, char** argv) {
   desc.add_options()("line", po::value<std::string>(&line_delim_str), "Line delimiter");
   desc.add_options()("quoted",
                      po::value<std::string>(&quoted),
-                     "Whether the source contains quoted fields (true/false, default true)");
+                     "Whether the source contains quoted fields (true/false, default false)");
   desc.add_options()("batch", po::value<size_t>(&batch_size)->default_value(batch_size), "Insert batch size");
   desc.add_options()(
       "retry_count", po::value<size_t>(&retry_count)->default_value(retry_count), "Number of time to retry an insert");
@@ -329,7 +329,7 @@ int main(int argc, char** argv) {
       std::cout
           << "Usage: <table name> <database name> {-u|--user} <user> {-p|--passwd} <password> [{--host} "
              "<hostname>][--port <port number>][--delim <delimiter>][--null <null string>][--line <line "
-             "delimiter>][--batch <batch size>][{-t|--transform} transformation [--quoted true|false] "
+             "delimiter>][--batch <batch size>][{-t|--transform} transformation [--quoted <true|false>] "
              "...][--retry_count <num_of_retries>] [--retry_wait <wait in secs>][--print_error][--print_transform]\n\n";
       std::cout << desc << std::endl;
       return 0;
@@ -403,8 +403,8 @@ int main(int argc, char** argv) {
   std::cout << "Null String: " << nulls << std::endl;
   std::cout << "Insert Batch Size: " << std::dec << batch_size << std::endl;
 
-  if (quoted == "false")
-    remove_quotes = false;
+  if (quoted == "true")
+    remove_quotes = true;
 
   for (auto& t : xforms) {
     auto n = t.find_first_of(':');
