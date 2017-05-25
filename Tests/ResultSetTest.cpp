@@ -135,10 +135,18 @@ int8_t* fill_one_entry_no_collisions(int8_t* buff,
     const auto slot_bytes = query_mem_desc.agg_col_widths[target_idx].actual;
     CHECK_LE(target_info.sql_type.get_size(), slot_bytes);
     bool isNullable = !target_info.sql_type.get_notnull();
-    if (isNullable && target_info.skip_null_val && null_val) {
-      vv = inline_int_null_val(target_info.sql_type);
+    if (target_info.agg_kind == kCOUNT) {
+      if (empty || null_val) {
+        vv = 0;
+      } else {
+        vv = v;
+      }
     } else {
-      vv = v;
+      if (isNullable && target_info.skip_null_val && null_val) {
+        vv = inline_int_null_val(target_info.sql_type);
+      } else {
+        vv = v;
+      }
     }
     if (empty) {
       write_int(slot_ptr, query_mem_desc.keyless_hash ? 0 : vv, slot_bytes);
@@ -180,14 +188,22 @@ void fill_one_entry_one_col(int8_t* ptr1,
                             const bool empty_entry,
                             const bool null_val = false) {
   int64_t vv = 0;
-  bool isNullable = !target_info.sql_type.get_notnull();
-  if (isNullable && target_info.skip_null_val && null_val) {
-    vv = inline_int_null_val(target_info.sql_type);
-  } else {
-    if (empty_entry && (target_info.agg_kind == kAVG)) {
+  if (target_info.agg_kind == kCOUNT) {
+    if (empty_entry || null_val) {
       vv = 0;
     } else {
       vv = v;
+    }
+  } else {
+    bool isNullable = !target_info.sql_type.get_notnull();
+    if (isNullable && target_info.skip_null_val && null_val) {
+      vv = inline_int_null_val(target_info.sql_type);
+    } else {
+      if (empty_entry && (target_info.agg_kind == kAVG)) {
+        vv = 0;
+      } else {
+        vv = v;
+      }
     }
   }
   CHECK(ptr1);
@@ -364,12 +380,17 @@ void fill_storage_buffer_baseline_colwise(int8_t* buff,
   const auto key_component_count = get_key_count_for_descriptor(query_mem_desc);
   const auto i64_buff = reinterpret_cast<int64_t*>(buff);
   const auto target_slot_count = get_slot_count(target_infos);
+  const auto slot_to_target = get_slot_to_target_mapping(target_infos);
   for (size_t i = 0; i < query_mem_desc.entry_count; ++i) {
     for (size_t key_comp_idx = 0; key_comp_idx < key_component_count; ++key_comp_idx) {
       i64_buff[key_offset_colwise(i, key_comp_idx, query_mem_desc.entry_count)] = EMPTY_KEY_64;
     }
     for (size_t target_slot = 0; target_slot < target_slot_count; ++target_slot) {
-      i64_buff[slot_offset_colwise(i, target_slot, key_component_count, query_mem_desc.entry_count)] = 0xdeadbeef;
+      auto target_it = slot_to_target.find(target_slot);
+      CHECK(target_it != slot_to_target.end());
+      const auto& target_info = target_infos[target_it->second];
+      i64_buff[slot_offset_colwise(i, target_slot, key_component_count, query_mem_desc.entry_count)] =
+          (target_info.agg_kind == kCOUNT ? 0 : 0xdeadbeef);
     }
   }
   for (size_t i = 0; i < query_mem_desc.entry_count; i += step) {
@@ -396,13 +417,18 @@ void fill_storage_buffer_baseline_rowwise(int8_t* buff,
   const auto key_component_count = get_key_count_for_descriptor(query_mem_desc);
   const auto i64_buff = reinterpret_cast<int64_t*>(buff);
   const auto target_slot_count = get_slot_count(target_infos);
+  const auto slot_to_target = get_slot_to_target_mapping(target_infos);
   for (size_t i = 0; i < query_mem_desc.entry_count; ++i) {
     const auto first_key_comp_offset = key_offset_rowwise(i, key_component_count, target_slot_count);
     for (size_t key_comp_idx = 0; key_comp_idx < key_component_count; ++key_comp_idx) {
       i64_buff[first_key_comp_offset + key_comp_idx] = EMPTY_KEY_64;
     }
     for (size_t target_slot = 0; target_slot < target_slot_count; ++target_slot) {
-      i64_buff[slot_offset_rowwise(i, target_slot, key_component_count, target_slot_count)] = 0xdeadbeef;
+      auto target_it = slot_to_target.find(target_slot);
+      CHECK(target_it != slot_to_target.end());
+      const auto& target_info = target_infos[target_it->second];
+      i64_buff[slot_offset_rowwise(i, target_slot, key_component_count, target_slot_count)] =
+          (target_info.agg_kind == kCOUNT ? 0 : 0xdeadbeef);
     }
   }
   for (size_t i = 0; i < query_mem_desc.entry_count; i += step) {
@@ -602,9 +628,9 @@ class ResultSetEmulator {
     rs2_groups.resize(rs_entry_count);
     std::fill(rs2_groups.begin(), rs2_groups.end(), false);
     rs1_values.resize(rs_entry_count);
-    std::fill(rs1_groups.begin(), rs1_groups.end(), 0);
+    std::fill(rs1_values.begin(), rs1_values.end(), 0);
     rs2_values.resize(rs_entry_count);
-    std::fill(rs2_groups.begin(), rs2_groups.end(), 0);
+    std::fill(rs2_values.begin(), rs2_values.end(), 0);
     rseReducedGroups.resize(rs_entry_count);
     std::fill(rseReducedGroups.begin(), rseReducedGroups.end(), false);
 
@@ -952,7 +978,10 @@ void ResultSetEmulator::rse_fill_storage_buffer_baseline_colwise(int8_t* buff,
     size_t target_slot = 0;
     int64_t init_val = 0;
     for (const auto& target_info : rs_target_infos) {
-      if (!target_info.sql_type.get_notnull() && target_info.skip_null_val && (rs_flow == 2)) {  // null_val support
+      if (target_info.agg_kind == kCOUNT) {
+        init_val = 0;
+      } else if (!target_info.sql_type.get_notnull() && target_info.skip_null_val &&
+                 (rs_flow == 2)) {  // null_val support
         init_val = inline_int_null_val(target_info.sql_type);
       } else {
         init_val = 0xdeadbeef;
@@ -1006,7 +1035,10 @@ void ResultSetEmulator::rse_fill_storage_buffer_baseline_rowwise(int8_t* buff,
     size_t target_slot = 0;
     int64_t init_val = 0;
     for (const auto& target_info : rs_target_infos) {
-      if (!target_info.sql_type.get_notnull() && target_info.skip_null_val && (rs_flow == 2)) {  // null_val support
+      if (target_info.agg_kind == kCOUNT) {
+        init_val = 0;
+      } else if (!target_info.sql_type.get_notnull() && target_info.skip_null_val &&
+                 (rs_flow == 2)) {  // null_val support
         init_val = inline_int_null_val(target_info.sql_type);
       } else {
         init_val = 0xdeadbeef;
@@ -1302,7 +1334,7 @@ int64_t ResultSetEmulator::rseAggregateKCOUNT(size_t i) {
 
   if (rs1_groups[i] && rs2_groups[i]) {
     if ((rs1_values[i] == -1) && (rs2_values[i] == -1)) {
-      return rse_get_null_val();
+      return 0;
     }
     if (rs1_values[i] != -1) {
       result += rs1_values[i];
@@ -1311,7 +1343,6 @@ int64_t ResultSetEmulator::rseAggregateKCOUNT(size_t i) {
       result += rs2_values[i];
     }
   } else {
-    result = rse_get_null_val();
     if (rs1_groups[i]) {
       if (rs1_values[i] != -1) {
         result = rs1_values[i];

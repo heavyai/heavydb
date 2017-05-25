@@ -75,6 +75,7 @@ void fill_storage_buffer_baseline_sort_int(int8_t* buff,
                                            const int64_t empty_key) {
   const auto key_component_count = get_key_count_for_descriptor(query_mem_desc);
   const auto target_slot_count = get_slot_count(target_infos);
+  const auto slot_to_target = get_slot_to_target_mapping(target_infos);
   const auto row_bytes = get_row_bytes(query_mem_desc);
   for (size_t i = 0; i < query_mem_desc.entry_count; ++i) {
     const auto row_ptr = buff + i * row_bytes;
@@ -82,8 +83,12 @@ void fill_storage_buffer_baseline_sort_int(int8_t* buff,
       reinterpret_cast<K*>(row_ptr)[key_comp_idx] = empty_key;
     }
     for (size_t target_slot = 0; target_slot < target_slot_count; ++target_slot) {
+      auto target_it = slot_to_target.find(target_slot);
+      CHECK(target_it != slot_to_target.end());
+      const auto& target_info = target_infos[target_it->second];
+
       const auto cols_ptr = reinterpret_cast<int64_t*>(row_ptr + get_slot_off_quad(query_mem_desc) * sizeof(int64_t));
-      cols_ptr[target_slot] = 0xdeadbeef;
+      cols_ptr[target_slot] = (target_info.agg_kind == kCOUNT ? 0 : 0xdeadbeef);
     }
   }
   std::vector<int64_t> values(upper_bound);
@@ -112,13 +117,18 @@ void fill_storage_buffer_baseline_sort_fp(int8_t* buff,
   const auto key_component_count = get_key_count_for_descriptor(query_mem_desc);
   const auto i64_buff = reinterpret_cast<int64_t*>(buff);
   const auto target_slot_count = get_slot_count(target_infos);
+  const auto slot_to_target = get_slot_to_target_mapping(target_infos);
   for (size_t i = 0; i < query_mem_desc.entry_count; ++i) {
     const auto first_key_comp_offset = key_offset_rowwise(i, key_component_count, target_slot_count);
     for (size_t key_comp_idx = 0; key_comp_idx < key_component_count; ++key_comp_idx) {
       i64_buff[first_key_comp_offset + key_comp_idx] = EMPTY_KEY_64;
     }
     for (size_t target_slot = 0; target_slot < target_slot_count; ++target_slot) {
-      i64_buff[slot_offset_rowwise(i, target_slot, key_component_count, target_slot_count)] = 0xdeadbeef;
+      auto target_it = slot_to_target.find(target_slot);
+      CHECK(target_it != slot_to_target.end());
+      const auto& target_info = target_infos[target_it->second];
+      i64_buff[slot_offset_rowwise(i, target_slot, key_component_count, target_slot_count)] =
+          (target_info.agg_kind == kCOUNT ? 0 : 0xdeadbeef);
     }
   }
   std::vector<int64_t> values(upper_bound);

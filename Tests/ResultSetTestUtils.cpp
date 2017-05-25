@@ -25,13 +25,22 @@ void fill_one_entry_baseline(int64_t* value_slots,
   size_t target_slot = 0;
   int64_t vv = 0;
   for (const auto& target_info : target_infos) {
-    bool isNullable = !target_info.sql_type.get_notnull();
     const bool float_argument_input = takes_float_argument(target_info);
-    if ((isNullable && target_info.skip_null_val && null_val) || empty) {
-      vv = null_val_bit_pattern(target_info.sql_type, float_argument_input);
+    if (target_info.agg_kind == kCOUNT) {
+      if (empty || null_val) {
+        vv = 0;
+      } else {
+        vv = v;
+      }
     } else {
-      vv = v;
+      bool isNullable = !target_info.sql_type.get_notnull();
+      if ((isNullable && target_info.skip_null_val && null_val) || empty) {
+        vv = null_val_bit_pattern(target_info.sql_type, float_argument_input);
+      } else {
+        vv = v;
+      }
     }
+
     switch (target_info.sql_type.get_type()) {
       case kSMALLINT:
       case kINT:
@@ -69,4 +78,20 @@ size_t get_slot_count(const std::vector<TargetInfo>& target_infos) {
     count = advance_slot(count, target_info, false);
   }
   return count;
+}
+
+std::unordered_map<size_t, size_t> get_slot_to_target_mapping(const std::vector<TargetInfo>& target_infos) {
+  std::unordered_map<size_t, size_t> mapping;
+  size_t target_index = 0;
+  size_t slot_index = 0;
+  for (const auto& target_info : target_infos) {
+    mapping.insert(std::make_pair(slot_index, target_index));
+    auto old_slot_index = slot_index;
+    slot_index = advance_slot(slot_index, target_info, false);
+    if (slot_index == old_slot_index + 2) {
+      mapping.insert(std::make_pair(old_slot_index + 1, target_index));
+    }
+    target_index++;
+  }
+  return mapping;
 }

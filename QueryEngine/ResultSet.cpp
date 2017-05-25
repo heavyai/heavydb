@@ -44,6 +44,10 @@ ResultSetStorage::ResultSetStorage(const std::vector<TargetInfo>& targets,
                                    const bool buff_is_provided)
     : targets_(targets), query_mem_desc_(query_mem_desc), buff_(buff), buff_is_provided_(buff_is_provided) {
   for (const auto& target_info : targets_) {
+    if (target_info.agg_kind == kCOUNT || target_info.agg_kind == kAPPROX_COUNT_DISTINCT) {
+      target_init_vals_.push_back(0);
+      continue;
+    }
     if (!target_info.sql_type.get_notnull()) {
       int64_t init_val = null_val_bit_pattern(target_info.sql_type, takes_float_argument(target_info));
       target_init_vals_.push_back(target_info.is_agg ? init_val : 0);

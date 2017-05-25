@@ -53,15 +53,8 @@ inline const SQLTypeInfo& get_compact_type(const TargetInfo& target) {
 }
 
 template <typename T>
-inline bool detect_overflow_and_underflow(const T a,
-                                          const T b,
-                                          const bool nullable,
-                                          const T null_val,
-                                          const SQLTypeInfo& ti) {
+inline bool detect_overflow_and_underflow(const T a, const T b, const bool nullable, const T null_val) {
 #ifdef ENABLE_COMPACTION
-  if (!ti.is_integer()) {
-    return false;
-  }
   if (nullable) {
     if (a == null_val || b == null_val) {
       return false;
@@ -74,6 +67,20 @@ inline bool detect_overflow_and_underflow(const T a,
   }
 #endif
   return false;
+}
+
+template <typename T>
+inline bool detect_overflow_and_underflow(const T a,
+                                          const T b,
+                                          const bool nullable,
+                                          const T null_val,
+                                          const SQLTypeInfo& ti) {
+#ifdef ENABLE_COMPACTION
+  if (!ti.is_integer()) {
+    return false;
+  }
+#endif
+  return detect_overflow_and_underflow(a, b, nullable, null_val);
 }
 
 inline int64_t inline_int_null_val(const SQLTypeInfo& ti) {
