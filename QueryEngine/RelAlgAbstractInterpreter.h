@@ -731,7 +731,7 @@ class RelMultiJoin : public RelAlgNode {
     conditions_ = std::move(conditions);
   }
 
-  virtual std::shared_ptr<RelAlgNode> deepCopy() const override {
+  std::shared_ptr<RelAlgNode> deepCopy() const override {
     CHECK(false);
     return nullptr;
   }
@@ -932,7 +932,7 @@ class RelSort : public RelAlgNode {
 
   size_t size() const override { return inputs_[0]->size(); }
 
-  virtual std::shared_ptr<RelAlgNode> deepCopy() const override;
+  std::shared_ptr<RelAlgNode> deepCopy() const override;
 
  private:
   std::vector<SortField> collation_;
