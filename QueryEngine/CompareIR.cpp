@@ -16,6 +16,8 @@
 
 #include "Execute.h"
 
+#include "Parser/ParserNode.h"
+
 namespace {
 
 llvm::CmpInst::Predicate llvm_icmp_pred(const SQLOps op_type) {
@@ -133,8 +135,45 @@ llvm::Value* Executor::codegenCmp(const Analyzer::BinOper* bin_oper, const Compi
   if (is_unnest(lhs) || is_unnest(rhs)) {
     throw std::runtime_error("Unnest not supported in comparisons");
   }
+  const auto& lhs_ti = lhs->get_type_info();
+  if (lhs_ti.is_decimal()) {
+    auto cmp_decimal_const = codegenCmpDecimalConst(optype, qualifier, lhs, lhs->get_type_info(), rhs, co);
+    if (cmp_decimal_const)
+      return cmp_decimal_const;
+  }
   const auto lhs_lvs = codegen(lhs, true, co);
   return codegenCmp(optype, qualifier, lhs_lvs, lhs->get_type_info(), rhs, co);
+}
+
+llvm::Value* Executor::codegenCmpDecimalConst(const SQLOps optype,
+                                              const SQLQualifier qualifier,
+                                              const Analyzer::Expr* lhs,
+                                              const SQLTypeInfo& lhs_ti,
+                                              const Analyzer::Expr* rhs,
+                                              const CompilationOptions& co) {
+  auto u_oper = dynamic_cast<const Analyzer::UOper*>(lhs);
+  if (!u_oper || u_oper->get_optype() != kCAST)
+    return nullptr;
+  auto rhs_constant = dynamic_cast<const Analyzer::Constant*>(rhs);
+  if (!rhs_constant)
+    return nullptr;
+  const auto operand = u_oper->get_operand();
+  const auto& operand_ti = operand->get_type_info();
+  if (!operand_ti.is_decimal() || operand_ti.get_scale() >= lhs_ti.get_scale())
+    return nullptr;
+
+  auto scale_diff = lhs_ti.get_scale() - operand_ti.get_scale() - 1;
+  auto literal_tail = rhs_constant->get_constval().bigintval % exp_to_scale(scale_diff);
+  auto new_literal_value = rhs_constant->get_constval().bigintval / exp_to_scale(scale_diff);
+  if (new_literal_value % 10 == 0 && literal_tail > 0)
+    new_literal_value += 1;
+  const auto rhs_lit = Parser::IntLiteral::analyzeValue(new_literal_value);
+  SQLTypeInfo new_ti =
+      SQLTypeInfo(kDECIMAL, operand_ti.get_dimension() + 1, operand_ti.get_scale() + 1, operand_ti.get_notnull());
+  const auto cast_rhs_lit = rhs_lit->add_cast(new_ti);
+  const auto operand_lv = codegen(operand, true, co).front();
+  const auto lhs_lv = codegenCast(operand_lv, operand_ti, new_ti, false);
+  return codegenCmp(optype, qualifier, {lhs_lv}, new_ti, cast_rhs_lit.get(), co);
 }
 
 llvm::Value* Executor::codegenCmp(const SQLOps optype,

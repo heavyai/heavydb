@@ -431,6 +431,12 @@ class Executor {
   llvm::Value* codegen(const Analyzer::InIntegerSet* expr, const CompilationOptions& co);
   std::unique_ptr<InValuesBitmap> createInValuesBitmap(const Analyzer::InValues*, const CompilationOptions&);
   llvm::Value* codegenCmp(const Analyzer::BinOper*, const CompilationOptions&);
+  llvm::Value* codegenCmpDecimalConst(const SQLOps,
+                                      const SQLQualifier,
+                                      const Analyzer::Expr*,
+                                      const SQLTypeInfo&,
+                                      const Analyzer::Expr*,
+                                      const CompilationOptions&);
   llvm::Value* codegenCmp(const SQLOps,
                           const SQLQualifier,
                           std::vector<llvm::Value*>,

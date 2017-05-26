@@ -1571,6 +1571,15 @@ TEST(Select, OverflowAndUnderFlow) {
       "GROUP BY key0 HAVING key0 >= 0 AND key0 < 12 ORDER BY val "
       "DESC LIMIT 50 OFFSET 0;",
       dt);
+    // avoiding overflows in decimal compares against higher precision literals:
+    // truncate literals based on the other side's precision, e.g. for d which is DECIMAL(14,2)
+    c("select count(*) from big_decimal_range_test where (d >  4.955357142857142);", dt);  // compare with 4.955
+    c("select count(*) from big_decimal_range_test where (d >= 4.955357142857142);", dt);  // compare with 4.955
+    c("select count(*) from big_decimal_range_test where (d <  4.955357142857142);", dt);  // compare with 4.955
+    c("select count(*) from big_decimal_range_test where (d <= 4.955357142857142);", dt);  // compare with 4.955
+    c("select count(*) from big_decimal_range_test where (d >= 4.950357142857142);", dt);  // compare with 4.951
+    c("select count(*) from big_decimal_range_test where (d <  4.950357142857142);", dt);  // compare with 4.951
+    c("select count(*) from big_decimal_range_test where (d < 59016609.300000056);", dt);  // compare with 59016609.301
 #ifdef ENABLE_COMPACTION
     c("SELECT SUM(ofd) FROM test GROUP BY x;", dt);
     c("SELECT SUM(ufd) FROM test GROUP BY x;", dt);
