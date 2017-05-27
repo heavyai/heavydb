@@ -16,8 +16,6 @@
 
 #include "Execute.h"
 
-#include "Parser/ParserNode.h"
-
 namespace {
 
 llvm::CmpInst::Predicate llvm_icmp_pred(const SQLOps op_type) {
@@ -167,13 +165,14 @@ llvm::Value* Executor::codegenCmpDecimalConst(const SQLOps optype,
   auto new_literal_value = rhs_constant->get_constval().bigintval / exp_to_scale(scale_diff);
   if (new_literal_value % 10 == 0 && literal_tail > 0)
     new_literal_value += 1;
-  const auto rhs_lit = Parser::IntLiteral::analyzeValue(new_literal_value);
   SQLTypeInfo new_ti =
       SQLTypeInfo(kDECIMAL, operand_ti.get_dimension() + 1, operand_ti.get_scale() + 1, operand_ti.get_notnull());
-  const auto cast_rhs_lit = rhs_lit->add_cast(new_ti);
+  Datum d;
+  d.bigintval = new_literal_value;
+  const auto new_rhs_lit = makeExpr<Analyzer::Constant>(new_ti, operand_ti.get_notnull(), d);
   const auto operand_lv = codegen(operand, true, co).front();
   const auto lhs_lv = codegenCast(operand_lv, operand_ti, new_ti, false);
-  return codegenCmp(optype, qualifier, {lhs_lv}, new_ti, cast_rhs_lit.get(), co);
+  return codegenCmp(optype, qualifier, {lhs_lv}, new_ti, new_rhs_lit.get(), co);
 }
 
 llvm::Value* Executor::codegenCmp(const SQLOps optype,
