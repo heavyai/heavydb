@@ -1581,6 +1581,7 @@ TEST(Select, OverflowAndUnderFlow) {
     c("select count(*) from big_decimal_range_test where (d <  4.950357142857142);", dt);  // compare with 4.951
     c("select count(*) from big_decimal_range_test where (d < 59016609.300000056);", dt);  // compare with 59016609.301
     c("select count(*) from test where dd <= 111.222;", dt);
+    c("select count(*) from test where dd >= -15264923.533545015;", dt);
 #ifdef ENABLE_COMPACTION
     c("SELECT SUM(ofd) FROM test GROUP BY x;", dt);
     c("SELECT SUM(ufd) FROM test GROUP BY x;", dt);

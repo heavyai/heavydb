@@ -161,14 +161,22 @@ llvm::Value* Executor::codegenCmpDecimalConst(const SQLOps optype,
     return nullptr;
 
   auto scale_diff = lhs_ti.get_scale() - operand_ti.get_scale() - 1;
-  auto literal_tail = rhs_constant->get_constval().bigintval % exp_to_scale(scale_diff);
-  auto new_literal_value = rhs_constant->get_constval().bigintval / exp_to_scale(scale_diff);
-  if (new_literal_value % 10 == 0 && literal_tail > 0)
-    new_literal_value += 1;
+  int64_t bigintval = rhs_constant->get_constval().bigintval;
+  bool negative = false;
+  if (bigintval < 0) {
+    negative = true;
+    bigintval = -bigintval;
+  }
+  int64_t truncated_decimal = bigintval / exp_to_scale(scale_diff);
+  int64_t decimal_tail = bigintval % exp_to_scale(scale_diff);
+  if (truncated_decimal % 10 == 0 && decimal_tail > 0)
+    truncated_decimal += 1;
   SQLTypeInfo new_ti =
       SQLTypeInfo(kDECIMAL, operand_ti.get_dimension() + 1, operand_ti.get_scale() + 1, operand_ti.get_notnull());
+  if (negative)
+    truncated_decimal = -truncated_decimal;
   Datum d;
-  d.bigintval = new_literal_value;
+  d.bigintval = truncated_decimal;
   const auto new_rhs_lit = makeExpr<Analyzer::Constant>(new_ti, operand_ti.get_notnull(), d);
   const auto operand_lv = codegen(operand, true, co).front();
   const auto lhs_lv = codegenCast(operand_lv, operand_ti, new_ti, false);
