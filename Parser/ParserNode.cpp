@@ -2419,7 +2419,8 @@ void DropViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 void CreateDBStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.get_catalog();
   if (catalog.get_currentDB().dbName != MAPD_SYSTEM_DB)
-    throw std::runtime_error("Must be in the system database to create databases.");
+    throw std::runtime_error("Must be in the system database ('" + std::string(MAPD_SYSTEM_DB) +
+                             "') to create databases.");
   Catalog_Namespace::SysCatalog& syscat = static_cast<Catalog_Namespace::SysCatalog&>(catalog);
   int ownerId = session.get_currentUser().userId;
   if (!name_value_list.empty()) {
@@ -2442,7 +2443,8 @@ void CreateDBStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 void DropDBStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.get_catalog();
   if (catalog.get_currentDB().dbName != MAPD_SYSTEM_DB)
-    throw std::runtime_error("Must be in the system database to drop databases.");
+    throw std::runtime_error("Must be in the system database ('" + std::string(MAPD_SYSTEM_DB) +
+                             "') to drop databases.");
   Catalog_Namespace::SysCatalog& syscat = static_cast<Catalog_Namespace::SysCatalog&>(catalog);
   Catalog_Namespace::DBMetadata db;
   if (!syscat.getMetadataForDB(*db_name, db))
@@ -2479,7 +2481,7 @@ void CreateUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   if (passwd.empty())
     throw std::runtime_error("Must have a password for CREATE USER.");
   if (catalog.get_currentDB().dbName != MAPD_SYSTEM_DB)
-    throw std::runtime_error("Must be in the system database to create users.");
+    throw std::runtime_error("Must be in the system database ('" + std::string(MAPD_SYSTEM_DB) + "') to create users.");
   if (!session.get_currentUser().isSuper)
     throw std::runtime_error("Only super user can create new users.");
   Catalog_Namespace::SysCatalog& syscat = static_cast<Catalog_Namespace::SysCatalog&>(catalog);
@@ -2517,6 +2519,8 @@ void AlterUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
       throw std::runtime_error("Invalid CREATE USER option " + *p->get_name() +
                                ".  Should be PASSWORD, INSERTACCESS or IS_SUPER.");
   }
+  if (catalog.get_currentDB().dbName != MAPD_SYSTEM_DB)
+    throw std::runtime_error("Must be in the system database ('" + std::string(MAPD_SYSTEM_DB) + "') to alter users.");
   Catalog_Namespace::SysCatalog& syscat = static_cast<Catalog_Namespace::SysCatalog&>(catalog);
   Catalog_Namespace::UserMetadata user;
   if (!syscat.getMetadataForUser(*user_name, user))
@@ -2541,7 +2545,7 @@ void AlterUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 void DropUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.get_catalog();
   if (catalog.get_currentDB().dbName != MAPD_SYSTEM_DB)
-    throw std::runtime_error("Must be in the system database to drop users.");
+    throw std::runtime_error("Must be in the system database ('" + std::string(MAPD_SYSTEM_DB) + "') to drop users.");
   if (!session.get_currentUser().isSuper)
     throw std::runtime_error("Only super user can drop users.");
   Catalog_Namespace::SysCatalog& syscat = static_cast<Catalog_Namespace::SysCatalog&>(catalog);
