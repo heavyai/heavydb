@@ -633,7 +633,7 @@ static ImportStatus import_thread(int thread_id,
     const char* thread_buf = buffer + begin_pos + begin;
     const char* thread_buf_end = buffer + end_pos;
     const char* buf_end = buffer + total_size;
-    bool try_single_thread;
+    bool try_single_thread = false;
     std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers = importer->get_import_buffers(thread_id);
     auto us = measure<std::chrono::microseconds>::execution([&]() {});
     for (const auto& p : import_buffers)
@@ -821,7 +821,7 @@ void Detector::detect_row_delimiter() {
 void Detector::split_raw_data() {
   const char* buf = raw_data.c_str();
   const char* buf_end = buf + raw_data.size();
-  bool try_single_thread;
+  bool try_single_thread = false;
   for (const char* p = buf; p < buf_end; p++) {
     std::vector<std::string> row;
     p = get_row(p, buf_end, buf_end, copy_params, true, nullptr, row, try_single_thread);
