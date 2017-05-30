@@ -1286,9 +1286,9 @@ void MapDHandler::detect_column_types(TDetectResult& _return,
       for (size_t col_idx = 0; col_idx < best_types.size(); col_idx++) {
         SQLTypes t = best_types[col_idx];
         EncodingType encodingType = best_encodings[col_idx];
-        SQLTypeInfo* ti = new SQLTypeInfo(t, false, encodingType);
-        col.col_type.type = type_to_thrift(*ti);
-        col.col_type.encoding = encoding_to_thrift(*ti);
+        SQLTypeInfo ti(t, false, encodingType);
+        col.col_type.type = type_to_thrift(ti);
+        col.col_type.encoding = encoding_to_thrift(ti);
         col.col_name = headers[col_idx];
         col.is_reserved_keyword =
             reserved_keywords.find(boost::to_upper_copy<std::string>(col.col_name)) != reserved_keywords.end();
