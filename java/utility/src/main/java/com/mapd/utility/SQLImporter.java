@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package com.mapd.utility;
 
 import com.mapd.thrift.server.MapD;
@@ -27,8 +26,6 @@ import static java.lang.System.exit;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.DefaultParser;
@@ -195,10 +192,17 @@ public class SQLImporter {
 
       long startTime = System.currentTimeMillis();
 
+      // set autocommit off to allow postgress to not load all results
+      conn.setAutoCommit(false);
+
       //Execute a query
       stmt = conn.createStatement();
 
+      int bufferSize = Integer.valueOf(cmd.getOptionValue("bufferSize", "10000"));
+      // set the jdbc fetch buffer size to reduce the amount of records being moved to java from postgress
+      stmt.setFetchSize(bufferSize);
       long timer;
+
       ResultSet rs = stmt.executeQuery(cmd.getOptionValue("sqlStmt"));
 
       //check if table already exists and is compatible in MapD with the query metadata
@@ -210,7 +214,6 @@ public class SQLImporter {
       long resultCount = 0;
       int bufferCount = 0;
       long total = 0;
-      int bufferSize = Integer.valueOf(cmd.getOptionValue("bufferSize", "10000"));
 
       List<TStringRow> rows = new ArrayList(bufferSize);
       while (rs.next()) {
@@ -305,11 +308,11 @@ public class SQLImporter {
           exit(1);
         }
         // table exists lets check it is same layout - check names will do for now
-        for (int colNum = 1; colNum <= columnInfo.size(); colNum ++ ){
-          if (!columnInfo.get(colNum-1).col_name.equalsIgnoreCase(md.getColumnName(colNum))){
-            LOGGER.error("MapD Table does not have matching column in same order for column number" +
-                    colNum + " MapD column name is " + columnInfo.get(colNum-1).col_name +
-                    " versus Select "  + md.getColumnName(colNum));
+        for (int colNum = 1; colNum <= columnInfo.size(); colNum++) {
+          if (!columnInfo.get(colNum - 1).col_name.equalsIgnoreCase(md.getColumnName(colNum))) {
+            LOGGER.error("MapD Table does not have matching column in same order for column number"
+                    + colNum + " MapD column name is " + columnInfo.get(colNum - 1).col_name
+                    + " versus Select " + md.getColumnName(colNum));
             exit(1);
           }
         }
@@ -320,9 +323,6 @@ public class SQLImporter {
   }
 
   private void createMapDTable(ResultSetMetaData metaData) {
-
-
-
 
     StringBuilder sb = new StringBuilder();
     sb.append("Create table ").append(cmd.getOptionValue("targetTable")).append("(");
@@ -389,7 +389,7 @@ public class SQLImporter {
     }
   }
 
-  private List<TColumnType>  getColumnInfo(String tName) {
+  private List<TColumnType> getColumnInfo(String tName) {
     LOGGER.debug("Getting columns for  " + tName);
     List<TColumnType> row_descriptor = null;
     try {
@@ -483,6 +483,5 @@ public class SQLImporter {
         throw new AssertionError("Column type " + cType + " not Supported");
     }
   }
-
 
 }
