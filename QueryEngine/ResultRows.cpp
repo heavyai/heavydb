@@ -294,7 +294,8 @@ bool ResultRows::reduceSingleRow(const int8_t* row_ptr,
         CHECK(agg_info.is_agg && !agg_info.is_distinct);
         ++agg_col_idx;
         partial_bin_val = partial_agg_vals[agg_col_idx] =
-            get_component(row_ptr + query_mem_desc.getColOnlyOffInBytes(agg_col_idx), chosen_bytes);
+            get_component(row_ptr + query_mem_desc.getColOnlyOffInBytes(agg_col_idx),
+                          query_mem_desc.agg_col_widths[agg_col_idx].compact);
       }
       if (agg_col_idx == static_cast<size_t>(query_mem_desc.idx_target_as_key) &&
           partial_bin_val != agg_init_vals[query_mem_desc.idx_target_as_key]) {
@@ -327,9 +328,10 @@ bool ResultRows::reduceSingleRow(const int8_t* row_ptr,
                                            agg_info);
               break;
             case kAVG:
+              // Ignore float argument compaction for count component for fear of its overflow
               AGGREGATE_ONE_COUNT(reinterpret_cast<int8_t*>(&agg_vals[agg_col_idx + 1]),
                                   reinterpret_cast<int8_t*>(&partial_agg_vals[agg_col_idx + 1]),
-                                  chosen_bytes,
+                                  query_mem_desc.agg_col_widths[agg_col_idx].compact,
                                   agg_info);
             // fall thru
             case kSUM:

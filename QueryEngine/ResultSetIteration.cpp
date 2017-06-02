@@ -41,7 +41,6 @@ TargetValue make_avg_target_value(const int8_t* ptr1,
   CHECK(target_info.agg_kind == kAVG);
   const bool float_argument_input = takes_float_argument(target_info);
   const auto actual_compact_sz1 = float_argument_input ? sizeof(float) : compact_sz1;
-  const auto actual_compact_sz2 = float_argument_input ? sizeof(int32_t) : compact_sz2;
   if (target_info.agg_arg_type.is_integer() || target_info.agg_arg_type.is_decimal()) {
     sum = read_int_from_buff(ptr1, actual_compact_sz1);
   } else if (target_info.agg_arg_type.is_fp()) {
@@ -62,7 +61,7 @@ TargetValue make_avg_target_value(const int8_t* ptr1,
   } else {
     CHECK(false);
   }
-  const auto count = read_int_from_buff(ptr2, actual_compact_sz2);
+  const auto count = read_int_from_buff(ptr2, compact_sz2);
   return pair_to_double({sum, count}, target_info.sql_type, false);
 }
 

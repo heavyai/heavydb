@@ -3092,7 +3092,9 @@ bool GroupByAndAggregate::codegenAggCalls(const std::tuple<llvm::Value*, llvm::V
       }
 
       const bool float_argument_input = takes_float_argument(agg_info);
-      const auto agg_chosen_bytes = float_argument_input ? sizeof(float) : chosen_bytes;
+      const bool is_count_in_avg = agg_info.agg_kind == kAVG && target_lv_idx == 1;
+      // The count component of an average should never be compacted.
+      const auto agg_chosen_bytes = float_argument_input && !is_count_in_avg ? sizeof(float) : chosen_bytes;
       if (float_argument_input) {
         CHECK_GE(chosen_bytes, sizeof(float));
       }

@@ -952,7 +952,8 @@ void ResultSetStorage::reduceOneSlot(int8_t* this_ptr1,
         break;
       }
       case kAVG: {
-        AGGREGATE_ONE_COUNT(this_ptr2, that_ptr2, chosen_bytes);
+        // Ignore float argument compaction for count component for fear of its overflow
+        AGGREGATE_ONE_COUNT(this_ptr2, that_ptr2, query_mem_desc_.agg_col_widths[target_slot_idx].compact);
       }
       // fall thru
       case kSUM: {
