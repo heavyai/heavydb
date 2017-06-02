@@ -120,7 +120,7 @@ class DeepCopyVisitor : public ScalarExprVisitor<std::shared_ptr<Analyzer::Expr>
   }
 
   RetType visitLikeExpr(const Analyzer::LikeExpr* like) const override {
-    auto escape_expr = like->get_like_expr();
+    auto escape_expr = like->get_escape_expr();
     return makeExpr<Analyzer::LikeExpr>(visit(like->get_arg()),
                                         visit(like->get_like_expr()),
                                         escape_expr ? visit(escape_expr) : nullptr,
