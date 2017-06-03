@@ -18,6 +18,14 @@
 #include "Execute.h"
 
 #ifdef ENABLE_ARROW_CONVERTER
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/types.h>
+#include <sys/ipc.h>
+#include <sys/shm.h>
+#include <errno.h>
+#include <string>
+
 #include "arrow/builder.h"
 #include "arrow/buffer.h"
 #include "arrow/io/memory.h"
@@ -516,6 +524,65 @@ arrow::RecordBatch ResultSet::convertToArrow(const std::vector<std::string>& col
     std::tie(columns, row_count) = getArrowColumns(fields);
   }
   return arrow::RecordBatch(schema, row_count, columns);
+}
+
+// WARN(ptaylor): users are responsible for detaching and removing shared memory segments, e.g.,
+//   int shmid = shmget(...);
+//   char *ipc_ptr = (char* shmat(shmid, ...));
+//   ...
+//   shmdt(ipc_ptr);
+//   shmctl(shmid, IPC_RMID, 0);
+std::tuple<std::shared_ptr<arrow::Buffer>, std::vector<char>, int64_t> ResultSet::getArrowCopy(
+    Data_Namespace::DataMgr* data_mgr,
+    const std::vector<std::string>& col_names) const {
+  auto arrow_copy = convertToArrow(col_names);
+  auto serialized_schema = serialize_arrow_schema(*arrow_copy.schema());
+  auto serialized_records = serialize_arrow_records(arrow_copy);
+  // Generate a new key for a shared memory segment. Keys to shared memory segments
+  // are OS global, so we need to try a new key if we encounter a collision. It seems
+  // incremental keygen would be deterministically worst-case. If we use a hash
+  // (like djb2) + nonce, we could still get collisions if multiple clients specify
+  // the same nonce, so using rand() in lieu of a better approach
+  // TODO(ptaylor): Is this common? Are these assumptions true?
+  key_t key = rand();
+  int shmsz = (int) serialized_records->size();
+  int shmid;
+  // IPC_CREAT - indicates we want to create a new segment for this key if it doesn't exist
+  // IPC_EXCL - ensures failure if a segment already exists for this key
+  while ((shmid = shmget(key, shmsz, IPC_CREAT | IPC_EXCL | 0666)) < 0) {
+    // If shmget fails and errno is one of these four values, try a new key.
+    // TODO(ptaylor): is checking for the last three values really necessary? Checking them by default to be safe.
+    // EEXIST - a shared memory segment is already associated with this key
+    // EACCES - a shared memory segment is already associated with this key, but we don't have permission to access it
+    // EINVAL - a shared memory segment is already associated with this key, but the size is less than shmsz
+    // ENOENT - IPC_CREAT was not set in shmflg and no shared memory segment associated with key was found
+    if (!(errno & (EEXIST | EACCES | EINVAL | ENOENT))) {
+      // TODO(ptaylor): Surface this error gracefully instead of crashing
+      perror("shmget");
+      exit(1);
+    }
+    key = rand();
+  }
+  // get a pointer to the shared memory segment
+  char *ipc_ptr;
+  if ((ipc_ptr = (char*)shmat(shmid, NULL, 0)) == (char *) -1) {
+      // TODO(ptaylor): Surface this error gracefully instead of crashing
+      perror("shmat");
+      exit(1);
+  }
+  // copy the arrow records buffer to shared memory
+  // TODO(ptaylor): I'm sure it's possible to tell Arrow's StreamWriter to write
+  // directly to the shared memory segment as a sink, but my c++ fu is not strong,
+  // so memcpy'ing for now.
+  memcpy(ipc_ptr, serialized_records->data(), serialized_records->size());
+  // detach from the shared memory segment
+  shmdt(ipc_ptr);
+  // cast the shared memory key to a string, and then to a char vec, so we can
+  // keep the same method signature as the original `getArrowDeviceCopy` below.
+  std::string handle_str = std::to_string(key);
+  std::vector<char> handle_buffer(handle_str.begin(), handle_str.end());
+  return std::tuple<std::shared_ptr<arrow::Buffer>, std::vector<char>, int64_t>{
+      serialized_schema, handle_buffer, serialized_records->size()};
 }
 
 // WARN(miyu): users are responsible to free all device copies, e.g.,
