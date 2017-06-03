@@ -248,6 +248,485 @@ class IndirectToDirectColVisitor : public DeepCopyVisitor {
   std::unordered_map<int, const InputColDescriptor*> ind_col_id_to_desc_;
 };
 
+class ConstantFoldingVisitor : public DeepCopyVisitor {
+ protected:
+  std::shared_ptr<Analyzer::Expr> visitUOper(const Analyzer::UOper* uoper) const override {
+    const auto operand = visit(uoper->get_operand());
+    const auto optype = uoper->get_optype();
+    const auto& operand_ti = operand->get_type_info();
+    const auto operand_type = operand_ti.is_decimal() ? decimal_to_int_type(operand_ti) : operand_ti.get_type();
+    const auto const_operand = std::dynamic_pointer_cast<const Analyzer::Constant>(operand);
+    if (const_operand) {
+      switch (optype) {
+        case kNOT: {
+          if (operand_ti.is_boolean()) {
+            Datum d;
+            d.boolval = !const_operand->get_constval().boolval;
+            return makeExpr<Analyzer::Constant>(kBOOLEAN, false, d);
+          }
+          break;
+        }
+        case kMINUS: {
+          int64_t max_int{0}, min_int{0};
+          std::tie(max_int, min_int) = inline_int_max_min(operand_ti.get_size());
+          bool fold = true;
+          Datum d;
+          switch (operand_type) {
+            case kSMALLINT: {
+              auto c = const_operand->get_constval().smallintval;
+              if (c == min_int)
+                fold = false;
+              else
+                d.smallintval = -c;
+              break;
+            }
+            case kINT: {
+              auto c = const_operand->get_constval().intval;
+              if (c == min_int)
+                fold = false;
+              else
+                d.intval = -c;
+              break;
+            }
+            case kBIGINT: {
+              auto c = const_operand->get_constval().bigintval;
+              if (c == min_int)
+                fold = false;
+              else
+                d.bigintval = -c;
+              break;
+            }
+            case kFLOAT:
+              d.floatval = -const_operand->get_constval().floatval;
+              break;
+            case kDOUBLE:
+              d.doubleval = -const_operand->get_constval().doubleval;
+              break;
+            default:
+              fold = false;
+              break;
+          }
+          if (fold) {
+            return makeExpr<Analyzer::Constant>(operand_type, false, d);
+          }
+          break;
+        }
+        case kCAST:
+        case kISNULL:
+        case kUNNEST:
+          break;
+        default:
+          break;
+      }
+    }
+
+    return makeExpr<Analyzer::UOper>(uoper->get_type_info(), uoper->get_contains_agg(), optype, operand);
+  }
+
+  std::shared_ptr<Analyzer::Expr> visitBinOper(const Analyzer::BinOper* bin_oper) const override {
+    const auto lhs = visit(bin_oper->get_left_operand());
+    const auto rhs = visit(bin_oper->get_right_operand());
+    const auto optype = bin_oper->get_optype();
+    const auto& lhs_ti = lhs->get_type_info();
+    const auto& rhs_ti = rhs->get_type_info();
+    const auto lhs_type = lhs_ti.is_decimal() ? decimal_to_int_type(lhs_ti) : lhs_ti.get_type();
+    const auto rhs_type = rhs_ti.is_decimal() ? decimal_to_int_type(rhs_ti) : rhs_ti.get_type();
+    const auto const_lhs = std::dynamic_pointer_cast<const Analyzer::Constant>(lhs);
+    const auto const_rhs = std::dynamic_pointer_cast<const Analyzer::Constant>(rhs);
+
+    if (const_lhs && const_rhs && lhs_type == rhs_type) {
+      auto lhs_datum = const_lhs->get_constval();
+      auto rhs_datum = const_rhs->get_constval();
+      switch (optype) {
+        case kEQ: {
+          bool fold = true;
+          Datum d;
+          switch (lhs_type) {
+            case kSMALLINT:
+              d.boolval = (lhs_datum.smallintval == rhs_datum.smallintval);
+              break;
+            case kINT:
+              d.boolval = (lhs_datum.intval == rhs_datum.intval);
+              break;
+            case kBIGINT:
+              d.boolval = (lhs_datum.bigintval == rhs_datum.bigintval);
+              break;
+            case kFLOAT:
+              d.boolval = (lhs_datum.floatval == rhs_datum.floatval);
+              break;
+            case kDOUBLE:
+              d.boolval = (lhs_datum.doubleval == rhs_datum.doubleval);
+              break;
+            default:
+              fold = false;
+              break;
+          }
+          if (fold) {
+            return makeExpr<Analyzer::Constant>(kBOOLEAN, false, d);
+          }
+          break;
+        }
+        case kNE: {
+          bool fold = true;
+          Datum d;
+          switch (lhs_type) {
+            case kSMALLINT:
+              d.boolval = (lhs_datum.smallintval != rhs_datum.smallintval);
+              break;
+            case kINT:
+              d.boolval = (lhs_datum.intval != rhs_datum.intval);
+              break;
+            case kBIGINT:
+              d.boolval = (lhs_datum.bigintval != rhs_datum.bigintval);
+              break;
+            case kFLOAT:
+              d.boolval = (lhs_datum.floatval != rhs_datum.floatval);
+              break;
+            case kDOUBLE:
+              d.boolval = (lhs_datum.doubleval != rhs_datum.doubleval);
+              break;
+            default:
+              fold = false;
+              break;
+          }
+          if (fold) {
+            return makeExpr<Analyzer::Constant>(kBOOLEAN, false, d);
+          }
+          break;
+        }
+        case kLT: {
+          bool fold = true;
+          Datum d;
+          switch (lhs_type) {
+            case kSMALLINT:
+              d.boolval = (lhs_datum.smallintval < rhs_datum.smallintval);
+              break;
+            case kINT:
+              d.boolval = (lhs_datum.intval < rhs_datum.intval);
+              break;
+            case kBIGINT:
+              d.boolval = (lhs_datum.bigintval < rhs_datum.bigintval);
+              break;
+            case kFLOAT:
+              d.boolval = (lhs_datum.floatval < rhs_datum.floatval);
+              break;
+            case kDOUBLE:
+              d.boolval = (lhs_datum.doubleval < rhs_datum.doubleval);
+              break;
+            default:
+              fold = false;
+              break;
+          }
+          if (fold) {
+            return makeExpr<Analyzer::Constant>(kBOOLEAN, false, d);
+          }
+          break;
+        }
+        case kLE: {
+          bool fold = true;
+          Datum d;
+          switch (lhs_type) {
+            case kSMALLINT:
+              d.boolval = (lhs_datum.smallintval <= rhs_datum.smallintval);
+              break;
+            case kINT:
+              d.boolval = (lhs_datum.intval <= rhs_datum.intval);
+              break;
+            case kBIGINT:
+              d.boolval = (lhs_datum.bigintval <= rhs_datum.bigintval);
+              break;
+            case kFLOAT:
+              d.boolval = (lhs_datum.floatval <= rhs_datum.floatval);
+              break;
+            case kDOUBLE:
+              d.boolval = (lhs_datum.doubleval <= rhs_datum.doubleval);
+              break;
+            default:
+              fold = false;
+              break;
+          }
+          if (fold) {
+            return makeExpr<Analyzer::Constant>(kBOOLEAN, false, d);
+          }
+          break;
+        }
+        case kGT: {
+          bool fold = true;
+          Datum d;
+          switch (lhs_type) {
+            case kSMALLINT:
+              d.boolval = (lhs_datum.smallintval > rhs_datum.smallintval);
+              break;
+            case kINT:
+              d.boolval = (lhs_datum.intval > rhs_datum.intval);
+              break;
+            case kBIGINT:
+              d.boolval = (lhs_datum.bigintval > rhs_datum.bigintval);
+              break;
+            case kFLOAT:
+              d.boolval = (lhs_datum.floatval > rhs_datum.floatval);
+              break;
+            case kDOUBLE:
+              d.boolval = (lhs_datum.doubleval > rhs_datum.doubleval);
+              break;
+            default:
+              fold = false;
+              break;
+          }
+          if (fold) {
+            return makeExpr<Analyzer::Constant>(kBOOLEAN, false, d);
+          }
+          break;
+        }
+        case kGE: {
+          bool fold = true;
+          Datum d;
+          switch (lhs_type) {
+            case kSMALLINT:
+              d.boolval = (lhs_datum.smallintval >= rhs_datum.smallintval);
+              break;
+            case kINT:
+              d.boolval = (lhs_datum.intval >= rhs_datum.intval);
+              break;
+            case kBIGINT:
+              d.boolval = (lhs_datum.bigintval >= rhs_datum.bigintval);
+              break;
+            case kFLOAT:
+              d.boolval = (lhs_datum.floatval >= rhs_datum.floatval);
+              break;
+            case kDOUBLE:
+              d.boolval = (lhs_datum.doubleval >= rhs_datum.doubleval);
+              break;
+            default:
+              fold = false;
+              break;
+          }
+          if (fold) {
+            return makeExpr<Analyzer::Constant>(kBOOLEAN, false, d);
+          }
+          break;
+        }
+        case kAND: {
+          bool fold = true;
+          Datum d;
+          switch (lhs_type) {
+            case kBOOLEAN:
+              d.boolval = (lhs_datum.boolval && rhs_datum.boolval);
+              break;
+            default:
+              fold = false;
+              break;
+          }
+          if (fold) {
+            return makeExpr<Analyzer::Constant>(kBOOLEAN, false, d);
+          }
+          break;
+        }
+        case kOR: {
+          bool fold = true;
+          Datum d;
+          switch (lhs_type) {
+            case kBOOLEAN:
+              d.boolval = (lhs_datum.boolval || rhs_datum.boolval);
+              break;
+            default:
+              fold = false;
+              break;
+          }
+          if (fold) {
+            return makeExpr<Analyzer::Constant>(kBOOLEAN, false, d);
+          }
+          break;
+        }
+        case kMINUS: {
+          bool fold = true;
+          Datum d;
+          switch (lhs_type) {
+            case kSMALLINT:
+              d.smallintval = (lhs_datum.smallintval - rhs_datum.smallintval);
+              break;
+            case kINT:
+              d.intval = (lhs_datum.intval - rhs_datum.intval);
+              break;
+            case kBIGINT:
+              d.bigintval = (lhs_datum.bigintval - rhs_datum.bigintval);
+              break;
+            case kFLOAT:
+              d.floatval = (lhs_datum.floatval - rhs_datum.floatval);
+              break;
+            case kDOUBLE:
+              d.doubleval = (lhs_datum.doubleval - rhs_datum.doubleval);
+              break;
+            default:
+              fold = false;
+              break;
+          }
+          if (fold) {
+            return makeExpr<Analyzer::Constant>(lhs_type, false, d);
+          }
+          break;
+        }
+        case kPLUS: {
+          bool fold = true;
+          Datum d;
+          switch (lhs_type) {
+            case kSMALLINT:
+              d.smallintval = (lhs_datum.smallintval + rhs_datum.smallintval);
+              break;
+            case kINT:
+              d.intval = (lhs_datum.intval + rhs_datum.intval);
+              break;
+            case kBIGINT:
+              d.bigintval = (lhs_datum.bigintval + rhs_datum.bigintval);
+              break;
+            case kFLOAT:
+              d.floatval = (lhs_datum.floatval + rhs_datum.floatval);
+              break;
+            case kDOUBLE:
+              d.doubleval = (lhs_datum.doubleval + rhs_datum.doubleval);
+              break;
+            default:
+              fold = false;
+              break;
+          }
+          if (fold) {
+            return makeExpr<Analyzer::Constant>(lhs_type, false, d);
+          }
+          break;
+        }
+        case kMULTIPLY: {
+          bool fold = true;
+          Datum d;
+          switch (lhs_type) {
+            case kSMALLINT:
+              d.smallintval = (lhs_datum.smallintval * rhs_datum.smallintval);
+              break;
+            case kINT:
+              d.intval = (lhs_datum.intval * rhs_datum.intval);
+              break;
+            case kBIGINT:
+              d.bigintval = (lhs_datum.bigintval * rhs_datum.bigintval);
+              break;
+            case kFLOAT:
+              d.floatval = (lhs_datum.floatval * rhs_datum.floatval);
+              break;
+            case kDOUBLE:
+              d.doubleval = (lhs_datum.doubleval * rhs_datum.doubleval);
+              break;
+            default:
+              fold = false;
+              break;
+          }
+          if (fold) {
+            return makeExpr<Analyzer::Constant>(lhs_type, false, d);
+          }
+          break;
+        }
+        case kDIVIDE: {
+          bool fold = true;
+          Datum d;
+          switch (lhs_type) {
+            case kSMALLINT: {
+              auto c2 = rhs_datum.smallintval;
+              if (c2 == 0)
+                fold = false;
+              else
+                d.smallintval = (lhs_datum.smallintval / c2);
+              break;
+            }
+            case kINT: {
+              auto c2 = rhs_datum.intval;
+              if (c2 == 0)
+                fold = false;
+              else
+                d.intval = (lhs_datum.intval / c2);
+              break;
+            }
+            case kBIGINT: {
+              auto c2 = rhs_datum.bigintval;
+              if (c2 == 0)
+                fold = false;
+              else
+                d.bigintval = (lhs_datum.bigintval / c2);
+              break;
+            }
+            case kFLOAT: {
+              auto c2 = rhs_datum.floatval;
+              if (c2 == 0.0)
+                fold = false;
+              else
+                d.floatval = (lhs_datum.floatval / c2);
+              break;
+            }
+            case kDOUBLE: {
+              auto c2 = rhs_datum.doubleval;
+              if (c2 == 0.0)
+                fold = false;
+              else
+                d.doubleval = (lhs_datum.doubleval / c2);
+              break;
+            }
+            default:
+              fold = false;
+              break;
+          }
+          if (fold) {
+            return makeExpr<Analyzer::Constant>(lhs_type, false, d);
+          }
+          break;
+        }
+        case kMODULO: {
+          bool fold = true;
+          Datum d;
+          switch (lhs_type) {
+            case kSMALLINT: {
+              auto c2 = rhs_datum.smallintval;
+              if (c2 == 0)
+                fold = false;
+              else
+                d.smallintval = (lhs_datum.smallintval % c2);
+              break;
+            }
+            case kINT: {
+              auto c2 = rhs_datum.intval;
+              if (c2 == 0)
+                fold = false;
+              else
+                d.intval = (lhs_datum.intval % c2);
+              break;
+            }
+            case kBIGINT: {
+              auto c2 = rhs_datum.bigintval;
+              if (c2 == 0)
+                fold = false;
+              else
+                d.bigintval = (lhs_datum.bigintval % c2);
+              break;
+            }
+            default:
+              fold = false;
+              break;
+          }
+          if (fold) {
+            return makeExpr<Analyzer::Constant>(lhs_type, false, d);
+          }
+          break;
+        }
+        case kARRAY_AT:
+        default:
+          break;
+      }
+    }
+
+    return makeExpr<Analyzer::BinOper>(bin_oper->get_type_info(),
+                                       bin_oper->get_contains_agg(),
+                                       bin_oper->get_optype(),
+                                       bin_oper->get_qualifier(),
+                                       lhs,
+                                       rhs);
+  }
+};
+
 const Analyzer::Expr* strip_likelihood(const Analyzer::Expr* expr) {
   const auto with_likelihood = dynamic_cast<const Analyzer::LikelihoodExpr*>(expr);
   if (!with_likelihood) {
@@ -332,4 +811,19 @@ std::shared_ptr<Analyzer::Expr> redirect_expr(const Analyzer::Expr* expr,
   }
   IndirectToDirectColVisitor visitor(col_descs);
   return visitor.visit(expr);
+}
+
+std::shared_ptr<Analyzer::Expr> fold_expr(const Analyzer::Expr* expr) {
+  if (!expr) {
+    return nullptr;
+  }
+  const auto expr_no_likelihood = strip_likelihood(expr);
+  ConstantFoldingVisitor visitor;
+  auto rewritten_expr = visitor.visit(expr_no_likelihood);
+  const auto expr_with_likelihood = dynamic_cast<const Analyzer::LikelihoodExpr*>(expr);
+  if (expr_with_likelihood) {
+    // Add back likelihood
+    return std::make_shared<Analyzer::LikelihoodExpr>(rewritten_expr, expr_with_likelihood->get_likelihood());
+  }
+  return rewritten_expr;
 }

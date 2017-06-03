@@ -45,4 +45,6 @@ std::vector<std::shared_ptr<Analyzer::Expr>> redirect_exprs(
 std::shared_ptr<Analyzer::Expr> redirect_expr(const Analyzer::Expr* expr,
                                               const std::list<std::shared_ptr<const InputColDescriptor>>& col_descs);
 
+std::shared_ptr<Analyzer::Expr> fold_expr(const Analyzer::Expr*);
+
 #endif  // QUERYENGINE_EXPRESSIONREWRITE_H

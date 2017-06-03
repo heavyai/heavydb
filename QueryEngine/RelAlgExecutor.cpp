@@ -848,7 +848,10 @@ std::vector<std::shared_ptr<Analyzer::Expr>> translate_scalar_sources(const RA* 
       // for the sake of taking memory ownership, no real work needed here.
       continue;
     }
-    scalar_sources.push_back(translator.translateScalarRex(scalar_rex));
+    const auto scalar_expr = translator.translateScalarRex(scalar_rex);
+    scalar_sources.push_back(scalar_expr);
+    // const auto folded_scalar_expr = fold_expr(scalar_expr.get());
+    // scalar_sources.push_back(folded_scalar_expr);
   }
   return scalar_sources;
 }
@@ -905,7 +908,7 @@ QualsConjunctiveForm qual_to_conjunctive_form(const std::shared_ptr<Analyzer::Ex
 QualsConjunctiveForm translate_quals(const RelCompound* compound, const RelAlgTranslator& translator) {
   const auto filter_rex = compound->getFilterExpr();
   const auto filter_expr = filter_rex ? translator.translateScalarRex(filter_rex) : nullptr;
-  return filter_expr ? qual_to_conjunctive_form(filter_expr) : QualsConjunctiveForm{};
+  return filter_expr ? qual_to_conjunctive_form(fold_expr(filter_expr.get())) : QualsConjunctiveForm{};
 }
 
 std::vector<Analyzer::Expr*> translate_targets(std::vector<std::shared_ptr<Analyzer::Expr>>& target_exprs_owned,
@@ -931,6 +934,7 @@ std::vector<Analyzer::Expr*> translate_targets(std::vector<std::shared_ptr<Analy
         target_expr = var_ref(groupby_expr.get(), Analyzer::Var::kGROUPBY, ref_idx);
       } else {
         target_expr = translator.translateScalarRex(target_rex_scalar);
+        target_expr = fold_expr(target_expr.get());
       }
     }
     CHECK(target_expr);
@@ -956,6 +960,7 @@ std::vector<Analyzer::Expr*> translate_targets(std::vector<std::shared_ptr<Analy
   for (const auto& target_rex_agg : aggregate->getAggExprs()) {
     auto target_expr = RelAlgTranslator::translateAggregateRex(target_rex_agg.get(), scalar_sources);
     CHECK(target_expr);
+    target_expr = fold_expr(target_expr.get());
     target_exprs_owned.push_back(target_expr);
     target_exprs.push_back(target_expr.get());
   }

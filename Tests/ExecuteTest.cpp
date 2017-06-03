@@ -400,6 +400,13 @@ TEST(Select, FilterAndSimpleAggregation) {
     c("SELECT SUM(-dd) FROM test;", dt);
     c("SELECT SUM(-f) FROM test;", dt);
     c("SELECT SUM(-d) FROM test;", dt);
+    c("SELECT COUNT(*) FROM test WHERE 1<>2;", dt);
+    c("SELECT COUNT(*) FROM test WHERE 1=1;", dt);
+    c("SELECT COUNT(*) FROM test WHERE 22 > 33;", dt);
+    c("SELECT COUNT(*) FROM test WHERE ff < 23.0/4.0 AND 22 < 33;", dt);
+    c("SELECT COUNT(*) FROM test WHERE x + 3*8/2 < 35 + y - 20/5;", dt);
+    c("SELECT x + 2 * 10/4 + 3 FROM test WHERE x + 3*8/2 < 35 + y - 20/5;", dt);
+    c("SELECT COUNT(*) FROM test WHERE ff + 3.0*8 < 20.0/5;", dt);
     c("SELECT COUNT(*) FROM test WHERE ofq >= 0 OR ofq IS NULL;", dt);
     c("SELECT COUNT(*) AS val FROM test WHERE (test.dd = 0.5 OR test.dd = 3);", dt);
     c("SELECT MAX(dd_notnull * 1) FROM test;", dt);
@@ -1471,6 +1478,7 @@ TEST(Select, DivByZero) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     EXPECT_THROW(run_multiple_agg("SELECT x / 0 FROM test;", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("SELECT 1 / 0 FROM test;", dt), std::runtime_error);
     EXPECT_THROW(run_multiple_agg("SELECT COUNT(distinct x / 0) FROM test;", dt), std::runtime_error);
     EXPECT_THROW(run_multiple_agg("SELECT f / 0. FROM test;", dt), std::runtime_error);
     EXPECT_THROW(run_multiple_agg("SELECT d / 0. FROM test;", dt), std::runtime_error);
