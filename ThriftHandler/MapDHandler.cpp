@@ -641,6 +641,62 @@ void MapDHandler::sql_execute(TQueryResult& _return,
   }
 }
 
+void MapDHandler::sql_execute_df(TGpuDataFrame& _return,
+                                 const TSessionId& session,
+                                 const std::string& query_str,
+                                 const int32_t first_n) {
+#ifdef ENABLE_ARROW_CONVERTER
+  const auto session_info = MapDHandler::get_session(session);
+  int64_t execution_time_ms = 0;
+  LOG(INFO) << query_str;
+  int64_t total_time_ms = measure<>::execution([&]() {
+    SQLParser parser;
+    std::list<std::unique_ptr<Parser::Stmt>> parse_trees;
+    std::string last_parsed;
+#ifdef HAVE_CALCITE
+    try {
+#ifdef HAVE_RAVM
+      ParserWrapper pw{query_str};
+      if (!pw.is_ddl && !pw.is_update_dml && !pw.is_other_explain) {
+        std::string query_ra;
+        execution_time_ms += measure<>::execution([&]() { query_ra = parse_to_ra(query_str, session_info); });
+        if (pw.is_select_calcite_explain) {
+          throw std::runtime_error("explain is not unsupported by sql_execute_df");
+        }
+        execute_rel_alg_df(_return, query_ra, session_info, first_n);
+        if (_return.schema.empty()) {
+          throw std::runtime_error("schema is missing in returned result");
+        }
+        return;
+      }
+#else
+      std::unique_ptr<const Planner::RootPlan> plan_ptr;
+      execution_time_ms += measure<>::execution([&]() { plan_ptr.reset(parse_to_plan(query_str, session_info)); });
+      if (plan_ptr) {
+        execute_root_plan_df(_return, plan_ptr.get(), session_info, first_n);
+        if (_return.schema.empty()) {
+          throw std::runtime_error("schema is missing in returned result");
+        }
+        return;
+      }
+#endif  // HAVE_RAVM
+      LOG(INFO) << "passing query to legacy processor";
+    } catch (std::exception& e) {
+      TMapDException ex;
+      ex.error_msg = std::string("Exception: ") + e.what();
+      LOG(ERROR) << ex.error_msg;
+      throw ex;
+    }
+#endif  // HAVE_CALCITE
+    TMapDException ex;
+    ex.error_msg = std::string("Exception: DDL or update DML are not unsupported by sql_execute_df");
+    LOG(ERROR) << ex.error_msg;
+    throw ex;
+  });
+  LOG(INFO) << "Total: " << total_time_ms << " (ms), Execution: " << execution_time_ms << " (ms)";
+#endif  // ENABLE_ARROW_CONVERTER
+}
+
 void MapDHandler::sql_execute_gpudf(TGpuDataFrame& _return,
                                     const TSessionId& session,
                                     const std::string& query_str,
@@ -1915,6 +1971,46 @@ void MapDHandler::execute_rel_alg(TQueryResult& _return,
 }
 
 #ifdef ENABLE_ARROW_CONVERTER
+void MapDHandler::execute_rel_alg_df(TGpuDataFrame& _return,
+                                     const std::string& query_ra,
+                                     const Catalog_Namespace::SessionInfo& session_info,
+                                     const int32_t first_n) const {
+  const auto& cat = session_info.get_catalog();
+  CHECK(session_info.get_executor_device_type() == ExecutorDeviceType::CPU);
+  CompilationOptions co = {ExecutorDeviceType::CPU, true, ExecutorOptLevel::Default, g_enable_dynamic_watchdog};
+  ExecutionOptions eo = {false,
+                         allow_multifrag_,
+                         false,
+                         allow_loop_joins_,
+                         g_enable_watchdog,
+                         jit_debug_,
+                         false,
+                         g_enable_dynamic_watchdog,
+                         g_dynamic_watchdog_time_limit};
+  auto executor = Executor::getExecutor(
+      cat.get_currentDB().dbId, jit_debug_ ? "/tmp" : "", jit_debug_ ? "mapdquery" : "", mapd_parameters_, nullptr);
+  RelAlgExecutor ra_executor(executor.get(), cat);
+  ExecutionResult result{ResultRows({}, {}, nullptr, nullptr, {}, ExecutorDeviceType::CPU), {}};
+  result = ra_executor.executeRelAlgQuery(query_ra, co, eo, nullptr);
+  if (auto rs = result.getRows().getResultSet()) {
+    std::shared_ptr<arrow::Buffer> schema_fbs;
+    std::vector<char> df_handle;
+    std::tie(schema_fbs, df_handle, _return.df_size) =
+        rs->getArrowCopy(data_mgr_.get(), getTargetNames(result.getTargetsMeta()));
+    if (schema_fbs) {
+      std::vector<char> raw_buffer(schema_fbs->size());
+      CHECK(schema_fbs->data());
+      memcpy(&raw_buffer[0], schema_fbs->data(), schema_fbs->size());
+      _return.schema = std::string(raw_buffer.begin(), raw_buffer.end());
+    } else {
+      _return.schema.clear();
+    }
+    _return.df_handle = std::string(df_handle.begin(), df_handle.end());
+  } else {
+    throw std::runtime_error("use-result-set might not be set");
+  }
+}
+
 void MapDHandler::execute_rel_alg_gpudf(TGpuDataFrame& _return,
                                         const std::string& query_ra,
                                         const Catalog_Namespace::SessionInfo& session_info,
@@ -1993,6 +2089,47 @@ void MapDHandler::execute_root_plan(TQueryResult& _return,
 }
 
 #ifdef ENABLE_ARROW_CONVERTER
+void MapDHandler::execute_root_plan_df(TGpuDataFrame& _return,
+                                       const Planner::RootPlan* root_plan,
+                                       const Catalog_Namespace::SessionInfo& session_info,
+                                       const int32_t first_n) const {
+  CHECK(session_info.get_executor_device_type() == ExecutorDeviceType::CPU);
+  auto executor = Executor::getExecutor(root_plan->get_catalog().get_currentDB().dbId,
+                                        jit_debug_ ? "/tmp" : "",
+                                        jit_debug_ ? "mapdquery" : "",
+                                        mapd_parameters_,
+                                        nullptr);
+  ResultRows results({}, {}, nullptr, nullptr, {}, ExecutorDeviceType::CPU);
+  results = executor->execute(root_plan,
+                              session_info,
+                              true,
+                              ExecutorDeviceType::CPU,
+                              ExecutorOptLevel::Default,
+                              allow_multifrag_,
+                              allow_loop_joins_);
+  CHECK(root_plan->get_plan_dest() != Planner::RootPlan::Dest::kEXPLAIN);
+  if (auto rs = results.getResultSet()) {
+    std::shared_ptr<arrow::Buffer> schema_fbs;
+    std::vector<char> df_handle;
+    const auto plan = root_plan->get_plan();
+    CHECK(plan);
+    const auto& targets = plan->get_targetlist();
+    std::tie(schema_fbs, df_handle, _return.df_size) =
+        rs->getArrowCopy(data_mgr_.get(), getTargetNames(targets));
+    if (schema_fbs) {
+      std::vector<char> raw_buffer(schema_fbs->size());
+      CHECK(schema_fbs->data());
+      memcpy(&raw_buffer[0], schema_fbs->data(), schema_fbs->size());
+      _return.schema = std::string(raw_buffer.begin(), raw_buffer.end());
+    } else {
+      _return.schema.clear();
+    }
+    _return.df_handle = std::string(df_handle.begin(), df_handle.end());
+  } else {
+    throw std::runtime_error("use-result-set might not be set");
+  }
+}
+
 void MapDHandler::execute_root_plan_gpudf(TGpuDataFrame& _return,
                                           const Planner::RootPlan* root_plan,
                                           const Catalog_Namespace::SessionInfo& session_info,

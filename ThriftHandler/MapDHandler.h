@@ -143,6 +143,10 @@ class MapDHandler : public MapDIf {
                    const bool column_format,
                    const std::string& nonce,
                    const int32_t first_n);
+  void sql_execute_df(TGpuDataFrame& _return,
+                      const TSessionId& session,
+                      const std::string& query,
+                      const int32_t first_n);
   void sql_execute_gpudf(TGpuDataFrame& _return,
                          const TSessionId& session,
                          const std::string& query,
@@ -308,6 +312,10 @@ class MapDHandler : public MapDIf {
                        const bool just_explain,
                        const bool just_validate) const;
 #ifdef ENABLE_ARROW_CONVERTER
+  void execute_rel_alg_df(TGpuDataFrame& _return,
+                          const std::string& query_ra,
+                          const Catalog_Namespace::SessionInfo& session_info,
+                          const int32_t first_n) const;
   void execute_rel_alg_gpudf(TGpuDataFrame& _return,
                              const std::string& query_ra,
                              const Catalog_Namespace::SessionInfo& session_info,
@@ -359,6 +367,10 @@ class MapDHandler : public MapDIf {
       const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& targets) const;
 
 #ifdef ENABLE_ARROW_CONVERTER
+  void execute_root_plan_df(TGpuDataFrame& _return,
+                            const Planner::RootPlan* root_plan,
+                            const Catalog_Namespace::SessionInfo& session_info,
+                            const int32_t first_n) const;
   void execute_root_plan_gpudf(TGpuDataFrame& _return,
                                const Planner::RootPlan* root_plan,
                                const Catalog_Namespace::SessionInfo& session_info,
