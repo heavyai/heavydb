@@ -56,6 +56,8 @@ class OrToInVisitor : public ScalarExprVisitor<std::shared_ptr<Analyzer::InValue
 
   std::shared_ptr<Analyzer::InValues> visitLikeExpr(const Analyzer::LikeExpr*) const override { return nullptr; }
 
+  std::shared_ptr<Analyzer::InValues> visitRegexpExpr(const Analyzer::RegexpExpr*) const override { return nullptr; }
+
   std::shared_ptr<Analyzer::InValues> visitCaseExpr(const Analyzer::CaseExpr*) const override { return nullptr; }
 
   std::shared_ptr<Analyzer::InValues> visitDatetruncExpr(const Analyzer::DatetruncExpr*) const override {
@@ -126,6 +128,13 @@ class DeepCopyVisitor : public ScalarExprVisitor<std::shared_ptr<Analyzer::Expr>
                                         escape_expr ? visit(escape_expr) : nullptr,
                                         like->get_is_ilike(),
                                         like->get_is_simple());
+  }
+
+  RetType visitRegexpExpr(const Analyzer::RegexpExpr* regexp) const override {
+    auto escape_expr = regexp->get_escape_expr();
+    return makeExpr<Analyzer::RegexpExpr>(visit(regexp->get_arg()),
+                                          visit(regexp->get_pattern_expr()),
+                                          escape_expr ? visit(escape_expr) : nullptr);
   }
 
   RetType visitCaseExpr(const Analyzer::CaseExpr* case_expr) const override {
