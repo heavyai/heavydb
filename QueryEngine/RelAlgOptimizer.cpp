@@ -1204,52 +1204,51 @@ void fold_filters(std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept {
   }
 }
 
-const RexScalar* find_hoistable_condition(const RexScalar* condition,
-                                          const RelAlgNode* source,
-                                          const size_t first_col_idx,
-                                          const size_t last_col_idx) {
+std::vector<const RexScalar*> find_hoistable_conditions(const RexScalar* condition,
+                                                        const RelAlgNode* source,
+                                                        const size_t first_col_idx,
+                                                        const size_t last_col_idx) {
   if (auto rex_op = dynamic_cast<const RexOperator*>(condition)) {
     switch (rex_op->getOperator()) {
       case kAND: {
-        auto lhs_cond = find_hoistable_condition(rex_op->getOperand(0), source, first_col_idx, last_col_idx);
-        auto rhs_cond = find_hoistable_condition(rex_op->getOperand(1), source, first_col_idx, last_col_idx);
-        if (lhs_cond) {
-          if (rhs_cond) {
-            return rex_op;
-          } else {
-            return lhs_cond;
+        std::vector<const RexScalar*> subconditions;
+        size_t complete_subcond_count = 0;
+        for (size_t i = 0; i < rex_op->size(); ++i) {
+          auto conds = find_hoistable_conditions(rex_op->getOperand(i), source, first_col_idx, last_col_idx);
+          if (conds.size() == size_t(1)) {
+            ++complete_subcond_count;
           }
+          subconditions.insert(subconditions.end(), conds.begin(), conds.end());
+        }
+        if (complete_subcond_count == rex_op->size()) {
+          return {rex_op};
         } else {
-          if (rhs_cond) {
-            return rhs_cond;
-          } else {
-            return nullptr;
-          }
+          return {subconditions};
         }
       } break;
       case kEQ: {
-        auto lhs_in = dynamic_cast<const RexInput*>(
-            find_hoistable_condition(rex_op->getOperand(0), source, first_col_idx, last_col_idx));
-        auto rhs_in = dynamic_cast<const RexInput*>(
-            find_hoistable_condition(rex_op->getOperand(1), source, first_col_idx, last_col_idx));
+        const auto lhs_conds = find_hoistable_conditions(rex_op->getOperand(0), source, first_col_idx, last_col_idx);
+        const auto rhs_conds = find_hoistable_conditions(rex_op->getOperand(1), source, first_col_idx, last_col_idx);
+        const auto lhs_in = lhs_conds.size() == 1 ? dynamic_cast<const RexInput*>(*lhs_conds.begin()) : nullptr;
+        const auto rhs_in = rhs_conds.size() == 1 ? dynamic_cast<const RexInput*>(*rhs_conds.begin()) : nullptr;
         if (lhs_in && rhs_in) {
-          return rex_op;
+          return {rex_op};
         }
-        return nullptr;
+        return {};
       } break;
       default:
         break;
     }
-    return nullptr;
+    return {};
   }
   if (auto rex_in = dynamic_cast<const RexInput*>(condition)) {
     if (rex_in->getSourceNode() == source) {
       const auto col_idx = rex_in->getIndex();
-      return (col_idx >= first_col_idx && col_idx <= last_col_idx ? condition : nullptr);
+      return {col_idx >= first_col_idx && col_idx <= last_col_idx ? condition : nullptr};
     }
-    return nullptr;
+    return {};
   }
-  return nullptr;
+  return {};
 }
 
 class JoinTargetRebaser : public RexDeepCopyVisitor {
@@ -1277,9 +1276,10 @@ class JoinTargetRebaser : public RexDeepCopyVisitor {
 
 class SubConditionRemover : public RexDeepCopyVisitor {
  public:
-  SubConditionRemover(const RexScalar* condition) : condition_(condition) {}
+  SubConditionRemover(const std::vector<const RexScalar*> sub_conds)
+      : sub_conditions_(sub_conds.begin(), sub_conds.end()) {}
   RetType visitOperator(const RexOperator* rex_operator) const override {
-    if (rex_operator == condition_) {
+    if (sub_conditions_.count(rex_operator)) {
       return boost::make_unique<RexLiteral>(
           true, kBOOLEAN, kBOOLEAN, unsigned(-2147483648), 1, unsigned(-2147483648), 1);
     }
@@ -1287,7 +1287,7 @@ class SubConditionRemover : public RexDeepCopyVisitor {
   }
 
  private:
-  const RexScalar* condition_;
+  std::unordered_set<const RexScalar*> sub_conditions_;
 };
 
 void hoist_filter_cond_to_cross_join(std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept {
@@ -1339,19 +1339,37 @@ void hoist_filter_cond_to_cross_join(std::vector<std::shared_ptr<RelAlgNode>>& n
         const auto src1_base = src_join->getInput(0)->size();
         auto source = first_col_idx < src1_base ? src_join->getInput(0) : src_join->getInput(1);
         first_col_idx = first_col_idx < src1_base ? first_col_idx : first_col_idx - src1_base;
-        if (auto join_condition = find_hoistable_condition(
-                filter->getCondition(), source, first_col_idx, first_col_idx + join->size() - 1)) {
-          JoinTargetRebaser rebaser(join, first_col_idx);
-          auto new_join_condition = rebaser.visit(join_condition);
-          join->setCondition(new_join_condition);
-          auto filter_it = deconst_mapping.find(filter);
-          CHECK(filter_it != deconst_mapping.end());
-          auto modified_filter = dynamic_cast<RelFilter*>(filter_it->second);
-          CHECK(modified_filter);
-          SubConditionRemover remover(join_condition);
-          auto new_filter_condition = remover.visit(filter->getCondition());
-          modified_filter->setCondition(new_filter_condition);
+        auto join_conditions =
+            find_hoistable_conditions(filter->getCondition(), source, first_col_idx, first_col_idx + join->size() - 1);
+        if (join_conditions.empty()) {
+          continue;
         }
+
+        JoinTargetRebaser rebaser(join, first_col_idx);
+        if (join_conditions.size() == 1) {
+          auto new_join_condition = rebaser.visit(*join_conditions.begin());
+          join->setCondition(new_join_condition);
+        } else {
+          std::vector<std::unique_ptr<const RexScalar>> operands;
+          bool notnull = true;
+          for (size_t i = 0; i < join_conditions.size(); ++i) {
+            operands.emplace_back(rebaser.visit(join_conditions[i]));
+            auto old_subcond = dynamic_cast<const RexOperator*>(join_conditions[i]);
+            CHECK(old_subcond && old_subcond->getType().get_type() == kBOOLEAN);
+            notnull = notnull && old_subcond->getType().get_notnull();
+          }
+          auto new_join_condition =
+              std::unique_ptr<const RexScalar>(new RexOperator(kAND, operands, SQLTypeInfo(kBOOLEAN, notnull)));
+          join->setCondition(new_join_condition);
+        }
+
+        auto filter_it = deconst_mapping.find(filter);
+        CHECK(filter_it != deconst_mapping.end());
+        auto modified_filter = dynamic_cast<RelFilter*>(filter_it->second);
+        CHECK(modified_filter);
+        SubConditionRemover remover(join_conditions);
+        auto new_filter_condition = remover.visit(filter->getCondition());
+        modified_filter->setCondition(new_filter_condition);
       }
     }
   }
