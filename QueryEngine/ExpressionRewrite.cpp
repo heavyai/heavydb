@@ -718,6 +718,55 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
       }
     }
 
+    if (optype == kAND && lhs_type == rhs_type && lhs_type == kBOOLEAN) {
+      if (const_rhs) {
+        auto rhs_datum = const_rhs->get_constval();
+        if (rhs_datum.boolval == false) {
+          Datum d;
+          d.boolval = false;
+          // lhs && false --> false
+          return makeExpr<Analyzer::Constant>(kBOOLEAN, false, d);
+        }
+        // lhs && true --> lhs
+        return lhs;
+      }
+      if (const_lhs) {
+        auto lhs_datum = const_lhs->get_constval();
+        if (lhs_datum.boolval == false) {
+          Datum d;
+          d.boolval = false;
+          // false && rhs --> false
+          return makeExpr<Analyzer::Constant>(kBOOLEAN, false, d);
+        }
+        // true && rhs --> rhs
+        return rhs;
+      }
+    }
+    if (optype == kOR && lhs_type == rhs_type && lhs_type == kBOOLEAN) {
+      if (const_rhs) {
+        auto rhs_datum = const_rhs->get_constval();
+        if (rhs_datum.boolval == true) {
+          Datum d;
+          d.boolval = true;
+          // lhs || true --> true
+          return makeExpr<Analyzer::Constant>(kBOOLEAN, false, d);
+        }
+        // lhs || false --> lhs
+        return lhs;
+      }
+      if (const_lhs) {
+        auto lhs_datum = const_lhs->get_constval();
+        if (lhs_datum.boolval == true) {
+          Datum d;
+          d.boolval = true;
+          // true || rhs --> true
+          return makeExpr<Analyzer::Constant>(kBOOLEAN, false, d);
+        }
+        // false || rhs --> rhs
+        return rhs;
+      }
+    }
+
     return makeExpr<Analyzer::BinOper>(bin_oper->get_type_info(),
                                        bin_oper->get_contains_agg(),
                                        bin_oper->get_optype(),

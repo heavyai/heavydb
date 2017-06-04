@@ -407,6 +407,12 @@ TEST(Select, FilterAndSimpleAggregation) {
     c("SELECT COUNT(*) FROM test WHERE x + 3*8/2 < 35 + y - 20/5;", dt);
     c("SELECT x + 2 * 10/4 + 3 FROM test WHERE x + 3*8/2 < 35 + y - 20/5;", dt);
     c("SELECT COUNT(*) FROM test WHERE ff + 3.0*8 < 20.0/5;", dt);
+    c("SELECT COUNT(*) FROM test WHERE x < y AND 0=1;", dt);
+    c("SELECT COUNT(*) FROM test WHERE x < y AND 1=1;", dt);
+    c("SELECT COUNT(*) FROM test WHERE x < y OR 1<1;", dt);
+    c("SELECT COUNT(*) FROM test WHERE x < y OR 1=1;", dt);
+    c("SELECT COUNT(*) FROM test WHERE x < 35 AND x < y AND 1=1 AND 0=1;", dt);
+    c("SELECT COUNT(*) FROM test WHERE 1>2 AND x < 35 AND x < y AND y < 10;", dt);
     c("SELECT COUNT(*) FROM test WHERE ofq >= 0 OR ofq IS NULL;", dt);
     c("SELECT COUNT(*) AS val FROM test WHERE (test.dd = 0.5 OR test.dd = 3);", dt);
     c("SELECT MAX(dd_notnull * 1) FROM test;", dt);
