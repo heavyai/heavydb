@@ -256,7 +256,11 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
     const auto& operand_ti = operand->get_type_info();
     const auto operand_type = operand_ti.is_decimal() ? decimal_to_int_type(operand_ti) : operand_ti.get_type();
     const auto const_operand = std::dynamic_pointer_cast<const Analyzer::Constant>(operand);
-    if (const_operand) {
+    bool notnull = true;
+    if (const_operand && !operand_ti.get_notnull() && isNull(const_operand.get()))
+      notnull = false;
+
+    if (const_operand && notnull) {
       switch (optype) {
         case kNOT: {
           if (operand_ti.is_boolean()) {
@@ -334,7 +338,13 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
     const auto const_lhs = std::dynamic_pointer_cast<const Analyzer::Constant>(lhs);
     const auto const_rhs = std::dynamic_pointer_cast<const Analyzer::Constant>(rhs);
 
-    if (const_lhs && const_rhs && lhs_type == rhs_type) {
+    bool notnull = true;
+    if (const_lhs && !lhs_ti.get_notnull() && isNull(const_lhs.get()))
+      notnull = false;
+    else if (const_rhs && !rhs_ti.get_notnull() && isNull(const_rhs.get()))
+      notnull = false;
+
+    if (const_lhs && const_rhs && lhs_type == rhs_type && notnull) {
       auto lhs_datum = const_lhs->get_constval();
       auto rhs_datum = const_rhs->get_constval();
       switch (optype) {
@@ -718,7 +728,7 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
       }
     }
 
-    if (optype == kAND && lhs_type == rhs_type && lhs_type == kBOOLEAN) {
+    if (optype == kAND && lhs_type == rhs_type && lhs_type == kBOOLEAN && notnull) {
       if (const_rhs) {
         auto rhs_datum = const_rhs->get_constval();
         if (rhs_datum.boolval == false) {
@@ -742,7 +752,7 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
         return rhs;
       }
     }
-    if (optype == kOR && lhs_type == rhs_type && lhs_type == kBOOLEAN) {
+    if (optype == kOR && lhs_type == rhs_type && lhs_type == kBOOLEAN && notnull) {
       if (const_rhs) {
         auto rhs_datum = const_rhs->get_constval();
         if (rhs_datum.boolval == true) {
@@ -773,6 +783,22 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
                                        bin_oper->get_qualifier(),
                                        lhs,
                                        rhs);
+  }
+
+private:
+  bool isNull(const Analyzer::Constant* c) const {
+    const auto& ti = c->get_type_info();
+    const auto type = ti.is_decimal() ? decimal_to_int_type(ti) : ti.get_type();
+    auto datum = c->get_constval();
+    switch (type) {
+      case kSMALLINT: return (datum.smallintval == NULL_SMALLINT);
+      case kINT:      return (datum.intval == NULL_INT);
+      case kBIGINT:   return (datum.bigintval == NULL_BIGINT);
+      case kFLOAT:    return (datum.floatval == NULL_FLOAT);
+      case kDOUBLE:   return (datum.doubleval == NULL_DOUBLE);
+      default: break;
+    }
+    return false;
   }
 };
 
