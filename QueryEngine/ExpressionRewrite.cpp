@@ -50,6 +50,10 @@ class OrToInVisitor : public ScalarExprVisitor<std::shared_ptr<Analyzer::InValue
 
   std::shared_ptr<Analyzer::InValues> visitInValues(const Analyzer::InValues*) const override { return nullptr; }
 
+  std::shared_ptr<Analyzer::InValues> visitInIntegerSet(const Analyzer::InIntegerSet*) const override {
+    return nullptr;
+  }
+
   std::shared_ptr<Analyzer::InValues> visitCharLength(const Analyzer::CharLengthExpr*) const override {
     return nullptr;
   }
@@ -69,6 +73,10 @@ class OrToInVisitor : public ScalarExprVisitor<std::shared_ptr<Analyzer::InValue
   }
 
   std::shared_ptr<Analyzer::InValues> visitExtractExpr(const Analyzer::ExtractExpr*) const override { return nullptr; }
+
+  std::shared_ptr<Analyzer::InValues> visitLikelihood(const Analyzer::LikelihoodExpr*) const override {
+    return nullptr;
+  }
 
   std::shared_ptr<Analyzer::InValues> visitAggExpr(const Analyzer::AggExpr*) const override { return nullptr; }
 
@@ -119,6 +127,12 @@ class DeepCopyVisitor : public ScalarExprVisitor<std::shared_ptr<Analyzer::Expr>
       new_list.push_back(visit(in_value.get()));
     }
     return makeExpr<Analyzer::InValues>(visit(in_values->get_arg()), new_list);
+  }
+
+  RetType visitInIntegerSet(const Analyzer::InIntegerSet* in_integer_set) const override {
+    return makeExpr<Analyzer::InIntegerSet>(visit(in_integer_set->get_arg()),
+                                            in_integer_set->get_value_list(),
+                                            in_integer_set->get_type_info().get_notnull());
   }
 
   RetType visitCharLength(const Analyzer::CharLengthExpr* char_length) const override {
@@ -189,6 +203,10 @@ class DeepCopyVisitor : public ScalarExprVisitor<std::shared_ptr<Analyzer::Expr>
     }
     const auto& type_info = func_oper->get_type_info();
     return makeExpr<Analyzer::FunctionOperWithCustomTypeHandling>(type_info, func_oper->getName(), args_copy);
+  }
+
+  RetType visitLikelihood(const Analyzer::LikelihoodExpr* likelihood) const override {
+    return makeExpr<Analyzer::LikelihoodExpr>(visit(likelihood->get_arg()), likelihood->get_likelihood());
   }
 
   RetType visitAggExpr(const Analyzer::AggExpr* agg) const override {
