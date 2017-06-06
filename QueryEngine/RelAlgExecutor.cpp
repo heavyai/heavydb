@@ -849,9 +849,8 @@ std::vector<std::shared_ptr<Analyzer::Expr>> translate_scalar_sources(const RA* 
       continue;
     }
     const auto scalar_expr = translator.translateScalarRex(scalar_rex);
-    scalar_sources.push_back(scalar_expr);
-    // const auto folded_scalar_expr = fold_expr(scalar_expr.get());
-    // scalar_sources.push_back(folded_scalar_expr);
+    const auto folded_scalar_expr = fold_expr(scalar_expr.get());
+    scalar_sources.push_back(folded_scalar_expr);
   }
   return scalar_sources;
 }
@@ -2042,7 +2041,8 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createFilterWorkUnit(const RelFilter* f
   RelAlgTranslator translator(cat_, executor_, input_to_nest_level, join_type, now_, just_explain);
   std::tie(in_metainfo, target_exprs_owned) =
       get_inputs_meta(filter, translator, used_inputs_owned, input_to_nest_level);
-  const auto qual = translator.translateScalarRex(filter->getCondition());
+  const auto filter_expr = translator.translateScalarRex(filter->getCondition());
+  const auto qual = fold_expr(filter_expr.get());
   std::list<std::shared_ptr<Analyzer::Expr>> quals{qual};
   const auto separated_quals = separate_join_quals(quals);
   target_exprs_owned_.insert(target_exprs_owned_.end(), target_exprs_owned.begin(), target_exprs_owned.end());
