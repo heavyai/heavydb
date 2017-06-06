@@ -150,9 +150,8 @@ class DeepCopyVisitor : public ScalarExprVisitor<std::shared_ptr<Analyzer::Expr>
 
   RetType visitRegexpExpr(const Analyzer::RegexpExpr* regexp) const override {
     auto escape_expr = regexp->get_escape_expr();
-    return makeExpr<Analyzer::RegexpExpr>(visit(regexp->get_arg()),
-                                          visit(regexp->get_pattern_expr()),
-                                          escape_expr ? visit(escape_expr) : nullptr);
+    return makeExpr<Analyzer::RegexpExpr>(
+        visit(regexp->get_arg()), visit(regexp->get_pattern_expr()), escape_expr ? visit(escape_expr) : nullptr);
   }
 
   RetType visitCaseExpr(const Analyzer::CaseExpr* case_expr) const override {
