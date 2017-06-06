@@ -64,6 +64,10 @@ class OrToInVisitor : public ScalarExprVisitor<std::shared_ptr<Analyzer::InValue
     return nullptr;
   }
 
+  std::shared_ptr<Analyzer::InValues> visitDatediffExpr(const Analyzer::DatediffExpr*) const override {
+    return nullptr;
+  }
+
   std::shared_ptr<Analyzer::InValues> visitExtractExpr(const Analyzer::ExtractExpr*) const override { return nullptr; }
 
   std::shared_ptr<Analyzer::InValues> visitAggExpr(const Analyzer::AggExpr*) const override { return nullptr; }
@@ -168,6 +172,13 @@ class DeepCopyVisitor : public ScalarExprVisitor<std::shared_ptr<Analyzer::Expr>
     }
     const auto& type_info = func_oper->get_type_info();
     return makeExpr<Analyzer::FunctionOper>(type_info, func_oper->getName(), args_copy);
+  }
+
+  RetType visitDatediffExpr(const Analyzer::DatediffExpr* datediff) const override {
+    return makeExpr<Analyzer::DatediffExpr>(datediff->get_type_info(),
+                                            datediff->get_field(),
+                                            visit(datediff->get_start_expr()),
+                                            visit(datediff->get_end_expr()));
   }
 
   RetType visitFunctionOperWithCustomTypeHandling(
