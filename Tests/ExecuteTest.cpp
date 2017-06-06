@@ -91,7 +91,7 @@ bool approx_eq(const double v, const double target, const double eps = 0.01) {
 
 class SQLiteComparator {
  public:
-  SQLiteComparator() : connector_("main", "") {}
+  SQLiteComparator() : connector_("sqliteTestDB", "") {}
 
   void query(const std::string& query_string) { connector_.query(query_string); }
 
@@ -3089,7 +3089,7 @@ int create_views() {
     g_sqlite_comparator.query(drop_old_view);
     g_sqlite_comparator.query(create_view_test);
   } catch (...) {
-    LOG(ERROR) << "Failed to (re-)create view 'view_test'";
+    LOG(ERROR) << "Failed to (re-)create view 'view_test' -- g_sqlite_comparator";
     return -EEXIST;
   }
   return 0;
