@@ -2119,6 +2119,7 @@ Executor::JoinInfo Executor::chooseJoinType(const std::list<std::shared_ptr<Anal
                                                                         : MemoryLevel::CPU_LEVEL};
 
   std::set<int> rte_idx_set;
+  std::unordered_set<std::pair<int, int>> rte_pair_set;
   std::vector<std::shared_ptr<Analyzer::BinOper>> bin_ops;
   std::vector<std::shared_ptr<JoinHashTable>> join_hash_tables;
   for (auto qual : join_quals) {
@@ -2138,7 +2139,19 @@ Executor::JoinInfo Executor::chooseJoinType(const std::list<std::shared_ptr<Anal
         const auto join_hash_table = JoinHashTable::getInstance(
             qual_bin_oper, *catalog_, query_infos, ra_exe_unit.input_col_descs, memory_level, device_count, this);
         CHECK(join_hash_table);
-        qual_bin_oper->collect_rte_idx(rte_idx_set);
+        std::set<int> curr_rte_idx_set;
+        qual_bin_oper->collect_rte_idx(curr_rte_idx_set);
+        CHECK_EQ(curr_rte_idx_set.size(), size_t(2));
+        rte_idx_set.insert(curr_rte_idx_set.begin(), curr_rte_idx_set.end());
+        std::pair<int, int> rte_pair{*curr_rte_idx_set.begin(), *std::next(curr_rte_idx_set.begin())};
+        if (rte_pair.first > rte_pair.second) {
+          std::swap(rte_pair.first, rte_pair.second);
+        }
+        // already handled the table pair
+        if (rte_pair_set.count(rte_pair)) {
+          continue;
+        }
+        rte_pair_set.insert(rte_pair);
         bin_ops.push_back(qual_bin_oper);
         join_hash_tables.push_back(join_hash_table);
       } catch (const HashJoinFail& e) {
