@@ -623,13 +623,16 @@ extern "C" __device__ void agg_count_distinct_bitmap_gpu(int64_t* agg,
                                                          const int64_t val,
                                                          const int64_t min_val,
                                                          const int64_t base_dev_addr,
-                                                         const int64_t base_host_addr) {
+                                                         const int64_t base_host_addr,
+                                                         const uint64_t sub_bitmap_count,
+                                                         const uint64_t bitmap_bytes) {
   const uint64_t bitmap_idx = val - min_val;
   const uint32_t byte_idx = bitmap_idx >> 3;
   const uint32_t word_idx = byte_idx >> 2;
   const uint32_t byte_word_idx = byte_idx & 3;
   const int64_t host_addr = *agg;
-  uint32_t* bitmap = (uint32_t*)(base_dev_addr + host_addr - base_host_addr);
+  uint32_t* bitmap =
+      (uint32_t*)(base_dev_addr + host_addr - base_host_addr + (threadIdx.x & (sub_bitmap_count - 1)) * bitmap_bytes);
   switch (byte_word_idx) {
     case 0:
       atomicOr(&bitmap[word_idx], 1 << (bitmap_idx & 7));
@@ -653,9 +656,11 @@ extern "C" __device__ void agg_count_distinct_bitmap_skip_val_gpu(int64_t* agg,
                                                                   const int64_t min_val,
                                                                   const int64_t skip_val,
                                                                   const int64_t base_dev_addr,
-                                                                  const int64_t base_host_addr) {
+                                                                  const int64_t base_host_addr,
+                                                                  const uint64_t sub_bitmap_count,
+                                                                  const uint64_t bitmap_bytes) {
   if (val != skip_val) {
-    agg_count_distinct_bitmap_gpu(agg, val, min_val, base_dev_addr, base_host_addr);
+    agg_count_distinct_bitmap_gpu(agg, val, min_val, base_dev_addr, base_host_addr, sub_bitmap_count, bitmap_bytes);
   }
 }
 

@@ -697,6 +697,7 @@ TEST(Select, CountDistinct) {
     c("SELECT z, str, AVG(z), COUNT(distinct z) FROM test GROUP BY z, str;", dt);
     c("SELECT AVG(z), COUNT(distinct x) AS dx FROM test GROUP BY y HAVING dx > 1;", dt);
     c("SELECT z, str, COUNT(distinct f) FROM test GROUP BY z, str ORDER BY str DESC;", dt);
+    c("SELECT COUNT(distinct x * (50000 - 1)) FROM test;", dt);
     EXPECT_THROW(run_multiple_agg("SELECT COUNT(distinct real_str) FROM test;", dt), std::runtime_error);
   }
 }

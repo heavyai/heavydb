@@ -2162,7 +2162,7 @@ CountDistinctDescriptors GroupByAndAggregate::initCountDistinctDescriptors() {
           !arg_ti.is_array()) {  // TODO(alex): allow bitmap implementation for arrays
         if (arg_range_info.isEmpty()) {
           count_distinct_descriptors.emplace_back(CountDistinctDescriptor{
-              CountDistinctImplType::Bitmap, 0, 64, agg_info.agg_kind == kAPPROX_COUNT_DISTINCT, device_type_});
+              CountDistinctImplType::Bitmap, 0, 64, agg_info.agg_kind == kAPPROX_COUNT_DISTINCT, device_type_, 1});
           continue;
         }
         count_distinct_impl_type = CountDistinctImplType::Bitmap;
@@ -2181,14 +2181,16 @@ CountDistinctDescriptors GroupByAndAggregate::initCountDistinctDescriptors() {
       if (g_enable_watchdog && count_distinct_impl_type == CountDistinctImplType::StdSet) {
         throw WatchdogException("Cannot use a fast path for COUNT distinct");
       }
+      const auto sub_bitmap_count = get_count_distinct_sub_bitmap_count(bitmap_sz_bits, ra_exe_unit_, device_type_);
       count_distinct_descriptors.emplace_back(CountDistinctDescriptor{count_distinct_impl_type,
                                                                       arg_range_info.min,
                                                                       bitmap_sz_bits,
                                                                       agg_info.agg_kind == kAPPROX_COUNT_DISTINCT,
-                                                                      device_type_});
+                                                                      device_type_,
+                                                                      sub_bitmap_count});
     } else {
       count_distinct_descriptors.emplace_back(
-          CountDistinctDescriptor{CountDistinctImplType::Invalid, 0, 0, false, device_type_});
+          CountDistinctDescriptor{CountDistinctImplType::Invalid, 0, 0, false, device_type_, 0});
     }
   }
   return count_distinct_descriptors;
@@ -3257,6 +3259,10 @@ void GroupByAndAggregate::codegenCountDistinct(const size_t target_idx,
     const auto base_host_addr = getAdditionalLiteral(-2);
     agg_args.push_back(base_dev_addr);
     agg_args.push_back(base_host_addr);
+    agg_args.push_back(LL_INT(int64_t(count_distinct_descriptor.sub_bitmap_count)));
+    CHECK_EQ(size_t(0), count_distinct_descriptor.bitmapPaddedSizeBytes() % count_distinct_descriptor.sub_bitmap_count);
+    agg_args.push_back(LL_INT(
+        int64_t(count_distinct_descriptor.bitmapPaddedSizeBytes() / count_distinct_descriptor.sub_bitmap_count)));
   }
   emitCall(agg_fname, agg_args);
 }

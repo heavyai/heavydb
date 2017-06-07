@@ -479,6 +479,19 @@ inline int64_t extract_max_stat(const ChunkStats& stats, const SQLTypeInfo& ti) 
   return extract_from_datum(stats.max, ti);
 }
 
+inline size_t get_count_distinct_sub_bitmap_count(const size_t bitmap_sz_bits,
+                                                  const RelAlgExecutionUnit& ra_exe_unit,
+                                                  const ExecutorDeviceType device_type) {
+  // For count distinct on a column with a very small number of distinct values
+  // contention can be very high, especially for non-grouped queries. We'll split
+  // the bitmap into multiple sub-bitmaps which are unified to get the full result.
+  // The threshold value for bitmap_sz_bits works well on Kepler.
+  return bitmap_sz_bits < 50000 && ra_exe_unit.groupby_exprs.empty() &&
+                 (device_type == ExecutorDeviceType::GPU || g_cluster)
+             ? 64  // NB: must be a power of 2 to keep runtime offset computations cheap
+             : 1;
+}
+
 template <class T>
 inline std::vector<int8_t> get_col_byte_widths(const T& col_expr_list,
                                                const std::vector<ssize_t>& target_group_by_indices) {

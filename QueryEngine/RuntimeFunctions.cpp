@@ -278,7 +278,9 @@ extern "C" NEVER_INLINE void agg_count_distinct_bitmap_gpu(int64_t*,
                                                            const int64_t,
                                                            const int64_t,
                                                            const int64_t,
-                                                           const int64_t) {
+                                                           const int64_t,
+                                                           const uint64_t,
+                                                           const uint64_t) {
   abort();
 }
 
@@ -356,7 +358,9 @@ extern "C" NEVER_INLINE void agg_count_distinct_bitmap_skip_val_gpu(int64_t*,
                                                                     const int64_t,
                                                                     const int64_t,
                                                                     const int64_t,
-                                                                    const int64_t) {
+                                                                    const int64_t,
+                                                                    const uint64_t,
+                                                                    const uint64_t) {
   abort();
 }
 
