@@ -3255,15 +3255,10 @@ void GroupByAndAggregate::codegenCountDistinct(const size_t target_idx,
     agg_fname += "_gpu";
     const auto base_dev_addr = getAdditionalLiteral(-1);
     const auto base_host_addr = getAdditionalLiteral(-2);
-    ;
     agg_args.push_back(base_dev_addr);
     agg_args.push_back(base_host_addr);
   }
-  if (count_distinct_descriptor.impl_type_ == CountDistinctImplType::Bitmap) {
-    emitCall(agg_fname, agg_args);
-  } else {
-    emitCall(agg_fname, agg_args);
-  }
+  emitCall(agg_fname, agg_args);
 }
 
 llvm::Value* GroupByAndAggregate::getAdditionalLiteral(const int32_t off) {
