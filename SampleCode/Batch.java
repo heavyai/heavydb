@@ -45,7 +45,7 @@ public static void main(String[] args) {
     //finally block used to close resources
     try {
       if (pstmt != null) {
-        stmt.close();
+        pstmt.close();
       }
     } catch (SQLException se2) {
     }// nothing we can do

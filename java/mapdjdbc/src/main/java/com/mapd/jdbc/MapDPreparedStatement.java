@@ -73,7 +73,7 @@ class MapDPreparedStatement implements PreparedStatement {
   private boolean isParmString[] = null;
   private List<TStringRow> rows = null;
   private String warnings = null;
-  private static final Pattern REGEX_PATTERN = Pattern.compile(" INTO (\\w+)");
+  private static final Pattern REGEX_PATTERN = Pattern.compile("(?i) INTO (\\w+)");
 
   MapDPreparedStatement(String sql, String session, MapD.Client client) {
     currentSQL = sql;
