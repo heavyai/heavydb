@@ -926,13 +926,8 @@ const RexOperator* get_equijoin_condition(const RelJoin* join) {
 std::vector<const RelJoin*> collect_coalescable_joins(
     const RelJoin* head,
     const std::unordered_map<const RelAlgNode*, std::unordered_set<const RelAlgNode*>>& du_web,
-    std::vector<const RexOperator*>& condition_set) {
+    std::vector<const RexScalar*>& condition_set) {
   CHECK(head);
-  // TODO(miyu): relax this limitation
-  if (!dynamic_cast<const RelScan*>(head->getInput(0)) || !dynamic_cast<const RelScan*>(head->getInput(1))) {
-    return {};
-  }
-
   auto first_condition = get_equijoin_condition(head);
   if (!first_condition) {
     return {};
@@ -957,6 +952,9 @@ std::vector<const RelJoin*> collect_coalescable_joins(
       }
       auto equal_condition = get_equijoin_condition(usr_join);
       if (!equal_condition) {
+        // Allow a loop join in the end of sequence for now
+        join_seq.push_back(usr_join);
+        condition_set.push_back(usr_join->getCondition());
         break;
       }
       auto left_operand = dynamic_cast<const RexInput*>(equal_condition->getOperand(0));
@@ -982,7 +980,6 @@ std::vector<const RelJoin*> collect_coalescable_joins(
   if (join_seq.empty()) {
     condition_set.clear();
   } else {
-    // TODO(miyu): relax this limitation when mult-column hash join is supported.
     auto usrs_it = du_web.find(join_seq.back());
     CHECK(usrs_it != du_web.end());
     for (auto usr : usrs_it->second) {
@@ -1131,7 +1128,7 @@ std::unordered_map<const RelAlgNode*, size_t> get_node_to_col_base(const RelMult
 }
 
 void replace_equijoin_keys(const std::shared_ptr<RelMultiJoin> multi_join,
-                           const std::vector<const RexOperator*>& condition_set,
+                           const std::vector<const RexScalar*>& condition_set,
                            const std::unordered_map<const RelAlgNode*, std::unordered_set<const RelAlgNode*>> du_web,
                            const std::unordered_map<const RelAlgNode*, std::shared_ptr<RelAlgNode>>& deconst_mapping) {
   CHECK_LE(size_t(2), multi_join->joinCount());
@@ -1146,14 +1143,16 @@ void replace_equijoin_keys(const std::shared_ptr<RelMultiJoin> multi_join,
   std::unordered_map<size_t, size_t> rhs_old_to_new_idx;
   std::unordered_map<size_t, size_t> old_to_new_flattened_idx;
   for (size_t i = 0; i < condition_set.size(); ++i) {
+    auto rex_operator = dynamic_cast<const RexOperator*>(condition_set[i]);
+    if (!rex_operator || rex_operator->getOperator() != kEQ) {
+      continue;
+    }
     auto lhs_table = multi_join->getJoinAt(i)->getInput(0);
     auto rhs_table = multi_join->getJoinAt(i)->getInput(1);
     CHECK(node_to_col_base.count(lhs_table));
     CHECK(node_to_col_base.count(rhs_table));
     const auto lhs_col_base = node_to_col_base[lhs_table];
     const auto rhs_col_base = node_to_col_base[rhs_table];
-    auto rex_operator = condition_set[i];
-    CHECK(rex_operator->getOperator() == kEQ);
     auto lhs = dynamic_cast<const RexInput*>(rex_operator->getOperand(0));
     auto rhs = dynamic_cast<const RexInput*>(rex_operator->getOperand(1));
     CHECK(lhs && rhs);
@@ -1235,7 +1234,7 @@ void coalesce_joins(std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
     }
     visited.insert(node.get());
     if (auto join = std::dynamic_pointer_cast<RelJoin>(node)) {
-      std::vector<const RexOperator*> condition_set;
+      std::vector<const RexScalar*> condition_set;
       auto sequence = collect_coalescable_joins(join.get(), web, condition_set);
       if (sequence.size() < 2) {
         new_nodes.push_back(node);

@@ -556,7 +556,8 @@ void JoinHashTable::putHashTableOnCpuToCache(
 }
 
 llvm::Value* JoinHashTable::codegenSlot(const CompilationOptions& co, const size_t index) {
-  CHECK(executor_->plan_state_->join_info_.join_impl_type_ == Executor::JoinImplType::HashOneToOne);
+  CHECK(executor_->plan_state_->join_info_.join_impl_type_ == Executor::JoinImplType::HashOneToOne ||
+        executor_->plan_state_->join_info_.join_impl_type_ == Executor::JoinImplType::HashPlusLoop);
   const auto cols = get_cols(qual_bin_oper_, cat_, executor_->temporary_tables_);
   auto key_col = cols.second;
   CHECK(key_col);

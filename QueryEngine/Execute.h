@@ -573,7 +573,7 @@ class Executor {
     return dt == ExecutorDeviceType::GPU && catalog_->get_dataMgr().cudaMgr_->isArchPascal();
   }
 
-  enum class JoinImplType { Invalid, Loop, HashOneToOne };
+  enum class JoinImplType { Invalid, Loop, HashOneToOne, HashPlusLoop };
 
   struct JoinInfo {
     JoinInfo(const JoinImplType join_impl_type,
@@ -911,6 +911,10 @@ class Executor {
                                     const bool has_cardinality_estimation);
 
   void createErrorCheckControlFlow(llvm::Function* query_func, bool run_with_dynamic_watchdog);
+
+  const std::vector<Analyzer::Expr*> codegenHashJoinsBeforeLoopJoin(const std::vector<Analyzer::Expr*>& primary_quals,
+                                                                    const RelAlgExecutionUnit& ra_exe_unit,
+                                                                    const CompilationOptions& co);
 
   void codegenInnerScanNextRow();
 

@@ -1052,10 +1052,20 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
   cgen_state_->ir_builder_.SetInsertPoint(bb);
   preloadFragOffsets(ra_exe_unit.input_descs, query_infos);
 
-  allocateInnerScansIterators(ra_exe_unit.input_descs);
-
   // generate the code for the filter
   allocateLocalColumnIds(ra_exe_unit.input_col_descs);
+
+  std::vector<Analyzer::Expr*> primary_quals;
+  std::vector<Analyzer::Expr*> deferred_quals;
+  bool short_circuited = prioritizeQuals(ra_exe_unit, primary_quals, deferred_quals);
+  if (short_circuited) {
+    VLOG(1) << "Prioritized " << std::to_string(primary_quals.size()) << " quals, "
+            << "short-circuited and deferred " << std::to_string(deferred_quals.size()) << " quals";
+  }
+
+  primary_quals = codegenHashJoinsBeforeLoopJoin(primary_quals, ra_exe_unit, co);
+
+  allocateInnerScansIterators(ra_exe_unit.input_descs);
 
   if (isOuterJoin()) {
     cgen_state_->outer_join_cond_lv_ =
@@ -1064,14 +1074,6 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
       cgen_state_->outer_join_cond_lv_ = cgen_state_->ir_builder_.CreateAnd(
           cgen_state_->outer_join_cond_lv_, toBool(codegen(expr.get(), true, co).front()));
     }
-  }
-
-  std::vector<Analyzer::Expr*> primary_quals;
-  std::vector<Analyzer::Expr*> deferred_quals;
-  bool short_circuited = prioritizeQuals(ra_exe_unit, primary_quals, deferred_quals);
-  if (short_circuited) {
-    VLOG(1) << "Prioritized " << std::to_string(primary_quals.size()) << " quals, "
-            << "short-circuited and deferred " << std::to_string(deferred_quals.size()) << " quals";
   }
 
   llvm::Value* filter_lv = llvm::ConstantInt::get(llvm::IntegerType::getInt1Ty(cgen_state_->context_), true);

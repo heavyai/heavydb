@@ -153,6 +153,66 @@ llvm::Value* Executor::codegen(const Analyzer::UOper* u_oper, const CompilationO
   }
 }
 
+const std::vector<Analyzer::Expr*> Executor::codegenHashJoinsBeforeLoopJoin(
+    const std::vector<Analyzer::Expr*>& primary_quals,
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const CompilationOptions& co) {
+  std::unordered_set<const Analyzer::Expr*> hash_join_quals;
+  if (plan_state_->join_info_.join_impl_type_ != JoinImplType::HashPlusLoop) {
+    return primary_quals;
+  }
+  CHECK_GT(ra_exe_unit.input_descs.size(), size_t(2));
+  const auto hash_join_count = ra_exe_unit.input_descs.size() - 2;
+
+  llvm::Value* filter_lv = nullptr;
+  for (auto expr : ra_exe_unit.inner_join_quals) {
+    auto bin_oper = std::dynamic_pointer_cast<const Analyzer::BinOper>(expr);
+    if (!bin_oper || bin_oper->get_optype() != kEQ) {
+      continue;
+    }
+    std::set<int> rte_idx_set;
+    bin_oper->collect_rte_idx(rte_idx_set);
+    bool found_hash_join = true;
+    for (auto rte : rte_idx_set) {
+      if (rte >= static_cast<int>(hash_join_count)) {
+        found_hash_join = false;
+        break;
+      }
+    }
+    if (!found_hash_join) {
+      continue;
+    }
+    hash_join_quals.insert(expr.get());
+    if (!filter_lv) {
+      filter_lv = llvm::ConstantInt::get(llvm::IntegerType::getInt1Ty(cgen_state_->context_), true);
+    }
+    CHECK(filter_lv);
+    filter_lv = cgen_state_->ir_builder_.CreateAnd(filter_lv, toBool(codegen(expr.get(), true, co).front()));
+    CHECK(filter_lv->getType()->isIntegerTy(1));
+  }
+
+  if (!filter_lv) {
+    return primary_quals;
+  }
+
+  auto cond_true = llvm::BasicBlock::Create(cgen_state_->context_, "match_true", cgen_state_->row_func_);
+  auto cond_false = llvm::BasicBlock::Create(cgen_state_->context_, "match_false", cgen_state_->row_func_);
+
+  cgen_state_->ir_builder_.CreateCondBr(filter_lv, cond_true, cond_false);
+  cgen_state_->ir_builder_.SetInsertPoint(cond_false);
+  cgen_state_->ir_builder_.CreateRet(ll_int(int32_t(0)));
+  cgen_state_->ir_builder_.SetInsertPoint(cond_true);
+
+  std::vector<Analyzer::Expr*> remaining_quals;
+  for (auto qual : primary_quals) {
+    if (hash_join_quals.count(qual)) {
+      continue;
+    }
+    remaining_quals.push_back(qual);
+  }
+  return remaining_quals;
+}
+
 void Executor::codegenInnerScanNextRow() {
   if (cgen_state_->inner_scan_labels_.empty()) {
     cgen_state_->ir_builder_.CreateRet(ll_int(int32_t(0)));

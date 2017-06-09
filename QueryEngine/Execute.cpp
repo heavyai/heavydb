@@ -782,8 +782,14 @@ bool is_trivial_loop_join(const std::vector<InputTableInfo>& query_infos, const 
   if (ra_exe_unit.input_descs.size() < 2) {
     return false;
   }
+
+#ifndef ENABLE_EQUIJOIN_FOLD
   CHECK_EQ(size_t(2), ra_exe_unit.input_descs.size());
-  const auto inner_table_id = ra_exe_unit.input_descs[1].getTableId();
+#endif
+  // We only support loop join at the end of folded joins
+  // where ra_exe_unit.input_descs.size() > 2 for now.
+  const auto inner_table_id = ra_exe_unit.input_descs.back().getTableId();
+
   ssize_t inner_table_idx = -1;
   for (size_t i = 0; i < query_infos.size(); ++i) {
     if (query_infos[i].table_id == inner_table_id) {
@@ -830,8 +836,11 @@ ResultPtr Executor::executeWorkUnit(int32_t* error_code,
   if (join_info.join_impl_type_ == JoinImplType::Loop && ra_exe_unit.input_descs.size() > 2) {
     throw UnfoldedMultiJoinRequired();
   }
+
+  if ((join_info.join_impl_type_ == JoinImplType::Loop || join_info.join_impl_type_ == JoinImplType::HashPlusLoop) &&
+#else
+      join_info.join_impl_type_  == JoinImplType::Loop &&
 #endif
-  if (join_info.join_impl_type_ == JoinImplType::Loop &&
       !(options.allow_loop_joins || is_trivial_loop_join(query_infos, ra_exe_unit))) {
     throw std::runtime_error("Hash join failed, reason: " + join_info.hash_join_fail_reason_);
   }
@@ -2074,9 +2083,14 @@ void Executor::allocateInnerScansIterators(const std::vector<InputDescriptor>& i
   if (plan_state_->join_info_.join_impl_type_ == JoinImplType::HashOneToOne) {
     return;
   }
-  CHECK(plan_state_->join_info_.join_impl_type_ == JoinImplType::Loop);
+  size_t desc_start_pos = 1;
+  if (plan_state_->join_info_.join_impl_type_ == JoinImplType::HashPlusLoop) {
+    desc_start_pos = input_descs.size() - 1;
+  } else {
+    CHECK(plan_state_->join_info_.join_impl_type_ == JoinImplType::Loop);
+  }
   auto preheader = cgen_state_->ir_builder_.GetInsertBlock();
-  for (auto it = input_descs.begin() + 1; it != input_descs.end(); ++it) {
+  for (auto it = input_descs.begin() + desc_start_pos; it != input_descs.end(); ++it) {
     const int inner_scan_idx = it - input_descs.begin();
     auto inner_scan_pos_ptr = cgen_state_->ir_builder_.CreateAlloca(
         get_int_type(64, cgen_state_->context_), nullptr, "inner_scan_" + std::to_string(inner_scan_idx));
@@ -2161,15 +2175,24 @@ Executor::JoinInfo Executor::chooseJoinType(const std::list<std::shared_ptr<Anal
   }
 
   bool found_missing_rte = false;
+  ssize_t missing_rte = -1;
   const auto nest_level_num = ra_exe_unit.input_descs.size();
   for (size_t i = 0; i < nest_level_num; ++i) {
     if (!rte_idx_set.count(i)) {
+      missing_rte = i;
       found_missing_rte = true;
       break;
     }
   }
-  if (!found_missing_rte && join_hash_tables.size() >= nest_level_num - 1) {
-    return Executor::JoinInfo(JoinImplType::HashOneToOne, bin_ops, join_hash_tables, "");
+  if (found_missing_rte) {
+    // TODO(miyu): support a loop join in the beginning or middle of hash joins.
+    if (missing_rte == static_cast<ssize_t>(nest_level_num - 1) && join_hash_tables.size() == nest_level_num - 2) {
+      return Executor::JoinInfo(JoinImplType::HashPlusLoop, bin_ops, join_hash_tables, hash_join_fail_reason);
+    }
+  } else {
+    if (join_hash_tables.size() == nest_level_num - 1) {
+      return Executor::JoinInfo(JoinImplType::HashOneToOne, bin_ops, join_hash_tables, "");
+    }
   }
 
   return Executor::JoinInfo(

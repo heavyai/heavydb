@@ -2555,6 +2555,12 @@ TEST(Select, InnerJoins) {
     c("SELECT COUNT(*) FROM test a, join_test b, test_inner c WHERE a.x = b.x AND a.y = b.x AND a.x = c.x AND c.str = "
       "'foo';",
       dt);
+    c("SELECT COUNT(*) FROM test a JOIN test_inner b ON a.str = b.str JOIN hash_join_test c ON a.x = c.x JOIN "
+      "join_test d ON a.x > d.x;",
+      dt);
+    c("SELECT a.x, b.x, d.str FROM test a JOIN test_inner b ON a.str = b.str JOIN hash_join_test c ON a.x = c.x JOIN "
+      "join_test d ON a.x >= d.x AND a.x < d.x + 5 ORDER BY a.x, b.x;",
+      dt);
 #endif
   }
 }
