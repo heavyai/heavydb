@@ -43,8 +43,6 @@ class ReductionRanOutOfSlots : public std::runtime_error {
   ReductionRanOutOfSlots() : std::runtime_error("ReductionRanOutOfSlots") {}
 };
 
-namespace {
-
 inline std::string nullable_str_to_string(const NullableString& str) {
   auto nptr = boost::get<void*>(&str);
   if (nptr) {
@@ -98,8 +96,6 @@ inline std::string datum_to_string(const TargetValue& tv, const SQLTypeInfo& ti,
   CHECK(sptr);
   return nullable_str_to_string(*sptr);
 }
-
-}  // namespace
 
 class QueryExecutionContext : boost::noncopyable {
  public:
@@ -435,8 +431,6 @@ class GroupByAndAggregate {
   friend class Executor;
 };
 
-namespace {
-
 inline std::vector<Analyzer::Expr*> get_agg_target_exprs(
     const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& target_list) {
   std::vector<Analyzer::Expr*> result;
@@ -484,8 +478,6 @@ inline int64_t extract_min_stat(const ChunkStats& stats, const SQLTypeInfo& ti) 
 inline int64_t extract_max_stat(const ChunkStats& stats, const SQLTypeInfo& ti) {
   return extract_from_datum(stats.max, ti);
 }
-
-}  // namespace
 
 template <class T>
 inline std::vector<int8_t> get_col_byte_widths(const T& col_expr_list,
