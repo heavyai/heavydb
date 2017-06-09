@@ -4,11 +4,11 @@ public class Batch {
 
 // JDBC driver name and database URL
 static final String JDBC_DRIVER = "com.mapd.jdbc.MapDDriver";
-static final String DB_URL = "jdbc:mapd:kali.mapd.com:9091:mapd";
+static final String DB_URL = "jdbc:mapd:myHost.com:9091:mapd";
 
 //  Database credentials
-static final String USER = "mapd";
-static final String PASS = "HyperInteractive";
+static final String USER = "myUserName";
+static final String PASS = "myPassword";
 
 public static void main(String[] args) {
   Connection conn = null;
@@ -21,9 +21,12 @@ public static void main(String[] args) {
 
     //STEP 2: Open a connection
     conn = DriverManager.getConnection(DB_URL, USER, PASS);
+    stmt = conn.createStatement();
+    stmt.executeUpdate("create table girl_groups(name1 varchar(20), group_rank integer, name2 varchar(20))");
+    stmt.close();
     conn.setAutoCommit(false);
 
-    pstmt = conn.prepareStatement("insert into test2 values(?,?,?)");
+    pstmt = conn.prepareStatement("insert into girl_groups values(?,?,?)");
     pstmt.setString(1,"Orange Caramel");
     pstmt.setInt(2,5);
     pstmt.setString(3,"2NE1");
@@ -34,6 +37,7 @@ public static void main(String[] args) {
     pstmt.addBatch();
     pstmt.executeBatch();
     conn.commit();
+    pstmt.close();
     conn.close();
   } catch (SQLException se) {
     //Handle errors for JDBC
@@ -45,6 +49,7 @@ public static void main(String[] args) {
     //finally block used to close resources
     try {
       if (pstmt != null) {
+        stmt.close();
         pstmt.close();
       }
     } catch (SQLException se2) {
