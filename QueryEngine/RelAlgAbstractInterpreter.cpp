@@ -893,11 +893,10 @@ const RexOperator* get_equals_operator(const T* node) {
     auto rex_operator = work_set.back();
     work_set.pop_back();
     if (rex_operator->getOperator() == kAND) {
-      if (auto left_operator = dynamic_cast<const RexOperator*>(rex_operator->getOperand(0))) {
-        work_set.push_back(left_operator);
-      }
-      if (auto right_operator = dynamic_cast<const RexOperator*>(rex_operator->getOperand(1))) {
-        work_set.push_back(right_operator);
+      for (size_t i = 0; i < rex_operator->size(); ++i) {
+        if (auto sub_operator = dynamic_cast<const RexOperator*>(rex_operator->getOperand(i))) {
+          work_set.push_back(sub_operator);
+        }
       }
       continue;
     }
