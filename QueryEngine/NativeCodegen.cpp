@@ -611,10 +611,9 @@ void bind_pos_placeholders(const std::string& pos_fn_name,
     auto& pos_call = llvm::cast<llvm::CallInst>(*it);
     if (std::string(pos_call.getCalledFunction()->getName()) == pos_fn_name) {
       if (use_resume_param) {
-        auto& resume_param = query_func->getArgumentList().back();
+        const auto error_code_arg = get_arg_by_name(query_func, "error_code");
         llvm::ReplaceInstWithInst(&pos_call,
-                                  llvm::CallInst::Create(module->getFunction(pos_fn_name + "_impl"),
-                                                         std::vector<llvm::Value*>{&resume_param}));
+                                  llvm::CallInst::Create(module->getFunction(pos_fn_name + "_impl"), error_code_arg));
       } else {
         llvm::ReplaceInstWithInst(&pos_call, llvm::CallInst::Create(module->getFunction(pos_fn_name + "_impl")));
       }
@@ -924,10 +923,9 @@ void Executor::createErrorCheckControlFlow(llvm::Function* query_func, bool run_
           unified_err_lv->addIncoming(err_lv, &*bb_it);
           err_lv = unified_err_lv;
         }
-        auto& error_code_arg = query_func->getArgumentList().back();
-        CHECK(error_code_arg.getName() == "error_code");
+        const auto error_code_arg = get_arg_by_name(query_func, "error_code");
         err_lv = ir_builder.CreateCall(cgen_state_->module_->getFunction("record_error_code"),
-                                       std::vector<llvm::Value*>{err_lv, &error_code_arg});
+                                       std::vector<llvm::Value*>{err_lv, error_code_arg});
         err_lv = ir_builder.CreateICmp(llvm::ICmpInst::ICMP_NE, err_lv, ll_int(int32_t(0)));
         auto error_bb = llvm::BasicBlock::Create(cgen_state_->context_, ".error_exit", query_func, new_bb);
         llvm::ReturnInst::Create(cgen_state_->context_, error_bb);
