@@ -3270,8 +3270,11 @@ void GroupByAndAggregate::codegenCountDistinct(const size_t target_idx,
 llvm::Value* GroupByAndAggregate::getAdditionalLiteral(const int32_t off) {
   CHECK_LT(off, 0);
   const auto lit_buff_lv = get_arg_by_name(ROW_FUNC, "literals");
-  return LL_BUILDER.CreateLoad(LL_BUILDER.CreateGEP(
+  auto lit_lv = LL_BUILDER.CreateLoad(LL_BUILDER.CreateGEP(
       LL_BUILDER.CreateBitCast(lit_buff_lv, llvm::PointerType::get(get_int_type(64, LL_CONTEXT), 0)), LL_INT(off)));
+  lit_lv->setMetadata(llvm::LLVMContext::MD_invariant_load,
+                      llvm::MDNode::get(executor_->cgen_state_->context_, llvm::None));
+  return lit_lv;
 }
 
 std::vector<llvm::Value*> GroupByAndAggregate::codegenAggArg(const Analyzer::Expr* target_expr,

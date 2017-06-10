@@ -141,6 +141,7 @@ std::vector<llvm::Value*> Executor::codegenHoistedConstants(const std::vector<co
   }
   auto lit_lv =
       cgen_state_->ir_builder_.CreateLoad(cgen_state_->ir_builder_.CreateBitCast(lit_buf_start, val_ptr_type));
+  lit_lv->setMetadata(llvm::LLVMContext::MD_invariant_load, llvm::MDNode::get(cgen_state_->context_, llvm::None));
   if (type_info.is_boolean() && type_info.get_notnull()) {
     return {toBool(lit_lv)};
   }

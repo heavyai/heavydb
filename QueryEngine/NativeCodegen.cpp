@@ -578,6 +578,13 @@ void Executor::initializeNVPTXBackend() const {
 
 namespace {
 
+// Listed non-inline runtime functions must only read or write from / to arguments
+// and / or addresses derived from arguments (for example through cast operations).
+const char* arg_only_functions[] = {"linear_probabilistic_count",
+                                    "agg_count_distinct_bitmap_gpu",
+                                    "agg_count_distinct_bitmap_skip_val_gpu",
+                                    "agg_approximate_count_distinct_gpu"};
+
 llvm::Module* read_template_module(llvm::LLVMContext& context) {
   llvm::SMDiagnostic err;
 
@@ -596,6 +603,11 @@ llvm::Module* read_template_module(llvm::LLVMContext& context) {
   auto module = owner.get().release();
 #endif
   CHECK(module);
+  for (auto func_name : arg_only_functions) {
+    auto func = module->getFunction(func_name);
+    // Guide LICM to hoist literal loads out of the inner loop.
+    func->setOnlyAccessesArgMemory();
+  }
 
   return module;
 }
