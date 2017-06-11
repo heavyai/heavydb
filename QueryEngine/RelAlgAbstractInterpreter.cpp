@@ -1481,6 +1481,9 @@ class RelAlgAbstractInterpreter {
     for (size_t i = 0; i < group.size(); ++i) {
       CHECK_EQ(i, group[i]);
     }
+    if (agg_ra.HasMember("groups") || agg_ra.HasMember("indicator")) {
+      throw QueryNotSupported("GROUP BY extensions not supported");
+    }
     const auto& aggs_json_arr = field(agg_ra, "aggs");
     CHECK(aggs_json_arr.IsArray());
     std::vector<std::unique_ptr<const RexAgg>> aggs;

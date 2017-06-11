@@ -1718,6 +1718,7 @@ TEST(Select, UnsupportedNodes) {
     SKIP_NO_GPU();
     EXPECT_THROW(run_multiple_agg("SELECT 1 + 2;", dt), std::runtime_error);
     EXPECT_THROW(run_multiple_agg("SELECT *;", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("SELECT x, COUNT(*) FROM test GROUP BY ROLLUP(x);", dt), std::runtime_error);
   }
 }
 
