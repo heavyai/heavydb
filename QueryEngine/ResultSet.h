@@ -46,13 +46,14 @@
  * Stores the underlying buffer and the meta-data for a result set. The buffer
  * format reflects the main requirements for result sets. Not all queries
  * specify a GROUP BY clause, but since it's the most important and challenging
- * case and we'll focus on it. Note that the meta-data is stored separately from
+ * case we'll focus on it. Note that the meta-data is stored separately from
  * the buffer and it's not transferred to GPU.
  *
- * 1. It has to be efficient to reduce partial GROUP BY query results together,
- *    the cardinalities can be high. Reduction currently happens on the host.
+ * 1. It has to be efficient for reduction of partial GROUP BY query results
+ *    from multiple devices / cores, the cardinalities can be high. Reduction
+ *    currently happens on the host.
  * 2. No conversions should be needed when buffers are transferred from GPU to
- *    host for reduction. This implies that buffer needs to be "flat", with no
+ *    host for reduction. This implies the buffer needs to be "flat", with no
  *    pointers to chase since they have no meaning in a different address space.
  * 3. Must be size-efficient.
  *
@@ -65,7 +66,7 @@
  * +-+-+-+-+-+-+-+-+-+-+-+--?--+-+-+-+-+-+-+-+-+-+-+-+-+
  *
  * (key_0 ... key_N-1) is a multiple component key, unique within the buffer.
- * They store the tuple specified by the GROUP BY clause. All components have
+ * It stores the tuple specified by the GROUP BY clause. All components have
  * the same width, 4 or 8 bytes. For the 4-byte components, 4-byte padding is
  * added if the number of components is odd. Not all entries in the buffer are
  * valid; an empty entry contains EMPTY_KEY_{64, 32} for 8-byte / 4-byte width,
