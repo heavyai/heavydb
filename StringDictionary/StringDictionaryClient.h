@@ -29,6 +29,8 @@ class StringDictionaryClient {
 
   void create(const int32_t dict_id, const int32_t db_id) { CHECK(false); };
 
+  void drop(const int32_t dict_id, const int32_t db_id) { CHECK(false); };
+
   int32_t get(const std::string& str) {
     CHECK(false);
     return 0;

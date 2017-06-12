@@ -49,6 +49,8 @@ using namespace ::apache::thrift::transport;
 using boost::make_shared;
 using boost::shared_ptr;
 
+extern bool g_aggregator;
+
 AggregatedColRange column_ranges_from_thrift(const std::vector<TColumnRange>& thrift_column_ranges) {
   AggregatedColRange column_ranges;
   for (const auto& thrift_column_range : thrift_column_ranges) {
@@ -371,6 +373,7 @@ int main(int argc, char** argv) {
       const auto all_nodes = LeafHostInfo::parseClusterConfig(cluster_file);
       if (vm.count("cluster")) {
         db_leaves = only_db_leaves(all_nodes);
+        g_aggregator = true;
       }
       if (vm.count("string-servers")) {
       }

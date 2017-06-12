@@ -44,6 +44,8 @@ using std::vector;
 using Chunk_NS::Chunk;
 using Fragmenter_Namespace::InsertOrderFragmenter;
 
+bool g_aggregator{false};
+
 namespace Catalog_Namespace {
 
 void SysCatalog::initDB() {
@@ -629,6 +631,12 @@ void Catalog::removeTableFromMap(const string& tableName, int tableId) {
     delete td->fragmenter;
   delete td;
 
+  std::unique_ptr<StringDictionaryClient> client;
+  if (g_aggregator) {
+    CHECK(!string_dict_hosts_.empty());
+    client.reset(new StringDictionaryClient(string_dict_hosts_.front(), -1, true));
+  }
+
   // delete all column descriptors for the table
   for (int i = 1; i <= ncolumns; i++) {
     ColumnIdKey cidKey(tableId, i);
@@ -641,6 +649,9 @@ void Catalog::removeTableFromMap(const string& tableName, int tableId) {
       DictDescriptorMapById::iterator dictIt = dictDescriptorMapById_.find(cd->columnType.get_comp_param());
       const auto& dd = dictIt->second;
       boost::filesystem::remove_all(dd->dictFolderPath);
+      if (client) {
+        client->drop(dd->dictId, currentDB_.dbId);
+      }
       dictDescriptorMapById_.erase(dictIt);
     }
     delete cd;

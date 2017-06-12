@@ -148,6 +148,9 @@ StringDictionary::StringDictionary(const LeafHostInfo& host, const int dict_id)
       client_no_timeout_(new StringDictionaryClient(host, dict_id, false)) {}
 
 StringDictionary::~StringDictionary() noexcept {
+  if (client_) {
+    return;
+  }
   if (payload_map_) {
     CHECK(offset_map_);
     checked_munmap(payload_map_, payload_file_size_);
