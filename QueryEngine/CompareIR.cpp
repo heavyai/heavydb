@@ -179,7 +179,7 @@ llvm::Value* Executor::codegenCmpDecimalConst(const SQLOps optype,
   d.bigintval = truncated_decimal;
   const auto new_rhs_lit = makeExpr<Analyzer::Constant>(new_ti, operand_ti.get_notnull(), d);
   const auto operand_lv = codegen(operand, true, co).front();
-  const auto lhs_lv = codegenCast(operand_lv, operand_ti, new_ti, false);
+  const auto lhs_lv = codegenCast(operand_lv, operand_ti, new_ti, false, co);
   return codegenCmp(optype, qualifier, {lhs_lv}, new_ti, new_rhs_lit.get(), co);
 }
 
@@ -273,7 +273,9 @@ llvm::Value* Executor::codegenQualifierCmp(const SQLOps optype,
     if (g_enable_watchdog) {
       throw WatchdogException("Comparison between a dictionary-encoded and a none-encoded string would be slow");
     }
-    cgen_state_->must_run_on_cpu_ = true;
+    if (co.device_type_ == ExecutorDeviceType::GPU) {
+      throw QueryMustRunOnCpu();
+    }
     CHECK_EQ(kENCODING_NONE, target_ti.get_compression());
     fname += "_str";
   }

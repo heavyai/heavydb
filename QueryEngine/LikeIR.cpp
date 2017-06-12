@@ -55,7 +55,9 @@ llvm::Value* Executor::codegen(const Analyzer::CharLengthExpr* expr, const Compi
     }
     str_lv.push_back(cgen_state_->emitCall("extract_str_ptr", {str_lv.front()}));
     str_lv.push_back(cgen_state_->emitCall("extract_str_len", {str_lv.front()}));
-    cgen_state_->must_run_on_cpu_ = true;
+    if (co.device_type_ == ExecutorDeviceType::GPU) {
+      throw QueryMustRunOnCpu();
+    }
   }
   std::vector<llvm::Value*> charlength_args{str_lv[1], str_lv[2]};
   std::string fn_name("char_length");
@@ -100,7 +102,9 @@ llvm::Value* Executor::codegen(const Analyzer::LikeExpr* expr, const Compilation
     CHECK_EQ(size_t(1), str_lv.size());
     str_lv.push_back(cgen_state_->emitCall("extract_str_ptr", {str_lv.front()}));
     str_lv.push_back(cgen_state_->emitCall("extract_str_len", {str_lv.front()}));
-    cgen_state_->must_run_on_cpu_ = true;
+    if (co.device_type_ == ExecutorDeviceType::GPU) {
+      throw QueryMustRunOnCpu();
+    }
   }
   auto like_expr_arg_lvs = codegen(expr->get_like_expr(), true, co);
   CHECK_EQ(size_t(3), like_expr_arg_lvs.size());
@@ -158,6 +162,9 @@ llvm::Value* Executor::codegen(const Analyzer::RegexpExpr* expr, const Compilati
   if (is_unnest(extract_cast_arg(expr->get_arg()))) {
     throw std::runtime_error("REGEXP not supported for unnested expressions");
   }
+  if (co.device_type_ == ExecutorDeviceType::GPU) {
+    throw QueryMustRunOnCpu();
+  }
   char escape_char{'\\'};
   if (expr->get_escape_expr()) {
     auto escape_char_expr = dynamic_cast<const Analyzer::Constant*>(expr->get_escape_expr());
@@ -178,13 +185,10 @@ llvm::Value* Executor::codegen(const Analyzer::RegexpExpr* expr, const Compilati
     throw WatchdogException("Cannot do REGEXP_LIKE on this dictionary encoded column, its cardinality is too high");
   }
   auto str_lv = codegen(expr->get_arg(), true, co);
-  // Running on CPU for now.
-  cgen_state_->must_run_on_cpu_ = true;
   if (str_lv.size() != 3) {
     CHECK_EQ(size_t(1), str_lv.size());
     str_lv.push_back(cgen_state_->emitCall("extract_str_ptr", {str_lv.front()}));
     str_lv.push_back(cgen_state_->emitCall("extract_str_len", {str_lv.front()}));
-    cgen_state_->must_run_on_cpu_ = true;
   }
   auto regexp_expr_arg_lvs = codegen(expr->get_pattern_expr(), true, co);
   CHECK_EQ(size_t(3), regexp_expr_arg_lvs.size());

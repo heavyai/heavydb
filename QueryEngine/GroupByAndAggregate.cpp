@@ -3252,7 +3252,7 @@ void GroupByAndAggregate::codegenCountDistinct(const size_t target_idx,
     agg_fname += "_skip_val";
     agg_args.push_back(null_lv);
   }
-  if (device_type == ExecutorDeviceType::GPU && !executor_->cgen_state_->must_run_on_cpu_) {
+  if (device_type == ExecutorDeviceType::GPU) {
     CHECK(count_distinct_descriptor.impl_type_ == CountDistinctImplType::Bitmap);
     agg_fname += "_gpu";
     const auto base_dev_addr = getAdditionalLiteral(-1);

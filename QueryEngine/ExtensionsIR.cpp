@@ -81,7 +81,7 @@ llvm::Value* Executor::codegenFunctionOper(const Analyzer::FunctionOper* functio
   const auto bbs = beginArgsNullcheck(function_oper, orig_arg_lvs);
   CHECK_EQ(orig_arg_lvs.size(), function_oper->getArity());
   // Arguments must be converted to the types the extension function can handle.
-  const auto args = codegenFunctionOperCastArgs(function_oper, &ext_func_sig, orig_arg_lvs);
+  const auto args = codegenFunctionOperCastArgs(function_oper, &ext_func_sig, orig_arg_lvs, co);
   auto ext_call = cgen_state_->emitExternalCall(ext_func_sig.getName(), ret_ty, args);
   return endArgsNullcheck(bbs, ext_call, function_oper);
 }
@@ -187,7 +187,8 @@ llvm::Value* Executor::codegenFunctionOperNullArg(const Analyzer::FunctionOper* 
 // Generate CAST operations for arguments in `orig_arg_lvs` to the types required by `ext_func_sig`.
 std::vector<llvm::Value*> Executor::codegenFunctionOperCastArgs(const Analyzer::FunctionOper* function_oper,
                                                                 const ExtensionFunction* ext_func_sig,
-                                                                const std::vector<llvm::Value*>& orig_arg_lvs) {
+                                                                const std::vector<llvm::Value*>& orig_arg_lvs,
+                                                                const CompilationOptions& co) {
   CHECK(ext_func_sig);
   const auto& ext_func_args = ext_func_sig->getArgs();
   CHECK_EQ(function_oper->getArity(), ext_func_args.size());
@@ -198,7 +199,7 @@ std::vector<llvm::Value*> Executor::codegenFunctionOperCastArgs(const Analyzer::
     const auto arg_target_ti = ext_arg_type_to_type_info(ext_func_args[i]);
     llvm::Value* arg_lv{nullptr};
     if (arg_ti.get_type() != arg_target_ti.get_type()) {
-      arg_lv = codegenCast(orig_arg_lvs[i], arg_ti, arg_target_ti, false);
+      arg_lv = codegenCast(orig_arg_lvs[i], arg_ti, arg_target_ti, false, co);
     } else {
       arg_lv = orig_arg_lvs[i];
     }

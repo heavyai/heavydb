@@ -998,18 +998,20 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
     for (const auto& count_distinct_descriptor : query_mem_desc.count_distinct_descriptors_) {
       if (count_distinct_descriptor.impl_type_ == CountDistinctImplType::StdSet ||
           (count_distinct_descriptor.impl_type_ != CountDistinctImplType::Invalid && !co.hoist_literals_)) {
-        cgen_state_->must_run_on_cpu_ = true;
+        throw QueryMustRunOnCpu();
       }
     }
   }
 
   if (co.device_type_ == ExecutorDeviceType::GPU &&
-      query_mem_desc.hash_type == GroupByColRangeType::MultiColPerfectHash && !cgen_state_->must_run_on_cpu_) {
+      query_mem_desc.hash_type == GroupByColRangeType::MultiColPerfectHash) {
     const auto grid_size = query_mem_desc.blocksShareMemory() ? 1 : gridSize();
     const size_t required_memory{(grid_size * query_mem_desc.getBufferSizeBytes(ExecutorDeviceType::GPU))};
     CHECK(catalog_->get_dataMgr().cudaMgr_);
     const size_t max_memory{catalog_->get_dataMgr().cudaMgr_->deviceProperties[0].globalMem / 5};
-    cgen_state_->must_run_on_cpu_ = required_memory > max_memory;
+    if (required_memory > max_memory) {
+      throw QueryMustRunOnCpu();
+    }
   }
 
   // Read the module template and target either CPU or GPU
@@ -1120,10 +1122,6 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
 
   is_nested_ = false;
   plan_state_->init_agg_vals_ = init_agg_val_vec(ra_exe_unit.target_exprs, ra_exe_unit.quals, query_mem_desc);
-
-  if (co.device_type_ == ExecutorDeviceType::GPU && cgen_state_->must_run_on_cpu_) {
-    return {};
-  }
 
   auto multifrag_query_func =
       cgen_state_->module_->getFunction("multifrag_query" + std::string(co.hoist_literals_ ? "_hoisted_literals" : ""));

@@ -64,7 +64,15 @@ ExecutionResult RelAlgExecutor::executeRelAlgQuery(const std::string& query_ra,
     auto result = ra_executor.executeRelAlgSubQuery(subquery, co, eo);
     subquery->setExecutionResult(std::make_shared<ExecutionResult>(result));
   }
-  return executeRelAlgSeq(ed_list, co, eo, render_info, queue_time_ms);
+  try {
+    return executeRelAlgSeq(ed_list, co, eo, render_info, queue_time_ms);
+  } catch (const QueryMustRunOnCpu&) {
+    if (g_enable_watchdog && !g_allow_cpu_retry) {
+      throw;
+    }
+  }
+  CompilationOptions co_cpu{ExecutorDeviceType::CPU, co.hoist_literals_, co.opt_level_, co.with_dynamic_watchdog_};
+  return executeRelAlgSeq(ed_list, co_cpu, eo, render_info, queue_time_ms);
 }
 
 namespace {

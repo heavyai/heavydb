@@ -905,7 +905,7 @@ ResultPtr Executor::executeWorkUnit(int32_t* error_code,
       }
     }
     const QueryMemoryDescriptor& query_mem_desc = execution_dispatch.getQueryMemoryDescriptor();
-    if (render_allocator_map && cgen_state_->must_run_on_cpu_) {
+    if (render_allocator_map && co.device_type_ == ExecutorDeviceType::CPU) {
       throw std::runtime_error("Query has to run on CPU, cannot render its results");
     }
     if (!options.just_validate) {

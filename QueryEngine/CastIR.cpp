@@ -35,16 +35,17 @@ llvm::Value* Executor::codegenCast(const Analyzer::UOper* uoper, const Compilati
     operand_lv = codegen(operand, true, co).front();
   }
   const auto& operand_ti = operand->get_type_info();
-  return codegenCast(operand_lv, operand_ti, ti, operand_as_const);
+  return codegenCast(operand_lv, operand_ti, ti, operand_as_const, co);
 }
 
 llvm::Value* Executor::codegenCast(llvm::Value* operand_lv,
                                    const SQLTypeInfo& operand_ti,
                                    const SQLTypeInfo& ti,
-                                   const bool operand_is_const) {
+                                   const bool operand_is_const,
+                                   const CompilationOptions& co) {
   if (operand_lv->getType()->isIntegerTy()) {
     if (operand_ti.is_string()) {
-      return codegenCastFromString(operand_lv, operand_ti, ti, operand_is_const);
+      return codegenCastFromString(operand_lv, operand_ti, ti, operand_is_const, co);
     }
     CHECK(operand_ti.is_integer() || operand_ti.is_decimal() || operand_ti.is_time() || operand_ti.is_boolean());
     if (operand_ti.is_boolean()) {
@@ -91,7 +92,8 @@ llvm::Value* Executor::codegenCastTimestampToDate(llvm::Value* ts_lv, const bool
 llvm::Value* Executor::codegenCastFromString(llvm::Value* operand_lv,
                                              const SQLTypeInfo& operand_ti,
                                              const SQLTypeInfo& ti,
-                                             const bool operand_is_const) {
+                                             const bool operand_is_const,
+                                             const CompilationOptions& co) {
   if (!ti.is_string()) {
     throw std::runtime_error("Cast from " + operand_ti.get_type_name() + " to " + ti.get_type_name() +
                              " not supported");
@@ -111,7 +113,9 @@ llvm::Value* Executor::codegenCastFromString(llvm::Value* operand_lv,
     CHECK_EQ(kENCODING_NONE, operand_ti.get_compression());
     CHECK_EQ(kENCODING_DICT, ti.get_compression());
     CHECK(operand_lv->getType()->isIntegerTy(64));
-    cgen_state_->must_run_on_cpu_ = true;
+    if (co.device_type_ == ExecutorDeviceType::GPU) {
+      throw QueryMustRunOnCpu();
+    }
     return cgen_state_->emitExternalCall(
         "string_compress",
         get_int_type(32, cgen_state_->context_),
@@ -127,7 +131,9 @@ llvm::Value* Executor::codegenCastFromString(llvm::Value* operand_lv,
       throw WatchdogException("Cast from dictionary-encoded string to none-encoded would be slow");
     }
     CHECK_EQ(kENCODING_DICT, operand_ti.get_compression());
-    cgen_state_->must_run_on_cpu_ = true;
+    if (co.device_type_ == ExecutorDeviceType::GPU) {
+      throw QueryMustRunOnCpu();
+    }
     return cgen_state_->emitExternalCall(
         "string_decompress",
         get_int_type(64, cgen_state_->context_),

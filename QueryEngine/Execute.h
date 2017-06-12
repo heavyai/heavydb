@@ -259,6 +259,11 @@ class CompilationRetryNoCompaction : public std::runtime_error {
   CompilationRetryNoCompaction() : std::runtime_error("CompilationRetryNoCompaction") {}
 };
 
+class QueryMustRunOnCpu : public std::runtime_error {
+ public:
+  QueryMustRunOnCpu() : std::runtime_error("QueryMustRunOnCpu") {}
+};
+
 class ExtensionFunction;
 
 namespace std {
@@ -493,12 +498,14 @@ class Executor {
   llvm::Value* codegenCast(llvm::Value* operand_lv,
                            const SQLTypeInfo& operand_ti,
                            const SQLTypeInfo& ti,
-                           const bool operand_is_const);
+                           const bool operand_is_const,
+                           const CompilationOptions& co);
   llvm::Value* codegenCastTimestampToDate(llvm::Value* ts_lv, const bool nullable);
   llvm::Value* codegenCastFromString(llvm::Value* operand_lv,
                                      const SQLTypeInfo& operand_ti,
                                      const SQLTypeInfo& ti,
-                                     const bool operand_is_const);
+                                     const bool operand_is_const,
+                                     const CompilationOptions& co);
   llvm::Value* codegenCastBetweenIntTypes(llvm::Value* operand_lv,
                                           const SQLTypeInfo& operand_ti,
                                           const SQLTypeInfo& ti,
@@ -529,7 +536,8 @@ class Executor {
   llvm::Value* codegenFunctionOperNullArg(const Analyzer::FunctionOper*, const std::vector<llvm::Value*>&);
   std::vector<llvm::Value*> codegenFunctionOperCastArgs(const Analyzer::FunctionOper*,
                                                         const ExtensionFunction*,
-                                                        const std::vector<llvm::Value*>&);
+                                                        const std::vector<llvm::Value*>&,
+                                                        const CompilationOptions&);
   llvm::ConstantInt* codegenIntConst(const Analyzer::Constant* constant);
   llvm::Value* colByteStream(const Analyzer::ColumnVar* col_var, const bool fetch_column, const bool hoist_literals);
   llvm::Value* posArg(const Analyzer::Expr*) const;
@@ -1023,7 +1031,6 @@ class Executor {
           is_outer_join_(is_outer_join),
           outer_join_cond_lv_(nullptr),
           query_infos_(query_infos),
-          must_run_on_cpu_(false),
           needs_error_check_(false) {}
 
     size_t getOrAddLiteral(const Analyzer::Constant* constant,
@@ -1136,7 +1143,6 @@ class Executor {
     std::unordered_map<int, llvm::Value*> scan_idx_to_hash_pos_;
     std::vector<std::unique_ptr<const InValuesBitmap>> in_values_bitmaps_;
     const std::vector<InputTableInfo>& query_infos_;
-    bool must_run_on_cpu_;
     bool needs_error_check_;
 
    private:
