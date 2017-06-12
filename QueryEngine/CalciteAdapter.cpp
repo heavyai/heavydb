@@ -1161,7 +1161,9 @@ Planner::RootPlan* translate_query(const std::string& query, const Catalog_Names
       plan, kSELECT, tds[0]->tableId, {}, cat, logical_sort_info.limit, logical_sort_info.offset);
 }
 
-std::string pg_shim(const std::string& query) {
+namespace {
+
+std::string pg_shim_impl(const std::string& query) {
   auto result = query;
   {
     boost::regex unnest_expr{R"((\s+|,)(unnest)\s*\()", boost::regex::extended | boost::regex::icase};
@@ -1235,4 +1237,17 @@ std::string pg_shim(const std::string& query) {
     });
   }
   return result;
+}
+
+}  // namespace
+
+std::string pg_shim(const std::string& query) {
+  try {
+    return pg_shim_impl(query);
+  } catch (...) {
+    // boost::regex throws an exception about the complexity of matching when
+    // the wrong type of quotes are used or they're mismatched. Let the query
+    // through unmodified, the parser will throw a much more informative error.
+  }
+  return query;
 }
