@@ -313,6 +313,12 @@ int main(int argc, char** argv) {
                              ->default_value(dynamic_watchdog_time_limit)
                              ->implicit_value(10000),
                          "Dynamic watchdog time limit, in milliseconds");
+  desc_adv.add_options()(
+      "trivial-loop-join-threshold",
+      po::value<unsigned>(&g_trivial_loop_join_threshold)
+          ->default_value(g_trivial_loop_join_threshold)
+          ->implicit_value(1000),
+      "The maximum number of rows in the inner table of a loop join considered to be trivially small");
   desc_adv.add_options()("start-epoch", po::value<std::string>(&start_epoch), "Value of table epoch to 'rollback' to");
   desc_adv.add_options()("decrement-start-epoch",
                          po::value<std::string>(&decr_start_epoch),

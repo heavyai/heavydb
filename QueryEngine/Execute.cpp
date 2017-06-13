@@ -57,6 +57,7 @@ bool g_enable_watchdog{false};
 bool g_enable_dynamic_watchdog{false};
 unsigned g_dynamic_watchdog_time_limit{10000};
 bool g_allow_cpu_retry{false};
+unsigned g_trivial_loop_join_threshold{1000};
 
 Executor::Executor(const int db_id,
                    const size_t block_size_x,
@@ -798,7 +799,7 @@ bool is_trivial_loop_join(const std::vector<InputTableInfo>& query_infos, const 
     }
   }
   CHECK_NE(ssize_t(-1), inner_table_idx);
-  return query_infos[inner_table_idx].info.getNumTuples() <= 100;
+  return query_infos[inner_table_idx].info.getNumTuples() <= g_trivial_loop_join_threshold;
 }
 
 }  // namespace
