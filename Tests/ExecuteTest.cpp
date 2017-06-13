@@ -2248,9 +2248,9 @@ TEST(Select, Joins) {
     // Intentionally duplicate previous string join to cover hash table building.
     c("SELECT COUNT(*) FROM test, join_test WHERE test.str = join_test.dup_str;", dt);
 #endif  // HAVE_RAVM
-    EXPECT_THROW(
-        run_multiple_agg("SELECT COUNT(*) FROM test, join_test WHERE test.rowid = join_test.rowid;", dt, false),
-        std::runtime_error);
+    ASSERT_EQ(
+        int64_t(3),
+        v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test, join_test WHERE test.rowid = join_test.rowid;", dt)));
   }
 }
 
