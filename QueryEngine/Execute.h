@@ -784,11 +784,14 @@ class Executor {
                          std::unordered_set<int>& available_gpus,
                          int& available_cpus);
 
-  static std::vector<size_t> getTableFragmentIndices(
+  std::vector<size_t> getTableFragmentIndices(
       const RelAlgExecutionUnit& ra_exe_unit,
       const size_t table_idx,
       const size_t outer_frag_idx,
       std::map<int, const Executor::TableFragments*>& selected_tables_fragments);
+
+  bool skipFragmentPair(const Fragmenter_Namespace::FragmentInfo& outer_fragment_info,
+                        const Fragmenter_Namespace::FragmentInfo& inner_fragment_info);
 
   std::vector<const int8_t*> fetchIterTabFrags(const size_t frag_id,
                                                const ExecutionDispatch& execution_dispatch,

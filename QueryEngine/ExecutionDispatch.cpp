@@ -524,7 +524,7 @@ const int8_t* Executor::ExecutionDispatch::getScanColumn(
   auto cd = get_column_descriptor(col_id, table_id, cat_);
   CHECK(cd);
   {
-    ChunkKey chunk_key{cat_.get_currentDB().dbId, table_id, col_id, fragment.fragmentId};
+    ChunkKey chunk_key{cat_.get_currentDB().dbId, fragment.physicalTableId, col_id, fragment.fragmentId};
     chunk = Chunk_NS::Chunk::getChunk(cd,
                                       &cat_.get_dataMgr(),
                                       chunk_key,

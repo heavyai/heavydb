@@ -100,7 +100,27 @@ std::vector<std::pair<JoinHashTable::JoinHashTableCacheKey, std::shared_ptr<std:
 std::mutex JoinHashTable::join_hash_table_cache_mutex_;
 
 size_t get_shard_count(const Analyzer::BinOper* join_condition, const Catalog_Namespace::Catalog& catalog) {
-  return 0;  // Sharded joins aren't enabled yet.
+  const auto lhs_col = dynamic_cast<const Analyzer::ColumnVar*>(join_condition->get_left_operand());
+  const auto rhs_col = dynamic_cast<const Analyzer::ColumnVar*>(join_condition->get_right_operand());
+  if (!lhs_col || !rhs_col) {  // TODO(alex): handle dictionary encoded sides, they'll have casts
+    return 0;
+  }
+  if (lhs_col->get_table_id() < 0 || rhs_col->get_table_id() < 0) {
+    return 0;
+  }
+  const auto lhs_td = catalog.getMetadataForTable(lhs_col->get_table_id());
+  CHECK(lhs_td);
+  const auto rhs_td = catalog.getMetadataForTable(rhs_col->get_table_id());
+  CHECK(rhs_td);
+  if (lhs_td->shardedColumnId == 0 || rhs_td->shardedColumnId == 0 || lhs_td->nShards != rhs_td->nShards) {
+    return 0;
+  }
+  // The two columns involved must be the ones on which the tables have been sharded on.
+  return (lhs_td->shardedColumnId == lhs_col->get_column_id() && rhs_td->shardedColumnId == rhs_col->get_column_id()) ||
+                 (rhs_td->shardedColumnId == lhs_col->get_column_id() &&
+                  lhs_td->shardedColumnId == rhs_col->get_column_id())
+             ? lhs_td->nShards
+             : 0;
 }
 
 std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(
@@ -173,7 +193,7 @@ std::pair<const int8_t*, size_t> JoinHashTable::getColumnFragment(
   const int8_t* col_buff = nullptr;
   if (cd) {
     ChunkKey chunk_key{
-        cat_.get_currentDB().dbId, hash_col.get_table_id(), hash_col.get_column_id(), fragment.fragmentId};
+        cat_.get_currentDB().dbId, fragment.physicalTableId, hash_col.get_column_id(), fragment.fragmentId};
     const auto chunk = Chunk_NS::Chunk::getChunk(cd,
                                                  &cat_.get_dataMgr(),
                                                  chunk_key,
@@ -586,7 +606,7 @@ llvm::Value* JoinHashTable::codegenSlot(const CompilationOptions& co, const size
                                                executor_->castToTypeIn(key_lvs.front(), 64),
                                                executor_->ll_int(col_range_.getIntMin()),
                                                executor_->ll_int(col_range_.getIntMax())};
-  const int shard_count = get_shard_count(qual_bin_oper_.get(), cat_);
+  const int shard_count = co.device_type_ == ExecutorDeviceType::GPU ? get_shard_count(qual_bin_oper_.get(), cat_) : 0;
   if (shard_count) {
     const auto hash_entry_count = get_hash_entry_count(col_range_);
     const auto entry_count_per_shard = (hash_entry_count + shard_count - 1) / shard_count;

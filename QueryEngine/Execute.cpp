@@ -1207,7 +1207,10 @@ void Executor::dispatchFragments(
       if (skip_frag.first) {
         continue;
       }
-      const int device_id = fragment.deviceIds[static_cast<int>(Data_Namespace::GPU_LEVEL)];
+      const auto device_count = catalog_->get_dataMgr().cudaMgr_->getDeviceCount();
+      CHECK_GT(device_count, 0);
+      const int device_id = fragment.shard == -1 ? fragment.deviceIds[static_cast<int>(Data_Namespace::GPU_LEVEL)]
+                                                 : fragment.shard % device_count;
       for (size_t j = 0; j < ra_exe_unit.input_descs.size(); ++j) {
         const auto table_id = ra_exe_unit.input_descs[j].getTableId();
         auto table_frags_it = selected_tables_fragments.find(table_id);
@@ -1215,11 +1218,14 @@ void Executor::dispatchFragments(
         const auto frag_ids = getTableFragmentIndices(ra_exe_unit, j, outer_frag_id, selected_tables_fragments);
         if (fragments_per_device[device_id].size() < j + 1) {
           fragments_per_device[device_id].emplace_back(table_id, frag_ids);
-        } else if (!j) {
+        } else {
           CHECK_EQ(fragments_per_device[device_id][j].first, table_id);
-          CHECK_EQ(frag_ids.size(), size_t(1));
           auto& curr_frag_ids = fragments_per_device[device_id][j].second;
-          curr_frag_ids.insert(curr_frag_ids.end(), frag_ids.begin(), frag_ids.end());
+          for (const int frag_id : frag_ids) {
+            if (std::find(curr_frag_ids.begin(), curr_frag_ids.end(), frag_id) == curr_frag_ids.end()) {
+              curr_frag_ids.push_back(frag_id);
+            }
+          }
         }
       }
       rowid_lookup_key = std::max(rowid_lookup_key, skip_frag.second);
@@ -1308,23 +1314,55 @@ std::vector<size_t> Executor::getTableFragmentIndices(
   const int table_id = ra_exe_unit.input_descs[table_idx].getTableId();
   auto table_frags_it = selected_tables_fragments.find(table_id);
   CHECK(table_frags_it != selected_tables_fragments.end());
+  const auto& outer_input_desc = ra_exe_unit.input_descs[0];
+  const auto outer_table_fragments_it = selected_tables_fragments.find(outer_input_desc.getTableId());
+  const auto outer_table_fragments = outer_table_fragments_it->second;
+  CHECK(outer_table_fragments_it != selected_tables_fragments.end());
+  CHECK_LT(outer_frag_idx, outer_table_fragments->size());
   if (!table_idx) {
     return {outer_frag_idx};
   }
+  const auto& outer_fragment_info = (*outer_table_fragments)[outer_frag_idx];
   auto& inner_frags = table_frags_it->second;
   CHECK_LT(size_t(1), ra_exe_unit.input_descs.size());
 #ifndef ENABLE_EQUIJOIN_FOLD
   CHECK_EQ(table_id, ra_exe_unit.input_descs[1].getTableId());
 #endif
-  std::vector<size_t> all_frag_ids(inner_frags->size());
 #ifndef ENABLE_MULTIFRAG_JOIN
-  if (all_frag_ids.size() > 1) {
+  if (inner_frags->size() > 1) {
     throw std::runtime_error("Multi-fragment inner table '" + get_table_name(ra_exe_unit.input_descs[1], *catalog_) +
                              "' not supported yet");
   }
 #endif
-  std::iota(all_frag_ids.begin(), all_frag_ids.end(), 0);
+  std::vector<size_t> all_frag_ids;
+  for (size_t inner_frag_idx = 0; inner_frag_idx < inner_frags->size(); ++inner_frag_idx) {
+    const auto& inner_frag_info = (*inner_frags)[inner_frag_idx];
+    if (skipFragmentPair(outer_fragment_info, inner_frag_info)) {
+      continue;
+    }
+    all_frag_ids.push_back(inner_frag_idx);
+  }
   return all_frag_ids;
+}
+
+// Returns true iff the join between two fragments cannot yield any results, per
+// shard information. The pair can be skipped to avoid full broadcast.
+bool Executor::skipFragmentPair(const Fragmenter_Namespace::FragmentInfo& outer_fragment_info,
+                                const Fragmenter_Namespace::FragmentInfo& inner_fragment_info) {
+  // Don't bother with sharding for non-hash joins.
+  if (plan_state_->join_info_.join_impl_type_ != Executor::JoinImplType::HashOneToOne) {
+    return false;
+  }
+  // Both tables need to be sharded the same way.
+  if (outer_fragment_info.shard == -1 || inner_fragment_info.shard == -1 ||
+      outer_fragment_info.shard == inner_fragment_info.shard) {
+    return false;
+  }
+  CHECK(!plan_state_->join_info_.equi_join_tautologies_.empty());
+  const auto join_condition =
+      dynamic_cast<const Analyzer::BinOper*>(plan_state_->join_info_.equi_join_tautologies_.front().get());
+  CHECK(join_condition);
+  return get_shard_count(join_condition, *catalog_);
 }
 
 std::vector<const int8_t*> Executor::fetchIterTabFrags(const size_t frag_id,
@@ -1903,6 +1941,9 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
   std::unordered_map<int, int8_t*> col_buffers;
   std::unordered_map<int, std::vector<std::string>> str_col_buffers;
   auto& cat = root_plan->get_catalog();
+  const auto table_descriptor = cat.getMetadataForTable(table_id);
+  const auto shard_tables = cat.getPhysicalTablesDescriptors(table_descriptor);
+  const TableDescriptor* shard{nullptr};
   for (const int col_id : col_id_list) {
     const auto cd = get_column_descriptor(col_id, table_id, cat);
     const auto col_enc = cd->columnType.get_compression();
@@ -1934,6 +1975,7 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
   Fragmenter_Namespace::InsertData insert_data;
   insert_data.databaseId = cat.get_currentDB().dbId;
   insert_data.tableId = table_id;
+  int64_t int_col_val{0};
   for (auto target_entry : targets) {
     auto col_cv = dynamic_cast<const Analyzer::Constant*>(target_entry->get_expr());
     if (!col_cv) {
@@ -1958,18 +2000,21 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
         auto col_data = reinterpret_cast<int16_t*>(checked_malloc(sizeof(int16_t)));
         *col_data = col_cv->get_is_null() ? inline_fixed_encoding_null_val(cd->columnType) : col_datum.smallintval;
         col_buffers[col_ids[col_idx]] = reinterpret_cast<int8_t*>(col_data);
+        int_col_val = col_datum.smallintval;
         break;
       }
       case kINT: {
         auto col_data = reinterpret_cast<int32_t*>(checked_malloc(sizeof(int32_t)));
         *col_data = col_cv->get_is_null() ? inline_fixed_encoding_null_val(cd->columnType) : col_datum.intval;
         col_buffers[col_ids[col_idx]] = reinterpret_cast<int8_t*>(col_data);
+        int_col_val = col_datum.intval;
         break;
       }
       case kBIGINT: {
         auto col_data = reinterpret_cast<int64_t*>(checked_malloc(sizeof(int64_t)));
         *col_data = col_cv->get_is_null() ? inline_fixed_encoding_null_val(cd->columnType) : col_datum.bigintval;
         col_buffers[col_ids[col_idx]] = reinterpret_cast<int8_t*>(col_data);
+        int_col_val = col_datum.bigintval;
         break;
       }
       case kFLOAT: {
@@ -2024,6 +2069,9 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
         CHECK(false);
     }
     ++col_idx;
+    if (col_idx == static_cast<size_t>(table_descriptor->shardedColumnId)) {
+      shard = shard_tables[int_col_val % shard_tables.size()];
+    }
   }
   for (const auto kv : col_buffers) {
     insert_data.columnIds.push_back(kv.first);
@@ -2038,8 +2086,11 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
     insert_data.data.push_back(p);
   }
   insert_data.numRows = 1;
-  const auto table_descriptor = cat.getMetadataForTable(table_id);
-  table_descriptor->fragmenter->insertData(insert_data);
+  if (shard) {
+    shard->fragmenter->insertData(insert_data);
+  } else {
+    table_descriptor->fragmenter->insertData(insert_data);
+  }
   for (const auto kv : col_buffers) {
     free(kv.second);
   }

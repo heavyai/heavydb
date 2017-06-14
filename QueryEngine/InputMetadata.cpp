@@ -25,12 +25,27 @@ InputTableInfoCache::InputTableInfoCache(Executor* executor) : executor_(executo
 
 namespace {
 
-Fragmenter_Namespace::TableInfo build_table_info(const Fragmenter_Namespace::TableInfo& table_info) {
+Fragmenter_Namespace::TableInfo copy_table_info(const Fragmenter_Namespace::TableInfo& table_info) {
   Fragmenter_Namespace::TableInfo table_info_copy;
   table_info_copy.chunkKeyPrefix = table_info.chunkKeyPrefix;
   table_info_copy.fragments = table_info.fragments;
   table_info_copy.setPhysicalNumTuples(table_info.getPhysicalNumTuples());
   return table_info_copy;
+}
+
+Fragmenter_Namespace::TableInfo build_table_info(const std::vector<const TableDescriptor*>& shard_tables) {
+  size_t total_number_of_tuples{0};
+  Fragmenter_Namespace::TableInfo table_info_all_shards;
+  for (const TableDescriptor* shard_table : shard_tables) {
+    CHECK(shard_table->fragmenter);
+    const auto& shard_metainfo = shard_table->fragmenter->getFragmentsForQuery();
+    total_number_of_tuples += shard_metainfo.getPhysicalNumTuples();
+    const auto& shard_fragments = shard_table->fragmenter->getFragmentsForQuery().fragments;
+    table_info_all_shards.fragments.insert(
+        table_info_all_shards.fragments.end(), shard_fragments.begin(), shard_fragments.end());
+  }
+  table_info_all_shards.setPhysicalNumTuples(total_number_of_tuples);
+  return table_info_all_shards;
 }
 
 }  // namespace
@@ -39,18 +54,17 @@ Fragmenter_Namespace::TableInfo InputTableInfoCache::getTableInfo(const int tabl
   const auto it = cache_.find(table_id);
   if (it != cache_.end()) {
     const auto& table_info = it->second;
-    return build_table_info(table_info);
+    return copy_table_info(table_info);
   }
   const auto cat = executor_->getCatalog();
   CHECK(cat);
   const auto td = cat->getMetadataForTable(table_id);
   CHECK(td);
-  const auto fragmenter = td->fragmenter;
-  CHECK(fragmenter);
-  auto table_info = fragmenter->getFragmentsForQuery();
-  auto it_ok = cache_.emplace(table_id, build_table_info(table_info));
+  const auto shard_tables = cat->getPhysicalTablesDescriptors(td);
+  auto table_info = build_table_info(shard_tables);
+  auto it_ok = cache_.emplace(table_id, copy_table_info(table_info));
   CHECK(it_ok.second);
-  return build_table_info(table_info);
+  return copy_table_info(table_info);
 }
 
 void InputTableInfoCache::clear() {
@@ -206,7 +220,7 @@ void collect_table_infos(std::vector<InputTableInfo>& table_infos,
     const auto table_id = input_desc.getTableId();
     if (info_cache.count(table_id)) {
       CHECK(info_cache[table_id]);
-      table_infos.push_back({table_id, build_table_info(*info_cache[table_id])});
+      table_infos.push_back({table_id, copy_table_info(*info_cache[table_id])});
       continue;
     }
     if (input_desc.getSourceType() == InputSourceType::RESULT) {
