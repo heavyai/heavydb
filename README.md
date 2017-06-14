@@ -337,6 +337,20 @@ Most build dependencies required by MapD Core are available via APT. Thrift, Blo
     sudo make install
     popd
 
+##UBUNTU 17.04
+
+Sames as 16.10 with the following additons (we recommend that the proprietary nvidia drivers supplied via canonical be used)
+
+  sudo apt install -y \
+    nvidia-cuda-toolkit \
+    ccache \
+    libglu1-mesa-dev \
+    libglewmx-dev \
+    gcc-5 \
+    g++-5 \
+    libldap2-dev \
+    flex-old
+
 ### CUDA
 
 It is preferred, but not necessary, to install CUDA and the NVIDIA drivers using the .deb using the [instructions provided by NVIDIA](https://developer.nvidia.com/cuda-downloads). The `deb (network)` method (preferred) will ensure you always have the latest stable drivers, while the `deb (local)` method allows you to install does not require Internet access.
