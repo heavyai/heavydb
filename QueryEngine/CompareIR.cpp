@@ -157,8 +157,13 @@ llvm::Value* Executor::codegenCmpDecimalConst(const SQLOps optype,
     return nullptr;
   const auto operand = u_oper->get_operand();
   const auto& operand_ti = operand->get_type_info();
-  if (!operand_ti.is_decimal() || operand_ti.get_scale() >= lhs_ti.get_scale())
+  if (operand_ti.is_decimal() && operand_ti.get_scale() < lhs_ti.get_scale()) {
+    // lhs decimal type has smaller scale
+  } else if (operand_ti.is_integer() && 0 < lhs_ti.get_scale()) {
+    // lhs is integer, no need to scale it all the way up to the cmp expr scale
+  } else {
     return nullptr;
+  }
 
   auto scale_diff = lhs_ti.get_scale() - operand_ti.get_scale() - 1;
   int64_t bigintval = rhs_constant->get_constval().bigintval;
@@ -171,8 +176,7 @@ llvm::Value* Executor::codegenCmpDecimalConst(const SQLOps optype,
   int64_t decimal_tail = bigintval % exp_to_scale(scale_diff);
   if (truncated_decimal % 10 == 0 && decimal_tail > 0)
     truncated_decimal += 1;
-  SQLTypeInfo new_ti =
-      SQLTypeInfo(kDECIMAL, operand_ti.get_dimension() + 1, operand_ti.get_scale() + 1, operand_ti.get_notnull());
+  SQLTypeInfo new_ti = SQLTypeInfo(kDECIMAL, 19, lhs_ti.get_scale() - scale_diff, operand_ti.get_notnull());
   if (negative)
     truncated_decimal = -truncated_decimal;
   Datum d;
