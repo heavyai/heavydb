@@ -40,9 +40,7 @@
 
 #include "MapDRelease.h"
 
-#ifdef HAVE_CALCITE
 #include "Calcite/Calcite.h"
-#endif  // HAVE_CALCITE
 
 #include "Catalog/Catalog.h"
 #include "Fragmenter/InsertOrderFragmenter.h"
@@ -89,7 +87,6 @@
 #include <fcntl.h>
 #include <regex>
 
-
 #include "gen-cpp/MapD.h"
 
 typedef std::map<TSessionId, std::shared_ptr<Catalog_Namespace::SessionInfo>> SessionMap;
@@ -117,13 +114,8 @@ class MapDHandler : public MapDIf {
               const LdapMetadata ldapMetadata,
               const MapDParameters& mapd_parameters,
               const std::string& db_convert_dir,
-#ifdef HAVE_CALCITE
               const int calcite_port,
               const bool legacy_syntax);
-#else
-              const int /* calcite_port */,
-              const bool /* legacy_syntax */);
-#endif  // HAVE_CALCITE
 
   ~MapDHandler();
 
@@ -276,10 +268,8 @@ class MapDHandler : public MapDIf {
   int64_t start_time_;
   const MapDParameters& mapd_parameters_;
   bool enable_rendering_;
-#ifdef HAVE_CALCITE
   std::shared_ptr<Calcite> calcite_;
   const bool legacy_syntax_;
-#endif  // HAVE_CALCITE
   Catalog_Namespace::SessionInfo get_session(const TSessionId& session);
 
  private:
@@ -302,7 +292,6 @@ class MapDHandler : public MapDIf {
   void validate_rel_alg(TTableDescriptor& _return,
                         const std::string& query_str,
                         const Catalog_Namespace::SessionInfo& session_info);
-#ifdef HAVE_RAVM
   void execute_rel_alg(TQueryResult& _return,
                        const std::string& query_ra,
                        const bool column_format,
@@ -321,7 +310,6 @@ class MapDHandler : public MapDIf {
                              const Catalog_Namespace::SessionInfo& session_info,
                              const size_t device_id,
                              const int32_t first_n) const;
-#endif
 #endif
   TColumnType populateThriftColumnType(const Catalog_Namespace::Catalog* cat, const ColumnDescriptor* cd);
   TRowDescriptor fixup_row_descriptor(const TRowDescriptor& row_desc, const Catalog_Namespace::Catalog& cat);
@@ -382,7 +370,6 @@ class MapDHandler : public MapDIf {
   std::vector<std::string> getTargetNames(const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& targets) const;
 #endif
 
-
   void render_root_plan(TRenderResult& _return,
                         Planner::RootPlan* root_plan,
                         const std::string& query_str,
@@ -392,9 +379,7 @@ class MapDHandler : public MapDIf {
 
   TRowDescriptor convert_target_metainfo(const std::vector<TargetMetaInfo>& targets) const;
 
-#ifdef HAVE_CALCITE
   Planner::RootPlan* parse_to_plan(const std::string& query_str, const Catalog_Namespace::SessionInfo& session_info);
-#endif
 
   std::vector<TColumnRange> column_ranges_to_thrift(const AggregatedColRange& column_ranges);
 

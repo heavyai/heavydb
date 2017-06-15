@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#ifdef HAVE_CALCITE
 #include "RelAlgExecutor.h"
 #include "RelAlgTranslator.h"
 
@@ -1445,7 +1444,6 @@ bool RelAlgExecutor::isRowidLookup(const WorkUnit& work_unit) {
   return false;
 }
 
-
 ExecutionResult RelAlgExecutor::handleRetry(const int32_t error_code_in,
                                             const RelAlgExecutor::WorkUnit& work_unit,
                                             const std::vector<TargetMetaInfo>& targets_meta,
@@ -2066,5 +2064,3 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createFilterWorkUnit(const RelFilter* f
 }
 
 SpeculativeTopNBlacklist RelAlgExecutor::speculative_topn_blacklist_;
-
-#endif  // HAVE_CALCITE

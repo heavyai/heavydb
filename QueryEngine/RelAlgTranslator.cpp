@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#ifdef HAVE_CALCITE
 #include "RelAlgTranslator.h"
 #include "SqlTypesLayout.h"
 
@@ -919,4 +918,3 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateFunction
   }
   return args;
 }
-#endif  // HAVE_CALCITE

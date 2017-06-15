@@ -275,10 +275,8 @@ int main(int argc, char** argv) {
 
   po::options_description desc_adv("Advanced options");
   desc_adv.add_options()("help-advanced", "Print advanced help messages");
-#ifdef HAVE_CALCITE
   desc_adv.add_options()(
       "calcite-port", po::value<int>(&calcite_port)->default_value(calcite_port), "Calcite port number");
-#endif  // HAVE_CALCITE
   desc_adv.add_options()("jit-debug",
                          po::value<bool>(&jit_debug)->default_value(jit_debug)->implicit_value(true),
                          "Enable debugger support for the JIT. The generated code can be found at /tmp/mapdquery");
@@ -349,7 +347,6 @@ int main(int argc, char** argv) {
                          "Allow the queries which failed on GPU to retry on CPU, even when watchdog is enabled");
   desc_adv.add_options()(
       "db-query-list", po::value<std::string>(&db_query_file), "Path to file containing mapd queries");
-
 
   po::positional_options_description positionalOptions;
   positionalOptions.add("data", 1);
@@ -479,7 +476,6 @@ int main(int argc, char** argv) {
     close(pid_fd);
     return 1;
   }
-
 
   const auto log_path = boost::filesystem::path(base_path) / "mapd_log";
   (void)boost::filesystem::create_directory(log_path);

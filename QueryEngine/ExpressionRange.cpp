@@ -448,7 +448,6 @@ ExpressionRange getExpressionRange(const Analyzer::ColumnVar* col_expr,
   CHECK_GE(rte_idx, 0);
   CHECK_LT(static_cast<size_t>(rte_idx), query_infos.size());
   bool is_outer_join_proj = rte_idx > 0 && executor->isOuterJoin();
-#ifdef HAVE_RAVM
   if (col_expr->get_table_id() > 0) {
     auto col_range = executor->getColRange(PhysicalInput{col_expr->get_column_id(), col_expr->get_table_id()});
     if (is_outer_join_proj) {
@@ -456,7 +455,6 @@ ExpressionRange getExpressionRange(const Analyzer::ColumnVar* col_expr,
     }
     return col_range;
   }
-#endif  // HAVE_RAVM
   return getLeafColumnRange(col_expr, query_infos, executor, is_outer_join_proj);
 }
 

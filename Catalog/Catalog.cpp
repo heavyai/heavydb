@@ -180,9 +180,7 @@ void SysCatalog::dropDatabase(const int32_t dbid, const std::string& name) {
   sqliteConnector_.query_with_text_param("DELETE FROM mapd_databases WHERE dbid = ?", std::to_string(dbid));
   boost::filesystem::remove(basePath_ + "/mapd_catalogs/" + name);
   ChunkKey chunkKeyPrefix = {dbid};
-#ifdef HAVE_CALCITE
   calciteMgr_->updateMetadata(name, "");
-#endif  // HAVE_CALCITE
   dataMgr_->deleteChunksWithPrefix(chunkKeyPrefix);
   /* don't need to checkpoint as database is being dropped */
   // dataMgr_->checkpoint();
@@ -257,20 +255,12 @@ Catalog::Catalog(const string& basePath,
                  const string& dbname,
                  std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
                  LdapMetadata ldapMetadata,
-                 bool is_initdb
-#ifdef HAVE_CALCITE
-                 ,
-                 std::shared_ptr<Calcite> calcite
-#endif  // HAVE_CALCITE
-                 )
+                 bool is_initdb,
+                 std::shared_ptr<Calcite> calcite)
     : basePath_(basePath),
       sqliteConnector_(dbname, basePath + "/mapd_catalogs/"),
-      dataMgr_(dataMgr)
-#ifdef HAVE_CALCITE
-      ,
-      calciteMgr_(calcite)
-#endif  // HAVE_CALCITE
-{
+      dataMgr_(dataMgr),
+      calciteMgr_(calcite) {
   ldap_server_.reset(new LdapServer(ldapMetadata));
   if (!is_initdb)
     buildMaps();
@@ -279,44 +269,28 @@ Catalog::Catalog(const string& basePath,
 Catalog::Catalog(const string& basePath,
                  const DBMetadata& curDB,
                  std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
-                 LdapMetadata ldapMetadata
-#ifdef HAVE_CALCITE
-                 ,
-                 std::shared_ptr<Calcite> calcite
-#endif  // HAVE_CALCITE
-                 )
+                 LdapMetadata ldapMetadata,
+                 std::shared_ptr<Calcite> calcite)
     : basePath_(basePath),
       sqliteConnector_(curDB.dbName, basePath + "/mapd_catalogs/"),
       currentDB_(curDB),
-      dataMgr_(dataMgr)
-#ifdef HAVE_CALCITE
-      ,
-      calciteMgr_(calcite)
-#endif  // HAVE_CALCITE
-{
+      dataMgr_(dataMgr),
+      calciteMgr_(calcite) {
   ldap_server_.reset(new LdapServer(ldapMetadata));
   buildMaps();
 }
 
 Catalog::Catalog(const string& basePath,
                  const DBMetadata& curDB,
-                 std::shared_ptr<Data_Namespace::DataMgr> dataMgr
-#ifdef HAVE_CALCITE
-                 ,
+                 std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
                  const std::vector<LeafHostInfo>& string_dict_hosts,
-                 std::shared_ptr<Calcite> calcite
-#endif  // HAVE_CALCITE
-                 )
+                 std::shared_ptr<Calcite> calcite)
     : basePath_(basePath),
       sqliteConnector_(curDB.dbName, basePath + "/mapd_catalogs/"),
       currentDB_(curDB),
-      dataMgr_(dataMgr)
-#ifdef HAVE_CALCITE
-      ,
+      dataMgr_(dataMgr),
       string_dict_hosts_(string_dict_hosts),
-      calciteMgr_(calcite)
-#endif  // HAVE_CALCITE
-{
+      calciteMgr_(calcite) {
   ldap_server_.reset(new LdapServer());
   buildMaps();
 }
@@ -1149,9 +1123,7 @@ void Catalog::doDropTable(const TableDescriptor* td) {
     throw;
   }
   sqliteConnector_.query("END TRANSACTION");
-#ifdef HAVE_CALCITE
   calciteMgr_->updateMetadata(currentDB_.dbName, td->tableName);
-#endif  // HAVE_CALCITE
 }
 
 void Catalog::renamePhysicalTable(const TableDescriptor* td, const string& newTableName) {
@@ -1167,9 +1139,7 @@ void Catalog::renamePhysicalTable(const TableDescriptor* td, const string& newTa
   sqliteConnector_.query("END TRANSACTION");
   TableDescriptorMap::iterator tableDescIt = tableDescriptorMap_.find(to_upper(td->tableName));
   CHECK(tableDescIt != tableDescriptorMap_.end());
-#ifdef HAVE_CALCITE
   calciteMgr_->updateMetadata(currentDB_.dbName, td->tableName);
-#endif  // HAVE_CALCITE
   // Get table descriptor to change it
   TableDescriptor* changeTd = tableDescIt->second;
   changeTd->tableName = newTableName;
@@ -1208,9 +1178,7 @@ void Catalog::renameColumn(const TableDescriptor* td, const ColumnDescriptor* cd
   ColumnDescriptorMap::iterator columnDescIt =
       columnDescriptorMap_.find(std::make_tuple(td->tableId, to_upper(cd->columnName)));
   CHECK(columnDescIt != columnDescriptorMap_.end());
-#ifdef HAVE_CALCITE
   calciteMgr_->updateMetadata(currentDB_.dbName, td->tableName);
-#endif  // HAVE_CALCITE
   ColumnDescriptor* changeCd = columnDescIt->second;
   changeCd->columnName = newColumnName;
   columnDescriptorMap_.erase(columnDescIt);  // erase entry under old name

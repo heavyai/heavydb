@@ -296,11 +296,9 @@ void c(const std::string& query_string, const ExecutorDeviceType device_type) {
   g_sqlite_comparator.compare(query_string, device_type);
 }
 
-#ifdef HAVE_RAVM
 void c(const std::string& query_string, const std::string& sqlite_query_string, const ExecutorDeviceType device_type) {
   g_sqlite_comparator.compare(query_string, sqlite_query_string, device_type);
 }
-#endif  // HAVE_RAVM
 
 /* timestamp approximate checking for NOW() */
 void cta(const std::string& query_string, const ExecutorDeviceType device_type) {
@@ -416,7 +414,6 @@ TEST(Select, FilterAndSimpleAggregation) {
     ASSERT_NEAR(static_cast<double>(-1000.3),
                 v<double>(run_simple_agg("SELECT AVG(fn) AS val FROM test GROUP BY rowid ORDER BY val LIMIT 1;", dt)),
                 static_cast<double>(0.2));
-#ifdef HAVE_CALCITE
     c("SELECT COUNT(*) FROM test WHERE d = 2.2", dt);
     c("SELECT COUNT(*) FROM test WHERE fx + 1 IS NULL;", dt);
     c("SELECT COUNT(ss) FROM test;", dt);
@@ -429,7 +426,6 @@ TEST(Select, FilterAndSimpleAggregation) {
     c("SELECT COUNT(*) FROM test WHERE o >= CAST('1999-09-09' AS DATE);", dt);
     ASSERT_EQ(19, v<int64_t>(run_simple_agg("SELECT rowid FROM test WHERE rowid = 19;", dt)));
     ASSERT_EQ(2 * g_num_rows, v<int64_t>(run_simple_agg("SELECT MAX(rowid) - MIN(rowid) + 1 FROM test;", dt)));
-#endif  // HAVE_CALCITE
     ASSERT_EQ(15, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE MOD(x, 7) = 0;", dt)));
     ASSERT_EQ(0, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE MOD(x, 7) = 7;", dt)));
     ASSERT_EQ(5, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE MOD(x, 7) <> 0;", dt)));
@@ -437,7 +433,6 @@ TEST(Select, FilterAndSimpleAggregation) {
     c("SELECT MIN(x) FROM test WHERE x <> 7 AND x <> 8;", dt);
     c("SELECT MIN(x) FROM test WHERE z <> 101 AND z <> 102;", dt);
     c("SELECT MIN(x) FROM test WHERE t <> 1001 AND t <> 1002;", dt);
-#ifdef HAVE_CALCITE
     ASSERT_NEAR(static_cast<double>(0.5),
                 v<double>(run_simple_agg("SELECT STDDEV_POP(x) FROM test;", dt)),
                 static_cast<double>(0.2));
@@ -498,7 +493,6 @@ TEST(Select, FilterAndSimpleAggregation) {
                                          "(stddev_pop(x) * stddev_pop(y)) FROM test;",
                                          dt)),
                 static_cast<double>(0.01));
-#endif  // HAVE_CALCITE
   }
 }
 
@@ -568,7 +562,6 @@ TEST(Select, FloatAndDoubleTests) {
     c("SELECT f + 1 AS s, AVG(u * f) FROM test GROUP BY s ORDER BY s DESC;", dt);
     c("SELECT (CAST(dd AS float) * 0.5) AS key FROM test GROUP BY key ORDER BY key DESC;", dt);
     c("SELECT (CAST(dd AS double) * 0.5) AS key FROM test GROUP BY key ORDER BY key DESC;", dt);
-#ifdef HAVE_CALCITE
     ASSERT_NEAR(
         static_cast<double>(1.3),
         v<double>(run_simple_agg("SELECT AVG(f) AS n FROM test WHERE x = 7 GROUP BY z HAVING AVG(y) + STDDEV(y) "
@@ -578,11 +571,9 @@ TEST(Select, FloatAndDoubleTests) {
     ASSERT_NEAR(static_cast<double>(92.0),
                 v<double>(run_simple_agg("SELECT STDDEV_POP(dd) AS n FROM test ORDER BY n;", dt)),
                 static_cast<double>(1.0));
-#endif  // HAVE_CALCITE
   }
 }
 
-#ifdef HAVE_CALCITE
 TEST(Select, FilterShortCircuit) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -603,7 +594,6 @@ TEST(Select, FilterShortCircuit) {
     c("SELECT COUNT(*) FROM test WHERE UNLIKELY(x IN (7, 8, 9, 10)) AND y > 42;", dt);
   }
 }
-#endif  // HAVE_CALCITE
 
 TEST(Select, FilterAndMultipleAggregation) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
@@ -640,14 +630,12 @@ TEST(Select, FilterAndGroupBy) {
     c("SELECT COUNT(*) FROM test WHERE CAST((CAST(x AS FLOAT) - 0) * 0.2 AS INT) = 1;", dt);
     c("SELECT CAST(CAST(d AS FLOAT) AS INTEGER) AS key, COUNT(*) FROM test GROUP BY key;", dt);
     c("SELECT x * 2 AS x2, COUNT(DISTINCT y) AS n FROM test GROUP BY x2 ORDER BY n DESC;", dt);
-#ifdef HAVE_CALCITE
     c("SELECT x, COUNT(real_str) FROM test GROUP BY x ORDER BY x DESC;", dt);
     EXPECT_THROW(run_multiple_agg("SELECT x, MIN(real_str) FROM test GROUP BY x ORDER BY x DESC;", dt),
                  std::runtime_error);
     EXPECT_THROW(run_multiple_agg("SELECT x, MAX(real_str) FROM test GROUP BY x ORDER BY x DESC;", dt),
                  std::runtime_error);
     EXPECT_THROW(run_multiple_agg("SELECT MIN(str) FROM test GROUP BY x;", dt), std::runtime_error);
-#endif
   }
 }
 
@@ -702,7 +690,6 @@ TEST(Select, CountDistinct) {
   }
 }
 
-#ifdef HAVE_RAVM
 TEST(Select, ApproxCountDistinct) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -745,7 +732,6 @@ TEST(Select, ApproxCountDistinct) {
     EXPECT_THROW(run_multiple_agg("SELECT APPROX_COUNT_DISTINCT(real_str) FROM test;", dt), std::runtime_error);
   }
 }
-#endif  // HAVE_RAVM
 
 TEST(Select, ScanNoAggregation) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
@@ -775,9 +761,7 @@ TEST(Select, OrderBy) {
     c("SELECT x, COUNT(distinct y) AS n FROM test GROUP BY x ORDER BY n DESC;", dt);
     c("SELECT x, x, COUNT(*) AS val FROM test GROUP BY x HAVING val > 5 ORDER BY val DESC LIMIT 5;", dt);
     c("SELECT ufd, COUNT(*) n FROM test GROUP BY ufd, str ORDER BY ufd, n;", dt);
-#ifdef HAVE_RAVM
     c("SELECT -x, COUNT(*) FROM test GROUP BY x ORDER BY x DESC;", dt);
-#endif  // HAVE_RAVM
   }
 }
 
@@ -798,7 +782,6 @@ TEST(Select, ComplexQueries) {
     c("SELECT x + y AS a, COUNT(*) * MAX(y) - SUM(z) AS b FROM test "
       "WHERE z BETWEEN 100 AND 200 GROUP BY a, y;",
       dt);
-#ifdef HAVE_RAVM
     c("SELECT COUNT(*) FROM test a JOIN (SELECT * FROM test WHERE y < 43) b ON a.x = b.x JOIN join_test c ON a.x = c.x "
       "WHERE a.fixed_str = 'foo';",
       dt);
@@ -806,7 +789,6 @@ TEST(Select, ComplexQueries) {
       "'foo' ORDER BY x LIMIT 1;",
       dt);
     c("SELECT * FROM (SELECT y, b.str FROM test a JOIN join_test b ON a.x = b.x) ORDER BY y, str;", dt);
-#endif  // HAVE_RAVM
     const auto rows = run_multiple_agg(
         "SELECT x + y AS a, COUNT(*) * MAX(y) - SUM(z) AS b FROM test "
         "WHERE z BETWEEN 100 AND 200 GROUP BY x, y ORDER BY a DESC LIMIT 2;",
@@ -833,25 +815,19 @@ TEST(Select, GroupByExprNoFilterNoAggregate) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     c("SELECT x + y AS a FROM test GROUP BY a ORDER BY a;", dt);
-#ifdef HAVE_RAVM
     ASSERT_EQ(8,
               v<int64_t>(run_simple_agg(
                   "SELECT TRUNCATE(x, 0) AS foo FROM test GROUP BY TRUNCATE(x, 0) ORDER BY foo DESC LIMIT 1;", dt)));
-#endif  // HAVE_RAVM
   }
 }
 
-#ifdef HAVE_CALCITE
 TEST(Select, DistinctProjection) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     c("SELECT DISTINCT str FROM test ORDER BY str;", dt);
-#ifdef HAVE_RAVM
     c("SELECT DISTINCT(str), SUM(x) FROM test WHERE x > 7 GROUP BY str LIMIT 2;", dt);
-#endif  // HAVE_RAVM
   }
 }
-#endif  // HAVE_CALCITE
 
 TEST(Select, Case) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
@@ -919,7 +895,6 @@ TEST(Select, Case) {
               v<int64_t>(run_simple_agg("SELECT CASE WHEN 1 < 0 THEN DATE_TRUNC(day, m) ELSE DATE_TRUNC(year, m) END "
                                         "AS date_bin FROM test GROUP BY date_bin;",
                                         dt)));
-#ifdef HAVE_CALCITE
     c("SELECT COUNT(CASE WHEN str IN ('foo', 'bar') THEN 'foo_bar' END) from test;", dt);
     ASSERT_EQ(
         int64_t(1),
@@ -927,18 +902,6 @@ TEST(Select, Case) {
     ASSERT_EQ(
         int64_t(0),
         v<int64_t>(run_simple_agg("SELECT MIN(CASE WHEN x BETWEEN 6 AND 7 THEN true ELSE false END) FROM test;", dt)));
-#else
-    ASSERT_EQ(int64_t(1),
-              v<int64_t>(run_simple_agg(
-                  "SELECT MIN(CASE WHEN x BETWEEN 7 AND 8 THEN CAST('t' AS boolean) ELSE CAST('f' AS boolean) END) "
-                  "FROM test;",
-                  dt)));
-    ASSERT_EQ(int64_t(0),
-              v<int64_t>(run_simple_agg(
-                  "SELECT MIN(CASE WHEN x BETWEEN 6 AND 7 THEN CAST('t' AS boolean) ELSE CAST('f' AS boolean) END) "
-                  "FROM test;",
-                  dt)));
-#endif  // HAVE_CALCITE
   }
 }
 
@@ -986,7 +949,6 @@ TEST(Select, Strings) {
     ASSERT_EQ(2 * g_num_rows, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE CHAR_LENGTH(str) = 3;", dt)));
     ASSERT_EQ(g_num_rows, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE str ILIKE 'f%%';", dt)));
     ASSERT_EQ(0, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE str ILIKE 'McDonald''s';", dt)));
-#ifdef HAVE_CALCITE
     ASSERT_EQ("foo",
               boost::get<std::string>(
                   v<NullableString>(run_simple_agg("SELECT str FROM test WHERE REGEXP_LIKE(str, '^f.?.+');", dt))));
@@ -1019,7 +981,6 @@ TEST(Select, Strings) {
                   run_simple_agg("SELECT COUNT(*) FROM test WHERE REGEXP_LIKE(str, 'ba.') or str REGEXP 'fo.?';", dt)));
     ASSERT_EQ(2 * g_num_rows,
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE str REGEXP 'ba.' or str REGEXP 'fo.';", dt)));
-#endif  // HAVE_CALCITE
   }
 }
 
@@ -1053,7 +1014,6 @@ TEST(Select, StringsNoneEncoding) {
     c("SELECT COUNT(*) FROM test WHERE LENGTH(real_str) = 8;", dt);
     ASSERT_EQ(2 * g_num_rows,
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE CHAR_LENGTH(real_str) = 8;", dt)));
-#ifdef HAVE_CALCITE
     ASSERT_EQ(2 * g_num_rows,
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE REGEXP_LIKE(real_str,'real_.*.*.*');", dt)));
     ASSERT_EQ(g_num_rows,
@@ -1062,7 +1022,6 @@ TEST(Select, StringsNoneEncoding) {
     ASSERT_EQ(g_num_rows,
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE real_str REGEXP 'real_f.*.*';", dt)));
     ASSERT_EQ(0, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE real_str REGEXP 'real_f.+\%';", dt)));
-#endif  // HAVE_CALCITE
   }
 }
 
@@ -1381,7 +1340,6 @@ TEST(Select, Time) {
     ASSERT_EQ(1440180000L,
               v<int64_t>(run_simple_agg(
                   "select DATE_TRUNC (QUARTERDAY, CAST('2015-08-21T23:59:59' AS timestamp)) FROM test limit 1;", dt)));
-#ifdef HAVE_CALCITE
     ASSERT_EQ(
         2007,
         v<int64_t>(run_simple_agg("SELECT DATEPART('year', CAST('2007-10-30 12:15:32' AS TIMESTAMP)) FROM test;", dt)));
@@ -1471,7 +1429,6 @@ TEST(Select, Time) {
                   "SELECT DATEDIFF('quarter', CAST('2006-01-07 00:00:00' as TIMESTAMP), CAST('2009-01-07 00:00:00' AS "
                   "TIMESTAMP)) FROM TEST LIMIT 1;",
                   dt)));
-#endif  // HAVE_CALCITE
     ASSERT_EQ(1418428800L, v<int64_t>(run_simple_agg("SELECT CAST(m AS date) FROM test LIMIT 1;", dt)));
     ASSERT_EQ(1336435200L,
               v<int64_t>(run_simple_agg(
@@ -1609,9 +1566,7 @@ TEST(Select, BooleanColumn) {
     ASSERT_EQ(g_num_rows + g_num_rows / 2,
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE x < 8 AND b;", dt)));
     ASSERT_EQ(0, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE x < 8 AND NOT b;", dt)));
-#ifdef HAVE_CALCITE
     ASSERT_EQ(5, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE x > 7 OR false;", dt)));
-#endif  // HAVE_CALCITE
     ASSERT_EQ(7, v<int64_t>(run_simple_agg("SELECT MAX(x) FROM test WHERE b = CAST('t' AS boolean);", dt)));
     ASSERT_EQ(3 * g_num_rows,
               v<int64_t>(run_simple_agg(" SELECT SUM(2 *(CASE when x = 7 then 1 else 0 END)) FROM test;", dt)));
@@ -1645,7 +1600,6 @@ TEST(Select, CastFromLiteral) {
   }
 }
 
-#ifdef HAVE_CALCITE
 TEST(Select, CastFromNull) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -1658,9 +1612,7 @@ TEST(Select, CastFromNull) {
     c("SELECT CAST(NULL AS NUMERIC) FROM test;", dt);
   }
 }
-#endif  // HAVE_CALCITE
 
-#ifdef HAVE_CALCITE
 TEST(Select, TimeInterval) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -1683,7 +1635,6 @@ TEST(Select, TimeInterval) {
     ASSERT_EQ(1002L,
               v<int64_t>(run_simple_agg("SELECT t * INTERVAL '1' MONTH FROM test WHERE t <> 1001 LIMIT 1;", dt)));
     ASSERT_EQ(3L, v<int64_t>(run_simple_agg("SELECT INTERVAL '1' MONTH + INTERVAL '2' MONTH FROM test LIMIT 1;", dt)));
-#ifdef HAVE_RAVM
     ASSERT_EQ(1388534400L,
               v<int64_t>(run_simple_agg(
                   "SELECT CAST(m AS date) + CAST(TRUNCATE(-1 * (EXTRACT(DOY FROM m) - 1), 0) AS INTEGER) * INTERVAL "
@@ -1711,10 +1662,8 @@ TEST(Select, TimeInterval) {
               v<int64_t>(run_simple_agg(
                   "SELECT TIMESTAMPADD(SQL_TSI_HOUR, EXTRACT(HOUR from m), CAST(m AS DATE)) AS g FROM test GROUP BY g;",
                   dt)));
-#endif  // HAVE_RAVM
   }
 }
-#endif  // HAVE_CALCITE
 
 TEST(Select, UnsupportedNodes) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
@@ -1725,14 +1674,12 @@ TEST(Select, UnsupportedNodes) {
   }
 }
 
-#ifdef HAVE_RAVM
 TEST(Select, UnsupportedMultipleArgAggregate) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     EXPECT_THROW(run_multiple_agg("SELECT COUNT(distinct x, y) FROM test;", dt), std::runtime_error);
   }
 }
-#endif  // HAVE_RAVM
 
 namespace Importer_NS {
 
@@ -2246,11 +2193,9 @@ TEST(Select, Joins) {
                   "array_test.x = "
                   "test_inner.x;",
                   dt)));
-#ifdef HAVE_RAVM
     c("SELECT COUNT(*) FROM test, join_test WHERE test.str = join_test.dup_str;", dt);
     // Intentionally duplicate previous string join to cover hash table building.
     c("SELECT COUNT(*) FROM test, join_test WHERE test.str = join_test.dup_str;", dt);
-#endif  // HAVE_RAVM
     c("SELECT test.x, empty.x FROM test, empty WHERE test.x = empty.x;", dt);
     ASSERT_EQ(
         int64_t(3),
@@ -2407,13 +2352,10 @@ TEST(Select, Empty) {
     c("SELECT SUM(dd) FROM test WHERE x > 8;", dt);
     c("SELECT SUM(dd) FROM empty GROUP BY x, y;", dt);
     c("SELECT COUNT(DISTINCT x) FROM empty;", dt);
-#ifdef HAVE_RAVM
     c("SELECT APPROX_COUNT_DISTINCT(x * 1000000) FROM empty;", "SELECT COUNT(DISTINCT x * 1000000) FROM empty;", dt);
-#endif  // HAVE_RAVM
   }
 }
 
-#ifdef HAVE_RAVM
 TEST(Select, Subqueries) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -2473,11 +2415,9 @@ TEST(Select, Subqueries) {
 #endif
     EXPECT_THROW(run_multiple_agg("SELECT * FROM (SELECT * FROM test LIMIT 5);", dt), std::runtime_error);
     EXPECT_THROW(run_simple_agg("SELECT AVG(SELECT x FROM test LIMIT 5) FROM test;", dt), std::runtime_error);
-#ifdef HAVE_CALCITE
     ASSERT_NEAR(static_cast<double>(2.057),
                 v<double>(run_simple_agg("SELECT AVG(dd) / (SELECT STDDEV(dd) FROM test) FROM test;", dt)),
                 static_cast<double>(0.10));
-#endif  // HAVE_CALCITE
   }
 }
 
@@ -2773,9 +2713,6 @@ TEST(Select, CreateTableAsSelect) {
   }
 }
 
-#endif  // HAVE_RAVM
-
-#ifdef HAVE_CALCITE
 TEST(Select, PgShim) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -2796,17 +2733,14 @@ TEST(Select, Deserialization) {
     c("SELECT CAST(CAST(x AS float) * 0.0000000000 AS INT) FROM test;", dt);
   }
 }
-#endif  // HAVE_CALCITE
 
 TEST(Select, DesugarTransform) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     c("SELECT * FROM empty ORDER BY empty.x;", dt);
-#ifdef HAVE_RAVM
     c("SELECT COUNT(*) FROM TEST WHERE x IN (SELECT x + 1 AS foo FROM test GROUP BY foo ORDER BY COUNT(*) DESC LIMIT "
       "1);",
       dt);
-#endif  // HAVE_RAVM
   }
 }
 
@@ -3025,7 +2959,6 @@ int create_and_populate_tables() {
 }
 
 int create_views() {
-#ifdef HAVE_RAVM
   try {
     const std::string create_view_test{
         "CREATE VIEW view_test AS SELECT test.*, test_inner.* FROM test, test_inner WHERE test.str = test_inner.str;"};
@@ -3035,12 +2968,10 @@ int create_views() {
     LOG(ERROR) << "Failed to (re-)create view 'view_test'";
     return -EEXIST;
   }
-#endif  // HAVE_RAVM
   return 0;
 }
 
 int create_as_select() {
-#ifdef HAVE_RAVM
   try {
     const std::string create_ctas_test{
         "CREATE TABLE ctas_test AS SELECT x, f, d, str, fixed_str FROM test WHERE x > 7;"};
@@ -3050,12 +2981,10 @@ int create_as_select() {
     LOG(ERROR) << "Failed to (re-)create table 'ctas_test'";
     return -EEXIST;
   }
-#endif  // HAVE_RAVM
   return 0;
 }
 
 int create_as_select_empty() {
-#ifdef HAVE_RAVM
   try {
     const std::string create_ctas_test{
         "CREATE TABLE empty_ctas_test AS SELECT x, f, d, str, fixed_str FROM test WHERE x > 8;"};
@@ -3065,7 +2994,6 @@ int create_as_select_empty() {
     LOG(ERROR) << "Failed to (re-)create table 'ctas_test'";
     return -EEXIST;
   }
-#endif  // HAVE_RAVM
   return 0;
 }
 
@@ -3110,22 +3038,18 @@ void drop_tables() {
   const std::string drop_test_in_bitmap{"DROP TABLE test_in_bitmap;"};
   g_sqlite_comparator.query(drop_test_in_bitmap);
   run_ddl_statement(drop_test_in_bitmap);
-#ifdef HAVE_RAVM
   const std::string drop_ctas_test{"DROP TABLE ctas_test;"};
   g_sqlite_comparator.query(drop_ctas_test);
   run_ddl_statement(drop_ctas_test);
   const std::string drop_empty_ctas_test{"DROP TABLE empty_ctas_test;"};
   g_sqlite_comparator.query(drop_empty_ctas_test);
   run_ddl_statement(drop_empty_ctas_test);
-#endif  // HAVE_RAVM
 }
 
 void drop_views() {
-#ifdef HAVE_RAVM
   const std::string drop_view_test{"DROP VIEW view_test;"};
   run_ddl_statement(drop_view_test);
   g_sqlite_comparator.query(drop_view_test);
-#endif  // HAVE_RAVM
 }
 
 }  // namespace

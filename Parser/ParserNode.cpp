@@ -39,11 +39,9 @@
 #include "../Shared/mapd_glob.h"
 #include "parser.h"
 
-#ifdef HAVE_RAVM
 #include "../QueryEngine/ExtensionFunctionsWhitelist.h"
 #include "../QueryEngine/RelAlgExecutor.h"
 #include "../QueryEngine/CalciteAdapter.h"
-#endif  // HAVE_RAVM
 
 namespace Parser {
 
@@ -1795,7 +1793,6 @@ ResultRows getResultRows(const Catalog_Namespace::SessionInfo& session,
 
   auto executor = Executor::getExecutor(catalog.get_currentDB().dbId);
 
-#ifdef HAVE_RAVM
 #ifdef HAVE_CUDA
   const auto device_type = session.get_executor_device_type();
 #else
@@ -1817,11 +1814,6 @@ ResultRows getResultRows(const Catalog_Namespace::SessionInfo& session,
   targets = result.getTargetsMeta();
 
   return result.getRows();
-#else   // HAVE_RAVM
-  LOG(FATAL) << "unsupported legacy parser path";
-  ResultRows* result;
-  return *result;
-#endif  // HAVE_RAVM
 }
 
 namespace {
@@ -2393,7 +2385,6 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 }
 
 void CreateViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
-#ifdef HAVE_CALCITE
   auto& catalog = session.get_catalog();
   if (catalog.getMetadataForTable(view_name_) != nullptr) {
     if (if_not_exists_)
@@ -2416,9 +2407,6 @@ void CreateViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   td.fragPageSize = DEFAULT_PAGE_SIZE;
   td.maxRows = DEFAULT_MAX_ROWS;
   catalog.createTable(td, {});
-#else
-  throw std::runtime_error("CREATE VIEW not supported with legacy parser");
-#endif  // HAVE_CALCITE
 }
 
 void DropViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {

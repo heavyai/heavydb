@@ -39,13 +39,9 @@
 
 #include "MapDRelease.h"
 
-#ifdef HAVE_CALCITE
 #include "Calcite/Calcite.h"
-#endif  // HAVE_CALCITE
 
-#ifdef HAVE_RAVM
 #include "QueryEngine/RelAlgExecutor.h"
-#endif  // HAVE_RAVM
 
 #include "Catalog/Catalog.h"
 #include "Fragmenter/InsertOrderFragmenter.h"
@@ -91,7 +87,6 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <regex>
-
 
 #ifdef ENABLE_ARROW_CONVERTER
 #include "arrow/buffer.h"
@@ -180,7 +175,6 @@ std::string transform_to_poly_render_query(const std::string& query_str, const r
   return result;
 }
 
-
 std::string image_from_rendered_rows(const ResultRows& rendered_results) {
   const auto img_row = rendered_results.getNextRow(false, false);
   CHECK_EQ(size_t(1), img_row.size());
@@ -214,13 +208,8 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
                          const LdapMetadata ldapMetadata,
                          const MapDParameters& mapd_parameters,
                          const std::string& db_convert_dir,
-#ifdef HAVE_CALCITE
                          const int calcite_port,
                          const bool legacy_syntax)
-#else
-                         const int /* calcite_port */,
-                         const bool /* legacy_syntax */)
-#endif  // HAVE_CALCITE
     : leaf_aggregator_(db_leaves),
       string_leaves_(string_leaves),
       base_data_path_(base_data_path),
@@ -231,12 +220,8 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
       read_only_(read_only),
       allow_loop_joins_(allow_loop_joins),
       mapd_parameters_(mapd_parameters),
-#ifdef HAVE_CALCITE
       enable_rendering_(enable_rendering),
       legacy_syntax_(legacy_syntax),
-#else
-      enable_rendering_(enable_rendering),
-#endif  // HAVE_CALCITE
       start_epoch_table_name_(start_epoch_table_name),
       start_epoch_(start_epoch),
       is_decr_start_epoch_(is_decr_start_epoch),
@@ -272,12 +257,8 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
                                               start_gpu,
                                               total_reserved,
                                               num_reader_threads));
-#ifdef HAVE_CALCITE
   calcite_.reset(new Calcite(calcite_port, base_data_path_, mapd_parameters_.calcite_max_mem));
-#ifdef HAVE_RAVM
   ExtensionFunctionsWhitelist::add(calcite_->getExtensionFunctionWhitelist());
-#endif  // HAVE_RAVM
-#endif  // HAVE_CALCITE
 
   if (!data_mgr_->gpusPresent()) {
     executor_device_type_ = ExecutorDeviceType::CPU;
@@ -296,15 +277,7 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
       LOG(INFO) << "Started in Hybrid mode" << std::endl;
   }
 
-
-  sys_cat_.reset(new Catalog_Namespace::SysCatalog(base_data_path_,
-                                                   data_mgr_,
-                                                   ldapMetadata
-#ifdef HAVE_CALCITE
-                                                   ,
-                                                   calcite_
-#endif  // HAVE_CALCITE
-                                                   ));
+  sys_cat_.reset(new Catalog_Namespace::SysCatalog(base_data_path_, data_mgr_, ldapMetadata, calcite_));
   import_path_ = boost::filesystem::path(base_data_path_) / "mapd_import";
   start_time_ = std::time(nullptr);
 }
@@ -406,15 +379,8 @@ void MapDHandler::connectImpl(TSessionId& session,
   }
   auto cat_it = cat_map_.find(dbname);
   if (cat_it == cat_map_.end()) {
-    Catalog_Namespace::Catalog* cat = new Catalog_Namespace::Catalog(base_data_path_,
-                                                                     db_meta,
-                                                                     data_mgr_
-#ifdef HAVE_CALCITE
-                                                                     ,
-                                                                     string_leaves_,
-                                                                     calcite_
-#endif  // HAVE_CALCITE
-                                                                     );
+    Catalog_Namespace::Catalog* cat =
+        new Catalog_Namespace::Catalog(base_data_path_, db_meta, data_mgr_, string_leaves_, calcite_);
     cat_map_[dbname].reset(cat);
     sessions_[session].reset(
         new Catalog_Namespace::SessionInfo(cat_map_[dbname], user_meta, executor_device_type_, session));
@@ -631,10 +597,6 @@ void MapDHandler::sql_execute(TQueryResult& _return,
                               const int32_t first_n) {
   const auto session_info = MapDHandler::get_session(session);
   if (leaf_aggregator_.leafCount() > 0) {
-#ifdef HAVE_RAVM
-#else
-    CHECK(false);
-#endif  // HAVE_RAVM
   } else {
     MapDHandler::sql_execute_impl(
         _return, session_info, query_str, column_format, nonce, session_info.get_executor_device_type(), first_n);
@@ -653,9 +615,7 @@ void MapDHandler::sql_execute_df(TGpuDataFrame& _return,
     SQLParser parser;
     std::list<std::unique_ptr<Parser::Stmt>> parse_trees;
     std::string last_parsed;
-#ifdef HAVE_CALCITE
     try {
-#ifdef HAVE_RAVM
       ParserWrapper pw{query_str};
       if (!pw.is_ddl && !pw.is_update_dml && !pw.is_other_explain) {
         std::string query_ra;
@@ -669,17 +629,6 @@ void MapDHandler::sql_execute_df(TGpuDataFrame& _return,
         }
         return;
       }
-#else
-      std::unique_ptr<const Planner::RootPlan> plan_ptr;
-      execution_time_ms += measure<>::execution([&]() { plan_ptr.reset(parse_to_plan(query_str, session_info)); });
-      if (plan_ptr) {
-        execute_root_plan_df(_return, plan_ptr.get(), session_info, first_n);
-        if (_return.schema.empty()) {
-          throw std::runtime_error("schema is missing in returned result");
-        }
-        return;
-      }
-#endif  // HAVE_RAVM
       LOG(INFO) << "passing query to legacy processor";
     } catch (std::exception& e) {
       TMapDException ex;
@@ -687,7 +636,6 @@ void MapDHandler::sql_execute_df(TGpuDataFrame& _return,
       LOG(ERROR) << ex.error_msg;
       throw ex;
     }
-#endif  // HAVE_CALCITE
     TMapDException ex;
     ex.error_msg = std::string("Exception: DDL or update DML are not unsupported by sql_execute_df");
     LOG(ERROR) << ex.error_msg;
@@ -729,9 +677,7 @@ void MapDHandler::sql_execute_gpudf(TGpuDataFrame& _return,
     SQLParser parser;
     std::list<std::unique_ptr<Parser::Stmt>> parse_trees;
     std::string last_parsed;
-#ifdef HAVE_CALCITE
     try {
-#ifdef HAVE_RAVM
       ParserWrapper pw{query_str};
       if (!pw.is_ddl && !pw.is_update_dml && !pw.is_other_explain) {
         std::string query_ra;
@@ -745,17 +691,6 @@ void MapDHandler::sql_execute_gpudf(TGpuDataFrame& _return,
         }
         return;
       }
-#else
-      std::unique_ptr<const Planner::RootPlan> plan_ptr;
-      execution_time_ms += measure<>::execution([&]() { plan_ptr.reset(parse_to_plan(query_str, session_info)); });
-      if (plan_ptr) {
-        execute_root_plan_gpudf(_return, plan_ptr.get(), session_info, device_id, first_n);
-        if (_return.schema.empty()) {
-          throw std::runtime_error("schema is missing in returned result");
-        }
-        return;
-      }
-#endif  // HAVE_RAVM
       LOG(INFO) << "passing query to legacy processor";
     } catch (std::exception& e) {
       TMapDException ex;
@@ -763,7 +698,6 @@ void MapDHandler::sql_execute_gpudf(TGpuDataFrame& _return,
       LOG(ERROR) << ex.error_msg;
       throw ex;
     }
-#endif  // HAVE_CALCITE
     TMapDException ex;
     ex.error_msg = std::string("Exception: DDL or update DML are not unsupported by sql_execute_gpudf");
     LOG(ERROR) << ex.error_msg;
@@ -789,18 +723,9 @@ std::string apply_copy_to_shim(const std::string& query_str) {
 
 }  // namespace
 
-#ifdef HAVE_RAVM
-namespace {
-
-
-}  // namespace
-
-#endif  // HAVE_RAVM
-
 void MapDHandler::sql_validate(TTableDescriptor& _return, const TSessionId& session, const std::string& query_str) {
   std::unique_ptr<const Planner::RootPlan> root_plan;
   const auto session_info = get_session(session);
-#ifdef HAVE_CALCITE
   ParserWrapper pw{query_str};
   if (pw.is_select_explain || pw.is_other_explain || pw.is_ddl || pw.is_update_dml) {
     TMapDException ex;
@@ -808,40 +733,9 @@ void MapDHandler::sql_validate(TTableDescriptor& _return, const TSessionId& sess
     LOG(ERROR) << ex.error_msg;
     throw ex;
   }
-#ifdef HAVE_RAVM
   MapDHandler::validate_rel_alg(_return, query_str, session_info);
-#else   // HAVE_RAVM
-  root_plan.reset(parse_to_plan(query_str, session_info));
-#endif  // !HAVE_RAVM
-#else   // HAVE_CALCITE
-  root_plan.reset(parse_to_plan_legacy(query_str, session_info, "validate"));
-#endif  // !HAVE_CALCITE
-#ifndef HAVE_RAVM
-  CHECK(root_plan);
-  CHECK(root_plan->get_plan());
-  const auto& target_list = root_plan->get_plan()->get_targetlist();
-  for (const auto& target : target_list) {
-    const auto& target_ti = target->get_expr()->get_type_info();
-    TColumnType col_type;
-    col_type.col_type.type = type_to_thrift(target_ti);
-    col_type.col_type.encoding = encoding_to_thrift(target_ti);
-    col_type.col_type.nullable = !target_ti.get_notnull();
-    col_type.col_type.is_array = target_ti.get_type() == kARRAY;
-    col_type.col_name = target->get_resname();
-    col_type.col_type.precision = target_ti.get_precision();
-    col_type.col_type.scale = target_ti.get_scale();
-    const auto it_ok = _return.insert(std::make_pair(col_type.col_name, col_type));
-    if (!it_ok.second) {
-      TMapDException ex;
-      ex.error_msg = "Duplicate alias: " + col_type.col_name;
-      LOG(ERROR) << ex.error_msg;
-      throw ex;
-    }
-  }
-#endif  // !HAVE_RAVM
 }
 
-#ifdef HAVE_RAVM
 void MapDHandler::validate_rel_alg(TTableDescriptor& _return,
                                    const std::string& query_str,
                                    const Catalog_Namespace::SessionInfo& session_info) {
@@ -861,7 +755,6 @@ void MapDHandler::validate_rel_alg(TTableDescriptor& _return,
     throw ex;
   }
 }
-#endif  // HAVE_RAVM
 
 // DEPRECATED - use get_row_for_pixel()
 void MapDHandler::get_rows_for_pixels(TPixelResult& _return,
@@ -966,7 +859,6 @@ void MapDHandler::get_table_details(TTableDetails& _return, const TSessionId& se
     throw ex;
   }
   if (td->isView) {
-#ifdef HAVE_CALCITE
     try {
       const auto query_ra = parse_to_ra(td->viewSQL, session_info);
       TQueryResult result;
@@ -978,12 +870,6 @@ void MapDHandler::get_table_details(TTableDetails& _return, const TSessionId& se
       LOG(ERROR) << ex.error_msg;
       throw ex;
     }
-#else
-    TMapDException ex;
-    ex.error_msg = "Views not supported with legacy parser";
-    LOG(ERROR) << ex.error_msg;
-    throw ex;
-#endif  // HAVE_CALCITE
   } else {
     const auto col_descriptors = cat.getAllColumnMetadataForTable(td->tableId, false, true);
     for (const auto cd : col_descriptors) {
@@ -1470,28 +1356,10 @@ void MapDHandler::render(TRenderResult& _return,
     auto session_it = get_session_it(session);
     auto session_info_ptr = session_it->second.get();
     try {
-#ifdef HAVE_RAVM
       std::string query_ra;
       _return.execution_time_ms +=
           measure<>::execution([&]() { query_ra = parse_to_ra(query_str, *session_info_ptr); });
       render_rel_alg(_return, query_ra, query_str_in, *session_info_ptr, render_type, is_projection_query);
-#else
-#ifdef HAVE_CALCITE
-      ParserWrapper pw{query_str};
-      if (pw.is_select_explain || pw.is_other_explain || pw.is_ddl || pw.is_update_dml) {
-        TMapDException ex;
-        ex.error_msg = "Can only render SELECT statements.";
-        LOG(ERROR) << ex.error_msg;
-        throw ex;
-      }
-      auto root_plan = parse_to_plan(query_str, *session_info_ptr);
-#else
-      auto root_plan = parse_to_plan_legacy(query_str, *session_info_ptr, "render");
-#endif  // HAVE_CALCITE
-      CHECK(root_plan);
-      std::unique_ptr<Planner::RootPlan> plan_ptr(root_plan);  // make sure it's deleted
-      render_root_plan(_return, root_plan, query_str_in, *session_info_ptr, render_type, is_projection_query);
-#endif  // HAVE_RAVM
     } catch (std::exception& e) {
       TMapDException ex;
       ex.error_msg = std::string("Exception: ") + e.what();
@@ -1526,11 +1394,8 @@ void MapDHandler::render_vega(TRenderResult& _return,
     auto session_info_ptr = session_it->second.get();
 
     const auto& cat = session_info_ptr->get_catalog();
-    auto executor = Executor::getExecutor(cat.get_currentDB().dbId,
-                                          jit_debug_ ? "/tmp" : "",
-                                          jit_debug_ ? "mapdquery" : "",
-                                          mapd_parameters_,
-                                          nullptr);
+    auto executor = Executor::getExecutor(
+        cat.get_currentDB().dbId, jit_debug_ ? "/tmp" : "", jit_debug_ ? "mapdquery" : "", mapd_parameters_, nullptr);
 
   });
   LOG(INFO) << "Total: " << _return.total_time_ms << " (ms), Total Execution: " << _return.execution_time_ms
@@ -1935,7 +1800,6 @@ void MapDHandler::set_execution_mode_nolock(Catalog_Namespace::SessionInfo* sess
   }
 }
 
-#ifdef HAVE_RAVM
 void MapDHandler::execute_rel_alg(TQueryResult& _return,
                                   const std::string& query_ra,
                                   const bool column_format,
@@ -2052,8 +1916,6 @@ void MapDHandler::execute_rel_alg_gpudf(TGpuDataFrame& _return,
   }
 }
 #endif  // ENABLE_ARROW_CONVERTER
-
-#endif  // HAVE_RAVM
 
 void MapDHandler::execute_root_plan(TQueryResult& _return,
                                     const Planner::RootPlan* root_plan,
@@ -2172,7 +2034,6 @@ void MapDHandler::execute_root_plan_gpudf(TGpuDataFrame& _return,
 }
 #endif  // ENABLE_ARROW_CONVERTER
 
-
 void MapDHandler::render_root_plan(TRenderResult& _return,
                                    Planner::RootPlan* root_plan,
                                    const std::string& query_str,
@@ -2212,9 +2073,6 @@ void MapDHandler::render_root_plan(TRenderResult& _return,
   _return.image = image_from_rendered_rows(results);
 }
 
-#ifdef HAVE_RAVM
-
-
 void MapDHandler::render_rel_alg(TRenderResult& _return,
                                  const std::string& query_ra,
                                  const std::string& query_str,
@@ -2222,11 +2080,8 @@ void MapDHandler::render_rel_alg(TRenderResult& _return,
                                  const std::string& render_type,
                                  const bool is_projection_query) {
   const auto& cat = session_info.get_catalog();
-  auto executor = Executor::getExecutor(cat.get_currentDB().dbId,
-                                        jit_debug_ ? "/tmp" : "",
-                                        jit_debug_ ? "mapdquery" : "",
-                                        mapd_parameters_,
-                                        nullptr);
+  auto executor = Executor::getExecutor(
+      cat.get_currentDB().dbId, jit_debug_ ? "/tmp" : "", jit_debug_ ? "mapdquery" : "", mapd_parameters_, nullptr);
   RelAlgExecutor ra_executor(executor.get(), cat);
   auto clock_begin = timer_start();
   CompilationOptions co = {
@@ -2257,7 +2112,6 @@ void MapDHandler::render_rel_alg(TRenderResult& _return,
   _return.render_time_ms = results.getRenderTime();
   _return.image = image_from_rendered_rows(results);
 }
-#endif  // HAVE_RAVM
 
 std::vector<TargetMetaInfo> MapDHandler::getTargetMetaInfo(
     const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& targets) const {
@@ -2435,9 +2289,7 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
     std::string last_parsed;
     int num_parse_errors = 0;
     Planner::RootPlan* root_plan{nullptr};
-#ifdef HAVE_CALCITE
     try {
-#ifdef HAVE_RAVM
       ParserWrapper pw{query_str};
       if (!pw.is_ddl && !pw.is_update_dml && !pw.is_other_explain) {
         std::string query_ra;
@@ -2451,15 +2303,6 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
             _return, query_ra, column_format, session_info, executor_device_type, first_n, pw.is_select_explain, false);
         return;
       }
-#else
-      std::unique_ptr<const Planner::RootPlan> plan_ptr;
-      _return.execution_time_ms +=
-          measure<>::execution([&]() { plan_ptr.reset(parse_to_plan(query_str, session_info)); });
-      if (plan_ptr) {
-        execute_root_plan(_return, plan_ptr.get(), column_format, session_info, executor_device_type, first_n);
-        return;
-      }
-#endif  // HAVE_RAVM
       LOG(INFO) << "passing query to legacy processor";
     } catch (std::exception& e) {
       TMapDException ex;
@@ -2467,7 +2310,6 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
       LOG(ERROR) << ex.error_msg;
       throw ex;
     }
-#endif  // HAVE_CALCITE
     try {
       // check for COPY TO stmt replace as required parser expects #~# markers
       const auto result = apply_copy_to_shim(query_str);
@@ -2546,7 +2388,6 @@ void MapDHandler::execute_distributed_copy_statement(Parser::CopyTableStmt* copy
   copy_stmt->execute(session_info, importer_factory);
 }
 
-#ifdef HAVE_CALCITE
 Planner::RootPlan* MapDHandler::parse_to_plan(const std::string& query_str,
                                               const Catalog_Namespace::SessionInfo& session_info) {
   auto& cat = session_info.get_catalog();
@@ -2584,9 +2425,6 @@ std::string MapDHandler::parse_to_ra(const std::string& query_str, const Catalog
   }
   return "";
 }
-#endif  // HAVE_CALCITE
-
-
 
 std::vector<TColumnRange> MapDHandler::column_ranges_to_thrift(const AggregatedColRange& column_ranges) {
   std::vector<TColumnRange> thrift_column_ranges;
@@ -2646,7 +2484,6 @@ std::vector<TTableGeneration> MapDHandler::table_generations_to_thrift(const Tab
   }
   return thrift_table_generations;
 }
-
 
 void MapDHandler::insert_data(const TSessionId& session, const TInsertData& thrift_insert_data) {
   static std::mutex insert_mutex;  // TODO: split lock, make it per table
@@ -2713,7 +2550,6 @@ void MapDHandler::insert_data(const TSessionId& session, const TInsertData& thri
   }
 }
 
-
 /*
  * There's a lot of code duplication between this endpoint and render_vega,
  * we need to do something about it ASAP. A helper to create the QueryExecCB
@@ -2741,11 +2577,8 @@ void MapDHandler::render_vega_raw_pixels(TRawPixelDataResult& _return,
     auto session_info_ptr = session_it->second.get();
 
     const auto& cat = session_info_ptr->get_catalog();
-    auto executor = Executor::getExecutor(cat.get_currentDB().dbId,
-                                          jit_debug_ ? "/tmp" : "",
-                                          jit_debug_ ? "mapdquery" : "",
-                                          mapd_parameters_,
-                                          nullptr);
+    auto executor = Executor::getExecutor(
+        cat.get_currentDB().dbId, jit_debug_ ? "/tmp" : "", jit_debug_ ? "mapdquery" : "", mapd_parameters_, nullptr);
 
   });
   LOG(INFO) << "Total: " << _return.total_time_ms << " (ms), Total Execution: " << _return.execution_time_ms
@@ -2759,19 +2592,19 @@ void MapDHandler::throw_profile_exception(const std::string& error_msg) {
   throw ex;
 }
 
-void MapDHandler::execute_first_step(TStepResult &_return,
-                                     const TPendingQuery &pending_query) {
+void MapDHandler::execute_first_step(TStepResult& _return, const TPendingQuery& pending_query) {
   CHECK(false);
 }
 
-void MapDHandler::start_query(TPendingQuery &_return, const TSessionId &session,
-                              const std::string &query_ra,
+void MapDHandler::start_query(TPendingQuery& _return,
+                              const TSessionId& session,
+                              const std::string& query_ra,
                               const bool just_explain) {
   CHECK(false);
 }
 
-void MapDHandler::broadcast_serialized_rows(const std::string &serialized_rows,
-                                            const TRowDescriptor &row_desc,
+void MapDHandler::broadcast_serialized_rows(const std::string& serialized_rows,
+                                            const TRowDescriptor& row_desc,
                                             const TQueryId query_id) {
   CHECK(false);
 }

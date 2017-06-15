@@ -117,11 +117,7 @@ StringDictionaryProxy* Executor::getStringDictionaryProxy(const int dict_id_in,
     CHECK(dd->stringDict);
     CHECK_LE(dd->dictNBits, 32);
     if (row_set_mem_owner) {
-#ifdef HAVE_RAVM
       const auto generation = with_generation ? string_dictionary_generations_.getGeneration(dict_id) : ssize_t(-1);
-#else
-      const ssize_t generation = dd->stringDict->storageEntryCount();
-#endif  // HAVE_RAVM
       return row_set_mem_owner->addStringDict(dd->stringDict, dict_id, generation);
     }
   }
@@ -2113,12 +2109,8 @@ void Executor::preloadFragOffsets(const std::vector<InputDescriptor>& input_desc
 #endif
   auto frag_off_ptr = get_arg_by_name(cgen_state_->row_func_, "frag_row_off");
   for (size_t i = 0; i < ld_count; ++i) {
-#ifdef HAVE_CALCITE
     CHECK_LT(i, query_infos.size());
     const auto frag_count = query_infos[i].info.fragments.size();
-#else
-    const size_t frag_count = 1;
-#endif  // HAVE_CALCITE
     if (frag_count > 1) {
       auto input_off_ptr = !i ? frag_off_ptr : cgen_state_->ir_builder_.CreateGEP(frag_off_ptr, ll_int(int32_t(i)));
       cgen_state_->frag_offsets_.push_back(cgen_state_->ir_builder_.CreateLoad(input_off_ptr));

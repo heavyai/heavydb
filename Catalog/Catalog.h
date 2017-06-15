@@ -50,9 +50,7 @@
 #include "../QueryEngine/CompilationOptions.h"
 #include "../SqliteConnector/SqliteConnector.h"
 
-#ifdef HAVE_CALCITE
 #include "../Calcite/Calcite.h"
-#endif  // HAVE_CALCITE
 
 struct Privileges {
   bool super_;
@@ -162,12 +160,8 @@ class Catalog {
           const std::string& dbname,
           std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
           LdapMetadata ldapMetadata,
-          bool is_initdb
-#ifdef HAVE_CALCITE
-          ,
-          std::shared_ptr<Calcite> calcite
-#endif  // HAVE_CALCITE
-          );
+          bool is_initdb,
+          std::shared_ptr<Calcite> calcite);
 
   /**
    * @brief Constructor - takes basePath to already extant
@@ -180,13 +174,9 @@ class Catalog {
 
   Catalog(const std::string& basePath,
           const DBMetadata& curDB,
-          std::shared_ptr<Data_Namespace::DataMgr> dataMgr
-#ifdef HAVE_CALCITE
-          ,
+          std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
           const std::vector<LeafHostInfo>& string_dict_hosts,
-          std::shared_ptr<Calcite> calcite
-#endif  // HAVE_CALCITE
-          );
+          std::shared_ptr<Calcite> calcite);
 
   /*
    builds a catalog that uses an ldap server
@@ -194,12 +184,8 @@ class Catalog {
   Catalog(const std::string& basePath,
           const DBMetadata& curDB,
           std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
-          LdapMetadata ldapMetadata
-#ifdef HAVE_CALCITE
-          ,
-          std::shared_ptr<Calcite> calcite
-#endif  // HAVE_CALCITE
-          );
+          LdapMetadata ldapMetadata,
+          std::shared_ptr<Calcite> calcite);
 
   /**
    * @brief Destructor - deletes all
@@ -257,9 +243,7 @@ class Catalog {
   const DBMetadata& get_currentDB() const { return currentDB_; }
   void set_currentDB(const DBMetadata& db) { currentDB_ = db; }
   Data_Namespace::DataMgr& get_dataMgr() const { return *dataMgr_; }
-#ifdef HAVE_CALCITE
   Calcite& get_calciteMgr() const { return *calciteMgr_; }
-#endif  // HAVE_CALCITE
   const std::string& get_basePath() const { return basePath_; }
 
   const DictDescriptor* getMetadataForDict(int dictId, bool loadDict = true) const;
@@ -310,9 +294,7 @@ class Catalog {
 
   std::unique_ptr<LdapServer> ldap_server_;
   const std::vector<LeafHostInfo> string_dict_hosts_;
-#ifdef HAVE_CALCITE
   std::shared_ptr<Calcite> calciteMgr_;
-#endif  // HAVE_CALCITE
 
   LogicalToPhysicalTableMapById logicalToPhysicalTableMapById_;
   std::list<DictDescriptor> logicalTableDDS_;      // logical table DictDescriptor list (used for physical tables)
@@ -329,38 +311,15 @@ class SysCatalog : public Catalog {
   SysCatalog(const std::string& basePath,
              std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
              LdapMetadata ldapMetadata,
-#ifdef HAVE_CALCITE
              std::shared_ptr<Calcite> calcite,
-#endif  // HAVE_CALCITE
              bool is_initdb = false)
-      : Catalog(basePath,
-                MAPD_SYSTEM_DB,
-                dataMgr,
-                ldapMetadata,
-                is_initdb
-#ifdef HAVE_CALCITE
-                ,
-                calcite
-#endif  // HAVE_CALCITE
-                ) {
-  }
+      : Catalog(basePath, MAPD_SYSTEM_DB, dataMgr, ldapMetadata, is_initdb, calcite) {}
 
   SysCatalog(const std::string& basePath,
              std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
-#ifdef HAVE_CALCITE
              std::shared_ptr<Calcite> calcite,
-#endif  // HAVE_CALCITE
              bool is_initdb = false)
-      : Catalog(basePath,
-                MAPD_SYSTEM_DB,
-                dataMgr,
-                LdapMetadata(),
-                is_initdb
-#ifdef HAVE_CALCITE
-                ,
-                calcite
-#endif  // HAVE_CALCITE
-                ) {
+      : Catalog(basePath, MAPD_SYSTEM_DB, dataMgr, LdapMetadata(), is_initdb, calcite) {
     if (!is_initdb) {
       migrateSysCatalogSchema();
     }

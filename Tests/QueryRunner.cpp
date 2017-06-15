@@ -17,16 +17,12 @@
 #include "QueryRunner.h"
 
 #include "../Parser/parser.h"
-#ifdef HAVE_CALCITE
 #include "../QueryEngine/CalciteAdapter.h"
 #include "../Parser/ParserWrapper.h"
 #include "../Calcite/Calcite.h"
-#endif  // HAVE_CALCITE
 
-#ifdef HAVE_RAVM
 #include "../QueryEngine/ExtensionFunctionsWhitelist.h"
 #include "../QueryEngine/RelAlgExecutor.h"
-#endif  // HAVE_RAVM
 
 #include <boost/filesystem/operations.hpp>
 
@@ -47,12 +43,8 @@ Catalog_Namespace::SessionInfo* get_session(const char* db_path) {
   auto data_dir = base_path / "mapd_data";
   Catalog_Namespace::UserMetadata user;
   Catalog_Namespace::DBMetadata db;
-#ifdef HAVE_CALCITE
   auto calcite = std::make_shared<Calcite>(CALCITEPORT, db_path, 1024);
-#ifdef HAVE_RAVM
   ExtensionFunctionsWhitelist::add(calcite->getExtensionFunctionWhitelist());
-#endif  // HAVE_RAVM
-#endif  // HAVE_CALCITE
 #ifdef HAVE_CUDA
   bool useGpus = true;
 #else
@@ -60,28 +52,15 @@ Catalog_Namespace::SessionInfo* get_session(const char* db_path) {
 #endif
   {
     auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), 0, useGpus, -1);
-    Catalog_Namespace::SysCatalog sys_cat(base_path.string(),
-                                          dataMgr
-#ifdef HAVE_CALCITE
-                                          ,
-                                          calcite
-#endif  // HAVE_CALCITE
-                                          );
+    Catalog_Namespace::SysCatalog sys_cat(base_path.string(), dataMgr, calcite);
     CHECK(sys_cat.getMetadataForUser(user_name, user));
     CHECK_EQ(user.passwd, passwd);
     CHECK(sys_cat.getMetadataForDB(db_name, db));
     CHECK(user.isSuper || (user.userId == db.dbOwner));
   }
   auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), 0, useGpus, -1);
-  return new Catalog_Namespace::SessionInfo(std::make_shared<Catalog_Namespace::Catalog>(base_path.string(),
-                                                                                         db,
-                                                                                         dataMgr
-#ifdef HAVE_CALCITE
-                                                                                         ,
-                                                                                         std::vector<LeafHostInfo>{},
-                                                                                         calcite
-#endif  // HAVE_CALCITE
-                                                                                         ),
+  return new Catalog_Namespace::SessionInfo(std::make_shared<Catalog_Namespace::Catalog>(
+                                                base_path.string(), db, dataMgr, std::vector<LeafHostInfo>{}, calcite),
                                             user,
                                             ExecutorDeviceType::GPU,
                                             "");
@@ -109,8 +88,6 @@ Planner::RootPlan* parse_plan_legacy(const std::string& query_str,
   return optimizer.optimize();
 }
 
-#ifdef HAVE_CALCITE
-
 Planner::RootPlan* parse_plan_calcite(const std::string& query_str,
                                       const std::unique_ptr<Catalog_Namespace::SessionInfo>& session) {
   ParserWrapper pw{query_str};
@@ -129,15 +106,9 @@ Planner::RootPlan* parse_plan_calcite(const std::string& query_str,
   return translate_query(query_ra, cat);
 }
 
-#endif  // HAVE_CALCITE
-
 Planner::RootPlan* parse_plan(const std::string& query_str,
                               const std::unique_ptr<Catalog_Namespace::SessionInfo>& session) {
-#ifdef HAVE_CALCITE
   Planner::RootPlan* plan = parse_plan_calcite(query_str, session);
-#else
-  Planner::RootPlan* plan = parse_plan_legacy(query_str, session);
-#endif  // HAVE_CALCITE
   return plan;
 }
 
@@ -151,7 +122,6 @@ ResultRows run_multiple_agg(const std::string& query_str,
   const auto& cat = session->get_catalog();
   auto executor = Executor::getExecutor(cat.get_currentDB().dbId);
 
-#ifdef HAVE_RAVM
   ParserWrapper pw{query_str};
   if (!(pw.is_other_explain || pw.is_ddl || pw.is_update_dml)) {
     CompilationOptions co = {device_type, true, ExecutorOptLevel::LoopStrengthReduction, false};
@@ -166,7 +136,6 @@ ResultRows run_multiple_agg(const std::string& query_str,
     RelAlgExecutor ra_executor(executor.get(), cat);
     return ra_executor.executeRelAlgQuery(query_ra, co, eo, nullptr).getRows();
   }
-#endif  // HAVE_RAVM
 
   Planner::RootPlan* plan = parse_plan(query_str, session);
 

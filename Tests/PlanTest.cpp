@@ -58,28 +58,15 @@ class SQLTestEnv : public ::testing::Environment {
     auto data_dir = base_path / "mapd_data";
     UserMetadata user;
     DBMetadata db;
-#ifdef HAVE_CALCITE
     auto calcite = std::make_shared<Calcite>(CALCITEPORT, base_path.string(), 1024);
-#endif  // HAVE_CALCITE
     {
       auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), 0, false, 0);
 
       if (!boost::filesystem::exists(system_db_file)) {
-        SysCatalog syscat(base_path.string(),
-                          dataMgr,
-#ifdef HAVE_CALCITE
-                          calcite,
-#endif  // HAVE_CALCITE
-                          true);
+        SysCatalog syscat(base_path.string(), dataMgr, calcite, true);
         syscat.initDB();
       }
-      SysCatalog sys_cat(base_path.string(),
-                         dataMgr
-#ifdef HAVE_CALCITE
-                         ,
-                         calcite
-#endif  // HAVE_CALCITE
-                         );
+      SysCatalog sys_cat(base_path.string(), dataMgr, calcite);
       CHECK(sys_cat.getMetadataForUser(MAPD_ROOT_USER, user));
       if (!sys_cat.getMetadataForUser("gtest", user)) {
         sys_cat.createUser("gtest", "test!test!", false);
@@ -91,15 +78,8 @@ class SQLTestEnv : public ::testing::Environment {
       }
     }
     auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), 0, false, 0);
-    gsession.reset(new SessionInfo(std::make_shared<Catalog_Namespace::Catalog>(base_path.string(),
-                                                                                db,
-                                                                                dataMgr
-#ifdef HAVE_CALCITE
-                                                                                ,
-                                                                                std::vector<LeafHostInfo>{},
-                                                                                calcite
-#endif  // HAVE_CALCITE
-                                                                                ),
+    gsession.reset(new SessionInfo(std::make_shared<Catalog_Namespace::Catalog>(
+                                       base_path.string(), db, dataMgr, std::vector<LeafHostInfo>{}, calcite),
                                    user,
                                    ExecutorDeviceType::GPU,
                                    ""));
@@ -309,7 +289,6 @@ TEST(ParseAnalyzePlan, Insert) {
   EXPECT_NO_THROW({ unique_ptr<RootPlan> plan_ptr(plan_dml("insert into skinny select 2*a, 2*b, 2*c from skinny;")); });
 }
 
-#ifdef HAVE_CALCITE
 TEST(DISABLED_ParseAnalyzePlan, Views) {
   EXPECT_NO_THROW(run_ddl("create view if not exists voo as select * from skinny where a > 15;"););
   EXPECT_NO_THROW(run_ddl("create view if not exists moo as select * from skinny where a > 15;"););
@@ -318,7 +297,6 @@ TEST(DISABLED_ParseAnalyzePlan, Views) {
                           "null or k <= 100000000000 and c = 'xyz';"););
   EXPECT_NO_THROW({ unique_ptr<RootPlan> plan_ptr(plan_dml("select * from fatview;")); });
 }
-#endif  // HAVE_CALCITE
 
 void drop_views_and_tables() {
   EXPECT_NO_THROW(run_ddl("drop view if exists voo;"));

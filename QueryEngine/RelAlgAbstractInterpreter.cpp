@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#ifdef HAVE_CALCITE
 #include "RelAlgAbstractInterpreter.h"
 #include "CalciteDeserializerUtils.h"
 #include "JsonAccessors.h"
@@ -1603,4 +1602,3 @@ std::string tree_string(const RelAlgNode* ra, const size_t indent) {
   }
   return result;
 }
-#endif  // HAVE_CALCITE

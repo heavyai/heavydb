@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#ifdef HAVE_CALCITE
 #include "RelAlgExecutionDescriptor.h"
 #include <boost/graph/adjacency_list.hpp>
 #include <boost/graph/topological_sort.hpp>
@@ -178,5 +177,3 @@ std::vector<RaExecutionDesc> get_execution_descriptors(const std::vector<const R
 
   return descs;
 }
-
-#endif  // HAVE_CALCITE

@@ -77,27 +77,14 @@ class SQLTestEnv : public ::testing::Environment {
     auto data_dir = base_path / "mapd_data";
     UserMetadata user;
     DBMetadata db;
-#ifdef HAVE_CALCITE
     auto calcite = std::make_shared<Calcite>(CALCITEPORT, data_dir.string(), 1024);
-#endif  // HAVE_CALCITE
     {
       auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), 0, false, 0);
       if (!boost::filesystem::exists(system_db_file)) {
-        SysCatalog sys_cat(base_path.string(),
-                           dataMgr,
-#ifdef HAVE_CALCITE
-                           calcite,
-#endif  // HAVE_CALCITE
-                           true);
+        SysCatalog sys_cat(base_path.string(), dataMgr, calcite, true);
         sys_cat.initDB();
       }
-      SysCatalog sys_cat(base_path.string(),
-                         dataMgr
-#ifdef HAVE_CALCITE
-                         ,
-                         calcite
-#endif  // HAVE_CALCITE
-                         );
+      SysCatalog sys_cat(base_path.string(), dataMgr, calcite);
       CHECK(sys_cat.getMetadataForUser(MAPD_ROOT_USER, user));
       if (!sys_cat.getMetadataForUser("gtest", user)) {
         sys_cat.createUser("gtest", "test!test!", false);
@@ -109,18 +96,11 @@ class SQLTestEnv : public ::testing::Environment {
       }
     }
     auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), 0, false, 0);
-    gsession.reset(new SessionInfo(std::make_shared<Catalog>(base_path.string(),
-                                                             db,
-                                                             dataMgr
-#ifdef HAVE_CALCITE
-                                                             ,
-                                                             std::vector<LeafHostInfo>{},
-                                                             calcite
-#endif  // HAVE_CALCITE
-                                                             ),
-                                   user,
-                                   ExecutorDeviceType::GPU,
-                                   ""));
+    gsession.reset(new SessionInfo(
+        std::make_shared<Catalog>(base_path.string(), db, dataMgr, std::vector<LeafHostInfo>{}, calcite),
+        user,
+        ExecutorDeviceType::GPU,
+        ""));
   }
 };
 

@@ -111,11 +111,7 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Expr* expr,
   if (function_oper_expr) {
     return {codegenFunctionOper(function_oper_expr, co)};
   }
-#ifdef HAVE_CALCITE
   abort();
-#else
-  throw std::runtime_error("Invalid scalar expression");
-#endif
 }
 
 llvm::Value* Executor::codegen(const Analyzer::BinOper* bin_oper, const CompilationOptions& co) {

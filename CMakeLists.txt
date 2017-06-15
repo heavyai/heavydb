@@ -253,34 +253,20 @@ add_library(mapd_thrift
     ${CMAKE_BINARY_DIR}/gen-cpp/mapd_types.cpp)
 target_link_libraries(mapd_thrift ${Thrift_LIBRARIES})
 
+find_package(JNI REQUIRED)
+include_directories(${JNI_INCLUDE_DIRS})
 
-
-option(ENABLE_CALCITE "Build Calcite adapter" ON)
-if(ENABLE_CALCITE)
-  add_definitions("-DHAVE_CALCITE")
-  find_package(JNI REQUIRED)
-  include_directories(${JNI_INCLUDE_DIRS})
-else()
-  set(MAPD_PACKAGE_FLAGS "${MAPD_PACKAGE_FLAGS}-legacyparser")
+option(ENABLE_JOIN_EXEC "Enable RA vm to execute join node" ON)
+if(ENABLE_JOIN_EXEC)
+  add_definitions("-DENABLE_JOIN_EXEC")
+  option(ENABLE_EQUIJOIN_FOLD "Enable multiple equi-join to be folded" ON)
+  if(ENABLE_EQUIJOIN_FOLD)
+    add_definitions("-DENABLE_EQUIJOIN_FOLD")
+  endif()
 endif()
-
-option(ENABLE_RAVM "Enable RA vm" ON)
-if(ENABLE_RAVM)
-  add_definitions("-DHAVE_RAVM")
-  option(ENABLE_JOIN_EXEC "Enable RA vm to execute join node" ON)
-  if(ENABLE_JOIN_EXEC)
-    add_definitions("-DENABLE_JOIN_EXEC")
-    option(ENABLE_EQUIJOIN_FOLD "Enable multiple equi-join to be folded" ON)
-    if(ENABLE_EQUIJOIN_FOLD)
-      add_definitions("-DENABLE_EQUIJOIN_FOLD")
-    endif()
-  endif()
-  option(ENABLE_MULTIFRAG_JOIN "Enable Join on Multi-frag table" ON)
-  if(ENABLE_MULTIFRAG_JOIN)
-    add_definitions("-DENABLE_MULTIFRAG_JOIN")
-  endif()
-else()
-  set(MAPD_PACKAGE_FLAGS "${MAPD_PACKAGE_FLAGS}-noravm")
+option(ENABLE_MULTIFRAG_JOIN "Enable Join on Multi-frag table" ON)
+if(ENABLE_MULTIFRAG_JOIN)
+  add_definitions("-DENABLE_MULTIFRAG_JOIN")
 endif()
 
 option(ENABLE_COMPACTION "Enable Compaction and Overflow/Underflow Detection" OFF)
@@ -325,9 +311,7 @@ if(ENABLE_ODBC)
   add_subdirectory(ODBC)
 endif()
 
-if(ENABLE_CALCITE)
-  add_subdirectory(Calcite)
-endif()
+add_subdirectory(Calcite)
 
 set(MAPD_LIBRARIES Shared Catalog SqliteConnector Parser Analyzer Planner
   QueryEngine DataMgr Fragmenter Chunk)
@@ -336,9 +320,7 @@ if(ENABLE_FOLLY)
   list(APPEND MAPD_LIBRARIES ${Folly_LIBRARIES})
 endif()
 
-if(ENABLE_CALCITE)
-  list(APPEND MAPD_LIBRARIES Calcite)
-endif()
+list(APPEND MAPD_LIBRARIES Calcite)
 
 
 if(ENABLE_ARROW_CONVERTER)
@@ -357,26 +339,24 @@ set(mapd_server_source_files MapDServer.cpp ${CMAKE_BINARY_DIR}/MapDRelease.h)
 add_executable(mapd_server ${mapd_server_source_files})
 set_target_properties(mapd_server PROPERTIES COMPILE_DEFINITIONS "${TIME_LIMITED_DEFINITIONS}")
 
-if(ENABLE_CALCITE)
-  add_custom_command(
-      DEPENDS ${CMAKE_SOURCE_DIR}/mapd.thrift
-      OUTPUT
-          ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/mapd/thrift/server/MapD.java
-          ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/mapd/thrift/server/TRow.java
-      COMMAND mkdir
-      ARGS -p ${CMAKE_SOURCE_DIR}/java/thrift/src/gen
-      COMMAND ${Thrift_EXECUTABLE}
-      ARGS -gen java -out ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/ ${CMAKE_SOURCE_DIR}/mapd.thrift)
+add_custom_command(
+    DEPENDS ${CMAKE_SOURCE_DIR}/mapd.thrift
+    OUTPUT
+        ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/mapd/thrift/server/MapD.java
+        ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/mapd/thrift/server/TRow.java
+    COMMAND mkdir
+    ARGS -p ${CMAKE_SOURCE_DIR}/java/thrift/src/gen
+    COMMAND ${Thrift_EXECUTABLE}
+    ARGS -gen java -out ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/ ${CMAKE_SOURCE_DIR}/mapd.thrift)
 
-  add_custom_command(
-      DEPENDS ${CMAKE_SOURCE_DIR}/java/thrift/calciteserver.thrift
-      OUTPUT ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/mapd/thrift/calciteserver/CalciteServer.java
-      COMMAND mkdir
-      ARGS -p ${CMAKE_SOURCE_DIR}/java/thrift/src/gen
-      COMMAND ${Thrift_EXECUTABLE}
-      ARGS -gen java -out ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/ ${CMAKE_SOURCE_DIR}/java/thrift/calciteserver.thrift)
-  list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/)
-endif()
+add_custom_command(
+    DEPENDS ${CMAKE_SOURCE_DIR}/java/thrift/calciteserver.thrift
+    OUTPUT ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/mapd/thrift/calciteserver/CalciteServer.java
+    COMMAND mkdir
+    ARGS -p ${CMAKE_SOURCE_DIR}/java/thrift/src/gen
+    COMMAND ${Thrift_EXECUTABLE}
+    ARGS -gen java -out ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/ ${CMAKE_SOURCE_DIR}/java/thrift/calciteserver.thrift)
+list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/)
 
 execute_process(
   COMMAND ${GIT_EXECUTABLE} log -1 --format=%h
@@ -518,45 +498,43 @@ add_custom_target(clean-all
   COMMAND ${CMAKE_BUILD_TOOL} clean
   )
 
-if(ENABLE_CALCITE)
-  ## mvn process for java code
-  find_program(MVN_EXECUTABLE NAMES mvn)
-  if(NOT MVN_EXECUTABLE)
-    message(FATAL_ERROR "mvn not found. Install Apache Maven.")
-  endif()
-  file(GLOB_RECURSE JAVA_POM RELATIVE ${CMAKE_SOURCE_DIR} java/**/pom.xml)
-  file(GLOB_RECURSE JAVA_SOURCES RELATIVE ${CMAKE_SOURCE_DIR} java/**/*.java)
-  add_custom_command(
-    OUTPUT
-      ${CMAKE_BINARY_DIR}/bin/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar
-      ${CMAKE_BINARY_DIR}/bin/mapdjdbc-1.0-SNAPSHOT-jar-with-dependencies.jar
-      ${CMAKE_BINARY_DIR}/bin/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar
-    COMMAND MVNPATH=${CMAKE_SOURCE_DIR}/java ${MVN_EXECUTABLE} -q install -Dthrift.version="${Thrift_VERSION}"
-    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/java/mapd/target/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar ${CMAKE_BINARY_DIR}/bin
-    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/java/mapdjdbc/target/mapdjdbc-1.0-SNAPSHOT-jar-with-dependencies.jar ${CMAKE_BINARY_DIR}/bin
-    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/java/calcite/target/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar ${CMAKE_BINARY_DIR}/bin
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/java
-    DEPENDS
-      ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/mapd/thrift/server/MapD.java
-      ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/mapd/thrift/calciteserver/CalciteServer.java
-      ${CMAKE_SOURCE_DIR}/java/pom.xml
-      ${CMAKE_SOURCE_DIR}/mapd.thrift
-      ${JAVA_POM}
-      ${JAVA_SOURCES}
-    )
-  add_custom_target(mapd_java_components ALL DEPENDS
+## mvn process for java code
+find_program(MVN_EXECUTABLE NAMES mvn)
+if(NOT MVN_EXECUTABLE)
+  message(FATAL_ERROR "mvn not found. Install Apache Maven.")
+endif()
+file(GLOB_RECURSE JAVA_POM RELATIVE ${CMAKE_SOURCE_DIR} java/**/pom.xml)
+file(GLOB_RECURSE JAVA_SOURCES RELATIVE ${CMAKE_SOURCE_DIR} java/**/*.java)
+add_custom_command(
+  OUTPUT
     ${CMAKE_BINARY_DIR}/bin/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar
     ${CMAKE_BINARY_DIR}/bin/mapdjdbc-1.0-SNAPSHOT-jar-with-dependencies.jar
-    ${CMAKE_BINARY_DIR}/bin/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar)
-  add_custom_target(mapd_java_clean
-    COMMAND MVNPATH=${CMAKE_SOURCE_DIR}/java ${MVN_EXECUTABLE} -q clean
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/java
-    )
-  add_dependencies(clean-all mapd_java_clean)
-  install(FILES ${CMAKE_SOURCE_DIR}/java/mapd/target/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar DESTINATION bin)
-  install(FILES ${CMAKE_SOURCE_DIR}/java/mapdjdbc/target/mapdjdbc-1.0-SNAPSHOT-jar-with-dependencies.jar DESTINATION bin)
-  install(FILES ${CMAKE_SOURCE_DIR}/java/calcite/target/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar DESTINATION bin)
-endif()
+    ${CMAKE_BINARY_DIR}/bin/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar
+  COMMAND MVNPATH=${CMAKE_SOURCE_DIR}/java ${MVN_EXECUTABLE} -q install -Dthrift.version="${Thrift_VERSION}"
+  COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/java/mapd/target/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar ${CMAKE_BINARY_DIR}/bin
+  COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/java/mapdjdbc/target/mapdjdbc-1.0-SNAPSHOT-jar-with-dependencies.jar ${CMAKE_BINARY_DIR}/bin
+  COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/java/calcite/target/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar ${CMAKE_BINARY_DIR}/bin
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/java
+  DEPENDS
+    ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/mapd/thrift/server/MapD.java
+    ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/mapd/thrift/calciteserver/CalciteServer.java
+    ${CMAKE_SOURCE_DIR}/java/pom.xml
+    ${CMAKE_SOURCE_DIR}/mapd.thrift
+    ${JAVA_POM}
+    ${JAVA_SOURCES}
+  )
+add_custom_target(mapd_java_components ALL DEPENDS
+  ${CMAKE_BINARY_DIR}/bin/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar
+  ${CMAKE_BINARY_DIR}/bin/mapdjdbc-1.0-SNAPSHOT-jar-with-dependencies.jar
+  ${CMAKE_BINARY_DIR}/bin/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar)
+add_custom_target(mapd_java_clean
+  COMMAND MVNPATH=${CMAKE_SOURCE_DIR}/java ${MVN_EXECUTABLE} -q clean
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/java
+  )
+add_dependencies(clean-all mapd_java_clean)
+install(FILES ${CMAKE_SOURCE_DIR}/java/mapd/target/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar DESTINATION bin)
+install(FILES ${CMAKE_SOURCE_DIR}/java/mapdjdbc/target/mapdjdbc-1.0-SNAPSHOT-jar-with-dependencies.jar DESTINATION bin)
+install(FILES ${CMAKE_SOURCE_DIR}/java/calcite/target/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar DESTINATION bin)
 
 set_directory_properties(PROPERTIES ADDITIONAL_MAKE_CLEAN_FILES "${ADDITIONAL_MAKE_CLEAN_FILES}")
 
