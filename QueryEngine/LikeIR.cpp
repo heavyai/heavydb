@@ -148,13 +148,12 @@ llvm::Value* Executor::codegenDictLike(const std::shared_ptr<Analyzer::Expr> lik
   CHECK_EQ(kENCODING_NONE, pattern_ti.get_compression());
   const auto& pattern_datum = pattern->get_constval();
   const auto& pattern_str = *pattern_datum.stringval;
-  const auto matching_strings = sdp->getLike(pattern_str, ilike, is_simple, escape_char);
-  std::list<std::shared_ptr<Analyzer::Expr>> matching_str_exprs;
-  for (const auto& matching_string : matching_strings) {
-    auto const_val = Parser::StringLiteral::analyzeValue(matching_string);
-    matching_str_exprs.push_back(const_val->add_cast(dict_like_arg_ti));
-  }
-  const auto in_values = makeExpr<Analyzer::InValues>(dict_like_arg, matching_str_exprs);
+  const auto matching_ids = sdp->getLike(pattern_str, ilike, is_simple, escape_char);
+  // InIntegerSet requires 64-bit values
+  std::vector<int64_t> matching_ids_64(matching_ids.size());
+  std::copy(matching_ids.begin(), matching_ids.end(), matching_ids_64.begin());
+  const auto in_values =
+      std::make_shared<Analyzer::InIntegerSet>(dict_like_arg, matching_ids_64, dict_like_arg_ti.get_notnull());
   return codegen(in_values.get(), co);
 }
 
@@ -227,12 +226,11 @@ llvm::Value* Executor::codegenDictRegexp(const std::shared_ptr<Analyzer::Expr> p
   CHECK_EQ(kENCODING_NONE, pattern_ti.get_compression());
   const auto& pattern_datum = pattern->get_constval();
   const auto& pattern_str = *pattern_datum.stringval;
-  const auto matching_strings = sdp->getRegexpLike(pattern_str, escape_char);
-  std::list<std::shared_ptr<Analyzer::Expr>> matching_str_exprs;
-  for (const auto& matching_string : matching_strings) {
-    auto const_val = Parser::StringLiteral::analyzeValue(matching_string);
-    matching_str_exprs.push_back(const_val->add_cast(dict_regexp_arg_ti));
-  }
-  const auto in_values = makeExpr<Analyzer::InValues>(dict_regexp_arg, matching_str_exprs);
+  const auto matching_ids = sdp->getRegexpLike(pattern_str, escape_char);
+  // InIntegerSet requires 64-bit values
+  std::vector<int64_t> matching_ids_64(matching_ids.size());
+  std::copy(matching_ids.begin(), matching_ids.end(), matching_ids_64.begin());
+  const auto in_values =
+      std::make_shared<Analyzer::InIntegerSet>(dict_regexp_arg, matching_ids_64, dict_regexp_arg_ti.get_notnull());
   return codegen(in_values.get(), co);
 }

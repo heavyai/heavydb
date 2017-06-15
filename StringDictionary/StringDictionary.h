@@ -46,13 +46,13 @@ class StringDictionary {
   std::pair<char*, size_t> getStringBytes(int32_t string_id) const noexcept;
   size_t storageEntryCount() const;
 
-  std::vector<std::string> getLike(const std::string& pattern,
-                                   const bool icase,
-                                   const bool is_simple,
-                                   const char escape,
-                                   const size_t generation) const;
+  std::vector<int32_t> getLike(const std::string& pattern,
+                               const bool icase,
+                               const bool is_simple,
+                               const char escape,
+                               const size_t generation) const;
 
-  std::vector<std::string> getRegexpLike(const std::string& pattern, const char escape, const size_t generation) const;
+  std::vector<int32_t> getRegexpLike(const std::string& pattern, const char escape, const size_t generation) const;
 
   bool checkpoint() noexcept;
 
@@ -93,8 +93,8 @@ class StringDictionary {
   size_t payload_file_size_;
   size_t payload_file_off_;
   mutable mapd_shared_mutex rw_mutex_;
-  mutable std::map<std::tuple<std::string, bool, bool, char>, std::vector<std::string>> like_cache_;
-  mutable std::map<std::pair<std::string, char>, std::vector<std::string>> regex_cache_;
+  mutable std::map<std::tuple<std::string, bool, bool, char>, std::vector<int32_t>> like_cache_;
+  mutable std::map<std::pair<std::string, char>, std::vector<int32_t>> regex_cache_;
   std::unique_ptr<StringDictionaryClient> client_;
   std::unique_ptr<StringDictionaryClient> client_no_timeout_;
 

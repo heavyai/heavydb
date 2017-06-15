@@ -292,11 +292,11 @@ bool is_like(const std::string& str,
 
 }  // namespace
 
-std::vector<std::string> StringDictionary::getLike(const std::string& pattern,
-                                                   const bool icase,
-                                                   const bool is_simple,
-                                                   const char escape,
-                                                   const size_t generation) const {
+std::vector<int32_t> StringDictionary::getLike(const std::string& pattern,
+                                               const bool icase,
+                                               const bool is_simple,
+                                               const char escape,
+                                               const size_t generation) const {
   mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
   if (client_) {
     return client_->get_like(pattern, icase, is_simple, escape, generation);
@@ -306,11 +306,11 @@ std::vector<std::string> StringDictionary::getLike(const std::string& pattern,
   if (it != like_cache_.end()) {
     return it->second;
   }
-  std::vector<std::string> result;
+  std::vector<int32_t> result;
   std::vector<std::thread> workers;
   int worker_count = cpu_threads();
   CHECK_GT(worker_count, 0);
-  std::vector<std::vector<std::string>> worker_results(worker_count);
+  std::vector<std::vector<int32_t>> worker_results(worker_count);
   CHECK_LE(generation, str_count_);
   for (int worker_idx = 0; worker_idx < worker_count; ++worker_idx) {
     workers.emplace_back(
@@ -318,7 +318,7 @@ std::vector<std::string> StringDictionary::getLike(const std::string& pattern,
           for (size_t string_id = worker_idx; string_id < generation; string_id += worker_count) {
             const auto str = getStringUnlocked(string_id);
             if (is_like(str, pattern, icase, is_simple, escape)) {
-              worker_results[worker_idx].push_back(str);
+              worker_results[worker_idx].push_back(string_id);
             }
           }
         });
@@ -343,9 +343,9 @@ bool is_regexp_like(const std::string& str, const std::string& pattern, const ch
 
 }  // namespace
 
-std::vector<std::string> StringDictionary::getRegexpLike(const std::string& pattern,
-                                                         const char escape,
-                                                         const size_t generation) const {
+std::vector<int32_t> StringDictionary::getRegexpLike(const std::string& pattern,
+                                                     const char escape,
+                                                     const size_t generation) const {
   mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
   if (client_) {
     return client_->get_regexp_like(pattern, escape, generation);
@@ -355,18 +355,18 @@ std::vector<std::string> StringDictionary::getRegexpLike(const std::string& patt
   if (it != regex_cache_.end()) {
     return it->second;
   }
-  std::vector<std::string> result;
+  std::vector<int32_t> result;
   std::vector<std::thread> workers;
   int worker_count = cpu_threads();
   CHECK_GT(worker_count, 0);
-  std::vector<std::vector<std::string>> worker_results(worker_count);
+  std::vector<std::vector<int32_t>> worker_results(worker_count);
   CHECK_LE(generation, str_count_);
   for (int worker_idx = 0; worker_idx < worker_count; ++worker_idx) {
     workers.emplace_back([&worker_results, &pattern, generation, escape, worker_idx, worker_count, this]() {
       for (size_t string_id = worker_idx; string_id < generation; string_id += worker_count) {
         const auto str = getStringUnlocked(string_id);
         if (is_regexp_like(str, pattern, escape)) {
-          worker_results[worker_idx].push_back(str);
+          worker_results[worker_idx].push_back(string_id);
         }
       }
     });

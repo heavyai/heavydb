@@ -107,16 +107,16 @@ bool is_like(const std::string& str,
 
 }  // namespace
 
-std::vector<std::string> StringDictionaryProxy::getLike(const std::string& pattern,
-                                                        const bool icase,
-                                                        const bool is_simple,
-                                                        const char escape) const {
+std::vector<int32_t> StringDictionaryProxy::getLike(const std::string& pattern,
+                                                    const bool icase,
+                                                    const bool is_simple,
+                                                    const char escape) const {
   CHECK_GE(generation_, 0);
   auto result = string_dict_->getLike(pattern, icase, is_simple, escape, generation_);
   for (const auto& kv : transient_int_to_str_) {
     const auto str = getString(kv.first);
     if (is_like(str, pattern, icase, is_simple, escape)) {
-      result.push_back(str);
+      result.push_back(kv.first);
     }
   }
   return result;
@@ -130,13 +130,13 @@ bool is_regexp_like(const std::string& str, const std::string& pattern, const ch
 
 }  // namespace
 
-std::vector<std::string> StringDictionaryProxy::getRegexpLike(const std::string& pattern, const char escape) const {
+std::vector<int32_t> StringDictionaryProxy::getRegexpLike(const std::string& pattern, const char escape) const {
   CHECK_GE(generation_, 0);
   auto result = string_dict_->getRegexpLike(pattern, escape, generation_);
   for (const auto& kv : transient_int_to_str_) {
     const auto str = getString(kv.first);
     if (is_regexp_like(str, pattern, escape)) {
-      result.push_back(str);
+      result.push_back(kv.first);
     }
   }
   return result;

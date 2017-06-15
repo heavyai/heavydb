@@ -45,12 +45,12 @@ class StringDictionaryProxy {
   size_t storageEntryCount() const;
   void updateGeneration(const ssize_t generation) noexcept;
 
-  std::vector<std::string> getLike(const std::string& pattern,
-                                   const bool icase,
-                                   const bool is_simple,
-                                   const char escape) const;
+  std::vector<int32_t> getLike(const std::string& pattern,
+                               const bool icase,
+                               const bool is_simple,
+                               const char escape) const;
 
-  std::vector<std::string> getRegexpLike(const std::string& pattern, const char escape) const;
+  std::vector<int32_t> getRegexpLike(const std::string& pattern, const char escape) const;
 
  private:
   std::shared_ptr<StringDictionary> string_dict_;
