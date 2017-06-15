@@ -685,6 +685,7 @@ static ImportStatus import_thread(int thread_id,
           for (size_t col_idx_to_pop = 0; col_idx_to_pop < col_idx; ++col_idx_to_pop) {
             import_buffers[col_idx_to_pop]->pop_value();
           }
+          import_status.rows_rejected++;
           LOG(WARNING) << "Input exception thrown: " << e.what() << ". Row discarded.";
         }
       });
