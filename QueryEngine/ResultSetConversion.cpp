@@ -27,8 +27,8 @@
 #include <string>
 
 #define MAPD_ARROW_VERSION (ARROW_VERSION_MAJOR * 10000 + ARROW_VERSION_MINOR * 100 + ARROW_VERSION_PATCH)
-#if MAPD_ARROW_VERSION != 300
-#error MapD only supports Apache Arrow release 0.3.0
+#if MAPD_ARROW_VERSION != 401
+#error MapD only supports Apache Arrow release 0.4.1
 #endif
 
 #include "arrow/builder.h"
@@ -360,8 +360,8 @@ void append_value_array(ValueArray& dst, const ValueArray& src, const Field& fie
 void print_serialization(const uint8_t* data, const size_t length) {
   const auto record_buffer = std::make_shared<arrow::Buffer>(data, length);
   auto buf_reader = std::make_shared<io::BufferReader>(record_buffer);
-  std::shared_ptr<ipc::StreamReader> reader;
-  ipc::StreamReader::Open(buf_reader, &reader);
+  std::shared_ptr<ipc::RecordBatchStreamReader> reader;
+  ipc::RecordBatchStreamReader::Open(buf_reader, &reader);
 
   std::shared_ptr<RecordBatch> batch;
   reader->GetNextRecordBatch(&batch);
@@ -379,8 +379,8 @@ std::shared_ptr<PoolBuffer> serialize_arrow_records(const RecordBatch& rb) {
   auto buffer = std::make_shared<PoolBuffer>(default_memory_pool());
   buffer->Reserve(rb_sz);
   io::BufferOutputStream sink(buffer);
-  std::shared_ptr<ipc::StreamWriter> writer;
-  RETURN_IF_NOT_OK(ipc::StreamWriter::Open(&sink, rb.schema(), &writer));
+  std::shared_ptr<ipc::RecordBatchStreamWriter> writer;
+  RETURN_IF_NOT_OK(ipc::RecordBatchStreamWriter::Open(&sink, rb.schema(), &writer));
   RETURN_IF_NOT_OK(writer->WriteRecordBatch(rb));
   writer->Close();
   return buffer;
@@ -572,7 +572,7 @@ std::tuple<std::shared_ptr<arrow::Buffer>, std::vector<char>, int64_t> ResultSet
     throw std::runtime_error("failed to attach a shared memory");
   }
   // copy the arrow records buffer to shared memory
-  // TODO(ptaylor): I'm sure it's possible to tell Arrow's StreamWriter to write
+  // TODO(ptaylor): I'm sure it's possible to tell Arrow's RecordBatchStreamWriter to write
   // directly to the shared memory segment as a sink
   memcpy(ipc_ptr, serialized_records->data(), serialized_records->size());
   // detach from the shared memory segment
