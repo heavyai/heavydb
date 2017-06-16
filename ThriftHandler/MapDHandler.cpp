@@ -94,87 +94,6 @@
 
 #define INVALID_SESSION_ID ""
 
-std::shared_ptr<const rapidjson::Value> get_poly_render_data(rapidjson::Document& render_config) {
-  // DEPRECATED, can be removed when MapDHandler::render() is removed
-  const auto& data_descs = field(render_config, "data");
-  CHECK(data_descs.IsArray());
-  CHECK_EQ(unsigned(1), data_descs.Size());
-  auto& data_desc = *(data_descs.Begin());
-  if (data_desc.HasMember("format")) {
-    CHECK_EQ("polys", json_str(field(data_desc, "format")));
-    std::shared_ptr<rapidjson::Value> data_ptr(new rapidjson::Value);
-    rapidjson::Document::AllocatorType& a = render_config.GetAllocator();
-    data_ptr->CopyFrom(data_desc, a);
-    return data_ptr;
-  }
-  return nullptr;
-}
-
-std::string build_poly_render_query(const rapidjson::Value& data_desc) {
-  // DEPRECATED, can be removed when MapDHandler::render() is removed
-  CHECK_EQ("polys", json_str(field(data_desc, "format")));
-  const auto polyTableName = json_str(field(data_desc, "dbTableName"));
-  const auto factsTableName = json_str(field(data_desc, "factsTableName"));
-  const auto filterExpr = json_str(field(data_desc, "filterExpr"));
-  const auto aggExpr = json_str(field(data_desc, "aggExpr"));
-  const auto factsKey = json_str(field(data_desc, "factsKey"));
-  const auto polysKey = json_str(field(data_desc, "polysKey"));
-  return "SELECT " + polyTableName + ".rowid, " + aggExpr + " FROM " + factsTableName + ", " + polyTableName +
-         " WHERE " + filterExpr + (filterExpr.empty() ? "" : " AND ") + factsTableName + "." + factsKey + " = " +
-         polyTableName + "." + polysKey + " GROUP BY " + polyTableName + ".rowid;";
-}
-
-std::string transform_to_poly_render_query(const std::string& query_str, const rapidjson::Value& data_desc) {
-  // DEPRECATED, can be removed when MapDHandler::render() is removed
-  CHECK_EQ("polys", json_str(field(data_desc, "format")));
-  auto result = query_str;
-  {
-    boost::regex aliased_group_expr{R"(\s+([^\s]+)\s+as\s+([^(\s|,)]+))", boost::regex::extended | boost::regex::icase};
-    boost::smatch what;
-    std::string what1, what2;
-    if (boost::regex_search(result, what, aliased_group_expr)) {
-      what1 = std::string(what[1]);
-      what2 = std::string(what[2]);
-      result.replace(what.position(), what.length(), " " + what1);
-    } else {
-      what1 = std::string(what[1]);
-      what2 = std::string(what[2]);
-    }
-    boost::ireplace_all(result, what2, what1);
-  }
-  const auto polyTableName = json_str(field(data_desc, "dbTableName"));
-  const auto polysKey = json_str(field(data_desc, "polysKey"));
-  std::string groupby_expr;
-  {
-    boost::regex group_expr{R"(group\s+by\s+([^(\s|;|,)]+))", boost::regex::extended | boost::regex::icase};
-    boost::smatch what;
-    CHECK(boost::regex_search(result, what, group_expr));
-    groupby_expr = what[1];
-    boost::ireplace_all(result, std::string(what[1]), polyTableName + ".rowid");
-  }
-  CHECK(!groupby_expr.empty());
-  const auto join_filter = groupby_expr + " = " + polyTableName + "." + polysKey;
-  {
-    boost::regex where_expr(R"(\s+where\s+(.*)\s+group\s+by)", boost::regex::extended | boost::regex::icase);
-    boost::smatch what_where;
-    boost::regex from_expr{R"(\s+from\s+([^\s]+)\s+)", boost::regex::extended | boost::regex::icase};
-    boost::smatch what_from;
-    if (boost::regex_search(result, what_where, where_expr)) {
-      result.replace(
-          what_where.position(), what_where.length(), " WHERE " + what_where[1] + " AND " + join_filter + " GROUP BY");
-      CHECK(boost::regex_search(result, what_from, from_expr));
-      result.replace(
-          what_from.position(), what_from.length(), " FROM " + std::string(what_from[1]) + ", " + polyTableName + " ");
-    } else {
-      CHECK(boost::regex_search(result, what_from, from_expr));
-      result.replace(what_from.position(),
-                     what_from.length(),
-                     " FROM " + std::string(what_from[1]) + ", " + polyTableName + " WHERE " + join_filter + " ");
-    }
-  }
-  return result;
-}
-
 std::string image_from_rendered_rows(const ResultRows& rendered_results) {
   const auto img_row = rendered_results.getNextRow(false, false);
   CHECK_EQ(size_t(1), img_row.size());
@@ -765,13 +684,7 @@ void MapDHandler::get_rows_for_pixels(TPixelResult& _return,
                                       const std::vector<std::string>& col_names,
                                       const bool column_format,
                                       const std::string& nonce) {
-  _return.nonce = nonce;
-  if (!enable_rendering_) {
-    TMapDException ex;
-    ex.error_msg = "Backend rendering is disabled.";
-    LOG(ERROR) << ex.error_msg;
-    throw ex;
-  }
+  LOG(ERROR) << "get_rows_for_pixels is deprecated, please fix application";
 }
 
 // DEPRECATED - use get_result_row_for_pixel()
@@ -784,13 +697,7 @@ void MapDHandler::get_row_for_pixel(TPixelRowResult& _return,
                                     const bool column_format,
                                     const int32_t pixelRadius,
                                     const std::string& nonce) {
-  _return.nonce = nonce;
-  if (!enable_rendering_) {
-    TMapDException ex;
-    ex.error_msg = "Backend rendering is disabled.";
-    LOG(ERROR) << ex.error_msg;
-    throw ex;
-  }
+  LOG(ERROR) << "get_rows_for_pixel is deprecated, please fix application";
 }
 
 void MapDHandler::get_result_row_for_pixel(TPixelTableRowResult& _return,
@@ -840,12 +747,7 @@ TColumnType MapDHandler::populateThriftColumnType(const Catalog_Namespace::Catal
 void MapDHandler::get_table_descriptor(TTableDescriptor& _return,
                                        const TSessionId& session,
                                        const std::string& table_name) {
-  TRowDescriptor rd;
-  TTableDetails table_details;
-  get_table_details(table_details, session, table_name);
-  for (const auto cd : table_details.row_desc) {
-    _return.insert(std::make_pair(cd.col_name, cd));
-  }
+  LOG(ERROR) << "get_table_descriptor is deprecated, please fix application";
 }
 
 void MapDHandler::get_table_details(TTableDetails& _return, const TSessionId& session, const std::string& table_name) {
@@ -886,9 +788,7 @@ void MapDHandler::get_table_details(TTableDetails& _return, const TSessionId& se
 void MapDHandler::get_row_descriptor(TRowDescriptor& _return,
                                      const TSessionId& session,
                                      const std::string& table_name) {
-  TTableDetails table_details;
-  get_table_details(table_details, session, table_name);
-  _return = table_details.row_desc;
+  LOG(ERROR) << "get_row_descriptor is deprecated, please fix application";
 }
 
 void MapDHandler::get_frontend_view(TFrontendView& _return, const TSessionId& session, const std::string& view_name) {
@@ -1329,46 +1229,7 @@ void MapDHandler::render(TRenderResult& _return,
                          const std::string& query_str_in,
                          const std::string& render_type,
                          const std::string& nonce) {
-  _return.total_time_ms = measure<>::execution([&]() {
-    _return.nonce = nonce;
-    if (!enable_rendering_) {
-      TMapDException ex;
-      ex.error_msg = "Backend rendering is disabled.";
-      LOG(ERROR) << ex.error_msg;
-      throw ex;
-    }
-    auto query_str = query_str_in;
-    rapidjson::Document render_config;
-    render_config.Parse(render_type.c_str());
-    auto poly_data_desc = get_poly_render_data(render_config);
-    bool is_projection_query = true;
-    if (poly_data_desc) {
-      if (poly_data_desc->HasMember("factsKey")) {
-        is_projection_query = false;
-        query_str = build_poly_render_query(*poly_data_desc);
-      } else if (poly_data_desc->HasMember("polysKey")) {
-        is_projection_query = false;
-        query_str = transform_to_poly_render_query(query_str, *poly_data_desc);
-      }
-    }
-    std::lock_guard<std::mutex> render_lock(render_mutex_);
-    mapd_shared_lock<mapd_shared_mutex> read_lock(sessions_mutex_);
-    auto session_it = get_session_it(session);
-    auto session_info_ptr = session_it->second.get();
-    try {
-      std::string query_ra;
-      _return.execution_time_ms +=
-          measure<>::execution([&]() { query_ra = parse_to_ra(query_str, *session_info_ptr); });
-      render_rel_alg(_return, query_ra, query_str_in, *session_info_ptr, render_type, is_projection_query);
-    } catch (std::exception& e) {
-      TMapDException ex;
-      ex.error_msg = std::string("Exception: ") + e.what();
-      LOG(ERROR) << ex.error_msg;
-      throw ex;
-    }
-  });
-  LOG(INFO) << "Total: " << _return.total_time_ms << " (ms), Execution: " << _return.execution_time_ms
-            << " (ms), Render: " << _return.render_time_ms << " (ms)";
+  LOG(ERROR) << "render is deprecated, please fix application";
 }
 
 void MapDHandler::render_vega(TRenderResult& _return,
@@ -2033,85 +1894,6 @@ void MapDHandler::execute_root_plan_gpudf(TGpuDataFrame& _return,
   }
 }
 #endif  // ENABLE_ARROW_CONVERTER
-
-void MapDHandler::render_root_plan(TRenderResult& _return,
-                                   Planner::RootPlan* root_plan,
-                                   const std::string& query_str,
-                                   const Catalog_Namespace::SessionInfo& session_info,
-                                   const std::string& render_type,
-                                   const bool is_projection_query) {
-  rapidjson::Document render_config;
-  render_config.Parse(render_type.c_str());
-
-  auto poly_data_desc = get_poly_render_data(render_config);
-  std::unique_ptr<RenderInfo> render_info(
-      new RenderInfo(session_info.get_session_id(), 1, render_type, (poly_data_desc == nullptr)));
-  if (!poly_data_desc) {
-    root_plan->set_plan_dest(Planner::RootPlan::Dest::kRENDER);
-  }
-  auto executor = Executor::getExecutor(root_plan->get_catalog().get_currentDB().dbId,
-                                        jit_debug_ ? "/tmp" : "",
-                                        jit_debug_ ? "mapdquery" : "",
-                                        mapd_parameters_,
-                                        nullptr);
-
-  auto clock_begin = timer_start();
-  auto results = executor->execute(root_plan,
-                                   session_info,
-                                   true,
-                                   session_info.get_executor_device_type(),
-                                   ExecutorOptLevel::Default,
-                                   allow_multifrag_,
-                                   false,
-                                   render_info.get());
-  if (poly_data_desc) {
-    CHECK(false);
-  }
-  // reduce execution time by the time spent during queue waiting
-  _return.execution_time_ms = timer_stop(clock_begin) - results.getQueueTime() - results.getRenderTime();
-  _return.render_time_ms = results.getRenderTime();
-  _return.image = image_from_rendered_rows(results);
-}
-
-void MapDHandler::render_rel_alg(TRenderResult& _return,
-                                 const std::string& query_ra,
-                                 const std::string& query_str,
-                                 const Catalog_Namespace::SessionInfo& session_info,
-                                 const std::string& render_type,
-                                 const bool is_projection_query) {
-  const auto& cat = session_info.get_catalog();
-  auto executor = Executor::getExecutor(
-      cat.get_currentDB().dbId, jit_debug_ ? "/tmp" : "", jit_debug_ ? "mapdquery" : "", mapd_parameters_, nullptr);
-  RelAlgExecutor ra_executor(executor.get(), cat);
-  auto clock_begin = timer_start();
-  CompilationOptions co = {
-      session_info.get_executor_device_type(), true, ExecutorOptLevel::Default, g_enable_dynamic_watchdog};
-  ExecutionOptions eo = {false,
-                         allow_multifrag_,
-                         false,
-                         allow_loop_joins_,
-                         g_enable_watchdog,
-                         jit_debug_,
-                         false,
-                         g_enable_dynamic_watchdog,
-                         g_dynamic_watchdog_time_limit};
-  rapidjson::Document render_config;
-  render_config.Parse(render_type.c_str());
-
-  auto poly_data_desc = get_poly_render_data(render_config);
-
-  std::unique_ptr<RenderInfo> render_info(
-      new RenderInfo(session_info.get_session_id(), 1, render_type, (poly_data_desc == nullptr)));
-  const auto exe_result = ra_executor.executeRelAlgQuery(query_ra, co, eo, render_info.get());
-  const auto& results = exe_result.getRows();
-  if (poly_data_desc) {
-    CHECK(false);
-  }
-  // reduce execution time by the time spent during queue waiting
-  _return.execution_time_ms = timer_stop(clock_begin) - results.getQueueTime() - results.getRenderTime();
-  _return.render_time_ms = results.getRenderTime();
-  _return.image = image_from_rendered_rows(results);
-}
 
 std::vector<TargetMetaInfo> MapDHandler::getTargetMetaInfo(
     const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& targets) const {
