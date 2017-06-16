@@ -544,9 +544,9 @@ std::tuple<std::shared_ptr<arrow::Buffer>, std::vector<char>, int64_t> ResultSet
   // (like djb2) + nonce, we could still get collisions if multiple clients specify
   // the same nonce, so using rand() in lieu of a better approach
   // TODO(ptaylor): Is this common? Are these assumptions true?
-  key_t key = rand();
-  int shmsz = (int) serialized_records->size();
-  int shmid;
+  auto key = static_cast<key_t>(rand());
+  const auto shmsz = serialized_records->size();
+  int shmid = -1;
   // IPC_CREAT - indicates we want to create a new segment for this key if it doesn't exist
   // IPC_EXCL - ensures failure if a segment already exists for this key
   while ((shmid = shmget(key, shmsz, IPC_CREAT | IPC_EXCL | 0666)) < 0) {
@@ -557,30 +557,25 @@ std::tuple<std::shared_ptr<arrow::Buffer>, std::vector<char>, int64_t> ResultSet
     // EINVAL - a shared memory segment is already associated with this key, but the size is less than shmsz
     // ENOENT - IPC_CREAT was not set in shmflg and no shared memory segment associated with key was found
     if (!(errno & (EEXIST | EACCES | EINVAL | ENOENT))) {
-      // TODO(ptaylor): Surface this error gracefully instead of crashing
-      perror("shmget");
-      exit(1);
+      throw std::runtime_error("failed to create a shared memory");
     }
-    key = rand();
+    key = static_cast<key_t>(rand());
   }
   // get a pointer to the shared memory segment
-  char *ipc_ptr;
-  if ((ipc_ptr = (char*)shmat(shmid, NULL, 0)) == (char *) -1) {
-      // TODO(ptaylor): Surface this error gracefully instead of crashing
-      perror("shmat");
-      exit(1);
+  auto ipc_ptr = shmat(shmid, NULL, 0);
+  if (reinterpret_cast<int64_t>(ipc_ptr) == -1) {
+    throw std::runtime_error("failed to attach a shared memory");
   }
   // copy the arrow records buffer to shared memory
   // TODO(ptaylor): I'm sure it's possible to tell Arrow's StreamWriter to write
-  // directly to the shared memory segment as a sink, but my c++ fu is not strong,
-  // so memcpy'ing for now.
+  // directly to the shared memory segment as a sink
   memcpy(ipc_ptr, serialized_records->data(), serialized_records->size());
   // detach from the shared memory segment
   shmdt(ipc_ptr);
   // cast the shared memory key to a string, and then to a char vec, so we can
   // keep the same method signature as the original `getArrowDeviceCopy` below.
-  std::string handle_str = std::to_string(key);
-  std::vector<char> handle_buffer(handle_str.begin(), handle_str.end());
+  std::vector<char> handle_buffer(sizeof(key_t), 0);
+  memcpy(&handle_buffer[0], reinterpret_cast<unsigned char*>(&key), sizeof(key_t));
   return std::tuple<std::shared_ptr<arrow::Buffer>, std::vector<char>, int64_t>{
       serialized_schema, handle_buffer, serialized_records->size()};
 }

@@ -2114,8 +2114,7 @@ void MapDHandler::execute_root_plan_df(TGpuDataFrame& _return,
     const auto plan = root_plan->get_plan();
     CHECK(plan);
     const auto& targets = plan->get_targetlist();
-    std::tie(schema_fbs, df_handle, _return.df_size) =
-        rs->getArrowCopy(data_mgr_.get(), getTargetNames(targets));
+    std::tie(schema_fbs, df_handle, _return.df_size) = rs->getArrowCopy(data_mgr_.get(), getTargetNames(targets));
     if (schema_fbs) {
       std::vector<char> raw_buffer(schema_fbs->size());
       CHECK(schema_fbs->data());
