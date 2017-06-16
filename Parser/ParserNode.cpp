@@ -2381,13 +2381,18 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   TargetMetaInfo* td = targets.data();
 
   std::ofstream outfile;
-  if (file_path->empty()) {
-    // generate file name as sessionid under mapd_export
-    *file_path = catalog.get_basePath() + "/mapd_export/";
+  if (file_path->empty() || !boost::filesystem::path(*file_path).is_absolute()) {
+    std::string file_name;
+    if (file_path->empty()) {
+      file_name = session.get_session_id() + ".txt";
+    } else {
+      file_name = boost::filesystem::path(*file_path).filename().string();
+    }
+    *file_path = catalog.get_basePath() + "/mapd_export/" + session.get_session_id() + "/";
     if (!boost::filesystem::exists(*file_path))
-      if (!boost::filesystem::create_directory(*file_path))
+      if (!boost::filesystem::create_directories(*file_path))
         throw std::runtime_error("Directory " + *file_path + " cannot be created.");
-    *file_path += session.get_session_id() + ".txt";
+    *file_path += file_name;
   }
   outfile.open(*file_path);
   if (!outfile)
