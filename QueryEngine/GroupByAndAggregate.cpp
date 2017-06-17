@@ -190,6 +190,9 @@ QueryExecutionContext::QueryExecutionContext(const RelAlgExecutionUnit& ra_exe_u
 #ifdef ENABLE_MULTIFRAG_JOIN
       const auto column_frag_offsets = get_col_frag_offsets(ra_exe_unit.target_exprs, frag_offsets);
       const auto& table_frag_sizes = consistent_frag_sizes_;
+      if (table_frag_sizes.empty()) {
+        return;
+      }
       const auto column_frag_sizes = get_consistent_frags_sizes(ra_exe_unit.target_exprs, table_frag_sizes);
 #endif
       result_sets_.emplace_back(new ResultSet(target_exprs_to_infos(ra_exe_unit.target_exprs, query_mem_desc_),
