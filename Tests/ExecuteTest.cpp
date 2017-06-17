@@ -2591,6 +2591,10 @@ TEST(Select, LeftOuterJoins) {
     c("SELECT test_inner.x key1 FROM test LEFT OUTER JOIN test_inner ON test.x = test_inner.x GROUP BY key1 HAVING "
       "key1 IS NOT NULL;",
       dt);
+    EXPECT_THROW(
+        run_multiple_agg(
+            "SELECT x, tnone FROM test LEFT JOIN text_group_by_test ON test.str = text_group_by_test.tdef;", dt),
+        std::runtime_error);
   }
 }
 

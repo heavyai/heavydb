@@ -311,6 +311,9 @@ std::vector<llvm::Value*> Executor::codegenOuterJoinNullPlaceholder(const std::v
   const auto null_constant = makeExpr<Analyzer::Constant>(null_ti, true, Datum{0});
   const auto null_target_lvs = codegen(
       null_constant.get(), false, CompilationOptions{ExecutorDeviceType::CPU, false, ExecutorOptLevel::Default, false});
+  if ((null_ti.is_string() && null_ti.get_compression() == kENCODING_NONE) || null_ti.is_array()) {
+    throw std::runtime_error("Projection type " + null_ti.get_type_name() + " not supported for outer joins yet");
+  }
   cgen_state_->ir_builder_.CreateBr(phi_bb);
   CHECK_EQ(orig_lvs.size(), null_target_lvs.size());
   cgen_state_->ir_builder_.SetInsertPoint(phi_bb);
