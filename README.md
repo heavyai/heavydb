@@ -332,10 +332,29 @@ Most build dependencies required by MapD Core are available via APT. Thrift, Blo
     wget --continue https://github.com/jarro2783/bisonpp/archive/$VERS.tar.gz
     tar xvf $VERS.tar.gz
     pushd bisonpp-$VERS
-    ./configure
+    ./configure --prefix=/usr/local/mapd-deps
     make -j $(nproc)
     sudo make install
     popd
+
+    VERS=0.3.0
+    wget --continue https://github.com/apache/arrow/archive/apache-arrow-$VERS.tar.gz
+    tar -xf apache-arrow-$VERS.tar.gz
+    mkdir -p arrow-apache-arrow-$VERS/cpp/build
+    pushd arrow-apache-arrow-$VERS/cpp/build
+    cmake \
+	-DCMAKE_BUILD_TYPE=Release \
+	-DARROW_BUILD_SHARED=off \
+        -DARROW_BUILD_STATIC=on \
+	-DCMAKE_INSTALL_PREFIX=/usr/local/mapd-deps \
+	-DARROW_BOOST_USE_SHARED=off \
+	-DARROW_JEMALLOC_USE_SHARED=off \
+				    ..
+   makej
+   make install
+   popd
+
+
 
 ##UBUNTU 17.04
 

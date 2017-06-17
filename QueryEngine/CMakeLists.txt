@@ -136,7 +136,7 @@ else()
 endif()
 
 if(ENABLE_ARROW_CONVERTER)
-  set(ARROW_LIBS arrow)
+  set(ARROW_LIBS ${Arrow_LIBRARIES})
 endif()
 
 if(ENABLE_RENDERING)
