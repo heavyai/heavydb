@@ -577,8 +577,6 @@ const int8_t* Executor::ExecutionDispatch::getAllScanColumnFrags(
     std::lock_guard<std::mutex> columnar_conversion_guard(columnar_conversion_mutex_);
     auto column_it = columnarized_scan_table_cache_.find(col_desc);
     if (column_it == columnarized_scan_table_cache_.end()) {
-      columnarized_scan_table_cache_.insert(std::make_pair(col_desc, nullptr));
-      column_it = columnarized_scan_table_cache_.find(col_desc);
       for (size_t frag_id = 0; frag_id < frag_count; ++frag_id) {
         std::list<std::shared_ptr<Chunk_NS::Chunk>> chunk_holder;
         std::list<ChunkIter> chunk_iter_holder;
@@ -595,10 +593,12 @@ const int8_t* Executor::ExecutionDispatch::getAllScanColumnFrags(
         column_frags.push_back(boost::make_unique<ColumnarResults>(
             row_set_mem_owner_, col_buffer, fragment.getNumTuples(), chunk_meta_it->second.sqlType));
       }
-      column_it->second = ColumnarResults::mergeResults(row_set_mem_owner_, column_frags);
+      auto merged_results = ColumnarResults::mergeResults(row_set_mem_owner_, column_frags);
+      table_column = merged_results.get();
+      columnarized_scan_table_cache_.emplace(col_desc, std::move(merged_results));
+    } else {
+      table_column = column_it->second.get();
     }
-    CHECK(column_it != columnarized_scan_table_cache_.end());
-    table_column = column_it->second.get();
   }
   return getColumn(table_column, 0, &cat_.get_dataMgr(), memory_level, device_id);
 }

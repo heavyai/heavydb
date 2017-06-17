@@ -176,6 +176,11 @@ ColumnarResults::ColumnarResults(const std::shared_ptr<RowSetMemoryOwner> row_se
                                  const size_t num_rows,
                                  const SQLTypeInfo& target_type)
     : column_buffers_(1), num_rows_(num_rows), target_types_{target_type} {
+  const bool is_varlen =
+      target_type.is_array() || (target_type.is_string() && target_type.get_compression() == kENCODING_NONE);
+  if (is_varlen) {
+    throw ColumnarConversionNotSupported();
+  }
   const auto buf_size = num_rows * target_type.get_size();
   column_buffers_[0] = reinterpret_cast<const int8_t*>(checked_malloc(buf_size));
   memcpy(((void*)column_buffers_[0]), one_col_buffer, buf_size);
