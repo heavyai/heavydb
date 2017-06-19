@@ -736,10 +736,10 @@ TEST(Select, ApproxCountDistinct) {
 TEST(Select, ScanNoAggregation) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-    c("SELECT * FROM test;", dt);
-    c("SELECT t.* FROM test t;", dt);
-    c("SELECT x, z, t FROM test;", dt);
-    c("SELECT x, y, x + 1 FROM test;", dt);
+    c("SELECT * FROM test ORDER BY x ASC, y ASC;", dt);
+    c("SELECT t.* FROM test t ORDER BY x ASC, y ASC;", dt);
+    c("SELECT x, z, t FROM test ORDER BY x ASC, y ASC;", dt);
+    c("SELECT x, y, x + 1 FROM test ORDER BY x ASC, y ASC;", dt);
     c("SELECT x + z, t FROM test WHERE x <> 7 AND y > 42;", dt);
     c("SELECT * FROM test WHERE x > 8;", dt);
   }
@@ -849,21 +849,23 @@ TEST(Select, Case) {
                   "SELECT SUM(CASE WHEN x BETWEEN 6 AND 7 THEN 1.1 WHEN x BETWEEN 8 AND 9 THEN 2.2 ELSE 3.3 END) FROM "
                   "test WHERE CASE WHEN y BETWEEN 44 AND 45 THEN 5.1 ELSE 3.9 END > 4;",
                   dt)));
-    c("SELECT CASE WHEN x BETWEEN 1 AND 3 THEN 'oops 1' WHEN x BETWEEN 4 AND 6 THEN 'oops 2' ELSE real_str END FROM "
-      "test;",
+    c("SELECT CASE WHEN x BETWEEN 1 AND 3 THEN 'oops 1' WHEN x BETWEEN 4 AND 6 THEN 'oops 2' ELSE real_str END c FROM "
+      "test ORDER BY c ASC;",
       dt);
-    c("SELECT CASE WHEN x BETWEEN 1 AND 3 THEN 'oops 1' WHEN x BETWEEN 4 AND 6 THEN 'oops 2' ELSE str END FROM test;",
+    c("SELECT CASE WHEN x BETWEEN 1 AND 3 THEN 'oops 1' WHEN x BETWEEN 4 AND 6 THEN 'oops 2' ELSE str END c FROM test "
+      "ORDER BY c ASC;",
       dt);
-    c("SELECT CASE WHEN x BETWEEN 1 AND 7 THEN 'seven' WHEN x BETWEEN 7 AND 10 THEN 'eight' ELSE 'ooops' end FROM "
-      "test;",
+    c("SELECT CASE WHEN x BETWEEN 1 AND 7 THEN 'seven' WHEN x BETWEEN 7 AND 10 THEN 'eight' ELSE 'ooops' END c FROM "
+      "test ORDER BY c ASC;",
       dt);
     c("SELECT CASE WHEN x BETWEEN 1 AND 7 THEN 'seven' WHEN x BETWEEN 7 AND 10 THEN real_str ELSE 'ooops' END AS g "
-      "FROM test;",
+      "FROM test ORDER BY g ASC;",
       dt);
-    c("SELECT CASE WHEN x BETWEEN 1 AND 7 THEN 'seven' WHEN x BETWEEN 7 AND 10 THEN str ELSE 'ooops' END FROM test;",
+    c("SELECT CASE WHEN x BETWEEN 1 AND 7 THEN 'seven' WHEN x BETWEEN 7 AND 10 THEN str ELSE 'ooops' END c FROM test "
+      "ORDER BY c ASC;",
       dt);
-    c("SELECT CASE WHEN x BETWEEN 1 AND 7 THEN 'seven' WHEN x BETWEEN 7 AND 10 THEN 'eight' ELSE 'ooops' END FROM "
-      "test;",
+    c("SELECT CASE WHEN x BETWEEN 1 AND 7 THEN 'seven' WHEN x BETWEEN 7 AND 10 THEN 'eight' ELSE 'ooops' END c FROM "
+      "test ORDER BY c ASC;",
       dt);
     c("SELECT CASE WHEN x BETWEEN 1 AND 7 THEN str WHEN x BETWEEN 7 AND 10 THEN 'eight' ELSE 'ooops' END AS g, "
       "COUNT(*) FROM test GROUP BY g ORDER BY g;",
@@ -872,7 +874,7 @@ TEST(Select, Case) {
     c("SELECT CASE WHEN str IN ('str1', 'str3', 'str8') THEN 'foo' WHEN str IN ('str2', 'str4', 'str9') THEN 'bar' "
       "ELSE 'baz' END AS bucketed_str, COUNT(*) AS n FROM query_rewrite_test GROUP BY bucketed_str ORDER BY n DESC;",
       dt);
-    c("SELECT CASE WHEN y > 40 THEN x END, x FROM test;", dt);
+    c("SELECT CASE WHEN y > 40 THEN x END c, x FROM test ORDER BY c ASC;", dt);
     c("SELECT COUNT(CASE WHEN str = 'foo' THEN 1 END) FROM test;", dt);
     c("SELECT COUNT(CASE WHEN str = 'foo' THEN 1 ELSE NULL END) FROM test;", dt);
     c("SELECT CASE WHEN x BETWEEN 1 AND 3 THEN y ELSE y END AS foobar FROM test ORDER BY foobar DESC;", dt);
@@ -887,7 +889,9 @@ TEST(Select, Case) {
     c("SELECT CASE WHEN str IN ('foo') THEN 'FOO' WHEN str IN ('bar') THEN 'BAR' ELSE 'BAZ' END AS g, COUNT(*) "
       "FROM test GROUP BY g ORDER BY g DESC;",
       dt);
-    c("SELECT x, COUNT(case when y = 42 then 1 else 0 end) as n1, COUNT(*) as n2 FROM test group by x;", dt);
+    c("SELECT x, COUNT(case when y = 42 then 1 else 0 end) AS n1, COUNT(*) AS n2 FROM test GROUP BY x ORDER BY n2 "
+      "DESC;",
+      dt);
     ASSERT_EQ(int64_t(1418428800),
               v<int64_t>(run_simple_agg("SELECT CASE WHEN 1 > 0 THEN DATE_TRUNC(day, m) ELSE DATE_TRUNC(year, m) END "
                                         "AS date_bin FROM test GROUP BY date_bin;",
@@ -921,11 +925,11 @@ TEST(Select, Strings) {
     c("SELECT COUNT(*) FROM test WHERE str LIKE 'ba%';", dt);
     c("SELECT COUNT(*) FROM test WHERE str LIKE '%eal_bar';", dt);
     c("SELECT COUNT(*) FROM test WHERE str LIKE '%ba%';", dt);
-    c("SELECT * FROM test WHERE str LIKE '%';", dt);
-    c("SELECT * FROM test WHERE str LIKE 'f%%';", dt);
-    c("SELECT * FROM test WHERE str LIKE 'f%\%';", dt);
-    c("SELECT * FROM test WHERE ss LIKE 'f%\%';", dt);
-    c("SELECT * FROM test WHERE str LIKE '@f%%' ESCAPE '@';", dt);
+    c("SELECT * FROM test WHERE str LIKE '%' ORDER BY x ASC, y ASC;", dt);
+    c("SELECT * FROM test WHERE str LIKE 'f%%' ORDER BY x ASC, y ASC;", dt);
+    c("SELECT * FROM test WHERE str LIKE 'f%\%' ORDER BY x ASC, y ASC;", dt);
+    c("SELECT * FROM test WHERE ss LIKE 'f%\%' ORDER BY x ASC, y ASC;", dt);
+    c("SELECT * FROM test WHERE str LIKE '@f%%' ESCAPE '@' ORDER BY x ASC, y ASC;", dt);
     c("SELECT COUNT(*) FROM test WHERE str LIKE 'ba_' or str LIKE 'fo_';", dt);
     c("SELECT COUNT(*) FROM test WHERE str IS NULL;", dt);
     c("SELECT COUNT(*) FROM test WHERE str IS NOT NULL;", dt);
@@ -991,10 +995,10 @@ TEST(Select, StringsNoneEncoding) {
     c("SELECT COUNT(*) FROM test WHERE real_str LIKE 'real_%%%';", dt);
     c("SELECT COUNT(*) FROM test WHERE real_str LIKE 'real_ba%';", dt);
     c("SELECT COUNT(*) FROM test WHERE real_str LIKE '%eal_bar';", dt);
-    c("SELECT * FROM test WHERE real_str LIKE '%';", dt);
-    c("SELECT * FROM test WHERE real_str LIKE 'real_f%%';", dt);
-    c("SELECT * FROM test WHERE real_str LIKE 'real_f%\%';", dt);
-    c("SELECT * FROM test WHERE real_str LIKE 'real_@f%%' ESCAPE '@';", dt);
+    c("SELECT * FROM test WHERE real_str LIKE '%' ORDER BY x ASC, y ASC;", dt);
+    c("SELECT * FROM test WHERE real_str LIKE 'real_f%%' ORDER BY x ASC, y ASC;", dt);
+    c("SELECT * FROM test WHERE real_str LIKE 'real_f%\%' ORDER BY x ASC, y ASC;", dt);
+    c("SELECT * FROM test WHERE real_str LIKE 'real_@f%%' ESCAPE '@' ORDER BY x ASC, y ASC;", dt);
     c("SELECT COUNT(*) FROM test WHERE real_str LIKE 'real_ba_' or real_str LIKE 'real_fo_';", dt);
     c("SELECT COUNT(*) FROM test WHERE real_str IS NULL;", dt);
     c("SELECT COUNT(*) FROM test WHERE real_str IS NOT NULL;", dt);
@@ -1127,8 +1131,8 @@ TEST(Select, Time) {
     ASSERT_EQ(1999, v<int64_t>(run_simple_agg("SELECT MAX(EXTRACT(YEAR FROM o)) FROM test;", dt)));
     ASSERT_EQ(9, v<int64_t>(run_simple_agg("SELECT MAX(EXTRACT(MONTH FROM o)) FROM test;", dt)));
     ASSERT_EQ(9, v<int64_t>(run_simple_agg("SELECT MAX(EXTRACT(DAY FROM o)) FROM test;", dt)));
-    ASSERT_EQ(4, v<int64_t>(run_simple_agg("SELECT EXTRACT(DOW FROM o) FROM test;", dt)));
-    ASSERT_EQ(252, v<int64_t>(run_simple_agg("SELECT EXTRACT(DOY FROM o) FROM test;", dt)));
+    ASSERT_EQ(4, v<int64_t>(run_simple_agg("SELECT EXTRACT(DOW FROM o) FROM test WHERE o IS NOT NULL;", dt)));
+    ASSERT_EQ(252, v<int64_t>(run_simple_agg("SELECT EXTRACT(DOY FROM o) FROM test WHERE o IS NOT NULL;", dt)));
     ASSERT_EQ(936835200L, v<int64_t>(run_simple_agg("SELECT MAX(EXTRACT(EPOCH FROM o)) FROM test;", dt)));
     ASSERT_EQ(1L,
               v<int64_t>(run_simple_agg(
@@ -1512,16 +1516,20 @@ TEST(Select, OverflowAndUnderFlow) {
                                   dt),
                  std::runtime_error);
     EXPECT_THROW(run_multiple_agg("SELECT dd * 2000000000000000 FROM test LIMIT 5;", dt), std::runtime_error);
-    c("SELECT dd * 200000000000000 FROM test LIMIT 5;", dt);  // overflow avoided through decimal mul optimization
+    c("SELECT dd * 200000000000000 FROM test ORDER BY dd ASC LIMIT 5;",
+      dt);  // overflow avoided through decimal mul optimization
     c("SELECT COUNT(*) FROM test WHERE dd + 2.0000000000000009 > 110.0;", dt);  // no overflow in the cast
     EXPECT_THROW(run_multiple_agg("SELECT COUNT(*) FROM test WHERE dd + 2.00000000000000099 > 110.0;", dt),
-                 std::runtime_error);                  // overflow in the cast due to higher precision
-    c("select dd/2.00000009 from test limit 1;", dt);  // dividend still fits after cast and division upscaling
-    EXPECT_THROW(run_multiple_agg("select dd/2.000000099 from test limit 1;", dt),
+                 std::runtime_error);  // overflow in the cast due to higher precision
+    c("SELECT dd / 2.00000009 FROM test ORDER BY dd ASC LIMIT 1;",
+      dt);  // dividend still fits after cast and division upscaling
+    EXPECT_THROW(run_multiple_agg("SELECT dd / 2.000000099 FROM test LIMIT 1;", dt),
                  std::runtime_error);  // dividend overflows after cast and division upscaling due to higher precision
-    c("select (dd-40.6364668888)/2 from test limit 1;", dt);  // decimal div by const optimization avoids overflow
-    c("select (dd-40.6364668888)/x from test limit 1;", dt);  // decimal div by int cast optimization avoids overflow
-    c("select (dd-40.63646688)/dd from test limit 1;",
+    c("SELECT (dd - 40.6364668888) / 2 FROM test ORDER BY dd ASC LIMIT 1;",
+      dt);  // decimal div by const optimization avoids overflow
+    c("SELECT (dd - 40.6364668888) / x FROM test ORDER BY dd ASC LIMIT 1;",
+      dt);  // decimal div by int cast optimization avoids overflow
+    c("SELECT (dd - 40.63646688) / dd FROM test ORDER BY dd ASC LIMIT 1;",
       dt);  // dividend still fits after upscaling from cast and division
     EXPECT_THROW(run_multiple_agg("select (dd-40.6364668888)/dd from test limit 1;", dt),
                  std::runtime_error);  // dividend overflows on upscaling on a slightly higher precision, test detection
@@ -2513,11 +2521,14 @@ TEST(Select, InnerJoins) {
 TEST(Select, LeftOuterJoins) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-    c("SELECT test.x, test_inner.x FROM test LEFT OUTER JOIN test_inner ON test.x = test_inner.x WHERE test.y > 40;",
+    c("SELECT test.x, test_inner.x FROM test LEFT OUTER JOIN test_inner ON test.x = test_inner.x WHERE test.y > 40 "
+      "ORDER BY test.x ASC;",
       dt);
-    c("SELECT test.x, test_inner.x FROM test LEFT OUTER JOIN test_inner ON test.x = test_inner.x WHERE test.y > 42;",
+    c("SELECT test.x, test_inner.x FROM test LEFT OUTER JOIN test_inner ON test.x = test_inner.x WHERE test.y > 42 "
+      "ORDER BY test.x ASC;",
       dt);
-    c("SELECT test.x, test_inner.x FROM test LEFT OUTER JOIN test_inner ON test.x = test_inner.x;", dt);
+    c("SELECT test.x, test_inner.x FROM test LEFT OUTER JOIN test_inner ON test.x = test_inner.x ORDER BY test.x ASC;",
+      dt);
     c("SELECT test.str AS foobar, test_inner.str FROM test LEFT OUTER JOIN test_inner ON test.x = test_inner.x WHERE "
       "test.y > 42 ORDER BY foobar DESC LIMIT 8;",
       dt);
