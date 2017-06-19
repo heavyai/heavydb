@@ -190,6 +190,9 @@ First install the basic build tools:
         gperftools \
         gperftools-devel \
         gperftools-libs \
+        python-devel \
+        wget \
+        curl \
         environment-modules
 
 Next download and install the prebuilt dependencies:
@@ -252,6 +255,8 @@ Most build dependencies required by MapD Core are available via APT. Thrift, Blo
         cmake \
         cmake-curses-gui \
         git \
+        wget \
+        curl \
         clang \
         clang-format \
         llvm \
@@ -350,8 +355,8 @@ Most build dependencies required by MapD Core are available via APT. Thrift, Blo
         -DARROW_BOOST_USE_SHARED=off \
         -DARROW_JEMALLOC_USE_SHARED=off \
         ..
-    makej
-    make install
+    make -j $(nproc)
+    sudo make install
     popd
 
 ### Environment Variables
