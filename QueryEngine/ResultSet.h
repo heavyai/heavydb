@@ -401,6 +401,8 @@ class ResultSet {
                                         const size_t target_logical_idx,
                                         const StorageLookupResult& storage_lookup_result) const;
 
+  InternalTargetValue getVarlenOrderEntry(const int64_t str_ptr, const size_t str_len) const;
+
   int64_t lazyReadInt(const int64_t ival,
                       const size_t target_logical_idx,
                       const StorageLookupResult& storage_lookup_result) const;

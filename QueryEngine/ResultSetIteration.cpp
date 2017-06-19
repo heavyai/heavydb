@@ -322,13 +322,14 @@ InternalTargetValue ResultSet::getColumnInternal(const int8_t* buff,
                                    : key_width;
       const int8_t* ptr2{nullptr};
       int8_t compact_sz2{0};
-      if (agg_info.is_agg && agg_info.agg_kind == kAVG) {
+      if ((agg_info.is_agg && agg_info.agg_kind == kAVG) || is_real_str_or_array(agg_info)) {
         ptr2 = rowwise_target_ptr + query_mem_desc_.agg_col_widths[agg_col_idx].compact;
         compact_sz2 = query_mem_desc_.agg_col_widths[agg_col_idx + 1].compact;
       }
       if (target_idx == target_logical_idx) {
         const auto i1 = lazyReadInt(read_int_from_buff(ptr1, compact_sz1), target_logical_idx, storage_lookup_result);
-        if (ptr2) {
+        if (agg_info.is_agg && agg_info.agg_kind == kAVG) {
+          CHECK(ptr2);
           const auto i2 = read_int_from_buff(ptr2, compact_sz2);
           return InternalTargetValue(i1, i2);
         } else {
@@ -351,6 +352,10 @@ InternalTargetValue ResultSet::getColumnInternal(const int8_t* buff,
               const auto& none_encoded_strings_for_fragment = none_encoded_strings_[storage_lookup_result.storage_idx];
               return InternalTargetValue(&none_encoded_strings_for_fragment[i1]);
             }
+            CHECK(ptr2);
+            const auto str_len = read_int_from_buff(ptr2, compact_sz2);
+            CHECK_GE(str_len, 0);
+            return getVarlenOrderEntry(i1, str_len);
           }
           return InternalTargetValue(i1);
         }
@@ -362,6 +367,22 @@ InternalTargetValue ResultSet::getColumnInternal(const int8_t* buff,
   }
   CHECK(false);
   return InternalTargetValue(int64_t(0));
+}
+
+InternalTargetValue ResultSet::getVarlenOrderEntry(const int64_t str_ptr, const size_t str_len) const {
+  char* host_str_ptr{nullptr};
+  std::vector<int8_t> cpu_buffer;
+  if (device_type_ == ExecutorDeviceType::GPU) {
+    cpu_buffer.resize(str_len);
+    auto& data_mgr = query_mem_desc_.executor_->catalog_->get_dataMgr();
+    copy_from_gpu(&data_mgr, &cpu_buffer[0], static_cast<CUdeviceptr>(str_ptr), str_len, device_id_);
+    host_str_ptr = reinterpret_cast<char*>(&cpu_buffer[0]);
+  } else {
+    CHECK(device_type_ == ExecutorDeviceType::CPU);
+    host_str_ptr = reinterpret_cast<char*>(str_ptr);
+  }
+  std::string str(host_str_ptr, str_len);
+  return InternalTargetValue(row_set_mem_owner_->addString(str));
 }
 
 int64_t ResultSet::lazyReadInt(const int64_t ival,
