@@ -405,7 +405,7 @@ TEST(Select, FilterAndSimpleAggregation) {
     c("SELECT COUNT(*) FROM test WHERE 22 > 33;", dt);
     c("SELECT COUNT(*) FROM test WHERE ff < 23.0/4.0 AND 22 < 33;", dt);
     c("SELECT COUNT(*) FROM test WHERE x + 3*8/2 < 35 + y - 20/5;", dt);
-    c("SELECT x + 2 * 10/4 + 3 FROM test WHERE x + 3*8/2 < 35 + y - 20/5;", dt);
+    c("SELECT x + 2 * 10/4 + 3 AS expr FROM test WHERE x + 3*8/2 < 35 + y - 20/5 ORDER BY expr ASC;", dt);
     c("SELECT COUNT(*) FROM test WHERE ff + 3.0*8 < 20.0/5;", dt);
     c("SELECT COUNT(*) FROM test WHERE x < y AND 0=1;", dt);
     c("SELECT COUNT(*) FROM test WHERE x < y AND 1=1;", dt);
@@ -1554,10 +1554,10 @@ TEST(Select, OverflowAndUnderFlow) {
       "GROUP BY key0 HAVING key0 >= 0 AND key0 < 12 ORDER BY val "
       "DESC LIMIT 50 OFFSET 0;",
       dt);
-    c("select -1 * dd from test limit 1;", dt);
-    c("select dd * -1 from test limit 1;", dt);
-    c("select (dd - 1000000111.10) * dd from test limit 1;", dt);
-    c("select dd * (dd - 1000000111.10) from test limit 1;", dt);
+    c("select -1 * dd as expr from test order by expr asc;", dt);
+    c("select dd * -1 as expr from test order by expr asc;", dt);
+    c("select (dd - 1000000111.10) * dd as expr from test order by expr asc;", dt);
+    c("select dd * (dd - 1000000111.10) as expr from test order by expr asc;", dt);
     // avoiding overflows in decimal compares against higher precision literals:
     // truncate literals based on the other side's precision, e.g. for d which is DECIMAL(14,2)
     c("select count(*) from big_decimal_range_test where (d >  4.955357142857142);", dt);  // compare with 4.955
