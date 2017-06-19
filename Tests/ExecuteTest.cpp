@@ -1572,6 +1572,15 @@ TEST(Select, OverflowAndUnderFlow) {
     c("select count(*) from test where (z*12345678 < 9681668.33071388567);", dt);          // compare with 9681668.3
     c("select count(*) from test where dd <= 111.222;", dt);
     c("select count(*) from test where dd >= -15264923.533545015;", dt);
+    // avoiding overflows with constant folding and pushed down casts
+    c("select count(*) + (604*575) from test;", dt);
+    c("select count(*) - (604*575) from test;", dt);
+    c("select count(*) * (604*575) from test;", dt);
+    c("select (604*575) / count(*) from test;", dt);
+    c("select cast(count(*) as DOUBLE) + (604*575) from test;", dt);
+    c("select cast(count(*) as DOUBLE) - (604*575) from test;", dt);
+    c("select cast(count(*) as DOUBLE) * (604*575) from test;", dt);
+    c("select (604*575) / cast(count(*) as DOUBLE) from test;", dt);
 #ifdef ENABLE_COMPACTION
     c("SELECT SUM(ofd) FROM test GROUP BY x;", dt);
     c("SELECT SUM(ufd) FROM test GROUP BY x;", dt);

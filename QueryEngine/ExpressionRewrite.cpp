@@ -251,8 +251,13 @@ class IndirectToDirectColVisitor : public DeepCopyVisitor {
 class ConstantFoldingVisitor : public DeepCopyVisitor {
  protected:
   std::shared_ptr<Analyzer::Expr> visitUOper(const Analyzer::UOper* uoper) const override {
-    const auto operand = visit(uoper->get_operand());
+    const auto unvisited_operand = uoper->get_operand();
     const auto optype = uoper->get_optype();
+    const Analyzer::BinOper* unvisited_binoper = nullptr;
+    if (optype == kCAST) {
+      unvisited_binoper = dynamic_cast<const Analyzer::BinOper*>(unvisited_operand);
+    }
+    const auto operand = (unvisited_binoper) ? visitBinOper(unvisited_binoper, uoper) : visit(unvisited_operand);
     const auto& operand_ti = operand->get_type_info();
     const auto operand_type = operand_ti.is_decimal() ? decimal_to_int_type(operand_ti) : operand_ti.get_type();
     const auto const_operand = std::dynamic_pointer_cast<const Analyzer::Constant>(operand);
@@ -328,15 +333,19 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
   }
 
   std::shared_ptr<Analyzer::Expr> visitBinOper(const Analyzer::BinOper* bin_oper) const override {
+    return visitBinOper(bin_oper, nullptr);
+  }
+
+  std::shared_ptr<Analyzer::Expr> visitBinOper(const Analyzer::BinOper* bin_oper, const Analyzer::UOper* cast) const {
     const auto lhs = visit(bin_oper->get_left_operand());
     const auto rhs = visit(bin_oper->get_right_operand());
+    const auto const_lhs = std::dynamic_pointer_cast<const Analyzer::Constant>(lhs);
+    const auto const_rhs = std::dynamic_pointer_cast<const Analyzer::Constant>(rhs);
     const auto optype = bin_oper->get_optype();
     const auto& lhs_ti = lhs->get_type_info();
     const auto& rhs_ti = rhs->get_type_info();
-    const auto lhs_type = lhs_ti.is_decimal() ? decimal_to_int_type(lhs_ti) : lhs_ti.get_type();
-    const auto rhs_type = rhs_ti.is_decimal() ? decimal_to_int_type(rhs_ti) : rhs_ti.get_type();
-    const auto const_lhs = std::dynamic_pointer_cast<const Analyzer::Constant>(lhs);
-    const auto const_rhs = std::dynamic_pointer_cast<const Analyzer::Constant>(rhs);
+    auto lhs_type = lhs_ti.is_decimal() ? decimal_to_int_type(lhs_ti) : lhs_ti.get_type();
+    auto rhs_type = rhs_ti.is_decimal() ? decimal_to_int_type(rhs_ti) : rhs_ti.get_type();
 
     bool notnull = true;
     if (const_lhs && !lhs_ti.get_notnull() && isNull(const_lhs.get()))
@@ -548,87 +557,147 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
           }
           break;
         }
-        case kMINUS: {
-          bool fold = true;
-          Datum d;
-          switch (lhs_type) {
-            case kSMALLINT:
-              d.smallintval = (lhs_datum.smallintval - rhs_datum.smallintval);
-              break;
-            case kINT:
-              d.intval = (lhs_datum.intval - rhs_datum.intval);
-              break;
-            case kBIGINT:
-              d.bigintval = (lhs_datum.bigintval - rhs_datum.bigintval);
-              break;
-            case kFLOAT:
-              d.floatval = (lhs_datum.floatval - rhs_datum.floatval);
-              break;
-            case kDOUBLE:
-              d.doubleval = (lhs_datum.doubleval - rhs_datum.doubleval);
-              break;
-            default:
-              fold = false;
-              break;
-          }
-          if (fold) {
-            return makeExpr<Analyzer::Constant>(lhs_type, false, d);
-          }
-          break;
-        }
+        case kMINUS:
         case kPLUS: {
+          auto result_type = lhs_type;
+          if (cast) {
+            const auto cast_ti = cast->get_type_info();
+            result_type = cast_ti.get_type();
+          }
           bool fold = true;
-          Datum d;
+          int64_t bigintval = 0;
+          int64_t rhs_bigintval = 0;
+          double doubleval = 0.0;
+          double rhs_doubleval = 0.0;
           switch (lhs_type) {
             case kSMALLINT:
-              d.smallintval = (lhs_datum.smallintval + rhs_datum.smallintval);
+              rhs_bigintval = (optype == kMINUS) ? -((int64_t)rhs_datum.smallintval) : (int64_t)rhs_datum.smallintval;
+              bigintval = (int64_t)lhs_datum.smallintval + rhs_bigintval;
+              doubleval = (double)bigintval;
               break;
             case kINT:
-              d.intval = (lhs_datum.intval + rhs_datum.intval);
+              rhs_bigintval = (optype == kMINUS) ? -((int64_t)rhs_datum.intval) : (int64_t)rhs_datum.intval;
+              bigintval = (int64_t)lhs_datum.intval + rhs_bigintval;
+              doubleval = (double)bigintval;
               break;
             case kBIGINT:
-              d.bigintval = (lhs_datum.bigintval + rhs_datum.bigintval);
+              rhs_bigintval = (optype == kMINUS) ? -rhs_datum.bigintval : rhs_datum.bigintval;
+              bigintval = lhs_datum.bigintval + rhs_bigintval;
+              doubleval = (double)bigintval;
               break;
             case kFLOAT:
-              d.floatval = (lhs_datum.floatval + rhs_datum.floatval);
+              rhs_doubleval = (optype == kMINUS) ? -((double)rhs_datum.doubleval) : (double)rhs_datum.doubleval;
+              doubleval = (double)lhs_datum.floatval + rhs_doubleval;
+              bigintval = (int64_t)doubleval;
               break;
             case kDOUBLE:
-              d.doubleval = (lhs_datum.doubleval + rhs_datum.doubleval);
+              rhs_doubleval = (optype == kMINUS) ? -rhs_datum.doubleval : rhs_datum.doubleval;
+              doubleval = lhs_datum.doubleval + rhs_doubleval;
+              bigintval = (int64_t)doubleval;
               break;
             default:
               fold = false;
               break;
           }
+          Datum d;
           if (fold) {
-            return makeExpr<Analyzer::Constant>(lhs_type, false, d);
+            switch (result_type) {
+              case kSMALLINT:
+                d.smallintval = (int16_t)bigintval;
+                if ((int64_t)d.smallintval != bigintval)
+                  fold = false;
+                break;
+              case kINT:
+                d.intval = (int32_t)bigintval;
+                if ((int64_t)d.intval != bigintval)
+                  fold = false;
+                break;
+              case kBIGINT:
+                d.bigintval = bigintval;
+                break;
+              case kFLOAT:
+                d.floatval = (float)doubleval;
+                if ((double)d.floatval != doubleval)
+                  fold = false;
+                break;
+              case kDOUBLE:
+                d.doubleval = doubleval;
+                break;
+              default:
+                fold = false;
+                break;
+            }
+          }
+          if (fold) {
+            return makeExpr<Analyzer::Constant>(result_type, false, d);
           }
           break;
         }
         case kMULTIPLY: {
+          auto result_type = lhs_type;
+          if (cast) {
+            const auto cast_ti = cast->get_type_info();
+            result_type = cast_ti.get_type();
+          }
           bool fold = true;
-          Datum d;
+          int64_t bigintval = 0;
+          double doubleval = 0.0;
           switch (lhs_type) {
             case kSMALLINT:
-              d.smallintval = (lhs_datum.smallintval * rhs_datum.smallintval);
+              bigintval = (int64_t)lhs_datum.smallintval * (int64_t)rhs_datum.smallintval;
+              doubleval = (double)bigintval;
               break;
             case kINT:
-              d.intval = (lhs_datum.intval * rhs_datum.intval);
+              bigintval = (int64_t)lhs_datum.intval * (int64_t)rhs_datum.intval;
+              doubleval = (double)bigintval;
               break;
             case kBIGINT:
-              d.bigintval = (lhs_datum.bigintval * rhs_datum.bigintval);
+              bigintval = lhs_datum.bigintval * rhs_datum.bigintval;
+              doubleval = (double)bigintval;
               break;
             case kFLOAT:
-              d.floatval = (lhs_datum.floatval * rhs_datum.floatval);
+              doubleval = (double)lhs_datum.floatval * (double)rhs_datum.floatval;
+              bigintval = (int64_t)doubleval;
               break;
             case kDOUBLE:
-              d.doubleval = (lhs_datum.doubleval * rhs_datum.doubleval);
+              doubleval = lhs_datum.doubleval * rhs_datum.doubleval;
+              bigintval = (int64_t)doubleval;
               break;
             default:
               fold = false;
               break;
           }
+          Datum d;
           if (fold) {
-            return makeExpr<Analyzer::Constant>(lhs_type, false, d);
+            switch (result_type) {
+              case kSMALLINT:
+                d.smallintval = (int16_t)bigintval;
+                if ((int64_t)d.smallintval != bigintval)
+                  fold = false;
+                break;
+              case kINT:
+                d.intval = (int32_t)bigintval;
+                if ((int64_t)d.intval != bigintval)
+                  fold = false;
+                break;
+              case kBIGINT:
+                d.bigintval = bigintval;
+                break;
+              case kFLOAT:
+                d.floatval = (float)doubleval;
+                if ((double)d.floatval != doubleval)
+                  fold = false;
+                break;
+              case kDOUBLE:
+                d.doubleval = doubleval;
+                break;
+              default:
+                fold = false;
+                break;
+            }
+          }
+          if (fold) {
+            return makeExpr<Analyzer::Constant>(result_type, false, d);
           }
           break;
         }
