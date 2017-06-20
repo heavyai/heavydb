@@ -1131,7 +1131,7 @@ RowSetPtr Executor::collectAllDeviceResults(ExecutionDispatch& execution_dispatc
                                             const bool output_columnar) {
   const auto& ra_exe_unit = execution_dispatch.getExecutionUnit();
   for (const auto& query_exe_context : execution_dispatch.getQueryContexts()) {
-    if (!query_exe_context) {
+    if (!query_exe_context || query_exe_context->hasNoFragments()) {
       continue;
     }
     execution_dispatch.getFragmentResults().emplace_back(

@@ -2206,6 +2206,7 @@ TEST(Select, Joins) {
     // Intentionally duplicate previous string join to cover hash table building.
     c("SELECT COUNT(*) FROM test, join_test WHERE test.str = join_test.dup_str;", dt);
     c("SELECT test.x, empty.x FROM test, empty WHERE test.x = empty.x;", dt);
+    c("SELECT COUNT(*) FROM test, empty GROUP BY test.x;", dt);
     ASSERT_EQ(
         int64_t(3),
         v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test, join_test WHERE test.rowid = join_test.rowid;", dt)));

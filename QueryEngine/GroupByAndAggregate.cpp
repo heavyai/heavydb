@@ -109,6 +109,10 @@ QueryExecutionContext::QueryExecutionContext(const RelAlgExecutionUnit& ra_exe_u
       count_distinct_bitmap_host_mem_(nullptr),
       count_distinct_bitmap_crt_ptr_(nullptr) {
   CHECK(!sort_on_gpu_ || output_columnar);
+  if (consistent_frag_sizes_.empty()) {
+    // No fragments in the input, no underlying buffers will be needed.
+    return;
+  }
   check_total_bitmap_memory(query_mem_desc_.count_distinct_descriptors_,
                             query_mem_desc_.entry_count + query_mem_desc_.entry_count_small);
   if (device_type_ == ExecutorDeviceType::GPU) {
@@ -189,11 +193,7 @@ QueryExecutionContext::QueryExecutionContext(const RelAlgExecutionUnit& ra_exe_u
     if (can_use_result_set(query_mem_desc_, device_type_)) {
 #ifdef ENABLE_MULTIFRAG_JOIN
       const auto column_frag_offsets = get_col_frag_offsets(ra_exe_unit.target_exprs, frag_offsets);
-      const auto& table_frag_sizes = consistent_frag_sizes_;
-      if (table_frag_sizes.empty()) {
-        return;
-      }
-      const auto column_frag_sizes = get_consistent_frags_sizes(ra_exe_unit.target_exprs, table_frag_sizes);
+      const auto column_frag_sizes = get_consistent_frags_sizes(ra_exe_unit.target_exprs, consistent_frag_sizes_);
 #endif
       result_sets_.emplace_back(new ResultSet(target_exprs_to_infos(ra_exe_unit.target_exprs, query_mem_desc_),
                                               getColLazyFetchInfo(ra_exe_unit.target_exprs),

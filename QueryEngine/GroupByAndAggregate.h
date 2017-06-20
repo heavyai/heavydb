@@ -165,6 +165,8 @@ class QueryExecutionContext : boost::noncopyable {
                                       const uint32_t num_tables,
                                       const std::vector<int64_t>& join_hash_tables);
 
+  bool hasNoFragments() const { return consistent_frag_sizes_.empty(); }
+
  private:
   const std::vector<const int8_t*>& getColumnFrag(const size_t table_idx, int64_t& global_idx) const;
   bool isEmptyBin(const int64_t* group_by_buffer, const size_t bin, const size_t key_idx) const;
