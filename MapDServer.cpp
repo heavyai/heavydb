@@ -220,7 +220,7 @@ int main(int argc, char** argv) {
   int port = 9091;
   int http_port = 9090;
   size_t reserved_gpu_mem = 1 << 27;
-  int calcite_port = -1;  // do not use calcite via thrift normally
+  int calcite_port = 9093;
   std::string base_path;
   std::string device("gpu");
   std::string config_file("mapd.conf");
