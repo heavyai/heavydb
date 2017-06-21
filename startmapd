@@ -87,6 +87,9 @@ if [ -d frontend ] && [ -e ./bin/mapd_web_server ]; then
     else
         MAPDFRONTEND="http://localhost:${MAPD_WEB_PORT}"
     fi
+
+    echo "- sleeping for 5s while server starts"
+    sleep 5
     if hash open 2>/dev/null; then
         open "$MAPDFRONTEND" 2> /dev/null || true
     elif hash xdg-open 2>/dev/null; then
