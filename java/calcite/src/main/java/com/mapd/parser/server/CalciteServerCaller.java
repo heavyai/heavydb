@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package com.mapd.parser.server;
 
 import java.io.IOException;
@@ -21,6 +20,7 @@ import static java.lang.System.exit;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Properties;
+import java.util.logging.Level;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.DefaultParser;
@@ -89,23 +89,26 @@ public class CalciteServerCaller {
     //Add logging to our log files directories
     Properties p = new Properties();
     try {
-        p.load(getClass().getResourceAsStream("/log4j.properties" ));
+      p.load(getClass().getResourceAsStream("/log4j.properties"));
+    } catch (IOException ex) {
+      MAPDLOGGER.error("Could not load log4j property file from resources " + ex.getMessage());
     }
-    catch (IOException ex) {
-        MAPDLOGGER.error("Could not load log4j property file from resources " + ex.getMessage());
-    }
-    p.put( "log.dir", dataDir ); // overwrite "log.dir"
-    PropertyConfigurator.configure( p );
+    p.put("log.dir", dataDir); // overwrite "log.dir"
+    PropertyConfigurator.configure(p);
 
     calciteServerWrapper = new CalciteServerWrapper(portNum, -1, dataDir, extensionFunctionsAstFile.toString());
 
     while (true) {
       try {
-        Thread t = new Thread(calciteServerWrapper);
-        t.start();
-        t.join();
+        calciteServerWrapper.run();
         if (calciteServerWrapper.shutdown()) {
           break;
+        }
+        try {
+          // wait for 4 secs before retry
+          Thread.sleep(4000);
+        } catch (InterruptedException ex) {
+          // noop
         }
       } catch (Exception x) {
         x.printStackTrace();

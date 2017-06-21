@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package com.mapd.parser.server;
 
 import com.mapd.calcite.parser.MapDParser;
@@ -107,8 +106,7 @@ class CalciteServerHandler implements CalciteServer.Iface {
       String msg = "Exception occurred: " + ex.getMessage();
       MAPDLOGGER.error(msg);
       throw new InvalidParseRequest(-4, msg);
-    }
-    finally {
+    } finally {
       try {
         // put parser object back in pool for others to use
         parserPool.returnObject(parser);
@@ -124,7 +122,7 @@ class CalciteServerHandler implements CalciteServer.Iface {
   @Override
   public void shutdown() throws TException {
     // received request to shutdown
-    MAPDLOGGER.info("Shutdown calcite java server");
+    MAPDLOGGER.error("Shutdown calcite java server");
     server.stop();
   }
 
@@ -139,7 +137,7 @@ class CalciteServerHandler implements CalciteServer.Iface {
 
   @Override
   public void updateMetadata(String catalog, String table) throws TException {
-    MAPDLOGGER.debug("Received invalidation from server for "+ catalog + " : " + table);
+    MAPDLOGGER.debug("Received invalidation from server for " + catalog + " : " + table);
     long timer = System.currentTimeMillis();
     callCount++;
     MapDParser parser;

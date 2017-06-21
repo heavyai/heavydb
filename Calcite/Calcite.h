@@ -24,8 +24,12 @@
 #ifndef CALCITE_H
 #define CALCITE_H
 
-#include "gen-cpp/CalciteServer.h"
+#include <thrift/protocol/TBinaryProtocol.h>
+#include <thrift/transport/TSocket.h>
+#include <thrift/transport/TTransportUtils.h>
 #include <jni.h>
+#include <thread>
+#include "gen-cpp/CalciteServer.h"
 
 class Calcite {
  public:
@@ -42,10 +46,12 @@ class Calcite {
 
  private:
   void runJNI(int port, std::string data_dir, size_t calcite_max_memory);
-  void runServer(int port, std::string data_dir);
+  void runServer(int port, std::string data_dir, size_t calcite_max_memory);
+
+  std::thread calcite_server_thread_;
   std::string handle_java_return(JNIEnv* env, jobject process_result);
   JNIEnv* checkJNIConnection();
-  std::unique_ptr<CalciteServerClient> client;
+
   bool server_available_;
   bool jni_;
   int remote_calcite_port_ = -1;

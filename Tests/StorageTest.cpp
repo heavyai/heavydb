@@ -47,11 +47,7 @@ using namespace Fragmenter_Namespace;
 #define BASE_PATH "./tmp"
 #endif
 
-#ifdef STANDALONE_CALCITE
 #define CALCITEPORT 9093
-#else
-#define CALCITEPORT -1
-#endif
 
 namespace {
 std::unique_ptr<SessionInfo> gsession;
