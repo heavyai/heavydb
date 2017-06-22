@@ -31,6 +31,11 @@ enum TExecuteMode {
   CPU
 }
 
+enum TDeviceType {
+  CPU,
+  GPU
+}
+
 enum TTableType {
   DELIMITED,
   POLYGON
@@ -124,7 +129,7 @@ struct TQueryResult {
   4: string nonce
 }
 
-struct TGpuDataFrame {
+struct TDataFrame {
   1: binary schema
   2: binary df_handle
   3: i64 df_size
@@ -342,8 +347,8 @@ service MapD {
   void clear_gpu_memory(1: TSessionId session) throws (1: TMapDException e)
   # query, render
   TQueryResult sql_execute(1: TSessionId session, 2: string query 3: bool column_format, 4: string nonce, 5: i32 first_n = -1) throws (1: TMapDException e)
-  TGpuDataFrame sql_execute_df(1: TSessionId session, 2: string query 3: i32 first_n = -1) throws (1: TMapDException e)
-  TGpuDataFrame sql_execute_gpudf(1: TSessionId session, 2: string query 3: i32 device_id = 0, 4: i32 first_n = -1) throws (1: TMapDException e)
+  TDataFrame sql_execute_df(1: TSessionId session, 2: string query 3: TDeviceType device_type 4: i32 device_id = 0 5: i32 first_n = -1) throws (1: TMapDException e)
+  TDataFrame sql_execute_gdf(1: TSessionId session, 2: string query 3: i32 device_id = 0, 4: i32 first_n = -1) throws (1: TMapDException e)
   void interrupt(1: TSessionId session) throws (1: TMapDException e)
   TTableDescriptor sql_validate(1: TSessionId session, 2: string query) throws (1: TMapDException e)
   void set_execution_mode(1: TSessionId session, 2: TExecuteMode mode) throws (1: TMapDException e)

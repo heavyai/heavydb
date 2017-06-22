@@ -204,6 +204,14 @@ struct OneIntegerColumnRow {
   const bool valid;
 };
 
+#ifdef ENABLE_ARROW_CONVERTER
+struct ArrowResult {
+  std::shared_ptr<arrow::Buffer> schema;
+  std::vector<char> df_handle;
+  int64_t df_size;
+};
+#endif
+
 class TSerializedRows;
 
 class ResultSet {
@@ -327,14 +335,10 @@ class ResultSet {
   static std::unique_ptr<ResultSet> unserialize(const std::string&, const Executor*);
 
 #ifdef ENABLE_ARROW_CONVERTER
-  std::tuple<std::shared_ptr<arrow::Buffer>, std::vector<char>, int64_t> getArrowCopy(
-      Data_Namespace::DataMgr* data_mgr,
-      const std::vector<std::string>& col_names) const;
-
-  std::tuple<std::shared_ptr<arrow::Buffer>, std::vector<char>, int64_t> getArrowDeviceCopy(
-      Data_Namespace::DataMgr* data_mgr,
-      const size_t device_id,
-      const std::vector<std::string>& col_names) const;
+  ArrowResult getArrowCopy(Data_Namespace::DataMgr* data_mgr,
+                           const ExecutorDeviceType device_type,
+                           const size_t device_id,
+                           const std::vector<std::string>& col_names) const;
 #endif
 
  private:
@@ -446,6 +450,11 @@ class ResultSet {
   arrow::RecordBatch convertToArrow(const std::vector<std::string>& col_names) const;
   std::pair<std::vector<std::shared_ptr<arrow::Array>>, size_t> getArrowColumns(
       const std::vector<std::shared_ptr<arrow::Field>>& fields) const;
+
+  ArrowResult getArrowCopyOnCpu(Data_Namespace::DataMgr* data_mgr, const std::vector<std::string>& col_names) const;
+  ArrowResult getArrowCopyOnGpu(Data_Namespace::DataMgr* data_mgr,
+                                const size_t device_id,
+                                const std::vector<std::string>& col_names) const;
 #endif
 
   std::string serializeProjection() const;

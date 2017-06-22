@@ -537,9 +537,8 @@ arrow::RecordBatch ResultSet::convertToArrow(const std::vector<std::string>& col
 //   ...
 //   shmdt(ipc_ptr);
 //   shmctl(shmid, IPC_RMID, 0);
-std::tuple<std::shared_ptr<arrow::Buffer>, std::vector<char>, int64_t> ResultSet::getArrowCopy(
-    Data_Namespace::DataMgr* data_mgr,
-    const std::vector<std::string>& col_names) const {
+ArrowResult ResultSet::getArrowCopyOnCpu(Data_Namespace::DataMgr* data_mgr,
+                                         const std::vector<std::string>& col_names) const {
   auto arrow_copy = convertToArrow(col_names);
   auto serialized_schema = serialize_arrow_schema(*arrow_copy.schema());
   auto serialized_records = serialize_arrow_records(arrow_copy);
@@ -581,8 +580,7 @@ std::tuple<std::shared_ptr<arrow::Buffer>, std::vector<char>, int64_t> ResultSet
   // keep the same method signature as the original `getArrowDeviceCopy` below.
   std::vector<char> handle_buffer(sizeof(key_t), 0);
   memcpy(&handle_buffer[0], reinterpret_cast<unsigned char*>(&key), sizeof(key_t));
-  return std::tuple<std::shared_ptr<arrow::Buffer>, std::vector<char>, int64_t>{
-      serialized_schema, handle_buffer, serialized_records->size()};
+  return {serialized_schema, handle_buffer, serialized_records->size()};
 }
 
 // WARN(miyu): users are responsible to free all device copies, e.g.,
@@ -594,10 +592,9 @@ std::tuple<std::shared_ptr<arrow::Buffer>, std::vector<char>, int64_t> ResultSet
 //   cudaFree(dev_ptr);
 //
 // TODO(miyu): verify if the server still needs to free its own copies after last uses
-std::tuple<std::shared_ptr<arrow::Buffer>, std::vector<char>, int64_t> ResultSet::getArrowDeviceCopy(
-    Data_Namespace::DataMgr* data_mgr,
-    const size_t device_id,
-    const std::vector<std::string>& col_names) const {
+ArrowResult ResultSet::getArrowCopyOnGpu(Data_Namespace::DataMgr* data_mgr,
+                                         const size_t device_id,
+                                         const std::vector<std::string>& col_names) const {
   auto arrow_copy = convertToArrow(col_names);
   auto serialized_schema = serialize_arrow_schema(*arrow_copy.schema());
 #ifdef HAVE_CUDA
@@ -613,11 +610,22 @@ std::tuple<std::shared_ptr<arrow::Buffer>, std::vector<char>, int64_t> ResultSet
                                        device_id);
   std::vector<char> handle_buffer(sizeof(ipc_mem_handle), 0);
   memcpy(&handle_buffer[0], reinterpret_cast<unsigned char*>(&ipc_mem_handle), sizeof(ipc_mem_handle));
-  return std::tuple<std::shared_ptr<arrow::Buffer>, std::vector<char>, int64_t>{
-      serialized_schema, handle_buffer, serialized_records->size()};
+  return {serialized_schema, handle_buffer, serialized_records->size()};
 #else
-  return std::tuple<std::shared_ptr<arrow::Buffer>, std::vector<char>, int64_t>{serialized_schema, {}, 0};
+  return {serialized_schema, {}, 0};
 #endif
+}
+
+ArrowResult ResultSet::getArrowCopy(Data_Namespace::DataMgr* data_mgr,
+                                    const ExecutorDeviceType device_type,
+                                    const size_t device_id,
+                                    const std::vector<std::string>& col_names) const {
+  if (device_type == ExecutorDeviceType::CPU) {
+    return getArrowCopyOnCpu(data_mgr, col_names);
+  }
+
+  CHECK(device_type == ExecutorDeviceType::GPU);
+  return getArrowCopyOnGpu(data_mgr, device_id, col_names);
 }
 
 #endif  // ENABLE_ARROW_CONVERTER
