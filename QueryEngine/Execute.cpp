@@ -1349,7 +1349,7 @@ bool Executor::skipFragmentPair(const Fragmenter_Namespace::FragmentInfo& outer_
   const auto join_condition =
       dynamic_cast<const Analyzer::BinOper*>(plan_state_->join_info_.equi_join_tautologies_.front().get());
   CHECK(join_condition);
-  return get_shard_count(join_condition, *catalog_);
+  return get_shard_count(join_condition, *catalog_) && !isOuterJoin();
 }
 
 std::vector<const int8_t*> Executor::fetchIterTabFrags(const size_t frag_id,
