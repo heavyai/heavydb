@@ -217,7 +217,7 @@ option(ENABLE_ARROW_CONVERTER "Enable arrow converter" OFF)
 if(ENABLE_ARROW_CONVERTER)
   find_package(Arrow REQUIRED)
   add_definitions("-DENABLE_ARROW_CONVERTER")
-  include_directories(${Arrow_INCLUDE_DIR})
+  include_directories(${Arrow_INCLUDE_DIRS})
 endif()
 
 # RapidJSON
