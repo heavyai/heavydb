@@ -104,7 +104,7 @@ void start_calcite_server_as_daemon(const int port, const std::string& data_dir,
   std::string cmd = "java -Xmx" + std::to_string(calcite_max_mem) + "m -jar " + mapd_root_abs_path() +
                     "/bin/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar -d " + data_dir + " -e " + mapd_root_abs_path() +
                     "/QueryEngine/ -p " + std::to_string(port);
-  system(cmd.c_str());
+  CHECK_GE(system(cmd.c_str()), 0);
 }
 
 std::pair<boost::shared_ptr<CalciteServerClient>, boost::shared_ptr<TTransport>> get_client(int port) {
