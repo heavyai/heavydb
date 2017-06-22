@@ -1324,7 +1324,7 @@ std::vector<size_t> Executor::getTableFragmentIndices(
   std::vector<size_t> all_frag_ids;
   for (size_t inner_frag_idx = 0; inner_frag_idx < inner_frags->size(); ++inner_frag_idx) {
     const auto& inner_frag_info = (*inner_frags)[inner_frag_idx];
-    if (skipFragmentPair(outer_fragment_info, inner_frag_info)) {
+    if (skipFragmentPair(outer_fragment_info, inner_frag_info, ra_exe_unit)) {
       continue;
     }
     all_frag_ids.push_back(inner_frag_idx);
@@ -1335,7 +1335,8 @@ std::vector<size_t> Executor::getTableFragmentIndices(
 // Returns true iff the join between two fragments cannot yield any results, per
 // shard information. The pair can be skipped to avoid full broadcast.
 bool Executor::skipFragmentPair(const Fragmenter_Namespace::FragmentInfo& outer_fragment_info,
-                                const Fragmenter_Namespace::FragmentInfo& inner_fragment_info) {
+                                const Fragmenter_Namespace::FragmentInfo& inner_fragment_info,
+                                const RelAlgExecutionUnit& ra_exe_unit) {
   // Don't bother with sharding for non-hash joins.
   if (plan_state_->join_info_.join_impl_type_ != Executor::JoinImplType::HashOneToOne) {
     return false;
@@ -1343,6 +1344,9 @@ bool Executor::skipFragmentPair(const Fragmenter_Namespace::FragmentInfo& outer_
   // Both tables need to be sharded the same way.
   if (outer_fragment_info.shard == -1 || inner_fragment_info.shard == -1 ||
       outer_fragment_info.shard == inner_fragment_info.shard) {
+    return false;
+  }
+  if (contains_iter_expr(ra_exe_unit.target_exprs)) {
     return false;
   }
   CHECK(!plan_state_->join_info_.equi_join_tautologies_.empty());

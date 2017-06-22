@@ -791,7 +791,8 @@ class Executor {
       std::map<int, const Executor::TableFragments*>& selected_tables_fragments);
 
   bool skipFragmentPair(const Fragmenter_Namespace::FragmentInfo& outer_fragment_info,
-                        const Fragmenter_Namespace::FragmentInfo& inner_fragment_info);
+                        const Fragmenter_Namespace::FragmentInfo& inner_fragment_info,
+                        const RelAlgExecutionUnit& ra_exe_unit);
 
   std::vector<const int8_t*> fetchIterTabFrags(const size_t frag_id,
                                                const ExecutionDispatch& execution_dispatch,
