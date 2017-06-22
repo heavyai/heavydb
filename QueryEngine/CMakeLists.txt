@@ -84,8 +84,6 @@ set(group_by_hash_test_files
 execute_process(COMMAND ${llvm_config_cmd} "--includedir"
                 OUTPUT_VARIABLE LLVM_INC_FLAGS)
 
-include_directories(.. ${LLVM_INC_FLAGS} "/usr/local/cuda/nvvm/include/" "/usr/local/cuda/include/" "/usr/local/cuda/nvvm/libnvvm-samples/common/include/" ${Boost_INCLUDE_DIR})
-
 if(ENABLE_CUDA)
   set(MAPD_DEFINITIONS "-DHAVE_CUDA")
 endif()

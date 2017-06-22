@@ -60,6 +60,7 @@ endif()
 option(ENABLE_CUDA "Enable CUDA support" ON)
 if(ENABLE_CUDA)
   find_package(CUDA REQUIRED)
+  include_directories(${CUDA_INCLUDE_DIRS})
   list(APPEND CUDA_LIBRARIES ${CUDA_CUDA_LIBRARY})
   add_definitions("-DHAVE_CUDA")
 
