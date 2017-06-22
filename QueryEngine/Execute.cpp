@@ -1242,7 +1242,14 @@ void Executor::dispatchFragments(
       }
       rowid_lookup_key = std::max(rowid_lookup_key, skip_frag.second);
       auto chosen_device_type = device_type;
-      int chosen_device_id = 0;
+      const auto device_count =
+          chosen_device_type == ExecutorDeviceType::CPU ? 1 : catalog_->get_dataMgr().cudaMgr_->getDeviceCount();
+      const auto memory_level =
+          chosen_device_type == ExecutorDeviceType::GPU ? Data_Namespace::GPU_LEVEL : Data_Namespace::CPU_LEVEL;
+      CHECK_GT(device_count, 0);
+      int chosen_device_id = (chosen_device_type == ExecutorDeviceType::CPU || fragment.shard == -1)
+                                 ? fragment.deviceIds[static_cast<int>(memory_level)]
+                                 : fragment.shard % device_count;
       if (device_type == ExecutorDeviceType::Hybrid) {
         std::unique_lock<std::mutex> scheduler_lock(scheduler_mutex);
         scheduler_cv.wait(scheduler_lock,
@@ -1260,27 +1267,11 @@ void Executor::dispatchFragments(
       }
       std::vector<std::pair<int, std::vector<size_t>>> frag_ids_for_table;
       for (size_t j = 0; j < ra_exe_unit.input_descs.size(); ++j) {
+        const auto frag_ids = getTableFragmentIndices(ra_exe_unit, j, i, selected_tables_fragments);
         const auto table_id = ra_exe_unit.input_descs[j].getTableId();
         auto table_frags_it = selected_tables_fragments.find(table_id);
         CHECK(table_frags_it != selected_tables_fragments.end());
-        if (!j) {
-          frag_ids_for_table.emplace_back(table_id, std::vector<size_t>{i});
-        } else {
-          auto& inner_frags = table_frags_it->second;
-          CHECK_LT(size_t(1), ra_exe_unit.input_descs.size());
-#ifndef ENABLE_EQUIJOIN_FOLD
-          CHECK_EQ(table_id, ra_exe_unit.input_descs[1].getTableId());
-#endif
-          std::vector<size_t> all_frag_ids(inner_frags->size());
-#ifndef ENABLE_MULTIFRAG_JOIN
-          if (all_frag_ids.size() > 1) {
-            throw std::runtime_error("Multi-fragment inner table '" +
-                                     get_table_name(ra_exe_unit.input_descs[1], *catalog_) + "' not supported yet");
-          }
-#endif
-          std::iota(all_frag_ids.begin(), all_frag_ids.end(), 0);
-          frag_ids_for_table.emplace_back(table_id, all_frag_ids);
-        }
+        frag_ids_for_table.emplace_back(table_id, frag_ids);
       }
       if (eo.with_watchdog && rowid_lookup_key < 0) {
         checkWorkUnitWatchdog(ra_exe_unit, *catalog_);

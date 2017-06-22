@@ -181,12 +181,6 @@ void Executor::ExecutionDispatch::runImpl(const ExecutorDeviceType chosen_device
 #endif
   CHECK_EQ(frag_ids[0].first, outer_table_id);
   const auto& outer_tab_frag_ids = frag_ids[0].second;
-  for (const auto frag_id : frag_ids[0].second) {
-    const auto& outer_fragment = query_infos_.front().info.fragments[frag_id];
-    if (co_.device_type_ != ExecutorDeviceType::Hybrid) {
-      chosen_device_id = outer_fragment.deviceIds[static_cast<int>(memory_level)];
-    }
-  }
   CHECK_GE(chosen_device_id, 0);
   CHECK_LT(chosen_device_id, max_gpu_count);
   // need to own them while query executes
