@@ -1346,14 +1346,11 @@ bool Executor::skipFragmentPair(const Fragmenter_Namespace::FragmentInfo& outer_
       outer_fragment_info.shard == inner_fragment_info.shard) {
     return false;
   }
-  if (contains_iter_expr(ra_exe_unit.target_exprs)) {
-    return false;
-  }
   CHECK(!plan_state_->join_info_.equi_join_tautologies_.empty());
   const auto join_condition =
       dynamic_cast<const Analyzer::BinOper*>(plan_state_->join_info_.equi_join_tautologies_.front().get());
   CHECK(join_condition);
-  return get_shard_count(join_condition, *catalog_) && !isOuterJoin();
+  return get_shard_count(join_condition, ra_exe_unit, this);
 }
 
 std::vector<const int8_t*> Executor::fetchIterTabFrags(const size_t frag_id,
@@ -2190,7 +2187,7 @@ Executor::JoinInfo Executor::chooseJoinType(const std::list<std::shared_ptr<Anal
       CHECK_GT(device_count, 0);
       try {
         const auto join_hash_table = JoinHashTable::getInstance(
-            qual_bin_oper, *catalog_, query_infos, ra_exe_unit.input_col_descs, memory_level, device_count, this);
+            qual_bin_oper, *catalog_, query_infos, ra_exe_unit, memory_level, device_count, this);
         CHECK(join_hash_table);
         std::set<int> curr_rte_idx_set;
         qual_bin_oper->collect_rte_idx(curr_rte_idx_set);

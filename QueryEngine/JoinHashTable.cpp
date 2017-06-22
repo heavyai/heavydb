@@ -99,7 +99,13 @@ std::vector<std::pair<JoinHashTable::JoinHashTableCacheKey, std::shared_ptr<std:
     JoinHashTable::join_hash_table_cache_;
 std::mutex JoinHashTable::join_hash_table_cache_mutex_;
 
-size_t get_shard_count(const Analyzer::BinOper* join_condition, const Catalog_Namespace::Catalog& catalog) {
+size_t get_shard_count(const Analyzer::BinOper* join_condition,
+                       const RelAlgExecutionUnit& ra_exe_unit,
+                       const Executor* executor) {
+  if (executor->isOuterJoin()) {
+    return 0;
+  }
+  const auto catalog = executor->getCatalog();
   const auto lhs_col = dynamic_cast<const Analyzer::ColumnVar*>(join_condition->get_left_operand());
   const auto rhs_col = dynamic_cast<const Analyzer::ColumnVar*>(join_condition->get_right_operand());
   if (!lhs_col || !rhs_col) {  // TODO(alex): handle dictionary encoded sides, they'll have casts
@@ -108,11 +114,14 @@ size_t get_shard_count(const Analyzer::BinOper* join_condition, const Catalog_Na
   if (lhs_col->get_table_id() < 0 || rhs_col->get_table_id() < 0) {
     return 0;
   }
-  const auto lhs_td = catalog.getMetadataForTable(lhs_col->get_table_id());
+  const auto lhs_td = catalog->getMetadataForTable(lhs_col->get_table_id());
   CHECK(lhs_td);
-  const auto rhs_td = catalog.getMetadataForTable(rhs_col->get_table_id());
+  const auto rhs_td = catalog->getMetadataForTable(rhs_col->get_table_id());
   CHECK(rhs_td);
   if (lhs_td->shardedColumnId == 0 || rhs_td->shardedColumnId == 0 || lhs_td->nShards != rhs_td->nShards) {
+    return 0;
+  }
+  if (contains_iter_expr(ra_exe_unit.target_exprs)) {
     return 0;
   }
   // The two columns involved must be the ones on which the tables have been sharded on.
@@ -123,17 +132,16 @@ size_t get_shard_count(const Analyzer::BinOper* join_condition, const Catalog_Na
              : 0;
 }
 
-std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(
-    const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
-    const Catalog_Namespace::Catalog& cat,
-    const std::vector<InputTableInfo>& query_infos,
-    const std::list<std::shared_ptr<const InputColDescriptor>>& input_col_descs,
-    const Data_Namespace::MemoryLevel memory_level,
-    const int device_count,
-    Executor* executor) {
+std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
+                                                          const Catalog_Namespace::Catalog& cat,
+                                                          const std::vector<InputTableInfo>& query_infos,
+                                                          const RelAlgExecutionUnit& ra_exe_unit,
+                                                          const Data_Namespace::MemoryLevel memory_level,
+                                                          const int device_count,
+                                                          Executor* executor) {
   CHECK_EQ(kEQ, qual_bin_oper->get_optype());
   const auto redirected_bin_oper =
-      std::dynamic_pointer_cast<Analyzer::BinOper>(redirect_expr(qual_bin_oper.get(), input_col_descs));
+      std::dynamic_pointer_cast<Analyzer::BinOper>(redirect_expr(qual_bin_oper.get(), ra_exe_unit.input_col_descs));
   CHECK(redirected_bin_oper);
   const auto cols = get_cols(redirected_bin_oper, cat, executor->temporary_tables_);
   const auto inner_col = cols.first;
@@ -154,8 +162,8 @@ std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(
                                               0,
                                               source_col_range.hasNulls());
   }
-  auto join_hash_table = std::shared_ptr<JoinHashTable>(
-      new JoinHashTable(qual_bin_oper, inner_col, cat, query_infos, memory_level, col_range, executor, device_count));
+  auto join_hash_table = std::shared_ptr<JoinHashTable>(new JoinHashTable(
+      qual_bin_oper, inner_col, cat, query_infos, ra_exe_unit, memory_level, col_range, executor, device_count));
   const int err = join_hash_table->reify(device_count);
   if (err) {
 #ifndef ENABLE_MULTIFRAG_JOIN
@@ -453,7 +461,7 @@ int JoinHashTable::initHashTableForDevice(const ChunkKey& chunk_key,
                                           const int device_id) {
   auto hash_entry_count = get_hash_entry_count(col_range_);
 #ifdef HAVE_CUDA
-  const auto shard_count = get_shard_count(qual_bin_oper_.get(), cat_);
+  const auto shard_count = get_shard_count(qual_bin_oper_.get(), ra_exe_unit_, executor_);
   const size_t entries_per_shard{shard_count ? get_entries_per_shard(hash_entry_count, shard_count) : 0};
   // Even if we join on dictionary encoded strings, the memory on the GPU is still needed
   // once the join hash table has been built on the CPU.
@@ -606,7 +614,8 @@ llvm::Value* JoinHashTable::codegenSlot(const CompilationOptions& co, const size
                                                executor_->castToTypeIn(key_lvs.front(), 64),
                                                executor_->ll_int(col_range_.getIntMin()),
                                                executor_->ll_int(col_range_.getIntMax())};
-  const int shard_count = co.device_type_ == ExecutorDeviceType::GPU ? get_shard_count(qual_bin_oper_.get(), cat_) : 0;
+  const int shard_count =
+      co.device_type_ == ExecutorDeviceType::GPU ? get_shard_count(qual_bin_oper_.get(), ra_exe_unit_, executor_) : 0;
   if (shard_count) {
     const auto hash_entry_count = get_hash_entry_count(col_range_);
     const auto entry_count_per_shard = (hash_entry_count + shard_count - 1) / shard_count;

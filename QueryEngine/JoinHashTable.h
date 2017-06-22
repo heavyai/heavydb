@@ -49,14 +49,13 @@ class HashJoinFail : public std::runtime_error {
 
 class JoinHashTable {
  public:
-  static std::shared_ptr<JoinHashTable> getInstance(
-      const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
-      const Catalog_Namespace::Catalog& cat,
-      const std::vector<InputTableInfo>& query_infos,
-      const std::list<std::shared_ptr<const InputColDescriptor>>& input_col_descs,
-      const Data_Namespace::MemoryLevel memory_level,
-      const int device_count,
-      Executor* executor);
+  static std::shared_ptr<JoinHashTable> getInstance(const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
+                                                    const Catalog_Namespace::Catalog& cat,
+                                                    const std::vector<InputTableInfo>& query_infos,
+                                                    const RelAlgExecutionUnit& ra_exe_unit,
+                                                    const Data_Namespace::MemoryLevel memory_level,
+                                                    const int device_count,
+                                                    Executor* executor);
 
   int64_t getJoinHashBuffer(const ExecutorDeviceType device_type, const int device_id) noexcept {
 #ifdef HAVE_CUDA
@@ -79,6 +78,7 @@ class JoinHashTable {
                 const Analyzer::ColumnVar* col_var,
                 const Catalog_Namespace::Catalog& cat,
                 const std::vector<InputTableInfo>& query_infos,
+                const RelAlgExecutionUnit& ra_exe_unit,
                 const Data_Namespace::MemoryLevel memory_level,
                 const ExpressionRange& col_range,
                 Executor* executor,
@@ -89,6 +89,7 @@ class JoinHashTable {
         memory_level_(memory_level),
         col_range_(col_range),
         executor_(executor),
+        ra_exe_unit_(ra_exe_unit),
         device_count_(device_count) {
     CHECK(col_range.getType() == ExpressionRangeType::Integer);
   }
@@ -141,6 +142,7 @@ class JoinHashTable {
 #endif
   ExpressionRange col_range_;
   Executor* executor_;
+  const RelAlgExecutionUnit& ra_exe_unit_;
   const int device_count_;
 
   struct JoinHashTableCacheKey {
@@ -175,6 +177,8 @@ inline std::string get_table_name_by_id(const int table_id, const Catalog_Namesp
   return "$TEMPORARY_TABLE" + std::to_string(-table_id);
 }
 
-size_t get_shard_count(const Analyzer::BinOper* join_condition, const Catalog_Namespace::Catalog& catalog);
+size_t get_shard_count(const Analyzer::BinOper* join_condition,
+                       const RelAlgExecutionUnit& ra_exe_unit,
+                       const Executor* executor);
 
 #endif  // QUERYENGINE_JOINHASHTABLE_H
