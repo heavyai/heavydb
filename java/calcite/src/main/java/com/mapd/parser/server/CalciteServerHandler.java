@@ -69,7 +69,7 @@ class CalciteServerHandler implements CalciteServer.Iface {
 
   @Override
   public void ping() throws TException {
-    MAPDLOGGER.info("Ping hit");
+    MAPDLOGGER.debug("Ping hit");
   }
 
   @Override

@@ -55,7 +55,7 @@ public class CalciteServerWrapper implements Runnable {
       TServerTransport serverTransport = new TServerSocket(calcitePort);
       server = new TThreadPoolServer(new TThreadPoolServer.Args(serverTransport).processor(processor));
 
-      MAPDLOGGER.info("Starting a threaded pool server... Listening on port " + calcitePort + " MapD on port "
+      MAPDLOGGER.debug("Starting a threaded pool server... Listening on port " + calcitePort + " MapD on port "
               + mapDPort);
       handler.setServer(server);
       server.serve();
