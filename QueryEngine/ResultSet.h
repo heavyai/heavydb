@@ -40,6 +40,7 @@
 #endif
 
 #include <atomic>
+#include <functional>
 #include <list>
 
 /*
