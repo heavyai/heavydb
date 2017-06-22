@@ -34,7 +34,7 @@ using namespace apache::thrift;
 using namespace apache::thrift::protocol;
 using namespace apache::thrift::transport;
 
-void Calcite::runJNI(int port, std::string data_dir, size_t calcite_max_mem) {
+void Calcite::runJNI(const int port, const std::string& data_dir, const size_t calcite_max_mem) {
   LOG(INFO) << "Creating Calcite Server local as JNI instance, jar expected in " << mapd_root_abs_path() << "/bin";
   const int kNumOptions = 2;
   std::string jar_file{"-Djava.class.path=" + mapd_root_abs_path() +
@@ -100,13 +100,11 @@ void Calcite::runJNI(int port, std::string data_dir, size_t calcite_max_mem) {
   CHECK(getTextMID_);
 }
 
-void start_calcite_server_as_daemon(int port, std::string data_dir, size_t calcite_max_mem) {
+void start_calcite_server_as_daemon(const int port, const std::string& data_dir, const size_t calcite_max_mem) {
   std::string cmd = "java -Xmx" + std::to_string(calcite_max_mem) + "m -jar " + mapd_root_abs_path() +
                     "/bin/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar -d " + data_dir + " -e " + mapd_root_abs_path() +
                     "/QueryEngine/ -p " + std::to_string(port);
-  LOG(INFO) << "Daemon command is : " << cmd;
-  int retval = system(cmd.c_str());
-  LOG(INFO) << "return from system calls is : " << retval;
+  system(cmd.c_str());
 }
 
 std::pair<boost::shared_ptr<CalciteServerClient>, boost::shared_ptr<TTransport>> get_client(int port) {
@@ -126,7 +124,7 @@ std::pair<boost::shared_ptr<CalciteServerClient>, boost::shared_ptr<TTransport>>
   return std::make_pair(client, transport);
 }
 
-void Calcite::runServer(int port, std::string data_dir, size_t calcite_max_mem) {
+void Calcite::runServer(const int port, const std::string& data_dir, const size_t calcite_max_mem) {
   LOG(INFO) << "Running calcite server as a daemon";
 
   // start the server in a thread
@@ -158,7 +156,7 @@ void Calcite::runServer(int port, std::string data_dir, size_t calcite_max_mem) 
   }
 }
 
-Calcite::Calcite(int port, std::string data_dir, size_t calcite_max_mem)
+Calcite::Calcite(const int port, const std::string& data_dir, const size_t calcite_max_mem)
     : server_available_(false), jni_(true), jvm_(NULL) {
   LOG(INFO) << "Creating Calcite Handler,  Calcite Port is " << port << " base data dir is " << data_dir;
   if (port == -1) {
