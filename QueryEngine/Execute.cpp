@@ -2186,8 +2186,8 @@ Executor::JoinInfo Executor::chooseJoinType(const std::list<std::shared_ptr<Anal
           device_type == ExecutorDeviceType::GPU ? catalog_->get_dataMgr().cudaMgr_->getDeviceCount() : 1;
       CHECK_GT(device_count, 0);
       try {
-        const auto join_hash_table = JoinHashTable::getInstance(
-            qual_bin_oper, *catalog_, query_infos, ra_exe_unit, memory_level, device_count, this);
+        const auto join_hash_table =
+            JoinHashTable::getInstance(qual_bin_oper, query_infos, ra_exe_unit, memory_level, device_count, this);
         CHECK(join_hash_table);
         std::set<int> curr_rte_idx_set;
         qual_bin_oper->collect_rte_idx(curr_rte_idx_set);

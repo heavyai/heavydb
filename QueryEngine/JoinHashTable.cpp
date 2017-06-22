@@ -133,7 +133,6 @@ size_t get_shard_count(const Analyzer::BinOper* join_condition,
 }
 
 std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
-                                                          const Catalog_Namespace::Catalog& cat,
                                                           const std::vector<InputTableInfo>& query_infos,
                                                           const RelAlgExecutionUnit& ra_exe_unit,
                                                           const Data_Namespace::MemoryLevel memory_level,
@@ -143,7 +142,7 @@ std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(const std::shared_ptr<
   const auto redirected_bin_oper =
       std::dynamic_pointer_cast<Analyzer::BinOper>(redirect_expr(qual_bin_oper.get(), ra_exe_unit.input_col_descs));
   CHECK(redirected_bin_oper);
-  const auto cols = get_cols(redirected_bin_oper, cat, executor->temporary_tables_);
+  const auto cols = get_cols(redirected_bin_oper, *executor->getCatalog(), executor->temporary_tables_);
   const auto inner_col = cols.first;
   CHECK(inner_col);
   const auto& ti = inner_col->get_type_info();
@@ -163,7 +162,7 @@ std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(const std::shared_ptr<
                                               source_col_range.hasNulls());
   }
   auto join_hash_table = std::shared_ptr<JoinHashTable>(new JoinHashTable(
-      qual_bin_oper, inner_col, cat, query_infos, ra_exe_unit, memory_level, col_range, executor, device_count));
+      qual_bin_oper, inner_col, query_infos, ra_exe_unit, memory_level, col_range, executor, device_count));
   const int err = join_hash_table->reify(device_count);
   if (err) {
 #ifndef ENABLE_MULTIFRAG_JOIN
@@ -196,14 +195,15 @@ std::pair<const int8_t*, size_t> JoinHashTable::getColumnFragment(
     std::map<int, std::shared_ptr<const ColumnarResults>>& frags_owner) {
   auto chunk_meta_it = fragment.getChunkMetadataMap().find(hash_col.get_column_id());
   CHECK(chunk_meta_it != fragment.getChunkMetadataMap().end());
-  const auto cd = get_column_descriptor_maybe(hash_col.get_column_id(), hash_col.get_table_id(), cat_);
+  const auto& catalog = *executor_->getCatalog();
+  const auto cd = get_column_descriptor_maybe(hash_col.get_column_id(), hash_col.get_table_id(), catalog);
   CHECK(!cd || !(cd->isVirtualCol));
   const int8_t* col_buff = nullptr;
   if (cd) {
     ChunkKey chunk_key{
-        cat_.get_currentDB().dbId, fragment.physicalTableId, hash_col.get_column_id(), fragment.fragmentId};
+        catalog.get_currentDB().dbId, fragment.physicalTableId, hash_col.get_column_id(), fragment.fragmentId};
     const auto chunk = Chunk_NS::Chunk::getChunk(cd,
-                                                 &cat_.get_dataMgr(),
+                                                 &catalog.get_dataMgr(),
                                                  chunk_key,
                                                  effective_mem_lvl,
                                                  effective_mem_lvl == Data_Namespace::CPU_LEVEL ? 0 : device_id,
@@ -228,7 +228,7 @@ std::pair<const int8_t*, size_t> JoinHashTable::getColumnFragment(
     }
     col_buff = Executor::ExecutionDispatch::getColumn(frag_it->second.get(),
                                                       hash_col.get_column_id(),
-                                                      &cat_.get_dataMgr(),
+                                                      &catalog.get_dataMgr(),
                                                       effective_mem_lvl,
                                                       effective_mem_lvl == Data_Namespace::CPU_LEVEL ? 0 : device_id);
   }
@@ -267,7 +267,8 @@ std::pair<const int8_t*, size_t> JoinHashTable::getAllColumnFragments(
 
 int JoinHashTable::reify(const int device_count) {
   CHECK_LT(0, device_count);
-  const auto cols = get_cols(qual_bin_oper_, cat_, executor_->temporary_tables_);
+  const auto& catalog = *executor_->getCatalog();
+  const auto cols = get_cols(qual_bin_oper_, catalog, executor_->temporary_tables_);
   const auto inner_col = cols.first;
   CHECK(inner_col);
   const auto& query_info = getInnerQueryInfo(inner_col).info;
@@ -281,7 +282,7 @@ int JoinHashTable::reify(const int device_count) {
 #else
   const bool has_multi_frag = query_info.fragments.size() > 1;
 #endif
-  const auto cd = get_column_descriptor_maybe(inner_col->get_column_id(), inner_col->get_table_id(), cat_);
+  const auto cd = get_column_descriptor_maybe(inner_col->get_column_id(), inner_col->get_table_id(), catalog);
   if (cd && cd->isVirtualCol) {
     return ERR_FAILED_TO_JOIN_ON_VIRTUAL_COLUMN;
   }
@@ -299,13 +300,13 @@ int JoinHashTable::reify(const int device_count) {
   std::vector<std::shared_ptr<Chunk_NS::Chunk>> chunks_owner;
   std::map<int, std::shared_ptr<const ColumnarResults>> frags_owner;
   const auto& first_frag = query_info.fragments.front();
-  ChunkKey chunk_key{cat_.get_currentDB().dbId, inner_col->get_table_id(), inner_col->get_column_id()};
+  ChunkKey chunk_key{catalog.get_currentDB().dbId, inner_col->get_table_id(), inner_col->get_column_id()};
   const int8_t* col_buff = nullptr;
   size_t elem_count = 0;
 
 #ifdef ENABLE_MULTIFRAG_JOIN
   const size_t elem_width = inner_col->get_type_info().get_size();
-  auto& data_mgr = cat_.get_dataMgr();
+  auto& data_mgr = catalog.get_dataMgr();
   RowSetMemoryOwner col_buff_owner;
   std::vector<ThrustAllocator> dev_buff_owner;
   if (has_multi_frag) {
@@ -465,8 +466,9 @@ int JoinHashTable::initHashTableForDevice(const ChunkKey& chunk_key,
   const size_t entries_per_shard{shard_count ? get_entries_per_shard(hash_entry_count, shard_count) : 0};
   // Even if we join on dictionary encoded strings, the memory on the GPU is still needed
   // once the join hash table has been built on the CPU.
+  const auto catalog = executor_->getCatalog();
   if (memory_level_ == Data_Namespace::GPU_LEVEL) {
-    auto& data_mgr = cat_.get_dataMgr();
+    auto& data_mgr = catalog->get_dataMgr();
     if (shard_count) {
       const auto shards_per_device = (shard_count + device_count_ - 1) / device_count_;
       CHECK_GT(shards_per_device, 0);
@@ -499,7 +501,7 @@ int JoinHashTable::initHashTableForDevice(const ChunkKey& chunk_key,
     if (memory_level_ == Data_Namespace::GPU_LEVEL && !err) {
 #ifdef HAVE_CUDA
       CHECK(ti.is_string());
-      auto& data_mgr = cat_.get_dataMgr();
+      auto& data_mgr = catalog->get_dataMgr();
       copy_to_gpu(&data_mgr,
                   gpu_hash_table_buff_[device_id],
                   &(*cpu_hash_table_buff_)[0],
@@ -512,7 +514,7 @@ int JoinHashTable::initHashTableForDevice(const ChunkKey& chunk_key,
   } else {
 #ifdef HAVE_CUDA
     CHECK_EQ(Data_Namespace::GPU_LEVEL, effective_memory_level);
-    auto& data_mgr = cat_.get_dataMgr();
+    auto& data_mgr = catalog->get_dataMgr();
     auto dev_err_buff = alloc_gpu_mem(&data_mgr, sizeof(int), device_id, nullptr);
     copy_to_gpu(&data_mgr, dev_err_buff, &err, sizeof(err), device_id);
     init_hash_join_buff_on_device(reinterpret_cast<int32_t*>(gpu_hash_table_buff_[device_id]),
@@ -586,7 +588,7 @@ void JoinHashTable::putHashTableOnCpuToCache(
 llvm::Value* JoinHashTable::codegenSlot(const CompilationOptions& co, const size_t index) {
   CHECK(executor_->plan_state_->join_info_.join_impl_type_ == Executor::JoinImplType::HashOneToOne ||
         executor_->plan_state_->join_info_.join_impl_type_ == Executor::JoinImplType::HashPlusLoop);
-  const auto cols = get_cols(qual_bin_oper_, cat_, executor_->temporary_tables_);
+  const auto cols = get_cols(qual_bin_oper_, *executor_->getCatalog(), executor_->temporary_tables_);
   auto key_col = cols.second;
   CHECK(key_col);
   auto val_col = cols.first;

@@ -50,7 +50,6 @@ class HashJoinFail : public std::runtime_error {
 class JoinHashTable {
  public:
   static std::shared_ptr<JoinHashTable> getInstance(const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
-                                                    const Catalog_Namespace::Catalog& cat,
                                                     const std::vector<InputTableInfo>& query_infos,
                                                     const RelAlgExecutionUnit& ra_exe_unit,
                                                     const Data_Namespace::MemoryLevel memory_level,
@@ -76,7 +75,6 @@ class JoinHashTable {
  private:
   JoinHashTable(const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
                 const Analyzer::ColumnVar* col_var,
-                const Catalog_Namespace::Catalog& cat,
                 const std::vector<InputTableInfo>& query_infos,
                 const RelAlgExecutionUnit& ra_exe_unit,
                 const Data_Namespace::MemoryLevel memory_level,
@@ -84,7 +82,6 @@ class JoinHashTable {
                 Executor* executor,
                 const int device_count)
       : qual_bin_oper_(qual_bin_oper),
-        cat_(cat),
         query_infos_(query_infos),
         memory_level_(memory_level),
         col_range_(col_range),
@@ -132,7 +129,6 @@ class JoinHashTable {
   const InputTableInfo& getInnerQueryInfo(const Analyzer::ColumnVar* inner_col);
 
   std::shared_ptr<Analyzer::BinOper> qual_bin_oper_;
-  const Catalog_Namespace::Catalog& cat_;
   const std::vector<InputTableInfo>& query_infos_;
   const Data_Namespace::MemoryLevel memory_level_;
   std::shared_ptr<std::vector<int32_t>> cpu_hash_table_buff_;
