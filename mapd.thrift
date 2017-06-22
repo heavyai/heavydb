@@ -130,9 +130,10 @@ struct TQueryResult {
 }
 
 struct TDataFrame {
-  1: binary schema
-  2: binary df_handle
-  3: i64 df_size
+  1: binary sm_handle
+  2: i64 sm_size
+  3: binary df_handle
+  4: i64 df_size
 }
 
 struct TDBInfo {

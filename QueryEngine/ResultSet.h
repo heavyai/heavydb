@@ -31,6 +31,7 @@
 #include "../Chunk/Chunk.h"
 
 #ifdef ENABLE_ARROW_CONVERTER
+#include "arrow/ipc/metadata.h"
 #include "arrow/table.h"
 // Arrow defines macro UNUSED conflict w/ that in jni_md.h
 #ifdef UNUSED
@@ -206,7 +207,8 @@ struct OneIntegerColumnRow {
 
 #ifdef ENABLE_ARROW_CONVERTER
 struct ArrowResult {
-  std::shared_ptr<arrow::Buffer> schema;
+  std::vector<char> sm_handle;
+  int64_t sm_size;
   std::vector<char> df_handle;
   int64_t df_size;
 };
@@ -447,7 +449,8 @@ class ResultSet {
   int getGpuCount() const;
 
 #ifdef ENABLE_ARROW_CONVERTER
-  arrow::RecordBatch convertToArrow(const std::vector<std::string>& col_names) const;
+  arrow::RecordBatch convertToArrow(const std::vector<std::string>& col_names, arrow::ipc::DictionaryMemo& memo) const;
+  std::shared_ptr<const std::vector<std::string>> getDictionary(const int dict_id) const;
   std::pair<std::vector<std::shared_ptr<arrow::Array>>, size_t> getArrowColumns(
       const std::vector<std::shared_ptr<arrow::Field>>& fields) const;
 

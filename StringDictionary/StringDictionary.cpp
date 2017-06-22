@@ -27,6 +27,7 @@
 #include <sys/fcntl.h>
 
 #include <thread>
+#include <future>
 
 namespace {
 const int PAGE_SIZE = getpagesize();
@@ -98,7 +99,8 @@ StringDictionary::StringDictionary(const std::string& folder, const bool recover
       payload_map_(nullptr),
       offset_file_size_(0),
       payload_file_size_(0),
-      payload_file_off_(0) {
+      payload_file_off_(0),
+      strings_cache_(nullptr) {
   if (folder.empty()) {
     return;
   }
@@ -144,7 +146,8 @@ StringDictionary::StringDictionary(const std::string& folder, const bool recover
 }
 
 StringDictionary::StringDictionary(const LeafHostInfo& host, const int dict_id)
-    : client_(new StringDictionaryClient(host, dict_id, true)),
+    : strings_cache_(nullptr),
+      client_(new StringDictionaryClient(host, dict_id, true)),
       client_no_timeout_(new StringDictionaryClient(host, dict_id, false)) {}
 
 StringDictionary::~StringDictionary() noexcept {
@@ -380,6 +383,52 @@ std::vector<int32_t> StringDictionary::getRegexpLike(const std::string& pattern,
   const auto it_ok = regex_cache_.insert(std::make_pair(cache_key, result));
   CHECK(it_ok.second);
   return result;
+}
+
+std::shared_ptr<const std::vector<std::string>> StringDictionary::copyStrings() const {
+  mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
+  if (client_) {
+    // TODO(miyu): support remote string dictionary
+    throw std::runtime_error("copying dictionaries from remote server is not supported yet.");
+  }
+
+  if (strings_cache_) {
+    return strings_cache_;
+  }
+
+  strings_cache_ = std::make_shared<std::vector<std::string>>();
+  strings_cache_->reserve(str_count_);
+  const bool multithreaded = str_count_ > 10000;
+  const auto worker_count = multithreaded ? static_cast<size_t>(cpu_threads()) : size_t(1);
+  CHECK_GT(worker_count, 0);
+  std::vector<std::vector<std::string>> worker_results(worker_count);
+  auto copy = [this](std::vector<std::string>& str_list, const size_t start_id, const size_t end_id) {
+    CHECK_LE(start_id, end_id);
+    str_list.reserve(end_id - start_id);
+    for (size_t string_id = start_id; string_id < end_id; ++string_id) {
+      str_list.push_back(getStringUnlocked(string_id));
+    }
+  };
+  if (multithreaded) {
+    std::vector<std::future<void>> workers;
+    const auto stride = (str_count_ + (worker_count - 1)) / worker_count;
+    for (size_t worker_idx = 0, start = 0, end = std::min(start + stride, str_count_);
+         worker_idx < worker_count && start < str_count_;
+         ++worker_idx, start += stride, end = std::min(start + stride, str_count_)) {
+      workers.push_back(std::async(std::launch::async, copy, std::ref(worker_results[worker_idx]), start, end));
+    }
+    for (auto& worker : workers) {
+      worker.get();
+    }
+  } else {
+    CHECK_EQ(worker_results.size(), size_t(1));
+    copy(worker_results[0], 0, str_count_);
+  }
+
+  for (const auto& worker_result : worker_results) {
+    strings_cache_->insert(strings_cache_->end(), worker_result.begin(), worker_result.end());
+  }
+  return strings_cache_;
 }
 
 bool StringDictionary::fillRateIsHigh() const noexcept {

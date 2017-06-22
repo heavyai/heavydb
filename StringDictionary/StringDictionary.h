@@ -54,6 +54,8 @@ class StringDictionary {
 
   std::vector<int32_t> getRegexpLike(const std::string& pattern, const char escape, const size_t generation) const;
 
+  std::shared_ptr<const std::vector<std::string>> copyStrings() const;
+
   bool checkpoint() noexcept;
 
   static const int32_t INVALID_STR_ID;
@@ -95,6 +97,7 @@ class StringDictionary {
   mutable mapd_shared_mutex rw_mutex_;
   mutable std::map<std::tuple<std::string, bool, bool, char>, std::vector<int32_t>> like_cache_;
   mutable std::map<std::pair<std::string, char>, std::vector<int32_t>> regex_cache_;
+  mutable std::shared_ptr<std::vector<std::string>> strings_cache_;
   std::unique_ptr<StringDictionaryClient> client_;
   std::unique_ptr<StringDictionaryClient> client_no_timeout_;
 

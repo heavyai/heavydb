@@ -31,6 +31,7 @@
 #error MapD only supports Apache Arrow release 0.4.1
 #endif
 
+#include "arrow/array.h"
 #include "arrow/builder.h"
 #include "arrow/buffer.h"
 #include "arrow/io/memory.h"
@@ -52,10 +53,45 @@ typedef boost::variant<std::vector<bool>,
                        std::vector<int32_t>,
                        std::vector<int64_t>,
                        std::vector<float>,
-                       std::vector<double>>
+                       std::vector<double>,
+                       std::vector<std::string>>
     ValueArray;
 
 namespace {
+
+bool is_dict_enc_str(const SQLTypeInfo& ti) {
+  return ti.is_string() && ti.get_compression() == kENCODING_DICT;
+}
+
+SQLTypes get_dict_index_type(const SQLTypeInfo& ti) {
+  CHECK(is_dict_enc_str(ti));
+  switch (ti.get_size()) {
+    case 2:
+      return kSMALLINT;
+    case 4:
+      return kINT;
+    case 8:
+      return kBIGINT;
+    default:
+      CHECK(false);
+  }
+  return ti.get_type();
+}
+
+SQLTypeInfo get_dict_index_type_info(const SQLTypeInfo& ti) {
+  CHECK(is_dict_enc_str(ti));
+  switch (ti.get_size()) {
+    case 2:
+      return SQLTypeInfo(kSMALLINT, ti.get_notnull());
+    case 4:
+      return SQLTypeInfo(kINT, ti.get_notnull());
+    case 8:
+      return SQLTypeInfo(kBIGINT, ti.get_notnull());
+    default:
+      CHECK(false);
+  }
+  return ti;
+}
 
 SQLTypes get_physical_type(const SQLTypeInfo& ti) {
   auto logical_type = ti.get_type();
@@ -103,7 +139,9 @@ void create_or_append_validity(const ScalarTargetValue& value,
   auto pvalue = boost::get<TYPE>(&value);
   CHECK(pvalue);
   bool is_valid = false;
-  if (col_type.is_integer()) {
+  if (is_dict_enc_str(col_type)) {
+    is_valid = inline_int_null_val(col_type) != static_cast<int32_t>(*pvalue);
+  } else if (col_type.is_integer()) {
     is_valid = inline_int_null_val(col_type) != static_cast<int64_t>(*pvalue);
   } else {
     CHECK(col_type.is_fp());
@@ -137,7 +175,7 @@ namespace arrow {
     }                       \
   } while (0);
 
-TypePtr get_arrow_type(const SQLTypeInfo& mapd_type) {
+TypePtr get_arrow_type(const SQLTypeInfo& mapd_type, const std::shared_ptr<Array>& dictionary) {
   switch (get_physical_type(mapd_type)) {
     case kBOOLEAN:
       return std::make_shared<BooleanType>();
@@ -151,13 +189,18 @@ TypePtr get_arrow_type(const SQLTypeInfo& mapd_type) {
       return std::make_shared<FloatType>();
     case kDOUBLE:
       return std::make_shared<DoubleType>();
+    case kTEXT:
+      if (is_dict_enc_str(mapd_type)) {
+        CHECK(dictionary);
+        const auto index_type = get_arrow_type(get_dict_index_type_info(mapd_type), nullptr);
+        return std::make_shared<DictionaryType>(index_type, dictionary);
+      }
     case kDECIMAL:
     case kNUMERIC:
     case kCHAR:
     case kVARCHAR:
     case kTIME:
     case kTIMESTAMP:
-    case kTEXT:
     case kDATE:
     case kARRAY:
     case kINTERVAL_DAY_TIME:
@@ -167,8 +210,11 @@ TypePtr get_arrow_type(const SQLTypeInfo& mapd_type) {
   }
   return nullptr;
 }
-std::shared_ptr<Field> make_field(const std::string name, const SQLTypeInfo& target_type) {
-  return std::make_shared<Field>(name, get_arrow_type(target_type), !target_type.get_notnull());
+
+std::shared_ptr<Field> make_field(const std::string name,
+                                  const SQLTypeInfo& target_type,
+                                  const std::shared_ptr<Array>& dictionary) {
+  return std::make_shared<Field>(name, get_arrow_type(target_type, dictionary), !target_type.get_notnull());
 }
 
 // Cited from arrow/test-util.h
@@ -233,6 +279,12 @@ std::shared_ptr<Array> generate_column(const Field& field,
       auto vals_double = boost::get<std::vector<double>>(&values);
       CHECK(vals_double);
       return array_from_vector<DoubleType, double>(is_valid, *vals_double);
+    }
+    case Type::DICTIONARY: {
+      const auto dict_type = std::static_pointer_cast<DictionaryType>(field.type());
+      Field index_child(field.name(), dict_type->index_type(), field.nullable());
+      auto indices = generate_column(index_child, is_valid, values);
+      return std::make_shared<DictionaryArray>(dict_type, indices);
     }
     default:
       CHECK(false);
@@ -357,46 +409,136 @@ void append_value_array(ValueArray& dst, const ValueArray& src, const Field& fie
   }
 }
 
-void print_serialization(const uint8_t* data, const size_t length) {
-  const auto record_buffer = std::make_shared<arrow::Buffer>(data, length);
-  auto buf_reader = std::make_shared<io::BufferReader>(record_buffer);
-  std::shared_ptr<ipc::RecordBatchStreamReader> reader;
-  ipc::RecordBatchStreamReader::Open(buf_reader, &reader);
-
-  std::shared_ptr<RecordBatch> batch;
-  reader->GetNextRecordBatch(&batch);
-  std::cout << "Schema: " << batch->schema()->ToString() << std::endl;
-  for (int i = 0; i < batch->num_columns(); ++i) {
-    const auto& column = *batch->column(i);
-    std::cout << "Column #" << i << ": ";
-    PrettyPrint(column, 0, &std::cout);
-  }
-}
-
-std::shared_ptr<PoolBuffer> serialize_arrow_records(const RecordBatch& rb) {
-  int64_t rb_sz = 0;
-  ASSERT_OK(ipc::GetRecordBatchSize(rb, &rb_sz));
+std::shared_ptr<PoolBuffer> serialize_arrow_schema(const std::shared_ptr<Schema>& schema, ipc::DictionaryMemo& memo) {
   auto buffer = std::make_shared<PoolBuffer>(default_memory_pool());
-  buffer->Reserve(rb_sz);
   io::BufferOutputStream sink(buffer);
   std::shared_ptr<ipc::RecordBatchStreamWriter> writer;
-  RETURN_IF_NOT_OK(ipc::RecordBatchStreamWriter::Open(&sink, rb.schema(), &writer));
-  RETURN_IF_NOT_OK(writer->WriteRecordBatch(rb));
+  RETURN_IF_NOT_OK(ipc::RecordBatchStreamWriter::Open(&sink, schema, &writer));
   writer->Close();
   return buffer;
 }
 
-std::shared_ptr<Buffer> serialize_arrow_schema(const Schema& schema) {
-  ipc::DictionaryMemo memo;
-  std::shared_ptr<Buffer> buffer;
-  ASSERT_OK(ipc::WriteSchemaMessage(schema, &memo, &buffer));
+void print_serialized_schema(const uint8_t* data, const size_t length) {
+  const auto payload = std::make_shared<arrow::Buffer>(data, length);
+  auto buffer = std::make_shared<io::BufferReader>(payload);
+  std::shared_ptr<ipc::RecordBatchStreamReader> reader;
+  ipc::RecordBatchStreamReader::Open(buffer, &reader);
+  auto schema = reader->schema();
+  std::cout << "Schema: " << schema->ToString() << std::endl;
+  for (int i = 0; i < schema->num_fields(); ++i) {
+    std::shared_ptr<DictionaryType> dict_type = std::dynamic_pointer_cast<DictionaryType>(schema->field(i)->type());
+    if (!dict_type) {
+      continue;
+    }
+    PrettyPrint(*dict_type->dictionary(), 0, &std::cout);
+    std::cout << std::endl;
+  }
+
+  std::shared_ptr<RecordBatch> batch;
+  reader->GetNextRecordBatch(&batch);
+  CHECK(!batch);
+}
+
+std::shared_ptr<PoolBuffer> serialize_arrow_records(const RecordBatch& rb, ipc::FileBlock& block) {
+  int64_t rb_sz = 0;
+  ASSERT_OK(ipc::GetRecordBatchSize(rb, &rb_sz));
+  auto pool = default_memory_pool();
+  auto buffer = std::make_shared<PoolBuffer>(pool);
+  buffer->Reserve(rb_sz);
+  io::BufferOutputStream sink(buffer);
+  // Frame of reference in file format is 0, see ARROW-384
+  const int64_t buffer_start_offset = 0;
+  const bool is_large_record = false;
+  RETURN_IF_NOT_OK(ipc::WriteRecordBatch(rb,
+                                         buffer_start_offset,
+                                         &sink,
+                                         &block.metadata_length,
+                                         &block.body_length,
+                                         pool,
+                                         kMaxNestingDepth,
+                                         is_large_record));
   return buffer;
+}
+
+void print_serialized_records(const uint8_t* data,
+                              const size_t length,
+                              const ipc::FileBlock& block,
+                              const std::shared_ptr<Schema>& schema) {
+  const auto payload = std::make_shared<arrow::Buffer>(data, length);
+  auto buffer_reader = std::make_shared<io::BufferReader>(payload);
+
+  std::shared_ptr<ipc::Message> message;
+  ReadMessage(0, block.metadata_length, buffer_reader.get(), &message);
+
+  // The buffer offsets start at 0, so we must construct a
+  // RandomAccessFile according to that frame of reference
+  std::shared_ptr<Buffer> body_payload;
+  buffer_reader->ReadAt(block.metadata_length, block.body_length, &body_payload);
+  io::BufferReader body_reader(body_payload);
+
+  std::shared_ptr<RecordBatch> batch;
+  ipc::ReadRecordBatch(*message, schema, &body_reader, &batch);
+
+  for (int i = 0; i < batch->num_columns(); ++i) {
+    const auto& column = *batch->column(i);
+    std::cout << "Column #" << i << ": ";
+    PrettyPrint(column, 0, &std::cout);
+    std::cout << std::endl;
+  }
 }
 
 #undef RETURN_IF_NOT_OK
 #undef ASSERT_OK
 
+key_t get_and_copy_to_shm(const std::shared_ptr<PoolBuffer>& data) {
+  if (!data->size()) {
+    return IPC_PRIVATE;
+  }
+  // Generate a new key for a shared memory segment. Keys to shared memory segments
+  // are OS global, so we need to try a new key if we encounter a collision. It seems
+  // incremental keygen would be deterministically worst-case. If we use a hash
+  // (like djb2) + nonce, we could still get collisions if multiple clients specify
+  // the same nonce, so using rand() in lieu of a better approach
+  // TODO(ptaylor): Is this common? Are these assumptions true?
+  auto key = static_cast<key_t>(rand());
+  const auto shmsz = data->size();
+  int shmid = -1;
+  // IPC_CREAT - indicates we want to create a new segment for this key if it doesn't exist
+  // IPC_EXCL - ensures failure if a segment already exists for this key
+  while ((shmid = shmget(key, shmsz, IPC_CREAT | IPC_EXCL | 0666)) < 0) {
+    // If shmget fails and errno is one of these four values, try a new key.
+    // TODO(ptaylor): is checking for the last three values really necessary? Checking them by default to be safe.
+    // EEXIST - a shared memory segment is already associated with this key
+    // EACCES - a shared memory segment is already associated with this key, but we don't have permission to access it
+    // EINVAL - a shared memory segment is already associated with this key, but the size is less than shmsz
+    // ENOENT - IPC_CREAT was not set in shmflg and no shared memory segment associated with key was found
+    if (!(errno & (EEXIST | EACCES | EINVAL | ENOENT))) {
+      throw std::runtime_error("failed to create a shared memory");
+    }
+    key = static_cast<key_t>(rand());
+  }
+  // get a pointer to the shared memory segment
+  auto ipc_ptr = shmat(shmid, NULL, 0);
+  if (reinterpret_cast<int64_t>(ipc_ptr) == -1) {
+    throw std::runtime_error("failed to attach a shared memory");
+  }
+
+  // copy the arrow records buffer to shared memory
+  // TODO(ptaylor): I'm sure it's possible to tell Arrow's RecordBatchStreamWriter to write
+  // directly to the shared memory segment as a sink
+  memcpy(ipc_ptr, data->data(), data->size());
+  // detach from the shared memory segment
+  shmdt(ipc_ptr);
+  return key;
+}
+
 }  // namespace arrow
+
+std::shared_ptr<const std::vector<std::string>> ResultSet::getDictionary(const int dict_id) const {
+  const auto sdp = executor_ ? executor_->getStringDictionaryProxy(dict_id, row_set_mem_owner_, false)
+                             : row_set_mem_owner_->getStringDictProxy(dict_id);
+  return sdp->getDictionary()->copyStrings();
+}
 
 std::pair<std::vector<std::shared_ptr<arrow::Array>>, size_t> ResultSet::getArrowColumns(
     const std::vector<std::shared_ptr<arrow::Field>>& fields) const {
@@ -417,7 +559,7 @@ std::pair<std::vector<std::shared_ptr<arrow::Array>>, size_t> ResultSet::getArro
     const auto entry_count = end_entry - start_entry;
     size_t seg_row_count = 0;
     for (size_t i = start_entry; i < end_entry; ++i) {
-      auto row = getRowAt(i);
+      auto row = getRowAtNoTranslations(i);
       if (row.empty()) {
         continue;
       }
@@ -427,7 +569,9 @@ std::pair<std::vector<std::shared_ptr<arrow::Array>>, size_t> ResultSet::getArro
         auto scalar_value = boost::get<ScalarTargetValue>(&row[j]);
         // TODO(miyu): support more types other than scalar.
         CHECK(scalar_value);
-        switch (get_physical_type(col_type)) {
+        const auto physical_type =
+            is_dict_enc_str(col_type) ? get_dict_index_type(col_type) : get_physical_type(col_type);
+        switch (physical_type) {
           case kBOOLEAN:
             create_or_append_value<bool, int64_t>(*scalar_value, value_seg[j], entry_count);
             create_or_append_validity<int64_t>(*scalar_value, col_type, null_bitmap_seg[j], entry_count);
@@ -509,18 +653,25 @@ std::pair<std::vector<std::shared_ptr<arrow::Array>>, size_t> ResultSet::getArro
   return {generate_columns(fields, null_bitmaps, column_values), row_count};
 }
 
-arrow::RecordBatch ResultSet::convertToArrow(const std::vector<std::string>& col_names) const {
+arrow::RecordBatch ResultSet::convertToArrow(const std::vector<std::string>& col_names,
+                                             arrow::ipc::DictionaryMemo& memo) const {
   const auto col_count = colCount();
   std::vector<std::shared_ptr<arrow::Field>> fields;
-  if (col_names.empty()) {
-    for (size_t i = 0; i < col_count; ++i) {
-      fields.push_back(arrow::make_field("", getColType(i)));
+  CHECK(col_names.empty() || col_names.size() == col_count);
+  for (size_t i = 0; i < col_count; ++i) {
+    const auto ti = getColType(i);
+    std::shared_ptr<arrow::Array> dict = nullptr;
+    if (is_dict_enc_str(ti)) {
+      const int dict_id = ti.get_comp_param();
+      if (memo.HasDictionaryId(dict_id)) {
+        memo.GetDictionary(dict_id, &dict);
+      } else {
+        auto str_list = getDictionary(dict_id);
+        dict = arrow::array_from_vector<arrow::StringType, std::string>(nullptr, *str_list);
+        memo.AddDictionary(dict_id, dict);
+      }
     }
-  } else {
-    CHECK_EQ(col_names.size(), col_count);
-    for (size_t i = 0; i < col_count; ++i) {
-      fields.push_back(arrow::make_field(col_names[i], getColType(i)));
-    }
+    fields.push_back(arrow::make_field(col_names.empty() ? "" : col_names[i], ti, dict));
   }
   auto schema = std::make_shared<arrow::Schema>(fields);
   std::vector<std::shared_ptr<arrow::Array>> columns;
@@ -533,54 +684,29 @@ arrow::RecordBatch ResultSet::convertToArrow(const std::vector<std::string>& col
 
 // WARN(ptaylor): users are responsible for detaching and removing shared memory segments, e.g.,
 //   int shmid = shmget(...);
-//   char *ipc_ptr = (char* shmat(shmid, ...));
+//   auto ipc_ptr = shmat(shmid, ...);
 //   ...
 //   shmdt(ipc_ptr);
 //   shmctl(shmid, IPC_RMID, 0);
 ArrowResult ResultSet::getArrowCopyOnCpu(Data_Namespace::DataMgr* data_mgr,
                                          const std::vector<std::string>& col_names) const {
-  auto arrow_copy = convertToArrow(col_names);
-  auto serialized_schema = serialize_arrow_schema(*arrow_copy.schema());
-  auto serialized_records = serialize_arrow_records(arrow_copy);
-  // Generate a new key for a shared memory segment. Keys to shared memory segments
-  // are OS global, so we need to try a new key if we encounter a collision. It seems
-  // incremental keygen would be deterministically worst-case. If we use a hash
-  // (like djb2) + nonce, we could still get collisions if multiple clients specify
-  // the same nonce, so using rand() in lieu of a better approach
-  // TODO(ptaylor): Is this common? Are these assumptions true?
-  auto key = static_cast<key_t>(rand());
-  const auto shmsz = serialized_records->size();
-  int shmid = -1;
-  // IPC_CREAT - indicates we want to create a new segment for this key if it doesn't exist
-  // IPC_EXCL - ensures failure if a segment already exists for this key
-  while ((shmid = shmget(key, shmsz, IPC_CREAT | IPC_EXCL | 0666)) < 0) {
-    // If shmget fails and errno is one of these four values, try a new key.
-    // TODO(ptaylor): is checking for the last three values really necessary? Checking them by default to be safe.
-    // EEXIST - a shared memory segment is already associated with this key
-    // EACCES - a shared memory segment is already associated with this key, but we don't have permission to access it
-    // EINVAL - a shared memory segment is already associated with this key, but the size is less than shmsz
-    // ENOENT - IPC_CREAT was not set in shmflg and no shared memory segment associated with key was found
-    if (!(errno & (EEXIST | EACCES | EINVAL | ENOENT))) {
-      throw std::runtime_error("failed to create a shared memory");
-    }
-    key = static_cast<key_t>(rand());
-  }
-  // get a pointer to the shared memory segment
-  auto ipc_ptr = shmat(shmid, NULL, 0);
-  if (reinterpret_cast<int64_t>(ipc_ptr) == -1) {
-    throw std::runtime_error("failed to attach a shared memory");
-  }
-  // copy the arrow records buffer to shared memory
-  // TODO(ptaylor): I'm sure it's possible to tell Arrow's RecordBatchStreamWriter to write
-  // directly to the shared memory segment as a sink
-  memcpy(ipc_ptr, serialized_records->data(), serialized_records->size());
-  // detach from the shared memory segment
-  shmdt(ipc_ptr);
-  // cast the shared memory key to a string, and then to a char vec, so we can
-  // keep the same method signature as the original `getArrowDeviceCopy` below.
-  std::vector<char> handle_buffer(sizeof(key_t), 0);
-  memcpy(&handle_buffer[0], reinterpret_cast<unsigned char*>(&key), sizeof(key_t));
-  return {serialized_schema, handle_buffer, serialized_records->size()};
+  arrow::ipc::DictionaryMemo dict_memo;
+  auto arrow_copy = convertToArrow(col_names, dict_memo);
+
+  auto serialized_schema = arrow::serialize_arrow_schema(arrow_copy.schema(), dict_memo);
+  const auto schema_key = arrow::get_and_copy_to_shm(serialized_schema);
+  CHECK(schema_key != IPC_PRIVATE);
+  std::vector<char> schema_handle_buffer(sizeof(key_t), 0);
+  memcpy(&schema_handle_buffer[0], reinterpret_cast<const unsigned char*>(&schema_key), sizeof(key_t));
+
+  arrow::ipc::FileBlock block{0, 0, 0};
+  auto serialized_records = arrow::serialize_arrow_records(arrow_copy, block);
+  const auto record_key = arrow::get_and_copy_to_shm(serialized_records);
+  CHECK(record_key != IPC_PRIVATE);
+  std::vector<char> record_handle_buffer(sizeof(key_t), 0);
+  memcpy(&record_handle_buffer[0], reinterpret_cast<const unsigned char*>(&record_key), sizeof(key_t));
+
+  return {schema_handle_buffer, serialized_schema->size(), record_handle_buffer, serialized_records->size()};
 }
 
 // WARN(miyu): users are responsible to free all device copies, e.g.,
@@ -595,24 +721,33 @@ ArrowResult ResultSet::getArrowCopyOnCpu(Data_Namespace::DataMgr* data_mgr,
 ArrowResult ResultSet::getArrowCopyOnGpu(Data_Namespace::DataMgr* data_mgr,
                                          const size_t device_id,
                                          const std::vector<std::string>& col_names) const {
-  auto arrow_copy = convertToArrow(col_names);
-  auto serialized_schema = serialize_arrow_schema(*arrow_copy.schema());
+  arrow::ipc::DictionaryMemo dict_memo;
+  auto arrow_copy = convertToArrow(col_names, dict_memo);
+
+  auto serialized_schema = arrow::serialize_arrow_schema(arrow_copy.schema(), dict_memo);
+  const auto schema_key = arrow::get_and_copy_to_shm(serialized_schema);
+  CHECK(schema_key != IPC_PRIVATE);
+  std::vector<char> schema_handle_buffer(sizeof(key_t), 0);
+  memcpy(&schema_handle_buffer[0], reinterpret_cast<const unsigned char*>(&schema_key), sizeof(key_t));
+
 #ifdef HAVE_CUDA
-  auto serialized_records = serialize_arrow_records(arrow_copy);
+  arrow::ipc::FileBlock block{0, 0, 0};
+  auto serialized_records = arrow::serialize_arrow_records(arrow_copy, block);
   CHECK(data_mgr && data_mgr->cudaMgr_);
   auto dev_ptr =
       reinterpret_cast<CUdeviceptr>(data_mgr->cudaMgr_->allocateDeviceMem(serialized_records->size(), device_id));
-  CUipcMemHandle ipc_mem_handle;
-  cuIpcGetMemHandle(&ipc_mem_handle, dev_ptr);
+  CUipcMemHandle record_handle;
+  cuIpcGetMemHandle(&record_handle, dev_ptr);
   data_mgr->cudaMgr_->copyHostToDevice(reinterpret_cast<int8_t*>(dev_ptr),
                                        reinterpret_cast<const int8_t*>(serialized_records->data()),
                                        serialized_records->size(),
                                        device_id);
-  std::vector<char> handle_buffer(sizeof(ipc_mem_handle), 0);
-  memcpy(&handle_buffer[0], reinterpret_cast<unsigned char*>(&ipc_mem_handle), sizeof(ipc_mem_handle));
-  return {serialized_schema, handle_buffer, serialized_records->size()};
+  std::vector<char> record_handle_buffer(sizeof(record_handle), 0);
+  memcpy(&record_handle_buffer[0], reinterpret_cast<unsigned char*>(&record_handle), sizeof(CUipcMemHandle));
+
+  return {schema_handle_buffer, serialized_schema->size(), record_handle_buffer, serialized_records->size()};
 #else
-  return {serialized_schema, {}, 0};
+  return {schema_handle_buffer, serialized_schema->size(), {}, 0};
 #endif
 }
 
