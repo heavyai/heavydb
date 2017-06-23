@@ -282,10 +282,17 @@ llvm::Value* Executor::codegenMul(const Analyzer::BinOper* bin_oper,
     auto const_zero = llvm::ConstantInt::get(rhs_lv->getType(), 0, true);
     cgen_state_->ir_builder_.CreateCondBr(cgen_state_->ir_builder_.CreateICmpEQ(rhs_lv, const_zero), mul_ok, mul_check);
     cgen_state_->ir_builder_.SetInsertPoint(mul_check);
+    auto rhs_is_negative_lv = cgen_state_->ir_builder_.CreateICmpSLT(rhs_lv, const_zero);
+    auto positive_rhs_lv =
+        cgen_state_->ir_builder_.CreateSelect(rhs_is_negative_lv, cgen_state_->ir_builder_.CreateNeg(rhs_lv), rhs_lv);
+    auto adjusted_lhs_lv =
+        cgen_state_->ir_builder_.CreateSelect(rhs_is_negative_lv, cgen_state_->ir_builder_.CreateNeg(lhs_lv), lhs_lv);
     auto detected = cgen_state_->ir_builder_.CreateOr(  // overflow
-        cgen_state_->ir_builder_.CreateICmpSGT(lhs_lv, cgen_state_->ir_builder_.CreateSDiv(chosen_max, rhs_lv)),
+        cgen_state_->ir_builder_.CreateICmpSGT(adjusted_lhs_lv,
+                                               cgen_state_->ir_builder_.CreateSDiv(chosen_max, positive_rhs_lv)),
         // underflow
-        cgen_state_->ir_builder_.CreateICmpSLT(lhs_lv, cgen_state_->ir_builder_.CreateSDiv(chosen_min, rhs_lv)));
+        cgen_state_->ir_builder_.CreateICmpSLT(adjusted_lhs_lv,
+                                               cgen_state_->ir_builder_.CreateSDiv(chosen_min, positive_rhs_lv)));
     cgen_state_->ir_builder_.CreateCondBr(detected, mul_fail, mul_ok);
     cgen_state_->ir_builder_.SetInsertPoint(mul_ok);
   }
