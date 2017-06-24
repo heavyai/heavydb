@@ -578,15 +578,6 @@ void Executor::initializeNVPTXBackend() const {
 
 namespace {
 
-#define MAPD_LLVM_VERSION (LLVM_VERSION_MAJOR * 10000 + LLVM_VERSION_MINOR * 100 + LLVM_VERSION_PATCH)
-
-// Listed non-inline runtime functions must only read or write from / to arguments
-// and / or addresses derived from arguments (for example through cast operations).
-const char* arg_only_functions[] = {"linear_probabilistic_count",
-                                    "agg_count_distinct_bitmap_gpu",
-                                    "agg_count_distinct_bitmap_skip_val_gpu",
-                                    "agg_approximate_count_distinct_gpu"};
-
 llvm::Module* read_template_module(llvm::LLVMContext& context) {
   llvm::SMDiagnostic err;
 
@@ -606,20 +597,8 @@ llvm::Module* read_template_module(llvm::LLVMContext& context) {
 #endif
   CHECK(module);
 
-  for (auto func_name : arg_only_functions) {
-    auto func = module->getFunction(func_name);
-// Guide LICM to hoist literal loads out of the inner loop.
-#if MAPD_LLVM_VERSION >= 30800
-    func->setOnlyAccessesArgMemory();
-#else
-    func->setDoesNotThrow();
-#endif
-  }
-
   return module;
 }
-
-#undef MAPD_LLVM_VERSION
 
 void bind_pos_placeholders(const std::string& pos_fn_name,
                            const bool use_resume_param,
