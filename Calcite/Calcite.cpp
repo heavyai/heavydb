@@ -161,13 +161,20 @@ Calcite::Calcite(const int port, const std::string& data_dir, const size_t calci
   LOG(INFO) << "Creating Calcite Handler,  Calcite Port is " << port << " base data dir is " << data_dir;
   if (port == -1) {
     runJNI(port, data_dir, calcite_max_mem);
+    jni_ = true;
+    server_available_ = false;
+    return;
   }
   if (port == 0) {
     // dummy process for initdb
     remote_calcite_port_ = port;
+    server_available_ = false;
+    jni_ = false;
   } else {
     remote_calcite_port_ = port;
     runServer(port, data_dir, calcite_max_mem);
+    server_available_ = true;
+    jni_ = false;
   }
 }
 
