@@ -74,24 +74,24 @@ class SQLTestEnv : public ::testing::Environment {
     UserMetadata user;
     DBMetadata db;
     auto calcite = std::make_shared<Calcite>(CALCITEPORT, data_dir.string(), 1024);
-    {
-      auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), 0, false, 0);
-      if (!boost::filesystem::exists(system_db_file)) {
-        SysCatalog sys_cat(base_path.string(), dataMgr, calcite, true);
-        sys_cat.initDB();
-      }
-      SysCatalog sys_cat(base_path.string(), dataMgr, calcite);
-      CHECK(sys_cat.getMetadataForUser(MAPD_ROOT_USER, user));
-      if (!sys_cat.getMetadataForUser("gtest", user)) {
-        sys_cat.createUser("gtest", "test!test!", false);
-        CHECK(sys_cat.getMetadataForUser("gtest", user));
-      }
-      if (!sys_cat.getMetadataForDB("gtest_db", db)) {
-        sys_cat.createDatabase("gtest_db", user.userId);
-        CHECK(sys_cat.getMetadataForDB("gtest_db", db));
-      }
-    }
     auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), 0, false, 0);
+    // if no catalog create one
+    if (!boost::filesystem::exists(system_db_file)) {
+      SysCatalog sys_cat(base_path.string(), dataMgr, calcite, true);
+      sys_cat.initDB();
+    }
+    SysCatalog sys_cat(base_path.string(), dataMgr, calcite);
+    CHECK(sys_cat.getMetadataForUser(MAPD_ROOT_USER, user));
+    // if no user create one
+    if (!sys_cat.getMetadataForUser("gtest", user)) {
+      sys_cat.createUser("gtest", "test!test!", false);
+      CHECK(sys_cat.getMetadataForUser("gtest", user));
+    }
+    // if no db create one
+    if (!sys_cat.getMetadataForDB("gtest_db", db)) {
+      sys_cat.createDatabase("gtest_db", user.userId);
+      CHECK(sys_cat.getMetadataForDB("gtest_db", db));
+    }
     gsession.reset(new SessionInfo(
         std::make_shared<Catalog>(base_path.string(), db, dataMgr, std::vector<LeafHostInfo>{}, calcite),
         user,
