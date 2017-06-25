@@ -515,6 +515,7 @@ class ResultRows {
   ResultRows(const std::string& explanation, int64_t queue_time_ms)
       : result_set_(nullptr),
         query_mem_desc_{},
+        group_by_buffer_(nullptr),
         group_by_buffer_idx_(0),
         output_columnar_(false),
         in_place_(false),
@@ -533,6 +534,7 @@ class ResultRows {
   ResultRows(const std::string& explanation, int64_t queue_time_ms, int64_t render_time_ms)
       : result_set_(nullptr),
         query_mem_desc_{},
+        group_by_buffer_(nullptr),
         group_by_buffer_idx_(0),
         output_columnar_(false),
         in_place_(false),
@@ -556,6 +558,7 @@ class ResultRows {
       : result_set_(nullptr),
         query_mem_desc_{},
         row_set_mem_owner_(row_set_mem_owner),
+        group_by_buffer_(nullptr),
         group_by_buffer_idx_(0),
         output_columnar_(false),
         in_place_(false),
@@ -575,6 +578,7 @@ class ResultRows {
   explicit ResultRows(const std::string& explanation)
       : result_set_(nullptr),
         query_mem_desc_{},
+        group_by_buffer_(nullptr),
         group_by_buffer_idx_(0),
         output_columnar_(false),
         in_place_(false),

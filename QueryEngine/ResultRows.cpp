@@ -28,7 +28,8 @@
 
 // The legacy way of representing result sets. Don't change it, it's going away.
 
-ResultRows::ResultRows(std::shared_ptr<ResultSet> result_set) : result_set_(result_set) {}
+ResultRows::ResultRows(std::shared_ptr<ResultSet> result_set)
+    : result_set_(result_set), group_by_buffer_(nullptr), in_place_(false) {}
 
 ResultRows::ResultRows(const QueryMemoryDescriptor& query_mem_desc,
                        const std::vector<Analyzer::Expr*>& targets,

@@ -134,6 +134,7 @@ struct UserMetadata {
  * @brief metadata for a mapd database
  */
 struct DBMetadata {
+  DBMetadata() : dbId(0), dbOwner(0) {}
   int32_t dbId;
   std::string dbName;
   int32_t dbOwner;
