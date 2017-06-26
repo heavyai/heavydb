@@ -438,12 +438,28 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
     if (const_lhs && const_rhs && lhs_type == rhs_type) {
       auto lhs_datum = const_lhs->get_constval();
       auto rhs_datum = const_rhs->get_constval();
+      if (cast) {
+        if (optype == kMINUS || optype == kPLUS || optype == kMULTIPLY) {
+          const auto cast_ti = cast->get_type_info();
+          auto lhs_copy = const_lhs->deep_copy();
+          auto rhs_copy = const_rhs->deep_copy();
+          auto cast_lhs = lhs_copy->add_cast(cast_ti);
+          auto cast_rhs = rhs_copy->add_cast(cast_ti);
+          auto const_cast_lhs = std::dynamic_pointer_cast<const Analyzer::Constant>(cast_lhs);
+          auto const_cast_rhs = std::dynamic_pointer_cast<const Analyzer::Constant>(cast_rhs);
+          if (const_cast_lhs && const_cast_rhs) {
+            lhs_datum = const_cast_lhs->get_constval();
+            rhs_datum = const_cast_rhs->get_constval();
+            lhs_type = cast_ti.get_type();
+          }
+        }
+      }
       Datum result_datum;
       SQLTypes result_type;
-
       if (foldOper(optype, lhs_type, lhs_datum, rhs_datum, result_datum, result_type))
         return makeExpr<Analyzer::Constant>(result_type, false, result_datum);
     }
+
     if (optype == kAND && lhs_type == rhs_type && lhs_type == kBOOLEAN) {
       if (const_rhs) {
         auto rhs_datum = const_rhs->get_constval();
