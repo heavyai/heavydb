@@ -30,6 +30,9 @@
 extern "C" DEVICE ALWAYS_INLINE int64_t SUFFIX(fixed_width_int_decode)(const int8_t* byte_stream,
                                                                        const int32_t byte_width,
                                                                        const int64_t pos) {
+#ifdef WITH_DECODERS_BOUNDS_CHECKING
+  assert(pos >= 0);
+#endif  // WITH_DECODERS_BOUNDS_CHECKING
   switch (byte_width) {
     case 1:
       return static_cast<int64_t>(byte_stream[pos * byte_width]);
@@ -52,6 +55,9 @@ extern "C" DEVICE ALWAYS_INLINE int64_t SUFFIX(fixed_width_int_decode)(const int
 extern "C" DEVICE ALWAYS_INLINE int64_t SUFFIX(fixed_width_unsigned_decode)(const int8_t* byte_stream,
                                                                             const int32_t byte_width,
                                                                             const int64_t pos) {
+#ifdef WITH_DECODERS_BOUNDS_CHECKING
+  assert(pos >= 0);
+#endif  // WITH_DECODERS_BOUNDS_CHECKING
   switch (byte_width) {
     case 1:
       return reinterpret_cast<const uint8_t*>(byte_stream)[pos * byte_width];
@@ -91,6 +97,9 @@ extern "C" DEVICE ALWAYS_INLINE int64_t SUFFIX(diff_fixed_width_int_decode)(cons
 }
 
 extern "C" DEVICE ALWAYS_INLINE float SUFFIX(fixed_width_float_decode)(const int8_t* byte_stream, const int64_t pos) {
+#ifdef WITH_DECODERS_BOUNDS_CHECKING
+  assert(pos >= 0);
+#endif  // WITH_DECODERS_BOUNDS_CHECKING
   return *(reinterpret_cast<const float*>(&byte_stream[pos * sizeof(float)]));
 }
 
@@ -100,6 +109,9 @@ extern "C" DEVICE NEVER_INLINE float SUFFIX(fixed_width_float_decode_noinline)(c
 }
 
 extern "C" DEVICE ALWAYS_INLINE double SUFFIX(fixed_width_double_decode)(const int8_t* byte_stream, const int64_t pos) {
+#ifdef WITH_DECODERS_BOUNDS_CHECKING
+  assert(pos >= 0);
+#endif  // WITH_DECODERS_BOUNDS_CHECKING
   return *(reinterpret_cast<const double*>(&byte_stream[pos * sizeof(double)]));
 }
 

@@ -92,6 +92,11 @@ if(ENABLE_MULTIFRAG_JOIN)
     list(APPEND MAPD_DEFINITIONS "-DENABLE_MULTIFRAG_JOIN")
 endif()
 
+
+if(ENABLE_DECODERS_BOUNDS_CHECKING)
+  list(APPEND MAPD_DEFINITIONS "-DWITH_DECODERS_BOUNDS_CHECKING")
+endif()
+
 if(ENABLE_LLVM_DBG)
 set(CLANG_SDK_INC "-I/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.11.sdk/usr/include/")
 set(CLANG_CRT_INC "-I/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include/c++/v1/")
