@@ -691,6 +691,27 @@ TargetValue ResultSet::makeVarlenTargetValue(const int8_t* ptr1,
   return std::string(reinterpret_cast<char*>(varlen_ptr), length);
 }
 
+namespace {
+
+int64_t int_resize_cast(const int64_t ival, const size_t sz) {
+  switch (sz) {
+    case 8:
+      return ival;
+    case 4:
+      return static_cast<int32_t>(ival);
+    case 2:
+      return static_cast<int16_t>(ival);
+    case 1:
+      return static_cast<int8_t>(ival);
+    default:
+      UNREACHABLE();
+  }
+  UNREACHABLE();
+  return 0;
+}
+
+}  // namespace
+
 // Reads an integer or a float from ptr based on the type and the byte width.
 TargetValue ResultSet::makeTargetValue(const int8_t* ptr,
                                        const int8_t compact_sz,
@@ -742,7 +763,8 @@ TargetValue ResultSet::makeTargetValue(const int8_t* ptr,
       return TargetValue(count_distinct_set_size(
           storage_->mappedPtr(ival), target_logical_idx, query_mem_desc_.count_distinct_descriptors_));
     }
-    if (inline_int_null_val(chosen_type) == ival) {
+    // TODO(alex): remove int_resize_cast, make read_int_from_buff return the right type instead
+    if (inline_int_null_val(chosen_type) == int_resize_cast(ival, chosen_type.get_logical_size())) {
       return inline_int_null_val(target_info.sql_type);
     }
     return ival;
