@@ -171,7 +171,8 @@ void SysCatalog::createDatabase(const string& name, int owner) {
       "CREATE TABLE mapd_links (linkid integer primary key, userid integer references mapd_users, "
       "link text unique, view_state text, update_time timestamp, view_metadata text)");
   dbConn.query(
-      "CREATE TABLE mapd_dictionaries (dictid integer primary key, name text unique, nbits int, is_shared boolean)");
+      "CREATE TABLE mapd_dictionaries (dictid integer primary key, name text unique, nbits int, is_shared boolean, "
+      "refcount int)");
   dbConn.query("CREATE TABLE mapd_logical_to_physical(logical_table_id integer, physical_table_id integer)");
 }
 
@@ -492,6 +493,24 @@ void Catalog::updateLogicalToPhysicalTableMap(const int32_t logical_tb_id) {
   sqliteConnector_.query("END TRANSACTION");
 }
 
+void Catalog::updateDictionarySchema() {
+  sqliteConnector_.query("BEGIN TRANSACTION");
+  try {
+    sqliteConnector_.query("PRAGMA TABLE_INFO(mapd_dictionaries)");
+    std::vector<std::string> cols;
+    for (size_t i = 0; i < sqliteConnector_.getNumRows(); i++) {
+      cols.push_back(sqliteConnector_.getData<std::string>(i, 1));
+    }
+    if (std::find(cols.begin(), cols.end(), std::string("refcount")) == cols.end()) {
+      sqliteConnector_.query("ALTER TABLE mapd_dictionaries ADD refcount DEFAULT 1");
+    }
+  } catch (std::exception& e) {
+    sqliteConnector_.query("ROLLBACK TRANSACTION");
+    throw;
+  }
+  sqliteConnector_.query("END TRANSACTION");
+}
+
 void Catalog::CheckAndExecuteMigrations() {
   updateTableDescriptorSchema();
   updateFrontendViewAndLinkUsers();
@@ -499,6 +518,7 @@ void Catalog::CheckAndExecuteMigrations() {
   updateLinkSchema();
   updateDictionaryNames();
   updateLogicalToPhysicalTableLinkSchema();
+  updateDictionarySchema();
 }
 
 void Catalog::buildMaps() {
@@ -962,7 +982,7 @@ void Catalog::createTable(TableDescriptor& td, const list<ColumnDescriptor>& col
         std::string folderPath;
         if (isLogicalTable) {
           sqliteConnector_.query_with_text_params(
-              "INSERT INTO mapd_dictionaries (name, nbits, is_shared) VALUES (?, ?, ?)",
+              "INSERT INTO mapd_dictionaries (name, nbits, is_shared, refcount) VALUES (?, ?, ?, 1)",
               std::vector<std::string>{dictName, std::to_string(cd.columnType.get_comp_param()), "0"});
           sqliteConnector_.query_with_text_param("SELECT dictid FROM mapd_dictionaries WHERE name = ?", dictName);
           dictId = sqliteConnector_.getData<int>(0, 0);

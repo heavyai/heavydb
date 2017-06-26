@@ -262,6 +262,7 @@ class Catalog {
   void updateFrontendViewAndLinkUsers();
   void updateLogicalToPhysicalTableLinkSchema();
   void updateLogicalToPhysicalTableMap(const int32_t logical_tb_id);
+  void updateDictionarySchema();
   void buildMaps();
   void addTableToMap(TableDescriptor& td,
                      const std::list<ColumnDescriptor>& columns,
