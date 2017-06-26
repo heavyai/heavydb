@@ -401,8 +401,9 @@ class Executor {
   std::vector<llvm::Value*> codegenVariableLengthStringColVar(llvm::Value* col_byte_stream, llvm::Value* pos_arg);
   llvm::Value* codegenRowId(const Analyzer::ColumnVar* col_var, const CompilationOptions& co);
   llvm::Value* codgenAdjustFixedEncNull(llvm::Value*, const SQLTypeInfo&);
-  std::vector<llvm::Value*> codegenOuterJoinNullPlaceholder(const std::vector<llvm::Value*>&,
-                                                            const Analyzer::ColumnVar*);
+  std::vector<llvm::Value*> codegenOuterJoinNullPlaceholder(const Analyzer::ColumnVar* col_var,
+                                                            const bool fetch_column,
+                                                            const CompilationOptions& co);
   llvm::Value* resolveGroupedColumnReference(const Analyzer::ColumnVar*);
   std::vector<llvm::Value*> codegen(const Analyzer::Constant*,
                                     const EncodingType enc_type,

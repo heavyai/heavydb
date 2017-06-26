@@ -83,11 +83,10 @@ int adjusted_range_table_index(const Analyzer::ColumnVar* col_var) {
 std::vector<llvm::Value*> Executor::codegen(const Analyzer::ColumnVar* col_var,
                                             const bool fetch_column,
                                             const CompilationOptions& co) {
-  const auto col_var_lvs = codegenColVar(col_var, fetch_column, co);
   if (!cgen_state_->outer_join_cond_lv_ || col_var->get_rte_idx() == 0) {
-    return col_var_lvs;
+    return codegenColVar(col_var, fetch_column, co);
   }
-  return codegenOuterJoinNullPlaceholder(col_var_lvs, col_var);
+  return codegenOuterJoinNullPlaceholder(col_var, fetch_column, co);
 }
 
 std::vector<llvm::Value*> Executor::codegenColVar(const Analyzer::ColumnVar* col_var,
@@ -288,8 +287,9 @@ llvm::Value* Executor::codgenAdjustFixedEncNull(llvm::Value* val, const SQLTypeI
                                {adjusted, inlineIntNull(col_phys_ti), inlineIntNull(col_ti)});
 }
 
-std::vector<llvm::Value*> Executor::codegenOuterJoinNullPlaceholder(const std::vector<llvm::Value*>& orig_lvs,
-                                                                    const Analyzer::ColumnVar* col_var) {
+std::vector<llvm::Value*> Executor::codegenOuterJoinNullPlaceholder(const Analyzer::ColumnVar* col_var,
+                                                                    const bool fetch_column,
+                                                                    const CompilationOptions& co) {
   const auto grouped_col_lv = resolveGroupedColumnReference(col_var);
   if (grouped_col_lv) {
     return {grouped_col_lv};
@@ -305,6 +305,8 @@ std::vector<llvm::Value*> Executor::codegenOuterJoinNullPlaceholder(const std::v
   const auto back_from_outer_join_bb =
       llvm::BasicBlock::Create(cgen_state_->context_, "back_from_outer_join", cgen_state_->row_func_);
   cgen_state_->ir_builder_.SetInsertPoint(outer_join_args_bb);
+  FetchCacheAnchor anchor(cgen_state_.get());
+  const auto orig_lvs = codegenColVar(col_var, fetch_column, co);
   cgen_state_->ir_builder_.CreateBr(phi_bb);
   cgen_state_->ir_builder_.SetInsertPoint(outer_join_nulls_bb);
   const auto& null_ti = col_var->get_type_info();
