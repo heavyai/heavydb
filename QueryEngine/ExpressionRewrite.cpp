@@ -266,6 +266,16 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
         return std::forward<T1>(t1) > std::forward<T2>(t2);
       case kGE:
         return std::forward<T1>(t1) >= std::forward<T2>(t2);
+      default:
+        break;
+    }
+    throw std::runtime_error("Unable to fold");
+    return false;
+  }
+
+  template <typename T1, typename T2>
+  auto foldLogic(SQLOps optype, T1&& t1, T2&& t2) const -> decltype(std::forward<T1>(t1) && std::forward<T2>(t2)) {
+    switch (optype) {
       case kAND:
         return std::forward<T1>(t1) && std::forward<T2>(t2);
       case kOR:
@@ -313,14 +323,20 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
     try {
       switch (type) {
         case kBOOLEAN:
-          if (IS_COMPARISON(optype) || IS_LOGIC(optype)) {
-            result.boolval = foldComparison(optype, lhs.smallintval, rhs.smallintval);
+          if (IS_COMPARISON(optype)) {
+            result.boolval = foldComparison(optype, lhs.boolval, rhs.boolval);
             result_type = kBOOLEAN;
             return true;
           }
+          if (IS_LOGIC(optype)) {
+            result.boolval = foldLogic(optype, lhs.boolval, rhs.boolval);
+            result_type = kBOOLEAN;
+            return true;
+          }
+          CHECK(!IS_ARITHMETIC(optype));
           break;
         case kSMALLINT:
-          if (IS_COMPARISON(optype) || IS_LOGIC(optype)) {
+          if (IS_COMPARISON(optype)) {
             result.boolval = foldComparison(optype, lhs.smallintval, rhs.smallintval);
             result_type = kBOOLEAN;
             return true;
@@ -329,9 +345,10 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
             result.smallintval = foldArithmetic(optype, lhs.smallintval, rhs.smallintval);
             return true;
           }
+          CHECK(!IS_LOGIC(optype));
           break;
         case kINT:
-          if (IS_COMPARISON(optype) || IS_LOGIC(optype)) {
+          if (IS_COMPARISON(optype)) {
             result.boolval = foldComparison(optype, lhs.intval, rhs.intval);
             result_type = kBOOLEAN;
             return true;
@@ -340,9 +357,10 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
             result.intval = foldArithmetic(optype, lhs.intval, rhs.intval);
             return true;
           }
+          CHECK(!IS_LOGIC(optype));
           break;
         case kBIGINT:
-          if (IS_COMPARISON(optype) || IS_LOGIC(optype)) {
+          if (IS_COMPARISON(optype)) {
             result.boolval = foldComparison(optype, lhs.bigintval, rhs.bigintval);
             result_type = kBOOLEAN;
             return true;
@@ -351,6 +369,7 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
             result.bigintval = foldArithmetic(optype, lhs.bigintval, rhs.bigintval);
             return true;
           }
+          CHECK(!IS_LOGIC(optype));
           break;
         case kFLOAT:
           if (IS_COMPARISON(optype)) {
@@ -362,6 +381,7 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
             result.floatval = foldArithmetic(optype, lhs.floatval, rhs.floatval);
             return true;
           }
+          CHECK(!IS_LOGIC(optype));
           break;
         case kDOUBLE:
           if (IS_COMPARISON(optype)) {
@@ -373,6 +393,7 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
             result.doubleval = foldArithmetic(optype, lhs.doubleval, rhs.doubleval);
             return true;
           }
+          CHECK(!IS_LOGIC(optype));
           break;
         default:
           break;
