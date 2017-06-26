@@ -705,6 +705,7 @@ TColumnType MapDHandler::populateThriftColumnType(const Catalog_Namespace::Catal
   col_type.col_type.is_array = cd->columnType.get_type() == kARRAY;
   col_type.col_type.precision = cd->columnType.get_precision();
   col_type.col_type.scale = cd->columnType.get_scale();
+  col_type.is_system = cd->isSystemCol;
   if (cd->columnType.get_compression() == EncodingType::kENCODING_DICT && cat != nullptr) {
     // have to get the actual size of the encoding from the dictionary definition
     const int dict_id = cd->columnType.get_comp_param();
@@ -756,7 +757,7 @@ void MapDHandler::get_table_details(TTableDetails& _return, const TSessionId& se
       throw ex;
     }
   } else {
-    const auto col_descriptors = cat.getAllColumnMetadataForTable(td->tableId, false, true);
+    const auto col_descriptors = cat.getAllColumnMetadataForTable(td->tableId, true, true);
     for (const auto cd : col_descriptors) {
       _return.row_desc.push_back(populateThriftColumnType(&cat, cd));
     }
@@ -767,6 +768,7 @@ void MapDHandler::get_table_details(TTableDetails& _return, const TSessionId& se
   _return.view_sql = td->viewSQL;
   _return.shard_count = td->nShards;
   _return.key_metainfo = td->keyMetainfo;
+  _return.is_temporary = td->persistenceLevel == Data_Namespace::MemoryLevel::CPU_LEVEL;
 }
 
 // DEPRECATED(2017-04-17) - use get_table_details()

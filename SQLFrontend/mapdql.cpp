@@ -394,7 +394,11 @@ void process_backslash_commands(char* command, ClientContext& context) {
       }
       const auto table_details = context.table_details;
       if (table_details.view_sql.empty()) {
-        std::cout << "CREATE TABLE " + table_name + " (\n";
+        std::string temp_holder(" ");
+        if (table_details.is_temporary) {
+          temp_holder = " TEMPORARY ";
+        }
+        std::cout << "CREATE" + temp_holder + "TABLE " + table_name + " (\n";
       } else {
         std::cout << "CREATE VIEW " + table_name + " AS " + table_details.view_sql << "\n";
         std::cout << "\n"
@@ -403,15 +407,19 @@ void process_backslash_commands(char* command, ClientContext& context) {
       }
       std::string comma_or_blank("");
       for (TColumnType p : table_details.row_desc) {
+        if (p.is_system) {
+          continue;
+        }
         std::string encoding;
         if (p.col_type.type == TDatumType::STR) {
-          encoding =
-              (p.col_type.encoding == 0 ? " ENCODING NONE" : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
-                                                                 std::to_string(p.col_type.comp_param) + ")");
+          encoding = (p.col_type.encoding == 0 ? " ENCODING NONE"
+                                               : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
+                                                     std::to_string(p.col_type.comp_param) + ")");
 
         } else {
-          encoding = (p.col_type.encoding == 0 ? "" : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
-                                                          std::to_string(p.col_type.comp_param) + ")");
+          encoding = (p.col_type.encoding == 0 ? ""
+                                               : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
+                                                     std::to_string(p.col_type.comp_param) + ")");
         }
         std::cout << comma_or_blank << p.col_name << " " << thrift_to_name(p.col_type)
                   << (p.col_type.nullable ? "" : " NOT NULL") << encoding;

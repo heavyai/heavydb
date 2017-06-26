@@ -1641,7 +1641,7 @@ std::string serialize_key_metainfo(const ShardKeyDef* shard_key_def,
 void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.get_catalog();
   if (catalog.getMetadataForTable(*table) != nullptr) {
-    if (if_not_exists)
+    if (if_not_exists_)
       return;
     throw std::runtime_error("Table " + *table + " already exists.");
   }
@@ -1814,6 +1814,10 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     }
     validate_shard_column_type(td.shardedColumnId, columns);
   }
+  if (is_temporary_)
+    td.persistenceLevel = Data_Namespace::MemoryLevel::CPU_LEVEL;
+  else
+    td.persistenceLevel = Data_Namespace::MemoryLevel::DISK_LEVEL;
   if (!storage_options.empty()) {
     for (auto& p : storage_options) {
       if (boost::iequals(*p->get_name(), "fragment_size")) {
@@ -2084,6 +2088,11 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
   td.maxChunkSize = DEFAULT_MAX_CHUNK_SIZE;
   td.fragPageSize = DEFAULT_PAGE_SIZE;
   td.maxRows = DEFAULT_MAX_ROWS;
+  if (is_temporary_) {
+    td.persistenceLevel = Data_Namespace::MemoryLevel::CPU_LEVEL;
+  } else {
+    td.persistenceLevel = Data_Namespace::MemoryLevel::DISK_LEVEL;
+  }
   catalog.createTable(td, column_descriptors, {}, true);
   if (result_rows.definitelyHasNoRows()) {
     return;

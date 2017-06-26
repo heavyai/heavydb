@@ -262,7 +262,9 @@ Catalog::Catalog(const string& basePath,
     : basePath_(basePath),
       sqliteConnector_(dbname, basePath + "/mapd_catalogs/"),
       dataMgr_(dataMgr),
-      calciteMgr_(calcite) {
+      calciteMgr_(calcite),
+      nextTempTableId_(MAPD_TEMP_TABLE_START_ID),
+      nextTempDictId_(MAPD_TEMP_DICT_START_ID) {
   ldap_server_.reset(new LdapServer(ldapMetadata));
   if (!is_initdb)
     buildMaps();
@@ -277,7 +279,9 @@ Catalog::Catalog(const string& basePath,
       sqliteConnector_(curDB.dbName, basePath + "/mapd_catalogs/"),
       currentDB_(curDB),
       dataMgr_(dataMgr),
-      calciteMgr_(calcite) {
+      calciteMgr_(calcite),
+      nextTempTableId_(MAPD_TEMP_TABLE_START_ID),
+      nextTempDictId_(MAPD_TEMP_DICT_START_ID) {
   ldap_server_.reset(new LdapServer(ldapMetadata));
   buildMaps();
 }
@@ -292,7 +296,9 @@ Catalog::Catalog(const string& basePath,
       currentDB_(curDB),
       dataMgr_(dataMgr),
       string_dict_hosts_(string_dict_hosts),
-      calciteMgr_(calcite) {
+      calciteMgr_(calcite),
+      nextTempTableId_(MAPD_TEMP_TABLE_START_ID),
+      nextTempDictId_(MAPD_TEMP_DICT_START_ID) {
   ldap_server_.reset(new LdapServer());
   buildMaps();
 }
@@ -540,7 +546,7 @@ void Catalog::buildMaps() {
     int refcount = sqliteConnector_.getData<int>(r, 4);
     std::string fname =
         basePath_ + "/mapd_data/DB_" + std::to_string(currentDB_.dbId) + "_DICT_" + std::to_string(dictId);
-    DictDescriptor* dd = new DictDescriptor(dictId, dictName, dictNBits, is_shared, refcount, fname);
+    DictDescriptor* dd = new DictDescriptor(dictId, dictName, dictNBits, is_shared, refcount, fname, false);
     dictDescriptorMapById_[dd->dictId].reset(dd);
   }
 
@@ -692,11 +698,12 @@ void Catalog::addTableToMap(TableDescriptor& td,
       continue;
     }
     if (client) {
-      client->create(dd.dictId, currentDB_.dbId);
+      client->create(dd.dictId, currentDB_.dbId, dd.dictIsTemp);
     }
     DictDescriptor* new_dd = new DictDescriptor(dd);
     dictDescriptorMapById_[dd.dictId].reset(new_dd);
-    boost::filesystem::create_directory(new_dd->dictFolderPath);
+    if (!dd.dictIsTemp)
+      boost::filesystem::create_directory(new_dd->dictFolderPath);
   }
 }
 
@@ -711,6 +718,7 @@ void Catalog::removeTableFromMap(const string& tableName, int tableId) {
   tableDescriptorMap_.erase(to_upper(tableName));
   if (td->fragmenter != nullptr)
     delete td->fragmenter;
+  bool isTemp = td->persistenceLevel == Data_Namespace::MemoryLevel::CPU_LEVEL;
   delete td;
 
   std::unique_ptr<StringDictionaryClient> client;
@@ -736,7 +744,8 @@ void Catalog::removeTableFromMap(const string& tableName, int tableId) {
       CHECK_GE(dd->refcount, 1);
       --dd->refcount;
       if (!dd->refcount) {
-        boost::filesystem::remove_all(dd->dictFolderPath);
+        if (!isTemp)
+          boost::filesystem::remove_all(dd->dictFolderPath);
         if (client) {
           client->drop(dd->dictId, currentDB_.dbId);
         }
@@ -763,7 +772,7 @@ void Catalog::addLinkToMap(LinkDescriptor& ld) {
 }
 
 void Catalog::instantiateFragmenter(TableDescriptor* td) const {
-  // instatiion table fragmenter upon first use
+  // instanciate table fragmenter upon first use
   // assume only insert order fragmenter is supported
   assert(td->fragType == Fragmenter_Namespace::FragmenterType::INSERT_ORDER);
   vector<Chunk> chunkVec;
@@ -779,7 +788,8 @@ void Catalog::instantiateFragmenter(TableDescriptor* td) const {
                                              td->maxFragRows,
                                              td->maxChunkSize,
                                              td->fragPageSize,
-                                             td->maxRows);
+                                             td->maxRows,
+                                             td->persistenceLevel);
 }
 
 const TableDescriptor* Catalog::getMetadataForTable(const string& tableName) const {
@@ -816,7 +826,10 @@ const DictDescriptor* Catalog::getMetadataForDict(int dictId, bool loadDict) con
     std::lock_guard<std::mutex> lock(cat_mutex_);
     if (!dd->stringDict) {
       if (string_dict_hosts_.empty()) {
-        dd->stringDict = std::make_shared<StringDictionary>(dd->dictFolderPath);
+        if (dd->dictIsTemp)
+          dd->stringDict = std::make_shared<StringDictionary>(dd->dictFolderPath, true);
+        else
+          dd->stringDict = std::make_shared<StringDictionary>(dd->dictFolderPath, false);
       } else {
         dd->stringDict = std::make_shared<StringDictionary>(string_dict_hosts_.front(), dd->dictId);
       }
@@ -962,70 +975,99 @@ void Catalog::createTable(TableDescriptor& td,
 
   td.nColumns = columns.size();
 
-  sqliteConnector_.query("BEGIN TRANSACTION");
-  try {
-    sqliteConnector_.query_with_text_params(
-        "INSERT INTO mapd_tables (name, ncolumns, isview, fragments, frag_type, max_frag_rows, max_chunk_size, "
-        "frag_page_size, max_rows, partitions, shard_column_id, shard, num_shards, key_metainfo) VALUES (?, ?, ?, ?, "
-        "?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        std::vector<std::string>{td.tableName,
-                                 std::to_string(columns.size()),
-                                 std::to_string(td.isView),
-                                 "",
-                                 std::to_string(td.fragType),
-                                 std::to_string(td.maxFragRows),
-                                 std::to_string(td.maxChunkSize),
-                                 std::to_string(td.fragPageSize),
-                                 std::to_string(td.maxRows),
-                                 td.partitions,
-                                 std::to_string(td.shardedColumnId),
-                                 std::to_string(td.shard),
-                                 std::to_string(td.nShards),
-                                 td.keyMetainfo});
+  if (td.persistenceLevel == Data_Namespace::MemoryLevel::DISK_LEVEL) {
+    sqliteConnector_.query("BEGIN TRANSACTION");
+    try {
+      sqliteConnector_.query_with_text_params(
+          "INSERT INTO mapd_tables (name, ncolumns, isview, fragments, frag_type, max_frag_rows, max_chunk_size, "
+          "frag_page_size, max_rows, partitions, shard_column_id, shard, num_shards, key_metainfo) VALUES (?, ?, ?, ?, "
+          "?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
 
-    // now get the auto generated tableid
-    sqliteConnector_.query_with_text_param("SELECT tableid FROM mapd_tables WHERE name = ?", td.tableName);
-    td.tableId = sqliteConnector_.getData<int>(0, 0);
+          std::vector<std::string>{td.tableName,
+                                   std::to_string(columns.size()),
+                                   std::to_string(td.isView),
+                                   "",
+                                   std::to_string(td.fragType),
+                                   std::to_string(td.maxFragRows),
+                                   std::to_string(td.maxChunkSize),
+                                   std::to_string(td.fragPageSize),
+                                   std::to_string(td.maxRows),
+                                   td.partitions,
+                                   std::to_string(td.shardedColumnId),
+                                   std::to_string(td.shard),
+                                   std::to_string(td.nShards),
+                                   td.keyMetainfo});
+
+      // now get the auto generated tableid
+      sqliteConnector_.query_with_text_param("SELECT tableid FROM mapd_tables WHERE name = ?", td.tableName);
+      td.tableId = sqliteConnector_.getData<int>(0, 0);
+      int colId = 1;
+      for (auto cd : columns) {
+        if (cd.columnType.get_compression() == kENCODING_DICT) {
+          const bool is_foreign_col = setColumnSharedDictionary(cd, shared_dict_defs);
+          if (!is_foreign_col) {
+            setColumnDictionary(cd, dds, td, isLogicalTable);
+          }
+        }
+        sqliteConnector_.query_with_text_params(
+            "INSERT INTO mapd_columns (tableid, columnid, name, coltype, colsubtype, coldim, colscale, is_notnull, "
+            "compression, comp_param, size, chunks, is_systemcol, is_virtualcol, virtual_expr) VALUES (?, ?, ?, ?, ?, "
+            "?, "
+            "?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            std::vector<std::string>{std::to_string(td.tableId),
+                                     std::to_string(colId),
+                                     cd.columnName,
+                                     std::to_string(cd.columnType.get_type()),
+                                     std::to_string(cd.columnType.get_subtype()),
+                                     std::to_string(cd.columnType.get_dimension()),
+                                     std::to_string(cd.columnType.get_scale()),
+                                     std::to_string(cd.columnType.get_notnull()),
+                                     std::to_string(cd.columnType.get_compression()),
+                                     std::to_string(cd.columnType.get_comp_param()),
+                                     std::to_string(cd.columnType.get_size()),
+                                     "",
+                                     std::to_string(cd.isSystemCol),
+                                     std::to_string(cd.isVirtualCol),
+                                     cd.virtualExpr});
+        cd.tableId = td.tableId;
+        cd.columnId = colId++;
+        cds.push_back(cd);
+      }
+      if (td.isView) {
+        sqliteConnector_.query_with_text_params("INSERT INTO mapd_views (tableid, sql) VALUES (?,?)",
+                                                std::vector<std::string>{std::to_string(td.tableId), td.viewSQL});
+      }
+    } catch (std::exception& e) {
+      sqliteConnector_.query("ROLLBACK TRANSACTION");
+      throw;
+    }
+    sqliteConnector_.query("END TRANSACTION");
+  } else {  // Temporary table
+    td.tableId = nextTempTableId_++;
     int colId = 1;
     for (auto cd : columns) {
       if (cd.columnType.get_compression() == kENCODING_DICT) {
-        const bool is_foreign_col = setColumnSharedDictionary(cd, shared_dict_defs);
-        if (!is_foreign_col) {
-          setColumnDictionary(cd, dds, td, isLogicalTable);
+        std::string fileName("");
+        std::string folderPath("");
+        int dictId = nextTempDictId_++;
+        DictDescriptor dd(dictId,
+                          fileName,
+                          cd.columnType.get_comp_param(),
+                          false,
+                          1,
+                          folderPath,
+                          true);  // Is dictName (2nd argument) used?
+        dds.push_back(dd);
+        if (!cd.columnType.is_array()) {
+          cd.columnType.set_size(cd.columnType.get_comp_param() / 8);
         }
+        cd.columnType.set_comp_param(dictId);
       }
-      sqliteConnector_.query_with_text_params(
-          "INSERT INTO mapd_columns (tableid, columnid, name, coltype, colsubtype, coldim, colscale, is_notnull, "
-          "compression, comp_param, size, chunks, is_systemcol, is_virtualcol, virtual_expr) VALUES (?, ?, ?, ?, ?, ?, "
-          "?, ?, ?, ?, ?, ?, ?, ?, ?)",
-          std::vector<std::string>{std::to_string(td.tableId),
-                                   std::to_string(colId),
-                                   cd.columnName,
-                                   std::to_string(cd.columnType.get_type()),
-                                   std::to_string(cd.columnType.get_subtype()),
-                                   std::to_string(cd.columnType.get_dimension()),
-                                   std::to_string(cd.columnType.get_scale()),
-                                   std::to_string(cd.columnType.get_notnull()),
-                                   std::to_string(cd.columnType.get_compression()),
-                                   std::to_string(cd.columnType.get_comp_param()),
-                                   std::to_string(cd.columnType.get_size()),
-                                   "",
-                                   std::to_string(cd.isSystemCol),
-                                   std::to_string(cd.isVirtualCol),
-                                   cd.virtualExpr});
       cd.tableId = td.tableId;
       cd.columnId = colId++;
       cds.push_back(cd);
     }
-    if (td.isView) {
-      sqliteConnector_.query_with_text_params("INSERT INTO mapd_views (tableid, sql) VALUES (?,?)",
-                                              std::vector<std::string>{std::to_string(td.tableId), td.viewSQL});
-    }
-  } catch (std::exception& e) {
-    sqliteConnector_.query("ROLLBACK TRANSACTION");
-    throw;
   }
-  sqliteConnector_.query("END TRANSACTION");
   addTableToMap(td, cds, dds);
   calciteMgr_->updateMetadata(currentDB_.dbName, td.tableName);
 }
@@ -1085,7 +1127,7 @@ void Catalog::setColumnDictionary(ColumnDescriptor& cd,
                                            dictName);
     folderPath = basePath_ + "/mapd_data/DB_" + std::to_string(currentDB_.dbId) + "_DICT_" + std::to_string(dictId);
   }
-  DictDescriptor dd(dictId, dictName, cd.columnType.get_comp_param(), false, 1, folderPath);
+  DictDescriptor dd(dictId, dictName, cd.columnType.get_comp_param(), false, 1, folderPath, false);
   dds.push_back(dd);
   if (!cd.columnType.is_array()) {
     cd.columnType.set_size(cd.columnType.get_comp_param() / 8);
@@ -1186,15 +1228,16 @@ void Catalog::doTruncateTable(const TableDescriptor* td) {
         if (client) {
           client->drop(dd->dictId, currentDB_.dbId);
         }
-        boost::filesystem::create_directory(dd->dictFolderPath);
+        if (!dd->dictIsTemp)
+          boost::filesystem::create_directory(dd->dictFolderPath);
       }
 
       DictDescriptor* new_dd = new DictDescriptor(
-          dd->dictId, dd->dictName, dd->dictNBits, dd->dictIsShared, dd->refcount, dd->dictFolderPath);
+          dd->dictId, dd->dictName, dd->dictNBits, dd->dictIsShared, dd->refcount, dd->dictFolderPath, dd->dictIsTemp);
       dictDescriptorMapById_.erase(dictIt);
       // now create new Dict -- need to figure out what to do here for temp tables
       if (client) {
-        client->create(new_dd->dictId, currentDB_.dbId);
+        client->create(new_dd->dictId, currentDB_.dbId, dd->dictIsTemp);
       }
       dictDescriptorMapById_[dictId].reset(new_dd);
       getMetadataForDict(dictId);

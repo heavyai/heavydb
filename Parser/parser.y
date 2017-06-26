@@ -22,7 +22,15 @@
     if (boost::regex_match(trimmed_input.cbegin(), trimmed_input.cend(), what, create_table_as_expr)) {                 \
       const auto table_name = what[1].str();                                                                            \
       const auto select_query = what[2].str();                                                                          \
-      parseTrees.emplace_back(new CreateTableAsSelectStmt(table_name, select_query));                                   \
+      parseTrees.emplace_back(new CreateTableAsSelectStmt(table_name, select_query, false));                            \
+      return 0;                                                                                                         \
+    }                                                                                                                   \
+    boost::regex create_temp_table_as_expr{R"(CREATE\s+TEMPORARY\s+TABLE\s+([A-Za-z_][A-Za-z0-9\$_]*)\s+AS\s+(.*);?)",  \
+                                      boost::regex::extended | boost::regex::icase};                                    \
+    if (boost::regex_match(trimmed_input.cbegin(), trimmed_input.cend(), what, create_temp_table_as_expr)) {            \
+      const auto table_name = what[1].str();                                                                            \
+      const auto select_query = what[2].str();                                                                          \
+      parseTrees.emplace_back(new CreateTableAsSelectStmt(table_name, select_query, true));                             \
       return 0;                                                                                                         \
     }                                                                                                                   \
     std::istringstream ss(inputStr);                                                                                    \
@@ -104,7 +112,7 @@ using namespace Parser;
 %token IS LANGUAGE LAST LENGTH LIKE LIMIT MOD NOW NULLX NUMERIC OF OFFSET ON OPEN OPTION
 %token ORDER PARAMETER PRECISION PRIMARY PRIVILEGES PROCEDURE
 %token PUBLIC REAL REFERENCES RENAME ROLLBACK SCHEMA SELECT SET SHARD SHARED SHOW
-%token SMALLINT SOME TABLE TEXT THEN TIME TIMESTAMP TO TRUNCATE UNION
+%token SMALLINT SOME TABLE TEMPORARY TEXT THEN TIME TIMESTAMP TO TRUNCATE UNION
 %token UNIQUE UPDATE USER VALUES VIEW WHEN WHENEVER WHERE WITH WORK
 
 %start sql_list
@@ -215,10 +223,15 @@ opt_if_not_exists:
 		| /* empty */ { $<boolval>$ = false; }
 		;
 
+opt_temporary:
+                TEMPORARY { $<boolval>$ = true; }
+                | /* empty */ { $<boolval>$ = false; }
+                ;
+
 create_table_statement:
-		CREATE TABLE opt_if_not_exists table '(' base_table_element_commalist ')' opt_with_option_list
+		CREATE opt_temporary TABLE opt_if_not_exists table '(' base_table_element_commalist ')' opt_with_option_list
 		{
-		  $<nodeval>$ = new CreateTableStmt($<stringval>4, reinterpret_cast<std::list<TableElement*>*>($<listval>6), $<boolval>3, reinterpret_cast<std::list<NameValueAssign*>*>($<listval>8));
+		  $<nodeval>$ = new CreateTableStmt($<stringval>5, reinterpret_cast<std::list<TableElement*>*>($<listval>7), $<boolval>2,  $<boolval>4, reinterpret_cast<std::list<NameValueAssign*>*>($<listval>9));
 		}
 	;
 

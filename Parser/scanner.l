@@ -116,6 +116,7 @@ SHOW          TOK(SHOW)
 SMALLINT      TOK(SMALLINT)
 SOME          { yylval.qualval = kANY; TOK(SOME) } /* SOME = ANY */
 TABLE         TOK(TABLE)
+TEMPORARY     TOK(TEMPORARY)
 TEXT          TOK(TEXT)
 THEN          TOK(THEN)
 TIME          TOK(TIME)

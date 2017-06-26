@@ -117,7 +117,7 @@ void start_calcite_server_as_daemon(const int mapd_port,
   std::string localPortP = "-p";
   std::string localPortD = std::to_string(port);
   std::string mapdPortP = "-m";
-  std::string mapdPortD = "-1";
+  std::string mapdPortD = std::to_string(mapd_port);
 
   int pid = fork();
   if (pid == 0) {

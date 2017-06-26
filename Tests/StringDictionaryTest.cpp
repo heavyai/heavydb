@@ -39,7 +39,7 @@ TEST(StringDictionary, AddAndGet) {
 }
 
 TEST(StringDictionary, Recover) {
-  StringDictionary string_dict(BASE_PATH);
+  StringDictionary string_dict(BASE_PATH, false);
   auto id1 = string_dict.getOrAdd("baz");
   ASSERT_EQ(1, id1);
   auto id2 = string_dict.getOrAdd("baz");

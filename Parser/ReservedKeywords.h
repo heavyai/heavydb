@@ -315,6 +315,7 @@ static std::set<std::string> reserved_keywords{
     "SYSTEM_USER",
     "TABLE",
     "TABLESAMPLE",
+    "TEMPORARY",
     "THEN",
     "TIME",
     "TIMESTAMP",

@@ -875,8 +875,12 @@ class NameValueAssign : public Node {
  */
 class CreateTableStmt : public DDLStmt {
  public:
-  CreateTableStmt(std::string* tab, std::list<TableElement*>* table_elems, bool i, std::list<NameValueAssign*>* s)
-      : table(tab), if_not_exists(i) {
+  CreateTableStmt(std::string* tab,
+                  std::list<TableElement*>* table_elems,
+                  bool is_temporary,
+                  bool if_not_exists,
+                  std::list<NameValueAssign*>* s)
+      : table(tab), is_temporary_(is_temporary), if_not_exists_(if_not_exists) {
     CHECK(table_elems);
     for (const auto e : *table_elems) {
       table_element_list.emplace_back(e);
@@ -903,7 +907,8 @@ class CreateTableStmt : public DDLStmt {
 
   std::unique_ptr<std::string> table;
   std::list<std::unique_ptr<TableElement>> table_element_list;
-  bool if_not_exists;
+  bool is_temporary_;
+  bool if_not_exists_;
   std::list<std::unique_ptr<NameValueAssign>> storage_options;
 };
 
@@ -913,14 +918,15 @@ class CreateTableStmt : public DDLStmt {
  */
 class CreateTableAsSelectStmt : public DDLStmt {
  public:
-  CreateTableAsSelectStmt(const std::string& table_name, const std::string& select_query)
-      : table_name_(table_name), select_query_(select_query) {}
+  CreateTableAsSelectStmt(const std::string& table_name, const std::string& select_query, const bool is_temporary)
+      : table_name_(table_name), select_query_(select_query), is_temporary_(is_temporary) {}
 
   virtual void execute(const Catalog_Namespace::SessionInfo& session);
 
  private:
   const std::string table_name_;
   const std::string select_query_;
+  const bool is_temporary_;
 };
 
 /*

@@ -153,7 +153,9 @@ struct DBMetadata {
 #define MAPD_ROOT_USER_ID 0
 #define MAPD_ROOT_USER_ID_STR "0"
 #define MAPD_ROOT_PASSWD_DEFAULT "HyperInteractive"
-#define DEFAULT_INITIAL_VERSION 1  // start at version 1
+#define DEFAULT_INITIAL_VERSION 1            // start at version 1
+#define MAPD_TEMP_TABLE_START_ID 1073741824  // 2^30, give room for over a billion non-temp tables
+#define MAPD_TEMP_DICT_START_ID 1073741824   // 2^30, give room for over a billion non-temp dictionaries
 
 /**
  * @type Catalog
@@ -320,6 +322,8 @@ class Catalog {
   LogicalToPhysicalTableMapById logicalToPhysicalTableMapById_;
   int logicalTableDictId_;                         // logical table DictId (used for physical tables)
   static const std::string physicalTableNameTag_;  // extra component added to the name of each physical table
+  int nextTempTableId_;
+  int nextTempDictId_;
 };
 
 /*

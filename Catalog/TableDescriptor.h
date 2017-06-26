@@ -19,6 +19,7 @@
 
 #include <string>
 #include <cstdint>
+#include "../DataMgr/MemoryLevel.h"
 #include "../Shared/sqldefs.h"
 #include "../Fragmenter/AbstractFragmenter.h"
 
@@ -47,7 +48,13 @@ struct TableDescriptor {
       fragmenter;       // point to fragmenter object for the table.  it's instantiated upon first use.
   int32_t nShards;      // # of shards, i.e. physical tables for this logical table (default: 0)
   int shardedColumnId;  // Id of the column to be sharded on
-  TableDescriptor() : tableId(-1), shard(-1), nShards(0), shardedColumnId(0) {}
+  Data_Namespace::MemoryLevel persistenceLevel;
+  TableDescriptor()
+      : tableId(-1),
+        shard(-1),
+        nShards(0),
+        shardedColumnId(0),
+        persistenceLevel(Data_Namespace::MemoryLevel::DISK_LEVEL) {}
 };
 
 inline bool table_is_replicated(const TableDescriptor* td) {

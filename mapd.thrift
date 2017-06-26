@@ -72,7 +72,8 @@ struct TColumnType {
   1: string col_name,
   2: TTypeInfo col_type,
   3: bool is_reserved_keyword,
-  4: string src_name
+  4: string src_name,
+  5: bool is_system
 }
 
 struct TRow {
@@ -255,6 +256,7 @@ struct TTableDetails {
   5: string view_sql
   6: i64 shard_count
   7: string key_metainfo
+  8: bool is_temporary
 }
 
 enum TExpressionRangeType {

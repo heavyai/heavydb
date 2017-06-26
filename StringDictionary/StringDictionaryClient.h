@@ -27,7 +27,7 @@ class StringDictionaryClient {
  public:
   StringDictionaryClient(const LeafHostInfo& server_host, const int dict_id, const bool with_timeout) { CHECK(false); };
 
-  void create(const int32_t dict_id, const int32_t db_id) { CHECK(false); };
+  void create(const int32_t dict_id, const int32_t db_id, const bool is_temp) { CHECK(false); };
 
   void drop(const int32_t dict_id, const int32_t db_id) { CHECK(false); };
 

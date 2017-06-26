@@ -427,7 +427,7 @@ void BufferMgr::clearSlabs() {
     for (auto segIt = slabSegments_[slabNum].begin(); segIt != slabSegments_[slabNum].end(); ++segIt) {
       if (segIt->memStatus == FREE) {
         // no need to free
-      } else {
+      } else if (segIt->buffer->getPinCount() < 1) {
         deleteBuffer(segIt->chunkKey, true);
       }
     }
@@ -563,7 +563,6 @@ void BufferMgr::deleteBuffersWithPrefix(const ChunkKey& keyPrefix, const bool pu
          std::search(
              bufferIt->first.begin(), bufferIt->first.begin() + keyPrefix.size(), keyPrefix.begin(), keyPrefix.end()) !=
              bufferIt->first.begin() + keyPrefix.size()) {
-    // cout << "Before getting segIt" << endl;
     auto segIt = bufferIt->second;
     if (segIt->buffer) {
       delete segIt->buffer;  // Delete Buffer for segment
@@ -619,10 +618,28 @@ void BufferMgr::checkpoint() {
 }
 
 void BufferMgr::checkpoint(const int db_id, const int tb_id) {
-  /* Don't change original behavior of BufferMgr::checkpoint() api to support checkpoint() per
-   * table as it's not related to this feature. Redirect this call to the original proc instead.
-   */
-  checkpoint();
+  std::lock_guard<std::mutex> lock(globalMutex_);  // granular lock
+  ChunkKey keyPrefix;
+  keyPrefix.push_back(db_id);
+  keyPrefix.push_back(tb_id);
+  auto startChunkIt = chunkIndex_.lower_bound(keyPrefix);
+  if (startChunkIt == chunkIndex_.end()) {
+    return;
+  }
+
+  auto bufferIt = startChunkIt;
+  while (bufferIt != chunkIndex_.end() &&
+         std::search(
+             bufferIt->first.begin(), bufferIt->first.begin() + keyPrefix.size(), keyPrefix.begin(), keyPrefix.end()) !=
+             bufferIt->first.begin() + keyPrefix.size()) {
+    if (bufferIt->second->chunkKey[0] != -1 &&
+        bufferIt->second->buffer->isDirty_) {  // checks that buffer is actual chunk (not just buffer) and is dirty
+
+      parentMgr_->putBuffer(bufferIt->second->chunkKey, bufferIt->second->buffer);
+      bufferIt->second->buffer->clearDirtyBits();
+    }
+    bufferIt++;
+  }
 }
 
 /// Returns a pointer to the Buffer holding the chunk, if it exists; otherwise,
