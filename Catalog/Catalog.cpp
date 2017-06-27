@@ -677,7 +677,6 @@ void Catalog::removeTableFromMap(const string& tableName, int tableId) {
   tableDescriptorMap_.erase(to_upper(tableName));
   if (td->fragmenter != nullptr)
     delete td->fragmenter;
-  const bool is_logical_table = td->isLogicalTable;
   delete td;
 
   std::unique_ptr<StringDictionaryClient> client;
@@ -694,16 +693,14 @@ void Catalog::removeTableFromMap(const string& tableName, int tableId) {
     columnDescriptorMapById_.erase(colDescIt);
     ColumnKey cnameKey(tableId, to_upper(cd->columnName));
     columnDescriptorMap_.erase(cnameKey);
-    if (is_logical_table) {
-      if (cd->columnType.get_compression() == kENCODING_DICT) {
-        DictDescriptorMapById::iterator dictIt = dictDescriptorMapById_.find(cd->columnType.get_comp_param());
-        const auto& dd = dictIt->second;
-        boost::filesystem::remove_all(dd->dictFolderPath);
-        if (client) {
-          client->drop(dd->dictId, currentDB_.dbId);
-        }
-        dictDescriptorMapById_.erase(dictIt);
+    if (cd->columnType.get_compression() == kENCODING_DICT) {
+      DictDescriptorMapById::iterator dictIt = dictDescriptorMapById_.find(cd->columnType.get_comp_param());
+      const auto& dd = dictIt->second;
+      boost::filesystem::remove_all(dd->dictFolderPath);
+      if (client) {
+        client->drop(dd->dictId, currentDB_.dbId);
       }
+      dictDescriptorMapById_.erase(dictIt);
     }
     delete cd;
   }
