@@ -1092,13 +1092,11 @@ void Catalog::doDropTable(const TableDescriptor* td) {
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
     sqliteConnector_.query_with_text_param("DELETE FROM mapd_tables WHERE tableid = ?", std::to_string(tableId));
-    if (td->isLogicalTable) {
-      sqliteConnector_.query_with_text_params(
-          "DELETE FROM mapd_dictionaries WHERE dictid in (select comp_param from mapd_columns where compression = ? "
-          "and "
-          "tableid = ?)",
-          std::vector<std::string>{std::to_string(kENCODING_DICT), std::to_string(tableId)});
-    }
+    sqliteConnector_.query_with_text_params(
+        "DELETE FROM mapd_dictionaries WHERE dictid in (select comp_param from mapd_columns where compression = ? "
+        "and "
+        "tableid = ?)",
+        std::vector<std::string>{std::to_string(kENCODING_DICT), std::to_string(tableId)});
     sqliteConnector_.query_with_text_param("DELETE FROM mapd_columns WHERE tableid = ?", std::to_string(tableId));
     if (td->isView)
       sqliteConnector_.query_with_text_param("DELETE FROM mapd_views WHERE tableid = ?", std::to_string(tableId));
