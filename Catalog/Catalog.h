@@ -196,7 +196,7 @@ class Catalog {
    */
   virtual ~Catalog();
 
-  void createTable(TableDescriptor& td, const std::list<ColumnDescriptor>& columns, bool isPhysicalTable = true);
+  void createTable(TableDescriptor& td, const std::list<ColumnDescriptor>& columns, bool isPhysicalTable);
   void createShardedTable(TableDescriptor& td, const std::list<ColumnDescriptor>& columns);
   void createFrontendView(FrontendViewDescriptor& vd);
   std::string createLink(LinkDescriptor& ld, size_t min_length);
@@ -298,7 +298,6 @@ class Catalog {
   std::shared_ptr<Calcite> calciteMgr_;
 
   LogicalToPhysicalTableMapById logicalToPhysicalTableMapById_;
-  std::list<DictDescriptor> logicalTableDDS_;      // logical table DictDescriptor list (used for physical tables)
   int logicalTableDictId_;                         // logical table DictId (used for physical tables)
   static const std::string physicalTableNameTag_;  // extra component added to the name of each physical table
 };

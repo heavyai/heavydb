@@ -729,7 +729,12 @@ TColumnType MapDHandler::populateThriftColumnType(const Catalog_Namespace::Catal
   col_type.col_type.scale = cd->columnType.get_scale();
   if (cd->columnType.get_compression() == EncodingType::kENCODING_DICT && cat != nullptr) {
     // have to get the actual size of the encoding from the dictionary definition
-    auto dd = cat->getMetadataForDict(cd->columnType.get_comp_param(), false);
+    const int dict_id = cd->columnType.get_comp_param();
+    if (!cat->getMetadataForDict(dict_id)) {
+      col_type.col_type.comp_param = 0;
+      return col_type;
+    }
+    auto dd = cat->getMetadataForDict(dict_id, false);
     if (!dd) {
       TMapDException ex;
       ex.error_msg = "Dictionary doesn't exist";

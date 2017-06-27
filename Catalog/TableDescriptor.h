@@ -43,14 +43,10 @@ struct TableDescriptor {
   int64_t maxRows;                                // max number of rows in the table
   std::string partitions;                         // distributed partition scheme
   Fragmenter_Namespace::AbstractFragmenter*
-      fragmenter;                // point to fragmenter object for the table.  it's instantiated upon first use.
-  bool isIdentityBasedSharding;  // sharding based on: a) true  - column value based,
-                                 //                    b) false - round robin or murmur hash function based
-  bool isLogicalTable;           // true - logical table, false - physical table (default: false)
-  int32_t nShards;               // # of shards, i.e. physical tables for this logical table (default: 0)
-  int shardedColumnId;           // Id of the column to be sharded on
-  TableDescriptor()
-      : tableId(-1), shard(-1), isIdentityBasedSharding(true), isLogicalTable(false), nShards(0), shardedColumnId(0) {}
+      fragmenter;       // point to fragmenter object for the table.  it's instantiated upon first use.
+  int32_t nShards;      // # of shards, i.e. physical tables for this logical table (default: 0)
+  int shardedColumnId;  // Id of the column to be sharded on
+  TableDescriptor() : tableId(-1), shard(-1), nShards(0), shardedColumnId(0) {}
 };
 
 #endif  // TABLE_DESCRIPTOR

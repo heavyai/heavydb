@@ -474,14 +474,16 @@ void Catalog::updateLogicalToPhysicalTableMap(const int32_t logical_tb_id) {
 
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
-    LogicalToPhysicalTableMapById::iterator physicalTableIt = logicalToPhysicalTableMapById_.find(logical_tb_id);
-    CHECK(physicalTableIt != logicalToPhysicalTableMapById_.end());
-    std::vector<int32_t> physicalTables = physicalTableIt->second;
-    for (size_t i = 0; i < physicalTables.size(); i++) {
-      int32_t physical_tb_id = physicalTables[i];
-      sqliteConnector_.query_with_text_params(
-          "INSERT OR REPLACE INTO mapd_logical_to_physical (logical_table_id, physical_table_id) VALUES (?1, ?2)",
-          std::vector<std::string>{std::to_string(logical_tb_id), std::to_string(physical_tb_id)});
+    const auto physicalTableIt = logicalToPhysicalTableMapById_.find(logical_tb_id);
+    if (physicalTableIt != logicalToPhysicalTableMapById_.end()) {
+      const auto physicalTables = physicalTableIt->second;
+      CHECK(!physicalTables.empty());
+      for (size_t i = 0; i < physicalTables.size(); i++) {
+        int32_t physical_tb_id = physicalTables[i];
+        sqliteConnector_.query_with_text_params(
+            "INSERT OR REPLACE INTO mapd_logical_to_physical (logical_table_id, physical_table_id) VALUES (?1, ?2)",
+            std::vector<std::string>{std::to_string(logical_tb_id), std::to_string(physical_tb_id)});
+      }
     }
   } catch (std::exception& e) {
     sqliteConnector_.query("ROLLBACK TRANSACTION");
@@ -623,12 +625,13 @@ void Catalog::buildMaps() {
   for (size_t r = 0; r < numRows; ++r) {
     int32_t logical_tb_id = sqliteConnector_.getData<int>(r, 0);
     int32_t physical_tb_id = sqliteConnector_.getData<int>(r, 1);
-    LogicalToPhysicalTableMapById::iterator physicalTableIt = logicalToPhysicalTableMapById_.find(logical_tb_id);
+    const auto physicalTableIt = logicalToPhysicalTableMapById_.find(logical_tb_id);
     if (physicalTableIt == logicalToPhysicalTableMapById_.end()) {
       /* add new entity to the map logicalToPhysicalTableMapById_ */
       std::vector<int32_t> physicalTables;
       physicalTables.push_back(physical_tb_id);
-      logicalToPhysicalTableMapById_[logical_tb_id] = physicalTables;
+      const auto it_ok = logicalToPhysicalTableMapById_.emplace(logical_tb_id, physicalTables);
+      CHECK(it_ok.second);
     } else {
       /* update map logicalToPhysicalTableMapById_ */
       physicalTableIt->second.push_back(physical_tb_id);
@@ -657,6 +660,10 @@ void Catalog::addTableToMap(TableDescriptor& td,
     client.reset(new StringDictionaryClient(string_dict_hosts_.front(), -1, true));
   }
   for (auto dd : dicts) {
+    if (!dd.dictId) {
+      // Dummy entry created for a shard of a logical table, nothing to do.
+      continue;
+    }
     if (client) {
       client->create(dd.dictId, currentDB_.dbId);
     }
@@ -694,7 +701,13 @@ void Catalog::removeTableFromMap(const string& tableName, int tableId) {
     ColumnKey cnameKey(tableId, to_upper(cd->columnName));
     columnDescriptorMap_.erase(cnameKey);
     if (cd->columnType.get_compression() == kENCODING_DICT) {
-      DictDescriptorMapById::iterator dictIt = dictDescriptorMapById_.find(cd->columnType.get_comp_param());
+      const int dictId = cd->columnType.get_comp_param();
+      if (!dictId) {
+        // // Dummy entry created for a shard of a logical table, nothing to do.
+        continue;
+      }
+      const auto dictIt = dictDescriptorMapById_.find(dictId);
+      CHECK(dictIt != dictDescriptorMapById_.end());
       const auto& dd = dictIt->second;
       boost::filesystem::remove_all(dd->dictFolderPath);
       if (client) {
@@ -917,7 +930,6 @@ void Catalog::createTable(TableDescriptor& td, const list<ColumnDescriptor>& col
   columns.push_back(cd);
 
   td.nColumns = columns.size();
-  int dictId{0};
 
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
@@ -939,21 +951,16 @@ void Catalog::createTable(TableDescriptor& td, const list<ColumnDescriptor>& col
                                  std::to_string(td.shard),
                                  std::to_string(td.nShards)});
 
-    /* derive DictDescriptors and TableDictId of physical table based on it's corresponding logical table */
-    if (isPhysicalTable && !logicalTableDDS_.empty()) {
-      dds = logicalTableDDS_;
-      dictId = logicalTableDictId_;
-    }
-
     // now get the auto generated tableid
     sqliteConnector_.query_with_text_param("SELECT tableid FROM mapd_tables WHERE name = ?", td.tableName);
     td.tableId = sqliteConnector_.getData<int>(0, 0);
     int colId = 1;
     for (auto cd : columns) {
       if (cd.columnType.get_compression() == kENCODING_DICT) {
-        if (!isPhysicalTable || (isPhysicalTable && logicalTableDDS_.empty())) {
-          // std::string dictName = td.tableName + "_" + cd.columnName + "_dict";
-          std::string dictName = "Initial_key";
+        std::string dictName{"Initial_key"};
+        int dictId{0};
+        std::string folderPath;
+        if (!isPhysicalTable) {
           sqliteConnector_.query_with_text_params(
               "INSERT INTO mapd_dictionaries (name, nbits, is_shared) VALUES (?, ?, ?)",
               std::vector<std::string>{dictName, std::to_string(cd.columnType.get_comp_param()), "0"});
@@ -962,12 +969,11 @@ void Catalog::createTable(TableDescriptor& td, const list<ColumnDescriptor>& col
           dictName = td.tableName + "_" + cd.columnName + "_dict" + std::to_string(dictId);
           sqliteConnector_.query_with_text_param("UPDATE mapd_dictionaries SET name = ? WHERE name = 'Initial_key'",
                                                  dictName);
-          // std::string folderPath = basePath_ + "/mapd_data/" + currentDB_.dbName + "_" + dictName;
-          std::string folderPath =
+          folderPath =
               basePath_ + "/mapd_data/DB_" + std::to_string(currentDB_.dbId) + "_DICT_" + std::to_string(dictId);
-          DictDescriptor dd(dictId, dictName, cd.columnType.get_comp_param(), false, folderPath);
-          dds.push_back(dd);
         }
+        DictDescriptor dd(dictId, dictName, cd.columnType.get_comp_param(), false, folderPath);
+        dds.push_back(dd);
         if (!cd.columnType.is_array()) {
           cd.columnType.set_size(cd.columnType.get_comp_param() / 8);
         }
@@ -1005,30 +1011,17 @@ void Catalog::createTable(TableDescriptor& td, const list<ColumnDescriptor>& col
     throw;
   }
   sqliteConnector_.query("END TRANSACTION");
-  if (!isPhysicalTable) {
-    logicalTableDictId_ = dictId;
-    logicalTableDDS_ = dds;
-  }
   addTableToMap(td, cds, dds);
 }
 
 void Catalog::createShardedTable(TableDescriptor& td, const list<ColumnDescriptor>& cols) {
-  /* create table with no sharding, same as original flow */
-  if (!td.isLogicalTable) {
-    createTable(td, cols, true);
-    return;
-  }
-
-  /* error checks for sharding parameters' values */
-  if (td.isIdentityBasedSharding && (td.shardedColumnId == 0)) {
-    LOG(INFO) << "Column to be sharded on has not been defined for table " << td.tableName << " of database "
-              << currentDB_.dbName << ". Round robin sharding schema will be used.";
-    td.isIdentityBasedSharding = false;
+  if (td.nShards > 0 && (td.shardedColumnId <= 0 || static_cast<size_t>(td.shardedColumnId) > cols.size())) {
+    std::string error_message{"Invalid sharding column for table " + td.tableName + " of database " +
+                              currentDB_.dbName};
+    throw runtime_error(error_message);
   }
 
   /* create logical table */
-  logicalTableDDS_.clear();
-  logicalTableDictId_ = 0;
   TableDescriptor tdl(td);
   createTable(tdl, cols, false);  // create logical table
   int32_t logical_tb_id = tdl.tableId;
@@ -1038,7 +1031,6 @@ void Catalog::createShardedTable(TableDescriptor& td, const list<ColumnDescripto
   for (int32_t i = 1; i <= td.nShards; i++) {
     TableDescriptor tdp(td);
     tdp.tableName = generatePhysicalTableName(tdp.tableName, i);
-    tdp.isLogicalTable = false;
     tdp.shard = i - 1;
     createTable(tdp, cols, true);  // create physical table
     int32_t physical_tb_id = tdp.tableId;
@@ -1046,22 +1038,22 @@ void Catalog::createShardedTable(TableDescriptor& td, const list<ColumnDescripto
     /* add physical table to the vector of physical tables */
     physicalTables.push_back(physical_tb_id);
   }
-  /* add logical to physical tables correspondence to the map */
-  logicalToPhysicalTableMapById_[logical_tb_id] = physicalTables;
 
-  /* update sqlite mapd_logical_to_physical in sqlite database */
-  updateLogicalToPhysicalTableMap(logical_tb_id);
-
-  logicalTableDDS_.clear();
-  logicalTableDictId_ = 0;
+  if (!physicalTables.empty()) {
+    /* add logical to physical tables correspondence to the map */
+    const auto it_ok = logicalToPhysicalTableMapById_.emplace(logical_tb_id, physicalTables);
+    CHECK(it_ok.second);
+    /* update sqlite mapd_logical_to_physical in sqlite database */
+    updateLogicalToPhysicalTableMap(logical_tb_id);
+  }
 }
 
 void Catalog::dropTable(const TableDescriptor* td) {
-  if (td->isLogicalTable) {
+  const auto physicalTableIt = logicalToPhysicalTableMapById_.find(td->tableId);
+  if (physicalTableIt != logicalToPhysicalTableMapById_.end()) {
     // remove all corresponding physical tables if this is a logical table
-    LogicalToPhysicalTableMapById::iterator physicalTableIt = logicalToPhysicalTableMapById_.find(td->tableId);
-    CHECK(physicalTableIt != logicalToPhysicalTableMapById_.end());
-    std::vector<int32_t> physicalTables = physicalTableIt->second;
+    const auto physicalTables = physicalTableIt->second;
+    CHECK(!physicalTables.empty());
     for (size_t i = 0; i < physicalTables.size(); i++) {
       int32_t physical_tb_id = physicalTables[i];
       const TableDescriptor* phys_td = getMetadataForTable(physical_tb_id);
@@ -1143,11 +1135,11 @@ void Catalog::renamePhysicalTable(const TableDescriptor* td, const string& newTa
 }
 
 void Catalog::renameTable(const TableDescriptor* td, const string& newTableName) {
-  if (td->isLogicalTable) {
-    // rename all corresponding physical tables if this is a logical table
-    LogicalToPhysicalTableMapById::iterator physicalTableIt = logicalToPhysicalTableMapById_.find(td->tableId);
-    CHECK(physicalTableIt != logicalToPhysicalTableMapById_.end());
-    std::vector<int32_t> physicalTables = physicalTableIt->second;
+  // rename all corresponding physical tables if this is a logical table
+  const auto physicalTableIt = logicalToPhysicalTableMapById_.find(td->tableId);
+  if (physicalTableIt != logicalToPhysicalTableMapById_.end()) {
+    const auto physicalTables = physicalTableIt->second;
+    CHECK(!physicalTables.empty());
     for (size_t i = 0; i < physicalTables.size(); i++) {
       int32_t physical_tb_id = physicalTables[i];
       const TableDescriptor* phys_td = getMetadataForTable(physical_tb_id);
@@ -1265,18 +1257,14 @@ std::string Catalog::createLink(LinkDescriptor& ld, size_t min_length) {
 
 std::vector<const TableDescriptor*> Catalog::getPhysicalTablesDescriptors(
     const TableDescriptor* logicalTableDesc) const {
-  std::vector<const TableDescriptor*> physicalTables;
-  std::vector<int32_t> physicalTablesIds;
-
   const auto physicalTableIt = logicalToPhysicalTableMapById_.find(logicalTableDesc->tableId);
-
   if (physicalTableIt == logicalToPhysicalTableMapById_.end()) {
     return {logicalTableDesc};
   }
-  physicalTablesIds = physicalTableIt->second;
-  if (physicalTablesIds.empty()) {
-    return {logicalTableDesc};
-  }
+
+  const auto physicalTablesIds = physicalTableIt->second;
+  CHECK(!physicalTablesIds.empty());
+  std::vector<const TableDescriptor*> physicalTables;
   for (size_t i = 0; i < physicalTablesIds.size(); i++) {
     physicalTables.push_back(getMetadataForTable(physicalTablesIds[i]));
   }

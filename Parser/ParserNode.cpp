@@ -1782,7 +1782,6 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
       }
     }
   }
-  td.isLogicalTable = true;
   catalog.createShardedTable(td, columns);
 }
 
@@ -1917,7 +1916,7 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
   td.maxChunkSize = DEFAULT_MAX_CHUNK_SIZE;
   td.fragPageSize = DEFAULT_PAGE_SIZE;
   td.maxRows = DEFAULT_MAX_ROWS;
-  catalog.createTable(td, column_descriptors);
+  catalog.createTable(td, column_descriptors, false);
   if (result_rows.definitelyHasNoRows()) {
     return;
   }
@@ -2406,7 +2405,7 @@ void CreateViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   td.maxChunkSize = DEFAULT_MAX_CHUNK_SIZE;  // @todo this stuff should not be InsertOrderFragmenter
   td.fragPageSize = DEFAULT_PAGE_SIZE;
   td.maxRows = DEFAULT_MAX_ROWS;
-  catalog.createTable(td, {});
+  catalog.createTable(td, {}, false);
 }
 
 void DropViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
