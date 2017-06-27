@@ -196,7 +196,7 @@ class Catalog {
    */
   virtual ~Catalog();
 
-  void createTable(TableDescriptor& td, const std::list<ColumnDescriptor>& columns, bool isPhysicalTable);
+  void createTable(TableDescriptor& td, const std::list<ColumnDescriptor>& columns, bool isLogicalTable);
   void createShardedTable(TableDescriptor& td, const std::list<ColumnDescriptor>& columns);
   void createFrontendView(FrontendViewDescriptor& vd);
   std::string createLink(LinkDescriptor& ld, size_t min_length);

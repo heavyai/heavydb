@@ -905,7 +905,7 @@ list<const FrontendViewDescriptor*> Catalog::getAllFrontendViewMetadata() const 
   return view_list;
 }
 
-void Catalog::createTable(TableDescriptor& td, const list<ColumnDescriptor>& cols, bool isPhysicalTable) {
+void Catalog::createTable(TableDescriptor& td, const list<ColumnDescriptor>& cols, bool isLogicalTable) {
   list<ColumnDescriptor> cds;
   list<DictDescriptor> dds;
 
@@ -960,7 +960,7 @@ void Catalog::createTable(TableDescriptor& td, const list<ColumnDescriptor>& col
         std::string dictName{"Initial_key"};
         int dictId{0};
         std::string folderPath;
-        if (!isPhysicalTable) {
+        if (isLogicalTable) {
           sqliteConnector_.query_with_text_params(
               "INSERT INTO mapd_dictionaries (name, nbits, is_shared) VALUES (?, ?, ?)",
               std::vector<std::string>{dictName, std::to_string(cd.columnType.get_comp_param()), "0"});
@@ -1023,7 +1023,7 @@ void Catalog::createShardedTable(TableDescriptor& td, const list<ColumnDescripto
 
   /* create logical table */
   TableDescriptor tdl(td);
-  createTable(tdl, cols, false);  // create logical table
+  createTable(tdl, cols, true);  // create logical table
   int32_t logical_tb_id = tdl.tableId;
 
   /* create physical tables and link them to the logical table */
@@ -1032,7 +1032,7 @@ void Catalog::createShardedTable(TableDescriptor& td, const list<ColumnDescripto
     TableDescriptor tdp(td);
     tdp.tableName = generatePhysicalTableName(tdp.tableName, i);
     tdp.shard = i - 1;
-    createTable(tdp, cols, true);  // create physical table
+    createTable(tdp, cols, false);  // create physical table
     int32_t physical_tb_id = tdp.tableId;
 
     /* add physical table to the vector of physical tables */
