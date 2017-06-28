@@ -41,7 +41,10 @@ ExecutionResult RelAlgExecutor::executeRelAlgQuery(const std::string& query_ra,
   if (g_enable_dynamic_watchdog) {
     executor_->resetInterrupt();
   }
-  ScopeGuard row_set_holder = [this] { executor_->row_set_mem_owner_ = nullptr; };
+  ScopeGuard row_set_holder = [this] {
+    executor_->row_set_mem_owner_ = nullptr;
+    executor_->lit_str_dict_proxy_ = nullptr;
+  };
   executor_->row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>();
   executor_->catalog_ = &cat_;
   executor_->agg_col_range_cache_ = computeColRangesCache(ra.get());

@@ -2140,6 +2140,7 @@ void GroupByAndAggregate::addTransientStringLiterals(const RelAlgExecutionUnit& 
       }
     }
   }
+  row_set_mem_owner->addLiteralStringDictProxy(executor->lit_str_dict_proxy_);
 }
 
 CountDistinctDescriptors GroupByAndAggregate::initCountDistinctDescriptors() {

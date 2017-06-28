@@ -117,10 +117,9 @@ StringDictionaryProxy* Executor::getStringDictionaryProxy(const int dict_id_in,
   if (dd) {
     CHECK(dd->stringDict);
     CHECK_LE(dd->dictNBits, 32);
-    if (row_set_mem_owner) {
-      const auto generation = with_generation ? string_dictionary_generations_.getGeneration(dict_id) : ssize_t(-1);
-      return row_set_mem_owner->addStringDict(dd->stringDict, dict_id, generation);
-    }
+    CHECK(row_set_mem_owner);
+    const auto generation = with_generation ? string_dictionary_generations_.getGeneration(dict_id) : ssize_t(-1);
+    return row_set_mem_owner->addStringDict(dd->stringDict, dict_id, generation);
   }
   CHECK_EQ(0, dict_id);
   if (!lit_str_dict_proxy_) {

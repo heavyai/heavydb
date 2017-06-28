@@ -239,6 +239,11 @@ class RowSetMemoryOwner : boost::noncopyable {
     lit_str_dict_proxy_ = lit_str_dict_proxy;
   }
 
+  StringDictionaryProxy* getLiteralStringDictProxy() const {
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    return lit_str_dict_proxy_.get();
+  }
+
   void addColBuffer(const void* col_buffer) {
     std::lock_guard<std::mutex> lock(state_mutex_);
     col_buffers_.push_back(const_cast<void*>(col_buffer));
@@ -262,11 +267,6 @@ class RowSetMemoryOwner : boost::noncopyable {
 
     for (auto dict_proxy : str_dict_proxy_owned_) {
       delete dict_proxy.second;
-    }
-
-    if (lit_str_dict_proxy_) {
-      lit_str_dict_proxy_.reset();
-      lit_str_dict_proxy_ = nullptr;
     }
   }
 
