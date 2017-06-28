@@ -409,6 +409,15 @@ llvm::Value* Executor::codegenDiv(llvm::Value* lhs_lv,
                                                              {lhs_lv, scale_lv, ll_int(inline_int_null_val(ti))});
     }
   }
+  if (g_null_div_by_zero) {
+    llvm::Value* null_lv{nullptr};
+    if (ti.is_fp()) {
+      null_lv = ti.get_type() == kFLOAT ? ll_fp(NULL_FLOAT) : ll_fp(NULL_DOUBLE);
+    } else {
+      null_lv = ll_int(inline_int_null_val(ti));
+    }
+    return cgen_state_->emitCall("safe_div_" + numeric_type_name(ti), {lhs_lv, rhs_lv, null_lv});
+  }
   cgen_state_->needs_error_check_ = true;
   auto div_ok = llvm::BasicBlock::Create(cgen_state_->context_, "div_ok", cgen_state_->row_func_);
   auto div_zero = llvm::BasicBlock::Create(cgen_state_->context_, "div_zero", cgen_state_->row_func_);

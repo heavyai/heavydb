@@ -74,7 +74,12 @@ ExpressionRange ExpressionRange::operator/(const ExpressionRange& other) const {
     // taking the convex hull of the resulting two intervals
     return ExpressionRange::makeInvalidRange();
   }
-  return binOp<int64_t>(other, [](const int64_t x, const int64_t y) { return int64_t(checked_int64_t(x) / y); });
+  auto div_range =
+      binOp<int64_t>(other, [](const int64_t x, const int64_t y) { return int64_t(checked_int64_t(x) / y); });
+  if (g_null_div_by_zero) {
+    div_range.setHasNulls();
+  }
+  return div_range;
 }
 
 ExpressionRange ExpressionRange::operator||(const ExpressionRange& other) const {

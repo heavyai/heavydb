@@ -90,11 +90,20 @@
     return null_bool_val;                                                                     \
   }
 
+#define DEF_SAFE_DIV_NULLABLE(type, null_type, opname)                                                      \
+  extern "C" ALWAYS_INLINE type safe_div_##type(const type lhs, const type rhs, const null_type null_val) { \
+    if (lhs != null_val && rhs != null_val && rhs != 0) {                                                   \
+      return lhs / rhs;                                                                                     \
+    }                                                                                                       \
+    return null_val;                                                                                        \
+  }
+
 #define DEF_BINARY_NULLABLE_ALL_OPS(type, null_type) \
   DEF_ARITH_NULLABLE(type, null_type, add, +)        \
   DEF_ARITH_NULLABLE(type, null_type, sub, -)        \
   DEF_ARITH_NULLABLE(type, null_type, mul, *)        \
   DEF_ARITH_NULLABLE(type, null_type, div, /)        \
+  DEF_SAFE_DIV_NULLABLE(type, null_type, safe_div)   \
   DEF_ARITH_NULLABLE_LHS(type, null_type, add, +)    \
   DEF_ARITH_NULLABLE_LHS(type, null_type, sub, -)    \
   DEF_ARITH_NULLABLE_LHS(type, null_type, mul, *)    \
@@ -147,6 +156,7 @@ DEF_ARITH_NULLABLE_RHS(int32_t, int64_t, mod, %)
 DEF_ARITH_NULLABLE_RHS(int64_t, int64_t, mod, %)
 
 #undef DEF_BINARY_NULLABLE_ALL_OPS
+#undef DEF_SAFE_DIV_NULLABLE
 #undef DEF_CMP_NULLABLE_RHS
 #undef DEF_CMP_NULLABLE_LHS
 #undef DEF_CMP_NULLABLE

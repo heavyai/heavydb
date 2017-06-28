@@ -272,6 +272,9 @@ int main(int argc, char** argv) {
   desc.add_options()("num-gpus", po::value<int>(&num_gpus)->default_value(num_gpus), "Number of gpus to use");
   desc.add_options()("start-gpu", po::value<int>(&start_gpu)->default_value(start_gpu), "First gpu to use");
   desc.add_options()("version,v", "Print Release Version Number");
+  desc.add_options()("null-div-by-zero",
+                     po::value<bool>(&g_null_div_by_zero)->default_value(g_null_div_by_zero)->implicit_value(true),
+                     "Return null on division by zero instead of throwing an exception");
 
   po::options_description desc_adv("Advanced options");
   desc_adv.add_options()("help-advanced", "Print advanced help messages");

@@ -65,6 +65,7 @@ extern bool g_enable_dynamic_watchdog;
 extern unsigned g_dynamic_watchdog_time_limit;
 extern unsigned g_trivial_loop_join_threshold;
 extern bool g_allow_cpu_retry;
+extern bool g_null_div_by_zero;
 extern bool g_bigint_count;
 
 struct RenderInfo {
