@@ -109,7 +109,7 @@ download https://internal-dependencies.mapd.com/thirdparty/boost_1_62_0.tar.bz2
 extract boost_1_62_0.tar.bz2
 pushd boost_1_62_0
 ./bootstrap.sh --prefix=$PREFIX
-./b2 install --prefix=$PREFIX || true
+./b2 cxxflags=-fPIC install --prefix=$PREFIX || true
 popd
 
 # http://www.cmake.org/files/v3.7/cmake-3.7.2.tar.gz
