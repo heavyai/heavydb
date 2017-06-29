@@ -155,18 +155,17 @@ Contributed code should compile without generating warnings by recent compilers 
 
 MapD has the following dependencies:
 
-- [CMake 3.3+](https://cmake.org/)
-- [LLVM 3.8](http://llvm.org/)
-- [GCC 4.9+](http://gcc.gnu.org/): not required if building with Clang
-- [Boost 1.5.7+](http://www.boost.org/)
-- [Thrift 0.9.2+](https://thrift.apache.org/)
-- [bison++](https://code.google.com/p/flexpp-bisonpp/)
-- [Google glog](https://github.com/google/glog)
-- [Go 1.5+](https://golang.org/)
-- [OpenJDK](http://openjdk.java.net/)
-- [CUDA 7.0+](http://nvidia.com/cuda)
-- [gperftools](https://github.com/gperftools/gperftools)
-- [gdal](http://gdal.org/)
+| Package | Min Version | Required |
+| ------- | ----------- | -------- |
+| [CMake](https://cmake.org/) | 3.3 | yes |
+| [LLVM](http://llvm.org/) | 3.8 | yes |
+| [GCC](http://gcc.gnu.org/) | 4.9 | no, if building with clang |
+| [Boost](http://www.boost.org/) | 1.5.7 | yes |
+| [OpenJDK](http://openjdk.java.net/) | 1.7 | yes |
+| [CUDA](http://nvidia.com/cuda) | 7.5 | yes, if compiling with GPU support |
+| [gperftools](https://github.com/gperftools/gperftools) | | yes |
+| [gdal](http://gdal.org/) | | yes |
+| [Arrow](https://arrow.apache.org/) | 0.4.1 | no |
 
 Dependencies for `mapd_web_server` and other Go utils are in [`ThirdParty/go`](ThirdParty/go). See [`ThirdParty/go/src/mapd/vendor/README.md`](ThirdParty/go/src/mapd/vendor/README.md) for instructions on how to add new deps.
 
