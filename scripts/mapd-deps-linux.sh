@@ -262,7 +262,7 @@ download_make_install http://download.osgeo.org/proj/proj-4.9.3.tar.gz
 download_make_install http://download.osgeo.org/gdal/2.0.3/gdal-2.0.3.tar.xz "" "--without-curl --without-geos --with-libkml=$PREFIX --with-static-proj4=$PREFIX"
 
 # arrow
-VERS=0.3.0
+VERS=0.4.1
 download https://github.com/apache/arrow/archive/apache-arrow-$VERS.tar.gz
 extract apache-arrow-$VERS.tar.gz
 mkdir -p arrow-apache-arrow-$VERS/cpp/build
