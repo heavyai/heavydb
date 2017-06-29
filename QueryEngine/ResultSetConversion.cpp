@@ -26,11 +26,6 @@
 #include <errno.h>
 #include <string>
 
-#define MAPD_ARROW_VERSION (ARROW_VERSION_MAJOR * 10000 + ARROW_VERSION_MINOR * 100 + ARROW_VERSION_PATCH)
-#if MAPD_ARROW_VERSION != 401
-#error MapD only supports Apache Arrow release 0.4.1
-#endif
-
 #include "arrow/array.h"
 #include "arrow/builder.h"
 #include "arrow/buffer.h"
