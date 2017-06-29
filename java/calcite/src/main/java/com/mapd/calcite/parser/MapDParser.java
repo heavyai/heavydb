@@ -72,13 +72,15 @@ public final class MapDParser {
     private final String dataDir;
 
     private int callCount = 0;
+    private final int mapdPort;
 
-    public MapDParser(String dataDir, final Map<String, ExtensionFunction> extSigs) {
+    public MapDParser(String dataDir, final Map<String, ExtensionFunction> extSigs, int mapdPort) {
         System.setProperty("saffron.default.charset", ConversionUtil.NATIVE_UTF16_CHARSET_NAME);
         System.setProperty("saffron.default.nationalcharset", ConversionUtil.NATIVE_UTF16_CHARSET_NAME);
         System.setProperty("saffron.default.collation.name", ConversionUtil.NATIVE_UTF16_CHARSET_NAME + "$en_US");
         this.dataDir = dataDir;
         this.extSigs = extSigs;
+        this.mapdPort = mapdPort;
     }
 
     public class Expander implements RelOptTable.ViewExpander {
@@ -97,7 +99,7 @@ public final class MapDParser {
     public String getRelAlgebra(String sql, final boolean legacy_syntax, final MapDUser mapDUser, final boolean isExplain)
             throws SqlParseException {
         callCount++;
-        catalogReader = new MapDCatalogReader(new SqlTypeFactoryImpl(RelDataTypeSystem.DEFAULT), dataDir, this);
+        catalogReader = new MapDCatalogReader(new SqlTypeFactoryImpl(RelDataTypeSystem.DEFAULT), dataDir, this, mapdPort);
         catalogReader.setCurrentMapDUser(mapDUser);
         final RelRoot sqlRel = queryToSqlNode(sql, legacy_syntax);
         RelNode project = sqlRel.project();
@@ -611,7 +613,7 @@ public final class MapDParser {
 
     public void updateMetaData(String catalog, String table) {
         MAPDLOGGER.debug("catalog :" + catalog + " table :" + table);
-        catalogReader = new MapDCatalogReader(new SqlTypeFactoryImpl(RelDataTypeSystem.DEFAULT), dataDir, this);
+        catalogReader = new MapDCatalogReader(new SqlTypeFactoryImpl(RelDataTypeSystem.DEFAULT), dataDir, this, mapdPort);
         catalogReader.updateMetaData(catalog, table);
     }
 }

@@ -217,10 +217,8 @@ void run_warmup_queries(boost::shared_ptr<MapDHandler> handler, std::string base
 }
 
 int main(int argc, char** argv) {
-  int port = 9091;
   int http_port = 9090;
   size_t reserved_gpu_mem = 1 << 27;
-  int calcite_port = 9093;
   std::string base_path;
   std::string device("gpu");
   std::string config_file("mapd.conf");
@@ -261,7 +259,9 @@ int main(int argc, char** argv) {
   desc.add_options()("read-only",
                      po::value<bool>(&read_only)->default_value(read_only)->implicit_value(true),
                      "Enable read-only mode");
-  desc.add_options()("port,p", po::value<int>(&port)->default_value(port), "Port number");
+  desc.add_options()("port,p",
+                     po::value<int>(&mapd_parameters.mapd_server_port)->default_value(mapd_parameters.mapd_server_port),
+                     "Port number");
   desc.add_options()("http-port", po::value<int>(&http_port)->default_value(http_port), "HTTP port number");
   desc.add_options()("flush-log",
                      po::value<bool>(&flush_log)->default_value(flush_log)->implicit_value(true),
@@ -278,8 +278,9 @@ int main(int argc, char** argv) {
 
   po::options_description desc_adv("Advanced options");
   desc_adv.add_options()("help-advanced", "Print advanced help messages");
-  desc_adv.add_options()(
-      "calcite-port", po::value<int>(&calcite_port)->default_value(calcite_port), "Calcite port number");
+  desc_adv.add_options()("calcite-port",
+                         po::value<int>(&mapd_parameters.calcite_port)->default_value(mapd_parameters.calcite_port),
+                         "Calcite port number");
   desc_adv.add_options()("jit-debug",
                          po::value<bool>(&jit_debug)->default_value(jit_debug)->implicit_value(true),
                          "Enable debugger support for the JIT. The generated code can be found at /tmp/mapdquery");
@@ -521,6 +522,8 @@ int main(int argc, char** argv) {
   LOG(INFO) << " cuda block size " << mapd_parameters.cuda_block_size;
   LOG(INFO) << " cuda grid size  " << mapd_parameters.cuda_grid_size;
   LOG(INFO) << " calcite JVM max memory  " << mapd_parameters.calcite_max_mem;
+  LOG(INFO) << " MapD Server Port  " << mapd_parameters.mapd_server_port;
+  LOG(INFO) << " MapD Calcite Port  " << mapd_parameters.calcite_port;
 
   // extract and validate value of the epoch to rollback to for the table if requested
   bool is_decr_start_epoch = false;
@@ -597,7 +600,6 @@ int main(int argc, char** argv) {
                                                   ldapMetadata,
                                                   mapd_parameters,
                                                   db_convert_dir,
-                                                  calcite_port,
                                                   enable_legacy_syntax));
 
   if (mapd_parameters.ha_group_id.empty()) {
@@ -606,7 +608,7 @@ int main(int argc, char** argv) {
     shared_ptr<ThreadManager> threadManager = ThreadManager::newSimpleThreadManager(tthreadpool_size);
     threadManager->threadFactory(make_shared<PlatformThreadFactory>());
     threadManager->start();
-    shared_ptr<TServerTransport> bufServerTransport(new TServerSocket(port));
+    shared_ptr<TServerTransport> bufServerTransport(new TServerSocket(mapd_parameters.mapd_server_port));
 
     shared_ptr<TTransportFactory> bufTransportFactory(new TBufferedTransportFactory());
     shared_ptr<TProtocolFactory> bufProtocolFactory(new TBinaryProtocolFactory());

@@ -73,7 +73,7 @@ class SQLTestEnv : public ::testing::Environment {
     auto data_dir = base_path / "mapd_data";
     UserMetadata user;
     DBMetadata db;
-    auto calcite = std::make_shared<Calcite>(CALCITEPORT, data_dir.string(), 1024);
+    auto calcite = std::make_shared<Calcite>(-1, CALCITEPORT, data_dir.string(), 1024);
     auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), 0, false, 0);
     // if no catalog create one
     if (!boost::filesystem::exists(system_db_file)) {

@@ -20,7 +20,6 @@ import static java.lang.System.exit;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Properties;
-import java.util.logging.Level;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.DefaultParser;
@@ -54,6 +53,12 @@ public class CalciteServerCaller {
             .longOpt("port")
             .build();
 
+    Option mapdPort = Option.builder("m")
+            .hasArg()
+            .desc("mapd port number")
+            .longOpt("mapd_port")
+            .build();
+
     Option data = Option.builder("d")
             .hasArg()
             .desc("data directory")
@@ -70,6 +75,7 @@ public class CalciteServerCaller {
     options.addOption(port);
     options.addOption(data);
     options.addOption(extensions);
+    options.addOption(mapdPort);
 
     CommandLineParser parser = new DefaultParser();
 
@@ -82,6 +88,7 @@ public class CalciteServerCaller {
     }
 
     int portNum = Integer.valueOf(cmd.getOptionValue("port", "9093"));
+    int mapdPortNum = Integer.valueOf(cmd.getOptionValue("mapd_port", "9091"));
     String dataDir = cmd.getOptionValue("data", "data");
     String extensionsDir = cmd.getOptionValue("extensions", "build/QueryEngine");
     final Path extensionFunctionsAstFile = Paths.get(extensionsDir, "ExtensionFunctions.ast");
@@ -96,7 +103,7 @@ public class CalciteServerCaller {
     p.put("log.dir", dataDir); // overwrite "log.dir"
     PropertyConfigurator.configure(p);
 
-    calciteServerWrapper = new CalciteServerWrapper(portNum, -1, dataDir, extensionFunctionsAstFile.toString());
+    calciteServerWrapper = new CalciteServerWrapper(portNum, mapdPortNum, dataDir, extensionFunctionsAstFile.toString());
 
     while (true) {
       try {

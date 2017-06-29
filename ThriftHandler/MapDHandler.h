@@ -114,7 +114,6 @@ class MapDHandler : public MapDIf {
               const LdapMetadata ldapMetadata,
               const MapDParameters& mapd_parameters,
               const std::string& db_convert_dir,
-              const int calcite_port,
               const bool legacy_syntax);
 
   ~MapDHandler();

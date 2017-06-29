@@ -100,10 +100,15 @@ void Calcite::runJNI(const int port, const std::string& data_dir, const size_t c
   CHECK(getTextMID_);
 }
 
-void start_calcite_server_as_daemon(const int port, const std::string& data_dir, const size_t calcite_max_mem) {
+void start_calcite_server_as_daemon(const int mapd_port,
+                                    const int port,
+                                    const std::string& data_dir,
+                                    const size_t calcite_max_mem) {
   std::string cmd = "java -Xmx" + std::to_string(calcite_max_mem) + "m -jar " + mapd_root_abs_path() +
                     "/bin/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar -d " + data_dir + " -e " + mapd_root_abs_path() +
-                    "/QueryEngine/ -p " + std::to_string(port);
+                    // disable calling mapd server for metadata for now
+                    //"/QueryEngine/ -p " + std::to_string(port) + " -m " + std::to_string(mapd_port);
+                    "/QueryEngine/ -p " + std::to_string(port) + " -m -1";
   CHECK_GE(system(cmd.c_str()), 0);
 }
 
@@ -124,11 +129,14 @@ std::pair<boost::shared_ptr<CalciteServerClient>, boost::shared_ptr<TTransport>>
   return std::make_pair(client, transport);
 }
 
-void Calcite::runServer(const int port, const std::string& data_dir, const size_t calcite_max_mem) {
+void Calcite::runServer(const int mapd_port,
+                        const int port,
+                        const std::string& data_dir,
+                        const size_t calcite_max_mem) {
   LOG(INFO) << "Running calcite server as a daemon";
 
   // start the server in a thread
-  std::thread t(start_calcite_server_as_daemon, port, data_dir, calcite_max_mem);
+  std::thread t(start_calcite_server_as_daemon, mapd_port, port, data_dir, calcite_max_mem);
   calcite_server_thread_ = move(t);
   calcite_server_thread_.detach();
 
@@ -156,11 +164,11 @@ void Calcite::runServer(const int port, const std::string& data_dir, const size_
   }
 }
 
-Calcite::Calcite(const int port, const std::string& data_dir, const size_t calcite_max_mem)
+Calcite::Calcite(const int mapd_port, const int port, const std::string& data_dir, const size_t calcite_max_mem)
     : server_available_(false), jni_(true), jvm_(NULL) {
   LOG(INFO) << "Creating Calcite Handler,  Calcite Port is " << port << " base data dir is " << data_dir;
   if (port == -1) {
-    runJNI(port, data_dir, calcite_max_mem);
+    runJNI(mapd_port, data_dir, calcite_max_mem);
     jni_ = true;
     server_available_ = false;
     return;
@@ -172,7 +180,7 @@ Calcite::Calcite(const int port, const std::string& data_dir, const size_t calci
     jni_ = false;
   } else {
     remote_calcite_port_ = port;
-    runServer(port, data_dir, calcite_max_mem);
+    runServer(mapd_port, port, data_dir, calcite_max_mem);
     server_available_ = true;
     jni_ = false;
   }
@@ -232,7 +240,7 @@ void Calcite::updateMetadata(string catalog, string table) {
 }
 
 string Calcite::process(string user,
-                        string passwd,
+                        string session,
                         string catalog,
                         string sql_string,
                         const bool legacy_syntax,
@@ -246,7 +254,7 @@ string Calcite::process(string user,
       process_result = env->CallObjectMethod(calciteDirectObject_,
                                              processMID_,
                                              env->NewStringUTF(user.c_str()),
-                                             env->NewStringUTF(passwd.c_str()),
+                                             env->NewStringUTF(session.c_str()),
                                              env->NewStringUTF(catalog.c_str()),
                                              env->NewStringUTF(sql_string.c_str()),
                                              legacy,
@@ -273,7 +281,7 @@ string Calcite::process(string user,
 
           std::pair<boost::shared_ptr<CalciteServerClient>, boost::shared_ptr<TTransport>> clientP =
               get_client(remote_calcite_port_);
-          clientP.first->process(ret, user, passwd, catalog, sql_string, legacy_syntax, is_explain);
+          clientP.first->process(ret, user, session, catalog, sql_string, legacy_syntax, is_explain);
           clientP.second->close();
         });
 

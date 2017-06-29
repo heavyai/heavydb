@@ -39,7 +39,7 @@ Catalog_Namespace::SessionInfo* get_session(const char* db_path) {
   auto data_dir = base_path / "mapd_data";
   Catalog_Namespace::UserMetadata user;
   Catalog_Namespace::DBMetadata db;
-  auto calcite = std::make_shared<Calcite>(CALCITEPORT, db_path, 1024);
+  auto calcite = std::make_shared<Calcite>(-1, CALCITEPORT, db_path, 1024);
   ExtensionFunctionsWhitelist::add(calcite->getExtensionFunctionWhitelist());
 #ifdef HAVE_CUDA
   bool useGpus = true;
@@ -94,7 +94,7 @@ Planner::RootPlan* parse_plan_calcite(const std::string& query_str,
   const auto& cat = session->get_catalog();
   auto& calcite_mgr = cat.get_calciteMgr();
   const auto query_ra = calcite_mgr.process(session->get_currentUser().userName,
-                                            session->get_currentUser().passwd,
+                                            session->get_session_id(),
                                             cat.get_currentDB().dbName,
                                             pg_shim(query_str),
                                             true,
@@ -124,7 +124,7 @@ ResultRows run_multiple_agg(const std::string& query_str,
     ExecutionOptions eo = {false, true, false, allow_loop_joins, false, false, false, false, 10000};
     auto& calcite_mgr = cat.get_calciteMgr();
     const auto query_ra = calcite_mgr.process(session->get_currentUser().userName,
-                                              session->get_currentUser().passwd,
+                                              session->get_session_id(),
                                               cat.get_currentDB().dbName,
                                               pg_shim(query_str),
                                               true,

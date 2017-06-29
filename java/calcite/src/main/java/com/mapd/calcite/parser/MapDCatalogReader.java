@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package com.mapd.calcite.parser;
 
 import org.apache.calcite.plan.RelOptPlanner;
@@ -43,6 +42,7 @@ import com.mapd.metadata.MetaConnect;
 import com.mapd.thrift.server.TColumnType;
 import com.mapd.thrift.server.TDatumType;
 import com.mapd.thrift.server.TTypeInfo;
+import com.mapd.thrift.server.TTableDetails;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -69,11 +69,11 @@ public class MapDCatalogReader implements Prepare.CatalogReader {
   protected final RelDataTypeFactory typeFactory;
   private final boolean elideRecord = true;
   private RelDataType addressType;
-  private boolean caseSensitive = false;
-//  private final EnumMap<TDatumType, ArrayList<ArrayList<RelDataType>>> mapDTypes;
+  private final boolean caseSensitive = false;
   private MapDUser currentMapDUser;
   private final String dataDir;
   private final MapDParser parser;
+  private final int mapdPort;
 
   //~ Constructors -----------------------------------------------------------
   /**
@@ -86,41 +86,21 @@ public class MapDCatalogReader implements Prepare.CatalogReader {
    * @param dataDir directory containing the mapd data
    *
    */
-  public MapDCatalogReader(RelDataTypeFactory typeFactory, String dataDir, final MapDParser parser) {
+  public MapDCatalogReader(RelDataTypeFactory typeFactory, String dataDir, final MapDParser parser, int mapdPort) {
     this.typeFactory = typeFactory;
     this.dataDir = dataDir;
     this.parser = parser;
-
-//    // add all the MapD datatype into this structure
-//    // it is indexed with the TDatumType,  isArray , isNullable
-//    mapDTypes = new EnumMap<TDatumType, ArrayList<ArrayList<RelDataType>>>(TDatumType.class);
-//
-//    for (TDatumType dType : TDatumType.values()) {
-//      RelDataType cType = getRelDataType(dType, value.col_type.precision, value.col_type.scale);
-//      ArrayList<ArrayList<RelDataType>> nullList = new ArrayList<ArrayList<RelDataType>>(2);
-//      for (int nullable = 0; nullable < 2; nullable++) {
-//        ArrayList<RelDataType> arrayList = new ArrayList<RelDataType>(2);
-//        if (nullable == 0) {
-//          arrayList.add(0, cType);                                              // regular type
-//          arrayList.add(1, typeFactory.createArrayType(cType, -1));             // Array type
-//        } else {
-//          arrayList.add(0, typeFactory.createTypeWithNullability(cType, true)); // regular type nullable
-//          arrayList.add(1, typeFactory.createArrayType(arrayList.get(0), -1));  // Array type nullable
-//        }
-//        nullList.add(nullable, arrayList);
-//      }
-//      mapDTypes.put(dType, nullList);
-//    }
+    this.mapdPort = mapdPort;
 
     addDefaultTestSchemas();
   }
 
   private MapDTable getTableData(String tableName) {
 
-    MetaConnect metaConnect = new MetaConnect(dataDir, currentMapDUser.getDB());
-    metaConnect.connectToDBCatalog();
+    MetaConnect metaConnect = new MetaConnect(mapdPort, dataDir, currentMapDUser);
+
     // Now get tables column details
-    Map<String, TColumnType> tableDescriptor = metaConnect.getTableDescriptor(tableName);
+    TTableDetails tableDescriptor = metaConnect.get_table_details(tableName);
 
     // get database
     MapDDatabase db = MAPD_DATABASE.get(currentMapDUser.getDB());
@@ -134,41 +114,31 @@ public class MapDCatalogReader implements Prepare.CatalogReader {
     MAPDLOGGER.debug("Database is " + currentMapDUser.getDB());
 
     MAPDLOGGER.debug("\t table  is " + tableName);
-    MapDTable mtable = null;
+    MapDTable mtable;
 
-    final boolean isView = metaConnect.isView(tableName);
-    if (isView) {
-      mtable = new MapDView(this, db.getCatalogName(), db.getSchemaName(), tableName,
-              false, metaConnect.getViewSql(tableName), parser);
-    } else {
+    if (tableDescriptor.getView_sql() == null || tableDescriptor.getView_sql().isEmpty()) {
+      MAPDLOGGER.debug("Processing a table");
       mtable = MapDTable.create(this, db, tableName, false);
+    } else {
+      MAPDLOGGER.debug("Processing a view");
+      mtable = new MapDView(this, db.getCatalogName(), db.getSchemaName(), tableName,
+              false, tableDescriptor.getView_sql(), parser);
     }
 
     // if we have a table descriptor from mapd server
-    if (tableDescriptor != null) {
-      for (Map.Entry<String, TColumnType> entry : tableDescriptor.entrySet()) {
-        TColumnType value = entry.getValue();
-        MAPDLOGGER.debug("'" + entry.getKey() + "'"
-                + " \t" + value.getCol_type().getEncoding()
-                + " \t" + value.getCol_type().getFieldValue(TTypeInfo._Fields.TYPE)
-                + " \t" + value.getCol_type().nullable
-                + " \t" + value.getCol_type().is_array
-                + " \t" + value.getCol_type().precision
-                + " \t" + value.getCol_type().scale
-        );
+    for (TColumnType value : tableDescriptor.getRow_desc()) {
+      MAPDLOGGER.debug("'" + value.col_name + "'"
+              + " \t" + value.getCol_type().getEncoding()
+              + " \t" + value.getCol_type().getFieldValue(TTypeInfo._Fields.TYPE)
+              + " \t" + value.getCol_type().nullable
+              + " \t" + value.getCol_type().is_array
+              + " \t" + value.getCol_type().precision
+              + " \t" + value.getCol_type().scale
+      );
 
-        mtable.addColumn(entry.getKey(), createType(value));
-
-//        mtable.addColumn(entry.getKey(), mapDTypes.get(value.getCol_type().type)
- //               .get(value.getCol_type().nullable ? 1 : 0)
-  //              .get(value.getCol_type().is_array ? 1 : 0));
-
-      }
-      registerTable(mtable);
-    } else {
-      // no table in MapD server schema
-      mtable = null;
+      mtable.addColumn(value.col_name, createType(value));
     }
+    registerTable(mtable);
     return mtable;
   }
 
@@ -552,15 +522,15 @@ public class MapDCatalogReader implements Prepare.CatalogReader {
         //Drop db and all tables
         // iterate through all and remove matching schema
         for (List<String> keys : MAPD_TABLES.keySet()) {
-          if (keys.get(1).equals(schema.toUpperCase())){
-            MAPDLOGGER.debug("removing schema "+ keys.get(1)+ " table " +keys.get(2));
+          if (keys.get(1).equals(schema.toUpperCase())) {
+            MAPDLOGGER.debug("removing schema " + keys.get(1) + " table " + keys.get(2));
             MAPD_TABLES.remove(ImmutableList.of(DEFAULT_CATALOG, keys.get(1), keys.get(2)));
           }
         }
-         MAPDLOGGER.debug("removing schema "+ schema);
+        MAPDLOGGER.debug("removing schema " + schema);
         MAPD_DATABASE.remove(schema.toUpperCase());
       } else {
-         MAPDLOGGER.debug("removing schema "+ schema.toUpperCase() + " table " + table.toUpperCase());
+        MAPDLOGGER.debug("removing schema " + schema.toUpperCase() + " table " + table.toUpperCase());
         MAPD_TABLES.remove(ImmutableList.of(DEFAULT_CATALOG, schema.toUpperCase(), table.toUpperCase()));
       }
     }
@@ -568,18 +538,16 @@ public class MapDCatalogReader implements Prepare.CatalogReader {
 
   private RelDataType createType(TColumnType value) {
     RelDataType cType = getRelDataType(value.col_type.type, value.col_type.precision, value.col_type.scale);
-    if (value.col_type.is_array){
-      if (value.col_type.isNullable()){
+    if (value.col_type.is_array) {
+      if (value.col_type.isNullable()) {
         return typeFactory.createArrayType(typeFactory.createTypeWithNullability(cType, true), -1);
       } else {
         return typeFactory.createArrayType(cType, -1);
       }
+    } else if (value.col_type.isNullable()) {
+      return typeFactory.createTypeWithNullability(cType, true);
     } else {
-      if (value.col_type.isNullable()){
-        return typeFactory.createTypeWithNullability(cType, true);
-      } else {
-       return  cType;
-      }
+      return cType;
     }
   }
 }

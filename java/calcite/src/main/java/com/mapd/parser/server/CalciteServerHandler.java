@@ -40,7 +40,7 @@ class CalciteServerHandler implements CalciteServer.Iface {
   final static Logger MAPDLOGGER = LoggerFactory.getLogger(CalciteServerHandler.class);
   private TServer server;
 
-  private final int mapDPort;
+  private final int mapdPort;
 
   private volatile long callCount;
 
@@ -50,9 +50,9 @@ class CalciteServerHandler implements CalciteServer.Iface {
 
   //TODO MAT we need to merge this into common code base for these funictions with
   // CalciteDirect since we are not deprecating this stuff yet
-  CalciteServerHandler(int mapDPort, String dataDir, String extensionFunctionsAstFile) {
+  CalciteServerHandler(int mapdPort, String dataDir, String extensionFunctionsAstFile) {
     this.parserPool = new GenericObjectPool();
-    this.mapDPort = mapDPort;
+    this.mapdPort = mapdPort;
 
     Map<String, ExtensionFunction> extSigs = null;
     try {
@@ -62,7 +62,7 @@ class CalciteServerHandler implements CalciteServer.Iface {
     }
     this.extSigsJson = ExtensionFunctionSignatureParser.signaturesToJson(extSigs);
 
-    PoolableObjectFactory parserFactory = new CalciteParserFactory(dataDir, extSigs);
+    PoolableObjectFactory parserFactory = new CalciteParserFactory(dataDir, extSigs, mapdPort);
 
     parserPool.setFactory(parserFactory);
   }
@@ -73,7 +73,7 @@ class CalciteServerHandler implements CalciteServer.Iface {
   }
 
   @Override
-  public TPlanResult process(String user, String passwd, String catalog, String sqlText, boolean legacySyntax, boolean isExplain) throws InvalidParseRequest, TException {
+  public TPlanResult process(String user, String session, String catalog, String sqlText, boolean legacySyntax, boolean isExplain) throws InvalidParseRequest, TException {
     long timer = System.currentTimeMillis();
     callCount++;
     MapDParser parser;
@@ -84,7 +84,7 @@ class CalciteServerHandler implements CalciteServer.Iface {
       MAPDLOGGER.error(msg);
       throw new InvalidParseRequest(-1, msg);
     }
-    MapDUser mapDUser = new MapDUser(user, passwd, catalog, mapDPort);
+    MapDUser mapDUser = new MapDUser(user, session, catalog, mapdPort);
     MAPDLOGGER.debug("process was called User: " + user + " Catalog: " + catalog + " sql: " + sqlText);
 
     // remove last charcter if it is a ;
@@ -122,7 +122,7 @@ class CalciteServerHandler implements CalciteServer.Iface {
   @Override
   public void shutdown() throws TException {
     // received request to shutdown
-    MAPDLOGGER.error("Shutdown calcite java server");
+    MAPDLOGGER.debug("Shutdown calcite java server");
     server.stop();
   }
 

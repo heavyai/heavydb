@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package com.mapd.parser.server;
 
 import java.util.Map;
@@ -28,19 +27,22 @@ import org.slf4j.LoggerFactory;
  * @author michael
  */
 class CalciteParserFactory implements PoolableObjectFactory {
+
   final static Logger MAPDLOGGER = LoggerFactory.getLogger(CalciteParserFactory.class);
 
   private final String dataDir;
   private final Map<String, ExtensionFunction> extSigs;
+  private final int mapdPort;
 
-  public CalciteParserFactory(String dataDir, final Map<String, ExtensionFunction> extSigs) {
+  public CalciteParserFactory(String dataDir, final Map<String, ExtensionFunction> extSigs, int mapdPort) {
     this.dataDir = dataDir;
     this.extSigs = extSigs;
+    this.mapdPort = mapdPort;
   }
 
   @Override
   public Object makeObject() throws Exception {
-    MapDParser obj = new MapDParser(dataDir, extSigs);
+    MapDParser obj = new MapDParser(dataDir, extSigs, mapdPort);
     return obj;
   }
 
@@ -51,7 +53,7 @@ class CalciteParserFactory implements PoolableObjectFactory {
 
   @Override
   public boolean validateObject(Object obj) {
-    MapDParser mdp = (MapDParser)obj;
+    MapDParser mdp = (MapDParser) obj;
     if (mdp.getCallCount() < 1000) {
       return true;
     } else {

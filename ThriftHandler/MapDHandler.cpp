@@ -127,7 +127,6 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
                          const LdapMetadata ldapMetadata,
                          const MapDParameters& mapd_parameters,
                          const std::string& db_convert_dir,
-                         const int calcite_port,
                          const bool legacy_syntax)
     : leaf_aggregator_(db_leaves),
       string_leaves_(string_leaves),
@@ -176,7 +175,10 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
                                               start_gpu,
                                               total_reserved,
                                               num_reader_threads));
-  calcite_.reset(new Calcite(calcite_port, base_data_path_, mapd_parameters_.calcite_max_mem));
+  calcite_.reset(new Calcite(mapd_parameters.mapd_server_port,
+                             mapd_parameters.calcite_port,
+                             base_data_path_,
+                             mapd_parameters_.calcite_max_mem));
   ExtensionFunctionsWhitelist::add(calcite_->getExtensionFunctionWhitelist());
 
   if (!data_mgr_->gpusPresent()) {
@@ -737,7 +739,7 @@ void MapDHandler::get_table_details(TTableDetails& _return, const TSessionId& se
   auto td = cat.getMetadataForTable(table_name);
   if (!td) {
     TMapDException ex;
-    ex.error_msg = "Table doesn't exist";
+    ex.error_msg = "Table " + table_name + " doesn't exist";
     LOG(ERROR) << ex.error_msg;
     throw ex;
   }
@@ -2029,7 +2031,7 @@ Planner::RootPlan* MapDHandler::parse_to_plan(const std::string& query_str,
   if (!pw.is_ddl && !pw.is_update_dml && !pw.is_other_explain) {
     const std::string actual_query{pw.is_select_explain || pw.is_select_calcite_explain ? pw.actual_query : query_str};
     const auto query_ra = calcite_->process(session_info.get_currentUser().userName,
-                                            session_info.get_currentUser().passwd,
+                                            session_info.get_session_id(),
                                             cat.get_currentDB().dbName,
                                             legacy_syntax_ ? pg_shim(actual_query) : actual_query,
                                             legacy_syntax_,
@@ -2050,7 +2052,7 @@ std::string MapDHandler::parse_to_ra(const std::string& query_str, const Catalog
   auto& cat = session_info.get_catalog();
   if (!pw.is_ddl && !pw.is_update_dml && !pw.is_other_explain) {
     return calcite_->process(session_info.get_currentUser().userName,
-                             session_info.get_currentUser().passwd,
+                             session_info.get_session_id(),
                              cat.get_currentDB().dbName,
                              legacy_syntax_ ? pg_shim(actual_query) : actual_query,
                              legacy_syntax_,

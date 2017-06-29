@@ -33,7 +33,7 @@
 
 class Calcite {
  public:
-  Calcite(const int port, const std::string& data_dir, const size_t calcite_max_mem);
+  Calcite(const int mapd_port, const int port, const std::string& data_dir, const size_t calcite_max_mem);
   std::string process(std::string user,
                       std::string passwd,
                       std::string catalog,
@@ -46,7 +46,7 @@ class Calcite {
 
  private:
   void runJNI(const int port, const std::string& data_dir, const size_t calcite_max_memory);
-  void runServer(const int port, const std::string& data_dir, const size_t calcite_max_memory);
+  void runServer(const int mapd_port, const int port, const std::string& data_dir, const size_t calcite_max_mem);
 
   std::thread calcite_server_thread_;
   std::string handle_java_return(JNIEnv* env, jobject process_result);
