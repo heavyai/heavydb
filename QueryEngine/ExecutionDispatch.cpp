@@ -487,6 +487,10 @@ void Executor::ExecutionDispatch::run(const ExecutorDeviceType chosen_device_typ
     std::lock_guard<std::mutex> lock(reduce_mutex_);
     LOG(ERROR) << e.what();
     *error_code_ = ERR_OUT_OF_CPU_MEM;
+  } catch (const OutOfHostMemory& e) {
+    std::lock_guard<std::mutex> lock(reduce_mutex_);
+    LOG(ERROR) << e.what();
+    *error_code_ = ERR_OUT_OF_CPU_MEM;
   } catch (const OutOfMemory& e) {
     std::lock_guard<std::mutex> lock(reduce_mutex_);
     LOG(ERROR) << e.what();
