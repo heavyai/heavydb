@@ -103,7 +103,7 @@ using namespace Parser;
 %token GRANT GROUP HAVING IF ILIKE IN INSERT INTEGER INTO
 %token IS LANGUAGE LAST LENGTH LIKE LIMIT MOD NOW NULLX NUMERIC OF OFFSET ON OPEN OPTION
 %token ORDER PARAMETER PRECISION PRIMARY PRIVILEGES PROCEDURE
-%token PUBLIC REAL REFERENCES RENAME ROLLBACK SCHEMA SELECT SET SHARED SHOW
+%token PUBLIC REAL REFERENCES RENAME ROLLBACK SCHEMA SELECT SET SHARD SHARED SHOW
 %token SMALLINT SOME TABLE TEXT THEN TIME TIMESTAMP TO UNION
 %token UNIQUE UPDATE USER VALUES VIEW WHEN WHENEVER WHERE WITH WORK
 
@@ -345,6 +345,12 @@ table_constraint_def:
     if (!boost::iequals(*$<stringval>2, "key"))
       throw std::runtime_error("Syntax error at " + *$<stringval>2);
     $<nodeval>$ = new ForeignKeyDef($<slistval>4, $<stringval>7, $<slistval>9);   }
+	|	SHARD NAME '(' column ')'
+	{
+	if (!boost::iequals(*$<stringval>2, "key"))
+	  throw std::runtime_error("Syntax error at " + *$<stringval>2);
+	$<nodeval>$ = new ShardKeyDef(*$<stringval>4);
+	}
 	|	SHARED DICTIONARY '(' column ')' REFERENCES table '(' column ')'
 	{
 		$<nodeval>$ = new SharedDictionaryDef(*$<stringval>4, *$<stringval>7, *$<stringval>9);

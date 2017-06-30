@@ -1568,6 +1568,22 @@ void SQLType::check_type() {
   }
 }
 
+namespace {
+
+size_t shard_column_index(const std::string& name, const std::list<ColumnDescriptor>& columns) {
+  size_t index = 1;
+  for (const auto& cd : columns) {
+    if (cd.columnName == name) {
+      return index;
+    }
+    ++index;
+  }
+  // Not found, return 0
+  return 0;
+}
+
+}  // namespace
+
 void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.get_catalog();
   if (catalog.getMetadataForTable(*table) != nullptr) {
@@ -1578,11 +1594,19 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   std::list<ColumnDescriptor> columns;
   std::unordered_set<std::string> uc_col_names;
   std::vector<SharedDictionaryDef> shared_dict_defs;
+  const ShardKeyDef* shard_key_def{nullptr};
   for (auto& e : table_element_list) {
     if (dynamic_cast<SharedDictionaryDef*>(e.get())) {
       auto shared_dict_def = static_cast<SharedDictionaryDef*>(e.get());
       validate_shared_dictionary(shared_dict_def, columns, shared_dict_defs, catalog);
       shared_dict_defs.push_back(*shared_dict_def);
+      continue;
+    }
+    if (dynamic_cast<ShardKeyDef*>(e.get())) {
+      if (shard_key_def) {
+        throw std::runtime_error("Specified more than one shard key");
+      }
+      shard_key_def = static_cast<const ShardKeyDef*>(e.get());
       continue;
     }
     if (!dynamic_cast<ColumnDef*>(e.get()))
@@ -1729,6 +1753,12 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   td.maxChunkSize = DEFAULT_MAX_CHUNK_SIZE;
   td.fragPageSize = DEFAULT_PAGE_SIZE;
   td.maxRows = DEFAULT_MAX_ROWS;
+  if (shard_key_def) {
+    td.shardedColumnId = shard_column_index(shard_key_def->get_column(), columns);
+    if (!td.shardedColumnId) {
+      throw std::runtime_error("Specified shard column " + shard_key_def->get_column() + " doesn't exist");
+    }
+  }
   if (!storage_options.empty()) {
     for (auto& p : storage_options) {
       if (boost::iequals(*p->get_name(), "fragment_size")) {
@@ -1766,28 +1796,22 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
           throw std::runtime_error("PARTITIONS must be SHARDED or REPLICATED");
         }
         td.partitions = partitions_uc;
-      } else if (boost::iequals(*p->get_name(), "num_shards")) {
+      } else if (boost::iequals(*p->get_name(), "shard_count")) {
         if (!dynamic_cast<const IntLiteral*>(p->get_value()))
-          throw std::runtime_error("NUM_SHARDS must be an integer literal.");
-        int num_shards = static_cast<const IntLiteral*>(p->get_value())->get_intval();
-        if (num_shards <= 0)
-          throw std::runtime_error("NUM_SHARDS must be a positive number.");
-        td.nShards = num_shards;
-        throw std::runtime_error("Sharded tables are not supported yet");
-      } else if (boost::iequals(*p->get_name(), "sharded_column_num")) {
-        if (!dynamic_cast<const IntLiteral*>(p->get_value()))
-          throw std::runtime_error("SHARDED_COLUMN_NUM must be an integer literal.");
-        int sharded_column_num = static_cast<const IntLiteral*>(p->get_value())->get_intval();
-        if (sharded_column_num <= 0)
-          throw std::runtime_error("SHARDED_COLUMN_NUM must be a positive number.");
-        td.shardedColumnId = sharded_column_num;
+          throw std::runtime_error("SHARD_COUNT must be an integer literal.");
+        int shard_count = static_cast<const IntLiteral*>(p->get_value())->get_intval();
+        if (shard_count <= 0)
+          throw std::runtime_error("SHARD_COUNT must be a positive number.");
+        td.nShards = shard_count;
         throw std::runtime_error("Sharded tables are not supported yet");
       } else {
-        throw std::runtime_error(
-            "Invalid CREATE TABLE option " + *p->get_name() +
-            ".  Should be FRAGMENT_SIZE, PAGE_SIZE, MAX_ROWS, PARTITIONS, NUM_SHARDS or SHARDED_COLUMN_NUM.");
+        throw std::runtime_error("Invalid CREATE TABLE option " + *p->get_name() +
+                                 ".  Should be FRAGMENT_SIZE, PAGE_SIZE, MAX_ROWS, PARTITIONS or SHARD_COUNT.");
       }
     }
+  }
+  if (shard_key_def && !td.nShards) {
+    throw std::runtime_error("Must specify the number of shards through the SHARD_COUNT option");
   }
   catalog.createShardedTable(td, columns, shared_dict_defs);
 }

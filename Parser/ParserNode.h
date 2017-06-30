@@ -841,6 +841,20 @@ class SharedDictionaryDef : public TableConstraintDef {
 };
 
 /*
+ * @type ShardKeyDef
+ * @brief Shard key for a table, mainly useful for distributed joins.
+ */
+class ShardKeyDef : public TableConstraintDef {
+ public:
+  ShardKeyDef(const std::string& column) : column_(column) {}
+
+  const std::string& get_column() const { return column_; }
+
+ private:
+  const std::string column_;
+};
+
+/*
  * @type NameValueAssign
  * @brief Assignment of a string value to a named attribute
  */
