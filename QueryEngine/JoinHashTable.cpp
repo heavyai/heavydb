@@ -105,15 +105,26 @@ size_t get_shard_count(const Analyzer::BinOper* join_condition,
   if (executor->isOuterJoin()) {
     return 0;
   }
-  const auto catalog = executor->getCatalog();
-  const auto lhs_col = dynamic_cast<const Analyzer::ColumnVar*>(join_condition->get_left_operand());
-  const auto rhs_col = dynamic_cast<const Analyzer::ColumnVar*>(join_condition->get_right_operand());
-  if (!lhs_col || !rhs_col) {  // TODO(alex): handle dictionary encoded sides, they'll have casts
+  const Analyzer::ColumnVar* lhs_col{nullptr};
+  const Analyzer::ColumnVar* rhs_col{nullptr};
+  try {
+    const auto redirected_bin_oper =
+        std::dynamic_pointer_cast<Analyzer::BinOper>(redirect_expr(join_condition, ra_exe_unit.input_col_descs));
+    CHECK(redirected_bin_oper);
+    std::tie(lhs_col, rhs_col) = get_cols(redirected_bin_oper, *executor->getCatalog(), executor->getTemporaryTables());
+  } catch (...) {
+    return 0;
+  }
+  if (!lhs_col || !rhs_col) {
     return 0;
   }
   if (lhs_col->get_table_id() < 0 || rhs_col->get_table_id() < 0) {
     return 0;
   }
+  if (lhs_col->get_type_info() != rhs_col->get_type_info()) {
+    return 0;
+  }
+  const auto catalog = executor->getCatalog();
   const auto lhs_td = catalog->getMetadataForTable(lhs_col->get_table_id());
   CHECK(lhs_td);
   const auto rhs_td = catalog->getMetadataForTable(rhs_col->get_table_id());
@@ -265,6 +276,34 @@ std::pair<const int8_t*, size_t> JoinHashTable::getAllColumnFragments(
   return {col_buff, total_elem_count};
 }
 
+namespace {
+
+bool needs_dictionary_translation(const Analyzer::ColumnVar* inner_col,
+                                  const Analyzer::ColumnVar* outer_col,
+                                  const Executor* executor) {
+  const auto catalog = executor->getCatalog();
+  CHECK(catalog);
+  const auto inner_cd = get_column_descriptor_maybe(inner_col->get_column_id(), inner_col->get_table_id(), *catalog);
+  const auto& inner_ti =
+      get_column_type(inner_col->get_column_id(), inner_col->get_table_id(), inner_cd, executor->getTemporaryTables());
+  // Only strings may need dictionary translation.
+  if (!inner_ti.is_string()) {
+    return false;
+  }
+  const auto outer_cd = get_column_descriptor_maybe(outer_col->get_column_id(), outer_col->get_table_id(), *catalog);
+  // Don't want to deal with temporary tables for now, require translation.
+  if (!inner_cd || !outer_cd) {
+    return true;
+  }
+  const auto& outer_ti =
+      get_column_type(outer_col->get_column_id(), outer_col->get_table_id(), outer_cd, executor->getTemporaryTables());
+  CHECK_EQ(inner_ti.is_string(), outer_ti.is_string());
+  // If the two columns don't share the dictionary, translation is needed.
+  return outer_ti.get_comp_param() != inner_ti.get_comp_param();
+}
+
+}  // namespace
+
 int JoinHashTable::reify(const int device_count) {
   CHECK_LT(0, device_count);
   const auto& catalog = *executor_->getCatalog();
@@ -282,16 +321,15 @@ int JoinHashTable::reify(const int device_count) {
 #else
   const bool has_multi_frag = query_info.fragments.size() > 1;
 #endif
-  const auto cd = get_column_descriptor_maybe(inner_col->get_column_id(), inner_col->get_table_id(), catalog);
-  if (cd && cd->isVirtualCol) {
+  const auto inner_cd = get_column_descriptor_maybe(inner_col->get_column_id(), inner_col->get_table_id(), catalog);
+  if (inner_cd && inner_cd->isVirtualCol) {
     return ERR_FAILED_TO_JOIN_ON_VIRTUAL_COLUMN;
   }
-  CHECK(!cd || !(cd->isVirtualCol));
-  const auto& ti =
-      get_column_type(inner_col->get_column_id(), inner_col->get_table_id(), cd, executor_->temporary_tables_);
+  CHECK(!inner_cd || !(inner_cd->isVirtualCol));
   // Since we don't have the string dictionary payloads on the GPU, we'll build
   // the join hash table on the CPU and transfer it to the GPU.
-  const auto effective_memory_level = ti.is_string() ? Data_Namespace::CPU_LEVEL : memory_level_;
+  const auto effective_memory_level =
+      needs_dictionary_translation(inner_col, cols.second, executor_) ? Data_Namespace::CPU_LEVEL : memory_level_;
 #ifdef HAVE_CUDA
   gpu_hash_table_buff_.resize(device_count);
 #endif
