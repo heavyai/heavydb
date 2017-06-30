@@ -35,13 +35,15 @@ struct DictDescriptor {
   int dictNBits;
   bool dictIsShared;
   std::string dictFolderPath;
+  int refcount;
   std::shared_ptr<StringDictionary> stringDict;
-  DictDescriptor(int id, const std::string& name, int nbits, bool shared, std::string& fname)
+  DictDescriptor(int id, const std::string& name, int nbits, bool shared, const int rc, std::string& fname)
       : dictId(id),
         dictName(name),
         dictNBits(nbits),
         dictIsShared(shared),
         dictFolderPath(fname),
+        refcount(rc),
         stringDict(nullptr) {}
 };
 

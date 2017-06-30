@@ -32,6 +32,7 @@
 #include <boost/uuid/sha1.hpp>
 #include "../Fragmenter/Fragmenter.h"
 #include "../Fragmenter/InsertOrderFragmenter.h"
+#include "../Parser/ParserNode.h"
 #include "../Shared/StringTransform.h"
 #include "../StringDictionary/StringDictionaryClient.h"
 
@@ -522,7 +523,9 @@ void Catalog::CheckAndExecuteMigrations() {
 }
 
 void Catalog::buildMaps() {
-  string dictQuery("SELECT dictid, name, nbits, is_shared from mapd_dictionaries");
+  CheckAndExecuteMigrations();
+
+  string dictQuery("SELECT dictid, name, nbits, is_shared, refcount from mapd_dictionaries");
   sqliteConnector_.query(dictQuery);
   size_t numRows = sqliteConnector_.getNumRows();
   for (size_t r = 0; r < numRows; ++r) {
@@ -530,13 +533,12 @@ void Catalog::buildMaps() {
     std::string dictName = sqliteConnector_.getData<string>(r, 1);
     int dictNBits = sqliteConnector_.getData<int>(r, 2);
     bool is_shared = sqliteConnector_.getData<bool>(r, 3);
+    int refcount = sqliteConnector_.getData<int>(r, 4);
     std::string fname =
         basePath_ + "/mapd_data/DB_" + std::to_string(currentDB_.dbId) + "_DICT_" + std::to_string(dictId);
-    DictDescriptor* dd = new DictDescriptor(dictId, dictName, dictNBits, is_shared, fname);
+    DictDescriptor* dd = new DictDescriptor(dictId, dictName, dictNBits, is_shared, refcount, fname);
     dictDescriptorMapById_[dd->dictId].reset(dd);
   }
-
-  CheckAndExecuteMigrations();
 
   string tableQuery(
       "SELECT tableid, name, ncolumns, isview, fragments, frag_type, max_frag_rows, max_chunk_size, frag_page_size, "
@@ -729,11 +731,15 @@ void Catalog::removeTableFromMap(const string& tableName, int tableId) {
       const auto dictIt = dictDescriptorMapById_.find(dictId);
       CHECK(dictIt != dictDescriptorMapById_.end());
       const auto& dd = dictIt->second;
-      boost::filesystem::remove_all(dd->dictFolderPath);
-      if (client) {
-        client->drop(dd->dictId, currentDB_.dbId);
+      CHECK_GE(dd->refcount, 1);
+      --dd->refcount;
+      if (!dd->refcount) {
+        boost::filesystem::remove_all(dd->dictFolderPath);
+        if (client) {
+          client->drop(dd->dictId, currentDB_.dbId);
+        }
+        dictDescriptorMapById_.erase(dictIt);
       }
-      dictDescriptorMapById_.erase(dictIt);
     }
     delete cd;
   }
@@ -925,7 +931,10 @@ list<const FrontendViewDescriptor*> Catalog::getAllFrontendViewMetadata() const 
   return view_list;
 }
 
-void Catalog::createTable(TableDescriptor& td, const list<ColumnDescriptor>& cols, bool isLogicalTable) {
+void Catalog::createTable(TableDescriptor& td,
+                          const list<ColumnDescriptor>& cols,
+                          const std::vector<Parser::SharedDictionaryDef>& shared_dict_defs,
+                          bool isLogicalTable) {
   list<ColumnDescriptor> cds;
   list<DictDescriptor> dds;
 
@@ -977,27 +986,10 @@ void Catalog::createTable(TableDescriptor& td, const list<ColumnDescriptor>& col
     int colId = 1;
     for (auto cd : columns) {
       if (cd.columnType.get_compression() == kENCODING_DICT) {
-        std::string dictName{"Initial_key"};
-        int dictId{0};
-        std::string folderPath;
-        if (isLogicalTable) {
-          sqliteConnector_.query_with_text_params(
-              "INSERT INTO mapd_dictionaries (name, nbits, is_shared, refcount) VALUES (?, ?, ?, 1)",
-              std::vector<std::string>{dictName, std::to_string(cd.columnType.get_comp_param()), "0"});
-          sqliteConnector_.query_with_text_param("SELECT dictid FROM mapd_dictionaries WHERE name = ?", dictName);
-          dictId = sqliteConnector_.getData<int>(0, 0);
-          dictName = td.tableName + "_" + cd.columnName + "_dict" + std::to_string(dictId);
-          sqliteConnector_.query_with_text_param("UPDATE mapd_dictionaries SET name = ? WHERE name = 'Initial_key'",
-                                                 dictName);
-          folderPath =
-              basePath_ + "/mapd_data/DB_" + std::to_string(currentDB_.dbId) + "_DICT_" + std::to_string(dictId);
+        const bool is_foreign_col = setColumnSharedDictionary(cd, shared_dict_defs);
+        if (!is_foreign_col) {
+          setColumnDictionary(cd, dds, td, isLogicalTable);
         }
-        DictDescriptor dd(dictId, dictName, cd.columnType.get_comp_param(), false, folderPath);
-        dds.push_back(dd);
-        if (!cd.columnType.is_array()) {
-          cd.columnType.set_size(cd.columnType.get_comp_param() / 8);
-        }
-        cd.columnType.set_comp_param(dictId);
       }
       sqliteConnector_.query_with_text_params(
           "INSERT INTO mapd_columns (tableid, columnid, name, coltype, colsubtype, coldim, colscale, is_notnull, "
@@ -1034,7 +1026,72 @@ void Catalog::createTable(TableDescriptor& td, const list<ColumnDescriptor>& col
   addTableToMap(td, cds, dds);
 }
 
-void Catalog::createShardedTable(TableDescriptor& td, const list<ColumnDescriptor>& cols) {
+namespace {
+
+const ColumnDescriptor* get_foreign_col(const Catalog& cat, const Parser::SharedDictionaryDef& shared_dict_def) {
+  const auto& table_name = shared_dict_def.get_foreign_table();
+  const auto td = cat.getMetadataForTable(table_name);
+  CHECK(td);
+  const auto& foreign_col_name = shared_dict_def.get_foreign_column();
+  return cat.getMetadataForColumn(td->tableId, foreign_col_name);
+}
+
+}  // namespace
+
+bool Catalog::setColumnSharedDictionary(ColumnDescriptor& cd,
+                                        const std::vector<Parser::SharedDictionaryDef>& shared_dict_defs) {
+  if (shared_dict_defs.empty()) {
+    return false;
+  }
+  for (const auto& shared_dict_def : shared_dict_defs) {
+    const auto& column = shared_dict_def.get_column();
+    if (cd.columnName == column) {
+      const auto foreign_ref_col = get_foreign_col(*this, shared_dict_def);
+      CHECK(foreign_ref_col);
+      cd.columnType = foreign_ref_col->columnType;
+      const int dict_id = cd.columnType.get_comp_param();
+      const auto dictIt = dictDescriptorMapById_.find(dict_id);
+      CHECK(dictIt != dictDescriptorMapById_.end());
+      const auto& dd = dictIt->second;
+      CHECK_GE(dd->refcount, 1);
+      ++dd->refcount;
+      sqliteConnector_.query_with_text_params("UPDATE mapd_dictionaries SET refcount = refcount + 1 WHERE dictid = ?",
+                                              {std::to_string(dict_id)});
+      return true;
+    }
+  }
+  return false;
+}
+
+void Catalog::setColumnDictionary(ColumnDescriptor& cd,
+                                  std::list<DictDescriptor>& dds,
+                                  const TableDescriptor& td,
+                                  const bool isLogicalTable) {
+  std::string dictName{"Initial_key"};
+  int dictId{0};
+  std::string folderPath;
+  if (isLogicalTable) {
+    sqliteConnector_.query_with_text_params(
+        "INSERT INTO mapd_dictionaries (name, nbits, is_shared, refcount) VALUES (?, ?, ?, 1)",
+        std::vector<std::string>{dictName, std::to_string(cd.columnType.get_comp_param()), "0"});
+    sqliteConnector_.query_with_text_param("SELECT dictid FROM mapd_dictionaries WHERE name = ?", dictName);
+    dictId = sqliteConnector_.getData<int>(0, 0);
+    dictName = td.tableName + "_" + cd.columnName + "_dict" + std::to_string(dictId);
+    sqliteConnector_.query_with_text_param("UPDATE mapd_dictionaries SET name = ? WHERE name = 'Initial_key'",
+                                           dictName);
+    folderPath = basePath_ + "/mapd_data/DB_" + std::to_string(currentDB_.dbId) + "_DICT_" + std::to_string(dictId);
+  }
+  DictDescriptor dd(dictId, dictName, cd.columnType.get_comp_param(), false, 1, folderPath);
+  dds.push_back(dd);
+  if (!cd.columnType.is_array()) {
+    cd.columnType.set_size(cd.columnType.get_comp_param() / 8);
+  }
+  cd.columnType.set_comp_param(dictId);
+}
+
+void Catalog::createShardedTable(TableDescriptor& td,
+                                 const list<ColumnDescriptor>& cols,
+                                 const std::vector<Parser::SharedDictionaryDef>& shared_dict_defs) {
   if (td.nShards > 0 && (td.shardedColumnId <= 0 || static_cast<size_t>(td.shardedColumnId) > cols.size())) {
     std::string error_message{"Invalid sharding column for table " + td.tableName + " of database " +
                               currentDB_.dbName};
@@ -1043,7 +1100,7 @@ void Catalog::createShardedTable(TableDescriptor& td, const list<ColumnDescripto
 
   /* create logical table */
   TableDescriptor tdl(td);
-  createTable(tdl, cols, true);  // create logical table
+  createTable(tdl, cols, shared_dict_defs, true);  // create logical table
   int32_t logical_tb_id = tdl.tableId;
 
   /* create physical tables and link them to the logical table */
@@ -1052,7 +1109,7 @@ void Catalog::createShardedTable(TableDescriptor& td, const list<ColumnDescripto
     TableDescriptor tdp(td);
     tdp.tableName = generatePhysicalTableName(tdp.tableName, i);
     tdp.shard = i - 1;
-    createTable(tdp, cols, false);  // create physical table
+    createTable(tdp, cols, shared_dict_defs, false);  // create physical table
     int32_t physical_tb_id = tdp.tableId;
 
     /* add physical table to the vector of physical tables */
@@ -1105,9 +1162,12 @@ void Catalog::doDropTable(const TableDescriptor* td) {
   try {
     sqliteConnector_.query_with_text_param("DELETE FROM mapd_tables WHERE tableid = ?", std::to_string(tableId));
     sqliteConnector_.query_with_text_params(
+        "UPDATE mapd_dictionaries SET refcount = refcount - 1 WHERE dictid in (select comp_param from mapd_columns "
+        "where compression = ? and tableid = ?)",
+        std::vector<std::string>{std::to_string(kENCODING_DICT), std::to_string(tableId)});
+    sqliteConnector_.query_with_text_params(
         "DELETE FROM mapd_dictionaries WHERE dictid in (select comp_param from mapd_columns where compression = ? "
-        "and "
-        "tableid = ?)",
+        "and tableid = ?) and refcount = 0",
         std::vector<std::string>{std::to_string(kENCODING_DICT), std::to_string(tableId)});
     sqliteConnector_.query_with_text_param("DELETE FROM mapd_columns WHERE tableid = ?", std::to_string(tableId));
     if (td->isView)

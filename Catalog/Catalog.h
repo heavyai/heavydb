@@ -58,6 +58,12 @@ struct Privileges {
   bool insert_;
 };
 
+namespace Parser {
+
+class SharedDictionaryDef;
+
+}  // Parser
+
 namespace Catalog_Namespace {
 
 /**
@@ -196,8 +202,13 @@ class Catalog {
    */
   virtual ~Catalog();
 
-  void createTable(TableDescriptor& td, const std::list<ColumnDescriptor>& columns, bool isLogicalTable);
-  void createShardedTable(TableDescriptor& td, const std::list<ColumnDescriptor>& columns);
+  void createTable(TableDescriptor& td,
+                   const std::list<ColumnDescriptor>& columns,
+                   const std::vector<Parser::SharedDictionaryDef>& shared_dict_defs,
+                   bool isLogicalTable);
+  void createShardedTable(TableDescriptor& td,
+                          const std::list<ColumnDescriptor>& columns,
+                          const std::vector<Parser::SharedDictionaryDef>& shared_dict_defs);
   void createFrontendView(FrontendViewDescriptor& vd);
   std::string createLink(LinkDescriptor& ld, size_t min_length);
   void dropTable(const TableDescriptor* td);
@@ -267,6 +278,12 @@ class Catalog {
   void addTableToMap(TableDescriptor& td,
                      const std::list<ColumnDescriptor>& columns,
                      const std::list<DictDescriptor>& dicts);
+  bool setColumnSharedDictionary(ColumnDescriptor& cd,
+                                 const std::vector<Parser::SharedDictionaryDef>& shared_dict_defs);
+  void setColumnDictionary(ColumnDescriptor& cd,
+                           std::list<DictDescriptor>& dds,
+                           const TableDescriptor& td,
+                           const bool isLogicalTable);
   void addFrontendViewToMap(FrontendViewDescriptor& vd);
   void addLinkToMap(LinkDescriptor& ld);
   void removeTableFromMap(const std::string& tableName, int tableId);

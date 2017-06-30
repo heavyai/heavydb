@@ -820,6 +820,27 @@ class CheckDef : public TableConstraintDef {
 };
 
 /*
+ * @type SharedDictionaryDef
+ * @brief Shared dictionary hint. The underlying string dictionary will be shared with the referenced column.
+ */
+class SharedDictionaryDef : public TableConstraintDef {
+ public:
+  SharedDictionaryDef(const std::string& column, const std::string& foreign_table, const std::string foreign_column)
+      : column_(column), foreign_table_(foreign_table), foreign_column_(foreign_column) {}
+
+  const std::string& get_column() const { return column_; }
+
+  const std::string& get_foreign_table() const { return foreign_table_; }
+
+  const std::string& get_foreign_column() const { return foreign_column_; }
+
+ private:
+  const std::string column_;
+  const std::string foreign_table_;
+  const std::string foreign_column_;
+};
+
+/*
  * @type NameValueAssign
  * @brief Assignment of a string value to a named attribute
  */
@@ -860,6 +881,12 @@ class CreateTableStmt : public DDLStmt {
   virtual void execute(const Catalog_Namespace::SessionInfo& session);
 
  private:
+  // Validate shared dictionary directive against the list of columns seen so far.
+  void validate_shared_dictionary(const SharedDictionaryDef* shared_dict_def,
+                                  const std::list<ColumnDescriptor>& columns,
+                                  const std::vector<SharedDictionaryDef>& shared_dict_defs_so_far,
+                                  const Catalog_Namespace::Catalog& catalog) const;
+
   std::unique_ptr<std::string> table;
   std::list<std::unique_ptr<TableElement>> table_element_list;
   bool if_not_exists;
