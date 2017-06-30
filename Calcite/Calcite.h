@@ -51,6 +51,7 @@ class Calcite {
   std::thread calcite_server_thread_;
   std::string handle_java_return(JNIEnv* env, jobject process_result);
   JNIEnv* checkJNIConnection();
+  int ping();
 
   bool server_available_;
   bool jni_;

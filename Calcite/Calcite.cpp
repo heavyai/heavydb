@@ -38,7 +38,7 @@ void Calcite::runJNI(const int port, const std::string& data_dir, const size_t c
   LOG(INFO) << "Creating Calcite Server local as JNI instance, jar expected in " << mapd_root_abs_path() << "/bin";
   const int kNumOptions = 2;
   std::string jar_file{"-Djava.class.path=" + mapd_root_abs_path() +
-                       "/bin/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar"};
+                       "/bin/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar"};
   std::string max_mem_setting{"-Xmx" + std::to_string(calcite_max_mem) + "m"};
   JavaVMOption options[kNumOptions] = {{const_cast<char*>(max_mem_setting.c_str()), NULL},
                                        {const_cast<char*>(jar_file.c_str()), NULL}};
@@ -105,7 +105,8 @@ void start_calcite_server_as_daemon(const int mapd_port,
                                     const std::string& data_dir,
                                     const size_t calcite_max_mem) {
   std::string cmd = "java -Xmx" + std::to_string(calcite_max_mem) + "m -jar " + mapd_root_abs_path() +
-                    "/bin/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar -d " + data_dir + " -e " + mapd_root_abs_path() +
+                    "/bin/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar -d " + data_dir + " -e " +
+                    mapd_root_abs_path() +
                     // disable calling mapd server for metadata for now
                     //"/QueryEngine/ -p " + std::to_string(port) + " -m " + std::to_string(mapd_port);
                     "/QueryEngine/ -p " + std::to_string(port) + " -m -1";
@@ -119,8 +120,7 @@ std::pair<boost::shared_ptr<CalciteServerClient>, boost::shared_ptr<TTransport>>
     transport->open();
 
   } catch (TException& tx) {
-    LOG(ERROR) << tx.what() << endl;
-    LOG(ERROR) << "Failed to open transport, No calcite remote server running on port " << port;
+    throw tx;
   }
   boost::shared_ptr<TProtocol> protocol(new TBinaryProtocol(transport));
   boost::shared_ptr<CalciteServerClient> client;
@@ -135,18 +135,52 @@ void Calcite::runServer(const int mapd_port,
                         const size_t calcite_max_mem) {
   LOG(INFO) << "Running calcite server as a daemon";
 
+  // ping server to see if for any reason there is an orphaned one
+  int ping_time = ping();
+  if (ping_time > -1) {
+    // we have an orphaned server shut it down
+    LOG(ERROR) << "Appears to be orphaned Calcite serve already running, shutting it down";
+    LOG(ERROR) << "Please check that you are not trying to run two servers on same port";
+    LOG(ERROR) << "Attempting to shutdown orphaned Calcite server";
+    try {
+      std::pair<boost::shared_ptr<CalciteServerClient>, boost::shared_ptr<TTransport>> clientP =
+          get_client(remote_calcite_port_);
+      clientP.first->shutdown();
+      clientP.second->close();
+      LOG(ERROR) << "orphaned Calcite server shutdown";
+
+    } catch (TException& tx) {
+      LOG(ERROR) << "Failed to shutdown orphaned Calcite server, reason: " << tx.what();
+    }
+  }
+
   // start the server in a thread
   std::thread t(start_calcite_server_as_daemon, mapd_port, port, data_dir, calcite_max_mem);
   calcite_server_thread_ = move(t);
   calcite_server_thread_.detach();
 
-  std::this_thread::sleep_for(std::chrono::milliseconds(2000));
-  LOG(INFO) << "slept 2 before checking server ";
+  // check for new server for 5 seconds max
+  std::this_thread::sleep_for(std::chrono::milliseconds(200));
+  for (int i = 2; i < 50; i++) {
+    int ping_time = ping();
+    if (ping_time > -1) {
+      LOG(INFO) << "Calcite server start took " << i * 100 << " ms " << endl;
+      LOG(INFO) << "ping took " << ping_time << " ms " << endl;
+      server_available_ = true;
+      jni_ = false;
+      return;
+    } else {
+      // wait 100 ms
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+  }
+  server_available_ = false;
+  LOG(FATAL) << "No calcite remote server running on port " << port;
+}
 
-  server_available_ = true;
-  jni_ = false;
-  // check server is responding
-
+// ping existing server
+// return -1 if no ping response
+int Calcite::ping() {
   try {
     auto ms = measure<>::execution([&]() {
       std::pair<boost::shared_ptr<CalciteServerClient>, boost::shared_ptr<TTransport>> clientP =
@@ -154,13 +188,10 @@ void Calcite::runServer(const int mapd_port,
       clientP.first->ping();
       clientP.second->close();
     });
-
-    LOG(INFO) << "ping took " << ms << " ms " << endl;
+    return ms;
 
   } catch (TException& tx) {
-    LOG(ERROR) << tx.what() << endl;
-    server_available_ = false;
-    LOG(ERROR) << "No calcite remote server running on port " << port;
+    return -1;
   }
 }
 
