@@ -1209,7 +1209,8 @@ RelAlgExecutionUnit decide_approx_count_distinct_implementation(
     if (agg_info.agg_kind != kAPPROX_COUNT_DISTINCT) {
       continue;
     }
-    const auto arg = dynamic_cast<const Analyzer::AggExpr*>(target_expr)->get_own_arg();
+    CHECK(dynamic_cast<const Analyzer::AggExpr*>(target_expr));
+    const auto arg = static_cast<Analyzer::AggExpr*>(target_expr)->get_own_arg();
     CHECK(arg);
     const auto& arg_ti = arg->get_type_info();
     // Avoid calling getExpressionRange for variable length types (string and array),
