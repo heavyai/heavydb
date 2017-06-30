@@ -1687,7 +1687,7 @@ void MapDHandler::execute_rel_alg_df(TDataFrame& _return,
                                      const int32_t first_n) const {
   const auto& cat = session_info.get_catalog();
   CHECK(device_type == ExecutorDeviceType::CPU || session_info.get_executor_device_type() == ExecutorDeviceType::GPU);
-  CompilationOptions co = {ExecutorDeviceType::GPU, true, ExecutorOptLevel::Default, g_enable_dynamic_watchdog};
+  CompilationOptions co = {device_type, true, ExecutorOptLevel::Default, g_enable_dynamic_watchdog};
   ExecutionOptions eo = {false,
                          allow_multifrag_,
                          false,
@@ -1700,7 +1700,7 @@ void MapDHandler::execute_rel_alg_df(TDataFrame& _return,
   auto executor = Executor::getExecutor(
       cat.get_currentDB().dbId, jit_debug_ ? "/tmp" : "", jit_debug_ ? "mapdquery" : "", mapd_parameters_, nullptr);
   RelAlgExecutor ra_executor(executor.get(), cat);
-  ExecutionResult result{ResultRows({}, {}, nullptr, nullptr, {}, ExecutorDeviceType::GPU), {}};
+  ExecutionResult result{ResultRows({}, {}, nullptr, nullptr, {}, device_type), {}};
   result = ra_executor.executeRelAlgQuery(query_ra, co, eo, nullptr);
   if (auto rs = result.getRows().getResultSet()) {
     const auto copy =
