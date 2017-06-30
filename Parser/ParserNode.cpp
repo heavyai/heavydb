@@ -1829,7 +1829,6 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
         } else {
           td.nShards = shard_count;
         }
-        throw std::runtime_error("Sharded tables are not supported yet");
       } else {
         throw std::runtime_error("Invalid CREATE TABLE option " + *p->get_name() +
                                  ".  Should be FRAGMENT_SIZE, PAGE_SIZE, MAX_ROWS, PARTITIONS or SHARD_COUNT.");
