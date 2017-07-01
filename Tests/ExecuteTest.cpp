@@ -482,24 +482,70 @@ TEST(Select, FilterAndSimpleAggregation) {
     ASSERT_NEAR(static_cast<double>(0.65),
                 v<double>(run_simple_agg("SELECT stddev(x) + VARIANCE(x) FROM test;", dt)),
                 static_cast<double>(0.10));
+    ASSERT_NEAR(static_cast<float>(0.5),
+                v<float>(run_simple_agg("SELECT STDDEV_POP_FLOAT(x) FROM test;", dt)),
+                static_cast<float>(0.2));
+    ASSERT_NEAR(static_cast<float>(0.5),
+                v<float>(run_simple_agg("SELECT STDDEV_SAMP_FLOAT(x) FROM test;", dt)),
+                static_cast<float>(0.2));
+    ASSERT_NEAR(static_cast<float>(0.2),
+                v<float>(run_simple_agg("SELECT VAR_POP_FLOAT(x) FROM test;", dt)),
+                static_cast<float>(0.1));
+    ASSERT_NEAR(static_cast<float>(0.2),
+                v<float>(run_simple_agg("SELECT VAR_SAMP_FLOAT(x) FROM test;", dt)),
+                static_cast<float>(0.1));
+    ASSERT_NEAR(static_cast<float>(92.0),
+                v<float>(run_simple_agg("SELECT STDDEV_POP_FLOAT(dd) FROM test;", dt)),
+                static_cast<float>(2.0));
+    ASSERT_NEAR(static_cast<float>(94.5),
+                v<float>(run_simple_agg("SELECT STDDEV_SAMP_FLOAT(dd) FROM test;", dt)),
+                static_cast<float>(1.0));
+    ASSERT_NEAR(
+        static_cast<double>(94.5),
+        v<double>(run_simple_agg(
+            "SELECT POWER(((SUM(dd * dd) - SUM(dd) * SUM(dd) / COUNT(dd)) / (COUNT(dd) - 1)), 0.5) FROM test;", dt)),
+        static_cast<double>(1.0));
+    ASSERT_NEAR(static_cast<float>(8485.0),
+                v<float>(run_simple_agg("SELECT VAR_POP_FLOAT(dd) FROM test;", dt)),
+                static_cast<float>(10.0));
+    ASSERT_NEAR(static_cast<float>(8932.0),
+                v<float>(run_simple_agg("SELECT VAR_SAMP_FLOAT(dd) FROM test;", dt)),
+                static_cast<float>(10.0));
+    ASSERT_EQ(20, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test HAVING STDDEV_POP_FLOAT(x) < 1.0;", dt)));
+    ASSERT_EQ(20, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test HAVING STDDEV_POP_FLOAT(x) * 5 < 3.0;", dt)));
+    ASSERT_NEAR(static_cast<float>(0.65),
+                v<float>(run_simple_agg("SELECT stddev_FLOAT(x) + VARIANCE_float(x) FROM test;", dt)),
+                static_cast<float>(0.10));
     ASSERT_NEAR(static_cast<double>(0.125),
                 v<double>(run_simple_agg("SELECT COVAR_POP(x, y) FROM test;", dt)),
                 static_cast<double>(0.001));
+    ASSERT_NEAR(static_cast<float>(0.125),
+                v<float>(run_simple_agg("SELECT COVAR_POP_FLOAT(x, y) FROM test;", dt)),
+                static_cast<float>(0.001));
     ASSERT_NEAR(static_cast<double>(0.125),  // covar_pop expansion
                 v<double>(run_simple_agg("SELECT avg(x * y) - avg(x) * avg(y) FROM test;", dt)),
                 static_cast<double>(0.001));
     ASSERT_NEAR(static_cast<double>(0.131),
                 v<double>(run_simple_agg("SELECT COVAR_SAMP(x, y) FROM test;", dt)),
                 static_cast<double>(0.001));
+    ASSERT_NEAR(static_cast<float>(0.131),
+                v<float>(run_simple_agg("SELECT COVAR_SAMP_FLOAT(x, y) FROM test;", dt)),
+                static_cast<float>(0.001));
     ASSERT_NEAR(static_cast<double>(0.131),  // covar_samp expansion
                 v<double>(run_simple_agg("SELECT ((sum(x * y) - sum(x) * avg(y)) / (count(x) - 1)) FROM test;", dt)),
                 static_cast<double>(0.001));
     ASSERT_NEAR(static_cast<double>(0.58),
                 v<double>(run_simple_agg("SELECT CORRELATION(x, y) FROM test;", dt)),
                 static_cast<double>(0.01));
+    ASSERT_NEAR(static_cast<float>(0.58),
+                v<float>(run_simple_agg("SELECT CORRELATION_FLOAT(x, y) FROM test;", dt)),
+                static_cast<float>(0.01));
     ASSERT_NEAR(static_cast<double>(0.58),
                 v<double>(run_simple_agg("SELECT CORR(x, y) FROM test;", dt)),
                 static_cast<double>(0.01));
+    ASSERT_NEAR(static_cast<float>(0.58),
+                v<float>(run_simple_agg("SELECT CORR_FLOAT(x, y) FROM test;", dt)),
+                static_cast<float>(0.01));
     ASSERT_NEAR(static_cast<double>(0.33),
                 v<double>(run_simple_agg("SELECT POWER(CORR(x, y), 2) FROM test;", dt)),
                 static_cast<double>(0.01));

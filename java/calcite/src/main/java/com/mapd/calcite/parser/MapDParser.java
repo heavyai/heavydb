@@ -357,32 +357,55 @@ public final class MapDParser {
         }
         boolean biased;
         boolean sqrt;
+        boolean flt;
         if (proj_call.getOperator().isName("STDDEV_POP")) {
             biased = true;
             sqrt = true;
+            flt = false;
+        } else if (proj_call.getOperator().getName().equalsIgnoreCase("STDDEV_POP_FLOAT")) {
+            biased = true;
+            sqrt = true;
+            flt = true;
         } else if (proj_call.getOperator().isName("STDDEV_SAMP")
                 || proj_call.getOperator().getName().equalsIgnoreCase("STDDEV")) {
             biased = false;
             sqrt = true;
+            flt = false;
+        } else if (proj_call.getOperator().getName().equalsIgnoreCase("STDDEV_SAMP_FLOAT")
+                || proj_call.getOperator().getName().equalsIgnoreCase("STDDEV_FLOAT")) {
+            biased = false;
+            sqrt = true;
+            flt = true;
         } else if (proj_call.getOperator().isName("VAR_POP")) {
             biased = true;
             sqrt = false;
+            flt = false;
+        } else if (proj_call.getOperator().getName().equalsIgnoreCase("VAR_POP_FLOAT")) {
+            biased = true;
+            sqrt = false;
+            flt = true;
         } else if (proj_call.getOperator().isName("VAR_SAMP")
                 || proj_call.getOperator().getName().equalsIgnoreCase("VARIANCE")) {
             biased = false;
             sqrt = false;
+            flt = false;
+        } else if (proj_call.getOperator().getName().equalsIgnoreCase("VAR_SAMP_FLOAT")
+                || proj_call.getOperator().getName().equalsIgnoreCase("VARIANCE_FLOAT")) {
+            biased = false;
+            sqrt = false;
+            flt = true;
         } else {
             return null;
         }
         final SqlNode operand = proj_call.operand(0);
         final SqlParserPos pos = proj_call.getParserPosition();
-        SqlNode expanded_proj_call = expandVariance(pos, operand, biased, sqrt);
+        SqlNode expanded_proj_call = expandVariance(pos, operand, biased, sqrt, flt);
         MAPDLOGGER.debug("Expanded select_list SqlCall: " + proj_call.toString());
         MAPDLOGGER.debug("to : " + expanded_proj_call.toString());
         return expanded_proj_call;
     }
 
-    private SqlNode expandVariance(final SqlParserPos pos, final SqlNode operand, boolean biased, boolean sqrt) {
+    private SqlNode expandVariance(final SqlParserPos pos, final SqlNode operand, boolean biased, boolean sqrt, boolean flt) {
         // stddev_pop(x) ==>
         //   power(
         //     (sum(x * x) - sum(x) * sum(x) / (case count(x) when 0 then NULL else count(x) end))
@@ -406,7 +429,7 @@ public final class MapDParser {
         final SqlNode arg
                 = SqlStdOperatorTable.CAST.createCall(pos, operand,
                         SqlTypeUtil.convertTypeToSpec(
-                                typeFactory.createSqlType(SqlTypeName.DOUBLE)));
+                                typeFactory.createSqlType(flt ? SqlTypeName.FLOAT : SqlTypeName.DOUBLE)));
         final SqlNode argSquared
                 = SqlStdOperatorTable.MULTIPLY.createCall(pos, arg, arg);
         final SqlNode sumArgSquared
@@ -427,8 +450,12 @@ public final class MapDParser {
         SqlNodeList thenList = new SqlNodeList(pos);
         whenList.add(countEqZero);
         thenList.add(nul);
-        final SqlNode denominator
+        final SqlNode int_denominator
                 = SqlStdOperatorTable.CASE.createCall(null, pos, null, whenList, thenList, count);
+        final SqlNode denominator
+                = SqlStdOperatorTable.CAST.createCall(pos, int_denominator,
+                        SqlTypeUtil.convertTypeToSpec(
+                                typeFactory.createSqlType(flt ? SqlTypeName.FLOAT : SqlTypeName.DOUBLE)));
         final SqlNode avgSumSquared
                 = SqlStdOperatorTable.DIVIDE.createCall(pos, sumSquared, denominator);
         final SqlNode diff
@@ -447,9 +474,13 @@ public final class MapDParser {
             SqlNodeList thenList1 = new SqlNodeList(pos);
             whenList1.add(countEqOne);
             thenList1.add(nul);
-            denominator1
+            final SqlNode int_denominator1
                     = SqlStdOperatorTable.CASE.createCall(null, pos, null, whenList1, thenList1,
                             countMinusOne);
+            denominator1
+                    = SqlStdOperatorTable.CAST.createCall(pos, int_denominator1,
+                            SqlTypeUtil.convertTypeToSpec(
+                                    typeFactory.createSqlType(flt ? SqlTypeName.FLOAT : SqlTypeName.DOUBLE)));
         }
         final SqlNode div
                 = SqlStdOperatorTable.DIVIDE.createCall(pos, diff, denominator1);
@@ -460,7 +491,10 @@ public final class MapDParser {
             result
                     = SqlStdOperatorTable.POWER.createCall(pos, div, half);
         }
-        return result;
+        return
+                SqlStdOperatorTable.CAST.createCall(pos, result,
+                        SqlTypeUtil.convertTypeToSpec(
+                                typeFactory.createSqlType(flt ? SqlTypeName.FLOAT : SqlTypeName.DOUBLE)));
     }
 
     private SqlNode expandCovariance(final SqlBasicCall proj_call) {
@@ -469,35 +503,44 @@ public final class MapDParser {
             return null;
         }
         boolean pop;
+        boolean flt;
         if (proj_call.getOperator().isName("COVAR_POP")) {
             pop = true;
+            flt = false;
         } else if (proj_call.getOperator().isName("COVAR_SAMP")) {
             pop = false;
+            flt = false;
+        } else if (proj_call.getOperator().getName().equalsIgnoreCase("COVAR_POP_FLOAT")) {
+            pop = true;
+            flt = true;
+        } else if (proj_call.getOperator().getName().equalsIgnoreCase("COVAR_SAMP_FLOAT")) {
+            pop = false;
+            flt = true;
         } else {
             return null;
         }
         final SqlNode operand0 = proj_call.operand(0);
         final SqlNode operand1 = proj_call.operand(1);
         final SqlParserPos pos = proj_call.getParserPosition();
-        SqlNode expanded_proj_call = expandCovariance(pos, operand0, operand1, pop);
+        SqlNode expanded_proj_call = expandCovariance(pos, operand0, operand1, pop, flt);
         MAPDLOGGER.debug("Expanded select_list SqlCall: " + proj_call.toString());
         MAPDLOGGER.debug("to : " + expanded_proj_call.toString());
         return expanded_proj_call;
     }
  
     private SqlNode expandCovariance(SqlParserPos pos, final SqlNode operand0, final SqlNode operand1,
-                                     boolean pop) {
+                                     boolean pop, boolean flt) {
         // covar_pop(x, y) ==> avg(x * y) - avg(x) * avg(y)
         // covar_samp(x, y) ==> (sum(x * y) - sum(x) * avg(y))
         //                      ((case count(x) when 1 then NULL else count(x) - 1 end))
         final SqlNode arg0
                 = SqlStdOperatorTable.CAST.createCall(operand0.getParserPosition(), operand0,
                         SqlTypeUtil.convertTypeToSpec(
-                                typeFactory.createSqlType(SqlTypeName.DOUBLE)));
+                                typeFactory.createSqlType(flt ? SqlTypeName.FLOAT : SqlTypeName.DOUBLE)));
         final SqlNode arg1
                 = SqlStdOperatorTable.CAST.createCall(operand1.getParserPosition(), operand1,
                         SqlTypeUtil.convertTypeToSpec(
-                                typeFactory.createSqlType(SqlTypeName.DOUBLE)));
+                                typeFactory.createSqlType(flt ? SqlTypeName.FLOAT : SqlTypeName.DOUBLE)));
         final SqlNode mulArg
                 = SqlStdOperatorTable.MULTIPLY.createCall(pos, arg0, arg1);
         final SqlNode avgArg1
@@ -511,7 +554,10 @@ public final class MapDParser {
                     = SqlStdOperatorTable.MULTIPLY.createCall(pos, avgArg0, avgArg1);
             final SqlNode covarPop
                     = SqlStdOperatorTable.MINUS.createCall(pos, avgMulArg, mulAvgAvg);
-            return covarPop;
+            return
+                    SqlStdOperatorTable.CAST.createCall(pos, covarPop,
+                            SqlTypeUtil.convertTypeToSpec(
+                                    typeFactory.createSqlType(flt ? SqlTypeName.FLOAT : SqlTypeName.DOUBLE)));
         }
         final SqlNode sumMulArg
                 = SqlStdOperatorTable.SUM.createCall(pos, mulArg);
@@ -535,12 +581,19 @@ public final class MapDParser {
         SqlNodeList thenList1 = new SqlNodeList(pos);
         whenList1.add(countEqOne);
         thenList1.add(nul);
-        final SqlNode denominator
+        final SqlNode int_denominator
                 = SqlStdOperatorTable.CASE.createCall(null, pos, null, whenList1, thenList1,
                                                       countMinusOne);
+        final SqlNode denominator
+                = SqlStdOperatorTable.CAST.createCall(pos, int_denominator,
+                        SqlTypeUtil.convertTypeToSpec(
+                                typeFactory.createSqlType(flt ? SqlTypeName.FLOAT : SqlTypeName.DOUBLE)));
         final SqlNode covarSamp
                 = SqlStdOperatorTable.DIVIDE.createCall(pos, sub, denominator);
-        return covarSamp;
+        return
+                SqlStdOperatorTable.CAST.createCall(pos, covarSamp,
+                        SqlTypeUtil.convertTypeToSpec(
+                                typeFactory.createSqlType(flt ? SqlTypeName.FLOAT : SqlTypeName.DOUBLE)));
     }
 
     private SqlNode expandCorrelation(final SqlBasicCall proj_call) {
@@ -548,9 +601,15 @@ public final class MapDParser {
         if (proj_call.operandCount() != 2) {
             return null;
         }
+        boolean flt;
         if (proj_call.getOperator().isName("CORR")
          || proj_call.getOperator().getName().equalsIgnoreCase("CORRELATION")) {
             // expand correlation coefficient
+            flt = false;
+        } else if (proj_call.getOperator().getName().equalsIgnoreCase("CORR_FLOAT")
+                || proj_call.getOperator().getName().equalsIgnoreCase("CORRELATION_FLOAT")) {
+            // expand correlation coefficient
+            flt = true;
         } else {
             return null;
         }
@@ -559,9 +618,9 @@ public final class MapDParser {
         final SqlNode operand0 = proj_call.operand(0);
         final SqlNode operand1 = proj_call.operand(1);
         final SqlParserPos pos = proj_call.getParserPosition();
-        SqlNode covariance = expandCovariance(pos, operand0, operand1, true);
-        SqlNode stddev0 = expandVariance(pos, operand0, true, true);
-        SqlNode stddev1 = expandVariance(pos, operand1, true, true);
+        SqlNode covariance = expandCovariance(pos, operand0, operand1, true, flt);
+        SqlNode stddev0 = expandVariance(pos, operand0, true, true, flt);
+        SqlNode stddev1 = expandVariance(pos, operand1, true, true, flt);
         final SqlNode mulStddev
                 = SqlStdOperatorTable.MULTIPLY.createCall(pos, stddev0, stddev1);
         final SqlNumericLiteral zero
