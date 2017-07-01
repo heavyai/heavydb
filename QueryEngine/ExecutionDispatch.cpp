@@ -510,7 +510,8 @@ const int8_t* Executor::ExecutionDispatch::getScanColumn(
     std::list<ChunkIter>& chunk_iter_holder,
     const Data_Namespace::MemoryLevel memory_level,
     const int device_id) const {
-  static std::mutex str_dec_mutex;  // TODO(alex): remove
+  static std::mutex varlen_chunk_mutex;  // TODO(alex): remove
+  static std::mutex chunk_list_mutex;
   const auto fragments_it = all_tables_fragments.find(table_id);
   CHECK(fragments_it != all_tables_fragments.end());
   const auto fragments = fragments_it->second;
@@ -521,8 +522,15 @@ const int8_t* Executor::ExecutionDispatch::getScanColumn(
   CHECK(table_id > 0);
   auto cd = get_column_descriptor(col_id, table_id, cat_);
   CHECK(cd);
+  const auto col_type = get_column_type(col_id, table_id, cd, executor_->temporary_tables_);
+  const bool is_real_string = col_type.is_string() && col_type.get_compression() == kENCODING_NONE;
+  const bool is_varlen = is_real_string || col_type.is_array();
   {
     ChunkKey chunk_key{cat_.get_currentDB().dbId, fragment.physicalTableId, col_id, fragment.fragmentId};
+    std::unique_ptr<std::lock_guard<std::mutex>> varlen_chunk_lock;
+    if (is_varlen) {
+      varlen_chunk_lock.reset(new std::lock_guard<std::mutex>(varlen_chunk_mutex));
+    }
     chunk = Chunk_NS::Chunk::getChunk(cd,
                                       &cat_.get_dataMgr(),
                                       chunk_key,
@@ -530,12 +538,10 @@ const int8_t* Executor::ExecutionDispatch::getScanColumn(
                                       memory_level == Data_Namespace::CPU_LEVEL ? 0 : device_id,
                                       chunk_meta_it->second.numBytes,
                                       chunk_meta_it->second.numElements);
-    std::lock_guard<std::mutex> lock(str_dec_mutex);
+    std::lock_guard<std::mutex> chunk_list_lock(chunk_list_mutex);
     chunk_holder.push_back(chunk);
   }
-  const auto col_type = get_column_type(col_id, table_id, cd, executor_->temporary_tables_);
-  const bool is_real_string = col_type.is_string() && col_type.get_compression() == kENCODING_NONE;
-  if (is_real_string || col_type.is_array()) {
+  if (is_varlen) {
     CHECK_GT(table_id, 0);
     CHECK(chunk_meta_it != fragment.getChunkMetadataMap().end());
     chunk_iter_holder.push_back(chunk->begin_iterator(chunk_meta_it->second));

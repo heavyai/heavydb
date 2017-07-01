@@ -610,7 +610,9 @@ class Executor {
       const std::map<int, const TableFragments*>& all_tables_fragments);
 
 #ifdef ENABLE_MULTIFRAG_JOIN
-  bool needFetchAllFragments(const InputColDescriptor& col_desc, const std::vector<InputDescriptor>& input_descs) const;
+  bool needFetchAllFragments(const InputColDescriptor& col_desc,
+                             const std::vector<InputDescriptor>& input_descs,
+                             const std::map<int, const TableFragments*>& all_tables_fragments) const;
 #endif
 
   class ExecutionDispatch {

@@ -1412,15 +1412,23 @@ std::map<size_t, std::vector<uint64_t>> Executor::getAllFragOffsets(
 #ifdef ENABLE_MULTIFRAG_JOIN
 // Only fetch columns of hash-joined inner fact table whose fetch are not deferred from all the table fragments.
 bool Executor::needFetchAllFragments(const InputColDescriptor& inner_col_desc,
-                                     const std::vector<InputDescriptor>& input_descs) const {
+                                     const std::vector<InputDescriptor>& input_descs,
+                                     const std::map<int, const TableFragments*>& all_tables_fragments) const {
   if (inner_col_desc.getScanDesc().getNestLevel() < 1 ||
       inner_col_desc.getScanDesc().getSourceType() != InputSourceType::TABLE ||
       plan_state_->join_info_.join_impl_type_ != JoinImplType::HashOneToOne || input_descs.size() < 2 ||
       plan_state_->isLazyFetchColumn(inner_col_desc)) {
     return false;
   }
-  auto inner_table_desc = input_descs[1];
-  return inner_col_desc.getScanDesc().getTableId() == inner_table_desc.getTableId();
+  const int table_id = inner_col_desc.getScanDesc().getTableId();
+  const auto fragments_it = all_tables_fragments.find(table_id);
+  CHECK(fragments_it != all_tables_fragments.end());
+  const auto& fragments = fragments_it->second;
+  if (fragments->size() <= 1) {
+    return false;
+  }
+  const auto inner_table_desc = input_descs[1];
+  return table_id == inner_table_desc.getTableId();
 }
 #endif
 
@@ -1490,7 +1498,7 @@ Executor::FetchResult Executor::fetchChunks(const ExecutionDispatch& execution_d
                                                                     is_rowid);
       } else {
 #ifdef ENABLE_MULTIFRAG_JOIN
-        if (needFetchAllFragments(*col_id, input_descs)) {
+        if (needFetchAllFragments(*col_id, input_descs, all_tables_fragments)) {
           frag_col_buffers[it->second] = execution_dispatch.getAllScanColumnFrags(
               table_id, col_id->getColId(), all_tables_fragments, memory_level_for_column, device_id);
         } else

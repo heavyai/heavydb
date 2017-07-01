@@ -2276,6 +2276,9 @@ TEST(Select, JoinsAndArrays) {
     ASSERT_EQ(int64_t(g_array_test_row_count),
               v<int64_t>(run_simple_agg(
                   "SELECT COUNT(*) FROM test, array_test_inner WHERE 7 = array_test_inner.arr_i16[1];", dt)));
+    ASSERT_EQ(int64_t(2 * g_num_rows),
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM test, array_test WHERE test.x = array_test.x AND 'bb' = ANY arr_str;", dt)));
     auto result_rows = run_multiple_agg(
         "SELECT UNNEST(array_test.arr_i16) AS a, test_inner.x, COUNT(*) FROM array_test, test_inner WHERE test_inner.x "
         "= array_test.arr_i16[1] GROUP BY a, test_inner.x;",
@@ -2877,10 +2880,8 @@ int create_and_populate_tables() {
     const std::string drop_old_array_test{"DROP TABLE IF EXISTS array_test;"};
     run_ddl_statement(drop_old_array_test);
     const std::string create_array_test{
-        "CREATE TABLE array_test(x int, arr_i16 smallint[], arr_i32 int[], arr_i64 bigint[], arr_str text[] encoding "
-        "dict, "
-        "arr_float float[], arr_double double[], arr_bool boolean[], real_str text encoding none) WITH "
-        "(fragment_size=2);"};
+        "CREATE TABLE array_test(x int not null, arr_i16 smallint[], arr_i32 int[], arr_i64 bigint[], arr_str text[] "
+        "encoding dict, arr_float float[], arr_double double[], arr_bool boolean[], real_str text encoding none);"};
     run_ddl_statement(create_array_test);
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'array_test'";
