@@ -1053,6 +1053,8 @@ int main(int argc, char** argv) {
     else if (line[0] == '\\') {
       process_backslash_commands(line, context);
     }
+    linenoiseHistoryAdd(line);                  /* Add to the history. */
+    linenoiseHistorySave("mapdql_history.txt"); /* Save the history on disk. */
     free(line);
   }
 
