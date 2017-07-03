@@ -403,11 +403,14 @@ std::pair<int64_t, int32_t> Executor::reduceResults(const SQLAgg agg,
         CHECK(ti.is_fp());
         switch (out_byte_width) {
           case 4: {
-            double r = 0.;
+            float r = 0.;
             for (size_t i = 0; i < out_vec_sz; ++i) {
               r += *reinterpret_cast<const float*>(may_alias_ptr(&out_vec[i]));
             }
             return {*reinterpret_cast<const int64_t*>(may_alias_ptr(&r)), 0};
+            const auto float_bin = *reinterpret_cast<const int32_t*>(may_alias_ptr(&r));
+            const int64_t converted_bin = float_argument_input ? float_bin : float_to_double_bin(float_bin, true);
+            return {converted_bin, 0};
           }
           case 8: {
             double r = 0.;
