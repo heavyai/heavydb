@@ -127,7 +127,7 @@ void mapd_signal_handler(int signal_number) {
   google::ShutdownGoogleLogging();
 
   // terminate program
-  exit(signal_number);
+  exit(0);
 }
 
 void register_signal_handler() {
