@@ -343,6 +343,7 @@ service MapD {
   void stop_heap_profile(1: TSessionId session) throws (1: TMapDException e)
   string get_heap_profile(1: TSessionId session) throws (1: TMapDException e)
   string get_memory_gpu(1: TSessionId session) throws (1: TMapDException e)
+  string get_memory_cpu(1: TSessionId session) throws (1: TMapDException e)
   TMemorySummary get_memory_summary(1: TSessionId session) throws (1: TMapDException e)
   void clear_cpu_memory(1: TSessionId session) throws (1: TMapDException e)
   void clear_gpu_memory(1: TSessionId session) throws (1: TMapDException e)

@@ -103,6 +103,7 @@ enum ThriftService {
   kSET_EXECUTION_MODE,
   kGET_VERSION,
   kGET_MEMORY_GPU,
+  kGET_MEMORY_CPU,
   kGET_MEMORY_SUMMARY,
   kGET_TABLE_DETAILS,
   kCLEAR_MEMORY_GPU,
@@ -145,6 +146,9 @@ bool thrift_with_retry(ThriftService which_service, ClientContext& context, cons
         break;
       case kGET_MEMORY_GPU:
         context.client.get_memory_gpu(context.memory_usage, context.session);
+        break;
+      case kGET_MEMORY_CPU:
+        context.client.get_memory_cpu(context.memory_usage, context.session);
         break;
       case kGET_MEMORY_SUMMARY:
         context.client.get_memory_summary(context.memory_summary, context.session);
@@ -363,20 +367,21 @@ void process_backslash_commands(char* command, ClientContext& context) {
         std::cout << "CREATE TABLE " + table_name + " (\n";
       } else {
         std::cout << "CREATE VIEW " + table_name + " AS " + table_details.view_sql << "\n";
-        std::cout << "\n" << "View columns:" << "\n\n";
+        std::cout << "\n"
+                  << "View columns:"
+                  << "\n\n";
       }
       std::string comma_or_blank("");
       for (TColumnType p : table_details.row_desc) {
         std::string encoding;
         if (p.col_type.type == TDatumType::STR) {
-          encoding = (p.col_type.encoding == 0 ? " ENCODING NONE"
-                                               : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
-                                                     std::to_string(p.col_type.comp_param) + ")");
+          encoding =
+              (p.col_type.encoding == 0 ? " ENCODING NONE" : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
+                                                                 std::to_string(p.col_type.comp_param) + ")");
 
         } else {
-          encoding = (p.col_type.encoding == 0 ? ""
-                                               : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
-                                                     std::to_string(p.col_type.comp_param) + ")");
+          encoding = (p.col_type.encoding == 0 ? "" : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
+                                                          std::to_string(p.col_type.comp_param) + ")");
         }
         std::cout << comma_or_blank << p.col_name << " " << thrift_to_name(p.col_type)
                   << (p.col_type.nullable ? "" : " NOT NULL") << encoding;
@@ -975,7 +980,12 @@ int main(int argc, char** argv) {
       } else {
         std::cout << "Cannot connect to MapD Server." << std::endl;
       }
-
+    } else if (!strncmp(line, "\\memory_cpu", 11)) {
+      if (thrift_with_retry(kGET_MEMORY_CPU, context, nullptr)) {
+        std::cout << "MapD Server CPU Detailed Memory Usage " << context.memory_usage << std::endl;
+      } else {
+        std::cout << "Cannot connect to MapD Server." << std::endl;
+      }
     } else if (!strncmp(line, "\\clear_gpu", 11)) {
       if (thrift_with_retry(kCLEAR_MEMORY_GPU, context, nullptr)) {
         std::cout << "MapD Server GPU memory Cleared " << std::endl;

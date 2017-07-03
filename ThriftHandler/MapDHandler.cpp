@@ -833,6 +833,11 @@ void MapDHandler::get_memory_gpu(std::string& memory, const TSessionId& session)
   memory = sys_cat_->get_dataMgr().dumpLevel(MemoryLevel::GPU_LEVEL);
 }
 
+void MapDHandler::get_memory_cpu(std::string& memory, const TSessionId& session) {
+  const auto session_info = get_session(session);
+  memory = sys_cat_->get_dataMgr().dumpLevel(MemoryLevel::CPU_LEVEL);
+}
+
 void MapDHandler::clear_gpu_memory(const TSessionId& session) {
   const auto session_info = get_session(session);
   sys_cat_->get_dataMgr().clearMemory(MemoryLevel::GPU_LEVEL);

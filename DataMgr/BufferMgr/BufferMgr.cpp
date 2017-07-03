@@ -396,7 +396,9 @@ std::string BufferMgr::printSlab(size_t slabNum) {
       tss << " FREE"
           << " ";
     else {
+      tss << " PC: " << setfill(' ') << setw(2) << segIt->buffer->getPinCount();
       tss << " USED - Chunk: ";
+
       for (auto vecIt = segIt->chunkKey.begin(); vecIt != segIt->chunkKey.end(); ++vecIt) {
         tss << *vecIt << ",";
       }
