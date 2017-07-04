@@ -160,6 +160,7 @@ MapD has the following dependencies:
 | [CMake](https://cmake.org/) | 3.3 | yes |
 | [LLVM](http://llvm.org/) | 3.8 | yes |
 | [GCC](http://gcc.gnu.org/) | 4.9 | no, if building with clang |
+| [Go](https://golang.org/) | 1.6 | yes |
 | [Boost](http://www.boost.org/) | 1.5.7 | yes |
 | [OpenJDK](http://openjdk.java.net/) | 1.7 | yes |
 | [CUDA](http://nvidia.com/cuda) | 7.5 | yes, if compiling with GPU support |
@@ -336,42 +337,56 @@ Most build dependencies required by MapD Core are available via APT. Thrift, Blo
     sudo make install
     popd
 
-    VERS=0.3.0
+    VERS=0.4.1
     wget --continue https://github.com/apache/arrow/archive/apache-arrow-$VERS.tar.gz
     tar -xf apache-arrow-$VERS.tar.gz
     mkdir -p arrow-apache-arrow-$VERS/cpp/build
     pushd arrow-apache-arrow-$VERS/cpp/build
     cmake \
-	-DCMAKE_BUILD_TYPE=Release \
-	-DARROW_BUILD_SHARED=off \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DARROW_BUILD_SHARED=off \
         -DARROW_BUILD_STATIC=on \
-	-DCMAKE_INSTALL_PREFIX=/usr/local/mapd-deps \
-	-DARROW_BOOST_USE_SHARED=off \
-	-DARROW_JEMALLOC_USE_SHARED=off \
-				    ..
-   makej
-   make install
-   popd
+        -DCMAKE_INSTALL_PREFIX=/usr/local/mapd-deps \
+        -DARROW_BOOST_USE_SHARED=off \
+        -DARROW_JEMALLOC_USE_SHARED=off \
+        ..
+    makej
+    make install
+    popd
 
+### Environment Variables
 
+The CUDA, Java, and mapd-deps `lib` directories need to be added to `LD_LIBRARY_PATH`; the CUDA and mapd-deps `bin` directories need to be added to `PATH`. The easiest way to do so is by creating a new file named `/etc/profile.d/mapd-deps.sh` containing the following:
 
-##UBUNTU 17.04
+    LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
+    LD_LIBRARY_PATH=/usr/lib/jvm/default-java/jre/lib/amd64/server:$LD_LIBRARY_PATH
+    LD_LIBRARY_PATH=/usr/local/mapd-deps/lib:$LD_LIBRARY_PATH
+    LD_LIBRARY_PATH=/usr/local/mapd-deps/lib64:$LD_LIBRARY_PATH
 
-Sames as 16.10 with the following additons (we recommend that the proprietary nvidia drivers supplied via canonical be used)
+    PATH=/usr/local/cuda/bin:$PATH
+    PATH=/usr/local/mapd-deps/bin:$PATH
 
-  sudo apt install -y \
-    nvidia-cuda-toolkit \
-    ccache \
-    libglu1-mesa-dev \
-    libglewmx-dev \
-    gcc-5 \
-    g++-5 \
-    libldap2-dev \
-    flex-old
+    export LD_LIBRARY_PATH PATH
+
+## Ubuntu 17.04
+
+Same as 16.10 with the following additions:
+
+    sudo apt install -y \
+        ccache \
+        libglu1-mesa-dev \
+        libglewmx-dev \
+        gcc-5 \
+        g++-5 \
+        libldap2-dev \
+        flex-old
 
 ### CUDA
 
-It is preferred, but not necessary, to install CUDA and the NVIDIA drivers using the .deb using the [instructions provided by NVIDIA](https://developer.nvidia.com/cuda-downloads). The `deb (network)` method (preferred) will ensure you always have the latest stable drivers, while the `deb (local)` method allows you to install does not require Internet access.
+Recent versions of Ubuntu provide the NVIDIA CUDA Toolkit and drivers in the standard repositories. To install:
+
+    sudo apt install -y \
+        nvidia-cuda-toolkit
 
 Be sure to reboot after installing in order to activate the NVIDIA drivers.
 
