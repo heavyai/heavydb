@@ -314,7 +314,6 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
         break;
     }
     throw std::runtime_error("Unable to fold");
-    return 0;
   }
 
   bool foldOper(SQLOps optype, SQLTypes type, Datum lhs, Datum rhs, Datum& result, SQLTypes& result_type) const {
