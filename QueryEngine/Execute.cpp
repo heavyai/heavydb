@@ -407,7 +407,6 @@ std::pair<int64_t, int32_t> Executor::reduceResults(const SQLAgg agg,
             for (size_t i = 0; i < out_vec_sz; ++i) {
               r += *reinterpret_cast<const float*>(may_alias_ptr(&out_vec[i]));
             }
-            return {*reinterpret_cast<const int64_t*>(may_alias_ptr(&r)), 0};
             const auto float_bin = *reinterpret_cast<const int32_t*>(may_alias_ptr(&r));
             const int64_t converted_bin = float_argument_input ? float_bin : float_to_double_bin(float_bin, true);
             return {converted_bin, 0};
