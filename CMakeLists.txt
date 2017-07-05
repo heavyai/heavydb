@@ -132,14 +132,20 @@ if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
 endif()
 
 if(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
+  get_filename_component(JAVA_LIBJVM_DIR ${JAVA_JVM_LIBRARY} DIRECTORY)
+  set(JAVA_ARCH CMAKE_SYSTEM_PROCESSOR)
+  if(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
+    set(JAVA_ARCH "amd64")
+  endif()
   set(CMAKE_INSTALL_RPATH
-    "\$ORIGIN/../ThirdParty/java/jre/lib/amd64/server"
-    "/usr/lib/jvm/java-1.8.0-openjdk-amd64/jre/lib/amd64/server"
-    "/usr/lib/jvm/jre-1.8.0-openjdk/lib/amd64/server"
-    "/usr/lib/jvm/java-1.8.0-openjdk/jre/lib/amd64/server"
-    "/usr/lib/jvm/jre/lib/amd64/server"
-    "/usr/lib/jvm/java/jre/lib/amd64/server"
-    "/usr/lib/jvm/default-java/jre/lib/amd64/server"
+    "\$ORIGIN/../ThirdParty/java/jre/lib/${JAVA_ARCH}/server"
+    "/usr/lib/jvm/java-1.8.0-openjdk-amd64/jre/lib/${JAVA_ARCH}/server"
+    "/usr/lib/jvm/jre-1.8.0-openjdk/lib/${JAVA_ARCH}/server"
+    "/usr/lib/jvm/java-1.8.0-openjdk/jre/lib/${JAVA_ARCH}/server"
+    "/usr/lib/jvm/jre/lib/${JAVA_ARCH}/server"
+    "/usr/lib/jvm/java/jre/lib/${JAVA_ARCH}/server"
+    "/usr/lib/jvm/default-java/jre/lib/${JAVA_ARCH}/server"
+    ${JAVA_LIBJVM_DIR}
   )
   set(CMAKE_BUILD_WITH_INSTALL_RPATH ON)
 endif()
