@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package com.mapd.jdbc;
 
 import com.mapd.thrift.server.MapD;
@@ -66,11 +65,9 @@ public class MapDStatement implements java.sql.Statement {
     logger.debug("afterFnSQL is :'" + afterFnSQL + "'");
     try {
       sqlResult = client.sql_execute(session, afterFnSQL + ";", true, null, -1);
-    }
-    catch (TMapDException ex) {
+    } catch (TMapDException ex) {
       throw new SQLException("Query failed : " + ex.getError_msg());
-    }
-    catch (TException ex) {
+    } catch (TException ex) {
       throw new SQLException("Query failed : " + ex.toString());
     }
 
@@ -82,11 +79,9 @@ public class MapDStatement implements java.sql.Statement {
   public int executeUpdate(String sql) throws SQLException { //logger.debug("Entered");
     try {
       sqlResult = client.sql_execute(session, sql + ";", true, null, -1);
-    }
-    catch (TMapDException ex) {
-      throw new SQLException("Query failed : " + ex.getError_msg());
-    }
-    catch (TException ex) {
+    } catch (TMapDException ex) {
+      throw new SQLException("Query failed : " + ex.getError_msg() + " sql was '" + sql + "'");
+    } catch (TException ex) {
       throw new SQLException("Query failed : " + ex.toString());
     }
 
