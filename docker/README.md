@@ -29,7 +29,7 @@ which will assign the name `mapd/mapd` and the tag `v3.0.0` to the image.
 
 ### Image layout
 
-The tarball is extracted to `/installs`. The extracted tarball is also symlinked to `/mapd`.
+The tarball is extracted to `/mapd`.
 
 The data directory is at `/mapd-storage/data`.
 
@@ -44,8 +44,8 @@ The config file lives at `/mapd-storage/mapd.conf`.
       -v /usr/share/glvnd/egl_vendor.d:/usr/share/glvnd/egl_vendor.d \
       mapd/mapd:v3.0.0
 
-This starts the MapD Core Database inside a container named `mapd`, and exposes the Immerse visualization client on port 9092..
+This starts the MapD Core Database inside a container named `mapd`, and exposes the Immerse visualization client on port 9092.
 
-Data will be persisted to the host directory `/path/to/mapd-storage`.
+Data will be persisted to the host directory `/path/to/mapd-storage`. The container will initialize the MapD data directory via `initdb` if necessary.
 
 The `/usr/share/glvnd/egl_vendor.d` directory is required for rendering support when using recent NVIDIA GPU drivers.
