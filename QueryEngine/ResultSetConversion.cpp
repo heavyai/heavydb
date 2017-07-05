@@ -313,7 +313,10 @@ std::vector<std::shared_ptr<Array>> generate_columns(
 }
 
 std::shared_ptr<ValueArray> create_value_array(const Field& field, const size_t value_count) {
-  switch (field.type()->id()) {
+  const auto type_id = field.type()->id() == Type::DICTIONARY
+                           ? std::static_pointer_cast<DictionaryType>(field.type())->index_type()->id()
+                           : field.type()->id();
+  switch (type_id) {
     case Type::BOOL: {
       auto array = std::make_shared<ValueArray>(std::vector<bool>());
       boost::get<std::vector<bool>>(*array).reserve(value_count);
@@ -356,7 +359,10 @@ std::shared_ptr<ValueArray> create_value_array(const Field& field, const size_t 
 }
 
 void append_value_array(ValueArray& dst, const ValueArray& src, const Field& field) {
-  switch (field.type()->id()) {
+  const auto type_id = field.type()->id() == Type::DICTIONARY
+                           ? std::static_pointer_cast<DictionaryType>(field.type())->index_type()->id()
+                           : field.type()->id();
+  switch (type_id) {
     case Type::BOOL: {
       auto dst_bool = boost::get<std::vector<bool>>(&dst);
       auto src_bool = boost::get<std::vector<bool>>(&src);
