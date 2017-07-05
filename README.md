@@ -423,6 +423,8 @@ The following uses [yaourt](https://wiki.archlinux.org/index.php/Yaourt) to inst
         llvm \
         thrift \
         go \
+        gdal \
+        maven
 
     VERS=1.21-45
     wget --continue https://github.com/jarro2783/bisonpp/archive/$VERS.tar.gz
@@ -443,3 +445,12 @@ CUDA and the NVIDIA drivers may be installed using the following.
         nvidia
 
 Be sure to reboot after installing in order to activate the NVIDIA drivers.
+
+### Environment Variables
+
+The Java `lib` directories need to be added to `LD_LIBRARY_PATH`; the CUDA `bin` directories need to be added to `PATH`. The easiest way to do so is by creating a new file named `/etc/profile.d/mapd-deps.sh` containing the following:
+
+    LD_LIBRARY_PATH=/usr/lib/jvm/default/jre/lib/amd64/server:$LD_LIBRARY_PATH
+    PATH=/opt/cuda/bin:$PATH
+
+    export LD_LIBRARY_PATH PATH
