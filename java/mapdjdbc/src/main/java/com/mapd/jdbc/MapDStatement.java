@@ -371,8 +371,6 @@ public class MapDStatement implements java.sql.Statement {
             getStackTrace()[0].getMethodName());
   }
 
-  private static final Pattern FN = Pattern.compile("\\{fn([^\\{]*?)}",
-          Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
   private static final Pattern QUARTER = Pattern.compile("\\sQUARTER\\(([^\\{]*?)",
           Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
   private static final Pattern DAYOFYEAR = Pattern.compile("\\sDAYOFYEAR\\(([^\\{]*?)",
@@ -413,11 +411,6 @@ public class MapDStatement implements java.sql.Statement {
   public static String fnReplace(String sql) {
     // need to iterate as each reduction of string opens up a anew match
     String start;
-    do {
-      start = sql;
-      sql = FN.matcher(sql).replaceAll("$1");
-    } while (!sql.equals(start));
-
     do {
       start = sql;
       sql = QUARTER.matcher(sql).replaceAll(" EXTRACT(QUARTER FROM $1");
