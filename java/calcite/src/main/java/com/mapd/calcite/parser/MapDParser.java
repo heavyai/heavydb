@@ -80,12 +80,10 @@ public final class MapDParser {
   }
 
   private Planner getPlanner() {
-    final SqlStdOperatorTable stdOpTab = SqlStdOperatorTable.instance();
     MapDSchema mapd = new MapDSchema(dataDir, this, mapdPort, mapdUser);
     final SchemaPlus rootSchema = Frameworks.createRootSchema(true);
     final FrameworkConfig config = Frameworks.newConfigBuilder()
             .defaultSchema(rootSchema.add("mapd", mapd))
-            //.operatorTable(stdOpTab)
             .operatorTable(createOperatorTable(extSigs))
             .parserConfig(SqlParser.configBuilder()
                     .setUnquotedCasing(Casing.UNCHANGED)
