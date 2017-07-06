@@ -104,13 +104,36 @@ void start_calcite_server_as_daemon(const int mapd_port,
                                     const int port,
                                     const std::string& data_dir,
                                     const size_t calcite_max_mem) {
-  std::string cmd = "java -Xmx" + std::to_string(calcite_max_mem) + "m -jar " + mapd_root_abs_path() +
-                    "/bin/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar -d " + data_dir + " -e " +
-                    mapd_root_abs_path() +
-                    // disable calling mapd server for metadata for now
-                    //"/QueryEngine/ -p " + std::to_string(port) + " -m " + std::to_string(mapd_port);
-                    "/QueryEngine/ -p " + std::to_string(port) + " -m -1";
-  CHECK_GE(system(cmd.c_str()), 0);
+  // todo MAT all platforms seem to respect /usr/bin/java - this could be a gotcha on some weird thing
+  std::string xmxP = "-Xmx" + std::to_string(calcite_max_mem) + "m";
+  std::string jarP = "-jar";
+  std::string jarD = mapd_root_abs_path() + "/bin/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar";
+  std::string extensionsP = "-e";
+  std::string extensionsD = mapd_root_abs_path() + "/QueryEngine/";
+  std::string dataP = "-d";
+  std::string dataD = data_dir;
+  std::string localPortP = "-p" + std::to_string(port);
+  std::string localPortD = std::to_string(port);
+  std::string mapdPortP = "-m";
+  std::string mapdPortD = "-1";
+
+  int pid = fork();
+  if (pid == 0) {
+    int i = execl("/usr/bin/java",
+                  xmxP.c_str(),
+                  jarP.c_str(),
+                  jarD.c_str(),
+                  extensionsP.c_str(),
+                  extensionsD.c_str(),
+                  dataP.c_str(),
+                  dataD.c_str(),
+                  localPortP.c_str(),
+                  localPortD.c_str(),
+                  mapdPortP.c_str(),
+                  mapdPortD.c_str(),
+                  (char*)0);
+    LOG(INFO) << " Calcite server running after exe, return " << i;
+  }
 }
 
 std::pair<boost::shared_ptr<CalciteServerClient>, boost::shared_ptr<TTransport>> get_client(int port) {
@@ -154,10 +177,8 @@ void Calcite::runServer(const int mapd_port,
     }
   }
 
-  // start the server in a thread
-  std::thread t(start_calcite_server_as_daemon, mapd_port, port, data_dir, calcite_max_mem);
-  calcite_server_thread_ = move(t);
-  calcite_server_thread_.detach();
+  // start the calcite server as a seperate process
+  start_calcite_server_as_daemon(mapd_port, port, data_dir, calcite_max_mem);
 
   // check for new server for 5 seconds max
   std::this_thread::sleep_for(std::chrono::milliseconds(200));
