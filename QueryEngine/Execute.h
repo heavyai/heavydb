@@ -929,11 +929,15 @@ class Executor {
 
   void createErrorCheckControlFlow(llvm::Function* query_func, bool run_with_dynamic_watchdog);
 
+  const std::vector<Analyzer::Expr*> codegenOneToManyHashJoins(const std::vector<Analyzer::Expr*>& primary_quals,
+                                                               const RelAlgExecutionUnit& ra_exe_unit,
+                                                               const CompilationOptions& co);
+
   const std::vector<Analyzer::Expr*> codegenHashJoinsBeforeLoopJoin(const std::vector<Analyzer::Expr*>& primary_quals,
                                                                     const RelAlgExecutionUnit& ra_exe_unit,
                                                                     const CompilationOptions& co);
 
-  void codegenInnerScanNextRow();
+  void codegenInnerScanNextRowOrMatch();
 
   void preloadFragOffsets(const std::vector<InputDescriptor>& input_descs,
                           const std::vector<InputTableInfo>& query_infos);
@@ -1158,9 +1162,11 @@ class Executor {
     std::vector<llvm::Value*> str_constants_;
     std::vector<llvm::Value*> frag_offsets_;
     std::unordered_map<InputDescriptor, std::pair<llvm::Value*, llvm::Value*>> scan_to_iterator_;
+    std::vector<std::pair<llvm::Value*, llvm::Value*>> match_iterators_;
     const bool is_outer_join_;
     llvm::Value* outer_join_cond_lv_;
     std::vector<llvm::BasicBlock*> inner_scan_labels_;
+    std::vector<llvm::BasicBlock*> match_scan_labels_;
     std::unordered_map<int, llvm::Value*> scan_idx_to_hash_pos_;
     std::vector<std::unique_ptr<const InValuesBitmap>> in_values_bitmaps_;
     const std::vector<InputTableInfo>& query_infos_;

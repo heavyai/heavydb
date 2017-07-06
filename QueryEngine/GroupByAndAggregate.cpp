@@ -2587,7 +2587,7 @@ bool GroupByAndAggregate::codegen(llvm::Value* filter_result, const CompilationO
     }
   }
 
-  executor_->codegenInnerScanNextRow();
+  executor_->codegenInnerScanNextRowOrMatch();
 
   return can_return_error;
 }

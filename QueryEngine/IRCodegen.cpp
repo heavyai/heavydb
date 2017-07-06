@@ -242,10 +242,24 @@ const std::vector<Analyzer::Expr*> Executor::codegenHashJoinsBeforeLoopJoin(
   return remaining_quals;
 }
 
-void Executor::codegenInnerScanNextRow() {
+void Executor::codegenInnerScanNextRowOrMatch() {
   if (cgen_state_->inner_scan_labels_.empty()) {
-    cgen_state_->ir_builder_.CreateRet(ll_int(int32_t(0)));
+    if (cgen_state_->match_scan_labels_.empty()) {
+      cgen_state_->ir_builder_.CreateRet(ll_int(int32_t(0)));
+      return;
+    }
+    // TODO(miyu): support multiple one-to-many hash joins in folded join sequence.
+    CHECK_EQ(size_t(1), cgen_state_->match_iterators_.size());
+    llvm::Value* match_pos = nullptr;
+    llvm::Value* match_pos_ptr = nullptr;
+    std::tie(match_pos, match_pos_ptr) = *cgen_state_->match_iterators_.begin();
+    auto next_match_pos = cgen_state_->ir_builder_.CreateAdd(match_pos, ll_int(int64_t(1)));
+    cgen_state_->ir_builder_.CreateStore(next_match_pos, match_pos_ptr);
+    CHECK_EQ(size_t(1), cgen_state_->match_scan_labels_.size());
+    cgen_state_->ir_builder_.CreateBr(cgen_state_->match_scan_labels_.front());
   } else {
+    // TODO(miyu): support one-to-many hash join + loop join
+    CHECK(cgen_state_->match_scan_labels_.empty());
     CHECK_EQ(size_t(1), cgen_state_->scan_to_iterator_.size());
     auto inner_it_val_and_ptr = cgen_state_->scan_to_iterator_.begin()->second;
     auto inner_it_inc = cgen_state_->ir_builder_.CreateAdd(inner_it_val_and_ptr.first, ll_int(int64_t(1)));

@@ -162,7 +162,15 @@ class JoinHashTable {
 
   size_t shardCount() const;
 
+  llvm::Value* codegenHashTableLoad(const size_t table_idx);
+
+  std::vector<llvm::Value*> getHashJoinArgs(llvm::Value* hash_ptr,
+                                            const Analyzer::ColumnVar* key_col,
+                                            const int shard_count,
+                                            const CompilationOptions& co);
+
   bool needOneToManyHash(const std::vector<int>& errors) const;
+  llvm::Value* codegenOneToManyHashJoin(const CompilationOptions&, const size_t);
 
   std::pair<const int8_t*, size_t> fetchFragments(const Analyzer::ColumnVar* hash_col,
                                                   const std::deque<Fragmenter_Namespace::FragmentInfo>& fragment_info,

@@ -986,7 +986,140 @@ void JoinHashTable::putHashTableOnCpuToCache(
   join_hash_table_cache_.emplace_back(cache_key, cpu_hash_table_buff_);
 }
 
+llvm::Value* JoinHashTable::codegenHashTableLoad(const size_t table_idx) {
+  llvm::Value* hash_ptr = nullptr;
+  const auto total_table_count = executor_->plan_state_->join_info_.join_hash_tables_.size();
+  CHECK_LT(table_idx, total_table_count);
+  if (total_table_count > 1) {
+    auto hash_tables_ptr = get_arg_by_name(executor_->cgen_state_->row_func_, "join_hash_tables");
+    auto hash_pptr = table_idx > 0
+                         ? executor_->cgen_state_->ir_builder_.CreateGEP(
+                               hash_tables_ptr, executor_->ll_int(static_cast<int64_t>(table_idx)))
+                         : hash_tables_ptr;
+    hash_ptr = executor_->cgen_state_->ir_builder_.CreateLoad(hash_pptr);
+  } else {
+    hash_ptr = executor_->cgen_state_->ir_builder_.CreatePtrToInt(
+        get_arg_by_name(executor_->cgen_state_->row_func_, "join_hash_tables"),
+        llvm::Type::getInt64Ty(executor_->cgen_state_->context_));
+  }
+  CHECK(hash_ptr);
+  return hash_ptr;
+}
+
+std::vector<llvm::Value*> JoinHashTable::getHashJoinArgs(llvm::Value* hash_ptr,
+                                                         const Analyzer::ColumnVar* key_col,
+                                                         const int shard_count,
+                                                         const CompilationOptions& co) {
+  const auto key_lvs = executor_->codegen(key_col, true, co);
+  CHECK_EQ(size_t(1), key_lvs.size());
+  std::vector<llvm::Value*> hash_join_idx_args{hash_ptr,
+                                               executor_->castToTypeIn(key_lvs.front(), 64),
+                                               executor_->ll_int(col_range_.getIntMin()),
+                                               executor_->ll_int(col_range_.getIntMax())};
+  if (shard_count) {
+    const auto expected_hash_entry_count = get_hash_entry_count(col_range_);
+    const auto entry_count_per_shard = (expected_hash_entry_count + shard_count - 1) / shard_count;
+    hash_join_idx_args.push_back(executor_->ll_int<uint32_t>(entry_count_per_shard));
+    hash_join_idx_args.push_back(executor_->ll_int<uint32_t>(shard_count));
+    hash_join_idx_args.push_back(executor_->ll_int<uint32_t>(device_count_));
+  }
+  if (col_range_.hasNulls()) {
+    hash_join_idx_args.push_back(executor_->ll_int(inline_fixed_encoding_null_val(key_col->get_type_info())));
+  }
+  return hash_join_idx_args;
+}
+
+llvm::Value* JoinHashTable::codegenOneToManyHashJoin(const CompilationOptions& co, const size_t index) {
+  // TODO(miyu): allow one-to-many hash join in folded join sequence.
+  CHECK(executor_->plan_state_->join_info_.join_impl_type_ == Executor::JoinImplType::HashOneToMany);
+  const int shard_count = shardCount();
+  if (shard_count) {
+    throw std::runtime_error("Sharded one-to-many hash join is not supported yet");
+  }
+  const auto cols = get_cols(qual_bin_oper_, *executor_->getCatalog(), executor_->temporary_tables_);
+  auto key_col = cols.second;
+  CHECK(key_col);
+  auto val_col = cols.first;
+  CHECK(val_col);
+  const auto key_lvs = executor_->codegen(key_col, true, co);
+  CHECK_EQ(size_t(1), key_lvs.size());
+  auto pos_ptr = codegenHashTableLoad(index);
+  CHECK(pos_ptr);
+  auto hash_join_idx_args = getHashJoinArgs(pos_ptr, key_col, shard_count, co);
+  std::string fname{"hash_join_idx"};
+  if (col_range_.hasNulls()) {
+    fname += "_nullable";
+  }
+  const auto slot_lv = executor_->cgen_state_->emitCall(fname, hash_join_idx_args);
+  const auto slot_valid_lv = executor_->cgen_state_->ir_builder_.CreateICmpSGE(slot_lv, executor_->ll_int(int64_t(0)));
+
+  CHECK(executor_->plan_state_->join_info_.join_hash_tables_[index]);
+  const auto actual_hash_entry_count = executor_->plan_state_->join_info_.join_hash_tables_[index]->hash_entry_count_;
+  const int64_t sub_buff_size = actual_hash_entry_count * sizeof(int32_t);
+  auto count_ptr = executor_->cgen_state_->ir_builder_.CreateAdd(pos_ptr, executor_->ll_int(sub_buff_size));
+
+  hash_join_idx_args[0] = executor_->cgen_state_->ir_builder_.CreatePtrToInt(
+      count_ptr, llvm::Type::getInt64Ty(executor_->cgen_state_->context_));
+
+  const auto row_count_lv = executor_->cgen_state_->emitCall(fname, hash_join_idx_args);
+  auto rowid_base_i32 = executor_->cgen_state_->ir_builder_.CreateIntToPtr(
+      executor_->cgen_state_->ir_builder_.CreateAdd(pos_ptr, executor_->ll_int(2 * sub_buff_size)),
+      llvm::Type::getInt32PtrTy(executor_->cgen_state_->context_));
+  auto rowid_ptr_i32 = executor_->cgen_state_->ir_builder_.CreateGEP(rowid_base_i32, slot_lv);
+
+  // Loop
+  auto preheader = executor_->cgen_state_->ir_builder_.GetInsertBlock();
+  auto match_pos_ptr =
+      executor_->cgen_state_->ir_builder_.CreateAlloca(get_int_type(64, executor_->cgen_state_->context_),
+                                                       nullptr,
+                                                       "match_scan_" + std::to_string(val_col->get_rte_idx()));
+  llvm::Value* match_start_pos = nullptr;
+  if (executor_->isOuterJoin()) {
+    // Avoid out of bound access to empty rowid_buff when no match is found.
+    match_start_pos = executor_->cgen_state_->ir_builder_.CreateSelect(
+        slot_valid_lv, executor_->ll_int(int64_t(0)), executor_->ll_int(int64_t(-1)));
+  } else {
+    match_start_pos = executor_->ll_int(int64_t(0));
+  }
+  CHECK(match_start_pos);
+  executor_->cgen_state_->ir_builder_.CreateStore(match_start_pos, match_pos_ptr);
+  auto match_loop_head = llvm::BasicBlock::Create(executor_->cgen_state_->context_,
+                                                  "match_loop_head_" + std::to_string(val_col->get_rte_idx()),
+                                                  executor_->cgen_state_->row_func_,
+                                                  preheader->getNextNode());
+  executor_->cgen_state_->ir_builder_.CreateBr(match_loop_head);
+  executor_->cgen_state_->ir_builder_.SetInsertPoint(match_loop_head);
+  auto match_pos = executor_->cgen_state_->ir_builder_.CreateLoad(match_pos_ptr, "match_pos_it");
+  auto match_rowid =
+      executor_->castToTypeIn(executor_->cgen_state_->ir_builder_.CreateLoad(
+                                  executor_->cgen_state_->ir_builder_.CreateGEP(rowid_ptr_i32, match_pos)),
+                              64);
+  {
+    const auto it_ok = executor_->cgen_state_->scan_idx_to_hash_pos_.emplace(val_col->get_rte_idx(), match_rowid);
+    CHECK(it_ok.second);
+  }
+  auto have_more_matches = executor_->cgen_state_->ir_builder_.CreateICmpSLT(match_pos, row_count_lv);
+  auto match_scan_ret = llvm::BasicBlock::Create(executor_->cgen_state_->context_,
+                                                 "match_scan_ret_" + std::to_string(val_col->get_rte_idx()),
+                                                 executor_->cgen_state_->row_func_);
+  auto match_scan_cont = llvm::BasicBlock::Create(executor_->cgen_state_->context_,
+                                                  "match_scan_cont_" + std::to_string(val_col->get_rte_idx()),
+                                                  executor_->cgen_state_->row_func_);
+  executor_->cgen_state_->ir_builder_.CreateCondBr(have_more_matches, match_scan_cont, match_scan_ret);
+  executor_->cgen_state_->ir_builder_.SetInsertPoint(match_scan_ret);
+  executor_->cgen_state_->ir_builder_.CreateRet(executor_->ll_int(int32_t(0)));
+  executor_->cgen_state_->ir_builder_.SetInsertPoint(match_scan_cont);
+
+  executor_->cgen_state_->match_scan_labels_.push_back(match_loop_head);
+  executor_->cgen_state_->match_iterators_.push_back(std::make_pair(match_pos, match_pos_ptr));
+
+  return slot_valid_lv;
+}
+
 llvm::Value* JoinHashTable::codegenSlot(const CompilationOptions& co, const size_t index) {
+  if (executor_->plan_state_->join_info_.join_hash_tables_[index]->getHashType() == JoinHashTable::OneToMany) {
+    return codegenOneToManyHashJoin(co, index);
+  }
   CHECK(executor_->plan_state_->join_info_.join_impl_type_ == Executor::JoinImplType::HashOneToOne ||
         executor_->plan_state_->join_info_.join_impl_type_ == Executor::JoinImplType::HashPlusLoop);
   const auto cols = get_cols(qual_bin_oper_, *executor_->getCatalog(), executor_->temporary_tables_);
@@ -996,38 +1129,11 @@ llvm::Value* JoinHashTable::codegenSlot(const CompilationOptions& co, const size
   CHECK(val_col);
   const auto key_lvs = executor_->codegen(key_col, true, co);
   CHECK_EQ(size_t(1), key_lvs.size());
-  const auto total_table_count = executor_->plan_state_->join_info_.join_hash_tables_.size();
-  CHECK_LT(index, total_table_count);
-  CHECK(executor_->plan_state_->join_info_.join_hash_tables_[index]);
-  llvm::Value* hash_ptr = nullptr;
-  if (total_table_count > 1) {
-    auto hash_tables_ptr = get_arg_by_name(executor_->cgen_state_->row_func_, "join_hash_tables");
-    auto hash_pptr = index > 0
-                         ? executor_->cgen_state_->ir_builder_.CreateGEP(hash_tables_ptr,
-                                                                         executor_->ll_int(static_cast<int64_t>(index)))
-                         : hash_tables_ptr;
-    hash_ptr = executor_->cgen_state_->ir_builder_.CreateLoad(hash_pptr);
-  } else {
-    hash_ptr = executor_->cgen_state_->ir_builder_.CreatePtrToInt(
-        get_arg_by_name(executor_->cgen_state_->row_func_, "join_hash_tables"),
-        llvm::Type::getInt64Ty(executor_->cgen_state_->context_));
-  }
+  auto hash_ptr = codegenHashTableLoad(index);
   CHECK(hash_ptr);
-  std::vector<llvm::Value*> hash_join_idx_args{hash_ptr,
-                                               executor_->castToTypeIn(key_lvs.front(), 64),
-                                               executor_->ll_int(col_range_.getIntMin()),
-                                               executor_->ll_int(col_range_.getIntMax())};
+  CHECK(executor_->plan_state_->join_info_.join_hash_tables_[index]);
   const int shard_count = shardCount();
-  if (shard_count) {
-    const auto hash_entry_count = get_hash_entry_count(col_range_);
-    const auto entry_count_per_shard = (hash_entry_count + shard_count - 1) / shard_count;
-    hash_join_idx_args.push_back(executor_->ll_int<uint32_t>(entry_count_per_shard));
-    hash_join_idx_args.push_back(executor_->ll_int<uint32_t>(shard_count));
-    hash_join_idx_args.push_back(executor_->ll_int<uint32_t>(device_count_));
-  }
-  if (col_range_.hasNulls()) {
-    hash_join_idx_args.push_back(executor_->ll_int(inline_fixed_encoding_null_val(key_col->get_type_info())));
-  }
+  const auto hash_join_idx_args = getHashJoinArgs(hash_ptr, key_col, shard_count, co);
   std::string fname{"hash_join_idx"};
   if (shard_count) {
     fname += "_sharded";

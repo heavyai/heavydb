@@ -1073,7 +1073,7 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
     auto sc_false = llvm::BasicBlock::Create(cgen_state_->context_, "sc_false", cgen_state_->row_func_);
     cgen_state_->ir_builder_.CreateCondBr(filter_lv, sc_true, sc_false);
     cgen_state_->ir_builder_.SetInsertPoint(sc_false);
-    codegenInnerScanNextRow();
+    codegenInnerScanNextRowOrMatch();
     cgen_state_->ir_builder_.SetInsertPoint(sc_true);
   }
 
