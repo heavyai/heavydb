@@ -9,7 +9,7 @@ MAPD_HTTP_PORT=${MAPD_HTTP_PORT:=9090}
 MAPD_WEB_PORT=${MAPD_WEB_PORT:=9092}
 MAPD_CALCITE_PORT=${MAPD_CALCITE_PORT:=9093}
 
-
+FRONTEND=${FRONTEND:=true}
 MAPD_DATA=${MAPD_DATA:="data"}
 
 while (( $# )); do
@@ -37,6 +37,8 @@ while (( $# )); do
             HTTPS_KEY="--key $1" ;;
         --non-interactive)
             NON_INTERACTIVE=true ;;
+        --no-frontend)
+            FRONTEND=false ;;
         --verbose)
             VERBOSE="--verbose" ;;
         *)
@@ -79,7 +81,7 @@ if [ "$INSERT_SAMPLE_DATA" = true ]; then
     fi
 fi
 
-if [ -d frontend ] && [ -e ./bin/mapd_web_server ]; then
+if [ "$FRONTEND" = true ] && [ -d frontend ] && [ -e ./bin/mapd_web_server ]; then
     ./bin/mapd_web_server $RO --port $MAPD_WEB_PORT --backend-url "http://localhost:${MAPD_HTTP_PORT}" --data $MAPD_DATA $HTTPS $HTTPS_CERT $HTTPS_KEY $VERBOSE &
 
     if [ ! -z "$HTTPS" ] ; then
