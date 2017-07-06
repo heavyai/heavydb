@@ -268,7 +268,7 @@ void redirect_inputs_of(std::shared_ptr<RelAlgNode> node,
     return;
   }
   if (auto filter = std::dynamic_pointer_cast<RelFilter>(node)) {
-    if (permutating_projects.count(src_project.get())) {
+    if (permutating_projects.count(src_project.get()) || dynamic_cast<const RelJoin*>(src_project->getInput(0))) {
       propagate_rex_input_renumber(filter.get(), du_web, deconst_mapping);
       filter->RelAlgNode::replaceInput(src_project, src_project->getAndOwnInput(0));
       RexProjectInputRedirector redirector(projects);
