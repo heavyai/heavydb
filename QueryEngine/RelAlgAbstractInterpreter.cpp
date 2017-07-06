@@ -922,7 +922,7 @@ const RexOperator* get_equijoin_condition(const RelJoin* join) {
   return get_equals_operator(join);
 }
 
-std::vector<const RelJoin*> collect_coalescable_joins(
+std::vector<const RelJoin*> collect_coalesceable_joins(
     const RelJoin* head,
     const std::unordered_map<const RelAlgNode*, std::unordered_set<const RelAlgNode*>>& du_web,
     std::vector<const RexScalar*>& condition_set) {
@@ -1196,8 +1196,7 @@ void replace_equijoin_keys(const std::shared_ptr<RelMultiJoin> multi_join,
       indirect_usrs.insert(indirect_usrs.end(), filter_usrs_it->second.begin(), filter_usrs_it->second.end());
       continue;
     }
-    throw QueryNotSupported(walker->toString() + " after join not supported yet");
-    CHECK(!dynamic_cast<const RelJoin*>(walker));
+    throw std::runtime_error(walker->toString() + " after join not supported yet");
   }
 
   RexInputRenumber<true> renumber(old_to_new_flattened_idx);
@@ -1214,7 +1213,7 @@ void replace_equijoin_keys(const std::shared_ptr<RelMultiJoin> multi_join,
       project->setExpressions(new_exprs);
       continue;
     }
-    throw QueryNotSupported(walker->toString() + " after join+filter not supported yet");
+    throw std::runtime_error(walker->toString() + " after join + filter not supported yet");
   }
 }
 
@@ -1234,7 +1233,7 @@ void coalesce_joins(std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
     visited.insert(node.get());
     if (auto join = std::dynamic_pointer_cast<RelJoin>(node)) {
       std::vector<const RexScalar*> condition_set;
-      auto sequence = collect_coalescable_joins(join.get(), web, condition_set);
+      auto sequence = collect_coalesceable_joins(join.get(), web, condition_set);
       if (sequence.size() < 2) {
         new_nodes.push_back(node);
         continue;
@@ -1287,7 +1286,7 @@ void coalesce_joins(std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
 }
 #endif
 
-void coalesce_nodes(std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept {
+void coalesce_nodes(std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
 #ifdef ENABLE_EQUIJOIN_FOLD
   coalesce_joins(nodes);
 #endif
