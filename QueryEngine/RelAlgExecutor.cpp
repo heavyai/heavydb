@@ -1570,6 +1570,8 @@ std::string RelAlgExecutor::getErrorMessageFromCode(const int32_t error_code) {
       return "Query execution has been interrupted";
     case Executor::ERR_COLUMNAR_CONVERSION_NOT_SUPPORTED:
       return "Columnar conversion not supported for variable length types";
+    case Executor::ERR_TOO_MANY_LITERALS:
+      return "Too many literals in the query";
   }
   return "Other error: code " + std::to_string(error_code);
 }

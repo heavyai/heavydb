@@ -498,6 +498,9 @@ void Executor::ExecutionDispatch::run(const ExecutorDeviceType chosen_device_typ
   } catch (const ColumnarConversionNotSupported& e) {
     std::lock_guard<std::mutex> lock(reduce_mutex_);
     *error_code_ = ERR_COLUMNAR_CONVERSION_NOT_SUPPORTED;
+  } catch (const TooManyLiterals&) {
+    std::lock_guard<std::mutex> lock(reduce_mutex_);
+    *error_code_ = ERR_TOO_MANY_LITERALS;
   }
 }
 
