@@ -54,6 +54,7 @@ class JoinHashTable {
                                                     const RelAlgExecutionUnit& ra_exe_unit,
                                                     const Data_Namespace::MemoryLevel memory_level,
                                                     const int device_count,
+                                                    const std::unordered_set<int>& skip_tables,
                                                     Executor* executor);
 
   int64_t getJoinHashBuffer(const ExecutorDeviceType device_type, const int device_id) noexcept {
@@ -72,6 +73,8 @@ class JoinHashTable {
 #endif
   }
 
+  const Analyzer::ColumnVar* getHashColumnVar() const { return col_var_.get(); };
+
  private:
   JoinHashTable(const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
                 const Analyzer::ColumnVar* col_var,
@@ -82,6 +85,7 @@ class JoinHashTable {
                 Executor* executor,
                 const int device_count)
       : qual_bin_oper_(qual_bin_oper),
+        col_var_(std::dynamic_pointer_cast<Analyzer::ColumnVar>(col_var->deep_copy())),
         query_infos_(query_infos),
         memory_level_(memory_level),
         col_range_(col_range),
@@ -129,6 +133,7 @@ class JoinHashTable {
   const InputTableInfo& getInnerQueryInfo(const Analyzer::ColumnVar* inner_col);
 
   std::shared_ptr<Analyzer::BinOper> qual_bin_oper_;
+  std::shared_ptr<Analyzer::ColumnVar> col_var_;
   const std::vector<InputTableInfo>& query_infos_;
   const Data_Namespace::MemoryLevel memory_level_;
   std::shared_ptr<std::vector<int32_t>> cpu_hash_table_buff_;

@@ -222,6 +222,8 @@ class TypedImportBuffer : boost::noncopyable {
     return string_array_buffer_->back();
   }
 
+  void addStringArray(const std::vector<std::string>& arr) { string_array_buffer_->push_back(arr); }
+
   void addTime(const time_t v) { time_buffer_->push_back(v); }
 
   void addDictEncodedString(const std::vector<std::string>& string_vec) {
@@ -267,6 +269,8 @@ class TypedImportBuffer : boost::noncopyable {
   const SQLTypeInfo& getTypeInfo() const { return column_desc_->columnType; }
 
   const ColumnDescriptor* getColumnDesc() const { return column_desc_; }
+
+  StringDictionary* getStringDictionary() const { return string_dict_; }
 
   int8_t* getAsBytes() const {
     switch (column_desc_->columnType.get_type()) {
@@ -470,6 +474,17 @@ class Loader {
   Fragmenter_Namespace::InsertData insert_data;
   std::map<int, StringDictionary*> dict_map;
   void init();
+
+ private:
+  typedef std::vector<std::unique_ptr<TypedImportBuffer>> OneShardBuffers;
+  void distributeToShards(std::vector<OneShardBuffers>& all_shard_import_buffers,
+                          std::vector<size_t>& all_shard_row_counts,
+                          const OneShardBuffers& import_buffers,
+                          const size_t row_count);
+  bool loadToShard(const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers,
+                   size_t row_count,
+                   const TableDescriptor* shard_table,
+                   bool checkpoint);
 };
 
 class Detector {

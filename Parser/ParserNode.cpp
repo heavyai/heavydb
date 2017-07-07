@@ -1582,6 +1582,19 @@ size_t shard_column_index(const std::string& name, const std::list<ColumnDescrip
   return 0;
 }
 
+void validate_shard_column_type(const size_t shard_column_id, const std::list<ColumnDescriptor>& columns) {
+  CHECK_NE(size_t(0), shard_column_id);
+  CHECK_LE(shard_column_id, columns.size());
+  auto column_it = columns.begin();
+  std::advance(column_it, shard_column_id - 1);
+  const auto& col_ti = column_it->columnType;
+  if (col_ti.is_integer() || (col_ti.is_string() && col_ti.get_compression() == kENCODING_DICT)) {
+    return;
+  }
+  throw std::runtime_error("Cannot shard on type " + col_ti.get_type_name() + ", encoding " +
+                           col_ti.get_compression_name());
+}
+
 }  // namespace
 
 void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
@@ -1758,6 +1771,7 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     if (!td.shardedColumnId) {
       throw std::runtime_error("Specified shard column " + shard_key_def->get_column() + " doesn't exist");
     }
+    validate_shard_column_type(td.shardedColumnId, columns);
   }
   if (!storage_options.empty()) {
     for (auto& p : storage_options) {
