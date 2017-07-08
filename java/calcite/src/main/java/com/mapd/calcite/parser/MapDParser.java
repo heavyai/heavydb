@@ -89,7 +89,6 @@ public final class MapDParser {
                     .setUnquotedCasing(Casing.UNCHANGED)
                     .setCaseSensitive(false)
                     .build())
-            
             .build();
     return new MapDPlanner(config);
   }
@@ -134,29 +133,29 @@ public final class MapDParser {
     SqlSelect validate_select = getSelectChild(validateR);
 
     // Hide rowid from select * queries
-        if (legacy_syntax && is_select_star && validate_select != null) {
-            SqlNodeList proj_exprs = ((SqlSelect) validateR).getSelectList();
-            SqlNodeList new_proj_exprs = new SqlNodeList(proj_exprs.getParserPosition());
-            for (SqlNode proj_expr : proj_exprs) {
-                final SqlNode unaliased_proj_expr = getUnaliasedExpression(proj_expr);
+    if (legacy_syntax && is_select_star && validate_select != null) {
+      SqlNodeList proj_exprs = ((SqlSelect) validateR).getSelectList();
+      SqlNodeList new_proj_exprs = new SqlNodeList(proj_exprs.getParserPosition());
+      for (SqlNode proj_expr : proj_exprs) {
+        final SqlNode unaliased_proj_expr = getUnaliasedExpression(proj_expr);
 
-                if (unaliased_proj_expr instanceof SqlIdentifier) {
-                    if ((((SqlIdentifier) unaliased_proj_expr).toString().toLowerCase()).endsWith(".rowid")) {
-                    continue;
-                }
-                }
-                new_proj_exprs.add(proj_expr);
-            }
-            validate_select.setSelectList(new_proj_exprs);
-            
-            // trick planner back into correct state for validate
-            planner.close();
-            // create a new one
-            planner = getPlanner();
-            processSQL(validateR.toSqlString(SqlDialect.CALCITE).toString(), false, planner);
-            // now validate the new modified SqlNode;
-            validateR = planner.validate(validateR);
+        if (unaliased_proj_expr instanceof SqlIdentifier) {
+          if ((((SqlIdentifier) unaliased_proj_expr).toString().toLowerCase()).endsWith(".rowid")) {
+            continue;
+          }
         }
+        new_proj_exprs.add(proj_expr);
+      }
+      validate_select.setSelectList(new_proj_exprs);
+
+      // trick planner back into correct state for validate
+      planner.close();
+      // create a new one
+      planner = getPlanner();
+      processSQL(validateR.toSqlString(SqlDialect.CALCITE).toString(), false, planner);
+      // now validate the new modified SqlNode;
+      validateR = planner.validate(validateR);
+    }
 
     RelRoot relR = planner.rel(validateR);
     planner.close();
