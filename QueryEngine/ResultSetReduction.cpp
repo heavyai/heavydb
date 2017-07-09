@@ -1008,6 +1008,5 @@ void ResultSetStorage::reduceOneCountDistinctSlot(int8_t* this_ptr1,
   CHECK(this_ptr1 && that_ptr1);
   auto old_set_ptr = reinterpret_cast<const int64_t*>(this_ptr1);
   auto new_set_ptr = reinterpret_cast<const int64_t*>(that_ptr1);
-  count_distinct_set_union(
-      that.mappedPtr(*new_set_ptr), mappedPtr(*old_set_ptr), new_count_distinct_desc, old_count_distinct_desc);
+  count_distinct_set_union(*new_set_ptr, *old_set_ptr, new_count_distinct_desc, old_count_distinct_desc);
 }

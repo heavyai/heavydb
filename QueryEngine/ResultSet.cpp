@@ -625,10 +625,10 @@ std::function<bool(const uint32_t, const uint32_t)> ResultSet::createComparator(
           return use_desc_cmp ? lhs_str > rhs_str : lhs_str < rhs_str;
         }
         if (UNLIKELY(is_distinct_target(targets_[order_entry.tle_no - 1]))) {
-          const auto lhs_sz = count_distinct_set_size(
-              storage_->mappedPtr(lhs_v.i1), order_entry.tle_no - 1, query_mem_desc_.count_distinct_descriptors_);
-          const auto rhs_sz = count_distinct_set_size(
-              storage_->mappedPtr(rhs_v.i1), order_entry.tle_no - 1, query_mem_desc_.count_distinct_descriptors_);
+          const auto lhs_sz =
+              count_distinct_set_size(lhs_v.i1, order_entry.tle_no - 1, query_mem_desc_.count_distinct_descriptors_);
+          const auto rhs_sz =
+              count_distinct_set_size(rhs_v.i1, order_entry.tle_no - 1, query_mem_desc_.count_distinct_descriptors_);
           if (lhs_sz == rhs_sz) {
             continue;
           }
@@ -757,9 +757,6 @@ void ResultSetStorage::addCountDistinctSetPointerMapping(const int64_t remote_pt
 }
 
 int64_t ResultSetStorage::mappedPtr(const int64_t remote_ptr) const {
-  if (count_distinct_sets_mapping_.empty()) {
-    return remote_ptr;
-  }
   const auto it = count_distinct_sets_mapping_.find(remote_ptr);
   CHECK(it != count_distinct_sets_mapping_.end());
   return it->second;
