@@ -50,6 +50,7 @@ using boost::make_shared;
 using boost::shared_ptr;
 
 extern bool g_aggregator;
+extern size_t g_leaf_count;
 
 AggregatedColRange column_ranges_from_thrift(const std::vector<TColumnRange>& thrift_column_ranges) {
   AggregatedColRange column_ranges;
@@ -378,11 +379,12 @@ int main(int argc, char** argv) {
       CHECK_NE(!!vm.count("cluster"), !!vm.count("string-servers"));
       boost::algorithm::trim_if(cluster_file, boost::is_any_of("\"'"));
       const auto all_nodes = LeafHostInfo::parseClusterConfig(cluster_file);
+      db_leaves = only_db_leaves(all_nodes);
+      g_leaf_count = db_leaves.size();
       if (vm.count("cluster")) {
-        db_leaves = only_db_leaves(all_nodes);
         g_aggregator = true;
-      }
-      if (vm.count("string-servers")) {
+      } else {
+        db_leaves.clear();
       }
       string_leaves = only_string_leaves(all_nodes);
       g_cluster = true;

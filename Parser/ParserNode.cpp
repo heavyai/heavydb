@@ -43,6 +43,8 @@
 #include "../QueryEngine/RelAlgExecutor.h"
 #include "../QueryEngine/CalciteAdapter.h"
 
+size_t g_leaf_count{0};
+
 namespace Parser {
 
 std::shared_ptr<Analyzer::Expr> NullLiteral::analyze(const Catalog_Namespace::Catalog& catalog,
@@ -1816,7 +1818,14 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
         int shard_count = static_cast<const IntLiteral*>(p->get_value())->get_intval();
         if (shard_count <= 0)
           throw std::runtime_error("SHARD_COUNT must be a positive number.");
-        td.nShards = shard_count;
+        if (g_leaf_count) {
+          if (shard_count % g_leaf_count) {
+            throw std::runtime_error("SHARD_COUNT must be a multiple of the number of leaves in the cluster.");
+          }
+          td.nShards = shard_count / g_leaf_count;
+        } else {
+          td.nShards = shard_count;
+        }
         throw std::runtime_error("Sharded tables are not supported yet");
       } else {
         throw std::runtime_error("Invalid CREATE TABLE option " + *p->get_name() +

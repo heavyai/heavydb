@@ -474,13 +474,14 @@ class Loader {
   Fragmenter_Namespace::InsertData insert_data;
   std::map<int, StringDictionary*> dict_map;
   void init();
-
- private:
   typedef std::vector<std::unique_ptr<TypedImportBuffer>> OneShardBuffers;
   void distributeToShards(std::vector<OneShardBuffers>& all_shard_import_buffers,
                           std::vector<size_t>& all_shard_row_counts,
                           const OneShardBuffers& import_buffers,
-                          const size_t row_count);
+                          const size_t row_count,
+                          const size_t shard_count);
+
+ private:
   bool loadToShard(const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers,
                    size_t row_count,
                    const TableDescriptor* shard_table,

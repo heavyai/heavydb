@@ -776,10 +776,10 @@ double double_value_at(const TypedImportBuffer& import_buffer, const size_t inde
 void Loader::distributeToShards(std::vector<OneShardBuffers>& all_shard_import_buffers,
                                 std::vector<size_t>& all_shard_row_counts,
                                 const OneShardBuffers& import_buffers,
-                                const size_t row_count) {
-  const auto shard_tables = catalog.getPhysicalTablesDescriptors(table_desc);
-  all_shard_row_counts.resize(shard_tables.size());
-  for (size_t shard_idx = 0; shard_idx < shard_tables.size(); ++shard_idx) {
+                                const size_t row_count,
+                                const size_t shard_count) {
+  all_shard_row_counts.resize(shard_count);
+  for (size_t shard_idx = 0; shard_idx < shard_count; ++shard_idx) {
     all_shard_import_buffers.emplace_back();
     for (const auto& typed_import_buffer : import_buffers) {
       all_shard_import_buffers.back().emplace_back(
@@ -802,7 +802,7 @@ void Loader::distributeToShards(std::vector<OneShardBuffers>& all_shard_import_b
   if (shard_col_desc->columnType.is_integer()) {
     for (size_t i = 0; i < row_count; ++i) {
       const auto val = int_value_at(*shard_column_input_buffer, i);
-      const auto shard = val % shard_tables.size();
+      const auto shard = val % shard_count;
       auto& shard_output_buffers = all_shard_import_buffers[shard];
       for (size_t col_idx = 0; col_idx < import_buffers.size(); ++col_idx) {
         const auto& input_buffer = import_buffers[col_idx];
@@ -866,8 +866,8 @@ bool Loader::loadImpl(const std::vector<std::unique_ptr<TypedImportBuffer>>& imp
   if (table_desc->nShards) {
     std::vector<OneShardBuffers> all_shard_import_buffers;
     std::vector<size_t> all_shard_row_counts;
-    distributeToShards(all_shard_import_buffers, all_shard_row_counts, import_buffers, row_count);
     const auto shard_tables = catalog.getPhysicalTablesDescriptors(table_desc);
+    distributeToShards(all_shard_import_buffers, all_shard_row_counts, import_buffers, row_count, shard_tables.size());
     bool success = true;
     for (size_t shard_idx = 0; shard_idx < shard_tables.size(); ++shard_idx) {
       if (!all_shard_row_counts[shard_idx]) {
