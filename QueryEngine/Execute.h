@@ -579,7 +579,7 @@ class Executor {
     return dt == ExecutorDeviceType::GPU && catalog_->get_dataMgr().cudaMgr_->isArchPascal();
   }
 
-  enum class JoinImplType { Invalid, Loop, HashOneToOne, HashPlusLoop };
+  enum class JoinImplType { Invalid, Loop, HashOneToOne, HashOneToMany, HashPlusLoop };
 
   struct JoinInfo {
     JoinInfo(const JoinImplType join_impl_type,

@@ -27,6 +27,12 @@
 #endif
 
 #ifdef __CUDACC__
+#define GLOBAL __global__
+#else
+#define GLOBAL
+#endif
+
+#ifdef __CUDACC__
 #define FORCE_INLINE __forceinline__
 #else
 #define FORCE_INLINE inline __attribute__((always_inline))

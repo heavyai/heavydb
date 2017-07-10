@@ -28,11 +28,13 @@
 #include "ColumnarResults.h"
 #include "InputDescriptors.h"
 #include "InputMetadata.h"
+#include "ThrustAllocator.h"
 #include "../Analyzer/Analyzer.h"
 #include "../Catalog/Catalog.h"
 #include "../Chunk/Chunk.h"
 
 #include <llvm/IR/Value.h>
+
 #ifdef HAVE_CUDA
 #include <cuda.h>
 #endif
@@ -49,6 +51,11 @@ class HashJoinFail : public std::runtime_error {
 
 class JoinHashTable {
  public:
+  enum HashType {
+    OneToOne,
+    OneToMany,
+  };
+
   static std::shared_ptr<JoinHashTable> getInstance(const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
                                                     const std::vector<InputTableInfo>& query_infos,
                                                     const RelAlgExecutionUnit& ra_exe_unit,
@@ -75,6 +82,8 @@ class JoinHashTable {
 
   const Analyzer::ColumnVar* getHashColumnVar() const { return col_var_.get(); };
 
+  HashType getHashType() const { return hash_type_; }
+
  private:
   JoinHashTable(const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
                 const Analyzer::ColumnVar* col_var,
@@ -88,6 +97,8 @@ class JoinHashTable {
         col_var_(std::dynamic_pointer_cast<Analyzer::ColumnVar>(col_var->deep_copy())),
         query_infos_(query_infos),
         memory_level_(memory_level),
+        hash_type_(OneToOne),
+        hash_entry_count_(0),
         col_range_(col_range),
         executor_(executor),
         ra_exe_unit_(ra_exe_unit),
@@ -109,15 +120,27 @@ class JoinHashTable {
       std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
       std::map<int, std::shared_ptr<const ColumnarResults>>& frags_owner);
 
+  ChunkKey genHashTableKey(const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
+                           const Analyzer::ColumnVar* outer_col,
+                           const Analyzer::ColumnVar* inner_col) const;
+
   int reify(const int device_count);
-  int reifyForDevice(const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments, const int device_id);
+  int reifyOneToOneForDevice(const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments, const int device_id);
+  int reifyOneToManyForDevice(const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments, const int device_id);
   void checkHashJoinReplicationConstraint(const int table_id);
   int initHashTableForDevice(const ChunkKey& chunk_key,
                              const int8_t* col_buff,
                              const size_t num_elements,
                              const std::pair<const Analyzer::ColumnVar*, const Analyzer::ColumnVar*>& cols,
                              const Data_Namespace::MemoryLevel effective_memory_level,
+                             std::pair<Data_Namespace::AbstractBuffer*, Data_Namespace::AbstractBuffer*>& buff_and_err,
                              const int device_id);
+  void initOneToManyHashTable(const ChunkKey& chunk_key,
+                              const int8_t* col_buff,
+                              const size_t num_elements,
+                              const std::pair<const Analyzer::ColumnVar*, const Analyzer::ColumnVar*>& cols,
+                              const Data_Namespace::MemoryLevel effective_memory_level,
+                              const int device_id);
   void initHashTableOnCpuFromCache(const ChunkKey& chunk_key,
                                    const size_t num_elements,
                                    const std::pair<const Analyzer::ColumnVar*, const Analyzer::ColumnVar*>& cols);
@@ -129,15 +152,32 @@ class JoinHashTable {
                          const std::pair<const Analyzer::ColumnVar*, const Analyzer::ColumnVar*>& cols,
                          const int32_t hash_entry_count,
                          const int32_t hash_join_invalid_val);
+  void initOneToManyHashTableOnCpu(const int8_t* col_buff,
+                                   const size_t num_elements,
+                                   const std::pair<const Analyzer::ColumnVar*, const Analyzer::ColumnVar*>& cols,
+                                   const int32_t hash_entry_count,
+                                   const int32_t hash_join_invalid_val);
 
-  const InputTableInfo& getInnerQueryInfo(const Analyzer::ColumnVar* inner_col);
+  const InputTableInfo& getInnerQueryInfo(const Analyzer::ColumnVar* inner_col) const;
 
   size_t shardCount() const;
+
+  bool needOneToManyHash(const std::vector<int>& errors) const;
+
+  std::pair<const int8_t*, size_t> fetchFragments(const Analyzer::ColumnVar* hash_col,
+                                                  const std::deque<Fragmenter_Namespace::FragmentInfo>& fragment_info,
+                                                  const Data_Namespace::MemoryLevel effective_memory_level,
+                                                  const int device_id,
+                                                  std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
+                                                  std::map<int, std::shared_ptr<const ColumnarResults>>& frags_owner,
+                                                  ThrustAllocator& dev_buff_owner);
 
   std::shared_ptr<Analyzer::BinOper> qual_bin_oper_;
   std::shared_ptr<Analyzer::ColumnVar> col_var_;
   const std::vector<InputTableInfo>& query_infos_;
   const Data_Namespace::MemoryLevel memory_level_;
+  HashType hash_type_;
+  size_t hash_entry_count_;
   std::shared_ptr<std::vector<int32_t>> cpu_hash_table_buff_;
   std::mutex cpu_hash_table_buff_mutex_;
 #ifdef HAVE_CUDA
@@ -170,6 +210,7 @@ class JoinHashTable {
   static const int ERR_MULTI_FRAG{-2};
   static const int ERR_FAILED_TO_FETCH_COLUMN{-3};
   static const int ERR_FAILED_TO_JOIN_ON_VIRTUAL_COLUMN{-4};
+  static const int ERR_COLUMN_NOT_UNIQUE{-5};
 };
 
 inline std::string get_table_name_by_id(const int table_id, const Catalog_Namespace::Catalog& cat) {

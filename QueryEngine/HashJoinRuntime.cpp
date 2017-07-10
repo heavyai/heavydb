@@ -23,8 +23,12 @@
 #include "../StringDictionary/StringDictionary.h"
 #include "../StringDictionary/StringDictionaryProxy.h"
 #include <glog/logging.h>
+
+#include <future>
 #endif
 #include "../Shared/funcannotations.h"
+
+#include <numeric>
 
 DEVICE void SUFFIX(init_hash_join_buff)(int32_t* groups_buffer,
                                         const int32_t hash_entry_count,
@@ -141,3 +145,246 @@ DEVICE int SUFFIX(fill_hash_join_buff_sharded)(int32_t* buff,
 }
 
 #undef mapd_cas
+
+#ifdef __CUDACC__
+#define mapd_add(address, val) atomicAdd(address, val)
+#else
+#define mapd_add(address, val) __sync_fetch_and_add(address, val)
+#endif
+
+GLOBAL void SUFFIX(count_matches)(int32_t* count_buff,
+                                  const int32_t invalid_slot_val,
+                                  const JoinColumn join_column,
+                                  const JoinColumnTypeInfo type_info
+#ifndef __CUDACC__
+                                  ,
+                                  const void* sd_inner_proxy,
+                                  const void* sd_outer_proxy,
+                                  const int32_t cpu_thread_idx,
+                                  const int32_t cpu_thread_count
+#endif
+                                  ) {
+#ifdef __CUDACC__
+  int32_t start = threadIdx.x + blockDim.x * blockIdx.x;
+  int32_t step = blockDim.x * gridDim.x;
+#else
+  int32_t start = cpu_thread_idx;
+  int32_t step = cpu_thread_count;
+#endif
+  for (size_t i = start; i < join_column.num_elems; i += step) {
+    int64_t elem = SUFFIX(fixed_width_int_decode_noinline)(join_column.col_buff, type_info.elem_sz, i);
+    if (elem == type_info.null_val) {
+      continue;
+    }
+#ifndef __CUDACC__
+    if (sd_inner_proxy) {
+      CHECK(sd_outer_proxy);
+      const auto sd_inner_dict_proxy = static_cast<const StringDictionaryProxy*>(sd_inner_proxy);
+      const auto sd_outer_dict_proxy = static_cast<const StringDictionaryProxy*>(sd_outer_proxy);
+      const auto elem_str = sd_inner_dict_proxy->getString(elem);
+      const auto outer_id = sd_outer_dict_proxy->getIdOfString(elem_str);
+      if (outer_id == StringDictionary::INVALID_STR_ID) {
+        continue;
+      }
+      elem = outer_id;
+    }
+#endif
+    int32_t* entry_ptr = SUFFIX(get_hash_slot)(count_buff, elem, type_info.min_val);
+    mapd_add(entry_ptr, int32_t(1));
+  }
+}
+
+GLOBAL void SUFFIX(fill_row_ids)(int32_t* buff,
+                                 const int32_t hash_entry_count,
+                                 const int32_t invalid_slot_val,
+                                 const JoinColumn join_column,
+                                 const JoinColumnTypeInfo type_info
+#ifndef __CUDACC__
+                                 ,
+                                 const void* sd_inner_proxy,
+                                 const void* sd_outer_proxy,
+                                 const int32_t cpu_thread_idx,
+                                 const int32_t cpu_thread_count
+#endif
+                                 ) {
+  int32_t* pos_buff = buff;
+  int32_t* count_buff = buff + hash_entry_count;
+  int32_t* id_buff = count_buff + hash_entry_count;
+
+#ifdef __CUDACC__
+  int32_t start = threadIdx.x + blockDim.x * blockIdx.x;
+  int32_t step = blockDim.x * gridDim.x;
+#else
+  int32_t start = cpu_thread_idx;
+  int32_t step = cpu_thread_count;
+#endif
+  for (size_t i = start; i < join_column.num_elems; i += step) {
+    int64_t elem = SUFFIX(fixed_width_int_decode_noinline)(join_column.col_buff, type_info.elem_sz, i);
+    if (elem == type_info.null_val) {
+      continue;
+    }
+#ifndef __CUDACC__
+    if (sd_inner_proxy) {
+      CHECK(sd_outer_proxy);
+      const auto sd_inner_dict_proxy = static_cast<const StringDictionaryProxy*>(sd_inner_proxy);
+      const auto sd_outer_dict_proxy = static_cast<const StringDictionaryProxy*>(sd_outer_proxy);
+      const auto elem_str = sd_inner_dict_proxy->getString(elem);
+      const auto outer_id = sd_outer_dict_proxy->getIdOfString(elem_str);
+      if (outer_id == StringDictionary::INVALID_STR_ID) {
+        continue;
+      }
+      elem = outer_id;
+    }
+#endif
+    int32_t* pos_ptr = SUFFIX(get_hash_slot)(pos_buff, elem, type_info.min_val);
+#ifndef __CUDACC__
+    CHECK_NE(*pos_ptr, invalid_slot_val);
+#endif
+    const auto bin_idx = pos_ptr - pos_buff;
+    const auto id_buff_idx = mapd_add(count_buff + bin_idx, 1) + *pos_ptr;
+    id_buff[id_buff_idx] = static_cast<int32_t>(i);
+  }
+}
+
+#undef mapd_add
+
+#ifndef __CUDACC__
+
+template <typename InputIterator, typename OutputIterator>
+void inclusive_scan(InputIterator first, InputIterator last, OutputIterator out, const size_t thread_count) {
+  typedef typename InputIterator::value_type ElementType;
+  typedef typename InputIterator::difference_type OffsetType;
+  const OffsetType elem_count = last - first;
+  if (elem_count < 10000 || thread_count <= 1) {
+    ElementType sum = 0;
+    for (auto iter = first; iter != last; ++iter, ++out) {
+      *out = sum += *iter;
+    }
+    return;
+  }
+
+  const OffsetType step = (elem_count + thread_count - 1) / thread_count;
+  OffsetType start_off = 0;
+  OffsetType end_off = std::min(step, elem_count);
+  std::vector<ElementType> partial_sums(thread_count);
+  std::vector<std::future<void>> counter_threads;
+  for (size_t thread_idx = 0; thread_idx < thread_count;
+       ++thread_idx, start_off += step, end_off = std::min(start_off + step, elem_count)) {
+    counter_threads.push_back(std::async(
+        std::launch::async,
+        [first, out](ElementType& partial_sum, const OffsetType start, const OffsetType end) {
+          ElementType sum = 0;
+          for (auto in_iter = first + start, out_iter = out + start; in_iter != (first + end); ++in_iter, ++out_iter) {
+            *out_iter = sum += *in_iter;
+          }
+          partial_sum = sum;
+        },
+        std::ref(partial_sums[thread_idx]),
+        start_off,
+        end_off));
+  }
+  for (auto& child : counter_threads) {
+    child.get();
+  }
+
+  ElementType sum = 0;
+  for (auto& s : partial_sums) {
+    s += sum;
+    sum = s;
+  }
+
+  counter_threads.clear();
+  start_off = 0;
+  end_off = std::min(step, elem_count);
+  for (size_t thread_idx = 0; thread_idx < thread_count;
+       ++thread_idx, start_off += step, end_off = std::min(start_off + step, elem_count)) {
+    if (!partial_sums[thread_idx]) {
+      continue;
+    }
+    counter_threads.push_back(
+        std::async(std::launch::async,
+                   [out](const ElementType prev_sum, const OffsetType start, const OffsetType end) {
+                     for (auto iter = out + start; iter != (out + end); ++iter) {
+                       *iter += prev_sum;
+                     }
+                   },
+                   partial_sums[thread_idx],
+                   start_off,
+                   end_off));
+  }
+  for (auto& child : counter_threads) {
+    child.get();
+  }
+}
+
+void fill_one_to_many_hash_table(int32_t* buff,
+                                 const int32_t hash_entry_count,
+                                 const int32_t invalid_slot_val,
+                                 const JoinColumn join_column,
+                                 const JoinColumnTypeInfo type_info,
+                                 const void* sd_inner_proxy,
+                                 const void* sd_outer_proxy,
+                                 const int32_t cpu_thread_count) {
+  int32_t* pos_buff = buff;
+  int32_t* count_buff = buff + hash_entry_count;
+  memset(count_buff, 0, hash_entry_count * sizeof(int32_t));
+  std::vector<std::future<void>> counter_threads;
+  for (int cpu_thread_idx = 0; cpu_thread_idx < cpu_thread_count; ++cpu_thread_idx) {
+    counter_threads.push_back(std::async(std::launch::async,
+                                         count_matches,
+                                         count_buff,
+                                         invalid_slot_val,
+                                         join_column,
+                                         type_info,
+                                         sd_inner_proxy,
+                                         sd_outer_proxy,
+                                         cpu_thread_idx,
+                                         cpu_thread_count));
+  }
+
+  for (auto& child : counter_threads) {
+    child.get();
+  }
+
+  std::vector<int32_t> count_copy(hash_entry_count, 0);
+  CHECK_GT(hash_entry_count, int32_t(0));
+  memcpy(&count_copy[1], count_buff, (hash_entry_count - 1) * sizeof(int32_t));
+  inclusive_scan(count_copy.begin(), count_copy.end(), count_copy.begin(), cpu_thread_count);
+  std::vector<std::future<void>> pos_threads;
+  for (int cpu_thread_idx = 0; cpu_thread_idx < cpu_thread_count; ++cpu_thread_idx) {
+    pos_threads.push_back(std::async(std::launch::async,
+                                     [&](const int thread_idx) {
+                                       for (int i = thread_idx; i < hash_entry_count; i += cpu_thread_count) {
+                                         if (count_buff[i]) {
+                                           pos_buff[i] = count_copy[i];
+                                         }
+                                       }
+                                     },
+                                     cpu_thread_idx));
+  }
+  for (auto& child : pos_threads) {
+    child.get();
+  }
+
+  memset(count_buff, 0, hash_entry_count * sizeof(int32_t));
+  std::vector<std::future<void>> rowid_threads;
+  for (int cpu_thread_idx = 0; cpu_thread_idx < cpu_thread_count; ++cpu_thread_idx) {
+    rowid_threads.push_back(std::async(std::launch::async,
+                                       SUFFIX(fill_row_ids),
+                                       buff,
+                                       hash_entry_count,
+                                       invalid_slot_val,
+                                       join_column,
+                                       type_info,
+                                       sd_inner_proxy,
+                                       sd_outer_proxy,
+                                       cpu_thread_idx,
+                                       cpu_thread_count));
+  }
+
+  for (auto& child : rowid_threads) {
+    child.get();
+  }
+}
+
+#endif

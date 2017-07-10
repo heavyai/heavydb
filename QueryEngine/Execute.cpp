@@ -1360,7 +1360,8 @@ bool Executor::skipFragmentPair(
     const std::unordered_map<int, const Analyzer::BinOper*>& inner_table_id_to_join_condition,
     const RelAlgExecutionUnit& ra_exe_unit) {
   // Don't bother with sharding for non-hash joins.
-  if (plan_state_->join_info_.join_impl_type_ != Executor::JoinImplType::HashOneToOne) {
+  if (plan_state_->join_info_.join_impl_type_ != Executor::JoinImplType::HashOneToOne &&
+      plan_state_->join_info_.join_impl_type_ != Executor::JoinImplType::HashOneToMany) {
     return false;
   }
   // Both tables need to be sharded the same way.
@@ -1439,8 +1440,9 @@ bool Executor::needFetchAllFragments(const InputColDescriptor& inner_col_desc,
                                      const std::map<int, const TableFragments*>& all_tables_fragments) const {
   if (inner_col_desc.getScanDesc().getNestLevel() < 1 ||
       inner_col_desc.getScanDesc().getSourceType() != InputSourceType::TABLE ||
-      plan_state_->join_info_.join_impl_type_ != JoinImplType::HashOneToOne || input_descs.size() < 2 ||
-      plan_state_->isLazyFetchColumn(inner_col_desc)) {
+      (plan_state_->join_info_.join_impl_type_ != JoinImplType::HashOneToOne &&
+       plan_state_->join_info_.join_impl_type_ != JoinImplType::HashOneToMany) ||
+      input_descs.size() < 2 || plan_state_->isLazyFetchColumn(inner_col_desc)) {
     return false;
   }
   const int table_id = inner_col_desc.getScanDesc().getTableId();
@@ -2149,7 +2151,8 @@ void Executor::allocateInnerScansIterators(const std::vector<InputDescriptor>& i
   if (input_descs.size() <= 1) {
     return;
   }
-  if (plan_state_->join_info_.join_impl_type_ == JoinImplType::HashOneToOne) {
+  if (plan_state_->join_info_.join_impl_type_ == JoinImplType::HashOneToOne ||
+      plan_state_->join_info_.join_impl_type_ == JoinImplType::HashOneToMany) {
     return;
   }
   size_t desc_start_pos = 1;
@@ -2207,6 +2210,15 @@ void check_loop_join_replication_constraint(const Catalog_Namespace::Catalog* ca
       throw std::runtime_error("Join table " + inner_td->tableName + " must be replicated");
     }
   }
+}
+
+bool has_one_to_many_hash_table(const std::vector<std::shared_ptr<JoinHashTable>>& hash_tables) {
+  for (auto ht : hash_tables) {
+    if (ht->getHashType() == JoinHashTable::OneToMany) {
+      return true;
+    }
+  }
+  return false;
 }
 
 }  // namespace
@@ -2273,11 +2285,20 @@ Executor::JoinInfo Executor::chooseJoinType(const std::list<std::shared_ptr<Anal
   if (found_missing_rte) {
     // TODO(miyu): support a loop join in the beginning or middle of hash joins.
     if (missing_rte == static_cast<ssize_t>(nest_level_num - 1) && join_hash_tables.size() == nest_level_num - 2) {
-      return Executor::JoinInfo(JoinImplType::HashPlusLoop, bin_ops, join_hash_tables, hash_join_fail_reason);
+      if (!has_one_to_many_hash_table(join_hash_tables)) {
+        return Executor::JoinInfo(JoinImplType::HashPlusLoop, bin_ops, join_hash_tables, hash_join_fail_reason);
+      }
     }
   } else {
     if (join_hash_tables.size() == nest_level_num - 1) {
-      return Executor::JoinInfo(JoinImplType::HashOneToOne, bin_ops, join_hash_tables, "");
+      // TODO(miyu): support one-to-many hash join in folded join sequence.
+      if (has_one_to_many_hash_table(join_hash_tables)) {
+        if (nest_level_num == 2) {
+          return Executor::JoinInfo(JoinImplType::HashOneToMany, bin_ops, join_hash_tables, "");
+        }
+      } else {
+        return Executor::JoinInfo(JoinImplType::HashOneToOne, bin_ops, join_hash_tables, "");
+      }
     }
   }
 

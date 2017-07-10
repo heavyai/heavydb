@@ -272,6 +272,11 @@ option(ENABLE_MULTIFRAG_JOIN "Enable Join on Multi-frag table" ON)
 if(ENABLE_MULTIFRAG_JOIN)
   add_definitions("-DENABLE_MULTIFRAG_JOIN")
 endif()
+option(ENABLE_ONE_TO_MANY_HASH_JOIN "Enable hash join on a column w/ duplicate values" OFF)
+if(ENABLE_ONE_TO_MANY_HASH_JOIN)
+  add_definitions("-DENABLE_ONE_TO_MANY_HASH_JOIN")
+endif()
+
 
 option(ENABLE_COMPACTION "Enable Compaction and Overflow/Underflow Detection" OFF)
 if(ENABLE_COMPACTION)

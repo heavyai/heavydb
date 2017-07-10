@@ -83,4 +83,21 @@ void fill_hash_join_buff_on_device_sharded(int32_t* buff,
                                            const size_t block_size_x,
                                            const size_t grid_size_x);
 
+void fill_one_to_many_hash_table(int32_t* buff,
+                                 const int32_t hash_entry_count,
+                                 const int32_t invalid_slot_val,
+                                 const JoinColumn join_column,
+                                 const JoinColumnTypeInfo type_info,
+                                 const void* sd_inner_proxy,
+                                 const void* sd_outer_proxy,
+                                 const int32_t cpu_thread_count);
+
+void fill_one_to_many_hash_table_on_device(int32_t* buff,
+                                           const int32_t hash_entry_count,
+                                           const int32_t invalid_slot_val,
+                                           const JoinColumn join_column,
+                                           const JoinColumnTypeInfo type_info,
+                                           const size_t block_size_x,
+                                           const size_t grid_size_x);
+
 #endif  // QUERYENGINE_HASHJOINRUNTIME_H
