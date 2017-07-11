@@ -141,7 +141,23 @@ Weight get_weight(const Analyzer::Expr* expr, int depth = 0) {
 bool Executor::prioritizeQuals(const RelAlgExecutionUnit& ra_exe_unit,
                                std::vector<Analyzer::Expr*>& primary_quals,
                                std::vector<Analyzer::Expr*>& deferred_quals) {
+  std::vector<std::shared_ptr<Analyzer::Expr>> remaining_inner_join_quals;
+  std::unordered_set<Analyzer::Expr*> equi_join_conds;
+  for (auto cond : plan_state_->join_info_.equi_join_tautologies_) {
+    equi_join_conds.insert(cond.get());
+  }
   for (auto expr : ra_exe_unit.inner_join_quals) {
+    if (auto bin_oper = std::dynamic_pointer_cast<Analyzer::BinOper>(expr)) {
+      // TODO(miyu): order equi-join conditions per any du-chain between them.
+      if (equi_join_conds.count(bin_oper.get())) {
+        primary_quals.push_back(expr.get());
+        continue;
+      }
+    }
+    remaining_inner_join_quals.push_back(expr);
+  }
+
+  for (auto expr : remaining_inner_join_quals) {
     primary_quals.push_back(expr.get());
   }
 
