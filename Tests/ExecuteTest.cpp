@@ -854,7 +854,7 @@ TEST(Select, ComplexQueries) {
     c("SELECT x, y FROM (SELECT a.str AS str, b.x AS x, a.y AS y FROM test a, join_test b WHERE a.x = b.x) WHERE str = "
       "'foo' ORDER BY x LIMIT 1;",
       dt);
-    c("SELECT * FROM (SELECT y, b.str FROM test a JOIN join_test b ON a.x = b.x) ORDER BY y, str;", dt);
+    c("SELECT * FROM (SELECT a.y, b.str FROM test a JOIN join_test b ON a.x = b.x) ORDER BY y, str;", dt);
     const auto rows = run_multiple_agg(
         "SELECT x + y AS a, COUNT(*) * MAX(y) - SUM(z) AS b FROM test "
         "WHERE z BETWEEN 100 AND 200 GROUP BY x, y ORDER BY a DESC LIMIT 2;",
@@ -1986,27 +1986,27 @@ void import_join_test() {
   g_sqlite_comparator.query(drop_old_test);
   const std::string create_test{
 #ifdef ENABLE_MULTIFRAG_JOIN
-      "CREATE TABLE join_test(x int not null, str text encoding dict, dup_str text encoding dict) WITH "
+      "CREATE TABLE join_test(x int not null, y int, str text encoding dict, dup_str text encoding dict) WITH "
       "(fragment_size=2);"
 #else
-      "CREATE TABLE join_test(x int not null, str text encoding dict, dup_str text encoding dict) WITH "
+      "CREATE TABLE join_test(x int not null, y int str text encoding dict, dup_str text encoding dict) WITH "
       "(fragment_size=3);"
 #endif
   };
   run_ddl_statement(create_test);
-  g_sqlite_comparator.query("CREATE TABLE join_test(x int not null, str text, dup_str text);");
+  g_sqlite_comparator.query("CREATE TABLE join_test(x int not null, y int, str text, dup_str text);");
   {
-    const std::string insert_query{"INSERT INTO join_test VALUES(7, 'foo', 'foo');"};
+    const std::string insert_query{"INSERT INTO join_test VALUES(7, 43, 'foo', 'foo');"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
   {
-    const std::string insert_query{"INSERT INTO join_test VALUES(8, 'bar', 'foo');"};
+    const std::string insert_query{"INSERT INTO join_test VALUES(8, null, 'bar', 'foo');"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
   {
-    const std::string insert_query{"INSERT INTO join_test VALUES(9, 'baz', 'bar');"};
+    const std::string insert_query{"INSERT INTO join_test VALUES(9, null, 'baz', 'bar');"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
@@ -2545,6 +2545,7 @@ TEST(Select, InnerJoins) {
     c("SELECT COUNT(*) FROM test JOIN test_inner ON test.str = test_inner.str AND test.x = 7;", dt);
     c("SELECT a.x, b.str FROM test AS a JOIN join_test AS b ON a.str = b.str AND a.x = b.x ORDER BY a.x, b.str;", dt);
     c("SELECT a.x, b.str FROM test AS a JOIN join_test AS b ON a.x = b.x AND a.str = b.str ORDER BY a.x, b.str;", dt);
+    c("SELECT a.z, b.str FROM test a JOIN join_test b ON a.y = b.y AND a.x = b.x ORDER BY a.z, b.str;", dt);
     ASSERT_EQ(7,
               v<int64_t>(run_simple_agg(
                   "SELECT test.x FROM test, test_inner WHERE test.x = test_inner.x AND test.rowid = 19;", dt)));
@@ -2559,8 +2560,9 @@ TEST(Select, InnerJoins) {
     c("SELECT a.y, count(*) FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str = c.str "
       "GROUP BY a.y;",
       dt);
-    c("SELECT a.x AS x, y, b.str FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str = c.str "
-      "ORDER BY y;",
+    c("SELECT a.x AS x, a.y, b.str FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str = "
+      "c.str "
+      "ORDER BY a.y;",
       dt);
     c("SELECT count(*) FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str = c.str WHERE a.y "
       "< 43;",
