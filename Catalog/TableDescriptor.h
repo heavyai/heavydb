@@ -49,4 +49,8 @@ struct TableDescriptor {
   TableDescriptor() : tableId(-1), shard(-1), nShards(0), shardedColumnId(0) {}
 };
 
+inline bool table_is_replicated(const TableDescriptor* td) {
+  return td->partitions == "REPLICATED";
+}
+
 #endif  // TABLE_DESCRIPTOR

@@ -2168,6 +2168,26 @@ void Executor::allocateInnerScansIterators(const std::vector<InputDescriptor>& i
   }
 }
 
+namespace {
+
+void check_loop_join_replication_constraint(const Catalog_Namespace::Catalog* catalog,
+                                            const RelAlgExecutionUnit& ra_exe_unit) {
+  if (!g_cluster) {
+    return;
+  }
+  CHECK(!ra_exe_unit.input_descs.empty());
+  const auto inner_table_id = ra_exe_unit.input_descs.back().getTableId();
+  if (inner_table_id >= 0) {
+    const auto inner_td = catalog->getMetadataForTable(inner_table_id);
+    CHECK(inner_td);
+    if (!table_is_replicated(inner_td)) {
+      throw std::runtime_error("Join table " + inner_td->tableName + " must be replicated");
+    }
+  }
+}
+
+}  // namespace
+
 Executor::JoinInfo Executor::chooseJoinType(const std::list<std::shared_ptr<Analyzer::Expr>>& join_quals,
                                             const std::vector<InputTableInfo>& query_infos,
                                             const RelAlgExecutionUnit& ra_exe_unit,
@@ -2223,6 +2243,9 @@ Executor::JoinInfo Executor::chooseJoinType(const std::list<std::shared_ptr<Anal
       found_missing_rte = true;
       break;
     }
+  }
+  if (join_hash_tables.size() < nest_level_num - 1) {
+    check_loop_join_replication_constraint(catalog_, ra_exe_unit);
   }
   if (found_missing_rte) {
     // TODO(miyu): support a loop join in the beginning or middle of hash joins.

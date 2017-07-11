@@ -389,6 +389,7 @@ int JoinHashTable::reify(const int device_count) {
         return ERR_FAILED_TO_FETCH_COLUMN;
       }
     }
+    checkHashJoinReplicationConstraint(inner_col->get_table_id());
     init_threads.emplace_back(
         [&errors, &chunk_key, &cols, elem_count, col_buff, effective_memory_level, device_id, this] {
           try {
@@ -408,6 +409,23 @@ int JoinHashTable::reify(const int device_count) {
     }
   }
   return 0;
+}
+
+void JoinHashTable::checkHashJoinReplicationConstraint(const int table_id) {
+  if (!g_cluster) {
+    return;
+  }
+  if (table_id >= 0) {
+    const auto inner_td = executor_->getCatalog()->getMetadataForTable(table_id);
+    CHECK(inner_td);
+    size_t shard_count{0};
+#ifdef HAVE_CUDA
+    shard_count = get_shard_count(qual_bin_oper_.get(), ra_exe_unit_, executor_);
+#endif  // HAVE_CUDA
+    if (!shard_count && !table_is_replicated(inner_td)) {
+      throw std::runtime_error("Join table " + inner_td->tableName + " must be replicated");
+    }
+  }
 }
 
 int JoinHashTable::initHashTableOnCpu(const int8_t* col_buff,

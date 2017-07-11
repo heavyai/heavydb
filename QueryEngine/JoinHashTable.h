@@ -110,6 +110,7 @@ class JoinHashTable {
       std::map<int, std::shared_ptr<const ColumnarResults>>& frags_owner);
 
   int reify(const int device_count);
+  void checkHashJoinReplicationConstraint(const int table_id);
   int initHashTableForDevice(const ChunkKey& chunk_key,
                              const int8_t* col_buff,
                              const size_t num_elements,
