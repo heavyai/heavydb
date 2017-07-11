@@ -107,16 +107,48 @@ unsigned widening_conversion_score(const SQLTypeInfo& arg_ti, const SQLTypeInfo&
   return 0;
 }
 
+bool element_type_is_compatible(const SQLTypeInfo& elem_ti, const ExtArgumentType ty) {
+  if (elem_ti.get_type() == kFLOAT) {
+    return ty == ExtArgumentType::PFloat;
+  }
+  if (elem_ti.get_type() == kDOUBLE) {
+    return ty == ExtArgumentType::PDouble;
+  }
+  CHECK(elem_ti.is_integer() || (elem_ti.is_string() && elem_ti.get_compression() == kENCODING_DICT));
+  switch (elem_ti.get_size()) {
+    case 2:
+      return ty == ExtArgumentType::PInt16;
+    case 4:
+      return ty == ExtArgumentType::PInt32;
+    case 8:
+      return ty == ExtArgumentType::PInt64;
+    default:
+      CHECK(false);
+  }
+  return false;
+}
+
 std::vector<unsigned> compute_narrowing_conv_scores(const Analyzer::FunctionOper* function_oper,
                                                     const std::vector<ExtensionFunction>& ext_func_sigs) {
   std::vector<unsigned> narrowing_conv_scores;
   for (const auto& ext_func_sig : ext_func_sigs) {
     const auto& ext_func_args = ext_func_sig.getArgs();
     unsigned score = 0;
-    for (size_t i = 0; i < function_oper->getArity(); ++i) {
-      const auto arg = function_oper->getArg(i);
+    for (size_t logical_arg_idx = 0, phys_arg_idx = 0; logical_arg_idx < function_oper->getArity();
+         ++logical_arg_idx, ++phys_arg_idx) {
+      const auto arg = function_oper->getArg(logical_arg_idx);
       const auto& arg_ti = arg->get_type_info();
-      const auto arg_target_ti = ext_arg_type_to_type_info(ext_func_args[i]);
+      if (arg_ti.is_array()) {
+        if (!element_type_is_compatible(arg_ti.get_elem_type(), ext_func_args[phys_arg_idx])) {
+          score = std::numeric_limits<unsigned>::max();
+          break;
+        }
+        ++phys_arg_idx;
+        CHECK_LT(phys_arg_idx, ext_func_args.size());
+        CHECK(ExtArgumentType::Int64 == ext_func_args[phys_arg_idx]);
+        continue;
+      }
+      const auto arg_target_ti = ext_arg_type_to_type_info(ext_func_args[phys_arg_idx]);
       score += narrowing_conversion_score(arg_ti, arg_target_ti);
     }
     narrowing_conv_scores.push_back(score);
@@ -131,10 +163,21 @@ std::vector<unsigned> compute_widening_conv_scores(const Analyzer::FunctionOper*
   for (const auto& ext_func_sig_ptr : ext_func_sigs) {
     const auto& ext_func_args = ext_func_sig_ptr->getArgs();
     unsigned score = 0;
-    for (size_t i = 0; i < function_oper->getArity(); ++i) {
-      const auto arg = function_oper->getArg(i);
+    for (size_t logical_arg_idx = 0, phys_arg_idx = 0; logical_arg_idx < function_oper->getArity();
+         ++logical_arg_idx, ++phys_arg_idx) {
+      const auto arg = function_oper->getArg(logical_arg_idx);
       const auto& arg_ti = arg->get_type_info();
-      const auto arg_target_ti = ext_arg_type_to_type_info(ext_func_args[i]);
+      if (arg_ti.is_array()) {
+        if (!element_type_is_compatible(arg_ti.get_elem_type(), ext_func_args[phys_arg_idx])) {
+          score = std::numeric_limits<unsigned>::max();
+          break;
+        }
+        ++phys_arg_idx;
+        CHECK_LT(phys_arg_idx, ext_func_args.size());
+        CHECK(ExtArgumentType::Int64 == ext_func_args[phys_arg_idx]);
+        continue;
+      }
+      const auto arg_target_ti = ext_arg_type_to_type_info(ext_func_args[phys_arg_idx]);
       score += widening_conversion_score(arg_ti, arg_target_ti);
     }
     widening_conv_scores.push_back(score);
@@ -170,6 +213,9 @@ const ExtensionFunction& bind_function(const Analyzer::FunctionOper* function_op
   CHECK(!ext_func_sigs.empty());
   const auto narrowing_conv_scores = compute_narrowing_conv_scores(function_oper, ext_func_sigs);
   const auto min_narrowing_it = std::min_element(narrowing_conv_scores.begin(), narrowing_conv_scores.end());
+  if (*min_narrowing_it == std::numeric_limits<unsigned>::max()) {
+    throw std::runtime_error("Could not find an adequate specialization for " + function_oper->getName());
+  }
   std::vector<const ExtensionFunction*> widening_candidates;
   for (size_t cand_idx = 0; cand_idx < narrowing_conv_scores.size(); ++cand_idx) {
     if (narrowing_conv_scores[cand_idx] == *min_narrowing_it) {

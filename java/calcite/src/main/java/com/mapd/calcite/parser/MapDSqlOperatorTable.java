@@ -607,10 +607,22 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
 
         private static java.util.List<SqlTypeFamily> toSqlSignature(final ExtensionFunction sig) {
             java.util.List<SqlTypeFamily> sql_sig = new java.util.ArrayList<SqlTypeFamily>();
-            for (final ExtensionFunction.ExtArgumentType arg_type : sig.getArgs()) {
+            for (int arg_idx = 0; arg_idx < sig.getArgs().size(); ++arg_idx) {
+                final ExtensionFunction.ExtArgumentType arg_type = sig.getArgs().get(arg_idx);
                 sql_sig.add(toSqlTypeName(arg_type).getFamily());
+                if (isPointerType(arg_type)) {
+                    ++arg_idx;
+                }
             }
             return sql_sig;
+        }
+
+        private static boolean isPointerType(final ExtensionFunction.ExtArgumentType type) {
+        return type == ExtensionFunction.ExtArgumentType.PInt16
+            || type == ExtensionFunction.ExtArgumentType.PInt32
+            || type == ExtensionFunction.ExtArgumentType.PInt64
+            || type == ExtensionFunction.ExtArgumentType.PFloat
+            || type == ExtensionFunction.ExtArgumentType.PDouble;
         }
 
         @Override
@@ -631,6 +643,12 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
                     return SqlTypeName.FLOAT;
                 case Double:
                     return SqlTypeName.DOUBLE;
+                case PInt16:
+                case PInt32:
+                case PInt64:
+                case PFloat:
+                case PDouble:
+                    return SqlTypeName.ARRAY;
             }
             assert false;
             return null;

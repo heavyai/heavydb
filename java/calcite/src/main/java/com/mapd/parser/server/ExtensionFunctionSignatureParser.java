@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package com.mapd.parser.server;
 
 import java.io.BufferedReader;
@@ -85,7 +84,7 @@ class ExtensionFunctionSignatureParser {
         if (type_name.equals("int32_t")) {
             return ExtensionFunction.ExtArgumentType.Int32;
         }
-        if (type_name.equals("int64_t")) {
+        if (type_name.equals("int64_t") || type_name.equals("size_t")) {
             return ExtensionFunction.ExtArgumentType.Int64;
         }
         if (type_name.equals("float")) {
@@ -97,8 +96,29 @@ class ExtensionFunctionSignatureParser {
         if (type_name.equals("void")) {
             return ExtensionFunction.ExtArgumentType.Void;
         }
+        if (type_name.endsWith(" *")) {
+            return pointerType(deserializeType(type_name.substring(0, type_name.length() - 2)));
+        }
         assert false;
         return null;
+    }
+
+    private static ExtensionFunction.ExtArgumentType pointerType(final ExtensionFunction.ExtArgumentType targetType) {
+        switch (targetType) {
+            case Int16:
+                return ExtensionFunction.ExtArgumentType.PInt16;
+            case Int32:
+                return ExtensionFunction.ExtArgumentType.PInt32;
+            case Int64:
+                return ExtensionFunction.ExtArgumentType.PInt64;
+            case Float:
+                return ExtensionFunction.ExtArgumentType.PFloat;
+            case Double:
+                return ExtensionFunction.ExtArgumentType.PDouble;
+            default:
+                assert false;
+                return null;
+        }
     }
 
     static String join(final List<String> strs, final String sep) {

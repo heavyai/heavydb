@@ -44,7 +44,7 @@ bool ext_func_call_requires_nullcheck(const Analyzer::FunctionOper* function_ope
   for (size_t i = 0; i < function_oper->getArity(); ++i) {
     const auto arg = function_oper->getArg(i);
     const auto& arg_ti = arg->get_type_info();
-    if (!arg_ti.get_notnull()) {
+    if (!arg_ti.get_notnull() && !arg_ti.is_array()) {
       return true;
     }
   }
@@ -178,6 +178,9 @@ llvm::Value* Executor::codegenFunctionOperNullArg(const Analyzer::FunctionOper* 
   for (size_t i = 0; i < function_oper->getArity(); ++i) {
     const auto arg = function_oper->getArg(i);
     const auto& arg_ti = arg->get_type_info();
+    if (arg_ti.get_notnull() || arg_ti.is_array()) {
+      continue;
+    }
     CHECK(arg_ti.is_number());
     one_arg_null = cgen_state_->ir_builder_.CreateOr(one_arg_null, codegenIsNullNumber(orig_arg_lvs[i], arg_ti));
   }
@@ -191,7 +194,7 @@ std::vector<llvm::Value*> Executor::codegenFunctionOperCastArgs(const Analyzer::
                                                                 const CompilationOptions& co) {
   CHECK(ext_func_sig);
   const auto& ext_func_args = ext_func_sig->getArgs();
-  CHECK_EQ(function_oper->getArity(), ext_func_args.size());
+  CHECK_LE(function_oper->getArity(), ext_func_args.size());
   std::vector<llvm::Value*> args;
   for (size_t i = 0; i < function_oper->getArity(); ++i) {
     const auto arg = function_oper->getArg(i);

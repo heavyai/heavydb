@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package com.mapd.parser.server;
 
 import java.util.ArrayList;
@@ -26,7 +25,7 @@ import java.util.List;
 public class ExtensionFunction {
 
     public enum ExtArgumentType {
-        Int16, Int32, Int64, Float, Double, Void
+        Int16, Int32, Int64, Float, Double, Void, PInt16, PInt32, PInt64, PFloat, PDouble
     };
 
     ExtensionFunction(final List<ExtArgumentType> args, final ExtArgumentType ret) {
@@ -71,6 +70,16 @@ public class ExtensionFunction {
                 return "float";
             case Double:
                 return "double";
+            case PInt16:
+                return "i16*";
+            case PInt32:
+                return "i32*";
+            case PInt64:
+                return "i64*";
+            case PFloat:
+                return "float*";
+            case PDouble:
+                return "double*";
         }
         assert false;
         return null;
