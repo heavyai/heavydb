@@ -929,7 +929,12 @@ void MapDHandler::load_table_binary(const TSessionId& session,
     LOG(ERROR) << ex.error_msg;
     throw ex;
   }
-  Importer_NS::Loader loader(cat, td);
+  std::unique_ptr<Importer_NS::Loader> loader;
+  if (leaf_aggregator_.leafCount() > 0) {
+    loader.reset(new DistributedLoader(session_info, td, &leaf_aggregator_));
+  } else {
+    loader.reset(new Importer_NS::Loader(cat, td));
+  }
   // TODO(andrew): nColumns should be number of non-virtual/non-system columns.
   //               Subtracting 1 (rowid) until TableDescriptor is updated.
   if (rows.front().cols.size() != static_cast<size_t>(td->nColumns) - 1) {
@@ -938,11 +943,11 @@ void MapDHandler::load_table_binary(const TSessionId& session,
     LOG(ERROR) << ex.error_msg;
     throw ex;
   }
-  auto col_descs = loader.get_column_descs();
+  auto col_descs = loader->get_column_descs();
   std::vector<std::unique_ptr<Importer_NS::TypedImportBuffer>> import_buffers;
   for (auto cd : col_descs) {
     import_buffers.push_back(std::unique_ptr<Importer_NS::TypedImportBuffer>(
-        new Importer_NS::TypedImportBuffer(cd, loader.get_string_dict(cd))));
+        new Importer_NS::TypedImportBuffer(cd, loader->get_string_dict(cd))));
   }
   for (auto row : rows) {
     try {
@@ -955,7 +960,7 @@ void MapDHandler::load_table_binary(const TSessionId& session,
       LOG(WARNING) << "load_table exception thrown: " << e.what() << ". Row discarded.";
     }
   }
-  loader.load(import_buffers, rows.size());
+  loader->load(import_buffers, rows.size());
 }
 
 void MapDHandler::load_table(const TSessionId& session,
@@ -971,7 +976,12 @@ void MapDHandler::load_table(const TSessionId& session,
     LOG(ERROR) << ex.error_msg;
     throw ex;
   }
-  Importer_NS::Loader loader(cat, td);
+  std::unique_ptr<Importer_NS::Loader> loader;
+  if (leaf_aggregator_.leafCount() > 0) {
+    loader.reset(new DistributedLoader(session_info, td, &leaf_aggregator_));
+  } else {
+    loader.reset(new Importer_NS::Loader(cat, td));
+  }
   Importer_NS::CopyParams copy_params;
   // TODO(andrew): nColumns should be number of non-virtual/non-system columns.
   //               Subtracting 1 (rowid) until TableDescriptor is updated.
@@ -982,11 +992,11 @@ void MapDHandler::load_table(const TSessionId& session,
     LOG(ERROR) << ex.error_msg;
     throw ex;
   }
-  auto col_descs = loader.get_column_descs();
+  auto col_descs = loader->get_column_descs();
   std::vector<std::unique_ptr<Importer_NS::TypedImportBuffer>> import_buffers;
   for (auto cd : col_descs) {
     import_buffers.push_back(std::unique_ptr<Importer_NS::TypedImportBuffer>(
-        new Importer_NS::TypedImportBuffer(cd, loader.get_string_dict(cd))));
+        new Importer_NS::TypedImportBuffer(cd, loader->get_string_dict(cd))));
   }
   for (auto row : rows) {
     try {
@@ -999,7 +1009,7 @@ void MapDHandler::load_table(const TSessionId& session,
       LOG(WARNING) << "load_table exception thrown: " << e.what() << ". Row discarded.";
     }
   }
-  loader.load(import_buffers, rows.size());
+  loader->load(import_buffers, rows.size());
 }
 
 char MapDHandler::unescape_char(std::string str) {
