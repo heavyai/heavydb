@@ -509,7 +509,13 @@ size_t get_entries_per_shard(const size_t total_entry_count, const size_t shard_
 
 // Number of entries required for the given range.
 size_t get_hash_entry_count(const ExpressionRange& col_range) {
-  CHECK_LE(col_range.getIntMin(), col_range.getIntMax());
+  if (col_range.getIntMin() > col_range.getIntMax()) {
+    // Should only happen for all-nulls columns
+    CHECK_EQ(col_range.getIntMin(), int64_t(0));
+    CHECK_EQ(col_range.getIntMax(), int64_t(-1));
+    CHECK(col_range.hasNulls());
+    return 1;
+  }
   return col_range.getIntMax() - col_range.getIntMin() + 1 + (col_range.hasNulls() ? 1 : 0);
 }
 

@@ -2539,6 +2539,7 @@ TEST(Select, Subqueries) {
 TEST(Select, InnerJoins) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
+    c("SELECT COUNT(*) FROM test a JOIN single_row_test b ON a.x = b.x;", dt);
     c("SELECT COUNT(*) FROM test JOIN test_inner ON test.x = test_inner.x;", dt);
     c("SELECT a.y, z FROM test a JOIN test_inner b ON a.x = b.x order by a.y;", dt);
     c("SELECT COUNT(*) FROM test, test_inner WHERE test.real_str = test_inner.str;", dt);
@@ -2963,9 +2964,11 @@ int create_and_populate_tables() {
     LOG(ERROR) << "Failed to (re-)create table 'test_inner'";
     return -EEXIST;
   }
-  const std::string insert_query{"INSERT INTO test_inner VALUES(7, 43, 'foo');"};
-  run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
-  g_sqlite_comparator.query(insert_query);
+  {
+    const std::string insert_query{"INSERT INTO test_inner VALUES(7, 43, 'foo');"};
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query);
+  }
   try {
     const std::string drop_old_array_test{"DROP TABLE IF EXISTS array_test_inner;"};
     run_ddl_statement(drop_old_array_test);
@@ -2981,6 +2984,22 @@ int create_and_populate_tables() {
     return -EEXIST;
   }
   import_array_test("array_test_inner");
+  try {
+    const std::string drop_old_single_row_test{"DROP TABLE IF EXISTS single_row_test;"};
+    run_ddl_statement(drop_old_single_row_test);
+    g_sqlite_comparator.query(drop_old_single_row_test);
+    const std::string create_single_row_test{"CREATE TABLE single_row_test(x int);"};
+    run_ddl_statement(create_single_row_test);
+    g_sqlite_comparator.query(create_single_row_test);
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'single_row_test'";
+    return -EEXIST;
+  }
+  {
+    const std::string insert_query{"INSERT INTO single_row_test VALUES(null);"};
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query);
+  }
   try {
     import_gpu_sort_test();
   } catch (...) {
