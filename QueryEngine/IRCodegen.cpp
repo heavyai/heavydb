@@ -181,7 +181,7 @@ const std::vector<Analyzer::Expr*> Executor::codegenHashJoinsBeforeLoopJoin(
     return primary_quals;
   }
   CHECK_GT(ra_exe_unit.input_descs.size(), size_t(2));
-  const auto hash_join_count = ra_exe_unit.input_descs.size() - 2;
+  const auto rte_limit = ra_exe_unit.input_descs.size() - 1;
 
   llvm::Value* filter_lv = nullptr;
   for (auto expr : ra_exe_unit.inner_join_quals) {
@@ -193,7 +193,7 @@ const std::vector<Analyzer::Expr*> Executor::codegenHashJoinsBeforeLoopJoin(
     bin_oper->collect_rte_idx(rte_idx_set);
     bool found_hash_join = true;
     for (auto rte : rte_idx_set) {
-      if (rte >= static_cast<int>(hash_join_count)) {
+      if (rte >= static_cast<int>(rte_limit)) {
         found_hash_join = false;
         break;
       }
