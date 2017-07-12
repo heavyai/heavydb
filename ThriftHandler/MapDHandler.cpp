@@ -916,12 +916,27 @@ void MapDHandler::set_execution_mode(const TSessionId& session, const TExecuteMo
   MapDHandler::set_execution_mode_nolock(session_it->second.get(), mode);
 }
 
+namespace {
+
+void check_table_not_sharded(const Catalog_Namespace::Catalog& cat, const std::string& table_name) {
+  const auto td = cat.getMetadataForTable(table_name);
+  if (td && td->nShards) {
+    throw std::runtime_error("Cannot import a sharded table directly to a leaf");
+  }
+}
+
+}  // namespace
+
 void MapDHandler::load_table_binary(const TSessionId& session,
                                     const std::string& table_name,
                                     const std::vector<TRow>& rows) {
   check_read_only("load_table_binary");
   const auto session_info = get_session(session);
   auto& cat = session_info.get_catalog();
+  if (g_cluster && !leaf_aggregator_.leafCount()) {
+    // Sharded table rows need to be routed to the leaf by an aggregator.
+    check_table_not_sharded(cat, table_name);
+  }
   const TableDescriptor* td = cat.getMetadataForTable(table_name);
   if (td == nullptr) {
     TMapDException ex;
@@ -969,6 +984,10 @@ void MapDHandler::load_table(const TSessionId& session,
   check_read_only("load_table");
   const auto session_info = get_session(session);
   auto& cat = session_info.get_catalog();
+  if (g_cluster && !leaf_aggregator_.leafCount()) {
+    // Sharded table rows need to be routed to the leaf by an aggregator.
+    check_table_not_sharded(cat, table_name);
+  }
   const TableDescriptor* td = cat.getMetadataForTable(table_name);
   if (td == nullptr) {
     TMapDException ex;
@@ -1921,17 +1940,6 @@ void MapDHandler::convert_explain(TQueryResult& _return, const ResultRows& resul
 void MapDHandler::convert_result(TQueryResult& _return, const ResultRows& results, const bool column_format) const {
   create_simple_result(_return, results, column_format, "Result");
 }
-
-namespace {
-
-void check_table_not_sharded(const Catalog_Namespace::Catalog& cat, const std::string& table_name) {
-  const auto td = cat.getMetadataForTable(table_name);
-  if (td && td->nShards) {
-    throw std::runtime_error("Cannot import a sharded table directly to a leaf");
-  }
-}
-
-}  // namespace
 
 void MapDHandler::sql_execute_impl(TQueryResult& _return,
                                    const Catalog_Namespace::SessionInfo& session_info,
