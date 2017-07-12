@@ -1811,6 +1811,9 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
         if (partitions_uc != "SHARDED" && partitions_uc != "REPLICATED") {
           throw std::runtime_error("PARTITIONS must be SHARDED or REPLICATED");
         }
+        if (shard_key_def && partitions_uc == "REPLICATED") {
+          throw std::runtime_error("A table cannot be sharded and replicated at the same time");
+        }
         td.partitions = partitions_uc;
       } else if (boost::iequals(*p->get_name(), "shard_count")) {
         if (!dynamic_cast<const IntLiteral*>(p->get_value()))
