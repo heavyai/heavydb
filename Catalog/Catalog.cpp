@@ -1024,6 +1024,7 @@ void Catalog::createTable(TableDescriptor& td,
   }
   sqliteConnector_.query("END TRANSACTION");
   addTableToMap(td, cds, dds);
+  calciteMgr_->updateMetadata(currentDB_.dbName, td.tableName);
 }
 
 namespace {
@@ -1212,6 +1213,7 @@ void Catalog::renamePhysicalTable(const TableDescriptor* td, const string& newTa
   changeTd->tableName = newTableName;
   tableDescriptorMap_.erase(tableDescIt);  // erase entry under old name
   tableDescriptorMap_[to_upper(newTableName)] = changeTd;
+  calciteMgr_->updateMetadata(currentDB_.dbName, td->tableName);
 }
 
 void Catalog::renameTable(const TableDescriptor* td, const string& newTableName) {
@@ -1250,6 +1252,7 @@ void Catalog::renameColumn(const TableDescriptor* td, const ColumnDescriptor* cd
   changeCd->columnName = newColumnName;
   columnDescriptorMap_.erase(columnDescIt);  // erase entry under old name
   columnDescriptorMap_[std::make_tuple(td->tableId, to_upper(newColumnName))] = changeCd;
+  calciteMgr_->updateMetadata(currentDB_.dbName, td->tableName);
 }
 
 void Catalog::createFrontendView(FrontendViewDescriptor& vd) {

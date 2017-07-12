@@ -90,4 +90,8 @@ public class MapDSchema implements Schema {
   public Schema snapshot(long l) {
     throw new UnsupportedOperationException("Not supported yet.");
   }
+
+  void updateMetaData(String schema, String table) {
+    metaConnect.updateMetaData(schema, table);
+  }
 }

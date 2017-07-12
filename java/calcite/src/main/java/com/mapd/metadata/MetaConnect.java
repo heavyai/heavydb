@@ -15,6 +15,8 @@
  */
 package com.mapd.metadata;
 
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Maps;
 import com.mapd.calcite.parser.MapDParser;
 import com.mapd.calcite.parser.MapDUser;
 import com.mapd.thrift.server.MapD;
@@ -43,6 +45,7 @@ import org.slf4j.LoggerFactory;
 import com.mapd.calcite.parser.MapDTable;
 import com.mapd.calcite.parser.MapDView;
 import java.util.List;
+import java.util.Map;
 
 /**
  *
@@ -74,15 +77,16 @@ public class MetaConnect {
   private static final int KDATE = 14;
   private static final int KARRAY = 15;
 
-  public static void main(String args[]) {
-    //MetaConnect x = new MetaConnect("/home/michael/mapd/mapd2/build/data/", "mapd");
-    //x.connectToDBCatalog();
-    //x.getTableDescriptor("flights");
-  }
+  private static volatile Map<String, Set<String>> MAPD_DATABASE_TO_TABLES = Maps.newConcurrentMap();
+  private static volatile Map<List<String>, Table> MAPD_TABLE_DETAILS = Maps.newConcurrentMap();
 
   public MetaConnect(int mapdPort, String dataDir, MapDUser currentMapDUser, MapDParser parser) {
     this.dataDir = dataDir;
-    this.db = currentMapDUser.getDB();
+    if (currentMapDUser != null) {
+      this.db = currentMapDUser.getDB();
+    } else {
+      this.db = null;
+    }
     this.currentUser = currentMapDUser;
     this.mapdPort = mapdPort;
     this.parser = parser;
@@ -121,24 +125,59 @@ public class MetaConnect {
     }
   }
 
+  private void addTableToMap(List<String> dbTable, Table table) {
+    synchronized (this) {
+      Table cTable = MAPD_TABLE_DETAILS.get(dbTable);
+      if (cTable == null) {
+        MAPD_TABLE_DETAILS.put(dbTable, table);
+      }
+    }
+  }
+
   public Table getTable(String tableName) {
+    List<String> dbTable = ImmutableList.of(db.toUpperCase(), tableName.toUpperCase());
+    Table cTable = MAPD_TABLE_DETAILS.get(dbTable);
+    if (cTable != null) {
+      return cTable;
+    }
+
     TTableDetails td = get_table_details(tableName);
 
     if (td.getView_sql() == null || td.getView_sql().isEmpty()) {
       MAPDLOGGER.debug("Processing a table");
-      return new MapDTable(td);
+      Table rTable = new MapDTable(td);
+      addTableToMap(dbTable, rTable);
+      return rTable;
     } else {
       MAPDLOGGER.debug("Processing a view");
-      return new MapDView(getViewSql(tableName), td, parser);
+      Table rTable = new MapDView(getViewSql(tableName), td, parser);
+      addTableToMap(dbTable, rTable);
+      return rTable;
+    }
+  }
+
+  private void addTablesToMap(String cDB, Set<String> ts) {
+    synchronized (this) {
+      Set<String> mSet = MAPD_DATABASE_TO_TABLES.get(db);
+      if (mSet == null) {
+        MAPD_DATABASE_TO_TABLES.put(cDB, ts);
+      }
     }
   }
 
   public Set<String> getTables() {
+
+    Set<String> mSet = MAPD_DATABASE_TO_TABLES.get(db.toUpperCase());
+    if (mSet != null) {
+      return mSet;
+    }
+
     if (mapdPort == -1) {
       // use sql
       connectToDBCatalog();
       Set<String> ts = getTables_SQL();
       disconnectFromDBCatalog();
+      addTablesToMap(db.toUpperCase(), ts);
       return ts;
     }
     // use thrift direct to local server
@@ -153,12 +192,12 @@ public class MetaConnect {
 
       List<String> tablesList = client.get_tables(currentUser.getSession());
       Set<String> ts = new HashSet<String>(tablesList.size());
-      for (String tableName : tablesList){
+      for (String tableName : tablesList) {
         ts.add(tableName);
       }
-      
-      transport.close();
 
+      transport.close();
+      addTablesToMap(db.toUpperCase(), ts);
       return ts;
 
     } catch (TTransportException ex) {
@@ -172,7 +211,7 @@ public class MetaConnect {
       throw new RuntimeException(ex.toString());
     }
   }
-  
+
   private Set<String> getTables_SQL() {
     connectToDBCatalog();
     Set<String> tableSet = new HashSet<String>();
@@ -496,4 +535,27 @@ public class MetaConnect {
         return null;
     }
   }
+
+  public void updateMetaData(String schema, String table) {
+    // Check if table is specified, if not we are dropping an entire DB so need to remove all tables for that DB
+    synchronized (this) {
+      if (table.equals("")) {
+        //Drop db and all tables
+        // iterate through all and remove matching schema
+        for (List<String> keys : MAPD_TABLE_DETAILS.keySet()) {
+          if (keys.get(1).equals(schema.toUpperCase())) {
+            MAPDLOGGER.debug("removing schema " + keys.get(1) + " table " + keys.get(2));
+            MAPD_TABLE_DETAILS.remove(ImmutableList.of(keys.get(1).toUpperCase(), keys.get(2).toUpperCase()));
+          }
+        }
+      } else {
+        MAPDLOGGER.debug("removing schema " + schema.toUpperCase() + " table " + table.toUpperCase());
+        MAPD_TABLE_DETAILS.remove(ImmutableList.of(schema.toUpperCase(), table.toUpperCase()));
+      }
+      // now remove schema
+      MAPDLOGGER.debug("removing schema " + schema.toUpperCase());
+      MAPD_DATABASE_TO_TABLES.remove(schema.toUpperCase());
+    }
+  }
+
 }

@@ -664,9 +664,9 @@ public final class MapDParser {
     return callCount;
   }
 
-  public void updateMetaData(String catalog, String table) {
-    MAPDLOGGER.debug("catalog :" + catalog + " table :" + table);
-//        catalogReader = new MapDCatalogReader(new SqlTypeFactoryImpl(RelDataTypeSystem.DEFAULT), dataDir, this);
-//        catalogReader.updateMetaData(catalog, table);
+  public void updateMetaData(String schema, String table) {
+    MAPDLOGGER.debug("schema :" + schema + " table :" + table);
+    MapDSchema mapd = new MapDSchema(dataDir, this, mapdPort, null);
+    mapd.updateMetaData(schema, table);
   }
 }
