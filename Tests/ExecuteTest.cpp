@@ -2540,12 +2540,13 @@ TEST(Select, InnerJoins) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     c("SELECT COUNT(*) FROM test JOIN test_inner ON test.x = test_inner.x;", dt);
-    c("SELECT y, z FROM test JOIN test_inner ON test.x = test_inner.x order by y;", dt);
+    c("SELECT a.y, z FROM test a JOIN test_inner b ON a.x = b.x order by a.y;", dt);
     c("SELECT COUNT(*) FROM test, test_inner WHERE test.real_str = test_inner.str;", dt);
     c("SELECT COUNT(*) FROM test JOIN test_inner ON test.str = test_inner.str AND test.x = 7;", dt);
     c("SELECT a.x, b.str FROM test AS a JOIN join_test AS b ON a.str = b.str AND a.x = b.x ORDER BY a.x, b.str;", dt);
     c("SELECT a.x, b.str FROM test AS a JOIN join_test AS b ON a.x = b.x AND a.str = b.str ORDER BY a.x, b.str;", dt);
     c("SELECT a.z, b.str FROM test a JOIN join_test b ON a.y = b.y AND a.x = b.x ORDER BY a.z, b.str;", dt);
+    c("SELECT a.z, b.str FROM test a JOIN test_inner b ON a.y = b.y AND a.x = b.x ORDER BY a.z, b.str;", dt);
     ASSERT_EQ(7,
               v<int64_t>(run_simple_agg(
                   "SELECT test.x FROM test, test_inner WHERE test.x = test_inner.x AND test.rowid = 19;", dt)));
@@ -2592,9 +2593,10 @@ TEST(Select, InnerJoins) {
     c("SELECT count(*) FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str = c.str JOIN "
       "hash_join_test AS d ON c.x = d.x;",
       dt);
-    c("SELECT a.x AS x, y, b.str FROM test AS a JOIN hash_join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str = "
+    c("SELECT a.x AS x, a.y, b.str FROM test AS a JOIN hash_join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str "
+      "= "
       "c.str "
-      "ORDER BY y;",
+      "ORDER BY a.y;",
       dt);
     c("SELECT count(*) FROM test AS a JOIN hash_join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str = c.str "
       "WHERE a.y "
@@ -2953,15 +2955,15 @@ int create_and_populate_tables() {
     run_ddl_statement(drop_old_test);
     g_sqlite_comparator.query(drop_old_test);
     const std::string create_test{
-        "CREATE TABLE test_inner(x int not null, str text encoding dict) WITH (fragment_size=2, "
+        "CREATE TABLE test_inner(x int not null, y int, str text encoding dict) WITH (fragment_size=2, "
         "partitions='REPLICATED');"};
     run_ddl_statement(create_test);
-    g_sqlite_comparator.query("CREATE TABLE test_inner(x int not null, str text encoding none);");
+    g_sqlite_comparator.query("CREATE TABLE test_inner(x int not null, y int, str text encoding none);");
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'test_inner'";
     return -EEXIST;
   }
-  const std::string insert_query{"INSERT INTO test_inner VALUES(7, 'foo');"};
+  const std::string insert_query{"INSERT INTO test_inner VALUES(7, 43, 'foo');"};
   run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
   g_sqlite_comparator.query(insert_query);
   try {

@@ -149,6 +149,29 @@ llvm::Value* Executor::codegen(const Analyzer::UOper* u_oper, const CompilationO
   }
 }
 
+llvm::Value* Executor::codegenRetOnHashFail(llvm::Value* hash_cond_lv, const Analyzer::Expr* qual) {
+  std::unordered_map<const Analyzer::Expr*, size_t> equi_join_conds;
+  for (size_t i = 0; i < plan_state_->join_info_.equi_join_tautologies_.size(); ++i) {
+    auto cond = plan_state_->join_info_.equi_join_tautologies_[i];
+    equi_join_conds.insert(std::make_pair(cond.get(), i));
+  }
+  auto bin_oper = dynamic_cast<const Analyzer::BinOper*>(qual);
+  if (!bin_oper || !equi_join_conds.count(bin_oper)) {
+    return hash_cond_lv;
+  }
+
+  auto bb_hash_pass = llvm::BasicBlock::Create(
+      cgen_state_->context_, "hash_pass_" + std::to_string(equi_join_conds[bin_oper]), cgen_state_->row_func_);
+  auto bb_hash_fail = llvm::BasicBlock::Create(
+      cgen_state_->context_, "hash_fail_" + std::to_string(equi_join_conds[bin_oper]), cgen_state_->row_func_);
+  cgen_state_->ir_builder_.CreateCondBr(hash_cond_lv, bb_hash_pass, bb_hash_fail);
+  cgen_state_->ir_builder_.SetInsertPoint(bb_hash_fail);
+
+  cgen_state_->ir_builder_.CreateRet(ll_int(int32_t(0)));
+  cgen_state_->ir_builder_.SetInsertPoint(bb_hash_pass);
+  return ll_bool(true);
+}
+
 const std::vector<Analyzer::Expr*> Executor::codegenHashJoinsBeforeLoopJoin(
     const std::vector<Analyzer::Expr*>& primary_quals,
     const RelAlgExecutionUnit& ra_exe_unit,
@@ -180,10 +203,12 @@ const std::vector<Analyzer::Expr*> Executor::codegenHashJoinsBeforeLoopJoin(
     }
     hash_join_quals.insert(expr.get());
     if (!filter_lv) {
-      filter_lv = llvm::ConstantInt::get(llvm::IntegerType::getInt1Ty(cgen_state_->context_), true);
+      filter_lv = ll_bool(true);
     }
     CHECK(filter_lv);
-    filter_lv = cgen_state_->ir_builder_.CreateAnd(filter_lv, toBool(codegen(expr.get(), true, co).front()));
+    auto cond_lv = toBool(codegen(expr.get(), true, co).front());
+    auto new_cond_lv = codegenRetOnHashFail(cond_lv, expr.get());
+    filter_lv = new_cond_lv == cond_lv ? cgen_state_->ir_builder_.CreateAnd(filter_lv, cond_lv) : new_cond_lv;
     CHECK(filter_lv->getType()->isIntegerTy(1));
   }
 
@@ -191,13 +216,17 @@ const std::vector<Analyzer::Expr*> Executor::codegenHashJoinsBeforeLoopJoin(
     return primary_quals;
   }
 
-  auto cond_true = llvm::BasicBlock::Create(cgen_state_->context_, "match_true", cgen_state_->row_func_);
-  auto cond_false = llvm::BasicBlock::Create(cgen_state_->context_, "match_false", cgen_state_->row_func_);
+  if (auto constant_true = dynamic_cast<llvm::ConstantInt*>(filter_lv)) {
+    CHECK_NE(constant_true->getSExtValue(), int64_t(0));
+  } else {
+    auto cond_true = llvm::BasicBlock::Create(cgen_state_->context_, "match_true", cgen_state_->row_func_);
+    auto cond_false = llvm::BasicBlock::Create(cgen_state_->context_, "match_false", cgen_state_->row_func_);
 
-  cgen_state_->ir_builder_.CreateCondBr(filter_lv, cond_true, cond_false);
-  cgen_state_->ir_builder_.SetInsertPoint(cond_false);
-  cgen_state_->ir_builder_.CreateRet(ll_int(int32_t(0)));
-  cgen_state_->ir_builder_.SetInsertPoint(cond_true);
+    cgen_state_->ir_builder_.CreateCondBr(filter_lv, cond_true, cond_false);
+    cgen_state_->ir_builder_.SetInsertPoint(cond_false);
+    cgen_state_->ir_builder_.CreateRet(ll_int(int32_t(0)));
+    cgen_state_->ir_builder_.SetInsertPoint(cond_true);
+  }
 
   std::vector<Analyzer::Expr*> remaining_quals;
   for (auto qual : primary_quals) {

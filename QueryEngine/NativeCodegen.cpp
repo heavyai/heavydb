@@ -1058,7 +1058,11 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
   llvm::Value* filter_lv = llvm::ConstantInt::get(llvm::IntegerType::getInt1Ty(cgen_state_->context_), true);
   for (auto expr : primary_quals) {
     // Generate the filter for primary quals
-    filter_lv = cgen_state_->ir_builder_.CreateAnd(filter_lv, toBool(codegen(expr, true, co).front()));
+    auto cond = toBool(codegen(expr, true, co).front());
+    auto new_cond = codegenRetOnHashFail(cond, expr);
+    if (new_cond == cond) {
+      filter_lv = cgen_state_->ir_builder_.CreateAnd(filter_lv, cond);
+    }
   }
   CHECK(filter_lv->getType()->isIntegerTy(1));
 
