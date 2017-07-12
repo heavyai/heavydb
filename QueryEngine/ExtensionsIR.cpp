@@ -199,15 +199,43 @@ std::vector<llvm::Value*> Executor::codegenFunctionOperCastArgs(const Analyzer::
   for (size_t i = 0; i < function_oper->getArity(); ++i) {
     const auto arg = function_oper->getArg(i);
     const auto& arg_ti = arg->get_type_info();
-    const auto arg_target_ti = ext_arg_type_to_type_info(ext_func_args[i]);
     llvm::Value* arg_lv{nullptr};
-    if (arg_ti.get_type() != arg_target_ti.get_type()) {
-      arg_lv = codegenCast(orig_arg_lvs[i], arg_ti, arg_target_ti, false, co);
+    if (arg_ti.is_array()) {
+      const auto elem_ti = arg_ti.get_elem_type();
+      const auto ptr_lv = cgen_state_->emitExternalCall(
+          "array_buff", llvm::Type::getInt8PtrTy(cgen_state_->context_), {orig_arg_lvs[i], posArg(arg)});
+      const auto len_lv =
+          cgen_state_->emitExternalCall("array_size",
+                                        get_int_type(32, cgen_state_->context_),
+                                        {orig_arg_lvs[i], posArg(arg), ll_int(log2_bytes(elem_ti.get_logical_size()))});
+      args.push_back(castArrayPointer(ptr_lv, elem_ti));
+      args.push_back(cgen_state_->ir_builder_.CreateZExt(len_lv, get_int_type(64, cgen_state_->context_)));
     } else {
-      arg_lv = orig_arg_lvs[i];
+      const auto arg_target_ti = ext_arg_type_to_type_info(ext_func_args[i]);
+      if (arg_ti.get_type() != arg_target_ti.get_type()) {
+        arg_lv = codegenCast(orig_arg_lvs[i], arg_ti, arg_target_ti, false, co);
+      } else {
+        arg_lv = orig_arg_lvs[i];
+      }
+      CHECK_EQ(arg_lv->getType(), ext_arg_type_to_llvm_type(ext_func_args[i], cgen_state_->context_));
+      args.push_back(arg_lv);
     }
-    CHECK_EQ(arg_lv->getType(), ext_arg_type_to_llvm_type(ext_func_args[i], cgen_state_->context_));
-    args.push_back(arg_lv);
   }
   return args;
+}
+
+llvm::Value* Executor::castArrayPointer(llvm::Value* ptr, const SQLTypeInfo& elem_ti) {
+  switch (elem_ti.get_size()) {
+    case 1:
+      return ptr;
+    case 2:
+      return cgen_state_->ir_builder_.CreatePointerCast(ptr, llvm::Type::getInt16PtrTy(cgen_state_->context_));
+    case 4:
+      return cgen_state_->ir_builder_.CreatePointerCast(ptr, llvm::Type::getInt32PtrTy(cgen_state_->context_));
+    case 8:
+      return cgen_state_->ir_builder_.CreatePointerCast(ptr, llvm::Type::getInt64PtrTy(cgen_state_->context_));
+    default:
+      CHECK(false);
+  }
+  return nullptr;
 }

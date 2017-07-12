@@ -541,6 +541,7 @@ class Executor {
                                                         const ExtensionFunction*,
                                                         const std::vector<llvm::Value*>&,
                                                         const CompilationOptions&);
+  llvm::Value* castArrayPointer(llvm::Value* ptr, const SQLTypeInfo& elem_ti);
   llvm::ConstantInt* codegenIntConst(const Analyzer::Constant* constant);
   llvm::Value* colByteStream(const Analyzer::ColumnVar* col_var, const bool fetch_column, const bool hoist_literals);
   llvm::Value* posArg(const Analyzer::Expr*) const;
