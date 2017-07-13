@@ -16,7 +16,6 @@
 package com.mapd.metadata;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Maps;
 import com.mapd.calcite.parser.MapDParser;
 import com.mapd.calcite.parser.MapDUser;
 import com.mapd.thrift.server.MapD;
@@ -46,6 +45,7 @@ import com.mapd.calcite.parser.MapDTable;
 import com.mapd.calcite.parser.MapDView;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  *
@@ -77,8 +77,8 @@ public class MetaConnect {
   private static final int KDATE = 14;
   private static final int KARRAY = 15;
 
-  private static volatile Map<String, Set<String>> MAPD_DATABASE_TO_TABLES = Maps.newConcurrentMap();
-  private static volatile Map<List<String>, Table> MAPD_TABLE_DETAILS = Maps.newConcurrentMap();
+  private static volatile Map<String, Set<String>> MAPD_DATABASE_TO_TABLES = new ConcurrentHashMap();
+  private static volatile Map<List<String>, Table> MAPD_TABLE_DETAILS = new ConcurrentHashMap();
 
   public MetaConnect(int mapdPort, String dataDir, MapDUser currentMapDUser, MapDParser parser) {
     this.dataDir = dataDir;
@@ -125,15 +125,6 @@ public class MetaConnect {
     }
   }
 
-  private void addTableToMap(List<String> dbTable, Table table) {
-    synchronized (this) {
-      Table cTable = MAPD_TABLE_DETAILS.get(dbTable);
-      if (cTable == null) {
-        MAPD_TABLE_DETAILS.put(dbTable, table);
-      }
-    }
-  }
-
   public Table getTable(String tableName) {
     List<String> dbTable = ImmutableList.of(db.toUpperCase(), tableName.toUpperCase());
     Table cTable = MAPD_TABLE_DETAILS.get(dbTable);
@@ -146,27 +137,17 @@ public class MetaConnect {
     if (td.getView_sql() == null || td.getView_sql().isEmpty()) {
       MAPDLOGGER.debug("Processing a table");
       Table rTable = new MapDTable(td);
-      addTableToMap(dbTable, rTable);
+      MAPD_TABLE_DETAILS.putIfAbsent(dbTable, rTable);
       return rTable;
     } else {
       MAPDLOGGER.debug("Processing a view");
       Table rTable = new MapDView(getViewSql(tableName), td, parser);
-      addTableToMap(dbTable, rTable);
+      MAPD_TABLE_DETAILS.putIfAbsent(dbTable, rTable);
       return rTable;
     }
   }
 
-  private void addTablesToMap(String cDB, Set<String> ts) {
-    synchronized (this) {
-      Set<String> mSet = MAPD_DATABASE_TO_TABLES.get(db);
-      if (mSet == null) {
-        MAPD_DATABASE_TO_TABLES.put(cDB, ts);
-      }
-    }
-  }
-
   public Set<String> getTables() {
-
     Set<String> mSet = MAPD_DATABASE_TO_TABLES.get(db.toUpperCase());
     if (mSet != null) {
       return mSet;
@@ -177,7 +158,7 @@ public class MetaConnect {
       connectToDBCatalog();
       Set<String> ts = getTables_SQL();
       disconnectFromDBCatalog();
-      addTablesToMap(db.toUpperCase(), ts);
+      MAPD_DATABASE_TO_TABLES.putIfAbsent(db.toUpperCase(), ts);
       return ts;
     }
     // use thrift direct to local server
@@ -197,7 +178,7 @@ public class MetaConnect {
       }
 
       transport.close();
-      addTablesToMap(db.toUpperCase(), ts);
+      MAPD_DATABASE_TO_TABLES.putIfAbsent(db.toUpperCase(), ts);
       return ts;
 
     } catch (TTransportException ex) {
@@ -541,24 +522,22 @@ public class MetaConnect {
 
   public void updateMetaData(String schema, String table) {
     // Check if table is specified, if not we are dropping an entire DB so need to remove all tables for that DB
-    synchronized (this) {
-      if (table.equals("")) {
-        //Drop db and all tables
-        // iterate through all and remove matching schema
-        for (List<String> keys : MAPD_TABLE_DETAILS.keySet()) {
-          if (keys.get(1).equals(schema.toUpperCase())) {
-            MAPDLOGGER.debug("removing schema " + keys.get(1) + " table " + keys.get(2));
-            MAPD_TABLE_DETAILS.remove(ImmutableList.of(keys.get(1).toUpperCase(), keys.get(2).toUpperCase()));
-          }
+    if (table.equals("")) {
+      //Drop db and all tables
+      // iterate through all and remove matching schema
+      for (List<String> keys : MAPD_TABLE_DETAILS.keySet()) {
+        if (keys.get(1).equals(schema.toUpperCase())) {
+          MAPDLOGGER.debug("removing schema " + keys.get(1) + " table " + keys.get(2));
+          MAPD_TABLE_DETAILS.remove(ImmutableList.of(keys.get(1).toUpperCase(), keys.get(2).toUpperCase()));
         }
-      } else {
-        MAPDLOGGER.debug("removing schema " + schema.toUpperCase() + " table " + table.toUpperCase());
-        MAPD_TABLE_DETAILS.remove(ImmutableList.of(schema.toUpperCase(), table.toUpperCase()));
       }
-      // now remove schema
-      MAPDLOGGER.debug("removing schema " + schema.toUpperCase());
-      MAPD_DATABASE_TO_TABLES.remove(schema.toUpperCase());
+    } else {
+      MAPDLOGGER.debug("removing schema " + schema.toUpperCase() + " table " + table.toUpperCase());
+      MAPD_TABLE_DETAILS.remove(ImmutableList.of(schema.toUpperCase(), table.toUpperCase()));
     }
+    // now remove schema
+    MAPDLOGGER.debug("removing schema " + schema.toUpperCase());
+    MAPD_DATABASE_TO_TABLES.remove(schema.toUpperCase());
   }
 
 }
