@@ -1912,6 +1912,17 @@ void MapDHandler::convert_result(TQueryResult& _return, const ResultRows& result
   create_simple_result(_return, results, column_format, "Result");
 }
 
+namespace {
+
+void check_table_not_sharded(const Catalog_Namespace::Catalog& cat, const std::string& table_name) {
+  const auto td = cat.getMetadataForTable(table_name);
+  if (td && td->nShards) {
+    throw std::runtime_error("Cannot import a sharded table directly to a leaf");
+  }
+}
+
+}  // namespace
+
 void MapDHandler::sql_execute_impl(TQueryResult& _return,
                                    const Catalog_Namespace::SessionInfo& session_info,
                                    const std::string& query_str,
@@ -1978,6 +1989,10 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
           explain_stmt = dynamic_cast<Parser::ExplainStmt*>(ddl);
         if (ddl != nullptr && explain_stmt == nullptr) {
           const auto copy_stmt = dynamic_cast<Parser::CopyTableStmt*>(ddl);
+          if (g_cluster && copy_stmt && !leaf_aggregator_.leafCount()) {
+            // Sharded table rows need to be routed to the leaf by an aggregator.
+            check_table_not_sharded(cat, copy_stmt->get_table());
+          }
           if (copy_stmt && leaf_aggregator_.leafCount() > 0) {
             _return.execution_time_ms +=
                 measure<>::execution([&]() { execute_distributed_copy_statement(copy_stmt, session_info); });

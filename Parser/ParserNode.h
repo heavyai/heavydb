@@ -983,6 +983,11 @@ class CopyTableStmt : public DDLStmt {
                                                                  const Importer_NS::CopyParams&)>& importer_factory);
   std::unique_ptr<std::string> return_message;
 
+  std::string& get_table() const {
+    CHECK(table);
+    return *table;
+  }
+
  private:
   std::unique_ptr<std::string> table;
   std::unique_ptr<std::string> file_pattern;
