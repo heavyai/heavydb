@@ -18,6 +18,7 @@ package com.mapd.jdbc;
 
 import com.mapd.thrift.server.MapD;
 import com.mapd.thrift.server.TMapDException;
+import com.mapd.thrift.server.TServerStatus;
 import java.sql.Array;
 import java.sql.Blob;
 import java.sql.CallableStatement;
@@ -188,6 +189,12 @@ public class MapDConnection implements java.sql.Connection {
     DatabaseMetaData mapDMetaData = new MapDDatabaseMetaData(this);
 
     return mapDMetaData;
+  }
+
+  @Override
+  public void setReadOnly(boolean readOnly) throws SQLException { //logger.debug("Entered");
+	  // TODO MAT we can't push the readonly upstream currently 
+	  // but we could make JDBC obey this command
   }
 
   @Override
