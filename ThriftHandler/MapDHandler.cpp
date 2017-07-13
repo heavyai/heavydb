@@ -1941,6 +1941,18 @@ void MapDHandler::convert_result(TQueryResult& _return, const ResultRows& result
   create_simple_result(_return, results, column_format, "Result");
 }
 
+namespace {
+
+void check_table_not_sharded(const Catalog_Namespace::Catalog& cat, const int table_id) {
+  const auto td = cat.getMetadataForTable(table_id);
+  CHECK(td);
+  if (td->nShards) {
+    throw std::runtime_error("Cannot execute a cluster insert into a sharded table");
+  }
+}
+
+}  // namespace
+
 void MapDHandler::sql_execute_impl(TQueryResult& _return,
                                    const Catalog_Namespace::SessionInfo& session_info,
                                    const std::string& query_str,
@@ -2033,6 +2045,9 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
           root_plan = optimizer.optimize();
           CHECK(root_plan);
           std::unique_ptr<Planner::RootPlan> plan_ptr(root_plan);  // make sure it's deleted
+          if (g_cluster && plan_ptr->get_stmt_type() == kINSERT) {
+            check_table_not_sharded(session_info.get_catalog(), plan_ptr->get_result_table_id());
+          }
           if (explain_stmt != nullptr) {
             root_plan->set_plan_dest(Planner::RootPlan::Dest::kEXPLAIN);
           }
