@@ -191,19 +191,21 @@ public class MapDConnection implements java.sql.Connection {
   }
 
   @Override
-  public void setReadOnly(boolean readOnly) throws SQLException { //logger.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
-  }
-
-  @Override
   public boolean isReadOnly() throws SQLException { //logger.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    try {
+      if (session != null) {
+        TServerStatus server_status = client.get_server_status(session);
+        return server_status.read_only;
+      }
+    } catch (TMapDException ex) {
+      throw new SQLException("get_server_status failed during isReadOnly check." + ex.toString());
+    } catch (TException ex) {
+      throw new SQLException("get_server_status failed during isReadOnly check." + ex.toString());
+    }
+    // never should get here
+    return true;
   }
-
+  
   @Override
   public void setCatalog(String catalog) throws SQLException { //logger.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
