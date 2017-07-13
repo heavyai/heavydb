@@ -2540,6 +2540,7 @@ TEST(Select, InnerJoins) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     c("SELECT COUNT(*) FROM test a JOIN single_row_test b ON a.x = b.x;", dt);
+    c("SELECT COUNT(*) from test a JOIN single_row_test b ON a.ofd = b.x;", dt);
     c("SELECT COUNT(*) FROM test JOIN test_inner ON test.x = test_inner.x;", dt);
     c("SELECT a.y, z FROM test a JOIN test_inner b ON a.x = b.x order by a.y;", dt);
     c("SELECT COUNT(*) FROM test, test_inner WHERE test.real_str = test_inner.str;", dt);
