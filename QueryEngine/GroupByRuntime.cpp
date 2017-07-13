@@ -264,12 +264,9 @@ extern "C" ALWAYS_INLINE DEVICE int64_t hash_join_idx_sharded_nullable(int64_t h
                                                                        const uint32_t num_shards,
                                                                        const uint32_t device_count,
                                                                        const int64_t null_val) {
-  if (key != null_val) {
-    return hash_join_idx_sharded(hash_buff, key, min_key, max_key, entry_count_per_shard, num_shards, device_count);
-  }
-  const int64_t translated_key = max_key + 1;
-  return hash_join_idx_sharded(
-      hash_buff, translated_key, min_key, translated_key, entry_count_per_shard, num_shards, device_count);
+  return key != null_val
+             ? hash_join_idx_sharded(hash_buff, key, min_key, max_key, entry_count_per_shard, num_shards, device_count)
+             : -1;
 }
 
 #define DEF_TRANSLATE_NULL_KEY(key_type)                                            \
