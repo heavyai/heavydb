@@ -67,10 +67,10 @@ DEVICE int SUFFIX(fill_hash_join_buff)(int32_t* buff,
   for (size_t i = start; i < join_column.num_elems; i += step) {
     int64_t elem = SUFFIX(fixed_width_int_decode_noinline)(join_column.col_buff, type_info.elem_sz, i);
     if (elem == type_info.null_val) {
-      elem = type_info.translated_null_val;
+      continue;
     }
 #ifndef __CUDACC__
-    if (sd_inner_proxy && elem != type_info.translated_null_val) {
+    if (sd_inner_proxy) {
       CHECK(sd_outer_proxy);
       const auto sd_inner_dict_proxy = static_cast<const StringDictionaryProxy*>(sd_inner_proxy);
       const auto sd_outer_dict_proxy = static_cast<const StringDictionaryProxy*>(sd_outer_proxy);
@@ -112,10 +112,10 @@ DEVICE int SUFFIX(fill_hash_join_buff_sharded)(int32_t* buff,
       continue;
     }
     if (elem == type_info.null_val) {
-      elem = type_info.translated_null_val;
+      continue;
     }
 #ifndef __CUDACC__
-    if (sd_inner_proxy && elem != type_info.translated_null_val) {
+    if (sd_inner_proxy) {
       CHECK(sd_outer_proxy);
       const auto sd_inner_dict_proxy = static_cast<const StringDictionaryProxy*>(sd_inner_proxy);
       const auto sd_outer_dict_proxy = static_cast<const StringDictionaryProxy*>(sd_outer_proxy);

@@ -239,11 +239,7 @@ extern "C" ALWAYS_INLINE DEVICE int64_t hash_join_idx_nullable(int64_t hash_buff
                                                                const int64_t min_key,
                                                                const int64_t max_key,
                                                                const int64_t null_val) {
-  if (key != null_val) {
-    return hash_join_idx(hash_buff, key, min_key, max_key);
-  }
-  const int64_t translated_key = max_key + 1;
-  return hash_join_idx(hash_buff, translated_key, min_key, translated_key);
+  return key != null_val ? hash_join_idx(hash_buff, key, min_key, max_key) : -1;
 }
 
 extern "C" ALWAYS_INLINE DEVICE int64_t hash_join_idx_sharded(int64_t hash_buff,

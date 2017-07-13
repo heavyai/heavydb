@@ -48,7 +48,6 @@ struct JoinColumnTypeInfo {
   const size_t elem_sz;
   const int64_t min_val;
   const int64_t null_val;
-  const int64_t translated_null_val;
 };
 
 int fill_hash_join_buff(int32_t* buff,

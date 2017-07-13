@@ -473,17 +473,15 @@ int JoinHashTable::initHashTableOnCpu(const int8_t* col_buff,
                                           thread_count,
                                           &ti,
                                           &err] {
-        int partial_err = fill_hash_join_buff(&(*cpu_hash_table_buff_)[0],
-                                              hash_join_invalid_val,
-                                              {col_buff, num_elements},
-                                              {static_cast<size_t>(ti.get_size()),
-                                               col_range_.getIntMin(),
-                                               inline_fixed_encoding_null_val(ti),
-                                               col_range_.getIntMax() + 1},
-                                              sd_inner_proxy,
-                                              sd_outer_proxy,
-                                              thread_idx,
-                                              thread_count);
+        int partial_err = fill_hash_join_buff(
+            &(*cpu_hash_table_buff_)[0],
+            hash_join_invalid_val,
+            {col_buff, num_elements},
+            {static_cast<size_t>(ti.get_size()), col_range_.getIntMin(), inline_fixed_encoding_null_val(ti)},
+            sd_inner_proxy,
+            sd_outer_proxy,
+            thread_idx,
+            thread_count);
         __sync_val_compare_and_swap(&err, 0, partial_err);
       });
     }
@@ -514,9 +512,9 @@ size_t get_hash_entry_count(const ExpressionRange& col_range) {
     CHECK_EQ(col_range.getIntMin(), int64_t(0));
     CHECK_EQ(col_range.getIntMax(), int64_t(-1));
     CHECK(col_range.hasNulls());
-    return 1;
+    return 0;
   }
-  return col_range.getIntMax() - col_range.getIntMin() + 1 + (col_range.hasNulls() ? 1 : 0);
+  return col_range.getIntMax() - col_range.getIntMin() + 1;
 }
 
 }  // namespace
@@ -528,6 +526,9 @@ int JoinHashTable::initHashTableForDevice(const ChunkKey& chunk_key,
                                           const Data_Namespace::MemoryLevel effective_memory_level,
                                           const int device_id) {
   auto hash_entry_count = get_hash_entry_count(col_range_);
+  if (!hash_entry_count) {
+    return 0;
+  }
 #ifdef HAVE_CUDA
   const auto shard_count = get_shard_count(qual_bin_oper_.get(), ra_exe_unit_, executor_);
   const size_t entries_per_shard{shard_count ? get_entries_per_shard(hash_entry_count, shard_count) : 0};
@@ -590,10 +591,8 @@ int JoinHashTable::initHashTableForDevice(const ChunkKey& chunk_key,
                                   executor_->blockSize(),
                                   executor_->gridSize());
     JoinColumn join_column{col_buff, num_elements};
-    JoinColumnTypeInfo type_info{static_cast<size_t>(ti.get_size()),
-                                 col_range_.getIntMin(),
-                                 inline_fixed_encoding_null_val(ti),
-                                 col_range_.getIntMax() + 1};
+    JoinColumnTypeInfo type_info{
+        static_cast<size_t>(ti.get_size()), col_range_.getIntMin(), inline_fixed_encoding_null_val(ti)};
     if (shard_count) {
       CHECK_GT(device_count_, 0);
       for (size_t shard = device_id; shard < shard_count; shard += device_count_) {
