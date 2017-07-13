@@ -205,12 +205,7 @@ public class MapDConnection implements java.sql.Connection {
     // never should get here
     return true;
   }
-
-  @Override
-  public boolean isReadOnly() throws SQLException { //logger.debug("Entered");
-    return false;
-  }
-
+  
   @Override
   public void setCatalog(String catalog) throws SQLException { //logger.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
