@@ -3190,6 +3190,9 @@ void drop_tables() {
   run_ddl_statement(drop_array_test);
   const std::string drop_array_test_inner{"DROP TABLE array_test_inner;"};
   run_ddl_statement(drop_array_test_inner);
+  const std::string drop_single_row_test{"DROP TABLE single_row_test;"};
+  g_sqlite_comparator.query(drop_single_row_test);
+  run_ddl_statement(drop_single_row_test);
   const std::string drop_subquery_test{"DROP TABLE subquery_test;"};
   run_ddl_statement(drop_subquery_test);
   g_sqlite_comparator.query(drop_subquery_test);
