@@ -107,8 +107,9 @@ size_t get_shard_count(const Analyzer::BinOper* join_condition,
   }
   const Analyzer::ColumnVar* lhs_col{nullptr};
   const Analyzer::ColumnVar* rhs_col{nullptr};
+  std::shared_ptr<Analyzer::BinOper> redirected_bin_oper;
   try {
-    const auto redirected_bin_oper =
+    redirected_bin_oper =
         std::dynamic_pointer_cast<Analyzer::BinOper>(redirect_expr(join_condition, ra_exe_unit.input_col_descs));
     CHECK(redirected_bin_oper);
     std::tie(lhs_col, rhs_col) = get_cols(redirected_bin_oper, *executor->getCatalog(), executor->getTemporaryTables());
