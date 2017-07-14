@@ -318,7 +318,7 @@ std::unique_ptr<ColumnarResults> ColumnarResults::createOffsetResults(
   const auto row_count = values.num_rows_;
   std::unique_ptr<ColumnarResults> offset_vals(new ColumnarResults(row_count, values.target_types_));
   CHECK(offset_vals->column_buffers_.empty());
-  CHECK_EQ(64, values.getColumnType(col_idx).get_size());
+  CHECK_EQ(8, values.getColumnType(col_idx).get_size());
   const size_t buf_size = sizeof(int64_t) * row_count;
   auto write_ptr = reinterpret_cast<int64_t*>(checked_malloc(buf_size));
   offset_vals->column_buffers_.push_back(reinterpret_cast<int8_t*>(write_ptr));
