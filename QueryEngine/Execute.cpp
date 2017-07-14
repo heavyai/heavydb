@@ -1897,7 +1897,8 @@ namespace {
 template <class T>
 int8_t* insert_one_dict_str(const ColumnDescriptor* cd,
                             const Analyzer::Constant* col_cv,
-                            const Catalog_Namespace::Catalog& catalog) {
+                            const Catalog_Namespace::Catalog& catalog,
+                            int64_t& int_col_val) {
   auto col_data = reinterpret_cast<T*>(checked_malloc(sizeof(T)));
   if (col_cv->get_is_null()) {
     *col_data = inline_fixed_encoding_null_val(cd->columnType);
@@ -1918,6 +1919,7 @@ int8_t* insert_one_dict_str(const ColumnDescriptor* cd,
     }
     *col_data = str_id;
   }
+  int_col_val = *col_data;
   return reinterpret_cast<int8_t*>(col_data);
 }
 
@@ -2037,13 +2039,13 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
           case kENCODING_DICT: {
             switch (cd->columnType.get_size()) {
               case 1:
-                col_buffers[col_ids[col_idx]] = insert_one_dict_str<int8_t>(cd, col_cv, cat);
+                col_buffers[col_ids[col_idx]] = insert_one_dict_str<int8_t>(cd, col_cv, cat, int_col_val);
                 break;
               case 2:
-                col_buffers[col_ids[col_idx]] = insert_one_dict_str<int16_t>(cd, col_cv, cat);
+                col_buffers[col_ids[col_idx]] = insert_one_dict_str<int16_t>(cd, col_cv, cat, int_col_val);
                 break;
               case 4:
-                col_buffers[col_ids[col_idx]] = insert_one_dict_str<int32_t>(cd, col_cv, cat);
+                col_buffers[col_ids[col_idx]] = insert_one_dict_str<int32_t>(cd, col_cv, cat, int_col_val);
                 break;
               default:
                 CHECK(false);
