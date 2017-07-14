@@ -70,6 +70,10 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Expr* expr,
   if (extract_expr) {
     return {codegen(extract_expr, co)};
   }
+  auto dateadd_expr = dynamic_cast<const Analyzer::DateaddExpr*>(expr);
+  if (dateadd_expr) {
+    return {codegen(dateadd_expr, co)};
+  }
   auto datediff_expr = dynamic_cast<const Analyzer::DatediffExpr*>(expr);
   if (datediff_expr) {
     return {codegen(datediff_expr, co)};

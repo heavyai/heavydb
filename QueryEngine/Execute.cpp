@@ -2359,6 +2359,7 @@ llvm::Value* Executor::castToIntPtrTyIn(llvm::Value* val, const size_t bitWidth)
 }
 
 #define EXECUTE_INCLUDE
+#include "DateAdd.cpp"
 #include "ArrayOps.cpp"
 #include "StringFunctions.cpp"
 #undef EXECUTE_INCLUDE

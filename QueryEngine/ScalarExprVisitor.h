@@ -92,6 +92,10 @@ class ScalarExprVisitor {
     if (datediff) {
       return visitDatediffExpr(datediff);
     }
+    const auto dateadd = dynamic_cast<const Analyzer::DateaddExpr*>(expr);
+    if (dateadd) {
+      return visitDateaddExpr(dateadd);
+    }
     const auto likelihood = dynamic_cast<const Analyzer::LikelihoodExpr*>(expr);
     if (likelihood) {
       return visitLikelihood(likelihood);
@@ -204,6 +208,13 @@ class ScalarExprVisitor {
     T result = defaultResult();
     result = aggregateResult(result, visit(datediff->get_start_expr()));
     result = aggregateResult(result, visit(datediff->get_end_expr()));
+    return result;
+  }
+
+  virtual T visitDateaddExpr(const Analyzer::DateaddExpr* dateadd) const {
+    T result = defaultResult();
+    result = aggregateResult(result, visit(dateadd->get_number_expr()));
+    result = aggregateResult(result, visit(dateadd->get_datetime_expr()));
     return result;
   }
 

@@ -324,6 +324,8 @@ declare i64 @DateTruncate(i32, i64);
 declare i64 @DateTruncateNullable(i32, i64, i64);
 declare i64 @DateDiff(i32, i64, i64);
 declare i64 @DateDiffNullable(i32, i64, i64, i64);
+declare i64 @DateAdd(i32, i64, i64);
+declare i64 @DateAddNullable(i32, i64, i64, i64);
 declare i64 @string_decode(i8*, i64);
 declare i32 @array_size(i8*, i64, i32);
 declare i1 @array_is_null(i8*, i64);

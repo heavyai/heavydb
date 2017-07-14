@@ -420,6 +420,7 @@ class Executor {
                            const bool is_real_str,
                            const CompilationOptions&);
   llvm::Value* codegen(const Analyzer::ExtractExpr*, const CompilationOptions&);
+  llvm::Value* codegen(const Analyzer::DateaddExpr*, const CompilationOptions&);
   llvm::Value* codegen(const Analyzer::DatediffExpr*, const CompilationOptions&);
   llvm::Value* codegen(const Analyzer::DatetruncExpr*, const CompilationOptions&);
   llvm::Value* codegen(const Analyzer::CharLengthExpr*, const CompilationOptions&);

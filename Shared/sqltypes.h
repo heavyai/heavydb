@@ -494,6 +494,7 @@ std::string DatumToString(Datum d, const SQLTypeInfo& ti);
 
 #include "../QueryEngine/ExtractFromTime.h"
 #include "../QueryEngine/DateTruncate.h"
+#include "../QueryEngine/DateAdd.h"
 
 inline SQLTypeInfo get_logical_type_info(const SQLTypeInfo& type_info) {
   EncodingType encoding = type_info.get_compression();

@@ -857,7 +857,45 @@ class ExtractExpr : public Expr {
 };
 
 /*
- * @type ExtractExpr
+ * @type DateaddExpr
+ * @brief the DATEADD expression
+ */
+class DateaddExpr : public Expr {
+ public:
+  DateaddExpr(const SQLTypeInfo& ti,
+              const DateaddField f,
+              const std::shared_ptr<Analyzer::Expr> number,
+              const std::shared_ptr<Analyzer::Expr> datetime)
+      : Expr(ti, false), field_(f), number_(number), datetime_(datetime) {}
+  DateaddField get_field() const { return field_; }
+  const Expr* get_number_expr() const { return number_.get(); }
+  const Expr* get_datetime_expr() const { return datetime_.get(); }
+  virtual std::shared_ptr<Analyzer::Expr> deep_copy() const;
+  virtual void check_group_by(const std::list<std::shared_ptr<Analyzer::Expr>>& groupby) const;
+  virtual void group_predicates(std::list<const Expr*>& scan_predicates,
+                                std::list<const Expr*>& join_predicates,
+                                std::list<const Expr*>& const_predicates) const;
+  virtual void collect_rte_idx(std::set<int>& rte_idx_set) const;
+  virtual void collect_column_var(std::set<const ColumnVar*, bool (*)(const ColumnVar*, const ColumnVar*)>& colvar_set,
+                                  bool include_agg) const;
+  virtual std::shared_ptr<Analyzer::Expr> rewrite_with_targetlist(
+      const std::vector<std::shared_ptr<TargetEntry>>& tlist) const;
+  virtual std::shared_ptr<Analyzer::Expr> rewrite_with_child_targetlist(
+      const std::vector<std::shared_ptr<TargetEntry>>& tlist) const;
+  virtual std::shared_ptr<Analyzer::Expr> rewrite_agg_to_var(
+      const std::vector<std::shared_ptr<TargetEntry>>& tlist) const;
+  virtual bool operator==(const Expr& rhs) const;
+  virtual void print() const;
+  virtual void find_expr(bool (*f)(const Expr*), std::list<const Expr*>& expr_list) const;
+
+ private:
+  const DateaddField field_;
+  const std::shared_ptr<Analyzer::Expr> number_;
+  const std::shared_ptr<Analyzer::Expr> datetime_;
+};
+
+/*
+ * @type DatediffExpr
  * @brief the DATEDIFF expression
  */
 class DatediffExpr : public Expr {

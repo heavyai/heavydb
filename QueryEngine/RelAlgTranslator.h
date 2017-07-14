@@ -86,6 +86,10 @@ class RelAlgTranslator {
 
   std::shared_ptr<Analyzer::Expr> translateExtract(const RexFunctionOperator*) const;
 
+  std::shared_ptr<Analyzer::Expr> translateDateadd(const RexFunctionOperator*) const;
+
+  std::shared_ptr<Analyzer::Expr> translateDateminus(const RexOperator*) const;
+
   std::shared_ptr<Analyzer::Expr> translateDatediff(const RexFunctionOperator*) const;
 
   std::shared_ptr<Analyzer::Expr> translateDatepart(const RexFunctionOperator*) const;
