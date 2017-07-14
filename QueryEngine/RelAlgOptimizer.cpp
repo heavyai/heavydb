@@ -1336,6 +1336,19 @@ void hoist_filter_cond_to_cross_join(std::vector<std::shared_ptr<RelAlgNode>>& n
         }
         const auto src_join = dynamic_cast<const RelJoin*>(filter->getInput(0));
         CHECK(src_join);
+        auto filter_it = deconst_mapping.find(filter);
+        CHECK(filter_it != deconst_mapping.end());
+        auto modified_filter = dynamic_cast<RelFilter*>(filter_it->second);
+        CHECK(modified_filter);
+
+        if (src_join == join) {
+          std::unique_ptr<const RexScalar> filter_condition(modified_filter->getAndReleaseCondition());
+          std::unique_ptr<const RexScalar> true_condition = boost::make_unique<RexLiteral>(
+              true, kBOOLEAN, kBOOLEAN, unsigned(-2147483648), 1, unsigned(-2147483648), 1);
+          modified_filter->setCondition(true_condition);
+          join->setCondition(filter_condition);
+          continue;
+        }
         const auto src1_base = src_join->getInput(0)->size();
         auto source = first_col_idx < src1_base ? src_join->getInput(0) : src_join->getInput(1);
         first_col_idx = first_col_idx < src1_base ? first_col_idx : first_col_idx - src1_base;
@@ -1363,10 +1376,6 @@ void hoist_filter_cond_to_cross_join(std::vector<std::shared_ptr<RelAlgNode>>& n
           join->setCondition(new_join_condition);
         }
 
-        auto filter_it = deconst_mapping.find(filter);
-        CHECK(filter_it != deconst_mapping.end());
-        auto modified_filter = dynamic_cast<RelFilter*>(filter_it->second);
-        CHECK(modified_filter);
         SubConditionRemover remover(join_conditions);
         auto new_filter_condition = remover.visit(filter->getCondition());
         modified_filter->setCondition(new_filter_condition);
