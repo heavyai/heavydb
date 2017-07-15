@@ -215,17 +215,41 @@ extern "C"
 #endif
         int64_t
         DateDiff(const DatetruncField datepart, time_t startdate, time_t enddate) {
-  int64_t res = 0;
-  time_t crt = enddate;
-  while (crt > startdate) {
-    const time_t dt = DateTruncate(datepart, crt - 1);
-    if (dt <= startdate) {
+  int64_t res = enddate - startdate;
+  switch (datepart) {
+    case dtMICROSECOND:
+      return res * 1000000;
+    case dtMILLISECOND:
+      return res * 1000;
+    case dtSECOND:
       return res;
-    }
+    case dtMINUTE:
+      return res / SECSPERMIN;
+    case dtHOUR:
+      return res / SECSPERHOUR;
+    case dtQUARTERDAY:
+      return res / SECSPERQUARTERDAY;
+    case dtDAY:
+      return res / SECSPERDAY;
+    case dtWEEK:
+      return res / (SECSPERDAY * DAYSPERWEEK);
+    default:
+      break;
+  }
+
+  auto future_date = (res > 0);
+  auto end = future_date ? enddate : startdate;
+  auto start = future_date ? startdate : enddate;
+  res = 0;
+  time_t crt = end;
+  while (crt > start) {
+    const time_t dt = DateTruncate(datepart, crt);
+    if (dt <= start)
+      break;
     ++res;
     crt = dt - 1;
   }
-  return res;
+  return future_date ? res : -res;
 }
 
 extern "C"

@@ -813,8 +813,14 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDateminus(const RexOp
   const auto datetime_ti = datetime->get_type_info();
   if (datetime_ti.get_type() != kTIMESTAMP && datetime_ti.get_type() != kDATE)
     return nullptr;
-  const auto unfolded_interval = translateScalarRex(rex_operator->getOperand(1));
-  const auto interval = fold_expr(unfolded_interval.get());
+  const auto rhs = translateScalarRex(rex_operator->getOperand(1));
+  const auto rhs_ti = rhs->get_type_info();
+  if (rhs_ti.get_type() == kTIMESTAMP || rhs_ti.get_type() == kDATE) {
+    const auto& rex_operator_ti = rex_operator->getType();
+    const auto datediff_field = (rex_operator_ti.get_type() == kINTERVAL_DAY_TIME) ? dtMILLISECOND : dtMONTH;
+    return makeExpr<Analyzer::DatediffExpr>(SQLTypeInfo(kBIGINT, false), datediff_field, rhs, datetime);
+  }
+  const auto interval = fold_expr(rhs.get());
   auto interval_ti = interval->get_type_info();
   auto bigint_ti = SQLTypeInfo(kBIGINT, false);
   const auto interval_lit = std::dynamic_pointer_cast<Analyzer::Constant>(interval);
@@ -827,12 +833,12 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDateminus(const RexOp
           bigint_ti.get_type(), kDIVIDE, kONE, interval, makeNumericConstant(bigint_ti, 1000));
       neg_interval_sec = std::make_shared<Analyzer::UOper>(bigint_ti, false, kUMINUS, interval_sec);
     }
-    return makeExpr<Analyzer::DateaddExpr>(datetime->get_type_info(), daSECOND, neg_interval_sec, datetime);
+    return makeExpr<Analyzer::DateaddExpr>(datetime_ti, daSECOND, neg_interval_sec, datetime);
   }
   CHECK(interval_ti.get_type() == kINTERVAL_YEAR_MONTH);
   std::shared_ptr<Analyzer::Expr> neg_interval_months;
   neg_interval_months = std::make_shared<Analyzer::UOper>(bigint_ti, false, kUMINUS, interval);
-  return makeExpr<Analyzer::DateaddExpr>(datetime->get_type_info(), daMONTH, neg_interval_months, datetime);
+  return makeExpr<Analyzer::DateaddExpr>(datetime_ti, daMONTH, neg_interval_months, datetime);
 }
 
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDatediff(const RexFunctionOperator* rex_function) const {
@@ -979,7 +985,16 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(const RexFun
     }
     return translateDateadd(rex_function);
   }
-  if (rex_function->getName() == std::string("\\INT")) {
+  if (rex_function->getName() == std::string("/INT")) {
+    CHECK_EQ(size_t(2), rex_function->size());
+    std::shared_ptr<Analyzer::Expr> lhs = translateScalarRex(rex_function->getOperand(0));
+    std::shared_ptr<Analyzer::Expr> rhs = translateScalarRex(rex_function->getOperand(1));
+    const auto rhs_lit = std::dynamic_pointer_cast<Analyzer::Constant>(rhs);
+    return Parser::OperExpr::normalize(kDIVIDE, kONE, lhs, rhs);
+  }
+  if (rex_function->getName() == std::string("Reinterpret")) {
+    CHECK_EQ(size_t(1), rex_function->size());
+    return translateScalarRex(rex_function->getOperand(0));
   }
   if (!ExtensionFunctionsWhitelist::get(rex_function->getName())) {
     throw QueryNotSupported("Function " + rex_function->getName() + " not supported");

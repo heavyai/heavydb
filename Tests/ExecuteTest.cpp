@@ -1490,7 +1490,7 @@ TEST(Select, Time) {
                   "SELECT DATEDIFF('month', CAST('2006-01-07 00:00:00' as TIMESTAMP), CAST('2009-01-07 00:00:00' AS "
                   "TIMESTAMP)) FROM TEST LIMIT 1;",
                   dt)));
-    ASSERT_EQ(1095,
+    ASSERT_EQ(1096,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('day', CAST('2006-01-07 00:00:00' as TIMESTAMP), CAST('2009-01-07 00:00:00' AS "
                   "TIMESTAMP)) FROM TEST LIMIT 1;",
@@ -1500,6 +1500,19 @@ TEST(Select, Time) {
                   "SELECT DATEDIFF('quarter', CAST('2006-01-07 00:00:00' as TIMESTAMP), CAST('2009-01-07 00:00:00' AS "
                   "TIMESTAMP)) FROM TEST LIMIT 1;",
                   dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg(
+                  "SELECT DATEDIFF('day', DATE '2009-2-28', DATE '2009-03-01') FROM TEST LIMIT 1;", dt)));
+    ASSERT_EQ(2,
+              v<int64_t>(run_simple_agg(
+                  "SELECT DATEDIFF('day', DATE '2008-2-28', DATE '2008-03-01') FROM TEST LIMIT 1;", dt)));
+    ASSERT_EQ(-425,
+              v<int64_t>(run_simple_agg(
+                  "select DATEDIFF('day', DATE '1971-03-02', DATE '1970-01-01') from test limit 1;", dt)));
+    ASSERT_EQ(1, v<int64_t>(run_simple_agg("SELECT DATEDIFF('day', o, o + INTERVAL '1' DAY) FROM TEST LIMIT 1;", dt)));
+    ASSERT_EQ(15,
+              v<int64_t>(
+                  run_simple_agg("SELECT count(*) from test where DATEDIFF('day', CAST (m AS DATE), o) < -5570;", dt)));
     // DATEADD tests
     ASSERT_EQ(
         1,
@@ -1780,6 +1793,41 @@ TEST(Select, Time) {
               v<int64_t>(run_simple_agg("SELECT TIMESTAMPADD(YEAR, -5, m) = TIMESTAMP '2009-12-13 22:23:15' "
                                         "FROM TEST LIMIT 1;",
                                         dt)));
+    ASSERT_EQ(0,
+              v<int64_t>(run_simple_agg(
+                  "select count(*) from test where TIMESTAMPADD(YEAR, 15, CAST(o AS TIMESTAMP)) > m;", dt)));
+    ASSERT_EQ(15,
+              v<int64_t>(run_simple_agg(
+                  "select count(*) from test where TIMESTAMPADD(YEAR, 16, CAST(o AS TIMESTAMP)) > m;", dt)));
+
+    ASSERT_EQ(128885,
+              v<int64_t>(run_simple_agg("SELECT TIMESTAMPDIFF(minute, TIMESTAMP '2003-02-01 0:00:00', TIMESTAMP "
+                                        "'2003-05-01 12:05:55') FROM TEST LIMIT 1;",
+                                        dt)));
+    ASSERT_EQ(2148,
+              v<int64_t>(run_simple_agg("SELECT TIMESTAMPDIFF(hour, TIMESTAMP '2003-02-01 0:00:00', TIMESTAMP "
+                                        "'2003-05-01 12:05:55') FROM TEST LIMIT 1;",
+                                        dt)));
+    ASSERT_EQ(89,
+              v<int64_t>(run_simple_agg("SELECT TIMESTAMPDIFF(day, TIMESTAMP '2003-02-01 0:00:00', TIMESTAMP "
+                                        "'2003-05-01 12:05:55') FROM TEST LIMIT 1;",
+                                        dt)));
+    ASSERT_EQ(3,
+              v<int64_t>(run_simple_agg("SELECT TIMESTAMPDIFF(month, TIMESTAMP '2003-02-01 0:00:00', TIMESTAMP "
+                                        "'2003-05-01 12:05:55') FROM TEST LIMIT 1;",
+                                        dt)));
+    ASSERT_EQ(-3,
+              v<int64_t>(run_simple_agg("SELECT TIMESTAMPDIFF(month, TIMESTAMP '2003-05-01 12:05:55', TIMESTAMP "
+                                        "'2003-02-01 0:00:00') FROM TEST LIMIT 1;",
+                                        dt)));
+    ASSERT_EQ(
+        5, v<int64_t>(run_simple_agg("SELECT TIMESTAMPDIFF(month, m, m + INTERVAL '5' MONTH) FROM TEST LIMIT 1;", dt)));
+    ASSERT_EQ(
+        -5,
+        v<int64_t>(run_simple_agg("SELECT TIMESTAMPDIFF(month, m, m - INTERVAL '5' MONTH) FROM TEST LIMIT 1;", dt)));
+    ASSERT_EQ(15,
+              v<int64_t>(run_simple_agg(
+                  "select count(*) from test where TIMESTAMPDIFF(YEAR, m, CAST(o AS TIMESTAMP)) < 0;", dt)));
 
     ASSERT_EQ(1418428800L, v<int64_t>(run_simple_agg("SELECT CAST(m AS date) FROM test LIMIT 1;", dt)));
     ASSERT_EQ(1336435200L,
@@ -2142,6 +2190,15 @@ TEST(Select, TimeInterval) {
                                         "(x - 1) * INTERVAL '1' MONTH - x * INTERVAL '10' YEAR = "
                                         "TIMESTAMP '1945-06-09 00:23:01' from test limit 1;",
                                         dt)));
+    ASSERT_EQ(0,
+              v<int64_t>(run_simple_agg("select count(*) from test where m < CAST (o AS TIMESTAMP) + INTERVAL '10' "
+                                        "YEAR AND m > CAST(o AS TIMESTAMP) - INTERVAL '10' YEAR;",
+                                        dt)));
+    ASSERT_EQ(15,
+              v<int64_t>(run_simple_agg("select count(*) from test where m < CAST (o AS TIMESTAMP) + INTERVAL '16' "
+                                        "YEAR AND m > CAST(o AS TIMESTAMP) - INTERVAL '16' YEAR;",
+                                        dt)));
+
     ASSERT_EQ(1, v<int64_t>(run_simple_agg("SELECT o = DATE '1999-09-09' from test limit 1;", dt)));
     ASSERT_EQ(1,
               v<int64_t>(run_simple_agg("SELECT (o + INTERVAL '10' DAY) = DATE '1999-09-19' from test limit 1;", dt)));
