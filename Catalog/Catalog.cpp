@@ -722,12 +722,9 @@ void Catalog::removeTableFromMap(const string& tableName, int tableId) {
     columnDescriptorMapById_.erase(colDescIt);
     ColumnKey cnameKey(tableId, to_upper(cd->columnName));
     columnDescriptorMap_.erase(cnameKey);
-    if (cd->columnType.get_compression() == kENCODING_DICT) {
-      const int dictId = cd->columnType.get_comp_param();
-      if (!dictId) {
-        // // Dummy entry created for a shard of a logical table, nothing to do.
-        continue;
-      }
+    const int dictId = cd->columnType.get_comp_param();
+    // Dummy dictionaries created for a shard of a logical table have the id set to zero.
+    if (cd->columnType.get_compression() == kENCODING_DICT && dictId) {
       const auto dictIt = dictDescriptorMapById_.find(dictId);
       CHECK(dictIt != dictDescriptorMapById_.end());
       const auto& dd = dictIt->second;
