@@ -3277,7 +3277,7 @@ std::string build_create_table_statement(const std::string& columns_definition,
                                          const size_t fragment_size) {
   const std::string shard_key_def{shard_info.shard_col.empty() ? "" : ", SHARD KEY (" + shard_info.shard_col + ")"};
   const std::string shared_dict_def{
-      shared_dict_info.col.empty() ? "" : ", SHARED DICTIONARY (" + shared_dict_info.col + ")" + "REFERENCES " +
+      shared_dict_info.col.empty() ? "" : ", SHARED DICTIONARY (" + shared_dict_info.col + ")" + " REFERENCES " +
                                               shared_dict_info.ref_table + "(" + shared_dict_info.ref_col + ")"};
   const std::string shard_count_def{shard_info.shard_col.empty() ? "" : ", shard_count=" +
                                                                             std::to_string(shard_info.shard_count)};
@@ -3314,8 +3314,11 @@ int create_and_populate_tables() {
         "timestamp(0), n time(0), o date, o1 date encoding fixed(32), fx int encoding fixed(16), dd decimal(10, 2), "
         "dd_notnull decimal(10, 2) not null, ss text encoding dict, u int, ofd int, ufd int not null, ofq bigint, ufq "
         "bigint not null"};
-    const std::string create_test = build_create_table_statement(
-        columns_definition, "test", {g_with_sharding ? "str" : "", 4}, {"str", "test_inner", "str"}, 2);
+    const std::string create_test = build_create_table_statement(columns_definition,
+                                                                 "test",
+                                                                 {g_with_sharding ? "str" : "", 4},
+                                                                 {g_with_sharding ? "str" : "", "test_inner", "str"},
+                                                                 2);
     run_ddl_statement(create_test);
     g_sqlite_comparator.query(
         "CREATE TABLE test(x int not null, y int, z smallint, t bigint, b boolean, f float, ff float, fn float, d "

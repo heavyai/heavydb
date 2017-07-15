@@ -350,10 +350,15 @@ table_constraint_def:
 	if (!boost::iequals(*$<stringval>2, "key"))
 	  throw std::runtime_error("Syntax error at " + *$<stringval>2);
 	$<nodeval>$ = new ShardKeyDef(*$<stringval>4);
+	delete $<stringval>2;
+	delete $<stringval>4;
 	}
 	|	SHARED DICTIONARY '(' column ')' REFERENCES table '(' column ')'
 	{
 		$<nodeval>$ = new SharedDictionaryDef(*$<stringval>4, *$<stringval>7, *$<stringval>9);
+		delete $<stringval>4;
+		delete $<stringval>7;
+		delete $<stringval>9;
 	}
 	|	CHECK '(' general_exp ')'
 	{ $<nodeval>$ = new CheckDef(dynamic_cast<Expr*>($<nodeval>3)); }
