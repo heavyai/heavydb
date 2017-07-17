@@ -47,6 +47,7 @@ var (
 	enableMetrics bool
 	connTimeout   time.Duration
 	version       string
+	proxies       []ReverseProxy
 )
 
 var (
@@ -69,6 +70,11 @@ type ThriftMethodTimings struct {
 	Labels []string
 }
 
+type ReverseProxy struct {
+	Path   string
+	Target *url.URL
+}
+
 var (
 	thriftMethodMap map[string]ThriftMethodTimings
 )
@@ -88,6 +94,7 @@ func init() {
 	var err error
 	pflag.IntP("port", "p", 9092, "frontend server port")
 	pflag.StringP("backend-url", "b", "", "url to http-port on mapd_server [http://localhost:9090]")
+	pflag.StringSliceP("reverse-proxy", "", nil, "additional endpoints to act as reverse proxies, format '/endpoint/:http://target.example.com'")
 	pflag.StringP("frontend", "f", "frontend", "path to frontend directory")
 	pflag.StringP("servers-json", "", "", "path to servers.json")
 	pflag.StringP("data", "d", "data", "path to MapD data directory")
@@ -109,11 +116,13 @@ func init() {
 	pflag.CommandLine.MarkHidden("profile")
 	pflag.CommandLine.MarkHidden("metrics")
 	pflag.CommandLine.MarkHidden("quiet")
+	pflag.CommandLine.MarkHidden("reverse-proxy")
 
 	pflag.Parse()
 
 	viper.BindPFlag("web.port", pflag.CommandLine.Lookup("port"))
 	viper.BindPFlag("web.backend-url", pflag.CommandLine.Lookup("backend-url"))
+	viper.BindPFlag("web.reverse-proxy", pflag.CommandLine.Lookup("reverse-proxy"))
 	viper.BindPFlag("web.frontend", pflag.CommandLine.Lookup("frontend"))
 	viper.BindPFlag("web.servers-json", pflag.CommandLine.Lookup("servers-json"))
 	viper.BindPFlag("web.enable-https", pflag.CommandLine.Lookup("enable-https"))
@@ -184,6 +193,28 @@ func init() {
 	backendUrl, err = url.Parse(backendUrlStr)
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	for _, rp := range viper.GetStringSlice("web.reverse-proxy") {
+		s := strings.SplitN(rp, ":", 2)
+		if len(s) != 2 {
+			log.Fatalln("Could not parse reverse proxy string:", rp)
+		}
+		path := s[0]
+		if len(path) == 0 {
+			log.Fatalln("Zero-length path passed for reverse proxy:", rp)
+		}
+		if path[len(path)-1] != '/' {
+			path += "/"
+		}
+		target, err := url.Parse(s[1])
+		if err != nil {
+			log.Fatal(err)
+		}
+		if target.Scheme == "" {
+			log.Fatalln("Missing URL scheme, need full URL including http/https:", target)
+		}
+		proxies = append(proxies, ReverseProxy{path, target})
 	}
 
 	if os.Getenv("TMPDIR") != "" {
@@ -421,6 +452,11 @@ func thriftOrFrontendHandler(rw http.ResponseWriter, r *http.Request) {
 	h.ServeHTTP(rw, r)
 }
 
+func (rp *ReverseProxy) proxyHandler(rw http.ResponseWriter, r *http.Request) {
+	h := http.StripPrefix(rp.Path, httputil.NewSingleHostReverseProxy(rp.Target))
+	h.ServeHTTP(rw, r)
+}
+
 func imagesHandler(rw http.ResponseWriter, r *http.Request) {
 	if r.RequestURI == "/images/" {
 		rw.Write([]byte(""))
@@ -535,6 +571,12 @@ func main() {
 		mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
 		mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
 		mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+	}
+
+	for k, _ := range proxies {
+		rp := proxies[k]
+		log.Infoln("Proxy:", rp.Path, "to", rp.Target)
+		mux.HandleFunc(rp.Path, rp.proxyHandler)
 	}
 
 	c := cors.New(cors.Options{
