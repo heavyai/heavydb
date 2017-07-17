@@ -108,6 +108,7 @@ class JoinHashTable {
       std::map<int, std::shared_ptr<const ColumnarResults>>& frags_owner);
 
   int reify(const int device_count);
+  int reifyForDevice(const int device_id);
   void checkHashJoinReplicationConstraint(const int table_id);
   int initHashTableForDevice(const ChunkKey& chunk_key,
                              const int8_t* col_buff,
@@ -144,6 +145,9 @@ class JoinHashTable {
   Executor* executor_;
   const RelAlgExecutionUnit& ra_exe_unit_;
   const int device_count_;
+  std::pair<const int8_t*, size_t> linearized_multifrag_column_;
+  std::mutex linearized_multifrag_column_mutex_;
+  RowSetMemoryOwner linearized_multifrag_column_owner_;
 
   struct JoinHashTableCacheKey {
     const ExpressionRange col_range;

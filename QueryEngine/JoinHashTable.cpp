@@ -257,6 +257,10 @@ std::pair<const int8_t*, size_t> JoinHashTable::getAllColumnFragments(
     const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
     std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
     std::map<int, std::shared_ptr<const ColumnarResults>>& frags_owner) {
+  std::lock_guard<std::mutex> linearized_multifrag_column_lock(linearized_multifrag_column_mutex_);
+  if (linearized_multifrag_column_.first) {
+    return linearized_multifrag_column_;
+  }
   CHECK(!fragments.empty());
   const size_t elem_width = hash_col.get_type_info().get_size();
   std::vector<const int8_t*> col_frags;
@@ -279,6 +283,8 @@ std::pair<const int8_t*, size_t> JoinHashTable::getAllColumnFragments(
     memcpy(col_buff + offset, col_frags[i], elem_counts[i] * elem_width);
     offset += elem_counts[i] * elem_width;
   }
+  linearized_multifrag_column_owner_.addColBuffer(col_buff);
+  linearized_multifrag_column_ = {col_buff, total_elem_count};
   return {col_buff, total_elem_count};
 }
 
@@ -312,6 +318,27 @@ bool needs_dictionary_translation(const Analyzer::ColumnVar* inner_col,
 
 int JoinHashTable::reify(const int device_count) {
   CHECK_LT(0, device_count);
+#ifdef HAVE_CUDA
+  gpu_hash_table_buff_.resize(device_count);
+#endif  // HAVE_CUDA
+  std::vector<int> errors(device_count);
+  std::vector<std::thread> init_threads;
+  for (int device_id = 0; device_id < device_count; ++device_id) {
+    init_threads.emplace_back([&errors, device_id, this] { errors[device_id] = reifyForDevice(device_id); });
+  }
+  for (auto& init_thread : init_threads) {
+    init_thread.join();
+  }
+  for (const int err : errors) {
+    if (err) {
+      return err;
+    }
+  }
+  return 0;
+}
+
+int JoinHashTable::reifyForDevice(const int device_id) {
+  static std::mutex fragment_fetch_mutex;
   const auto& catalog = *executor_->getCatalog();
   const auto cols = get_cols(qual_bin_oper_, catalog, executor_->temporary_tables_);
   const auto inner_col = cols.first;
@@ -337,11 +364,6 @@ int JoinHashTable::reify(const int device_count) {
   // the join hash table on the CPU and transfer it to the GPU.
   const auto effective_memory_level =
       needs_dictionary_translation(inner_col, cols.second, executor_) ? Data_Namespace::CPU_LEVEL : memory_level_;
-#ifdef HAVE_CUDA
-  gpu_hash_table_buff_.resize(device_count);
-#endif
-  std::vector<int> errors(device_count);
-  std::vector<std::thread> init_threads;
   std::vector<std::shared_ptr<Chunk_NS::Chunk>> chunks_owner;
   std::map<int, std::shared_ptr<const ColumnarResults>> frags_owner;
   const auto& first_frag = query_info.fragments.front();
@@ -352,13 +374,11 @@ int JoinHashTable::reify(const int device_count) {
 #ifdef ENABLE_MULTIFRAG_JOIN
   const size_t elem_width = inner_col->get_type_info().get_size();
   auto& data_mgr = catalog.get_dataMgr();
-  RowSetMemoryOwner col_buff_owner;
-  std::vector<ThrustAllocator> dev_buff_owner;
+  ThrustAllocator dev_buff_owner(&data_mgr, device_id);
   if (has_multi_frag) {
     try {
       std::tie(col_buff, elem_count) =
           getAllColumnFragments(*inner_col, query_info.fragments, chunks_owner, frags_owner);
-      col_buff_owner.addColBuffer(col_buff);
     } catch (...) {
       return ERR_FAILED_TO_FETCH_COLUMN;
     }
@@ -368,15 +388,15 @@ int JoinHashTable::reify(const int device_count) {
     chunk_key.push_back(first_frag.fragmentId);
   }
 
-  for (int device_id = 0; device_id < device_count; ++device_id) {
+  {
+    std::lock_guard<std::mutex> fragment_fetch_lock(fragment_fetch_mutex);
 #ifdef ENABLE_MULTIFRAG_JOIN
-    dev_buff_owner.emplace_back(&data_mgr, device_id);
     if (has_multi_frag) {
       if (effective_memory_level == Data_Namespace::GPU_LEVEL) {
         CHECK(col_buff != nullptr);
         CHECK_NE(elem_count, size_t(0));
         int8_t* dev_col_buff = nullptr;
-        dev_col_buff = dev_buff_owner[device_id].allocate(elem_count * elem_width);
+        dev_col_buff = dev_buff_owner.allocate(elem_count * elem_width);
         copy_to_gpu(
             &data_mgr, reinterpret_cast<CUdeviceptr>(dev_col_buff), col_buff, elem_count * elem_width, device_id);
         col_buff = dev_col_buff;
@@ -391,25 +411,14 @@ int JoinHashTable::reify(const int device_count) {
         return ERR_FAILED_TO_FETCH_COLUMN;
       }
     }
-    init_threads.emplace_back(
-        [&errors, &chunk_key, &cols, elem_count, col_buff, effective_memory_level, device_id, this] {
-          try {
-            errors[device_id] =
-                initHashTableForDevice(chunk_key, col_buff, elem_count, cols, effective_memory_level, device_id);
-          } catch (...) {
-            errors[device_id] = -1;
-          }
-        });
   }
-  for (auto& init_thread : init_threads) {
-    init_thread.join();
+  int err{0};
+  try {
+    err = initHashTableForDevice(chunk_key, col_buff, elem_count, cols, effective_memory_level, device_id);
+  } catch (...) {
+    return -1;
   }
-  for (const int err : errors) {
-    if (err) {
-      return err;
-    }
-  }
-  return 0;
+  return err;
 }
 
 void JoinHashTable::checkHashJoinReplicationConstraint(const int table_id) {
