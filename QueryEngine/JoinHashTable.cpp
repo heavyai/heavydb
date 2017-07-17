@@ -316,6 +316,7 @@ int JoinHashTable::reify(const int device_count) {
   const auto cols = get_cols(qual_bin_oper_, catalog, executor_->temporary_tables_);
   const auto inner_col = cols.first;
   CHECK(inner_col);
+  checkHashJoinReplicationConstraint(inner_col->get_table_id());
   const auto& query_info = getInnerQueryInfo(inner_col).info;
   if (query_info.fragments.empty()) {
     return 0;
@@ -390,7 +391,6 @@ int JoinHashTable::reify(const int device_count) {
         return ERR_FAILED_TO_FETCH_COLUMN;
       }
     }
-    checkHashJoinReplicationConstraint(inner_col->get_table_id());
     init_threads.emplace_back(
         [&errors, &chunk_key, &cols, elem_count, col_buff, effective_memory_level, device_id, this] {
           try {
