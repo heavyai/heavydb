@@ -13,6 +13,7 @@ MapD Core is an in-memory, column store, SQL relational database that was design
 - [Using](#using)
 - [Code Style](#code-style)
 - [Dependencies](#dependencies)
+- [Roadmap](ROADMAP.md)
 
 # Links
 
