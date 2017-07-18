@@ -71,6 +71,8 @@ class JoinHashTable {
 #endif
   }
 
+  llvm::Value* codegenSlot(const CompilationOptions&, const size_t);
+
   const Analyzer::ColumnVar* getHashColumnVar() const { return col_var_.get(); };
 
  private:
@@ -128,8 +130,6 @@ class JoinHashTable {
                          const int32_t hash_entry_count,
                          const int32_t hash_join_invalid_val);
 
-  llvm::Value* codegenSlot(const CompilationOptions&, const size_t);
-
   const InputTableInfo& getInnerQueryInfo(const Analyzer::ColumnVar* inner_col);
 
   size_t shardCount() const;
@@ -170,8 +170,6 @@ class JoinHashTable {
   static const int ERR_MULTI_FRAG{-2};
   static const int ERR_FAILED_TO_FETCH_COLUMN{-3};
   static const int ERR_FAILED_TO_JOIN_ON_VIRTUAL_COLUMN{-4};
-
-  friend class Executor;
 };
 
 inline std::string get_table_name_by_id(const int table_id, const Catalog_Namespace::Catalog& cat) {
