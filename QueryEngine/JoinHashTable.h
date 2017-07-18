@@ -108,7 +108,7 @@ class JoinHashTable {
       std::map<int, std::shared_ptr<const ColumnarResults>>& frags_owner);
 
   int reify(const int device_count);
-  int reifyForDevice(const int device_id);
+  int reifyForDevice(const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments, const int device_id);
   void checkHashJoinReplicationConstraint(const int table_id);
   int initHashTableForDevice(const ChunkKey& chunk_key,
                              const int8_t* col_buff,
@@ -131,6 +131,8 @@ class JoinHashTable {
   llvm::Value* codegenSlot(const CompilationOptions&, const size_t);
 
   const InputTableInfo& getInnerQueryInfo(const Analyzer::ColumnVar* inner_col);
+
+  size_t shardCount() const;
 
   std::shared_ptr<Analyzer::BinOper> qual_bin_oper_;
   std::shared_ptr<Analyzer::ColumnVar> col_var_;

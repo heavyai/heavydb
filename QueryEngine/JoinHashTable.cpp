@@ -284,7 +284,9 @@ std::pair<const int8_t*, size_t> JoinHashTable::getAllColumnFragments(
     offset += elem_counts[i] * elem_width;
   }
   linearized_multifrag_column_owner_.addColBuffer(col_buff);
-  linearized_multifrag_column_ = {col_buff, total_elem_count};
+  if (!shardCount()) {
+    linearized_multifrag_column_ = {col_buff, total_elem_count};
+  }
   return {col_buff, total_elem_count};
 }
 
@@ -314,17 +316,43 @@ bool needs_dictionary_translation(const Analyzer::ColumnVar* inner_col,
   return outer_ti.get_comp_param() != inner_ti.get_comp_param();
 }
 
+std::deque<Fragmenter_Namespace::FragmentInfo> only_shards_for_device(
+    const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
+    const int device_id,
+    const int device_count) {
+  std::deque<Fragmenter_Namespace::FragmentInfo> shards_for_device;
+  for (const auto& fragment : fragments) {
+    CHECK_GE(fragment.shard, 0);
+    if (fragment.shard % device_count == device_id) {
+      shards_for_device.push_back(fragment);
+    }
+  }
+  return shards_for_device;
+}
+
 }  // namespace
 
 int JoinHashTable::reify(const int device_count) {
   CHECK_LT(0, device_count);
+  const auto& catalog = *executor_->getCatalog();
+  const auto cols = get_cols(qual_bin_oper_, catalog, executor_->temporary_tables_);
+  const auto inner_col = cols.first;
+  checkHashJoinReplicationConstraint(inner_col->get_table_id());
+  const auto& query_info = getInnerQueryInfo(inner_col).info;
+  if (query_info.fragments.empty()) {
+    return 0;
+  }
 #ifdef HAVE_CUDA
   gpu_hash_table_buff_.resize(device_count);
 #endif  // HAVE_CUDA
   std::vector<int> errors(device_count);
   std::vector<std::thread> init_threads;
+  const int shard_count = shardCount();
   for (int device_id = 0; device_id < device_count; ++device_id) {
-    init_threads.emplace_back([&errors, device_id, this] { errors[device_id] = reifyForDevice(device_id); });
+    const auto fragments =
+        shard_count ? only_shards_for_device(query_info.fragments, device_id, device_count) : query_info.fragments;
+    init_threads.emplace_back(
+        [&errors, device_id, fragments, this] { errors[device_id] = reifyForDevice(fragments, device_id); });
   }
   for (auto& init_thread : init_threads) {
     init_thread.join();
@@ -337,24 +365,20 @@ int JoinHashTable::reify(const int device_count) {
   return 0;
 }
 
-int JoinHashTable::reifyForDevice(const int device_id) {
+int JoinHashTable::reifyForDevice(const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
+                                  const int device_id) {
   static std::mutex fragment_fetch_mutex;
+#ifndef ENABLE_MULTIFRAG_JOIN
+  if (fragments.size() != 1) {  // we don't support multiple fragment inner tables (yet)
+    return ERR_MULTI_FRAG;
+  }
+#else
+  const bool has_multi_frag = fragments.size() > 1;
+#endif
   const auto& catalog = *executor_->getCatalog();
   const auto cols = get_cols(qual_bin_oper_, catalog, executor_->temporary_tables_);
   const auto inner_col = cols.first;
   CHECK(inner_col);
-  checkHashJoinReplicationConstraint(inner_col->get_table_id());
-  const auto& query_info = getInnerQueryInfo(inner_col).info;
-  if (query_info.fragments.empty()) {
-    return 0;
-  }
-#ifndef ENABLE_MULTIFRAG_JOIN
-  if (query_info.fragments.size() != 1) {  // we don't support multiple fragment inner tables (yet)
-    return ERR_MULTI_FRAG;
-  }
-#else
-  const bool has_multi_frag = query_info.fragments.size() > 1;
-#endif
   const auto inner_cd = get_column_descriptor_maybe(inner_col->get_column_id(), inner_col->get_table_id(), catalog);
   if (inner_cd && inner_cd->isVirtualCol) {
     return ERR_FAILED_TO_JOIN_ON_VIRTUAL_COLUMN;
@@ -364,9 +388,14 @@ int JoinHashTable::reifyForDevice(const int device_id) {
   // the join hash table on the CPU and transfer it to the GPU.
   const auto effective_memory_level =
       needs_dictionary_translation(inner_col, cols.second, executor_) ? Data_Namespace::CPU_LEVEL : memory_level_;
+  if (fragments.empty()) {
+    // No data in this fragment. Still need to create a hash table and initialize it properly.
+    ChunkKey empty_chunk;
+    return initHashTableForDevice(empty_chunk, nullptr, 0, cols, effective_memory_level, device_id);
+  }
   std::vector<std::shared_ptr<Chunk_NS::Chunk>> chunks_owner;
   std::map<int, std::shared_ptr<const ColumnarResults>> frags_owner;
-  const auto& first_frag = query_info.fragments.front();
+  const auto& first_frag = fragments.front();
   ChunkKey chunk_key{catalog.get_currentDB().dbId, inner_col->get_table_id(), inner_col->get_column_id()};
   const int8_t* col_buff = nullptr;
   size_t elem_count = 0;
@@ -377,8 +406,7 @@ int JoinHashTable::reifyForDevice(const int device_id) {
   ThrustAllocator dev_buff_owner(&data_mgr, device_id);
   if (has_multi_frag) {
     try {
-      std::tie(col_buff, elem_count) =
-          getAllColumnFragments(*inner_col, query_info.fragments, chunks_owner, frags_owner);
+      std::tie(col_buff, elem_count) = getAllColumnFragments(*inner_col, fragments, chunks_owner, frags_owner);
     } catch (...) {
       return ERR_FAILED_TO_FETCH_COLUMN;
     }
@@ -429,9 +457,7 @@ void JoinHashTable::checkHashJoinReplicationConstraint(const int table_id) {
     const auto inner_td = executor_->getCatalog()->getMetadataForTable(table_id);
     CHECK(inner_td);
     size_t shard_count{0};
-#ifdef HAVE_CUDA
     shard_count = get_shard_count(qual_bin_oper_.get(), ra_exe_unit_, executor_);
-#endif  // HAVE_CUDA
     if (!shard_count && !table_is_replicated(inner_td)) {
       throw std::runtime_error("Join table " + inner_td->tableName + " must be replicated");
     }
@@ -540,7 +566,7 @@ int JoinHashTable::initHashTableForDevice(const ChunkKey& chunk_key,
     return 0;
   }
 #ifdef HAVE_CUDA
-  const auto shard_count = get_shard_count(qual_bin_oper_.get(), ra_exe_unit_, executor_);
+  const auto shard_count = shardCount();
   const size_t entries_per_shard{shard_count ? get_entries_per_shard(hash_entry_count, shard_count) : 0};
   // Even if we join on dictionary encoded strings, the memory on the GPU is still needed
   // once the join hash table has been built on the CPU.
@@ -565,6 +591,7 @@ int JoinHashTable::initHashTableForDevice(const ChunkKey& chunk_key,
   int err = 0;
   const int32_t hash_join_invalid_val{-1};
   if (effective_memory_level == Data_Namespace::CPU_LEVEL) {
+    CHECK(!chunk_key.empty() && col_buff);
     initHashTableOnCpuFromCache(chunk_key, num_elements, cols);
     {
       std::lock_guard<std::mutex> cpu_hash_table_buff_lock(cpu_hash_table_buff_mutex_);
@@ -600,6 +627,9 @@ int JoinHashTable::initHashTableForDevice(const ChunkKey& chunk_key,
                                   hash_join_invalid_val,
                                   executor_->blockSize(),
                                   executor_->gridSize());
+    if (chunk_key.empty()) {
+      return 0;
+    }
     JoinColumn join_column{col_buff, num_elements};
     JoinColumnTypeInfo type_info{
         static_cast<size_t>(ti.get_size()), col_range_.getIntMin(), inline_fixed_encoding_null_val(ti)};
@@ -692,8 +722,7 @@ llvm::Value* JoinHashTable::codegenSlot(const CompilationOptions& co, const size
                                                executor_->castToTypeIn(key_lvs.front(), 64),
                                                executor_->ll_int(col_range_.getIntMin()),
                                                executor_->ll_int(col_range_.getIntMax())};
-  const int shard_count =
-      co.device_type_ == ExecutorDeviceType::GPU ? get_shard_count(qual_bin_oper_.get(), ra_exe_unit_, executor_) : 0;
+  const int shard_count = shardCount();
   if (shard_count) {
     const auto hash_entry_count = get_hash_entry_count(col_range_);
     const auto entry_count_per_shard = (hash_entry_count + shard_count - 1) / shard_count;
@@ -729,4 +758,9 @@ const InputTableInfo& JoinHashTable::getInnerQueryInfo(const Analyzer::ColumnVar
   }
   CHECK_NE(ssize_t(-1), ti_idx);
   return query_infos_[ti_idx];
+}
+
+size_t JoinHashTable::shardCount() const {
+  return memory_level_ == Data_Namespace::GPU_LEVEL ? get_shard_count(qual_bin_oper_.get(), ra_exe_unit_, executor_)
+                                                    : 0;
 }
