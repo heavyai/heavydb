@@ -17,7 +17,9 @@
 #include "Execute.h"
 
 #include "AggregateUtils.h"
+#include "BaselineJoinHashTable.h"
 #include "CartesianProduct.h"
+#include "EquiJoinCondition.h"
 #include "ExecutionException.h"
 #include "ExpressionRewrite.h"
 #include "GpuMemUtils.h"
@@ -1374,6 +1376,10 @@ bool Executor::skipFragmentPair(
   CHECK(condition_it != inner_table_id_to_join_condition.end());
   const auto join_condition = condition_it->second;
   CHECK(join_condition);
+  if (dynamic_cast<const Analyzer::ColumnVarTuple*>(join_condition->get_left_operand())) {
+    const auto shard_count_info = get_baseline_shard_count(join_condition, ra_exe_unit, this);
+    return shard_count_info.count;
+  }
   return get_shard_count(join_condition, ra_exe_unit, this);
 }
 
@@ -2324,8 +2330,13 @@ Executor::JoinInfo Executor::chooseJoinType(const std::list<std::shared_ptr<Anal
       CHECK_GT(device_count, 0);
       std::shared_ptr<JoinHashTableInterface> join_hash_table;
       try {
-        const auto join_hash_table = JoinHashTable::getInstance(
-            qual_bin_oper, query_infos, ra_exe_unit, memory_level, device_count, visited_tables, this);
+        if (dynamic_cast<const Analyzer::ColumnVarTuple*>(qual_bin_oper->get_left_operand())) {
+          join_hash_table = BaselineJoinHashTable::getInstance(
+              qual_bin_oper, query_infos, ra_exe_unit, memory_level, device_count, visited_tables, this);
+        } else {
+          join_hash_table = JoinHashTable::getInstance(
+              qual_bin_oper, query_infos, ra_exe_unit, memory_level, device_count, visited_tables, this);
+        }
         CHECK(join_hash_table);
         std::set<int> curr_rte_idx_set;
         qual_bin_oper->collect_rte_idx(curr_rte_idx_set);

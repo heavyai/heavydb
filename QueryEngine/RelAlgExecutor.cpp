@@ -19,6 +19,7 @@
 
 #include "CalciteDeserializerUtils.h"
 #include "CardinalityEstimator.h"
+#include "EquiJoinCondition.h"
 #include "ExecutionException.h"
 #include "ExpressionRewrite.h"
 #include "InputMetadata.h"
@@ -1699,7 +1700,7 @@ std::list<std::shared_ptr<Analyzer::Expr>> get_inner_join_quals(const RelAlgNode
       quals.insert(quals.end(), join_cond_cf.quals.begin(), join_cond_cf.quals.end());
     }
   }
-  return quals;
+  return combine_equi_join_conditions(quals);
 }
 
 std::vector<std::pair<int, size_t>> get_join_dimensions(const RelAlgNode* ra, Executor* executor) {

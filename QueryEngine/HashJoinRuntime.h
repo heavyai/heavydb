@@ -72,13 +72,13 @@ void init_baseline_hash_join_buff_on_device_64(int8_t* hash_join_buff,
 
 struct JoinColumn {
   const int8_t* col_buff;
-  const size_t num_elems;
+  size_t num_elems;
 };
 
 struct JoinColumnTypeInfo {
-  const size_t elem_sz;
-  const int64_t min_val;
-  const int64_t null_val;
+  size_t elem_sz;
+  int64_t min_val;
+  int64_t null_val;
 };
 
 int fill_hash_join_buff(int32_t* buff,

@@ -282,6 +282,8 @@ declare i64* @get_group_value_fast_with_original_key(i64*, i64, i64, i64, i64, i
 declare i32 @get_columnar_group_bin_offset(i64*, i64, i64, i64);
 declare i64* @get_group_value_one_key(i64*, i32, i64*, i32, i64, i64, i32, i64*);
 declare i64* @get_group_value_one_key_with_watchdog(i64*, i32, i64*, i32, i64, i64, i32, i64*);
+declare i64 @baseline_hash_join_idx_32(i8*, i8*, i64, i64);
+declare i64 @baseline_hash_join_idx_64(i8*, i8*, i64, i64);
 declare i64 @agg_count_shared(i64*, i64);
 declare i64 @agg_count_skip_val_shared(i64*, i64, i64);
 declare i32 @agg_count_int32_shared(i32*, i32);

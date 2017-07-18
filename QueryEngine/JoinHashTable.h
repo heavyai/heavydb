@@ -231,7 +231,7 @@ inline std::string get_table_name_by_id(const int table_id, const Catalog_Namesp
   return "$TEMPORARY_TABLE" + std::to_string(-table_id);
 }
 
-// Functions below need to be moved to a separate translation unit, they don't belong here.
+// TODO(alex): Functions below need to be moved to a separate translation unit, they don't belong here.
 
 size_t get_shard_count(const Analyzer::BinOper* join_condition,
                        const RelAlgExecutionUnit& ra_exe_unit,

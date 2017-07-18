@@ -7,6 +7,7 @@ set(query_engine_source_files
     ArithmeticIR.cpp
     ArrayIR.cpp
     ArrayOps.cpp
+    BaselineJoinHashTable.cpp
     CalciteAdapter.cpp
     CalciteDeserializerUtils.cpp
     CaseIR.cpp
@@ -18,6 +19,7 @@ set(query_engine_source_files
     ConstantIR.cpp
     DateTimeIR.cpp
     DateTimePlusRewrite.cpp
+    EquiJoinCondition.cpp
     Execute.cpp
     ExecutionDispatch.cpp
     ExpressionRange.cpp
