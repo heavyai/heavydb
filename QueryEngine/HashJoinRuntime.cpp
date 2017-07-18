@@ -194,6 +194,54 @@ GLOBAL void SUFFIX(count_matches)(int32_t* count_buff,
   }
 }
 
+GLOBAL void SUFFIX(count_matches_sharded)(int32_t* count_buff,
+                                          const int32_t invalid_slot_val,
+                                          const JoinColumn join_column,
+                                          const JoinColumnTypeInfo type_info,
+                                          const ShardInfo shard_info
+#ifndef __CUDACC__
+                                          ,
+                                          const void* sd_inner_proxy,
+                                          const void* sd_outer_proxy,
+                                          const int32_t cpu_thread_idx,
+                                          const int32_t cpu_thread_count
+#endif
+                                          ) {
+#ifdef __CUDACC__
+  int32_t start = threadIdx.x + blockDim.x * blockIdx.x;
+  int32_t step = blockDim.x * gridDim.x;
+#else
+  int32_t start = cpu_thread_idx;
+  int32_t step = cpu_thread_count;
+#endif
+  for (size_t i = start; i < join_column.num_elems; i += step) {
+    int64_t elem = SUFFIX(fixed_width_int_decode_noinline)(join_column.col_buff, type_info.elem_sz, i);
+    if (elem == type_info.null_val) {
+      continue;
+    }
+#ifndef __CUDACC__
+    if (sd_inner_proxy) {
+      CHECK(sd_outer_proxy);
+      const auto sd_inner_dict_proxy = static_cast<const StringDictionaryProxy*>(sd_inner_proxy);
+      const auto sd_outer_dict_proxy = static_cast<const StringDictionaryProxy*>(sd_outer_proxy);
+      const auto elem_str = sd_inner_dict_proxy->getString(elem);
+      const auto outer_id = sd_outer_dict_proxy->getIdOfString(elem_str);
+      if (outer_id == StringDictionary::INVALID_STR_ID) {
+        continue;
+      }
+      elem = outer_id;
+    }
+#endif
+    int32_t* entry_ptr = SUFFIX(get_hash_slot_sharded)(count_buff,
+                                                       elem,
+                                                       type_info.min_val,
+                                                       shard_info.entry_count_per_shard,
+                                                       shard_info.num_shards,
+                                                       shard_info.device_count);
+    mapd_add(entry_ptr, int32_t(1));
+  }
+}
+
 GLOBAL void SUFFIX(fill_row_ids)(int32_t* buff,
                                  const int32_t hash_entry_count,
                                  const int32_t invalid_slot_val,
@@ -237,6 +285,64 @@ GLOBAL void SUFFIX(fill_row_ids)(int32_t* buff,
     }
 #endif
     int32_t* pos_ptr = SUFFIX(get_hash_slot)(pos_buff, elem, type_info.min_val);
+#ifndef __CUDACC__
+    CHECK_NE(*pos_ptr, invalid_slot_val);
+#endif
+    const auto bin_idx = pos_ptr - pos_buff;
+    const auto id_buff_idx = mapd_add(count_buff + bin_idx, 1) + *pos_ptr;
+    id_buff[id_buff_idx] = static_cast<int32_t>(i);
+  }
+}
+
+GLOBAL void SUFFIX(fill_row_ids_sharded)(int32_t* buff,
+                                         const int32_t hash_entry_count,
+                                         const int32_t invalid_slot_val,
+                                         const JoinColumn join_column,
+                                         const JoinColumnTypeInfo type_info,
+                                         const ShardInfo shard_info
+#ifndef __CUDACC__
+                                         ,
+                                         const void* sd_inner_proxy,
+                                         const void* sd_outer_proxy,
+                                         const int32_t cpu_thread_idx,
+                                         const int32_t cpu_thread_count
+#endif
+                                         ) {
+  int32_t* pos_buff = buff;
+  int32_t* count_buff = buff + hash_entry_count;
+  int32_t* id_buff = count_buff + hash_entry_count;
+
+#ifdef __CUDACC__
+  int32_t start = threadIdx.x + blockDim.x * blockIdx.x;
+  int32_t step = blockDim.x * gridDim.x;
+#else
+  int32_t start = cpu_thread_idx;
+  int32_t step = cpu_thread_count;
+#endif
+  for (size_t i = start; i < join_column.num_elems; i += step) {
+    int64_t elem = SUFFIX(fixed_width_int_decode_noinline)(join_column.col_buff, type_info.elem_sz, i);
+    if (elem == type_info.null_val) {
+      continue;
+    }
+#ifndef __CUDACC__
+    if (sd_inner_proxy) {
+      CHECK(sd_outer_proxy);
+      const auto sd_inner_dict_proxy = static_cast<const StringDictionaryProxy*>(sd_inner_proxy);
+      const auto sd_outer_dict_proxy = static_cast<const StringDictionaryProxy*>(sd_outer_proxy);
+      const auto elem_str = sd_inner_dict_proxy->getString(elem);
+      const auto outer_id = sd_outer_dict_proxy->getIdOfString(elem_str);
+      if (outer_id == StringDictionary::INVALID_STR_ID) {
+        continue;
+      }
+      elem = outer_id;
+    }
+#endif
+    int32_t* pos_ptr = SUFFIX(get_hash_slot_sharded)(pos_buff,
+                                                     elem,
+                                                     type_info.min_val,
+                                                     shard_info.entry_count_per_shard,
+                                                     shard_info.num_shards,
+                                                     shard_info.device_count);
 #ifndef __CUDACC__
     CHECK_NE(*pos_ptr, invalid_slot_val);
 #endif
@@ -320,8 +426,8 @@ void inclusive_scan(InputIterator first, InputIterator last, OutputIterator out,
 void fill_one_to_many_hash_table(int32_t* buff,
                                  const int32_t hash_entry_count,
                                  const int32_t invalid_slot_val,
-                                 const JoinColumn join_column,
-                                 const JoinColumnTypeInfo type_info,
+                                 const JoinColumn& join_column,
+                                 const JoinColumnTypeInfo& type_info,
                                  const void* sd_inner_proxy,
                                  const void* sd_outer_proxy,
                                  const int32_t cpu_thread_count) {
@@ -374,8 +480,81 @@ void fill_one_to_many_hash_table(int32_t* buff,
                                        buff,
                                        hash_entry_count,
                                        invalid_slot_val,
-                                       join_column,
-                                       type_info,
+                                       std::ref(join_column),
+                                       std::ref(type_info),
+                                       sd_inner_proxy,
+                                       sd_outer_proxy,
+                                       cpu_thread_idx,
+                                       cpu_thread_count));
+  }
+
+  for (auto& child : rowid_threads) {
+    child.get();
+  }
+}
+
+void fill_one_to_many_hash_table_sharded(int32_t* buff,
+                                         const int32_t hash_entry_count,
+                                         const int32_t invalid_slot_val,
+                                         const JoinColumn& join_column,
+                                         const JoinColumnTypeInfo& type_info,
+                                         const ShardInfo& shard_info,
+                                         const void* sd_inner_proxy,
+                                         const void* sd_outer_proxy,
+                                         const int32_t cpu_thread_count) {
+  int32_t* pos_buff = buff;
+  int32_t* count_buff = buff + hash_entry_count;
+  memset(count_buff, 0, hash_entry_count * sizeof(int32_t));
+  std::vector<std::future<void>> counter_threads;
+  for (int cpu_thread_idx = 0; cpu_thread_idx < cpu_thread_count; ++cpu_thread_idx) {
+    counter_threads.push_back(std::async(std::launch::async,
+                                         count_matches_sharded,
+                                         count_buff,
+                                         invalid_slot_val,
+                                         std::ref(join_column),
+                                         std::ref(type_info),
+                                         std::ref(shard_info),
+                                         sd_inner_proxy,
+                                         sd_outer_proxy,
+                                         cpu_thread_idx,
+                                         cpu_thread_count));
+  }
+
+  for (auto& child : counter_threads) {
+    child.get();
+  }
+
+  std::vector<int32_t> count_copy(hash_entry_count, 0);
+  CHECK_GT(hash_entry_count, int32_t(0));
+  memcpy(&count_copy[1], count_buff, (hash_entry_count - 1) * sizeof(int32_t));
+  inclusive_scan(count_copy.begin(), count_copy.end(), count_copy.begin(), cpu_thread_count);
+  std::vector<std::future<void>> pos_threads;
+  for (int cpu_thread_idx = 0; cpu_thread_idx < cpu_thread_count; ++cpu_thread_idx) {
+    pos_threads.push_back(std::async(std::launch::async,
+                                     [&](const int thread_idx) {
+                                       for (int i = thread_idx; i < hash_entry_count; i += cpu_thread_count) {
+                                         if (count_buff[i]) {
+                                           pos_buff[i] = count_copy[i];
+                                         }
+                                       }
+                                     },
+                                     cpu_thread_idx));
+  }
+  for (auto& child : pos_threads) {
+    child.get();
+  }
+
+  memset(count_buff, 0, hash_entry_count * sizeof(int32_t));
+  std::vector<std::future<void>> rowid_threads;
+  for (int cpu_thread_idx = 0; cpu_thread_idx < cpu_thread_count; ++cpu_thread_idx) {
+    rowid_threads.push_back(std::async(std::launch::async,
+                                       SUFFIX(fill_row_ids_sharded),
+                                       buff,
+                                       hash_entry_count,
+                                       invalid_slot_val,
+                                       std::ref(join_column),
+                                       std::ref(type_info),
+                                       std::ref(shard_info),
                                        sd_inner_proxy,
                                        sd_outer_proxy,
                                        cpu_thread_idx,

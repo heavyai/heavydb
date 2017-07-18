@@ -100,8 +100,8 @@ __global__ void set_valid_pos(int32_t* pos_buff, int32_t* count_buff, const int3
 void fill_one_to_many_hash_table_on_device(int32_t* buff,
                                            const int32_t hash_entry_count,
                                            const int32_t invalid_slot_val,
-                                           const JoinColumn join_column,
-                                           const JoinColumnTypeInfo type_info,
+                                           const JoinColumn& join_column,
+                                           const JoinColumnTypeInfo& type_info,
                                            const size_t block_size_x,
                                            const size_t grid_size_x) {
   int32_t* pos_buff = buff;
@@ -116,4 +116,28 @@ void fill_one_to_many_hash_table_on_device(int32_t* buff,
   set_valid_pos<<<grid_size_x, block_size_x>>>(pos_buff, count_buff, hash_entry_count);
   cudaMemset(count_buff, 0, hash_entry_count * sizeof(int32_t));
   SUFFIX(fill_row_ids)<<<grid_size_x, block_size_x>>>(buff, hash_entry_count, invalid_slot_val, join_column, type_info);
+}
+
+void fill_one_to_many_hash_table_on_device_sharded(int32_t* buff,
+                                                   const int32_t hash_entry_count,
+                                                   const int32_t invalid_slot_val,
+                                                   const JoinColumn& join_column,
+                                                   const JoinColumnTypeInfo& type_info,
+                                                   const ShardInfo& shard_info,
+                                                   const size_t block_size_x,
+                                                   const size_t grid_size_x) {
+  int32_t* pos_buff = buff;
+  int32_t* count_buff = buff + hash_entry_count;
+  cudaMemset(count_buff, 0, hash_entry_count * sizeof(int32_t));
+  SUFFIX(count_matches_sharded)<<<grid_size_x, block_size_x>>>(
+      count_buff, invalid_slot_val, join_column, type_info, shard_info);
+
+  set_valid_pos_flag<<<grid_size_x, block_size_x>>>(pos_buff, count_buff, hash_entry_count);
+
+  auto count_buff_dev_ptr = thrust::device_pointer_cast(count_buff);
+  thrust::inclusive_scan(count_buff_dev_ptr, count_buff_dev_ptr + hash_entry_count, count_buff_dev_ptr);
+  set_valid_pos<<<grid_size_x, block_size_x>>>(pos_buff, count_buff, hash_entry_count);
+  cudaMemset(count_buff, 0, hash_entry_count * sizeof(int32_t));
+  SUFFIX(fill_row_ids_sharded)<<<grid_size_x, block_size_x>>>(
+      buff, hash_entry_count, invalid_slot_val, join_column, type_info, shard_info);
 }

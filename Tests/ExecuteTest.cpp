@@ -37,6 +37,32 @@ std::unique_ptr<Catalog_Namespace::SessionInfo> g_session;
 bool g_hoist_literals{true};
 bool g_with_sharding{false};
 
+struct ShardInfo {
+  const std::string shard_col;
+  const size_t shard_count;
+};
+
+struct SharedDictionaryInfo {
+  const std::string col;
+  const std::string ref_table;
+  const std::string ref_col;
+};
+
+std::string build_create_table_statement(const std::string& columns_definition,
+                                         const std::string& table_name,
+                                         const ShardInfo& shard_info,
+                                         const SharedDictionaryInfo& shared_dict_info,
+                                         const size_t fragment_size) {
+  const std::string shard_key_def{shard_info.shard_col.empty() ? "" : ", SHARD KEY (" + shard_info.shard_col + ")"};
+  const std::string shared_dict_def{
+      shared_dict_info.col.empty() ? "" : ", SHARED DICTIONARY (" + shared_dict_info.col + ")" + " REFERENCES " +
+                                              shared_dict_info.ref_table + "(" + shared_dict_info.ref_col + ")"};
+  const std::string shard_count_def{shard_info.shard_col.empty() ? "" : ", shard_count=" +
+                                                                            std::to_string(shard_info.shard_count)};
+  return "CREATE TABLE " + table_name + "(" + columns_definition + shard_key_def + shared_dict_def + ") WITH (" +
+         "fragment_size=" + std::to_string(fragment_size) + shard_count_def + ");";
+}
+
 ResultRows run_multiple_agg(const string& query_str,
                             const ExecutorDeviceType device_type,
                             const bool allow_loop_joins) {
@@ -2422,15 +2448,17 @@ void import_join_test() {
   const std::string drop_old_test{"DROP TABLE IF EXISTS join_test;"};
   run_ddl_statement(drop_old_test);
   g_sqlite_comparator.query(drop_old_test);
-  const std::string create_test{
+  std::string columns_definition{"x int not null, y int, str text encoding dict, dup_str text encoding dict"};
+  const auto create_test = build_create_table_statement(columns_definition,
+                                                        "join_test",
+                                                        {g_with_sharding ? "dup_str" : "", 4},
+                                                        {},
 #ifdef ENABLE_MULTIFRAG_JOIN
-      "CREATE TABLE join_test(x int not null, y int, str text encoding dict, dup_str text encoding dict) WITH "
-      "(fragment_size=2);"
+                                                        2
 #else
-      "CREATE TABLE join_test(x int not null, y int str text encoding dict, dup_str text encoding dict) WITH "
-      "(fragment_size=3);"
+                                                        3
 #endif
-  };
+                                                        );
   run_ddl_statement(create_test);
   g_sqlite_comparator.query("CREATE TABLE join_test(x int not null, y int, str text, dup_str text);");
   {
@@ -2988,11 +3016,11 @@ TEST(Select, InnerJoins) {
     c("SELECT a.z, b.str FROM test a JOIN join_test b ON a.y = b.y AND a.x = b.x ORDER BY a.z, b.str;", dt);
     c("SELECT a.z, b.str FROM test a JOIN test_inner b ON a.y = b.y AND a.x = b.x ORDER BY a.z, b.str;", dt);
     c("SELECT COUNT(*) FROM test a JOIN join_test b ON a.str = b.dup_str;", dt);
-    c("SELECT COUNT(*) FROM test_inner a JOIN test b ON a.x = b.x;", dt);
+    c("SELECT COUNT(*) FROM test_inner_x a JOIN test_x b ON a.x = b.x;", dt);
     c("SELECT a.x FROM test a JOIN join_test b ON a.str = b.dup_str ORDER BY a.x;", dt);
-    c("SELECT a.x FROM test_inner a JOIN test b ON a.x = b.x ORDER BY a.x;", dt);
+    c("SELECT a.x FROM test_inner_x a JOIN test_x b ON a.x = b.x ORDER BY a.x;", dt);
     c("SELECT a.x FROM test a JOIN join_test b ON a.str = b.dup_str GROUP BY a.x ORDER BY a.x;", dt);
-    c("SELECT a.x FROM test_inner a JOIN test b ON a.x = b.x GROUP BY a.x ORDER BY a.x;", dt);
+    c("SELECT a.x FROM test_inner_x a JOIN test_x b ON a.x = b.x GROUP BY a.x ORDER BY a.x;", dt);
     ASSERT_EQ(7,
               v<int64_t>(run_simple_agg(
                   "SELECT test.x FROM test, test_inner WHERE test.x = test_inner.x AND test.rowid = 19;", dt)));
@@ -3105,10 +3133,10 @@ TEST(Select, LeftOuterJoins) {
       dt);
 // TODO(miyu): remove the following ifdef after fixing left loop join
 #ifdef ENABLE_ONE_TO_MANY_HASH_JOIN
-    c("SELECT COUNT(*) FROM test_inner a LEFT OUTER JOIN test b ON a.x = b.x;", dt);
+    c("SELECT COUNT(*) FROM test_inner a LEFT OUTER JOIN test_x b ON a.x = b.x;", dt);
     c("SELECT COUNT(*) FROM test a LEFT OUTER JOIN join_test b ON a.str = b.dup_str;", dt);
     c("SELECT COUNT(*) FROM test a LEFT OUTER JOIN join_test b ON a.str = b.dup_str;", dt);
-    c("SELECT a.x, b.str FROM test_inner a LEFT OUTER JOIN test b ON a.x = b.x ORDER BY a.x, b.str IS NULL, b.str;",
+    c("SELECT a.x, b.str FROM test_inner a LEFT OUTER JOIN test_x b ON a.x = b.x ORDER BY a.x, b.str IS NULL, b.str;",
       dt);
     c("SELECT a.x, b.str FROM test a LEFT OUTER JOIN join_test b ON a.str = b.dup_str ORDER BY a.x, b.str IS NULL, "
       "b.str;",
@@ -3116,10 +3144,10 @@ TEST(Select, LeftOuterJoins) {
     c("SELECT a.x, b.str FROM test a LEFT OUTER JOIN join_test b ON a.str = b.dup_str ORDER BY a.x, b.str IS NULL, "
       "b.str;",
       dt);
-    c("SELECT COUNT(*) FROM test_inner a LEFT JOIN test b ON a.x = b.x;", dt);
+    c("SELECT COUNT(*) FROM test_inner_x a LEFT JOIN test_x b ON a.x = b.x;", dt);
     c("SELECT COUNT(*) FROM test a LEFT JOIN join_test b ON a.str = b.dup_str;", dt);
     c("SELECT COUNT(*) FROM test a LEFT JOIN join_test b ON a.str = b.dup_str;", dt);
-    c("SELECT a.x, b.str FROM test_inner a LEFT JOIN test b ON a.x = b.x ORDER BY a.x, b.str IS NULL, b.str;", dt);
+    c("SELECT a.x, b.str FROM test_inner_x a LEFT JOIN test_x b ON a.x = b.x ORDER BY a.x, b.str IS NULL, b.str;", dt);
     c("SELECT a.x, b.str FROM test a LEFT JOIN join_test b ON a.str = b.dup_str ORDER BY a.x, b.str IS NULL, b.str;",
       dt);
     c("SELECT a.x, b.str FROM test a LEFT JOIN join_test b ON a.str = b.dup_str ORDER BY a.x, b.str IS NULL, b.str;",
@@ -3361,32 +3389,6 @@ TEST(Truncate, Count) {
 
 namespace {
 
-struct ShardInfo {
-  const std::string shard_col;
-  const size_t shard_count;
-};
-
-struct SharedDictionaryInfo {
-  const std::string col;
-  const std::string ref_table;
-  const std::string ref_col;
-};
-
-std::string build_create_table_statement(const std::string& columns_definition,
-                                         const std::string& table_name,
-                                         const ShardInfo& shard_info,
-                                         const SharedDictionaryInfo& shared_dict_info,
-                                         const size_t fragment_size) {
-  const std::string shard_key_def{shard_info.shard_col.empty() ? "" : ", SHARD KEY (" + shard_info.shard_col + ")"};
-  const std::string shared_dict_def{
-      shared_dict_info.col.empty() ? "" : ", SHARED DICTIONARY (" + shared_dict_info.col + ")" + " REFERENCES " +
-                                              shared_dict_info.ref_table + "(" + shared_dict_info.ref_col + ")"};
-  const std::string shard_count_def{shard_info.shard_col.empty() ? "" : ", shard_count=" +
-                                                                            std::to_string(shard_info.shard_count)};
-  return "CREATE TABLE " + table_name + "(" + columns_definition + shard_key_def + shared_dict_def + ") WITH (" +
-         "fragment_size=" + std::to_string(fragment_size) + shard_count_def + ");";
-}
-
 int create_and_populate_tables() {
   try {
     const std::string drop_old_test{"DROP TABLE IF EXISTS test_inner;"};
@@ -3403,6 +3405,24 @@ int create_and_populate_tables() {
   }
   {
     const std::string insert_query{"INSERT INTO test_inner VALUES(7, 43, 'foo');"};
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query);
+  }
+  try {
+    const std::string drop_old_test{"DROP TABLE IF EXISTS test_inner_x;"};
+    run_ddl_statement(drop_old_test);
+    g_sqlite_comparator.query(drop_old_test);
+    std::string columns_definition{"x int not null, y int, str text encoding dict"};
+    const auto create_test_inner =
+        build_create_table_statement(columns_definition, "test_inner_x", {g_with_sharding ? "x" : "", 4}, {}, 2);
+    run_ddl_statement(create_test_inner);
+    g_sqlite_comparator.query("CREATE TABLE test_inner_x(x int not null, y int, str text);");
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'test_inner_x'";
+    return -EEXIST;
+  }
+  {
+    const std::string insert_query{"INSERT INTO test_inner_x VALUES(7, 43, 'foo');"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
@@ -3457,6 +3477,61 @@ int create_and_populate_tables() {
   for (ssize_t i = 0; i < g_num_rows / 2; ++i) {
     const std::string insert_query{
         "INSERT INTO test VALUES(7, 43, 102, 1002, 't', 1.3, 1000.3, -1000.3, 2.6, -220.6, 'baz', null, 'baz', "
+        "'real_baz', "
+        "'2014-12-13 "
+        "22:23:15', "
+        "'15:13:14', '1999-09-09', '1999-09-09', 11, 333.3, 333.3, 'boat', null, 1, -1, 1, -9223372036854775808);"};
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query);
+  }
+  try {
+    const std::string drop_old_test{"DROP TABLE IF EXISTS test_x;"};
+    run_ddl_statement(drop_old_test);
+    g_sqlite_comparator.query(drop_old_test);
+    std::string columns_definition{
+        "x int not null, y int, z smallint, t bigint, b boolean, f float, ff float, fn float, d double, dn double, str "
+        "text, null_str text encoding dict, fixed_str text encoding dict(16), real_str text encoding none, m "
+        "timestamp(0), n time(0), o date, o1 date encoding fixed(32), fx int encoding fixed(16), dd decimal(10, 2), "
+        "dd_notnull decimal(10, 2) not null, ss text encoding dict, u int, ofd int, ufd int not null, ofq bigint, ufq "
+        "bigint not null"};
+    const std::string create_test =
+        build_create_table_statement(columns_definition, "test_x", {g_with_sharding ? "x" : "", 4}, {}, 2);
+    run_ddl_statement(create_test);
+    g_sqlite_comparator.query(
+        "CREATE TABLE test_x(x int not null, y int, z smallint, t bigint, b boolean, f float, ff float, fn float, d "
+        "double, dn double, str "
+        "text, null_str text,"
+        "fixed_str text, real_str text, m timestamp(0), n time(0), o date, o1 date, fx int, dd decimal(10, 2), "
+        "dd_notnull decimal(10, 2) not null, ss text, u int, ofd int, ufd int not null, ofq bigint, ufq bigint not "
+        "null);");
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'test_x'";
+    return -EEXIST;
+  }
+  CHECK_EQ(g_num_rows % 2, 0);
+  for (ssize_t i = 0; i < g_num_rows; ++i) {
+    const std::string insert_query{
+        "INSERT INTO test_x VALUES(7, 42, 101, 1001, 't', 1.1, 1.1, null, 2.2, null, 'foo', null, 'foo', 'real_foo', "
+        "'2014-12-13 "
+        "22:23:15', "
+        "'15:13:14', '1999-09-09', '1999-09-09', 9, 111.1, 111.1, 'fish', null, 2147483647, -2147483648, null, -1);"};
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query);
+  }
+  for (ssize_t i = 0; i < g_num_rows / 2; ++i) {
+    const std::string insert_query{
+        "INSERT INTO test_x VALUES(8, 43, 102, 1002, 'f', 1.2, 101.2, -101.2, 2.4, -2002.4, 'bar', null, 'bar', "
+        "'real_bar', "
+        "'2014-12-13 "
+        "22:23:15', "
+        "'15:13:14', NULL, NULL, NULL, 222.2, 222.2, null, null, null, -2147483647, 9223372036854775807, "
+        "-9223372036854775808);"};
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query);
+  }
+  for (ssize_t i = 0; i < g_num_rows / 2; ++i) {
+    const std::string insert_query{
+        "INSERT INTO test_x VALUES(7, 43, 102, 1002, 't', 1.3, 1000.3, -1000.3, 2.6, -220.6, 'baz', null, 'baz', "
         "'real_baz', "
         "'2014-12-13 "
         "22:23:15', "

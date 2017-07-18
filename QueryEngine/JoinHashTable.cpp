@@ -883,10 +883,13 @@ void JoinHashTable::initOneToManyHashTable(
   auto hash_entry_count = get_hash_entry_count(col_range_);
 #ifdef HAVE_CUDA
   const auto shard_count = get_shard_count(qual_bin_oper_.get(), ra_exe_unit_, executor_);
+  const size_t entries_per_shard = (shard_count ? get_entries_per_shard(hash_entry_count, shard_count) : 0);
   // Even if we join on dictionary encoded strings, the memory on the GPU is still needed
   // once the join hash table has been built on the CPU.
   if (memory_level_ == Data_Namespace::GPU_LEVEL && shard_count) {
-    throw std::runtime_error("Sharded one-to-many hash join is not supported yet");
+    const auto shards_per_device = (shard_count + device_count_ - 1) / device_count_;
+    CHECK_GT(shards_per_device, 0);
+    hash_entry_count = entries_per_shard * shards_per_device;
   }
 #else
   CHECK_EQ(Data_Namespace::CPU_LEVEL, effective_memory_level);
@@ -942,7 +945,18 @@ void JoinHashTable::initOneToManyHashTable(
     JoinColumnTypeInfo type_info{
         static_cast<size_t>(ti.get_size()), col_range_.getIntMin(), inline_fixed_encoding_null_val(ti)};
     if (shard_count) {
-      throw std::runtime_error("Sharded one-to-many hash join is not supported yet");
+      CHECK_GT(device_count_, 0);
+      for (size_t shard = device_id; shard < shard_count; shard += device_count_) {
+        ShardInfo shard_info{shard, entries_per_shard, shard_count, device_count_};
+        fill_one_to_many_hash_table_on_device_sharded(reinterpret_cast<int32_t*>(gpu_hash_table_buff_[device_id]),
+                                                      hash_entry_count,
+                                                      hash_join_invalid_val,
+                                                      join_column,
+                                                      type_info,
+                                                      shard_info,
+                                                      executor_->blockSize(),
+                                                      executor_->gridSize());
+      }
     } else {
       fill_one_to_many_hash_table_on_device(reinterpret_cast<int32_t*>(gpu_hash_table_buff_[device_id]),
                                             hash_entry_count,
@@ -1032,10 +1046,6 @@ std::vector<llvm::Value*> JoinHashTable::getHashJoinArgs(llvm::Value* hash_ptr,
 llvm::Value* JoinHashTable::codegenOneToManyHashJoin(const CompilationOptions& co, const size_t index) {
   // TODO(miyu): allow one-to-many hash join in folded join sequence.
   CHECK(executor_->plan_state_->join_info_.join_impl_type_ == Executor::JoinImplType::HashOneToMany);
-  const int shard_count = shardCount();
-  if (shard_count) {
-    throw std::runtime_error("Sharded one-to-many hash join is not supported yet");
-  }
   const auto cols = get_cols(qual_bin_oper_, *executor_->getCatalog(), executor_->temporary_tables_);
   auto key_col = cols.second;
   CHECK(key_col);
@@ -1045,8 +1055,12 @@ llvm::Value* JoinHashTable::codegenOneToManyHashJoin(const CompilationOptions& c
   CHECK_EQ(size_t(1), key_lvs.size());
   auto pos_ptr = codegenHashTableLoad(index);
   CHECK(pos_ptr);
+  const int shard_count = shardCount();
   auto hash_join_idx_args = getHashJoinArgs(pos_ptr, key_col, shard_count, co);
   std::string fname{"hash_join_idx"};
+  if (shard_count) {
+    fname += "_sharded";
+  }
   if (col_range_.hasNulls()) {
     fname += "_nullable";
   }
