@@ -1,6 +1,7 @@
 port = 9091
 http-port = 9090
 data = "@MAPD_DATA@"
+null-div-by-zero = true
 
 [web]
 port = 9092
