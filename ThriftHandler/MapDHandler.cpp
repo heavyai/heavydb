@@ -2083,9 +2083,7 @@ Planner::RootPlan* MapDHandler::parse_to_plan(const std::string& query_str,
   // if this is a calcite select or explain select run in calcite
   if (!pw.is_ddl && !pw.is_update_dml && !pw.is_other_explain) {
     const std::string actual_query{pw.is_select_explain || pw.is_select_calcite_explain ? pw.actual_query : query_str};
-    const auto query_ra = calcite_->process(session_info.get_currentUser().userName,
-                                            session_info.get_session_id(),
-                                            cat.get_currentDB().dbName,
+    const auto query_ra = calcite_->process(session_info,
                                             legacy_syntax_ ? pg_shim(actual_query) : actual_query,
                                             legacy_syntax_,
                                             pw.is_select_calcite_explain);
@@ -2102,11 +2100,8 @@ Planner::RootPlan* MapDHandler::parse_to_plan(const std::string& query_str,
 std::string MapDHandler::parse_to_ra(const std::string& query_str, const Catalog_Namespace::SessionInfo& session_info) {
   ParserWrapper pw{query_str};
   const std::string actual_query{pw.is_select_explain || pw.is_select_calcite_explain ? pw.actual_query : query_str};
-  auto& cat = session_info.get_catalog();
   if (!pw.is_ddl && !pw.is_update_dml && !pw.is_other_explain) {
-    return calcite_->process(session_info.get_currentUser().userName,
-                             session_info.get_session_id(),
-                             cat.get_currentDB().dbName,
+    return calcite_->process(session_info,
                              legacy_syntax_ ? pg_shim(actual_query) : actual_query,
                              legacy_syntax_,
                              pw.is_select_calcite_explain);

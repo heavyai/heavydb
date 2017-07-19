@@ -1932,12 +1932,7 @@ ResultRows getResultRows(const Catalog_Namespace::SessionInfo& session,
 #endif  // HAVE_CUDA
   auto& calcite_mgr = catalog.get_calciteMgr();
 
-  const auto query_ra = calcite_mgr.process(session.get_currentUser().userName,
-                                            session.get_session_id(),
-                                            catalog.get_currentDB().dbName,
-                                            pg_shim(select_stmt),
-                                            true,
-                                            false);
+  const auto query_ra = calcite_mgr.process(session, pg_shim(select_stmt), true, false);
   CompilationOptions co = {device_type, true, ExecutorOptLevel::LoopStrengthReduction, false};
   ExecutionOptions eo = {false, true, false, true, false, false, false, false, 10000};
   RelAlgExecutor ra_executor(executor.get(), catalog);
@@ -2523,10 +2518,8 @@ void CreateViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
       return;
     throw std::runtime_error("Table or View " + view_name_ + " already exists.");
   }
-  const auto& user_metadata = session.get_currentUser();
   const auto query_after_shim = pg_shim(select_query_);
-  catalog.get_calciteMgr().process(
-      user_metadata.userName, session.get_session_id(), catalog.get_currentDB().dbName, query_after_shim, true, true);
+  catalog.get_calciteMgr().process(session, query_after_shim, true, true);
   TableDescriptor td;
   td.tableName = view_name_;
   td.nColumns = 0;

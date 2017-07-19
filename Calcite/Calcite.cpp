@@ -28,8 +28,10 @@
 #include <glog/logging.h>
 #include <thread>
 #include <utility>
+#include "Catalog/Catalog.h"
 
 using namespace std;
+using namespace rapidjson;
 using namespace apache::thrift;
 using namespace apache::thrift::protocol;
 using namespace apache::thrift::transport;
@@ -291,12 +293,61 @@ void Calcite::updateMetadata(string catalog, string table) {
   }
 }
 
-string Calcite::process(string user,
-                        string session,
-                        string catalog,
-                        string sql_string,
+string Calcite::process(const Catalog_Namespace::SessionInfo& session_info,
+                        const string sql_string,
                         const bool legacy_syntax,
                         const bool is_explain) {
+  std::string ra = processImpl(session_info, sql_string, legacy_syntax, is_explain);
+
+  // gather tables used in this query
+  if (!is_explain) {
+    // TODO MAT we need to extend the output from calcite to include views
+    // basically add a structure that returns all objects even if it is explain
+    // secirity requires explains to be restricted in real life
+
+    // Norair uncomment this to get the vector
+    // std::vector<std::string> v_db_obj = get_db_objects(ra);
+
+    // Norair add your permission check code here
+  }
+
+  return ra;
+}
+
+std::vector<string> Calcite::get_db_objects(const std::string ra) {
+  std::vector<string> v_db_obj;
+  Document document;
+  document.Parse(ra.c_str());
+  const Value& rels = document["rels"];
+  CHECK(rels.IsArray());
+  for (auto& v : rels.GetArray()) {
+    std::string relOp(v["relOp"].GetString());
+    if (!relOp.compare("EnumerableTableScan")) {
+      std::string x;
+      bool period_required = false;
+      for (auto& t : v["table"].GetArray()) {
+        if (period_required) {
+          x.append(".");
+        }
+        period_required = true;
+        x.append(t.GetString());
+      }
+      v_db_obj.push_back(x);
+    }
+  }
+
+  return v_db_obj;
+}
+
+string Calcite::processImpl(const Catalog_Namespace::SessionInfo& session_info,
+                            const string sql_string,
+                            const bool legacy_syntax,
+                            const bool is_explain) {
+  auto& cat = session_info.get_catalog();
+  string user = session_info.get_currentUser().userName;
+  string session = session_info.get_session_id();
+  string catalog = cat.get_currentDB().dbName;
+
   LOG(INFO) << "User " << user << " catalog " << catalog << " sql '" << sql_string << "'";
   if (jni_) {
     JNIEnv* env = checkJNIConnection();
