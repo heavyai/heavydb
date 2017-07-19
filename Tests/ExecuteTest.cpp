@@ -1093,6 +1093,9 @@ TEST(Select, StringsNoneEncoding) {
     ASSERT_EQ(g_num_rows,
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE real_str REGEXP 'real_f.*.*';", dt)));
     ASSERT_EQ(0, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE real_str REGEXP 'real_f.+\%';", dt)));
+    EXPECT_THROW(run_multiple_agg("SELECT COUNT(*) FROM test WHERE real_str LIKE str;", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("SELECT COUNT(*) FROM test WHERE REGEXP_LIKE(real_str, str);", dt),
+                 std::runtime_error);
   }
 }
 

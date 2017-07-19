@@ -693,6 +693,9 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLike(const RexFunctio
   CHECK(rex_function->size() == 2 || rex_function->size() == 3);
   const auto arg = translateScalarRex(rex_function->getOperand(0));
   const auto like = translateScalarRex(rex_function->getOperand(1));
+  if (!std::dynamic_pointer_cast<const Analyzer::Constant>(like)) {
+    throw std::runtime_error("The matching pattern must be a literal.");
+  }
   const auto escape = (rex_function->size() == 3) ? translateScalarRex(rex_function->getOperand(2)) : nullptr;
   const bool is_ilike = rex_function->getName() == std::string("PG_ILIKE");
   return Parser::LikeExpr::get(arg, like, escape, is_ilike, false);
@@ -702,6 +705,9 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateRegexp(const RexFunct
   CHECK(rex_function->size() == 2 || rex_function->size() == 3);
   const auto arg = translateScalarRex(rex_function->getOperand(0));
   const auto pattern = translateScalarRex(rex_function->getOperand(1));
+  if (!std::dynamic_pointer_cast<const Analyzer::Constant>(pattern)) {
+    throw std::runtime_error("The matching pattern must be a literal.");
+  }
   const auto escape = (rex_function->size() == 3) ? translateScalarRex(rex_function->getOperand(2)) : nullptr;
   return Parser::RegexpExpr::get(arg, pattern, escape, false);
 }
