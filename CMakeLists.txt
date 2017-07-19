@@ -27,10 +27,10 @@ string(TOLOWER "${MAPD_EDITION}" MAPD_EDITION_LOWER)
 
 set(MAPD_VERSION_MAJOR "3")
 set(MAPD_VERSION_MINOR "1")
-set(MAPD_VERSION_PATCH "2")
+set(MAPD_VERSION_PATCH "3")
 set(MAPD_VERSION_EXTRA "dev")
 set(MAPD_VERSION_RAW "${MAPD_VERSION_MAJOR}.${MAPD_VERSION_MINOR}.${MAPD_VERSION_PATCH}${MAPD_VERSION_EXTRA}")
-set(MAPD_IMMERSE_URL "https://builds.mapd.com/frontend/mapd2-dashboard-v2-f23da32-unofficial-prod.zip")
+set(MAPD_IMMERSE_URL "http://builds.mapd.com/frontend/immerse-v2-latest-master-prod.zip")
 set(MAPD_DOCS_URL "http://docs.builds.mapd.com/master/docs-master.zip")
 string(TIMESTAMP MAPD_BUILD_DATE "%Y%m%d")
 
