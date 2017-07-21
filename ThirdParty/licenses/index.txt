@@ -36,10 +36,13 @@
   ---                    ---                                                                                ---
   generate\_cert (Go)    [BSD](https://github.com/golang/go/blob/master/LICENSE)                            HTTPS certificate generator
   gorilla/handlers       [BSD](https://github.com/gorilla/handlers/blob/master/LICENSE)                     HTTP service handlers
+  pelletier/go-toml      [MIT](https://github.com/pelletier/go-toml/blob/master/LICENSE)                    Config file parser
   rs/cors                [MIT](https://github.com/rs/cors/blob/master/LICENSE)                              CORS handler
   Sirupsen/logrus        [MIT](https://github.com/Sirupsen/logrus/blob/master/LICENSE)                      Go logging
+  spf13/afero            [BSD](https://github.com/spf13/afero/blob/master/LICENSE.txt)                      CLI flags handler
   spf13/pflag            [BSD](https://github.com/spf13/pflag/blob/master/LICENSE)                          CLI flags handler
   spf13/viper            [MIT](https://github.com/spf13/viper/blob/master/LICENSE)                          Config file management
+  andrewseidl/viper      [MIT](https://github.com/andrewseidl/viper/blob/master/LICENSE)                    Config file management
   tylerb/graceful        [MIT](https://github.com/tylerb/graceful/blob/master/LICENSE)                      Graceful server shutdown and restart
   ---                    ---                                                                                ---
   Apache commons-cli     [Apache](https://github.com/apache/commons-cli/blob/trunk/LICENSE.txt)             CLI flags handler

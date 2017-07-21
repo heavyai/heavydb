@@ -21,11 +21,11 @@ import (
 	"time"
 
 	log "github.com/Sirupsen/logrus"
+	"github.com/andrewseidl/viper"
 	"github.com/gorilla/handlers"
 	"github.com/rcrowley/go-metrics"
 	"github.com/rs/cors"
 	"github.com/spf13/pflag"
-	"github.com/spf13/viper"
 	"gopkg.in/tylerb/graceful.v1"
 )
 
