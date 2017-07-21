@@ -136,6 +136,33 @@ Weight get_weight(const Analyzer::Expr* expr, int depth = 0) {
   return Weight();
 }
 
+void sort_eq_joins_by_rte_indices(std::vector<Analyzer::Expr*>& join_conditions) {
+  auto cmp = [](const Analyzer::Expr* lhs, const Analyzer::Expr* rhs) -> bool {
+    auto lhs_eq = dynamic_cast<const Analyzer::BinOper*>(lhs);
+    auto rhs_eq = dynamic_cast<const Analyzer::BinOper*>(rhs);
+    CHECK(lhs_eq && lhs_eq->get_optype() == kEQ);
+    CHECK(rhs_eq && rhs_eq->get_optype() == kEQ);
+    std::set<int> rte_idx_set;
+    lhs_eq->collect_rte_idx(rte_idx_set);
+    CHECK_EQ(rte_idx_set.size(), size_t(2));
+    auto lhs_outer_rte = *rte_idx_set.begin();
+    auto lhs_inner_rtx = *std::next(rte_idx_set.begin());
+    CHECK_LT(lhs_outer_rte, lhs_inner_rtx);
+
+    rte_idx_set.clear();
+    rhs_eq->collect_rte_idx(rte_idx_set);
+    CHECK_EQ(rte_idx_set.size(), size_t(2));
+    auto rhs_outer_rte = *rte_idx_set.begin();
+    auto rhs_inner_rtx = *std::next(rte_idx_set.begin());
+    if (lhs_outer_rte == rhs_outer_rte) {
+      return lhs_inner_rtx < rhs_inner_rtx;
+    }
+    return lhs_outer_rte < rhs_outer_rte;
+  };
+
+  std::sort(join_conditions.begin(), join_conditions.end(), cmp);
+}
+
 }  // namespace
 
 bool Executor::prioritizeQuals(const RelAlgExecutionUnit& ra_exe_unit,
@@ -148,7 +175,6 @@ bool Executor::prioritizeQuals(const RelAlgExecutionUnit& ra_exe_unit,
   }
   for (auto expr : ra_exe_unit.inner_join_quals) {
     if (auto bin_oper = std::dynamic_pointer_cast<Analyzer::BinOper>(expr)) {
-      // TODO(miyu): order equi-join conditions per any du-chain between them.
       if (equi_join_conds.count(bin_oper.get())) {
         primary_quals.push_back(expr.get());
         continue;
@@ -156,6 +182,7 @@ bool Executor::prioritizeQuals(const RelAlgExecutionUnit& ra_exe_unit,
     }
     remaining_inner_join_quals.push_back(expr);
   }
+  sort_eq_joins_by_rte_indices(primary_quals);
 
   for (auto expr : remaining_inner_join_quals) {
     primary_quals.push_back(expr.get());
