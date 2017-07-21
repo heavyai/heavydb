@@ -938,6 +938,20 @@ class DropTableStmt : public DDLStmt {
   bool if_exists;
 };
 
+/*
+ * @type TruncateTableStmt
+ * @brief TRUNCATE TABLE statement
+ */
+class TruncateTableStmt : public DDLStmt {
+ public:
+  TruncateTableStmt(std::string* tab) : table(tab) {}
+  const std::string* get_table() const { return table.get(); }
+  virtual void execute(const Catalog_Namespace::SessionInfo& session);
+
+ private:
+  std::unique_ptr<std::string> table;
+};
+
 class RenameTableStmt : public DDLStmt {
  public:
   RenameTableStmt(std::string* tab, std::string* new_tab_name) : table(tab), new_table_name(new_tab_name) {}

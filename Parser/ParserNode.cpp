@@ -2110,6 +2110,17 @@ void DropTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   catalog.dropTable(td);
 }
 
+void TruncateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+  auto& catalog = session.get_catalog();
+  const TableDescriptor* td = catalog.getMetadataForTable(*table);
+  if (td == nullptr) {
+    throw std::runtime_error("Table " + *table + " does not exist.");
+  }
+  if (td->isView)
+    throw std::runtime_error(*table + " is a view.  Cannot Truncate.");
+  catalog.truncateTable(td);
+}
+
 void RenameTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.get_catalog();
   const TableDescriptor* td = catalog.getMetadataForTable(*table);

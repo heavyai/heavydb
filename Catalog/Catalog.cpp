@@ -1123,6 +1123,79 @@ void Catalog::createShardedTable(TableDescriptor& td,
   }
 }
 
+void Catalog::truncateTable(const TableDescriptor* td) {
+  const auto physicalTableIt = logicalToPhysicalTableMapById_.find(td->tableId);
+  if (physicalTableIt != logicalToPhysicalTableMapById_.end()) {
+    // truncate all corresponding physical tables if this is a logical table
+    const auto physicalTables = physicalTableIt->second;
+    CHECK(!physicalTables.empty());
+    for (size_t i = 0; i < physicalTables.size(); i++) {
+      int32_t physical_tb_id = physicalTables[i];
+      const TableDescriptor* phys_td = getMetadataForTable(physical_tb_id);
+      CHECK(phys_td);
+      doTruncateTable(phys_td);
+    }
+  }
+  doTruncateTable(td);
+}
+
+void Catalog::doTruncateTable(const TableDescriptor* td) {
+  const int tableId = td->tableId;
+
+  // must destroy fragmenter before deleteChunks is called.
+  if (td->fragmenter != nullptr) {
+    auto tableDescIt = tableDescriptorMapById_.find(tableId);
+    delete td->fragmenter;
+    tableDescIt->second->fragmenter = nullptr;  // get around const-ness
+  }
+  ChunkKey chunkKeyPrefix = {currentDB_.dbId, tableId};
+  // assuming deleteChunksWithPrefix is atomic
+  dataMgr_->deleteChunksWithPrefix(chunkKeyPrefix);
+  // MAT TODO fix this
+  // NOTE This is unsafe , if there are updates occuring at same time
+  dataMgr_->checkpoint(currentDB_.dbId, tableId);
+  dataMgr_->removeTableRelatedDS(currentDB_.dbId, tableId);
+
+  std::unique_ptr<StringDictionaryClient> client;
+  if (g_aggregator) {
+    CHECK(!string_dict_hosts_.empty());
+    client.reset(new StringDictionaryClient(string_dict_hosts_.front(), -1, true));
+  }
+  // clean up any dictionaries
+  // delete all column descriptors for the table
+  for (int i = 1; i <= td->nColumns; i++) {
+    ColumnIdKey cidKey(tableId, i);
+    ColumnDescriptorMapById::iterator colDescIt = columnDescriptorMapById_.find(cidKey);
+    ColumnDescriptor* cd = colDescIt->second;
+    const int dictId = cd->columnType.get_comp_param();
+    // Dummy dictionaries created for a shard of a logical table have the id set to zero.
+    if (cd->columnType.get_compression() == kENCODING_DICT && dictId) {
+      const auto dictIt = dictDescriptorMapById_.find(dictId);
+      CHECK(dictIt != dictDescriptorMapById_.end());
+      const auto& dd = dictIt->second;
+      CHECK_GE(dd->refcount, 1);
+      // if this is the only table using this dict reset the dict
+      if (dd->refcount == 1) {
+        boost::filesystem::remove_all(dd->dictFolderPath);
+        if (client) {
+          client->drop(dd->dictId, currentDB_.dbId);
+        }
+        boost::filesystem::create_directory(dd->dictFolderPath);
+      }
+
+      DictDescriptor* new_dd = new DictDescriptor(
+          dd->dictId, dd->dictName, dd->dictNBits, dd->dictIsShared, dd->refcount, dd->dictFolderPath);
+      dictDescriptorMapById_.erase(dictIt);
+      // now create new Dict -- need to figure out what to do here for temp tables
+      if (client) {
+        client->create(new_dd->dictId, currentDB_.dbId);
+      }
+      dictDescriptorMapById_[dictId].reset(new_dd);
+      getMetadataForDict(dictId);
+    }
+  }
+}
+
 void Catalog::dropTable(const TableDescriptor* td) {
   const auto physicalTableIt = logicalToPhysicalTableMapById_.find(td->tableId);
   if (physicalTableIt != logicalToPhysicalTableMapById_.end()) {

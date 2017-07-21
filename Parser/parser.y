@@ -104,7 +104,7 @@ using namespace Parser;
 %token IS LANGUAGE LAST LENGTH LIKE LIMIT MOD NOW NULLX NUMERIC OF OFFSET ON OPEN OPTION
 %token ORDER PARAMETER PRECISION PRIMARY PRIVILEGES PROCEDURE
 %token PUBLIC REAL REFERENCES RENAME ROLLBACK SCHEMA SELECT SET SHARD SHARED SHOW
-%token SMALLINT SOME TABLE TEXT THEN TIME TIMESTAMP TO UNION
+%token SMALLINT SOME TABLE TEXT THEN TIME TIMESTAMP TO TRUNCATE UNION
 %token UNIQUE UPDATE USER VALUES VIEW WHEN WHENEVER WHERE WITH WORK
 
 %start sql_list
@@ -127,6 +127,7 @@ sql:		/* schema {	$<nodeval>$ = $<nodeval>1; } */
 	/* | prvililege_def { $<nodeval>$ = $<nodeval>1; } */
 	| drop_view_statement { $<nodeval>$ = $<nodeval>1; }
 	| drop_table_statement { $<nodeval>$ = $<nodeval>1; }
+	| truncate_table_statement { $<nodeval>$ = $<nodeval>1; }
 	| rename_table_statement { $<nodeval>$ = $<nodeval>1; }
 	| rename_column_statement { $<nodeval>$ = $<nodeval>1; }
   | copy_table_statement { $<nodeval>$ = $<nodeval>1; }
@@ -236,6 +237,12 @@ drop_table_statement:
 		DROP TABLE opt_if_exists table
 		{
 		  $<nodeval>$ = new DropTableStmt($<stringval>4, $<boolval>3);
+		}
+		;
+truncate_table_statement:
+		TRUNCATE TABLE table
+		{
+		  $<nodeval>$ = new TruncateTableStmt($<stringval>3);
 		}
 		;
 rename_table_statement:

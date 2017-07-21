@@ -212,6 +212,7 @@ class Catalog {
   void createFrontendView(FrontendViewDescriptor& vd);
   std::string createLink(LinkDescriptor& ld, size_t min_length);
   void dropTable(const TableDescriptor* td);
+  void truncateTable(const TableDescriptor* td);
   void renameTable(const TableDescriptor* td, const std::string& newTableName);
   void renameColumn(const TableDescriptor* td, const ColumnDescriptor* cd, const std::string& newColumnName);
 
@@ -288,6 +289,7 @@ class Catalog {
   void addLinkToMap(LinkDescriptor& ld);
   void removeTableFromMap(const std::string& tableName, int tableId);
   void doDropTable(const TableDescriptor* td);
+  void doTruncateTable(const TableDescriptor* td);
   void renamePhysicalTable(const TableDescriptor* td, const std::string& newTableName);
   void instantiateFragmenter(TableDescriptor* td) const;
   void getAllColumnMetadataForTable(const TableDescriptor* td,

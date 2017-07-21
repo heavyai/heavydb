@@ -3323,6 +3323,18 @@ TEST(Select, WatchdogTest) {
   }
 }
 
+TEST(Truncate, Count) {
+  run_ddl_statement("create table trunc_test (i1 integer, t1 text);");
+  run_multiple_agg("insert into trunc_test values(1, '1');", ExecutorDeviceType::CPU);
+  run_multiple_agg("insert into trunc_test values(2, '2');", ExecutorDeviceType::CPU);
+  ASSERT_EQ(int64_t(3), v<int64_t>(run_simple_agg("SELECT SUM(i1) FROM trunc_test;", ExecutorDeviceType::CPU)));
+  run_ddl_statement("truncate table trunc_test;");
+  run_multiple_agg("insert into trunc_test values(3, '3');", ExecutorDeviceType::CPU);
+  run_multiple_agg("insert into trunc_test values(4, '4');", ExecutorDeviceType::CPU);
+  ASSERT_EQ(int64_t(7), v<int64_t>(run_simple_agg("SELECT SUM(i1) FROM trunc_test;", ExecutorDeviceType::CPU)));
+  run_ddl_statement("drop table trunc_test;");
+}
+
 namespace {
 
 struct ShardInfo {
