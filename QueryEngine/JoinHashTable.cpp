@@ -396,7 +396,18 @@ int JoinHashTable::reifyForDevice(const std::deque<Fragmenter_Namespace::Fragmen
   std::vector<std::shared_ptr<Chunk_NS::Chunk>> chunks_owner;
   std::map<int, std::shared_ptr<const ColumnarResults>> frags_owner;
   const auto& first_frag = fragments.front();
-  ChunkKey chunk_key{catalog.get_currentDB().dbId, inner_col->get_table_id(), inner_col->get_column_id()};
+  ChunkKey hash_table_key{catalog.get_currentDB().dbId, inner_col->get_table_id(), inner_col->get_column_id()};
+  const auto& ti = inner_col->get_type_info();
+  if (ti.is_string()) {
+    CHECK_EQ(kENCODING_DICT, ti.get_compression());
+    size_t outer_elem_count = 0;
+    const auto& outer_query_info = getInnerQueryInfo(cols.second).info;
+    for (auto& frag : outer_query_info.fragments) {
+      outer_elem_count = frag.getNumTuples();
+    }
+    hash_table_key.push_back(outer_elem_count);
+  }
+
   const int8_t* col_buff = nullptr;
   size_t elem_count = 0;
 
@@ -413,7 +424,7 @@ int JoinHashTable::reifyForDevice(const std::deque<Fragmenter_Namespace::Fragmen
   } else
 #endif
   {
-    chunk_key.push_back(first_frag.fragmentId);
+    hash_table_key.push_back(first_frag.fragmentId);
   }
 
   {
@@ -442,7 +453,7 @@ int JoinHashTable::reifyForDevice(const std::deque<Fragmenter_Namespace::Fragmen
   }
   int err{0};
   try {
-    err = initHashTableForDevice(chunk_key, col_buff, elem_count, cols, effective_memory_level, device_id);
+    err = initHashTableForDevice(hash_table_key, col_buff, elem_count, cols, effective_memory_level, device_id);
   } catch (...) {
     return -1;
   }
