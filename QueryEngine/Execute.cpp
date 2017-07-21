@@ -1156,6 +1156,17 @@ RowSetPtr Executor::collectAllDeviceResults(ExecutionDispatch& execution_dispatc
                                   execution_dispatch.getDeviceType());
 }
 
+std::unordered_map<int, const Analyzer::BinOper*> Executor::getInnerTabIdToJoinCond() const {
+  std::unordered_map<int, const Analyzer::BinOper*> id_to_cond;
+  const auto& join_info = plan_state_->join_info_;
+  CHECK_EQ(join_info.equi_join_tautologies_.size(), join_info.join_hash_tables_.size());
+  for (size_t i = 0; i < join_info.join_hash_tables_.size(); ++i) {
+    int inner_table_id = join_info.join_hash_tables_[i]->getHashColumnVar()->get_table_id();
+    id_to_cond.insert(std::make_pair(inner_table_id, join_info.equi_join_tautologies_[i].get()));
+  }
+  return id_to_cond;
+}
+
 void Executor::dispatchFragments(
     const std::function<void(const ExecutorDeviceType chosen_device_type,
                              int chosen_device_id,
@@ -1184,6 +1195,8 @@ void Executor::dispatchFragments(
   const auto device_type = execution_dispatch.getDeviceType();
 
   const auto& query_mem_desc = execution_dispatch.getQueryMemoryDescriptor();
+  const auto inner_table_id_to_join_condition = getInnerTabIdToJoinCond();
+
   const bool allow_multifrag =
       eo.allow_multifrag && (ra_exe_unit.groupby_exprs.empty() || query_mem_desc.usesCachedContext() ||
                              query_mem_desc.hash_type == GroupByColRangeType::MultiCol ||
@@ -1213,7 +1226,8 @@ void Executor::dispatchFragments(
         const auto table_id = ra_exe_unit.input_descs[j].getTableId();
         auto table_frags_it = selected_tables_fragments.find(table_id);
         CHECK(table_frags_it != selected_tables_fragments.end());
-        const auto frag_ids = getTableFragmentIndices(ra_exe_unit, j, outer_frag_id, selected_tables_fragments);
+        const auto frag_ids = getTableFragmentIndices(
+            ra_exe_unit, j, outer_frag_id, selected_tables_fragments, inner_table_id_to_join_condition);
         if (fragments_per_device[device_id].size() < j + 1) {
           fragments_per_device[device_id].emplace_back(table_id, frag_ids);
         } else {
@@ -1269,7 +1283,8 @@ void Executor::dispatchFragments(
       }
       std::vector<std::pair<int, std::vector<size_t>>> frag_ids_for_table;
       for (size_t j = 0; j < ra_exe_unit.input_descs.size(); ++j) {
-        const auto frag_ids = getTableFragmentIndices(ra_exe_unit, j, i, selected_tables_fragments);
+        const auto frag_ids =
+            getTableFragmentIndices(ra_exe_unit, j, i, selected_tables_fragments, inner_table_id_to_join_condition);
         const auto table_id = ra_exe_unit.input_descs[j].getTableId();
         auto table_frags_it = selected_tables_fragments.find(table_id);
         CHECK(table_frags_it != selected_tables_fragments.end());
@@ -1299,7 +1314,8 @@ std::vector<size_t> Executor::getTableFragmentIndices(
     const RelAlgExecutionUnit& ra_exe_unit,
     const size_t table_idx,
     const size_t outer_frag_idx,
-    std::map<int, const Executor::TableFragments*>& selected_tables_fragments) {
+    std::map<int, const Executor::TableFragments*>& selected_tables_fragments,
+    const std::unordered_map<int, const Analyzer::BinOper*>& inner_table_id_to_join_condition) {
   const int table_id = ra_exe_unit.input_descs[table_idx].getTableId();
   auto table_frags_it = selected_tables_fragments.find(table_id);
   CHECK(table_frags_it != selected_tables_fragments.end());
@@ -1326,7 +1342,8 @@ std::vector<size_t> Executor::getTableFragmentIndices(
   std::vector<size_t> all_frag_ids;
   for (size_t inner_frag_idx = 0; inner_frag_idx < inner_frags->size(); ++inner_frag_idx) {
     const auto& inner_frag_info = (*inner_frags)[inner_frag_idx];
-    if (skipFragmentPair(outer_fragment_info, inner_frag_info, ra_exe_unit)) {
+    if (skipFragmentPair(
+            outer_fragment_info, inner_frag_info, table_id, inner_table_id_to_join_condition, ra_exe_unit)) {
       continue;
     }
     all_frag_ids.push_back(inner_frag_idx);
@@ -1336,9 +1353,12 @@ std::vector<size_t> Executor::getTableFragmentIndices(
 
 // Returns true iff the join between two fragments cannot yield any results, per
 // shard information. The pair can be skipped to avoid full broadcast.
-bool Executor::skipFragmentPair(const Fragmenter_Namespace::FragmentInfo& outer_fragment_info,
-                                const Fragmenter_Namespace::FragmentInfo& inner_fragment_info,
-                                const RelAlgExecutionUnit& ra_exe_unit) {
+bool Executor::skipFragmentPair(
+    const Fragmenter_Namespace::FragmentInfo& outer_fragment_info,
+    const Fragmenter_Namespace::FragmentInfo& inner_fragment_info,
+    const int inner_table_id,
+    const std::unordered_map<int, const Analyzer::BinOper*>& inner_table_id_to_join_condition,
+    const RelAlgExecutionUnit& ra_exe_unit) {
   // Don't bother with sharding for non-hash joins.
   if (plan_state_->join_info_.join_impl_type_ != Executor::JoinImplType::HashOneToOne) {
     return false;
@@ -1348,9 +1368,10 @@ bool Executor::skipFragmentPair(const Fragmenter_Namespace::FragmentInfo& outer_
       outer_fragment_info.shard == inner_fragment_info.shard) {
     return false;
   }
-  CHECK(!plan_state_->join_info_.equi_join_tautologies_.empty());
-  const auto join_condition =
-      dynamic_cast<const Analyzer::BinOper*>(plan_state_->join_info_.equi_join_tautologies_.front().get());
+  CHECK(!inner_table_id_to_join_condition.empty());
+  auto condition_it = inner_table_id_to_join_condition.find(inner_table_id);
+  CHECK(condition_it != inner_table_id_to_join_condition.end());
+  const auto join_condition = condition_it->second;
   CHECK(join_condition);
   return get_shard_count(join_condition, ra_exe_unit, this);
 }

@@ -776,6 +776,8 @@ class Executor {
   std::string renderRows(const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& targets,
                          RenderInfo* render_query_data);
 
+  std::unordered_map<int, const Analyzer::BinOper*> getInnerTabIdToJoinCond() const;
+
   void dispatchFragments(const std::function<void(const ExecutorDeviceType chosen_device_type,
                                                   int chosen_device_id,
                                                   const std::vector<std::pair<int, std::vector<size_t>>>& frag_ids,
@@ -795,10 +797,13 @@ class Executor {
       const RelAlgExecutionUnit& ra_exe_unit,
       const size_t table_idx,
       const size_t outer_frag_idx,
-      std::map<int, const Executor::TableFragments*>& selected_tables_fragments);
+      std::map<int, const Executor::TableFragments*>& selected_tables_fragments,
+      const std::unordered_map<int, const Analyzer::BinOper*>& inner_table_id_to_join_condition);
 
   bool skipFragmentPair(const Fragmenter_Namespace::FragmentInfo& outer_fragment_info,
                         const Fragmenter_Namespace::FragmentInfo& inner_fragment_info,
+                        const int inner_table_id,
+                        const std::unordered_map<int, const Analyzer::BinOper*>& inner_table_id_to_join_condition,
                         const RelAlgExecutionUnit& ra_exe_unit);
 
   std::vector<const int8_t*> fetchIterTabFrags(const size_t frag_id,
