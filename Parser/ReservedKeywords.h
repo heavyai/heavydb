@@ -278,6 +278,7 @@ static std::set<std::string> reserved_keywords{
     "RETURNS",
     "REVOKE",
     "RIGHT",
+    "ROLE",
     "ROLLBACK",
     "ROLLUP",
     "ROW",

@@ -1015,6 +1015,127 @@ class CopyTableStmt : public DDLStmt {
 };
 
 /*
+ * @type CreateRoleStmt
+ * @brief CREATE ROLE statement
+ */
+class CreateRoleStmt : public DDLStmt {
+ public:
+  CreateRoleStmt(const std::string& r) : role(r) {}
+  const std::string& get_role() const { return role; }
+  virtual void execute(const Catalog_Namespace::SessionInfo& session);
+
+ private:
+  const std::string role;
+};
+
+/*
+ * @type DropRoleStmt
+ * @brief DROP ROLE statement
+ */
+class DropRoleStmt : public DDLStmt {
+ public:
+  DropRoleStmt(const std::string& r) : role(r) {}
+  const std::string& get_role() const { return role; }
+  virtual void execute(const Catalog_Namespace::SessionInfo& session);
+
+ private:
+  const std::string role;
+};
+
+/*
+ * @type GrantPrivilegesStmt
+ * @brief GRANT PRIVILEGES statement
+ */
+class GrantPrivilegesStmt : public DDLStmt {
+ public:
+  GrantPrivilegesStmt(const std::string& p, const std::string& t, const std::string& o, const std::string& r)
+      : priv(p), object_type(t), object(o), role(r) {}
+  const std::string& get_priv() const { return priv; }
+  const std::string& get_object_type() const { return object_type; }
+  const std::string& get_object() const { return object; }
+  const std::string& get_role() const { return role; }
+  virtual void execute(const Catalog_Namespace::SessionInfo& session);
+
+ private:
+  const std::string priv;
+  const std::string object_type;
+  const std::string object;
+  const std::string role;
+};
+
+/*
+ * @type RevokePrivilegesStmt
+ * @brief REVOKE PRIVILEGES statement
+ */
+class RevokePrivilegesStmt : public DDLStmt {
+ public:
+  RevokePrivilegesStmt(const std::string& p, const std::string& t, const std::string& o, const std::string& r)
+      : priv(p), object_type(t), object(o), role(r) {}
+  const std::string& get_priv() const { return priv; }
+  const std::string& get_object_type() const { return object_type; }
+  const std::string& get_object() const { return object; }
+  const std::string& get_role() const { return role; }
+  virtual void execute(const Catalog_Namespace::SessionInfo& session);
+
+ private:
+  const std::string priv;
+  const std::string object_type;
+  const std::string object;
+  const std::string role;
+};
+
+/*
+ * @type ShowPrivilegesStmt
+ * @brief SHOW PRIVILEGES statement
+ */
+class ShowPrivilegesStmt : public DDLStmt {
+ public:
+  ShowPrivilegesStmt(const std::string& t, const std::string& o, const std::string& r)
+      : object_type(t), object(o), role(r) {}
+  const std::string& get_object_type() const { return object_type; }
+  const std::string& get_object() const { return object; }
+  const std::string& get_role() const { return role; }
+  virtual void execute(const Catalog_Namespace::SessionInfo& session);
+
+ private:
+  const std::string object_type;
+  const std::string object;
+  const std::string role;
+};
+
+/*
+ * @type GrantRoleStmt
+ * @brief GRANT ROLE statement
+ */
+class GrantRoleStmt : public DDLStmt {
+ public:
+  GrantRoleStmt(const std::string& r, const std::string& u) : role(r), user(u) {}
+  const std::string& get_role() const { return role; }
+  const std::string& get_user() const { return user; }
+  virtual void execute(const Catalog_Namespace::SessionInfo& session);
+
+ private:
+  const std::string role;
+  const std::string user;
+};
+
+/*
+ * @type RevokeRoleStmt
+ * @brief REVOKE ROLE statement
+ */
+class RevokeRoleStmt : public DDLStmt {
+ public:
+  RevokeRoleStmt(const std::string& r, const std::string& u) : role(r), user(u) {}
+  const std::string& get_role() const { return role; }
+  const std::string& get_user() const { return user; }
+  virtual void execute(const Catalog_Namespace::SessionInfo& session);
+
+ private:
+  const std::string role;
+  const std::string user;
+};
+
+/*
  * @type QueryExpr
  * @brief query expression
  */

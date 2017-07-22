@@ -51,6 +51,18 @@ namespace Catalog_Namespace {
 
 const std::string Catalog::physicalTableNameTag_("_shard_#");
 
+SysCatalog::~SysCatalog() {
+  std::lock_guard<std::mutex> lock(cat_mutex_);
+  for (RoleMap::iterator roleIt = roleMap_.begin(); roleIt != roleMap_.end(); ++roleIt) {
+    delete roleIt->second;
+  }
+  roleMap_.clear();
+  for (UserRoleMap::iterator userRoleIt = userRoleMap_.begin(); userRoleIt != userRoleMap_.end(); ++userRoleIt) {
+    delete userRoleIt->second;
+  }
+  userRoleMap_.clear();
+}
+
 void SysCatalog::initDB() {
   sqliteConnector_.query(
       "CREATE TABLE mapd_users (userid integer primary key, name text unique, passwd text, issuper boolean)");
@@ -84,6 +96,16 @@ void SysCatalog::createUser(const string& name, const string& passwd, bool issup
     throw runtime_error("User " + name + " already exists.");
   sqliteConnector_.query_with_text_params("INSERT INTO mapd_users (name, passwd, issuper) VALUES (?, ?, ?)",
                                           std::vector<std::string>{name, passwd, std::to_string(issuper)});
+  if (access_priv_check_) {
+    if (!getMetadataForRole(MAPD_DEFAULT_ROOT_USER_ROLE)) {
+      createDefaultMapdRoles();
+    }
+    if (issuper) {
+      grantRole(MAPD_DEFAULT_ROOT_USER_ROLE, name);
+    } else {
+      grantRole(MAPD_DEFAULT_USER_ROLE, name);
+    }
+  }
 }
 
 void SysCatalog::dropUser(const string& name) {
@@ -253,18 +275,285 @@ bool SysCatalog::getMetadataForDB(const string& name, DBMetadata& db) {
   return true;
 }
 
+void SysCatalog::createDefaultMapdRoles() {
+  DBObject dbObject(get_currentDB().dbName, DatabaseDBObjectType);
+  std::vector<bool> privs;
+  // create default non suser role
+  if (!getMetadataForRole(MAPD_DEFAULT_USER_ROLE)) {
+    createRole(MAPD_DEFAULT_USER_ROLE);
+    privs = {false, false, false};
+    dbObject.setPrivileges(privs);
+    grantDBObjectPrivileges(MAPD_DEFAULT_USER_ROLE, dbObject, *this);
+  }
+  // create default suser role
+  if (!getMetadataForRole(MAPD_DEFAULT_ROOT_USER_ROLE)) {
+    createRole(MAPD_DEFAULT_ROOT_USER_ROLE);
+    privs = {true, true, true};
+    dbObject.setPrivileges(privs);
+    grantDBObjectPrivileges(MAPD_DEFAULT_ROOT_USER_ROLE, dbObject, *this);
+    grantRole(MAPD_DEFAULT_ROOT_USER_ROLE, MAPD_ROOT_USER);
+  }
+}
+
+void SysCatalog::populateDBObjectKey(DBObject& object, const Catalog_Namespace::Catalog& catalog) {
+  DBObjectKey objectKey;
+  switch (object.getType()) {
+    case (DatabaseDBObjectType): {
+      Catalog_Namespace::DBMetadata db;
+      if (!getMetadataForDB(object.getName(), db)) {
+        throw std::runtime_error("Failure generating DB object key. Database " + object.getName() + " does not exist.");
+      }
+      objectKey = {db.dbId};
+      break;
+    }
+    case (TableDBObjectType): {
+      if (!catalog.getMetadataForTable(object.getName())) {
+        throw std::runtime_error("Failure generating DB object key. Table " + object.getName() + " does not exist.");
+      }
+      objectKey = {catalog.get_currentDB().dbId, catalog.getMetadataForTable(object.getName())->tableId};
+      break;
+    }
+    case (ColumnDBObjectType): {
+      // TBD - populate object key for column
+      break;
+    }
+    case (DashboardDBObjectType): {
+      // TBD - populate object key for dashboard
+      break;
+    }
+    default: { CHECK(false); }
+  }
+  object.setObjectKey(objectKey);
+}
+
+void SysCatalog::createDBObject(const UserMetadata& user,
+                                const std::string& objectName,
+                                const Catalog_Namespace::Catalog& catalog) {
+  // this api may be reused later to create DBDatabaseObject as well (just pass an extra parameter DBObjectType)
+  Role* user_rl = getMetadataForUserRole(user.userId);
+  if (!user_rl) {
+    if (!getMetadataForRole(MAPD_DEFAULT_ROOT_USER_ROLE)) {  // TBD - may clean this up after save/restore role related
+                                                             // data in sglite DB
+      createDefaultMapdRoles();
+    }
+    if (user.isSuper) {
+      grantRole(MAPD_DEFAULT_ROOT_USER_ROLE, user.userName);
+    } else {
+      grantRole(MAPD_DEFAULT_USER_ROLE, user.userName);
+    }
+    user_rl = getMetadataForUserRole(user.userId);
+  }
+  DBObject* object = new DBObject(objectName, TableDBObjectType);
+  DBObjectKey objectKey = {catalog.get_currentDB().dbId, catalog.getMetadataForTable(object->getName())->tableId};
+  object->setObjectKey(objectKey);
+  object->setPrivileges(
+      {true, true, true});  // as an owner/creator of this object, the user will have all access rights
+  object->setUserPrivateObject();
+  object->setOwningUserId(user.userId);
+  user_rl->grantPrivileges(*object);
+}
+
+// GRANT INSERT ON TABLE payroll_table TO payroll_dept_role;
+void SysCatalog::grantDBObjectPrivileges(const std::string& roleName,
+                                         DBObject& object,
+                                         const Catalog_Namespace::Catalog& catalog) {
+  Role* rl = getMetadataForRole(roleName);
+  if (!rl) {
+    throw runtime_error("Request to grant privileges to a role " + roleName +
+                        " failed because role with this name does not exist.");
+  }
+  populateDBObjectKey(object, catalog);
+  rl->grantPrivileges(object);
+}
+
+// REVOKE INSERT ON TABLE payroll_table FROM payroll_dept_role;
+void SysCatalog::revokeDBObjectPrivileges(const std::string& roleName,
+                                          DBObject& object,
+                                          const Catalog_Namespace::Catalog& catalog) {
+  Role* rl = getMetadataForRole(roleName);
+  if (!rl) {
+    throw runtime_error("Request to revoke privileges from a role " + roleName +
+                        " failed because role with this name does not exist.");
+  }
+  populateDBObjectKey(object, catalog);
+  rl->revokePrivileges(object);
+}
+
+bool SysCatalog::verifyDBObjectOwnership(const UserMetadata& user,
+                                         DBObject object,
+                                         const Catalog_Namespace::Catalog& catalog) {
+  Role* rl = getMetadataForUserRole(user.userId);
+  if (rl) {
+    populateDBObjectKey(object, catalog);
+    if (rl->findDbObject(object.getObjectKey())) {
+      return true;
+    }
+  }
+  return false;
+}
+
+void SysCatalog::getDBObjectPrivileges(const std::string& roleName,
+                                       DBObject& object,
+                                       const Catalog_Namespace::Catalog& catalog) {
+  Role* rl = getMetadataForRole(roleName);
+  if (!rl) {
+    throw runtime_error("Request to show privileges for a role " + roleName +
+                        " failed because role with this name does not exist.");
+  }
+  populateDBObjectKey(object, catalog);
+  rl->getPrivileges(object);
+}
+
+void SysCatalog::createRole(const std::string& roleName) {
+  Role* rl = getMetadataForRole(roleName);
+  CHECK(!rl);  // it has been checked already in the calling proc that this role doesn't exist, fail otherwize
+  rl = new GroupRole(to_upper(roleName));
+  roleMap_[to_upper(roleName)] = rl;
+}
+
+void SysCatalog::dropRole(const std::string& roleName) {
+  Role* rl = getMetadataForRole(roleName);
+  CHECK(rl);  // it has been checked already in the calling proc that this role exists, faiul otherwise
+  delete rl;
+  roleMap_.erase(to_upper(roleName));
+}
+
+// GRANT ROLE payroll_dept_role TO joe;
+void SysCatalog::grantRole(const std::string& roleName, const std::string& userName) {
+  Role* user_rl = nullptr;
+  Role* rl = getMetadataForRole(roleName);
+  if (!rl) {
+    throw runtime_error("Request to grant role " + roleName + " failed because role with this name does not exist.");
+  }
+  UserMetadata user;
+  if (!getMetadataForUser(userName, user)) {
+    throw runtime_error("Request to grant role to user " + userName +
+                        " failed because user with this name does not exist.");
+  }
+  user_rl = getMetadataForUserRole(user.userId);
+  if (!user_rl) {
+    // this user has never been granted roles before, so create new object
+    user_rl = new UserRole(rl, user.userId, userName);
+    std::lock_guard<std::mutex> lock(cat_mutex_);
+    userRoleMap_[user.userId] = user_rl;
+  }
+  user_rl->grantRole(rl);
+}
+
+// REVOKE ROLE payroll_dept_role FROM joe;
+void SysCatalog::revokeRole(const std::string& roleName, const std::string& userName) {
+  Role* user_rl = nullptr;
+  Role* rl = getMetadataForRole(roleName);
+  if (!rl) {
+    throw runtime_error("Request to revoke role " + roleName + " failed because role with this name does not exist.");
+  }
+  UserMetadata user;
+  if (!getMetadataForUser(userName, user)) {
+    throw runtime_error("Request to revoke role from user " + userName +
+                        " failed because user with this name does not exist.");
+  }
+  user_rl = getMetadataForUserRole(user.userId);
+  if (!user_rl) {
+    throw runtime_error("Request to revoke role " + roleName + " from user " + userName +
+                        " failed because this role has not been granted to the user.");
+  }
+  user_rl->revokeRole(rl);
+  if (user_rl->getMembershipSize() == 0) {
+    delete user_rl;
+    std::lock_guard<std::mutex> lock(cat_mutex_);
+    userRoleMap_.erase(user.userId);
+  }
+}
+
+/*
+ * delete object of UserRole class (delete all GroupRoles for this user)
+ * called as a result of executing "DROP USER" command
+ * similar function should be added to be called from "DROP ROLE" command (deletes only one role of the user)
+ */
+void SysCatalog::dropUserRole(const std::string& userName) {
+  /* this proc is not being directly called from parser, so it should have been checked already
+   * before calling this proc that the userName is valid (see call to proc "getMetadataForUser")
+   */
+  UserMetadata user;
+  if (!getMetadataForUser(userName, user)) {
+    throw runtime_error("Request to revoke roles from user " + userName +
+                        " failed because user with this name does not exist.");
+  }
+  Role* user_rl = getMetadataForUserRole(user.userId);
+  if (user_rl) {
+    delete user_rl;
+    std::lock_guard<std::mutex> lock(cat_mutex_);
+    userRoleMap_.erase(user.userId);
+  }
+  // do nothing if userName was not found in userRoleMap_
+}
+
+bool SysCatalog::checkPrivileges(const UserMetadata& user, std::vector<DBObject>& privObjects) {
+  if (user.isSuper) {
+    return true;
+  }
+  Role* user_rl = getMetadataForUserRole(user.userId);
+  if (!user_rl) {
+    if (!getMetadataForRole(MAPD_DEFAULT_ROOT_USER_ROLE)) {  // TBD - may clean this up after save/restore role related
+                                                             // data in sglite DB
+      createDefaultMapdRoles();
+    }
+    if (user.isSuper) {
+      grantRole(MAPD_DEFAULT_ROOT_USER_ROLE, user.userName);
+    } else {
+      grantRole(MAPD_DEFAULT_USER_ROLE, user.userName);
+    }
+    user_rl = getMetadataForUserRole(user.userId);
+  }
+  for (std::vector<DBObject>::iterator objectIt = privObjects.begin(); objectIt != privObjects.end(); ++objectIt) {
+    if (!user_rl->checkPrivileges(*objectIt)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool SysCatalog::checkPrivileges(const std::string& userName, std::vector<DBObject>& privObjects) {
+  UserMetadata user;
+  if (!getMetadataForUser(userName, user)) {
+    throw runtime_error("Request to check privileges for user " + userName +
+                        " failed because user with this name does not exist.");
+  }
+  return (checkPrivileges(user, privObjects));
+}
+
+Role* SysCatalog::getMetadataForRole(const std::string& roleName) const {
+  std::lock_guard<std::mutex> lock(cat_mutex_);
+  auto roleIt = roleMap_.find(to_upper(roleName));
+  if (roleIt == roleMap_.end()) {  // check to make sure role exists
+    return nullptr;
+  }
+  return roleIt->second;  // returns pointer to role
+}
+
+Role* SysCatalog::getMetadataForUserRole(int32_t userId) const {
+  std::lock_guard<std::mutex> lock(cat_mutex_);
+  auto userRoleIt = userRoleMap_.find(userId);
+  if (userRoleIt == userRoleMap_.end()) {  // check to make sure role exists
+    return nullptr;
+  }
+  return userRoleIt->second;  // returns pointer to role
+}
+
 Catalog::Catalog(const string& basePath,
                  const string& dbname,
                  std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
                  LdapMetadata ldapMetadata,
                  bool is_initdb,
-                 std::shared_ptr<Calcite> calcite)
+                 std::shared_ptr<Calcite> calcite,
+                 const bool access_priv_check)
     : basePath_(basePath),
       sqliteConnector_(dbname, basePath + "/mapd_catalogs/"),
       dataMgr_(dataMgr),
       calciteMgr_(calcite),
       nextTempTableId_(MAPD_TEMP_TABLE_START_ID),
-      nextTempDictId_(MAPD_TEMP_DICT_START_ID) {
+      nextTempDictId_(MAPD_TEMP_DICT_START_ID),
+      access_priv_check_(access_priv_check) {
   ldap_server_.reset(new LdapServer(ldapMetadata));
   if (!is_initdb)
     buildMaps();
@@ -274,14 +563,16 @@ Catalog::Catalog(const string& basePath,
                  const DBMetadata& curDB,
                  std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
                  LdapMetadata ldapMetadata,
-                 std::shared_ptr<Calcite> calcite)
+                 std::shared_ptr<Calcite> calcite,
+                 const bool access_priv_check)
     : basePath_(basePath),
       sqliteConnector_(curDB.dbName, basePath + "/mapd_catalogs/"),
       currentDB_(curDB),
       dataMgr_(dataMgr),
       calciteMgr_(calcite),
       nextTempTableId_(MAPD_TEMP_TABLE_START_ID),
-      nextTempDictId_(MAPD_TEMP_DICT_START_ID) {
+      nextTempDictId_(MAPD_TEMP_DICT_START_ID),
+      access_priv_check_(access_priv_check) {
   ldap_server_.reset(new LdapServer(ldapMetadata));
   buildMaps();
 }
@@ -290,7 +581,8 @@ Catalog::Catalog(const string& basePath,
                  const DBMetadata& curDB,
                  std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
                  const std::vector<LeafHostInfo>& string_dict_hosts,
-                 std::shared_ptr<Calcite> calcite)
+                 std::shared_ptr<Calcite> calcite,
+                 const bool access_priv_check)
     : basePath_(basePath),
       sqliteConnector_(curDB.dbName, basePath + "/mapd_catalogs/"),
       currentDB_(curDB),
@@ -298,7 +590,8 @@ Catalog::Catalog(const string& basePath,
       string_dict_hosts_(string_dict_hosts),
       calciteMgr_(calcite),
       nextTempTableId_(MAPD_TEMP_TABLE_START_ID),
-      nextTempDictId_(MAPD_TEMP_DICT_START_ID) {
+      nextTempDictId_(MAPD_TEMP_DICT_START_ID),
+      access_priv_check_(access_priv_check) {
   ldap_server_.reset(new LdapServer());
   buildMaps();
 }
@@ -1477,6 +1770,33 @@ std::vector<const TableDescriptor*> Catalog::getPhysicalTablesDescriptors(
 std::string Catalog::generatePhysicalTableName(const std::string& logicalTableName, const int32_t& shardNumber) {
   std::string physicalTableName = logicalTableName + physicalTableNameTag_ + std::to_string(shardNumber);
   return (physicalTableName);
+}
+
+bool SessionInfo::checkDBAccessPrivileges(std::vector<bool> privs) const {
+  auto& cat = get_catalog();
+  auto& sys_cat = static_cast<Catalog_Namespace::SysCatalog&>(cat);
+  if (!cat.isAccessPrivCheckEnabled()) {
+    // run flow without DB object level access permission checks
+    Privileges wants_privs;
+    if (get_currentUser().isSuper) {
+      wants_privs.super_ = true;
+    } else {
+      wants_privs.super_ = false;
+    }
+    wants_privs.select_ = false;
+    wants_privs.insert_ = true;
+    auto currentDB = static_cast<Catalog_Namespace::DBMetadata>(cat.get_currentDB());
+    auto currentUser = static_cast<Catalog_Namespace::UserMetadata>(get_currentUser());
+    return sys_cat.checkPrivileges(currentUser, currentDB, wants_privs);
+  } else {
+    // run flow with DB object level access permission checks
+    DBObject object(cat.get_currentDB().dbName, DatabaseDBObjectType);
+    sys_cat.populateDBObjectKey(object, cat);
+    object.setPrivileges(privs);
+    std::vector<DBObject> privObjects;
+    privObjects.push_back(object);
+    return sys_cat.checkPrivileges(get_currentUser(), privObjects);
+  }
 }
 
 }  // Catalog_Namespace

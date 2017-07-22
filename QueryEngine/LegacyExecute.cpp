@@ -681,6 +681,22 @@ ResultRows Executor::execute(const Planner::RootPlan* root_plan,
       if (root_plan->get_plan_dest() == Planner::RootPlan::kEXPLAIN) {
         return ResultRows("No explanation available.", queue_time_ms);
       }
+      Catalog_Namespace::Catalog& cat = session.get_catalog();
+      Catalog_Namespace::SysCatalog& sys_cat = static_cast<Catalog_Namespace::SysCatalog&>(cat);
+      auto user_metadata = session.get_currentUser();
+      const int table_id = root_plan->get_result_table_id();
+      auto td = cat.getMetadataForTable(table_id);
+      DBObject dbObject(td->tableName, TableDBObjectType);
+      std::vector<bool> privs{false, true, false};  // INSERT
+      sys_cat.populateDBObjectKey(dbObject, cat);
+      dbObject.setPrivileges(privs);
+      std::vector<DBObject> privObjects;
+      privObjects.push_back(dbObject);
+      if (!sys_cat.checkPrivileges(user_metadata, privObjects)) {
+        throw std::runtime_error("Violation of access privileges: user " + user_metadata.userName +
+                                 " has no insert privileges for table " + td->tableName + ".");
+        break;
+      }
       executeSimpleInsert(root_plan);
       return ResultRows({}, {}, nullptr, nullptr, {}, ExecutorDeviceType::CPU, nullptr, 0, 0, 0, queue_time_ms);
     }

@@ -305,10 +305,23 @@ string Calcite::process(const Catalog_Namespace::SessionInfo& session_info,
     // basically add a structure that returns all objects even if it is explain
     // secirity requires explains to be restricted in real life
 
-    // Norair uncomment this to get the vector
-    // std::vector<std::string> v_db_obj = get_db_objects(ra);
-
-    // Norair add your permission check code here
+    Catalog_Namespace::Catalog& catalog = session_info.get_catalog();
+    std::vector<DBObject> privObjects;
+    std::vector<std::string> v_db_obj = get_db_objects(ra);
+    for (size_t i = 0; i < v_db_obj.size(); i++) {
+      DBObject dbObject(v_db_obj[i], TableDBObjectType);
+      DBObjectKey dbObjectKey = {catalog.get_currentDB().dbId,
+                                 catalog.getMetadataForTable(dbObject.getName())->tableId};
+      dbObject.setObjectKey(dbObjectKey);
+      std::vector<bool> privs{true, false, false};  // SELECT
+      dbObject.setPrivileges(privs);
+      privObjects.push_back(dbObject);
+    }
+    if (!(static_cast<Catalog_Namespace::SysCatalog&>(catalog))
+             .checkPrivileges(session_info.get_currentUser(), privObjects)) {
+      throw std::runtime_error("Violation of access privileges: user " + session_info.get_currentUser().userName +
+                               " has no proper select privileges.");
+    }
   }
 
   return ra;
@@ -324,14 +337,8 @@ std::vector<string> Calcite::get_db_objects(const std::string ra) {
     std::string relOp(v["relOp"].GetString());
     if (!relOp.compare("EnumerableTableScan")) {
       std::string x;
-      bool period_required = false;
-      for (auto& t : v["table"].GetArray()) {
-        if (period_required) {
-          x.append(".");
-        }
-        period_required = true;
-        x.append(t.GetString());
-      }
+      auto t = v["table"].GetArray();
+      x = t[1].GetString();
       v_db_obj.push_back(x);
     }
   }

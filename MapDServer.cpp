@@ -247,6 +247,7 @@ int main(int argc, char** argv) {
   std::string decr_start_epoch("");  // value on which to decrement table's epoch, presented as: table_name:decrement
   std::string db_convert_dir("");    // path to mapd DB to convert from; if path is empty, no conversion is requested
   std::string db_query_file("");     // path to file containing warmup queries list
+  bool enable_access_priv_check = false;  // enable DB objects access privileges checking
 
   namespace po = boost::program_options;
 
@@ -352,6 +353,10 @@ int main(int argc, char** argv) {
                          "Allow the queries which failed on GPU to retry on CPU, even when watchdog is enabled");
   desc_adv.add_options()(
       "db-query-list", po::value<std::string>(&db_query_file), "Path to file containing mapd queries");
+  desc_adv.add_options()(
+      "enable-access-priv-check",
+      po::value<bool>(&enable_access_priv_check)->default_value(enable_access_priv_check)->implicit_value(false),
+      "Check user access privileges to database objects");
 
   po::positional_options_description positionalOptions;
   positionalOptions.add("data", 1);
@@ -602,7 +607,8 @@ int main(int argc, char** argv) {
                                                   ldapMetadata,
                                                   mapd_parameters,
                                                   db_convert_dir,
-                                                  enable_legacy_syntax));
+                                                  enable_legacy_syntax,
+                                                  enable_access_priv_check));
 
   if (mapd_parameters.ha_group_id.empty()) {
     shared_ptr<TProcessor> processor(new MapDProcessor(handler));

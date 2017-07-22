@@ -114,7 +114,8 @@ class MapDHandler : public MapDIf {
               const LdapMetadata ldapMetadata,
               const MapDParameters& mapd_parameters,
               const std::string& db_convert_dir,
-              const bool legacy_syntax);
+              const bool legacy_syntax,
+              const bool access_priv_check);
 
   ~MapDHandler();
 
@@ -388,6 +389,7 @@ class MapDHandler : public MapDIf {
   int start_epoch_;
   bool is_decr_start_epoch_;
   bool super_user_rights_;  // default is "false"; setting to "true" ignores passwd checks in "connect(..)" method
+  const bool access_priv_check_;
   friend void run_warmup_queries(boost::shared_ptr<MapDHandler> handler,
                                  std::string base_path,
                                  std::string query_file_path);

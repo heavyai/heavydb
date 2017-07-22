@@ -127,7 +127,8 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
                          const LdapMetadata ldapMetadata,
                          const MapDParameters& mapd_parameters,
                          const std::string& db_convert_dir,
-                         const bool legacy_syntax)
+                         const bool legacy_syntax,
+                         const bool access_priv_check)
     : leaf_aggregator_(db_leaves),
       string_leaves_(string_leaves),
       base_data_path_(base_data_path),
@@ -143,7 +144,8 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
       start_epoch_table_name_(start_epoch_table_name),
       start_epoch_(start_epoch),
       is_decr_start_epoch_(is_decr_start_epoch),
-      super_user_rights_(false) {
+      super_user_rights_(false),
+      access_priv_check_(access_priv_check) {
   LOG(INFO) << "MapD Server " << MAPD_RELEASE;
   if (executor_device == "gpu") {
 #ifdef HAVE_CUDA
@@ -198,7 +200,8 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
       LOG(INFO) << "Started in Hybrid mode" << std::endl;
   }
 
-  sys_cat_.reset(new Catalog_Namespace::SysCatalog(base_data_path_, data_mgr_, ldapMetadata, calcite_));
+  sys_cat_.reset(
+      new Catalog_Namespace::SysCatalog(base_data_path_, data_mgr_, ldapMetadata, calcite_, false, access_priv_check_));
   import_path_ = boost::filesystem::path(base_data_path_) / "mapd_import";
   start_time_ = std::time(nullptr);
 }
@@ -285,11 +288,13 @@ void MapDHandler::connectImpl(TSessionId& session,
   Privileges privs;
   privs.insert_ = true;
   privs.select_ = false;
-  if (!sys_cat_->checkPrivileges(user_meta, db_meta, privs)) {
-    TMapDException ex;
-    ex.error_msg = std::string("User ") + user + " is not authorized to access database " + dbname;
-    LOG(ERROR) << ex.error_msg;
-    throw ex;
+  if (!access_priv_check_) {  // proceed with old style access priv check for DB only
+    if (!sys_cat_->checkPrivileges(user_meta, db_meta, privs)) {
+      TMapDException ex;
+      ex.error_msg = std::string("User ") + user + " is not authorized to access database " + dbname;
+      LOG(ERROR) << ex.error_msg;
+      throw ex;
+    }
   }
   session = INVALID_SESSION_ID;
   while (true) {
@@ -300,8 +305,8 @@ void MapDHandler::connectImpl(TSessionId& session,
   }
   auto cat_it = cat_map_.find(dbname);
   if (cat_it == cat_map_.end()) {
-    Catalog_Namespace::Catalog* cat =
-        new Catalog_Namespace::Catalog(base_data_path_, db_meta, data_mgr_, string_leaves_, calcite_);
+    Catalog_Namespace::Catalog* cat = new Catalog_Namespace::Catalog(
+        base_data_path_, db_meta, data_mgr_, string_leaves_, calcite_, access_priv_check_);
     cat_map_[dbname].reset(cat);
     sessions_[session].reset(
         new Catalog_Namespace::SessionInfo(cat_map_[dbname], user_meta, executor_device_type_, session));
