@@ -1048,16 +1048,22 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
 
   allocateInnerScansIterators(ra_exe_unit.input_descs);
 
+  llvm::Value* outer_join_nomatch_flag_lv = nullptr;
   if (isOuterJoin()) {
-    cgen_state_->outer_join_cond_lv_ =
-        llvm::ConstantInt::get(llvm::IntegerType::getInt1Ty(cgen_state_->context_), true);
+    if (isOuterLoopJoin()) {
+      outer_join_nomatch_flag_lv = cgen_state_->ir_builder_.CreateLoad(cgen_state_->outer_join_nomatch_);
+      cgen_state_->outer_join_cond_lv_ = cgen_state_->ir_builder_.CreateNot(outer_join_nomatch_flag_lv);
+    } else {
+      cgen_state_->outer_join_cond_lv_ =
+          llvm::ConstantInt::get(llvm::IntegerType::getInt1Ty(cgen_state_->context_), true);
+    }
     for (auto expr : ra_exe_unit.outer_join_quals) {
       cgen_state_->outer_join_cond_lv_ = cgen_state_->ir_builder_.CreateAnd(
           cgen_state_->outer_join_cond_lv_, toBool(codegen(expr.get(), true, co).front()));
     }
   }
 
-  llvm::Value* filter_lv = llvm::ConstantInt::get(llvm::IntegerType::getInt1Ty(cgen_state_->context_), true);
+  llvm::Value* filter_lv = isOuterLoopJoin() ? cgen_state_->outer_join_cond_lv_ : ll_bool(true);
   for (auto expr : primary_quals) {
     // Generate the filter for primary quals
     auto cond = toBool(codegen(expr, true, co).front());
@@ -1071,15 +1077,24 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
   if (!deferred_quals.empty()) {
     auto sc_true = llvm::BasicBlock::Create(cgen_state_->context_, "sc_true", cgen_state_->row_func_);
     auto sc_false = llvm::BasicBlock::Create(cgen_state_->context_, "sc_false", cgen_state_->row_func_);
+    if (isOuterLoopJoin()) {
+      filter_lv = cgen_state_->ir_builder_.CreateOr(filter_lv, outer_join_nomatch_flag_lv);
+    }
     cgen_state_->ir_builder_.CreateCondBr(filter_lv, sc_true, sc_false);
     cgen_state_->ir_builder_.SetInsertPoint(sc_false);
     codegenInnerScanNextRowOrMatch();
     cgen_state_->ir_builder_.SetInsertPoint(sc_true);
+    filter_lv = ll_bool(true);
   }
 
   for (auto expr : deferred_quals) {
     filter_lv = cgen_state_->ir_builder_.CreateAnd(filter_lv, toBool(codegen(expr, true, co).front()));
   }
+  if (isOuterLoopJoin()) {
+    CHECK(outer_join_nomatch_flag_lv);
+    filter_lv = cgen_state_->ir_builder_.CreateOr(filter_lv, outer_join_nomatch_flag_lv);
+  }
+
   CHECK(filter_lv->getType()->isIntegerTy(1));
 
   const bool needs_error_check = group_by_and_aggregate.codegen(filter_lv, co);

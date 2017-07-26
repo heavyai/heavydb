@@ -3131,8 +3131,12 @@ TEST(Select, LeftOuterJoins) {
     c("SELECT test_inner.x key1 FROM test LEFT OUTER JOIN test_inner ON test.x = test_inner.x GROUP BY key1 HAVING "
       "key1 IS NOT NULL;",
       dt);
-// TODO(miyu): remove the following ifdef after fixing left loop join
-#ifdef ENABLE_ONE_TO_MANY_HASH_JOIN
+    c("SELECT COUNT(*) FROM test_inner a LEFT JOIN (SELECT * FROM test WHERE y > 40) b ON a.x = b.x;", dt);
+    c("SELECT a.x, b.str FROM join_test a LEFT JOIN (SELECT * FROM test WHERE y > 40) b ON a.x = b.x ORDER BY a.x, "
+      "b.str;",
+      dt);
+    c("SELECT COUNT(*) FROM test_inner a LEFT JOIN test b ON a.x = b.x;", dt);
+    c("SELECT a.x, b.str FROM join_test a LEFT JOIN test b ON a.x = b.x ORDER BY a.x, b.str;", dt);
     c("SELECT COUNT(*) FROM test_inner a LEFT OUTER JOIN test_x b ON a.x = b.x;", dt);
     c("SELECT COUNT(*) FROM test a LEFT OUTER JOIN join_test b ON a.str = b.dup_str;", dt);
     c("SELECT COUNT(*) FROM test a LEFT OUTER JOIN join_test b ON a.str = b.dup_str;", dt);
@@ -3152,7 +3156,6 @@ TEST(Select, LeftOuterJoins) {
       dt);
     c("SELECT a.x, b.str FROM test a LEFT JOIN join_test b ON a.str = b.dup_str ORDER BY a.x, b.str IS NULL, b.str;",
       dt);
-#endif
     EXPECT_THROW(
         run_multiple_agg(
             "SELECT x, tnone FROM test LEFT JOIN text_group_by_test ON test.str = text_group_by_test.tdef;", dt),

@@ -288,6 +288,8 @@ class Executor {
                 "Host hardware not supported, unexpected size of float / double.");
 
  public:
+  typedef std::deque<Fragmenter_Namespace::FragmentInfo> TableFragments;
+
   Executor(const int db_id,
            const size_t block_size_x,
            const size_t grid_size_x,
@@ -345,6 +347,10 @@ class Executor {
   bool isArchMaxwell(const ExecutorDeviceType dt) const;
 
   bool isOuterJoin() const { return cgen_state_->is_outer_join_; }
+
+  bool isOuterLoopJoin() const {
+    return isOuterJoin() && plan_state_->join_info_.join_impl_type_ == JoinImplType::Loop;
+  }
 
   const ColumnDescriptor* getColumnDescriptor(const Analyzer::ColumnVar*) const;
 
@@ -605,12 +611,6 @@ class Executor {
     std::vector<std::vector<int64_t>> num_rows;
     std::vector<std::vector<uint64_t>> frag_offsets;
   };
-
-  typedef std::deque<Fragmenter_Namespace::FragmentInfo> TableFragments;
-
-  std::map<size_t, std::vector<uint64_t>> getAllFragOffsets(
-      const std::vector<InputDescriptor>& input_descs,
-      const std::map<int, const TableFragments*>& all_tables_fragments);
 
 #ifdef ENABLE_MULTIFRAG_JOIN
   bool needFetchAllFragments(const InputColDescriptor& col_desc,
@@ -1055,6 +1055,8 @@ class Executor {
           ir_builder_(context_),
           is_outer_join_(is_outer_join),
           outer_join_cond_lv_(nullptr),
+          outer_join_match_found_(nullptr),
+          outer_join_nomatch_(nullptr),
           query_infos_(query_infos),
           needs_error_check_(false) {}
 
@@ -1165,6 +1167,8 @@ class Executor {
     std::vector<std::pair<llvm::Value*, llvm::Value*>> match_iterators_;
     const bool is_outer_join_;
     llvm::Value* outer_join_cond_lv_;
+    llvm::Value* outer_join_match_found_;
+    llvm::Value* outer_join_nomatch_;
     std::vector<llvm::BasicBlock*> inner_scan_labels_;
     std::vector<llvm::BasicBlock*> match_scan_labels_;
     std::unordered_map<int, llvm::Value*> scan_idx_to_hash_pos_;
