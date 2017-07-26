@@ -697,6 +697,8 @@ TEST(Select, FilterAndGroupBy) {
     c("SELECT CAST(CAST(d AS FLOAT) AS INTEGER) AS key, COUNT(*) FROM test GROUP BY key;", dt);
     c("SELECT x * 2 AS x2, COUNT(DISTINCT y) AS n FROM test GROUP BY x2 ORDER BY n DESC;", dt);
     c("SELECT x, COUNT(real_str) FROM test GROUP BY x ORDER BY x DESC;", dt);
+    c("SELECT str, SUM(y - y) FROM test GROUP BY str ORDER BY str ASC;", dt);
+    c("SELECT str, SUM(y - y) FROM test WHERE y - y IS NOT NULL GROUP BY str ORDER BY str ASC;", dt);
     EXPECT_THROW(run_multiple_agg("SELECT x, MIN(real_str) FROM test GROUP BY x ORDER BY x DESC;", dt),
                  std::runtime_error);
     EXPECT_THROW(run_multiple_agg("SELECT x, MAX(real_str) FROM test GROUP BY x ORDER BY x DESC;", dt),

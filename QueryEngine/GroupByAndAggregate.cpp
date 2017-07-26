@@ -2235,12 +2235,16 @@ GroupByAndAggregate::KeylessInfo GroupByAndAggregate::getKeylessInfo(
           found = true;
           break;
         case kSUM: {
-          if (!arg_expr->get_type_info().get_notnull()) {
+          auto arg_ti = arg_expr->get_type_info();
+          if (constrained_not_null(arg_expr, ra_exe_unit_.quals)) {
+            arg_ti.set_notnull(true);
+          }
+          if (!arg_ti.get_notnull()) {
             auto expr_range_info = getExpressionRange(arg_expr, query_infos_, executor_);
             if (expr_range_info.getType() != ExpressionRangeType::Invalid && !expr_range_info.hasNulls()) {
               init_val =
                   get_agg_initial_val(agg_info.agg_kind,
-                                      arg_expr->get_type_info(),
+                                      arg_ti,
                                       is_group_by || float_argument_input,
                                       float_argument_input ? sizeof(float) : query_mem_desc_.getCompactByteWidth());
               found = true;
