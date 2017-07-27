@@ -248,16 +248,6 @@ public final class MapDParser {
         continue;
       }
       SqlBasicCall proj_call = (SqlBasicCall) proj;
-      if (proj_call.getOperator() instanceof SqlAsOperator) {
-        MAPDLOGGER.debug("desugar: SqlBasicCall: " + proj_call.toString());
-        SqlNode[] operands = proj_call.getOperands();
-        SqlIdentifier id = (SqlIdentifier) operands[1];
-        SqlNode expanded_operand0 = expand(operands[0], id_to_expr, typeFactory);
-        id_to_expr.put(id.toString(), expanded_operand0);
-        proj_call.setOperand(0, expanded_operand0);
-        new_select_list.add(proj_call);
-        continue;
-      }
       new_select_list.add(expand(proj_call, id_to_expr, typeFactory));
     }
     select_node.setSelectList(new_select_list);
@@ -306,10 +296,6 @@ public final class MapDParser {
   private SqlNode expand(final SqlNode node,
           final java.util.Map<String, SqlNode> id_to_expr, RelDataTypeFactory typeFactory) {
     MAPDLOGGER.debug("expand: " + node.toString());
-    if (node instanceof SqlIdentifier && id_to_expr.containsKey(node.toString())) {
-      // Expand aliases
-      return id_to_expr.get(node.toString());
-    }
     if (node instanceof SqlBasicCall) {
       SqlBasicCall node_call = (SqlBasicCall) node;
       SqlNode[] operands = node_call.getOperands();
