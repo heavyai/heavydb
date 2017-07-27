@@ -695,7 +695,8 @@ static ImportStatus import_thread(int thread_id,
             import_buffers[col_idx_to_pop]->pop_value();
           }
           import_status.rows_rejected++;
-          LOG(ERROR) << "Input exception thrown: " << e.what() << ". Row discarded : " << row;
+          LOG(ERROR) << "Input exception thrown: " << e.what() << ". Row discarded, issue at column : " << (col_idx + 1)
+                     << " data :" << row;
         }
       });
       total_str_to_val_time_us += us;
