@@ -342,6 +342,10 @@ void Catalog::updateTableDescriptorSchema() {
       string queryString("ALTER TABLE mapd_tables ADD num_shards BIGINT DEFAULT " + std::to_string(0));
       sqliteConnector_.query(queryString);
     }
+    if (std::find(cols.begin(), cols.end(), std::string("key_metainfo")) == cols.end()) {
+      string queryString("ALTER TABLE mapd_tables ADD key_metainfo TEXT DEFAULT '[]'");
+      sqliteConnector_.query(queryString);
+    }
   } catch (std::exception& e) {
     sqliteConnector_.query("ROLLBACK TRANSACTION");
     throw;
@@ -542,7 +546,7 @@ void Catalog::buildMaps() {
 
   string tableQuery(
       "SELECT tableid, name, ncolumns, isview, fragments, frag_type, max_frag_rows, max_chunk_size, frag_page_size, "
-      "max_rows, partitions, shard_column_id, shard, num_shards from mapd_tables");
+      "max_rows, partitions, shard_column_id, shard, num_shards, key_metainfo from mapd_tables");
   sqliteConnector_.query(tableQuery);
   numRows = sqliteConnector_.getNumRows();
   for (size_t r = 0; r < numRows; ++r) {
@@ -561,6 +565,7 @@ void Catalog::buildMaps() {
     td->shardedColumnId = sqliteConnector_.getData<int>(r, 11);
     td->shard = sqliteConnector_.getData<int>(r, 12);
     td->nShards = sqliteConnector_.getData<int>(r, 13);
+    td->keyMetainfo = sqliteConnector_.getData<string>(r, 14);
     if (!td->isView) {
       td->fragmenter = nullptr;
     }
@@ -961,8 +966,8 @@ void Catalog::createTable(TableDescriptor& td,
   try {
     sqliteConnector_.query_with_text_params(
         "INSERT INTO mapd_tables (name, ncolumns, isview, fragments, frag_type, max_frag_rows, max_chunk_size, "
-        "frag_page_size, max_rows, partitions, shard_column_id, shard, num_shards) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, "
-        "?, ?, ?, ?)",
+        "frag_page_size, max_rows, partitions, shard_column_id, shard, num_shards, key_metainfo) VALUES (?, ?, ?, ?, "
+        "?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         std::vector<std::string>{td.tableName,
                                  std::to_string(columns.size()),
                                  std::to_string(td.isView),
@@ -975,7 +980,8 @@ void Catalog::createTable(TableDescriptor& td,
                                  td.partitions,
                                  std::to_string(td.shardedColumnId),
                                  std::to_string(td.shard),
-                                 std::to_string(td.nShards)});
+                                 std::to_string(td.nShards),
+                                 td.keyMetainfo});
 
     // now get the auto generated tableid
     sqliteConnector_.query_with_text_param("SELECT tableid FROM mapd_tables WHERE name = ?", td.tableName);

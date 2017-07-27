@@ -37,6 +37,7 @@
 #include <boost/program_options.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/tokenizer.hpp>
+#include <rapidjson/document.h>
 
 #include "../Fragmenter/InsertOrderFragmenter.h"
 #include "Shared/checked_alloc.h"
@@ -333,6 +334,35 @@ int get_optimal_size(ClientContext& context, std::string table_name, std::string
   return 0;
 }
 
+namespace {
+
+std::vector<std::string> unserialize_key_metainfo(const std::string key_metainfo) {
+  std::vector<std::string> keys_with_spec;
+  rapidjson::Document document;
+  document.Parse(key_metainfo.c_str());
+  CHECK(!document.HasParseError());
+  CHECK(document.IsArray());
+  for (auto it = document.Begin(); it != document.End(); ++it) {
+    const auto& key_with_spec_json = *it;
+    CHECK(key_with_spec_json.IsObject());
+    const std::string type = key_with_spec_json["type"].GetString();
+    const std::string name = key_with_spec_json["name"].GetString();
+    auto key_with_spec = type + " (" + name + ")";
+    if (type == "SHARED DICTIONARY") {
+      key_with_spec += " REFERENCES ";
+      const std::string foreign_table = key_with_spec_json["foreign_table"].GetString();
+      const std::string foreign_column = key_with_spec_json["foreign_column"].GetString();
+      key_with_spec += foreign_table + "(" + foreign_column + ")";
+    } else {
+      CHECK(type == "SHARD KEY");
+    }
+    keys_with_spec.push_back(key_with_spec);
+  }
+  return keys_with_spec;
+}
+
+}  // namespace
+
 void process_backslash_commands(char* command, ClientContext& context) {
   switch (command[1]) {
     case 'h':
@@ -387,6 +417,10 @@ void process_backslash_commands(char* command, ClientContext& context) {
                   << (p.col_type.nullable ? "" : " NOT NULL") << encoding;
         comma_or_blank = ",\n";
       }
+      const auto keys_with_spec = unserialize_key_metainfo(table_details.key_metainfo);
+      for (const auto& key_with_spec : keys_with_spec) {
+        std::cout << ",\n" << key_with_spec;
+      }
       // push final "\n";
       if (table_details.view_sql.empty()) {
         std::cout << ")\n";
@@ -395,15 +429,19 @@ void process_backslash_commands(char* command, ClientContext& context) {
         std::string page = "";
         std::string row = "";
         if (DEFAULT_FRAGMENT_ROWS != table_details.fragment_size) {
-          frag = " FRAGMENT_SIZE = " + std::to_string(table_details.fragment_size);
-          comma_or_blank = ",";
+          frag = "FRAGMENT_SIZE = " + std::to_string(table_details.fragment_size);
+          comma_or_blank = ", ";
+        }
+        if (table_details.shard_count) {
+          frag += comma_or_blank + "SHARD_COUNT = " + std::to_string(table_details.shard_count);
+          comma_or_blank = ", ";
         }
         if (DEFAULT_PAGE_SIZE != table_details.page_size) {
-          page = comma_or_blank + " PAGE_SIZE = " + std::to_string(table_details.page_size);
-          comma_or_blank = ",";
+          page = comma_or_blank + "PAGE_SIZE = " + std::to_string(table_details.page_size);
+          comma_or_blank = ", ";
         }
         if (DEFAULT_MAX_ROWS != table_details.max_rows) {
-          row = comma_or_blank + " MAX_ROWS = " + std::to_string(table_details.max_rows);
+          row = comma_or_blank + "MAX_ROWS = " + std::to_string(table_details.max_rows);
         }
         std::string with = frag + page + row;
         if (with.length() > 0) {

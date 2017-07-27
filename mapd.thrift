@@ -253,6 +253,8 @@ struct TTableDetails {
   3: i64 page_size
   4: i64 max_rows
   5: string view_sql
+  6: i64 shard_count
+  7: string key_metainfo
 }
 
 enum TExpressionRangeType {

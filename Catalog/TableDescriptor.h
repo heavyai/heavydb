@@ -42,6 +42,7 @@ struct TableDescriptor {
   int32_t fragPageSize;                           // page size
   int64_t maxRows;                                // max number of rows in the table
   std::string partitions;                         // distributed partition scheme
+  std::string keyMetainfo;                        // meta-information about shard keys and shared dictionary, as JSON
   Fragmenter_Namespace::AbstractFragmenter*
       fragmenter;       // point to fragmenter object for the table.  it's instantiated upon first use.
   int32_t nShards;      // # of shards, i.e. physical tables for this logical table (default: 0)

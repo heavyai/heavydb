@@ -28,6 +28,9 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/filesystem.hpp>
+#include <rapidjson/document.h>
+#include <rapidjson/stringbuffer.h>
+#include <rapidjson/writer.h>
 #include "../Catalog/Catalog.h"
 #include "ParserNode.h"
 #include "ReservedKeywords.h"
@@ -1597,6 +1600,42 @@ void validate_shard_column_type(const size_t shard_column_id, const std::list<Co
                            col_ti.get_compression_name());
 }
 
+void set_string_field(rapidjson::Value& obj,
+                      const std::string& field_name,
+                      const std::string& field_value,
+                      rapidjson::Document& document) {
+  rapidjson::Value field_name_json_str;
+  field_name_json_str.SetString(field_name.c_str(), field_name.size(), document.GetAllocator());
+  rapidjson::Value field_value_json_str;
+  field_value_json_str.SetString(field_value.c_str(), field_value.size(), document.GetAllocator());
+  obj.AddMember(field_name_json_str, field_value_json_str, document.GetAllocator());
+}
+
+std::string serialize_key_metainfo(const ShardKeyDef* shard_key_def,
+                                   const std::vector<SharedDictionaryDef>& shared_dict_defs) {
+  rapidjson::Document document;
+  auto& allocator = document.GetAllocator();
+  rapidjson::Value arr(rapidjson::kArrayType);
+  if (shard_key_def) {
+    rapidjson::Value shard_key_obj(rapidjson::kObjectType);
+    set_string_field(shard_key_obj, "type", "SHARD KEY", document);
+    set_string_field(shard_key_obj, "name", shard_key_def->get_column(), document);
+    arr.PushBack(shard_key_obj, allocator);
+  }
+  for (const auto& shared_dict_def : shared_dict_defs) {
+    rapidjson::Value shared_dict_obj(rapidjson::kObjectType);
+    set_string_field(shared_dict_obj, "type", "SHARED DICTIONARY", document);
+    set_string_field(shared_dict_obj, "name", shared_dict_def.get_column(), document);
+    set_string_field(shared_dict_obj, "foreign_table", shared_dict_def.get_foreign_table(), document);
+    set_string_field(shared_dict_obj, "foreign_column", shared_dict_def.get_foreign_column(), document);
+    arr.PushBack(shared_dict_obj, allocator);
+  }
+  rapidjson::StringBuffer buffer;
+  rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+  arr.Accept(writer);
+  return buffer.GetString();
+}
+
 }  // namespace
 
 void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
@@ -1838,6 +1877,7 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   if (shard_key_def && !td.nShards) {
     throw std::runtime_error("Must specify the number of shards through the SHARD_COUNT option");
   }
+  td.keyMetainfo = serialize_key_metainfo(shard_key_def, shared_dict_defs);
   catalog.createShardedTable(td, columns, shared_dict_defs);
 }
 

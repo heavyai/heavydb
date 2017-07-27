@@ -765,6 +765,8 @@ void MapDHandler::get_table_details(TTableDetails& _return, const TSessionId& se
   _return.page_size = td->fragPageSize;
   _return.max_rows = td->maxRows;
   _return.view_sql = td->viewSQL;
+  _return.shard_count = td->nShards;
+  _return.key_metainfo = td->keyMetainfo;
 }
 
 // DEPRECATED(2017-04-17) - use get_table_details()
@@ -812,6 +814,10 @@ void MapDHandler::get_tables(std::vector<std::string>& table_names, const TSessi
   auto& cat = session_info.get_catalog();
   const auto tables = cat.getAllTableMetadata();
   for (const auto td : tables) {
+    if (td->shard >= 0) {
+      // skip shards, they're not standalone tables
+      continue;
+    }
     table_names.push_back(td->tableName);
   }
 }
