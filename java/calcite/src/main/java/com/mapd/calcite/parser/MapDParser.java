@@ -83,7 +83,7 @@ public final class MapDParser {
     MapDSchema mapd = new MapDSchema(dataDir, this, mapdPort, mapdUser);
     final SchemaPlus rootSchema = Frameworks.createRootSchema(true);
     final FrameworkConfig config = Frameworks.newConfigBuilder()
-            .defaultSchema(rootSchema.add("mapd", mapd))
+            .defaultSchema(rootSchema.add(mapdUser.getDB(), mapd))
             .operatorTable(createOperatorTable(extSigs))
             .parserConfig(SqlParser.configBuilder()
                     .setUnquotedCasing(Casing.UNCHANGED)
@@ -100,8 +100,6 @@ public final class MapDParser {
   public String getRelAlgebra(String sql, final boolean legacy_syntax, final MapDUser mapDUser, final boolean isExplain)
           throws SqlParseException, ValidationException, RelConversionException {
     callCount++;
-//        catalogReader = new MapDCatalogReader(new SqlTypeFactoryImpl(RelDataTypeSystem.DEFAULT), dataDir, this);
-//        catalogReader.setCurrentMapDUser(mapDUser);
     final RelRoot sqlRel = queryToSqlNode(sql, legacy_syntax);
 
     RelNode project = sqlRel.project();
