@@ -47,6 +47,9 @@
 #include "../Shared/geosupport.h"
 #include "Importer.h"
 #include "gen-cpp/MapD.h"
+#include <vector>
+#include <iostream>
+using std::ostream;
 
 namespace Importer_NS {
 
@@ -618,6 +621,19 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd, const TDatum& datu
   }
 }
 
+template <typename T>
+ostream& operator<<(ostream& out, const std::vector<T>& v) {
+  out << "[";
+  size_t last = v.size() - 1;
+  for (size_t i = 0; i < v.size(); ++i) {
+    out << v[i];
+    if (i != last)
+      out << ", ";
+  }
+  out << "]";
+  return out;
+}
+
 static ImportStatus import_thread(int thread_id,
                                   Importer* importer,
                                   const char* buffer,
@@ -658,18 +674,9 @@ static ImportStatus import_thread(int thread_id,
       } else
         p = get_row(
             p, thread_buf_end, buf_end, copy_params, p == thread_buf, importer->get_is_array(), row, try_single_thread);
-      /*
-      std::cout << "Row " << row_count << " : ";
-      for (auto p : row)
-        std::cout << p << ", ";
-      std::cout << std::endl;
-      */
       if (row.size() != col_descs.size()) {
         import_status.rows_rejected++;
-        LOG(ERROR) << "Incorrect Row (expected " << col_descs.size() << " columns, has " << row.size() << "): ";
-        for (auto p : row)
-          std::cerr << p << ", ";
-        std::cerr << std::endl;
+        LOG(ERROR) << "Incorrect Row (expected " << col_descs.size() << " columns, has " << row.size() << "): " << row;
         continue;
       }
       us = measure<std::chrono::microseconds>::execution([&]() {
@@ -688,7 +695,7 @@ static ImportStatus import_thread(int thread_id,
             import_buffers[col_idx_to_pop]->pop_value();
           }
           import_status.rows_rejected++;
-          LOG(WARNING) << "Input exception thrown: " << e.what() << ". Row discarded.";
+          LOG(ERROR) << "Input exception thrown: " << e.what() << ". Row discarded : " << row;
         }
       });
       total_str_to_val_time_us += us;
