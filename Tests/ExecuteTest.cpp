@@ -3763,6 +3763,12 @@ void drop_tables() {
   const std::string drop_test{"DROP TABLE test;"};
   run_ddl_statement(drop_test);
   g_sqlite_comparator.query(drop_test);
+  const std::string drop_test_inner_x{"DROP TABLE test_inner_x;"};
+  run_ddl_statement(drop_test_inner_x);
+  g_sqlite_comparator.query(drop_test_inner_x);
+  const std::string drop_test_x{"DROP TABLE test_x;"};
+  run_ddl_statement(drop_test_x);
+  g_sqlite_comparator.query(drop_test_x);
   const std::string drop_gpu_sort_test{"DROP TABLE gpu_sort_test;"};
   run_ddl_statement(drop_gpu_sort_test);
   g_sqlite_comparator.query(drop_gpu_sort_test);
