@@ -888,6 +888,8 @@ TEST(Select, ComplexQueries) {
         "SELECT x + y AS a, COUNT(*) * MAX(y) - SUM(z) AS b FROM test "
         "WHERE z BETWEEN 100 AND 200 GROUP BY x, y ORDER BY a DESC LIMIT 2;",
         dt);
+    c("SELECT x, dup_str FROM (SELECT * FROM test a JOIN join_test b ON a.x = b.x) WHERE y > 40 ORDER BY x, dup_str;",
+      dt);
     ASSERT_EQ(rows.rowCount(), size_t(2));
     {
       auto crt_row = rows.getNextRow(true, true);

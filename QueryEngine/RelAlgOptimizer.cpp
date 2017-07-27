@@ -182,10 +182,16 @@ void propagate_rex_input_renumber(
   CHECK(excluded_root);
   auto src_project = dynamic_cast<const RelProject*>(excluded_root->getInput(0));
   CHECK(src_project && src_project->isSimple());
+  const auto indirect_join_src = dynamic_cast<const RelJoin*>(src_project->getInput(0));
   std::unordered_map<size_t, size_t> old_to_new_idx;
   for (size_t i = 0; i < src_project->size(); ++i) {
     auto rex_in = dynamic_cast<const RexInput*>(src_project->getProjectAt(i));
     CHECK(rex_in);
+    size_t src_base = 0;
+    if (indirect_join_src != nullptr && indirect_join_src->getInput(1) == rex_in->getSourceNode()) {
+      src_base = indirect_join_src->getInput(0)->size();
+    }
+    old_to_new_idx.insert(std::make_pair(i, src_base + rex_in->getIndex()));
     old_to_new_idx.insert(std::make_pair(i, rex_in->getIndex()));
   }
   CHECK(old_to_new_idx.size());
@@ -268,8 +274,11 @@ void redirect_inputs_of(std::shared_ptr<RelAlgNode> node,
     return;
   }
   if (auto filter = std::dynamic_pointer_cast<RelFilter>(node)) {
-    if (permutating_projects.count(src_project.get()) || dynamic_cast<const RelJoin*>(src_project->getInput(0))) {
-      propagate_rex_input_renumber(filter.get(), du_web, deconst_mapping);
+    const bool is_permutating_proj = permutating_projects.count(src_project.get());
+    if (is_permutating_proj || dynamic_cast<const RelJoin*>(src_project->getInput(0))) {
+      if (is_permutating_proj) {
+        propagate_rex_input_renumber(filter.get(), du_web, deconst_mapping);
+      }
       filter->RelAlgNode::replaceInput(src_project, src_project->getAndOwnInput(0));
       RexProjectInputRedirector redirector(projects);
       auto new_condition = redirector.visit(filter->getCondition());
