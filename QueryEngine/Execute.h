@@ -352,6 +352,10 @@ class Executor {
     return isOuterJoin() && plan_state_->join_info_.join_impl_type_ == JoinImplType::Loop;
   }
 
+  bool isOneToManyOuterHashJoin() const {
+    return isOuterJoin() && plan_state_->join_info_.join_impl_type_ == JoinImplType::HashOneToMany;
+  }
+
   const ColumnDescriptor* getColumnDescriptor(const Analyzer::ColumnVar*) const;
 
   const Catalog_Namespace::Catalog* getCatalog() const;
@@ -941,6 +945,10 @@ class Executor {
 
   void preloadFragOffsets(const std::vector<InputDescriptor>& input_descs,
                           const std::vector<InputTableInfo>& query_infos);
+
+  void codegenNomatchInitialization(const int index);
+
+  void codegenNomatchLoopback(const std::function<void()> init_iters, llvm::BasicBlock* loop_head);
 
   void allocateInnerScansIterators(const std::vector<InputDescriptor>& input_descs);
 

@@ -2523,7 +2523,7 @@ bool GroupByAndAggregate::codegen(llvm::Value* filter_result, const CompilationO
     DiamondCodegen filter_cfg(
         filter_result, executor_, !is_group_by || query_mem_desc.usesGetGroupValueFast(), "filter");
 
-    if (executor_->isOuterLoopJoin()) {
+    if (executor_->isOuterLoopJoin() || executor_->isOneToManyOuterHashJoin()) {
       auto match_found_ptr = executor_->cgen_state_->outer_join_match_found_;
       CHECK(match_found_ptr);
       LL_BUILDER.CreateStore(executor_->ll_bool(true), match_found_ptr);

@@ -30,6 +30,7 @@
 #include <llvm/IRReader/IRReader.h>
 #include <llvm/IR/Attributes.h>
 #include <llvm/IR/InstIterator.h>
+#include "llvm/IR/IntrinsicInst.h"
 #include "llvm/IR/Intrinsics.h"
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Verifier.h>
@@ -385,6 +386,24 @@ std::string extension_function_decls() {
 }
 #endif  // HAVE_CUDA
 
+void legalize_nvvm_ir(llvm::Function* query_func) {
+  std::vector<llvm::Instruction*> unsupported_intrinsics;
+  for (auto& BB : *query_func) {
+    for (llvm::Instruction& I : BB) {
+      if (const llvm::IntrinsicInst* II = llvm::dyn_cast<llvm::IntrinsicInst>(&I)) {
+        if (II->getIntrinsicID() == llvm::Intrinsic::stacksave ||
+            II->getIntrinsicID() == llvm::Intrinsic::stackrestore) {
+          unsupported_intrinsics.push_back(&I);
+        }
+      }
+    }
+  }
+
+  for (auto& II : unsupported_intrinsics) {
+    II->eraseFromParent();
+  }
+}
+
 }  // namespace
 
 std::vector<std::pair<void*, void*>> Executor::optimizeAndCodegenGPU(llvm::Function* query_func,
@@ -440,6 +459,8 @@ std::vector<std::pair<void*, void*>> Executor::optimizeAndCodegenGPU(llvm::Funct
 
   // run optimizations
   optimizeIR(query_func, module, live_funcs, co, "", "");
+
+  legalize_nvvm_ir(query_func);
 
   std::stringstream ss;
   llvm::raw_os_ostream os(ss);
@@ -1054,16 +1075,20 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
       outer_join_nomatch_flag_lv = cgen_state_->ir_builder_.CreateLoad(cgen_state_->outer_join_nomatch_);
       cgen_state_->outer_join_cond_lv_ = cgen_state_->ir_builder_.CreateNot(outer_join_nomatch_flag_lv);
     } else {
-      cgen_state_->outer_join_cond_lv_ =
-          llvm::ConstantInt::get(llvm::IntegerType::getInt1Ty(cgen_state_->context_), true);
+      cgen_state_->outer_join_cond_lv_ = ll_bool(true);
     }
     for (auto expr : ra_exe_unit.outer_join_quals) {
       cgen_state_->outer_join_cond_lv_ = cgen_state_->ir_builder_.CreateAnd(
           cgen_state_->outer_join_cond_lv_, toBool(codegen(expr.get(), true, co).front()));
     }
+    if (isOneToManyOuterHashJoin()) {
+      // TODO(miyu): Support more than 1 one-to-many hash joins in folded sequence.
+      outer_join_nomatch_flag_lv = cgen_state_->ir_builder_.CreateLoad(cgen_state_->outer_join_nomatch_);
+    }
   }
 
-  llvm::Value* filter_lv = isOuterLoopJoin() ? cgen_state_->outer_join_cond_lv_ : ll_bool(true);
+  llvm::Value* filter_lv =
+      isOuterLoopJoin() || isOneToManyOuterHashJoin() ? cgen_state_->outer_join_cond_lv_ : ll_bool(true);
   for (auto expr : primary_quals) {
     // Generate the filter for primary quals
     auto cond = toBool(codegen(expr, true, co).front());
@@ -1077,7 +1102,7 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
   if (!deferred_quals.empty()) {
     auto sc_true = llvm::BasicBlock::Create(cgen_state_->context_, "sc_true", cgen_state_->row_func_);
     auto sc_false = llvm::BasicBlock::Create(cgen_state_->context_, "sc_false", cgen_state_->row_func_);
-    if (isOuterLoopJoin()) {
+    if (isOuterLoopJoin() || isOneToManyOuterHashJoin()) {
       filter_lv = cgen_state_->ir_builder_.CreateOr(filter_lv, outer_join_nomatch_flag_lv);
     }
     cgen_state_->ir_builder_.CreateCondBr(filter_lv, sc_true, sc_false);
@@ -1090,7 +1115,7 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
   for (auto expr : deferred_quals) {
     filter_lv = cgen_state_->ir_builder_.CreateAnd(filter_lv, toBool(codegen(expr, true, co).front()));
   }
-  if (isOuterLoopJoin()) {
+  if (isOuterLoopJoin() || isOneToManyOuterHashJoin()) {
     CHECK(outer_join_nomatch_flag_lv);
     filter_lv = cgen_state_->ir_builder_.CreateOr(filter_lv, outer_join_nomatch_flag_lv);
   }

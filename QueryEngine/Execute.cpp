@@ -2170,6 +2170,29 @@ void Executor::preloadFragOffsets(const std::vector<InputDescriptor>& input_desc
   }
 }
 
+void Executor::codegenNomatchInitialization(const int index) {
+  CHECK(isOuterJoin());
+  cgen_state_->outer_join_match_found_ = cgen_state_->ir_builder_.CreateAlloca(
+      get_int_type(1, cgen_state_->context_), nullptr, "match_found_" + std::to_string(index));
+  cgen_state_->outer_join_nomatch_ = cgen_state_->ir_builder_.CreateAlloca(
+      get_int_type(1, cgen_state_->context_), nullptr, "outer_join_nomatch_flag" + std::to_string(index));
+  cgen_state_->ir_builder_.CreateStore(ll_bool(false), cgen_state_->outer_join_match_found_);
+  cgen_state_->ir_builder_.CreateStore(ll_bool(false), cgen_state_->outer_join_nomatch_);
+}
+
+void Executor::codegenNomatchLoopback(const std::function<void()> init_iters, llvm::BasicBlock* loop_head) {
+  CHECK(isOuterJoin());
+  auto nomatch_bb = llvm::BasicBlock::Create(cgen_state_->context_, "outer_join_nomatch", cgen_state_->row_func_);
+  auto ret_bb = llvm::BasicBlock::Create(cgen_state_->context_, "inner_scan_ret", cgen_state_->row_func_);
+  auto match_found_lv = cgen_state_->ir_builder_.CreateLoad(cgen_state_->outer_join_match_found_);
+  cgen_state_->ir_builder_.CreateCondBr(match_found_lv, ret_bb, nomatch_bb);
+  cgen_state_->ir_builder_.SetInsertPoint(nomatch_bb);
+  init_iters();
+  cgen_state_->ir_builder_.CreateStore(ll_bool(true), cgen_state_->outer_join_nomatch_);
+  cgen_state_->ir_builder_.CreateBr(loop_head);
+  cgen_state_->ir_builder_.SetInsertPoint(ret_bb);
+}
+
 void Executor::allocateInnerScansIterators(const std::vector<InputDescriptor>& input_descs) {
   if (input_descs.size() <= 1) {
     return;
@@ -2200,12 +2223,7 @@ void Executor::allocateInnerScansIterators(const std::vector<InputDescriptor>& i
       rows_per_scan_ptr = cgen_state_->ir_builder_.CreateAlloca(
           get_int_type(64, cgen_state_->context_), nullptr, "num_rows_per_scan_copy");
       cgen_state_->ir_builder_.CreateStore(rows_per_scan, rows_per_scan_ptr);
-      cgen_state_->outer_join_match_found_ = cgen_state_->ir_builder_.CreateAlloca(
-          get_int_type(1, cgen_state_->context_), nullptr, "match_found" + std::to_string(inner_scan_idx));
-      cgen_state_->outer_join_nomatch_ = cgen_state_->ir_builder_.CreateAlloca(
-          get_int_type(1, cgen_state_->context_), nullptr, "outer_join_nomatch_flag" + std::to_string(inner_scan_idx));
-      cgen_state_->ir_builder_.CreateStore(ll_bool(false), cgen_state_->outer_join_match_found_);
-      cgen_state_->ir_builder_.CreateStore(ll_bool(false), cgen_state_->outer_join_nomatch_);
+      codegenNomatchInitialization(inner_scan_idx);
     }
     auto scan_loop_head = llvm::BasicBlock::Create(
         cgen_state_->context_, "scan_loop_head", cgen_state_->row_func_, preheader->getNextNode());
@@ -2236,16 +2254,11 @@ void Executor::allocateInnerScansIterators(const std::vector<InputDescriptor>& i
     cgen_state_->ir_builder_.CreateCondBr(have_more_inner_rows, inner_scan_cont, inner_scan_ret);
     cgen_state_->ir_builder_.SetInsertPoint(inner_scan_ret);
     if (isOuterJoin()) {
-      auto nomatch_bb = llvm::BasicBlock::Create(cgen_state_->context_, "outer_join_nomatch", cgen_state_->row_func_);
-      auto ret_bb = llvm::BasicBlock::Create(cgen_state_->context_, "inner_scan_ret", cgen_state_->row_func_);
-      auto match_found_lv = cgen_state_->ir_builder_.CreateLoad(cgen_state_->outer_join_match_found_);
-      cgen_state_->ir_builder_.CreateCondBr(match_found_lv, ret_bb, nomatch_bb);
-      cgen_state_->ir_builder_.SetInsertPoint(nomatch_bb);
-      cgen_state_->ir_builder_.CreateStore(ll_int(int64_t(1)), rows_per_scan_ptr);
-      cgen_state_->ir_builder_.CreateStore(ll_int(int64_t(0)), inner_scan_pos_ptr);
-      cgen_state_->ir_builder_.CreateStore(ll_bool(true), cgen_state_->outer_join_nomatch_);
-      cgen_state_->ir_builder_.CreateBr(scan_loop_head);
-      cgen_state_->ir_builder_.SetInsertPoint(ret_bb);
+      auto init_iters = [this, &rows_per_scan_ptr, &inner_scan_pos_ptr]() {
+        cgen_state_->ir_builder_.CreateStore(ll_int(int64_t(1)), rows_per_scan_ptr);
+        cgen_state_->ir_builder_.CreateStore(ll_int(int64_t(0)), inner_scan_pos_ptr);
+      };
+      codegenNomatchLoopback(init_iters, scan_loop_head);
     }
     cgen_state_->ir_builder_.CreateRet(ll_int(int32_t(0)));
     cgen_state_->ir_builder_.SetInsertPoint(inner_scan_cont);
@@ -2287,8 +2300,6 @@ Executor::JoinInfo Executor::chooseJoinType(const std::list<std::shared_ptr<Anal
                                             const ExecutorDeviceType device_type) {
   CHECK(device_type != ExecutorDeviceType::Hybrid);
   std::string hash_join_fail_reason{"No equijoin expression found"};
-
-  const bool is_outer_join = (&ra_exe_unit.outer_join_quals == &join_quals) && !join_quals.empty();
 
   const MemoryLevel memory_level{device_type == ExecutorDeviceType::GPU ? MemoryLevel::GPU_LEVEL
                                                                         : MemoryLevel::CPU_LEVEL};
@@ -2353,8 +2364,7 @@ Executor::JoinInfo Executor::chooseJoinType(const std::list<std::shared_ptr<Anal
     if (join_hash_tables.size() == nest_level_num - 1) {
       // TODO(miyu): support one-to-many hash join in folded join sequence.
       if (has_one_to_many_hash_table(join_hash_tables)) {
-        // TODO(miyu): Fix one-to-many outer hash join.
-        if (nest_level_num == 2 && !is_outer_join) {
+        if (nest_level_num == 2) {
           return Executor::JoinInfo(JoinImplType::HashOneToMany, bin_ops, join_hash_tables, "");
         }
       } else {
