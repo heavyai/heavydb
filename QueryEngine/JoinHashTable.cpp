@@ -1067,9 +1067,7 @@ llvm::Value* JoinHashTable::codegenOneToManyHashJoin(const CompilationOptions& c
   const auto slot_lv = executor_->cgen_state_->emitCall(fname, hash_join_idx_args);
   const auto slot_valid_lv = executor_->cgen_state_->ir_builder_.CreateICmpSGE(slot_lv, executor_->ll_int(int64_t(0)));
 
-  CHECK(executor_->plan_state_->join_info_.join_hash_tables_[index]);
-  const auto actual_hash_entry_count = executor_->plan_state_->join_info_.join_hash_tables_[index]->hash_entry_count_;
-  const int64_t sub_buff_size = actual_hash_entry_count * sizeof(int32_t);
+  const int64_t sub_buff_size = hash_entry_count_ * sizeof(int32_t);
   auto count_ptr = executor_->cgen_state_->ir_builder_.CreateAdd(pos_ptr, executor_->ll_int(sub_buff_size));
 
   hash_join_idx_args[0] = executor_->cgen_state_->ir_builder_.CreatePtrToInt(
@@ -1137,7 +1135,7 @@ llvm::Value* JoinHashTable::codegenOneToManyHashJoin(const CompilationOptions& c
 }
 
 llvm::Value* JoinHashTable::codegenSlot(const CompilationOptions& co, const size_t index) {
-  if (executor_->plan_state_->join_info_.join_hash_tables_[index]->getHashType() == JoinHashTable::OneToMany) {
+  if (getHashType() == JoinHashTable::OneToMany) {
     return codegenOneToManyHashJoin(co, index);
   }
   CHECK(executor_->plan_state_->join_info_.join_impl_type_ == Executor::JoinImplType::HashOneToOne ||
@@ -1151,7 +1149,6 @@ llvm::Value* JoinHashTable::codegenSlot(const CompilationOptions& co, const size
   CHECK_EQ(size_t(1), key_lvs.size());
   auto hash_ptr = codegenHashTableLoad(index);
   CHECK(hash_ptr);
-  CHECK(executor_->plan_state_->join_info_.join_hash_tables_[index]);
   const int shard_count = shardCount();
   const auto hash_join_idx_args = getHashJoinArgs(hash_ptr, key_col, shard_count, co);
   std::string fname{"hash_join_idx"};
