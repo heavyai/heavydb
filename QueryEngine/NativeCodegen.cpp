@@ -384,7 +384,6 @@ std::string extension_function_decls() {
   const auto decls = ExtensionFunctionsWhitelist::getLLVMDeclarations();
   return boost::algorithm::join(decls, "\n");
 }
-#endif  // HAVE_CUDA
 
 void legalize_nvvm_ir(llvm::Function* query_func) {
   std::vector<llvm::Instruction*> unsupported_intrinsics;
@@ -403,6 +402,7 @@ void legalize_nvvm_ir(llvm::Function* query_func) {
     II->eraseFromParent();
   }
 }
+#endif  // HAVE_CUDA
 
 }  // namespace
 
