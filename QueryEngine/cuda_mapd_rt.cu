@@ -196,6 +196,7 @@ extern "C" __device__ int64_t* get_matching_group_value_columnar(int64_t* groups
 
 #include "MurmurHash.cpp"
 #include "GroupByRuntime.cpp"
+#include "JoinHashTableQueryRuntime.cpp"
 
 __device__ int64_t atomicMax64(int64_t* address, int64_t val) {
   unsigned long long int* address_as_ull = (unsigned long long int*)address;

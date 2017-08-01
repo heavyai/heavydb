@@ -26,6 +26,9 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <vector>
+
+const size_t g_maximum_conditions_to_coalesce{8};
 
 void init_hash_join_buff(int32_t* buff,
                          const int32_t entry_count,
@@ -38,6 +41,34 @@ void init_hash_join_buff_on_device(int32_t* buff,
                                    const int32_t invalid_slot_val,
                                    const size_t block_size_x,
                                    const size_t grid_size_x);
+
+void init_baseline_hash_join_buff_32(int8_t* hash_join_buff,
+                                     const int32_t entry_count,
+                                     const size_t key_component_count,
+                                     const int32_t invalid_slot_val,
+                                     const int32_t cpu_thread_idx,
+                                     const int32_t cpu_thread_count);
+
+void init_baseline_hash_join_buff_64(int8_t* hash_join_buff,
+                                     const int32_t entry_count,
+                                     const size_t key_component_count,
+                                     const int32_t invalid_slot_val,
+                                     const int32_t cpu_thread_idx,
+                                     const int32_t cpu_thread_count);
+
+void init_baseline_hash_join_buff_on_device_32(int8_t* hash_join_buff,
+                                               const int32_t entry_count,
+                                               const size_t key_component_count,
+                                               const int32_t invalid_slot_val,
+                                               const size_t block_size_x,
+                                               const size_t grid_size_x);
+
+void init_baseline_hash_join_buff_on_device_64(int8_t* hash_join_buff,
+                                               const int32_t entry_count,
+                                               const size_t key_component_count,
+                                               const int32_t invalid_slot_val,
+                                               const size_t block_size_x,
+                                               const size_t grid_size_x);
 
 struct JoinColumn {
   const int8_t* col_buff;
@@ -118,5 +149,47 @@ void fill_one_to_many_hash_table_on_device_sharded(int32_t* buff,
                                                    const ShardInfo& shard_info,
                                                    const size_t block_size_x,
                                                    const size_t grid_size_x);
+
+int fill_baseline_hash_join_buff_32(int8_t* hash_buff,
+                                    const size_t entry_count,
+                                    const int32_t invalid_slot_val,
+                                    const size_t key_component_count,
+                                    const std::vector<JoinColumn>& join_column_per_key,
+                                    const std::vector<JoinColumnTypeInfo>& type_info_per_key,
+                                    const std::vector<const void*>& sd_inner_proxy_per_key,
+                                    const std::vector<const void*>& sd_outer_proxy_per_key,
+                                    const int32_t cpu_thread_idx,
+                                    const int32_t cpu_thread_count);
+
+int fill_baseline_hash_join_buff_64(int8_t* hash_buff,
+                                    const size_t entry_count,
+                                    const int32_t invalid_slot_val,
+                                    const size_t key_component_count,
+                                    const std::vector<JoinColumn>& join_column_per_key,
+                                    const std::vector<JoinColumnTypeInfo>& type_info_per_key,
+                                    const std::vector<const void*>& sd_inner_proxy_per_key,
+                                    const std::vector<const void*>& sd_outer_proxy_per_key,
+                                    const int32_t cpu_thread_idx,
+                                    const int32_t cpu_thread_count);
+
+void fill_baseline_hash_join_buff_on_device_32(int8_t* hash_buff,
+                                               const size_t entry_count,
+                                               const int32_t invalid_slot_val,
+                                               const size_t key_component_count,
+                                               int* dev_err_buff,
+                                               const JoinColumn* join_column_per_key,
+                                               const JoinColumnTypeInfo* type_info_per_key,
+                                               const size_t block_size_x,
+                                               const size_t grid_size_x);
+
+void fill_baseline_hash_join_buff_on_device_64(int8_t* hash_buff,
+                                               const size_t entry_count,
+                                               const int32_t invalid_slot_val,
+                                               const size_t key_component_count,
+                                               int* dev_err_buff,
+                                               const JoinColumn* join_column_per_key,
+                                               const JoinColumnTypeInfo* type_info_per_key,
+                                               const size_t block_size_x,
+                                               const size_t grid_size_x);
 
 #endif  // QUERYENGINE_HASHJOINRUNTIME_H
