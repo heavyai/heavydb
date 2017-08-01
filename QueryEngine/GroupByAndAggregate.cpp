@@ -46,6 +46,7 @@
 bool g_cluster{false};
 bool g_use_result_set{true};
 bool g_bigint_count{false};
+int g_hll_precision_bits{11};
 
 namespace {
 
@@ -2147,7 +2148,7 @@ CountDistinctDescriptors GroupByAndAggregate::initCountDistinctDescriptors() {
       GroupByAndAggregate::ColRangeInfo no_range_info{GroupByColRangeType::OneColGuessedRange, 0, 0, 0, false};
       auto arg_range_info = arg_ti.is_fp() ? no_range_info : getExprRangeInfo(agg_expr->get_arg());
       CountDistinctImplType count_distinct_impl_type{CountDistinctImplType::StdSet};
-      int64_t bitmap_sz_bits{agg_info.agg_kind == kCOUNT ? 0 : HLL_MASK_WIDTH};
+      int64_t bitmap_sz_bits{agg_info.agg_kind == kCOUNT ? 0 : g_hll_precision_bits};
       if (arg_range_info.hash_type_ == GroupByColRangeType::OneColKnownRange &&
           !arg_ti.is_array()) {  // TODO(alex): allow bitmap implementation for arrays
         if (arg_range_info.isEmpty()) {

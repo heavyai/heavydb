@@ -357,6 +357,10 @@ int main(int argc, char** argv) {
       "enable-access-priv-check",
       po::value<bool>(&enable_access_priv_check)->default_value(enable_access_priv_check)->implicit_value(false),
       "Check user access privileges to database objects");
+  desc_adv.add_options()(
+      "hll-precision-bits",
+      po::value<int>(&g_hll_precision_bits)->default_value(g_hll_precision_bits)->implicit_value(g_hll_precision_bits),
+      "Number of bits used from the hash value used to specify the bucket number.");
 
   po::positional_options_description positionalOptions;
   positionalOptions.add("data", 1);
@@ -433,6 +437,10 @@ int main(int argc, char** argv) {
     return 1;
   }
 
+  if (g_hll_precision_bits < 1 || g_hll_precision_bits > 16) {
+    std::cerr << "hll-precision-bits must be between 1 and 16." << std::endl;
+    return 1;
+  }
   boost::algorithm::trim_if(db_query_file, boost::is_any_of("\"'"));
   if (db_query_file.length() > 0 && !boost::filesystem::exists(db_query_file)) {
     std::cerr << "File containing DB queries " << db_query_file << " does not exist." << std::endl;

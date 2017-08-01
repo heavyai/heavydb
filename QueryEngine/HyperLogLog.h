@@ -74,6 +74,6 @@ inline void hll_unify(T1* lhs, T2* rhs, const size_t m) {
   }
 }
 
-const int HLL_MASK_WIDTH{11};
+extern int g_hll_precision_bits;
 
 #endif  // QUERYENGINE_HYPERLOGLOG_H

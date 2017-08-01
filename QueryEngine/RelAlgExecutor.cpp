@@ -1234,8 +1234,12 @@ RelAlgExecutionUnit decide_approx_count_distinct_implementation(
     const auto device_type = g_cluster ? ExecutorDeviceType::GPU : device_type_in;
     const auto bitmap_sz_bits = arg_range.getIntMax() - arg_range.getIntMin() + 1;
     const auto sub_bitmap_count = get_count_distinct_sub_bitmap_count(bitmap_sz_bits, ra_exe_unit, device_type);
-    CountDistinctDescriptor approx_count_distinct_desc{
-        CountDistinctImplType::Bitmap, arg_range.getIntMin(), HLL_MASK_WIDTH, true, device_type, sub_bitmap_count};
+    CountDistinctDescriptor approx_count_distinct_desc{CountDistinctImplType::Bitmap,
+                                                       arg_range.getIntMin(),
+                                                       g_hll_precision_bits,
+                                                       true,
+                                                       device_type,
+                                                       sub_bitmap_count};
     CountDistinctDescriptor precise_count_distinct_desc{
         CountDistinctImplType::Bitmap, arg_range.getIntMin(), bitmap_sz_bits, false, device_type, sub_bitmap_count};
     if (approx_count_distinct_desc.bitmapPaddedSizeBytes() >= precise_count_distinct_desc.bitmapPaddedSizeBytes()) {
