@@ -409,10 +409,33 @@ llvm::Value* Executor::posArg(const Analyzer::Expr* expr) const {
 const Analyzer::ColumnVar* Executor::hashJoinLhs(const Analyzer::ColumnVar* rhs) const {
   for (const auto tautological_eq : plan_state_->join_info_.equi_join_tautologies_) {
     CHECK(tautological_eq->get_optype() == kEQ);
-    if (*tautological_eq->get_right_operand() == *rhs) {
-      auto lhs_col = dynamic_cast<const Analyzer::ColumnVar*>(tautological_eq->get_left_operand());
-      CHECK(lhs_col);
-      return lhs_col;
+    if (dynamic_cast<const Analyzer::ColumnVarTuple*>(tautological_eq->get_left_operand())) {
+      auto lhs_col = hashJoinLhsTuple(rhs, tautological_eq.get());
+      if (lhs_col) {
+        return lhs_col;
+      }
+    } else {
+      if (*tautological_eq->get_right_operand() == *rhs) {
+        auto lhs_col = dynamic_cast<const Analyzer::ColumnVar*>(tautological_eq->get_left_operand());
+        CHECK(lhs_col);
+        return lhs_col;
+      }
+    }
+  }
+  return nullptr;
+}
+
+const Analyzer::ColumnVar* Executor::hashJoinLhsTuple(const Analyzer::ColumnVar* rhs,
+                                                      const Analyzer::BinOper* tautological_eq) const {
+  const auto lhs_tuple_expr = dynamic_cast<const Analyzer::ColumnVarTuple*>(tautological_eq->get_left_operand());
+  const auto rhs_tuple_expr = dynamic_cast<const Analyzer::ColumnVarTuple*>(tautological_eq->get_right_operand());
+  CHECK(lhs_tuple_expr && rhs_tuple_expr);
+  const auto& lhs_tuple = lhs_tuple_expr->getTuple();
+  const auto& rhs_tuple = rhs_tuple_expr->getTuple();
+  CHECK_EQ(lhs_tuple.size(), rhs_tuple.size());
+  for (size_t i = 0; i < lhs_tuple.size(); ++i) {
+    if (*rhs_tuple[i] == *rhs) {
+      return lhs_tuple[i].get();
     }
   }
   return nullptr;

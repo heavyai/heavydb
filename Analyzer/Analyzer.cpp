@@ -58,6 +58,22 @@ std::shared_ptr<Analyzer::Expr> ColumnVar::deep_copy() const {
   return makeExpr<ColumnVar>(type_info, table_id, column_id, rte_idx);
 }
 
+void ColumnVarTuple::collect_rte_idx(std::set<int>& rte_idx_set) const {
+  for (const auto column : tuple_) {
+    column->collect_rte_idx(rte_idx_set);
+  }
+}
+
+std::shared_ptr<Analyzer::Expr> ColumnVarTuple::deep_copy() const {
+  std::vector<std::shared_ptr<ColumnVar>> tuple_deep_copy;
+  for (const auto& column : tuple_) {
+    const auto column_deep_copy = std::dynamic_pointer_cast<Analyzer::ColumnVar>(column->deep_copy());
+    CHECK(column_deep_copy);
+    tuple_deep_copy.push_back(column_deep_copy);
+  }
+  return makeExpr<ColumnVarTuple>(tuple_deep_copy);
+}
+
 std::shared_ptr<Analyzer::Expr> Var::deep_copy() const {
   return makeExpr<Var>(type_info, table_id, column_id, rte_idx, which_row, varno);
 }
@@ -1495,6 +1511,23 @@ bool ColumnVar::operator==(const Expr& rhs) const {
   return (v->get_which_row() == rv->get_which_row()) && (v->get_varno() == rv->get_varno());
 }
 
+bool ColumnVarTuple::operator==(const Expr& rhs) const {
+  const auto rhs_tuple = dynamic_cast<const ColumnVarTuple*>(&rhs);
+  if (!rhs_tuple) {
+    return false;
+  }
+  const auto& rhs_tuple_cols = rhs_tuple->getTuple();
+  if (rhs_tuple_cols.size() != tuple_.size()) {
+    return false;
+  }
+  for (size_t i = 0; i < tuple_.size(); ++i) {
+    if (!(*tuple_[i] == *rhs_tuple_cols[i])) {
+      return false;
+    }
+  }
+  return true;
+}
+
 bool Datum_equal(const SQLTypeInfo& ti, Datum val1, Datum val2) {
   switch (ti.get_type()) {
     case kBOOLEAN:
@@ -1681,6 +1714,14 @@ bool IterExpr::operator==(const Expr& rhs) const {
 
 void ColumnVar::print() const {
   std::cout << "(ColumnVar table: " << table_id << " column: " << column_id << " rte: " << rte_idx << ") ";
+}
+
+void ColumnVarTuple::print() const {
+  std::cout << "< ";
+  for (const auto& column : tuple_) {
+    column->print();
+  }
+  std::cout << "> ";
 }
 
 void Var::print() const {

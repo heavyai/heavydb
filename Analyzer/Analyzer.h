@@ -208,6 +208,29 @@ class ColumnVar : public Expr {
 };
 
 /*
+ * @type ColumnVarTuple
+ * @brief A tuple of columns on the side of an equi-join on multiple columns.
+ * Not to be used in any other context.
+ */
+class ColumnVarTuple : public Expr {
+ public:
+  ColumnVarTuple(const std::vector<std::shared_ptr<Analyzer::ColumnVar>>& tuple) : Expr(SQLTypeInfo()), tuple_(tuple){};
+
+  const std::vector<std::shared_ptr<Analyzer::ColumnVar>>& getTuple() const { return tuple_; }
+
+  virtual void collect_rte_idx(std::set<int>& rte_idx_set) const override;
+
+  virtual std::shared_ptr<Analyzer::Expr> deep_copy() const override;
+
+  virtual void print() const override;
+
+  virtual bool operator==(const Expr& rhs) const override;
+
+ private:
+  const std::vector<std::shared_ptr<Analyzer::ColumnVar>> tuple_;
+};
+
+/*
  * @type Var
  * @brief expression that evaluates to the value of a column in a given row generated
  * from a query plan node.  It is only used in plan nodes above Scan nodes.
