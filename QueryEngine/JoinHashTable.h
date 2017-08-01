@@ -50,6 +50,11 @@ class HashJoinFail : public std::runtime_error {
   HashJoinFail(const std::string& reason) : std::runtime_error(reason) {}
 };
 
+class TooManyHashEntries : public std::runtime_error {
+ public:
+  TooManyHashEntries() : std::runtime_error("Hash tables with more than 2B entries not supported yet") {}
+};
+
 class JoinHashTable : public JoinHashTableInterface {
  public:
   enum HashType {

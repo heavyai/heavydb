@@ -46,6 +46,9 @@ std::shared_ptr<BaselineJoinHashTable> BaselineJoinHashTable::getInstance(
                                     : ShardCountInfo{0, nullptr};
   const auto shard_count = shard_count_info.count;
   const auto total_entries = 2 * query_info.getNumTuplesUpperBound();
+  if (total_entries > static_cast<size_t>(std::numeric_limits<int32_t>::max())) {
+    throw TooManyHashEntries();
+  }
   const auto entries_per_shard = shard_count ? (total_entries + shard_count - 1) / shard_count : total_entries;
   size_t entries_per_device = entries_per_shard;
   if (memory_level == Data_Namespace::GPU_LEVEL && shard_count) {

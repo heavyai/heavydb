@@ -99,6 +99,18 @@ std::pair<const Analyzer::ColumnVar*, const Analyzer::ColumnVar*> get_cols(
   return normalize_column_pair(lhs, rhs, cat, temporary_tables);
 }
 
+// Number of entries required for the given range.
+size_t get_hash_entry_count(const ExpressionRange& col_range) {
+  if (col_range.getIntMin() > col_range.getIntMax()) {
+    // Should only happen for all-nulls columns
+    CHECK_EQ(col_range.getIntMin(), int64_t(0));
+    CHECK_EQ(col_range.getIntMax(), int64_t(-1));
+    CHECK(col_range.hasNulls());
+    return 0;
+  }
+  return col_range.getIntMax() - col_range.getIntMin() + 1;
+}
+
 }  // namespace
 
 std::vector<std::pair<JoinHashTable::JoinHashTableCacheKey, std::shared_ptr<std::vector<int32_t>>>>
@@ -194,6 +206,9 @@ std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(const std::shared_ptr<
                                               std::max(source_col_range.getIntMax(), col_range.getIntMax()),
                                               0,
                                               source_col_range.hasNulls());
+  }
+  if (get_hash_entry_count(col_range) > static_cast<size_t>(std::numeric_limits<int32_t>::max())) {
+    throw TooManyHashEntries();
   }
   auto join_hash_table = std::shared_ptr<JoinHashTable>(new JoinHashTable(
       qual_bin_oper, inner_col, query_infos, ra_exe_unit, memory_level, col_range, executor, device_count));
@@ -315,6 +330,9 @@ int JoinHashTable::reify(const int device_count) {
   const auto& query_info = getInnerQueryInfo(inner_col).info;
   if (query_info.fragments.empty()) {
     return 0;
+  }
+  if (query_info.getNumTuplesUpperBound() > static_cast<size_t>(std::numeric_limits<int32_t>::max())) {
+    throw TooManyHashEntries();
   }
 #ifdef HAVE_CUDA
   gpu_hash_table_buff_.resize(device_count);
@@ -694,18 +712,6 @@ size_t get_entries_per_shard(const size_t total_entry_count, const size_t shard_
   return (total_entry_count + shard_count - 1) / shard_count;
 }
 #endif  // HAVE_CUDA
-
-// Number of entries required for the given range.
-size_t get_hash_entry_count(const ExpressionRange& col_range) {
-  if (col_range.getIntMin() > col_range.getIntMax()) {
-    // Should only happen for all-nulls columns
-    CHECK_EQ(col_range.getIntMin(), int64_t(0));
-    CHECK_EQ(col_range.getIntMax(), int64_t(-1));
-    CHECK(col_range.hasNulls());
-    return 0;
-  }
-  return col_range.getIntMax() - col_range.getIntMin() + 1;
-}
 
 }  // namespace
 
