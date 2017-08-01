@@ -28,6 +28,7 @@
 #include "ColumnarResults.h"
 #include "InputDescriptors.h"
 #include "InputMetadata.h"
+#include "JoinHashTableInterface.h"
 #include "ThrustAllocator.h"
 #include "../Analyzer/Analyzer.h"
 #include "../Catalog/Catalog.h"
@@ -49,7 +50,7 @@ class HashJoinFail : public std::runtime_error {
   HashJoinFail(const std::string& reason) : std::runtime_error(reason) {}
 };
 
-class JoinHashTable {
+class JoinHashTable : public JoinHashTableInterface {
  public:
   enum HashType {
     OneToOne,
@@ -64,7 +65,7 @@ class JoinHashTable {
                                                     const std::unordered_set<int>& skip_tables,
                                                     Executor* executor);
 
-  int64_t getJoinHashBuffer(const ExecutorDeviceType device_type, const int device_id) noexcept {
+  int64_t getJoinHashBuffer(const ExecutorDeviceType device_type, const int device_id) noexcept override {
     if (device_type == ExecutorDeviceType::CPU && !cpu_hash_table_buff_) {
       return 0;
     }
@@ -78,9 +79,9 @@ class JoinHashTable {
 #endif
   }
 
-  llvm::Value* codegenSlot(const CompilationOptions&, const size_t);
+  llvm::Value* codegenSlot(const CompilationOptions&, const size_t) override;
 
-  const Analyzer::ColumnVar* getHashColumnVar() const { return col_var_.get(); };
+  int getInnerTableId() const noexcept override { return col_var_.get()->get_table_id(); };
 
   HashType getHashType() const { return hash_type_; }
 
@@ -127,7 +128,7 @@ class JoinHashTable {
   int reify(const int device_count);
   int reifyOneToOneForDevice(const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments, const int device_id);
   int reifyOneToManyForDevice(const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments, const int device_id);
-  void checkHashJoinReplicationConstraint(const int table_id);
+  void checkHashJoinReplicationConstraint(const int table_id) const;
   int initHashTableForDevice(const ChunkKey& chunk_key,
                              const int8_t* col_buff,
                              const size_t num_elements,
@@ -230,8 +231,32 @@ inline std::string get_table_name_by_id(const int table_id, const Catalog_Namesp
   return "$TEMPORARY_TABLE" + std::to_string(-table_id);
 }
 
+// Functions below need to be moved to a separate translation unit, they don't belong here.
+
 size_t get_shard_count(const Analyzer::BinOper* join_condition,
                        const RelAlgExecutionUnit& ra_exe_unit,
                        const Executor* executor);
+
+size_t get_shard_count(std::pair<const Analyzer::ColumnVar*, const Analyzer::ColumnVar*> equi_pair,
+                       const RelAlgExecutionUnit& ra_exe_unit,
+                       const Executor* executor);
+
+bool needs_dictionary_translation(const Analyzer::ColumnVar* inner_col,
+                                  const Analyzer::ColumnVar* outer_col,
+                                  const Executor* executor);
+
+// Swap the columns if needed and make the inner column the first component.
+std::pair<const Analyzer::ColumnVar*, const Analyzer::ColumnVar*> normalize_column_pair(
+    const Analyzer::Expr* lhs,
+    const Analyzer::Expr* rhs,
+    const Catalog_Namespace::Catalog& cat,
+    const TemporaryTables* temporary_tables);
+
+std::deque<Fragmenter_Namespace::FragmentInfo> only_shards_for_device(
+    const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
+    const int device_id,
+    const int device_count);
+
+const InputTableInfo& get_inner_query_info(const int inner_table_id, const std::vector<InputTableInfo>& query_infos);
 
 #endif  // QUERYENGINE_JOINHASHTABLE_H

@@ -1161,7 +1161,7 @@ std::unordered_map<int, const Analyzer::BinOper*> Executor::getInnerTabIdToJoinC
   const auto& join_info = plan_state_->join_info_;
   CHECK_EQ(join_info.equi_join_tautologies_.size(), join_info.join_hash_tables_.size());
   for (size_t i = 0; i < join_info.join_hash_tables_.size(); ++i) {
-    int inner_table_id = join_info.join_hash_tables_[i]->getHashColumnVar()->get_table_id();
+    int inner_table_id = join_info.join_hash_tables_[i]->getInnerTableId();
     id_to_cond.insert(std::make_pair(inner_table_id, join_info.equi_join_tautologies_[i].get()));
   }
   return id_to_cond;
@@ -2283,9 +2283,10 @@ void check_loop_join_replication_constraint(const Catalog_Namespace::Catalog* ca
   }
 }
 
-bool has_one_to_many_hash_table(const std::vector<std::shared_ptr<JoinHashTable>>& hash_tables) {
-  for (auto ht : hash_tables) {
-    if (ht->getHashType() == JoinHashTable::OneToMany) {
+bool has_one_to_many_hash_table(const std::vector<std::shared_ptr<JoinHashTableInterface>>& hash_tables) {
+  for (auto ht_interface : hash_tables) {
+    const auto ht = dynamic_cast<const JoinHashTable*>(ht_interface.get());
+    if (ht && ht->getHashType() == JoinHashTable::OneToMany) {
       return true;
     }
   }
@@ -2307,7 +2308,7 @@ Executor::JoinInfo Executor::chooseJoinType(const std::list<std::shared_ptr<Anal
   std::set<int> rte_idx_set;
   std::unordered_set<int> visited_tables;
   std::vector<std::shared_ptr<Analyzer::BinOper>> bin_ops;
-  std::vector<std::shared_ptr<JoinHashTable>> join_hash_tables;
+  std::vector<std::shared_ptr<JoinHashTableInterface>> join_hash_tables;
   for (auto qual : join_quals) {
     auto qual_bin_oper = std::dynamic_pointer_cast<Analyzer::BinOper>(qual);
     if (!qual_bin_oper) {
@@ -2321,6 +2322,7 @@ Executor::JoinInfo Executor::chooseJoinType(const std::list<std::shared_ptr<Anal
       const int device_count =
           device_type == ExecutorDeviceType::GPU ? catalog_->get_dataMgr().cudaMgr_->getDeviceCount() : 1;
       CHECK_GT(device_count, 0);
+      std::shared_ptr<JoinHashTableInterface> join_hash_table;
       try {
         const auto join_hash_table = JoinHashTable::getInstance(
             qual_bin_oper, query_infos, ra_exe_unit, memory_level, device_count, visited_tables, this);
@@ -2329,9 +2331,7 @@ Executor::JoinInfo Executor::chooseJoinType(const std::list<std::shared_ptr<Anal
         qual_bin_oper->collect_rte_idx(curr_rte_idx_set);
         CHECK_EQ(curr_rte_idx_set.size(), size_t(2));
         rte_idx_set.insert(curr_rte_idx_set.begin(), curr_rte_idx_set.end());
-        auto hash_col = join_hash_table->getHashColumnVar();
-        CHECK(hash_col);
-        visited_tables.insert(hash_col->get_table_id());
+        visited_tables.insert(join_hash_table->getInnerTableId());
         bin_ops.push_back(qual_bin_oper);
         join_hash_tables.push_back(join_hash_table);
       } catch (const HashJoinFail& e) {

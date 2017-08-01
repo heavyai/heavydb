@@ -20,6 +20,8 @@
 
 #include "DataMgr/BufferMgr/BufferMgr.h"
 
+#include <numeric>
+
 std::mutex Executor::ExecutionDispatch::reduce_mutex_;
 
 namespace {
@@ -806,4 +808,85 @@ const std::vector<std::unique_ptr<QueryExecutionContext>>& Executor::ExecutionDi
 
 std::vector<std::pair<ResultPtr, std::vector<size_t>>>& Executor::ExecutionDispatch::getFragmentResults() {
   return all_fragment_results_;
+}
+
+std::pair<const int8_t*, size_t> Executor::ExecutionDispatch::getColumnFragment(
+    Executor* executor,
+    const Analyzer::ColumnVar& hash_col,
+    const Fragmenter_Namespace::FragmentInfo& fragment,
+    const Data_Namespace::MemoryLevel effective_mem_lvl,
+    const int device_id,
+    std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
+    std::map<int, std::shared_ptr<const ColumnarResults>>& frags_owner) {
+  auto chunk_meta_it = fragment.getChunkMetadataMap().find(hash_col.get_column_id());
+  CHECK(chunk_meta_it != fragment.getChunkMetadataMap().end());
+  const auto& catalog = *executor->getCatalog();
+  const auto cd = get_column_descriptor_maybe(hash_col.get_column_id(), hash_col.get_table_id(), catalog);
+  CHECK(!cd || !(cd->isVirtualCol));
+  const int8_t* col_buff = nullptr;
+  if (cd) {
+    ChunkKey chunk_key{
+        catalog.get_currentDB().dbId, fragment.physicalTableId, hash_col.get_column_id(), fragment.fragmentId};
+    const auto chunk = Chunk_NS::Chunk::getChunk(cd,
+                                                 &catalog.get_dataMgr(),
+                                                 chunk_key,
+                                                 effective_mem_lvl,
+                                                 effective_mem_lvl == Data_Namespace::CPU_LEVEL ? 0 : device_id,
+                                                 chunk_meta_it->second.numBytes,
+                                                 chunk_meta_it->second.numElements);
+    chunks_owner.push_back(chunk);
+    CHECK(chunk);
+    auto ab = chunk->get_buffer();
+    CHECK(ab->getMemoryPtr());
+    col_buff = reinterpret_cast<int8_t*>(ab->getMemoryPtr());
+  } else {
+    const auto frag_id = fragment.fragmentId;
+    auto frag_it = frags_owner.find(frag_id);
+    if (frag_it == frags_owner.end()) {
+      std::shared_ptr<const ColumnarResults> col_frag(
+          columnarize_result(executor->row_set_mem_owner_,
+                             get_temporary_table(executor->temporary_tables_, hash_col.get_table_id()),
+                             frag_id));
+      auto res = frags_owner.insert(std::make_pair(frag_id, col_frag));
+      CHECK(res.second);
+      frag_it = res.first;
+    }
+    col_buff = getColumn(frag_it->second.get(),
+                         hash_col.get_column_id(),
+                         &catalog.get_dataMgr(),
+                         effective_mem_lvl,
+                         effective_mem_lvl == Data_Namespace::CPU_LEVEL ? 0 : device_id);
+  }
+  return {col_buff, fragment.getNumTuples()};
+}
+
+std::pair<const int8_t*, size_t> Executor::ExecutionDispatch::getAllColumnFragments(
+    Executor* executor,
+    const Analyzer::ColumnVar& hash_col,
+    const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
+    std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
+    std::map<int, std::shared_ptr<const ColumnarResults>>& frags_owner) {
+  CHECK(!fragments.empty());
+  const size_t elem_width = hash_col.get_type_info().get_size();
+  std::vector<const int8_t*> col_frags;
+  std::vector<size_t> elem_counts;
+  for (auto& frag : fragments) {
+    const int8_t* col_frag = nullptr;
+    size_t elem_count = 0;
+    std::tie(col_frag, elem_count) =
+        getColumnFragment(executor, hash_col, frag, Data_Namespace::CPU_LEVEL, 0, chunks_owner, frags_owner);
+    CHECK(col_frag != nullptr);
+    CHECK_NE(elem_count, size_t(0));
+    col_frags.push_back(col_frag);
+    elem_counts.push_back(elem_count);
+  }
+  CHECK(!col_frags.empty());
+  CHECK_EQ(col_frags.size(), elem_counts.size());
+  const auto total_elem_count = std::accumulate(elem_counts.begin(), elem_counts.end(), size_t(0));
+  auto col_buff = reinterpret_cast<int8_t*>(checked_malloc(total_elem_count * elem_width));
+  for (size_t i = 0, offset = 0; i < col_frags.size(); ++i) {
+    memcpy(col_buff + offset, col_frags[i], elem_counts[i] * elem_width);
+    offset += elem_counts[i] * elem_width;
+  }
+  return {col_buff, total_elem_count};
 }

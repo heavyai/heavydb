@@ -26,14 +26,11 @@
 #include <numeric>
 #include <thread>
 
-namespace {
-
-std::pair<const Analyzer::ColumnVar*, const Analyzer::ColumnVar*> get_cols(
-    const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
+std::pair<const Analyzer::ColumnVar*, const Analyzer::ColumnVar*> normalize_column_pair(
+    const Analyzer::Expr* lhs,
+    const Analyzer::Expr* rhs,
     const Catalog_Namespace::Catalog& cat,
     const TemporaryTables* temporary_tables) {
-  const auto lhs = qual_bin_oper->get_left_operand();
-  const auto rhs = qual_bin_oper->get_right_operand();
   const auto& lhs_ti = lhs->get_type_info();
   const auto& rhs_ti = rhs->get_type_info();
   if (lhs_ti.get_type() != rhs_ti.get_type()) {
@@ -49,8 +46,6 @@ std::pair<const Analyzer::ColumnVar*, const Analyzer::ColumnVar*> get_cols(
       (rhs_cast && rhs_cast->get_optype() != kCAST)) {
     throw HashJoinFail("Cannot use hash join for given expression");
   }
-  CHECK_EQ(kENCODING_NONE, lhs_ti.get_compression());
-  CHECK_EQ(kENCODING_NONE, rhs_ti.get_compression());
   const auto lhs_col = lhs_cast ? dynamic_cast<const Analyzer::ColumnVar*>(lhs_cast->get_operand())
                                 : dynamic_cast<const Analyzer::ColumnVar*>(lhs);
   const auto rhs_col = rhs_cast ? dynamic_cast<const Analyzer::ColumnVar*>(rhs_cast->get_operand())
@@ -93,6 +88,17 @@ std::pair<const Analyzer::ColumnVar*, const Analyzer::ColumnVar*> get_cols(
   return {inner_col, outer_col};
 }
 
+namespace {
+
+std::pair<const Analyzer::ColumnVar*, const Analyzer::ColumnVar*> get_cols(
+    const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
+    const Catalog_Namespace::Catalog& cat,
+    const TemporaryTables* temporary_tables) {
+  const auto lhs = qual_bin_oper->get_left_operand();
+  const auto rhs = qual_bin_oper->get_right_operand();
+  return normalize_column_pair(lhs, rhs, cat, temporary_tables);
+}
+
 }  // namespace
 
 std::vector<std::pair<JoinHashTable::JoinHashTableCacheKey, std::shared_ptr<std::vector<int32_t>>>>
@@ -119,6 +125,17 @@ size_t get_shard_count(const Analyzer::BinOper* join_condition,
   if (!lhs_col || !rhs_col) {
     return 0;
   }
+  return get_shard_count({lhs_col, rhs_col}, ra_exe_unit, executor);
+}
+
+size_t get_shard_count(std::pair<const Analyzer::ColumnVar*, const Analyzer::ColumnVar*> equi_pair,
+                       const RelAlgExecutionUnit& ra_exe_unit,
+                       const Executor* executor) {
+  if (executor->isOuterJoin()) {
+    return 0;
+  }
+  const auto lhs_col = equi_pair.first;
+  const auto rhs_col = equi_pair.second;
   if (lhs_col->get_table_id() < 0 || rhs_col->get_table_id() < 0) {
     return 0;
   }
@@ -211,46 +228,8 @@ std::pair<const int8_t*, size_t> JoinHashTable::getColumnFragment(
     const int device_id,
     std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
     std::map<int, std::shared_ptr<const ColumnarResults>>& frags_owner) {
-  auto chunk_meta_it = fragment.getChunkMetadataMap().find(hash_col.get_column_id());
-  CHECK(chunk_meta_it != fragment.getChunkMetadataMap().end());
-  const auto& catalog = *executor_->getCatalog();
-  const auto cd = get_column_descriptor_maybe(hash_col.get_column_id(), hash_col.get_table_id(), catalog);
-  CHECK(!cd || !(cd->isVirtualCol));
-  const int8_t* col_buff = nullptr;
-  if (cd) {
-    ChunkKey chunk_key{
-        catalog.get_currentDB().dbId, fragment.physicalTableId, hash_col.get_column_id(), fragment.fragmentId};
-    const auto chunk = Chunk_NS::Chunk::getChunk(cd,
-                                                 &catalog.get_dataMgr(),
-                                                 chunk_key,
-                                                 effective_mem_lvl,
-                                                 effective_mem_lvl == Data_Namespace::CPU_LEVEL ? 0 : device_id,
-                                                 chunk_meta_it->second.numBytes,
-                                                 chunk_meta_it->second.numElements);
-    chunks_owner.push_back(chunk);
-    CHECK(chunk);
-    auto ab = chunk->get_buffer();
-    CHECK(ab->getMemoryPtr());
-    col_buff = reinterpret_cast<int8_t*>(ab->getMemoryPtr());
-  } else {
-    const auto frag_id = fragment.fragmentId;
-    auto frag_it = frags_owner.find(frag_id);
-    if (frag_it == frags_owner.end()) {
-      std::shared_ptr<const ColumnarResults> col_frag(
-          columnarize_result(executor_->row_set_mem_owner_,
-                             get_temporary_table(executor_->temporary_tables_, hash_col.get_table_id()),
-                             frag_id));
-      auto res = frags_owner.insert(std::make_pair(frag_id, col_frag));
-      CHECK(res.second);
-      frag_it = res.first;
-    }
-    col_buff = Executor::ExecutionDispatch::getColumn(frag_it->second.get(),
-                                                      hash_col.get_column_id(),
-                                                      &catalog.get_dataMgr(),
-                                                      effective_mem_lvl,
-                                                      effective_mem_lvl == Data_Namespace::CPU_LEVEL ? 0 : device_id);
-  }
-  return {col_buff, fragment.getNumTuples()};
+  return Executor::ExecutionDispatch::getColumnFragment(
+      executor_, hash_col, fragment, effective_mem_lvl, device_id, chunks_owner, frags_owner);
 }
 
 std::pair<const int8_t*, size_t> JoinHashTable::getAllColumnFragments(
@@ -262,36 +241,16 @@ std::pair<const int8_t*, size_t> JoinHashTable::getAllColumnFragments(
   if (linearized_multifrag_column_.first) {
     return linearized_multifrag_column_;
   }
-  CHECK(!fragments.empty());
-  const size_t elem_width = hash_col.get_type_info().get_size();
-  std::vector<const int8_t*> col_frags;
-  std::vector<size_t> elem_counts;
-  for (auto& frag : fragments) {
-    const int8_t* col_frag = nullptr;
-    size_t elem_count = 0;
-    std::tie(col_frag, elem_count) =
-        getColumnFragment(hash_col, frag, Data_Namespace::CPU_LEVEL, 0, chunks_owner, frags_owner);
-    CHECK(col_frag != nullptr);
-    CHECK_NE(elem_count, size_t(0));
-    col_frags.push_back(col_frag);
-    elem_counts.push_back(elem_count);
-  }
-  CHECK(!col_frags.empty());
-  CHECK_EQ(col_frags.size(), elem_counts.size());
-  const auto total_elem_count = std::accumulate(elem_counts.begin(), elem_counts.end(), size_t(0));
-  auto col_buff = reinterpret_cast<int8_t*>(checked_malloc(total_elem_count * elem_width));
-  for (size_t i = 0, offset = 0; i < col_frags.size(); ++i) {
-    memcpy(col_buff + offset, col_frags[i], elem_counts[i] * elem_width);
-    offset += elem_counts[i] * elem_width;
-  }
+  const int8_t* col_buff;
+  size_t total_elem_count;
+  std::tie(col_buff, total_elem_count) =
+      Executor::ExecutionDispatch::getAllColumnFragments(executor_, hash_col, fragments, chunks_owner, frags_owner);
   linearized_multifrag_column_owner_.addColBuffer(col_buff);
   if (!shardCount()) {
     linearized_multifrag_column_ = {col_buff, total_elem_count};
   }
   return {col_buff, total_elem_count};
 }
-
-namespace {
 
 bool needs_dictionary_translation(const Analyzer::ColumnVar* inner_col,
                                   const Analyzer::ColumnVar* outer_col,
@@ -330,8 +289,6 @@ std::deque<Fragmenter_Namespace::FragmentInfo> only_shards_for_device(
   }
   return shards_for_device;
 }
-
-}  // namespace
 
 bool JoinHashTable::needOneToManyHash(const std::vector<int>& errors) const {
 #ifdef ENABLE_ONE_TO_MANY_HASH_JOIN
@@ -596,7 +553,7 @@ int JoinHashTable::reifyOneToManyForDevice(const std::deque<Fragmenter_Namespace
   return 0;
 }
 
-void JoinHashTable::checkHashJoinReplicationConstraint(const int table_id) {
+void JoinHashTable::checkHashJoinReplicationConstraint(const int table_id) const {
   if (!g_cluster) {
     return;
   }
@@ -1167,15 +1124,19 @@ llvm::Value* JoinHashTable::codegenSlot(const CompilationOptions& co, const size
 }
 
 const InputTableInfo& JoinHashTable::getInnerQueryInfo(const Analyzer::ColumnVar* inner_col) const {
+  return get_inner_query_info(inner_col->get_table_id(), query_infos_);
+}
+
+const InputTableInfo& get_inner_query_info(const int inner_table_id, const std::vector<InputTableInfo>& query_infos) {
   ssize_t ti_idx = -1;
-  for (size_t i = 0; i < query_infos_.size(); ++i) {
-    if (inner_col->get_table_id() == query_infos_[i].table_id) {
+  for (size_t i = 0; i < query_infos.size(); ++i) {
+    if (inner_table_id == query_infos[i].table_id) {
       ti_idx = i;
       break;
     }
   }
   CHECK_NE(ssize_t(-1), ti_idx);
-  return query_infos_[ti_idx];
+  return query_infos[ti_idx];
 }
 
 size_t JoinHashTable::shardCount() const {

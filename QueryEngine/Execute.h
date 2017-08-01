@@ -596,7 +596,7 @@ class Executor {
   struct JoinInfo {
     JoinInfo(const JoinImplType join_impl_type,
              const std::vector<std::shared_ptr<Analyzer::BinOper>>& equi_join_tautologies,
-             const std::vector<std::shared_ptr<JoinHashTable>>& join_hash_tables,
+             const std::vector<std::shared_ptr<JoinHashTableInterface>>& join_hash_tables,
              const std::string& hash_join_fail_reason)
         : join_impl_type_(join_impl_type),
           equi_join_tautologies_(equi_join_tautologies),
@@ -607,7 +607,7 @@ class Executor {
     std::vector<std::shared_ptr<Analyzer::BinOper>> equi_join_tautologies_;  // expressions we equi-join on are true by
                                                                              // definition when using a hash join; we'll
                                                                              // fold them to true during code generation
-    std::vector<std::shared_ptr<JoinHashTable>> join_hash_tables_;
+    std::vector<std::shared_ptr<JoinHashTableInterface>> join_hash_tables_;
     std::string hash_join_fail_reason_;
   };
 
@@ -753,6 +753,22 @@ class Executor {
     const std::vector<std::unique_ptr<QueryExecutionContext>>& getQueryContexts() const;
 
     std::vector<std::pair<ResultPtr, std::vector<size_t>>>& getFragmentResults();
+
+    static std::pair<const int8_t*, size_t> getColumnFragment(
+        Executor* executor,
+        const Analyzer::ColumnVar& hash_col,
+        const Fragmenter_Namespace::FragmentInfo& fragment,
+        const Data_Namespace::MemoryLevel effective_mem_lvl,
+        const int device_id,
+        std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
+        std::map<int, std::shared_ptr<const ColumnarResults>>& frags_owner);
+
+    static std::pair<const int8_t*, size_t> getAllColumnFragments(
+        Executor* executor,
+        const Analyzer::ColumnVar& hash_col,
+        const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
+        std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
+        std::map<int, std::shared_ptr<const ColumnarResults>>& frags_owner);
   };
 
   ResultPtr executeWorkUnit(int32_t* error_code,
@@ -1346,6 +1362,7 @@ class Executor {
   static const int32_t ERR_INTERRUPTED{10};
   static const int32_t ERR_COLUMNAR_CONVERSION_NOT_SUPPORTED{11};
   static const int32_t ERR_TOO_MANY_LITERALS{12};
+  friend class BaselineJoinHashTable;
   friend class GroupByAndAggregate;
   friend struct QueryMemoryDescriptor;
   friend class QueryExecutionContext;
