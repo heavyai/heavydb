@@ -51,12 +51,8 @@ bool can_combine_with(const Analyzer::Expr* crt, const Analyzer::Expr* prev) {
   return true;
 }
 
-// Create an equals expression with column tuple operands out of regular equals expressions.
-std::shared_ptr<Analyzer::Expr> make_composite_equals(
+std::shared_ptr<Analyzer::BinOper> make_composite_equals_impl(
     const std::vector<std::shared_ptr<Analyzer::Expr>>& crt_coalesced_quals) {
-  if (crt_coalesced_quals.size() == 1) {
-    return crt_coalesced_quals.front();
-  }
   std::vector<std::shared_ptr<Analyzer::ColumnVar>> lhs_tuple;
   std::vector<std::shared_ptr<Analyzer::ColumnVar>> rhs_tuple;
   bool not_null{true};
@@ -78,6 +74,15 @@ std::shared_ptr<Analyzer::Expr> make_composite_equals(
                                              kONE,
                                              std::make_shared<Analyzer::ColumnVarTuple>(lhs_tuple),
                                              std::make_shared<Analyzer::ColumnVarTuple>(rhs_tuple));
+}
+
+// Create an equals expression with column tuple operands out of regular equals expressions.
+std::shared_ptr<Analyzer::Expr> make_composite_equals(
+    const std::vector<std::shared_ptr<Analyzer::Expr>>& crt_coalesced_quals) {
+  if (crt_coalesced_quals.size() == 1) {
+    return crt_coalesced_quals.front();
+  }
+  return make_composite_equals_impl(crt_coalesced_quals);
 }
 
 }  // namespace
@@ -105,4 +110,10 @@ std::list<std::shared_ptr<Analyzer::Expr>> combine_equi_join_conditions(
     coalesced_quals.push_back(make_composite_equals(crt_coalesced_quals));
   }
   return coalesced_quals;
+}
+
+std::shared_ptr<Analyzer::BinOper> coalesce_singleton_equi_join(const std::shared_ptr<Analyzer::BinOper>& join_qual) {
+  std::vector<std::shared_ptr<Analyzer::Expr>> singleton_qual_list;
+  singleton_qual_list.push_back(join_qual);
+  return make_composite_equals_impl(singleton_qual_list);
 }

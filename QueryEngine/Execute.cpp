@@ -2334,8 +2334,18 @@ Executor::JoinInfo Executor::chooseJoinType(const std::list<std::shared_ptr<Anal
           join_hash_table = BaselineJoinHashTable::getInstance(
               qual_bin_oper, query_infos, ra_exe_unit, memory_level, device_count, visited_tables, this);
         } else {
-          join_hash_table = JoinHashTable::getInstance(
-              qual_bin_oper, query_infos, ra_exe_unit, memory_level, device_count, visited_tables, this);
+          try {
+            join_hash_table = JoinHashTable::getInstance(
+                qual_bin_oper, query_infos, ra_exe_unit, memory_level, device_count, visited_tables, this);
+          } catch (TooManyHashEntries&) {
+            join_hash_table = BaselineJoinHashTable::getInstance(coalesce_singleton_equi_join(qual_bin_oper),
+                                                                 query_infos,
+                                                                 ra_exe_unit,
+                                                                 memory_level,
+                                                                 device_count,
+                                                                 visited_tables,
+                                                                 this);
+          }
         }
         CHECK(join_hash_table);
         std::set<int> curr_rte_idx_set;
