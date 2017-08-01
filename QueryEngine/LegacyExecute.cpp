@@ -692,7 +692,7 @@ ResultRows Executor::execute(const Planner::RootPlan* root_plan,
       dbObject.setPrivileges(privs);
       std::vector<DBObject> privObjects;
       privObjects.push_back(dbObject);
-      if (!sys_cat.checkPrivileges(user_metadata, privObjects)) {
+      if (cat.isAccessPrivCheckEnabled() && !sys_cat.checkPrivileges(user_metadata, privObjects)) {
         throw std::runtime_error("Violation of access privileges: user " + user_metadata.userName +
                                  " has no insert privileges for table " + td->tableName + ".");
         break;

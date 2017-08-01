@@ -314,11 +314,9 @@ void SysCatalog::populateDBObjectKey(DBObject& object, const Catalog_Namespace::
       break;
     }
     case (ColumnDBObjectType): {
-      // TBD - populate object key for column
       break;
     }
     case (DashboardDBObjectType): {
-      // TBD - populate object key for dashboard
       break;
     }
     default: { CHECK(false); }
@@ -332,8 +330,7 @@ void SysCatalog::createDBObject(const UserMetadata& user,
   // this api may be reused later to create DBDatabaseObject as well (just pass an extra parameter DBObjectType)
   Role* user_rl = getMetadataForUserRole(user.userId);
   if (!user_rl) {
-    if (!getMetadataForRole(MAPD_DEFAULT_ROOT_USER_ROLE)) {  // TBD - may clean this up after save/restore role related
-                                                             // data in sglite DB
+    if (!getMetadataForRole(MAPD_DEFAULT_ROOT_USER_ROLE)) {
       createDefaultMapdRoles();
     }
     if (user.isSuper) {
@@ -494,8 +491,7 @@ bool SysCatalog::checkPrivileges(const UserMetadata& user, std::vector<DBObject>
   }
   Role* user_rl = getMetadataForUserRole(user.userId);
   if (!user_rl) {
-    if (!getMetadataForRole(MAPD_DEFAULT_ROOT_USER_ROLE)) {  // TBD - may clean this up after save/restore role related
-                                                             // data in sglite DB
+    if (!getMetadataForRole(MAPD_DEFAULT_ROOT_USER_ROLE)) {
       createDefaultMapdRoles();
     }
     if (user.isSuper) {

@@ -303,24 +303,26 @@ string Calcite::process(const Catalog_Namespace::SessionInfo& session_info,
   if (!is_explain) {
     // TODO MAT we need to extend the output from calcite to include views
     // basically add a structure that returns all objects even if it is explain
-    // secirity requires explains to be restricted in real life
+    // security requires explains to be restricted in real life
 
     Catalog_Namespace::Catalog& catalog = session_info.get_catalog();
-    std::vector<DBObject> privObjects;
-    std::vector<std::string> v_db_obj = get_db_objects(ra);
-    for (size_t i = 0; i < v_db_obj.size(); i++) {
-      DBObject dbObject(v_db_obj[i], TableDBObjectType);
-      DBObjectKey dbObjectKey = {catalog.get_currentDB().dbId,
-                                 catalog.getMetadataForTable(dbObject.getName())->tableId};
-      dbObject.setObjectKey(dbObjectKey);
-      std::vector<bool> privs{true, false, false};  // SELECT
-      dbObject.setPrivileges(privs);
-      privObjects.push_back(dbObject);
-    }
-    if (!(static_cast<Catalog_Namespace::SysCatalog&>(catalog))
-             .checkPrivileges(session_info.get_currentUser(), privObjects)) {
-      throw std::runtime_error("Violation of access privileges: user " + session_info.get_currentUser().userName +
-                               " has no proper select privileges.");
+    if (catalog.isAccessPrivCheckEnabled()) {
+      std::vector<DBObject> privObjects;
+      std::vector<std::string> v_db_obj = get_db_objects(ra);
+      for (size_t i = 0; i < v_db_obj.size(); i++) {
+        DBObject dbObject(v_db_obj[i], TableDBObjectType);
+        DBObjectKey dbObjectKey = {catalog.get_currentDB().dbId,
+                                   catalog.getMetadataForTable(dbObject.getName())->tableId};
+        dbObject.setObjectKey(dbObjectKey);
+        std::vector<bool> privs{true, false, false};  // SELECT
+        dbObject.setPrivileges(privs);
+        privObjects.push_back(dbObject);
+      }
+      if (!(static_cast<Catalog_Namespace::SysCatalog&>(catalog))
+               .checkPrivileges(session_info.get_currentUser(), privObjects)) {
+        throw std::runtime_error("Violation of access privileges: user " + session_info.get_currentUser().userName +
+                                 " has no proper select privileges.");
+      }
     }
   }
 

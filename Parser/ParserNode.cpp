@@ -2258,16 +2258,17 @@ void CopyTableStmt::execute(
   // check access privileges
   std::vector<DBObject> privObjects;
   DBObject dbObject(td->tableName, TableDBObjectType);
-  DBObjectKey dbObjectKey = {session.get_catalog().get_currentDB().dbId,
-                             session.get_catalog().getMetadataForTable(dbObject.getName())->tableId};
+  DBObjectKey dbObjectKey = {catalog.get_currentDB().dbId, catalog.getMetadataForTable(dbObject.getName())->tableId};
   dbObject.setObjectKey(dbObjectKey);
   std::vector<bool> privs{false, true, false};  // INSERT
   dbObject.setPrivileges(privs);
   privObjects.push_back(dbObject);
-  if (!(static_cast<Catalog_Namespace::SysCatalog&>(session.get_catalog()))
-           .checkPrivileges(session.get_currentUser(), privObjects)) {
-    throw std::runtime_error("Violation of access privileges: user " + session.get_currentUser().userName +
-                             " has no insert privileges for table " + td->tableName + ".");
+  if (catalog.isAccessPrivCheckEnabled()) {
+    if (!(static_cast<Catalog_Namespace::SysCatalog&>(catalog))
+             .checkPrivileges(session.get_currentUser(), privObjects)) {
+      throw std::runtime_error("Violation of access privileges: user " + session.get_currentUser().userName +
+                               " has no insert privileges for table " + td->tableName + ".");
+    }
   }
 
   auto file_paths = mapd_glob(*file_pattern);
