@@ -2192,6 +2192,23 @@ void TruncateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   if (td == nullptr) {
     throw std::runtime_error("Table " + *table + " does not exist.");
   }
+
+  // check access privileges
+  if (catalog.isAccessPrivCheckEnabled()) {
+    std::vector<DBObject> privObjects;
+    DBObject dbObject(*table, TableDBObjectType);
+    DBObjectKey dbObjectKey = {catalog.get_currentDB().dbId, td->tableId};
+    dbObject.setObjectKey(dbObjectKey);
+    std::vector<bool> privs{false, true, false};  // INSERT, which is being used for COPY/IMPORT/etc as well
+    dbObject.setPrivileges(privs);
+    privObjects.push_back(dbObject);
+    if (!(static_cast<Catalog_Namespace::SysCatalog&>(catalog))
+             .checkPrivileges(session.get_currentUser(), privObjects)) {
+      throw std::runtime_error("Table " + *table + " will not be trancated. User " +
+                               session.get_currentUser().userName + " has no proper privileges.");
+    }
+  }
+
   if (td->isView)
     throw std::runtime_error(*table + " is a view.  Cannot Truncate.");
   catalog.truncateTable(td);
@@ -2256,18 +2273,18 @@ void CopyTableStmt::execute(
     throw std::runtime_error("Table " + *table + " does not exist.");
 
   // check access privileges
-  std::vector<DBObject> privObjects;
-  DBObject dbObject(td->tableName, TableDBObjectType);
-  DBObjectKey dbObjectKey = {catalog.get_currentDB().dbId, catalog.getMetadataForTable(dbObject.getName())->tableId};
-  dbObject.setObjectKey(dbObjectKey);
-  std::vector<bool> privs{false, true, false};  // INSERT
-  dbObject.setPrivileges(privs);
-  privObjects.push_back(dbObject);
   if (catalog.isAccessPrivCheckEnabled()) {
+    std::vector<DBObject> privObjects;
+    DBObject dbObject(*table, TableDBObjectType);
+    DBObjectKey dbObjectKey = {catalog.get_currentDB().dbId, td->tableId};
+    dbObject.setObjectKey(dbObjectKey);
+    std::vector<bool> privs{false, true, false};  // INSERT
+    dbObject.setPrivileges(privs);
+    privObjects.push_back(dbObject);
     if (!(static_cast<Catalog_Namespace::SysCatalog&>(catalog))
              .checkPrivileges(session.get_currentUser(), privObjects)) {
       throw std::runtime_error("Violation of access privileges: user " + session.get_currentUser().userName +
-                               " has no insert privileges for table " + td->tableName + ".");
+                               " has no insert privileges for table " + *table + ".");
     }
   }
 
