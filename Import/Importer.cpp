@@ -280,18 +280,28 @@ void parseStringArray(const std::string& s, const CopyParams& copy_params, std::
     return;
   }
   if (s[0] != copy_params.array_begin || s[s.size() - 1] != copy_params.array_end) {
-    LOG(WARNING) << "Malformed array: " << s;
-    return;
+    throw std::runtime_error("Malformed Array :" + s);
   }
   size_t last = 1;
   for (size_t i = s.find(copy_params.array_delim, 1); i != std::string::npos;
        i = s.find(copy_params.array_delim, last)) {
-    if (i > last)  // if not empty string - disallow empty strings for now
+    if (i > last) {  // if not empty string - disallow empty strings for now
+      if (s.substr(last, i - last).length() > StringDictionary::MAX_STRLEN)
+        throw std::runtime_error("Array String too long : " + std::to_string(s.substr(last, i - last).length()) +
+                                 " max is " + std::to_string(StringDictionary::MAX_STRLEN));
+
       string_vec.push_back(s.substr(last, i - last));
+    }
     last = i + 1;
   }
-  if (s.size() - 1 > last)  // if not empty string - disallow empty strings for now
+  if (s.size() - 1 > last) {  // if not empty string - disallow empty strings for now
+    if (s.substr(last, s.size() - 1 - last).length() > StringDictionary::MAX_STRLEN)
+      throw std::runtime_error("Array String too long : " +
+                               std::to_string(s.substr(last, s.size() - 1 - last).length()) + " max is " +
+                               std::to_string(StringDictionary::MAX_STRLEN));
+
     string_vec.push_back(s.substr(last, s.size() - 1 - last));
+  }
 }
 
 void addBinaryStringArray(const TDatum& datum, std::vector<std::string>& string_vec) {
@@ -438,8 +448,13 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
         if (cd->columnType.get_notnull())
           throw std::runtime_error("NULL for column " + cd->columnName);
         addString(std::string());
-      } else
+      } else {
+        if (val.length() > StringDictionary::MAX_STRLEN)
+          throw std::runtime_error("String too long for column " + cd->columnName + " was " +
+                                   std::to_string(val.length()) + " max is " +
+                                   std::to_string(StringDictionary::MAX_STRLEN));
         addString(val);
+      }
       break;
     }
     case kTIME:
