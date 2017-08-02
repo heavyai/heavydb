@@ -34,7 +34,8 @@ const int PAGE_SIZE = getpagesize();
 
 size_t file_size(const int fd) {
   struct stat buf;
-  fstat(fd, &buf);
+  int err = fstat(fd, &buf);
+  CHECK_EQ(0, err);
   return buf.st_size;
 }
 
