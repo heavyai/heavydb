@@ -2486,25 +2486,25 @@ void import_hash_join_test() {
   g_sqlite_comparator.query(drop_old_test);
   const std::string create_test{
 #ifdef ENABLE_MULTIFRAG_JOIN
-      "CREATE TABLE hash_join_test(x int not null, str text encoding dict) WITH (fragment_size=2);"
+      "CREATE TABLE hash_join_test(x int not null, str text encoding dict, t BIGINT) WITH (fragment_size=2);"
 #else
-      "CREATE TABLE hash_join_test(x int not null, str text encoding dict) WITH (fragment_size=3);"
+      "CREATE TABLE hash_join_test(x int not null, str text encoding dict, t BIGINT) WITH (fragment_size=3);"
 #endif
   };
   run_ddl_statement(create_test);
-  g_sqlite_comparator.query("CREATE TABLE hash_join_test(x int not null, str text);");
+  g_sqlite_comparator.query("CREATE TABLE hash_join_test(x int not null, str text, t BIGINT);");
   {
-    const std::string insert_query{"INSERT INTO hash_join_test VALUES(7, 'foo');"};
+    const std::string insert_query{"INSERT INTO hash_join_test VALUES(7, 'foo', 1001);"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
   {
-    const std::string insert_query{"INSERT INTO hash_join_test VALUES(8, 'bar');"};
+    const std::string insert_query{"INSERT INTO hash_join_test VALUES(8, 'bar', 5000000000);"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
   {
-    const std::string insert_query{"INSERT INTO hash_join_test VALUES(9, 'the');"};
+    const std::string insert_query{"INSERT INTO hash_join_test VALUES(9, 'the', 1002);"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
@@ -2743,6 +2743,7 @@ TEST(Select, Joins) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     c("SELECT COUNT(*) FROM test, test_inner WHERE test.x = test_inner.x;", dt);
+    c("SELECT COUNT(*) FROM test, hash_join_test WHERE test.t = hash_join_test.t;", dt);
     c("SELECT COUNT(*) FROM test, test_inner WHERE test.x < test_inner.x + 1;", dt);
     c("SELECT test_inner.x, COUNT(*) AS n FROM test, test_inner WHERE test.x = test_inner.x GROUP BY test_inner.x "
       "ORDER BY n;",
