@@ -363,7 +363,7 @@ public class MetaConnect {
     }
     if (isView(tableName)) {
       td.setView_sqlIsSet(true);
-      td.setView_sql(getViewSql(id));
+      td.setView_sql(getViewSqlViaSql(id));
     }
     return td;
   }
@@ -435,43 +435,51 @@ public class MetaConnect {
     return (viewFlag == 1);
   }
 
-  public String getViewSql(String tableName) {
+  private String getViewSql(String tableName) {
+    String sqlText;
     if (mapdPort == -1) {
       // use sql
       connectToDBCatalog();
-      String sql = getViewSql(getTableId(tableName));
+      sqlText = getViewSqlViaSql(getTableId(tableName));
       disconnectFromDBCatalog();
-      return sql;
+    } else {
+      // use thrift direct to local server
+      try {
+        TProtocol protocol = null;
+
+        TTransport transport = new TSocket("localhost", mapdPort);
+        transport.open();
+        protocol = new TBinaryProtocol(transport);
+
+        MapD.Client client = new MapD.Client(protocol);
+
+        TTableDetails td = client.get_table_details(currentUser.getSession(), tableName);
+
+        transport.close();
+
+        sqlText = td.getView_sql();
+
+      } catch (TTransportException ex) {
+        MAPDLOGGER.error(ex.toString());
+        throw new RuntimeException(ex.toString());
+      } catch (TMapDException ex) {
+        MAPDLOGGER.error(ex.toString());
+        throw new RuntimeException(ex.toString());
+      } catch (TException ex) {
+        MAPDLOGGER.error(ex.toString());
+        throw new RuntimeException(ex.toString());
+      }
     }
-    // use thrift direct to local server
-    try {
-      TProtocol protocol = null;
-
-      TTransport transport = new TSocket("localhost", mapdPort);
-      transport.open();
-      protocol = new TBinaryProtocol(transport);
-
-      MapD.Client client = new MapD.Client(protocol);
-
-      TTableDetails td = client.get_table_details(currentUser.getSession(), tableName);
-
-      transport.close();
-
-      return td.getView_sql();
-
-    } catch (TTransportException ex) {
-      MAPDLOGGER.error(ex.toString());
-      throw new RuntimeException(ex.toString());
-    } catch (TMapDException ex) {
-      MAPDLOGGER.error(ex.toString());
-      throw new RuntimeException(ex.toString());
-    } catch (TException ex) {
-      MAPDLOGGER.error(ex.toString());
-      throw new RuntimeException(ex.toString());
+    /* return string without the sqlite's trailing semicolon */
+    if (sqlText.charAt(sqlText.length() - 1) == ';') {
+      return (sqlText.substring(0, sqlText.length() - 1));
+    } else {
+      return (sqlText);
     }
   }
 
-  public String getViewSql(int tableId) {
+  // we assume there is already a DB connection here
+  private String getViewSqlViaSql(int tableId) {
     Statement stmt;
     ResultSet rs;
     String sqlText = "";
@@ -496,12 +504,7 @@ public class MetaConnect {
       MAPDLOGGER.error(err);
       throw new RuntimeException(err);
     }
-    /* return string without the sqlite's trailing semicolon */
-    if (sqlText.charAt(sqlText.length() - 1) == ';') {
-      return (sqlText.substring(0, sqlText.length() - 1));
-    } else {
-      return (sqlText);
-    }
+    return sqlText;
   }
 
   private TDatumType typeToThrift(int type) {
