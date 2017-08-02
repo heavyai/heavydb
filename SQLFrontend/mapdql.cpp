@@ -412,25 +412,24 @@ void process_backslash_commands(char* command, ClientContext& context) {
         }
         std::string encoding;
         if (p.col_type.type == TDatumType::STR) {
-          encoding = (p.col_type.encoding == 0 ? " ENCODING NONE"
-                                               : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
-                                                     std::to_string(p.col_type.comp_param) + ")");
+          encoding =
+              (p.col_type.encoding == 0 ? " ENCODING NONE" : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
+                                                                 std::to_string(p.col_type.comp_param) + ")");
 
         } else {
-          encoding = (p.col_type.encoding == 0 ? ""
-                                               : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
-                                                     std::to_string(p.col_type.comp_param) + ")");
+          encoding = (p.col_type.encoding == 0 ? "" : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
+                                                          std::to_string(p.col_type.comp_param) + ")");
         }
         std::cout << comma_or_blank << p.col_name << " " << thrift_to_name(p.col_type)
                   << (p.col_type.nullable ? "" : " NOT NULL") << encoding;
         comma_or_blank = ",\n";
       }
-      const auto keys_with_spec = unserialize_key_metainfo(table_details.key_metainfo);
-      for (const auto& key_with_spec : keys_with_spec) {
-        std::cout << ",\n" << key_with_spec;
-      }
-      // push final "\n";
       if (table_details.view_sql.empty()) {
+        const auto keys_with_spec = unserialize_key_metainfo(table_details.key_metainfo);
+        for (const auto& key_with_spec : keys_with_spec) {
+          std::cout << ",\n" << key_with_spec;
+        }
+        // push final ")\n";
         std::cout << ")\n";
         comma_or_blank = "";
         std::string frag = "";
