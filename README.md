@@ -248,7 +248,7 @@ The Java server lib directory containing `libjvm.so` must also be added to your 
 
 ## Ubuntu 16.04, 16.10
 
-Most build dependencies required by MapD Core are available via APT. Thrift, Blosc, and Folly must be built manually. The following will install all required dependencies and build the ones not available in the APT repositories.
+Most build dependencies required by MapD Core are available via APT. Thrift, Blosc, and Folly must be built manually. The following will install all required dependencies and build the ones not available in the APT repositories. Be sure to run from the top level of the `mapd-core` repository so that the paths to the patch files are correct.
 
     sudo apt update
     sudo apt install -y \
@@ -289,11 +289,15 @@ Most build dependencies required by MapD Core are available via APT. Thrift, Blo
         autoconf \
         autoconf-archive
 
+    cd scripts
+
     sudo apt build-dep -y thrift-compiler
     VERS=0.10.0
     wget http://apache.claz.org/thrift/$VERS/thrift-$VERS.tar.gz
     tar xvf thrift-$VERS.tar.gz
     pushd thrift-$VERS
+    patch -p1 < ../thrift-3821-tmemorybuffer-overflow-check.patch
+    patch -p1 < ../thrift-3821-tmemorybuffer-overflow-test.patch
     ./configure \
         --with-lua=no \
         --with-python=no \

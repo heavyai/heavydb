@@ -1,0 +1,28 @@
+From af851cb570c70cef833d764dbfacfc5961031f86 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Alex=20=C5=9Euhan?= <alex.suhan@gmail.com>
+Date: Thu, 3 Aug 2017 12:28:17 -0700
+Subject: [PATCH] THRIFT-3821 Check for overflow on buffer resize in
+ TMemoryBuffer
+
+---
+ lib/cpp/src/thrift/transport/TBufferTransports.cpp | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/lib/cpp/src/thrift/transport/TBufferTransports.cpp b/lib/cpp/src/thrift/transport/TBufferTransports.cpp
+index 700bdd527a..1633a3cd24 100644
+--- a/lib/cpp/src/thrift/transport/TBufferTransports.cpp
++++ b/lib/cpp/src/thrift/transport/TBufferTransports.cpp
+@@ -361,9 +361,12 @@ void TMemoryBuffer::ensureCanWrite(uint32_t len) {
+   }
+
+   // Grow the buffer as necessary.
+-  uint32_t new_size = bufferSize_;
++  uint64_t new_size = bufferSize_;
+   while (len > avail) {
+     new_size = new_size > 0 ? new_size * 2 : 1;
++    if (new_size > std::numeric_limits<uint32_t>::max()) {
++      throw TTransportException("Internal buffer size exceeded 2GB");
++    }
+     avail = available_write() + (new_size - bufferSize_);
+   }
+

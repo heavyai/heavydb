@@ -1,0 +1,29 @@
+From 457b7f5be06c57e8a0f0adf33c3c43d031e21991 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Alex=20=C5=9Euhan?= <alex.suhan@gmail.com>
+Date: Thu, 3 Aug 2017 11:45:31 -0700
+Subject: [PATCH] THRIFT-3821 Test for overflow on buffer resize in
+ TMemoryBuffer
+
+---
+ lib/cpp/test/TMemoryBufferTest.cpp | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/lib/cpp/test/TMemoryBufferTest.cpp b/lib/cpp/test/TMemoryBufferTest.cpp
+index 84103e3f6c..9a2d2085c7 100644
+--- a/lib/cpp/test/TMemoryBufferTest.cpp
++++ b/lib/cpp/test/TMemoryBufferTest.cpp
+@@ -116,4 +116,14 @@ BOOST_AUTO_TEST_CASE(test_exceptions) {
+   BOOST_CHECK_NO_THROW(buf2.write((const uint8_t*)"bar", 3));
+ }
+
++BOOST_AUTO_TEST_CASE(test_over_two_gb) {
++  TMemoryBuffer buf;
++  std::vector<uint8_t> small(1);
++  std::vector<uint8_t> one_gb(1073741824);
++
++  buf.write(&small[0], small.size());
++  buf.write(&one_gb[0], one_gb.size());
++  BOOST_CHECK_THROW(buf.write(&one_gb[0], one_gb.size()), TTransportException);
++}
++
+ BOOST_AUTO_TEST_SUITE_END()
