@@ -1141,10 +1141,17 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createSortInputWorkUnit(const RelSort* 
   SortInfo sort_info{order_entries, sort_algorithm, limit, offset};
   auto source_work_unit = createWorkUnit(source, sort_info, just_explain);
   const auto& source_exe_unit = source_work_unit.exe_unit;
-  if (source_exe_unit.groupby_exprs.size() == 1 && source_exe_unit.groupby_exprs.front() &&
-      speculative_topn_blacklist_.contains(source_exe_unit.groupby_exprs.front(), first_oe_is_desc(order_entries))) {
-    sort_algorithm = SortAlgorithm::Default;
+  if (source_exe_unit.groupby_exprs.size() == 1) {
+    if (!source_exe_unit.groupby_exprs.front()) {
+      sort_algorithm = SortAlgorithm::StreamingTopN;
+    } else {
+      if (speculative_topn_blacklist_.contains(source_exe_unit.groupby_exprs.front(),
+                                               first_oe_is_desc(order_entries))) {
+        sort_algorithm = SortAlgorithm::Default;
+      }
+    }
   }
+
   sort->setOutputMetainfo(source->getOutputMetainfo());
   // NB: the `body` field of the returned `WorkUnit` needs to be the `source` node,
   // not the `sort`. The aggregator needs the pre-sorted result from leaves.

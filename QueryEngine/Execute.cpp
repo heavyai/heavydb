@@ -2401,7 +2401,18 @@ llvm::Value* Executor::castToIntPtrTyIn(llvm::Value* val, const size_t bitWidth)
   CHECK(val->getType()->isPointerTy());
 
   const auto val_ptr_type = static_cast<llvm::PointerType*>(val->getType());
-  const auto val_width = val_ptr_type->getElementType()->getIntegerBitWidth();
+  const auto val_type = val_ptr_type->getElementType();
+  size_t val_width = 0;
+  if (val_type->isIntegerTy()) {
+    val_width = val_type->getIntegerBitWidth();
+  } else {
+    if (val_type->isFloatTy()) {
+      val_width = 32;
+    } else {
+      CHECK(val_type->isDoubleTy());
+      val_width = 64;
+    }
+  }
   CHECK_LT(size_t(0), val_width);
   if (bitWidth == val_width) {
     return val;

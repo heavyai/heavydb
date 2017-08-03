@@ -22,6 +22,7 @@
 #include "QueryRewrite.h"
 #include "RelAlgExecutionDescriptor.h"
 #include "SpeculativeTopN.h"
+#include "StreamingTopN.h"
 #include "../Shared/scope.h"
 
 #include <ctime>

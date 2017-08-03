@@ -120,6 +120,9 @@ struct QueryMemoryDescriptor {
   size_t getBufferSizeQuad(const ExecutorDeviceType device_type) const;
   size_t getSmallBufferSizeQuad() const;
 
+  size_t getBufferSizeBytes(const RelAlgExecutionUnit& ra_exe_unit,
+                            const unsigned thread_count,
+                            const ExecutorDeviceType device_type) const;
   size_t getBufferSizeBytes(const ExecutorDeviceType device_type) const;
   size_t getSmallBufferSizeBytes() const;
 

@@ -235,8 +235,16 @@ class QueryExecutionContext : boost::noncopyable {
                                                const bool hoist_literals,
                                                const bool is_group_by) const;
 
+  std::pair<CUdeviceptr, CUdeviceptr> prepareTopNHeapsDevBuffer(Data_Namespace::DataMgr* data_mgr,
+                                                                const CUdeviceptr init_agg_vals_dev_ptr,
+                                                                const size_t n,
+                                                                const int device_id,
+                                                                const unsigned block_size_x,
+                                                                const unsigned grid_size_x) const;
+
   GpuQueryMemory prepareGroupByDevBuffer(Data_Namespace::DataMgr* data_mgr,
                                          RenderAllocator* render_allocator,
+                                         const RelAlgExecutionUnit& ra_exe_unit,
                                          const CUdeviceptr init_agg_vals_dev_ptr,
                                          const int device_id,
                                          const unsigned block_size_x,
@@ -282,6 +290,7 @@ class QueryExecutionContext : boost::noncopyable {
   friend void copy_group_by_buffers_from_gpu(Data_Namespace::DataMgr* data_mgr,
                                              const QueryExecutionContext* query_exe_context,
                                              const GpuQueryMemory& gpu_query_mem,
+                                             const RelAlgExecutionUnit& ra_exe_unit,
                                              const unsigned block_size_x,
                                              const unsigned grid_size_x,
                                              const int device_id,
@@ -357,6 +366,10 @@ class GroupByAndAggregate {
   void addTransientStringLiterals();
 
   CountDistinctDescriptors initCountDistinctDescriptors();
+
+  llvm::Value* codegenOutputSlot(llvm::Value* groups_buffer,
+                                 const CompilationOptions& co,
+                                 DiamondCodegen& diamond_codegen);
 
   std::tuple<llvm::Value*, llvm::Value*> codegenGroupBy(const CompilationOptions& co, DiamondCodegen& codegen);
 

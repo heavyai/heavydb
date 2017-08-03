@@ -33,7 +33,7 @@
 #include <memory>
 #include <vector>
 
-enum class SortAlgorithm { Default, SpeculativeTopN };
+enum class SortAlgorithm { Default, SpeculativeTopN, StreamingTopN };
 
 namespace Analyzer {
 

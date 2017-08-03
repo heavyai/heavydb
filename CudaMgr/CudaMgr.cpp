@@ -227,9 +227,13 @@ void CudaMgr::copyDeviceToDevice(int8_t* destPtr,
 }
 
 void CudaMgr::zeroDeviceMem(int8_t* devicePtr, const size_t numBytes, const int deviceNum) {
+  setDeviceMem(devicePtr, 0, numBytes, deviceNum);
+}
+
+void CudaMgr::setDeviceMem(int8_t* devicePtr, const unsigned char uc, const size_t numBytes, const int deviceNum) {
 #ifdef HAVE_CUDA
   setContext(deviceNum);
-  checkError(cuMemsetD8(reinterpret_cast<CUdeviceptr>(devicePtr), 0, numBytes));
+  checkError(cuMemsetD8(reinterpret_cast<CUdeviceptr>(devicePtr), uc, numBytes));
 #endif
 }
 
