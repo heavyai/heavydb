@@ -2773,7 +2773,7 @@ TEST(Select, Joins) {
     c("SELECT COUNT(*) FROM test, join_test WHERE test.str = join_test.dup_str;", dt);
     // Intentionally duplicate previous string join to cover hash table building.
     c("SELECT COUNT(*) FROM test, join_test WHERE test.str = join_test.dup_str;", dt);
-    c("SELECT test.x, emptytab. x FROM test, emptytab WHERE test.x = emptytab. x;", dt);
+    c("SELECT test.x, emptytab.x FROM test, emptytab WHERE test.x = emptytab.x;", dt);
     c("SELECT COUNT(*) FROM test, emptytab GROUP BY test.x;", dt);
     ASSERT_EQ(
         int64_t(3),
@@ -3650,7 +3650,7 @@ int create_and_populate_tables() {
     run_ddl_statement(drop_old_empty);
     g_sqlite_comparator.query(drop_old_empty);
     const std::string create_empty{
-        "CREATE TABLE emptytab(x int, y int not null, t bigint not null, f float not null, d double not null, dd "
+        "CREATE TABLE emptytab(x int not null, y int, t bigint not null, f float not null, d double not null, dd "
         "decimal(10, 2) not null, ts timestamp)"};
     run_ddl_statement(create_empty + " WITH (partitions='REPLICATED');");
     g_sqlite_comparator.query(create_empty + ";");

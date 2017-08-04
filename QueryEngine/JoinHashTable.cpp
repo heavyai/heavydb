@@ -102,10 +102,8 @@ std::pair<const Analyzer::ColumnVar*, const Analyzer::ColumnVar*> get_cols(
 // Number of entries required for the given range.
 size_t get_hash_entry_count(const ExpressionRange& col_range) {
   if (col_range.getIntMin() > col_range.getIntMax()) {
-    // Should only happen for all-nulls columns
     CHECK_EQ(col_range.getIntMin(), int64_t(0));
     CHECK_EQ(col_range.getIntMax(), int64_t(-1));
-    CHECK(col_range.hasNulls());
     return 0;
   }
   return col_range.getIntMax() - col_range.getIntMin() + 1;
