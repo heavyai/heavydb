@@ -625,7 +625,6 @@ void StringDictionary::invalidateInvertedIndex() noexcept {
 char* StringDictionary::CANARY_BUFFER{nullptr};
 
 bool StringDictionary::checkpoint() noexcept {
-  CHECK(!isTemp_);
   if (client_) {
     try {
       return client_->checkpoint();
@@ -633,6 +632,7 @@ bool StringDictionary::checkpoint() noexcept {
       return false;
     }
   }
+  CHECK(!isTemp_);
   bool ret = true;
   ret = ret && (msync((void*)offset_map_, offset_file_size_, MS_SYNC) == 0);
   ret = ret && (msync((void*)payload_map_, payload_file_size_, MS_SYNC) == 0);
