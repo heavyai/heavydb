@@ -31,6 +31,7 @@
 #include <fstream>
 #include <termios.h>
 #include <signal.h>
+#include <math.h>
 #include <boost/algorithm/string/join.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/algorithm/string/trim.hpp>
@@ -115,7 +116,12 @@ enum ThriftService {
 
 namespace {
 
-bool thrift_with_retry(ThriftService which_service, ClientContext& context, const char* arg) {
+bool thrift_with_retry(ThriftService which_service, ClientContext& context, const char* arg, const int try_count = 1) {
+  int max_reconnect = 4;
+  int con_timeout_base = 1;
+  if (try_count > max_reconnect) {
+    return false;
+  }
   try {
     switch (which_service) {
       case kCONNECT:
@@ -176,11 +182,12 @@ bool thrift_with_retry(ThriftService which_service, ClientContext& context, cons
       context.transport.open();
       if (which_service == kDISCONNECT)
         return false;
+      sleep(con_timeout_base * pow(2, try_count));
       if (which_service != kCONNECT) {
-        if (!thrift_with_retry(kCONNECT, context, nullptr))
+        if (!thrift_with_retry(kCONNECT, context, nullptr, try_count + 1))
           return false;
       }
-      return thrift_with_retry(which_service, context, arg);
+      return thrift_with_retry(which_service, context, arg, try_count + 1);
     } catch (TException& te1) {
       std::cerr << "Thrift error: " << te1.what() << std::endl;
       return false;
