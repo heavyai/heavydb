@@ -173,6 +173,21 @@ std::vector<TargetValue> ResultSet::getRowAt(const size_t global_entry_idx,
   return row;
 }
 
+TargetValue ResultSet::getRowAt(const size_t row_idx,
+                                const size_t col_idx,
+                                const bool translate_strings,
+                                const bool decimal_to_double /* = true */) const {
+  std::lock_guard<std::mutex> lock(row_iteration_mutex_);
+  moveToBegin();
+  for (size_t i = 0; i < row_idx; ++i) {
+    auto crt_row = getNextRowUnlocked(translate_strings, decimal_to_double);
+    CHECK(!crt_row.empty());
+  }
+  auto crt_row = getNextRowUnlocked(translate_strings, decimal_to_double);
+  CHECK(!crt_row.empty());
+  return crt_row[col_idx];
+}
+
 OneIntegerColumnRow ResultSet::getOneColRow(const size_t global_entry_idx) const {
   const auto storage_lookup_result = findStorage(global_entry_idx);
   const auto storage = storage_lookup_result.storage_ptr;
@@ -224,12 +239,15 @@ bool ResultSet::isRowAtEmpty(const size_t logical_index) const {
 
 std::vector<TargetValue> ResultSet::getNextRow(const bool translate_strings, const bool decimal_to_double) const {
   std::lock_guard<std::mutex> lock(row_iteration_mutex_);
+  if (!storage_ && !just_explain_) {
+    return {};
+  }
   return getNextRowUnlocked(translate_strings, decimal_to_double);
 }
 
 std::vector<TargetValue> ResultSet::getNextRowUnlocked(const bool translate_strings,
                                                        const bool decimal_to_double) const {
-  if (!explanation_.empty()) {
+  if (just_explain_) {
     if (fetched_so_far_) {
       return {};
     }

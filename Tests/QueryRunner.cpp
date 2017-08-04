@@ -109,11 +109,11 @@ Planner::RootPlan* parse_plan(const std::string& query_str,
 
 }  // namespace
 
-ResultRows run_multiple_agg(const std::string& query_str,
-                            const std::unique_ptr<Catalog_Namespace::SessionInfo>& session,
-                            const ExecutorDeviceType device_type,
-                            const bool hoist_literals,
-                            const bool allow_loop_joins) {
+std::shared_ptr<ResultSet> run_multiple_agg(const std::string& query_str,
+                                            const std::unique_ptr<Catalog_Namespace::SessionInfo>& session,
+                                            const ExecutorDeviceType device_type,
+                                            const bool hoist_literals,
+                                            const bool allow_loop_joins) {
   const auto& cat = session->get_catalog();
   auto executor = Executor::getExecutor(cat.get_currentDB().dbId);
 

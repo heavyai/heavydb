@@ -333,8 +333,8 @@ class MapDHandler : public MapDIf {
   TColumnType create_array_column(const TDatumType::type type, const std::string& name);
   void throw_profile_exception(const std::string& error_msg);
 
-  void convert_explain(TQueryResult& _return, const ResultRows& results, const bool column_format) const;
-  void convert_result(TQueryResult& _return, const ResultRows& results, const bool column_format) const;
+  void convert_explain(TQueryResult& _return, const ResultSet& results, const bool column_format) const;
+  void convert_result(TQueryResult& _return, const ResultSet& results, const bool column_format) const;
 
   template <class R>
   void convert_rows(TQueryResult& _return,
@@ -344,7 +344,7 @@ class MapDHandler : public MapDIf {
                     const int32_t first_n) const;
 
   void create_simple_result(TQueryResult& _return,
-                            const ResultRows& results,
+                            const ResultSet& results,
                             const bool column_format,
                             const std::string label) const;
 

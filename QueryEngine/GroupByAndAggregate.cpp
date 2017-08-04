@@ -191,28 +191,26 @@ QueryExecutionContext::QueryExecutionContext(const RelAlgExecutionUnit& ra_exe_u
         small_group_by_buffers_.push_back(nullptr);
       }
     }
-    if (can_use_result_set(query_mem_desc_, device_type_)) {
 #ifdef ENABLE_MULTIFRAG_JOIN
-      const auto column_frag_offsets = get_col_frag_offsets(ra_exe_unit.target_exprs, frag_offsets);
-      const auto column_frag_sizes = get_consistent_frags_sizes(ra_exe_unit.target_exprs, consistent_frag_sizes_);
+    const auto column_frag_offsets = get_col_frag_offsets(ra_exe_unit.target_exprs, frag_offsets);
+    const auto column_frag_sizes = get_consistent_frags_sizes(ra_exe_unit.target_exprs, consistent_frag_sizes_);
 #endif
-      result_sets_.emplace_back(new ResultSet(target_exprs_to_infos(ra_exe_unit.target_exprs, query_mem_desc_),
-                                              getColLazyFetchInfo(ra_exe_unit.target_exprs),
-                                              col_buffers,
+    result_sets_.emplace_back(new ResultSet(target_exprs_to_infos(ra_exe_unit.target_exprs, query_mem_desc_),
+                                            getColLazyFetchInfo(ra_exe_unit.target_exprs),
+                                            col_buffers,
 #ifdef ENABLE_MULTIFRAG_JOIN
-                                              column_frag_offsets,
-                                              column_frag_sizes,
+                                            column_frag_offsets,
+                                            column_frag_sizes,
 #endif
-                                              device_type_,
-                                              device_id,
-                                              ResultSet::fixupQueryMemoryDescriptor(query_mem_desc_),
-                                              row_set_mem_owner_,
-                                              executor));
-      result_sets_.back()->allocateStorage(reinterpret_cast<int8_t*>(group_by_buffer),
-                                           executor_->plan_state_->init_agg_vals_);
-      for (size_t j = 1; j < step; ++j) {
-        result_sets_.emplace_back(nullptr);
-      }
+                                            device_type_,
+                                            device_id,
+                                            ResultSet::fixupQueryMemoryDescriptor(query_mem_desc_),
+                                            row_set_mem_owner_,
+                                            executor));
+    result_sets_.back()->allocateStorage(reinterpret_cast<int8_t*>(group_by_buffer),
+                                         executor_->plan_state_->init_agg_vals_);
+    for (size_t j = 1; j < step; ++j) {
+      result_sets_.emplace_back(nullptr);
     }
   }
 }
@@ -322,9 +320,7 @@ void QueryExecutionContext::initGroups(int64_t* groups_buffer,
   auto agg_bitmap_size = allocateCountDistinctBuffers(true);
   auto buffer_ptr = reinterpret_cast<int8_t*>(groups_buffer);
 
-  const auto query_mem_desc_fixedup = can_use_result_set(query_mem_desc_, device_type_)
-                                          ? ResultSet::fixupQueryMemoryDescriptor(query_mem_desc_)
-                                          : query_mem_desc_;
+  const auto query_mem_desc_fixedup = ResultSet::fixupQueryMemoryDescriptor(query_mem_desc_);
 
   if (keyless) {
     CHECK(warp_size >= 1);
@@ -472,7 +468,7 @@ RowSetPtr QueryExecutionContext::getRowSet(const RelAlgExecutionUnit& ra_exe_uni
   }
   CHECK(device_type_ == ExecutorDeviceType::GPU);
   return executor_->reduceMultiDeviceResults(
-      ra_exe_unit, results_per_sm, row_set_mem_owner_, query_mem_desc, output_columnar_, device_type_);
+      ra_exe_unit, results_per_sm, row_set_mem_owner_, query_mem_desc, output_columnar_);
 }
 
 bool QueryExecutionContext::isEmptyBin(const int64_t* group_by_buffer, const size_t bin, const size_t key_idx) const {

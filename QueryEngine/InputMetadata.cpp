@@ -78,7 +78,7 @@ bool uses_int_meta(const SQLTypeInfo& col_ti) {
          (col_ti.is_string() && col_ti.get_compression() == kENCODING_DICT);
 }
 
-std::map<int, ChunkMetadata> synthesize_metadata(const ResultRows* rows) {
+std::map<int, ChunkMetadata> synthesize_metadata(const ResultSet* rows) {
   rows->moveToBegin();
   std::vector<std::vector<std::unique_ptr<Encoder>>> dummy_encoders;
   const size_t worker_count = use_parallel_algorithms(*rows) ? cpu_threads() : 1;
@@ -125,17 +125,16 @@ std::map<int, ChunkMetadata> synthesize_metadata(const ResultRows* rows) {
   if (use_parallel_algorithms(*rows)) {
     const size_t worker_count = cpu_threads();
     std::vector<std::future<void>> compute_stats_threads;
-    const auto entry_count = rows->getResultSet()->entryCount();
+    const auto entry_count = rows->entryCount();
     for (size_t i = 0, start_entry = 0, stride = (entry_count + worker_count - 1) / worker_count;
          i < worker_count && start_entry < entry_count;
          ++i, start_entry += stride) {
       const auto end_entry = std::min(start_entry + stride, entry_count);
-      const auto rs = rows->getResultSet().get();
       compute_stats_threads.push_back(
           std::async(std::launch::async,
-                     [rs, &do_work, &dummy_encoders](const size_t start, const size_t end, const size_t worker_idx) {
+                     [rows, &do_work, &dummy_encoders](const size_t start, const size_t end, const size_t worker_idx) {
                        for (size_t i = start; i < end; ++i) {
-                         const auto crt_row = rs->getRowAtNoTranslations(i);
+                         const auto crt_row = rows->getRowAtNoTranslations(i);
                          if (!crt_row.empty()) {
                            do_work(crt_row, dummy_encoders[worker_idx]);
                          }
@@ -304,12 +303,7 @@ size_t Fragmenter_Namespace::TableInfo::getNumTuples() const {
 
 size_t Fragmenter_Namespace::TableInfo::getNumTuplesUpperBound() const {
   if (!fragments.empty() && fragments.front().resultSet) {
-    const auto result_set = fragments.front().resultSet->getResultSet();
-    if (!result_set) {
-      CHECK(fragments.front().resultSet->definitelyHasNoRows());
-      return 0;
-    }
-    return result_set->entryCount();
+    return fragments.front().resultSet->entryCount();
   }
   return numTuples;
 }

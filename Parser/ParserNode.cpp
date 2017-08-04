@@ -1972,9 +1972,9 @@ void CreateTableStmt::validate_shared_dictionary(const SharedDictionaryDef* shar
   }
 }
 
-ResultRows getResultRows(const Catalog_Namespace::SessionInfo& session,
-                         const std::string select_stmt,
-                         std::vector<TargetMetaInfo>& targets) {
+std::shared_ptr<ResultSet> getResultRows(const Catalog_Namespace::SessionInfo& session,
+                                         const std::string select_stmt,
+                                         std::vector<TargetMetaInfo>& targets) {
   auto& catalog = session.get_catalog();
 
   auto executor = Executor::getExecutor(catalog.get_currentDB().dbId);
@@ -1990,7 +1990,10 @@ ResultRows getResultRows(const Catalog_Namespace::SessionInfo& session,
   CompilationOptions co = {device_type, true, ExecutorOptLevel::LoopStrengthReduction, false};
   ExecutionOptions eo = {false, true, false, true, false, false, false, false, 10000};
   RelAlgExecutor ra_executor(executor.get(), catalog);
-  ExecutionResult result{ResultRows({}, {}, nullptr, nullptr, {}, device_type), {}};
+  ExecutionResult result{
+      std::make_shared<ResultSet>(
+          std::vector<TargetInfo>{}, ExecutorDeviceType::CPU, QueryMemoryDescriptor{}, nullptr, nullptr),
+      {}};
   result = ra_executor.executeRelAlgQuery(query_ra, co, eo, nullptr);
   targets = result.getTargetsMeta();
 
@@ -2111,14 +2114,13 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
     td.persistenceLevel = Data_Namespace::MemoryLevel::DISK_LEVEL;
   }
   catalog.createTable(td, column_descriptors, {}, true);
-  if (result_rows.definitelyHasNoRows()) {
+  if (result_rows->definitelyHasNoRows()) {
     return;
   }
   const TableDescriptor* created_td{nullptr};
   try {
-    const auto row_set_mem_owner =
-        result_rows.getResultSet() ? result_rows.getResultSet()->getRowSetMemOwner() : result_rows.getRowSetMemOwner();
-    ColumnarResults columnar_results(row_set_mem_owner, result_rows, column_descriptors.size(), logical_column_types);
+    const auto row_set_mem_owner = result_rows->getRowSetMemOwner();
+    ColumnarResults columnar_results(row_set_mem_owner, *result_rows, column_descriptors.size(), logical_column_types);
     Fragmenter_Namespace::InsertData insert_data;
     insert_data.databaseId = catalog.get_currentDB().dbId;
     created_td = catalog.getMetadataForTable(table_name_);
@@ -2743,7 +2745,7 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     }
   }
   std::vector<TargetMetaInfo> targets;
-  ResultRows results = getResultRows(session, *select_stmt, targets);
+  const auto results = getResultRows(session, *select_stmt, targets);
   TargetMetaInfo* td = targets.data();
 
   std::ofstream outfile;
@@ -2781,12 +2783,12 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     outfile << copy_params.line_delim;
   }
   while (true) {
-    const auto crt_row = results.getNextRow(true, true);
+    const auto crt_row = results->getNextRow(true, true);
     if (crt_row.empty()) {
       break;
     }
     bool not_first = false;
-    for (size_t i = 0; i < results.colCount(); ++i) {
+    for (size_t i = 0; i < results->colCount(); ++i) {
       bool is_null;
       const auto tv = crt_row[i];
       const auto scalar_tv = boost::get<ScalarTargetValue>(&tv);

@@ -95,6 +95,7 @@ ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
       host_estimator_buffer_(nullptr),
       data_mgr_(nullptr),
       none_encoded_strings_valid_(false),
+      just_explain_(false),
       cached_row_count_(-1) {}
 
 ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
@@ -131,6 +132,7 @@ ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
       host_estimator_buffer_(nullptr),
       data_mgr_(nullptr),
       none_encoded_strings_valid_(false),
+      just_explain_(false),
       cached_row_count_(-1) {
 }
 
@@ -147,6 +149,7 @@ ResultSet::ResultSet(const std::shared_ptr<const Analyzer::NDVEstimator> estimat
       host_estimator_buffer_(nullptr),
       data_mgr_(data_mgr),
       none_encoded_strings_valid_(false),
+      just_explain_(false),
       cached_row_count_(-1) {
   if (device_type == ExecutorDeviceType::GPU) {
     estimator_buffer_ =
@@ -167,6 +170,7 @@ ResultSet::ResultSet(const std::string& explanation)
       host_estimator_buffer_(nullptr),
       none_encoded_strings_valid_(false),
       explanation_(explanation),
+      just_explain_(true),
       cached_row_count_(-1) {}
 
 ResultSet::ResultSet()
@@ -178,7 +182,24 @@ ResultSet::ResultSet()
       host_estimator_buffer_(nullptr),
       data_mgr_(nullptr),
       none_encoded_strings_valid_(false),
+      just_explain_(true),
       cached_row_count_(-1) {}
+
+ResultSet::ResultSet(const std::string& image_bytes,
+                     int64_t queue_time_ms,
+                     int64_t render_time_ms,
+                     const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner)
+    : device_type_(ExecutorDeviceType::CPU),
+      device_id_(-1),
+      fetched_so_far_(0),
+      queue_time_ms_(queue_time_ms),
+      render_time_ms_(render_time_ms),
+      estimator_buffer_(nullptr),
+      host_estimator_buffer_(nullptr),
+      none_encoded_strings_valid_(false),
+      explanation_(image_bytes),
+      just_explain_(true),
+      cached_row_count_(-1){};
 
 ResultSet::~ResultSet() {
   if (storage_) {
@@ -191,6 +212,10 @@ ResultSet::~ResultSet() {
     CHECK(device_type_ == ExecutorDeviceType::CPU || estimator_buffer_);
     free(host_estimator_buffer_);
   }
+}
+
+ExecutorDeviceType ResultSet::getDeviceType() const {
+  return device_type_;
 }
 
 const ResultSetStorage* ResultSet::allocateStorage() const {
@@ -247,11 +272,11 @@ const ResultSetStorage* ResultSet::getStorage() const {
 }
 
 size_t ResultSet::colCount() const {
-  return explanation_.empty() ? targets_.size() : 1;
+  return just_explain_ ? 1 : targets_.size();
 }
 
 SQLTypeInfo ResultSet::getColType(const size_t col_idx) const {
-  if (!explanation_.empty()) {
+  if (just_explain_) {
     return SQLTypeInfo(kTEXT, false);
   }
   CHECK_LT(col_idx, targets_.size());
@@ -259,7 +284,7 @@ SQLTypeInfo ResultSet::getColType(const size_t col_idx) const {
 }
 
 size_t ResultSet::rowCount() const {
-  if (!explanation_.empty()) {
+  if (just_explain_) {
     return 1;
   }
   if (!permutation_.empty()) {
@@ -268,6 +293,9 @@ size_t ResultSet::rowCount() const {
   if (cached_row_count_ != -1) {
     CHECK_GE(cached_row_count_, 0);
     return cached_row_count_;
+  }
+  if (!storage_) {
+    return 0;
   }
   if (entryCount() > 100000) {
     return parallelRowCount();
@@ -286,7 +314,7 @@ size_t ResultSet::rowCount() const {
   return row_count;
 }
 
-void ResultSet::setCachedRowCount(const size_t row_count) {
+void ResultSet::setCachedRowCount(const size_t row_count) const {
   CHECK(cached_row_count_ == -1 || cached_row_count_ == static_cast<ssize_t>(row_count));
   cached_row_count_ = row_count;
 }
@@ -326,7 +354,7 @@ size_t ResultSet::parallelRowCount() const {
 }
 
 bool ResultSet::definitelyHasNoRows() const {
-  return !storage_ && !estimator_ && explanation_.empty();
+  return !storage_ && !estimator_ && !just_explain_;
 }
 
 const QueryMemoryDescriptor& ResultSet::getQueryMemDesc() const {
@@ -377,6 +405,10 @@ void ResultSet::setQueueTime(const int64_t queue_time) {
 
 int64_t ResultSet::getQueueTime() const {
   return queue_time_ms_;
+}
+
+int64_t ResultSet::getRenderTime() const {
+  return render_time_ms_;
 }
 
 void ResultSet::moveToBegin() const {

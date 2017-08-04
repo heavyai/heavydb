@@ -513,17 +513,15 @@ std::pair<int64_t, int32_t> Executor::reduceResults(const SQLAgg agg,
 namespace {
 
 template <typename PtrTy>
-PtrTy get_merged_result(const std::vector<std::pair<ResultPtr, std::vector<size_t>>>& results_per_device) {
+PtrTy get_merged_result(std::vector<std::pair<ResultPtr, std::vector<size_t>>>& results_per_device) {
   auto& first = boost::get<PtrTy>(results_per_device.front().first);
   CHECK(first);
-  auto copy = boost::make_unique<typename PtrTy::element_type>(*first);
-  CHECK(copy);
   for (size_t dev_idx = 1; dev_idx < results_per_device.size(); ++dev_idx) {
     const auto& next = boost::get<PtrTy>(results_per_device[dev_idx].first);
     CHECK(next);
-    copy->append(*next);
+    first->append(*next);
   }
-  return copy;
+  return std::move(first);
 }
 
 }  // namespace
@@ -532,12 +530,11 @@ ResultPtr Executor::resultsUnion(ExecutionDispatch& execution_dispatch) {
   auto& results_per_device = execution_dispatch.getFragmentResults();
   if (results_per_device.empty()) {
     const auto& ra_exe_unit = execution_dispatch.getExecutionUnit();
-    return boost::make_unique<ResultRows>(QueryMemoryDescriptor{},
-                                          ra_exe_unit.target_exprs,
-                                          nullptr,
-                                          nullptr,
-                                          std::vector<int64_t>{},
-                                          ExecutorDeviceType::CPU);
+    std::vector<TargetInfo> targets;
+    for (const auto target_expr : ra_exe_unit.target_exprs) {
+      targets.push_back(target_info(target_expr));
+    }
+    return std::make_shared<ResultSet>(targets, ExecutorDeviceType::CPU, QueryMemoryDescriptor{}, nullptr, nullptr);
   }
   typedef std::pair<ResultPtr, std::vector<size_t>> IndexedResultRows;
   std::sort(results_per_device.begin(),
@@ -566,15 +563,14 @@ RowSetPtr reduce_estimator_results(const RelAlgExecutionUnit& ra_exe_unit,
   }
   auto first = boost::get<RowSetPtr>(&results_per_device.front().first);
   CHECK(first && *first);
-  const auto result_set = (*first)->getResultSet();
+  const auto& result_set = *first;
   CHECK(result_set);
   auto estimator_buffer = result_set->getHostEstimatorBuffer();
   CHECK(estimator_buffer);
   for (size_t i = 1; i < results_per_device.size(); ++i) {
     auto next = boost::get<RowSetPtr>(&results_per_device[i].first);
     CHECK(next && *next);
-    const auto next_result_set = (*next)->getResultSet();
-    CHECK(next_result_set);
+    const auto& next_result_set = *next;
     const auto other_estimator_buffer = next_result_set->getHostEstimatorBuffer();
     for (size_t off = 0; off < ra_exe_unit.estimator->getEstimatorBufferSize(); ++off) {
       estimator_buffer[off] |= other_estimator_buffer[off];
@@ -585,42 +581,25 @@ RowSetPtr reduce_estimator_results(const RelAlgExecutionUnit& ra_exe_unit,
 
 }  // namespace
 
-// TODO(miyu): remove dt_for_all along w/ can_use_result_set
 RowSetPtr Executor::reduceMultiDeviceResults(const RelAlgExecutionUnit& ra_exe_unit,
                                              std::vector<std::pair<ResultPtr, std::vector<size_t>>>& results_per_device,
                                              std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                                              const QueryMemoryDescriptor& query_mem_desc,
-                                             const bool output_columnar,
-                                             const ExecutorDeviceType dt_for_all) const {
+                                             const bool output_columnar) const {
   if (ra_exe_unit.estimator) {
     return reduce_estimator_results(ra_exe_unit, results_per_device);
   }
 
   if (results_per_device.empty()) {
-    return boost::make_unique<ResultRows>(
-        query_mem_desc, ra_exe_unit.target_exprs, nullptr, nullptr, std::vector<int64_t>{}, ExecutorDeviceType::CPU);
+    std::vector<TargetInfo> targets;
+    for (const auto target_expr : ra_exe_unit.target_exprs) {
+      targets.push_back(target_info(target_expr));
+    }
+    return std::make_shared<ResultSet>(targets, ExecutorDeviceType::CPU, QueryMemoryDescriptor{}, nullptr, this);
   }
 
-  if (can_use_result_set(query_mem_desc, dt_for_all)) {
-    return reduceMultiDeviceResultSets(
-        results_per_device, row_set_mem_owner, ResultSet::fixupQueryMemoryDescriptor(query_mem_desc));
-  }
-
-  auto first = boost::get<RowSetPtr>(&results_per_device.front().first);
-  CHECK(first && *first);
-
-  auto reduced_results = boost::make_unique<ResultRows>(**first);
-  CHECK(reduced_results);
-
-  for (size_t i = 1; i < results_per_device.size(); ++i) {
-    auto next = boost::get<RowSetPtr>(&results_per_device[i].first);
-    CHECK(next && *next);
-    reduced_results->reduce(**next, query_mem_desc, output_columnar);
-  }
-
-  row_set_mem_owner->addLiteralStringDictProxy(lit_str_dict_proxy_);
-
-  return reduced_results;
+  return reduceMultiDeviceResultSets(
+      results_per_device, row_set_mem_owner, ResultSet::fixupQueryMemoryDescriptor(query_mem_desc));
 }
 
 RowSetPtr Executor::reduceMultiDeviceResultSets(
@@ -639,41 +618,37 @@ RowSetPtr Executor::reduceMultiDeviceResultSets(
                         size_t(0),
                         [](const size_t init, const std::pair<ResultPtr, std::vector<size_t>>& rs) {
                           const auto& r = boost::get<RowSetPtr>(rs.first);
-                          return init + r->getResultSet()->getQueryMemDesc().entry_count;
+                          return init + r->getQueryMemDesc().entry_count;
                         });
     CHECK(total_entry_count);
-    const auto first_result = first->getResultSet();
-    CHECK(first_result);
-    auto query_mem_desc = first_result->getQueryMemDesc();
+    auto query_mem_desc = first->getQueryMemDesc();
     query_mem_desc.entry_count = total_entry_count;
     reduced_results = std::make_shared<ResultSet>(
-        first_result->getTargetInfos(), ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, this);
+        first->getTargetInfos(), ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, this);
     auto result_storage = reduced_results->allocateStorage(plan_state_->init_agg_vals_);
     reduced_results->initializeStorage();
     switch (query_mem_desc.getEffectiveKeyWidth()) {
       case 4:
-        first_result->getStorage()->moveEntriesToBuffer<int32_t>(result_storage->getUnderlyingBuffer(),
-                                                                 query_mem_desc.entry_count);
+        first->getStorage()->moveEntriesToBuffer<int32_t>(result_storage->getUnderlyingBuffer(),
+                                                          query_mem_desc.entry_count);
         break;
       case 8:
-        first_result->getStorage()->moveEntriesToBuffer<int64_t>(result_storage->getUnderlyingBuffer(),
-                                                                 query_mem_desc.entry_count);
+        first->getStorage()->moveEntriesToBuffer<int64_t>(result_storage->getUnderlyingBuffer(),
+                                                          query_mem_desc.entry_count);
         break;
       default:
         CHECK(false);
     }
   } else {
-    reduced_results = first->getResultSet();
+    reduced_results = first;
   }
 
   for (size_t i = 1; i < results_per_device.size(); ++i) {
     const auto& result = boost::get<RowSetPtr>(results_per_device[i].first);
-    const auto result_set = result->getResultSet();
-    CHECK(result_set);
-    reduced_results->getStorage()->reduce(*(result_set->getStorage()));
+    reduced_results->getStorage()->reduce(*(result->getStorage()));
   }
 
-  return boost::make_unique<ResultRows>(ResultRows(reduced_results));
+  return reduced_results;
 }
 
 RowSetPtr Executor::reduceSpeculativeTopN(const RelAlgExecutionUnit& ra_exe_unit,
@@ -699,7 +674,7 @@ RowSetPtr Executor::reduceSpeculativeTopN(const RelAlgExecutionUnit& ra_exe_unit
   }
   CHECK_EQ(size_t(1), ra_exe_unit.sort_info.order_entries.size());
   const auto desc = ra_exe_unit.sort_info.order_entries.front().is_desc;
-  return m.asRows(ra_exe_unit, row_set_mem_owner, query_mem_desc, plan_state_->init_agg_vals_, this, top_n, desc);
+  return m.asRows(ra_exe_unit, row_set_mem_owner, query_mem_desc, this, top_n, desc);
 }
 
 namespace {
@@ -939,12 +914,8 @@ ResultPtr Executor::executeWorkUnit(int32_t* error_code,
       continue;
     }
     if (*error_code != 0) {
-      return boost::make_unique<ResultRows>(QueryMemoryDescriptor{},
-                                            std::vector<Analyzer::Expr*>{},
-                                            nullptr,
-                                            nullptr,
-                                            std::vector<int64_t>{},
-                                            ExecutorDeviceType::CPU);
+      return std::make_shared<ResultSet>(
+          std::vector<TargetInfo>{}, ExecutorDeviceType::CPU, QueryMemoryDescriptor{}, nullptr, this);
     }
     if (is_agg) {
       try {
@@ -955,16 +926,11 @@ ResultPtr Executor::executeWorkUnit(int32_t* error_code,
                                        execution_dispatch.outputColumnar());
       } catch (ReductionRanOutOfSlots&) {
         *error_code = ERR_OUT_OF_SLOTS;
-        return boost::make_unique<ResultRows>(query_mem_desc,
-                                              plan_state_->target_exprs_,
-                                              nullptr,
-                                              std::vector<int64_t>{},
-                                              nullptr,
-                                              0,
-                                              false,
-                                              std::vector<std::vector<const int8_t*>>{},
-                                              execution_dispatch.getDeviceType(),
-                                              -1);
+        std::vector<TargetInfo> targets;
+        for (const auto target_expr : ra_exe_unit.target_exprs) {
+          targets.push_back(target_info(target_expr));
+        }
+        return std::make_shared<ResultSet>(targets, ExecutorDeviceType::CPU, query_mem_desc, nullptr, this);
       } catch (OverflowOrUnderflow&) {
         crt_min_byte_width <<= 1;
         continue;
@@ -974,12 +940,8 @@ ResultPtr Executor::executeWorkUnit(int32_t* error_code,
 
   } while (static_cast<size_t>(crt_min_byte_width) <= sizeof(int64_t));
 
-  return boost::make_unique<ResultRows>(QueryMemoryDescriptor{},
-                                        std::vector<Analyzer::Expr*>{},
-                                        nullptr,
-                                        nullptr,
-                                        std::vector<int64_t>{},
-                                        ExecutorDeviceType::CPU);
+  return std::make_shared<ResultSet>(
+      std::vector<TargetInfo>{}, ExecutorDeviceType::CPU, QueryMemoryDescriptor{}, nullptr, this);
 }
 
 RowSetPtr Executor::executeExplain(const ExecutionDispatch& execution_dispatch) {
@@ -993,8 +955,7 @@ RowSetPtr Executor::executeExplain(const ExecutionDispatch& execution_dispatch) 
     explained_plan +=
         (std::string(llvm_ir_cpu.empty() ? "" : "\n") + "IR for the GPU:\n===============\n" + llvm_ir_gpu);
   }
-  return (g_cluster || g_use_result_set) ? boost::make_unique<ResultRows>(std::make_shared<ResultSet>(explained_plan))
-                                         : boost::make_unique<ResultRows>(explained_plan);
+  return std::make_shared<ResultSet>(explained_plan);
 }
 
 // Looks at the targets and returns a feasible device type. We only punt
@@ -1097,33 +1058,14 @@ RowSetPtr build_row_for_empty_input(const std::vector<Analyzer::Expr*>& target_e
   std::vector<TargetInfo> target_infos;
   std::vector<int64_t> entry;
   fill_entries_for_empty_input(target_infos, entry, target_exprs, query_mem_desc);
-  if (can_use_result_set(query_mem_desc, ExecutorDeviceType::CPU)) {
-    const auto executor = query_mem_desc.executor_;
-    CHECK(executor);
-    auto row_set_mem_owner = executor->getRowSetMemoryOwner();
-    CHECK(row_set_mem_owner);
-    auto rs = std::make_shared<ResultSet>(target_infos, device_type, query_mem_desc, row_set_mem_owner, executor);
-    rs->allocateStorage();
-    rs->fillOneEntry(entry);
-    return boost::make_unique<ResultRows>(rs);
-  }
-  auto result_rows = boost::make_unique<ResultRows>(
-      query_mem_desc, target_exprs, nullptr, nullptr, std::vector<int64_t>{}, ExecutorDeviceType::CPU);
-
-  result_rows->beginRow();
-  for (size_t target_idx = 0, entry_idx = 0; target_idx < target_infos.size(); ++target_idx, ++entry_idx) {
-    const auto agg_info = target_infos[target_idx];
-    CHECK(agg_info.is_agg);
-    CHECK_LT(entry_idx, entry.size());
-    if (agg_info.agg_kind == kAVG) {
-      CHECK_LT(entry_idx + 1, entry.size());
-      result_rows->addValue(entry[entry_idx], entry[entry_idx + 1]);
-      ++entry_idx;
-    } else {
-      result_rows->addValue(entry[entry_idx]);
-    }
-  }
-  return result_rows;
+  const auto executor = query_mem_desc.executor_;
+  CHECK(executor);
+  auto row_set_mem_owner = executor->getRowSetMemoryOwner();
+  CHECK(row_set_mem_owner);
+  auto rs = std::make_shared<ResultSet>(target_infos, device_type, query_mem_desc, row_set_mem_owner, executor);
+  rs->allocateStorage();
+  rs->fillOneEntry(entry);
+  return rs;
 }
 
 }  // namespace
@@ -1150,12 +1092,7 @@ RowSetPtr Executor::collectAllDeviceResults(ExecutionDispatch& execution_dispatc
   if (use_speculative_top_n(ra_exe_unit, query_mem_desc)) {
     return reduceSpeculativeTopN(ra_exe_unit, result_per_device, row_set_mem_owner, query_mem_desc);
   }
-  return reduceMultiDeviceResults(ra_exe_unit,
-                                  result_per_device,
-                                  row_set_mem_owner,
-                                  query_mem_desc,
-                                  output_columnar,
-                                  execution_dispatch.getDeviceType());
+  return reduceMultiDeviceResults(ra_exe_unit, result_per_device, row_set_mem_owner, query_mem_desc, output_columnar);
 }
 
 std::unordered_map<int, const Analyzer::BinOper*> Executor::getInnerTabIdToJoinCond() const {
@@ -1732,8 +1669,7 @@ int32_t Executor::executePlanWithoutGroupBy(const RelAlgExecutionUnit& ra_exe_un
   }
   if (ra_exe_unit.estimator) {
     CHECK(!error_code);
-    results =
-        boost::make_unique<ResultRows>(std::shared_ptr<ResultSet>(query_exe_context->estimator_result_set_.release()));
+    results = std::shared_ptr<ResultSet>(query_exe_context->estimator_result_set_.release());
     return 0;
   }
   std::vector<int64_t> reduced_outs;
@@ -1795,20 +1731,9 @@ int32_t Executor::executePlanWithoutGroupBy(const RelAlgExecutionUnit& ra_exe_un
     }
   }
 
-  RowSetPtr rows_ptr{nullptr};
-  if (can_use_result_set(query_exe_context->query_mem_desc_, device_type)) {
-    CHECK_EQ(size_t(1), query_exe_context->result_sets_.size());
-    rows_ptr = boost::make_unique<ResultRows>(std::shared_ptr<ResultSet>(query_exe_context->result_sets_[0].release()));
-  } else {
-    rows_ptr = boost::make_unique<ResultRows>(query_exe_context->query_mem_desc_,
-                                              target_exprs,
-                                              this,
-                                              query_exe_context->row_set_mem_owner_,
-                                              query_exe_context->init_agg_vals_,
-                                              device_type);
-  }
-  CHECK(rows_ptr);
-  rows_ptr->fillOneRow(reduced_outs);
+  CHECK_EQ(size_t(1), query_exe_context->result_sets_.size());
+  auto rows_ptr = std::shared_ptr<ResultSet>(query_exe_context->result_sets_[0].release());
+  rows_ptr->fillOneEntry(reduced_outs);
   results = std::move(rows_ptr);
   return error_code;
 }

@@ -30,7 +30,7 @@ namespace Data_Namespace {
 class AbstractBuffer;
 }
 
-class ResultRows;
+class ResultSet;
 
 namespace Fragmenter_Namespace {
 
@@ -104,7 +104,7 @@ class FragmentInfo {
   int physicalTableId;
   int shard;
   std::map<int, ChunkMetadata> shadowChunkMetadataMap;
-  mutable ResultRows* resultSet;
+  mutable ResultSet* resultSet;
   mutable std::shared_ptr<std::mutex> resultSetMutex;
 
  private:

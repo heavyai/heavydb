@@ -94,18 +94,6 @@
 
 #define INVALID_SESSION_ID ""
 
-std::string image_from_rendered_rows(const ResultRows& rendered_results) {
-  const auto img_row = rendered_results.getNextRow(false, false);
-  CHECK_EQ(size_t(1), img_row.size());
-  const auto& img_tv = img_row.front();
-  const auto scalar_tv = boost::get<ScalarTargetValue>(&img_tv);
-  const auto nullable_sptr = boost::get<NullableString>(scalar_tv);
-  CHECK(nullable_sptr);
-  auto sptr = boost::get<std::string>(nullable_sptr);
-  CHECK(sptr);
-  return *sptr;
-}
-
 MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
                          const std::vector<LeafHostInfo>& string_leaves,
                          const std::string& base_data_path,
@@ -1725,15 +1713,18 @@ void MapDHandler::execute_rel_alg(TQueryResult& _return,
   auto executor = Executor::getExecutor(
       cat.get_currentDB().dbId, jit_debug_ ? "/tmp" : "", jit_debug_ ? "mapdquery" : "", mapd_parameters_, nullptr);
   RelAlgExecutor ra_executor(executor.get(), cat);
-  ExecutionResult result{ResultRows({}, {}, nullptr, nullptr, {}, executor_device_type), {}};
+  ExecutionResult result{
+      std::make_shared<ResultSet>(
+          std::vector<TargetInfo>{}, ExecutorDeviceType::CPU, QueryMemoryDescriptor{}, nullptr, nullptr),
+      {}};
   _return.execution_time_ms +=
       measure<>::execution([&]() { result = ra_executor.executeRelAlgQuery(query_ra, co, eo, nullptr); });
   // reduce execution time by the time spent during queue waiting
-  _return.execution_time_ms -= result.getRows().getQueueTime();
+  _return.execution_time_ms -= result.getRows()->getQueueTime();
   if (just_explain) {
-    convert_explain(_return, result.getRows(), column_format);
+    convert_explain(_return, *result.getRows(), column_format);
   } else {
-    convert_rows(_return, result.getTargetsMeta(), result.getRows(), column_format, first_n);
+    convert_rows(_return, result.getTargetsMeta(), *result.getRows(), column_format, first_n);
   }
 }
 
@@ -1759,18 +1750,13 @@ void MapDHandler::execute_rel_alg_df(TDataFrame& _return,
   auto executor = Executor::getExecutor(
       cat.get_currentDB().dbId, jit_debug_ ? "/tmp" : "", jit_debug_ ? "mapdquery" : "", mapd_parameters_, nullptr);
   RelAlgExecutor ra_executor(executor.get(), cat);
-  ExecutionResult result{ResultRows({}, {}, nullptr, nullptr, {}, device_type), {}};
-  result = ra_executor.executeRelAlgQuery(query_ra, co, eo, nullptr);
-  if (auto rs = result.getRows().getResultSet()) {
-    const auto copy =
-        rs->getArrowCopy(data_mgr_.get(), device_type, device_id, getTargetNames(result.getTargetsMeta()));
-    _return.sm_handle = std::string(copy.sm_handle.begin(), copy.sm_handle.end());
-    _return.sm_size = copy.sm_size;
-    _return.df_handle = std::string(copy.df_handle.begin(), copy.df_handle.end());
-    _return.df_size = copy.df_size;
-  } else {
-    throw std::runtime_error("use-result-set might not be set");
-  }
+  const auto result = ra_executor.executeRelAlgQuery(query_ra, co, eo, nullptr);
+  const auto rs = result.getRows();
+  const auto copy = rs->getArrowCopy(data_mgr_.get(), device_type, device_id, getTargetNames(result.getTargetsMeta()));
+  _return.sm_handle = std::string(copy.sm_handle.begin(), copy.sm_handle.end());
+  _return.sm_size = copy.sm_size;
+  _return.df_handle = std::string(copy.df_handle.begin(), copy.df_handle.end());
+  _return.df_size = copy.df_size;
 }
 #endif  // ENABLE_ARROW_CONVERTER
 
@@ -1785,7 +1771,7 @@ void MapDHandler::execute_root_plan(TQueryResult& _return,
                                         jit_debug_ ? "mapdquery" : "",
                                         mapd_parameters_,
                                         nullptr);
-  ResultRows results({}, {}, nullptr, nullptr, {}, executor_device_type);
+  std::shared_ptr<ResultSet> results;
   _return.execution_time_ms += measure<>::execution([&]() {
     results = executor->execute(root_plan,
                                 session_info,
@@ -1796,15 +1782,15 @@ void MapDHandler::execute_root_plan(TQueryResult& _return,
                                 allow_loop_joins_);
   });
   // reduce execution time by the time spent during queue waiting
-  _return.execution_time_ms -= results.getQueueTime();
+  _return.execution_time_ms -= results->getQueueTime();
   if (root_plan->get_plan_dest() == Planner::RootPlan::Dest::kEXPLAIN) {
-    convert_explain(_return, results, column_format);
+    convert_explain(_return, *results, column_format);
     return;
   }
   const auto plan = root_plan->get_plan();
   CHECK(plan);
   const auto& targets = plan->get_targetlist();
-  convert_rows(_return, getTargetMetaInfo(targets), results, column_format, -1);
+  convert_rows(_return, getTargetMetaInfo(targets), *results, column_format, -1);
 }
 
 std::vector<TargetMetaInfo> MapDHandler::getTargetMetaInfo(
@@ -1922,7 +1908,7 @@ TRowDescriptor MapDHandler::fixup_row_descriptor(const TRowDescriptor& row_desc,
 
 // create simple result set to return a single column result
 void MapDHandler::create_simple_result(TQueryResult& _return,
-                                       const ResultRows& results,
+                                       const ResultSet& results,
                                        const bool column_format,
                                        const std::string label) const {
   CHECK_EQ(size_t(1), results.rowCount());
@@ -1958,11 +1944,11 @@ void MapDHandler::create_simple_result(TQueryResult& _return,
   }
 }
 
-void MapDHandler::convert_explain(TQueryResult& _return, const ResultRows& results, const bool column_format) const {
+void MapDHandler::convert_explain(TQueryResult& _return, const ResultSet& results, const bool column_format) const {
   create_simple_result(_return, results, column_format, "Explanation");
 }
 
-void MapDHandler::convert_result(TQueryResult& _return, const ResultRows& results, const bool column_format) const {
+void MapDHandler::convert_result(TQueryResult& _return, const ResultSet& results, const bool column_format) const {
   create_simple_result(_return, results, column_format, "Result");
 }
 
@@ -2002,7 +1988,7 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
         _return.execution_time_ms += measure<>::execution([&]() { query_ra = parse_to_ra(query_str, session_info); });
         if (pw.is_select_calcite_explain) {
           // return the ra as the result
-          convert_explain(_return, ResultRows(query_ra, 0), true);
+          convert_explain(_return, ResultSet(query_ra), true);
           return;
         }
         execute_rel_alg(
@@ -2056,7 +2042,7 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
           }
           // check if it was a copy statement gather response message
           if (copy_stmt) {
-            convert_result(_return, ResultRows(*copy_stmt->return_message.get(), 0), true);
+            convert_result(_return, ResultSet(*copy_stmt->return_message.get()), true);
           }
         } else {
           const Parser::DMLStmt* dml;

@@ -369,12 +369,8 @@ RowSetPtr Executor::executeResultPlan(const Planner::Result* result_plan,
                                         },
                                         0};
   if (*error_code) {
-    return boost::make_unique<ResultRows>(QueryMemoryDescriptor{},
-                                          std::vector<Analyzer::Expr*>{},
-                                          nullptr,
-                                          nullptr,
-                                          std::vector<int64_t>{},
-                                          ExecutorDeviceType::CPU);
+    return std::make_shared<ResultSet>(
+        std::vector<TargetInfo>{}, ExecutorDeviceType::CPU, QueryMemoryDescriptor{}, nullptr, this);
   }
   const auto& targets = result_plan->get_targetlist();
   CHECK(!targets.empty());
@@ -403,12 +399,8 @@ RowSetPtr Executor::executeResultPlan(const Planner::Result* result_plan,
   }
   const auto row_count = rows->rowCount();
   if (!row_count) {
-    return boost::make_unique<ResultRows>(QueryMemoryDescriptor{},
-                                          std::vector<Analyzer::Expr*>{},
-                                          nullptr,
-                                          nullptr,
-                                          std::vector<int64_t>{},
-                                          ExecutorDeviceType::CPU);
+    return std::make_shared<ResultSet>(
+        std::vector<TargetInfo>{}, ExecutorDeviceType::CPU, QueryMemoryDescriptor{}, nullptr, this);
   }
   std::vector<ColWidths> agg_col_widths;
   for (auto wid : get_col_byte_widths(target_exprs, {})) {
@@ -532,7 +524,7 @@ RowSetPtr Executor::executeSortPlan(const Planner::Sort* sort_plan,
       *error_code == ERR_INTERRUPTED) {
     return rows_to_sort;
   }
-  rows_to_sort->sort(sort_plan->get_order_entries(), sort_plan->get_remove_duplicates(), limit + offset);
+  rows_to_sort->sort(sort_plan->get_order_entries(), limit + offset);
   if (limit || offset) {
     rows_to_sort->dropFirstN(offset);
     if (limit) {
@@ -550,14 +542,14 @@ RowSetPtr Executor::executeSortPlan(const Planner::Sort* sort_plan,
  * TODO(alex): check we haven't introduced a regression with the new translator.
  */
 
-ResultRows Executor::execute(const Planner::RootPlan* root_plan,
-                             const Catalog_Namespace::SessionInfo& session,
-                             const bool hoist_literals,
-                             const ExecutorDeviceType device_type,
-                             const ExecutorOptLevel opt_level,
-                             const bool allow_multifrag,
-                             const bool allow_loop_joins,
-                             RenderInfo* render_info) {
+std::shared_ptr<ResultSet> Executor::execute(const Planner::RootPlan* root_plan,
+                                             const Catalog_Namespace::SessionInfo& session,
+                                             const bool hoist_literals,
+                                             const ExecutorDeviceType device_type,
+                                             const ExecutorOptLevel opt_level,
+                                             const bool allow_multifrag,
+                                             const bool allow_loop_joins,
+                                             RenderInfo* render_info) {
   catalog_ = &root_plan->get_catalog();
   const auto stmt_type = root_plan->get_stmt_type();
   // capture the lock acquistion time
@@ -664,7 +656,7 @@ ResultRows Executor::execute(const Planner::RootPlan* root_plan,
           CHECK(rows);
           if (!error_code) {
             rows->setQueueTime(queue_time_ms);
-            return *rows;
+            return rows;
           }
           // Even the conservative guess failed; it should only happen when we group
           // by a huge cardinality array. Maybe we should throw an exception instead?
@@ -675,11 +667,13 @@ ResultRows Executor::execute(const Planner::RootPlan* root_plan,
       }
       CHECK(rows);
       rows->setQueueTime(queue_time_ms);
-      return *rows;
+      return rows;
     }
     case kINSERT: {
       if (root_plan->get_plan_dest() == Planner::RootPlan::kEXPLAIN) {
-        return ResultRows("No explanation available.", queue_time_ms);
+        auto explanation_rs = std::make_shared<ResultSet>("No explanation available.");
+        explanation_rs->setQueueTime(queue_time_ms);
+        return explanation_rs;
       }
       Catalog_Namespace::Catalog& cat = session.get_catalog();
       Catalog_Namespace::SysCatalog& sys_cat = static_cast<Catalog_Namespace::SysCatalog&>(cat);
@@ -698,11 +692,14 @@ ResultRows Executor::execute(const Planner::RootPlan* root_plan,
         break;
       }
       executeSimpleInsert(root_plan);
-      return ResultRows({}, {}, nullptr, nullptr, {}, ExecutorDeviceType::CPU, nullptr, 0, 0, 0, queue_time_ms);
+      auto empty_rs = std::make_shared<ResultSet>(
+          std::vector<TargetInfo>{}, ExecutorDeviceType::CPU, QueryMemoryDescriptor{}, nullptr, this);
+      empty_rs->setQueueTime(queue_time_ms);
+      return empty_rs;
     }
     default:
       CHECK(false);
   }
   CHECK(false);
-  return ResultRows({}, {}, nullptr, nullptr, {}, ExecutorDeviceType::CPU, nullptr, 0, 0, 0, queue_time_ms);
+  return nullptr;
 }

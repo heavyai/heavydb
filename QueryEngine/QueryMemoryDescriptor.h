@@ -168,9 +168,4 @@ struct QueryMemoryDescriptor {
   size_t getTotalBytesOfColumnarBuffers(const std::vector<ColWidths>& col_widths) const;
 };
 
-inline bool can_use_result_set(const QueryMemoryDescriptor& query_mem_desc, const ExecutorDeviceType) {
-  return (g_cluster || g_use_result_set) || query_mem_desc.must_use_baseline_sort ||
-         query_mem_desc.hash_type == GroupByColRangeType::MultiCol;
-}
-
 #endif  // QUERYENGINE_QUERYMEMORYDESCRIPTOR_H

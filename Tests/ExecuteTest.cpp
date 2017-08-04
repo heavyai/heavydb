@@ -63,19 +63,19 @@ std::string build_create_table_statement(const std::string& columns_definition,
          "fragment_size=" + std::to_string(fragment_size) + shard_count_def + ");";
 }
 
-ResultRows run_multiple_agg(const string& query_str,
-                            const ExecutorDeviceType device_type,
-                            const bool allow_loop_joins) {
+std::shared_ptr<ResultSet> run_multiple_agg(const string& query_str,
+                                            const ExecutorDeviceType device_type,
+                                            const bool allow_loop_joins) {
   return run_multiple_agg(query_str, g_session, device_type, g_hoist_literals, allow_loop_joins);
 }
 
-ResultRows run_multiple_agg(const string& query_str, const ExecutorDeviceType device_type) {
+std::shared_ptr<ResultSet> run_multiple_agg(const string& query_str, const ExecutorDeviceType device_type) {
   return run_multiple_agg(query_str, device_type, true);
 }
 
 TargetValue run_simple_agg(const string& query_str, const ExecutorDeviceType device_type) {
   auto rows = run_multiple_agg(query_str, device_type);
-  auto crt_row = rows.getNextRow(true, true);
+  auto crt_row = rows->getNextRow(true, true);
   CHECK_EQ(size_t(1), crt_row.size());
   return crt_row[0];
 }
@@ -144,19 +144,19 @@ class SQLiteComparator {
                     bool timestamp_approx) {
     connector_.query(sqlite_query_string);
     const auto mapd_results = run_multiple_agg(query_string, device_type);
-    ASSERT_EQ(connector_.getNumRows(), mapd_results.rowCount());
+    ASSERT_EQ(connector_.getNumRows(), mapd_results->rowCount());
     const int num_rows{static_cast<int>(connector_.getNumRows())};
-    if (mapd_results.definitelyHasNoRows()) {
+    if (mapd_results->definitelyHasNoRows()) {
       ASSERT_EQ(0, num_rows);
       return;
     }
     if (!num_rows) {
       return;
     }
-    CHECK_EQ(connector_.getNumCols(), mapd_results.colCount());
+    CHECK_EQ(connector_.getNumCols(), mapd_results->colCount());
     const int num_cols{static_cast<int>(connector_.getNumCols())};
     for (int row_idx = 0; row_idx < num_rows; ++row_idx) {
-      const auto crt_row = mapd_results.getNextRow(true, true);
+      const auto crt_row = mapd_results->getNextRow(true, true);
       CHECK(!crt_row.empty());
       CHECK_EQ(static_cast<size_t>(num_cols), crt_row.size());
       for (int col_idx = 0; col_idx < num_cols; ++col_idx) {
@@ -164,7 +164,7 @@ class SQLiteComparator {
         const auto mapd_variant = crt_row[col_idx];
         const auto scalar_mapd_variant = boost::get<ScalarTargetValue>(&mapd_variant);
         CHECK(scalar_mapd_variant);
-        const auto mapd_ti = mapd_results.getColType(col_idx);
+        const auto mapd_ti = mapd_results->getColType(col_idx);
         const auto mapd_type = mapd_ti.get_type();
         checkTypeConsistency(ref_col_type, mapd_ti);
         const bool ref_is_null = connector_.isNull(row_idx, col_idx);
@@ -590,15 +590,15 @@ TEST(Select, LimitAndOffset) {
     SKIP_NO_GPU();
     {
       const auto rows = run_multiple_agg("SELECT * FROM test LIMIT 5;", dt);
-      ASSERT_EQ(size_t(5), rows.rowCount());
+      ASSERT_EQ(size_t(5), rows->rowCount());
     }
     {
       const auto rows = run_multiple_agg("SELECT * FROM test LIMIT 5 OFFSET 3;", dt);
-      ASSERT_EQ(size_t(5), rows.rowCount());
+      ASSERT_EQ(size_t(5), rows->rowCount());
     }
     {
       const auto rows = run_multiple_agg("SELECT * FROM test WHERE x <> 8 LIMIT 3 OFFSET 1;", dt);
-      ASSERT_EQ(size_t(3), rows.rowCount());
+      ASSERT_EQ(size_t(3), rows->rowCount());
     }
     EXPECT_THROW(run_multiple_agg("SELECT * FROM test LIMIT 0;", dt), std::runtime_error);
   }
@@ -844,14 +844,15 @@ TEST(Select, OrderBy) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     const auto rows = run_multiple_agg("SELECT x, y, z + t, x * y AS m FROM test ORDER BY 3 desc LIMIT 5;", dt);
-    CHECK_EQ(rows.rowCount(), std::min(size_t(5), static_cast<size_t>(g_num_rows)));
-    CHECK_EQ(rows.colCount(), size_t(4));
-    for (size_t row_idx = 0; row_idx < rows.rowCount(); ++row_idx) {
-      ASSERT_TRUE(v<int64_t>(rows.getRowAt(row_idx, 0, true)) == 8 || v<int64_t>(rows.getRowAt(row_idx, 0, true)) == 7);
-      ASSERT_EQ(v<int64_t>(rows.getRowAt(row_idx, 1, true)), 43);
-      ASSERT_EQ(v<int64_t>(rows.getRowAt(row_idx, 2, true)), 1104);
-      ASSERT_TRUE(v<int64_t>(rows.getRowAt(row_idx, 3, true)) == 344 ||
-                  v<int64_t>(rows.getRowAt(row_idx, 3, true)) == 301);
+    CHECK_EQ(rows->rowCount(), std::min(size_t(5), static_cast<size_t>(g_num_rows)));
+    CHECK_EQ(rows->colCount(), size_t(4));
+    for (size_t row_idx = 0; row_idx < rows->rowCount(); ++row_idx) {
+      ASSERT_TRUE(v<int64_t>(rows->getRowAt(row_idx, 0, true)) == 8 ||
+                  v<int64_t>(rows->getRowAt(row_idx, 0, true)) == 7);
+      ASSERT_EQ(v<int64_t>(rows->getRowAt(row_idx, 1, true)), 43);
+      ASSERT_EQ(v<int64_t>(rows->getRowAt(row_idx, 2, true)), 1104);
+      ASSERT_TRUE(v<int64_t>(rows->getRowAt(row_idx, 3, true)) == 344 ||
+                  v<int64_t>(rows->getRowAt(row_idx, 3, true)) == 301);
     }
     c("SELECT x, COUNT(distinct y) AS n FROM test GROUP BY x ORDER BY n DESC;", dt);
     c("SELECT x x1, x, COUNT(*) AS val FROM test GROUP BY x HAVING val > 5 ORDER BY val DESC LIMIT 5;", dt);
@@ -894,20 +895,20 @@ TEST(Select, ComplexQueries) {
         dt);
     c("SELECT x, dup_str FROM (SELECT * FROM test a JOIN join_test b ON a.x = b.x) WHERE y > 40 ORDER BY x, dup_str;",
       dt);
-    ASSERT_EQ(rows.rowCount(), size_t(2));
+    ASSERT_EQ(rows->rowCount(), size_t(2));
     {
-      auto crt_row = rows.getNextRow(true, true);
+      auto crt_row = rows->getNextRow(true, true);
       CHECK_EQ(size_t(2), crt_row.size());
       ASSERT_EQ(v<int64_t>(crt_row[0]), 51);
       ASSERT_EQ(v<int64_t>(crt_row[1]), -59 * g_num_rows / 2);
     }
     {
-      auto crt_row = rows.getNextRow(true, true);
+      auto crt_row = rows->getNextRow(true, true);
       CHECK_EQ(size_t(2), crt_row.size());
       ASSERT_EQ(v<int64_t>(crt_row[0]), 50);
       ASSERT_EQ(v<int64_t>(crt_row[1]), -59 * g_num_rows / 2);
     }
-    auto empty_row = rows.getNextRow(true, true);
+    auto empty_row = rows->getNextRow(true, true);
     CHECK(empty_row.empty());
   }
 }
@@ -1135,7 +1136,7 @@ TEST(Select, StringsNoneEncoding) {
 
 namespace {
 
-void check_date_trunc_groups(const ResultRows& rows) {
+void check_date_trunc_groups(const ResultSet& rows) {
   {
     const auto crt_row = rows.getNextRow(true, true);
     CHECK(!crt_row.empty());
@@ -1173,7 +1174,7 @@ void check_date_trunc_groups(const ResultRows& rows) {
   CHECK(crt_row.empty());
 }
 
-void check_one_date_trunc_group(const ResultRows& rows, const int64_t ref_ts) {
+void check_one_date_trunc_group(const ResultSet& rows, const int64_t ref_ts) {
   const auto crt_row = rows.getNextRow(true, true);
   ASSERT_EQ(size_t(1), crt_row.size());
   const auto actual_ts = v<int64_t>(crt_row[0]);
@@ -1875,12 +1876,12 @@ TEST(Select, Time) {
         "SELECT DATE_TRUNC(month, CAST(o AS TIMESTAMP(0))) AS key0, str AS key1, COUNT(*) AS val FROM test GROUP BY "
         "key0, key1 ORDER BY val DESC, key1;",
         dt);
-    check_date_trunc_groups(rows);
+    check_date_trunc_groups(*rows);
     const auto one_row = run_multiple_agg(
         "SELECT DATE_TRUNC(year, CASE WHEN str = 'foo' THEN m END) d FROM test GROUP BY d "
         "HAVING d IS NOT NULL;",
         dt);
-    check_one_date_trunc_group(one_row, 1388534400);
+    check_one_date_trunc_group(*one_row, 1388534400);
   }
 }
 
@@ -2588,35 +2589,35 @@ TEST(Select, ArrayUnnest) {
       auto result_rows = run_multiple_agg("SELECT COUNT(*), UNNEST(arr_i" + std::to_string(int_width) +
                                               ") AS a FROM array_test GROUP BY a ORDER BY a DESC;",
                                           dt);
-      ASSERT_EQ(g_array_test_row_count + 2, result_rows.rowCount());
-      ASSERT_EQ(int64_t(g_array_test_row_count + 2) * power10, v<int64_t>(result_rows.getRowAt(0, 1, true)));
-      ASSERT_EQ(1, v<int64_t>(result_rows.getRowAt(g_array_test_row_count + 1, 0, true)));
-      ASSERT_EQ(1, v<int64_t>(result_rows.getRowAt(0, 0, true)));
-      ASSERT_EQ(power10, v<int64_t>(result_rows.getRowAt(g_array_test_row_count + 1, 1, true)));
+      ASSERT_EQ(g_array_test_row_count + 2, result_rows->rowCount());
+      ASSERT_EQ(int64_t(g_array_test_row_count + 2) * power10, v<int64_t>(result_rows->getRowAt(0, 1, true)));
+      ASSERT_EQ(1, v<int64_t>(result_rows->getRowAt(g_array_test_row_count + 1, 0, true)));
+      ASSERT_EQ(1, v<int64_t>(result_rows->getRowAt(0, 0, true)));
+      ASSERT_EQ(power10, v<int64_t>(result_rows->getRowAt(g_array_test_row_count + 1, 1, true)));
       power10 *= 10;
     }
     for (const std::string float_type : {"float", "double"}) {
       auto result_rows = run_multiple_agg(
           "SELECT COUNT(*), UNNEST(arr_" + float_type + ") AS a FROM array_test GROUP BY a ORDER BY a DESC;", dt);
-      ASSERT_EQ(g_array_test_row_count + 2, result_rows.rowCount());
-      ASSERT_EQ(1, v<int64_t>(result_rows.getRowAt(g_array_test_row_count + 1, 0, true)));
-      ASSERT_EQ(1, v<int64_t>(result_rows.getRowAt(0, 0, true)));
+      ASSERT_EQ(g_array_test_row_count + 2, result_rows->rowCount());
+      ASSERT_EQ(1, v<int64_t>(result_rows->getRowAt(g_array_test_row_count + 1, 0, true)));
+      ASSERT_EQ(1, v<int64_t>(result_rows->getRowAt(0, 0, true)));
     }
     {
       auto result_rows =
           run_multiple_agg("SELECT COUNT(*), UNNEST(arr_str) AS a FROM array_test GROUP BY a ORDER BY a DESC;", dt);
-      ASSERT_EQ(g_array_test_row_count + 2, result_rows.rowCount());
-      ASSERT_EQ(1, v<int64_t>(result_rows.getRowAt(g_array_test_row_count + 1, 0, true)));
-      ASSERT_EQ(1, v<int64_t>(result_rows.getRowAt(0, 0, true)));
+      ASSERT_EQ(g_array_test_row_count + 2, result_rows->rowCount());
+      ASSERT_EQ(1, v<int64_t>(result_rows->getRowAt(g_array_test_row_count + 1, 0, true)));
+      ASSERT_EQ(1, v<int64_t>(result_rows->getRowAt(0, 0, true)));
     }
     {
       auto result_rows =
           run_multiple_agg("SELECT COUNT(*), UNNEST(arr_bool) AS a FROM array_test GROUP BY a ORDER BY a DESC;", dt);
-      ASSERT_EQ(size_t(2), result_rows.rowCount());
-      ASSERT_EQ(int64_t(g_array_test_row_count * 3), v<int64_t>(result_rows.getRowAt(0, 0, true)));
-      ASSERT_EQ(int64_t(g_array_test_row_count * 3), v<int64_t>(result_rows.getRowAt(1, 0, true)));
-      ASSERT_EQ(1, v<int64_t>(result_rows.getRowAt(0, 1, true)));
-      ASSERT_EQ(0, v<int64_t>(result_rows.getRowAt(1, 1, true)));
+      ASSERT_EQ(size_t(2), result_rows->rowCount());
+      ASSERT_EQ(int64_t(g_array_test_row_count * 3), v<int64_t>(result_rows->getRowAt(0, 0, true)));
+      ASSERT_EQ(int64_t(g_array_test_row_count * 3), v<int64_t>(result_rows->getRowAt(1, 0, true)));
+      ASSERT_EQ(1, v<int64_t>(result_rows->getRowAt(0, 1, true)));
+      ASSERT_EQ(0, v<int64_t>(result_rows->getRowAt(1, 1, true)));
     }
   }
 }
@@ -2663,9 +2664,9 @@ TEST(Select, ArrayCountDistinct) {
                     "SELECT COUNT(distinct arr_i" + std::to_string(int_width) + ") FROM array_test;", dt)));
       auto result_rows = run_multiple_agg(
           "SELECT COUNT(distinct arr_i" + std::to_string(int_width) + ") FROM array_test GROUP BY x;", dt);
-      ASSERT_EQ(g_array_test_row_count, result_rows.rowCount());
+      ASSERT_EQ(g_array_test_row_count, result_rows->rowCount());
       for (size_t row_idx = 0; row_idx < g_array_test_row_count; ++row_idx) {
-        ASSERT_EQ(3, v<int64_t>(result_rows.getRowAt(row_idx, 0, true)));
+        ASSERT_EQ(3, v<int64_t>(result_rows->getRowAt(row_idx, 0, true)));
       }
     }
     for (const std::string float_type : {"float", "double"}) {
@@ -2807,7 +2808,7 @@ TEST(Select, JoinsAndArrays) {
         "SELECT UNNEST(array_test.arr_i16) AS a, test_inner.x, COUNT(*) FROM array_test, test_inner WHERE test_inner.x "
         "= array_test.arr_i16[1] GROUP BY a, test_inner.x;",
         dt);
-    ASSERT_EQ(size_t(3), result_rows.rowCount());
+    ASSERT_EQ(size_t(3), result_rows->rowCount());
   }
 }
 

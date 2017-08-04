@@ -41,7 +41,7 @@ void RelAlgNode::resetRelAlgFirstId() noexcept {
 }
 
 void RexSubQuery::setExecutionResult(const std::shared_ptr<const ExecutionResult> result) {
-  auto row_set = &result->getRows();
+  auto row_set = result->getRows();
   CHECK(row_set);
   CHECK_EQ(size_t(1), row_set->colCount());
   type_ = row_set->getColType(0);

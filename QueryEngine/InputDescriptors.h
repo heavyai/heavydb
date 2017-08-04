@@ -22,8 +22,6 @@
 #include <memory>
 #include <glog/logging.h>
 
-class ResultRows;
-
 enum class InputSourceType { TABLE, RESULT };
 
 class InputDescriptor {

@@ -249,11 +249,11 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateScalarSubquery(const 
   }
   CHECK(rex_subquery);
   auto result = rex_subquery->getExecutionResult();
-  auto& row_set = result->getRows();
-  if (row_set.rowCount() != size_t(1)) {
+  auto row_set = result->getRows();
+  if (row_set->rowCount() != size_t(1)) {
     throw std::runtime_error("Scalar sub-query returned multiple rows");
   }
-  auto first_row = row_set.getNextRow(false, false);
+  auto first_row = row_set->getNextRow(false, false);
   auto scalar_tv = boost::get<ScalarTargetValue>(&first_row[0]);
   auto ti = rex_subquery->getType();
   Datum d{0};
@@ -343,13 +343,11 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUoper(const RexOperat
 
 namespace {
 
-std::shared_ptr<Analyzer::Expr> get_in_values_expr(std::shared_ptr<Analyzer::Expr> arg, const ResultRows& val_rows) {
-  if (!can_use_parallel_algorithms(val_rows)) {
+std::shared_ptr<Analyzer::Expr> get_in_values_expr(std::shared_ptr<Analyzer::Expr> arg, const ResultSet& val_set) {
+  if (!can_use_parallel_algorithms(val_set)) {
     return nullptr;
   }
-  const auto val_sets = val_rows.getResultSet();
-  CHECK(val_sets);
-  if (val_sets->rowCount() > 5000000 && g_enable_watchdog) {
+  if (val_set.rowCount() > 5000000 && g_enable_watchdog) {
     throw std::runtime_error("Unable to handle 'expr IN (subquery)', subquery returned 5M+ rows.");
   }
   std::list<std::shared_ptr<Analyzer::Expr>> value_exprs;
@@ -358,7 +356,7 @@ std::shared_ptr<Analyzer::Expr> get_in_values_expr(std::shared_ptr<Analyzer::Exp
                                                                    std::list<std::shared_ptr<Analyzer::Expr>>());
   std::vector<std::future<void>> fetcher_threads;
   const auto& ti = arg->get_type_info();
-  const auto entry_count = val_sets->entryCount();
+  const auto entry_count = val_set.entryCount();
   for (size_t i = 0, start_entry = 0, stride = (entry_count + fetcher_count - 1) / fetcher_count;
        i < fetcher_count && start_entry < entry_count;
        ++i, start_entry += stride) {
@@ -367,7 +365,7 @@ std::shared_ptr<Analyzer::Expr> get_in_values_expr(std::shared_ptr<Analyzer::Exp
         std::launch::async,
         [&](std::list<std::shared_ptr<Analyzer::Expr>>& in_vals, const size_t start, const size_t end) {
           for (auto index = start; index < end; ++index) {
-            auto row = val_sets->getRowAt(index);
+            auto row = val_set.getRowAt(index);
             if (row.empty()) {
               continue;
             }
@@ -394,7 +392,7 @@ std::shared_ptr<Analyzer::Expr> get_in_values_expr(std::shared_ptr<Analyzer::Exp
     child.get();
   }
 
-  val_sets->moveToBegin();
+  val_set.moveToBegin();
   for (auto& exprs : expr_set) {
     value_exprs.splice(value_exprs.end(), exprs);
   }
@@ -419,12 +417,12 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInOper(const RexOpera
   auto ti = lhs->get_type_info();
   auto result = rex_subquery->getExecutionResult();
   auto& row_set = result->getRows();
-  row_set.moveToBegin();
-  if (row_set.getResultSet() && row_set.getResultSet()->entryCount() > 10000) {
+  row_set->moveToBegin();
+  if (row_set->entryCount() > 10000) {
     std::shared_ptr<Analyzer::Expr> expr;
     if ((ti.is_integer() || (ti.is_string() && ti.get_compression() == kENCODING_DICT)) &&
-        !row_set.getQueryMemDesc().output_columnar) {
-      expr = getInIntegerSetExpr(lhs, row_set);
+        !row_set->getQueryMemDesc().output_columnar) {
+      expr = getInIntegerSetExpr(lhs, *row_set);
       // Handle the highly unlikely case when the InIntegerSet ended up being tiny.
       // Just let it fall through the usual InValues path at the end of this method,
       // its codegen knows to use inline comparisons for few values.
@@ -432,7 +430,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInOper(const RexOpera
         expr = nullptr;
       }
     } else {
-      expr = get_in_values_expr(lhs, row_set);
+      expr = get_in_values_expr(lhs, *row_set);
     }
     if (expr) {
       return expr;
@@ -440,7 +438,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInOper(const RexOpera
   }
   std::list<std::shared_ptr<Analyzer::Expr>> value_exprs;
   while (true) {
-    auto row = row_set.getNextRow(true, false);
+    auto row = row_set->getNextRow(true, false);
     if (row.empty())
       break;
     if (g_enable_watchdog && value_exprs.size() >= 10000) {
@@ -564,20 +562,18 @@ void fill_dictionary_encoded_in_vals(std::vector<int64_t>& in_vals,
 // refcounting associated with shared pointers by creating an abbreviated InIntegerSet
 // representation of the IN expression which takes advantage of the this information.
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::getInIntegerSetExpr(std::shared_ptr<Analyzer::Expr> arg,
-                                                                      const ResultRows& val_rows) const {
-  if (!can_use_parallel_algorithms(val_rows)) {
+                                                                      const ResultSet& val_set) const {
+  if (!can_use_parallel_algorithms(val_set)) {
     return nullptr;
   }
-  auto values_rowset = val_rows.getResultSet();
-  CHECK(values_rowset);
   std::vector<int64_t> value_exprs;
   const size_t fetcher_count = cpu_threads();
   std::vector<std::vector<int64_t>> expr_set(fetcher_count);
   std::vector<std::future<void>> fetcher_threads;
   const auto& arg_type = arg->get_type_info();
-  const auto entry_count = values_rowset->entryCount();
-  CHECK_EQ(size_t(1), values_rowset->colCount());
-  const auto& col_type = values_rowset->getColType(0);
+  const auto entry_count = val_set.entryCount();
+  CHECK_EQ(size_t(1), val_set.colCount());
+  const auto& col_type = val_set.getColType(0);
   if (g_cluster && arg_type.is_string() && (col_type.get_comp_param() <= 0 || arg_type.get_comp_param() <= 0)) {
     // Skip this case for now, see comment for fill_dictionary_encoded_in_vals.
     return nullptr;
@@ -592,41 +588,39 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::getInIntegerSetExpr(std::share
       CHECK_EQ(kENCODING_DICT, arg_type.get_compression());
       const int32_t dest_dict_id = arg_type.get_comp_param();
       const int32_t source_dict_id = col_type.get_comp_param();
-      const auto dd =
-          executor_->getStringDictionaryProxy(arg_type.get_comp_param(), values_rowset->getRowSetMemOwner(), true);
-      const auto sd =
-          executor_->getStringDictionaryProxy(col_type.get_comp_param(), values_rowset->getRowSetMemOwner(), true);
+      const auto dd = executor_->getStringDictionaryProxy(arg_type.get_comp_param(), val_set.getRowSetMemOwner(), true);
+      const auto sd = executor_->getStringDictionaryProxy(col_type.get_comp_param(), val_set.getRowSetMemOwner(), true);
       CHECK(sd);
       const auto needle_null_val = inline_int_null_val(arg_type);
-      fetcher_threads.push_back(std::async(
-          std::launch::async,
-          [this, &values_rowset, &total_in_vals_count, sd, dd, source_dict_id, dest_dict_id, needle_null_val](
-              std::vector<int64_t>& in_vals, const size_t start, const size_t end) {
-            if (g_cluster) {
-              CHECK_GE(dd->getGeneration(), 0);
-              fill_dictionary_encoded_in_vals(in_vals,
-                                              total_in_vals_count,
-                                              values_rowset.get(),
-                                              {start, end},
-                                              cat_.getStringDictionaryHosts(),
-                                              source_dict_id,
-                                              dest_dict_id,
-                                              dd->getGeneration(),
-                                              needle_null_val);
-            } else {
-              fill_dictionary_encoded_in_vals(
-                  in_vals, total_in_vals_count, values_rowset.get(), {start, end}, sd, dd, needle_null_val);
-            }
-          },
-          std::ref(expr_set[i]),
-          start_entry,
-          end_entry));
+      fetcher_threads.push_back(
+          std::async(std::launch::async,
+                     [this, &val_set, &total_in_vals_count, sd, dd, source_dict_id, dest_dict_id, needle_null_val](
+                         std::vector<int64_t>& in_vals, const size_t start, const size_t end) {
+                       if (g_cluster) {
+                         CHECK_GE(dd->getGeneration(), 0);
+                         fill_dictionary_encoded_in_vals(in_vals,
+                                                         total_in_vals_count,
+                                                         &val_set,
+                                                         {start, end},
+                                                         cat_.getStringDictionaryHosts(),
+                                                         source_dict_id,
+                                                         dest_dict_id,
+                                                         dd->getGeneration(),
+                                                         needle_null_val);
+                       } else {
+                         fill_dictionary_encoded_in_vals(
+                             in_vals, total_in_vals_count, &val_set, {start, end}, sd, dd, needle_null_val);
+                       }
+                     },
+                     std::ref(expr_set[i]),
+                     start_entry,
+                     end_entry));
     } else {
       CHECK(arg_type.is_integer());
       fetcher_threads.push_back(std::async(
           std::launch::async,
-          [&values_rowset, &total_in_vals_count](std::vector<int64_t>& in_vals, const size_t start, const size_t end) {
-            fill_integer_in_vals(in_vals, total_in_vals_count, values_rowset.get(), {start, end});
+          [&val_set, &total_in_vals_count](std::vector<int64_t>& in_vals, const size_t start, const size_t end) {
+            fill_integer_in_vals(in_vals, total_in_vals_count, &val_set, {start, end});
           },
           std::ref(expr_set[i]),
           start_entry,
@@ -637,7 +631,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::getInIntegerSetExpr(std::share
     child.get();
   }
 
-  values_rowset->moveToBegin();
+  val_set.moveToBegin();
   value_exprs.reserve(entry_count);
   for (auto& exprs : expr_set) {
     value_exprs.insert(value_exprs.end(), exprs.begin(), exprs.end());

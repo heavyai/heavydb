@@ -247,7 +247,14 @@ class ResultSet {
   // Empty result set constructor
   ResultSet();
 
+  ResultSet(const std::string& image_bytes,
+            int64_t queue_time_ms,
+            int64_t render_time_ms,
+            const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner);
+
   ~ResultSet();
+
+  ExecutorDeviceType getDeviceType() const;
 
   const ResultSetStorage* allocateStorage() const;
 
@@ -258,6 +265,11 @@ class ResultSet {
   std::vector<TargetValue> getNextRow(const bool translate_strings, const bool decimal_to_double) const;
 
   std::vector<TargetValue> getRowAt(const size_t index) const;
+
+  TargetValue getRowAt(const size_t row_idx,
+                       const size_t col_idx,
+                       const bool translate_strings,
+                       const bool decimal_to_double = true) const;
 
   // Specialized random access getter for result sets with a single column to
   // avoid the overhead of building a std::vector<TargetValue> result with only
@@ -286,7 +298,7 @@ class ResultSet {
 
   size_t rowCount() const;
 
-  void setCachedRowCount(const size_t row_count);
+  void setCachedRowCount(const size_t row_count) const;
 
   size_t entryCount() const;
 
@@ -307,6 +319,8 @@ class ResultSet {
   void setQueueTime(const int64_t queue_time);
 
   int64_t getQueueTime() const;
+
+  int64_t getRenderTime() const;
 
   void moveToBegin() const;
 
@@ -507,7 +521,8 @@ class ResultSet {
   std::vector<std::vector<std::string>> none_encoded_strings_;
   bool none_encoded_strings_valid_;
   std::string explanation_;
-  std::atomic<ssize_t> cached_row_count_;
+  const bool just_explain_;
+  mutable std::atomic<ssize_t> cached_row_count_;
   mutable std::mutex row_iteration_mutex_;
 
   friend class ResultSetManager;

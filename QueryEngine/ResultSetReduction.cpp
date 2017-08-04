@@ -919,6 +919,52 @@ const bool sum_check_flag = true;
     }                                                                                                    \
   } while (0)
 
+#define AGGREGATE_ONE_NULLABLE_COUNT(val_ptr__, other_ptr__, init_val__, chosen_bytes__, agg_info__) \
+  {                                                                                                  \
+    if (agg_info__.skip_null_val) {                                                                  \
+      const auto sql_type = get_compact_type(agg_info__);                                            \
+      if (sql_type.is_fp()) {                                                                        \
+        if (chosen_bytes__ == sizeof(float)) {                                                       \
+          agg_sum_float_skip_val(reinterpret_cast<int32_t*>(val_ptr__),                              \
+                                 *reinterpret_cast<const float*>(other_ptr__),                       \
+                                 *reinterpret_cast<const float*>(may_alias_ptr(&init_val__)));       \
+        } else {                                                                                     \
+          agg_sum_double_skip_val(reinterpret_cast<int64_t*>(val_ptr__),                             \
+                                  *reinterpret_cast<const double*>(other_ptr__),                     \
+                                  *reinterpret_cast<const double*>(may_alias_ptr(&init_val__)));     \
+        }                                                                                            \
+      } else {                                                                                       \
+        if (chosen_bytes__ == sizeof(int32_t)) {                                                     \
+          auto val_ptr = reinterpret_cast<int32_t*>(val_ptr__);                                      \
+          auto other_ptr = reinterpret_cast<const int32_t*>(other_ptr__);                            \
+          const auto null_val = static_cast<int32_t>(init_val__);                                    \
+          if (detect_overflow_and_underflow(static_cast<uint32_t>(*val_ptr),                         \
+                                            static_cast<uint32_t>(*other_ptr),                       \
+                                            true,                                                    \
+                                            static_cast<uint32_t>(null_val),                         \
+                                            sql_type)) {                                             \
+            throw OverflowOrUnderflow();                                                             \
+          }                                                                                          \
+          agg_sum_int32_skip_val(val_ptr, *other_ptr, null_val);                                     \
+        } else {                                                                                     \
+          auto val_ptr = reinterpret_cast<int64_t*>(val_ptr__);                                      \
+          auto other_ptr = reinterpret_cast<const int64_t*>(other_ptr__);                            \
+          const auto null_val = static_cast<int64_t>(init_val__);                                    \
+          if (detect_overflow_and_underflow(static_cast<uint64_t>(*val_ptr),                         \
+                                            static_cast<uint64_t>(*other_ptr),                       \
+                                            true,                                                    \
+                                            static_cast<uint64_t>(null_val),                         \
+                                            sql_type)) {                                             \
+            throw OverflowOrUnderflow();                                                             \
+          }                                                                                          \
+          agg_sum_skip_val(val_ptr, *other_ptr, null_val);                                           \
+        }                                                                                            \
+      }                                                                                              \
+    } else {                                                                                         \
+      AGGREGATE_ONE_COUNT(val_ptr__, other_ptr__, chosen_bytes__);                                   \
+    }                                                                                                \
+  }
+
 void ResultSetStorage::reduceOneSlot(int8_t* this_ptr1,
                                      int8_t* this_ptr2,
                                      const int8_t* that_ptr1,
@@ -1011,4 +1057,144 @@ void ResultSetStorage::reduceOneCountDistinctSlot(int8_t* this_ptr1,
   auto old_set_ptr = reinterpret_cast<const int64_t*>(this_ptr1);
   auto new_set_ptr = reinterpret_cast<const int64_t*>(that_ptr1);
   count_distinct_set_union(*new_set_ptr, *old_set_ptr, new_count_distinct_desc, old_count_distinct_desc);
+}
+
+bool ResultRows::reduceSingleRow(const int8_t* row_ptr,
+                                 const int8_t warp_count,
+                                 const bool is_columnar,
+                                 const bool replace_bitmap_ptr_with_bitmap_sz,
+                                 std::vector<int64_t>& agg_vals,
+                                 const QueryMemoryDescriptor& query_mem_desc,
+                                 const std::vector<TargetInfo>& targets,
+                                 const std::vector<int64_t>& agg_init_vals) {
+  const size_t agg_col_count{agg_vals.size()};
+  const auto row_size = query_mem_desc.getRowSize();
+  CHECK_EQ(agg_col_count, query_mem_desc.agg_col_widths.size());
+  CHECK_GE(agg_col_count, targets.size());
+  CHECK_EQ(is_columnar, query_mem_desc.output_columnar);
+  CHECK(query_mem_desc.keyless_hash);
+  std::vector<int64_t> partial_agg_vals(agg_col_count, 0);
+  bool discard_row = true;
+  for (int8_t warp_idx = 0; warp_idx < warp_count; ++warp_idx) {
+    bool discard_partial_result = true;
+    for (size_t target_idx = 0, agg_col_idx = 0; target_idx < targets.size() && agg_col_idx < agg_col_count;
+         ++target_idx, ++agg_col_idx) {
+      const auto& agg_info = targets[target_idx];
+      const bool float_argument_input = takes_float_argument(agg_info);
+      const auto chosen_bytes =
+          float_argument_input ? sizeof(float) : query_mem_desc.agg_col_widths[agg_col_idx].compact;
+      auto partial_bin_val = get_component(row_ptr + query_mem_desc.getColOnlyOffInBytes(agg_col_idx), chosen_bytes);
+      partial_agg_vals[agg_col_idx] = partial_bin_val;
+      if (is_distinct_target(agg_info)) {
+        CHECK_EQ(int8_t(1), warp_count);
+        CHECK(agg_info.is_agg && (agg_info.agg_kind == kCOUNT || agg_info.agg_kind == kAPPROX_COUNT_DISTINCT));
+        partial_bin_val =
+            count_distinct_set_size(partial_bin_val, target_idx, query_mem_desc.count_distinct_descriptors_);
+        if (replace_bitmap_ptr_with_bitmap_sz) {
+          partial_agg_vals[agg_col_idx] = partial_bin_val;
+        }
+      }
+      if (kAVG == agg_info.agg_kind) {
+        CHECK(agg_info.is_agg && !agg_info.is_distinct);
+        ++agg_col_idx;
+        partial_bin_val = partial_agg_vals[agg_col_idx] =
+            get_component(row_ptr + query_mem_desc.getColOnlyOffInBytes(agg_col_idx),
+                          query_mem_desc.agg_col_widths[agg_col_idx].compact);
+      }
+      if (agg_col_idx == static_cast<size_t>(query_mem_desc.idx_target_as_key) &&
+          partial_bin_val != agg_init_vals[query_mem_desc.idx_target_as_key]) {
+        CHECK(agg_info.is_agg);
+        discard_partial_result = false;
+      }
+    }
+    row_ptr += row_size;
+    if (discard_partial_result) {
+      continue;
+    }
+    discard_row = false;
+    for (size_t target_idx = 0, agg_col_idx = 0; target_idx < targets.size() && agg_col_idx < agg_col_count;
+         ++target_idx, ++agg_col_idx) {
+      auto partial_bin_val = partial_agg_vals[agg_col_idx];
+      const auto& agg_info = targets[target_idx];
+      const bool float_argument_input = takes_float_argument(agg_info);
+      const auto chosen_bytes =
+          float_argument_input ? sizeof(float) : query_mem_desc.agg_col_widths[agg_col_idx].compact;
+      const auto& chosen_type = get_compact_type(agg_info);
+      if (agg_info.is_agg) {
+        try {
+          switch (agg_info.agg_kind) {
+            case kCOUNT:
+            case kAPPROX_COUNT_DISTINCT:
+              AGGREGATE_ONE_NULLABLE_COUNT(reinterpret_cast<int8_t*>(&agg_vals[agg_col_idx]),
+                                           reinterpret_cast<int8_t*>(&partial_agg_vals[agg_col_idx]),
+                                           agg_init_vals[agg_col_idx],
+                                           chosen_bytes,
+                                           agg_info);
+              break;
+            case kAVG:
+              // Ignore float argument compaction for count component for fear of its overflow
+              AGGREGATE_ONE_COUNT(reinterpret_cast<int8_t*>(&agg_vals[agg_col_idx + 1]),
+                                  reinterpret_cast<int8_t*>(&partial_agg_vals[agg_col_idx + 1]),
+                                  query_mem_desc.agg_col_widths[agg_col_idx].compact);
+            // fall thru
+            case kSUM:
+              AGGREGATE_ONE_NULLABLE_VALUE(sum,
+                                           reinterpret_cast<int8_t*>(&agg_vals[agg_col_idx]),
+                                           reinterpret_cast<int8_t*>(&partial_agg_vals[agg_col_idx]),
+                                           agg_init_vals[agg_col_idx],
+                                           chosen_bytes,
+                                           agg_info);
+              break;
+            case kMIN:
+              AGGREGATE_ONE_NULLABLE_VALUE(min,
+                                           reinterpret_cast<int8_t*>(&agg_vals[agg_col_idx]),
+                                           reinterpret_cast<int8_t*>(&partial_agg_vals[agg_col_idx]),
+                                           agg_init_vals[agg_col_idx],
+                                           chosen_bytes,
+                                           agg_info);
+              break;
+            case kMAX:
+              AGGREGATE_ONE_NULLABLE_VALUE(max,
+                                           reinterpret_cast<int8_t*>(&agg_vals[agg_col_idx]),
+                                           reinterpret_cast<int8_t*>(&partial_agg_vals[agg_col_idx]),
+                                           agg_init_vals[agg_col_idx],
+                                           chosen_bytes,
+                                           agg_info);
+              break;
+            default:
+              CHECK(false);
+              break;
+          }
+        } catch (std::runtime_error& e) {
+          // TODO(miyu): handle the case where chosen_bytes < 8
+          LOG(ERROR) << e.what();
+        }
+        if (chosen_type.is_integer() || chosen_type.is_decimal()) {
+          switch (chosen_bytes) {
+            case 8:
+              break;
+            case 4: {
+              int32_t ret = *reinterpret_cast<const int32_t*>(&agg_vals[agg_col_idx]);
+              if (!(agg_info.agg_kind == kCOUNT && ret != agg_init_vals[agg_col_idx])) {
+                agg_vals[agg_col_idx] = static_cast<int64_t>(ret);
+              }
+              break;
+            }
+            default:
+              CHECK(false);
+          }
+        }
+        if (kAVG == agg_info.agg_kind) {
+          ++agg_col_idx;
+        }
+      } else {
+        if (agg_vals[agg_col_idx]) {
+          CHECK_EQ(agg_vals[agg_col_idx], partial_bin_val);
+        } else {
+          agg_vals[agg_col_idx] = partial_bin_val;
+        }
+      }
+    }
+  }
+  return discard_row;
 }

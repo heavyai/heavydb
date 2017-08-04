@@ -16,7 +16,7 @@
 
 #ifndef COLUMNAR_RESULTS_H
 #define COLUMNAR_RESULTS_H
-#include "ResultRows.h"
+#include "ResultSet.h"
 #include "IteratorTable.h"
 #include "SqlTypesLayout.h"
 
@@ -31,7 +31,7 @@ class ColumnarConversionNotSupported : public std::runtime_error {
 class ColumnarResults {
  public:
   ColumnarResults(const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-                  const ResultRows& rows,
+                  const ResultSet& rows,
                   const size_t num_columns,
                   const std::vector<SQLTypeInfo>& target_types);
 

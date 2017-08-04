@@ -1108,13 +1108,13 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
       const size_t limit = sort->getLimit();
       const size_t offset = sort->getOffset();
       if (sort->collationCount() != 0 &&
-          !use_speculative_top_n(source_work_unit.exe_unit, rows_to_sort.getQueryMemDesc())) {
-        rows_to_sort.sort(source_work_unit.exe_unit.sort_info.order_entries, false, limit + offset);
+          !use_speculative_top_n(source_work_unit.exe_unit, rows_to_sort->getQueryMemDesc())) {
+        rows_to_sort->sort(source_work_unit.exe_unit.sort_info.order_entries, limit + offset);
       }
       if (limit || offset) {
-        rows_to_sort.dropFirstN(offset);
+        rows_to_sort->dropFirstN(offset);
         if (limit) {
-          rows_to_sort.keepFirstN(limit);
+          rows_to_sort->keepFirstN(limit);
         }
       }
       return {rows_to_sort, source_result.getTargetsMeta()};
@@ -1124,7 +1124,9 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
     }
   }
   CHECK(false);
-  return {ResultRows({}, {}, nullptr, nullptr, {}, co.device_type_), {}};
+  return {std::make_shared<ResultSet>(
+              std::vector<TargetInfo>{}, co.device_type_, QueryMemoryDescriptor{}, nullptr, executor_),
+          {}};
 }
 
 RelAlgExecutor::WorkUnit RelAlgExecutor::createSortInputWorkUnit(const RelSort* sort, const bool just_explain) {
@@ -1294,7 +1296,9 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(const RelAlgExecutor::WorkUnit& 
 
   static const size_t big_group_threshold{20000};
 
-  ExecutionResult result{ResultRows({}, {}, nullptr, nullptr, {}, co.device_type_), {}};
+  ExecutionResult result{std::make_shared<ResultSet>(
+                             std::vector<TargetInfo>{}, co.device_type_, QueryMemoryDescriptor{}, nullptr, executor_),
+                         {}};
 
   try {
     result = {executor_->executeWorkUnit(
@@ -1374,9 +1378,7 @@ size_t RelAlgExecutor::getNDVEstimation(const WorkUnit& work_unit,
   if (!estimator_result_rows) {
     return 1;
   }
-  const auto estimator_result_set = estimator_result_rows->getResultSet();
-  CHECK(estimator_result_set);
-  return std::max(estimator_result_set->getNDVEstimator(), size_t(1));
+  return std::max(estimator_result_rows->getNDVEstimator(), size_t(1));
 }
 
 ssize_t RelAlgExecutor::getFilteredCountAll(const WorkUnit& work_unit,
@@ -1475,7 +1477,9 @@ ExecutionResult RelAlgExecutor::handleRetry(const int32_t error_code_in,
                                    false,
                                    eo.with_dynamic_watchdog,
                                    eo.dynamic_watchdog_time_limit};
-  ExecutionResult result{ResultRows({}, {}, nullptr, nullptr, {}, co.device_type_), {}};
+  ExecutionResult result{std::make_shared<ResultSet>(
+                             std::vector<TargetInfo>{}, co.device_type_, QueryMemoryDescriptor{}, nullptr, executor_),
+                         {}};
   const auto table_infos = get_table_infos(work_unit.exe_unit, executor_);
   if (error_code == Executor::ERR_OUT_OF_GPU_MEM) {
     if (g_enable_watchdog && !g_allow_cpu_retry) {

@@ -17,13 +17,13 @@
 #include "SpeculativeTopN.h"
 
 #include "RelAlgExecutor.h"
-#include "ResultRows.h"
+#include "ResultSet.h"
 
 #include <glog/logging.h>
 
 SpeculativeTopNMap::SpeculativeTopNMap() : unknown_(0) {}
 
-SpeculativeTopNMap::SpeculativeTopNMap(const ResultRows& rows,
+SpeculativeTopNMap::SpeculativeTopNMap(const ResultSet& rows,
                                        const std::vector<Analyzer::Expr*>& target_exprs,
                                        const size_t truncate_n)
     : unknown_(0) {
@@ -92,8 +92,7 @@ void SpeculativeTopNMap::reduce(SpeculativeTopNMap& that) {
 RowSetPtr SpeculativeTopNMap::asRows(const RelAlgExecutionUnit& ra_exe_unit,
                                      std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                                      const QueryMemoryDescriptor& query_mem_desc,
-                                     const std::vector<int64_t>& init_agg_vals,  // TODO(alex): needed?
-                                     const Executor* executor,                   // TODO(alex): needed?
+                                     const Executor* executor,
                                      const size_t top_n,
                                      const bool desc) const {
   std::vector<SpeculativeTopNEntry> vec;
@@ -112,20 +111,31 @@ RowSetPtr SpeculativeTopNMap::asRows(const RelAlgExecutionUnit& ra_exe_unit,
     }
   }
   CHECK_EQ(size_t(2), ra_exe_unit.target_exprs.size());
-  auto result = boost::make_unique<ResultRows>(
-      query_mem_desc, ra_exe_unit.target_exprs, executor, row_set_mem_owner, init_agg_vals, ExecutorDeviceType::GPU);
+  auto query_mem_desc_rs = query_mem_desc;
+  query_mem_desc_rs.hash_type = GroupByColRangeType::MultiCol;
+  query_mem_desc_rs.output_columnar = false;
+  query_mem_desc_rs.entry_count = num_rows;
+  query_mem_desc_rs.agg_col_widths = {{8, 8}, {8, 8}};
+  auto rs = std::make_shared<ResultSet>(target_exprs_to_infos(ra_exe_unit.target_exprs, query_mem_desc_rs),
+                                        ExecutorDeviceType::CPU,
+                                        query_mem_desc_rs,
+                                        row_set_mem_owner,
+                                        executor);
+  auto rs_storage = rs->allocateStorage();
+  auto rs_buff = reinterpret_cast<int64_t*>(rs_storage->getUnderlyingBuffer());
   const bool count_first = dynamic_cast<const Analyzer::AggExpr*>(ra_exe_unit.target_exprs[0]);
   for (size_t i = 0; i < num_rows; ++i) {
-    result->beginRow(vec[i].key);
+    rs_buff[0] = vec[i].key;
     int64_t col0 = vec[i].key;
     int64_t col1 = vec[i].val;
     if (count_first) {
       std::swap(col0, col1);
     }
-    result->addValue(col0);
-    result->addValue(col1);
+    rs_buff[1] = col0;
+    rs_buff[2] = col1;
+    rs_buff += 3;
   }
-  return result;
+  return rs;
 }
 
 void SpeculativeTopNBlacklist::add(const std::shared_ptr<Analyzer::Expr> expr, const bool desc) {

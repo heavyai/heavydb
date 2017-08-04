@@ -38,11 +38,11 @@ int64_t fixed_encoding_nullable_val(const int64_t val, const SQLTypeInfo& type_i
 }  // namespace
 
 ColumnarResults::ColumnarResults(const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-                                 const ResultRows& rows,
+                                 const ResultSet& rows,
                                  const size_t num_columns,
                                  const std::vector<SQLTypeInfo>& target_types)
     : column_buffers_(num_columns),
-      num_rows_(use_parallel_algorithms(rows) ? rows.getResultSet()->entryCount() : rows.rowCount()),
+      num_rows_(use_parallel_algorithms(rows) ? rows.entryCount() : rows.rowCount()),
       target_types_(target_types) {
   column_buffers_.resize(num_columns);
   for (size_t i = 0; i < num_columns; ++i) {
@@ -103,16 +103,15 @@ ColumnarResults::ColumnarResults(const std::shared_ptr<RowSetMemoryOwner> row_se
   if (use_parallel_algorithms(rows)) {
     const size_t worker_count = cpu_threads();
     std::vector<std::future<void>> conversion_threads;
-    const auto entry_count = rows.getResultSet()->entryCount();
+    const auto entry_count = rows.entryCount();
     for (size_t i = 0, start_entry = 0, stride = (entry_count + worker_count - 1) / worker_count;
          i < worker_count && start_entry < entry_count;
          ++i, start_entry += stride) {
       const auto end_entry = std::min(start_entry + stride, entry_count);
-      const auto rs = rows.getResultSet().get();
       conversion_threads.push_back(std::async(std::launch::async,
-                                              [rs, &do_work, &row_idx](const size_t start, const size_t end) {
+                                              [&rows, &do_work, &row_idx](const size_t start, const size_t end) {
                                                 for (size_t i = start; i < end; ++i) {
-                                                  const auto crt_row = rs->getRowAtNoTranslations(i);
+                                                  const auto crt_row = rows.getRowAtNoTranslations(i);
                                                   if (!crt_row.empty()) {
                                                     do_work(crt_row, row_idx.fetch_add(1));
                                                   }
@@ -128,9 +127,7 @@ ColumnarResults::ColumnarResults(const std::shared_ptr<RowSetMemoryOwner> row_se
       child.get();
     }
     num_rows_ = row_idx;
-    if (rows.getResultSet()) {
-      rows.getResultSet()->setCachedRowCount(num_rows_);
-    }
+    rows.setCachedRowCount(num_rows_);
     return;
   }
   while (true) {

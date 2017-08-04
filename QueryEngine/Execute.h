@@ -311,14 +311,14 @@ class Executor {
 
   typedef std::tuple<std::string, const Analyzer::Expr*, int64_t, const size_t> AggInfo;
 
-  ResultRows execute(const Planner::RootPlan* root_plan,
-                     const Catalog_Namespace::SessionInfo& session,
-                     const bool hoist_literals,
-                     const ExecutorDeviceType device_type,
-                     const ExecutorOptLevel,
-                     const bool allow_multifrag,
-                     const bool allow_loop_joins,
-                     RenderInfo* render_query_data = nullptr);
+  std::shared_ptr<ResultSet> execute(const Planner::RootPlan* root_plan,
+                                     const Catalog_Namespace::SessionInfo& session,
+                                     const bool hoist_literals,
+                                     const ExecutorDeviceType device_type,
+                                     const ExecutorOptLevel,
+                                     const bool allow_multifrag,
+                                     const bool allow_loop_joins,
+                                     RenderInfo* render_query_data = nullptr);
 
   int64_t getRowidForPixel(const int64_t x,
                            const int64_t y,
@@ -326,17 +326,23 @@ class Executor {
                            const int render_widget_id,
                            const int pixelRadius = 0);
 
-  ResultRows renderPolygons(const std::string& queryStr,
-                            const ResultRows& rows,
-                            const std::vector<TargetMetaInfo>& row_shape,
-                            const Catalog_Namespace::SessionInfo& session,
-                            const int render_widget_id,
-                            const rapidjson::Value& data_desc,
-                            const std::string* render_config_json = nullptr,
-                            const bool is_projection_query = true,
-                            const std::string& poly_table_name = "",
-                            RenderInfo* render_query_data = nullptr);
+  std::shared_ptr<ResultSet> renderPolygons(const std::string& queryStr,
+                                            const ResultSet& rows,
+                                            const Catalog_Namespace::SessionInfo& session,
+                                            const int render_widget_id,
+                                            const rapidjson::Value& data_desc,
+                                            RenderInfo* render_query_data,
+                                            const std::string* render_config_json = nullptr,
+                                            const bool is_projection_query = true,
+                                            const std::string& poly_table_name = "");
 
+  std::shared_ptr<ResultSet> renderNonInSituData(const std::string& queryStr,
+                                                 const ResultSet& rows,
+                                                 const Catalog_Namespace::SessionInfo& session,
+                                                 const int render_widget_id,
+                                                 const rapidjson::Value& data_desc,
+                                                 RenderInfo* render_query_data,
+                                                 const std::string* render_config_json = nullptr);
 
   StringDictionaryProxy* getStringDictionaryProxy(const int dictId,
                                                   const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
@@ -921,8 +927,7 @@ class Executor {
                                      std::vector<std::pair<ResultPtr, std::vector<size_t>>>& all_fragment_results,
                                      std::shared_ptr<RowSetMemoryOwner>,
                                      const QueryMemoryDescriptor&,
-                                     const bool output_columnar,
-                                     const ExecutorDeviceType dt_for_all) const;
+                                     const bool output_columnar) const;
   RowSetPtr reduceMultiDeviceResultSets(std::vector<std::pair<ResultPtr, std::vector<size_t>>>& all_fragment_results,
                                         std::shared_ptr<RowSetMemoryOwner>,
                                         const QueryMemoryDescriptor&) const;
@@ -1366,7 +1371,6 @@ class Executor {
   friend class GroupByAndAggregate;
   friend struct QueryMemoryDescriptor;
   friend class QueryExecutionContext;
-  friend class ResultRows;
   friend class ResultSet;
   friend class IteratorTable;
   friend class InValuesBitmap;
