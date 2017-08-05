@@ -20,18 +20,20 @@
  * @author      Todd Mostak <todd@map-d.com>
  */
 
-#include "GlobalFileMgr.h"
-#include <boost/filesystem.hpp>
-#include <boost/lexical_cast.hpp>
-#include <string>
-#include "../../Shared/File.h"
+#include "DataMgr/FileMgr/GlobalFileMgr.h"
 
 #include <fcntl.h>
 #include <unistd.h>
 #include <algorithm>
+#include <boost/filesystem.hpp>
+#include <boost/lexical_cast.hpp>
+#include <string>
 #include <thread>
 #include <utility>
 #include <vector>
+
+#include "DataMgr/ForeignStorage/ForeignStorageInterface.h"
+#include "Shared/File.h"
 
 using namespace std;
 
@@ -127,17 +129,17 @@ void GlobalFileMgr::getChunkMetadataVec(
   }
 }
 
-FileMgr* GlobalFileMgr::findFileMgr(const int db_id,
-                                    const int tb_id,
-                                    const bool removeFromMap) {
-  FileMgr* fm = nullptr;
+AbstractBufferMgr* GlobalFileMgr::findFileMgr(const int db_id,
+                                              const int tb_id,
+                                              const bool remove_from_map) {
+  AbstractBufferMgr* fm = nullptr;
   const auto file_mgr_key = std::make_pair(db_id, tb_id);
   {
     mapd_lock_guard<mapd_shared_mutex> read_lock(fileMgrs_mutex_);
     auto it = fileMgrs_.find(file_mgr_key);
     if (it != fileMgrs_.end()) {
       fm = it->second;
-      if (removeFromMap) {
+      if (remove_from_map) {
         fileMgrs_.erase(it);
       }
     }
@@ -145,10 +147,10 @@ FileMgr* GlobalFileMgr::findFileMgr(const int db_id,
   return fm;
 }
 
-FileMgr* GlobalFileMgr::getFileMgr(const int db_id, const int tb_id) {
+AbstractBufferMgr* GlobalFileMgr::getFileMgr(const int db_id, const int tb_id) {
   { /* check if FileMgr already exists for (db_id, tb_id) */
-    FileMgr* fm = findFileMgr(db_id, tb_id);
-    if (fm != nullptr) {
+    AbstractBufferMgr* fm = findFileMgr(db_id, tb_id);
+    if (fm) {
       return fm;
     }
   }
@@ -160,8 +162,13 @@ FileMgr* GlobalFileMgr::getFileMgr(const int db_id, const int tb_id) {
     if (it != fileMgrs_.end()) {
       return it->second;
     }
-    FileMgr* fm =
-        new FileMgr(0, this, file_mgr_key, num_reader_threads_, epoch_, defaultPageSize_);
+    const auto foreign_buffer_manager =
+        ForeignStorageInterface::lookupBufferManager(db_id, tb_id);
+    auto fm =
+        foreign_buffer_manager
+            ? foreign_buffer_manager
+            : new FileMgr(
+                  0, this, file_mgr_key, num_reader_threads_, epoch_, defaultPageSize_);
     auto it_ok = fileMgrs_.insert(std::make_pair(file_mgr_key, fm));
     CHECK(it_ok.second);
 
@@ -172,7 +179,8 @@ FileMgr* GlobalFileMgr::getFileMgr(const int db_id, const int tb_id) {
 void GlobalFileMgr::writeFileMgrData(
     FileMgr* fileMgr) {  // this function is not used, keep it for now for future needs
   for (auto fileMgrIt = fileMgrs_.begin(); fileMgrIt != fileMgrs_.end(); fileMgrIt++) {
-    FileMgr* fm = fileMgrIt->second;
+    FileMgr* fm = dynamic_cast<FileMgr*>(fileMgrIt->second);
+    CHECK(fm);
     if ((fileMgr != 0) && (fileMgr != fm)) {
       continue;
     }
@@ -186,11 +194,11 @@ void GlobalFileMgr::writeFileMgrData(
 }
 
 void GlobalFileMgr::removeTableRelatedDS(const int db_id, const int tb_id) {
-  FileMgr* fm = findFileMgr(db_id, tb_id, true);
+  auto fm = dynamic_cast<File_Namespace::FileMgr*>(findFileMgr(db_id, tb_id, true));
   if (fm == nullptr) {
     // fileMgr has not been initialized so there is no need to
     // spend the time initializing
-    // inmitialize just enough to have to rename
+    // initialize just enough to have to rename
     const auto file_mgr_key = std::make_pair(db_id, tb_id);
     fm = new FileMgr(0, this, file_mgr_key, true);
   }
@@ -213,17 +221,16 @@ void GlobalFileMgr::setTableEpoch(const int db_id,
   delete fm;
 
   // see if one exists currently, and remove it
-  fm = findFileMgr(db_id, tb_id, true);
-
-  if (fm != nullptr) {
+  auto old_fm = findFileMgr(db_id, tb_id, true);
+  if (old_fm) {
     LOG(INFO) << "found and removed fm";
-    delete fm;
+    delete old_fm;
   }
 }
 
 size_t GlobalFileMgr::getTableEpoch(const int db_id, const int tb_id) {
-  FileMgr* fm = getFileMgr(db_id, tb_id);
-
+  auto fm = dynamic_cast<FileMgr*>(getFileMgr(db_id, tb_id));
+  CHECK(fm);
   return fm->epoch_;
 }
 
