@@ -53,6 +53,10 @@
 #include <rapidjson/ostreamwrapper.h>
 #include <rapidjson/writer.h>
 
+#include "../QueryEngine/Execute.h"
+#include "../QueryEngine/TableOptimizer.h"
+
+#include "../DataMgr/ForeignStorage/ForeignStorageInterface.h"
 #include "../Fragmenter/Fragmenter.h"
 #include "../Fragmenter/SortedOrderFragmenter.h"
 #include "../LockMgr/TableLockMgr.h"
@@ -247,6 +251,10 @@ void Catalog::updateTableDescriptorSchema() {
         cols.end()) {
       sqliteConnector_.query(
           "ALTER TABLE mapd_tables ADD sort_column_id INTEGER DEFAULT 0");
+    }
+    if (std::find(cols.begin(), cols.end(), std::string("storage_type")) == cols.end()) {
+      string queryString("ALTER TABLE mapd_tables ADD storage_type TEXT DEFAULT ''");
+      sqliteConnector_.query(queryString);
     }
   } catch (std::exception& e) {
     sqliteConnector_.query("ROLLBACK TRANSACTION");
@@ -956,7 +964,7 @@ void Catalog::buildMaps() {
       "SELECT tableid, name, ncolumns, isview, fragments, frag_type, max_frag_rows, "
       "max_chunk_size, frag_page_size, "
       "max_rows, partitions, shard_column_id, shard, num_shards, key_metainfo, userid, "
-      "sort_column_id "
+      "sort_column_id, storage_type "
       "from mapd_tables");
   sqliteConnector_.query(tableQuery);
   numRows = sqliteConnector_.getNumRows();
@@ -987,6 +995,11 @@ void Catalog::buildMaps() {
     td->hasDeletedCol = false;
     tableDescriptorMap_[to_upper(td->tableName)] = td;
     tableDescriptorMapById_[td->tableId] = td;
+    td->storageType = sqliteConnector_.getData<string>(r, 17);
+    if (!td->storageType.empty()) {
+      ForeignStorageInterface::registerTable(
+          getCurrentDB().dbId, td->tableId, td->storageType);
+    }
   }
   string columnQuery(
       "SELECT tableid, columnid, name, coltype, colsubtype, coldim, colscale, "
@@ -2057,14 +2070,7 @@ void Catalog::createTable(
   if (td.persistenceLevel == Data_Namespace::MemoryLevel::DISK_LEVEL) {
     try {
       sqliteConnector_.query_with_text_params(
-          "INSERT INTO mapd_tables (name, userid, ncolumns, isview, fragments, "
-          "frag_type, max_frag_rows, "
-          "max_chunk_size, "
-          "frag_page_size, max_rows, partitions, shard_column_id, shard, num_shards, "
-          "sort_column_id, "
-          "key_metainfo) VALUES (?, ?, ?, "
-          "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-
+          R"(INSERT INTO mapd_tables (name, userid, ncolumns, isview, fragments, frag_type, max_frag_rows, max_chunk_size, frag_page_size, max_rows, partitions, shard_column_id, shard, num_shards, sort_column_id, storage_type, key_metainfo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?))",
           std::vector<std::string>{td.tableName,
                                    std::to_string(td.userId),
                                    std::to_string(td.nColumns),
@@ -2080,6 +2086,7 @@ void Catalog::createTable(
                                    std::to_string(td.shard),
                                    std::to_string(td.nShards),
                                    std::to_string(td.sortedColumnId),
+                                   td.storageType,
                                    td.keyMetainfo});
 
       // now get the auto generated tableid
@@ -2139,11 +2146,14 @@ void Catalog::createTable(
             "INSERT INTO mapd_views (tableid, sql) VALUES (?,?)",
             std::vector<std::string>{std::to_string(td.tableId), td.viewSQL});
       }
+      if (!td.storageType.empty()) {
+        ForeignStorageInterface::registerTable(
+            getCurrentDB().dbId, td.tableId, td.storageType);
+      }
     } catch (std::exception& e) {
       sqliteConnector_.query("ROLLBACK TRANSACTION");
       throw;
     }
-
   } else {  // Temporary table
     td.tableId = nextTempTableId_++;
     int colId = 1;
