@@ -964,11 +964,15 @@ class NameValueAssign : public Node {
 class CreateTableStmt : public DDLStmt {
  public:
   CreateTableStmt(std::string* tab,
+                  const std::string* storage,
                   std::list<TableElement*>* table_elems,
                   bool is_temporary,
                   bool if_not_exists,
                   std::list<NameValueAssign*>* s)
-      : table_(tab), is_temporary_(is_temporary), if_not_exists_(if_not_exists) {
+      : table_(tab)
+      , storage_type_(storage)
+      , is_temporary_(is_temporary)
+      , if_not_exists_(if_not_exists) {
     CHECK(table_elems);
     for (const auto e : *table_elems) {
       table_element_list_.emplace_back(e);
@@ -995,6 +999,7 @@ class CreateTableStmt : public DDLStmt {
  private:
   std::unique_ptr<std::string> table_;
   std::list<std::unique_ptr<TableElement>> table_element_list_;
+  std::unique_ptr<const std::string> storage_type_;
   bool is_temporary_;
   bool if_not_exists_;
   std::list<std::unique_ptr<NameValueAssign>> storage_options_;

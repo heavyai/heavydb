@@ -250,7 +250,11 @@ create_table_as_statement:
 create_table_statement:
 		CREATE opt_temporary TABLE opt_if_not_exists table '(' base_table_element_commalist ')' opt_with_option_list
 		{
-		  $<nodeval>$ = new CreateTableStmt($<stringval>5, reinterpret_cast<std::list<TableElement*>*>($<listval>7), $<boolval>2,  $<boolval>4, reinterpret_cast<std::list<NameValueAssign*>*>($<listval>9));
+		  $<nodeval>$ = new CreateTableStmt($<stringval>5, nullptr, reinterpret_cast<std::list<TableElement*>*>($<listval>7), $<boolval>2,  $<boolval>4, reinterpret_cast<std::list<NameValueAssign*>*>($<listval>9));
+		}
+		| CREATE NAME TABLE opt_if_not_exists table '(' base_table_element_commalist ')' opt_with_option_list
+		{
+		  $<nodeval>$ = new CreateTableStmt($<stringval>5, $<stringval>2, reinterpret_cast<std::list<TableElement*>*>($<listval>7), false,  $<boolval>4, reinterpret_cast<std::list<NameValueAssign*>*>($<listval>9));
 		}
 	;
 

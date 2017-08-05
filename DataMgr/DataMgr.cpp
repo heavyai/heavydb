@@ -175,8 +175,10 @@ void DataMgr::createTopLevelMetadata()
   chunkKey[1] = 0;  // top level tb_id
 
   GlobalFileMgr* gfm = dynamic_cast<GlobalFileMgr*>(bufferMgrs_[0][0]);
-  FileMgr* fm_top = gfm->getFileMgr(chunkKey);
-  fm_top->createTopLevelMetadata();
+  auto fm_top = gfm->getFileMgr(chunkKey);
+  if (dynamic_cast<File_Namespace::FileMgr*>(fm_top)) {
+    static_cast<File_Namespace::FileMgr*>(fm_top)->createTopLevelMetadata();
+  }
 }
 
 std::vector<MemoryInfo> DataMgr::getMemoryInfo(const MemoryLevel memLevel) {

@@ -35,6 +35,7 @@
 #include "../QueryEngine/Execute.h"
 #include "../QueryEngine/ExtensionFunctionsWhitelist.h"
 #include "../QueryEngine/RelAlgExecutor.h"
+#include "../Shared/StringTransform.h"
 #include "../Shared/TimeGM.h"
 #include "../Shared/geo_types.h"
 #include "../Shared/mapd_glob.h"
@@ -2229,6 +2230,9 @@ void CreateTableStmt::executeDryRun(const Catalog_Namespace::SessionInfo& sessio
   } else {
     td.persistenceLevel = Data_Namespace::MemoryLevel::DISK_LEVEL;
   }
+  if (storage_type_) {
+    td.storageType = to_upper(*storage_type_);
+  }
   if (!storage_options_.empty()) {
     for (auto& p : storage_options_) {
       get_table_definitions(td, p, columns);
@@ -2277,7 +2281,6 @@ std::shared_ptr<ResultSet> getResultSet(QueryStateProxy query_state_proxy,
   auto& catalog = session->getCatalog();
 
   auto executor = Executor::getExecutor(catalog.getCurrentDB().dbId);
-
 #ifdef HAVE_CUDA
   const auto device_type = session->get_executor_device_type();
 #else
