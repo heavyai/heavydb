@@ -143,31 +143,71 @@ void fill_one_to_many_hash_table_on_device_sharded(int32_t* buff,
 }
 
 template <typename T>
+void fill_one_to_many_baseline_hash_table_on_device(int32_t* buff,
+                                                    const T* composite_key_dict,
+                                                    const size_t hash_entry_count,
+                                                    const int32_t invalid_slot_val,
+                                                    const size_t key_component_count,
+                                                    const JoinColumn* join_column_per_key,
+                                                    const JoinColumnTypeInfo* type_info_per_key,
+                                                    const size_t block_size_x,
+                                                    const size_t grid_size_x) {
+  auto pos_buff = buff;
+  auto count_buff = buff + hash_entry_count;
+  cudaMemset(count_buff, 0, hash_entry_count * sizeof(int32_t));
+  count_matches_baseline_gpu<<<grid_size_x, block_size_x>>>(count_buff,
+                                                            composite_key_dict,
+                                                            hash_entry_count,
+                                                            invalid_slot_val,
+                                                            key_component_count,
+                                                            join_column_per_key,
+                                                            type_info_per_key);
+
+  set_valid_pos_flag<<<grid_size_x, block_size_x>>>(pos_buff, count_buff, hash_entry_count);
+
+  auto count_buff_dev_ptr = thrust::device_pointer_cast(count_buff);
+  thrust::inclusive_scan(count_buff_dev_ptr, count_buff_dev_ptr + hash_entry_count, count_buff_dev_ptr);
+  set_valid_pos<<<grid_size_x, block_size_x>>>(pos_buff, count_buff, hash_entry_count);
+  cudaMemset(count_buff, 0, hash_entry_count * sizeof(int32_t));
+  fill_row_ids_baseline_gpu<<<grid_size_x, block_size_x>>>(buff,
+                                                           composite_key_dict,
+                                                           hash_entry_count,
+                                                           invalid_slot_val,
+                                                           key_component_count,
+                                                           join_column_per_key,
+                                                           type_info_per_key);
+}
+
+template <typename T>
 __global__ void init_baseline_hash_join_buff_wrapper(int8_t* hash_join_buff,
                                                      const size_t entry_count,
                                                      const size_t key_component_count,
+                                                     const bool with_val_slot,
                                                      const int32_t invalid_slot_val) {
-  SUFFIX(init_baseline_hash_join_buff)<T>(hash_join_buff, entry_count, key_component_count, invalid_slot_val, -1, -1);
+  SUFFIX(init_baseline_hash_join_buff)<T>(
+      hash_join_buff, entry_count, key_component_count, with_val_slot, invalid_slot_val, -1, -1);
 }
 
 void init_baseline_hash_join_buff_on_device_32(int8_t* hash_join_buff,
                                                const int32_t entry_count,
                                                const size_t key_component_count,
+                                               const bool with_val_slot,
                                                const int32_t invalid_slot_val,
                                                const size_t block_size_x,
                                                const size_t grid_size_x) {
   init_baseline_hash_join_buff_wrapper<int32_t><<<grid_size_x, block_size_x>>>(
-      hash_join_buff, entry_count, key_component_count, invalid_slot_val);
+      hash_join_buff, entry_count, key_component_count, with_val_slot, invalid_slot_val);
 }
 
 void init_baseline_hash_join_buff_on_device_64(int8_t* hash_join_buff,
                                                const int32_t entry_count,
                                                const size_t key_component_count,
+                                               const bool with_val_slot,
                                                const int32_t invalid_slot_val,
                                                const size_t block_size_x,
                                                const size_t grid_size_x) {
   init_baseline_hash_join_buff_wrapper<int64_t><<<grid_size_x, block_size_x>>>(
-      hash_join_buff, entry_count, key_component_count, invalid_slot_val);
+      hash_join_buff, entry_count, key_component_count, with_val_slot, invalid_slot_val);
 }
 
 template <typename T>
@@ -175,6 +215,7 @@ __global__ void fill_baseline_hash_join_buff_wrapper(int8_t* hash_buff,
                                                      const size_t entry_count,
                                                      const int32_t invalid_slot_val,
                                                      const size_t key_component_count,
+                                                     const bool with_val_slot,
                                                      int* err,
                                                      const JoinColumn* join_column_per_key,
                                                      const JoinColumnTypeInfo* type_info_per_key) {
@@ -182,6 +223,7 @@ __global__ void fill_baseline_hash_join_buff_wrapper(int8_t* hash_buff,
                                                             entry_count,
                                                             invalid_slot_val,
                                                             key_component_count,
+                                                            with_val_slot,
                                                             join_column_per_key,
                                                             type_info_per_key,
                                                             nullptr,
@@ -195,6 +237,7 @@ void fill_baseline_hash_join_buff_on_device_32(int8_t* hash_buff,
                                                const size_t entry_count,
                                                const int32_t invalid_slot_val,
                                                const size_t key_component_count,
+                                               const bool with_val_slot,
                                                int* dev_err_buff,
                                                const JoinColumn* join_column_per_key,
                                                const JoinColumnTypeInfo* type_info_per_key,
@@ -204,6 +247,7 @@ void fill_baseline_hash_join_buff_on_device_32(int8_t* hash_buff,
                                                                                entry_count,
                                                                                invalid_slot_val,
                                                                                key_component_count,
+                                                                               with_val_slot,
                                                                                dev_err_buff,
                                                                                join_column_per_key,
                                                                                type_info_per_key);
@@ -213,6 +257,7 @@ void fill_baseline_hash_join_buff_on_device_64(int8_t* hash_buff,
                                                const size_t entry_count,
                                                const int32_t invalid_slot_val,
                                                const size_t key_component_count,
+                                               const bool with_val_slot,
                                                int* dev_err_buff,
                                                const JoinColumn* join_column_per_key,
                                                const JoinColumnTypeInfo* type_info_per_key,
@@ -222,7 +267,48 @@ void fill_baseline_hash_join_buff_on_device_64(int8_t* hash_buff,
                                                                                           entry_count,
                                                                                           invalid_slot_val,
                                                                                           key_component_count,
+                                                                                          with_val_slot,
                                                                                           dev_err_buff,
                                                                                           join_column_per_key,
                                                                                           type_info_per_key);
+}
+
+void fill_one_to_many_baseline_hash_table_on_device_32(int32_t* buff,
+                                                       const int32_t* composite_key_dict,
+                                                       const size_t hash_entry_count,
+                                                       const int32_t invalid_slot_val,
+                                                       const size_t key_component_count,
+                                                       const JoinColumn* join_column_per_key,
+                                                       const JoinColumnTypeInfo* type_info_per_key,
+                                                       const size_t block_size_x,
+                                                       const size_t grid_size_x) {
+  fill_one_to_many_baseline_hash_table_on_device<int32_t>(buff,
+                                                          composite_key_dict,
+                                                          hash_entry_count,
+                                                          invalid_slot_val,
+                                                          key_component_count,
+                                                          join_column_per_key,
+                                                          type_info_per_key,
+                                                          block_size_x,
+                                                          grid_size_x);
+}
+
+void fill_one_to_many_baseline_hash_table_on_device_64(int32_t* buff,
+                                                       const int64_t* composite_key_dict,
+                                                       const size_t hash_entry_count,
+                                                       const int32_t invalid_slot_val,
+                                                       const size_t key_component_count,
+                                                       const JoinColumn* join_column_per_key,
+                                                       const JoinColumnTypeInfo* type_info_per_key,
+                                                       const size_t block_size_x,
+                                                       const size_t grid_size_x) {
+  fill_one_to_many_baseline_hash_table_on_device<int64_t>(buff,
+                                                          composite_key_dict,
+                                                          hash_entry_count,
+                                                          invalid_slot_val,
+                                                          key_component_count,
+                                                          join_column_per_key,
+                                                          type_info_per_key,
+                                                          block_size_x,
+                                                          grid_size_x);
 }

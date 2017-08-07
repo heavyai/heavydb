@@ -59,6 +59,10 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
 
   int getInnerTableId() const noexcept override;
 
+  int getInnerTableRteIdx() const noexcept;
+
+  JoinHashTableInterface::HashType getHashType() const noexcept override;
+
  private:
   BaselineJoinHashTable(const std::shared_ptr<Analyzer::BinOper> condition,
                         const std::vector<InputTableInfo>& query_infos,
@@ -81,32 +85,45 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
 
   int reify(const int device_count);
 
-  int reifyForDevice(const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments, const int device_id);
+  int reifyWithLayout(const int device_count, const JoinHashTableInterface::HashType layout);
+
+  int reifyForDevice(const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
+                     const JoinHashTableInterface::HashType layout,
+                     const int device_id);
 
   void checkHashJoinReplicationConstraint(const int table_id) const;
 
   int initHashTableForDevice(const std::vector<JoinColumn>& join_columns,
                              const std::vector<JoinColumnTypeInfo>& join_column_types,
+                             const JoinHashTableInterface::HashType layout,
                              const Data_Namespace::MemoryLevel effective_memory_level,
                              const int device_id);
 
   int initHashTableOnCpu(const std::vector<JoinColumn>& join_columns,
-                         const std::vector<JoinColumnTypeInfo>& join_column_types);
+                         const std::vector<JoinColumnTypeInfo>& join_column_types,
+                         const JoinHashTableInterface::HashType layout);
 
   int initHashTableOnGpu(const std::vector<JoinColumn>& join_columns,
                          const std::vector<JoinColumnTypeInfo>& join_column_types,
+                         const JoinHashTableInterface::HashType layout,
                          const size_t key_component_width,
                          const size_t key_component_count,
                          const int device_id);
 
   llvm::Value* hashPtr(const size_t index);
 
+  llvm::Value* codegenOneToManySlot(const CompilationOptions& co,
+                                    const size_t index,
+                                    llvm::Value* key_buff_lv,
+                                    const size_t key_component_count,
+                                    const size_t key_component_width);
+
   struct HashTableCacheKey {
-    const size_t num_elements_;
-    const std::vector<ChunkKey> chunk_keys_;
+    const size_t num_elements;
+    const std::vector<ChunkKey> chunk_keys;
 
     bool operator==(const struct HashTableCacheKey& that) const {
-      return num_elements_ == that.num_elements_ && chunk_keys_ == that.chunk_keys_;
+      return num_elements == that.num_elements && chunk_keys == that.chunk_keys;
     }
   };
 
@@ -123,19 +140,36 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
   std::shared_ptr<std::vector<int8_t>> cpu_hash_table_buff_;
   std::mutex cpu_hash_table_buff_mutex_;
 #ifdef HAVE_CUDA
-  std::vector<CUdeviceptr> gpu_hash_table_buff_;
+  std::vector<Data_Namespace::AbstractBuffer*> gpu_hash_table_buff_;
 #endif
   typedef std::pair<const int8_t*, size_t> LinearizedColumn;
   typedef std::pair<int, int> LinearizedColumnCacheKey;
   std::map<LinearizedColumnCacheKey, LinearizedColumn> linearized_multifrag_columns_;
   std::mutex linearized_multifrag_column_mutex_;
   RowSetMemoryOwner linearized_multifrag_column_owner_;
+  JoinHashTableInterface::HashType layout_;
 
-  static std::vector<std::pair<HashTableCacheKey, std::shared_ptr<std::vector<int8_t>>>> hash_table_cache_;
+  struct HashTableCacheValue {
+    const std::shared_ptr<std::vector<int8_t>> buffer;
+    const JoinHashTableInterface::HashType type;
+  };
+
+  static std::vector<std::pair<HashTableCacheKey, HashTableCacheValue>> hash_table_cache_;
   static std::mutex hash_table_cache_mutex_;
 
   static const int ERR_FAILED_TO_FETCH_COLUMN{-3};
   static const int ERR_FAILED_TO_JOIN_ON_VIRTUAL_COLUMN{-4};
+};
+
+class HashTypeCache {
+ public:
+  static void set(const std::vector<ChunkKey>& key, const JoinHashTableInterface::HashType hash_type);
+
+  static std::pair<JoinHashTableInterface::HashType, bool> get(const std::vector<ChunkKey>& key);
+
+ private:
+  static std::map<std::vector<ChunkKey>, JoinHashTableInterface::HashType> hash_type_cache_;
+  static std::mutex hash_type_cache_mutex_;
 };
 
 // TODO(alex): Should be unified with get_shard_count, doesn't belong here.

@@ -15,6 +15,7 @@
  */
 
 #include "MurmurHash.h"
+#include "CompareKeysInl.h"
 
 DEVICE bool compare_to_key(const int8_t* entry, const int8_t* key, const size_t key_bytes) {
   for (size_t i = 0; i < key_bytes; ++i) {
@@ -67,4 +68,39 @@ extern "C" NEVER_INLINE DEVICE int64_t baseline_hash_join_idx_64(const int8_t* h
                                                                  const size_t key_bytes,
                                                                  const size_t entry_count) {
   return baseline_hash_join_idx_impl<int64_t>(hash_buff, key, key_bytes, entry_count);
+}
+
+template <typename T>
+FORCE_INLINE DEVICE int64_t get_composite_key_index_impl(const T* key,
+                                                         const size_t key_component_count,
+                                                         const T* composite_key_dict,
+                                                         const size_t entry_count) {
+  const uint32_t h = MurmurHash1(key, key_component_count * sizeof(T), 0) % entry_count;
+  uint32_t off = h * key_component_count;
+  if (keys_are_equal(&composite_key_dict[off], key, key_component_count)) {
+    return h;
+  }
+  uint32_t h_probe = (h + 1) % entry_count;
+  while (h_probe != h) {
+    off = h_probe * key_component_count;
+    if (keys_are_equal(&composite_key_dict[off], key, key_component_count)) {
+      return h_probe;
+    }
+    h_probe = (h_probe + 1) % entry_count;
+  }
+  return -1;
+}
+
+extern "C" NEVER_INLINE DEVICE int64_t get_composite_key_index_32(const int32_t* key,
+                                                                  const size_t key_component_count,
+                                                                  const int32_t* composite_key_dict,
+                                                                  const size_t entry_count) {
+  return get_composite_key_index_impl(key, key_component_count, composite_key_dict, entry_count);
+}
+
+extern "C" NEVER_INLINE DEVICE int64_t get_composite_key_index_64(const int64_t* key,
+                                                                  const size_t key_component_count,
+                                                                  const int64_t* composite_key_dict,
+                                                                  const size_t entry_count) {
+  return get_composite_key_index_impl(key, key_component_count, composite_key_dict, entry_count);
 }

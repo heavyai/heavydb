@@ -2290,9 +2290,8 @@ void check_loop_join_replication_constraint(const Catalog_Namespace::Catalog* ca
 }
 
 bool has_one_to_many_hash_table(const std::vector<std::shared_ptr<JoinHashTableInterface>>& hash_tables) {
-  for (auto ht_interface : hash_tables) {
-    const auto ht = dynamic_cast<const JoinHashTable*>(ht_interface.get());
-    if (ht && ht->getHashType() == JoinHashTable::OneToMany) {
+  for (auto ht : hash_tables) {
+    if (ht->getHashType() == JoinHashTableInterface::HashType::OneToMany) {
       return true;
     }
   }

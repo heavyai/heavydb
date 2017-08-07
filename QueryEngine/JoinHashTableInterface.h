@@ -27,6 +27,13 @@ class JoinHashTableInterface {
   virtual llvm::Value* codegenSlot(const CompilationOptions&, const size_t) = 0;
 
   virtual int getInnerTableId() const noexcept = 0;
+
+  enum class HashType {
+    OneToOne,
+    OneToMany,
+  };
+
+  virtual HashType getHashType() const noexcept = 0;
 };
 
 #endif  // QUERYENGINE_JOINHASHTABLEINTERFACE_H

@@ -57,11 +57,6 @@ class TooManyHashEntries : public std::runtime_error {
 
 class JoinHashTable : public JoinHashTableInterface {
  public:
-  enum HashType {
-    OneToOne,
-    OneToMany,
-  };
-
   static std::shared_ptr<JoinHashTable> getInstance(const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
                                                     const std::vector<InputTableInfo>& query_infos,
                                                     const RelAlgExecutionUnit& ra_exe_unit,
@@ -88,7 +83,16 @@ class JoinHashTable : public JoinHashTableInterface {
 
   int getInnerTableId() const noexcept override { return col_var_.get()->get_table_id(); };
 
-  HashType getHashType() const { return hash_type_; }
+  HashType getHashType() const noexcept override { return hash_type_; }
+
+  static llvm::Value* codegenOneToManyHashJoin(const std::vector<llvm::Value*>& hash_join_idx_args_in,
+                                               const size_t inner_rte_idx,
+                                               const bool is_sharded,
+                                               const bool col_range_has_nulls,
+                                               const int64_t sub_buff_size,
+                                               Executor* executor);
+
+  static llvm::Value* codegenHashTableLoad(const size_t table_idx, Executor* executor);
 
  private:
   JoinHashTable(const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
@@ -103,7 +107,7 @@ class JoinHashTable : public JoinHashTableInterface {
         col_var_(std::dynamic_pointer_cast<Analyzer::ColumnVar>(col_var->deep_copy())),
         query_infos_(query_infos),
         memory_level_(memory_level),
-        hash_type_(OneToOne),
+        hash_type_(HashType::OneToOne),
         hash_entry_count_(0),
         col_range_(col_range),
         executor_(executor),
@@ -176,6 +180,7 @@ class JoinHashTable : public JoinHashTableInterface {
                                             const CompilationOptions& co);
 
   bool needOneToManyHash(const std::vector<int>& errors) const;
+
   llvm::Value* codegenOneToManyHashJoin(const CompilationOptions&, const size_t);
 
   std::pair<const int8_t*, size_t> fetchFragments(const Analyzer::ColumnVar* hash_col,
