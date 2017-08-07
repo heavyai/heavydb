@@ -14,9 +14,6 @@ add_library(calciteserver_thrift
 )
 target_link_libraries(calciteserver_thrift ${Thrift_LIBRARIES})
 
-find_package(JNI REQUIRED)
-include_directories(${JNI_INCLUDE_DIRS})
-
 add_library(Calcite Calcite.cpp Calcite.h)
 
 target_link_libraries(Calcite Catalog calciteserver_thrift ${JAVA_JVM_LIBRARY})
