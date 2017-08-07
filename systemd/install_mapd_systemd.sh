@@ -14,10 +14,7 @@ vars["MAPD_USER"]=${MAPD_USER:=$(id --user --name)}
 descs["MAPD_GROUP"]="group MapD will be run as"
 vars["MAPD_GROUP"]=${MAPD_GROUP:=$(id --group --name)}
 
-descs["MAPD_LIBJVM_DIR"]="directory containing Java's libjvm.so"
-vars["MAPD_LIBJVM_DIR"]=${MAPD_LIBJVM_DIR:=$(bash ./find_libjvm_dir.sh)}
-
-for v in MAPD_PATH MAPD_STORAGE MAPD_USER MAPD_GROUP MAPD_LIBJVM_DIR; do
+for v in MAPD_PATH MAPD_STORAGE MAPD_USER MAPD_GROUP ; do
   echo "$v: ${descs["$v"]}"
   read -p "[${vars[$v]}]: "
   if [ ! -z "$REPLY" ]; then
@@ -26,7 +23,7 @@ for v in MAPD_PATH MAPD_STORAGE MAPD_USER MAPD_GROUP MAPD_LIBJVM_DIR; do
   echo
 done
 
-for v in MAPD_PATH MAPD_STORAGE MAPD_USER MAPD_GROUP MAPD_LIBJVM_DIR; do
+for v in MAPD_PATH MAPD_STORAGE MAPD_USER MAPD_GROUP ; do
   echo -e "$v:\t${vars[$v]}"
 done
 
@@ -48,7 +45,6 @@ for f in mapd_server mapd_server@ mapd_sd_server mapd_sd_server@ mapd_web_server
       -e "s#@MAPD_DATA@#${vars['MAPD_DATA']}#g" \
       -e "s#@MAPD_USER@#${vars['MAPD_USER']}#g" \
       -e "s#@MAPD_GROUP@#${vars['MAPD_GROUP']}#g" \
-      -e "s#@MAPD_LIBJVM_DIR@#${vars['MAPD_LIBJVM_DIR']}#g" \
       $f.service.in > $f.service
   sudo cp $f.service /lib/systemd/system/
 done
@@ -61,14 +57,12 @@ sed -e "s#@MAPD_PATH@#${vars['MAPD_PATH']}#g" \
     -e "s#@MAPD_DATA@#${vars['MAPD_DATA']}#g" \
     -e "s#@MAPD_USER@#${vars['MAPD_USER']}#g" \
     -e "s#@MAPD_GROUP@#${vars['MAPD_GROUP']}#g" \
-    -e "s#@MAPD_LIBJVM_DIR@#${vars['MAPD_LIBJVM_DIR']}#g" \
     mapd.conf.in > mapd.conf
 sed -e "s#@MAPD_PATH@#${vars['MAPD_PATH']}#g" \
     -e "s#@MAPD_STORAGE@#${vars['MAPD_STORAGE']}#g" \
     -e "s#@MAPD_DATA@#${vars['MAPD_DATA']}#g" \
     -e "s#@MAPD_USER@#${vars['MAPD_USER']}#g" \
     -e "s#@MAPD_GROUP@#${vars['MAPD_GROUP']}#g" \
-    -e "s#@MAPD_LIBJVM_DIR@#${vars['MAPD_LIBJVM_DIR']}#g" \
     mapd-sds.conf.in > mapd-sds.conf
 sudo cp mapd.conf mapd-sds.conf ${vars['MAPD_STORAGE']}
 sudo chown ${vars['MAPD_USER']}:${vars['MAPD_GROUP']} "${vars['MAPD_STORAGE']}/mapd.conf" "${vars['MAPD_STORAGE']}/mapd-sds.conf"

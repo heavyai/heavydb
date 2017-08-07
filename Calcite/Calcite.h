@@ -27,7 +27,6 @@
 #include <thrift/protocol/TBinaryProtocol.h>
 #include <thrift/transport/TSocket.h>
 #include <thrift/transport/TTransportUtils.h>
-#include <jni.h>
 #include <thread>
 #include "gen-cpp/CalciteServer.h"
 #include "rapidjson/document.h"
@@ -48,7 +47,6 @@ class Calcite {
   virtual ~Calcite();
 
  private:
-  void runJNI(const int port, const std::string& data_dir, const size_t calcite_max_memory);
   void runServer(const int mapd_port, const int port, const std::string& data_dir, const size_t calcite_max_mem);
   std::string processImpl(const Catalog_Namespace::SessionInfo& session_info,
                           const std::string sql_string,
@@ -57,23 +55,10 @@ class Calcite {
   std::vector<std::string> get_db_objects(const std::string ra);
 
   std::thread calcite_server_thread_;
-  std::string handle_java_return(JNIEnv* env, jobject process_result);
-  JNIEnv* checkJNIConnection();
   int ping();
 
   bool server_available_;
-  bool jni_;
   int remote_calcite_port_ = -1;
-  JavaVM* jvm_;
-  jclass calciteDirect_;
-  jobject calciteDirectObject_;
-  jmethodID constructor_;
-  jmethodID processMID_;
-  jmethodID updateMetadataMID_;
-  jmethodID hasFailedMID_;
-  jmethodID getElapsedTimeMID_;
-  jmethodID getTextMID_;
-  jmethodID getExtensionFunctionWhitelistMID_;
 };
 
 #endif /* CALCITE_H */

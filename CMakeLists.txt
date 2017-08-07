@@ -131,19 +131,6 @@ if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated-declarations")
 endif()
 
-if(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
-  set(CMAKE_INSTALL_RPATH
-    "\$ORIGIN/../ThirdParty/java/jre/lib/amd64/server"
-    "/usr/lib/jvm/java-1.8.0-openjdk-amd64/jre/lib/amd64/server"
-    "/usr/lib/jvm/jre-1.8.0-openjdk/lib/amd64/server"
-    "/usr/lib/jvm/java-1.8.0-openjdk/jre/lib/amd64/server"
-    "/usr/lib/jvm/jre/lib/amd64/server"
-    "/usr/lib/jvm/java/jre/lib/amd64/server"
-    "/usr/lib/jvm/default-java/jre/lib/amd64/server"
-  )
-  set(CMAKE_BUILD_WITH_INSTALL_RPATH ON)
-endif()
-
 option(ENABLE_LLVM_DBG "switch to local debug version of llvm" OFF)
 if(ENABLE_LLVM_DBG)
   # NOTE: specify LLVM_BIN_DIR to use your local llvm
@@ -256,9 +243,6 @@ add_library(mapd_thrift
     ${CMAKE_BINARY_DIR}/gen-cpp/mapd_constants.cpp
     ${CMAKE_BINARY_DIR}/gen-cpp/mapd_types.cpp)
 target_link_libraries(mapd_thrift ${Thrift_LIBRARIES})
-
-find_package(JNI REQUIRED)
-include_directories(${JNI_INCLUDE_DIRS})
 
 option(ENABLE_JOIN_EXEC "Enable RA vm to execute join node" ON)
 if(ENABLE_JOIN_EXEC)
@@ -495,7 +479,6 @@ if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
   install(FILES systemd/mapd_web_server.service.in systemd/mapd_web_server@.service.in DESTINATION systemd)
   install(FILES systemd/mapd.conf.in DESTINATION systemd)
   install(FILES systemd/mapd-sds.conf.in DESTINATION systemd)
-  install(PROGRAMS systemd/find_libjvm_dir.sh DESTINATION systemd)
   install(PROGRAMS systemd/install_mapd_systemd.sh DESTINATION systemd)
 
   if(NOT ENABLE_RENDERING OR "${RENDERER_CONTEXT_TYPE}" STREQUAL "EGL")
