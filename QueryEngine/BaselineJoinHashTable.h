@@ -93,6 +93,12 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
   int initHashTableOnCpu(const std::vector<JoinColumn>& join_columns,
                          const std::vector<JoinColumnTypeInfo>& join_column_types);
 
+  int initHashTableOnGpu(const std::vector<JoinColumn>& join_columns,
+                         const std::vector<JoinColumnTypeInfo>& join_column_types,
+                         const size_t key_component_width,
+                         const size_t key_component_count,
+                         const int device_id);
+
   llvm::Value* hashPtr(const size_t index);
 
   struct HashTableCacheKey {

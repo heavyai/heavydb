@@ -415,6 +415,76 @@ int BaselineJoinHashTable::initHashTableOnCpu(const std::vector<JoinColumn>& joi
   return err;
 }
 
+int BaselineJoinHashTable::initHashTableOnGpu(const std::vector<JoinColumn>& join_columns,
+                                              const std::vector<JoinColumnTypeInfo>& join_column_types,
+                                              const size_t key_component_width,
+                                              const size_t key_component_count,
+                                              const int device_id) {
+  int err = 0;
+#ifdef HAVE_CUDA
+  const auto catalog = executor_->getCatalog();
+  auto& data_mgr = catalog->get_dataMgr();
+  auto dev_err_buff = alloc_gpu_mem(&data_mgr, sizeof(int), device_id, nullptr);
+  copy_to_gpu(&data_mgr, dev_err_buff, &err, sizeof(err), device_id);
+  switch (key_component_width) {
+    case 4:
+      init_baseline_hash_join_buff_on_device_32(reinterpret_cast<int8_t*>(gpu_hash_table_buff_[device_id]),
+                                                entry_count_,
+                                                key_component_count,
+                                                -1,
+                                                executor_->blockSize(),
+                                                executor_->gridSize());
+      break;
+    case 8:
+      init_baseline_hash_join_buff_on_device_64(reinterpret_cast<int8_t*>(gpu_hash_table_buff_[device_id]),
+                                                entry_count_,
+                                                key_component_count,
+                                                -1,
+                                                executor_->blockSize(),
+                                                executor_->gridSize());
+      break;
+    default:
+      CHECK(false);
+  }
+  auto join_columns_gpu = transfer_pod_vector_to_gpu(join_columns, &data_mgr, device_id);
+  auto join_column_types_gpu = transfer_pod_vector_to_gpu(join_column_types, &data_mgr, device_id);
+  auto hash_buff = reinterpret_cast<int8_t*>(gpu_hash_table_buff_[device_id]);
+  switch (key_component_width) {
+    case 4: {
+      fill_baseline_hash_join_buff_on_device_32(hash_buff,
+                                                entry_count_,
+                                                -1,
+                                                key_component_count,
+                                                reinterpret_cast<int*>(dev_err_buff),
+                                                join_columns_gpu,
+                                                join_column_types_gpu,
+                                                executor_->blockSize(),
+                                                executor_->gridSize());
+      copy_from_gpu(&data_mgr, &err, dev_err_buff, sizeof(err), device_id);
+      break;
+    }
+    case 8: {
+      fill_baseline_hash_join_buff_on_device_64(hash_buff,
+                                                entry_count_,
+                                                -1,
+                                                key_component_count,
+                                                reinterpret_cast<int*>(dev_err_buff),
+                                                join_columns_gpu,
+                                                join_column_types_gpu,
+                                                executor_->blockSize(),
+                                                executor_->gridSize());
+      copy_from_gpu(&data_mgr, &err, dev_err_buff, sizeof(err), device_id);
+      break;
+    }
+    default:
+      CHECK(false);
+  }
+#else
+  CHECK(false);
+#endif
+  return err;
+}
+
 int BaselineJoinHashTable::initHashTableForDevice(const std::vector<JoinColumn>& join_columns,
                                                   const std::vector<JoinColumnTypeInfo>& join_column_types,
                                                   const Data_Namespace::MemoryLevel effective_memory_level,
@@ -423,10 +493,10 @@ int BaselineJoinHashTable::initHashTableForDevice(const std::vector<JoinColumn>&
   const auto col_tuple_expr = std::dynamic_pointer_cast<Analyzer::ColumnVarTuple>(condition_->get_own_right_operand());
   CHECK(col_tuple_expr);
   const auto inner_outer_pairs = normalize_column_pairs(condition_.get(), *catalog, executor_->getTemporaryTables());
-  int err = 0;
-#ifdef HAVE_CUDA
   const auto key_component_width = get_key_component_width(condition_, executor_);
   const auto key_component_count = inner_outer_pairs.size();
+  int err = 0;
+#ifdef HAVE_CUDA
   auto& data_mgr = catalog->get_dataMgr();
   if (memory_level_ == Data_Namespace::GPU_LEVEL) {
     const auto entry_size = (key_component_count + 1) * key_component_width;
@@ -453,66 +523,7 @@ int BaselineJoinHashTable::initHashTableForDevice(const std::vector<JoinColumn>&
 #endif
     }
   } else {
-#ifdef HAVE_CUDA
-    CHECK_EQ(Data_Namespace::GPU_LEVEL, effective_memory_level);
-    auto dev_err_buff = alloc_gpu_mem(&data_mgr, sizeof(int), device_id, nullptr);
-    copy_to_gpu(&data_mgr, dev_err_buff, &err, sizeof(err), device_id);
-    switch (key_component_width) {
-      case 4:
-        init_baseline_hash_join_buff_on_device_32(reinterpret_cast<int8_t*>(gpu_hash_table_buff_[device_id]),
-                                                  entry_count_,
-                                                  key_component_count,
-                                                  -1,
-                                                  executor_->blockSize(),
-                                                  executor_->gridSize());
-        break;
-      case 8:
-        init_baseline_hash_join_buff_on_device_64(reinterpret_cast<int8_t*>(gpu_hash_table_buff_[device_id]),
-                                                  entry_count_,
-                                                  key_component_count,
-                                                  -1,
-                                                  executor_->blockSize(),
-                                                  executor_->gridSize());
-        break;
-      default:
-        CHECK(false);
-    }
-    auto join_columns_gpu = transfer_pod_vector_to_gpu(join_columns, &data_mgr, device_id);
-    auto join_column_types_gpu = transfer_pod_vector_to_gpu(join_column_types, &data_mgr, device_id);
-    auto hash_buff = reinterpret_cast<int8_t*>(gpu_hash_table_buff_[device_id]);
-    switch (key_component_width) {
-      case 4: {
-        fill_baseline_hash_join_buff_on_device_32(hash_buff,
-                                                  entry_count_,
-                                                  -1,
-                                                  key_component_count,
-                                                  reinterpret_cast<int*>(dev_err_buff),
-                                                  join_columns_gpu,
-                                                  join_column_types_gpu,
-                                                  executor_->blockSize(),
-                                                  executor_->gridSize());
-        copy_from_gpu(&data_mgr, &err, dev_err_buff, sizeof(err), device_id);
-        break;
-      }
-      case 8: {
-        fill_baseline_hash_join_buff_on_device_64(hash_buff,
-                                                  entry_count_,
-                                                  -1,
-                                                  key_component_count,
-                                                  reinterpret_cast<int*>(dev_err_buff),
-                                                  join_columns_gpu,
-                                                  join_column_types_gpu,
-                                                  executor_->blockSize(),
-                                                  executor_->gridSize());
-        copy_from_gpu(&data_mgr, &err, dev_err_buff, sizeof(err), device_id);
-        break;
-      }
-      default:
-        CHECK(false);
-    }
-#else
-    CHECK(false);
-#endif
+    err = initHashTableOnGpu(join_columns, join_column_types, key_component_width, key_component_count, device_id);
   }
   return err;
 }
