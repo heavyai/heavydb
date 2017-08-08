@@ -857,6 +857,9 @@ TEST(Select, OrderBy) {
     c("SELECT ufd, COUNT(*) n FROM test GROUP BY ufd, str ORDER BY ufd, n;", dt);
     c("SELECT -x, COUNT(*) FROM test GROUP BY x ORDER BY x DESC;", dt);
     c("SELECT real_str FROM test WHERE real_str LIKE '%real%' ORDER BY real_str ASC;", dt);
+    c("SELECT ss FROM test GROUP by ss ORDER BY ss ASC NULLS FIRST;",
+      "SELECT ss FROM test GROUP by ss ORDER BY ss ASC;",
+      dt);
   }
 }
 

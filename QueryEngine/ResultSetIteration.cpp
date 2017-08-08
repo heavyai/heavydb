@@ -269,6 +269,23 @@ const int8_t* columnar_elem_ptr(const size_t entry_idx, const int8_t* col1_ptr, 
   return col1_ptr + compact_sz1 * entry_idx;
 }
 
+int64_t int_resize_cast(const int64_t ival, const size_t sz) {
+  switch (sz) {
+    case 8:
+      return ival;
+    case 4:
+      return static_cast<int32_t>(ival);
+    case 2:
+      return static_cast<int16_t>(ival);
+    case 1:
+      return static_cast<int8_t>(ival);
+    default:
+      UNREACHABLE();
+  }
+  UNREACHABLE();
+  return 0;
+}
+
 }  // namespace
 
 InternalTargetValue ResultSet::getColumnInternal(const int8_t* buff,
@@ -307,7 +324,8 @@ InternalTargetValue ResultSet::getColumnInternal(const int8_t* buff,
           const auto i2 = read_int_from_buff(columnar_elem_ptr(entry_idx, col2_ptr, compact_sz2), compact_sz2);
           return InternalTargetValue(i1, i2);
         } else {
-          return InternalTargetValue(i1);
+          return InternalTargetValue(
+              agg_info.sql_type.is_fp() ? i1 : int_resize_cast(i1, agg_info.sql_type.get_logical_size()));
         }
       }
       crt_col_ptr = next_col_ptr;
@@ -362,7 +380,8 @@ InternalTargetValue ResultSet::getColumnInternal(const int8_t* buff,
             CHECK_GE(str_len, 0);
             return getVarlenOrderEntry(i1, str_len);
           }
-          return InternalTargetValue(i1);
+          return InternalTargetValue(
+              agg_info.sql_type.is_fp() ? i1 : int_resize_cast(i1, agg_info.sql_type.get_logical_size()));
         }
       }
       rowwise_target_ptr =
@@ -695,27 +714,6 @@ TargetValue ResultSet::makeVarlenTargetValue(const int8_t* ptr1,
   }
   return std::string(reinterpret_cast<char*>(varlen_ptr), length);
 }
-
-namespace {
-
-int64_t int_resize_cast(const int64_t ival, const size_t sz) {
-  switch (sz) {
-    case 8:
-      return ival;
-    case 4:
-      return static_cast<int32_t>(ival);
-    case 2:
-      return static_cast<int16_t>(ival);
-    case 1:
-      return static_cast<int8_t>(ival);
-    default:
-      UNREACHABLE();
-  }
-  UNREACHABLE();
-  return 0;
-}
-
-}  // namespace
 
 // Reads an integer or a float from ptr based on the type and the byte width.
 TargetValue ResultSet::makeTargetValue(const int8_t* ptr,
