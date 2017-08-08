@@ -19,6 +19,7 @@
 
 #include "LeafHostInfo.h"
 #include "gen-cpp/MapD.h"
+#include "DataMgr/MemoryLevel.h"
 #include "QueryEngine/CompilationOptions.h"
 #include "QueryEngine/TargetMetaInfo.h"
 
@@ -56,6 +57,16 @@ class LeafAggregator {
   void disconnect(const TSessionId session) { CHECK(false); }
 
   void interrupt(const TSessionId session) { CHECK(false); }
+
+  std::vector<TServerStatus> getLeafStatus(TSessionId session) {
+    CHECK(false);
+    return {};
+  }
+
+  std::vector<TNodeMemoryInfo> getLeafMemoryInfo(TSessionId session, Data_Namespace::MemoryLevel memory_level) {
+    CHECK(false);
+    return {};
+  }
 
   size_t leafCount() const { return 0; }
 

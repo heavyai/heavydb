@@ -23,6 +23,8 @@
 
 #include "AbstractBuffer.h"
 #include "AbstractBufferMgr.h"
+#include "BufferMgr/Buffer.h"
+#include "BufferMgr/BufferMgr.h"
 #include "MemoryLevel.h"
 #include "../Shared/mapd_shared_mutex.h"
 
@@ -42,16 +44,21 @@ class CudaMgr;
 
 namespace Data_Namespace {
 
-struct gpuMemorySummary {
-  int64_t max;
-  int64_t inUse;
-  int64_t allocated;
-  bool isAllocationCapped;  // mean allocation request failed
+struct MemoryData {
+  size_t slabNum;
+  int32_t startPage;
+  size_t numPages;
+  u_int32_t touch;
+  std::vector<int32_t> chunk_key;
+  Buffer_Namespace::MemStatus isFree;
 };
 
-struct memorySummary {
-  int64_t cpuMemoryInUse;
-  std::vector<gpuMemorySummary> gpuSummary;
+struct MemoryInfo {
+  size_t pageSize;
+  size_t maxNumPages;
+  size_t numPageAllocated;
+  bool isAllocationCapped;
+  std::vector<MemoryData> nodeMemoryData;
 };
 
 class DataMgr {
@@ -81,7 +88,7 @@ class DataMgr {
   // copies one buffer to another
   void copy(AbstractBuffer* destBuffer, AbstractBuffer* srcBuffer);
   bool isBufferOnDevice(const ChunkKey& key, const MemoryLevel memLevel, const int deviceId);
-  memorySummary getMemorySummary();
+  std::vector<MemoryInfo> getMemoryInfo(const MemoryLevel memLevel);
   std::string dumpLevel(const MemoryLevel memLevel);
   void clearMemory(const MemoryLevel memLevel);
 

@@ -93,7 +93,11 @@ class BufferMgr : public AbstractBufferMgr {  // implements
   size_t getInUseSize();
   size_t getMaxSize();
   size_t getAllocated();
+  size_t getMaxBufferSize();
+  size_t getMaxSlabSize();
+  size_t getPageSize();
   bool isAllocationCapped();
+  const std::vector<BufferList>& getSlabSegments();
 
   /// Creates a chunk with the specified key and page size.
   virtual AbstractBuffer* createBuffer(const ChunkKey& key, const size_t pageSize = 0, const size_t initialSize = 0);

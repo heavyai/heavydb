@@ -33,6 +33,9 @@ build/
 Debug/
 .settings/
 
+# VS code settings files
+.vscode/
+
 # Thrift-generated files
 java/src/gen/
 gen-js/

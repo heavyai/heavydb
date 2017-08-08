@@ -126,6 +126,7 @@ class MapDHandler : public MapDIf {
   void disconnect(const TSessionId& session);
   void interrupt(const TSessionId& session);
   void get_server_status(TServerStatus& _return, const TSessionId& session);
+  void get_status(std::vector<TServerStatus>& _return, const TSessionId& session);
   void sql_execute(TQueryResult& _return,
                    const TSessionId& session,
                    const std::string& query,
@@ -155,9 +156,7 @@ class MapDHandler : public MapDIf {
   void get_frontend_views(std::vector<TFrontendView>& _return, const TSessionId& session);
   void set_execution_mode(const TSessionId& session, const TExecuteMode::type mode);
   void get_version(std::string& _return);
-  void get_memory_gpu(std::string& _return, const TSessionId& session);
-  void get_memory_cpu(std::string& memory, const TSessionId& session);
-  void get_memory_summary(TMemorySummary& _return, const TSessionId& session);
+  void get_memory(std::vector<TNodeMemoryInfo>& _return, const TSessionId& session, const std::string& memory_level);
   void load_table_binary(const TSessionId& session, const std::string& table_name, const std::vector<TRow>& rows);
   void load_table(const TSessionId& session, const std::string& table_name, const std::vector<TStringRow>& rows);
   void render(TRenderResult& _return,

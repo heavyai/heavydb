@@ -174,9 +174,68 @@ void DataMgr::createTopLevelMetadata() const {  // create metadata shared by all
   fm_top->createTopLevelMetadata();
 }
 
-memorySummary DataMgr::getMemorySummary() {
-  memorySummary ms;
-  ms.cpuMemoryInUse = bufferMgrs_[MemoryLevel::CPU_LEVEL][0]->getInUseSize();
+std::vector<MemoryInfo> DataMgr::getMemoryInfo(const MemoryLevel memLevel) {
+  // TODO (vraj) : Reduce the duplicate code
+  std::vector<MemoryInfo> memInfo;
+  if (memLevel == MemoryLevel::CPU_LEVEL) {
+    CpuBufferMgr* cpuBuffer = dynamic_cast<CpuBufferMgr*>(bufferMgrs_[MemoryLevel::CPU_LEVEL][0]);
+    MemoryInfo mi;
+
+    mi.pageSize = cpuBuffer->getPageSize();
+    mi.maxNumPages = cpuBuffer->getMaxSize() / mi.pageSize;
+    mi.isAllocationCapped = cpuBuffer->isAllocationCapped();
+    mi.numPageAllocated = cpuBuffer->getAllocated() / mi.pageSize;
+
+    const std::vector<BufferList> slab_segments = cpuBuffer->getSlabSegments();
+    size_t numSlabs = slab_segments.size();
+
+    for (size_t slabNum = 0; slabNum != numSlabs; ++slabNum) {
+      for (auto segIt : slab_segments[slabNum]) {
+        MemoryData md;
+        md.slabNum = slabNum;
+        md.startPage = segIt.startPage;
+        md.numPages = segIt.numPages;
+        md.touch = segIt.lastTouched;
+        md.isFree = segIt.memStatus;
+        md.chunk_key.insert(md.chunk_key.end(), segIt.chunkKey.begin(), segIt.chunkKey.end());
+        mi.nodeMemoryData.push_back(md);
+      }
+    }
+    memInfo.push_back(mi);
+  } else if (hasGpus_) {
+    int numGpus = cudaMgr_->getDeviceCount();
+    for (int gpuNum = 0; gpuNum < numGpus; ++gpuNum) {
+      GpuCudaBufferMgr* gpuBuffer = dynamic_cast<GpuCudaBufferMgr*>(bufferMgrs_[MemoryLevel::GPU_LEVEL][gpuNum]);
+      MemoryInfo mi;
+
+      mi.pageSize = gpuBuffer->getPageSize();
+      mi.maxNumPages = gpuBuffer->getMaxSize() / mi.pageSize;
+      mi.isAllocationCapped = gpuBuffer->isAllocationCapped();
+      mi.numPageAllocated = gpuBuffer->getAllocated() / mi.pageSize;
+      const std::vector<BufferList> slab_segments = gpuBuffer->getSlabSegments();
+      size_t numSlabs = slab_segments.size();
+
+      for (size_t slabNum = 0; slabNum != numSlabs; ++slabNum) {
+        for (auto segIt : slab_segments[slabNum]) {
+          MemoryData md;
+          md.slabNum = slabNum;
+          md.startPage = segIt.startPage;
+          md.numPages = segIt.numPages;
+          md.touch = segIt.lastTouched;
+          md.chunk_key.insert(md.chunk_key.end(), segIt.chunkKey.begin(), segIt.chunkKey.end());
+          md.isFree = segIt.memStatus;
+          mi.nodeMemoryData.push_back(md);
+        }
+      }
+      memInfo.push_back(mi);
+    }
+  }
+  return memInfo;
+}
+
+/*
+std::vector<MemoryData> DataMgr::getGpuMemory() {
+  std::vector<MemoryData> memInfo;
   if (hasGpus_) {
     int numGpus = cudaMgr_->getDeviceCount();
     for (int gpuNum = 0; gpuNum < numGpus; ++gpuNum) {
@@ -185,11 +244,13 @@ memorySummary DataMgr::getMemorySummary() {
       gms.inUse = bufferMgrs_[MemoryLevel::GPU_LEVEL][gpuNum]->getInUseSize();
       gms.allocated = bufferMgrs_[MemoryLevel::GPU_LEVEL][gpuNum]->getAllocated();
       gms.isAllocationCapped = bufferMgrs_[MemoryLevel::GPU_LEVEL][gpuNum]->isAllocationCapped();
-      ms.gpuSummary.push_back(gms);
+      memInfo.push_back(gms);
     }
   }
-  return ms;
+  return memInfo;
 }
+
+*/
 //  std::ostringstream tss;
 //  size_t mb = 1024 * 1024;
 //  tss << std::endl;

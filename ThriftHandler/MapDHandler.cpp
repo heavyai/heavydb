@@ -61,6 +61,8 @@
 #include "Shared/scope.h"
 #include "Shared/StringTransform.h"
 #include "Shared/MapDParameters.h"
+#include "DataMgr/BufferMgr/Buffer.h"
+#include "DataMgr/BufferMgr/BufferMgr.h"
 
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/replace.hpp>
@@ -352,6 +354,22 @@ void MapDHandler::get_server_status(TServerStatus& _return, const TSessionId& se
   _return.rendering_enabled = enable_rendering_;
   _return.start_time = start_time_;
   _return.edition = MAPD_EDITION;
+  _return.host_name = "aggregator";
+}
+
+void MapDHandler::get_status(std::vector<TServerStatus>& _return, const TSessionId& session) {
+  TServerStatus ret;
+  ret.read_only = read_only_;
+  ret.version = MAPD_RELEASE;
+  ret.rendering_enabled = enable_rendering_;
+  ret.start_time = start_time_;
+  ret.edition = MAPD_EDITION;
+  ret.host_name = "aggregator";
+  _return.push_back(ret);
+  if (leaf_aggregator_.leafCount() > 0) {
+    std::vector<TServerStatus> leaf_status = leaf_aggregator_.getLeafStatus(session);
+    _return.insert(_return.end(), leaf_status.begin(), leaf_status.end());
+  }
 }
 
 void MapDHandler::value_to_thrift_column(const TargetValue& tv, const SQLTypeInfo& ti, TColumn& column) {
@@ -834,16 +852,6 @@ void MapDHandler::get_version(std::string& version) {
   version = MAPD_RELEASE;
 }
 
-void MapDHandler::get_memory_gpu(std::string& memory, const TSessionId& session) {
-  const auto session_info = get_session(session);
-  memory = sys_cat_->get_dataMgr().dumpLevel(MemoryLevel::GPU_LEVEL);
-}
-
-void MapDHandler::get_memory_cpu(std::string& memory, const TSessionId& session) {
-  const auto session_info = get_session(session);
-  memory = sys_cat_->get_dataMgr().dumpLevel(MemoryLevel::CPU_LEVEL);
-}
-
 void MapDHandler::clear_gpu_memory(const TSessionId& session) {
   const auto session_info = get_session(session);
   sys_cat_->get_dataMgr().clearMemory(MemoryLevel::GPU_LEVEL);
@@ -858,19 +866,44 @@ TSessionId MapDHandler::getInvalidSessionId() const {
   return INVALID_SESSION_ID;
 }
 
-// void get_memory_summary(std::string& memory) { memory = sys_cat_->get_dataMgr().getMemorySummary(); }
-
-void MapDHandler::get_memory_summary(TMemorySummary& memory, const TSessionId& session) {
+void MapDHandler::get_memory(std::vector<TNodeMemoryInfo>& _return,
+                             const TSessionId& session,
+                             const std::string& memory_level) {
   const auto session_info = get_session(session);
-  Data_Namespace::memorySummary internal_memory = sys_cat_->get_dataMgr().getMemorySummary();
-  memory.cpu_memory_in_use = internal_memory.cpuMemoryInUse;
-  for (auto gpu : internal_memory.gpuSummary) {
-    TGpuMemorySummary gs;
-    gs.in_use = gpu.inUse;
-    gs.max = gpu.max;
-    gs.allocated = gpu.allocated;
-    gs.is_allocation_capped = gpu.isAllocationCapped;
-    memory.gpu_summary.push_back(gs);
+  std::vector<Data_Namespace::MemoryInfo> internal_memory;
+  Data_Namespace::MemoryLevel mem_level;
+  if (!memory_level.compare("gpu")) {
+    mem_level = Data_Namespace::MemoryLevel::GPU_LEVEL;
+    internal_memory = sys_cat_->get_dataMgr().getMemoryInfo(MemoryLevel::GPU_LEVEL);
+  } else {
+    mem_level = Data_Namespace::MemoryLevel::CPU_LEVEL;
+    internal_memory = sys_cat_->get_dataMgr().getMemoryInfo(MemoryLevel::CPU_LEVEL);
+  }
+
+  for (auto memInfo : internal_memory) {
+    TNodeMemoryInfo nodeInfo;
+    if (leaf_aggregator_.leafCount() > 0) {
+      nodeInfo.host_name = "aggregator";
+    }
+    nodeInfo.page_size = memInfo.pageSize;
+    nodeInfo.max_num_pages = memInfo.maxNumPages;
+    nodeInfo.num_pages_allocated = memInfo.numPageAllocated;
+    nodeInfo.is_allocation_capped = memInfo.isAllocationCapped;
+    for (auto gpu : memInfo.nodeMemoryData) {
+      TMemoryData md;
+      md.slab = gpu.slabNum;
+      md.start_page = gpu.startPage;
+      md.num_pages = gpu.numPages;
+      md.touch = gpu.touch;
+      md.chunk_key.insert(md.chunk_key.end(), gpu.chunk_key.begin(), gpu.chunk_key.end());
+      md.is_free = gpu.isFree == Buffer_Namespace::MemStatus::FREE;
+      nodeInfo.node_memory_data.push_back(md);
+    }
+    _return.push_back(nodeInfo);
+  }
+  if (leaf_aggregator_.leafCount() > 0) {
+    std::vector<TNodeMemoryInfo> leafSummary = leaf_aggregator_.getLeafMemoryInfo(session, mem_level);
+    _return.insert(_return.begin(), leafSummary.begin(), leafSummary.end());
   }
 }
 

@@ -29,9 +29,10 @@
 #include <iostream>
 #include <iomanip>
 #include <fstream>
+#include <cmath>
+#include <glog/logging.h>
 #include <termios.h>
 #include <signal.h>
-#include <math.h>
 #include <boost/algorithm/string/join.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/algorithm/string/trim.hpp>
@@ -85,8 +86,8 @@ struct ClientContext {
   std::vector<TDBInfo> dbinfos_return;
   TExecuteMode::type execution_mode;
   std::string version;
-  std::string memory_usage;
-  TMemorySummary memory_summary;
+  std::vector<TNodeMemoryInfo> gpu_memory;
+  std::vector<TNodeMemoryInfo> cpu_memory;
   TTableDetails table_details;
   std::string table_name;
   std::string file_name;
@@ -94,6 +95,8 @@ struct ClientContext {
   int db_id;
   int table_id;
   int epoch_value;
+  TServerStatus server_status;
+  std::vector<TServerStatus> cluster_status;
 
   ClientContext(TTransport& t, MapDClient& c)
       : transport(t), client(c), session(INVALID_SESSION_ID), execution_mode(TExecuteMode::GPU) {}
@@ -116,7 +119,8 @@ enum ThriftService {
   kCLEAR_MEMORY_CPU,
   kIMPORT_GEO_TABLE,
   kINTERRUPT,
-  kROLLBACK_TABLE_EPOCH
+  kROLLBACK_TABLE_EPOCH,
+  kGET_SERVER_STATUS
 };
 
 namespace {
@@ -157,13 +161,14 @@ bool thrift_with_retry(ThriftService which_service, ClientContext& context, cons
         context.client.get_version(context.version);
         break;
       case kGET_MEMORY_GPU:
-        context.client.get_memory_gpu(context.memory_usage, context.session);
+        context.client.get_memory(context.gpu_memory, context.session, "gpu");
         break;
       case kGET_MEMORY_CPU:
-        context.client.get_memory_cpu(context.memory_usage, context.session);
+        context.client.get_memory(context.cpu_memory, context.session, "cpu");
         break;
       case kGET_MEMORY_SUMMARY:
-        context.client.get_memory_summary(context.memory_summary, context.session);
+        context.client.get_memory(context.gpu_memory, context.session, "gpu");
+        context.client.get_memory(context.cpu_memory, context.session, "cpu");
         break;
       case kGET_TABLE_DETAILS:
         context.client.get_table_details(context.table_details, context.session, arg);
@@ -181,6 +186,8 @@ bool thrift_with_retry(ThriftService which_service, ClientContext& context, cons
       case kROLLBACK_TABLE_EPOCH:
         context.client.rollback_table_epoch(context.session, context.db_id, context.table_id, context.epoch_value);
         break;
+      case kGET_SERVER_STATUS:
+        context.client.get_status(context.cluster_status, context.session);
     }
   } catch (TMapDException& e) {
     std::cerr << e.error_msg << std::endl;
@@ -444,6 +451,7 @@ void process_backslash_commands(char* command, ClientContext& context) {
       std::cout << "\\memory_summary Print memory usage summary.\n";
       std::cout << "\\version Print MapD Server version.\n";
       std::cout << "\\copy <file path> <table> Copy data from file to table.\n";
+      std::cout << "\\status get status of the server and the leaf nodes.\n";
       std::cout << "\\q Quit.\n";
       return;
     case 'd': {
@@ -475,13 +483,14 @@ void process_backslash_commands(char* command, ClientContext& context) {
         }
         std::string encoding;
         if (p.col_type.type == TDatumType::STR) {
-          encoding =
-              (p.col_type.encoding == 0 ? " ENCODING NONE" : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
-                                                                 std::to_string(p.col_type.comp_param) + ")");
+          encoding = (p.col_type.encoding == 0 ? " ENCODING NONE"
+                                               : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
+                                                     std::to_string(p.col_type.comp_param) + ")");
 
         } else {
-          encoding = (p.col_type.encoding == 0 ? "" : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
-                                                          std::to_string(p.col_type.comp_param) + ")");
+          encoding = (p.col_type.encoding == 0 ? ""
+                                               : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
+                                                     std::to_string(p.col_type.comp_param) + ")");
         }
         std::cout << comma_or_blank << p.col_name << " " << thrift_to_name(p.col_type)
                   << (p.col_type.nullable ? "" : " NOT NULL") << encoding;
@@ -861,6 +870,158 @@ void register_signal_handler() {
   signal(SIGINT, mapdql_signal_handler);
 }
 
+void print_memory_summary(ClientContext context, std::string memory_level) {
+  std::ostringstream tss;
+  std::vector<TNodeMemoryInfo> memory_info;
+  std::string sub_system;
+  std::string cur_host = "^";
+  bool hasGPU = false;
+  bool multiNode = context.cpu_memory.size() > 1;
+  if (!memory_level.compare("gpu")) {
+    memory_info = context.gpu_memory;
+    sub_system = "GPU";
+    hasGPU = true;
+  } else {
+    memory_info = context.cpu_memory;
+    sub_system = "CPU";
+  }
+
+  tss << "MapD Server " << sub_system << " Memory Summary:" << std::endl;
+
+  if (multiNode) {
+    if (hasGPU) {
+      tss << "        NODE[GPU]            MAX            USE      ALLOCATED           FREE" << std::endl;
+    } else {
+      tss << "        NODE            MAX            USE      ALLOCATED           FREE" << std::endl;
+    }
+  } else {
+    if (hasGPU) {
+      tss << "[GPU]            MAX            USE      ALLOCATED           FREE" << std::endl;
+    } else {
+      tss << "            MAX            USE      ALLOCATED           FREE" << std::endl;
+    }
+  }
+
+  for (auto& nodeIt : memory_info) {
+    int MB = 1024 * 1024;
+    u_int64_t page_count = 0;
+    u_int64_t free_page_count = 0;
+    u_int64_t used_page_count = 0;
+    u_int16_t gpu_num = 0;
+    for (auto& segIt : nodeIt.node_memory_data) {
+      page_count += segIt.num_pages;
+      if (segIt.is_free) {
+        free_page_count += segIt.num_pages;
+      }
+    }
+    if (context.cpu_memory.size() > 1) {
+    }
+    used_page_count = page_count - free_page_count;
+    if (cur_host.compare(nodeIt.host_name)) {
+      gpu_num = 0;
+      cur_host = nodeIt.host_name;
+    } else {
+      ++gpu_num;
+    }
+    if (multiNode) {
+      tss << std::setfill(' ') << std::setw(12) << nodeIt.host_name;
+      if (hasGPU) {
+        tss << std::setfill(' ') << std::setw(3);
+        tss << "[" << gpu_num << "]";
+      } else {
+      }
+    } else {
+      if (hasGPU) {
+        tss << std::setfill(' ') << std::setw(3);
+        tss << "[" << gpu_num << "]";
+      } else {
+      }
+    }
+    tss << std::fixed;
+    tss << std::setprecision(2);
+    tss << std::setfill(' ') << std::setw(12) << ((float)nodeIt.page_size * nodeIt.max_num_pages) / MB << " MB";
+    tss << std::setfill(' ') << std::setw(12) << ((float)nodeIt.page_size * used_page_count) / MB << " MB";
+    tss << std::setfill(' ') << std::setw(12) << ((float)nodeIt.page_size * page_count) / MB << " MB";
+    tss << std::setfill(' ') << std::setw(12) << ((float)nodeIt.page_size * free_page_count) / MB << " MB";
+    if (nodeIt.is_allocation_capped) {
+      tss << " The allocation is capped!";
+    }
+    tss << std::endl;
+  }
+  std::cout << tss.str() << std::endl;
+}
+
+void print_memory_info(ClientContext context, std::string memory_level) {
+  int MB = 1024 * 1024;
+  std::ostringstream tss;
+  std::vector<TNodeMemoryInfo> memory_info;
+  std::string sub_system;
+  std::string cur_host = "^";
+  bool multiNode = context.cpu_memory.size() > 1;
+  int mgr_num = 0;
+  if (!memory_level.compare("gpu")) {
+    memory_info = context.gpu_memory;
+    sub_system = "GPU";
+  } else {
+    memory_info = context.cpu_memory;
+    sub_system = "CPU";
+  }
+
+  tss << "MapD Server Detailed " << sub_system << " Memory Usage:" << std::endl;
+  for (auto& nodeIt : memory_info) {
+    if (cur_host.compare(nodeIt.host_name)) {
+      mgr_num = 0;
+      cur_host = nodeIt.host_name;
+    } else {
+      ++mgr_num;
+    }
+    cur_host = nodeIt.host_name;
+    if (multiNode) {
+      tss << "Node: " << nodeIt.host_name << std::endl;
+    }
+    tss << "Maximum Bytes for one page: " << nodeIt.page_size << " Bytes" << std::endl;
+    tss << "Maximum Bytes for node: " << (nodeIt.max_num_pages * nodeIt.page_size) / MB << " MB" << std::endl;
+    tss << "Memory allocated: " << (nodeIt.num_pages_allocated * nodeIt.page_size) / MB << " MB" << std::endl;
+    tss << sub_system << "[" << mgr_num << "]"
+        << " Slab Information:" << std::endl;
+    if (nodeIt.is_allocation_capped) {
+      tss << "The allocation is capped!";
+    }
+    tss << "SLAB     ST_PAGE NUM_PAGE  TOUCH         CHUNK_KEY" << std::endl;
+    for (auto segIt = nodeIt.node_memory_data.begin(); segIt != nodeIt.node_memory_data.end(); ++segIt) {
+      tss << std::setfill(' ') << std::setw(4) << segIt->slab;
+      tss << std::setfill(' ') << std::setw(12) << segIt->start_page;
+      tss << std::setfill(' ') << std::setw(9) << segIt->num_pages;
+      tss << std::setfill(' ') << std::setw(7) << segIt->touch;
+      tss << std::setfill(' ') << std::setw(5);
+      auto nextSeg = segIt + 1;
+      if (nextSeg != nodeIt.node_memory_data.end()) {
+        if (segIt->start_page + segIt->num_pages == nextSeg->start_page) {
+          tss << "USED";
+          tss << std::setfill(' ') << std::setw(5);
+          for (auto& vecIt : segIt->chunk_key) {
+            tss << vecIt << ",";
+          }
+        } else {
+          tss << "FREE";
+        }
+      } else {
+        if (segIt->is_free) {
+          tss << "FREE";
+        } else {
+          tss << "USED";
+          tss << std::setfill(' ') << std::setw(5);
+          for (auto& vecIt : segIt->chunk_key) {
+            tss << vecIt << ",";
+          }
+        }
+      }
+      tss << std::endl;
+    }
+    tss << "---------------------------------------------------------------" << std::endl;
+  }
+  std::cout << tss.str() << std::endl;
+}
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -1084,13 +1245,13 @@ int main(int argc, char** argv) {
       }
     } else if (!strncmp(line, "\\memory_gpu", 11)) {
       if (thrift_with_retry(kGET_MEMORY_GPU, context, nullptr)) {
-        std::cout << "MapD Server GPU Detailed Memory Usage " << context.memory_usage << std::endl;
+        print_memory_info(context, "gpu");
       } else {
         std::cout << "Cannot connect to MapD Server." << std::endl;
       }
     } else if (!strncmp(line, "\\memory_cpu", 11)) {
       if (thrift_with_retry(kGET_MEMORY_CPU, context, nullptr)) {
-        std::cout << "MapD Server CPU Detailed Memory Usage " << context.memory_usage << std::endl;
+        print_memory_info(context, "cpu");
       } else {
         std::cout << "Cannot connect to MapD Server." << std::endl;
       }
@@ -1108,24 +1269,44 @@ int main(int argc, char** argv) {
       }
     } else if (!strncmp(line, "\\memory_summary", 11)) {
       if (thrift_with_retry(kGET_MEMORY_SUMMARY, context, nullptr)) {
-        std::ostringstream tss;
-        size_t mb = 1024 * 1024;
-        tss << std::endl;
-        tss << "CPU RAM IN BUFFER USE : " << std::fixed << std::setw(9) << std::setprecision(2)
-            << ((float)context.memory_summary.cpu_memory_in_use / mb) << " MB" << std::endl;
-        int gpuNum = 0;
-        tss << "GPU VRAM USAGE (in MB's)" << std::endl;
-        tss << "GPU     MAX    ALLOC    IN-USE     FREE" << std::endl;
-        for (auto gpu : context.memory_summary.gpu_summary) {
-          int64_t real_max = gpu.is_allocation_capped ? gpu.allocated : gpu.max;
-          tss << std::setfill(' ') << std::setw(2) << gpuNum << std::setw(9) << std::setprecision(2)
-              << ((float)gpu.max / mb) << std::setw(9) << std::setprecision(2) << ((float)gpu.allocated / mb)
-              << (gpu.is_allocation_capped ? "*" : " ") << std::setw(9) << std::setprecision(2)
-              << ((float)gpu.in_use / mb) << std::setw(9) << std::setprecision(2)
-              << ((float)(real_max - gpu.in_use) / mb) << std::endl;
-          gpuNum++;
+        print_memory_summary(context, "cpu");
+        print_memory_summary(context, "gpu");
+      } else {
+        std::cout << "Cannot connect to MapD Server." << std::endl;
+      }
+    } else if (!strncmp(line, "\\status", 8)) {
+      if (thrift_with_retry(kGET_SERVER_STATUS, context, nullptr)) {
+        time_t t = (time_t)context.cluster_status[0].start_time;
+        std::tm* tm_ptr = gmtime(&t);
+        char buf[12] = {0};
+        strftime(buf, 11, "%F", tm_ptr);
+        std::string server_version = context.cluster_status[0].version;
+        if (context.cluster_status.size() > 1) {
+          std::cout << "Name of Leaf               : " << context.cluster_status[0].host_name << std::endl;
         }
-        std::cout << "MapD Server Memory Usage " << tss.str() << std::endl;
+        
+        std::cout << "The Server Version Number  : " << context.cluster_status[0].version << std::endl;
+        std::cout << "The Server Start Time      : " << buf << " : " << tm_ptr->tm_hour << ":" << tm_ptr->tm_min << ":"
+                  << tm_ptr->tm_sec << std::endl;
+        std::cout << "The Server edition         : " << server_version << std::endl;
+
+        if (context.cluster_status.size() > 1) {
+          std::cout << "The Number of Leaves        : " << context.cluster_status.size() - 1 << std::endl;
+          for (auto leaf = context.cluster_status.begin() + 1; leaf != context.cluster_status.end(); ++leaf) {
+            t = (time_t)leaf->start_time;
+            buf[11] = 0;
+            std::tm* tm_ptr = gmtime(&t);
+            strftime(buf, 11, "%F", tm_ptr);
+            std::cout << "--------------------------------------------------" << std::endl;
+            std::cout << "Name of Node              : " << leaf->host_name << std::endl;
+            if (server_version.compare(leaf->version) != 0) {
+              std::cout << "The Leaf Version Number   : " << leaf->version << std::endl;
+              std::cerr << "Version number mismatch!" << std::endl;
+            }
+            std::cout << "The Leaf Start Time       : " << buf << " : " << tm_ptr->tm_hour << ":" << tm_ptr->tm_min
+                      << ":" << tm_ptr->tm_sec << std::endl;
+          }
+        }
       } else {
         std::cout << "Cannot connect to MapD Server." << std::endl;
       }

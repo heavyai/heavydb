@@ -192,6 +192,7 @@ struct TServerStatus {
   3: bool rendering_enabled
   4: i64 start_time
   5: string edition
+  6: string host_name
 }
 
 typedef map<string, TRenderProperty> TRenderPropertyMap
@@ -236,16 +237,23 @@ struct TRenderResult {
   5: i64 total_time_ms
 }
 
-struct TGpuMemorySummary {
-  1: i64 max
-  2: i64 in_use
-  3: i64 allocated
-  4: bool is_allocation_capped
+struct TMemoryData {
+  1: i64 slab
+  2: i32 start_page
+  3: i64 num_pages
+  4: i32 touch
+  5: list<i64> chunk_key
+  6: i32 buffer_epoch
+  7: bool is_free
 }
 
-struct TMemorySummary {
-  1: i64 cpu_memory_in_use
-  2: list<TGpuMemorySummary> gpu_summary
+struct TNodeMemoryInfo {
+  1: string host_name
+  2: i64 page_size
+  3: i64 max_num_pages
+  4: i64 num_pages_allocated
+  5: bool is_allocation_capped
+  6: list<TMemoryData> node_memory_data
 }
 
 struct TTableDetails {
@@ -338,6 +346,7 @@ service MapD {
   TSessionId connect(1: string user, 2: string passwd, 3: string dbname) throws (1: TMapDException e)
   void disconnect(1: TSessionId session) throws (1: TMapDException e)
   TServerStatus get_server_status(1: TSessionId session) throws (1: TMapDException e)
+  list<TServerStatus> get_status(1: TSessionId session) throws (1: TMapDException e)
   list<string> get_tables(1: TSessionId session) throws (1: TMapDException e)
   TTableDetails get_table_details(1: TSessionId session, 2: string table_name) throws (1: TMapDException e)
   TTableDetails get_internal_table_details(1: TSessionId session, 2: string table_name) throws (1: TMapDException e)
@@ -347,9 +356,7 @@ service MapD {
   void start_heap_profile(1: TSessionId session) throws (1: TMapDException e)
   void stop_heap_profile(1: TSessionId session) throws (1: TMapDException e)
   string get_heap_profile(1: TSessionId session) throws (1: TMapDException e)
-  string get_memory_gpu(1: TSessionId session) throws (1: TMapDException e)
-  string get_memory_cpu(1: TSessionId session) throws (1: TMapDException e)
-  TMemorySummary get_memory_summary(1: TSessionId session) throws (1: TMapDException e)
+  list<TNodeMemoryInfo> get_memory(1: TSessionId session, 2: string memory_level) throws (1: TMapDException e)
   void clear_cpu_memory(1: TSessionId session) throws (1: TMapDException e)
   void clear_gpu_memory(1: TSessionId session) throws (1: TMapDException e)
   void rollback_table_epoch (1: TSessionId session 2: i32 db_id 3: i32 table_id 4: i32 new_epoch) throws (1: TMapDException e)

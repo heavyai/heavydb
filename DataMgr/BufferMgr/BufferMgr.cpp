@@ -449,6 +449,10 @@ bool BufferMgr::isAllocationCapped() {
   return allocationsCapped_;
 }
 
+size_t BufferMgr::getPageSize() {
+  return pageSize_;
+}
+
 // return the size of the chunks in use in bytes
 size_t BufferMgr::getInUseSize() {
   size_t inUse = 0;
@@ -782,6 +786,14 @@ size_t BufferMgr::size() {
   return numPagesAllocated_;
 }
 
+size_t BufferMgr::getMaxBufferSize() {
+  return maxBufferSize_;
+}
+
+size_t BufferMgr::getMaxSlabSize() {
+  return maxSlabSize_;
+}
+
 void BufferMgr::getChunkMetadataVec(std::vector<std::pair<ChunkKey, ChunkMetadata>>& chunkMetadataVec) {
   LOG(FATAL) << "getChunkMetadataVec not supported for BufferMgr.";
 }
@@ -789,5 +801,9 @@ void BufferMgr::getChunkMetadataVec(std::vector<std::pair<ChunkKey, ChunkMetadat
 void BufferMgr::getChunkMetadataVecForKeyPrefix(std::vector<std::pair<ChunkKey, ChunkMetadata>>& chunkMetadataVec,
                                                 const ChunkKey& keyPrefix) {
   LOG(FATAL) << "getChunkMetadataVecForPrefix not supported for BufferMgr.";
+}
+
+const std::vector<BufferList>& BufferMgr::getSlabSegments() {
+  return slabSegments_;
 }
 }
