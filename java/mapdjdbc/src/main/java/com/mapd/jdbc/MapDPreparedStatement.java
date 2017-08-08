@@ -79,6 +79,7 @@ class MapDPreparedStatement implements PreparedStatement {
     currentSQL = sql;
     this.client = client;
     this.session = session;
+    this.stmt = new MapDStatement(session, client);
     MAPDLOGGER.debug("Prepared statement is " + currentSQL);
     //TODO in real life this needs to check if the ? isinside quotes before we assume it a parameter
     brokenSQL = currentSQL.split("\\?");
@@ -128,7 +129,6 @@ class MapDPreparedStatement implements PreparedStatement {
   public ResultSet executeQuery() throws SQLException { //logger.debug("Entered");
     if (isNewBatch) {
       String qsql = getQuery();
-      stmt = new MapDStatement(session, client);
       return stmt.executeQuery(qsql);
     }
     throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
@@ -278,7 +278,6 @@ class MapDPreparedStatement implements PreparedStatement {
   @Override
   public boolean execute() throws SQLException { //logger.debug("Entered");
     String tQuery = getQuery();
-    stmt = new MapDStatement(session, client);
     return stmt.execute(tQuery);
   }
 
@@ -567,14 +566,12 @@ class MapDPreparedStatement implements PreparedStatement {
 
   @Override
   public int getMaxRows() throws SQLException { //logger.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    return stmt.getMaxRows();
   }
 
   @Override
   public void setMaxRows(int max) throws SQLException { //logger.debug("Entered");
-    MAPDLOGGER.info("SetMaxRows to " + max);
+    MAPDLOGGER.debug("SetMaxRows to " + max);
     stmt.setMaxRows(max);
   }
 
@@ -587,16 +584,13 @@ class MapDPreparedStatement implements PreparedStatement {
 
   @Override
   public int getQueryTimeout() throws SQLException { //logger.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    return stmt.getQueryTimeout();
   }
 
   @Override
   public void setQueryTimeout(int seconds) throws SQLException { //logger.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    MAPDLOGGER.debug("SetQueryTimeout to " + seconds);
+    stmt.setQueryTimeout(seconds);
   }
 
   @Override
