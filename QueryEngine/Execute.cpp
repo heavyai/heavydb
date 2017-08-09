@@ -1580,7 +1580,8 @@ Executor::FetchResult Executor::fetchChunks(const ExecutionDispatch& execution_d
       }
     }
     all_frag_col_buffers.push_back(frag_col_buffers);
-    if (needs_fetch_iterators) {
+    // IteratorTable on the left could only have a single fragment for now.
+    if (needs_fetch_iterators && all_frag_iter_buffers.empty()) {
       CHECK_EQ(size_t(2), selected_fragments_crossjoin.size());
       all_frag_iter_buffers.push_back(
           fetchIterTabFrags(selected_frag_ids[0], execution_dispatch, ra_exe_unit.input_descs[0], device_id));

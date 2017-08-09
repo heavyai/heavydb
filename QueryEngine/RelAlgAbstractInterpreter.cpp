@@ -228,7 +228,6 @@ bool RelProject::isRenaming() const {
 void RelMultiJoin::append(std::shared_ptr<RelJoin> join) {
   if (sequence_.empty()) {
     const auto src0 = join->getAndOwnInput(0);
-    CHECK(!std::dynamic_pointer_cast<const RelJoin>(src0));
     addManagedInput(src0);
   } else {
     CHECK_EQ(sequence_.back().get(), join->getInput(0));

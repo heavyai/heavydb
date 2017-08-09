@@ -686,11 +686,13 @@ size_t get_target_list_size(const RelAlgNode* ra_node) {
   return 0;
 }
 
-std::vector<const RelAlgNode*> get_join_sequence(const RelAlgNode* ra) {
+std::vector<const RelAlgNode*> get_non_join_sequence(const RelAlgNode* ra) {
   std::vector<const RelAlgNode*> seq;
   if (auto multi_join = dynamic_cast<const RelMultiJoin*>(ra)) {
+    CHECK_GT(multi_join->joinCount(), size_t(1));
+    seq = get_non_join_sequence(multi_join->getJoinAt(0)->getInput(0));
     for (size_t i = 0; i < multi_join->joinCount(); ++i) {
-      seq.push_back(multi_join->getJoinAt(i));
+      seq.push_back(multi_join->getJoinAt(i)->getInput(1));
     }
     return seq;
   }
@@ -731,9 +733,9 @@ void collect_used_input_desc(std::vector<InputDescriptor>& input_descs,
                              const std::unordered_set<const RexInput*>& source_used_inputs,
                              const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level) {
   std::unordered_set<InputDescriptor> input_descs_unique(input_descs.begin(), input_descs.end());
-  const auto join_seq = get_join_sequence(get_data_sink(ra_node));
+  const auto non_join_src_seq = get_non_join_sequence(get_data_sink(ra_node));
   std::unordered_map<const RelAlgNode*, int> non_join_to_nest_level;
-  for (const auto node : join_seq) {
+  for (const auto node : non_join_src_seq) {
     non_join_to_nest_level.insert(std::make_pair(node, non_join_to_nest_level.size()));
   }
   for (const auto used_input : source_used_inputs) {
@@ -1733,6 +1735,9 @@ std::list<std::shared_ptr<Analyzer::Expr>> get_inner_join_quals(const RelAlgNode
 
 std::vector<std::pair<int, size_t>> get_join_dimensions(const RelAlgNode* ra, Executor* executor) {
   std::vector<std::pair<int, size_t>> dims;
+  if (auto mj = dynamic_cast<const RelMultiJoin*>(ra)) {
+    ra = mj->getJoinAt(mj->joinCount() - 1);
+  }
   for (auto join = dynamic_cast<const RelJoin*>(ra); join; join = static_cast<const RelJoin*>(join->getInput(0))) {
     CHECK_EQ(size_t(2), join->inputCount());
     const auto id = table_id_from_ra(join->getInput(1));

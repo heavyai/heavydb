@@ -3175,6 +3175,9 @@ TEST(Select, Joins_InnerJoin_AtLeastThreeTables) {
     c("SELECT COUNT(*) FROM test a JOIN test_inner b ON a.str = b.str JOIN hash_join_test c ON a.x = c.x JOIN "
       "join_test d ON a.x > d.x;",
       dt);
+    c("SELECT a.x, b.str, c.str, d.y FROM hash_join_test a JOIN test b ON a.x = b.x JOIN join_test c ON b.x = c.x JOIN "
+      "test_inner d ON b.x = d.x ORDER BY a.x, b.str;",
+      dt);
 #endif
   }
 }

@@ -69,7 +69,7 @@ std::vector<Vertex> merge_join_with_non_join(const std::vector<Vertex>& vertices
     boost::tie(oe_iter, oe_end) = boost::out_edges(vert, graph);
     CHECK(boost::next(oe_iter) == oe_end);
     const auto out_vert = boost::target(*oe_iter, graph);
-    if (!dynamic_cast<const RelJoin*>(graph[out_vert])) {
+    if (!dynamic_cast<const RelJoin*>(graph[out_vert]) && !dynamic_cast<const RelMultiJoin*>(graph[out_vert])) {
       joins.insert(vert);
     }
   }
