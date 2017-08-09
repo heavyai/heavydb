@@ -30,7 +30,7 @@ export PATH=$CUDA_ROOT/bin/:$PATH
 curl -O https://storage.googleapis.com/google-code-archive-downloads/v2/code.google.com/flexpp-bisonpp/bisonpp-1.21-45.tar.gz
 tar xvf bisonpp-1.21-45.tar.gz
 cd bison++-1.21
-./configure && make && make install
+./configure && make && sudo make install
 
 # Finally, add a few components of llvm to your path PATH.
 # Not adding full llvm/bin to PATH since brew's `clang` breaks CUDA
