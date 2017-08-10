@@ -39,6 +39,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQuery(const std::string& query_ra,
   // capture the lock acquistion time
   auto clock_begin = timer_start();
   std::lock_guard<std::mutex> lock(executor_->execute_mutex_);
+  int64_t queue_time_ms = timer_stop(clock_begin);
   if (g_enable_dynamic_watchdog) {
     executor_->resetInterrupt();
   }
@@ -52,7 +53,6 @@ ExecutionResult RelAlgExecutor::executeRelAlgQuery(const std::string& query_ra,
   executor_->string_dictionary_generations_ = computeStringDictionaryGenerations(ra.get());
   executor_->table_generations_ = computeTableGenerations(ra.get());
   ScopeGuard restore_metainfo_cache = [this] { executor_->clearMetaInfoCache(); };
-  int64_t queue_time_ms = timer_stop(clock_begin);
   auto ed_list = get_execution_descriptors(ra.get());
   if (render_info && render_info->do_render && ed_list.size() > 1) {
     throw std::runtime_error("Cannot render queries which need more than one execution step");
