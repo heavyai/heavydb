@@ -29,6 +29,10 @@
 
 #include <future>
 #endif
+
+#if HAVE_CUDA
+#include <thrust/scan.h>
+#endif
 #include "../Shared/funcannotations.h"
 
 #include <numeric>
@@ -660,7 +664,11 @@ void fill_one_to_many_hash_table(int32_t* buff,
   std::vector<int32_t> count_copy(hash_entry_count, 0);
   CHECK_GT(hash_entry_count, int32_t(0));
   memcpy(&count_copy[1], count_buff, (hash_entry_count - 1) * sizeof(int32_t));
+#if HAVE_CUDA
+  thrust::inclusive_scan(count_copy.begin(), count_copy.end(), count_copy.begin());
+#else
   inclusive_scan(count_copy.begin(), count_copy.end(), count_copy.begin(), cpu_thread_count);
+#endif
   std::vector<std::future<void>> pos_threads;
   for (int cpu_thread_idx = 0; cpu_thread_idx < cpu_thread_count; ++cpu_thread_idx) {
     pos_threads.push_back(std::async(std::launch::async,
