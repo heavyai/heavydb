@@ -580,8 +580,9 @@ void inclusive_scan(InputIterator first, InputIterator last, OutputIterator out,
   OffsetType end_off = std::min(step, elem_count);
   std::vector<ElementType> partial_sums(thread_count);
   std::vector<std::future<void>> counter_threads;
-  for (size_t thread_idx = 0; thread_idx < thread_count;
-       ++thread_idx, start_off += step, end_off = std::min(start_off + step, elem_count)) {
+  for (size_t thread_idx = 0; thread_idx < thread_count; ++thread_idx,
+              start_off = std::min(start_off + step, elem_count),
+              end_off = std::min(start_off + step, elem_count)) {
     counter_threads.push_back(std::async(
         std::launch::async,
         [first, out](ElementType& partial_sum, const OffsetType start, const OffsetType end) {
@@ -606,13 +607,11 @@ void inclusive_scan(InputIterator first, InputIterator last, OutputIterator out,
   }
 
   counter_threads.clear();
-  start_off = 0;
-  end_off = std::min(step, elem_count);
-  for (size_t thread_idx = 0; thread_idx < thread_count;
-       ++thread_idx, start_off += step, end_off = std::min(start_off + step, elem_count)) {
-    if (!partial_sums[thread_idx]) {
-      continue;
-    }
+  start_off = std::min(step, elem_count);
+  end_off = std::min(start_off + step, elem_count);
+  for (size_t thread_idx = 0; thread_idx < thread_count - 1; ++thread_idx,
+              start_off = std::min(start_off + step, elem_count),
+              end_off = std::min(start_off + step, elem_count)) {
     counter_threads.push_back(
         std::async(std::launch::async,
                    [out](const ElementType prev_sum, const OffsetType start, const OffsetType end) {
