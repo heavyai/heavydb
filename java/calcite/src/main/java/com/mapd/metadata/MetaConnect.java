@@ -77,7 +77,8 @@ public class MetaConnect {
   private static final int KDATE = 14;
   private static final int KARRAY = 15;
 
-  private static volatile Map<String, Set<String>> MAPD_DATABASE_TO_TABLES = new ConcurrentHashMap();
+  private static volatile Map<String, Set<String>> MAPD_DATABASE_TO_TABLES
+          = new ConcurrentHashMap();
   private static volatile Map<List<String>, Table> MAPD_TABLE_DETAILS = new ConcurrentHashMap();
 
   public MetaConnect(int mapdPort, String dataDir, MapDUser currentMapDUser, MapDParser parser) {
@@ -94,11 +95,11 @@ public class MetaConnect {
 
   private void connectToDBCatalog() {
     try {
-      //try {
+      // try {
       Class.forName("org.sqlite.JDBC");
     } catch (ClassNotFoundException ex) {
-      String err = "Could not find class for metadata connection; DB: '" + db
-              + "' data dir '" + dataDir + "', error was " + ex.getMessage();
+      String err = "Could not find class for metadata connection; DB: '" + db + "' data dir '"
+              + dataDir + "', error was " + ex.getMessage();
       MAPDLOGGER.error(err);
       throw new RuntimeException(err);
     }
@@ -118,8 +119,8 @@ public class MetaConnect {
     try {
       catConn.close();
     } catch (SQLException ex) {
-      String err = "Could not disconnect for metadata; DB: '" + db
-              + "' data dir '" + dataDir + "', error was " + ex.getMessage();
+      String err = "Could not disconnect for metadata; DB: '" + db + "' data dir '" + dataDir
+              + "', error was " + ex.getMessage();
       MAPDLOGGER.error(err);
       throw new RuntimeException(err);
     }
@@ -203,8 +204,7 @@ public class MetaConnect {
       stmt = catConn.createStatement();
 
       // get the tables
-      rs = stmt.executeQuery(
-              "SELECT name FROM mapd_tables ");
+      rs = stmt.executeQuery("SELECT name FROM mapd_tables ");
       while (rs.next()) {
         tableSet.add(rs.getString("name"));
         /*--*/
@@ -240,7 +240,8 @@ public class MetaConnect {
 
       MapD.Client client = new MapD.Client(protocol);
 
-      TTableDetails td = client.get_table_details(currentUser.getSession(), tableName);
+      TTableDetails td
+              = client.get_internal_table_details(currentUser.getSession(), tableName);
 
       transport.close();
 
@@ -275,7 +276,8 @@ public class MetaConnect {
       stmt = catConn.createStatement();
       MAPDLOGGER.debug("table id is " + id);
       MAPDLOGGER.debug("table name is " + tableName);
-      String query = String.format("SELECT * FROM mapd_columns where tableid = %d order by columnid;", id);
+      String query = String.format(
+              "SELECT * FROM mapd_columns where tableid = %d order by columnid;", id);
       MAPDLOGGER.debug(query);
       rs = stmt.executeQuery(query);
       while (rs.next()) {
@@ -521,23 +523,25 @@ public class MetaConnect {
   }
 
   public void updateMetaData(String schema, String table) {
-    // Check if table is specified, if not we are dropping an entire DB so need to remove all tables for that DB
+    // Check if table is specified, if not we are dropping an entire DB so need to remove all
+    // tables for that DB
     if (table.equals("")) {
-      //Drop db and all tables
+      // Drop db and all tables
       // iterate through all and remove matching schema
       for (List<String> keys : MAPD_TABLE_DETAILS.keySet()) {
         if (keys.get(1).equals(schema.toUpperCase())) {
           MAPDLOGGER.debug("removing schema " + keys.get(1) + " table " + keys.get(2));
-          MAPD_TABLE_DETAILS.remove(ImmutableList.of(keys.get(1).toUpperCase(), keys.get(2).toUpperCase()));
+          MAPD_TABLE_DETAILS.remove(
+                  ImmutableList.of(keys.get(1).toUpperCase(), keys.get(2).toUpperCase()));
         }
       }
     } else {
-      MAPDLOGGER.debug("removing schema " + schema.toUpperCase() + " table " + table.toUpperCase());
+      MAPDLOGGER.debug(
+              "removing schema " + schema.toUpperCase() + " table " + table.toUpperCase());
       MAPD_TABLE_DETAILS.remove(ImmutableList.of(schema.toUpperCase(), table.toUpperCase()));
     }
     // now remove schema
     MAPDLOGGER.debug("removing schema " + schema.toUpperCase());
     MAPD_DATABASE_TO_TABLES.remove(schema.toUpperCase());
   }
-
 }

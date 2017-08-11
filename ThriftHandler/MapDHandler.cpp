@@ -739,7 +739,20 @@ void MapDHandler::get_table_descriptor(TTableDescriptor& _return,
   LOG(ERROR) << "get_table_descriptor is deprecated, please fix application";
 }
 
+void MapDHandler::get_internal_table_details(TTableDetails& _return,
+                                             const TSessionId& session,
+                                             const std::string& table_name) {
+  get_table_details_impl(_return, session, table_name, true);
+}
+
 void MapDHandler::get_table_details(TTableDetails& _return, const TSessionId& session, const std::string& table_name) {
+  get_table_details_impl(_return, session, table_name, false);
+}
+
+void MapDHandler::get_table_details_impl(TTableDetails& _return,
+                                         const TSessionId& session,
+                                         const std::string& table_name,
+                                         const bool get_system) {
   const auto session_info = get_session(session);
   auto& cat = session_info.get_catalog();
   auto td = cat.getMetadataForTable(table_name);
@@ -762,7 +775,7 @@ void MapDHandler::get_table_details(TTableDetails& _return, const TSessionId& se
       throw ex;
     }
   } else {
-    const auto col_descriptors = cat.getAllColumnMetadataForTable(td->tableId, true, true);
+    const auto col_descriptors = cat.getAllColumnMetadataForTable(td->tableId, get_system, true);
     for (const auto cd : col_descriptors) {
       _return.row_desc.push_back(populateThriftColumnType(&cat, cd));
     }

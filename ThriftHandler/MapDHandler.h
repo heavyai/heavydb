@@ -246,6 +246,7 @@ class MapDHandler : public MapDIf {
                               const std::string& vega_json);
   void checkpoint(const TSessionId& session, const int32_t db_id, const int32_t table_id);
   void get_table_details(TTableDetails& _return, const TSessionId& session, const std::string& table_name);
+  void get_internal_table_details(TTableDetails& _return, const TSessionId& session, const std::string& table_name);
   void clear_gpu_memory(const TSessionId& session);
   void clear_cpu_memory(const TSessionId& session);
   TSessionId getInvalidSessionId() const;
@@ -277,6 +278,10 @@ class MapDHandler : public MapDIf {
   Catalog_Namespace::SessionInfo get_session(const TSessionId& session);
 
  private:
+  void get_table_details_impl(TTableDetails& _return,
+                              const TSessionId& session,
+                              const std::string& table_name,
+                              const bool get_system);
   void check_read_only(const std::string& str);
   SessionMap::iterator get_session_it(const TSessionId& session);
   static void value_to_thrift_column(const TargetValue& tv, const SQLTypeInfo& ti, TColumn& column);
