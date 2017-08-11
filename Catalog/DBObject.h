@@ -72,9 +72,10 @@ class DBObject {
   std::string getName() const;
   DBObjectType getType() const;
   DBObjectKey getObjectKey() const;
-  std::vector<bool> getPrivileges() const;
   void setObjectKey(const DBObjectKey& objectKey);
+  std::vector<bool> getPrivileges() const;
   void setPrivileges(const std::vector<bool> priv);
+  void resetPrivileges();
   void copyPrivileges(const DBObject& object);
   void updatePrivileges(const DBObject& object);
   void grantPrivileges(const DBObject& object);

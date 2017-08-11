@@ -76,7 +76,7 @@ typedef std::map<std::string, Role*> RoleMap;
 
 /**
  * @type UserRoleMap
- * @brief Maps user names to pointers to UserRole class objects allocated on the heap
+ * @brief Maps user IDs to pointers to UserRole class objects allocated on the heap
  */
 
 typedef std::map<int32_t, Role*> UserRoleMap;
@@ -300,6 +300,8 @@ class Catalog {
   void updateLogicalToPhysicalTableLinkSchema();
   void updateLogicalToPhysicalTableMap(const int32_t logical_tb_id);
   void updateDictionarySchema();
+  void buildRoleMap();
+  void buildUserRoleMap();
   void buildMaps();
   void addTableToMap(TableDescriptor& td,
                      const std::list<ColumnDescriptor>& columns,
@@ -349,7 +351,7 @@ class Catalog {
   static const std::string physicalTableNameTag_;  // extra component added to the name of each physical table
   int nextTempTableId_;
   int nextTempDictId_;
-  const bool access_priv_check_;                   // if true, verify user access privileges to DB objects
+  const bool access_priv_check_;  // if true, verify user access privileges to DB objects
 };
 
 /*
@@ -392,6 +394,8 @@ class SysCatalog : public Catalog {
   std::list<DBMetadata> getAllDBMetadata();
   std::list<UserMetadata> getAllUserMetadata();
   void createDefaultMapdRoles();
+  std::vector<std::string> convertObjectKeyToString(const DBObject& object);
+  std::vector<int32_t> convertObjectKeyFromString(const std::vector<std::string>& key, const DBObjectType& type);
   void populateDBObjectKey(DBObject& object, const Catalog_Namespace::Catalog& catalog);
   void createDBObject(const UserMetadata& user,
                       const std::string& objectName,

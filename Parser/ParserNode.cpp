@@ -2615,11 +2615,8 @@ void ShowPrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session) 
   }
 
   /* get values of privileges for the object and report them */
-  std::vector<bool> privs{false, false, false};
-  dbObject.setPrivileges(privs);
   syscat.getDBObjectPrivileges(get_role(), dbObject, catalog);
-  // TBD - this has been coded for debug purposes for now, can be enhanced and reused as a regular mapd command later
-  privs = dbObject.getPrivileges();
+  std::vector<bool> privs = dbObject.getPrivileges();
   printf("\nPRIVILEGES ON %s FOR %s ARE SET AS FOLLOWING: ", get_object().c_str(), get_role().c_str());
   size_t i = 0;
   while (i < privs.size()) {

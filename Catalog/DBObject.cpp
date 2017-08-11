@@ -74,6 +74,9 @@ void DBObject::setPrivileges(std::vector<bool> priv) {
   }
 }
 
+void DBObject::resetPrivileges() {
+  objectPrivs_.select_ = objectPrivs_.insert_ = objectPrivs_.create_ = false;
+}
 void DBObject::copyPrivileges(const DBObject& object) {
   // objectPrivs_ = object.objectPrivs_;
   objectPrivs_.select_ = object.objectPrivs_.select_;
