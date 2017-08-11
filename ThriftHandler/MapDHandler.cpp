@@ -1030,18 +1030,25 @@ void MapDHandler::load_table(const TSessionId& session,
     import_buffers.push_back(std::unique_ptr<Importer_NS::TypedImportBuffer>(
         new Importer_NS::TypedImportBuffer(cd, loader->get_string_dict(cd))));
   }
+  size_t rows_completed = 0;
+  size_t col_idx = 0;
   for (auto row : rows) {
     try {
-      int col_idx = 0;
+      col_idx = 0;
       for (auto cd : col_descs) {
         import_buffers[col_idx]->add_value(cd, row.cols[col_idx].str_val, row.cols[col_idx].is_null, copy_params);
         col_idx++;
       }
+      rows_completed++;
     } catch (const std::exception& e) {
-      LOG(WARNING) << "load_table exception thrown: " << e.what() << ". Row discarded.";
+      for (size_t col_idx_to_pop = 0; col_idx_to_pop < col_idx; ++col_idx_to_pop) {
+        import_buffers[col_idx_to_pop]->pop_value();
+      }
+      LOG(ERROR) << "Input exception thrown: " << e.what() << ". Row discarded, issue at column : " << (col_idx + 1)
+                 << " data :" << row;
     }
   }
-  loader->load(import_buffers, rows.size());
+  loader->load(import_buffers, rows_completed);
 }
 
 char MapDHandler::unescape_char(std::string str) {
