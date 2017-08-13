@@ -188,11 +188,7 @@ class QueryExecutionContext : boost::noncopyable {
                   const size_t warp_size);
 
   template <typename T>
-  int8_t* initColumnarBuffer(T* buffer_ptr,
-                             const T init_val,
-                             const uint32_t entry_count,
-                             const ssize_t bitmap_sz = -1,
-                             const bool key_or_col = true);
+  int8_t* initColumnarBuffer(T* buffer_ptr, const T init_val, const uint32_t entry_count);
 
   void initColumnarGroups(int64_t* groups_buffer,
                           const int64_t* init_vals,

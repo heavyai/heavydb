@@ -1,3 +1,6 @@
+This code is distributed with the following changes:
+- github.com/fsnotify/fsnotify dependency removed
+
 The MIT License (MIT)
 
 Copyright (c) 2014 Steve Francia

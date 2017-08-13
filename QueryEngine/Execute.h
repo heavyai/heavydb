@@ -288,6 +288,8 @@ class Executor {
                 "Host hardware not supported, unexpected size of float / double.");
 
  public:
+  typedef std::deque<Fragmenter_Namespace::FragmentInfo> TableFragments;
+
   Executor(const int db_id,
            const size_t block_size_x,
            const size_t grid_size_x,
@@ -345,6 +347,14 @@ class Executor {
   bool isArchMaxwell(const ExecutorDeviceType dt) const;
 
   bool isOuterJoin() const { return cgen_state_->is_outer_join_; }
+
+  bool isOuterLoopJoin() const {
+    return isOuterJoin() && plan_state_->join_info_.join_impl_type_ == JoinImplType::Loop;
+  }
+
+  bool isOneToManyOuterHashJoin() const {
+    return isOuterJoin() && plan_state_->join_info_.join_impl_type_ == JoinImplType::HashOneToMany;
+  }
 
   const ColumnDescriptor* getColumnDescriptor(const Analyzer::ColumnVar*) const;
 
@@ -420,6 +430,7 @@ class Executor {
                            const bool is_real_str,
                            const CompilationOptions&);
   llvm::Value* codegen(const Analyzer::ExtractExpr*, const CompilationOptions&);
+  llvm::Value* codegen(const Analyzer::DateaddExpr*, const CompilationOptions&);
   llvm::Value* codegen(const Analyzer::DatediffExpr*, const CompilationOptions&);
   llvm::Value* codegen(const Analyzer::DatetruncExpr*, const CompilationOptions&);
   llvm::Value* codegen(const Analyzer::CharLengthExpr*, const CompilationOptions&);
@@ -522,6 +533,7 @@ class Executor {
   llvm::Value* codegenArrayAt(const Analyzer::BinOper*, const CompilationOptions&);
 
   llvm::Value* codegenFunctionOper(const Analyzer::FunctionOper*, const CompilationOptions&);
+  llvm::Value* codegenRetOnHashFail(llvm::Value* hash_cond, const Analyzer::Expr* qual);
 
   struct ArgNullcheckBBs {
     llvm::BasicBlock* args_null_bb;
@@ -541,10 +553,13 @@ class Executor {
                                                         const ExtensionFunction*,
                                                         const std::vector<llvm::Value*>&,
                                                         const CompilationOptions&);
+  llvm::Value* castArrayPointer(llvm::Value* ptr, const SQLTypeInfo& elem_ti);
   llvm::ConstantInt* codegenIntConst(const Analyzer::Constant* constant);
   llvm::Value* colByteStream(const Analyzer::ColumnVar* col_var, const bool fetch_column, const bool hoist_literals);
   llvm::Value* posArg(const Analyzer::Expr*) const;
   const Analyzer::ColumnVar* hashJoinLhs(const Analyzer::ColumnVar* rhs) const;
+  const Analyzer::ColumnVar* hashJoinLhsTuple(const Analyzer::ColumnVar* rhs,
+                                              const Analyzer::BinOper* tautological_eq) const;
   llvm::ConstantInt* inlineIntNull(const SQLTypeInfo&);
   llvm::ConstantFP* inlineFpNull(const SQLTypeInfo&);
   std::pair<llvm::ConstantInt*, llvm::ConstantInt*> inlineIntMaxMin(const size_t byte_width, const bool is_signed);
@@ -576,12 +591,12 @@ class Executor {
     return dt == ExecutorDeviceType::GPU && catalog_->get_dataMgr().cudaMgr_->isArchPascal();
   }
 
-  enum class JoinImplType { Invalid, Loop, HashOneToOne, HashPlusLoop };
+  enum class JoinImplType { Invalid, Loop, HashOneToOne, HashOneToMany, HashPlusLoop };
 
   struct JoinInfo {
     JoinInfo(const JoinImplType join_impl_type,
              const std::vector<std::shared_ptr<Analyzer::BinOper>>& equi_join_tautologies,
-             const std::vector<std::shared_ptr<JoinHashTable>>& join_hash_tables,
+             const std::vector<std::shared_ptr<JoinHashTableInterface>>& join_hash_tables,
              const std::string& hash_join_fail_reason)
         : join_impl_type_(join_impl_type),
           equi_join_tautologies_(equi_join_tautologies),
@@ -592,7 +607,7 @@ class Executor {
     std::vector<std::shared_ptr<Analyzer::BinOper>> equi_join_tautologies_;  // expressions we equi-join on are true by
                                                                              // definition when using a hash join; we'll
                                                                              // fold them to true during code generation
-    std::vector<std::shared_ptr<JoinHashTable>> join_hash_tables_;
+    std::vector<std::shared_ptr<JoinHashTableInterface>> join_hash_tables_;
     std::string hash_join_fail_reason_;
   };
 
@@ -602,12 +617,6 @@ class Executor {
     std::vector<std::vector<int64_t>> num_rows;
     std::vector<std::vector<uint64_t>> frag_offsets;
   };
-
-  typedef std::deque<Fragmenter_Namespace::FragmentInfo> TableFragments;
-
-  std::map<size_t, std::vector<uint64_t>> getAllFragOffsets(
-      const std::vector<InputDescriptor>& input_descs,
-      const std::map<int, const TableFragments*>& all_tables_fragments);
 
 #ifdef ENABLE_MULTIFRAG_JOIN
   bool needFetchAllFragments(const InputColDescriptor& col_desc,
@@ -744,6 +753,22 @@ class Executor {
     const std::vector<std::unique_ptr<QueryExecutionContext>>& getQueryContexts() const;
 
     std::vector<std::pair<ResultPtr, std::vector<size_t>>>& getFragmentResults();
+
+    static std::pair<const int8_t*, size_t> getColumnFragment(
+        Executor* executor,
+        const Analyzer::ColumnVar& hash_col,
+        const Fragmenter_Namespace::FragmentInfo& fragment,
+        const Data_Namespace::MemoryLevel effective_mem_lvl,
+        const int device_id,
+        std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
+        std::map<int, std::shared_ptr<const ColumnarResults>>& frags_owner);
+
+    static std::pair<const int8_t*, size_t> getAllColumnFragments(
+        Executor* executor,
+        const Analyzer::ColumnVar& hash_col,
+        const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
+        std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
+        std::map<int, std::shared_ptr<const ColumnarResults>>& frags_owner);
   };
 
   ResultPtr executeWorkUnit(int32_t* error_code,
@@ -773,6 +798,8 @@ class Executor {
   std::string renderRows(const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& targets,
                          RenderInfo* render_query_data);
 
+  std::unordered_map<int, const Analyzer::BinOper*> getInnerTabIdToJoinCond() const;
+
   void dispatchFragments(const std::function<void(const ExecutorDeviceType chosen_device_type,
                                                   int chosen_device_id,
                                                   const std::vector<std::pair<int, std::vector<size_t>>>& frag_ids,
@@ -792,10 +819,13 @@ class Executor {
       const RelAlgExecutionUnit& ra_exe_unit,
       const size_t table_idx,
       const size_t outer_frag_idx,
-      std::map<int, const Executor::TableFragments*>& selected_tables_fragments);
+      std::map<int, const Executor::TableFragments*>& selected_tables_fragments,
+      const std::unordered_map<int, const Analyzer::BinOper*>& inner_table_id_to_join_condition);
 
   bool skipFragmentPair(const Fragmenter_Namespace::FragmentInfo& outer_fragment_info,
                         const Fragmenter_Namespace::FragmentInfo& inner_fragment_info,
+                        const int inner_table_id,
+                        const std::unordered_map<int, const Analyzer::BinOper*>& inner_table_id_to_join_condition,
                         const RelAlgExecutionUnit& ra_exe_unit);
 
   std::vector<const int8_t*> fetchIterTabFrags(const size_t frag_id,
@@ -921,14 +951,22 @@ class Executor {
 
   void createErrorCheckControlFlow(llvm::Function* query_func, bool run_with_dynamic_watchdog);
 
+  const std::vector<Analyzer::Expr*> codegenOneToManyHashJoins(const std::vector<Analyzer::Expr*>& primary_quals,
+                                                               const RelAlgExecutionUnit& ra_exe_unit,
+                                                               const CompilationOptions& co);
+
   const std::vector<Analyzer::Expr*> codegenHashJoinsBeforeLoopJoin(const std::vector<Analyzer::Expr*>& primary_quals,
                                                                     const RelAlgExecutionUnit& ra_exe_unit,
                                                                     const CompilationOptions& co);
 
-  void codegenInnerScanNextRow();
+  void codegenInnerScanNextRowOrMatch();
 
   void preloadFragOffsets(const std::vector<InputDescriptor>& input_descs,
                           const std::vector<InputTableInfo>& query_infos);
+
+  void codegenNomatchInitialization(const int index);
+
+  void codegenNomatchLoopback(const std::function<void()> init_iters, llvm::BasicBlock* loop_head);
 
   void allocateInnerScansIterators(const std::vector<InputDescriptor>& input_descs);
 
@@ -1043,6 +1081,8 @@ class Executor {
           ir_builder_(context_),
           is_outer_join_(is_outer_join),
           outer_join_cond_lv_(nullptr),
+          outer_join_match_found_(nullptr),
+          outer_join_nomatch_(nullptr),
           query_infos_(query_infos),
           needs_error_check_(false) {}
 
@@ -1150,9 +1190,13 @@ class Executor {
     std::vector<llvm::Value*> str_constants_;
     std::vector<llvm::Value*> frag_offsets_;
     std::unordered_map<InputDescriptor, std::pair<llvm::Value*, llvm::Value*>> scan_to_iterator_;
+    std::vector<std::pair<llvm::Value*, llvm::Value*>> match_iterators_;
     const bool is_outer_join_;
     llvm::Value* outer_join_cond_lv_;
+    llvm::Value* outer_join_match_found_;
+    llvm::Value* outer_join_nomatch_;
     std::vector<llvm::BasicBlock*> inner_scan_labels_;
+    std::vector<llvm::BasicBlock*> match_scan_labels_;
     std::unordered_map<int, llvm::Value*> scan_idx_to_hash_pos_;
     std::vector<std::unique_ptr<const InValuesBitmap>> in_values_bitmaps_;
     const std::vector<InputTableInfo>& query_infos_;
@@ -1318,6 +1362,7 @@ class Executor {
   static const int32_t ERR_INTERRUPTED{10};
   static const int32_t ERR_COLUMNAR_CONVERSION_NOT_SUPPORTED{11};
   static const int32_t ERR_TOO_MANY_LITERALS{12};
+  friend class BaselineJoinHashTable;
   friend class GroupByAndAggregate;
   friend struct QueryMemoryDescriptor;
   friend class QueryExecutionContext;

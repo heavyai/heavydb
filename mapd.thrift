@@ -72,7 +72,8 @@ struct TColumnType {
   1: string col_name,
   2: TTypeInfo col_type,
   3: bool is_reserved_keyword,
-  4: string src_name
+  4: string src_name,
+  5: bool is_system
 }
 
 struct TRow {
@@ -253,6 +254,9 @@ struct TTableDetails {
   3: i64 page_size
   4: i64 max_rows
   5: string view_sql
+  6: i64 shard_count
+  7: string key_metainfo
+  8: bool is_temporary
 }
 
 enum TExpressionRangeType {
@@ -336,6 +340,7 @@ service MapD {
   TServerStatus get_server_status(1: TSessionId session) throws (1: TMapDException e)
   list<string> get_tables(1: TSessionId session) throws (1: TMapDException e)
   TTableDetails get_table_details(1: TSessionId session, 2: string table_name) throws (1: TMapDException e)
+  TTableDetails get_internal_table_details(1: TSessionId session, 2: string table_name) throws (1: TMapDException e)
   list<string> get_users(1: TSessionId session) throws (1: TMapDException e)
   list<TDBInfo> get_databases(1: TSessionId session) throws (1: TMapDException e)
   string get_version() throws (1: TMapDException e)

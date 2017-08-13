@@ -40,11 +40,16 @@
 #include <ogrsf_frmts.h>
 #include <gdal.h>
 #include "../QueryEngine/SqlTypesLayout.h"
+#include "../QueryEngine/TypePunning.h"
 #include "../Shared/mapdpath.h"
 #include "../Shared/measure.h"
+#include "../Shared/unreachable.h"
 #include "../Shared/geosupport.h"
 #include "Importer.h"
 #include "gen-cpp/MapD.h"
+#include <vector>
+#include <iostream>
+using std::ostream;
 
 namespace Importer_NS {
 
@@ -275,18 +280,28 @@ void parseStringArray(const std::string& s, const CopyParams& copy_params, std::
     return;
   }
   if (s[0] != copy_params.array_begin || s[s.size() - 1] != copy_params.array_end) {
-    LOG(WARNING) << "Malformed array: " << s;
-    return;
+    throw std::runtime_error("Malformed Array :" + s);
   }
   size_t last = 1;
   for (size_t i = s.find(copy_params.array_delim, 1); i != std::string::npos;
        i = s.find(copy_params.array_delim, last)) {
-    if (i > last)  // if not empty string - disallow empty strings for now
+    if (i > last) {  // if not empty string - disallow empty strings for now
+      if (s.substr(last, i - last).length() > StringDictionary::MAX_STRLEN)
+        throw std::runtime_error("Array String too long : " + std::to_string(s.substr(last, i - last).length()) +
+                                 " max is " + std::to_string(StringDictionary::MAX_STRLEN));
+
       string_vec.push_back(s.substr(last, i - last));
+    }
     last = i + 1;
   }
-  if (s.size() - 1 > last)  // if not empty string - disallow empty strings for now
+  if (s.size() - 1 > last) {  // if not empty string - disallow empty strings for now
+    if (s.substr(last, s.size() - 1 - last).length() > StringDictionary::MAX_STRLEN)
+      throw std::runtime_error("Array String too long : " +
+                               std::to_string(s.substr(last, s.size() - 1 - last).length()) + " max is " +
+                               std::to_string(StringDictionary::MAX_STRLEN));
+
     string_vec.push_back(s.substr(last, s.size() - 1 - last));
+  }
 }
 
 void addBinaryStringArray(const TDatum& datum, std::vector<std::string>& string_vec) {
@@ -433,8 +448,13 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
         if (cd->columnType.get_notnull())
           throw std::runtime_error("NULL for column " + cd->columnName);
         addString(std::string());
-      } else
+      } else {
+        if (val.length() > StringDictionary::MAX_STRLEN)
+          throw std::runtime_error("String too long for column " + cd->columnName + " was " +
+                                   std::to_string(val.length()) + " max is " +
+                                   std::to_string(StringDictionary::MAX_STRLEN));
         addString(val);
+      }
       break;
     }
     case kTIME:
@@ -616,6 +636,19 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd, const TDatum& datu
   }
 }
 
+template <typename T>
+ostream& operator<<(ostream& out, const std::vector<T>& v) {
+  out << "[";
+  size_t last = v.size() - 1;
+  for (size_t i = 0; i < v.size(); ++i) {
+    out << v[i];
+    if (i != last)
+      out << ", ";
+  }
+  out << "]";
+  return out;
+}
+
 static ImportStatus import_thread(int thread_id,
                                   Importer* importer,
                                   const char* buffer,
@@ -656,18 +689,9 @@ static ImportStatus import_thread(int thread_id,
       } else
         p = get_row(
             p, thread_buf_end, buf_end, copy_params, p == thread_buf, importer->get_is_array(), row, try_single_thread);
-      /*
-      std::cout << "Row " << row_count << " : ";
-      for (auto p : row)
-        std::cout << p << ", ";
-      std::cout << std::endl;
-      */
       if (row.size() != col_descs.size()) {
         import_status.rows_rejected++;
-        LOG(ERROR) << "Incorrect Row (expected " << col_descs.size() << " columns, has " << row.size() << "): ";
-        for (auto p : row)
-          std::cerr << p << ", ";
-        std::cerr << std::endl;
+        LOG(ERROR) << "Incorrect Row (expected " << col_descs.size() << " columns, has " << row.size() << "): " << row;
         continue;
       }
       us = measure<std::chrono::microseconds>::execution([&]() {
@@ -686,7 +710,8 @@ static ImportStatus import_thread(int thread_id,
             import_buffers[col_idx_to_pop]->pop_value();
           }
           import_status.rows_rejected++;
-          LOG(WARNING) << "Input exception thrown: " << e.what() << ". Row discarded.";
+          LOG(ERROR) << "Input exception thrown: " << e.what() << ". Row discarded, issue at column : " << (col_idx + 1)
+                     << " data :" << row;
         }
       });
       total_str_to_val_time_us += us;
@@ -723,9 +748,171 @@ bool Loader::load(const std::vector<std::unique_ptr<TypedImportBuffer>>& import_
   return loadImpl(import_buffers, row_count, true);
 }
 
+namespace {
+
+int64_t int_value_at(const TypedImportBuffer& import_buffer, const size_t index) {
+  const auto& ti = import_buffer.getTypeInfo();
+  const int8_t* values_buffer{nullptr};
+  if (ti.is_string()) {
+    CHECK_EQ(kENCODING_DICT, ti.get_compression());
+    values_buffer = import_buffer.getStringDictBuffer();
+  } else {
+    values_buffer = import_buffer.getAsBytes();
+  }
+  CHECK(values_buffer);
+  switch (ti.get_logical_size()) {
+    case 1: {
+      return values_buffer[index];
+    }
+    case 2: {
+      return reinterpret_cast<const int16_t*>(values_buffer)[index];
+    }
+    case 4: {
+      return reinterpret_cast<const int32_t*>(values_buffer)[index];
+    }
+    case 8: {
+      return reinterpret_cast<const int64_t*>(values_buffer)[index];
+    }
+    default:
+      CHECK(false);
+  }
+  UNREACHABLE();
+  return 0;
+}
+
+float float_value_at(const TypedImportBuffer& import_buffer, const size_t index) {
+  const auto& ti = import_buffer.getTypeInfo();
+  CHECK_EQ(kFLOAT, ti.get_type());
+  const auto values_buffer = import_buffer.getAsBytes();
+  return reinterpret_cast<const float*>(may_alias_ptr(values_buffer))[index];
+}
+
+double double_value_at(const TypedImportBuffer& import_buffer, const size_t index) {
+  const auto& ti = import_buffer.getTypeInfo();
+  CHECK_EQ(kDOUBLE, ti.get_type());
+  const auto values_buffer = import_buffer.getAsBytes();
+  return reinterpret_cast<const double*>(may_alias_ptr(values_buffer))[index];
+}
+
+}  // namespace
+
+void Loader::distributeToShards(std::vector<OneShardBuffers>& all_shard_import_buffers,
+                                std::vector<size_t>& all_shard_row_counts,
+                                const OneShardBuffers& import_buffers,
+                                const size_t row_count,
+                                const size_t shard_count) {
+  all_shard_row_counts.resize(shard_count);
+  for (size_t shard_idx = 0; shard_idx < shard_count; ++shard_idx) {
+    all_shard_import_buffers.emplace_back();
+    for (const auto& typed_import_buffer : import_buffers) {
+      all_shard_import_buffers.back().emplace_back(
+          new TypedImportBuffer(typed_import_buffer->getColumnDesc(), typed_import_buffer->getStringDictionary()));
+    }
+  }
+  CHECK_GT(table_desc->shardedColumnId, 0);
+  int col_idx{0};
+  const ColumnDescriptor* shard_col_desc{nullptr};
+  for (const auto col_desc : column_descs) {
+    ++col_idx;
+    if (col_idx == table_desc->shardedColumnId) {
+      shard_col_desc = col_desc;
+      break;
+    }
+  }
+  CHECK(shard_col_desc);
+  CHECK_LE(static_cast<size_t>(table_desc->shardedColumnId), import_buffers.size());
+  auto& shard_column_input_buffer = import_buffers[table_desc->shardedColumnId - 1];
+  const auto& shard_col_ti = shard_col_desc->columnType;
+  CHECK(shard_col_ti.is_integer() || (shard_col_ti.is_string() && shard_col_ti.get_compression() == kENCODING_DICT));
+  if (shard_col_ti.is_string()) {
+    const auto payloads_ptr = shard_column_input_buffer->getStringBuffer();
+    CHECK(payloads_ptr);
+    shard_column_input_buffer->addDictEncodedString(*payloads_ptr);
+  }
+  for (size_t i = 0; i < row_count; ++i) {
+    const auto val = int_value_at(*shard_column_input_buffer, i);
+    const auto shard = val % shard_count;
+    auto& shard_output_buffers = all_shard_import_buffers[shard];
+    for (size_t col_idx = 0; col_idx < import_buffers.size(); ++col_idx) {
+      const auto& input_buffer = import_buffers[col_idx];
+      const auto& col_ti = input_buffer->getTypeInfo();
+      const auto type = col_ti.is_decimal() ? decimal_to_int_type(col_ti) : col_ti.get_type();
+      switch (type) {
+        case kBOOLEAN:
+          shard_output_buffers[col_idx]->addBoolean(int_value_at(*input_buffer, i));
+          break;
+        case kSMALLINT:
+          shard_output_buffers[col_idx]->addSmallint(int_value_at(*input_buffer, i));
+          break;
+        case kINT:
+          shard_output_buffers[col_idx]->addInt(int_value_at(*input_buffer, i));
+          break;
+        case kBIGINT:
+          shard_output_buffers[col_idx]->addBigint(int_value_at(*input_buffer, i));
+          break;
+        case kFLOAT:
+          shard_output_buffers[col_idx]->addFloat(float_value_at(*input_buffer, i));
+          break;
+        case kDOUBLE:
+          shard_output_buffers[col_idx]->addDouble(double_value_at(*input_buffer, i));
+          break;
+        case kTEXT:
+        case kVARCHAR:
+        case kCHAR: {
+          CHECK_LT(i, input_buffer->getStringBuffer()->size());
+          shard_output_buffers[col_idx]->addString((*input_buffer->getStringBuffer())[i]);
+          break;
+        }
+        case kTIME:
+        case kTIMESTAMP:
+        case kDATE:
+          shard_output_buffers[col_idx]->addTime(int_value_at(*input_buffer, i));
+          break;
+        case kARRAY:
+          if (IS_STRING(col_ti.get_subtype())) {
+            CHECK(input_buffer->getStringArrayBuffer());
+            CHECK_LT(i, input_buffer->getStringArrayBuffer()->size());
+            const auto& input_arr = (*(input_buffer->getStringArrayBuffer()))[i];
+            shard_output_buffers[col_idx]->addStringArray(input_arr);
+          } else {
+            shard_output_buffers[col_idx]->addArray((*input_buffer->getArrayBuffer())[i]);
+          }
+          break;
+        default:
+          CHECK(false);
+      }
+    }
+    ++all_shard_row_counts[shard];
+  }
+}
+
 bool Loader::loadImpl(const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers,
                       size_t row_count,
                       bool checkpoint) {
+  if (table_desc->nShards) {
+    std::vector<OneShardBuffers> all_shard_import_buffers;
+    std::vector<size_t> all_shard_row_counts;
+    const auto shard_tables = catalog.getPhysicalTablesDescriptors(table_desc);
+    distributeToShards(all_shard_import_buffers, all_shard_row_counts, import_buffers, row_count, shard_tables.size());
+    bool success = true;
+    for (size_t shard_idx = 0; shard_idx < shard_tables.size(); ++shard_idx) {
+      if (!all_shard_row_counts[shard_idx]) {
+        continue;
+      }
+      success = success && loadToShard(all_shard_import_buffers[shard_idx],
+                                       all_shard_row_counts[shard_idx],
+                                       shard_tables[shard_idx],
+                                       checkpoint);
+    }
+    return success;
+  }
+  return loadToShard(import_buffers, row_count, table_desc, checkpoint);
+}
+
+bool Loader::loadToShard(const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers,
+                         size_t row_count,
+                         const TableDescriptor* shard_table,
+                         bool checkpoint) {
   Fragmenter_Namespace::InsertData ins_data(insert_data);
   ins_data.numRows = row_count;
   bool success = true;
@@ -757,9 +944,9 @@ bool Loader::loadImpl(const std::vector<std::unique_ptr<TypedImportBuffer>>& imp
   {
     try {
       if (checkpoint)
-        table_desc->fragmenter->insertData(ins_data);
+        shard_table->fragmenter->insertData(ins_data);
       else
-        table_desc->fragmenter->insertDataNoCheckpoint(ins_data);
+        shard_table->fragmenter->insertDataNoCheckpoint(ins_data);
     } catch (std::exception& e) {
       LOG(ERROR) << "Fragmenter Insert Exception: " << e.what();
       success = false;
@@ -1161,25 +1348,36 @@ ImportStatus Importer::importDelimited() {
       LOG(ERROR) << "Maximum rows rejected exceeded. Halting load";
       break;
     }
-    // checkpoint before going again
-    loader->get_catalog().get_dataMgr().checkpoint(loader->get_catalog().get_currentDB().dbId,
-                                                   loader->get_table_desc()->tableId);
-  }
-  // todo MAT we need to review whether this checkpoint process makes sense
-  auto ms = measure<>::execution([&]() {
-    if (!load_failed) {
-      for (auto& p : import_buffers_vec[0]) {
-        if (!p->stringDictCheckpoint()) {
-          LOG(ERROR) << "Checkpointing Dictionary for Column " << p->getColumnDesc()->columnName << " failed.";
-          load_failed = true;
-          break;
-        }
+    if (loader->get_table_desc()->persistenceLevel ==
+        Data_Namespace::MemoryLevel::DISK_LEVEL) {  // only checkpoint disk-resident tables
+      // checkpoint before going again
+      const auto shard_tables = loader->get_catalog().getPhysicalTablesDescriptors(loader->get_table_desc());
+      for (const auto shard_table : shard_tables) {
+        loader->get_catalog().get_dataMgr().checkpoint(loader->get_catalog().get_currentDB().dbId,
+                                                       shard_table->tableId);
       }
     }
-  });
-  if (debug_timing)
-    LOG(INFO) << "Checkpointing took " << (double)ms / 1000.0 << " Seconds." << std::endl;
-
+  }
+  // checkpoint before going again
+  if (loader->get_table_desc()->persistenceLevel ==
+      Data_Namespace::MemoryLevel::DISK_LEVEL) {  // only checkpoint disk-resident tables
+    // todo MAT we need to review whether this checkpoint process makes sense
+    auto ms = measure<>::execution([&]() {
+      if (!load_failed) {
+        for (auto& p : import_buffers_vec[0]) {
+          if (!p->stringDictCheckpoint()) {
+            LOG(ERROR) << "Checkpointing Dictionary for Column " << p->getColumnDesc()->columnName << " failed.";
+            load_failed = true;
+            break;
+          }
+        }
+        loader->get_catalog().get_dataMgr().checkpoint(loader->get_catalog().get_currentDB().dbId,
+                                                       loader->get_table_desc()->tableId);
+      }
+    });
+    if (debug_timing)
+      LOG(INFO) << "Checkpointing took " << (double)ms / 1000.0 << " Seconds." << std::endl;
+  }
   free(buffer[0]);
   buffer[0] = nullptr;
   free(buffer[1]);

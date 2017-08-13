@@ -196,6 +196,7 @@ extern "C" __device__ int64_t* get_matching_group_value_columnar(int64_t* groups
 
 #include "MurmurHash.cpp"
 #include "GroupByRuntime.cpp"
+#include "JoinHashTableQueryRuntime.cpp"
 
 __device__ int64_t atomicMax64(int64_t* address, int64_t val) {
   unsigned long long int* address_as_ull = (unsigned long long int*)address;
@@ -593,6 +594,7 @@ extern "C" __device__ void agg_max_double_skip_val_shared(int64_t* agg, const do
 #include "DateTruncate.cpp"
 #include "../Utils/ChunkIter.cpp"
 #define EXECUTE_INCLUDE
+#include "DateAdd.cpp"
 #include "ArrayOps.cpp"
 #include "StringFunctions.cpp"
 #undef EXECUTE_INCLUDE

@@ -193,7 +193,8 @@ public class MapDPlanner implements Planner {
   @Override
   public SqlNode validate(SqlNode sqlNode) throws ValidationException {
     ensure(State.STATE_3_PARSED);
-    final SqlConformance conformance = conformance();
+    // TODO MAT figure out correct way to pass conformace from planner config
+    final SqlConformance conformance = SqlConformanceEnum.LENIENT;
     final CalciteCatalogReader catalogReader = createCatalogReader();
     this.validator
             = new CalciteSqlValidator(operatorTable, catalogReader, typeFactory,

@@ -28,6 +28,9 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/filesystem.hpp>
+#include <rapidjson/document.h>
+#include <rapidjson/stringbuffer.h>
+#include <rapidjson/writer.h>
 #include "../Catalog/Catalog.h"
 #include "ParserNode.h"
 #include "ReservedKeywords.h"
@@ -42,6 +45,8 @@
 #include "../QueryEngine/ExtensionFunctionsWhitelist.h"
 #include "../QueryEngine/RelAlgExecutor.h"
 #include "../QueryEngine/CalciteAdapter.h"
+
+size_t g_leaf_count{0};
 
 namespace Parser {
 
@@ -1582,12 +1587,66 @@ size_t shard_column_index(const std::string& name, const std::list<ColumnDescrip
   return 0;
 }
 
+void validate_shard_column_type(const size_t shard_column_id, const std::list<ColumnDescriptor>& columns) {
+  CHECK_NE(size_t(0), shard_column_id);
+  CHECK_LE(shard_column_id, columns.size());
+  auto column_it = columns.begin();
+  std::advance(column_it, shard_column_id - 1);
+  const auto& col_ti = column_it->columnType;
+  if (col_ti.is_integer() || (col_ti.is_string() && col_ti.get_compression() == kENCODING_DICT)) {
+    return;
+  }
+  throw std::runtime_error("Cannot shard on type " + col_ti.get_type_name() + ", encoding " +
+                           col_ti.get_compression_name());
+}
+
+void set_string_field(rapidjson::Value& obj,
+                      const std::string& field_name,
+                      const std::string& field_value,
+                      rapidjson::Document& document) {
+  rapidjson::Value field_name_json_str;
+  field_name_json_str.SetString(field_name.c_str(), field_name.size(), document.GetAllocator());
+  rapidjson::Value field_value_json_str;
+  field_value_json_str.SetString(field_value.c_str(), field_value.size(), document.GetAllocator());
+  obj.AddMember(field_name_json_str, field_value_json_str, document.GetAllocator());
+}
+
+std::string serialize_key_metainfo(const ShardKeyDef* shard_key_def,
+                                   const std::vector<SharedDictionaryDef>& shared_dict_defs) {
+  rapidjson::Document document;
+  auto& allocator = document.GetAllocator();
+  rapidjson::Value arr(rapidjson::kArrayType);
+  if (shard_key_def) {
+    rapidjson::Value shard_key_obj(rapidjson::kObjectType);
+    set_string_field(shard_key_obj, "type", "SHARD KEY", document);
+    set_string_field(shard_key_obj, "name", shard_key_def->get_column(), document);
+    arr.PushBack(shard_key_obj, allocator);
+  }
+  for (const auto& shared_dict_def : shared_dict_defs) {
+    rapidjson::Value shared_dict_obj(rapidjson::kObjectType);
+    set_string_field(shared_dict_obj, "type", "SHARED DICTIONARY", document);
+    set_string_field(shared_dict_obj, "name", shared_dict_def.get_column(), document);
+    set_string_field(shared_dict_obj, "foreign_table", shared_dict_def.get_foreign_table(), document);
+    set_string_field(shared_dict_obj, "foreign_column", shared_dict_def.get_foreign_column(), document);
+    arr.PushBack(shared_dict_obj, allocator);
+  }
+  rapidjson::StringBuffer buffer;
+  rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+  arr.Accept(writer);
+  return buffer.GetString();
+}
+
 }  // namespace
 
 void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.get_catalog();
+  // check access privileges
+  if (!session.checkDBAccessPrivileges({false, false, true})) {  // CREATE
+    throw std::runtime_error("Table " + *table + " will not be created. User has no create privileges.");
+  }
+
   if (catalog.getMetadataForTable(*table) != nullptr) {
-    if (if_not_exists)
+    if (if_not_exists_)
       return;
     throw std::runtime_error("Table " + *table + " already exists.");
   }
@@ -1758,7 +1817,12 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     if (!td.shardedColumnId) {
       throw std::runtime_error("Specified shard column " + shard_key_def->get_column() + " doesn't exist");
     }
+    validate_shard_column_type(td.shardedColumnId, columns);
   }
+  if (is_temporary_)
+    td.persistenceLevel = Data_Namespace::MemoryLevel::CPU_LEVEL;
+  else
+    td.persistenceLevel = Data_Namespace::MemoryLevel::DISK_LEVEL;
   if (!storage_options.empty()) {
     for (auto& p : storage_options) {
       if (boost::iequals(*p->get_name(), "fragment_size")) {
@@ -1795,6 +1859,9 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
         if (partitions_uc != "SHARDED" && partitions_uc != "REPLICATED") {
           throw std::runtime_error("PARTITIONS must be SHARDED or REPLICATED");
         }
+        if (shard_key_def && partitions_uc == "REPLICATED") {
+          throw std::runtime_error("A table cannot be sharded and replicated at the same time");
+        }
         td.partitions = partitions_uc;
       } else if (boost::iequals(*p->get_name(), "shard_count")) {
         if (!dynamic_cast<const IntLiteral*>(p->get_value()))
@@ -1802,8 +1869,14 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
         int shard_count = static_cast<const IntLiteral*>(p->get_value())->get_intval();
         if (shard_count <= 0)
           throw std::runtime_error("SHARD_COUNT must be a positive number.");
-        td.nShards = shard_count;
-        throw std::runtime_error("Sharded tables are not supported yet");
+        if (g_leaf_count) {
+          if (shard_count % g_leaf_count) {
+            throw std::runtime_error("SHARD_COUNT must be a multiple of the number of leaves in the cluster.");
+          }
+          td.nShards = shard_count / g_leaf_count;
+        } else {
+          td.nShards = shard_count;
+        }
       } else {
         throw std::runtime_error("Invalid CREATE TABLE option " + *p->get_name() +
                                  ".  Should be FRAGMENT_SIZE, PAGE_SIZE, MAX_ROWS, PARTITIONS or SHARD_COUNT.");
@@ -1813,7 +1886,13 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   if (shard_key_def && !td.nShards) {
     throw std::runtime_error("Must specify the number of shards through the SHARD_COUNT option");
   }
+  td.keyMetainfo = serialize_key_metainfo(shard_key_def, shared_dict_defs);
   catalog.createShardedTable(td, columns, shared_dict_defs);
+
+  if (catalog.isAccessPrivCheckEnabled()) {
+    auto& syscat = static_cast<Catalog_Namespace::SysCatalog&>(catalog);
+    syscat.createDBObject(session.get_currentUser(), td.tableName, catalog);
+  }
 }
 
 namespace {
@@ -1907,12 +1986,7 @@ ResultRows getResultRows(const Catalog_Namespace::SessionInfo& session,
 #endif  // HAVE_CUDA
   auto& calcite_mgr = catalog.get_calciteMgr();
 
-  const auto query_ra = calcite_mgr.process(session.get_currentUser().userName,
-                                            session.get_session_id(),
-                                            catalog.get_currentDB().dbName,
-                                            pg_shim(select_stmt),
-                                            true,
-                                            false);
+  const auto query_ra = calcite_mgr.process(session, pg_shim(select_stmt), true, false);
   CompilationOptions co = {device_type, true, ExecutorOptLevel::LoopStrengthReduction, false};
   ExecutionOptions eo = {false, true, false, true, false, false, false, false, 10000};
   RelAlgExecutor ra_executor(executor.get(), catalog);
@@ -1989,6 +2063,13 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
     throw std::runtime_error("Distributed CTAS not supported yet");
   }
   auto& catalog = session.get_catalog();
+
+  // check access privileges
+  if (!session.checkDBAccessPrivileges({false, false, true})) {  // CREATE
+    throw std::runtime_error("CTAS failed. Table " + table_name_ +
+                             " will not be created. User has no create privileges.");
+  }
+
   if (catalog.getMetadataForTable(table_name_) != nullptr) {
     throw std::runtime_error("Table " + table_name_ + " already exists.");
   }
@@ -2024,6 +2105,11 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
   td.maxChunkSize = DEFAULT_MAX_CHUNK_SIZE;
   td.fragPageSize = DEFAULT_PAGE_SIZE;
   td.maxRows = DEFAULT_MAX_ROWS;
+  if (is_temporary_) {
+    td.persistenceLevel = Data_Namespace::MemoryLevel::CPU_LEVEL;
+  } else {
+    td.persistenceLevel = Data_Namespace::MemoryLevel::DISK_LEVEL;
+  }
   catalog.createTable(td, column_descriptors, {}, true);
   if (result_rows.definitelyHasNoRows()) {
     return;
@@ -2075,10 +2161,20 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
     }
     throw;
   }
+  if (catalog.isAccessPrivCheckEnabled()) {
+    auto& syscat = static_cast<Catalog_Namespace::SysCatalog&>(catalog);
+    syscat.createDBObject(session.get_currentUser(), td.tableName, catalog);
+  }
 }
 
 void DropTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.get_catalog();
+
+  // check access privileges
+  if (!session.checkDBAccessPrivileges({false, false, true})) {  // CREATE, which is being used for DROP as well
+    throw std::runtime_error("Table " + *table + " will not be dropped. User has no proper privileges.");
+  }
+
   const TableDescriptor* td = catalog.getMetadataForTable(*table);
   if (td == nullptr) {
     if (if_exists)
@@ -2088,6 +2184,34 @@ void DropTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   if (td->isView)
     throw std::runtime_error(*table + " is a view.  Use DROP VIEW.");
   catalog.dropTable(td);
+}
+
+void TruncateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+  auto& catalog = session.get_catalog();
+  const TableDescriptor* td = catalog.getMetadataForTable(*table);
+  if (td == nullptr) {
+    throw std::runtime_error("Table " + *table + " does not exist.");
+  }
+
+  // check access privileges
+  if (catalog.isAccessPrivCheckEnabled()) {
+    std::vector<DBObject> privObjects;
+    DBObject dbObject(*table, TableDBObjectType);
+    DBObjectKey dbObjectKey = {catalog.get_currentDB().dbId, td->tableId};
+    dbObject.setObjectKey(dbObjectKey);
+    std::vector<bool> privs{false, true, false};  // INSERT, which is being used for COPY/IMPORT/etc as well
+    dbObject.setPrivileges(privs);
+    privObjects.push_back(dbObject);
+    if (!(static_cast<Catalog_Namespace::SysCatalog&>(catalog))
+             .checkPrivileges(session.get_currentUser(), privObjects)) {
+      throw std::runtime_error("Table " + *table + " will not be trancated. User " +
+                               session.get_currentUser().userName + " has no proper privileges.");
+    }
+  }
+
+  if (td->isView)
+    throw std::runtime_error(*table + " is a view.  Cannot Truncate.");
+  catalog.truncateTable(td);
 }
 
 void RenameTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
@@ -2147,6 +2271,23 @@ void CopyTableStmt::execute(
   const TableDescriptor* td = catalog.getMetadataForTable(*table);
   if (td == nullptr)
     throw std::runtime_error("Table " + *table + " does not exist.");
+
+  // check access privileges
+  if (catalog.isAccessPrivCheckEnabled()) {
+    std::vector<DBObject> privObjects;
+    DBObject dbObject(*table, TableDBObjectType);
+    DBObjectKey dbObjectKey = {catalog.get_currentDB().dbId, td->tableId};
+    dbObject.setObjectKey(dbObjectKey);
+    std::vector<bool> privs{false, true, false};  // INSERT
+    dbObject.setPrivileges(privs);
+    privObjects.push_back(dbObject);
+    if (!(static_cast<Catalog_Namespace::SysCatalog&>(catalog))
+             .checkPrivileges(session.get_currentUser(), privObjects)) {
+      throw std::runtime_error("Violation of access privileges: user " + session.get_currentUser().userName +
+                               " has no insert privileges for table " + *table + ".");
+    }
+  }
+
   auto file_paths = mapd_glob(*file_pattern);
   if (file_paths.size() == 0)
     throw std::runtime_error("File " + *file_pattern + " does not exist.");
@@ -2270,6 +2411,264 @@ void CopyTableStmt::execute(
   LOG(INFO) << tr;
 }
 
+// CREATE ROLE payroll_dept_role;
+void CreateRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+  const auto& currentUser = session.get_currentUser();
+  if (!currentUser.isSuper) {
+    throw std::runtime_error("CREATE ROLE " + get_role() + " failed. It can only be executed by super user.");
+  }
+  const auto role_name = boost::to_lower_copy<std::string>(get_role());
+  if (!role_name.compare(MAPD_DEFAULT_ROOT_USER_ROLE) || !role_name.compare(MAPD_DEFAULT_USER_ROLE)) {
+    throw std::runtime_error("CREATE ROLE " + get_role() +
+                             " failed because this role name is reserved and can't be used.");
+  }
+
+  auto& catalog = session.get_catalog();
+  auto& syscat = static_cast<Catalog_Namespace::SysCatalog&>(catalog);
+  if (syscat.getMetadataForRole(get_role()) != nullptr) {
+    throw std::runtime_error("CREATE ROLE " + get_role() + " failed because role with this name already exists.");
+  }
+  syscat.createRole(get_role());
+}
+
+// DROP ROLE payroll_dept_role;
+void DropRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+  const auto& currentUser = session.get_currentUser();
+  if (!currentUser.isSuper) {
+    throw std::runtime_error("DROP ROLE " + get_role() + "failed. It can only be executed by super user.");
+  }
+
+  auto& catalog = session.get_catalog();
+  auto& syscat = static_cast<Catalog_Namespace::SysCatalog&>(catalog);
+  if (syscat.getMetadataForRole(get_role()) == nullptr) {
+    throw std::runtime_error("DROP ROLE " + get_role() + " failed because role with this name does not exist.");
+  }
+  syscat.dropRole(get_role());
+}
+
+std::vector<std::string> splitObjectHierName(const std::string& hierName) {
+  std::vector<std::string> componentNames;
+  boost::split(componentNames, hierName, boost::is_any_of("."));
+  return componentNames;
+}
+
+std::string extractObjectNameFromHierName(const std::string& objectHierName,
+                                          const std::string& objectType,
+                                          const Catalog_Namespace::Catalog& cat) {
+  std::string objectName;
+  std::vector<std::string> componentNames = splitObjectHierName(objectHierName);
+  if (objectType.compare("DATABASE") == 0) {
+    if (componentNames.size() == 1) {
+      objectName = componentNames[0];
+    } else {
+      throw std::runtime_error("DB object name is not correct " + objectHierName);
+    }
+  } else {
+    if (objectType.compare("TABLE") == 0) {
+      switch (componentNames.size()) {
+        case (1): {
+          objectName = componentNames[0];
+          break;
+        }
+        case (2): {
+          if (cat.get_currentDB().dbName.compare(componentNames[0]) == 0) {
+            objectName = componentNames[1];
+          } else {
+            throw std::runtime_error("DB object name is not correct " + objectHierName);
+          }
+          break;
+        }
+        default: { throw std::runtime_error("DB object name is not correct " + objectHierName); }
+      }
+    } else {
+      CHECK(false);
+    }
+  }
+  return objectName;
+}
+
+// GRANT SELECT/INSERT/CREATE ON TABLE payroll_table TO payroll_dept_role;
+void GrantPrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+  const auto& currentUser = session.get_currentUser();
+  auto& catalog = session.get_catalog();
+  auto& syscat = static_cast<Catalog_Namespace::SysCatalog&>(catalog);
+  const auto parserObjectType = boost::to_upper_copy<std::string>(get_object_type());
+  const auto objectName = extractObjectNameFromHierName(get_object(), parserObjectType, catalog);
+  DBObjectType objectType = TableDBObjectType;
+  if (parserObjectType.compare("DATABASE") == 0) {
+    objectType = DatabaseDBObjectType;
+  } else {
+    if (parserObjectType.compare("TABLE") != 0) {
+      CHECK(false);
+    }
+  }
+  DBObject dbObject(objectName, objectType);
+
+  /* verify object ownership if not suser */
+  if (!currentUser.isSuper) {
+    if (!syscat.verifyDBObjectOwnership(currentUser, dbObject, catalog)) {
+      throw std::runtime_error("GRANT " + get_priv() +
+                               " failed. It can only be executed by super user or owner of the object.");
+    }
+  }
+
+  /* set proper values of privileges & grant them to the object */
+  std::vector<bool> privs;
+  const auto priv = boost::to_upper_copy<std::string>(get_priv());
+  if (priv.compare("ALL") == 0) {
+    privs = {true, true, true};
+  } else {
+    if (priv.compare("SELECT") == 0) {
+      privs = {true, false, false};
+    } else {
+      if (priv.compare("INSERT") == 0) {
+        privs = {false, true, false};
+      } else {
+        if ((priv.compare("CREATE") == 0) &&
+            (objectType == DatabaseDBObjectType)) {  // CREATE privs allowed only on DB level
+          privs = {false, false, true};
+        } else {
+          throw std::runtime_error("Privileges " + get_priv() + " being granted to DB object " + get_object() +
+                                   " are not correct.");
+        }
+      }
+    }
+  }
+  dbObject.setPrivileges(privs);
+  syscat.grantDBObjectPrivileges(get_role(), dbObject, catalog);
+}
+
+// REVOKE SELECT/INSERT/CREATE ON TABLE payroll_table FROM payroll_dept_role;
+void RevokePrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+  const auto& currentUser = session.get_currentUser();
+  auto& catalog = session.get_catalog();
+  auto& syscat = static_cast<Catalog_Namespace::SysCatalog&>(catalog);
+  const auto parserObjectType = boost::to_upper_copy<std::string>(get_object_type());
+  const auto objectName = extractObjectNameFromHierName(get_object(), parserObjectType, catalog);
+  DBObjectType objectType = TableDBObjectType;
+  if (parserObjectType.compare("DATABASE") == 0) {
+    objectType = DatabaseDBObjectType;
+  } else {
+    if (parserObjectType.compare("TABLE") != 0) {
+      CHECK(false);
+    }
+  }
+  DBObject dbObject(objectName, objectType);
+
+  /* verify object ownership if not suser */
+  if (!currentUser.isSuper) {
+    if (!syscat.verifyDBObjectOwnership(currentUser, dbObject, catalog)) {
+      throw std::runtime_error("REVOKE " + get_priv() +
+                               " failed. It can only be executed by super user or owner of the object.");
+    }
+  }
+
+  /* set proper values of privileges & revoke them from the object */
+  std::vector<bool> privs;
+  const auto priv = boost::to_upper_copy<std::string>(get_priv());
+  if (priv.compare("ALL") == 0) {
+    privs = {true, true, true};
+  } else {
+    if (priv.compare("SELECT") == 0) {
+      privs = {true, false, false};
+    } else {
+      if (priv.compare("INSERT") == 0) {
+        privs = {false, true, false};
+      } else {
+        if ((priv.compare("CREATE") == 0) &&
+            (objectType == DatabaseDBObjectType)) {  // CREATE privs allowed only on DB level
+          privs = {false, false, true};
+        } else {
+          throw std::runtime_error("Privileges " + get_priv() + " being revoked from DB object " + get_object() +
+                                   " are not correct.");
+        }
+      }
+    }
+  }
+  dbObject.setPrivileges(privs);
+  syscat.revokeDBObjectPrivileges(get_role(), dbObject, catalog);
+}
+
+// SHOW ON TABLE payroll_table FOR payroll_dept_role;
+void ShowPrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+  const auto& currentUser = session.get_currentUser();
+  auto& catalog = session.get_catalog();
+  auto& syscat = static_cast<Catalog_Namespace::SysCatalog&>(catalog);
+  const auto parserObjectType = boost::to_upper_copy<std::string>(get_object_type());
+  const auto objectName = extractObjectNameFromHierName(get_object(), parserObjectType, catalog);
+  DBObjectType objectType = TableDBObjectType;
+  if (parserObjectType.compare("DATABASE") == 0) {
+    objectType = DatabaseDBObjectType;
+  } else {
+    if (parserObjectType.compare("TABLE") != 0) {
+      CHECK(false);
+    }
+  }
+  DBObject dbObject(objectName, objectType);
+
+  /* verify object ownership if not suser */
+  if (!currentUser.isSuper) {
+    if (!syscat.verifyDBObjectOwnership(currentUser, dbObject, catalog)) {
+      throw std::runtime_error("SHOW ON " + get_object() + " FOR " + get_role() +
+                               " failed. It can only be executed by super user or owner of the object.");
+    }
+  }
+
+  /* get values of privileges for the object and report them */
+  std::vector<bool> privs{false, false, false};
+  dbObject.setPrivileges(privs);
+  syscat.getDBObjectPrivileges(get_role(), dbObject, catalog);
+  // TBD - this has been coded for debug purposes for now, can be enhanced and reused as a regular mapd command later
+  privs = dbObject.getPrivileges();
+  printf("\nPRIVILEGES ON %s FOR %s ARE SET AS FOLLOWING: ", get_object().c_str(), get_role().c_str());
+  size_t i = 0;
+  while (i < privs.size()) {
+    if (privs[i]) {
+      switch (i) {
+        case 0: {
+          printf(" SELECT");
+          break;
+        }
+        case 1: {
+          printf(" INSERT");
+          break;
+        }
+        case 2: {
+          printf(" CREATE");
+          break;
+        }
+        default: { CHECK(false); }
+      }
+    }
+    i++;
+  }
+  printf(".\n");
+}
+
+// GRANT payroll_dept_role TO joe;
+void GrantRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+  const auto& currentUser = session.get_currentUser();
+  if (!currentUser.isSuper) {
+    throw std::runtime_error("GRANT ROLE " + get_role() + " TO " + get_user() +
+                             "; failed, because it can only be executed by super user.");
+  }
+  auto& catalog = session.get_catalog();
+  auto& syscat = static_cast<Catalog_Namespace::SysCatalog&>(catalog);
+  syscat.grantRole(get_role(), get_user());
+}
+
+// REVOKE payroll_dept_role FROM joe;
+void RevokeRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+  const auto& currentUser = session.get_currentUser();
+  if (!currentUser.isSuper) {
+    throw std::runtime_error("REVOKE ROLE " + get_role() + " FROM " + get_user() +
+                             "; failed, because it can only be executed by super user.");
+  }
+  auto& catalog = session.get_catalog();
+  auto& syscat = static_cast<Catalog_Namespace::SysCatalog&>(catalog);
+  syscat.revokeRole(get_role(), get_user());
+}
+
 void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.get_catalog();
   Importer_NS::CopyParams copy_params;
@@ -2350,13 +2749,18 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   TargetMetaInfo* td = targets.data();
 
   std::ofstream outfile;
-  if (file_path->empty()) {
-    // generate file name as sessionid under mapd_export
-    *file_path = catalog.get_basePath() + "/mapd_export/";
+  if (file_path->empty() || !boost::filesystem::path(*file_path).is_absolute()) {
+    std::string file_name;
+    if (file_path->empty()) {
+      file_name = session.get_session_id() + ".txt";
+    } else {
+      file_name = boost::filesystem::path(*file_path).filename().string();
+    }
+    *file_path = catalog.get_basePath() + "/mapd_export/" + session.get_session_id() + "/";
     if (!boost::filesystem::exists(*file_path))
-      if (!boost::filesystem::create_directory(*file_path))
+      if (!boost::filesystem::create_directories(*file_path))
         throw std::runtime_error("Directory " + *file_path + " cannot be created.");
-    *file_path += session.get_session_id() + ".txt";
+    *file_path += file_name;
   }
   outfile.open(*file_path);
   if (!outfile)
@@ -2498,10 +2902,8 @@ void CreateViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
       return;
     throw std::runtime_error("Table or View " + view_name_ + " already exists.");
   }
-  const auto& user_metadata = session.get_currentUser();
   const auto query_after_shim = pg_shim(select_query_);
-  catalog.get_calciteMgr().process(
-      user_metadata.userName, session.get_session_id(), catalog.get_currentDB().dbName, query_after_shim, true, true);
+  catalog.get_calciteMgr().process(session, query_after_shim, true, true);
   TableDescriptor td;
   td.tableName = view_name_;
   td.nColumns = 0;

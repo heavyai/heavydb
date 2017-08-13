@@ -20,6 +20,7 @@
 #include <stdint.h>
 #include <time.h>
 
+#include "../Shared/funcannotations.h"
 #include "ExtractFromTime.h"
 
 /*
@@ -56,11 +57,6 @@ enum DatetruncField {
   dtINVALID
 };
 
-extern "C" __attribute__((noinline))
-#ifdef __CUDACC__
-__device__
-#endif
-    time_t
-    DateTruncate(DatetruncField field, time_t timeval);
+extern "C" NEVER_INLINE DEVICE time_t DateTruncate(DatetruncField field, time_t timeval);
 
 #endif  // QUERYENGINE_DATETRUNCATE_H

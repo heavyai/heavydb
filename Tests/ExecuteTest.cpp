@@ -35,6 +35,33 @@ namespace {
 
 std::unique_ptr<Catalog_Namespace::SessionInfo> g_session;
 bool g_hoist_literals{true};
+bool g_with_sharding{false};
+
+struct ShardInfo {
+  const std::string shard_col;
+  const size_t shard_count;
+};
+
+struct SharedDictionaryInfo {
+  const std::string col;
+  const std::string ref_table;
+  const std::string ref_col;
+};
+
+std::string build_create_table_statement(const std::string& columns_definition,
+                                         const std::string& table_name,
+                                         const ShardInfo& shard_info,
+                                         const SharedDictionaryInfo& shared_dict_info,
+                                         const size_t fragment_size) {
+  const std::string shard_key_def{shard_info.shard_col.empty() ? "" : ", SHARD KEY (" + shard_info.shard_col + ")"};
+  const std::string shared_dict_def{
+      shared_dict_info.col.empty() ? "" : ", SHARED DICTIONARY (" + shared_dict_info.col + ")" + " REFERENCES " +
+                                              shared_dict_info.ref_table + "(" + shared_dict_info.ref_col + ")"};
+  const std::string shard_count_def{shard_info.shard_col.empty() ? "" : ", shard_count=" +
+                                                                            std::to_string(shard_info.shard_count)};
+  return "CREATE TABLE " + table_name + "(" + columns_definition + shard_key_def + shared_dict_def + ") WITH (" +
+         "fragment_size=" + std::to_string(fragment_size) + shard_count_def + ");";
+}
 
 ResultRows run_multiple_agg(const string& query_str,
                             const ExecutorDeviceType device_type,
@@ -696,6 +723,8 @@ TEST(Select, FilterAndGroupBy) {
     c("SELECT CAST(CAST(d AS FLOAT) AS INTEGER) AS key, COUNT(*) FROM test GROUP BY key;", dt);
     c("SELECT x * 2 AS x2, COUNT(DISTINCT y) AS n FROM test GROUP BY x2 ORDER BY n DESC;", dt);
     c("SELECT x, COUNT(real_str) FROM test GROUP BY x ORDER BY x DESC;", dt);
+    c("SELECT str, SUM(y - y) FROM test GROUP BY str ORDER BY str ASC;", dt);
+    c("SELECT str, SUM(y - y) FROM test WHERE y - y IS NOT NULL GROUP BY str ORDER BY str ASC;", dt);
     EXPECT_THROW(run_multiple_agg("SELECT x, MIN(real_str) FROM test GROUP BY x ORDER BY x DESC;", dt),
                  std::runtime_error);
     EXPECT_THROW(run_multiple_agg("SELECT x, MAX(real_str) FROM test GROUP BY x ORDER BY x DESC;", dt),
@@ -824,10 +853,13 @@ TEST(Select, OrderBy) {
                   v<int64_t>(rows.getRowAt(row_idx, 3, true)) == 301);
     }
     c("SELECT x, COUNT(distinct y) AS n FROM test GROUP BY x ORDER BY n DESC;", dt);
-    c("SELECT x, x, COUNT(*) AS val FROM test GROUP BY x HAVING val > 5 ORDER BY val DESC LIMIT 5;", dt);
+    c("SELECT x x1, x, COUNT(*) AS val FROM test GROUP BY x HAVING val > 5 ORDER BY val DESC LIMIT 5;", dt);
     c("SELECT ufd, COUNT(*) n FROM test GROUP BY ufd, str ORDER BY ufd, n;", dt);
     c("SELECT -x, COUNT(*) FROM test GROUP BY x ORDER BY x DESC;", dt);
     c("SELECT real_str FROM test WHERE real_str LIKE '%real%' ORDER BY real_str ASC;", dt);
+    c("SELECT ss FROM test GROUP by ss ORDER BY ss ASC NULLS FIRST;",
+      "SELECT ss FROM test GROUP by ss ORDER BY ss ASC;",
+      dt);
   }
 }
 
@@ -854,11 +886,13 @@ TEST(Select, ComplexQueries) {
     c("SELECT x, y FROM (SELECT a.str AS str, b.x AS x, a.y AS y FROM test a, join_test b WHERE a.x = b.x) WHERE str = "
       "'foo' ORDER BY x LIMIT 1;",
       dt);
-    c("SELECT * FROM (SELECT y, b.str FROM test a JOIN join_test b ON a.x = b.x) ORDER BY y, str;", dt);
+    c("SELECT * FROM (SELECT a.y, b.str FROM test a JOIN join_test b ON a.x = b.x) ORDER BY y, str;", dt);
     const auto rows = run_multiple_agg(
         "SELECT x + y AS a, COUNT(*) * MAX(y) - SUM(z) AS b FROM test "
         "WHERE z BETWEEN 100 AND 200 GROUP BY x, y ORDER BY a DESC LIMIT 2;",
         dt);
+    c("SELECT x, dup_str FROM (SELECT * FROM test a JOIN join_test b ON a.x = b.x) WHERE y > 40 ORDER BY x, dup_str;",
+      dt);
     ASSERT_EQ(rows.rowCount(), size_t(2));
     {
       auto crt_row = rows.getNextRow(true, true);
@@ -1092,6 +1126,9 @@ TEST(Select, StringsNoneEncoding) {
     ASSERT_EQ(g_num_rows,
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE real_str REGEXP 'real_f.*.*';", dt)));
     ASSERT_EQ(0, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE real_str REGEXP 'real_f.+\%';", dt)));
+    EXPECT_THROW(run_multiple_agg("SELECT COUNT(*) FROM test WHERE real_str LIKE str;", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("SELECT COUNT(*) FROM test WHERE REGEXP_LIKE(real_str, str);", dt),
+                 std::runtime_error);
   }
 }
 
@@ -1489,7 +1526,7 @@ TEST(Select, Time) {
                   "SELECT DATEDIFF('month', CAST('2006-01-07 00:00:00' as TIMESTAMP), CAST('2009-01-07 00:00:00' AS "
                   "TIMESTAMP)) FROM TEST LIMIT 1;",
                   dt)));
-    ASSERT_EQ(1095,
+    ASSERT_EQ(1096,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('day', CAST('2006-01-07 00:00:00' as TIMESTAMP), CAST('2009-01-07 00:00:00' AS "
                   "TIMESTAMP)) FROM TEST LIMIT 1;",
@@ -1499,6 +1536,335 @@ TEST(Select, Time) {
                   "SELECT DATEDIFF('quarter', CAST('2006-01-07 00:00:00' as TIMESTAMP), CAST('2009-01-07 00:00:00' AS "
                   "TIMESTAMP)) FROM TEST LIMIT 1;",
                   dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg(
+                  "SELECT DATEDIFF('day', DATE '2009-2-28', DATE '2009-03-01') FROM TEST LIMIT 1;", dt)));
+    ASSERT_EQ(2,
+              v<int64_t>(run_simple_agg(
+                  "SELECT DATEDIFF('day', DATE '2008-2-28', DATE '2008-03-01') FROM TEST LIMIT 1;", dt)));
+    ASSERT_EQ(-425,
+              v<int64_t>(run_simple_agg(
+                  "select DATEDIFF('day', DATE '1971-03-02', DATE '1970-01-01') from test limit 1;", dt)));
+    ASSERT_EQ(1, v<int64_t>(run_simple_agg("SELECT DATEDIFF('day', o, o + INTERVAL '1' DAY) FROM TEST LIMIT 1;", dt)));
+    ASSERT_EQ(15,
+              v<int64_t>(
+                  run_simple_agg("SELECT count(*) from test where DATEDIFF('day', CAST (m AS DATE), o) < -5570;", dt)));
+    // DATEADD tests
+    ASSERT_EQ(
+        1,
+        v<int64_t>(run_simple_agg(
+            "SELECT DATEADD('day', 1, CAST('2017-05-31' AS DATE)) = TIMESTAMP '2017-06-01 0:00:00' from test limit 1;",
+            dt)));
+    ASSERT_EQ(
+        1,
+        v<int64_t>(run_simple_agg(
+            "SELECT DATEADD('day', 2, DATE '2017-05-31') = TIMESTAMP '2017-06-02 0:00:00' from test limit 1;", dt)));
+    ASSERT_EQ(
+        1,
+        v<int64_t>(run_simple_agg(
+            "SELECT DATEADD('day', -1, CAST('2017-05-31' AS DATE)) = TIMESTAMP '2017-05-30 0:00:00' from test limit 1;",
+            dt)));
+    ASSERT_EQ(
+        1,
+        v<int64_t>(run_simple_agg(
+            "SELECT DATEADD('day', -2, DATE '2017-05-31') = TIMESTAMP '2017-05-29 0:00:00' from test limit 1;", dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg("SELECT DATEADD('hour', 1, TIMESTAMP '2017-05-31 1:11:11') = TIMESTAMP "
+                                        "'2017-05-31 2:11:11' from test limit 1;",
+                                        dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg("SELECT DATEADD('hour', 10, TIMESTAMP '2017-05-31 1:11:11') = TIMESTAMP "
+                                        "'2017-05-31 11:11:11' from test limit 1;",
+                                        dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg("SELECT DATEADD('hour', -1, TIMESTAMP '2017-05-31 1:11:11') = TIMESTAMP "
+                                        "'2017-05-31 0:11:11' from test limit 1;",
+                                        dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg("SELECT DATEADD('hour', -10, TIMESTAMP '2017-05-31 1:11:11') = TIMESTAMP "
+                                        "'2017-05-30 15:11:11' from test limit 1;",
+                                        dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg("SELECT DATEADD('minute', 1, TIMESTAMP '2017-05-31 1:11:11') = TIMESTAMP "
+                                        "'2017-05-31 1:12:11' from test limit 1;",
+                                        dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg("SELECT DATEADD('minute', 10, TIMESTAMP '2017-05-31 1:11:11') = TIMESTAMP "
+                                        "'2017-05-31 1:21:11' from test limit 1;",
+                                        dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg("SELECT DATEADD('minute', -1, TIMESTAMP '2017-05-31 1:11:11') = TIMESTAMP "
+                                        "'2017-05-31 1:10:11' from test limit 1;",
+                                        dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg("SELECT DATEADD('minute', -10, TIMESTAMP '2017-05-31 1:11:11') = TIMESTAMP "
+                                        "'2017-05-31 1:01:11' from test limit 1;",
+                                        dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg("SELECT DATEADD('second', 1, TIMESTAMP '2017-05-31 1:11:11') = TIMESTAMP "
+                                        "'2017-05-31 1:11:12' from test limit 1;",
+                                        dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg("SELECT DATEADD('second', 10, TIMESTAMP '2017-05-31 1:11:11') = TIMESTAMP "
+                                        "'2017-05-31 1:11:21' from test limit 1;",
+                                        dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg("SELECT DATEADD('second', -1, TIMESTAMP '2017-05-31 1:11:11') = TIMESTAMP "
+                                        "'2017-05-31 1:11:10' from test limit 1;",
+                                        dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg("SELECT DATEADD('second', -10, TIMESTAMP '2017-05-31 1:11:11') = TIMESTAMP "
+                                        "'2017-05-31 1:11:01' from test limit 1;",
+                                        dt)));
+
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg("SELECT DATEADD('month', 1, DATE '2017-01-10') = TIMESTAMP "
+                                        "'2017-02-10 0:00:00' from test limit 1;",
+                                        dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg("SELECT DATEADD('month', 10, DATE '2017-01-10') = TIMESTAMP "
+                                        "'2017-11-10 0:00:00' from test limit 1;",
+                                        dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg("SELECT DATEADD('month', 1, DATE '2009-01-30') = TIMESTAMP "
+                                        "'2009-02-28 0:00:00' from test limit 1;",
+                                        dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg("SELECT DATEADD('month', 1, DATE '2008-01-30') = TIMESTAMP "
+                                        "'2008-02-29 0:00:00' from test limit 1;",
+                                        dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg("SELECT DATEADD('month', 1, TIMESTAMP '2009-01-30 1:11:11') = TIMESTAMP "
+                                        "'2009-02-28 1:11:11' from test limit 1;",
+                                        dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg("SELECT DATEADD('month', -1, TIMESTAMP '2009-03-30 1:11:11') = TIMESTAMP "
+                                        "'2009-02-28 1:11:11' from test limit 1;",
+                                        dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg("SELECT DATEADD('month', -4, TIMESTAMP '2009-03-30 1:11:11') = TIMESTAMP "
+                                        "'2008-11-30 1:11:11' from test limit 1;",
+                                        dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg("SELECT DATEADD('month', 5, TIMESTAMP '2009-01-31 1:11:11') = TIMESTAMP "
+                                        "'2009-6-30 1:11:11' from test limit 1;",
+                                        dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg("SELECT DATEADD('year', 1, TIMESTAMP '2008-02-29 1:11:11') = TIMESTAMP "
+                                        "'2009-02-28 1:11:11' from test limit 1;",
+                                        dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg("SELECT TIMESTAMPADD(YEAR, 1, TIMESTAMP '2008-02-29 1:11:11') = TIMESTAMP "
+                                        "'2009-02-28 1:11:11' from test limit 1;",
+                                        dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg("SELECT TIMESTAMPADD(YEAR, -8, TIMESTAMP '2008-02-29 1:11:11') = TIMESTAMP "
+                                        "'2000-02-29 1:11:11' from test limit 1;",
+                                        dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg("SELECT TIMESTAMPADD(YEAR, -8, TIMESTAMP '2008-02-29 1:11:11') = TIMESTAMP "
+                                        "'2000-02-29 1:11:11' from test limit 1;",
+                                        dt)));
+
+    ASSERT_EQ(1, v<int64_t>(run_simple_agg("SELECT m = TIMESTAMP '2014-12-13 22:23:15' from test limit 1;", dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg(
+                  "SELECT DATEADD('day', 1, m) = TIMESTAMP '2014-12-14 22:23:15' from test limit 1;", dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg(
+                  "SELECT DATEADD('day', -1, m) = TIMESTAMP '2014-12-12 22:23:15' from test limit 1;", dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg(
+                  "SELECT DATEADD('day', 1, m) = TIMESTAMP '2014-12-14 22:23:15' from test limit 1;", dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg(
+                  "SELECT DATEADD('day', -1, m) = TIMESTAMP '2014-12-12 22:23:15' from test limit 1;", dt)));
+    ASSERT_EQ(1, v<int64_t>(run_simple_agg("SELECT o = DATE '1999-09-09' from test limit 1;", dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg(
+                  "SELECT DATEADD('day', 1, o) = TIMESTAMP '1999-09-10 0:00:00' from test limit 1;", dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg(
+                  "SELECT DATEADD('day', -3, o) = TIMESTAMP '1999-09-06 0:00:00' from test limit 1;", dt)));
+
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg(
+                  "SELECT TIMESTAMPADD(DAY, 1, TIMESTAMP '2009-03-02 1:23:45') = TIMESTAMP '2009-03-03 1:23:45' "
+                  "FROM TEST LIMIT 1;",
+                  dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg(
+                  "SELECT TIMESTAMPADD(DAY, -1, TIMESTAMP '2009-03-02 1:23:45') = TIMESTAMP '2009-03-01 1:23:45' "
+                  "FROM TEST LIMIT 1;",
+                  dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg(
+                  "SELECT TIMESTAMPADD(DAY, 15, TIMESTAMP '2009-03-02 1:23:45') = TIMESTAMP '2009-03-17 1:23:45' "
+                  "FROM TEST LIMIT 1;",
+                  dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg(
+                  "SELECT TIMESTAMPADD(DAY, -15, TIMESTAMP '2009-03-02 1:23:45') = TIMESTAMP '2009-02-15 1:23:45' "
+                  "FROM TEST LIMIT 1;",
+                  dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg(
+                  "SELECT TIMESTAMPADD(HOUR, 1, TIMESTAMP '2009-03-02 1:23:45') = TIMESTAMP '2009-03-02 2:23:45' "
+                  "FROM TEST LIMIT 1;",
+                  dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg(
+                  "SELECT TIMESTAMPADD(HOUR, -1, TIMESTAMP '2009-03-02 1:23:45') = TIMESTAMP '2009-03-02 0:23:45' "
+                  "FROM TEST LIMIT 1;",
+                  dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg(
+                  "SELECT TIMESTAMPADD(HOUR, 15, TIMESTAMP '2009-03-02 1:23:45') = TIMESTAMP '2009-03-02 16:23:45' "
+                  "FROM TEST LIMIT 1;",
+                  dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg(
+                  "SELECT TIMESTAMPADD(HOUR, -15, TIMESTAMP '2009-03-02 1:23:45') = TIMESTAMP '2009-03-01 10:23:45' "
+                  "FROM TEST LIMIT 1;",
+                  dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg(
+                  "SELECT TIMESTAMPADD(MINUTE, 15, TIMESTAMP '2009-03-02 1:23:45') = TIMESTAMP '2009-03-02 1:38:45' "
+                  "FROM TEST LIMIT 1;",
+                  dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg(
+                  "SELECT TIMESTAMPADD(MINUTE, -15, TIMESTAMP '2009-03-02 1:23:45') = TIMESTAMP '2009-03-02 1:08:45' "
+                  "FROM TEST LIMIT 1;",
+                  dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg(
+                  "SELECT TIMESTAMPADD(SECOND, 15, TIMESTAMP '2009-03-02 1:23:45') = TIMESTAMP '2009-03-02 1:24:00' "
+                  "FROM TEST LIMIT 1;",
+                  dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg(
+                  "SELECT TIMESTAMPADD(SECOND, -15, TIMESTAMP '2009-03-02 1:23:45') = TIMESTAMP '2009-03-02 1:23:30' "
+                  "FROM TEST LIMIT 1;",
+                  dt)));
+
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg("SELECT TIMESTAMPADD(DAY, 1, m) = TIMESTAMP '2014-12-14 22:23:15' "
+                                        "FROM TEST LIMIT 1;",
+                                        dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg("SELECT TIMESTAMPADD(DAY, -1, m) = TIMESTAMP '2014-12-12 22:23:15' "
+                                        "FROM TEST LIMIT 1;",
+                                        dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg("SELECT TIMESTAMPADD(DAY, 15, m) = TIMESTAMP '2014-12-28 22:23:15' "
+                                        "FROM TEST LIMIT 1;",
+                                        dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg("SELECT TIMESTAMPADD(DAY, -15, m) = TIMESTAMP '2014-11-28 22:23:15' "
+                                        "FROM TEST LIMIT 1;",
+                                        dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg("SELECT TIMESTAMPADD(HOUR, 1, m) = TIMESTAMP '2014-12-13 23:23:15' "
+                                        "FROM TEST LIMIT 1;",
+                                        dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg("SELECT TIMESTAMPADD(HOUR, -1, m) = TIMESTAMP '2014-12-13 21:23:15' "
+                                        "FROM TEST LIMIT 1;",
+                                        dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg("SELECT TIMESTAMPADD(HOUR, 15, m) = TIMESTAMP '2014-12-14 13:23:15' "
+                                        "FROM TEST LIMIT 1;",
+                                        dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg("SELECT TIMESTAMPADD(HOUR, -15, m) = TIMESTAMP '2014-12-13 7:23:15' "
+                                        "FROM TEST LIMIT 1;",
+                                        dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg("SELECT TIMESTAMPADD(MINUTE, 15, m) = TIMESTAMP '2014-12-13 22:38:15' "
+                                        "FROM TEST LIMIT 1;",
+                                        dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg("SELECT TIMESTAMPADD(MINUTE, -15, m) = TIMESTAMP '2014-12-13 22:08:15' "
+                                        "FROM TEST LIMIT 1;",
+                                        dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg("SELECT TIMESTAMPADD(SECOND, 15, m) = TIMESTAMP '2014-12-13 22:23:30' "
+                                        "FROM TEST LIMIT 1;",
+                                        dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg("SELECT TIMESTAMPADD(SECOND, -15, m) = TIMESTAMP '2014-12-13 22:23:00' "
+                                        "FROM TEST LIMIT 1;",
+                                        dt)));
+
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg("SELECT TIMESTAMPADD(MONTH, 1, m) = TIMESTAMP '2015-01-13 22:23:15' "
+                                        "FROM TEST LIMIT 1;",
+                                        dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg("SELECT TIMESTAMPADD(MONTH, -1, m) = TIMESTAMP '2014-11-13 22:23:15' "
+                                        "FROM TEST LIMIT 1;",
+                                        dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg("SELECT TIMESTAMPADD(MONTH, 5, m) = TIMESTAMP '2015-05-13 22:23:15' "
+                                        "FROM TEST LIMIT 1;",
+                                        dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg("SELECT TIMESTAMPADD(DAY, -5, m) = TIMESTAMP '2014-12-08 22:23:15' "
+                                        "FROM TEST LIMIT 1;",
+                                        dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg("SELECT TIMESTAMPADD(YEAR, 1, m) = TIMESTAMP '2015-12-13 22:23:15' "
+                                        "FROM TEST LIMIT 1;",
+                                        dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg("SELECT TIMESTAMPADD(YEAR, -1, m) = TIMESTAMP '2013-12-13 22:23:15' "
+                                        "FROM TEST LIMIT 1;",
+                                        dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg("SELECT TIMESTAMPADD(YEAR, 5, m) = TIMESTAMP '2019-12-13 22:23:15' "
+                                        "FROM TEST LIMIT 1;",
+                                        dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg("SELECT TIMESTAMPADD(YEAR, -5, m) = TIMESTAMP '2009-12-13 22:23:15' "
+                                        "FROM TEST LIMIT 1;",
+                                        dt)));
+    ASSERT_EQ(0,
+              v<int64_t>(run_simple_agg(
+                  "select count(*) from test where TIMESTAMPADD(YEAR, 15, CAST(o AS TIMESTAMP)) > m;", dt)));
+    ASSERT_EQ(15,
+              v<int64_t>(run_simple_agg(
+                  "select count(*) from test where TIMESTAMPADD(YEAR, 16, CAST(o AS TIMESTAMP)) > m;", dt)));
+
+    ASSERT_EQ(128885,
+              v<int64_t>(run_simple_agg("SELECT TIMESTAMPDIFF(minute, TIMESTAMP '2003-02-01 0:00:00', TIMESTAMP "
+                                        "'2003-05-01 12:05:55') FROM TEST LIMIT 1;",
+                                        dt)));
+    ASSERT_EQ(2148,
+              v<int64_t>(run_simple_agg("SELECT TIMESTAMPDIFF(hour, TIMESTAMP '2003-02-01 0:00:00', TIMESTAMP "
+                                        "'2003-05-01 12:05:55') FROM TEST LIMIT 1;",
+                                        dt)));
+    ASSERT_EQ(89,
+              v<int64_t>(run_simple_agg("SELECT TIMESTAMPDIFF(day, TIMESTAMP '2003-02-01 0:00:00', TIMESTAMP "
+                                        "'2003-05-01 12:05:55') FROM TEST LIMIT 1;",
+                                        dt)));
+    ASSERT_EQ(3,
+              v<int64_t>(run_simple_agg("SELECT TIMESTAMPDIFF(month, TIMESTAMP '2003-02-01 0:00:00', TIMESTAMP "
+                                        "'2003-05-01 12:05:55') FROM TEST LIMIT 1;",
+                                        dt)));
+    ASSERT_EQ(-3,
+              v<int64_t>(run_simple_agg("SELECT TIMESTAMPDIFF(month, TIMESTAMP '2003-05-01 12:05:55', TIMESTAMP "
+                                        "'2003-02-01 0:00:00') FROM TEST LIMIT 1;",
+                                        dt)));
+    ASSERT_EQ(
+        5, v<int64_t>(run_simple_agg("SELECT TIMESTAMPDIFF(month, m, m + INTERVAL '5' MONTH) FROM TEST LIMIT 1;", dt)));
+    ASSERT_EQ(
+        -5,
+        v<int64_t>(run_simple_agg("SELECT TIMESTAMPDIFF(month, m, m - INTERVAL '5' MONTH) FROM TEST LIMIT 1;", dt)));
+    ASSERT_EQ(15,
+              v<int64_t>(run_simple_agg(
+                  "select count(*) from test where TIMESTAMPDIFF(YEAR, m, CAST(o AS TIMESTAMP)) < 0;", dt)));
+
     ASSERT_EQ(1418428800L, v<int64_t>(run_simple_agg("SELECT CAST(m AS date) FROM test LIMIT 1;", dt)));
     ASSERT_EQ(1336435200L,
               v<int64_t>(run_simple_agg(
@@ -1769,6 +2135,109 @@ TEST(Select, TimeInterval) {
               v<int64_t>(run_simple_agg(
                   "SELECT TIMESTAMPADD(SQL_TSI_HOUR, EXTRACT(HOUR from m), CAST(m AS DATE)) AS g FROM test GROUP BY g;",
                   dt)));
+
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg(
+                  "SELECT (DATE '2008-1-31' + INTERVAL '1' YEAR) = DATE '2009-01-31' from test limit 1;", dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg(
+                  "SELECT (DATE '2008-1-31' + INTERVAL '5' YEAR) = DATE '2013-01-31' from test limit 1;", dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg(
+                  "SELECT (DATE '2008-1-31' - INTERVAL '1' YEAR) = DATE '2007-01-31' from test limit 1;", dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg(
+                  "SELECT (DATE '2008-1-31' - INTERVAL '4' YEAR) = DATE '2004-01-31' from test limit 1;", dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg(
+                  "SELECT (DATE '2008-1-31' + INTERVAL '1' MONTH) = DATE '2008-02-29' from test limit 1;", dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg(
+                  "SELECT (DATE '2008-1-31' + INTERVAL '5' MONTH) = DATE '2008-06-30' from test limit 1;", dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg(
+                  "SELECT (DATE '2008-1-31' - INTERVAL '1' MONTH) = DATE '2007-12-31' from test limit 1;", dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg(
+                  "SELECT (DATE '2008-1-31' - INTERVAL '4' MONTH) = DATE '2007-09-30' from test limit 1;", dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg(
+                  "SELECT (DATE '2008-2-28' + INTERVAL '1' DAY) = DATE '2008-02-29' from test limit 1;", dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg(
+                  "SELECT (DATE '2009-2-28' + INTERVAL '1' DAY) = DATE '2009-03-01' from test limit 1;", dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg(
+                  "SELECT (DATE '2008-2-28' + INTERVAL '4' DAY) = DATE '2008-03-03' from test limit 1;", dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg(
+                  "SELECT (DATE '2009-2-28' + INTERVAL '4' DAY) = DATE '2009-03-04' from test limit 1;", dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg(
+                  "SELECT (DATE '2008-03-01' - INTERVAL '1' DAY) = DATE '2008-02-29' from test limit 1;", dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg(
+                  "SELECT (DATE '2009-03-01' - INTERVAL '1' DAY) = DATE '2009-02-28' from test limit 1;", dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg(
+                  "SELECT (DATE '2008-03-03' - INTERVAL '4' DAY) = DATE '2008-02-28' from test limit 1;", dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg(
+                  "SELECT (DATE '2009-03-04' - INTERVAL '4' DAY) = DATE '2009-02-28' from test limit 1;", dt)));
+    ASSERT_EQ(1, v<int64_t>(run_simple_agg("SELECT m = TIMESTAMP '2014-12-13 22:23:15' from test limit 1;", dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg(
+                  "SELECT (m + INTERVAL '1' SECOND) = TIMESTAMP '2014-12-13 22:23:16' from test limit 1;", dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg(
+                  "SELECT (m + INTERVAL '1' MINUTE) = TIMESTAMP '2014-12-13 22:24:15' from test limit 1;", dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg(
+                  "SELECT (m + INTERVAL '1' HOUR) = TIMESTAMP '2014-12-13 23:23:15' from test limit 1;", dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg(
+                  "SELECT (m + INTERVAL '2' DAY) = TIMESTAMP '2014-12-15 22:23:15' from test limit 1;", dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg(
+                  "SELECT (m + INTERVAL '1' MONTH) = TIMESTAMP '2015-01-13 22:23:15' from test limit 1;", dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg(
+                  "SELECT (m + INTERVAL '1' YEAR) = TIMESTAMP '2015-12-13 22:23:15' from test limit 1;", dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg(
+                  "SELECT (m - 5 * INTERVAL '1' SECOND) = TIMESTAMP '2014-12-13 22:23:10' from test limit 1;", dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg(
+                  "SELECT (m - x * INTERVAL '1' MINUTE) = TIMESTAMP '2014-12-13 22:16:15' from test limit 1;", dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg(
+                  "SELECT (m - 2 * x * INTERVAL '1' HOUR) = TIMESTAMP '2014-12-13 8:23:15' from test limit 1;", dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg(
+                  "SELECT (m - x * INTERVAL '1' DAY) = TIMESTAMP '2014-12-06 22:23:15' from test limit 1;", dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg(
+                  "SELECT (m - x * INTERVAL '1' MONTH) = TIMESTAMP '2014-05-13 22:23:15' from test limit 1;", dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg(
+                  "SELECT (m - x * INTERVAL '1' YEAR) = TIMESTAMP '2007-12-13 22:23:15' from test limit 1;", dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg("SELECT (m - INTERVAL '5' DAY + INTERVAL '2' HOUR - x * INTERVAL '2' SECOND) +"
+                                        "(x - 1) * INTERVAL '1' MONTH - x * INTERVAL '10' YEAR = "
+                                        "TIMESTAMP '1945-06-09 00:23:01' from test limit 1;",
+                                        dt)));
+    ASSERT_EQ(0,
+              v<int64_t>(run_simple_agg("select count(*) from test where m < CAST (o AS TIMESTAMP) + INTERVAL '10' "
+                                        "YEAR AND m > CAST(o AS TIMESTAMP) - INTERVAL '10' YEAR;",
+                                        dt)));
+    ASSERT_EQ(15,
+              v<int64_t>(run_simple_agg("select count(*) from test where m < CAST (o AS TIMESTAMP) + INTERVAL '16' "
+                                        "YEAR AND m > CAST(o AS TIMESTAMP) - INTERVAL '16' YEAR;",
+                                        dt)));
+
+    ASSERT_EQ(1, v<int64_t>(run_simple_agg("SELECT o = DATE '1999-09-09' from test limit 1;", dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg("SELECT (o + INTERVAL '10' DAY) = DATE '1999-09-19' from test limit 1;", dt)));
   }
 }
 
@@ -1984,29 +2453,31 @@ void import_join_test() {
   const std::string drop_old_test{"DROP TABLE IF EXISTS join_test;"};
   run_ddl_statement(drop_old_test);
   g_sqlite_comparator.query(drop_old_test);
-  const std::string create_test{
+  std::string columns_definition{"x int not null, y int, str text encoding dict, dup_str text encoding dict"};
+  const auto create_test = build_create_table_statement(columns_definition,
+                                                        "join_test",
+                                                        {g_with_sharding ? "dup_str" : "", 4},
+                                                        {},
 #ifdef ENABLE_MULTIFRAG_JOIN
-      "CREATE TABLE join_test(x int not null, str text encoding dict, dup_str text encoding dict) WITH "
-      "(fragment_size=2);"
+                                                        2
 #else
-      "CREATE TABLE join_test(x int not null, str text encoding dict, dup_str text encoding dict) WITH "
-      "(fragment_size=3);"
+                                                        3
 #endif
-  };
+                                                        );
   run_ddl_statement(create_test);
-  g_sqlite_comparator.query("CREATE TABLE join_test(x int not null, str text, dup_str text);");
+  g_sqlite_comparator.query("CREATE TABLE join_test(x int not null, y int, str text, dup_str text);");
   {
-    const std::string insert_query{"INSERT INTO join_test VALUES(7, 'foo', 'foo');"};
+    const std::string insert_query{"INSERT INTO join_test VALUES(7, 43, 'foo', 'foo');"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
   {
-    const std::string insert_query{"INSERT INTO join_test VALUES(8, 'bar', 'foo');"};
+    const std::string insert_query{"INSERT INTO join_test VALUES(8, null, 'bar', 'foo');"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
   {
-    const std::string insert_query{"INSERT INTO join_test VALUES(9, 'baz', 'bar');"};
+    const std::string insert_query{"INSERT INTO join_test VALUES(9, null, 'baz', 'bar');"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
@@ -2018,25 +2489,25 @@ void import_hash_join_test() {
   g_sqlite_comparator.query(drop_old_test);
   const std::string create_test{
 #ifdef ENABLE_MULTIFRAG_JOIN
-      "CREATE TABLE hash_join_test(x int not null, str text encoding dict) WITH (fragment_size=2);"
+      "CREATE TABLE hash_join_test(x int not null, str text encoding dict, t BIGINT) WITH (fragment_size=2);"
 #else
-      "CREATE TABLE hash_join_test(x int not null, str text encoding dict) WITH (fragment_size=3);"
+      "CREATE TABLE hash_join_test(x int not null, str text encoding dict, t BIGINT) WITH (fragment_size=3);"
 #endif
   };
   run_ddl_statement(create_test);
-  g_sqlite_comparator.query("CREATE TABLE hash_join_test(x int not null, str text);");
+  g_sqlite_comparator.query("CREATE TABLE hash_join_test(x int not null, str text, t BIGINT);");
   {
-    const std::string insert_query{"INSERT INTO hash_join_test VALUES(7, 'foo');"};
+    const std::string insert_query{"INSERT INTO hash_join_test VALUES(7, 'foo', 1001);"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
   {
-    const std::string insert_query{"INSERT INTO hash_join_test VALUES(8, 'bar');"};
+    const std::string insert_query{"INSERT INTO hash_join_test VALUES(8, 'bar', 5000000000);"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
   {
-    const std::string insert_query{"INSERT INTO hash_join_test VALUES(9, 'the');"};
+    const std::string insert_query{"INSERT INTO hash_join_test VALUES(9, 'the', 1002);"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
@@ -2275,6 +2746,7 @@ TEST(Select, Joins) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     c("SELECT COUNT(*) FROM test, test_inner WHERE test.x = test_inner.x;", dt);
+    c("SELECT COUNT(*) FROM test, hash_join_test WHERE test.t = hash_join_test.t;", dt);
     c("SELECT COUNT(*) FROM test, test_inner WHERE test.x < test_inner.x + 1;", dt);
     c("SELECT test_inner.x, COUNT(*) AS n FROM test, test_inner WHERE test.x = test_inner.x GROUP BY test_inner.x "
       "ORDER BY n;",
@@ -2304,7 +2776,7 @@ TEST(Select, Joins) {
     c("SELECT COUNT(*) FROM test, join_test WHERE test.str = join_test.dup_str;", dt);
     // Intentionally duplicate previous string join to cover hash table building.
     c("SELECT COUNT(*) FROM test, join_test WHERE test.str = join_test.dup_str;", dt);
-    c("SELECT test.x, emptytab. x FROM test, emptytab WHERE test.x = emptytab. x;", dt);
+    c("SELECT test.x, emptytab.x FROM test, emptytab WHERE test.x = emptytab.x;", dt);
     c("SELECT COUNT(*) FROM test, emptytab GROUP BY test.x;", dt);
     ASSERT_EQ(
         int64_t(3),
@@ -2539,12 +3011,22 @@ TEST(Select, Subqueries) {
 TEST(Select, InnerJoins) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
+    c("SELECT COUNT(*) FROM test a JOIN single_row_test b ON a.x = b.x;", dt);
+    c("SELECT COUNT(*) from test a JOIN single_row_test b ON a.ofd = b.x;", dt);
     c("SELECT COUNT(*) FROM test JOIN test_inner ON test.x = test_inner.x;", dt);
-    c("SELECT y, z FROM test JOIN test_inner ON test.x = test_inner.x order by y;", dt);
+    c("SELECT a.y, z FROM test a JOIN test_inner b ON a.x = b.x order by a.y;", dt);
     c("SELECT COUNT(*) FROM test, test_inner WHERE test.real_str = test_inner.str;", dt);
     c("SELECT COUNT(*) FROM test JOIN test_inner ON test.str = test_inner.str AND test.x = 7;", dt);
     c("SELECT a.x, b.str FROM test AS a JOIN join_test AS b ON a.str = b.str AND a.x = b.x ORDER BY a.x, b.str;", dt);
     c("SELECT a.x, b.str FROM test AS a JOIN join_test AS b ON a.x = b.x AND a.str = b.str ORDER BY a.x, b.str;", dt);
+    c("SELECT a.z, b.str FROM test a JOIN join_test b ON a.y = b.y AND a.x = b.x ORDER BY a.z, b.str;", dt);
+    c("SELECT a.z, b.str FROM test a JOIN test_inner b ON a.y = b.y AND a.x = b.x ORDER BY a.z, b.str;", dt);
+    c("SELECT COUNT(*) FROM test a JOIN join_test b ON a.str = b.dup_str;", dt);
+    c("SELECT COUNT(*) FROM test_inner_x a JOIN test_x b ON a.x = b.x;", dt);
+    c("SELECT a.x FROM test a JOIN join_test b ON a.str = b.dup_str ORDER BY a.x;", dt);
+    c("SELECT a.x FROM test_inner_x a JOIN test_x b ON a.x = b.x ORDER BY a.x;", dt);
+    c("SELECT a.x FROM test a JOIN join_test b ON a.str = b.dup_str GROUP BY a.x ORDER BY a.x;", dt);
+    c("SELECT a.x FROM test_inner_x a JOIN test_x b ON a.x = b.x GROUP BY a.x ORDER BY a.x;", dt);
     ASSERT_EQ(7,
               v<int64_t>(run_simple_agg(
                   "SELECT test.x FROM test, test_inner WHERE test.x = test_inner.x AND test.rowid = 19;", dt)));
@@ -2559,8 +3041,9 @@ TEST(Select, InnerJoins) {
     c("SELECT a.y, count(*) FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str = c.str "
       "GROUP BY a.y;",
       dt);
-    c("SELECT a.x AS x, y, b.str FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str = c.str "
-      "ORDER BY y;",
+    c("SELECT a.x AS x, a.y, b.str FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str = "
+      "c.str "
+      "ORDER BY a.y;",
       dt);
     c("SELECT count(*) FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str = c.str WHERE a.y "
       "< 43;",
@@ -2590,9 +3073,10 @@ TEST(Select, InnerJoins) {
     c("SELECT count(*) FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str = c.str JOIN "
       "hash_join_test AS d ON c.x = d.x;",
       dt);
-    c("SELECT a.x AS x, y, b.str FROM test AS a JOIN hash_join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str = "
+    c("SELECT a.x AS x, a.y, b.str FROM test AS a JOIN hash_join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str "
+      "= "
       "c.str "
-      "ORDER BY y;",
+      "ORDER BY a.y;",
       dt);
     c("SELECT count(*) FROM test AS a JOIN hash_join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str = c.str "
       "WHERE a.y "
@@ -2613,6 +3097,9 @@ TEST(Select, InnerJoins) {
     c("SELECT COUNT(1) FROM test a, join_test b, test_inner c WHERE a.str = b.str AND b.x = c.x", dt);
     c("SELECT COUNT(*) FROM test a, join_test b, test_inner c WHERE a.x = b.x AND a.y = b.x AND a.x = c.x AND c.str = "
       "'foo';",
+      dt);
+    c("SELECT COUNT(*) FROM test a JOIN join_test b ON a.x = b.x AND a.y = b.x JOIN test_inner c ON a.x = c.x WHERE "
+      "c.str <> 'foo';",
       dt);
     c("SELECT COUNT(*) FROM test a JOIN test_inner b ON a.str = b.str JOIN hash_join_test c ON a.x = c.x JOIN "
       "join_test d ON a.x > d.x;",
@@ -2649,6 +3136,34 @@ TEST(Select, LeftOuterJoins) {
       dt);
     c("SELECT test_inner.x key1 FROM test LEFT OUTER JOIN test_inner ON test.x = test_inner.x GROUP BY key1 HAVING "
       "key1 IS NOT NULL;",
+      dt);
+    c("SELECT COUNT(*) FROM test_inner a LEFT JOIN (SELECT * FROM test WHERE y > 40) b ON a.x = b.x;", dt);
+    c("SELECT a.x, b.str FROM join_test a LEFT JOIN (SELECT * FROM test WHERE y > 40) b ON a.x = b.x ORDER BY a.x, "
+      "b.str;",
+      dt);
+    c("SELECT COUNT(*) FROM test_inner a LEFT JOIN test b ON a.x = b.x;", dt);
+    c("SELECT a.x, b.str FROM join_test a LEFT JOIN test b ON a.x = b.x ORDER BY a.x, b.str;", dt);
+    c("SELECT a.x, b.str FROM join_test a LEFT JOIN test b ON a.x = b.x ORDER BY a.x, b.str;", dt);
+    c("SELECT a.x, b.str FROM join_test a LEFT JOIN test b ON a.x = b.x AND a.x = 7 ORDER BY a.x, b.str;", dt);
+    c("SELECT COUNT(*) FROM join_test a LEFT JOIN test b ON a.x = b.x AND a.x = 7;", dt);
+    c("SELECT COUNT(*) FROM test_inner a LEFT OUTER JOIN test_x b ON a.x = b.x;", dt);
+    c("SELECT COUNT(*) FROM test a LEFT OUTER JOIN join_test b ON a.str = b.dup_str;", dt);
+    c("SELECT COUNT(*) FROM test a LEFT OUTER JOIN join_test b ON a.str = b.dup_str;", dt);
+    c("SELECT a.x, b.str FROM test_inner a LEFT OUTER JOIN test_x b ON a.x = b.x ORDER BY a.x, b.str IS NULL, b.str;",
+      dt);
+    c("SELECT a.x, b.str FROM test a LEFT OUTER JOIN join_test b ON a.str = b.dup_str ORDER BY a.x, b.str IS NULL, "
+      "b.str;",
+      dt);
+    c("SELECT a.x, b.str FROM test a LEFT OUTER JOIN join_test b ON a.str = b.dup_str ORDER BY a.x, b.str IS NULL, "
+      "b.str;",
+      dt);
+    c("SELECT COUNT(*) FROM test_inner_x a LEFT JOIN test_x b ON a.x = b.x;", dt);
+    c("SELECT COUNT(*) FROM test a LEFT JOIN join_test b ON a.str = b.dup_str;", dt);
+    c("SELECT COUNT(*) FROM test a LEFT JOIN join_test b ON a.str = b.dup_str;", dt);
+    c("SELECT a.x, b.str FROM test_inner_x a LEFT JOIN test_x b ON a.x = b.x ORDER BY a.x, b.str IS NULL, b.str;", dt);
+    c("SELECT a.x, b.str FROM test a LEFT JOIN join_test b ON a.str = b.dup_str ORDER BY a.x, b.str IS NULL, b.str;",
+      dt);
+    c("SELECT a.x, b.str FROM test a LEFT JOIN join_test b ON a.str = b.dup_str ORDER BY a.x, b.str IS NULL, b.str;",
       dt);
     EXPECT_THROW(
         run_multiple_agg(
@@ -2817,6 +3332,7 @@ TEST(Select, Views) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     c("SELECT x, COUNT(*) FROM view_test WHERE y > 41 GROUP BY x;", dt);
+    c("SELECT x FROM join_view_test WHERE x IS NULL;", dt);
   }
 }
 
@@ -2871,22 +3387,72 @@ TEST(Select, WatchdogTest) {
   }
 }
 
+TEST(Truncate, Count) {
+  run_ddl_statement("create table trunc_test (i1 integer, t1 text);");
+  run_multiple_agg("insert into trunc_test values(1, '1');", ExecutorDeviceType::CPU);
+  run_multiple_agg("insert into trunc_test values(2, '2');", ExecutorDeviceType::CPU);
+  ASSERT_EQ(int64_t(3), v<int64_t>(run_simple_agg("SELECT SUM(i1) FROM trunc_test;", ExecutorDeviceType::CPU)));
+  run_ddl_statement("truncate table trunc_test;");
+  run_multiple_agg("insert into trunc_test values(3, '3');", ExecutorDeviceType::CPU);
+  run_multiple_agg("insert into trunc_test values(4, '4');", ExecutorDeviceType::CPU);
+  ASSERT_EQ(int64_t(7), v<int64_t>(run_simple_agg("SELECT SUM(i1) FROM trunc_test;", ExecutorDeviceType::CPU)));
+  run_ddl_statement("drop table trunc_test;");
+}
+
 namespace {
 
 int create_and_populate_tables() {
   try {
+    const std::string drop_old_test{"DROP TABLE IF EXISTS test_inner;"};
+    run_ddl_statement(drop_old_test);
+    g_sqlite_comparator.query(drop_old_test);
+    std::string columns_definition{"x int not null, y int, str text encoding dict"};
+    const auto create_test_inner =
+        build_create_table_statement(columns_definition, "test_inner", {g_with_sharding ? "str" : "", 4}, {}, 2);
+    run_ddl_statement(create_test_inner);
+    g_sqlite_comparator.query("CREATE TABLE test_inner(x int not null, y int, str text);");
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'test_inner'";
+    return -EEXIST;
+  }
+  {
+    const std::string insert_query{"INSERT INTO test_inner VALUES(7, 43, 'foo');"};
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query);
+  }
+  try {
+    const std::string drop_old_test{"DROP TABLE IF EXISTS test_inner_x;"};
+    run_ddl_statement(drop_old_test);
+    g_sqlite_comparator.query(drop_old_test);
+    std::string columns_definition{"x int not null, y int, str text encoding dict"};
+    const auto create_test_inner =
+        build_create_table_statement(columns_definition, "test_inner_x", {g_with_sharding ? "x" : "", 4}, {}, 2);
+    run_ddl_statement(create_test_inner);
+    g_sqlite_comparator.query("CREATE TABLE test_inner_x(x int not null, y int, str text);");
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'test_inner_x'";
+    return -EEXIST;
+  }
+  {
+    const std::string insert_query{"INSERT INTO test_inner_x VALUES(7, 43, 'foo');"};
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query);
+  }
+  try {
     const std::string drop_old_test{"DROP TABLE IF EXISTS test;"};
     run_ddl_statement(drop_old_test);
     g_sqlite_comparator.query(drop_old_test);
-    const std::string create_test{
-        "CREATE TABLE test(x int not null, y int, z smallint, t bigint, b boolean, f float, ff float, fn float, d "
-        "double, dn double, str "
-        "text "
-        "encoding dict, null_str text encoding dict, fixed_str text encoding dict(16), real_str text encoding none, m "
-        "timestamp(0), n time(0), o "
-        "date, o1 date encoding fixed(32), fx int encoding fixed(16), dd decimal(10, 2), dd_notnull decimal(10, 2) not "
-        "null, ss text encoding dict, u int, ofd int, ufd int not null, ofq bigint, ufq bigint not null) WITH "
-        "(fragment_size=2);"};
+    std::string columns_definition{
+        "x int not null, y int, z smallint, t bigint, b boolean, f float, ff float, fn float, d double, dn double, str "
+        "text, null_str text encoding dict, fixed_str text encoding dict(16), real_str text encoding none, m "
+        "timestamp(0), n time(0), o date, o1 date encoding fixed(32), fx int encoding fixed(16), dd decimal(10, 2), "
+        "dd_notnull decimal(10, 2) not null, ss text encoding dict, u int, ofd int, ufd int not null, ofq bigint, ufq "
+        "bigint not null"};
+    const std::string create_test = build_create_table_statement(columns_definition,
+                                                                 "test",
+                                                                 {g_with_sharding ? "str" : "", 4},
+                                                                 {g_with_sharding ? "str" : "", "test_inner", "str"},
+                                                                 2);
     run_ddl_statement(create_test);
     g_sqlite_comparator.query(
         "CREATE TABLE test(x int not null, y int, z smallint, t bigint, b boolean, f float, ff float, fn float, d "
@@ -2931,6 +3497,61 @@ int create_and_populate_tables() {
     g_sqlite_comparator.query(insert_query);
   }
   try {
+    const std::string drop_old_test{"DROP TABLE IF EXISTS test_x;"};
+    run_ddl_statement(drop_old_test);
+    g_sqlite_comparator.query(drop_old_test);
+    std::string columns_definition{
+        "x int not null, y int, z smallint, t bigint, b boolean, f float, ff float, fn float, d double, dn double, str "
+        "text, null_str text encoding dict, fixed_str text encoding dict(16), real_str text encoding none, m "
+        "timestamp(0), n time(0), o date, o1 date encoding fixed(32), fx int encoding fixed(16), dd decimal(10, 2), "
+        "dd_notnull decimal(10, 2) not null, ss text encoding dict, u int, ofd int, ufd int not null, ofq bigint, ufq "
+        "bigint not null"};
+    const std::string create_test =
+        build_create_table_statement(columns_definition, "test_x", {g_with_sharding ? "x" : "", 4}, {}, 2);
+    run_ddl_statement(create_test);
+    g_sqlite_comparator.query(
+        "CREATE TABLE test_x(x int not null, y int, z smallint, t bigint, b boolean, f float, ff float, fn float, d "
+        "double, dn double, str "
+        "text, null_str text,"
+        "fixed_str text, real_str text, m timestamp(0), n time(0), o date, o1 date, fx int, dd decimal(10, 2), "
+        "dd_notnull decimal(10, 2) not null, ss text, u int, ofd int, ufd int not null, ofq bigint, ufq bigint not "
+        "null);");
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'test_x'";
+    return -EEXIST;
+  }
+  CHECK_EQ(g_num_rows % 2, 0);
+  for (ssize_t i = 0; i < g_num_rows; ++i) {
+    const std::string insert_query{
+        "INSERT INTO test_x VALUES(7, 42, 101, 1001, 't', 1.1, 1.1, null, 2.2, null, 'foo', null, 'foo', 'real_foo', "
+        "'2014-12-13 "
+        "22:23:15', "
+        "'15:13:14', '1999-09-09', '1999-09-09', 9, 111.1, 111.1, 'fish', null, 2147483647, -2147483648, null, -1);"};
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query);
+  }
+  for (ssize_t i = 0; i < g_num_rows / 2; ++i) {
+    const std::string insert_query{
+        "INSERT INTO test_x VALUES(8, 43, 102, 1002, 'f', 1.2, 101.2, -101.2, 2.4, -2002.4, 'bar', null, 'bar', "
+        "'real_bar', "
+        "'2014-12-13 "
+        "22:23:15', "
+        "'15:13:14', NULL, NULL, NULL, 222.2, 222.2, null, null, null, -2147483647, 9223372036854775807, "
+        "-9223372036854775808);"};
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query);
+  }
+  for (ssize_t i = 0; i < g_num_rows / 2; ++i) {
+    const std::string insert_query{
+        "INSERT INTO test_x VALUES(7, 43, 102, 1002, 't', 1.3, 1000.3, -1000.3, 2.6, -220.6, 'baz', null, 'baz', "
+        "'real_baz', "
+        "'2014-12-13 "
+        "22:23:15', "
+        "'15:13:14', '1999-09-09', '1999-09-09', 11, 333.3, 333.3, 'boat', null, 1, -1, 1, -9223372036854775808);"};
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query);
+  }
+  try {
     const std::string drop_old_array_test{"DROP TABLE IF EXISTS array_test;"};
     run_ddl_statement(drop_old_array_test);
     const std::string create_array_test{
@@ -2942,22 +3563,6 @@ int create_and_populate_tables() {
     return -EEXIST;
   }
   import_array_test("array_test");
-  try {
-    const std::string drop_old_test{"DROP TABLE IF EXISTS test_inner;"};
-    run_ddl_statement(drop_old_test);
-    g_sqlite_comparator.query(drop_old_test);
-    const std::string create_test{
-        "CREATE TABLE test_inner(x int not null, str text encoding dict) WITH (fragment_size=2, "
-        "partitions='REPLICATED');"};
-    run_ddl_statement(create_test);
-    g_sqlite_comparator.query("CREATE TABLE test_inner(x int not null, str text encoding none);");
-  } catch (...) {
-    LOG(ERROR) << "Failed to (re-)create table 'test_inner'";
-    return -EEXIST;
-  }
-  const std::string insert_query{"INSERT INTO test_inner VALUES(7, 'foo');"};
-  run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
-  g_sqlite_comparator.query(insert_query);
   try {
     const std::string drop_old_array_test{"DROP TABLE IF EXISTS array_test_inner;"};
     run_ddl_statement(drop_old_array_test);
@@ -2973,6 +3578,22 @@ int create_and_populate_tables() {
     return -EEXIST;
   }
   import_array_test("array_test_inner");
+  try {
+    const std::string drop_old_single_row_test{"DROP TABLE IF EXISTS single_row_test;"};
+    run_ddl_statement(drop_old_single_row_test);
+    g_sqlite_comparator.query(drop_old_single_row_test);
+    const std::string create_single_row_test{"CREATE TABLE single_row_test(x int);"};
+    run_ddl_statement(create_single_row_test);
+    g_sqlite_comparator.query(create_single_row_test);
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'single_row_test'";
+    return -EEXIST;
+  }
+  {
+    const std::string insert_query{"INSERT INTO single_row_test VALUES(null);"};
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query);
+  }
   try {
     import_gpu_sort_test();
   } catch (...) {
@@ -3032,7 +3653,7 @@ int create_and_populate_tables() {
     run_ddl_statement(drop_old_empty);
     g_sqlite_comparator.query(drop_old_empty);
     const std::string create_empty{
-        "CREATE TABLE emptytab(x int, y int not null, t bigint not null, f float not null, d double not null, dd "
+        "CREATE TABLE emptytab(x int not null, y int, t bigint not null, f float not null, d double not null, dd "
         "decimal(10, 2) not null, ts timestamp)"};
     run_ddl_statement(create_empty + " WITH (partitions='REPLICATED');");
     g_sqlite_comparator.query(create_empty + ";");
@@ -3078,6 +3699,9 @@ int create_views() {
   const std::string create_view_test{
       "CREATE VIEW view_test AS SELECT test.*, test_inner.* FROM test, test_inner WHERE test.str = test_inner.str;"};
   const std::string drop_old_view{"DROP VIEW IF EXISTS view_test;"};
+  const std::string create_join_view_test{
+      "CREATE VIEW join_view_test AS SELECT a.x AS x FROM test a JOIN test_inner b ON a.str = b.str;"};
+  const std::string drop_old_join_view{"DROP VIEW IF EXISTS join_view_test;"};
   try {
     run_ddl_statement(drop_old_view);
     run_ddl_statement(create_view_test);
@@ -3090,6 +3714,20 @@ int create_views() {
     g_sqlite_comparator.query(create_view_test);
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create view 'view_test' -- g_sqlite_comparator";
+    return -EEXIST;
+  }
+  try {
+    run_ddl_statement(drop_old_join_view);
+    run_ddl_statement(create_join_view_test);
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create view 'join_view_test' -- run_ddl_statement";
+    return -EEXIST;
+  }
+  try {
+    g_sqlite_comparator.query(drop_old_join_view);
+    g_sqlite_comparator.query(create_join_view_test);
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create view 'join_view_test' -- g_sqlite_comparator";
     return -EEXIST;
   }
   return 0;
@@ -3128,12 +3766,18 @@ int create_as_select_empty() {
 }
 
 void drop_tables() {
-  const std::string drop_test{"DROP TABLE test;"};
-  run_ddl_statement(drop_test);
-  g_sqlite_comparator.query(drop_test);
   const std::string drop_test_inner{"DROP TABLE test_inner;"};
   run_ddl_statement(drop_test_inner);
   g_sqlite_comparator.query(drop_test_inner);
+  const std::string drop_test{"DROP TABLE test;"};
+  run_ddl_statement(drop_test);
+  g_sqlite_comparator.query(drop_test);
+  const std::string drop_test_inner_x{"DROP TABLE test_inner_x;"};
+  run_ddl_statement(drop_test_inner_x);
+  g_sqlite_comparator.query(drop_test_inner_x);
+  const std::string drop_test_x{"DROP TABLE test_x;"};
+  run_ddl_statement(drop_test_x);
+  g_sqlite_comparator.query(drop_test_x);
   const std::string drop_gpu_sort_test{"DROP TABLE gpu_sort_test;"};
   run_ddl_statement(drop_gpu_sort_test);
   g_sqlite_comparator.query(drop_gpu_sort_test);
@@ -3146,6 +3790,9 @@ void drop_tables() {
   run_ddl_statement(drop_array_test);
   const std::string drop_array_test_inner{"DROP TABLE array_test_inner;"};
   run_ddl_statement(drop_array_test_inner);
+  const std::string drop_single_row_test{"DROP TABLE single_row_test;"};
+  g_sqlite_comparator.query(drop_single_row_test);
+  run_ddl_statement(drop_single_row_test);
   const std::string drop_subquery_test{"DROP TABLE subquery_test;"};
   run_ddl_statement(drop_subquery_test);
   g_sqlite_comparator.query(drop_subquery_test);
@@ -3180,6 +3827,9 @@ void drop_views() {
   const std::string drop_view_test{"DROP VIEW view_test;"};
   run_ddl_statement(drop_view_test);
   g_sqlite_comparator.query(drop_view_test);
+  const std::string drop_join_view_test{"DROP VIEW join_view_test;"};
+  run_ddl_statement(drop_join_view_test);
+  g_sqlite_comparator.query(drop_join_view_test);
 }
 
 }  // namespace
@@ -3192,6 +3842,7 @@ int main(int argc, char** argv) {
 
   po::options_description desc("Options");
   desc.add_options()("disable-literal-hoisting", "Disable literal hoisting");
+  desc.add_options()("with-sharding", "Create sharded tables");
   desc.add_options()("use-result-set",
                      po::value<bool>(&g_use_result_set)->default_value(g_use_result_set)->implicit_value(true),
                      "Use the new result set");
@@ -3208,6 +3859,9 @@ int main(int argc, char** argv) {
 
   if (vm.count("disable-literal-hoisting"))
     g_hoist_literals = false;
+
+  if (vm.count("with-sharding"))
+    g_with_sharding = true;
 
   g_session.reset(get_session(BASE_PATH));
 

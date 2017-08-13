@@ -19,6 +19,7 @@
 
 #include "CalciteDeserializerUtils.h"
 #include "DateTimePlusRewrite.h"
+#include "ExpressionRewrite.h"
 #include "ExtensionFunctionsWhitelist.h"
 #include "RelAlgAbstractInterpreter.h"
 #include "RelAlgExecutionDescriptor.h"
@@ -653,6 +654,12 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateOper(const RexOperato
   if (sql_op == kIN) {
     return translateInOper(rex_operator);
   }
+  if (sql_op == kMINUS) {
+    auto date_minus = translateDateminus(rex_operator);
+    if (date_minus) {
+      return date_minus;
+    }
+  }
   auto lhs = translateScalarRex(rex_operator->getOperand(0));
   for (size_t i = 1; i < rex_operator->size(); ++i) {
     std::shared_ptr<Analyzer::Expr> rhs;
@@ -686,6 +693,9 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLike(const RexFunctio
   CHECK(rex_function->size() == 2 || rex_function->size() == 3);
   const auto arg = translateScalarRex(rex_function->getOperand(0));
   const auto like = translateScalarRex(rex_function->getOperand(1));
+  if (!std::dynamic_pointer_cast<const Analyzer::Constant>(like)) {
+    throw std::runtime_error("The matching pattern must be a literal.");
+  }
   const auto escape = (rex_function->size() == 3) ? translateScalarRex(rex_function->getOperand(2)) : nullptr;
   const bool is_ilike = rex_function->getName() == std::string("PG_ILIKE");
   return Parser::LikeExpr::get(arg, like, escape, is_ilike, false);
@@ -695,6 +705,9 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateRegexp(const RexFunct
   CHECK(rex_function->size() == 2 || rex_function->size() == 3);
   const auto arg = translateScalarRex(rex_function->getOperand(0));
   const auto pattern = translateScalarRex(rex_function->getOperand(1));
+  if (!std::dynamic_pointer_cast<const Analyzer::Constant>(pattern)) {
+    throw std::runtime_error("The matching pattern must be a literal.");
+  }
   const auto escape = (rex_function->size() == 3) ? translateScalarRex(rex_function->getOperand(2)) : nullptr;
   return Parser::RegexpExpr::get(arg, pattern, escape, false);
 }
@@ -722,6 +735,116 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateExtract(const RexFunc
   const bool is_date_trunc = rex_function->getName() == std::string("PG_DATE_TRUNC");
   return is_date_trunc ? Parser::DatetruncExpr::get(from_expr, *timeunit_lit->get_constval().stringval)
                        : Parser::ExtractExpr::get(from_expr, *timeunit_lit->get_constval().stringval);
+}
+
+namespace {
+
+std::shared_ptr<Analyzer::Constant> makeNumericConstant(const SQLTypeInfo& ti, const int val) {
+  CHECK(ti.is_number());
+  Datum datum{0};
+  switch (ti.get_type()) {
+    case kSMALLINT: {
+      datum.smallintval = val;
+      break;
+    }
+    case kINT: {
+      datum.intval = val;
+      break;
+    }
+    case kBIGINT: {
+      datum.bigintval = val;
+      break;
+    }
+    case kDECIMAL:
+    case kNUMERIC: {
+      datum.bigintval = val * exp_to_scale(ti.get_scale());
+      break;
+    }
+    case kFLOAT: {
+      datum.floatval = val;
+      break;
+    }
+    case kDOUBLE: {
+      datum.doubleval = val;
+      break;
+    }
+    default:
+      CHECK(false);
+  }
+  return makeExpr<Analyzer::Constant>(ti, false, datum);
+}
+
+}  // namespace
+
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDateadd(const RexFunctionOperator* rex_function) const {
+  if (rex_function->getName() == std::string("DATETIME_PLUS")) {
+    const auto datetime = translateScalarRex(rex_function->getOperand(0));
+    const auto unfolded_number = translateScalarRex(rex_function->getOperand(1));
+    const auto number = fold_expr(unfolded_number.get());
+    const auto number_lit = std::dynamic_pointer_cast<Analyzer::Constant>(number);
+    const auto& number_ti = number->get_type_info();
+    if (number_ti.get_type() == kINTERVAL_DAY_TIME) {
+      std::shared_ptr<Analyzer::Expr> number_sec;
+      if (number_lit) {
+        number_sec = makeNumericConstant(SQLTypeInfo(kBIGINT, false), number_lit->get_constval().timeval / 1000);
+      } else {
+        number_sec = makeExpr<Analyzer::BinOper>(
+            number_ti.get_type(), kDIVIDE, kONE, number, makeNumericConstant(SQLTypeInfo(kBIGINT, false), 1000));
+      }
+      return makeExpr<Analyzer::DateaddExpr>(datetime->get_type_info(), daSECOND, number_sec, datetime);
+    }
+    CHECK(number_ti.get_type() == kINTERVAL_YEAR_MONTH);
+    return makeExpr<Analyzer::DateaddExpr>(datetime->get_type_info(), daMONTH, number, datetime);
+  }
+  CHECK_EQ(size_t(3), rex_function->size());
+  const auto timeunit = translateScalarRex(rex_function->getOperand(0));
+  const auto timeunit_lit = std::dynamic_pointer_cast<Analyzer::Constant>(timeunit);
+  if (!timeunit_lit) {
+    throw std::runtime_error("The time unit parameter must be a literal.");
+  }
+
+  const auto number_units = translateScalarRex(rex_function->getOperand(1));
+  const auto cast_number_units = number_units->add_cast(SQLTypeInfo(kBIGINT, false));
+  const auto datetime = translateScalarRex(rex_function->getOperand(2));
+  return makeExpr<Analyzer::DateaddExpr>(SQLTypeInfo(kTIMESTAMP, false),
+                                         to_dateadd_field(*timeunit_lit->get_constval().stringval),
+                                         cast_number_units,
+                                         datetime);
+}
+
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDateminus(const RexOperator* rex_operator) const {
+  if (rex_operator->size() != 2)
+    return nullptr;
+  const auto datetime = translateScalarRex(rex_operator->getOperand(0));
+  const auto datetime_ti = datetime->get_type_info();
+  if (datetime_ti.get_type() != kTIMESTAMP && datetime_ti.get_type() != kDATE)
+    return nullptr;
+  const auto rhs = translateScalarRex(rex_operator->getOperand(1));
+  const auto rhs_ti = rhs->get_type_info();
+  if (rhs_ti.get_type() == kTIMESTAMP || rhs_ti.get_type() == kDATE) {
+    const auto& rex_operator_ti = rex_operator->getType();
+    const auto datediff_field = (rex_operator_ti.get_type() == kINTERVAL_DAY_TIME) ? dtMILLISECOND : dtMONTH;
+    return makeExpr<Analyzer::DatediffExpr>(SQLTypeInfo(kBIGINT, false), datediff_field, rhs, datetime);
+  }
+  const auto interval = fold_expr(rhs.get());
+  auto interval_ti = interval->get_type_info();
+  auto bigint_ti = SQLTypeInfo(kBIGINT, false);
+  const auto interval_lit = std::dynamic_pointer_cast<Analyzer::Constant>(interval);
+  if (interval_ti.get_type() == kINTERVAL_DAY_TIME) {
+    std::shared_ptr<Analyzer::Expr> neg_interval_sec;
+    if (interval_lit) {
+      neg_interval_sec = makeNumericConstant(bigint_ti, -interval_lit->get_constval().timeval / 1000);
+    } else {
+      auto interval_sec = makeExpr<Analyzer::BinOper>(
+          bigint_ti.get_type(), kDIVIDE, kONE, interval, makeNumericConstant(bigint_ti, 1000));
+      neg_interval_sec = std::make_shared<Analyzer::UOper>(bigint_ti, false, kUMINUS, interval_sec);
+    }
+    return makeExpr<Analyzer::DateaddExpr>(datetime_ti, daSECOND, neg_interval_sec, datetime);
+  }
+  CHECK(interval_ti.get_type() == kINTERVAL_YEAR_MONTH);
+  std::shared_ptr<Analyzer::Expr> neg_interval_months;
+  neg_interval_months = std::make_shared<Analyzer::UOper>(bigint_ti, false, kUMINUS, interval);
+  return makeExpr<Analyzer::DateaddExpr>(datetime_ti, daMONTH, neg_interval_months, datetime);
 }
 
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDatediff(const RexFunctionOperator* rex_function) const {
@@ -781,45 +904,6 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDatetime(const RexFun
   return translateNow();
 }
 
-namespace {
-
-std::shared_ptr<Analyzer::Constant> makeNumericConstant(const SQLTypeInfo& ti, const int val) {
-  CHECK(ti.is_number());
-  Datum datum{0};
-  switch (ti.get_type()) {
-    case kSMALLINT: {
-      datum.smallintval = val;
-      break;
-    }
-    case kINT: {
-      datum.intval = val;
-      break;
-    }
-    case kBIGINT: {
-      datum.bigintval = val;
-      break;
-    }
-    case kDECIMAL:
-    case kNUMERIC: {
-      datum.bigintval = val * exp_to_scale(ti.get_scale());
-      break;
-    }
-    case kFLOAT: {
-      datum.floatval = val;
-      break;
-    }
-    case kDOUBLE: {
-      datum.doubleval = val;
-      break;
-    }
-    default:
-      CHECK(false);
-  }
-  return makeExpr<Analyzer::Constant>(ti, false, datum);
-}
-
-}  // namespace
-
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateAbs(const RexFunctionOperator* rex_function) const {
   std::list<std::pair<std::shared_ptr<Analyzer::Expr>, std::shared_ptr<Analyzer::Expr>>> expr_list;
   CHECK_EQ(size_t(1), rex_function->size());
@@ -866,6 +950,9 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(const RexFun
   if (rex_function->getName() == std::string("PG_EXTRACT") || rex_function->getName() == std::string("PG_DATE_TRUNC")) {
     return translateExtract(rex_function);
   }
+  if (rex_function->getName() == std::string("DATEADD")) {
+    return translateDateadd(rex_function);
+  }
   if (rex_function->getName() == std::string("DATEDIFF")) {
     return translateDatediff(rex_function);
   }
@@ -902,6 +989,18 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(const RexFun
     if (date_trunc) {
       return date_trunc;
     }
+    return translateDateadd(rex_function);
+  }
+  if (rex_function->getName() == std::string("/INT")) {
+    CHECK_EQ(size_t(2), rex_function->size());
+    std::shared_ptr<Analyzer::Expr> lhs = translateScalarRex(rex_function->getOperand(0));
+    std::shared_ptr<Analyzer::Expr> rhs = translateScalarRex(rex_function->getOperand(1));
+    const auto rhs_lit = std::dynamic_pointer_cast<Analyzer::Constant>(rhs);
+    return Parser::OperExpr::normalize(kDIVIDE, kONE, lhs, rhs);
+  }
+  if (rex_function->getName() == std::string("Reinterpret")) {
+    CHECK_EQ(size_t(1), rex_function->size());
+    return translateScalarRex(rex_function->getOperand(0));
   }
   if (!ExtensionFunctionsWhitelist::get(rex_function->getName())) {
     throw QueryNotSupported("Function " + rex_function->getName() + " not supported");

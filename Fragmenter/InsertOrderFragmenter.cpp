@@ -75,42 +75,44 @@ InsertOrderFragmenter::InsertOrderFragmenter(const vector<int> chunkKeyPrefix,
 InsertOrderFragmenter::~InsertOrderFragmenter() {}
 
 void InsertOrderFragmenter::getChunkMetadata() {
-  std::vector<std::pair<ChunkKey, ChunkMetadata>> chunkMetadataVec;
-  dataMgr_->getChunkMetadataVecForKeyPrefix(chunkMetadataVec, chunkKeyPrefix_);
-  // dataMgr_->getChunkMetadataVec(chunkMetadataVec);
+  if (defaultInsertLevel_ ==
+      Data_Namespace::MemoryLevel::DISK_LEVEL) {  // memory-resident tables won't have anything on disk
+    std::vector<std::pair<ChunkKey, ChunkMetadata>> chunkMetadataVec;
+    dataMgr_->getChunkMetadataVecForKeyPrefix(chunkMetadataVec, chunkKeyPrefix_);
 
-  // data comes like this - database_id, table_id, column_id, fragment_id
-  // but lets sort by database_id, table_id, fragment_id, column_id
+    // data comes like this - database_id, table_id, column_id, fragment_id
+    // but lets sort by database_id, table_id, fragment_id, column_id
 
-  int fragmentSubKey = 3;
-  std::sort(chunkMetadataVec.begin(),
-            chunkMetadataVec.end(),
-            [&](const std::pair<ChunkKey, ChunkMetadata>& pair1, const std::pair<ChunkKey, ChunkMetadata>& pair2) {
-              return pair1.first[3] < pair2.first[3];
-            });
+    int fragmentSubKey = 3;
+    std::sort(chunkMetadataVec.begin(),
+              chunkMetadataVec.end(),
+              [&](const std::pair<ChunkKey, ChunkMetadata>& pair1, const std::pair<ChunkKey, ChunkMetadata>& pair2) {
+                return pair1.first[3] < pair2.first[3];
+              });
 
-  for (auto chunkIt = chunkMetadataVec.begin(); chunkIt != chunkMetadataVec.end(); ++chunkIt) {
-    int curFragmentId = chunkIt->first[fragmentSubKey];
+    for (auto chunkIt = chunkMetadataVec.begin(); chunkIt != chunkMetadataVec.end(); ++chunkIt) {
+      int curFragmentId = chunkIt->first[fragmentSubKey];
 
-    if (fragmentInfoVec_.empty() || curFragmentId != fragmentInfoVec_.back().fragmentId) {
-      maxFragmentId_ = curFragmentId;
-      fragmentInfoVec_.push_back(FragmentInfo());
-      fragmentInfoVec_.back().fragmentId = curFragmentId;
-      fragmentInfoVec_.back().setPhysicalNumTuples(chunkIt->second.numElements);
-      numTuples_ += fragmentInfoVec_.back().getPhysicalNumTuples();
-      for (const auto levelSize : dataMgr_->levelSizes_) {
-        fragmentInfoVec_.back().deviceIds.push_back(curFragmentId % levelSize);
+      if (fragmentInfoVec_.empty() || curFragmentId != fragmentInfoVec_.back().fragmentId) {
+        maxFragmentId_ = curFragmentId;
+        fragmentInfoVec_.push_back(FragmentInfo());
+        fragmentInfoVec_.back().fragmentId = curFragmentId;
+        fragmentInfoVec_.back().setPhysicalNumTuples(chunkIt->second.numElements);
+        numTuples_ += fragmentInfoVec_.back().getPhysicalNumTuples();
+        for (const auto levelSize : dataMgr_->levelSizes_) {
+          fragmentInfoVec_.back().deviceIds.push_back(curFragmentId % levelSize);
+        }
+        fragmentInfoVec_.back().shadowNumTuples = fragmentInfoVec_.back().getPhysicalNumTuples();
+        fragmentInfoVec_.back().physicalTableId = physicalTableId_;
+        fragmentInfoVec_.back().shard = shard_;
+      } else {
+        if (chunkIt->second.numElements != fragmentInfoVec_.back().getPhysicalNumTuples()) {
+          throw std::runtime_error("Inconsistency in num tuples within fragment");
+        }
       }
-      fragmentInfoVec_.back().shadowNumTuples = fragmentInfoVec_.back().getPhysicalNumTuples();
-      fragmentInfoVec_.back().physicalTableId = physicalTableId_;
-      fragmentInfoVec_.back().shard = shard_;
-    } else {
-      if (chunkIt->second.numElements != fragmentInfoVec_.back().getPhysicalNumTuples()) {
-        throw std::runtime_error("Inconsistency in num tuples within fragment");
-      }
+      int columnId = chunkIt->first[2];
+      fragmentInfoVec_.back().setChunkMetadata(columnId, chunkIt->second);
     }
-    int columnId = chunkIt->first[2];
-    fragmentInfoVec_.back().setChunkMetadata(columnId, chunkIt->second);
   }
 
   ssize_t maxFixedColSize = 0;
@@ -186,8 +188,10 @@ void InsertOrderFragmenter::insertData(const InsertData& insertDataStruct) {
       chunkKeyPrefix_));  // prevent two threads from trying to insert into the same table simultaneously
                           // mutex comes from datamgr so that lock can span more than a single component
   insertDataImpl(insertDataStruct);
-  dataMgr_->checkpoint(chunkKeyPrefix_[0],
-                       chunkKeyPrefix_[1]);  // need to checkpoint here to remove window for corruption
+  if (defaultInsertLevel_ == Data_Namespace::DISK_LEVEL) {  // only checkpoint if data is resident on disk
+    dataMgr_->checkpoint(chunkKeyPrefix_[0],
+                         chunkKeyPrefix_[1]);  // need to checkpoint here to remove window for corruption
+  }
 }
 
 void InsertOrderFragmenter::insertDataNoCheckpoint(const InsertData& insertDataStruct) {
@@ -240,7 +244,7 @@ void InsertOrderFragmenter::insertDataImpl(const InsertData& insertDataStruct) {
     }
 
     if (rowsLeftInCurrentFragment == 0 || numRowsToInsert == 0) {
-      currentFragment = createNewFragment();
+      currentFragment = createNewFragment(defaultInsertLevel_);
       if (numRowsInserted == 0) {
         startFragment++;
       }

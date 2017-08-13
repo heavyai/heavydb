@@ -70,6 +70,10 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Expr* expr,
   if (extract_expr) {
     return {codegen(extract_expr, co)};
   }
+  auto dateadd_expr = dynamic_cast<const Analyzer::DateaddExpr*>(expr);
+  if (dateadd_expr) {
+    return {codegen(dateadd_expr, co)};
+  }
   auto datediff_expr = dynamic_cast<const Analyzer::DatediffExpr*>(expr);
   if (datediff_expr) {
     return {codegen(datediff_expr, co)};
@@ -149,6 +153,29 @@ llvm::Value* Executor::codegen(const Analyzer::UOper* u_oper, const CompilationO
   }
 }
 
+llvm::Value* Executor::codegenRetOnHashFail(llvm::Value* hash_cond_lv, const Analyzer::Expr* qual) {
+  std::unordered_map<const Analyzer::Expr*, size_t> equi_join_conds;
+  for (size_t i = 0; i < plan_state_->join_info_.equi_join_tautologies_.size(); ++i) {
+    auto cond = plan_state_->join_info_.equi_join_tautologies_[i];
+    equi_join_conds.insert(std::make_pair(cond.get(), i));
+  }
+  auto bin_oper = dynamic_cast<const Analyzer::BinOper*>(qual);
+  if (!bin_oper || !equi_join_conds.count(bin_oper)) {
+    return hash_cond_lv;
+  }
+
+  auto bb_hash_pass = llvm::BasicBlock::Create(
+      cgen_state_->context_, "hash_pass_" + std::to_string(equi_join_conds[bin_oper]), cgen_state_->row_func_);
+  auto bb_hash_fail = llvm::BasicBlock::Create(
+      cgen_state_->context_, "hash_fail_" + std::to_string(equi_join_conds[bin_oper]), cgen_state_->row_func_);
+  cgen_state_->ir_builder_.CreateCondBr(hash_cond_lv, bb_hash_pass, bb_hash_fail);
+  cgen_state_->ir_builder_.SetInsertPoint(bb_hash_fail);
+
+  cgen_state_->ir_builder_.CreateRet(ll_int(int32_t(0)));
+  cgen_state_->ir_builder_.SetInsertPoint(bb_hash_pass);
+  return ll_bool(true);
+}
+
 const std::vector<Analyzer::Expr*> Executor::codegenHashJoinsBeforeLoopJoin(
     const std::vector<Analyzer::Expr*>& primary_quals,
     const RelAlgExecutionUnit& ra_exe_unit,
@@ -158,7 +185,7 @@ const std::vector<Analyzer::Expr*> Executor::codegenHashJoinsBeforeLoopJoin(
     return primary_quals;
   }
   CHECK_GT(ra_exe_unit.input_descs.size(), size_t(2));
-  const auto hash_join_count = ra_exe_unit.input_descs.size() - 2;
+  const auto rte_limit = ra_exe_unit.input_descs.size() - 1;
 
   llvm::Value* filter_lv = nullptr;
   for (auto expr : ra_exe_unit.inner_join_quals) {
@@ -170,7 +197,7 @@ const std::vector<Analyzer::Expr*> Executor::codegenHashJoinsBeforeLoopJoin(
     bin_oper->collect_rte_idx(rte_idx_set);
     bool found_hash_join = true;
     for (auto rte : rte_idx_set) {
-      if (rte >= static_cast<int>(hash_join_count)) {
+      if (rte >= static_cast<int>(rte_limit)) {
         found_hash_join = false;
         break;
       }
@@ -180,10 +207,12 @@ const std::vector<Analyzer::Expr*> Executor::codegenHashJoinsBeforeLoopJoin(
     }
     hash_join_quals.insert(expr.get());
     if (!filter_lv) {
-      filter_lv = llvm::ConstantInt::get(llvm::IntegerType::getInt1Ty(cgen_state_->context_), true);
+      filter_lv = ll_bool(true);
     }
     CHECK(filter_lv);
-    filter_lv = cgen_state_->ir_builder_.CreateAnd(filter_lv, toBool(codegen(expr.get(), true, co).front()));
+    auto cond_lv = toBool(codegen(expr.get(), true, co).front());
+    auto new_cond_lv = codegenRetOnHashFail(cond_lv, expr.get());
+    filter_lv = new_cond_lv == cond_lv ? cgen_state_->ir_builder_.CreateAnd(filter_lv, cond_lv) : new_cond_lv;
     CHECK(filter_lv->getType()->isIntegerTy(1));
   }
 
@@ -191,13 +220,17 @@ const std::vector<Analyzer::Expr*> Executor::codegenHashJoinsBeforeLoopJoin(
     return primary_quals;
   }
 
-  auto cond_true = llvm::BasicBlock::Create(cgen_state_->context_, "match_true", cgen_state_->row_func_);
-  auto cond_false = llvm::BasicBlock::Create(cgen_state_->context_, "match_false", cgen_state_->row_func_);
+  if (auto constant_true = dynamic_cast<llvm::ConstantInt*>(filter_lv)) {
+    CHECK_NE(constant_true->getSExtValue(), int64_t(0));
+  } else {
+    auto cond_true = llvm::BasicBlock::Create(cgen_state_->context_, "match_true", cgen_state_->row_func_);
+    auto cond_false = llvm::BasicBlock::Create(cgen_state_->context_, "match_false", cgen_state_->row_func_);
 
-  cgen_state_->ir_builder_.CreateCondBr(filter_lv, cond_true, cond_false);
-  cgen_state_->ir_builder_.SetInsertPoint(cond_false);
-  cgen_state_->ir_builder_.CreateRet(ll_int(int32_t(0)));
-  cgen_state_->ir_builder_.SetInsertPoint(cond_true);
+    cgen_state_->ir_builder_.CreateCondBr(filter_lv, cond_true, cond_false);
+    cgen_state_->ir_builder_.SetInsertPoint(cond_false);
+    cgen_state_->ir_builder_.CreateRet(ll_int(int32_t(0)));
+    cgen_state_->ir_builder_.SetInsertPoint(cond_true);
+  }
 
   std::vector<Analyzer::Expr*> remaining_quals;
   for (auto qual : primary_quals) {
@@ -209,10 +242,24 @@ const std::vector<Analyzer::Expr*> Executor::codegenHashJoinsBeforeLoopJoin(
   return remaining_quals;
 }
 
-void Executor::codegenInnerScanNextRow() {
+void Executor::codegenInnerScanNextRowOrMatch() {
   if (cgen_state_->inner_scan_labels_.empty()) {
-    cgen_state_->ir_builder_.CreateRet(ll_int(int32_t(0)));
+    if (cgen_state_->match_scan_labels_.empty()) {
+      cgen_state_->ir_builder_.CreateRet(ll_int(int32_t(0)));
+      return;
+    }
+    // TODO(miyu): support multiple one-to-many hash joins in folded join sequence.
+    CHECK_EQ(size_t(1), cgen_state_->match_iterators_.size());
+    llvm::Value* match_pos = nullptr;
+    llvm::Value* match_pos_ptr = nullptr;
+    std::tie(match_pos, match_pos_ptr) = *cgen_state_->match_iterators_.begin();
+    auto next_match_pos = cgen_state_->ir_builder_.CreateAdd(match_pos, ll_int(int64_t(1)));
+    cgen_state_->ir_builder_.CreateStore(next_match_pos, match_pos_ptr);
+    CHECK_EQ(size_t(1), cgen_state_->match_scan_labels_.size());
+    cgen_state_->ir_builder_.CreateBr(cgen_state_->match_scan_labels_.front());
   } else {
+    // TODO(miyu): support one-to-many hash join + loop join
+    CHECK(cgen_state_->match_scan_labels_.empty());
     CHECK_EQ(size_t(1), cgen_state_->scan_to_iterator_.size());
     auto inner_it_val_and_ptr = cgen_state_->scan_to_iterator_.begin()->second;
     auto inner_it_inc = cgen_state_->ir_builder_.CreateAdd(inner_it_val_and_ptr.first, ll_int(int64_t(1)));

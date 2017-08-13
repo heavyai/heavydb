@@ -21,12 +21,7 @@
 #include <glog/logging.h>
 #endif
 
-extern "C" __attribute__((noinline))
-#ifdef __CUDACC__
-__device__
-#endif
-    time_t
-    create_epoch(int year) {
+extern "C" NEVER_INLINE DEVICE time_t create_epoch(int year) {
   // Note this is not general purpose
   // it has a final assumption that the year being passed can never be a leap
   // year
@@ -69,12 +64,7 @@ __device__
 /*
  * @brief support the SQL DATE_TRUNC function
  */
-extern "C" __attribute__((noinline))
-#ifdef __CUDACC__
-__device__
-#endif
-    time_t
-    DateTruncate(DatetruncField field, time_t timeval) {
+extern "C" NEVER_INLINE DEVICE time_t DateTruncate(DatetruncField field, time_t timeval) {
   const int month_lengths[2][MONSPERYEAR] = {{31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31},
                                              {31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}};
   switch (field) {
@@ -197,43 +187,55 @@ __device__
   }
 }
 
-extern "C"
-#ifdef __CUDACC__
-    __device__
-#endif
-        time_t
-        DateTruncateNullable(DatetruncField field, time_t timeval, const int64_t null_val) {
+extern "C" DEVICE time_t DateTruncateNullable(DatetruncField field, time_t timeval, const int64_t null_val) {
   if (timeval == null_val) {
     return null_val;
   }
   return DateTruncate(field, timeval);
 }
 
-extern "C"
-#ifdef __CUDACC__
-    __device__
-#endif
-        int64_t
-        DateDiff(const DatetruncField datepart, time_t startdate, time_t enddate) {
-  int64_t res = 0;
-  time_t crt = enddate;
-  while (crt > startdate) {
-    const time_t dt = DateTruncate(datepart, crt - 1);
-    if (dt <= startdate) {
+extern "C" DEVICE int64_t DateDiff(const DatetruncField datepart, time_t startdate, time_t enddate) {
+  int64_t res = enddate - startdate;
+  switch (datepart) {
+    case dtMICROSECOND:
+      return res * 1000000;
+    case dtMILLISECOND:
+      return res * 1000;
+    case dtSECOND:
       return res;
-    }
+    case dtMINUTE:
+      return res / SECSPERMIN;
+    case dtHOUR:
+      return res / SECSPERHOUR;
+    case dtQUARTERDAY:
+      return res / SECSPERQUARTERDAY;
+    case dtDAY:
+      return res / SECSPERDAY;
+    case dtWEEK:
+      return res / (SECSPERDAY * DAYSPERWEEK);
+    default:
+      break;
+  }
+
+  auto future_date = (res > 0);
+  auto end = future_date ? enddate : startdate;
+  auto start = future_date ? startdate : enddate;
+  res = 0;
+  time_t crt = end;
+  while (crt > start) {
+    const time_t dt = DateTruncate(datepart, crt);
+    if (dt <= start)
+      break;
     ++res;
     crt = dt - 1;
   }
-  return res;
+  return future_date ? res : -res;
 }
 
-extern "C"
-#ifdef __CUDACC__
-    __device__
-#endif
-        int64_t
-        DateDiffNullable(const DatetruncField datepart, time_t startdate, time_t enddate, const int64_t null_val) {
+extern "C" DEVICE int64_t DateDiffNullable(const DatetruncField datepart,
+                                           time_t startdate,
+                                           time_t enddate,
+                                           const int64_t null_val) {
   if (startdate == null_val || enddate == null_val) {
     return null_val;
   }

@@ -50,6 +50,7 @@ using boost::make_shared;
 using boost::shared_ptr;
 
 extern bool g_aggregator;
+extern size_t g_leaf_count;
 
 AggregatedColRange column_ranges_from_thrift(const std::vector<TColumnRange>& thrift_column_ranges) {
   AggregatedColRange column_ranges;
@@ -246,6 +247,7 @@ int main(int argc, char** argv) {
   std::string decr_start_epoch("");  // value on which to decrement table's epoch, presented as: table_name:decrement
   std::string db_convert_dir("");    // path to mapd DB to convert from; if path is empty, no conversion is requested
   std::string db_query_file("");     // path to file containing warmup queries list
+  bool enable_access_priv_check = false;  // enable DB objects access privileges checking
 
   namespace po = boost::program_options;
 
@@ -351,6 +353,14 @@ int main(int argc, char** argv) {
                          "Allow the queries which failed on GPU to retry on CPU, even when watchdog is enabled");
   desc_adv.add_options()(
       "db-query-list", po::value<std::string>(&db_query_file), "Path to file containing mapd queries");
+  desc_adv.add_options()(
+      "enable-access-priv-check",
+      po::value<bool>(&enable_access_priv_check)->default_value(enable_access_priv_check)->implicit_value(false),
+      "Check user access privileges to database objects");
+  desc_adv.add_options()(
+      "hll-precision-bits",
+      po::value<int>(&g_hll_precision_bits)->default_value(g_hll_precision_bits)->implicit_value(g_hll_precision_bits),
+      "Number of bits used from the hash value used to specify the bucket number.");
 
   po::positional_options_description positionalOptions;
   positionalOptions.add("data", 1);
@@ -378,11 +388,12 @@ int main(int argc, char** argv) {
       CHECK_NE(!!vm.count("cluster"), !!vm.count("string-servers"));
       boost::algorithm::trim_if(cluster_file, boost::is_any_of("\"'"));
       const auto all_nodes = LeafHostInfo::parseClusterConfig(cluster_file);
+      db_leaves = only_db_leaves(all_nodes);
+      g_leaf_count = db_leaves.size();
       if (vm.count("cluster")) {
-        db_leaves = only_db_leaves(all_nodes);
         g_aggregator = true;
-      }
-      if (vm.count("string-servers")) {
+      } else {
+        db_leaves.clear();
       }
       string_leaves = only_string_leaves(all_nodes);
       g_cluster = true;
@@ -426,6 +437,10 @@ int main(int argc, char** argv) {
     return 1;
   }
 
+  if (g_hll_precision_bits < 1 || g_hll_precision_bits > 16) {
+    std::cerr << "hll-precision-bits must be between 1 and 16." << std::endl;
+    return 1;
+  }
   boost::algorithm::trim_if(db_query_file, boost::is_any_of("\"'"));
   if (db_query_file.length() > 0 && !boost::filesystem::exists(db_query_file)) {
     std::cerr << "File containing DB queries " << db_query_file << " does not exist." << std::endl;
@@ -600,7 +615,8 @@ int main(int argc, char** argv) {
                                                   ldapMetadata,
                                                   mapd_parameters,
                                                   db_convert_dir,
-                                                  enable_legacy_syntax));
+                                                  enable_legacy_syntax,
+                                                  enable_access_priv_check));
 
   if (mapd_parameters.ha_group_id.empty()) {
     shared_ptr<TProcessor> processor(new MapDProcessor(handler));

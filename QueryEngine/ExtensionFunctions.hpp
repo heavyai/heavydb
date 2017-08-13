@@ -7,12 +7,29 @@
 
 #define EXTENSION_NOINLINE extern "C" NEVER_INLINE DEVICE
 
-/* Example extension function:
+/* Example extension functions:
  *
  * EXTENSION_NOINLINE
  * int32_t diff(const int32_t x, const int32_t y) {
  *   return x - y;
+ *
+ * Arrays map to a pair of pointer and element count. The pointer type must be
+ * consistent with the element type of the array column. Only array of numbers
+ * are supported for the moment. For example, an ARRAY_AT function which works
+ * for arrays of INTEGER and SMALLINT can be implemented as follows:
+ *
+ * EXTENSION_NOINLINE
+ * int64_t array_at(const int32_t* arr, const size_t elem_count, const size_t idx) {
+ *   return idx < elem_count ? arr[idx] : -1;
  * }
+ *
+ * EXTENSION_NOINLINE
+ * int64_t array_at__(const int16_t* arr, const size_t elem_count, const size_t idx) {
+ *   return idx < elem_count ? arr[idx] : -1;
+ * }
+ *
+ * Note that the return type cannot be specialized and must be the same across
+ * all specializations. We can remove this constraint in the future if necessary.
  */
 
 EXTENSION_NOINLINE

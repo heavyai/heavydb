@@ -73,6 +73,8 @@ class OrToInVisitor : public ScalarExprVisitor<std::shared_ptr<Analyzer::InValue
     return nullptr;
   }
 
+  std::shared_ptr<Analyzer::InValues> visitDateaddExpr(const Analyzer::DateaddExpr*) const override { return nullptr; }
+
   std::shared_ptr<Analyzer::InValues> visitExtractExpr(const Analyzer::ExtractExpr*) const override { return nullptr; }
 
   std::shared_ptr<Analyzer::InValues> visitLikelihood(const Analyzer::LikelihoodExpr*) const override {
@@ -100,6 +102,10 @@ class DeepCopyVisitor : public ScalarExprVisitor<std::shared_ptr<Analyzer::Expr>
  protected:
   typedef std::shared_ptr<Analyzer::Expr> RetType;
   RetType visitColumnVar(const Analyzer::ColumnVar* col_var) const override { return col_var->deep_copy(); }
+
+  RetType visitColumnVarTuple(const Analyzer::ColumnVarTuple* col_var_tuple) const override {
+    return col_var_tuple->deep_copy();
+  }
 
   RetType visitVar(const Analyzer::Var* var) const override { return var->deep_copy(); }
 
@@ -195,6 +201,13 @@ class DeepCopyVisitor : public ScalarExprVisitor<std::shared_ptr<Analyzer::Expr>
                                             visit(datediff->get_end_expr()));
   }
 
+  RetType visitDateaddExpr(const Analyzer::DateaddExpr* dateadd) const override {
+    return makeExpr<Analyzer::DateaddExpr>(dateadd->get_type_info(),
+                                           dateadd->get_field(),
+                                           visit(dateadd->get_number_expr()),
+                                           visit(dateadd->get_datetime_expr()));
+  }
+
   RetType visitFunctionOperWithCustomTypeHandling(
       const Analyzer::FunctionOperWithCustomTypeHandling* func_oper) const override {
     std::vector<std::shared_ptr<Analyzer::Expr>> args_copy;
@@ -243,6 +256,17 @@ class IndirectToDirectColVisitor : public DeepCopyVisitor {
                                          ind_col_desc->getIndirectDesc().getTableId(),
                                          ind_col_desc->getRefColIndex(),
                                          col_var->get_rte_idx());
+  }
+
+  RetType visitColumnVarTuple(const Analyzer::ColumnVarTuple* col_var_tuple) const override {
+    std::vector<std::shared_ptr<Analyzer::ColumnVar>> redirected_tuple;
+    for (const auto& tuple_component : col_var_tuple->getTuple()) {
+      const auto redirected_component =
+          std::dynamic_pointer_cast<Analyzer::ColumnVar>(visitColumnVar(tuple_component.get()));
+      CHECK(redirected_component);
+      redirected_tuple.push_back(redirected_component);
+    }
+    return std::make_shared<Analyzer::ColumnVarTuple>(redirected_tuple);
   }
 
  private:

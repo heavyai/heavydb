@@ -13,33 +13,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#ifndef QUERYENGINE_EQUIJOINCONDITION_H
+#define QUERYENGINE_EQUIJOINCONDITION_H
 
-package com.mapd.parser.server;
+#include <list>
+#include <memory>
 
-/**
- *
- * @author michael
- */
-public class CalciteReturn {
-  private final String returnText;
-  private final long elapsedTime;
-  private final boolean failed;
+namespace Analyzer {
+class BinOper;
+class Expr;
+}  // Analyzer
 
-  CalciteReturn(String string, long l, boolean b) {
-    returnText = string;
-    elapsedTime= l;
-    failed = b;
-  }
+// Go through the qualifiers and group consecutive equality operators to create
+// a list of composite join conditions.
+std::list<std::shared_ptr<Analyzer::Expr>> combine_equi_join_conditions(
+    const std::list<std::shared_ptr<Analyzer::Expr>>& join_quals);
 
-  public String getText() {
-    return returnText;
-  }
+std::shared_ptr<Analyzer::BinOper> coalesce_singleton_equi_join(const std::shared_ptr<Analyzer::BinOper>& join_qual);
 
-  public long getElapsedTime(){
-    return elapsedTime;
-  }
-
-  public boolean hasFailed(){
-    return failed;
-  }
-}
+#endif  // QUERYENGINE_EQUIJOINCONDITION_H

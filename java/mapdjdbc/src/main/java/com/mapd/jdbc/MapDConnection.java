@@ -18,6 +18,7 @@ package com.mapd.jdbc;
 
 import com.mapd.thrift.server.MapD;
 import com.mapd.thrift.server.TMapDException;
+import com.mapd.thrift.server.TServerStatus;
 import java.sql.Array;
 import java.sql.Blob;
 import java.sql.CallableStatement;
@@ -192,18 +193,26 @@ public class MapDConnection implements java.sql.Connection {
 
   @Override
   public void setReadOnly(boolean readOnly) throws SQLException { //logger.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+	  // TODO MAT we can't push the readonly upstream currently 
+	  // but we could make JDBC obey this command
   }
 
   @Override
   public boolean isReadOnly() throws SQLException { //logger.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    try {
+      if (session != null) {
+        TServerStatus server_status = client.get_server_status(session);
+        return server_status.read_only;
+      }
+    } catch (TMapDException ex) {
+      throw new SQLException("get_server_status failed during isReadOnly check." + ex.toString());
+    } catch (TException ex) {
+      throw new SQLException("get_server_status failed during isReadOnly check." + ex.toString());
+    }
+    // never should get here
+    return true;
   }
-
+  
   @Override
   public void setCatalog(String catalog) throws SQLException { //logger.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].

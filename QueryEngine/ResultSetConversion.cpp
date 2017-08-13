@@ -313,7 +313,10 @@ std::vector<std::shared_ptr<Array>> generate_columns(
 }
 
 std::shared_ptr<ValueArray> create_value_array(const Field& field, const size_t value_count) {
-  switch (field.type()->id()) {
+  const auto type_id = field.type()->id() == Type::DICTIONARY
+                           ? std::static_pointer_cast<DictionaryType>(field.type())->index_type()->id()
+                           : field.type()->id();
+  switch (type_id) {
     case Type::BOOL: {
       auto array = std::make_shared<ValueArray>(std::vector<bool>());
       boost::get<std::vector<bool>>(*array).reserve(value_count);
@@ -356,7 +359,10 @@ std::shared_ptr<ValueArray> create_value_array(const Field& field, const size_t 
 }
 
 void append_value_array(ValueArray& dst, const ValueArray& src, const Field& field) {
-  switch (field.type()->id()) {
+  const auto type_id = field.type()->id() == Type::DICTIONARY
+                           ? std::static_pointer_cast<DictionaryType>(field.type())->index_type()->id()
+                           : field.type()->id();
+  switch (type_id) {
     case Type::BOOL: {
       auto dst_bool = boost::get<std::vector<bool>>(&dst);
       auto src_bool = boost::get<std::vector<bool>>(&src);
@@ -435,7 +441,7 @@ void print_serialized_schema(const uint8_t* data, const size_t length) {
   CHECK(!batch);
 }
 
-std::shared_ptr<PoolBuffer> serialize_arrow_records(const RecordBatch& rb, ipc::FileBlock& block) {
+std::shared_ptr<PoolBuffer> serialize_arrow_records(const RecordBatch& rb) {
   int64_t rb_sz = 0;
   if (!rb.num_rows()) {
     return std::make_shared<PoolBuffer>();
@@ -448,38 +454,34 @@ std::shared_ptr<PoolBuffer> serialize_arrow_records(const RecordBatch& rb, ipc::
   // Frame of reference in file format is 0, see ARROW-384
   const int64_t buffer_start_offset = 0;
   const bool is_large_record = false;
+  ipc::FileBlock dummy_block{0, 0, 0};
   RETURN_IF_NOT_OK(ipc::WriteRecordBatch(rb,
                                          buffer_start_offset,
                                          &sink,
-                                         &block.metadata_length,
-                                         &block.body_length,
+                                         &dummy_block.metadata_length,
+                                         &dummy_block.body_length,
                                          pool,
                                          kMaxNestingDepth,
                                          is_large_record));
   return buffer;
 }
 
-void print_serialized_records(const uint8_t* data,
-                              const size_t length,
-                              const ipc::FileBlock& block,
-                              const std::shared_ptr<Schema>& schema) {
+void print_serialized_records(const uint8_t* data, const size_t length, const std::shared_ptr<Schema>& schema) {
   if (data == nullptr || !length) {
     std::cout << "No row found" << std::endl;
     return;
   }
 
-  CHECK_GT(block.metadata_length, int32_t(0));
-  CHECK_GT(block.body_length, int64_t(0));
   const auto payload = std::make_shared<arrow::Buffer>(data, length);
   auto buffer_reader = std::make_shared<io::BufferReader>(payload);
 
   std::shared_ptr<ipc::Message> message;
-  ReadMessage(0, block.metadata_length, buffer_reader.get(), &message);
+  ReadMessage(buffer_reader.get(), &message);
 
   // The buffer offsets start at 0, so we must construct a
   // RandomAccessFile according to that frame of reference
   std::shared_ptr<Buffer> body_payload;
-  buffer_reader->ReadAt(block.metadata_length, block.body_length, &body_payload);
+  buffer_reader->Read(message->body_length(), &body_payload);
   io::BufferReader body_reader(body_payload);
 
   std::shared_ptr<RecordBatch> batch;
@@ -707,8 +709,7 @@ ArrowResult ResultSet::getArrowCopyOnCpu(Data_Namespace::DataMgr* data_mgr,
   std::vector<char> schema_handle_buffer(sizeof(key_t), 0);
   memcpy(&schema_handle_buffer[0], reinterpret_cast<const unsigned char*>(&schema_key), sizeof(key_t));
 
-  arrow::ipc::FileBlock block{0, 0, 0};
-  auto serialized_records = arrow::serialize_arrow_records(arrow_copy, block);
+  auto serialized_records = arrow::serialize_arrow_records(arrow_copy);
   const auto record_key = arrow::get_and_copy_to_shm(serialized_records);
   std::vector<char> record_handle_buffer(sizeof(key_t), 0);
   memcpy(&record_handle_buffer[0], reinterpret_cast<const unsigned char*>(&record_key), sizeof(key_t));
@@ -738,8 +739,7 @@ ArrowResult ResultSet::getArrowCopyOnGpu(Data_Namespace::DataMgr* data_mgr,
   memcpy(&schema_handle_buffer[0], reinterpret_cast<const unsigned char*>(&schema_key), sizeof(key_t));
 
 #ifdef HAVE_CUDA
-  arrow::ipc::FileBlock block{0, 0, 0};
-  auto serialized_records = arrow::serialize_arrow_records(arrow_copy, block);
+  auto serialized_records = arrow::serialize_arrow_records(arrow_copy);
   if (serialized_records->size()) {
     CHECK(data_mgr && data_mgr->cudaMgr_);
     auto dev_ptr =

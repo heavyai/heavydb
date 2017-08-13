@@ -18,6 +18,7 @@
 #define QUERYENGINE_CALCITEDESERIALIZERUTILS_H
 
 #include "DateTruncate.h"
+#include "DateAdd.h"
 
 #include "../Shared/sqldefs.h"
 #include "../Shared/sqltypes.h"
@@ -147,10 +148,11 @@ inline SQLTypes to_sql_type(const std::string& type_name) {
   if (type_name == std::string("NULL")) {
     return kNULLT;
   }
-  if (type_name == std::string("INTERVAL_HOUR") || type_name == std::string("INTERVAL_DAY")) {
+  if (type_name == std::string("INTERVAL_DAY") || type_name == std::string("INTERVAL_HOUR") ||
+      type_name == std::string("INTERVAL_MINUTE") || type_name == std::string("INTERVAL_SECOND")) {
     return kINTERVAL_DAY_TIME;
   }
-  if (type_name == std::string("INTERVAL_MONTH")) {
+  if (type_name == std::string("INTERVAL_MONTH") || type_name == std::string("INTERVAL_YEAR")) {
     return kINTERVAL_YEAR_MONTH;
   }
   throw std::runtime_error("Unsupported type: " + type_name);
@@ -166,6 +168,8 @@ class Expr;
 SQLTypeInfo get_agg_type(const SQLAgg agg_kind, const Analyzer::Expr* arg_expr);
 
 ExtractField to_datepart_field(const std::string&);
+
+DateaddField to_dateadd_field(const std::string&);
 
 DatetruncField to_datediff_field(const std::string&);
 

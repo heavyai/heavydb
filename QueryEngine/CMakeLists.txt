@@ -7,6 +7,7 @@ set(query_engine_source_files
     ArithmeticIR.cpp
     ArrayIR.cpp
     ArrayOps.cpp
+    BaselineJoinHashTable.cpp
     CalciteAdapter.cpp
     CalciteDeserializerUtils.cpp
     CaseIR.cpp
@@ -18,6 +19,7 @@ set(query_engine_source_files
     ConstantIR.cpp
     DateTimeIR.cpp
     DateTimePlusRewrite.cpp
+    EquiJoinCondition.cpp
     Execute.cpp
     ExecutionDispatch.cpp
     ExpressionRange.cpp
@@ -166,7 +168,7 @@ add_custom_command(
     )
 
 add_custom_command(
-    DEPENDS cuda_mapd_rt.cu GpuInitGroups.cu GroupByRuntime.cpp DateTruncate.cpp ExtractFromTime.cpp ArrayOps.cpp StringFunctions.cpp RegexpFunctions.cpp ${CMAKE_SOURCE_DIR}/Utils/ChunkIter.cpp ${CMAKE_SOURCE_DIR}/Utils/StringLike.cpp ${CMAKE_SOURCE_DIR}/Utils/Regexp.cpp ${CMAKE_CURRENT_SOURCE_DIR}/ExtensionFunctions.hpp
+    DEPENDS cuda_mapd_rt.cu GpuInitGroups.cu GroupByRuntime.cpp DateTruncate.cpp DateAdd.cpp ExtractFromTime.cpp ArrayOps.cpp StringFunctions.cpp RegexpFunctions.cpp ${CMAKE_SOURCE_DIR}/Utils/ChunkIter.cpp ${CMAKE_SOURCE_DIR}/Utils/StringLike.cpp ${CMAKE_SOURCE_DIR}/Utils/Regexp.cpp ${CMAKE_CURRENT_SOURCE_DIR}/ExtensionFunctions.hpp
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.o
     COMMAND nvcc
     ARGS

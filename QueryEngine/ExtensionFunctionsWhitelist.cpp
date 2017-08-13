@@ -45,6 +45,16 @@ std::string serialize_type(const ExtArgumentType type) {
       return "float";
     case ExtArgumentType::Double:
       return "double";
+    case ExtArgumentType::PInt16:
+      return "i16*";
+    case ExtArgumentType::PInt32:
+      return "i32*";
+    case ExtArgumentType::PInt64:
+      return "i64*";
+    case ExtArgumentType::PFloat:
+      return "float*";
+    case ExtArgumentType::PDouble:
+      return "double*";
     default:
       CHECK(false);
   }
@@ -89,6 +99,21 @@ ExtArgumentType deserialize_type(const std::string& type_name) {
   }
   if (type_name == "double") {
     return ExtArgumentType::Double;
+  }
+  if (type_name == "i16*") {
+    return ExtArgumentType::PInt16;
+  }
+  if (type_name == "i32*") {
+    return ExtArgumentType::PInt32;
+  }
+  if (type_name == "i64*") {
+    return ExtArgumentType::PInt64;
+  }
+  if (type_name == "float*") {
+    return ExtArgumentType::PFloat;
+  }
+  if (type_name == "double*") {
+    return ExtArgumentType::PDouble;
   }
   CHECK(false);
   return ExtArgumentType::Int16;

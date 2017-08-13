@@ -860,6 +860,7 @@ extern "C" ALWAYS_INLINE int64_t* get_matching_group_value_perfect_hash(int64_t*
 }
 
 #include "GroupByRuntime.cpp"
+#include "JoinHashTableQueryRuntime.cpp"
 
 extern "C" ALWAYS_INLINE int64_t* get_group_value_fast_keyless(int64_t* groups_buffer,
                                                                const int64_t key,

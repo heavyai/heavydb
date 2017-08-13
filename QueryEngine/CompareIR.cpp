@@ -16,6 +16,8 @@
 
 #include "Execute.h"
 
+#include "../Parser/ParserNode.h"
+
 namespace {
 
 llvm::CmpInst::Predicate llvm_icmp_pred(const SQLOps op_type) {
@@ -117,6 +119,34 @@ std::string string_cmp_func(const SQLOps optype) {
   }
 }
 
+std::shared_ptr<Analyzer::BinOper> make_eq(const std::shared_ptr<Analyzer::ColumnVar>& lhs,
+                                           const std::shared_ptr<Analyzer::ColumnVar>& rhs) {
+  // Sides of a tuple equality are stripped of cast operators to simplify the logic
+  // in the hash table construction algorithm. Add them back here.
+  auto eq_oper = std::dynamic_pointer_cast<Analyzer::BinOper>(Parser::OperExpr::normalize(kEQ, kONE, lhs, rhs));
+  CHECK(eq_oper);
+  return eq_oper;
+}
+
+// Convert a column tuple equality expression back to a conjunction of comparisons
+// so that it can be handled by the regular code generation methods.
+std::shared_ptr<Analyzer::BinOper> lower_multicol_compare(const Analyzer::BinOper* multicol_compare) {
+  const auto left_tuple_expr = dynamic_cast<const Analyzer::ColumnVarTuple*>(multicol_compare->get_left_operand());
+  const auto right_tuple_expr = dynamic_cast<const Analyzer::ColumnVarTuple*>(multicol_compare->get_right_operand());
+  CHECK(left_tuple_expr && right_tuple_expr);
+  const auto& left_tuple = left_tuple_expr->getTuple();
+  const auto& right_tuple = right_tuple_expr->getTuple();
+  CHECK_EQ(left_tuple.size(), right_tuple.size());
+  CHECK_GT(left_tuple.size(), size_t(1));
+  auto acc = make_eq(left_tuple.front(), right_tuple.front());
+  for (size_t i = 1; i < left_tuple.size(); ++i) {
+    auto crt = make_eq(left_tuple[i], right_tuple[i]);
+    const bool not_null = acc->get_type_info().get_notnull() && crt->get_type_info().get_notnull();
+    acc = makeExpr<Analyzer::BinOper>(SQLTypeInfo(kBOOLEAN, not_null), false, kAND, kONE, acc, crt);
+  }
+  return acc;
+}
+
 }  // namespace
 
 llvm::Value* Executor::codegenCmp(const Analyzer::BinOper* bin_oper, const CompilationOptions& co) {
@@ -130,6 +160,13 @@ llvm::Value* Executor::codegenCmp(const Analyzer::BinOper* bin_oper, const Compi
   const auto qualifier = bin_oper->get_qualifier();
   const auto lhs = bin_oper->get_left_operand();
   const auto rhs = bin_oper->get_right_operand();
+  if (dynamic_cast<const Analyzer::ColumnVarTuple*>(lhs)) {
+    CHECK(dynamic_cast<const Analyzer::ColumnVarTuple*>(rhs));
+    const auto lowered = lower_multicol_compare(bin_oper);
+    const auto lowered_lvs = codegen(lowered.get(), true, co);
+    CHECK_EQ(size_t(1), lowered_lvs.size());
+    return lowered_lvs.front();
+  }
   if (is_unnest(lhs) || is_unnest(rhs)) {
     throw std::runtime_error("Unnest not supported in comparisons");
   }

@@ -350,7 +350,8 @@ class ResultSet {
 
   std::vector<TargetValue> getRowAt(const size_t index,
                                     const bool translate_strings,
-                                    const bool decimal_to_double) const;
+                                    const bool decimal_to_double,
+                                    const bool fixup_count_distinct_pointers) const;
 
   size_t parallelRowCount() const;
 
@@ -362,14 +363,15 @@ class ResultSet {
 
   static bool isNull(const SQLTypeInfo& ti, const InternalTargetValue& val, const bool float_argument_input);
 
-  TargetValue getTargetValueFromBufferRowwise(const int8_t* rowwise_target_ptr,
-                                              const int8_t* keys_ptr,
+  TargetValue getTargetValueFromBufferRowwise(int8_t* rowwise_target_ptr,
+                                              int8_t* keys_ptr,
                                               const size_t entry_buff_idx,
                                               const TargetInfo& target_info,
                                               const size_t target_logical_idx,
                                               const size_t slot_idx,
                                               const bool translate_strings,
-                                              const bool decimal_to_double) const;
+                                              const bool decimal_to_double,
+                                              const bool fixup_count_distinct_pointers) const;
 
   TargetValue getTargetValueFromBufferColwise(const int8_t* col1_ptr,
                                               const int8_t compact_sz1,
@@ -465,6 +467,8 @@ class ResultSet {
   void serializeCountDistinctColumns(TSerializedRows&) const;
 
   void unserializeCountDistinctColumns(const TSerializedRows&);
+
+  void fixupCountDistinctPointers();
 
   const std::vector<TargetInfo> targets_;
   const ExecutorDeviceType device_type_;

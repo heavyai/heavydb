@@ -83,13 +83,12 @@ public final class MapDParser {
     MapDSchema mapd = new MapDSchema(dataDir, this, mapdPort, mapdUser);
     final SchemaPlus rootSchema = Frameworks.createRootSchema(true);
     final FrameworkConfig config = Frameworks.newConfigBuilder()
-            .defaultSchema(rootSchema.add("mapd", mapd))
+            .defaultSchema(rootSchema.add(mapdUser.getDB(), mapd))
             .operatorTable(createOperatorTable(extSigs))
             .parserConfig(SqlParser.configBuilder()
                     .setUnquotedCasing(Casing.UNCHANGED)
                     .setCaseSensitive(false)
                     .build())
-            
             .build();
     return new MapDPlanner(config);
   }
@@ -101,8 +100,6 @@ public final class MapDParser {
   public String getRelAlgebra(String sql, final boolean legacy_syntax, final MapDUser mapDUser, final boolean isExplain)
           throws SqlParseException, ValidationException, RelConversionException {
     callCount++;
-//        catalogReader = new MapDCatalogReader(new SqlTypeFactoryImpl(RelDataTypeSystem.DEFAULT), dataDir, this);
-//        catalogReader.setCurrentMapDUser(mapDUser);
     final RelRoot sqlRel = queryToSqlNode(sql, legacy_syntax);
 
     RelNode project = sqlRel.project();
@@ -134,29 +131,29 @@ public final class MapDParser {
     SqlSelect validate_select = getSelectChild(validateR);
 
     // Hide rowid from select * queries
-        if (legacy_syntax && is_select_star && validate_select != null) {
-            SqlNodeList proj_exprs = ((SqlSelect) validateR).getSelectList();
-            SqlNodeList new_proj_exprs = new SqlNodeList(proj_exprs.getParserPosition());
-            for (SqlNode proj_expr : proj_exprs) {
-                final SqlNode unaliased_proj_expr = getUnaliasedExpression(proj_expr);
+    if (legacy_syntax && is_select_star && validate_select != null) {
+      SqlNodeList proj_exprs = ((SqlSelect) validateR).getSelectList();
+      SqlNodeList new_proj_exprs = new SqlNodeList(proj_exprs.getParserPosition());
+      for (SqlNode proj_expr : proj_exprs) {
+        final SqlNode unaliased_proj_expr = getUnaliasedExpression(proj_expr);
 
-                if (unaliased_proj_expr instanceof SqlIdentifier) {
-                    if ((((SqlIdentifier) unaliased_proj_expr).toString().toLowerCase()).endsWith(".rowid")) {
-                    continue;
-                }
-                }
-                new_proj_exprs.add(proj_expr);
-            }
-            validate_select.setSelectList(new_proj_exprs);
-            
-            // trick planner back into correct state for validate
-            planner.close();
-            // create a new one
-            planner = getPlanner();
-            processSQL(validateR.toSqlString(SqlDialect.CALCITE).toString(), false, planner);
-            // now validate the new modified SqlNode;
-            validateR = planner.validate(validateR);
+        if (unaliased_proj_expr instanceof SqlIdentifier) {
+          if ((((SqlIdentifier) unaliased_proj_expr).toString().toLowerCase()).endsWith(".rowid")) {
+            continue;
+          }
         }
+        new_proj_exprs.add(proj_expr);
+      }
+      validate_select.setSelectList(new_proj_exprs);
+
+      // trick planner back into correct state for validate
+      planner.close();
+      // create a new one
+      planner = getPlanner();
+      processSQL(validateR.toSqlString(SqlDialect.CALCITE).toString(), false, planner);
+      // now validate the new modified SqlNode;
+      validateR = planner.validate(validateR);
+    }
 
     RelRoot relR = planner.rel(validateR);
     planner.close();
@@ -251,16 +248,6 @@ public final class MapDParser {
         continue;
       }
       SqlBasicCall proj_call = (SqlBasicCall) proj;
-      if (proj_call.getOperator() instanceof SqlAsOperator) {
-        MAPDLOGGER.debug("desugar: SqlBasicCall: " + proj_call.toString());
-        SqlNode[] operands = proj_call.getOperands();
-        SqlIdentifier id = (SqlIdentifier) operands[1];
-        SqlNode expanded_operand0 = expand(operands[0], id_to_expr, typeFactory);
-        id_to_expr.put(id.toString(), expanded_operand0);
-        proj_call.setOperand(0, expanded_operand0);
-        new_select_list.add(proj_call);
-        continue;
-      }
       new_select_list.add(expand(proj_call, id_to_expr, typeFactory));
     }
     select_node.setSelectList(new_select_list);
@@ -309,10 +296,6 @@ public final class MapDParser {
   private SqlNode expand(final SqlNode node,
           final java.util.Map<String, SqlNode> id_to_expr, RelDataTypeFactory typeFactory) {
     MAPDLOGGER.debug("expand: " + node.toString());
-    if (node instanceof SqlIdentifier && id_to_expr.containsKey(node.toString())) {
-      // Expand aliases
-      return id_to_expr.get(node.toString());
-    }
     if (node instanceof SqlBasicCall) {
       SqlBasicCall node_call = (SqlBasicCall) node;
       SqlNode[] operands = node_call.getOperands();
@@ -665,9 +648,9 @@ public final class MapDParser {
     return callCount;
   }
 
-  public void updateMetaData(String catalog, String table) {
-    MAPDLOGGER.debug("catalog :" + catalog + " table :" + table);
-//        catalogReader = new MapDCatalogReader(new SqlTypeFactoryImpl(RelDataTypeSystem.DEFAULT), dataDir, this);
-//        catalogReader.updateMetaData(catalog, table);
+  public void updateMetaData(String schema, String table) {
+    MAPDLOGGER.debug("schema :" + schema + " table :" + table);
+    MapDSchema mapd = new MapDSchema(dataDir, this, mapdPort, null);
+    mapd.updateMetaData(schema, table);
   }
 }

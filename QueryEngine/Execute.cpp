@@ -17,7 +17,9 @@
 #include "Execute.h"
 
 #include "AggregateUtils.h"
+#include "BaselineJoinHashTable.h"
 #include "CartesianProduct.h"
+#include "EquiJoinCondition.h"
 #include "ExecutionException.h"
 #include "ExpressionRewrite.h"
 #include "GpuMemUtils.h"
@@ -123,7 +125,7 @@ StringDictionaryProxy* Executor::getStringDictionaryProxy(const int dict_id_in,
   }
   CHECK_EQ(0, dict_id);
   if (!lit_str_dict_proxy_) {
-    std::shared_ptr<StringDictionary> tsd = std::make_shared<StringDictionary>("");
+    std::shared_ptr<StringDictionary> tsd = std::make_shared<StringDictionary>("", false);
     lit_str_dict_proxy_.reset(new StringDictionaryProxy(tsd, 0));
   }
   return lit_str_dict_proxy_.get();
@@ -1156,6 +1158,17 @@ RowSetPtr Executor::collectAllDeviceResults(ExecutionDispatch& execution_dispatc
                                   execution_dispatch.getDeviceType());
 }
 
+std::unordered_map<int, const Analyzer::BinOper*> Executor::getInnerTabIdToJoinCond() const {
+  std::unordered_map<int, const Analyzer::BinOper*> id_to_cond;
+  const auto& join_info = plan_state_->join_info_;
+  CHECK_EQ(join_info.equi_join_tautologies_.size(), join_info.join_hash_tables_.size());
+  for (size_t i = 0; i < join_info.join_hash_tables_.size(); ++i) {
+    int inner_table_id = join_info.join_hash_tables_[i]->getInnerTableId();
+    id_to_cond.insert(std::make_pair(inner_table_id, join_info.equi_join_tautologies_[i].get()));
+  }
+  return id_to_cond;
+}
+
 void Executor::dispatchFragments(
     const std::function<void(const ExecutorDeviceType chosen_device_type,
                              int chosen_device_id,
@@ -1184,6 +1197,8 @@ void Executor::dispatchFragments(
   const auto device_type = execution_dispatch.getDeviceType();
 
   const auto& query_mem_desc = execution_dispatch.getQueryMemoryDescriptor();
+  const auto inner_table_id_to_join_condition = getInnerTabIdToJoinCond();
+
   const bool allow_multifrag =
       eo.allow_multifrag && (ra_exe_unit.groupby_exprs.empty() || query_mem_desc.usesCachedContext() ||
                              query_mem_desc.hash_type == GroupByColRangeType::MultiCol ||
@@ -1213,7 +1228,8 @@ void Executor::dispatchFragments(
         const auto table_id = ra_exe_unit.input_descs[j].getTableId();
         auto table_frags_it = selected_tables_fragments.find(table_id);
         CHECK(table_frags_it != selected_tables_fragments.end());
-        const auto frag_ids = getTableFragmentIndices(ra_exe_unit, j, outer_frag_id, selected_tables_fragments);
+        const auto frag_ids = getTableFragmentIndices(
+            ra_exe_unit, j, outer_frag_id, selected_tables_fragments, inner_table_id_to_join_condition);
         if (fragments_per_device[device_id].size() < j + 1) {
           fragments_per_device[device_id].emplace_back(table_id, frag_ids);
         } else {
@@ -1269,7 +1285,8 @@ void Executor::dispatchFragments(
       }
       std::vector<std::pair<int, std::vector<size_t>>> frag_ids_for_table;
       for (size_t j = 0; j < ra_exe_unit.input_descs.size(); ++j) {
-        const auto frag_ids = getTableFragmentIndices(ra_exe_unit, j, i, selected_tables_fragments);
+        const auto frag_ids =
+            getTableFragmentIndices(ra_exe_unit, j, i, selected_tables_fragments, inner_table_id_to_join_condition);
         const auto table_id = ra_exe_unit.input_descs[j].getTableId();
         auto table_frags_it = selected_tables_fragments.find(table_id);
         CHECK(table_frags_it != selected_tables_fragments.end());
@@ -1299,7 +1316,8 @@ std::vector<size_t> Executor::getTableFragmentIndices(
     const RelAlgExecutionUnit& ra_exe_unit,
     const size_t table_idx,
     const size_t outer_frag_idx,
-    std::map<int, const Executor::TableFragments*>& selected_tables_fragments) {
+    std::map<int, const Executor::TableFragments*>& selected_tables_fragments,
+    const std::unordered_map<int, const Analyzer::BinOper*>& inner_table_id_to_join_condition) {
   const int table_id = ra_exe_unit.input_descs[table_idx].getTableId();
   auto table_frags_it = selected_tables_fragments.find(table_id);
   CHECK(table_frags_it != selected_tables_fragments.end());
@@ -1326,7 +1344,8 @@ std::vector<size_t> Executor::getTableFragmentIndices(
   std::vector<size_t> all_frag_ids;
   for (size_t inner_frag_idx = 0; inner_frag_idx < inner_frags->size(); ++inner_frag_idx) {
     const auto& inner_frag_info = (*inner_frags)[inner_frag_idx];
-    if (skipFragmentPair(outer_fragment_info, inner_frag_info, ra_exe_unit)) {
+    if (skipFragmentPair(
+            outer_fragment_info, inner_frag_info, table_id, inner_table_id_to_join_condition, ra_exe_unit)) {
       continue;
     }
     all_frag_ids.push_back(inner_frag_idx);
@@ -1336,11 +1355,15 @@ std::vector<size_t> Executor::getTableFragmentIndices(
 
 // Returns true iff the join between two fragments cannot yield any results, per
 // shard information. The pair can be skipped to avoid full broadcast.
-bool Executor::skipFragmentPair(const Fragmenter_Namespace::FragmentInfo& outer_fragment_info,
-                                const Fragmenter_Namespace::FragmentInfo& inner_fragment_info,
-                                const RelAlgExecutionUnit& ra_exe_unit) {
+bool Executor::skipFragmentPair(
+    const Fragmenter_Namespace::FragmentInfo& outer_fragment_info,
+    const Fragmenter_Namespace::FragmentInfo& inner_fragment_info,
+    const int inner_table_id,
+    const std::unordered_map<int, const Analyzer::BinOper*>& inner_table_id_to_join_condition,
+    const RelAlgExecutionUnit& ra_exe_unit) {
   // Don't bother with sharding for non-hash joins.
-  if (plan_state_->join_info_.join_impl_type_ != Executor::JoinImplType::HashOneToOne) {
+  if (plan_state_->join_info_.join_impl_type_ != Executor::JoinImplType::HashOneToOne &&
+      plan_state_->join_info_.join_impl_type_ != Executor::JoinImplType::HashOneToMany) {
     return false;
   }
   // Both tables need to be sharded the same way.
@@ -1348,10 +1371,15 @@ bool Executor::skipFragmentPair(const Fragmenter_Namespace::FragmentInfo& outer_
       outer_fragment_info.shard == inner_fragment_info.shard) {
     return false;
   }
-  CHECK(!plan_state_->join_info_.equi_join_tautologies_.empty());
-  const auto join_condition =
-      dynamic_cast<const Analyzer::BinOper*>(plan_state_->join_info_.equi_join_tautologies_.front().get());
+  CHECK(!inner_table_id_to_join_condition.empty());
+  auto condition_it = inner_table_id_to_join_condition.find(inner_table_id);
+  CHECK(condition_it != inner_table_id_to_join_condition.end());
+  const auto join_condition = condition_it->second;
   CHECK(join_condition);
+  if (dynamic_cast<const Analyzer::ColumnVarTuple*>(join_condition->get_left_operand())) {
+    const auto shard_count_info = get_baseline_shard_count(join_condition, ra_exe_unit, this);
+    return shard_count_info.count;
+  }
   return get_shard_count(join_condition, ra_exe_unit, this);
 }
 
@@ -1393,9 +1421,9 @@ const SQLTypeInfo get_column_type(const InputColDescriptor* col_desc,
 
 }  // namespace
 
-std::map<size_t, std::vector<uint64_t>> Executor::getAllFragOffsets(
+std::map<size_t, std::vector<uint64_t>> get_table_id_to_frag_offsets(
     const std::vector<InputDescriptor>& input_descs,
-    const std::map<int, const TableFragments*>& all_tables_fragments) {
+    const std::map<int, const Executor::TableFragments*>& all_tables_fragments) {
   std::map<size_t, std::vector<uint64_t>> tab_id_to_frag_offsets;
   for (auto& desc : input_descs) {
     const auto fragments_it = all_tables_fragments.find(desc.getTableId());
@@ -1411,6 +1439,48 @@ std::map<size_t, std::vector<uint64_t>> Executor::getAllFragOffsets(
   return tab_id_to_frag_offsets;
 }
 
+std::pair<std::vector<std::vector<int64_t>>, std::vector<std::vector<uint64_t>>> get_row_count_and_offset_for_all_frags(
+    const CartesianProduct<std::vector<std::vector<size_t>>>& frag_ids_crossjoin,
+    const std::vector<InputDescriptor>& input_descs,
+    const std::map<int, const Executor::TableFragments*>& all_tables_fragments,
+    const bool one_to_all_frags) {
+  std::vector<std::vector<int64_t>> all_num_rows;
+  std::vector<std::vector<uint64_t>> all_frag_offsets;
+  const auto tab_id_to_frag_offsets = get_table_id_to_frag_offsets(input_descs, all_tables_fragments);
+  CHECK(!one_to_all_frags || input_descs.size() == 2);
+  std::unordered_map<size_t, size_t> outer_id_to_num_row_idx;
+  for (const auto& selected_frag_ids : frag_ids_crossjoin) {
+    std::vector<int64_t> num_rows;
+    std::vector<uint64_t> frag_offsets;
+    CHECK_EQ(selected_frag_ids.size(), input_descs.size());
+    for (size_t tab_idx = 0; tab_idx < input_descs.size(); ++tab_idx) {
+      const auto frag_id = selected_frag_ids[tab_idx];
+      const auto fragments_it = all_tables_fragments.find(input_descs[tab_idx].getTableId());
+      CHECK(fragments_it != all_tables_fragments.end());
+      const auto& fragments = *fragments_it->second;
+      const auto& fragment = fragments[frag_id];
+      num_rows.push_back(fragment.getNumTuples());
+      const auto frag_offsets_it = tab_id_to_frag_offsets.find(input_descs[tab_idx].getTableId());
+      CHECK(frag_offsets_it != tab_id_to_frag_offsets.end());
+      const auto& offsets = frag_offsets_it->second;
+      CHECK_LT(frag_id, offsets.size());
+      frag_offsets.push_back(offsets[frag_id]);
+    }
+    all_num_rows.push_back(num_rows);
+    if (one_to_all_frags) {
+      const auto outer_frag_id = selected_frag_ids[0];
+      if (outer_id_to_num_row_idx.count(outer_frag_id)) {
+        all_num_rows[outer_id_to_num_row_idx[outer_frag_id]][1] += num_rows[1];
+      } else {
+        outer_id_to_num_row_idx.insert(std::make_pair(outer_frag_id, all_num_rows.size() - 1));
+      }
+    }
+    // Fragment offsets of outer table should be ONLY used by rowid for now.
+    all_frag_offsets.push_back(frag_offsets);
+  }
+  return {all_num_rows, all_frag_offsets};
+}
+
 #ifdef ENABLE_MULTIFRAG_JOIN
 // Only fetch columns of hash-joined inner fact table whose fetch are not deferred from all the table fragments.
 bool Executor::needFetchAllFragments(const InputColDescriptor& inner_col_desc,
@@ -1418,8 +1488,9 @@ bool Executor::needFetchAllFragments(const InputColDescriptor& inner_col_desc,
                                      const std::map<int, const TableFragments*>& all_tables_fragments) const {
   if (inner_col_desc.getScanDesc().getNestLevel() < 1 ||
       inner_col_desc.getScanDesc().getSourceType() != InputSourceType::TABLE ||
-      plan_state_->join_info_.join_impl_type_ != JoinImplType::HashOneToOne || input_descs.size() < 2 ||
-      plan_state_->isLazyFetchColumn(inner_col_desc)) {
+      (plan_state_->join_info_.join_impl_type_ != JoinImplType::HashOneToOne &&
+       plan_state_->join_info_.join_impl_type_ != JoinImplType::HashOneToMany && !isOuterLoopJoin()) ||
+      input_descs.size() < 2 || plan_state_->isLazyFetchColumn(inner_col_desc)) {
     return false;
   }
   const int table_id = inner_col_desc.getScanDesc().getTableId();
@@ -1456,7 +1527,8 @@ Executor::FetchResult Executor::fetchChunks(const ExecutionDispatch& execution_d
   std::vector<std::vector<const int8_t*>> all_frag_iter_buffers;
   std::vector<std::vector<int64_t>> all_num_rows;
   std::vector<std::vector<uint64_t>> all_frag_offsets;
-  const auto extra_tab_id_to_frag_offsets = getAllFragOffsets(ra_exe_unit.extra_input_descs, all_tables_fragments);
+  const auto extra_tab_id_to_frag_offsets =
+      get_table_id_to_frag_offsets(ra_exe_unit.extra_input_descs, all_tables_fragments);
   const bool needs_fetch_iterators =
       ra_exe_unit.join_dimensions.size() > 2 && dynamic_cast<Analyzer::IterExpr*>(ra_exe_unit.target_exprs.front());
 
@@ -1524,28 +1596,8 @@ Executor::FetchResult Executor::fetchChunks(const ExecutionDispatch& execution_d
           fetchIterTabFrags(selected_frag_ids[0], execution_dispatch, ra_exe_unit.input_descs[0], device_id));
     }
   }
-  const auto tab_id_to_frag_offsets = getAllFragOffsets(input_descs, all_tables_fragments);
-  for (const auto& selected_frag_ids : frag_ids_crossjoin) {
-    std::vector<int64_t> num_rows;
-    std::vector<uint64_t> frag_offsets;
-    CHECK_EQ(selected_frag_ids.size(), input_descs.size());
-    for (size_t tab_idx = 0; tab_idx < input_descs.size(); ++tab_idx) {
-      const auto frag_id = selected_frag_ids[tab_idx];
-      const auto fragments_it = all_tables_fragments.find(input_descs[tab_idx].getTableId());
-      CHECK(fragments_it != all_tables_fragments.end());
-      const auto& fragments = *fragments_it->second;
-      const auto& fragment = fragments[frag_id];
-      num_rows.push_back(fragment.getNumTuples());
-      const auto frag_offsets_it = tab_id_to_frag_offsets.find(input_descs[tab_idx].getTableId());
-      CHECK(frag_offsets_it != tab_id_to_frag_offsets.end());
-      const auto& offsets = frag_offsets_it->second;
-      CHECK_LT(frag_id, offsets.size());
-      frag_offsets.push_back(offsets[frag_id]);
-    }
-    all_num_rows.push_back(num_rows);
-    // Fragment offsets of outer table should be ONLY used by rowid for now.
-    all_frag_offsets.push_back(frag_offsets);
-  }
+  std::tie(all_num_rows, all_frag_offsets) =
+      get_row_count_and_offset_for_all_frags(frag_ids_crossjoin, input_descs, all_tables_fragments, isOuterLoopJoin());
   return {all_frag_col_buffers, all_frag_iter_buffers, all_num_rows, all_frag_offsets};
 }
 
@@ -1897,7 +1949,8 @@ namespace {
 template <class T>
 int8_t* insert_one_dict_str(const ColumnDescriptor* cd,
                             const Analyzer::Constant* col_cv,
-                            const Catalog_Namespace::Catalog& catalog) {
+                            const Catalog_Namespace::Catalog& catalog,
+                            int64_t& int_col_val) {
   auto col_data = reinterpret_cast<T*>(checked_malloc(sizeof(T)));
   if (col_cv->get_is_null()) {
     *col_data = inline_fixed_encoding_null_val(cd->columnType);
@@ -1918,6 +1971,7 @@ int8_t* insert_one_dict_str(const ColumnDescriptor* cd,
     }
     *col_data = str_id;
   }
+  int_col_val = *col_data;
   return reinterpret_cast<int8_t*>(col_data);
 }
 
@@ -2037,13 +2091,13 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
           case kENCODING_DICT: {
             switch (cd->columnType.get_size()) {
               case 1:
-                col_buffers[col_ids[col_idx]] = insert_one_dict_str<int8_t>(cd, col_cv, cat);
+                col_buffers[col_ids[col_idx]] = insert_one_dict_str<int8_t>(cd, col_cv, cat, int_col_val);
                 break;
               case 2:
-                col_buffers[col_ids[col_idx]] = insert_one_dict_str<int16_t>(cd, col_cv, cat);
+                col_buffers[col_ids[col_idx]] = insert_one_dict_str<int16_t>(cd, col_cv, cat, int_col_val);
                 break;
               case 4:
-                col_buffers[col_ids[col_idx]] = insert_one_dict_str<int32_t>(cd, col_cv, cat);
+                col_buffers[col_ids[col_idx]] = insert_one_dict_str<int32_t>(cd, col_cv, cat, int_col_val);
                 break;
               default:
                 CHECK(false);
@@ -2122,11 +2176,35 @@ void Executor::preloadFragOffsets(const std::vector<InputDescriptor>& input_desc
   }
 }
 
+void Executor::codegenNomatchInitialization(const int index) {
+  CHECK(isOuterJoin());
+  cgen_state_->outer_join_match_found_ = cgen_state_->ir_builder_.CreateAlloca(
+      get_int_type(1, cgen_state_->context_), nullptr, "match_found_" + std::to_string(index));
+  cgen_state_->outer_join_nomatch_ = cgen_state_->ir_builder_.CreateAlloca(
+      get_int_type(1, cgen_state_->context_), nullptr, "outer_join_nomatch_flag" + std::to_string(index));
+  cgen_state_->ir_builder_.CreateStore(ll_bool(false), cgen_state_->outer_join_match_found_);
+  cgen_state_->ir_builder_.CreateStore(ll_bool(false), cgen_state_->outer_join_nomatch_);
+}
+
+void Executor::codegenNomatchLoopback(const std::function<void()> init_iters, llvm::BasicBlock* loop_head) {
+  CHECK(isOuterJoin());
+  auto nomatch_bb = llvm::BasicBlock::Create(cgen_state_->context_, "outer_join_nomatch", cgen_state_->row_func_);
+  auto ret_bb = llvm::BasicBlock::Create(cgen_state_->context_, "inner_scan_ret", cgen_state_->row_func_);
+  auto match_found_lv = cgen_state_->ir_builder_.CreateLoad(cgen_state_->outer_join_match_found_);
+  cgen_state_->ir_builder_.CreateCondBr(match_found_lv, ret_bb, nomatch_bb);
+  cgen_state_->ir_builder_.SetInsertPoint(nomatch_bb);
+  init_iters();
+  cgen_state_->ir_builder_.CreateStore(ll_bool(true), cgen_state_->outer_join_nomatch_);
+  cgen_state_->ir_builder_.CreateBr(loop_head);
+  cgen_state_->ir_builder_.SetInsertPoint(ret_bb);
+}
+
 void Executor::allocateInnerScansIterators(const std::vector<InputDescriptor>& input_descs) {
   if (input_descs.size() <= 1) {
     return;
   }
-  if (plan_state_->join_info_.join_impl_type_ == JoinImplType::HashOneToOne) {
+  if (plan_state_->join_info_.join_impl_type_ == JoinImplType::HashOneToOne ||
+      plan_state_->join_info_.join_impl_type_ == JoinImplType::HashOneToMany) {
     return;
   }
   size_t desc_start_pos = 1;
@@ -2141,32 +2219,87 @@ void Executor::allocateInnerScansIterators(const std::vector<InputDescriptor>& i
     auto inner_scan_pos_ptr = cgen_state_->ir_builder_.CreateAlloca(
         get_int_type(64, cgen_state_->context_), nullptr, "inner_scan_" + std::to_string(inner_scan_idx));
     cgen_state_->ir_builder_.CreateStore(ll_int(int64_t(0)), inner_scan_pos_ptr);
+    llvm::Value* rows_per_scan_ptr = nullptr;
+    llvm::Value* rows_per_scan = nullptr;
+    if (isOuterJoin()) {
+      CHECK_EQ(input_descs.size(), size_t(2));
+      rows_per_scan_ptr = cgen_state_->ir_builder_.CreateGEP(
+          get_arg_by_name(cgen_state_->row_func_, "num_rows_per_scan"), ll_int(int32_t(inner_scan_idx)));
+      rows_per_scan = cgen_state_->ir_builder_.CreateLoad(rows_per_scan_ptr, "num_rows_per_scan");
+      rows_per_scan_ptr = cgen_state_->ir_builder_.CreateAlloca(
+          get_int_type(64, cgen_state_->context_), nullptr, "num_rows_per_scan_copy");
+      cgen_state_->ir_builder_.CreateStore(rows_per_scan, rows_per_scan_ptr);
+      codegenNomatchInitialization(inner_scan_idx);
+    }
     auto scan_loop_head = llvm::BasicBlock::Create(
         cgen_state_->context_, "scan_loop_head", cgen_state_->row_func_, preheader->getNextNode());
     cgen_state_->inner_scan_labels_.push_back(scan_loop_head);
     cgen_state_->ir_builder_.CreateBr(scan_loop_head);
     cgen_state_->ir_builder_.SetInsertPoint(scan_loop_head);
+    if (isOuterJoin()) {
+      rows_per_scan = cgen_state_->ir_builder_.CreateLoad(rows_per_scan_ptr, "rows_per_scan");
+    }
     auto inner_scan_pos = cgen_state_->ir_builder_.CreateLoad(inner_scan_pos_ptr, "load_inner_it");
     {
       const auto it_ok = cgen_state_->scan_to_iterator_.insert(
           std::make_pair(*it, std::make_pair(inner_scan_pos, inner_scan_pos_ptr)));
       CHECK(it_ok.second);
     }
-    {
-      auto rows_per_scan_ptr = cgen_state_->ir_builder_.CreateGEP(
+    if (!isOuterJoin()) {
+      CHECK(!rows_per_scan_ptr);
+      rows_per_scan_ptr = cgen_state_->ir_builder_.CreateGEP(
           get_arg_by_name(cgen_state_->row_func_, "num_rows_per_scan"), ll_int(int32_t(inner_scan_idx)));
-      auto rows_per_scan = cgen_state_->ir_builder_.CreateLoad(rows_per_scan_ptr, "rows_per_scan");
-      auto have_more_inner_rows =
-          cgen_state_->ir_builder_.CreateICmp(llvm::ICmpInst::ICMP_ULT, inner_scan_pos, rows_per_scan);
-      auto inner_scan_ret = llvm::BasicBlock::Create(cgen_state_->context_, "inner_scan_ret", cgen_state_->row_func_);
-      auto inner_scan_cont = llvm::BasicBlock::Create(cgen_state_->context_, "inner_scan_cont", cgen_state_->row_func_);
-      cgen_state_->ir_builder_.CreateCondBr(have_more_inner_rows, inner_scan_cont, inner_scan_ret);
-      cgen_state_->ir_builder_.SetInsertPoint(inner_scan_ret);
-      cgen_state_->ir_builder_.CreateRet(ll_int(int32_t(0)));
-      cgen_state_->ir_builder_.SetInsertPoint(inner_scan_cont);
+      CHECK(!rows_per_scan);
+      rows_per_scan = cgen_state_->ir_builder_.CreateLoad(rows_per_scan_ptr, "num_rows_per_scan");
+    }
+    auto have_more_inner_rows =
+        cgen_state_->ir_builder_.CreateICmp(llvm::ICmpInst::ICMP_ULT, inner_scan_pos, rows_per_scan);
+    auto inner_scan_ret = llvm::BasicBlock::Create(
+        cgen_state_->context_, (isOuterJoin() ? "inner_scan_ret" : "check_match_found"), cgen_state_->row_func_);
+    auto inner_scan_cont = llvm::BasicBlock::Create(cgen_state_->context_, "inner_scan_cont", cgen_state_->row_func_);
+    cgen_state_->ir_builder_.CreateCondBr(have_more_inner_rows, inner_scan_cont, inner_scan_ret);
+    cgen_state_->ir_builder_.SetInsertPoint(inner_scan_ret);
+    if (isOuterJoin()) {
+      auto init_iters = [this, &rows_per_scan_ptr, &inner_scan_pos_ptr]() {
+        cgen_state_->ir_builder_.CreateStore(ll_int(int64_t(1)), rows_per_scan_ptr);
+        cgen_state_->ir_builder_.CreateStore(ll_int(int64_t(0)), inner_scan_pos_ptr);
+      };
+      codegenNomatchLoopback(init_iters, scan_loop_head);
+    }
+    cgen_state_->ir_builder_.CreateRet(ll_int(int32_t(0)));
+    cgen_state_->ir_builder_.SetInsertPoint(inner_scan_cont);
+  }
+}
+
+namespace {
+
+void check_loop_join_replication_constraint(const Catalog_Namespace::Catalog* catalog,
+                                            const RelAlgExecutionUnit& ra_exe_unit) {
+  if (!g_cluster) {
+    return;
+  }
+  CHECK(!ra_exe_unit.input_descs.empty());
+  const auto inner_table_id = ra_exe_unit.input_descs.back().getTableId();
+  if (inner_table_id >= 0) {
+    const auto inner_td = catalog->getMetadataForTable(inner_table_id);
+    CHECK(inner_td);
+    if (!table_is_replicated(inner_td)) {
+      throw std::runtime_error("Join table " + inner_td->tableName + " must be replicated");
     }
   }
 }
+
+bool has_one_to_many_hash_table(const std::vector<std::shared_ptr<JoinHashTableInterface>>& hash_tables) {
+  for (auto ht_interface : hash_tables) {
+    const auto ht = dynamic_cast<const JoinHashTable*>(ht_interface.get());
+    if (ht && ht->getHashType() == JoinHashTable::OneToMany) {
+      return true;
+    }
+  }
+  return false;
+}
+
+}  // namespace
 
 Executor::JoinInfo Executor::chooseJoinType(const std::list<std::shared_ptr<Analyzer::Expr>>& join_quals,
                                             const std::vector<InputTableInfo>& query_infos,
@@ -2179,9 +2312,9 @@ Executor::JoinInfo Executor::chooseJoinType(const std::list<std::shared_ptr<Anal
                                                                         : MemoryLevel::CPU_LEVEL};
 
   std::set<int> rte_idx_set;
-  std::unordered_set<std::pair<int, int>> rte_pair_set;
+  std::unordered_set<int> visited_tables;
   std::vector<std::shared_ptr<Analyzer::BinOper>> bin_ops;
-  std::vector<std::shared_ptr<JoinHashTable>> join_hash_tables;
+  std::vector<std::shared_ptr<JoinHashTableInterface>> join_hash_tables;
   for (auto qual : join_quals) {
     auto qual_bin_oper = std::dynamic_pointer_cast<Analyzer::BinOper>(qual);
     if (!qual_bin_oper) {
@@ -2195,23 +2328,31 @@ Executor::JoinInfo Executor::chooseJoinType(const std::list<std::shared_ptr<Anal
       const int device_count =
           device_type == ExecutorDeviceType::GPU ? catalog_->get_dataMgr().cudaMgr_->getDeviceCount() : 1;
       CHECK_GT(device_count, 0);
+      std::shared_ptr<JoinHashTableInterface> join_hash_table;
       try {
-        const auto join_hash_table =
-            JoinHashTable::getInstance(qual_bin_oper, query_infos, ra_exe_unit, memory_level, device_count, this);
+        if (dynamic_cast<const Analyzer::ColumnVarTuple*>(qual_bin_oper->get_left_operand())) {
+          join_hash_table = BaselineJoinHashTable::getInstance(
+              qual_bin_oper, query_infos, ra_exe_unit, memory_level, device_count, visited_tables, this);
+        } else {
+          try {
+            join_hash_table = JoinHashTable::getInstance(
+                qual_bin_oper, query_infos, ra_exe_unit, memory_level, device_count, visited_tables, this);
+          } catch (TooManyHashEntries&) {
+            join_hash_table = BaselineJoinHashTable::getInstance(coalesce_singleton_equi_join(qual_bin_oper),
+                                                                 query_infos,
+                                                                 ra_exe_unit,
+                                                                 memory_level,
+                                                                 device_count,
+                                                                 visited_tables,
+                                                                 this);
+          }
+        }
         CHECK(join_hash_table);
         std::set<int> curr_rte_idx_set;
         qual_bin_oper->collect_rte_idx(curr_rte_idx_set);
         CHECK_EQ(curr_rte_idx_set.size(), size_t(2));
         rte_idx_set.insert(curr_rte_idx_set.begin(), curr_rte_idx_set.end());
-        std::pair<int, int> rte_pair{*curr_rte_idx_set.begin(), *std::next(curr_rte_idx_set.begin())};
-        if (rte_pair.first > rte_pair.second) {
-          std::swap(rte_pair.first, rte_pair.second);
-        }
-        // already handled the table pair
-        if (rte_pair_set.count(rte_pair)) {
-          continue;
-        }
-        rte_pair_set.insert(rte_pair);
+        visited_tables.insert(join_hash_table->getInnerTableId());
         bin_ops.push_back(qual_bin_oper);
         join_hash_tables.push_back(join_hash_table);
       } catch (const HashJoinFail& e) {
@@ -2230,14 +2371,26 @@ Executor::JoinInfo Executor::chooseJoinType(const std::list<std::shared_ptr<Anal
       break;
     }
   }
+  if (join_hash_tables.size() < nest_level_num - 1) {
+    check_loop_join_replication_constraint(catalog_, ra_exe_unit);
+  }
   if (found_missing_rte) {
     // TODO(miyu): support a loop join in the beginning or middle of hash joins.
     if (missing_rte == static_cast<ssize_t>(nest_level_num - 1) && join_hash_tables.size() == nest_level_num - 2) {
-      return Executor::JoinInfo(JoinImplType::HashPlusLoop, bin_ops, join_hash_tables, hash_join_fail_reason);
+      if (!has_one_to_many_hash_table(join_hash_tables)) {
+        return Executor::JoinInfo(JoinImplType::HashPlusLoop, bin_ops, join_hash_tables, hash_join_fail_reason);
+      }
     }
   } else {
     if (join_hash_tables.size() == nest_level_num - 1) {
-      return Executor::JoinInfo(JoinImplType::HashOneToOne, bin_ops, join_hash_tables, "");
+      // TODO(miyu): support one-to-many hash join in folded join sequence.
+      if (has_one_to_many_hash_table(join_hash_tables)) {
+        if (nest_level_num == 2) {
+          return Executor::JoinInfo(JoinImplType::HashOneToMany, bin_ops, join_hash_tables, "");
+        }
+      } else {
+        return Executor::JoinInfo(JoinImplType::HashOneToOne, bin_ops, join_hash_tables, "");
+      }
     }
   }
 
@@ -2340,6 +2493,7 @@ llvm::Value* Executor::castToIntPtrTyIn(llvm::Value* val, const size_t bitWidth)
 }
 
 #define EXECUTE_INCLUDE
+#include "DateAdd.cpp"
 #include "ArrayOps.cpp"
 #include "StringFunctions.cpp"
 #undef EXECUTE_INCLUDE

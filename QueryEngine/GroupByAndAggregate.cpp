@@ -46,6 +46,7 @@
 bool g_cluster{false};
 bool g_use_result_set{true};
 bool g_bigint_count{false};
+int g_hll_precision_bits{11};
 
 namespace {
 
@@ -343,27 +344,11 @@ void QueryExecutionContext::initGroups(int64_t* groups_buffer,
 }
 
 template <typename T>
-int8_t* QueryExecutionContext::initColumnarBuffer(T* buffer_ptr,
-                                                  const T init_val,
-                                                  const uint32_t entry_count,
-                                                  const ssize_t bitmap_sz,
-                                                  const bool key_or_col) {
+int8_t* QueryExecutionContext::initColumnarBuffer(T* buffer_ptr, const T init_val, const uint32_t entry_count) {
   static_assert(sizeof(T) <= sizeof(int64_t), "Unsupported template type");
-  if (key_or_col) {
-    for (uint32_t i = 0; i < entry_count; ++i) {
-      buffer_ptr[i] = init_val;
-    }
-  } else {
-    for (uint32_t j = 0; j < entry_count; ++j) {
-      if (!bitmap_sz) {
-        buffer_ptr[j] = init_val;
-      } else {
-        CHECK_EQ(sizeof(int64_t), sizeof(T));
-        buffer_ptr[j] = bitmap_sz > 0 ? allocateCountDistinctBitmap(bitmap_sz) : allocateCountDistinctSet();
-      }
-    }
+  for (uint32_t i = 0; i < entry_count; ++i) {
+    buffer_ptr[i] = init_val;
   }
-
   return reinterpret_cast<int8_t*>(buffer_ptr + entry_count);
 }
 
@@ -371,7 +356,10 @@ void QueryExecutionContext::initColumnarGroups(int64_t* groups_buffer,
                                                const int64_t* init_vals,
                                                const int32_t groups_buffer_entry_count,
                                                const bool keyless) {
-  auto agg_bitmap_size = allocateCountDistinctBuffers(true);
+  for (const auto target_expr : executor_->plan_state_->target_exprs_) {
+    const auto agg_info = target_info(target_expr);
+    CHECK(!is_distinct_target(agg_info));
+  }
   const bool need_padding = !query_mem_desc_.isCompactLayoutIsometric();
   const int32_t agg_col_count = query_mem_desc_.agg_col_widths.size();
   const int32_t key_qw_count = query_mem_desc_.group_col_widths.size();
@@ -382,22 +370,21 @@ void QueryExecutionContext::initColumnarGroups(int64_t* groups_buffer,
         initColumnarBuffer<int64_t>(reinterpret_cast<int64_t*>(buffer_ptr), EMPTY_KEY_64, groups_buffer_entry_count);
   }
   for (int32_t i = 0; i < agg_col_count; ++i) {
-    const ssize_t bitmap_sz{agg_bitmap_size[i]};
     switch (query_mem_desc_.agg_col_widths[i].compact) {
       case 1:
-        buffer_ptr = initColumnarBuffer<int8_t>(buffer_ptr, init_vals[i], bitmap_sz, false);
+        buffer_ptr = initColumnarBuffer<int8_t>(buffer_ptr, init_vals[i], groups_buffer_entry_count);
         break;
       case 2:
-        buffer_ptr =
-            initColumnarBuffer<int16_t>(reinterpret_cast<int16_t*>(buffer_ptr), init_vals[i], bitmap_sz, false);
+        buffer_ptr = initColumnarBuffer<int16_t>(
+            reinterpret_cast<int16_t*>(buffer_ptr), init_vals[i], groups_buffer_entry_count);
         break;
       case 4:
-        buffer_ptr =
-            initColumnarBuffer<int32_t>(reinterpret_cast<int32_t*>(buffer_ptr), init_vals[i], bitmap_sz, false);
+        buffer_ptr = initColumnarBuffer<int32_t>(
+            reinterpret_cast<int32_t*>(buffer_ptr), init_vals[i], groups_buffer_entry_count);
         break;
       case 8:
-        buffer_ptr =
-            initColumnarBuffer<int64_t>(reinterpret_cast<int64_t*>(buffer_ptr), init_vals[i], bitmap_sz, false);
+        buffer_ptr = initColumnarBuffer<int64_t>(
+            reinterpret_cast<int64_t*>(buffer_ptr), init_vals[i], groups_buffer_entry_count);
         break;
       default:
         CHECK(false);
@@ -2161,7 +2148,7 @@ CountDistinctDescriptors GroupByAndAggregate::initCountDistinctDescriptors() {
       GroupByAndAggregate::ColRangeInfo no_range_info{GroupByColRangeType::OneColGuessedRange, 0, 0, 0, false};
       auto arg_range_info = arg_ti.is_fp() ? no_range_info : getExprRangeInfo(agg_expr->get_arg());
       CountDistinctImplType count_distinct_impl_type{CountDistinctImplType::StdSet};
-      int64_t bitmap_sz_bits{agg_info.agg_kind == kCOUNT ? 0 : HLL_MASK_WIDTH};
+      int64_t bitmap_sz_bits{agg_info.agg_kind == kCOUNT ? 0 : g_hll_precision_bits};
       if (arg_range_info.hash_type_ == GroupByColRangeType::OneColKnownRange &&
           !arg_ti.is_array()) {  // TODO(alex): allow bitmap implementation for arrays
         if (arg_range_info.isEmpty()) {
@@ -2249,12 +2236,16 @@ GroupByAndAggregate::KeylessInfo GroupByAndAggregate::getKeylessInfo(
           found = true;
           break;
         case kSUM: {
-          if (!arg_expr->get_type_info().get_notnull()) {
+          auto arg_ti = arg_expr->get_type_info();
+          if (constrained_not_null(arg_expr, ra_exe_unit_.quals)) {
+            arg_ti.set_notnull(true);
+          }
+          if (!arg_ti.get_notnull()) {
             auto expr_range_info = getExpressionRange(arg_expr, query_infos_, executor_);
             if (expr_range_info.getType() != ExpressionRangeType::Invalid && !expr_range_info.hasNulls()) {
               init_val =
                   get_agg_initial_val(agg_info.agg_kind,
-                                      arg_expr->get_type_info(),
+                                      arg_ti,
                                       is_group_by || float_argument_input,
                                       float_argument_input ? sizeof(float) : query_mem_desc_.getCompactByteWidth());
               found = true;
@@ -2533,6 +2524,12 @@ bool GroupByAndAggregate::codegen(llvm::Value* filter_result, const CompilationO
     DiamondCodegen filter_cfg(
         filter_result, executor_, !is_group_by || query_mem_desc.usesGetGroupValueFast(), "filter");
 
+    if (executor_->isOuterLoopJoin() || executor_->isOneToManyOuterHashJoin()) {
+      auto match_found_ptr = executor_->cgen_state_->outer_join_match_found_;
+      CHECK(match_found_ptr);
+      LL_BUILDER.CreateStore(executor_->ll_bool(true), match_found_ptr);
+    }
+
     if (is_group_by) {
       if (query_mem_desc_.hash_type == GroupByColRangeType::Projection) {
         const auto crt_match = get_arg_by_name(ROW_FUNC, "crt_match");
@@ -2597,7 +2594,7 @@ bool GroupByAndAggregate::codegen(llvm::Value* filter_result, const CompilationO
     }
   }
 
-  executor_->codegenInnerScanNextRow();
+  executor_->codegenInnerScanNextRowOrMatch();
 
   return can_return_error;
 }

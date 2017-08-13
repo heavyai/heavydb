@@ -13,6 +13,12 @@
 			"revisionTime": "2016-01-18T19:00:32-05:00"
 		},
 		{
+			"checksumSHA1": "J5hOr3qJwd020FZJpYEMmdt8jMQ=",
+			"path": "github.com/andrewseidl/viper",
+			"revision": "f1e6386c8d33102ad845a193e847720cc3b41107",
+			"revisionTime": "2017-07-24T17:18:54Z"
+		},
+		{
 			"path": "github.com/gorilla/handlers",
 			"revision": "b3aff83722cb2ae031a70cae984650e3a16cd20e",
 			"revisionTime": "2016-02-01T11:49:43-08:00"
@@ -83,6 +89,12 @@
 			"revisionTime": "2015-07-16T22:11:58-07:00"
 		},
 		{
+			"checksumSHA1": "zZg0J0MqvnqXVYo644QDvnUinrc=",
+			"path": "github.com/pelletier/go-toml",
+			"revision": "69d355db5304c0f7f809a2edc054553e7142f016",
+			"revisionTime": "2017-06-28T01:26:37Z"
+		},
+		{
 			"path": "github.com/rcrowley/go-metrics",
 			"revision": "51425a2415d21afadfd55cd93432c0bc69e9598d",
 			"revisionTime": "2016-01-13T15:50:30-08:00"
@@ -98,9 +110,22 @@
 			"revisionTime": "2015-12-23T17:29:56-08:00"
 		},
 		{
+			"checksumSHA1": "lBehULzb2/kIK3wZ0gz2yNmHq9s=",
+			"path": "github.com/spf13/afero",
+			"revision": "9be650865eab0c12963d8753212f4f9c66cdcf12",
+			"revisionTime": "2017-02-17T16:41:46Z"
+		},
+		{
+			"checksumSHA1": "5KRbEQ28dDaQmKwAYTD0if/aEvg=",
+			"path": "github.com/spf13/afero/mem",
+			"revision": "9be650865eab0c12963d8753212f4f9c66cdcf12",
+			"revisionTime": "2017-02-17T16:41:46Z"
+		},
+		{
+			"checksumSHA1": "Sq0QP4JywTr7UM4hTK1cjCi7jec=",
 			"path": "github.com/spf13/cast",
-			"revision": "ee7b3e0353166ab1f3a605294ac8cd2b77953778",
-			"revisionTime": "2015-11-26T07:42:19+01:00"
+			"revision": "acbeb36b902d72a7a4c18e8f3241075e7ab763e4",
+			"revisionTime": "2017-04-13T08:50:28Z"
 		},
 		{
 			"path": "github.com/spf13/jwalterweatherman",
@@ -108,9 +133,10 @@
 			"revisionTime": "2015-10-14T12:42:31+05:30"
 		},
 		{
+			"checksumSHA1": "STxYqRb4gnlSr3mRpT+Igfdz/kM=",
 			"path": "github.com/spf13/pflag",
-			"revision": "7f60f83a2c81bc3c3c0d5297f61ddfa68da9d3b7",
-			"revisionTime": "2015-10-24T12:54:09+02:00"
+			"revision": "e57e3eeb33f795204c1ca35f56c44f83227c6e66",
+			"revisionTime": "2017-05-08T18:43:26Z"
 		},
 		{
 			"path": "github.com/spf13/viper",
@@ -127,6 +153,18 @@
 			"path": "golang.org/x/net/netutil",
 			"revision": "96dbb961a39ddccf16860cdd355bfa639c497f23",
 			"revisionTime": "2016-05-10T16:41:55Z"
+		},
+		{
+			"checksumSHA1": "ziMb9+ANGRJSSIuxYdRbA+cDRBQ=",
+			"path": "golang.org/x/text/transform",
+			"revision": "836efe42bb4aa16aaa17b9c155d8813d336ed720",
+			"revisionTime": "2017-07-09T00:38:22Z"
+		},
+		{
+			"checksumSHA1": "Anof4bt0AU+Sa3R8Rq0KBnlpbaQ=",
+			"path": "golang.org/x/text/unicode/norm",
+			"revision": "836efe42bb4aa16aaa17b9c155d8813d336ed720",
+			"revisionTime": "2017-07-09T00:38:22Z"
 		},
 		{
 			"path": "gopkg.in/fsnotify.v1",

@@ -19,6 +19,7 @@
 
 #include "CalciteDeserializerUtils.h"
 #include "CardinalityEstimator.h"
+#include "EquiJoinCondition.h"
 #include "ExecutionException.h"
 #include "ExpressionRewrite.h"
 #include "InputMetadata.h"
@@ -38,6 +39,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQuery(const std::string& query_ra,
   // capture the lock acquistion time
   auto clock_begin = timer_start();
   std::lock_guard<std::mutex> lock(executor_->execute_mutex_);
+  int64_t queue_time_ms = timer_stop(clock_begin);
   if (g_enable_dynamic_watchdog) {
     executor_->resetInterrupt();
   }
@@ -51,7 +53,6 @@ ExecutionResult RelAlgExecutor::executeRelAlgQuery(const std::string& query_ra,
   executor_->string_dictionary_generations_ = computeStringDictionaryGenerations(ra.get());
   executor_->table_generations_ = computeTableGenerations(ra.get());
   ScopeGuard restore_metainfo_cache = [this] { executor_->clearMetaInfoCache(); };
-  int64_t queue_time_ms = timer_stop(clock_begin);
   auto ed_list = get_execution_descriptors(ra.get());
   if (render_info && render_info->do_render && ed_list.size() > 1) {
     throw std::runtime_error("Cannot render queries which need more than one execution step");
@@ -1231,10 +1232,14 @@ RelAlgExecutionUnit decide_approx_count_distinct_implementation(
     // must be consistent across all leaves, otherwise we could have a mix of precise
     // and approximate bitmaps and we cannot aggregate them.
     const auto device_type = g_cluster ? ExecutorDeviceType::GPU : device_type_in;
-    CountDistinctDescriptor approx_count_distinct_desc{
-        CountDistinctImplType::Bitmap, arg_range.getIntMin(), HLL_MASK_WIDTH, true, device_type, 1};
     const auto bitmap_sz_bits = arg_range.getIntMax() - arg_range.getIntMin() + 1;
     const auto sub_bitmap_count = get_count_distinct_sub_bitmap_count(bitmap_sz_bits, ra_exe_unit, device_type);
+    CountDistinctDescriptor approx_count_distinct_desc{CountDistinctImplType::Bitmap,
+                                                       arg_range.getIntMin(),
+                                                       g_hll_precision_bits,
+                                                       true,
+                                                       device_type,
+                                                       sub_bitmap_count};
     CountDistinctDescriptor precise_count_distinct_desc{
         CountDistinctImplType::Bitmap, arg_range.getIntMin(), bitmap_sz_bits, false, device_type, sub_bitmap_count};
     if (approx_count_distinct_desc.bitmapPaddedSizeBytes() >= precise_count_distinct_desc.bitmapPaddedSizeBytes()) {
@@ -1699,7 +1704,7 @@ std::list<std::shared_ptr<Analyzer::Expr>> get_inner_join_quals(const RelAlgNode
       quals.insert(quals.end(), join_cond_cf.quals.begin(), join_cond_cf.quals.end());
     }
   }
-  return quals;
+  return combine_equi_join_conditions(quals);
 }
 
 std::vector<std::pair<int, size_t>> get_join_dimensions(const RelAlgNode* ra, Executor* executor) {

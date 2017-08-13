@@ -127,7 +127,8 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
                          const LdapMetadata ldapMetadata,
                          const MapDParameters& mapd_parameters,
                          const std::string& db_convert_dir,
-                         const bool legacy_syntax)
+                         const bool legacy_syntax,
+                         const bool access_priv_check)
     : leaf_aggregator_(db_leaves),
       string_leaves_(string_leaves),
       base_data_path_(base_data_path),
@@ -143,7 +144,8 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
       start_epoch_table_name_(start_epoch_table_name),
       start_epoch_(start_epoch),
       is_decr_start_epoch_(is_decr_start_epoch),
-      super_user_rights_(false) {
+      super_user_rights_(false),
+      access_priv_check_(access_priv_check) {
   LOG(INFO) << "MapD Server " << MAPD_RELEASE;
   if (executor_device == "gpu") {
 #ifdef HAVE_CUDA
@@ -198,7 +200,8 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
       LOG(INFO) << "Started in Hybrid mode" << std::endl;
   }
 
-  sys_cat_.reset(new Catalog_Namespace::SysCatalog(base_data_path_, data_mgr_, ldapMetadata, calcite_));
+  sys_cat_.reset(
+      new Catalog_Namespace::SysCatalog(base_data_path_, data_mgr_, ldapMetadata, calcite_, false, access_priv_check_));
   import_path_ = boost::filesystem::path(base_data_path_) / "mapd_import";
   start_time_ = std::time(nullptr);
 }
@@ -285,11 +288,13 @@ void MapDHandler::connectImpl(TSessionId& session,
   Privileges privs;
   privs.insert_ = true;
   privs.select_ = false;
-  if (!sys_cat_->checkPrivileges(user_meta, db_meta, privs)) {
-    TMapDException ex;
-    ex.error_msg = std::string("User ") + user + " is not authorized to access database " + dbname;
-    LOG(ERROR) << ex.error_msg;
-    throw ex;
+  if (!access_priv_check_) {  // proceed with old style access priv check for DB only
+    if (!sys_cat_->checkPrivileges(user_meta, db_meta, privs)) {
+      TMapDException ex;
+      ex.error_msg = std::string("User ") + user + " is not authorized to access database " + dbname;
+      LOG(ERROR) << ex.error_msg;
+      throw ex;
+    }
   }
   session = INVALID_SESSION_ID;
   while (true) {
@@ -300,8 +305,8 @@ void MapDHandler::connectImpl(TSessionId& session,
   }
   auto cat_it = cat_map_.find(dbname);
   if (cat_it == cat_map_.end()) {
-    Catalog_Namespace::Catalog* cat =
-        new Catalog_Namespace::Catalog(base_data_path_, db_meta, data_mgr_, string_leaves_, calcite_);
+    Catalog_Namespace::Catalog* cat = new Catalog_Namespace::Catalog(
+        base_data_path_, db_meta, data_mgr_, string_leaves_, calcite_, access_priv_check_);
     cat_map_[dbname].reset(cat);
     sessions_[session].reset(
         new Catalog_Namespace::SessionInfo(cat_map_[dbname], user_meta, executor_device_type_, session));
@@ -705,6 +710,7 @@ TColumnType MapDHandler::populateThriftColumnType(const Catalog_Namespace::Catal
   col_type.col_type.is_array = cd->columnType.get_type() == kARRAY;
   col_type.col_type.precision = cd->columnType.get_precision();
   col_type.col_type.scale = cd->columnType.get_scale();
+  col_type.is_system = cd->isSystemCol;
   if (cd->columnType.get_compression() == EncodingType::kENCODING_DICT && cat != nullptr) {
     // have to get the actual size of the encoding from the dictionary definition
     const int dict_id = cd->columnType.get_comp_param();
@@ -733,7 +739,20 @@ void MapDHandler::get_table_descriptor(TTableDescriptor& _return,
   LOG(ERROR) << "get_table_descriptor is deprecated, please fix application";
 }
 
+void MapDHandler::get_internal_table_details(TTableDetails& _return,
+                                             const TSessionId& session,
+                                             const std::string& table_name) {
+  get_table_details_impl(_return, session, table_name, true);
+}
+
 void MapDHandler::get_table_details(TTableDetails& _return, const TSessionId& session, const std::string& table_name) {
+  get_table_details_impl(_return, session, table_name, false);
+}
+
+void MapDHandler::get_table_details_impl(TTableDetails& _return,
+                                         const TSessionId& session,
+                                         const std::string& table_name,
+                                         const bool get_system) {
   const auto session_info = get_session(session);
   auto& cat = session_info.get_catalog();
   auto td = cat.getMetadataForTable(table_name);
@@ -756,7 +775,7 @@ void MapDHandler::get_table_details(TTableDetails& _return, const TSessionId& se
       throw ex;
     }
   } else {
-    const auto col_descriptors = cat.getAllColumnMetadataForTable(td->tableId, false, true);
+    const auto col_descriptors = cat.getAllColumnMetadataForTable(td->tableId, get_system, true);
     for (const auto cd : col_descriptors) {
       _return.row_desc.push_back(populateThriftColumnType(&cat, cd));
     }
@@ -765,6 +784,9 @@ void MapDHandler::get_table_details(TTableDetails& _return, const TSessionId& se
   _return.page_size = td->fragPageSize;
   _return.max_rows = td->maxRows;
   _return.view_sql = td->viewSQL;
+  _return.shard_count = td->nShards;
+  _return.key_metainfo = td->keyMetainfo;
+  _return.is_temporary = td->persistenceLevel == Data_Namespace::MemoryLevel::CPU_LEVEL;
 }
 
 // DEPRECATED(2017-04-17) - use get_table_details()
@@ -812,6 +834,10 @@ void MapDHandler::get_tables(std::vector<std::string>& table_names, const TSessi
   auto& cat = session_info.get_catalog();
   const auto tables = cat.getAllTableMetadata();
   for (const auto td : tables) {
+    if (td->shard >= 0) {
+      // skip shards, they're not standalone tables
+      continue;
+    }
     table_names.push_back(td->tableName);
   }
 }
@@ -916,12 +942,27 @@ void MapDHandler::set_execution_mode(const TSessionId& session, const TExecuteMo
   MapDHandler::set_execution_mode_nolock(session_it->second.get(), mode);
 }
 
+namespace {
+
+void check_table_not_sharded(const Catalog_Namespace::Catalog& cat, const std::string& table_name) {
+  const auto td = cat.getMetadataForTable(table_name);
+  if (td && td->nShards) {
+    throw std::runtime_error("Cannot import a sharded table directly to a leaf");
+  }
+}
+
+}  // namespace
+
 void MapDHandler::load_table_binary(const TSessionId& session,
                                     const std::string& table_name,
                                     const std::vector<TRow>& rows) {
   check_read_only("load_table_binary");
   const auto session_info = get_session(session);
   auto& cat = session_info.get_catalog();
+  if (g_cluster && !leaf_aggregator_.leafCount()) {
+    // Sharded table rows need to be routed to the leaf by an aggregator.
+    check_table_not_sharded(cat, table_name);
+  }
   const TableDescriptor* td = cat.getMetadataForTable(table_name);
   if (td == nullptr) {
     TMapDException ex;
@@ -929,7 +970,12 @@ void MapDHandler::load_table_binary(const TSessionId& session,
     LOG(ERROR) << ex.error_msg;
     throw ex;
   }
-  Importer_NS::Loader loader(cat, td);
+  std::unique_ptr<Importer_NS::Loader> loader;
+  if (leaf_aggregator_.leafCount() > 0) {
+    loader.reset(new DistributedLoader(session_info, td, &leaf_aggregator_));
+  } else {
+    loader.reset(new Importer_NS::Loader(cat, td));
+  }
   // TODO(andrew): nColumns should be number of non-virtual/non-system columns.
   //               Subtracting 1 (rowid) until TableDescriptor is updated.
   if (rows.front().cols.size() != static_cast<size_t>(td->nColumns) - 1) {
@@ -938,11 +984,11 @@ void MapDHandler::load_table_binary(const TSessionId& session,
     LOG(ERROR) << ex.error_msg;
     throw ex;
   }
-  auto col_descs = loader.get_column_descs();
+  auto col_descs = loader->get_column_descs();
   std::vector<std::unique_ptr<Importer_NS::TypedImportBuffer>> import_buffers;
   for (auto cd : col_descs) {
     import_buffers.push_back(std::unique_ptr<Importer_NS::TypedImportBuffer>(
-        new Importer_NS::TypedImportBuffer(cd, loader.get_string_dict(cd))));
+        new Importer_NS::TypedImportBuffer(cd, loader->get_string_dict(cd))));
   }
   for (auto row : rows) {
     try {
@@ -955,7 +1001,7 @@ void MapDHandler::load_table_binary(const TSessionId& session,
       LOG(WARNING) << "load_table exception thrown: " << e.what() << ". Row discarded.";
     }
   }
-  loader.load(import_buffers, rows.size());
+  loader->load(import_buffers, rows.size());
 }
 
 void MapDHandler::load_table(const TSessionId& session,
@@ -964,6 +1010,10 @@ void MapDHandler::load_table(const TSessionId& session,
   check_read_only("load_table");
   const auto session_info = get_session(session);
   auto& cat = session_info.get_catalog();
+  if (g_cluster && !leaf_aggregator_.leafCount()) {
+    // Sharded table rows need to be routed to the leaf by an aggregator.
+    check_table_not_sharded(cat, table_name);
+  }
   const TableDescriptor* td = cat.getMetadataForTable(table_name);
   if (td == nullptr) {
     TMapDException ex;
@@ -971,7 +1021,12 @@ void MapDHandler::load_table(const TSessionId& session,
     LOG(ERROR) << ex.error_msg;
     throw ex;
   }
-  Importer_NS::Loader loader(cat, td);
+  std::unique_ptr<Importer_NS::Loader> loader;
+  if (leaf_aggregator_.leafCount() > 0) {
+    loader.reset(new DistributedLoader(session_info, td, &leaf_aggregator_));
+  } else {
+    loader.reset(new Importer_NS::Loader(cat, td));
+  }
   Importer_NS::CopyParams copy_params;
   // TODO(andrew): nColumns should be number of non-virtual/non-system columns.
   //               Subtracting 1 (rowid) until TableDescriptor is updated.
@@ -982,24 +1037,31 @@ void MapDHandler::load_table(const TSessionId& session,
     LOG(ERROR) << ex.error_msg;
     throw ex;
   }
-  auto col_descs = loader.get_column_descs();
+  auto col_descs = loader->get_column_descs();
   std::vector<std::unique_ptr<Importer_NS::TypedImportBuffer>> import_buffers;
   for (auto cd : col_descs) {
     import_buffers.push_back(std::unique_ptr<Importer_NS::TypedImportBuffer>(
-        new Importer_NS::TypedImportBuffer(cd, loader.get_string_dict(cd))));
+        new Importer_NS::TypedImportBuffer(cd, loader->get_string_dict(cd))));
   }
+  size_t rows_completed = 0;
+  size_t col_idx = 0;
   for (auto row : rows) {
     try {
-      int col_idx = 0;
+      col_idx = 0;
       for (auto cd : col_descs) {
         import_buffers[col_idx]->add_value(cd, row.cols[col_idx].str_val, row.cols[col_idx].is_null, copy_params);
         col_idx++;
       }
+      rows_completed++;
     } catch (const std::exception& e) {
-      LOG(WARNING) << "load_table exception thrown: " << e.what() << ". Row discarded.";
+      for (size_t col_idx_to_pop = 0; col_idx_to_pop < col_idx; ++col_idx_to_pop) {
+        import_buffers[col_idx_to_pop]->pop_value();
+      }
+      LOG(ERROR) << "Input exception thrown: " << e.what() << ". Row discarded, issue at column : " << (col_idx + 1)
+                 << " data :" << row;
     }
   }
-  loader.load(import_buffers, rows.size());
+  loader->load(import_buffers, rows_completed);
 }
 
 char MapDHandler::unescape_char(std::string str) {
@@ -1912,6 +1974,18 @@ void MapDHandler::convert_result(TQueryResult& _return, const ResultRows& result
   create_simple_result(_return, results, column_format, "Result");
 }
 
+namespace {
+
+void check_table_not_sharded(const Catalog_Namespace::Catalog& cat, const int table_id) {
+  const auto td = cat.getMetadataForTable(table_id);
+  CHECK(td);
+  if (td->nShards) {
+    throw std::runtime_error("Cannot execute a cluster insert into a sharded table");
+  }
+}
+
+}  // namespace
+
 void MapDHandler::sql_execute_impl(TQueryResult& _return,
                                    const Catalog_Namespace::SessionInfo& session_info,
                                    const std::string& query_str,
@@ -1978,6 +2052,10 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
           explain_stmt = dynamic_cast<Parser::ExplainStmt*>(ddl);
         if (ddl != nullptr && explain_stmt == nullptr) {
           const auto copy_stmt = dynamic_cast<Parser::CopyTableStmt*>(ddl);
+          if (g_cluster && copy_stmt && !leaf_aggregator_.leafCount()) {
+            // Sharded table rows need to be routed to the leaf by an aggregator.
+            check_table_not_sharded(cat, copy_stmt->get_table());
+          }
           if (copy_stmt && leaf_aggregator_.leafCount() > 0) {
             _return.execution_time_ms +=
                 measure<>::execution([&]() { execute_distributed_copy_statement(copy_stmt, session_info); });
@@ -2000,6 +2078,9 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
           root_plan = optimizer.optimize();
           CHECK(root_plan);
           std::unique_ptr<Planner::RootPlan> plan_ptr(root_plan);  // make sure it's deleted
+          if (g_cluster && plan_ptr->get_stmt_type() == kINSERT) {
+            check_table_not_sharded(session_info.get_catalog(), plan_ptr->get_result_table_id());
+          }
           if (explain_stmt != nullptr) {
             root_plan->set_plan_dest(Planner::RootPlan::Dest::kEXPLAIN);
           }
@@ -2035,9 +2116,7 @@ Planner::RootPlan* MapDHandler::parse_to_plan(const std::string& query_str,
   // if this is a calcite select or explain select run in calcite
   if (!pw.is_ddl && !pw.is_update_dml && !pw.is_other_explain) {
     const std::string actual_query{pw.is_select_explain || pw.is_select_calcite_explain ? pw.actual_query : query_str};
-    const auto query_ra = calcite_->process(session_info.get_currentUser().userName,
-                                            session_info.get_session_id(),
-                                            cat.get_currentDB().dbName,
+    const auto query_ra = calcite_->process(session_info,
                                             legacy_syntax_ ? pg_shim(actual_query) : actual_query,
                                             legacy_syntax_,
                                             pw.is_select_calcite_explain);
@@ -2054,11 +2133,8 @@ Planner::RootPlan* MapDHandler::parse_to_plan(const std::string& query_str,
 std::string MapDHandler::parse_to_ra(const std::string& query_str, const Catalog_Namespace::SessionInfo& session_info) {
   ParserWrapper pw{query_str};
   const std::string actual_query{pw.is_select_explain || pw.is_select_calcite_explain ? pw.actual_query : query_str};
-  auto& cat = session_info.get_catalog();
   if (!pw.is_ddl && !pw.is_update_dml && !pw.is_other_explain) {
-    return calcite_->process(session_info.get_currentUser().userName,
-                             session_info.get_session_id(),
-                             cat.get_currentDB().dbName,
+    return calcite_->process(session_info,
                              legacy_syntax_ ? pg_shim(actual_query) : actual_query,
                              legacy_syntax_,
                              pw.is_select_calcite_explain);

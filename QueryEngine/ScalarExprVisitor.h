@@ -32,6 +32,10 @@ class ScalarExprVisitor {
     if (column_var) {
       return visitColumnVar(column_var);
     }
+    const auto column_var_tuple = dynamic_cast<const Analyzer::ColumnVarTuple*>(expr);
+    if (column_var_tuple) {
+      return visitColumnVarTuple(column_var_tuple);
+    }
     const auto iter = dynamic_cast<const Analyzer::IterExpr*>(expr);
     if (iter) {
       return visitIterator(iter);
@@ -92,6 +96,10 @@ class ScalarExprVisitor {
     if (datediff) {
       return visitDatediffExpr(datediff);
     }
+    const auto dateadd = dynamic_cast<const Analyzer::DateaddExpr*>(expr);
+    if (dateadd) {
+      return visitDateaddExpr(dateadd);
+    }
     const auto likelihood = dynamic_cast<const Analyzer::LikelihoodExpr*>(expr);
     if (likelihood) {
       return visitLikelihood(likelihood);
@@ -107,6 +115,8 @@ class ScalarExprVisitor {
   virtual T visitVar(const Analyzer::Var*) const { return defaultResult(); }
 
   virtual T visitColumnVar(const Analyzer::ColumnVar*) const { return defaultResult(); }
+
+  virtual T visitColumnVarTuple(const Analyzer::ColumnVarTuple*) const { return defaultResult(); }
 
   virtual T visitIterator(const Analyzer::IterExpr*) const { return defaultResult(); }
 
@@ -204,6 +214,13 @@ class ScalarExprVisitor {
     T result = defaultResult();
     result = aggregateResult(result, visit(datediff->get_start_expr()));
     result = aggregateResult(result, visit(datediff->get_end_expr()));
+    return result;
+  }
+
+  virtual T visitDateaddExpr(const Analyzer::DateaddExpr* dateadd) const {
+    T result = defaultResult();
+    result = aggregateResult(result, visit(dateadd->get_number_expr()));
+    result = aggregateResult(result, visit(dateadd->get_datetime_expr()));
     return result;
   }
 

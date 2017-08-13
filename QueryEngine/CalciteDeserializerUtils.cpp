@@ -65,6 +65,27 @@ ExtractField to_datepart_field(const std::string& field) {
   return fieldno;
 }
 
+DateaddField to_dateadd_field(const std::string& field) {
+  DateaddField fieldno;
+  if (boost::iequals(field, "year") || boost::iequals(field, "yy") || boost::iequals(field, "yyyy"))
+    fieldno = daYEAR;
+  else if (boost::iequals(field, "quarter") || boost::iequals(field, "qq") || boost::iequals(field, "q"))
+    fieldno = daQUARTER;
+  else if (boost::iequals(field, "month") || boost::iequals(field, "mm") || boost::iequals(field, "m"))
+    fieldno = daMONTH;
+  else if (boost::iequals(field, "day") || boost::iequals(field, "dd") || boost::iequals(field, "d"))
+    fieldno = daDAY;
+  else if (boost::iequals(field, "hour") || boost::iequals(field, "hh"))
+    fieldno = daHOUR;
+  else if (boost::iequals(field, "minute") || boost::iequals(field, "mi") || boost::iequals(field, "n"))
+    fieldno = daMINUTE;
+  else if (boost::iequals(field, "second") || boost::iequals(field, "ss") || boost::iequals(field, "s"))
+    fieldno = daSECOND;
+  else
+    throw std::runtime_error("Unsupported field in DATEADD function: " + field);
+  return fieldno;
+}
+
 DatetruncField to_datediff_field(const std::string& field) {
   DatetruncField fieldno;
   if (boost::iequals(field, "year") || boost::iequals(field, "yy") || boost::iequals(field, "yyyy"))
@@ -82,7 +103,7 @@ DatetruncField to_datediff_field(const std::string& field) {
   else if (boost::iequals(field, "second") || boost::iequals(field, "ss") || boost::iequals(field, "s"))
     fieldno = dtSECOND;
   else
-    throw std::runtime_error("Unsupported field in DATEPART function: " + field);
+    throw std::runtime_error("Unsupported field in DATEDIFF function: " + field);
   return fieldno;
 }
 

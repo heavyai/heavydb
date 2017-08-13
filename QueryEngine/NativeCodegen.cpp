@@ -30,6 +30,7 @@
 #include <llvm/IRReader/IRReader.h>
 #include <llvm/IR/Attributes.h>
 #include <llvm/IR/InstIterator.h>
+#include "llvm/IR/IntrinsicInst.h"
 #include "llvm/IR/Intrinsics.h"
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Verifier.h>
@@ -281,6 +282,8 @@ declare i64* @get_group_value_fast_with_original_key(i64*, i64, i64, i64, i64, i
 declare i32 @get_columnar_group_bin_offset(i64*, i64, i64, i64);
 declare i64* @get_group_value_one_key(i64*, i32, i64*, i32, i64, i64, i32, i64*);
 declare i64* @get_group_value_one_key_with_watchdog(i64*, i32, i64*, i32, i64, i64, i32, i64*);
+declare i64 @baseline_hash_join_idx_32(i8*, i8*, i64, i64);
+declare i64 @baseline_hash_join_idx_64(i8*, i8*, i64, i64);
 declare i64 @agg_count_shared(i64*, i64);
 declare i64 @agg_count_skip_val_shared(i64*, i64, i64);
 declare i32 @agg_count_int32_shared(i32*, i32);
@@ -324,6 +327,8 @@ declare i64 @DateTruncate(i32, i64);
 declare i64 @DateTruncateNullable(i32, i64, i64);
 declare i64 @DateDiff(i32, i64, i64);
 declare i64 @DateDiffNullable(i32, i64, i64, i64);
+declare i64 @DateAdd(i32, i64, i64);
+declare i64 @DateAddNullable(i32, i64, i64, i64);
 declare i64 @string_decode(i8*, i64);
 declare i32 @array_size(i8*, i64, i32);
 declare i1 @array_is_null(i8*, i64);
@@ -380,6 +385,24 @@ declare void @force_sync();
 std::string extension_function_decls() {
   const auto decls = ExtensionFunctionsWhitelist::getLLVMDeclarations();
   return boost::algorithm::join(decls, "\n");
+}
+
+void legalize_nvvm_ir(llvm::Function* query_func) {
+  std::vector<llvm::Instruction*> unsupported_intrinsics;
+  for (auto& BB : *query_func) {
+    for (llvm::Instruction& I : BB) {
+      if (const llvm::IntrinsicInst* II = llvm::dyn_cast<llvm::IntrinsicInst>(&I)) {
+        if (II->getIntrinsicID() == llvm::Intrinsic::stacksave ||
+            II->getIntrinsicID() == llvm::Intrinsic::stackrestore) {
+          unsupported_intrinsics.push_back(&I);
+        }
+      }
+    }
+  }
+
+  for (auto& II : unsupported_intrinsics) {
+    II->eraseFromParent();
+  }
 }
 #endif  // HAVE_CUDA
 
@@ -438,6 +461,8 @@ std::vector<std::pair<void*, void*>> Executor::optimizeAndCodegenGPU(llvm::Funct
 
   // run optimizations
   optimizeIR(query_func, module, live_funcs, co, "", "");
+
+  legalize_nvvm_ir(query_func);
 
   std::stringstream ss;
   llvm::raw_os_ostream os(ss);
@@ -1046,34 +1071,57 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
 
   allocateInnerScansIterators(ra_exe_unit.input_descs);
 
+  llvm::Value* outer_join_nomatch_flag_lv = nullptr;
   if (isOuterJoin()) {
-    cgen_state_->outer_join_cond_lv_ =
-        llvm::ConstantInt::get(llvm::IntegerType::getInt1Ty(cgen_state_->context_), true);
+    if (isOuterLoopJoin()) {
+      outer_join_nomatch_flag_lv = cgen_state_->ir_builder_.CreateLoad(cgen_state_->outer_join_nomatch_);
+      cgen_state_->outer_join_cond_lv_ = cgen_state_->ir_builder_.CreateNot(outer_join_nomatch_flag_lv);
+    } else {
+      cgen_state_->outer_join_cond_lv_ = ll_bool(true);
+    }
     for (auto expr : ra_exe_unit.outer_join_quals) {
       cgen_state_->outer_join_cond_lv_ = cgen_state_->ir_builder_.CreateAnd(
           cgen_state_->outer_join_cond_lv_, toBool(codegen(expr.get(), true, co).front()));
     }
+    if (isOneToManyOuterHashJoin()) {
+      // TODO(miyu): Support more than 1 one-to-many hash joins in folded sequence.
+      outer_join_nomatch_flag_lv = cgen_state_->ir_builder_.CreateLoad(cgen_state_->outer_join_nomatch_);
+    }
   }
 
-  llvm::Value* filter_lv = llvm::ConstantInt::get(llvm::IntegerType::getInt1Ty(cgen_state_->context_), true);
+  llvm::Value* filter_lv =
+      isOuterLoopJoin() || isOneToManyOuterHashJoin() ? cgen_state_->outer_join_cond_lv_ : ll_bool(true);
   for (auto expr : primary_quals) {
     // Generate the filter for primary quals
-    filter_lv = cgen_state_->ir_builder_.CreateAnd(filter_lv, toBool(codegen(expr, true, co).front()));
+    auto cond = toBool(codegen(expr, true, co).front());
+    auto new_cond = codegenRetOnHashFail(cond, expr);
+    if (new_cond == cond) {
+      filter_lv = cgen_state_->ir_builder_.CreateAnd(filter_lv, cond);
+    }
   }
   CHECK(filter_lv->getType()->isIntegerTy(1));
 
   if (!deferred_quals.empty()) {
     auto sc_true = llvm::BasicBlock::Create(cgen_state_->context_, "sc_true", cgen_state_->row_func_);
     auto sc_false = llvm::BasicBlock::Create(cgen_state_->context_, "sc_false", cgen_state_->row_func_);
+    if (isOuterLoopJoin() || isOneToManyOuterHashJoin()) {
+      filter_lv = cgen_state_->ir_builder_.CreateOr(filter_lv, outer_join_nomatch_flag_lv);
+    }
     cgen_state_->ir_builder_.CreateCondBr(filter_lv, sc_true, sc_false);
     cgen_state_->ir_builder_.SetInsertPoint(sc_false);
-    codegenInnerScanNextRow();
+    codegenInnerScanNextRowOrMatch();
     cgen_state_->ir_builder_.SetInsertPoint(sc_true);
+    filter_lv = ll_bool(true);
   }
 
   for (auto expr : deferred_quals) {
     filter_lv = cgen_state_->ir_builder_.CreateAnd(filter_lv, toBool(codegen(expr, true, co).front()));
   }
+  if (isOuterLoopJoin() || isOneToManyOuterHashJoin()) {
+    CHECK(outer_join_nomatch_flag_lv);
+    filter_lv = cgen_state_->ir_builder_.CreateOr(filter_lv, outer_join_nomatch_flag_lv);
+  }
+
   CHECK(filter_lv->getType()->isIntegerTy(1));
 
   const bool needs_error_check = group_by_and_aggregate.codegen(filter_lv, co);

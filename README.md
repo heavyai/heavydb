@@ -13,6 +13,7 @@ MapD Core is an in-memory, column store, SQL relational database that was design
 - [Using](#using)
 - [Code Style](#code-style)
 - [Dependencies](#dependencies)
+- [Roadmap](ROADMAP.md)
 
 # Links
 
@@ -228,11 +229,6 @@ Be sure to reboot after installing in order to activate the NVIDIA drivers.
 
 [scripts/mapd-deps-centos.sh](scripts/mapd-deps-centos.sh) generates two files with the appropriate environment variables: `mapd-deps-<date>.sh` (for sourcing from your shell config) and `mapd-deps-<date>.modulefile` (for use with [Environment Modules](http://modules.sf.net), yum package `environment-modules`). These files are placed in mapd-deps install directory, usually `/usr/local/mapd-deps/<date>`. Either of these may be used to configure your environment: the `.sh` may be sourced in your shell config; the `.modulefile` needs to be moved to the modulespath.
 
-The Java server lib directory containing `libjvm.so` must also be added to your `LD_LIBRARY_PATH`. Add one of the following to your shell config:
-
-    LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib/jvm/jre/lib/amd64/server
-    LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib/jvm/java-1.8.0/jre/lib/amd64/server
-
 ## macOS
 
 [scripts/mapd-deps-osx.sh](scripts/mapd-deps-osx.sh) is provided that will automatically install and/or update [Homebrew](http://brew.sh/) and use that to install all dependencies. Please make sure macOS is completely update to date and Xcode is installed before running. Xcode can be installed from the App Store.
@@ -247,7 +243,7 @@ The Java server lib directory containing `libjvm.so` must also be added to your 
 
 ## Ubuntu 16.04, 16.10
 
-Most build dependencies required by MapD Core are available via APT. Thrift, Blosc, and Folly must be built manually. The following will install all required dependencies and build the ones not available in the APT repositories.
+Most build dependencies required by MapD Core are available via APT. Thrift, Blosc, and Folly must be built manually. The following will install all required dependencies and build the ones not available in the APT repositories. Be sure to run from the top level of the `mapd-core` repository so that the paths to the patch files are correct.
 
     sudo apt update
     sudo apt install -y \
@@ -288,11 +284,15 @@ Most build dependencies required by MapD Core are available via APT. Thrift, Blo
         autoconf \
         autoconf-archive
 
+    cd scripts
+
     sudo apt build-dep -y thrift-compiler
     VERS=0.10.0
     wget http://apache.claz.org/thrift/$VERS/thrift-$VERS.tar.gz
     tar xvf thrift-$VERS.tar.gz
     pushd thrift-$VERS
+    patch -p1 < ../thrift-3821-tmemorybuffer-overflow-check.patch
+    patch -p1 < ../thrift-3821-tmemorybuffer-overflow-test.patch
     ./configure \
         --with-lua=no \
         --with-python=no \
@@ -361,10 +361,9 @@ Most build dependencies required by MapD Core are available via APT. Thrift, Blo
 
 ### Environment Variables
 
-The CUDA, Java, and mapd-deps `lib` directories need to be added to `LD_LIBRARY_PATH`; the CUDA and mapd-deps `bin` directories need to be added to `PATH`. The easiest way to do so is by creating a new file named `/etc/profile.d/mapd-deps.sh` containing the following:
+The CUDA and mapd-deps `lib` directories need to be added to `LD_LIBRARY_PATH`; the CUDA and mapd-deps `bin` directories need to be added to `PATH`. The easiest way to do so is by creating a new file named `/etc/profile.d/mapd-deps.sh` containing the following:
 
     LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
-    LD_LIBRARY_PATH=/usr/lib/jvm/default-java/jre/lib/amd64/server:$LD_LIBRARY_PATH
     LD_LIBRARY_PATH=/usr/local/mapd-deps/lib:$LD_LIBRARY_PATH
     LD_LIBRARY_PATH=/usr/local/mapd-deps/lib64:$LD_LIBRARY_PATH
 
@@ -397,10 +396,9 @@ Be sure to reboot after installing in order to activate the NVIDIA drivers.
 
 ### Environment Variables
 
-The CUDA, Java, and mapd-deps `lib` directories need to be added to `LD_LIBRARY_PATH`; the CUDA and mapd-deps `bin` directories need to be added to `PATH`. The easiest way to do so is by creating a new file named `/etc/profile.d/mapd-deps.sh` containing the following:
+The CUDA and mapd-deps `lib` directories need to be added to `LD_LIBRARY_PATH`; the CUDA and mapd-deps `bin` directories need to be added to `PATH`. The easiest way to do so is by creating a new file named `/etc/profile.d/mapd-deps.sh` containing the following:
 
     LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
-    LD_LIBRARY_PATH=/usr/lib/jvm/default-java/jre/lib/amd64/server:$LD_LIBRARY_PATH
     LD_LIBRARY_PATH=/usr/local/mapd-deps/lib:$LD_LIBRARY_PATH
     LD_LIBRARY_PATH=/usr/local/mapd-deps/lib64:$LD_LIBRARY_PATH
 
@@ -448,9 +446,7 @@ Be sure to reboot after installing in order to activate the NVIDIA drivers.
 
 ### Environment Variables
 
-The Java `lib` directories need to be added to `LD_LIBRARY_PATH`; the CUDA `bin` directories need to be added to `PATH`. The easiest way to do so is by creating a new file named `/etc/profile.d/mapd-deps.sh` containing the following:
+The CUDA `bin` directories need to be added to `PATH`. The easiest way to do so is by creating a new file named `/etc/profile.d/mapd-deps.sh` containing the following:
 
-    LD_LIBRARY_PATH=/usr/lib/jvm/default/jre/lib/amd64/server:$LD_LIBRARY_PATH
     PATH=/opt/cuda/bin:$PATH
-
-    export LD_LIBRARY_PATH PATH
+    export PATH

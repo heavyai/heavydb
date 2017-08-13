@@ -26,11 +26,11 @@ add_definitions("-DMAPD_EDITION_${MAPD_EDITION}")
 string(TOLOWER "${MAPD_EDITION}" MAPD_EDITION_LOWER)
 
 set(MAPD_VERSION_MAJOR "3")
-set(MAPD_VERSION_MINOR "1")
-set(MAPD_VERSION_PATCH "2")
+set(MAPD_VERSION_MINOR "2")
+set(MAPD_VERSION_PATCH "1")
 set(MAPD_VERSION_EXTRA "dev")
 set(MAPD_VERSION_RAW "${MAPD_VERSION_MAJOR}.${MAPD_VERSION_MINOR}.${MAPD_VERSION_PATCH}${MAPD_VERSION_EXTRA}")
-set(MAPD_IMMERSE_URL "https://builds.mapd.com/frontend/mapd2-dashboard-v2-f23da32-unofficial-prod.zip")
+set(MAPD_IMMERSE_URL "http://builds.mapd.com/frontend/immerse-v2-latest-master-prod.zip")
 set(MAPD_DOCS_URL "http://docs.builds.mapd.com/master/docs-master.zip")
 string(TIMESTAMP MAPD_BUILD_DATE "%Y%m%d")
 
@@ -129,19 +129,6 @@ endif()
 if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-deprecated-declarations")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated-declarations")
-endif()
-
-if(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
-  set(CMAKE_INSTALL_RPATH
-    "\$ORIGIN/../ThirdParty/java/jre/lib/amd64/server"
-    "/usr/lib/jvm/java-1.8.0-openjdk-amd64/jre/lib/amd64/server"
-    "/usr/lib/jvm/jre-1.8.0-openjdk/lib/amd64/server"
-    "/usr/lib/jvm/java-1.8.0-openjdk/jre/lib/amd64/server"
-    "/usr/lib/jvm/jre/lib/amd64/server"
-    "/usr/lib/jvm/java/jre/lib/amd64/server"
-    "/usr/lib/jvm/default-java/jre/lib/amd64/server"
-  )
-  set(CMAKE_BUILD_WITH_INSTALL_RPATH ON)
 endif()
 
 option(ENABLE_LLVM_DBG "switch to local debug version of llvm" OFF)
@@ -257,9 +244,6 @@ add_library(mapd_thrift
     ${CMAKE_BINARY_DIR}/gen-cpp/mapd_types.cpp)
 target_link_libraries(mapd_thrift ${Thrift_LIBRARIES})
 
-find_package(JNI REQUIRED)
-include_directories(${JNI_INCLUDE_DIRS})
-
 option(ENABLE_JOIN_EXEC "Enable RA vm to execute join node" ON)
 if(ENABLE_JOIN_EXEC)
   add_definitions("-DENABLE_JOIN_EXEC")
@@ -272,6 +256,11 @@ option(ENABLE_MULTIFRAG_JOIN "Enable Join on Multi-frag table" ON)
 if(ENABLE_MULTIFRAG_JOIN)
   add_definitions("-DENABLE_MULTIFRAG_JOIN")
 endif()
+option(ENABLE_ONE_TO_MANY_HASH_JOIN "Enable hash join on a column w/ duplicate values" ON)
+if(ENABLE_ONE_TO_MANY_HASH_JOIN)
+  add_definitions("-DENABLE_ONE_TO_MANY_HASH_JOIN")
+endif()
+
 
 option(ENABLE_COMPACTION "Enable Compaction and Overflow/Underflow Detection" OFF)
 if(ENABLE_COMPACTION)
@@ -411,11 +400,15 @@ set(CPACK_PACKAGE_CONTACT "support@mapd.com")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "MapD Core Database")
 set(CPACK_PROJECT_CONFIG_FILE ${CMAKE_SOURCE_DIR}/CMakePackaging.txt)
 set(CPACK_STRIP_FILES ON)
-set(CPACK_DEBIAN_PACKAGE_DEPENDS "java8-runtime-headless, bsdmainutils, curl | wget")
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "default-jre-headless | openjdk-8-jre-headless | java8-runtime-headless, bsdmainutils, curl | wget")
 set(CPACK_RPM_PACKAGE_REQUIRES "java-headless, util-linux, curl")
 set(CPACK_RPM_PACKAGE_AUTOREQ OFF)
 if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
   set(CPACK_DEBIAN_PACKAGE_DEPENDS "${CPACK_DEBIAN_PACKAGE_DEPENDS}, libldap-2.4-2")
+endif()
+if(ENABLE_RENDERING)
+  set(CPACK_RPM_PACKAGE_REQUIRES "${CPACK_RPM_PACKAGE_REQUIRES}, libX11, libXext")
+  set(CPACK_DEBIAN_PACKAGE_DEPENDS "${CPACK_DEBIAN_PACKAGE_DEPENDS}, libx11-6, libxext6")
 endif()
 
 set_dpkg_arch(${CMAKE_SYSTEM_PROCESSOR} CPACK_DEBIAN_PACKAGE_ARCHITECTURE)
@@ -486,7 +479,6 @@ if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
   install(FILES systemd/mapd_web_server.service.in systemd/mapd_web_server@.service.in DESTINATION systemd)
   install(FILES systemd/mapd.conf.in DESTINATION systemd)
   install(FILES systemd/mapd-sds.conf.in DESTINATION systemd)
-  install(PROGRAMS systemd/find_libjvm_dir.sh DESTINATION systemd)
   install(PROGRAMS systemd/install_mapd_systemd.sh DESTINATION systemd)
 
   if(NOT ENABLE_RENDERING OR "${RENDERER_CONTEXT_TYPE}" STREQUAL "EGL")

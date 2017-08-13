@@ -43,6 +43,28 @@ llvm::Value* Executor::codegen(const Analyzer::ExtractExpr* extract_expr, const 
   return cgen_state_->emitExternalCall(extract_fname, get_int_type(64, cgen_state_->context_), extract_args);
 }
 
+llvm::Value* Executor::codegen(const Analyzer::DateaddExpr* dateadd_expr, const CompilationOptions& co) {
+  static_assert(sizeof(time_t) == 4 || sizeof(time_t) == 8, "Unsupported time_t size");
+  const auto& dateadd_expr_ti = dateadd_expr->get_type_info();
+  CHECK(dateadd_expr_ti.get_type() == kTIMESTAMP || dateadd_expr_ti.get_type() == kDATE);
+  auto datetime = codegen(dateadd_expr->get_datetime_expr(), true, co).front();
+  CHECK(datetime->getType()->isIntegerTy(32) || datetime->getType()->isIntegerTy(64));
+  if (sizeof(time_t) == 4 && datetime->getType()->isIntegerTy(64)) {
+    datetime = cgen_state_->ir_builder_.CreateCast(
+        llvm::Instruction::CastOps::Trunc, datetime, get_int_type(32, cgen_state_->context_));
+  }
+  auto number = codegen(dateadd_expr->get_number_expr(), true, co).front();
+
+  std::vector<llvm::Value*> dateadd_args{ll_int(static_cast<int32_t>(dateadd_expr->get_field())), number, datetime};
+  std::string dateadd_fname{"DateAdd"};
+  const auto& datetime_ti = dateadd_expr->get_datetime_expr()->get_type_info();
+  if (!datetime_ti.get_notnull()) {
+    dateadd_args.push_back(inlineIntNull(datetime_ti));
+    dateadd_fname += "Nullable";
+  }
+  return cgen_state_->emitExternalCall(dateadd_fname, get_int_type(64, cgen_state_->context_), dateadd_args);
+}
+
 llvm::Value* Executor::codegen(const Analyzer::DatediffExpr* datediff_expr, const CompilationOptions& co) {
   static_assert(sizeof(time_t) == 4 || sizeof(time_t) == 8, "Unsupported time_t size");
   auto start = codegen(datediff_expr->get_start_expr(), true, co).front();

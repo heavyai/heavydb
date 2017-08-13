@@ -211,6 +211,8 @@ VERS=0.10.0
 download http://apache.claz.org/thrift/$VERS/thrift-$VERS.tar.gz
 extract thrift-$VERS.tar.gz
 pushd thrift-$VERS
+patch -p1 < ../thrift-3821-tmemorybuffer-overflow-check.patch
+patch -p1 < ../thrift-3821-tmemorybuffer-overflow-test.patch
 CFLAGS="-fPIC" CXXFLAGS="-fPIC" JAVA_PREFIX=$PREFIX/lib ./configure --prefix=$PREFIX --with-lua=no --with-python=no --with-php=no --with-boost-libdir=$PREFIX/lib
 makej
 make install

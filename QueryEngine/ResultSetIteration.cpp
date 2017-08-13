@@ -28,6 +28,7 @@
 #include "RuntimeFunctions.h"
 #include "SqlTypesLayout.h"
 #include "TypePunning.h"
+#include "../Shared/likely.h"
 
 namespace {
 
@@ -108,11 +109,14 @@ const int8_t* advance_col_buff_to_slot(const int8_t* buff,
 
 std::vector<TargetValue> ResultSet::getRowAt(const size_t global_entry_idx,
                                              const bool translate_strings,
-                                             const bool decimal_to_double) const {
-  const auto storage_lookup_result = findStorage(global_entry_idx);
+                                             const bool decimal_to_double,
+                                             const bool fixup_count_distinct_pointers) const {
+  const auto storage_lookup_result = fixup_count_distinct_pointers
+                                         ? StorageLookupResult{storage_.get(), global_entry_idx, 0}
+                                         : findStorage(global_entry_idx);
   const auto storage = storage_lookup_result.storage_ptr;
   const auto local_entry_idx = storage_lookup_result.fixedup_entry_idx;
-  if (storage->isEmptyEntry(local_entry_idx)) {
+  if (!fixup_count_distinct_pointers && storage->isEmptyEntry(local_entry_idx)) {
     return {};
   }
 
@@ -120,8 +124,8 @@ std::vector<TargetValue> ResultSet::getRowAt(const size_t global_entry_idx,
   CHECK(buff);
   std::vector<TargetValue> row;
   size_t agg_col_idx = 0;
-  const int8_t* rowwise_target_ptr{nullptr};
-  const int8_t* keys_ptr{nullptr};
+  int8_t* rowwise_target_ptr{nullptr};
+  int8_t* keys_ptr{nullptr};
   const int8_t* crt_col_ptr{nullptr};
   if (query_mem_desc_.output_columnar) {
     crt_col_ptr = get_cols_ptr(buff, query_mem_desc_);
@@ -158,7 +162,8 @@ std::vector<TargetValue> ResultSet::getRowAt(const size_t global_entry_idx,
                                                     target_idx,
                                                     agg_col_idx,
                                                     translate_strings,
-                                                    decimal_to_double));
+                                                    decimal_to_double,
+                                                    fixup_count_distinct_pointers));
       rowwise_target_ptr =
           advance_target_ptr(rowwise_target_ptr, agg_info, agg_col_idx, query_mem_desc_, none_encoded_strings_valid_);
     }
@@ -182,7 +187,7 @@ OneIntegerColumnRow ResultSet::getOneColRow(const size_t global_entry_idx) const
   const auto key_bytes_with_padding = align_to_int64(get_key_bytes_rowwise(query_mem_desc_));
   const auto rowwise_target_ptr = keys_ptr + key_bytes_with_padding;
   const auto tv = getTargetValueFromBufferRowwise(
-      rowwise_target_ptr, keys_ptr, global_entry_idx, targets_.front(), 0, 0, false, false);
+      rowwise_target_ptr, keys_ptr, global_entry_idx, targets_.front(), 0, 0, false, false, false);
   const auto scalar_tv = boost::get<ScalarTargetValue>(&tv);
   CHECK(scalar_tv);
   const auto ival_ptr = boost::get<int64_t>(scalar_tv);
@@ -195,7 +200,7 @@ std::vector<TargetValue> ResultSet::getRowAt(const size_t logical_index) const {
     return {};
   }
   const auto entry_idx = permutation_.empty() ? logical_index : permutation_[logical_index];
-  return getRowAt(entry_idx, true, false);
+  return getRowAt(entry_idx, true, false, false);
 }
 
 std::vector<TargetValue> ResultSet::getRowAtNoTranslations(const size_t logical_index) const {
@@ -203,7 +208,7 @@ std::vector<TargetValue> ResultSet::getRowAtNoTranslations(const size_t logical_
     return {};
   }
   const auto entry_idx = permutation_.empty() ? logical_index : permutation_[logical_index];
-  return getRowAt(entry_idx, false, false);
+  return getRowAt(entry_idx, false, false, false);
 }
 
 bool ResultSet::isRowAtEmpty(const size_t logical_index) const {
@@ -250,7 +255,7 @@ std::vector<TargetValue> ResultSet::getNextRowImpl(const bool translate_strings,
     CHECK_EQ(entryCount(), crt_row_buff_idx_);
     return {};
   }
-  auto row = getRowAt(entry_buff_idx, translate_strings, decimal_to_double);
+  auto row = getRowAt(entry_buff_idx, translate_strings, decimal_to_double, false);
   CHECK(!row.empty());
   ++crt_row_buff_idx_;
   ++fetched_so_far_;
@@ -262,6 +267,23 @@ namespace {
 
 const int8_t* columnar_elem_ptr(const size_t entry_idx, const int8_t* col1_ptr, const int8_t compact_sz1) {
   return col1_ptr + compact_sz1 * entry_idx;
+}
+
+int64_t int_resize_cast(const int64_t ival, const size_t sz) {
+  switch (sz) {
+    case 8:
+      return ival;
+    case 4:
+      return static_cast<int32_t>(ival);
+    case 2:
+      return static_cast<int16_t>(ival);
+    case 1:
+      return static_cast<int8_t>(ival);
+    default:
+      UNREACHABLE();
+  }
+  UNREACHABLE();
+  return 0;
 }
 
 }  // namespace
@@ -302,7 +324,8 @@ InternalTargetValue ResultSet::getColumnInternal(const int8_t* buff,
           const auto i2 = read_int_from_buff(columnar_elem_ptr(entry_idx, col2_ptr, compact_sz2), compact_sz2);
           return InternalTargetValue(i1, i2);
         } else {
-          return InternalTargetValue(i1);
+          return InternalTargetValue(
+              agg_info.sql_type.is_fp() ? i1 : int_resize_cast(i1, agg_info.sql_type.get_logical_size()));
         }
       }
       crt_col_ptr = next_col_ptr;
@@ -357,7 +380,8 @@ InternalTargetValue ResultSet::getColumnInternal(const int8_t* buff,
             CHECK_GE(str_len, 0);
             return getVarlenOrderEntry(i1, str_len);
           }
-          return InternalTargetValue(i1);
+          return InternalTargetValue(
+              agg_info.sql_type.is_fp() ? i1 : int_resize_cast(i1, agg_info.sql_type.get_logical_size()));
         }
       }
       rowwise_target_ptr =
@@ -691,27 +715,6 @@ TargetValue ResultSet::makeVarlenTargetValue(const int8_t* ptr1,
   return std::string(reinterpret_cast<char*>(varlen_ptr), length);
 }
 
-namespace {
-
-int64_t int_resize_cast(const int64_t ival, const size_t sz) {
-  switch (sz) {
-    case 8:
-      return ival;
-    case 4:
-      return static_cast<int32_t>(ival);
-    case 2:
-      return static_cast<int16_t>(ival);
-    case 1:
-      return static_cast<int8_t>(ival);
-    default:
-      UNREACHABLE();
-  }
-  UNREACHABLE();
-  return 0;
-}
-
-}  // namespace
-
 // Reads an integer or a float from ptr based on the type and the byte width.
 TargetValue ResultSet::makeTargetValue(const int8_t* ptr,
                                        const int8_t compact_sz,
@@ -760,8 +763,8 @@ TargetValue ResultSet::makeTargetValue(const int8_t* ptr,
   }
   if (chosen_type.is_integer() | chosen_type.is_boolean() || chosen_type.is_time() || chosen_type.is_timeinterval()) {
     if (is_distinct_target(target_info)) {
-      return TargetValue(count_distinct_set_size(
-          storage_->mappedPtr(ival), target_logical_idx, query_mem_desc_.count_distinct_descriptors_));
+      return TargetValue(
+          count_distinct_set_size(ival, target_logical_idx, query_mem_desc_.count_distinct_descriptors_));
     }
     // TODO(alex): remove int_resize_cast, make read_int_from_buff return the right type instead
     if (inline_int_null_val(chosen_type) == int_resize_cast(ival, chosen_type.get_logical_size())) {
@@ -826,14 +829,23 @@ TargetValue ResultSet::getTargetValueFromBufferColwise(const int8_t* col1_ptr,
 }
 
 // Gets the TargetValue stored in slot_idx (and slot_idx for AVG) of rowwise_target_ptr.
-TargetValue ResultSet::getTargetValueFromBufferRowwise(const int8_t* rowwise_target_ptr,
-                                                       const int8_t* keys_ptr,
+TargetValue ResultSet::getTargetValueFromBufferRowwise(int8_t* rowwise_target_ptr,
+                                                       int8_t* keys_ptr,
                                                        const size_t entry_buff_idx,
                                                        const TargetInfo& target_info,
                                                        const size_t target_logical_idx,
                                                        const size_t slot_idx,
                                                        const bool translate_strings,
-                                                       const bool decimal_to_double) const {
+                                                       const bool decimal_to_double,
+                                                       const bool fixup_count_distinct_pointers) const {
+  if (UNLIKELY(fixup_count_distinct_pointers) && is_distinct_target(target_info)) {
+    auto count_distinct_ptr_ptr = reinterpret_cast<int64_t*>(rowwise_target_ptr);
+    const auto remote_ptr = *count_distinct_ptr_ptr;
+    if (remote_ptr) {
+      *count_distinct_ptr_ptr = storage_->mappedPtr(remote_ptr);
+    }
+    return int64_t(0);
+  }
   auto ptr1 = rowwise_target_ptr;
   CHECK_LT(slot_idx, query_mem_desc_.agg_col_widths.size());
   auto compact_sz1 = query_mem_desc_.agg_col_widths[slot_idx].compact;

@@ -34,7 +34,10 @@ class StringDictionaryClient;
 
 class StringDictionary {
  public:
-  StringDictionary(const std::string& folder, const bool recover = true, size_t initial_capacity = 256) noexcept;
+  StringDictionary(const std::string& folder,
+                   const bool isTemp,
+                   const bool recover = true,
+                   size_t initial_capacity = 256) noexcept;
   StringDictionary(const LeafHostInfo& host, const int dict_id);
   ~StringDictionary() noexcept;
 
@@ -59,7 +62,7 @@ class StringDictionary {
   bool checkpoint() noexcept;
 
   static const int32_t INVALID_STR_ID;
-  static const size_t MAX_STRLEN = (2 << 16) - 1;
+  static const size_t MAX_STRLEN = (1 << 15) - 1;
 
  private:
   struct StringIdxEntry {
@@ -82,10 +85,12 @@ class StringDictionary {
   void addPayloadCapacity() noexcept;
   void addOffsetCapacity() noexcept;
   size_t addStorageCapacity(int fd) noexcept;
+  void* addMemoryCapacity(void* addr, size_t& mem_size) noexcept;
   void invalidateInvertedIndex() noexcept;
 
   size_t str_count_;
   std::vector<int32_t> str_ids_;
+  bool isTemp_;
   std::string offsets_path_;
   int payload_fd_;
   int offset_fd_;
