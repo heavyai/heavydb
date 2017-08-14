@@ -26,6 +26,24 @@ std::vector<std::pair<BaselineJoinHashTable::HashTableCacheKey, BaselineJoinHash
     BaselineJoinHashTable::hash_table_cache_;
 std::mutex BaselineJoinHashTable::hash_table_cache_mutex_;
 
+namespace {
+
+size_t get_entries_per_device(const size_t total_entries,
+                              const size_t shard_count,
+                              const size_t device_count,
+                              const Data_Namespace::MemoryLevel memory_level) {
+  const auto entries_per_shard = shard_count ? (total_entries + shard_count - 1) / shard_count : total_entries;
+  size_t entries_per_device = entries_per_shard;
+  if (memory_level == Data_Namespace::GPU_LEVEL && shard_count) {
+    const auto shards_per_device = (shard_count + device_count - 1) / device_count;
+    CHECK_GT(shards_per_device, 0);
+    entries_per_device = entries_per_shard * shards_per_device;
+  }
+  return entries_per_device;
+}
+
+}  // namespace
+
 std::shared_ptr<BaselineJoinHashTable> BaselineJoinHashTable::getInstance(
     const std::shared_ptr<Analyzer::BinOper> condition_in,
     const std::vector<InputTableInfo>& query_infos,
@@ -41,21 +59,15 @@ std::shared_ptr<BaselineJoinHashTable> BaselineJoinHashTable::getInstance(
     throw HashJoinFail("A hash table is already built for the table of this column");
   }
   const auto& query_info = get_inner_query_info(getInnerTableId(condition.get(), executor), query_infos).info;
-  const auto shard_count_info = memory_level == Data_Namespace::GPU_LEVEL
-                                    ? get_baseline_shard_count(condition.get(), ra_exe_unit, executor)
-                                    : ShardCountInfo{0, nullptr};
-  const auto shard_count = shard_count_info.count;
   const auto total_entries = 2 * query_info.getNumTuplesUpperBound();
   if (total_entries > static_cast<size_t>(std::numeric_limits<int32_t>::max())) {
     throw TooManyHashEntries();
   }
-  const auto entries_per_shard = shard_count ? (total_entries + shard_count - 1) / shard_count : total_entries;
-  size_t entries_per_device = entries_per_shard;
-  if (memory_level == Data_Namespace::GPU_LEVEL && shard_count) {
-    const auto shards_per_device = (shard_count + device_count - 1) / device_count;
-    CHECK_GT(shards_per_device, 0);
-    entries_per_device = entries_per_shard * shards_per_device;
-  }
+  const auto shard_count_info = memory_level == Data_Namespace::GPU_LEVEL
+                                    ? get_baseline_shard_count(condition.get(), ra_exe_unit, executor)
+                                    : ShardCountInfo{0, nullptr};
+  const auto entries_per_device =
+      get_entries_per_device(total_entries, shard_count_info.count, device_count, memory_level);
   auto join_hash_table = std::shared_ptr<BaselineJoinHashTable>(
       new BaselineJoinHashTable(condition, query_infos, ra_exe_unit, memory_level, entries_per_device, executor));
   join_hash_table->checkHashJoinReplicationConstraint(getInnerTableId(condition.get(), executor));
@@ -178,20 +190,50 @@ int BaselineJoinHashTable::reify(const int device_count) {
   return 0;
 }
 
+namespace {
+
+Data_Namespace::MemoryLevel get_effective_memory_level(const std::vector<InnerOuter>& inner_outer_pairs,
+                                                       Data_Namespace::MemoryLevel memory_level,
+                                                       const Executor* executor) {
+  for (const auto& inner_outer_pair : inner_outer_pairs) {
+    if (needs_dictionary_translation(inner_outer_pair.first, inner_outer_pair.second, executor)) {
+      return Data_Namespace::CPU_LEVEL;
+    }
+  }
+  return memory_level;
+}
+
+}  // namespace
+
 int BaselineJoinHashTable::reifyWithLayout(const int device_count, const JoinHashTableInterface::HashType layout) {
   layout_ = layout;
-  std::vector<int> errors(device_count);
-  std::vector<std::thread> init_threads;
-  const auto shard_info = computeShardCount();
   const auto& query_info = get_inner_query_info(getInnerTableId(), query_infos_).info;
   if (query_info.fragments.empty()) {
     return 0;
   }
+  std::vector<BaselineJoinHashTable::ColumnsForDevice> columns_per_device;
+  for (int device_id = 0; device_id < device_count; ++device_id) {
+    const auto columns_for_device = fetchColumnsForDevice(query_info.fragments, device_id);
+    if (columns_for_device.err) {
+      return columns_for_device.err;
+    }
+    columns_per_device.push_back(columns_for_device);
+  }
+  if (layout == JoinHashTableInterface::HashType::OneToMany) {
+    const auto entry_count = 2 * std::max(approximateTupleCount(columns_per_device), size_t(1));
+    const auto shard_count_info = memory_level_ == Data_Namespace::GPU_LEVEL
+                                      ? get_baseline_shard_count(condition_.get(), ra_exe_unit_, executor_)
+                                      : ShardCountInfo{0, nullptr};
+    entry_count_ = get_entries_per_device(entry_count, shard_count_info.count, device_count, memory_level_);
+  }
+  std::vector<int> errors(device_count);
+  std::vector<std::thread> init_threads;
+  const auto shard_info = computeShardCount();
   for (int device_id = 0; device_id < device_count; ++device_id) {
     const auto fragments =
         shard_info.count ? only_shards_for_device(query_info.fragments, device_id, device_count) : query_info.fragments;
-    init_threads.emplace_back([&errors, device_id, fragments, layout, this] {
-      errors[device_id] = reifyForDevice(fragments, layout, device_id);
+    init_threads.emplace_back([&columns_per_device, &errors, device_id, fragments, layout, this] {
+      errors[device_id] = reifyForDevice(columns_per_device[device_id], layout, device_id);
     });
   }
   for (auto& init_thread : init_threads) {
@@ -205,31 +247,112 @@ int BaselineJoinHashTable::reifyWithLayout(const int device_count, const JoinHas
   return 0;
 }
 
-int BaselineJoinHashTable::reifyForDevice(const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
-                                          const JoinHashTableInterface::HashType layout,
-                                          const int device_id) {
+namespace {
+
+template <class T>
+T* transfer_pod_vector_to_gpu(const std::vector<T>& vec, Data_Namespace::DataMgr* data_mgr, const int device_id) {
+  static_assert(std::is_pod<T>::value, "Transferring a vector to GPU only works for POD elements");
+  const auto vec_bytes = vec.size() * sizeof(T);
+  auto gpu_vec = alloc_gpu_mem(data_mgr, vec_bytes, device_id, nullptr);
+  copy_to_gpu(data_mgr, gpu_vec, &vec[0], vec_bytes, device_id);
+  return reinterpret_cast<T*>(gpu_vec);
+}
+
+}  // namespace
+
+size_t BaselineJoinHashTable::approximateTupleCount(const std::vector<ColumnsForDevice>& columns_per_device) const {
+  const auto inner_outer_pairs =
+      normalize_column_pairs(condition_.get(), *executor_->getCatalog(), executor_->getTemporaryTables());
+  const auto effective_memory_level = get_effective_memory_level(inner_outer_pairs, memory_level_, executor_);
+  CountDistinctDescriptor count_distinct_desc{CountDistinctImplType::Bitmap,
+                                              0,
+                                              11,
+                                              true,
+                                              effective_memory_level == Data_Namespace::MemoryLevel::GPU_LEVEL
+                                                  ? ExecutorDeviceType::GPU
+                                                  : ExecutorDeviceType::CPU,
+                                              1};
+  const auto padded_size_bytes = count_distinct_desc.bitmapPaddedSizeBytes();
+  if (effective_memory_level == Data_Namespace::MemoryLevel::CPU_LEVEL) {
+    int thread_count = cpu_threads();
+    std::vector<uint8_t> hll_buffer_all_cpus(thread_count * padded_size_bytes);
+    CHECK(!columns_per_device.empty());
+    auto hll_result = &hll_buffer_all_cpus[0];
+    approximate_distinct_tuples(hll_result,
+                                count_distinct_desc.bitmap_sz_bits,
+                                padded_size_bytes,
+                                columns_per_device.front().join_columns,
+                                columns_per_device.front().join_column_types,
+                                thread_count);
+    for (int i = 1; i < thread_count; ++i) {
+      hll_unify(hll_result, hll_result + i * padded_size_bytes, 1 << count_distinct_desc.bitmap_sz_bits);
+    }
+    return hll_size(hll_result, count_distinct_desc.bitmap_sz_bits);
+  }
+  const int device_count = columns_per_device.size();
+  auto& data_mgr = executor_->getCatalog()->get_dataMgr();
+  std::vector<std::vector<uint8_t>> host_hll_buffers(device_count);
+  for (auto& host_hll_buffer : host_hll_buffers) {
+    host_hll_buffer.resize(count_distinct_desc.bitmapPaddedSizeBytes());
+  }
+  std::vector<std::future<void>> approximate_distinct_device_threads;
+  for (int device_id = 0; device_id < device_count; ++device_id) {
+    approximate_distinct_device_threads.emplace_back(std::async(
+        std::launch::async, [device_id, &columns_per_device, &count_distinct_desc, &data_mgr, &host_hll_buffers, this] {
+          auto device_hll_buffer =
+              alloc_gpu_mem(&data_mgr, count_distinct_desc.bitmapPaddedSizeBytes(), device_id, nullptr);
+          data_mgr.cudaMgr_->zeroDeviceMem(
+              reinterpret_cast<int8_t*>(device_hll_buffer), count_distinct_desc.bitmapPaddedSizeBytes(), device_id);
+          const auto& columns_for_device = columns_per_device[device_id];
+          auto join_columns_gpu = transfer_pod_vector_to_gpu(columns_for_device.join_columns, &data_mgr, device_id);
+          auto join_column_types_gpu =
+              transfer_pod_vector_to_gpu(columns_for_device.join_column_types, &data_mgr, device_id);
+          approximate_distinct_tuples_on_device(reinterpret_cast<uint8_t*>(device_hll_buffer),
+                                                count_distinct_desc.bitmap_sz_bits,
+                                                columns_for_device.join_columns.size(),
+                                                join_columns_gpu,
+                                                join_column_types_gpu,
+                                                executor_->blockSize(),
+                                                executor_->gridSize());
+          auto& host_hll_buffer = host_hll_buffers[device_id];
+          copy_from_gpu(&data_mgr,
+                        &host_hll_buffer[0],
+                        device_hll_buffer,
+                        count_distinct_desc.bitmapPaddedSizeBytes(),
+                        device_id);
+        }));
+  }
+  for (auto& child : approximate_distinct_device_threads) {
+    child.get();
+  }
+  CHECK_EQ(Data_Namespace::MemoryLevel::GPU_LEVEL, effective_memory_level);
+  auto& result_hll_buffer = host_hll_buffers.front();
+  auto hll_result = reinterpret_cast<int32_t*>(&result_hll_buffer[0]);
+  for (int device_id = 1; device_id < device_count; ++device_id) {
+    auto& host_hll_buffer = host_hll_buffers[device_id];
+    hll_unify(hll_result, reinterpret_cast<int32_t*>(&host_hll_buffer[0]), 1 << count_distinct_desc.bitmap_sz_bits);
+  }
+  return hll_size(hll_result, count_distinct_desc.bitmap_sz_bits);
+}
+
+BaselineJoinHashTable::ColumnsForDevice BaselineJoinHashTable::fetchColumnsForDevice(
+    const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
+    const int device_id) {
   static std::mutex fragment_fetch_mutex;
   const bool has_multi_frag = fragments.size() > 1;
   const auto& catalog = *executor_->getCatalog();
   const auto inner_outer_pairs = normalize_column_pairs(condition_.get(), catalog, executor_->getTemporaryTables());
   std::vector<JoinColumn> join_columns;
-  std::vector<JoinColumnTypeInfo> join_column_types;
   std::vector<std::shared_ptr<Chunk_NS::Chunk>> chunks_owner;
   std::map<int, std::shared_ptr<const ColumnarResults>> frags_owner;
   const auto& first_frag = fragments.front();
-  auto effective_memory_level = memory_level_;
-  for (const auto& inner_outer_pair : inner_outer_pairs) {
-    if (needs_dictionary_translation(inner_outer_pair.first, inner_outer_pair.second, executor_)) {
-      effective_memory_level = Data_Namespace::CPU_LEVEL;
-      break;
-    }
-  }
+  const auto effective_memory_level = get_effective_memory_level(inner_outer_pairs, memory_level_, executor_);
+  std::vector<JoinColumnTypeInfo> join_column_types;
   for (const auto& inner_outer_pair : inner_outer_pairs) {
     const auto inner_col = inner_outer_pair.first;
-    const auto& ti = inner_col->get_type_info();
     const auto inner_cd = get_column_descriptor_maybe(inner_col->get_column_id(), inner_col->get_table_id(), catalog);
     if (inner_cd && inner_cd->isVirtualCol) {
-      return ERR_FAILED_TO_JOIN_ON_VIRTUAL_COLUMN;
+      return {{}, {}, {}, {}, ERR_FAILED_TO_JOIN_ON_VIRTUAL_COLUMN};
     }
     const int8_t* col_buff = nullptr;
     size_t elem_count = 0;
@@ -240,7 +363,7 @@ int BaselineJoinHashTable::reifyForDevice(const std::deque<Fragmenter_Namespace:
       try {
         std::tie(col_buff, elem_count) = getAllColumnFragments(*inner_col, fragments, chunks_owner, frags_owner);
       } catch (...) {
-        return ERR_FAILED_TO_FETCH_COLUMN;
+        return {{}, {}, {}, {}, ERR_FAILED_TO_FETCH_COLUMN};
       }
     }
     {
@@ -260,17 +383,32 @@ int BaselineJoinHashTable::reifyForDevice(const std::deque<Fragmenter_Namespace:
           std::tie(col_buff, elem_count) = Executor::ExecutionDispatch::getColumnFragment(
               executor_, *inner_col, first_frag, effective_memory_level, device_id, chunks_owner, frags_owner);
         } catch (...) {
-          return ERR_FAILED_TO_FETCH_COLUMN;
+          return {{}, {}, {}, {}, ERR_FAILED_TO_FETCH_COLUMN};
         }
       }
     }
     join_columns.emplace_back(JoinColumn{col_buff, elem_count});
+    const auto& ti = inner_col->get_type_info();
     join_column_types.emplace_back(
         JoinColumnTypeInfo{static_cast<size_t>(ti.get_size()), 0, inline_fixed_encoding_null_val(ti)});
   }
+  return {join_columns, join_column_types, chunks_owner, frags_owner, 0};
+}
+
+int BaselineJoinHashTable::reifyForDevice(const ColumnsForDevice& columns_for_device,
+                                          const JoinHashTableInterface::HashType layout,
+                                          const int device_id) {
+  static std::mutex fragment_fetch_mutex;
+  const auto& catalog = *executor_->getCatalog();
+  const auto inner_outer_pairs = normalize_column_pairs(condition_.get(), catalog, executor_->getTemporaryTables());
+  const auto effective_memory_level = get_effective_memory_level(inner_outer_pairs, memory_level_, executor_);
   int err{0};
   try {
-    err = initHashTableForDevice(join_columns, join_column_types, layout, effective_memory_level, device_id);
+    err = initHashTableForDevice(columns_for_device.join_columns,
+                                 columns_for_device.join_column_types,
+                                 layout,
+                                 effective_memory_level,
+                                 device_id);
   } catch (...) {
     return -1;
   }
@@ -341,15 +479,6 @@ size_t get_key_component_width(const std::shared_ptr<Analyzer::BinOper> conditio
   return 4;
 }
 
-template <class T>
-T* transfer_pod_vector_to_gpu(const std::vector<T>& vec, Data_Namespace::DataMgr* data_mgr, const int device_id) {
-  static_assert(std::is_pod<T>::value, "Transferring a vector to GPU only works for POD elements");
-  const auto vec_bytes = vec.size() * sizeof(T);
-  auto gpu_vec = alloc_gpu_mem(data_mgr, vec_bytes, device_id, nullptr);
-  copy_to_gpu(data_mgr, gpu_vec, &vec[0], vec_bytes, device_id);
-  return reinterpret_cast<T*>(gpu_vec);
-}
-
 }  // namespace
 
 int BaselineJoinHashTable::initHashTableOnCpu(const std::vector<JoinColumn>& join_columns,
@@ -369,7 +498,8 @@ int BaselineJoinHashTable::initHashTableOnCpu(const std::vector<JoinColumn>& joi
   const auto key_component_width = get_key_component_width(condition_, executor_);
   const auto entry_size =
       (inner_outer_pairs.size() + (layout == JoinHashTableInterface::HashType::OneToOne ? 1 : 0)) * key_component_width;
-  const size_t one_to_many_hash_entries = layout == JoinHashTableInterface::HashType::OneToMany ? 3 * entry_count_ : 0;
+  const size_t one_to_many_hash_entries =
+      layout == JoinHashTableInterface::HashType::OneToMany ? 2 * entry_count_ + join_columns.front().num_elems : 0;
   cpu_hash_table_buff_.reset(
       new std::vector<int8_t>(entry_size * entry_count_ + one_to_many_hash_entries * sizeof(int32_t)));
   const auto key_component_count = inner_outer_pairs.size();
@@ -641,7 +771,7 @@ int BaselineJoinHashTable::initHashTableForDevice(const std::vector<JoinColumn>&
     const auto entry_size =
         (key_component_count + (layout == JoinHashTableInterface::HashType::OneToOne ? 1 : 0)) * key_component_width;
     const size_t one_to_many_hash_entries =
-        layout == JoinHashTableInterface::HashType::OneToMany ? 3 * entry_count_ : 0;
+        layout == JoinHashTableInterface::HashType::OneToMany ? 2 * entry_count_ + join_columns.front().num_elems : 0;
     gpu_hash_table_buff_[device_id] = alloc_gpu_abstract_buffer(
         &data_mgr, entry_size * entry_count_ + one_to_many_hash_entries * sizeof(int32_t), device_id);
   }

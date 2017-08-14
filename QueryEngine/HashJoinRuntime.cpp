@@ -16,6 +16,7 @@
 
 #include "HashJoinRuntime.h"
 #include "CompareKeysInl.h"
+#include "HyperLogLogRank.h"
 #include "MurmurHash1Inl.h"
 #ifdef __CUDACC__
 #include "DecodersImpl.h"
@@ -737,6 +738,48 @@ GLOBAL void SUFFIX(fill_row_ids_baseline)(int32_t* buff,
 
 #undef mapd_add
 
+namespace {
+
+GLOBAL void SUFFIX(approximate_distinct_tuples_impl)(uint8_t* hll_buffer,
+                                                     const uint32_t b,
+                                                     const size_t key_component_count,
+                                                     const JoinColumn* join_column_per_key,
+                                                     const JoinColumnTypeInfo* type_info_per_key
+#ifndef __CUDACC__
+                                                     ,
+                                                     const int32_t cpu_thread_idx,
+                                                     const int32_t cpu_thread_count
+#endif
+                                                     ) {
+#ifdef __CUDACC__
+  int32_t start = threadIdx.x + blockDim.x * blockIdx.x;
+  int32_t step = blockDim.x * gridDim.x;
+#else
+  int32_t start = cpu_thread_idx;
+  int32_t step = cpu_thread_count;
+#endif
+  const auto num_elems = join_column_per_key[0].num_elems;
+  int64_t key_scratch_buff[g_maximum_conditions_to_coalesce];
+  for (size_t i = start; i < num_elems; i += step) {
+    for (size_t key_component_index = 0; key_component_index < key_component_count; ++key_component_index) {
+      const auto& join_column = join_column_per_key[key_component_index];
+      const auto& type_info = type_info_per_key[key_component_index];
+      key_scratch_buff[key_component_index] =
+          SUFFIX(fixed_width_int_decode_noinline)(join_column.col_buff, type_info.elem_sz, i);
+    }
+    const uint64_t hash = MurmurHash64AImpl(key_scratch_buff, key_component_count * sizeof(int64_t), 0);
+    const uint32_t index = hash >> (64 - b);
+    const auto rank = get_rank(hash << b, 64 - b);
+#ifdef __CUDACC__
+    atomicMax(reinterpret_cast<int32_t*>(hll_buffer) + index, rank);
+#else
+    hll_buffer[index] = std::max(hll_buffer[index], rank);
+#endif
+  }
+}
+
+}  // namespace
+
 #ifndef __CUDACC__
 
 template <typename InputIterator, typename OutputIterator>
@@ -1151,6 +1194,40 @@ void fill_one_to_many_baseline_hash_table_64(int32_t* buff,
                                                 sd_inner_proxy_per_key,
                                                 sd_outer_proxy_per_key,
                                                 cpu_thread_count);
+}
+
+void approximate_distinct_tuples(uint8_t* hll_buffer_all_cpus,
+                                 const uint32_t b,
+                                 const size_t padded_size_bytes,
+                                 const std::vector<JoinColumn>& join_column_per_key,
+                                 const std::vector<JoinColumnTypeInfo>& type_info_per_key,
+                                 const int thread_count) {
+  CHECK_EQ(join_column_per_key.size(), type_info_per_key.size());
+  CHECK(!join_column_per_key.empty());
+  std::vector<std::future<void>> approx_distinct_threads;
+  for (int thread_idx = 0; thread_idx < thread_count; ++thread_idx) {
+    approx_distinct_threads.push_back(std::async(std::launch::async,
+                                                 [&join_column_per_key,
+                                                  &type_info_per_key,
+                                                  b,
+                                                  hll_buffer_all_cpus,
+                                                  padded_size_bytes,
+                                                  thread_idx,
+                                                  thread_count] {
+                                                   auto hll_buffer =
+                                                       hll_buffer_all_cpus + thread_idx * padded_size_bytes;
+                                                   approximate_distinct_tuples_impl(hll_buffer,
+                                                                                    b,
+                                                                                    join_column_per_key.size(),
+                                                                                    &join_column_per_key[0],
+                                                                                    &type_info_per_key[0],
+                                                                                    thread_idx,
+                                                                                    thread_count);
+                                                 }));
+  }
+  for (auto& child : approx_distinct_threads) {
+    child.get();
+  }
 }
 
 #endif

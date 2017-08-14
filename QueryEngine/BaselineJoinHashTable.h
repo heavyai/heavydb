@@ -87,7 +87,20 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
 
   int reifyWithLayout(const int device_count, const JoinHashTableInterface::HashType layout);
 
-  int reifyForDevice(const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
+  struct ColumnsForDevice {
+    const std::vector<JoinColumn> join_columns;
+    const std::vector<JoinColumnTypeInfo> join_column_types;
+    const std::vector<std::shared_ptr<Chunk_NS::Chunk>> chunks_owner;
+    const std::map<int, std::shared_ptr<const ColumnarResults>> frags_owner;
+    const int err;
+  };
+
+  size_t approximateTupleCount(const std::vector<ColumnsForDevice>&) const;
+
+  ColumnsForDevice fetchColumnsForDevice(const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
+                                         const int device_id);
+
+  int reifyForDevice(const ColumnsForDevice& columns_for_device,
                      const JoinHashTableInterface::HashType layout,
                      const int device_id);
 
@@ -134,7 +147,7 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
   const std::shared_ptr<Analyzer::BinOper> condition_;
   const std::vector<InputTableInfo>& query_infos_;
   const Data_Namespace::MemoryLevel memory_level_;
-  const size_t entry_count_;
+  size_t entry_count_;
   Executor* executor_;
   const RelAlgExecutionUnit& ra_exe_unit_;
   std::shared_ptr<std::vector<int8_t>> cpu_hash_table_buff_;

@@ -312,3 +312,14 @@ void fill_one_to_many_baseline_hash_table_on_device_64(int32_t* buff,
                                                           block_size_x,
                                                           grid_size_x);
 }
+
+void approximate_distinct_tuples_on_device(uint8_t* hll_buffer,
+                                           const uint32_t b,
+                                           const size_t padded_size_bytes,
+                                           const JoinColumn* join_column_per_key,
+                                           const JoinColumnTypeInfo* type_info_per_key,
+                                           const size_t block_size_x,
+                                           const size_t grid_size_x) {
+  approximate_distinct_tuples_impl_gpu<<<grid_size_x, block_size_x>>>(
+      hll_buffer, b, padded_size_bytes, join_column_per_key, type_info_per_key);
+}

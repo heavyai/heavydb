@@ -79,9 +79,10 @@ inline int64_t count_distinct_set_size(const int64_t set_handle,
   if (count_distinct_desc.impl_type_ == CountDistinctImplType::Bitmap) {
     auto set_vals = reinterpret_cast<int8_t*>(set_handle);
     if (count_distinct_desc.approximate) {
+      CHECK_GT(count_distinct_desc.bitmap_sz_bits, 0);
       return count_distinct_desc.device_type == ExecutorDeviceType::GPU
-                 ? hll_size(reinterpret_cast<const int32_t*>(set_vals), count_distinct_desc)
-                 : hll_size(reinterpret_cast<const int8_t*>(set_vals), count_distinct_desc);
+                 ? hll_size(reinterpret_cast<const int32_t*>(set_vals), count_distinct_desc.bitmap_sz_bits)
+                 : hll_size(reinterpret_cast<const int8_t*>(set_vals), count_distinct_desc.bitmap_sz_bits);
     }
     if (count_distinct_desc.sub_bitmap_count > 1) {
       partial_bitmap_union(set_vals, count_distinct_desc);

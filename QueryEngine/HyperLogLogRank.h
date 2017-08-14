@@ -14,13 +14,19 @@
  * limitations under the License.
  */
 
-#include "MurmurHash.h"
-#include "MurmurHash1Inl.h"
+#ifndef QUERYENGINE_HYPERLOGLOGRT_H
+#define QUERYENGINE_HYPERLOGLOGRT_H
 
-extern "C" NEVER_INLINE DEVICE uint32_t MurmurHash1(const void* key, int len, const uint32_t seed) {
-  return MurmurHash1Impl(key, len, seed);
-}
+#include "../Shared/funcannotations.h"
 
-extern "C" NEVER_INLINE DEVICE uint64_t MurmurHash64A(const void* key, int len, uint64_t seed) {
-  return MurmurHash64AImpl(key, len, seed);
+#ifdef __CUDACC__
+inline __device__ int32_t get_rank(uint64_t x, uint32_t b) {
+  return min(b, static_cast<uint32_t>(x ? __clzll(x) : 64)) + 1;
 }
+#else
+FORCE_INLINE uint8_t get_rank(uint64_t x, uint32_t b) {
+  return std::min(b, static_cast<uint32_t>(x ? __builtin_clzl(x) : 64)) + 1;
+}
+#endif
+
+#endif  // QUERYENGINE_HYPERLOGLOGRT_H

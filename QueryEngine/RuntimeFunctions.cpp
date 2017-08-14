@@ -19,6 +19,7 @@
 #endif  // __CUDACC__
 
 #include "BufferCompaction.h"
+#include "HyperLogLogRank.h"
 #include "MurmurHash.h"
 #include "RuntimeFunctions.h"
 #include "TypePunning.h"
@@ -292,10 +293,6 @@ extern "C" NEVER_INLINE void agg_count_distinct_bitmap_gpu(int64_t*,
                                                            const uint64_t,
                                                            const uint64_t) {
   abort();
-}
-
-extern "C" ALWAYS_INLINE uint8_t get_rank(uint64_t x, uint32_t b) {
-  return std::min(b, static_cast<uint32_t>(x ? __builtin_clzl(x) : 64)) + 1;
 }
 
 extern "C" NEVER_INLINE void agg_approximate_count_distinct(int64_t* agg, const int64_t key, const uint32_t b) {

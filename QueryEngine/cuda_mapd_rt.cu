@@ -5,6 +5,7 @@
 #include "BufferCompaction.h"
 #include "ExtensionFunctions.hpp"
 #include "GpuRtConstants.h"
+#include "HyperLogLogRank.h"
 
 extern "C" __device__ int32_t pos_start_impl(const int32_t* row_index_resume) {
   return blockIdx.x * blockDim.x + threadIdx.x;
@@ -664,10 +665,6 @@ extern "C" __device__ void agg_count_distinct_bitmap_skip_val_gpu(int64_t* agg,
   if (val != skip_val) {
     agg_count_distinct_bitmap_gpu(agg, val, min_val, base_dev_addr, base_host_addr, sub_bitmap_count, bitmap_bytes);
   }
-}
-
-extern "C" __device__ int32_t get_rank(uint64_t x, uint32_t b) {
-  return min(b, static_cast<uint32_t>(x ? __clzll(x) : 64)) + 1;
 }
 
 extern "C" __device__ void agg_approximate_count_distinct_gpu(int64_t* agg,

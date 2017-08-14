@@ -45,8 +45,8 @@ inline double hll_alpha(const size_t m) {
 }
 
 template <class T>
-inline size_t hll_size(const T* M, const CountDistinctDescriptor& count_distinct_descriptor) {
-  size_t m = 1 << count_distinct_descriptor.bitmap_sz_bits;
+inline size_t hll_size(const T* M, const size_t bitmap_sz_bits) {
+  size_t m = 1 << bitmap_sz_bits;
   double sum{0};
   for (size_t i = 0; i < m; i++) {
     sum += 1.0 / (1 << M[i]);
