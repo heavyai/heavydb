@@ -250,11 +250,12 @@ int BaselineJoinHashTable::reifyWithLayout(const int device_count, const JoinHas
 namespace {
 
 template <class T>
-T* transfer_pod_vector_to_gpu(const std::vector<T>& vec, Data_Namespace::DataMgr* data_mgr, const int device_id) {
+T* transfer_pod_vector_to_gpu(const std::vector<T>& vec, ThrustAllocator& allocator) {
   static_assert(std::is_pod<T>::value, "Transferring a vector to GPU only works for POD elements");
   const auto vec_bytes = vec.size() * sizeof(T);
-  auto gpu_vec = alloc_gpu_mem(data_mgr, vec_bytes, device_id, nullptr);
-  copy_to_gpu(data_mgr, gpu_vec, &vec[0], vec_bytes, device_id);
+  auto gpu_vec = allocator.allocateScopedBuffer(vec_bytes);
+  copy_to_gpu(
+      allocator.getDataMgr(), reinterpret_cast<CUdeviceptr>(gpu_vec), &vec[0], vec_bytes, allocator.getDeviceId());
   return reinterpret_cast<T*>(gpu_vec);
 }
 
@@ -306,14 +307,12 @@ size_t BaselineJoinHashTable::approximateTupleCount(const std::vector<ColumnsFor
   for (int device_id = 0; device_id < device_count; ++device_id) {
     approximate_distinct_device_threads.emplace_back(std::async(
         std::launch::async, [device_id, &columns_per_device, &count_distinct_desc, &data_mgr, &host_hll_buffers, this] {
-          auto device_hll_buffer =
-              alloc_gpu_mem(&data_mgr, count_distinct_desc.bitmapPaddedSizeBytes(), device_id, nullptr);
-          data_mgr.cudaMgr_->zeroDeviceMem(
-              reinterpret_cast<int8_t*>(device_hll_buffer), count_distinct_desc.bitmapPaddedSizeBytes(), device_id);
+          ThrustAllocator allocator(&data_mgr, device_id);
+          auto device_hll_buffer = allocator.allocateScopedBuffer(count_distinct_desc.bitmapPaddedSizeBytes());
+          data_mgr.cudaMgr_->zeroDeviceMem(device_hll_buffer, count_distinct_desc.bitmapPaddedSizeBytes(), device_id);
           const auto& columns_for_device = columns_per_device[device_id];
-          auto join_columns_gpu = transfer_pod_vector_to_gpu(columns_for_device.join_columns, &data_mgr, device_id);
-          auto join_column_types_gpu =
-              transfer_pod_vector_to_gpu(columns_for_device.join_column_types, &data_mgr, device_id);
+          auto join_columns_gpu = transfer_pod_vector_to_gpu(columns_for_device.join_columns, allocator);
+          auto join_column_types_gpu = transfer_pod_vector_to_gpu(columns_for_device.join_column_types, allocator);
           approximate_distinct_tuples_on_device(reinterpret_cast<uint8_t*>(device_hll_buffer),
                                                 count_distinct_desc.bitmap_sz_bits,
                                                 columns_for_device.join_columns.size(),
@@ -324,7 +323,7 @@ size_t BaselineJoinHashTable::approximateTupleCount(const std::vector<ColumnsFor
           auto& host_hll_buffer = host_hll_buffers[device_id];
           copy_from_gpu(&data_mgr,
                         &host_hll_buffer[0],
-                        device_hll_buffer,
+                        reinterpret_cast<CUdeviceptr>(device_hll_buffer),
                         count_distinct_desc.bitmapPaddedSizeBytes(),
                         device_id);
         }));
@@ -651,7 +650,8 @@ int BaselineJoinHashTable::initHashTableOnGpu(const std::vector<JoinColumn>& joi
 #ifdef HAVE_CUDA
   const auto catalog = executor_->getCatalog();
   auto& data_mgr = catalog->get_dataMgr();
-  auto dev_err_buff = alloc_gpu_mem(&data_mgr, sizeof(int), device_id, nullptr);
+  ThrustAllocator allocator(&data_mgr, device_id);
+  auto dev_err_buff = reinterpret_cast<CUdeviceptr>(allocator.allocateScopedBuffer(sizeof(int)));
   copy_to_gpu(&data_mgr, dev_err_buff, &err, sizeof(err), device_id);
   switch (key_component_width) {
     case 4:
@@ -677,8 +677,8 @@ int BaselineJoinHashTable::initHashTableOnGpu(const std::vector<JoinColumn>& joi
     default:
       CHECK(false);
   }
-  auto join_columns_gpu = transfer_pod_vector_to_gpu(join_columns, &data_mgr, device_id);
-  auto join_column_types_gpu = transfer_pod_vector_to_gpu(join_column_types, &data_mgr, device_id);
+  auto join_columns_gpu = transfer_pod_vector_to_gpu(join_columns, allocator);
+  auto join_column_types_gpu = transfer_pod_vector_to_gpu(join_column_types, allocator);
   auto hash_buff = reinterpret_cast<int8_t*>(gpu_hash_table_buff_[device_id]->getMemoryPtr());
   switch (key_component_width) {
     case 4: {
