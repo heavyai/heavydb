@@ -274,9 +274,16 @@ size_t BaselineJoinHashTable::approximateTupleCount(const std::vector<ColumnsFor
                                               1};
   const auto padded_size_bytes = count_distinct_desc.bitmapPaddedSizeBytes();
   if (effective_memory_level == Data_Namespace::MemoryLevel::CPU_LEVEL) {
+    const auto composite_key_info = get_composite_key_info(inner_outer_pairs, executor_);
+    CHECK(!columns_per_device.empty() && !columns_per_device.front().join_columns.empty());
+    HashTableCacheKey cache_key{columns_per_device.front().join_columns.front().num_elems,
+                                composite_key_info.cache_key_chunks};
+    const auto cached_entry_count = getApproximateTupleCountFromCache(cache_key);
+    if (cached_entry_count >= 0) {
+      return cached_entry_count;
+    }
     int thread_count = cpu_threads();
     std::vector<uint8_t> hll_buffer_all_cpus(thread_count * padded_size_bytes);
-    CHECK(!columns_per_device.empty());
     auto hll_result = &hll_buffer_all_cpus[0];
     approximate_distinct_tuples(hll_result,
                                 count_distinct_desc.bitmap_sz_bits,
@@ -943,6 +950,7 @@ void BaselineJoinHashTable::initHashTableOnCpuFromCache(const HashTableCacheKey&
     if (kv.first == key) {
       cpu_hash_table_buff_ = kv.second.buffer;
       layout_ = kv.second.type;
+      entry_count_ = kv.second.entry_count;
       break;
     }
   }
@@ -955,7 +963,17 @@ void BaselineJoinHashTable::putHashTableOnCpuToCache(const HashTableCacheKey& ke
       return;
     }
   }
-  hash_table_cache_.emplace_back(key, HashTableCacheValue{cpu_hash_table_buff_, layout_});
+  hash_table_cache_.emplace_back(key, HashTableCacheValue{cpu_hash_table_buff_, layout_, entry_count_});
+}
+
+ssize_t BaselineJoinHashTable::getApproximateTupleCountFromCache(const HashTableCacheKey& key) const {
+  std::lock_guard<std::mutex> hash_table_cache_lock(hash_table_cache_mutex_);
+  for (const auto& kv : hash_table_cache_) {
+    if (kv.first == key) {
+      return kv.second.entry_count;
+    }
+  }
+  return -1;
 }
 
 std::map<std::vector<ChunkKey>, JoinHashTableInterface::HashType> HashTypeCache::hash_type_cache_;

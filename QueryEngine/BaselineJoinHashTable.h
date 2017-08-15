@@ -144,6 +144,8 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
 
   void putHashTableOnCpuToCache(const HashTableCacheKey&);
 
+  ssize_t getApproximateTupleCountFromCache(const HashTableCacheKey&) const;
+
   const std::shared_ptr<Analyzer::BinOper> condition_;
   const std::vector<InputTableInfo>& query_infos_;
   const Data_Namespace::MemoryLevel memory_level_;
@@ -165,6 +167,7 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
   struct HashTableCacheValue {
     const std::shared_ptr<std::vector<int8_t>> buffer;
     const JoinHashTableInterface::HashType type;
+    const size_t entry_count;
   };
 
   static std::vector<std::pair<HashTableCacheKey, HashTableCacheValue>> hash_table_cache_;
