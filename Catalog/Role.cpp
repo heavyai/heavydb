@@ -152,6 +152,17 @@ void UserRole::revokeRole(Role* role) {
   updatePrivileges();
 }
 
+bool UserRole::hasRole(Role* role) {
+  bool found = false;
+  for (auto roleIt = groupRole_.begin(); roleIt != groupRole_.end(); ++roleIt) {
+    if (role == (*roleIt)) {
+      found = true;
+      break;
+    }
+  }
+  return found;
+}
+
 void UserRole::updatePrivileges(Role* role) {
   for (auto dbObjectIt = role->getDbObject()->begin(); dbObjectIt != role->getDbObject()->end(); ++dbObjectIt) {
     auto dbObject = findDbObject(dbObjectIt->first);
@@ -279,6 +290,10 @@ void GroupRole::revokePrivileges(const DBObject& object) {
   }
   dbObject->revokePrivileges(object);
   updatePrivileges();
+}
+
+bool GroupRole::hasRole(Role* role) {
+  throw runtime_error("hasRole() api should not be used with objects of the GroupRole class.");
 }
 
 void GroupRole::getPrivileges(DBObject& object) {

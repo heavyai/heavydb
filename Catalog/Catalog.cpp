@@ -74,15 +74,6 @@ void SysCatalog::initDB() {
   sqliteConnector_.query(
       "CREATE TABLE mapd_privileges (userid integer references mapd_users, dbid integer references mapd_databases, "
       "select_priv boolean, insert_priv boolean, UNIQUE(userid, dbid))");
-
-  if (access_priv_check_) {
-    sqliteConnector_.query("CREATE TABLE mapd_roles(roleName text, userName text, UNIQUE(roleName, userName))");
-    sqliteConnector_.query(
-        "CREATE TABLE mapd_object_privileges(roleName text, objectName text, objectType integer, dbId integer "
-        "references mapd_databases, tableId integer references mapd_tables, columnId integer references mapd_columns, "
-        "privSelect bool, privInsert bool, privCreate bool, privDelete bool, privUpdate bool, "
-        "UNIQUE(roleName, objectType, dbId, tableId, columnId))");
-  }
   createDatabase("mapd", MAPD_ROOT_USER_ID);
 };
 
@@ -97,25 +88,25 @@ void SysCatalog::migrateSysCatalogSchema() {
     throw;
   }
   sqliteConnector_.query("END TRANSACTION");
+}
 
-  if (access_priv_check_) {
-    sqliteConnector_.query("BEGIN TRANSACTION");
-    try {
-      sqliteConnector_.query(
-          "CREATE TABLE IF NOT EXISTS mapd_roles(roleName text, userName text, UNIQUE(roleName, userName))");
-      sqliteConnector_.query(
-          "CREATE TABLE IF NOT EXISTS mapd_object_privileges(roleName text, objectName text, objectType integer, dbId "
-          "integer "
-          "references mapd_databases, tableId integer references mapd_tables, columnId integer references "
-          "mapd_columns, "
-          "privSelect bool, privInsert bool, privCreate bool, privDelete bool, privUpdate bool, "
-          "UNIQUE(roleName, objectType, dbId, tableId, columnId))");
-    } catch (const std::exception& e) {
-      sqliteConnector_.query("ROLLBACK TRANSACTION");
-      throw;
-    }
-    sqliteConnector_.query("END TRANSACTION");
+void SysCatalog::initObjectPrivileges() {
+  sqliteConnector_.query("BEGIN TRANSACTION");
+  try {
+    sqliteConnector_.query(
+        "CREATE TABLE IF NOT EXISTS mapd_roles(roleName text, userName text, UNIQUE(roleName, userName))");
+    sqliteConnector_.query(
+        "CREATE TABLE IF NOT EXISTS mapd_object_privileges(roleName text, objectName text, objectType integer, dbId "
+        "integer "
+        "references mapd_databases, tableId integer references mapd_tables, columnId integer references "
+        "mapd_columns, "
+        "privSelect bool, privInsert bool, privCreate bool, privDelete bool, privUpdate bool, "
+        "UNIQUE(roleName, objectType, dbId, tableId, columnId))");
+  } catch (const std::exception& e) {
+    sqliteConnector_.query("ROLLBACK TRANSACTION");
+    throw;
   }
+  sqliteConnector_.query("END TRANSACTION");
 }
 
 void SysCatalog::createUser(const string& name, const string& passwd, bool issuper) {
@@ -613,18 +604,19 @@ void SysCatalog::grantRole(const std::string& roleName, const std::string& userN
     std::lock_guard<std::mutex> lock(cat_mutex_);
     userRoleMap_[user.userId] = user_rl;
   }
-  user_rl->grantRole(rl);
-
-  /* apply grant role statement to sqlite DB */
-  sqliteConnector_.query("BEGIN TRANSACTION");
-  try {
-    sqliteConnector_.query_with_text_params("INSERT INTO mapd_roles(roleName, userName) VALUES (?, ?)",
-                                            std::vector<std::string>{roleName, userName});
-  } catch (std::exception& e) {
-    sqliteConnector_.query("ROLLBACK TRANSACTION");
-    throw;
+  if (!user_rl->hasRole(rl)) {
+    user_rl->grantRole(rl);
+    /* apply grant role statement to sqlite DB */
+    sqliteConnector_.query("BEGIN TRANSACTION");
+    try {
+      sqliteConnector_.query_with_text_params("INSERT INTO mapd_roles(roleName, userName) VALUES (?, ?)",
+                                              std::vector<std::string>{roleName, userName});
+    } catch (std::exception& e) {
+      sqliteConnector_.query("ROLLBACK TRANSACTION");
+      throw;
+    }
+    sqliteConnector_.query("END TRANSACTION");
   }
-  sqliteConnector_.query("END TRANSACTION");
 }
 
 // REVOKE ROLE payroll_dept_role FROM joe;

@@ -60,6 +60,7 @@ class Role {
   virtual void getPrivileges(DBObject& object) = 0;
   virtual void grantRole(Role* role) = 0;
   virtual void revokeRole(Role* role) = 0;
+  virtual bool hasRole(Role* role) = 0;
   virtual void updatePrivileges(Role* role) = 0;
   virtual void updatePrivileges() = 0;
   virtual std::string roleName() const = 0;
@@ -92,6 +93,7 @@ class UserRole : public Role {
   virtual void getPrivileges(DBObject& object);
   virtual void grantRole(Role* role);
   virtual void revokeRole(Role* role);
+  virtual bool hasRole(Role* role);
   virtual void updatePrivileges(Role* role);
   virtual void updatePrivileges();
   virtual std::string roleName() const;
@@ -120,6 +122,7 @@ class GroupRole : public Role {
   virtual void getPrivileges(DBObject& object);
   virtual void grantRole(Role* role);
   virtual void revokeRole(Role* role);
+  virtual bool hasRole(Role* role);
   virtual void updatePrivileges(Role* role);
   virtual void updatePrivileges();
   virtual std::string roleName() const;

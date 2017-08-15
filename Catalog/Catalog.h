@@ -366,7 +366,9 @@ class SysCatalog : public Catalog {
              std::shared_ptr<Calcite> calcite,
              bool is_initdb = false,
              const bool access_priv_check = false)
-      : Catalog(basePath, MAPD_SYSTEM_DB, dataMgr, ldapMetadata, is_initdb, calcite, access_priv_check) {}
+      : Catalog(basePath, MAPD_SYSTEM_DB, dataMgr, ldapMetadata, is_initdb, calcite, access_priv_check) {
+    initObjectPrivileges();
+  }
 
   SysCatalog(const std::string& basePath,
              std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
@@ -377,10 +379,12 @@ class SysCatalog : public Catalog {
     if (!is_initdb) {
       migrateSysCatalogSchema();
     }
+    initObjectPrivileges();
   }
   virtual ~SysCatalog();
   void initDB();
   void migrateSysCatalogSchema();
+  void initObjectPrivileges();
   void createUser(const std::string& name, const std::string& passwd, bool issuper);
   void dropUser(const std::string& name);
   void alterUser(const int32_t userid, const std::string* passwd, bool* is_superp);
