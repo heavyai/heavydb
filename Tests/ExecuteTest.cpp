@@ -600,6 +600,7 @@ TEST(Select, LimitAndOffset) {
       const auto rows = run_multiple_agg("SELECT * FROM test WHERE x <> 8 LIMIT 3 OFFSET 1;", dt);
       ASSERT_EQ(size_t(3), rows.rowCount());
     }
+    EXPECT_THROW(run_multiple_agg("SELECT * FROM test LIMIT 0;", dt), std::runtime_error);
   }
 }
 

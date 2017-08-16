@@ -1514,9 +1514,12 @@ class RelAlgAbstractInterpreter {
                                               : NullSortedPosition::Last;
       collation.emplace_back(field_idx, sort_dir, null_pos);
     }
-    const auto limit = get_int_literal_field(sort_ra, "fetch", 0);
+    auto limit = get_int_literal_field(sort_ra, "fetch", -1);
+    if (limit == 0) {
+      throw QueryNotSupported("LIMIT 0 not supported");
+    }
     const auto offset = get_int_literal_field(sort_ra, "offset", 0);
-    return std::make_shared<RelSort>(collation, limit, offset, inputs.front());
+    return std::make_shared<RelSort>(collation, limit > 0 ? limit : 0, offset, inputs.front());
   }
 
   const TableDescriptor* getTableFromScanNode(const rapidjson::Value& scan_ra) const {
