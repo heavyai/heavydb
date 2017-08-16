@@ -121,9 +121,6 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
                          const int start_gpu,
                          const size_t reserved_gpu_mem,
                          const size_t num_reader_threads,
-                         const std::string& start_epoch_table_name,
-                         const int start_epoch,
-                         const bool is_decr_start_epoch,
                          const LdapMetadata ldapMetadata,
                          const MapDParameters& mapd_parameters,
                          const std::string& db_convert_dir,
@@ -141,9 +138,6 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
       mapd_parameters_(mapd_parameters),
       enable_rendering_(enable_rendering),
       legacy_syntax_(legacy_syntax),
-      start_epoch_table_name_(start_epoch_table_name),
-      start_epoch_(start_epoch),
-      is_decr_start_epoch_(is_decr_start_epoch),
       super_user_rights_(false),
       access_priv_check_(access_priv_check) {
   LOG(INFO) << "MapD Server " << MAPD_RELEASE;
@@ -204,6 +198,9 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
       new Catalog_Namespace::SysCatalog(base_data_path_, data_mgr_, ldapMetadata, calcite_, false, access_priv_check_));
   import_path_ = boost::filesystem::path(base_data_path_) / "mapd_import";
   start_time_ = std::time(nullptr);
+
+  // if epoch is epoch is being rolled back execute here
+  set_table_start_epoch();
 }
 
 MapDHandler::~MapDHandler() {
@@ -311,12 +308,10 @@ void MapDHandler::connectImpl(TSessionId& session,
     sessions_[session].reset(
         new Catalog_Namespace::SessionInfo(cat_map_[dbname], user_meta, executor_device_type_, session));
     const auto start_epoch_session_info_ptr = sessions_[session];
-    set_table_start_epoch(*start_epoch_session_info_ptr);
   } else {
     sessions_[session].reset(
         new Catalog_Namespace::SessionInfo(cat_it->second, user_meta, executor_device_type_, session));
     const auto start_epoch_session_info_ptr = sessions_[session];
-    set_table_start_epoch(*start_epoch_session_info_ptr);
   }
   if (!super_user_rights_) {  // no need to connect to leaf_aggregator_ at this time while doing warmup
     if (leaf_aggregator_.leafCount() > 0) {
@@ -2325,24 +2320,19 @@ void MapDHandler::broadcast_serialized_rows(const std::string& serialized_rows,
   CHECK(false);
 }
 
-void MapDHandler::set_table_start_epoch(const Catalog_Namespace::SessionInfo& session_info) {
-  if (start_epoch_table_name_.length() > 0) {
-    auto& cat = session_info.get_catalog();
-    auto td = cat.getMetadataForTable(start_epoch_table_name_);
-    if (!td) {
-      TMapDException ex;
-      if (!is_decr_start_epoch_) {
-        ex.error_msg =
-            "Unable to set epoch for table " + start_epoch_table_name_ + " because the table does not exist.";
-      } else {
-        ex.error_msg =
-            "Unable to decrement epoch for table " + start_epoch_table_name_ + " because the table does not exist.";
-      }
-      LOG(ERROR) << ex.error_msg;
-      throw ex;
-    }
-    int tb_id = static_cast<int>(td->tableId);
-    int db_id = static_cast<int>(cat.get_currentDB().dbId);
-    data_mgr_->updateTableEpoch(db_id, tb_id, start_epoch_, is_decr_start_epoch_);
+// check and reset epoch if a request has been made
+void MapDHandler::set_table_start_epoch() {
+  LOG(INFO) << "checking for reset DB " << mapd_parameters_.start_epoch_db_id << " Table ID  "
+            << mapd_parameters_.start_epoch_table_id << " back to epoch " << mapd_parameters_.start_epoch_value
+            << " decr is set to " << mapd_parameters_.is_decr_start_epoch;
+  if (mapd_parameters_.start_epoch_table_id >= 0 && mapd_parameters_.start_epoch_db_id >= 0) {
+    LOG(INFO) << "Executing epoch reset of DB " << mapd_parameters_.start_epoch_db_id << " Table ID  "
+              << mapd_parameters_.start_epoch_table_id << " back to epoch " << mapd_parameters_.start_epoch_value
+              << " decr is set to " << mapd_parameters_.is_decr_start_epoch;
+    data_mgr_->updateTableEpoch(mapd_parameters_.start_epoch_db_id,
+                                mapd_parameters_.start_epoch_table_id,
+                                mapd_parameters_.start_epoch_value,
+                                mapd_parameters_.is_decr_start_epoch);
+    LOG(INFO) << " Reminder to remove the start-epoch statement from the config file ";
   }
 }

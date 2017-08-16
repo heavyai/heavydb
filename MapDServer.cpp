@@ -35,10 +35,12 @@
 #include <boost/filesystem.hpp>
 #include <boost/make_shared.hpp>
 #include <boost/program_options.hpp>
+#include <boost/algorithm/string.hpp>
 #include <thread>
 #include <glog/logging.h>
 #include <signal.h>
 #include <sstream>
+#include <vector>
 
 using namespace ::apache::thrift;
 using namespace ::apache::thrift::concurrency;
@@ -242,11 +244,12 @@ int main(int argc, char** argv) {
   int num_gpus = -1;  // Can be used to override number of gpus detected on system - -1 means do not override
   int start_gpu = 0;
   int tthreadpool_size = 8;
-  size_t num_reader_threads = 0;     // number of threads used when loading data
-  std::string start_epoch("");       // epoch value for the table, presented as: table_name:epoch
-  std::string decr_start_epoch("");  // value on which to decrement table's epoch, presented as: table_name:decrement
-  std::string db_convert_dir("");    // path to mapd DB to convert from; if path is empty, no conversion is requested
-  std::string db_query_file("");     // path to file containing warmup queries list
+  size_t num_reader_threads = 0;  // number of threads used when loading data
+  std::string start_epoch("");    // epoch value for the table, presented as: db_id:table_id:epoch
+  std::string decr_start_epoch(
+      "");                         // value on which to decrement table's epoch, presented as: db_id:table_id:decrement
+  std::string db_convert_dir("");  // path to mapd DB to convert from; if path is empty, no conversion is requested
+  std::string db_query_file("");   // path to file containing warmup queries list
   bool enable_access_priv_check = false;  // enable DB objects access privileges checking
 
   namespace po = boost::program_options;
@@ -541,36 +544,66 @@ int main(int argc, char** argv) {
   LOG(INFO) << " MapD Calcite Port  " << mapd_parameters.calcite_port;
 
   // extract and validate value of the epoch to rollback to for the table if requested
-  bool is_decr_start_epoch = false;
+  mapd_parameters.is_decr_start_epoch = false;
   if ((start_epoch.length() > 0) && (decr_start_epoch.length() > 0)) {
     LOG(ERROR) << "Options start-epoch and decrement-start-epoch can't be used simultaneously." << std::endl;
     throw std::runtime_error("Improper usage of options start-epoch and decrement-start-epoch.");
   }
   if (decr_start_epoch.length() > 0) {
     start_epoch = decr_start_epoch;
-    is_decr_start_epoch = true;
+    mapd_parameters.is_decr_start_epoch = true;
   }
-  std::string start_epoch_table("");
-  int start_epoch_int_value = -1;
+
   if (start_epoch.length() > 0) {
-    std::string start_epoch_value("");
-    std::string start_epoch_delimiter(":");
-    size_t pos = start_epoch.find(start_epoch_delimiter);
-    if (pos == std::string::npos) {
-      if (!is_decr_start_epoch) {
-        LOG(ERROR) << "Value of option start-epoch does not contain delimiter: " << start_epoch << std::endl;
+    std::vector<std::string> split_result;
+
+    boost::split(split_result,
+                 start_epoch,
+                 boost::is_any_of(":"),
+                 boost::token_compress_on);  // SplitVec == { "hello abc","ABC","aBc goodbye" }
+
+    if (split_result.size() != 3) {
+      if (!mapd_parameters.is_decr_start_epoch) {
+        LOG(ERROR) << "Value of option start-epoch does not contain db_id:table_id_epoch: " << start_epoch << std::endl;
         throw std::runtime_error("Option start-epoch is not correct.");
       } else {
-        LOG(ERROR) << "Value of option decrement-start-epoch does not contain delimiter: " << start_epoch << std::endl;
+        LOG(ERROR) << "Value of option decrement-start-epoch does not contain does not contain db_id:table_id_epoch: "
+                   << start_epoch << std::endl;
         throw std::runtime_error("Option decrement-start-epoch is not correct.");
       }
     }
-    start_epoch_table = start_epoch.substr(0, pos);
-    start_epoch_value = start_epoch.substr(pos + 1, start_epoch.length());
+
+    // validate db identifier is a number
     try {
-      start_epoch_int_value = std::stoi(start_epoch_value);
+      mapd_parameters.start_epoch_db_id = std::stoi(split_result[0]);
     } catch (std::exception& e) {
-      if (!is_decr_start_epoch) {
+      if (!mapd_parameters.is_decr_start_epoch) {
+        LOG(ERROR) << "Value of option start-epoch has incorrect db number: " << start_epoch << std::endl;
+        throw std::runtime_error("Option start-epoch is not correct.");
+      } else {
+        LOG(ERROR) << "Value of option decrement-start-epoch has incorrect table number: " << start_epoch << std::endl;
+        throw std::runtime_error("Option decrement-start-epoch is not correct.");
+      }
+    }
+
+    // validate table identifier is a number
+    try {
+      mapd_parameters.start_epoch_table_id = std::stoi(split_result[1]);
+    } catch (std::exception& e) {
+      if (!mapd_parameters.is_decr_start_epoch) {
+        LOG(ERROR) << "Value of option start-epoch has incorrect table number: " << start_epoch << std::endl;
+        throw std::runtime_error("Option start-epoch is not correct.");
+      } else {
+        LOG(ERROR) << "Value of option decrement-start-epoch has incorrect table number: " << start_epoch << std::endl;
+        throw std::runtime_error("Option decrement-start-epoch is not correct.");
+      }
+    }
+
+    // validate epoch value
+    try {
+      mapd_parameters.start_epoch_value = std::stoi(split_result[2]);
+    } catch (std::exception& e) {
+      if (!mapd_parameters.is_decr_start_epoch) {
         LOG(ERROR) << "Value of option start-epoch has incorrect epoch number: " << start_epoch << std::endl;
         throw std::runtime_error("Option start-epoch is not correct.");
       } else {
@@ -578,8 +611,8 @@ int main(int argc, char** argv) {
         throw std::runtime_error("Option decrement-start-epoch is not correct.");
       }
     }
-    if (start_epoch_int_value < 0) {
-      if (!is_decr_start_epoch) {
+    if (mapd_parameters.start_epoch_value < 0) {
+      if (!mapd_parameters.is_decr_start_epoch) {
         LOG(ERROR) << "Epoch value of option start-epoch can not be negative: " << start_epoch << std::endl;
         throw std::runtime_error("Option start-epoch is not correct.");
       } else {
@@ -609,9 +642,6 @@ int main(int argc, char** argv) {
                                                   start_gpu,
                                                   reserved_gpu_mem,
                                                   num_reader_threads,
-                                                  start_epoch_table,
-                                                  start_epoch_int_value,
-                                                  is_decr_start_epoch,
                                                   ldapMetadata,
                                                   mapd_parameters,
                                                   db_convert_dir,
