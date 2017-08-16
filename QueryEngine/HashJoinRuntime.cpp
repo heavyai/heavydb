@@ -260,10 +260,12 @@ T* get_matching_baseline_hash_slot_at(int8_t* hash_buff,
   while (load_cst(row_ptr) == write_pending) {
     // spin until the winning thread has finished writing the entire key
   }
-  if (memcmp(row_ptr, key, key_component_count * sizeof(T)) == 0) {
-    return reinterpret_cast<T*>(row_ptr + key_component_count);
+  for (size_t i = 0; i < key_component_count; ++i) {
+    if (load_cst(row_ptr + i) != key[i]) {
+      return nullptr;
+    }
   }
-  return nullptr;
+  return reinterpret_cast<T*>(row_ptr + key_component_count);
 }
 
 #undef load_cst

@@ -426,10 +426,12 @@ GroupValueInfo get_matching_group_value_reduction(int64_t* groups_buffer,
   while (load_cst(row_ptr) == write_pending) {
     // spin until the winning thread has finished writing the entire key and the init value
   }
-  if (memcmp(row_ptr, key, key_count * sizeof(T)) == 0) {
-    return {groups_buffer + off + slot_off_quad, false};
+  for (size_t i = 0; i < key_count; ++i) {
+    if (load_cst(row_ptr + i) != key[i]) {
+      return {nullptr, true};
+    }
   }
-  return {nullptr, true};
+  return {groups_buffer + off + slot_off_quad, false};
 }
 
 #undef load_cst
