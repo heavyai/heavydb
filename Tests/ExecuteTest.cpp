@@ -3028,6 +3028,8 @@ TEST(Select, InnerJoins) {
     c("SELECT a.x FROM test_inner_x a JOIN test_x b ON a.x = b.x ORDER BY a.x;", dt);
     c("SELECT a.x FROM test a JOIN join_test b ON a.str = b.dup_str GROUP BY a.x ORDER BY a.x;", dt);
     c("SELECT a.x FROM test_inner_x a JOIN test_x b ON a.x = b.x GROUP BY a.x ORDER BY a.x;", dt);
+    c("SELECT COUNT(*) FROM test a, test b WHERE a.x = b.x AND a.y = b.y;", dt);
+    c("SELECT COUNT(*) FROM test a, test b WHERE a.x = b.x AND a.str = b.str;", dt);
     ASSERT_EQ(7,
               v<int64_t>(run_simple_agg(
                   "SELECT test.x FROM test, test_inner WHERE test.x = test_inner.x AND test.rowid = 19;", dt)));
