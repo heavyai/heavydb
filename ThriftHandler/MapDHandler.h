@@ -247,6 +247,7 @@ class MapDHandler : public MapDIf {
   void clear_gpu_memory(const TSessionId& session);
   void clear_cpu_memory(const TSessionId& session);
   TSessionId getInvalidSessionId() const;
+  void rollback_table_epoch(const TSessionId& session, const int db_id, const int table_id, const int new_epoch);
 
   std::unique_ptr<Catalog_Namespace::SysCatalog> sys_cat_;
   std::shared_ptr<Data_Namespace::DataMgr> data_mgr_;
@@ -384,8 +385,6 @@ class MapDHandler : public MapDIf {
   Planner::RootPlan* parse_to_plan_legacy(const std::string& query_str,
                                           const Catalog_Namespace::SessionInfo& session_info,
                                           const std::string& action /* render or validate */);
-
-  void set_table_start_epoch();
 
   bool super_user_rights_;  // default is "false"; setting to "true" ignores passwd checks in "connect(..)" method
   const bool access_priv_check_;

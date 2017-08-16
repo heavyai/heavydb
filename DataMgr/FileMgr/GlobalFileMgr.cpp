@@ -121,7 +121,7 @@ void GlobalFileMgr::getChunkMetadataVec(std::vector<std::pair<ChunkKey, ChunkMet
 }
 
 FileMgr* GlobalFileMgr::findFileMgr(const int db_id, const int tb_id, const bool removeFromMap) {
-  FileMgr* fm = 0;
+  FileMgr* fm = nullptr;
   const auto file_mgr_key = std::make_pair(db_id, tb_id);
   {
     mapd_lock_guard<mapd_shared_mutex> read_lock(fileMgrs_mutex_);
@@ -139,7 +139,7 @@ FileMgr* GlobalFileMgr::findFileMgr(const int db_id, const int tb_id, const bool
 FileMgr* GlobalFileMgr::getFileMgr(const int db_id, const int tb_id) {
   { /* check if FileMgr already exists for (db_id, tb_id) */
     FileMgr* fm = findFileMgr(db_id, tb_id);
-    if (fm != 0) {
+    if (fm != nullptr) {
       return fm;
     }
   }
@@ -174,7 +174,7 @@ void GlobalFileMgr::writeFileMgrData(FileMgr* fileMgr) {  // this function is no
 
 void GlobalFileMgr::removeTableRelatedDS(const int db_id, const int tb_id) {
   FileMgr* fm = findFileMgr(db_id, tb_id, true);
-  if (fm == 0) {
+  if (fm == nullptr) {
     LOG(FATAL) << "Drop table failed. Table " << db_id << " " << tb_id << " does not exist.";
   }
 
@@ -189,13 +189,19 @@ void GlobalFileMgr::removeTableRelatedDS(const int db_id, const int tb_id) {
   }
 }
 
-void GlobalFileMgr::updateTableEpoch(const int db_id,
-                                     const int tb_id,
-                                     const int start_epoch,
-                                     const bool is_decr_start_epoch) {
-  // is_decr_start_epoch NOT implemented
+void GlobalFileMgr::updateTableEpoch(const int db_id, const int tb_id, const int start_epoch) {
   const auto file_mgr_key = std::make_pair(db_id, tb_id);
   FileMgr* fm = new FileMgr(0, this, file_mgr_key, num_reader_threads_, start_epoch, defaultPageSize_);
+  // remove the dummy one we built
+  delete fm;
+
+  // see if one exists currently, and remove it
+  fm = findFileMgr(db_id, tb_id, true);
+
+  if (fm != nullptr) {
+    LOG(INFO) << "found and removed fm";
+    delete fm;
+  }
 }
 
 }  // File_Namespace

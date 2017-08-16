@@ -244,10 +244,7 @@ int main(int argc, char** argv) {
   int num_gpus = -1;  // Can be used to override number of gpus detected on system - -1 means do not override
   int start_gpu = 0;
   int tthreadpool_size = 8;
-  size_t num_reader_threads = 0;  // number of threads used when loading data
-  std::string start_epoch("");    // epoch value for the table, presented as: db_id:table_id:epoch
-  std::string decr_start_epoch(
-      "");                         // value on which to decrement table's epoch, presented as: db_id:table_id:decrement
+  size_t num_reader_threads = 0;   // number of threads used when loading data
   std::string db_convert_dir("");  // path to mapd DB to convert from; if path is empty, no conversion is requested
   std::string db_query_file("");   // path to file containing warmup queries list
   bool enable_access_priv_check = false;  // enable DB objects access privileges checking
@@ -326,10 +323,6 @@ int main(int argc, char** argv) {
           ->default_value(g_trivial_loop_join_threshold)
           ->implicit_value(1000),
       "The maximum number of rows in the inner table of a loop join considered to be trivially small");
-  desc_adv.add_options()("start-epoch", po::value<std::string>(&start_epoch), "Value of table epoch to 'rollback' to");
-  desc_adv.add_options()("decrement-start-epoch",
-                         po::value<std::string>(&decr_start_epoch),
-                         "Value on which to decrement epoch of the table");
   desc_adv.add_options()(
       "cuda-block-size",
       po::value<size_t>(&mapd_parameters.cuda_block_size)->default_value(mapd_parameters.cuda_block_size),
@@ -542,86 +535,6 @@ int main(int argc, char** argv) {
   LOG(INFO) << " calcite JVM max memory  " << mapd_parameters.calcite_max_mem;
   LOG(INFO) << " MapD Server Port  " << mapd_parameters.mapd_server_port;
   LOG(INFO) << " MapD Calcite Port  " << mapd_parameters.calcite_port;
-
-  // extract and validate value of the epoch to rollback to for the table if requested
-  mapd_parameters.is_decr_start_epoch = false;
-  if ((start_epoch.length() > 0) && (decr_start_epoch.length() > 0)) {
-    LOG(ERROR) << "Options start-epoch and decrement-start-epoch can't be used simultaneously." << std::endl;
-    throw std::runtime_error("Improper usage of options start-epoch and decrement-start-epoch.");
-  }
-  if (decr_start_epoch.length() > 0) {
-    start_epoch = decr_start_epoch;
-    mapd_parameters.is_decr_start_epoch = true;
-  }
-
-  if (start_epoch.length() > 0) {
-    std::vector<std::string> split_result;
-
-    boost::split(split_result,
-                 start_epoch,
-                 boost::is_any_of(":"),
-                 boost::token_compress_on);  // SplitVec == { "hello abc","ABC","aBc goodbye" }
-
-    if (split_result.size() != 3) {
-      if (!mapd_parameters.is_decr_start_epoch) {
-        LOG(ERROR) << "Value of option start-epoch does not contain db_id:table_id_epoch: " << start_epoch << std::endl;
-        throw std::runtime_error("Option start-epoch is not correct.");
-      } else {
-        LOG(ERROR) << "Value of option decrement-start-epoch does not contain does not contain db_id:table_id_epoch: "
-                   << start_epoch << std::endl;
-        throw std::runtime_error("Option decrement-start-epoch is not correct.");
-      }
-    }
-
-    // validate db identifier is a number
-    try {
-      mapd_parameters.start_epoch_db_id = std::stoi(split_result[0]);
-    } catch (std::exception& e) {
-      if (!mapd_parameters.is_decr_start_epoch) {
-        LOG(ERROR) << "Value of option start-epoch has incorrect db number: " << start_epoch << std::endl;
-        throw std::runtime_error("Option start-epoch is not correct.");
-      } else {
-        LOG(ERROR) << "Value of option decrement-start-epoch has incorrect table number: " << start_epoch << std::endl;
-        throw std::runtime_error("Option decrement-start-epoch is not correct.");
-      }
-    }
-
-    // validate table identifier is a number
-    try {
-      mapd_parameters.start_epoch_table_id = std::stoi(split_result[1]);
-    } catch (std::exception& e) {
-      if (!mapd_parameters.is_decr_start_epoch) {
-        LOG(ERROR) << "Value of option start-epoch has incorrect table number: " << start_epoch << std::endl;
-        throw std::runtime_error("Option start-epoch is not correct.");
-      } else {
-        LOG(ERROR) << "Value of option decrement-start-epoch has incorrect table number: " << start_epoch << std::endl;
-        throw std::runtime_error("Option decrement-start-epoch is not correct.");
-      }
-    }
-
-    // validate epoch value
-    try {
-      mapd_parameters.start_epoch_value = std::stoi(split_result[2]);
-    } catch (std::exception& e) {
-      if (!mapd_parameters.is_decr_start_epoch) {
-        LOG(ERROR) << "Value of option start-epoch has incorrect epoch number: " << start_epoch << std::endl;
-        throw std::runtime_error("Option start-epoch is not correct.");
-      } else {
-        LOG(ERROR) << "Value of option decrement-start-epoch has incorrect decrement: " << start_epoch << std::endl;
-        throw std::runtime_error("Option decrement-start-epoch is not correct.");
-      }
-    }
-    if (mapd_parameters.start_epoch_value < 0) {
-      if (!mapd_parameters.is_decr_start_epoch) {
-        LOG(ERROR) << "Epoch value of option start-epoch can not be negative: " << start_epoch << std::endl;
-        throw std::runtime_error("Option start-epoch is not correct.");
-      } else {
-        LOG(ERROR) << "Epoch decrement value of option decrement-start-epoch can not be negative: " << start_epoch
-                   << std::endl;
-        throw std::runtime_error("Option decrement-start-epoch is not correct.");
-      }
-    }
-  }
 
   // rudimetary signal handling to try to guarantee the logging gets flushed to files
   // on shutdown

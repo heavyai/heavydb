@@ -198,9 +198,6 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
       new Catalog_Namespace::SysCatalog(base_data_path_, data_mgr_, ldapMetadata, calcite_, false, access_priv_check_));
   import_path_ = boost::filesystem::path(base_data_path_) / "mapd_import";
   start_time_ = std::time(nullptr);
-
-  // if epoch is epoch is being rolled back execute here
-  set_table_start_epoch();
 }
 
 MapDHandler::~MapDHandler() {
@@ -2321,18 +2318,16 @@ void MapDHandler::broadcast_serialized_rows(const std::string& serialized_rows,
 }
 
 // check and reset epoch if a request has been made
-void MapDHandler::set_table_start_epoch() {
-  LOG(INFO) << "checking for reset DB " << mapd_parameters_.start_epoch_db_id << " Table ID  "
-            << mapd_parameters_.start_epoch_table_id << " back to epoch " << mapd_parameters_.start_epoch_value
-            << " decr is set to " << mapd_parameters_.is_decr_start_epoch;
-  if (mapd_parameters_.start_epoch_table_id >= 0 && mapd_parameters_.start_epoch_db_id >= 0) {
-    LOG(INFO) << "Executing epoch reset of DB " << mapd_parameters_.start_epoch_db_id << " Table ID  "
-              << mapd_parameters_.start_epoch_table_id << " back to epoch " << mapd_parameters_.start_epoch_value
-              << " decr is set to " << mapd_parameters_.is_decr_start_epoch;
-    data_mgr_->updateTableEpoch(mapd_parameters_.start_epoch_db_id,
-                                mapd_parameters_.start_epoch_table_id,
-                                mapd_parameters_.start_epoch_value,
-                                mapd_parameters_.is_decr_start_epoch);
-    LOG(INFO) << " Reminder to remove the start-epoch statement from the config file ";
+void MapDHandler::rollback_table_epoch(const TSessionId& session,
+                                       const int db_id,
+                                       const int table_id,
+                                       const int new_epoch) {
+  const auto session_info = get_session(session);
+  if (!session_info.get_currentUser().isSuper) {
+    throw std::runtime_error("Only superuser can rollback_table_epoch");
   }
+  LOG(INFO) << "Rollback table epoch db:" << db_id << " Table ID  " << table_id << " back to new epoch " << new_epoch;
+  data_mgr_->updateTableEpoch(db_id, table_id, new_epoch);
+  clear_gpu_memory(session);
+  clear_cpu_memory(session);
 }

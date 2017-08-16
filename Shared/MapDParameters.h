@@ -36,9 +36,6 @@ struct MapDParameters {
   std::string ha_unique_server_id;  // name of the HA unique id for this server
   std::string ha_brokers;           // name of the HA broker
   std::string ha_shared_data;       // name of shared data directory base
-  int start_epoch_db_id = -1;       // db id if epoch is being rolled back
-  int start_epoch_table_id = -1;    // tableId if epoch is being rolled back
-  int start_epoch_value = -1;       // epoch to rollback to
   bool is_decr_start_epoch;         // are we doing a start epoch decrement?
 
   MapDParameters() : cuda_block_size(0), cuda_grid_size(0), calcite_max_mem(1024) {}
