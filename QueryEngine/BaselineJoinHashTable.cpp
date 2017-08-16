@@ -178,12 +178,14 @@ int BaselineJoinHashTable::reify(const int device_count) {
   const auto layout = type_and_found.second ? type_and_found.first : JoinHashTableInterface::HashType::OneToOne;
   int err = reifyWithLayout(device_count, layout);
   if (err) {
+#ifdef HAVE_CUDA
     if (memory_level_ == Data_Namespace::GPU_LEVEL) {
       auto& data_mgr = executor_->getCatalog()->get_dataMgr();
       for (const auto device_buffer : gpu_hash_table_buff_) {
         free_gpu_abstract_buffer(&data_mgr, device_buffer);
       }
     }
+#endif  // HAVE_CUDA
     HashTypeCache::set(composite_key_info.cache_key_chunks, JoinHashTableInterface::HashType::OneToMany);
     return reifyWithLayout(device_count, JoinHashTableInterface::HashType::OneToMany);
   }
@@ -297,6 +299,7 @@ size_t BaselineJoinHashTable::approximateTupleCount(const std::vector<ColumnsFor
     }
     return hll_size(hll_result, count_distinct_desc.bitmap_sz_bits);
   }
+#ifdef HAVE_CUDA
   const int device_count = columns_per_device.size();
   auto& data_mgr = executor_->getCatalog()->get_dataMgr();
   std::vector<std::vector<uint8_t>> host_hll_buffers(device_count);
@@ -339,6 +342,10 @@ size_t BaselineJoinHashTable::approximateTupleCount(const std::vector<ColumnsFor
     hll_unify(hll_result, reinterpret_cast<int32_t*>(&host_hll_buffer[0]), 1 << count_distinct_desc.bitmap_sz_bits);
   }
   return hll_size(hll_result, count_distinct_desc.bitmap_sz_bits);
+#else
+  CHECK(false);
+  return 0;
+#endif  // HAVE_CUDA
 }
 
 BaselineJoinHashTable::ColumnsForDevice BaselineJoinHashTable::fetchColumnsForDevice(
