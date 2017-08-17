@@ -1578,9 +1578,6 @@ GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getExprRangeInfo(const An
               expr_range.hasNulls()};
     case ExpressionRangeType::Float:
     case ExpressionRangeType::Double:
-      if (g_enable_watchdog && !g_enable_dynamic_watchdog) {
-        throw WatchdogException("Group by float / double would be slow");
-      }
     case ExpressionRangeType::Invalid:
       return (g_cluster || g_use_result_set)
                  ? ColRangeInfo{GroupByColRangeType::MultiCol, 0, 0, 0, false}
