@@ -64,13 +64,6 @@ __inline__ __device__ uint32_t get_smid(void) {
   return ret;
 }
 
-// Global nanosecond counter
-__inline__ __device__ uint64_t get_globaltimer(void) {
-  uint64_t ret;
-  asm("mov.u64 %0, %%globaltimer;" : "=r"(ret));
-  return ret;
-}
-
 extern "C" __device__ bool dynamic_watchdog() {
   if (dw_cycle_budget == 0LL)
     return false;  // Uninitialized watchdog can't check time
