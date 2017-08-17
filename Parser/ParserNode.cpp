@@ -2665,6 +2665,9 @@ void RevokeRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 }
 
 void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+  if (g_cluster) {
+    throw std::runtime_error("Distributed export not supported yet");
+  }
   auto& catalog = session.get_catalog();
   Importer_NS::CopyParams copy_params;
   if (!options.empty()) {
