@@ -96,12 +96,12 @@ void SysCatalog::initObjectPrivileges() {
     sqliteConnector_.query(
         "CREATE TABLE IF NOT EXISTS mapd_roles(roleName text, userName text, UNIQUE(roleName, userName))");
     sqliteConnector_.query(
-        "CREATE TABLE IF NOT EXISTS mapd_object_privileges(roleName text, objectName text, objectType integer, dbId "
-        "integer "
+        "CREATE TABLE IF NOT EXISTS mapd_object_privileges(roleName text, objectName text, objectType integer, "
+        "dbObjectType integer, dbId integer "
         "references mapd_databases, tableId integer references mapd_tables, columnId integer references "
         "mapd_columns, "
         "privSelect bool, privInsert bool, privCreate bool, privDelete bool, privUpdate bool, "
-        "UNIQUE(roleName, objectType, dbId, tableId, columnId))");
+        "UNIQUE(roleName, dbObjectType, dbId, tableId, columnId))");
   } catch (const std::exception& e) {
     sqliteConnector_.query("ROLLBACK TRANSACTION");
     throw;
@@ -307,6 +307,8 @@ bool SysCatalog::getMetadataForDB(const string& name, DBMetadata& db) {
 
 void SysCatalog::createDefaultMapdRoles() {
   DBObject dbObject(get_currentDB().dbName, DatabaseDBObjectType);
+  populateDBObjectKey(dbObject, *this);
+
   // create default non suser role
   if (!getMetadataForRole(MAPD_DEFAULT_USER_ROLE)) {
     createRole(MAPD_DEFAULT_USER_ROLE);
@@ -326,6 +328,7 @@ std::vector<std::string> SysCatalog::convertObjectKeyToString(const DBObject& ob
   switch (object.getType()) {
     case (DatabaseDBObjectType): {
       objectKey.push_back(std::to_string(object.getObjectKey()[0]));
+      objectKey.push_back(std::to_string(object.getObjectKey()[1]));
       objectKey.push_back(std::to_string(0));
       objectKey.push_back(std::to_string(0));
       break;
@@ -333,6 +336,7 @@ std::vector<std::string> SysCatalog::convertObjectKeyToString(const DBObject& ob
     case (TableDBObjectType): {
       objectKey.push_back(std::to_string(object.getObjectKey()[0]));
       objectKey.push_back(std::to_string(object.getObjectKey()[1]));
+      objectKey.push_back(std::to_string(object.getObjectKey()[2]));
       objectKey.push_back(std::to_string(0));
       break;
     }
@@ -355,11 +359,13 @@ std::vector<int32_t> SysCatalog::convertObjectKeyFromString(const std::vector<st
   switch (type) {
     case (DatabaseDBObjectType): {
       objectKey.push_back(std::stoi(key[0]));
+      objectKey.push_back(std::stoi(key[1]));
       break;
     }
     case (TableDBObjectType): {
       objectKey.push_back(std::stoi(key[0]));
       objectKey.push_back(std::stoi(key[1]));
+      objectKey.push_back(std::stoi(key[2]));
       break;
     }
     case (ColumnDBObjectType): {
@@ -383,14 +389,16 @@ void SysCatalog::populateDBObjectKey(DBObject& object, const Catalog_Namespace::
       if (!getMetadataForDB(object.getName(), db)) {
         throw std::runtime_error("Failure generating DB object key. Database " + object.getName() + " does not exist.");
       }
-      objectKey = {db.dbId};
+      objectKey = {static_cast<int32_t>(DatabaseDBObjectType), db.dbId};
       break;
     }
     case (TableDBObjectType): {
       if (!catalog.getMetadataForTable(object.getName())) {
         throw std::runtime_error("Failure generating DB object key. Table " + object.getName() + " does not exist.");
       }
-      objectKey = {catalog.get_currentDB().dbId, catalog.getMetadataForTable(object.getName())->tableId};
+      objectKey = {static_cast<int32_t>(TableDBObjectType),
+                   catalog.get_currentDB().dbId,
+                   catalog.getMetadataForTable(object.getName())->tableId};
       break;
     }
     case (ColumnDBObjectType): {
@@ -420,8 +428,7 @@ void SysCatalog::createDBObject(const UserMetadata& user,
     user_rl = getMetadataForUserRole(user.userId);
   }
   DBObject* object = new DBObject(objectName, TableDBObjectType);
-  DBObjectKey objectKey = {catalog.get_currentDB().dbId, catalog.getMetadataForTable(object->getName())->tableId};
-  object->setObjectKey(objectKey);
+  populateDBObjectKey(*object, catalog);
   object->setPrivileges(
       {true, true, true});  // as an owner/creator of this object, the user will have all access rights
   object->setUserPrivateObject();
@@ -448,15 +455,17 @@ void SysCatalog::grantDBObjectPrivileges(const std::string& roleName,
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
     sqliteConnector_.query_with_text_params(
-        "INSERT OR REPLACE INTO mapd_object_privileges(roleName, objectName, objectType, dbId, tableId, columnId, "
+        "INSERT OR REPLACE INTO mapd_object_privileges(roleName, objectName, objectType, dbObjectType, dbId, tableId, "
+        "columnId, "
         "privSelect, privInsert, privCreate, privDelete, privUpdate) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, "
-        "?11)",
+        "?11, ?12)",
         std::vector<std::string>{roleName,
                                  object.getName(),
                                  std::to_string(object.getType()),
                                  objectKey[0],
                                  objectKey[1],
                                  objectKey[2],
+                                 objectKey[3],
                                  std::to_string(object.getPrivileges()[0]),
                                  std::to_string(object.getPrivileges()[1]),
                                  std::to_string(object.getPrivileges()[2]),
@@ -488,15 +497,17 @@ void SysCatalog::revokeDBObjectPrivileges(const std::string& roleName,
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
     sqliteConnector_.query_with_text_params(
-        "INSERT OR REPLACE INTO mapd_object_privileges(roleName, objectName, objectType, dbId, tableId, columnId, "
+        "INSERT OR REPLACE INTO mapd_object_privileges(roleName, objectName, objectType, dbObjectType, dbId, tableId, "
+        "columnId, "
         "privSelect, privInsert, privCreate, privDelete, privUpdate) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, "
-        "?11)",
+        "?11, ?12)",
         std::vector<std::string>{roleName,
                                  object.getName(),
                                  std::to_string(object.getType()),
                                  objectKey[0],
                                  objectKey[1],
                                  objectKey[2],
+                                 objectKey[3],
                                  std::to_string(object.getPrivileges()[0]),
                                  std::to_string(object.getPrivileges()[1]),
                                  std::to_string(object.getPrivileges()[2]),
@@ -544,20 +555,22 @@ void SysCatalog::createRole(const std::string& roleName) {
   DBObject dbObject(get_currentDB().dbName, DatabaseDBObjectType);
   populateDBObjectKey(dbObject, static_cast<Catalog_Namespace::Catalog&>(*this));
   rl->grantPrivileges(dbObject);
+  std::vector<std::string> objectKey = convertObjectKeyToString(dbObject);
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
     sqliteConnector_.query_with_text_params(
-        "INSERT INTO mapd_object_privileges(roleName, objectName, objectType, dbId, tableId, columnId, "
-        "privSelect, privInsert, privCreate, privDelete, privUpdate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO mapd_object_privileges(roleName, objectName, objectType, dbObjectType, dbId, tableId, columnId, "
+        "privSelect, privInsert, privCreate, privDelete, privUpdate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         std::vector<std::string>{roleName,
                                  dbObject.getName(),
                                  std::to_string(dbObject.getType()),
-                                 std::to_string(dbObject.getObjectKey()[0]),
-                                 std::to_string(0),
-                                 std::to_string(0),
-                                 std::to_string(false),
-                                 std::to_string(false),
-                                 std::to_string(false),
+                                 objectKey[0],
+                                 objectKey[1],
+                                 objectKey[2],
+                                 objectKey[3],
+                                 std::to_string(dbObject.getPrivileges()[0]),
+                                 std::to_string(dbObject.getPrivileges()[1]),
+                                 std::to_string(dbObject.getPrivileges()[2]),
                                  std::to_string(false),
                                  std::to_string(false)});
   } catch (std::exception& e) {
@@ -1018,12 +1031,13 @@ void Catalog::CheckAndExecuteMigrations() {
 void Catalog::buildRoleMap() {
   auto& sys_cat = static_cast<Catalog_Namespace::SysCatalog&>(*this);
   string roleQuery(
-      "SELECT roleName, objectName, objectType, dbId, tableId, columnId, privSelect, privInsert, privCreate, "
+      "SELECT roleName, objectName, objectType, dbObjectType, dbId, tableId, columnId, privSelect, privInsert, "
+      "privCreate, "
       "privDelete, privUpdate from mapd_object_privileges");
   sqliteConnector_.query(roleQuery);
   size_t numRows = sqliteConnector_.getNumRows();
-  std::vector<std::string> objectKeyStr(3);
-  DBObjectKey objectKey(3);
+  std::vector<std::string> objectKeyStr(4);
+  DBObjectKey objectKey(4);
   std::vector<bool> privs(3);
   for (size_t r = 0; r < numRows; ++r) {
     std::string roleName = sqliteConnector_.getData<string>(r, 0);
@@ -1032,10 +1046,11 @@ void Catalog::buildRoleMap() {
     objectKeyStr[0] = sqliteConnector_.getData<string>(r, 3);
     objectKeyStr[1] = sqliteConnector_.getData<string>(r, 4);
     objectKeyStr[2] = sqliteConnector_.getData<string>(r, 5);
+    objectKeyStr[3] = sqliteConnector_.getData<string>(r, 6);
     objectKey = sys_cat.convertObjectKeyFromString(objectKeyStr, objectType);
-    privs[0] = sqliteConnector_.getData<bool>(r, 6);
-    privs[1] = sqliteConnector_.getData<bool>(r, 7);
-    privs[2] = sqliteConnector_.getData<bool>(r, 8);
+    privs[0] = sqliteConnector_.getData<bool>(r, 7);
+    privs[1] = sqliteConnector_.getData<bool>(r, 8);
+    privs[2] = sqliteConnector_.getData<bool>(r, 9);
     {
       DBObject dbObject(objectName, objectType);
       dbObject.setObjectKey(objectKey);

@@ -200,9 +200,7 @@ string Calcite::process(const Catalog_Namespace::SessionInfo& session_info,
       std::vector<std::string> v_db_obj = get_db_objects(ra);
       for (size_t i = 0; i < v_db_obj.size(); i++) {
         DBObject dbObject(v_db_obj[i], TableDBObjectType);
-        DBObjectKey dbObjectKey = {catalog.get_currentDB().dbId,
-                                   catalog.getMetadataForTable(dbObject.getName())->tableId};
-        dbObject.setObjectKey(dbObjectKey);
+        static_cast<Catalog_Namespace::SysCatalog&>(catalog).populateDBObjectKey(dbObject, catalog);
         std::vector<bool> privs{true, false, false};  // SELECT
         dbObject.setPrivileges(privs);
         privObjects.push_back(dbObject);

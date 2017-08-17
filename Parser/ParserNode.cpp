@@ -2197,8 +2197,7 @@ void TruncateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   if (catalog.isAccessPrivCheckEnabled()) {
     std::vector<DBObject> privObjects;
     DBObject dbObject(*table, TableDBObjectType);
-    DBObjectKey dbObjectKey = {catalog.get_currentDB().dbId, td->tableId};
-    dbObject.setObjectKey(dbObjectKey);
+    static_cast<Catalog_Namespace::SysCatalog&>(catalog).populateDBObjectKey(dbObject, catalog);
     std::vector<bool> privs{false, true, false};  // INSERT, which is being used for COPY/IMPORT/etc as well
     dbObject.setPrivileges(privs);
     privObjects.push_back(dbObject);
@@ -2276,8 +2275,7 @@ void CopyTableStmt::execute(
   if (catalog.isAccessPrivCheckEnabled()) {
     std::vector<DBObject> privObjects;
     DBObject dbObject(*table, TableDBObjectType);
-    DBObjectKey dbObjectKey = {catalog.get_currentDB().dbId, td->tableId};
-    dbObject.setObjectKey(dbObjectKey);
+    static_cast<Catalog_Namespace::SysCatalog&>(catalog).populateDBObjectKey(dbObject, catalog);
     std::vector<bool> privs{false, true, false};  // INSERT
     dbObject.setPrivileges(privs);
     privObjects.push_back(dbObject);
