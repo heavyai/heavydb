@@ -1534,7 +1534,8 @@ GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getColRangeInfo() {
           has_nulls = true;
         }
       }
-      if (cardinality > baseline_threshold) {  // more than 1M groups is a lot
+      // For zero or high cardinalities, use baseline layout.
+      if (!cardinality || cardinality > baseline_threshold) {
         return {GroupByColRangeType::MultiCol, 0, 0, 0, false};
       }
       return {GroupByColRangeType::MultiColPerfectHash, 0, int64_t(cardinality), 0, has_nulls};
