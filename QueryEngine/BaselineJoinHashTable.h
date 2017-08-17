@@ -59,8 +59,6 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
 
   int getInnerTableId() const noexcept override;
 
-  int getInnerTableRteIdx() const noexcept;
-
   JoinHashTableInterface::HashType getHashType() const noexcept override;
 
  private:
@@ -70,6 +68,8 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
                         const Data_Namespace::MemoryLevel memory_level,
                         const size_t entry_count,
                         Executor* executor);
+
+  int getInnerTableRteIdx() const noexcept;
 
   static int getInnerTableId(const Analyzer::BinOper* condition, const Executor* executor);
 
