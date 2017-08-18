@@ -125,7 +125,7 @@ StringDictionaryProxy* Executor::getStringDictionaryProxy(const int dict_id_in,
   }
   CHECK_EQ(0, dict_id);
   if (!lit_str_dict_proxy_) {
-    std::shared_ptr<StringDictionary> tsd = std::make_shared<StringDictionary>("", false);
+    std::shared_ptr<StringDictionary> tsd = std::make_shared<StringDictionary>("", false, true);
     lit_str_dict_proxy_.reset(new StringDictionaryProxy(tsd, 0));
   }
   return lit_str_dict_proxy_.get();

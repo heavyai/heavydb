@@ -1403,9 +1403,9 @@ const DictDescriptor* Catalog::getMetadataForDict(int dictId, bool loadDict) con
     if (!dd->stringDict) {
       if (string_dict_hosts_.empty()) {
         if (dd->dictIsTemp)
-          dd->stringDict = std::make_shared<StringDictionary>(dd->dictFolderPath, true);
+          dd->stringDict = std::make_shared<StringDictionary>(dd->dictFolderPath, true, true);
         else
-          dd->stringDict = std::make_shared<StringDictionary>(dd->dictFolderPath, false);
+          dd->stringDict = std::make_shared<StringDictionary>(dd->dictFolderPath, false, true);
       } else {
         dd->stringDict = std::make_shared<StringDictionary>(string_dict_hosts_.front(), dd->dictId);
       }

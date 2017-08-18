@@ -1363,7 +1363,7 @@ bool approx_eq(const double v, const double target, const double eps = 0.01) {
   return target - eps < v && v < target + eps;
 }
 
-std::shared_ptr<StringDictionary> g_sd = std::make_shared<StringDictionary>("", false);
+std::shared_ptr<StringDictionary> g_sd = std::make_shared<StringDictionary>("", false, true);
 
 void test_iterate(const std::vector<TargetInfo>& target_infos, const QueryMemoryDescriptor& query_mem_desc) {
   SQLTypeInfo double_ti(kDOUBLE, false);

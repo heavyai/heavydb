@@ -36,7 +36,7 @@ class StringDictionary {
  public:
   StringDictionary(const std::string& folder,
                    const bool isTemp,
-                   const bool recover = true,
+                   const bool recover,
                    size_t initial_capacity = 256) noexcept;
   StringDictionary(const LeafHostInfo& host, const int dict_id);
   ~StringDictionary() noexcept;
