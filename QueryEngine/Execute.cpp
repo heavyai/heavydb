@@ -1087,7 +1087,59 @@ RowSetPtr Executor::collectAllDeviceResults(ExecutionDispatch& execution_dispatc
   if (use_speculative_top_n(ra_exe_unit, query_mem_desc)) {
     return reduceSpeculativeTopN(ra_exe_unit, result_per_device, row_set_mem_owner, query_mem_desc);
   }
+  const auto shard_count = execution_dispatch.getDeviceType() == ExecutorDeviceType::GPU
+                               ? shard_count_for_top_groups(ra_exe_unit, *catalog_)
+                               : 0;
+
+  if (shard_count && !result_per_device.empty()) {
+    return collectAllDeviceShardedTopResults(execution_dispatch);
+  }
   return reduceMultiDeviceResults(ra_exe_unit, result_per_device, row_set_mem_owner, query_mem_desc);
+}
+
+// Collect top results from each device, stitch them together and sort. Partial
+// results from each device are guaranteed to be disjunct because we only go on
+// this path when one of the columns involved is a shard key.
+RowSetPtr Executor::collectAllDeviceShardedTopResults(ExecutionDispatch& execution_dispatch) const {
+  const auto& ra_exe_unit = execution_dispatch.getExecutionUnit();
+  auto& result_per_device = execution_dispatch.getFragmentResults();
+  const auto first_result_set = boost::get<RowSetPtr>(result_per_device.front().first);
+  CHECK(first_result_set);
+  auto top_query_mem_desc = first_result_set->getQueryMemDesc();
+  CHECK(!top_query_mem_desc.output_columnar);
+  CHECK(!top_query_mem_desc.interleaved_bins_on_gpu);
+  const auto top_n = ra_exe_unit.sort_info.limit + ra_exe_unit.sort_info.offset;
+  top_query_mem_desc.entry_count = 0;
+  for (auto& result : result_per_device) {
+    const auto result_set = boost::get<RowSetPtr>(result.first);
+    CHECK(result_set);
+    result_set->sort(ra_exe_unit.sort_info.order_entries, top_n);
+    top_query_mem_desc.entry_count += result_set->rowCount();
+  }
+  auto top_result_set = std::make_shared<ResultSet>(first_result_set->getTargetInfos(),
+                                                    first_result_set->getDeviceType(),
+                                                    top_query_mem_desc,
+                                                    first_result_set->getRowSetMemOwner(),
+                                                    this);
+  auto top_storage = top_result_set->allocateStorage();
+  const auto top_result_set_buffer = top_storage->getUnderlyingBuffer();
+  size_t top_output_row_idx{0};
+  for (auto& result : result_per_device) {
+    const auto result_set = boost::get<RowSetPtr>(result.first);
+    CHECK(result_set);
+    const auto& top_permutation = result_set->getPermutationBuffer();
+    CHECK_LE(top_permutation.size(), top_n);
+    const auto result_set_buffer = result_set->getStorage()->getUnderlyingBuffer();
+    for (const auto sorted_idx : top_permutation) {
+      const auto row_ptr = result_set_buffer + sorted_idx * top_query_mem_desc.getRowSize();
+      memcpy(top_result_set_buffer + top_output_row_idx * top_query_mem_desc.getRowSize(),
+             row_ptr,
+             top_query_mem_desc.getRowSize());
+      ++top_output_row_idx;
+    }
+  }
+  CHECK_EQ(top_output_row_idx, top_query_mem_desc.entry_count);
+  return top_result_set;
 }
 
 std::unordered_map<int, const Analyzer::BinOper*> Executor::getInnerTabIdToJoinCond() const {

@@ -804,6 +804,8 @@ class Executor {
                                     const QueryMemoryDescriptor& query_mem_desc,
                                     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner);
 
+  RowSetPtr collectAllDeviceShardedTopResults(ExecutionDispatch& execution_dispatch) const;
+
   std::string renderRows(const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& targets,
                          RenderInfo* render_query_data);
 

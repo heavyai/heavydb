@@ -61,14 +61,12 @@ void ResultSet::doBaselineSort(const ExecutorDeviceType device_type,
   CHECK_GT(oe.tle_no, 0);
   CHECK_LE(static_cast<size_t>(oe.tle_no), targets_.size());
   size_t logical_slot_idx = 0;
-  size_t physical_slot_idx = 0;
+  size_t physical_slot_off = 0;
   for (size_t i = 0; i < static_cast<size_t>(oe.tle_no - 1); ++i) {
-    if (query_mem_desc_.agg_col_widths[logical_slot_idx].compact) {
-      physical_slot_idx = advance_slot(physical_slot_idx, targets_[i], none_encoded_strings_valid_);
-    }
+    physical_slot_off += query_mem_desc_.agg_col_widths[logical_slot_idx].compact;
     logical_slot_idx = advance_slot(logical_slot_idx, targets_[i], none_encoded_strings_valid_);
   }
-  const auto col_off = (get_slot_off_quad(query_mem_desc_) + physical_slot_idx) * sizeof(int64_t);
+  const auto col_off = get_slot_off_quad(query_mem_desc_) * sizeof(int64_t) + physical_slot_off;
   const size_t col_bytes = query_mem_desc_.agg_col_widths[logical_slot_idx].compact;
   const auto row_bytes = get_row_bytes(query_mem_desc_);
   const auto& target_groupby_indices = query_mem_desc_.target_groupby_indices;

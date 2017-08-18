@@ -527,6 +527,10 @@ std::vector<uint32_t> ResultSet::initPermutationBuffer(const size_t start, const
   return permutation;
 }
 
+const std::vector<uint32_t>& ResultSet::getPermutationBuffer() const {
+  return permutation_;
+}
+
 void ResultSet::parallelTop(const std::list<Analyzer::OrderEntry>& order_entries, const size_t top_n) {
   const size_t step = cpu_threads();
   std::vector<std::vector<uint32_t>> strided_permutations(step);

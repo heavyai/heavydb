@@ -1737,14 +1737,16 @@ GroupByAndAggregate::GroupByAndAggregate(Executor* executor,
       throw std::runtime_error("Group by array not supported");
     }
   }
+  const auto shard_count =
+      device_type_ == ExecutorDeviceType::GPU ? shard_count_for_top_groups(ra_exe_unit_, *executor_->getCatalog()) : 0;
   bool sort_on_gpu_hint = device_type == ExecutorDeviceType::GPU && allow_multifrag &&
                           !ra_exe_unit.sort_info.order_entries.empty() &&
-                          gpuCanHandleOrderEntries(ra_exe_unit.sort_info.order_entries);
+                          gpuCanHandleOrderEntries(ra_exe_unit.sort_info.order_entries) && !shard_count;
   // must_use_baseline_sort is true iff we'd sort on GPU with the old algorithm
-  // but the total output buffer size would be too big. For the sake of managing
-  // risk, use the new result set way very selectively for this case only (alongside
-  // the baseline layout we've enabled for a while now).
-  bool must_use_baseline_sort = false;
+  // but the total output buffer size would be too big or it's a sharded top query.
+  // For the sake of managing risk, use the new result set way very selectively for
+  // this case only (alongside the baseline layout we've enabled for a while now).
+  bool must_use_baseline_sort = shard_count;
   while (true) {
     initQueryMemoryDescriptor(allow_multifrag,
                               max_groups_buffer_entry_count,
@@ -1964,7 +1966,23 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
     return;
   }
 
-  const auto col_range_info = getColRangeInfo();
+  auto col_range_info_nosharding = getColRangeInfo();
+
+  const auto shard_count =
+      device_type_ == ExecutorDeviceType::GPU ? shard_count_for_top_groups(ra_exe_unit_, *executor_->getCatalog()) : 0;
+
+  int device_count{0};
+  if (device_type_ == ExecutorDeviceType::GPU) {
+    device_count = executor_->getCatalog()->get_dataMgr().cudaMgr_->getDeviceCount();
+    CHECK_GT(device_count, 0);
+  }
+
+  const auto col_range_info =
+      ColRangeInfo{col_range_info_nosharding.hash_type_,
+                   col_range_info_nosharding.min,
+                   col_range_info_nosharding.max,
+                   shard_count ? static_cast<int64_t>(device_count) : col_range_info_nosharding.bucket,
+                   col_range_info_nosharding.has_nulls};
 
   if (g_enable_watchdog &&
       ((col_range_info.hash_type_ == GroupByColRangeType::MultiCol && max_groups_buffer_entry_count > 120000000) ||
@@ -2065,7 +2083,8 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
         // assumes everything is padded to 8 bytes, make it so.
         agg_col_widths.push_back({wid, static_cast<int8_t>(wid ? 8 : 0)});
       }
-      CHECK(!must_use_baseline_sort);
+      const auto entries_per_shard =
+          shard_count ? (max_groups_buffer_entry_count + shard_count - 1) / shard_count : max_groups_buffer_entry_count;
       query_mem_desc_ = {executor_,
                          allow_multifrag,
                          col_range_info.hash_type_,
@@ -2079,7 +2098,7 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
 #endif
                          agg_col_widths,
                          target_group_by_indices,
-                         max_groups_buffer_entry_count,
+                         entries_per_shard,
                          0,
                          0,
                          0,
@@ -2137,7 +2156,6 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
     }
     case GroupByColRangeType::MultiColPerfectHash: {
       CHECK(!render_output);
-      CHECK(!must_use_baseline_sort);
       query_mem_desc_ = {executor_,
                          allow_multifrag,
                          col_range_info.hash_type_,
@@ -3470,3 +3488,23 @@ llvm::Value* GroupByAndAggregate::emitCall(const std::string& fname, const std::
 #undef LL_BOOL
 #undef LL_BUILDER
 #undef LL_CONTEXT
+
+size_t shard_count_for_top_groups(const RelAlgExecutionUnit& ra_exe_unit, const Catalog_Namespace::Catalog& catalog) {
+  if (ra_exe_unit.sort_info.order_entries.size() != 1 || !ra_exe_unit.sort_info.limit) {
+    return 0;
+  }
+  for (const auto& group_expr : ra_exe_unit.groupby_exprs) {
+    const auto grouped_col_expr = dynamic_cast<const Analyzer::ColumnVar*>(group_expr.get());
+    if (!grouped_col_expr) {
+      continue;
+    }
+    if (grouped_col_expr->get_table_id() <= 0) {
+      return 0;
+    }
+    const auto td = catalog.getMetadataForTable(grouped_col_expr->get_table_id());
+    if (td->shardedColumnId == grouped_col_expr->get_column_id()) {
+      return td->nShards;
+    }
+  }
+  return 0;
+}

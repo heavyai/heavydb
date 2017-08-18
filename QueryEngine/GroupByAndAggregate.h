@@ -553,4 +553,6 @@ int8_t pick_target_compact_width(const RelAlgExecutionUnit& ra_exe_unit,
                                  const std::vector<InputTableInfo>& query_infos,
                                  const int8_t crt_min_byte_width);
 
+size_t shard_count_for_top_groups(const RelAlgExecutionUnit& ra_exe_unit, const Catalog_Namespace::Catalog& catalog);
+
 #endif  // QUERYENGINE_GROUPBYANDAGGREGATE_H

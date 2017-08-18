@@ -341,6 +341,8 @@ class ResultSet {
 
   std::shared_ptr<RowSetMemoryOwner> getRowSetMemOwner() const { return row_set_mem_owner_; }
 
+  const std::vector<uint32_t>& getPermutationBuffer() const;
+
   std::string serialize() const;
 
   static std::unique_ptr<ResultSet> unserialize(const std::string&, const Executor*);
