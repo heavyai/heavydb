@@ -467,8 +467,7 @@ RowSetPtr QueryExecutionContext::getRowSet(const RelAlgExecutionUnit& ra_exe_uni
                                 std::vector<size_t>{});
   }
   CHECK(device_type_ == ExecutorDeviceType::GPU);
-  return executor_->reduceMultiDeviceResults(
-      ra_exe_unit, results_per_sm, row_set_mem_owner_, query_mem_desc, output_columnar_);
+  return executor_->reduceMultiDeviceResults(ra_exe_unit, results_per_sm, row_set_mem_owner_, query_mem_desc);
 }
 
 bool QueryExecutionContext::isEmptyBin(const int64_t* group_by_buffer, const size_t bin, const size_t key_idx) const {

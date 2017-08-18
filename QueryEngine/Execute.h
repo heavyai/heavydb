@@ -798,8 +798,7 @@ class Executor {
   RowSetPtr collectAllDeviceResults(ExecutionDispatch& execution_dispatch,
                                     const std::vector<Analyzer::Expr*>& target_exprs,
                                     const QueryMemoryDescriptor& query_mem_desc,
-                                    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-                                    const bool output_columnar);
+                                    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner);
 
   std::string renderRows(const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& targets,
                          RenderInfo* render_query_data);
@@ -926,8 +925,7 @@ class Executor {
   RowSetPtr reduceMultiDeviceResults(const RelAlgExecutionUnit&,
                                      std::vector<std::pair<ResultPtr, std::vector<size_t>>>& all_fragment_results,
                                      std::shared_ptr<RowSetMemoryOwner>,
-                                     const QueryMemoryDescriptor&,
-                                     const bool output_columnar) const;
+                                     const QueryMemoryDescriptor&) const;
   RowSetPtr reduceMultiDeviceResultSets(std::vector<std::pair<ResultPtr, std::vector<size_t>>>& all_fragment_results,
                                         std::shared_ptr<RowSetMemoryOwner>,
                                         const QueryMemoryDescriptor&) const;

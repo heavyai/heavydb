@@ -584,8 +584,7 @@ RowSetPtr reduce_estimator_results(const RelAlgExecutionUnit& ra_exe_unit,
 RowSetPtr Executor::reduceMultiDeviceResults(const RelAlgExecutionUnit& ra_exe_unit,
                                              std::vector<std::pair<ResultPtr, std::vector<size_t>>>& results_per_device,
                                              std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-                                             const QueryMemoryDescriptor& query_mem_desc,
-                                             const bool output_columnar) const {
+                                             const QueryMemoryDescriptor& query_mem_desc) const {
   if (ra_exe_unit.estimator) {
     return reduce_estimator_results(ra_exe_unit, results_per_device);
   }
@@ -919,11 +918,7 @@ ResultPtr Executor::executeWorkUnit(int32_t* error_code,
     }
     if (is_agg) {
       try {
-        return collectAllDeviceResults(execution_dispatch,
-                                       ra_exe_unit.target_exprs,
-                                       query_mem_desc,
-                                       row_set_mem_owner,
-                                       execution_dispatch.outputColumnar());
+        return collectAllDeviceResults(execution_dispatch, ra_exe_unit.target_exprs, query_mem_desc, row_set_mem_owner);
       } catch (ReductionRanOutOfSlots&) {
         *error_code = ERR_OUT_OF_SLOTS;
         std::vector<TargetInfo> targets;
@@ -1073,8 +1068,7 @@ RowSetPtr build_row_for_empty_input(const std::vector<Analyzer::Expr*>& target_e
 RowSetPtr Executor::collectAllDeviceResults(ExecutionDispatch& execution_dispatch,
                                             const std::vector<Analyzer::Expr*>& target_exprs,
                                             const QueryMemoryDescriptor& query_mem_desc,
-                                            std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-                                            const bool output_columnar) {
+                                            std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner) {
   const auto& ra_exe_unit = execution_dispatch.getExecutionUnit();
   for (const auto& query_exe_context : execution_dispatch.getQueryContexts()) {
     if (!query_exe_context || query_exe_context->hasNoFragments()) {
@@ -1092,7 +1086,7 @@ RowSetPtr Executor::collectAllDeviceResults(ExecutionDispatch& execution_dispatc
   if (use_speculative_top_n(ra_exe_unit, query_mem_desc)) {
     return reduceSpeculativeTopN(ra_exe_unit, result_per_device, row_set_mem_owner, query_mem_desc);
   }
-  return reduceMultiDeviceResults(ra_exe_unit, result_per_device, row_set_mem_owner, query_mem_desc, output_columnar);
+  return reduceMultiDeviceResults(ra_exe_unit, result_per_device, row_set_mem_owner, query_mem_desc);
 }
 
 std::unordered_map<int, const Analyzer::BinOper*> Executor::getInnerTabIdToJoinCond() const {
