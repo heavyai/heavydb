@@ -1947,11 +1947,10 @@ std::vector<int64_t> Executor::getJoinHashTablePtrs(const ExecutorDeviceType dev
 namespace {
 
 template <class T>
-int8_t* insert_one_dict_str(const ColumnDescriptor* cd,
+int64_t insert_one_dict_str(T* col_data,
+                            const ColumnDescriptor* cd,
                             const Analyzer::Constant* col_cv,
-                            const Catalog_Namespace::Catalog& catalog,
-                            int64_t& int_col_val) {
-  auto col_data = reinterpret_cast<T*>(checked_malloc(sizeof(T)));
+                            const Catalog_Namespace::Catalog& catalog) {
   if (col_cv->get_is_null()) {
     *col_data = inline_fixed_encoding_null_val(cd->columnType);
   } else {
@@ -1971,8 +1970,7 @@ int8_t* insert_one_dict_str(const ColumnDescriptor* cd,
     }
     *col_data = str_id;
   }
-  int_col_val = *col_data;
-  return reinterpret_cast<int8_t*>(col_data);
+  return *col_data;
 }
 
 }  // namespace
@@ -1990,7 +1988,7 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
   const auto& col_id_list = root_plan->get_result_col_list();
   std::vector<const ColumnDescriptor*> col_descriptors;
   std::vector<int> col_ids;
-  std::unordered_map<int, int8_t*> col_buffers;
+  std::unordered_map<int, std::unique_ptr<uint8_t[]>> col_buffers;
   std::unordered_map<int, std::vector<std::string>> str_col_buffers;
   auto& cat = root_plan->get_catalog();
   const auto table_descriptor = cat.getMetadataForTable(table_id);
@@ -2009,7 +2007,8 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
         case kENCODING_DICT: {
           const auto dd = cat.getMetadataForDict(cd->columnType.get_comp_param());
           CHECK(dd);
-          auto it_ok = col_buffers.insert(std::make_pair(col_id, nullptr));
+          const auto it_ok =
+              col_buffers.emplace(col_id, std::unique_ptr<uint8_t[]>(new uint8_t[cd->columnType.get_size()]));
           CHECK(it_ok.second);
           break;
         }
@@ -2017,7 +2016,8 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
           CHECK(false);
       }
     } else {
-      auto it_ok = col_buffers.insert(std::make_pair(col_id, nullptr));
+      const auto it_ok =
+          col_buffers.emplace(col_id, std::unique_ptr<uint8_t[]>(new uint8_t[cd->columnType.get_logical_size()]));
       CHECK(it_ok.second);
     }
     col_descriptors.push_back(cd);
@@ -2040,45 +2040,45 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
     const auto cd = col_descriptors[col_idx];
     auto col_datum = col_cv->get_constval();
     auto col_type = cd->columnType.is_decimal() ? decimal_to_int_type(cd->columnType) : cd->columnType.get_type();
+    uint8_t* col_data_bytes{nullptr};
+    if (!cd->columnType.is_string() || cd->columnType.get_compression() == kENCODING_DICT) {
+      const auto col_data_bytes_it = col_buffers.find(col_ids[col_idx]);
+      CHECK(col_data_bytes_it != col_buffers.end());
+      col_data_bytes = col_data_bytes_it->second.get();
+    }
     switch (col_type) {
       case kBOOLEAN: {
-        auto col_data = reinterpret_cast<int8_t*>(checked_malloc(sizeof(int8_t)));
+        auto col_data = col_data_bytes;
         *col_data =
             col_cv->get_is_null() ? inline_fixed_encoding_null_val(cd->columnType) : (col_datum.boolval ? 1 : 0);
-        col_buffers[col_ids[col_idx]] = col_data;
         break;
       }
       case kSMALLINT: {
-        auto col_data = reinterpret_cast<int16_t*>(checked_malloc(sizeof(int16_t)));
+        auto col_data = reinterpret_cast<int16_t*>(col_data_bytes);
         *col_data = col_cv->get_is_null() ? inline_fixed_encoding_null_val(cd->columnType) : col_datum.smallintval;
-        col_buffers[col_ids[col_idx]] = reinterpret_cast<int8_t*>(col_data);
         int_col_val = col_datum.smallintval;
         break;
       }
       case kINT: {
-        auto col_data = reinterpret_cast<int32_t*>(checked_malloc(sizeof(int32_t)));
+        auto col_data = reinterpret_cast<int32_t*>(col_data_bytes);
         *col_data = col_cv->get_is_null() ? inline_fixed_encoding_null_val(cd->columnType) : col_datum.intval;
-        col_buffers[col_ids[col_idx]] = reinterpret_cast<int8_t*>(col_data);
         int_col_val = col_datum.intval;
         break;
       }
       case kBIGINT: {
-        auto col_data = reinterpret_cast<int64_t*>(checked_malloc(sizeof(int64_t)));
+        auto col_data = reinterpret_cast<int64_t*>(col_data_bytes);
         *col_data = col_cv->get_is_null() ? inline_fixed_encoding_null_val(cd->columnType) : col_datum.bigintval;
-        col_buffers[col_ids[col_idx]] = reinterpret_cast<int8_t*>(col_data);
         int_col_val = col_datum.bigintval;
         break;
       }
       case kFLOAT: {
-        auto col_data = reinterpret_cast<float*>(checked_malloc(sizeof(float)));
+        auto col_data = reinterpret_cast<float*>(col_data_bytes);
         *col_data = col_datum.floatval;
-        col_buffers[col_ids[col_idx]] = reinterpret_cast<int8_t*>(col_data);
         break;
       }
       case kDOUBLE: {
-        auto col_data = reinterpret_cast<double*>(checked_malloc(sizeof(double)));
+        auto col_data = reinterpret_cast<double*>(col_data_bytes);
         *col_data = col_datum.doubleval;
-        col_buffers[col_ids[col_idx]] = reinterpret_cast<int8_t*>(col_data);
         break;
       }
       case kTEXT:
@@ -2091,13 +2091,13 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
           case kENCODING_DICT: {
             switch (cd->columnType.get_size()) {
               case 1:
-                col_buffers[col_ids[col_idx]] = insert_one_dict_str<int8_t>(cd, col_cv, cat, int_col_val);
+                int_col_val = insert_one_dict_str(reinterpret_cast<int8_t*>(col_data_bytes), cd, col_cv, cat);
                 break;
               case 2:
-                col_buffers[col_ids[col_idx]] = insert_one_dict_str<int16_t>(cd, col_cv, cat, int_col_val);
+                int_col_val = insert_one_dict_str(reinterpret_cast<int16_t*>(col_data_bytes), cd, col_cv, cat);
                 break;
               case 4:
-                col_buffers[col_ids[col_idx]] = insert_one_dict_str<int32_t>(cd, col_cv, cat, int_col_val);
+                int_col_val = insert_one_dict_str(reinterpret_cast<int32_t*>(col_data_bytes), cd, col_cv, cat);
                 break;
               default:
                 CHECK(false);
@@ -2112,9 +2112,8 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
       case kTIME:
       case kTIMESTAMP:
       case kDATE: {
-        auto col_data = reinterpret_cast<time_t*>(checked_malloc(sizeof(time_t)));
+        auto col_data = reinterpret_cast<time_t*>(col_data_bytes);
         *col_data = col_cv->get_is_null() ? inline_fixed_encoding_null_val(cd->columnType) : col_datum.timeval;
-        col_buffers[col_ids[col_idx]] = reinterpret_cast<int8_t*>(col_data);
         break;
       }
       default:
@@ -2125,10 +2124,10 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
       shard = shard_tables[int_col_val % shard_tables.size()];
     }
   }
-  for (const auto kv : col_buffers) {
+  for (const auto& kv : col_buffers) {
     insert_data.columnIds.push_back(kv.first);
     DataBlockPtr p;
-    p.numbersPtr = kv.second;
+    p.numbersPtr = reinterpret_cast<int8_t*>(kv.second.get());
     insert_data.data.push_back(p);
   }
   for (auto& kv : str_col_buffers) {
@@ -2142,9 +2141,6 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
     shard->fragmenter->insertData(insert_data);
   } else {
     table_descriptor->fragmenter->insertData(insert_data);
-  }
-  for (const auto kv : col_buffers) {
-    free(kv.second);
   }
 }
 
