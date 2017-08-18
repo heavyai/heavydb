@@ -276,6 +276,7 @@ class MapDHandler : public MapDIf {
   Catalog_Namespace::SessionInfo get_session(const TSessionId& session);
 
  private:
+  void check_table_load_privileges(const TSessionId& session, const std::string& table_name);
   void get_table_details_impl(TTableDetails& _return,
                               const TSessionId& session,
                               const std::string& table_name,

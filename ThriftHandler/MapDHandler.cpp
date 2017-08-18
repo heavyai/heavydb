@@ -950,6 +950,7 @@ void MapDHandler::load_table_binary(const TSessionId& session,
     LOG(ERROR) << ex.error_msg;
     throw ex;
   }
+  check_table_load_privileges(session, table_name);
   std::unique_ptr<Importer_NS::Loader> loader;
   if (leaf_aggregator_.leafCount() > 0) {
     loader.reset(new DistributedLoader(session_info, td, &leaf_aggregator_));
@@ -1001,6 +1002,7 @@ void MapDHandler::load_table(const TSessionId& session,
     LOG(ERROR) << ex.error_msg;
     throw ex;
   }
+  check_table_load_privileges(session, table_name);
   std::unique_ptr<Importer_NS::Loader> loader;
   if (leaf_aggregator_.leafCount() > 0) {
     loader.reset(new DistributedLoader(session_info, td, &leaf_aggregator_));
@@ -1477,6 +1479,7 @@ void MapDHandler::import_table(const TSessionId& session,
     LOG(ERROR) << ex.error_msg;
     throw ex;
   }
+  check_table_load_privileges(session, table_name);
 
   auto file_path = import_path_ / session / boost::filesystem::path(file_name).filename();
   if (!boost::filesystem::exists(file_path)) {
@@ -1578,6 +1581,7 @@ void MapDHandler::import_geo_table(const TSessionId& session,
     LOG(ERROR) << ex.error_msg;
     throw ex;
   }
+  check_table_load_privileges(session, table_name);
 
   Importer_NS::CopyParams copy_params = thrift_to_copyparams(cp);
 
@@ -1661,6 +1665,26 @@ SessionMap::iterator MapDHandler::get_session_it(const TSessionId& session) {
 Catalog_Namespace::SessionInfo MapDHandler::get_session(const TSessionId& session) {
   mapd_shared_lock<mapd_shared_mutex> read_lock(sessions_mutex_);
   return *get_session_it(session)->second;
+}
+
+void MapDHandler::check_table_load_privileges(const TSessionId& session, const std::string& table_name) {
+  const auto session_info = MapDHandler::get_session(session);
+  auto user_metadata = session_info.get_currentUser();
+  auto& cat = session_info.get_catalog();
+  auto& sys_cat = static_cast<Catalog_Namespace::SysCatalog&>(cat);
+  DBObject dbObject(table_name, TableDBObjectType);
+  std::vector<bool> privs{false, true, false};  // INSERT
+  sys_cat.populateDBObjectKey(dbObject, cat);
+  dbObject.setPrivileges(privs);
+  std::vector<DBObject> privObjects;
+  privObjects.push_back(dbObject);
+  if (cat.isAccessPrivCheckEnabled() && !sys_cat.checkPrivileges(user_metadata, privObjects)) {
+    TMapDException ex;
+    ex.error_msg = "Violation of access privileges: user " + user_metadata.userName +
+                   " has no insert privileges for table " + table_name + ".";
+    LOG(ERROR) << ex.error_msg;
+    throw ex;
+  }
 }
 
 void MapDHandler::set_execution_mode_nolock(Catalog_Namespace::SessionInfo* session_ptr,
