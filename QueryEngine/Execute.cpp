@@ -2095,10 +2095,10 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
           case kENCODING_DICT: {
             switch (cd->columnType.get_size()) {
               case 1:
-                int_col_val = insert_one_dict_str(reinterpret_cast<int8_t*>(col_data_bytes), cd, col_cv, cat);
+                int_col_val = insert_one_dict_str(reinterpret_cast<uint8_t*>(col_data_bytes), cd, col_cv, cat);
                 break;
               case 2:
-                int_col_val = insert_one_dict_str(reinterpret_cast<int16_t*>(col_data_bytes), cd, col_cv, cat);
+                int_col_val = insert_one_dict_str(reinterpret_cast<uint16_t*>(col_data_bytes), cd, col_cv, cat);
                 break;
               case 4:
                 int_col_val = insert_one_dict_str(reinterpret_cast<int32_t*>(col_data_bytes), cd, col_cv, cat);
