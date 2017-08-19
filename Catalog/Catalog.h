@@ -240,6 +240,8 @@ class Catalog {
   void renameTable(const TableDescriptor* td, const std::string& newTableName);
   void renameColumn(const TableDescriptor* td, const ColumnDescriptor* cd, const std::string& newColumnName);
 
+  void removeChunks(const int table_id);
+
   /**
    * @brief Returns a pointer to a const TableDescriptor struct matching
    * the provided tableName

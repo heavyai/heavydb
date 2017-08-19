@@ -1821,6 +1821,20 @@ void Catalog::doTruncateTable(const TableDescriptor* td) {
   }
 }
 
+// used by rollback_table_epoch to clean up in memory artifcats after a rollback
+void Catalog::removeChunks(const int table_id) {
+  auto td = getMetadataForTable(table_id);
+
+  if (td->fragmenter != nullptr) {
+    auto tableDescIt = tableDescriptorMapById_.find(table_id);
+    delete td->fragmenter;
+    tableDescIt->second->fragmenter = nullptr;  // get around const-ness
+  }
+  ChunkKey chunkKeyPrefix = {currentDB_.dbId, table_id};
+  // assuming deleteChunksWithPrefix is atomic
+  dataMgr_->deleteChunksWithPrefix(chunkKeyPrefix);
+}
+
 void Catalog::dropTable(const TableDescriptor* td) {
   const auto physicalTableIt = logicalToPhysicalTableMapById_.find(td->tableId);
   if (physicalTableIt != logicalToPhysicalTableMapById_.end()) {

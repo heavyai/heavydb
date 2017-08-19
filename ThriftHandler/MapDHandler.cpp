@@ -2312,8 +2312,16 @@ void MapDHandler::rollback_table_epoch(const TSessionId& session,
   if (!session_info.get_currentUser().isSuper) {
     throw std::runtime_error("Only superuser can rollback_table_epoch");
   }
+  // remove artifact in memory about rolledback data
+
+  auto& cat = session_info.get_catalog();
+
+  // if running in same DB as the rolledback table
+  if (cat.get_currentDB().dbId == db_id) {
+    LOG(INFO) << "Removing in memory artifacts after rollback of table epoch";
+    cat.removeChunks(table_id);
+  }
+
   LOG(INFO) << "Rollback table epoch db:" << db_id << " Table ID  " << table_id << " back to new epoch " << new_epoch;
   data_mgr_->updateTableEpoch(db_id, table_id, new_epoch);
-  clear_gpu_memory(session);
-  clear_cpu_memory(session);
 }
