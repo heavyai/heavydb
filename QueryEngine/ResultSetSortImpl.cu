@@ -145,7 +145,7 @@ std::vector<uint32_t> baseline_sort_fp(const ExecutorDeviceType device_type,
   // Execlude AVG b/c collect_order_entry_column already makes its pair collapse into a double
   const bool float_argument_input = takes_float_argument(oe_info) && oe_info.agg_kind != kAVG;
 
-  auto is_negtive = float_argument_input ? [](const int64_t v) -> bool { return (v & (1 << 31)) != 0; }
+  auto is_negative = float_argument_input ? [](const int64_t v) -> bool { return (v & (1 << 31)) != 0; }
   : [](const int64_t v) -> bool { return v < 0; };
 
   for (size_t i = start; i < layout.entry_count; i += step, ++oe_col_buffer_idx) {
@@ -154,7 +154,7 @@ std::vector<uint32_t> baseline_sort_fp(const ExecutorDeviceType device_type,
       null_idx_buff.push_back(i);
       continue;
     }
-    if (is_negtive(oe_col_buffer[oe_col_buffer_idx])) {  // sign bit works the same for integer and floating point
+    if (is_negative(oe_col_buffer[oe_col_buffer_idx])) {  // sign bit works the same for integer and floating point
       neg_idx_buff.push_back(i);
       neg_oe_col_buffer.push_back(oe_col_buffer[oe_col_buffer_idx]);
     } else {
