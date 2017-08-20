@@ -4,11 +4,11 @@ We welcome and encourage developer contributions to the project. Please see the 
 
 ## Database
 - Top k sort on GPU. Ability to efficiently order by a projected column.
-- JOIN improvements. Additional join types and performance improvements.
-- TRUNCATE. Efficiently remove contents of table or part of table.
+- JOIN improvements. Additional join types and performance improvements. (Completed 3.2)
+- TRUNCATE. Efficiently remove contents of table or part of table. (Completed v3.2)
 - Batched UPDATE and DELETE.
-- Interval type, and TIMESTAMP_ADD, TIMESTAMP_DIFF.
-- Table Sharding. Table sharding types in addition to the existing round robin.
+- Interval type, and TIMESTAMP_ADD, TIMESTAMP_DIFF. (Completed v3.2)
+- Table Sharding. Table sharding types in addition to the existing round robin. (Completed v3.2)
 - Table-level security, GRANT, REVOKE. Ability to grant and revoke table access to users/roles.
 - User Defined Functions (UDF)
 
