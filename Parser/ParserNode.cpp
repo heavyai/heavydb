@@ -2413,6 +2413,13 @@ void CopyTableStmt::execute(
 
 // CREATE ROLE payroll_dept_role;
 void CreateRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+  auto& catalog = session.get_catalog();
+  if (!catalog.isAccessPrivCheckEnabled()) {
+    throw std::runtime_error(
+        "CREATE ROLE " + get_role() +
+        " failed. This command may be executed only when DB object level access privileges check turned on.");
+  }
+
   const auto& currentUser = session.get_currentUser();
   if (!currentUser.isSuper) {
     throw std::runtime_error("CREATE ROLE " + get_role() + " failed. It can only be executed by super user.");
@@ -2423,7 +2430,6 @@ void CreateRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
                              " failed because this role name is reserved and can't be used.");
   }
 
-  auto& catalog = session.get_catalog();
   auto& syscat = static_cast<Catalog_Namespace::SysCatalog&>(catalog);
   if (syscat.getMetadataForRole(get_role()) != nullptr) {
     throw std::runtime_error("CREATE ROLE " + get_role() + " failed because role with this name already exists.");
@@ -2433,12 +2439,18 @@ void CreateRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 
 // DROP ROLE payroll_dept_role;
 void DropRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+  auto& catalog = session.get_catalog();
+  if (!catalog.isAccessPrivCheckEnabled()) {
+    throw std::runtime_error(
+        "DROP ROLE " + get_role() +
+        " failed. This command may be executed only when DB object level access privileges check turned on.");
+  }
+
   const auto& currentUser = session.get_currentUser();
   if (!currentUser.isSuper) {
     throw std::runtime_error("DROP ROLE " + get_role() + "failed. It can only be executed by super user.");
   }
 
-  auto& catalog = session.get_catalog();
   auto& syscat = static_cast<Catalog_Namespace::SysCatalog&>(catalog);
   if (syscat.getMetadataForRole(get_role()) == nullptr) {
     throw std::runtime_error("DROP ROLE " + get_role() + " failed because role with this name does not exist.");
@@ -2489,8 +2501,14 @@ std::string extractObjectNameFromHierName(const std::string& objectHierName,
 
 // GRANT SELECT/INSERT/CREATE ON TABLE payroll_table TO payroll_dept_role;
 void GrantPrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session) {
-  const auto& currentUser = session.get_currentUser();
   auto& catalog = session.get_catalog();
+  if (!catalog.isAccessPrivCheckEnabled()) {
+    throw std::runtime_error(
+        "GRANT " + get_priv() +
+        " failed. This command may be executed only when DB object level access privileges check turned on.");
+  }
+
+  const auto& currentUser = session.get_currentUser();
   auto& syscat = static_cast<Catalog_Namespace::SysCatalog&>(catalog);
   const auto parserObjectType = boost::to_upper_copy<std::string>(get_object_type());
   const auto objectName = extractObjectNameFromHierName(get_object(), parserObjectType, catalog);
@@ -2540,8 +2558,14 @@ void GrantPrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session)
 
 // REVOKE SELECT/INSERT/CREATE ON TABLE payroll_table FROM payroll_dept_role;
 void RevokePrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session) {
-  const auto& currentUser = session.get_currentUser();
   auto& catalog = session.get_catalog();
+  if (!catalog.isAccessPrivCheckEnabled()) {
+    throw std::runtime_error(
+        "REVOKE " + get_priv() +
+        " failed. This command may be executed only when DB object level access privileges check turned on.");
+  }
+
+  const auto& currentUser = session.get_currentUser();
   auto& syscat = static_cast<Catalog_Namespace::SysCatalog&>(catalog);
   const auto parserObjectType = boost::to_upper_copy<std::string>(get_object_type());
   const auto objectName = extractObjectNameFromHierName(get_object(), parserObjectType, catalog);
@@ -2591,8 +2615,14 @@ void RevokePrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session
 
 // SHOW ON TABLE payroll_table FOR payroll_dept_role;
 void ShowPrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session) {
-  const auto& currentUser = session.get_currentUser();
   auto& catalog = session.get_catalog();
+  if (!catalog.isAccessPrivCheckEnabled()) {
+    throw std::runtime_error(
+        "SHOW ON " + get_object() + " FOR " + get_role() +
+        " failed. This command may be executed only when DB object level access privileges check turned on.");
+  }
+
+  const auto& currentUser = session.get_currentUser();
   auto& syscat = static_cast<Catalog_Namespace::SysCatalog&>(catalog);
   const auto parserObjectType = boost::to_upper_copy<std::string>(get_object_type());
   const auto objectName = extractObjectNameFromHierName(get_object(), parserObjectType, catalog);
@@ -2644,24 +2674,36 @@ void ShowPrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session) 
 
 // GRANT payroll_dept_role TO joe;
 void GrantRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+  auto& catalog = session.get_catalog();
+  if (!catalog.isAccessPrivCheckEnabled()) {
+    throw std::runtime_error(
+        "GRANT " + get_role() + " TO " + get_user() +
+        " failed. This command may be executed only when DB object level access privileges check turned on.");
+  }
+
   const auto& currentUser = session.get_currentUser();
   if (!currentUser.isSuper) {
-    throw std::runtime_error("GRANT ROLE " + get_role() + " TO " + get_user() +
+    throw std::runtime_error("GRANT " + get_role() + " TO " + get_user() +
                              "; failed, because it can only be executed by super user.");
   }
-  auto& catalog = session.get_catalog();
   auto& syscat = static_cast<Catalog_Namespace::SysCatalog&>(catalog);
   syscat.grantRole(get_role(), get_user());
 }
 
 // REVOKE payroll_dept_role FROM joe;
 void RevokeRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+  auto& catalog = session.get_catalog();
+  if (!catalog.isAccessPrivCheckEnabled()) {
+    throw std::runtime_error(
+        "REVOKE " + get_role() + " FROM " + get_user() +
+        " failed. This command may be executed only when DB object level access privileges check turned on.");
+  }
+
   const auto& currentUser = session.get_currentUser();
   if (!currentUser.isSuper) {
-    throw std::runtime_error("REVOKE ROLE " + get_role() + " FROM " + get_user() +
+    throw std::runtime_error("REVOKE " + get_role() + " FROM " + get_user() +
                              "; failed, because it can only be executed by super user.");
   }
-  auto& catalog = session.get_catalog();
   auto& syscat = static_cast<Catalog_Namespace::SysCatalog&>(catalog);
   syscat.revokeRole(get_role(), get_user());
 }
