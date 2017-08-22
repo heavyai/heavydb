@@ -866,6 +866,62 @@ TEST(Select, OrderBy) {
     c("SELECT ss FROM test GROUP by ss ORDER BY ss ASC NULLS FIRST;",
       "SELECT ss FROM test GROUP by ss ORDER BY ss ASC;",
       dt);
+    c("SELECT x FROM test ORDER BY x LIMIT 50;", dt);
+    c("SELECT x FROM test ORDER BY x LIMIT 5;", dt);
+    c("SELECT x FROM test ORDER BY x ASC LIMIT 20;", dt);
+    c("SELECT dd FROM test ORDER BY dd ASC LIMIT 20;", dt);
+    c("SELECT f FROM test ORDER BY f ASC LIMIT 5;", dt);
+    c("SELECT f FROM test ORDER BY f ASC LIMIT 20;", dt);
+    c("SELECT fn as k FROM test ORDER BY k ASC NULLS FIRST LIMIT 5;",
+      "SELECT fn as k FROM test ORDER BY k ASC LIMIT 5;",
+      dt);
+    c("SELECT fn as k FROM test ORDER BY k ASC NULLS FIRST LIMIT 20;",
+      "SELECT fn as k FROM test ORDER BY k ASC LIMIT 20;",
+      dt);
+    c("SELECT dn as k FROM test ORDER BY k ASC NULLS FIRST LIMIT 5;",
+      "SELECT dn as k FROM test ORDER BY k ASC LIMIT 5;",
+      dt);
+    c("SELECT dn as k FROM test ORDER BY k ASC NULLS FIRST LIMIT 20;",
+      "SELECT dn as k FROM test ORDER BY k ASC LIMIT 20;",
+      dt);
+    c("SELECT ff as k FROM test ORDER BY k ASC NULLS FIRST LIMIT 5;",
+      "SELECT ff as k FROM test ORDER BY k ASC LIMIT 5;",
+      dt);
+    c("SELECT ff as k FROM test ORDER BY k ASC NULLS FIRST  LIMIT 20;",
+      "SELECT ff as k FROM test ORDER BY k ASC LIMIT 20;",
+      dt);
+    c("SELECT d as k FROM test ORDER BY k ASC LIMIT 5;", dt);
+    c("SELECT d as k FROM test ORDER BY k ASC LIMIT 20;", dt);
+    c("SELECT dn as k FROM test ORDER BY k ASC NULLS FIRST LIMIT 5;",
+      "SELECT dn as k FROM test ORDER BY k ASC LIMIT 5;",
+      dt);
+    c("SELECT dn as k FROM test ORDER BY k ASC NULLS FIRST LIMIT 20;",
+      "SELECT dn as k FROM test ORDER BY k ASC LIMIT 20;",
+      dt);
+    c("SELECT ofq AS k FROM test ORDER BY k ASC NULLS FIRST LIMIT 5;",
+      "SELECT ofq as k FROM test ORDER BY k ASC LIMIT 5;",
+      dt);
+    c("SELECT ofq AS k FROM test ORDER BY k ASC NULLS FIRST LIMIT 20;",
+      "SELECT ofq as k FROM test ORDER BY k ASC LIMIT 20;",
+      dt);
+    c("SELECT ufq as k FROM test ORDER BY k ASC NULLS FIRST LIMIT 5;",
+      "SELECT ufq as k FROM test ORDER BY k ASC LIMIT 5;",
+      dt);
+    c("SELECT ufq as k FROM test ORDER BY k ASC NULLS FIRST LIMIT 20;",
+      "SELECT ufq as k FROM test ORDER BY k ASC LIMIT 20;",
+      dt);
+    c("SELECT CAST(ofd AS FLOAT) as k FROM test ORDER BY k ASC NULLS FIRST LIMIT 5;",
+      "SELECT CAST(ofd AS FLOAT) as k FROM test ORDER BY k ASC LIMIT 5;",
+      dt);
+    c("SELECT CAST(ofd AS FLOAT) as k FROM test ORDER BY k ASC NULLS FIRST LIMIT 20;",
+      "SELECT CAST(ofd AS FLOAT) as k FROM test ORDER BY k ASC LIMIT 20;",
+      dt);
+    c("SELECT CAST(ufd AS FLOAT) as k FROM test ORDER BY k ASC NULLS FIRST LIMIT 5;",
+      "SELECT CAST(ufd AS FLOAT) as k FROM test ORDER BY k ASC LIMIT 5;",
+      dt);
+    c("SELECT CAST(ufd AS FLOAT) as k FROM test ORDER BY k ASC NULLS FIRST LIMIT 20;",
+      "SELECT CAST(ufd AS FLOAT) as k FROM test ORDER BY k ASC LIMIT 20;",
+      dt);
   }
 }
 
