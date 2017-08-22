@@ -492,8 +492,8 @@ int64_t lazy_decode(const ColumnLazyFetchInfo& col_lazy_fetch, const int8_t* byt
   const auto& type_info = col_lazy_fetch.type;
   if (type_info.is_fp()) {
     if (type_info.get_type() == kFLOAT) {
-      float fval = fixed_width_float_decode_noinline(byte_stream, pos);
-      return *reinterpret_cast<const int32_t*>(may_alias_ptr(&fval));
+      double fval = fixed_width_float_decode_noinline(byte_stream, pos);
+      return *reinterpret_cast<const int64_t*>(may_alias_ptr(&fval));
     } else {
       double fval = fixed_width_double_decode_noinline(byte_stream, pos);
       return *reinterpret_cast<const int64_t*>(may_alias_ptr(&fval));
@@ -755,11 +755,11 @@ TargetValue ResultSet::makeTargetValue(const int8_t* ptr,
       auto& frag_col_buffers = getColumnFrag(storage_idx.first, target_logical_idx, ival);
       ival = lazy_decode(col_lazy_fetch, frag_col_buffers[col_lazy_fetch.local_col_id], ival);
       if (chosen_type.is_fp()) {
+        const auto dval = *reinterpret_cast<const double*>(may_alias_ptr(&ival));
         if (chosen_type.get_type() == kFLOAT) {
-          const auto fval_int = static_cast<const int32_t>(ival);
-          return ScalarTargetValue(*reinterpret_cast<const float*>(may_alias_ptr(&fval_int)));
+          return ScalarTargetValue(static_cast<float>(dval));
         } else {
-          return ScalarTargetValue(*reinterpret_cast<const double*>(may_alias_ptr(&ival)));
+          return ScalarTargetValue(dval);
         }
       }
     }
