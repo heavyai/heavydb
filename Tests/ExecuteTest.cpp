@@ -942,19 +942,13 @@ TEST(Select, ComplexQueries) {
     c("SELECT x + y AS a, COUNT(*) * MAX(y) - SUM(z) AS b FROM test "
       "WHERE z BETWEEN 100 AND 200 GROUP BY a, y;",
       dt);
-    c("SELECT COUNT(*) FROM test a JOIN (SELECT * FROM test WHERE y < 43) b ON a.x = b.x JOIN join_test c ON a.x = c.x "
-      "WHERE a.fixed_str = 'foo';",
-      dt);
     c("SELECT x, y FROM (SELECT a.str AS str, b.x AS x, a.y AS y FROM test a, join_test b WHERE a.x = b.x) WHERE str = "
       "'foo' ORDER BY x LIMIT 1;",
       dt);
-    c("SELECT * FROM (SELECT a.y, b.str FROM test a JOIN join_test b ON a.x = b.x) ORDER BY y, str;", dt);
     const auto rows = run_multiple_agg(
         "SELECT x + y AS a, COUNT(*) * MAX(y) - SUM(z) AS b FROM test "
         "WHERE z BETWEEN 100 AND 200 GROUP BY x, y ORDER BY a DESC LIMIT 2;",
         dt);
-    c("SELECT x, dup_str FROM (SELECT * FROM test a JOIN join_test b ON a.x = b.x) WHERE y > 40 ORDER BY x, dup_str;",
-      dt);
     ASSERT_EQ(rows->rowCount(), size_t(2));
     {
       auto crt_row = rows->getNextRow(true, true);
@@ -2804,74 +2798,6 @@ TEST(Select, ArrayUnsupported) {
   }
 }
 
-TEST(Select, Joins) {
-  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
-    SKIP_NO_GPU();
-    c("SELECT COUNT(*) FROM test, test_inner WHERE test.x = test_inner.x;", dt);
-    c("SELECT COUNT(*) FROM test, hash_join_test WHERE test.t = hash_join_test.t;", dt);
-    c("SELECT COUNT(*) FROM test, test_inner WHERE test.x < test_inner.x + 1;", dt);
-    c("SELECT test_inner.x, COUNT(*) AS n FROM test, test_inner WHERE test.x = test_inner.x GROUP BY test_inner.x "
-      "ORDER BY n;",
-      dt);
-    c("SELECT COUNT(*) FROM test, test_inner WHERE test.str = test_inner.str;", dt);
-    c("SELECT test.str, COUNT(*) FROM test, test_inner WHERE test.str = test_inner.str GROUP BY test.str;", dt);
-    c("SELECT test_inner.str, COUNT(*) FROM test, test_inner WHERE test.str = test_inner.str GROUP BY test_inner.str;",
-      dt);
-    c("SELECT test.str, COUNT(*) AS foobar FROM test, test_inner WHERE test.x = test_inner.x AND test.x > 6 GROUP BY "
-      "test.str HAVING foobar > 5;",
-      dt);
-    c("SELECT COUNT(*) FROM test, test_inner WHERE test.real_str LIKE 'real_ba%' AND test.x = test_inner.x;", dt);
-    c("SELECT COUNT(*) FROM test, test_inner WHERE LENGTH(test.real_str) = 8 AND test.x = test_inner.x;", dt);
-    c("SELECT a.x, b.str FROM test a, join_test b WHERE a.str = b.str GROUP BY a.x, b.str ORDER BY a.x, b.str;", dt);
-    c("SELECT a.x, b.str FROM test a, join_test b WHERE a.str = b.str ORDER BY a.x, b.str;", dt);
-    ASSERT_EQ(
-        int64_t(g_array_test_row_count / 2 + g_array_test_row_count / 4),
-        v<int64_t>(run_simple_agg(
-            "SELECT COUNT(*) FROM test, test_inner WHERE EXTRACT(HOUR FROM test.m) = 22 AND test.x = test_inner.x;",
-            dt)));
-    ASSERT_EQ(int64_t(1),
-              v<int64_t>(run_simple_agg(
-                  "SELECT COUNT(*) FROM array_test, test_inner WHERE array_test.arr_i32[array_test.x - 5] = 20 AND "
-                  "array_test.x = "
-                  "test_inner.x;",
-                  dt)));
-    c("SELECT COUNT(*) FROM test, join_test WHERE test.str = join_test.dup_str;", dt);
-    // Intentionally duplicate previous string join to cover hash table building.
-    c("SELECT COUNT(*) FROM test, join_test WHERE test.str = join_test.dup_str;", dt);
-    c("SELECT test.x, emptytab.x FROM test, emptytab WHERE test.x = emptytab.x;", dt);
-    c("SELECT COUNT(*) FROM test, emptytab GROUP BY test.x;", dt);
-    ASSERT_EQ(
-        int64_t(3),
-        v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test, join_test WHERE test.rowid = join_test.rowid;", dt)));
-  }
-}
-
-TEST(Select, JoinsAndArrays) {
-  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
-    SKIP_NO_GPU();
-    ASSERT_EQ(int64_t(0),
-              v<int64_t>(run_simple_agg(
-                  "SELECT COUNT(*) FROM test, array_test_inner WHERE test.x = ALL array_test_inner.arr_i16;", dt)));
-    ASSERT_EQ(int64_t(60),
-              v<int64_t>(run_simple_agg(
-                  "SELECT COUNT(*) FROM test, array_test_inner WHERE test.x = ANY array_test_inner.arr_i16;", dt)));
-    ASSERT_EQ(int64_t(2 * g_array_test_row_count * g_num_rows - 60),
-              v<int64_t>(run_simple_agg(
-                  "SELECT COUNT(*) FROM test, array_test_inner WHERE test.x <> ALL array_test_inner.arr_i16;", dt)));
-    ASSERT_EQ(int64_t(g_array_test_row_count),
-              v<int64_t>(run_simple_agg(
-                  "SELECT COUNT(*) FROM test, array_test_inner WHERE 7 = array_test_inner.arr_i16[1];", dt)));
-    ASSERT_EQ(int64_t(2 * g_num_rows),
-              v<int64_t>(run_simple_agg(
-                  "SELECT COUNT(*) FROM test, array_test WHERE test.x = array_test.x AND 'bb' = ANY arr_str;", dt)));
-    auto result_rows = run_multiple_agg(
-        "SELECT UNNEST(array_test.arr_i16) AS a, test_inner.x, COUNT(*) FROM array_test, test_inner WHERE test_inner.x "
-        "= array_test.arr_i16[1] GROUP BY a, test_inner.x;",
-        dt);
-    ASSERT_EQ(size_t(3), result_rows->rowCount());
-  }
-}
-
 TEST(Select, OrRewrite) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -3054,9 +2980,6 @@ TEST(Select, Subqueries) {
     c("SELECT COUNT(*) FROM test_in_bitmap WHERE str IN (SELECT str FROM test GROUP BY str);", dt);
     c("SELECT COUNT(*) FROM test_in_bitmap WHERE str NOT IN (SELECT str FROM test GROUP BY str);", dt);
     c("SELECT COUNT(str) FROM (SELECT * FROM (SELECT * FROM test WHERE x = 7) WHERE y = 42) WHERE t > 1000;", dt);
-    c("SELECT a.x FROM (SELECT * FROM test WHERE x = 8) AS a JOIN (SELECT * FROM test_inner WHERE x = 7) AS b ON a.str "
-      "= b.str WHERE a.y < 42;",
-      dt);
     c("SELECT x_cap, y FROM (SELECT CASE WHEN x > 100 THEN 100 ELSE x END x_cap, y, t FROM emptytab) GROUP BY x_cap, "
       "y;",
       dt);
@@ -3073,33 +2996,109 @@ TEST(Select, Subqueries) {
   }
 }
 
-TEST(Select, InnerJoins) {
+TEST(Select, Joins_Arrays) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-    c("SELECT COUNT(*) FROM test a JOIN single_row_test b ON a.x = b.x;", dt);
-    c("SELECT COUNT(*) from test a JOIN single_row_test b ON a.ofd = b.x;", dt);
-    c("SELECT COUNT(*) FROM test JOIN test_inner ON test.x = test_inner.x;", dt);
-    c("SELECT a.y, z FROM test a JOIN test_inner b ON a.x = b.x order by a.y;", dt);
+    ASSERT_EQ(int64_t(0),
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM test, array_test_inner WHERE test.x = ALL array_test_inner.arr_i16;", dt)));
+    ASSERT_EQ(int64_t(60),
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM test, array_test_inner WHERE test.x = ANY array_test_inner.arr_i16;", dt)));
+    ASSERT_EQ(int64_t(2 * g_array_test_row_count * g_num_rows - 60),
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM test, array_test_inner WHERE test.x <> ALL array_test_inner.arr_i16;", dt)));
+    ASSERT_EQ(int64_t(g_array_test_row_count),
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM test, array_test_inner WHERE 7 = array_test_inner.arr_i16[1];", dt)));
+    ASSERT_EQ(int64_t(2 * g_num_rows),
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM test, array_test WHERE test.x = array_test.x AND 'bb' = ANY arr_str;", dt)));
+    auto result_rows = run_multiple_agg(
+        "SELECT UNNEST(array_test.arr_i16) AS a, test_inner.x, COUNT(*) FROM array_test, test_inner WHERE test_inner.x "
+        "= array_test.arr_i16[1] GROUP BY a, test_inner.x;",
+        dt);
+    ASSERT_EQ(size_t(3), result_rows->rowCount());
+    ASSERT_EQ(
+        int64_t(g_array_test_row_count / 2 + g_array_test_row_count / 4),
+        v<int64_t>(run_simple_agg(
+            "SELECT COUNT(*) FROM test, test_inner WHERE EXTRACT(HOUR FROM test.m) = 22 AND test.x = test_inner.x;",
+            dt)));
+    ASSERT_EQ(int64_t(1),
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM array_test, test_inner WHERE array_test.arr_i32[array_test.x - 5] = 20 AND "
+                  "array_test.x = "
+                  "test_inner.x;",
+                  dt)));
+  }
+}
+
+TEST(Select, Joins_EmptyTable) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT test.x, emptytab.x FROM test, emptytab WHERE test.x = emptytab.x;", dt);
+    c("SELECT COUNT(*) FROM test, emptytab GROUP BY test.x;", dt);
+  }
+}
+
+TEST(Select, Joins_ImplicitJoins) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT COUNT(*) FROM test, test_inner WHERE test.x = test_inner.x;", dt);
+    c("SELECT COUNT(*) FROM test, hash_join_test WHERE test.t = hash_join_test.t;", dt);
+    c("SELECT COUNT(*) FROM test, test_inner WHERE test.x < test_inner.x + 1;", dt);
     c("SELECT COUNT(*) FROM test, test_inner WHERE test.real_str = test_inner.str;", dt);
-    c("SELECT COUNT(*) FROM test JOIN test_inner ON test.str = test_inner.str AND test.x = 7;", dt);
-    c("SELECT a.x, b.str FROM test AS a JOIN join_test AS b ON a.str = b.str AND a.x = b.x ORDER BY a.x, b.str;", dt);
-    c("SELECT a.x, b.str FROM test AS a JOIN join_test AS b ON a.x = b.x AND a.str = b.str ORDER BY a.x, b.str;", dt);
-    c("SELECT a.z, b.str FROM test a JOIN join_test b ON a.y = b.y AND a.x = b.x ORDER BY a.z, b.str;", dt);
-    c("SELECT a.z, b.str FROM test a JOIN test_inner b ON a.y = b.y AND a.x = b.x ORDER BY a.z, b.str;", dt);
-    c("SELECT COUNT(*) FROM test a JOIN join_test b ON a.str = b.dup_str;", dt);
-    c("SELECT COUNT(*) FROM test_inner_x a JOIN test_x b ON a.x = b.x;", dt);
-    c("SELECT a.x FROM test a JOIN join_test b ON a.str = b.dup_str ORDER BY a.x;", dt);
-    c("SELECT a.x FROM test_inner_x a JOIN test_x b ON a.x = b.x ORDER BY a.x;", dt);
-    c("SELECT a.x FROM test a JOIN join_test b ON a.str = b.dup_str GROUP BY a.x ORDER BY a.x;", dt);
-    c("SELECT a.x FROM test_inner_x a JOIN test_x b ON a.x = b.x GROUP BY a.x ORDER BY a.x;", dt);
+    c("SELECT test_inner.x, COUNT(*) AS n FROM test, test_inner WHERE test.x = test_inner.x GROUP BY test_inner.x "
+      "ORDER BY n;",
+      dt);
+    c("SELECT COUNT(*) FROM test, test_inner WHERE test.str = test_inner.str;", dt);
+    c("SELECT test.str, COUNT(*) FROM test, test_inner WHERE test.str = test_inner.str GROUP BY test.str;", dt);
+    c("SELECT test_inner.str, COUNT(*) FROM test, test_inner WHERE test.str = test_inner.str GROUP BY test_inner.str;",
+      dt);
+    c("SELECT test.str, COUNT(*) AS foobar FROM test, test_inner WHERE test.x = test_inner.x AND test.x > 6 GROUP BY "
+      "test.str HAVING foobar > 5;",
+      dt);
+    c("SELECT COUNT(*) FROM test, test_inner WHERE test.real_str LIKE 'real_ba%' AND test.x = test_inner.x;", dt);
+    c("SELECT COUNT(*) FROM test, test_inner WHERE LENGTH(test.real_str) = 8 AND test.x = test_inner.x;", dt);
+    c("SELECT a.x, b.str FROM test a, join_test b WHERE a.str = b.str GROUP BY a.x, b.str ORDER BY a.x, b.str;", dt);
+    c("SELECT a.x, b.str FROM test a, join_test b WHERE a.str = b.str ORDER BY a.x, b.str;", dt);
+    c("SELECT COUNT(1) FROM test a, join_test b, test_inner c WHERE a.str = b.str AND b.x = c.x", dt);
+    c("SELECT COUNT(*) FROM test a, join_test b, test_inner c WHERE a.x = b.x AND a.y = b.x AND a.x = c.x AND c.str = "
+      "'foo';",
+      dt);
     c("SELECT COUNT(*) FROM test a, test b WHERE a.x = b.x AND a.y = b.y;", dt);
     c("SELECT COUNT(*) FROM test a, test b WHERE a.x = b.x AND a.str = b.str;", dt);
+    ASSERT_EQ(
+        int64_t(3),
+        v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test, join_test WHERE test.rowid = join_test.rowid;", dt)));
     ASSERT_EQ(7,
               v<int64_t>(run_simple_agg(
                   "SELECT test.x FROM test, test_inner WHERE test.x = test_inner.x AND test.rowid = 19;", dt)));
     ASSERT_EQ(0,
               v<int64_t>(run_simple_agg(
                   "SELECT COUNT(*) FROM test, test_inner WHERE test.x = test_inner.x AND test.rowid = 20;", dt)));
+  }
+}
+
+TEST(Select, Joins_InnerJoin_TwoTables) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT COUNT(*) FROM test a JOIN single_row_test b ON a.x = b.x;", dt);
+    c("SELECT COUNT(*) from test a JOIN single_row_test b ON a.ofd = b.x;", dt);
+    c("SELECT COUNT(*) FROM test JOIN test_inner ON test.x = test_inner.x;", dt);
+    c("SELECT a.y, z FROM test a JOIN test_inner b ON a.x = b.x order by a.y;", dt);
+    c("SELECT COUNT(*) FROM test a JOIN join_test b ON a.str = b.dup_str;", dt);
+    c("SELECT COUNT(*) FROM test_inner_x a JOIN test_x b ON a.x = b.x;", dt);
+    c("SELECT a.x FROM test a JOIN join_test b ON a.str = b.dup_str ORDER BY a.x;", dt);
+    c("SELECT a.x FROM test_inner_x a JOIN test_x b ON a.x = b.x ORDER BY a.x;", dt);
+    c("SELECT a.x FROM test a JOIN join_test b ON a.str = b.dup_str GROUP BY a.x ORDER BY a.x;", dt);
+    c("SELECT a.x FROM test_inner_x a JOIN test_x b ON a.x = b.x GROUP BY a.x ORDER BY a.x;", dt);
+  }
+}
+
+TEST(Select, Joins_InnerJoin_AtLeastThreeTables) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
 #ifdef ENABLE_JOIN_EXEC
     c("SELECT count(*) FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str = c.str;", dt);
     c("SELECT count(*) FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str = c.str JOIN "
@@ -3112,23 +3111,10 @@ TEST(Select, InnerJoins) {
       "c.str "
       "ORDER BY a.y;",
       dt);
-    c("SELECT count(*) FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str = c.str WHERE a.y "
-      "< 43;",
-      dt);
-    c("SELECT SUM(a.x), b.str FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str = c.str "
-      "WHERE a.y "
-      "= 43 group by b.str;",
-      dt);
     c("SELECT a.x, b.x, b.str, c.str FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.x = c.x "
       "ORDER BY b.str;",
       dt);
-    c("SELECT a.str as key0,a.fixed_str as key1,COUNT(*) AS color FROM test a JOIN (select str,count(*) "
-      "from test group by str order by COUNT(*) desc limit 40) b on a.str=b.str JOIN (select "
-      "fixed_str,count(*) from test group by fixed_str order by count(*) desc limit 40) c on "
-      "c.fixed_str=a.fixed_str GROUP BY key0, key1 ORDER BY key0,key1;",
-      dt);
     c("SELECT a.x, b.x, c.x FROM test a JOIN test_inner b ON a.x = b.x JOIN join_test c ON b.x = c.x;", dt);
-
     c("SELECT count(*) FROM test AS a JOIN hash_join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str = c.str;",
       dt);
     c("SELECT count(*) FROM test AS a JOIN hash_join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str = c.str JOIN "
@@ -3141,10 +3127,32 @@ TEST(Select, InnerJoins) {
       "hash_join_test AS d ON c.x = d.x;",
       dt);
     c("SELECT a.x AS x, a.y, b.str FROM test AS a JOIN hash_join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str "
-      "= "
-      "c.str "
+      "= c.str "
       "ORDER BY a.y;",
       dt);
+    c("SELECT a.x, b.x, c.x FROM test a JOIN test_inner b ON a.x = b.x JOIN hash_join_test c ON b.x = c.x;", dt);
+    c("SELECT a.x, b.x FROM test_inner a JOIN test_inner b ON a.x = b.x ORDER BY a.x;", dt);
+    c("SELECT a.x, b.x FROM join_test a JOIN join_test b ON a.x = b.x ORDER BY a.x;", dt);
+    c("SELECT COUNT(1) FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c ON a.t = c.x;", dt);
+    c("SELECT COUNT(*) FROM test a JOIN test_inner b ON a.str = b.str JOIN hash_join_test c ON a.x = c.x JOIN "
+      "join_test d ON a.x > d.x;",
+      dt);
+#endif
+  }
+}
+
+TEST(Select, Joins_InnerJoin_Filters) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT count(*) FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str = c.str WHERE a.y "
+      "< 43;",
+      dt);
+    c("SELECT SUM(a.x), b.str FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str = c.str "
+      "WHERE a.y "
+      "= 43 group by b.str;",
+      dt);
+    c("SELECT COUNT(*) FROM test JOIN test_inner ON test.str = test_inner.str AND test.x = 7;", dt);
+    c("SELECT test.x, test_inner.str FROM test JOIN test_inner ON test.str = test_inner.str AND test.x <> 7;", dt);
     c("SELECT count(*) FROM test AS a JOIN hash_join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str = c.str "
       "WHERE a.y "
       "< 43;",
@@ -3157,46 +3165,13 @@ TEST(Select, InnerJoins) {
     c("SELECT COUNT(*) FROM test a JOIN join_test b ON a.x = b.x JOIN test_inner c ON c.str = a.str WHERE c.str = "
       "'foo';",
       dt);
-    c("SELECT a.x, b.x, c.x FROM test a JOIN test_inner b ON a.x = b.x JOIN hash_join_test c ON b.x = c.x;", dt);
-    c("SELECT a.x, b.x FROM test_inner a JOIN test_inner b ON a.x = b.x ORDER BY a.x;", dt);
-    c("SELECT a.x, b.x FROM join_test a JOIN join_test b ON a.x = b.x ORDER BY a.x;", dt);
-    c("SELECT COUNT(1) FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c ON a.t = c.x;", dt);
-    c("SELECT COUNT(1) FROM test a, join_test b, test_inner c WHERE a.str = b.str AND b.x = c.x", dt);
-    c("SELECT COUNT(*) FROM test a, join_test b, test_inner c WHERE a.x = b.x AND a.y = b.x AND a.x = c.x AND c.str = "
-      "'foo';",
-      dt);
-    c("SELECT COUNT(*) FROM test a JOIN join_test b ON a.x = b.x AND a.y = b.x JOIN test_inner c ON a.x = c.x WHERE "
-      "c.str <> 'foo';",
-      dt);
-    c("SELECT COUNT(*) FROM test a JOIN test_inner b ON a.str = b.str JOIN hash_join_test c ON a.x = c.x JOIN "
-      "join_test d ON a.x > d.x;",
-      dt);
-    c("SELECT a.x, b.x, d.str FROM test a JOIN test_inner b ON a.str = b.str JOIN hash_join_test c ON a.x = c.x JOIN "
-      "join_test d ON a.x >= d.x AND a.x < d.x + 5 ORDER BY a.x, b.x;",
-      dt);
-#endif
   }
 }
 
-TEST(Select, LeftOuterJoins) {
+TEST(Select, Joins_LeftOuterJoin) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-    c("SELECT test.x, test_inner.x FROM test LEFT OUTER JOIN test_inner ON test.x = test_inner.x WHERE test.y > 40 "
-      "ORDER BY test.x ASC;",
-      dt);
-    c("SELECT test.x, test_inner.x FROM test LEFT OUTER JOIN test_inner ON test.x = test_inner.x WHERE test.y > 42 "
-      "ORDER BY test.x ASC;",
-      dt);
     c("SELECT test.x, test_inner.x FROM test LEFT OUTER JOIN test_inner ON test.x = test_inner.x ORDER BY test.x ASC;",
-      dt);
-    c("SELECT test.str AS foobar, test_inner.str FROM test LEFT OUTER JOIN test_inner ON test.x = test_inner.x WHERE "
-      "test.y > 42 ORDER BY foobar DESC LIMIT 8;",
-      dt);
-    c("SELECT test.x AS foobar, test_inner.x AS inner_foobar, test.f AS f_foobar FROM test LEFT OUTER JOIN test_inner "
-      "ON test.str = test_inner.str WHERE test.y > 40 ORDER BY foobar DESC, f_foobar DESC;",
-      dt);
-    c("SELECT test.str AS foobar, test_inner.str FROM test LEFT OUTER JOIN test_inner ON test.x = test_inner.x WHERE "
-      "test_inner.str IS NOT NULL ORDER BY foobar DESC;",
       dt);
     c("SELECT test.x key1, CASE WHEN test_inner.x IS NULL THEN 99 ELSE test_inner.x END key2 FROM test LEFT OUTER JOIN "
       "test_inner ON test.x = test_inner.x GROUP BY key1, key2 ORDER BY key1;",
@@ -3204,15 +3179,9 @@ TEST(Select, LeftOuterJoins) {
     c("SELECT test_inner.x key1 FROM test LEFT OUTER JOIN test_inner ON test.x = test_inner.x GROUP BY key1 HAVING "
       "key1 IS NOT NULL;",
       dt);
-    c("SELECT COUNT(*) FROM test_inner a LEFT JOIN (SELECT * FROM test WHERE y > 40) b ON a.x = b.x;", dt);
-    c("SELECT a.x, b.str FROM join_test a LEFT JOIN (SELECT * FROM test WHERE y > 40) b ON a.x = b.x ORDER BY a.x, "
-      "b.str;",
-      dt);
     c("SELECT COUNT(*) FROM test_inner a LEFT JOIN test b ON a.x = b.x;", dt);
     c("SELECT a.x, b.str FROM join_test a LEFT JOIN test b ON a.x = b.x ORDER BY a.x, b.str;", dt);
     c("SELECT a.x, b.str FROM join_test a LEFT JOIN test b ON a.x = b.x ORDER BY a.x, b.str;", dt);
-    c("SELECT a.x, b.str FROM join_test a LEFT JOIN test b ON a.x = b.x AND a.x = 7 ORDER BY a.x, b.str;", dt);
-    c("SELECT COUNT(*) FROM join_test a LEFT JOIN test b ON a.x = b.x AND a.x = 7;", dt);
     c("SELECT COUNT(*) FROM test_inner a LEFT OUTER JOIN test_x b ON a.x = b.x;", dt);
     c("SELECT COUNT(*) FROM test a LEFT OUTER JOIN join_test b ON a.str = b.dup_str;", dt);
     c("SELECT COUNT(*) FROM test a LEFT OUTER JOIN join_test b ON a.str = b.dup_str;", dt);
@@ -3232,10 +3201,126 @@ TEST(Select, LeftOuterJoins) {
       dt);
     c("SELECT a.x, b.str FROM test a LEFT JOIN join_test b ON a.str = b.dup_str ORDER BY a.x, b.str IS NULL, b.str;",
       dt);
+  }
+}
+
+TEST(Select, Joins_LeftJoin_Filters) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT test.x, test_inner.x FROM test LEFT OUTER JOIN test_inner ON test.x = test_inner.x WHERE test.y > 40 "
+      "ORDER BY test.x ASC;",
+      dt);
+    c("SELECT test.x, test_inner.x FROM test LEFT OUTER JOIN test_inner ON test.x = test_inner.x WHERE test.y > 42 "
+      "ORDER BY test.x ASC;",
+      dt);
+    c("SELECT test.str AS foobar, test_inner.str FROM test LEFT OUTER JOIN test_inner ON test.x = test_inner.x WHERE "
+      "test.y > 42 ORDER BY foobar DESC LIMIT 8;",
+      dt);
+    c("SELECT test.x AS foobar, test_inner.x AS inner_foobar, test.f AS f_foobar FROM test LEFT OUTER JOIN test_inner "
+      "ON test.str = test_inner.str WHERE test.y > 40 ORDER BY foobar DESC, f_foobar DESC;",
+      dt);
+    c("SELECT test.str AS foobar, test_inner.str FROM test LEFT OUTER JOIN test_inner ON test.x = test_inner.x WHERE "
+      "test_inner.str IS NOT NULL ORDER BY foobar DESC;",
+      dt);
+    c("SELECT COUNT(*) FROM test_inner a LEFT JOIN (SELECT * FROM test WHERE y > 40) b ON a.x = b.x;", dt);
+    c("SELECT a.x, b.str FROM join_test a LEFT JOIN (SELECT * FROM test WHERE y > 40) b ON a.x = b.x ORDER BY a.x, "
+      "b.str;",
+      dt);
+    c("SELECT COUNT(*) FROM join_test a LEFT JOIN test b ON a.x = b.x AND a.x = 7;", dt);
+    c("SELECT a.x, b.str FROM join_test a LEFT JOIN test b ON a.x = b.x AND a.x = 7 ORDER BY a.x, b.str;", dt);
+  }
+}
+
+TEST(Select, Joins_MultiCompositeColumns) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT a.x, b.str FROM test AS a JOIN join_test AS b ON a.str = b.str AND a.x = b.x ORDER BY a.x, b.str;", dt);
+    c("SELECT a.x, b.str FROM test AS a JOIN join_test AS b ON a.x = b.x AND a.str = b.str ORDER BY a.x, b.str;", dt);
+    c("SELECT a.z, b.str FROM test a JOIN join_test b ON a.y = b.y AND a.x = b.x ORDER BY a.z, b.str;", dt);
+    c("SELECT a.z, b.str FROM test a JOIN test_inner b ON a.y = b.y AND a.x = b.x ORDER BY a.z, b.str;", dt);
+    c("SELECT COUNT(*) FROM test a JOIN join_test b ON a.x = b.x AND a.y = b.x JOIN test_inner c ON a.x = c.x WHERE "
+      "c.str <> 'foo';",
+      dt);
+    c("SELECT a.x, b.x, d.str FROM test a JOIN test_inner b ON a.str = b.str JOIN hash_join_test c ON a.x = c.x JOIN "
+      "join_test d ON a.x >= d.x AND a.x < d.x + 5 ORDER BY a.x, b.x;",
+      dt);
+  }
+}
+
+TEST(Select, Joins_BuildHashTable) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT COUNT(*) FROM test, join_test WHERE test.str = join_test.dup_str;", dt);
+    // Intentionally duplicate previous string join to cover hash table building.
+    c("SELECT COUNT(*) FROM test, join_test WHERE test.str = join_test.dup_str;", dt);
+  }
+}
+
+TEST(Select, Joins_ComplexQueries) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT COUNT(*) FROM test a JOIN (SELECT * FROM test WHERE y < 43) b ON a.x = b.x JOIN join_test c ON a.x = c.x "
+      "WHERE a.fixed_str = 'foo';",
+      dt);
+    c("SELECT * FROM (SELECT a.y, b.str FROM test a JOIN join_test b ON a.x = b.x) ORDER BY y, str;", dt);
+    c("SELECT x, dup_str FROM (SELECT * FROM test a JOIN join_test b ON a.x = b.x) WHERE y > 40 ORDER BY x, dup_str;",
+      dt);
+    c("SELECT a.x FROM (SELECT * FROM test WHERE x = 8) AS a JOIN (SELECT * FROM test_inner WHERE x = 7) AS b ON a.str "
+      "= b.str WHERE a.y < 42;",
+      dt);
+    c("SELECT a.str as key0,a.fixed_str as key1,COUNT(*) AS color FROM test a JOIN (select str,count(*) "
+      "from test group by str order by COUNT(*) desc limit 40) b on a.str=b.str JOIN (select "
+      "fixed_str,count(*) from test group by fixed_str order by count(*) desc limit 40) c on "
+      "c.fixed_str=a.fixed_str GROUP BY key0, key1 ORDER BY key0,key1;",
+      dt);
+  }
+}
+
+TEST(Select, Joins_Unsupported) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+#ifndef ENABLE_JOIN_EXEC
+    EXPECT_THROW(
+        run_multiple_agg("SELECT count(*) FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c ON "
+                         "b.str = c.str;",
+                         dt),
+        std::runtime_error);
+    EXPECT_THROW(run_multiple_agg(
+                     "SELECT count(*) FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str = "
+                     "c.str JOIN join_test AS d ON c.x = d.x;",
+                     dt),
+                 std::runtime_error);
+    EXPECT_THROW(run_multiple_agg(
+                     "SELECT a.x AS x, y, b.str FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c "
+                     "ON b.str = c.str ORDER BY x;",
+                     dt),
+                 std::runtime_error);
+    EXPECT_THROW(run_multiple_agg(
+                     "SELECT count(*) FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str = "
+                     "c.str WHERE a.y "
+                     "< 43;",
+                     dt),
+                 std::runtime_error);
+    EXPECT_THROW(run_multiple_agg(
+                     "SELECT SUM(a.x), b.str FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c ON "
+                     "b.str = c.str WHERE a.y "
+                     "= 43 group by b.str;",
+                     dt),
+                 std::runtime_error);
+    EXPECT_THROW(run_multiple_agg(
+                     "SELECT a.str as key0,a.fixed_str as key1,COUNT(*) AS color FROM test a JOIN (select str,count(*) "
+                     "from test group by str order by COUNT(*) desc limit 40) b on a.str=b.str JOIN (select "
+                     "fixed_str,count(*) from test group by fixed_str order by count(*) desc limit 40) c on "
+                     "c.fixed_str=a.fixed_str GROUP BY key0, key1 ORDER BY key0,key1;",
+                     dt),
+                 std::runtime_error);
     EXPECT_THROW(
         run_multiple_agg(
             "SELECT x, tnone FROM test LEFT JOIN text_group_by_test ON test.str = text_group_by_test.tdef;", dt),
         std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("SELECT * FROM test a JOIN test b on a.b = b.x;", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("SELECT * FROM test a JOIN test b on a.f = b.f;", dt), std::runtime_error);
+#endif
   }
 }
 
@@ -3328,48 +3413,6 @@ TEST(Select, RuntimeFunctions) {
                     v<double>(run_simple_agg("SELECT TRUNCATE(CAST(1171.123 AS DOUBLE),1) FROM test LIMIT 1;", dt)));
     ASSERT_FLOAT_EQ(static_cast<float>(1171.11),
                     v<float>(run_simple_agg("SELECT TRUNCATE(CAST(1171.113 AS FLOAT),2) FROM test LIMIT 1;", dt)));
-  }
-}
-
-TEST(Select, UnsupportedPatterns) {
-  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
-    SKIP_NO_GPU();
-#ifndef ENABLE_JOIN_EXEC
-    EXPECT_THROW(
-        run_multiple_agg("SELECT count(*) FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c ON "
-                         "b.str = c.str;",
-                         dt),
-        std::runtime_error);
-    EXPECT_THROW(run_multiple_agg(
-                     "SELECT count(*) FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str = "
-                     "c.str JOIN join_test AS d ON c.x = d.x;",
-                     dt),
-                 std::runtime_error);
-    EXPECT_THROW(run_multiple_agg(
-                     "SELECT a.x AS x, y, b.str FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c "
-                     "ON b.str = c.str ORDER BY x;",
-                     dt),
-                 std::runtime_error);
-    EXPECT_THROW(run_multiple_agg(
-                     "SELECT count(*) FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c ON b.str = "
-                     "c.str WHERE a.y "
-                     "< 43;",
-                     dt),
-                 std::runtime_error);
-    EXPECT_THROW(run_multiple_agg(
-                     "SELECT SUM(a.x), b.str FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner AS c ON "
-                     "b.str = c.str WHERE a.y "
-                     "= 43 group by b.str;",
-                     dt),
-                 std::runtime_error);
-    EXPECT_THROW(run_multiple_agg(
-                     "SELECT a.str as key0,a.fixed_str as key1,COUNT(*) AS color FROM test a JOIN (select str,count(*) "
-                     "from test group by str order by COUNT(*) desc limit 40) b on a.str=b.str JOIN (select "
-                     "fixed_str,count(*) from test group by fixed_str order by count(*) desc limit 40) c on "
-                     "c.fixed_str=a.fixed_str GROUP BY key0, key1 ORDER BY key0,key1;",
-                     dt),
-                 std::runtime_error);
-#endif
   }
 }
 
