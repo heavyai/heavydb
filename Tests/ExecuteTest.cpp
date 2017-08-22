@@ -922,6 +922,15 @@ TEST(Select, OrderBy) {
     c("SELECT CAST(ufd AS FLOAT) as k FROM test ORDER BY k ASC NULLS FIRST LIMIT 20;",
       "SELECT CAST(ufd AS FLOAT) as k FROM test ORDER BY k ASC LIMIT 20;",
       dt);
+    c("SELECT m AS k FROM test ORDER BY k ASC NULLS FIRST LIMIT 20;",
+      "SELECT m AS k FROM test ORDER BY k ASC LIMIT 20;",
+      dt);
+    c("SELECT n AS k FROM test ORDER BY k ASC NULLS FIRST LIMIT 20;",
+      "SELECT n AS k FROM test ORDER BY k ASC LIMIT 20;",
+      dt);
+    c("SELECT o AS k FROM test ORDER BY k ASC NULLS FIRST LIMIT 20;",
+      "SELECT o AS k FROM test ORDER BY k ASC LIMIT 20;",
+      dt);
   }
 }
 

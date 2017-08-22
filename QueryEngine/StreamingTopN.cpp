@@ -61,7 +61,8 @@ bool use_streaming_top_n(const RelAlgExecutionUnit& ra_exe_unit, const QueryMemo
     CHECK_LE(static_cast<size_t>(only_order_entry.tle_no), ra_exe_unit.target_exprs.size());
     const auto order_entry_expr = ra_exe_unit.target_exprs[only_order_entry.tle_no - 1];
     const auto n = ra_exe_unit.sort_info.offset + ra_exe_unit.sort_info.limit;
-    if (order_entry_expr->get_type_info().is_number() && n <= 100000) {  // TODO(miyu): relax?
+    if ((order_entry_expr->get_type_info().is_number() || order_entry_expr->get_type_info().is_time()) &&
+        n <= 100000) {  // TODO(miyu): relax?
       return true;
     }
   }

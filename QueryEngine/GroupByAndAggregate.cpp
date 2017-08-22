@@ -2725,7 +2725,7 @@ llvm::Value* GroupByAndAggregate::codegenOutputSlot(llvm::Value* groups_buffer,
     std::string fname = "get_bin_from_k_heap";
     const auto& oe_ti = order_entry_expr->get_type_info();
     llvm::Value* null_key_lv = nullptr;
-    if (oe_ti.is_integer() || oe_ti.is_decimal()) {
+    if (oe_ti.is_integer() || oe_ti.is_decimal() || oe_ti.is_time()) {
       const size_t bit_width = order_entry_lv->getType()->getIntegerBitWidth();
       switch (bit_width) {
         case 32:
