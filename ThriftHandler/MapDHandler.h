@@ -347,7 +347,8 @@ class MapDHandler : public MapDIf {
   void get_table_details_impl(TTableDetails& _return,
                               const TSessionId& session,
                               const std::string& table_name,
-                              const bool get_system);
+                              const bool get_system,
+                              const bool get_physical);
   void check_read_only(const std::string& str);
   SessionMap::iterator get_session_it(const TSessionId& session);
   static void value_to_thrift_column(const TargetValue& tv, const SQLTypeInfo& ti, TColumn& column);

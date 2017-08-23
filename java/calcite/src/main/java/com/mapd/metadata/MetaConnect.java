@@ -297,6 +297,8 @@ public class MetaConnect {
         MAPDLOGGER.debug("is_systemcol = " + isSystemCol);
         boolean isVirtualCol = rs.getBoolean("is_virtualcol");
         MAPDLOGGER.debug("is_vitrualcol = " + isVirtualCol);
+        boolean isPhysicalCol = rs.getBoolean("is_physicalcol");
+        MAPDLOGGER.debug("is_physicalcol = " + isPhysicalCol);
         MAPDLOGGER.debug("");
         TColumnType tct = new TColumnType();
         TTypeInfo tti = new TTypeInfo();

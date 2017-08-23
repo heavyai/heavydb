@@ -489,7 +489,7 @@ class TypedImportBuffer : boost::noncopyable {
 class Loader {
  public:
   Loader(Catalog_Namespace::Catalog& c, const TableDescriptor* t)
-      : catalog(c), table_desc(t), column_descs(c.getAllColumnMetadataForTable(t->tableId, false, false)) {
+      : catalog(c), table_desc(t), column_descs(c.getAllColumnMetadataForTable(t->tableId, false, false, true)) {
     init();
   };
   Catalog_Namespace::Catalog& get_catalog() { return catalog; }

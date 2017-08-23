@@ -2576,7 +2576,7 @@ void import_array_test(const std::string& table_name) {
   CHECK(td);
   Importer_NS::Loader loader(cat, td);
   std::vector<std::unique_ptr<Importer_NS::TypedImportBuffer>> import_buffers;
-  const auto col_descs = cat.getAllColumnMetadataForTable(td->tableId, false, false);
+  const auto col_descs = cat.getAllColumnMetadataForTable(td->tableId, false, false, false);
   for (const auto cd : col_descs) {
     import_buffers.emplace_back(new Importer_NS::TypedImportBuffer(
         cd,

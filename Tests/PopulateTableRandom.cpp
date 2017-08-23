@@ -242,7 +242,7 @@ size_t random_fill(const ColumnDescriptor* cd, DataBlockPtr p, size_t num_elems,
 
 vector<size_t> populate_table_random(const string& table_name, const size_t num_rows, const Catalog& cat) {
   const TableDescriptor* td = cat.getMetadataForTable(table_name);
-  list<const ColumnDescriptor*> cds = cat.getAllColumnMetadataForTable(td->tableId, false, false);
+  list<const ColumnDescriptor*> cds = cat.getAllColumnMetadataForTable(td->tableId, false, false, false);
   InsertData insert_data;
   insert_data.databaseId = cat.get_currentDB().dbId;
   insert_data.tableId = td->tableId;

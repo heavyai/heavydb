@@ -1089,17 +1089,18 @@ void MapDHandler::get_table_descriptor(TTableDescriptor& _return,
 void MapDHandler::get_internal_table_details(TTableDetails& _return,
                                              const TSessionId& session,
                                              const std::string& table_name) {
-  get_table_details_impl(_return, session, table_name, true);
+  get_table_details_impl(_return, session, table_name, true, true);
 }
 
 void MapDHandler::get_table_details(TTableDetails& _return, const TSessionId& session, const std::string& table_name) {
-  get_table_details_impl(_return, session, table_name, false);
+  get_table_details_impl(_return, session, table_name, false, false);
 }
 
 void MapDHandler::get_table_details_impl(TTableDetails& _return,
                                          const TSessionId& session,
                                          const std::string& table_name,
-                                         const bool get_system) {
+                                         const bool get_system,
+                                         const bool get_physical) {
   const auto session_info = get_session(session);
   auto& cat = session_info.get_catalog();
   auto td =
@@ -1121,7 +1122,7 @@ void MapDHandler::get_table_details_impl(TTableDetails& _return,
   } else {
     try {
       if (!SysCatalog::instance().arePrivilegesOn() || hasTableAccessPrivileges(td, session)) {
-        const auto col_descriptors = cat.getAllColumnMetadataForTable(td->tableId, get_system, true);
+        const auto col_descriptors = cat.getAllColumnMetadataForTable(td->tableId, get_system, true, get_physical);
         const auto deleted_cd = cat.getDeletedColumn(td);
         for (const auto cd : col_descriptors) {
           if (cd == deleted_cd) {

@@ -954,13 +954,13 @@ std::shared_ptr<Analyzer::Expr> Subquery::add_cast(const SQLTypeInfo& new_type_i
 }
 
 void RangeTblEntry::add_all_column_descs(const Catalog_Namespace::Catalog& catalog) {
-  column_descs = catalog.getAllColumnMetadataForTable(table_desc->tableId, true, true);
+  column_descs = catalog.getAllColumnMetadataForTable(table_desc->tableId, true, true, true);
 }
 
 void RangeTblEntry::expand_star_in_targetlist(const Catalog_Namespace::Catalog& catalog,
                                               std::vector<std::shared_ptr<TargetEntry>>& tlist,
                                               int rte_idx) {
-  column_descs = catalog.getAllColumnMetadataForTable(table_desc->tableId, false, true);
+  column_descs = catalog.getAllColumnMetadataForTable(table_desc->tableId, false, true, true);
   for (auto col_desc : column_descs) {
     auto cv = makeExpr<ColumnVar>(col_desc->columnType, table_desc->tableId, col_desc->columnId, rte_idx);
     auto tle = std::make_shared<TargetEntry>(col_desc->columnName, cv, false);

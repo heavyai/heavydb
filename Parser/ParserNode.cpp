@@ -1503,7 +1503,7 @@ void InsertStmt::analyze(const Catalog_Namespace::Catalog& catalog, Analyzer::Qu
   query.set_result_table_id(td->tableId);
   std::list<int> result_col_list;
   if (column_list.empty()) {
-    const std::list<const ColumnDescriptor*> all_cols = catalog.getAllColumnMetadataForTable(td->tableId, false, false);
+    const std::list<const ColumnDescriptor*> all_cols = catalog.getAllColumnMetadataForTable(td->tableId, false, false, true);
     for (auto cd : all_cols) {
       result_col_list.push_back(cd->columnId);
     }
@@ -1514,7 +1514,7 @@ void InsertStmt::analyze(const Catalog_Namespace::Catalog& catalog, Analyzer::Qu
         throw std::runtime_error("Column " + *c + " does not exist.");
       result_col_list.push_back(cd->columnId);
     }
-    if (catalog.getAllColumnMetadataForTable(td->tableId, false, false).size() != result_col_list.size())
+    if (catalog.getAllColumnMetadataForTable(td->tableId, false, false, true).size() != result_col_list.size())
       throw std::runtime_error("Insert into a subset of columns is not supported yet.");
   }
   query.set_result_col_list(result_col_list);

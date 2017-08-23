@@ -194,7 +194,8 @@ class Catalog {
 
   std::list<const ColumnDescriptor*> getAllColumnMetadataForTable(const int tableId,
                                                                   const bool fetchSystemColumns,
-                                                                  const bool fetchVirtualColumns) const;
+                                                                  const bool fetchVirtualColumns,
+                                                                  const bool fetchPhysicalColumns) const;
 
   std::list<const TableDescriptor*> getAllTableMetadata() const;
   std::list<const FrontendViewDescriptor*> getAllFrontendViewMetadata() const;
@@ -270,7 +271,8 @@ class Catalog {
   void getAllColumnMetadataForTable(const TableDescriptor* td,
                                     std::list<const ColumnDescriptor*>& colDescs,
                                     const bool fetchSystemColumns,
-                                    const bool fetchVirtualColumns) const;
+                                    const bool fetchVirtualColumns,
+                                    const bool fetchPhysicalColumns) const;
   std::string calculateSHA1(const std::string& data);
   std::string generatePhysicalTableName(const std::string& logicalTableName, const int32_t& shardNumber);
 

@@ -279,7 +279,7 @@ void SysCatalog::createDatabase(const string& name, int owner) {
       "CREATE TABLE mapd_columns (tableid integer references mapd_tables, columnid integer, name text, coltype "
       "integer, colsubtype integer, coldim integer, colscale integer, is_notnull boolean, compression integer, "
       "comp_param integer, size integer, chunks text, is_systemcol boolean, is_virtualcol boolean, virtual_expr text, "
-      "primary key(tableid, columnid), unique(tableid, name))");
+      "is_physicalcol boolean, phys_columns integer, primary key(tableid, columnid), unique(tableid, name))");
   dbConn.query("CREATE TABLE mapd_views (tableid integer references mapd_tables, sql text)");
   dbConn.query(
       "CREATE TABLE mapd_frontend_views (viewid integer primary key, name text unique, userid integer references "
@@ -1265,7 +1265,7 @@ void Catalog::buildMaps() {
   }
   string columnQuery(
       "SELECT tableid, columnid, name, coltype, colsubtype, coldim, colscale, is_notnull, compression, comp_param, "
-      "size, chunks, is_systemcol, is_virtualcol, virtual_expr from mapd_columns");
+      "size, chunks, is_systemcol, is_virtualcol, virtual_expr, is_physicalcol, phys_columns from mapd_columns");
   sqliteConnector_.query(columnQuery);
   numRows = sqliteConnector_.getNumRows();
   for (size_t r = 0; r < numRows; ++r) {
@@ -1285,6 +1285,8 @@ void Catalog::buildMaps() {
     cd->isSystemCol = sqliteConnector_.getData<bool>(r, 12);
     cd->isVirtualCol = sqliteConnector_.getData<bool>(r, 13);
     cd->virtualExpr = sqliteConnector_.getData<string>(r, 14);
+    cd->isPhysicalCol = sqliteConnector_.getData<bool>(r, 15);
+    cd->numPhysicalColumns = sqliteConnector_.getData<int>(r, 16);
     ColumnKey columnKey(cd->tableId, to_upper(cd->columnName));
     columnDescriptorMap_[columnKey] = cd;
     ColumnIdKey columnIdKey(cd->tableId, cd->columnId);
@@ -1469,7 +1471,7 @@ void Catalog::instantiateFragmenter(TableDescriptor* td) const {
     assert(td->fragType == Fragmenter_Namespace::FragmenterType::INSERT_ORDER);
     vector<Chunk> chunkVec;
     list<const ColumnDescriptor*> columnDescs;
-    getAllColumnMetadataForTable(td, columnDescs, true, false);
+    getAllColumnMetadataForTable(td, columnDescs, true, false, true);
     Chunk::translateColumnDescriptorsToChunkVec(columnDescs, chunkVec);
     ChunkKey chunkKeyPrefix = {currentDB_.dbId, td->tableId};
     td->fragmenter = new InsertOrderFragmenter(chunkKeyPrefix,
@@ -1612,7 +1614,8 @@ const LinkDescriptor* Catalog::getMetadataForLink(int linkId) const {
 void Catalog::getAllColumnMetadataForTable(const TableDescriptor* td,
                                            list<const ColumnDescriptor*>& columnDescriptors,
                                            const bool fetchSystemColumns,
-                                           const bool fetchVirtualColumns) const {
+                                           const bool fetchVirtualColumns,
+                                           const bool fetchPhysicalColumns) const {
   for (int i = 1; i <= td->nColumns; i++) {
     const ColumnDescriptor* cd = getMetadataForColumn(td->tableId, i);
     assert(cd != nullptr);
@@ -1620,16 +1623,19 @@ void Catalog::getAllColumnMetadataForTable(const TableDescriptor* td,
       continue;
     if (!fetchVirtualColumns && cd->isVirtualCol)
       continue;
+    if (!fetchPhysicalColumns && cd->isPhysicalCol)
+      continue;
     columnDescriptors.push_back(cd);
   }
 }
 
 list<const ColumnDescriptor*> Catalog::getAllColumnMetadataForTable(const int tableId,
                                                                     const bool fetchSystemColumns,
-                                                                    const bool fetchVirtualColumns) const {
+                                                                    const bool fetchVirtualColumns,
+                                                                    const bool fetchPhysicalColumns) const {
   list<const ColumnDescriptor*> columnDescriptors;
   const TableDescriptor* td = getMetadataForTable(tableId);
-  getAllColumnMetadataForTable(td, columnDescriptors, fetchSystemColumns, fetchVirtualColumns);
+  getAllColumnMetadataForTable(td, columnDescriptors, fetchSystemColumns, fetchVirtualColumns, fetchPhysicalColumns);
   return columnDescriptors;
 }
 
