@@ -22,6 +22,10 @@ import org.apache.calcite.sql.type.SqlTypeName;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.mapd.metadata.PointSqlType;
+import com.mapd.metadata.LineSqlType;
+import com.mapd.metadata.PolygonSqlType;
+
 /**
  *
  * @author michael
@@ -81,7 +85,6 @@ public class MapDTable implements Table {
   // todo confirm whether it is ok to ignore thinsg like lengths
   // since we do not use them on the validator side of the calcite 'fence'
   private RelDataType getRelDataType(TDatumType dType, int precision, int scale, RelDataTypeFactory typeFactory) {
-
     switch (dType) {
       case SMALLINT:
         return typeFactory.createSqlType(SqlTypeName.SMALLINT);
@@ -109,6 +112,12 @@ public class MapDTable implements Table {
         return typeFactory.createSqlType(SqlTypeName.INTERVAL_DAY);
       case INTERVAL_YEAR_MONTH:
         return typeFactory.createSqlType(SqlTypeName.INTERVAL_YEAR_MONTH);
+      case POINT:
+        return new PointSqlType();
+      case LINE:
+        return new LineSqlType();
+      case POLYGON:
+        return new PolygonSqlType();
       default:
         throw new AssertionError(dType.name());
     }
