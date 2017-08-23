@@ -124,6 +124,8 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
         opTab.addOperator(new Unlikely());
         opTab.addOperator(new Sign());
         opTab.addOperator(new Truncate());
+        opTab.addOperator(new ST_Contains());
+        opTab.addOperator(new ST_Distance());
         opTab.addOperator(new ApproxCountDistinct());
         if (extSigs == null) {
             return;
@@ -597,6 +599,50 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
             truncate_sig.add(SqlTypeFamily.NUMERIC);
             truncate_sig.add(SqlTypeFamily.INTEGER);
             return truncate_sig;
+        }
+    }
+
+    static class ST_Contains extends SqlFunction {
+
+        ST_Contains() {
+            super("ST_Contains", SqlKind.OTHER_FUNCTION, null, null, OperandTypes.family(signature()), SqlFunctionCategory.SYSTEM);
+        }
+
+        @Override
+        public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+            assert opBinding.getOperandCount() == 2;
+            final RelDataTypeFactory typeFactory
+                    = opBinding.getTypeFactory();
+            return typeFactory.createSqlType(SqlTypeName.BOOLEAN);
+        }
+
+        private static java.util.List<SqlTypeFamily> signature() {
+            java.util.List<SqlTypeFamily> st_contains_sig = new java.util.ArrayList<SqlTypeFamily>();
+            st_contains_sig.add(SqlTypeFamily.ANY);
+            st_contains_sig.add(SqlTypeFamily.ANY);
+            return st_contains_sig;
+        }
+    }
+
+    static class ST_Distance extends SqlFunction {
+
+        ST_Distance() {
+            super("ST_Distance", SqlKind.OTHER_FUNCTION, null, null, OperandTypes.family(signature()), SqlFunctionCategory.SYSTEM);
+        }
+
+        @Override
+        public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+            assert opBinding.getOperandCount() == 2;
+            final RelDataTypeFactory typeFactory
+                    = opBinding.getTypeFactory();
+            return typeFactory.createSqlType(SqlTypeName.DOUBLE);
+        }
+
+        private static java.util.List<SqlTypeFamily> signature() {
+            java.util.List<SqlTypeFamily> st_distance_sig = new java.util.ArrayList<SqlTypeFamily>();
+            st_distance_sig.add(SqlTypeFamily.ANY);
+            st_distance_sig.add(SqlTypeFamily.ANY);
+            return st_distance_sig;
         }
     }
 
