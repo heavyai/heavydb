@@ -56,8 +56,10 @@ enum SQLTypes {
   kARRAY = 15,
   kINTERVAL_DAY_TIME = 16,
   kINTERVAL_YEAR_MONTH = 17,
-  kSQLTYPE_LAST = 18
-};
+  kPOINT = 18,
+  kLINE = 19,
+  kPOLYGON = 20,
+  kSQLTYPE_LAST = 21};
 
 struct VarlenDatum {
   int length;
@@ -126,6 +128,7 @@ enum EncodingType {
    ((T) == kNUMERIC) || ((T) == kDECIMAL))
 #define IS_STRING(T) (((T) == kTEXT) || ((T) == kVARCHAR) || ((T) == kCHAR))
 #define IS_TIME(T) (((T) == kTIME) || ((T) == kTIMESTAMP) || ((T) == kDATE))
+#define IS_GEO(T) (((T) == kPOINT) || ((T) == kLINE) || ((T) == kPOLYGON))
 
 #define NULL_BOOLEAN INT8_MIN
 #define NULL_TINYINT INT8_MIN

@@ -58,6 +58,12 @@ inline TDatumType::type type_to_thrift(const SQLTypeInfo& type_info) {
       return TDatumType::INTERVAL_DAY_TIME;
     case kINTERVAL_YEAR_MONTH:
       return TDatumType::INTERVAL_YEAR_MONTH;
+    case kPOINT:
+      return TDatumType::POINT;
+    case kLINE:
+      return TDatumType::LINE;
+    case kPOLYGON:
+      return TDatumType::POLYGON;
     default:
       break;
   }
@@ -92,6 +98,12 @@ inline SQLTypes thrift_to_type(const TDatumType::type& type) {
       return kINTERVAL_DAY_TIME;
     case TDatumType::INTERVAL_YEAR_MONTH:
       return kINTERVAL_YEAR_MONTH;
+    case TDatumType::POINT:
+      return kPOINT;
+    case TDatumType::LINE:
+      return kLINE;
+    case TDatumType::POLYGON:
+      return kPOLYGON;
     default:
       break;
   }

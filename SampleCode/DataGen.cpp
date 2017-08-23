@@ -158,6 +158,9 @@ void data_gen(const TRowDescriptor& row_desc, const char* delimiter, int num_row
         case TDatumType::BOOL:
           std::cout << gen_bool();
           break;
+        default:
+          std::cout << "???";
+          break;
       }
     }
     std::cout << std::endl;

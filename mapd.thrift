@@ -15,7 +15,10 @@ enum TDatumType {
   DATE,
   BOOL,
   INTERVAL_DAY_TIME,
-  INTERVAL_YEAR_MONTH
+  INTERVAL_YEAR_MONTH,
+  POINT,
+  LINE,
+  POLYGON
 }
 
 enum TEncodingType {
