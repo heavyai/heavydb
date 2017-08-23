@@ -244,9 +244,6 @@ class ResultSet {
 
   ResultSet(const std::string& explanation);
 
-  // Empty result set constructor
-  ResultSet();
-
   ResultSet(const std::string& image_bytes,
             int64_t queue_time_ms,
             int64_t render_time_ms,
@@ -281,8 +278,6 @@ class ResultSet {
   bool isRowAtEmpty(const size_t index) const;
 
   void sort(const std::list<Analyzer::OrderEntry>& order_entries, const size_t top_n);
-
-  bool isEmptyInitializer() const;
 
   void keepFirstN(const size_t n);
 

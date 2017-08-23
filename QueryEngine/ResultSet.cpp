@@ -173,18 +173,6 @@ ResultSet::ResultSet(const std::string& explanation)
       just_explain_(true),
       cached_row_count_(-1) {}
 
-ResultSet::ResultSet()
-    : device_type_(ExecutorDeviceType::CPU),
-      device_id_(-1),
-      query_mem_desc_{},
-      crt_row_buff_idx_(0),
-      estimator_buffer_(nullptr),
-      host_estimator_buffer_(nullptr),
-      data_mgr_(nullptr),
-      none_encoded_strings_valid_(false),
-      just_explain_(true),
-      cached_row_count_(-1) {}
-
 ResultSet::ResultSet(const std::string& image_bytes,
                      int64_t queue_time_ms,
                      int64_t render_time_ms,
@@ -456,9 +444,7 @@ QueryMemoryDescriptor ResultSet::fixupQueryMemoryDescriptor(const QueryMemoryDes
 
 void ResultSet::sort(const std::list<Analyzer::OrderEntry>& order_entries, const size_t top_n) {
   CHECK_EQ(-1, cached_row_count_);
-  if (isEmptyInitializer()) {
-    return;
-  }
+  CHECK(!targets_.empty());
 #ifdef HAVE_CUDA
   if (canUseFastBaselineSort(order_entries, top_n)) {
     baselineSort(order_entries, top_n);
@@ -721,10 +707,6 @@ void ResultSet::topPermutation(std::vector<uint32_t>& to_sort,
 
 void ResultSet::sortPermutation(const std::function<bool(const uint32_t, const uint32_t)> compare) {
   std::sort(permutation_.begin(), permutation_.end(), compare);
-}
-
-bool ResultSet::isEmptyInitializer() const {
-  return targets_.empty();
 }
 
 void ResultSet::radixSortOnGpu(const std::list<Analyzer::OrderEntry>& order_entries) const {

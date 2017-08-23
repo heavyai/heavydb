@@ -36,11 +36,6 @@
 #include <queue>
 #include <random>
 
-TEST(Construct, Empty) {
-  ResultSet result_set;
-  ASSERT_TRUE(result_set.isEmptyInitializer());
-}
-
 TEST(Construct, Allocate) {
   std::vector<TargetInfo> target_infos;
   QueryMemoryDescriptor query_mem_desc{};
