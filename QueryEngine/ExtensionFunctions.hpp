@@ -642,3 +642,43 @@ float reg_hex_vert_pixel_bin_y(const float valx,
   // now convert the cube/hex coord to a pixel location
   return hexsize * sqrt3 * (rz + rx / 2.0f) + yoffset;
 }
+
+
+DEVICE
+double hypotenuse(double x, double y)
+{
+  x = fabs(x);
+  y = fabs(y);
+  if (x < y)
+    std::swap(x, y);
+  if (y == 0.0)
+    return x;
+  return x * sqrt(1.0 + (y * y) / (x * x)); 
+}
+
+EXTENSION_NOINLINE
+double ST_Distance_Point_Point(double p1x, double p1y, double p2x, double p2y)
+{
+  return hypotenuse(p1x - p2x, p1y - p2y);
+}
+
+EXTENSION_NOINLINE
+double ST_Distance_Point_Line(double px, double py,
+                              double lx1, double ly1, double lx2, double ly2)
+{
+  return 0.0;
+}
+
+EXTENSION_NOINLINE
+double ST_Distance_Line_Point(double lx1, double ly1, double lx2, double ly2,
+                              double px, double py)
+{
+  return ST_Distance_Point_Line(px, py, lx1, ly1, lx2, ly2);
+}
+
+EXTENSION_NOINLINE
+double ST_Distance_Line_Line(double l1x1, double l1y1, double l1x2, double l1y2,
+                             double l2x1, double l2y1, double l2x2, double l2y2)
+{
+  return 0.0;
+}
