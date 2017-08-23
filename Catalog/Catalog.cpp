@@ -1653,6 +1653,17 @@ list<const FrontendViewDescriptor*> Catalog::getAllFrontendViewMetadata() const 
   return view_list;
 }
 
+ColumnDescriptor create_array_column(const SQLTypes& type, const std::string& name) {
+  ColumnDescriptor cd;
+  cd.columnName = name;
+  SQLTypeInfo ti;
+  ti.set_type(kARRAY);
+  ti.set_subtype(type);
+  ti.set_fixed_size();
+  cd.columnType = ti;
+  return cd;
+}
+
 void Catalog::createTable(TableDescriptor& td,
                           const list<ColumnDescriptor>& cols,
                           const std::vector<Parser::SharedDictionaryDef>& shared_dict_defs,
@@ -1660,13 +1671,48 @@ void Catalog::createTable(TableDescriptor& td,
   list<ColumnDescriptor> cds;
   list<DictDescriptor> dds;
 
+  list<ColumnDescriptor> columns;
   for (auto cd : cols) {
     if (cd.columnName == "rowid") {
       throw std::runtime_error("Cannot create column with name rowid. rowid is a system defined column.");
     }
+    auto col_ti = cd.columnType;
+    if (IS_GEO(col_ti.get_type())) {
+      switch (col_ti.get_type()) {
+        case kPOINT:
+          cd.numPhysicalColumns = 2;
+          columns.push_back(cd);
+          for (int i = 0; i < cd.numPhysicalColumns; i++) {
+            ColumnDescriptor physical_cd;
+            physical_cd.columnName = cd.columnName + std::to_string(i);
+            physical_cd.columnType = SQLTypeInfo(kDOUBLE, true);
+            physical_cd.isPhysicalCol = true;
+            columns.push_back(physical_cd);
+          }
+          break;
+        case kLINE:
+          cd.numPhysicalColumns = 4;
+          columns.push_back(cd);
+          for (int i = 0; i < cd.numPhysicalColumns; i++) {
+            ColumnDescriptor physical_cd;
+            physical_cd.columnName = cd.columnName + std::to_string(i);
+            physical_cd.columnType = SQLTypeInfo(kDOUBLE, true);
+            physical_cd.isPhysicalCol = true;
+            columns.push_back(physical_cd);
+          }
+          break;
+        case kPOLYGON:
+          throw runtime_error("Polygon type is not supported.");
+          break;
+        default:
+          throw runtime_error("Unrecognized geometry type.");
+          break;
+      }
+      continue;
+    }
+    columns.push_back(cd);
   }
 
-  list<ColumnDescriptor> columns(cols);
   // add row_id column
   ColumnDescriptor cd;
   cd.columnName = "rowid";
@@ -1690,7 +1736,7 @@ void Catalog::createTable(TableDescriptor& td,
           "?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
 
           std::vector<std::string>{td.tableName,
-                                   std::to_string(columns.size()),
+                                   std::to_string(td.nColumns),
                                    std::to_string(td.isView),
                                    "",
                                    std::to_string(td.fragType),
@@ -1717,9 +1763,11 @@ void Catalog::createTable(TableDescriptor& td,
         }
         sqliteConnector_.query_with_text_params(
             "INSERT INTO mapd_columns (tableid, columnid, name, coltype, colsubtype, coldim, colscale, is_notnull, "
-            "compression, comp_param, size, chunks, is_systemcol, is_virtualcol, virtual_expr) VALUES (?, ?, ?, ?, ?, "
+            "compression, comp_param, size, chunks, is_systemcol, is_virtualcol, virtual_expr, is_physicalcol, phys_columns) "
+            "VALUES (?, ?, ?, ?, ?, "
             "?, "
-            "?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "?, ?, ?, ?, ?, ?, ?, ?, ?, "
+            "?, ?)",
             std::vector<std::string>{std::to_string(td.tableId),
                                      std::to_string(colId),
                                      cd.columnName,
@@ -1734,7 +1782,9 @@ void Catalog::createTable(TableDescriptor& td,
                                      "",
                                      std::to_string(cd.isSystemCol),
                                      std::to_string(cd.isVirtualCol),
-                                     cd.virtualExpr});
+                                     cd.virtualExpr,
+                                     std::to_string(cd.isPhysicalCol),
+                                     std::to_string(cd.numPhysicalColumns)});
         cd.tableId = td.tableId;
         cd.columnId = colId++;
         cds.push_back(cd);
@@ -1752,6 +1802,11 @@ void Catalog::createTable(TableDescriptor& td,
     td.tableId = nextTempTableId_++;
     int colId = 1;
     for (auto cd : columns) {
+      auto col_ti = cd.columnType;
+      if (IS_GEO(col_ti.get_type())) {
+        throw runtime_error("Geometry types in temporary tables are not supported.");
+      }
+
       if (cd.columnType.get_compression() == kENCODING_DICT) {
         // TODO(vraj) : create shared dictionary for temp table if needed
         std::string fileName("");
