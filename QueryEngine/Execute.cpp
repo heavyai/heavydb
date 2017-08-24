@@ -1417,7 +1417,7 @@ std::pair<std::vector<std::vector<int64_t>>, std::vector<std::vector<uint64_t>>>
 // Only fetch columns of hash-joined inner fact table whose fetch are not deferred from all the table fragments.
 bool Executor::needFetchAllFragments(const InputColDescriptor& inner_col_desc,
                                      const std::vector<InputDescriptor>& input_descs,
-                                     const std::map<int, const TableFragments*>& all_tables_fragments) const {
+                                     const std::vector<std::pair<int, std::vector<size_t>>>& selected_fragments) const {
   if (inner_col_desc.getScanDesc().getNestLevel() < 1 ||
       inner_col_desc.getScanDesc().getSourceType() != InputSourceType::TABLE ||
       (plan_state_->join_info_.join_impl_type_ != JoinImplType::HashOneToOne &&
@@ -1426,10 +1426,13 @@ bool Executor::needFetchAllFragments(const InputColDescriptor& inner_col_desc,
     return false;
   }
   const int table_id = inner_col_desc.getScanDesc().getTableId();
-  const auto fragments_it = all_tables_fragments.find(table_id);
-  CHECK(fragments_it != all_tables_fragments.end());
+  const auto fragments_it =
+      std::find_if(selected_fragments.begin(),
+                   selected_fragments.end(),
+                   [table_id](const std::pair<int, std::vector<size_t>>& frag) { return frag.first == table_id; });
+  CHECK(fragments_it != selected_fragments.end());
   const auto& fragments = fragments_it->second;
-  if (fragments->size() <= 1) {
+  if (fragments.size() <= 1) {
     return false;
   }
   const auto inner_table_desc = input_descs[1];
@@ -1504,7 +1507,7 @@ Executor::FetchResult Executor::fetchChunks(const ExecutionDispatch& execution_d
                                                                     is_rowid);
       } else {
 #ifdef ENABLE_MULTIFRAG_JOIN
-        if (needFetchAllFragments(*col_id, input_descs, all_tables_fragments)) {
+        if (needFetchAllFragments(*col_id, input_descs, selected_fragments)) {
           frag_col_buffers[it->second] = execution_dispatch.getAllScanColumnFrags(
               table_id, col_id->getColId(), all_tables_fragments, memory_level_for_column, device_id);
         } else
