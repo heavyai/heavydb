@@ -3465,6 +3465,8 @@ llvm::Value* GroupByAndAggregate::emitCall(const std::string& fname, const std::
 }
 
 #undef ROW_FUNC
+#undef LL_FP
 #undef LL_INT
+#undef LL_BOOL
 #undef LL_BUILDER
 #undef LL_CONTEXT
