@@ -2081,6 +2081,9 @@ TEST(Select, OverflowAndUnderFlow) {
     c("select cast(count(*) as DOUBLE) * (604*575) from test;", dt);
     c("select (604*575) / cast(count(*) as DOUBLE) from test;", dt);
     c("select (12345-123456789012345) / cast(count(*) as DOUBLE) from test;", dt);
+    ASSERT_EQ(0,
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(CAST(EXTRACT(QUARTER FROM CAST(NULL AS TIMESTAMP)) AS BIGINT) - 1) FROM test;", dt)));
 #ifdef ENABLE_COMPACTION
     c("SELECT SUM(ofd) FROM test GROUP BY x;", dt);
     c("SELECT SUM(ufd) FROM test GROUP BY x;", dt);
@@ -3344,7 +3347,7 @@ TEST(Select, RuntimeFunctions) {
     c("SELECT SUM(ABS(-f + 1)) FROM test;", dt);
     c("SELECT SUM(ABS(-d + 1)) FROM test;", dt);
     c("SELECT COUNT(*) FROM test WHERE ABS(CAST(x AS float)) >= 0;", dt);
-    EXPECT_THROW(run_multiple_agg("SELECT MIN(ABS(-ofd + 2)) FROM test;", dt), std::runtime_error);
+    c("SELECT MIN(ABS(-ofd + 2)) FROM test;", dt);
     ASSERT_EQ(static_cast<int64_t>(2 * g_num_rows),
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE SIGN(-dd) = -1;", dt)));
     ASSERT_EQ(static_cast<int64_t>(g_num_rows + g_num_rows / 2),
@@ -3369,7 +3372,8 @@ TEST(Select, RuntimeFunctions) {
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE SIGN(-d) = -1;", dt)));
     ASSERT_EQ(static_cast<int64_t>(g_num_rows + g_num_rows / 2),
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE SIGN(ofd) = 1;", dt)));
-    EXPECT_THROW(run_simple_agg("SELECT COUNT(*) FROM test WHERE SIGN(-ofd) = -1;", dt), std::runtime_error);
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows + g_num_rows / 2),
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE SIGN(-ofd) = -1;", dt)));
     ASSERT_EQ(static_cast<int64_t>(g_num_rows / 2),
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE SIGN(ofd) IS NULL;", dt)));
     ASSERT_FLOAT_EQ(static_cast<double>(2 * g_num_rows),

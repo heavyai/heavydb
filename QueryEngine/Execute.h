@@ -533,6 +533,10 @@ class Executor {
   llvm::Value* codegenCastToFp(llvm::Value* operand_lv, const SQLTypeInfo& operand_ti, const SQLTypeInfo& ti);
   llvm::Value* codegenCastFromFp(llvm::Value* operand_lv, const SQLTypeInfo& operand_ti, const SQLTypeInfo& ti);
   llvm::Value* codegenUMinus(const Analyzer::UOper*, const CompilationOptions&);
+  void codegenSkipOverflowCheckForNull(llvm::Value* lhs_lv,
+                                       llvm::Value* rhs_lv,
+                                       llvm::BasicBlock* no_overflow_bb,
+                                       const SQLTypeInfo& ti);
   llvm::Value* codegenIsNull(const Analyzer::UOper*, const CompilationOptions&);
   llvm::Value* codegenIsNullNumber(llvm::Value*, const SQLTypeInfo&);
   llvm::Value* codegenUnnest(const Analyzer::UOper*, const CompilationOptions&);
