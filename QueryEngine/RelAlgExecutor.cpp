@@ -163,16 +163,22 @@ FirstStepExecutionResult RelAlgExecutor::executeRelAlgQueryFirstStep(const RelAl
   CHECK(!ed_list.empty());
   auto first_exec_desc = ed_list.front();
   const auto sort = dynamic_cast<const RelSort*>(first_exec_desc.getBody());
+  size_t shard_count{0};
   if (sort) {
-    // No point in sorting on the leaf, only execute the input to the sort node.
-    CHECK_EQ(size_t(1), sort->inputCount());
-    const auto source = sort->getInput(0);
-    if (sort->collationCount() || node_is_aggregate(source)) {
-      first_exec_desc = RaExecutionDesc(source);
+    const auto source_work_unit = createSortInputWorkUnit(sort, eo.just_explain);
+    shard_count = shard_count_for_top_groups(source_work_unit.exe_unit, *executor_->getCatalog());
+    if (!shard_count) {
+      // No point in sorting on the leaf, only execute the input to the sort node.
+      CHECK_EQ(size_t(1), sort->inputCount());
+      const auto source = sort->getInput(0);
+      if (sort->collationCount() || node_is_aggregate(source)) {
+        first_exec_desc = RaExecutionDesc(source);
+      }
     }
   }
   std::vector<RaExecutionDesc> first_exec_desc_singleton_list{first_exec_desc};
-  const auto merge_type = node_is_aggregate(first_exec_desc.getBody()) ? MergeType::Reduce : MergeType::Union;
+  const auto merge_type =
+      (node_is_aggregate(first_exec_desc.getBody()) && !shard_count) ? MergeType::Reduce : MergeType::Union;
   return {executeRelAlgSeq(first_exec_desc_singleton_list, co, eo, render_info, queue_time_ms_),
           merge_type,
           first_exec_desc.getBody()->getId(),
