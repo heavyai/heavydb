@@ -109,7 +109,7 @@ int64_t BaselineJoinHashTable::getJoinHashBuffer(const ExecutorDeviceType device
 
 namespace {
 
-typedef std::pair<const Analyzer::ColumnVar*, const Analyzer::ColumnVar*> InnerOuter;
+typedef std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*> InnerOuter;
 
 std::vector<InnerOuter> normalize_column_pairs(const Analyzer::BinOper* condition,
                                                const Catalog_Namespace::Catalog& cat,

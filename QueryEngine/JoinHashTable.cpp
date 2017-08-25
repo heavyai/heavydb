@@ -26,7 +26,7 @@
 #include <numeric>
 #include <thread>
 
-std::pair<const Analyzer::ColumnVar*, const Analyzer::ColumnVar*> normalize_column_pair(
+std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*> normalize_column_pair(
     const Analyzer::Expr* lhs,
     const Analyzer::Expr* rhs,
     const Catalog_Namespace::Catalog& cat,
@@ -50,34 +50,46 @@ std::pair<const Analyzer::ColumnVar*, const Analyzer::ColumnVar*> normalize_colu
                                 : dynamic_cast<const Analyzer::ColumnVar*>(lhs);
   const auto rhs_col = rhs_cast ? dynamic_cast<const Analyzer::ColumnVar*>(rhs_cast->get_operand())
                                 : dynamic_cast<const Analyzer::ColumnVar*>(rhs);
-  if (!lhs_col || !rhs_col) {
+  if (!lhs_col && !rhs_col) {
     throw HashJoinFail("Cannot use hash join for given expression");
   }
   const Analyzer::ColumnVar* inner_col{nullptr};
   const Analyzer::ColumnVar* outer_col{nullptr};
+  auto outer_ti = lhs_ti;
+  auto inner_ti = rhs_ti;
+  const Analyzer::Expr* outer_expr{lhs};
 #ifdef ENABLE_EQUIJOIN_FOLD
-  if (lhs_col->get_rte_idx() == 0 && rhs_col->get_rte_idx() > 0) {
+  if ((!lhs_col || lhs_col->get_rte_idx() == 0) && (!rhs_col || rhs_col->get_rte_idx() > 0)) {
 #else
-  if (lhs_col->get_rte_idx() == 0 && rhs_col->get_rte_idx() == 1) {
+  if ((!lhs_col || lhs_col->get_rte_idx() == 0) && (!rhs_col || rhs_col->get_rte_idx() == 1)) {
 #endif
     inner_col = rhs_col;
     outer_col = lhs_col;
   } else {
+    if (lhs_col) {
 #ifdef ENABLE_EQUIJOIN_FOLD
-    CHECK_GT(lhs_col->get_rte_idx(), 0);
+      CHECK_GT(lhs_col->get_rte_idx(), 0);
 #else
-    CHECK_EQ(lhs_col->get_rte_idx(), 1);
+      CHECK_EQ(lhs_col->get_rte_idx(), 1);
 #endif
-    CHECK_EQ(rhs_col->get_rte_idx(), 0);
+    }
+    if (rhs_col) {
+      CHECK_EQ(rhs_col->get_rte_idx(), 0);
+    }
     inner_col = lhs_col;
     outer_col = rhs_col;
+    std::swap(outer_ti, inner_ti);
+    outer_expr = rhs;
+  }
+  if (!inner_col) {
+    throw HashJoinFail("Cannot use hash join for given expression");
   }
   // We need to fetch the actual type information from the catalog since Analyzer
   // always reports nullable as true for inner table columns in left joins.
   const auto inner_col_cd = get_column_descriptor_maybe(inner_col->get_column_id(), inner_col->get_table_id(), cat);
-  const auto& inner_col_real_ti =
+  const auto inner_col_real_ti =
       get_column_type(inner_col->get_column_id(), inner_col->get_table_id(), inner_col_cd, temporary_tables);
-  const auto& outer_col_ti = outer_col->get_type_info();
+  const auto& outer_col_ti = outer_col ? outer_col->get_type_info() : outer_ti;
   if (outer_col_ti.get_notnull() != inner_col_real_ti.get_notnull()) {
     throw HashJoinFail("For hash join, both sides must have the same nullability");
   }
@@ -85,12 +97,12 @@ std::pair<const Analyzer::ColumnVar*, const Analyzer::ColumnVar*> normalize_colu
         (inner_col_real_ti.is_string() && inner_col_real_ti.get_compression() == kENCODING_DICT))) {
     throw HashJoinFail("Can only apply hash join to integer-like types and dictionary encoded strings");
   }
-  return {inner_col, outer_col};
+  return {inner_col, outer_col ? outer_col : outer_expr};
 }
 
 namespace {
 
-std::pair<const Analyzer::ColumnVar*, const Analyzer::ColumnVar*> get_cols(
+std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*> get_cols(
     const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
     const Catalog_Namespace::Catalog& cat,
     const TemporaryTables* temporary_tables) {
@@ -122,7 +134,7 @@ size_t get_shard_count(const Analyzer::BinOper* join_condition,
     return 0;
   }
   const Analyzer::ColumnVar* lhs_col{nullptr};
-  const Analyzer::ColumnVar* rhs_col{nullptr};
+  const Analyzer::Expr* rhs_col{nullptr};
   std::shared_ptr<Analyzer::BinOper> redirected_bin_oper;
   try {
     redirected_bin_oper =
@@ -138,15 +150,15 @@ size_t get_shard_count(const Analyzer::BinOper* join_condition,
   return get_shard_count({lhs_col, rhs_col}, ra_exe_unit, executor);
 }
 
-size_t get_shard_count(std::pair<const Analyzer::ColumnVar*, const Analyzer::ColumnVar*> equi_pair,
+size_t get_shard_count(std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*> equi_pair,
                        const RelAlgExecutionUnit& ra_exe_unit,
                        const Executor* executor) {
   if (executor->isOuterJoin()) {
     return 0;
   }
   const auto lhs_col = equi_pair.first;
-  const auto rhs_col = equi_pair.second;
-  if (lhs_col->get_table_id() < 0 || rhs_col->get_table_id() < 0) {
+  const auto rhs_col = dynamic_cast<const Analyzer::ColumnVar*>(equi_pair.second);
+  if (!rhs_col || lhs_col->get_table_id() < 0 || rhs_col->get_table_id() < 0) {
     return 0;
   }
   if (lhs_col->get_type_info() != rhs_col->get_type_info()) {
@@ -266,7 +278,7 @@ std::pair<const int8_t*, size_t> JoinHashTable::getAllColumnFragments(
 }
 
 bool needs_dictionary_translation(const Analyzer::ColumnVar* inner_col,
-                                  const Analyzer::ColumnVar* outer_col,
+                                  const Analyzer::Expr* outer_col_expr,
                                   const Executor* executor) {
   const auto catalog = executor->getCatalog();
   CHECK(catalog);
@@ -277,6 +289,8 @@ bool needs_dictionary_translation(const Analyzer::ColumnVar* inner_col,
   if (!inner_ti.is_string()) {
     return false;
   }
+  const auto outer_col = dynamic_cast<const Analyzer::ColumnVar*>(outer_col_expr);
+  CHECK(outer_col);
   const auto outer_cd = get_column_descriptor_maybe(outer_col->get_column_id(), outer_col->get_table_id(), *catalog);
   // Don't want to deal with temporary tables for now, require translation.
   if (!inner_cd || !outer_cd) {
@@ -426,7 +440,7 @@ std::pair<const int8_t*, size_t> JoinHashTable::fetchFragments(
 }
 
 ChunkKey JoinHashTable::genHashTableKey(const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
-                                        const Analyzer::ColumnVar* outer_col,
+                                        const Analyzer::Expr* outer_col_expr,
                                         const Analyzer::ColumnVar* inner_col) const {
   ChunkKey hash_table_key{
       executor_->getCatalog()->get_currentDB().dbId, inner_col->get_table_id(), inner_col->get_column_id()};
@@ -434,6 +448,8 @@ ChunkKey JoinHashTable::genHashTableKey(const std::deque<Fragmenter_Namespace::F
   if (ti.is_string()) {
     CHECK_EQ(kENCODING_DICT, ti.get_compression());
     size_t outer_elem_count = 0;
+    const auto outer_col = dynamic_cast<const Analyzer::ColumnVar*>(outer_col_expr);
+    CHECK(outer_col);
     const auto& outer_query_info = getInnerQueryInfo(outer_col).info;
     for (auto& frag : outer_query_info.fragments) {
       outer_elem_count = frag.getNumTuples();
@@ -586,7 +602,7 @@ void JoinHashTable::checkHashJoinReplicationConstraint(const int table_id) const
 
 int JoinHashTable::initHashTableOnCpu(const int8_t* col_buff,
                                       const size_t num_elements,
-                                      const std::pair<const Analyzer::ColumnVar*, const Analyzer::ColumnVar*>& cols,
+                                      const std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*>& cols,
                                       const int32_t hash_entry_count,
                                       const int32_t hash_join_invalid_val) {
   const auto inner_col = cols.first;
@@ -602,8 +618,10 @@ int JoinHashTable::initHashTableOnCpu(const int8_t* col_buff,
       sd_inner_proxy =
           executor_->getStringDictionaryProxy(inner_col->get_comp_param(), executor_->row_set_mem_owner_, true);
       CHECK(sd_inner_proxy);
+      const auto outer_col = dynamic_cast<const Analyzer::ColumnVar*>(cols.second);
+      CHECK(outer_col);
       sd_outer_proxy =
-          executor_->getStringDictionaryProxy(cols.second->get_comp_param(), executor_->row_set_mem_owner_, true);
+          executor_->getStringDictionaryProxy(outer_col->get_comp_param(), executor_->row_set_mem_owner_, true);
       CHECK(sd_outer_proxy);
     }
     int thread_count = cpu_threads();
@@ -654,7 +672,7 @@ int JoinHashTable::initHashTableOnCpu(const int8_t* col_buff,
 void JoinHashTable::initOneToManyHashTableOnCpu(
     const int8_t* col_buff,
     const size_t num_elements,
-    const std::pair<const Analyzer::ColumnVar*, const Analyzer::ColumnVar*>& cols,
+    const std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*>& cols,
     const int32_t hash_entry_count,
     const int32_t hash_join_invalid_val) {
   const auto inner_col = cols.first;
@@ -671,8 +689,10 @@ void JoinHashTable::initOneToManyHashTableOnCpu(
     sd_inner_proxy =
         executor_->getStringDictionaryProxy(inner_col->get_comp_param(), executor_->row_set_mem_owner_, true);
     CHECK(sd_inner_proxy);
+    const auto outer_col = dynamic_cast<const Analyzer::ColumnVar*>(cols.second);
+    CHECK(outer_col);
     sd_outer_proxy =
-        executor_->getStringDictionaryProxy(cols.second->get_comp_param(), executor_->row_set_mem_owner_, true);
+        executor_->getStringDictionaryProxy(outer_col->get_comp_param(), executor_->row_set_mem_owner_, true);
     CHECK(sd_outer_proxy);
   }
   int thread_count = cpu_threads();
@@ -717,7 +737,7 @@ int JoinHashTable::initHashTableForDevice(
     const ChunkKey& chunk_key,
     const int8_t* col_buff,
     const size_t num_elements,
-    const std::pair<const Analyzer::ColumnVar*, const Analyzer::ColumnVar*>& cols,
+    const std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*>& cols,
     const Data_Namespace::MemoryLevel effective_memory_level,
     std::pair<Data_Namespace::AbstractBuffer*, Data_Namespace::AbstractBuffer*>& buff_and_err,
     const int device_id) {
@@ -834,13 +854,12 @@ int JoinHashTable::initHashTableForDevice(
   return err;
 }
 
-void JoinHashTable::initOneToManyHashTable(
-    const ChunkKey& chunk_key,
-    const int8_t* col_buff,
-    const size_t num_elements,
-    const std::pair<const Analyzer::ColumnVar*, const Analyzer::ColumnVar*>& cols,
-    const Data_Namespace::MemoryLevel effective_memory_level,
-    const int device_id) {
+void JoinHashTable::initOneToManyHashTable(const ChunkKey& chunk_key,
+                                           const int8_t* col_buff,
+                                           const size_t num_elements,
+                                           const std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*>& cols,
+                                           const Data_Namespace::MemoryLevel effective_memory_level,
+                                           const int device_id) {
   auto hash_entry_count = get_hash_entry_count(col_range_);
 #ifdef HAVE_CUDA
   const auto shard_count = get_shard_count(qual_bin_oper_.get(), ra_exe_unit_, executor_);
@@ -936,8 +955,10 @@ void JoinHashTable::initOneToManyHashTable(
 void JoinHashTable::initHashTableOnCpuFromCache(
     const ChunkKey& chunk_key,
     const size_t num_elements,
-    const std::pair<const Analyzer::ColumnVar*, const Analyzer::ColumnVar*>& cols) {
-  JoinHashTableCacheKey cache_key{col_range_, *cols.first, *cols.second, num_elements, chunk_key};
+    const std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*>& cols) {
+  const auto outer_col = dynamic_cast<const Analyzer::ColumnVar*>(cols.second);
+  JoinHashTableCacheKey cache_key{
+      col_range_, *cols.first, outer_col ? *outer_col : *cols.first, num_elements, chunk_key};
   std::lock_guard<std::mutex> join_hash_table_cache_lock(join_hash_table_cache_mutex_);
   for (const auto& kv : join_hash_table_cache_) {
     if (kv.first == cache_key) {
@@ -947,11 +968,12 @@ void JoinHashTable::initHashTableOnCpuFromCache(
   }
 }
 
-void JoinHashTable::putHashTableOnCpuToCache(
-    const ChunkKey& chunk_key,
-    const size_t num_elements,
-    const std::pair<const Analyzer::ColumnVar*, const Analyzer::ColumnVar*>& cols) {
-  JoinHashTableCacheKey cache_key{col_range_, *cols.first, *cols.second, num_elements, chunk_key};
+void JoinHashTable::putHashTableOnCpuToCache(const ChunkKey& chunk_key,
+                                             const size_t num_elements,
+                                             const std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*>& cols) {
+  const auto outer_col = dynamic_cast<const Analyzer::ColumnVar*>(cols.second);
+  JoinHashTableCacheKey cache_key{
+      col_range_, *cols.first, outer_col ? *outer_col : *cols.first, num_elements, chunk_key};
   std::lock_guard<std::mutex> join_hash_table_cache_lock(join_hash_table_cache_mutex_);
   for (const auto& kv : join_hash_table_cache_) {
     if (kv.first == cache_key) {
@@ -991,7 +1013,7 @@ llvm::Value* JoinHashTable::codegenHashTableLoad(const size_t table_idx, Executo
 }
 
 std::vector<llvm::Value*> JoinHashTable::getHashJoinArgs(llvm::Value* hash_ptr,
-                                                         const Analyzer::ColumnVar* key_col,
+                                                         const Analyzer::Expr* key_col,
                                                          const int shard_count,
                                                          const CompilationOptions& co) {
   const auto key_lvs = executor_->codegen(key_col, true, co);

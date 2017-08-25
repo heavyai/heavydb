@@ -131,7 +131,7 @@ class JoinHashTable : public JoinHashTableInterface {
       std::map<int, std::shared_ptr<const ColumnarResults>>& frags_owner);
 
   ChunkKey genHashTableKey(const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
-                           const Analyzer::ColumnVar* outer_col,
+                           const Analyzer::Expr* outer_col,
                            const Analyzer::ColumnVar* inner_col) const;
 
   int reify(const int device_count);
@@ -141,30 +141,30 @@ class JoinHashTable : public JoinHashTableInterface {
   int initHashTableForDevice(const ChunkKey& chunk_key,
                              const int8_t* col_buff,
                              const size_t num_elements,
-                             const std::pair<const Analyzer::ColumnVar*, const Analyzer::ColumnVar*>& cols,
+                             const std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*>& cols,
                              const Data_Namespace::MemoryLevel effective_memory_level,
                              std::pair<Data_Namespace::AbstractBuffer*, Data_Namespace::AbstractBuffer*>& buff_and_err,
                              const int device_id);
   void initOneToManyHashTable(const ChunkKey& chunk_key,
                               const int8_t* col_buff,
                               const size_t num_elements,
-                              const std::pair<const Analyzer::ColumnVar*, const Analyzer::ColumnVar*>& cols,
+                              const std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*>& cols,
                               const Data_Namespace::MemoryLevel effective_memory_level,
                               const int device_id);
   void initHashTableOnCpuFromCache(const ChunkKey& chunk_key,
                                    const size_t num_elements,
-                                   const std::pair<const Analyzer::ColumnVar*, const Analyzer::ColumnVar*>& cols);
+                                   const std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*>& cols);
   void putHashTableOnCpuToCache(const ChunkKey& chunk_key,
                                 const size_t num_elements,
-                                const std::pair<const Analyzer::ColumnVar*, const Analyzer::ColumnVar*>& cols);
+                                const std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*>& cols);
   int initHashTableOnCpu(const int8_t* col_buff,
                          const size_t num_elements,
-                         const std::pair<const Analyzer::ColumnVar*, const Analyzer::ColumnVar*>& cols,
+                         const std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*>& cols,
                          const int32_t hash_entry_count,
                          const int32_t hash_join_invalid_val);
   void initOneToManyHashTableOnCpu(const int8_t* col_buff,
                                    const size_t num_elements,
-                                   const std::pair<const Analyzer::ColumnVar*, const Analyzer::ColumnVar*>& cols,
+                                   const std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*>& cols,
                                    const int32_t hash_entry_count,
                                    const int32_t hash_join_invalid_val);
 
@@ -175,7 +175,7 @@ class JoinHashTable : public JoinHashTableInterface {
   llvm::Value* codegenHashTableLoad(const size_t table_idx);
 
   std::vector<llvm::Value*> getHashJoinArgs(llvm::Value* hash_ptr,
-                                            const Analyzer::ColumnVar* key_col,
+                                            const Analyzer::Expr* key_col,
                                             const int shard_count,
                                             const CompilationOptions& co);
 
@@ -247,16 +247,16 @@ size_t get_shard_count(const Analyzer::BinOper* join_condition,
                        const RelAlgExecutionUnit& ra_exe_unit,
                        const Executor* executor);
 
-size_t get_shard_count(std::pair<const Analyzer::ColumnVar*, const Analyzer::ColumnVar*> equi_pair,
+size_t get_shard_count(std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*> equi_pair,
                        const RelAlgExecutionUnit& ra_exe_unit,
                        const Executor* executor);
 
 bool needs_dictionary_translation(const Analyzer::ColumnVar* inner_col,
-                                  const Analyzer::ColumnVar* outer_col,
+                                  const Analyzer::Expr* outer_col,
                                   const Executor* executor);
 
 // Swap the columns if needed and make the inner column the first component.
-std::pair<const Analyzer::ColumnVar*, const Analyzer::ColumnVar*> normalize_column_pair(
+std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*> normalize_column_pair(
     const Analyzer::Expr* lhs,
     const Analyzer::Expr* rhs,
     const Catalog_Namespace::Catalog& cat,
