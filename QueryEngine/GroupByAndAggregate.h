@@ -363,6 +363,8 @@ class GroupByAndAggregate {
                                  const bool render_output,
                                  const bool must_use_baseline_sort);
 
+  int64_t getShardedTopBucket(const ColRangeInfo& col_range_info, const size_t shard_count) const;
+
   void addTransientStringLiterals();
 
   CountDistinctDescriptors initCountDistinctDescriptors();

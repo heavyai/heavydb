@@ -48,6 +48,7 @@ bool g_cluster{false};
 bool g_use_result_set{true};
 bool g_bigint_count{false};
 int g_hll_precision_bits{11};
+extern size_t g_leaf_count;
 
 namespace {
 
@@ -1913,6 +1914,27 @@ std::vector<ssize_t> target_expr_group_by_indices(const std::list<std::shared_pt
 
 }  // namespace
 
+int64_t GroupByAndAggregate::getShardedTopBucket(const ColRangeInfo& col_range_info, const size_t shard_count) const {
+  int device_count{0};
+  if (device_type_ == ExecutorDeviceType::GPU) {
+    device_count = executor_->getCatalog()->get_dataMgr().cudaMgr_->getDeviceCount();
+    CHECK_GT(device_count, 0);
+  }
+
+  int64_t bucket{col_range_info.bucket};
+
+  if (shard_count) {
+    CHECK(!col_range_info.bucket);
+    if (static_cast<size_t>(device_count) <= shard_count && g_leaf_count) {
+      bucket = shard_count * g_leaf_count;
+    } else {
+      bucket = device_count;
+    }
+  }
+
+  return bucket;
+}
+
 void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
                                                     const size_t max_groups_buffer_entry_count,
                                                     const size_t small_groups_buffer_entry_count,
@@ -1971,18 +1993,11 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
   const auto shard_count =
       device_type_ == ExecutorDeviceType::GPU ? shard_count_for_top_groups(ra_exe_unit_, *executor_->getCatalog()) : 0;
 
-  int device_count{0};
-  if (device_type_ == ExecutorDeviceType::GPU) {
-    device_count = executor_->getCatalog()->get_dataMgr().cudaMgr_->getDeviceCount();
-    CHECK_GT(device_count, 0);
-  }
-
-  const auto col_range_info =
-      ColRangeInfo{col_range_info_nosharding.hash_type_,
-                   col_range_info_nosharding.min,
-                   col_range_info_nosharding.max,
-                   shard_count ? static_cast<int64_t>(device_count) : col_range_info_nosharding.bucket,
-                   col_range_info_nosharding.has_nulls};
+  const auto col_range_info = ColRangeInfo{col_range_info_nosharding.hash_type_,
+                                           col_range_info_nosharding.min,
+                                           col_range_info_nosharding.max,
+                                           getShardedTopBucket(col_range_info_nosharding, shard_count),
+                                           col_range_info_nosharding.has_nulls};
 
   if (g_enable_watchdog &&
       ((col_range_info.hash_type_ == GroupByColRangeType::MultiCol && max_groups_buffer_entry_count > 120000000) ||
