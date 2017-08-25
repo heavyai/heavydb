@@ -237,11 +237,11 @@ llvm::Value* Executor::codegenSub(const Analyzer::BinOper* bin_oper,
     llvm::Value* detected{nullptr};
     auto const_zero = llvm::ConstantInt::get(lhs_lv->getType(), 0, true);
     auto overflow = cgen_state_->ir_builder_.CreateAnd(
-        cgen_state_->ir_builder_.CreateICmpSLT(lhs_lv, const_zero),
-        cgen_state_->ir_builder_.CreateICmpSGT(rhs_lv, cgen_state_->ir_builder_.CreateAdd(chosen_max, lhs_lv)));
+        cgen_state_->ir_builder_.CreateICmpSLT(rhs_lv, const_zero),  // sub going up, check the max
+        cgen_state_->ir_builder_.CreateICmpSGT(lhs_lv, cgen_state_->ir_builder_.CreateAdd(chosen_max, rhs_lv)));
     auto underflow = cgen_state_->ir_builder_.CreateAnd(
-        cgen_state_->ir_builder_.CreateICmpSGT(lhs_lv, const_zero),
-        cgen_state_->ir_builder_.CreateICmpSLT(rhs_lv, cgen_state_->ir_builder_.CreateAdd(chosen_min, lhs_lv)));
+        cgen_state_->ir_builder_.CreateICmpSGT(rhs_lv, const_zero),  // sub going down, check the min
+        cgen_state_->ir_builder_.CreateICmpSLT(lhs_lv, cgen_state_->ir_builder_.CreateAdd(chosen_min, rhs_lv)));
     detected = cgen_state_->ir_builder_.CreateOr(overflow, underflow);
     cgen_state_->ir_builder_.CreateCondBr(detected, sub_fail, sub_ok);
     cgen_state_->ir_builder_.SetInsertPoint(sub_ok);
