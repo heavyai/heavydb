@@ -64,6 +64,7 @@ class Role {
   virtual void updatePrivileges(Role* role) = 0;
   virtual void updatePrivileges() = 0;
   virtual std::string roleName() const = 0;
+  virtual bool isUserPrivateRole() const = 0;
   const DBObjectMap* getDbObject() const;
   DBObject* findDbObject(const DBObjectKey objectKey) const;
 
@@ -97,6 +98,7 @@ class UserRole : public Role {
   virtual void updatePrivileges(Role* role);
   virtual void updatePrivileges();
   virtual std::string roleName() const;
+  virtual bool isUserPrivateRole() const;
 
  private:
   int32_t userId_;
@@ -107,7 +109,7 @@ class UserRole : public Role {
 // DB user roles and privileges, including DB users and their access privileges to DB objects
 class GroupRole : public Role {
  public:
-  GroupRole(const std::string& name);
+  GroupRole(const std::string& name, const bool& userPrivateRole = false);
   GroupRole(const GroupRole& role);
   virtual ~GroupRole();
 
@@ -126,8 +128,10 @@ class GroupRole : public Role {
   virtual void updatePrivileges(Role* role);
   virtual void updatePrivileges();
   virtual std::string roleName() const;
+  virtual bool isUserPrivateRole() const;
 
  private:
+  bool userPrivateRole_;
   std::unordered_set<Role*> userRole_;
 };
 

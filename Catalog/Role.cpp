@@ -222,11 +222,16 @@ std::string UserRole::roleName() const {
   return (roleName_ + "_" + userName_);
 }
 
+bool UserRole::isUserPrivateRole() const {
+  throw runtime_error("isUserPrivateRole() api should not be used with objects of the UserRole class.");
+}
+
 //      ***** Class GroupRole *****
 
-GroupRole::GroupRole(const std::string& name) : Role(name) {}
+GroupRole::GroupRole(const std::string& name, const bool& userPrivateRole)
+    : Role(name), userPrivateRole_(userPrivateRole) {}
 
-GroupRole::GroupRole(const GroupRole& role) : Role(role) {
+GroupRole::GroupRole(const GroupRole& role) : Role(role), userPrivateRole_(role.userPrivateRole_) {
   copyRoles(role.userRole_);  // copy all pointers of <userRole_> set from the from_ object to the to_ object
 }
 
@@ -321,4 +326,8 @@ void GroupRole::updatePrivileges() {
   for (auto roleIt = userRole_.begin(); roleIt != userRole_.end(); ++roleIt) {
     (*roleIt)->updatePrivileges();
   }
+}
+
+bool GroupRole::isUserPrivateRole() const {
+  return userPrivateRole_;
 }

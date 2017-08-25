@@ -400,6 +400,7 @@ class SysCatalog : public Catalog {
   std::list<DBMetadata> getAllDBMetadata();
   std::list<UserMetadata> getAllUserMetadata();
   void createDefaultMapdRoles();
+  void grantDefaultPrivilegesToRole(const std::string& name, bool issuper);
   std::vector<std::string> convertObjectKeyToString(const DBObject& object);
   std::vector<int32_t> convertObjectKeyFromString(const std::vector<std::string>& key, const DBObjectType& type);
   void populateDBObjectKey(DBObject& object, const Catalog_Namespace::Catalog& catalog);
@@ -414,7 +415,7 @@ class SysCatalog : public Catalog {
                                 const Catalog_Namespace::Catalog& catalog);
   void getDBObjectPrivileges(const std::string& roleName, DBObject& object, const Catalog_Namespace::Catalog& catalog);
   bool verifyDBObjectOwnership(const UserMetadata& user, DBObject object, const Catalog_Namespace::Catalog& catalog);
-  void createRole(const std::string& roleName);
+  void createRole(const std::string& roleName, const bool& userPrivateRole = false);
   void dropRole(const std::string& roleName);
   void grantRole(const std::string& roleName, const std::string& userName);
   void revokeRole(const std::string& roleName, const std::string& userName);

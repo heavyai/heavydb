@@ -2431,9 +2431,6 @@ void CreateRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   }
 
   auto& syscat = static_cast<Catalog_Namespace::SysCatalog&>(catalog);
-  if (syscat.getMetadataForRole(get_role()) != nullptr) {
-    throw std::runtime_error("CREATE ROLE " + get_role() + " failed because role with this name already exists.");
-  }
   syscat.createRole(get_role());
 }
 
