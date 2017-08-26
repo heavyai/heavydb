@@ -2108,6 +2108,7 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
   td.maxChunkSize = DEFAULT_MAX_CHUNK_SIZE;
   td.fragPageSize = DEFAULT_PAGE_SIZE;
   td.maxRows = DEFAULT_MAX_ROWS;
+  td.keyMetainfo = "[]";
   if (is_temporary_) {
     td.persistenceLevel = Data_Namespace::MemoryLevel::CPU_LEVEL;
   } else {
