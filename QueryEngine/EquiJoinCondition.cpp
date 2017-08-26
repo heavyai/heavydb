@@ -34,12 +34,8 @@ bool can_combine_with(const Analyzer::Expr* crt, const Analyzer::Expr* prev) {
   if (!crt_bin || !prev_bin) {
     return false;
   }
-  if (crt_bin->get_optype() != kEQ || prev_bin->get_optype() != kEQ) {
-    return false;
-  }
-  const auto crt_outer = std::dynamic_pointer_cast<Analyzer::ColumnVar>(remove_cast(crt_bin->get_own_left_operand()));
-  const auto prev_outer = std::dynamic_pointer_cast<Analyzer::ColumnVar>(remove_cast(prev_bin->get_own_left_operand()));
-  if (!crt_outer || !prev_outer || crt_outer->get_table_id() != prev_outer->get_table_id()) {
+  if (crt_bin->get_optype() != kEQ || crt_bin->get_qualifier() != kONE || prev_bin->get_optype() != kEQ ||
+      prev_bin->get_qualifier() != kONE) {
     return false;
   }
   const auto crt_inner = std::dynamic_pointer_cast<Analyzer::ColumnVar>(remove_cast(crt_bin->get_own_right_operand()));
@@ -53,18 +49,15 @@ bool can_combine_with(const Analyzer::Expr* crt, const Analyzer::Expr* prev) {
 
 std::shared_ptr<Analyzer::BinOper> make_composite_equals_impl(
     const std::vector<std::shared_ptr<Analyzer::Expr>>& crt_coalesced_quals) {
-  std::vector<std::shared_ptr<Analyzer::ColumnVar>> lhs_tuple;
-  std::vector<std::shared_ptr<Analyzer::ColumnVar>> rhs_tuple;
+  std::vector<std::shared_ptr<Analyzer::Expr>> lhs_tuple;
+  std::vector<std::shared_ptr<Analyzer::Expr>> rhs_tuple;
   bool not_null{true};
   for (const auto& qual : crt_coalesced_quals) {
     const auto qual_binary = std::dynamic_pointer_cast<Analyzer::BinOper>(qual);
     CHECK(qual_binary);
     not_null = not_null && qual_binary->get_type_info().get_notnull();
-    const auto lhs_col =
-        std::dynamic_pointer_cast<Analyzer::ColumnVar>(remove_cast(qual_binary->get_own_left_operand()));
-    const auto rhs_col =
-        std::dynamic_pointer_cast<Analyzer::ColumnVar>(remove_cast(qual_binary->get_own_right_operand()));
-    CHECK(lhs_col && rhs_col);
+    const auto lhs_col = remove_cast(qual_binary->get_own_left_operand());
+    const auto rhs_col = remove_cast(qual_binary->get_own_right_operand());
     lhs_tuple.push_back(lhs_col);
     rhs_tuple.push_back(rhs_col);
   }
@@ -72,8 +65,8 @@ std::shared_ptr<Analyzer::BinOper> make_composite_equals_impl(
                                              false,
                                              kEQ,
                                              kONE,
-                                             std::make_shared<Analyzer::ColumnVarTuple>(lhs_tuple),
-                                             std::make_shared<Analyzer::ColumnVarTuple>(rhs_tuple));
+                                             std::make_shared<Analyzer::ExpressionTuple>(lhs_tuple),
+                                             std::make_shared<Analyzer::ExpressionTuple>(rhs_tuple));
 }
 
 // Create an equals expression with column tuple operands out of regular equals expressions.

@@ -115,8 +115,8 @@ std::vector<InnerOuter> normalize_column_pairs(const Analyzer::BinOper* conditio
                                                const Catalog_Namespace::Catalog& cat,
                                                const TemporaryTables* temporary_tables) {
   std::vector<InnerOuter> result;
-  const auto lhs_tuple_expr = dynamic_cast<const Analyzer::ColumnVarTuple*>(condition->get_left_operand());
-  const auto rhs_tuple_expr = dynamic_cast<const Analyzer::ColumnVarTuple*>(condition->get_right_operand());
+  const auto lhs_tuple_expr = dynamic_cast<const Analyzer::ExpressionTuple*>(condition->get_left_operand());
+  const auto rhs_tuple_expr = dynamic_cast<const Analyzer::ExpressionTuple*>(condition->get_right_operand());
   CHECK(lhs_tuple_expr && rhs_tuple_expr);
   const auto& lhs_tuple = lhs_tuple_expr->getTuple();
   const auto& rhs_tuple = rhs_tuple_expr->getTuple();
@@ -497,7 +497,7 @@ size_t get_key_component_width(const std::shared_ptr<Analyzer::BinOper> conditio
 int BaselineJoinHashTable::initHashTableOnCpu(const std::vector<JoinColumn>& join_columns,
                                               const std::vector<JoinColumnTypeInfo>& join_column_types,
                                               const JoinHashTableInterface::HashType layout) {
-  const auto col_tuple_expr = std::dynamic_pointer_cast<Analyzer::ColumnVarTuple>(condition_->get_own_right_operand());
+  const auto col_tuple_expr = std::dynamic_pointer_cast<Analyzer::ExpressionTuple>(condition_->get_own_right_operand());
   CHECK(col_tuple_expr);
   const auto inner_outer_pairs =
       normalize_column_pairs(condition_.get(), *executor_->getCatalog(), executor_->getTemporaryTables());
@@ -773,7 +773,7 @@ int BaselineJoinHashTable::initHashTableForDevice(const std::vector<JoinColumn>&
                                                   const Data_Namespace::MemoryLevel effective_memory_level,
                                                   const int device_id) {
   const auto catalog = executor_->getCatalog();
-  const auto col_tuple_expr = std::dynamic_pointer_cast<Analyzer::ColumnVarTuple>(condition_->get_own_right_operand());
+  const auto col_tuple_expr = std::dynamic_pointer_cast<Analyzer::ExpressionTuple>(condition_->get_own_right_operand());
   CHECK(col_tuple_expr);
   const auto inner_outer_pairs = normalize_column_pairs(condition_.get(), *catalog, executor_->getTemporaryTables());
   const auto key_component_width = get_key_component_width(condition_, executor_);

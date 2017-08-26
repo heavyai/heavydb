@@ -119,8 +119,8 @@ std::string string_cmp_func(const SQLOps optype) {
   }
 }
 
-std::shared_ptr<Analyzer::BinOper> make_eq(const std::shared_ptr<Analyzer::ColumnVar>& lhs,
-                                           const std::shared_ptr<Analyzer::ColumnVar>& rhs) {
+std::shared_ptr<Analyzer::BinOper> make_eq(const std::shared_ptr<Analyzer::Expr>& lhs,
+                                           const std::shared_ptr<Analyzer::Expr>& rhs) {
   // Sides of a tuple equality are stripped of cast operators to simplify the logic
   // in the hash table construction algorithm. Add them back here.
   auto eq_oper = std::dynamic_pointer_cast<Analyzer::BinOper>(Parser::OperExpr::normalize(kEQ, kONE, lhs, rhs));
@@ -131,8 +131,8 @@ std::shared_ptr<Analyzer::BinOper> make_eq(const std::shared_ptr<Analyzer::Colum
 // Convert a column tuple equality expression back to a conjunction of comparisons
 // so that it can be handled by the regular code generation methods.
 std::shared_ptr<Analyzer::BinOper> lower_multicol_compare(const Analyzer::BinOper* multicol_compare) {
-  const auto left_tuple_expr = dynamic_cast<const Analyzer::ColumnVarTuple*>(multicol_compare->get_left_operand());
-  const auto right_tuple_expr = dynamic_cast<const Analyzer::ColumnVarTuple*>(multicol_compare->get_right_operand());
+  const auto left_tuple_expr = dynamic_cast<const Analyzer::ExpressionTuple*>(multicol_compare->get_left_operand());
+  const auto right_tuple_expr = dynamic_cast<const Analyzer::ExpressionTuple*>(multicol_compare->get_right_operand());
   CHECK(left_tuple_expr && right_tuple_expr);
   const auto& left_tuple = left_tuple_expr->getTuple();
   const auto& right_tuple = right_tuple_expr->getTuple();
@@ -160,8 +160,8 @@ llvm::Value* Executor::codegenCmp(const Analyzer::BinOper* bin_oper, const Compi
   const auto qualifier = bin_oper->get_qualifier();
   const auto lhs = bin_oper->get_left_operand();
   const auto rhs = bin_oper->get_right_operand();
-  if (dynamic_cast<const Analyzer::ColumnVarTuple*>(lhs)) {
-    CHECK(dynamic_cast<const Analyzer::ColumnVarTuple*>(rhs));
+  if (dynamic_cast<const Analyzer::ExpressionTuple*>(lhs)) {
+    CHECK(dynamic_cast<const Analyzer::ExpressionTuple*>(rhs));
     const auto lowered = lower_multicol_compare(bin_oper);
     const auto lowered_lvs = codegen(lowered.get(), true, co);
     CHECK_EQ(size_t(1), lowered_lvs.size());

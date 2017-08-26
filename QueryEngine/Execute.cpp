@@ -1360,7 +1360,7 @@ bool Executor::skipFragmentPair(
   CHECK(condition_it != inner_table_id_to_join_condition.end());
   const auto join_condition = condition_it->second;
   CHECK(join_condition);
-  if (dynamic_cast<const Analyzer::ColumnVarTuple*>(join_condition->get_left_operand())) {
+  if (dynamic_cast<const Analyzer::ExpressionTuple*>(join_condition->get_left_operand())) {
     const auto shard_count_info = get_baseline_shard_count(join_condition, ra_exe_unit, this);
     return shard_count_info.count;
   }
@@ -2304,7 +2304,7 @@ Executor::JoinInfo Executor::chooseJoinType(const std::list<std::shared_ptr<Anal
       CHECK_GT(device_count, 0);
       std::shared_ptr<JoinHashTableInterface> join_hash_table;
       try {
-        if (dynamic_cast<const Analyzer::ColumnVarTuple*>(qual_bin_oper->get_left_operand())) {
+        if (dynamic_cast<const Analyzer::ExpressionTuple*>(qual_bin_oper->get_left_operand())) {
           join_hash_table = BaselineJoinHashTable::getInstance(
               qual_bin_oper, query_infos, ra_exe_unit, memory_level, device_count, visited_tables, this);
         } else {

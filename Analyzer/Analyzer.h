@@ -208,15 +208,15 @@ class ColumnVar : public Expr {
 };
 
 /*
- * @type ColumnVarTuple
- * @brief A tuple of columns on the side of an equi-join on multiple columns.
+ * @type ExpressionTuple
+ * @brief A tuple of expressions on the side of an equi-join on multiple columns.
  * Not to be used in any other context.
  */
-class ColumnVarTuple : public Expr {
+class ExpressionTuple : public Expr {
  public:
-  ColumnVarTuple(const std::vector<std::shared_ptr<Analyzer::ColumnVar>>& tuple) : Expr(SQLTypeInfo()), tuple_(tuple){};
+  ExpressionTuple(const std::vector<std::shared_ptr<Analyzer::Expr>>& tuple) : Expr(SQLTypeInfo()), tuple_(tuple){};
 
-  const std::vector<std::shared_ptr<Analyzer::ColumnVar>>& getTuple() const { return tuple_; }
+  const std::vector<std::shared_ptr<Analyzer::Expr>>& getTuple() const { return tuple_; }
 
   virtual void collect_rte_idx(std::set<int>& rte_idx_set) const override;
 
@@ -227,7 +227,7 @@ class ColumnVarTuple : public Expr {
   virtual bool operator==(const Expr& rhs) const override;
 
  private:
-  const std::vector<std::shared_ptr<Analyzer::ColumnVar>> tuple_;
+  const std::vector<std::shared_ptr<Analyzer::Expr>> tuple_;
 };
 
 /*

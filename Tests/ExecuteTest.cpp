@@ -3319,6 +3319,19 @@ TEST(Select, Joins_OneOuterExpression) {
   }
 }
 
+TEST(Select, Joins_MultipleOuterExpressions) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT COUNT(*) FROM test, test_inner WHERE test.x - 1 = test_inner.x AND test.str = test_inner.str;", dt);
+    c("SELECT COUNT(*) FROM test, test_inner WHERE test.x + 0 = test_inner.x AND test.str = test_inner.str;", dt);
+    c("SELECT COUNT(*) FROM test, test_inner WHERE test.str = test_inner.str AND test.x + 0 = test_inner.x;", dt);
+    c("SELECT COUNT(*) FROM test, test_inner WHERE test.x + 1 = test_inner.x AND test.str = test_inner.str;", dt);
+    // The following query will fallback to loop join because we don't reorder the
+    // expressions to be consistent with table order for composite equality yet.
+    c("SELECT COUNT(*) FROM test, test_inner WHERE test.x + 0 = test_inner.x AND test_inner.str = test.str;", dt);
+  }
+}
+
 TEST(Select, Joins_Unsupported) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();

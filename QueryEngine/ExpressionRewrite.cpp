@@ -103,7 +103,7 @@ class DeepCopyVisitor : public ScalarExprVisitor<std::shared_ptr<Analyzer::Expr>
   typedef std::shared_ptr<Analyzer::Expr> RetType;
   RetType visitColumnVar(const Analyzer::ColumnVar* col_var) const override { return col_var->deep_copy(); }
 
-  RetType visitColumnVarTuple(const Analyzer::ColumnVarTuple* col_var_tuple) const override {
+  RetType visitColumnVarTuple(const Analyzer::ExpressionTuple* col_var_tuple) const override {
     return col_var_tuple->deep_copy();
   }
 
@@ -258,15 +258,13 @@ class IndirectToDirectColVisitor : public DeepCopyVisitor {
                                          col_var->get_rte_idx());
   }
 
-  RetType visitColumnVarTuple(const Analyzer::ColumnVarTuple* col_var_tuple) const override {
-    std::vector<std::shared_ptr<Analyzer::ColumnVar>> redirected_tuple;
+  RetType visitColumnVarTuple(const Analyzer::ExpressionTuple* col_var_tuple) const override {
+    std::vector<std::shared_ptr<Analyzer::Expr>> redirected_tuple;
     for (const auto& tuple_component : col_var_tuple->getTuple()) {
-      const auto redirected_component =
-          std::dynamic_pointer_cast<Analyzer::ColumnVar>(visitColumnVar(tuple_component.get()));
-      CHECK(redirected_component);
+      const auto redirected_component = visit(tuple_component.get());
       redirected_tuple.push_back(redirected_component);
     }
-    return std::make_shared<Analyzer::ColumnVarTuple>(redirected_tuple);
+    return std::make_shared<Analyzer::ExpressionTuple>(redirected_tuple);
   }
 
  private:
