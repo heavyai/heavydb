@@ -136,17 +136,20 @@ void SysCatalog::createUser(const string& name, const string& passwd, bool issup
 
 void SysCatalog::dropUser(const string& name) {
   if (access_priv_check_) {
-    dropRole(name);
-    dropUserRole(name);
-    const std::string& roleName(name);
-    sqliteConnector_.query("BEGIN TRANSACTION");
-    try {
-      sqliteConnector_.query_with_text_param("DELETE FROM mapd_roles WHERE userName = ?", roleName);
-    } catch (const std::exception& e) {
-      sqliteConnector_.query("ROLLBACK TRANSACTION");
-      throw;
+    UserMetadata user;
+    if (getMetadataForUser(name, user)) {
+      dropRole(name);
+      dropUserRole(name);
+      const std::string& roleName(name);
+      sqliteConnector_.query("BEGIN TRANSACTION");
+      try {
+        sqliteConnector_.query_with_text_param("DELETE FROM mapd_roles WHERE userName = ?", roleName);
+      } catch (const std::exception& e) {
+        sqliteConnector_.query("ROLLBACK TRANSACTION");
+        throw;
+      }
+      sqliteConnector_.query("END TRANSACTION");
     }
-    sqliteConnector_.query("END TRANSACTION");
   }
   UserMetadata user;
   if (!getMetadataForUser(name, user))
