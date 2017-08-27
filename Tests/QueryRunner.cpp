@@ -109,28 +109,38 @@ Planner::RootPlan* parse_plan(const std::string& query_str,
 
 }  // namespace
 
+ExecutionResult run_select_query(const std::string& query_str,
+                                 const std::unique_ptr<Catalog_Namespace::SessionInfo>& session,
+                                 const ExecutorDeviceType device_type,
+                                 const bool hoist_literals,
+                                 const bool allow_loop_joins) {
+  const auto& cat = session->get_catalog();
+  auto executor = Executor::getExecutor(cat.get_currentDB().dbId);
+  CompilationOptions co = {device_type, true, ExecutorOptLevel::LoopStrengthReduction, false};
+  ExecutionOptions eo = {false, true, false, allow_loop_joins, false, false, false, false, 10000};
+  auto& calcite_mgr = cat.get_calciteMgr();
+  const auto query_ra = calcite_mgr.process(*session, pg_shim(query_str), true, false);
+  RelAlgExecutor ra_executor(executor.get(), cat);
+  return ra_executor.executeRelAlgQuery(query_ra, co, eo, nullptr);
+}
+
 std::shared_ptr<ResultSet> run_multiple_agg(const std::string& query_str,
                                             const std::unique_ptr<Catalog_Namespace::SessionInfo>& session,
                                             const ExecutorDeviceType device_type,
                                             const bool hoist_literals,
                                             const bool allow_loop_joins) {
-  const auto& cat = session->get_catalog();
-  auto executor = Executor::getExecutor(cat.get_currentDB().dbId);
-
   ParserWrapper pw{query_str};
   if (!(pw.is_other_explain || pw.is_ddl || pw.is_update_dml)) {
-    CompilationOptions co = {device_type, true, ExecutorOptLevel::LoopStrengthReduction, false};
-    ExecutionOptions eo = {false, true, false, allow_loop_joins, false, false, false, false, 10000};
-    auto& calcite_mgr = cat.get_calciteMgr();
-    const Catalog_Namespace::SessionInfo* sess = session.get();
-    const auto query_ra = calcite_mgr.process(*sess, pg_shim(query_str), true, false);
-    RelAlgExecutor ra_executor(executor.get(), cat);
-    return ra_executor.executeRelAlgQuery(query_ra, co, eo, nullptr).getRows();
+    const auto execution_result = run_select_query(query_str, session, device_type, hoist_literals, allow_loop_joins);
+    return execution_result.getRows();
   }
 
   Planner::RootPlan* plan = parse_plan(query_str, session);
-
   std::unique_ptr<Planner::RootPlan> plan_ptr(plan);  // make sure it's deleted
+
+  const auto& cat = session->get_catalog();
+  auto executor = Executor::getExecutor(cat.get_currentDB().dbId);
+
 #ifdef HAVE_CUDA
   return executor->execute(
       plan, *session, hoist_literals, device_type, ExecutorOptLevel::LoopStrengthReduction, true, allow_loop_joins);

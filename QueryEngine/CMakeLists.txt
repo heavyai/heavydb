@@ -7,6 +7,7 @@ set(query_engine_source_files
     ArithmeticIR.cpp
     ArrayIR.cpp
     ArrayOps.cpp
+    ArrowResultSet.cpp
     BaselineJoinHashTable.cpp
     CalciteAdapter.cpp
     CalciteDeserializerUtils.cpp

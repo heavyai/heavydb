@@ -17,6 +17,9 @@
 #include "QueryRunner.h"
 
 #include "../Parser/parser.h"
+#ifdef ENABLE_ARROW_CONVERTER
+#include "../QueryEngine/ArrowResultSet.h"
+#endif  // ENABLE_ARROW_CONVERTER
 #include "../SqliteConnector/SqliteConnector.h"
 #include "../Import/Importer.h"
 
@@ -123,27 +126,40 @@ class SQLiteComparator {
   void query(const std::string& query_string) { connector_.query(query_string); }
 
   void compare(const std::string& query_string, const ExecutorDeviceType device_type) {
-    compare_impl(query_string, query_string, device_type, false);
+    const auto mapd_results = run_multiple_agg(query_string, device_type);
+    compare_impl(mapd_results.get(), query_string, device_type, false);
   }
+
+#ifdef ENABLE_ARROW_CONVERTER
+  void compare_arrow_output(const std::string& query_string,
+                            const std::string& sqlite_query_string,
+                            const ExecutorDeviceType device_type) {
+    const auto results = run_select_query(query_string, g_session, device_type, g_hoist_literals, true);
+    const auto arrow_mapd_results = result_set_arrow_loopback(results);
+    compare_impl(arrow_mapd_results.get(), sqlite_query_string, device_type, false);
+  }
+#endif  // ENABLE_ARROW_CONVERTER
 
   void compare(const std::string& query_string,
                const std::string& sqlite_query_string,
                const ExecutorDeviceType device_type) {
-    compare_impl(query_string, sqlite_query_string, device_type, false);
+    const auto mapd_results = run_multiple_agg(query_string, device_type);
+    compare_impl(mapd_results.get(), sqlite_query_string, device_type, false);
   }
 
   // added to deal with time shift for now testing
   void compare_timstamp_approx(const std::string& query_string, const ExecutorDeviceType device_type) {
-    compare_impl(query_string, query_string, device_type, true);
+    const auto mapd_results = run_multiple_agg(query_string, device_type);
+    compare_impl(mapd_results.get(), query_string, device_type, true);
   }
 
  private:
-  void compare_impl(const std::string& query_string,
+  template <class MapDResults>
+  void compare_impl(const MapDResults* mapd_results,
                     const std::string& sqlite_query_string,
                     const ExecutorDeviceType device_type,
                     bool timestamp_approx) {
     connector_.query(sqlite_query_string);
-    const auto mapd_results = run_multiple_agg(query_string, device_type);
     ASSERT_EQ(connector_.getNumRows(), mapd_results->rowCount());
     const int num_rows{static_cast<int>(connector_.getNumRows())};
     if (mapd_results->definitelyHasNoRows()) {
@@ -331,6 +347,12 @@ void c(const std::string& query_string, const std::string& sqlite_query_string, 
 void cta(const std::string& query_string, const ExecutorDeviceType device_type) {
   g_sqlite_comparator.compare_timstamp_approx(query_string, device_type);
 }
+
+#ifdef ENABLE_ARROW_CONVERTER
+void c_arrow(const std::string& query_string, const ExecutorDeviceType device_type) {
+  g_sqlite_comparator.compare_arrow_output(query_string, query_string, device_type);
+}
+#endif  // ENABLE_ARROW_CONVERTER
 }  // namespace
 
 #define SKIP_NO_GPU()                                        \
@@ -3500,6 +3522,17 @@ TEST(Select, DesugarTransform) {
       dt);
   }
 }
+
+#ifdef ENABLE_ARROW_CONVERTER
+TEST(Select, ArrowOutput) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c_arrow("SELECT str, COUNT(*) FROM test GROUP BY str ORDER BY str ASC;", dt);
+    c_arrow("SELECT x, y, z, t, f, d, str, ofd, ofq FROM test ORDER BY x ASC, y ASC;", dt);
+    c_arrow("SELECT null_str, COUNT(*) FROM test GROUP BY null_str;", dt);
+  }
+}
+#endif  // ENABLE_ARROW_CONVERTER
 
 TEST(Select, WatchdogTest) {
   g_enable_watchdog = true;

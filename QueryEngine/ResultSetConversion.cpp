@@ -692,24 +692,30 @@ arrow::RecordBatch ResultSet::convertToArrow(const std::vector<std::string>& col
   return arrow::RecordBatch(schema, row_count, columns);
 }
 
+ResultSet::SerializedArrowOutput ResultSet::getSerializedArrowOutput(const std::vector<std::string>& col_names) const {
+  arrow::ipc::DictionaryMemo dict_memo;
+  const auto arrow_copy = convertToArrow(col_names, dict_memo);
+  const auto serialized_schema = arrow::serialize_arrow_schema(arrow_copy.schema(), dict_memo);
+  const auto serialized_records = arrow::serialize_arrow_records(arrow_copy);
+  return {serialized_schema, serialized_records};
+}
+
 // WARN(ptaylor): users are responsible for detaching and removing shared memory segments, e.g.,
 //   int shmid = shmget(...);
 //   auto ipc_ptr = shmat(shmid, ...);
 //   ...
 //   shmdt(ipc_ptr);
 //   shmctl(shmid, IPC_RMID, 0);
-ArrowResult ResultSet::getArrowCopyOnCpu(Data_Namespace::DataMgr* data_mgr,
-                                         const std::vector<std::string>& col_names) const {
-  arrow::ipc::DictionaryMemo dict_memo;
-  auto arrow_copy = convertToArrow(col_names, dict_memo);
+ArrowResult ResultSet::getArrowCopyOnCpu(const std::vector<std::string>& col_names) const {
+  const auto serialized_arrow_output = getSerializedArrowOutput(col_names);
+  const auto& serialized_schema = serialized_arrow_output.schema;
+  const auto& serialized_records = serialized_arrow_output.records;
 
-  auto serialized_schema = arrow::serialize_arrow_schema(arrow_copy.schema(), dict_memo);
   const auto schema_key = arrow::get_and_copy_to_shm(serialized_schema);
   CHECK(schema_key != IPC_PRIVATE);
   std::vector<char> schema_handle_buffer(sizeof(key_t), 0);
   memcpy(&schema_handle_buffer[0], reinterpret_cast<const unsigned char*>(&schema_key), sizeof(key_t));
 
-  auto serialized_records = arrow::serialize_arrow_records(arrow_copy);
   const auto record_key = arrow::get_and_copy_to_shm(serialized_records);
   std::vector<char> record_handle_buffer(sizeof(key_t), 0);
   memcpy(&record_handle_buffer[0], reinterpret_cast<const unsigned char*>(&record_key), sizeof(key_t));
@@ -729,17 +735,16 @@ ArrowResult ResultSet::getArrowCopyOnCpu(Data_Namespace::DataMgr* data_mgr,
 ArrowResult ResultSet::getArrowCopyOnGpu(Data_Namespace::DataMgr* data_mgr,
                                          const size_t device_id,
                                          const std::vector<std::string>& col_names) const {
-  arrow::ipc::DictionaryMemo dict_memo;
-  auto arrow_copy = convertToArrow(col_names, dict_memo);
+  const auto serialized_arrow_output = getSerializedArrowOutput(col_names);
+  const auto& serialized_schema = serialized_arrow_output.schema;
 
-  auto serialized_schema = arrow::serialize_arrow_schema(arrow_copy.schema(), dict_memo);
   const auto schema_key = arrow::get_and_copy_to_shm(serialized_schema);
   CHECK(schema_key != IPC_PRIVATE);
   std::vector<char> schema_handle_buffer(sizeof(key_t), 0);
   memcpy(&schema_handle_buffer[0], reinterpret_cast<const unsigned char*>(&schema_key), sizeof(key_t));
 
 #ifdef HAVE_CUDA
-  auto serialized_records = arrow::serialize_arrow_records(arrow_copy);
+  const auto& serialized_records = serialized_arrow_output.records;
   if (serialized_records->size()) {
     CHECK(data_mgr && data_mgr->cudaMgr_);
     auto dev_ptr =
@@ -764,7 +769,7 @@ ArrowResult ResultSet::getArrowCopy(Data_Namespace::DataMgr* data_mgr,
                                     const size_t device_id,
                                     const std::vector<std::string>& col_names) const {
   if (device_type == ExecutorDeviceType::CPU) {
-    return getArrowCopyOnCpu(data_mgr, col_names);
+    return getArrowCopyOnCpu(col_names);
   }
 
   CHECK(device_type == ExecutorDeviceType::GPU);

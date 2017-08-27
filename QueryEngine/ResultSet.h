@@ -33,6 +33,7 @@
 #ifdef ENABLE_ARROW_CONVERTER
 #include "arrow/ipc/metadata.h"
 #include "arrow/table.h"
+#include "arrow/buffer.h"
 // Arrow defines macro UNUSED conflict w/ that in jni_md.h
 #ifdef UNUSED
 #undef UNUSED
@@ -348,11 +349,18 @@ class ResultSet {
   static std::unique_ptr<ResultSet> unserialize(const std::string&, const Executor*);
 
 #ifdef ENABLE_ARROW_CONVERTER
+  struct SerializedArrowOutput {
+    std::shared_ptr<arrow::PoolBuffer> schema;
+    std::shared_ptr<arrow::PoolBuffer> records;
+  };
+
+  SerializedArrowOutput getSerializedArrowOutput(const std::vector<std::string>& col_names) const;
+
   ArrowResult getArrowCopy(Data_Namespace::DataMgr* data_mgr,
                            const ExecutorDeviceType device_type,
                            const size_t device_id,
                            const std::vector<std::string>& col_names) const;
-#endif
+#endif  // ENABLE_ARROW_CONVERTER
 
  private:
   std::vector<TargetValue> getNextRowImpl(const bool translate_strings, const bool decimal_to_double) const;
@@ -467,7 +475,7 @@ class ResultSet {
   std::pair<std::vector<std::shared_ptr<arrow::Array>>, size_t> getArrowColumns(
       const std::vector<std::shared_ptr<arrow::Field>>& fields) const;
 
-  ArrowResult getArrowCopyOnCpu(Data_Namespace::DataMgr* data_mgr, const std::vector<std::string>& col_names) const;
+  ArrowResult getArrowCopyOnCpu(const std::vector<std::string>& col_names) const;
   ArrowResult getArrowCopyOnGpu(Data_Namespace::DataMgr* data_mgr,
                                 const size_t device_id,
                                 const std::vector<std::string>& col_names) const;
