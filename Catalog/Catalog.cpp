@@ -548,11 +548,13 @@ void SysCatalog::revokeDBObjectPrivileges(const std::string& roleName,
 bool SysCatalog::verifyDBObjectOwnership(const UserMetadata& user,
                                          DBObject object,
                                          const Catalog_Namespace::Catalog& catalog) {
-  Role* rl = getMetadataForUserRole(user.userId);
-  if (rl) {
-    populateDBObjectKey(object, catalog);
-    if (rl->findDbObject(object.getObjectKey())) {
-      return true;
+  if (object.getType() == TableDBObjectType) {
+    Role* rl = getMetadataForUserRole(user.userId);
+    if (rl) {
+      populateDBObjectKey(object, catalog);
+      if (rl->findDbObject(object.getObjectKey())) {
+        return true;
+      }
     }
   }
   return false;
