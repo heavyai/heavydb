@@ -280,9 +280,9 @@ int main(int argc, char** argv) {
 
   po::options_description desc_adv("Advanced options");
   desc_adv.add_options()("help-advanced", "Print advanced help messages");
-  desc_adv.add_options()("calcite-port",
-                         po::value<int>(&mapd_parameters.calcite_port)->default_value(mapd_parameters.calcite_port),
-                         "Calcite port number");
+  desc.add_options()("calcite-port",
+                     po::value<int>(&mapd_parameters.calcite_port)->default_value(mapd_parameters.calcite_port),
+                     "Calcite port number");
   desc_adv.add_options()("jit-debug",
                          po::value<bool>(&jit_debug)->default_value(jit_debug)->implicit_value(true),
                          "Enable debugger support for the JIT. The generated code can be found at /tmp/mapdquery");
