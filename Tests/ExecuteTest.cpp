@@ -3310,12 +3310,24 @@ TEST(Select, Joins_ComplexQueries) {
   }
 }
 
+TEST(Select, Joins_TimeAndDate) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT COUNT(*) FROM test a, test b WHERE a.m = b.m;", dt);
+    c("SELECT COUNT(*) FROM test a, test b WHERE a.n = b.n;", dt);
+    c("SELECT COUNT(*) FROM test a, test b WHERE a.o = b.o;", dt);
+  }
+}
+
 TEST(Select, Joins_OneOuterExpression) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     c("SELECT COUNT(*) FROM test, test_inner WHERE test.x - 1 = test_inner.x;", dt);
     c("SELECT COUNT(*) FROM test, test_inner WHERE test.x + 0 = test_inner.x;", dt);
     c("SELECT COUNT(*) FROM test, test_inner WHERE test.x + 1 = test_inner.x;", dt);
+    c("SELECT COUNT(*) FROM test a, test b WHERE a.o + INTERVAL '0' DAY = b.o;",
+      "SELECT COUNT(*) FROM test a, test b WHERE a.o = b.o;",
+      dt);
   }
 }
 
@@ -3329,6 +3341,12 @@ TEST(Select, Joins_MultipleOuterExpressions) {
     // The following query will fallback to loop join because we don't reorder the
     // expressions to be consistent with table order for composite equality yet.
     c("SELECT COUNT(*) FROM test, test_inner WHERE test.x + 0 = test_inner.x AND test_inner.str = test.str;", dt);
+    c("SELECT COUNT(*) FROM test a, test b WHERE a.o + INTERVAL '0' DAY = b.o AND a.str = b.str;",
+      "SELECT COUNT(*) FROM test a, test b WHERE a.o = b.o AND a.str = b.str;",
+      dt);
+    c("SELECT COUNT(*) FROM test a, test b WHERE a.o + INTERVAL '0' DAY = b.o AND a.x = b.x;",
+      "SELECT COUNT(*) FROM test a, test b WHERE a.o = b.o AND a.x = b.x;",
+      dt);
   }
 }
 

@@ -485,7 +485,9 @@ size_t get_key_component_width(const std::shared_ptr<Analyzer::BinOper> conditio
       normalize_column_pairs(condition.get(), *executor->getCatalog(), executor->getTemporaryTables());
   for (const auto& inner_outer_pair : inner_outer_pairs) {
     const auto inner_col = inner_outer_pair.first;
-    if (inner_col->get_type_info().get_type() == kBIGINT) {
+    const auto& inner_col_ti = inner_col->get_type_info();
+    if (inner_col_ti.get_logical_size() > 4) {
+      CHECK_EQ(size_t(8), inner_col_ti.get_logical_size());
       return 8;
     }
   }
