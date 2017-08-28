@@ -139,7 +139,7 @@ void validate_shared_dictionary(const Parser::CreateTableStmt* stmt,
   }
 
   if (foreign_td) {
-    const auto reference_columns = catalog.getAllColumnMetadataForTable(foreign_td->tableId, false, false);
+    const auto reference_columns = catalog.getAllColumnMetadataForTable(foreign_td->tableId, false, false, false);
     const auto reference_cd_ptr = lookup_column(shared_dict_def->get_foreign_column(), reference_columns);
     const auto reference_col_qualified_name =
         reference_cd_ptr->columnName + "." + shared_dict_def->get_foreign_column();
