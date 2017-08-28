@@ -76,7 +76,7 @@
       parseTrees.emplace_back(new ShowPrivilegesStmt(object_type, object_name, role_name));                             \
       return 0;                                                                                                         \
     }                                                                                                                   \
-    boost::regex grant_role_expr{R"(GRANT\s+([A-Za-z_][A-Za-z0-9\$_]*)\s+TO\s+(.*);)",                           \
+    boost::regex grant_role_expr{R"(GRANT\s+([A-Za-z_][A-Za-z0-9\$_]*)\s+TO\s+([A-Za-z_][A-Za-z0-9\$_]*)\s*;)",		\
                                  boost::regex::extended | boost::regex::icase};                                         \
     if (boost::regex_match(trimmed_input.cbegin(), trimmed_input.cend(), what, grant_role_expr)) {                      \
       const auto role_name = what[1].str();                                                                             \
@@ -84,7 +84,7 @@
       parseTrees.emplace_back(new GrantRoleStmt(role_name, user_name));                                                 \
       return 0;                                                                                                         \
     }                                                                                                                   \
-    boost::regex revoke_role_expr{R"(REVOKE\s+([A-Za-z_][A-Za-z0-9\$_]*)\s+FROM\s+(.*);)",                       \
+    boost::regex revoke_role_expr{R"(REVOKE\s+([A-Za-z_][A-Za-z0-9\$_]*)\s+FROM\s+([A-Za-z_][A-Za-z0-9\$_]*)\s*;)",	\
                                   boost::regex::extended | boost::regex::icase};                                        \
     if (boost::regex_match(trimmed_input.cbegin(), trimmed_input.cend(), what, revoke_role_expr)) {                     \
       const auto role_name = what[1].str();                                                                             \
