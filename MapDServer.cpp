@@ -265,6 +265,9 @@ int main(int argc, char** argv) {
                      po::value<int>(&mapd_parameters.mapd_server_port)->default_value(mapd_parameters.mapd_server_port),
                      "Port number");
   desc.add_options()("http-port", po::value<int>(&http_port)->default_value(http_port), "HTTP port number");
+  desc.add_options()("calcite-port",
+                     po::value<int>(&mapd_parameters.calcite_port)->default_value(mapd_parameters.calcite_port),
+                     "Calcite port number");
   desc.add_options()("flush-log",
                      po::value<bool>(&flush_log)->default_value(flush_log)->implicit_value(true),
                      "Immediately flush logs to disk. Set to false if this is a performance bottleneck.");
@@ -280,9 +283,6 @@ int main(int argc, char** argv) {
 
   po::options_description desc_adv("Advanced options");
   desc_adv.add_options()("help-advanced", "Print advanced help messages");
-  desc.add_options()("calcite-port",
-                     po::value<int>(&mapd_parameters.calcite_port)->default_value(mapd_parameters.calcite_port),
-                     "Calcite port number");
   desc_adv.add_options()("jit-debug",
                          po::value<bool>(&jit_debug)->default_value(jit_debug)->implicit_value(true),
                          "Enable debugger support for the JIT. The generated code can be found at /tmp/mapdquery");
