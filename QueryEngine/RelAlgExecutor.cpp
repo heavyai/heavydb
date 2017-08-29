@@ -35,6 +35,21 @@ ExecutionResult RelAlgExecutor::executeRelAlgQuery(const std::string& query_ra,
                                                    const CompilationOptions& co,
                                                    const ExecutionOptions& eo,
                                                    RenderInfo* render_info) {
+  try {
+    return executeRelAlgQueryNoRetry(query_ra, co, eo, render_info);
+  } catch (const QueryMustRunOnCpu&) {
+    if (g_enable_watchdog && !g_allow_cpu_retry) {
+      throw;
+    }
+  }
+  CompilationOptions co_cpu{ExecutorDeviceType::CPU, co.hoist_literals_, co.opt_level_, co.with_dynamic_watchdog_};
+  return executeRelAlgQueryNoRetry(query_ra, co_cpu, eo, render_info);
+}
+
+ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const std::string& query_ra,
+                                                          const CompilationOptions& co,
+                                                          const ExecutionOptions& eo,
+                                                          RenderInfo* render_info) {
   const auto ra = deserialize_ra_dag(query_ra, cat_, this);
   // capture the lock acquistion time
   auto clock_begin = timer_start();
@@ -67,15 +82,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQuery(const std::string& query_ra,
     auto result = ra_executor.executeRelAlgSubQuery(subquery, co, eo);
     subquery->setExecutionResult(std::make_shared<ExecutionResult>(result));
   }
-  try {
-    return executeRelAlgSeq(ed_list, co, eo, render_info, queue_time_ms);
-  } catch (const QueryMustRunOnCpu&) {
-    if (g_enable_watchdog && !g_allow_cpu_retry) {
-      throw;
-    }
-  }
-  CompilationOptions co_cpu{ExecutorDeviceType::CPU, co.hoist_literals_, co.opt_level_, co.with_dynamic_watchdog_};
-  return executeRelAlgSeq(ed_list, co_cpu, eo, render_info, queue_time_ms);
+  return executeRelAlgSeq(ed_list, co, eo, render_info, queue_time_ms);
 }
 
 namespace {

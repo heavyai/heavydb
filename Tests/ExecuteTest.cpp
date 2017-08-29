@@ -3308,6 +3308,9 @@ TEST(Select, Joins_ComplexQueries) {
       "fixed_str,count(*) from test group by fixed_str order by count(*) desc limit 40) c on "
       "c.fixed_str=a.fixed_str GROUP BY key0, key1 ORDER BY key0,key1;",
       dt);
+    c("SELECT COUNT(*) FROM test a JOIN (SELECT str FROM test) b ON a.str = b.str OR false;",
+      "SELECT COUNT(*) FROM test a JOIN (SELECT str FROM test) b ON a.str = b.str OR 0;",
+      dt);
   }
 }
 

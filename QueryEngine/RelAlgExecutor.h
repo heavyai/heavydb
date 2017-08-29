@@ -80,6 +80,11 @@ class RelAlgExecutor {
   Executor* getExecutor() const;
 
  private:
+  ExecutionResult executeRelAlgQueryNoRetry(const std::string& query_ra,
+                                            const CompilationOptions& co,
+                                            const ExecutionOptions& eo,
+                                            RenderInfo* render_info);
+
   void executeRelAlgStep(const size_t step_idx,
                          std::vector<RaExecutionDesc>&,
                          const CompilationOptions&,
