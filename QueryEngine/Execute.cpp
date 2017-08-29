@@ -1540,6 +1540,9 @@ Executor::FetchResult Executor::fetchChunks(const ExecutionDispatch& execution_d
       CHECK(it != plan_state_->global_to_local_col_ids_.end());
       CHECK_LT(static_cast<size_t>(it->second), plan_state_->global_to_local_col_ids_.size());
       const size_t frag_id = selected_frag_ids[local_col_to_frag_pos[it->second]];
+      if (!fragments->size()) {
+        return {};
+      }
       CHECK_LT(frag_id, fragments->size());
       auto memory_level_for_column = memory_level;
       if (plan_state_->columns_to_fetch_.find(std::make_pair(col_id->getScanDesc().getTableId(), col_id->getColId())) ==

@@ -3074,6 +3074,7 @@ TEST(Select, Joins_EmptyTable) {
     SKIP_NO_GPU();
     c("SELECT test.x, emptytab.x FROM test, emptytab WHERE test.x = emptytab.x;", dt);
     c("SELECT COUNT(*) FROM test, emptytab GROUP BY test.x;", dt);
+    c("SELECT COUNT(*) FROM test, emptytab, test_inner where test.x = emptytab.x;", dt);
   }
 }
 

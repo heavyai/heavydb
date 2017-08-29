@@ -223,6 +223,9 @@ void Executor::ExecutionDispatch::runImpl(const ExecutorDeviceType chosen_device
                                           cat_,
                                           *chunk_iterators_ptr,
                                           chunks);
+    if (fetch_result.num_rows.empty()) {
+      return;
+    }
     if (options.with_dynamic_watchdog && !dynamic_watchdog_set_.test_and_set(std::memory_order_acquire)) {
       CHECK_GT(options.dynamic_watchdog_time_limit, 0);
       auto cycle_budget = dynamic_watchdog_init(options.dynamic_watchdog_time_limit);
@@ -646,6 +649,11 @@ const int8_t* Executor::ExecutionDispatch::getColumn(
   CHECK_LE(size_t(3), ra_exe_unit_.join_dimensions.size());
   const std::vector<std::pair<int, size_t>> previous_join_dims(ra_exe_unit_.join_dimensions.begin(),
                                                                std::prev(ra_exe_unit_.join_dimensions.end()));
+  for (const auto& table : previous_join_dims) {
+    if (!table.second) {
+      return nullptr;
+    }
+  }
   const auto ref_frag_id = get_mapped_frag_id_of_src_table(previous_join_dims, ref_table_id, frag_id);
   CacheKey sub_key;
   auto ref_col_id_for_cache = ref_col_id;
