@@ -3061,6 +3061,11 @@ void AlterUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
       if (!dynamic_cast<const StringLiteral*>(p->get_value()))
         throw std::runtime_error("INSERTACCESS must be a string literal.");
       insertaccessDB = static_cast<const StringLiteral*>(p->get_value())->get_stringval();
+      if (insertaccessDB && catalog.isAccessPrivCheckEnabled()) {
+        throw std::runtime_error(
+            "ALTER USER command failed. INSERTACCESS option can't be used when running mapd with DB object level "
+            "access privileges set.");
+      }
     } else if (boost::iequals(*p->get_name(), "is_super")) {
       if (!dynamic_cast<const StringLiteral*>(p->get_value()))
         throw std::runtime_error("IS_SUPER option must be a string literal.");
