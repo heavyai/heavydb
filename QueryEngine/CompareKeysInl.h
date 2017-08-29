@@ -16,7 +16,23 @@
 
 #pragma once
 
+#ifdef __CUDACC__
+#include "GpuRtConstants.h"
+#else
+#include "RuntimeFunctions.h"
+#endif  // __CUDACC__
+#include "../Shared/funcannotations.h"
 #include <cstdlib>
+
+template <typename T = int64_t>
+inline DEVICE T SUFFIX(get_invalid_key)() {
+  return EMPTY_KEY_64;
+}
+
+template <>
+inline DEVICE int32_t SUFFIX(get_invalid_key)() {
+  return EMPTY_KEY_32;
+}
 
 #ifdef __CUDACC__
 template <typename T>

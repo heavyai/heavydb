@@ -26,13 +26,23 @@ DEVICE bool compare_to_key(const int8_t* entry, const int8_t* key, const size_t 
   return true;
 }
 
+namespace {
+
+const int kNoMatch = -1;
+const int kNotPresent = -2;
+
+}  // namespace
+
 template <class T>
 DEVICE int64_t get_matching_slot(const int8_t* hash_buff, const uint32_t h, const int8_t* key, const size_t key_bytes) {
   const auto lookup_result_ptr = hash_buff + h * (key_bytes + sizeof(T));
   if (compare_to_key(lookup_result_ptr, key, key_bytes)) {
     return *reinterpret_cast<const T*>(lookup_result_ptr + key_bytes);
   }
-  return -1;
+  if (*reinterpret_cast<const T*>(lookup_result_ptr) == SUFFIX(get_invalid_key)<T>()) {
+    return kNotPresent;
+  }
+  return kNoMatch;
 }
 
 template <class T>
@@ -42,18 +52,18 @@ FORCE_INLINE DEVICE int64_t baseline_hash_join_idx_impl(const int8_t* hash_buff,
                                                         const size_t entry_count) {
   const uint32_t h = MurmurHash1(key, key_bytes, 0) % entry_count;
   int64_t matching_slot = get_matching_slot<T>(hash_buff, h, key, key_bytes);
-  if (matching_slot != -1) {
+  if (matching_slot != kNoMatch) {
     return matching_slot;
   }
   uint32_t h_probe = (h + 1) % entry_count;
   while (h_probe != h) {
     matching_slot = get_matching_slot<T>(hash_buff, h_probe, key, key_bytes);
-    if (matching_slot != -1) {
+    if (matching_slot != kNoMatch) {
       return matching_slot;
     }
     h_probe = (h_probe + 1) % entry_count;
   }
-  return -1;
+  return kNoMatch;
 }
 
 extern "C" NEVER_INLINE DEVICE int64_t baseline_hash_join_idx_32(const int8_t* hash_buff,

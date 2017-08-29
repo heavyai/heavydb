@@ -153,16 +153,6 @@ DEVICE int SUFFIX(fill_hash_join_buff_sharded)(int32_t* buff,
   return 0;
 }
 
-template <typename T = int64_t>
-DEVICE T SUFFIX(get_invalid_key)() {
-  return EMPTY_KEY_64;
-}
-
-template <>
-DEVICE int32_t SUFFIX(get_invalid_key)() {
-  return EMPTY_KEY_32;
-}
-
 template <typename T>
 DEVICE void SUFFIX(init_baseline_hash_join_buff)(int8_t* hash_buff,
                                                  const size_t entry_count,
