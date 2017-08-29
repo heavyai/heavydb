@@ -182,7 +182,9 @@ int BaselineJoinHashTable::reify(const int device_count) {
     if (memory_level_ == Data_Namespace::GPU_LEVEL) {
       auto& data_mgr = executor_->getCatalog()->get_dataMgr();
       for (const auto device_buffer : gpu_hash_table_buff_) {
-        free_gpu_abstract_buffer(&data_mgr, device_buffer);
+        if (device_buffer) {
+          free_gpu_abstract_buffer(&data_mgr, device_buffer);
+        }
       }
     }
 #endif  // HAVE_CUDA
