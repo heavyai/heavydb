@@ -217,7 +217,11 @@ std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(const std::shared_ptr<
                                               0,
                                               source_col_range.hasNulls());
   }
-  if (get_hash_entry_count(col_range) > static_cast<size_t>(std::numeric_limits<int32_t>::max())) {
+  // We can't allocate more than 2GB contiguous memory on GPU and each entry is 4 bytes.
+  const auto max_hash_entry_count = memory_level == Data_Namespace::MemoryLevel::GPU_LEVEL
+                                        ? static_cast<size_t>(std::numeric_limits<int32_t>::max() / sizeof(int32_t))
+                                        : static_cast<size_t>(std::numeric_limits<int32_t>::max());
+  if (get_hash_entry_count(col_range) > max_hash_entry_count) {
     throw TooManyHashEntries();
   }
   auto join_hash_table = std::shared_ptr<JoinHashTable>(new JoinHashTable(
