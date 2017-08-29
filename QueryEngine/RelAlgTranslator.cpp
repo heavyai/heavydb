@@ -256,6 +256,9 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateScalarSubquery(const 
   auto first_row = row_set->getNextRow(false, false);
   auto scalar_tv = boost::get<ScalarTargetValue>(&first_row[0]);
   auto ti = rex_subquery->getType();
+  if (ti.is_string()) {
+    throw std::runtime_error("Scalar sub-queries which return strings not supported");
+  }
   Datum d{0};
   bool is_null_const{false};
   std::tie(d, is_null_const) = datum_from_scalar_tv(scalar_tv, ti);
