@@ -3045,6 +3045,9 @@ void CreateUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 
 void AlterUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.get_catalog();
+  if (catalog.isAccessPrivCheckEnabled() && !session.get_currentUser().isSuper) {
+    throw std::runtime_error("ALTER USER command failed. It can only be executed by super user.");
+  }
   const std::string* passwd = nullptr;
   const std::string* insertaccessDB = nullptr;
   bool is_super = false;
