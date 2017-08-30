@@ -93,6 +93,8 @@ void fill_storage_buffer_baseline_sort_int(int8_t* buff,
   }
   std::vector<int64_t> values(upper_bound);
   std::iota(values.begin(), values.end(), 1);
+  const auto null_pattern = null_val_bit_pattern(target_infos.back().sql_type, false);
+  values.push_back(null_pattern);
   std::random_shuffle(values.begin(), values.end());
   CHECK_EQ(size_t(0), row_bytes % 8);
   const auto row_size_quad = row_bytes / 8;
@@ -196,33 +198,37 @@ int64_t empty_key_val<int32_t>() {
 #endif  // ENABLE_KEY_COMPACTION
 
 template <class K>
-void SortBaselineIntegersTestImpl() {
+void SortBaselineIntegersTestImpl(const bool desc) {
   const auto target_infos = get_sort_int_target_infos();
   const auto query_mem_desc = baseline_sort_desc(target_infos, 400, sizeof(K));
   const auto row_set_mem_owner = std::make_shared<RowSetMemoryOwner>();
   const int64_t upper_bound = 200;
+  const int64_t lower_bound = 1;
   std::unique_ptr<ResultSet> rs(
       new ResultSet(target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, nullptr));
   auto storage = rs->allocateStorage();
   fill_storage_buffer_baseline_sort_int<K>(
       storage->getUnderlyingBuffer(), target_infos, query_mem_desc, upper_bound, empty_key_val<K>());
   std::list<Analyzer::OrderEntry> order_entries;
-  const bool desc = true;
   order_entries.emplace_back(3, desc, false);
   const size_t top_n = 5;
   rs->sort(order_entries, top_n);
-  check_sorted<int64_t>(*rs, upper_bound, top_n, desc);
+  check_sorted<int64_t>(*rs, desc ? upper_bound : lower_bound, top_n, desc);
 }
 
 }  // namespace
 
 TEST(SortBaseline, IntegersKey64) {
-  SortBaselineIntegersTestImpl<int64_t>();
+  for (const bool desc : {true, false}) {
+    SortBaselineIntegersTestImpl<int64_t>(desc);
+  }
 }
 
 #ifdef ENABLE_KEY_COMPACTION
 TEST(SortBaseline, IntegersKey32) {
-  SortBaselineIntegersTestImpl<int32_t>();
+  for (const bool desc : {true, false}) {
+    SortBaselineIntegersTestImpl<int32_t>(desc);
+  }
 }
 #endif  // ENABLE_KEY_COMPACTION
 
