@@ -241,149 +241,15 @@ Be sure to reboot after installing in order to activate the NVIDIA drivers.
 
 `mapd-deps-osx.sh` will automatically install Java and Maven via Homebrew and add the correct environment variables to `~/.bash_profile`.
 
-## Ubuntu 16.04, 16.10
+## Ubuntu 16.04 - 17.04
 
-Most build dependencies required by MapD Core are available via APT. Thrift, Blosc, and Folly must be built manually. The following will install all required dependencies and build the ones not available in the APT repositories. Be sure to run from the top level of the `mapd-core` repository so that the paths to the patch files are correct.
-
-    sudo apt update
-    sudo apt install -y \
-        build-essential \
-        cmake \
-        cmake-curses-gui \
-        git \
-        wget \
-        curl \
-        clang \
-        clang-format \
-        llvm \
-        llvm-dev \
-        libboost-all-dev \
-        libgoogle-glog-dev \
-        golang \
-        libssl-dev \
-        libevent-dev \
-        default-jre \
-        default-jre-headless \
-        default-jdk \
-        default-jdk-headless \
-        maven \
-        libncurses5-dev \
-        binutils-dev \
-        google-perftools \
-        libdouble-conversion-dev \
-        libevent-dev \
-        libgdal-dev \
-        libgflags-dev \
-        libgoogle-perftools-dev \
-        libiberty-dev \
-        libjemalloc-dev \
-        liblz4-dev \
-        liblzma-dev \
-        libsnappy-dev \
-        zlib1g-dev \
-        autoconf \
-        autoconf-archive
-
-    cd scripts
-
-    sudo apt build-dep -y thrift-compiler
-    VERS=0.10.0
-    wget http://apache.claz.org/thrift/$VERS/thrift-$VERS.tar.gz
-    tar xvf thrift-$VERS.tar.gz
-    pushd thrift-$VERS
-    patch -p1 < ../thrift-3821-tmemorybuffer-overflow-check.patch
-    patch -p1 < ../thrift-3821-tmemorybuffer-overflow-test.patch
-    ./configure \
-        --with-lua=no \
-        --with-python=no \
-        --with-php=no \
-        --with-ruby=no \
-        --prefix=/usr/local/mapd-deps
-    make -j $(nproc)
-    sudo make install
-    popd
-
-    VERS=1.11.3
-    wget --continue https://github.com/Blosc/c-blosc/archive/v$VERS.tar.gz
-    tar xvf v$VERS.tar.gz
-    BDIR="c-blosc-$VERS/build"
-    rm -rf "$BDIR"
-    mkdir -p "$BDIR"
-    pushd "$BDIR"
-    cmake \
-        -DCMAKE_BUILD_TYPE=Release \
-        -DCMAKE_INSTALL_PREFIX=/usr/local/mapd-deps \
-        -DBUILD_BENCHMARKS=off \
-        -DBUILD_TESTS=off \
-        -DPREFER_EXTERNAL_SNAPPY=off \
-        -DPREFER_EXTERNAL_ZLIB=off \
-        -DPREFER_EXTERNAL_ZSTD=off \
-        ..
-    make -j $(nproc)
-    sudo make install
-    popd
-
-    VERS=2017.04.10.00
-    wget --continue https://github.com/facebook/folly/archive/v$VERS.tar.gz
-    tar xvf v$VERS.tar.gz
-    pushd folly-$VERS/folly
-    /usr/bin/autoreconf -ivf
-    ./configure --prefix=/usr/local/mapd-deps
-    make -j $(nproc)
-    sudo make install
-    popd
-
-    VERS=1.21-45
-    wget --continue https://github.com/jarro2783/bisonpp/archive/$VERS.tar.gz
-    tar xvf $VERS.tar.gz
-    pushd bisonpp-$VERS
-    ./configure --prefix=/usr/local/mapd-deps
-    make -j $(nproc)
-    sudo make install
-    popd
-
-    VERS=0.4.1
-    wget --continue https://github.com/apache/arrow/archive/apache-arrow-$VERS.tar.gz
-    tar -xf apache-arrow-$VERS.tar.gz
-    mkdir -p arrow-apache-arrow-$VERS/cpp/build
-    pushd arrow-apache-arrow-$VERS/cpp/build
-    cmake \
-        -DCMAKE_BUILD_TYPE=Release \
-        -DARROW_BUILD_SHARED=off \
-        -DARROW_BUILD_STATIC=on \
-        -DCMAKE_INSTALL_PREFIX=/usr/local/mapd-deps \
-        -DARROW_BOOST_USE_SHARED=off \
-        -DARROW_JEMALLOC_USE_SHARED=off \
-        ..
-    make -j $(nproc)
-    sudo make install
-    popd
+Most build dependencies required by MapD Core are available via APT. Certain dependencies such as Thrift, Blosc, and Folly must be built as they either do not exist in the default repositories or have outdated versions. The provided [scripts/mapd-deps-ubuntu.sh](scripts/mapd-deps-ubuntu.sh) script will install all required dependencies (except CUDA) and build the dependencies which require it. The built dependencies will be installed to `/usr/local/mapd-deps/` by default; see the Environment Variables section below for how to add these dependencies to your environment.
 
 ### Environment Variables
 
-The CUDA and mapd-deps `lib` directories need to be added to `LD_LIBRARY_PATH`; the CUDA and mapd-deps `bin` directories need to be added to `PATH`. The easiest way to do so is by creating a new file named `/etc/profile.d/mapd-deps.sh` containing the following:
+The CUDA and mapd-deps `lib` directories need to be added to `LD_LIBRARY_PATH`; the CUDA and mapd-deps `bin` directories need to be added to `PATH`. The `mapd-deps-ubuntu.sh` script above will generate a script named `mapd-deps.sh` containing the environment variables which need to be set. Simply source this file in your current session (or symlink it to `/etc/profile.d/mapd-deps.sh`) in order to activate it:
 
-    LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
-    LD_LIBRARY_PATH=/usr/local/mapd-deps/lib:$LD_LIBRARY_PATH
-    LD_LIBRARY_PATH=/usr/local/mapd-deps/lib64:$LD_LIBRARY_PATH
-
-    PATH=/usr/local/cuda/bin:$PATH
-    PATH=/usr/local/mapd-deps/bin:$PATH
-
-    export LD_LIBRARY_PATH PATH
-
-## Ubuntu 17.04
-
-Same as 16.10 with the following additions:
-
-    sudo apt install -y \
-        ccache \
-        libglu1-mesa-dev \
-        libglewmx-dev \
-        gcc-5 \
-        g++-5 \
-        libldap2-dev \
-        flex-old
+    source /usr/local/mapd-deps/mapd-deps.sh
 
 ### CUDA
 
@@ -393,19 +259,6 @@ Recent versions of Ubuntu provide the NVIDIA CUDA Toolkit and drivers in the sta
         nvidia-cuda-toolkit
 
 Be sure to reboot after installing in order to activate the NVIDIA drivers.
-
-### Environment Variables
-
-The CUDA and mapd-deps `lib` directories need to be added to `LD_LIBRARY_PATH`; the CUDA and mapd-deps `bin` directories need to be added to `PATH`. The easiest way to do so is by creating a new file named `/etc/profile.d/mapd-deps.sh` containing the following:
-
-    LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
-    LD_LIBRARY_PATH=/usr/local/mapd-deps/lib:$LD_LIBRARY_PATH
-    LD_LIBRARY_PATH=/usr/local/mapd-deps/lib64:$LD_LIBRARY_PATH
-
-    PATH=/usr/local/cuda/bin:$PATH
-    PATH=/usr/local/mapd-deps/bin:$PATH
-
-    export LD_LIBRARY_PATH PATH
 
 ## Arch
 
