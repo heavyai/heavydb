@@ -681,7 +681,7 @@ std::shared_ptr<ResultSet> Executor::execute(const Planner::RootPlan* root_plan,
       const int table_id = root_plan->get_result_table_id();
       auto td = cat.getMetadataForTable(table_id);
       DBObject dbObject(td->tableName, TableDBObjectType);
-      std::vector<bool> privs{false, true, false};  // INSERT
+      std::vector<bool> privs{false, true, false, false};  // INSERT
       sys_cat.populateDBObjectKey(dbObject, cat);
       dbObject.setPrivileges(privs);
       std::vector<DBObject> privObjects;

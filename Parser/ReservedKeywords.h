@@ -331,6 +331,7 @@ static std::set<std::string> reserved_keywords{
     "TRIGGER",
     "TRIM",
     "TRUE",
+    "TRUNCATE",
     "UESCAPE",
     "UNION",
     "UNIQUE",

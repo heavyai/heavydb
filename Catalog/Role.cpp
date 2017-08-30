@@ -109,7 +109,8 @@ bool UserRole::checkPrivileges(const DBObject& objectRequested) const {
       rc = true;
       if ((objectRequested.objectPrivs_.select_ && !dbObject->objectPrivs_.select_) ||
           (objectRequested.objectPrivs_.insert_ && !dbObject->objectPrivs_.insert_) ||
-          (objectRequested.objectPrivs_.create_ && !dbObject->objectPrivs_.create_)) {
+          (objectRequested.objectPrivs_.create_ && !dbObject->objectPrivs_.create_) ||
+          (objectRequested.objectPrivs_.truncate_ && !dbObject->objectPrivs_.truncate_)) {
         rc = false;
       }
     }

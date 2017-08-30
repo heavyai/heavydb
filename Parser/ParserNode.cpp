@@ -2201,7 +2201,7 @@ void TruncateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     std::vector<DBObject> privObjects;
     DBObject dbObject(*table, TableDBObjectType);
     static_cast<Catalog_Namespace::SysCatalog&>(catalog).populateDBObjectKey(dbObject, catalog);
-    std::vector<bool> privs{false, true, false};  // INSERT, which is being used for COPY/IMPORT/etc as well
+    std::vector<bool> privs{false, false, false, true};  // TRUNCATE
     dbObject.setPrivileges(privs);
     privObjects.push_back(dbObject);
     if (!(static_cast<Catalog_Namespace::SysCatalog&>(catalog))
@@ -2279,7 +2279,7 @@ void CopyTableStmt::execute(
     std::vector<DBObject> privObjects;
     DBObject dbObject(*table, TableDBObjectType);
     static_cast<Catalog_Namespace::SysCatalog&>(catalog).populateDBObjectKey(dbObject, catalog);
-    std::vector<bool> privs{false, true, false};  // INSERT
+    std::vector<bool> privs{false, true, false, false};  // INSERT
     dbObject.setPrivileges(privs);
     privObjects.push_back(dbObject);
     if (!(static_cast<Catalog_Namespace::SysCatalog&>(catalog))
@@ -2532,20 +2532,28 @@ void GrantPrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session)
   std::vector<bool> privs;
   const auto priv = boost::to_upper_copy<std::string>(get_priv());
   if (priv.compare("ALL") == 0) {
-    privs = {true, true, true};
+    if (objectType == DatabaseDBObjectType) {
+      privs = {true, true, true, true};
+    } else {  // TableDBObjectType
+      privs = {true, true, false, true};
+    }
   } else {
     if (priv.compare("SELECT") == 0) {
-      privs = {true, false, false};
+      privs = {true, false, false, false};
     } else {
       if (priv.compare("INSERT") == 0) {
-        privs = {false, true, false};
+        privs = {false, true, false, false};
       } else {
         if ((priv.compare("CREATE") == 0) &&
             (objectType == DatabaseDBObjectType)) {  // CREATE privs allowed only on DB level
-          privs = {false, false, true};
+          privs = {false, false, true, false};
         } else {
-          throw std::runtime_error("Privileges " + get_priv() + " being granted to DB object " + get_object() +
-                                   " are not correct.");
+          if (priv.compare("TRUNCATE") == 0) {
+            privs = {false, false, false, true};
+          } else {
+            throw std::runtime_error("Privileges " + get_priv() + " being granted to DB object " + get_object() +
+                                     " are not correct.");
+          }
         }
       }
     }
@@ -2589,20 +2597,28 @@ void RevokePrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session
   std::vector<bool> privs;
   const auto priv = boost::to_upper_copy<std::string>(get_priv());
   if (priv.compare("ALL") == 0) {
-    privs = {true, true, true};
+    if (objectType == DatabaseDBObjectType) {
+      privs = {true, true, true, true};
+    } else {  // TableDBObjectType
+      privs = {true, true, false, true};
+    }
   } else {
     if (priv.compare("SELECT") == 0) {
-      privs = {true, false, false};
+      privs = {true, false, false, false};
     } else {
       if (priv.compare("INSERT") == 0) {
-        privs = {false, true, false};
+        privs = {false, true, false, false};
       } else {
         if ((priv.compare("CREATE") == 0) &&
             (objectType == DatabaseDBObjectType)) {  // CREATE privs allowed only on DB level
-          privs = {false, false, true};
+          privs = {false, false, true, false};
         } else {
-          throw std::runtime_error("Privileges " + get_priv() + " being revoked from DB object " + get_object() +
-                                   " are not correct.");
+          if (priv.compare("TRUNCATE") == 0) {
+            privs = {false, false, false, true};
+          } else {
+            throw std::runtime_error("Privileges " + get_priv() + " being revoked from DB object " + get_object() +
+                                     " are not correct.");
+          }
         }
       }
     }
@@ -2660,6 +2676,10 @@ void ShowPrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session) 
         }
         case 2: {
           printf(" CREATE");
+          break;
+        }
+        case 3: {
+          printf(" TRUNCATE");
           break;
         }
         default: { CHECK(false); }

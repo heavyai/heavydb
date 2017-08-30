@@ -50,6 +50,7 @@ class AccessPrivileges {
   bool select_;
   bool insert_;
   bool create_;
+  bool truncate_;
   /* following privileges may be added on as needed basis
   bool update_;
   bool delete_;

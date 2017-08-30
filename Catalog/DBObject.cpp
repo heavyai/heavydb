@@ -11,6 +11,7 @@ DBObject::DBObject(const std::string& name, const DBObjectType& type) : objectNa
   objectPrivs_.select_ = false;
   objectPrivs_.insert_ = false;
   objectPrivs_.create_ = false;
+  objectPrivs_.truncate_ = false;
   privsValid_ = false;
   userPrivateObject_ = false;
   owningUserId_ = 0;
@@ -49,6 +50,7 @@ std::vector<bool> DBObject::getPrivileges() const {
   privs.push_back(objectPrivs_.select_);
   privs.push_back(objectPrivs_.insert_);
   privs.push_back(objectPrivs_.create_);
+  privs.push_back(objectPrivs_.truncate_);
   return privs;
 }
 
@@ -68,6 +70,10 @@ void DBObject::setPrivileges(std::vector<bool> priv) {
           objectPrivs_.create_ = true;
           break;
         }
+        case (3): {
+          objectPrivs_.truncate_ = true;
+          break;
+        }
         default: { CHECK(false); }
       }
     }
@@ -75,13 +81,14 @@ void DBObject::setPrivileges(std::vector<bool> priv) {
 }
 
 void DBObject::resetPrivileges() {
-  objectPrivs_.select_ = objectPrivs_.insert_ = objectPrivs_.create_ = false;
+  objectPrivs_.select_ = objectPrivs_.insert_ = objectPrivs_.create_ = objectPrivs_.truncate_ = false;
 }
 void DBObject::copyPrivileges(const DBObject& object) {
   // objectPrivs_ = object.objectPrivs_;
   objectPrivs_.select_ = object.objectPrivs_.select_;
   objectPrivs_.insert_ = object.objectPrivs_.insert_;
   objectPrivs_.create_ = object.objectPrivs_.create_;
+  objectPrivs_.truncate_ = object.objectPrivs_.truncate_;
   privsValid_ = true;
 }
 
@@ -89,6 +96,7 @@ void DBObject::updatePrivileges(const DBObject& object) {
   objectPrivs_.select_ |= object.objectPrivs_.select_;
   objectPrivs_.insert_ |= object.objectPrivs_.insert_;
   objectPrivs_.create_ |= object.objectPrivs_.create_;
+  objectPrivs_.truncate_ |= object.objectPrivs_.truncate_;
   privsValid_ = true;
 }
 
@@ -105,6 +113,9 @@ void DBObject::revokePrivileges(const DBObject& object) {
   }
   if (object.objectPrivs_.create_) {
     objectPrivs_.create_ = false;
+  }
+  if (object.objectPrivs_.truncate_) {
+    objectPrivs_.truncate_ = false;
   }
   privsValid_ = true;
 }

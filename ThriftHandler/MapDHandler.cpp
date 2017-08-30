@@ -1673,7 +1673,7 @@ void MapDHandler::check_table_load_privileges(const TSessionId& session, const s
   auto& cat = session_info.get_catalog();
   auto& sys_cat = static_cast<Catalog_Namespace::SysCatalog&>(cat);
   DBObject dbObject(table_name, TableDBObjectType);
-  std::vector<bool> privs{false, true, false};  // INSERT
+  std::vector<bool> privs{false, true, false, false};  // INSERT
   sys_cat.populateDBObjectKey(dbObject, cat);
   dbObject.setPrivileges(privs);
   std::vector<DBObject> privObjects;
