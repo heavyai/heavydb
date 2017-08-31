@@ -147,6 +147,22 @@ std::shared_ptr<Analyzer::BinOper> lower_multicol_compare(const Analyzer::BinOpe
   return acc;
 }
 
+std::shared_ptr<Analyzer::BinOper> lower_bw_eq(const Analyzer::BinOper* bw_eq) {
+  const auto eq_oper = std::make_shared<Analyzer::BinOper>(bw_eq->get_type_info(),
+                                                           bw_eq->get_contains_agg(),
+                                                           kEQ,
+                                                           bw_eq->get_qualifier(),
+                                                           bw_eq->get_own_left_operand(),
+                                                           bw_eq->get_own_right_operand());
+  const auto lhs_is_null = std::make_shared<Analyzer::UOper>(kBOOLEAN, kISNULL, bw_eq->get_own_left_operand());
+  const auto rhs_is_null = std::make_shared<Analyzer::UOper>(kBOOLEAN, kISNULL, bw_eq->get_own_right_operand());
+  const auto both_are_null = Parser::OperExpr::normalize(kAND, kONE, lhs_is_null, rhs_is_null);
+  const auto bw_eq_oper =
+      std::dynamic_pointer_cast<Analyzer::BinOper>(Parser::OperExpr::normalize(kOR, kONE, eq_oper, both_are_null));
+  CHECK(bw_eq_oper);
+  return bw_eq_oper;
+}
+
 }  // namespace
 
 llvm::Value* Executor::codegenCmp(const Analyzer::BinOper* bin_oper, const CompilationOptions& co) {
@@ -157,6 +173,10 @@ llvm::Value* Executor::codegenCmp(const Analyzer::BinOper* bin_oper, const Compi
     }
   }
   const auto optype = bin_oper->get_optype();
+  if (optype == kBW_EQ) {
+    const auto bw_eq_oper = lower_bw_eq(bin_oper);
+    return codegenLogical(bw_eq_oper.get(), co);
+  }
   const auto qualifier = bin_oper->get_qualifier();
   const auto lhs = bin_oper->get_left_operand();
   const auto rhs = bin_oper->get_right_operand();

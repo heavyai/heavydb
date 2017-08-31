@@ -196,7 +196,7 @@ std::shared_ptr<Analyzer::Expr> OperExpr::normalize(const SQLOps optype,
     else
       right_expr = right_expr->add_cast(new_right_type.get_array_type());
   }
-  if (optype == kEQ || optype == kNE) {
+  if (IS_EQUIVALENCE(optype) || optype == kNE) {
     if (new_left_type.get_compression() == kENCODING_DICT && new_right_type.get_compression() == kENCODING_NONE) {
       SQLTypeInfo ti(new_right_type);
       ti.set_compression(new_left_type.get_compression());
@@ -1308,7 +1308,7 @@ std::string ColumnRef::to_string() const {
 }
 
 std::string OperExpr::to_string() const {
-  std::string op_str[] = {"=", "<>", "<", ">", "<=", ">=", " AND ", " OR ", "NOT", "-", "+", "*", "/"};
+  std::string op_str[] = {"=", "===", "<>", "<", ">", "<=", ">=", " AND ", " OR ", "NOT", "-", "+", "*", "/"};
   std::string str;
   if (optype == kUMINUS)
     str = "-(" + left->to_string() + ")";

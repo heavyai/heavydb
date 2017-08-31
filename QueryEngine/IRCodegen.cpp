@@ -16,6 +16,7 @@
 
 #include "Execute.h"
 #include "MaxwellCodegenPatch.h"
+#include "../Parser/ParserNode.h"
 
 // Driver methods for the IR generation.
 

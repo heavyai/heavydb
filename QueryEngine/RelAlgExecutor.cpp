@@ -1699,6 +1699,48 @@ std::list<std::shared_ptr<Analyzer::Expr>> get_outer_join_quals(const RelAlgNode
   return {};
 }
 
+namespace {
+
+std::unique_ptr<const RexOperator> get_bitwise_equals(const RexScalar* scalar) {
+  const auto condition = dynamic_cast<const RexOperator*>(scalar);
+  if (!condition || condition->getOperator() != kOR || condition->size() != 2) {
+    return nullptr;
+  }
+  const auto equi_join_condition = dynamic_cast<const RexOperator*>(condition->getOperand(0));
+  if (!equi_join_condition || equi_join_condition->getOperator() != kEQ) {
+    return nullptr;
+  }
+  const auto both_are_null_condition = dynamic_cast<const RexOperator*>(condition->getOperand(1));
+  if (!both_are_null_condition || both_are_null_condition->getOperator() != kAND ||
+      both_are_null_condition->size() != 2) {
+    return nullptr;
+  }
+  const auto lhs_is_null = dynamic_cast<const RexOperator*>(both_are_null_condition->getOperand(0));
+  const auto rhs_is_null = dynamic_cast<const RexOperator*>(both_are_null_condition->getOperand(1));
+  if (!lhs_is_null || !rhs_is_null || lhs_is_null->getOperator() != kISNULL || rhs_is_null->getOperator() != kISNULL) {
+    return nullptr;
+  }
+  CHECK_EQ(size_t(1), lhs_is_null->size());
+  CHECK_EQ(size_t(1), rhs_is_null->size());
+  CHECK_EQ(size_t(2), equi_join_condition->size());
+  const auto eq_lhs = dynamic_cast<const RexInput*>(equi_join_condition->getOperand(0));
+  const auto eq_rhs = dynamic_cast<const RexInput*>(equi_join_condition->getOperand(1));
+  const auto is_null_lhs = dynamic_cast<const RexInput*>(lhs_is_null->getOperand(0));
+  const auto is_null_rhs = dynamic_cast<const RexInput*>(rhs_is_null->getOperand(0));
+  if (!eq_lhs || !eq_rhs || !is_null_lhs || !is_null_rhs) {
+    return nullptr;
+  }
+  std::vector<std::unique_ptr<const RexScalar>> eq_operands;
+  if (*eq_lhs == *is_null_lhs && *eq_rhs == *is_null_rhs) {
+    eq_operands.emplace_back(equi_join_condition->getOperandAndRelease(0));
+    eq_operands.emplace_back(equi_join_condition->getOperandAndRelease(1));
+    return boost::make_unique<const RexOperator>(kBW_EQ, eq_operands, equi_join_condition->getType());
+  }
+  return nullptr;
+}
+
+}  // namespace
+
 std::list<std::shared_ptr<Analyzer::Expr>> get_inner_join_quals(const RelAlgNode* ra,
                                                                 const RelAlgTranslator& translator) {
   std::vector<const RexScalar*> work_set;
@@ -1725,7 +1767,9 @@ std::list<std::shared_ptr<Analyzer::Expr>> get_inner_join_quals(const RelAlgNode
   std::list<std::shared_ptr<Analyzer::Expr>> quals;
   for (auto condition : work_set) {
     if (condition && !is_literal_true(condition)) {
-      const auto join_cond_cf = qual_to_conjunctive_form(translator.translateScalarRex(condition));
+      const auto bw_equals = get_bitwise_equals(condition);
+      const auto eq_condition = bw_equals ? bw_equals.get() : condition;
+      const auto join_cond_cf = qual_to_conjunctive_form(translator.translateScalarRex(eq_condition));
       quals.insert(quals.end(), join_cond_cf.simple_quals.begin(), join_cond_cf.simple_quals.end());
       quals.insert(quals.end(), join_cond_cf.quals.begin(), join_cond_cf.quals.end());
     }
