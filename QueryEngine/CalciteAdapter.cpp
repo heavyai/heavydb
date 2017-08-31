@@ -1207,7 +1207,7 @@ std::string pg_shim_impl(const std::string& query) {
     });
   }
   {
-    boost::regex ilike_expr{R"((\s+)([^\s]+)\s+ilike\s+('(?:[^']+|'')+')(\s+escape(\s+('[^']+')))?)",
+    boost::regex ilike_expr{R"((\s+|\()((?!\()[^\s]+)\s+ilike\s+('(?:[^']+|'')+')(\s+escape(\s+('[^']+')))?)",
                             boost::regex::perl | boost::regex::icase};
     apply_shim(result, ilike_expr, [](std::string& result, const boost::smatch& what) {
       std::string esc = what[6];
