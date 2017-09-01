@@ -112,13 +112,13 @@ std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*> get_cols(
 }
 
 // Number of entries required for the given range.
-size_t get_hash_entry_count(const ExpressionRange& col_range) {
+size_t get_hash_entry_count(const ExpressionRange& col_range, const bool is_bw_eq) {
   if (col_range.getIntMin() > col_range.getIntMax()) {
     CHECK_EQ(col_range.getIntMin(), int64_t(0));
     CHECK_EQ(col_range.getIntMax(), int64_t(-1));
-    return 0;
+    return is_bw_eq ? 1 : 0;
   }
-  return col_range.getIntMax() - col_range.getIntMin() + 1;
+  return col_range.getIntMax() - col_range.getIntMin() + 1 + (is_bw_eq ? 1 : 0);
 }
 
 }  // namespace
@@ -190,7 +190,7 @@ std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(const std::shared_ptr<
                                                           const int device_count,
                                                           const std::unordered_set<int>& skip_tables,
                                                           Executor* executor) {
-  CHECK_EQ(kEQ, qual_bin_oper->get_optype());
+  CHECK(IS_EQUIVALENCE(qual_bin_oper->get_optype()));
   const auto redirected_bin_oper =
       std::dynamic_pointer_cast<Analyzer::BinOper>(redirect_expr(qual_bin_oper.get(), ra_exe_unit.input_col_descs));
   CHECK(redirected_bin_oper);
@@ -221,8 +221,11 @@ std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(const std::shared_ptr<
   const auto max_hash_entry_count = memory_level == Data_Namespace::MemoryLevel::GPU_LEVEL
                                         ? static_cast<size_t>(std::numeric_limits<int32_t>::max() / sizeof(int32_t))
                                         : static_cast<size_t>(std::numeric_limits<int32_t>::max());
-  if (get_hash_entry_count(col_range) > max_hash_entry_count) {
+  if (get_hash_entry_count(col_range, qual_bin_oper->get_optype() == kBW_EQ) > max_hash_entry_count) {
     throw TooManyHashEntries();
+  }
+  if (qual_bin_oper->get_optype() == kBW_EQ && col_range.getIntMax() >= std::numeric_limits<int64_t>::max()) {
+    throw HashJoinFail("Cannot translate null value for kBW_EQ");
   }
   auto join_hash_table = std::shared_ptr<JoinHashTable>(new JoinHashTable(
       qual_bin_oper, inner_col, query_infos, ra_exe_unit, memory_level, col_range, executor, device_count));
@@ -745,7 +748,7 @@ int JoinHashTable::initHashTableForDevice(
     const Data_Namespace::MemoryLevel effective_memory_level,
     std::pair<Data_Namespace::AbstractBuffer*, Data_Namespace::AbstractBuffer*>& buff_and_err,
     const int device_id) {
-  auto hash_entry_count = get_hash_entry_count(col_range_);
+  auto hash_entry_count = get_hash_entry_count(col_range_, isBitwiseEq());
   if (!hash_entry_count) {
     return 0;
   }
@@ -823,8 +826,11 @@ int JoinHashTable::initHashTableForDevice(
       return 0;
     }
     JoinColumn join_column{col_buff, num_elements};
-    JoinColumnTypeInfo type_info{
-        static_cast<size_t>(ti.get_size()), col_range_.getIntMin(), inline_fixed_encoding_null_val(ti)};
+    JoinColumnTypeInfo type_info{static_cast<size_t>(ti.get_size()),
+                                 col_range_.getIntMin(),
+                                 inline_fixed_encoding_null_val(ti),
+                                 isBitwiseEq(),
+                                 col_range_.getIntMax() + 1};
     if (shard_count) {
       CHECK_GT(device_count_, 0);
       for (size_t shard = device_id; shard < shard_count; shard += device_count_) {
@@ -864,7 +870,7 @@ void JoinHashTable::initOneToManyHashTable(const ChunkKey& chunk_key,
                                            const std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*>& cols,
                                            const Data_Namespace::MemoryLevel effective_memory_level,
                                            const int device_id) {
-  auto hash_entry_count = get_hash_entry_count(col_range_);
+  auto hash_entry_count = get_hash_entry_count(col_range_, isBitwiseEq());
 #ifdef HAVE_CUDA
   const auto shard_count = get_shard_count(qual_bin_oper_.get(), ra_exe_unit_, executor_);
   const size_t entries_per_shard = (shard_count ? get_entries_per_shard(hash_entry_count, shard_count) : 0);
@@ -926,8 +932,11 @@ void JoinHashTable::initOneToManyHashTable(const ChunkKey& chunk_key,
                                   executor_->blockSize(),
                                   executor_->gridSize());
     JoinColumn join_column{col_buff, num_elements};
-    JoinColumnTypeInfo type_info{
-        static_cast<size_t>(ti.get_size()), col_range_.getIntMin(), inline_fixed_encoding_null_val(ti)};
+    JoinColumnTypeInfo type_info{static_cast<size_t>(ti.get_size()),
+                                 col_range_.getIntMin(),
+                                 inline_fixed_encoding_null_val(ti),
+                                 isBitwiseEq(),
+                                 col_range_.getIntMax() + 1};
     if (shard_count) {
       CHECK_GT(device_count_, 0);
       for (size_t shard = device_id; shard < shard_count; shard += device_count_) {
@@ -961,8 +970,12 @@ void JoinHashTable::initHashTableOnCpuFromCache(
     const size_t num_elements,
     const std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*>& cols) {
   const auto outer_col = dynamic_cast<const Analyzer::ColumnVar*>(cols.second);
-  JoinHashTableCacheKey cache_key{
-      col_range_, *cols.first, outer_col ? *outer_col : *cols.first, num_elements, chunk_key};
+  JoinHashTableCacheKey cache_key{col_range_,
+                                  *cols.first,
+                                  outer_col ? *outer_col : *cols.first,
+                                  num_elements,
+                                  chunk_key,
+                                  qual_bin_oper_->get_optype()};
   std::lock_guard<std::mutex> join_hash_table_cache_lock(join_hash_table_cache_mutex_);
   for (const auto& kv : join_hash_table_cache_) {
     if (kv.first == cache_key) {
@@ -976,8 +989,12 @@ void JoinHashTable::putHashTableOnCpuToCache(const ChunkKey& chunk_key,
                                              const size_t num_elements,
                                              const std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*>& cols) {
   const auto outer_col = dynamic_cast<const Analyzer::ColumnVar*>(cols.second);
-  JoinHashTableCacheKey cache_key{
-      col_range_, *cols.first, outer_col ? *outer_col : *cols.first, num_elements, chunk_key};
+  JoinHashTableCacheKey cache_key{col_range_,
+                                  *cols.first,
+                                  outer_col ? *outer_col : *cols.first,
+                                  num_elements,
+                                  chunk_key,
+                                  qual_bin_oper_->get_optype()};
   std::lock_guard<std::mutex> join_hash_table_cache_lock(join_hash_table_cache_mutex_);
   for (const auto& kv : join_hash_table_cache_) {
     if (kv.first == cache_key) {
@@ -1027,14 +1044,17 @@ std::vector<llvm::Value*> JoinHashTable::getHashJoinArgs(llvm::Value* hash_ptr,
                                                executor_->ll_int(col_range_.getIntMin()),
                                                executor_->ll_int(col_range_.getIntMax())};
   if (shard_count) {
-    const auto expected_hash_entry_count = get_hash_entry_count(col_range_);
+    const auto expected_hash_entry_count = get_hash_entry_count(col_range_, isBitwiseEq());
     const auto entry_count_per_shard = (expected_hash_entry_count + shard_count - 1) / shard_count;
     hash_join_idx_args.push_back(executor_->ll_int<uint32_t>(entry_count_per_shard));
     hash_join_idx_args.push_back(executor_->ll_int<uint32_t>(shard_count));
     hash_join_idx_args.push_back(executor_->ll_int<uint32_t>(device_count_));
   }
-  if (col_range_.hasNulls()) {
+  if (col_range_.hasNulls() || isBitwiseEq()) {
     hash_join_idx_args.push_back(executor_->ll_int(inline_fixed_encoding_null_val(key_col->get_type_info())));
+  }
+  if (isBitwiseEq()) {
+    hash_join_idx_args.push_back(executor_->ll_int(col_range_.getIntMax() + 1));
   }
   return hash_join_idx_args;
 }
@@ -1054,22 +1074,31 @@ llvm::Value* JoinHashTable::codegenOneToManyHashJoin(const CompilationOptions& c
   const int shard_count = shardCount();
   auto hash_join_idx_args = getHashJoinArgs(pos_ptr, key_col, shard_count, co);
   const int64_t sub_buff_size = hash_entry_count_ * sizeof(int32_t);
-  return codegenOneToManyHashJoin(
-      hash_join_idx_args, val_col->get_rte_idx(), shard_count, col_range_.hasNulls(), sub_buff_size, executor_);
+  return codegenOneToManyHashJoin(hash_join_idx_args,
+                                  val_col->get_rte_idx(),
+                                  shard_count,
+                                  col_range_.hasNulls(),
+                                  isBitwiseEq(),
+                                  sub_buff_size,
+                                  executor_);
 }
 
 llvm::Value* JoinHashTable::codegenOneToManyHashJoin(const std::vector<llvm::Value*>& hash_join_idx_args_in,
                                                      const size_t inner_rte_idx,
                                                      const bool is_sharded,
                                                      const bool col_range_has_nulls,
+                                                     const bool is_bw_eq,
                                                      const int64_t sub_buff_size,
                                                      Executor* executor) {
   CHECK(executor->plan_state_->join_info_.join_impl_type_ == Executor::JoinImplType::HashOneToMany);
   std::string fname{"hash_join_idx"};
+  if (is_bw_eq) {
+    fname += "_bitwise";
+  }
   if (is_sharded) {
     fname += "_sharded";
   }
-  if (col_range_has_nulls) {
+  if (!is_bw_eq && col_range_has_nulls) {
     fname += "_nullable";
   }
   const auto slot_lv = executor->cgen_state_->emitCall(fname, hash_join_idx_args_in);
@@ -1159,10 +1188,13 @@ llvm::Value* JoinHashTable::codegenSlot(const CompilationOptions& co, const size
   const int shard_count = shardCount();
   const auto hash_join_idx_args = getHashJoinArgs(hash_ptr, key_col, shard_count, co);
   std::string fname{"hash_join_idx"};
+  if (isBitwiseEq()) {
+    fname += "_bitwise";
+  }
   if (shard_count) {
     fname += "_sharded";
   }
-  if (col_range_.hasNulls()) {
+  if (!isBitwiseEq() && col_range_.hasNulls()) {
     fname += "_nullable";
   }
   const auto slot_lv = executor_->cgen_state_->emitCall(fname, hash_join_idx_args);
@@ -1192,4 +1224,8 @@ const InputTableInfo& get_inner_query_info(const int inner_table_id, const std::
 size_t JoinHashTable::shardCount() const {
   return memory_level_ == Data_Namespace::GPU_LEVEL ? get_shard_count(qual_bin_oper_.get(), ra_exe_unit_, executor_)
                                                     : 0;
+}
+
+bool JoinHashTable::isBitwiseEq() const {
+  return qual_bin_oper_->get_optype() == kBW_EQ;
 }

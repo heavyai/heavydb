@@ -898,7 +898,7 @@ const RexOperator* get_equals_operator(const T* node) {
       }
       continue;
     }
-    if (rex_operator->getOperator() != kEQ) {
+    if (!IS_EQUIVALENCE(rex_operator->getOperator())) {
       continue;
     }
     std::unordered_set<const RelAlgNode*> source_nodes;
@@ -1142,7 +1142,7 @@ void replace_equijoin_keys(const std::shared_ptr<RelMultiJoin> multi_join,
   std::unordered_map<size_t, size_t> old_to_new_flattened_idx;
   for (size_t i = 0; i < condition_set.size(); ++i) {
     auto rex_operator = dynamic_cast<const RexOperator*>(condition_set[i]);
-    if (!rex_operator || rex_operator->getOperator() != kEQ) {
+    if (!rex_operator || !IS_EQUIVALENCE(rex_operator->getOperator())) {
       continue;
     }
     auto lhs_table = multi_join->getJoinAt(i)->getInput(0);

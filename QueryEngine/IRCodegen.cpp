@@ -191,7 +191,7 @@ const std::vector<Analyzer::Expr*> Executor::codegenHashJoinsBeforeLoopJoin(
   llvm::Value* filter_lv = nullptr;
   for (auto expr : ra_exe_unit.inner_join_quals) {
     auto bin_oper = std::dynamic_pointer_cast<const Analyzer::BinOper>(expr);
-    if (!bin_oper || bin_oper->get_optype() != kEQ) {
+    if (!bin_oper || !IS_EQUIVALENCE(bin_oper->get_optype())) {
       continue;
     }
     std::set<int> rte_idx_set;

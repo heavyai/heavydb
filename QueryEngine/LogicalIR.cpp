@@ -140,8 +140,8 @@ void sort_eq_joins_by_rte_indices(std::vector<Analyzer::Expr*>& join_conditions)
   auto cmp = [](const Analyzer::Expr* lhs, const Analyzer::Expr* rhs) -> bool {
     auto lhs_eq = dynamic_cast<const Analyzer::BinOper*>(lhs);
     auto rhs_eq = dynamic_cast<const Analyzer::BinOper*>(rhs);
-    CHECK(lhs_eq && lhs_eq->get_optype() == kEQ);
-    CHECK(rhs_eq && rhs_eq->get_optype() == kEQ);
+    CHECK(lhs_eq && IS_EQUIVALENCE(lhs_eq->get_optype()));
+    CHECK(rhs_eq && IS_EQUIVALENCE(rhs_eq->get_optype()));
     std::set<int> rte_idx_set;
     lhs_eq->collect_rte_idx(rte_idx_set);
     CHECK_EQ(rte_idx_set.size(), size_t(2));

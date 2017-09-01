@@ -408,7 +408,7 @@ llvm::Value* Executor::posArg(const Analyzer::Expr* expr) const {
 
 const Analyzer::ColumnVar* Executor::hashJoinLhs(const Analyzer::ColumnVar* rhs) const {
   for (const auto tautological_eq : plan_state_->join_info_.equi_join_tautologies_) {
-    CHECK(tautological_eq->get_optype() == kEQ);
+    CHECK(IS_EQUIVALENCE(tautological_eq->get_optype()));
     if (dynamic_cast<const Analyzer::ExpressionTuple*>(tautological_eq->get_left_operand())) {
       auto lhs_col = hashJoinLhsTuple(rhs, tautological_eq.get());
       if (lhs_col) {

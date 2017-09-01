@@ -242,6 +242,15 @@ extern "C" ALWAYS_INLINE DEVICE int64_t hash_join_idx_nullable(int64_t hash_buff
   return key != null_val ? hash_join_idx(hash_buff, key, min_key, max_key) : -1;
 }
 
+extern "C" ALWAYS_INLINE DEVICE int64_t hash_join_idx_bitwise(int64_t hash_buff,
+                                                              const int64_t key,
+                                                              const int64_t min_key,
+                                                              const int64_t max_key,
+                                                              const int64_t null_val,
+                                                              const int64_t translated_val) {
+  return key != null_val ? hash_join_idx(hash_buff, key, min_key, max_key) : translated_val;
+}
+
 extern "C" ALWAYS_INLINE DEVICE int64_t hash_join_idx_sharded(int64_t hash_buff,
                                                               const int64_t key,
                                                               const int64_t min_key,
@@ -267,6 +276,20 @@ extern "C" ALWAYS_INLINE DEVICE int64_t hash_join_idx_sharded_nullable(int64_t h
   return key != null_val
              ? hash_join_idx_sharded(hash_buff, key, min_key, max_key, entry_count_per_shard, num_shards, device_count)
              : -1;
+}
+
+extern "C" ALWAYS_INLINE DEVICE int64_t hash_join_idx_bitwise_sharded(int64_t hash_buff,
+                                                                      const int64_t key,
+                                                                      const int64_t min_key,
+                                                                      const int64_t max_key,
+                                                                      const uint32_t entry_count_per_shard,
+                                                                      const uint32_t num_shards,
+                                                                      const uint32_t device_count,
+                                                                      const int64_t null_val,
+                                                                      const int64_t translated_val) {
+  return key != null_val
+             ? hash_join_idx_sharded(hash_buff, key, min_key, max_key, entry_count_per_shard, num_shards, device_count)
+             : translated_val;
 }
 
 #define DEF_TRANSLATE_NULL_KEY(key_type)                                            \

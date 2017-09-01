@@ -80,10 +80,14 @@ DEVICE int SUFFIX(fill_hash_join_buff)(int32_t* buff,
   for (size_t i = start; i < join_column.num_elems; i += step) {
     int64_t elem = SUFFIX(fixed_width_int_decode_noinline)(join_column.col_buff, type_info.elem_sz, i);
     if (elem == type_info.null_val) {
-      continue;
+      if (type_info.uses_bw_eq) {
+        elem = type_info.translated_null_val;
+      } else {
+        continue;
+      }
     }
 #ifndef __CUDACC__
-    if (sd_inner_proxy) {
+    if (sd_inner_proxy && (!type_info.uses_bw_eq || elem != type_info.translated_null_val)) {
       CHECK(sd_outer_proxy);
       const auto sd_inner_dict_proxy = static_cast<const StringDictionaryProxy*>(sd_inner_proxy);
       const auto sd_outer_dict_proxy = static_cast<const StringDictionaryProxy*>(sd_outer_proxy);
@@ -125,10 +129,14 @@ DEVICE int SUFFIX(fill_hash_join_buff_sharded)(int32_t* buff,
       continue;
     }
     if (elem == type_info.null_val) {
-      continue;
+      if (type_info.uses_bw_eq) {
+        elem = type_info.translated_null_val;
+      } else {
+        continue;
+      }
     }
 #ifndef __CUDACC__
-    if (sd_inner_proxy) {
+    if (sd_inner_proxy && (!type_info.uses_bw_eq || elem != type_info.translated_null_val)) {
       CHECK(sd_outer_proxy);
       const auto sd_inner_dict_proxy = static_cast<const StringDictionaryProxy*>(sd_inner_proxy);
       const auto sd_outer_dict_proxy = static_cast<const StringDictionaryProxy*>(sd_outer_proxy);
@@ -388,10 +396,14 @@ GLOBAL void SUFFIX(count_matches)(int32_t* count_buff,
   for (size_t i = start; i < join_column.num_elems; i += step) {
     int64_t elem = SUFFIX(fixed_width_int_decode_noinline)(join_column.col_buff, type_info.elem_sz, i);
     if (elem == type_info.null_val) {
-      continue;
+      if (type_info.uses_bw_eq) {
+        elem = type_info.translated_null_val;
+      } else {
+        continue;
+      }
     }
 #ifndef __CUDACC__
-    if (sd_inner_proxy) {
+    if (sd_inner_proxy && (!type_info.uses_bw_eq || elem != type_info.translated_null_val)) {
       CHECK(sd_outer_proxy);
       const auto sd_inner_dict_proxy = static_cast<const StringDictionaryProxy*>(sd_inner_proxy);
       const auto sd_outer_dict_proxy = static_cast<const StringDictionaryProxy*>(sd_outer_proxy);
@@ -431,10 +443,14 @@ GLOBAL void SUFFIX(count_matches_sharded)(int32_t* count_buff,
   for (size_t i = start; i < join_column.num_elems; i += step) {
     int64_t elem = SUFFIX(fixed_width_int_decode_noinline)(join_column.col_buff, type_info.elem_sz, i);
     if (elem == type_info.null_val) {
-      continue;
+      if (type_info.uses_bw_eq) {
+        elem = type_info.translated_null_val;
+      } else {
+        continue;
+      }
     }
 #ifndef __CUDACC__
-    if (sd_inner_proxy) {
+    if (sd_inner_proxy && (!type_info.uses_bw_eq || elem != type_info.translated_null_val)) {
       CHECK(sd_outer_proxy);
       const auto sd_inner_dict_proxy = static_cast<const StringDictionaryProxy*>(sd_inner_proxy);
       const auto sd_outer_dict_proxy = static_cast<const StringDictionaryProxy*>(sd_outer_proxy);
@@ -571,10 +587,14 @@ GLOBAL void SUFFIX(fill_row_ids)(int32_t* buff,
   for (size_t i = start; i < join_column.num_elems; i += step) {
     int64_t elem = SUFFIX(fixed_width_int_decode_noinline)(join_column.col_buff, type_info.elem_sz, i);
     if (elem == type_info.null_val) {
-      continue;
+      if (type_info.uses_bw_eq) {
+        elem = type_info.translated_null_val;
+      } else {
+        continue;
+      }
     }
 #ifndef __CUDACC__
-    if (sd_inner_proxy) {
+    if (sd_inner_proxy && (!type_info.uses_bw_eq || elem != type_info.translated_null_val)) {
       CHECK(sd_outer_proxy);
       const auto sd_inner_dict_proxy = static_cast<const StringDictionaryProxy*>(sd_inner_proxy);
       const auto sd_outer_dict_proxy = static_cast<const StringDictionaryProxy*>(sd_outer_proxy);
@@ -624,10 +644,14 @@ GLOBAL void SUFFIX(fill_row_ids_sharded)(int32_t* buff,
   for (size_t i = start; i < join_column.num_elems; i += step) {
     int64_t elem = SUFFIX(fixed_width_int_decode_noinline)(join_column.col_buff, type_info.elem_sz, i);
     if (elem == type_info.null_val) {
-      continue;
+      if (type_info.uses_bw_eq) {
+        elem = type_info.translated_null_val;
+      } else {
+        continue;
+      }
     }
 #ifndef __CUDACC__
-    if (sd_inner_proxy) {
+    if (sd_inner_proxy && (!type_info.uses_bw_eq || elem != type_info.translated_null_val)) {
       CHECK(sd_outer_proxy);
       const auto sd_inner_dict_proxy = static_cast<const StringDictionaryProxy*>(sd_inner_proxy);
       const auto sd_outer_dict_proxy = static_cast<const StringDictionaryProxy*>(sd_outer_proxy);

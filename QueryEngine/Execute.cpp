@@ -2301,7 +2301,7 @@ Executor::JoinInfo Executor::chooseJoinType(const std::list<std::shared_ptr<Anal
       }
       continue;
     }
-    if (qual_bin_oper->get_optype() == kEQ) {
+    if (IS_EQUIVALENCE(qual_bin_oper->get_optype())) {
       const int device_count =
           device_type == ExecutorDeviceType::GPU ? catalog_->get_dataMgr().cudaMgr_->getDeviceCount() : 1;
       CHECK_GT(device_count, 0);

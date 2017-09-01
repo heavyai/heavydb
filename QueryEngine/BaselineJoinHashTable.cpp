@@ -891,6 +891,7 @@ llvm::Value* BaselineJoinHashTable::codegenOneToManySlot(const CompilationOption
                                                  getInnerTableRteIdx(),
                                                  false,
                                                  false,
+                                                 false,
                                                  entry_count_ * sizeof(int32_t),
                                                  executor_);
 }

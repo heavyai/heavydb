@@ -83,6 +83,8 @@ struct JoinColumnTypeInfo {
   size_t elem_sz;
   int64_t min_val;
   int64_t null_val;
+  bool uses_bw_eq;
+  int64_t translated_null_val;
 };
 
 int fill_hash_join_buff(int32_t* buff,

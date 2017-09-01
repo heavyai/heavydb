@@ -89,6 +89,7 @@ class JoinHashTable : public JoinHashTableInterface {
                                                const size_t inner_rte_idx,
                                                const bool is_sharded,
                                                const bool col_range_has_nulls,
+                                               const bool is_bw_eq,
                                                const int64_t sub_buff_size,
                                                Executor* executor);
 
@@ -191,6 +192,8 @@ class JoinHashTable : public JoinHashTableInterface {
                                                   std::map<int, std::shared_ptr<const ColumnarResults>>& frags_owner,
                                                   ThrustAllocator& dev_buff_owner);
 
+  bool isBitwiseEq() const;
+
   std::shared_ptr<Analyzer::BinOper> qual_bin_oper_;
   std::shared_ptr<Analyzer::ColumnVar> col_var_;
   const std::vector<InputTableInfo>& query_infos_;
@@ -216,10 +219,11 @@ class JoinHashTable : public JoinHashTableInterface {
     const Analyzer::ColumnVar outer_col;
     const size_t num_elements;
     const ChunkKey chunk_key;
+    const SQLOps optype;
 
     bool operator==(const struct JoinHashTableCacheKey& that) const {
       return col_range == that.col_range && inner_col == that.inner_col && outer_col == that.outer_col &&
-             num_elements == that.num_elements && chunk_key == that.chunk_key;
+             num_elements == that.num_elements && chunk_key == that.chunk_key && optype == that.optype;
     }
   };
 

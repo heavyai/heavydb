@@ -3136,6 +3136,9 @@ TEST(Select, Joins_InnerJoin_TwoTables) {
     c("SELECT COUNT(*) FROM test JOIN test_inner ON test.x = test_inner.x AND test.rowid = test_inner.rowid;", dt);
     c("SELECT COUNT(*) FROM test, test_inner WHERE test.y = test_inner.y OR (test.y IS NULL AND test_inner.y IS NULL);",
       dt);
+    c("SELECT COUNT(*) FROM test, join_test WHERE (test.str = join_test.dup_str OR (test.str IS NULL AND "
+      "join_test.dup_str IS NULL));",
+      dt);
   }
 }
 
