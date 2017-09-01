@@ -1811,7 +1811,9 @@ void Catalog::truncateTable(const TableDescriptor* td) {
 
 void Catalog::doTruncateTable(const TableDescriptor* td) {
   const int tableId = td->tableId;
-
+  // get a write lock on the table before trying to remove it
+  ChunkKey chunkKey = {currentDB_.dbId, tableId};
+  mapd_unique_lock<mapd_shared_mutex> tableLevelWriteLock(*dataMgr_->getMutexForChunkPrefix(chunkKey));
   // must destroy fragmenter before deleteChunks is called.
   if (td->fragmenter != nullptr) {
     auto tableDescIt = tableDescriptorMapById_.find(tableId);
@@ -1914,6 +1916,9 @@ void Catalog::dropTable(const TableDescriptor* td) {
 
 void Catalog::doDropTable(const TableDescriptor* td) {
   const int tableId = td->tableId;
+  // get a write lock on the table before trying to remove it
+  ChunkKey chunkKey = {currentDB_.dbId, tableId};
+  mapd_unique_lock<mapd_shared_mutex> tableLevelWriteLock(*dataMgr_->getMutexForChunkPrefix(chunkKey));
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
     sqliteConnector_.query_with_text_param("DELETE FROM mapd_tables WHERE tableid = ?", std::to_string(tableId));
