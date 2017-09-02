@@ -1097,12 +1097,17 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
 
   llvm::Value* filter_lv =
       isOuterLoopJoin() || isOneToManyOuterHashJoin() ? cgen_state_->outer_join_cond_lv_ : ll_bool(true);
+  llvm::Value* outerjoin_query_filter_lv =
+      (!primary_quals.empty() && (isOuterJoin() || isOuterLoopJoin())) ? ll_bool(true) : nullptr;
   for (auto expr : primary_quals) {
     // Generate the filter for primary quals
     auto cond = toBool(codegen(expr, true, co).front());
     auto new_cond = codegenRetOnHashFail(cond, expr);
-    if (new_cond == cond) {
+    if (new_cond == cond && !outerjoin_query_filter_lv) {
       filter_lv = cgen_state_->ir_builder_.CreateAnd(filter_lv, cond);
+    }
+    if (outerjoin_query_filter_lv) {
+      outerjoin_query_filter_lv = cgen_state_->ir_builder_.CreateAnd(outerjoin_query_filter_lv, cond);
     }
   }
   CHECK(filter_lv->getType()->isIntegerTy(1));
@@ -1130,7 +1135,7 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
 
   CHECK(filter_lv->getType()->isIntegerTy(1));
 
-  const bool needs_error_check = group_by_and_aggregate.codegen(filter_lv, co);
+  const bool needs_error_check = group_by_and_aggregate.codegen(filter_lv, outerjoin_query_filter_lv, co);
 
   if (needs_error_check || cgen_state_->needs_error_check_ || eo.with_dynamic_watchdog) {
     createErrorCheckControlFlow(query_func, eo.with_dynamic_watchdog);

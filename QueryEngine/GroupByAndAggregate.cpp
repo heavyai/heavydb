@@ -2580,13 +2580,19 @@ GroupByAndAggregate::DiamondCodegen::DiamondCodegen(llvm::Value* cond,
                                                     Executor* executor,
                                                     const bool chain_to_next,
                                                     const std::string& label_prefix,
-                                                    DiamondCodegen* parent)
+                                                    DiamondCodegen* parent,
+                                                    const bool share_false_edge_with_parent)
     : executor_(executor), chain_to_next_(chain_to_next), parent_(parent) {
   if (parent_) {
     CHECK(!chain_to_next_);
   }
   cond_true_ = llvm::BasicBlock::Create(LL_CONTEXT, label_prefix + "_true", ROW_FUNC);
-  orig_cond_false_ = cond_false_ = llvm::BasicBlock::Create(LL_CONTEXT, label_prefix + "_false", ROW_FUNC);
+  if (share_false_edge_with_parent) {
+    CHECK(parent);
+    orig_cond_false_ = cond_false_ = parent_->cond_false_;
+  } else {
+    orig_cond_false_ = cond_false_ = llvm::BasicBlock::Create(LL_CONTEXT, label_prefix + "_false", ROW_FUNC);
+  }
 
   LL_BUILDER.CreateCondBr(cond, cond_true_, cond_false_);
   LL_BUILDER.SetInsertPoint(cond_true_);
@@ -2598,11 +2604,12 @@ void GroupByAndAggregate::DiamondCodegen::setChainToNext() {
 }
 
 void GroupByAndAggregate::DiamondCodegen::setFalseTarget(llvm::BasicBlock* cond_false) {
+  CHECK(!parent_ || orig_cond_false_ != parent_->cond_false_);
   cond_false_ = cond_false;
 }
 
 GroupByAndAggregate::DiamondCodegen::~DiamondCodegen() {
-  if (parent_) {
+  if (parent_ && orig_cond_false_ != parent_->cond_false_) {
     LL_BUILDER.CreateBr(parent_->cond_false_);
   } else if (chain_to_next_) {
     LL_BUILDER.CreateBr(cond_false_);
@@ -2637,7 +2644,9 @@ void GroupByAndAggregate::patchGroupbyCall(llvm::CallInst* call_site) {
   llvm::ReplaceInstWithInst(call_site, llvm::CallInst::Create(func, args));
 }
 
-bool GroupByAndAggregate::codegen(llvm::Value* filter_result, const CompilationOptions& co) {
+bool GroupByAndAggregate::codegen(llvm::Value* filter_result,
+                                  llvm::Value* outerjoin_query_filter_result,
+                                  const CompilationOptions& co) {
   CHECK(filter_result);
 
   bool can_return_error = false;
@@ -2650,12 +2659,18 @@ bool GroupByAndAggregate::codegen(llvm::Value* filter_result, const CompilationO
       prependForceSync();
     }
     DiamondCodegen filter_cfg(
-        filter_result, executor_, !is_group_by || query_mem_desc.usesGetGroupValueFast(), "filter");
+        filter_result, executor_, !is_group_by || query_mem_desc.usesGetGroupValueFast(), "filter", nullptr, false);
 
     if (executor_->isOuterLoopJoin() || executor_->isOneToManyOuterHashJoin()) {
       auto match_found_ptr = executor_->cgen_state_->outer_join_match_found_;
       CHECK(match_found_ptr);
       LL_BUILDER.CreateStore(executor_->ll_bool(true), match_found_ptr);
+    }
+
+    std::unique_ptr<DiamondCodegen> nonjoin_filter_cfg;
+    if (outerjoin_query_filter_result) {
+      nonjoin_filter_cfg.reset(new DiamondCodegen(
+          outerjoin_query_filter_result, executor_, false, "nonjoin_filter", &filter_cfg, is_group_by));
     }
 
     if (is_group_by) {
@@ -2694,7 +2709,8 @@ bool GroupByAndAggregate::codegen(llvm::Value* filter_result, const CompilationO
                                        executor_,
                                        false,
                                        "groupby_nullcheck",
-                                       &filter_cfg);
+                                       &filter_cfg,
+                                       false);
           codegenAggCalls(agg_out_ptr_w_idx, {}, co);
         }
         can_return_error = true;

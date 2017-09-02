@@ -319,7 +319,7 @@ class GroupByAndAggregate {
 
   // returns true iff checking the error code after every row
   // is required -- slow path group by queries for now
-  bool codegen(llvm::Value* filter_result, const CompilationOptions& co);
+  bool codegen(llvm::Value* filter_result, llvm::Value* nonjoin_filter_result, const CompilationOptions& co);
 
   static void addTransientStringLiterals(const RelAlgExecutionUnit& ra_exe_unit,
                                          Executor* executor,
@@ -340,7 +340,8 @@ class GroupByAndAggregate {
                    Executor* executor,
                    const bool chain_to_next,
                    const std::string& label_prefix,
-                   DiamondCodegen* parent = nullptr);
+                   DiamondCodegen* parent,
+                   const bool share_false_edge_with_parent);
     void setChainToNext();
     void setFalseTarget(llvm::BasicBlock* cond_false);
     ~DiamondCodegen();
