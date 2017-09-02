@@ -284,6 +284,10 @@ SQLTypeInfo BinOper::analyze_type_info(SQLOps op,
     new_left_type->set_notnull(left_type.get_notnull());
     *new_right_type = common_type;
     new_right_type->set_notnull(right_type.get_notnull());
+    if (op == kMULTIPLY) {
+      new_left_type->set_scale(left_type.get_scale());
+      new_right_type->set_scale(right_type.get_scale());
+    }
     result_type = common_type;
   } else {
     throw std::runtime_error("invalid binary operator type.");

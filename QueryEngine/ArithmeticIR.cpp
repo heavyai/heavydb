@@ -39,18 +39,10 @@ llvm::Value* Executor::codegenArith(const Analyzer::BinOper* bin_oper, const Com
   const auto& lhs_type = lhs->get_type_info();
   const auto& rhs_type = rhs->get_type_info();
 
-  if (lhs_type.is_decimal() && rhs_type.is_decimal() && lhs_type.get_scale() == rhs_type.get_scale()) {
-    if (optype == kMULTIPLY) {
-      if (auto ret = codegenDeciMul(bin_oper, false, co)) {
-        return ret;
-      }
-      if (auto ret = codegenDeciMul(bin_oper, true, co)) {
-        return ret;
-      }
-    } else if (optype == kDIVIDE) {
-      if (auto ret = codegenDeciDiv(bin_oper, co)) {
-        return ret;
-      }
+  if (lhs_type.is_decimal() && rhs_type.is_decimal() && optype == kDIVIDE) {
+    const auto ret = codegenDeciDiv(bin_oper, co);
+    if (ret) {
+      return ret;
     }
   }
 
@@ -64,9 +56,6 @@ llvm::Value* Executor::codegenArith(const Analyzer::BinOper* bin_oper, const Com
     lhs_lv = codegenCastBetweenIntTypes(lhs_lv, lhs_type, rhs_type);
   } else {
     CHECK_EQ(lhs_type.get_type(), rhs_type.get_type());
-  }
-  if (lhs_type.is_decimal()) {
-    CHECK_EQ(lhs_type.get_scale(), rhs_type.get_scale());
   }
   if (lhs_type.is_integer() || lhs_type.is_decimal() || lhs_type.is_timeinterval()) {
     return codegenIntArith(bin_oper, lhs_lv, rhs_lv);
@@ -317,76 +306,15 @@ llvm::Value* Executor::codegenMul(const Analyzer::BinOper* bin_oper,
     cgen_state_->ir_builder_.CreateCondBr(detected, mul_fail, mul_ok);
     cgen_state_->ir_builder_.SetInsertPoint(mul_ok);
   }
-  llvm::Value* ret{nullptr};
-  if (ti.is_decimal()) {
-    const auto decimal_null_typename = null_typename.empty() ? "int64_t" : null_typename;
-    if (downscale) {
-      ret = cgen_state_->emitCall(
-          "mul_" + decimal_null_typename + "_decimal",
-          {lhs_lv, rhs_lv, ll_int(exp_to_scale(ti.get_scale())), ll_int(inline_int_null_val(ti))});
-    } else {
-      ret = cgen_state_->emitCall("mul_" + decimal_null_typename + "_decimal_no_downscale",
-                                  {lhs_lv, rhs_lv, ll_int(inline_int_null_val(ti))});
-    }
-  } else {
-    ret = null_check_suffix.empty() ? cgen_state_->ir_builder_.CreateMul(lhs_lv, rhs_lv)
-                                    : cgen_state_->emitCall("mul_" + null_typename + null_check_suffix,
-                                                            {lhs_lv, rhs_lv, ll_int(inline_int_null_val(ti))});
-  }
+  const auto ret = null_check_suffix.empty() ? cgen_state_->ir_builder_.CreateMul(lhs_lv, rhs_lv)
+                                             : cgen_state_->emitCall("mul_" + null_typename + null_check_suffix,
+                                                                     {lhs_lv, rhs_lv, ll_int(inline_int_null_val(ti))});
   if (need_overflow_check) {
     cgen_state_->ir_builder_.SetInsertPoint(mul_fail);
     cgen_state_->ir_builder_.CreateRet(ll_int(ERR_OVERFLOW_OR_UNDERFLOW));
     cgen_state_->ir_builder_.SetInsertPoint(mul_ok);
   }
   return ret;
-}
-
-// Handle decimal multiplication by an integer (constant or cast), return null if
-// the expression doesn't match this pattern and let the general method kick in.
-// For said patterns, we can simply scale the decimal operand by the non-scaled
-// integer constant value instead of using the scaled value followed by a division.
-// It is both more efficient and avoids the overflow for a lot of practical cases.
-llvm::Value* Executor::codegenDeciMul(const Analyzer::BinOper* bin_oper, bool swap, const CompilationOptions& co) {
-  auto lhs = swap ? bin_oper->get_right_operand() : bin_oper->get_left_operand();
-  auto rhs = swap ? bin_oper->get_left_operand() : bin_oper->get_right_operand();
-  const auto& lhs_type = lhs->get_type_info();
-  const auto& rhs_type = rhs->get_type_info();
-  CHECK(lhs_type.is_decimal() && rhs_type.is_decimal() && lhs_type.get_scale() == rhs_type.get_scale());
-
-  auto rhs_constant = dynamic_cast<const Analyzer::Constant*>(rhs);
-  auto rhs_cast = dynamic_cast<const Analyzer::UOper*>(rhs);
-  if (rhs_constant && (rhs_constant->get_constval().bigintval % exp_to_scale(rhs_type.get_scale())) == 0LL) {
-    // can safely downscale a scaled constant
-  } else if (rhs_cast && rhs_cast->get_optype() == kCAST && rhs_cast->get_operand()->get_type_info().is_integer()) {
-    // can skip upscale in the int to dec cast
-  } else {
-    return nullptr;
-  }
-
-  auto lhs_lv = codegen(lhs, true, co).front();
-  llvm::Value* rhs_lv{nullptr};
-  if (rhs_constant) {
-    const auto rhs_lit =
-        Parser::IntLiteral::analyzeValue(rhs_constant->get_constval().bigintval / exp_to_scale(rhs_type.get_scale()));
-    auto rhs_lit_lv = codegenIntConst(dynamic_cast<const Analyzer::Constant*>(rhs_lit.get()));
-    rhs_lv = codegenCastBetweenIntTypes(rhs_lit_lv, rhs_lit->get_type_info(), lhs_type, /*upscale*/ false);
-  } else if (rhs_cast) {
-    auto rhs_cast_oper = rhs_cast->get_operand();
-    const auto& rhs_cast_oper_ti = rhs_cast_oper->get_type_info();
-    auto rhs_cast_oper_lv = codegen(rhs_cast_oper, true, co).front();
-    rhs_lv = codegenCastBetweenIntTypes(rhs_cast_oper_lv, rhs_cast_oper_ti, lhs_type, /*upscale*/ false);
-  } else {
-    CHECK(false);
-  }
-  const auto int_typename = numeric_or_time_interval_type_name(lhs_type, rhs_type);
-  const auto null_check_suffix = get_null_check_suffix(lhs_type, rhs_type);
-  return codegenMul(bin_oper,
-                    lhs_lv,
-                    rhs_lv,
-                    null_check_suffix.empty() ? "" : int_typename,
-                    null_check_suffix,
-                    lhs_type,
-                    /*downscale*/ false);
 }
 
 llvm::Value* Executor::codegenDiv(llvm::Value* lhs_lv,

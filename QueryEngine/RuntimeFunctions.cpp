@@ -165,36 +165,6 @@ DEF_ARITH_NULLABLE_RHS(int64_t, int64_t, mod, %)
 #undef DEF_ARITH_NULLABLE_LHS
 #undef DEF_ARITH_NULLABLE
 
-#define DEF_MUL_DECIMAL(type)                                                      \
-  extern "C" ALWAYS_INLINE type mul_##type##_decimal(                              \
-      const type lhs, const type rhs, const uint64_t scale, const type null_val) { \
-    if (lhs != null_val && rhs != null_val) {                                      \
-      return (static_cast<double>(lhs) * rhs) / scale;                             \
-    }                                                                              \
-    return null_val;                                                               \
-  }
-
-DEF_MUL_DECIMAL(int16_t)
-DEF_MUL_DECIMAL(int32_t)
-DEF_MUL_DECIMAL(int64_t)
-
-#undef DEF_MUL_DECIMAL
-
-#define DEF_MUL_DECIMAL_NO_DOWNSCALE(type)                         \
-  extern "C" ALWAYS_INLINE type mul_##type##_decimal_no_downscale( \
-      const type lhs, const type rhs, const type null_val) {       \
-    if (lhs != null_val && rhs != null_val) {                      \
-      return (static_cast<double>(lhs) * rhs);                     \
-    }                                                              \
-    return null_val;                                               \
-  }
-
-DEF_MUL_DECIMAL_NO_DOWNSCALE(int16_t)
-DEF_MUL_DECIMAL_NO_DOWNSCALE(int32_t)
-DEF_MUL_DECIMAL_NO_DOWNSCALE(int64_t)
-
-#undef DEF_MUL_DECIMAL_NO_DOWNSCALE
-
 extern "C" ALWAYS_INLINE int64_t scale_decimal(const int64_t operand,
                                                const uint64_t scale,
                                                const int64_t operand_null_val,

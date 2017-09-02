@@ -449,6 +449,7 @@ TEST(Select, FilterAndSimpleAggregation) {
     c("SELECT SUM(-dd) FROM test;", dt);
     c("SELECT SUM(-f) FROM test;", dt);
     c("SELECT SUM(-d) FROM test;", dt);
+    c("SELECT SUM(dd * 0.99) FROM test;", dt);
     c("SELECT COUNT(*) FROM test WHERE 1<>2;", dt);
     c("SELECT COUNT(*) FROM test WHERE 1=1;", dt);
     c("SELECT COUNT(*) FROM test WHERE 22 > 33;", dt);

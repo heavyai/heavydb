@@ -183,7 +183,7 @@ std::shared_ptr<Analyzer::Expr> OperExpr::normalize(const SQLOps optype,
   }
   SQLTypeInfo new_left_type;
   SQLTypeInfo new_right_type;
-  const auto result_type =
+  auto result_type =
       Analyzer::BinOper::analyze_type_info(optype, left_type, right_type, &new_left_type, &new_right_type);
   if (result_type.is_timeinterval()) {
     return makeExpr<Analyzer::BinOper>(result_type, false, optype, qual, left_expr, right_expr);
@@ -219,6 +219,9 @@ std::shared_ptr<Analyzer::Expr> OperExpr::normalize(const SQLOps optype,
     right_expr = right_expr->decompress();
   }
   bool has_agg = (left_expr->get_contains_agg() || right_expr->get_contains_agg());
+  if (left_type.is_decimal() && right_type.is_decimal() && optype == kMULTIPLY) {
+    result_type.set_scale(left_type.get_scale() + right_type.get_scale());
+  }
   return makeExpr<Analyzer::BinOper>(result_type, has_agg, optype, qual, left_expr, right_expr);
 }
 

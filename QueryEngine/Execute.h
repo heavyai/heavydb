@@ -500,7 +500,6 @@ class Executor {
                           const std::string& null_check_suffix,
                           const SQLTypeInfo&,
                           bool downscale = true);
-  llvm::Value* codegenDeciMul(const Analyzer::BinOper*, bool, const CompilationOptions&);
   llvm::Value* codegenDiv(llvm::Value*,
                           llvm::Value*,
                           const std::string& null_typename,

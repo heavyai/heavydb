@@ -200,10 +200,6 @@ ExpressionRange getExpressionRange(const Analyzer::Expr* expr,
 
 namespace {
 
-int64_t scale_down_interval_endpoint(const int64_t endpoint, const SQLTypeInfo& ti) {
-  return endpoint / static_cast<int64_t>(exp_to_scale(ti.get_scale()));
-}
-
 int64_t scale_up_interval_endpoint(const int64_t endpoint, const SQLTypeInfo& ti) {
   return endpoint * static_cast<int64_t>(exp_to_scale(ti.get_scale()));
 }
@@ -220,19 +216,8 @@ ExpressionRange getExpressionRange(const Analyzer::BinOper* expr,
       return lhs + rhs;
     case kMINUS:
       return lhs - rhs;
-    case kMULTIPLY: {
-      const auto& lhs_type = expr->get_left_operand()->get_type_info();
-      auto er = lhs * rhs;
-      if (lhs_type.is_decimal() && er.getType() != ExpressionRangeType::Invalid) {
-        CHECK(er.getType() == ExpressionRangeType::Integer);
-        CHECK_EQ(int64_t(0), er.getBucket());
-        return ExpressionRange::makeIntRange(scale_down_interval_endpoint(er.getIntMin(), lhs_type),
-                                             scale_down_interval_endpoint(er.getIntMax(), lhs_type),
-                                             0,
-                                             er.hasNulls());
-      }
-      return er;
-    }
+    case kMULTIPLY:
+      return lhs * rhs;
     case kDIVIDE: {
       const auto& lhs_type = expr->get_left_operand()->get_type_info();
       if (lhs_type.is_decimal() && lhs.getType() != ExpressionRangeType::Invalid) {
