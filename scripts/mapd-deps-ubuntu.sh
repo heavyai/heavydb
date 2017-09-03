@@ -5,6 +5,9 @@ set -x
 
 PREFIX=/usr/local/mapd-deps
 
+SCRIPTS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+source $SCRIPTS_DIR/common-functions.sh
+
 sudo mkdir -p $PREFIX
 sudo chown -R $(id -u) $PREFIX
 
@@ -111,22 +114,8 @@ make -j $(nproc)
 make install
 popd
 
-VERS=0.4.1
-wget --continue https://github.com/apache/arrow/archive/apache-arrow-$VERS.tar.gz
-tar -xf apache-arrow-$VERS.tar.gz
-mkdir -p arrow-apache-arrow-$VERS/cpp/build
-pushd arrow-apache-arrow-$VERS/cpp/build
-cmake \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DARROW_BUILD_SHARED=off \
-    -DARROW_BUILD_STATIC=on \
-    -DCMAKE_INSTALL_PREFIX=$PREFIX \
-    -DARROW_BOOST_USE_SHARED=off \
-    -DARROW_JEMALLOC_USE_SHARED=off \
-    ..
-make -j $(nproc)
-make install
-popd
+# Apache Arrow (see common-functions.sh)
+install_arrow
 
 cat >> $PREFIX/mapd-deps.sh <<EOF
 PREFIX=$PREFIX
