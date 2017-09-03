@@ -17,10 +17,8 @@
 #include "BaselineJoinHashTable.h"
 #include "ExpressionRewrite.h"
 #include "Execute.h"
-#include "HashJoinRuntime.h"
 
 #include <future>
-#include <type_traits>
 
 std::vector<std::pair<BaselineJoinHashTable::HashTableCacheKey, BaselineJoinHashTable::HashTableCacheValue>>
     BaselineJoinHashTable::hash_table_cache_;
@@ -413,7 +411,6 @@ BaselineJoinHashTable::ColumnsForDevice BaselineJoinHashTable::fetchColumnsForDe
 int BaselineJoinHashTable::reifyForDevice(const ColumnsForDevice& columns_for_device,
                                           const JoinHashTableInterface::HashType layout,
                                           const int device_id) {
-  static std::mutex fragment_fetch_mutex;
   const auto& catalog = *executor_->getCatalog();
   const auto inner_outer_pairs = normalize_column_pairs(condition_.get(), catalog, executor_->getTemporaryTables());
   const auto effective_memory_level = get_effective_memory_level(inner_outer_pairs, memory_level_, executor_);
