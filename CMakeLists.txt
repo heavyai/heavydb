@@ -319,6 +319,10 @@ list(APPEND MAPD_LIBRARIES Calcite)
 
 if(ENABLE_ARROW_CONVERTER)
   list(APPEND MAPD_LIBRARIES ${Arrow_LIBRARIES})
+
+  if(ENABLE_CUDA)
+    list(APPEND MAPD_LIBRARIES ${Arrow_GPU_LIBRARIES})
+  endif()
 endif()
 
 enable_testing()

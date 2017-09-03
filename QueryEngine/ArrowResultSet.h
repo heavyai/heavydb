@@ -22,16 +22,13 @@
 #include "TargetValue.h"
 #include "../Shared/sqltypes.h"
 
-#include <arrow/buffer.h>
-#include <arrow/table.h>
+#include <arrow/api.h>
 
 // Expose Arrow buffers as a subset of the ResultSet interface
 // to make it work within the existing execution test framework.
 class ArrowResultSet {
  public:
-  ArrowResultSet(const std::shared_ptr<arrow::Schema>& schema,
-                 const std::shared_ptr<arrow::RecordBatch>& record_batch,
-                 const std::vector<std::shared_ptr<arrow::PoolBuffer>>& pool_buffers);
+  ArrowResultSet(const std::shared_ptr<arrow::RecordBatch>& record_batch);
 
   std::vector<TargetValue> getNextRow(const bool translate_strings, const bool decimal_to_double) const;
 
@@ -44,8 +41,11 @@ class ArrowResultSet {
   size_t rowCount() const;
 
  private:
-  const std::shared_ptr<arrow::RecordBatch> record_batch_;
-  const std::vector<std::shared_ptr<arrow::PoolBuffer>> pool_buffers_;
+  std::shared_ptr<arrow::RecordBatch> record_batch_;
+
+  // Boxed arrays from the record batch. The result of RecordBatch::column is
+  // temporary, so we cache these for better performance
+  std::vector<std::shared_ptr<arrow::Array>> columns_;
   mutable size_t crt_row_idx_;
   std::vector<TargetMetaInfo> column_metainfo_;
 };

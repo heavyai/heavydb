@@ -14,6 +14,8 @@ $SUDO chown -R $USER $PREFIX
 export PATH=$PREFIX/bin:$PATH
 export LD_LIBRARY_PATH=$PREFIX/lib64:$PREFIX/lib:$LD_LIBRARY_PATH
 
+SCRIPTS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+source $SCRIPTS_DIR/common-functions.sh
 
 download() {
     wget --continue "$1"
@@ -263,23 +265,8 @@ popd
 download_make_install http://download.osgeo.org/proj/proj-4.9.3.tar.gz
 download_make_install http://download.osgeo.org/gdal/2.0.3/gdal-2.0.3.tar.xz "" "--without-curl --without-geos --with-libkml=$PREFIX --with-static-proj4=$PREFIX"
 
-# arrow
-VERS=0.4.1
-download https://github.com/apache/arrow/archive/apache-arrow-$VERS.tar.gz
-extract apache-arrow-$VERS.tar.gz
-mkdir -p arrow-apache-arrow-$VERS/cpp/build
-pushd arrow-apache-arrow-$VERS/cpp/build
-cmake \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DARROW_BUILD_SHARED=off \
-    -DARROW_BUILD_STATIC=on \
-    -DCMAKE_INSTALL_PREFIX=$PREFIX \
-    -DARROW_BOOST_USE_SHARED=off \
-    -DARROW_JEMALLOC_USE_SHARED=off \
-    ..
-makej
-make install
-popd
+# Apache Arrow (see common-functions.sh)
+install_arrow
 
 # https://storage.googleapis.com/golang/go1.8.1.linux-amd64.tar.gz
 download https://internal-dependencies.mapd.com/thirdparty/go1.8.1.linux-amd64.tar.gz

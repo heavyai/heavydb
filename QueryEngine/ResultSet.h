@@ -31,9 +31,8 @@
 #include "../Chunk/Chunk.h"
 
 #ifdef ENABLE_ARROW_CONVERTER
-#include "arrow/ipc/metadata.h"
-#include "arrow/table.h"
-#include "arrow/buffer.h"
+#include "arrow/api.h"
+#include "arrow/ipc/api.h"
 // Arrow defines macro UNUSED conflict w/ that in jni_md.h
 #ifdef UNUSED
 #undef UNUSED
@@ -350,8 +349,8 @@ class ResultSet {
 
 #ifdef ENABLE_ARROW_CONVERTER
   struct SerializedArrowOutput {
-    std::shared_ptr<arrow::PoolBuffer> schema;
-    std::shared_ptr<arrow::PoolBuffer> records;
+    std::shared_ptr<arrow::Buffer> schema;
+    std::shared_ptr<arrow::Buffer> records;
   };
 
   SerializedArrowOutput getSerializedArrowOutput(const std::vector<std::string>& col_names) const;
@@ -470,10 +469,10 @@ class ResultSet {
   int getGpuCount() const;
 
 #ifdef ENABLE_ARROW_CONVERTER
-  arrow::RecordBatch convertToArrow(const std::vector<std::string>& col_names, arrow::ipc::DictionaryMemo& memo) const;
+  std::shared_ptr<arrow::RecordBatch> convertToArrow(const std::vector<std::string>& col_names,
+                                                     arrow::ipc::DictionaryMemo& memo) const;
   std::shared_ptr<const std::vector<std::string>> getDictionary(const int dict_id) const;
-  std::pair<std::vector<std::shared_ptr<arrow::Array>>, size_t> getArrowColumns(
-      const std::vector<std::shared_ptr<arrow::Field>>& fields) const;
+  std::shared_ptr<arrow::RecordBatch> getArrowBatch(const std::shared_ptr<arrow::Schema>& schema) const;
 
   ArrowResult getArrowCopyOnCpu(const std::vector<std::string>& col_names) const;
   ArrowResult getArrowCopyOnGpu(Data_Namespace::DataMgr* data_mgr,
