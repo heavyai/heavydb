@@ -1361,8 +1361,7 @@ bool Executor::skipFragmentPair(
   const auto join_condition = condition_it->second;
   CHECK(join_condition);
   if (dynamic_cast<const Analyzer::ExpressionTuple*>(join_condition->get_left_operand())) {
-    const auto shard_count_info = get_baseline_shard_count(join_condition, ra_exe_unit, this);
-    return shard_count_info.count;
+    return get_baseline_shard_count(join_condition, ra_exe_unit, this);
   }
   return get_shard_count(join_condition, ra_exe_unit, this);
 }

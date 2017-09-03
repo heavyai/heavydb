@@ -34,11 +34,6 @@
 
 class Executor;
 
-struct ShardCountInfo {
-  const size_t count;
-  const Analyzer::ColumnVar* sharded_inner_col;
-};
-
 // Representation for a hash table using the baseline layout: an open-addressing
 // hash with a fill rate of 50%. It is used for equi-joins on multiple columns and
 // on single sparse columns (with very wide range), typically big integer. As of
@@ -79,9 +74,9 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
       std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
       std::map<int, std::shared_ptr<const ColumnarResults>>& frags_owner);
 
-  ShardCountInfo shardCount() const;
+  size_t shardCount() const;
 
-  ShardCountInfo computeShardCount() const;
+  size_t computeShardCount() const;
 
   int reify(const int device_count);
 
@@ -190,8 +185,8 @@ class HashTypeCache {
 
 // TODO(alex): Should be unified with get_shard_count, doesn't belong here.
 
-ShardCountInfo get_baseline_shard_count(const Analyzer::BinOper* join_condition,
-                                        const RelAlgExecutionUnit& ra_exe_unit,
-                                        const Executor* executor);
+size_t get_baseline_shard_count(const Analyzer::BinOper* join_condition,
+                                const RelAlgExecutionUnit& ra_exe_unit,
+                                const Executor* executor);
 
 #endif  // QUERYENGINE_BASELINEJOINHASHTABLE_H

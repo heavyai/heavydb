@@ -61,11 +61,9 @@ std::shared_ptr<BaselineJoinHashTable> BaselineJoinHashTable::getInstance(
   if (total_entries > static_cast<size_t>(std::numeric_limits<int32_t>::max())) {
     throw TooManyHashEntries();
   }
-  const auto shard_count_info = memory_level == Data_Namespace::GPU_LEVEL
-                                    ? get_baseline_shard_count(condition.get(), ra_exe_unit, executor)
-                                    : ShardCountInfo{0, nullptr};
-  const auto entries_per_device =
-      get_entries_per_device(total_entries, shard_count_info.count, device_count, memory_level);
+  const auto shard_count =
+      memory_level == Data_Namespace::GPU_LEVEL ? get_baseline_shard_count(condition.get(), ra_exe_unit, executor) : 0;
+  const auto entries_per_device = get_entries_per_device(total_entries, shard_count, device_count, memory_level);
   auto join_hash_table = std::shared_ptr<BaselineJoinHashTable>(
       new BaselineJoinHashTable(condition, query_infos, ra_exe_unit, memory_level, entries_per_device, executor));
   join_hash_table->checkHashJoinReplicationConstraint(getInnerTableId(condition.get(), executor));
@@ -223,17 +221,17 @@ int BaselineJoinHashTable::reifyWithLayout(const int device_count, const JoinHas
   }
   if (layout == JoinHashTableInterface::HashType::OneToMany) {
     const auto entry_count = 2 * std::max(approximateTupleCount(columns_per_device), size_t(1));
-    const auto shard_count_info = memory_level_ == Data_Namespace::GPU_LEVEL
-                                      ? get_baseline_shard_count(condition_.get(), ra_exe_unit_, executor_)
-                                      : ShardCountInfo{0, nullptr};
-    entry_count_ = get_entries_per_device(entry_count, shard_count_info.count, device_count, memory_level_);
+    const auto shard_count = memory_level_ == Data_Namespace::GPU_LEVEL
+                                 ? get_baseline_shard_count(condition_.get(), ra_exe_unit_, executor_)
+                                 : 0;
+    entry_count_ = get_entries_per_device(entry_count, shard_count, device_count, memory_level_);
   }
   std::vector<int> errors(device_count);
   std::vector<std::thread> init_threads;
-  const auto shard_info = computeShardCount();
+  const auto shard_count = computeShardCount();
   for (int device_id = 0; device_id < device_count; ++device_id) {
     const auto fragments =
-        shard_info.count ? only_shards_for_device(query_info.fragments, device_id, device_count) : query_info.fragments;
+        shard_count ? only_shards_for_device(query_info.fragments, device_id, device_count) : query_info.fragments;
     init_threads.emplace_back([&columns_per_device, &errors, device_id, fragments, layout, this] {
       errors[device_id] = reifyForDevice(columns_per_device[device_id], layout, device_id);
     });
@@ -443,8 +441,8 @@ std::pair<const int8_t*, size_t> BaselineJoinHashTable::getAllColumnFragments(
   std::tie(col_buff, total_elem_count) =
       Executor::ExecutionDispatch::getAllColumnFragments(executor_, hash_col, fragments, chunks_owner, frags_owner);
   linearized_multifrag_column_owner_.addColBuffer(col_buff);
-  const auto shard_count_info = shardCount();
-  if (!shard_count_info.count) {
+  const auto shard_count = shardCount();
+  if (!shard_count) {
     const auto it_ok = linearized_multifrag_columns_.emplace(linearized_column_cache_key,
                                                              LinearizedColumn{col_buff, total_elem_count});
     CHECK(it_ok.second);
@@ -452,29 +450,29 @@ std::pair<const int8_t*, size_t> BaselineJoinHashTable::getAllColumnFragments(
   return {col_buff, total_elem_count};
 }
 
-ShardCountInfo BaselineJoinHashTable::shardCount() const {
+size_t BaselineJoinHashTable::shardCount() const {
   if (memory_level_ != Data_Namespace::GPU_LEVEL) {
-    return {0, nullptr};
+    return 0;
   }
   return computeShardCount();
 }
 
-ShardCountInfo BaselineJoinHashTable::computeShardCount() const {
+size_t BaselineJoinHashTable::computeShardCount() const {
   return get_baseline_shard_count(condition_.get(), ra_exe_unit_, executor_);
 }
 
-ShardCountInfo get_baseline_shard_count(const Analyzer::BinOper* condition,
-                                        const RelAlgExecutionUnit& ra_exe_unit,
-                                        const Executor* executor) {
+size_t get_baseline_shard_count(const Analyzer::BinOper* condition,
+                                const RelAlgExecutionUnit& ra_exe_unit,
+                                const Executor* executor) {
   const auto inner_outer_pairs =
       normalize_column_pairs(condition, *executor->getCatalog(), executor->getTemporaryTables());
   for (const auto& inner_outer_pair : inner_outer_pairs) {
     const auto pair_shard_count = get_shard_count(inner_outer_pair, ra_exe_unit, executor);
     if (pair_shard_count) {
-      return {pair_shard_count, inner_outer_pair.first};
+      return pair_shard_count;
     }
   }
-  return {0, nullptr};
+  return 0;
 }
 
 namespace {
@@ -945,8 +943,8 @@ void BaselineJoinHashTable::checkHashJoinReplicationConstraint(const int table_i
   if (table_id >= 0) {
     const auto inner_td = executor_->getCatalog()->getMetadataForTable(table_id);
     CHECK(inner_td);
-    const auto shard_count_info = computeShardCount();
-    if (!shard_count_info.count && !table_is_replicated(inner_td)) {
+    const auto shard_count = computeShardCount();
+    if (!shard_count && !table_is_replicated(inner_td)) {
       throw std::runtime_error("Join table " + inner_td->tableName + " must be replicated");
     }
   }
