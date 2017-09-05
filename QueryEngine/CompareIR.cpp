@@ -119,34 +119,6 @@ std::string string_cmp_func(const SQLOps optype) {
   }
 }
 
-std::shared_ptr<Analyzer::BinOper> make_eq(const std::shared_ptr<Analyzer::Expr>& lhs,
-                                           const std::shared_ptr<Analyzer::Expr>& rhs) {
-  // Sides of a tuple equality are stripped of cast operators to simplify the logic
-  // in the hash table construction algorithm. Add them back here.
-  auto eq_oper = std::dynamic_pointer_cast<Analyzer::BinOper>(Parser::OperExpr::normalize(kEQ, kONE, lhs, rhs));
-  CHECK(eq_oper);
-  return eq_oper;
-}
-
-// Convert a column tuple equality expression back to a conjunction of comparisons
-// so that it can be handled by the regular code generation methods.
-std::shared_ptr<Analyzer::BinOper> lower_multicol_compare(const Analyzer::BinOper* multicol_compare) {
-  const auto left_tuple_expr = dynamic_cast<const Analyzer::ExpressionTuple*>(multicol_compare->get_left_operand());
-  const auto right_tuple_expr = dynamic_cast<const Analyzer::ExpressionTuple*>(multicol_compare->get_right_operand());
-  CHECK(left_tuple_expr && right_tuple_expr);
-  const auto& left_tuple = left_tuple_expr->getTuple();
-  const auto& right_tuple = right_tuple_expr->getTuple();
-  CHECK_EQ(left_tuple.size(), right_tuple.size());
-  CHECK_GT(left_tuple.size(), size_t(1));
-  auto acc = make_eq(left_tuple.front(), right_tuple.front());
-  for (size_t i = 1; i < left_tuple.size(); ++i) {
-    auto crt = make_eq(left_tuple[i], right_tuple[i]);
-    const bool not_null = acc->get_type_info().get_notnull() && crt->get_type_info().get_notnull();
-    acc = makeExpr<Analyzer::BinOper>(SQLTypeInfo(kBOOLEAN, not_null), false, kAND, kONE, acc, crt);
-  }
-  return acc;
-}
-
 std::shared_ptr<Analyzer::BinOper> lower_bw_eq(const Analyzer::BinOper* bw_eq) {
   const auto eq_oper = std::make_shared<Analyzer::BinOper>(bw_eq->get_type_info(),
                                                            bw_eq->get_contains_agg(),
@@ -163,6 +135,36 @@ std::shared_ptr<Analyzer::BinOper> lower_bw_eq(const Analyzer::BinOper* bw_eq) {
   return bw_eq_oper;
 }
 
+std::shared_ptr<Analyzer::BinOper> make_eq(const std::shared_ptr<Analyzer::Expr>& lhs,
+                                           const std::shared_ptr<Analyzer::Expr>& rhs,
+                                           const SQLOps optype) {
+  CHECK(IS_EQUIVALENCE(optype));
+  // Sides of a tuple equality are stripped of cast operators to simplify the logic
+  // in the hash table construction algorithm. Add them back here.
+  auto eq_oper = std::dynamic_pointer_cast<Analyzer::BinOper>(Parser::OperExpr::normalize(optype, kONE, lhs, rhs));
+  CHECK(eq_oper);
+  return optype == kBW_EQ ? lower_bw_eq(eq_oper.get()) : eq_oper;
+}
+
+// Convert a column tuple equality expression back to a conjunction of comparisons
+// so that it can be handled by the regular code generation methods.
+std::shared_ptr<Analyzer::BinOper> lower_multicol_compare(const Analyzer::BinOper* multicol_compare) {
+  const auto left_tuple_expr = dynamic_cast<const Analyzer::ExpressionTuple*>(multicol_compare->get_left_operand());
+  const auto right_tuple_expr = dynamic_cast<const Analyzer::ExpressionTuple*>(multicol_compare->get_right_operand());
+  CHECK(left_tuple_expr && right_tuple_expr);
+  const auto& left_tuple = left_tuple_expr->getTuple();
+  const auto& right_tuple = right_tuple_expr->getTuple();
+  CHECK_EQ(left_tuple.size(), right_tuple.size());
+  CHECK_GT(left_tuple.size(), size_t(1));
+  auto acc = make_eq(left_tuple.front(), right_tuple.front(), multicol_compare->get_optype());
+  for (size_t i = 1; i < left_tuple.size(); ++i) {
+    auto crt = make_eq(left_tuple[i], right_tuple[i], multicol_compare->get_optype());
+    const bool not_null = acc->get_type_info().get_notnull() && crt->get_type_info().get_notnull();
+    acc = makeExpr<Analyzer::BinOper>(SQLTypeInfo(kBOOLEAN, not_null), false, kAND, kONE, acc, crt);
+  }
+  return acc;
+}
+
 }  // namespace
 
 llvm::Value* Executor::codegenCmp(const Analyzer::BinOper* bin_oper, const CompilationOptions& co) {
@@ -171,11 +173,6 @@ llvm::Value* Executor::codegenCmp(const Analyzer::BinOper* bin_oper, const Compi
     if (*equi_join_tautology == *bin_oper) {
       return plan_state_->join_info_.join_hash_tables_[i]->codegenSlot(co, i);
     }
-  }
-  const auto optype = bin_oper->get_optype();
-  if (optype == kBW_EQ) {
-    const auto bw_eq_oper = lower_bw_eq(bin_oper);
-    return codegenLogical(bw_eq_oper.get(), co);
   }
   const auto qualifier = bin_oper->get_qualifier();
   const auto lhs = bin_oper->get_left_operand();
@@ -186,6 +183,11 @@ llvm::Value* Executor::codegenCmp(const Analyzer::BinOper* bin_oper, const Compi
     const auto lowered_lvs = codegen(lowered.get(), true, co);
     CHECK_EQ(size_t(1), lowered_lvs.size());
     return lowered_lvs.front();
+  }
+  const auto optype = bin_oper->get_optype();
+  if (optype == kBW_EQ) {
+    const auto bw_eq_oper = lower_bw_eq(bin_oper);
+    return codegenLogical(bw_eq_oper.get(), co);
   }
   if (is_unnest(lhs) || is_unnest(rhs)) {
     throw std::runtime_error("Unnest not supported in comparisons");

@@ -278,7 +278,8 @@ size_t BaselineJoinHashTable::approximateTupleCount(const std::vector<ColumnsFor
     const auto composite_key_info = get_composite_key_info(inner_outer_pairs, executor_);
     CHECK(!columns_per_device.empty() && !columns_per_device.front().join_columns.empty());
     HashTableCacheKey cache_key{columns_per_device.front().join_columns.front().num_elems,
-                                composite_key_info.cache_key_chunks};
+                                composite_key_info.cache_key_chunks,
+                                condition_->get_optype()};
     const auto cached_entry_count = getApproximateTupleCountFromCache(cache_key);
     if (cached_entry_count >= 0) {
       return cached_entry_count;
@@ -400,8 +401,8 @@ BaselineJoinHashTable::ColumnsForDevice BaselineJoinHashTable::fetchColumnsForDe
     }
     join_columns.emplace_back(JoinColumn{col_buff, elem_count});
     const auto& ti = inner_col->get_type_info();
-    join_column_types.emplace_back(
-        JoinColumnTypeInfo{static_cast<size_t>(ti.get_size()), 0, inline_fixed_encoding_null_val(ti)});
+    join_column_types.emplace_back(JoinColumnTypeInfo{
+        static_cast<size_t>(ti.get_size()), 0, inline_fixed_encoding_null_val(ti), isBitwiseEq(), 0});
   }
   return {join_columns, join_column_types, chunks_owner, frags_owner, 0};
 }
@@ -502,7 +503,8 @@ int BaselineJoinHashTable::initHashTableOnCpu(const std::vector<JoinColumn>& joi
       normalize_column_pairs(condition_.get(), *executor_->getCatalog(), executor_->getTemporaryTables());
   const auto composite_key_info = get_composite_key_info(inner_outer_pairs, executor_);
   CHECK(!join_columns.empty());
-  HashTableCacheKey cache_key{join_columns.front().num_elems, composite_key_info.cache_key_chunks};
+  HashTableCacheKey cache_key{
+      join_columns.front().num_elems, composite_key_info.cache_key_chunks, condition_->get_optype()};
   initHashTableOnCpuFromCache(cache_key);
   if (cpu_hash_table_buff_) {
     return 0;
@@ -981,6 +983,10 @@ ssize_t BaselineJoinHashTable::getApproximateTupleCountFromCache(const HashTable
     }
   }
   return -1;
+}
+
+bool BaselineJoinHashTable::isBitwiseEq() const {
+  return condition_->get_optype() == kBW_EQ;
 }
 
 std::map<std::vector<ChunkKey>, JoinHashTableInterface::HashType> HashTypeCache::hash_type_cache_;

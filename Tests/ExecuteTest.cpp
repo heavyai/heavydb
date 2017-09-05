@@ -3295,6 +3295,12 @@ TEST(Select, Joins_MultiCompositeColumns) {
     c("SELECT a.x, b.x, d.str FROM test a JOIN test_inner b ON a.str = b.str JOIN hash_join_test c ON a.x = c.x JOIN "
       "join_test d ON a.x >= d.x AND a.x < d.x + 5 ORDER BY a.x, b.x;",
       dt);
+    c("SELECT COUNT(*) FROM test, join_test WHERE (test.x = join_test.x OR (test.x IS NULL AND join_test.x IS NULL)) "
+      "AND (test.y = join_test.y OR (test.y IS NULL AND join_test.y IS NULL));",
+      dt);
+    c("SELECT COUNT(*) FROM test, join_test WHERE (test.str = join_test.dup_str OR (test.str IS NULL AND "
+      "join_test.dup_str IS NULL)) AND (test.x = join_test.x OR (test.x IS NULL AND join_test.x IS NULL));",
+      dt);
   }
 }
 

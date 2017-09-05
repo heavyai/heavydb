@@ -1739,6 +1739,25 @@ std::unique_ptr<const RexOperator> get_bitwise_equals(const RexScalar* scalar) {
   return nullptr;
 }
 
+std::unique_ptr<const RexOperator> get_bitwise_equals_conjunction(const RexScalar* scalar) {
+  const auto condition = dynamic_cast<const RexOperator*>(scalar);
+  if (condition && condition->getOperator() == kAND) {
+    CHECK_GE(condition->size(), size_t(2));
+    auto acc = get_bitwise_equals(condition->getOperand(0));
+    if (!acc) {
+      return nullptr;
+    }
+    for (size_t i = 1; i < condition->size(); ++i) {
+      std::vector<std::unique_ptr<const RexScalar>> and_operands;
+      and_operands.emplace_back(std::move(acc));
+      and_operands.emplace_back(get_bitwise_equals_conjunction(condition->getOperand(i)));
+      acc = boost::make_unique<const RexOperator>(kAND, and_operands, condition->getType());
+    }
+    return acc;
+  }
+  return get_bitwise_equals(scalar);
+}
+
 }  // namespace
 
 std::list<std::shared_ptr<Analyzer::Expr>> get_inner_join_quals(const RelAlgNode* ra,
@@ -1767,7 +1786,7 @@ std::list<std::shared_ptr<Analyzer::Expr>> get_inner_join_quals(const RelAlgNode
   std::list<std::shared_ptr<Analyzer::Expr>> quals;
   for (auto condition : work_set) {
     if (condition && !is_literal_true(condition)) {
-      const auto bw_equals = get_bitwise_equals(condition);
+      const auto bw_equals = get_bitwise_equals_conjunction(condition);
       const auto eq_condition = bw_equals ? bw_equals.get() : condition;
       const auto join_cond_cf = qual_to_conjunctive_form(translator.translateScalarRex(eq_condition));
       quals.insert(quals.end(), join_cond_cf.simple_quals.begin(), join_cond_cf.simple_quals.end());

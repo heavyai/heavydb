@@ -34,8 +34,10 @@ bool can_combine_with(const Analyzer::Expr* crt, const Analyzer::Expr* prev) {
   if (!crt_bin || !prev_bin) {
     return false;
   }
-  if (crt_bin->get_optype() != kEQ || crt_bin->get_qualifier() != kONE || prev_bin->get_optype() != kEQ ||
-      prev_bin->get_qualifier() != kONE) {
+  if (!IS_EQUIVALENCE(crt_bin->get_optype()) || crt_bin->get_qualifier() != kONE ||
+      !IS_EQUIVALENCE(prev_bin->get_optype()) || prev_bin->get_qualifier() != kONE ||
+      // We could accept a mix of kEQ and kBW_EQ, but don't bother for now.
+      crt_bin->get_optype() != prev_bin->get_optype()) {
     return false;
   }
   const auto crt_inner = std::dynamic_pointer_cast<Analyzer::ColumnVar>(remove_cast(crt_bin->get_own_right_operand()));
@@ -61,9 +63,12 @@ std::shared_ptr<Analyzer::BinOper> make_composite_equals_impl(
     lhs_tuple.push_back(lhs_col);
     rhs_tuple.push_back(rhs_col);
   }
+  CHECK(!crt_coalesced_quals.empty());
+  const auto first_qual = std::dynamic_pointer_cast<Analyzer::BinOper>(crt_coalesced_quals.front());
+  CHECK(first_qual);
   return std::make_shared<Analyzer::BinOper>(SQLTypeInfo(kBOOLEAN, not_null),
                                              false,
-                                             kEQ,
+                                             first_qual->get_optype(),
                                              kONE,
                                              std::make_shared<Analyzer::ExpressionTuple>(lhs_tuple),
                                              std::make_shared<Analyzer::ExpressionTuple>(rhs_tuple));

@@ -129,9 +129,10 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
   struct HashTableCacheKey {
     const size_t num_elements;
     const std::vector<ChunkKey> chunk_keys;
+    const SQLOps optype;
 
     bool operator==(const struct HashTableCacheKey& that) const {
-      return num_elements == that.num_elements && chunk_keys == that.chunk_keys;
+      return num_elements == that.num_elements && chunk_keys == that.chunk_keys && optype == that.optype;
     }
   };
 
@@ -140,6 +141,8 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
   void putHashTableOnCpuToCache(const HashTableCacheKey&);
 
   ssize_t getApproximateTupleCountFromCache(const HashTableCacheKey&) const;
+
+  bool isBitwiseEq() const;
 
   const std::shared_ptr<Analyzer::BinOper> condition_;
   const std::vector<InputTableInfo>& query_infos_;

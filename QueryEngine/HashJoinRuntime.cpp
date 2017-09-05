@@ -335,12 +335,12 @@ DEVICE int SUFFIX(fill_baseline_hash_join_buff)(int8_t* hash_buff,
       const auto sd_outer_proxy = sd_outer_proxy_per_key[key_component_index];
 #endif
       int64_t elem = SUFFIX(fixed_width_int_decode_noinline)(join_column.col_buff, type_info.elem_sz, i);
-      if (elem == type_info.null_val) {
+      if (elem == type_info.null_val && !type_info.uses_bw_eq) {
         skip_entry = true;
         break;
       }
 #ifndef __CUDACC__
-      if (sd_inner_proxy) {
+      if (sd_inner_proxy && elem != type_info.null_val) {
         CHECK(sd_outer_proxy);
         const auto sd_inner_dict_proxy = static_cast<const StringDictionaryProxy*>(sd_inner_proxy);
         const auto sd_outer_dict_proxy = static_cast<const StringDictionaryProxy*>(sd_outer_proxy);
@@ -531,12 +531,12 @@ GLOBAL void SUFFIX(count_matches_baseline)(int32_t* count_buff,
       const auto sd_outer_proxy = sd_outer_proxy_per_key[key_component_index];
 #endif
       int64_t elem = SUFFIX(fixed_width_int_decode_noinline)(join_column.col_buff, type_info.elem_sz, i);
-      if (elem == type_info.null_val) {
+      if (elem == type_info.null_val && !type_info.uses_bw_eq) {
         skip_entry = true;
         break;
       }
 #ifndef __CUDACC__
-      if (sd_inner_proxy) {
+      if (sd_inner_proxy && elem != type_info.null_val) {
         CHECK(sd_outer_proxy);
         const auto sd_inner_dict_proxy = static_cast<const StringDictionaryProxy*>(sd_inner_proxy);
         const auto sd_outer_dict_proxy = static_cast<const StringDictionaryProxy*>(sd_outer_proxy);
@@ -716,12 +716,12 @@ GLOBAL void SUFFIX(fill_row_ids_baseline)(int32_t* buff,
       const auto sd_outer_proxy = sd_outer_proxy_per_key[key_component_index];
 #endif
       int64_t elem = SUFFIX(fixed_width_int_decode_noinline)(join_column.col_buff, type_info.elem_sz, i);
-      if (elem == type_info.null_val) {
+      if (elem == type_info.null_val && !type_info.uses_bw_eq) {
         skip_entry = true;
         break;
       }
 #ifndef __CUDACC__
-      if (sd_inner_proxy) {
+      if (sd_inner_proxy && elem != type_info.null_val) {
         CHECK(sd_outer_proxy);
         const auto sd_inner_dict_proxy = static_cast<const StringDictionaryProxy*>(sd_inner_proxy);
         const auto sd_outer_dict_proxy = static_cast<const StringDictionaryProxy*>(sd_outer_proxy);
