@@ -1004,18 +1004,74 @@ void MapDHandler::load_table_binary(const TSessionId& session,
     import_buffers.push_back(std::unique_ptr<Importer_NS::TypedImportBuffer>(
         new Importer_NS::TypedImportBuffer(cd, loader->get_string_dict(cd))));
   }
-  for (auto row : rows) {
+  for (auto const& row : rows) {
+    size_t col_idx = 0;
     try {
-      int col_idx = 0;
       for (auto cd : col_descs) {
         import_buffers[col_idx]->add_value(cd, row.cols[col_idx], row.cols[col_idx].is_null);
         col_idx++;
       }
     } catch (const std::exception& e) {
-      LOG(WARNING) << "load_table exception thrown: " << e.what() << ". Row discarded.";
+      for (size_t col_idx_to_pop = 0; col_idx_to_pop < col_idx; ++col_idx_to_pop) {
+        import_buffers[col_idx_to_pop]->pop_value();
+      }
+      LOG(ERROR) << "Input exception thrown: " << e.what() << ". Row discarded, issue at column : " << (col_idx + 1) << " data :" << row;
     }
   }
   loader->load(import_buffers, rows.size());
+}
+
+void MapDHandler::load_table_binary_columnar(const TSessionId& session,
+                                             const std::string& table_name,
+                                             const std::vector<TColumn>& cols) {
+  check_read_only("load_table_binary_columnar");
+  const auto session_info = get_session(session);
+  auto& cat = session_info.get_catalog();
+  if (g_cluster && !leaf_aggregator_.leafCount()) {
+    // Sharded table rows need to be routed to the leaf by an aggregator.
+    check_table_not_sharded(cat, table_name);
+  }
+  const TableDescriptor* td = cat.getMetadataForTable(table_name);
+  if (td == nullptr) {
+    TMapDException ex;
+    ex.error_msg = "Table " + table_name + " does not exist.";
+    LOG(ERROR) << ex.error_msg;
+    throw ex;
+  }
+  check_table_load_privileges(session, table_name);
+  std::unique_ptr<Importer_NS::Loader> loader;
+  if (leaf_aggregator_.leafCount() > 0) {
+    loader.reset(new DistributedLoader(session_info, td, &leaf_aggregator_));
+  } else {
+    loader.reset(new Importer_NS::Loader(cat, td));
+  }
+  // TODO(andrew): nColumns should be number of non-virtual/non-system columns.
+  //               Subtracting 1 (rowid) until TableDescriptor is updated.
+  if (cols.size() != static_cast<size_t>(td->nColumns) - 1 || cols.size() < 1) {
+    TMapDException ex;
+    ex.error_msg = "Wrong number of columns to load into Table " + table_name;
+    LOG(ERROR) << ex.error_msg;
+    throw ex;
+  }
+  auto col_descs = loader->get_column_descs();
+  std::vector<std::unique_ptr<Importer_NS::TypedImportBuffer>> import_buffers;
+  for (auto cd : col_descs) {
+    import_buffers.push_back(std::unique_ptr<Importer_NS::TypedImportBuffer>(
+        new Importer_NS::TypedImportBuffer(cd, loader->get_string_dict(cd))));
+  }
+  size_t numRows = 0;
+  size_t col_idx = 0;
+  try {
+    for (auto cd : col_descs) {
+      numRows = import_buffers[col_idx]->add_values(cd, cols[col_idx]);
+      col_idx++;
+    }
+  } catch (const std::exception& e) {
+    LOG(ERROR) << "Input exception thrown: " << e.what() << ". Issue at column : " << (col_idx + 1)
+               << ". Import aborted";
+    // TODO(tmostak): Go row-wise on binary columnar import to be consistent with our other import paths
+  }
+  loader->load(import_buffers, numRows);
 }
 
 void MapDHandler::load_table(const TSessionId& session,
@@ -1060,7 +1116,7 @@ void MapDHandler::load_table(const TSessionId& session,
   }
   size_t rows_completed = 0;
   size_t col_idx = 0;
-  for (auto row : rows) {
+  for (auto const& row : rows) {
     try {
       col_idx = 0;
       for (auto cd : col_descs) {

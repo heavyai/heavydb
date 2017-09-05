@@ -158,6 +158,9 @@ class MapDHandler : public MapDIf {
   void get_version(std::string& _return);
   void get_memory(std::vector<TNodeMemoryInfo>& _return, const TSessionId& session, const std::string& memory_level);
   void load_table_binary(const TSessionId& session, const std::string& table_name, const std::vector<TRow>& rows);
+  void load_table_binary_columnar(const TSessionId& session,
+                                  const std::string& table_name,
+                                  const std::vector<TColumn>& cols);
   void load_table(const TSessionId& session, const std::string& table_name, const std::vector<TStringRow>& rows);
   void render(TRenderResult& _return,
               const TSessionId& session,

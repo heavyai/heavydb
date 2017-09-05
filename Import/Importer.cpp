@@ -549,6 +549,266 @@ void TypedImportBuffer::pop_value() {
   }
 }
 
+size_t TypedImportBuffer::add_values(const ColumnDescriptor* cd, const TColumn& col) {
+  size_t dataSize = 0;
+  const auto type = cd->columnType.is_decimal() ? decimal_to_int_type(cd->columnType) : cd->columnType.get_type();
+  if (cd->columnType.get_notnull()) {
+    // We can't have any null values for this column; to have them is an error
+    if (std::any_of(col.nulls.begin(), col.nulls.end(), [](int i) { return i != 0; }))
+      throw std::runtime_error("NULL for column " + cd->columnName);
+  }
+
+  switch (type) {
+    case kBOOLEAN: {
+      dataSize = col.data.int_col.size();
+      bool_buffer_->reserve(dataSize);
+      for (size_t i = 0; i < dataSize; i++) {
+        if (col.nulls[i])
+          bool_buffer_->push_back(inline_fixed_encoding_null_val(cd->columnType));
+        else
+          bool_buffer_->push_back((int8_t)col.data.int_col[i]);
+      }
+      break;
+    }
+    case kSMALLINT: {
+      dataSize = col.data.int_col.size();
+      smallint_buffer_->reserve(dataSize);
+      for (size_t i = 0; i < dataSize; i++) {
+        if (col.nulls[i])
+          smallint_buffer_->push_back(inline_fixed_encoding_null_val(cd->columnType));
+        else
+          smallint_buffer_->push_back((int16_t)col.data.int_col[i]);
+      }
+      break;
+    }
+    case kINT: {
+      dataSize = col.data.int_col.size();
+      int_buffer_->reserve(dataSize);
+      for (size_t i = 0; i < dataSize; i++) {
+        if (col.nulls[i])
+          int_buffer_->push_back(inline_fixed_encoding_null_val(cd->columnType));
+        else
+          int_buffer_->push_back((int32_t)col.data.int_col[i]);
+      }
+      break;
+    }
+    case kBIGINT: {
+      dataSize = col.data.int_col.size();
+      bigint_buffer_->reserve(dataSize);
+      for (size_t i = 0; i < dataSize; i++) {
+        if (col.nulls[i])
+          bigint_buffer_->push_back(inline_fixed_encoding_null_val(cd->columnType));
+        else
+          bigint_buffer_->push_back((int64_t)col.data.int_col[i]);
+      }
+      break;
+    }
+    case kFLOAT: {
+      dataSize = col.data.real_col.size();
+      float_buffer_->reserve(dataSize);
+      for (size_t i = 0; i < dataSize; i++) {
+        if (col.nulls[i])
+          float_buffer_->push_back(NULL_FLOAT);
+        else
+          float_buffer_->push_back((float)col.data.real_col[i]);
+      }
+      break;
+    }
+    case kDOUBLE: {
+      dataSize = col.data.real_col.size();
+      double_buffer_->reserve(dataSize);
+      for (size_t i = 0; i < dataSize; i++) {
+        if (col.nulls[i])
+          double_buffer_->push_back(NULL_DOUBLE);
+        else
+          double_buffer_->push_back((double)col.data.real_col[i]);
+      }
+      break;
+    }
+    case kTEXT:
+    case kVARCHAR:
+    case kCHAR: {
+      // TODO: for now, use empty string for nulls
+      dataSize = col.data.str_col.size();
+      string_buffer_->reserve(dataSize);
+      for (size_t i = 0; i < dataSize; i++) {
+        if (col.nulls[i])
+          string_buffer_->push_back(std::string());
+        else
+          string_buffer_->push_back(col.data.str_col[i]);
+      }
+      break;
+    }
+    case kTIME:
+    case kTIMESTAMP:
+    case kDATE: {
+      dataSize = col.data.int_col.size();
+      time_buffer_->reserve(dataSize);
+      for (size_t i = 0; i < dataSize; i++) {
+        if (col.nulls[i])
+          time_buffer_->push_back(inline_fixed_encoding_null_val(cd->columnType));
+        else
+          time_buffer_->push_back((time_t)col.data.int_col[i]);
+      }
+      break;
+    }
+    case kARRAY: {
+      // TODO: add support for nulls inside array
+      dataSize = col.data.arr_col.size();
+      if (IS_STRING(cd->columnType.get_subtype())) {
+        for (size_t i = 0; i < dataSize; i++) {
+          std::vector<std::string>& string_vec = addStringArray();
+          if (!col.nulls[i]) {
+            size_t stringArrSize = col.data.arr_col[i].data.str_col.size();
+            for (size_t str_idx = 0; str_idx != stringArrSize; ++str_idx)
+              string_vec.push_back(col.data.arr_col[i].data.str_col[str_idx]);
+          }
+        }
+      } else {
+        auto elem_ti = cd->columnType.get_subtype();
+        switch (elem_ti) {
+          case kBOOLEAN: {
+            for (size_t i = 0; i < dataSize; i++) {
+              if (col.nulls[i])
+                addArray(ArrayDatum(0, NULL, true));
+              else {
+                size_t len = col.data.arr_col[i].data.int_col.size();
+                size_t byteSize = len * sizeof(int8_t);
+                int8_t* buf = (int8_t*)checked_malloc(len * byteSize);
+                int8_t* p = buf;
+                for (size_t j = 0; j < len; ++j) {
+                  *(bool*)p = static_cast<bool>(col.data.arr_col[i].data.int_col[j]);
+                  p += sizeof(bool);
+                }
+                addArray(ArrayDatum(byteSize, buf, len == 0));
+              }
+            }
+            break;
+          }
+          case kSMALLINT: {
+            for (size_t i = 0; i < dataSize; i++) {
+              if (col.nulls[i])
+                addArray(ArrayDatum(0, NULL, true));
+              else {
+                size_t len = col.data.arr_col[i].data.int_col.size();
+                size_t byteSize = len * sizeof(int16_t);
+                int8_t* buf = (int8_t*)checked_malloc(len * byteSize);
+                int8_t* p = buf;
+                for (size_t j = 0; j < len; ++j) {
+                  *(int16_t*)p = static_cast<int16_t>(col.data.arr_col[i].data.int_col[j]);
+                  p += sizeof(int16_t);
+                }
+                addArray(ArrayDatum(byteSize, buf, len == 0));
+              }
+            }
+            break;
+          }
+          case kINT: {
+            for (size_t i = 0; i < dataSize; i++) {
+              if (col.nulls[i])
+                addArray(ArrayDatum(0, NULL, true));
+              else {
+                size_t len = col.data.arr_col[i].data.int_col.size();
+                size_t byteSize = len * sizeof(int32_t);
+                int8_t* buf = (int8_t*)checked_malloc(len * byteSize);
+                int8_t* p = buf;
+                for (size_t j = 0; j < len; ++j) {
+                  *(int32_t*)p = static_cast<int32_t>(col.data.arr_col[i].data.int_col[j]);
+                  p += sizeof(int32_t);
+                }
+                addArray(ArrayDatum(byteSize, buf, len == 0));
+              }
+            }
+            break;
+          }
+          case kBIGINT:
+          case kNUMERIC:
+          case kDECIMAL: {
+            for (size_t i = 0; i < dataSize; i++) {
+              if (col.nulls[i])
+                addArray(ArrayDatum(0, NULL, true));
+              else {
+                size_t len = col.data.arr_col[i].data.int_col.size();
+                size_t byteSize = len * sizeof(int64_t);
+                int8_t* buf = (int8_t*)checked_malloc(len * byteSize);
+                int8_t* p = buf;
+                for (size_t j = 0; j < len; ++j) {
+                  *(int64_t*)p = static_cast<int64_t>(col.data.arr_col[j].data.int_col[j]);
+                  p += sizeof(int64_t);
+                }
+                addArray(ArrayDatum(byteSize, buf, len == 0));
+              }
+            }
+            break;
+          }
+          case kFLOAT: {
+            for (size_t i = 0; i < dataSize; i++) {
+              if (col.nulls[i])
+                addArray(ArrayDatum(0, NULL, true));
+              else {
+                size_t len = col.data.arr_col[i].data.real_col.size();
+                size_t byteSize = len * sizeof(float);
+                int8_t* buf = (int8_t*)checked_malloc(len * byteSize);
+                int8_t* p = buf;
+                for (size_t j = 0; j < len; ++j) {
+                  *(float*)p = static_cast<float>(col.data.arr_col[i].data.real_col[j]);
+                  p += sizeof(float);
+                }
+                addArray(ArrayDatum(byteSize, buf, len == 0));
+              }
+            }
+            break;
+          }
+          case kDOUBLE: {
+            for (size_t i = 0; i < dataSize; i++) {
+              if (col.nulls[i])
+                addArray(ArrayDatum(0, NULL, true));
+              else {
+                size_t len = col.data.arr_col[i].data.real_col.size();
+                size_t byteSize = len * sizeof(double);
+                int8_t* buf = (int8_t*)checked_malloc(len * byteSize);
+                int8_t* p = buf;
+                for (size_t j = 0; j < len; ++j) {
+                  *(double*)p = static_cast<double>(col.data.arr_col[i].data.real_col[j]);
+                  p += sizeof(double);
+                }
+                addArray(ArrayDatum(byteSize, buf, len == 0));
+              }
+            }
+            break;
+          }
+          case kTIME:
+          case kTIMESTAMP:
+          case kDATE: {
+            for (size_t i = 0; i < dataSize; i++) {
+              if (col.nulls[i])
+                addArray(ArrayDatum(0, NULL, true));
+              else {
+                size_t len = col.data.arr_col[i].data.int_col.size();
+                size_t byteSize = len * sizeof(time_t);
+                int8_t* buf = (int8_t*)checked_malloc(len * byteSize);
+                int8_t* p = buf;
+                for (size_t j = 0; j < len; ++j) {
+                  *(time_t*)p = static_cast<time_t>(col.data.arr_col[i].data.int_col[j]);
+                  p += sizeof(time_t);
+                }
+                addArray(ArrayDatum(byteSize, buf, len == 0));
+              }
+            }
+            break;
+          }
+          default:
+            throw std::runtime_error("Invalid Array Type");
+        }
+      }
+      break;
+    }
+    default:
+      throw std::runtime_error("Invalid Type");
+  }
+  return dataSize;
+}
+
 void TypedImportBuffer::add_value(const ColumnDescriptor* cd, const TDatum& datum, const bool is_null) {
   const auto type = cd->columnType.is_decimal() ? decimal_to_int_type(cd->columnType) : cd->columnType.get_type();
   switch (type) {

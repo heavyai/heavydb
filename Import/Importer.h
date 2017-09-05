@@ -45,6 +45,7 @@
 #include "../StringDictionary/StringDictionary.h"
 
 class TDatum;
+class TColumn;
 
 namespace Importer_NS {
 
@@ -417,6 +418,7 @@ class TypedImportBuffer : boost::noncopyable {
     }
   }
 
+  size_t add_values(const ColumnDescriptor* cd, const TColumn& data);
   void add_value(const ColumnDescriptor* cd, const std::string& val, const bool is_null, const CopyParams& copy_params);
   void add_value(const ColumnDescriptor* cd, const TDatum& val, const bool is_null);
   void pop_value();
