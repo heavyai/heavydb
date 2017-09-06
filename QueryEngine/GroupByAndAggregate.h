@@ -116,7 +116,6 @@ class QueryExecutionContext : boost::noncopyable {
 
   ResultPtr getResult(const RelAlgExecutionUnit& ra_exe_unit,
                       const std::vector<size_t>& outer_tab_frag_ids,
-                      const QueryMemoryDescriptor& query_mem_desc,
                       const bool was_auto_device) const;
 
   // TOOD(alex): get rid of targets parameter
@@ -127,10 +126,7 @@ class QueryExecutionContext : boost::noncopyable {
                                  const std::vector<Analyzer::Expr*>& targets,
                                  const bool was_auto_device) const;
 
-  IterTabPtr getIterTab(const std::vector<Analyzer::Expr*>& targets,
-                        const ssize_t frag_idx,
-                        const QueryMemoryDescriptor& query_mem_desc,
-                        const bool was_auto_device) const;
+  IterTabPtr getIterTab(const std::vector<Analyzer::Expr*>& targets, const ssize_t frag_idx) const;
 
   std::vector<int64_t*> launchGpuCode(const RelAlgExecutionUnit& ra_exe_unit,
                                       const std::vector<std::pair<void*, void*>>& cu_functions,
@@ -193,8 +189,7 @@ class QueryExecutionContext : boost::noncopyable {
 
   IterTabPtr groupBufferToTab(const size_t buf_idx,
                               const ssize_t frag_idx,
-                              const std::vector<Analyzer::Expr*>& targets,
-                              const bool was_auto_device) const;
+                              const std::vector<Analyzer::Expr*>& targets) const;
 
   uint32_t getFragmentStride(const RelAlgExecutionUnit& ra_exe_unit,
                              const std::vector<std::pair<int, std::vector<size_t>>>& frag_ids) const;

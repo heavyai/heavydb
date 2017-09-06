@@ -45,8 +45,7 @@ class IteratorTable {
                 const size_t groups_buffer_entry_count,
                 const std::vector<std::vector<const int8_t*>>& iter_buffers,
                 const ssize_t frag_id,
-                const ExecutorDeviceType device_type,
-                const int device_id);
+                const ExecutorDeviceType device_type);
 
   IteratorTable(const std::vector<TargetInfo>& targets,
                 const QueryMemoryDescriptor& query_mem_desc,

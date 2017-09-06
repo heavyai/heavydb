@@ -1895,8 +1895,7 @@ int32_t Executor::executePlanWithGroupBy(const RelAlgExecutionUnit& ra_exe_unit,
   if (error_code != Executor::ERR_OVERFLOW_OR_UNDERFLOW && error_code != Executor::ERR_DIV_BY_ZERO &&
       !query_exe_context->query_mem_desc_.usesCachedContext() && !render_allocator_map) {
     CHECK(!query_exe_context->query_mem_desc_.sortOnGpu());
-    results = query_exe_context->getResult(
-        ra_exe_unit, outer_tab_frag_ids, query_exe_context->query_mem_desc_, was_auto_device);
+    results = query_exe_context->getResult(ra_exe_unit, outer_tab_frag_ids, was_auto_device);
     if (auto rows = boost::get<RowSetPtr>(&results)) {
       (*rows)->holdLiterals(hoist_buf);
     }

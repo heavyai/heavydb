@@ -36,8 +36,7 @@ IteratorTable::IteratorTable(const QueryMemoryDescriptor& query_mem_desc,
                              const size_t groups_buffer_entry_count,
                              const std::vector<std::vector<const int8_t*>>& iter_buffers,
                              const ssize_t frag_id,
-                             const ExecutorDeviceType device_type,
-                             const int device_id)
+                             const ExecutorDeviceType device_type)
     : targets_([&targets]() {
         std::vector<TargetInfo> info;
         for (size_t col_idx = 0; col_idx < targets.size(); ++col_idx) {
@@ -216,8 +215,7 @@ void IteratorTable::fuse(const IteratorTable& that) {
 
 IterTabPtr QueryExecutionContext::groupBufferToTab(const size_t buf_idx,
                                                    const ssize_t frag_idx,
-                                                   const std::vector<Analyzer::Expr*>& targets,
-                                                   const bool was_auto_device) const {
+                                                   const std::vector<Analyzer::Expr*>& targets) const {
   CHECK_EQ(size_t(2), query_mem_desc_.agg_col_widths.size());
   const size_t group_by_col_count{query_mem_desc_.group_col_widths.size()};
   CHECK(!output_columnar_ || group_by_col_count == 1);
@@ -230,8 +228,7 @@ IterTabPtr QueryExecutionContext::groupBufferToTab(const size_t buf_idx,
                                                          groups_buffer_entry_count,
                                                          iter_buffers_,
                                                          frag_idx,
-                                                         device_type_,
-                                                         device_id_);
+                                                         device_type_);
     CHECK(table);
     return table;
   };
@@ -253,13 +250,11 @@ IterTabPtr QueryExecutionContext::groupBufferToTab(const size_t buf_idx,
 }
 
 IterTabPtr QueryExecutionContext::getIterTab(const std::vector<Analyzer::Expr*>& targets,
-                                             const ssize_t frag_idx,
-                                             const QueryMemoryDescriptor& query_mem_desc,
-                                             const bool was_auto_device) const {
+                                             const ssize_t frag_idx) const {
   CHECK_EQ(num_buffers_, group_by_buffers_.size());
   if (device_type_ == ExecutorDeviceType::CPU) {
     CHECK_EQ(size_t(1), num_buffers_);
-    return groupBufferToTab(0, frag_idx, targets, was_auto_device);
+    return groupBufferToTab(0, frag_idx, targets);
   }
 
   CHECK(device_type_ == ExecutorDeviceType::GPU);
@@ -267,10 +262,10 @@ IterTabPtr QueryExecutionContext::getIterTab(const std::vector<Analyzer::Expr*>&
   size_t step{query_mem_desc_.threadsShareMemory() ? executor_->blockSize() : 1};
   for (size_t i = 0; i < group_by_buffers_.size(); i += step) {
     if (!table) {
-      table = groupBufferToTab(i, frag_idx, targets, was_auto_device);
+      table = groupBufferToTab(i, frag_idx, targets);
       continue;
     }
-    table->fuse(*groupBufferToTab(i, frag_idx, targets, was_auto_device));
+    table->fuse(*groupBufferToTab(i, frag_idx, targets));
   }
 
   return table;
@@ -278,11 +273,10 @@ IterTabPtr QueryExecutionContext::getIterTab(const std::vector<Analyzer::Expr*>&
 
 ResultPtr QueryExecutionContext::getResult(const RelAlgExecutionUnit& ra_exe_unit,
                                            const std::vector<size_t>& outer_tab_frag_ids,
-                                           const QueryMemoryDescriptor& query_mem_desc,
                                            const bool was_auto_device) const {
   if (contains_iter_expr(ra_exe_unit.target_exprs)) {
     CHECK_EQ(size_t(1), outer_tab_frag_ids.size());
-    return getIterTab(ra_exe_unit.orig_target_exprs, outer_tab_frag_ids[0], query_mem_desc_, was_auto_device);
+    return getIterTab(ra_exe_unit.orig_target_exprs, outer_tab_frag_ids[0]);
   } else {
     return getRowSet(ra_exe_unit, query_mem_desc_, was_auto_device);
   }
