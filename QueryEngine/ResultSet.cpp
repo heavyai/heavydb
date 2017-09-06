@@ -346,6 +346,7 @@ bool ResultSet::definitelyHasNoRows() const {
 }
 
 const QueryMemoryDescriptor& ResultSet::getQueryMemDesc() const {
+  CHECK(storage_);
   return storage_->query_mem_desc_;
 }
 

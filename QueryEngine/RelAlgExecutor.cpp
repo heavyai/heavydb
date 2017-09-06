@@ -1122,7 +1122,7 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
       }
       const size_t limit = sort->getLimit();
       const size_t offset = sort->getOffset();
-      if (sort->collationCount() != 0 &&
+      if (sort->collationCount() != 0 && !rows_to_sort->definitelyHasNoRows() &&
           !use_speculative_top_n(source_work_unit.exe_unit, rows_to_sort->getQueryMemDesc())) {
         rows_to_sort->sort(source_work_unit.exe_unit.sort_info.order_entries, limit + offset);
       }

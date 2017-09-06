@@ -889,6 +889,7 @@ TEST(Select, OrderBy) {
     c("SELECT ss FROM test GROUP by ss ORDER BY ss ASC NULLS FIRST;",
       "SELECT ss FROM test GROUP by ss ORDER BY ss ASC;",
       dt);
+    c("SELECT str, COUNT(*) n FROM test WHERE x < 0 GROUP BY str ORDER BY n DESC LIMIT 5;", dt);
     c("SELECT x FROM test ORDER BY x LIMIT 50;", dt);
     c("SELECT x FROM test ORDER BY x LIMIT 5;", dt);
     c("SELECT x FROM test ORDER BY x ASC LIMIT 20;", dt);
