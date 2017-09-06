@@ -322,7 +322,10 @@ int64_t convert_decimal_value_to_scale(const int64_t decimal_value,
       converted_decimal_value *= 10;
   } else if (new_type_info.get_scale() < type_info.get_scale()) {
     for (int i = 0; i < type_info.get_scale() - new_type_info.get_scale(); i++)
-      converted_decimal_value /= 10;
+      if (converted_decimal_value > 0)
+        converted_decimal_value = (converted_decimal_value + 5) / 10;
+      else
+        converted_decimal_value = (converted_decimal_value - 5) / 10;
   }
   return converted_decimal_value;
 }
