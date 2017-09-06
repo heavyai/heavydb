@@ -490,6 +490,9 @@ SQLTypes decimal_to_int_type(const SQLTypeInfo&);
 #ifndef __CUDACC__
 Datum StringToDatum(const std::string& s, SQLTypeInfo& ti);
 std::string DatumToString(Datum d, const SQLTypeInfo& ti);
+int64_t convert_decimal_value_to_scale(const int64_t decimal_value,
+                                       const SQLTypeInfo& type_info,
+                                       const SQLTypeInfo& new_type_info);
 #endif
 
 #include "../QueryEngine/ExtractFromTime.h"

@@ -727,13 +727,7 @@ void Constant::cast_number(const SQLTypeInfo& new_type_info) {
         }
         case kNUMERIC:
         case kDECIMAL:
-          if (new_type_info.get_scale() > type_info.get_scale()) {
-            for (int i = 0; i < new_type_info.get_scale() - type_info.get_scale(); i++)
-              constval.bigintval *= 10;
-          } else if (new_type_info.get_scale() < type_info.get_scale()) {
-            for (int i = 0; i < type_info.get_scale() - new_type_info.get_scale(); i++)
-              constval.bigintval /= 10;
-          }
+          constval.bigintval = convert_decimal_value_to_scale(constval.bigintval, type_info, new_type_info);
           break;
         default:
           CHECK(false);

@@ -372,7 +372,7 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
                                   const std::string& val,
                                   const bool is_null,
                                   const CopyParams& copy_params) {
-  const auto type = cd->columnType.is_decimal() ? decimal_to_int_type(cd->columnType) : cd->columnType.get_type();
+  const auto type = cd->columnType.get_type();
   switch (type) {
     case kBOOLEAN: {
       if (is_null) {
@@ -415,6 +415,20 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
         SQLTypeInfo ti = cd->columnType;
         Datum d = StringToDatum(val, ti);
         addBigint(d.bigintval);
+      } else {
+        if (cd->columnType.get_notnull())
+          throw std::runtime_error("NULL for column " + cd->columnName);
+        addBigint(inline_fixed_encoding_null_val(cd->columnType));
+      }
+      break;
+    }
+    case kDECIMAL:
+    case kNUMERIC: {
+      if (!is_null) {
+        SQLTypeInfo ti(kNUMERIC, 0, 0, false);
+        Datum d = StringToDatum(val, ti);
+        const auto converted_decimal_value = convert_decimal_value_to_scale(d.bigintval, ti, cd->columnType);
+        addBigint(converted_decimal_value);
       } else {
         if (cd->columnType.get_notnull())
           throw std::runtime_error("NULL for column " + cd->columnName);

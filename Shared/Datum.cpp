@@ -312,3 +312,17 @@ SQLTypes decimal_to_int_type(const SQLTypeInfo& ti) {
   }
   return kNULLT;
 }
+
+int64_t convert_decimal_value_to_scale(const int64_t decimal_value,
+                                       const SQLTypeInfo& type_info,
+                                       const SQLTypeInfo& new_type_info) {
+  auto converted_decimal_value = decimal_value;
+  if (new_type_info.get_scale() > type_info.get_scale()) {
+    for (int i = 0; i < new_type_info.get_scale() - type_info.get_scale(); i++)
+      converted_decimal_value *= 10;
+  } else if (new_type_info.get_scale() < type_info.get_scale()) {
+    for (int i = 0; i < type_info.get_scale() - new_type_info.get_scale(); i++)
+      converted_decimal_value /= 10;
+  }
+  return converted_decimal_value;
+}
