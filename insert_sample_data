@@ -6,9 +6,19 @@ MAPD_TCP_PORT=${MAPD_TCP_PORT:=9091}
 
 DATA_URL=${DATA_URL:="https://data.mapd.com"}
 
-DATA_PATH=${DATA_PATH:="$PWD/sample_datasets"}
+SAMPLE_PATH=${SAMPLE_PATH:="$PWD/sample_datasets"}
 
 ALLOW_DOWNLOADS=${ALLOW_DOWNLOADS:=true}
+
+MKRES=$(mkdir -p "$SAMPLE_PATH")
+if ! mkdir -p "$SAMPLE_PATH" || [ ! -w "$SAMPLE_PATH" ] ; then
+  SAMPLE_PATH2=$(mktemp -d)
+  echo "Cannot write sample data to: $SAMPLE_PATH"
+  echo "Saving instead to: $SAMPLE_PATH2"
+  echo
+  SAMPLE_PATH=$SAMPLE_PATH2
+  mkdir -p "$SAMPLE_PATH"
+fi
 
 if hash wget 2>/dev/null; then
   GETTER="wget --continue"
@@ -19,9 +29,11 @@ else
 fi
 
 download_and_extract_file() {
+  pushd $SAMPLE_PATH
   echo "- downloading and extracting $1"
   $GETTER "$DATA_URL/$1"
   tar xvf "$1"
+  popd
 }
 
 while (( $# )); do
@@ -31,7 +43,7 @@ while (( $# )); do
     --url)
       DATA_URL=$1 ;;
     --path)
-      DATA_PATH=$1 ;;
+      SAMPLE_PATH=$1 ;;
     --no-download)
       ALLOW_DOWNLOADS=false
       ;;
@@ -45,12 +57,11 @@ if [ "$ALLOW_DOWNLOADS" = false ] ; then
   GETTER="echo Using: "
 fi
 
-mkdir -p "$DATA_PATH"
-pushd "$DATA_PATH"
-
 if [ "$ALLOW_DOWNLOADS" = true ] ; then
+  pushd "$SAMPLE_PATH"
   rm -f manifest.tsv
   $GETTER "$DATA_URL/manifest.tsv"
+  popd
 fi
 
 counter=1
@@ -60,7 +71,7 @@ while IFS=$'\t' read -r name size tablename filename ; do
 	tables[$counter]=$tablename
 	files[$counter]=$filename
 	counter=$((counter+1))
-done < manifest.tsv
+done < "$SAMPLE_PATH/manifest.tsv"
 
 echo "Enter dataset number to download, or 'q' to quit:"
 table=" # | Dataset | Rows | Table Name | File Name"
@@ -85,13 +96,11 @@ for idx in $idxs; do
     filebase="${filename%%.*}"
 
     echo "- adding schema"
-    ../bin/mapdql mapd -u mapd -p HyperInteractive --port "$MAPD_TCP_PORT" < "$filebase"/*.sql
+    ./bin/mapdql mapd -u mapd -p HyperInteractive --port "$MAPD_TCP_PORT" < "$SAMPLE_PATH/$filebase"/*.sql
     table=${tables[$idx]}
-    for csv in $PWD/$filebase/*csv; do
+    for csv in $SAMPLE_PATH/$filebase/*csv; do
       echo "- inserting file: $csv"
-      echo "copy $table from '${csv}' with (quoted='true');" | ../bin/mapdql mapd -u mapd -p HyperInteractive --port "$MAPD_TCP_PORT"
+      echo "copy $table from '${csv}' with (quoted='true');" | ./bin/mapdql mapd -u mapd -p HyperInteractive --port "$MAPD_TCP_PORT"
     done
   fi
 done
-
-popd
