@@ -17,6 +17,7 @@
 #include "RelAlgAbstractInterpreter.h"
 #include "CalciteDeserializerUtils.h"
 #include "JsonAccessors.h"
+#include "RelLeftDeepInnerJoin.h"
 #include "RelAlgExecutor.h"
 #include "RelAlgOptimizer.h"
 #include "RexVisitor.h"
@@ -1285,7 +1286,8 @@ void coalesce_joins(std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
 }
 #endif
 
-void coalesce_nodes(std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
+void coalesce_nodes(std::vector<std::shared_ptr<RelAlgNode>>& nodes,
+                    const std::vector<const RelAlgNode*>& left_deep_joins) {
 #ifdef ENABLE_EQUIJOIN_FOLD
   coalesce_joins(nodes);
 #endif
@@ -1297,7 +1299,8 @@ void coalesce_nodes(std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
     const auto ra_node = nodeIt != nodes.end() ? *nodeIt : nullptr;
     switch (crt_state) {
       case CoalesceState::Initial: {
-        if (std::dynamic_pointer_cast<const RelFilter>(ra_node)) {
+        if (std::dynamic_pointer_cast<const RelFilter>(ra_node) &&
+            std::find(left_deep_joins.begin(), left_deep_joins.end(), ra_node.get()) == left_deep_joins.end()) {
           crt_pattern.push_back(size_t(nodeIt));
           crt_state = CoalesceState::Filter;
           nodeIt.advance(RANodeIterator::AdvancingMode::DUChain);
@@ -1404,10 +1407,19 @@ class RelAlgAbstractInterpreter {
     simplify_sort(nodes_);
     eliminate_identical_copy(nodes_);
     fold_filters(nodes_);
-    hoist_filter_cond_to_cross_join(nodes_);
+    std::vector<const RelAlgNode*> left_deep_joins;
+    for (const auto& node : nodes_) {
+      if (is_left_deep_join(node.get())) {
+        left_deep_joins.push_back(node.get());
+      }
+    }
+    if (left_deep_joins.empty()) {
+      hoist_filter_cond_to_cross_join(nodes_);
+    }
     eliminate_dead_columns(nodes_);
-    coalesce_nodes(nodes_);
+    coalesce_nodes(nodes_, left_deep_joins);
     CHECK(nodes_.back().unique());
+    create_left_deep_join(nodes_);
     return nodes_.back();
   }
 

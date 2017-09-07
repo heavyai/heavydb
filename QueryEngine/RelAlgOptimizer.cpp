@@ -388,7 +388,8 @@ std::unordered_map<const RelAlgNode*, std::unordered_set<const RelAlgNode*>> bui
       const auto aggregate = dynamic_cast<const RelAggregate*>(walker);
       const auto filter = dynamic_cast<const RelFilter*>(walker);
       const auto sort = dynamic_cast<const RelSort*>(walker);
-      CHECK(join || project || aggregate || filter || sort);
+      const auto left_deep_join = dynamic_cast<const RelLeftDeepInnerJoin*>(walker);
+      CHECK(join || project || aggregate || filter || sort || left_deep_join);
       for (size_t i = 0; i < walker->inputCount(); ++i) {
         auto src = walker->getInput(i);
         if (dynamic_cast<const RelScan*>(src)) {

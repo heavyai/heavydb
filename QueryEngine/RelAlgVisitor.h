@@ -47,6 +47,10 @@ class RelAlgVisitor {
     if (multi_join) {
       return aggregateResult(result, visitMultiJoin(multi_join));
     }
+    const auto left_deep_inner_join = dynamic_cast<const RelLeftDeepInnerJoin*>(rel_alg);
+    if (left_deep_inner_join) {
+      return aggregateResult(result, visitLeftDeepInnerJoin(left_deep_inner_join));
+    }
     const auto project = dynamic_cast<const RelProject*>(rel_alg);
     if (project) {
       return aggregateResult(result, visitProject(project));
@@ -72,6 +76,8 @@ class RelAlgVisitor {
   virtual T visitJoin(const RelJoin*) const { return defaultResult(); }
 
   virtual T visitMultiJoin(const RelMultiJoin*) const { return defaultResult(); }
+
+  virtual T visitLeftDeepInnerJoin(const RelLeftDeepInnerJoin*) const { return defaultResult(); }
 
   virtual T visitProject(const RelProject*) const { return defaultResult(); }
 

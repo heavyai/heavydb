@@ -52,6 +52,7 @@ set(query_engine_source_files
     QueryRewrite.cpp
     QueryTemplateGenerator.cpp
     RelAlgAbstractInterpreter.cpp
+    RelLeftDeepInnerJoin.cpp
     RelAlgExecutionDescriptor.cpp
     RelAlgExecutor.cpp
     RelAlgTranslator.cpp

@@ -45,10 +45,12 @@ class RexAbstractInput : public RexScalar {
 
   unsigned getIndex() const { return in_index_; }
 
+  void setIndex(const unsigned in_index) const { in_index_ = in_index; }
+
   std::string toString() const override { return "(RexAbstractInput " + std::to_string(in_index_) + ")"; }
 
  private:
-  unsigned in_index_;
+  mutable unsigned in_index_;
 };
 
 class RexLiteral : public RexScalar {
@@ -459,6 +461,15 @@ class RelAlgNode {
 
   void addManagedInput(std::shared_ptr<const RelAlgNode> input) { inputs_.push_back(input); }
 
+  bool hasInput(const RelAlgNode* needle) const {
+    for (auto& input_ptr : inputs_) {
+      if (input_ptr.get() == needle) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   virtual void replaceInput(std::shared_ptr<const RelAlgNode> old_input, std::shared_ptr<const RelAlgNode> input) {
     for (auto& input_ptr : inputs_) {
       if (input_ptr == old_input) {
@@ -740,6 +751,23 @@ class RelMultiJoin : public RelAlgNode {
 
   mutable std::vector<std::shared_ptr<RelJoin>> sequence_;
   std::vector<std::unique_ptr<const RexScalar>> conditions_;
+};
+
+// Synthetic node to assist execution of left-deep join relational algebra.
+class RelLeftDeepInnerJoin : public RelAlgNode {
+ public:
+  RelLeftDeepInnerJoin(const RexOperator* condition, std::vector<std::shared_ptr<const RelAlgNode>> inputs);
+
+  const RexOperator* getCondition() const;
+
+  std::string toString() const override;
+
+  size_t size() const override;
+
+  std::shared_ptr<RelAlgNode> deepCopy() const override;
+
+ private:
+  std::unique_ptr<const RexOperator> condition_;
 };
 
 class RelFilter : public RelAlgNode {

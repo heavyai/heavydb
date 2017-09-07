@@ -209,6 +209,14 @@ class RelAlgExecutor {
 
   static std::vector<std::string> getScanTableNamesInRelAlgSeq(std::vector<RaExecutionDesc>& exec_descs);
 
+  typedef std::vector<std::vector<std::shared_ptr<const Analyzer::Expr>>> JoinQualsPerNestingLevel;
+
+  JoinQualsPerNestingLevel translateLeftDeepJoinFilter(
+      const RelLeftDeepInnerJoin* join,
+      const std::vector<InputDescriptor>& input_descs,
+      const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
+      const bool just_explain);
+
   Executor* executor_;
   const Catalog_Namespace::Catalog& cat_;
   TemporaryTables temporary_tables_;

@@ -505,8 +505,8 @@ const RelAlgNode* get_data_sink(const RelAlgNode* ra_node) {
   }
   CHECK_EQ(size_t(1), ra_node->inputCount());
   auto only_src = ra_node->getInput(0);
-  const bool is_join =
-      dynamic_cast<const RelJoin*>(only_src) != nullptr || dynamic_cast<const RelMultiJoin*>(only_src) != nullptr;
+  const bool is_join = dynamic_cast<const RelJoin*>(only_src) || dynamic_cast<const RelMultiJoin*>(only_src) ||
+                       dynamic_cast<const RelLeftDeepInnerJoin*>(only_src);
   return is_join ? only_src : ra_node;
 }
 
@@ -1677,6 +1677,9 @@ JoinType get_join_type(const RelAlgNode* ra) {
   if (auto multi_join = dynamic_cast<const RelMultiJoin*>(sink)) {
     return multi_join->getJoinType();
   }
+  if (dynamic_cast<const RelLeftDeepInnerJoin*>(sink)) {
+    return JoinType::INNER;
+  }
 
   return JoinType::INVALID;
 }
@@ -1845,6 +1848,11 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(const RelCompoun
   std::list<std::shared_ptr<const InputColDescriptor>> input_col_descs;
   const auto input_to_nest_level = get_input_nest_levels(compound);
   std::tie(input_descs, input_col_descs, std::ignore) = get_input_desc(compound, input_to_nest_level);
+  CHECK_EQ(size_t(1), compound->inputCount());
+  const auto join = dynamic_cast<const RelLeftDeepInnerJoin*>(compound->getInput(0));
+  if (join) {
+    translateLeftDeepJoinFilter(join, input_descs, input_to_nest_level, just_explain);
+  }
   const auto extra_input_descs = separate_extra_input_descs(input_descs);
   const auto join_type = get_join_type(compound);
   RelAlgTranslator translator(cat_, executor_, input_to_nest_level, join_type, now_, just_explain);
@@ -1883,6 +1891,48 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(const RelCompoun
           compound,
           max_groups_buffer_entry_default_guess,
           std::unique_ptr<QueryRewriter>(query_rewriter)};
+}
+
+namespace {
+
+class RangeTableIndexVisitor : public ScalarExprVisitor<int> {
+ protected:
+  virtual int visitColumnVar(const Analyzer::ColumnVar* column) const override { return column->get_rte_idx(); }
+
+  virtual int aggregateResult(const int& aggregate, const int& next_result) const override {
+    return std::max(aggregate, next_result);
+  }
+};
+
+}  // namespace
+
+// Translate left deep join filter and separate the conjunctive form qualifiers
+// per nesting level. The code generated for hash table lookups on each level
+// must dominate its uses in deeper nesting levels.
+RelAlgExecutor::JoinQualsPerNestingLevel RelAlgExecutor::translateLeftDeepJoinFilter(
+    const RelLeftDeepInnerJoin* join,
+    const std::vector<InputDescriptor>& input_descs,
+    const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
+    const bool just_explain) {
+  RelAlgTranslator translator(cat_, executor_, input_to_nest_level, JoinType::INNER, now_, just_explain);
+  const auto join_condition = translator.translateScalarRex(join->getCondition());
+  auto join_condition_cf = qual_to_conjunctive_form(join_condition);
+  RangeTableIndexVisitor rte_idx_visitor;
+  JoinQualsPerNestingLevel result(input_descs.size() - 1);
+  std::vector<std::shared_ptr<Analyzer::Expr>> join_condition_quals(join_condition_cf.quals.begin(),
+                                                                    join_condition_cf.quals.end());
+  join_condition_quals.insert(
+      join_condition_quals.end(), join_condition_cf.simple_quals.begin(), join_condition_cf.simple_quals.end());
+  for (size_t rte_idx = 1; rte_idx < input_descs.size(); ++rte_idx) {
+    for (const auto qual : join_condition_quals) {
+      const auto qual_rte_idx = rte_idx_visitor.visit(qual.get());
+      if (static_cast<size_t>(qual_rte_idx) == rte_idx) {
+        result[rte_idx - 1].push_back(qual);
+      }
+    }
+  }
+  CHECK(false);
+  return result;
 }
 
 namespace {
