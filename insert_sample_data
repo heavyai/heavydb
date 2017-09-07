@@ -39,10 +39,13 @@ download_and_extract_file() {
 while (( $# )); do
   case "$1" in
     --port)
+      shift
       MAPD_TCP_PORT=$1 ;;
     --url)
+      shift
       DATA_URL=$1 ;;
     --path)
+      shift
       SAMPLE_PATH=$1 ;;
     --no-download)
       ALLOW_DOWNLOADS=false
@@ -66,11 +69,11 @@ fi
 
 counter=1
 while IFS=$'\t' read -r name size tablename filename ; do
-	names[$counter]=$name
-	sizes[$counter]=$size
-	tables[$counter]=$tablename
-	files[$counter]=$filename
-	counter=$((counter+1))
+  names[$counter]=$name
+  sizes[$counter]=$size
+  tables[$counter]=$tablename
+  files[$counter]=$filename
+  counter=$((counter+1))
 done < "$SAMPLE_PATH/manifest.tsv"
 
 echo "Enter dataset number to download, or 'q' to quit:"
