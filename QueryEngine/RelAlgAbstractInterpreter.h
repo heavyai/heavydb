@@ -505,8 +505,7 @@ class RelScan : public RelAlgNode {
   const std::string getFieldName(const size_t i) const { return field_names_[i]; }
 
   std::string toString() const override {
-    return "(RelScan<" + std::to_string(reinterpret_cast<uint64_t>(this)) + "> " +
-           std::to_string(reinterpret_cast<uint64_t>(td_)) + ")";
+    return "(RelScan<" + std::to_string(reinterpret_cast<uint64_t>(this)) + "> " + td_->tableName + ")";
   }
 
   std::shared_ptr<RelAlgNode> deepCopy() const override {
