@@ -34,9 +34,6 @@
 
 #ifdef HAVE_CUDA
 #include <cuda.h>
-
-#include "arrow/gpu/cuda_api.h"
-
 #endif  // HAVE_CUDA
 #include <future>
 
