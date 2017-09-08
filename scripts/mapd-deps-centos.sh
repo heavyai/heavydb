@@ -155,7 +155,7 @@ popd
 
 # llvm
 download_make_install http://thrysoee.dk/editline/libedit-20160903-3.1.tar.gz
-VERS=4.0.0
+VERS=3.9.1
 download http://releases.llvm.org/$VERS/llvm-$VERS.src.tar.xz
 download http://releases.llvm.org/$VERS/cfe-$VERS.src.tar.xz
 download http://releases.llvm.org/$VERS/compiler-rt-$VERS.src.tar.xz
