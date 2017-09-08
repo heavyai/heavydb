@@ -82,6 +82,7 @@ class DBObject {
   void grantPrivileges(const DBObject& object);
   void revokePrivileges(const DBObject& object);
   bool isUserPrivateObject() const;
+  bool hasActivePrivs() const;
   void setUserPrivateObject();
   int32_t getOwningUserId() const;
   void setOwningUserId(int32_t userId);

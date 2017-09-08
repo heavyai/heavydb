@@ -124,6 +124,14 @@ bool DBObject::isUserPrivateObject() const {
   return userPrivateObject_;
 }
 
+bool DBObject::hasActivePrivs() const {
+  bool active = false;
+  if (objectPrivs_.select_ || objectPrivs_.insert_ || objectPrivs_.create_ || objectPrivs_.truncate_) {
+    active = true;
+  }
+  return active;
+}
+
 void DBObject::setUserPrivateObject() {
   userPrivateObject_ = true;
 }
