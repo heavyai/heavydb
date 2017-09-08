@@ -554,7 +554,8 @@ bool SysCatalog::verifyDBObjectOwnership(const UserMetadata& user,
     Role* rl = getMetadataForUserRole(user.userId);
     if (rl) {
       populateDBObjectKey(object, catalog);
-      if (rl->findDbObject(object.getObjectKey())) {
+      if (rl->findDbObject(object.getObjectKey()) &&
+          (rl->findDbObject(object.getObjectKey())->getOwningUserId() == user.userId)) {
         return true;
       }
     }
