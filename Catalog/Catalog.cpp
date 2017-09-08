@@ -463,8 +463,8 @@ void SysCatalog::grantDBObjectPrivileges(const std::string& roleName,
                                          const Catalog_Namespace::Catalog& catalog) {
   Role* rl = getMetadataForRole(roleName);
   if (!rl) {
-    throw runtime_error("Request to grant privileges to a role " + roleName +
-                        " failed because role with this name does not exist.");
+    throw runtime_error("Request to grant privileges to " + roleName +
+                        " failed because role or user with this name does not exist.");
   }
   populateDBObjectKey(object, catalog);
   rl->grantPrivileges(object);
@@ -508,8 +508,8 @@ void SysCatalog::revokeDBObjectPrivileges(const std::string& roleName,
                                           const Catalog_Namespace::Catalog& catalog) {
   Role* rl = getMetadataForRole(roleName);
   if (!rl) {
-    throw runtime_error("Request to revoke privileges from a role " + roleName +
-                        " failed because role with this name does not exist.");
+    throw runtime_error("Request to revoke privileges from " + roleName +
+                        " failed because role or user with this name does not exist.");
   }
   populateDBObjectKey(object, catalog);
   rl->revokePrivileges(object);
@@ -567,8 +567,8 @@ void SysCatalog::getDBObjectPrivileges(const std::string& roleName,
                                        const Catalog_Namespace::Catalog& catalog) {
   Role* rl = getMetadataForRole(roleName);
   if (!rl) {
-    throw runtime_error("Request to show privileges for a role " + roleName +
-                        " failed because role with this name does not exist.");
+    throw runtime_error("Request to show privileges for " + roleName +
+                        " failed because role or user with this name does not exist.");
   }
   populateDBObjectKey(object, catalog);
   rl->getPrivileges(object);
@@ -715,7 +715,6 @@ void SysCatalog::revokeRole(const std::string& roleName, const std::string& user
  * delete object of UserRole class (delete all GroupRoles for this user,
  * i.e. delete pointers from all GroupRole objects referencing to this UserRole object)
  * called as a result of executing "DROP USER" command
- * similar function should be added to be called from "DROP ROLE" command (deletes only one role of the user)
  */
 void SysCatalog::dropUserRole(const std::string& userName) {
   /* this proc is not being directly called from parser, so it should have been checked already

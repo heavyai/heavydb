@@ -291,7 +291,7 @@ void GroupRole::grantPrivileges(const DBObject& object) {
 void GroupRole::revokePrivileges(const DBObject& object) {
   auto dbObject = findDbObject(object.getObjectKey());
   if (!dbObject || !dbObject->hasActivePrivs()) {  // not found or has none of privileges set
-    throw runtime_error("Can't revoke privileges because role " + roleName() + " has no privileges to " +
+    throw runtime_error("Can not revoke privileges because " + roleName() + " has no privileges to " +
                         object.getName());
   }
   dbObject->revokePrivileges(object);
@@ -305,8 +305,7 @@ bool GroupRole::hasRole(Role* role) {
 void GroupRole::getPrivileges(DBObject& object) {
   auto dbObject = findDbObject(object.getObjectKey());
   if (!dbObject) {  // not found
-    throw runtime_error("Can't show privileges because role " + roleName() + " has no privileges to " +
-                        object.getName());
+    throw runtime_error("Can not get privileges because " + roleName() + " has no privileges to " + object.getName());
   }
   object.grantPrivileges(*dbObject);
 }
