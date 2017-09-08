@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#ifdef ENABLE_ARROW_CONVERTER
 #include "ArrowUtil.h"
 #include "DataMgr/BufferMgr/BufferMgr.h"  // for OutOfMemory
 
@@ -30,3 +31,4 @@ void arrow_status_throw(const ::arrow::Status& s) {
       throw std::runtime_error(message);
   }
 }
+#endif  // ENABLE_ARROW_CONVERTER
