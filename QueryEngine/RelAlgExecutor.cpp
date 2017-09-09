@@ -1127,9 +1127,13 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
         rows_to_sort->sort(source_work_unit.exe_unit.sort_info.order_entries, limit + offset);
       }
       if (limit || offset) {
-        rows_to_sort->dropFirstN(offset);
-        if (limit) {
-          rows_to_sort->keepFirstN(limit);
+        if (g_cluster) {
+          rows_to_sort->keepFirstN(limit + offset);
+        } else {
+          rows_to_sort->dropFirstN(offset);
+          if (limit) {
+            rows_to_sort->keepFirstN(limit);
+          }
         }
       }
       return {rows_to_sort, source_result.getTargetsMeta()};
