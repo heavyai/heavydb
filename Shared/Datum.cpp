@@ -29,6 +29,7 @@
 #include <cstdio>
 #include <cmath>
 #include "sqltypes.h"
+#include "StringTransform.h"
 
 std::string SQLTypeInfo::type_name[kSQLTYPE_LAST] = {"NULL",
                                                      "BOOLEAN",
@@ -99,9 +100,9 @@ Datum StringToDatum(const std::string& s, SQLTypeInfo& ti) {
   Datum d;
   switch (ti.get_type()) {
     case kBOOLEAN:
-      if (s == "t" || s == "true" || s == "T" || s == "True" || s == "1")
+      if (s == "t" || s == "T" || s == "1" || to_upper(s) == "TRUE")
         d.boolval = true;
-      else if (s == "f" || s == "false" || s == "F" || s == "False" || s == "0")
+      else if (s == "f" || s == "F" || s == "0" || to_upper(s) == "FALSE")
         d.boolval = false;
       else
         throw std::runtime_error("Invalid string for boolean " + s);
