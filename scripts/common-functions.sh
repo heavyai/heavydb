@@ -1,5 +1,32 @@
 #!/bin/bash
 
+function download() {
+    wget --continue "$1"
+}
+
+function extract() {
+    tar xvf "$1"
+}
+
+function makej() {
+    make -j $(nproc)
+}
+
+function download_make_install() {
+    name="$(basename $1)"
+    download "$1"
+    extract $name
+    if [ -z "$2" ]; then
+        pushd ${name%%.tar*}
+    else
+        pushd $2
+    fi
+    ./configure --prefix=$PREFIX $3
+    makej
+    make install
+    popd
+}
+
 # master as of 2017-09-07. Will want to update to 0.7.0 final as soon as it's
 # released
 ARROW_VERSION=6f27a6447171353427a129a5ce88dba181bd8af6

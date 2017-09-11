@@ -17,33 +17,6 @@ export LD_LIBRARY_PATH=$PREFIX/lib64:$PREFIX/lib:$LD_LIBRARY_PATH
 SCRIPTS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 source $SCRIPTS_DIR/common-functions.sh
 
-download() {
-    wget --continue "$1"
-}
-
-extract() {
-    tar xvf "$1"
-}
-
-makej() {
-    make -j $(nproc)
-}
-
-download_make_install() {
-    name="$(basename $1)"
-    download "$1"
-    extract $name
-    if [ -z "$2" ]; then
-        pushd ${name%%.tar*}
-    else
-        pushd $2
-    fi
-    ./configure --prefix=$PREFIX $3
-    makej
-    make install
-    popd
-}
-
 
 # gmp, mpc, mpfr, autoconf, automake
 # note: if gmp fails on POWER8:
