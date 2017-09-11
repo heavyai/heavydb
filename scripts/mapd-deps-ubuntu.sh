@@ -63,8 +63,8 @@ VERS=0.10.0
 wget --continue http://apache.claz.org/thrift/$VERS/thrift-$VERS.tar.gz
 tar xvf thrift-$VERS.tar.gz
 pushd thrift-$VERS
-patch -p1 < ../thrift-3821-tmemorybuffer-overflow-check.patch
-patch -p1 < ../thrift-3821-tmemorybuffer-overflow-test.patch
+patch -p1 < $SCRIPTS_DIR/thrift-3821-tmemorybuffer-overflow-check.patch
+patch -p1 < $SCRIPTS_DIR/thrift-3821-tmemorybuffer-overflow-test.patch
 JAVA_PREFIX=$PREFIX/lib ./configure \
     --with-lua=no \
     --with-python=no \
