@@ -48,7 +48,7 @@ function install_arrow() {
     -DARROW_WITH_SNAPPY=OFF \
     -DARROW_WITH_ZSTD=OFF \
     -DCMAKE_INSTALL_PREFIX=$PREFIX \
-    -DARROW_BOOST_USE_SHARED=off \
+    -DARROW_BOOST_USE_SHARED=${ARROW_BOOST_USE_SHARED:="OFF"} \
     ..
   make -j $(nproc)
   make install

@@ -115,6 +115,7 @@ make install
 popd
 
 # Apache Arrow (see common-functions.sh)
+ARROW_BOOST_USE_SHARED="ON"
 install_arrow
 
 cat >> $PREFIX/mapd-deps.sh <<EOF
