@@ -78,6 +78,9 @@ class ExtensionFunctionSignatureParser {
         if (type_name.startsWith(const_prefix)) {
             return deserializeType(type_name.substring(const_prefix.length()));
         }
+        if (type_name.equals("bool") || type_name.equals("_Bool")) {
+            return ExtensionFunction.ExtArgumentType.Bool;
+        }
         if (type_name.equals("int16_t")) {
             return ExtensionFunction.ExtArgumentType.Int16;
         }

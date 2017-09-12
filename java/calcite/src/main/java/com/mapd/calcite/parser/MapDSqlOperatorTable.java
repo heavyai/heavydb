@@ -708,6 +708,8 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
 
         private static SqlTypeName toSqlTypeName(final ExtensionFunction.ExtArgumentType type) {
             switch (type) {
+                case Bool:
+                    return SqlTypeName.BOOLEAN;
                 case Int16:
                     return SqlTypeName.SMALLINT;
                 case Int32:

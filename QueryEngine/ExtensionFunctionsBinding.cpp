@@ -190,6 +190,8 @@ std::vector<unsigned> compute_widening_conv_scores(const Analyzer::FunctionOper*
 
 SQLTypeInfo ext_arg_type_to_type_info(const ExtArgumentType ext_arg_type) {
   switch (ext_arg_type) {
+    case ExtArgumentType::Bool:
+      return SQLTypeInfo(kBOOLEAN, true);
     case ExtArgumentType::Int16:
       return SQLTypeInfo(kSMALLINT, true);
     case ExtArgumentType::Int32:

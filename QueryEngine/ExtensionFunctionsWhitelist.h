@@ -29,7 +29,7 @@
 #include <unordered_map>
 #include <vector>
 
-enum class ExtArgumentType { Int16, Int32, Int64, Float, Double, PInt16, PInt32, PInt64, PFloat, PDouble };
+enum class ExtArgumentType { Int16, Int32, Int64, Float, Double, PInt16, PInt32, PInt64, PFloat, PDouble, Bool };
 
 class ExtensionFunction {
  public:

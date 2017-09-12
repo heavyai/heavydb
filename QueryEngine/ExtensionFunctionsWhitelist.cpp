@@ -35,6 +35,8 @@ namespace {
 // Returns the LLVM name for `type`.
 std::string serialize_type(const ExtArgumentType type) {
   switch (type) {
+    case ExtArgumentType::Bool:
+      return "i1";
     case ExtArgumentType::Int16:
       return "i16";
     case ExtArgumentType::Int32:
@@ -85,6 +87,9 @@ std::vector<std::string> ExtensionFunctionsWhitelist::getLLVMDeclarations() {
 namespace {
 
 ExtArgumentType deserialize_type(const std::string& type_name) {
+  if (type_name == "bool" || type_name == "i1") {
+    return ExtArgumentType::Bool;
+  }
   if (type_name == "i16") {
     return ExtArgumentType::Int16;
   }

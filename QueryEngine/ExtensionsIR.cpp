@@ -23,6 +23,8 @@ namespace {
 
 llvm::Type* ext_arg_type_to_llvm_type(const ExtArgumentType ext_arg_type, llvm::LLVMContext& ctx) {
   switch (ext_arg_type) {
+    case ExtArgumentType::Bool:
+      return get_int_type(8, ctx);
     case ExtArgumentType::Int16:
       return get_int_type(16, ctx);
     case ExtArgumentType::Int32:
@@ -61,7 +63,7 @@ llvm::Value* Executor::codegenFunctionOper(const Analyzer::FunctionOper* functio
   CHECK(!ext_func_sigs->empty());
   const auto& ext_func_sig = bind_function(function_oper, *ext_func_sigs);
   const auto& ret_ti = function_oper->get_type_info();
-  CHECK(ret_ti.is_integer() || ret_ti.is_fp());
+  CHECK(ret_ti.is_integer() || ret_ti.is_fp() || ret_ti.is_boolean());
   const auto ret_ty = ret_ti.is_fp() ? (ret_ti.get_type() == kDOUBLE ? llvm::Type::getDoubleTy(cgen_state_->context_)
                                                                      : llvm::Type::getFloatTy(cgen_state_->context_))
                                      : get_int_type(ret_ti.get_logical_size() * 8, cgen_state_->context_);

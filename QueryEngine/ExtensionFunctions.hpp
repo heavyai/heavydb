@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstdlib>
 
+#define EXTENSION_INLINE extern "C" ALWAYS_INLINE DEVICE
 #define EXTENSION_NOINLINE extern "C" NEVER_INLINE DEVICE
 
 /* Example extension functions:
@@ -649,17 +650,24 @@ double hypotenuse(double x, double y)
 {
   x = fabs(x);
   y = fabs(y);
-  if (x < y)
-    std::swap(x, y);
+  if (x < y) {
+    auto t = x; x = y; y = t;
+  }
   if (y == 0.0)
     return x;
   return x * sqrt(1.0 + (y * y) / (x * x)); 
 }
 
+ALWAYS_INLINE DEVICE
+double distance_point_point(double p1x, double p1y, double p2x, double p2y)
+{
+  return hypotenuse(p1x - p2x, p1y - p2y);
+}
+
 EXTENSION_NOINLINE
 double ST_Distance_Point_Point(double p1x, double p1y, double p2x, double p2y)
 {
-  return hypotenuse(p1x - p2x, p1y - p2y);
+  return distance_point_point(p1x, p1y, p2x, p2y);
 }
 
 EXTENSION_NOINLINE
@@ -669,7 +677,7 @@ double ST_Distance_Point_Line(double px, double py,
   return 0.0;
 }
 
-EXTENSION_NOINLINE
+EXTENSION_INLINE
 double ST_Distance_Line_Point(double lx1, double ly1, double lx2, double ly2,
                               double px, double py)
 {
@@ -681,4 +689,31 @@ double ST_Distance_Line_Line(double l1x1, double l1y1, double l1x2, double l1y2,
                              double l2x1, double l2y1, double l2x2, double l2y2)
 {
   return 0.0;
+}
+
+EXTENSION_NOINLINE
+bool ST_Contains_Point_Point(double p1x, double p1y, double p2x, double p2y)
+{
+  return (p1x == p2x) && (p1y == p2y);
+}
+
+EXTENSION_NOINLINE
+bool ST_Contains_Point_Line(double px, double py,
+                            double lx1, double ly1, double lx2, double ly2)
+{
+  return false;
+}
+
+EXTENSION_INLINE
+bool ST_Contains_Line_Point(double lx1, double ly1, double lx2, double ly2,
+                            double px, double py)
+{
+  return false;
+}
+
+EXTENSION_NOINLINE
+bool ST_Contains_Line_Line(double l1x1, double l1y1, double l1x2, double l1y2,
+                           double l2x1, double l2y1, double l2x2, double l2y2)
+{
+  return false;
 }
