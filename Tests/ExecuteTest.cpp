@@ -2877,6 +2877,12 @@ void import_dept_table() {
   }
 }
 
+void import_geospatial_test() {
+  const std::string geospatial_test("DROP TABLE IF EXISTS geospatial_test;");
+  run_ddl_statement(geospatial_test);
+  run_ddl_statement("CREATE TABLE geospatial_test (p POINT, l LINE) WITH (fragment_size=2);");
+}
+
 }  // namespace
 
 TEST(Select, ArrayUnnest) {
@@ -3932,6 +3938,21 @@ TEST(Select, Deleted) {
   }
 }
 
+TEST(Select, GeoSpatial) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    ASSERT_EQ(static_cast<int64_t>(0),
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE ST_Distance(p,p) < 1.0;", dt)));
+    ASSERT_EQ(static_cast<int64_t>(0),
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE ST_Distance(p,l) < 1.0;", dt)));
+
+    ASSERT_EQ(static_cast<int64_t>(0),
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE ST_Contains(p,p);", dt)));
+    ASSERT_EQ(static_cast<int64_t>(0),
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE ST_Contains(p,l);", dt)));
+  }
+}
+
 namespace {
 
 int create_and_populate_tables() {
@@ -4222,6 +4243,12 @@ int create_and_populate_tables() {
     return -EEXIST;
   }
   try {
+    import_geospatial_test();
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'geospatial_test'";
+    return -EEXIST;
+  }
+  try {
     const std::string drop_old_empty{"DROP TABLE IF EXISTS emptytab;"};
     run_ddl_statement(drop_old_empty);
     g_sqlite_comparator.query(drop_old_empty);
@@ -4391,6 +4418,7 @@ void drop_tables() {
   const std::string drop_dept_table{"DROP TABLE dept;"};
   g_sqlite_comparator.query(drop_dept_table);
   run_ddl_statement(drop_dept_table);
+  run_ddl_statement("DROP TABLE geospatial_test;");
   const std::string drop_test_in_bitmap{"DROP TABLE test_in_bitmap;"};
   g_sqlite_comparator.query(drop_test_in_bitmap);
   run_ddl_statement(drop_test_in_bitmap);
