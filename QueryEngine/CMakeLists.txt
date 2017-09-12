@@ -55,6 +55,7 @@ set(query_engine_source_files
     RelAlgExecutionDescriptor.cpp
     RelAlgExecutor.cpp
     RelAlgTranslator.cpp
+    RelAlgTranslatorGeo.cpp
     RelAlgOptimizer.cpp
     ResultRows.cpp
     ResultSet.cpp
