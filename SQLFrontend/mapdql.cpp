@@ -971,16 +971,17 @@ void print_memory_info(ClientContext context, std::string memory_level) {
     if (cur_host.compare(nodeIt.host_name)) {
       mgr_num = 0;
       cur_host = nodeIt.host_name;
+      if (multiNode) {
+        tss << "Node: " << nodeIt.host_name << std::endl;
+      }
+      tss << "Maximum Bytes for one page: " << nodeIt.page_size << " Bytes" << std::endl;
+      tss << "Maximum Bytes for node: " << (nodeIt.max_num_pages * nodeIt.page_size) / MB << " MB" << std::endl;
+      tss << "Memory allocated: " << (nodeIt.num_pages_allocated * nodeIt.page_size) / MB << " MB" << std::endl;
     } else {
       ++mgr_num;
     }
     cur_host = nodeIt.host_name;
-    if (multiNode) {
-      tss << "Node: " << nodeIt.host_name << std::endl;
-    }
-    tss << "Maximum Bytes for one page: " << nodeIt.page_size << " Bytes" << std::endl;
-    tss << "Maximum Bytes for node: " << (nodeIt.max_num_pages * nodeIt.page_size) / MB << " MB" << std::endl;
-    tss << "Memory allocated: " << (nodeIt.num_pages_allocated * nodeIt.page_size) / MB << " MB" << std::endl;
+
     tss << sub_system << "[" << mgr_num << "]"
         << " Slab Information:" << std::endl;
     if (nodeIt.is_allocation_capped) {
@@ -1280,9 +1281,6 @@ int main(int argc, char** argv) {
         char buf[12] = {0};
         strftime(buf, 11, "%F", tm_ptr);
         std::string server_version = context.cluster_status[0].version;
-        if (context.cluster_status.size() > 1) {
-          std::cout << "Name of Leaf               : " << context.cluster_status[0].host_name << std::endl;
-        }
 
         std::cout << "The Server Version Number  : " << context.cluster_status[0].version << std::endl;
         std::cout << "The Server Start Time      : " << buf << " : " << tm_ptr->tm_hour << ":" << tm_ptr->tm_min << ":"
@@ -1290,19 +1288,19 @@ int main(int argc, char** argv) {
         std::cout << "The Server edition         : " << server_version << std::endl;
 
         if (context.cluster_status.size() > 1) {
-          std::cout << "The Number of Leaves        : " << context.cluster_status.size() - 1 << std::endl;
+          std::cout << "The Number of Leaves       : " << context.cluster_status.size() - 1 << std::endl;
           for (auto leaf = context.cluster_status.begin() + 1; leaf != context.cluster_status.end(); ++leaf) {
             t = (time_t)leaf->start_time;
             buf[11] = 0;
             std::tm* tm_ptr = gmtime(&t);
             strftime(buf, 11, "%F", tm_ptr);
             std::cout << "--------------------------------------------------" << std::endl;
-            std::cout << "Name of Node              : " << leaf->host_name << std::endl;
+            std::cout << "Name of Leaf               : " << leaf->host_name << std::endl;
             if (server_version.compare(leaf->version) != 0) {
               std::cout << "The Leaf Version Number   : " << leaf->version << std::endl;
               std::cerr << "Version number mismatch!" << std::endl;
             }
-            std::cout << "The Leaf Start Time       : " << buf << " : " << tm_ptr->tm_hour << ":" << tm_ptr->tm_min
+            std::cout << "The Leaf Start Time        : " << buf << " : " << tm_ptr->tm_hour << ":" << tm_ptr->tm_min
                       << ":" << tm_ptr->tm_sec << std::endl;
           }
         }
