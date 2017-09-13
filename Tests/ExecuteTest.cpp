@@ -200,6 +200,7 @@ class SQLiteComparator {
             break;
           }
           case kTEXT:
+          case kCHAR:
           case kVARCHAR: {
             const auto mapd_as_str_p = boost::get<NullableString>(scalar_mapd_variant);
             ASSERT_NE(nullptr, mapd_as_str_p);
@@ -1081,6 +1082,7 @@ TEST(Select, Case) {
     c("SELECT x, COUNT(case when y = 42 then 1 else 0 end) AS n1, COUNT(*) AS n2 FROM test GROUP BY x ORDER BY n2 "
       "DESC;",
       dt);
+    c("SELECT CASE WHEN test.str = 'foo' THEN 'foo' ELSE test.str END AS g FROM test GROUP BY g ORDER BY g ASC;", dt);
     ASSERT_EQ(int64_t(1418428800),
               v<int64_t>(run_simple_agg("SELECT CASE WHEN 1 > 0 THEN DATE_TRUNC(day, m) ELSE DATE_TRUNC(year, m) END "
                                         "AS date_bin FROM test GROUP BY date_bin;",
@@ -3673,10 +3675,10 @@ int create_and_populate_tables() {
     g_sqlite_comparator.query(drop_old_test);
     std::string columns_definition{
         "x int not null, y int, z smallint, t bigint, b boolean, f float, ff float, fn float, d double, dn double, str "
-        "text, null_str text encoding dict, fixed_str text encoding dict(16), fixed_null_str text encoding dict(16), "
-        "real_str text encoding none, m timestamp(0), n time(0), o date, o1 date encoding fixed(32), fx int encoding "
-        "fixed(16), dd decimal(10, 2), dd_notnull decimal(10, 2) not null, ss text encoding dict, u int, ofd int, ufd "
-        "int not null, ofq bigint, ufq bigint not null"};
+        "varchar(10), null_str text encoding dict, fixed_str text encoding dict(16), fixed_null_str text encoding "
+        "dict(16), real_str text encoding none, m timestamp(0), n time(0), o date, o1 date encoding fixed(32), fx int "
+        "encoding fixed(16), dd decimal(10, 2), dd_notnull decimal(10, 2) not null, ss text encoding dict, u int, ofd "
+        "int, ufd int not null, ofq bigint, ufq bigint not null"};
     const std::string create_test = build_create_table_statement(columns_definition,
                                                                  "test",
                                                                  {g_with_sharding ? "str" : "", 4},
@@ -3685,7 +3687,7 @@ int create_and_populate_tables() {
     run_ddl_statement(create_test);
     g_sqlite_comparator.query(
         "CREATE TABLE test(x int not null, y int, z smallint, t bigint, b boolean, f float, ff float, fn float, d "
-        "double, dn double, str text, null_str text, fixed_str text, fixed_null_str text, real_str text, m "
+        "double, dn double, str varchar(10), null_str text, fixed_str text, fixed_null_str text, real_str text, m "
         "timestamp(0), n time(0), o date, o1 date, fx int, dd decimal(10, 2), dd_notnull decimal(10, 2) not null, ss "
         "text, u int, ofd int, ufd int not null, ofq bigint, ufq bigint not null);");
   } catch (...) {

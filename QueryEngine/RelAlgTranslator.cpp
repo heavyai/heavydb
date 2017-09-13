@@ -280,6 +280,9 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInput(const RexInput*
     const auto cd = cat_.getMetadataForColumn(table_desc->tableId, rex_input->getIndex() + 1);
     CHECK(cd);
     auto col_ti = cd->columnType;
+    if (col_ti.is_string()) {
+      col_ti.set_type(kTEXT);
+    }
     if (cd->isVirtualCol) {
       // TODO(alex): remove at some point, we only need this fixup for backwards compatibility with old imported data
       CHECK_EQ("rowid", cd->columnName);
