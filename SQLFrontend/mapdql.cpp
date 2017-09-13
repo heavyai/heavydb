@@ -956,14 +956,16 @@ void print_memory_info(ClientContext context, std::string memory_level) {
   std::vector<TNodeMemoryInfo> memory_info;
   std::string sub_system;
   std::string cur_host = "^";
-  bool multiNode = context.cpu_memory.size() > 1;
+  bool multiNode;
   int mgr_num = 0;
   if (!memory_level.compare("gpu")) {
     memory_info = context.gpu_memory;
     sub_system = "GPU";
+    multiNode = context.gpu_memory.size() > 1;
   } else {
     memory_info = context.cpu_memory;
     sub_system = "CPU";
+    multiNode = context.cpu_memory.size() > 1;
   }
 
   tss << "MapD Server Detailed " << sub_system << " Memory Usage:" << std::endl;
