@@ -1127,7 +1127,7 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
         rows_to_sort->sort(source_work_unit.exe_unit.sort_info.order_entries, limit + offset);
       }
       if (limit || offset) {
-        if (g_cluster) {
+        if (g_cluster && sort->collationCount() == 0) {
           rows_to_sort->keepFirstN(limit + offset);
         } else {
           rows_to_sort->dropFirstN(offset);
