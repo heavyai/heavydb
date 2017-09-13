@@ -483,14 +483,13 @@ void process_backslash_commands(char* command, ClientContext& context) {
         }
         std::string encoding;
         if (p.col_type.type == TDatumType::STR) {
-          encoding = (p.col_type.encoding == 0 ? " ENCODING NONE"
-                                               : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
-                                                     std::to_string(p.col_type.comp_param) + ")");
+          encoding =
+              (p.col_type.encoding == 0 ? " ENCODING NONE" : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
+                                                                 std::to_string(p.col_type.comp_param) + ")");
 
         } else {
-          encoding = (p.col_type.encoding == 0 ? ""
-                                               : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
-                                                     std::to_string(p.col_type.comp_param) + ")");
+          encoding = (p.col_type.encoding == 0 ? "" : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
+                                                          std::to_string(p.col_type.comp_param) + ")");
         }
         std::cout << comma_or_blank << p.col_name << " " << thrift_to_name(p.col_type)
                   << (p.col_type.nullable ? "" : " NOT NULL") << encoding;
@@ -1284,7 +1283,7 @@ int main(int argc, char** argv) {
         if (context.cluster_status.size() > 1) {
           std::cout << "Name of Leaf               : " << context.cluster_status[0].host_name << std::endl;
         }
-        
+
         std::cout << "The Server Version Number  : " << context.cluster_status[0].version << std::endl;
         std::cout << "The Server Start Time      : " << buf << " : " << tm_ptr->tm_hour << ":" << tm_ptr->tm_min << ":"
                   << tm_ptr->tm_sec << std::endl;
