@@ -3252,6 +3252,11 @@ TEST(Select, Joins_LeftOuterJoin) {
       dt);
     c("SELECT a.x, b.str FROM test a LEFT JOIN join_test b ON a.str = b.dup_str ORDER BY a.x, b.str IS NULL, b.str;",
       dt);
+    c("SELECT COUNT(*) FROM test LEFT JOIN test_inner ON test_inner.x = test.x WHERE test_inner.str = test.str;", dt);
+    c("SELECT COUNT(*) FROM test LEFT JOIN test_inner ON test_inner.x < test.x WHERE test_inner.str = test.str;", dt);
+    c("SELECT COUNT(*) FROM test LEFT JOIN test_inner ON test_inner.x > test.x WHERE test_inner.str = test.str;", dt);
+    c("SELECT COUNT(*) FROM test LEFT JOIN test_inner ON test_inner.x >= test.x WHERE test_inner.str = test.str;", dt);
+    c("SELECT COUNT(*) FROM test LEFT JOIN test_inner ON test_inner.x <= test.x WHERE test_inner.str = test.str;", dt);
   }
 }
 

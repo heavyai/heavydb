@@ -1080,6 +1080,7 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
   llvm::Value* outer_join_nomatch_flag_lv = nullptr;
   if (isOuterJoin()) {
     if (isOuterLoopJoin()) {
+      CHECK(cgen_state_->outer_join_nomatch_);
       outer_join_nomatch_flag_lv = cgen_state_->ir_builder_.CreateLoad(cgen_state_->outer_join_nomatch_);
       cgen_state_->outer_join_cond_lv_ = cgen_state_->ir_builder_.CreateNot(outer_join_nomatch_flag_lv);
     } else {
@@ -1090,6 +1091,7 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
           cgen_state_->outer_join_cond_lv_, toBool(codegen(expr.get(), true, co).front()));
     }
     if (isOneToManyOuterHashJoin()) {
+      CHECK(cgen_state_->outer_join_nomatch_);
       // TODO(miyu): Support more than 1 one-to-many hash joins in folded sequence.
       outer_join_nomatch_flag_lv = cgen_state_->ir_builder_.CreateLoad(cgen_state_->outer_join_nomatch_);
     }

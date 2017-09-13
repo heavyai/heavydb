@@ -1851,7 +1851,8 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(const RelCompoun
   const auto scalar_sources = translate_scalar_sources(compound, translator);
   const auto groupby_exprs = translate_groupby_exprs(compound, scalar_sources);
   const auto quals_cf = translate_quals(compound, translator);
-  const auto separated_quals = separate_join_quals(quals_cf.quals);
+  const auto separated_quals =
+      join_type == JoinType::LEFT ? SeparatedQuals{quals_cf.quals, {}} : separate_join_quals(quals_cf.quals);
   const auto simple_separated_quals = separate_join_quals(quals_cf.simple_quals);
   CHECK(simple_separated_quals.join_quals.empty());
   const auto target_exprs = translate_targets(target_exprs_owned_, scalar_sources, groupby_exprs, compound, translator);
@@ -2151,7 +2152,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createFilterWorkUnit(const RelFilter* f
   const auto filter_expr = translator.translateScalarRex(filter->getCondition());
   const auto qual = fold_expr(filter_expr.get());
   std::list<std::shared_ptr<Analyzer::Expr>> quals{qual};
-  const auto separated_quals = separate_join_quals(quals);
+  const auto separated_quals = join_type == JoinType::LEFT ? SeparatedQuals{quals, {}} : separate_join_quals(quals);
   target_exprs_owned_.insert(target_exprs_owned_.end(), target_exprs_owned.begin(), target_exprs_owned.end());
   const auto target_exprs = get_exprs_not_owned(target_exprs_owned);
   filter->setOutputMetainfo(in_metainfo);
