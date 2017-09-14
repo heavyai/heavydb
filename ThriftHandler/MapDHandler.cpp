@@ -60,8 +60,6 @@
 #include "Shared/scope.h"
 #include "Shared/StringTransform.h"
 #include "Shared/MapDParameters.h"
-#include "DataMgr/BufferMgr/Buffer.h"
-#include "DataMgr/BufferMgr/BufferMgr.h"
 
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/replace.hpp>

@@ -899,12 +899,6 @@ class CreateTableStmt : public DDLStmt {
   virtual void execute(const Catalog_Namespace::SessionInfo& session);
 
  private:
-  // Validate shared dictionary directive against the list of columns seen so far.
-  void validate_shared_dictionary(const SharedDictionaryDef* shared_dict_def,
-                                  const std::list<ColumnDescriptor>& columns,
-                                  const std::vector<SharedDictionaryDef>& shared_dict_defs_so_far,
-                                  const Catalog_Namespace::Catalog& catalog) const;
-
   std::unique_ptr<std::string> table;
   std::list<std::unique_ptr<TableElement>> table_element_list;
   bool is_temporary_;

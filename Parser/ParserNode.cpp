@@ -32,6 +32,7 @@
 #include <rapidjson/stringbuffer.h>
 #include <rapidjson/writer.h>
 #include "../Catalog/Catalog.h"
+#include "../Catalog/SharedDictionaryValidator.h"
 #include "ParserNode.h"
 #include "ReservedKeywords.h"
 #include "../Planner/Planner.h"
@@ -197,7 +198,10 @@ std::shared_ptr<Analyzer::Expr> OperExpr::normalize(const SQLOps optype,
       right_expr = right_expr->add_cast(new_right_type.get_array_type());
   }
   if (IS_EQUIVALENCE(optype) || optype == kNE) {
-    if (new_left_type.get_compression() == kENCODING_DICT && new_right_type.get_compression() == kENCODING_NONE) {
+    if (new_left_type.get_compression() == kENCODING_DICT && new_right_type.get_compression() == kENCODING_DICT) {
+      // do nothing
+    } else if (new_left_type.get_compression() == kENCODING_DICT &&
+               new_right_type.get_compression() == kENCODING_NONE) {
       SQLTypeInfo ti(new_right_type);
       ti.set_compression(new_left_type.get_compression());
       ti.set_comp_param(new_left_type.get_comp_param());
@@ -1660,7 +1664,7 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   for (auto& e : table_element_list) {
     if (dynamic_cast<SharedDictionaryDef*>(e.get())) {
       auto shared_dict_def = static_cast<SharedDictionaryDef*>(e.get());
-      validate_shared_dictionary(shared_dict_def, columns, shared_dict_defs, catalog);
+      validate_shared_dictionary(this, shared_dict_def, columns, shared_dict_defs, catalog);
       shared_dict_defs.push_back(*shared_dict_def);
       continue;
     }
@@ -1895,83 +1899,6 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   if (catalog.isAccessPrivCheckEnabled()) {
     auto& syscat = static_cast<Catalog_Namespace::SysCatalog&>(catalog);
     syscat.createDBObject(session.get_currentUser(), td.tableName, catalog);
-  }
-}
-
-namespace {
-
-const ColumnDescriptor* lookup_column(const std::string& name, const std::list<ColumnDescriptor>& columns) {
-  for (const auto& cd : columns) {
-    if (cd.columnName == name) {
-      return &cd;
-    }
-  }
-  return nullptr;
-}
-
-const ColumnDescriptor* lookup_column(const std::string& name, const std::list<const ColumnDescriptor*>& columns) {
-  for (const auto& cd : columns) {
-    if (cd->columnName == name) {
-      return cd;
-    }
-  }
-  return nullptr;
-}
-
-const CompressDef* get_compression_for_column(const std::string& name,
-                                              const std::list<std::unique_ptr<TableElement>>& table_element_list) {
-  for (const auto& e : table_element_list) {
-    const auto col_def = dynamic_cast<ColumnDef*>(e.get());
-    if (!col_def || *col_def->get_column_name() != name) {
-      continue;
-    }
-    return col_def->get_compression();
-  }
-  UNREACHABLE();
-  return nullptr;
-}
-
-}  // namespace
-
-// Validate shared dictionary directive against the list of columns seen so far.
-void CreateTableStmt::validate_shared_dictionary(const SharedDictionaryDef* shared_dict_def,
-                                                 const std::list<ColumnDescriptor>& columns,
-                                                 const std::vector<SharedDictionaryDef>& shared_dict_defs_so_far,
-                                                 const Catalog_Namespace::Catalog& catalog) const {
-  CHECK(shared_dict_def);
-  const auto cd_ptr = lookup_column(shared_dict_def->get_column(), columns);
-  const auto col_qualified_name = *table + "." + shared_dict_def->get_column();
-  if (!cd_ptr) {
-    throw std::runtime_error("Column " + col_qualified_name + " doesn't exist");
-  }
-  if (!cd_ptr->columnType.is_string() || cd_ptr->columnType.get_compression() != kENCODING_DICT) {
-    throw std::runtime_error("Column " + col_qualified_name + " must be a dictionary encoded string");
-  }
-  if (get_compression_for_column(shared_dict_def->get_column(), table_element_list)) {
-    throw std::runtime_error("Column " + col_qualified_name +
-                             " shouldn't specify an encoding, it borrows it from the referenced column");
-  }
-  const auto foreign_td = catalog.getMetadataForTable(shared_dict_def->get_foreign_table());
-  if (!foreign_td) {
-    throw std::runtime_error("Table " + shared_dict_def->get_foreign_table() + " doesn't exist");
-  }
-  const auto foreign_columns = catalog.getAllColumnMetadataForTable(foreign_td->tableId, false, false);
-  const auto foreign_cd_ptr = lookup_column(shared_dict_def->get_foreign_column(), foreign_columns);
-  const auto foreign_col_qualified_name = foreign_td->tableName + "." + shared_dict_def->get_foreign_column();
-  if (!foreign_cd_ptr) {
-    throw std::runtime_error("Column " + foreign_col_qualified_name + " doesn't exist");
-  }
-  if (!foreign_cd_ptr->columnType.is_string() || foreign_cd_ptr->columnType.get_compression() != kENCODING_DICT) {
-    throw std::runtime_error("Column " + foreign_col_qualified_name + " must be a dictionary encoded string");
-  }
-  const auto it = std::find_if(shared_dict_defs_so_far.begin(),
-                               shared_dict_defs_so_far.end(),
-                               [shared_dict_def](const SharedDictionaryDef& elem) {
-                                 return elem.get_column() == shared_dict_def->get_column();
-                               });
-  if (it != shared_dict_defs_so_far.end()) {
-    throw std::runtime_error("Duplicate shared dictionary hint for column " + *table + "." +
-                             shared_dict_def->get_column());
   }
 }
 

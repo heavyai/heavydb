@@ -30,6 +30,7 @@
 #include <random>
 #include <boost/filesystem.hpp>
 #include <boost/uuid/sha1.hpp>
+#include "SharedDictionaryValidator.h"
 #include "../Fragmenter/Fragmenter.h"
 #include "../Fragmenter/InsertOrderFragmenter.h"
 #include "../Parser/ParserNode.h"
@@ -1725,7 +1726,7 @@ void Catalog::createTable(TableDescriptor& td,
       int colId = 1;
       for (auto cd : columns) {
         if (cd.columnType.get_compression() == kENCODING_DICT) {
-          const bool is_foreign_col = setColumnSharedDictionary(cd, shared_dict_defs);
+          const bool is_foreign_col = setColumnSharedDictionary(cd, cds, dds, td, shared_dict_defs);
           if (!is_foreign_col) {
             setColumnDictionary(cd, dds, td, isLogicalTable);
           }
@@ -1768,6 +1769,7 @@ void Catalog::createTable(TableDescriptor& td,
     int colId = 1;
     for (auto cd : columns) {
       if (cd.columnType.get_compression() == kENCODING_DICT) {
+        // TODO(vraj) : create shared dictionary for temp table if needed
         std::string fileName("");
         std::string folderPath("");
         int dictId = nextTempDictId_++;
@@ -1805,25 +1807,65 @@ const ColumnDescriptor* get_foreign_col(const Catalog& cat, const Parser::Shared
 
 }  // namespace
 
+void Catalog::addReferenceToForeignDict(ColumnDescriptor& referencing_column,
+                                        Parser::SharedDictionaryDef shared_dict_def) {
+  const auto foreign_ref_col = get_foreign_col(*this, shared_dict_def);
+  CHECK(foreign_ref_col);
+  referencing_column.columnType = foreign_ref_col->columnType;
+  const int dict_id = referencing_column.columnType.get_comp_param();
+  const auto dictIt = dictDescriptorMapById_.find(dict_id);
+  CHECK(dictIt != dictDescriptorMapById_.end());
+  const auto& dd = dictIt->second;
+  CHECK_GE(dd->refcount, 1);
+  ++dd->refcount;
+  sqliteConnector_.query_with_text_params("UPDATE mapd_dictionaries SET refcount = refcount + 1 WHERE dictid = ?",
+                                          {std::to_string(dict_id)});
+}
+
 bool Catalog::setColumnSharedDictionary(ColumnDescriptor& cd,
+                                        std::list<ColumnDescriptor>& cdd,
+                                        std::list<DictDescriptor>& dds,
+                                        const TableDescriptor td,
                                         const std::vector<Parser::SharedDictionaryDef>& shared_dict_defs) {
   if (shared_dict_defs.empty()) {
     return false;
   }
   for (const auto& shared_dict_def : shared_dict_defs) {
+    // check if the current column is a referencing column
     const auto& column = shared_dict_def.get_column();
     if (cd.columnName == column) {
-      const auto foreign_ref_col = get_foreign_col(*this, shared_dict_def);
-      CHECK(foreign_ref_col);
-      cd.columnType = foreign_ref_col->columnType;
-      const int dict_id = cd.columnType.get_comp_param();
-      const auto dictIt = dictDescriptorMapById_.find(dict_id);
-      CHECK(dictIt != dictDescriptorMapById_.end());
-      const auto& dd = dictIt->second;
-      CHECK_GE(dd->refcount, 1);
-      ++dd->refcount;
-      sqliteConnector_.query_with_text_params("UPDATE mapd_dictionaries SET refcount = refcount + 1 WHERE dictid = ?",
-                                              {std::to_string(dict_id)});
+      if (!shared_dict_def.get_foreign_table().compare(td.tableName)) {
+        // Dictionaries are being shared in table to be created
+        const auto& ref_column = shared_dict_def.get_foreign_column();
+        auto colIt = std::find_if(cdd.begin(), cdd.end(), [ref_column](const ColumnDescriptor it) {
+          return !ref_column.compare(it.columnName);
+        });
+        CHECK(colIt != cdd.end());
+        cd.columnType = colIt->columnType;
+
+        sqliteConnector_.query_with_text_params(
+            "SELECT dictid FROM mapd_dictionaries WHERE dictid in (select comp_param from "
+            "mapd_columns "
+            "where compression = ? and tableid = ? and columnid = ?)",
+            std::vector<std::string>{
+                std::to_string(kENCODING_DICT), std::to_string(td.tableId), std::to_string(colIt->columnId)});
+        const auto dict_id = sqliteConnector_.getData<int>(0, 0);
+        auto dictIt =
+            std::find_if(dds.begin(), dds.end(), [dict_id](const DictDescriptor it) { return it.dictId == dict_id; });
+        if (dictIt != dds.end()) {
+          // There exists dictionary definition of a dictionary column
+          CHECK_GE(dictIt->refcount, 1);
+          ++dictIt->refcount;
+          sqliteConnector_.query_with_text_params(
+              "UPDATE mapd_dictionaries SET refcount = refcount + 1 WHERE dictid = ?", {std::to_string(dict_id)});
+        } else {
+          // The dictionary is referencing a column which is referencing a column in diffrent table
+          auto root_dict_def = compress_reference_path(shared_dict_def, shared_dict_defs);
+          addReferenceToForeignDict(cd, root_dict_def);
+        }
+      } else {
+        addReferenceToForeignDict(cd, shared_dict_def);
+      }
       return true;
     }
   }
@@ -2019,9 +2061,17 @@ void Catalog::doDropTable(const TableDescriptor* td) {
   try {
     sqliteConnector_.query_with_text_param("DELETE FROM mapd_tables WHERE tableid = ?", std::to_string(tableId));
     sqliteConnector_.query_with_text_params(
-        "UPDATE mapd_dictionaries SET refcount = refcount - 1 WHERE dictid in (select comp_param from mapd_columns "
-        "where compression = ? and tableid = ?)",
+        "select comp_param from mapd_columns where compression = ? and tableid = ?",
         std::vector<std::string>{std::to_string(kENCODING_DICT), std::to_string(tableId)});
+    int numRows = sqliteConnector_.getNumRows();
+    std::vector<int> dict_id_list;
+    for (int r = 0; r < numRows; ++r) {
+      dict_id_list.push_back(sqliteConnector_.getData<int>(r, 0));
+    }
+    for (auto dict_id : dict_id_list) {
+      sqliteConnector_.query_with_text_params("UPDATE mapd_dictionaries SET refcount = refcount - 1 WHERE dictid = ?",
+                                              std::vector<std::string>{std::to_string(dict_id)});
+    }
     sqliteConnector_.query_with_text_params(
         "DELETE FROM mapd_dictionaries WHERE dictid in (select comp_param from mapd_columns where compression = ? "
         "and tableid = ?) and refcount = 0",
