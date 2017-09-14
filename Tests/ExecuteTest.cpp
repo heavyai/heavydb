@@ -3261,6 +3261,9 @@ TEST(Select, Joins_LeftOuterJoin) {
     c("SELECT COUNT(*) FROM test LEFT JOIN test_inner ON test_inner.x > test.x WHERE test_inner.str = test.str;", dt);
     c("SELECT COUNT(*) FROM test LEFT JOIN test_inner ON test_inner.x >= test.x WHERE test_inner.str = test.str;", dt);
     c("SELECT COUNT(*) FROM test LEFT JOIN test_inner ON test_inner.x <= test.x WHERE test_inner.str = test.str;", dt);
+    c("SELECT test_inner.y, COUNT(*) n FROM test LEFT JOIN test_inner ON test_inner.x = test.x WHERE test_inner.str = "
+      "'foo' GROUP BY test_inner.y ORDER BY n DESC;",
+      dt);
   }
 }
 

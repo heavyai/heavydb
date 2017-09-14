@@ -2614,7 +2614,9 @@ GroupByAndAggregate::DiamondCodegen::~DiamondCodegen() {
   } else if (chain_to_next_) {
     LL_BUILDER.CreateBr(cond_false_);
   }
-  LL_BUILDER.SetInsertPoint(orig_cond_false_);
+  if (!parent_ || (!chain_to_next_ && cond_false_ != parent_->cond_false_)) {
+    LL_BUILDER.SetInsertPoint(orig_cond_false_);
+  }
 }
 
 void GroupByAndAggregate::patchGroupbyCall(llvm::CallInst* call_site) {
