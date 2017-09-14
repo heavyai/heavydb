@@ -3218,6 +3218,8 @@ TEST(Select, Joins_InnerJoin_Filters) {
     c("SELECT COUNT(*) FROM test a JOIN join_test b ON a.x = b.x JOIN test_inner c ON c.str = a.str WHERE c.str = "
       "'foo';",
       dt);
+    c("SELECT COUNT(*) FROM test t1 JOIN test t2 ON t1.x = t2.x WHERE t1.y > t2.y;", dt);
+    c("SELECT COUNT(*) FROM test t1 JOIN test t2 ON t1.x = t2.x WHERE t1.null_str = t2.null_str;", dt);
   }
 }
 

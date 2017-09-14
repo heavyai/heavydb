@@ -1478,10 +1478,10 @@ bool Executor::needFetchAllFragments(const InputColDescriptor& inner_col_desc,
   }
   const int table_id = inner_col_desc.getScanDesc().getTableId();
   const auto fragments_it =
-      std::find_if(selected_fragments.begin(),
-                   selected_fragments.end(),
+      std::find_if(selected_fragments.rbegin(),
+                   selected_fragments.rend(),
                    [table_id](const std::pair<int, std::vector<size_t>>& frag) { return frag.first == table_id; });
-  CHECK(fragments_it != selected_fragments.end());
+  CHECK(fragments_it != selected_fragments.rend());
   const auto& fragments = fragments_it->second;
   if (fragments.size() <= 1) {
     return false;
