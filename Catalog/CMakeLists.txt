@@ -3,6 +3,7 @@ set(catalog_source_files
     Catalog.h
     DBObject.cpp
     Role.cpp
+    SharedDictionaryValidator.cpp
 )
 
 get_target_property(StringDictionary_BINARY_DIR StringDictionary BINARY_DIR)

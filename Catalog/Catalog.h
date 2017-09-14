@@ -308,7 +308,11 @@ class Catalog {
   void addTableToMap(TableDescriptor& td,
                      const std::list<ColumnDescriptor>& columns,
                      const std::list<DictDescriptor>& dicts);
+  void addReferenceToForeignDict(ColumnDescriptor& referencing_column, Parser::SharedDictionaryDef shared_dict_def);
   bool setColumnSharedDictionary(ColumnDescriptor& cd,
+                                 std::list<ColumnDescriptor>& cdd,
+                                 std::list<DictDescriptor>& dds,
+                                 const TableDescriptor td,
                                  const std::vector<Parser::SharedDictionaryDef>& shared_dict_defs);
   void setColumnDictionary(ColumnDescriptor& cd,
                            std::list<DictDescriptor>& dds,
