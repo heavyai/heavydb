@@ -212,26 +212,28 @@ std::vector<llvm::Value*> Executor::codegenVariableLengthStringColVar(llvm::Valu
 }
 
 llvm::Value* Executor::codegenRowId(const Analyzer::ColumnVar* col_var, const CompilationOptions& co) {
-  const auto offset = cgen_state_->frag_offsets_[adjusted_range_table_index(col_var)];
-  if (offset) {
-    const auto& table_generation = getTableGeneration(col_var->get_table_id());
-    if (table_generation.start_rowid > 0) {
-      // Handle the multi-node case: each leaf receives a start rowid used
-      // to offset the local rowid and generate a cluster-wide unique rowid.
-      Datum d;
-      d.bigintval = table_generation.start_rowid;
-      const auto start_rowid = makeExpr<Analyzer::Constant>(kBIGINT, false, d);
-      const auto start_rowid_lvs = codegen(start_rowid.get(), kENCODING_NONE, -1, co);
-      CHECK_EQ(size_t(1), start_rowid_lvs.size());
-      // Add the start rowid for the leaf.
-      return cgen_state_->ir_builder_.CreateAdd(cgen_state_->ir_builder_.CreateAdd(posArg(col_var), offset),
-                                                start_rowid_lvs.front());
-    } else {
-      return cgen_state_->ir_builder_.CreateAdd(posArg(col_var), offset);
-    }
+  const auto offset_lv = cgen_state_->frag_offsets_[adjusted_range_table_index(col_var)];
+  llvm::Value* start_rowid_lv{nullptr};
+  const auto& table_generation = getTableGeneration(col_var->get_table_id());
+  if (table_generation.start_rowid > 0) {
+    // Handle the multi-node case: each leaf receives a start rowid used
+    // to offset the local rowid and generate a cluster-wide unique rowid.
+    Datum d;
+    d.bigintval = table_generation.start_rowid;
+    const auto start_rowid = makeExpr<Analyzer::Constant>(kBIGINT, false, d);
+    const auto start_rowid_lvs = codegen(start_rowid.get(), kENCODING_NONE, -1, co);
+    CHECK_EQ(size_t(1), start_rowid_lvs.size());
+    start_rowid_lv = start_rowid_lvs.front();
   }
-  // Handle the temporary table case
-  return posArg(col_var);
+  auto rowid_lv = posArg(col_var);
+  if (offset_lv) {
+    rowid_lv = cgen_state_->ir_builder_.CreateAdd(rowid_lv, offset_lv);
+  }
+  if (table_generation.start_rowid > 0) {
+    CHECK(start_rowid_lv);
+    rowid_lv = cgen_state_->ir_builder_.CreateAdd(rowid_lv, start_rowid_lv);
+  }
+  return rowid_lv;
 }
 
 namespace {
