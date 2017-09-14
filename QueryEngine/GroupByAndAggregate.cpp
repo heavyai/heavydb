@@ -2802,7 +2802,7 @@ llvm::Value* GroupByAndAggregate::codegenOutputSlot(llvm::Value* groups_buffer,
                      LL_INT(row_size_quad),
                      LL_INT(static_cast<uint32_t>(query_mem_desc_.getColOffInBytes(0, target_idx))),
                      LL_BOOL(only_order_entry.is_desc),
-                     LL_BOOL(order_entry_expr->get_type_info().get_notnull()),
+                     LL_BOOL(!order_entry_expr->get_type_info().get_notnull()),
                      LL_BOOL(only_order_entry.nulls_first),
                      null_key_lv,
                      order_entry_lv});
