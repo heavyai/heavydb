@@ -388,8 +388,11 @@ ExpressionRange getLeafColumnRange(const Analyzer::ColumnVar* col_expr,
       }
       if (query_info.getNumTuples() == 0) {
         // The column doesn't contain any values, synthesize an empty range.
-        return col_ti.is_fp() ? ExpressionRange::makeFloatRange(0, -1, false)
-                              : ExpressionRange::makeIntRange(0, -1, 0, false);
+        if (col_ti.is_fp()) {
+          return col_ti.get_type() == kFLOAT ? ExpressionRange::makeFloatRange(0, -1, false)
+                                             : ExpressionRange::makeDoubleRange(0, -1, false);
+        }
+        return ExpressionRange::makeIntRange(0, -1, 0, false);
       }
       FIND_STAT_FRAG(min);
       FIND_STAT_FRAG(max);
