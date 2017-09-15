@@ -145,9 +145,8 @@ class MapDPreparedStatement implements PreparedStatement {
 
   @Override
   public void setNull(int parameterIndex, int sqlType) throws SQLException { //logger.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet," + " line:" + new Throwable().getStackTrace()[0].
-            getLineNumber() + " class:" + new Throwable().getStackTrace()[0].getClassName() + " method:" + new Throwable().
-            getStackTrace()[0].getMethodName());
+    parmRep[parameterIndex - 1] = "";
+    repCount++;
   }
 
   @Override

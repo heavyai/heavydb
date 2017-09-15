@@ -78,6 +78,10 @@ public class MapDStatement implements java.sql.Statement {
   @Override
   public int executeUpdate(String sql) throws SQLException { //logger.debug("Entered");
     try {
+       // remove " characters if it is a CREATE statement
+      if (sql.trim().substring(0, 6).compareToIgnoreCase("CREATE") == 0){
+          sql = sql.replace('"', ' ');
+      }
       sqlResult = client.sql_execute(session, sql + ";", true, null, -1);
     } catch (TMapDException ex) {
       throw new SQLException("Query failed : " + ex.getError_msg() + " sql was '" + sql + "'");
