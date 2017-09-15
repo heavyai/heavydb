@@ -2708,6 +2708,10 @@ void GrantRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
                              "; failed, because it can only be executed by super user.");
   }
   auto& syscat = static_cast<Catalog_Namespace::SysCatalog&>(catalog);
+  if (!get_user().compare(MAPD_ROOT_USER)) {
+    throw std::runtime_error("Request to grant role " + get_role() +
+                             " failed because mapd root user has all privileges by default.");
+  }
   syscat.grantRole(get_role(), get_user());
 }
 
@@ -2726,6 +2730,10 @@ void RevokeRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
                              "; failed, because it can only be executed by super user.");
   }
   auto& syscat = static_cast<Catalog_Namespace::SysCatalog&>(catalog);
+  if (!get_user().compare(MAPD_ROOT_USER)) {
+    throw std::runtime_error("Request to revoke role " + get_role() +
+                             " failed because privileges can not be revoked from mapd root user.");
+  }
   syscat.revokeRole(get_role(), get_user());
 }
 

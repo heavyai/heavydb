@@ -461,6 +461,10 @@ void SysCatalog::createDBObject(const UserMetadata& user,
 void SysCatalog::grantDBObjectPrivileges(const std::string& roleName,
                                          DBObject& object,
                                          const Catalog_Namespace::Catalog& catalog) {
+  if (!roleName.compare(MAPD_ROOT_USER)) {
+    throw runtime_error("Request to grant privileges to " + roleName +
+                        " failed because mapd root user has all privileges by default.");
+  }
   Role* rl = getMetadataForRole(roleName);
   if (!rl) {
     throw runtime_error("Request to grant privileges to " + roleName +
@@ -506,6 +510,10 @@ void SysCatalog::grantDBObjectPrivileges(const std::string& roleName,
 void SysCatalog::revokeDBObjectPrivileges(const std::string& roleName,
                                           DBObject& object,
                                           const Catalog_Namespace::Catalog& catalog) {
+  if (!roleName.compare(MAPD_ROOT_USER)) {
+    throw runtime_error("Request to revoke privileges from " + roleName +
+                        " failed because privileges can not be revoked from mapd root user.");
+  }
   Role* rl = getMetadataForRole(roleName);
   if (!rl) {
     throw runtime_error("Request to revoke privileges from " + roleName +
@@ -566,6 +574,10 @@ bool SysCatalog::verifyDBObjectOwnership(const UserMetadata& user,
 void SysCatalog::getDBObjectPrivileges(const std::string& roleName,
                                        DBObject& object,
                                        const Catalog_Namespace::Catalog& catalog) {
+  if (!roleName.compare(MAPD_ROOT_USER)) {
+    throw runtime_error("Request to show privileges from " + roleName +
+                        " failed because mapd root user has all privileges by default.");
+  }
   Role* rl = getMetadataForRole(roleName);
   if (!rl) {
     throw runtime_error("Request to show privileges for " + roleName +
@@ -649,10 +661,6 @@ void SysCatalog::grantRole(const std::string& roleName, const std::string& userN
   if (!rl) {
     throw runtime_error("Request to grant role " + roleName + " failed because role with this name does not exist.");
   }
-  if (!userName.compare(MAPD_ROOT_USER)) {
-    throw runtime_error("Request to grant role " + roleName +
-                        " failed because mapd root user has all privileges by default.");
-  }
   UserMetadata user;
   if (!getMetadataForUser(userName, user)) {
     throw runtime_error("Request to grant role to user " + userName +
@@ -686,10 +694,6 @@ void SysCatalog::revokeRole(const std::string& roleName, const std::string& user
   Role* rl = getMetadataForRole(roleName);
   if (!rl) {
     throw runtime_error("Request to revoke role " + roleName + " failed because role with this name does not exist.");
-  }
-  if (!userName.compare(MAPD_ROOT_USER)) {
-    throw runtime_error("Request to revoke role " + roleName +
-                        " failed because privileges can not be revoked from mapd root user.");
   }
   UserMetadata user;
   if (!getMetadataForUser(userName, user)) {
