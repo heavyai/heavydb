@@ -649,6 +649,10 @@ void SysCatalog::grantRole(const std::string& roleName, const std::string& userN
   if (!rl) {
     throw runtime_error("Request to grant role " + roleName + " failed because role with this name does not exist.");
   }
+  if (!userName.compare(MAPD_ROOT_USER)) {
+    throw runtime_error("Request to grant role " + roleName +
+                        " failed because mapd root user has all privileges by default.");
+  }
   UserMetadata user;
   if (!getMetadataForUser(userName, user)) {
     throw runtime_error("Request to grant role to user " + userName +
@@ -683,13 +687,17 @@ void SysCatalog::revokeRole(const std::string& roleName, const std::string& user
   if (!rl) {
     throw runtime_error("Request to revoke role " + roleName + " failed because role with this name does not exist.");
   }
+  if (!userName.compare(MAPD_ROOT_USER)) {
+    throw runtime_error("Request to revoke role " + roleName +
+                        " failed because privileges can not be revoked from mapd root user.");
+  }
   UserMetadata user;
   if (!getMetadataForUser(userName, user)) {
     throw runtime_error("Request to revoke role from user " + userName +
                         " failed because user with this name does not exist.");
   }
   user_rl = getMetadataForUserRole(user.userId);
-  if (!user_rl) {
+  if (!user_rl || (user_rl && !user_rl->hasRole(rl))) {
     throw runtime_error("Request to revoke role " + roleName + " from user " + userName +
                         " failed because this role has not been granted to the user.");
   }
