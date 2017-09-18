@@ -23,27 +23,29 @@ option(WITH_ZLIB "With ZLIB" ${with_zlib_default})
 # }
 
 # OpenSSL {
-if(WITH_BUNDLED_SSL) # option from 'h2o' parent project
-  set(with_ssl_default ON)
-else()
-  find_package(OpenSSL QUIET)
-  if(OpenSSL_FOUND)
-    set(with_ssl_default ON)
-  else()
-    set(with_ssl_default OFF)
-  endif()
-endif()
+#if(WITH_BUNDLED_SSL) # option from 'h2o' parent project
+#  set(with_ssl_default ON)
+#else()
+#  find_package(OpenSSL QUIET)
+#  if(OpenSSL_FOUND)
+#    set(with_ssl_default ON)
+#  else()
+#    set(with_ssl_default OFF)
+#  endif()
+#endif()
+set(with_ssl_default OFF)
 option(WITH_SSL "With SSL" ${with_ssl_default})
 # }
 
 # SASL {
-include(FindPkgConfig)
-pkg_check_modules(SASL QUIET libsasl2)
-if(SASL_FOUND)
-  set(with_sasl_default ON)
-else()
-  set(with_sasl_default OFF)
-endif()
+#include(FindPkgConfig)
+#pkg_check_modules(SASL QUIET libsasl2)
+#if(SASL_FOUND)
+#  set(with_sasl_default ON)
+#else()
+#  set(with_sasl_default OFF)
+#endif()
+set(with_sasl_default OFF)
 option(WITH_SASL "With SASL" ${with_sasl_default})
 # }
 
