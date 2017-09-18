@@ -168,11 +168,6 @@ double radians(const double x) {
 }
 
 EXTENSION_NOINLINE
-double Round(const double x) {
-  return round(x);
-}
-
-EXTENSION_NOINLINE
 double round_to_digit(const double x, const int32_t y) {
   double exp = pow(10, y);
   return round(x * exp) / exp;
