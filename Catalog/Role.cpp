@@ -98,7 +98,10 @@ bool UserRole::checkPrivileges(const DBObject& objectRequested) const {
   bool rc =
       false;  // returns false if requested privileges are not granted or no privileges granted at all to this DBObject
   DBObjectKey objectKey = objectRequested.objectKey_;
-  while (!objectKey.empty()) {
+  while (objectKey.size() > 1) {
+    if (objectKey.size() == 2) {
+      objectKey[0] = static_cast<int32_t>(DatabaseDBObjectType);
+    }
     auto dbObject = findDbObject(objectKey);
     if (dbObject) {  // if object not found return false, i.e. no privileges for this object granted at all
       // User has access privileges to the object decsribed by dbObjectRequested objectId and type. Check to make sure
