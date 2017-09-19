@@ -186,4 +186,8 @@ inline size_t get_bit_width(const SQLTypeInfo& ti) {
   }
 }
 
+inline bool is_unsigned_type(const SQLTypeInfo& ti) {
+  return ti.get_compression() == kENCODING_DICT && ti.get_size() < ti.get_logical_size();
+}
+
 #endif  // QUERYENGINE_SQLTYPESLAYOUT_H

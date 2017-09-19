@@ -804,7 +804,7 @@ TargetValue ResultSet::makeTargetValue(const int8_t* ptr,
       }
       return NullableString(sdp->getString(ival));
     } else {
-      return ival;
+      return static_cast<int64_t>(static_cast<int32_t>(ival));
     }
   }
   if (chosen_type.is_decimal()) {

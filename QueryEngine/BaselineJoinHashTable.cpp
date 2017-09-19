@@ -401,8 +401,12 @@ BaselineJoinHashTable::ColumnsForDevice BaselineJoinHashTable::fetchColumnsForDe
     }
     join_columns.emplace_back(JoinColumn{col_buff, elem_count});
     const auto& ti = inner_col->get_type_info();
-    join_column_types.emplace_back(JoinColumnTypeInfo{
-        static_cast<size_t>(ti.get_size()), 0, inline_fixed_encoding_null_val(ti), isBitwiseEq(), 0});
+    join_column_types.emplace_back(JoinColumnTypeInfo{static_cast<size_t>(ti.get_size()),
+                                                      0,
+                                                      inline_fixed_encoding_null_val(ti),
+                                                      isBitwiseEq(),
+                                                      0,
+                                                      is_unsigned_type(ti)});
   }
   return {join_columns, join_column_types, chunks_owner, frags_owner, 0};
 }

@@ -654,15 +654,19 @@ int JoinHashTable::initHashTableOnCpu(const int8_t* col_buff,
                                           thread_count,
                                           &ti,
                                           &err] {
-        int partial_err = fill_hash_join_buff(
-            &(*cpu_hash_table_buff_)[0],
-            hash_join_invalid_val,
-            {col_buff, num_elements},
-            {static_cast<size_t>(ti.get_size()), col_range_.getIntMin(), inline_fixed_encoding_null_val(ti)},
-            sd_inner_proxy,
-            sd_outer_proxy,
-            thread_idx,
-            thread_count);
+        int partial_err = fill_hash_join_buff(&(*cpu_hash_table_buff_)[0],
+                                              hash_join_invalid_val,
+                                              {col_buff, num_elements},
+                                              {static_cast<size_t>(ti.get_size()),
+                                               col_range_.getIntMin(),
+                                               inline_fixed_encoding_null_val(ti),
+                                               isBitwiseEq(),
+                                               col_range_.getIntMax() + 1,
+                                               is_unsigned_type(ti)},
+                                              sd_inner_proxy,
+                                              sd_outer_proxy,
+                                              thread_idx,
+                                              thread_count);
         __sync_val_compare_and_swap(&err, 0, partial_err);
       });
     }
@@ -717,15 +721,19 @@ void JoinHashTable::initOneToManyHashTableOnCpu(
     child.get();
   }
 
-  fill_one_to_many_hash_table(
-      &(*cpu_hash_table_buff_)[0],
-      hash_entry_count,
-      hash_join_invalid_val,
-      {col_buff, num_elements},
-      {static_cast<size_t>(ti.get_size()), col_range_.getIntMin(), inline_fixed_encoding_null_val(ti)},
-      sd_inner_proxy,
-      sd_outer_proxy,
-      thread_count);
+  fill_one_to_many_hash_table(&(*cpu_hash_table_buff_)[0],
+                              hash_entry_count,
+                              hash_join_invalid_val,
+                              {col_buff, num_elements},
+                              {static_cast<size_t>(ti.get_size()),
+                               col_range_.getIntMin(),
+                               inline_fixed_encoding_null_val(ti),
+                               isBitwiseEq(),
+                               col_range_.getIntMax() + 1,
+                               is_unsigned_type(ti)},
+                              sd_inner_proxy,
+                              sd_outer_proxy,
+                              thread_count);
 }
 
 namespace {
@@ -830,7 +838,8 @@ int JoinHashTable::initHashTableForDevice(
                                  col_range_.getIntMin(),
                                  inline_fixed_encoding_null_val(ti),
                                  isBitwiseEq(),
-                                 col_range_.getIntMax() + 1};
+                                 col_range_.getIntMax() + 1,
+                                 is_unsigned_type(ti)};
     if (shard_count) {
       CHECK_GT(device_count_, 0);
       for (size_t shard = device_id; shard < shard_count; shard += device_count_) {
@@ -936,7 +945,8 @@ void JoinHashTable::initOneToManyHashTable(const ChunkKey& chunk_key,
                                  col_range_.getIntMin(),
                                  inline_fixed_encoding_null_val(ti),
                                  isBitwiseEq(),
-                                 col_range_.getIntMax() + 1};
+                                 col_range_.getIntMax() + 1,
+                                 is_unsigned_type(ti)};
     if (shard_count) {
       CHECK_GT(device_count_, 0);
       for (size_t shard = device_id; shard < shard_count; shard += device_count_) {
@@ -1051,7 +1061,8 @@ std::vector<llvm::Value*> JoinHashTable::getHashJoinArgs(llvm::Value* hash_ptr,
     hash_join_idx_args.push_back(executor_->ll_int<uint32_t>(device_count_));
   }
   if (col_range_.hasNulls() || isBitwiseEq()) {
-    hash_join_idx_args.push_back(executor_->ll_int(inline_fixed_encoding_null_val(key_col->get_type_info())));
+    auto key_col_logical_ti = get_logical_type_info(key_col->get_type_info());
+    hash_join_idx_args.push_back(executor_->ll_int(inline_fixed_encoding_null_val(key_col_logical_ti)));
   }
   if (isBitwiseEq()) {
     hash_join_idx_args.push_back(executor_->ll_int(col_range_.getIntMax() + 1));

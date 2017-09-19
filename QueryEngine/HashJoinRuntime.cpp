@@ -78,7 +78,9 @@ DEVICE int SUFFIX(fill_hash_join_buff)(int32_t* buff,
   int32_t step = cpu_thread_count;
 #endif
   for (size_t i = start; i < join_column.num_elems; i += step) {
-    int64_t elem = SUFFIX(fixed_width_int_decode_noinline)(join_column.col_buff, type_info.elem_sz, i);
+    int64_t elem = type_info.is_unsigned
+                       ? SUFFIX(fixed_width_unsigned_decode_noinline)(join_column.col_buff, type_info.elem_sz, i)
+                       : SUFFIX(fixed_width_int_decode_noinline)(join_column.col_buff, type_info.elem_sz, i);
     if (elem == type_info.null_val) {
       if (type_info.uses_bw_eq) {
         elem = type_info.translated_null_val;
@@ -124,7 +126,9 @@ DEVICE int SUFFIX(fill_hash_join_buff_sharded)(int32_t* buff,
   int32_t step = cpu_thread_count;
 #endif
   for (size_t i = start; i < join_column.num_elems; i += step) {
-    int64_t elem = SUFFIX(fixed_width_int_decode_noinline)(join_column.col_buff, type_info.elem_sz, i);
+    int64_t elem = type_info.is_unsigned
+                       ? SUFFIX(fixed_width_unsigned_decode_noinline)(join_column.col_buff, type_info.elem_sz, i)
+                       : SUFFIX(fixed_width_int_decode_noinline)(join_column.col_buff, type_info.elem_sz, i);
     if (elem % shard_info.num_shards != shard_info.shard) {
       continue;
     }
@@ -334,7 +338,9 @@ DEVICE int SUFFIX(fill_baseline_hash_join_buff)(int8_t* hash_buff,
       const auto sd_inner_proxy = sd_inner_proxy_per_key[key_component_index];
       const auto sd_outer_proxy = sd_outer_proxy_per_key[key_component_index];
 #endif
-      int64_t elem = SUFFIX(fixed_width_int_decode_noinline)(join_column.col_buff, type_info.elem_sz, i);
+      int64_t elem = type_info.is_unsigned
+                         ? SUFFIX(fixed_width_unsigned_decode_noinline)(join_column.col_buff, type_info.elem_sz, i)
+                         : SUFFIX(fixed_width_int_decode_noinline)(join_column.col_buff, type_info.elem_sz, i);
       if (elem == type_info.null_val && !type_info.uses_bw_eq) {
         skip_entry = true;
         break;
@@ -394,7 +400,9 @@ GLOBAL void SUFFIX(count_matches)(int32_t* count_buff,
   int32_t step = cpu_thread_count;
 #endif
   for (size_t i = start; i < join_column.num_elems; i += step) {
-    int64_t elem = SUFFIX(fixed_width_int_decode_noinline)(join_column.col_buff, type_info.elem_sz, i);
+    int64_t elem = type_info.is_unsigned
+                       ? SUFFIX(fixed_width_unsigned_decode_noinline)(join_column.col_buff, type_info.elem_sz, i)
+                       : SUFFIX(fixed_width_int_decode_noinline)(join_column.col_buff, type_info.elem_sz, i);
     if (elem == type_info.null_val) {
       if (type_info.uses_bw_eq) {
         elem = type_info.translated_null_val;
@@ -441,7 +449,9 @@ GLOBAL void SUFFIX(count_matches_sharded)(int32_t* count_buff,
   int32_t step = cpu_thread_count;
 #endif
   for (size_t i = start; i < join_column.num_elems; i += step) {
-    int64_t elem = SUFFIX(fixed_width_int_decode_noinline)(join_column.col_buff, type_info.elem_sz, i);
+    int64_t elem = type_info.is_unsigned
+                       ? SUFFIX(fixed_width_unsigned_decode_noinline)(join_column.col_buff, type_info.elem_sz, i)
+                       : SUFFIX(fixed_width_int_decode_noinline)(join_column.col_buff, type_info.elem_sz, i);
     if (elem == type_info.null_val) {
       if (type_info.uses_bw_eq) {
         elem = type_info.translated_null_val;
@@ -530,7 +540,9 @@ GLOBAL void SUFFIX(count_matches_baseline)(int32_t* count_buff,
       const auto sd_inner_proxy = sd_inner_proxy_per_key[key_component_index];
       const auto sd_outer_proxy = sd_outer_proxy_per_key[key_component_index];
 #endif
-      int64_t elem = SUFFIX(fixed_width_int_decode_noinline)(join_column.col_buff, type_info.elem_sz, i);
+      int64_t elem = type_info.is_unsigned
+                         ? SUFFIX(fixed_width_unsigned_decode_noinline)(join_column.col_buff, type_info.elem_sz, i)
+                         : SUFFIX(fixed_width_int_decode_noinline)(join_column.col_buff, type_info.elem_sz, i);
       if (elem == type_info.null_val && !type_info.uses_bw_eq) {
         skip_entry = true;
         break;
@@ -585,7 +597,9 @@ GLOBAL void SUFFIX(fill_row_ids)(int32_t* buff,
   int32_t step = cpu_thread_count;
 #endif
   for (size_t i = start; i < join_column.num_elems; i += step) {
-    int64_t elem = SUFFIX(fixed_width_int_decode_noinline)(join_column.col_buff, type_info.elem_sz, i);
+    int64_t elem = type_info.is_unsigned
+                       ? SUFFIX(fixed_width_unsigned_decode_noinline)(join_column.col_buff, type_info.elem_sz, i)
+                       : SUFFIX(fixed_width_int_decode_noinline)(join_column.col_buff, type_info.elem_sz, i);
     if (elem == type_info.null_val) {
       if (type_info.uses_bw_eq) {
         elem = type_info.translated_null_val;
@@ -642,7 +656,9 @@ GLOBAL void SUFFIX(fill_row_ids_sharded)(int32_t* buff,
   int32_t step = cpu_thread_count;
 #endif
   for (size_t i = start; i < join_column.num_elems; i += step) {
-    int64_t elem = SUFFIX(fixed_width_int_decode_noinline)(join_column.col_buff, type_info.elem_sz, i);
+    int64_t elem = type_info.is_unsigned
+                       ? SUFFIX(fixed_width_unsigned_decode_noinline)(join_column.col_buff, type_info.elem_sz, i)
+                       : SUFFIX(fixed_width_int_decode_noinline)(join_column.col_buff, type_info.elem_sz, i);
     if (elem == type_info.null_val) {
       if (type_info.uses_bw_eq) {
         elem = type_info.translated_null_val;
@@ -715,7 +731,9 @@ GLOBAL void SUFFIX(fill_row_ids_baseline)(int32_t* buff,
       const auto sd_inner_proxy = sd_inner_proxy_per_key[key_component_index];
       const auto sd_outer_proxy = sd_outer_proxy_per_key[key_component_index];
 #endif
-      int64_t elem = SUFFIX(fixed_width_int_decode_noinline)(join_column.col_buff, type_info.elem_sz, i);
+      int64_t elem = type_info.is_unsigned
+                         ? SUFFIX(fixed_width_unsigned_decode_noinline)(join_column.col_buff, type_info.elem_sz, i)
+                         : SUFFIX(fixed_width_int_decode_noinline)(join_column.col_buff, type_info.elem_sz, i);
       if (elem == type_info.null_val && !type_info.uses_bw_eq) {
         skip_entry = true;
         break;
@@ -781,7 +799,9 @@ GLOBAL void SUFFIX(approximate_distinct_tuples_impl)(uint8_t* hll_buffer,
       const auto& join_column = join_column_per_key[key_component_index];
       const auto& type_info = type_info_per_key[key_component_index];
       key_scratch_buff[key_component_index] =
-          SUFFIX(fixed_width_int_decode_noinline)(join_column.col_buff, type_info.elem_sz, i);
+          type_info.is_unsigned
+              ? SUFFIX(fixed_width_unsigned_decode_noinline)(join_column.col_buff, type_info.elem_sz, i)
+              : SUFFIX(fixed_width_int_decode_noinline)(join_column.col_buff, type_info.elem_sz, i);
     }
     const uint64_t hash = MurmurHash64AImpl(key_scratch_buff, key_component_count * sizeof(int64_t), 0);
     const uint32_t index = hash >> (64 - b);
