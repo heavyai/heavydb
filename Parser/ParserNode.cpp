@@ -2494,7 +2494,7 @@ std::string extractObjectNameFromHierName(const std::string& objectHierName,
         default: { throw std::runtime_error("DB object name is not correct " + objectHierName); }
       }
     } else {
-      CHECK(false);
+      throw std::runtime_error("DB object type " + objectType + " is not supported.");
     }
   }
   return objectName;
@@ -2518,7 +2518,7 @@ void GrantPrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session)
     objectType = DatabaseDBObjectType;
   } else {
     if (parserObjectType.compare("TABLE") != 0) {
-      CHECK(false);
+      throw std::runtime_error("DB object type " + parserObjectType + " is not supported.");
     }
   }
   DBObject dbObject(objectName, objectType);
@@ -2583,7 +2583,7 @@ void RevokePrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session
     objectType = DatabaseDBObjectType;
   } else {
     if (parserObjectType.compare("TABLE") != 0) {
-      CHECK(false);
+      throw std::runtime_error("DB object type " + parserObjectType + " is not supported.");
     }
   }
   DBObject dbObject(objectName, objectType);
@@ -2648,7 +2648,7 @@ void ShowPrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session) 
     objectType = DatabaseDBObjectType;
   } else {
     if (parserObjectType.compare("TABLE") != 0) {
-      CHECK(false);
+      throw std::runtime_error("DB object type " + parserObjectType + " is not supported.");
     }
   }
   DBObject dbObject(objectName, objectType);
