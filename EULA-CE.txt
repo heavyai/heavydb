@@ -1,5 +1,5 @@
 MapD Community Edition End User License Agreement
-Last Updated: 08-May-2017
+Last Updated: 21-Sept-2017
 
 	This End User License Agreement ("Agreement") is a legal agreement
 	between you or the company or legal entity you represent ("you", "your"
@@ -147,24 +147,28 @@ Last Updated: 08-May-2017
        to the Software, including, without limitation, system specifications
        and performance, capacity usage, system faults, and other information of
        a similar nature (collectively, "Diagnostic Data") to MapD. Diagnostic
-       Data may be sent on a periodic basis and upon a failure or fault in the
-       Software. You may turn off the feature that sends Diagnostic Data
-       automatically to MapD. In addition to the automatic transmission of
-       Diagnostic Data, you may choose to provide additional data files ("Core
-       Dumps") to MapD for technical analysis in the context or receiving
-       support. You hereby grant MapD a non-exclusive, worldwide, perpetual,
-       irrevocable, transferable, sublicenseable, royalty free, fully paid-up
-       license to access, use, reproduce, transmit, display, publish,
-       distribute, modify, adapt and create derivative works from the
-       Diagnostic Data and Core Dumps in connection with providing support,
-       troubleshooting the Software and enhancing, improving, and developing
-       the Software and related products and services. MapD will take
-       commercially reasonable steps to protect your Diagnostic Data and Core
-       Dumps from unauthorized access or disclosure. MapD reserves the right to
-       disclose Diagnostic Data and Core Dumps (a) to MapD partners subject to
-       confidentiality obligations to assist with specific support issues, or
-       (b) in an anonymous and aggregated form that does not link such
-       information to you or to any identifiable person.
+       Data may also include general product use information, including,
+       without limitation, navigation, links, buttons, refreshes, errors,
+       dashboard characteristics (chart count and types, filter count), and
+       data size (row and column count). Diagnostic Data may be sent on a
+       periodic basis and upon a failure or fault in the Software. If you block
+       the transmission of Diagnostic Data, the Software may not function. In
+       addition to the automatic transmission of Diagnostic Data, you may
+       choose to provide additional data files ("Core Dumps") to MapD for
+       technical analysis in the context of receiving support. You hereby grant
+       MapD a non-exclusive, worldwide, perpetual, irrevocable, transferable,
+       sublicenseable, royalty free, fully paid-up license to access, use,
+       reproduce, transmit, display, publish, distribute, modify, adapt and
+       create derivative works from the Diagnostic Data and Core Dumps in
+       connection with providing support, troubleshooting the Software and
+       enhancing, improving, and developing the Software and related products
+       and services. MapD will take commercially reasonable steps to protect
+       your Diagnostic Data and Core Dumps from unauthorized access or
+       disclosure. MapD reserves the right to disclose Diagnostic Data and Core
+       Dumps (a) to MapD partners subject to confidentiality obligations to
+       assist with specific support issues, or (b) in an anonymous and
+       aggregated form that does not link such information to you or to any
+       identifiable person.
 
 4. CONFIDENTIAL INFORMATION
 
