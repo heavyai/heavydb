@@ -1,0 +1,4 @@
+JoinLoopTest: JoinLoopTest.cpp JoinLoop.cpp JoinLoop.h
+	g++ -Wall -O0 -g -o JoinLoopTest JoinLoopTest.cpp JoinLoop.cpp -I`llvm-config --includedir` `llvm-config --libs` `llvm-config --ldflags` -Wl,-no-as-needed -rdynamic -lglog -lgflags -pthread
+clean:
+	rm -f JoinLoopTest

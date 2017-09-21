@@ -62,6 +62,7 @@ set(query_engine_source_files
     ResultSetIteration.cpp
     ResultSetReduction.cpp
     ResultSetConversion.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/LoopControlFlow/JoinLoop.cpp
     ResultSetSort.cpp
     RuntimeFunctions.cpp
     RuntimeFunctions.bc
