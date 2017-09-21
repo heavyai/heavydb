@@ -22,6 +22,7 @@
 #include "GroupByAndAggregate.h"
 #include "InValuesBitmap.h"
 #include "InputMetadata.h"
+#include "IRCodegenUtils.h"
 #include "JoinHashTable.h"
 #include "LLVMGlobalContext.h"
 #include "NvidiaKernel.h"
@@ -99,29 +100,6 @@ class WatchdogException : public std::runtime_error {
 };
 
 class Executor;
-
-inline llvm::Type* get_int_type(const int width, llvm::LLVMContext& context) {
-  switch (width) {
-    case 64:
-      return llvm::Type::getInt64Ty(context);
-    case 32:
-      return llvm::Type::getInt32Ty(context);
-      break;
-    case 16:
-      return llvm::Type::getInt16Ty(context);
-      break;
-    case 8:
-      return llvm::Type::getInt8Ty(context);
-      break;
-    case 1:
-      return llvm::Type::getInt1Ty(context);
-      break;
-    default:
-      LOG(FATAL) << "Unsupported integer width: " << width;
-  }
-  CHECK(false);
-  return nullptr;
-}
 
 inline llvm::Value* get_arg_by_name(llvm::Function* func, const std::string& name) {
   auto& arg_list = func->getArgumentList();
@@ -392,8 +370,7 @@ class Executor {
 
   template <class T>
   llvm::ConstantInt* ll_int(const T v) const {
-    return static_cast<llvm::ConstantInt*>(
-        llvm::ConstantInt::get(get_int_type(sizeof(v) * 8, cgen_state_->context_), v));
+    return ::ll_int(v, cgen_state_->context_);
   }
   llvm::ConstantFP* ll_fp(const float v) const {
     return static_cast<llvm::ConstantFP*>(llvm::ConstantFP::get(llvm::Type::getFloatTy(cgen_state_->context_), v));
