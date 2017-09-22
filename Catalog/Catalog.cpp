@@ -34,6 +34,7 @@
 #include "../Fragmenter/InsertOrderFragmenter.h"
 #include "../Parser/ParserNode.h"
 #include "../Shared/StringTransform.h"
+#include "../Shared/measure.h"
 #include "../StringDictionary/StringDictionaryClient.h"
 
 using std::runtime_error;
@@ -1407,24 +1408,27 @@ void Catalog::addLinkToMap(LinkDescriptor& ld) {
 }
 
 void Catalog::instantiateFragmenter(TableDescriptor* td) const {
-  // instanciate table fragmenter upon first use
-  // assume only insert order fragmenter is supported
-  assert(td->fragType == Fragmenter_Namespace::FragmenterType::INSERT_ORDER);
-  vector<Chunk> chunkVec;
-  list<const ColumnDescriptor*> columnDescs;
-  getAllColumnMetadataForTable(td, columnDescs, true, false);
-  Chunk::translateColumnDescriptorsToChunkVec(columnDescs, chunkVec);
-  ChunkKey chunkKeyPrefix = {currentDB_.dbId, td->tableId};
-  td->fragmenter = new InsertOrderFragmenter(chunkKeyPrefix,
-                                             chunkVec,
-                                             dataMgr_.get(),
-                                             td->tableId,
-                                             td->shard,
-                                             td->maxFragRows,
-                                             td->maxChunkSize,
-                                             td->fragPageSize,
-                                             td->maxRows,
-                                             td->persistenceLevel);
+  auto time_ms = measure<>::execution([&]() {
+    // instanciate table fragmenter upon first use
+    // assume only insert order fragmenter is supported
+    assert(td->fragType == Fragmenter_Namespace::FragmenterType::INSERT_ORDER);
+    vector<Chunk> chunkVec;
+    list<const ColumnDescriptor*> columnDescs;
+    getAllColumnMetadataForTable(td, columnDescs, true, false);
+    Chunk::translateColumnDescriptorsToChunkVec(columnDescs, chunkVec);
+    ChunkKey chunkKeyPrefix = {currentDB_.dbId, td->tableId};
+    td->fragmenter = new InsertOrderFragmenter(chunkKeyPrefix,
+                                               chunkVec,
+                                               dataMgr_.get(),
+                                               td->tableId,
+                                               td->shard,
+                                               td->maxFragRows,
+                                               td->maxChunkSize,
+                                               td->fragPageSize,
+                                               td->maxRows,
+                                               td->persistenceLevel);
+  });
+  LOG(INFO) << "Instantiating Fragmenter for table " << td->tableName << " took " << time_ms << "ms";
 }
 
 const TableDescriptor* Catalog::getMetadataForTable(const string& tableName) const {
@@ -1460,14 +1464,17 @@ const DictDescriptor* Catalog::getMetadataForDict(int dictId, bool loadDict) con
   if (loadDict) {
     std::lock_guard<std::mutex> lock(cat_mutex_);
     if (!dd->stringDict) {
-      if (string_dict_hosts_.empty()) {
-        if (dd->dictIsTemp)
-          dd->stringDict = std::make_shared<StringDictionary>(dd->dictFolderPath, true, true);
-        else
-          dd->stringDict = std::make_shared<StringDictionary>(dd->dictFolderPath, false, true);
-      } else {
-        dd->stringDict = std::make_shared<StringDictionary>(string_dict_hosts_.front(), dd->dictId);
-      }
+      auto time_ms = measure<>::execution([&]() {
+        if (string_dict_hosts_.empty()) {
+          if (dd->dictIsTemp)
+            dd->stringDict = std::make_shared<StringDictionary>(dd->dictFolderPath, true, true);
+          else
+            dd->stringDict = std::make_shared<StringDictionary>(dd->dictFolderPath, false, true);
+        } else {
+          dd->stringDict = std::make_shared<StringDictionary>(string_dict_hosts_.front(), dd->dictId);
+        }
+      });
+      LOG(INFO) << "Time to load Dictionary " << dictId << " was " << time_ms << "ms";
     }
   }
   return dd.get();
