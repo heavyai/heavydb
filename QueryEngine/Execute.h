@@ -936,6 +936,10 @@ class Executor {
                                     const JoinInfo& join_info,
                                     const bool has_cardinality_estimation);
 
+  GroupByAndAggregate::BodyControlFlow compileBody(const RelAlgExecutionUnit& ra_exe_unit,
+                                                   GroupByAndAggregate& group_by_and_aggregate,
+                                                   const CompilationOptions& co);
+
   void createErrorCheckControlFlow(llvm::Function* query_func, bool run_with_dynamic_watchdog);
 
   const std::vector<Analyzer::Expr*> codegenOneToManyHashJoins(const std::vector<Analyzer::Expr*>& primary_quals,

@@ -2646,12 +2646,14 @@ void GroupByAndAggregate::patchGroupbyCall(llvm::CallInst* call_site) {
   llvm::ReplaceInstWithInst(call_site, llvm::CallInst::Create(func, args));
 }
 
-bool GroupByAndAggregate::codegen(llvm::Value* filter_result,
-                                  llvm::Value* outerjoin_query_filter_result,
-                                  const CompilationOptions& co) {
+GroupByAndAggregate::BodyControlFlow GroupByAndAggregate::codegen(llvm::Value* filter_result,
+                                                                  llvm::Value* outerjoin_query_filter_result,
+                                                                  const CompilationOptions& co) {
   CHECK(filter_result);
 
   bool can_return_error = false;
+  llvm::BasicBlock* filter_true{nullptr};
+  llvm::BasicBlock* filter_false{nullptr};
 
   {
     const bool is_group_by = !ra_exe_unit_.groupby_exprs.empty();
@@ -2662,6 +2664,8 @@ bool GroupByAndAggregate::codegen(llvm::Value* filter_result,
     }
     DiamondCodegen filter_cfg(
         filter_result, executor_, !is_group_by || query_mem_desc.usesGetGroupValueFast(), "filter", nullptr, false);
+    filter_true = filter_cfg.cond_true_;
+    filter_false = filter_cfg.cond_false_;
 
     if (executor_->isOuterLoopJoin() || executor_->isOneToManyOuterHashJoin()) {
       auto match_found_ptr = executor_->cgen_state_->outer_join_match_found_;
@@ -2749,7 +2753,7 @@ bool GroupByAndAggregate::codegen(llvm::Value* filter_result,
 
   executor_->codegenInnerScanNextRowOrMatch();
 
-  return can_return_error;
+  return {can_return_error, filter_true, filter_false};
 }
 
 llvm::Value* GroupByAndAggregate::codegenOutputSlot(llvm::Value* groups_buffer,

@@ -136,6 +136,7 @@ RelAlgExecutionUnit QueryRewriter::rewriteConstrainedByIn(const std::shared_ptr<
           ra_exe_unit_.simple_quals,
           ra_exe_unit_.quals,
           ra_exe_unit_.join_type,
+          ra_exe_unit_.inner_joins,
           ra_exe_unit_.join_dimensions,
           ra_exe_unit_.inner_join_quals,
           ra_exe_unit_.outer_join_quals,

@@ -1062,6 +1062,70 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
   cgen_state_->ir_builder_.SetInsertPoint(bb);
   preloadFragOffsets(ra_exe_unit.input_descs, query_infos);
 
+  const auto body_control_flow = compileBody(ra_exe_unit, group_by_and_aggregate, co);
+
+  if (body_control_flow.can_return_error || cgen_state_->needs_error_check_ || eo.with_dynamic_watchdog) {
+    createErrorCheckControlFlow(query_func, eo.with_dynamic_watchdog);
+  }
+
+  // iterate through all the instruction in the query template function and
+  // replace the call to the filter placeholder with the call to the actual filter
+  for (auto it = llvm::inst_begin(query_func), e = llvm::inst_end(query_func); it != e; ++it) {
+    if (!llvm::isa<llvm::CallInst>(*it)) {
+      continue;
+    }
+    auto& filter_call = llvm::cast<llvm::CallInst>(*it);
+    if (std::string(filter_call.getCalledFunction()->getName()) == unique_name("row_process", is_nested_)) {
+      std::vector<llvm::Value*> args;
+      for (size_t i = 0; i < filter_call.getNumArgOperands(); ++i) {
+        args.push_back(filter_call.getArgOperand(i));
+      }
+      args.insert(args.end(), col_heads.begin(), col_heads.end());
+      args.push_back(get_arg_by_name(query_func, "join_hash_tables"));
+      llvm::ReplaceInstWithInst(&filter_call, llvm::CallInst::Create(cgen_state_->row_func_, args, ""));
+      break;
+    }
+  }
+
+  is_nested_ = false;
+  plan_state_->init_agg_vals_ = init_agg_val_vec(ra_exe_unit.target_exprs, ra_exe_unit.quals, query_mem_desc);
+
+  auto multifrag_query_func =
+      cgen_state_->module_->getFunction("multifrag_query" + std::string(co.hoist_literals_ ? "_hoisted_literals" : ""));
+  CHECK(multifrag_query_func);
+
+  bind_query(query_func,
+             "query_stub" + std::string(co.hoist_literals_ ? "_hoisted_literals" : ""),
+             multifrag_query_func,
+             cgen_state_->module_);
+
+  auto live_funcs =
+      markDeadRuntimeFuncs(*cgen_state_->module_, {query_func, cgen_state_->row_func_}, {multifrag_query_func});
+
+  std::string llvm_ir;
+  if (eo.just_explain) {
+    llvm_ir = serialize_llvm_object(query_func) + serialize_llvm_object(cgen_state_->row_func_);
+  }
+  verify_function_ir(cgen_state_->row_func_);
+  return Executor::CompilationResult{
+      co.device_type_ == ExecutorDeviceType::CPU
+          ? optimizeAndCodegenCPU(query_func, multifrag_query_func, live_funcs, cgen_state_->module_, co)
+          : optimizeAndCodegenGPU(query_func,
+                                  multifrag_query_func,
+                                  live_funcs,
+                                  cgen_state_->module_,
+                                  is_group_by || ra_exe_unit.estimator,
+                                  cuda_mgr,
+                                  co),
+      cgen_state_->getLiterals(),
+      query_mem_desc,
+      output_columnar,
+      llvm_ir};
+}
+
+GroupByAndAggregate::BodyControlFlow Executor::compileBody(const RelAlgExecutionUnit& ra_exe_unit,
+                                                           GroupByAndAggregate& group_by_and_aggregate,
+                                                           const CompilationOptions& co) {
   // generate the code for the filter
   allocateLocalColumnIds(ra_exe_unit.input_col_descs);
 
@@ -1075,7 +1139,9 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
 
   primary_quals = codegenHashJoinsBeforeLoopJoin(primary_quals, ra_exe_unit, co);
 
-  allocateInnerScansIterators(ra_exe_unit.input_descs);
+  if (ra_exe_unit.inner_joins.empty()) {
+    allocateInnerScansIterators(ra_exe_unit.input_descs);
+  }
 
   llvm::Value* outer_join_nomatch_flag_lv = nullptr;
   if (isOuterJoin()) {
@@ -1137,63 +1203,5 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
 
   CHECK(filter_lv->getType()->isIntegerTy(1));
 
-  const bool needs_error_check = group_by_and_aggregate.codegen(filter_lv, outerjoin_query_filter_lv, co);
-
-  if (needs_error_check || cgen_state_->needs_error_check_ || eo.with_dynamic_watchdog) {
-    createErrorCheckControlFlow(query_func, eo.with_dynamic_watchdog);
-  }
-
-  // iterate through all the instruction in the query template function and
-  // replace the call to the filter placeholder with the call to the actual filter
-  for (auto it = llvm::inst_begin(query_func), e = llvm::inst_end(query_func); it != e; ++it) {
-    if (!llvm::isa<llvm::CallInst>(*it)) {
-      continue;
-    }
-    auto& filter_call = llvm::cast<llvm::CallInst>(*it);
-    if (std::string(filter_call.getCalledFunction()->getName()) == unique_name("row_process", is_nested_)) {
-      std::vector<llvm::Value*> args;
-      for (size_t i = 0; i < filter_call.getNumArgOperands(); ++i) {
-        args.push_back(filter_call.getArgOperand(i));
-      }
-      args.insert(args.end(), col_heads.begin(), col_heads.end());
-      args.push_back(get_arg_by_name(query_func, "join_hash_tables"));
-      llvm::ReplaceInstWithInst(&filter_call, llvm::CallInst::Create(cgen_state_->row_func_, args, ""));
-      break;
-    }
-  }
-
-  is_nested_ = false;
-  plan_state_->init_agg_vals_ = init_agg_val_vec(ra_exe_unit.target_exprs, ra_exe_unit.quals, query_mem_desc);
-
-  auto multifrag_query_func =
-      cgen_state_->module_->getFunction("multifrag_query" + std::string(co.hoist_literals_ ? "_hoisted_literals" : ""));
-  CHECK(multifrag_query_func);
-
-  bind_query(query_func,
-             "query_stub" + std::string(co.hoist_literals_ ? "_hoisted_literals" : ""),
-             multifrag_query_func,
-             cgen_state_->module_);
-
-  auto live_funcs =
-      markDeadRuntimeFuncs(*cgen_state_->module_, {query_func, cgen_state_->row_func_}, {multifrag_query_func});
-
-  std::string llvm_ir;
-  if (eo.just_explain) {
-    llvm_ir = serialize_llvm_object(query_func) + serialize_llvm_object(cgen_state_->row_func_);
-  }
-  verify_function_ir(cgen_state_->row_func_);
-  return Executor::CompilationResult{
-      co.device_type_ == ExecutorDeviceType::CPU
-          ? optimizeAndCodegenCPU(query_func, multifrag_query_func, live_funcs, cgen_state_->module_, co)
-          : optimizeAndCodegenGPU(query_func,
-                                  multifrag_query_func,
-                                  live_funcs,
-                                  cgen_state_->module_,
-                                  is_group_by || ra_exe_unit.estimator,
-                                  cuda_mgr,
-                                  co),
-      cgen_state_->getLiterals(),
-      query_mem_desc,
-      output_columnar,
-      llvm_ir};
+  return group_by_and_aggregate.codegen(filter_lv, outerjoin_query_filter_lv, co);
 }

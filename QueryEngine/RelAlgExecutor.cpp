@@ -1180,6 +1180,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createSortInputWorkUnit(const RelSort* 
            source_exe_unit.simple_quals,
            source_exe_unit.quals,
            source_exe_unit.join_type,
+           source_exe_unit.inner_joins,
            source_exe_unit.join_dimensions,
            source_exe_unit.inner_join_quals,
            source_exe_unit.outer_join_quals,
@@ -1849,12 +1850,13 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(const RelCompoun
   const auto input_to_nest_level = get_input_nest_levels(compound);
   std::tie(input_descs, input_col_descs, std::ignore) = get_input_desc(compound, input_to_nest_level);
   CHECK_EQ(size_t(1), compound->inputCount());
-  const auto join = dynamic_cast<const RelLeftDeepInnerJoin*>(compound->getInput(0));
-  if (join) {
-    translateLeftDeepJoinFilter(join, input_descs, input_to_nest_level, just_explain);
+  const auto left_deep_join = dynamic_cast<const RelLeftDeepInnerJoin*>(compound->getInput(0));
+  JoinQualsPerNestingLevel left_deep_inner_joins;
+  if (left_deep_join) {
+    left_deep_inner_joins = translateLeftDeepJoinFilter(left_deep_join, input_descs, input_to_nest_level, just_explain);
   }
   const auto extra_input_descs = separate_extra_input_descs(input_descs);
-  const auto join_type = get_join_type(compound);
+  const auto join_type = left_deep_join ? JoinType::INVALID : get_join_type(compound);
   RelAlgTranslator translator(cat_, executor_, input_to_nest_level, join_type, now_, just_explain);
   const auto scalar_sources = translate_scalar_sources(compound, translator);
   const auto groupby_exprs = translate_groupby_exprs(compound, scalar_sources);
@@ -1873,6 +1875,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(const RelCompoun
                                         quals_cf.simple_quals,
                                         separated_quals.regular_quals,
                                         join_type,
+                                        left_deep_inner_joins,
                                         get_join_dimensions(get_data_sink(compound), executor_),
                                         inner_join_quals,
                                         get_outer_join_quals(compound, translator),
@@ -1909,7 +1912,7 @@ class RangeTableIndexVisitor : public ScalarExprVisitor<int> {
 // Translate left deep join filter and separate the conjunctive form qualifiers
 // per nesting level. The code generated for hash table lookups on each level
 // must dominate its uses in deeper nesting levels.
-RelAlgExecutor::JoinQualsPerNestingLevel RelAlgExecutor::translateLeftDeepJoinFilter(
+JoinQualsPerNestingLevel RelAlgExecutor::translateLeftDeepJoinFilter(
     const RelLeftDeepInnerJoin* join,
     const std::vector<InputDescriptor>& input_descs,
     const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
@@ -2029,6 +2032,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createJoinWorkUnit(const RelJoin* join,
            {},
            {},
            join_type,
+           {},
            get_join_dimensions(join, executor_),
            inner_join_quals,
            outer_join_quals,
@@ -2096,6 +2100,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createAggregateWorkUnit(const RelAggreg
            {},
            {},
            join_type,
+           {},
            get_join_dimensions(get_data_sink(aggregate), executor_),
            get_inner_join_quals(aggregate, translator),
            get_outer_join_quals(aggregate, translator),
@@ -2131,6 +2136,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(const RelProject*
            {},
            {},
            join_type,
+           {},
            get_join_dimensions(get_data_sink(project), executor_),
            get_inner_join_quals(project, translator),
            get_outer_join_quals(project, translator),
@@ -2212,6 +2218,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createFilterWorkUnit(const RelFilter* f
            {},
            separated_quals.regular_quals,
            join_type,
+           {},
            get_join_dimensions(get_data_sink(filter), executor_),
            separated_quals.join_quals,
            get_outer_join_quals(filter, translator),

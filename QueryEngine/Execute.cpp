@@ -801,7 +801,7 @@ ResultPtr Executor::executeWorkUnit(int32_t* error_code,
   }
 
   auto join_info = JoinInfo(JoinImplType::Invalid, std::vector<std::shared_ptr<Analyzer::BinOper>>{}, {}, "");
-  if (ra_exe_unit.input_descs.size() > 1) {
+  if (ra_exe_unit.input_descs.size() > 1 && ra_exe_unit.inner_joins.empty()) {
     join_info = chooseJoinType(ra_exe_unit.inner_join_quals, query_infos, ra_exe_unit, device_type);
   }
   if (join_info.join_impl_type_ == JoinImplType::Loop && !ra_exe_unit.outer_join_quals.empty()) {
