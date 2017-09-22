@@ -61,6 +61,10 @@ Encoder* Encoder::Create(Data_Namespace::AbstractBuffer* buffer, const SQLTypeIn
         case kTIMESTAMP:
         case kDATE:
           return new NoneEncoder<time_t>(buffer);
+        case kPOINT:
+        case kLINE:
+        case kPOLYGON:
+          return new StringNoneEncoder(buffer);
         default: { return 0; }
       }
       break;

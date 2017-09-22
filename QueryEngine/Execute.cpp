@@ -2045,6 +2045,9 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
         default:
           CHECK(false);
       }
+    } else if (cd->columnType.is_geometry()) {
+      auto it_ok = str_col_buffers.insert(std::make_pair(col_id, std::vector<std::string>{}));
+      CHECK(it_ok.second);
     } else {
       const auto it_ok =
           col_buffers.emplace(col_id, std::unique_ptr<uint8_t[]>(new uint8_t[cd->columnType.get_logical_size()]));
@@ -2071,7 +2074,7 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
     auto col_datum = col_cv->get_constval();
     auto col_type = cd->columnType.is_decimal() ? decimal_to_int_type(cd->columnType) : cd->columnType.get_type();
     uint8_t* col_data_bytes{nullptr};
-    if (!cd->columnType.is_string() || cd->columnType.get_compression() == kENCODING_DICT) {
+    if (!cd->columnType.is_geometry() && (!cd->columnType.is_string() || cd->columnType.get_compression() == kENCODING_DICT)) {
       const auto col_data_bytes_it = col_buffers.find(col_ids[col_idx]);
       CHECK(col_data_bytes_it != col_buffers.end());
       col_data_bytes = col_data_bytes_it->second.get();
@@ -2146,6 +2149,11 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
         *col_data = col_cv->get_is_null() ? inline_fixed_encoding_null_val(cd->columnType) : col_datum.timeval;
         break;
       }
+      case kPOINT:
+      case kLINE:
+      case kPOLYGON:
+        str_col_buffers[col_ids[col_idx]].push_back(col_datum.stringval ? *col_datum.stringval : "");
+        break;
       default:
         CHECK(false);
     }

@@ -181,6 +181,10 @@ inline size_t get_bit_width(const SQLTypeInfo& ti) {
       return 32;
     case kARRAY:
       throw std::runtime_error("Projecting on array columns not supported yet.");
+    case kPOINT:
+    case kLINE:
+    case kPOLYGON:
+      return 32;
     default:
       abort();
   }

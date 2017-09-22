@@ -832,6 +832,10 @@ void Constant::do_cast(const SQLTypeInfo& new_type_info) {
   if (new_type_info.is_number() &&
       (type_info.is_number() || type_info.get_type() == kTIMESTAMP || type_info.get_type() == kBOOLEAN)) {
     cast_number(new_type_info);
+  } else if (new_type_info.is_geometry() && type_info.is_string()) {
+    type_info = new_type_info;
+  } else if (new_type_info.is_geometry() && type_info.get_type() == new_type_info.get_type()) {
+    type_info = new_type_info;
   } else if (new_type_info.is_boolean() && type_info.is_boolean()) {
     type_info = new_type_info;
   } else if (new_type_info.is_string() && type_info.is_string()) {
@@ -1598,6 +1602,10 @@ bool Datum_equal(const SQLTypeInfo& ti, Datum val1, Datum val2) {
     case kTIME:
     case kTIMESTAMP:
       return val1.timeval == val2.timeval;
+    case kPOINT:
+    case kLINE:
+    case kPOLYGON:
+      return *val1.stringval == *val2.stringval;
     default:
       CHECK(false);
   }

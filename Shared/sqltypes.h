@@ -241,8 +241,9 @@ class SQLTypeInfo {
   inline bool is_boolean() const { return type == kBOOLEAN; }
   inline bool is_array() const { return type == kARRAY; }
   inline bool is_timeinterval() const { return type == kINTERVAL_DAY_TIME || type == kINTERVAL_YEAR_MONTH; }
+  inline bool is_geometry() const { return IS_GEO(type); }
 
-  inline bool is_varlen() const { return (IS_STRING(type) && compression != kENCODING_DICT) || type == kARRAY; }
+  inline bool is_varlen() const { return (IS_STRING(type) && compression != kENCODING_DICT) || type == kARRAY || IS_GEO(type); }
 
   HOST DEVICE inline bool operator!=(const SQLTypeInfo& rhs) const {
     return type != rhs.get_type() || subtype != rhs.get_subtype() || dimension != rhs.get_dimension() ||
@@ -481,6 +482,10 @@ class SQLTypeInfo {
         if (compression == kENCODING_DICT)
           return sizeof(int32_t);  // @TODO(wei) must check DictDescriptor
         break;
+      case kPOINT:
+      case kLINE:
+      case kPOLYGON:
+        break;;
       default:
         break;
     }
