@@ -1523,7 +1523,9 @@ void InsertStmt::analyze(const Catalog_Namespace::Catalog& catalog, Analyzer::Qu
 void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog, Analyzer::Query& query) const {
   InsertStmt::analyze(catalog, query);
   std::vector<std::shared_ptr<Analyzer::TargetEntry>>& tlist = query.get_targetlist_nonconst();
-  if (query.get_result_col_list().size() != value_list.size())
+  const auto tableId = query.get_result_table_id();
+  const std::list<const ColumnDescriptor*> non_phys_cols = catalog.getAllColumnMetadataForTable(tableId, false, false, false);
+  if (non_phys_cols.size() != value_list.size())
     throw std::runtime_error("Insert has more target columns than expressions.");
   std::list<int>::const_iterator it = query.get_result_col_list().begin();
   for (auto& v : value_list) {
@@ -1538,6 +1540,20 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog, Analyz
     e = e->add_cast(cd->columnType);
     tlist.emplace_back(new Analyzer::TargetEntry("", e, false));
     ++it;
+
+    if (cd->numPhysicalColumns > 0) {
+      CHECK(cd->columnType.is_geometry());
+      // placeholder: import geometry from *c->get_constval().stringval, populate physical columns
+      auto c = std::dynamic_pointer_cast<Analyzer::Constant>(e);
+      CHECK(c);
+      for (int col = cd->columnId + 1; col <= cd->columnId + cd->numPhysicalColumns; col++) {
+        //const ColumnDescriptor* pcd = catalog.getMetadataForColumn(query.get_result_table_id(), col);
+        Datum d;
+        d.doubleval = 1.1;
+        tlist.emplace_back(new Analyzer::TargetEntry("", makeExpr<Analyzer::Constant>(kDOUBLE, false, d), false));
+        ++it;
+      }
+    }
   }
 }
 
