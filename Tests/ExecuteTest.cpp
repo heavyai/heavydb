@@ -2881,6 +2881,12 @@ void import_geospatial_test() {
   const std::string geospatial_test("DROP TABLE IF EXISTS geospatial_test;");
   run_ddl_statement(geospatial_test);
   run_ddl_statement("CREATE TABLE geospatial_test (p POINT, l LINE) WITH (fragment_size=2);");
+  for (ssize_t i = 0; i < g_num_rows; ++i) {
+    const std::string insert_query{"INSERT INTO geospatial_test VALUES(POINT 'POINT(" +
+        std::to_string(i) + " " + std::to_string(i) + ")', " + "LINE 'LINE( 0 " +
+        std::to_string(i) + ", " + std::to_string(i) + " 0)');"};
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+  }
 }
 
 }  // namespace
@@ -3941,12 +3947,12 @@ TEST(Select, Deleted) {
 TEST(Select, GeoSpatial) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-    ASSERT_EQ(static_cast<int64_t>(0),
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows),
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE ST_Distance(p,p) < 1.0;", dt)));
-    ASSERT_EQ(static_cast<int64_t>(0),
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows),
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE ST_Distance(p,l) < 1.0;", dt)));
 
-    ASSERT_EQ(static_cast<int64_t>(0),
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows),
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE ST_Contains(p,p);", dt)));
     ASSERT_EQ(static_cast<int64_t>(0),
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE ST_Contains(p,l);", dt)));
