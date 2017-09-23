@@ -2751,7 +2751,9 @@ GroupByAndAggregate::BodyControlFlow GroupByAndAggregate::codegen(llvm::Value* f
     }
   }
 
-  executor_->codegenInnerScanNextRowOrMatch();
+  if (ra_exe_unit_.inner_joins.empty()) {
+    executor_->codegenInnerScanNextRowOrMatch();
+  }
 
   return {can_return_error, filter_true, filter_false};
 }

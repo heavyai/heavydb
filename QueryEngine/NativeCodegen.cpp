@@ -18,6 +18,7 @@
 #include "ExtensionFunctionsWhitelist.h"
 #include "QueryTemplateGenerator.h"
 
+#include "LoopControlFlow/JoinLoop.h"
 #include "Shared/mapdpath.h"
 
 #if LLVM_VERSION_MAJOR >= 4
@@ -1062,10 +1063,41 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
   cgen_state_->ir_builder_.SetInsertPoint(bb);
   preloadFragOffsets(ra_exe_unit.input_descs, query_infos);
 
-  const auto body_control_flow = compileBody(ra_exe_unit, group_by_and_aggregate, co);
+  std::vector<JoinLoop> join_loops;
+  for (const auto& current_level_join_conditions : ra_exe_unit.inner_joins) {
+    static_cast<void>(current_level_join_conditions);
+    join_loops.emplace_back(JoinLoopKind::UpperBound, [this](const std::vector<llvm::Value*>& prev_iters) {
+      JoinLoopDomain domain{0};
+      domain.upper_bound = ll_int<int64_t>(1);
+      return domain;
+    });
+  }
+  if (!join_loops.empty()) {
+    const auto exit_bb = llvm::BasicBlock::Create(cgen_state_->context_, "exit", cgen_state_->row_func_);
+    cgen_state_->ir_builder_.SetInsertPoint(exit_bb);
+    cgen_state_->ir_builder_.CreateRet(ll_int<int32_t>(0));
+    cgen_state_->ir_builder_.SetInsertPoint(bb);
+    const auto loops_entry_bb =
+        JoinLoop::codegen(join_loops,
+                          [this, bb, &co, &group_by_and_aggregate, &ra_exe_unit](const std::vector<llvm::Value*>&) {
+                            auto& builder = cgen_state_->ir_builder_;
+                            const auto loop_body_bb = llvm::BasicBlock::Create(
+                                builder.getContext(), "loop_body", builder.GetInsertBlock()->getParent());
+                            builder.SetInsertPoint(loop_body_bb);
+                            compileBody(ra_exe_unit, group_by_and_aggregate, co);
+                            return loop_body_bb;
+                          },
+                          posArg(nullptr),
+                          exit_bb,
+                          cgen_state_->ir_builder_);
+    cgen_state_->ir_builder_.SetInsertPoint(bb);
+    cgen_state_->ir_builder_.CreateBr(loops_entry_bb);
+  } else {
+    const auto body_control_flow = compileBody(ra_exe_unit, group_by_and_aggregate, co);
 
-  if (body_control_flow.can_return_error || cgen_state_->needs_error_check_ || eo.with_dynamic_watchdog) {
-    createErrorCheckControlFlow(query_func, eo.with_dynamic_watchdog);
+    if (body_control_flow.can_return_error || cgen_state_->needs_error_check_ || eo.with_dynamic_watchdog) {
+      createErrorCheckControlFlow(query_func, eo.with_dynamic_watchdog);
+    }
   }
 
   // iterate through all the instruction in the query template function and
@@ -1188,7 +1220,9 @@ GroupByAndAggregate::BodyControlFlow Executor::compileBody(const RelAlgExecution
     }
     cgen_state_->ir_builder_.CreateCondBr(filter_lv, sc_true, sc_false);
     cgen_state_->ir_builder_.SetInsertPoint(sc_false);
-    codegenInnerScanNextRowOrMatch();
+    if (ra_exe_unit.inner_joins.empty()) {
+      codegenInnerScanNextRowOrMatch();
+    }
     cgen_state_->ir_builder_.SetInsertPoint(sc_true);
     filter_lv = ll_bool(true);
   }
