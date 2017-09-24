@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#ifdef ENABLE_ARROW_CONVERTER
 #include "ArrowResultSet.h"
 #include "ArrowUtil.h"
 #include "RelAlgExecutionDescriptor.h"
@@ -171,5 +170,3 @@ std::unique_ptr<ArrowResultSet> result_set_arrow_loopback(const ExecutionResult&
 
   return boost::make_unique<ArrowResultSet>(batch);
 }
-
-#endif  // ENABLE_ARROW_CONVERTER

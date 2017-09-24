@@ -27,9 +27,7 @@ function download_make_install() {
     popd
 }
 
-# master as of 2017-09-07. Will want to update to 0.7.0 final as soon as it's
-# released
-ARROW_VERSION=6f27a6447171353427a129a5ce88dba181bd8af6
+ARROW_VERSION=apache-arrow-0.7.0
 
 function install_arrow() {
   download https://github.com/apache/arrow/archive/$ARROW_VERSION.tar.gz

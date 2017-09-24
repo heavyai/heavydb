@@ -204,13 +204,9 @@ include_directories(ThirdParty/googletest)
 add_subdirectory(ThirdParty/googletest)
 
 # Arrow
-option(ENABLE_ARROW_CONVERTER "Enable arrow converter" OFF)
-if(ENABLE_ARROW_CONVERTER)
-  find_package(Arrow REQUIRED)
-  add_definitions("-DENABLE_ARROW_CONVERTER")
-  add_definitions("-DARROW_NO_DEPRECATED_API")
-  include_directories(${Arrow_INCLUDE_DIRS})
-endif()
+find_package(Arrow REQUIRED)
+add_definitions("-DARROW_NO_DEPRECATED_API")
+include_directories(${Arrow_INCLUDE_DIRS})
 
 # RapidJSON
 include_directories(ThirdParty/rapidjson)
@@ -316,10 +312,7 @@ endif()
 
 list(APPEND MAPD_LIBRARIES Calcite)
 
-
-if(ENABLE_ARROW_CONVERTER)
-  list(APPEND MAPD_LIBRARIES ${Arrow_LIBRARIES})
-endif()
+list(APPEND MAPD_LIBRARIES ${Arrow_LIBRARIES})
 
 enable_testing()
 add_subdirectory(Tests)
