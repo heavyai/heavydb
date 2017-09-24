@@ -1129,8 +1129,12 @@ void MapDHandler::load_table_binary_arrow(const TSessionId& session,
   RecordBatchVector batches = loadArrowStream(arrow_stream);
 
   // Assuming have one batch for now
-  if (batches.size() == 1) {
-    LOG(ERROR) << "Expected a single Arrow record batch. Import aborted";
+  if (batches.size() != 1) {
+    std::string msg = "Expected a single Arrow record batch. Import aborted";
+    LOG(ERROR) << msg;
+    TMapDException ex;
+    ex.error_msg = msg;
+    throw ex;
   }
 
   std::shared_ptr<arrow::RecordBatch> batch = batches[0];
