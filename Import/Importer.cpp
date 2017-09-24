@@ -49,6 +49,9 @@
 #include "gen-cpp/MapD.h"
 #include <vector>
 #include <iostream>
+
+#include <arrow/api.h>
+
 using std::ostream;
 
 namespace Importer_NS {
@@ -547,6 +550,118 @@ void TypedImportBuffer::pop_value() {
     default:
       CHECK(false);
   }
+}
+
+template <typename ArrayType, typename T>
+inline void appendArrowPrimitive(const arrow::Array& values, const T null_sentinel, std::vector<T>* buffer) {
+  const auto& typed_values = static_cast<const ArrayType&>(values);
+  buffer->reserve(typed_values.length());
+  for (int64_t i = 0; i < typed_values.length(); i++) {
+    if (typed_values.IsNull(i)) {
+      buffer->push_back(null_sentinel);
+    } else {
+      buffer->push_back(static_cast<T>(typed_values.Value(i)));
+    }
+  }
+}
+
+static void appendArrowBoolean(const ColumnDescriptor* cd, const arrow::Array& values, std::vector<int8_t>* buffer) {
+  CHECK(values.type_id() == arrow::Type::BOOL);
+  const int8_t null_sentinel = inline_fixed_encoding_null_val(cd->columnType);
+  appendArrowPrimitive<arrow::BooleanArray, int8_t>(values, null_sentinel, buffer);
+}
+
+static void appendArrowInt16(const ColumnDescriptor* cd, const arrow::Array& values, std::vector<int16_t>* buffer) {
+  CHECK(values.type_id() == arrow::Type::INT16);
+  const int16_t null_sentinel = inline_fixed_encoding_null_val(cd->columnType);
+  appendArrowPrimitive<arrow::Int16Array, int16_t>(values, null_sentinel, buffer);
+}
+
+static void appendArrowInt32(const ColumnDescriptor* cd, const arrow::Array& values, std::vector<int32_t>* buffer) {
+  CHECK(values.type_id() == arrow::Type::INT32);
+  const int32_t null_sentinel = inline_fixed_encoding_null_val(cd->columnType);
+  appendArrowPrimitive<arrow::Int32Array, int32_t>(values, null_sentinel, buffer);
+}
+
+static void appendArrowInt64(const ColumnDescriptor* cd, const arrow::Array& values, std::vector<int64_t>* buffer) {
+  CHECK(values.type_id() == arrow::Type::INT64);
+  const int64_t null_sentinel = inline_fixed_encoding_null_val(cd->columnType);
+  appendArrowPrimitive<arrow::Int64Array, int64_t>(values, null_sentinel, buffer);
+}
+
+static void appendArrowFloat(const ColumnDescriptor* cd, const arrow::Array& values, std::vector<float>* buffer) {
+  CHECK(values.type_id() == arrow::Type::FLOAT);
+  appendArrowPrimitive<arrow::FloatArray, float>(values, NULL_FLOAT, buffer);
+}
+
+static void appendArrowDouble(const ColumnDescriptor* cd, const arrow::Array& values, std::vector<double>* buffer) {
+  CHECK(values.type_id() == arrow::Type::DOUBLE);
+  appendArrowPrimitive<arrow::DoubleArray, double>(values, NULL_DOUBLE, buffer);
+}
+
+static void appendArrowBinary(const ColumnDescriptor* cd,
+                              const arrow::Array& values,
+                              std::vector<std::string>* buffer) {
+  const auto& typed_values = static_cast<const arrow::BinaryArray&>(values);
+  buffer->reserve(typed_values.length());
+
+  const char* bytes;
+  int32_t bytes_length = 0;
+  for (int64_t i = 0; i < typed_values.length(); i++) {
+    if (typed_values.IsNull(i)) {
+      // TODO(wesm): How are nulls handled for strings?
+      buffer->push_back(std::string());
+    } else {
+      bytes = reinterpret_cast<const char*>(typed_values.GetValue(i, &bytes_length));
+      buffer->push_back(std::string(bytes, bytes_length));
+    }
+  }
+}
+
+size_t TypedImportBuffer::add_arrow_values(const ColumnDescriptor* cd, const arrow::Array& col) {
+  size_t dataSize = 0;
+  const auto type = cd->columnType.is_decimal() ? decimal_to_int_type(cd->columnType) : cd->columnType.get_type();
+  if (cd->columnType.get_notnull()) {
+    // We can't have any null values for this column; to have them is an error
+    if (col.null_count() > 0) {
+      throw std::runtime_error("NULL not allowed for column " + cd->columnName);
+    }
+  }
+
+  switch (type) {
+    case kBOOLEAN:
+      appendArrowBoolean(cd, col, bool_buffer_);
+      break;
+    case kSMALLINT:
+      appendArrowInt16(cd, col, smallint_buffer_);
+      break;
+    case kINT:
+      appendArrowInt32(cd, col, int_buffer_);
+      break;
+    case kBIGINT:
+      appendArrowInt64(cd, col, bigint_buffer_);
+      break;
+    case kFLOAT:
+      appendArrowFloat(cd, col, float_buffer_);
+      break;
+    case kDOUBLE:
+      appendArrowDouble(cd, col, double_buffer_);
+      break;
+    case kTEXT:
+    case kVARCHAR:
+    case kCHAR:
+      appendArrowBinary(cd, col, string_buffer_);
+      break;
+    case kTIME:
+    case kTIMESTAMP:
+    case kDATE:
+      throw std::runtime_error("Arrow date/time type appends not yet supported");
+    case kARRAY:
+      throw std::runtime_error("Arrow array appends not yet supported");
+    default:
+      throw std::runtime_error("Invalid Type");
+  }
+  return dataSize;
 }
 
 size_t TypedImportBuffer::add_values(const ColumnDescriptor* cd, const TColumn& col) {

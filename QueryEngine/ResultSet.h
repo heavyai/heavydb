@@ -30,15 +30,8 @@
 #include "TargetValue.h"
 #include "../Chunk/Chunk.h"
 
-#ifdef ENABLE_ARROW_CONVERTER
 #include "arrow/api.h"
 #include "arrow/ipc/api.h"
-// Arrow defines macro UNUSED conflict w/ that in jni_md.h
-#ifdef UNUSED
-#undef UNUSED
-#endif
-#include "arrow/type.h"
-#endif
 
 #include <atomic>
 #include <functional>
@@ -205,14 +198,12 @@ struct OneIntegerColumnRow {
   const bool valid;
 };
 
-#ifdef ENABLE_ARROW_CONVERTER
 struct ArrowResult {
   std::vector<char> sm_handle;
   int64_t sm_size;
   std::vector<char> df_handle;
   int64_t df_size;
 };
-#endif
 
 class TSerializedRows;
 
@@ -347,7 +338,6 @@ class ResultSet {
 
   static std::unique_ptr<ResultSet> unserialize(const std::string&, const Executor*);
 
-#ifdef ENABLE_ARROW_CONVERTER
   struct SerializedArrowOutput {
     std::shared_ptr<arrow::Buffer> schema;
     std::shared_ptr<arrow::Buffer> records;
@@ -359,7 +349,6 @@ class ResultSet {
                            const ExecutorDeviceType device_type,
                            const size_t device_id,
                            const std::vector<std::string>& col_names) const;
-#endif  // ENABLE_ARROW_CONVERTER
 
  private:
   std::vector<TargetValue> getNextRowImpl(const bool translate_strings, const bool decimal_to_double) const;
@@ -468,7 +457,6 @@ class ResultSet {
 
   int getGpuCount() const;
 
-#ifdef ENABLE_ARROW_CONVERTER
   std::shared_ptr<arrow::RecordBatch> convertToArrow(const std::vector<std::string>& col_names,
                                                      arrow::ipc::DictionaryMemo& memo) const;
   std::shared_ptr<const std::vector<std::string>> getDictionary(const int dict_id) const;
@@ -478,7 +466,6 @@ class ResultSet {
   ArrowResult getArrowCopyOnGpu(Data_Namespace::DataMgr* data_mgr,
                                 const size_t device_id,
                                 const std::vector<std::string>& col_names) const;
-#endif
 
   std::string serializeProjection() const;
 

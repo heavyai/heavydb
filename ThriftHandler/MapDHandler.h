@@ -161,6 +161,10 @@ class MapDHandler : public MapDIf {
   void load_table_binary_columnar(const TSessionId& session,
                                   const std::string& table_name,
                                   const std::vector<TColumn>& cols);
+  void load_table_binary_arrow(const TSessionId& session,
+                               const std::string& table_name,
+                               const std::string& arrow_stream);
+
   void load_table(const TSessionId& session, const std::string& table_name, const std::vector<TStringRow>& rows);
   void render(TRenderResult& _return,
               const TSessionId& session,
@@ -310,14 +314,12 @@ class MapDHandler : public MapDIf {
                        const int32_t first_n,
                        const bool just_explain,
                        const bool just_validate) const;
-#ifdef ENABLE_ARROW_CONVERTER
   void execute_rel_alg_df(TDataFrame& _return,
                           const std::string& query_ra,
                           const Catalog_Namespace::SessionInfo& session_info,
                           const ExecutorDeviceType device_type,
                           const size_t device_id,
                           const int32_t first_n) const;
-#endif
   TColumnType populateThriftColumnType(const Catalog_Namespace::Catalog* cat, const ColumnDescriptor* cd);
   TRowDescriptor fixup_row_descriptor(const TRowDescriptor& row_desc, const Catalog_Namespace::Catalog& cat);
   void set_execution_mode_nolock(Catalog_Namespace::SessionInfo* session_ptr, const TExecuteMode::type mode);
@@ -361,11 +363,8 @@ class MapDHandler : public MapDIf {
   std::vector<TargetMetaInfo> getTargetMetaInfo(
       const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& targets) const;
 
-#ifdef ENABLE_ARROW_CONVERTER
   std::vector<std::string> getTargetNames(const std::vector<TargetMetaInfo>& targets) const;
-
   std::vector<std::string> getTargetNames(const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& targets) const;
-#endif
 
   void render_root_plan(TRenderResult& _return,
                         Planner::RootPlan* root_plan,

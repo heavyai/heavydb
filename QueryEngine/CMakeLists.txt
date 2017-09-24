@@ -143,9 +143,7 @@ else()
   add_library(QueryEngine ${query_engine_source_files})
 endif()
 
-if(ENABLE_ARROW_CONVERTER)
-  set(ARROW_LIBS ${Arrow_LIBRARIES})
-endif()
+set(ARROW_LIBS ${Arrow_LIBRARIES})
 
 if(ENABLE_RENDERING)
   target_link_libraries(QueryEngine CsvImport Planner StringDictionary Utils QueryRenderer ${ARROW_LIBS})

@@ -17,7 +17,6 @@
 #include "ResultSet.h"
 #include "Execute.h"
 
-#ifdef ENABLE_ARROW_CONVERTER
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/types.h>
@@ -564,5 +563,3 @@ ArrowResult ResultSet::getArrowCopy(Data_Namespace::DataMgr* data_mgr,
   CHECK(device_type == ExecutorDeviceType::GPU);
   return getArrowCopyOnGpu(data_mgr, device_id, col_names);
 }
-
-#endif  // ENABLE_ARROW_CONVERTER
