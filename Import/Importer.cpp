@@ -556,6 +556,12 @@ namespace detail {
 
 using namespace arrow;
 
+#define ARROW_THROW_IF(cond, message)           \
+  if ((cond)) {                                 \
+    LOG(ERROR) << message;                      \
+    throw std::runtime_error(message);          \
+  }
+
 template <typename ArrayType, typename T>
 inline void appendArrowPrimitive(const Array& values, const T null_sentinel, std::vector<T>* buffer) {
   const auto& typed_values = static_cast<const ArrayType&>(values);
@@ -571,7 +577,7 @@ inline void appendArrowPrimitive(const Array& values, const T null_sentinel, std
 }
 
 static void appendArrowBoolean(const ColumnDescriptor* cd, const Array& values, std::vector<int8_t>* buffer) {
-  CHECK(values.type_id() == Type::BOOL);
+  ARROW_THROW_IF(values.type_id() != Type::BOOL, "Expected boolean col");
   const int8_t null_sentinel = inline_fixed_encoding_null_val(cd->columnType);
   const auto& typed_values = static_cast<const BooleanArray&>(values);
   buffer->reserve(typed_values.length());
@@ -585,30 +591,30 @@ static void appendArrowBoolean(const ColumnDescriptor* cd, const Array& values, 
 }
 
 static void appendArrowInt16(const ColumnDescriptor* cd, const Array& values, std::vector<int16_t>* buffer) {
-  CHECK(values.type_id() == Type::INT16);
+  ARROW_THROW_IF(values.type_id() != Type::INT16, "Expected int16 col");
   const int16_t null_sentinel = inline_fixed_encoding_null_val(cd->columnType);
   appendArrowPrimitive<Int16Array, int16_t>(values, null_sentinel, buffer);
 }
 
 static void appendArrowInt32(const ColumnDescriptor* cd, const Array& values, std::vector<int32_t>* buffer) {
-  CHECK(values.type_id() == Type::INT32);
+  ARROW_THROW_IF(values.type_id() != Type::INT32, "Expected int32 col");
   const int32_t null_sentinel = inline_fixed_encoding_null_val(cd->columnType);
   appendArrowPrimitive<Int32Array, int32_t>(values, null_sentinel, buffer);
 }
 
 static void appendArrowInt64(const ColumnDescriptor* cd, const Array& values, std::vector<int64_t>* buffer) {
-  CHECK(values.type_id() == Type::INT64);
+  ARROW_THROW_IF(values.type_id() != Type::INT64, "Expected int64 col");
   const int64_t null_sentinel = inline_fixed_encoding_null_val(cd->columnType);
   appendArrowPrimitive<Int64Array, int64_t>(values, null_sentinel, buffer);
 }
 
 static void appendArrowFloat(const ColumnDescriptor* cd, const Array& values, std::vector<float>* buffer) {
-  CHECK(values.type_id() == Type::FLOAT);
+  ARROW_THROW_IF(values.type_id() != Type::FLOAT, "Expected float col");
   appendArrowPrimitive<FloatArray, float>(values, NULL_FLOAT, buffer);
 }
 
 static void appendArrowDouble(const ColumnDescriptor* cd, const Array& values, std::vector<double>* buffer) {
-  CHECK(values.type_id() == Type::DOUBLE);
+  ARROW_THROW_IF(values.type_id() != Type::DOUBLE, "Expected double col");
   appendArrowPrimitive<DoubleArray, double>(values, NULL_DOUBLE, buffer);
 }
 
@@ -634,6 +640,7 @@ static void appendArrowTime(const ColumnDescriptor* cd, const Array& values, std
             buffer->push_back(static_cast<time_t>(raw_values[i] / 1000));
             break;
           default:
+            // unreachable code
             CHECK(false);
             break;
         }
@@ -659,17 +666,20 @@ static void appendArrowTime(const ColumnDescriptor* cd, const Array& values, std
             buffer->push_back(static_cast<time_t>(raw_values[i] / 1000000000L));
             break;
           default:
+            // unreachable code
             CHECK(false);
             break;
         }
       }
     }
   } else {
-    CHECK(false);
+    ARROW_THROW_IF(true, "Column was not time32 or time64");
   }
 }
 
 static void appendArrowTimestamp(const ColumnDescriptor* cd, const Array& values, std::vector<time_t>* buffer) {
+  ARROW_THROW_IF(values.type_id() != Type::TIMESTAMP, "Expected timestamp col");
+
   const time_t null_sentinel = inline_fixed_encoding_null_val(cd->columnType);
   const auto& typed_values = static_cast<const TimestampArray&>(values);
   const auto& type = static_cast<const TimestampType&>(*values.type());
@@ -734,11 +744,14 @@ static void appendArrowDate(const ColumnDescriptor* cd, const Array& values, std
       }
     }
   } else {
-    CHECK(false);
+    ARROW_THROW_IF(true, "Column was not date32 or date64");
   }
 }
 
 static void appendArrowBinary(const ColumnDescriptor* cd, const Array& values, std::vector<std::string>* buffer) {
+  ARROW_THROW_IF(values.type_id() != Type::BINARY && values.type_id() != Type::STRING,
+                 "Expected binary col");
+
   const auto& typed_values = static_cast<const BinaryArray&>(values);
   buffer->reserve(typed_values.length());
 
