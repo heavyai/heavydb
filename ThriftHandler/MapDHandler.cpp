@@ -1075,6 +1075,17 @@ void MapDHandler::load_table_binary_columnar(const TSessionId& session,
 
 using RecordBatchVector = std::vector<std::shared_ptr<arrow::RecordBatch>>;
 
+#define ARROW_THRIFT_THROW_NOT_OK(s)            \
+  do {                                          \
+    ::arrow::Status _s = (s);                   \
+    if (UNLIKELY(!_s.ok())) {                   \
+      TMapDException ex;                        \
+      ex.error_msg = _s.ToString();             \
+      LOG(ERROR) << s.ToString();               \
+      throw ex;                                 \
+    }                                           \
+  } while (0)
+
 static RecordBatchVector loadArrowStream(const std::string& stream) {
   RecordBatchVector batches;
   try {
@@ -1084,12 +1095,12 @@ static RecordBatchVector loadArrowStream(const std::string& stream) {
 
     arrow::io::BufferReader buf_reader(stream_buffer);
     std::shared_ptr<arrow::RecordBatchReader> batch_reader;
-    ARROW_THROW_NOT_OK(arrow::ipc::RecordBatchStreamReader::Open(&buf_reader, &batch_reader));
+    ARROW_THRIFT_THROW_NOT_OK(arrow::ipc::RecordBatchStreamReader::Open(&buf_reader, &batch_reader));
 
     while (true) {
       std::shared_ptr<arrow::RecordBatch> batch;
       // Read batch (zero-copy) from the stream
-      ARROW_THROW_NOT_OK(batch_reader->ReadNext(&batch));
+      ARROW_THRIFT_THROW_NOT_OK(batch_reader->ReadNext(&batch));
       if (batch == nullptr) {
         break;
       }
@@ -1163,6 +1174,9 @@ void MapDHandler::load_table_binary_arrow(const TSessionId& session,
   } catch (const std::exception& e) {
     LOG(ERROR) << "Input exception thrown: " << e.what() << ". Issue at column : " << (col_idx + 1)
                << ". Import aborted";
+    TMapDException ex;
+    ex.error_msg = std::string("Exception: ") + e.what();
+    throw ex;
     // TODO(tmostak): Go row-wise on binary columnar import to be consistent
     // with our other import paths
   }
