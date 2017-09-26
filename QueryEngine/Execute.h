@@ -966,6 +966,16 @@ class Executor {
                           const RelAlgExecutionUnit& ra_exe_unit,
                           const ExecutorDeviceType device_type);
 
+  struct JoinHashTableOrError {
+    const std::shared_ptr<JoinHashTableInterface> hash_table;
+    const std::string fail_reason;
+  };
+
+  JoinHashTableOrError buildHashTableForQualifier(const std::shared_ptr<Analyzer::BinOper>& qual_bin_oper,
+                                                  const std::vector<InputTableInfo>& query_infos,
+                                                  const RelAlgExecutionUnit& ra_exe_unit,
+                                                  const MemoryLevel memory_level,
+                                                  const std::unordered_set<int>& visited_tables);
   void nukeOldState(const bool allow_lazy_fetch,
                     const JoinInfo& join_info,
                     const std::vector<InputTableInfo>& query_infos,

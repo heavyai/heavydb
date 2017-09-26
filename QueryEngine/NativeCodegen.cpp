@@ -1064,14 +1064,33 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
   preloadFragOffsets(ra_exe_unit.input_descs, query_infos);
 
   std::vector<JoinLoop> join_loops;
-  for (const auto& current_level_join_conditions : ra_exe_unit.inner_joins) {
-    static_cast<void>(current_level_join_conditions);
-    join_loops.emplace_back(JoinLoopKind::UpperBound, [this](const std::vector<llvm::Value*>& prev_iters) {
-      JoinLoopDomain domain{0};
-      domain.upper_bound = ll_int<int64_t>(1);
-      return domain;
-    });
+  for (size_t level_idx = 0; level_idx < ra_exe_unit.inner_joins.size(); ++level_idx) {
+    const auto& current_level_join_conditions = ra_exe_unit.inner_joins[level_idx];
+    for (const auto& join_qual : current_level_join_conditions) {
+      auto qual_bin_oper = std::dynamic_pointer_cast<Analyzer::BinOper>(join_qual);
+      if (!qual_bin_oper || !IS_EQUIVALENCE(qual_bin_oper->get_optype())) {
+        continue;
+      }
+      const auto hash_table_or_error = buildHashTableForQualifier(
+          qual_bin_oper,
+          query_infos,
+          ra_exe_unit,
+          co.device_type_ == ExecutorDeviceType::GPU ? MemoryLevel::GPU_LEVEL : MemoryLevel::CPU_LEVEL,
+          std::unordered_set<int>{});
+      if (hash_table_or_error.hash_table) {
+        plan_state_->join_info_.join_hash_tables_.push_back(hash_table_or_error.hash_table);
+        plan_state_->join_info_.equi_join_tautologies_.push_back(qual_bin_oper);
+      }
+    }
+    join_loops.emplace_back(JoinLoopKind::UpperBound,
+                            [this, level_idx, &co](const std::vector<llvm::Value*>& prev_iters) {
+                              plan_state_->join_info_.join_hash_tables_[level_idx]->codegenSlot(co, level_idx);
+                              JoinLoopDomain domain{0};
+                              domain.upper_bound = ll_int<int64_t>(1);
+                              return domain;
+                            });
   }
+  allocateLocalColumnIds(ra_exe_unit.input_col_descs);
   if (!join_loops.empty()) {
     const auto exit_bb = llvm::BasicBlock::Create(cgen_state_->context_, "exit", cgen_state_->row_func_);
     cgen_state_->ir_builder_.SetInsertPoint(exit_bb);
@@ -1159,8 +1178,6 @@ GroupByAndAggregate::BodyControlFlow Executor::compileBody(const RelAlgExecution
                                                            GroupByAndAggregate& group_by_and_aggregate,
                                                            const CompilationOptions& co) {
   // generate the code for the filter
-  allocateLocalColumnIds(ra_exe_unit.input_col_descs);
-
   std::vector<Analyzer::Expr*> primary_quals;
   std::vector<Analyzer::Expr*> deferred_quals;
   bool short_circuited = prioritizeQuals(ra_exe_unit, primary_quals, deferred_quals);

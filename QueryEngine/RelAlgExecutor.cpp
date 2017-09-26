@@ -649,6 +649,13 @@ std::unordered_set<const RexInput*> get_join_source_used_inputs(const RelAlgNode
     return input_set;
   }
 
+  if (auto left_deep_join = dynamic_cast<const RelLeftDeepInnerJoin*>(data_sink_node)) {
+    CHECK_GT(left_deep_join->inputCount(), 2);
+    const auto condition = left_deep_join->getCondition();
+    RexUsedInputsVisitor visitor;
+    return visitor.visit(condition);
+  }
+
   CHECK_EQ(ra_node->inputCount(), 1);
   return std::unordered_set<const RexInput*>{};
 }

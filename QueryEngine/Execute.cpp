@@ -2286,6 +2286,43 @@ bool has_one_to_many_hash_table(const std::vector<std::shared_ptr<JoinHashTableI
 
 }  // namespace
 
+Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
+    const std::shared_ptr<Analyzer::BinOper>& qual_bin_oper,
+    const std::vector<InputTableInfo>& query_infos,
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const MemoryLevel memory_level,
+    const std::unordered_set<int>& visited_tables) {
+  std::shared_ptr<JoinHashTableInterface> join_hash_table;
+  const int device_count =
+      memory_level == MemoryLevel::GPU_LEVEL ? catalog_->get_dataMgr().cudaMgr_->getDeviceCount() : 1;
+  CHECK_GT(device_count, 0);
+  try {
+    if (dynamic_cast<const Analyzer::ExpressionTuple*>(qual_bin_oper->get_left_operand())) {
+      join_hash_table = BaselineJoinHashTable::getInstance(
+          qual_bin_oper, query_infos, ra_exe_unit, memory_level, device_count, visited_tables, this);
+    } else {
+      try {
+        join_hash_table = JoinHashTable::getInstance(
+            qual_bin_oper, query_infos, ra_exe_unit, memory_level, device_count, visited_tables, this);
+      } catch (TooManyHashEntries&) {
+        join_hash_table = BaselineJoinHashTable::getInstance(coalesce_singleton_equi_join(qual_bin_oper),
+                                                             query_infos,
+                                                             ra_exe_unit,
+                                                             memory_level,
+                                                             device_count,
+                                                             visited_tables,
+                                                             this);
+      }
+    }
+    CHECK(join_hash_table);
+    return {join_hash_table, ""};
+  } catch (const HashJoinFail& e) {
+    return {nullptr, e.what()};
+  }
+  CHECK(false);
+  return {nullptr, ""};
+}
+
 Executor::JoinInfo Executor::chooseJoinType(const std::list<std::shared_ptr<Analyzer::Expr>>& join_quals,
                                             const std::vector<InputTableInfo>& query_infos,
                                             const RelAlgExecutionUnit& ra_exe_unit,
@@ -2310,38 +2347,18 @@ Executor::JoinInfo Executor::chooseJoinType(const std::list<std::shared_ptr<Anal
       continue;
     }
     if (IS_EQUIVALENCE(qual_bin_oper->get_optype())) {
-      const int device_count =
-          device_type == ExecutorDeviceType::GPU ? catalog_->get_dataMgr().cudaMgr_->getDeviceCount() : 1;
-      CHECK_GT(device_count, 0);
-      std::shared_ptr<JoinHashTableInterface> join_hash_table;
-      try {
-        if (dynamic_cast<const Analyzer::ExpressionTuple*>(qual_bin_oper->get_left_operand())) {
-          join_hash_table = BaselineJoinHashTable::getInstance(
-              qual_bin_oper, query_infos, ra_exe_unit, memory_level, device_count, visited_tables, this);
-        } else {
-          try {
-            join_hash_table = JoinHashTable::getInstance(
-                qual_bin_oper, query_infos, ra_exe_unit, memory_level, device_count, visited_tables, this);
-          } catch (TooManyHashEntries&) {
-            join_hash_table = BaselineJoinHashTable::getInstance(coalesce_singleton_equi_join(qual_bin_oper),
-                                                                 query_infos,
-                                                                 ra_exe_unit,
-                                                                 memory_level,
-                                                                 device_count,
-                                                                 visited_tables,
-                                                                 this);
-          }
-        }
-        CHECK(join_hash_table);
+      const auto hash_table_and_error =
+          buildHashTableForQualifier(qual_bin_oper, query_infos, ra_exe_unit, memory_level, visited_tables);
+      if (hash_table_and_error.hash_table) {
         std::set<int> curr_rte_idx_set;
         qual_bin_oper->collect_rte_idx(curr_rte_idx_set);
         CHECK_EQ(curr_rte_idx_set.size(), size_t(2));
         rte_idx_set.insert(curr_rte_idx_set.begin(), curr_rte_idx_set.end());
-        visited_tables.insert(join_hash_table->getInnerTableId());
+        visited_tables.insert(hash_table_and_error.hash_table->getInnerTableId());
         bin_ops.push_back(qual_bin_oper);
-        join_hash_tables.push_back(join_hash_table);
-      } catch (const HashJoinFail& e) {
-        hash_join_fail_reason = e.what();
+        join_hash_tables.push_back(hash_table_and_error.hash_table);
+      } else {
+        hash_join_fail_reason = hash_table_and_error.fail_reason;
       }
     }
   }

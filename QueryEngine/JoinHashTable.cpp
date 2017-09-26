@@ -58,20 +58,13 @@ std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*> normalize_column_pa
   auto outer_ti = lhs_ti;
   auto inner_ti = rhs_ti;
   const Analyzer::Expr* outer_expr{lhs};
-#ifdef ENABLE_EQUIJOIN_FOLD
-  if ((!lhs_col || lhs_col->get_rte_idx() == 0) && (!rhs_col || rhs_col->get_rte_idx() > 0)) {
-#else
-  if ((!lhs_col || lhs_col->get_rte_idx() == 0) && (!rhs_col || rhs_col->get_rte_idx() == 1)) {
-#endif
+  if ((!lhs_col || (rhs_col && lhs_col->get_rte_idx() < rhs_col->get_rte_idx())) &&
+      (!rhs_col || (!lhs_col || lhs_col->get_rte_idx() < rhs_col->get_rte_idx()))) {
     inner_col = rhs_col;
     outer_col = lhs_col;
   } else {
-    if (lhs_col) {
-#ifdef ENABLE_EQUIJOIN_FOLD
-      CHECK_GT(lhs_col->get_rte_idx(), 0);
-#else
-      CHECK_EQ(lhs_col->get_rte_idx(), 1);
-#endif
+    if (lhs_col && lhs_col->get_rte_idx() == 0) {
+      throw HashJoinFail("Cannot use hash join for given expression");
     }
     if (rhs_col) {
       CHECK_EQ(rhs_col->get_rte_idx(), 0);
@@ -1185,8 +1178,6 @@ llvm::Value* JoinHashTable::codegenSlot(const CompilationOptions& co, const size
   if (getHashType() == JoinHashTableInterface::HashType::OneToMany) {
     return codegenOneToManyHashJoin(co, index);
   }
-  CHECK(executor_->plan_state_->join_info_.join_impl_type_ == Executor::JoinImplType::HashOneToOne ||
-        executor_->plan_state_->join_info_.join_impl_type_ == Executor::JoinImplType::HashPlusLoop);
   const auto cols = get_cols(qual_bin_oper_, *executor_->getCatalog(), executor_->temporary_tables_);
   auto key_col = cols.second;
   CHECK(key_col);

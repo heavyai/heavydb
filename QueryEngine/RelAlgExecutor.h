@@ -209,8 +209,6 @@ class RelAlgExecutor {
 
   static std::vector<std::string> getScanTableNamesInRelAlgSeq(std::vector<RaExecutionDesc>& exec_descs);
 
-  typedef std::vector<std::vector<std::shared_ptr<const Analyzer::Expr>>> JoinQualsPerNestingLevel;
-
   JoinQualsPerNestingLevel translateLeftDeepJoinFilter(
       const RelLeftDeepInnerJoin* join,
       const std::vector<InputDescriptor>& input_descs,
