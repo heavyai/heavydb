@@ -771,7 +771,6 @@ static void appendArrowBinary(const ColumnDescriptor* cd, const Array& values, s
 }  // namespace detail
 
 size_t TypedImportBuffer::add_arrow_values(const ColumnDescriptor* cd, const arrow::Array& col) {
-  size_t dataSize = 0;
   const auto type = cd->columnType.is_decimal() ? decimal_to_int_type(cd->columnType) : cd->columnType.get_type();
   if (cd->columnType.get_notnull()) {
     // We can't have any null values for this column; to have them is an error
@@ -818,7 +817,7 @@ size_t TypedImportBuffer::add_arrow_values(const ColumnDescriptor* cd, const arr
     default:
       throw std::runtime_error("Invalid Type");
   }
-  return dataSize;
+  return col.length();
 }
 
 size_t TypedImportBuffer::add_values(const ColumnDescriptor* cd, const TColumn& col) {
