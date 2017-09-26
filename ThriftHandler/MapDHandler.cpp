@@ -1020,10 +1020,12 @@ void MapDHandler::load_table_binary(const TSessionId& session,
   loader->load(import_buffers, rows.size());
 }
 
-void MapDHandler::load_table_binary_columnar(const TSessionId& session,
-                                             const std::string& table_name,
-                                             const std::vector<TColumn>& cols) {
-  check_read_only("load_table_binary_columnar");
+void MapDHandler::prepare_columnar_loader(
+    const TSessionId& session,
+    const std::string& table_name,
+    size_t num_cols,
+    std::unique_ptr<Importer_NS::Loader>* loader,
+    std::vector<std::unique_ptr<Importer_NS::TypedImportBuffer>>* import_buffers) {
   const auto session_info = get_session(session);
   auto& cat = session_info.get_catalog();
   if (g_cluster && !leaf_aggregator_.leafCount()) {
@@ -1038,30 +1040,39 @@ void MapDHandler::load_table_binary_columnar(const TSessionId& session,
     throw ex;
   }
   check_table_load_privileges(session, table_name);
-  std::unique_ptr<Importer_NS::Loader> loader;
   if (leaf_aggregator_.leafCount() > 0) {
-    loader.reset(new DistributedLoader(session_info, td, &leaf_aggregator_));
+    loader->reset(new DistributedLoader(session_info, td, &leaf_aggregator_));
   } else {
-    loader.reset(new Importer_NS::Loader(cat, td));
+    loader->reset(new Importer_NS::Loader(cat, td));
   }
   // TODO(andrew): nColumns should be number of non-virtual/non-system columns.
   //               Subtracting 1 (rowid) until TableDescriptor is updated.
-  if (cols.size() != static_cast<size_t>(td->nColumns) - 1 || cols.size() < 1) {
+  if (num_cols != static_cast<size_t>(td->nColumns) - 1 || num_cols < 1) {
     TMapDException ex;
     ex.error_msg = "Wrong number of columns to load into Table " + table_name;
     LOG(ERROR) << ex.error_msg;
     throw ex;
   }
-  auto col_descs = loader->get_column_descs();
-  std::vector<std::unique_ptr<Importer_NS::TypedImportBuffer>> import_buffers;
+  auto col_descs = (*loader)->get_column_descs();
   for (auto cd : col_descs) {
-    import_buffers.push_back(std::unique_ptr<Importer_NS::TypedImportBuffer>(
-        new Importer_NS::TypedImportBuffer(cd, loader->get_string_dict(cd))));
+    import_buffers->push_back(std::unique_ptr<Importer_NS::TypedImportBuffer>(
+        new Importer_NS::TypedImportBuffer(cd, (*loader)->get_string_dict(cd))));
   }
+}
+
+void MapDHandler::load_table_binary_columnar(const TSessionId& session,
+                                             const std::string& table_name,
+                                             const std::vector<TColumn>& cols) {
+  check_read_only("load_table_binary_columnar");
+
+  std::unique_ptr<Importer_NS::Loader> loader;
+  std::vector<std::unique_ptr<Importer_NS::TypedImportBuffer>> import_buffers;
+  prepare_columnar_loader(session, table_name, cols.size(), &loader, &import_buffers);
+
   size_t numRows = 0;
   size_t col_idx = 0;
   try {
-    for (auto cd : col_descs) {
+    for (auto cd : loader->get_column_descs()) {
       numRows = import_buffers[col_idx]->add_values(cd, cols[col_idx]);
       col_idx++;
     }
@@ -1075,18 +1086,20 @@ void MapDHandler::load_table_binary_columnar(const TSessionId& session,
 
 using RecordBatchVector = std::vector<std::shared_ptr<arrow::RecordBatch>>;
 
-#define ARROW_THRIFT_THROW_NOT_OK(s)            \
-  do {                                          \
-    ::arrow::Status _s = (s);                   \
-    if (UNLIKELY(!_s.ok())) {                   \
-      TMapDException ex;                        \
-      ex.error_msg = _s.ToString();             \
-      LOG(ERROR) << s.ToString();               \
-      throw ex;                                 \
-    }                                           \
+#define ARROW_THRIFT_THROW_NOT_OK(s) \
+  do {                               \
+    ::arrow::Status _s = (s);        \
+    if (UNLIKELY(!_s.ok())) {        \
+      TMapDException ex;             \
+      ex.error_msg = _s.ToString();  \
+      LOG(ERROR) << s.ToString();    \
+      throw ex;                      \
+    }                                \
   } while (0)
 
-static RecordBatchVector loadArrowStream(const std::string& stream) {
+namespace {
+
+RecordBatchVector loadArrowStream(const std::string& stream) {
   RecordBatchVector batches;
   try {
     // TODO(wesm): Make this simpler in general, see ARROW-1600
@@ -1112,30 +1125,12 @@ static RecordBatchVector loadArrowStream(const std::string& stream) {
   return batches;
 }
 
+}  // namespace
+
 void MapDHandler::load_table_binary_arrow(const TSessionId& session,
                                           const std::string& table_name,
                                           const std::string& arrow_stream) {
   check_read_only("load_table_binary_arrow");
-  const auto session_info = get_session(session);
-  auto& cat = session_info.get_catalog();
-  if (g_cluster && !leaf_aggregator_.leafCount()) {
-    // Sharded table rows need to be routed to the leaf by an aggregator.
-    check_table_not_sharded(cat, table_name);
-  }
-  const TableDescriptor* td = cat.getMetadataForTable(table_name);
-  if (td == nullptr) {
-    TMapDException ex;
-    ex.error_msg = "Table " + table_name + " does not exist.";
-    LOG(ERROR) << ex.error_msg;
-    throw ex;
-  }
-  check_table_load_privileges(session, table_name);
-  std::unique_ptr<Importer_NS::Loader> loader;
-  if (leaf_aggregator_.leafCount() > 0) {
-    loader.reset(new DistributedLoader(session_info, td, &leaf_aggregator_));
-  } else {
-    loader.reset(new Importer_NS::Loader(cat, td));
-  }
 
   RecordBatchVector batches = loadArrowStream(arrow_stream);
 
@@ -1150,24 +1145,14 @@ void MapDHandler::load_table_binary_arrow(const TSessionId& session,
 
   std::shared_ptr<arrow::RecordBatch> batch = batches[0];
 
-  // TODO(andrew): nColumns should be number of non-virtual/non-system columns.
-  //               Subtracting 1 (rowid) until TableDescriptor is updated.
-  if (batch->num_columns() != (td->nColumns - 1) || batch->num_columns() < 1) {
-    TMapDException ex;
-    ex.error_msg = "Wrong number of columns to load into Table " + table_name;
-    LOG(ERROR) << ex.error_msg;
-    throw ex;
-  }
-  auto col_descs = loader->get_column_descs();
+  std::unique_ptr<Importer_NS::Loader> loader;
   std::vector<std::unique_ptr<Importer_NS::TypedImportBuffer>> import_buffers;
-  for (auto cd : col_descs) {
-    import_buffers.push_back(std::unique_ptr<Importer_NS::TypedImportBuffer>(
-        new Importer_NS::TypedImportBuffer(cd, loader->get_string_dict(cd))));
-  }
+  prepare_columnar_loader(session, table_name, static_cast<size_t>(batch->num_columns()), &loader, &import_buffers);
+
   size_t numRows = 0;
   size_t col_idx = 0;
   try {
-    for (auto cd : col_descs) {
+    for (auto cd : loader->get_column_descs()) {
       numRows = import_buffers[col_idx]->add_arrow_values(cd, *batch->column(col_idx));
       col_idx++;
     }
