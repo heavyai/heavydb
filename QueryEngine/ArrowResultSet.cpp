@@ -54,7 +54,7 @@ ArrowResultSet::ArrowResultSet(const std::shared_ptr<arrow::RecordBatch>& record
     std::shared_ptr<arrow::Field> field = schema->field(i);
     SQLTypeInfo type_info = type_from_arrow_field(*schema->field(i));
     column_metainfo_.emplace_back(field->name(), type_info);
-    columns_.emplace_back(std::move(record_batch->column(i)));
+    columns_.emplace_back(record_batch->column(i));
   }
 }
 
