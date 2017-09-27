@@ -270,6 +270,70 @@ void Executor::codegenInnerScanNextRowOrMatch() {
   }
 }
 
+std::vector<JoinLoop> Executor::buildJoinLoops(const RelAlgExecutionUnit& ra_exe_unit,
+                                               const CompilationOptions& co,
+                                               const std::vector<InputTableInfo>& query_infos) {
+  std::vector<JoinLoop> join_loops;
+  for (size_t level_idx = 0; level_idx < ra_exe_unit.inner_joins.size(); ++level_idx) {
+    const auto& current_level_join_conditions = ra_exe_unit.inner_joins[level_idx];
+    for (const auto& join_qual : current_level_join_conditions) {
+      auto qual_bin_oper = std::dynamic_pointer_cast<Analyzer::BinOper>(join_qual);
+      if (!qual_bin_oper || !IS_EQUIVALENCE(qual_bin_oper->get_optype())) {
+        // TODO
+        continue;
+      }
+      const auto hash_table_or_error = buildHashTableForQualifier(
+          qual_bin_oper,
+          query_infos,
+          ra_exe_unit,
+          co.device_type_ == ExecutorDeviceType::GPU ? MemoryLevel::GPU_LEVEL : MemoryLevel::CPU_LEVEL,
+          std::unordered_set<int>{});
+      if (hash_table_or_error.hash_table) {
+        plan_state_->join_info_.join_hash_tables_.push_back(hash_table_or_error.hash_table);
+        plan_state_->join_info_.equi_join_tautologies_.push_back(qual_bin_oper);
+      }
+    }
+    join_loops.emplace_back(
+        JoinLoopKind::Singleton, [this, level_idx, &co](const std::vector<llvm::Value*>& prev_iters) {
+          JoinLoopDomain domain{0};
+          domain.slot_lookup_result = plan_state_->join_info_.join_hash_tables_[level_idx]->codegenSlot(co, level_idx);
+          return domain;
+        });
+  }
+  return join_loops;
+}
+
+void Executor::codegenJoinLoops(const std::vector<JoinLoop>& join_loops,
+                                const RelAlgExecutionUnit& ra_exe_unit,
+                                GroupByAndAggregate& group_by_and_aggregate,
+                                llvm::Function* query_func,
+                                llvm::BasicBlock* entry_bb,
+                                const CompilationOptions& co,
+                                const ExecutionOptions& eo) {
+  const auto exit_bb = llvm::BasicBlock::Create(cgen_state_->context_, "exit", cgen_state_->row_func_);
+  cgen_state_->ir_builder_.SetInsertPoint(exit_bb);
+  cgen_state_->ir_builder_.CreateRet(ll_int<int32_t>(0));
+  cgen_state_->ir_builder_.SetInsertPoint(entry_bb);
+  const auto loops_entry_bb = JoinLoop::codegen(
+      join_loops,
+      [this, query_func, &co, &eo, &group_by_and_aggregate, &ra_exe_unit](const std::vector<llvm::Value*>&) {
+        auto& builder = cgen_state_->ir_builder_;
+        const auto loop_body_bb =
+            llvm::BasicBlock::Create(builder.getContext(), "loop_body", builder.GetInsertBlock()->getParent());
+        builder.SetInsertPoint(loop_body_bb);
+        const auto body_control_flow = compileBody(ra_exe_unit, group_by_and_aggregate, co);
+        if (body_control_flow.can_return_error || cgen_state_->needs_error_check_ || eo.with_dynamic_watchdog) {
+          createErrorCheckControlFlow(query_func, eo.with_dynamic_watchdog);
+        }
+        return loop_body_bb;
+      },
+      posArg(nullptr),
+      exit_bb,
+      cgen_state_->ir_builder_);
+  cgen_state_->ir_builder_.SetInsertPoint(entry_bb);
+  cgen_state_->ir_builder_.CreateBr(loops_entry_bb);
+}
+
 Executor::GroupColLLVMValue Executor::groupByColumnCodegen(Analyzer::Expr* group_by_col,
                                                            const size_t col_width,
                                                            const CompilationOptions& co,

@@ -30,6 +30,7 @@
 #include "StringDictionaryGenerations.h"
 #include "TableGenerations.h"
 #include "TargetMetaInfo.h"
+#include "LoopControlFlow/JoinLoop.h"
 
 #include "../Analyzer/Analyzer.h"
 #include "../Chunk/Chunk.h"
@@ -936,6 +937,16 @@ class Executor {
                                     const JoinInfo& join_info,
                                     const bool has_cardinality_estimation);
 
+  std::vector<JoinLoop> buildJoinLoops(const RelAlgExecutionUnit& ra_exe_unit,
+                                       const CompilationOptions& co,
+                                       const std::vector<InputTableInfo>& query_infos);
+  void codegenJoinLoops(const std::vector<JoinLoop>& join_loops,
+                        const RelAlgExecutionUnit& ra_exe_unit,
+                        GroupByAndAggregate& group_by_and_aggregate,
+                        llvm::Function* query_func,
+                        llvm::BasicBlock* entry_bb,
+                        const CompilationOptions& co,
+                        const ExecutionOptions& eo);
   GroupByAndAggregate::BodyControlFlow compileBody(const RelAlgExecutionUnit& ra_exe_unit,
                                                    GroupByAndAggregate& group_by_and_aggregate,
                                                    const CompilationOptions& co);
