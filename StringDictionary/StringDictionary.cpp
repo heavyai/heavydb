@@ -131,6 +131,9 @@ StringDictionary::StringDictionary(const std::string& folder,
     offset_map_ = reinterpret_cast<StringIdxEntry*>(checked_mmap(offset_fd_, offset_file_size_));
     if (recover) {
       const size_t bytes = file_size(offset_fd_);
+      if (bytes % sizeof(StringIdxEntry) != 0) {
+        LOG(WARNING) << "Offsets " << offsets_path_ << " file is truncated";
+      }
       const unsigned str_count = bytes / sizeof(StringIdxEntry);
       // at this point we know the size of the StringDict we need to load
       // so lets reallocate the vector to the correct size
@@ -139,16 +142,59 @@ StringDictionary::StringDictionary(const std::string& folder,
       str_ids_.swap(new_str_ids);
       unsigned string_id = 0;
       mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
-      for (string_id = 0; string_id < str_count; ++string_id) {
-        const auto recovered = getStringFromStorage(string_id);
-        if (std::get<2>(recovered)) {
+      const uint32_t items_per_thread = 1000;
+      uint32_t thread_inits = 0;
+      const auto thread_count = std::thread::hardware_concurrency();
+      std::vector<std::future<std::vector<std::pair<unsigned int, unsigned int>>>> dictionary_futures;
+      for (string_id = 0; string_id < str_count; string_id += items_per_thread) {
+        dictionary_futures.emplace_back(std::async(std::launch::async, [items_per_thread, string_id, str_count, this] {
+          std::vector<std::pair<unsigned int, unsigned int>> hashVec;
+          for (uint32_t curr_id = string_id; curr_id < string_id + items_per_thread && curr_id < str_count; curr_id++) {
+            const auto recovered = getStringFromStorage(curr_id);
+            if (std::get<2>(recovered)) {
+              // hit the canary, recovery finished
+              break;
+            } else {
+              std::string temp = std::string(std::get<0>(recovered), std::get<1>(recovered));
+              hashVec.emplace_back(std::make_pair(rk_hash(temp), temp.size()));
+            }
+          }
+          return hashVec;
+        }));
+        thread_inits++;
+        if (thread_inits % thread_count == 0) {
+          for (auto& dictionary_future : dictionary_futures) {
+            dictionary_future.wait();
+            auto hashVec = dictionary_future.get();
+            for (auto& hash : hashVec) {
+              int32_t bucket = computeUniqueBucketWithHash(hash.first, str_ids_, recover);
+              payload_file_off_ += hash.second;
+              str_ids_[bucket] = static_cast<int32_t>(str_count_);
+              ++str_count_;
+            }
+          }
+          dictionary_futures.clear();
+          //    if (std::get<2>(recovered)) {
           // hit the canary, recovery finished
-          break;
+          //    break;
+          // }
+          // need to set set payload offset so appends know where to start
+          // payload_file_off_ = bytes;
         }
-        getOrAddImpl(std::string(std::get<0>(recovered), std::get<1>(recovered)), true);
       }
-      if (bytes % sizeof(StringIdxEntry) != 0) {
-        LOG(WARNING) << "Offsets " << offsets_path_ << " file is truncated";
+      // gather last few threads
+      if (dictionary_futures.size() != 0) {
+        for (auto& dictionary_future : dictionary_futures) {
+          dictionary_future.wait();
+          auto hashVec = dictionary_future.get();
+          for (auto& hash : hashVec) {
+            int32_t bucket = computeUniqueBucketWithHash(hash.first, str_ids_, recover);
+            payload_file_off_ += hash.second;
+            str_ids_[bucket] = static_cast<int32_t>(str_count_);
+            ++str_count_;
+          }
+        }
+        dictionary_futures.clear();
       }
     }
   }
@@ -517,6 +563,22 @@ int32_t StringDictionary::computeBucket(const std::string& str,
         // found the string
         break;
       }
+    }
+    // wrap around
+    if (++bucket == data.size()) {
+      bucket = 0;
+    }
+  }
+  return bucket;
+}
+
+int32_t StringDictionary::computeUniqueBucketWithHash(const size_t hash,
+                                                      const std::vector<int32_t>& data,
+                                                      const bool unique) const noexcept {
+  auto bucket = hash & (data.size() - 1);
+  while (true) {
+    if (data[bucket] == INVALID_STR_ID) {  // In this case it means the slot is available for use
+      break;
     }
     // wrap around
     if (++bucket == data.size()) {
