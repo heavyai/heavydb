@@ -1088,7 +1088,6 @@ llvm::Value* JoinHashTable::codegenOneToManyHashJoin(const CompilationOptions& c
 }
 
 HashJoinMatchingSet JoinHashTable::codegenMatchingSet(const CompilationOptions& co, const size_t index) {
-  CHECK(executor_->plan_state_->join_info_.join_impl_type_ == Executor::JoinImplType::HashOneToMany);
   const auto cols = get_cols(qual_bin_oper_, *executor_->getCatalog(), executor_->temporary_tables_);
   auto key_col = cols.second;
   CHECK(key_col);
@@ -1172,7 +1171,6 @@ HashJoinMatchingSet JoinHashTable::codegenMatchingSet(const std::vector<llvm::Va
                                                       const bool is_bw_eq,
                                                       const int64_t sub_buff_size,
                                                       Executor* executor) {
-  CHECK(executor->plan_state_->join_info_.join_impl_type_ == Executor::JoinImplType::HashOneToMany);
   std::string fname{"hash_join_idx"};
   if (is_bw_eq) {
     fname += "_bitwise";

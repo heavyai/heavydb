@@ -274,8 +274,9 @@ std::vector<JoinLoop> Executor::buildJoinLoops(const RelAlgExecutionUnit& ra_exe
                                                const CompilationOptions& co,
                                                const std::vector<InputTableInfo>& query_infos) {
   std::vector<JoinLoop> join_loops;
-  for (size_t level_idx = 0; level_idx < ra_exe_unit.inner_joins.size(); ++level_idx) {
+  for (size_t level_idx = 0, current_hash_table_idx = 0; level_idx < ra_exe_unit.inner_joins.size(); ++level_idx) {
     const auto& current_level_join_conditions = ra_exe_unit.inner_joins[level_idx];
+    std::shared_ptr<JoinHashTableInterface> current_level_hash_table;
     for (const auto& join_qual : current_level_join_conditions) {
       auto qual_bin_oper = std::dynamic_pointer_cast<Analyzer::BinOper>(join_qual);
       if (!qual_bin_oper || !IS_EQUIVALENCE(qual_bin_oper->get_optype())) {
@@ -288,17 +289,63 @@ std::vector<JoinLoop> Executor::buildJoinLoops(const RelAlgExecutionUnit& ra_exe
           ra_exe_unit,
           co.device_type_ == ExecutorDeviceType::GPU ? MemoryLevel::GPU_LEVEL : MemoryLevel::CPU_LEVEL,
           std::unordered_set<int>{});
-      if (hash_table_or_error.hash_table) {
+      current_level_hash_table = hash_table_or_error.hash_table;
+      if (current_level_hash_table) {
         plan_state_->join_info_.join_hash_tables_.push_back(hash_table_or_error.hash_table);
         plan_state_->join_info_.equi_join_tautologies_.push_back(qual_bin_oper);
       }
     }
-    join_loops.emplace_back(
-        JoinLoopKind::Singleton, [this, level_idx, &co](const std::vector<llvm::Value*>& prev_iters) {
-          JoinLoopDomain domain{0};
-          domain.slot_lookup_result = plan_state_->join_info_.join_hash_tables_[level_idx]->codegenSlot(co, level_idx);
-          return domain;
-        });
+    auto load_set_element = [this](const std::vector<llvm::Value*>& prev_iters, const size_t level_idx) {
+      CHECK(!prev_iters.empty());
+      llvm::Value* matching_row_index{nullptr};
+      if (prev_iters.back()->getType()->isPointerTy()) {
+        CHECK(prev_iters.back()->getType()->getPointerElementType()->isIntegerTy(32));
+        matching_row_index = cgen_state_->ir_builder_.CreateLoad(prev_iters.back());
+        matching_row_index =
+            cgen_state_->ir_builder_.CreateSExt(matching_row_index, get_int_type(64, cgen_state_->context_));
+      } else {
+        matching_row_index = prev_iters.back();
+      }
+      CHECK(matching_row_index->getType()->isIntegerTy(64));
+      const auto it_ok = cgen_state_->scan_idx_to_hash_pos_.emplace(level_idx, matching_row_index);
+      CHECK(it_ok.second);
+    };
+    if (current_level_hash_table) {
+      if (current_level_hash_table->getHashType() == JoinHashTable::HashType::OneToOne) {
+        join_loops.emplace_back(
+            JoinLoopKind::Singleton,
+            [this, current_hash_table_idx, level_idx, current_level_hash_table, load_set_element, &co](
+                const std::vector<llvm::Value*>& prev_iters) {
+              load_set_element(prev_iters, level_idx);
+              JoinLoopDomain domain{0};
+              domain.slot_lookup_result = current_level_hash_table->codegenSlot(co, current_hash_table_idx);
+              return domain;
+            });
+      } else {
+        join_loops.emplace_back(
+            JoinLoopKind::Set,
+            [this, current_hash_table_idx, level_idx, current_level_hash_table, load_set_element, &co](
+                const std::vector<llvm::Value*>& prev_iters) {
+              load_set_element(prev_iters, level_idx);
+              JoinLoopDomain domain{0};
+              const auto matching_set = current_level_hash_table->codegenMatchingSet(co, current_hash_table_idx);
+              domain.values_buffer = matching_set.elements;
+              domain.element_count = matching_set.count;
+              return domain;
+            });
+      }
+      ++current_hash_table_idx;
+    } else {
+      join_loops.emplace_back(
+          JoinLoopKind::UpperBound, [this, level_idx, load_set_element](const std::vector<llvm::Value*>& prev_iters) {
+            load_set_element(prev_iters, level_idx);
+            JoinLoopDomain domain{0};
+            const auto rows_per_scan_ptr = cgen_state_->ir_builder_.CreateGEP(
+                get_arg_by_name(cgen_state_->row_func_, "num_rows_per_scan"), ll_int(int32_t(level_idx + 1)));
+            domain.upper_bound = cgen_state_->ir_builder_.CreateLoad(rows_per_scan_ptr, "num_rows_per_scan");
+            return domain;
+          });
+    }
   }
   return join_loops;
 }
