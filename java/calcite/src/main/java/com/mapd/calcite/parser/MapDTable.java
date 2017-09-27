@@ -23,7 +23,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.mapd.metadata.PointSqlType;
-import com.mapd.metadata.LineSqlType;
+import com.mapd.metadata.LinestringSqlType;
 import com.mapd.metadata.PolygonSqlType;
 
 /**
@@ -115,7 +115,7 @@ public class MapDTable implements Table {
       case POINT:
         return new PointSqlType();
       case LINESTRING:
-        return new LineSqlType();
+        return new LinestringSqlType();
       case POLYGON:
         return new PolygonSqlType();
       default:

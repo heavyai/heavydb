@@ -501,6 +501,13 @@ TDatum columnar_val_to_datum(const TColumn& col, const size_t row_idx, const TTy
       datum.val.str_val = col.data.str_col[row_idx];
       break;
     }
+    case TDatumType::POINT:
+    case TDatumType::LINESTRING:
+    case TDatumType::POLYGON: {
+      CHECK(false);
+      datum.val.str_val = col.data.str_col[row_idx];
+      break;
+    }
     default:
       CHECK(false);
   }

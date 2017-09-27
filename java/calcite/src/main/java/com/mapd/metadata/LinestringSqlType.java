@@ -31,10 +31,10 @@ import org.apache.calcite.sql.type.SqlTypeName;
 
 import com.mapd.metadata.GeoRelDataType;
 
-public class LineSqlType extends GeoRelDataType {
+public class LinestringSqlType extends GeoRelDataType {
 
     @Override
     public String getFullTypeString() {
-        return "Line";
+        return "Linestring";
     }
 }
