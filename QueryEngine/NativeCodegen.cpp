@@ -1082,13 +1082,12 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
         plan_state_->join_info_.equi_join_tautologies_.push_back(qual_bin_oper);
       }
     }
-    join_loops.emplace_back(JoinLoopKind::UpperBound,
-                            [this, level_idx, &co](const std::vector<llvm::Value*>& prev_iters) {
-                              plan_state_->join_info_.join_hash_tables_[level_idx]->codegenSlotIsValid(co, level_idx);
-                              JoinLoopDomain domain{0};
-                              domain.upper_bound = ll_int<int64_t>(1);
-                              return domain;
-                            });
+    join_loops.emplace_back(
+        JoinLoopKind::Singleton, [this, level_idx, &co](const std::vector<llvm::Value*>& prev_iters) {
+          JoinLoopDomain domain{0};
+          domain.slot_lookup_result = plan_state_->join_info_.join_hash_tables_[level_idx]->codegenSlot(co, level_idx);
+          return domain;
+        });
   }
   allocateLocalColumnIds(ra_exe_unit.input_col_descs);
   if (!join_loops.empty()) {
