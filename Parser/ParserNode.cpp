@@ -54,6 +54,14 @@ bool g_fast_strcmp{true};
 using namespace Lock_Namespace;
 using Catalog_Namespace::SysCatalog;
 
+namespace Importer_NS {
+
+bool readGeoCoords(SQLTypes type,
+                   std::string& wkt,
+                   std::vector<double>& coords);
+
+}  // Importer_NS
+
 namespace Parser {
 
 std::shared_ptr<Analyzer::Expr> NullLiteral::analyze(const Catalog_Namespace::Catalog& catalog,
@@ -1543,13 +1551,20 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog, Analyz
 
     if (cd->numPhysicalColumns > 0) {
       CHECK(cd->columnType.is_geometry());
-      // placeholder: import geometry from *c->get_constval().stringval, populate physical columns
       auto c = std::dynamic_pointer_cast<Analyzer::Constant>(e);
       CHECK(c);
-      for (int col = cd->columnId + 1; col <= cd->columnId + cd->numPhysicalColumns; col++) {
-        //const ColumnDescriptor* pcd = catalog.getMetadataForColumn(query.get_result_table_id(), col);
+      std::vector<double> coords;
+      if (!Importer_NS::readGeoCoords(cd->columnType.get_type(), *c->get_constval().stringval, coords)) {
+        throw std::runtime_error("Cannot read geometry to insert into column " + cd->columnName);
+      }
+      CHECK_EQ(cd->numPhysicalColumns, coords.size());
+      for (int i = 0; i < cd->numPhysicalColumns; i++) {
+        auto col = cd->columnId + i + 1;
+        const ColumnDescriptor* pcd = catalog.getMetadataForColumn(query.get_result_table_id(), col);
+        CHECK(pcd && pcd->isPhysicalCol);
+        CHECK_EQ(pcd->columnType.get_type(), kDOUBLE);
         Datum d;
-        d.doubleval = 1.1;
+        d.doubleval = coords[i];
         tlist.emplace_back(new Analyzer::TargetEntry("", makeExpr<Analyzer::Constant>(kDOUBLE, false, d), false));
         ++it;
       }
