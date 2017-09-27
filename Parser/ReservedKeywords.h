@@ -199,7 +199,7 @@ static std::set<std::string> reserved_keywords{
     "LEFT",
     "LIKE",
     "LIMIT",
-    "LINE",
+    "LINESTRING",
     "LN",
     "LOCAL",
     "LOCALTIME",

@@ -60,8 +60,8 @@ inline TDatumType::type type_to_thrift(const SQLTypeInfo& type_info) {
       return TDatumType::INTERVAL_YEAR_MONTH;
     case kPOINT:
       return TDatumType::POINT;
-    case kLINE:
-      return TDatumType::LINE;
+    case kLINESTRING:
+      return TDatumType::LINESTRING;
     case kPOLYGON:
       return TDatumType::POLYGON;
     default:
@@ -100,8 +100,8 @@ inline SQLTypes thrift_to_type(const TDatumType::type& type) {
       return kINTERVAL_YEAR_MONTH;
     case TDatumType::POINT:
       return kPOINT;
-    case TDatumType::LINE:
-      return kLINE;
+    case TDatumType::LINESTRING:
+      return kLINESTRING;
     case TDatumType::POLYGON:
       return kPOLYGON;
     default:

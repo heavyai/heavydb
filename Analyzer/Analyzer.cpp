@@ -1603,7 +1603,7 @@ bool Datum_equal(const SQLTypeInfo& ti, Datum val1, Datum val2) {
     case kTIMESTAMP:
       return val1.timeval == val2.timeval;
     case kPOINT:
-    case kLINE:
+    case kLINESTRING:
     case kPOLYGON:
       return *val1.stringval == *val2.stringval;
     default:

@@ -38,17 +38,17 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateGeoFunction(const Rex
         return makeExpr<Analyzer::FunctionOper>(
             rex_function->getType(), "ST_Distance_Point_Point", translateGeoFunctionArgs(rex_function));
       }
-      if (columnB_ti.get_type() == kLINE) {
+      if (columnB_ti.get_type() == kLINESTRING) {
         return makeExpr<Analyzer::FunctionOper>(
             rex_function->getType(), "ST_Distance_Point_Line", translateGeoFunctionArgs(rex_function));
       }
     }
-    if (columnA_ti.get_type() == kLINE) {
+    if (columnA_ti.get_type() == kLINESTRING) {
       if (columnB_ti.get_type() == kPOINT) {
         return makeExpr<Analyzer::FunctionOper>(
             rex_function->getType(), "ST_Distance_Line_Point", translateGeoFunctionArgs(rex_function));
       }
-      if (columnB_ti.get_type() == kLINE) {
+      if (columnB_ti.get_type() == kLINESTRING) {
         return makeExpr<Analyzer::FunctionOper>(
             rex_function->getType(), "ST_Distance_Line_Line", translateGeoFunctionArgs(rex_function));
       }
@@ -61,17 +61,17 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateGeoFunction(const Rex
         return makeExpr<Analyzer::FunctionOper>(
             rex_function->getType(), "ST_Contains_Point_Point", translateGeoFunctionArgs(rex_function));
       }
-      if (columnB_ti.get_type() == kLINE) {
+      if (columnB_ti.get_type() == kLINESTRING) {
         return makeExpr<Analyzer::FunctionOper>(
             rex_function->getType(), "ST_Contains_Point_Line", translateGeoFunctionArgs(rex_function));
       }
     }
-    if (columnA_ti.get_type() == kLINE) {
+    if (columnA_ti.get_type() == kLINESTRING) {
       if (columnB_ti.get_type() == kPOINT) {
         return makeExpr<Analyzer::FunctionOper>(
             rex_function->getType(), "ST_Contains_Line_Point", translateGeoFunctionArgs(rex_function));
       }
-      if (columnB_ti.get_type() == kLINE) {
+      if (columnB_ti.get_type() == kLINESTRING) {
         return makeExpr<Analyzer::FunctionOper>(
             rex_function->getType(), "ST_Contains_Line_Line", translateGeoFunctionArgs(rex_function));
       }

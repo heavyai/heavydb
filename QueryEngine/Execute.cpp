@@ -2150,7 +2150,7 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
         break;
       }
       case kPOINT:
-      case kLINE:
+      case kLINESTRING:
       case kPOLYGON:
         str_col_buffers[col_ids[col_idx]].push_back(col_datum.stringval ? *col_datum.stringval : "");
         break;

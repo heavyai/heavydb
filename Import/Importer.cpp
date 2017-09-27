@@ -317,8 +317,12 @@ Datum TDatumToDatum(const TDatum& datum, SQLTypeInfo& ti) {
     case kDATE:
       d.timeval = datum.is_null ? inline_fixed_encoding_null_val(ti) : datum.val.int_val;
       break;
+    case kPOINT:
+    case kLINESTRING:
+    case kPOLYGON:
+      throw std::runtime_error("Internal error: geometry type in TDatumToDatum.");
     default:
-      throw std::runtime_error("Internal error: invalid type in StringToDatum.");
+      throw std::runtime_error("Internal error: invalid type in TDatumToDatum.");
   }
   return d;
 }

@@ -57,7 +57,7 @@ enum SQLTypes {
   kINTERVAL_DAY_TIME = 16,
   kINTERVAL_YEAR_MONTH = 17,
   kPOINT = 18,
-  kLINE = 19,
+  kLINESTRING = 19,
   kPOLYGON = 20,
   kSQLTYPE_LAST = 21};
 
@@ -128,7 +128,7 @@ enum EncodingType {
    ((T) == kNUMERIC) || ((T) == kDECIMAL))
 #define IS_STRING(T) (((T) == kTEXT) || ((T) == kVARCHAR) || ((T) == kCHAR))
 #define IS_TIME(T) (((T) == kTIME) || ((T) == kTIMESTAMP) || ((T) == kDATE))
-#define IS_GEO(T) (((T) == kPOINT) || ((T) == kLINE) || ((T) == kPOLYGON))
+#define IS_GEO(T) (((T) == kPOINT) || ((T) == kLINESTRING) || ((T) == kPOLYGON))
 
 #define NULL_BOOLEAN INT8_MIN
 #define NULL_TINYINT INT8_MIN
@@ -483,7 +483,7 @@ class SQLTypeInfo {
           return sizeof(int32_t);  // @TODO(wei) must check DictDescriptor
         break;
       case kPOINT:
-      case kLINE:
+      case kLINESTRING:
       case kPOLYGON:
         break;;
       default:

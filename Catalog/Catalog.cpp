@@ -1690,7 +1690,7 @@ void Catalog::createTable(TableDescriptor& td,
             columns.push_back(physical_cd);
           }
           break;
-        case kLINE:
+        case kLINESTRING:
           cd.numPhysicalColumns = 4;
           columns.push_back(cd);
           for (int i = 0; i < cd.numPhysicalColumns; i++) {

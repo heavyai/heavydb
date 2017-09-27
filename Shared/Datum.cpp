@@ -50,7 +50,7 @@ std::string SQLTypeInfo::type_name[kSQLTYPE_LAST] = {"NULL",
                                                      "INTERVAL_DAY_TIME",
                                                      "INTERVAL_YEAR_MONTH",
                                                      "POINT",
-                                                     "LINE",
+                                                     "LINESTRING",
                                                      "POLYGON"};
 std::string SQLTypeInfo::comp_name[kENCODING_LAST] = {"NONE", "FIXED", "RL", "DIFF", "DICT", "SPARSE"};
 
