@@ -79,6 +79,8 @@ class JoinHashTable : public JoinHashTableInterface {
 #endif
   }
 
+  llvm::Value* codegenSlotIsValid(const CompilationOptions&, const size_t) override;
+
   llvm::Value* codegenSlot(const CompilationOptions&, const size_t) override;
 
   int getInnerTableId() const noexcept override { return col_var_.get()->get_table_id(); };

@@ -1171,6 +1171,13 @@ llvm::Value* JoinHashTable::codegenOneToManyHashJoin(const std::vector<llvm::Val
   executor->cgen_state_->match_scan_labels_.push_back(match_loop_head);
   executor->cgen_state_->match_iterators_.push_back(std::make_pair(match_pos, match_pos_ptr));
 
+  return slot_lv;
+}
+
+llvm::Value* JoinHashTable::codegenSlotIsValid(const CompilationOptions& co, const size_t index) {
+  const auto slot_lv = codegenSlot(co, index);
+  const auto slot_valid_lv =
+      executor_->cgen_state_->ir_builder_.CreateICmp(llvm::ICmpInst::ICMP_SGE, slot_lv, executor_->ll_int(int64_t(0)));
   return slot_valid_lv;
 }
 
@@ -1202,9 +1209,7 @@ llvm::Value* JoinHashTable::codegenSlot(const CompilationOptions& co, const size
   const auto slot_lv = executor_->cgen_state_->emitCall(fname, hash_join_idx_args);
   const auto it_ok = executor_->cgen_state_->scan_idx_to_hash_pos_.emplace(val_col->get_rte_idx(), slot_lv);
   CHECK(it_ok.second);
-  const auto slot_valid_lv =
-      executor_->cgen_state_->ir_builder_.CreateICmp(llvm::ICmpInst::ICMP_SGE, slot_lv, executor_->ll_int(int64_t(0)));
-  return slot_valid_lv;
+  return slot_lv;
 }
 
 const InputTableInfo& JoinHashTable::getInnerQueryInfo(const Analyzer::ColumnVar* inner_col) const {

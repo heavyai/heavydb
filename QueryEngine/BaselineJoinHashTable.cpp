@@ -826,6 +826,12 @@ int BaselineJoinHashTable::initHashTableForDevice(const std::vector<JoinColumn>&
 #define LL_INT(v) executor_->ll_int(v)
 #define ROW_FUNC executor_->cgen_state_->row_func_
 
+llvm::Value* BaselineJoinHashTable::codegenSlotIsValid(const CompilationOptions& co, const size_t index) {
+  const auto slot_lv = codegenSlot(co, index);
+  return executor_->cgen_state_->ir_builder_.CreateICmp(
+      llvm::ICmpInst::ICMP_SGE, slot_lv, executor_->ll_int(int64_t(0)));
+}
+
 llvm::Value* BaselineJoinHashTable::codegenSlot(const CompilationOptions& co, const size_t index) {
   const auto key_component_width = get_key_component_width(condition_, executor_);
   CHECK(key_component_width == 4 || key_component_width == 8);
@@ -866,9 +872,7 @@ llvm::Value* BaselineJoinHashTable::codegenSlot(const CompilationOptions& co, co
   const auto first_inner_col = inner_outer_pairs.front().first;
   const auto it_ok = executor_->cgen_state_->scan_idx_to_hash_pos_.emplace(first_inner_col->get_rte_idx(), slot_lv);
   CHECK(it_ok.second);
-  const auto slot_valid_lv =
-      executor_->cgen_state_->ir_builder_.CreateICmp(llvm::ICmpInst::ICMP_SGE, slot_lv, executor_->ll_int(int64_t(0)));
-  return slot_valid_lv;
+  return slot_lv;
 }
 
 llvm::Value* BaselineJoinHashTable::codegenOneToManySlot(const CompilationOptions& co,

@@ -50,6 +50,8 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
 
   int64_t getJoinHashBuffer(const ExecutorDeviceType device_type, const int device_id) noexcept override;
 
+  llvm::Value* codegenSlotIsValid(const CompilationOptions&, const size_t) override;
+
   llvm::Value* codegenSlot(const CompilationOptions&, const size_t) override;
 
   int getInnerTableId() const noexcept override;

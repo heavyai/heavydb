@@ -1084,7 +1084,7 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
     }
     join_loops.emplace_back(JoinLoopKind::UpperBound,
                             [this, level_idx, &co](const std::vector<llvm::Value*>& prev_iters) {
-                              plan_state_->join_info_.join_hash_tables_[level_idx]->codegenSlot(co, level_idx);
+                              plan_state_->join_info_.join_hash_tables_[level_idx]->codegenSlotIsValid(co, level_idx);
                               JoinLoopDomain domain{0};
                               domain.upper_bound = ll_int<int64_t>(1);
                               return domain;
