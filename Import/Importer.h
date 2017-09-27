@@ -177,6 +177,11 @@ class TypedImportBuffer : boost::noncopyable {
         } else
           array_buffer_ = new std::vector<ArrayDatum>();
         break;
+      case kPOINT:
+      case kLINESTRING:
+      case kPOLYGON:
+        geo_string_buffer_ = new std::vector<std::string>();
+        break;
       default:
         CHECK(false);
     }
@@ -234,6 +239,11 @@ class TypedImportBuffer : boost::noncopyable {
         } else
           delete array_buffer_;
         break;
+      case kPOINT:
+      case kLINESTRING:
+      case kPOLYGON:
+        delete geo_string_buffer_;
+        break;
       default:
         CHECK(false);
     }
@@ -252,6 +262,8 @@ class TypedImportBuffer : boost::noncopyable {
   void addDouble(const double v) { double_buffer_->push_back(v); }
 
   void addString(const std::string& v) { string_buffer_->push_back(v); }
+
+  void addGeoString(const std::string& v) { geo_string_buffer_->push_back(v); }
 
   void addArray(const ArrayDatum& v) { array_buffer_->push_back(v); }
 
@@ -362,6 +374,8 @@ class TypedImportBuffer : boost::noncopyable {
 
   std::vector<std::string>* getStringBuffer() const { return string_buffer_; }
 
+  std::vector<std::string>* getGeoStringBuffer() const { return geo_string_buffer_; }
+
   std::vector<ArrayDatum>* getArrayBuffer() const { return array_buffer_; }
 
   std::vector<std::vector<std::string>>* getStringArrayBuffer() const { return string_array_buffer_; }
@@ -450,6 +464,11 @@ class TypedImportBuffer : boost::noncopyable {
           array_buffer_->clear();
         break;
       }
+      case kPOINT:
+      case kLINESTRING:
+      case kPOLYGON:
+        geo_string_buffer_->clear();
+        break;
       default:
         CHECK(false);
     }
@@ -473,6 +492,7 @@ class TypedImportBuffer : boost::noncopyable {
     std::vector<double>* double_buffer_;
     std::vector<time_t>* time_buffer_;
     std::vector<std::string>* string_buffer_;
+    std::vector<std::string>* geo_string_buffer_;
     std::vector<ArrayDatum>* array_buffer_;
     std::vector<std::vector<std::string>>* string_array_buffer_;
   };

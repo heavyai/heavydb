@@ -483,6 +483,11 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
         }
       }
       break;
+    case kPOINT:
+    case kLINESTRING:
+    case kPOLYGON:
+      addGeoString(val);
+      break;
     default:
       CHECK(false);
   }
@@ -526,6 +531,11 @@ void TypedImportBuffer::pop_value() {
       } else {
         array_buffer_->pop_back();
       }
+      break;
+    case kPOINT:
+    case kLINESTRING:
+    case kPOLYGON:
+      geo_string_buffer_->pop_back();
       break;
     default:
       CHECK(false);
@@ -1156,6 +1166,16 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd, const TDatum& datu
         }
       }
       break;
+    case kPOINT:
+    case kLINESTRING:
+    case kPOLYGON:
+      if (is_null) {
+        if (cd->columnType.get_notnull())
+          throw std::runtime_error("NULL for column " + cd->columnName);
+        addGeoString(std::string());
+      } else
+        addGeoString(datum.val.str_val);
+      break;
     default:
       CHECK(false);
   }
@@ -1172,6 +1192,42 @@ ostream& operator<<(ostream& out, const std::vector<T>& v) {
   }
   out << "]";
   return out;
+}
+
+bool readGeoCoords(SQLTypes type,
+                   std::string& wkt,
+                   std::vector<double>& coords) {
+  OGRErr status = OGRERR_NONE;
+  switch (type) {
+    case kPOINT: {
+      auto data = (char *)wkt.c_str();
+      OGRPoint p;
+      status = p.importFromWkt(&data);
+      if (status != OGRERR_NONE)
+        break;
+      coords.push_back(p.getX());
+      coords.push_back(p.getY());
+      return true;
+    }
+    case kLINESTRING: {
+      auto data = (char *)wkt.c_str();
+      OGRLineString l;
+      status = l.importFromWkt(&data);
+      if (status != OGRERR_NONE || l.getNumPoints() != 2)
+        break;
+      coords.push_back(l.getX(0));
+      coords.push_back(l.getY(0));
+      coords.push_back(l.getX(1));
+      coords.push_back(l.getY(1));
+      return true;
+    }
+    case kPOLYGON: {
+      break;
+    }
+    default:
+      break;
+  }
+  return false;
 }
 
 static ImportStatus import_thread(int thread_id,
@@ -1215,22 +1271,48 @@ static ImportStatus import_thread(int thread_id,
       } else
         p = get_row(
             p, thread_buf_end, buf_end, copy_params, p == thread_buf, importer->get_is_array(), row, try_single_thread);
-      if (row.size() != col_descs.size()) {
+      int phys_cols = 0;
+      for (const auto cd : col_descs)
+        phys_cols += cd->numPhysicalColumns;
+      if (row.size() != col_descs.size() - phys_cols) {
         import_status.rows_rejected++;
-        LOG(ERROR) << "Incorrect Row (expected " << col_descs.size() << " columns, has " << row.size() << "): " << row;
+        LOG(ERROR) << "Incorrect Row (expected " << col_descs.size() - phys_cols << " columns, has " << row.size() << "): " << row;
         if (import_status.rows_rejected > copy_params.max_reject)
           break;
         continue;
       }
       us = measure<std::chrono::microseconds>::execution([&]() {
+        size_t row_idx = 0;
         size_t col_idx = 0;
         try {
-          for (const auto cd : col_descs) {
-            bool is_null = (row[col_idx] == copy_params.null_str);
-            if (!cd->columnType.is_string() && row[col_idx].empty())
+          for (auto cd_it = col_descs.begin(); cd_it != col_descs.end(); cd_it++) {
+            auto cd = *cd_it;
+            bool is_null = (row[row_idx] == copy_params.null_str);
+            if (!cd->columnType.is_string() && row[row_idx].empty())
               is_null = true;
-            import_buffers[col_idx]->add_value(cd, row[col_idx], is_null, copy_params);
+            import_buffers[col_idx]->add_value(cd, row[row_idx], is_null, copy_params);
+            std::string geostr{row[row_idx]};
+            ++row_idx;
             ++col_idx;
+            if (cd->numPhysicalColumns) {
+              auto col_ti = cd->columnType;
+              CHECK(IS_GEO(col_ti.get_type()));
+              // import data through GDAL, fill physical columns
+              std::vector<double> coords;
+              if (!Importer_NS::readGeoCoords(col_ti.get_type(), geostr, coords)) {
+                throw std::runtime_error("Cannot read geometry to insert into column " + cd->columnName);
+              }
+              CHECK_EQ(cd->numPhysicalColumns, coords.size());
+              for (auto j = 0; j < cd->numPhysicalColumns; j++) {
+                ++cd_it;
+                auto pcd = *cd_it;
+                TDatum td;
+                td.val.real_val = coords[j];
+                td.is_null = false;
+                import_buffers[col_idx]->add_value(pcd, td, false);
+                ++col_idx;
+              }
+            }
           }
           import_status.rows_completed++;
         } catch (const std::exception& e) {
@@ -1410,6 +1492,13 @@ void Loader::distributeToShards(std::vector<OneShardBuffers>& all_shard_import_b
             shard_output_buffers[col_idx]->addArray((*input_buffer->getArrayBuffer())[i]);
           }
           break;
+        case kPOINT:
+        case kLINESTRING:
+        case kPOLYGON: {
+          CHECK_LT(i, input_buffer->getGeoStringBuffer()->size());
+          shard_output_buffers[col_idx]->addGeoString((*input_buffer->getGeoStringBuffer())[i]);
+          break;
+        }
         default:
           CHECK(false);
       }
@@ -1462,6 +1551,9 @@ bool Loader::loadToShard(const std::vector<std::unique_ptr<TypedImportBuffer>>& 
         import_buff->addDictEncodedString(*string_payload_ptr);
         p.numbersPtr = import_buff->getStringDictBuffer();
       }
+    } else if (import_buff->getTypeInfo().is_geometry()) {
+      auto geo_payload_ptr = import_buff->getGeoStringBuffer();
+      p.stringsPtr = geo_payload_ptr;
     } else {
       CHECK(import_buff->getTypeInfo().get_type() == kARRAY);
       if (IS_STRING(import_buff->getTypeInfo().get_subtype())) {
