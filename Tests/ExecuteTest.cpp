@@ -2880,11 +2880,11 @@ void import_dept_table() {
 void import_geospatial_test() {
   const std::string geospatial_test("DROP TABLE IF EXISTS geospatial_test;");
   run_ddl_statement(geospatial_test);
-  run_ddl_statement("CREATE TABLE geospatial_test (p POINT, l LINE) WITH (fragment_size=2);");
+  run_ddl_statement("CREATE TABLE geospatial_test (pz POINT, p POINT, l LINESTRING) WITH (fragment_size=2);");
   for (ssize_t i = 0; i < g_num_rows; ++i) {
-    const std::string insert_query{"INSERT INTO geospatial_test VALUES(POINT 'POINT(" +
-        std::to_string(i) + " " + std::to_string(i) + ")', " + "LINE 'LINE( 0 " +
-        std::to_string(i) + ", " + std::to_string(i) + " 0)');"};
+    const std::string insert_query{"INSERT INTO geospatial_test VALUES('POINT(0 0)', 'POINT(" +
+        std::to_string(i) + " " + std::to_string(i) + ")', 'LINESTRING(" +
+        std::to_string(2*i) + " 0, " + std::to_string(2*i) + " " + std::to_string(2*i) + ")');"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
   }
 }
@@ -3948,12 +3948,18 @@ TEST(Select, GeoSpatial) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     ASSERT_EQ(static_cast<int64_t>(g_num_rows),
-              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE ST_Distance(p,p) < 1.0;", dt)));
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE ST_Distance(p,p) < 0.1;", dt)));
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows),
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE ST_Distance(pz,p) < 100.0;", dt)));
+    ASSERT_EQ(static_cast<int64_t>(5),
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE ST_Distance(pz,p) < 5.9;", dt)));
     ASSERT_EQ(static_cast<int64_t>(g_num_rows),
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE ST_Distance(p,l) < 1.0;", dt)));
 
     ASSERT_EQ(static_cast<int64_t>(g_num_rows),
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE ST_Contains(p,p);", dt)));
+    ASSERT_EQ(static_cast<int64_t>(1),
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE ST_Contains(pz,p);", dt)));
     ASSERT_EQ(static_cast<int64_t>(0),
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE ST_Contains(p,l);", dt)));
   }
