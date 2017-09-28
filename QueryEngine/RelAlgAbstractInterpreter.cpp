@@ -59,6 +59,11 @@ class RexRebindInputsVisitor : public RexVisitor<void*> {
   void* visitInput(const RexInput* rex_input) const override {
     const auto old_source = rex_input->getSourceNode();
     if (old_source == old_input_) {
+      const auto left_deep_join = dynamic_cast<const RelLeftDeepInnerJoin*>(new_input_);
+      if (left_deep_join) {
+        rebind_inputs_from_left_deep_join(rex_input, left_deep_join);
+        return nullptr;
+      }
       rex_input->setSourceNode(new_input_);
     }
     return nullptr;

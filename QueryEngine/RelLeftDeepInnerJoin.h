@@ -20,7 +20,11 @@
 #include <vector>
 
 class RelAlgNode;
+class RelLeftDeepInnerJoin;
+class RexScalar;
 
 bool is_left_deep_join(const RelAlgNode* left_deep_join_root);
 
 void create_left_deep_join(std::vector<std::shared_ptr<RelAlgNode>>& nodes);
+
+void rebind_inputs_from_left_deep_join(const RexScalar* rex, const RelLeftDeepInnerJoin* left_deep_join);

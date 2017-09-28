@@ -114,9 +114,9 @@ std::shared_ptr<RelLeftDeepInnerJoin> create_left_deep_join(RelAlgNode* left_dee
   return nullptr;
 }
 
-class RexRebindLeftDeepJoinFilter : public RexVisitor<void*> {
+class RebindRexInputsFromLeftDeepJoin : public RexVisitor<void*> {
  public:
-  RexRebindLeftDeepJoinFilter(const RelLeftDeepInnerJoin* left_deep_join) : left_deep_join_(left_deep_join) {
+  RebindRexInputsFromLeftDeepJoin(const RelLeftDeepInnerJoin* left_deep_join) : left_deep_join_(left_deep_join) {
     std::vector<size_t> input_sizes;
     CHECK_GT(left_deep_join->inputCount(), size_t(1));
     for (size_t i = 0; i < left_deep_join->inputCount() - 1; ++i) {
@@ -165,17 +165,27 @@ bool is_left_deep_join(const RelAlgNode* left_deep_join_root) {
   return is_left_deep_join_helper(join);
 }
 
+void rebind_inputs_from_left_deep_join(const RexScalar* rex, const RelLeftDeepInnerJoin* left_deep_join) {
+  RebindRexInputsFromLeftDeepJoin rebind_rex_inputs_from_left_deep_join(left_deep_join);
+  rebind_rex_inputs_from_left_deep_join.visit(rex);
+}
+
 void create_left_deep_join(std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
   for (const auto& left_deep_join_candidate : nodes) {
     const auto left_deep_join = create_left_deep_join(left_deep_join_candidate.get());
     if (!left_deep_join) {
       continue;
     }
-    RexRebindLeftDeepJoinFilter rebind_join_condition(left_deep_join.get());
-    rebind_join_condition.visit(left_deep_join->getCondition());
+    rebind_inputs_from_left_deep_join(left_deep_join->getCondition(), left_deep_join.get());
     for (auto& node : nodes) {
       if (node && node->hasInput(left_deep_join_candidate.get())) {
         node->replaceInput(left_deep_join_candidate, left_deep_join);
+        CHECK_EQ(size_t(1), left_deep_join_candidate->inputCount());
+        auto old_join = std::dynamic_pointer_cast<const RelJoin>(left_deep_join_candidate->getAndOwnInput(0));
+        while (old_join) {
+          node->replaceInput(old_join, left_deep_join);
+          old_join = std::dynamic_pointer_cast<const RelJoin>(old_join->getAndOwnInput(0));
+        }
       }
     }
   }
