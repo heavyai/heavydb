@@ -118,4 +118,11 @@ class RelAlgTranslator {
   const bool just_explain_;
 };
 
+struct QualsConjunctiveForm {
+  const std::list<std::shared_ptr<Analyzer::Expr>> simple_quals;
+  const std::list<std::shared_ptr<Analyzer::Expr>> quals;
+};
+
+QualsConjunctiveForm qual_to_conjunctive_form(const std::shared_ptr<Analyzer::Expr> qual_expr);
+
 #endif  // QUERYENGINE_RELALGTRANSLATOR_H

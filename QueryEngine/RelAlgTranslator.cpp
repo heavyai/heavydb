@@ -1023,3 +1023,24 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateFunction
   }
   return args;
 }
+
+QualsConjunctiveForm qual_to_conjunctive_form(const std::shared_ptr<Analyzer::Expr> qual_expr) {
+  CHECK(qual_expr);
+  const auto bin_oper = std::dynamic_pointer_cast<const Analyzer::BinOper>(qual_expr);
+  if (!bin_oper) {
+    const auto rewritten_qual_expr = rewrite_expr(qual_expr.get());
+    return {{}, {rewritten_qual_expr ? rewritten_qual_expr : qual_expr}};
+  }
+  if (bin_oper->get_optype() == kAND) {
+    const auto lhs_cf = qual_to_conjunctive_form(bin_oper->get_own_left_operand());
+    const auto rhs_cf = qual_to_conjunctive_form(bin_oper->get_own_right_operand());
+    auto simple_quals = lhs_cf.simple_quals;
+    simple_quals.insert(simple_quals.end(), rhs_cf.simple_quals.begin(), rhs_cf.simple_quals.end());
+    auto quals = lhs_cf.quals;
+    quals.insert(quals.end(), rhs_cf.quals.begin(), rhs_cf.quals.end());
+    return {simple_quals, quals};
+  }
+  int rte_idx{0};
+  const auto simple_qual = bin_oper->normalize_simple_predicate(rte_idx);
+  return simple_qual ? QualsConjunctiveForm{{simple_qual}, {}} : QualsConjunctiveForm{{}, {qual_expr}};
+}
