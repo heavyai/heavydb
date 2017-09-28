@@ -1933,10 +1933,16 @@ JoinQualsPerNestingLevel RelAlgExecutor::translateLeftDeepJoinFilter(
                                                                     join_condition_cf.quals.end());
   join_condition_quals.insert(
       join_condition_quals.end(), join_condition_cf.simple_quals.begin(), join_condition_cf.simple_quals.end());
+  std::unordered_set<std::shared_ptr<Analyzer::Expr>> visited_quals;
   for (size_t rte_idx = 1; rte_idx < input_descs.size(); ++rte_idx) {
     for (const auto qual : join_condition_quals) {
+      if (visited_quals.count(qual)) {
+        continue;
+      }
       const auto qual_rte_idx = rte_idx_visitor.visit(qual.get());
-      if (static_cast<size_t>(qual_rte_idx) == rte_idx) {
+      if (static_cast<size_t>(qual_rte_idx) <= rte_idx) {
+        const auto it_ok = visited_quals.emplace(qual);
+        CHECK(it_ok.second);
         result[rte_idx - 1].push_back(qual);
       }
     }
