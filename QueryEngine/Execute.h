@@ -937,7 +937,7 @@ class Executor {
                                     const JoinInfo& join_info,
                                     const bool has_cardinality_estimation);
 
-  std::vector<JoinLoop> buildJoinLoops(const RelAlgExecutionUnit& ra_exe_unit,
+  std::vector<JoinLoop> buildJoinLoops(RelAlgExecutionUnit& ra_exe_unit,
                                        const CompilationOptions& co,
                                        const std::vector<InputTableInfo>& query_infos);
   void addJoinLoopIterator(const std::vector<llvm::Value*>& prev_iters, const size_t level_idx);
@@ -979,8 +979,8 @@ class Executor {
                           const ExecutorDeviceType device_type);
 
   struct JoinHashTableOrError {
-    const std::shared_ptr<JoinHashTableInterface> hash_table;
-    const std::string fail_reason;
+    std::shared_ptr<JoinHashTableInterface> hash_table;
+    std::string fail_reason;
   };
 
   JoinHashTableOrError buildHashTableForQualifier(const std::shared_ptr<Analyzer::BinOper>& qual_bin_oper,

@@ -56,8 +56,8 @@ struct RelAlgExecutionUnit {
   const std::vector<InputDescriptor> input_descs;
   const std::vector<InputDescriptor> extra_input_descs;
   const std::list<std::shared_ptr<const InputColDescriptor>> input_col_descs;
-  const std::list<std::shared_ptr<Analyzer::Expr>> simple_quals;
-  const std::list<std::shared_ptr<Analyzer::Expr>> quals;
+  std::list<std::shared_ptr<Analyzer::Expr>> simple_quals;
+  std::list<std::shared_ptr<Analyzer::Expr>> quals;
   const JoinType join_type;
   const JoinQualsPerNestingLevel inner_joins;
   const std::vector<std::pair<int, size_t>> join_dimensions;

@@ -1062,11 +1062,12 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
   cgen_state_->ir_builder_.SetInsertPoint(bb);
   preloadFragOffsets(ra_exe_unit.input_descs, query_infos);
 
-  const auto join_loops = buildJoinLoops(ra_exe_unit, co, query_infos);
+  RelAlgExecutionUnit body_execution_unit = ra_exe_unit;
+  const auto join_loops = buildJoinLoops(body_execution_unit, co, query_infos);
 
   allocateLocalColumnIds(ra_exe_unit.input_col_descs);
   if (!join_loops.empty()) {
-    codegenJoinLoops(join_loops, ra_exe_unit, group_by_and_aggregate, query_func, bb, co, eo);
+    codegenJoinLoops(join_loops, body_execution_unit, group_by_and_aggregate, query_func, bb, co, eo);
   } else {
     const auto body_control_flow = compileBody(ra_exe_unit, group_by_and_aggregate, co);
 

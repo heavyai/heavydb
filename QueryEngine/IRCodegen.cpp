@@ -15,6 +15,7 @@
  */
 
 #include "Execute.h"
+#include "RelAlgTranslator.h"
 #include "MaxwellCodegenPatch.h"
 #include "../Parser/ParserNode.h"
 
@@ -270,7 +271,18 @@ void Executor::codegenInnerScanNextRowOrMatch() {
   }
 }
 
-std::vector<JoinLoop> Executor::buildJoinLoops(const RelAlgExecutionUnit& ra_exe_unit,
+namespace {
+
+void add_qualifier_to_execution_unit(RelAlgExecutionUnit& ra_exe_unit, const std::shared_ptr<Analyzer::Expr>& qual) {
+  const auto qual_cf = qual_to_conjunctive_form(qual);
+  ra_exe_unit.simple_quals.insert(
+      ra_exe_unit.simple_quals.end(), qual_cf.simple_quals.begin(), qual_cf.simple_quals.end());
+  ra_exe_unit.quals.insert(ra_exe_unit.quals.end(), qual_cf.quals.begin(), qual_cf.quals.end());
+}
+
+}  // namespace
+
+std::vector<JoinLoop> Executor::buildJoinLoops(RelAlgExecutionUnit& ra_exe_unit,
                                                const CompilationOptions& co,
                                                const std::vector<InputTableInfo>& query_infos) {
   std::vector<JoinLoop> join_loops;
@@ -281,18 +293,25 @@ std::vector<JoinLoop> Executor::buildJoinLoops(const RelAlgExecutionUnit& ra_exe
       auto qual_bin_oper = std::dynamic_pointer_cast<Analyzer::BinOper>(join_qual);
       if (!qual_bin_oper || !IS_EQUIVALENCE(qual_bin_oper->get_optype())) {
         // TODO
+        add_qualifier_to_execution_unit(ra_exe_unit, join_qual);
         continue;
       }
-      const auto hash_table_or_error = buildHashTableForQualifier(
-          qual_bin_oper,
-          query_infos,
-          ra_exe_unit,
-          co.device_type_ == ExecutorDeviceType::GPU ? MemoryLevel::GPU_LEVEL : MemoryLevel::CPU_LEVEL,
-          std::unordered_set<int>{});
-      current_level_hash_table = hash_table_or_error.hash_table;
-      if (current_level_hash_table) {
+      JoinHashTableOrError hash_table_or_error;
+      if (!current_level_hash_table) {
+        hash_table_or_error = buildHashTableForQualifier(
+            qual_bin_oper,
+            query_infos,
+            ra_exe_unit,
+            co.device_type_ == ExecutorDeviceType::GPU ? MemoryLevel::GPU_LEVEL : MemoryLevel::CPU_LEVEL,
+            std::unordered_set<int>{});
+        current_level_hash_table = hash_table_or_error.hash_table;
+      }
+      if (hash_table_or_error.hash_table) {
         plan_state_->join_info_.join_hash_tables_.push_back(hash_table_or_error.hash_table);
         plan_state_->join_info_.equi_join_tautologies_.push_back(qual_bin_oper);
+      } else {
+        // TODO: handle the error
+        add_qualifier_to_execution_unit(ra_exe_unit, qual_bin_oper);
       }
     }
     if (current_level_hash_table) {
