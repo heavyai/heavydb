@@ -753,23 +753,6 @@ class RelMultiJoin : public RelAlgNode {
   std::vector<std::unique_ptr<const RexScalar>> conditions_;
 };
 
-// Synthetic node to assist execution of left-deep join relational algebra.
-class RelLeftDeepInnerJoin : public RelAlgNode {
- public:
-  RelLeftDeepInnerJoin(const RexOperator* condition, std::vector<std::shared_ptr<const RelAlgNode>> inputs);
-
-  const RexOperator* getCondition() const;
-
-  std::string toString() const override;
-
-  size_t size() const override;
-
-  std::shared_ptr<RelAlgNode> deepCopy() const override;
-
- private:
-  std::unique_ptr<const RexOperator> condition_;
-};
-
 class RelFilter : public RelAlgNode {
  public:
   RelFilter(std::unique_ptr<const RexScalar>& filter, std::shared_ptr<const RelAlgNode> input)
@@ -801,6 +784,29 @@ class RelFilter : public RelAlgNode {
 
  private:
   std::unique_ptr<const RexScalar> filter_;
+};
+
+// Synthetic node to assist execution of left-deep join relational algebra.
+class RelLeftDeepInnerJoin : public RelAlgNode {
+ public:
+  RelLeftDeepInnerJoin(const std::shared_ptr<RelFilter>& filter,
+                       std::vector<std::shared_ptr<const RelAlgNode>> inputs,
+                       std::vector<std::shared_ptr<const RelJoin>>& original_joins);
+
+  const RexOperator* getCondition() const;
+
+  std::string toString() const override;
+
+  size_t size() const override;
+
+  std::shared_ptr<RelAlgNode> deepCopy() const override;
+
+  bool coversOriginalNode(const RelAlgNode* node) const;
+
+ private:
+  std::unique_ptr<const RexOperator> condition_;
+  const std::shared_ptr<RelFilter> original_filter_;
+  const std::vector<std::shared_ptr<const RelJoin>> original_joins_;
 };
 
 // The 'RelCompound' node combines filter and on the fly aggregate computation.

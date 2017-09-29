@@ -2110,7 +2110,12 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(const RelProject*
   const auto input_to_nest_level = get_input_nest_levels(project);
   std::tie(input_descs, input_col_descs, std::ignore) = get_input_desc(project, input_to_nest_level);
   const auto extra_input_descs = separate_extra_input_descs(input_descs);
-  const auto join_type = get_join_type(project);
+  const auto left_deep_join = dynamic_cast<const RelLeftDeepInnerJoin*>(project->getInput(0));
+  JoinQualsPerNestingLevel left_deep_inner_joins;
+  if (left_deep_join) {
+    left_deep_inner_joins = translateLeftDeepJoinFilter(left_deep_join, input_descs, input_to_nest_level, just_explain);
+  }
+  const auto join_type = left_deep_join ? JoinType::INVALID : get_join_type(project);
   RelAlgTranslator translator(cat_, executor_, input_to_nest_level, join_type, now_, just_explain);
   const auto target_exprs_owned = translate_scalar_sources(project, translator);
   target_exprs_owned_.insert(target_exprs_owned_.end(), target_exprs_owned.begin(), target_exprs_owned.end());
@@ -2123,7 +2128,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(const RelProject*
            {},
            {},
            join_type,
-           {},
+           left_deep_inner_joins,
            get_join_dimensions(get_data_sink(project), executor_),
            get_inner_join_quals(project, translator),
            get_outer_join_quals(project, translator),
