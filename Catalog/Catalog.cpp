@@ -1416,6 +1416,9 @@ void Catalog::buildMaps() {
   }
 
   if (access_priv_check_) {
+    /* create object privileges related tables if ones don't exist */
+    auto& sys_cat = static_cast<Catalog_Namespace::SysCatalog&>(*this);
+    sys_cat.initObjectPrivileges();
     /* rebuild role map (includes object privileges assignment) */
     buildRoleMap();
     /* rebuild map linking user IDs to granted them roles */

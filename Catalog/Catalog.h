@@ -377,7 +377,9 @@ class SysCatalog : public Catalog {
              bool is_initdb = false,
              const bool access_priv_check = false)
       : Catalog(basePath, MAPD_SYSTEM_DB, dataMgr, ldapMetadata, is_initdb, calcite, access_priv_check) {
-    initObjectPrivileges();
+    if (access_priv_check) {
+      initObjectPrivileges();
+    }
   }
 
   SysCatalog(const std::string& basePath,
@@ -389,7 +391,9 @@ class SysCatalog : public Catalog {
     if (!is_initdb) {
       migrateSysCatalogSchema();
     }
-    initObjectPrivileges();
+    if (access_priv_check) {
+      initObjectPrivileges();
+    }
   }
   virtual ~SysCatalog();
   void initDB();
