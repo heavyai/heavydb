@@ -1688,8 +1688,6 @@ std::list<std::shared_ptr<Analyzer::Expr>> get_outer_join_quals(const RelAlgNode
   return {};
 }
 
-namespace {
-
 std::unique_ptr<const RexOperator> get_bitwise_equals(const RexScalar* scalar) {
   const auto condition = dynamic_cast<const RexOperator*>(scalar);
   if (!condition || condition->getOperator() != kOR || condition->size() != 2) {
@@ -1746,8 +1744,6 @@ std::unique_ptr<const RexOperator> get_bitwise_equals_conjunction(const RexScala
   }
   return get_bitwise_equals(scalar);
 }
-
-}  // namespace
 
 std::list<std::shared_ptr<Analyzer::Expr>> get_inner_join_quals(const RelAlgNode* ra,
                                                                 const RelAlgTranslator& translator) {
@@ -1903,10 +1899,10 @@ JoinQualsPerNestingLevel RelAlgExecutor::translateLeftDeepJoinFilter(
   auto join_condition_cf = qual_to_conjunctive_form(join_condition);
   RangeTableIndexVisitor rte_idx_visitor;
   JoinQualsPerNestingLevel result(input_descs.size() - 1);
-  std::vector<std::shared_ptr<Analyzer::Expr>> join_condition_quals(join_condition_cf.quals.begin(),
-                                                                    join_condition_cf.quals.end());
+  auto join_condition_quals = join_condition_cf.quals;
   join_condition_quals.insert(
       join_condition_quals.end(), join_condition_cf.simple_quals.begin(), join_condition_cf.simple_quals.end());
+  join_condition_quals = combine_equi_join_conditions(join_condition_quals);
   std::unordered_set<std::shared_ptr<Analyzer::Expr>> visited_quals;
   for (size_t rte_idx = 1; rte_idx < input_descs.size(); ++rte_idx) {
     for (const auto qual : join_condition_quals) {

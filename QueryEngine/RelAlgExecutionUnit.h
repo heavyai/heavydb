@@ -50,7 +50,7 @@ struct SortInfo {
   const size_t offset;
 };
 
-typedef std::vector<std::vector<std::shared_ptr<Analyzer::Expr>>> JoinQualsPerNestingLevel;
+typedef std::vector<std::list<std::shared_ptr<Analyzer::Expr>>> JoinQualsPerNestingLevel;
 
 struct RelAlgExecutionUnit {
   const std::vector<InputDescriptor> input_descs;
