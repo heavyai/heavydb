@@ -1522,11 +1522,10 @@ Executor::FetchResult Executor::fetchChunks(const ExecutionDispatch& execution_d
                                             std::list<ChunkIter>& chunk_iterators,
                                             std::list<std::shared_ptr<Chunk_NS::Chunk>>& chunks) {
   const auto& col_global_ids = ra_exe_unit.input_col_descs;
-  const auto& input_descs = ra_exe_unit.input_descs;
   std::vector<std::vector<size_t>> selected_fragments_crossjoin;
   std::vector<size_t> local_col_to_frag_pos;
   buildSelectedFragsMapping(
-      selected_fragments_crossjoin, local_col_to_frag_pos, col_global_ids, selected_fragments, input_descs);
+      selected_fragments_crossjoin, local_col_to_frag_pos, col_global_ids, selected_fragments, ra_exe_unit);
 
   CartesianProduct<std::vector<std::vector<size_t>>> frag_ids_crossjoin(selected_fragments_crossjoin);
 
@@ -1608,14 +1607,14 @@ Executor::FetchResult Executor::fetchChunks(const ExecutionDispatch& execution_d
     }
   }
   std::tie(all_num_rows, all_frag_offsets) = get_row_count_and_offset_for_all_frags(
-      ra_exe_unit, frag_ids_crossjoin, input_descs, all_tables_fragments, isOuterLoopJoin());
+      ra_exe_unit, frag_ids_crossjoin, ra_exe_unit.input_descs, all_tables_fragments, isOuterLoopJoin());
   return {all_frag_col_buffers, all_frag_iter_buffers, all_num_rows, all_frag_offsets};
 }
 
 std::vector<size_t> get_fragment_count(const std::vector<std::pair<int, std::vector<size_t>>>& selected_fragments,
                                        const size_t scan_idx,
-                                       const std::vector<InputDescriptor>& input_descs) {
-  if (input_descs.size() > size_t(2) && scan_idx > 0) {
+                                       const RelAlgExecutionUnit& ra_exe_unit) {
+  if ((ra_exe_unit.input_descs.size() > size_t(2) || !ra_exe_unit.inner_joins.empty()) && scan_idx > 0) {
     // Fetch all fragments
     return {size_t(0)};
   }
@@ -1627,13 +1626,14 @@ void Executor::buildSelectedFragsMapping(std::vector<std::vector<size_t>>& selec
                                          std::vector<size_t>& local_col_to_frag_pos,
                                          const std::list<std::shared_ptr<const InputColDescriptor>>& col_global_ids,
                                          const std::vector<std::pair<int, std::vector<size_t>>>& selected_fragments,
-                                         const std::vector<InputDescriptor>& input_descs) {
+                                         const RelAlgExecutionUnit& ra_exe_unit) {
   local_col_to_frag_pos.resize(plan_state_->global_to_local_col_ids_.size());
   size_t frag_pos{0};
+  const auto& input_descs = ra_exe_unit.input_descs;
   for (size_t scan_idx = 0; scan_idx < input_descs.size(); ++scan_idx) {
     const int table_id = input_descs[scan_idx].getTableId();
     CHECK_EQ(selected_fragments[scan_idx].first, table_id);
-    selected_fragments_crossjoin.push_back(get_fragment_count(selected_fragments, scan_idx, input_descs));
+    selected_fragments_crossjoin.push_back(get_fragment_count(selected_fragments, scan_idx, ra_exe_unit));
     for (const auto& col_id : col_global_ids) {
       CHECK(col_id);
       const auto& input_desc = col_id->getScanDesc();

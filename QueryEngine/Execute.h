@@ -837,7 +837,7 @@ class Executor {
                                  std::vector<size_t>& local_col_to_frag_pos,
                                  const std::list<std::shared_ptr<const InputColDescriptor>>& col_global_ids,
                                  const std::vector<std::pair<int, std::vector<size_t>>>& selected_fragments,
-                                 const std::vector<InputDescriptor>& input_descs);
+                                 const RelAlgExecutionUnit& ra_exe_unit);
 
   RowSetPtr executeResultPlan(const Planner::Result* result_plan,
                               const bool hoist_literals,
