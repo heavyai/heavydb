@@ -19,6 +19,7 @@ brew install thrift
 brew install cryptopp
 brew install llvm
 brew install folly
+brew install apache-arrow
 
 # install CUDA (even if you don't have an nvidia GPU - some headers req'd for compilation)
 brew tap caskroom/drivers
