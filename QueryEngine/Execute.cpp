@@ -1432,6 +1432,7 @@ std::map<size_t, std::vector<uint64_t>> get_table_id_to_frag_offsets(
 }
 
 std::pair<std::vector<std::vector<int64_t>>, std::vector<std::vector<uint64_t>>> get_row_count_and_offset_for_all_frags(
+    const RelAlgExecutionUnit& ra_exe_unit,
     const CartesianProduct<std::vector<std::vector<size_t>>>& frag_ids_crossjoin,
     const std::vector<InputDescriptor>& input_descs,
     const std::map<int, const Executor::TableFragments*>& all_tables_fragments,
@@ -1450,8 +1451,16 @@ std::pair<std::vector<std::vector<int64_t>>, std::vector<std::vector<uint64_t>>>
       const auto fragments_it = all_tables_fragments.find(input_descs[tab_idx].getTableId());
       CHECK(fragments_it != all_tables_fragments.end());
       const auto& fragments = *fragments_it->second;
-      const auto& fragment = fragments[frag_id];
-      num_rows.push_back(fragment.getNumTuples());
+      if (ra_exe_unit.inner_joins.empty() || tab_idx == 0) {
+        const auto& fragment = fragments[frag_id];
+        num_rows.push_back(fragment.getNumTuples());
+      } else {
+        size_t total_row_count{0};
+        for (const auto& fragment : fragments) {
+          total_row_count += fragment.getNumTuples();
+        }
+        num_rows.push_back(total_row_count);
+      }
       const auto frag_offsets_it = tab_id_to_frag_offsets.find(input_descs[tab_idx].getTableId());
       CHECK(frag_offsets_it != tab_id_to_frag_offsets.end());
       const auto& offsets = frag_offsets_it->second;
@@ -1476,13 +1485,14 @@ std::pair<std::vector<std::vector<int64_t>>, std::vector<std::vector<uint64_t>>>
 #ifdef ENABLE_MULTIFRAG_JOIN
 // Only fetch columns of hash-joined inner fact table whose fetch are not deferred from all the table fragments.
 bool Executor::needFetchAllFragments(const InputColDescriptor& inner_col_desc,
-                                     const std::vector<InputDescriptor>& input_descs,
+                                     const RelAlgExecutionUnit& ra_exe_unit,
                                      const std::vector<std::pair<int, std::vector<size_t>>>& selected_fragments) const {
-  if (inner_col_desc.getScanDesc().getNestLevel() < 1 ||
-      inner_col_desc.getScanDesc().getSourceType() != InputSourceType::TABLE ||
-      (plan_state_->join_info_.join_impl_type_ != JoinImplType::HashOneToOne &&
+  const auto& input_descs = ra_exe_unit.input_descs;
+  const int nest_level = inner_col_desc.getScanDesc().getNestLevel();
+  if (nest_level < 1 || inner_col_desc.getScanDesc().getSourceType() != InputSourceType::TABLE ||
+      (ra_exe_unit.inner_joins.empty() && plan_state_->join_info_.join_impl_type_ != JoinImplType::HashOneToOne &&
        plan_state_->join_info_.join_impl_type_ != JoinImplType::HashOneToMany && !isOuterLoopJoin()) ||
-      input_descs.size() < 2 || plan_state_->isLazyFetchColumn(inner_col_desc)) {
+      input_descs.size() < 2 || (ra_exe_unit.inner_joins.empty() && plan_state_->isLazyFetchColumn(inner_col_desc))) {
     return false;
   }
   const int table_id = inner_col_desc.getScanDesc().getTableId();
@@ -1495,7 +1505,9 @@ bool Executor::needFetchAllFragments(const InputColDescriptor& inner_col_desc,
   if (fragments.size() <= 1) {
     return false;
   }
-  const auto inner_table_desc = input_descs[1];
+  CHECK_GE(nest_level, 0);
+  CHECK_LT(static_cast<size_t>(nest_level), input_descs.size());
+  const auto inner_table_desc = input_descs[nest_level];
   return table_id == inner_table_desc.getTableId();
 }
 #endif
@@ -1570,7 +1582,7 @@ Executor::FetchResult Executor::fetchChunks(const ExecutionDispatch& execution_d
                                                                     is_rowid);
       } else {
 #ifdef ENABLE_MULTIFRAG_JOIN
-        if (needFetchAllFragments(*col_id, input_descs, selected_fragments)) {
+        if (needFetchAllFragments(*col_id, ra_exe_unit, selected_fragments)) {
           frag_col_buffers[it->second] = execution_dispatch.getAllScanColumnFrags(
               table_id, col_id->getColId(), all_tables_fragments, memory_level_for_column, device_id);
         } else
@@ -1595,8 +1607,8 @@ Executor::FetchResult Executor::fetchChunks(const ExecutionDispatch& execution_d
           fetchIterTabFrags(selected_frag_ids[0], execution_dispatch, ra_exe_unit.input_descs[0], device_id));
     }
   }
-  std::tie(all_num_rows, all_frag_offsets) =
-      get_row_count_and_offset_for_all_frags(frag_ids_crossjoin, input_descs, all_tables_fragments, isOuterLoopJoin());
+  std::tie(all_num_rows, all_frag_offsets) = get_row_count_and_offset_for_all_frags(
+      ra_exe_unit, frag_ids_crossjoin, input_descs, all_tables_fragments, isOuterLoopJoin());
   return {all_frag_col_buffers, all_frag_iter_buffers, all_num_rows, all_frag_offsets};
 }
 

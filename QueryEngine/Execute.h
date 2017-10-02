@@ -607,7 +607,7 @@ class Executor {
 
 #ifdef ENABLE_MULTIFRAG_JOIN
   bool needFetchAllFragments(const InputColDescriptor& col_desc,
-                             const std::vector<InputDescriptor>& input_descs,
+                             const RelAlgExecutionUnit& ra_exe_unit,
                              const std::vector<std::pair<int, std::vector<size_t>>>& selected_fragments) const;
 #endif
 
