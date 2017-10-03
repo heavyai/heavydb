@@ -1213,7 +1213,7 @@ void Executor::dispatchFragments(
         auto table_frags_it = selected_tables_fragments.find(table_id);
         CHECK(table_frags_it != selected_tables_fragments.end());
         const auto frag_ids = getTableFragmentIndices(
-            ra_exe_unit, j, outer_frag_id, selected_tables_fragments, inner_table_id_to_join_condition);
+            ra_exe_unit, device_type, j, outer_frag_id, selected_tables_fragments, inner_table_id_to_join_condition);
         if (fragments_per_device[device_id].size() < j + 1) {
           fragments_per_device[device_id].emplace_back(table_id, frag_ids);
         } else {
@@ -1269,8 +1269,8 @@ void Executor::dispatchFragments(
       }
       std::vector<std::pair<int, std::vector<size_t>>> frag_ids_for_table;
       for (size_t j = 0; j < ra_exe_unit.input_descs.size(); ++j) {
-        const auto frag_ids =
-            getTableFragmentIndices(ra_exe_unit, j, i, selected_tables_fragments, inner_table_id_to_join_condition);
+        const auto frag_ids = getTableFragmentIndices(
+            ra_exe_unit, device_type, j, i, selected_tables_fragments, inner_table_id_to_join_condition);
         const auto table_id = ra_exe_unit.input_descs[j].getTableId();
         auto table_frags_it = selected_tables_fragments.find(table_id);
         CHECK(table_frags_it != selected_tables_fragments.end());
@@ -1298,6 +1298,7 @@ void Executor::dispatchFragments(
 
 std::vector<size_t> Executor::getTableFragmentIndices(
     const RelAlgExecutionUnit& ra_exe_unit,
+    const ExecutorDeviceType device_type,
     const size_t table_idx,
     const size_t outer_frag_idx,
     std::map<int, const Executor::TableFragments*>& selected_tables_fragments,
@@ -1328,8 +1329,12 @@ std::vector<size_t> Executor::getTableFragmentIndices(
   std::vector<size_t> all_frag_ids;
   for (size_t inner_frag_idx = 0; inner_frag_idx < inner_frags->size(); ++inner_frag_idx) {
     const auto& inner_frag_info = (*inner_frags)[inner_frag_idx];
-    if (skipFragmentPair(
-            outer_fragment_info, inner_frag_info, table_id, inner_table_id_to_join_condition, ra_exe_unit)) {
+    if (skipFragmentPair(outer_fragment_info,
+                         inner_frag_info,
+                         table_id,
+                         inner_table_id_to_join_condition,
+                         ra_exe_unit,
+                         device_type)) {
       continue;
     }
     all_frag_ids.push_back(inner_frag_idx);
@@ -1344,7 +1349,11 @@ bool Executor::skipFragmentPair(
     const Fragmenter_Namespace::FragmentInfo& inner_fragment_info,
     const int inner_table_id,
     const std::unordered_map<int, const Analyzer::BinOper*>& inner_table_id_to_join_condition,
-    const RelAlgExecutionUnit& ra_exe_unit) {
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const ExecutorDeviceType device_type) {
+  if (device_type != ExecutorDeviceType::GPU) {
+    return false;
+  }
   // Don't bother with sharding for non-hash joins.
   if (plan_state_->join_info_.join_impl_type_ != Executor::JoinImplType::HashOneToOne &&
       plan_state_->join_info_.join_impl_type_ != Executor::JoinImplType::HashOneToMany) {

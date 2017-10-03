@@ -804,6 +804,7 @@ class Executor {
 
   std::vector<size_t> getTableFragmentIndices(
       const RelAlgExecutionUnit& ra_exe_unit,
+      const ExecutorDeviceType device_type,
       const size_t table_idx,
       const size_t outer_frag_idx,
       std::map<int, const Executor::TableFragments*>& selected_tables_fragments,
@@ -813,7 +814,8 @@ class Executor {
                         const Fragmenter_Namespace::FragmentInfo& inner_fragment_info,
                         const int inner_table_id,
                         const std::unordered_map<int, const Analyzer::BinOper*>& inner_table_id_to_join_condition,
-                        const RelAlgExecutionUnit& ra_exe_unit);
+                        const RelAlgExecutionUnit& ra_exe_unit,
+                        const ExecutorDeviceType device_type);
 
   std::vector<const int8_t*> fetchIterTabFrags(const size_t frag_id,
                                                const ExecutionDispatch& execution_dispatch,
