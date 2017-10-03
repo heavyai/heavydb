@@ -174,6 +174,9 @@ size_t get_shard_count(std::pair<const Analyzer::ColumnVar*, const Analyzer::Exp
   if (!rhs_col || lhs_col->get_table_id() < 0 || rhs_col->get_table_id() < 0) {
     return 0;
   }
+  if (rhs_col->get_rte_idx()) {
+    return 0;
+  }
   if (lhs_col->get_type_info() != rhs_col->get_type_info()) {
     return 0;
   }

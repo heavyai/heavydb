@@ -69,6 +69,17 @@ bool needs_skip_result(const ResultPtr& res) {
 uint32_t Executor::ExecutionDispatch::getFragmentStride(
     const std::vector<std::pair<int, std::vector<size_t>>>& frag_ids) const {
 #ifdef ENABLE_MULTIFRAG_JOIN
+  if (!ra_exe_unit_.inner_joins.empty()) {
+    CHECK_EQ(ra_exe_unit_.input_descs.size(), frag_ids.size());
+    const auto table_count = ra_exe_unit_.input_descs.size();
+    uint32_t stride = 1;
+    for (size_t i = 1; i < table_count; ++i) {
+      if (executor_->plan_state_->join_info_.sharded_range_table_indices_.count(i)) {
+        stride *= frag_ids[i].second.size();
+      }
+    }
+    return stride;
+  }
   const bool is_hash_join =
       executor_->plan_state_->join_info_.join_impl_type_ == Executor::JoinImplType::HashOneToOne ||
       executor_->plan_state_->join_info_.join_impl_type_ == Executor::JoinImplType::HashOneToMany;

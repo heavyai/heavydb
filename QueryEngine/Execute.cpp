@@ -18,7 +18,6 @@
 
 #include "AggregateUtils.h"
 #include "BaselineJoinHashTable.h"
-#include "CartesianProduct.h"
 #include "EquiJoinCondition.h"
 #include "ExecutionException.h"
 #include "ExpressionRewrite.h"
@@ -1331,7 +1330,7 @@ std::vector<size_t> Executor::getTableFragmentIndices(
     const auto& inner_frag_info = (*inner_frags)[inner_frag_idx];
     if (skipFragmentPair(outer_fragment_info,
                          inner_frag_info,
-                         table_id,
+                         table_idx,
                          inner_table_id_to_join_condition,
                          ra_exe_unit,
                          device_type)) {
@@ -1347,16 +1346,19 @@ std::vector<size_t> Executor::getTableFragmentIndices(
 bool Executor::skipFragmentPair(
     const Fragmenter_Namespace::FragmentInfo& outer_fragment_info,
     const Fragmenter_Namespace::FragmentInfo& inner_fragment_info,
-    const int inner_table_id,
+    const int table_idx,
     const std::unordered_map<int, const Analyzer::BinOper*>& inner_table_id_to_join_condition,
     const RelAlgExecutionUnit& ra_exe_unit,
     const ExecutorDeviceType device_type) {
   if (device_type != ExecutorDeviceType::GPU) {
     return false;
   }
+  CHECK(table_idx >= 0 && static_cast<size_t>(table_idx) < ra_exe_unit.input_descs.size());
+  const int inner_table_id = ra_exe_unit.input_descs[table_idx].getTableId();
   // Don't bother with sharding for non-hash joins.
   if (plan_state_->join_info_.join_impl_type_ != Executor::JoinImplType::HashOneToOne &&
-      plan_state_->join_info_.join_impl_type_ != Executor::JoinImplType::HashOneToMany) {
+      plan_state_->join_info_.join_impl_type_ != Executor::JoinImplType::HashOneToMany &&
+      ra_exe_unit.inner_joins.empty()) {
     return false;
   }
   // Both tables need to be sharded the same way.
@@ -1364,15 +1366,35 @@ bool Executor::skipFragmentPair(
       outer_fragment_info.shard == inner_fragment_info.shard) {
     return false;
   }
-  CHECK(!inner_table_id_to_join_condition.empty());
-  auto condition_it = inner_table_id_to_join_condition.find(inner_table_id);
-  CHECK(condition_it != inner_table_id_to_join_condition.end());
-  const auto join_condition = condition_it->second;
-  CHECK(join_condition);
-  if (dynamic_cast<const Analyzer::ExpressionTuple*>(join_condition->get_left_operand())) {
-    return get_baseline_shard_count(join_condition, ra_exe_unit, this);
+  const Analyzer::BinOper* join_condition{nullptr};
+  if (ra_exe_unit.inner_joins.empty()) {
+    CHECK(!inner_table_id_to_join_condition.empty());
+    auto condition_it = inner_table_id_to_join_condition.find(inner_table_id);
+    CHECK(condition_it != inner_table_id_to_join_condition.end());
+    join_condition = condition_it->second;
+    CHECK(join_condition);
+  } else {
+    CHECK_EQ(plan_state_->join_info_.equi_join_tautologies_.size(), plan_state_->join_info_.join_hash_tables_.size());
+    for (size_t i = 0; i < plan_state_->join_info_.join_hash_tables_.size(); ++i) {
+      if (plan_state_->join_info_.join_hash_tables_[i]->getInnerTableRteIdx() == table_idx) {
+        CHECK(!join_condition);
+        join_condition = plan_state_->join_info_.equi_join_tautologies_[i].get();
+      }
+    }
   }
-  return get_shard_count(join_condition, ra_exe_unit, this);
+  if (!join_condition) {
+    return false;
+  }
+  size_t shard_count{0};
+  if (dynamic_cast<const Analyzer::ExpressionTuple*>(join_condition->get_left_operand())) {
+    shard_count = get_baseline_shard_count(join_condition, ra_exe_unit, this);
+  } else {
+    shard_count = get_shard_count(join_condition, ra_exe_unit, this);
+  }
+  if (shard_count && !ra_exe_unit.inner_joins.empty()) {
+    plan_state_->join_info_.sharded_range_table_indices_.emplace(table_idx);
+  }
+  return shard_count;
 }
 
 std::vector<const int8_t*> Executor::fetchIterTabFrags(const size_t frag_id,
@@ -1431,12 +1453,12 @@ std::map<size_t, std::vector<uint64_t>> get_table_id_to_frag_offsets(
   return tab_id_to_frag_offsets;
 }
 
-std::pair<std::vector<std::vector<int64_t>>, std::vector<std::vector<uint64_t>>> get_row_count_and_offset_for_all_frags(
-    const RelAlgExecutionUnit& ra_exe_unit,
-    const CartesianProduct<std::vector<std::vector<size_t>>>& frag_ids_crossjoin,
-    const std::vector<InputDescriptor>& input_descs,
-    const std::map<int, const Executor::TableFragments*>& all_tables_fragments,
-    const bool one_to_all_frags) {
+std::pair<std::vector<std::vector<int64_t>>, std::vector<std::vector<uint64_t>>>
+Executor::getRowCountAndOffsetForAllFrags(const RelAlgExecutionUnit& ra_exe_unit,
+                                          const CartesianProduct<std::vector<std::vector<size_t>>>& frag_ids_crossjoin,
+                                          const std::vector<InputDescriptor>& input_descs,
+                                          const std::map<int, const Executor::TableFragments*>& all_tables_fragments,
+                                          const bool one_to_all_frags) {
   std::vector<std::vector<int64_t>> all_num_rows;
   std::vector<std::vector<uint64_t>> all_frag_offsets;
   const auto tab_id_to_frag_offsets = get_table_id_to_frag_offsets(input_descs, all_tables_fragments);
@@ -1451,7 +1473,8 @@ std::pair<std::vector<std::vector<int64_t>>, std::vector<std::vector<uint64_t>>>
       const auto fragments_it = all_tables_fragments.find(input_descs[tab_idx].getTableId());
       CHECK(fragments_it != all_tables_fragments.end());
       const auto& fragments = *fragments_it->second;
-      if (ra_exe_unit.inner_joins.empty() || tab_idx == 0) {
+      if (ra_exe_unit.inner_joins.empty() || tab_idx == 0 ||
+          plan_state_->join_info_.sharded_range_table_indices_.count(tab_idx)) {
         const auto& fragment = fragments[frag_id];
         num_rows.push_back(fragment.getNumTuples());
       } else {
@@ -1606,15 +1629,17 @@ Executor::FetchResult Executor::fetchChunks(const ExecutionDispatch& execution_d
           fetchIterTabFrags(selected_frag_ids[0], execution_dispatch, ra_exe_unit.input_descs[0], device_id));
     }
   }
-  std::tie(all_num_rows, all_frag_offsets) = get_row_count_and_offset_for_all_frags(
+  std::tie(all_num_rows, all_frag_offsets) = getRowCountAndOffsetForAllFrags(
       ra_exe_unit, frag_ids_crossjoin, ra_exe_unit.input_descs, all_tables_fragments, isOuterLoopJoin());
   return {all_frag_col_buffers, all_frag_iter_buffers, all_num_rows, all_frag_offsets};
 }
 
-std::vector<size_t> get_fragment_count(const std::vector<std::pair<int, std::vector<size_t>>>& selected_fragments,
-                                       const size_t scan_idx,
-                                       const RelAlgExecutionUnit& ra_exe_unit) {
-  if ((ra_exe_unit.input_descs.size() > size_t(2) || !ra_exe_unit.inner_joins.empty()) && scan_idx > 0) {
+std::vector<size_t> Executor::getFragmentCount(
+    const std::vector<std::pair<int, std::vector<size_t>>>& selected_fragments,
+    const size_t scan_idx,
+    const RelAlgExecutionUnit& ra_exe_unit) {
+  if ((ra_exe_unit.input_descs.size() > size_t(2) || !ra_exe_unit.inner_joins.empty()) && scan_idx > 0 &&
+      !plan_state_->join_info_.sharded_range_table_indices_.count(scan_idx)) {
     // Fetch all fragments
     return {size_t(0)};
   }
@@ -1633,7 +1658,7 @@ void Executor::buildSelectedFragsMapping(std::vector<std::vector<size_t>>& selec
   for (size_t scan_idx = 0; scan_idx < input_descs.size(); ++scan_idx) {
     const int table_id = input_descs[scan_idx].getTableId();
     CHECK_EQ(selected_fragments[scan_idx].first, table_id);
-    selected_fragments_crossjoin.push_back(get_fragment_count(selected_fragments, scan_idx, ra_exe_unit));
+    selected_fragments_crossjoin.push_back(getFragmentCount(selected_fragments, scan_idx, ra_exe_unit));
     for (const auto& col_id : col_global_ids) {
       CHECK(col_id);
       const auto& input_desc = col_id->getScanDesc();

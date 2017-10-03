@@ -87,6 +87,8 @@ class JoinHashTable : public JoinHashTableInterface {
 
   int getInnerTableId() const noexcept override { return col_var_.get()->get_table_id(); };
 
+  int getInnerTableRteIdx() const noexcept override { return col_var_.get()->get_rte_idx(); };
+
   HashType getHashType() const noexcept override { return hash_type_; }
 
   static llvm::Value* codegenOneToManyHashJoin(const std::vector<llvm::Value*>& hash_join_idx_args_in,

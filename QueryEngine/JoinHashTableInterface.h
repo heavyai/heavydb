@@ -38,6 +38,8 @@ class JoinHashTableInterface {
 
   virtual int getInnerTableId() const noexcept = 0;
 
+  virtual int getInnerTableRteIdx() const noexcept = 0;
+
   enum class HashType {
     OneToOne,
     OneToMany,

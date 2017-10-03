@@ -19,6 +19,7 @@
 
 #include "AggregatedColRange.h"
 #include "BufferCompaction.h"
+#include "CartesianProduct.h"
 #include "GroupByAndAggregate.h"
 #include "InValuesBitmap.h"
 #include "InputMetadata.h"
@@ -596,6 +597,7 @@ class Executor {
                                                                              // fold them to true during code generation
     std::vector<std::shared_ptr<JoinHashTableInterface>> join_hash_tables_;
     std::string hash_join_fail_reason_;
+    std::unordered_set<size_t> sharded_range_table_indices_;
   };
 
   struct FetchResult {
@@ -833,11 +835,22 @@ class Executor {
                           std::list<ChunkIter>&,
                           std::list<std::shared_ptr<Chunk_NS::Chunk>>&);
 
+  std::pair<std::vector<std::vector<int64_t>>, std::vector<std::vector<uint64_t>>> getRowCountAndOffsetForAllFrags(
+      const RelAlgExecutionUnit& ra_exe_unit,
+      const CartesianProduct<std::vector<std::vector<size_t>>>& frag_ids_crossjoin,
+      const std::vector<InputDescriptor>& input_descs,
+      const std::map<int, const Executor::TableFragments*>& all_tables_fragments,
+      const bool one_to_all_frags);
+
   void buildSelectedFragsMapping(std::vector<std::vector<size_t>>& selected_fragments_crossjoin,
                                  std::vector<size_t>& local_col_to_frag_pos,
                                  const std::list<std::shared_ptr<const InputColDescriptor>>& col_global_ids,
                                  const std::vector<std::pair<int, std::vector<size_t>>>& selected_fragments,
                                  const RelAlgExecutionUnit& ra_exe_unit);
+
+  std::vector<size_t> getFragmentCount(const std::vector<std::pair<int, std::vector<size_t>>>& selected_fragments,
+                                       const size_t scan_idx,
+                                       const RelAlgExecutionUnit& ra_exe_unit);
 
   RowSetPtr executeResultPlan(const Planner::Result* result_plan,
                               const bool hoist_literals,
