@@ -274,13 +274,12 @@ void MapDHandler::connectImpl(TSessionId& session,
   Privileges privs;
   privs.insert_ = true;
   privs.select_ = false;
-  if (!access_priv_check_) {  // proceed with old style access priv check for DB only
-    if (!sys_cat_->checkPrivileges(user_meta, db_meta, privs)) {
-      TMapDException ex;
-      ex.error_msg = std::string("User ") + user + " is not authorized to access database " + dbname;
-      LOG(ERROR) << ex.error_msg;
-      throw ex;
-    }
+  // use old style check for DB object level privs code only to check user access to the database
+  if (!sys_cat_->checkPrivileges(user_meta, db_meta, privs)) {
+    TMapDException ex;
+    ex.error_msg = std::string("User ") + user + " is not authorized to access database " + dbname;
+    LOG(ERROR) << ex.error_msg;
+    throw ex;
   }
   session = INVALID_SESSION_ID;
   while (true) {
@@ -296,11 +295,13 @@ void MapDHandler::connectImpl(TSessionId& session,
     cat_map_[dbname].reset(cat);
     sessions_[session].reset(
         new Catalog_Namespace::SessionInfo(cat_map_[dbname], user_meta, executor_device_type_, session));
-    const auto start_epoch_session_info_ptr = sessions_[session];
+    if (dbname == MAPD_SYSTEM_DB) {
+      auto mapd_session_ptr = sessions_[session];
+      mapd_session_ptr->setSysCatalog(static_cast<Catalog_Namespace::SysCatalog*>(cat));
+    }
   } else {
     sessions_[session].reset(
         new Catalog_Namespace::SessionInfo(cat_it->second, user_meta, executor_device_type_, session));
-    const auto start_epoch_session_info_ptr = sessions_[session];
   }
   if (!super_user_rights_) {  // no need to connect to leaf_aggregator_ at this time while doing warmup
     if (leaf_aggregator_.leafCount() > 0) {

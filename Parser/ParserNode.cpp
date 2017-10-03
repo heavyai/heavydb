@@ -2424,6 +2424,10 @@ void CreateRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
         " failed. This command may be executed only when DB object level access privileges check turned on.");
   }
 
+  if (catalog.get_currentDB().dbName != MAPD_SYSTEM_DB) {
+    throw std::runtime_error("CREATE ROLE " + get_role() + " failed. Must be in the system database ('" +
+                             std::string(MAPD_SYSTEM_DB) + "') to create roles.");
+  }
   const auto& currentUser = session.get_currentUser();
   if (!currentUser.isSuper) {
     throw std::runtime_error("CREATE ROLE " + get_role() + " failed. It can only be executed by super user.");
@@ -2447,6 +2451,10 @@ void DropRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
         " failed. This command may be executed only when DB object level access privileges check turned on.");
   }
 
+  if (catalog.get_currentDB().dbName != MAPD_SYSTEM_DB) {
+    throw std::runtime_error("DROP ROLE " + get_role() + " failed. Must be in the system database ('" +
+                             std::string(MAPD_SYSTEM_DB) + "') to drop roles.");
+  }
   const auto& currentUser = session.get_currentUser();
   if (!currentUser.isSuper) {
     throw std::runtime_error("DROP ROLE " + get_role() + "failed. It can only be executed by super user.");
@@ -2484,11 +2492,7 @@ std::string extractObjectNameFromHierName(const std::string& objectHierName,
           break;
         }
         case (2): {
-          if (cat.get_currentDB().dbName.compare(componentNames[0]) == 0) {
-            objectName = componentNames[1];
-          } else {
-            throw std::runtime_error("DB object name is not correct " + objectHierName);
-          }
+          objectName = componentNames[1];
           break;
         }
         default: { throw std::runtime_error("DB object name is not correct " + objectHierName); }
@@ -2702,6 +2706,11 @@ void GrantRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
         " failed. This command may be executed only when DB object level access privileges check turned on.");
   }
 
+  if (catalog.get_currentDB().dbName != MAPD_SYSTEM_DB) {
+    throw std::runtime_error("GRANT " + get_role() + " TO " + get_user() +
+                             "; failed. Must be in the system database ('" + std::string(MAPD_SYSTEM_DB) +
+                             "') to grant roles.");
+  }
   const auto& currentUser = session.get_currentUser();
   if (!currentUser.isSuper) {
     throw std::runtime_error("GRANT " + get_role() + " TO " + get_user() +
@@ -2724,6 +2733,11 @@ void RevokeRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
         " failed. This command may be executed only when DB object level access privileges check turned on.");
   }
 
+  if (catalog.get_currentDB().dbName != MAPD_SYSTEM_DB) {
+    throw std::runtime_error("REVOKE " + get_role() + " TO " + get_user() +
+                             "; failed. Must be in the system database ('" + std::string(MAPD_SYSTEM_DB) +
+                             "') to revoke roles.");
+  }
   const auto& currentUser = session.get_currentUser();
   if (!currentUser.isSuper) {
     throw std::runtime_error("REVOKE " + get_role() + " FROM " + get_user() +
@@ -3092,11 +3106,6 @@ void AlterUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
       if (!dynamic_cast<const StringLiteral*>(p->get_value()))
         throw std::runtime_error("INSERTACCESS must be a string literal.");
       insertaccessDB = static_cast<const StringLiteral*>(p->get_value())->get_stringval();
-      if (insertaccessDB && catalog.isAccessPrivCheckEnabled()) {
-        throw std::runtime_error(
-            "ALTER USER command failed. INSERTACCESS option can't be used when running mapd with DB object level "
-            "access privileges set.");
-      }
     } else if (boost::iequals(*p->get_name(), "is_super")) {
       if (!dynamic_cast<const StringLiteral*>(p->get_value()))
         throw std::runtime_error("IS_SUPER option must be a string literal.");

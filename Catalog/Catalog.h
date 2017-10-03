@@ -450,6 +450,8 @@ class SessionInfo {
   time_t get_last_used_time() const { return last_used_time; }
   void update_time() { last_used_time = time(0); }
   bool checkDBAccessPrivileges(std::vector<bool> privs) const;
+  void setSysCatalog(Catalog_Namespace::SysCatalog* sys_cat);
+  Catalog_Namespace::SysCatalog* getSysCatalog() const;
 
  private:
   std::shared_ptr<Catalog> catalog_;
