@@ -1893,20 +1893,11 @@ ImportStatus Importer::importDelimited() {
       LOG(ERROR) << "Maximum rows rejected exceeded. Halting load";
       break;
     }
-    if (loader->get_table_desc()->persistenceLevel ==
-        Data_Namespace::MemoryLevel::DISK_LEVEL) {  // only checkpoint disk-resident tables
-      // checkpoint before going again
-      const auto shard_tables = loader->get_catalog().getPhysicalTablesDescriptors(loader->get_table_desc());
-      for (const auto shard_table : shard_tables) {
-        loader->get_catalog().get_dataMgr().checkpoint(loader->get_catalog().get_currentDB().dbId,
-                                                       shard_table->tableId);
-      }
-    }
+    // checkpoint before going again
+    loader->checkpoint();
   }
-  // checkpoint before going again
   if (loader->get_table_desc()->persistenceLevel ==
       Data_Namespace::MemoryLevel::DISK_LEVEL) {  // only checkpoint disk-resident tables
-    // todo MAT we need to review whether this checkpoint process makes sense
     auto ms = measure<>::execution([&]() {
       if (!load_failed) {
         for (auto& p : import_buffers_vec[0]) {
@@ -1916,12 +1907,10 @@ ImportStatus Importer::importDelimited() {
             break;
           }
         }
-        loader->get_catalog().get_dataMgr().checkpoint(loader->get_catalog().get_currentDB().dbId,
-                                                       loader->get_table_desc()->tableId);
       }
     });
     if (debug_timing)
-      LOG(INFO) << "Checkpointing took " << (double)ms / 1000.0 << " Seconds." << std::endl;
+      LOG(INFO) << "Dictionary Checkpointing took " << (double)ms / 1000.0 << " Seconds." << std::endl;
   }
   free(buffer[0]);
   buffer[0] = nullptr;
@@ -1932,6 +1921,16 @@ ImportStatus Importer::importDelimited() {
 
   import_status.load_truncated = load_truncated;
   return import_status;
+}
+
+void Loader::checkpoint() {
+  if (get_table_desc()->persistenceLevel ==
+      Data_Namespace::MemoryLevel::DISK_LEVEL) {  // only checkpoint disk-resident tables
+    const auto shard_tables = get_catalog().getPhysicalTablesDescriptors(get_table_desc());
+    for (const auto shard_table : shard_tables) {
+      get_catalog().get_dataMgr().checkpoint(get_catalog().get_currentDB().dbId, shard_table->tableId);
+    }
+  }
 }
 
 void GDALErrorHandler(CPLErr eErrClass, int err_no, const char* msg) {

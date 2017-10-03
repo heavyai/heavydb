@@ -477,6 +477,7 @@ class Loader {
   virtual bool loadImpl(const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers,
                         size_t row_count,
                         bool checkpoint);
+  virtual void checkpoint();
 
  protected:
   const Catalog_Namespace::Catalog& catalog;
