@@ -158,10 +158,10 @@ MapD has the following dependencies:
 | Package | Min Version | Required |
 | ------- | ----------- | -------- |
 | [CMake](https://cmake.org/) | 3.3 | yes |
-| [LLVM](http://llvm.org/) | 3.8 | yes |
+| [LLVM](http://llvm.org/) | 3.8-4.0 | yes |
 | [GCC](http://gcc.gnu.org/) | 4.9 | no, if building with clang |
 | [Go](https://golang.org/) | 1.6 | yes |
-| [Boost](http://www.boost.org/) | 1.5.7 | yes |
+| [Boost](http://www.boost.org/) | 1.57.0 | yes |
 | [OpenJDK](http://openjdk.java.net/) | 1.7 | yes |
 | [CUDA](http://nvidia.com/cuda) | 7.5 | yes, if compiling with GPU support |
 | [gperftools](https://github.com/gperftools/gperftools) | | yes |
