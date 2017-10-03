@@ -2522,6 +2522,8 @@ void MapDHandler::set_table_epoch(const TSessionId& session, const int db_id, co
     LOG(INFO) << "Removing in memory artifacts after rollback of table epoch";
     cat.removeChunks(table_id);
   }
+  clear_gpu_memory(session);
+  clear_cpu_memory(session);
 
   LOG(INFO) << "Set table epoch db:" << db_id << " Table ID  " << table_id << " back to new epoch " << new_epoch;
   data_mgr_->setTableEpoch(db_id, table_id, new_epoch);
