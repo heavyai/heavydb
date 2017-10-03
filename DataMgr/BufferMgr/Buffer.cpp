@@ -67,9 +67,14 @@ void Buffer::reserve(const size_t numBytes) {
   size_t numPages = (numBytes + pageSize_ - 1) / pageSize_;
   // std::cout << "NumPages reserved: " << numPages << std::endl;
   if (numPages > numPages_) {
+    // When running out of cpu buffers, reserveBuffer() will fail and
+    // trigger a SlabTooBig exception, so pageDirtyFlags_ and numPages_
+    // MUST NOT be set until reserveBuffer() returns; otherwise, this
+    // buffer is not properly resized, so any call to FileMgr::fetchBuffer()
+    // will proceed to read(), corrupt heap memory and cause core dump later.
+    segIt_ = bm_->reserveBuffer(segIt_, pageSize_ * numPages);
     pageDirtyFlags_.resize(numPages);
     numPages_ = numPages;
-    segIt_ = bm_->reserveBuffer(segIt_, reservedSize());
   }
 }
 
