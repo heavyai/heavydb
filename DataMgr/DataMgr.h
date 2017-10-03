@@ -101,6 +101,7 @@ class DataMgr {
   inline bool gpusPresent() { return hasGpus_; }
   void removeTableRelatedDS(const int db_id, const int tb_id);
   void updateTableEpoch(const int db_id, const int tb_id, const int start_epoch);
+  size_t getTableEpoch(const int db_id, const int tb_id);
 
   CudaMgr_Namespace::CudaMgr* cudaMgr_;
 

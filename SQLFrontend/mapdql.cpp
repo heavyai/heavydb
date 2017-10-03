@@ -119,7 +119,8 @@ enum ThriftService {
   kCLEAR_MEMORY_CPU,
   kIMPORT_GEO_TABLE,
   kINTERRUPT,
-  kROLLBACK_TABLE_EPOCH,
+  kSET_TABLE_EPOCH,
+  kGET_TABLE_EPOCH,
   kGET_SERVER_STATUS
 };
 
@@ -183,8 +184,11 @@ bool thrift_with_retry(ThriftService which_service, ClientContext& context, cons
         context.client.import_geo_table(
             context.session, context.table_name, context.file_name, context.copy_params, TRowDescriptor());
         break;
-      case kROLLBACK_TABLE_EPOCH:
+      case kSET_TABLE_EPOCH:
         context.client.rollback_table_epoch(context.session, context.db_id, context.table_id, context.epoch_value);
+        break;
+      case kGET_TABLE_EPOCH:
+        context.epoch_value = context.client.get_table_epoch(context.session, context.db_id, context.table_id);
         break;
       case kGET_SERVER_STATUS:
         context.client.get_status(context.cluster_status, context.session);
@@ -314,7 +318,43 @@ int run_query(ClientContext& context, std::string query) {
   // return 4;
 }
 
-void rollback_table_epoch(ClientContext& context, std::string table_details) {
+void get_table_epoch(ClientContext& context, std::string table_details) {
+  std::vector<std::string> split_result;
+
+  boost::split(split_result,
+               table_details,
+               boost::is_any_of(":"),
+               boost::token_compress_on);  // SplitVec == { "hello abc","ABC","aBc goodbye" }
+
+  if (split_result.size() != 2) {
+    std::cerr << "set table epoch does not contain db_id:table_id " << table_details << std::endl;
+    return;
+  }
+
+  // validate db identifier is a number
+  try {
+    context.db_id = std::stoi(split_result[0]);
+  } catch (std::exception& e) {
+    std::cerr << "non numeric db number: " << table_details << std::endl;
+    return;
+  }
+
+  // validate table identifier is a number
+  try {
+    context.table_id = std::stoi(split_result[1]);
+  } catch (std::exception& e) {
+    std::cerr << "non-numeric table number: " << table_details << std::endl;
+    return;
+  }
+
+  if (thrift_with_retry(kGET_TABLE_EPOCH, context, nullptr)) {
+    std::cout << "table epoch is " << context.epoch_value << std::endl;
+  } else {
+    std::cout << "Cannot connect to MapD Server." << std::endl;
+  }
+}
+
+void set_table_epoch(ClientContext& context, std::string table_details) {
   std::vector<std::string> split_result;
 
   boost::split(split_result,
@@ -323,7 +363,7 @@ void rollback_table_epoch(ClientContext& context, std::string table_details) {
                boost::token_compress_on);  // SplitVec == { "hello abc","ABC","aBc goodbye" }
 
   if (split_result.size() != 3) {
-    std::cerr << "rollback table epoch does not contain db_id:table_id_epoch: " << table_details << std::endl;
+    std::cerr << "Set table epoch does not contain db_id:table_id:epoch " << table_details << std::endl;
     return;
   }
 
@@ -355,8 +395,8 @@ void rollback_table_epoch(ClientContext& context, std::string table_details) {
     return;
   }
 
-  if (thrift_with_retry(kROLLBACK_TABLE_EPOCH, context, nullptr)) {
-    std::cout << "table epoch reset" << std::endl;
+  if (thrift_with_retry(kSET_TABLE_EPOCH, context, nullptr)) {
+    std::cout << "table epoch set" << std::endl;
   } else {
     std::cout << "Cannot connect to MapD Server." << std::endl;
   }
@@ -1313,9 +1353,12 @@ int main(int argc, char** argv) {
       context.file_name = strtok(line + 9, " ");
       context.table_name = strtok(nullptr, " ");
       (void)thrift_with_retry(kIMPORT_GEO_TABLE, context, nullptr);
-    } else if (!strncmp(line, "\\rte", 4)) {
+    } else if (!strncmp(line, "\\ste", 4)) {
       std::string table_details = strtok(line + 5, " ");
-      rollback_table_epoch(context, table_details);
+      set_table_epoch(context, table_details);
+    } else if (!strncmp(line, "\\gte", 4)) {
+      std::string table_details = strtok(line + 5, " ");
+      get_table_epoch(context, table_details);
     } else if (!strncmp(line, "\\copy", 5)) {
       char* filepath = strtok(line + 6, " ");
       char* table = strtok(NULL, " ");

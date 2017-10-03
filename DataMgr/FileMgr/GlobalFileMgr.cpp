@@ -205,4 +205,10 @@ void GlobalFileMgr::updateTableEpoch(const int db_id, const int tb_id, const int
   }
 }
 
+size_t GlobalFileMgr::getTableEpoch(const int db_id, const int tb_id) {
+  FileMgr* fm = getFileMgr(db_id, tb_id);
+
+  return fm->epoch_;
+}
+
 }  // File_Namespace

@@ -409,4 +409,8 @@ void DataMgr::updateTableEpoch(const int db_id, const int tb_id, const int start
   dynamic_cast<GlobalFileMgr*>(bufferMgrs_[0][0])->updateTableEpoch(db_id, tb_id, start_epoch);
 }
 
+size_t DataMgr::getTableEpoch(const int db_id, const int tb_id) {
+  return dynamic_cast<GlobalFileMgr*>(bufferMgrs_[0][0])->getTableEpoch(db_id, tb_id);
+}
+
 }  // Data_Namespace

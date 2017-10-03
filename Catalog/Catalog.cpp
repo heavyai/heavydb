@@ -1898,9 +1898,6 @@ void Catalog::removeChunks(const int table_id) {
     delete td->fragmenter;
     tableDescIt->second->fragmenter = nullptr;  // get around const-ness
   }
-  ChunkKey chunkKeyPrefix = {currentDB_.dbId, table_id};
-  // assuming deleteChunksWithPrefix is atomic
-  dataMgr_->deleteChunksWithPrefix(chunkKeyPrefix);
 }
 
 void Catalog::dropTable(const TableDescriptor* td) {
