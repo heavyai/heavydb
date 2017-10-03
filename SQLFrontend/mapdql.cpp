@@ -185,7 +185,7 @@ bool thrift_with_retry(ThriftService which_service, ClientContext& context, cons
             context.session, context.table_name, context.file_name, context.copy_params, TRowDescriptor());
         break;
       case kSET_TABLE_EPOCH:
-        context.client.rollback_table_epoch(context.session, context.db_id, context.table_id, context.epoch_value);
+        context.client.set_table_epoch(context.session, context.db_id, context.table_id, context.epoch_value);
         break;
       case kGET_TABLE_EPOCH:
         context.epoch_value = context.client.get_table_epoch(context.session, context.db_id, context.table_id);

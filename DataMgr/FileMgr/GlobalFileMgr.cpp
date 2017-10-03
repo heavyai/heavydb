@@ -189,10 +189,11 @@ void GlobalFileMgr::removeTableRelatedDS(const int db_id, const int tb_id) {
   }
 }
 
-void GlobalFileMgr::updateTableEpoch(const int db_id, const int tb_id, const int start_epoch) {
+void GlobalFileMgr::setTableEpoch(const int db_id, const int tb_id, const int start_epoch) {
   const auto file_mgr_key = std::make_pair(db_id, tb_id);
+  // this is where the real rollback of any data ahead of the currently set epoch is performed
   FileMgr* fm = new FileMgr(0, this, file_mgr_key, num_reader_threads_, start_epoch, defaultPageSize_);
-  fm->setEpoch(start_epoch);
+  fm->setEpoch(start_epoch - 1);
   // remove the dummy one we built
   delete fm;
 

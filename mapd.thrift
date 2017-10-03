@@ -359,7 +359,7 @@ service MapD {
   list<TNodeMemoryInfo> get_memory(1: TSessionId session, 2: string memory_level) throws (1: TMapDException e)
   void clear_cpu_memory(1: TSessionId session) throws (1: TMapDException e)
   void clear_gpu_memory(1: TSessionId session) throws (1: TMapDException e)
-  void rollback_table_epoch (1: TSessionId session 2: i32 db_id 3: i32 table_id 4: i32 new_epoch) throws (1: TMapDException e)
+  void set_table_epoch (1: TSessionId session 2: i32 db_id 3: i32 table_id 4: i32 new_epoch) throws (1: TMapDException e)
   i32 get_table_epoch (1: TSessionId session 2: i32 db_id 3: i32 table_id)
 # query, render
   TQueryResult sql_execute(1: TSessionId session, 2: string query 3: bool column_format, 4: string nonce, 5: i32 first_n = -1) throws (1: TMapDException e)

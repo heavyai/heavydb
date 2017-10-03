@@ -159,30 +159,14 @@ void FileMgr::init(const size_t num_reader_threads) {
           }));
           fileCount++;
           if (fileCount % threadCount == 0) {
-            for (auto& file_future : file_futures) {
-              file_future.wait();
-            }
-            // concatenate the vectors after thread completes
-            for (auto& file_future : file_futures) {
-              auto tempHeaderVec = file_future.get();
-              headerVec.insert(headerVec.end(), tempHeaderVec.begin(), tempHeaderVec.end());
-            }
-            file_futures.clear();
+            processFileFutures(file_futures, headerVec);
           }
         }
       }
     }
 
     if (file_futures.size() > 0) {
-      for (auto& file_future : file_futures) {
-        file_future.wait();
-      }
-      // concatenate the vectors after thread completes
-      for (auto& file_future : file_futures) {
-        auto tempHeaderVec = file_future.get();
-        headerVec.insert(headerVec.end(), tempHeaderVec.begin(), tempHeaderVec.end());
-      }
-      file_futures.clear();
+      processFileFutures(file_futures, headerVec);
     }
     int64_t queue_time_ms = timer_stop(clock_begin);
 
@@ -260,6 +244,19 @@ void FileMgr::init(const size_t num_reader_threads) {
   }
 }
 
+void FileMgr::processFileFutures(std::vector<std::future<std::vector<HeaderInfo>>>& file_futures,
+                                 std::vector<HeaderInfo>& headerVec) {
+  for (auto& file_future : file_futures) {
+    file_future.wait();
+  }
+  // concatenate the vectors after thread completes
+  for (auto& file_future : file_futures) {
+    auto tempHeaderVec = file_future.get();
+    headerVec.insert(headerVec.end(), tempHeaderVec.begin(), tempHeaderVec.end());
+  }
+  file_futures.clear();
+}
+
 void FileMgr::init(const std::string dataPathToConvertFrom) {
   int converted_data_epoch = 0;
   boost::filesystem::path path(dataPathToConvertFrom);
@@ -279,7 +276,6 @@ void FileMgr::init(const std::string dataPathToConvertFrom) {
     int maxFileId = -1;
     int fileCount = 0;
     int threadCount = std::thread::hardware_concurrency();
-    LOG(INFO) << "reading metadata with " << threadCount << threadCount;
     std::vector<HeaderInfo> headerVec;
     std::vector<std::future<std::vector<HeaderInfo>>> file_futures;
     for (boost::filesystem::directory_iterator fileIt(path); fileIt != endItr; ++fileIt) {
@@ -314,32 +310,15 @@ void FileMgr::init(const std::string dataPathToConvertFrom) {
             return tempHeaderVec;
           }));
           fileCount++;
-          if (fileCount == threadCount) {
-            for (auto& file_future : file_futures) {
-              file_future.wait();
-            }
-            // concatenate the vectors after thread completes
-            for (auto& file_future : file_futures) {
-              auto tempHeaderVec = file_future.get();
-              headerVec.insert(headerVec.end(), tempHeaderVec.begin(), tempHeaderVec.end());
-            }
-            file_futures.clear();
-            fileCount = 0;
+          if (fileCount % threadCount) {
+            processFileFutures(file_futures, headerVec);
           }
         }
       }
     }
 
-    if (fileCount > 0) {
-      for (auto& file_future : file_futures) {
-        file_future.wait();
-      }
-      // concatenate the vectors after thread completes
-      for (auto& file_future : file_futures) {
-        auto tempHeaderVec = file_future.get();
-        headerVec.insert(headerVec.end(), tempHeaderVec.begin(), tempHeaderVec.end());
-      }
-      file_futures.clear();
+    if (file_futures.size() > 0) {
+      processFileFutures(file_futures, headerVec);
     }
 
     /* Sort headerVec so that all HeaderInfos

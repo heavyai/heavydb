@@ -30,6 +30,8 @@
 #include <map>
 #include <mutex>
 #include <set>
+#include <vector>
+#include <future>
 
 #include "../AbstractBuffer.h"
 #include "../AbstractBufferMgr.h"
@@ -256,6 +258,8 @@ class FileMgr : public AbstractBufferMgr {  // implements
   bool openDBMetaFile(const std::string& DBMetaFileName);
   void writeAndSyncDBMetaToDisk();
   void setEpoch(int epoch);  // resets current value of epoch at startup
+  void processFileFutures(std::vector<std::future<std::vector<HeaderInfo>>>& file_futures,
+                          std::vector<HeaderInfo>& headerVec);
 };
 
 }  // File_Namespace

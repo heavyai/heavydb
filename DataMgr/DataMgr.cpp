@@ -405,8 +405,8 @@ void DataMgr::removeTableRelatedDS(const int db_id, const int tb_id) {
   dynamic_cast<GlobalFileMgr*>(bufferMgrs_[0][0])->removeTableRelatedDS(db_id, tb_id);
 }
 
-void DataMgr::updateTableEpoch(const int db_id, const int tb_id, const int start_epoch) {
-  dynamic_cast<GlobalFileMgr*>(bufferMgrs_[0][0])->updateTableEpoch(db_id, tb_id, start_epoch);
+void DataMgr::setTableEpoch(const int db_id, const int tb_id, const int start_epoch) {
+  dynamic_cast<GlobalFileMgr*>(bufferMgrs_[0][0])->setTableEpoch(db_id, tb_id, start_epoch);
 }
 
 size_t DataMgr::getTableEpoch(const int db_id, const int tb_id) {

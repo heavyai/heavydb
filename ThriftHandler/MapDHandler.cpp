@@ -2508,10 +2508,7 @@ void MapDHandler::broadcast_serialized_rows(const std::string& serialized_rows,
 }
 
 // check and reset epoch if a request has been made
-void MapDHandler::rollback_table_epoch(const TSessionId& session,
-                                       const int db_id,
-                                       const int table_id,
-                                       const int new_epoch) {
+void MapDHandler::set_table_epoch(const TSessionId& session, const int db_id, const int table_id, const int new_epoch) {
   const auto session_info = get_session(session);
   if (!session_info.get_currentUser().isSuper) {
     throw std::runtime_error("Only superuser can rollback_table_epoch");
@@ -2526,8 +2523,8 @@ void MapDHandler::rollback_table_epoch(const TSessionId& session,
     cat.removeChunks(table_id);
   }
 
-  LOG(INFO) << "Rollback table epoch db:" << db_id << " Table ID  " << table_id << " back to new epoch " << new_epoch;
-  data_mgr_->updateTableEpoch(db_id, table_id, new_epoch);
+  LOG(INFO) << "Set table epoch db:" << db_id << " Table ID  " << table_id << " back to new epoch " << new_epoch;
+  data_mgr_->setTableEpoch(db_id, table_id, new_epoch);
 }
 
 int32_t MapDHandler::get_table_epoch(const TSessionId& session, const int32_t db_id, const int32_t table_id) {

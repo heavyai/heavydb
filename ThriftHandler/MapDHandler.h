@@ -140,7 +140,7 @@ class MapDHandler : public MapDIf {
   void get_memory(std::vector<TNodeMemoryInfo>& _return, const TSessionId& session, const std::string& memory_level);
   void clear_cpu_memory(const TSessionId& session);
   void clear_gpu_memory(const TSessionId& session);
-  void rollback_table_epoch(const TSessionId& session, const int db_id, const int table_id, const int new_epoch);
+  void set_table_epoch(const TSessionId& session, const int db_id, const int table_id, const int new_epoch);
   int32_t get_table_epoch(const TSessionId& session, const int32_t db_id, const int32_t table_id);
   // query, render
   void sql_execute(TQueryResult& _return,

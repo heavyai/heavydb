@@ -163,41 +163,30 @@ StringDictionary::StringDictionary(const std::string& folder,
         }));
         thread_inits++;
         if (thread_inits % thread_count == 0) {
-          for (auto& dictionary_future : dictionary_futures) {
-            dictionary_future.wait();
-            auto hashVec = dictionary_future.get();
-            for (auto& hash : hashVec) {
-              int32_t bucket = computeUniqueBucketWithHash(hash.first, str_ids_, recover);
-              payload_file_off_ += hash.second;
-              str_ids_[bucket] = static_cast<int32_t>(str_count_);
-              ++str_count_;
-            }
-          }
-          dictionary_futures.clear();
-          //    if (std::get<2>(recovered)) {
-          // hit the canary, recovery finished
-          //    break;
-          // }
-          // need to set set payload offset so appends know where to start
-          // payload_file_off_ = bytes;
+          processDictionaryFutures(dictionary_futures);
         }
       }
       // gather last few threads
       if (dictionary_futures.size() != 0) {
-        for (auto& dictionary_future : dictionary_futures) {
-          dictionary_future.wait();
-          auto hashVec = dictionary_future.get();
-          for (auto& hash : hashVec) {
-            int32_t bucket = computeUniqueBucketWithHash(hash.first, str_ids_, recover);
-            payload_file_off_ += hash.second;
-            str_ids_[bucket] = static_cast<int32_t>(str_count_);
-            ++str_count_;
-          }
-        }
-        dictionary_futures.clear();
+        processDictionaryFutures(dictionary_futures);
       }
     }
   }
+}
+
+void StringDictionary::processDictionaryFutures(
+    std::vector<std::future<std::vector<std::pair<unsigned int, unsigned int>>>>& dictionary_futures) {
+  for (auto& dictionary_future : dictionary_futures) {
+    dictionary_future.wait();
+    auto hashVec = dictionary_future.get();
+    for (auto& hash : hashVec) {
+      int32_t bucket = computeUniqueBucketWithHash(hash.first, str_ids_);
+      payload_file_off_ += hash.second;
+      str_ids_[bucket] = static_cast<int32_t>(str_count_);
+      ++str_count_;
+    }
+  }
+  dictionary_futures.clear();
 }
 
 StringDictionary::StringDictionary(const LeafHostInfo& host, const int dict_id)
@@ -572,9 +561,8 @@ int32_t StringDictionary::computeBucket(const std::string& str,
   return bucket;
 }
 
-int32_t StringDictionary::computeUniqueBucketWithHash(const size_t hash,
-                                                      const std::vector<int32_t>& data,
-                                                      const bool unique) const noexcept {
+int32_t StringDictionary::computeUniqueBucketWithHash(const size_t hash, const std::vector<int32_t>& data) const
+    noexcept {
   auto bucket = hash & (data.size() - 1);
   while (true) {
     if (data[bucket] == INVALID_STR_ID) {  // In this case it means the slot is available for use
