@@ -1186,9 +1186,10 @@ GroupByAndAggregate::BodyControlFlow Executor::compileBody(const RelAlgExecution
   }
   CHECK(filter_lv->getType()->isIntegerTy(1));
 
+  llvm::BasicBlock* sc_false{nullptr};
   if (!deferred_quals.empty()) {
     auto sc_true = llvm::BasicBlock::Create(cgen_state_->context_, "sc_true", cgen_state_->row_func_);
-    auto sc_false = llvm::BasicBlock::Create(cgen_state_->context_, "sc_false", cgen_state_->row_func_);
+    sc_false = llvm::BasicBlock::Create(cgen_state_->context_, "sc_false", cgen_state_->row_func_);
     if (isOuterLoopJoin() || isOneToManyOuterHashJoin()) {
       filter_lv = cgen_state_->ir_builder_.CreateOr(filter_lv, outer_join_nomatch_flag_lv);
     }
@@ -1211,5 +1212,5 @@ GroupByAndAggregate::BodyControlFlow Executor::compileBody(const RelAlgExecution
 
   CHECK(filter_lv->getType()->isIntegerTy(1));
 
-  return group_by_and_aggregate.codegen(filter_lv, outerjoin_query_filter_lv, co);
+  return group_by_and_aggregate.codegen(filter_lv, outerjoin_query_filter_lv, sc_false, co);
 }

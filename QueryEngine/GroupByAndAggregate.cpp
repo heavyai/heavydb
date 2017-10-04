@@ -2648,6 +2648,7 @@ void GroupByAndAggregate::patchGroupbyCall(llvm::CallInst* call_site) {
 
 GroupByAndAggregate::BodyControlFlow GroupByAndAggregate::codegen(llvm::Value* filter_result,
                                                                   llvm::Value* outerjoin_query_filter_result,
+                                                                  llvm::BasicBlock* sc_false,
                                                                   const CompilationOptions& co) {
   CHECK(filter_result);
 
@@ -2753,6 +2754,11 @@ GroupByAndAggregate::BodyControlFlow GroupByAndAggregate::codegen(llvm::Value* f
 
   if (ra_exe_unit_.inner_joins.empty()) {
     executor_->codegenInnerScanNextRowOrMatch();
+  } else if (sc_false) {
+    const auto saved_insert_block = LL_BUILDER.GetInsertBlock();
+    LL_BUILDER.SetInsertPoint(sc_false);
+    LL_BUILDER.CreateBr(filter_false);
+    LL_BUILDER.SetInsertPoint(saved_insert_block);
   }
 
   return {can_return_error, filter_true, filter_false};

@@ -320,7 +320,10 @@ class GroupByAndAggregate {
 
   // returns true iff checking the error code after every row
   // is required -- slow path group by queries for now
-  BodyControlFlow codegen(llvm::Value* filter_result, llvm::Value* nonjoin_filter_result, const CompilationOptions& co);
+  BodyControlFlow codegen(llvm::Value* filter_result,
+                          llvm::Value* nonjoin_filter_result,
+                          llvm::BasicBlock* sc_false,
+                          const CompilationOptions& co);
 
   static void addTransientStringLiterals(const RelAlgExecutionUnit& ra_exe_unit,
                                          Executor* executor,
