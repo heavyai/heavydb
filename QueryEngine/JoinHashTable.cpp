@@ -1087,6 +1087,22 @@ llvm::Value* JoinHashTable::codegenOneToManyHashJoin(const CompilationOptions& c
                                   executor_);
 }
 
+HashJoinMatchingSet JoinHashTable::codegenMatchingSet(const CompilationOptions& co, const size_t index) {
+  CHECK(executor_->plan_state_->join_info_.join_impl_type_ == Executor::JoinImplType::HashOneToMany);
+  const auto cols = get_cols(qual_bin_oper_, *executor_->getCatalog(), executor_->temporary_tables_);
+  auto key_col = cols.second;
+  CHECK(key_col);
+  auto val_col = cols.first;
+  CHECK(val_col);
+  auto pos_ptr = codegenHashTableLoad(index);
+  CHECK(pos_ptr);
+  const int shard_count = shardCount();
+  auto hash_join_idx_args = getHashJoinArgs(pos_ptr, key_col, shard_count, co);
+  const int64_t sub_buff_size = hash_entry_count_ * sizeof(int32_t);
+  return codegenMatchingSet(
+      hash_join_idx_args, shard_count, col_range_.hasNulls(), isBitwiseEq(), sub_buff_size, executor_);
+}
+
 llvm::Value* JoinHashTable::codegenOneToManyHashJoin(const std::vector<llvm::Value*>& hash_join_idx_args_in,
                                                      const size_t inner_rte_idx,
                                                      const bool is_sharded,
@@ -1094,6 +1110,68 @@ llvm::Value* JoinHashTable::codegenOneToManyHashJoin(const std::vector<llvm::Val
                                                      const bool is_bw_eq,
                                                      const int64_t sub_buff_size,
                                                      Executor* executor) {
+  const auto matching_set =
+      codegenMatchingSet(hash_join_idx_args_in, is_sharded, col_range_has_nulls, is_bw_eq, sub_buff_size, executor);
+
+  // Loop
+  auto preheader = executor->cgen_state_->ir_builder_.GetInsertBlock();
+  auto match_pos_ptr = executor->cgen_state_->ir_builder_.CreateAlloca(
+      get_int_type(64, executor->cgen_state_->context_), nullptr, "match_scan_" + std::to_string(inner_rte_idx));
+  if (executor->isOuterJoin()) {
+    executor->codegenNomatchInitialization(inner_rte_idx);
+  }
+
+  executor->cgen_state_->ir_builder_.CreateStore(executor->ll_int(int64_t(0)), match_pos_ptr);
+  auto match_loop_head = llvm::BasicBlock::Create(executor->cgen_state_->context_,
+                                                  "match_loop_head_" + std::to_string(inner_rte_idx),
+                                                  executor->cgen_state_->row_func_,
+                                                  preheader->getNextNode());
+  executor->cgen_state_->ir_builder_.CreateBr(match_loop_head);
+  executor->cgen_state_->ir_builder_.SetInsertPoint(match_loop_head);
+  auto match_pos = executor->cgen_state_->ir_builder_.CreateLoad(match_pos_ptr, "match_pos_it");
+  auto match_rowid =
+      executor->castToTypeIn(executor->cgen_state_->ir_builder_.CreateLoad(
+                                 executor->cgen_state_->ir_builder_.CreateGEP(matching_set.elements, match_pos)),
+                             64);
+  {
+    const auto it_ok = executor->cgen_state_->scan_idx_to_hash_pos_.emplace(inner_rte_idx, match_rowid);
+    CHECK(it_ok.second);
+  }
+  auto have_more_matches = executor->cgen_state_->ir_builder_.CreateICmpSLT(match_pos, matching_set.count);
+  auto match_scan_ret = llvm::BasicBlock::Create(executor->cgen_state_->context_,
+                                                 "match_scan_ret_" + std::to_string(inner_rte_idx),
+                                                 executor->cgen_state_->row_func_);
+  auto match_scan_cont = llvm::BasicBlock::Create(executor->cgen_state_->context_,
+                                                  "match_scan_cont_" + std::to_string(inner_rte_idx),
+                                                  executor->cgen_state_->row_func_);
+  executor->cgen_state_->ir_builder_.CreateCondBr(have_more_matches, match_scan_cont, match_scan_ret);
+  executor->cgen_state_->ir_builder_.SetInsertPoint(match_scan_ret);
+  if (executor->isOuterJoin()) {
+    auto init_iters = [executor, &matching_set, &match_pos_ptr]() {
+      executor->cgen_state_->ir_builder_.CreateStore(
+          executor->cgen_state_->ir_builder_.CreateSub(matching_set.count, executor->ll_int(int64_t(1))),
+          match_pos_ptr);
+      executor->cgen_state_->ir_builder_.CreateStore(executor->ll_bool(true),
+                                                     executor->cgen_state_->outer_join_nomatch_);
+      ;
+    };
+    executor->codegenNomatchLoopback(init_iters, match_loop_head);
+  }
+  executor->cgen_state_->ir_builder_.CreateRet(executor->ll_int(int32_t(0)));
+  executor->cgen_state_->ir_builder_.SetInsertPoint(match_scan_cont);
+
+  executor->cgen_state_->match_scan_labels_.push_back(match_loop_head);
+  executor->cgen_state_->match_iterators_.push_back(std::make_pair(match_pos, match_pos_ptr));
+
+  return matching_set.slot;
+}
+
+HashJoinMatchingSet JoinHashTable::codegenMatchingSet(const std::vector<llvm::Value*>& hash_join_idx_args_in,
+                                                      const bool is_sharded,
+                                                      const bool col_range_has_nulls,
+                                                      const bool is_bw_eq,
+                                                      const int64_t sub_buff_size,
+                                                      Executor* executor) {
   CHECK(executor->plan_state_->join_info_.join_impl_type_ == Executor::JoinImplType::HashOneToMany);
   std::string fname{"hash_join_idx"};
   if (is_bw_eq) {
@@ -1122,56 +1200,7 @@ llvm::Value* JoinHashTable::codegenOneToManyHashJoin(const std::vector<llvm::Val
       executor->cgen_state_->ir_builder_.CreateAdd(pos_ptr, executor->ll_int(2 * sub_buff_size)),
       llvm::Type::getInt32PtrTy(executor->cgen_state_->context_));
   auto rowid_ptr_i32 = executor->cgen_state_->ir_builder_.CreateGEP(rowid_base_i32, slot_lv);
-
-  // Loop
-  auto preheader = executor->cgen_state_->ir_builder_.GetInsertBlock();
-  auto match_pos_ptr = executor->cgen_state_->ir_builder_.CreateAlloca(
-      get_int_type(64, executor->cgen_state_->context_), nullptr, "match_scan_" + std::to_string(inner_rte_idx));
-  if (executor->isOuterJoin()) {
-    executor->codegenNomatchInitialization(inner_rte_idx);
-  }
-
-  executor->cgen_state_->ir_builder_.CreateStore(executor->ll_int(int64_t(0)), match_pos_ptr);
-  auto match_loop_head = llvm::BasicBlock::Create(executor->cgen_state_->context_,
-                                                  "match_loop_head_" + std::to_string(inner_rte_idx),
-                                                  executor->cgen_state_->row_func_,
-                                                  preheader->getNextNode());
-  executor->cgen_state_->ir_builder_.CreateBr(match_loop_head);
-  executor->cgen_state_->ir_builder_.SetInsertPoint(match_loop_head);
-  auto match_pos = executor->cgen_state_->ir_builder_.CreateLoad(match_pos_ptr, "match_pos_it");
-  auto match_rowid = executor->castToTypeIn(executor->cgen_state_->ir_builder_.CreateLoad(
-                                                executor->cgen_state_->ir_builder_.CreateGEP(rowid_ptr_i32, match_pos)),
-                                            64);
-  {
-    const auto it_ok = executor->cgen_state_->scan_idx_to_hash_pos_.emplace(inner_rte_idx, match_rowid);
-    CHECK(it_ok.second);
-  }
-  auto have_more_matches = executor->cgen_state_->ir_builder_.CreateICmpSLT(match_pos, row_count_lv);
-  auto match_scan_ret = llvm::BasicBlock::Create(executor->cgen_state_->context_,
-                                                 "match_scan_ret_" + std::to_string(inner_rte_idx),
-                                                 executor->cgen_state_->row_func_);
-  auto match_scan_cont = llvm::BasicBlock::Create(executor->cgen_state_->context_,
-                                                  "match_scan_cont_" + std::to_string(inner_rte_idx),
-                                                  executor->cgen_state_->row_func_);
-  executor->cgen_state_->ir_builder_.CreateCondBr(have_more_matches, match_scan_cont, match_scan_ret);
-  executor->cgen_state_->ir_builder_.SetInsertPoint(match_scan_ret);
-  if (executor->isOuterJoin()) {
-    auto init_iters = [executor, &row_count_lv, &match_pos_ptr]() {
-      executor->cgen_state_->ir_builder_.CreateStore(
-          executor->cgen_state_->ir_builder_.CreateSub(row_count_lv, executor->ll_int(int64_t(1))), match_pos_ptr);
-      executor->cgen_state_->ir_builder_.CreateStore(executor->ll_bool(true),
-                                                     executor->cgen_state_->outer_join_nomatch_);
-      ;
-    };
-    executor->codegenNomatchLoopback(init_iters, match_loop_head);
-  }
-  executor->cgen_state_->ir_builder_.CreateRet(executor->ll_int(int32_t(0)));
-  executor->cgen_state_->ir_builder_.SetInsertPoint(match_scan_cont);
-
-  executor->cgen_state_->match_scan_labels_.push_back(match_loop_head);
-  executor->cgen_state_->match_iterators_.push_back(std::make_pair(match_pos, match_pos_ptr));
-
-  return slot_lv;
+  return {rowid_ptr_i32, row_count_lv, slot_lv};
 }
 
 llvm::Value* JoinHashTable::codegenSlotIsValid(const CompilationOptions& co, const size_t index) {

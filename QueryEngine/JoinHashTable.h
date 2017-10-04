@@ -83,6 +83,8 @@ class JoinHashTable : public JoinHashTableInterface {
 
   llvm::Value* codegenSlot(const CompilationOptions&, const size_t) override;
 
+  HashJoinMatchingSet codegenMatchingSet(const CompilationOptions&, const size_t) override;
+
   int getInnerTableId() const noexcept override { return col_var_.get()->get_table_id(); };
 
   HashType getHashType() const noexcept override { return hash_type_; }
@@ -94,6 +96,13 @@ class JoinHashTable : public JoinHashTableInterface {
                                                const bool is_bw_eq,
                                                const int64_t sub_buff_size,
                                                Executor* executor);
+
+  static HashJoinMatchingSet codegenMatchingSet(const std::vector<llvm::Value*>& hash_join_idx_args_in,
+                                                const bool is_sharded,
+                                                const bool col_range_has_nulls,
+                                                const bool is_bw_eq,
+                                                const int64_t sub_buff_size,
+                                                Executor* executor);
 
   static llvm::Value* codegenHashTableLoad(const size_t table_idx, Executor* executor);
 

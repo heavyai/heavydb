@@ -54,6 +54,8 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
 
   llvm::Value* codegenSlot(const CompilationOptions&, const size_t) override;
 
+  HashJoinMatchingSet codegenMatchingSet(const CompilationOptions&, const size_t) override;
+
   int getInnerTableId() const noexcept override;
 
   JoinHashTableInterface::HashType getHashType() const noexcept override;
@@ -127,6 +129,8 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
                                     llvm::Value* key_buff_lv,
                                     const size_t key_component_count,
                                     const size_t key_component_width);
+
+  llvm::Value* codegenKey(const CompilationOptions&);
 
   struct HashTableCacheKey {
     const size_t num_elements;

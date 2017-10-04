@@ -20,6 +20,12 @@
 #include <llvm/IR/Value.h>
 #include <cstdint>
 
+struct HashJoinMatchingSet {
+  llvm::Value* elements;
+  llvm::Value* count;
+  llvm::Value* slot;
+};
+
 class JoinHashTableInterface {
  public:
   virtual int64_t getJoinHashBuffer(const ExecutorDeviceType device_type, const int device_id) noexcept = 0;
@@ -27,6 +33,8 @@ class JoinHashTableInterface {
   virtual llvm::Value* codegenSlotIsValid(const CompilationOptions&, const size_t) = 0;
 
   virtual llvm::Value* codegenSlot(const CompilationOptions&, const size_t) = 0;
+
+  virtual HashJoinMatchingSet codegenMatchingSet(const CompilationOptions&, const size_t) = 0;
 
   virtual int getInnerTableId() const noexcept = 0;
 
