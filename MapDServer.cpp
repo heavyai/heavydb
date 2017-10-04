@@ -21,7 +21,6 @@
 #include <thrift/concurrency/PlatformThreadFactory.h>
 #include <thrift/protocol/TBinaryProtocol.h>
 #include <thrift/protocol/TJSONProtocol.h>
-#include <thrift/server/TThreadPoolServer.h>
 #include <thrift/server/TThreadedServer.h>
 #include <thrift/transport/THttpServer.h>
 #include <thrift/transport/TServerSocket.h>
@@ -141,7 +140,7 @@ void register_signal_handler() {
   signal(SIGTERM, mapd_signal_handler);
 }
 
-void start_server(TThreadPoolServer& server) {
+void start_server(TThreadedServer& server) {
   try {
     server.serve();
   } catch (std::exception& e) {
@@ -243,7 +242,6 @@ int main(int argc, char** argv) {
   size_t render_mem_bytes = 500000000;
   int num_gpus = -1;  // Can be used to override number of gpus detected on system - -1 means do not override
   int start_gpu = 0;
-  int tthreadpool_size = 8;
   size_t num_reader_threads = 0;   // number of threads used when loading data
   std::string db_convert_dir("");  // path to mapd DB to convert from; if path is empty, no conversion is requested
   std::string db_query_file("");   // path to file containing warmup queries list
@@ -299,9 +297,6 @@ int main(int argc, char** argv) {
       "disable-legacy-syntax",
       po::value<bool>(&enable_legacy_syntax)->default_value(enable_legacy_syntax)->implicit_value(false),
       "Enable legacy syntax");
-  desc_adv.add_options()("tthreadpool-size",
-                         po::value<int>(&tthreadpool_size)->default_value(tthreadpool_size),
-                         "Server thread pool size. Increasing may adversely affect render performance and stability.");
   desc_adv.add_options()("num-reader-threads",
                          po::value<size_t>(&num_reader_threads)->default_value(num_reader_threads),
                          "Number of reader threads to use");
@@ -564,20 +559,16 @@ int main(int argc, char** argv) {
   if (mapd_parameters.ha_group_id.empty()) {
     shared_ptr<TProcessor> processor(new MapDProcessor(handler));
 
-    shared_ptr<ThreadManager> threadManager = ThreadManager::newSimpleThreadManager(tthreadpool_size);
-    threadManager->threadFactory(make_shared<PlatformThreadFactory>());
-    threadManager->start();
     shared_ptr<TServerTransport> bufServerTransport(new TServerSocket(mapd_parameters.mapd_server_port));
 
     shared_ptr<TTransportFactory> bufTransportFactory(new TBufferedTransportFactory());
     shared_ptr<TProtocolFactory> bufProtocolFactory(new TBinaryProtocolFactory());
-    TThreadPoolServer bufServer(processor, bufServerTransport, bufTransportFactory, bufProtocolFactory, threadManager);
+    TThreadedServer bufServer(processor, bufServerTransport, bufTransportFactory, bufProtocolFactory);
 
     shared_ptr<TServerTransport> httpServerTransport(new TServerSocket(http_port));
     shared_ptr<TTransportFactory> httpTransportFactory(new THttpServerTransportFactory());
     shared_ptr<TProtocolFactory> httpProtocolFactory(new TJSONProtocolFactory());
-    TThreadPoolServer httpServer(
-        processor, httpServerTransport, httpTransportFactory, httpProtocolFactory, threadManager);
+    TThreadedServer httpServer(processor, httpServerTransport, httpTransportFactory, httpProtocolFactory);
 
     std::thread bufThread(start_server, std::ref(bufServer));
     std::thread httpThread(start_server, std::ref(httpServer));
