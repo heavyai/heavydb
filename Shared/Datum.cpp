@@ -58,14 +58,16 @@ int64_t parse_numeric(const std::string& s, SQLTypeInfo& ti) {
   std::string after_dot;
   if (dot != std::string::npos) {
     // make .99 as 0.99, or std::stoll below throws exception 'std::invalid_argument'
-    before_dot = (0 == dot)? "0": s.substr(0, dot);
+    before_dot = (0 == dot) ? "0" : s.substr(0, dot);
     after_dot = s.substr(dot + 1);
   } else {
     before_dot = s;
     after_dot = "0";
   }
+  const bool is_negative = before_dot.find_first_of('-', 0) != std::string::npos;
+  const int64_t sign = is_negative ? -1 : 1;
   int64_t result;
-  result = std::stoll(before_dot);
+  result = std::abs(std::stoll(before_dot));
   int64_t fraction = 0;
   if (!after_dot.empty())
     fraction = std::stoll(after_dot);
@@ -88,7 +90,7 @@ int64_t parse_numeric(const std::string& s, SQLTypeInfo& ti) {
     result -= fraction;
   else
     result += fraction;
-  return result;
+  return result * sign;
 }
 
 // had to port timegm because the one on MacOS is horrendously slow.

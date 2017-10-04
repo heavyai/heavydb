@@ -17,9 +17,7 @@
 #include "QueryRunner.h"
 
 #include "../Parser/parser.h"
-#ifdef ENABLE_ARROW_CONVERTER
 #include "../QueryEngine/ArrowResultSet.h"
-#endif  // ENABLE_ARROW_CONVERTER
 #include "../SqliteConnector/SqliteConnector.h"
 #include "../Import/Importer.h"
 
@@ -130,7 +128,6 @@ class SQLiteComparator {
     compare_impl(mapd_results.get(), query_string, device_type, false);
   }
 
-#ifdef ENABLE_ARROW_CONVERTER
   void compare_arrow_output(const std::string& query_string,
                             const std::string& sqlite_query_string,
                             const ExecutorDeviceType device_type) {
@@ -138,7 +135,6 @@ class SQLiteComparator {
     const auto arrow_mapd_results = result_set_arrow_loopback(results);
     compare_impl(arrow_mapd_results.get(), sqlite_query_string, device_type, false);
   }
-#endif  // ENABLE_ARROW_CONVERTER
 
   void compare(const std::string& query_string,
                const std::string& sqlite_query_string,
@@ -349,11 +345,10 @@ void cta(const std::string& query_string, const ExecutorDeviceType device_type) 
   g_sqlite_comparator.compare_timstamp_approx(query_string, device_type);
 }
 
-#ifdef ENABLE_ARROW_CONVERTER
 void c_arrow(const std::string& query_string, const ExecutorDeviceType device_type) {
   g_sqlite_comparator.compare_arrow_output(query_string, query_string, device_type);
 }
-#endif  // ENABLE_ARROW_CONVERTER
+
 }  // namespace
 
 #define SKIP_NO_GPU()                                        \
@@ -3033,6 +3028,8 @@ TEST(Select, Subqueries) {
     EXPECT_THROW(run_simple_agg("SELECT AVG(SELECT x FROM test LIMIT 5) FROM test;", dt), std::runtime_error);
     EXPECT_THROW(run_multiple_agg("SELECT COUNT(*) FROM test WHERE str < (SELECT str FROM test LIMIT 1);", dt),
                  std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("SELECT COUNT(*) FROM test WHERE str IN (SELECT x FROM test GROUP BY x);", dt),
+                 std::runtime_error);
     ASSERT_NEAR(static_cast<double>(2.057),
                 v<double>(run_simple_agg("SELECT AVG(dd) / (SELECT STDDEV(dd) FROM test) FROM test;", dt)),
                 static_cast<double>(0.10));
@@ -3607,7 +3604,6 @@ TEST(Select, DesugarTransform) {
   }
 }
 
-#ifdef ENABLE_ARROW_CONVERTER
 TEST(Select, ArrowOutput) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -3616,7 +3612,6 @@ TEST(Select, ArrowOutput) {
     c_arrow("SELECT null_str, COUNT(*) FROM test GROUP BY null_str;", dt);
   }
 }
-#endif  // ENABLE_ARROW_CONVERTER
 
 TEST(Select, WatchdogTest) {
   g_enable_watchdog = true;

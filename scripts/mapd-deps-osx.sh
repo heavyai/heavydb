@@ -17,8 +17,15 @@ brew install gflags
 brew install glog
 brew install thrift
 brew install cryptopp
-brew install llvm
+brew install llvm@4
 brew install folly
+brew install apache-arrow
+brew install golang
+brew install libpng
+
+brew cask install java
+brew cask install gdal-framework
+brew install maven
 
 # install CUDA (even if you don't have an nvidia GPU - some headers req'd for compilation)
 brew tap caskroom/drivers
@@ -35,8 +42,8 @@ cd bison++-1.21
 # Finally, add a few components of llvm to your path PATH.
 # Not adding full llvm/bin to PATH since brew's `clang` breaks CUDA
 mkdir -p ~/bin/
-for i in clang++ llc llvm-config clang-format; do
-  ln -sf "$(brew --prefix llvm)/bin/$i" ~/bin/$i
+for i in llvm-config; do
+  ln -sf "$(brew --prefix llvm@4)/bin/$i" ~/bin/$i
 done
 export PATH=~/bin:$PATH
 
@@ -49,22 +56,7 @@ PATH=\$HOME/bin:\$PATH
 export DYLD_LIBRARY_PATH PATH
 EOF
 
-brew install nodejs
-brew install golang
-brew install glfw3
-brew install glew
-
-brew install gdal --with-libkml
-
-brew cask install java
-cat >> ~/.bash_profile <<EOF
-# mapd-deps java
-DYLD_LIBRARY_PATH=$(/usr/libexec/java_home)/jre/lib/server:$DYLD_LIBRARY_PATH
-JAVA_HOME=$(/usr/libexec/java_home)
-export DYLD_LIBRARY_PATH JAVA_HOME
-EOF
 source ~/.bash_profile
-brew install maven
 
 #done!
 #git clone mapd2 && cd mapd2 && mkdir build && cd build && ccmake ..

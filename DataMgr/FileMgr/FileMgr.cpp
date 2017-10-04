@@ -23,6 +23,7 @@
 #include "FileMgr.h"
 #include "GlobalFileMgr.h"
 #include "File.h"
+#include "../Shared/measure.h"
 #include <boost/filesystem.hpp>
 #include <boost/lexical_cast.hpp>
 #include <string>
@@ -33,6 +34,7 @@
 #include <unistd.h>
 #include <utility>
 #include <vector>
+#include <future>
 
 #define EPOCH_FILENAME "epoch"
 #define DB_META_FILENAME "dbmeta"
@@ -113,11 +115,15 @@ void FileMgr::init(const size_t num_reader_threads) {
     } else {
       openEpochFile(EPOCH_FILENAME);
     }
-    LOG(INFO) << "Read table metadata, Epoch is " << epoch_ << " for table data at '" << fileMgrBasePath_ << "'";
+
+    auto clock_begin = timer_start();
 
     boost::filesystem::directory_iterator endItr;  // default construction yields past-the-end
     int maxFileId = -1;
+    int fileCount = 0;
+    int threadCount = std::thread::hardware_concurrency();
     std::vector<HeaderInfo> headerVec;
+    std::vector<std::future<std::vector<HeaderInfo>>> file_futures;
     for (boost::filesystem::directory_iterator fileIt(path); fileIt != endItr; ++fileIt) {
       if (boost::filesystem::is_regular_file(fileIt->status())) {
         // note that boost::filesystem leaves preceding dot on
@@ -145,10 +151,27 @@ void FileMgr::init(const size_t num_reader_threads) {
           size_t numPages = fileSize / pageSize;
 
           VLOG(1) << "File id: " << fileId << " Page size: " << pageSize << " Num pages: " << numPages;
-          openExistingFile(filePath, fileId, pageSize, numPages, headerVec);
+
+          file_futures.emplace_back(std::async(std::launch::async, [filePath, fileId, pageSize, numPages, this] {
+            std::vector<HeaderInfo> tempHeaderVec;
+            openExistingFile(filePath, fileId, pageSize, numPages, tempHeaderVec);
+            return tempHeaderVec;
+          }));
+          fileCount++;
+          if (fileCount % threadCount == 0) {
+            processFileFutures(file_futures, headerVec);
+          }
         }
       }
     }
+
+    if (file_futures.size() > 0) {
+      processFileFutures(file_futures, headerVec);
+    }
+    int64_t queue_time_ms = timer_stop(clock_begin);
+
+    LOG(INFO) << "Completed Reading table's file metadata, Elasped time : " << queue_time_ms << "ms Epoch: " << epoch_
+              << " files read: " << fileCount << " table location: '" << fileMgrBasePath_ << "'";
 
     /* Sort headerVec so that all HeaderInfos
      * from a chunk will be grouped together
@@ -221,6 +244,19 @@ void FileMgr::init(const size_t num_reader_threads) {
   }
 }
 
+void FileMgr::processFileFutures(std::vector<std::future<std::vector<HeaderInfo>>>& file_futures,
+                                 std::vector<HeaderInfo>& headerVec) {
+  for (auto& file_future : file_futures) {
+    file_future.wait();
+  }
+  // concatenate the vectors after thread completes
+  for (auto& file_future : file_futures) {
+    auto tempHeaderVec = file_future.get();
+    headerVec.insert(headerVec.end(), tempHeaderVec.begin(), tempHeaderVec.end());
+  }
+  file_futures.clear();
+}
+
 void FileMgr::init(const std::string dataPathToConvertFrom) {
   int converted_data_epoch = 0;
   boost::filesystem::path path(dataPathToConvertFrom);
@@ -238,7 +274,10 @@ void FileMgr::init(const std::string dataPathToConvertFrom) {
 
     boost::filesystem::directory_iterator endItr;  // default construction yields past-the-end
     int maxFileId = -1;
+    int fileCount = 0;
+    int threadCount = std::thread::hardware_concurrency();
     std::vector<HeaderInfo> headerVec;
+    std::vector<std::future<std::vector<HeaderInfo>>> file_futures;
     for (boost::filesystem::directory_iterator fileIt(path); fileIt != endItr; ++fileIt) {
       if (boost::filesystem::is_regular_file(fileIt->status())) {
         // note that boost::filesystem leaves preceding dot on
@@ -264,10 +303,22 @@ void FileMgr::init(const std::string dataPathToConvertFrom) {
           size_t fileSize = boost::filesystem::file_size(filePath);
           assert(fileSize % pageSize == 0);  // should be no partial pages
           size_t numPages = fileSize / pageSize;
-          // std::cout<<"File id: "<<fileId<<" Page size: "<<pageSize<<" Num pages: "<<numPages<<endl;
-          openExistingFile(filePath, fileId, pageSize, numPages, headerVec);
+
+          file_futures.emplace_back(std::async(std::launch::async, [filePath, fileId, pageSize, numPages, this] {
+            std::vector<HeaderInfo> tempHeaderVec;
+            openExistingFile(filePath, fileId, pageSize, numPages, tempHeaderVec);
+            return tempHeaderVec;
+          }));
+          fileCount++;
+          if (fileCount % threadCount) {
+            processFileFutures(file_futures, headerVec);
+          }
         }
       }
+    }
+
+    if (file_futures.size() > 0) {
+      processFileFutures(file_futures, headerVec);
     }
 
     /* Sort headerVec so that all HeaderInfos
@@ -720,7 +771,11 @@ FileInfo* FileMgr::openExistingFile(const std::string& path,
 
   fInfo->openExistingFile(headerVec, epoch_);
   if (fileId >= static_cast<int>(files_.size())) {
-    files_.resize(fileId + 1);
+    mapd_unique_lock<mapd_shared_mutex> write_lock(files_rw_mutex_);
+    // recheck
+    if (fileId >= static_cast<int>(files_.size())) {
+      files_.resize(fileId + 1);
+    }
   }
   files_[fileId] = fInfo;
   fileIndex_.insert(std::pair<size_t, int>(pageSize, fileId));

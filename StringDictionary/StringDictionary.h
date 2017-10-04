@@ -29,6 +29,7 @@
 #include <string>
 #include <tuple>
 #include <vector>
+#include <future>
 
 class StringDictionaryClient;
 
@@ -70,6 +71,8 @@ class StringDictionary {
     uint64_t size : 16;
   };
 
+  void processDictionaryFutures(
+      std::vector<std::future<std::vector<std::pair<unsigned int, unsigned int>>>>& dictionary_futures);
   bool fillRateIsHigh() const noexcept;
   void increaseCapacity() noexcept;
   int32_t getOrAddImpl(const std::string& str, bool recover) noexcept;
@@ -80,6 +83,7 @@ class StringDictionary {
   std::string getStringChecked(const int string_id) const noexcept;
   std::pair<char*, size_t> getStringBytesChecked(const int string_id) const noexcept;
   int32_t computeBucket(const std::string& str, const std::vector<int32_t>& data, const bool unique) const noexcept;
+  int32_t computeUniqueBucketWithHash(const size_t hash, const std::vector<int32_t>& data) const noexcept;
   void appendToStorage(const std::string& str) noexcept;
   std::tuple<char*, size_t, bool> getStringFromStorage(const int string_id) const noexcept;
   void addPayloadCapacity() noexcept;

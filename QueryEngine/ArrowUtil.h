@@ -23,6 +23,7 @@
 #include "Shared/likely.h"
 
 void arrow_status_throw(const ::arrow::Status& s);
+void arrow_status_thrift_throw(const ::arrow::Status& s);
 
 #define ARROW_THROW_NOT_OK(s) \
   do {                        \

@@ -359,8 +359,9 @@ service MapD {
   list<TNodeMemoryInfo> get_memory(1: TSessionId session, 2: string memory_level) throws (1: TMapDException e)
   void clear_cpu_memory(1: TSessionId session) throws (1: TMapDException e)
   void clear_gpu_memory(1: TSessionId session) throws (1: TMapDException e)
-  void rollback_table_epoch (1: TSessionId session 2: i32 db_id 3: i32 table_id 4: i32 new_epoch) throws (1: TMapDException e)
-  # query, render
+  void set_table_epoch (1: TSessionId session 2: i32 db_id 3: i32 table_id 4: i32 new_epoch) throws (1: TMapDException e)
+  i32 get_table_epoch (1: TSessionId session 2: i32 db_id 3: i32 table_id)
+# query, render
   TQueryResult sql_execute(1: TSessionId session, 2: string query 3: bool column_format, 4: string nonce, 5: i32 first_n = -1) throws (1: TMapDException e)
   TDataFrame sql_execute_df(1: TSessionId session, 2: string query 3: TDeviceType device_type 4: i32 device_id = 0 5: i32 first_n = -1) throws (1: TMapDException e)
   TDataFrame sql_execute_gdf(1: TSessionId session, 2: string query 3: i32 device_id = 0, 4: i32 first_n = -1) throws (1: TMapDException e)
@@ -379,6 +380,7 @@ service MapD {
   # import
   void load_table_binary(1: TSessionId session, 2: string table_name, 3: list<TRow> rows) throws (1: TMapDException e)
   void load_table_binary_columnar(1: TSessionId session, 2: string table_name, 3: list<TColumn> cols) throws (1: TMapDException e)
+  void load_table_binary_arrow(1: TSessionId session, 2: string table_name, 3: binary arrow_stream) throws (1: TMapDException e)
   void load_table(1: TSessionId session, 2: string table_name, 3: list<TStringRow> rows) throws (1: TMapDException e)
   TDetectResult detect_column_types(1: TSessionId session, 2: string file_name, 3: TCopyParams copy_params) throws (1: TMapDException e)
   void create_table(1: TSessionId session, 2: string table_name, 3: TRowDescriptor row_desc, 4: TTableType table_type=TTableType.DELIMITED) throws (1: TMapDException e)

@@ -90,9 +90,11 @@
 #include <fcntl.h>
 #include <regex>
 
-#ifdef ENABLE_ARROW_CONVERTER
-#include "arrow/buffer.h"
-#endif  // ENABLE_ARROW_CONVERTER
+#include <arrow/api.h>
+#include <arrow/io/api.h>
+#include <arrow/ipc/api.h>
+
+#include "QueryEngine/ArrowUtil.h"
 
 #define INVALID_SESSION_ID ""
 
@@ -272,13 +274,12 @@ void MapDHandler::connectImpl(TSessionId& session,
   Privileges privs;
   privs.insert_ = true;
   privs.select_ = false;
-  if (!access_priv_check_) {  // proceed with old style access priv check for DB only
-    if (!sys_cat_->checkPrivileges(user_meta, db_meta, privs)) {
-      TMapDException ex;
-      ex.error_msg = std::string("User ") + user + " is not authorized to access database " + dbname;
-      LOG(ERROR) << ex.error_msg;
-      throw ex;
-    }
+  // use old style check for DB object level privs code only to check user access to the database
+  if (!sys_cat_->checkPrivileges(user_meta, db_meta, privs)) {
+    TMapDException ex;
+    ex.error_msg = std::string("User ") + user + " is not authorized to access database " + dbname;
+    LOG(ERROR) << ex.error_msg;
+    throw ex;
   }
   session = INVALID_SESSION_ID;
   while (true) {
@@ -294,11 +295,13 @@ void MapDHandler::connectImpl(TSessionId& session,
     cat_map_[dbname].reset(cat);
     sessions_[session].reset(
         new Catalog_Namespace::SessionInfo(cat_map_[dbname], user_meta, executor_device_type_, session));
-    const auto start_epoch_session_info_ptr = sessions_[session];
+    if (dbname == MAPD_SYSTEM_DB) {
+      auto mapd_session_ptr = sessions_[session];
+      mapd_session_ptr->setSysCatalog(static_cast<Catalog_Namespace::SysCatalog*>(cat));
+    }
   } else {
     sessions_[session].reset(
         new Catalog_Namespace::SessionInfo(cat_it->second, user_meta, executor_device_type_, session));
-    const auto start_epoch_session_info_ptr = sessions_[session];
   }
   if (!super_user_rights_) {  // no need to connect to leaf_aggregator_ at this time while doing warmup
     if (leaf_aggregator_.leafCount() > 0) {
@@ -533,7 +536,6 @@ void MapDHandler::sql_execute_df(TDataFrame& _return,
                                  const TDeviceType::type device_type,
                                  const int32_t device_id,
                                  const int32_t first_n) {
-#ifdef ENABLE_ARROW_CONVERTER
   const auto session_info = MapDHandler::get_session(session);
   int64_t execution_time_ms = 0;
   if (device_type == TDeviceType::GPU) {
@@ -594,7 +596,6 @@ void MapDHandler::sql_execute_df(TDataFrame& _return,
     throw ex;
   });
   LOG(INFO) << "Total: " << total_time_ms << " (ms), Execution: " << execution_time_ms << " (ms)";
-#endif  // ENABLE_ARROW_CONVERTER
 }
 
 void MapDHandler::sql_execute_gdf(TDataFrame& _return,
@@ -602,9 +603,7 @@ void MapDHandler::sql_execute_gdf(TDataFrame& _return,
                                   const std::string& query_str,
                                   const int32_t device_id,
                                   const int32_t first_n) {
-#ifdef ENABLE_ARROW_CONVERTER
   sql_execute_df(_return, session, query_str, TDeviceType::GPU, device_id, first_n);
-#endif
 }
 
 namespace {
@@ -1015,16 +1014,19 @@ void MapDHandler::load_table_binary(const TSessionId& session,
       for (size_t col_idx_to_pop = 0; col_idx_to_pop < col_idx; ++col_idx_to_pop) {
         import_buffers[col_idx_to_pop]->pop_value();
       }
-      LOG(ERROR) << "Input exception thrown: " << e.what() << ". Row discarded, issue at column : " << (col_idx + 1) << " data :" << row;
+      LOG(ERROR) << "Input exception thrown: " << e.what() << ". Row discarded, issue at column : " << (col_idx + 1)
+                 << " data :" << row;
     }
   }
   loader->load(import_buffers, rows.size());
 }
 
-void MapDHandler::load_table_binary_columnar(const TSessionId& session,
-                                             const std::string& table_name,
-                                             const std::vector<TColumn>& cols) {
-  check_read_only("load_table_binary_columnar");
+void MapDHandler::prepare_columnar_loader(
+    const TSessionId& session,
+    const std::string& table_name,
+    size_t num_cols,
+    std::unique_ptr<Importer_NS::Loader>* loader,
+    std::vector<std::unique_ptr<Importer_NS::TypedImportBuffer>>* import_buffers) {
   const auto session_info = get_session(session);
   auto& cat = session_info.get_catalog();
   if (g_cluster && !leaf_aggregator_.leafCount()) {
@@ -1039,30 +1041,39 @@ void MapDHandler::load_table_binary_columnar(const TSessionId& session,
     throw ex;
   }
   check_table_load_privileges(session, table_name);
-  std::unique_ptr<Importer_NS::Loader> loader;
   if (leaf_aggregator_.leafCount() > 0) {
-    loader.reset(new DistributedLoader(session_info, td, &leaf_aggregator_));
+    loader->reset(new DistributedLoader(session_info, td, &leaf_aggregator_));
   } else {
-    loader.reset(new Importer_NS::Loader(cat, td));
+    loader->reset(new Importer_NS::Loader(cat, td));
   }
   // TODO(andrew): nColumns should be number of non-virtual/non-system columns.
   //               Subtracting 1 (rowid) until TableDescriptor is updated.
-  if (cols.size() != static_cast<size_t>(td->nColumns) - 1 || cols.size() < 1) {
+  if (num_cols != static_cast<size_t>(td->nColumns) - 1 || num_cols < 1) {
     TMapDException ex;
     ex.error_msg = "Wrong number of columns to load into Table " + table_name;
     LOG(ERROR) << ex.error_msg;
     throw ex;
   }
-  auto col_descs = loader->get_column_descs();
-  std::vector<std::unique_ptr<Importer_NS::TypedImportBuffer>> import_buffers;
+  auto col_descs = (*loader)->get_column_descs();
   for (auto cd : col_descs) {
-    import_buffers.push_back(std::unique_ptr<Importer_NS::TypedImportBuffer>(
-        new Importer_NS::TypedImportBuffer(cd, loader->get_string_dict(cd))));
+    import_buffers->push_back(std::unique_ptr<Importer_NS::TypedImportBuffer>(
+        new Importer_NS::TypedImportBuffer(cd, (*loader)->get_string_dict(cd))));
   }
+}
+
+void MapDHandler::load_table_binary_columnar(const TSessionId& session,
+                                             const std::string& table_name,
+                                             const std::vector<TColumn>& cols) {
+  check_read_only("load_table_binary_columnar");
+
+  std::unique_ptr<Importer_NS::Loader> loader;
+  std::vector<std::unique_ptr<Importer_NS::TypedImportBuffer>> import_buffers;
+  prepare_columnar_loader(session, table_name, cols.size(), &loader, &import_buffers);
+
   size_t numRows = 0;
   size_t col_idx = 0;
   try {
-    for (auto cd : col_descs) {
+    for (auto cd : loader->get_column_descs()) {
       numRows = import_buffers[col_idx]->add_values(cd, cols[col_idx]);
       col_idx++;
     }
@@ -1070,6 +1081,90 @@ void MapDHandler::load_table_binary_columnar(const TSessionId& session,
     LOG(ERROR) << "Input exception thrown: " << e.what() << ". Issue at column : " << (col_idx + 1)
                << ". Import aborted";
     // TODO(tmostak): Go row-wise on binary columnar import to be consistent with our other import paths
+  }
+  loader->load(import_buffers, numRows);
+}
+
+using RecordBatchVector = std::vector<std::shared_ptr<arrow::RecordBatch>>;
+
+#define ARROW_THRIFT_THROW_NOT_OK(s) \
+  do {                               \
+    ::arrow::Status _s = (s);        \
+    if (UNLIKELY(!_s.ok())) {        \
+      TMapDException ex;             \
+      ex.error_msg = _s.ToString();  \
+      LOG(ERROR) << s.ToString();    \
+      throw ex;                      \
+    }                                \
+  } while (0)
+
+namespace {
+
+RecordBatchVector loadArrowStream(const std::string& stream) {
+  RecordBatchVector batches;
+  try {
+    // TODO(wesm): Make this simpler in general, see ARROW-1600
+    auto stream_buffer = std::make_shared<arrow::Buffer>(reinterpret_cast<const uint8_t*>(stream.c_str()),
+                                                         static_cast<int64_t>(stream.size()));
+
+    arrow::io::BufferReader buf_reader(stream_buffer);
+    std::shared_ptr<arrow::RecordBatchReader> batch_reader;
+    ARROW_THRIFT_THROW_NOT_OK(arrow::ipc::RecordBatchStreamReader::Open(&buf_reader, &batch_reader));
+
+    while (true) {
+      std::shared_ptr<arrow::RecordBatch> batch;
+      // Read batch (zero-copy) from the stream
+      ARROW_THRIFT_THROW_NOT_OK(batch_reader->ReadNext(&batch));
+      if (batch == nullptr) {
+        break;
+      }
+      batches.emplace_back(std::move(batch));
+    }
+  } catch (const std::exception& e) {
+    LOG(ERROR) << "Error parsing Arrow stream: " << e.what() << ". Import aborted";
+  }
+  return batches;
+}
+
+}  // namespace
+
+void MapDHandler::load_table_binary_arrow(const TSessionId& session,
+                                          const std::string& table_name,
+                                          const std::string& arrow_stream) {
+  check_read_only("load_table_binary_arrow");
+
+  RecordBatchVector batches = loadArrowStream(arrow_stream);
+
+  // Assuming have one batch for now
+  if (batches.size() != 1) {
+    std::string msg = "Expected a single Arrow record batch. Import aborted";
+    LOG(ERROR) << msg;
+    TMapDException ex;
+    ex.error_msg = msg;
+    throw ex;
+  }
+
+  std::shared_ptr<arrow::RecordBatch> batch = batches[0];
+
+  std::unique_ptr<Importer_NS::Loader> loader;
+  std::vector<std::unique_ptr<Importer_NS::TypedImportBuffer>> import_buffers;
+  prepare_columnar_loader(session, table_name, static_cast<size_t>(batch->num_columns()), &loader, &import_buffers);
+
+  size_t numRows = 0;
+  size_t col_idx = 0;
+  try {
+    for (auto cd : loader->get_column_descs()) {
+      numRows = import_buffers[col_idx]->add_arrow_values(cd, *batch->column(col_idx));
+      col_idx++;
+    }
+  } catch (const std::exception& e) {
+    LOG(ERROR) << "Input exception thrown: " << e.what() << ". Issue at column : " << (col_idx + 1)
+               << ". Import aborted";
+    TMapDException ex;
+    ex.error_msg = std::string("Exception: ") + e.what();
+    throw ex;
+    // TODO(tmostak): Go row-wise on binary columnar import to be consistent
+    // with our other import paths
   }
   loader->load(import_buffers, numRows);
 }
@@ -1841,7 +1936,6 @@ void MapDHandler::execute_rel_alg(TQueryResult& _return,
   }
 }
 
-#ifdef ENABLE_ARROW_CONVERTER
 void MapDHandler::execute_rel_alg_df(TDataFrame& _return,
                                      const std::string& query_ra,
                                      const Catalog_Namespace::SessionInfo& session_info,
@@ -1871,7 +1965,6 @@ void MapDHandler::execute_rel_alg_df(TDataFrame& _return,
   _return.df_handle = std::string(copy.df_handle.begin(), copy.df_handle.end());
   _return.df_size = copy.df_size;
 }
-#endif  // ENABLE_ARROW_CONVERTER
 
 void MapDHandler::execute_root_plan(TQueryResult& _return,
                                     const Planner::RootPlan* root_plan,
@@ -1917,7 +2010,6 @@ std::vector<TargetMetaInfo> MapDHandler::getTargetMetaInfo(
   return result;
 }
 
-#ifdef ENABLE_ARROW_CONVERTER
 std::vector<std::string> MapDHandler::getTargetNames(
     const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& targets) const {
   std::vector<std::string> names;
@@ -1936,7 +2028,6 @@ std::vector<std::string> MapDHandler::getTargetNames(const std::vector<TargetMet
   }
   return names;
 }
-#endif
 
 TRowDescriptor MapDHandler::convert_target_metainfo(const std::vector<TargetMetaInfo>& targets) const {
   TRowDescriptor row_desc;
@@ -2417,10 +2508,7 @@ void MapDHandler::broadcast_serialized_rows(const std::string& serialized_rows,
 }
 
 // check and reset epoch if a request has been made
-void MapDHandler::rollback_table_epoch(const TSessionId& session,
-                                       const int db_id,
-                                       const int table_id,
-                                       const int new_epoch) {
+void MapDHandler::set_table_epoch(const TSessionId& session, const int db_id, const int table_id, const int new_epoch) {
   const auto session_info = get_session(session);
   if (!session_info.get_currentUser().isSuper) {
     throw std::runtime_error("Only superuser can rollback_table_epoch");
@@ -2434,7 +2522,13 @@ void MapDHandler::rollback_table_epoch(const TSessionId& session,
     LOG(INFO) << "Removing in memory artifacts after rollback of table epoch";
     cat.removeChunks(table_id);
   }
+  clear_gpu_memory(session);
+  clear_cpu_memory(session);
 
-  LOG(INFO) << "Rollback table epoch db:" << db_id << " Table ID  " << table_id << " back to new epoch " << new_epoch;
-  data_mgr_->updateTableEpoch(db_id, table_id, new_epoch);
+  LOG(INFO) << "Set table epoch db:" << db_id << " Table ID  " << table_id << " back to new epoch " << new_epoch;
+  data_mgr_->setTableEpoch(db_id, table_id, new_epoch);
+}
+
+int32_t MapDHandler::get_table_epoch(const TSessionId& session, const int32_t db_id, const int32_t table_id) {
+  return data_mgr_->getTableEpoch(db_id, table_id);
 }

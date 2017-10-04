@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#ifdef ENABLE_ARROW_CONVERTER
 #include "ArrowResultSet.h"
 #include "ArrowUtil.h"
 #include "RelAlgExecutionDescriptor.h"
@@ -55,7 +54,7 @@ ArrowResultSet::ArrowResultSet(const std::shared_ptr<arrow::RecordBatch>& record
     std::shared_ptr<arrow::Field> field = schema->field(i);
     SQLTypeInfo type_info = type_from_arrow_field(*schema->field(i));
     column_metainfo_.emplace_back(field->name(), type_info);
-    columns_.emplace_back(std::move(record_batch->column(i)));
+    columns_.emplace_back(record_batch->column(i));
   }
 }
 
@@ -171,5 +170,3 @@ std::unique_ptr<ArrowResultSet> result_set_arrow_loopback(const ExecutionResult&
 
   return boost::make_unique<ArrowResultSet>(batch);
 }
-
-#endif  // ENABLE_ARROW_CONVERTER

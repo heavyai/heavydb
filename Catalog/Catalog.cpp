@@ -34,6 +34,7 @@
 #include "../Fragmenter/InsertOrderFragmenter.h"
 #include "../Parser/ParserNode.h"
 #include "../Shared/StringTransform.h"
+#include "../Shared/measure.h"
 #include "../StringDictionary/StringDictionaryClient.h"
 
 using std::runtime_error;
@@ -50,6 +51,7 @@ bool g_aggregator{false};
 namespace Catalog_Namespace {
 
 const std::string Catalog::physicalTableNameTag_("_shard_#");
+Catalog_Namespace::SysCatalog* mapd_sys_cat(nullptr);
 
 SysCatalog::~SysCatalog() {
   std::lock_guard<std::mutex> lock(cat_mutex_);
@@ -322,12 +324,12 @@ void SysCatalog::createDefaultMapdRoles() {
   populateDBObjectKey(dbObject, *this);
 
   // create default non suser role
-  if (!getMetadataForRole(MAPD_DEFAULT_USER_ROLE)) {
+  if (!mapd_sys_cat->getMetadataForRole(MAPD_DEFAULT_USER_ROLE)) {
     createRole(MAPD_DEFAULT_USER_ROLE);
     grantDBObjectPrivileges(MAPD_DEFAULT_USER_ROLE, dbObject, *this);
   }
   // create default suser role
-  if (!getMetadataForRole(MAPD_DEFAULT_ROOT_USER_ROLE)) {
+  if (!mapd_sys_cat->getMetadataForRole(MAPD_DEFAULT_ROOT_USER_ROLE)) {
     createRole(MAPD_DEFAULT_ROOT_USER_ROLE);
     dbObject.setPrivileges({true, true, true, true});
     grantDBObjectPrivileges(MAPD_DEFAULT_ROOT_USER_ROLE, dbObject, *this);
@@ -407,7 +409,7 @@ void SysCatalog::populateDBObjectKey(DBObject& object, const Catalog_Namespace::
   switch (object.getType()) {
     case (DatabaseDBObjectType): {
       Catalog_Namespace::DBMetadata db;
-      if (!getMetadataForDB(object.getName(), db)) {
+      if (!mapd_sys_cat->getMetadataForDB(object.getName(), db)) {
         throw std::runtime_error("Failure generating DB object key. Database " + object.getName() + " does not exist.");
       }
       objectKey = {static_cast<int32_t>(DatabaseDBObjectType), db.dbId};
@@ -436,9 +438,9 @@ void SysCatalog::populateDBObjectKey(DBObject& object, const Catalog_Namespace::
 void SysCatalog::createDBObject(const UserMetadata& user,
                                 const std::string& objectName,
                                 const Catalog_Namespace::Catalog& catalog) {
-  Role* user_rl = getMetadataForUserRole(user.userId);
+  Role* user_rl = mapd_sys_cat->getMetadataForUserRole(user.userId);
   if (!user_rl) {
-    if (!getMetadataForRole(MAPD_DEFAULT_ROOT_USER_ROLE)) {
+    if (!mapd_sys_cat->getMetadataForRole(MAPD_DEFAULT_ROOT_USER_ROLE)) {
       createDefaultMapdRoles();
     }
     if (user.isSuper) {
@@ -446,7 +448,7 @@ void SysCatalog::createDBObject(const UserMetadata& user,
     } else {
       grantRole(MAPD_DEFAULT_USER_ROLE, user.userName);
     }
-    user_rl = getMetadataForUserRole(user.userId);
+    user_rl = mapd_sys_cat->getMetadataForUserRole(user.userId);
   }
   DBObject* object = new DBObject(objectName, TableDBObjectType);
   populateDBObjectKey(*object, catalog);
@@ -465,7 +467,7 @@ void SysCatalog::grantDBObjectPrivileges(const std::string& roleName,
     throw runtime_error("Request to grant privileges to " + roleName +
                         " failed because mapd root user has all privileges by default.");
   }
-  Role* rl = getMetadataForRole(roleName);
+  Role* rl = mapd_sys_cat->getMetadataForRole(roleName);
   if (!rl) {
     throw runtime_error("Request to grant privileges to " + roleName +
                         " failed because role or user with this name does not exist.");
@@ -514,7 +516,7 @@ void SysCatalog::revokeDBObjectPrivileges(const std::string& roleName,
     throw runtime_error("Request to revoke privileges from " + roleName +
                         " failed because privileges can not be revoked from mapd root user.");
   }
-  Role* rl = getMetadataForRole(roleName);
+  Role* rl = mapd_sys_cat->getMetadataForRole(roleName);
   if (!rl) {
     throw runtime_error("Request to revoke privileges from " + roleName +
                         " failed because role or user with this name does not exist.");
@@ -559,7 +561,7 @@ bool SysCatalog::verifyDBObjectOwnership(const UserMetadata& user,
                                          DBObject object,
                                          const Catalog_Namespace::Catalog& catalog) {
   if (object.getType() == TableDBObjectType) {
-    Role* rl = getMetadataForUserRole(user.userId);
+    Role* rl = mapd_sys_cat->getMetadataForUserRole(user.userId);
     if (rl) {
       populateDBObjectKey(object, catalog);
       if (rl->findDbObject(object.getObjectKey()) &&
@@ -578,7 +580,7 @@ void SysCatalog::getDBObjectPrivileges(const std::string& roleName,
     throw runtime_error("Request to show privileges from " + roleName +
                         " failed because mapd root user has all privileges by default.");
   }
-  Role* rl = getMetadataForRole(roleName);
+  Role* rl = mapd_sys_cat->getMetadataForRole(roleName);
   if (!rl) {
     throw runtime_error("Request to show privileges for " + roleName +
                         " failed because role or user with this name does not exist.");
@@ -751,9 +753,9 @@ bool SysCatalog::checkPrivileges(const UserMetadata& user, std::vector<DBObject>
   if (user.isSuper) {
     return true;
   }
-  Role* user_rl = getMetadataForUserRole(user.userId);
+  Role* user_rl = mapd_sys_cat->getMetadataForUserRole(user.userId);
   if (!user_rl) {
-    if (!getMetadataForRole(MAPD_DEFAULT_ROOT_USER_ROLE)) {
+    if (!mapd_sys_cat->getMetadataForRole(MAPD_DEFAULT_ROOT_USER_ROLE)) {
       createDefaultMapdRoles();
     }
     if (user.isSuper) {
@@ -761,7 +763,7 @@ bool SysCatalog::checkPrivileges(const UserMetadata& user, std::vector<DBObject>
     } else {
       grantRole(MAPD_DEFAULT_USER_ROLE, user.userName);
     }
-    user_rl = getMetadataForUserRole(user.userId);
+    user_rl = mapd_sys_cat->getMetadataForUserRole(user.userId);
   }
   for (std::vector<DBObject>::iterator objectIt = privObjects.begin(); objectIt != privObjects.end(); ++objectIt) {
     if (!user_rl->checkPrivileges(*objectIt)) {
@@ -773,7 +775,7 @@ bool SysCatalog::checkPrivileges(const UserMetadata& user, std::vector<DBObject>
 
 bool SysCatalog::checkPrivileges(const std::string& userName, std::vector<DBObject>& privObjects) {
   UserMetadata user;
-  if (!getMetadataForUser(userName, user)) {
+  if (!mapd_sys_cat->getMetadataForUser(userName, user)) {
     throw runtime_error("Request to check privileges for user " + userName +
                         " failed because user with this name does not exist.");
   }
@@ -1406,24 +1408,27 @@ void Catalog::addLinkToMap(LinkDescriptor& ld) {
 }
 
 void Catalog::instantiateFragmenter(TableDescriptor* td) const {
-  // instanciate table fragmenter upon first use
-  // assume only insert order fragmenter is supported
-  assert(td->fragType == Fragmenter_Namespace::FragmenterType::INSERT_ORDER);
-  vector<Chunk> chunkVec;
-  list<const ColumnDescriptor*> columnDescs;
-  getAllColumnMetadataForTable(td, columnDescs, true, false);
-  Chunk::translateColumnDescriptorsToChunkVec(columnDescs, chunkVec);
-  ChunkKey chunkKeyPrefix = {currentDB_.dbId, td->tableId};
-  td->fragmenter = new InsertOrderFragmenter(chunkKeyPrefix,
-                                             chunkVec,
-                                             dataMgr_.get(),
-                                             td->tableId,
-                                             td->shard,
-                                             td->maxFragRows,
-                                             td->maxChunkSize,
-                                             td->fragPageSize,
-                                             td->maxRows,
-                                             td->persistenceLevel);
+  auto time_ms = measure<>::execution([&]() {
+    // instanciate table fragmenter upon first use
+    // assume only insert order fragmenter is supported
+    assert(td->fragType == Fragmenter_Namespace::FragmenterType::INSERT_ORDER);
+    vector<Chunk> chunkVec;
+    list<const ColumnDescriptor*> columnDescs;
+    getAllColumnMetadataForTable(td, columnDescs, true, false);
+    Chunk::translateColumnDescriptorsToChunkVec(columnDescs, chunkVec);
+    ChunkKey chunkKeyPrefix = {currentDB_.dbId, td->tableId};
+    td->fragmenter = new InsertOrderFragmenter(chunkKeyPrefix,
+                                               chunkVec,
+                                               dataMgr_.get(),
+                                               td->tableId,
+                                               td->shard,
+                                               td->maxFragRows,
+                                               td->maxChunkSize,
+                                               td->fragPageSize,
+                                               td->maxRows,
+                                               td->persistenceLevel);
+  });
+  LOG(INFO) << "Instantiating Fragmenter for table " << td->tableName << " took " << time_ms << "ms";
 }
 
 const TableDescriptor* Catalog::getMetadataForTable(const string& tableName) const {
@@ -1459,14 +1464,17 @@ const DictDescriptor* Catalog::getMetadataForDict(int dictId, bool loadDict) con
   if (loadDict) {
     std::lock_guard<std::mutex> lock(cat_mutex_);
     if (!dd->stringDict) {
-      if (string_dict_hosts_.empty()) {
-        if (dd->dictIsTemp)
-          dd->stringDict = std::make_shared<StringDictionary>(dd->dictFolderPath, true, true);
-        else
-          dd->stringDict = std::make_shared<StringDictionary>(dd->dictFolderPath, false, true);
-      } else {
-        dd->stringDict = std::make_shared<StringDictionary>(string_dict_hosts_.front(), dd->dictId);
-      }
+      auto time_ms = measure<>::execution([&]() {
+        if (string_dict_hosts_.empty()) {
+          if (dd->dictIsTemp)
+            dd->stringDict = std::make_shared<StringDictionary>(dd->dictFolderPath, true, true);
+          else
+            dd->stringDict = std::make_shared<StringDictionary>(dd->dictFolderPath, false, true);
+        } else {
+          dd->stringDict = std::make_shared<StringDictionary>(string_dict_hosts_.front(), dd->dictId);
+        }
+      });
+      LOG(INFO) << "Time to load Dictionary " << dictId << " was " << time_ms << "ms";
     }
   }
   return dd.get();
@@ -1890,9 +1898,6 @@ void Catalog::removeChunks(const int table_id) {
     delete td->fragmenter;
     tableDescIt->second->fragmenter = nullptr;  // get around const-ness
   }
-  ChunkKey chunkKeyPrefix = {currentDB_.dbId, table_id};
-  // assuming deleteChunksWithPrefix is atomic
-  dataMgr_->deleteChunksWithPrefix(chunkKeyPrefix);
 }
 
 void Catalog::dropTable(const TableDescriptor* td) {
@@ -2157,6 +2162,14 @@ bool SessionInfo::checkDBAccessPrivileges(std::vector<bool> privs) const {
     privObjects.push_back(object);
     return sys_cat.checkPrivileges(get_currentUser(), privObjects);
   }
+}
+
+void SessionInfo::setSysCatalog(Catalog_Namespace::SysCatalog* sys_cat) {
+  mapd_sys_cat = sys_cat;
+}
+
+Catalog_Namespace::SysCatalog* SessionInfo::getSysCatalog() const {
+  return mapd_sys_cat;
 }
 
 }  // Catalog_Namespace

@@ -928,7 +928,7 @@ int BaselineJoinHashTable::getInnerTableRteIdx() const noexcept {
       normalize_column_pairs(condition_.get(), *executor_->getCatalog(), executor_->getTemporaryTables());
   CHECK(!inner_outer_pairs.empty());
   const auto first_inner_col = inner_outer_pairs.front().first;
-  return first_inner_col->get_table_id();
+  return first_inner_col->get_rte_idx();
 }
 
 JoinHashTableInterface::HashType BaselineJoinHashTable::getHashType() const noexcept {

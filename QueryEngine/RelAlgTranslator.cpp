@@ -423,6 +423,12 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInOper(const RexOpera
   auto ti = lhs->get_type_info();
   auto result = rex_subquery->getExecutionResult();
   auto& row_set = result->getRows();
+  CHECK_EQ(size_t(1), row_set->colCount());
+  const auto& rhs_ti = row_set->getColType(0);
+  if (rhs_ti.get_type() != ti.get_type()) {
+    throw std::runtime_error("The two sides of the IN operator must have the same type; found " + ti.get_type_name() +
+                             " and " + rhs_ti.get_type_name());
+  }
   row_set->moveToBegin();
   if (row_set->entryCount() > 10000) {
     std::shared_ptr<Analyzer::Expr> expr;

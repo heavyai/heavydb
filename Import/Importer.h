@@ -47,6 +47,12 @@
 class TDatum;
 class TColumn;
 
+namespace arrow {
+
+class Array;
+
+}  // namespace arrow
+
 namespace Importer_NS {
 
 enum class TableType { DELIMITED, POLYGON };
@@ -419,6 +425,9 @@ class TypedImportBuffer : boost::noncopyable {
   }
 
   size_t add_values(const ColumnDescriptor* cd, const TColumn& data);
+
+  size_t add_arrow_values(const ColumnDescriptor* cd, const arrow::Array& data);
+
   void add_value(const ColumnDescriptor* cd, const std::string& val, const bool is_null, const CopyParams& copy_params);
   void add_value(const ColumnDescriptor* cd, const TDatum& val, const bool is_null);
   void pop_value();
@@ -468,6 +477,7 @@ class Loader {
   virtual bool loadImpl(const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers,
                         size_t row_count,
                         bool checkpoint);
+  virtual void checkpoint();
 
  protected:
   const Catalog_Namespace::Catalog& catalog;

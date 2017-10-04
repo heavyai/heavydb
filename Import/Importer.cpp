@@ -49,6 +49,9 @@
 #include "gen-cpp/MapD.h"
 #include <vector>
 #include <iostream>
+
+#include <arrow/api.h>
+
 using std::ostream;
 
 namespace Importer_NS {
@@ -547,6 +550,274 @@ void TypedImportBuffer::pop_value() {
     default:
       CHECK(false);
   }
+}
+
+namespace {
+
+using namespace arrow;
+
+#define ARROW_THROW_IF(cond, message)  \
+  if ((cond)) {                        \
+    LOG(ERROR) << message;             \
+    throw std::runtime_error(message); \
+  }
+
+template <typename ArrayType, typename T>
+inline void append_arrow_primitive(const Array& values, const T null_sentinel, std::vector<T>* buffer) {
+  const auto& typed_values = static_cast<const ArrayType&>(values);
+  buffer->reserve(typed_values.length());
+  const T* raw_values = typed_values.raw_values();
+  if (typed_values.null_count() > 0) {
+    for (int64_t i = 0; i < typed_values.length(); i++) {
+      if (typed_values.IsNull(i)) {
+        buffer->push_back(null_sentinel);
+      } else {
+        buffer->push_back(raw_values[i]);
+      }
+    }
+  } else {
+    for (int64_t i = 0; i < typed_values.length(); i++) {
+      buffer->push_back(raw_values[i]);
+    }
+  }
+}
+
+void append_arrow_boolean(const ColumnDescriptor* cd, const Array& values, std::vector<int8_t>* buffer) {
+  ARROW_THROW_IF(values.type_id() != Type::BOOL, "Expected boolean col");
+  const int8_t null_sentinel = inline_fixed_encoding_null_val(cd->columnType);
+  const auto& typed_values = static_cast<const BooleanArray&>(values);
+  buffer->reserve(typed_values.length());
+  for (int64_t i = 0; i < typed_values.length(); i++) {
+    if (typed_values.IsNull(i)) {
+      buffer->push_back(null_sentinel);
+    } else {
+      buffer->push_back(static_cast<int8_t>(typed_values.Value(i)));
+    }
+  }
+}
+
+template <typename ArrowType, typename T>
+void append_arrow_integer(const ColumnDescriptor* cd, const Array& values, std::vector<T>* buffer) {
+  using ArrayType = typename TypeTraits<ArrowType>::ArrayType;
+  const T null_sentinel = inline_fixed_encoding_null_val(cd->columnType);
+  append_arrow_primitive<ArrayType, T>(values, null_sentinel, buffer);
+}
+
+void append_arrow_float(const ColumnDescriptor* cd, const Array& values, std::vector<float>* buffer) {
+  ARROW_THROW_IF(values.type_id() != Type::FLOAT, "Expected float col");
+  append_arrow_primitive<FloatArray, float>(values, NULL_FLOAT, buffer);
+}
+
+void append_arrow_double(const ColumnDescriptor* cd, const Array& values, std::vector<double>* buffer) {
+  ARROW_THROW_IF(values.type_id() != Type::DOUBLE, "Expected double col");
+  append_arrow_primitive<DoubleArray, double>(values, NULL_DOUBLE, buffer);
+}
+
+constexpr int64_t kMillisecondsInSecond = 1000L;
+constexpr int64_t kMicrosecondsInSecond = 1000L * 1000L;
+constexpr int64_t kNanosecondsinSecond = 1000L * 1000L * 1000L;
+constexpr int32_t kSecondsInDay = 86400;
+
+void append_arrow_time(const ColumnDescriptor* cd, const Array& values, std::vector<time_t>* buffer) {
+  const time_t null_sentinel = inline_fixed_encoding_null_val(cd->columnType);
+  if (values.type_id() == Type::TIME32) {
+    const auto& typed_values = static_cast<const Time32Array&>(values);
+    const auto& type = static_cast<const Time32Type&>(*values.type());
+
+    buffer->reserve(typed_values.length());
+    const int32_t* raw_values = typed_values.raw_values();
+    const TimeUnit::type unit = type.unit();
+
+    for (int64_t i = 0; i < typed_values.length(); i++) {
+      if (typed_values.IsNull(i)) {
+        buffer->push_back(null_sentinel);
+      } else {
+        switch (unit) {
+          case TimeUnit::SECOND:
+            buffer->push_back(static_cast<time_t>(raw_values[i]));
+            break;
+          case TimeUnit::MILLI:
+            buffer->push_back(static_cast<time_t>(raw_values[i] / kMillisecondsInSecond));
+            break;
+          default:
+            // unreachable code
+            CHECK(false);
+            break;
+        }
+      }
+    }
+  } else if (values.type_id() == Type::TIME64) {
+    const auto& typed_values = static_cast<const Time64Array&>(values);
+    const auto& type = static_cast<const Time64Type&>(*values.type());
+
+    buffer->reserve(typed_values.length());
+    const int64_t* raw_values = typed_values.raw_values();
+    const TimeUnit::type unit = type.unit();
+
+    for (int64_t i = 0; i < typed_values.length(); i++) {
+      if (typed_values.IsNull(i)) {
+        buffer->push_back(null_sentinel);
+      } else {
+        switch (unit) {
+          case TimeUnit::MICRO:
+            buffer->push_back(static_cast<time_t>(raw_values[i] / kMicrosecondsInSecond));
+            break;
+          case TimeUnit::NANO:
+            buffer->push_back(static_cast<time_t>(raw_values[i] / kNanosecondsinSecond));
+            break;
+          default:
+            // unreachable code
+            CHECK(false);
+            break;
+        }
+      }
+    }
+  } else {
+    ARROW_THROW_IF(true, "Column was not time32 or time64");
+  }
+}
+
+void append_arrow_timestamp(const ColumnDescriptor* cd, const Array& values, std::vector<time_t>* buffer) {
+  ARROW_THROW_IF(values.type_id() != Type::TIMESTAMP, "Expected timestamp col");
+
+  const time_t null_sentinel = inline_fixed_encoding_null_val(cd->columnType);
+  const auto& typed_values = static_cast<const TimestampArray&>(values);
+  const auto& type = static_cast<const TimestampType&>(*values.type());
+
+  buffer->reserve(typed_values.length());
+  const int64_t* raw_values = typed_values.raw_values();
+  const TimeUnit::type unit = type.unit();
+
+  for (int64_t i = 0; i < typed_values.length(); i++) {
+    if (typed_values.IsNull(i)) {
+      buffer->push_back(null_sentinel);
+    } else {
+      switch (unit) {
+        case TimeUnit::SECOND:
+          buffer->push_back(static_cast<time_t>(raw_values[i]));
+          break;
+        case TimeUnit::MILLI:
+          buffer->push_back(static_cast<time_t>(raw_values[i] / kMillisecondsInSecond));
+          break;
+        case TimeUnit::MICRO:
+          buffer->push_back(static_cast<time_t>(raw_values[i] / kMicrosecondsInSecond));
+          break;
+        case TimeUnit::NANO:
+          buffer->push_back(static_cast<time_t>(raw_values[i] / kNanosecondsinSecond));
+          break;
+        default:
+          break;
+      }
+    }
+  }
+}
+
+void append_arrow_date(const ColumnDescriptor* cd, const Array& values, std::vector<time_t>* buffer) {
+  const time_t null_sentinel = inline_fixed_encoding_null_val(cd->columnType);
+  if (values.type_id() == Type::DATE32) {
+    const auto& typed_values = static_cast<const Date32Array&>(values);
+
+    buffer->reserve(typed_values.length());
+    const int32_t* raw_values = typed_values.raw_values();
+
+    for (int64_t i = 0; i < typed_values.length(); i++) {
+      if (typed_values.IsNull(i)) {
+        buffer->push_back(null_sentinel);
+      } else {
+        buffer->push_back(static_cast<time_t>(raw_values[i] * kSecondsInDay));
+      }
+    }
+  } else if (values.type_id() == Type::DATE64) {
+    const auto& typed_values = static_cast<const Date64Array&>(values);
+
+    buffer->reserve(typed_values.length());
+    const int64_t* raw_values = typed_values.raw_values();
+
+    // Convert from milliseconds since UNIX epoch
+    for (int64_t i = 0; i < typed_values.length(); i++) {
+      if (typed_values.IsNull(i)) {
+        buffer->push_back(null_sentinel);
+      } else {
+        buffer->push_back(static_cast<time_t>(raw_values[i] / 1000));
+      }
+    }
+  } else {
+    ARROW_THROW_IF(true, "Column was not date32 or date64");
+  }
+}
+
+void append_arrow_binary(const ColumnDescriptor* cd, const Array& values, std::vector<std::string>* buffer) {
+  ARROW_THROW_IF(values.type_id() != Type::BINARY && values.type_id() != Type::STRING, "Expected binary col");
+
+  const auto& typed_values = static_cast<const BinaryArray&>(values);
+  buffer->reserve(typed_values.length());
+
+  const char* bytes;
+  int32_t bytes_length = 0;
+  for (int64_t i = 0; i < typed_values.length(); i++) {
+    if (typed_values.IsNull(i)) {
+      // TODO(wesm): How are nulls handled for strings?
+      buffer->push_back(std::string());
+    } else {
+      bytes = reinterpret_cast<const char*>(typed_values.GetValue(i, &bytes_length));
+      buffer->push_back(std::string(bytes, bytes_length));
+    }
+  }
+}
+
+}  // namespace
+
+size_t TypedImportBuffer::add_arrow_values(const ColumnDescriptor* cd, const arrow::Array& col) {
+  const auto type = cd->columnType.is_decimal() ? decimal_to_int_type(cd->columnType) : cd->columnType.get_type();
+  if (cd->columnType.get_notnull()) {
+    // We can't have any null values for this column; to have them is an error
+    if (col.null_count() > 0) {
+      throw std::runtime_error("NULL not allowed for column " + cd->columnName);
+    }
+  }
+
+  switch (type) {
+    case kBOOLEAN:
+      append_arrow_boolean(cd, col, bool_buffer_);
+      break;
+    case kSMALLINT:
+      ARROW_THROW_IF(col.type_id() != arrow::Type::INT16, "Expected int16 type");
+      append_arrow_integer<arrow::Int16Type, int16_t>(cd, col, smallint_buffer_);
+      break;
+    case kINT:
+      ARROW_THROW_IF(col.type_id() != arrow::Type::INT32, "Expected int32 type");
+      append_arrow_integer<arrow::Int32Type, int32_t>(cd, col, int_buffer_);
+      break;
+    case kBIGINT:
+      ARROW_THROW_IF(col.type_id() != arrow::Type::INT64, "Expected int64 type");
+      append_arrow_integer<arrow::Int64Type, int64_t>(cd, col, bigint_buffer_);
+      break;
+    case kFLOAT:
+      append_arrow_float(cd, col, float_buffer_);
+      break;
+    case kDOUBLE:
+      append_arrow_double(cd, col, double_buffer_);
+      break;
+    case kTEXT:
+    case kVARCHAR:
+    case kCHAR:
+      append_arrow_binary(cd, col, string_buffer_);
+      break;
+    case kTIME:
+      append_arrow_time(cd, col, time_buffer_);
+      break;
+    case kTIMESTAMP:
+      append_arrow_timestamp(cd, col, time_buffer_);
+      break;
+    case kDATE:
+      append_arrow_date(cd, col, time_buffer_);
+      break;
+    case kARRAY:
+      throw std::runtime_error("Arrow array appends not yet supported");
+    default:
+      throw std::runtime_error("Invalid Type");
+  }
+  return col.length();
 }
 
 size_t TypedImportBuffer::add_values(const ColumnDescriptor* cd, const TColumn& col) {
@@ -1622,20 +1893,11 @@ ImportStatus Importer::importDelimited() {
       LOG(ERROR) << "Maximum rows rejected exceeded. Halting load";
       break;
     }
-    if (loader->get_table_desc()->persistenceLevel ==
-        Data_Namespace::MemoryLevel::DISK_LEVEL) {  // only checkpoint disk-resident tables
-      // checkpoint before going again
-      const auto shard_tables = loader->get_catalog().getPhysicalTablesDescriptors(loader->get_table_desc());
-      for (const auto shard_table : shard_tables) {
-        loader->get_catalog().get_dataMgr().checkpoint(loader->get_catalog().get_currentDB().dbId,
-                                                       shard_table->tableId);
-      }
-    }
+    // checkpoint before going again
+    loader->checkpoint();
   }
-  // checkpoint before going again
   if (loader->get_table_desc()->persistenceLevel ==
       Data_Namespace::MemoryLevel::DISK_LEVEL) {  // only checkpoint disk-resident tables
-    // todo MAT we need to review whether this checkpoint process makes sense
     auto ms = measure<>::execution([&]() {
       if (!load_failed) {
         for (auto& p : import_buffers_vec[0]) {
@@ -1645,12 +1907,10 @@ ImportStatus Importer::importDelimited() {
             break;
           }
         }
-        loader->get_catalog().get_dataMgr().checkpoint(loader->get_catalog().get_currentDB().dbId,
-                                                       loader->get_table_desc()->tableId);
       }
     });
     if (debug_timing)
-      LOG(INFO) << "Checkpointing took " << (double)ms / 1000.0 << " Seconds." << std::endl;
+      LOG(INFO) << "Dictionary Checkpointing took " << (double)ms / 1000.0 << " Seconds." << std::endl;
   }
   free(buffer[0]);
   buffer[0] = nullptr;
@@ -1661,6 +1921,16 @@ ImportStatus Importer::importDelimited() {
 
   import_status.load_truncated = load_truncated;
   return import_status;
+}
+
+void Loader::checkpoint() {
+  if (get_table_desc()->persistenceLevel ==
+      Data_Namespace::MemoryLevel::DISK_LEVEL) {  // only checkpoint disk-resident tables
+    const auto shard_tables = get_catalog().getPhysicalTablesDescriptors(get_table_desc());
+    for (const auto shard_table : shard_tables) {
+      get_catalog().get_dataMgr().checkpoint(get_catalog().get_currentDB().dbId, shard_table->tableId);
+    }
+  }
 }
 
 void GDALErrorHandler(CPLErr eErrClass, int err_no, const char* msg) {

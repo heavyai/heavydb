@@ -40,9 +40,8 @@ Fragmenter_Namespace::TableInfo build_table_info(const std::vector<const TableDe
     CHECK(shard_table->fragmenter);
     const auto& shard_metainfo = shard_table->fragmenter->getFragmentsForQuery();
     total_number_of_tuples += shard_metainfo.getPhysicalNumTuples();
-    const auto& shard_fragments = shard_table->fragmenter->getFragmentsForQuery().fragments;
     table_info_all_shards.fragments.insert(
-        table_info_all_shards.fragments.end(), shard_fragments.begin(), shard_fragments.end());
+        table_info_all_shards.fragments.end(), shard_metainfo.fragments.begin(), shard_metainfo.fragments.end());
   }
   table_info_all_shards.setPhysicalNumTuples(total_number_of_tuples);
   return table_info_all_shards;
