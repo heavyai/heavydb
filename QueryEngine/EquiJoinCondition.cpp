@@ -43,7 +43,8 @@ bool can_combine_with(const Analyzer::Expr* crt, const Analyzer::Expr* prev) {
   const auto crt_inner = std::dynamic_pointer_cast<Analyzer::ColumnVar>(remove_cast(crt_bin->get_own_right_operand()));
   const auto prev_inner =
       std::dynamic_pointer_cast<Analyzer::ColumnVar>(remove_cast(prev_bin->get_own_right_operand()));
-  if (!crt_inner || !prev_inner || crt_inner->get_table_id() != prev_inner->get_table_id()) {
+  if (!crt_inner || !prev_inner || crt_inner->get_table_id() != prev_inner->get_table_id() ||
+      crt_inner->get_rte_idx() != prev_inner->get_rte_idx()) {
     return false;
   }
   return true;
