@@ -213,12 +213,13 @@ void collect_table_infos(std::vector<InputTableInfo>& table_infos,
   const auto temporary_tables = executor->getTemporaryTables();
   const auto cat = executor->getCatalog();
   CHECK(cat);
-  std::unordered_map<int, Fragmenter_Namespace::TableInfo*> info_cache;
+  std::unordered_map<int, size_t> info_cache;
   for (const auto& input_desc : input_descs) {
     const auto table_id = input_desc.getTableId();
-    if (info_cache.count(table_id)) {
-      CHECK(info_cache[table_id]);
-      table_infos.push_back({table_id, copy_table_info(*info_cache[table_id])});
+    const auto cached_index_it = info_cache.find(table_id);
+    if (cached_index_it != info_cache.end()) {
+      CHECK_LT(cached_index_it->second, table_infos.size());
+      table_infos.push_back({table_id, copy_table_info(table_infos[cached_index_it->second].info)});
       continue;
     }
     if (input_desc.getSourceType() == InputSourceType::RESULT) {
@@ -239,7 +240,8 @@ void collect_table_infos(std::vector<InputTableInfo>& table_infos,
       CHECK(input_desc.getSourceType() == InputSourceType::TABLE);
       table_infos.push_back({table_id, executor->getTableInfo(table_id)});
     }
-    info_cache.insert(std::make_pair(table_id, &table_infos.back().info));
+    CHECK(!table_infos.empty());
+    info_cache.insert(std::make_pair(table_id, table_infos.size() - 1));
   }
 }
 
