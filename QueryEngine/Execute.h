@@ -948,9 +948,9 @@ class Executor {
                         llvm::BasicBlock* entry_bb,
                         const CompilationOptions& co,
                         const ExecutionOptions& eo);
-  GroupByAndAggregate::BodyControlFlow compileBody(const RelAlgExecutionUnit& ra_exe_unit,
-                                                   GroupByAndAggregate& group_by_and_aggregate,
-                                                   const CompilationOptions& co);
+  bool compileBody(const RelAlgExecutionUnit& ra_exe_unit,
+                   GroupByAndAggregate& group_by_and_aggregate,
+                   const CompilationOptions& co);
 
   void createErrorCheckControlFlow(llvm::Function* query_func, bool run_with_dynamic_watchdog);
 

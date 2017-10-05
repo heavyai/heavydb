@@ -2646,14 +2646,13 @@ void GroupByAndAggregate::patchGroupbyCall(llvm::CallInst* call_site) {
   llvm::ReplaceInstWithInst(call_site, llvm::CallInst::Create(func, args));
 }
 
-GroupByAndAggregate::BodyControlFlow GroupByAndAggregate::codegen(llvm::Value* filter_result,
-                                                                  llvm::Value* outerjoin_query_filter_result,
-                                                                  llvm::BasicBlock* sc_false,
-                                                                  const CompilationOptions& co) {
+bool GroupByAndAggregate::codegen(llvm::Value* filter_result,
+                                  llvm::Value* outerjoin_query_filter_result,
+                                  llvm::BasicBlock* sc_false,
+                                  const CompilationOptions& co) {
   CHECK(filter_result);
 
   bool can_return_error = false;
-  llvm::BasicBlock* filter_true{nullptr};
   llvm::BasicBlock* filter_false{nullptr};
 
   {
@@ -2665,7 +2664,6 @@ GroupByAndAggregate::BodyControlFlow GroupByAndAggregate::codegen(llvm::Value* f
     }
     DiamondCodegen filter_cfg(
         filter_result, executor_, !is_group_by || query_mem_desc.usesGetGroupValueFast(), "filter", nullptr, false);
-    filter_true = filter_cfg.cond_true_;
     filter_false = filter_cfg.cond_false_;
 
     if (executor_->isOuterLoopJoin() || executor_->isOneToManyOuterHashJoin()) {
@@ -2761,7 +2759,7 @@ GroupByAndAggregate::BodyControlFlow GroupByAndAggregate::codegen(llvm::Value* f
     LL_BUILDER.SetInsertPoint(saved_insert_block);
   }
 
-  return {can_return_error, filter_true, filter_false};
+  return can_return_error;
 }
 
 llvm::Value* GroupByAndAggregate::codegenOutputSlot(llvm::Value* groups_buffer,

@@ -1069,9 +1069,9 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
   if (!join_loops.empty()) {
     codegenJoinLoops(join_loops, body_execution_unit, group_by_and_aggregate, query_func, bb, co, eo);
   } else {
-    const auto body_control_flow = compileBody(ra_exe_unit, group_by_and_aggregate, co);
+    const bool can_return_error = compileBody(ra_exe_unit, group_by_and_aggregate, co);
 
-    if (body_control_flow.can_return_error || cgen_state_->needs_error_check_ || eo.with_dynamic_watchdog) {
+    if (can_return_error || cgen_state_->needs_error_check_ || eo.with_dynamic_watchdog) {
       createErrorCheckControlFlow(query_func, eo.with_dynamic_watchdog);
     }
   }
@@ -1131,9 +1131,9 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
       llvm_ir};
 }
 
-GroupByAndAggregate::BodyControlFlow Executor::compileBody(const RelAlgExecutionUnit& ra_exe_unit,
-                                                           GroupByAndAggregate& group_by_and_aggregate,
-                                                           const CompilationOptions& co) {
+bool Executor::compileBody(const RelAlgExecutionUnit& ra_exe_unit,
+                           GroupByAndAggregate& group_by_and_aggregate,
+                           const CompilationOptions& co) {
   // generate the code for the filter
   std::vector<Analyzer::Expr*> primary_quals;
   std::vector<Analyzer::Expr*> deferred_quals;

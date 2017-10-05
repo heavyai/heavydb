@@ -379,24 +379,24 @@ void Executor::codegenJoinLoops(const std::vector<JoinLoop>& join_loops,
   cgen_state_->ir_builder_.SetInsertPoint(exit_bb);
   cgen_state_->ir_builder_.CreateRet(ll_int<int32_t>(0));
   cgen_state_->ir_builder_.SetInsertPoint(entry_bb);
-  const auto loops_entry_bb = JoinLoop::codegen(
-      join_loops,
-      [this, query_func, &co, &eo, &group_by_and_aggregate, &join_loops, &ra_exe_unit](
-          const std::vector<llvm::Value*>& prev_iters) {
-        addJoinLoopIterator(prev_iters, join_loops.size());
-        auto& builder = cgen_state_->ir_builder_;
-        const auto loop_body_bb =
-            llvm::BasicBlock::Create(builder.getContext(), "loop_body", builder.GetInsertBlock()->getParent());
-        builder.SetInsertPoint(loop_body_bb);
-        const auto body_control_flow = compileBody(ra_exe_unit, group_by_and_aggregate, co);
-        if (body_control_flow.can_return_error || cgen_state_->needs_error_check_ || eo.with_dynamic_watchdog) {
-          createErrorCheckControlFlow(query_func, eo.with_dynamic_watchdog);
-        }
-        return loop_body_bb;
-      },
-      posArg(nullptr),
-      exit_bb,
-      cgen_state_->ir_builder_);
+  const auto loops_entry_bb =
+      JoinLoop::codegen(join_loops,
+                        [this, query_func, &co, &eo, &group_by_and_aggregate, &join_loops, &ra_exe_unit](
+                            const std::vector<llvm::Value*>& prev_iters) {
+                          addJoinLoopIterator(prev_iters, join_loops.size());
+                          auto& builder = cgen_state_->ir_builder_;
+                          const auto loop_body_bb = llvm::BasicBlock::Create(
+                              builder.getContext(), "loop_body", builder.GetInsertBlock()->getParent());
+                          builder.SetInsertPoint(loop_body_bb);
+                          const bool can_return_error = compileBody(ra_exe_unit, group_by_and_aggregate, co);
+                          if (can_return_error || cgen_state_->needs_error_check_ || eo.with_dynamic_watchdog) {
+                            createErrorCheckControlFlow(query_func, eo.with_dynamic_watchdog);
+                          }
+                          return loop_body_bb;
+                        },
+                        posArg(nullptr),
+                        exit_bb,
+                        cgen_state_->ir_builder_);
   cgen_state_->ir_builder_.SetInsertPoint(entry_bb);
   cgen_state_->ir_builder_.CreateBr(loops_entry_bb);
 }
