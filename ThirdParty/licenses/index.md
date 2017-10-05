@@ -45,6 +45,7 @@ spf13/pflag | [BSD](<https://github.com/spf13/pflag/blob/master/LICENSE>) | CLI 
 spf13/viper | [MIT](<https://github.com/spf13/viper/blob/master/LICENSE>) | Config file management |
 andrewseidl/viper | [MIT](<https://github.com/andrewseidl/viper/blob/master/LICENSE>) | Config file management |
 tylerb/graceful | [MIT](<https://github.com/tylerb/graceful/blob/master/LICENSE>) | Graceful server shutdown and restart |
+dgrijalva/jwt-go | [MIT](<https://github.com/dgrijalva/jwt-go/blob/master/LICENSE>) | Licensing |
 --- | --- | --- |
 Apache commons-cli | [Apache](<https://github.com/apache/commons-cli/blob/trunk/LICENSE.txt>) | CLI flags handler |
 Apache commons-math3 | [Apache](<https://github.com/apache/commons-math/blob/master/LICENSE.txt>) | Math functions |

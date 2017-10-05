@@ -19,6 +19,12 @@
 			"revisionTime": "2017-07-24T17:18:54Z"
 		},
 		{
+			"checksumSHA1": "GXOurDGgsLmJs0wounpdWZZRSGw=",
+			"path": "github.com/dgrijalva/jwt-go",
+			"revision": "a539ee1a749a2b895533f979515ac7e6e0f5b650",
+			"revisionTime": "2017-06-08T00:51:49Z"
+		},
+		{
 			"path": "github.com/gorilla/handlers",
 			"revision": "b3aff83722cb2ae031a70cae984650e3a16cd20e",
 			"revisionTime": "2016-02-01T11:49:43-08:00"
