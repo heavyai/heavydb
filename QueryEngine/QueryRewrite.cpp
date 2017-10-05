@@ -41,10 +41,9 @@ RelAlgExecutionUnit QueryRewriter::rewriteConstrainedByIn() const {
   if (!in_vals) {
     in_vals = std::dynamic_pointer_cast<Analyzer::InValues>(rewrite_expr(ra_exe_unit_.quals.front().get()));
   }
-  if (!in_vals) {
+  if (!in_vals || in_vals->get_value_list().empty()) {
     return ra_exe_unit_;
   }
-  CHECK(!in_vals->get_value_list().empty());
   for (const auto in_val : in_vals->get_value_list()) {
     if (!std::dynamic_pointer_cast<Analyzer::Constant>(in_val)) {
       break;
