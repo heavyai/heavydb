@@ -63,7 +63,7 @@ class Role {
   virtual bool hasRole(Role* role) = 0;
   virtual void updatePrivileges(Role* role) = 0;
   virtual void updatePrivileges() = 0;
-  virtual std::string roleName() const = 0;
+  virtual std::string roleName(bool userName = false) const = 0;
   virtual bool isUserPrivateRole() const = 0;
   const DBObjectMap* getDbObject() const;
   DBObject* findDbObject(const DBObjectKey objectKey) const;
@@ -97,7 +97,7 @@ class UserRole : public Role {
   virtual bool hasRole(Role* role);
   virtual void updatePrivileges(Role* role);
   virtual void updatePrivileges();
-  virtual std::string roleName() const;
+  virtual std::string roleName(bool userName = false) const;
   virtual bool isUserPrivateRole() const;
 
  private:
@@ -127,7 +127,7 @@ class GroupRole : public Role {
   virtual bool hasRole(Role* role);
   virtual void updatePrivileges(Role* role);
   virtual void updatePrivileges();
-  virtual std::string roleName() const;
+  virtual std::string roleName(bool userName = false) const;
   virtual bool isUserPrivateRole() const;
 
  private:

@@ -800,6 +800,85 @@ Role* SysCatalog::getMetadataForUserRole(int32_t userId) const {
   return userRoleIt->second;  // returns pointer to role
 }
 
+bool SysCatalog::getRole(const std::string& roleName) const {
+  bool rc = false;
+  if (mapd_sys_cat->getMetadataForRole(roleName)) {
+    rc = true;
+  }
+  return rc;
+}
+
+std::vector<std::string> SysCatalog::getAllRoles() {
+  std::vector<std::string> roles(0);
+  std::lock_guard<std::mutex> lock(cat_mutex_);
+  for (RoleMap::iterator roleIt = roleMap_.begin(); roleIt != roleMap_.end(); ++roleIt) {
+    roles.push_back(roleIt->first);
+  }
+  return roles;
+}
+
+std::vector<DBObject*> SysCatalog::getDBObjectPrivilegesForRole(const std::string& roleName) const {
+  std::vector<DBObject*> db_objects;
+  Role* rl = mapd_sys_cat->getMetadataForRole(roleName);
+  if (rl) {
+    for (auto dbObjectIt = rl->getDbObject()->begin(); dbObjectIt != rl->getDbObject()->end(); ++dbObjectIt) {
+      db_objects.push_back(dbObjectIt->second);
+    }
+  }
+  return db_objects;
+}
+
+std::vector<bool> SysCatalog::getDBObjectPrivilegesForRole(const std::string& roleName,
+                                                           const DBObjectType& objectType,
+                                                           const std::string& objectName) {
+  DBObject dbObject(objectName, objectType);
+  getDBObjectPrivileges(roleName, dbObject, static_cast<Catalog_Namespace::Catalog&>(*this));
+  std::vector<bool> dbObjectPrivs = dbObject.getPrivileges();
+  return dbObjectPrivs;
+}
+
+std::vector<std::string> SysCatalog::getAllRolesForUser(const std::string& userName) {
+  std::vector<std::string> roles(0);
+  std::lock_guard<std::mutex> lock(cat_mutex_);
+  for (UserRoleMap::iterator userRoleIt = userRoleMap_.begin(); userRoleIt != userRoleMap_.end(); ++userRoleIt) {
+    roles.push_back(userRoleIt->second->roleName());
+  }
+  return roles;
+}
+
+std::vector<DBObject*> SysCatalog::getDBObjectPrivilegesForUser(const std::string& userName) const {
+  std::vector<DBObject*> db_objects;
+  UserMetadata user;
+  if (mapd_sys_cat->getMetadataForUser(userName, user)) {
+    Role* role = mapd_sys_cat->getMetadataForUserRole(user.userId);
+    if (role) {
+      for (auto dbObjectIt = role->getDbObject()->begin(); dbObjectIt != role->getDbObject()->end(); ++dbObjectIt) {
+        db_objects.push_back(dbObjectIt->second);
+      }
+    }
+  }
+  return db_objects;
+}
+
+std::vector<bool> SysCatalog::getDBObjectPrivilegesForUser(const std::string& userName,
+                                                           const DBObjectType& objectType,
+                                                           const std::string& objectName) {
+  std::vector<bool> dbObjectPrivs(0);
+  UserMetadata user;
+  if (mapd_sys_cat->getMetadataForUser(userName, user)) {
+    Role* role = mapd_sys_cat->getMetadataForUserRole(user.userId);
+    if (role) {
+      DBObject object(objectName, objectType);
+      populateDBObjectKey(object, static_cast<Catalog_Namespace::Catalog&>(*this));
+      auto dbObject = role->findDbObject(object.getObjectKey());
+      if (dbObject) {
+        dbObjectPrivs = dbObject->getPrivileges();
+      }
+    }
+  }
+  return dbObjectPrivs;
+}
+
 Catalog::Catalog(const string& basePath,
                  const string& dbname,
                  std::shared_ptr<Data_Namespace::DataMgr> dataMgr,

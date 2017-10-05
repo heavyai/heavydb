@@ -222,8 +222,12 @@ void UserRole::removeRole(Role* role) {
   groupRole_.erase(role);
 }
 
-std::string UserRole::roleName() const {
-  return (roleName_ + "_" + userName_);
+std::string UserRole::roleName(bool userName) const {
+  if (userName) {
+    return (roleName_ + "_" + userName_);
+  } else {
+    return (roleName_);
+  }
 }
 
 bool UserRole::isUserPrivateRole() const {
@@ -277,7 +281,7 @@ void GroupRole::removeRole(Role* role) {
   revokeRole(role);
 }
 
-std::string GroupRole::roleName() const {
+std::string GroupRole::roleName(bool userName) const {
   return roleName_;
 }
 
