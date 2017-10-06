@@ -828,6 +828,13 @@ int BaselineJoinHashTable::initHashTableForDevice(const std::vector<JoinColumn>&
 
 llvm::Value* BaselineJoinHashTable::codegenSlotIsValid(const CompilationOptions& co, const size_t index) {
   const auto slot_lv = codegenSlot(co, index);
+  if (getHashType() == JoinHashTableInterface::HashType::OneToOne) {
+    const auto inner_outer_pairs =
+        normalize_column_pairs(condition_.get(), *executor_->getCatalog(), executor_->getTemporaryTables());
+    const auto first_inner_col = inner_outer_pairs.front().first;
+    const auto it_ok = executor_->cgen_state_->scan_idx_to_hash_pos_.emplace(first_inner_col->get_rte_idx(), slot_lv);
+    CHECK(it_ok.second);
+  }
   return executor_->cgen_state_->ir_builder_.CreateICmp(
       llvm::ICmpInst::ICMP_SGE, slot_lv, executor_->ll_int(int64_t(0)));
 }
@@ -845,15 +852,9 @@ llvm::Value* BaselineJoinHashTable::codegenSlot(const CompilationOptions& co, co
   const auto hash_ptr = hashPtr(index);
   const auto key_ptr_lv = LL_BUILDER.CreatePointerCast(key_buff_lv, llvm::Type::getInt8PtrTy(LL_CONTEXT));
   const auto key_size_lv = LL_INT(inner_outer_pairs.size() * key_component_width);
-  const auto slot_lv =
-      executor_->cgen_state_->emitExternalCall("baseline_hash_join_idx_" + std::to_string(key_component_width * 8),
-                                               get_int_type(64, LL_CONTEXT),
-                                               {hash_ptr, key_ptr_lv, key_size_lv, LL_INT(entry_count_)});
-  CHECK(!inner_outer_pairs.empty());
-  const auto first_inner_col = inner_outer_pairs.front().first;
-  const auto it_ok = executor_->cgen_state_->scan_idx_to_hash_pos_.emplace(first_inner_col->get_rte_idx(), slot_lv);
-  CHECK(it_ok.second);
-  return slot_lv;
+  return executor_->cgen_state_->emitExternalCall("baseline_hash_join_idx_" + std::to_string(key_component_width * 8),
+                                                  get_int_type(64, LL_CONTEXT),
+                                                  {hash_ptr, key_ptr_lv, key_size_lv, LL_INT(entry_count_)});
 }
 
 HashJoinMatchingSet BaselineJoinHashTable::codegenMatchingSet(const CompilationOptions& co, const size_t index) {
