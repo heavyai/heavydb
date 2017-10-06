@@ -31,42 +31,61 @@
 namespace File_Namespace {
 
 FILE* create(const std::string& basePath, const int fileId, const size_t pageSize, const size_t numPages) {
-  if (numPages < 1 || pageSize < 1)
-    LOG(FATAL) << "Number of pages and page size must be positive integers.";
-
   std::string path(basePath + std::to_string(fileId) + "." + std::to_string(pageSize) +
                    std::string(MAPD_FILE_EXT));  // MAPD_FILE_EXT has preceding "."
+  if (numPages < 1 || pageSize < 1) {
+    LOG(FATAL) << "Error trying to create file '" << path
+               << "', Number of pages and page size must be positive integers. numPages " << numPages << " pageSize "
+               << pageSize;
+  }
   FILE* f = fopen(path.c_str(), "w+b");
-  CHECK(f);
+  if (f == nullptr) {
+    LOG(FATAL) << "Error trying to create file '" << path << "', the errno is " << errno;
+  }
   fseek(f, (pageSize * numPages) - 1, SEEK_SET);
   fputc(EOF, f);
   fseek(f, 0, SEEK_SET);  // rewind
-  CHECK_EQ(fileSize(f), pageSize * numPages);
+  if (fileSize(f) != pageSize * numPages) {
+    LOG(FATAL) << "Error trying to create file '" << path << "', file size " << fileSize(f)
+               << " does not equal pageSize * numPages " << pageSize * numPages;
+  }
 
   return f;
 }
 
 FILE* create(const std::string& fullPath, const size_t requestedFileSize) {
-  CHECK_GE(requestedFileSize, size_t(0));
+  if (requestedFileSize < size_t(0)) {
+    LOG(FATAL) << "Error trying to create file '" << fullPath << "' Requested file size " << requestedFileSize
+               << " was less than 0";
+  }
   FILE* f = fopen(fullPath.c_str(), "w+b");
-  CHECK(f);
+  if (f == nullptr) {
+    LOG(FATAL) << "Error trying to create file '" << fullPath << "', the errno is " << errno;
+  }
   fseek(f, requestedFileSize - 1, SEEK_SET);
   fputc(EOF, f);
   fseek(f, 0, SEEK_SET);  // rewind
-  CHECK_EQ(fileSize(f), requestedFileSize);
+  if (fileSize(f) != requestedFileSize) {
+    LOG(FATAL) << "Error trying to create file '" << fullPath << "', file size " << fileSize(f)
+               << " does not equal requestedFileSize " << requestedFileSize;
+  }
   return f;
 }
 
 FILE* open(int fileId) {
   std::string s(std::to_string(fileId) + std::string(MAPD_FILE_EXT));
   FILE* f = fopen(s.c_str(), "r+b");  // opens existing file for updates
-  CHECK(f);
+  if (f == nullptr) {
+    LOG(FATAL) << "Error trying to open file '" << s << "', the errno is " << errno;
+  }
   return f;
 }
 
 FILE* open(const std::string& path) {
   FILE* f = fopen(path.c_str(), "r+b");  // opens existing file for updates
-  CHECK(f);
+  if (f == nullptr) {
+    LOG(FATAL) << "Error trying to open file '" << path << "', the errno is " << errno;
+  }
   return f;
 }
 
