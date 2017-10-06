@@ -1938,7 +1938,6 @@ JoinQualsPerNestingLevel RelAlgExecutor::translateLeftDeepJoinFilter(
       }
     }
   }
-  CHECK(false);
   return result;
 }
 

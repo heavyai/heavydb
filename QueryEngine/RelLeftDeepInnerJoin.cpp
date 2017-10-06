@@ -115,7 +115,6 @@ void collect_left_deep_join_inputs(std::deque<std::shared_ptr<const RelAlgNode>>
 }
 
 std::shared_ptr<RelLeftDeepInnerJoin> create_left_deep_join(const std::shared_ptr<RelAlgNode>& left_deep_join_root) {
-  // TODO
   if (!is_left_deep_join(left_deep_join_root.get())) {
     return nullptr;
   }

@@ -292,7 +292,6 @@ std::vector<JoinLoop> Executor::buildJoinLoops(RelAlgExecutionUnit& ra_exe_unit,
     for (const auto& join_qual : current_level_join_conditions) {
       auto qual_bin_oper = std::dynamic_pointer_cast<Analyzer::BinOper>(join_qual);
       if (!qual_bin_oper || !IS_EQUIVALENCE(qual_bin_oper->get_optype())) {
-        // TODO
         add_qualifier_to_execution_unit(ra_exe_unit, join_qual);
         continue;
       }
