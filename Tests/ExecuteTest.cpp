@@ -36,7 +36,7 @@ namespace {
 
 std::unique_ptr<Catalog_Namespace::SessionInfo> g_session;
 bool g_hoist_literals{true};
-bool g_with_sharding{false};
+size_t g_shard_count{0};
 
 struct ShardInfo {
   const std::string shard_col;
@@ -58,10 +58,12 @@ std::string build_create_table_statement(const std::string& columns_definition,
   const std::string shared_dict_def{
       shared_dict_info.col.empty() ? "" : ", SHARED DICTIONARY (" + shared_dict_info.col + ")" + " REFERENCES " +
                                               shared_dict_info.ref_table + "(" + shared_dict_info.ref_col + ")"};
-  const std::string shard_count_def{shard_info.shard_col.empty() ? "" : ", shard_count=" +
+  const std::string shard_count_def{shard_info.shard_col.empty() ? "" : "shard_count=" +
                                                                             std::to_string(shard_info.shard_count)};
+  const std::string fragment_size_def{shard_info.shard_col.empty() ? "fragment_size=" + std::to_string(fragment_size)
+                                                                   : ""};
   return "CREATE TABLE " + table_name + "(" + columns_definition + shard_key_def + shared_dict_def + ") WITH (" +
-         "fragment_size=" + std::to_string(fragment_size) + shard_count_def + ");";
+         fragment_size_def + shard_count_def + ");";
 }
 
 std::shared_ptr<ResultSet> run_multiple_agg(const string& query_str,
@@ -2548,7 +2550,7 @@ void import_join_test() {
   std::string columns_definition{"x int not null, y int, str text encoding dict, dup_str text encoding dict"};
   const auto create_test = build_create_table_statement(columns_definition,
                                                         "join_test",
-                                                        {g_with_sharding ? "dup_str" : "", 4},
+                                                        {g_shard_count ? "dup_str" : "", g_shard_count},
                                                         {},
 #ifdef ENABLE_MULTIFRAG_JOIN
                                                         2
@@ -3115,7 +3117,7 @@ TEST(Select, Joins_ImplicitJoins) {
         v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test, join_test WHERE test.rowid = join_test.rowid;", dt)));
     ASSERT_EQ(7,
               v<int64_t>(run_simple_agg(
-                  "SELECT test.x FROM test, test_inner WHERE test.x = test_inner.x AND test.rowid = 19;", dt)));
+                  "SELECT test.x FROM test, test_inner WHERE test.x = test_inner.x AND test.rowid = 9;", dt)));
     ASSERT_EQ(0,
               v<int64_t>(run_simple_agg(
                   "SELECT COUNT(*) FROM test, test_inner WHERE test.x = test_inner.x AND test.rowid = 20;", dt)));
@@ -3643,8 +3645,8 @@ int create_and_populate_tables() {
     run_ddl_statement(drop_old_test);
     g_sqlite_comparator.query(drop_old_test);
     std::string columns_definition{"x int not null, y int, str text encoding dict"};
-    const auto create_test_inner =
-        build_create_table_statement(columns_definition, "test_inner", {g_with_sharding ? "str" : "", 4}, {}, 2);
+    const auto create_test_inner = build_create_table_statement(
+        columns_definition, "test_inner", {g_shard_count ? "str" : "", g_shard_count}, {}, 2);
     run_ddl_statement(create_test_inner);
     g_sqlite_comparator.query("CREATE TABLE test_inner(x int not null, y int, str text);");
   } catch (...) {
@@ -3661,8 +3663,8 @@ int create_and_populate_tables() {
     run_ddl_statement(drop_old_test);
     g_sqlite_comparator.query(drop_old_test);
     std::string columns_definition{"x int not null, y int, str text encoding dict"};
-    const auto create_test_inner =
-        build_create_table_statement(columns_definition, "test_inner_x", {g_with_sharding ? "x" : "", 4}, {}, 2);
+    const auto create_test_inner = build_create_table_statement(
+        columns_definition, "test_inner_x", {g_shard_count ? "x" : "", g_shard_count}, {}, 2);
     run_ddl_statement(create_test_inner);
     g_sqlite_comparator.query("CREATE TABLE test_inner_x(x int not null, y int, str text);");
   } catch (...) {
@@ -3686,8 +3688,8 @@ int create_and_populate_tables() {
         "int, ufd int not null, ofq bigint, ufq bigint not null"};
     const std::string create_test = build_create_table_statement(columns_definition,
                                                                  "test",
-                                                                 {g_with_sharding ? "str" : "", 4},
-                                                                 {g_with_sharding ? "str" : "", "test_inner", "str"},
+                                                                 {g_shard_count ? "str" : "", g_shard_count},
+                                                                 {g_shard_count ? "str" : "", "test_inner", "str"},
                                                                  2);
     run_ddl_statement(create_test);
     g_sqlite_comparator.query(
@@ -3737,7 +3739,7 @@ int create_and_populate_tables() {
         "dd_notnull decimal(10, 2) not null, ss text encoding dict, u int, ofd int, ufd int not null, ofq bigint, ufq "
         "bigint not null"};
     const std::string create_test =
-        build_create_table_statement(columns_definition, "test_x", {g_with_sharding ? "x" : "", 4}, {}, 2);
+        build_create_table_statement(columns_definition, "test_x", {g_shard_count ? "x" : "", g_shard_count}, {}, 2);
     run_ddl_statement(create_test);
     g_sqlite_comparator.query(
         "CREATE TABLE test_x(x int not null, y int, z smallint, t bigint, b boolean, f float, ff float, fn float, d "
@@ -4062,6 +4064,13 @@ void drop_views() {
   g_sqlite_comparator.query(drop_join_view_test);
 }
 
+size_t choose_shard_count() {
+  CHECK(g_session);
+  const auto cuda_mgr = g_session->get_catalog().get_dataMgr().cudaMgr_;
+  const int device_count = cuda_mgr ? cuda_mgr->getDeviceCount() : 0;
+  return device_count > 1 ? device_count : 0;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -4090,10 +4099,10 @@ int main(int argc, char** argv) {
   if (vm.count("disable-literal-hoisting"))
     g_hoist_literals = false;
 
-  if (vm.count("with-sharding"))
-    g_with_sharding = true;
-
   g_session.reset(get_session(BASE_PATH));
+
+  if (vm.count("with-sharding"))
+    g_shard_count = choose_shard_count();
 
   const bool use_existing_data = vm.count("use-existing-data");
   int err{0};

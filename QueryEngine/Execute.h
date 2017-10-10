@@ -349,7 +349,7 @@ class Executor {
 
   const TemporaryTables* getTemporaryTables() const;
 
-  Fragmenter_Namespace::TableInfo getTableInfo(const int table_id);
+  Fragmenter_Namespace::TableInfo getTableInfo(const int table_id) const;
 
   const TableGeneration& getTableGeneration(const int table_id) const;
 
@@ -1354,7 +1354,7 @@ class Executor {
   const Catalog_Namespace::Catalog* catalog_;
   const TemporaryTables* temporary_tables_;
 
-  InputTableInfoCache input_table_info_cache_;
+  mutable InputTableInfoCache input_table_info_cache_;
   AggregatedColRange agg_col_range_cache_;
   StringDictionaryGenerations string_dictionary_generations_;
   TableGenerations table_generations_;

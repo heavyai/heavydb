@@ -143,6 +143,26 @@ size_t get_shard_count(const Analyzer::BinOper* join_condition,
   return get_shard_count({lhs_col, rhs_col}, ra_exe_unit, executor);
 }
 
+namespace {
+
+bool shard_count_less_or_equal_device_count(const int outer_table_id, const Executor* executor) {
+  const auto outer_table_info = executor->getTableInfo(outer_table_id);
+  std::unordered_set<int> device_holding_fragments;
+  auto cuda_mgr = executor->getCatalog()->get_dataMgr().cudaMgr_;
+  const int device_count = cuda_mgr ? cuda_mgr->getDeviceCount() : 1;
+  for (const auto& fragment : outer_table_info.fragments) {
+    if (fragment.shard != -1) {
+      const auto it_ok = device_holding_fragments.emplace(fragment.shard % device_count);
+      if (!it_ok.second) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+}  // namespace
+
 size_t get_shard_count(std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*> equi_pair,
                        const RelAlgExecutionUnit& ra_exe_unit,
                        const Executor* executor) {
@@ -163,6 +183,9 @@ size_t get_shard_count(std::pair<const Analyzer::ColumnVar*, const Analyzer::Exp
   const auto rhs_td = catalog->getMetadataForTable(rhs_col->get_table_id());
   CHECK(rhs_td);
   if (lhs_td->shardedColumnId == 0 || rhs_td->shardedColumnId == 0 || lhs_td->nShards != rhs_td->nShards) {
+    return 0;
+  }
+  if (!shard_count_less_or_equal_device_count(rhs_td->tableId, executor)) {
     return 0;
   }
   if (contains_iter_expr(ra_exe_unit.target_exprs)) {

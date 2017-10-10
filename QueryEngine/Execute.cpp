@@ -152,7 +152,7 @@ const TemporaryTables* Executor::getTemporaryTables() const {
   return temporary_tables_;
 }
 
-Fragmenter_Namespace::TableInfo Executor::getTableInfo(const int table_id) {
+Fragmenter_Namespace::TableInfo Executor::getTableInfo(const int table_id) const {
   return input_table_info_cache_.getTableInfo(table_id);
 }
 
