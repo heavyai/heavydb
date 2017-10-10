@@ -1519,19 +1519,10 @@ bool Executor::needFetchAllFragments(const InputColDescriptor& inner_col_desc,
     return false;
   }
   const int table_id = inner_col_desc.getScanDesc().getTableId();
-  const auto fragments_it =
-      std::find_if(selected_fragments.rbegin(),
-                   selected_fragments.rend(),
-                   [table_id](const std::pair<int, std::vector<size_t>>& frag) { return frag.first == table_id; });
-  CHECK(fragments_it != selected_fragments.rend());
-  const auto& fragments = fragments_it->second;
-  if (fragments.size() <= 1) {
-    return false;
-  }
-  CHECK_GE(nest_level, 0);
-  CHECK_LT(static_cast<size_t>(nest_level), input_descs.size());
-  const auto inner_table_desc = input_descs[nest_level];
-  return table_id == inner_table_desc.getTableId();
+  CHECK_LT(static_cast<size_t>(nest_level), selected_fragments.size());
+  CHECK_EQ(table_id, selected_fragments[nest_level].first);
+  const auto& fragments = selected_fragments[nest_level].second;
+  return fragments.size() > 1;
 }
 #endif
 
