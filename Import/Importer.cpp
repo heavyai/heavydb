@@ -1817,12 +1817,26 @@ ImportStatus Importer::import() {
 
     // allow copy from .gz and .bz2
     using namespace std;
-    if (boost::filesystem::extension(file_path) == ".gz" || boost::filesystem::extension(file_path) == ".bz2")
+    if (boost::filesystem::extension(file_path) == ".gz"
+     || boost::filesystem::extension(file_path) == ".bz2"
+     || boost::filesystem::extension(file_path) == ".zip"
+     || boost::filesystem::extension(file_path) == ".tar"
+     || boost::filesystem::extension(file_path) == ".tgz")
     {
         // first try parallelized decompressors
-        string cmd = boost::filesystem::extension(file_path) == ".bz2"? "pbzip2": "pigz";
-        cmd += " -d -c ";
-        cmd += file_path;
+        string cmd;
+        if (boost::filesystem::extension(file_path) == ".tar" || boost::filesystem::extension(file_path) == ".tgz")
+        {
+            cmd = "tar";
+            cmd += boost::filesystem::extension(file_path) == ".tgz"? " xfz ": " xf ";
+            cmd += file_path + " -O ";
+        }
+        else
+        {
+            cmd = boost::filesystem::extension(file_path) == ".bz2"? "pbzip2": "pigz";
+            cmd += " -d -c ";
+            cmd += file_path;
+        }
 
         // fall back to boostiostream if popen fails
         try
@@ -1868,6 +1882,7 @@ ImportStatus Importer::import() {
                 throw std::runtime_error("mkfifo failure for '" + pipe_path + "': " + strerror(errno));
 
             ImportStatus ret;
+            std::exception_ptr teptr;
             try
             {
                 #define IMPORT_READER__ do                                                                            \
@@ -1878,8 +1893,15 @@ ImportStatus Importer::import() {
                     } while (0)
                 #define IMPORT_WRITER__ do                                                                            \
                     {                                                                                                 \
-                        ofstream out(pipe_path, ofstream::binary);                                                    \
-                        boost::iostreams::copy(in, out);                                                              \
+                        try                                                                                           \
+                        {                                                                                             \
+                            ofstream out(pipe_path, ofstream::binary);                                                \
+                            boost::iostreams::copy(in, out);                                                          \
+                        }                                                                                             \
+                        catch (...)                                                                                   \
+                        {                                                                                             \
+                            teptr = std::current_exception();                                                         \
+                        }                                                                                             \
                     } while (0)
 
                 // create a writer thread on one end and a reader thread on another
@@ -1896,6 +1918,8 @@ ImportStatus Importer::import() {
                 auto th2 = std::thread([&](){IMPORT_WRITER__;});
                 th1.join();
                 th2.join();
+                if (teptr)
+                    std::rethrow_exception(teptr);
                 #endif//HAS_TBB
 
                 if (p_file) fclose(p_file);
