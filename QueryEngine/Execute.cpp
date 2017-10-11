@@ -753,6 +753,8 @@ bool is_sample_query(const RelAlgExecutionUnit& ra_exe_unit) {
   return result;
 }
 
+}  // namespace
+
 bool is_trivial_loop_join(const std::vector<InputTableInfo>& query_infos, const RelAlgExecutionUnit& ra_exe_unit) {
   if (ra_exe_unit.input_descs.size() < 2) {
     return false;
@@ -775,8 +777,6 @@ bool is_trivial_loop_join(const std::vector<InputTableInfo>& query_infos, const 
   CHECK_NE(ssize_t(-1), inner_table_idx);
   return query_infos[inner_table_idx].info.getNumTuples() <= g_trivial_loop_join_threshold;
 }
-
-}  // namespace
 
 ResultPtr Executor::executeWorkUnit(int32_t* error_code,
                                     size_t& max_groups_buffer_entry_guess,

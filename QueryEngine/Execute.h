@@ -952,6 +952,7 @@ class Executor {
 
   std::vector<JoinLoop> buildJoinLoops(RelAlgExecutionUnit& ra_exe_unit,
                                        const CompilationOptions& co,
+                                       const ExecutionOptions& eo,
                                        const std::vector<InputTableInfo>& query_infos);
   void addJoinLoopIterator(const std::vector<llvm::Value*>& prev_iters, const size_t level_idx);
   void codegenJoinLoops(const std::vector<JoinLoop>& join_loops,
@@ -1421,5 +1422,7 @@ inline bool is_unnest(const Analyzer::Expr* expr) {
   return dynamic_cast<const Analyzer::UOper*>(expr) &&
          static_cast<const Analyzer::UOper*>(expr)->get_optype() == kUNNEST;
 }
+
+bool is_trivial_loop_join(const std::vector<InputTableInfo>& query_infos, const RelAlgExecutionUnit& ra_exe_unit);
 
 #endif  // QUERYENGINE_EXECUTE_H
