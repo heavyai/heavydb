@@ -1063,7 +1063,7 @@ Executor::CompilationResult Executor::compileWorkUnit(const bool render_output,
   preloadFragOffsets(ra_exe_unit.input_descs, query_infos);
 
   RelAlgExecutionUnit body_execution_unit = ra_exe_unit;
-  const auto join_loops = buildJoinLoops(body_execution_unit, co, query_infos);
+  const auto join_loops = buildJoinLoops(body_execution_unit, co, eo, query_infos);
 
   allocateLocalColumnIds(ra_exe_unit.input_col_descs);
   if (!join_loops.empty()) {

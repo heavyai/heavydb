@@ -280,10 +280,24 @@ void add_qualifier_to_execution_unit(RelAlgExecutionUnit& ra_exe_unit, const std
   ra_exe_unit.quals.insert(ra_exe_unit.quals.end(), qual_cf.quals.begin(), qual_cf.quals.end());
 }
 
+void check_if_loop_join_is_allowed(RelAlgExecutionUnit& ra_exe_unit,
+                                   const ExecutionOptions& eo,
+                                   const std::vector<InputTableInfo>& query_infos,
+                                   const size_t level_idx,
+                                   const std::string& fail_reason) {
+  if (eo.allow_loop_joins) {
+    return;
+  }
+  if (level_idx + 1 != ra_exe_unit.inner_joins.size() || !is_trivial_loop_join(query_infos, ra_exe_unit)) {
+    throw std::runtime_error("Hash join failed, reason: " + fail_reason);
+  }
+}
+
 }  // namespace
 
 std::vector<JoinLoop> Executor::buildJoinLoops(RelAlgExecutionUnit& ra_exe_unit,
                                                const CompilationOptions& co,
+                                               const ExecutionOptions& eo,
                                                const std::vector<InputTableInfo>& query_infos) {
   std::vector<JoinLoop> join_loops;
   for (size_t level_idx = 0, current_hash_table_idx = 0; level_idx < ra_exe_unit.inner_joins.size(); ++level_idx) {
@@ -292,6 +306,7 @@ std::vector<JoinLoop> Executor::buildJoinLoops(RelAlgExecutionUnit& ra_exe_unit,
     for (const auto& join_qual : current_level_join_conditions) {
       auto qual_bin_oper = std::dynamic_pointer_cast<Analyzer::BinOper>(join_qual);
       if (!qual_bin_oper || !IS_EQUIVALENCE(qual_bin_oper->get_optype())) {
+        check_if_loop_join_is_allowed(ra_exe_unit, eo, query_infos, level_idx, "No equijoin expression found");
         add_qualifier_to_execution_unit(ra_exe_unit, join_qual);
         continue;
       }
@@ -309,7 +324,7 @@ std::vector<JoinLoop> Executor::buildJoinLoops(RelAlgExecutionUnit& ra_exe_unit,
         plan_state_->join_info_.join_hash_tables_.push_back(hash_table_or_error.hash_table);
         plan_state_->join_info_.equi_join_tautologies_.push_back(qual_bin_oper);
       } else {
-        // TODO: handle the error
+        check_if_loop_join_is_allowed(ra_exe_unit, eo, query_infos, level_idx, hash_table_or_error.fail_reason);
         add_qualifier_to_execution_unit(ra_exe_unit, qual_bin_oper);
       }
     }
