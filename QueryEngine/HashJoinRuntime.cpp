@@ -502,6 +502,8 @@ DEVICE NEVER_INLINE const T* SUFFIX(get_matching_baseline_hash_slot_readonly)(co
   }
 #ifndef __CUDACC__
   CHECK(false);
+#else
+  assert(false);
 #endif
   return nullptr;
 }
@@ -563,6 +565,9 @@ GLOBAL void SUFFIX(count_matches_baseline)(int32_t* count_buff,
 #endif
       key_scratch_buff[key_component_index] = elem;
     }
+#ifdef __CUDACC__
+    assert(composite_key_dict);
+#endif
     if (!skip_entry) {
       const auto matching_group = SUFFIX(get_matching_baseline_hash_slot_readonly)(
           key_scratch_buff, key_component_count, composite_key_dict, entry_count);
@@ -754,6 +759,9 @@ GLOBAL void SUFFIX(fill_row_ids_baseline)(int32_t* buff,
 #endif
       key_scratch_buff[key_component_index] = elem;
     }
+#ifdef __CUDACC__
+    assert(composite_key_dict);
+#endif
     if (!skip_entry) {
       const T* matching_group = SUFFIX(get_matching_baseline_hash_slot_readonly)(
           key_scratch_buff, key_component_count, composite_key_dict, hash_entry_count);
