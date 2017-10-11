@@ -29,6 +29,7 @@
 #include <stdexcept>
 #include <list>
 #include <vector>
+#include <stack>
 #include <unordered_map>
 #include <unordered_set>
 #include <thread>
@@ -51,6 +52,15 @@
 #include <iostream>
 
 #include <arrow/api.h>
+
+#include <boost/iostreams/filtering_streambuf.hpp>
+#include <boost/iostreams/copy.hpp>
+#include <boost/iostreams/filter/gzip.hpp>
+#include <boost/iostreams/filter/bzip2.hpp>
+
+#ifdef HAS_TBB
+#include "tbb/tbb.h"
+#endif
 
 using std::ostream;
 
@@ -75,7 +85,6 @@ Importer::Importer(Loader* providedLoader, const std::string& f, const CopyParam
   p_file = nullptr;
   buffer[0] = nullptr;
   buffer[1] = nullptr;
-  which_buf = 0;
   auto is_array = std::unique_ptr<bool[]>(new bool[loader->get_column_descs().size()]);
   int i = 0;
   bool has_array = false;
@@ -1196,13 +1205,14 @@ ostream& operator<<(ostream& out, const std::vector<T>& v) {
 
 static ImportStatus import_thread(int thread_id,
                                   Importer* importer,
-                                  const char* buffer,
+                                  std::shared_ptr<const char> sbuffer,
                                   size_t begin_pos,
                                   size_t end_pos,
                                   size_t total_size) {
   ImportStatus import_status;
   int64_t total_get_row_time_us = 0;
   int64_t total_str_to_val_time_us = 0;
+  auto buffer = sbuffer.get();
   auto load_ms = measure<>::execution([]() {});
   auto ms = measure<>::execution([&]() {
     const CopyParams& copy_params = importer->get_copy_params();
@@ -1271,6 +1281,10 @@ static ImportStatus import_thread(int thread_id,
               << "sec, get_row: " << (double)total_get_row_time_us / 1000000.0
               << "sec, str_to_val: " << (double)total_str_to_val_time_us / 1000000.0 << "sec" << std::endl;
   }
+
+  import_status.thread_id = thread_id;
+  //LOG(INFO) << " return " << import_status.thread_id << std::endl;
+
   return import_status;
 }
 
@@ -1799,55 +1813,171 @@ void Importer::load(const std::vector<std::unique_ptr<TypedImportBuffer>>& impor
 }
 
 ImportStatus Importer::import() {
-  // TODO(andrew): add file type detection
-  return importDelimited();
+    // TODO(andrew): add file type detection
+
+    // allow copy from .gz and .bz2
+    using namespace std;
+    if (boost::filesystem::extension(file_path) == ".gz" || boost::filesystem::extension(file_path) == ".bz2")
+    {
+        // first try parallelized decompressors
+        string cmd = boost::filesystem::extension(file_path) == ".bz2"? "pbzip2": "pigz";
+        cmd += " -d -c ";
+        cmd += file_path;
+
+        // fall back to boostiostream if popen fails
+        try
+        {
+            if (0 == (p_file = popen(cmd.data(), "r")))
+            {
+                LOG(ERROR) << "popen(" + cmd + ") failed: " << strerror(errno) << std::endl;
+                throw std::runtime_error(string("popen(") + cmd + ") failed: " + strerror(errno));
+            }
+
+            auto rc = importDelimited(file_path, true);
+            if (rc.popen_exit_code != 0)
+            {
+                LOG(ERROR) << "popen(" + cmd + ") failed: exit code = " << std::hex << rc.popen_exit_code << std::endl;
+                throw std::runtime_error(string("popen(") + cmd + ") failed: " + to_string(rc.popen_exit_code));
+            }
+
+            return rc;
+        }
+        catch (...)
+        {
+            // use boostiostream
+            using namespace boost::iostreams;
+
+            // create a decompression filter
+            ifstream file(file_path, ios_base::in | ios_base::binary);
+            filtering_streambuf<input> in;
+
+            if (boost::filesystem::extension(file_path) == ".bz2")
+                in.push(bzip2_decompressor());
+            else
+                in.push(gzip_decompressor());
+
+            in.push(file);
+
+            // create a named pipe to write decompressed output
+            std::stringstream ss;
+            ss << std::this_thread::get_id();
+            string pipe_path = string("/tmp/mapdp_") + ss.str();
+
+            unlink(pipe_path.data());
+            if (mkfifo(pipe_path.data(), 0660) < 0)
+                throw std::runtime_error("mkfifo failure for '" + pipe_path + "': " + strerror(errno));
+
+            ImportStatus ret;
+            try
+            {
+                #define IMPORT_READER__ do                                                                            \
+                    {                                                                                                 \
+                        if (0 == (p_file = fopen(pipe_path.data(), "rb")))                                            \
+                            throw std::runtime_error("fopen failure for '" + pipe_path + "': " + strerror(errno));    \
+                        ret = importDelimited(pipe_path, true);                                                       \
+                    } while (0)
+                #define IMPORT_WRITER__ do                                                                            \
+                    {                                                                                                 \
+                        ofstream out(pipe_path, ofstream::binary);                                                    \
+                        boost::iostreams::copy(in, out);                                                              \
+                    } while (0)
+
+                // create a writer thread on one end and a reader thread on another
+                #ifdef HAS_TBB
+                tbb::parallel_for(0, 2, [&](const int ith)
+                {
+                    if (0 == ith)
+                        IMPORT_READER__;
+                    else
+                        IMPORT_WRITER__;
+                });
+                #else //!HAS_TBB
+                auto th1 = std::thread([&](){IMPORT_READER__;});
+                auto th2 = std::thread([&](){IMPORT_WRITER__;});
+                th1.join();
+                th2.join();
+                #endif//HAS_TBB
+
+                if (p_file) fclose(p_file);
+                p_file = 0;
+                unlink(pipe_path.data());
+                return ret;
+            }
+            catch (...)
+            {
+                if (p_file) fclose(p_file);
+                p_file = 0;
+                unlink(pipe_path.data());
+                throw;
+            }
+        }
+    }
+
+    return importDelimited(file_path);
 }
 
-#define IMPORT_FILE_BUFFER_SIZE 100000000  // 100M file size
+#define IMPORT_FILE_BUFFER_SIZE (1<<25)  // 100M file size
 #define MIN_FILE_BUFFER_SIZE 50000         // 50K min buffer
 
-ImportStatus Importer::importDelimited() {
+ImportStatus Importer::importDelimited(const std::string& file_path, const bool decompressed) {
   bool load_truncated = false;
   set_import_status(import_id, import_status);
-  p_file = fopen(file_path.c_str(), "rb");
+
+  if (!p_file) p_file = fopen(file_path.c_str(), "rb");
   if (!p_file) {
     throw std::runtime_error("fopen failure for '" + file_path + "': " + strerror(errno));
   }
-  (void)fseek(p_file, 0, SEEK_END);
-  file_size = ftell(p_file);
+
+  if (!decompressed)
+  {
+    (void)fseek(p_file, 0, SEEK_END);
+    file_size = ftell(p_file);
+  }
+
   if (copy_params.threads == 0)
     max_threads = sysconf(_SC_NPROCESSORS_CONF);
   else
     max_threads = copy_params.threads;
+
   // deal with small files
   size_t alloc_size = IMPORT_FILE_BUFFER_SIZE;
-  if (file_size < alloc_size) {
+  if (!decompressed && file_size < alloc_size)
     alloc_size = file_size;
-  }
-  buffer[0] = (char*)checked_malloc(alloc_size);
-  if (max_threads > 1)
-    buffer[1] = (char*)checked_malloc(alloc_size);
+
   for (int i = 0; i < max_threads; i++) {
     import_buffers_vec.push_back(std::vector<std::unique_ptr<TypedImportBuffer>>());
     for (const auto cd : loader->get_column_descs())
       import_buffers_vec[i].push_back(
           std::unique_ptr<TypedImportBuffer>(new TypedImportBuffer(cd, loader->get_string_dict(cd))));
   }
+
+  std::shared_ptr<char> sbuffer(new char[alloc_size]);
   size_t current_pos = 0;
   size_t end_pos;
-  (void)fseek(p_file, current_pos, SEEK_SET);
-  size_t size = fread((void*)buffer[which_buf], 1, alloc_size, p_file);
   bool eof_reached = false;
   size_t begin_pos = 0;
+
+  (void)fseek(p_file, current_pos, SEEK_SET);
+  size_t size = fread((void*)sbuffer.get(), 1, alloc_size, p_file);
+
   if (copy_params.has_header) {
     size_t i;
-    for (i = 0; i < size && buffer[which_buf][i] != copy_params.line_delim; i++)
+    for (i = 0; i < size && sbuffer.get()[i] != copy_params.line_delim; i++)
       ;
     if (i == size)
       LOG(WARNING) << "No line delimiter in block." << std::endl;
     begin_pos = i + 1;
   }
+
   ChunkKey chunkKey = {loader->get_catalog().get_currentDB().dbId, loader->get_table_desc()->tableId};
+  std::list<std::future<ImportStatus>> threads;
+
+  // use a stack to track thread_ids which must not overlap among threads
+  // because thread_id is used to index import_buffers_vec[]
+  std::stack<int> stack_thread_ids;
+  for (int i = 0; i < max_threads; i++) stack_thread_ids.push(i);
+
+  uint64_t bytes_copied = 0;
   while (size > 0) {
     // for each process through a buffer take a table lock
     mapd_unique_lock<mapd_shared_mutex> tableLevelWriteLock(*loader->get_catalog().get_dataMgr().getMutexForChunkPrefix(
@@ -1855,47 +1985,82 @@ ImportStatus Importer::importDelimited() {
     if (eof_reached)
       end_pos = size;
     else
-      end_pos = find_end(buffer[which_buf], size, copy_params);
-    if (size <= alloc_size) {
-      max_threads = std::min(max_threads, (int)std::ceil((double)(end_pos - begin_pos) / MIN_FILE_BUFFER_SIZE));
-    }
-    if (max_threads == 1) {
-      import_status += import_thread(0, this, buffer[which_buf], begin_pos, end_pos, end_pos);
-      current_pos += end_pos;
-      (void)fseek(p_file, current_pos, SEEK_SET);
-      size = fread((void*)buffer[which_buf], 1, IMPORT_FILE_BUFFER_SIZE, p_file);
-      if (size < IMPORT_FILE_BUFFER_SIZE && feof(p_file))
-        eof_reached = true;
-    } else {
-      std::vector<std::future<ImportStatus>> threads;
-      for (int i = 0; i < max_threads; i++) {
-        size_t begin = begin_pos + i * ((end_pos - begin_pos) / max_threads);
-        size_t end = (i < max_threads - 1) ? begin_pos + (i + 1) * ((end_pos - begin_pos) / max_threads) : end_pos;
-        threads.push_back(
-            std::async(std::launch::async, import_thread, i, this, buffer[which_buf], begin, end, end_pos));
-      }
-      current_pos += end_pos;
-      which_buf = (which_buf + 1) % 2;
-      (void)fseek(p_file, current_pos, SEEK_SET);
-      size = fread((void*)buffer[which_buf], 1, IMPORT_FILE_BUFFER_SIZE, p_file);
-      if (size < IMPORT_FILE_BUFFER_SIZE && feof(p_file))
-        eof_reached = true;
-      for (auto& p : threads)
-        p.wait();
-      for (auto& p : threads)
-        import_status += p.get();
-    }
-    import_status.rows_estimated = ((float)file_size / current_pos) * import_status.rows_completed;
-    set_import_status(import_id, import_status);
+      end_pos = find_end(sbuffer.get(), size, copy_params);
+
+    // unput residual
+    int nresidual = size - end_pos;
+    std::unique_ptr<char> unbuf(nresidual > 0? new char[nresidual]: nullptr);
+    if (unbuf) memcpy(unbuf.get(), sbuffer.get() + end_pos, nresidual);
+
+    // get a thread_id not in use
+    auto thread_id = stack_thread_ids.top();
+    stack_thread_ids.pop();
+    //LOG(INFO) << " stack_thread_ids.pop " << thread_id << std::endl;
+
+    threads.push_back(std::async(std::launch::async, import_thread, thread_id, this, sbuffer, begin_pos, end_pos, end_pos));
+
+    current_pos += end_pos;
+    sbuffer.reset(new char[alloc_size]);
+    memcpy(sbuffer.get(), unbuf.get(), nresidual);
+    size = nresidual + fread(sbuffer.get() + nresidual, 1, IMPORT_FILE_BUFFER_SIZE - nresidual, p_file);
+    if (size < IMPORT_FILE_BUFFER_SIZE && feof(p_file))
+      eof_reached = true;
+
     begin_pos = 0;
-    if (import_status.rows_rejected > copy_params.max_reject) {
-      load_truncated = true;
-      LOG(ERROR) << "Maximum rows rejected exceeded. Halting load";
-      break;
+
+    while (threads.size() > 0)
+    {
+        for (std::list<std::future<ImportStatus>>::iterator it = threads.begin(); it != threads.end(); it = it)
+        {
+            auto &p = *it;
+            std::chrono::milliseconds span(1);
+            if (p.wait_for(span) == std::future_status::ready)
+            {
+                auto ret_import_status = p.get();
+                import_status += ret_import_status;
+                import_status.rows_estimated = ((float)file_size / current_pos) * import_status.rows_completed;
+                set_import_status(import_id, import_status);
+                bytes_copied += IMPORT_FILE_BUFFER_SIZE;
+
+                // recall thread_id for reuse
+                stack_thread_ids.push(ret_import_status.thread_id);
+                //LOG(INFO) << " stack_thread_ids.push " << ret_import_status.thread_id << std::endl;
+
+                threads.erase(it++);
+            }
+            else
+                ++it;
+        }
+
+        // checkpoint before going again
+        if (bytes_copied >= (1 << 27))
+        {
+            bytes_copied = 0;
+            loader->checkpoint();
+        }
+
+        // on eof, wait all threads to finish
+        if (0 == size) continue;
+
+        // keep reading if any free thread slot
+        // this is one of the major difference from old threading model !!
+        if ((int)threads.size() < max_threads)
+            break;
     }
-    // checkpoint before going again
-    loader->checkpoint();
+
+    if (import_status.rows_rejected > copy_params.max_reject)
+    {
+        load_truncated = true;
+        LOG(ERROR) << "Maximum rows rejected exceeded. Halting load";
+        break;
+    }
+
   }
+
+  // join dangling threads in case of LOG(ERROR) above
+  for (auto &p: threads) p.wait();
+  loader->checkpoint();
+
   if (loader->get_table_desc()->persistenceLevel ==
       Data_Namespace::MemoryLevel::DISK_LEVEL) {  // only checkpoint disk-resident tables
     auto ms = measure<>::execution([&]() {
@@ -1912,11 +2077,15 @@ ImportStatus Importer::importDelimited() {
     if (debug_timing)
       LOG(INFO) << "Dictionary Checkpointing took " << (double)ms / 1000.0 << " Seconds." << std::endl;
   }
-  free(buffer[0]);
-  buffer[0] = nullptr;
-  free(buffer[1]);
-  buffer[1] = nullptr;
-  fclose(p_file);
+
+  if (decompressed)
+  {
+    // afaik the only way to know if popen() failed the command is WEXITSTATUS(pclose())
+    auto status = pclose(p_file);
+    import_status.popen_exit_code = WEXITSTATUS(status);
+  }
+  else
+    fclose(p_file);
   p_file = nullptr;
 
   import_status.load_truncated = load_truncated;
