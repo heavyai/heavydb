@@ -2543,24 +2543,14 @@ void MapDHandler::broadcast_serialized_rows(const std::string& serialized_rows,
 void MapDHandler::set_table_epoch(const TSessionId& session, const int db_id, const int table_id, const int new_epoch) {
   const auto session_info = get_session(session);
   if (!session_info.get_currentUser().isSuper) {
-    throw std::runtime_error("Only superuser can rollback_table_epoch");
+    throw std::runtime_error("Only superuser can set_table_epoch");
   }
-  // remove artifact in memory about rolledback data
-
   auto& cat = session_info.get_catalog();
-
-  // if running in same DB as the rolledback table
-  if (cat.get_currentDB().dbId == db_id) {
-    LOG(INFO) << "Removing in memory artifacts after rollback of table epoch";
-    cat.removeChunks(table_id);
-  }
-  clear_gpu_memory(session);
-  clear_cpu_memory(session);
-
-  LOG(INFO) << "Set table epoch db:" << db_id << " Table ID  " << table_id << " back to new epoch " << new_epoch;
-  data_mgr_->setTableEpoch(db_id, table_id, new_epoch);
+  cat.setTableEpoch(db_id, table_id, new_epoch);
 }
 
 int32_t MapDHandler::get_table_epoch(const TSessionId& session, const int32_t db_id, const int32_t table_id) {
-  return data_mgr_->getTableEpoch(db_id, table_id);
+  const auto session_info = get_session(session);
+  auto& cat = session_info.get_catalog();
+  return cat.getTableEpoch(db_id, table_id);
 }

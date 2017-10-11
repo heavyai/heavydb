@@ -292,6 +292,9 @@ class Catalog {
 
   std::vector<const TableDescriptor*> getPhysicalTablesDescriptors(const TableDescriptor* logicalTableDesc) const;
 
+  int32_t getTableEpoch(const int32_t db_id, const int32_t table_id);
+  void setTableEpoch(const int db_id, const int table_id, const int new_epoch);
+
  protected:
   void CheckAndExecuteMigrations();
   void updateDictionaryNames();

@@ -1795,6 +1795,20 @@ void Catalog::createTable(TableDescriptor& td,
   calciteMgr_->updateMetadata(currentDB_.dbName, td.tableName);
 }
 
+int32_t Catalog::getTableEpoch(const int32_t db_id, const int32_t table_id) {
+  return dataMgr_->getTableEpoch(db_id, table_id);
+}
+
+void Catalog::setTableEpoch(const int db_id, const int table_id, const int new_epoch) {
+  removeChunks(table_id);
+
+  dataMgr_->clearMemory(MemoryLevel::CPU_LEVEL);
+  dataMgr_->clearMemory(MemoryLevel::GPU_LEVEL);
+
+  LOG(INFO) << "Set table epoch db:" << db_id << " Table ID  " << table_id << " back to new epoch " << new_epoch;
+  dataMgr_->setTableEpoch(db_id, table_id, new_epoch);
+}
+
 namespace {
 
 const ColumnDescriptor* get_foreign_col(const Catalog& cat, const Parser::SharedDictionaryDef& shared_dict_def) {
