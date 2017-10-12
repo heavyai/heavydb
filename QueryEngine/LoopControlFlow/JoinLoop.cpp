@@ -57,13 +57,13 @@ llvm::BasicBlock* JoinLoop::codegen(
         const auto iteration_counter_ptr =
             builder.CreateAlloca(get_int_type(64, context), nullptr, "ub_iter_counter_ptr_" + join_loop.name_);
         builder.CreateStore(ll_int(int64_t(0), context), iteration_counter_ptr);
+        const auto iteration_domain = join_loop.iteration_domain_codegen_(iterators);
         const auto head_bb = llvm::BasicBlock::Create(context, "ub_iter_head_" + join_loop.name_, parent_func);
         builder.CreateBr(head_bb);
         builder.SetInsertPoint(head_bb);
         llvm::Value* iteration_counter =
             builder.CreateLoad(iteration_counter_ptr, "ub_iter_counter_val_" + join_loop.name_);
         auto iteration_val = iteration_counter;
-        const auto iteration_domain = join_loop.iteration_domain_codegen_(iterators);
         CHECK(join_loop.kind_ == JoinLoopKind::Set || !iteration_domain.values_buffer);
         if (join_loop.kind_ == JoinLoopKind::Set) {
           iteration_val = builder.CreateGEP(iteration_domain.values_buffer, iteration_counter);
