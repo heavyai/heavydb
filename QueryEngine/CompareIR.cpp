@@ -16,6 +16,8 @@
 
 #include "Execute.h"
 
+#include <typeinfo>
+
 #include "../Parser/ParserNode.h"
 
 namespace {
@@ -193,15 +195,55 @@ llvm::Value* Executor::codegenCmp(const Analyzer::BinOper* bin_oper, const Compi
     throw std::runtime_error("Unnest not supported in comparisons");
   }
   const auto& lhs_ti = lhs->get_type_info();
+  const auto& rhs_ti = rhs->get_type_info();
+
+  if (g_fast_strcmp && lhs_ti.is_string() && rhs_ti.is_string()) {
+    auto cmp_str =
+        codegenStrCmp(optype, qualifier, bin_oper->get_own_left_operand(), bin_oper->get_own_right_operand(), co);
+    if (cmp_str) {
+      return cmp_str;
+    }
+  }
+
   if (lhs_ti.is_decimal()) {
-    auto cmp_decimal_const = codegenCmpDecimalConst(optype, qualifier, lhs, lhs->get_type_info(), rhs, co);
+    auto cmp_decimal_const = codegenCmpDecimalConst(optype, qualifier, lhs, lhs_ti, rhs, co);
     if (cmp_decimal_const)
       return cmp_decimal_const;
   }
-  const auto lhs_lvs = codegen(lhs, true, co);
-  return codegenCmp(optype, qualifier, lhs_lvs, lhs->get_type_info(), rhs, co);
+
+  auto lhs_lvs = codegen(lhs, true, co);
+  return codegenCmp(optype, qualifier, lhs_lvs, lhs_ti, rhs, co);
 }
 
+llvm::Value* Executor::codegenStrCmp(const SQLOps optype,
+                                     const SQLQualifier qualifier,
+                                     const std::shared_ptr<Analyzer::Expr> lhs,
+                                     const std::shared_ptr<Analyzer::Expr> rhs,
+                                     const CompilationOptions& co) {
+  const auto lhs_ti = lhs->get_type_info();
+  const auto rhs_ti = rhs->get_type_info();
+
+  CHECK(lhs_ti.is_string());
+  CHECK(rhs_ti.is_string());
+
+  const auto null_check_suffix = get_null_check_suffix(lhs_ti, rhs_ti);
+  if (lhs_ti.get_compression() == kENCODING_DICT && rhs_ti.get_compression() == kENCODING_DICT) {
+    if (lhs_ti.get_comp_param() == rhs_ti.get_comp_param()) {
+      // Both operands share a dictionary
+
+      // check if query is trying to compare a columnt against literal
+
+      auto ir = codegenDictStrCmp(lhs, rhs, optype, co);
+      if (ir) {
+        return ir;
+      }
+    } else {
+      // Both operands don't share a dictionary
+      return nullptr;
+    }
+  }
+  return nullptr;
+}
 llvm::Value* Executor::codegenCmpDecimalConst(const SQLOps optype,
                                               const SQLQualifier qualifier,
                                               const Analyzer::Expr* lhs,

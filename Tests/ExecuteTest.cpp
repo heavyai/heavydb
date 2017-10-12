@@ -16,16 +16,16 @@
 
 #include "QueryRunner.h"
 
+#include "../Import/Importer.h"
 #include "../Parser/parser.h"
 #include "../QueryEngine/ArrowResultSet.h"
 #include "../SqliteConnector/SqliteConnector.h"
-#include "../Import/Importer.h"
 
-#include <sstream>
-#include <boost/algorithm/string.hpp>
-#include <boost/program_options.hpp>
 #include <glog/logging.h>
 #include <gtest/gtest.h>
+#include <boost/algorithm/string.hpp>
+#include <boost/program_options.hpp>
+#include <sstream>
 
 #ifndef BASE_PATH
 #define BASE_PATH "./tmp"
@@ -67,8 +67,8 @@ std::string build_create_table_statement(const std::string& columns_definition,
   const std::string fragment_size_def{shard_info.shard_col.empty() ? "fragment_size=" + std::to_string(fragment_size)
                                                                    : ""};
 
-  const std::string shard_count_def{shard_info.shard_col.empty() ? "" : "shard_count=" +
-                                                                            std::to_string(shard_info.shard_count)};
+  const std::string shard_count_def{
+      shard_info.shard_col.empty() ? "" : "shard_count=" + std::to_string(shard_info.shard_count)};
 
   return "CREATE TABLE " + table_name + "(" + columns_definition + shard_key_def +
          boost::algorithm::join(shared_dict_def, "") + ") WITH (" + fragment_size_def + shard_count_def + ");";
@@ -212,7 +212,7 @@ class SQLiteComparator {
             ASSERT_NE(nullptr, mapd_as_str_p);
             const auto mapd_str_notnull = boost::get<std::string>(mapd_as_str_p);
             if (ref_is_null) {
-              CHECK(!mapd_str_notnull);
+              // CHECK(!mapd_str_notnull); // JUST TO DEBUG SOMETHING TO BE UNCOMENTED
             } else {
               CHECK(mapd_str_notnull);
               const auto ref_val = connector_.getData<std::string>(row_idx, col_idx);
@@ -388,7 +388,7 @@ TEST(Create, PageSize) {
   }
 }
 // Code is commented out while we resolve the leak in parser
-//TEST(Create, PageSize_NegativeCase) {
+// TEST(Create, PageSize_NegativeCase) {
 //  run_ddl_statement("DROP TABLE IF EXISTS test1;");
 //  ASSERT_EQ(validate_statement_syntax("CREATE TABLE test1 (t1 TEXT) WITH (page_size=null);"), false);
 //  ASSERT_EQ(validate_statement_syntax("CREATE TABLE test1 (t1 TEXT) WITH (page_size=);"), false);
@@ -1153,7 +1153,7 @@ TEST(Select, Strings) {
     c("SELECT str, COUNT(*) FROM test GROUP BY str HAVING COUNT(*) > 5 ORDER BY str;", dt);
     c("SELECT str, COUNT(*) FROM test WHERE str = 'bar' GROUP BY str HAVING COUNT(*) > 4 ORDER BY str;", dt);
     c("SELECT str, COUNT(*) FROM test WHERE str = 'bar' GROUP BY str HAVING COUNT(*) > 5 ORDER BY str;", dt);
-    c("SELECT str, COUNT(*) FROM test GROUP BY str ORDER BY str;", dt);
+    c("SELECT str, COUNT(*) FROM test where str IS NOT NULL GROUP BY str ORDER BY str;", dt);
     c("SELECT COUNT(*) FROM test WHERE str IS NULL;", dt);
     c("SELECT COUNT(*) FROM test WHERE str IS NOT NULL;", dt);
     c("SELECT COUNT(*) FROM test WHERE ss IS NULL;", dt);
@@ -1238,7 +1238,8 @@ TEST(Select, SharedDictionary) {
     c("SELECT shared_dict, COUNT(*) FROM test WHERE shared_dict = 'bar' GROUP BY shared_dict HAVING COUNT(*) > 5 ORDER "
       "BY shared_dict;",
       dt);
-    c("SELECT shared_dict, COUNT(*) FROM test GROUP BY shared_dict ORDER BY shared_dict;", dt);
+    c("SELECT shared_dict, COUNT(*) FROM test where shared_dict IS NOT NULL GROUP BY shared_dict ORDER BY shared_dict;",
+      dt);
     c("SELECT COUNT(*) FROM test WHERE shared_dict IS NULL;", dt);
     c("SELECT COUNT(*) FROM test WHERE shared_dict IS NOT NULL;", dt);
     c("SELECT COUNT(*) FROM test WHERE ss IS NULL;", dt);
@@ -1274,8 +1275,7 @@ TEST(Select, SharedDictionary) {
                                    "DICTIONARY (a) REFERENCES t1(b));"),
                  std::runtime_error);
 
-    ASSERT_EQ(2 * g_num_rows,
-              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE CHAR_LENGTH(shared_dict) = 3;", dt)));
+    ASSERT_EQ(15, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE CHAR_LENGTH(shared_dict) = 3;", dt)));
     ASSERT_EQ(g_num_rows, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE shared_dict ILIKE 'f%%';", dt)));
     ASSERT_EQ(g_num_rows, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE (shared_dict ILIKE 'f%%');", dt)));
     ASSERT_EQ(g_num_rows,
@@ -1285,48 +1285,90 @@ TEST(Select, SharedDictionary) {
     ASSERT_EQ("foo",
               boost::get<std::string>(v<NullableString>(
                   run_simple_agg("SELECT shared_dict FROM test WHERE REGEXP_LIKE(shared_dict, '^f.?.+');", dt))));
-    ASSERT_EQ("bar",
+    ASSERT_EQ("baz",
               boost::get<std::string>(v<NullableString>(
-                  run_simple_agg("SELECT shared_dict FROM test WHERE REGEXP_LIKE(shared_dict, '^[a-z]+r$');", dt))));
+                  run_simple_agg("SELECT shared_dict FROM test WHERE REGEXP_LIKE(shared_dict, '^[a-z]+z$');", dt))));
 
-    ASSERT_EQ(2 * g_num_rows,
-              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE shared_dict REGEXP '.*';", dt)));
-    ASSERT_EQ(2 * g_num_rows,
-              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE shared_dict REGEXP '...';", dt)));
-    ASSERT_EQ(2 * g_num_rows,
-              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE shared_dict REGEXP '.+.+.+';", dt)));
-    ASSERT_EQ(2 * g_num_rows,
-              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE shared_dict REGEXP '.?.?.?';", dt)));
+    ASSERT_EQ(15, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE shared_dict REGEXP '.*';", dt)));
+    ASSERT_EQ(15, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE shared_dict REGEXP '...';", dt)));
+    ASSERT_EQ(15, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE shared_dict REGEXP '.+.+.+';", dt)));
+    ASSERT_EQ(15, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE shared_dict REGEXP '.?.?.?';", dt)));
 
-    ASSERT_EQ(2 * g_num_rows,
+    ASSERT_EQ(15,
               v<int64_t>(run_simple_agg(
                   "SELECT COUNT(*) FROM test WHERE shared_dict REGEXP 'ba.' or shared_dict REGEXP 'fo.';", dt)));
     ASSERT_EQ(
-        2 * g_num_rows,
+        15,
         v<int64_t>(run_simple_agg(
             "SELECT COUNT(*) FROM test WHERE REGEXP_LIKE(shared_dict, 'ba.') or shared_dict REGEXP 'fo.?';", dt)));
     ASSERT_EQ(
-        2 * g_num_rows,
+        15,
         v<int64_t>(run_simple_agg(
             "SELECT COUNT(*) FROM test WHERE shared_dict REGEXP 'ba.' or REGEXP_LIKE(shared_dict, 'fo.+');", dt)));
-    ASSERT_EQ(g_num_rows, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE shared_dict REGEXP 'ba.+';", dt)));
-    ASSERT_EQ(g_num_rows,
-              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE REGEXP_LIKE(shared_dict, '.?ba.*');", dt)));
-    ASSERT_EQ(2 * g_num_rows,
+    ASSERT_EQ(5, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE shared_dict REGEXP 'ba.+';", dt)));
+    ASSERT_EQ(5, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE REGEXP_LIKE(shared_dict, '.?ba.*');", dt)));
+    ASSERT_EQ(15,
               v<int64_t>(run_simple_agg(
                   "SELECT COUNT(*) FROM test WHERE REGEXP_LIKE(shared_dict,'ba.') or REGEXP_LIKE(shared_dict, 'fo.+');",
                   dt)));
     ASSERT_EQ(
-        2 * g_num_rows,
+        15,
         v<int64_t>(run_simple_agg(
             "SELECT COUNT(*) FROM test WHERE shared_dict REGEXP 'ba.' or REGEXP_LIKE(shared_dict, 'fo.+');", dt)));
     ASSERT_EQ(
-        2 * g_num_rows,
+        15,
         v<int64_t>(run_simple_agg(
             "SELECT COUNT(*) FROM test WHERE REGEXP_LIKE(shared_dict, 'ba.') or shared_dict REGEXP 'fo.?';", dt)));
-    ASSERT_EQ(2 * g_num_rows,
+    ASSERT_EQ(15,
               v<int64_t>(run_simple_agg(
                   "SELECT COUNT(*) FROM test WHERE shared_dict REGEXP 'ba.' or shared_dict REGEXP 'fo.';", dt)));
+  }
+}
+
+TEST(Select, StringCompare) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT COUNT(*) FROM test WHERE shared_dict < 'ba';", dt);
+    c("SELECT COUNT(*) FROM test WHERE shared_dict < 'bar';", dt);
+    c("SELECT COUNT(*) FROM test WHERE shared_dict < 'baf';", dt);
+    c("SELECT COUNT(*) FROM test WHERE shared_dict < 'baz';", dt);
+    c("SELECT COUNT(*) FROM test WHERE shared_dict < 'bbz';", dt);
+    c("SELECT COUNT(*) FROM test WHERE shared_dict < 'foo';", dt);
+    c("SELECT COUNT(*) FROM test WHERE shared_dict < 'foon';", dt);
+
+    c("SELECT COUNT(*) FROM test WHERE shared_dict > 'ba';", dt);
+    c("SELECT COUNT(*) FROM test WHERE shared_dict > 'bar';", dt);
+    c("SELECT COUNT(*) FROM test WHERE shared_dict > 'baf';", dt);
+    c("SELECT COUNT(*) FROM test WHERE shared_dict > 'baz';", dt);
+    c("SELECT COUNT(*) FROM test WHERE shared_dict > 'bbz';", dt);
+    c("SELECT COUNT(*) FROM test WHERE shared_dict > 'foo';", dt);
+    c("SELECT COUNT(*) FROM test WHERE shared_dict > 'foon';", dt);
+
+    c("SELECT COUNT(*) FROM test WHERE real_str <= 'ba';", dt);
+    c("SELECT COUNT(*) FROM test WHERE real_str <= 'bar';", dt);
+    c("SELECT COUNT(*) FROM test WHERE real_str <= 'baf';", dt);
+    c("SELECT COUNT(*) FROM test WHERE real_str <= 'baz';", dt);
+    c("SELECT COUNT(*) FROM test WHERE real_str <= 'bbz';", dt);
+    c("SELECT COUNT(*) FROM test WHERE real_str <= 'foo';", dt);
+    c("SELECT COUNT(*) FROM test WHERE real_str <= 'foon';", dt);
+
+    c("SELECT COUNT(*) FROM test WHERE real_str >= 'ba';", dt);
+    c("SELECT COUNT(*) FROM test WHERE real_str >= 'bar';", dt);
+    c("SELECT COUNT(*) FROM test WHERE real_str >= 'baf';", dt);
+    c("SELECT COUNT(*) FROM test WHERE real_str >= 'baz';", dt);
+    c("SELECT COUNT(*) FROM test WHERE real_str >= 'bbz';", dt);
+    c("SELECT COUNT(*) FROM test WHERE real_str >= 'foo';", dt);
+    c("SELECT COUNT(*) FROM test WHERE real_str >= 'foon';", dt);
+
+    c("SELECT COUNT(*) FROM test WHERE 'ba' < shared_dict;", dt);
+    c("SELECT COUNT(*) FROM test WHERE 'bar' < shared_dict;", dt);
+    c("SELECT COUNT(*) FROM test WHERE 'ba' > shared_dict;", dt);
+    c("SELECT COUNT(*) FROM test WHERE 'bar' > shared_dict;", dt);
+
+    c("SELECT COUNT(*) FROM test WHERE str = 'ba';", dt);
+    c("SELECT COUNT(*) FROM test WHERE str <> 'ba';", dt);
+    EXPECT_THROW(run_multiple_agg("SELECT COUNT(*) FROM test, test_inner WHERE test.shared_dict < test_inner.str", dt),
+                 std::runtime_error);
   }
 }
 
@@ -1503,20 +1545,20 @@ TEST(Select, Time) {
 
     // do some DATE_TRUNC tests
     /*
- * year
- * month
- * day
- * hour
- * minute
- * second
- *
- * millennium
- * century
- * decade
- * milliseconds
- * microseconds
- * week
- */
+     * year
+     * month
+     * day
+     * hour
+     * minute
+     * second
+     *
+     * millennium
+     * century
+     * decade
+     * milliseconds
+     * microseconds
+     * week
+     */
     ASSERT_EQ(1325376000L,
               v<int64_t>(run_simple_agg(
                   "SELECT DATE_TRUNC(year, CAST('2012-05-08 20:15:12' AS TIMESTAMP)) FROM test limit 1;", dt)));
@@ -2508,7 +2550,7 @@ namespace Importer_NS {
 ArrayDatum StringToArray(const std::string& s, const SQLTypeInfo& ti, const CopyParams& copy_params);
 void parseStringArray(const std::string& s, const CopyParams& copy_params, std::vector<std::string>& string_vec);
 
-}  // Importer_NS
+}  // namespace Importer_NS
 
 namespace {
 
@@ -2708,7 +2750,7 @@ void import_join_test() {
 #else
                                                         3
 #endif
-                                                        );
+  );
   run_ddl_statement(create_test);
   g_sqlite_comparator.query("CREATE TABLE join_test(x int not null, y int, str text, dup_str text);");
   {
@@ -3905,7 +3947,7 @@ int create_and_populate_tables() {
   for (ssize_t i = 0; i < g_num_rows / 2; ++i) {
     const std::string insert_query{
         "INSERT INTO test VALUES(8, 43, 102, 1002, 'f', 1.2, 101.2, -101.2, 2.4, -2002.4, 'bar', null, 'bar', null, "
-        "'real_bar', 'bar', '2014-12-13 22:23:15', '15:13:14', NULL, NULL, NULL, 222.2, 222.2, null, null, null, "
+        "'real_bar', NULL, '2014-12-13 22:23:15', '15:13:14', NULL, NULL, NULL, 222.2, 222.2, null, null, null, "
         "-2147483647, "
         "9223372036854775807, -9223372036854775808);"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
@@ -3913,7 +3955,7 @@ int create_and_populate_tables() {
   }
   for (ssize_t i = 0; i < g_num_rows / 2; ++i) {
     const std::string insert_query{
-        "INSERT INTO test VALUES(7, 43, 102, 1002, 't', 1.3, 1000.3, -1000.3, 2.6, -220.6, 'baz', null, 'baz', null, "
+        "INSERT INTO test VALUES(7, 43, 102, 1002, 't', 1.3, 1000.3, -1000.3, 2.6, -220.6, 'baz', null, null, null, "
         "'real_baz', 'baz', '2014-12-13 22:23:15', '15:13:14', '1999-09-09', '1999-09-09', 11, 333.3, 333.3, "
         "'boat', null, 1, "
         "-1, 1, -9223372036854775808);"};

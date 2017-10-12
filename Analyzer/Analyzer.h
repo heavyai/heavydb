@@ -24,17 +24,18 @@
 #ifndef ANALYZER_H
 #define ANALYZER_H
 
+#include <glog/logging.h>
+#include <iostream>
 #include <cstdint>
-#include <string>
-#include <vector>
-#include <utility>
 #include <list>
 #include <set>
+#include <string>
 #include <type_traits>
-#include <glog/logging.h>
+#include <utility>
+#include <vector>
 #include "../Catalog/TableDescriptor.h"
-#include "../Shared/sqltypes.h"
 #include "../Shared/sqldefs.h"
+#include "../Shared/sqltypes.h"
 
 namespace Analyzer {
 class Expr;
@@ -536,7 +537,7 @@ class InValues : public Expr {
  */
 class InIntegerSet : public Expr {
  public:
-  InIntegerSet(std::shared_ptr<Analyzer::Expr> a, const std::vector<int64_t>& values, const bool not_null);
+  InIntegerSet(const std::shared_ptr<const Analyzer::Expr> a, const std::vector<int64_t>& values, const bool not_null);
 
   const Expr* get_arg() const { return arg.get(); }
 
@@ -549,8 +550,8 @@ class InIntegerSet : public Expr {
   void print() const override;
 
  private:
-  const std::shared_ptr<Analyzer::Expr> arg;  // the argument left of IN
-  const std::vector<int64_t> value_list;      // the list of values right of IN
+  const std::shared_ptr<const Analyzer::Expr> arg;  // the argument left of IN
+  const std::vector<int64_t> value_list;            // the list of values right of IN
 };
 
 /*
@@ -1203,7 +1204,7 @@ class Query {
   int64_t limit;                   // row count for LIMIT clause.  0 means ALL
   int64_t offset;                  // offset in OFFSET clause.  0 means no offset.
 };
-}
+}  // namespace Analyzer
 
 inline std::shared_ptr<Analyzer::Var> var_ref(const Analyzer::Expr* expr,
                                               const Analyzer::Var::WhichRow which_row,

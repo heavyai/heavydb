@@ -17,24 +17,33 @@
 #ifndef STRINGDICTIONARY_STRINGDICTIONARY_H
 #define STRINGDICTIONARY_STRINGDICTIONARY_H
 
-#include "LeafHostInfo.h"
 #include "../Shared/mapd_shared_mutex.h"
+#include "DictionaryCache.hpp"
+#include "LeafHostInfo.h"
 
 #include <sys/mman.h>
-#include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 #include <unistd.h>
 
+#include <future>
 #include <map>
 #include <string>
 #include <tuple>
 #include <vector>
-#include <future>
 
 class StringDictionaryClient;
 
 class StringDictionary {
  public:
+  // In the compare_cache_value_t index represents the index of the sorted cache.
+  // The diff component represents whether the index the cache is pointing to is equal to the pattern it is cached for.
+  // We want to use diff so we don't have compare string again when we are retrieving it from the cache.
+  typedef struct {
+    int index;
+    int32_t diff;
+  } compare_cache_value_t;
+
   StringDictionary(const std::string& folder,
                    const bool isTemp,
                    const bool recover,
@@ -55,6 +64,10 @@ class StringDictionary {
                                const bool is_simple,
                                const char escape,
                                const size_t generation) const;
+
+  std::vector<int32_t> getCompare(const std::string& pattern,
+                                  const std::string& comp_operator,
+                                  const size_t generation);
 
   std::vector<int32_t> getRegexpLike(const std::string& pattern, const char escape, const size_t generation) const;
 
@@ -91,9 +104,18 @@ class StringDictionary {
   size_t addStorageCapacity(int fd) noexcept;
   void* addMemoryCapacity(void* addr, size_t& mem_size) noexcept;
   void invalidateInvertedIndex() noexcept;
+  void buildSortedCache();
+  void insertInSortedCache(std::string str, int32_t str_id);
+  void sortCache();
+  compare_cache_value_t* binary_search_cache(const std::string& pattern) const;
+  // To be Deleted
+  void printSortedCache();
+  void printSortedCacheValues();
+  // To be Deleted
 
   size_t str_count_;
   std::vector<int32_t> str_ids_;
+  std::vector<int32_t> sorted_cache;
   bool isTemp_;
   std::string offsets_path_;
   int payload_fd_;
@@ -106,6 +128,7 @@ class StringDictionary {
   mutable mapd_shared_mutex rw_mutex_;
   mutable std::map<std::tuple<std::string, bool, bool, char>, std::vector<int32_t>> like_cache_;
   mutable std::map<std::pair<std::string, char>, std::vector<int32_t>> regex_cache_;
+  mutable DictionaryCache<std::string, compare_cache_value_t> compare_cache_;
   mutable std::shared_ptr<std::vector<std::string>> strings_cache_;
   std::unique_ptr<StringDictionaryClient> client_;
   std::unique_ptr<StringDictionaryClient> client_no_timeout_;

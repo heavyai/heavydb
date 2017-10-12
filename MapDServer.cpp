@@ -17,28 +17,28 @@
 #include "MapDServer.h"
 #include "ThriftHandler/MapDHandler.h"
 
-#include <thrift/concurrency/ThreadManager.h>
 #include <thrift/concurrency/PlatformThreadFactory.h>
+#include <thrift/concurrency/ThreadManager.h>
 #include <thrift/protocol/TBinaryProtocol.h>
 #include <thrift/protocol/TJSONProtocol.h>
 #include <thrift/server/TThreadedServer.h>
+#include <thrift/transport/TBufferTransports.h>
 #include <thrift/transport/THttpServer.h>
 #include <thrift/transport/TServerSocket.h>
-#include <thrift/transport/TBufferTransports.h>
 
 #include "MapDRelease.h"
 
 #include "Shared/MapDParameters.h"
 #include "Shared/scope.h"
 
+#include <glog/logging.h>
+#include <signal.h>
+#include <boost/algorithm/string.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/make_shared.hpp>
 #include <boost/program_options.hpp>
-#include <boost/algorithm/string.hpp>
-#include <thread>
-#include <glog/logging.h>
-#include <signal.h>
 #include <sstream>
+#include <thread>
 #include <vector>
 
 using namespace ::apache::thrift;
@@ -290,6 +290,9 @@ int main(int argc, char** argv) {
   desc_adv.add_options()("allow-loop-joins",
                          po::value<bool>(&allow_loop_joins)->default_value(allow_loop_joins)->implicit_value(true),
                          "Enable loop joins");
+  desc_adv.add_options()("disable-fast-strcmp",
+                         po::value<bool>(&g_fast_strcmp)->default_value(g_fast_strcmp)->implicit_value(false),
+                         "Disable fast string comparison");
   desc_adv.add_options()("res-gpu-mem",
                          po::value<size_t>(&reserved_gpu_mem)->default_value(reserved_gpu_mem),
                          "Reserved memory for GPU, not use mapd allocator");

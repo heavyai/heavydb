@@ -52,6 +52,13 @@ class StringDictionaryClient {
     return std::vector<int32_t>{};
   };
 
+  std::vector<int32_t> get_compare(const std::string& pattern,
+                                   const std::string& comp_operator,
+                                   const int64_t generation) {
+    CHECK(false);
+    return std::vector<int32_t>{};
+  };
+
   std::vector<int32_t> get_regexp_like(const std::string& pattern, const char escape, const int64_t generation) {
     CHECK(false);
     return std::vector<int32_t>{};

@@ -72,6 +72,7 @@ extern bool g_from_table_reordering;
 extern bool g_allow_cpu_retry;
 extern bool g_null_div_by_zero;
 extern bool g_bigint_count;
+extern bool g_fast_strcmp;
 
 class ExecutionResult;
 
@@ -441,6 +442,15 @@ class Executor {
                           const SQLTypeInfo&,
                           const Analyzer::Expr*,
                           const CompilationOptions&);
+  llvm::Value* codegenStrCmp(const SQLOps,
+                             const SQLQualifier,
+                             const std::shared_ptr<Analyzer::Expr>,
+                             const std::shared_ptr<Analyzer::Expr>,
+                             const CompilationOptions&);
+  llvm::Value* codegenDictStrCmp(const std::shared_ptr<Analyzer::Expr>,
+                                 const std::shared_ptr<Analyzer::Expr>,
+                                 const SQLOps,
+                                 const CompilationOptions& co);
   llvm::Value* codegenQualifierCmp(const SQLOps,
                                    const SQLQualifier,
                                    std::vector<llvm::Value*>,

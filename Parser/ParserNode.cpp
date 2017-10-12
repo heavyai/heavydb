@@ -22,33 +22,34 @@
  * Copyright (c) 2014 MapD Technologies, Inc.  All rights reserved.
  **/
 
-#include <cassert>
-#include <stdexcept>
-#include <typeinfo>
-#include <limits>
-#include <boost/algorithm/string.hpp>
-#include <boost/algorithm/string/predicate.hpp>
-#include <boost/filesystem.hpp>
+#include "ParserNode.h"
 #include <rapidjson/document.h>
 #include <rapidjson/stringbuffer.h>
 #include <rapidjson/writer.h>
+#include <boost/algorithm/string.hpp>
+#include <boost/algorithm/string/predicate.hpp>
+#include <boost/filesystem.hpp>
+#include <cassert>
+#include <limits>
+#include <stdexcept>
+#include <typeinfo>
 #include "../Catalog/Catalog.h"
 #include "../Catalog/SharedDictionaryValidator.h"
-#include "ParserNode.h"
-#include "ReservedKeywords.h"
-#include "../Planner/Planner.h"
-#include "../QueryEngine/Execute.h"
 #include "../Fragmenter/InsertOrderFragmenter.h"
 #include "../Import/Importer.h"
-#include "../Shared/measure.h"
+#include "../Planner/Planner.h"
+#include "../QueryEngine/Execute.h"
 #include "../Shared/mapd_glob.h"
+#include "../Shared/measure.h"
+#include "ReservedKeywords.h"
 #include "parser.h"
 
+#include "../QueryEngine/CalciteAdapter.h"
 #include "../QueryEngine/ExtensionFunctionsWhitelist.h"
 #include "../QueryEngine/RelAlgExecutor.h"
-#include "../QueryEngine/CalciteAdapter.h"
 
 size_t g_leaf_count{0};
+bool g_fast_strcmp{true};
 
 namespace Parser {
 
@@ -198,7 +199,9 @@ std::shared_ptr<Analyzer::Expr> OperExpr::normalize(const SQLOps optype,
     else
       right_expr = right_expr->add_cast(new_right_type.get_array_type());
   }
-  if (IS_EQUIVALENCE(optype) || optype == kNE) {
+  auto check_compression =
+      (g_fast_strcmp) ? IS_COMPARISON(optype) : IS_EQUIVALENCE(optype) || optype == kNE;
+  if (check_compression) {
     if (new_left_type.get_compression() == kENCODING_DICT && new_right_type.get_compression() == kENCODING_DICT) {
       // do nothing
     } else if (new_left_type.get_compression() == kENCODING_DICT &&
@@ -3100,4 +3103,4 @@ void DropUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   Catalog_Namespace::SysCatalog& syscat = static_cast<Catalog_Namespace::SysCatalog&>(catalog);
   syscat.dropUser(*user_name);
 }
-}
+}  // namespace Parser

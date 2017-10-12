@@ -22,14 +22,14 @@
  * Copyright (c) 2014 MapD Technologies, Inc.  All rights reserved.
  **/
 
-#include <iostream>
-#include <algorithm>
-#include <stdexcept>
-#include <cstring>
+#include "Analyzer.h"
 #include <glog/logging.h>
+#include <algorithm>
+#include <cstring>
+#include <iostream>
+#include <stdexcept>
 #include "../Catalog/Catalog.h"
 #include "../Shared/sqltypes.h"
-#include "Analyzer.h"
 
 namespace Analyzer {
 
@@ -1129,7 +1129,9 @@ void InValues::group_predicates(std::list<const Expr*>& scan_predicates,
     const_predicates.push_back(this);
 }
 
-InIntegerSet::InIntegerSet(std::shared_ptr<Analyzer::Expr> a, const std::vector<int64_t>& l, const bool not_null)
+InIntegerSet::InIntegerSet(const std::shared_ptr<const Analyzer::Expr> a,
+                           const std::vector<int64_t>& l,
+                           const bool not_null)
     : Expr(kBOOLEAN, not_null), arg(a), value_list(l) {}
 
 void CharLengthExpr::group_predicates(std::list<const Expr*>& scan_predicates,

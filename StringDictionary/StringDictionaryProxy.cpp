@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-#include "StringDictionary.h"
 #include "StringDictionaryProxy.h"
 #include "../Shared/sqltypes.h"
-#include "../Utils/StringLike.h"
 #include "../Utils/Regexp.h"
+#include "../Utils/StringLike.h"
 #include "Shared/thread_count.h"
+#include "StringDictionary.h"
 
 #include <glog/logging.h>
 #include <sys/fcntl.h>
@@ -116,6 +116,41 @@ std::vector<int32_t> StringDictionaryProxy::getLike(const std::string& pattern,
   for (const auto& kv : transient_int_to_str_) {
     const auto str = getString(kv.first);
     if (is_like(str, pattern, icase, is_simple, escape)) {
+      result.push_back(kv.first);
+    }
+  }
+  return result;
+}
+
+namespace {
+
+bool do_compare(const std::string& str, const std::string& pattern, const std::string& comp_operator) {
+  int res = str.compare(pattern);
+  if (comp_operator == "<") {
+    return res < 0;
+  } else if (comp_operator == "<=") {
+    return res <= 0;
+  } else if (comp_operator == "=") {
+    return res == 0;
+  } else if (comp_operator == ">") {
+    return res > 0;
+  } else if (comp_operator == ">=") {
+    return res >= 0;
+  } else if (comp_operator == "<>") {
+    return res != 0;
+  }
+  throw std::runtime_error("unsupported string compare operator");
+}
+
+}  // namespace
+
+std::vector<int32_t> StringDictionaryProxy::getCompare(const std::string& pattern,
+                                                       const std::string& comp_operator) const {
+  CHECK_GE(generation_, 0);
+  auto result = string_dict_->getCompare(pattern, comp_operator, generation_);
+  for (const auto& kv : transient_int_to_str_) {
+    const auto str = getString(kv.first);
+    if (do_compare(str, pattern, comp_operator)) {
       result.push_back(kv.first);
     }
   }

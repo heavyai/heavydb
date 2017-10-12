@@ -16,6 +16,7 @@
 
 #include "Execute.h"
 
+#include "../Shared/sqldefs.h"
 #include "Parser/ParserNode.h"
 
 extern "C" uint64_t string_decode(int8_t* chunk_iter_, int64_t pos) {
@@ -24,8 +25,9 @@ extern "C" uint64_t string_decode(int8_t* chunk_iter_, int64_t pos) {
   bool is_end;
   ChunkIter_get_nth(chunk_iter, pos, false, &vd, &is_end);
   CHECK(!is_end);
-  return vd.is_null ? 0 : (reinterpret_cast<uint64_t>(vd.pointer) & 0xffffffffffff) |
-                              (static_cast<uint64_t>(vd.length) << 48);
+  return vd.is_null
+             ? 0
+             : (reinterpret_cast<uint64_t>(vd.pointer) & 0xffffffffffff) | (static_cast<uint64_t>(vd.length) << 48);
 }
 
 extern "C" uint64_t string_decompress(const int32_t string_id, const int64_t string_dict_handle) {
@@ -154,6 +156,115 @@ llvm::Value* Executor::codegenDictLike(const std::shared_ptr<Analyzer::Expr> lik
   std::copy(matching_ids.begin(), matching_ids.end(), matching_ids_64.begin());
   const auto in_values =
       std::make_shared<Analyzer::InIntegerSet>(dict_like_arg, matching_ids_64, dict_like_arg_ti.get_notnull());
+  return codegen(in_values.get(), co);
+}
+
+namespace {
+
+std::vector<int32_t> get_compared_ids(const StringDictionaryProxy* dict,
+                                      const SQLOps compare_operator,
+                                      const std::string& pattern) {
+  std::vector<int> ret;
+  switch (compare_operator) {
+    case kLT:
+      ret = dict->getCompare(pattern, "<");
+      break;
+    case kLE:
+      ret = dict->getCompare(pattern, "<=");
+      break;
+    case kEQ:
+    case kBW_EQ:
+      ret = dict->getCompare(pattern, "=");
+      break;
+    case kGT:
+      ret = dict->getCompare(pattern, ">");
+      break;
+    case kGE:
+      ret = dict->getCompare(pattern, ">=");
+      break;
+    case kNE:
+      ret = dict->getCompare(pattern, "<>");
+      break;
+    default:
+      std::runtime_error("unsuported operator for string comparision");
+  }
+  return ret;
+}
+}  // namespace
+
+llvm::Value* Executor::codegenDictStrCmp(const std::shared_ptr<Analyzer::Expr> lhs,
+                                         const std::shared_ptr<Analyzer::Expr> rhs,
+                                         const SQLOps compare_operator,
+                                         const CompilationOptions& co) {
+  auto rhs_cast_oper = std::dynamic_pointer_cast<const Analyzer::UOper>(rhs);
+  auto lhs_cast_oper = std::dynamic_pointer_cast<const Analyzer::UOper>(lhs);
+  auto rhs_col_var = std::dynamic_pointer_cast<const Analyzer::ColumnVar>(rhs);
+  auto lhs_col_var = std::dynamic_pointer_cast<const Analyzer::ColumnVar>(lhs);
+  std::shared_ptr<const Analyzer::UOper> cast_oper;
+  std::shared_ptr<const Analyzer::ColumnVar> col_var;
+  auto compare_opr = compare_operator;
+  if (lhs_col_var && rhs_col_var) {
+    if (lhs_col_var->get_type_info().get_comp_param() == rhs_col_var->get_type_info().get_comp_param()) {
+      if (compare_operator == kEQ || compare_operator == kNE) {
+        // TODO (vraj): implement compare between two dictionary encoded columns which share a dictionary
+        return nullptr;
+      }
+    }
+    // TODO (vraj): implement compare between two dictionary encoded columns which don't shared dictionary
+    throw std::runtime_error("Decoding two Dictionary encoded columns will be slow");
+  } else if (lhs_col_var && rhs_cast_oper) {
+    cast_oper.swap(rhs_cast_oper);
+    col_var.swap(lhs_col_var);
+  } else if (lhs_cast_oper && rhs_col_var) {
+    cast_oper.swap(lhs_cast_oper);
+    col_var.swap(rhs_col_var);
+    switch (compare_operator) {
+      case kLT:
+        compare_opr = kGT;
+        break;
+      case kLE:
+        compare_opr = kGE;
+        break;
+      case kGT:
+        compare_opr = kLT;
+        break;
+      case kGE:
+        compare_opr = kLE;
+      default:
+        break;
+    }
+  }
+  if (!cast_oper || !col_var) {
+    return nullptr;
+  }
+  CHECK_EQ(kCAST, cast_oper->get_optype());
+
+  const auto const_expr = dynamic_cast<Analyzer::Constant*>(cast_oper->get_own_operand().get());
+  if (!const_expr) {
+    // Analyzer casts dictionary encoded columns to none encoded if there is a comparison between two encoded columns.
+    // Which we currently do not handle.
+    return nullptr;
+  }
+  const auto& const_val = const_expr->get_constval();
+
+  const auto col_ti = col_var->get_type_info();
+  CHECK(col_ti.is_string());
+  CHECK_EQ(kENCODING_DICT, col_ti.get_compression());
+  const auto sdp = getStringDictionaryProxy(col_ti.get_comp_param(), row_set_mem_owner_, true);
+
+  if (!g_fast_strcmp && sdp->storageEntryCount() > 200000000) {
+    std::runtime_error("Cardinality for string dictionary is too high");
+    return nullptr;
+  }
+
+  const auto& pattern_str = *const_val.stringval;
+  const auto matching_ids = get_compared_ids(sdp, compare_opr, pattern_str);
+
+  // InIntegerSet requires 64-bit values
+  std::vector<int64_t> matching_ids_64(matching_ids.size());
+  std::copy(matching_ids.begin(), matching_ids.end(), matching_ids_64.begin());
+
+  const auto in_values = std::make_shared<Analyzer::InIntegerSet>(col_var, matching_ids_64, col_ti.get_notnull());
   return codegen(in_values.get(), co);
 }
 
