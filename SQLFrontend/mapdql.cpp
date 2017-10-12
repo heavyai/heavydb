@@ -41,6 +41,10 @@
 #include <boost/filesystem.hpp>
 #include <boost/tokenizer.hpp>
 #include <rapidjson/document.h>
+#include <boost/archive/iterators/binary_from_base64.hpp>
+#include <boost/archive/iterators/base64_from_binary.hpp>
+#include <boost/archive/iterators/transform_width.hpp>
+#include <boost/algorithm/string.hpp>
 
 #include "../Fragmenter/InsertOrderFragmenter.h"
 #include "Shared/checked_alloc.h"
@@ -71,6 +75,22 @@ void completion(const char* buf, linenoiseCompletions* lc) {
 
 #define INVALID_SESSION_ID ""
 
+// code from https://stackoverflow.com/questions/7053538/how-do-i-encode-a-string-to-base64-using-only-boost
+
+std::string decode64(const std::string& val) {
+  using namespace boost::archive::iterators;
+  using It = transform_width<binary_from_base64<std::string::const_iterator>, 8, 6>;
+  return boost::algorithm::trim_right_copy_if(std::string(It(std::begin(val)), It(std::end(val))),
+                                              [](char c) { return c == '\0'; });
+}
+
+std::string encode64(const std::string& val) {
+  using namespace boost::archive::iterators;
+  using It = base64_from_binary<transform_width<std::string::const_iterator, 6, 8>>;
+  auto tmp = std::string(It(std::begin(val)), It(std::end(val)));
+  return tmp.append((3 - val.size() % 3) % 3, '=');
+}
+
 struct ClientContext {
   std::string user_name;
   std::string passwd;
@@ -97,6 +117,10 @@ struct ClientContext {
   int epoch_value;
   TServerStatus server_status;
   std::vector<TServerStatus> cluster_status;
+  std::string view_name;
+  std::string view_state;
+  std::string view_metadata;
+  TFrontendView view_return;
 
   ClientContext(TTransport& t, MapDClient& c)
       : transport(t), client(c), session(INVALID_SESSION_ID), execution_mode(TExecuteMode::GPU) {}
@@ -121,7 +145,9 @@ enum ThriftService {
   kINTERRUPT,
   kSET_TABLE_EPOCH,
   kGET_TABLE_EPOCH,
-  kGET_SERVER_STATUS
+  kGET_SERVER_STATUS,
+  kIMPORT_DASHBOARD,
+  kEXPORT_DASHBOARD
 };
 
 namespace {
@@ -192,6 +218,14 @@ bool thrift_with_retry(ThriftService which_service, ClientContext& context, cons
         break;
       case kGET_SERVER_STATUS:
         context.client.get_status(context.cluster_status, context.session);
+        break;
+      case kIMPORT_DASHBOARD:
+        context.client.create_frontend_view(
+            context.session, context.view_name, context.view_state, "", context.view_metadata);
+        break;
+      case kEXPORT_DASHBOARD:
+        context.client.get_frontend_view(context.view_return, context.session, context.view_name);
+        break;
     }
   } catch (TMapDException& e) {
     std::cerr << e.error_msg << std::endl;
@@ -351,6 +385,91 @@ void get_table_epoch(ClientContext& context, std::string table_details) {
     std::cout << "table epoch is " << context.epoch_value << std::endl;
   } else {
     std::cout << "Cannot connect to MapD Server." << std::endl;
+  }
+}
+
+bool replace(std::string& str, const std::string& from, const std::string& to) {
+  size_t start_pos = str.find(from);
+  if (start_pos == std::string::npos)
+    return false;
+  str.replace(start_pos, from.length(), to);
+  return true;
+}
+
+void import_dashboard(ClientContext& context, std::string dash_details) {
+  std::vector<std::string> split_result;
+
+  boost::split(split_result, dash_details, boost::is_any_of(","), boost::token_compress_on);
+
+  if (split_result.size() != 2) {
+    std::cerr << "import_dashboard requires a dashboard name and a filename eg:dash1,/tmp/dash.out " << dash_details
+              << std::endl;
+    return;
+  }
+
+  context.view_name = split_result[0];
+  std::string filename = split_result[1];
+  // context.view_metadata = std::string("{\"table\":\"") + table_name + std::string("\",\"version\":\"v2\"}");
+  context.view_state = "";
+  context.view_metadata = "";
+  // read file to get view state
+  std::ifstream dashfile;
+  std::string state;
+  std::string old_name;
+  dashfile.open(filename);
+  if (dashfile.is_open()) {
+    std::getline(dashfile, old_name);
+    std::getline(dashfile, context.view_metadata);
+    std::getline(dashfile, state);
+    dashfile.close();
+  } else {
+    std::cout << "Could not open file " << filename << std::endl;
+    return;
+  }
+
+  if (!replace(state,
+               std::string("\"title\":\"" + old_name + "\","),
+               std::string("\"title\":\"" + context.view_name + "\","))) {
+    std::cout << "Failed to update title." << std::endl;
+    return;
+  }
+
+  context.view_state = encode64(state);
+
+  std::cout << "Importing dashboard " << context.view_name << " from file " << filename << std::endl;
+  if (!thrift_with_retry(kIMPORT_DASHBOARD, context, nullptr)) {
+    std::cout << "Failed to import dashboard." << std::endl;
+  }
+}
+
+void export_dashboard(ClientContext& context, std::string dash_details) {
+  std::vector<std::string> split_result;
+
+  boost::split(split_result, dash_details, boost::is_any_of(","), boost::token_compress_on);
+
+  if (split_result.size() != 2) {
+    std::cerr << "export_dashboard requires a dashboard name and a filename eg:dash1,/tmp/dash.out " << dash_details
+              << std::endl;
+    return;
+  }
+  context.view_name = split_result[0];
+  std::string filename = split_result[1];
+
+  if (thrift_with_retry(kEXPORT_DASHBOARD, context, nullptr)) {
+    std::cout << "Exporting dashboard " << context.view_name << " to file " << filename << std::endl;
+    // create file and dump string to it
+    std::ofstream dashfile;
+    dashfile.open(filename);
+    if (dashfile.is_open()) {
+      dashfile << context.view_name << std::endl;
+      dashfile << context.view_return.view_metadata << std::endl;
+      dashfile << decode64(context.view_return.view_state);
+      dashfile.close();
+    } else {
+      std::cout << "Could not open file " << filename << std::endl;
+    }
+  } else {
+    std::cout << "Failed to export dashboard." << std::endl;
   }
 }
 
@@ -1359,6 +1478,12 @@ int main(int argc, char** argv) {
     } else if (!strncmp(line, "\\gte", 4)) {
       std::string table_details = strtok(line + 5, " ");
       get_table_epoch(context, table_details);
+    } else if (!strncmp(line, "\\export_dashboard", 17)) {
+      std::string dash_details = strtok(line + 18, " ");
+      export_dashboard(context, dash_details);
+    } else if (!strncmp(line, "\\import_dashboard", 17)) {
+      std::string dash_details = strtok(line + 18, " ");
+      import_dashboard(context, dash_details);
     } else if (!strncmp(line, "\\copy", 5)) {
       char* filepath = strtok(line + 6, " ");
       char* table = strtok(NULL, " ");
