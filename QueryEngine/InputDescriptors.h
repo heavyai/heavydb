@@ -39,8 +39,8 @@ class InputDescriptor {
   InputSourceType getSourceType() const { return table_id_ > 0 ? InputSourceType::TABLE : InputSourceType::RESULT; }
 
  private:
-  const int table_id_;
-  const int nest_level_;
+  int table_id_;
+  int nest_level_;
 };
 
 namespace std {
