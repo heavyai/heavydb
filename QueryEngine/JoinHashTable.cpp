@@ -19,6 +19,7 @@
 #include "ExecutionException.h"
 #include "ExpressionRewrite.h"
 #include "HashJoinRuntime.h"
+#include "RangeTableIndexVisitor.h"
 #include "RuntimeFunctions.h"
 
 #include <glog/logging.h>
@@ -73,6 +74,15 @@ std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*> normalize_column_pa
   }
   if (!inner_col) {
     throw HashJoinFail("Cannot use hash join for given expression");
+  }
+  if (!outer_col) {
+    RangeTableIndexVisitor rte_idx_visitor;
+    int outer_rte_idx = rte_idx_visitor.visit(outer_expr);
+    // The inner column candidate is not actually inner; the outer
+    // expression contains columns which are at least as deep.
+    if (inner_col->get_rte_idx() <= outer_rte_idx) {
+      throw HashJoinFail("Cannot use hash join for given expression");
+    }
   }
   // We need to fetch the actual type information from the catalog since Analyzer
   // always reports nullable as true for inner table columns in left joins.
