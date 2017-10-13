@@ -66,9 +66,6 @@ std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*> normalize_column_pa
     if (lhs_col && lhs_col->get_rte_idx() == 0) {
       throw HashJoinFail("Cannot use hash join for given expression");
     }
-    if (rhs_col) {
-      CHECK_EQ(rhs_col->get_rte_idx(), 0);
-    }
     inner_col = lhs_col;
     outer_col = rhs_col;
     std::swap(outer_ti, inner_ti);
