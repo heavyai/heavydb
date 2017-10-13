@@ -2487,7 +2487,7 @@ const size_t g_array_test_row_count{20};
 
 void import_array_test(const std::string& table_name) {
   CHECK_EQ(size_t(0), g_array_test_row_count % 4);
-  const auto& cat = g_session->get_catalog();
+  auto& cat = g_session->get_catalog();
   const auto td = cat.getMetadataForTable(table_name);
   CHECK(td);
   Importer_NS::Loader loader(cat, td);

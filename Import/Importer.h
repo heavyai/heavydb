@@ -457,11 +457,11 @@ class TypedImportBuffer : boost::noncopyable {
 
 class Loader {
  public:
-  Loader(const Catalog_Namespace::Catalog& c, const TableDescriptor* t)
+  Loader(Catalog_Namespace::Catalog& c, const TableDescriptor* t)
       : catalog(c), table_desc(t), column_descs(c.getAllColumnMetadataForTable(t->tableId, false, false)) {
     init();
   };
-  const Catalog_Namespace::Catalog& get_catalog() const { return catalog; }
+  Catalog_Namespace::Catalog& get_catalog() { return catalog; }
   const TableDescriptor* get_table_desc() const { return table_desc; }
   const std::list<const ColumnDescriptor*>& get_column_descs() const { return column_descs; }
   const Fragmenter_Namespace::InsertData& get_insert_data() const { return insert_data; }
@@ -480,7 +480,7 @@ class Loader {
   virtual void checkpoint();
 
  protected:
-  const Catalog_Namespace::Catalog& catalog;
+  Catalog_Namespace::Catalog& catalog;
   const TableDescriptor* table_desc;
   std::list<const ColumnDescriptor*> column_descs;
   Fragmenter_Namespace::InsertData insert_data;
@@ -673,7 +673,7 @@ struct PolyData2d {
 
 class Importer {
  public:
-  Importer(const Catalog_Namespace::Catalog& c, const TableDescriptor* t, const std::string& f, const CopyParams& p);
+  Importer(Catalog_Namespace::Catalog& c, const TableDescriptor* t, const std::string& f, const CopyParams& p);
   Importer(Loader* providedLoader, const std::string& f, const CopyParams& p);
   ~Importer();
   ImportStatus import();

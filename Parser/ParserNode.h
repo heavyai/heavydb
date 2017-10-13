@@ -991,7 +991,7 @@ class CopyTableStmt : public DDLStmt {
   virtual void execute(const Catalog_Namespace::SessionInfo& session);
   void execute(
       const Catalog_Namespace::SessionInfo& session,
-      const std::function<std::unique_ptr<Importer_NS::Importer>(const Catalog_Namespace::Catalog&,
+      const std::function<std::unique_ptr<Importer_NS::Importer>(Catalog_Namespace::Catalog&,
                                                                  const TableDescriptor*,
                                                                  const std::string&,
                                                                  const Importer_NS::CopyParams&)>& importer_factory);

@@ -61,10 +61,7 @@ bool debug_timing = false;
 static mapd_shared_mutex status_mutex;
 static std::map<std::string, ImportStatus> import_status_map;
 
-Importer::Importer(const Catalog_Namespace::Catalog& c,
-                   const TableDescriptor* t,
-                   const std::string& f,
-                   const CopyParams& p)
+Importer::Importer(Catalog_Namespace::Catalog& c, const TableDescriptor* t, const std::string& f, const CopyParams& p)
     : Importer(new Loader(c, t), f, p) {}
 
 Importer::Importer(Loader* providedLoader, const std::string& f, const CopyParams& p)
@@ -1904,8 +1901,8 @@ ImportStatus Importer::importDelimited() {
     }
     if (load_failed) {
       // rollback to starting epoch
-      // loader->get_catalog().setTableEpoch(loader->get_catalog().get_currentDB().dbId,
-      // loader->get_table_desc()->tableId, start_epoch -1);
+      loader->get_catalog().setTableEpoch(
+          loader->get_catalog().get_currentDB().dbId, loader->get_table_desc()->tableId, start_epoch - 1);
     } else {
       loader->checkpoint();
     }

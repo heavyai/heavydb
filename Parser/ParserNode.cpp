@@ -2179,7 +2179,7 @@ void RenameColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 }
 
 void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
-  auto importer_factory = [](const Catalog_Namespace::Catalog& catalog,
+  auto importer_factory = [](Catalog_Namespace::Catalog& catalog,
                              const TableDescriptor* td,
                              const std::string& file_path,
                              const Importer_NS::CopyParams& copy_params) {
@@ -2190,7 +2190,7 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 
 void CopyTableStmt::execute(
     const Catalog_Namespace::SessionInfo& session,
-    const std::function<std::unique_ptr<Importer_NS::Importer>(const Catalog_Namespace::Catalog&,
+    const std::function<std::unique_ptr<Importer_NS::Importer>(Catalog_Namespace::Catalog&,
                                                                const TableDescriptor*,
                                                                const std::string&,
                                                                const Importer_NS::CopyParams&)>& importer_factory) {
