@@ -24,8 +24,8 @@
 #include "ExpressionRewrite.h"
 #include "InputMetadata.h"
 #include "QueryPhysicalInputsCollector.h"
+#include "RangeTableIndexVisitor.h"
 #include "RexVisitor.h"
-#include "ScalarExprVisitor.h"
 
 #include "../Shared/measure.h"
 
@@ -1899,15 +1899,6 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(const RelCompoun
 }
 
 namespace {
-
-class RangeTableIndexVisitor : public ScalarExprVisitor<int> {
- protected:
-  virtual int visitColumnVar(const Analyzer::ColumnVar* column) const override { return column->get_rte_idx(); }
-
-  virtual int aggregateResult(const int& aggregate, const int& next_result) const override {
-    return std::max(aggregate, next_result);
-  }
-};
 
 std::vector<const RexScalar*> rex_to_conjunctive_form(const RexScalar* qual_expr) {
   CHECK(qual_expr);
