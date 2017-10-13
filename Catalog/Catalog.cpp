@@ -1795,11 +1795,11 @@ void Catalog::createTable(TableDescriptor& td,
   calciteMgr_->updateMetadata(currentDB_.dbName, td.tableName);
 }
 
-int32_t Catalog::getTableEpoch(const int32_t db_id, const int32_t table_id) {
+int32_t Catalog::getTableEpoch(const int32_t db_id, const int32_t table_id) const {
   return dataMgr_->getTableEpoch(db_id, table_id);
 }
 
-void Catalog::setTableEpoch(const int db_id, const int table_id, const int new_epoch) {
+void Catalog::setTableEpoch(const int db_id, const int table_id, int new_epoch) {
   removeChunks(table_id);
 
   dataMgr_->clearMemory(MemoryLevel::CPU_LEVEL);
@@ -2024,7 +2024,7 @@ void Catalog::doTruncateTable(const TableDescriptor* td) {
   }
 }
 
-// used by rollback_table_epoch to clean up in memory artifcats after a rollback
+// used by rollback_table_epoch to clean up in memory artifacts after a rollback
 void Catalog::removeChunks(const int table_id) {
   auto td = getMetadataForTable(table_id);
 

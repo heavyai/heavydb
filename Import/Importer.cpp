@@ -1848,60 +1848,69 @@ ImportStatus Importer::importDelimited() {
     begin_pos = i + 1;
   }
   ChunkKey chunkKey = {loader->get_catalog().get_currentDB().dbId, loader->get_table_desc()->tableId};
-  
-  while (size > 0) {
-    // for each process through a buffer take a table lock
+  {
+    // Lock table for write for the period of the whole load
     mapd_unique_lock<mapd_shared_mutex> tableLevelWriteLock(*loader->get_catalog().get_dataMgr().getMutexForChunkPrefix(
         chunkKey));  // prevent two threads from trying to insert into the same table simultaneously
-    if (eof_reached)
-      end_pos = size;
-    else
-      end_pos = find_end(buffer[which_buf], size, copy_params);
-    if (size <= alloc_size) {
-      max_threads = std::min(max_threads, (int)std::ceil((double)(end_pos - begin_pos) / MIN_FILE_BUFFER_SIZE));
-    }
-    if (max_threads == 1) {
-      import_status += import_thread(0, this, buffer[which_buf], begin_pos, end_pos, end_pos);
-      current_pos += end_pos;
-      (void)fseek(p_file, current_pos, SEEK_SET);
-      size = fread((void*)buffer[which_buf], 1, IMPORT_FILE_BUFFER_SIZE, p_file);
-      if (size < IMPORT_FILE_BUFFER_SIZE && feof(p_file))
-        eof_reached = true;
-    } else {
-      std::vector<std::future<ImportStatus>> threads;
-      for (int i = 0; i < max_threads; i++) {
-        size_t begin = begin_pos + i * ((end_pos - begin_pos) / max_threads);
-        size_t end = (i < max_threads - 1) ? begin_pos + (i + 1) * ((end_pos - begin_pos) / max_threads) : end_pos;
-        threads.push_back(
-            std::async(std::launch::async, import_thread, i, this, buffer[which_buf], begin, end, end_pos));
+    auto start_epoch = loader->get_catalog().getTableEpoch(loader->get_catalog().get_currentDB().dbId,
+                                                           loader->get_table_desc()->tableId);
+    while (size > 0) {
+      if (eof_reached)
+        end_pos = size;
+      else
+        end_pos = find_end(buffer[which_buf], size, copy_params);
+      if (size <= alloc_size) {
+        max_threads = std::min(max_threads, (int)std::ceil((double)(end_pos - begin_pos) / MIN_FILE_BUFFER_SIZE));
       }
-      current_pos += end_pos;
-      which_buf = (which_buf + 1) % 2;
-      (void)fseek(p_file, current_pos, SEEK_SET);
-      size = fread((void*)buffer[which_buf], 1, IMPORT_FILE_BUFFER_SIZE, p_file);
-      if (size < IMPORT_FILE_BUFFER_SIZE && feof(p_file))
-        eof_reached = true;
-      for (auto& p : threads)
-        p.wait();
-      for (auto& p : threads)
-        import_status += p.get();
-    }
-    import_status.rows_estimated = ((float)file_size / current_pos) * import_status.rows_completed;
-    set_import_status(import_id, import_status);
-    begin_pos = 0;
-    if (import_status.rows_rejected > copy_params.max_reject) {
-      load_truncated = true;
-      LOG(ERROR) << "Maximum rows rejected exceeded. Halting load";
-      break;
+      if (max_threads == 1) {
+        import_status += import_thread(0, this, buffer[which_buf], begin_pos, end_pos, end_pos);
+        current_pos += end_pos;
+        (void)fseek(p_file, current_pos, SEEK_SET);
+        size = fread((void*)buffer[which_buf], 1, IMPORT_FILE_BUFFER_SIZE, p_file);
+        if (size < IMPORT_FILE_BUFFER_SIZE && feof(p_file))
+          eof_reached = true;
+      } else {
+        std::vector<std::future<ImportStatus>> threads;
+        for (int i = 0; i < max_threads; i++) {
+          size_t begin = begin_pos + i * ((end_pos - begin_pos) / max_threads);
+          size_t end = (i < max_threads - 1) ? begin_pos + (i + 1) * ((end_pos - begin_pos) / max_threads) : end_pos;
+          threads.push_back(
+              std::async(std::launch::async, import_thread, i, this, buffer[which_buf], begin, end, end_pos));
+        }
+        current_pos += end_pos;
+        which_buf = (which_buf + 1) % 2;
+        (void)fseek(p_file, current_pos, SEEK_SET);
+        size = fread((void*)buffer[which_buf], 1, IMPORT_FILE_BUFFER_SIZE, p_file);
+        if (size < IMPORT_FILE_BUFFER_SIZE && feof(p_file))
+          eof_reached = true;
+        for (auto& p : threads)
+          p.wait();
+        for (auto& p : threads)
+          import_status += p.get();
+      }
+      import_status.rows_estimated = ((float)file_size / current_pos) * import_status.rows_completed;
+      set_import_status(import_id, import_status);
+      begin_pos = 0;
+      if (import_status.rows_rejected > copy_params.max_reject) {
+        load_truncated = true;
+        LOG(ERROR) << "Maximum rows rejected exceeded. Halting load";
+        break;
+      }
+      if (load_failed) {
+        load_truncated = true;
+        LOG(ERROR) << "A call to the Loader::load failed, Please review the logs for more details";
+        break;
+      }
     }
     if (load_failed) {
-      load_truncated = true;
-      LOG(ERROR) << "A call to the Loader::load failed, Please review the logs for more details";
-      break;
+      // rollback to starting epoch
+      // loader->get_catalog().setTableEpoch(loader->get_catalog().get_currentDB().dbId,
+      // loader->get_table_desc()->tableId, start_epoch -1);
+    } else {
+      loader->checkpoint();
     }
-    // checkpoint before going again
-    loader->checkpoint();
   }
+
   if (loader->get_table_desc()->persistenceLevel ==
       Data_Namespace::MemoryLevel::DISK_LEVEL) {  // only checkpoint disk-resident tables
     auto ms = measure<>::execution([&]() {
