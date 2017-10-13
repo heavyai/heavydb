@@ -3104,7 +3104,7 @@ TEST(Select, Subqueries) {
       "FROM emptytab GROUP BY emptytab. x, yy;",
       dt);
     c("WITH d1 AS (SELECT deptno, dname FROM dept LIMIT 10) SELECT ename, dname FROM emp, d1 WHERE emp.deptno = "
-      "d1.deptno LIMIT 10;",
+      "d1.deptno ORDER BY ename ASC LIMIT 10;",
       dt);
     c("SELECT x FROM (SELECT x, MAX(y), COUNT(*) AS n FROM test GROUP BY x HAVING MAX(y) > 42 ORDER BY n);", dt);
     c("SELECT CASE WHEN test.x IN (SELECT x FROM test_inner) THEN x ELSE NULL END AS c, COUNT(*) AS n FROM test WHERE "

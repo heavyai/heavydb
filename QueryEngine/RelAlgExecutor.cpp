@@ -30,6 +30,7 @@
 #include "../Shared/measure.h"
 
 #include <algorithm>
+#include <numeric>
 
 ExecutionResult RelAlgExecutor::executeRelAlgQuery(const std::string& query_ra,
                                                    const CompilationOptions& co,
@@ -618,11 +619,13 @@ int table_id_from_ra(const RelAlgNode* ra_node) {
   return -ra_node->getId();
 }
 
-std::unordered_map<const RelAlgNode*, int> get_input_nest_levels(const RelAlgNode* ra_node) {
+std::unordered_map<const RelAlgNode*, int> get_input_nest_levels(const RelAlgNode* ra_node,
+                                                                 const std::vector<size_t>& input_permutation) {
   const auto data_sink_node = get_data_sink(ra_node);
   std::unordered_map<const RelAlgNode*, int> input_to_nest_level;
-  for (size_t nest_level = 0; nest_level < data_sink_node->inputCount(); ++nest_level) {
-    const auto input_ra = data_sink_node->getInput(nest_level);
+  for (size_t input_idx = 0; input_idx < data_sink_node->inputCount(); ++input_idx) {
+    const auto input_ra = data_sink_node->getInput(input_idx);
+    size_t nest_level = input_permutation.empty() ? input_idx : input_permutation[input_idx];
     const auto it_ok = input_to_nest_level.emplace(input_ra, nest_level);
     CHECK(it_ok.second);
   }
@@ -795,14 +798,19 @@ template <class RA>
 std::pair<std::vector<InputDescriptor>, std::list<std::shared_ptr<const InputColDescriptor>>> get_input_desc_impl(
     const RA* ra_node,
     const std::unordered_set<const RexInput*>& used_inputs,
-    const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level) {
+    const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
+    const std::vector<size_t>& input_permutation) {
   std::vector<InputDescriptor> input_descs;
   const auto data_sink_node = get_data_sink(ra_node);
-  for (size_t nest_level = 0; nest_level < data_sink_node->inputCount(); ++nest_level) {
-    const auto input_ra = data_sink_node->getInput(nest_level);
+  for (size_t input_idx = 0; input_idx < data_sink_node->inputCount(); ++input_idx) {
+    const auto input_ra = data_sink_node->getInput(input_idx);
     const int table_id = table_id_from_ra(input_ra);
+    const auto nest_level = input_permutation.empty() ? input_idx : input_permutation[input_idx];
     input_descs.emplace_back(table_id, nest_level);
   }
+  std::sort(input_descs.begin(), input_descs.end(), [](const InputDescriptor& lhs, const InputDescriptor& rhs) {
+    return lhs.getNestLevel() < rhs.getNestLevel();
+  });
   std::unordered_set<std::shared_ptr<const InputColDescriptor>> input_col_descs_unique;
   collect_used_input_desc(input_descs, input_col_descs_unique, ra_node, used_inputs, input_to_nest_level);
   collect_used_input_desc(
@@ -827,11 +835,13 @@ template <class RA>
 std::tuple<std::vector<InputDescriptor>,
            std::list<std::shared_ptr<const InputColDescriptor>>,
            std::vector<std::shared_ptr<RexInput>>>
-get_input_desc(const RA* ra_node, const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level) {
+get_input_desc(const RA* ra_node,
+               const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
+               const std::vector<size_t>& input_permutation) {
   std::unordered_set<const RexInput*> used_inputs;
   std::vector<std::shared_ptr<RexInput>> used_inputs_owned;
   std::tie(used_inputs, used_inputs_owned) = get_used_inputs(ra_node);
-  auto input_desc_pair = get_input_desc_impl(ra_node, used_inputs, input_to_nest_level);
+  auto input_desc_pair = get_input_desc_impl(ra_node, used_inputs, input_to_nest_level, input_permutation);
   return std::make_tuple(input_desc_pair.first, input_desc_pair.second, used_inputs_owned);
 }
 
@@ -1817,6 +1827,17 @@ std::vector<InputDescriptor> separate_extra_input_descs(std::vector<InputDescrip
   return extra_input_descs;
 }
 
+std::vector<size_t> get_node_input_permutation(const std::vector<InputTableInfo>& table_infos) {
+  std::vector<size_t> input_permutation(table_infos.size());
+  std::iota(input_permutation.begin(), input_permutation.end(), 0);
+  std::sort(input_permutation.begin(),
+            input_permutation.end(),
+            [&table_infos](const size_t lhs_index, const size_t rhs_index) {
+              return table_infos[lhs_index].info.getNumTuples() > table_infos[rhs_index].info.getNumTuples();
+            });
+  return input_permutation;
+}
+
 }  // namespace
 
 RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(const RelCompound* compound,
@@ -1824,12 +1845,17 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(const RelCompoun
                                                                 const bool just_explain) {
   std::vector<InputDescriptor> input_descs;
   std::list<std::shared_ptr<const InputColDescriptor>> input_col_descs;
-  const auto input_to_nest_level = get_input_nest_levels(compound);
-  std::tie(input_descs, input_col_descs, std::ignore) = get_input_desc(compound, input_to_nest_level);
+  auto input_to_nest_level = get_input_nest_levels(compound, {});
+  std::tie(input_descs, input_col_descs, std::ignore) = get_input_desc(compound, input_to_nest_level, {});
+  const auto query_infos = get_table_infos(input_descs, executor_);
   CHECK_EQ(size_t(1), compound->inputCount());
   const auto left_deep_join = dynamic_cast<const RelLeftDeepInnerJoin*>(compound->getInput(0));
   JoinQualsPerNestingLevel left_deep_inner_joins;
   if (left_deep_join) {
+    const auto input_permutation = get_node_input_permutation(query_infos);
+    input_to_nest_level = get_input_nest_levels(compound, input_permutation);
+    std::tie(input_descs, input_col_descs, std::ignore) =
+        get_input_desc(compound, input_to_nest_level, input_permutation);
     left_deep_inner_joins = translateLeftDeepJoinFilter(left_deep_join, input_descs, input_to_nest_level, just_explain);
   }
   const auto extra_input_descs = separate_extra_input_descs(input_descs);
@@ -1862,7 +1888,6 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(const RelCompoun
                                         nullptr,
                                         sort_info,
                                         0};
-  const auto query_infos = get_table_infos(exe_unit.input_descs, executor_);
   QueryRewriter* query_rewriter = new QueryRewriter(exe_unit, query_infos, executor_, nullptr);
   const auto rewritten_exe_unit = query_rewriter->rewrite();
   const auto targets_meta = get_targets_meta(compound, rewritten_exe_unit.target_exprs);
@@ -2013,8 +2038,8 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createJoinWorkUnit(const RelJoin* join,
                                                             const bool just_explain) {
   std::vector<InputDescriptor> input_descs;
   std::list<std::shared_ptr<const InputColDescriptor>> input_col_descs;
-  const auto input_to_nest_level = get_input_nest_levels(join);
-  std::tie(input_descs, input_col_descs, std::ignore) = get_input_desc(join, input_to_nest_level);
+  const auto input_to_nest_level = get_input_nest_levels(join, {});
+  std::tie(input_descs, input_col_descs, std::ignore) = get_input_desc(join, input_to_nest_level, {});
   const auto extra_input_descs = separate_extra_input_descs(input_descs);
   const auto join_type = join->getJoinType();
   RelAlgTranslator translator(cat_, executor_, input_to_nest_level, join_type, now_, just_explain);
@@ -2083,8 +2108,8 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createAggregateWorkUnit(const RelAggreg
   std::vector<InputDescriptor> input_descs;
   std::list<std::shared_ptr<const InputColDescriptor>> input_col_descs;
   std::vector<std::shared_ptr<RexInput>> used_inputs_owned;
-  const auto input_to_nest_level = get_input_nest_levels(aggregate);
-  std::tie(input_descs, input_col_descs, used_inputs_owned) = get_input_desc(aggregate, input_to_nest_level);
+  const auto input_to_nest_level = get_input_nest_levels(aggregate, {});
+  std::tie(input_descs, input_col_descs, used_inputs_owned) = get_input_desc(aggregate, input_to_nest_level, {});
   const auto extra_input_descs = separate_extra_input_descs(input_descs);
   const auto join_type = get_join_type(aggregate);
   RelAlgTranslator translator(cat_, executor_, input_to_nest_level, join_type, now_, just_explain);
@@ -2123,12 +2148,17 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(const RelProject*
                                                                const bool just_explain) {
   std::vector<InputDescriptor> input_descs;
   std::list<std::shared_ptr<const InputColDescriptor>> input_col_descs;
-  const auto input_to_nest_level = get_input_nest_levels(project);
-  std::tie(input_descs, input_col_descs, std::ignore) = get_input_desc(project, input_to_nest_level);
+  auto input_to_nest_level = get_input_nest_levels(project, {});
+  std::tie(input_descs, input_col_descs, std::ignore) = get_input_desc(project, input_to_nest_level, {});
   const auto extra_input_descs = separate_extra_input_descs(input_descs);
   const auto left_deep_join = dynamic_cast<const RelLeftDeepInnerJoin*>(project->getInput(0));
   JoinQualsPerNestingLevel left_deep_inner_joins;
   if (left_deep_join) {
+    const auto query_infos = get_table_infos(input_descs, executor_);
+    const auto input_permutation = get_node_input_permutation(query_infos);
+    input_to_nest_level = get_input_nest_levels(project, input_permutation);
+    std::tie(input_descs, input_col_descs, std::ignore) =
+        get_input_desc(project, input_to_nest_level, input_permutation);
     left_deep_inner_joins = translateLeftDeepJoinFilter(left_deep_join, input_descs, input_to_nest_level, just_explain);
   }
   const auto join_type = left_deep_join ? JoinType::INVALID : get_join_type(project);
@@ -2206,8 +2236,8 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createFilterWorkUnit(const RelFilter* f
   std::vector<std::shared_ptr<RexInput>> used_inputs_owned;
   std::vector<std::shared_ptr<Analyzer::Expr>> target_exprs_owned;
 
-  const auto input_to_nest_level = get_input_nest_levels(filter);
-  std::tie(input_descs, input_col_descs, used_inputs_owned) = get_input_desc(filter, input_to_nest_level);
+  const auto input_to_nest_level = get_input_nest_levels(filter, {});
+  std::tie(input_descs, input_col_descs, used_inputs_owned) = get_input_desc(filter, input_to_nest_level, {});
   const auto extra_input_descs = separate_extra_input_descs(input_descs);
   const auto join_type = get_join_type(filter);
   RelAlgTranslator translator(cat_, executor_, input_to_nest_level, join_type, now_, just_explain);
