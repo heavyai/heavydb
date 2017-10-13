@@ -1849,8 +1849,7 @@ ImportStatus Importer::importDelimited() {
     // Lock table for write for the period of the whole load
     mapd_unique_lock<mapd_shared_mutex> tableLevelWriteLock(*loader->get_catalog().get_dataMgr().getMutexForChunkPrefix(
         chunkKey));  // prevent two threads from trying to insert into the same table simultaneously
-    auto start_epoch = loader->get_catalog().getTableEpoch(loader->get_catalog().get_currentDB().dbId,
-                                                           loader->get_table_desc()->tableId);
+    auto start_epoch = loader->getTableEpoch();
     while (size > 0) {
       if (eof_reached)
         end_pos = size;
@@ -1890,6 +1889,7 @@ ImportStatus Importer::importDelimited() {
       begin_pos = 0;
       if (import_status.rows_rejected > copy_params.max_reject) {
         load_truncated = true;
+        load_failed = true;
         LOG(ERROR) << "Maximum rows rejected exceeded. Halting load";
         break;
       }
@@ -1900,9 +1900,8 @@ ImportStatus Importer::importDelimited() {
       }
     }
     if (load_failed) {
-      // rollback to starting epoch
-      loader->get_catalog().setTableEpoch(
-          loader->get_catalog().get_currentDB().dbId, loader->get_table_desc()->tableId, start_epoch - 1);
+      // rollback to starting epoch - undo all the added records
+      loader->setTableEpoch(start_epoch);
     } else {
       loader->checkpoint();
     }
@@ -1943,6 +1942,14 @@ void Loader::checkpoint() {
       get_catalog().get_dataMgr().checkpoint(get_catalog().get_currentDB().dbId, shard_table->tableId);
     }
   }
+}
+
+int32_t Loader::getTableEpoch() {
+  return get_catalog().getTableEpoch(get_catalog().get_currentDB().dbId, get_table_desc()->tableId);
+}
+
+void Loader::setTableEpoch(int32_t start_epoch) {
+  get_catalog().setTableEpoch(get_catalog().get_currentDB().dbId, get_table_desc()->tableId, start_epoch);
 }
 
 void GDALErrorHandler(CPLErr eErrClass, int err_no, const char* msg) {

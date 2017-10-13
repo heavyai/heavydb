@@ -339,6 +339,13 @@ void DataMgr::deleteChunksWithPrefix(const ChunkKey& keyPrefix) {
   }
 }
 
+// only deletes the chunks at the given memory level
+void DataMgr::deleteChunksWithPrefix(const ChunkKey& keyPrefix, const MemoryLevel memLevel) {
+  for (int device = 0; device < levelSizes_[memLevel]; ++device) {
+    bufferMgrs_[memLevel][device]->deleteBuffersWithPrefix(keyPrefix);
+  }
+}
+
 std::shared_ptr<mapd_shared_mutex> DataMgr::getMutexForChunkPrefix(const ChunkKey& keyPrefix) {
   std::map<ChunkKey, std::shared_ptr<mapd_shared_mutex>>::iterator mapMutexIt = chunkMutexMap_.find(keyPrefix);
   if (mapMutexIt == chunkMutexMap_.end()) {

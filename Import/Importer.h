@@ -478,6 +478,8 @@ class Loader {
                         size_t row_count,
                         bool checkpoint);
   virtual void checkpoint();
+  virtual int32_t getTableEpoch();
+  virtual void setTableEpoch(const int32_t new_epoch);
 
  protected:
   Catalog_Namespace::Catalog& catalog;

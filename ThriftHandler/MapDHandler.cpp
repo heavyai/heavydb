@@ -861,11 +861,13 @@ void MapDHandler::get_version(std::string& version) {
   version = MAPD_RELEASE;
 }
 
+// TODO This need to be corrected for distributed they are only hitting aggr
 void MapDHandler::clear_gpu_memory(const TSessionId& session) {
   const auto session_info = get_session(session);
   sys_cat_->get_dataMgr().clearMemory(MemoryLevel::GPU_LEVEL);
 }
 
+// TODO This need to be corrected for distributed they are only hitting aggr
 void MapDHandler::clear_cpu_memory(const TSessionId& session) {
   const auto session_info = get_session(session);
   sys_cat_->get_dataMgr().clearMemory(MemoryLevel::CPU_LEVEL);

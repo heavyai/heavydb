@@ -1795,18 +1795,55 @@ void Catalog::createTable(TableDescriptor& td,
   calciteMgr_->updateMetadata(currentDB_.dbName, td.tableName);
 }
 
+// returns the table epoch or -1 if there is something wrong with the shared epoch
 int32_t Catalog::getTableEpoch(const int32_t db_id, const int32_t table_id) const {
-  return dataMgr_->getTableEpoch(db_id, table_id);
+  const auto physicalTableIt = logicalToPhysicalTableMapById_.find(table_id);
+  if (physicalTableIt != logicalToPhysicalTableMapById_.end()) {
+    // check all shards have same checkpoint
+    const auto physicalTables = physicalTableIt->second;
+    CHECK(!physicalTables.empty());
+    size_t curr_epoch = 0;
+    for (size_t i = 0; i < physicalTables.size(); i++) {
+      int32_t physical_tb_id = physicalTables[i];
+      const TableDescriptor* phys_td = getMetadataForTable(physical_tb_id);
+      CHECK(phys_td);
+      if (i == 0) {
+        curr_epoch = dataMgr_->getTableEpoch(db_id, physical_tb_id);
+      } else {
+        if (curr_epoch != dataMgr_->getTableEpoch(db_id, physical_tb_id)) {
+          // oh dear the leaves do not agree on the epoch for this table
+          LOG(ERROR) << "Epochs on shards do not all agree on table id " << table_id << " db id  " << db_id << " epoch "
+                     << curr_epoch << " leaf_epoch " << dataMgr_->getTableEpoch(db_id, physical_tb_id);
+          return -1;
+        }
+      }
+    }
+    return curr_epoch;
+  } else {
+    return dataMgr_->getTableEpoch(db_id, table_id);
+  }
 }
 
 void Catalog::setTableEpoch(const int db_id, const int table_id, int new_epoch) {
-  removeChunks(table_id);
-
-  dataMgr_->clearMemory(MemoryLevel::CPU_LEVEL);
-  dataMgr_->clearMemory(MemoryLevel::GPU_LEVEL);
-
   LOG(INFO) << "Set table epoch db:" << db_id << " Table ID  " << table_id << " back to new epoch " << new_epoch;
+  removeChunks(table_id);
   dataMgr_->setTableEpoch(db_id, table_id, new_epoch);
+
+  // check if sharded
+  const auto physicalTableIt = logicalToPhysicalTableMapById_.find(table_id);
+  if (physicalTableIt != logicalToPhysicalTableMapById_.end()) {
+    const auto physicalTables = physicalTableIt->second;
+    CHECK(!physicalTables.empty());
+    for (size_t i = 0; i < physicalTables.size(); i++) {
+      int32_t physical_tb_id = physicalTables[i];
+      const TableDescriptor* phys_td = getMetadataForTable(physical_tb_id);
+      CHECK(phys_td);
+      LOG(INFO) << "Set sharded table epoch db:" << db_id << " Table ID  " << physical_tb_id << " back to new epoch "
+                << new_epoch;
+      removeChunks(physical_tb_id);
+      dataMgr_->setTableEpoch(db_id, physical_tb_id, new_epoch);
+    }
+  }
 }
 
 namespace {
@@ -2033,6 +2070,12 @@ void Catalog::removeChunks(const int table_id) {
     delete td->fragmenter;
     tableDescIt->second->fragmenter = nullptr;  // get around const-ness
   }
+
+  // remove the chunks from in memory structures
+  ChunkKey chunkKey = {currentDB_.dbId, table_id};
+
+  dataMgr_->deleteChunksWithPrefix(chunkKey, MemoryLevel::CPU_LEVEL);
+  dataMgr_->deleteChunksWithPrefix(chunkKey, MemoryLevel::GPU_LEVEL);
 }
 
 void Catalog::dropTable(const TableDescriptor* td) {
