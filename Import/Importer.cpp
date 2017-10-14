@@ -53,14 +53,8 @@
 
 #include <arrow/api.h>
 
-#include <boost/iostreams/filtering_streambuf.hpp>
-#include <boost/iostreams/copy.hpp>
-#include <boost/iostreams/filter/gzip.hpp>
-#include <boost/iostreams/filter/bzip2.hpp>
-
-#ifdef HAS_TBB
-#include "tbb/tbb.h"
-#endif
+#include "libarchive/archive.h"
+#include "libarchive/archive_entry.h"
 
 using std::ostream;
 
@@ -1815,132 +1809,120 @@ void Importer::load(const std::vector<std::unique_ptr<TypedImportBuffer>>& impor
 ImportStatus Importer::import() {
     // TODO(andrew): add file type detection
 
-    // allow copy from .gz and .bz2
+    // enable COPY from .gz/bz2/zip/tar/tgz files thru libarchive
     using namespace std;
-    if (boost::filesystem::extension(file_path) == ".gz"
-     || boost::filesystem::extension(file_path) == ".bz2"
-     || boost::filesystem::extension(file_path) == ".zip"
-     || boost::filesystem::extension(file_path) == ".tar"
-     || boost::filesystem::extension(file_path) == ".tgz")
+    string ext = boost::filesystem::extension(file_path);
+    if (ext == ".gz" || ext == ".bz2" || ext == ".zip" || ext == ".tar" || ext == ".tgz")
     {
-        // first try parallelized decompressors
-        string cmd;
-        if (boost::filesystem::extension(file_path) == ".tar" || boost::filesystem::extension(file_path) == ".tgz")
-        {
-            cmd = "tar";
-            cmd += boost::filesystem::extension(file_path) == ".tgz"? " xfz ": " xf ";
-            cmd += file_path + " -O ";
-        }
-        else
-        {
-            cmd = boost::filesystem::extension(file_path) == ".bz2"? "pbzip2": "pigz";
-            cmd += " -d -c ";
-            cmd += file_path;
-        }
+        ImportStatus ret;
+        std::exception_ptr teptr;
+        int fd[2];
 
-        // fall back to boostiostream if popen fails
         try
         {
-            if (0 == (p_file = popen(cmd.data(), "r")))
-            {
-                LOG(ERROR) << "popen(" + cmd + ") failed: " << strerror(errno) << std::endl;
-                throw std::runtime_error(string("popen(") + cmd + ") failed: " + strerror(errno));
-            }
+            if (pipe(fd) < 0)
+                throw std::runtime_error(string("pipe(): ") + strerror(errno));
 
-            auto rc = importDelimited(file_path, true);
-            if (rc.popen_exit_code != 0)
+            // one thread to forward decompressed stream to fd[1]
+            auto th1 = std::thread([&]()
             {
-                LOG(ERROR) << "popen(" + cmd + ") failed: exit code = " << std::hex << rc.popen_exit_code << std::endl;
-                throw std::runtime_error(string("popen(") + cmd + ") failed: " + to_string(rc.popen_exit_code));
-            }
+                archive *ar = archive_read_new();
+                try
+                {
+                    #if 1
+                    // list supported formats
+                    archive_read_support_filter_bzip2(ar);
+                    archive_read_support_filter_gzip(ar);
+                    archive_read_support_format_zip(ar);
+                    archive_read_support_format_tar(ar);
+                    // libarchive assumes archive formats, so without this bzip2 and gzip won't work!
+                    // see related issue at https://github.com/libarchive/libarchive/issues/586
+                    archive_read_support_format_raw(ar);
+                    #else
+                    // this increases ~800kb code size
+                    archive_read_support_format_all(ar);
+                    archive_read_support_filter_all(ar);
+                    archive_read_support_format_raw(ar);
+                    #endif
 
-            return rc;
+                    int rc;
+                    if (0 != (rc = archive_read_open_filename(ar, file_path.c_str(), 1 << 16)))
+                        throw std::runtime_error("archive_read_open_file('" + file_path + "'): " + archive_error_string(ar));
+
+                    for (;;)
+                    {
+                        archive_entry *entry;
+                        if (ARCHIVE_EOF == (rc = archive_read_next_header(ar, &entry)))
+                            break;
+
+                        for (;;)
+                        {
+                            const void* buff;
+                            size_t size;
+                            int64_t offset;
+                            if (ARCHIVE_EOF == (rc = archive_read_data_block(ar, &buff, &size, &offset)))
+                                break;
+
+                            if (ARCHIVE_OK != rc)
+                                throw std::runtime_error("archive_read_data_block('" + file_path + "'): " + archive_error_string(ar));
+
+                            // write to the pipe
+                            if ((int)size != write(fd[1], buff, size))
+                                throw std::runtime_error("write(" + to_string(fd[1]) + ", " + to_string(size) + "): " + strerror(errno));
+                        }
+                    }
+                }
+                catch (...)
+                {
+                    teptr = std::current_exception();
+                }
+
+                // close writer end
+                close(fd[1]);
+                if (ar) archive_read_close(ar);
+                if (ar) archive_read_free(ar);
+            });
+
+            // another thread to run importDelimited() to read from fd[0]
+            auto th2 = std::thread([&]()
+            {
+                try
+                {
+                    // importDelimited will read from FILE* p_file
+                    if (0 == (p_file = fdopen(fd[0], "r")))
+                        throw std::runtime_error("fdopen('" + to_string(fd[0]) + "'): " + strerror(errno));
+
+                    ret = importDelimited(file_path, true);
+                }
+                catch (...)
+                {
+                    teptr = std::current_exception();
+                }
+
+                if (p_file) fclose(p_file);
+                if (p_file) p_file = 0;
+            });
+
+            th1.join();
+            th2.join();
+
         }
         catch (...)
         {
-            // use boostiostream
-            using namespace boost::iostreams;
-
-            // create a decompression filter
-            ifstream file(file_path, ios_base::in | ios_base::binary);
-            filtering_streambuf<input> in;
-
-            if (boost::filesystem::extension(file_path) == ".bz2")
-                in.push(bzip2_decompressor());
-            else
-                in.push(gzip_decompressor());
-
-            in.push(file);
-
-            // create a named pipe to write decompressed output
-            std::stringstream ss;
-            ss << std::this_thread::get_id();
-            string pipe_path = string("/tmp/mapdp_") + ss.str();
-
-            unlink(pipe_path.data());
-            if (mkfifo(pipe_path.data(), 0660) < 0)
-                throw std::runtime_error("mkfifo failure for '" + pipe_path + "': " + strerror(errno));
-
-            ImportStatus ret;
-            std::exception_ptr teptr;
-            try
-            {
-                #define IMPORT_READER__ do                                                                            \
-                    {                                                                                                 \
-                        if (0 == (p_file = fopen(pipe_path.data(), "rb")))                                            \
-                            throw std::runtime_error("fopen failure for '" + pipe_path + "': " + strerror(errno));    \
-                        ret = importDelimited(pipe_path, true);                                                       \
-                    } while (0)
-                #define IMPORT_WRITER__ do                                                                            \
-                    {                                                                                                 \
-                        try                                                                                           \
-                        {                                                                                             \
-                            ofstream out(pipe_path, ofstream::binary);                                                \
-                            boost::iostreams::copy(in, out);                                                          \
-                        }                                                                                             \
-                        catch (...)                                                                                   \
-                        {                                                                                             \
-                            teptr = std::current_exception();                                                         \
-                        }                                                                                             \
-                    } while (0)
-
-                // create a writer thread on one end and a reader thread on another
-                #ifdef HAS_TBB
-                tbb::parallel_for(0, 2, [&](const int ith)
-                {
-                    if (0 == ith)
-                        IMPORT_READER__;
-                    else
-                        IMPORT_WRITER__;
-                });
-                #else //!HAS_TBB
-                auto th1 = std::thread([&](){IMPORT_READER__;});
-                auto th2 = std::thread([&](){IMPORT_WRITER__;});
-                th1.join();
-                th2.join();
-                if (teptr)
-                    std::rethrow_exception(teptr);
-                #endif//HAS_TBB
-
-                if (p_file) fclose(p_file);
-                p_file = 0;
-                unlink(pipe_path.data());
-                return ret;
-            }
-            catch (...)
-            {
-                if (p_file) fclose(p_file);
-                p_file = 0;
-                unlink(pipe_path.data());
-                throw;
-            }
+            teptr = std::current_exception();
         }
+
+        // rethrow any exception happened herebefore
+        if (teptr)
+            std::rethrow_exception(teptr);
+        else
+            return ret;
     }
 
     return importDelimited(file_path);
 }
 
-#define IMPORT_FILE_BUFFER_SIZE (1<<25)  // 100M file size
+#define IMPORT_FILE_BUFFER_SIZE (1<<23)    // not too big (need much memory) but not too small (many thread forks)
 #define MIN_FILE_BUFFER_SIZE 50000         // 50K min buffer
 
 ImportStatus Importer::importDelimited(const std::string& file_path, const bool decompressed) {
@@ -2034,10 +2016,11 @@ ImportStatus Importer::importDelimited(const std::string& file_path, const bool 
 
     while (threads.size() > 0)
     {
+        int nready = 0;
         for (std::list<std::future<ImportStatus>>::iterator it = threads.begin(); it != threads.end(); it = it)
         {
             auto &p = *it;
-            std::chrono::milliseconds span(1);
+            std::chrono::milliseconds span(0);	//(std::distance(it, threads.end()) == 1? 1: 0);
             if (p.wait_for(span) == std::future_status::ready)
             {
                 auto ret_import_status = p.get();
@@ -2051,10 +2034,13 @@ ImportStatus Importer::importDelimited(const std::string& file_path, const bool 
                 //LOG(INFO) << " stack_thread_ids.push " << ret_import_status.thread_id << std::endl;
 
                 threads.erase(it++);
+                ++nready;
             }
             else
                 ++it;
         }
+
+        if (nready == 0) std::this_thread::yield();
 
         // checkpoint before going again
         if (bytes_copied >= (1 << 27))
@@ -2102,14 +2088,7 @@ ImportStatus Importer::importDelimited(const std::string& file_path, const bool 
       LOG(INFO) << "Dictionary Checkpointing took " << (double)ms / 1000.0 << " Seconds." << std::endl;
   }
 
-  if (decompressed)
-  {
-    // afaik the only way to know if popen() failed the command is WEXITSTATUS(pclose())
-    auto status = pclose(p_file);
-    import_status.popen_exit_code = WEXITSTATUS(status);
-  }
-  else
-    fclose(p_file);
+  fclose(p_file);
   p_file = nullptr;
 
   import_status.load_truncated = load_truncated;
