@@ -664,6 +664,37 @@ double distance_point_point(double p1x, double p1y, double p2x, double p2y)
   return hypotenuse(p1x - p2x, p1y - p2y);
 }
 
+DEVICE
+double distance_point_line(double px, double py, double *l)
+{
+  double length = distance_point_point(l[0], l[1], l[2], l[3]);
+  if (length == 0.0)
+    return distance_point_point(px, py, l[0], l[1]);
+
+  // Find projection of point P onto the line segment AB:
+  // Line containing that segment: A + k * (B - A)
+  // Projection of point P onto the line touches it at
+  //   k = dot(P-A,B-A) / length^2
+  // AB segment is represented by k = [0,1]
+  // Clamping k to [0,1] will give the shortest distance from P to AB segment
+  double dotprod = (px - l[0]) * (l[2] - l[0]) + (py - l[1]) * (l[3] - l[1]);
+  double k = dotprod / (length * length);
+  k = fmax(0.0, fmin(1.0, k));
+  double projx = l[0] + k * (l[2] - l[0]);
+  double projy = l[1] + k * (l[3] - l[1]);
+  return distance_point_point(px, py, projx, projy);
+}
+
+DEVICE
+double distance_line_line(double *l1, double *l2)
+{
+  double dist12 = fmin(distance_point_line(l1[0], l1[1], l2),
+                       distance_point_line(l1[2], l1[3], l2));
+  double dist21 = fmin(distance_point_line(l2[0], l2[1], l1),
+                       distance_point_line(l2[2], l2[3], l1));
+  return fmin(dist12, dist21);
+}
+
 EXTENSION_NOINLINE
 double ST_Distance_Point_Point(double *p1, int64_t p1num, double *p2, int64_t p2num)
 {
@@ -673,7 +704,16 @@ double ST_Distance_Point_Point(double *p1, int64_t p1num, double *p2, int64_t p2
 EXTENSION_NOINLINE
 double ST_Distance_Point_LineString(double *p, int64_t pnum, double *l, int64_t lnum)
 {
-  return 0.0;
+  double *line = l;
+  int64_t num_lines = lnum/2 - 1;
+  double dist = distance_point_line(p[0], p[1], line);
+  for (int i = 1; i < num_lines; i++) {
+    line += 2; // adance one point
+    double ldist = distance_point_line(p[0], p[1], line);
+    if (dist > ldist)
+      dist = ldist;
+  }
+  return dist;
 }
 
 EXTENSION_INLINE
@@ -685,29 +725,49 @@ double ST_Distance_LineString_Point(double *l, int64_t lnum, double *p, int64_t 
 EXTENSION_NOINLINE
 double ST_Distance_LineString_LineString(double *l1, int64_t l1num, double *l2, int64_t l2num)
 {
-  return 0.0;
+  double dist = distance_point_point(l1[0], l1[1], l2[0], l2[1]);
+  int64_t num_lines1 = l1num/2 - 1;
+  int64_t num_lines2 = l2num/2 - 1;
+  double *line1 = l1;
+  for (int i = 0; i < num_lines1; i++) {
+    double *line2 = l2;
+    for (int j = 0; j < num_lines2; j++) {
+      double ldist = distance_line_line(line1, line2);
+      if (dist > ldist)
+        dist = ldist;
+      line2 += 2; // adance one point
+    }
+    line1 += 2; // adance one point
+  }
+  return dist;
 }
 
 EXTENSION_NOINLINE
 bool ST_Contains_Point_Point(double *p1, int64_t p1num, double *p2, int64_t p2num)
 {
-  return (p1[0] == p2[0]) && (p1[1] == p2[1]);
+  return (p1[0] == p2[0]) && (p1[1] == p2[1]); // TBD: sensitivity
 }
 
 EXTENSION_NOINLINE
 bool ST_Contains_Point_LineString(double *p, int64_t pnum, double *l, int64_t lnum)
 {
-  return false;
+  for (int i = 0; i < lnum; i+=2) {
+    if (p[0] == l[i] && p[1] == l[i+1])
+      continue;
+    return false;
+  }
+  return true;
 }
 
 EXTENSION_INLINE
 bool ST_Contains_LineString_Point(double *l, int64_t lnum, double *p, int64_t pnum)
 {
-  return false;
+  return (ST_Distance_Point_LineString(p, pnum, l, lnum) == 0.0);  // TBD: sensitivity
 }
 
 EXTENSION_NOINLINE
 bool ST_Contains_LineString_LineString(double *l1, int64_t l1num, double *l2, int64_t l2num)
 {
+  // TBD
   return false;
 }
