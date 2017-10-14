@@ -53,8 +53,8 @@
 
 #include <arrow/api.h>
 
-#include "libarchive/archive.h"
-#include "libarchive/archive_entry.h"
+#include "archive.h"
+#include "archive_entry.h"
 
 using std::ostream;
 

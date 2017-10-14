@@ -52,6 +52,7 @@ sudo apt install -y \
     liblz4-dev \
     liblzma-dev \
     libbz2-dev \
+    libarchive-dev \
     libsnappy-dev \
     zlib1g-dev \
     autoconf \
