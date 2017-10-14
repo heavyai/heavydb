@@ -40,17 +40,17 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateGeoFunction(const Rex
       }
       if (columnB_ti.get_type() == kLINESTRING) {
         return makeExpr<Analyzer::FunctionOper>(
-            rex_function->getType(), "ST_Distance_Point_Line", translateGeoFunctionArgs(rex_function));
+            rex_function->getType(), "ST_Distance_Point_LineString", translateGeoFunctionArgs(rex_function));
       }
     }
     if (columnA_ti.get_type() == kLINESTRING) {
       if (columnB_ti.get_type() == kPOINT) {
         return makeExpr<Analyzer::FunctionOper>(
-            rex_function->getType(), "ST_Distance_Line_Point", translateGeoFunctionArgs(rex_function));
+            rex_function->getType(), "ST_Distance_LineString_Point", translateGeoFunctionArgs(rex_function));
       }
       if (columnB_ti.get_type() == kLINESTRING) {
         return makeExpr<Analyzer::FunctionOper>(
-            rex_function->getType(), "ST_Distance_Line_Line", translateGeoFunctionArgs(rex_function));
+            rex_function->getType(), "ST_Distance_LineString_LineString", translateGeoFunctionArgs(rex_function));
       }
     }
     throw QueryNotSupported("Function " + rex_function->getName() + " not supported for arguments provided");
@@ -63,17 +63,16 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateGeoFunction(const Rex
       }
       if (columnB_ti.get_type() == kLINESTRING) {
         return makeExpr<Analyzer::FunctionOper>(
-            rex_function->getType(), "ST_Contains_Point_Line", translateGeoFunctionArgs(rex_function));
+            rex_function->getType(), "ST_Contains_Point_LineString", translateGeoFunctionArgs(rex_function));
       }
     }
     if (columnA_ti.get_type() == kLINESTRING) {
       if (columnB_ti.get_type() == kPOINT) {
         return makeExpr<Analyzer::FunctionOper>(
-            rex_function->getType(), "ST_Contains_Line_Point", translateGeoFunctionArgs(rex_function));
+            rex_function->getType(), "ST_Contains_LineString_Point", translateGeoFunctionArgs(rex_function));
       }
       if (columnB_ti.get_type() == kLINESTRING) {
-        return makeExpr<Analyzer::FunctionOper>(
-            rex_function->getType(), "ST_Contains_Line_Line", translateGeoFunctionArgs(rex_function));
+        throw QueryNotSupported("Function " + rex_function->getName() + " not supported for arguments provided");
       }
     }
     throw QueryNotSupported("Function " + rex_function->getName() + " not supported for arguments provided");

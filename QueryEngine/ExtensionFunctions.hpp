@@ -665,55 +665,49 @@ double distance_point_point(double p1x, double p1y, double p2x, double p2y)
 }
 
 EXTENSION_NOINLINE
-double ST_Distance_Point_Point(double p1x, double p1y, double p2x, double p2y)
+double ST_Distance_Point_Point(double *p1, int64_t p1num, double *p2, int64_t p2num)
 {
-  return distance_point_point(p1x, p1y, p2x, p2y);
+  return distance_point_point(p1[0], p1[1], p2[0], p2[1]);
 }
 
 EXTENSION_NOINLINE
-double ST_Distance_Point_Line(double px, double py,
-                              double lx1, double ly1, double lx2, double ly2)
+double ST_Distance_Point_LineString(double *p, int64_t pnum, double *l, int64_t lnum)
 {
   return 0.0;
 }
 
 EXTENSION_INLINE
-double ST_Distance_Line_Point(double lx1, double ly1, double lx2, double ly2,
-                              double px, double py)
+double ST_Distance_LineString_Point(double *l, int64_t lnum, double *p, int64_t pnum)
 {
-  return ST_Distance_Point_Line(px, py, lx1, ly1, lx2, ly2);
+  return ST_Distance_Point_LineString(p, pnum, l, lnum);
 }
 
 EXTENSION_NOINLINE
-double ST_Distance_Line_Line(double l1x1, double l1y1, double l1x2, double l1y2,
-                             double l2x1, double l2y1, double l2x2, double l2y2)
+double ST_Distance_LineString_LineString(double *l1, int64_t l1num, double *l2, int64_t l2num)
 {
   return 0.0;
 }
 
 EXTENSION_NOINLINE
-bool ST_Contains_Point_Point(double p1x, double p1y, double p2x, double p2y)
+bool ST_Contains_Point_Point(double *p1, int64_t p1num, double *p2, int64_t p2num)
 {
-  return (p1x == p2x) && (p1y == p2y);
+  return (p1[0] == p2[0]) && (p1[1] == p2[1]);
 }
 
 EXTENSION_NOINLINE
-bool ST_Contains_Point_Line(double px, double py,
-                            double lx1, double ly1, double lx2, double ly2)
+bool ST_Contains_Point_LineString(double *p, int64_t pnum, double *l, int64_t lnum)
 {
   return false;
 }
 
 EXTENSION_INLINE
-bool ST_Contains_Line_Point(double lx1, double ly1, double lx2, double ly2,
-                            double px, double py)
+bool ST_Contains_LineString_Point(double *l, int64_t lnum, double *p, int64_t pnum)
 {
   return false;
 }
 
 EXTENSION_NOINLINE
-bool ST_Contains_Line_Line(double l1x1, double l1y1, double l1x2, double l1y2,
-                           double l2x1, double l2y1, double l2x2, double l2y2)
+bool ST_Contains_LineString_LineString(double *l1, int64_t l1num, double *l2, int64_t l2num)
 {
   return false;
 }

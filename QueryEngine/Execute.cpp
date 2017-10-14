@@ -2005,6 +2005,12 @@ int64_t insert_one_dict_str(T* col_data,
 
 }  // namespace
 
+namespace Importer_NS {
+
+int8_t* appendDatum(int8_t* buf, Datum d, const SQLTypeInfo& ti);
+
+}  // Importer_NS
+
 void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
   const auto plan = root_plan->get_plan();
   CHECK(plan);
@@ -2020,6 +2026,7 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
   std::vector<int> col_ids;
   std::unordered_map<int, std::unique_ptr<uint8_t[]>> col_buffers;
   std::unordered_map<int, std::vector<std::string>> str_col_buffers;
+  std::unordered_map<int, std::vector<ArrayDatum>> arr_col_buffers;
   auto& cat = root_plan->get_catalog();
   const auto table_descriptor = cat.getMetadataForTable(table_id);
   const auto shard_tables = cat.getPhysicalTablesDescriptors(table_descriptor);
@@ -2048,6 +2055,9 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
     } else if (cd->columnType.is_geometry()) {
       auto it_ok = str_col_buffers.insert(std::make_pair(col_id, std::vector<std::string>{}));
       CHECK(it_ok.second);
+    } else if (cd->columnType.is_array()) {
+      auto it_ok = arr_col_buffers.insert(std::make_pair(col_id, std::vector<ArrayDatum>{}));
+      CHECK(it_ok.second);
     } else {
       const auto it_ok =
           col_buffers.emplace(col_id, std::unique_ptr<uint8_t[]>(new uint8_t[cd->columnType.get_logical_size()]));
@@ -2074,7 +2084,9 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
     auto col_datum = col_cv->get_constval();
     auto col_type = cd->columnType.is_decimal() ? decimal_to_int_type(cd->columnType) : cd->columnType.get_type();
     uint8_t* col_data_bytes{nullptr};
-    if (!cd->columnType.is_geometry() && (!cd->columnType.is_string() || cd->columnType.get_compression() == kENCODING_DICT)) {
+    if (!cd->columnType.is_array() &&
+        !cd->columnType.is_geometry() &&
+        (!cd->columnType.is_string() || cd->columnType.get_compression() == kENCODING_DICT)) {
       const auto col_data_bytes_it = col_buffers.find(col_ids[col_idx]);
       CHECK(col_data_bytes_it != col_buffers.end());
       col_data_bytes = col_data_bytes_it->second.get();
@@ -2149,6 +2161,21 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
         *col_data = col_cv->get_is_null() ? inline_fixed_encoding_null_val(cd->columnType) : col_datum.timeval;
         break;
       }
+      case kARRAY: {
+        const auto l = col_cv->get_value_list();
+        SQLTypeInfo elem_ti = cd->columnType.get_elem_type();
+        CHECK(!elem_ti.is_string());
+        size_t len = l.size() * elem_ti.get_size();
+        int8_t* buf = (int8_t*)checked_malloc(len);
+        int8_t* p = buf;
+        for (auto& e : l) {
+          auto c = std::dynamic_pointer_cast<Analyzer::Constant>(e);
+          CHECK(c);
+          p = Importer_NS::appendDatum(p, c->get_constval(), elem_ti);
+        }
+        arr_col_buffers[col_ids[col_idx]].push_back(ArrayDatum(len, buf, len == 0));
+        break;
+      }
       case kPOINT:
       case kLINESTRING:
       case kPOLYGON:
@@ -2172,6 +2199,12 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
     insert_data.columnIds.push_back(kv.first);
     DataBlockPtr p;
     p.stringsPtr = &kv.second;
+    insert_data.data.push_back(p);
+  }
+  for (auto& kv : arr_col_buffers) {
+    insert_data.columnIds.push_back(kv.first);
+    DataBlockPtr p;
+    p.arraysPtr = &kv.second;
     insert_data.data.push_back(p);
   }
   insert_data.numRows = 1;

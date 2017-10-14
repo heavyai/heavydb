@@ -24,6 +24,7 @@
 static std::set<std::string> reserved_keywords{
     "ROWID",  // MapD internal
     "AMMSC",  // MapD legacy
+    "ARRAY",
     "ASC",
     "CHAR_LENGTH",
     "CONTINUE",

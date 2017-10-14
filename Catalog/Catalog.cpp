@@ -1679,37 +1679,45 @@ void Catalog::createTable(TableDescriptor& td,
     auto col_ti = cd.columnType;
     if (IS_GEO(col_ti.get_type())) {
       switch (col_ti.get_type()) {
-        case kPOINT:
-          cd.numPhysicalColumns = 2;
+        case kPOINT: {
+          cd.numPhysicalColumns = 1;
           columns.push_back(cd);
-          for (int i = 0; i < cd.numPhysicalColumns; i++) {
-            ColumnDescriptor physical_cd;
-            physical_cd.columnName = cd.columnName + std::to_string(i);
-            physical_cd.columnType = SQLTypeInfo(kDOUBLE, true);
-            physical_cd.isPhysicalCol = true;
-            columns.push_back(physical_cd);
-          }
+
+          ColumnDescriptor physical_cd_coords;
+          physical_cd_coords.columnName = cd.columnName + "_coords";
+          SQLTypeInfo ti = SQLTypeInfo(kARRAY, true);
+          ti.set_subtype(kDOUBLE);
+          ti.set_size(2 * sizeof(double));
+          physical_cd_coords.columnType = ti;
+          physical_cd_coords.isPhysicalCol = true;
+          columns.push_back(physical_cd_coords);
+
           break;
-        case kLINESTRING:
-          cd.numPhysicalColumns = 4;
+        }
+        case kLINESTRING: {
+          cd.numPhysicalColumns = 1;
           columns.push_back(cd);
-          for (int i = 0; i < cd.numPhysicalColumns; i++) {
-            ColumnDescriptor physical_cd;
-            physical_cd.columnName = cd.columnName + std::to_string(i);
-            physical_cd.columnType = SQLTypeInfo(kDOUBLE, true);
-            physical_cd.isPhysicalCol = true;
-            columns.push_back(physical_cd);
-          }
+
+          ColumnDescriptor physical_cd_coords;
+          physical_cd_coords.columnName = cd.columnName + "_coords";
+          SQLTypeInfo ti = SQLTypeInfo(kARRAY, true);
+          ti.set_subtype(kDOUBLE);
+          physical_cd_coords.columnType = ti;
+          physical_cd_coords.isPhysicalCol = true;
+          columns.push_back(physical_cd_coords);
+
           break;
-        case kPOLYGON:
-          throw runtime_error("Polygon type is not supported.");
+        }
+        case kPOLYGON: {
           break;
+        }
         default:
           throw runtime_error("Unrecognized geometry type.");
           break;
       }
       continue;
     }
+
     columns.push_back(cd);
   }
 

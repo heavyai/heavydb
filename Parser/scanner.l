@@ -26,6 +26,7 @@ ALL		{ yylval.qualval = kALL; TOK(ALL) }
 ALTER         TOK(ALTER)
 AND           TOK(AND)
 ANY           { yylval.qualval = kANY; TOK(ANY) }
+ARRAY         TOK(ARRAY)
 AS            TOK(AS)
 ASC           TOK(ASC)
 AUTHORIZATION	TOK(AUTHORIZATION)

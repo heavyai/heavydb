@@ -159,6 +159,43 @@ std::shared_ptr<Analyzer::Expr> UserLiteral::analyze(const Catalog_Namespace::Ca
   return nullptr;
 }
 
+std::shared_ptr<Analyzer::Expr> ArrayLiteral::analyze(const Catalog_Namespace::Catalog& catalog,
+                                                      Analyzer::Query& query,
+                                                      TlistRefType allow_tlist_ref) const {
+  SQLTypeInfo ti = SQLTypeInfo(kARRAY, true);
+  bool set_subtype = true;
+  std::list<std::shared_ptr<Analyzer::Expr>> value_exprs;
+  for (auto& p : value_list) {
+    auto e = p->analyze(catalog, query, allow_tlist_ref);
+    CHECK(e);
+    auto subtype = e->get_type_info().get_type();
+    if (set_subtype) {
+      ti.set_subtype(subtype);
+      set_subtype = false;
+    } else {
+      if (ti.get_subtype() != subtype)
+        throw std::runtime_error("ARRAY literals should be of the same type.");
+    }
+    value_exprs.push_back(e);
+  }
+  std::shared_ptr<Analyzer::Expr> result = makeExpr<Analyzer::Constant>(ti, false, value_exprs);
+  return result;
+}
+
+std::string ArrayLiteral::to_string() const {
+  std::string str = "{";
+  bool notfirst = false;
+  for (auto& p : value_list) {
+    if (notfirst)
+      str += ", ";
+    else
+      notfirst = true;
+    str += p->to_string();
+  }
+  str += "}";
+  return str;
+}
+
 std::shared_ptr<Analyzer::Expr> OperExpr::analyze(const Catalog_Namespace::Catalog& catalog,
                                                   Analyzer::Query& query,
                                                   TlistRefType allow_tlist_ref) const {
@@ -1557,16 +1594,20 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog, Analyz
       if (!Importer_NS::readGeoCoords(cd->columnType.get_type(), *c->get_constval().stringval, coords)) {
         throw std::runtime_error("Cannot read geometry to insert into column " + cd->columnName);
       }
-      CHECK_EQ(cd->numPhysicalColumns, coords.size());
-      for (int i = 0; i < cd->numPhysicalColumns; i++) {
-        auto col = cd->columnId + i + 1;
-        const ColumnDescriptor* pcd = catalog.getMetadataForColumn(query.get_result_table_id(), col);
-        CHECK(pcd && pcd->isPhysicalCol);
-        CHECK_EQ(pcd->columnType.get_type(), kDOUBLE);
+
+      const ColumnDescriptor* cd_coords = catalog.getMetadataForColumn(query.get_result_table_id(), cd->columnId + 1);
+      CHECK(cd_coords && cd_coords->isPhysicalCol);
+      CHECK_EQ(cd_coords->columnType.get_type(), kARRAY);
+      CHECK_EQ(cd_coords->columnType.get_subtype(), kDOUBLE);
+      std::list<std::shared_ptr<Analyzer::Expr>> value_exprs;
+      for (auto c : coords) {
         Datum d;
-        d.doubleval = coords[i];
-        tlist.emplace_back(new Analyzer::TargetEntry("", makeExpr<Analyzer::Constant>(kDOUBLE, false, d), false));
-        ++it;
+        d.doubleval = c;
+        auto e = makeExpr<Analyzer::Constant>(kDOUBLE, false, d);
+        value_exprs.push_back(e);
+      }
+      tlist.emplace_back(new Analyzer::TargetEntry("", makeExpr<Analyzer::Constant>(cd_coords->columnType, false, value_exprs), false));
+      ++it;
       }
     }
   }

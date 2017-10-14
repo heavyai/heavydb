@@ -241,6 +241,29 @@ class UserLiteral : public Literal {
 };
 
 /*
+ * @type ArrayLiteral
+ * @brief the literal for arrays
+ */
+class ArrayLiteral : public Literal {
+ public:
+  ArrayLiteral(std::list<Expr*>* v) {
+    CHECK(v);
+    for (const auto e : *v) {
+      value_list.emplace_back(e);
+    }
+    delete v;
+  }
+  const std::list<std::unique_ptr<Expr>>& get_value_list() const { return value_list; }
+  virtual std::shared_ptr<Analyzer::Expr> analyze(const Catalog_Namespace::Catalog& catalog,
+                                                  Analyzer::Query& query,
+                                                  TlistRefType allow_tlist_ref = TLIST_NONE) const;
+  virtual std::string to_string() const;
+
+ private:
+  std::list<std::unique_ptr<Expr>> value_list;
+};
+
+/*
  * @type OperExpr
  * @brief all operator expressions
  */

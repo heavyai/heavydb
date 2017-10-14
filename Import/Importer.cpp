@@ -1201,24 +1201,26 @@ bool readGeoCoords(SQLTypes type,
   switch (type) {
     case kPOINT: {
       auto data = (char *)wkt.c_str();
-      OGRPoint p;
-      status = p.importFromWkt(&data);
+      OGRPoint point;
+      status = point.importFromWkt(&data);
       if (status != OGRERR_NONE)
         break;
-      coords.push_back(p.getX());
-      coords.push_back(p.getY());
+      coords.push_back(point.getX());
+      coords.push_back(point.getY());
       return true;
     }
     case kLINESTRING: {
       auto data = (char *)wkt.c_str();
-      OGRLineString l;
-      status = l.importFromWkt(&data);
-      if (status != OGRERR_NONE || l.getNumPoints() != 2)
+      OGRLineString linestring;
+      status = linestring.importFromWkt(&data);
+      if (status != OGRERR_NONE)
         break;
-      coords.push_back(l.getX(0));
-      coords.push_back(l.getY(0));
-      coords.push_back(l.getX(1));
-      coords.push_back(l.getY(1));
+      for (int i = 0; i < linestring.getNumPoints(); i++) {
+        OGRPoint point;
+        linestring.getPoint(i, &point);
+        coords.push_back(point.getX());
+        coords.push_back(point.getY());
+      }
       return true;
     }
     case kPOLYGON: {
@@ -1282,35 +1284,39 @@ static ImportStatus import_thread(int thread_id,
         continue;
       }
       us = measure<std::chrono::microseconds>::execution([&]() {
-        size_t row_idx = 0;
+        size_t import_idx = 0;
         size_t col_idx = 0;
         try {
           for (auto cd_it = col_descs.begin(); cd_it != col_descs.end(); cd_it++) {
             auto cd = *cd_it;
-            bool is_null = (row[row_idx] == copy_params.null_str);
-            if (!cd->columnType.is_string() && row[row_idx].empty())
+            bool is_null = (row[import_idx] == copy_params.null_str);
+            if (!cd->columnType.is_string() && row[import_idx].empty())
               is_null = true;
-            import_buffers[col_idx]->add_value(cd, row[row_idx], is_null, copy_params);
-            std::string geostr{row[row_idx]};
-            ++row_idx;
+            import_buffers[col_idx]->add_value(cd, row[import_idx], is_null, copy_params);
+            std::string geostr{row[import_idx]};
+            ++import_idx;
             ++col_idx;
-            if (cd->numPhysicalColumns) {
+            if (cd->numPhysicalColumns > 0) {
               auto col_ti = cd->columnType;
               CHECK(IS_GEO(col_ti.get_type()));
-              // import data through GDAL, fill physical columns
               std::vector<double> coords;
-              if (!Importer_NS::readGeoCoords(col_ti.get_type(), geostr, coords)) {
+              if (!readGeoCoords(col_ti.get_type(), geostr, coords)) {
                 throw std::runtime_error("Cannot read geometry to insert into column " + cd->columnName);
               }
-              CHECK_EQ(cd->numPhysicalColumns, coords.size());
-              for (auto j = 0; j < cd->numPhysicalColumns; j++) {
-                ++cd_it;
-                auto pcd = *cd_it;
-                TDatum td;
-                td.val.real_val = coords[j];
-                td.is_null = false;
-                import_buffers[col_idx]->add_value(pcd, td, false);
-                ++col_idx;
+
+              ++cd_it;
+              auto cd_coords = *cd_it;
+              std::vector<TDatum> td_coords;
+              for (auto coord : coords) {
+                TDatum td_coord;
+                td_coord.val.real_val = coord;
+                td_coords.push_back(td_coord);
+              }
+              TDatum tdd_coords;
+              tdd_coords.val.arr_val = td_coords;
+              tdd_coords.is_null = false;
+              import_buffers[col_idx]->add_value(cd_coords, tdd_coords, false);
+              ++col_idx;
               }
             }
           }

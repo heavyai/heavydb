@@ -164,7 +164,7 @@ using namespace Parser;
 
 	/* literal keyword tokens */
 
-%token ALL ALTER AMMSC ANY AS ASC AUTHORIZATION BETWEEN BIGINT BOOLEAN BY
+%token ALL ALTER AMMSC ANY ARRAY AS ASC AUTHORIZATION BETWEEN BIGINT BOOLEAN BY
 %token CASE CAST CHAR_LENGTH CHARACTER CHECK CLOSE COLUMN COMMIT CONTINUE COPY CREATE CURRENT
 %token CURSOR DATABASE DATE DATETIME DATE_TRUNC DECIMAL DECLARE DEFAULT DELETE DESC DICTIONARY DISTINCT DOUBLE DROP
 %token ELSE END EXISTS EXPLAIN EXTRACT FETCH FIRST FLOAT FOR FOREIGN FOUND FROM
@@ -1083,18 +1083,25 @@ function_ref:
 	;
 
 literal:
-    STRING { $<nodeval>$ = new StringLiteral($<stringval>1); }
-  | INTNUM { $<nodeval>$ = new IntLiteral($<intval>1); }
-  | NOW '(' ')' { $<nodeval>$ = new TimestampLiteral(); }
-  | DATETIME '(' general_exp ')' { delete dynamic_cast<Expr*>($<nodeval>3); $<nodeval>$ = new TimestampLiteral(); }
-  | FIXEDNUM
-  {
-    $<nodeval>$ = new FixedPtLiteral($<stringval>1);
-  }
-	| FLOAT { $<nodeval>$ = new FloatLiteral($<floatval>1); }
-	| DOUBLE { $<nodeval>$ = new DoubleLiteral($<doubleval>1); }
-	| data_type STRING
-	{ $<nodeval>$ = new CastExpr(new StringLiteral($<stringval>2), dynamic_cast<SQLType*>($<nodeval>1)); }
+		STRING { $<nodeval>$ = new StringLiteral($<stringval>1); }
+	|	INTNUM { $<nodeval>$ = new IntLiteral($<intval>1); }
+	|	NOW '(' ')' { $<nodeval>$ = new TimestampLiteral(); }
+	|	DATETIME '(' general_exp ')' { delete dynamic_cast<Expr*>($<nodeval>3); $<nodeval>$ = new TimestampLiteral(); }
+	|	FIXEDNUM { $<nodeval>$ = new FixedPtLiteral($<stringval>1); }
+	|	FLOAT { $<nodeval>$ = new FloatLiteral($<floatval>1); }
+	|	DOUBLE { $<nodeval>$ = new DoubleLiteral($<doubleval>1); }
+	|	data_type STRING { $<nodeval>$ = new CastExpr(new StringLiteral($<stringval>2), dynamic_cast<SQLType*>($<nodeval>1)); }
+	|	'{' literal_commalist '}' { $<nodeval>$ = new ArrayLiteral(reinterpret_cast<std::list<Expr*>*>($<listval>2)); }
+	|	ARRAY '[' literal_commalist ']' { $<nodeval>$ = new ArrayLiteral(reinterpret_cast<std::list<Expr*>*>($<listval>3)); }
+	;
+
+literal_commalist:
+		literal { $<listval>$ = new std::list<Node*>(1, $<nodeval>1); }
+	|	literal_commalist ',' literal
+	{
+		$<listval>$ = $<listval>1;
+		$<listval>$->push_back($<nodeval>3);
+	}
 	;
 
 	/* miscellaneous */
