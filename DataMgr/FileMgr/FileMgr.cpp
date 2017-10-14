@@ -770,12 +770,9 @@ FileInfo* FileMgr::openExistingFile(const std::string& path,
   FileInfo* fInfo = new FileInfo(fileId, f, pageSize, numPages, false);  // false means don't init file
 
   fInfo->openExistingFile(headerVec, epoch_);
+  mapd_unique_lock<mapd_shared_mutex> write_lock(files_rw_mutex_);
   if (fileId >= static_cast<int>(files_.size())) {
-    mapd_unique_lock<mapd_shared_mutex> write_lock(files_rw_mutex_);
-    // recheck
-    if (fileId >= static_cast<int>(files_.size())) {
-      files_.resize(fileId + 1);
-    }
+    files_.resize(fileId + 1);
   }
   files_[fileId] = fInfo;
   fileIndex_.insert(std::pair<size_t, int>(pageSize, fileId));
