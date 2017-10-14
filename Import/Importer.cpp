@@ -1224,7 +1224,27 @@ bool readGeoCoords(SQLTypes type,
       return true;
     }
     case kPOLYGON: {
-      break;
+      auto data = (char *)wkt.c_str();
+      OGRPolygon polygon;
+      status = polygon.importFromWkt(&data);
+      if (status != OGRERR_NONE)
+        break;
+      OGRLinearRing* exteriorRing = polygon.getExteriorRing();
+      if (!exteriorRing->isClockwise()) {
+        exteriorRing->reverseWindingOrder();
+      }
+      if (!exteriorRing->isClockwise()) {
+        break;
+      }
+      exteriorRing->closeRings();
+      for (int i = 0; i < exteriorRing->getNumPoints(); i++) {
+        OGRPoint point;
+        exteriorRing->getPoint(i, &point);
+        coords.push_back(point.getX());
+        coords.push_back(point.getY());
+      }
+      // TBD: read ring sizes
+      return true;
     }
     default:
       break;
@@ -1317,6 +1337,9 @@ static ImportStatus import_thread(int thread_id,
               tdd_coords.is_null = false;
               import_buffers[col_idx]->add_value(cd_coords, tdd_coords, false);
               ++col_idx;
+
+              if (col_ti.get_type() == kPOLYGON) {
+                // TBD: add ring size array
               }
             }
           }

@@ -1608,6 +1608,9 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog, Analyz
       }
       tlist.emplace_back(new Analyzer::TargetEntry("", makeExpr<Analyzer::Constant>(cd_coords->columnType, false, value_exprs), false));
       ++it;
+
+      if (cd->columnType.get_type() == kPOLYGON) {
+        // TBD: ingest ring sizes
       }
     }
   }

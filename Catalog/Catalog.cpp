@@ -1709,6 +1709,19 @@ void Catalog::createTable(TableDescriptor& td,
           break;
         }
         case kPOLYGON: {
+          cd.numPhysicalColumns = 1; // TBD: add ring size array column
+          columns.push_back(cd);
+
+          ColumnDescriptor physical_cd_coords;
+          physical_cd_coords.columnName = cd.columnName + "_coords";
+          SQLTypeInfo ti = SQLTypeInfo(kARRAY, true);
+          ti.set_subtype(kDOUBLE);
+          physical_cd_coords.columnType = ti;
+          physical_cd_coords.isPhysicalCol = true;
+          columns.push_back(physical_cd_coords);
+
+          // TBD: add ring size array column
+
           break;
         }
         default:
