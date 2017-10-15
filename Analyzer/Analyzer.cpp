@@ -127,7 +127,7 @@ std::shared_ptr<Analyzer::Expr> LikelihoodExpr::deep_copy() const {
   return makeExpr<LikelihoodExpr>(arg->deep_copy(), likelihood);
 }
 std::shared_ptr<Analyzer::Expr> AggExpr::deep_copy() const {
-  return makeExpr<AggExpr>(type_info, aggtype, arg == nullptr ? nullptr : arg->deep_copy(), is_distinct);
+  return makeExpr<AggExpr>(type_info, aggtype, arg == nullptr ? nullptr : arg->deep_copy(), is_distinct, error_rate);
 }
 
 std::shared_ptr<Analyzer::Expr> CaseExpr::deep_copy() const {
@@ -1376,7 +1376,8 @@ std::shared_ptr<Analyzer::Expr> AggExpr::rewrite_with_targetlist(
 
 std::shared_ptr<Analyzer::Expr> AggExpr::rewrite_with_child_targetlist(
     const std::vector<std::shared_ptr<TargetEntry>>& tlist) const {
-  return makeExpr<AggExpr>(type_info, aggtype, arg ? arg->rewrite_with_child_targetlist(tlist) : nullptr, is_distinct);
+  return makeExpr<AggExpr>(
+      type_info, aggtype, arg ? arg->rewrite_with_child_targetlist(tlist) : nullptr, is_distinct, error_rate);
 }
 
 std::shared_ptr<Analyzer::Expr> AggExpr::rewrite_agg_to_var(

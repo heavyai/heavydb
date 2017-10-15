@@ -224,7 +224,8 @@ class DeepCopyVisitor : public ScalarExprVisitor<std::shared_ptr<Analyzer::Expr>
 
   RetType visitAggExpr(const Analyzer::AggExpr* agg) const override {
     RetType arg = agg->get_arg() ? visit(agg->get_arg()) : nullptr;
-    return makeExpr<Analyzer::AggExpr>(agg->get_type_info(), agg->get_aggtype(), arg, agg->get_is_distinct());
+    return makeExpr<Analyzer::AggExpr>(
+        agg->get_type_info(), agg->get_aggtype(), arg, agg->get_is_distinct(), agg->get_error_rate());
   }
 };
 

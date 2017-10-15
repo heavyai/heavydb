@@ -2276,7 +2276,17 @@ CountDistinctDescriptors GroupByAndAggregate::initCountDistinctDescriptors() {
       GroupByAndAggregate::ColRangeInfo no_range_info{GroupByColRangeType::OneColGuessedRange, 0, 0, 0, false};
       auto arg_range_info = arg_ti.is_fp() ? no_range_info : getExprRangeInfo(agg_expr->get_arg());
       CountDistinctImplType count_distinct_impl_type{CountDistinctImplType::StdSet};
-      int64_t bitmap_sz_bits{agg_info.agg_kind == kCOUNT ? 0 : g_hll_precision_bits};
+      int64_t bitmap_sz_bits{0};
+      if (agg_info.agg_kind == kAPPROX_COUNT_DISTINCT) {
+        const auto error_rate = agg_expr->get_error_rate();
+        if (error_rate) {
+          CHECK(error_rate->get_type_info().is_integer());
+          CHECK_GE(error_rate->get_constval().intval, 1);
+          bitmap_sz_bits = hll_sz_for_rate(error_rate->get_constval().intval);
+        } else {
+          bitmap_sz_bits = g_hll_precision_bits;
+        }
+      }
       if (arg_range_info.hash_type_ == GroupByColRangeType::OneColKnownRange &&
           !arg_ti.is_array()) {  // TODO(alex): allow bitmap implementation for arrays
         if (arg_range_info.isEmpty()) {

@@ -74,6 +74,12 @@ inline void hll_unify(T1* lhs, T2* rhs, const size_t m) {
   }
 }
 
+inline int hll_sz_for_rate(const int err_percent) {
+  double err_rate{static_cast<double>(err_percent) / 100.0};
+  double k = ceil(2 * log2(1.04 / err_rate));
+  return k > 16 ? 16 : k < 1 ? 1 : k;
+}
+
 extern int g_hll_precision_bits;
 
 #endif  // QUERYENGINE_HYPERLOGLOG_H

@@ -398,29 +398,35 @@ class RexRef : public RexScalar {
 
 class RexAgg : public Rex {
  public:
-  RexAgg(const SQLAgg agg, const bool distinct, const SQLTypeInfo& type, const ssize_t operand)
-      : agg_(agg), distinct_(distinct), type_(type), operand_(operand){};
+  RexAgg(const SQLAgg agg, const bool distinct, const SQLTypeInfo& type, const std::vector<size_t>& operands)
+      : agg_(agg), distinct_(distinct), type_(type), operands_(operands) {}
 
   std::string toString() const override {
-    return "(RexAgg " + std::to_string(agg_) + " " + std::to_string(distinct_) + " " + type_.get_type_name() + " " +
-           type_.get_compression_name() + " " + std::to_string(operand_) + ")";
+    auto result = "(RexAgg " + std::to_string(agg_) + " " + std::to_string(distinct_) + " " + type_.get_type_name() +
+                  " " + type_.get_compression_name();
+    for (auto operand : operands_) {
+      result += " " + std::to_string(operand);
+    }
+    return result + ")";
   }
 
   SQLAgg getKind() const { return agg_; }
 
   bool isDistinct() const { return distinct_; }
 
-  ssize_t getOperand() const { return operand_; }
+  size_t size() const { return operands_.size(); }
+
+  size_t getOperand(size_t idx) const { return operands_[idx]; }
 
   const SQLTypeInfo& getType() const { return type_; }
 
-  std::unique_ptr<RexAgg> deepCopy() const { return boost::make_unique<RexAgg>(agg_, distinct_, type_, operand_); }
+  std::unique_ptr<RexAgg> deepCopy() const { return boost::make_unique<RexAgg>(agg_, distinct_, type_, operands_); }
 
  private:
   const SQLAgg agg_;
   const bool distinct_;
   const SQLTypeInfo type_;
-  const ssize_t operand_;
+  const std::vector<size_t> operands_;
 };
 
 class RelAlgNode {

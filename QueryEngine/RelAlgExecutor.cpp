@@ -540,9 +540,8 @@ std::pair<std::unordered_set<const RexInput*>, std::vector<std::shared_ptr<RexIn
     used_inputs.insert(synthesized_used_input);
   }
   for (const auto& agg_expr : aggregate->getAggExprs()) {
-    const auto operand_idx = agg_expr->getOperand();
-    const bool takes_arg{operand_idx >= 0};
-    if (takes_arg) {
+    for (size_t i = 0; i < agg_expr->size(); ++i) {
+      const auto operand_idx = agg_expr->getOperand(i);
       CHECK_GE(in_metainfo.size(), static_cast<size_t>(operand_idx));
       auto synthesized_used_input = new RexInput(source, operand_idx);
       used_inputs_owned.emplace_back(synthesized_used_input);
@@ -1254,16 +1253,26 @@ RelAlgExecutionUnit decide_approx_count_distinct_implementation(
     const auto device_type = g_cluster ? ExecutorDeviceType::GPU : device_type_in;
     const auto bitmap_sz_bits = arg_range.getIntMax() - arg_range.getIntMin() + 1;
     const auto sub_bitmap_count = get_count_distinct_sub_bitmap_count(bitmap_sz_bits, ra_exe_unit, device_type);
+    int64_t approx_bitmap_sz_bits{0};
+    const auto error_rate = static_cast<Analyzer::AggExpr*>(target_expr)->get_error_rate();
+    if (error_rate) {
+      CHECK(error_rate->get_type_info().is_integer());
+      CHECK_GE(error_rate->get_constval().intval, 1);
+      approx_bitmap_sz_bits = hll_sz_for_rate(error_rate->get_constval().intval);
+    } else {
+      approx_bitmap_sz_bits = g_hll_precision_bits;
+    }
     CountDistinctDescriptor approx_count_distinct_desc{CountDistinctImplType::Bitmap,
                                                        arg_range.getIntMin(),
-                                                       g_hll_precision_bits,
+                                                       approx_bitmap_sz_bits,
                                                        true,
                                                        device_type,
                                                        sub_bitmap_count};
     CountDistinctDescriptor precise_count_distinct_desc{
         CountDistinctImplType::Bitmap, arg_range.getIntMin(), bitmap_sz_bits, false, device_type, sub_bitmap_count};
     if (approx_count_distinct_desc.bitmapPaddedSizeBytes() >= precise_count_distinct_desc.bitmapPaddedSizeBytes()) {
-      auto precise_count_distinct = makeExpr<Analyzer::AggExpr>(get_agg_type(kCOUNT, arg.get()), kCOUNT, arg, true);
+      auto precise_count_distinct =
+          makeExpr<Analyzer::AggExpr>(get_agg_type(kCOUNT, arg.get()), kCOUNT, arg, true, nullptr);
       target_exprs_owned.push_back(precise_count_distinct);
       ra_exe_unit.target_exprs[i] = precise_count_distinct.get();
     }
@@ -1408,7 +1417,7 @@ ssize_t RelAlgExecutor::getFilteredCountAll(const WorkUnit& work_unit,
     return table_infos.front().info.getNumTuplesUpperBound();
   }
   const auto count =
-      makeExpr<Analyzer::AggExpr>(SQLTypeInfo(g_bigint_count ? kBIGINT : kINT, false), kCOUNT, nullptr, false);
+      makeExpr<Analyzer::AggExpr>(SQLTypeInfo(g_bigint_count ? kBIGINT : kINT, false), kCOUNT, nullptr, false, nullptr);
   const auto count_all_exe_unit = create_count_all_execution_unit(work_unit.exe_unit, count);
   int32_t error_code{0};
   size_t one{1};

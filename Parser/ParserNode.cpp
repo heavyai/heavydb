@@ -642,7 +642,7 @@ std::shared_ptr<Analyzer::Expr> FunctionRef::analyze(const Catalog_Namespace::Ca
   }
   int naggs = query.get_num_aggs();
   query.set_num_aggs(naggs + 1);
-  return makeExpr<Analyzer::AggExpr>(result_type, agg_type, arg_expr, is_distinct);
+  return makeExpr<Analyzer::AggExpr>(result_type, agg_type, arg_expr, is_distinct, nullptr);
 }
 
 std::shared_ptr<Analyzer::Expr> CastExpr::analyze(const Catalog_Namespace::Catalog& catalog,

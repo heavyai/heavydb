@@ -31,13 +31,18 @@
 
 namespace {
 
-ssize_t get_agg_operand_idx(const rapidjson::Value& expr) {
+std::vector<size_t> get_agg_operand_idxs(const rapidjson::Value& expr) {
   CHECK(expr.IsObject());
   CHECK(expr.HasMember("agg"));
   const auto& agg_operands = expr["operands"];
   CHECK(agg_operands.IsArray());
-  CHECK(agg_operands.Size() <= 1);
-  return agg_operands.Empty() ? -1 : agg_operands[0].GetInt();
+  auto n_operands = agg_operands.Size();
+  CHECK(n_operands <= 2);
+  std::vector<size_t> operands;
+  for (size_t i = 0; i < n_operands; ++i) {
+    operands.push_back(agg_operands[i].GetInt());
+  }
+  return operands;
 }
 
 std::tuple<const rapidjson::Value*, SQLTypeInfo, SQLTypeInfo> parse_literal(const rapidjson::Value& expr) {
@@ -452,14 +457,20 @@ class CalciteAdapter {
     CHECK(expr_type.IsObject());
     const auto agg_kind = to_agg_kind(expr["agg"].GetString());
     const bool is_distinct = expr["distinct"].GetBool();
-    const auto operand = get_agg_operand_idx(expr);
-    const bool takes_arg{operand >= 0};
-    if (takes_arg) {
-      CHECK_LT(operand, static_cast<ssize_t>(scan_targets.size()));
+    const auto operands = get_agg_operand_idxs(expr);
+    std::shared_ptr<Analyzer::Expr> arg_expr{nullptr};
+    std::shared_ptr<Analyzer::Constant> err_rate_expr{nullptr};
+    if (operands.size() >= 1) {
+      CHECK_LT(operands[0], scan_targets.size());
+      arg_expr = scan_targets[operands[0]]->get_own_expr();
+      if (operands.size() == 2) {
+        CHECK_LT(operands[1], scan_targets.size());
+        err_rate_expr = std::dynamic_pointer_cast<Analyzer::Constant>(scan_targets[operands[1]]->get_own_expr());
+        CHECK(err_rate_expr != nullptr);
+      }
     }
-    const auto arg_expr = takes_arg ? scan_targets[operand]->get_own_expr() : nullptr;
     const auto agg_ti = get_agg_type(agg_kind, arg_expr.get());
-    return makeExpr<Analyzer::AggExpr>(agg_ti, agg_kind, arg_expr, is_distinct);
+    return makeExpr<Analyzer::AggExpr>(agg_ti, agg_kind, arg_expr, is_distinct, err_rate_expr);
   }
 
   std::shared_ptr<Analyzer::Expr> translateTypedLiteral(const rapidjson::Value& expr) {
