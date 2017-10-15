@@ -75,6 +75,20 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateGeoFunction(const Rex
         throw QueryNotSupported("Function " + rex_function->getName() + " not supported for arguments provided");
       }
     }
+    if (columnA_ti.get_type() == kPOLYGON) {
+      if (columnB_ti.get_type() == kPOINT) {
+        return makeExpr<Analyzer::FunctionOper>(
+            rex_function->getType(), "ST_Contains_Polygon_Point", translateGeoFunctionArgs(rex_function));
+      }
+      if (columnB_ti.get_type() == kLINESTRING) {
+        return makeExpr<Analyzer::FunctionOper>(
+            rex_function->getType(), "ST_Contains_Polygon_LineString", translateGeoFunctionArgs(rex_function));
+      }
+      if (columnB_ti.get_type() == kPOLYGON) {
+        return makeExpr<Analyzer::FunctionOper>(
+            rex_function->getType(), "ST_Contains_Polygon_Polygon", translateGeoFunctionArgs(rex_function));
+      }
+    }
     throw QueryNotSupported("Function " + rex_function->getName() + " not supported for arguments provided");
   }
 

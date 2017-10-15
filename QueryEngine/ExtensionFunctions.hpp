@@ -698,8 +698,8 @@ bool intersects_line_line(double *l1, double *l2)
   double fp = fx * px + fy * py; // F * P
   if (fp == 0.0)
     return false; // lines are parallel
-  double h = ((l1[0] - l2[0]) * px + (l1[1] - l2[1]) * py) / fp; // h = ( (A-C) * P ) / (F * P)
-  return (h >= 0.0 && h <= 1.0);
+  double h = ((l1[0] - l2[0]) * px + (l1[1] - l2[1]) * py) / fp; // H = ( (A-C) * P ) / (F * P)
+  return (h >= 0.0 && h <= 1.0); // exact point of intersection: C + F*H
 }
 
 DEVICE
@@ -789,4 +789,35 @@ bool ST_Contains_LineString_LineString(double *l1, int64_t l1num, double *l2, in
 {
   // TBD
   return false;
+}
+
+DEVICE
+bool contains_polygon_point(double *poly, int64_t num, double *p)
+{
+  // TBD
+  return false;
+}
+
+EXTENSION_NOINLINE
+bool ST_Contains_Polygon_Point(double *poly, int64_t polynum, double *p, int64_t pnum)
+{
+  return contains_polygon_point(poly, polynum, p);
+}
+
+EXTENSION_NOINLINE
+bool ST_Contains_Polygon_LineString(double *poly, int64_t polynum, double *l, int64_t lnum)
+{
+  double *p = l;
+  for (int64_t i = 0; i < lnum; i+=2) {
+    if (!contains_polygon_point(poly, polynum, p + i))
+      return false;
+  }
+  return true;
+}
+
+EXTENSION_NOINLINE
+bool ST_Contains_Polygon_Polygon(double *poly1, int64_t poly1num, double *poly2, int64_t poly2num)
+{
+  // Calling ST_Contains_Polygon_LineString with poly2's exterior ring as the LineString
+  return (ST_Contains_Polygon_LineString(poly1, poly1num, poly2, poly2num));
 }
