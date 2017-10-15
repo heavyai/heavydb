@@ -686,8 +686,27 @@ double distance_point_line(double px, double py, double *l)
 }
 
 DEVICE
+bool intersects_line_line(double *l1, double *l2)
+{
+  // Check if line segment AB intersects line segment CD
+  double ex = l1[2] - l1[0]; // E = B - A
+  double ey = l1[3] - l1[1];
+  double fx = l2[2] - l2[0]; // F = D - C
+  double fy = l2[3] - l2[1];
+  double px = -ey; // P = ( -Ey, Ex )
+  double py =  ex;
+  double fp = fx * px + fy * py; // F * P
+  if (fp == 0.0)
+    return false; // lines are parallel
+  double h = ((l1[0] - l2[0]) * px + (l1[1] - l2[1]) * py) / fp; // h = ( (A-C) * P ) / (F * P)
+  return (h >= 0.0 && h <= 1.0);
+}
+
+DEVICE
 double distance_line_line(double *l1, double *l2)
 {
+  if (intersects_line_line(l1, l2))
+    return 0.0;
   double dist12 = fmin(distance_point_line(l1[0], l1[1], l2),
                        distance_point_line(l1[2], l1[3], l2));
   double dist21 = fmin(distance_point_line(l2[0], l2[1], l1),
