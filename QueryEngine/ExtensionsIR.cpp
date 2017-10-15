@@ -24,7 +24,7 @@ namespace {
 llvm::Type* ext_arg_type_to_llvm_type(const ExtArgumentType ext_arg_type, llvm::LLVMContext& ctx) {
   switch (ext_arg_type) {
     case ExtArgumentType::Bool:
-      return get_int_type(8, ctx);
+      return get_int_type(1, ctx);
     case ExtArgumentType::Int16:
       return get_int_type(16, ctx);
     case ExtArgumentType::Int32:
@@ -66,7 +66,8 @@ llvm::Value* Executor::codegenFunctionOper(const Analyzer::FunctionOper* functio
   CHECK(ret_ti.is_integer() || ret_ti.is_fp() || ret_ti.is_boolean());
   const auto ret_ty = ret_ti.is_fp() ? (ret_ti.get_type() == kDOUBLE ? llvm::Type::getDoubleTy(cgen_state_->context_)
                                                                      : llvm::Type::getFloatTy(cgen_state_->context_))
-                                     : get_int_type(ret_ti.get_logical_size() * 8, cgen_state_->context_);
+                                     : (ret_ti.is_boolean() ? llvm::Type::getInt1Ty(cgen_state_->context_)
+                                                            : get_int_type(ret_ti.get_logical_size() * 8, cgen_state_->context_));
   if (ret_ty != ext_arg_type_to_llvm_type(ext_func_sig.getRet(), cgen_state_->context_)) {
     throw std::runtime_error("Inconsistent return type for " + function_oper->getName());
   }
@@ -227,6 +228,13 @@ std::vector<llvm::Value*> Executor::codegenFunctionOperCastArgs(const Analyzer::
 }
 
 llvm::Value* Executor::castArrayPointer(llvm::Value* ptr, const SQLTypeInfo& elem_ti) {
+  if (elem_ti.get_type() == kFLOAT) {
+    return cgen_state_->ir_builder_.CreatePointerCast(ptr, llvm::Type::getFloatPtrTy(cgen_state_->context_));
+  }
+  if (elem_ti.get_type() == kDOUBLE) {
+    return cgen_state_->ir_builder_.CreatePointerCast(ptr, llvm::Type::getDoublePtrTy(cgen_state_->context_));
+  }
+  CHECK(elem_ti.is_integer() || (elem_ti.is_string() && elem_ti.get_compression() == kENCODING_DICT));
   switch (elem_ti.get_size()) {
     case 1:
       return ptr;
