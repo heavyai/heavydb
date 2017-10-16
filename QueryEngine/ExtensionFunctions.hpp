@@ -794,6 +794,9 @@ bool ST_Contains_LineString_LineString(double *l1, int64_t l1num, double *l2, in
 DEVICE
 bool contains_polygon_point(double *poly, int64_t num, double *p)
 {
+  // Shoot a line from P to the right, register intersections with polygon edges.
+  // Each intersection means we're entered/exited the polygon.
+  // Odd number of intersections means the polygon does contain P.
   bool result = false;
   int64_t i, j;
   for (i = 0, j = num - 2; i < num; j = i, i+=2) {
@@ -809,26 +812,66 @@ bool contains_polygon_point(double *poly, int64_t num, double *p)
 }
 
 EXTENSION_NOINLINE
-bool ST_Contains_Polygon_Point(double *poly, int64_t polynum, double *p, int64_t pnum)
-{
-  // TBD: check that none of the polygon's holes contain that point
-  return contains_polygon_point(poly, polynum, p);
+bool ST_Contains_Polygon_Point(double* poly_coords,
+                               int64_t poly_num_coords,
+                               int32_t* poly_ring_sizes,
+                               int64_t poly_num_rings,
+                               double* p,
+                               int64_t pnum) {
+  int64_t exterior_ring_num_coords = poly_num_coords;
+  if (poly_num_rings > 0)
+    exterior_ring_num_coords = poly_ring_sizes[0] * 2;
+
+  auto poly = poly_coords;
+  if (contains_polygon_point(poly, exterior_ring_num_coords, p)) {
+    // Inside exterior ring
+    poly += exterior_ring_num_coords;
+    // Check that none of the polygon's holes contain that point
+    for (auto r = 1; r < poly_num_rings; r++) {
+      int64_t interior_ring_num_coords = poly_ring_sizes[r] * 2;
+      if (contains_polygon_point(poly, interior_ring_num_coords, p))
+        return false;
+      poly += interior_ring_num_coords;
+    }
+    return true;
+  }
+  return false;
 }
 
 EXTENSION_NOINLINE
-bool ST_Contains_Polygon_LineString(double *poly, int64_t polynum, double *l, int64_t lnum)
-{
+bool ST_Contains_Polygon_LineString(double* poly_coords,
+                                    int64_t poly_num_coords,
+                                    int32_t* poly_ring_sizes,
+                                    int64_t poly_num_rings,
+                                    double* l,
+                                    int64_t lnum) {
+  if (poly_num_rings > 0)
+    return false;  // TBD: support polygons with interior rings
   double *p = l;
   for (int64_t i = 0; i < lnum; i+=2) {
-    if (!contains_polygon_point(poly, polynum, p + i))
+    // Check if polygon contains each point in the LineString
+    if (!contains_polygon_point(poly_coords, poly_num_coords, p + i))
       return false;
   }
   return true;
 }
 
 EXTENSION_NOINLINE
-bool ST_Contains_Polygon_Polygon(double *poly1, int64_t poly1num, double *poly2, int64_t poly2num)
-{
-  // Calling ST_Contains_Polygon_LineString with poly2's exterior ring as the LineString
-  return (ST_Contains_Polygon_LineString(poly1, poly1num, poly2, poly2num));
+bool ST_Contains_Polygon_Polygon(double* poly1_coords,
+                                 int64_t poly1_num_coords,
+                                 int32_t* poly1_ring_sizes,
+                                 int64_t poly1_num_rings,
+                                 double* poly2_coords,
+                                 int64_t poly2_num_coords,
+                                 int32_t* poly2_ring_sizes,
+                                 int64_t poly2_num_rings) {
+  if (poly1_num_rings > 0)
+    return false;  // TBD: support [containing] polygons with interior rings
+  // If we don't have any holes in poly1, check if poly1 contains poly2's exterior ring's points:
+  // calling ST_Contains_Polygon_LineString with poly2's exterior ring as the LineString
+  int64_t poly2_exterior_ring_num_coords = poly2_num_coords;
+  if (poly2_num_rings > 0)
+    poly2_exterior_ring_num_coords = poly2_ring_sizes[0] * 2;
+  return (ST_Contains_Polygon_LineString(
+      poly1_coords, poly1_num_coords, poly1_ring_sizes, poly1_num_rings, poly2_coords, poly2_exterior_ring_num_coords));
 }

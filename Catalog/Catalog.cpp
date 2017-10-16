@@ -1709,18 +1709,24 @@ void Catalog::createTable(TableDescriptor& td,
           break;
         }
         case kPOLYGON: {
-          cd.numPhysicalColumns = 1; // TBD: add ring size array column
+          cd.numPhysicalColumns = 2;
           columns.push_back(cd);
 
           ColumnDescriptor physical_cd_coords;
           physical_cd_coords.columnName = cd.columnName + "_coords";
-          SQLTypeInfo ti = SQLTypeInfo(kARRAY, true);
-          ti.set_subtype(kDOUBLE);
-          physical_cd_coords.columnType = ti;
+          SQLTypeInfo coords_ti = SQLTypeInfo(kARRAY, true);
+          coords_ti.set_subtype(kDOUBLE);
+          physical_cd_coords.columnType = coords_ti;
           physical_cd_coords.isPhysicalCol = true;
           columns.push_back(physical_cd_coords);
 
-          // TBD: add ring size array column
+          ColumnDescriptor physical_cd_ring_sizes;
+          physical_cd_ring_sizes.columnName = cd.columnName + "_ring_sizes";
+          SQLTypeInfo ring_sizes_ti = SQLTypeInfo(kARRAY, true);
+          ring_sizes_ti.set_subtype(kINT);
+          physical_cd_ring_sizes.columnType = ring_sizes_ti;
+          physical_cd_ring_sizes.isPhysicalCol = true;
+          columns.push_back(physical_cd_ring_sizes);
 
           break;
         }

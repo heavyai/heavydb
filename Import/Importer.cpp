@@ -1241,9 +1241,21 @@ bool importGeoFromWkt(SQLTypes type,
         coords.push_back(point.getX());
         coords.push_back(point.getY());
       }
-      ring_sizes.push_back(exteriorRing->getNumPoints());
-
-      // TBD: add coords and sizes of the interior rings
+      if (polygon.getNumInteriorRings() > 0) {
+        // First add exterior ring size
+        ring_sizes.push_back(exteriorRing->getNumPoints());
+        // Add sizes and coords of the interior rings
+        for (int r = 0; r < polygon.getNumInteriorRings(); r++) {
+          OGRLinearRing* interiorRing = polygon.getInteriorRing(r);
+          ring_sizes.push_back(interiorRing->getNumPoints());
+          for (int i = 0; i < interiorRing->getNumPoints(); i++) {
+            OGRPoint point;
+            interiorRing->getPoint(i, &point);
+            coords.push_back(point.getX());
+            coords.push_back(point.getY());
+          }
+        }
+      }
 
       return true;
     }
@@ -1341,8 +1353,20 @@ static ImportStatus import_thread(int thread_id,
               ++col_idx;
 
               if (col_ti.get_type() == kPOLYGON) {
-                // TBD: create ring_sizes array value and add it to the physical columns
-                CHECK(ring_sizes.size() > 0);
+                // Create ring_sizes array value and add it to the physical column
+                ++cd_it;
+                auto cd_ring_sizes = *cd_it;
+                std::vector<TDatum> td_ring_sizes;
+                for (auto ring_size : ring_sizes) {
+                  TDatum td_ring_size;
+                  td_ring_size.val.int_val = ring_size;
+                  td_ring_sizes.push_back(td_ring_size);
+                }
+                TDatum tdd_ring_sizes;
+                tdd_ring_sizes.val.arr_val = td_ring_sizes;
+                tdd_ring_sizes.is_null = false;
+                import_buffers[col_idx]->add_value(cd_ring_sizes, tdd_ring_sizes, false);
+                ++col_idx;
               }
             }
           }

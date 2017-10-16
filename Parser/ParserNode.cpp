@@ -1612,8 +1612,22 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog, Analyz
       ++it;
 
       if (cd->columnType.get_type() == kPOLYGON) {
-        // TBD: ingest ring sizes into separate physical column
-        CHECK(ring_sizes.size() > 0);
+        // Put ring sizes array into separate physical column
+        const ColumnDescriptor* cd_ring_sizes =
+            catalog.getMetadataForColumn(query.get_result_table_id(), cd->columnId + 2);
+        CHECK(cd_ring_sizes && cd_ring_sizes->isPhysicalCol);
+        CHECK_EQ(cd_ring_sizes->columnType.get_type(), kARRAY);
+        CHECK_EQ(cd_ring_sizes->columnType.get_subtype(), kINT);
+        std::list<std::shared_ptr<Analyzer::Expr>> value_exprs;
+        for (auto c : ring_sizes) {
+          Datum d;
+          d.intval = c;
+          auto e = makeExpr<Analyzer::Constant>(kINT, false, d);
+          value_exprs.push_back(e);
+        }
+        tlist.emplace_back(new Analyzer::TargetEntry(
+            "", makeExpr<Analyzer::Constant>(cd_ring_sizes->columnType, false, value_exprs), false));
+        ++it;
       }
     }
   }
