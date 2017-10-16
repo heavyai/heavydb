@@ -82,7 +82,7 @@ class MapDPreparedStatement implements PreparedStatement {
     this.stmt = new MapDStatement(session, client);
     MAPDLOGGER.debug("Prepared statement is " + currentSQL);
     //TODO in real life this needs to check if the ? isinside quotes before we assume it a parameter
-    brokenSQL = currentSQL.split("\\?");
+    brokenSQL = currentSQL.split("\\?", -1);
     parmCount = brokenSQL.length - 1;
     parmRep = new String[parmCount];
     isParmString = new boolean[parmCount];
