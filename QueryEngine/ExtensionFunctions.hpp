@@ -794,13 +794,24 @@ bool ST_Contains_LineString_LineString(double *l1, int64_t l1num, double *l2, in
 DEVICE
 bool contains_polygon_point(double *poly, int64_t num, double *p)
 {
-  // TBD
-  return false;
+  bool result = false;
+  int64_t i, j;
+  for (i = 0, j = num - 2; i < num; j = i, i+=2) {
+    if ((poly[i + 1] > p[1]) != (poly[j + 1] > p[1])) {
+      if (poly[j + 1] != poly[i + 1]) {
+        if (p[0] < (poly[j] - poly[i]) * (p[1] - poly[i + 1]) / (poly[j + 1] - poly[i + 1]) + poly[i]) {
+          result = !result;
+        }
+      }
+    }
+  }
+  return result;
 }
 
 EXTENSION_NOINLINE
 bool ST_Contains_Polygon_Point(double *poly, int64_t polynum, double *p, int64_t pnum)
 {
+  // TBD: check that none of the polygon's holes contain that point
   return contains_polygon_point(poly, polynum, p);
 }
 
