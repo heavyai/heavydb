@@ -42,12 +42,12 @@ FILE* create(const std::string& basePath, const int fileId, const size_t pageSiz
   if (f == nullptr) {
     LOG(FATAL) << "Error trying to create file '" << path << "', the errno is " << errno;
   }
-  fseek(f, (pageSize * numPages) - 1, SEEK_SET);
+  fseek(f, (pageSize * numPages) - 1 + SUPER_PAGE_SIZE, SEEK_SET);
   fputc(EOF, f);
   fseek(f, 0, SEEK_SET);  // rewind
-  if (fileSize(f) != pageSize * numPages) {
+  if (fileSize(f) != pageSize * numPages + SUPER_PAGE_SIZE) {
     LOG(FATAL) << "Error trying to create file '" << path << "', file size " << fileSize(f)
-               << " does not equal pageSize * numPages " << pageSize * numPages;
+               << " does not equal pageSize * numPages " << pageSize * numPages + SUPER_PAGE_SIZE;
   }
 
   return f;
@@ -62,12 +62,12 @@ FILE* create(const std::string& fullPath, const size_t requestedFileSize) {
   if (f == nullptr) {
     LOG(FATAL) << "Error trying to create file '" << fullPath << "', the errno is " << errno;
   }
-  fseek(f, requestedFileSize - 1, SEEK_SET);
+  fseek(f, requestedFileSize - 1 + SUPER_PAGE_SIZE, SEEK_SET);
   fputc(EOF, f);
   fseek(f, 0, SEEK_SET);  // rewind
-  if (fileSize(f) != requestedFileSize) {
+  if (fileSize(f) != requestedFileSize + SUPER_PAGE_SIZE) {
     LOG(FATAL) << "Error trying to create file '" << fullPath << "', file size " << fileSize(f)
-               << " does not equal requestedFileSize " << requestedFileSize;
+               << " does not equal requestedFileSize " << requestedFileSize + SUPER_PAGE_SIZE;
   }
   return f;
 }
@@ -122,7 +122,7 @@ size_t append(FILE* f, const size_t size, int8_t* buf) {
 }
 
 size_t readPage(FILE* f, const size_t pageSize, const size_t pageNum, int8_t* buf) {
-  return read(f, pageNum * pageSize, pageSize, buf);
+  return read(f, pageNum * pageSize + SUPER_PAGE_SIZE, pageSize, buf);
 }
 
 size_t readPartialPage(FILE* f,
@@ -131,11 +131,11 @@ size_t readPartialPage(FILE* f,
                        const size_t readSize,
                        const size_t pageNum,
                        int8_t* buf) {
-  return read(f, pageNum * pageSize + offset, readSize, buf);
+  return read(f, pageNum * pageSize + offset + SUPER_PAGE_SIZE, readSize, buf);
 }
 
 size_t writePage(FILE* f, const size_t pageSize, const size_t pageNum, int8_t* buf) {
-  return write(f, pageNum * pageSize, pageSize, buf);
+  return write(f, pageNum * pageSize + SUPER_PAGE_SIZE, pageSize, buf);
 }
 
 size_t writePartialPage(FILE* f,
@@ -144,7 +144,7 @@ size_t writePartialPage(FILE* f,
                         const size_t writeSize,
                         const size_t pageNum,
                         int8_t* buf) {
-  return write(f, pageNum * pageSize + offset, writeSize, buf);
+  return write(f, pageNum * pageSize + offset + SUPER_PAGE_SIZE, writeSize, buf);
 }
 
 size_t appendPage(FILE* f, const size_t pageSize, int8_t* buf) {
