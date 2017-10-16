@@ -198,7 +198,7 @@ void run_warmup_queries(boost::shared_ptr<MapDHandler> handler, std::string base
             single_query.clear();
             break;
           }
-          warmup_handler->sql_execute(ret, sessionId, single_query, true, "", -1);
+          warmup_handler->sql_execute(ret, sessionId, single_query, true, "", -1, -1);
           single_query.clear();
         }
 

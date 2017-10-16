@@ -518,12 +518,25 @@ void MapDHandler::sql_execute(TQueryResult& _return,
                               const std::string& query_str,
                               const bool column_format,
                               const std::string& nonce,
-                              const int32_t first_n) {
+                              const int32_t first_n,
+                              const int32_t at_most_n) {
+  if (first_n >= 0 && at_most_n >= 0) {
+    TMapDException ex;
+    ex.error_msg = std::string("At most one of first_n and at_most_n can be set");
+    LOG(ERROR) << ex.error_msg;
+    throw ex;
+  }
   const auto session_info = MapDHandler::get_session(session);
   if (leaf_aggregator_.leafCount() > 0) {
   } else {
-    MapDHandler::sql_execute_impl(
-        _return, session_info, query_str, column_format, nonce, session_info.get_executor_device_type(), first_n);
+    MapDHandler::sql_execute_impl(_return,
+                                  session_info,
+                                  query_str,
+                                  column_format,
+                                  nonce,
+                                  session_info.get_executor_device_type(),
+                                  first_n,
+                                  at_most_n);
   }
 }
 
@@ -638,7 +651,7 @@ void MapDHandler::validate_rel_alg(TTableDescriptor& _return,
   try {
     const auto query_ra = parse_to_ra(query_str, session_info);
     TQueryResult result;
-    MapDHandler::execute_rel_alg(result, query_ra, true, session_info, ExecutorDeviceType::CPU, -1, false, true);
+    MapDHandler::execute_rel_alg(result, query_ra, true, session_info, ExecutorDeviceType::CPU, -1, -1, false, true);
     const auto& row_desc = fixup_row_descriptor(result.row_set.row_desc, session_info.get_catalog());
     for (const auto& col_desc : row_desc) {
       const auto it_ok = _return.insert(std::make_pair(col_desc.col_name, col_desc));
@@ -760,7 +773,7 @@ void MapDHandler::get_table_details_impl(TTableDetails& _return,
     try {
       const auto query_ra = parse_to_ra(td->viewSQL, session_info);
       TQueryResult result;
-      execute_rel_alg(result, query_ra, true, session_info, ExecutorDeviceType::CPU, -1, false, true);
+      execute_rel_alg(result, query_ra, true, session_info, ExecutorDeviceType::CPU, -1, -1, false, true);
       _return.row_desc = fixup_row_descriptor(result.row_set.row_desc, cat);
     } catch (std::exception& e) {
       TMapDException ex;
@@ -1641,7 +1654,7 @@ void MapDHandler::create_table(const TSessionId& session,
   stmt.append(" (" + boost::algorithm::join(col_stmts, ", ") + ");");
 
   TQueryResult ret;
-  sql_execute(ret, session, stmt, true, "", -1);
+  sql_execute(ret, session, stmt, true, "", -1, -1);
 }
 
 void MapDHandler::import_table(const TSessionId& session,
@@ -1902,6 +1915,7 @@ void MapDHandler::execute_rel_alg(TQueryResult& _return,
                                   const Catalog_Namespace::SessionInfo& session_info,
                                   const ExecutorDeviceType executor_device_type,
                                   const int32_t first_n,
+                                  const int32_t at_most_n,
                                   const bool just_explain,
                                   const bool just_validate) const {
   const auto& cat = session_info.get_catalog();
@@ -1929,7 +1943,7 @@ void MapDHandler::execute_rel_alg(TQueryResult& _return,
   if (just_explain) {
     convert_explain(_return, *result.getRows(), column_format);
   } else {
-    convert_rows(_return, result.getTargetsMeta(), *result.getRows(), column_format, first_n);
+    convert_rows(_return, result.getTargetsMeta(), *result.getRows(), column_format, first_n, at_most_n);
   }
 }
 
@@ -1993,7 +2007,7 @@ void MapDHandler::execute_root_plan(TQueryResult& _return,
   const auto plan = root_plan->get_plan();
   CHECK(plan);
   const auto& targets = plan->get_targetlist();
-  convert_rows(_return, getTargetMetaInfo(targets), *results, column_format, -1);
+  convert_rows(_return, getTargetMetaInfo(targets), *results, column_format, -1, -1);
 }
 
 std::vector<TargetMetaInfo> MapDHandler::getTargetMetaInfo(
@@ -2054,7 +2068,8 @@ void MapDHandler::convert_rows(TQueryResult& _return,
                                const std::vector<TargetMetaInfo>& targets,
                                const R& results,
                                const bool column_format,
-                               const int32_t first_n) const {
+                               const int32_t first_n,
+                               const int32_t at_most_n) const {
   _return.row_set.row_desc = convert_target_metainfo(targets);
   int32_t fetched{0};
   if (column_format) {
@@ -2066,6 +2081,12 @@ void MapDHandler::convert_rows(TQueryResult& _return,
         break;
       }
       ++fetched;
+      if (at_most_n >= 0 && fetched > at_most_n) {
+        TMapDException ex;
+        ex.error_msg = "The result contains more rows than the specified cap of " + std::to_string(at_most_n);
+        LOG(ERROR) << ex.error_msg;
+        throw ex;
+      }
       for (size_t i = 0; i < results.colCount(); ++i) {
         const auto agg_result = crt_row[i];
         value_to_thrift_column(agg_result, targets[i].get_type_info(), tcolumns[i]);
@@ -2082,6 +2103,12 @@ void MapDHandler::convert_rows(TQueryResult& _return,
         break;
       }
       ++fetched;
+      if (at_most_n >= 0 && fetched > at_most_n) {
+        TMapDException ex;
+        ex.error_msg = "The result contains more rows than the specified cap of " + std::to_string(at_most_n);
+        LOG(ERROR) << ex.error_msg;
+        throw ex;
+      }
       TRow trow;
       trow.cols.reserve(results.colCount());
       for (size_t i = 0; i < results.colCount(); ++i) {
@@ -2171,7 +2198,8 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
                                    const bool column_format,
                                    const std::string& nonce,
                                    const ExecutorDeviceType executor_device_type,
-                                   const int32_t first_n) {
+                                   const int32_t first_n,
+                                   const int32_t at_most_n) {
   _return.nonce = nonce;
   _return.execution_time_ms = 0;
   auto& cat = session_info.get_catalog();
@@ -2192,8 +2220,15 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
           convert_explain(_return, ResultSet(query_ra), true);
           return;
         }
-        execute_rel_alg(
-            _return, query_ra, column_format, session_info, executor_device_type, first_n, pw.is_select_explain, false);
+        execute_rel_alg(_return,
+                        query_ra,
+                        column_format,
+                        session_info,
+                        executor_device_type,
+                        first_n,
+                        at_most_n,
+                        pw.is_select_explain,
+                        false);
         return;
       }
       LOG(INFO) << "passing query to legacy processor";

@@ -166,7 +166,7 @@ public class LogRunner {
     logger.info(
             " -- before query -- ");
 
-    TQueryResult sql_execute = client.sql_execute(session, "Select uniquecarrier,flightnum  from flights LIMIT 3;", true, null, -1);
+    TQueryResult sql_execute = client.sql_execute(session, "Select uniquecarrier,flightnum  from flights LIMIT 3;", true, null, -1, -1);
     //client.send_sql_execute(session, "Select BRAND  from ACV ;", true);
     //logger.info(" -- before query recv -- ");
     //TQueryResult sql_execute = client.recv_sql_execute();
@@ -277,7 +277,7 @@ public class LogRunner {
       if (header.contains("MapDServer.cpp:1813")) {
         logger.info("run query " + originalSql.get(pid));
         try {
-        client.sql_execute(session, originalSql.get(pid), true, null, -1);
+        client.sql_execute(session, originalSql.get(pid), true, null, -1, -1);
         } catch  (TMapDException ex1) {
                logger.error("Failed to execute " + originalSql.get(pid) + " exception " + ex1.toString());
         }

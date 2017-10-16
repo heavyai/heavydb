@@ -78,7 +78,7 @@ public class MapDExample {
       System.out.println("Query is: " + query);
 
       // always use True for is columnar
-      results = client.sql_execute(session, query, true, null, -1);
+      results = client.sql_execute(session, query, true, null, -1, -1);
 
       if (results.row_set.is_columnar) {
         numRows = results.row_set.columns.get(0).nulls.size();

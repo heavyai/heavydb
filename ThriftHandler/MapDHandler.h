@@ -147,7 +147,8 @@ class MapDHandler : public MapDIf {
                    const std::string& query,
                    const bool column_format,
                    const std::string& nonce,
-                   const int32_t first_n);
+                   const int32_t first_n,
+                   const int32_t at_most_n);
   // TODO(miyu): merge the following two data frame APIs.
   void sql_execute_df(TDataFrame& _return,
                       const TSessionId& session,
@@ -324,7 +325,8 @@ class MapDHandler : public MapDIf {
                         const bool column_format,
                         const std::string& nonce,
                         const ExecutorDeviceType executor_device_type,
-                        const int32_t first_n);
+                        const int32_t first_n,
+                        const int32_t at_most_n);
 
   void execute_distributed_copy_statement(Parser::CopyTableStmt*, const Catalog_Namespace::SessionInfo& session_info);
 
@@ -333,7 +335,8 @@ class MapDHandler : public MapDIf {
                        const std::string& query_str,
                        const bool column_format,
                        const std::string& nonce,
-                       const int32_t first_n);
+                       const int32_t first_n,
+                       const int32_t at_most_n);
 
   void validate_rel_alg(TTableDescriptor& _return,
                         const std::string& query_str,
@@ -357,6 +360,7 @@ class MapDHandler : public MapDIf {
                        const Catalog_Namespace::SessionInfo& session_info,
                        const ExecutorDeviceType executor_device_type,
                        const int32_t first_n,
+                       const int32_t at_most_n,
                        const bool just_explain,
                        const bool just_validate) const;
   void execute_rel_alg_df(TDataFrame& _return,
@@ -391,7 +395,8 @@ class MapDHandler : public MapDIf {
                     const std::vector<TargetMetaInfo>& targets,
                     const R& results,
                     const bool column_format,
-                    const int32_t first_n) const;
+                    const int32_t first_n,
+                    const int32_t at_most_n) const;
 
   void create_simple_result(TQueryResult& _return,
                             const ResultSet& results,

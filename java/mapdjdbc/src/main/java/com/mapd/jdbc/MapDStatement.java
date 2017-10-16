@@ -64,7 +64,7 @@ public class MapDStatement implements java.sql.Statement {
     String afterFnSQL = fnReplace(sql);
     logger.debug("afterFnSQL is :'" + afterFnSQL + "'");
     try {
-      sqlResult = client.sql_execute(session, afterFnSQL + ";", true, null, -1);
+      sqlResult = client.sql_execute(session, afterFnSQL + ";", true, null, -1, -1);
     } catch (TMapDException ex) {
       throw new SQLException("Query failed : " + ex.getError_msg());
     } catch (TException ex) {
@@ -82,7 +82,7 @@ public class MapDStatement implements java.sql.Statement {
       if (sql.trim().substring(0, 6).compareToIgnoreCase("CREATE") == 0){
           sql = sql.replace('"', ' ');
       }
-      sqlResult = client.sql_execute(session, sql + ";", true, null, -1);
+      sqlResult = client.sql_execute(session, sql + ";", true, null, -1, -1);
     } catch (TMapDException ex) {
       throw new SQLException("Query failed : " + ex.getError_msg() + " sql was '" + sql + "'");
     } catch (TException ex) {

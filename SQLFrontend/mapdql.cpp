@@ -170,7 +170,7 @@ bool thrift_with_retry(ThriftService which_service, ClientContext& context, cons
         context.client.interrupt(context.session);
         break;
       case kSQL:
-        context.client.sql_execute(context.query_return, context.session, arg, true, "", -1);
+        context.client.sql_execute(context.query_return, context.session, arg, true, "", -1, -1);
         break;
       case kGET_TABLES:
         context.client.get_tables(context.names_return, context.session);

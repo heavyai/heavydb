@@ -66,7 +66,7 @@ def main():
     print 'Query is : ' + query
 
     # always use True for is columnar
-    results = client.sql_execute(session, query, True, None, -1)
+    results = client.sql_execute(session, query, True, None, -1, -1)
     dates = ['TIME', 'TIMESTAMP', 'DATE']
 
     if results.row_set.is_columnar == True:

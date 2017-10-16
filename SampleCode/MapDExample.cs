@@ -52,7 +52,7 @@ namespace MapDExample
 				Console.WriteLine("Connection Completed");
 				query = "select a, b from table1 limit 10;";
 				Console.WriteLine("Query is: " + query);
-				results = client.sql_execute(session, query, true, null, -1);
+				results = client.sql_execute(session, query, true, null, -1, -1);
 
 				if (results.Row_set.Is_columnar) {
 					numRows = results.Row_set.Columns[0].Nulls.Count;
