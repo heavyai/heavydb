@@ -1630,7 +1630,8 @@ std::vector<size_t> Executor::getFragmentCount(
     const size_t scan_idx,
     const RelAlgExecutionUnit& ra_exe_unit) {
   if ((ra_exe_unit.input_descs.size() > size_t(2) || !ra_exe_unit.inner_joins.empty()) && scan_idx > 0 &&
-      !plan_state_->join_info_.sharded_range_table_indices_.count(scan_idx)) {
+      !plan_state_->join_info_.sharded_range_table_indices_.count(scan_idx) &&
+      !selected_fragments[scan_idx].second.empty()) {
     // Fetch all fragments
     return {size_t(0)};
   }

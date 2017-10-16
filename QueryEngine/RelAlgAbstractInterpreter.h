@@ -664,6 +664,8 @@ class RelJoin : public RelAlgNode {
 
   const RexScalar* getCondition() const { return condition_.get(); }
 
+  const RexScalar* getAndReleaseCondition() const { return condition_.release(); }
+
   void setCondition(std::unique_ptr<const RexScalar>& condition) {
     CHECK(condition);
     condition_ = std::move(condition);
@@ -683,7 +685,7 @@ class RelJoin : public RelAlgNode {
   std::shared_ptr<RelAlgNode> deepCopy() const override;
 
  private:
-  std::unique_ptr<const RexScalar> condition_;
+  mutable std::unique_ptr<const RexScalar> condition_;
   const JoinType join_type_;
 };
 
@@ -793,7 +795,7 @@ class RelLeftDeepInnerJoin : public RelAlgNode {
                        std::vector<std::shared_ptr<const RelAlgNode>> inputs,
                        std::vector<std::shared_ptr<const RelJoin>>& original_joins);
 
-  const RexOperator* getCondition() const;
+  const RexScalar* getCondition() const;
 
   std::string toString() const override;
 
@@ -804,7 +806,7 @@ class RelLeftDeepInnerJoin : public RelAlgNode {
   bool coversOriginalNode(const RelAlgNode* node) const;
 
  private:
-  std::unique_ptr<const RexOperator> condition_;
+  std::unique_ptr<const RexScalar> condition_;
   const std::shared_ptr<RelFilter> original_filter_;
   const std::vector<std::shared_ptr<const RelJoin>> original_joins_;
 };

@@ -1294,7 +1294,9 @@ void coalesce_joins(std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
 void coalesce_nodes(std::vector<std::shared_ptr<RelAlgNode>>& nodes,
                     const std::vector<const RelAlgNode*>& left_deep_joins) {
 #ifdef ENABLE_EQUIJOIN_FOLD
-  coalesce_joins(nodes);
+  if (left_deep_joins.empty()) {
+    coalesce_joins(nodes);
+  }
 #endif
   enum class CoalesceState { Initial, Filter, FirstProject, Aggregate };
   std::vector<size_t> crt_pattern;
@@ -1414,8 +1416,11 @@ class RelAlgAbstractInterpreter {
     fold_filters(nodes_);
     std::vector<const RelAlgNode*> left_deep_joins;
     for (const auto& node : nodes_) {
-      if (is_left_deep_join(node.get())) {
-        left_deep_joins.push_back(node.get());
+      const auto left_deep_join_root = get_left_deep_join_root(node);
+      // The filter which starts a left-deep join pattern must not be coalesced
+      // since it contains (part of) the join condition.
+      if (left_deep_join_root && std::dynamic_pointer_cast<const RelFilter>(left_deep_join_root)) {
+        left_deep_joins.push_back(left_deep_join_root.get());
       }
     }
     if (left_deep_joins.empty()) {
