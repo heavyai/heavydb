@@ -33,6 +33,18 @@
 
 namespace File_Namespace {
 
+// This super page resides at front of a file and must
+// be big enough to hold 'headers' of maximum number of 'pages'.
+// If it can't hold the maximum number of page headers at once,
+// another super page and its pages shall be appended, and so on.
+// Note: this new file format is tentative and for reference only,
+// so this extensibility is a TODO and not yet implemented in this
+// version. But is it possible? So far i saw at most 256 pages (of 2MB page)
+// which exactly match MAX_FILE_N_PAGES above.
+#define SUPER_PAGE_SIZE (1 << 18)
+#define SUPER_HEAD_SIZE (1 <<  6)	// existing format seems needing 24 bytes
+
+
 FILE* create(const std::string& basePath, const int fileId, const size_t pageSize, const size_t npages);
 
 FILE* create(const std::string& fullPath, const size_t requestedFileSize);
