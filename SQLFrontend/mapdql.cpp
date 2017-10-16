@@ -1155,28 +1155,17 @@ void print_memory_info(ClientContext context, std::string memory_level) {
       tss << std::setfill(' ') << std::setw(9) << segIt->num_pages;
       tss << std::setfill(' ') << std::setw(7) << segIt->touch;
       tss << std::setfill(' ') << std::setw(5);
-      auto nextSeg = segIt + 1;
-      if (nextSeg != nodeIt.node_memory_data.end()) {
-        if (segIt->start_page + segIt->num_pages == nextSeg->start_page) {
-          tss << "USED";
-          tss << std::setfill(' ') << std::setw(5);
-          for (auto& vecIt : segIt->chunk_key) {
-            tss << vecIt << ",";
-          }
-        } else {
-          tss << "FREE";
-        }
+
+      if (segIt->is_free) {
+        tss << "FREE";
       } else {
-        if (segIt->is_free) {
-          tss << "FREE";
-        } else {
-          tss << "USED";
-          tss << std::setfill(' ') << std::setw(5);
-          for (auto& vecIt : segIt->chunk_key) {
-            tss << vecIt << ",";
-          }
+        tss << "USED";
+        tss << std::setfill(' ') << std::setw(5);
+        for (auto& vecIt : segIt->chunk_key) {
+          tss << vecIt << ",";
         }
       }
+
       tss << std::endl;
     }
     tss << "---------------------------------------------------------------" << std::endl;
