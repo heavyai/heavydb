@@ -28,8 +28,6 @@
 #include <thread>
 #include <future>
 
-#define METADATA_PAGE_SIZE 4096
-
 using namespace std;
 
 namespace File_Namespace {
@@ -151,6 +149,10 @@ void FileBuffer::calcHeaderBuffer() {
   if (headerMod > 0) {
     reservedHeaderSize_ += headerBufferOffset_ - headerMod;
   }
+
+  //ppan+ no need this in new format !!!
+  reservedHeaderSize_ = 0;
+
   // pageDataSize_ = pageSize_-reservedHeaderSize_;
 }
 
@@ -356,12 +358,12 @@ void FileBuffer::writeHeader(Page& page, const int pageId, const int epoch, cons
   header[intHeaderSize - 1] = epoch;
   FileInfo* fileInfo = fm_->getFileInfoForFileId(page.fileId);
   size_t pageSize = writeMetadata ? METADATA_PAGE_SIZE : pageSize_;
-  fileInfo->write(page.pageNum * pageSize, (intHeaderSize) * sizeof(int), (int8_t*)&header[0]);
+  fileInfo->write(page.pageNum * SUPER_HEAD_SIZE - SUPER_PAGE_SIZE, (intHeaderSize) * sizeof(int), (int8_t*)&header[0]);
 }
 
 void FileBuffer::readMetadata(const Page& page) {
   FILE* f = fm_->getFileForFileId(page.fileId);
-  fseek(f, page.pageNum * METADATA_PAGE_SIZE + reservedHeaderSize_, SEEK_SET);
+  fseek(f, SUPER_PAGE_SIZE + page.pageNum * METADATA_PAGE_SIZE + reservedHeaderSize_, SEEK_SET);
   fread((int8_t*)&pageSize_, sizeof(size_t), 1, f);
   fread((int8_t*)&size_, sizeof(size_t), 1, f);
   vector<int> typeData(
@@ -390,7 +392,7 @@ void FileBuffer::writeMetadata(const int epoch) {
   Page page = fm_->requestFreePage(METADATA_PAGE_SIZE, true);
   writeHeader(page, -1, epoch, true);
   FILE* f = fm_->getFileForFileId(page.fileId);
-  fseek(f, page.pageNum * METADATA_PAGE_SIZE + reservedHeaderSize_, SEEK_SET);
+  fseek(f, SUPER_PAGE_SIZE + page.pageNum * METADATA_PAGE_SIZE + reservedHeaderSize_, SEEK_SET);
   fwrite((int8_t*)&pageSize_, sizeof(size_t), 1, f);
   fwrite((int8_t*)&size_, sizeof(size_t), 1, f);
   vector<int> typeData(
