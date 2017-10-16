@@ -56,9 +56,10 @@ using Catalog_Namespace::SysCatalog;
 
 namespace Importer_NS {
 
-bool readGeoCoords(SQLTypes type,
-                   std::string& wkt,
-                   std::vector<double>& coords);
+bool importGeoFromWkt(SQLTypes type,
+                      std::string& wkt,
+                      std::vector<double>& coords,
+                      std::vector<int>& ring_sizes);
 
 }  // Importer_NS
 
@@ -1591,7 +1592,8 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog, Analyz
       auto c = std::dynamic_pointer_cast<Analyzer::Constant>(e);
       CHECK(c);
       std::vector<double> coords;
-      if (!Importer_NS::readGeoCoords(cd->columnType.get_type(), *c->get_constval().stringval, coords)) {
+      std::vector<int> ring_sizes;
+      if (!Importer_NS::importGeoFromWkt(cd->columnType.get_type(), *c->get_constval().stringval, coords, ring_sizes)) {
         throw std::runtime_error("Cannot read geometry to insert into column " + cd->columnName);
       }
 
@@ -1610,7 +1612,8 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog, Analyz
       ++it;
 
       if (cd->columnType.get_type() == kPOLYGON) {
-        // TBD: ingest ring sizes
+        // TBD: ingest ring sizes into separate physical column
+        CHECK(ring_sizes.size() > 0);
       }
     }
   }

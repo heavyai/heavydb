@@ -1194,9 +1194,10 @@ ostream& operator<<(ostream& out, const std::vector<T>& v) {
   return out;
 }
 
-bool readGeoCoords(SQLTypes type,
-                   std::string& wkt,
-                   std::vector<double>& coords) {
+bool importGeoFromWkt(SQLTypes type,
+                      std::string& wkt,
+                      std::vector<double>& coords,
+                      std::vector<int>& ring_sizes) {
   OGRErr status = OGRERR_NONE;
   switch (type) {
     case kPOINT: {
@@ -1233,9 +1234,6 @@ bool readGeoCoords(SQLTypes type,
       if (!exteriorRing->isClockwise()) {
         exteriorRing->reverseWindingOrder();
       }
-      if (!exteriorRing->isClockwise()) {
-        break;
-      }
       exteriorRing->closeRings();
       for (int i = 0; i < exteriorRing->getNumPoints(); i++) {
         OGRPoint point;
@@ -1243,7 +1241,10 @@ bool readGeoCoords(SQLTypes type,
         coords.push_back(point.getX());
         coords.push_back(point.getY());
       }
-      // TBD: read ring sizes
+      ring_sizes.push_back(exteriorRing->getNumPoints());
+
+      // TBD: add coords and sizes of the interior rings
+
       return true;
     }
     default:
@@ -1313,14 +1314,15 @@ static ImportStatus import_thread(int thread_id,
             if (!cd->columnType.is_string() && row[import_idx].empty())
               is_null = true;
             import_buffers[col_idx]->add_value(cd, row[import_idx], is_null, copy_params);
-            std::string geostr{row[import_idx]};
+            std::string wkt{row[import_idx]};
             ++import_idx;
             ++col_idx;
             if (cd->numPhysicalColumns > 0) {
               auto col_ti = cd->columnType;
               CHECK(IS_GEO(col_ti.get_type()));
               std::vector<double> coords;
-              if (!readGeoCoords(col_ti.get_type(), geostr, coords)) {
+              std::vector<int> ring_sizes;
+              if (!importGeoFromWkt(col_ti.get_type(), wkt, coords, ring_sizes)) {
                 throw std::runtime_error("Cannot read geometry to insert into column " + cd->columnName);
               }
 
@@ -1339,7 +1341,8 @@ static ImportStatus import_thread(int thread_id,
               ++col_idx;
 
               if (col_ti.get_type() == kPOLYGON) {
-                // TBD: add ring size array
+                // TBD: create ring_sizes array value and add it to the physical columns
+                CHECK(ring_sizes.size() > 0);
               }
             }
           }
