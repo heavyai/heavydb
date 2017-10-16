@@ -33,6 +33,15 @@
 
 namespace File_Namespace {
 
+//ppan# moved from FileBuffer.cpp
+#define METADATA_PAGE_SIZE 4096
+
+//ppan+ this super page resides at front of a file and must
+//be big enough to hold 'headers' of maximum number of 'pages'.
+#define SUPER_PAGE_SIZE (1 << 18)
+#define SUPER_HEAD_SIZE (SUPER_PAGE_SIZE / METADATA_PAGE_SIZE)
+
+
 FILE* create(const std::string& basePath, const int fileId, const size_t pageSize, const size_t npages);
 
 FILE* create(const std::string& fullPath, const size_t requestedFileSize);
