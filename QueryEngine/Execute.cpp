@@ -60,6 +60,8 @@ unsigned g_dynamic_watchdog_time_limit{10000};
 bool g_allow_cpu_retry{false};
 bool g_null_div_by_zero{false};
 unsigned g_trivial_loop_join_threshold{1000};
+bool g_left_deep_join_optimization{true};
+bool g_from_table_reordering{true};
 
 Executor::Executor(const int db_id,
                    const size_t block_size_x,

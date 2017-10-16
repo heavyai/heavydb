@@ -22,6 +22,8 @@
 
 #include <numeric>
 
+extern bool g_left_deep_join_optimization;
+
 RelLeftDeepInnerJoin::RelLeftDeepInnerJoin(const std::shared_ptr<RelFilter>& filter,
                                            std::vector<std::shared_ptr<const RelAlgNode>> inputs,
                                            std::vector<std::shared_ptr<const RelJoin>>& original_joins)
@@ -120,8 +122,7 @@ bool is_left_deep_join_helper(const RelJoin* join) {
   if (left_input_join) {
     return is_left_deep_join_helper(left_input_join);
   }
-  // It's disabled for now.
-  return false /* true */;
+  return g_left_deep_join_optimization;
 }
 
 void collect_left_deep_join_inputs(std::deque<std::shared_ptr<const RelAlgNode>>& inputs,

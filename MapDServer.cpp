@@ -318,6 +318,15 @@ int main(int argc, char** argv) {
           ->default_value(g_trivial_loop_join_threshold)
           ->implicit_value(1000),
       "The maximum number of rows in the inner table of a loop join considered to be trivially small");
+  desc.add_options()("left-deep-join-optimization",
+                     po::value<bool>(&g_left_deep_join_optimization)
+                         ->default_value(g_left_deep_join_optimization)
+                         ->implicit_value(true),
+                     "Enable left-deep join optimization");
+  desc.add_options()(
+      "from-table-reordering",
+      po::value<bool>(&g_from_table_reordering)->default_value(g_from_table_reordering)->implicit_value(true),
+      "Enable automatic table reordering in FROM clause");
   desc_adv.add_options()(
       "cuda-block-size",
       po::value<size_t>(&mapd_parameters.cuda_block_size)->default_value(mapd_parameters.cuda_block_size),

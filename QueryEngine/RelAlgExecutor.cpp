@@ -1852,10 +1852,12 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(const RelCompoun
   const auto left_deep_join = dynamic_cast<const RelLeftDeepInnerJoin*>(compound->getInput(0));
   JoinQualsPerNestingLevel left_deep_inner_joins;
   if (left_deep_join) {
-    const auto input_permutation = get_node_input_permutation(query_infos);
-    input_to_nest_level = get_input_nest_levels(compound, input_permutation);
-    std::tie(input_descs, input_col_descs, std::ignore) =
-        get_input_desc(compound, input_to_nest_level, input_permutation);
+    if (g_from_table_reordering) {
+      const auto input_permutation = get_node_input_permutation(query_infos);
+      input_to_nest_level = get_input_nest_levels(compound, input_permutation);
+      std::tie(input_descs, input_col_descs, std::ignore) =
+          get_input_desc(compound, input_to_nest_level, input_permutation);
+    }
     left_deep_inner_joins = translateLeftDeepJoinFilter(left_deep_join, input_descs, input_to_nest_level, just_explain);
   }
   const auto extra_input_descs = separate_extra_input_descs(input_descs);
@@ -2146,10 +2148,12 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(const RelProject*
   JoinQualsPerNestingLevel left_deep_inner_joins;
   if (left_deep_join) {
     const auto query_infos = get_table_infos(input_descs, executor_);
-    const auto input_permutation = get_node_input_permutation(query_infos);
-    input_to_nest_level = get_input_nest_levels(project, input_permutation);
-    std::tie(input_descs, input_col_descs, std::ignore) =
-        get_input_desc(project, input_to_nest_level, input_permutation);
+    if (g_from_table_reordering) {
+      const auto input_permutation = get_node_input_permutation(query_infos);
+      input_to_nest_level = get_input_nest_levels(project, input_permutation);
+      std::tie(input_descs, input_col_descs, std::ignore) =
+          get_input_desc(project, input_to_nest_level, input_permutation);
+    }
     left_deep_inner_joins = translateLeftDeepJoinFilter(left_deep_join, input_descs, input_to_nest_level, just_explain);
   }
   const auto join_type = left_deep_join ? JoinType::INVALID : get_join_type(project);
