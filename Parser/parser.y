@@ -4,7 +4,8 @@
 %define CONSTRUCTOR_INIT : lexer(yylval)
 %define MEMBERS                                                                                                         \
   virtual ~SQLParser() {}                                                                                               \
-  int parse(const std::string & inputStr, std::list<std::unique_ptr<Stmt>>& parseTrees, std::string &lastParsed) {      \
+  int parse(const std::string & inputStrOrig, std::list<std::unique_ptr<Stmt>>& parseTrees, std::string &lastParsed) {  \
+    auto inputStr = boost::algorithm::trim_right_copy_if(inputStrOrig, boost::is_any_of(";") || boost::is_space()) + ";"; \
     boost::regex create_view_expr{R"(CREATE\s+VIEW\s+(IF\s+NOT\s+EXISTS\s+)?([A-Za-z_][A-Za-z0-9\$_]*)\s+AS\s+(.*);?)", \
                                   boost::regex::extended | boost::regex::icase};                                        \
     std::lock_guard<std::mutex> lock(mutex_);                                                                           \
