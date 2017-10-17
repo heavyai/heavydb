@@ -16,6 +16,8 @@
 package com.mapd.utility;
 
 import com.mapd.thrift.server.MapD;
+import com.mapd.thrift.server.TColumn;
+import com.mapd.thrift.server.TColumnData;
 import com.mapd.thrift.server.TColumnType;
 import com.mapd.thrift.server.TQueryResult;
 import com.mapd.thrift.server.TStringRow;
@@ -215,29 +217,28 @@ public class SQLImporter {
       int bufferCount = 0;
       long total = 0;
 
-      List<TStringRow> rows = new ArrayList(bufferSize);
+      List<TColumn> cols = new ArrayList(md.getColumnCount());
+      for (int i = 1; i <= md.getColumnCount(); i++) {
+        TColumn col = setupBinaryColumn(i, md, bufferSize);
+        cols.add(col);
+      }
+      
+      // read data from old DB
       while (rs.next()) {
-        TStringRow tsr = new TStringRow();
         for (int i = 1; i <= md.getColumnCount(); i++) {
-          // place string in rows array
-          TStringValue tsv = new TStringValue();
-          tsv.str_val = rs.getString(i);
-          if (rs.wasNull()) {
-            tsv.is_null = true;
-          } else {
-            tsv.is_null = false;
-          }
-          tsr.addToCols(tsv);
-        }
-        rows.add(tsr);
-
+          setColValue(rs, cols.get(i - 1), md.getColumnType(i), i);
+        } 
         resultCount++;
         bufferCount++;
         if (bufferCount == bufferSize) {
           bufferCount = 0;
           //send the buffer to mapD
-          client.load_table(session, cmd.getOptionValue("targetTable"), rows);
-          rows.clear();
+          client.load_table_binary_columnar(session, cmd.getOptionValue("targetTable"), cols); // old
+          // recreate columnar store for use
+          for (int i = 1; i <= md.getColumnCount(); i++) {
+            resetBinaryColumn(i, md, bufferSize, cols.get(i - 1));
+          }
+
           if (resultCount % 100000 == 0) {
             LOGGER.info("Imported " + resultCount + " records");
           }
@@ -245,8 +246,7 @@ public class SQLImporter {
       }
       if (bufferCount > 0) {
         //send the LAST buffer to mapD
-        client.load_table(session, cmd.getOptionValue("targetTable"), rows);
-        rows.clear();
+        client.load_table_binary_columnar(session, cmd.getOptionValue("targetTable"), cols);
         bufferCount = 0;
       }
       LOGGER.info("result set count is " + resultCount + " read time is " + (System.currentTimeMillis() - timer) + "ms");
@@ -484,4 +484,141 @@ public class SQLImporter {
     }
   }
 
+  private TColumn setupBinaryColumn(int i, ResultSetMetaData md, int bufferSize) throws SQLException {
+    TColumn col = new TColumn();
+
+    col.nulls = new ArrayList<Boolean>(bufferSize);
+
+    col.data = new TColumnData();
+
+    switch (md.getColumnType(i)) {
+      case java.sql.Types.TINYINT:
+      case java.sql.Types.SMALLINT:
+      case java.sql.Types.INTEGER:
+      case java.sql.Types.BIGINT:
+      case java.sql.Types.TIME:
+      case java.sql.Types.TIMESTAMP:
+      case java.sql.Types.BIT:  // deal with postgress treating boolean as bit... this will bite me
+      case java.sql.Types.BOOLEAN:
+      case java.sql.Types.DATE:
+        col.data.int_col = new ArrayList<Long>(bufferSize);
+        break;
+
+      case java.sql.Types.FLOAT:
+      case java.sql.Types.DECIMAL:
+      case java.sql.Types.DOUBLE:
+      case java.sql.Types.REAL:
+      case java.sql.Types.NUMERIC:
+        col.data.real_col = new ArrayList<Double>(bufferSize);
+        break;
+
+      case java.sql.Types.NVARCHAR:
+      case java.sql.Types.VARCHAR:
+      case java.sql.Types.NCHAR:
+      case java.sql.Types.CHAR:
+      case java.sql.Types.LONGVARCHAR:
+      case java.sql.Types.LONGNVARCHAR:
+        col.data.str_col = new ArrayList<String>(bufferSize);
+        break;
+
+      default:
+        throw new AssertionError("Column type " + md.getColumnType(i) + " not Supported");
+    }
+    return col;
+  }
+
+  private void setColValue(ResultSet rs, TColumn col, int columnType, int colNum) throws SQLException {
+
+    col.nulls.add(Boolean.FALSE);
+
+    switch (columnType) {
+      case java.sql.Types.TINYINT:
+      case java.sql.Types.SMALLINT:
+      case java.sql.Types.INTEGER:
+      case java.sql.Types.BIGINT:
+      case java.sql.Types.BIT:  // deal with postgress treating boolean as bit... this will bite me
+      case java.sql.Types.BOOLEAN:
+        col.data.int_col.add(rs.getLong(colNum));
+        break;
+
+      case java.sql.Types.TIME:
+        Time t = rs.getTime(colNum);
+
+        col.data.int_col.add(t.getTime()/1000);
+        break;
+      case java.sql.Types.TIMESTAMP:
+        Timestamp ts = rs.getTimestamp(colNum);
+
+        col.data.int_col.add(ts.getTime()/1000);
+        break;
+      case java.sql.Types.DATE:
+        Date d = rs.getDate(colNum);
+
+        col.data.int_col.add(d.getTime()/1000);
+        break;
+      case java.sql.Types.FLOAT:
+      case java.sql.Types.DECIMAL:
+      case java.sql.Types.DOUBLE:
+      case java.sql.Types.REAL:
+      case java.sql.Types.NUMERIC:
+        col.data.real_col.add(rs.getDouble(colNum));
+        break;
+
+      case java.sql.Types.NVARCHAR:
+      case java.sql.Types.VARCHAR:
+      case java.sql.Types.NCHAR:
+      case java.sql.Types.CHAR:
+      case java.sql.Types.LONGVARCHAR:
+      case java.sql.Types.LONGNVARCHAR:
+        col.data.str_col.add(rs.getString(colNum));
+        break;
+
+      default:
+        throw new AssertionError("Column type " + columnType + " not Supported");
+    }
+    if (rs.wasNull()) {
+      col.nulls.add(Boolean.TRUE);
+    } else {
+      col.nulls.add(Boolean.FALSE);
+    }
+  }
+
+  private void resetBinaryColumn(int i, ResultSetMetaData md, int bufferSize, TColumn col) throws SQLException {
+
+    col.nulls.clear();
+
+    switch (md.getColumnType(i)) {
+      case java.sql.Types.TINYINT:
+      case java.sql.Types.SMALLINT:
+      case java.sql.Types.INTEGER:
+      case java.sql.Types.BIGINT:
+      case java.sql.Types.TIME:
+      case java.sql.Types.TIMESTAMP:
+      case java.sql.Types.BIT:  // deal with postgress treating boolean as bit... this will bite me
+      case java.sql.Types.BOOLEAN:
+      case java.sql.Types.DATE:
+        col.data.int_col.clear();
+        break;
+
+      case java.sql.Types.FLOAT:
+      case java.sql.Types.DECIMAL:
+      case java.sql.Types.DOUBLE:
+      case java.sql.Types.REAL:
+      case java.sql.Types.NUMERIC:
+        col.data.real_col.clear();
+        break;
+
+      case java.sql.Types.NVARCHAR:
+      case java.sql.Types.VARCHAR:
+      case java.sql.Types.NCHAR:
+      case java.sql.Types.CHAR:
+      case java.sql.Types.LONGVARCHAR:
+      case java.sql.Types.LONGNVARCHAR:
+        col.data.str_col.clear();
+        break;
+
+      default:
+        throw new AssertionError("Column type " + md.getColumnType(i) + " not Supported");
+    }
+  }
 }
