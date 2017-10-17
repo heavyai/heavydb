@@ -406,6 +406,12 @@ void RelAlgExecutor::executeRelAlgStep(const size_t i,
       return;
     }
 #endif
+    const auto logical_values = dynamic_cast<const RelLogicalValues*>(body);
+    if (logical_values) {
+      exec_desc.setResult(executeLogicalValues(logical_values));
+      addTemporaryTable(-logical_values->getId(), exec_desc.getResult().getDataPtr());
+      return;
+    }
     CHECK(false);
   } catch (const UnfoldedMultiJoinRequired&) {
     executeUnfoldedMultiJoin(body, exec_desc, co, eo, queue_time_ms);
@@ -1052,6 +1058,33 @@ ExecutionResult RelAlgExecutor::executeJoin(const RelJoin* join,
                                             const int64_t queue_time_ms) {
   const auto work_unit = createJoinWorkUnit(join, {{}, SortAlgorithm::Default, 0, 0}, eo.just_explain);
   return executeWorkUnit(work_unit, join->getOutputMetainfo(), false, co, eo, render_info, queue_time_ms);
+}
+
+ExecutionResult RelAlgExecutor::executeLogicalValues(const RelLogicalValues* logical_values) {
+  QueryMemoryDescriptor query_mem_desc{0};
+  query_mem_desc.executor_ = executor_;
+  query_mem_desc.entry_count = 1;
+  query_mem_desc.hash_type = GroupByColRangeType::Scan;
+  const auto& tuple_type = logical_values->getTupleType();
+  for (size_t i = 0; i < tuple_type.size(); ++i) {
+    query_mem_desc.agg_col_widths.emplace_back(ColWidths{8, 8});
+  }
+  logical_values->setOutputMetainfo(tuple_type);
+  std::vector<std::unique_ptr<Analyzer::ColumnVar>> owned_column_expressions;
+  std::vector<Analyzer::Expr*> target_expressions;
+  for (const auto& tuple_component : tuple_type) {
+    const auto column_var = new Analyzer::ColumnVar(tuple_component.get_type_info(), 0, 0, 0);
+    target_expressions.push_back(column_var);
+    owned_column_expressions.emplace_back(column_var);
+  }
+  std::vector<TargetInfo> target_infos;
+  for (const auto& tuple_type_component : tuple_type) {
+    target_infos.emplace_back(
+        TargetInfo{false, kCOUNT, tuple_type_component.get_type_info(), SQLTypeInfo(kNULLT, false), false, false});
+  }
+  auto rs = std::make_shared<ResultSet>(
+      target_infos, ExecutorDeviceType::CPU, query_mem_desc, executor_->getRowSetMemoryOwner(), executor_);
+  return {rs, tuple_type};
 }
 
 namespace {

@@ -154,6 +154,11 @@ RANodeOutput get_node_output(const RelAlgNode* ra_node) {
     const auto prev_out = get_node_output(sort_node->getInput(0));
     return n_outputs(sort_node, prev_out.size());
   }
+  const auto logical_values_node = dynamic_cast<const RelLogicalValues*>(ra_node);
+  if (logical_values_node) {
+    CHECK_EQ(size_t(0), logical_values_node->inputCount());
+    return n_outputs(logical_values_node, logical_values_node->size());
+  }
   CHECK(false);
   return outputs;
 }
@@ -209,6 +214,12 @@ bool isRenamedInput(const RelAlgNode* node, const size_t index, const std::strin
 
   if (auto project = dynamic_cast<const RelProject*>(node)) {
     return new_name != project->getFieldName(index);
+  }
+
+  if (auto logical_values = dynamic_cast<const RelLogicalValues*>(node)) {
+    const auto& tuple_type = logical_values->getTupleType();
+    CHECK_LT(index, tuple_type.size());
+    return new_name != tuple_type[index].get_resname();
   }
 
   CHECK(dynamic_cast<const RelSort*>(node) || dynamic_cast<const RelFilter*>(node));
@@ -481,10 +492,10 @@ SQLTypeInfo parse_type(const rapidjson::Value& type_obj) {
   CHECK(type_obj.IsObject() && (type_obj.MemberCount() >= 2 && type_obj.MemberCount() <= 4));
   const auto type = to_sql_type(json_str(field(type_obj, "type")));
   const auto nullable = json_bool(field(type_obj, "nullable"));
-  const bool has_precision = type_obj.MemberCount() >= 3;
-  const bool has_scale = type_obj.MemberCount() == 4;
-  const int precision = has_precision ? json_i64(field(type_obj, "precision")) : 0;
-  const int scale = has_scale ? json_i64(field(type_obj, "scale")) : 0;
+  const auto precision_it = type_obj.FindMember("precision");
+  const int precision = precision_it != type_obj.MemberEnd() ? json_i64(precision_it->value) : 0;
+  const auto scale_it = type_obj.FindMember("scale");
+  const int scale = scale_it != type_obj.MemberEnd() ? json_i64(scale_it->value) : 0;
   SQLTypeInfo ti(type, !nullable);
   ti.set_precision(precision);
   ti.set_scale(scale);
@@ -1454,6 +1465,8 @@ class RelAlgAbstractInterpreter {
         ra_node = dispatchJoin(crt_node);
       } else if (rel_op == std::string("LogicalSort")) {
         ra_node = dispatchSort(crt_node);
+      } else if (rel_op == std::string("LogicalValues")) {
+        ra_node = dispatchLogicalValues(crt_node);
       } else {
         throw QueryNotSupported(std::string("Node ") + rel_op + " not supported yet");
       }
@@ -1541,6 +1554,26 @@ class RelAlgAbstractInterpreter {
     }
     const auto offset = get_int_literal_field(sort_ra, "offset", 0);
     return std::make_shared<RelSort>(collation, limit > 0 ? limit : 0, offset, inputs.front());
+  }
+
+  std::shared_ptr<RelLogicalValues> dispatchLogicalValues(const rapidjson::Value& logical_values_ra) {
+    const auto& tuple_type_arr = field(logical_values_ra, "type");
+    CHECK(tuple_type_arr.IsArray());
+    std::vector<TargetMetaInfo> tuple_type;
+    for (auto tuple_type_arr_it = tuple_type_arr.Begin(); tuple_type_arr_it != tuple_type_arr.End();
+         ++tuple_type_arr_it) {
+      const auto component_type = parse_type(*tuple_type_arr_it);
+      const auto component_name = json_str(field(*tuple_type_arr_it, "name"));
+      tuple_type.emplace_back(component_name, component_type);
+    }
+    const auto& inputs_arr = field(logical_values_ra, "inputs");
+    CHECK(inputs_arr.IsArray());
+    const auto& tuples_arr = field(logical_values_ra, "tuples");
+    CHECK(tuples_arr.IsArray());
+    if (inputs_arr.Size() || tuples_arr.Size()) {
+      throw QueryNotSupported("Non-empty LogicalValues not supported yet");
+    }
+    return std::make_shared<RelLogicalValues>(tuple_type);
   }
 
   const TableDescriptor* getTableFromScanNode(const rapidjson::Value& scan_ra) const {

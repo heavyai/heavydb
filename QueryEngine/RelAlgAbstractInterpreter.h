@@ -977,6 +977,25 @@ class RelSort : public RelAlgNode {
   bool hasEquivCollationOf(const RelSort& that) const;
 };
 
+class RelLogicalValues : public RelAlgNode {
+ public:
+  RelLogicalValues(const std::vector<TargetMetaInfo>& tuple_type) : tuple_type_(tuple_type) {}
+
+  const std::vector<TargetMetaInfo> getTupleType() const { return tuple_type_; }
+
+  std::string toString() const override {
+    // TODO
+    return "(RelLogicalValues)";
+  }
+
+  size_t size() const override { return tuple_type_.size(); }
+
+  std::shared_ptr<RelAlgNode> deepCopy() const override { return std::make_shared<RelLogicalValues>(tuple_type_); }
+
+ private:
+  const std::vector<TargetMetaInfo> tuple_type_;
+};
+
 class QueryNotSupported : public std::runtime_error {
  public:
   QueryNotSupported(const std::string& reason) : std::runtime_error(reason) {}

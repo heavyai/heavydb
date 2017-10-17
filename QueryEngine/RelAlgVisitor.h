@@ -63,6 +63,10 @@ class RelAlgVisitor {
     if (sort) {
       return aggregateResult(result, visitSort(sort));
     }
+    const auto logical_values = dynamic_cast<const RelLogicalValues*>(rel_alg);
+    if (logical_values) {
+      return aggregateResult(result, visitLogicalValues(logical_values));
+    }
     CHECK(false);
     return defaultResult();
   }
@@ -84,6 +88,8 @@ class RelAlgVisitor {
   virtual T visitScan(const RelScan*) const { return defaultResult(); }
 
   virtual T visitSort(const RelSort*) const { return defaultResult(); }
+
+  virtual T visitLogicalValues(const RelLogicalValues*) const { return defaultResult(); }
 
  protected:
   virtual T aggregateResult(const T& aggregate, const T& next_result) const { return next_result; }
