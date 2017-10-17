@@ -408,7 +408,7 @@ void RelAlgExecutor::executeRelAlgStep(const size_t i,
 #endif
     const auto logical_values = dynamic_cast<const RelLogicalValues*>(body);
     if (logical_values) {
-      exec_desc.setResult(executeLogicalValues(logical_values));
+      exec_desc.setResult(executeLogicalValues(logical_values, eo_work_unit));
       addTemporaryTable(-logical_values->getId(), exec_desc.getResult().getDataPtr());
       return;
     }
@@ -1060,7 +1060,11 @@ ExecutionResult RelAlgExecutor::executeJoin(const RelJoin* join,
   return executeWorkUnit(work_unit, join->getOutputMetainfo(), false, co, eo, render_info, queue_time_ms);
 }
 
-ExecutionResult RelAlgExecutor::executeLogicalValues(const RelLogicalValues* logical_values) {
+ExecutionResult RelAlgExecutor::executeLogicalValues(const RelLogicalValues* logical_values,
+                                                     const ExecutionOptions& eo) {
+  if (eo.just_explain) {
+    throw std::runtime_error("EXPLAIN not supported for LogicalValues");
+  }
   QueryMemoryDescriptor query_mem_desc{0};
   query_mem_desc.executor_ = executor_;
   query_mem_desc.entry_count = 1;

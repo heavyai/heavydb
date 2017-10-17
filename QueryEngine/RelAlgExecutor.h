@@ -128,7 +128,7 @@ class RelAlgExecutor {
                               RenderInfo*,
                               const int64_t queue_time_ms);
 
-  ExecutionResult executeLogicalValues(const RelLogicalValues*);
+  ExecutionResult executeLogicalValues(const RelLogicalValues*, const ExecutionOptions&);
 
   // TODO(alex): just move max_groups_buffer_entry_guess to RelAlgExecutionUnit once
   //             we deprecate the plan-based executor paths and remove WorkUnit
