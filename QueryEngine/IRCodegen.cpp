@@ -289,7 +289,7 @@ void check_if_loop_join_is_allowed(RelAlgExecutionUnit& ra_exe_unit,
     return;
   }
   if (level_idx + 1 != ra_exe_unit.inner_joins.size() || !is_trivial_loop_join(query_infos, ra_exe_unit)) {
-    throw std::runtime_error("Hash join failed, reason: " + fail_reason);
+    throw std::runtime_error("Hash join failed, reason(s): " + fail_reason);
   }
 }
 
@@ -303,10 +303,11 @@ std::vector<JoinLoop> Executor::buildJoinLoops(RelAlgExecutionUnit& ra_exe_unit,
   for (size_t level_idx = 0, current_hash_table_idx = 0; level_idx < ra_exe_unit.inner_joins.size(); ++level_idx) {
     const auto& current_level_join_conditions = ra_exe_unit.inner_joins[level_idx];
     std::shared_ptr<JoinHashTableInterface> current_level_hash_table;
+    std::vector<std::string> fail_reasons;
     for (const auto& join_qual : current_level_join_conditions) {
       auto qual_bin_oper = std::dynamic_pointer_cast<Analyzer::BinOper>(join_qual);
       if (!qual_bin_oper || !IS_EQUIVALENCE(qual_bin_oper->get_optype())) {
-        check_if_loop_join_is_allowed(ra_exe_unit, eo, query_infos, level_idx, "No equijoin expression found");
+        fail_reasons.push_back("No equijoin expression found");
         add_qualifier_to_execution_unit(ra_exe_unit, join_qual);
         continue;
       }
@@ -324,7 +325,7 @@ std::vector<JoinLoop> Executor::buildJoinLoops(RelAlgExecutionUnit& ra_exe_unit,
         plan_state_->join_info_.join_hash_tables_.push_back(hash_table_or_error.hash_table);
         plan_state_->join_info_.equi_join_tautologies_.push_back(qual_bin_oper);
       } else {
-        check_if_loop_join_is_allowed(ra_exe_unit, eo, query_infos, level_idx, hash_table_or_error.fail_reason);
+        fail_reasons.push_back(hash_table_or_error.fail_reason);
         add_qualifier_to_execution_unit(ra_exe_unit, qual_bin_oper);
       }
     }
@@ -354,6 +355,8 @@ std::vector<JoinLoop> Executor::buildJoinLoops(RelAlgExecutionUnit& ra_exe_unit,
       }
       ++current_hash_table_idx;
     } else {
+      const auto fail_reasons_str = boost::algorithm::join(fail_reasons, " | ");
+      check_if_loop_join_is_allowed(ra_exe_unit, eo, query_infos, level_idx, fail_reasons_str);
       join_loops.emplace_back(JoinLoopKind::UpperBound, [this, level_idx](const std::vector<llvm::Value*>& prev_iters) {
         addJoinLoopIterator(prev_iters, level_idx);
         JoinLoopDomain domain{0};
