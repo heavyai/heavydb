@@ -76,7 +76,7 @@ std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*> normalize_column_pa
     throw HashJoinFail("Cannot use hash join for given expression");
   }
   if (!outer_col) {
-    RangeTableIndexVisitor rte_idx_visitor;
+    MaxRangeTableIndexVisitor rte_idx_visitor;
     int outer_rte_idx = rte_idx_visitor.visit(outer_expr);
     // The inner column candidate is not actually inner; the outer
     // expression contains columns which are at least as deep.

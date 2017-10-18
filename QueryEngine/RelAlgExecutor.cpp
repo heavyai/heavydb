@@ -1977,7 +1977,7 @@ JoinQualsPerNestingLevel RelAlgExecutor::translateLeftDeepJoinFilter(
         join_condition_quals.end(), join_condition_cf.simple_quals.begin(), join_condition_cf.simple_quals.end());
   }
   join_condition_quals = combine_equi_join_conditions(join_condition_quals);
-  RangeTableIndexVisitor rte_idx_visitor;
+  MaxRangeTableIndexVisitor rte_idx_visitor;
   JoinQualsPerNestingLevel result(input_descs.size() - 1);
   std::unordered_set<std::shared_ptr<Analyzer::Expr>> visited_quals;
   for (size_t rte_idx = 1; rte_idx < input_descs.size(); ++rte_idx) {

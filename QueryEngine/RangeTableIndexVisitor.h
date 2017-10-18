@@ -16,13 +16,29 @@
 
 #pragma once
 
+#include <unordered_set>
+
 #include "ScalarExprVisitor.h"
 
-class RangeTableIndexVisitor : public ScalarExprVisitor<int> {
+class MaxRangeTableIndexVisitor : public ScalarExprVisitor<int> {
  protected:
   virtual int visitColumnVar(const Analyzer::ColumnVar* column) const override { return column->get_rte_idx(); }
 
   virtual int aggregateResult(const int& aggregate, const int& next_result) const override {
     return std::max(aggregate, next_result);
+  }
+};
+
+class AllRangeTableIndexVisitor : public ScalarExprVisitor<std::unordered_set<int>> {
+ protected:
+  virtual std::unordered_set<int> visitColumnVar(const Analyzer::ColumnVar* column) const override {
+    return {column->get_rte_idx()};
+  }
+
+  virtual std::unordered_set<int> aggregateResult(const std::unordered_set<int>& aggregate,
+                                                  const std::unordered_set<int>& next_result) const override {
+    auto result = aggregate;
+    result.insert(next_result.begin(), next_result.end());
+    return result;
   }
 };
