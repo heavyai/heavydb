@@ -355,7 +355,8 @@ std::vector<JoinLoop> Executor::buildJoinLoops(RelAlgExecutionUnit& ra_exe_unit,
       }
       ++current_hash_table_idx;
     } else {
-      const auto fail_reasons_str = boost::algorithm::join(fail_reasons, " | ");
+      const auto fail_reasons_str = current_level_join_conditions.empty() ? "No equijoin expression found"
+                                                                          : boost::algorithm::join(fail_reasons, " | ");
       check_if_loop_join_is_allowed(ra_exe_unit, eo, query_infos, level_idx, fail_reasons_str);
       join_loops.emplace_back(JoinLoopKind::UpperBound, [this, level_idx](const std::vector<llvm::Value*>& prev_iters) {
         addJoinLoopIterator(prev_iters, level_idx);
