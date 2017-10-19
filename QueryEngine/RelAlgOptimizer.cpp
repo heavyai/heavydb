@@ -762,24 +762,20 @@ std::vector<std::unique_ptr<const RexAgg>> renumber_rex_aggs(std::vector<std::un
                                                              const std::unordered_map<size_t, size_t>& new_numbering) {
   std::vector<std::unique_ptr<const RexAgg>> new_exprs;
   for (auto& expr : agg_exprs) {
-    bool need_renumber = false;
-    std::vector<size_t> new_idxs(expr->size());
-    for (size_t i = 0; i < expr->size(); ++i) {
-      auto old_idx = expr->getOperand(1);
+    if (expr->size() >= 1) {
+      auto old_idx = expr->getOperand(0);
       auto idx_it = new_numbering.find(old_idx);
       if (idx_it != new_numbering.end()) {
-        new_idxs[i] = idx_it->second;
-        need_renumber = true;
-      } else {
-        new_idxs[i] = old_idx;
+        std::vector<size_t> operands;
+        operands.push_back(idx_it->second);
+        if (expr->size() == 2) {
+          operands.push_back(expr->getOperand(1));
+        }
+        new_exprs.push_back(boost::make_unique<RexAgg>(expr->getKind(), expr->isDistinct(), expr->getType(), operands));
+        continue;
       }
     }
-
-    if (need_renumber) {
-      new_exprs.push_back(boost::make_unique<RexAgg>(expr->getKind(), expr->isDistinct(), expr->getType(), new_idxs));
-    } else {
-      new_exprs.push_back(std::move(expr));
-    }
+    new_exprs.push_back(std::move(expr));
   }
   return new_exprs;
 }

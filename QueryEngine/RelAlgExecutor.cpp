@@ -1256,9 +1256,9 @@ RelAlgExecutionUnit decide_approx_count_distinct_implementation(
     int64_t approx_bitmap_sz_bits{0};
     const auto error_rate = static_cast<Analyzer::AggExpr*>(target_expr)->get_error_rate();
     if (error_rate) {
-      CHECK(error_rate->get_type_info().is_integer());
-      CHECK_GE(error_rate->get_constval().intval, 1);
-      approx_bitmap_sz_bits = hll_sz_for_rate(error_rate->get_constval().intval);
+      CHECK(error_rate->get_type_info().get_type() == kSMALLINT);
+      CHECK_GE(error_rate->get_constval().smallintval, 1);
+      approx_bitmap_sz_bits = hll_size_for_rate(error_rate->get_constval().smallintval);
     } else {
       approx_bitmap_sz_bits = g_hll_precision_bits;
     }
