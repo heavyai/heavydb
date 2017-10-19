@@ -24,6 +24,15 @@ class MaxRangeTableIndexVisitor : public ScalarExprVisitor<int> {
  protected:
   virtual int visitColumnVar(const Analyzer::ColumnVar* column) const override { return column->get_rte_idx(); }
 
+  virtual int visitColumnVarTuple(const Analyzer::ExpressionTuple* expr_tuple) const override {
+    MaxRangeTableIndexVisitor visitor;
+    int max_range_table_idx = 0;
+    for (const auto& expr_component : expr_tuple->getTuple()) {
+      max_range_table_idx = std::max(max_range_table_idx, visitor.visit(expr_component.get()));
+    }
+    return max_range_table_idx;
+  }
+
   virtual int aggregateResult(const int& aggregate, const int& next_result) const override {
     return std::max(aggregate, next_result);
   }
@@ -33,6 +42,16 @@ class AllRangeTableIndexVisitor : public ScalarExprVisitor<std::unordered_set<in
  protected:
   virtual std::unordered_set<int> visitColumnVar(const Analyzer::ColumnVar* column) const override {
     return {column->get_rte_idx()};
+  }
+
+  virtual std::unordered_set<int> visitColumnVarTuple(const Analyzer::ExpressionTuple* expr_tuple) const override {
+    AllRangeTableIndexVisitor visitor;
+    std::unordered_set<int> result;
+    for (const auto& expr_component : expr_tuple->getTuple()) {
+      const auto component_rte_set = visitor.visit(expr_component.get());
+      result.insert(component_rte_set.begin(), component_rte_set.end());
+    }
+    return result;
   }
 
   virtual std::unordered_set<int> aggregateResult(const std::unordered_set<int>& aggregate,
