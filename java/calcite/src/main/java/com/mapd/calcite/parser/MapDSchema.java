@@ -13,6 +13,7 @@ import org.apache.calcite.linq4j.tree.Expression;
 import org.apache.calcite.schema.Function;
 import org.apache.calcite.schema.Schema;
 import org.apache.calcite.schema.SchemaPlus;
+import org.apache.calcite.schema.SchemaVersion;
 import org.apache.calcite.schema.Table;
 import org.apache.calcite.util.ConversionUtil;
 import org.slf4j.Logger;
@@ -80,18 +81,12 @@ public class MapDSchema implements Schema {
     throw new UnsupportedOperationException("Not supported yet.");
   }
 
-  @Override
-  public boolean contentsHaveChangedSince(long l, long l1) {
-    MAPDLOGGER.debug("l is " + l + " ll is " + l1);
-    return true;
-  }
-
-  @Override
-  public Schema snapshot(long l) {
-    throw new UnsupportedOperationException("Not supported yet.");
-  }
-
   void updateMetaData(String schema, String table) {
     metaConnect.updateMetaData(schema, table);
+  }
+
+  @Override
+  public Schema snapshot(SchemaVersion sv) {
+    throw new UnsupportedOperationException("Not supported yet.");
   }
 }

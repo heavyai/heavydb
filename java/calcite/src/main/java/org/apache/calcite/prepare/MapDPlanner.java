@@ -18,6 +18,8 @@ package org.apache.calcite.prepare;
 
 import org.apache.calcite.adapter.java.JavaTypeFactory;
 import org.apache.calcite.config.CalciteConnectionConfig;
+import org.apache.calcite.config.CalciteConnectionConfigImpl;
+import org.apache.calcite.config.CalciteConnectionProperty;
 import org.apache.calcite.jdbc.CalciteSchema;
 import org.apache.calcite.plan.Context;
 import org.apache.calcite.plan.RelOptCluster;
@@ -57,22 +59,20 @@ import org.apache.calcite.util.Util;
 import com.google.common.collect.ImmutableList;
 
 import java.util.List;
+import java.util.Properties;
 
-/**
- * Implementation of {@link org.apache.calcite.tools.Planner}.
- */
+/** Implementation of {@link org.apache.calcite.tools.Planner}. */
+/** MAT duplicated from MapDPlanner at /core/src/main/java/org/apache/calcite/prepare/MapDPlanner.java */
 public class MapDPlanner implements Planner {
-
   private final SqlOperatorTable operatorTable;
   private final ImmutableList<Program> programs;
   private final FrameworkConfig config;
 
-  /**
-   * Holds the trait definitions to be registered with planner. May be null.
-   */
+  /** Holds the trait definitions to be registered with planner. May be null. */
   private final ImmutableList<RelTraitDef> traitDefs;
 
   private final SqlParser.Config parserConfig;
+  private final SqlToRelConverter.Config sqlToRelConverterConfig;
   private final SqlRexConvertletTable convertletTable;
 
   private State state;
@@ -93,16 +93,15 @@ public class MapDPlanner implements Planner {
   // set in STATE_5_CONVERT
   private RelRoot root;
 
-  /**
-   * Creates a planner. Not a public API; call
-   * {@link org.apache.calcite.tools.Frameworks#getPlanner} instead.
-   */
+  /** Creates a planner. Not a public API; call
+   * {@link org.apache.calcite.tools.Frameworks#getPlanner} instead. */
   public MapDPlanner(FrameworkConfig config) {
     this.config = config;
     this.defaultSchema = config.getDefaultSchema();
     this.operatorTable = config.getOperatorTable();
     this.programs = config.getPrograms();
     this.parserConfig = config.getParserConfig();
+    this.sqlToRelConverterConfig = config.getSqlToRelConverterConfig();
     this.state = State.STATE_0_CLOSED;
     this.traitDefs = config.getTraitDefs();
     this.convertletTable = config.getConvertletTable();
@@ -110,33 +109,28 @@ public class MapDPlanner implements Planner {
     reset();
   }
 
-  /**
-   * Makes sure that the state is at least the given state.
-   */
+  /** Makes sure that the state is at least the given state. */
   private void ensure(State state) {
     if (state == this.state) {
       return;
     }
     if (state.ordinal() < this.state.ordinal()) {
       throw new IllegalArgumentException("cannot move to " + state + " from "
-              + this.state);
+          + this.state);
     }
     state.from(this);
   }
 
-  @Override
   public RelTraitSet getEmptyTraitSet() {
     return planner.emptyTraitSet();
   }
 
-  @Override
   public void close() {
     open = false;
     typeFactory = null;
     state = State.STATE_0_CLOSED;
   }
 
-  @Override
   public void reset() {
     ensure(State.STATE_0_CLOSED);
     open = true;
@@ -145,23 +139,22 @@ public class MapDPlanner implements Planner {
 
   private void ready() {
     switch (state) {
-      case STATE_0_CLOSED:
-        reset();
+    case STATE_0_CLOSED:
+      reset();
     }
     ensure(State.STATE_1_RESET);
     Frameworks.withPlanner(
-            new Frameworks.PlannerAction<Void>() {
-      @Override
-      public Void apply(RelOptCluster cluster, RelOptSchema relOptSchema,
+        new Frameworks.PlannerAction<Void>() {
+          public Void apply(RelOptCluster cluster, RelOptSchema relOptSchema,
               SchemaPlus rootSchema) {
-        Util.discard(rootSchema); // use our own defaultSchema
-        typeFactory = (JavaTypeFactory) cluster.getTypeFactory();
-        planner = cluster.getPlanner();
-        planner.setExecutor(executor);
-        return null;
-      }
-    },
-            config);
+            Util.discard(rootSchema); // use our own defaultSchema
+            typeFactory = (JavaTypeFactory) cluster.getTypeFactory();
+            planner = cluster.getPlanner();
+            planner.setExecutor(executor);
+            return null;
+          }
+        },
+        config);
 
     state = State.STATE_2_READY;
 
@@ -176,12 +169,11 @@ public class MapDPlanner implements Planner {
     }
   }
 
-  @Override
   public SqlNode parse(final String sql) throws SqlParseException {
     switch (state) {
-      case STATE_0_CLOSED:
-      case STATE_1_RESET:
-        ready();
+    case STATE_0_CLOSED:
+    case STATE_1_RESET:
+      ready();
     }
     ensure(State.STATE_2_READY);
     SqlParser parser = SqlParser.create(sql, parserConfig);
@@ -190,15 +182,13 @@ public class MapDPlanner implements Planner {
     return sqlNode;
   }
 
-  @Override
   public SqlNode validate(SqlNode sqlNode) throws ValidationException {
     ensure(State.STATE_3_PARSED);
-    // TODO MAT figure out correct way to pass conformace from planner config
     final SqlConformance conformance = SqlConformanceEnum.LENIENT;
     final CalciteCatalogReader catalogReader = createCatalogReader();
-    this.validator
-            = new CalciteSqlValidator(operatorTable, catalogReader, typeFactory,
-                    conformance);
+    this.validator =
+        new CalciteSqlValidator(operatorTable, catalogReader, typeFactory,
+            conformance);
     this.validator.setIdentifierExpansion(true);
     try {
       validatedSqlNode = validator.validate(sqlNode);
@@ -212,8 +202,8 @@ public class MapDPlanner implements Planner {
   private SqlConformance conformance() {
     final Context context = config.getContext();
     if (context != null) {
-      final CalciteConnectionConfig connectionConfig
-              = context.unwrap(CalciteConnectionConfig.class);
+      final CalciteConnectionConfig connectionConfig =
+          context.unwrap(CalciteConnectionConfig.class);
       if (connectionConfig != null) {
         return connectionConfig.conformance();
       }
@@ -221,49 +211,49 @@ public class MapDPlanner implements Planner {
     return SqlConformanceEnum.DEFAULT;
   }
 
-  @Override
   public Pair<SqlNode, RelDataType> validateAndGetType(SqlNode sqlNode)
-          throws ValidationException {
+      throws ValidationException {
     final SqlNode validatedNode = this.validate(sqlNode);
-    final RelDataType type
-            = this.validator.getValidatedNodeType(validatedNode);
+    final RelDataType type =
+        this.validator.getValidatedNodeType(validatedNode);
     return Pair.of(validatedNode, type);
   }
 
   @SuppressWarnings("deprecation")
-  @Override
   public final RelNode convert(SqlNode sql) throws RelConversionException {
     return rel(sql).rel;
   }
 
-  @Override
   public RelRoot rel(SqlNode sql) throws RelConversionException {
     ensure(State.STATE_4_VALIDATED);
     assert validatedSqlNode != null;
     final RexBuilder rexBuilder = createRexBuilder();
     final RelOptCluster cluster = RelOptCluster.create(planner, rexBuilder);
     final SqlToRelConverter.Config config = SqlToRelConverter.configBuilder()
-            .withExpand(false).withInSubQueryThreshold(Integer.MAX_VALUE)
-            .withTrimUnusedFields(false).withConvertTableAccess(false).build();
-    final SqlToRelConverter sqlToRelConverter
-            = new SqlToRelConverter(new ViewExpanderImpl(), validator,
-                    createCatalogReader(), cluster, convertletTable, config);
-    root = sqlToRelConverter.convertQuery(validatedSqlNode, false, true);
+        .withConfig(sqlToRelConverterConfig)
+        //MAT custom code mods to stop expansion and allow for any number IN
+        .withExpand(false)
+        .withInSubQueryThreshold(Integer.MAX_VALUE)
+        //
+        .withTrimUnusedFields(false)
+        .withConvertTableAccess(false)
+        .build();
+    final SqlToRelConverter sqlToRelConverter =
+        new SqlToRelConverter(new ViewExpanderImpl(), validator,
+            createCatalogReader(), cluster, convertletTable, config);
+    root =
+        sqlToRelConverter.convertQuery(validatedSqlNode, false, true);
     root = root.withRel(sqlToRelConverter.flattenTypes(root.rel, true));
     root = root.withRel(RelDecorrelator.decorrelateQuery(root.rel));
     state = State.STATE_5_CONVERTED;
     return root;
   }
 
-  /**
-   * Implements {@link org.apache.calcite.plan.RelOptTable.ViewExpander}
-   * interface for {@link org.apache.calcite.tools.Planner}.
-   */
+  /** Implements {@link org.apache.calcite.plan.RelOptTable.ViewExpander}
+   * interface for {@link org.apache.calcite.tools.Planner}. */
   public class ViewExpanderImpl implements ViewExpander {
-
-    @Override
-    public RelRoot expandView(RelDataType rowType, String queryString,
-            List<String> schemaPath, List<String> viewPath) {
+    @Override public RelRoot expandView(RelDataType rowType, String queryString,
+      List<String> schemaPath, List<String> viewPath) {
       SqlParser parser = SqlParser.create(queryString, parserConfig);
       SqlNode sqlNode;
       try {
@@ -273,21 +263,25 @@ public class MapDPlanner implements Planner {
       }
 
       final SqlConformance conformance = conformance();
-      final CalciteCatalogReader catalogReader
-              = createCatalogReader().withSchemaPath(schemaPath);
-      final SqlValidator validator
-              = new CalciteSqlValidator(operatorTable, catalogReader, typeFactory,
-                      conformance);
+      final CalciteCatalogReader catalogReader =
+          createCatalogReader().withSchemaPath(schemaPath);
+      final SqlValidator validator =
+          new CalciteSqlValidator(operatorTable, catalogReader, typeFactory,
+              conformance);
       validator.setIdentifierExpansion(true);
       final SqlNode validatedSqlNode = validator.validate(sqlNode);
 
       final RexBuilder rexBuilder = createRexBuilder();
       final RelOptCluster cluster = RelOptCluster.create(planner, rexBuilder);
-      final SqlToRelConverter.Config config = SqlToRelConverter.configBuilder()
-              .withTrimUnusedFields(false).withConvertTableAccess(false).build();
-      final SqlToRelConverter sqlToRelConverter
-              = new SqlToRelConverter(new ViewExpanderImpl(), validator,
-                      catalogReader, cluster, convertletTable, config);
+      final SqlToRelConverter.Config config = SqlToRelConverter
+          .configBuilder()
+          .withConfig(sqlToRelConverterConfig)
+          .withTrimUnusedFields(false)
+          .withConvertTableAccess(false)
+          .build();
+      final SqlToRelConverter sqlToRelConverter =
+          new SqlToRelConverter(new ViewExpanderImpl(), validator,
+              catalogReader, cluster, convertletTable, config);
 
       root = sqlToRelConverter.convertQuery(validatedSqlNode, true, false);
       root = root.withRel(sqlToRelConverter.flattenTypes(root.rel, true));
@@ -300,11 +294,22 @@ public class MapDPlanner implements Planner {
   // CalciteCatalogReader is stateless; no need to store one
   private CalciteCatalogReader createCatalogReader() {
     SchemaPlus rootSchema = rootSchema(defaultSchema);
+    Context context = config.getContext();
+    CalciteConnectionConfig connectionConfig = null;
+
+    if (context != null) {
+      connectionConfig = context.unwrap(CalciteConnectionConfig.class);
+    } else {
+      Properties properties = new Properties();
+      properties.setProperty(CalciteConnectionProperty.CASE_SENSITIVE.camelName(),
+              String.valueOf(parserConfig.caseSensitive()));
+      connectionConfig = new CalciteConnectionConfigImpl(properties);
+    }
+
     return new CalciteCatalogReader(
-            CalciteSchema.from(rootSchema),
-            parserConfig.caseSensitive(),
-            CalciteSchema.from(defaultSchema).path(null),
-            typeFactory);
+        CalciteSchema.from(rootSchema),
+        CalciteSchema.from(defaultSchema).path(null),
+        typeFactory, connectionConfig);
   }
 
   private static SchemaPlus rootSchema(SchemaPlus schema) {
@@ -321,45 +326,38 @@ public class MapDPlanner implements Planner {
     return new RexBuilder(typeFactory);
   }
 
-  @Override
   public JavaTypeFactory getTypeFactory() {
     return typeFactory;
   }
 
-  @Override
   public RelNode transform(int ruleSetIndex, RelTraitSet requiredOutputTraits,
-          RelNode rel) throws RelConversionException {
+      RelNode rel) throws RelConversionException {
     ensure(State.STATE_5_CONVERTED);
     rel.getCluster().setMetadataProvider(
-            new CachingRelMetadataProvider(
-                    rel.getCluster().getMetadataProvider(),
-                    rel.getCluster().getPlanner()));
+        new CachingRelMetadataProvider(
+            rel.getCluster().getMetadataProvider(),
+            rel.getCluster().getPlanner()));
     Program program = programs.get(ruleSetIndex);
     return program.run(planner, rel, requiredOutputTraits,
-            ImmutableList.<RelOptMaterialization>of(),
-            ImmutableList.<RelOptLattice>of());
+        ImmutableList.<RelOptMaterialization>of(),
+        ImmutableList.<RelOptLattice>of());
   }
 
-  /**
-   * Stage of a statement in the query-preparation lifecycle.
-   */
+  /** Stage of a statement in the query-preparation lifecycle. */
   private enum State {
     STATE_0_CLOSED {
-      @Override
-      void from(MapDPlanner planner) {
+      @Override void from(MapDPlanner planner) {
         planner.close();
       }
     },
     STATE_1_RESET {
-      @Override
-      void from(MapDPlanner planner) {
+      @Override void from(MapDPlanner planner) {
         planner.ensure(STATE_0_CLOSED);
         planner.reset();
       }
     },
     STATE_2_READY {
-      @Override
-      void from(MapDPlanner planner) {
+      @Override void from(MapDPlanner planner) {
         STATE_1_RESET.from(planner);
         planner.ready();
       }
@@ -368,14 +366,12 @@ public class MapDPlanner implements Planner {
     STATE_4_VALIDATED,
     STATE_5_CONVERTED;
 
-    /**
-     * Moves planner's state to this state. This must be a higher state.
-     */
+    /** Moves planner's state to this state. This must be a higher state. */
     void from(MapDPlanner planner) {
       throw new IllegalArgumentException("cannot move from " + planner.state
-              + " to " + this);
+          + " to " + this);
     }
   }
 }
 
-// End PlannerImpl.java
+// End MapDPlanner.java

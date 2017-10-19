@@ -9,12 +9,15 @@ import com.mapd.thrift.server.TColumnType;
 import com.mapd.thrift.server.TDatumType;
 import com.mapd.thrift.server.TTableDetails;
 import com.mapd.thrift.server.TTypeInfo;
+import org.apache.calcite.config.CalciteConnectionConfig;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.schema.Schema;
 import org.apache.calcite.schema.Statistic;
 import org.apache.calcite.schema.Statistics;
 import org.apache.calcite.schema.Table;
+import org.apache.calcite.sql.SqlCall;
+import org.apache.calcite.sql.SqlNode;
 import org.apache.calcite.sql.type.SqlTypeName;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -110,4 +113,15 @@ public class MapDTable implements Table {
         throw new AssertionError(dType.name());
     }
   }
+
+    @Override
+    public boolean isRolledUp(String string) {
+        //will set to false by default
+        return false;
+    }
+
+    @Override
+    public boolean rolledUpColumnValidInsideAgg(String string, SqlCall sc, SqlNode sn, CalciteConnectionConfig ccc) {
+        throw new UnsupportedOperationException("rolledUpColumnValidInsideAgg Not supported yet.");
+    }
 }
