@@ -630,9 +630,9 @@ std::unordered_map<const RelAlgNode*, int> get_input_nest_levels(const RelAlgNod
   const auto data_sink_node = get_data_sink(ra_node);
   std::unordered_map<const RelAlgNode*, int> input_to_nest_level;
   for (size_t input_idx = 0; input_idx < data_sink_node->inputCount(); ++input_idx) {
-    const auto input_ra = data_sink_node->getInput(input_idx);
-    size_t nest_level = input_permutation.empty() ? input_idx : input_permutation[input_idx];
-    const auto it_ok = input_to_nest_level.emplace(input_ra, nest_level);
+    const auto input_node_idx = input_permutation.empty() ? input_idx : input_permutation[input_idx];
+    const auto input_ra = data_sink_node->getInput(input_node_idx);
+    const auto it_ok = input_to_nest_level.emplace(input_ra, input_idx);
     CHECK(it_ok.second);
   }
   return input_to_nest_level;
@@ -809,10 +809,10 @@ std::pair<std::vector<InputDescriptor>, std::list<std::shared_ptr<const InputCol
   std::vector<InputDescriptor> input_descs;
   const auto data_sink_node = get_data_sink(ra_node);
   for (size_t input_idx = 0; input_idx < data_sink_node->inputCount(); ++input_idx) {
-    const auto input_ra = data_sink_node->getInput(input_idx);
+    const auto input_node_idx = input_permutation.empty() ? input_idx : input_permutation[input_idx];
+    const auto input_ra = data_sink_node->getInput(input_node_idx);
     const int table_id = table_id_from_ra(input_ra);
-    const auto nest_level = input_permutation.empty() ? input_idx : input_permutation[input_idx];
-    input_descs.emplace_back(table_id, nest_level);
+    input_descs.emplace_back(table_id, input_idx);
   }
   std::sort(input_descs.begin(), input_descs.end(), [](const InputDescriptor& lhs, const InputDescriptor& rhs) {
     return lhs.getNestLevel() < rhs.getNestLevel();
