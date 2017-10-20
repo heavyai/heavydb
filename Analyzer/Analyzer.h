@@ -761,17 +761,23 @@ class LikelihoodExpr : public Expr {
  */
 class AggExpr : public Expr {
  public:
-  AggExpr(const SQLTypeInfo& ti, SQLAgg a, std::shared_ptr<Analyzer::Expr> g, bool d)
-      : Expr(ti, true), aggtype(a), arg(g), is_distinct(d) {}
-  AggExpr(SQLTypes t, SQLAgg a, Expr* g, bool d, int idx)
+  AggExpr(const SQLTypeInfo& ti,
+          SQLAgg a,
+          std::shared_ptr<Analyzer::Expr> g,
+          bool d,
+          std::shared_ptr<Analyzer::Constant> e)
+      : Expr(ti, true), aggtype(a), arg(g), is_distinct(d), error_rate(e) {}
+  AggExpr(SQLTypes t, SQLAgg a, Expr* g, bool d, std::shared_ptr<Analyzer::Constant> e, int idx)
       : Expr(SQLTypeInfo(t, g == nullptr ? true : g->get_type_info().get_notnull()), true),
         aggtype(a),
         arg(g),
-        is_distinct(d) {}
+        is_distinct(d),
+        error_rate(e) {}
   SQLAgg get_aggtype() const { return aggtype; }
   Expr* get_arg() const { return arg.get(); }
   std::shared_ptr<Analyzer::Expr> get_own_arg() const { return arg; }
   bool get_is_distinct() const { return is_distinct; }
+  std::shared_ptr<Analyzer::Constant> get_error_rate() const { return error_rate; }
   virtual std::shared_ptr<Analyzer::Expr> deep_copy() const;
   virtual void group_predicates(std::list<const Expr*>& scan_predicates,
                                 std::list<const Expr*>& join_predicates,
@@ -796,9 +802,10 @@ class AggExpr : public Expr {
   virtual void find_expr(bool (*f)(const Expr*), std::list<const Expr*>& expr_list) const;
 
  private:
-  SQLAgg aggtype;                       // aggregate type: kAVG, kMIN, kMAX, kSUM, kCOUNT
-  std::shared_ptr<Analyzer::Expr> arg;  // argument to aggregate
-  bool is_distinct;                     // true only if it is for COUNT(DISTINCT x).
+  SQLAgg aggtype;                                  // aggregate type: kAVG, kMIN, kMAX, kSUM, kCOUNT
+  std::shared_ptr<Analyzer::Expr> arg;             // argument to aggregate
+  bool is_distinct;                                // true only if it is for COUNT(DISTINCT x)
+  std::shared_ptr<Analyzer::Constant> error_rate;  // error rate of kAPPROX_COUNT_DISTINCT
 };
 
 /*

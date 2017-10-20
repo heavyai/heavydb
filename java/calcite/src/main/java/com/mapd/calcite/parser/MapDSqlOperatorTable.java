@@ -603,7 +603,15 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     static class ApproxCountDistinct extends SqlAggFunction {
 
         ApproxCountDistinct() {
-            super("APPROX_COUNT_DISTINCT", null, SqlKind.OTHER_FUNCTION, null, null, OperandTypes.ANY, SqlFunctionCategory.SYSTEM);
+            super("APPROX_COUNT_DISTINCT",
+                    null,
+                    SqlKind.OTHER_FUNCTION,
+                    null,
+                    null,
+                    OperandTypes.or(
+                            OperandTypes.family(SqlTypeFamily.ANY),
+                            OperandTypes.family(SqlTypeFamily.ANY, SqlTypeFamily.INTEGER)),
+                    SqlFunctionCategory.SYSTEM);
         }
 
         @Override

@@ -573,21 +573,23 @@ std::vector<std::unordered_set<size_t>> get_live_ins(
     for (size_t i = 0; i < group_key_count; ++i) {
       live_in.insert(i);
     }
-    bool has_count_start_only{false};
+    bool has_count_star_only{false};
     for (const auto& idx : live_out) {
       if (idx < group_key_count) {
         continue;
       }
       const auto agg_idx = idx - group_key_count;
       CHECK_LT(agg_idx, agg_expr_count);
-      const auto arg_idx = aggregate->getAggExprs()[agg_idx]->getOperand();
-      if (arg_idx >= 0) {
-        live_in.insert(static_cast<size_t>(arg_idx));
-      } else if (agg_expr_count == 1) {
-        has_count_start_only = true;
+      const auto& cur_agg_expr = aggregate->getAggExprs()[agg_idx];
+      const auto n_operands = cur_agg_expr->size();
+      for (size_t i = 0; i < n_operands; ++i) {
+        live_in.insert(static_cast<size_t>(cur_agg_expr->getOperand(i)));
+      }
+      if (n_operands == 0) {
+        has_count_star_only = true;
       }
     }
-    if (has_count_start_only && !group_key_count) {
+    if (has_count_star_only && !group_key_count) {
       live_in.insert(size_t(0));
     }
     return {live_in};
@@ -761,14 +763,20 @@ std::vector<std::unique_ptr<const RexAgg>> renumber_rex_aggs(std::vector<std::un
                                                              const std::unordered_map<size_t, size_t>& new_numbering) {
   std::vector<std::unique_ptr<const RexAgg>> new_exprs;
   for (auto& expr : agg_exprs) {
-    auto old_idx = expr->getOperand();
-    auto idx_it = new_numbering.find(old_idx);
-    if (idx_it != new_numbering.end()) {
-      new_exprs.push_back(
-          boost::make_unique<RexAgg>(expr->getKind(), expr->isDistinct(), expr->getType(), idx_it->second));
-    } else {
-      new_exprs.push_back(std::move(expr));
+    if (expr->size() >= 1) {
+      auto old_idx = expr->getOperand(0);
+      auto idx_it = new_numbering.find(old_idx);
+      if (idx_it != new_numbering.end()) {
+        std::vector<size_t> operands;
+        operands.push_back(idx_it->second);
+        if (expr->size() == 2) {
+          operands.push_back(expr->getOperand(1));
+        }
+        new_exprs.push_back(boost::make_unique<RexAgg>(expr->getKind(), expr->isDistinct(), expr->getType(), operands));
+        continue;
+      }
     }
+    new_exprs.push_back(std::move(expr));
   }
   return new_exprs;
 }

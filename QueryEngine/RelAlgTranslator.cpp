@@ -178,14 +178,25 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateAggregateRex(
     const std::vector<std::shared_ptr<Analyzer::Expr>>& scalar_sources) {
   const auto agg_kind = rex->getKind();
   const bool is_distinct = rex->isDistinct();
-  const auto operand = rex->getOperand();
-  const bool takes_arg{operand >= 0};
+  const bool takes_arg{rex->size() > 0};
+  std::shared_ptr<Analyzer::Expr> arg_expr;
+  std::shared_ptr<Analyzer::Constant> err_rate;
   if (takes_arg) {
+    const auto operand = rex->getOperand(0);
     CHECK_LT(operand, static_cast<ssize_t>(scalar_sources.size()));
+    CHECK_LE(rex->size(), 2);
+    arg_expr = scalar_sources[operand];
+    if (agg_kind == kAPPROX_COUNT_DISTINCT && rex->size() == 2) {
+      err_rate = std::dynamic_pointer_cast<Analyzer::Constant>(scalar_sources[rex->getOperand(1)]);
+      if (!err_rate || err_rate->get_type_info().get_type() != kSMALLINT || err_rate->get_constval().smallintval < 1 ||
+          err_rate->get_constval().smallintval > 100) {
+        throw std::runtime_error(
+            "APPROX_COUNT_DISTINCT's second parameter should be SMALLINT literal between 1 and 100");
+      }
+    }
   }
-  const auto arg_expr = takes_arg ? scalar_sources[operand] : nullptr;
   const auto agg_ti = get_agg_type(agg_kind, arg_expr.get());
-  return makeExpr<Analyzer::AggExpr>(agg_ti, agg_kind, arg_expr, is_distinct);
+  return makeExpr<Analyzer::AggExpr>(agg_ti, agg_kind, arg_expr, is_distinct, err_rate);
 }
 
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLiteral(const RexLiteral* rex_literal) {

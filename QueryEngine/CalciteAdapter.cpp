@@ -36,7 +36,7 @@ ssize_t get_agg_operand_idx(const rapidjson::Value& expr) {
   CHECK(expr.HasMember("agg"));
   const auto& agg_operands = expr["operands"];
   CHECK(agg_operands.IsArray());
-  CHECK(agg_operands.Size() <= 1);
+  CHECK(agg_operands.Size() <= 2);
   return agg_operands.Empty() ? -1 : agg_operands[0].GetInt();
 }
 
@@ -459,7 +459,7 @@ class CalciteAdapter {
     }
     const auto arg_expr = takes_arg ? scan_targets[operand]->get_own_expr() : nullptr;
     const auto agg_ti = get_agg_type(agg_kind, arg_expr.get());
-    return makeExpr<Analyzer::AggExpr>(agg_ti, agg_kind, arg_expr, is_distinct);
+    return makeExpr<Analyzer::AggExpr>(agg_ti, agg_kind, arg_expr, is_distinct, nullptr);
   }
 
   std::shared_ptr<Analyzer::Expr> translateTypedLiteral(const rapidjson::Value& expr) {

@@ -858,7 +858,19 @@ TEST(Select, ApproxCountDistinct) {
       "SELECT approx_value, exact_value FROM (SELECT COUNT(distinct x) AS approx_value FROM test), (SELECT "
       "COUNT(distinct x) AS exact_value FROM test);",
       dt);
+    c("SELECT APPROX_COUNT_DISTINCT(x, 1) FROM test;", "SELECT COUNT(distinct x) FROM test;", dt);
+    c("SELECT APPROX_COUNT_DISTINCT(b, 10) FROM test;", "SELECT COUNT(distinct b) FROM test;", dt);
+    c("SELECT APPROX_COUNT_DISTINCT(f, 20) FROM test;", "SELECT COUNT(distinct f) FROM test;", dt);
+    c("SELECT COUNT(*), MIN(x), MAX(x), AVG(y), SUM(z) AS n, APPROX_COUNT_DISTINCT(x, 1) FROM test GROUP BY y ORDER "
+      "BY n;",
+      "SELECT COUNT(*), MIN(x), MAX(x), AVG(y), SUM(z) AS n, COUNT(distinct x) FROM test GROUP BY y ORDER BY n;",
+      dt);
+    c("SELECT COUNT(*), MIN(x), MAX(x), AVG(y), SUM(z) AS n, APPROX_COUNT_DISTINCT(x + 1, 1) FROM test GROUP BY y "
+      "ORDER BY n;",
+      "SELECT COUNT(*), MIN(x), MAX(x), AVG(y), SUM(z) AS n, COUNT(distinct x + 1) FROM test GROUP BY y ORDER BY n;",
+      dt);
     EXPECT_THROW(run_multiple_agg("SELECT APPROX_COUNT_DISTINCT(real_str) FROM test;", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("SELECT APPROX_COUNT_DISTINCT(x, 0) FROM test;", dt), std::runtime_error);
   }
 }
 
