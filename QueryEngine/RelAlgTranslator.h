@@ -125,4 +125,6 @@ struct QualsConjunctiveForm {
 
 QualsConjunctiveForm qual_to_conjunctive_form(const std::shared_ptr<Analyzer::Expr> qual_expr);
 
+std::vector<std::shared_ptr<Analyzer::Expr>> qual_to_disjunctive_form(const std::shared_ptr<Analyzer::Expr>& qual_expr);
+
 #endif  // QUERYENGINE_RELALGTRANSLATOR_H

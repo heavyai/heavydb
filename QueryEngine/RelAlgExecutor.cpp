@@ -27,6 +27,7 @@
 #include "RangeTableIndexVisitor.h"
 #include "RexVisitor.h"
 
+#include "../Parser/ParserNode.h"
 #include "../Shared/measure.h"
 
 #include <algorithm>
@@ -1963,6 +1964,71 @@ std::vector<const RexScalar*> rex_to_conjunctive_form(const RexScalar* qual_expr
   return lhs_cf;
 }
 
+std::shared_ptr<Analyzer::Expr> build_logical_expression(const std::vector<std::shared_ptr<Analyzer::Expr>>& factors,
+                                                         const SQLOps sql_op) {
+  auto acc = factors.front();
+  for (size_t i = 1; i < factors.size(); ++i) {
+    acc = Parser::OperExpr::normalize(sql_op, kONE, acc, factors[i]);
+  }
+  return acc;
+}
+
+template <class QualsList>
+bool list_contains_expression(const QualsList& haystack, const std::shared_ptr<Analyzer::Expr>& needle) {
+  for (const auto& qual : haystack) {
+    if (*qual == *needle) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// Transform `(p AND q) OR (p AND r)` to `p AND (q OR r)`. Avoids redundant
+// evaluations of `p` and allows use of the original form in joins if `p`
+// can be used for hash joins.
+std::shared_ptr<Analyzer::Expr> reverse_logical_distribution(const std::shared_ptr<Analyzer::Expr>& expr) {
+  const auto expr_terms = qual_to_disjunctive_form(expr);
+  CHECK_GE(expr_terms.size(), size_t(1));
+  const auto& first_term = expr_terms.front();
+  const auto first_term_factors = qual_to_conjunctive_form(first_term);
+  std::vector<std::shared_ptr<Analyzer::Expr>> common_factors;
+  // First, collect the conjunctive components common to all the disjunctive components.
+  // Don't do it for simple qualifiers, we only care about expensive or join qualifiers.
+  for (const auto& first_term_factor : first_term_factors.quals) {
+    bool is_common = expr_terms.size() > 1;  // Only report common factors for disjunction.
+    for (size_t i = 1; i < expr_terms.size(); ++i) {
+      const auto crt_term_factors = qual_to_conjunctive_form(expr_terms[i]);
+      if (!list_contains_expression(crt_term_factors.quals, first_term_factor)) {
+        is_common = false;
+        break;
+      }
+    }
+    if (is_common) {
+      common_factors.push_back(first_term_factor);
+    }
+  }
+  if (common_factors.empty()) {
+    return expr;
+  }
+  // Now that the common expressions are known, collect the remaining expressions.
+  std::vector<std::shared_ptr<Analyzer::Expr>> remaining_terms;
+  for (const auto& term : expr_terms) {
+    const auto term_cf = qual_to_conjunctive_form(term);
+    std::vector<std::shared_ptr<Analyzer::Expr>> remaining_quals(term_cf.simple_quals.begin(),
+                                                                 term_cf.simple_quals.end());
+    for (const auto& qual : term_cf.quals) {
+      if (!list_contains_expression(common_factors, qual)) {
+        remaining_quals.push_back(qual);
+      }
+    }
+    remaining_terms.push_back(build_logical_expression(remaining_quals, kAND));
+  }
+  // Reconstruct the expression with the transformation applied.
+  const auto common_expr = build_logical_expression(common_factors, kAND);
+  const auto remaining_expr = build_logical_expression(remaining_terms, kOR);
+  return Parser::OperExpr::normalize(kAND, kONE, common_expr, remaining_expr);
+}
+
 }  // namespace
 
 // Translate left deep join filter and separate the conjunctive form qualifiers
@@ -1978,7 +2044,8 @@ JoinQualsPerNestingLevel RelAlgExecutor::translateLeftDeepJoinFilter(
   std::list<std::shared_ptr<Analyzer::Expr>> join_condition_quals;
   for (const auto rex_condition_component : rex_condition_cf) {
     const auto bw_equals = get_bitwise_equals_conjunction(rex_condition_component);
-    const auto join_condition = translator.translateScalarRex(bw_equals ? bw_equals.get() : rex_condition_component);
+    const auto join_condition = reverse_logical_distribution(
+        translator.translateScalarRex(bw_equals ? bw_equals.get() : rex_condition_component));
     auto join_condition_cf = qual_to_conjunctive_form(join_condition);
     join_condition_quals.insert(
         join_condition_quals.end(), join_condition_cf.quals.begin(), join_condition_cf.quals.end());

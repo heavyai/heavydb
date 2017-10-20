@@ -1055,3 +1055,21 @@ QualsConjunctiveForm qual_to_conjunctive_form(const std::shared_ptr<Analyzer::Ex
   const auto simple_qual = bin_oper->normalize_simple_predicate(rte_idx);
   return simple_qual ? QualsConjunctiveForm{{simple_qual}, {}} : QualsConjunctiveForm{{}, {qual_expr}};
 }
+
+std::vector<std::shared_ptr<Analyzer::Expr>> qual_to_disjunctive_form(
+    const std::shared_ptr<Analyzer::Expr>& qual_expr) {
+  CHECK(qual_expr);
+  const auto bin_oper = std::dynamic_pointer_cast<const Analyzer::BinOper>(qual_expr);
+  if (!bin_oper) {
+    const auto rewritten_qual_expr = rewrite_expr(qual_expr.get());
+    return {rewritten_qual_expr ? rewritten_qual_expr : qual_expr};
+  }
+  if (bin_oper->get_optype() == kOR) {
+    const auto lhs_df = qual_to_disjunctive_form(bin_oper->get_own_left_operand());
+    const auto rhs_df = qual_to_disjunctive_form(bin_oper->get_own_right_operand());
+    auto quals = lhs_df;
+    quals.insert(quals.end(), rhs_df.begin(), rhs_df.end());
+    return quals;
+  }
+  return {qual_expr};
+}
