@@ -1966,6 +1966,7 @@ std::vector<const RexScalar*> rex_to_conjunctive_form(const RexScalar* qual_expr
 
 std::shared_ptr<Analyzer::Expr> build_logical_expression(const std::vector<std::shared_ptr<Analyzer::Expr>>& factors,
                                                          const SQLOps sql_op) {
+  CHECK(!factors.empty());
   auto acc = factors.front();
   for (size_t i = 1; i < factors.size(); ++i) {
     acc = Parser::OperExpr::normalize(sql_op, kONE, acc, factors[i]);
@@ -2021,10 +2022,15 @@ std::shared_ptr<Analyzer::Expr> reverse_logical_distribution(const std::shared_p
         remaining_quals.push_back(qual);
       }
     }
-    remaining_terms.push_back(build_logical_expression(remaining_quals, kAND));
+    if (!remaining_quals.empty()) {
+      remaining_terms.push_back(build_logical_expression(remaining_quals, kAND));
+    }
   }
   // Reconstruct the expression with the transformation applied.
   const auto common_expr = build_logical_expression(common_factors, kAND);
+  if (remaining_terms.empty()) {
+    return common_expr;
+  }
   const auto remaining_expr = build_logical_expression(remaining_terms, kOR);
   return Parser::OperExpr::normalize(kAND, kONE, common_expr, remaining_expr);
 }
