@@ -68,6 +68,11 @@ class LeafAggregator {
     return {};
   }
 
+  TClusterHardwareInfo getHardwareInfo(TSessionId session) {
+    CHECK(false);
+    return {};
+  }
+
   size_t leafCount() const { return 0; }
 
   void set_execution_mode(const TSessionId session, const TExecuteMode::type mode) { CHECK(false); }

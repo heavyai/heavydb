@@ -19,6 +19,7 @@
 
 #include <cstdlib>
 #include <vector>
+#include <string>
 #ifdef HAVE_CUDA
 #include <cuda.h>
 #else
@@ -45,6 +46,8 @@ struct DeviceProperties {
   int memoryBusWidth;  // in bits
   float memoryBandwidthGBs;
   int clockKhz;
+  int numCore;
+  std::string arch;
 };
 
 class CudaMgr {
@@ -53,6 +56,7 @@ class CudaMgr {
   ~CudaMgr();
   void setContext(const int deviceNum) const;
   void printDeviceProperties() const;
+  DeviceProperties* getDeviceProperties(const size_t deviceNum);
   int8_t* allocatePinnedHostMem(const size_t numBytes);
   int8_t* allocateDeviceMem(const size_t numBytes, const int deviceNum);
   void freePinnedHostMem(int8_t* hostPtr);
@@ -67,11 +71,20 @@ class CudaMgr {
   void zeroDeviceMem(int8_t* devicePtr, const size_t numBytes, const int deviceNum);
   void setDeviceMem(int8_t* devicePtr, const unsigned char uc, const size_t numBytes, const int deviceNum);
   inline int getDeviceCount() const { return deviceCount_; }
+  inline int getStartGpu() const {
+#ifdef HAVE_CUDA
+    return startGpu_;
+#else
+    return -1;
+#endif
+  }
   inline bool isArchMaxwell() const { return (getDeviceCount() > 0 && deviceProperties[0].computeMajor == 5); }
   inline bool isArchPascal() const { return (getDeviceCount() > 0 && deviceProperties[0].computeMajor == 6); }
   std::vector<DeviceProperties> deviceProperties;
 
   const std::vector<CUcontext>& getDeviceContexts() const { return deviceContexts; }
+
+  const int getGpuDriverVersion() { return gpu_driver_version; }
 
  private:
   void fillDeviceProperties();
@@ -79,6 +92,8 @@ class CudaMgr {
   void checkError(CUresult cuResult);
 
   int deviceCount_;
+  int gpu_driver_version;
+
 #ifdef HAVE_CUDA
   int startGpu_;
 #endif  // HAVE_CUDA

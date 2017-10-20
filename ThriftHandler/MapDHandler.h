@@ -125,6 +125,7 @@ class MapDHandler : public MapDIf {
   void disconnect(const TSessionId& session);
   void get_server_status(TServerStatus& _return, const TSessionId& session);
   void get_status(std::vector<TServerStatus>& _return, const TSessionId& session);
+  void get_hardware_info(TClusterHardwareInfo& _return, const TSessionId& session);
 
   void get_tables(std::vector<std::string>& _return, const TSessionId& session);
   void get_table_details(TTableDetails& _return, const TSessionId& session, const std::string& table_name);

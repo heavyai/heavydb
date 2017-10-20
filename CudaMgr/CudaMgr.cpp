@@ -20,6 +20,7 @@
 #include "assert.h"
 #include <algorithm>
 #include <glog/logging.h>
+#include <cuda_runtime.h>
 
 using std::cout;
 using std::endl;
@@ -58,6 +59,8 @@ CudaMgr::~CudaMgr() {
 void CudaMgr::fillDeviceProperties() {
 #ifdef HAVE_CUDA
   deviceProperties.resize(deviceCount_);
+  cudaDriverGetVersion(&gpu_driver_version);
+  std::cout << gpu_driver_version << std::endl;
   for (int deviceNum = 0; deviceNum < deviceCount_; ++deviceNum) {
     checkError(cuDeviceGet(&deviceProperties[deviceNum].device, deviceNum + startGpu_));
     checkError(cuDeviceComputeCapability(&deviceProperties[deviceNum].computeMajor,
@@ -99,6 +102,8 @@ void CudaMgr::fillDeviceProperties() {
                                     deviceProperties[deviceNum].device));
     deviceProperties[deviceNum].memoryBandwidthGBs =
         deviceProperties[deviceNum].memoryClockKhz / 1000000.0 / 8.0 * deviceProperties[deviceNum].memoryBusWidth;
+    //   deviceProperties[deviceNum].numCore =
+    //_ConvertSMVer2Cores(deviceProperties[deviceNum].computeMajor, deviceProperties[deviceNum].computeMinor);
   }
 #endif
 }
@@ -145,6 +150,15 @@ void CudaMgr::printDeviceProperties() const {
     VLOG(1) << "Max register per MP: " << deviceProperties[d].maxRegistersPerMP;
     VLOG(1) << "Memory bus width in bits: " << deviceProperties[d].memoryBusWidth;
   }
+#endif
+}
+
+DeviceProperties* CudaMgr::getDeviceProperties(const size_t deviceNum) {
+#ifdef HAVE_CUDA
+  if (deviceNum < deviceProperties.size()) {
+    return &deviceProperties[deviceNum];
+  }
+  return nullptr;
 #endif
 }
 

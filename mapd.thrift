@@ -237,6 +237,27 @@ struct TRenderResult {
   5: i64 total_time_ms
 }
 
+struct TGpuSpecification {
+  1: i32 num_sm
+  2: i64 clock_frequency_kHz
+  3: i64 memory
+  4: i16 compute_capability_major
+  5: i16 compute_capability_minor
+}
+
+struct THardwareInfo {
+  1: i16 num_gpu_hw
+  2: i16 num_cpu_hw
+  3: i16 num_gpu_allocated
+  4: i16 start_gpu
+  5: string host_name
+  6: list<TGpuSpecification> gpu_info
+}
+
+struct TClusterHardwareInfo {
+  1: list<THardwareInfo> hardware_info
+}
+
 struct TMemoryData {
   1: i64 slab
   2: i32 start_page
@@ -347,6 +368,7 @@ service MapD {
   void disconnect(1: TSessionId session) throws (1: TMapDException e)
   TServerStatus get_server_status(1: TSessionId session) throws (1: TMapDException e)
   list<TServerStatus> get_status(1: TSessionId session) throws (1: TMapDException e)
+  TClusterHardwareInfo get_hardware_info(1: TSessionId session) throws (1: TMapDException e)
   list<string> get_tables(1: TSessionId session) throws (1: TMapDException e)
   TTableDetails get_table_details(1: TSessionId session, 2: string table_name) throws (1: TMapDException e)
   TTableDetails get_internal_table_details(1: TSessionId session, 2: string table_name) throws (1: TMapDException e)

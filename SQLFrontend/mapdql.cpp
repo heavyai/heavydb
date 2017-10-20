@@ -117,6 +117,7 @@ struct ClientContext {
   int table_id;
   int epoch_value;
   TServerStatus server_status;
+  TClusterHardwareInfo cluster_hardware_info;
   std::vector<TServerStatus> cluster_status;
   std::string view_name;
   std::string view_state;
@@ -148,7 +149,8 @@ enum ThriftService {
   kGET_TABLE_EPOCH,
   kGET_SERVER_STATUS,
   kIMPORT_DASHBOARD,
-  kEXPORT_DASHBOARD
+  kEXPORT_DASHBOARD,
+  kGET_HARDWARE_INFO
 };
 
 namespace {
@@ -206,6 +208,9 @@ bool thrift_with_retry(ThriftService which_service, ClientContext& context, cons
         break;
       case kCLEAR_MEMORY_CPU:
         context.client.clear_cpu_memory(context.session);
+        break;
+      case kGET_HARDWARE_INFO:
+        context.client.get_hardware_info(context.cluster_hardware_info, context.session);
         break;
       case kIMPORT_GEO_TABLE:
         context.client.import_geo_table(
@@ -1185,6 +1190,43 @@ void print_memory_info(ClientContext context, std::string memory_level) {
   }
   std::cout << tss.str() << std::endl;
 }
+
+std::string print_gpu_specification(TGpuSpecification gpu_spec) {
+  int Giga = 1024 * 1024 * 1024;
+  int Kilo = 1024;
+  std::ostringstream tss;
+  tss << "Number of SM             :" << gpu_spec.num_sm << std::endl;
+  tss << "Clock frequency          :" << gpu_spec.clock_frequency_kHz / Kilo << " MHz" << std::endl;
+  tss << "Physical GPU Memory      :" << gpu_spec.memory / Giga << " GB" << std::endl;
+  tss << "Compute capability       :" << gpu_spec.compute_capability_major << "." << gpu_spec.compute_capability_minor
+      << std::endl;
+  return tss.str();
+}
+
+std::string print_hardware_specification(THardwareInfo hw_spec) {
+  std::ostringstream tss;
+  tss << "Host name                :" << hw_spec.host_name << std::endl;
+  tss << "Number of Physical GPUs  :" << hw_spec.num_gpu_hw << std::endl;
+  tss << "Number of CPU core       :" << hw_spec.num_cpu_hw << std::endl;
+  tss << "Number of GPUs allocated :" << hw_spec.num_gpu_allocated << std::endl;
+  tss << "Start GPU                :" << hw_spec.start_gpu << std::endl;
+  for (auto gpu_spec : hw_spec.gpu_info) {
+    tss << "-------------------------------------------" << std::endl;
+    tss << print_gpu_specification(gpu_spec);
+  }
+  tss << "-------------------------------------------" << std::endl;
+  return tss.str();
+}
+
+void print_all_hardware_info(ClientContext context) {
+  std::ostringstream tss;
+  for (auto hw_info : context.cluster_hardware_info.hardware_info) {
+    tss << "===========================================" << std::endl;
+    tss << print_hardware_specification(hw_info) << std::endl;
+  }
+  tss << "===========================================" << std::endl;
+  std::cout << tss.str();
+}
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -1437,6 +1479,15 @@ int main(int argc, char** argv) {
       } else {
         std::cout << "Cannot connect to MapD Server." << std::endl;
       }
+    } else if (!strncmp(line, "\\hardware_info", 13)) {
+      if (context.cluster_hardware_info.hardware_info.size() > 0 ||
+          thrift_with_retry(kGET_HARDWARE_INFO, context, nullptr)) {
+        // TODO(vraj): try not to abuse using short circuit here
+        print_all_hardware_info(context);
+      } else {
+        std::cout << "Cannot connect to MapD Server." << std::endl;
+      }
+
     } else if (!strncmp(line, "\\status", 8)) {
       if (thrift_with_retry(kGET_SERVER_STATUS, context, nullptr)) {
         time_t t = (time_t)context.cluster_status[0].start_time;
