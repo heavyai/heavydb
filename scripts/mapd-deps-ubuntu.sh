@@ -95,7 +95,7 @@ make -j $(nproc)
 make install
 popd
 
-VERS=2017.04.10.00
+VERS=2017.10.16.00
 wget --continue https://github.com/facebook/folly/archive/v$VERS.tar.gz
 tar xvf v$VERS.tar.gz
 pushd folly-$VERS/folly

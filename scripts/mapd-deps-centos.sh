@@ -114,9 +114,10 @@ CXXFLAGS="-fPIC" download_make_install https://github.com/google/glog/archive/v0
 
 download_make_install https://github.com/libevent/libevent/releases/download/release-2.0.22-stable/libevent-2.0.22-stable.tar.gz
 
-download https://github.com/facebook/folly/archive/v2017.04.10.00.tar.gz
-extract v2017.04.10.00.tar.gz
-pushd folly-2017.04.10.00/folly
+VERS=2017.10.16.00
+download https://github.com/facebook/folly/archive/v$VERS.tar.gz
+extract v$VERS.tar.gz
+pushd folly-$VERS/folly
 OLDPATH=$PATH
 PATH=/usr/bin
 /usr/bin/autoreconf -ivf
