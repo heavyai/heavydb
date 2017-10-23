@@ -619,7 +619,16 @@ std::function<bool(const uint32_t, const uint32_t)> ResultSet::createComparator(
       CHECK_GE(order_entry.tle_no, 1);
       const auto& agg_info = targets_[order_entry.tle_no - 1];
       const auto& entry_ti = get_compact_type(agg_info);
-      const bool float_argument_input = takes_float_argument(agg_info);
+      bool float_argument_input = takes_float_argument(agg_info);
+      // Need to determine if the float value has been stored as float
+      // or if it has been compacted to a different (often larger 8 bytes)
+      // in distributed case the floats are actually 4 bytes
+      // TODO the above takes_float_argument() is widely used  wonder if this problem exists elsewhere
+      if (entry_ti.get_type() == kFLOAT) {
+        if (query_mem_desc_.agg_col_widths[order_entry.tle_no - 1].compact == sizeof(float)) {
+          float_argument_input = true;
+        }
+      }
       const auto lhs_v =
           getColumnInternal(lhs_storage->buff_, fixedup_lhs, order_entry.tle_no - 1, lhs_storage_lookup_result);
       const auto rhs_v =
