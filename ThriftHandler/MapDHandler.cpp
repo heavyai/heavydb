@@ -704,6 +704,64 @@ void MapDHandler::validate_rel_alg(TTableDescriptor& _return,
   }
 }
 
+void MapDHandler::get_role(std::vector<std::string>& _return, const TSessionId& session, const std::string& roleName) {
+  std::vector<std::string> all_roles;
+  get_all_roles(all_roles, session);
+  for (size_t i = 0; i < all_roles.size(); i++) {
+    if (!(all_roles[i].compare(to_upper(roleName)))) {
+      _return.push_back(roleName);
+      break;
+    }
+  }
+  return;
+}
+
+void MapDHandler::get_all_roles(std::vector<std::string>& _return, const TSessionId& session) {
+  auto session_it = get_session_it(session);
+  auto session_info_ptr = session_it->second.get();
+  auto& cat = session_info_ptr->get_catalog();
+  auto& sys_cat = static_cast<Catalog_Namespace::SysCatalog&>(cat);
+  _return = sys_cat.getAllRoles();
+}
+
+void MapDHandler::get_db_object_privileges_for_role(std::vector<TAccessPrivileges>& TDBObjectPrivsForRole,
+                                                    const TSessionId& session,
+                                                    const std::string& roleName,
+                                                    const int16_t objectType,
+                                                    const std::string& objectName) {
+  TAccessPrivileges tprivObject;
+  TDBObjectPrivsForRole.push_back(tprivObject);
+}
+
+void MapDHandler::get_db_objects_for_role(std::vector<TDBObject>& TDBObjectsForRole,
+                                          const TSessionId& session,
+                                          const std::string& roleName) {
+  TDBObject tdbObject;
+  TDBObjectsForRole.push_back(tdbObject);
+}
+
+void MapDHandler::get_all_roles_for_user(std::vector<std::string>& _rolesForUser,
+                                         const TSessionId& session,
+                                         const std::string& userName) {
+  _rolesForUser.push_back("mapd_role_test");
+}
+
+void MapDHandler::get_db_object_privileges_for_user(std::vector<TAccessPrivileges>& TDBObjectPrivsForUser,
+                                                    const TSessionId& session,
+                                                    const std::string& userName,
+                                                    const int16_t objectType,
+                                                    const std::string& objectName) {
+  TAccessPrivileges tprivObject;
+  TDBObjectPrivsForUser.push_back(tprivObject);
+}
+
+void MapDHandler::get_db_objects_for_user(std::vector<TDBObject>& TDBObjectsForUser,
+                                          const TSessionId& session,
+                                          const std::string& userName) {
+  TDBObject tdbObject;
+  TDBObjectsForUser.push_back(tdbObject);
+}
+
 std::string dump_table_col_names(const std::map<std::string, std::vector<std::string>>& table_col_names) {
   std::ostringstream oss;
   for (const auto table_col : table_col_names) {

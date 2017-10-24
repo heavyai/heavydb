@@ -123,6 +123,11 @@ struct ClientContext {
   std::string view_state;
   std::string view_metadata;
   TFrontendView view_return;
+  std::string privs_role_name;
+  std::string privs_user_name;
+  std::vector<std::string> role_names;
+  std::vector<TAccessPrivileges> object_privileges;
+  std::vector<TDBObject> db_objects;
 
   ClientContext(TTransport& t, MapDClient& c)
       : transport(t), client(c), session(INVALID_SESSION_ID), execution_mode(TExecuteMode::GPU) {}
@@ -150,7 +155,9 @@ enum ThriftService {
   kGET_SERVER_STATUS,
   kIMPORT_DASHBOARD,
   kEXPORT_DASHBOARD,
-  kGET_HARDWARE_INFO
+  kGET_HARDWARE_INFO,
+  kGET_ROLE,
+  kGET_ALL_ROLES
 };
 
 namespace {
@@ -232,6 +239,11 @@ bool thrift_with_retry(ThriftService which_service, ClientContext& context, cons
       case kEXPORT_DASHBOARD:
         context.client.get_frontend_view(context.view_return, context.session, context.view_name);
         break;
+      case kGET_ROLE:
+        context.client.get_role(context.role_names, context.session, context.privs_role_name);
+        break;
+      case kGET_ALL_ROLES:
+        context.client.get_all_roles(context.role_names, context.session);
     }
   } catch (TMapDException& e) {
     std::cerr << e.error_msg << std::endl;
@@ -650,13 +662,14 @@ void process_backslash_commands(char* command, ClientContext& context) {
         }
         std::string encoding;
         if (p.col_type.type == TDatumType::STR) {
-          encoding =
-              (p.col_type.encoding == 0 ? " ENCODING NONE" : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
-                                                                 std::to_string(p.col_type.comp_param) + ")");
+          encoding = (p.col_type.encoding == 0 ? " ENCODING NONE"
+                                               : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
+                                                     std::to_string(p.col_type.comp_param) + ")");
 
         } else {
-          encoding = (p.col_type.encoding == 0 ? "" : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
-                                                          std::to_string(p.col_type.comp_param) + ")");
+          encoding = (p.col_type.encoding == 0 ? ""
+                                               : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
+                                                     std::to_string(p.col_type.comp_param) + ")");
         }
         std::cout << comma_or_blank << p.col_name << " " << thrift_to_name(p.col_type)
                   << (p.col_type.nullable ? "" : " NOT NULL") << encoding;
@@ -1229,6 +1242,30 @@ void print_all_hardware_info(ClientContext context) {
   tss << "===========================================" << std::endl;
   std::cout << tss.str();
 }
+
+void get_role(ClientContext context) {
+  context.role_names.clear();
+  if (thrift_with_retry(kGET_ROLE, context, context.privs_role_name.c_str())) {
+    if (context.role_names.size() > 0) {
+      std::cout << "Role " << context.privs_role_name << " exists." << std::endl;
+    } else {
+      std::cout << "Role " << context.privs_role_name << " does not exist." << std::endl;
+    }
+  } else {
+    std::cout << "Cannot connect to MapD Server." << std::endl;
+  }
+}
+
+void get_all_roles(ClientContext context) {
+  context.role_names.clear();
+  if (thrift_with_retry(kGET_ALL_ROLES, context, nullptr)) {
+    for (size_t i = 0; i < context.role_names.size(); i++) {
+      std::cout << context.role_names[i].c_str() << std::endl;
+    }
+  } else {
+    std::cout << "Cannot connect to MapD Server." << std::endl;
+  }
+}
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -1562,6 +1599,11 @@ int main(int argc, char** argv) {
       print_timing = true;
     } else if (!strncmp(line, "\\notiming", 9)) {
       print_timing = false;
+    } else if (!strncmp(line, "\\role", 5)) {
+      context.privs_role_name = strtok(line + 6, " ");
+      get_role(context);
+    } else if (!strncmp(line, "\\all_roles", 10)) {
+      get_all_roles(context);
     } else if (line[0] == '\\' && line[1] == 'q')
       break;
     else if (line[0] == '\\') {

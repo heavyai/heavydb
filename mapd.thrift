@@ -346,6 +346,27 @@ struct TRawPixelDataResult {
   10: i64 total_time_ms
 }
 
+struct TAccessPrivileges {
+  1: bool select_;
+  2: bool insert_;
+  3: bool create_;
+  4: bool truncate_;
+}
+
+enum TDBObjectType {
+  AbstractDBObjectType = 0,
+  DatabaseDBObjectType,
+  TableDBObjectType,
+  ColumnDBObjectType,
+  DashboardDBObjectType
+}
+
+struct TDBObject {
+  1: string objectName
+  2: TDBObjectType objectType
+  3: list<bool> privs
+}
+
 service MapD {
   # connection, admin
   TSessionId connect(1: string user, 2: string passwd, 3: string dbname) throws (1: TMapDException e)
@@ -403,4 +424,12 @@ service MapD {
   # deprecated
   TTableDescriptor get_table_descriptor(1: TSessionId session, 2: string table_name) throws (1: TMapDException e)
   TRowDescriptor get_row_descriptor(1: TSessionId session, 2: string table_name) throws (1: TMapDException e)
+  # object privileges
+  list<string> get_role(1: TSessionId session 2: string roleName) throws (1: TMapDException e)
+  list<string> get_all_roles(1: TSessionId session) throws (1: TMapDException e)
+  list<TAccessPrivileges> get_db_object_privileges_for_role(1: TSessionId session 2: string roleName 3: i16 objectType 4: string objectName) throws (1: TMapDException e)
+  list<TDBObject> get_db_objects_for_role(1: TSessionId session 2: string roleName) throws (1: TMapDException e)
+  list<string> get_all_roles_for_user(1: TSessionId session 2: string userName) throws (1: TMapDException e)
+  list<TAccessPrivileges> get_db_object_privileges_for_user(1: TSessionId session 2: string userName 3: i16 objectType 4: string objectName) throws (1: TMapDException e)
+  list<TDBObject> get_db_objects_for_user(1: TSessionId session 2: string userName) throws (1: TMapDException e)
 }

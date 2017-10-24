@@ -814,6 +814,11 @@ std::vector<std::string> SysCatalog::getAllRoles() {
   std::vector<std::string> roles(0);
   std::lock_guard<std::mutex> lock(cat_mutex_);
   for (RoleMap::iterator roleIt = roleMap_.begin(); roleIt != roleMap_.end(); ++roleIt) {
+    if (static_cast<GroupRole*>(roleIt->second)->isUserPrivateRole() ||
+        !static_cast<GroupRole*>(roleIt->second)->roleName().compare("MAPD_DEFAULT_SUSER_ROLE") ||
+        !static_cast<GroupRole*>(roleIt->second)->roleName().compare("MAPD_DEFAULT_USER_ROLE")) {
+      continue;
+    }
     roles.push_back(roleIt->first);
   }
   return roles;
