@@ -157,7 +157,8 @@ enum ThriftService {
   kEXPORT_DASHBOARD,
   kGET_HARDWARE_INFO,
   kGET_ROLE,
-  kGET_ALL_ROLES
+  kGET_ALL_ROLES,
+  kGET_OBJECTS_FOR_ROLE
 };
 
 namespace {
@@ -244,6 +245,9 @@ bool thrift_with_retry(ThriftService which_service, ClientContext& context, cons
         break;
       case kGET_ALL_ROLES:
         context.client.get_all_roles(context.role_names, context.session);
+        break;
+      case kGET_OBJECTS_FOR_ROLE:
+        context.client.get_db_objects_for_role(context.db_objects, context.session, context.privs_role_name);
     }
   } catch (TMapDException& e) {
     std::cerr << e.error_msg << std::endl;
@@ -1266,6 +1270,62 @@ void get_all_roles(ClientContext context) {
     std::cout << "Cannot connect to MapD Server." << std::endl;
   }
 }
+
+void get_db_objects_for_role(ClientContext context) {
+  context.role_names.clear();
+  if (thrift_with_retry(kGET_ROLE, context, context.privs_role_name.c_str())) {
+    if (context.role_names.size() == 0) {
+      std::cout << "Role " << context.privs_role_name << " does not exist." << std::endl;
+    } else {
+      context.db_objects.clear();
+      if (thrift_with_retry(kGET_OBJECTS_FOR_ROLE, context, context.privs_role_name.c_str())) {
+        for (size_t i = 0; i < context.db_objects.size(); i++) {
+          std::cout << context.db_objects[i].objectName.c_str();
+          switch (context.db_objects[i].objectType) {
+            case (TDBObjectType::DatabaseDBObjectType): {
+              std::cout << " (database)";
+              break;
+            }
+            case (TDBObjectType::TableDBObjectType): {
+              std::cout << " (table)";
+              break;
+            }
+            default: { CHECK(false); }
+          }
+          std::cout << " privileges:";
+          for (size_t j = 0; j < context.db_objects[i].privs.size(); j++) {
+            if (context.db_objects[i].privs[j]) {
+              switch (j) {
+                case (0): {
+                  std::cout << " select";
+                  break;
+                }
+                case (1): {
+                  std::cout << " insert";
+                  break;
+                }
+                case (2): {
+                  std::cout << " create";
+                  break;
+                }
+                case (3): {
+                  std::cout << " truncate";
+                  break;
+                }
+                default: { CHECK(false); }
+              }
+            }
+          }
+          std::cout << std::endl;
+        }
+      } else {
+        std::cout << "Cannot connect to MapD Server." << std::endl;
+      }
+    }
+  } else {
+    std::cout << "Cannot connect to MapD Server." << std::endl;
+  }
+}
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -1599,11 +1659,14 @@ int main(int argc, char** argv) {
       print_timing = true;
     } else if (!strncmp(line, "\\notiming", 9)) {
       print_timing = false;
-    } else if (!strncmp(line, "\\role", 5)) {
-      context.privs_role_name = strtok(line + 6, " ");
+    } else if (!strncmp(line, "\\role_name", 10)) {
+      context.privs_role_name = strtok(line + 11, " ");
       get_role(context);
-    } else if (!strncmp(line, "\\all_roles", 10)) {
+    } else if (!strncmp(line, "\\roles", 6)) {
       get_all_roles(context);
+    } else if (!strncmp(line, "\\role_privs", 11)) {
+      context.privs_role_name = strtok(line + 12, " ");
+      get_db_objects_for_role(context);
     } else if (line[0] == '\\' && line[1] == 'q')
       break;
     else if (line[0] == '\\') {

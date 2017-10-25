@@ -704,24 +704,23 @@ void MapDHandler::validate_rel_alg(TTableDescriptor& _return,
   }
 }
 
-void MapDHandler::get_role(std::vector<std::string>& _return, const TSessionId& session, const std::string& roleName) {
-  std::vector<std::string> all_roles;
-  get_all_roles(all_roles, session);
-  for (size_t i = 0; i < all_roles.size(); i++) {
-    if (!(all_roles[i].compare(to_upper(roleName)))) {
-      _return.push_back(roleName);
-      break;
-    }
-  }
-  return;
-}
-
-void MapDHandler::get_all_roles(std::vector<std::string>& _return, const TSessionId& session) {
+void MapDHandler::get_role(std::vector<std::string>& roles, const TSessionId& session, const std::string& roleName) {
   auto session_it = get_session_it(session);
   auto session_info_ptr = session_it->second.get();
   auto& cat = session_info_ptr->get_catalog();
   auto& sys_cat = static_cast<Catalog_Namespace::SysCatalog&>(cat);
-  _return = sys_cat.getAllRoles();
+  if (sys_cat.getRole(roleName)) {
+    roles.push_back(roleName);
+  }
+  return;
+}
+
+void MapDHandler::get_all_roles(std::vector<std::string>& roles, const TSessionId& session) {
+  auto session_it = get_session_it(session);
+  auto session_info_ptr = session_it->second.get();
+  auto& cat = session_info_ptr->get_catalog();
+  auto& sys_cat = static_cast<Catalog_Namespace::SysCatalog&>(cat);
+  roles = sys_cat.getAllRoles();
 }
 
 void MapDHandler::get_db_object_privileges_for_role(std::vector<TAccessPrivileges>& TDBObjectPrivsForRole,
@@ -736,8 +735,33 @@ void MapDHandler::get_db_object_privileges_for_role(std::vector<TAccessPrivilege
 void MapDHandler::get_db_objects_for_role(std::vector<TDBObject>& TDBObjectsForRole,
                                           const TSessionId& session,
                                           const std::string& roleName) {
-  TDBObject tdbObject;
-  TDBObjectsForRole.push_back(tdbObject);
+  auto session_it = get_session_it(session);
+  auto session_info_ptr = session_it->second.get();
+  auto& cat = session_info_ptr->get_catalog();
+  auto& sys_cat = static_cast<Catalog_Namespace::SysCatalog&>(cat);
+
+  Role* rl = sys_cat.getMetadataForRole(roleName);
+  if (rl) {
+    for (auto dbObjectIt = rl->getDbObject()->begin(); dbObjectIt != rl->getDbObject()->end(); ++dbObjectIt) {
+      TDBObject tdbObject;
+      tdbObject.objectName = dbObjectIt->second->getName();
+      switch (dbObjectIt->second->getType()) {
+        case (DatabaseDBObjectType): {
+          tdbObject.objectType = TDBObjectType::DatabaseDBObjectType;
+          break;
+        }
+        case (TableDBObjectType): {
+          tdbObject.objectType = TDBObjectType::TableDBObjectType;
+          break;
+        }
+        default: { CHECK(false); }
+      }
+      tdbObject.privs = dbObjectIt->second->getPrivileges();
+      TDBObjectsForRole.push_back(tdbObject);
+    }
+  } else {
+    std::cout << "Role " << roleName << " does not exist." << std::endl;
+  }
 }
 
 void MapDHandler::get_all_roles_for_user(std::vector<std::string>& _rolesForUser,
