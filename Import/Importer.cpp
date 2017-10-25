@@ -1198,6 +1198,9 @@ bool importGeoFromWkt(SQLTypes type,
                       std::string& wkt,
                       std::vector<double>& coords,
                       std::vector<int>& ring_sizes) {
+  auto poSR = new OGRSpatialReference();
+  poSR->importFromEPSG(3857);
+
   OGRErr status = OGRERR_NONE;
   switch (type) {
     case kPOINT: {
@@ -1206,6 +1209,7 @@ bool importGeoFromWkt(SQLTypes type,
       status = point.importFromWkt(&data);
       if (status != OGRERR_NONE)
         break;
+      point.transformTo(poSR);
       coords.push_back(point.getX());
       coords.push_back(point.getY());
       return true;
@@ -1216,6 +1220,7 @@ bool importGeoFromWkt(SQLTypes type,
       status = linestring.importFromWkt(&data);
       if (status != OGRERR_NONE)
         break;
+      linestring.transformTo(poSR);
       for (int i = 0; i < linestring.getNumPoints(); i++) {
         OGRPoint point;
         linestring.getPoint(i, &point);
@@ -1230,6 +1235,7 @@ bool importGeoFromWkt(SQLTypes type,
       status = polygon.importFromWkt(&data);
       if (status != OGRERR_NONE)
         break;
+      polygon.transformTo(poSR);
       OGRLinearRing* exteriorRing = polygon.getExteriorRing();
       if (!exteriorRing->isClockwise()) {
         exteriorRing->reverseWindingOrder();
