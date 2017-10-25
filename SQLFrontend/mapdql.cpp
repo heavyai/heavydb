@@ -75,6 +75,37 @@ void completion(const char* buf, linenoiseCompletions* lc) {
 
 #define INVALID_SESSION_ID ""
 
+bool wildcard_match(std::string str, std::string pattern){
+  int n = str.size(), m = pattern.size();
+  if (m == 0)
+    return true;
+ 
+  bool lookup[n + 1][m + 1];
+  memset(lookup, false, sizeof(lookup));
+  lookup[0][0] = true;
+ 
+
+  for (int j = 1; j <= m; j++)
+    if (pattern[j - 1] == '*')
+      lookup[0][j] = lookup[0][j - 1];
+ 
+  for (int i = 1; i <= n; i++){
+    for (int j = 1; j <= m; j++){
+      if (pattern[j - 1] == '*')
+        lookup[i][j] = lookup[i][j - 1] || lookup[i - 1][j];
+      else if (pattern[j - 1] == '?' || str[i - 1] == pattern[j - 1])
+        lookup[i][j] = lookup[i - 1][j - 1];
+ 
+      else lookup[i][j] = false;
+    }
+  }
+ 
+  return lookup[n][m];
+}
+
+
+
+
 // code from https://stackoverflow.com/questions/7053538/how-do-i-encode-a-string-to-base64-using-only-boost
 
 std::string decode64(const std::string& val) {
@@ -595,9 +626,9 @@ std::vector<std::string> unserialize_key_metainfo(const std::string key_metainfo
 void process_backslash_commands(char* command, ClientContext& context) {
   switch (command[1]) {
     case 'h':
-      std::cout << "\\u List all users.\n";
-      std::cout << "\\l List all databases.\n";
-      std::cout << "\\t List all tables.\n";
+      std::cout << "\\u [<wildcard>] List all users matching wildcard.\n";
+      std::cout << "\\l [<wildcard>] List all databases matching wildcard.\n";
+      std::cout << "\\t [<wildcard>] List all tables matching wildcard.\n";
       std::cout << "\\d <table> List all columns of table.\n";
       std::cout << "\\c <database> <user> <password>.\n";
       std::cout << "\\o <table> Return a memory optimized schema based on current data distribution in table";
@@ -752,23 +783,31 @@ void process_backslash_commands(char* command, ClientContext& context) {
       return;
     }
     case 't': {
-      if (thrift_with_retry(kGET_TABLES, context, nullptr))
+      if (thrift_with_retry(kGET_TABLES, context, nullptr)) {
+        std::string pattern;
+        if (command[2] == ' ') {
+          pattern = std::string(command + 3);
+        }
         for (auto p : context.names_return)
-          if (thrift_with_retry(kGET_TABLE_DETAILS, context, p.c_str()))
+          if ((pattern.empty() || wildcard_match(p, pattern)) && thrift_with_retry(kGET_TABLE_DETAILS, context, p.c_str()))
             if (context.table_details.view_sql.empty()) {
               std::cout << p << std::endl;
             }
-
+      }
       return;
     }
     case 'v': {
-      if (thrift_with_retry(kGET_TABLES, context, nullptr))
+      if (thrift_with_retry(kGET_TABLES, context, nullptr)) {
+        std::string pattern;
+        if (command[2] == ' ') {
+          pattern = std::string(command + 3);
+        }
         for (auto p : context.names_return)
-          if (thrift_with_retry(kGET_TABLE_DETAILS, context, p.c_str()))
+          if ((pattern.empty() || wildcard_match(p, pattern)) && thrift_with_retry(kGET_TABLE_DETAILS, context, p.c_str()))
             if (!context.table_details.view_sql.empty()) {
               std::cout << p << std::endl;
             }
-
+      }
       return;
     }
     case 'c': {
@@ -795,16 +834,27 @@ void process_backslash_commands(char* command, ClientContext& context) {
       }
     } break;
     case 'u': {
-      if (thrift_with_retry(kGET_USERS, context, nullptr))
+      if (thrift_with_retry(kGET_USERS, context, nullptr)) {
+        std::string pattern;
+        if (command[2] == ' ') {
+          pattern = std::string(command + 3);
+        }
         for (auto p : context.names_return)
-          std::cout << p << std::endl;
+          if(pattern.empty() || wildcard_match(p,pattern))
+            std::cout << p << std::endl;
+      }
       return;
     }
     case 'l': {
       if (thrift_with_retry(kGET_DATABASES, context, nullptr)) {
+        std::string pattern;
+        if (command[2] == ' ') {
+          pattern = std::string(command + 3);
+        }
         std::cout << "Database | Owner" << std::endl;
         for (auto p : context.dbinfos_return)
-          std::cout << p.db_name << " | " << p.db_owner << std::endl;
+          if(pattern.empty() || wildcard_match(p.db_name, pattern))
+            std::cout << p.db_name << " | " << p.db_owner << std::endl;
       }
       return;
     }
