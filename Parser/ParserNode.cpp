@@ -25,6 +25,7 @@
 #include <cassert>
 #include <stdexcept>
 #include <typeinfo>
+#include <limits>
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/filesystem.hpp>
@@ -2678,6 +2679,8 @@ void RevokeRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   syscat.revokeRole(get_role(), get_user());
 }
 
+typedef std::numeric_limits<double> dbl;
+
 void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   if (g_cluster) {
     throw std::runtime_error("Distributed export not supported yet");
@@ -2864,15 +2867,17 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
         }
         if (is_null)
           outfile << copy_params.null_str;
+        else if (ti.get_type() == kNUMERIC)
+          outfile << std::setprecision(ti.get_precision()) << real_val;
         else
-          outfile << real_val;
+          outfile << std::setprecision(std::numeric_limits<double>::digits10 + 1) << real_val;
       } else if (boost::get<float>(scalar_tv)) {
         CHECK_EQ(kFLOAT, ti.get_type());
         auto real_val = *(boost::get<float>(scalar_tv));
         if (real_val == NULL_FLOAT)
           outfile << copy_params.null_str;
         else
-          outfile << real_val;
+          outfile << std::setprecision(std::numeric_limits<float>::digits10 + 1) << real_val;
       } else {
         auto s = boost::get<NullableString>(scalar_tv);
         is_null = !s || boost::get<void*>(s);

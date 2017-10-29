@@ -29,6 +29,7 @@
 #include <iostream>
 #include <iomanip>
 #include <fstream>
+#include <limits>
 #include <cmath>
 #include <glog/logging.h>
 #include <termios.h>
@@ -821,10 +822,21 @@ std::string scalar_datum_to_string(const TDatum& datum, const TTypeInfo& type_in
     case TDatumType::INT:
     case TDatumType::BIGINT:
       return std::to_string(datum.val.int_val);
-    case TDatumType::DECIMAL:
-    case TDatumType::FLOAT:
-    case TDatumType::DOUBLE:
-      return std::to_string(datum.val.real_val);
+    case TDatumType::DECIMAL: {
+      std::ostringstream dout;
+      dout << std::setprecision(type_info.precision) << datum.val.real_val;
+      return dout.str();
+    }
+    case TDatumType::DOUBLE: {
+      std::ostringstream dout;
+      dout << std::setprecision(std::numeric_limits<double>::digits10 + 1) << datum.val.real_val;
+      return dout.str();
+    }
+    case TDatumType::FLOAT: {
+      std::ostringstream out;
+      out << std::setprecision(std::numeric_limits<float>::digits10 + 1) << datum.val.real_val;
+      return out.str();
+    }
     case TDatumType::STR:
       return datum.val.str_val;
     case TDatumType::TIME: {
