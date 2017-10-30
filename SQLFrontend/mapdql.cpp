@@ -612,6 +612,8 @@ void process_backslash_commands(char* command, ClientContext& context) {
       std::cout << "\\version Print MapD Server version.\n";
       std::cout << "\\copy <file path> <table> Copy data from file to table.\n";
       std::cout << "\\status get status of the server and the leaf nodes.\n";
+      std::cout << "\\export_dashboard <dashboard name>,<filename> Exports a dashboard to a file\n";
+      std::cout << "\\import_dashboard <dashboard name>,<filename> Imports a dashboard from a file\n";
       std::cout << "\\q Quit.\n";
       return;
     case 'd': {
