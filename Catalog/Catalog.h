@@ -172,10 +172,6 @@ struct DBMetadata {
 #define MAPD_TEMP_TABLE_START_ID 1073741824  // 2^30, give room for over a billion non-temp tables
 #define MAPD_TEMP_DICT_START_ID 1073741824   // 2^30, give room for over a billion non-temp dictionaries
 
-/* the mapd default roles */
-#define MAPD_DEFAULT_ROOT_USER_ROLE "mapd_default_suser_role"
-#define MAPD_DEFAULT_USER_ROLE "mapd_default_user_role"
-
 /**
  * @type Catalog
  * @brief class for a per-database catalog.  also includes metadata for the
@@ -445,7 +441,7 @@ class SysCatalog : public Catalog {
       const std::string& roleName,  // result is empty if no privs granted to object
       const DBObjectType& objectType,
       const std::string& objectName);
-  std::vector<std::string> getAllRolesForUser(const std::string& userName);  // result is empty if no roles exist
+  std::vector<std::string> getAllRolesForUser(const int32_t userId);  // result is empty if no roles exist
   std::vector<DBObject*> getDBObjectPrivilegesForUser(
       const std::string& userName) const;  // result is empty if no privs granted to user
   std::vector<bool> getDBObjectPrivilegesForUser(

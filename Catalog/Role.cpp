@@ -234,6 +234,21 @@ bool UserRole::isUserPrivateRole() const {
   throw runtime_error("isUserPrivateRole() api should not be used with objects of the UserRole class.");
 }
 
+std::vector<std::string> UserRole::getRoles() const {
+  std::vector<std::string> roles;
+  for (auto roleIt = groupRole_.begin(); roleIt != groupRole_.end(); ++roleIt) {
+    if (static_cast<GroupRole*>(*roleIt)->isUserPrivateRole() ||
+        !static_cast<GroupRole*>(*roleIt)->roleName().compare(
+            boost::to_upper_copy<std::string>(MAPD_DEFAULT_ROOT_USER_ROLE)) ||
+        !static_cast<GroupRole*>(*roleIt)->roleName().compare(
+            boost::to_upper_copy<std::string>(MAPD_DEFAULT_USER_ROLE))) {
+      continue;
+    }
+    roles.push_back((*roleIt)->roleName());
+  }
+  return roles;
+}
+
 //      ***** Class GroupRole *****
 
 GroupRole::GroupRole(const std::string& name, const bool& userPrivateRole)
@@ -337,4 +352,8 @@ void GroupRole::updatePrivileges() {
 
 bool GroupRole::isUserPrivateRole() const {
   return userPrivateRole_;
+}
+
+std::vector<std::string> GroupRole::getRoles() const {
+  throw runtime_error("getRoles() api should not be used with objects of the GroupRole class.");
 }

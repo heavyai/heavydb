@@ -75,6 +75,7 @@ void completion(const char* buf, linenoiseCompletions* lc) {
 }
 
 #define INVALID_SESSION_ID ""
+#define MAPD_USER_EXISTS_YES "USER_EXISTS_YES"
 
 // code from https://stackoverflow.com/questions/7053538/how-do-i-encode-a-string-to-base64-using-only-boost
 
@@ -158,7 +159,8 @@ enum ThriftService {
   kGET_HARDWARE_INFO,
   kGET_ROLE,
   kGET_ALL_ROLES,
-  kGET_OBJECTS_FOR_ROLE
+  kGET_OBJECTS_FOR_ROLE,
+  kGET_ROLES_FOR_USER
 };
 
 namespace {
@@ -248,6 +250,9 @@ bool thrift_with_retry(ThriftService which_service, ClientContext& context, cons
         break;
       case kGET_OBJECTS_FOR_ROLE:
         context.client.get_db_objects_for_role(context.db_objects, context.session, context.privs_role_name);
+        break;
+      case kGET_ROLES_FOR_USER:
+        context.client.get_all_roles_for_user(context.role_names, context.session, context.privs_user_name);
     }
   } catch (TMapDException& e) {
     std::cerr << e.error_msg << std::endl;
@@ -1326,6 +1331,26 @@ void get_db_objects_for_role(ClientContext context) {
     std::cout << "Cannot connect to MapD Server." << std::endl;
   }
 }
+
+void get_all_roles_for_user(ClientContext context) {
+  context.role_names.clear();
+  if (thrift_with_retry(kGET_ROLES_FOR_USER, context, context.privs_user_name.c_str())) {
+    if ((context.role_names.size() > 0) &&
+        (!context.role_names[context.role_names.size() - 1].compare(MAPD_USER_EXISTS_YES))) {
+      if (context.role_names.size() == 1) {
+        std::cout << "No roles are granted to user " << context.privs_user_name.c_str() << std::endl;
+      } else {
+        for (size_t i = 0; i < context.role_names.size() - 1; i++) {
+          std::cout << context.role_names[i].c_str() << std::endl;
+        }
+      }
+    } else {
+      std::cout << "User " << context.privs_user_name.c_str() << " does not exist." << std::endl;
+    }
+  } else {
+    std::cout << "Cannot connect to MapD Server." << std::endl;
+  }
+}
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -1667,6 +1692,9 @@ int main(int argc, char** argv) {
     } else if (!strncmp(line, "\\role_privs", 11)) {
       context.privs_role_name = strtok(line + 12, " ");
       get_db_objects_for_role(context);
+    } else if (!strncmp(line, "\\role_user", 10)) {
+      context.privs_user_name = strtok(line + 11, " ");
+      get_all_roles_for_user(context);
     } else if (line[0] == '\\' && line[1] == 'q')
       break;
     else if (line[0] == '\\') {

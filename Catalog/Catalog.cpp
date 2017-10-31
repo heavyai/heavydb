@@ -815,8 +815,8 @@ std::vector<std::string> SysCatalog::getAllRoles() {
   std::lock_guard<std::mutex> lock(cat_mutex_);
   for (RoleMap::iterator roleIt = roleMap_.begin(); roleIt != roleMap_.end(); ++roleIt) {
     if (static_cast<GroupRole*>(roleIt->second)->isUserPrivateRole() ||
-        !static_cast<GroupRole*>(roleIt->second)->roleName().compare("MAPD_DEFAULT_SUSER_ROLE") ||
-        !static_cast<GroupRole*>(roleIt->second)->roleName().compare("MAPD_DEFAULT_USER_ROLE")) {
+        !static_cast<GroupRole*>(roleIt->second)->roleName().compare(to_upper(MAPD_DEFAULT_ROOT_USER_ROLE)) ||
+        !static_cast<GroupRole*>(roleIt->second)->roleName().compare(to_upper(MAPD_DEFAULT_USER_ROLE))) {
       continue;
     }
     roles.push_back(roleIt->first);
@@ -844,11 +844,11 @@ std::vector<bool> SysCatalog::getDBObjectPrivilegesForRole(const std::string& ro
   return dbObjectPrivs;
 }
 
-std::vector<std::string> SysCatalog::getAllRolesForUser(const std::string& userName) {
+std::vector<std::string> SysCatalog::getAllRolesForUser(const int32_t userId) {
   std::vector<std::string> roles(0);
-  std::lock_guard<std::mutex> lock(cat_mutex_);
-  for (UserRoleMap::iterator userRoleIt = userRoleMap_.begin(); userRoleIt != userRoleMap_.end(); ++userRoleIt) {
-    roles.push_back(userRoleIt->second->roleName());
+  Role* rl = getMetadataForUserRole(userId);
+  if (rl) {
+    roles = rl->getRoles();
   }
   return roles;
 }

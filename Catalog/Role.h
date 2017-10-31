@@ -33,8 +33,13 @@
 
 #include <map>
 #include <unordered_set>
+#include <boost/algorithm/string.hpp>
 #include <string>
 #include <glog/logging.h>
+
+/* the mapd default roles */
+#define MAPD_DEFAULT_ROOT_USER_ROLE "mapd_default_suser_role"
+#define MAPD_DEFAULT_USER_ROLE "mapd_default_user_role"
 
 // Abstract base class, includes access privileges to DB objects
 class Role {
@@ -65,6 +70,7 @@ class Role {
   virtual void updatePrivileges() = 0;
   virtual std::string roleName(bool userName = false) const = 0;
   virtual bool isUserPrivateRole() const = 0;
+  virtual std::vector<std::string> getRoles() const = 0;
   const DBObjectMap* getDbObject() const;
   DBObject* findDbObject(const DBObjectKey objectKey) const;
 
@@ -99,6 +105,7 @@ class UserRole : public Role {
   virtual void updatePrivileges();
   virtual std::string roleName(bool userName = false) const;
   virtual bool isUserPrivateRole() const;
+  virtual std::vector<std::string> getRoles() const;
 
  private:
   int32_t userId_;
@@ -129,6 +136,7 @@ class GroupRole : public Role {
   virtual void updatePrivileges();
   virtual std::string roleName(bool userName = false) const;
   virtual bool isUserPrivateRole() const;
+  virtual std::vector<std::string> getRoles() const;
 
  private:
   bool userPrivateRole_;
