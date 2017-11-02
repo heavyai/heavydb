@@ -810,11 +810,13 @@ bool SysCatalog::getRole(const std::string& roleName) const {
   return rc;
 }
 
-std::vector<std::string> SysCatalog::getAllRoles() {
+// NKR_1102 std::vector<std::string> SysCatalog::getAllRoles() {
+std::vector<std::string> SysCatalog::getAllRoles(bool userPrivateRole) { // NKR_1102
   std::vector<std::string> roles(0);
   std::lock_guard<std::mutex> lock(cat_mutex_);
   for (RoleMap::iterator roleIt = roleMap_.begin(); roleIt != roleMap_.end(); ++roleIt) {
-    if (static_cast<GroupRole*>(roleIt->second)->isUserPrivateRole() ||
+    // NKR_1102 if (static_cast<GroupRole*>(roleIt->second)->isUserPrivateRole() ||
+    if ((!userPrivateRole && static_cast<GroupRole*>(roleIt->second)->isUserPrivateRole()) || // NKR_1102
         !static_cast<GroupRole*>(roleIt->second)->roleName().compare(to_upper(MAPD_DEFAULT_ROOT_USER_ROLE)) ||
         !static_cast<GroupRole*>(roleIt->second)->roleName().compare(to_upper(MAPD_DEFAULT_USER_ROLE))) {
       continue;

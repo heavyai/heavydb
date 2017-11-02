@@ -426,9 +426,10 @@ service MapD {
   TRowDescriptor get_row_descriptor(1: TSessionId session, 2: string table_name) throws (1: TMapDException e)
   # object privileges
   list<string> get_role(1: TSessionId session 2: string roleName) throws (1: TMapDException e)
-  list<string> get_all_roles(1: TSessionId session) throws (1: TMapDException e)
+  list<string> get_all_roles(1: TSessionId session 2: bool userPrivateRole) throws (1: TMapDException e)
   list<TAccessPrivileges> get_db_object_privileges_for_role(1: TSessionId session 2: string roleName 3: i16 objectType 4: string objectName) throws (1: TMapDException e)
   list<TDBObject> get_db_objects_for_role(1: TSessionId session 2: string roleName) throws (1: TMapDException e)
+  list<TDBObject> get_db_object_privs(1: TSessionId session 2: string objectName) throws (1: TMapDException e)
   list<string> get_all_roles_for_user(1: TSessionId session 2: string userName) throws (1: TMapDException e)
   list<TAccessPrivileges> get_db_object_privileges_for_user(1: TSessionId session 2: string userName 3: i16 objectType 4: string objectName) throws (1: TMapDException e)
   list<TDBObject> get_db_objects_for_user(1: TSessionId session 2: string userName) throws (1: TMapDException e)

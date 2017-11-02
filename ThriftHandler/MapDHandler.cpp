@@ -715,12 +715,12 @@ void MapDHandler::get_role(std::vector<std::string>& roles, const TSessionId& se
   return;
 }
 
-void MapDHandler::get_all_roles(std::vector<std::string>& roles, const TSessionId& session) {
+void MapDHandler::get_all_roles(std::vector<std::string>& roles, const TSessionId& session, bool userPrivateRole) {
   auto session_it = get_session_it(session);
   auto session_info_ptr = session_it->second.get();
   auto& cat = session_info_ptr->get_catalog();
   auto& sys_cat = static_cast<Catalog_Namespace::SysCatalog&>(cat);
-  roles = sys_cat.getAllRoles();
+  roles = sys_cat.getAllRoles(userPrivateRole);
 }
 
 void MapDHandler::get_db_object_privileges_for_role(std::vector<TAccessPrivileges>& TDBObjectPrivsForRole,
@@ -761,6 +761,12 @@ void MapDHandler::get_db_objects_for_role(std::vector<TDBObject>& TDBObjectsForR
   } else {
     std::cout << "Role " << roleName << " does not exist." << std::endl;
   }
+}
+
+void MapDHandler::get_db_object_privs(std::vector<TDBObject>& TDBObjects,
+                                      const TSessionId& session,
+                                      const std::string& objectName) {
+  throw std::runtime_error("MapDHandler::get_db_object_privs(..) api should not be used.");
 }
 
 void MapDHandler::get_all_roles_for_user(std::vector<std::string>& roles,

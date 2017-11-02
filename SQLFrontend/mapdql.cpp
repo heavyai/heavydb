@@ -126,6 +126,8 @@ struct ClientContext {
   TFrontendView view_return;
   std::string privs_role_name;
   std::string privs_user_name;
+  std::string privs_object_name;
+  bool userPrivateRole;
   std::vector<std::string> role_names;
   std::vector<TAccessPrivileges> object_privileges;
   std::vector<TDBObject> db_objects;
@@ -160,6 +162,7 @@ enum ThriftService {
   kGET_ROLE,
   kGET_ALL_ROLES,
   kGET_OBJECTS_FOR_ROLE,
+  kGET_OBJECT_PRIVS,
   kGET_ROLES_FOR_USER
 };
 
@@ -246,10 +249,13 @@ bool thrift_with_retry(ThriftService which_service, ClientContext& context, cons
         context.client.get_role(context.role_names, context.session, context.privs_role_name);
         break;
       case kGET_ALL_ROLES:
-        context.client.get_all_roles(context.role_names, context.session);
+        context.client.get_all_roles(context.role_names, context.session, context.userPrivateRole);
         break;
       case kGET_OBJECTS_FOR_ROLE:
         context.client.get_db_objects_for_role(context.db_objects, context.session, context.privs_role_name);
+        break;
+      case kGET_OBJECT_PRIVS:
+        context.client.get_db_object_privs(context.db_objects, context.session, context.privs_object_name);
         break;
       case kGET_ROLES_FOR_USER:
         context.client.get_all_roles_for_user(context.role_names, context.session, context.privs_user_name);
@@ -1267,6 +1273,7 @@ void get_role(ClientContext context) {
 
 void get_all_roles(ClientContext context) {
   context.role_names.clear();
+  context.userPrivateRole = false;
   if (thrift_with_retry(kGET_ALL_ROLES, context, nullptr)) {
     for (size_t i = 0; i < context.role_names.size(); i++) {
       std::cout << context.role_names[i].c_str() << std::endl;
@@ -1293,6 +1300,71 @@ void get_db_objects_for_role(ClientContext context) {
             }
             case (TDBObjectType::TableDBObjectType): {
               std::cout << " (table)";
+              break;
+            }
+            default: { CHECK(false); }
+          }
+          std::cout << " privileges:";
+          for (size_t j = 0; j < context.db_objects[i].privs.size(); j++) {
+            if (context.db_objects[i].privs[j]) {
+              switch (j) {
+                case (0): {
+                  std::cout << " select";
+                  break;
+                }
+                case (1): {
+                  std::cout << " insert";
+                  break;
+                }
+                case (2): {
+                  std::cout << " create";
+                  break;
+                }
+                case (3): {
+                  std::cout << " truncate";
+                  break;
+                }
+                default: { CHECK(false); }
+              }
+            }
+          }
+          std::cout << std::endl;
+        }
+      } else {
+        std::cout << "Cannot connect to MapD Server." << std::endl;
+      }
+    }
+  } else {
+    std::cout << "Cannot connect to MapD Server." << std::endl;
+  }
+}
+
+void get_db_object_privs(ClientContext context) {
+  context.role_names.clear();
+  context.userPrivateRole = true;
+  if (thrift_with_retry(kGET_ALL_ROLES, context, nullptr)) {
+    for (size_t i = 0; i < context.role_names.size(); i++) {
+      context.db_objects.clear();
+      context.privs_role_name = context.role_names[i];
+      if (thrift_with_retry(kGET_OBJECTS_FOR_ROLE, context, context.privs_role_name.c_str())) {
+        bool print_role(true);
+        for (size_t i = 0; i < context.db_objects.size(); i++) {
+          if (boost::to_upper_copy<std::string>(context.privs_object_name)
+                  .compare(boost::to_upper_copy<std::string>(context.db_objects[i].objectName))) {
+            continue;
+          }
+          if (print_role) {
+            std::cout << "Role/User: " << context.privs_role_name.c_str() << std::endl;
+            print_role = false;
+          }
+          std::cout << "           DB Object: " << context.db_objects[i].objectName.c_str();
+          switch (context.db_objects[i].objectType) {
+            case (TDBObjectType::DatabaseDBObjectType): {
+              std::cout << " (database)";
+              break;
+            }
+            case (TDBObjectType::TableDBObjectType): {
+              std::cout << " (table)   ";
               break;
             }
             default: { CHECK(false); }
@@ -1692,6 +1764,9 @@ int main(int argc, char** argv) {
     } else if (!strncmp(line, "\\role_privs", 11)) {
       context.privs_role_name = strtok(line + 12, " ");
       get_db_objects_for_role(context);
+    } else if (!strncmp(line, "\\role_object_privs", 18)) {
+      context.privs_object_name = strtok(line + 19, " ");
+      get_db_object_privs(context);
     } else if (!strncmp(line, "\\role_user", 10)) {
       context.privs_user_name = strtok(line + 11, " ");
       get_all_roles_for_user(context);

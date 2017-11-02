@@ -255,13 +255,14 @@ class MapDHandler : public MapDIf {
   void get_row_descriptor(TRowDescriptor& _return, const TSessionId& session, const std::string& table_name);
   // DB Object Privileges
   void get_role(std::vector<std::string>& _return, const TSessionId& session, const std::string& roleName);
-  void get_all_roles(std::vector<std::string>& _return, const TSessionId& session);
+  void get_all_roles(std::vector<std::string>& _return, const TSessionId& session, bool userPrivateRole);
   void get_db_object_privileges_for_role(std::vector<TAccessPrivileges>& _return,
                                          const TSessionId& session,
                                          const std::string& roleName,
                                          const int16_t objectType,
                                          const std::string& objectName);
   void get_db_objects_for_role(std::vector<TDBObject>& _return, const TSessionId& session, const std::string& roleName);
+  void get_db_object_privs(std::vector<TDBObject>& _return, const TSessionId& session, const std::string& objectName);
   void get_all_roles_for_user(std::vector<std::string>& _return,
                               const TSessionId& session,
                               const std::string& userName);
