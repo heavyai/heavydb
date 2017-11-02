@@ -400,7 +400,7 @@ class MapDHandler : public MapDIf {
                       const std::string& render_type,
                       const bool is_projection_query);
 
-  TColumnType create_array_column(const TDatumType::type type, const std::string& name);
+  TColumnType create_geo_column(const TDatumType::type type, const std::string& name, const bool is_array);
 
   void convert_explain(TQueryResult& _return, const ResultSet& results, const bool column_format) const;
   void convert_result(TQueryResult& _return, const ResultSet& results, const bool column_format) const;

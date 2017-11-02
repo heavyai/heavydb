@@ -1814,14 +1814,17 @@ void MapDHandler::detect_column_types(TDetectResult& _return,
         _return.row_set.rows.push_back(sample_row);
       }
     } else if (copy_params.table_type == Importer_NS::TableType::POLYGON) {
+      // @TODO simon.eves get this from somewhere!
+      const std::string geoColumnName(MAPD_GEO_PREFIX);
+
       check_geospatial_files(file_path);
-      std::list<ColumnDescriptor> cds = Importer_NS::Importer::gdalToColumnDescriptors(file_path.string());
+      std::list<ColumnDescriptor> cds = Importer_NS::Importer::gdalToColumnDescriptors(file_path.string(), geoColumnName);
       for (auto cd : cds) {
         cd.columnName = sanitize_name(cd.columnName);
         _return.row_set.row_desc.push_back(populateThriftColumnType(nullptr, &cd));
       }
       std::map<std::string, std::vector<std::string>> sample_data;
-      Importer_NS::Importer::readMetadataSampleGDAL(file_path.string(), sample_data, 100);
+      Importer_NS::Importer::readMetadataSampleGDAL(file_path.string(), geoColumnName, sample_data, 100);
       if (sample_data.size() > 0) {
         for (size_t i = 0; i < sample_data.begin()->second.size(); i++) {
           TRow sample_row;
@@ -1965,11 +1968,11 @@ std::string MapDHandler::sanitize_name(const std::string& name) {
   return col_name;
 }
 
-TColumnType MapDHandler::create_array_column(const TDatumType::type type, const std::string& name) {
+TColumnType MapDHandler::create_geo_column(const TDatumType::type type, const std::string& name, const bool is_array) {
   TColumnType ct;
   ct.col_name = name;
   ct.col_type.type = type;
-  ct.col_type.is_array = true;
+  ct.col_type.is_array = is_array;
   return ct;
 }
 
@@ -1999,12 +2002,9 @@ void MapDHandler::create_table(const TSessionId& session,
 
   auto rds = rd;
 
-  if (table_type == TTableType::POLYGON) {
-    rds.push_back(create_array_column(TDatumType::DOUBLE, MAPD_GEO_PREFIX + "coords"));
-    rds.push_back(create_array_column(TDatumType::INT, MAPD_GEO_PREFIX + "indices"));
-    rds.push_back(create_array_column(TDatumType::INT, MAPD_GEO_PREFIX + "linedrawinfo"));
-    rds.push_back(create_array_column(TDatumType::INT, MAPD_GEO_PREFIX + "polydrawinfo"));
-  }
+  // no longer need to manually add the poly column for a TTableType::POLYGON table
+  // a column of the correct geo type has already been added
+  // @TODO simon.eves rename TTableType::POLYGON to TTableType::GEO or something!
 
   std::string stmt{"CREATE TABLE " + table_name};
   std::vector<std::string> col_stmts;

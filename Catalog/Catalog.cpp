@@ -1658,17 +1658,6 @@ list<const FrontendViewDescriptor*> Catalog::getAllFrontendViewMetadata() const 
   return view_list;
 }
 
-ColumnDescriptor create_array_column(const SQLTypes& type, const std::string& name) {
-  ColumnDescriptor cd;
-  cd.columnName = name;
-  SQLTypeInfo ti;
-  ti.set_type(kARRAY);
-  ti.set_subtype(type);
-  ti.set_fixed_size();
-  cd.columnType = ti;
-  return cd;
-}
-
 void Catalog::createTable(TableDescriptor& td,
                           const list<ColumnDescriptor>& cols,
                           const std::vector<Parser::SharedDictionaryDef>& shared_dict_defs,
@@ -1730,6 +1719,12 @@ void Catalog::createTable(TableDescriptor& td,
           physical_cd_ring_sizes.columnType = ring_sizes_ti;
           columns.push_back(physical_cd_ring_sizes);
 
+          ColumnDescriptor physical_cd_render_group;
+          physical_cd_render_group.columnName = cd.columnName + "_render_group";
+          SQLTypeInfo render_group_ti = SQLTypeInfo(kINT, true);
+          physical_cd_render_group.columnType = render_group_ti;
+          columns.push_back(physical_cd_render_group);
+
           // If adding more physical columns - update SQLTypeInfo::get_physical_cols()
 
           break;
@@ -1757,6 +1752,12 @@ void Catalog::createTable(TableDescriptor& td,
           poly_rings_ti.set_subtype(kINT);
           physical_cd_poly_rings.columnType = poly_rings_ti;
           columns.push_back(physical_cd_poly_rings);
+
+          ColumnDescriptor physical_cd_render_group;
+          physical_cd_render_group.columnName = cd.columnName + "_render_group";
+          SQLTypeInfo render_group_ti = SQLTypeInfo(kINT, true);
+          physical_cd_render_group.columnType = render_group_ti;
+          columns.push_back(physical_cd_render_group);
 
           // If adding more physical columns - update SQLTypeInfo::get_physical_cols()
 

@@ -32,7 +32,6 @@
 #include <boost/filesystem.hpp>
 #include <boost/tokenizer.hpp>
 #include <glog/logging.h>
-#include <poly2tri/poly2tri.h>
 #include "../Shared/fixautotools.h"
 #include <ogrsf_frmts.h>
 #include <gdal.h>
@@ -42,6 +41,8 @@
 #include "../Catalog/Catalog.h"
 #include "../Fragmenter/Fragmenter.h"
 #include "../Shared/checked_alloc.h"
+#include "../Chunk/Chunk.h"
+#include <boost/geometry/index/rtree.hpp>
 
 class TDatum;
 class TColumn;
@@ -651,136 +652,6 @@ class Detector : public DataStreamSink {
   std::string line1;
 };
 
-struct PolyData2d {
-  std::vector<double> coords;
-  std::vector<unsigned int> triangulation_indices;
-  std::vector<Rendering::GL::Resources::IndirectDrawVertexData> lineDrawInfo;
-  std::vector<Rendering::GL::Resources::IndirectDrawIndexData> polyDrawInfo;
-
-  PolyData2d(unsigned int startVert = 0, unsigned int startIdx = 0)
-      : _ended(true), _startVert(startVert), _startIdx(startIdx), _startLineIdx(0) {}
-  ~PolyData2d() {}
-
-  size_t numVerts() const {
-    size_t s = coords.size();
-    CHECK(s % 2 == 0);
-    return s / 2;
-  }
-  size_t numTris() const {
-    size_t s = triangulation_indices.size();
-    CHECK_EQ(s % 3, 0);
-    return s / 3;
-  }
-  size_t numLineLoops() const { return lineDrawInfo.size(); }
-  size_t numIndices() const { return triangulation_indices.size(); }
-
-  unsigned int startVert() const { return _startVert; }
-  unsigned int startIdx() const { return _startIdx; }
-
-  void beginPoly() {
-    CHECK(_ended);
-    _ended = false;
-
-    if (!polyDrawInfo.size()) {
-      polyDrawInfo.emplace_back(0, _startIdx, _startVert);
-    }
-  }
-
-  void addTriangle(unsigned int idx0, unsigned int idx1, unsigned int idx2) {
-    triangulation_indices.push_back(_startLineIdx + idx0);
-    triangulation_indices.push_back(_startLineIdx + idx1);
-    triangulation_indices.push_back(_startLineIdx + idx2);
-
-    polyDrawInfo.back().count += 3;
-  }
-
-  void endPoly() {
-    CHECK(!_ended);
-    _ended = true;
-  }
-
-  void popPoly() {
-    CHECK(_ended);
-    CHECK(polyDrawInfo.size());
-    if (triangulation_indices.empty()) {
-      return;
-    }
-    CHECK_EQ(triangulation_indices.size() % 3, 0);
-    auto itr = triangulation_indices.end() - 1;
-    for (; itr >= triangulation_indices.begin(); itr -= 3) {
-      if (*itr < _startLineIdx) {
-        break;
-      }
-    }
-    itr++;
-    auto count = triangulation_indices.end() - itr;
-    triangulation_indices.erase(itr, triangulation_indices.end());
-    polyDrawInfo.back().count -= count;
-  }
-
-  void beginLine() {
-    CHECK(_ended);
-    _ended = false;
-
-    if (!lineDrawInfo.size()) {
-      // first line creates this
-      lineDrawInfo.emplace_back(0, _startVert + numVerts());
-    } else {
-      // second and subsequent line, first
-      // add an empty coord as a separator
-      coords.push_back(-FLT_MAX);
-      coords.push_back(-FLT_MAX);
-      lineDrawInfo.back().count++;
-    }
-
-    _startLineIdx = numVerts();
-  }
-
-  void addLinePoint(const p2t::Point* vertPtr) {
-    _addPoint(vertPtr->x, vertPtr->y);
-    lineDrawInfo.back().count++;
-  }
-
-  void endLine(const bool add_extra_verts = true) {
-    if (add_extra_verts) {
-      // repeat the first 3 vertices to fully create the "loop"
-      // since it will be drawn using the GL_LINE_STRIP_ADJACENCY
-      // primitive type
-      int numPointsThisLine = numVerts() - _startLineIdx;
-      for (int i = 0; i < 3; ++i) {
-        int idx = (_startLineIdx + (i % numPointsThisLine)) * 2;
-        coords.push_back(coords[idx]);
-        coords.push_back(coords[idx + 1]);
-      }
-      lineDrawInfo.back().count += 3;
-    }
-
-    _ended = true;
-  }
-
-  void popLine() {
-    CHECK(_ended);
-    CHECK(lineDrawInfo.size());
-    auto count = lineDrawInfo.back().count;
-    CHECK_LE(count * 2, coords.size());
-    auto itr = coords.end();
-    itr -= count * 2;
-    coords.erase(itr, coords.end());
-    lineDrawInfo.pop_back();
-  }
-
- private:
-  bool _ended;
-  unsigned int _startVert;
-  unsigned int _startIdx;
-  unsigned int _startLineIdx;
-
-  void _addPoint(double x, double y) {
-    coords.push_back(x);
-    coords.push_back(y);
-  }
-};
-
 class ImporterUtils {
  public:
   static void parseStringArray(const std::string& s,
@@ -815,6 +686,20 @@ class ImporterUtils {
   }
 };
 
+class RenderGroupAnalyzer {
+public:
+  RenderGroupAnalyzer() : _numRenderGroups(0) {}
+  void seedFromExistingTableContents(const std::unique_ptr<Loader>& loader, const std::string& geoColumnBaseName);
+  int insertCoordsAndReturnRenderGroup(const std::vector<double>& coords);
+private:
+  using Point = boost::geometry::model::point<double, 2, boost::geometry::cs::cartesian>;
+  using Bounds = boost::geometry::model::box<Point>;
+  using Node = std::pair<Bounds, int>;
+  boost::geometry::index::rtree<Node, boost::geometry::index::quadratic<16>> _rtree;
+  std::mutex _rtreeMutex;
+  int _numRenderGroups;
+};
+
 class Importer : public DataStreamSink {
  public:
   Importer(Catalog_Namespace::Catalog& c, const TableDescriptor* t, const std::string& f, const CopyParams& p);
@@ -822,7 +707,6 @@ class Importer : public DataStreamSink {
   ~Importer();
   ImportStatus import();
   ImportStatus importDelimited(const std::string& file_path, const bool decompressed);
-  ImportStatus importShapefile();
   ImportStatus importGDAL(std::map<std::string, std::string> colname_to_src);
   const CopyParams& get_copy_params() const { return copy_params; }
   const std::list<const ColumnDescriptor*>& get_column_descs() const { return loader->get_column_descs(); }
@@ -832,21 +716,14 @@ class Importer : public DataStreamSink {
   const bool* get_is_array() const { return is_array_a.get(); }
   static ImportStatus get_import_status(const std::string& id);
   static void set_import_status(const std::string& id, const ImportStatus is);
-  static const std::list<ColumnDescriptor> gdalToColumnDescriptors(const std::string& fileName);
+  static const std::list<ColumnDescriptor> gdalToColumnDescriptors(const std::string& fileName,
+                                                                   const std::string& geoColumnName);
   static void readMetadataSampleGDAL(const std::string& fileName,
+                                     const std::string& geoColumnName,
                                      std::map<std::string, std::vector<std::string>>& metadata,
                                      int rowLimit);
 
  private:
-  void readVerticesFromGDAL(const std::string& fileName,
-                            std::vector<PolyData2d>& polys,
-                            std::pair<std::map<std::string, size_t>, std::vector<std::vector<std::string>>>& metadata);
-  void readVerticesFromGDALGeometryZ(const std::string& fileName,
-                                     OGRPolygon* poPolygon,
-                                     PolyData2d& poly,
-                                     const bool hasZ,
-                                     const ssize_t featureIdx,
-                                     const ssize_t multipolyIdx);
   void initGDAL();
   std::string import_id;
   size_t file_size;

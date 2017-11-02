@@ -223,9 +223,9 @@ class SQLTypeInfo {
       case kLINESTRING:
         return 1;
       case kPOLYGON:
-        return 2;
-      case kMULTIPOLYGON:
         return 3;
+      case kMULTIPOLYGON:
+        return 4;
       default:
         break;
     }

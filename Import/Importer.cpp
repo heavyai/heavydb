@@ -38,6 +38,7 @@
 #include <mutex>
 #include <boost/algorithm/string.hpp>
 #include <boost/filesystem.hpp>
+#include <boost/dynamic_bitset.hpp>
 #include <glog/logging.h>
 #include <ogrsf_frmts.h>
 #include <gdal.h>
@@ -51,6 +52,7 @@
 #include "../Shared/scope.h"
 #include "Importer.h"
 #include "DataMgr/LockMgr.h"
+#include "Utils/ChunkAccessorTable.h"
 #include "gen-cpp/MapD.h"
 #include <vector>
 #include <iostream>
@@ -65,7 +67,18 @@ using std::ostream;
 
 namespace Importer_NS {
 
-bool debug_timing = false;
+using FieldNameToIndexMapType = std::map<std::string, size_t>;
+using ColumnNameToSourceNameMapType = std::map<std::string, std::string>;
+using ColumnIdToRenderGroupAnalyzerMapType = std::map<int, std::shared_ptr<RenderGroupAnalyzer>>;
+using FeaturePtrVector = std::vector<OGRFeature*>;
+using GeometryPtrVector = std::vector<OGRGeometry*>;
+
+#define DEBUG_TIMING false
+#define DEBUG_SHAPEFILE_IMPORT 0
+#define DEBUG_RENDER_GROUP_ANALYZER 0
+
+#define DISABLE_MULTI_THREADED_SHAPEFILE_IMPORT 0
+#define PROMOTE_POLYGON_TO_MULTIPOLYGON 1
 
 static mapd_shared_mutex status_mutex;
 static std::map<std::string, ImportStatus> import_status_map;
@@ -1198,46 +1211,12 @@ ostream& operator<<(ostream& out, const std::vector<T>& v) {
   return out;
 }
 
-bool importGeoFromWkt(std::string& wkt,
-                      SQLTypeInfo& ti,
-                      std::vector<double>& coords,
-                      std::vector<int>& ring_sizes,
-                      std::vector<int>& poly_rings) {
+bool importGeoFromGeometry(OGRGeometry* geom,
+                           SQLTypeInfo& ti,
+                           std::vector<double>& coords,
+                           std::vector<int>& ring_sizes,
+                           std::vector<int>& poly_rings) {
   bool status = true;
-  auto data = (char*)wkt.c_str();
-  OGRGeometryFactory geom_factory;
-  OGRGeometry* geom = nullptr;
-  OGRErr ogr_status = geom_factory.createFromWkt(&data, NULL, &geom);
-  if (ogr_status != OGRERR_NONE)
-    status = false;
-  if (status && geom) {
-    int srid;
-    auto sr = geom->getSpatialReference();
-    if (!sr) {
-      srid = 0;
-    } else if (sr->IsGeographic()) {
-      srid = 0;
-      // TODO: may have to transform all geographic objects to WGS 84, EPSG 4236
-      // ti.set_dimension(4326);
-      // auto poSR = new OGRSpatialReference();
-      // poSR->importFromEPSG(4326);
-      // geom->transformTo(poSR);
-    } else {
-      srid = 0;
-      // Try to guess srid?
-      // srid = sr->GetEPSGGeogCS();
-      // if (srid != -1)
-      //  srid = 0;
-    }
-    ti.set_input_srid(srid);
-    ti.set_output_srid(srid);
-  }
-  if (status == false) {
-    if (geom)
-      geom_factory.destroyGeometry(geom);
-    return false;
-  }
-
   switch (wkbFlatten(geom->getGeometryType())) {
     case wkbPoint: {
       ti.set_type(kPOINT);
@@ -1259,77 +1238,188 @@ bool importGeoFromWkt(std::string& wkt,
     }
     case wkbPolygon: {
       ti.set_type(kPOLYGON);
+      // get the polygon
       OGRPolygon* polygon = static_cast<OGRPolygon*>(geom);
+      CHECK(polygon);
+      // get the ring
       OGRLinearRing* exteriorRing = polygon->getExteriorRing();
+      CHECK(exteriorRing);
+      // make it CW
       if (!exteriorRing->isClockwise()) {
         exteriorRing->reverseWindingOrder();
       }
-      for (int i = 0; i < exteriorRing->getNumPoints(); i++) {
+      // prepare to add the ring
+      double lastX = DBL_MAX, lastY = DBL_MAX;
+      size_t firstIndex = coords.size();
+      int numPointsAdded = 0;
+      int numPointsInRing = exteriorRing->getNumPoints();
+      // rings must have at least three points
+      if (numPointsInRing < 3)
+        return false;
+      // add ring
+      for (int i = 0; i < numPointsInRing; i++) {
         OGRPoint point;
         exteriorRing->getPoint(i, &point);
-        coords.push_back(point.getX());
-        coords.push_back(point.getY());
+        lastX = point.getX();
+        lastY = point.getY();
+        coords.push_back(lastX);
+        coords.push_back(lastY);
+        numPointsAdded++;
       }
-      // First add exterior ring size.
-      // TBD(d): might skip if polygon has no interior rings.
-      ring_sizes.push_back(exteriorRing->getNumPoints());
+      // if last point is same as first, discard it to leave the ring open
+      if (coords[firstIndex] == lastX && coords[firstIndex + 1] == lastY) {
+        coords.pop_back();
+        coords.pop_back();
+        numPointsAdded--;
+        // ring must still have at least three points
+        if (numPointsAdded < 3)
+          return false;
+      }
+      // add final exterior ring size
+      ring_sizes.push_back(numPointsAdded);
       // Add sizes and coords of the interior rings
       for (int r = 0; r < polygon->getNumInteriorRings(); r++) {
+        // get the ring
         OGRLinearRing* interiorRing = polygon->getInteriorRing(r);
+        CHECK(interiorRing);
+        // make it CCW
         if (interiorRing->isClockwise()) {
           interiorRing->reverseWindingOrder();
         }
-        ring_sizes.push_back(interiorRing->getNumPoints());
-        for (int i = 0; i < interiorRing->getNumPoints(); i++) {
+        // prepare to add the ring
+        firstIndex = coords.size();
+        numPointsAdded = 0;
+        numPointsInRing = interiorRing->getNumPoints();
+        // rings must have at least three points
+        if (numPointsInRing < 3)
+          return false;
+        // add ring
+        for (int i = 0; i < numPointsInRing; i++) {
           OGRPoint point;
           interiorRing->getPoint(i, &point);
-          coords.push_back(point.getX());
-          coords.push_back(point.getY());
+          lastX = point.getX();
+          lastY = point.getY();
+          coords.push_back(lastX);
+          coords.push_back(lastY);
+          numPointsAdded++;
         }
+        // if last point is same as first, discard it to leave the ring open
+        if (coords[firstIndex] == lastX && coords[firstIndex + 1] == lastY) {
+          coords.pop_back();
+          coords.pop_back();
+          numPointsAdded--;
+          // ring must still have at least three points
+          if (numPointsAdded < 3)
+            return false;
+        }
+        // add final interior ring size
+        ring_sizes.push_back(numPointsAdded);
       }
       break;
     }
     case wkbMultiPolygon: {
       ti.set_type(kMULTIPOLYGON);
+      // get the multi-polygon
       OGRMultiPolygon* mpolygon = static_cast<OGRMultiPolygon*>(geom);
-
+      CHECK(mpolygon);
+      // for each polygon...
       for (int p = 0; p < mpolygon->getNumGeometries(); p++) {
+        // get the geom
         OGRGeometry* mpgeom = mpolygon->getGeometryRef(p);
+        CHECK(mpgeom);
+        // get the polygon
         OGRPolygon* polygon = dynamic_cast<OGRPolygon*>(mpgeom);
         if (!polygon) {
           status = false;
           break;
         }
+        // get the ring
         OGRLinearRing* exteriorRing = polygon->getExteriorRing();
+        CHECK(exteriorRing);
+        // make it CW
         if (!exteriorRing->isClockwise()) {
           exteriorRing->reverseWindingOrder();
         }
-        for (int i = 0; i < exteriorRing->getNumPoints(); i++) {
+        // prepare to add the ring
+        double lastX = DBL_MAX, lastY = DBL_MAX;
+        size_t firstIndex = coords.size();
+        int numPointsAdded = 0;
+        int numPointsInRing = exteriorRing->getNumPoints();
+        // rings must have at least three points
+        if (numPointsInRing < 3) {
+          status = false;
+          break;
+        }
+        // add ring
+        for (int i = 0; i < numPointsInRing; i++) {
           OGRPoint point;
           exteriorRing->getPoint(i, &point);
-          coords.push_back(point.getX());
-          coords.push_back(point.getY());
+          lastX = point.getX();
+          lastY = point.getY();
+          coords.push_back(lastX);
+          coords.push_back(lastY);
+          numPointsAdded++;
         }
-        // First add exterior ring size.
-        ring_sizes.push_back(exteriorRing->getNumPoints());
+        // if last point is same as first, discard it to leave the ring open
+        if (coords[firstIndex] == lastX && coords[firstIndex + 1] == lastY) {
+          coords.pop_back();
+          coords.pop_back();
+          numPointsAdded--;
+          // ring must still have at least three points
+          if (numPointsAdded < 3) {
+            status = false;
+            break;
+          }
+        }
+        // add final exterior ring size
+        ring_sizes.push_back(numPointsAdded);
         // Add sizes and coords of the interior rings
         for (int r = 0; r < polygon->getNumInteriorRings(); r++) {
+          // get the ring
           OGRLinearRing* interiorRing = polygon->getInteriorRing(r);
+          CHECK(interiorRing);
+          // make it CCW
           if (interiorRing->isClockwise()) {
             interiorRing->reverseWindingOrder();
           }
-          ring_sizes.push_back(interiorRing->getNumPoints());
-          for (int i = 0; i < interiorRing->getNumPoints(); i++) {
+          // prepare to add ring
+          firstIndex = coords.size();
+          numPointsAdded = 0;
+          numPointsInRing = interiorRing->getNumPoints();
+          // rings must have at least three points
+          if (numPointsInRing < 3) {
+            status = false;
+            break;
+          }
+          // add ring
+          for (int i = 0; i < numPointsInRing; i++) {
             OGRPoint point;
             interiorRing->getPoint(i, &point);
-            coords.push_back(point.getX());
-            coords.push_back(point.getY());
+            lastX = point.getX();
+            lastY = point.getY();
+            coords.push_back(lastX);
+            coords.push_back(lastY);
+            numPointsAdded++;
           }
+          // if last point is same as first, discard it to leave the ring open
+          if (coords[firstIndex] == lastX && coords[firstIndex + 1] == lastY) {
+            coords.pop_back();
+            coords.pop_back();
+            numPointsAdded--;
+            // ring must still have at least three points
+            if (numPointsAdded < 3) {
+              status = false;
+              break;
+            }
+          }
+          // add final interior ring size
+          ring_sizes.push_back(numPointsAdded);
         }
+        // how many rings in this polygon?
         poly_rings.push_back(1 + polygon->getNumInteriorRings());
       }
       if (status) {
-        status = (poly_rings.size() == mpolygon->getNumGeometries());
+        status = (poly_rings.size() == (size_t)mpolygon->getNumGeometries());
       }
       break;
     }
@@ -1337,6 +1427,55 @@ bool importGeoFromWkt(std::string& wkt,
       status = false;
       break;
   }
+  return status;
+}
+
+bool importGeoFromWkt(std::string& wkt,
+                      SQLTypeInfo& ti,
+                      std::vector<double>& coords,
+                      std::vector<int>& ring_sizes,
+                      std::vector<int>& poly_rings) {
+  bool status = true;
+  auto data = (char*)wkt.c_str();
+  OGRGeometryFactory geom_factory;
+  OGRGeometry* geom = nullptr;
+  OGRErr ogr_status = geom_factory.createFromWkt(&data, NULL, &geom);
+  if (ogr_status != OGRERR_NONE)
+    status = false;
+  if (status && geom) {
+    int srid;
+    auto sr = geom->getSpatialReference();
+    if (!sr) {
+      srid = 0;
+    } else if (sr->IsGeographic()) {
+      srid = 0;
+      // If GDAL ever supports EWKT (or some equivalent) where an individual
+      // geo string can define its own SRID, then the OGRGeometry returned by
+      // createFromWkt may then invoke this branch, at which point we'd want to
+      // force a conversion back to our standard SRID
+      // For now, the returned SRID will always be zero and we never get here
+      //
+      // srid = GEOGRAPHIC_SPATIAL_REFERENCE;
+      // std::unique_ptr<OGRSpatialReference> poGeographicSR(new OGRSpatialReference());
+      // poGeographicSR->importFromEPSG(GEOGRAPHIC_SPATIAL_REFERENCE);
+      // geom->transformTo(poGeographicSR.get());
+    } else {
+      srid = 0;
+      // Try to guess srid?
+      // srid = sr->GetEPSGGeogCS();
+      // if (srid != -1)
+      //  srid = 0;
+    }
+    ti.set_input_srid(srid);
+    ti.set_output_srid(srid);
+  }
+  if (status == false) {
+    if (geom)
+      geom_factory.destroyGeometry(geom);
+    return false;
+  }
+
+  status = importGeoFromGeometry(geom, ti, coords, ring_sizes, poly_rings);
 
   if (geom)
     geom_factory.destroyGeometry(geom);
@@ -1360,12 +1499,13 @@ bool importGeoFromLonLat(double lon, double lat, std::vector<double>& coords) {
   return true;
 }
 
-static ImportStatus import_thread(int thread_id,
-                                  Importer* importer,
-                                  std::shared_ptr<const char> sbuffer,
-                                  size_t begin_pos,
-                                  size_t end_pos,
-                                  size_t total_size) {
+static ImportStatus import_thread_delimited(int thread_id,
+                                            Importer* importer,
+                                            std::shared_ptr<const char> sbuffer,
+                                            size_t begin_pos,
+                                            size_t end_pos,
+                                            size_t total_size,
+                                            const ColumnIdToRenderGroupAnalyzerMapType& columnIdToRenderGroupAnalyzerMap) {
   ImportStatus import_status;
   int64_t total_get_row_time_us = 0;
   int64_t total_str_to_val_time_us = 0;
@@ -1386,7 +1526,7 @@ static ImportStatus import_thread(int thread_id,
     std::vector<std::string> row;
     for (const char* p = thread_buf; p < thread_buf_end; p++) {
       row.clear();
-      if (debug_timing) {
+      if (DEBUG_TIMING) {
         us = measure<std::chrono::microseconds>::execution([&]() {
           p = get_row(p,
                       thread_buf_end,
@@ -1433,11 +1573,15 @@ static ImportStatus import_thread(int thread_id,
             ++col_idx;
             const auto& col_ti = cd->columnType;
             if (col_ti.get_physical_cols() > 0) {
-              CHECK(IS_GEO(col_ti.get_type()));
+              SQLTypes col_type = col_ti.get_type();
+              CHECK(IS_GEO(col_type));
+
               std::vector<double> coords;
               std::vector<int> ring_sizes;
               std::vector<int> poly_rings;
-              if (col_ti.get_type() == kPOINT &&
+              int render_group = 0;
+
+              if (col_type == kPOINT &&
                   wkt.size() > 0 &&
                   (wkt[0] == '.' || isdigit(wkt[0]) || wkt[0] == '-')) {
                 // Invalid WKT, looks more like a scalar.
@@ -1460,14 +1604,31 @@ static ImportStatus import_thread(int thread_id,
                   throw std::runtime_error("Cannot read lon/lat to insert into POINT column " + cd->columnName);
                 }
               } else {
+                // import it
                 SQLTypeInfo import_ti;
                 if (!importGeoFromWkt(wkt, import_ti, coords, ring_sizes, poly_rings)) {
                   throw std::runtime_error("Cannot read geometry to insert into column " + cd->columnName);
                 }
-                if (col_ti.get_type() != import_ti.get_type()) {
+
+                // validate types
+#if PROMOTE_POLYGON_TO_MULTIPOLYGON
+                if (col_type != import_ti.get_type()) {
+                  if (!(import_ti.get_type() == SQLTypes::kPOLYGON && col_type == SQLTypes::kMULTIPOLYGON))
+                    throw std::runtime_error("Imported geometry doesn't match the type of column " + cd->columnName);
+                }
+#else
+                if (col_type != import_ti.get_type()) {
                   throw std::runtime_error("Imported geometry doesn't match the type of column " + cd->columnName);
                 }
+#endif
                 // TODO: Check if column and wkt SRIDs match. Transform to column SRID: col_ti.get_output_srid()
+
+                if (col_type == kPOLYGON || col_type == kMULTIPOLYGON) {
+                  // get a suitable render group for these poly coords
+                  auto rga_it = columnIdToRenderGroupAnalyzerMap.find(cd->columnId);
+                  CHECK(rga_it != columnIdToRenderGroupAnalyzerMap.end());
+                  render_group = (*rga_it).second->insertCoordsAndReturnRenderGroup(coords);
+                }
               }
 
               ++cd_it;
@@ -1497,7 +1658,7 @@ static ImportStatus import_thread(int thread_id,
               import_buffers[col_idx]->add_value(cd_coords, tdd_coords, false);
               ++col_idx;
 
-              if (col_ti.get_type() == kPOLYGON || col_ti.get_type() == kMULTIPOLYGON) {
+              if (col_type == kPOLYGON || col_type == kMULTIPOLYGON) {
                 // Create ring_sizes array value and add it to the physical column
                 ++cd_it;
                 auto cd_ring_sizes = *cd_it;
@@ -1514,7 +1675,7 @@ static ImportStatus import_thread(int thread_id,
                 ++col_idx;
               }
 
-              if (col_ti.get_type() == kMULTIPOLYGON) {
+              if (col_type == kMULTIPOLYGON) {
                 // Create poly_rings array value and add it to the physical column
                 ++cd_it;
                 auto cd_poly_rings = *cd_it;
@@ -1528,6 +1689,17 @@ static ImportStatus import_thread(int thread_id,
                 tdd_poly_rings.val.arr_val = td_poly_rings;
                 tdd_poly_rings.is_null = false;
                 import_buffers[col_idx]->add_value(cd_poly_rings, tdd_poly_rings, false);
+                ++col_idx;
+              }
+
+              if (col_type == kPOLYGON || col_type == kMULTIPOLYGON) {
+                // Create render_group value and add it to the physical column
+                ++cd_it;
+                auto cd_render_group = *cd_it;
+                TDatum td_render_group;
+                td_render_group.val.int_val = render_group;
+                td_render_group.is_null = false;
+                import_buffers[col_idx]->add_value(cd_render_group, td_render_group, false);
                 ++col_idx;
               }
             }
@@ -1548,7 +1720,7 @@ static ImportStatus import_thread(int thread_id,
       load_ms = measure<>::execution([&]() { importer->load(import_buffers, import_status.rows_completed); });
     }
   });
-  if (debug_timing && import_status.rows_completed > 0) {
+  if (DEBUG_TIMING && import_status.rows_completed > 0) {
     LOG(INFO) << "Thread" << std::this_thread::get_id() << ":" << import_status.rows_completed << " rows inserted in "
               << (double)ms / 1000.0 << "sec, Insert Time: " << (double)load_ms / 1000.0
               << "sec, get_row: " << (double)total_get_row_time_us / 1000000.0
@@ -1557,6 +1729,196 @@ static ImportStatus import_thread(int thread_id,
 
   import_status.thread_id = thread_id;
   // LOG(INFO) << " return " << import_status.thread_id << std::endl;
+
+  return import_status;
+}
+
+static ImportStatus import_thread_shapefile(int thread_id,
+                                            Importer* importer,
+                                            OGRSpatialReference* poSR,
+                                            const FeaturePtrVector& features,
+                                            size_t numFeatures,
+                                            const FieldNameToIndexMapType& fieldNameToIndexMap,
+                                            const ColumnNameToSourceNameMapType& columnNameToSourceNameMap,
+                                            const ColumnIdToRenderGroupAnalyzerMapType& columnIdToRenderGroupAnalyzerMap) {
+  ImportStatus import_status;
+  const CopyParams& copy_params = importer->get_copy_params();
+  const std::list<const ColumnDescriptor*>& col_descs = importer->get_column_descs();
+  std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers = importer->get_import_buffers(thread_id);
+
+  for (const auto& p : import_buffers)
+    p->clear();
+
+  auto convert_timer = timer_start();
+
+  for (size_t iFeature = 0; iFeature < numFeatures; iFeature++) {
+
+    if (!features[iFeature])
+      continue;
+
+    // get this feature's geometry
+    OGRGeometry* pGeometry = features[iFeature]->GetGeometryRef();
+    CHECK(pGeometry);
+
+    // transform it
+    pGeometry->transformTo(poSR);
+
+    size_t col_idx = 0;
+    try {
+      for (auto cd_it = col_descs.begin(); cd_it != col_descs.end(); cd_it++) {
+        auto cd = *cd_it;
+
+        // is this a geo column?
+        const auto& col_ti = cd->columnType;
+        if (cd->columnName == MAPD_GEO_PREFIX && col_ti.get_physical_cols() > 0) {
+          SQLTypes col_type = col_ti.get_type();
+          CHECK(IS_GEO(col_type));
+
+          // regenerate WKT string
+          char* wkts = nullptr;
+          pGeometry->exportToWkt(&wkts);
+          CHECK(wkts);
+          std::string wkt(wkts);
+          CPLFree(wkts);
+
+          // insert WKT string into the base column
+          import_buffers[col_idx]->add_value(cd, wkt, !cd->columnType.is_string(), copy_params);
+          ++col_idx;
+
+          // the data we now need to extract for the other columns
+          std::vector<double> coords;
+          std::vector<int> ring_sizes;
+          std::vector<int> poly_rings;
+          int render_group = 0;
+
+          // extract it
+          SQLTypeInfo import_ti;
+          if (!importGeoFromGeometry(pGeometry, import_ti, coords, ring_sizes, poly_rings)) {
+            throw std::runtime_error("Cannot read geometry to insert into column " + cd->columnName);
+          }
+
+          // validate types
+#if PROMOTE_POLYGON_TO_MULTIPOLYGON
+          if (col_type != import_ti.get_type()) {
+            if (!(import_ti.get_type() == SQLTypes::kPOLYGON && col_type == SQLTypes::kMULTIPOLYGON)) {
+              throw std::runtime_error("Imported geometry doesn't match the type of column " + cd->columnName);
+            }
+          }
+#else
+          if (col_type != import_ti.get_type()) {
+              throw std::runtime_error("Imported geometry doesn't match the type of column " + cd->columnName);
+          }
+#endif
+
+          // TODO: Check if column and wkt SRIDs match. Transform to column SRID: col_ti.get_dimension()
+
+          if (col_type == kPOLYGON || col_type == kMULTIPOLYGON) {
+            // get a suitable render group for these poly coords
+            auto rga_it = columnIdToRenderGroupAnalyzerMap.find(cd->columnId);
+            CHECK(rga_it != columnIdToRenderGroupAnalyzerMap.end());
+            render_group = (*rga_it).second->insertCoordsAndReturnRenderGroup(coords);
+          }
+
+          // create coords array value and add it to the physical column
+          ++cd_it;
+          auto cd_coords = *cd_it;
+          std::vector<TDatum> td_coords;
+          for (auto coord : coords) {
+            TDatum td_coord;
+            td_coord.val.real_val = coord;
+            td_coords.push_back(td_coord);
+          }
+          TDatum tdd_coords;
+          tdd_coords.val.arr_val = td_coords;
+          tdd_coords.is_null = false;
+          import_buffers[col_idx]->add_value(cd_coords, tdd_coords, false);
+          ++col_idx;
+
+          if (col_type == kPOLYGON || col_type == kMULTIPOLYGON) {
+            // Create ring_sizes array value and add it to the physical column
+            ++cd_it;
+            auto cd_ring_sizes = *cd_it;
+            std::vector<TDatum> td_ring_sizes;
+            for (auto ring_size : ring_sizes) {
+              TDatum td_ring_size;
+              td_ring_size.val.int_val = ring_size;
+              td_ring_sizes.push_back(td_ring_size);
+            }
+            TDatum tdd_ring_sizes;
+            tdd_ring_sizes.val.arr_val = td_ring_sizes;
+            tdd_ring_sizes.is_null = false;
+            import_buffers[col_idx]->add_value(cd_ring_sizes, tdd_ring_sizes, false);
+            ++col_idx;
+          }
+
+          if (col_type == kMULTIPOLYGON) {
+            // Create poly_rings array value and add it to the physical column
+            ++cd_it;
+            auto cd_poly_rings = *cd_it;
+            std::vector<TDatum> td_poly_rings;
+            for (auto num_rings : poly_rings) {
+              TDatum td_num_rings;
+              td_num_rings.val.int_val = num_rings;
+              td_poly_rings.push_back(td_num_rings);
+            }
+            TDatum tdd_poly_rings;
+            tdd_poly_rings.val.arr_val = td_poly_rings;
+            tdd_poly_rings.is_null = false;
+            import_buffers[col_idx]->add_value(cd_poly_rings, tdd_poly_rings, false);
+            ++col_idx;
+          }
+
+          if (col_type == kPOLYGON || col_type == kMULTIPOLYGON) {
+            // Create render_group value and add it to the physical column
+            ++cd_it;
+            auto cd_render_group = *cd_it;
+            TDatum td_render_group;
+            td_render_group.val.int_val = render_group;
+            td_render_group.is_null = false;
+            import_buffers[col_idx]->add_value(cd_render_group, td_render_group, false);
+            ++col_idx;
+          }
+        } else {
+          // regular column
+          // pull from GDAL metadata
+          const auto cit = columnNameToSourceNameMap.find(cd->columnName);
+          CHECK(cit != columnNameToSourceNameMap.end());
+          const std::string& fieldName = cit->second;
+          const auto fit = fieldNameToIndexMap.find(fieldName);
+          CHECK(fit != fieldNameToIndexMap.end());
+          size_t iField = fit->second;
+          CHECK(iField < fieldNameToIndexMap.size());
+          std::string fieldContents = features[iFeature]->GetFieldAsString(iField);
+          import_buffers[col_idx]->add_value(cd, fieldContents, false, copy_params);
+          ++col_idx;
+        }
+      }
+      import_status.rows_completed++;
+    } catch (const std::exception& e) {
+      for (size_t col_idx_to_pop = 0; col_idx_to_pop < col_idx; ++col_idx_to_pop) {
+        import_buffers[col_idx_to_pop]->pop_value();
+      }
+      import_status.rows_rejected++;
+      LOG(ERROR) << "Input exception thrown: " << e.what() << ". Row discarded, issue at column : " << (col_idx + 1);
+    }
+  }
+  float convert_ms = float(timer_stop<std::chrono::steady_clock::time_point, std::chrono::microseconds>(convert_timer)) / 1000.0f;
+
+  float load_ms = 0.0f;
+  if (import_status.rows_completed > 0) {
+    auto load_timer = timer_start();
+    importer->load(import_buffers, import_status.rows_completed);
+    load_ms = float(timer_stop<std::chrono::steady_clock::time_point, std::chrono::microseconds>(load_timer)) / 1000.0f;
+  }
+
+  if (DEBUG_TIMING && import_status.rows_completed > 0) {
+    LOG(INFO) << "DEBUG:      Process " << convert_ms << "ms";
+    LOG(INFO) << "DEBUG:      Load " << load_ms << "ms";
+  }
+
+  import_status.thread_id = thread_id;
+
+  if (DEBUG_TIMING) LOG(INFO) << "DEBUG:      Total " << float(timer_stop<std::chrono::steady_clock::time_point, std::chrono::microseconds>(convert_timer)) / 1000.0f << "ms";
 
   return import_status;
 }
@@ -1962,6 +2324,21 @@ SQLTypes Detector::detect_sqltype(const std::string& str) {
       }
     }
   }
+  if (type == kTEXT) {
+    if (str.find("POINT") == 0) {
+      type = kPOINT;
+    } else if (str.find("LINESTRING") == 0) {
+      type = kLINESTRING;
+    } else if (str.find("POLYGON") == 0) {
+#if PROMOTE_POLYGON_TO_MULTIPOLYGON
+      type = kMULTIPOLYGON;
+#else
+      type = kPOLYGON;
+#endif
+    } else if (str.find("MULTIPOLYGON") == 0) {
+      type = kMULTIPOLYGON;
+    }
+  }
   return type;
 }
 
@@ -1985,7 +2362,11 @@ bool Detector::more_restrictive_sqltype(const SQLTypes a, const SQLTypes b) {
   typeorder[kTIMESTAMP] = 8;
   typeorder[kTIME] = 9;
   typeorder[kDATE] = 10;
-  typeorder[kTEXT] = 11;
+  typeorder[kPOINT] = 11;
+  typeorder[kLINESTRING] = 11;
+  typeorder[kPOLYGON] = 11;
+  typeorder[kMULTIPOLYGON] = 11;
+  typeorder[kTEXT] = 12;
 
   // note: b < a instead of a < b because the map is ordered most to least restrictive
   return typeorder[b] < typeorder[a];
@@ -2399,6 +2780,18 @@ ImportStatus Importer::importDelimited(const std::string& file_path, const bool 
   (void)fseek(p_file, current_pos, SEEK_SET);
   size_t size = fread((void*)sbuffer.get(), 1, alloc_size, p_file);
 
+  // make render group analyzers for each poly column
+  ColumnIdToRenderGroupAnalyzerMapType columnIdToRenderGroupAnalyzerMap;
+  auto columnDescriptors = loader->get_catalog().getAllColumnMetadataForTable(loader->get_table_desc()->tableId, false, false, false);
+  for (auto cd : columnDescriptors) {
+    SQLTypes ct = cd->columnType.get_type();
+    if (ct == kPOLYGON || ct == kMULTIPOLYGON) {
+      auto rga = std::make_shared<RenderGroupAnalyzer>();
+      rga->seedFromExistingTableContents(loader, cd->columnName);
+      columnIdToRenderGroupAnalyzerMap[cd->columnId] = rga;
+    }
+  }
+
   ChunkKey chunkKey = {loader->get_catalog().get_currentDB().dbId, loader->get_table_desc()->tableId};
   {
     std::list<std::future<ImportStatus>> threads;
@@ -2408,6 +2801,7 @@ ImportStatus Importer::importDelimited(const std::string& file_path, const bool 
     std::stack<int> stack_thread_ids;
     for (int i = 0; i < max_threads; i++)
       stack_thread_ids.push(i);
+
     auto start_epoch = loader->getTableEpoch();
     while (size > 0) {
       if (eof_reached)
@@ -2426,7 +2820,7 @@ ImportStatus Importer::importDelimited(const std::string& file_path, const bool 
       // LOG(INFO) << " stack_thread_ids.pop " << thread_id << std::endl;
 
       threads.push_back(
-          std::async(std::launch::async, import_thread, thread_id, this, sbuffer, begin_pos, end_pos, end_pos));
+          std::async(std::launch::async, import_thread_delimited, thread_id, this, sbuffer, begin_pos, end_pos, end_pos, columnIdToRenderGroupAnalyzerMap));
 
       current_pos += end_pos;
       sbuffer.reset(new char[alloc_size]);
@@ -2509,7 +2903,7 @@ ImportStatus Importer::importDelimited(const std::string& file_path, const bool 
         }
       }
     });
-    if (debug_timing)
+    if (DEBUG_TIMING)
       LOG(INFO) << "Dictionary Checkpointing took " << (double)ms / 1000.0 << " Seconds." << std::endl;
   }
   // must set import_status.load_truncated before closing this end of pipe
@@ -2544,502 +2938,6 @@ void GDALErrorHandler(CPLErr eErrClass, int err_no, const char* msg) {
   throw std::runtime_error("GDAL error: " + std::string(msg));
 }
 
-namespace GeomConvexHull {
-// The code in this namespace is based on the code found here:
-// http://www.geeksforgeeks.org/convex-hull-set-2-graham-scan/
-// using Graham's scan algorithm: https://en.wikipedia.org/wiki/Graham_scan
-
-// TODO(croot): add this to a geom utility library
-
-// squared distance between points p1 and p2
-double distSq(const p2t::Point* p1, const p2t::Point* p2) {
-  return (p1->x - p2->x) * (p1->x - p2->x) + (p1->y - p2->y) * (p1->y - p2->y);
-}
-
-// Finds the orientation of a triplet of points (p, q, r).
-// 0 --> All collinear
-// 1 --> Clockwise
-// 2 --> Counterclockwise
-int orientation(const p2t::Point* p, const p2t::Point* q, const p2t::Point* r) {
-  auto val = (q->y - p->y) * (r->x - q->x) - (q->x - p->x) * (r->y - q->y);
-
-  if (val == 0)
-    return 0;                // colinear
-  return (val > 0) ? 1 : 2;  // clock or counterclock wise
-}
-
-// Returns the convex hull of a set of points
-std::vector<p2t::Point*> buildConvexHull(const std::vector<p2t::Point*>& pts) {
-  // Find the bottommost point
-  std::vector<p2t::Point*> mypts = pts;
-
-  double ymin = mypts[0]->y;
-  int min = 0;
-  for (int i = 1; i < static_cast<int>(mypts.size()); i++) {
-    double y = mypts[i]->y;
-
-    // Pick the bottom-most or chose the left
-    // most point in case of tie
-    if ((y < ymin) || (ymin == y && mypts[i]->x < mypts[min]->x)) {
-      ymin = mypts[i]->y;
-      min = i;
-    }
-  }
-
-  // Place the bottom-most point at first position
-  if (min != 0) {
-    auto ptr = mypts[0];
-    mypts[0] = mypts[min];
-    mypts[min] = ptr;
-  }
-
-  // Sort pts.
-  // A point p1 comes before p2 if p2
-  // has larger polar angle (in counterclockwise direction) than p1
-  auto p0 = mypts[0];
-  std::sort(mypts.begin() + 1, mypts.end(), [&p0](const p2t::Point* p1, const p2t::Point* p2) {
-    // Find orientation
-    auto o = orientation(p0, p1, p2);
-    if (o == 0) {
-      return (distSq(p0, p2) >= distSq(p0, p1)) ? true : false;
-    }
-
-    return (o == 2) ? true : false;
-  });
-
-  // If two or more pts make same angle with p0,
-  // Remove all but the one that is farthest from p0
-  int m = 1;  // Initialize size of modified array
-  int n = static_cast<int>(mypts.size());
-  for (int i = 1; i < n; i++) {
-    // Keep removing i while angle of i and i+1 is same
-    // with respect to p0
-    while (i < n - 1 && orientation(p0, mypts[i], mypts[i + 1]) == 0)
-      i++;
-
-    mypts[m] = mypts[i];
-    m++;  // Update size of modified array
-  }
-
-  // If modified array of pts has less than 3 pts,
-  // convex hull is not possible
-  if (m < 3) {
-    throw std::runtime_error("Cannot compute convex hull. All points are collinear.");
-  }
-
-  // Create an empty stack and push first three pts
-  // to it.
-  std::vector<p2t::Point*> hullPts;
-  hullPts.push_back(mypts[0]);
-  hullPts.push_back(mypts[1]);
-  hullPts.push_back(mypts[2]);
-
-  // Process remaining n-3 pts
-  for (int i = 3; i < m; i++) {
-    // Keep removing top while the angle formed by
-    // pts next-to-top, top, and pts[i] makes
-    // a non-left turn
-    while (orientation(hullPts.at(hullPts.size() - 2), hullPts.back(), mypts[i]) != 2) {
-      hullPts.pop_back();
-    }
-    hullPts.push_back(mypts[i]);
-  }
-
-  return hullPts;
-}
-
-}  // namespace GeomConvexHull
-
-namespace GeomSimplify {
-// This code in this namespace is taken from https://github.com/mourner/simplify-js, translated to C++
-// and re-purposed for poly simplification to handle problematic polys on import.
-// It makes use of the Douglas-Peuker algorithm for simplification:
-// https://en.wikipedia.org/wiki/Ramer-Douglas-Peucker_algorithm
-
-// TODO(croot): add this to a geom utility library
-
-// returns a value proportional to the distance
-// between the point p and the line joining the
-// points p1 and p2
-double lineDist(const p2t::Point* p1, const p2t::Point* p2, const p2t::Point* p) {
-  return std::abs((p->y - p1->y) * (p2->x - p1->x) - (p2->y - p1->y) * (p->x - p1->x));
-}
-
-// square distance between 2 points
-double getSqDist(const p2t::Point* p1, const p2t::Point* p2) {
-  auto dx = p1->x - p2->x;
-  auto dy = p1->y - p2->y;
-  return dx * dx + dy * dy;
-}
-
-// square distance from a point to a segment
-double getSqSegDist(const p2t::Point* p, const p2t::Point* p1, const p2t::Point* p2) {
-  auto x = p1->x, y = p1->y, dx = p2->x - x, dy = p2->y - y;
-
-  if (dx != 0 || dy != 0) {
-    auto t = ((p->x - x) * dx + (p->y - y) * dy) / (dx * dx + dy * dy);
-    if (t > 1) {
-      x = p2->x;
-      y = p2->y;
-    } else if (t > 0) {
-      x += dx * t;
-      y += dy * t;
-    }
-  }
-
-  dx = p->x - x;
-  dy = p->y - y;
-
-  return dx * dx + dy * dy;
-}
-
-// basic distance-based simplification
-std::vector<p2t::Point*> simplifyRadialDist(const std::vector<p2t::Point*>& points, const double sqTolerance) {
-  p2t::Point* prevPoint = points[0];
-  std::vector<p2t::Point*> newPoints = {prevPoint};
-  p2t::Point* point;
-
-  for (size_t i = 1; i < points.size(); ++i) {
-    point = points[i];
-    if (getSqDist(point, prevPoint) > sqTolerance) {
-      newPoints.push_back(points[i]);
-      prevPoint = point;
-    }
-  }
-
-  if (prevPoint != point) {
-    newPoints.push_back(point);
-  }
-
-  return newPoints;
-}
-
-void simplifyDPStep(const std::vector<p2t::Point*>& points,
-                    const int first,
-                    const int last,
-                    const double sqTolerance,
-                    std::vector<p2t::Point*>& simplified) {
-  double maxSqDist = sqTolerance;
-  int index = -1;
-
-  for (int i = first + 1; i < last; i++) {
-    auto sqDist = getSqSegDist(points[i], points[first], points[last]);
-    if (sqDist > maxSqDist) {
-      index = i;
-      maxSqDist = sqDist;
-    }
-  }
-
-  if (maxSqDist > sqTolerance) {
-    if (index - first > 1) {
-      simplifyDPStep(points, first, index, sqTolerance, simplified);
-    }
-    simplified.push_back(points[index]);
-    if (last - index > 1) {
-      simplifyDPStep(points, index, last, sqTolerance, simplified);
-    }
-  }
-}
-
-std::vector<p2t::Point*> simplifyDouglasPeucker(const std::vector<p2t::Point*>& points, const double sqTolerance) {
-  auto last = points.size() - 1;
-
-  std::vector<p2t::Point*> simplified = {points[0]};
-  simplifyDPStep(points, 0, last, sqTolerance, simplified);
-  simplified.push_back(points[last]);
-
-  if (simplified.size() == 2) {
-    double maxSqDist(0.0);
-    int index = -1;
-    for (int i = 1; i < static_cast<int>(points.size()) - 1; i++) {
-      auto sqDist = lineDist(simplified[0], simplified[1], points[i]);
-      if (sqDist > maxSqDist) {
-        index = i;
-        maxSqDist = sqDist;
-      }
-    }
-    if (index < 0) {
-      index = 1;
-    }
-    simplified.insert(simplified.begin() + 1, points[index]);
-  }
-
-  return simplified;
-}
-
-// Returns a simplified set of points from an input list of connected points.
-std::vector<p2t::Point*> simplify(const std::vector<p2t::Point*>& points,
-                                  const double tolerance = 1.0,
-                                  const bool highestQuality = false) {
-  if (points.size() <= 3) {
-    return points;
-  }
-
-  auto sqTolerance = tolerance * tolerance;
-  return simplifyDouglasPeucker((highestQuality ? points : simplifyRadialDist(points, sqTolerance)), sqTolerance);
-}
-}  // namespace GeomSimplify
-
-std::tuple<bool, double, double> buildRenderablePolyOutline(
-    PolyData2d& poly,
-    const std::vector<p2t::Point*>& vertexPtrs,
-    std::unordered_map<p2t::Point*, int>& pointIndices,
-    const std::unordered_map<p2t::Point*, int>& origPointIndices,
-    const ssize_t featureIdx,
-    const ssize_t multipolyIdx) {
-  if (vertexPtrs.size() < 2) {
-    throw std::runtime_error("invalid geometry: polygon" +
-                             (multipolyIdx < 0 ? "" : (" at multipolygon index " + std::to_string(multipolyIdx + 1))) +
-                             " in feature " + std::to_string(featureIdx + 1) + " - Cannot import a polygon with " +
-                             std::to_string(vertexPtrs.size()) + " point" + (vertexPtrs.size() == 1 ? "." : "s."));
-  } else if (vertexPtrs.size() == 2) {
-    LOG(WARNING)
-        << "invalid geometry: polygon"
-        << (multipolyIdx < 0 ? "" : (" at multipolygon index " + std::to_string(multipolyIdx + 1))) << " in feature "
-        << (featureIdx + 1) << " has only " << std::to_string(vertexPtrs.size()) << " point"
-        << (vertexPtrs.size() == 1
-                ? "."
-                : "s. The geom will be imported, but it might not be visible unless you have stroking enabled.");
-
-    poly.beginLine();
-    poly.addLinePoint(vertexPtrs[0]);
-    poly.addLinePoint(vertexPtrs[0]);
-    poly.addLinePoint(vertexPtrs[1]);
-    poly.addLinePoint(vertexPtrs[1]);
-    poly.endLine(false);
-    poly.beginPoly();
-    poly.addTriangle(0, 2, 1);
-    poly.endPoly();
-    return std::make_tuple(true, 0.0, 0.0);
-  }
-
-  pointIndices.clear();
-  std::set<std::pair<double, double>> dedupe;
-  poly.beginLine();
-  ScopeGuard guard = [&poly]() { poly.endLine(); };
-  double mindist = std::numeric_limits<double>::max(), avgdist(0.0), sumdist(0.0);
-  for (size_t k = 0; k < vertexPtrs.size(); ++k) {
-    auto vert = vertexPtrs[k];
-    auto origitr = origPointIndices.find(vert);
-    CHECK(origitr != origPointIndices.end());
-    auto origxypair = std::make_pair(vert->x, vert->y);
-    auto a = dedupe.insert(origxypair);
-    if (!a.second) {
-      const auto& startpt = *vertexPtrs[k - 1];
-      const auto next = vertexPtrs[(k + 1) % vertexPtrs.size()];
-      p2t::Point nextpt(next->x, next->y);
-      std::array<double, 2> v({startpt.x - nextpt.x, startpt.y - nextpt.y});
-
-      v[0] *= 0.5;
-      v[1] *= 0.5;
-      nextpt.x += v[0];
-      nextpt.y += v[1];
-      v[0] = nextpt.x - vert->x;
-      v[1] = nextpt.y - vert->y;
-      if (!(v[0] * v[0] + v[1] * v[1])) {
-        v[0] = startpt.x - vert->x;
-        v[1] = startpt.y - vert->y;
-        CHECK_NE(v[0] * v[0] + v[1] * v[1], 0);
-      }
-      const auto stepsz = 0.01;
-      v[0] *= stepsz;
-      v[1] *= stepsz;
-      auto currstep = 0;
-      while (!a.second && currstep < 1.0) {
-        currstep += stepsz;
-        vert->x += v[0];
-        vert->y += v[1];
-        a = dedupe.insert(std::make_pair(vert->x, vert->y));
-      }
-
-      if (currstep >= 1.0) {
-        throw std::runtime_error(
-            "invalid geometry: polygon" +
-            (multipolyIdx < 0 ? "" : (" at multipolygon index " + std::to_string(multipolyIdx + 1))) + " in feature " +
-            std::to_string(featureIdx + 1) + " - duplicate vertex found at index " + std::to_string(origitr->second) +
-            " which cannot be properly transformed to avoid the duplication.");
-      }
-
-      LOG(WARNING) << "duplicate vertex at index " << origitr->second << " in polygon"
-                   << (multipolyIdx < 0 ? "" : (" at multipolygon index " + std::to_string(multipolyIdx + 1)))
-                   << " in feature " << (featureIdx + 1) << ". It has been transformed from [" << origxypair.first
-                   << ", " << origxypair.second << "] to " << std::string(*vert)
-                   << " in order to avoid overlap issues.";
-    }
-    if (k > 0) {
-      const auto lastpt = vertexPtrs[k - 1];
-      const auto dx = vert->x - lastpt->x;
-      const auto dy = vert->y - lastpt->y;
-      const auto dist = std::sqrt(dx * dx + dy * dy);
-      sumdist += dist;
-      if (dist < mindist) {
-        mindist = dist;
-      }
-    }
-    vert->edge_list.clear();  // make sure to clear out the containers build up from a previous triangulation run
-    poly.addLinePoint(vert);
-    pointIndices.insert({vert, k});
-  }
-  // already guaranteed to have a poly with at least 3 verts by the time we
-  // reach this point
-  const auto lastpt = vertexPtrs.back();
-  const auto firstpt = vertexPtrs.front();
-  const auto dx = firstpt->x - lastpt->x;
-  const auto dy = firstpt->y - lastpt->y;
-  const auto dist = std::sqrt(dx * dx + dy * dy);
-  sumdist += dist;
-  if (dist < mindist) {
-    mindist = dist;
-  }
-  avgdist = sumdist / vertexPtrs.size();
-  return std::make_tuple(false, mindist, avgdist);
-}
-
-p2t::CDT triangulate(bool& triangulated, const std::vector<p2t::Point*>& vertexPtrs) {
-  triangulated = false;
-  p2t::CDT triangulator(vertexPtrs);
-  triangulator.Triangulate();
-  triangulated = true;
-  return triangulator;
-}
-
-void buildRenderablePolyAfterTriangulation(PolyData2d& poly,
-                                           p2t::CDT& triangulator,
-                                           const std::unordered_map<p2t::Point*, int>& pointIndices,
-                                           const std::unordered_map<p2t::Point*, int>& origPointIndices) {
-  int idx0, idx1, idx2;
-  std::unordered_map<p2t::Point*, int>::const_iterator itr;
-  poly.beginPoly();
-  ScopeGuard guard = [&poly]() { poly.endPoly(); };
-  for (p2t::Triangle* tri : triangulator.GetTriangles()) {
-    itr = pointIndices.find(tri->GetPoint(0));
-    if (itr == pointIndices.end()) {
-      throw std::runtime_error("failed to triangulate polygon due to invalid triangle - triidx: " +
-                               std::to_string(poly.numTris()) + ", pointidx: 0");
-    }
-    idx0 = itr->second;
-
-    itr = pointIndices.find(tri->GetPoint(1));
-    if (itr == pointIndices.end()) {
-      throw std::runtime_error("failed to triangulate polygon due to invalid triangle - triidx: " +
-                               std::to_string(poly.numTris()) + ", pointidx: 1");
-    }
-    idx1 = itr->second;
-
-    itr = pointIndices.find(tri->GetPoint(2));
-    if (itr == pointIndices.end()) {
-      throw std::runtime_error("failed to triangulate polygon due to invalid triangle - triidx: " +
-                               std::to_string(poly.numTris()) + ", pointidx: 2");
-    }
-    idx2 = itr->second;
-
-    poly.addTriangle(idx0, idx1, idx2);
-  }
-}
-
-void Importer::readVerticesFromGDALGeometryZ(const std::string& fileName,
-                                             OGRPolygon* poPolygon,
-                                             PolyData2d& poly,
-                                             const bool,
-                                             const ssize_t featureIdx,
-                                             const ssize_t multipolyIdx = -1) {
-  std::vector<std::shared_ptr<p2t::Point>> vertexShPtrs;
-  std::vector<p2t::Point*> vertexPtrs;
-  std::vector<int> tris;
-  std::unordered_map<p2t::Point*, int> origPointIndices;
-  std::unordered_map<p2t::Point*, int> pointIndices;
-  OGRPoint ptTemp;
-
-  OGRLinearRing* poExteriorRing = poPolygon->getExteriorRing();
-  if (!poExteriorRing->isClockwise()) {
-    poExteriorRing->reverseWindingOrder();
-  }
-  if (!poExteriorRing->isClockwise()) {
-    return;
-  }
-  poExteriorRing->closeRings();
-  int nExtVerts = poExteriorRing->getNumPoints();
-  if (nExtVerts < 3) {
-    throw std::runtime_error("invalid geometry: polygon" +
-                             (multipolyIdx < 0 ? "" : (" at multipolygon index " + std::to_string(multipolyIdx + 1))) +
-                             " in feature " + std::to_string(featureIdx + 1) + " needs at least 3 points. It has " +
-                             std::to_string(nExtVerts) + ".");
-  }
-
-  for (int k = 0; k < nExtVerts - 1; k++) {
-    poExteriorRing->getPoint(k, &ptTemp);
-    if (k > 0 && vertexPtrs.back()->x == ptTemp.getX() && vertexPtrs.back()->y == ptTemp.getY()) {
-      continue;
-    }
-    vertexShPtrs.emplace_back(new p2t::Point(ptTemp.getX(), ptTemp.getY()));
-    auto vertPtr = vertexShPtrs.back().get();
-    vertexPtrs.push_back(vertPtr);
-    origPointIndices.insert({vertPtr, k});
-  }
-
-  bool finished;
-  double mindist, avgdist;
-  std::tie(finished, mindist, avgdist) =
-      buildRenderablePolyOutline(poly, vertexPtrs, pointIndices, origPointIndices, featureIdx, multipolyIdx);
-  if (finished) {
-    return;
-  }
-
-  bool triangulated = false;
-  try {
-    auto triangulator = triangulate(triangulated, vertexPtrs);
-    buildRenderablePolyAfterTriangulation(poly, triangulator, pointIndices, origPointIndices);
-  } catch (std::exception& err) {
-    if (triangulated) {
-      poly.popPoly();
-    }
-    poly.popLine();
-
-    // try a simplify with a modest tolerance to see if we can get the geom
-    // to be more poly2tri friendly
-    auto simplifyVertexPtrs = GeomSimplify::simplify(vertexPtrs, mindist + 0.1 * (avgdist - mindist), true);
-    std::tie(finished, mindist, avgdist) =
-        buildRenderablePolyOutline(poly, simplifyVertexPtrs, pointIndices, origPointIndices, featureIdx, multipolyIdx);
-    try {
-      if (!finished) {
-        auto triangulator = triangulate(triangulated, simplifyVertexPtrs);
-        buildRenderablePolyAfterTriangulation(poly, triangulator, pointIndices, origPointIndices);
-      }
-      LOG(WARNING) << "Failed to triangulate original polygon "
-                   << (multipolyIdx < 0 ? "" : ("at multipolygon index " + std::to_string(multipolyIdx + 1)))
-                   << " in feature " << (featureIdx + 1)
-                   << ". A simplified geometry will be used as a proxy in its place. The simplified geometry has "
-                   << simplifyVertexPtrs.size() << " vertices. The original polygon had " << vertexPtrs.size() << ".";
-    } catch (std::exception& err) {
-      if (triangulated) {
-        poly.popPoly();
-      }
-      poly.popLine();
-      auto convexHullVertexPtrs = GeomConvexHull::buildConvexHull(vertexPtrs);
-      std::tie(finished, mindist, avgdist) = buildRenderablePolyOutline(
-          poly, convexHullVertexPtrs, pointIndices, origPointIndices, featureIdx, multipolyIdx);
-      try {
-        if (!finished) {
-          auto triangulator = triangulate(triangulated, convexHullVertexPtrs);
-          buildRenderablePolyAfterTriangulation(poly, triangulator, pointIndices, origPointIndices);
-        }
-        LOG(WARNING)
-            << "Failed to triangulate original polygon"
-            << (multipolyIdx < 0 ? "" : (" at multipolygon index " + std::to_string(multipolyIdx + 1)))
-            << " in feature " << (featureIdx + 1)
-            << ". A convex hull of the original geometry will be used as a proxy in its place. The convex hull has "
-            << convexHullVertexPtrs.size() << " vertices. The original polygon had " << vertexPtrs.size() << ".";
-      } catch (std::exception& err) {
-        throw std::runtime_error(
-            "invalid geometry: polygon" +
-            (multipolyIdx < 0 ? "" : (" at multipolygon index " + std::to_string(multipolyIdx + 1))) + " in feature " +
-            std::to_string(featureIdx + 1) + "- " + err.what() +
-            ". Cannot build proxy geometry after trying a simplification and convex hull.");
-      }
-    }
-  }
-}
-
 void initGDAL() {
   static bool gdal_initialized = false;
   if (!gdal_initialized) {
@@ -3067,128 +2965,78 @@ static OGRDataSource* openGDALDataset(const std::string& fileName) {
 }
 
 void Importer::readMetadataSampleGDAL(const std::string& fileName,
+                                      const std::string& geoColumnName,
                                       std::map<std::string, std::vector<std::string>>& metadata,
                                       int rowLimit) {
-  auto poDS = openGDALDataset(fileName);
-  if (poDS == nullptr) {
-    throw std::runtime_error("Unable to open geo file " + fileName);
-  }
-  OGRLayer* poLayer;
-  poLayer = poDS->GetLayer(0);
-  if (poLayer == nullptr) {
-    throw std::runtime_error("No layers found in " + fileName);
-  }
-  OGRFeatureDefn* poFDefn = poLayer->GetLayerDefn();
-
-  // typeof GetFeatureCount() is different between GDAL 1.x (int32_t) and 2.x (int64_t)
-  auto nFeats = poLayer->GetFeatureCount();
-  size_t numFeatures =
-      std::max(static_cast<decltype(nFeats)>(0), std::min(static_cast<decltype(nFeats)>(rowLimit), nFeats));
-  for (auto iField = 0; iField < poFDefn->GetFieldCount(); iField++) {
-    OGRFieldDefn* poFieldDefn = poFDefn->GetFieldDefn(iField);
-    // FIXME(andrewseidl): change this to the faster one used by readVerticesFromGDAL
-    metadata.emplace(poFieldDefn->GetNameRef(), std::vector<std::string>(numFeatures));
-  }
-  OGRFeature* poFeature;
-  poLayer->ResetReading();
-  size_t iFeature = 0;
-  while ((poFeature = poLayer->GetNextFeature()) != nullptr && iFeature < numFeatures) {
-    OGRGeometry* poGeometry;
-    poGeometry = poFeature->GetGeometryRef();
-    if (poGeometry != nullptr) {
-      switch (wkbFlatten(poGeometry->getGeometryType())) {
-        case wkbPolygon:
-        case wkbMultiPolygon:
-          break;
-        default:
-          throw std::runtime_error("Unsupported geometry type: " + std::string(poGeometry->getGeometryName()));
-      }
-      for (auto i : metadata) {
-        auto iField = poFeature->GetFieldIndex(i.first.c_str());
-        metadata[i.first].at(iFeature) = std::string(poFeature->GetFieldAsString(iField));
-      }
-      OGRFeature::DestroyFeature(poFeature);
+  OGRDataSource* poDS = nullptr;
+  try {
+    poDS = openGDALDataset(fileName);
+    if (poDS == nullptr) {
+      throw std::runtime_error("Unable to open geo file " + fileName);
     }
-    iFeature++;
-  }
-  GDALClose(poDS);
-}
-
-void Importer::readVerticesFromGDAL(
-    const std::string& fileName,
-    std::vector<PolyData2d>& polys,
-    std::pair<std::map<std::string, size_t>, std::vector<std::vector<std::string>>>& metadata) {
-  auto poDS = openGDALDataset(fileName);
-  if (poDS == nullptr) {
-    throw std::runtime_error("Unable to open geo file " + fileName);
-  }
-  OGRLayer* poLayer;
-  poLayer = poDS->GetLayer(0);
-  if (poLayer == nullptr) {
-    throw std::runtime_error("No layers found in " + fileName);
-  }
-  OGRFeatureDefn* poFDefn = poLayer->GetLayerDefn();
-  size_t numFeatures = poLayer->GetFeatureCount();
-  size_t nFields = poFDefn->GetFieldCount();
-  for (size_t iField = 0; iField < nFields; iField++) {
-    OGRFieldDefn* poFieldDefn = poFDefn->GetFieldDefn(iField);
-    metadata.first[poFieldDefn->GetNameRef()] = iField;
-    metadata.second.push_back(std::vector<std::string>(numFeatures));
-  }
-  OGRFeature* poFeature;
-  poLayer->ResetReading();
-  auto poSR = new OGRSpatialReference();
-  poSR->importFromEPSG(3857);
-
-  // typeof GetFeatureCount() is different between GDAL 1.x (int32_t) and 2.x (int64_t)
-  auto nFeats = poLayer->GetFeatureCount();
-  decltype(nFeats) iFeature = 0;
-  for (iFeature = 0; iFeature < nFeats; iFeature++) {
-    poFeature = poLayer->GetNextFeature();
-    if (poFeature == nullptr) {
-      break;
+    OGRLayer* poLayer;
+    poLayer = poDS->GetLayer(0);
+    if (poLayer == nullptr) {
+      throw std::runtime_error("No layers found in " + fileName);
     }
-    try {
+    OGRFeatureDefn* poFDefn = poLayer->GetLayerDefn();
+
+    // typeof GetFeatureCount() is different between GDAL 1.x (int32_t) and 2.x (int64_t)
+    auto nFeats = poLayer->GetFeatureCount();
+    size_t numFeatures =
+        std::max(static_cast<decltype(nFeats)>(0), std::min(static_cast<decltype(nFeats)>(rowLimit), nFeats));
+    for (auto iField = 0; iField < poFDefn->GetFieldCount(); iField++) {
+      OGRFieldDefn* poFieldDefn = poFDefn->GetFieldDefn(iField);
+      // FIXME(andrewseidl): change this to the faster one used by readVerticesFromGDAL
+      metadata.emplace(poFieldDefn->GetNameRef(), std::vector<std::string>(numFeatures));
+    }
+    metadata.emplace(geoColumnName, std::vector<std::string>(numFeatures));
+    OGRFeature* poFeature;
+    poLayer->ResetReading();
+    size_t iFeature = 0;
+    while ((poFeature = poLayer->GetNextFeature()) != nullptr && iFeature < numFeatures) {
       OGRGeometry* poGeometry;
       poGeometry = poFeature->GetGeometryRef();
       if (poGeometry != nullptr) {
-        poGeometry->transformTo(poSR);
-        if (polys.size()) {
-          polys.emplace_back(polys.back().startVert() + polys.back().numVerts(),
-                             polys.back().startIdx() + polys.back().numIndices());
-        } else {
-          polys.emplace_back();
-        }
+        // validate geom type (again?)
         switch (wkbFlatten(poGeometry->getGeometryType())) {
-          case wkbPolygon: {
-            OGRPolygon* poPolygon = (OGRPolygon*)poGeometry;
-            readVerticesFromGDALGeometryZ(fileName, poPolygon, polys.back(), false, iFeature);
-            break;
-          }
-          case wkbMultiPolygon: {
-            OGRMultiPolygon* poMultiPolygon = (OGRMultiPolygon*)poGeometry;
-            int NumberOfGeometries = poMultiPolygon->getNumGeometries();
-            for (auto j = 0; j < NumberOfGeometries; j++) {
-              OGRGeometry* poPolygonGeometry = poMultiPolygon->getGeometryRef(j);
-              OGRPolygon* poPolygon = (OGRPolygon*)poPolygonGeometry;
-              readVerticesFromGDALGeometryZ(fileName, poPolygon, polys.back(), false, iFeature, j);
-            }
-            break;
-          }
           case wkbPoint:
+          case wkbLineString:
+          case wkbPolygon:
+          case wkbMultiPolygon:
+            break;
           default:
             throw std::runtime_error("Unsupported geometry type: " + std::string(poGeometry->getGeometryName()));
         }
-        for (size_t iField = 0; iField < nFields; iField++) {
-          metadata.second[iField][iFeature] = std::string(poFeature->GetFieldAsString(iField));
+
+        // populate metadata for regular fields
+        for (auto i : metadata) {
+          auto iField = poFeature->GetFieldIndex(i.first.c_str());
+          if (iField >= 0) // geom is -1
+            metadata[i.first].at(iFeature) = std::string(poFeature->GetFieldAsString(iField));
         }
+
+        // populate metadata for geo column with WKT string
+        char* wkts = nullptr;
+        poGeometry->exportToWkt(&wkts);
+        CHECK(wkts);
+        metadata[geoColumnName].at(iFeature) = wkts;
+        CPLFree(wkts);
+
+        // done with this feature
         OGRFeature::DestroyFeature(poFeature);
       }
-    } catch (const std::exception& e) {
-      throw std::runtime_error(e.what() + std::string(" Feature: ") + std::to_string(iFeature + 1));
+      iFeature++;
     }
+  } catch (const std::exception& e) {
+    if (poDS)
+      GDALClose(poDS);
+    poDS = nullptr;
+    throw;
   }
-  GDALClose(poDS);
+  if (poDS)
+    GDALClose(poDS);
+  poDS = nullptr;
 }
 
 std::pair<SQLTypes, bool> ogr_to_type(const OGRFieldType& ogr_type) {
@@ -3224,21 +3072,28 @@ std::pair<SQLTypes, bool> ogr_to_type(const OGRFieldType& ogr_type) {
   throw std::runtime_error("Unknown OGR field type: " + std::to_string(ogr_type));
 }
 
-ColumnDescriptor create_array_column(const SQLTypes& type, const std::string& name) {
-  ColumnDescriptor cd;
-  cd.columnName = name;
-  SQLTypeInfo ti;
-  ti.set_type(kARRAY);
-  ti.set_subtype(type);
-  ti.set_fixed_size();
-  cd.columnType = ti;
-  return cd;
+SQLTypes ogr_to_type(const OGRwkbGeometryType& ogr_type) {
+  switch (ogr_type) {
+    case wkbPoint:
+      return kPOINT;
+    case wkbLineString:
+      return kLINESTRING;
+    case wkbPolygon:
+      return kPOLYGON;
+    case wkbMultiPolygon:
+      return kMULTIPOLYGON;
+    default:
+      break;
+  }
+  throw std::runtime_error("Unknown OGR geom type: " + std::to_string(ogr_type));
 }
 
-const std::list<ColumnDescriptor> Importer::gdalToColumnDescriptors(const std::string& fileName) {
+const std::list<ColumnDescriptor> Importer::gdalToColumnDescriptors(const std::string& fileName,
+                                                                    const std::string& geoColumnName) {
   std::list<ColumnDescriptor> cds;
-  auto poDS = openGDALDataset(fileName);
+  OGRDataSource* poDS = nullptr;
   try {
+    poDS = openGDALDataset(fileName);
     if (poDS == nullptr) {
       throw std::runtime_error("Unable to open geo file " + fileName + " : " + CPLGetLastErrorMsg());
     }
@@ -3251,6 +3106,7 @@ const std::list<ColumnDescriptor> Importer::gdalToColumnDescriptors(const std::s
     poLayer->ResetReading();
     // TODO(andrewseidl): support multiple features
     if ((poFeature = poLayer->GetNextFeature()) != nullptr) {
+      // get fields as regular columns
       OGRFeatureDefn* poFDefn = poLayer->GetLayerDefn();
       int iField;
       for (iField = 0; iField < poFDefn->GetFieldCount(); iField++) {
@@ -3274,103 +3130,437 @@ const std::list<ColumnDescriptor> Importer::gdalToColumnDescriptors(const std::s
         cd.columnType = ti;
         cds.push_back(cd);
       }
+      // get geo column, if any
+      OGRGeometry* poGeometry = poFeature->GetGeometryRef();
+      if (poGeometry) {
+        ColumnDescriptor cd;
+        cd.columnName = geoColumnName;
+        cd.sourceName = geoColumnName;
+        SQLTypes geoType = ogr_to_type(wkbFlatten(poGeometry->getGeometryType()));
+#if PROMOTE_POLYGON_TO_MULTIPOLYGON
+        geoType = (geoType == kPOLYGON) ? kMULTIPOLYGON : geoType;
+#endif
+        SQLTypeInfo ti;
+        ti.set_type(geoType);
+        cd.columnType = ti;
+        cds.push_back(cd);
+      }
+      // done with this feature
+      OGRFeature::DestroyFeature(poFeature);
     }
   } catch (const std::exception& e) {
-    GDALClose(poDS);
+    if (poDS)
+      GDALClose(poDS);
+    poDS = nullptr;
     throw;
   }
-  GDALClose(poDS);
+  if (poDS)
+    GDALClose(poDS);
+  poDS = nullptr;
 
   return cds;
 }
 
-ImportStatus Importer::importGDAL(std::map<std::string, std::string> colname_to_src) {
-  set_import_status(import_id, import_status);
-  std::vector<PolyData2d> polys;
-  std::pair<std::map<std::string, size_t>, std::vector<std::vector<std::string>>> metadata;
+ImportStatus Importer::importGDAL(ColumnNameToSourceNameMapType columnNameToSourceNameMap) {
+  OGRDataSource* poDS = nullptr;
+  try {
+    auto import_timer = timer_start();
 
-  readVerticesFromGDAL(file_path.c_str(), polys, metadata);
+    // initial status
+    bool load_truncated = false;
+    set_import_status(import_id, import_status);
 
-  std::vector<std::unique_ptr<TypedImportBuffer>> import_buffers_vec;
-  for (const auto cd : loader->get_column_descs())
-    import_buffers_vec.push_back(
-        std::unique_ptr<TypedImportBuffer>(new TypedImportBuffer(cd, loader->get_string_dict(cd))));
+    // open the data set
+    poDS = openGDALDataset(file_path);
+    if (poDS == nullptr) {
+      throw std::runtime_error("Unable to open geo file " + file_path);
+    }
 
-  for (size_t ipoly = 0; ipoly < polys.size(); ++ipoly) {
-    auto poly = polys[ipoly];
-    try {
-      auto icol = 0;
-      for (auto cd : loader->get_column_descs()) {
-        if (cd->columnName == MAPD_GEO_PREFIX + "coords") {
-          std::vector<TDatum> coords;
-          for (auto coord : poly.coords) {
-            TDatum td;
-            td.val.real_val = coord;
-            coords.push_back(td);
-          }
-          TDatum tdd;
-          tdd.val.arr_val = coords;
-          tdd.is_null = false;
-          import_buffers_vec[icol++]->add_value(cd, tdd, false);
-        } else if (cd->columnName == MAPD_GEO_PREFIX + "indices") {
-          std::vector<TDatum> indices;
-          for (auto tris : poly.triangulation_indices) {
-            TDatum td;
-            td.val.int_val = tris;
-            indices.push_back(td);
-          }
-          TDatum tdd;
-          tdd.val.arr_val = indices;
-          tdd.is_null = false;
-          import_buffers_vec[icol++]->add_value(cd, tdd, false);
-        } else if (cd->columnName == MAPD_GEO_PREFIX + "linedrawinfo") {
-          std::vector<TDatum> ldis;
-          ldis.resize(4 * poly.lineDrawInfo.size());
-          size_t ildi = 0;
-          for (auto ldi : poly.lineDrawInfo) {
-            ldis[ildi++].val.int_val = ldi.count;
-            ldis[ildi++].val.int_val = ldi.instanceCount;
-            ldis[ildi++].val.int_val = ldi.firstIndex;
-            ldis[ildi++].val.int_val = ldi.baseInstance;
-          }
-          TDatum tdd;
-          tdd.val.arr_val = ldis;
-          tdd.is_null = false;
-          import_buffers_vec[icol++]->add_value(cd, tdd, false);
-        } else if (cd->columnName == MAPD_GEO_PREFIX + "polydrawinfo") {
-          std::vector<TDatum> pdis;
-          pdis.resize(5 * poly.polyDrawInfo.size());
-          size_t ipdi = 0;
-          for (auto pdi : poly.polyDrawInfo) {
-            pdis[ipdi++].val.int_val = pdi.count;
-            pdis[ipdi++].val.int_val = pdi.instanceCount;
-            pdis[ipdi++].val.int_val = pdi.firstIndex;
-            pdis[ipdi++].val.int_val = pdi.baseVertex;
-            pdis[ipdi++].val.int_val = pdi.baseInstance;
-          }
-          TDatum tdd;
-          tdd.val.arr_val = pdis;
-          tdd.is_null = false;
-          import_buffers_vec[icol++]->add_value(cd, tdd, false);
-        } else {
-          auto ifield = metadata.first.at(colname_to_src[cd->columnName]);
-          auto str = metadata.second.at(ifield).at(ipoly);
-          import_buffers_vec[icol++]->add_value(cd, str, false, copy_params);
+    // get the first layer
+    OGRLayer* poLayer = poDS->GetLayer(0);
+    if (poLayer == nullptr) {
+      throw std::runtime_error("No layers found in " + file_path);
+    }
+
+    // get the number of features in this layer
+    size_t numFeatures = poLayer->GetFeatureCount();
+
+    // build map of metadata field (additional columns) name to index
+    // use shared_ptr since we need to pass it to the worker
+    FieldNameToIndexMapType fieldNameToIndexMap;
+    OGRFeatureDefn* poFDefn = poLayer->GetLayerDefn();
+    size_t numFields = poFDefn->GetFieldCount();
+    for (size_t iField = 0; iField < numFields; iField++) {
+      OGRFieldDefn* poFieldDefn = poFDefn->GetFieldDefn(iField);
+      fieldNameToIndexMap.emplace(std::make_pair(poFieldDefn->GetNameRef(), iField));
+    }
+
+    // the spatial reference we want to put everything in
+    auto poSR = new OGRSpatialReference();
+    poSR->importFromEPSG(3857);
+
+#if DISABLE_MULTI_THREADED_SHAPEFILE_IMPORT
+    // just one "thread"
+    int max_threads = 1;
+#else
+    // how many threads to use
+    int max_threads = 0;
+    if (copy_params.threads == 0)
+      max_threads = sysconf(_SC_NPROCESSORS_CONF);
+    else
+      max_threads = copy_params.threads;
+#endif
+
+    // make an import buffer for each thread
+    for (int i = 0; i < max_threads; i++) {
+      import_buffers_vec.push_back(std::vector<std::unique_ptr<TypedImportBuffer>>());
+      for (const auto cd : loader->get_column_descs())
+        import_buffers_vec[i].push_back(
+            std::unique_ptr<TypedImportBuffer>(new TypedImportBuffer(cd, loader->get_string_dict(cd))));
+    }
+
+    // make render group analyzers for each poly column
+    ColumnIdToRenderGroupAnalyzerMapType columnIdToRenderGroupAnalyzerMap;
+    auto columnDescriptors = loader->get_catalog().getAllColumnMetadataForTable(loader->get_table_desc()->tableId, false, false, false);
+    for (auto cd : columnDescriptors) {
+      SQLTypes ct = cd->columnType.get_type();
+      if (ct == kPOLYGON || ct == kMULTIPOLYGON) {
+        auto rga = std::make_shared<RenderGroupAnalyzer>();
+        rga->seedFromExistingTableContents(loader, cd->columnName);
+        columnIdToRenderGroupAnalyzerMap[cd->columnId] = rga;
+      }
+    }
+
+#if !DISABLE_MULTI_THREADED_SHAPEFILE_IMPORT
+    // threads
+    std::list<std::future<ImportStatus>> threads;
+
+    // use a stack to track thread_ids which must not overlap among threads
+    // because thread_id is used to index import_buffers_vec[]
+    std::stack<int> stack_thread_ids;
+    for (int i = 0; i < max_threads; i++)
+      stack_thread_ids.push(i);
+#endif
+
+    // checkpoint the table
+    auto start_epoch = loader->getTableEpoch();
+
+    // reset the layer
+    poLayer->ResetReading();
+
+    static const size_t MAX_FEATURES_PER_CHUNK = 1000;
+
+    // make a features buffer for each thread
+    std::vector<FeaturePtrVector> features;
+    for (int i = 0; i < max_threads; i++) {
+      features.emplace_back(MAX_FEATURES_PER_CHUNK, nullptr);
+    }
+
+    // for each feature...
+    size_t firstFeatureThisChunk = 0;
+    while (firstFeatureThisChunk < numFeatures) {
+
+      // how many features this chunk
+      size_t numFeaturesThisChunk = std::min(MAX_FEATURES_PER_CHUNK, numFeatures - firstFeatureThisChunk);
+
+      // get a thread_id not in use
+#if DISABLE_MULTI_THREADED_SHAPEFILE_IMPORT
+      int thread_id = 0;
+#else
+      auto thread_id = stack_thread_ids.top();
+      stack_thread_ids.pop();
+      // LOG(INFO) << " stack_thread_ids.pop " << thread_id << std::endl;
+#endif
+
+      // fill features buffer for new thread
+      for (size_t i = 0; i < numFeaturesThisChunk; i++) {
+        features[thread_id][i] = poLayer->GetNextFeature();
+      }
+
+#if DISABLE_MULTI_THREADED_SHAPEFILE_IMPORT
+      // call worker function directly
+      if (DEBUG_SHAPEFILE_IMPORT) LOG(INFO) << "DEBUG: Starting worker for features " << firstFeatureThisChunk << " to " << firstFeatureThisChunk + numFeaturesThisChunk - 1;
+      auto ret_import_status = import_thread_shapefile(0, this, poSR, features[thread_id], numFeaturesThisChunk,
+                                                       fieldNameToIndexMap, columnNameToSourceNameMap, columnIdToRenderGroupAnalyzerMap);
+      import_status += ret_import_status;
+      import_status.rows_estimated = ((float)firstFeatureThisChunk / (float)numFeatures) * import_status.rows_completed;
+      set_import_status(import_id, import_status);
+
+      // destroy and reset features
+      FeaturePtrVector& threadFeatures = features[0];
+      for (size_t iFeature = 0; iFeature < MAX_FEATURES_PER_CHUNK; iFeature++) {
+        if (threadFeatures[iFeature])
+          OGRFeature::DestroyFeature(threadFeatures[iFeature]);
+        threadFeatures[iFeature] = nullptr;
+      }
+#else
+
+      // fire up that thread to import this geometry
+      if (DEBUG_SHAPEFILE_IMPORT) LOG(INFO) << "DEBUG: Starting worker thread " << thread_id << " for features " << firstFeatureThisChunk << " to " << firstFeatureThisChunk + numFeaturesThisChunk - 1;
+      threads.push_back(
+          std::async(std::launch::async, import_thread_shapefile, thread_id, this, poSR, features[thread_id], numFeaturesThisChunk,
+                     fieldNameToIndexMap, columnNameToSourceNameMap, columnIdToRenderGroupAnalyzerMap));
+
+      // let the threads run
+      while (threads.size() > 0) {
+        int nready = 0;
+        for (std::list<std::future<ImportStatus>>::iterator it = threads.begin(); it != threads.end(); it = it) {
+          auto& p = *it;
+          std::chrono::milliseconds span(0);  //(std::distance(it, threads.end()) == 1? 1: 0);
+          if (p.wait_for(span) == std::future_status::ready) {
+            auto ret_import_status = p.get();
+            import_status += ret_import_status;
+            import_status.rows_estimated = ((float)firstFeatureThisChunk / (float)numFeatures) * import_status.rows_completed;
+            set_import_status(import_id, import_status);
+
+            // destroy and reset features
+            FeaturePtrVector& threadFeatures = features[ret_import_status.thread_id];
+            for (size_t iFeature = 0; iFeature < MAX_FEATURES_PER_CHUNK; iFeature++) {
+              if (threadFeatures[iFeature])
+                OGRFeature::DestroyFeature(threadFeatures[iFeature]);
+              threadFeatures[iFeature] = nullptr;
+            }
+
+            // recall thread_id for reuse
+            stack_thread_ids.push(ret_import_status.thread_id);
+            // LOG(INFO) << " stack_thread_ids.push " << ret_import_status.thread_id << std::endl;
+
+            if (DEBUG_SHAPEFILE_IMPORT) LOG(INFO) << "DEBUG:   Thread " << ret_import_status.thread_id << " finished";
+
+            threads.erase(it++);
+            ++nready;
+          } else
+            ++it;
+        }
+
+        if (nready == 0)
+        {
+          std::this_thread::yield();
+        }
+
+        // keep reading if any free thread slot
+        // this is one of the major difference from old threading model !!
+        if ((int)threads.size() < max_threads)
+          break;
+      }
+#endif
+
+      // out of rows?
+      if (import_status.rows_rejected > copy_params.max_reject) {
+        load_truncated = true;
+        load_failed = true;
+        LOG(ERROR) << "Maximum rows rejected exceeded. Halting load";
+        break;
+      }
+
+      // failed?
+      if (load_failed) {
+        load_truncated = true;
+        LOG(ERROR) << "A call to the Loader::load failed, Please review the logs for more details";
+        break;
+      }
+
+      firstFeatureThisChunk += numFeaturesThisChunk;
+    }
+
+#if !DISABLE_MULTI_THREADED_SHAPEFILE_IMPORT
+    // join dangling threads in case of LOG(ERROR) above
+    if (threads.size()) {
+      if (DEBUG_SHAPEFILE_IMPORT) LOG(INFO) << "DEBUG:   Waiting for dangling threads...";
+      for (auto& p : threads)
+        p.wait();
+      if (DEBUG_SHAPEFILE_IMPORT) LOG(INFO) << "DEBUG:   Done";
+    }
+#endif
+
+    GDALClose(poDS);
+    poDS = nullptr;
+
+    if (load_failed) {
+      // rollback to starting epoch - undo all the added records
+      loader->setTableEpoch(start_epoch);
+    } else {
+      loader->checkpoint();
+    }
+
+    if (!load_failed && loader->get_table_desc()->persistenceLevel == Data_Namespace::MemoryLevel::DISK_LEVEL) {  // only checkpoint disk-resident tables
+      for (auto& p : import_buffers_vec[0]) {
+        if (!p->stringDictCheckpoint()) {
+          LOG(ERROR) << "Checkpointing Dictionary for Column " << p->getColumnDesc()->columnName << " failed.";
+          load_failed = true;
+          break;
         }
       }
-    } catch (const std::exception& e) {
-      LOG(WARNING) << "importGDAL exception thrown: " << e.what() << ". Row discarded.";
     }
-  }
 
-  try {
-    loader->load(import_buffers_vec, polys.size());
-    return import_status;
+    // must set import_status.load_truncated before closing this end of pipe
+    // otherwise, the thread on the other end would throw an unwanted 'write()'
+    // exception
+    import_status.load_truncated = load_truncated;
+
+    // tidy up
+    delete poSR;
+
+    if (DEBUG_SHAPEFILE_IMPORT) LOG(INFO) << "Import completed in " << float(timer_stop<std::chrono::steady_clock::time_point, std::chrono::microseconds>(import_timer)) / 1000.0f << "ms";
+
   } catch (const std::exception& e) {
-    LOG(WARNING) << e.what();
+    if (poDS)
+      GDALClose(poDS);
+    poDS = nullptr;
+    throw;
+  }
+  if (poDS)
+    GDALClose(poDS);
+  poDS = nullptr;
+
+  // done
+  return import_status;
+}
+
+//
+// class RenderGroupAnalyzer
+//
+
+void RenderGroupAnalyzer::seedFromExistingTableContents(const std::unique_ptr<Loader>& loader, const std::string& geoColumnBaseName) {
+  // get the table descriptor
+  const auto& cat = loader->get_catalog();
+  const std::string& tableName = loader->get_table_desc()->tableName;
+  const auto td = cat.getMetadataForTable(tableName);
+  CHECK(td);
+  CHECK(td->fragmenter);
+
+  // start with a fresh tree
+  _rtree.clear();
+  _numRenderGroups = 0;
+
+  // if the table is empty, we're done
+  if (td->fragmenter->getFragmentsForQuery().getPhysicalNumTuples() == 0) {
+    if (DEBUG_RENDER_GROUP_ANALYZER) LOG(INFO) << "DEBUG: Table is empty!";
+    return;
   }
 
-  return import_status;
+  // no seeding possible without these two columns
+  const auto cd_coords = cat.getMetadataForColumn(td->tableId, geoColumnBaseName + "_coords");
+  const auto cd_render_group = cat.getMetadataForColumn(td->tableId, geoColumnBaseName + "_render_group");
+  if (!cd_coords || !cd_render_group) {
+    if (DEBUG_RENDER_GROUP_ANALYZER) LOG(INFO) << "DEBUG: Table doesn't have coords or render_group columns!";
+    return;
+  }
+
+  // and validate their types
+  if (cd_coords->columnType.get_type() != kARRAY || cd_coords->columnType.get_subtype() != kDOUBLE) {
+    if (DEBUG_RENDER_GROUP_ANALYZER) LOG(INFO) << "DEBUG: Table coords columns is wrong type!";
+    return;
+  }
+  if (cd_render_group->columnType.get_type() != kINT) {
+    if (DEBUG_RENDER_GROUP_ANALYZER) LOG(INFO) << "DEBUG: Table render_group columns is wrong type!";
+    return;
+  }
+
+  // get chunk accessor table
+  auto chunkAccessorTable = getChunkAccessorTable(cat, td, { geoColumnBaseName + "_coords",
+                                                             geoColumnBaseName + "_render_group" });
+  const auto table_count = std::get<0>(chunkAccessorTable.back());
+
+  if (DEBUG_RENDER_GROUP_ANALYZER) LOG(INFO) << "DEBUG: Scanning existing table geo column set '" << geoColumnBaseName << "'";
+
+  auto scanTimer = timer_start();
+
+  for (size_t row = 0; row < table_count; row++) {
+    ArrayDatum ad;
+    VarlenDatum vd;
+    bool is_end;
+
+    // get ChunkIters and fragment row offset
+    size_t rowOffset = 0;
+    auto& chunkIters = getChunkItersAndRowOffset(chunkAccessorTable, row, rowOffset);
+    auto& coordsChunkIter = chunkIters[0];
+    auto& renderGroupChunkIter = chunkIters[1];
+
+    // get coords
+    ChunkIter_get_nth(&coordsChunkIter, row - rowOffset, &ad, &is_end);
+    CHECK(!is_end);
+    CHECK(ad.pointer);
+    int numCoords = (int)(ad.length / sizeof(double));
+    CHECK(numCoords % 2 == 0);
+
+    // skip row if no coords
+    if (numCoords == 0)
+      continue;
+
+    // build bounding box of these points
+    double* coords = reinterpret_cast<double*>(ad.pointer);
+    Bounds bounds;
+    boost::geometry::assign_inverse(bounds);
+    for (int i = 0; i < numCoords; i += 2) {
+      double x = *coords++;
+      double y = *coords++;
+      boost::geometry::expand(bounds, Point(x, y));
+    }
+
+    // get render group
+    ChunkIter_get_nth(&renderGroupChunkIter, row - rowOffset, false, &vd, &is_end);
+    CHECK(!is_end);
+    CHECK(vd.pointer);
+    int renderGroup = *reinterpret_cast<int32_t*>(vd.pointer);
+    CHECK_GE(renderGroup, 0);
+
+    // add to rtree
+    _rtree.insert(std::make_pair(bounds, renderGroup));
+
+    // how many render groups do we have now?
+    if (renderGroup >= _numRenderGroups)
+      _numRenderGroups = renderGroup + 1;
+
+    if (DEBUG_RENDER_GROUP_ANALYZER) LOG(INFO) << "DEBUG:   Existing row " << row << " has " << numCoords << " coords, and Render Group " << renderGroup;
+  }
+
+  if (DEBUG_RENDER_GROUP_ANALYZER) LOG(INFO) << "DEBUG: Done! Now have " << _numRenderGroups << " Render Groups (" << timer_stop(scanTimer) << "ms)";
+}
+
+int RenderGroupAnalyzer::insertCoordsAndReturnRenderGroup(const std::vector<double>& coords) {
+  // get bounds
+  Bounds bounds;
+  boost::geometry::assign_inverse(bounds);
+  for (size_t i = 0; i < coords.size(); i += 2) {
+    double x = coords[i];
+    double y = coords[i + 1];
+    boost::geometry::expand(bounds, Point(x, y));
+  }
+
+  // remainder under mutex to allow this to be multi-threaded
+  std::lock_guard<std::mutex> guard(_rtreeMutex);
+
+  // get the intersecting nodes
+  std::vector<Node> intersects;
+  _rtree.query(boost::geometry::index::intersects(bounds), std::back_inserter(intersects));
+
+  // build bitset of render groups of the intersecting rectangles
+  // clear bit means available, allows use of find_first()
+  boost::dynamic_bitset<> bits(_numRenderGroups);
+  bits.set();
+  for (const auto& intersection : intersects)
+  {
+    CHECK(intersection.second < _numRenderGroups);
+    bits.reset(intersection.second);
+  }
+
+  // find first available group
+  int firstAvailableRenderGroup;
+  size_t firstSetBit = bits.find_first();
+  if (firstSetBit == boost::dynamic_bitset<>::npos) {
+    // all known groups represented, add a new one
+    firstAvailableRenderGroup = _numRenderGroups;
+    _numRenderGroups++;
+  } else {
+    firstAvailableRenderGroup = (int)firstSetBit;
+  }
+
+  // insert new node
+  _rtree.insert(std::make_pair(bounds, firstAvailableRenderGroup));
+
+  // return it
+  return firstAvailableRenderGroup;
 }
 
 }  // Namespace Importer
