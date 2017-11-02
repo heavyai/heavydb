@@ -20,10 +20,11 @@ import com.mapd.thrift.server.TColumn;
 import com.mapd.thrift.server.TColumnData;
 import com.mapd.thrift.server.TColumnType;
 import com.mapd.thrift.server.TQueryResult;
-import com.mapd.thrift.server.TStringRow;
-import com.mapd.thrift.server.TStringValue;
 import com.mapd.thrift.server.TTableDetails;
 import com.mapd.thrift.server.TMapDException;
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.io.IOException;
 import static java.lang.System.exit;
 import java.sql.*;
 import java.util.ArrayList;
@@ -152,6 +153,12 @@ public class SQLImporter {
             .longOpt("truncate")
             .build();
 
+    Option initFile = Option.builder("i")
+            .hasArg()
+            .desc("File containing init command for DB")
+            .longOpt("initializeFile")
+            .build();
+
     options.addOption(driver);
     options.addOption(sqlStmt);
     options.addOption(jdbcConnect);
@@ -166,6 +173,7 @@ public class SQLImporter {
     options.addOption(bufferSize);
     options.addOption(fragmentSize);
     options.addOption(truncate);
+    options.addOption(initFile);
 
     CommandLineParser parser = new DefaultParser();
 
@@ -193,6 +201,11 @@ public class SQLImporter {
               cmd.getOptionValue("sourcePasswd"));
 
       long startTime = System.currentTimeMillis();
+
+      // run init file script on targe DB if present
+      if (cmd.hasOption("initializeFile")) {
+        run_init(conn);
+      }
 
       // set autocommit off to allow postgress to not load all results
       conn.setAutoCommit(false);
@@ -222,12 +235,12 @@ public class SQLImporter {
         TColumn col = setupBinaryColumn(i, md, bufferSize);
         cols.add(col);
       }
-      
+
       // read data from old DB
       while (rs.next()) {
         for (int i = 1; i <= md.getColumnCount(); i++) {
           setColValue(rs, cols.get(i - 1), md.getColumnType(i), i);
-        } 
+        }
         resultCount++;
         bufferCount++;
         if (bufferCount == bufferSize) {
@@ -283,6 +296,30 @@ public class SQLImporter {
         se.printStackTrace();
       }//end finally try
     }//end try
+  }
+
+  private void run_init(Connection conn) {
+    //attempt to open file
+    String line = "";
+    try {
+      BufferedReader reader = new BufferedReader(new FileReader(cmd.getOptionValue("initializeFile")));
+      Statement stmt = conn.createStatement();
+      while ((line = reader.readLine()) != null) {
+        if (line.isEmpty()) {
+          continue;
+        }
+        LOGGER.info("Running : " + line);
+        stmt.execute(line);
+      }
+      stmt.close();
+      reader.close();
+    } catch (IOException e) {
+      LOGGER.error("Exception occurred trying to read initialize file: " + cmd.getOptionValue("initFile"));
+      exit(1);
+    } catch (SQLException e) {
+      LOGGER.error("Exception occurred trying to execute initialize file entry : " + line);
+      exit(1);
+    }
   }
 
   private void help(Options options) {
@@ -544,17 +581,17 @@ public class SQLImporter {
       case java.sql.Types.TIME:
         Time t = rs.getTime(colNum);
 
-        col.data.int_col.add(t.getTime()/1000);
+        col.data.int_col.add(t.getTime() / 1000);
         break;
       case java.sql.Types.TIMESTAMP:
         Timestamp ts = rs.getTimestamp(colNum);
 
-        col.data.int_col.add(ts.getTime()/1000);
+        col.data.int_col.add(ts.getTime() / 1000);
         break;
       case java.sql.Types.DATE:
         Date d = rs.getDate(colNum);
 
-        col.data.int_col.add(d.getTime()/1000);
+        col.data.int_col.add(d.getTime() / 1000);
         break;
       case java.sql.Types.FLOAT:
       case java.sql.Types.DECIMAL:
