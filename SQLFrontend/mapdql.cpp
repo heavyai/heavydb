@@ -646,6 +646,13 @@ void process_backslash_commands(char* command, ClientContext& context) {
       std::cout << "\\status get status of the server and the leaf nodes.\n";
       std::cout << "\\export_dashboard <dashboard name>,<filename> Exports a dashboard to a file\n";
       std::cout << "\\import_dashboard <dashboard name>,<filename> Imports a dashboard from a file\n";
+      std::cout << "\\roles Reports all roles.\n";
+      std::cout << "\\role_check <roleName> Checks if a role exists.\n";
+      std::cout << "\\role_list <userName> Reports all roles granted to an user.\n";
+      std::cout << "\\privileges {<roleName>|<userName>} Reports all database objects' privileges granted to a role or "
+                   "an user.\n";
+      std::cout
+          << "\\object_privileges <object_name> Reports all privileges granted to an object for all roles and users.\n";
       std::cout << "\\q Quit.\n";
       return;
     case 'd': {
@@ -1756,18 +1763,18 @@ int main(int argc, char** argv) {
       print_timing = true;
     } else if (!strncmp(line, "\\notiming", 9)) {
       print_timing = false;
-    } else if (!strncmp(line, "\\role_name", 10)) {
-      context.privs_role_name = strtok(line + 11, " ");
+    } else if (!strncmp(line, "\\role_check", 11)) {
+      context.privs_role_name = strtok(line + 12, " ");
       get_role(context);
     } else if (!strncmp(line, "\\roles", 6)) {
       get_all_roles(context);
-    } else if (!strncmp(line, "\\role_privs", 11)) {
+    } else if (!strncmp(line, "\\privileges", 11)) {
       context.privs_role_name = strtok(line + 12, " ");
       get_db_objects_for_role(context);
-    } else if (!strncmp(line, "\\role_object_privs", 18)) {
+    } else if (!strncmp(line, "\\object_privileges", 18)) {
       context.privs_object_name = strtok(line + 19, " ");
       get_db_object_privs(context);
-    } else if (!strncmp(line, "\\role_user", 10)) {
+    } else if (!strncmp(line, "\\role_list", 10)) {
       context.privs_user_name = strtok(line + 11, " ");
       get_all_roles_for_user(context);
     } else if (line[0] == '\\' && line[1] == 'q')
