@@ -566,8 +566,6 @@ public class SQLImporter {
 
   private void setColValue(ResultSet rs, TColumn col, int columnType, int colNum) throws SQLException {
 
-    col.nulls.add(Boolean.FALSE);
-
     switch (columnType) {
       case java.sql.Types.TINYINT:
       case java.sql.Types.SMALLINT:
@@ -576,22 +574,47 @@ public class SQLImporter {
       case java.sql.Types.BIT:  // deal with postgress treating boolean as bit... this will bite me
       case java.sql.Types.BOOLEAN:
         col.data.int_col.add(rs.getLong(colNum));
+        if (rs.wasNull()) {
+          col.nulls.add(Boolean.TRUE);
+        } else {
+          col.nulls.add(Boolean.FALSE);
+        }
         break;
 
       case java.sql.Types.TIME:
         Time t = rs.getTime(colNum);
+        if (rs.wasNull()) {
+          col.nulls.add(Boolean.TRUE);
+          col.data.int_col.add(0L);
 
-        col.data.int_col.add(t.getTime() / 1000);
+        } else {
+          col.data.int_col.add(t.getTime() / 1000);
+          col.nulls.add(Boolean.FALSE);
+        }
+
         break;
       case java.sql.Types.TIMESTAMP:
         Timestamp ts = rs.getTimestamp(colNum);
+        if (rs.wasNull()) {
+          col.nulls.add(Boolean.TRUE);
+          col.data.int_col.add(0L);
 
-        col.data.int_col.add(ts.getTime() / 1000);
+        } else {
+          col.data.int_col.add(ts.getTime() / 1000);
+          col.nulls.add(Boolean.FALSE);
+        }
+
         break;
       case java.sql.Types.DATE:
         Date d = rs.getDate(colNum);
+        if (rs.wasNull()) {
+          col.nulls.add(Boolean.TRUE);
+          col.data.int_col.add(0L);
 
-        col.data.int_col.add(d.getTime() / 1000);
+        } else {
+          col.data.int_col.add(d.getTime() / 1000);
+          col.nulls.add(Boolean.FALSE);
+        }
         break;
       case java.sql.Types.FLOAT:
       case java.sql.Types.DECIMAL:
@@ -599,6 +622,12 @@ public class SQLImporter {
       case java.sql.Types.REAL:
       case java.sql.Types.NUMERIC:
         col.data.real_col.add(rs.getDouble(colNum));
+        if (rs.wasNull()) {
+          col.nulls.add(Boolean.TRUE);
+
+        } else {
+          col.nulls.add(Boolean.FALSE);
+        }
         break;
 
       case java.sql.Types.NVARCHAR:
@@ -607,16 +636,19 @@ public class SQLImporter {
       case java.sql.Types.CHAR:
       case java.sql.Types.LONGVARCHAR:
       case java.sql.Types.LONGNVARCHAR:
-        col.data.str_col.add(rs.getString(colNum));
+        String strVal = rs.getString(colNum);
+        if (rs.wasNull()) {
+          col.nulls.add(Boolean.TRUE);
+          col.data.str_col.add("");
+
+        } else {
+          col.data.str_col.add(strVal);
+          col.nulls.add(Boolean.FALSE);
+        }
         break;
 
       default:
         throw new AssertionError("Column type " + columnType + " not Supported");
-    }
-    if (rs.wasNull()) {
-      col.nulls.add(Boolean.TRUE);
-    } else {
-      col.nulls.add(Boolean.FALSE);
     }
   }
 
