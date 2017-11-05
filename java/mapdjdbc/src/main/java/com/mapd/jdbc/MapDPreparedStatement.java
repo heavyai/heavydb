@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package com.mapd.jdbc;
 
 import com.mapd.thrift.server.MapD;
@@ -73,7 +72,7 @@ class MapDPreparedStatement implements PreparedStatement {
   private boolean isParmString[] = null;
   private List<TStringRow> rows = null;
   private String warnings = null;
-  private static final Pattern REGEX_PATTERN = Pattern.compile("(?i) INTO (\\w+)");
+  private static final Pattern REGEX_PATTERN = Pattern.compile("(?i)\\s+INTO\\s+(\\w+)");
 
   MapDPreparedStatement(String sql, String session, MapD.Client client) {
     currentSQL = sql;
@@ -81,7 +80,7 @@ class MapDPreparedStatement implements PreparedStatement {
     this.session = session;
     this.stmt = new MapDStatement(session, client);
     MAPDLOGGER.debug("Prepared statement is " + currentSQL);
-    //TODO in real life this needs to check if the ? isinside quotes before we assume it a parameter
+    //TODO in real life this needs to check if the ? is inside quotes before we assume it a parameter
     brokenSQL = currentSQL.split("\\?", -1);
     parmCount = brokenSQL.length - 1;
     parmRep = new String[parmCount];
@@ -89,6 +88,9 @@ class MapDPreparedStatement implements PreparedStatement {
     repCount = 0;
     modQuery = new StringBuffer(currentSQL.length() * 5);
     if (currentSQL.toUpperCase().contains("INSERT ")) {
+      // remove double quotes required for queries generated with " around all names like kafka connect
+      currentSQL = currentSQL.replaceAll("\"", " ");
+      MAPDLOGGER.debug("Insert Prepared statement is " + currentSQL);
       isInsert = true;
       Matcher matcher = REGEX_PATTERN.matcher(currentSQL);
       while (matcher.find()) {
@@ -710,7 +712,11 @@ class MapDPreparedStatement implements PreparedStatement {
         throw new SQLException("addBatch failed : " + ex.toString());
       }
       ret = new int[rows.size()];
+      for (int i = 0; i < rows.size(); i++) {
+        ret[i] = 1;
+      }
       rows.clear();
+
     }
     return ret;
   }
