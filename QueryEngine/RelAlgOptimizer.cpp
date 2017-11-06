@@ -1321,11 +1321,12 @@ void hoist_filter_cond_to_cross_join(std::vector<std::shared_ptr<RelAlgNode>>& n
       continue;
     }
     visited.insert(node.get());
-    if (auto join = dynamic_cast<RelJoin*>(node.get())) {
+    auto join = dynamic_cast<RelJoin*>(node.get());
+    if (join && join->getJoinType() == JoinType::INNER) {
       // Only allow cross join for now.
       if (auto literal = dynamic_cast<const RexLiteral*>(join->getCondition())) {
         // Assume Calcite always generates an inner join on constant boolean true for cross join.
-        CHECK(literal->getType() == kBOOLEAN && literal->getVal<bool>() && join->getJoinType() == JoinType::INNER);
+        CHECK(literal->getType() == kBOOLEAN && literal->getVal<bool>());
         size_t first_col_idx = 0;
         const RelFilter* filter = nullptr;
         std::vector<const RelJoin*> join_seq{join};
