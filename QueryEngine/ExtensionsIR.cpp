@@ -72,9 +72,18 @@ llvm::Value* Executor::codegenFunctionOper(const Analyzer::FunctionOper* functio
     throw std::runtime_error("Inconsistent return type for " + function_oper->getName());
   }
   std::vector<llvm::Value*> orig_arg_lvs;
+  std::unordered_map<llvm::Value*, llvm::Value*> const_arr_size;
   for (size_t i = 0; i < function_oper->getArity(); ++i) {
-    const auto arg_lvs = codegen(function_oper->getArg(i), true, co);
-    CHECK_EQ(size_t(1), arg_lvs.size());
+    const auto arg = function_oper->getArg(i);
+    const auto& arg_ti = arg->get_type_info();
+    const auto arg_lvs = codegen(arg, true, co);
+    if (arg_lvs.size() > 1) {
+      CHECK(arg_ti.is_array());
+      CHECK_EQ(size_t(2), arg_lvs.size());
+      const_arr_size[arg_lvs.front()] = arg_lvs.back();
+    } else {
+      CHECK_EQ(size_t(1), arg_lvs.size());
+    }
     orig_arg_lvs.push_back(arg_lvs.front());
   }
   // The extension function implementations don't handle NULL, they work under
@@ -84,7 +93,7 @@ llvm::Value* Executor::codegenFunctionOper(const Analyzer::FunctionOper* functio
   const auto bbs = beginArgsNullcheck(function_oper, orig_arg_lvs);
   CHECK_EQ(orig_arg_lvs.size(), function_oper->getArity());
   // Arguments must be converted to the types the extension function can handle.
-  const auto args = codegenFunctionOperCastArgs(function_oper, &ext_func_sig, orig_arg_lvs, co);
+  const auto args = codegenFunctionOperCastArgs(function_oper, &ext_func_sig, orig_arg_lvs, const_arr_size, co);
   auto ext_call = cgen_state_->emitExternalCall(ext_func_sig.getName(), ret_ty, args);
   return endArgsNullcheck(bbs, ext_call, function_oper);
 }
@@ -191,10 +200,12 @@ llvm::Value* Executor::codegenFunctionOperNullArg(const Analyzer::FunctionOper* 
 }
 
 // Generate CAST operations for arguments in `orig_arg_lvs` to the types required by `ext_func_sig`.
-std::vector<llvm::Value*> Executor::codegenFunctionOperCastArgs(const Analyzer::FunctionOper* function_oper,
-                                                                const ExtensionFunction* ext_func_sig,
-                                                                const std::vector<llvm::Value*>& orig_arg_lvs,
-                                                                const CompilationOptions& co) {
+std::vector<llvm::Value*> Executor::codegenFunctionOperCastArgs(
+    const Analyzer::FunctionOper* function_oper,
+    const ExtensionFunction* ext_func_sig,
+    const std::vector<llvm::Value*>& orig_arg_lvs,
+    const std::unordered_map<llvm::Value*, llvm::Value*>& const_arr_size,
+    const CompilationOptions& co) {
   CHECK(ext_func_sig);
   const auto& ext_func_args = ext_func_sig->getArgs();
   CHECK_LE(function_oper->getArity(), ext_func_args.size());
@@ -204,13 +215,18 @@ std::vector<llvm::Value*> Executor::codegenFunctionOperCastArgs(const Analyzer::
     const auto& arg_ti = arg->get_type_info();
     llvm::Value* arg_lv{nullptr};
     if (arg_ti.is_array()) {
+      bool const_arr = (const_arr_size.count(orig_arg_lvs[i]) > 0);
       const auto elem_ti = arg_ti.get_elem_type();
-      const auto ptr_lv = cgen_state_->emitExternalCall(
-          "array_buff", llvm::Type::getInt8PtrTy(cgen_state_->context_), {orig_arg_lvs[i], posArg(arg)});
-      const auto len_lv =
-          cgen_state_->emitExternalCall("array_size",
-                                        get_int_type(32, cgen_state_->context_),
-                                        {orig_arg_lvs[i], posArg(arg), ll_int(log2_bytes(elem_ti.get_logical_size()))});
+      const auto ptr_lv =
+          (const_arr) ? orig_arg_lvs[i] : cgen_state_->emitExternalCall("array_buff",
+                                                                        llvm::Type::getInt8PtrTy(cgen_state_->context_),
+                                                                        {orig_arg_lvs[i], posArg(arg)});
+      const auto len_lv = (const_arr)
+                              ? const_arr_size.at(orig_arg_lvs[i])
+                              : cgen_state_->emitExternalCall(
+                                    "array_size",
+                                    get_int_type(32, cgen_state_->context_),
+                                    {orig_arg_lvs[i], posArg(arg), ll_int(log2_bytes(elem_ti.get_logical_size()))});
       args.push_back(castArrayPointer(ptr_lv, elem_ti));
       args.push_back(cgen_state_->ir_builder_.CreateZExt(len_lv, get_int_type(64, cgen_state_->context_)));
     } else {
