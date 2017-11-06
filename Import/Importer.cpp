@@ -1194,49 +1194,49 @@ ostream& operator<<(ostream& out, const std::vector<T>& v) {
   return out;
 }
 
-bool importGeoFromWkt(SQLTypes type,
-                      std::string& wkt,
+bool importGeoFromWkt(std::string& wkt,
+                      SQLTypes& type,
                       std::vector<double>& coords,
-                      std::vector<int>& ring_sizes) {
+                      std::vector<int>& ring_sizes,
+                      std::vector<int>& polygon_sizes) {
+  auto data = (char*)wkt.c_str();
+  OGRGeometryFactory geom_factory;
+  OGRGeometry* geom = nullptr;
+  OGRErr ogr_status = geom_factory.createFromWkt(&data, NULL, &geom);
+  if (ogr_status != OGRERR_NONE) {
+    if (geom)
+      geom_factory.destroyGeometry(geom);
+    return false;
+  }
+
   auto poSR = new OGRSpatialReference();
   poSR->importFromEPSG(3857);
+  geom->transformTo(poSR);
 
-  OGRErr status = OGRERR_NONE;
-  switch (type) {
-    case kPOINT: {
-      auto data = (char *)wkt.c_str();
-      OGRPoint point;
-      status = point.importFromWkt(&data);
-      if (status != OGRERR_NONE)
-        break;
-      point.transformTo(poSR);
-      coords.push_back(point.getX());
-      coords.push_back(point.getY());
-      return true;
+  bool status = true;
+  switch (wkbFlatten(geom->getGeometryType())) {
+    case wkbPoint: {
+      type = kPOINT;
+      OGRPoint* point = static_cast<OGRPoint*>(geom);
+      coords.push_back(point->getX());
+      coords.push_back(point->getY());
+      break;
     }
-    case kLINESTRING: {
-      auto data = (char *)wkt.c_str();
-      OGRLineString linestring;
-      status = linestring.importFromWkt(&data);
-      if (status != OGRERR_NONE)
-        break;
-      linestring.transformTo(poSR);
-      for (int i = 0; i < linestring.getNumPoints(); i++) {
+    case wkbLineString: {
+      type = kLINESTRING;
+      OGRLineString* linestring = static_cast<OGRLineString*>(geom);
+      for (int i = 0; i < linestring->getNumPoints(); i++) {
         OGRPoint point;
-        linestring.getPoint(i, &point);
+        linestring->getPoint(i, &point);
         coords.push_back(point.getX());
         coords.push_back(point.getY());
       }
-      return true;
+      break;
     }
-    case kPOLYGON: {
-      auto data = (char *)wkt.c_str();
-      OGRPolygon polygon;
-      status = polygon.importFromWkt(&data);
-      if (status != OGRERR_NONE)
-        break;
-      polygon.transformTo(poSR);
-      OGRLinearRing* exteriorRing = polygon.getExteriorRing();
+    case wkbPolygon: {
+      type = kPOLYGON;
+      OGRPolygon* polygon = static_cast<OGRPolygon*>(geom);
+      OGRLinearRing* exteriorRing = polygon->getExteriorRing();
       if (!exteriorRing->isClockwise()) {
         exteriorRing->reverseWindingOrder();
       }
@@ -1247,12 +1247,12 @@ bool importGeoFromWkt(SQLTypes type,
         coords.push_back(point.getX());
         coords.push_back(point.getY());
       }
-      if (polygon.getNumInteriorRings() > 0) {
+      if (polygon->getNumInteriorRings() > 0) {
         // First add exterior ring size
         ring_sizes.push_back(exteriorRing->getNumPoints());
         // Add sizes and coords of the interior rings
-        for (int r = 0; r < polygon.getNumInteriorRings(); r++) {
-          OGRLinearRing* interiorRing = polygon.getInteriorRing(r);
+        for (int r = 0; r < polygon->getNumInteriorRings(); r++) {
+          OGRLinearRing* interiorRing = polygon->getInteriorRing(r);
           ring_sizes.push_back(interiorRing->getNumPoints());
           for (int i = 0; i < interiorRing->getNumPoints(); i++) {
             OGRPoint point;
@@ -1262,13 +1262,20 @@ bool importGeoFromWkt(SQLTypes type,
           }
         }
       }
-
-      return true;
+      break;
+    }
+    case wkbMultiPolygon: {
+      status = false;
+      break;
     }
     default:
+      status = false;
       break;
   }
-  return false;
+
+  if (geom)
+    geom_factory.destroyGeometry(geom);
+  return status;
 }
 
 static ImportStatus import_thread(int thread_id,
@@ -1340,8 +1347,13 @@ static ImportStatus import_thread(int thread_id,
               CHECK(IS_GEO(col_ti.get_type()));
               std::vector<double> coords;
               std::vector<int> ring_sizes;
-              if (!importGeoFromWkt(col_ti.get_type(), wkt, coords, ring_sizes)) {
+              std::vector<int> polygon_sizes;
+              SQLTypes imported_type;
+              if (!importGeoFromWkt(wkt, imported_type, coords, ring_sizes, polygon_sizes)) {
                 throw std::runtime_error("Cannot read geometry to insert into column " + cd->columnName);
+              }
+              if (col_ti.get_type() != imported_type) {
+                throw std::runtime_error("Imported geometry doesn't match the type of column " + cd->columnName);
               }
 
               ++cd_it;

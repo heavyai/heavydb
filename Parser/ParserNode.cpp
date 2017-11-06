@@ -56,10 +56,11 @@ using Catalog_Namespace::SysCatalog;
 
 namespace Importer_NS {
 
-bool importGeoFromWkt(SQLTypes type,
-                      std::string& wkt,
+bool importGeoFromWkt(std::string& wkt,
+                      SQLTypes& type,
                       std::vector<double>& coords,
-                      std::vector<int>& ring_sizes);
+                      std::vector<int>& ring_sizes,
+                      std::vector<int>& polygon_sizes);
 
 }  // Importer_NS
 
@@ -1593,8 +1594,14 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog, Analyz
       CHECK(c);
       std::vector<double> coords;
       std::vector<int> ring_sizes;
-      if (!Importer_NS::importGeoFromWkt(cd->columnType.get_type(), *c->get_constval().stringval, coords, ring_sizes)) {
+      std::vector<int> polygon_sizes;
+      SQLTypes imported_type;
+      if (!Importer_NS::importGeoFromWkt(
+              *c->get_constval().stringval, imported_type, coords, ring_sizes, polygon_sizes)) {
         throw std::runtime_error("Cannot read geometry to insert into column " + cd->columnName);
+      }
+      if (cd->columnType.get_type() != imported_type) {
+        throw std::runtime_error("Imported geometry doesn't match the type of column " + cd->columnName);
       }
 
       const ColumnDescriptor* cd_coords = catalog.getMetadataForColumn(query.get_result_table_id(), cd->columnId + 1);
