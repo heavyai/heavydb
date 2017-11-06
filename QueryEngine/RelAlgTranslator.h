@@ -112,9 +112,11 @@ class RelAlgTranslator {
 
   std::shared_ptr<Analyzer::Expr> translateGeoFunction(const RexFunctionOperator*) const;
 
-  std::vector<std::shared_ptr<Analyzer::Expr>> translateGeoFunctionArgs(const RexFunctionOperator*) const;
+  std::vector<std::shared_ptr<Analyzer::Expr>> translateGeoFunctionArg(const RexScalar*, SQLTypes&) const;
 
-  std::vector<std::shared_ptr<Analyzer::Expr>> translateGeoFunctionArg(const RexInput*) const;
+  std::vector<std::shared_ptr<Analyzer::Expr>> translateGeoColumn(const RexInput*, SQLTypes&) const;
+
+  std::vector<std::shared_ptr<Analyzer::Expr>> translateGeoLiteral(const RexLiteral*, SQLTypes&) const;
 
   const Catalog_Namespace::Catalog& cat_;
   const Executor* executor_;
