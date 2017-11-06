@@ -2880,13 +2880,13 @@ void import_dept_table() {
 void import_geospatial_test() {
   const std::string geospatial_test("DROP TABLE IF EXISTS geospatial_test;");
   run_ddl_statement(geospatial_test);
-  run_ddl_statement("CREATE TABLE geospatial_test (pz POINT, p POINT, l LINESTRING, poly POLYGON) WITH (fragment_size=2);");
+  run_ddl_statement("CREATE TABLE geospatial_test (p POINT, l LINESTRING, poly POLYGON) WITH (fragment_size=2);");
   for (ssize_t i = 0; i < g_num_rows; ++i) {
-    const std::string insert_query{"INSERT INTO geospatial_test VALUES('POINT(0 0)', 'POINT(" +
-        std::to_string(i) + " " + std::to_string(i) + ")', 'LINESTRING(" +
-        std::to_string(i) + " 0, " + std::to_string(2*i) + " " + std::to_string(2*i) +
-        ((i % 2) ? (", " + std::to_string(2*i+1) + " " + std::to_string(2*i+1)) : "") + ")', 'POLYGON((0 0, " +
-        std::to_string(i+1) + " 0, 0 " + std::to_string(i+1) + ", 0 0))');"};
+    const std::string insert_query{
+        "INSERT INTO geospatial_test VALUES('POINT(" + std::to_string(i) + " " + std::to_string(i) +
+        ")', 'LINESTRING(" + std::to_string(i) + " 0, " + std::to_string(2 * i) + " " + std::to_string(2 * i) +
+        ((i % 2) ? (", " + std::to_string(2 * i + 1) + " " + std::to_string(2 * i + 1)) : "") + ")', 'POLYGON((0 0, " +
+        std::to_string(i + 1) + " 0, 0 " + std::to_string(i + 1) + ", 0 0))');"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
   }
 }
@@ -3952,22 +3952,56 @@ TEST(Select, GeoSpatial) {
     ASSERT_EQ(static_cast<int64_t>(g_num_rows),
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE ST_Distance(p,p) < 0.1;", dt)));
     ASSERT_EQ(static_cast<int64_t>(g_num_rows),
-              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE ST_Distance(pz,p) < 100.0;", dt)));
-    ASSERT_EQ(static_cast<int64_t>(7),
-              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE ST_Distance(pz,p) < 9;", dt)));
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM geospatial_test WHERE ST_Distance('POINT(0 0)', p) < 100.0;", dt)));
+    ASSERT_EQ(
+        static_cast<int64_t>(7),
+        v<int64_t>(run_simple_agg(
+            "SELECT COUNT(*) FROM geospatial_test WHERE ST_Distance(ST_GeomFromText('POINT(0 0)'), p) < 9;", dt)));
     ASSERT_EQ(static_cast<int64_t>(5),
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE ST_Distance(p,l) < 2.0;", dt)));
+    ASSERT_EQ(static_cast<int64_t>(1),
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test "
+                                        "WHERE ST_Distance('LINESTRING(-1 0, 0 1)', p) < 0.8;",
+                                        dt)));
+    ASSERT_EQ(static_cast<int64_t>(2),
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test "
+                                        "WHERE ST_Distance('LINESTRING(-1 0, 0 1)', p) < 1.1;",
+                                        dt)));
+    ASSERT_EQ(static_cast<int64_t>(3),
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test "
+                                        "WHERE ST_Distance(p, 'LINESTRING(-1 0, 0 1)') < 2.5;",
+                                        dt)));
 
     ASSERT_EQ(static_cast<int64_t>(g_num_rows),
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE ST_Contains(p,p);", dt)));
-    ASSERT_EQ(static_cast<int64_t>(1),
-              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE ST_Contains(pz,p);", dt)));
-    ASSERT_EQ(static_cast<int64_t>(1),
-              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE ST_Contains(pz,l);", dt)));
+    ASSERT_EQ(
+        static_cast<int64_t>(1),
+        v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE ST_Contains('POINT(0 0)', p);", dt)));
+    ASSERT_EQ(
+        static_cast<int64_t>(1),
+        v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE ST_Contains('POINT(0 0)', l);", dt)));
     ASSERT_EQ(static_cast<int64_t>(1),
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE ST_Contains(p,l);", dt)));
     ASSERT_EQ(static_cast<int64_t>(1),
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE ST_Contains(l,p);", dt)));
+
+    ASSERT_EQ(static_cast<int64_t>(0),
+              v<int64_t>(
+                  run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE ST_Contains(poly, 'POINT(-1 -1)');", dt)));
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows),
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM geospatial_test WHERE ST_Contains(poly, 'POINT(0.1 0.1)');", dt)));
+    ASSERT_EQ(static_cast<int64_t>(1),  // polygon containing a point
+              v<int64_t>(run_simple_agg("SELECT ST_Contains("
+                                        "ST_GeomFromText('POLYGON((2 0, 0 2, -2 0, 0 -2, 2 0))'), "
+                                        "ST_GeomFromText('POINT(0.1 0.1)')) FROM geospatial_test limit 1;",
+                                        dt)));
+    ASSERT_EQ(static_cast<int64_t>(0),  // same polygon but with a hole in the middle that the point falls into
+              v<int64_t>(run_simple_agg("SELECT ST_Contains("
+                                        "'POLYGON((2 0, 0 2, -2 0, 0 -2, 2 0),(1 0, 0 1, -1 0, 0 -1, 1 0))', "
+                                        "'POINT(0.1 0.1)') FROM geospatial_test limit 1;",
+                                        dt)));
   }
 }
 
