@@ -800,13 +800,13 @@ bool contains_polygon_point(double *poly, int64_t num, double *p)
   bool result = false;
   int64_t i, j;
   for (i = 0, j = num - 2; i < num; j = i, i+=2) {
-    if ((poly[i + 1] > p[1]) != (poly[j + 1] > p[1])) {
-      if (poly[j + 1] != poly[i + 1]) {
-        if (p[0] < (poly[j] - poly[i]) * (p[1] - poly[i + 1]) / (poly[j + 1] - poly[i + 1]) + poly[i]) {
-          result = !result;
-        }
-      }
-    }
+    double xray = fmax(poly[i], poly[j]);
+    if (xray < p[0])
+      continue;  // edge is on the left, we're casting the ray right so - no intersection
+    double ray[4] = {p[0], p[1], xray + 1.0, p[1]};
+    double polygon_edge[4] = {poly[j], poly[j + 1], poly[i], poly[i + 1]};
+    if (intersects_line_line(ray, polygon_edge))
+      result = !result;
   }
   return result;
 }
