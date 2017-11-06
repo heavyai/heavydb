@@ -314,9 +314,12 @@ list(APPEND MAPD_LIBRARIES Calcite)
 
 list(APPEND MAPD_LIBRARIES ${Arrow_LIBRARIES})
 
-enable_testing()
-add_subdirectory(Tests)
-add_subdirectory(SampleCode)
+option(ENABLE_TESTS "Build unit tests" ON)
+if (ENABLE_TESTS)
+  enable_testing()
+  add_subdirectory(Tests)
+  add_subdirectory(SampleCode)
+endif()
 
 set(initdb_source_files initdb.cpp)
 add_executable(initdb ${initdb_source_files})
