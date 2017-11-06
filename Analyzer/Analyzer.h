@@ -291,8 +291,7 @@ class Constant : public Expr {
       set_null_value();
   }
   Constant(const SQLTypeInfo& ti, bool n, const std::list<std::shared_ptr<Analyzer::Expr>>& l)
-    : Expr(ti), is_null(n), constval(Datum{0}), value_list(l) {
-  }
+      : Expr(ti), is_null(n), constval(Datum{0}), value_list(l) {}
   virtual ~Constant();
   bool get_is_null() const { return is_null; }
   Datum get_constval() const { return constval; }

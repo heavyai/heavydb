@@ -644,29 +644,26 @@ float reg_hex_vert_pixel_bin_y(const float valx,
   return hexsize * sqrt3 * (rz + rx / 2.0f) + yoffset;
 }
 
-
 DEVICE
-double hypotenuse(double x, double y)
-{
+double hypotenuse(double x, double y) {
   x = fabs(x);
   y = fabs(y);
   if (x < y) {
-    auto t = x; x = y; y = t;
+    auto t = x;
+    x = y;
+    y = t;
   }
   if (y == 0.0)
     return x;
-  return x * sqrt(1.0 + (y * y) / (x * x)); 
+  return x * sqrt(1.0 + (y * y) / (x * x));
 }
 
-ALWAYS_INLINE DEVICE
-double distance_point_point(double p1x, double p1y, double p2x, double p2y)
-{
+ALWAYS_INLINE DEVICE double distance_point_point(double p1x, double p1y, double p2x, double p2y) {
   return hypotenuse(p1x - p2x, p1y - p2y);
 }
 
 DEVICE
-double distance_point_line(double px, double py, double *l)
-{
+double distance_point_line(double px, double py, double* l) {
   double length = distance_point_point(l[0], l[1], l[2], l[3]);
   if (length == 0.0)
     return distance_point_point(px, py, l[0], l[1]);
@@ -686,48 +683,42 @@ double distance_point_line(double px, double py, double *l)
 }
 
 DEVICE
-bool intersects_line_line(double *l1, double *l2)
-{
+bool intersects_line_line(double* l1, double* l2) {
   // Check if line segment AB intersects line segment CD
-  double ex = l1[2] - l1[0]; // E = B - A
+  double ex = l1[2] - l1[0];  // E = B - A
   double ey = l1[3] - l1[1];
-  double fx = l2[2] - l2[0]; // F = D - C
+  double fx = l2[2] - l2[0];  // F = D - C
   double fy = l2[3] - l2[1];
-  double px = -ey; // P = ( -Ey, Ex )
-  double py =  ex;
-  double fp = fx * px + fy * py; // F * P
+  double px = -ey;  // P = ( -Ey, Ex )
+  double py = ex;
+  double fp = fx * px + fy * py;  // F * P
   if (fp == 0.0)
-    return false; // lines are parallel
-  double h = ((l1[0] - l2[0]) * px + (l1[1] - l2[1]) * py) / fp; // H = ( (A-C) * P ) / (F * P)
-  return (h >= 0.0 && h <= 1.0); // exact point of intersection: C + F*H
+    return false;                                                 // lines are parallel
+  double h = ((l1[0] - l2[0]) * px + (l1[1] - l2[1]) * py) / fp;  // H = ( (A-C) * P ) / (F * P)
+  return (h >= 0.0 && h <= 1.0);                                  // exact point of intersection: C + F*H
 }
 
 DEVICE
-double distance_line_line(double *l1, double *l2)
-{
+double distance_line_line(double* l1, double* l2) {
   if (intersects_line_line(l1, l2))
     return 0.0;
-  double dist12 = fmin(distance_point_line(l1[0], l1[1], l2),
-                       distance_point_line(l1[2], l1[3], l2));
-  double dist21 = fmin(distance_point_line(l2[0], l2[1], l1),
-                       distance_point_line(l2[2], l2[3], l1));
+  double dist12 = fmin(distance_point_line(l1[0], l1[1], l2), distance_point_line(l1[2], l1[3], l2));
+  double dist21 = fmin(distance_point_line(l2[0], l2[1], l1), distance_point_line(l2[2], l2[3], l1));
   return fmin(dist12, dist21);
 }
 
 EXTENSION_NOINLINE
-double ST_Distance_Point_Point(double *p1, int64_t p1num, double *p2, int64_t p2num)
-{
+double ST_Distance_Point_Point(double* p1, int64_t p1num, double* p2, int64_t p2num) {
   return distance_point_point(p1[0], p1[1], p2[0], p2[1]);
 }
 
 EXTENSION_NOINLINE
-double ST_Distance_Point_LineString(double *p, int64_t pnum, double *l, int64_t lnum)
-{
-  double *line = l;
-  int64_t num_lines = lnum/2 - 1;
+double ST_Distance_Point_LineString(double* p, int64_t pnum, double* l, int64_t lnum) {
+  double* line = l;
+  int64_t num_lines = lnum / 2 - 1;
   double dist = distance_point_line(p[0], p[1], line);
   for (int i = 1; i < num_lines; i++) {
-    line += 2; // adance one point
+    line += 2;  // adance one point
     double ldist = distance_point_line(p[0], p[1], line);
     if (dist > ldist)
       dist = ldist;
@@ -736,42 +727,38 @@ double ST_Distance_Point_LineString(double *p, int64_t pnum, double *l, int64_t 
 }
 
 EXTENSION_INLINE
-double ST_Distance_LineString_Point(double *l, int64_t lnum, double *p, int64_t pnum)
-{
+double ST_Distance_LineString_Point(double* l, int64_t lnum, double* p, int64_t pnum) {
   return ST_Distance_Point_LineString(p, pnum, l, lnum);
 }
 
 EXTENSION_NOINLINE
-double ST_Distance_LineString_LineString(double *l1, int64_t l1num, double *l2, int64_t l2num)
-{
+double ST_Distance_LineString_LineString(double* l1, int64_t l1num, double* l2, int64_t l2num) {
   double dist = distance_point_point(l1[0], l1[1], l2[0], l2[1]);
-  int64_t num_lines1 = l1num/2 - 1;
-  int64_t num_lines2 = l2num/2 - 1;
-  double *line1 = l1;
+  int64_t num_lines1 = l1num / 2 - 1;
+  int64_t num_lines2 = l2num / 2 - 1;
+  double* line1 = l1;
   for (int i = 0; i < num_lines1; i++) {
-    double *line2 = l2;
+    double* line2 = l2;
     for (int j = 0; j < num_lines2; j++) {
       double ldist = distance_line_line(line1, line2);
       if (dist > ldist)
         dist = ldist;
-      line2 += 2; // adance one point
+      line2 += 2;  // adance one point
     }
-    line1 += 2; // adance one point
+    line1 += 2;  // adance one point
   }
   return dist;
 }
 
 EXTENSION_NOINLINE
-bool ST_Contains_Point_Point(double *p1, int64_t p1num, double *p2, int64_t p2num)
-{
-  return (p1[0] == p2[0]) && (p1[1] == p2[1]); // TBD: sensitivity
+bool ST_Contains_Point_Point(double* p1, int64_t p1num, double* p2, int64_t p2num) {
+  return (p1[0] == p2[0]) && (p1[1] == p2[1]);  // TBD: sensitivity
 }
 
 EXTENSION_NOINLINE
-bool ST_Contains_Point_LineString(double *p, int64_t pnum, double *l, int64_t lnum)
-{
-  for (int i = 0; i < lnum; i+=2) {
-    if (p[0] == l[i] && p[1] == l[i+1])
+bool ST_Contains_Point_LineString(double* p, int64_t pnum, double* l, int64_t lnum) {
+  for (int i = 0; i < lnum; i += 2) {
+    if (p[0] == l[i] && p[1] == l[i + 1])
       continue;
     return false;
   }
@@ -779,34 +766,37 @@ bool ST_Contains_Point_LineString(double *p, int64_t pnum, double *l, int64_t ln
 }
 
 EXTENSION_INLINE
-bool ST_Contains_LineString_Point(double *l, int64_t lnum, double *p, int64_t pnum)
-{
+bool ST_Contains_LineString_Point(double* l, int64_t lnum, double* p, int64_t pnum) {
   return (ST_Distance_Point_LineString(p, pnum, l, lnum) == 0.0);  // TBD: sensitivity
 }
 
 EXTENSION_NOINLINE
-bool ST_Contains_LineString_LineString(double *l1, int64_t l1num, double *l2, int64_t l2num)
-{
+bool ST_Contains_LineString_LineString(double* l1, int64_t l1num, double* l2, int64_t l2num) {
   // TBD
   return false;
 }
 
 DEVICE
-bool contains_polygon_point(double *poly, int64_t num, double *p)
-{
+bool contains_polygon_point(double* poly, int64_t num, double* p) {
   // Shoot a line from P to the right, register intersections with polygon edges.
   // Each intersection means we're entered/exited the polygon.
   // Odd number of intersections means the polygon does contain P.
   bool result = false;
   int64_t i, j;
-  for (i = 0, j = num - 2; i < num; j = i, i+=2) {
+  for (i = 0, j = num - 2; i < num; j = i, i += 2) {
     double xray = fmax(poly[i], poly[j]);
     if (xray < p[0])
-      continue;  // edge is on the left, we're casting the ray right so - no intersection
+      continue;  // No intersection - edge is on the left, we're casting the ray to the right
     double ray[4] = {p[0], p[1], xray + 1.0, p[1]};
     double polygon_edge[4] = {poly[j], poly[j + 1], poly[i], poly[i + 1]};
-    if (intersects_line_line(ray, polygon_edge))
+    if (intersects_line_line(ray, polygon_edge)) {
       result = !result;
+      if (distance_point_line(poly[i], poly[i + 1], ray) == 0.0) {
+        // if ray goes through the edge's second vertex, flip the result again -
+        // that vertex will be crossed again when we look at the next edge
+        result = !result;
+      }
+    }
   }
   return result;
 }
@@ -847,8 +837,8 @@ bool ST_Contains_Polygon_LineString(double* poly_coords,
                                     int64_t lnum) {
   if (poly_num_rings > 0)
     return false;  // TBD: support polygons with interior rings
-  double *p = l;
-  for (int64_t i = 0; i < lnum; i+=2) {
+  double* p = l;
+  for (int64_t i = 0; i < lnum; i += 2) {
     // Check if polygon contains each point in the LineString
     if (!contains_polygon_point(poly_coords, poly_num_coords, p + i))
       return false;

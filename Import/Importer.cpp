@@ -1324,7 +1324,8 @@ static ImportStatus import_thread(int thread_id,
         phys_cols += cd->numPhysicalColumns;
       if (row.size() != col_descs.size() - phys_cols) {
         import_status.rows_rejected++;
-        LOG(ERROR) << "Incorrect Row (expected " << col_descs.size() - phys_cols << " columns, has " << row.size() << "): " << row;
+        LOG(ERROR) << "Incorrect Row (expected " << col_descs.size() - phys_cols << " columns, has " << row.size()
+                   << "): " << row;
         if (import_status.rows_rejected > copy_params.max_reject)
           break;
         continue;

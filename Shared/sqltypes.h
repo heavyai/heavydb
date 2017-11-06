@@ -59,7 +59,8 @@ enum SQLTypes {
   kPOINT = 18,
   kLINESTRING = 19,
   kPOLYGON = 20,
-  kSQLTYPE_LAST = 21};
+  kSQLTYPE_LAST = 21
+};
 
 struct VarlenDatum {
   int length;
@@ -243,7 +244,9 @@ class SQLTypeInfo {
   inline bool is_timeinterval() const { return type == kINTERVAL_DAY_TIME || type == kINTERVAL_YEAR_MONTH; }
   inline bool is_geometry() const { return IS_GEO(type); }
 
-  inline bool is_varlen() const { return (IS_STRING(type) && compression != kENCODING_DICT) || type == kARRAY || IS_GEO(type); }
+  inline bool is_varlen() const {
+    return (IS_STRING(type) && compression != kENCODING_DICT) || type == kARRAY || IS_GEO(type);
+  }
 
   HOST DEVICE inline bool operator!=(const SQLTypeInfo& rhs) const {
     return type != rhs.get_type() || subtype != rhs.get_subtype() || dimension != rhs.get_dimension() ||
@@ -485,7 +488,7 @@ class SQLTypeInfo {
       case kPOINT:
       case kLINESTRING:
       case kPOLYGON:
-        break;;
+        break;
       default:
         break;
     }

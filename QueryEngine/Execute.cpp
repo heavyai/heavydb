@@ -2166,8 +2166,7 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
     auto col_datum = col_cv->get_constval();
     auto col_type = cd->columnType.is_decimal() ? decimal_to_int_type(cd->columnType) : cd->columnType.get_type();
     uint8_t* col_data_bytes{nullptr};
-    if (!cd->columnType.is_array() &&
-        !cd->columnType.is_geometry() &&
+    if (!cd->columnType.is_array() && !cd->columnType.is_geometry() &&
         (!cd->columnType.is_string() || cd->columnType.get_compression() == kENCODING_DICT)) {
       const auto col_data_bytes_it = col_buffers.find(col_ids[col_idx]);
       CHECK(col_data_bytes_it != col_buffers.end());

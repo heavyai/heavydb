@@ -635,21 +635,7 @@ std::pair<std::unordered_set<const RexInput*>, std::vector<std::shared_ptr<RexIn
     const auto scan_source = dynamic_cast<const RelScan*>(source);
     if (scan_source) {
       CHECK(source->getOutputMetainfo().empty());
-      const auto table_desc = scan_source->getTableDescriptor();
       for (size_t i = 0; i < scan_source->size(); ++i) {
-        if (table_desc) {
-          const auto cd = cat.getMetadataForColumn(table_desc->tableId, i);
-          if (cd && cd->numPhysicalColumns) {
-            auto col_ti = cd->columnType;
-            CHECK(IS_GEO(col_ti.get_type()));
-            for (auto j = 0; j < cd->numPhysicalColumns; j++) {
-              auto synthesized_used_input = new RexInput(scan_source, i + 1 + j);
-              used_inputs_owned.emplace_back(synthesized_used_input);
-              used_inputs.insert(synthesized_used_input);
-            }
-            continue;
-          }
-        }
         auto synthesized_used_input = new RexInput(scan_source, i);
         used_inputs_owned.emplace_back(synthesized_used_input);
         used_inputs.insert(synthesized_used_input);
@@ -733,7 +719,7 @@ std::unordered_set<const RexInput*> get_join_source_used_inputs(const RelAlgNode
   if (auto left_deep_join = dynamic_cast<const RelLeftDeepInnerJoin*>(data_sink_node)) {
     CHECK_GE(left_deep_join->inputCount(), 2);
     const auto condition = left_deep_join->getInnerCondition();
-    RexUsedInputsVisitor visitor;
+    RexUsedInputsVisitor visitor(cat);
     auto result = visitor.visit(condition);
     for (size_t nesting_level = 1; nesting_level <= left_deep_join->inputCount() - 1; ++nesting_level) {
       const auto outer_condition = left_deep_join->getOuterCondition(nesting_level);
@@ -2027,7 +2013,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(const RelCompoun
       const auto input_permutation = get_node_input_permutation(query_infos);
       input_to_nest_level = get_input_nest_levels(compound, input_permutation);
       std::tie(input_descs, input_col_descs, std::ignore) =
-          get_input_desc(compound, input_to_nest_level, input_permutation);
+          get_input_desc(compound, input_to_nest_level, input_permutation, cat_);
     }
     left_deep_inner_joins = translateLeftDeepJoinFilter(left_deep_join, input_descs, input_to_nest_level, just_explain);
   }
@@ -2419,7 +2405,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(const RelProject*
       const auto input_permutation = get_node_input_permutation(query_infos);
       input_to_nest_level = get_input_nest_levels(project, input_permutation);
       std::tie(input_descs, input_col_descs, std::ignore) =
-          get_input_desc(project, input_to_nest_level, input_permutation);
+          get_input_desc(project, input_to_nest_level, input_permutation, cat_);
     }
     left_deep_inner_joins = translateLeftDeepJoinFilter(left_deep_join, input_descs, input_to_nest_level, just_explain);
   }

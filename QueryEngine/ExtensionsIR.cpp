@@ -64,10 +64,11 @@ llvm::Value* Executor::codegenFunctionOper(const Analyzer::FunctionOper* functio
   const auto& ext_func_sig = bind_function(function_oper, *ext_func_sigs);
   const auto& ret_ti = function_oper->get_type_info();
   CHECK(ret_ti.is_integer() || ret_ti.is_fp() || ret_ti.is_boolean());
-  const auto ret_ty = ret_ti.is_fp() ? (ret_ti.get_type() == kDOUBLE ? llvm::Type::getDoubleTy(cgen_state_->context_)
-                                                                     : llvm::Type::getFloatTy(cgen_state_->context_))
-                                     : (ret_ti.is_boolean() ? llvm::Type::getInt1Ty(cgen_state_->context_)
-                                                            : get_int_type(ret_ti.get_logical_size() * 8, cgen_state_->context_));
+  const auto ret_ty = ret_ti.is_fp()
+                          ? (ret_ti.get_type() == kDOUBLE ? llvm::Type::getDoubleTy(cgen_state_->context_)
+                                                          : llvm::Type::getFloatTy(cgen_state_->context_))
+                          : (ret_ti.is_boolean() ? llvm::Type::getInt1Ty(cgen_state_->context_)
+                                                 : get_int_type(ret_ti.get_logical_size() * 8, cgen_state_->context_));
   if (ret_ty != ext_arg_type_to_llvm_type(ext_func_sig.getRet(), cgen_state_->context_)) {
     throw std::runtime_error("Inconsistent return type for " + function_oper->getName());
   }

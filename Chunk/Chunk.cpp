@@ -131,9 +131,9 @@ size_t Chunk::getNumElemsForBytesInsertData(const DataBlockPtr& src_data,
       StringNoneEncoder* str_encoder = dynamic_cast<StringNoneEncoder*>(buffer->encoder.get());
       return str_encoder->getNumElemsForBytesInsertData(src_data.stringsPtr, start_idx, num_elems, byte_limit);
     }
-  case kPOINT:
-  case kLINESTRING:
-  case kPOLYGON: {
+    case kPOINT:
+    case kLINESTRING:
+    case kPOLYGON: {
       StringNoneEncoder* str_encoder = dynamic_cast<StringNoneEncoder*>(buffer->encoder.get());
       return str_encoder->getNumElemsForBytesInsertData(src_data.stringsPtr, start_idx, num_elems, byte_limit);
     }

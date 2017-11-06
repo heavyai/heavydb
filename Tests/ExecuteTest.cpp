@@ -3995,7 +3995,7 @@ TEST(Select, GeoSpatial) {
     ASSERT_EQ(static_cast<int64_t>(1),  // polygon containing a point
               v<int64_t>(run_simple_agg("SELECT ST_Contains("
                                         "ST_GeomFromText('POLYGON((2 0, 0 2, -2 0, 0 -2, 2 0))'), "
-                                        "ST_GeomFromText('POINT(0.1 0.1)')) FROM geospatial_test limit 1;",
+                                        "ST_GeomFromText('POINT(0 0)')) FROM geospatial_test limit 1;",
                                         dt)));
     ASSERT_EQ(static_cast<int64_t>(0),  // same polygon but with a hole in the middle that the point falls into
               v<int64_t>(run_simple_agg("SELECT ST_Contains("

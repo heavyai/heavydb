@@ -356,8 +356,17 @@ class Executor {
 
   ExpressionRange getColRange(const PhysicalInput&) const;
 
-  typedef boost::variant<int8_t, int16_t, int32_t, int64_t, float, double, std::pair<std::string, int>, std::string,
-                         std::vector<double>, std::vector<int32_t>, std::vector<int8_t>>
+  typedef boost::variant<int8_t,
+                         int16_t,
+                         int32_t,
+                         int64_t,
+                         float,
+                         double,
+                         std::pair<std::string, int>,
+                         std::string,
+                         std::vector<double>,
+                         std::vector<int32_t>,
+                         std::vector<int8_t>>
       LiteralValue;
   typedef std::vector<LiteralValue> LiteralValues;
 
@@ -1100,27 +1109,27 @@ class Executor {
   static size_t literalBytes(const LiteralValue& lit) {
     switch (lit.which()) {
       case 0:
-        return 1; // int8_t
+        return 1;  // int8_t
       case 1:
-        return 2; // int16_t
+        return 2;  // int16_t
       case 2:
-        return 4; // int32_t
+        return 4;  // int32_t
       case 3:
-        return 8; // int64_t
+        return 8;  // int64_t
       case 4:
-        return 4; // float
+        return 4;  // float
       case 5:
-        return 8; // double
+        return 8;  // double
       case 6:
-        return 4; // std::pair<std::string, int>
+        return 4;  // std::pair<std::string, int>
       case 7:
-        return 4; // std::string
+        return 4;  // std::string
       case 8:
-        return 4; // std::vector<double>
+        return 4;  // std::vector<double>
       case 9:
-        return 4; // std::vector<int32_t>
+        return 4;  // std::vector<int32_t>
       case 10:
-        return 4; // std::vector<int8_t>
+        return 4;  // std::vector<int8_t>
       default:
         abort();
     }

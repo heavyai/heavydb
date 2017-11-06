@@ -1790,7 +1790,8 @@ void Catalog::createTable(TableDescriptor& td,
         }
         sqliteConnector_.query_with_text_params(
             "INSERT INTO mapd_columns (tableid, columnid, name, coltype, colsubtype, coldim, colscale, is_notnull, "
-            "compression, comp_param, size, chunks, is_systemcol, is_virtualcol, virtual_expr, is_physicalcol, phys_columns) "
+            "compression, comp_param, size, chunks, is_systemcol, is_virtualcol, virtual_expr, is_physicalcol, "
+            "phys_columns) "
             "VALUES (?, ?, ?, ?, ?, "
             "?, "
             "?, ?, ?, ?, ?, ?, ?, ?, ?, "

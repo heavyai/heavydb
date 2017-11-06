@@ -1550,7 +1550,8 @@ void InsertStmt::analyze(const Catalog_Namespace::Catalog& catalog, Analyzer::Qu
   query.set_result_table_id(td->tableId);
   std::list<int> result_col_list;
   if (column_list.empty()) {
-    const std::list<const ColumnDescriptor*> all_cols = catalog.getAllColumnMetadataForTable(td->tableId, false, false, true);
+    const std::list<const ColumnDescriptor*> all_cols =
+        catalog.getAllColumnMetadataForTable(td->tableId, false, false, true);
     for (auto cd : all_cols) {
       result_col_list.push_back(cd->columnId);
     }
@@ -1571,7 +1572,8 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog, Analyz
   InsertStmt::analyze(catalog, query);
   std::vector<std::shared_ptr<Analyzer::TargetEntry>>& tlist = query.get_targetlist_nonconst();
   const auto tableId = query.get_result_table_id();
-  const std::list<const ColumnDescriptor*> non_phys_cols = catalog.getAllColumnMetadataForTable(tableId, false, false, false);
+  const std::list<const ColumnDescriptor*> non_phys_cols =
+      catalog.getAllColumnMetadataForTable(tableId, false, false, false);
   if (non_phys_cols.size() != value_list.size())
     throw std::runtime_error("Insert has more target columns than expressions.");
   std::list<int>::const_iterator it = query.get_result_col_list().begin();
@@ -1615,7 +1617,8 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog, Analyz
         auto e = makeExpr<Analyzer::Constant>(kDOUBLE, false, d);
         value_exprs.push_back(e);
       }
-      tlist.emplace_back(new Analyzer::TargetEntry("", makeExpr<Analyzer::Constant>(cd_coords->columnType, false, value_exprs), false));
+      tlist.emplace_back(new Analyzer::TargetEntry(
+          "", makeExpr<Analyzer::Constant>(cd_coords->columnType, false, value_exprs), false));
       ++it;
 
       if (cd->columnType.get_type() == kPOLYGON) {
