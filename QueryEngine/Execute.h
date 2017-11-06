@@ -356,7 +356,8 @@ class Executor {
 
   ExpressionRange getColRange(const PhysicalInput&) const;
 
-  typedef boost::variant<int8_t, int16_t, int32_t, int64_t, float, double, std::pair<std::string, int>, std::string>
+  typedef boost::variant<int8_t, int16_t, int32_t, int64_t, float, double, std::pair<std::string, int>, std::string,
+                         std::vector<double>, std::vector<int32_t>, std::vector<int8_t>>
       LiteralValue;
   typedef std::vector<LiteralValue> LiteralValues;
 
@@ -1098,24 +1099,38 @@ class Executor {
   static size_t literalBytes(const LiteralValue& lit) {
     switch (lit.which()) {
       case 0:
-        return 1;
+        return 1; // int8_t
       case 1:
-        return 2;
+        return 2; // int16_t
       case 2:
-        return 4;
+        return 4; // int32_t
       case 3:
-        return 8;
+        return 8; // int64_t
       case 4:
-        return 4;
+        return 4; // float
       case 5:
-        return 8;
+        return 8; // double
       case 6:
-        return 4;
+        return 4; // std::pair<std::string, int>
       case 7:
-        return 4;
+        return 4; // std::string
+      case 8:
+        return 4; // std::vector<double>
+      case 9:
+        return 4; // std::vector<int32_t>
+      case 10:
+        return 4; // std::vector<int8_t>
       default:
         abort();
     }
+  }
+
+  static size_t align(const size_t off_in, const size_t alignment) {
+    size_t off = off_in;
+    if (off % alignment != 0) {
+      off += (alignment - off % alignment);
+    }
+    return off;
   }
 
   static size_t addAligned(const size_t off_in, const size_t alignment) {
@@ -1194,6 +1209,32 @@ class Executor {
         case kINTERVAL_YEAR_MONTH:
           // TODO(alex): support null
           return getOrAddLiteral(static_cast<int64_t>(constant->get_constval().timeval), device_id);
+        case kARRAY: {
+          if (enc_type == kENCODING_NONE) {
+            if (ti.get_subtype() == kDOUBLE) {
+              std::vector<double> double_array_literal;
+              for (const auto& value : constant->get_value_list()) {
+                const auto c = dynamic_cast<const Analyzer::Constant*>(value.get());
+                CHECK(c);
+                double d = c->get_constval().doubleval;
+                double_array_literal.push_back(d);
+              }
+              return getOrAddLiteral(double_array_literal, device_id);
+            }
+            if (ti.get_subtype() == kINT) {
+              std::vector<int32_t> int32_array_literal;
+              for (const auto& value : constant->get_value_list()) {
+                const auto c = dynamic_cast<const Analyzer::Constant*>(value.get());
+                CHECK(c);
+                int32_t i = c->get_constval().intval;
+                int32_array_literal.push_back(i);
+              }
+              return getOrAddLiteral(int32_array_literal, device_id);
+            }
+            throw std::runtime_error("Unsupported literal array");
+          }
+          throw std::runtime_error("Encoded literal arrays are not supported");
+        }
         default:
           abort();
       }

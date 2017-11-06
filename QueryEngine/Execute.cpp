@@ -182,12 +182,27 @@ std::vector<int8_t> Executor::serializeLiterals(const std::unordered_map<int, Ex
   const auto& dev_literals = dev_literals_it->second;
   size_t lit_buf_size{0};
   std::vector<std::string> real_strings;
+  std::vector<std::vector<double>> double_array_literals;
+  std::vector<std::vector<int32_t>> int32_array_literals;
+  std::vector<std::vector<int8_t>> int8_array_literals;
   for (const auto& lit : dev_literals) {
     lit_buf_size = addAligned(lit_buf_size, Executor::literalBytes(lit));
     if (lit.which() == 7) {
       const auto p = boost::get<std::string>(&lit);
       CHECK(p);
       real_strings.push_back(*p);
+    } else if (lit.which() == 8) {
+      const auto p = boost::get<std::vector<double>>(&lit);
+      CHECK(p);
+      double_array_literals.push_back(*p);
+    } else if (lit.which() == 9) {
+      const auto p = boost::get<std::vector<int32_t>>(&lit);
+      CHECK(p);
+      int32_array_literals.push_back(*p);
+    } else if (lit.which() == 10) {
+      const auto p = boost::get<std::vector<int8_t>>(&lit);
+      CHECK(p);
+      int8_array_literals.push_back(*p);
     }
   }
   if (lit_buf_size > static_cast<size_t>(std::numeric_limits<int16_t>::max())) {
@@ -198,7 +213,29 @@ std::vector<int8_t> Executor::serializeLiterals(const std::unordered_map<int, Ex
     CHECK_LE(real_str.size(), static_cast<size_t>(std::numeric_limits<int16_t>::max()));
     lit_buf_size += real_str.size();
   }
+  if (double_array_literals.size() > 0)
+    lit_buf_size = align(lit_buf_size, sizeof(double));
+  int16_t crt_double_arr_lit_off = lit_buf_size;
+  for (const auto& double_array_literal : double_array_literals) {
+    CHECK_LE(double_array_literal.size(), static_cast<size_t>(std::numeric_limits<int16_t>::max()));
+    lit_buf_size += double_array_literal.size() * sizeof(double);
+  }
+  if (int32_array_literals.size() > 0)
+    lit_buf_size = align(lit_buf_size, sizeof(int32_t));
+  int16_t crt_int32_arr_lit_off = lit_buf_size;
+  for (const auto& int32_array_literal : int32_array_literals) {
+    CHECK_LE(int32_array_literal.size(), static_cast<size_t>(std::numeric_limits<int16_t>::max()));
+    lit_buf_size += int32_array_literal.size() * sizeof(int32_t);
+  }
+  int16_t crt_int8_arr_lit_off = lit_buf_size;
+  for (const auto& int8_array_literal : int8_array_literals) {
+    CHECK_LE(int8_array_literal.size(), static_cast<size_t>(std::numeric_limits<int16_t>::max()));
+    lit_buf_size += int8_array_literal.size();
+  }
   unsigned crt_real_str_idx = 0;
+  unsigned crt_double_arr_lit_idx = 0;
+  unsigned crt_int32_arr_lit_idx = 0;
+  unsigned crt_int8_arr_lit_idx = 0;
   std::vector<int8_t> serialized(lit_buf_size);
   size_t off{0};
   for (const auto& lit : dev_literals) {
@@ -258,6 +295,51 @@ std::vector<int8_t> Executor::serializeLiterals(const std::unordered_map<int, Ex
         memcpy(&serialized[crt_real_str_off], crt_real_str.data(), crt_real_str.size());
         ++crt_real_str_idx;
         crt_real_str_off += crt_real_str.size();
+        break;
+      }
+      case 8: {
+        const auto p = boost::get<std::vector<double>>(&lit);
+        CHECK(p);
+        int32_t off_and_len = crt_double_arr_lit_off << 16;
+        const auto& crt_double_arr_lit = double_array_literals[crt_double_arr_lit_idx];
+        int32_t len = crt_double_arr_lit.size();
+        CHECK_EQ((len >> 16), 0);
+        off_and_len |= static_cast<int16_t>(len);
+        int32_t double_array_bytesize = len * sizeof(double);
+        memcpy(&serialized[off - lit_bytes], &off_and_len, lit_bytes);
+        memcpy(&serialized[crt_double_arr_lit_off], crt_double_arr_lit.data(), double_array_bytesize);
+        ++crt_double_arr_lit_idx;
+        crt_double_arr_lit_off += double_array_bytesize;
+        break;
+      }
+      case 9: {
+        const auto p = boost::get<std::vector<int32_t>>(&lit);
+        CHECK(p);
+        int32_t off_and_len = crt_int32_arr_lit_off << 16;
+        const auto& crt_int32_arr_lit = int32_array_literals[crt_int32_arr_lit_idx];
+        int32_t len = crt_int32_arr_lit.size();
+        CHECK_EQ((len >> 16), 0);
+        off_and_len |= static_cast<int16_t>(len);
+        int32_t int32_array_bytesize = len * sizeof(int32_t);
+        memcpy(&serialized[off - lit_bytes], &off_and_len, lit_bytes);
+        memcpy(&serialized[crt_int32_arr_lit_off], crt_int32_arr_lit.data(), int32_array_bytesize);
+        ++crt_int32_arr_lit_idx;
+        crt_int32_arr_lit_off += int32_array_bytesize;
+        break;
+      }
+      case 10: {
+        const auto p = boost::get<std::vector<int8_t>>(&lit);
+        CHECK(p);
+        int32_t off_and_len = crt_int8_arr_lit_off << 16;
+        const auto& crt_int8_arr_lit = int8_array_literals[crt_int8_arr_lit_idx];
+        int32_t len = crt_int8_arr_lit.size();
+        CHECK_EQ((len >> 16), 0);
+        off_and_len |= static_cast<int16_t>(len);
+        int32_t int8_array_bytesize = len;
+        memcpy(&serialized[off - lit_bytes], &off_and_len, lit_bytes);
+        memcpy(&serialized[crt_int8_arr_lit_off], crt_int8_arr_lit.data(), int8_array_bytesize);
+        ++crt_int8_arr_lit_idx;
+        crt_int8_arr_lit_off += int8_array_bytesize;
         break;
       }
       default:
