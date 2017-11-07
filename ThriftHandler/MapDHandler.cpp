@@ -704,12 +704,15 @@ void MapDHandler::validate_rel_alg(TTableDescriptor& _return,
   }
 }
 
-void MapDHandler::get_role(std::vector<std::string>& roles, const TSessionId& session, const std::string& roleName) {
+void MapDHandler::get_role(std::vector<std::string>& roles,
+                           const TSessionId& session,
+                           const std::string& roleName,
+                           bool userPrivateRole) {
   auto session_it = get_session_it(session);
   auto session_info_ptr = session_it->second.get();
   auto& cat = session_info_ptr->get_catalog();
   auto& sys_cat = static_cast<Catalog_Namespace::SysCatalog&>(cat);
-  if (sys_cat.getRole(roleName)) {
+  if (sys_cat.getRole(roleName, userPrivateRole)) {
     roles.push_back(roleName);
   }
   return;

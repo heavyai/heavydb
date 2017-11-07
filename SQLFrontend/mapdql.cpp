@@ -246,7 +246,7 @@ bool thrift_with_retry(ThriftService which_service, ClientContext& context, cons
         context.client.get_frontend_view(context.view_return, context.session, context.view_name);
         break;
       case kGET_ROLE:
-        context.client.get_role(context.role_names, context.session, context.privs_role_name);
+        context.client.get_role(context.role_names, context.session, context.privs_role_name, context.userPrivateRole);
         break;
       case kGET_ALL_ROLES:
         context.client.get_all_roles(context.role_names, context.session, context.userPrivateRole);
@@ -1267,6 +1267,7 @@ void print_all_hardware_info(ClientContext context) {
 
 void get_role(ClientContext context) {
   context.role_names.clear();
+  context.userPrivateRole = false;
   if (thrift_with_retry(kGET_ROLE, context, context.privs_role_name.c_str())) {
     if (context.role_names.size() > 0) {
       std::cout << "Role " << context.privs_role_name << " exists." << std::endl;
@@ -1292,9 +1293,10 @@ void get_all_roles(ClientContext context) {
 
 void get_db_objects_for_role(ClientContext context) {
   context.role_names.clear();
+  context.userPrivateRole = true;
   if (thrift_with_retry(kGET_ROLE, context, context.privs_role_name.c_str())) {
     if (context.role_names.size() == 0) {
-      std::cout << "Role " << context.privs_role_name << " does not exist." << std::endl;
+      std::cout << "Role or user " << context.privs_role_name << " does not exist." << std::endl;
     } else {
       context.db_objects.clear();
       if (thrift_with_retry(kGET_OBJECTS_FOR_ROLE, context, context.privs_role_name.c_str())) {

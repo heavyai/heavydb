@@ -802,10 +802,17 @@ Role* SysCatalog::getMetadataForUserRole(int32_t userId) const {
   return userRoleIt->second;  // returns pointer to role
 }
 
-bool SysCatalog::getRole(const std::string& roleName) const {
+bool SysCatalog::getRole(const std::string& roleName, bool userPrivateRole) const {
   bool rc = false;
-  if (mapd_sys_cat->getMetadataForRole(roleName)) {
-    rc = true;
+  Role* rl = mapd_sys_cat->getMetadataForRole(roleName);
+  if (userPrivateRole) {
+    if (rl) {
+      rc = true;
+    }
+  } else {
+    if (rl && !rl->isUserPrivateRole()) {
+      rc = true;
+    }
   }
   return rc;
 }
