@@ -75,11 +75,11 @@ namespace Catalog_Namespace {
  */
 struct UserMetadata {
   UserMetadata(int32_t u, const std::string& n, const std::string& p, bool s)
-      : userId(u), userName(n), passwd(p), isSuper(s), isReallySuper(s) {}
+      : userId(u), userName(n), passwd_hash(p), isSuper(s), isReallySuper(s) {}
   UserMetadata() {}
   int32_t userId;
   std::string userName;
-  std::string passwd;
+  std::string passwd_hash;
   bool isSuper;
   bool isReallySuper;
 };
@@ -256,7 +256,6 @@ class Catalog {
   void updateDeletedColumnIndicator();
   void updateFrontendViewsToDashboards();
   void recordOwnershipOfObjectsInObjectPermissions();
-
   void buildMaps();
   void addTableToMap(TableDescriptor& td,
                      const std::list<ColumnDescriptor>& columns,
@@ -331,7 +330,7 @@ class SysCatalog {
             bool check_privileges);
   void createUser(const std::string& name, const std::string& passwd, bool issuper);
   void dropUser(const std::string& name);
-  void alterUser(const int32_t userid, const std::string* passwd, bool* is_superp);
+  void alterUser(const int32_t userid, const std::string* passwd, bool* issuper);
   void grantPrivileges(const int32_t userid, const int32_t dbid, const Privileges& privs);
   bool checkPrivileges(UserMetadata& user, DBMetadata& db, const Privileges& wants_privs);
   void createDatabase(const std::string& dbname, int owner);
@@ -409,6 +408,7 @@ class SysCatalog {
   void createUserRoles();
   void migratePrivileges();
   void migratePrivileged_old();
+  void updatePasswordsToHashes();
   void dropUserRole(const std::string& userName);
 
   // Here go functions not wrapped into transactions (necessary for nested calls)

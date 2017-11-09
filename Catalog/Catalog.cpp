@@ -48,6 +48,7 @@
 #include "../Shared/measure.h"
 #include "../StringDictionary/StringDictionaryClient.h"
 #include "SharedDictionaryValidator.h"
+#include "bcrypt.h"
 
 using Chunk_NS::Chunk;
 using Fragmenter_Namespace::InsertOrderFragmenter;
@@ -59,6 +60,17 @@ using std::string;
 using std::vector;
 
 bool g_aggregator{false};
+
+namespace {
+
+std::string hash_with_bcrypt(const std::string& pwd) {
+  char salt[BCRYPT_HASHSIZE], hash[BCRYPT_HASHSIZE];
+  CHECK(bcrypt_gensalt(-1, salt) == 0);
+  CHECK(bcrypt_hashpw(pwd.c_str(), salt, hash) == 0);
+  return std::string(hash, BCRYPT_HASHSIZE);
+}
+
+}  // namespace
 
 namespace Catalog_Namespace {
 
@@ -120,10 +132,10 @@ SysCatalog::~SysCatalog() {
 
 void SysCatalog::initDB() {
   sqliteConnector_->query(
-      "CREATE TABLE mapd_users (userid integer primary key, name text unique, passwd text, issuper boolean)");
+      "CREATE TABLE mapd_users (userid integer primary key, name text unique, passwd_hash text, issuper boolean)");
   sqliteConnector_->query_with_text_params(
       "INSERT INTO mapd_users VALUES (?, ?, ?, 1)",
-      std::vector<std::string>{MAPD_ROOT_USER_ID_STR, MAPD_ROOT_USER, MAPD_ROOT_PASSWD_DEFAULT});
+      std::vector<std::string>{MAPD_ROOT_USER_ID_STR, MAPD_ROOT_USER, hash_with_bcrypt(MAPD_ROOT_PASSWD_DEFAULT)});
   sqliteConnector_->query(
       "CREATE TABLE mapd_databases (dbid integer primary key, name text unique, owner integer references mapd_users)");
   if (check_privileges_) {
@@ -151,6 +163,7 @@ void SysCatalog::checkAndExecuteMigrations() {
     createUserRoles();
     migratePrivileges();
   }
+  updatePasswordsToHashes();
 }
 
 void SysCatalog::createUserRoles() {
@@ -323,6 +336,52 @@ void SysCatalog::migratePrivileges() {
   sqliteConnector_->query("END TRANSACTION");
 }
 
+void SysCatalog::updatePasswordsToHashes() {
+  sqliteConnector_->query("BEGIN TRANSACTION");
+  try {
+    sqliteConnector_->query("SELECT name FROM sqlite_master WHERE type='table' AND name='mapd_users'");
+    if (sqliteConnector_->getNumRows() == 0) {
+      // Nothing to update
+      sqliteConnector_->query("END TRANSACTION");
+      return;
+    }
+    sqliteConnector_->query("PRAGMA TABLE_INFO(mapd_users)");
+    for (size_t i = 0; i < sqliteConnector_->getNumRows(); i++) {
+      const auto& col_name = sqliteConnector_->getData<std::string>(i, 1);
+      if (col_name == "passwd_hash") {
+        sqliteConnector_->query("END TRANSACTION");
+        return;
+      }
+    }
+    // Alas, SQLite can't drop columns so we have to recreate the table
+    // (or, optionally, add the new column and reset the old one to a bunch of nulls)
+    sqliteConnector_->query("SELECT userid, passwd FROM mapd_users");
+    auto numRows = sqliteConnector_->getNumRows();
+    vector<std::string> users, passwords;
+    for (size_t i = 0; i < numRows; i++) {
+      users.push_back(sqliteConnector_->getData<std::string>(i, 0));
+      passwords.push_back(sqliteConnector_->getData<std::string>(i, 1));
+    }
+    sqliteConnector_->query(
+        "CREATE TABLE mapd_users_tmp (userid integer primary key, name text unique, passwd_hash text, issuper "
+        "boolean)");
+    sqliteConnector_->query(
+        "INSERT INTO mapd_users_tmp(userid, name, passwd_hash, issuper) SELECT userid, name, null, issuper FROM "
+        "mapd_users");
+    for (size_t i = 0; i < users.size(); ++i) {
+      sqliteConnector_->query_with_text_params("UPDATE mapd_users_tmp SET passwd_hash = ? WHERE userid = ?",
+                                              std::vector<std::string>{hash_with_bcrypt(passwords[i]), users[i]});
+    }
+    sqliteConnector_->query("DROP TABLE mapd_users");
+    sqliteConnector_->query("ALTER TABLE mapd_users_tmp RENAME TO mapd_users");
+  } catch (const std::exception&) {
+    sqliteConnector_->query("ROLLBACK TRANSACTION");
+    throw;
+  }
+  sqliteConnector_->query("END TRANSACTION");
+  sqliteConnector_->query("VACUUM");  // physically delete plain text passwords
+}
+
 // migration will be done as two step process this release
 // will create and use new table
 // next release will remove old table, doing this to have fall back path
@@ -378,8 +437,8 @@ void SysCatalog::createUser(const string& name, const string& passwd, bool issup
   }
   sqliteConnector_->query("BEGIN TRANSACTION");
   try {
-    sqliteConnector_->query_with_text_params("INSERT INTO mapd_users (name, passwd, issuper) VALUES (?, ?, ?)",
-                                             std::vector<std::string>{name, passwd, std::to_string(issuper)});
+    sqliteConnector_->query_with_text_params("INSERT INTO mapd_users (name, passwd_hash, issuper) VALUES (?, ?, ?)",
+                                             std::vector<std::string>{name, hash_with_bcrypt(passwd), std::to_string(issuper)});
     if (arePrivilegesOn()) {
       createRole_unsafe(name, true);
 
@@ -420,18 +479,19 @@ void SysCatalog::dropUser(const string& name) {
   sqliteConnector_->query("END TRANSACTION");
 }
 
-void SysCatalog::alterUser(const int32_t userid, const string* passwd, bool* is_superp) {
-  if (passwd != nullptr && is_superp != nullptr)
+void SysCatalog::alterUser(const int32_t userid, const string* passwd, bool* issuper) {
+  if (passwd != nullptr && issuper != nullptr) {
     sqliteConnector_->query_with_text_params(
-        "UPDATE mapd_users SET passwd = ?, issuper = ? WHERE userid = ?",
-        std::vector<std::string>{*passwd, std::to_string(*is_superp), std::to_string(userid)});
-  else if (passwd != nullptr)
-    sqliteConnector_->query_with_text_params("UPDATE mapd_users SET passwd = ? WHERE userid = ?",
-                                             std::vector<std::string>{*passwd, std::to_string(userid)});
-  else if (is_superp != nullptr)
+        "UPDATE mapd_users SET passwd_hash = ?, issuper = ? WHERE userid = ?",
+        std::vector<std::string>{hash_with_bcrypt(*passwd), std::to_string(*issuper), std::to_string(userid)});
+  } else if (passwd != nullptr) {
+    sqliteConnector_->query_with_text_params("UPDATE mapd_users SET passwd_hash = ? WHERE userid = ?",
+                                             std::vector<std::string>{hash_with_bcrypt(*passwd), std::to_string(userid)});
+  } else if (issuper != nullptr) {
     sqliteConnector_->query_with_text_params(
         "UPDATE mapd_users SET issuper = ? WHERE userid = ?",
-        std::vector<std::string>{std::to_string(*is_superp), std::to_string(userid)});
+        std::vector<std::string>{std::to_string(*issuper), std::to_string(userid)});
+  }
 }
 
 void SysCatalog::grantPrivileges(const int32_t userid, const int32_t dbid, const Privileges& privs) {
@@ -549,7 +609,10 @@ void SysCatalog::dropDatabase(const int32_t dbid, const std::string& name, Catal
 bool SysCatalog::checkPasswordForUser(const std::string& passwd, UserMetadata& user) {
   std::lock_guard<std::mutex> lock(cat_mutex_);
   {
-    if (user.passwd != passwd) {
+    int pwd_check_result = bcrypt_checkpw(passwd.c_str(), user.passwd_hash.c_str());
+    // if the check fails there is a good chance that data on disc is broken
+    CHECK(pwd_check_result >= 0);
+    if (pwd_check_result != 0) {
       return false;
     }
   }
@@ -558,13 +621,13 @@ bool SysCatalog::checkPasswordForUser(const std::string& passwd, UserMetadata& u
 
 bool SysCatalog::getMetadataForUser(const string& name, UserMetadata& user) {
   std::lock_guard<std::mutex> lock(cat_mutex_);
-  sqliteConnector_->query_with_text_param("SELECT userid, name, passwd, issuper FROM mapd_users WHERE name = ?", name);
+  sqliteConnector_->query_with_text_param("SELECT userid, name, passwd_hash, issuper FROM mapd_users WHERE name = ?", name);
   int numRows = sqliteConnector_->getNumRows();
   if (numRows == 0)
     return false;
   user.userId = sqliteConnector_->getData<int>(0, 0);
   user.userName = sqliteConnector_->getData<string>(0, 1);
-  user.passwd = sqliteConnector_->getData<string>(0, 2);
+  user.passwd_hash = sqliteConnector_->getData<string>(0, 2);
   user.isSuper = sqliteConnector_->getData<bool>(0, 3);
   user.isReallySuper = user.isSuper;
   return true;
@@ -572,14 +635,14 @@ bool SysCatalog::getMetadataForUser(const string& name, UserMetadata& user) {
 
 bool SysCatalog::getMetadataForUserById(const int32_t idIn, UserMetadata& user) {
   std::lock_guard<std::mutex> lock(cat_mutex_);
-  sqliteConnector_->query_with_text_param("SELECT userid, name, passwd, issuper FROM mapd_users WHERE userid = ?",
+  sqliteConnector_->query_with_text_param("SELECT userid, name, passwd_hash, issuper FROM mapd_users WHERE userid = ?",
                                           std::to_string(idIn));
   int numRows = sqliteConnector_->getNumRows();
   if (numRows == 0)
     return false;
   user.userId = sqliteConnector_->getData<int>(0, 0);
   user.userName = sqliteConnector_->getData<string>(0, 1);
-  user.passwd = sqliteConnector_->getData<string>(0, 2);
+  user.passwd_hash = sqliteConnector_->getData<string>(0, 2);
   user.isSuper = sqliteConnector_->getData<bool>(0, 3);
   user.isReallySuper = user.isSuper;
   return true;

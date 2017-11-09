@@ -595,6 +595,21 @@ TDatum MapDHandler::value_to_thrift(const TargetValue& tv, const SQLTypeInfo& ti
   return datum;
 }
 
+namespace {
+
+ std::string hide_sensitive_data(const std::string& query_str) {
+   auto result = query_str;
+   boost::regex passwd{R"(^(CREATE|ALTER)\s+?USER.+password\s*?=\s*?'(?<pwd>.+?)'.+)",
+                       boost::regex_constants::perl | boost::regex::icase};
+   boost::smatch matches;
+   if (boost::regex_search(query_str, matches, passwd)) {
+     result.replace(matches["pwd"].first - query_str.begin(), matches["pwd"].length(), "XXXXXXXX");
+   }
+   return result;
+ }
+
+ }  // namespace
+
 void MapDHandler::sql_execute(TQueryResult& _return,
                               const TSessionId& session,
                               const std::string& query_str,
@@ -607,7 +622,7 @@ void MapDHandler::sql_execute(TQueryResult& _return,
     THROW_MAPD_EXCEPTION(std::string("At most one of first_n and at_most_n can be set"));
   }
   const auto session_info = MapDHandler::get_session(session);
-  LOG(INFO) << "sql_execute :" << session << ":query_str:" << query_str;
+  LOG(INFO) << "sql_execute :" << session << ":query_str:" << hide_sensitive_data(query_str);
   if (leaf_aggregator_.leafCount() > 0) {
     if (!agg_handler_) {
       THROW_MAPD_EXCEPTION("Distributed support is disabled.");
@@ -683,7 +698,7 @@ void MapDHandler::sql_execute_df(TDataFrame& _return,
       THROW_MAPD_EXCEPTION(std::string("Exception: invalid device_id or unavailable GPU with this ID"));
     }
   }
-  LOG(INFO) << query_str;
+  LOG(INFO) << hide_sensitive_data(query_str);
   int64_t total_time_ms = measure<>::execution([&]() {
     SQLParser parser;
     std::list<std::unique_ptr<Parser::Stmt>> parse_trees;
@@ -2197,7 +2212,7 @@ Planner::RootPlan* MapDHandler::parse_to_plan_legacy(const std::string& query_st
                                                      const Catalog_Namespace::SessionInfo& session_info,
                                                      const std::string& action /* render or validate */) {
   auto& cat = session_info.get_catalog();
-  LOG(INFO) << action << ": " << query_str;
+  LOG(INFO) << action << ": " << hide_sensitive_data(query_str);
   SQLParser parser;
   std::list<std::unique_ptr<Parser::Stmt>> parse_trees;
   std::string last_parsed;

@@ -54,7 +54,7 @@ target_link_libraries(TokenCompletionHintsTest token_completion_hints gtest mapd
 set(EXECUTE_TEST_LIBS gtest QueryRunner ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${Glog_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${LLVM_LINKER_FLAGS} ${CURSES_LIBRARIES})
 list(APPEND EXECUTE_TEST_LIBS Calcite)
 target_link_libraries(ExecuteTest ${EXECUTE_TEST_LIBS})
-target_link_libraries(RunQueryLoop ${EXECUTE_TEST_LIBS})
+target_link_libraries(RunQueryLoop ${EXECUTE_TEST_LIBS} bcrypt)
 target_link_libraries(ImportTest gtest ${EXECUTE_TEST_LIBS})
 target_link_libraries(PlanTest gtest ${EXECUTE_TEST_LIBS})
 target_link_libraries(UpdelStorageTest gtest ${EXECUTE_TEST_LIBS})
