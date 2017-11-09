@@ -22,9 +22,6 @@
 #include <glog/logging.h>
 #include <cuda_runtime.h>
 
-using std::cout;
-using std::endl;
-
 namespace CudaMgr_Namespace {
 
 #ifdef HAVE_CUDA
@@ -60,7 +57,6 @@ void CudaMgr::fillDeviceProperties() {
 #ifdef HAVE_CUDA
   deviceProperties.resize(deviceCount_);
   cudaDriverGetVersion(&gpu_driver_version);
-  std::cout << gpu_driver_version << std::endl;
   for (int deviceNum = 0; deviceNum < deviceCount_; ++deviceNum) {
     checkError(cuDeviceGet(&deviceProperties[deviceNum].device, deviceNum + startGpu_));
     checkError(cuDeviceComputeCapability(&deviceProperties[deviceNum].computeMajor,
@@ -225,8 +221,6 @@ void CudaMgr::copyDeviceToDevice(int8_t* destPtr,
                                  const int destDeviceNum,
                                  const int srcDeviceNum) {
 #ifdef HAVE_CUDA
-  // std::cout << "Source device: " << srcDeviceNum << std::endl;
-  // std::cout << "Dest device: " << destDeviceNum << std::endl;
   if (srcDeviceNum == destDeviceNum) {
     setContext(srcDeviceNum);
     checkError(cuMemcpy(reinterpret_cast<CUdeviceptr>(destPtr), reinterpret_cast<CUdeviceptr>(srcPtr), numBytes));
