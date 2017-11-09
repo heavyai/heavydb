@@ -262,6 +262,10 @@ if(ENABLE_AWS_S3)
   endif()
 endif()
 
+# bcrypt
+include_directories(ThirdParty/bcrypt)
+add_subdirectory(ThirdParty/bcrypt)
+
 add_custom_command(
     DEPENDS ${CMAKE_SOURCE_DIR}/mapd.thrift
     OUTPUT
