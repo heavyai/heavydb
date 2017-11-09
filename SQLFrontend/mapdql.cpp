@@ -1205,7 +1205,9 @@ std::string print_gpu_specification(TGpuSpecification gpu_spec) {
 
 std::string print_hardware_specification(THardwareInfo hw_spec) {
   std::ostringstream tss;
-  tss << "Host name                :" << hw_spec.host_name << std::endl;
+  if (hw_spec.host_name != "") {
+    tss << "Host name                :" << hw_spec.host_name << std::endl;
+  }
   tss << "Number of Physical GPUs  :" << hw_spec.num_gpu_hw << std::endl;
   tss << "Number of CPU core       :" << hw_spec.num_cpu_hw << std::endl;
   tss << "Number of GPUs allocated :" << hw_spec.num_gpu_allocated << std::endl;

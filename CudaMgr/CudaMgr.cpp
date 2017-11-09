@@ -20,8 +20,9 @@
 #include "assert.h"
 #include <algorithm>
 #include <glog/logging.h>
+#ifdef HAVE_CUDA
 #include <cuda_runtime.h>
-
+#endif
 namespace CudaMgr_Namespace {
 
 #ifdef HAVE_CUDA
@@ -98,8 +99,6 @@ void CudaMgr::fillDeviceProperties() {
                                     deviceProperties[deviceNum].device));
     deviceProperties[deviceNum].memoryBandwidthGBs =
         deviceProperties[deviceNum].memoryClockKhz / 1000000.0 / 8.0 * deviceProperties[deviceNum].memoryBusWidth;
-    //   deviceProperties[deviceNum].numCore =
-    //_ConvertSMVer2Cores(deviceProperties[deviceNum].computeMajor, deviceProperties[deviceNum].computeMinor);
   }
 #endif
 }

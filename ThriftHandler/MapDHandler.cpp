@@ -376,22 +376,23 @@ void MapDHandler::get_status(std::vector<TServerStatus>& _return, const TSession
 void MapDHandler::get_hardware_info(TClusterHardwareInfo& _return, const TSessionId& session) {
   THardwareInfo ret;
   CudaMgr_Namespace::CudaMgr* cuda_mgr = data_mgr_->cudaMgr_;
-  ret.num_gpu_hw = cuda_mgr->getDeviceCount();
-  ret.start_gpu = cuda_mgr->getStartGpu();
-  if (ret.start_gpu >= 0) {
-    ret.num_gpu_allocated = cuda_mgr->getDeviceCount() - cuda_mgr->getStartGpu();
-    // ^ This will break as soon as we allow non contiguous GPU allocations to MapD
-  }
-  ret.host_name = "aggregator";
-  for (size_t device_id = 0; device_id < ret.num_gpu_hw; device_id++) {
-    TGpuSpecification gpu_spec;
-    auto deviceProperties = cuda_mgr->getDeviceProperties(device_id);
-    gpu_spec.num_sm = deviceProperties->numMPs;
-    gpu_spec.clock_frequency_kHz = deviceProperties->clockKhz;
-    gpu_spec.memory = deviceProperties->globalMem;
-    gpu_spec.compute_capability_major = deviceProperties->computeMajor;
-    gpu_spec.compute_capability_minor = deviceProperties->computeMinor;
-    ret.gpu_info.push_back(gpu_spec);
+  if (cuda_mgr) {
+    ret.num_gpu_hw = cuda_mgr->getDeviceCount();
+    ret.start_gpu = cuda_mgr->getStartGpu();
+    if (ret.start_gpu >= 0) {
+      ret.num_gpu_allocated = cuda_mgr->getDeviceCount() - cuda_mgr->getStartGpu();
+      // ^ This will break as soon as we allow non contiguous GPU allocations to MapD
+    }
+    for (int16_t device_id = 0; device_id < ret.num_gpu_hw; device_id++) {
+      TGpuSpecification gpu_spec;
+      auto deviceProperties = cuda_mgr->getDeviceProperties(device_id);
+      gpu_spec.num_sm = deviceProperties->numMPs;
+      gpu_spec.clock_frequency_kHz = deviceProperties->clockKhz;
+      gpu_spec.memory = deviceProperties->globalMem;
+      gpu_spec.compute_capability_major = deviceProperties->computeMajor;
+      gpu_spec.compute_capability_minor = deviceProperties->computeMinor;
+      ret.gpu_info.push_back(gpu_spec);
+    }
   }
 
   // start  hardware/OS dependent code
@@ -400,8 +401,8 @@ void MapDHandler::get_hardware_info(TClusterHardwareInfo& _return, const TSessio
   // end hardware/OS dependent code
 
   _return.hardware_info.push_back(ret);
-  ret.host_name = "aggregator";
   if (leaf_aggregator_.leafCount() > 0) {
+    ret.host_name = "aggregator";
     TClusterHardwareInfo leaf_hardware = leaf_aggregator_.getHardwareInfo(session);
     _return.hardware_info.insert(
         _return.hardware_info.end(), leaf_hardware.hardware_info.begin(), leaf_hardware.hardware_info.end());
