@@ -647,10 +647,10 @@ void process_backslash_commands(char* command, ClientContext& context) {
       std::cout << "\\export_dashboard <dashboard name>,<filename> Exports a dashboard to a file\n";
       std::cout << "\\import_dashboard <dashboard name>,<filename> Imports a dashboard from a file\n";
       std::cout << "\\roles Reports all roles.\n";
-      std::cout << "\\role_check <roleName> Checks if a role exists.\n";
-      std::cout << "\\role_list <userName> Reports all roles granted to an user.\n";
-      std::cout << "\\privileges {<roleName>|<userName>} Reports all database objects' privileges granted to a role or "
-                   "an user.\n";
+      std::cout << "\\role_check <roleName> Verifies whether role exists.\n";
+      std::cout << "\\role_list <userName> Reports all roles granted to user.\n";
+      std::cout << "\\privileges {<roleName>|<userName>} Reports all database objects privileges granted to role or "
+                   "user.\n";
       std::cout
           << "\\object_privileges <object_name> Reports all privileges granted to an object for all roles and users.\n";
       std::cout << "\\q Quit.\n";
@@ -1766,19 +1766,47 @@ int main(int argc, char** argv) {
     } else if (!strncmp(line, "\\notiming", 9)) {
       print_timing = false;
     } else if (!strncmp(line, "\\role_check", 11)) {
-      context.privs_role_name = strtok(line + 12, " ");
-      get_role(context);
+      std::string temp_line(line);
+      boost::algorithm::trim(temp_line);
+      if (temp_line.size() > 11) {
+        context.privs_role_name.clear();
+        context.privs_role_name = strtok(line + 12, " ");
+        get_role(context);
+      } else {
+        std::cout << "Command role_check failed because parameter role name is missing." << std::endl;
+      }
     } else if (!strncmp(line, "\\roles", 6)) {
       get_all_roles(context);
     } else if (!strncmp(line, "\\privileges", 11)) {
-      context.privs_role_name = strtok(line + 12, " ");
-      get_db_objects_for_role(context);
+      std::string temp_line(line);
+      boost::algorithm::trim(temp_line);
+      if (temp_line.size() > 11) {
+        context.privs_role_name.clear();
+        context.privs_role_name = strtok(line + 12, " ");
+        get_db_objects_for_role(context);
+      } else {
+        std::cout << "Command privileges failed because parameter role name or user name is missing." << std::endl;
+      }
     } else if (!strncmp(line, "\\object_privileges", 18)) {
-      context.privs_object_name = strtok(line + 19, " ");
-      get_db_object_privs(context);
+      std::string temp_line(line);
+      boost::algorithm::trim(temp_line);
+      if (temp_line.size() > 18) {
+        context.privs_object_name.clear();
+        context.privs_object_name = strtok(line + 19, " ");
+        get_db_object_privs(context);
+      } else {
+        std::cout << "Command object_privileges failed because parameter object name is missing." << std::endl;
+      }
     } else if (!strncmp(line, "\\role_list", 10)) {
-      context.privs_user_name = strtok(line + 11, " ");
-      get_all_roles_for_user(context);
+      std::string temp_line(line);
+      boost::algorithm::trim(temp_line);
+      if (temp_line.size() > 10) {
+        context.privs_user_name.clear();
+        context.privs_user_name = strtok(line + 11, " ");
+        get_all_roles_for_user(context);
+      } else {
+        std::cout << "Command role_list failed because parameter user name is missing." << std::endl;
+      }
     } else if (line[0] == '\\' && line[1] == 'q')
       break;
     else if (line[0] == '\\') {
