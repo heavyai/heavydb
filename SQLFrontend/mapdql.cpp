@@ -1301,6 +1301,16 @@ void get_db_objects_for_role(ClientContext context) {
       context.db_objects.clear();
       if (thrift_with_retry(kGET_OBJECTS_FOR_ROLE, context, context.privs_role_name.c_str())) {
         for (size_t i = 0; i < context.db_objects.size(); i++) {
+          bool any_granted_privs = false;
+          for (size_t j = 0; j < context.db_objects[i].privs.size(); j++) {
+            if (context.db_objects[i].privs[j]) {
+              any_granted_privs = true;
+              break;
+            }
+          }
+          if (!any_granted_privs) {
+            continue;
+          }
           std::cout << context.db_objects[i].objectName.c_str();
           switch (context.db_objects[i].objectType) {
             case (TDBObjectType::DatabaseDBObjectType): {
@@ -1360,6 +1370,16 @@ void get_db_object_privs(ClientContext context) {
         for (size_t i = 0; i < context.db_objects.size(); i++) {
           if (boost::to_upper_copy<std::string>(context.privs_object_name)
                   .compare(boost::to_upper_copy<std::string>(context.db_objects[i].objectName))) {
+            continue;
+          }
+          bool any_granted_privs = false;
+          for (size_t j = 0; j < context.db_objects[i].privs.size(); j++) {
+            if (context.db_objects[i].privs[j]) {
+              any_granted_privs = true;
+              break;
+            }
+          }
+          if (!any_granted_privs) {
             continue;
           }
           if (print_role) {
