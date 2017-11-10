@@ -567,12 +567,20 @@ public class SQLImporter {
   private void setColValue(ResultSet rs, TColumn col, int columnType, int colNum) throws SQLException {
 
     switch (columnType) {
+      case java.sql.Types.BIT:  // deal with postgress treating boolean as bit... this will bite me
+      case java.sql.Types.BOOLEAN:
+        Boolean b = rs.getBoolean(colNum);
+        col.data.int_col.add(b ? 1L : 0L);
+        if (rs.wasNull()) {
+          col.nulls.add(Boolean.TRUE);
+        } else {
+          col.nulls.add(Boolean.FALSE);
+        }
+        break;
       case java.sql.Types.TINYINT:
       case java.sql.Types.SMALLINT:
       case java.sql.Types.INTEGER:
       case java.sql.Types.BIGINT:
-      case java.sql.Types.BIT:  // deal with postgress treating boolean as bit... this will bite me
-      case java.sql.Types.BOOLEAN:
         col.data.int_col.add(rs.getLong(colNum));
         if (rs.wasNull()) {
           col.nulls.add(Boolean.TRUE);
