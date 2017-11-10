@@ -981,6 +981,7 @@ Executor::CompilationResult Executor::compileWorkUnit(const std::vector<InputTab
                                                       const int8_t crt_min_byte_width,
                                                       const JoinInfo& join_info,
                                                       const bool has_cardinality_estimation,
+                                                      ColumnCacheMap& column_cache,
                                                       RenderInfo* render_info) {
   nukeOldState(allow_lazy_fetch, join_info, query_infos, ra_exe_unit.outer_join_quals);
 
@@ -1063,7 +1064,7 @@ Executor::CompilationResult Executor::compileWorkUnit(const std::vector<InputTab
   preloadFragOffsets(ra_exe_unit.input_descs, query_infos);
 
   RelAlgExecutionUnit body_execution_unit = ra_exe_unit;
-  const auto join_loops = buildJoinLoops(body_execution_unit, co, eo, query_infos);
+  const auto join_loops = buildJoinLoops(body_execution_unit, co, eo, query_infos, column_cache);
 
   allocateLocalColumnIds(ra_exe_unit.input_col_descs);
   if (!join_loops.empty()) {

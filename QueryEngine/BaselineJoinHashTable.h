@@ -16,12 +16,12 @@
 #ifndef QUERYENGINE_BASELINEJOINHASHTABLE_H
 #define QUERYENGINE_BASELINEJOINHASHTABLE_H
 
+#include "../Analyzer/Analyzer.h"
+#include "../DataMgr/MemoryLevel.h"
 #include "ColumnarResults.h"
 #include "HashJoinRuntime.h"
 #include "InputMetadata.h"
 #include "JoinHashTableInterface.h"
-#include "../Analyzer/Analyzer.h"
-#include "../DataMgr/MemoryLevel.h"
 
 #ifdef HAVE_CUDA
 #include <cuda.h>
@@ -46,6 +46,7 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
                                                             const Data_Namespace::MemoryLevel memory_level,
                                                             const int device_count,
                                                             const std::unordered_set<int>& skip_tables,
+                                                            ColumnCacheMap& column_map,
                                                             Executor* executor);
 
   int64_t getJoinHashBuffer(const ExecutorDeviceType device_type, const int device_id) noexcept override;
@@ -68,6 +69,7 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
                         const RelAlgExecutionUnit& ra_exe_unit,
                         const Data_Namespace::MemoryLevel memory_level,
                         const size_t entry_count,
+                        ColumnCacheMap& column_map,
                         Executor* executor);
 
   static int getInnerTableId(const Analyzer::BinOper* condition, const Executor* executor);
@@ -75,8 +77,7 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
   std::pair<const int8_t*, size_t> getAllColumnFragments(
       const Analyzer::ColumnVar& hash_col,
       const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
-      std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
-      std::map<int, std::shared_ptr<const ColumnarResults>>& frags_owner);
+      std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner);
 
   size_t shardCount() const;
 
@@ -90,7 +91,6 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
     const std::vector<JoinColumn> join_columns;
     const std::vector<JoinColumnTypeInfo> join_column_types;
     const std::vector<std::shared_ptr<Chunk_NS::Chunk>> chunks_owner;
-    const std::map<int, std::shared_ptr<const ColumnarResults>> frags_owner;
     const int err;
   };
 
@@ -156,6 +156,7 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
   size_t entry_count_;
   Executor* executor_;
   const RelAlgExecutionUnit& ra_exe_unit_;
+  ColumnCacheMap& column_cache_;
   std::shared_ptr<std::vector<int8_t>> cpu_hash_table_buff_;
   std::mutex cpu_hash_table_buff_mutex_;
 #ifdef HAVE_CUDA

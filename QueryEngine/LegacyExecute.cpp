@@ -438,6 +438,7 @@ RowSetPtr Executor::executeResultPlan(const Planner::Result* result_plan,
                                        {},
                                        {},
                                        false};
+  ColumnCacheMap column_cache;
   auto compilation_result =
       compileWorkUnit({},
                       res_ra_unit,
@@ -458,7 +459,8 @@ RowSetPtr Executor::executeResultPlan(const Planner::Result* result_plan,
                       small_groups_buffer_entry_count_,
                       get_min_byte_width(),
                       JoinInfo(JoinImplType::Invalid, std::vector<std::shared_ptr<Analyzer::BinOper>>{}, {}, ""),
-                      false);
+                      false,
+                      column_cache);
   auto column_buffers = result_columns.getColumnBuffers();
   CHECK_EQ(column_buffers.size(), static_cast<size_t>(in_col_count));
   std::vector<int64_t> init_agg_vals(query_mem_desc.agg_col_widths.size());

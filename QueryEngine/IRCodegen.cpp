@@ -298,7 +298,8 @@ void check_if_loop_join_is_allowed(RelAlgExecutionUnit& ra_exe_unit,
 std::vector<JoinLoop> Executor::buildJoinLoops(RelAlgExecutionUnit& ra_exe_unit,
                                                const CompilationOptions& co,
                                                const ExecutionOptions& eo,
-                                               const std::vector<InputTableInfo>& query_infos) {
+                                               const std::vector<InputTableInfo>& query_infos,
+                                               ColumnCacheMap& column_cache) {
   std::vector<JoinLoop> join_loops;
   for (size_t level_idx = 0, current_hash_table_idx = 0; level_idx < ra_exe_unit.inner_joins.size(); ++level_idx) {
     const auto& current_level_join_conditions = ra_exe_unit.inner_joins[level_idx];
@@ -318,7 +319,8 @@ std::vector<JoinLoop> Executor::buildJoinLoops(RelAlgExecutionUnit& ra_exe_unit,
             query_infos,
             ra_exe_unit,
             co.device_type_ == ExecutorDeviceType::GPU ? MemoryLevel::GPU_LEVEL : MemoryLevel::CPU_LEVEL,
-            std::unordered_set<int>{});
+            std::unordered_set<int>{},
+            column_cache);
         current_level_hash_table = hash_table_or_error.hash_table;
       }
       if (hash_table_or_error.hash_table) {

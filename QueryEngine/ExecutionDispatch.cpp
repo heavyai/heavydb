@@ -146,12 +146,12 @@ const int8_t* Executor::ExecutionDispatch::getColumn(const ResultPtr& buffer,
     std::lock_guard<std::mutex> columnar_conversion_guard(columnar_conversion_mutex_);
     if (columnarized_table_cache_.empty() || !columnarized_table_cache_.count(table_id)) {
       columnarized_table_cache_.insert(
-          std::make_pair(table_id, std::unordered_map<int, std::unique_ptr<const ColumnarResults>>()));
+          std::make_pair(table_id, std::unordered_map<int, std::shared_ptr<const ColumnarResults>>()));
     }
     auto& frag_id_to_result = columnarized_table_cache_[table_id];
     if (frag_id_to_result.empty() || !frag_id_to_result.count(frag_id)) {
       frag_id_to_result.insert(std::make_pair(
-          frag_id, std::unique_ptr<const ColumnarResults>(columnarize_result(row_set_mem_owner_, buffer, frag_id))));
+          frag_id, std::shared_ptr<const ColumnarResults>(columnarize_result(row_set_mem_owner_, buffer, frag_id))));
     }
     CHECK_NE(size_t(0), columnarized_table_cache_.count(table_id));
     result = columnarized_table_cache_[table_id][frag_id].get();
@@ -383,6 +383,7 @@ Executor::ExecutionDispatch::ExecutionDispatch(Executor* executor,
                                                const CompilationOptions& co,
                                                const size_t context_count,
                                                const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+                                               const ColumnCacheMap& column_cache,
                                                int32_t* error_code,
                                                RenderInfo* render_info)
     : executor_(executor),
@@ -394,7 +395,8 @@ Executor::ExecutionDispatch::ExecutionDispatch(Executor* executor,
       query_context_mutexes_(context_count),
       row_set_mem_owner_(row_set_mem_owner),
       error_code_(error_code),
-      render_info_(render_info) {
+      render_info_(render_info),
+      columnarized_table_cache_(column_cache) {
   all_fragment_results_.reserve(query_infos_.front().info.fragments.size());
 }
 
@@ -423,6 +425,7 @@ int8_t Executor::ExecutionDispatch::compile(const Executor::JoinInfo& join_info,
                                                            crt_min_byte_width,
                                                            join_info,
                                                            has_cardinality_estimation,
+                                                           columnarized_table_cache_,
                                                            render_info_);
     } catch (const CompilationRetryNoLazyFetch&) {
       compilation_result_cpu_ = executor_->compileWorkUnit(query_infos_,
@@ -437,6 +440,7 @@ int8_t Executor::ExecutionDispatch::compile(const Executor::JoinInfo& join_info,
                                                            crt_min_byte_width,
                                                            join_info,
                                                            has_cardinality_estimation,
+                                                           columnarized_table_cache_,
                                                            render_info_);
     }
     for (auto wids : compilation_result_cpu_.query_mem_desc.agg_col_widths) {
@@ -466,6 +470,7 @@ int8_t Executor::ExecutionDispatch::compile(const Executor::JoinInfo& join_info,
                                      crt_min_byte_width,
                                      join_info,
                                      has_cardinality_estimation,
+                                     columnarized_table_cache_,
                                      render_info_);
     } catch (const CompilationRetryNoLazyFetch&) {
       compilation_result_gpu_ = executor_->compileWorkUnit(query_infos_,
@@ -480,6 +485,7 @@ int8_t Executor::ExecutionDispatch::compile(const Executor::JoinInfo& join_info,
                                                            crt_min_byte_width,
                                                            join_info,
                                                            has_cardinality_estimation,
+                                                           columnarized_table_cache_,
                                                            render_info_);
     }
 
@@ -671,13 +677,13 @@ const int8_t* Executor::ExecutionDispatch::getColumn(
     std::lock_guard<std::mutex> columnar_conversion_guard(columnar_conversion_mutex_);
     if (columnarized_table_cache_.empty() || !columnarized_table_cache_.count(ref_table_id)) {
       columnarized_table_cache_.insert(
-          std::make_pair(iter_table_id, std::unordered_map<int, std::unique_ptr<const ColumnarResults>>()));
+          std::make_pair(iter_table_id, std::unordered_map<int, std::shared_ptr<const ColumnarResults>>()));
     }
     auto& frag_id_to_iters = columnarized_table_cache_[iter_table_id];
     if (frag_id_to_iters.empty() || !frag_id_to_iters.count(frag_id)) {
       frag_id_to_iters.insert(std::make_pair(
           frag_id,
-          std::unique_ptr<const ColumnarResults>(columnarize_result(row_set_mem_owner_, iter_buffer, frag_id))));
+          std::shared_ptr<const ColumnarResults>(columnarize_result(row_set_mem_owner_, iter_buffer, frag_id))));
     }
 
     if (columnarized_ref_table_cache_.empty() || !columnarized_ref_table_cache_.count(iter_desc)) {
@@ -690,13 +696,13 @@ const int8_t* Executor::ExecutionDispatch::getColumn(
       const auto& ref_buffer = get_temporary_table(executor_->temporary_tables_, ref_table_id);
       if (columnarized_table_cache_.empty() || !columnarized_table_cache_.count(ref_table_id)) {
         columnarized_table_cache_.insert(
-            std::make_pair(ref_table_id, std::unordered_map<int, std::unique_ptr<const ColumnarResults>>()));
+            std::make_pair(ref_table_id, std::unordered_map<int, std::shared_ptr<const ColumnarResults>>()));
       }
       auto& frag_id_to_ref = columnarized_table_cache_[ref_table_id];
       if (frag_id_to_ref.empty() || !frag_id_to_ref.count(ref_frag_id)) {
         frag_id_to_ref.insert(std::make_pair(
             ref_frag_id,
-            std::unique_ptr<const ColumnarResults>(columnarize_result(row_set_mem_owner_, ref_buffer, ref_frag_id))));
+            std::shared_ptr<const ColumnarResults>(columnarize_result(row_set_mem_owner_, ref_buffer, ref_frag_id))));
       }
       sub_key = {frag_id};
       if (frag_id_to_result.empty() || !frag_id_to_result.count(sub_key)) {
@@ -834,7 +840,8 @@ std::pair<const int8_t*, size_t> Executor::ExecutionDispatch::getColumnFragment(
     const Data_Namespace::MemoryLevel effective_mem_lvl,
     const int device_id,
     std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
-    std::map<int, std::shared_ptr<const ColumnarResults>>& frags_owner) {
+    ColumnCacheMap& column_cache) {
+  static std::mutex columnar_conversion_mutex;
   auto chunk_meta_it = fragment.getChunkMetadataMap().find(hash_col.get_column_id());
   CHECK(chunk_meta_it != fragment.getChunkMetadataMap().end());
   const auto& catalog = *executor->getCatalog();
@@ -857,18 +864,27 @@ std::pair<const int8_t*, size_t> Executor::ExecutionDispatch::getColumnFragment(
     CHECK(ab->getMemoryPtr());
     col_buff = reinterpret_cast<int8_t*>(ab->getMemoryPtr());
   } else {
-    const auto frag_id = fragment.fragmentId;
-    auto frag_it = frags_owner.find(frag_id);
-    if (frag_it == frags_owner.end()) {
-      std::shared_ptr<const ColumnarResults> col_frag(
-          columnarize_result(executor->row_set_mem_owner_,
-                             get_temporary_table(executor->temporary_tables_, hash_col.get_table_id()),
-                             frag_id));
-      auto res = frags_owner.insert(std::make_pair(frag_id, col_frag));
-      CHECK(res.second);
-      frag_it = res.first;
+    const ColumnarResults* col_frag{nullptr};
+    {
+      std::lock_guard<std::mutex> columnar_conversion_guard(columnar_conversion_mutex);
+      const auto table_id = hash_col.get_table_id();
+      const auto frag_id = fragment.fragmentId;
+      if (column_cache.empty() || !column_cache.count(table_id)) {
+        column_cache.insert(
+            std::make_pair(table_id, std::unordered_map<int, std::shared_ptr<const ColumnarResults>>()));
+      }
+      auto& frag_id_to_result = column_cache[table_id];
+      if (frag_id_to_result.empty() || !frag_id_to_result.count(frag_id)) {
+        frag_id_to_result.insert(
+            std::make_pair(frag_id,
+                           std::shared_ptr<const ColumnarResults>(columnarize_result(
+                               executor->row_set_mem_owner_,
+                               get_temporary_table(executor->temporary_tables_, hash_col.get_table_id()),
+                               frag_id))));
+      }
+      col_frag = column_cache[table_id][frag_id].get();
     }
-    col_buff = getColumn(frag_it->second.get(),
+    col_buff = getColumn(col_frag,
                          hash_col.get_column_id(),
                          &catalog.get_dataMgr(),
                          effective_mem_lvl,
@@ -882,7 +898,7 @@ std::pair<const int8_t*, size_t> Executor::ExecutionDispatch::getAllColumnFragme
     const Analyzer::ColumnVar& hash_col,
     const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
     std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
-    std::map<int, std::shared_ptr<const ColumnarResults>>& frags_owner) {
+    ColumnCacheMap& column_cache) {
   CHECK(!fragments.empty());
   const size_t elem_width = hash_col.get_type_info().get_size();
   std::vector<const int8_t*> col_frags;
@@ -891,7 +907,7 @@ std::pair<const int8_t*, size_t> Executor::ExecutionDispatch::getAllColumnFragme
     const int8_t* col_frag = nullptr;
     size_t elem_count = 0;
     std::tie(col_frag, elem_count) =
-        getColumnFragment(executor, hash_col, frag, Data_Namespace::CPU_LEVEL, 0, chunks_owner, frags_owner);
+        getColumnFragment(executor, hash_col, frag, Data_Namespace::CPU_LEVEL, 0, chunks_owner, column_cache);
     CHECK(col_frag != nullptr);
     CHECK_NE(elem_count, size_t(0));
     col_frags.push_back(col_frag);

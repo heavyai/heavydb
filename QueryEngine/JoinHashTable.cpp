@@ -215,6 +215,7 @@ std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(const std::shared_ptr<
                                                           const Data_Namespace::MemoryLevel memory_level,
                                                           const int device_count,
                                                           const std::unordered_set<int>& skip_tables,
+                                                          ColumnCacheMap& column_cache,
                                                           Executor* executor) {
   CHECK(IS_EQUIVALENCE(qual_bin_oper->get_optype()));
   const auto redirected_bin_oper =
@@ -253,8 +254,15 @@ std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(const std::shared_ptr<
   if (qual_bin_oper->get_optype() == kBW_EQ && col_range.getIntMax() >= std::numeric_limits<int64_t>::max()) {
     throw HashJoinFail("Cannot translate null value for kBW_EQ");
   }
-  auto join_hash_table = std::shared_ptr<JoinHashTable>(new JoinHashTable(
-      qual_bin_oper, inner_col, query_infos, ra_exe_unit, memory_level, col_range, executor, device_count));
+  auto join_hash_table = std::shared_ptr<JoinHashTable>(new JoinHashTable(qual_bin_oper,
+                                                                          inner_col,
+                                                                          query_infos,
+                                                                          ra_exe_unit,
+                                                                          memory_level,
+                                                                          col_range,
+                                                                          column_cache,
+                                                                          executor,
+                                                                          device_count));
   const int err = join_hash_table->reify(device_count);
   if (err) {
 #ifndef ENABLE_MULTIFRAG_JOIN
@@ -284,17 +292,15 @@ std::pair<const int8_t*, size_t> JoinHashTable::getColumnFragment(
     const Fragmenter_Namespace::FragmentInfo& fragment,
     const Data_Namespace::MemoryLevel effective_mem_lvl,
     const int device_id,
-    std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
-    std::map<int, std::shared_ptr<const ColumnarResults>>& frags_owner) {
+    std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner) {
   return Executor::ExecutionDispatch::getColumnFragment(
-      executor_, hash_col, fragment, effective_mem_lvl, device_id, chunks_owner, frags_owner);
+      executor_, hash_col, fragment, effective_mem_lvl, device_id, chunks_owner, column_cache_);
 }
 
 std::pair<const int8_t*, size_t> JoinHashTable::getAllColumnFragments(
     const Analyzer::ColumnVar& hash_col,
     const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
-    std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
-    std::map<int, std::shared_ptr<const ColumnarResults>>& frags_owner) {
+    std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner) {
   std::lock_guard<std::mutex> linearized_multifrag_column_lock(linearized_multifrag_column_mutex_);
   if (linearized_multifrag_column_.first) {
     return linearized_multifrag_column_;
@@ -302,7 +308,7 @@ std::pair<const int8_t*, size_t> JoinHashTable::getAllColumnFragments(
   const int8_t* col_buff;
   size_t total_elem_count;
   std::tie(col_buff, total_elem_count) =
-      Executor::ExecutionDispatch::getAllColumnFragments(executor_, hash_col, fragments, chunks_owner, frags_owner);
+      Executor::ExecutionDispatch::getAllColumnFragments(executor_, hash_col, fragments, chunks_owner, column_cache_);
   linearized_multifrag_column_owner_.addColBuffer(col_buff);
   if (!shardCount()) {
     linearized_multifrag_column_ = {col_buff, total_elem_count};
@@ -427,7 +433,6 @@ std::pair<const int8_t*, size_t> JoinHashTable::fetchFragments(
     const Data_Namespace::MemoryLevel effective_memory_level,
     const int device_id,
     std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
-    std::map<int, std::shared_ptr<const ColumnarResults>>& frags_owner,
     ThrustAllocator& dev_buff_owner) {
   static std::mutex fragment_fetch_mutex;
 #ifndef ENABLE_MULTIFRAG_JOIN
@@ -445,7 +450,7 @@ std::pair<const int8_t*, size_t> JoinHashTable::fetchFragments(
 #ifdef ENABLE_MULTIFRAG_JOIN
   const size_t elem_width = hash_col->get_type_info().get_size();
   if (has_multi_frag) {
-    std::tie(col_buff, elem_count) = getAllColumnFragments(*hash_col, fragment_info, chunks_owner, frags_owner);
+    std::tie(col_buff, elem_count) = getAllColumnFragments(*hash_col, fragment_info, chunks_owner);
   }
 #endif
 
@@ -466,7 +471,7 @@ std::pair<const int8_t*, size_t> JoinHashTable::fetchFragments(
 #endif
     {
       std::tie(col_buff, elem_count) =
-          getColumnFragment(*hash_col, first_frag, effective_memory_level, device_id, chunks_owner, frags_owner);
+          getColumnFragment(*hash_col, first_frag, effective_memory_level, device_id, chunks_owner);
     }
   }
   return {col_buff, elem_count};
@@ -528,13 +533,12 @@ int JoinHashTable::reifyOneToOneForDevice(const std::deque<Fragmenter_Namespace:
   }
 
   std::vector<std::shared_ptr<Chunk_NS::Chunk>> chunks_owner;
-  std::map<int, std::shared_ptr<const ColumnarResults>> frags_owner;
   ThrustAllocator dev_buff_owner(&data_mgr, device_id);
   const int8_t* col_buff = nullptr;
   size_t elem_count = 0;
   try {
-    std::tie(col_buff, elem_count) = fetchFragments(
-        inner_col, fragments, effective_memory_level, device_id, chunks_owner, frags_owner, dev_buff_owner);
+    std::tie(col_buff, elem_count) =
+        fetchFragments(inner_col, fragments, effective_memory_level, device_id, chunks_owner, dev_buff_owner);
   } catch (...) {
     return ERR_FAILED_TO_FETCH_COLUMN;
   }
@@ -593,14 +597,13 @@ int JoinHashTable::reifyOneToManyForDevice(const std::deque<Fragmenter_Namespace
   }
 
   std::vector<std::shared_ptr<Chunk_NS::Chunk>> chunks_owner;
-  std::map<int, std::shared_ptr<const ColumnarResults>> frags_owner;
   ThrustAllocator dev_buff_owner(&data_mgr, device_id);
   const int8_t* col_buff = nullptr;
   size_t elem_count = 0;
 
   try {
-    std::tie(col_buff, elem_count) = fetchFragments(
-        inner_col, fragments, effective_memory_level, device_id, chunks_owner, frags_owner, dev_buff_owner);
+    std::tie(col_buff, elem_count) =
+        fetchFragments(inner_col, fragments, effective_memory_level, device_id, chunks_owner, dev_buff_owner);
   } catch (...) {
     return ERR_FAILED_TO_FETCH_COLUMN;
   }

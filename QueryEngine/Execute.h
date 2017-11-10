@@ -694,8 +694,7 @@ class Executor {
 
     typedef std::vector<int> CacheKey;
     mutable std::mutex columnar_conversion_mutex_;
-    mutable std::unordered_map<int, std::unordered_map<int, std::unique_ptr<const ColumnarResults>>>
-        columnarized_table_cache_;
+    mutable ColumnCacheMap columnarized_table_cache_;
     mutable std::unordered_map<InputColDescriptor, std::unordered_map<CacheKey, std::unique_ptr<const ColumnarResults>>>
         columnarized_ref_table_cache_;
 #ifdef ENABLE_MULTIFRAG_JOIN
@@ -732,6 +731,7 @@ class Executor {
                       const CompilationOptions& co,
                       const size_t context_count,
                       const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+                      const ColumnCacheMap& column_cache,
                       int32_t* error_code,
                       RenderInfo* render_info);
 
@@ -809,14 +809,14 @@ class Executor {
         const Data_Namespace::MemoryLevel effective_mem_lvl,
         const int device_id,
         std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
-        std::map<int, std::shared_ptr<const ColumnarResults>>& frags_owner);
+        ColumnCacheMap& column_cache);
 
     static std::pair<const int8_t*, size_t> getAllColumnFragments(
         Executor* executor,
         const Analyzer::ColumnVar& hash_col,
         const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
         std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
-        std::map<int, std::shared_ptr<const ColumnarResults>>& frags_owner);
+        ColumnCacheMap& column_cache);
   };
 
   ResultPtr executeWorkUnit(int32_t* error_code,
@@ -1006,11 +1006,13 @@ class Executor {
                                     const int8_t crt_min_byte_width,
                                     const JoinInfo& join_info,
                                     const bool has_cardinality_estimation,
+                                    ColumnCacheMap& column_cache,
                                     RenderInfo* render_info = nullptr);
   std::vector<JoinLoop> buildJoinLoops(RelAlgExecutionUnit& ra_exe_unit,
                                        const CompilationOptions& co,
                                        const ExecutionOptions& eo,
-                                       const std::vector<InputTableInfo>& query_infos);
+                                       const std::vector<InputTableInfo>& query_infos,
+                                       ColumnCacheMap& column_cache);
   void addJoinLoopIterator(const std::vector<llvm::Value*>& prev_iters, const size_t level_idx);
   void codegenJoinLoops(const std::vector<JoinLoop>& join_loops,
                         const RelAlgExecutionUnit& ra_exe_unit,
@@ -1047,7 +1049,8 @@ class Executor {
   JoinInfo chooseJoinType(const std::list<std::shared_ptr<Analyzer::Expr>>&,
                           const std::vector<InputTableInfo>&,
                           const RelAlgExecutionUnit& ra_exe_unit,
-                          const ExecutorDeviceType device_type);
+                          const ExecutorDeviceType device_type,
+                          ColumnCacheMap& column_cache);
 
   struct JoinHashTableOrError {
     std::shared_ptr<JoinHashTableInterface> hash_table;
@@ -1058,7 +1061,8 @@ class Executor {
                                                   const std::vector<InputTableInfo>& query_infos,
                                                   const RelAlgExecutionUnit& ra_exe_unit,
                                                   const MemoryLevel memory_level,
-                                                  const std::unordered_set<int>& visited_tables);
+                                                  const std::unordered_set<int>& visited_tables,
+                                                  ColumnCacheMap& column_cache);
   void nukeOldState(const bool allow_lazy_fetch,
                     const JoinInfo& join_info,
                     const std::vector<InputTableInfo>& query_infos,

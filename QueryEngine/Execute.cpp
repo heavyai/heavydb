@@ -801,12 +801,13 @@ ResultPtr Executor::executeWorkUnit(int32_t* error_code,
     max_groups_buffer_entry_guess = compute_buffer_entry_guess(query_infos);
   }
 
+  ColumnCacheMap column_cache;
   auto join_info = JoinInfo(JoinImplType::Invalid, std::vector<std::shared_ptr<Analyzer::BinOper>>{}, {}, "");
   if (ra_exe_unit.input_descs.size() > 1 && ra_exe_unit.inner_joins.empty()) {
-    join_info = chooseJoinType(ra_exe_unit.inner_join_quals, query_infos, ra_exe_unit, device_type);
+    join_info = chooseJoinType(ra_exe_unit.inner_join_quals, query_infos, ra_exe_unit, device_type, column_cache);
   }
   if (join_info.join_impl_type_ == JoinImplType::Loop && !ra_exe_unit.outer_join_quals.empty()) {
-    join_info = chooseJoinType(ra_exe_unit.outer_join_quals, query_infos, ra_exe_unit, device_type);
+    join_info = chooseJoinType(ra_exe_unit.outer_join_quals, query_infos, ra_exe_unit, device_type, column_cache);
   }
 
 #ifdef ENABLE_EQUIJOIN_FOLD
@@ -840,6 +841,7 @@ ResultPtr Executor::executeWorkUnit(int32_t* error_code,
                                          {device_type, co.hoist_literals_, co.opt_level_, co.with_dynamic_watchdog_},
                                          context_count,
                                          row_set_mem_owner,
+                                         column_cache,
                                          error_code,
                                          render_info);
     try {
@@ -2322,7 +2324,8 @@ Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
     const std::vector<InputTableInfo>& query_infos,
     const RelAlgExecutionUnit& ra_exe_unit,
     const MemoryLevel memory_level,
-    const std::unordered_set<int>& visited_tables) {
+    const std::unordered_set<int>& visited_tables,
+    ColumnCacheMap& column_cache) {
   std::shared_ptr<JoinHashTableInterface> join_hash_table;
   const int device_count =
       memory_level == MemoryLevel::GPU_LEVEL ? catalog_->get_dataMgr().cudaMgr_->getDeviceCount() : 1;
@@ -2330,11 +2333,11 @@ Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
   try {
     if (dynamic_cast<const Analyzer::ExpressionTuple*>(qual_bin_oper->get_left_operand())) {
       join_hash_table = BaselineJoinHashTable::getInstance(
-          qual_bin_oper, query_infos, ra_exe_unit, memory_level, device_count, visited_tables, this);
+          qual_bin_oper, query_infos, ra_exe_unit, memory_level, device_count, visited_tables, column_cache, this);
     } else {
       try {
         join_hash_table = JoinHashTable::getInstance(
-            qual_bin_oper, query_infos, ra_exe_unit, memory_level, device_count, visited_tables, this);
+            qual_bin_oper, query_infos, ra_exe_unit, memory_level, device_count, visited_tables, column_cache, this);
       } catch (TooManyHashEntries&) {
         join_hash_table = BaselineJoinHashTable::getInstance(coalesce_singleton_equi_join(qual_bin_oper),
                                                              query_infos,
@@ -2342,6 +2345,7 @@ Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
                                                              memory_level,
                                                              device_count,
                                                              visited_tables,
+                                                             column_cache,
                                                              this);
       }
     }
@@ -2357,7 +2361,8 @@ Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
 Executor::JoinInfo Executor::chooseJoinType(const std::list<std::shared_ptr<Analyzer::Expr>>& join_quals,
                                             const std::vector<InputTableInfo>& query_infos,
                                             const RelAlgExecutionUnit& ra_exe_unit,
-                                            const ExecutorDeviceType device_type) {
+                                            const ExecutorDeviceType device_type,
+                                            ColumnCacheMap& column_cache) {
   CHECK(device_type != ExecutorDeviceType::Hybrid);
   std::string hash_join_fail_reason{"No equijoin expression found"};
 
@@ -2378,8 +2383,8 @@ Executor::JoinInfo Executor::chooseJoinType(const std::list<std::shared_ptr<Anal
       continue;
     }
     if (IS_EQUIVALENCE(qual_bin_oper->get_optype())) {
-      const auto hash_table_and_error =
-          buildHashTableForQualifier(qual_bin_oper, query_infos, ra_exe_unit, memory_level, visited_tables);
+      const auto hash_table_and_error = buildHashTableForQualifier(
+          qual_bin_oper, query_infos, ra_exe_unit, memory_level, visited_tables, column_cache);
       if (hash_table_and_error.hash_table) {
         std::set<int> curr_rte_idx_set;
         qual_bin_oper->collect_rte_idx(curr_rte_idx_set);

@@ -16,11 +16,14 @@
 
 #ifndef COLUMNAR_RESULTS_H
 #define COLUMNAR_RESULTS_H
-#include "ResultSet.h"
 #include "IteratorTable.h"
+#include "ResultSet.h"
 #include "SqlTypesLayout.h"
 
 #include "../Shared/checked_alloc.h"
+
+#include <memory>
+#include <unordered_map>
 
 class ColumnarConversionNotSupported : public std::runtime_error {
  public:
@@ -89,4 +92,5 @@ class ColumnarResults {
   const std::vector<SQLTypeInfo> target_types_;
 };
 
+typedef std::unordered_map<int, std::unordered_map<int, std::shared_ptr<const ColumnarResults>>> ColumnCacheMap;
 #endif  // COLUMNAR_RESULTS_H
