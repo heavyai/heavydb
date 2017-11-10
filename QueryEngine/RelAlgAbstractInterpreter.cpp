@@ -1423,6 +1423,7 @@ class RelAlgAbstractInterpreter {
     bind_inputs(nodes_);
     mark_nops(nodes_);
     simplify_sort(nodes_);
+    sink_projected_boolean_expr_to_join(nodes_);
     eliminate_identical_copy(nodes_);
     fold_filters(nodes_);
     std::vector<const RelAlgNode*> left_deep_joins;

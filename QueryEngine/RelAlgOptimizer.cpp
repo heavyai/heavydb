@@ -21,6 +21,7 @@
 
 #include <numeric>
 #include <string>
+#include <unordered_map>
 
 namespace {
 
@@ -1115,6 +1116,140 @@ void eliminate_dead_columns(std::vector<std::shared_ptr<RelAlgNode>>& nodes) noe
   // Propagate
   propagate_input_renumbering(
       liveout_renumbering, ready_nodes, old_liveouts, deconst_mapping, intact_nodes, web, orig_node_sizes);
+}
+
+namespace {
+
+class RexInputSinker : public RexDeepCopyVisitor {
+ public:
+  RexInputSinker(const std::unordered_map<size_t, size_t>& old_to_new_idx, const RelAlgNode* new_src)
+      : old_to_new_in_idx_(old_to_new_idx), target_(new_src) {}
+
+  RetType visitInput(const RexInput* input) const {
+    CHECK_EQ(target_->inputCount(), size_t(1));
+    CHECK_EQ(target_->getInput(0), input->getSourceNode());
+    auto idx_it = old_to_new_in_idx_.find(input->getIndex());
+    CHECK(idx_it != old_to_new_in_idx_.end());
+    return boost::make_unique<RexInput>(target_, idx_it->second);
+  }
+
+ private:
+  const std::unordered_map<size_t, size_t>& old_to_new_in_idx_;
+  const RelAlgNode* target_;
+};
+
+class SubConditionReplacer : public RexDeepCopyVisitor {
+ public:
+  SubConditionReplacer(const std::unordered_map<size_t, std::unique_ptr<const RexScalar>>& idx_to_sub_condition)
+      : idx_to_subcond_(idx_to_sub_condition) {}
+  RetType visitInput(const RexInput* input) const override {
+    auto subcond_it = idx_to_subcond_.find(input->getIndex());
+    if (subcond_it != idx_to_subcond_.end()) {
+      return RexDeepCopyVisitor::visit(subcond_it->second.get());
+    }
+    return RexDeepCopyVisitor::visitInput(input);
+  }
+
+ private:
+  const std::unordered_map<size_t, std::unique_ptr<const RexScalar>>& idx_to_subcond_;
+};
+
+}  // namespace
+
+void sink_projected_boolean_expr_to_join(std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept {
+  auto web = build_du_web(nodes);
+  std::unordered_map<const RelAlgNode*, RelAlgNode*> deconst_mapping;
+  for (auto node : nodes) {
+    deconst_mapping.insert(std::make_pair(node.get(), node.get()));
+  }
+  auto liveouts = mark_live_columns(nodes);
+  for (auto node : nodes) {
+    auto project = std::dynamic_pointer_cast<RelProject>(node);
+    // TODO(miyu): relax RelScan limitation
+    if (!project || project->isSimple() || !dynamic_cast<const RelScan*>(project->getInput(0))) {
+      continue;
+    }
+    auto usrs_it = web.find(project.get());
+    CHECK(usrs_it != web.end());
+    auto& usrs = usrs_it->second;
+    if (usrs.size() != 1) {
+      continue;
+    }
+    auto join = dynamic_cast<RelJoin*>(deconst_mapping[*usrs.begin()]);
+    if (!join) {
+      continue;
+    }
+    auto outs_it = liveouts.find(join);
+    CHECK(outs_it != liveouts.end());
+    std::unordered_map<size_t, size_t> in_to_out_index;
+    std::unordered_set<size_t> boolean_expr_indicies;
+    bool discarded = false;
+    for (size_t i = 0; i < project->size(); ++i) {
+      auto oper = dynamic_cast<const RexOperator*>(project->getProjectAt(i));
+      if (oper && oper->getType().get_type() == kBOOLEAN) {
+        boolean_expr_indicies.insert(i);
+      } else {
+        // TODO(miyu): relax?
+        if (auto input = dynamic_cast<const RexInput*>(project->getProjectAt(i))) {
+          in_to_out_index.insert(std::make_pair(input->getIndex(), i));
+        } else {
+          discarded = true;
+        }
+      }
+    }
+    if (discarded || boolean_expr_indicies.empty()) {
+      continue;
+    }
+    const size_t index_base = join->getInput(0) == project.get() ? 0 : join->getInput(0)->size();
+    for (auto i : boolean_expr_indicies) {
+      auto join_idx = index_base + i;
+      if (outs_it->second.count(join_idx)) {
+        discarded = true;
+        break;
+      }
+    }
+    if (discarded) {
+      continue;
+    }
+    RexInputCollector collector(project.get());
+    std::vector<size_t> unloaded_input_indices;
+    std::unordered_map<size_t, std::unique_ptr<const RexScalar>> in_idx_to_new_subcond;
+    // Given all are dead right after join, safe to sink
+    for (auto i : boolean_expr_indicies) {
+      auto rex_ins = collector.visit(project->getProjectAt(i));
+      for (auto& in : rex_ins) {
+        CHECK_EQ(in.getSourceNode(), project->getInput(0));
+        if (!in_to_out_index.count(in.getIndex())) {
+          auto curr_out_index = project->size() + unloaded_input_indices.size();
+          in_to_out_index.insert(std::make_pair(in.getIndex(), curr_out_index));
+          unloaded_input_indices.push_back(in.getIndex());
+        }
+        RexInputSinker sinker(in_to_out_index, project.get());
+        in_idx_to_new_subcond.insert(std::make_pair(i, sinker.visit(project->getProjectAt(i))));
+      }
+    }
+    if (in_idx_to_new_subcond.empty()) {
+      continue;
+    }
+    std::vector<std::unique_ptr<const RexScalar>> new_projections;
+    for (size_t i = 0; i < project->size(); ++i) {
+      if (boolean_expr_indicies.count(i)) {
+        new_projections.push_back(boost::make_unique<RexInput>(project->getInput(0), 0));
+      } else {
+        auto rex_input = dynamic_cast<const RexInput*>(project->getProjectAt(i));
+        CHECK(rex_input != nullptr);
+        new_projections.push_back(rex_input->deepCopy());
+      }
+    }
+    for (auto i : unloaded_input_indices) {
+      new_projections.push_back(boost::make_unique<RexInput>(project->getInput(0), i));
+    }
+    project->setExpressions(new_projections);
+
+    SubConditionReplacer replacer(in_idx_to_new_subcond);
+    auto new_condition = replacer.visit(join->getCondition());
+    join->setCondition(new_condition);
+  }
 }
 
 namespace {
