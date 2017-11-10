@@ -1534,10 +1534,10 @@ int main(int argc, char** argv) {
       std::string table_details = strtok(line + 5, " ");
       get_table_epoch(context, table_details);
     } else if (!strncmp(line, "\\export_dashboard", 17)) {
-      std::string dash_details = strtok(line + 18, " ");
+      std::string dash_details = line + 18;
       export_dashboard(context, dash_details);
     } else if (!strncmp(line, "\\import_dashboard", 17)) {
-      std::string dash_details = strtok(line + 18, " ");
+      std::string dash_details = line + 18;
       import_dashboard(context, dash_details);
     } else if (!strncmp(line, "\\copy", 5)) {
       char* filepath = strtok(line + 6, " ");
