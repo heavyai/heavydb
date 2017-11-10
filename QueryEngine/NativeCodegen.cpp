@@ -27,13 +27,11 @@
 #include <llvm/Bitcode/ReaderWriter.h>
 #endif
 #include <llvm/ExecutionEngine/MCJIT.h>
-#include <llvm/IRReader/IRReader.h>
 #include <llvm/IR/Attributes.h>
 #include <llvm/IR/InstIterator.h>
-#include "llvm/IR/IntrinsicInst.h"
-#include "llvm/IR/Intrinsics.h"
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Verifier.h>
+#include <llvm/IRReader/IRReader.h>
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/FormattedStream.h>
 #include <llvm/Support/MemoryBuffer.h>
@@ -41,8 +39,10 @@
 #include <llvm/Support/TargetRegistry.h>
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/Support/raw_os_ostream.h>
-#include <llvm/Transforms/Instrumentation.h>
 #include <llvm/Transforms/IPO.h>
+#include <llvm/Transforms/Instrumentation.h>
+#include "llvm/IR/IntrinsicInst.h"
+#include "llvm/IR/Intrinsics.h"
 #if LLVM_VERSION_MAJOR >= 4
 #include <llvm/Transforms/IPO/AlwaysInliner.h>
 #endif

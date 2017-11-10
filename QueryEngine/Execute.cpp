@@ -18,6 +18,7 @@
 
 #include "AggregateUtils.h"
 #include "BaselineJoinHashTable.h"
+#include "DynamicWatchdog.h"
 #include "EquiJoinCondition.h"
 #include "ExecutionException.h"
 #include "ExpressionRewrite.h"
@@ -28,22 +29,21 @@
 #include "QueryRewrite.h"
 #include "QueryTemplateGenerator.h"
 #include "RuntimeFunctions.h"
-#include "DynamicWatchdog.h"
 #include "SpeculativeTopN.h"
 
 #include "CudaMgr/CudaMgr.h"
 #include "DataMgr/BufferMgr/BufferMgr.h"
 #include "Parser/ParserNode.h"
-#include "Shared/checked_alloc.h"
 #include "Shared/MapDParameters.h"
+#include "Shared/checked_alloc.h"
 #include "Shared/scope.h"
 
 #include "AggregatedColRange.h"
 #include "StringDictionaryGenerations.h"
 
+#include <llvm/Transforms/Utils/BasicBlockUtils.h>
 #include <boost/filesystem/operations.hpp>
 #include <boost/filesystem/path.hpp>
-#include <llvm/Transforms/Utils/BasicBlockUtils.h>
 
 #ifdef HAVE_CUDA
 #include <cuda.h>
@@ -51,8 +51,8 @@
 #include <future>
 #include <memory>
 #include <numeric>
-#include <thread>
 #include <set>
+#include <thread>
 
 bool g_enable_watchdog{false};
 bool g_enable_dynamic_watchdog{false};
@@ -706,9 +706,10 @@ std::unordered_set<int> get_available_gpus(const Catalog_Namespace::Catalog& cat
 }
 
 size_t get_context_count(const ExecutorDeviceType device_type, const size_t cpu_count, const size_t gpu_count) {
-  return device_type == ExecutorDeviceType::GPU ? gpu_count : device_type == ExecutorDeviceType::Hybrid
-                                                                  ? std::max(static_cast<size_t>(cpu_count), gpu_count)
-                                                                  : static_cast<size_t>(cpu_count);
+  return device_type == ExecutorDeviceType::GPU
+             ? gpu_count
+             : device_type == ExecutorDeviceType::Hybrid ? std::max(static_cast<size_t>(cpu_count), gpu_count)
+                                                         : static_cast<size_t>(cpu_count);
 }
 
 std::string get_table_name(const InputDescriptor& input_desc, const Catalog_Namespace::Catalog& cat) {
@@ -2542,8 +2543,8 @@ llvm::Value* Executor::castToIntPtrTyIn(llvm::Value* val, const size_t bitWidth)
 }
 
 #define EXECUTE_INCLUDE
-#include "DateAdd.cpp"
 #include "ArrayOps.cpp"
+#include "DateAdd.cpp"
 #include "StringFunctions.cpp"
 #undef EXECUTE_INCLUDE
 

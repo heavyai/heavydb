@@ -21,36 +21,37 @@
 #include "BufferCompaction.h"
 #include "CartesianProduct.h"
 #include "GroupByAndAggregate.h"
+#include "IRCodegenUtils.h"
 #include "InValuesBitmap.h"
 #include "InputMetadata.h"
-#include "IRCodegenUtils.h"
 #include "JoinHashTable.h"
 #include "LLVMGlobalContext.h"
+#include "LoopControlFlow/JoinLoop.h"
 #include "NvidiaKernel.h"
 #include "RelAlgExecutionUnit.h"
 #include "StringDictionaryGenerations.h"
 #include "TableGenerations.h"
 #include "TargetMetaInfo.h"
-#include "LoopControlFlow/JoinLoop.h"
 
 #include "../Analyzer/Analyzer.h"
 #include "../Chunk/Chunk.h"
 #include "../Planner/Planner.h"
+#include "../Shared/MapDParameters.h"
 #include "../Shared/measure.h"
 #include "../Shared/thread_count.h"
-#include "../Shared/MapDParameters.h"
 #include "../StringDictionary/StringDictionary.h"
 #include "../StringDictionary/StringDictionaryProxy.h"
 
-#include <boost/functional/hash.hpp>
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
+#include <llvm/IR/Function.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/LLVMContext.h>
-#include <llvm/IR/Function.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Value.h>
 #include <rapidjson/document.h>
+#include <boost/functional/hash.hpp>
 
+#include <unistd.h>
 #include <algorithm>
 #include <condition_variable>
 #include <deque>
@@ -59,7 +60,6 @@
 #include <map>
 #include <mutex>
 #include <stack>
-#include <unistd.h>
 #include <unordered_map>
 #include <unordered_set>
 

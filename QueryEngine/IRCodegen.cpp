@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-#include "Execute.h"
-#include "RelAlgTranslator.h"
-#include "MaxwellCodegenPatch.h"
 #include "../Parser/ParserNode.h"
+#include "Execute.h"
+#include "MaxwellCodegenPatch.h"
+#include "RelAlgTranslator.h"
 
 // Driver methods for the IR generation.
 

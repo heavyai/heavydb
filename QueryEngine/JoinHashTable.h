@@ -24,15 +24,15 @@
 #ifndef QUERYENGINE_JOINHASHTABLE_H
 #define QUERYENGINE_JOINHASHTABLE_H
 
-#include "ExpressionRange.h"
+#include "../Analyzer/Analyzer.h"
+#include "../Catalog/Catalog.h"
+#include "../Chunk/Chunk.h"
 #include "ColumnarResults.h"
+#include "ExpressionRange.h"
 #include "InputDescriptors.h"
 #include "InputMetadata.h"
 #include "JoinHashTableInterface.h"
 #include "ThrustAllocator.h"
-#include "../Analyzer/Analyzer.h"
-#include "../Catalog/Catalog.h"
-#include "../Chunk/Chunk.h"
 
 #include <llvm/IR/Value.h>
 
