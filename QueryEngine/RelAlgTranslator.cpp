@@ -496,18 +496,24 @@ void fill_dictionary_encoded_in_vals(std::vector<int64_t>& in_vals,
                                      const StringDictionaryProxy* dest_dict,
                                      const int64_t needle_null_val) {
   CHECK(in_vals.empty());
+  bool dicts_are_equal = source_dict == dest_dict;
   for (auto index = values_rowset_slice.first; index < values_rowset_slice.second; ++index) {
     const auto row = values_rowset->getOneColRow(index);
-    if (row.valid) {
+    if (UNLIKELY(!row.valid)) {
+      continue;
+    }
+    if (dicts_are_equal) {
+      in_vals.push_back(row.value);
+    } else {
       const int string_id =
           row.value == needle_null_val ? needle_null_val : dest_dict->getIdOfString(source_dict->getString(row.value));
       if (string_id != StringDictionary::INVALID_STR_ID) {
         in_vals.push_back(string_id);
-        if (UNLIKELY(g_enable_watchdog && (in_vals.size() & 1023) == 0 &&
-                     total_in_vals_count.fetch_add(1024) >= g_max_integer_set_size)) {
-          throw std::runtime_error("Unable to handle 'expr IN (subquery)', subquery returned 30M+ rows.");
-        }
       }
+    }
+    if (UNLIKELY(g_enable_watchdog && (in_vals.size() & 1023) == 0 &&
+                 total_in_vals_count.fetch_add(1024) >= g_max_integer_set_size)) {
+      throw std::runtime_error("Unable to handle 'expr IN (subquery)', subquery returned 30M+ rows.");
     }
   }
 }
@@ -548,6 +554,30 @@ void fill_dictionary_encoded_in_vals(std::vector<int64_t>& in_vals,
   std::vector<int32_t> source_ids;
   source_ids.reserve(values_rowset->entryCount());
   bool has_nulls = false;
+  if (source_dict_id == dest_dict_id) {
+    in_vals.reserve(values_rowset_slice.second - values_rowset_slice.first + 1);  // Add 1 to cover interval
+    for (auto index = values_rowset_slice.first; index < values_rowset_slice.second; ++index) {
+      const auto row = values_rowset->getOneColRow(index);
+      if (!row.valid) {
+        continue;
+      }
+      if (row.value != needle_null_val) {
+        in_vals.push_back(row.value);
+        if (UNLIKELY(g_enable_watchdog && (in_vals.size() & 1023) == 0 &&
+                     total_in_vals_count.fetch_add(1024) >= g_max_integer_set_size)) {
+          throw std::runtime_error("Unable to handle 'expr IN (subquery)', subquery returned 30M+ rows.");
+        }
+      } else {
+        has_nulls = true;
+      }
+    }
+    if (has_nulls) {
+      in_vals.push_back(
+          needle_null_val);  // we've deduped null values as an optimization, although this is not required by consumer
+    }
+    return;
+  }
+  // Code path below is for when dictionaries are not shared
   for (auto index = values_rowset_slice.first; index < values_rowset_slice.second; ++index) {
     const auto row = values_rowset->getOneColRow(index);
     if (row.valid) {

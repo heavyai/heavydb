@@ -3144,6 +3144,7 @@ TEST(Select, Subqueries) {
     c("SELECT x_cap, y FROM (SELECT CASE WHEN x > 100 THEN 100 ELSE x END x_cap, y, t FROM emptytab) GROUP BY x_cap, "
       "y;",
       dt);
+    c("SELECT COUNT(*) FROM test WHERE str IN (SELECT DISTINCT str FROM test);", dt);
 #ifdef ENABLE_JOIN_EXEC
     c("SELECT SUM((x - (SELECT AVG(x) FROM test)) * (x - (SELECT AVG(x) FROM test)) / ((SELECT COUNT(x) FROM test) - "
       "1)) FROM test;",
