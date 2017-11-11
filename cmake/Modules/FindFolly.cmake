@@ -68,7 +68,7 @@ if(Folly_USE_STATIC_LIBS)
 endif()
 
 # Set standard CMake FindPackage variables if found.
-set(Folly_LIBRARIES ${Folly_LIBRARY} ${Folly_DC_LIBRARY})
+set(Folly_LIBRARIES ${Folly_LIBRARY} ${Folly_DC_LIBRARY} ${CMAKE_DL_LIBS})
 set(Folly_LIBRARY_DIRS ${Folly_LIBRARY_DIR})
 set(Folly_INCLUDE_DIRS ${Folly_LIBRARY_DIR}/../include)
 
