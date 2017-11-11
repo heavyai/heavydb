@@ -22,6 +22,7 @@ brew install folly
 brew install apache-arrow
 brew install golang
 brew install libpng
+brew install libarchive
 
 brew cask install java
 brew cask install gdal-framework
@@ -29,7 +30,7 @@ brew install maven
 
 # install CUDA (even if you don't have an nvidia GPU - some headers req'd for compilation)
 brew tap caskroom/drivers
-brew cask install cuda
+brew cask install nvidia-cuda
 CUDA_ROOT=$(ls -d /Developer/NVIDIA/CUDA-* | tail -n 1)
 export PATH=$CUDA_ROOT/bin/:$PATH
 

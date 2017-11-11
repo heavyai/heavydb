@@ -50,6 +50,8 @@ sudo apt install -y \
     libglu1-mesa-dev \
     liblz4-dev \
     liblzma-dev \
+    libbz2-dev \
+    libarchive-dev \
     libsnappy-dev \
     zlib1g-dev \
     autoconf \

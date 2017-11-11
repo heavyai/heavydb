@@ -70,6 +70,10 @@ makej
 make install PREFIX=$PREFIX
 popd
 
+# libarchive
+download_make_install https://tukaani.org/xz/xz-5.2.3.tar.gz "" "--disable-shared"
+download_make_install http://libarchive.org/downloads/libarchive-3.3.2.tar.gz "" "--without-openssl --disable-shared"
+
 CFLAGS="-fPIC" download_make_install ftp://ftp.gnu.org/pub/gnu/ncurses/ncurses-6.0.tar.gz # "" "--build=powerpc64le-unknown-linux-gnu"
 
 download_make_install ftp://ftp.gnu.org/gnu/bison/bison-2.5.1.tar.xz # "" "--build=powerpc64le-unknown-linux-gnu"
@@ -265,3 +269,4 @@ cp mapd-deps-$SUFFIX.sh mapd-deps-$SUFFIX.modulefile $PREFIX
 if [ "$1" = "--compress" ] ; then
     tar acvf mapd-deps-$SUFFIX.tar.xz -C $(dirname $PREFIX) $SUFFIX
 fi
+

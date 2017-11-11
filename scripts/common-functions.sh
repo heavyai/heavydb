@@ -21,7 +21,12 @@ function download_make_install() {
     else
         pushd $2
     fi
-    ./configure --prefix=$PREFIX $3
+
+    if [ -x ./Configure ]; then
+        ./Configure --prefix=$PREFIX $3
+    else
+        ./configure --prefix=$PREFIX $3
+    fi
     makej
     make install
     popd
