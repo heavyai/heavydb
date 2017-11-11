@@ -75,6 +75,8 @@ void completion(const char* buf, linenoiseCompletions* lc) {
 }
 
 #define INVALID_SESSION_ID ""
+#define MAPD_ROOT_USER "mapd"
+#define MAPD_DEFAULT_ROOT_USER_ROLE "mapd_default_suser_role"
 #define MAPD_USER_EXISTS_YES "USER_EXISTS_YES"
 
 // code from https://stackoverflow.com/questions/7053538/how-do-i-encode-a-string-to-base64-using-only-boost
@@ -1803,6 +1805,9 @@ int main(int argc, char** argv) {
       if (temp_line.size() > 11) {
         context.privs_role_name.clear();
         context.privs_role_name = strtok(line + 12, " ");
+        if (!context.privs_role_name.compare(MAPD_ROOT_USER)) {
+          context.privs_role_name = boost::to_upper_copy<std::string>(MAPD_DEFAULT_ROOT_USER_ROLE);
+        }
         get_db_objects_for_role(context);
       } else {
         std::cout << "Command privileges failed because parameter role name or user name is missing." << std::endl;
