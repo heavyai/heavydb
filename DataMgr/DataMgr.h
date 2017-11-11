@@ -74,7 +74,10 @@ class DataMgr {
           const size_t reservedGpuMem = (1 << 27),
           const size_t numReaderThreads = 0); /* 0 means use default for # of reader threads */
   ~DataMgr();
-  AbstractBuffer* createChunkBuffer(const ChunkKey& key, const MemoryLevel memoryLevel, const int deviceId = 0);
+  AbstractBuffer* createChunkBuffer(const ChunkKey& key,
+                                    const MemoryLevel memoryLevel,
+                                    const int deviceId = 0,
+                                    const size_t page_size = 0);
   AbstractBuffer* getChunkBuffer(const ChunkKey& key,
                                  const MemoryLevel memoryLevel,
                                  const int deviceId = 0,

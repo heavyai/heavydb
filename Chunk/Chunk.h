@@ -60,7 +60,11 @@ class Chunk {
                                        const size_t start_idx,
                                        const size_t byte_limit);
   ChunkMetadata appendData(DataBlockPtr& srcData, const size_t numAppendElems, const size_t startIdx);
-  void createChunkBuffer(DataMgr* data_mgr, const ChunkKey& key, const MemoryLevel mem_level, const int deviceId = 0);
+  void createChunkBuffer(DataMgr* data_mgr,
+                         const ChunkKey& key,
+                         const MemoryLevel mem_level,
+                         const int deviceId = 0,
+                         const size_t page_size = 0);
   void getChunkBuffer(DataMgr* data_mgr,
                       const ChunkKey& key,
                       const MemoryLevel mem_level,

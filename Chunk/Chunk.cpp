@@ -92,16 +92,17 @@ void Chunk::getChunkBuffer(DataMgr* data_mgr,
 void Chunk::createChunkBuffer(DataMgr* data_mgr,
                               const ChunkKey& key,
                               const MemoryLevel mem_level,
-                              const int device_id) {
+                              const int device_id,
+                              const size_t page_size) {
   if (column_desc->columnType.is_varlen()) {
     ChunkKey subKey = key;
     subKey.push_back(1);  // 1 for the main buffer
-    buffer = data_mgr->createChunkBuffer(subKey, mem_level, device_id);
+    buffer = data_mgr->createChunkBuffer(subKey, mem_level, device_id, page_size);
     subKey.pop_back();
     subKey.push_back(2);  // 2 for the index buffer
-    index_buf = data_mgr->createChunkBuffer(subKey, mem_level, device_id);
+    index_buf = data_mgr->createChunkBuffer(subKey, mem_level, device_id, page_size);
   } else
-    buffer = data_mgr->createChunkBuffer(key, mem_level, device_id);
+    buffer = data_mgr->createChunkBuffer(key, mem_level, device_id, page_size);
 }
 
 size_t Chunk::getNumElemsForBytesInsertData(const DataBlockPtr& src_data,

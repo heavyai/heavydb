@@ -305,6 +305,7 @@ class Catalog {
   void updateLogicalToPhysicalTableLinkSchema();
   void updateLogicalToPhysicalTableMap(const int32_t logical_tb_id);
   void updateDictionarySchema();
+  void updatePageSize();
   void buildRoleMap();
   void buildUserRoleMap();
   void buildMaps();

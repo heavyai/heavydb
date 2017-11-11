@@ -42,7 +42,7 @@ InsertOrderFragmenter::InsertOrderFragmenter(const vector<int> chunkKeyPrefix,
                                              const int shard,
                                              const size_t maxFragmentRows,
                                              const size_t maxChunkSize,
-                                             const size_t pageSize /*default 1MB*/,
+                                             const size_t pageSize,
                                              const size_t maxRows,
                                              const Data_Namespace::MemoryLevel defaultInsertLevel)
     : chunkKeyPrefix_(chunkKeyPrefix),
@@ -327,7 +327,7 @@ FragmentInfo* InsertOrderFragmenter::createNewFragment(const Data_Namespace::Mem
     chunkKey.push_back(colMapIt->second.get_column_desc()->columnId);
     chunkKey.push_back(maxFragmentId_);
     colMapIt->second.createChunkBuffer(
-        dataMgr_, chunkKey, memoryLevel, newFragmentInfo.deviceIds[static_cast<int>(memoryLevel)]);
+        dataMgr_, chunkKey, memoryLevel, newFragmentInfo.deviceIds[static_cast<int>(memoryLevel)], pageSize_);
     colMapIt->second.init_encoder();
   }
 

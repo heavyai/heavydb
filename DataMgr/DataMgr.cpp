@@ -315,9 +315,12 @@ void DataMgr::getChunkMetadataVecForKeyPrefix(std::vector<std::pair<ChunkKey, Ch
   bufferMgrs_[0][0]->getChunkMetadataVecForKeyPrefix(chunkMetadataVec, keyPrefix);
 }
 
-AbstractBuffer* DataMgr::createChunkBuffer(const ChunkKey& key, const MemoryLevel memoryLevel, const int deviceId) {
+AbstractBuffer* DataMgr::createChunkBuffer(const ChunkKey& key,
+                                           const MemoryLevel memoryLevel,
+                                           const int deviceId,
+                                           const size_t page_size) {
   int level = static_cast<int>(memoryLevel);
-  return bufferMgrs_[level][deviceId]->createBuffer(key);
+  return bufferMgrs_[level][deviceId]->createBuffer(key, page_size);
 }
 
 AbstractBuffer* DataMgr::getChunkBuffer(const ChunkKey& key,

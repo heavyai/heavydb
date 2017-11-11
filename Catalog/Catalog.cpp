@@ -225,7 +225,8 @@ void SysCatalog::createDatabase(const string& name, int owner) {
   dbConn.query(
       "CREATE TABLE mapd_tables (tableid integer primary key, name text unique, ncolumns integer, isview boolean, "
       "fragments text, frag_type integer, max_frag_rows integer, max_chunk_size bigint, frag_page_size integer, "
-      "max_rows bigint, partitions text, shard_column_id integer, shard integer, num_shards integer)");
+      "max_rows bigint, partitions text, shard_column_id integer, shard integer, num_shards integer, version_num "
+      "BIGINT DEFAULT 1) ");
   dbConn.query(
       "CREATE TABLE mapd_columns (tableid integer references mapd_tables, columnid integer, name text, coltype "
       "integer, colsubtype integer, coldim integer, colscale integer, is_notnull boolean, compression integer, "
@@ -240,7 +241,7 @@ void SysCatalog::createDatabase(const string& name, int owner) {
       "link text unique, view_state text, update_time timestamp, view_metadata text)");
   dbConn.query(
       "CREATE TABLE mapd_dictionaries (dictid integer primary key, name text unique, nbits int, is_shared boolean, "
-      "refcount int)");
+      "refcount int, version_num BIGINT DEFAULT 1)");
   dbConn.query("CREATE TABLE mapd_logical_to_physical(logical_table_id integer, physical_table_id integer)");
 }
 
@@ -1049,6 +1050,39 @@ void Catalog::updateFrontendViewAndLinkUsers() {
   sqliteConnector_.query("END TRANSACTION");
 }
 
+// introduce DB version into the tables table
+// if the DB does not have a version reset all pagesizes to 2097152 to be compatible with old
+// value
+
+void Catalog::updatePageSize() {
+  if (currentDB_.dbName.length() == 0) {
+    // updateDictionaryNames dbName length is zero nothing to do here
+    return;
+  }
+  sqliteConnector_.query("BEGIN TRANSACTION");
+  try {
+    sqliteConnector_.query("PRAGMA TABLE_INFO(mapd_tables)");
+    std::vector<std::string> cols;
+    for (size_t i = 0; i < sqliteConnector_.getNumRows(); i++) {
+      cols.push_back(sqliteConnector_.getData<std::string>(i, 1));
+    }
+    if (std::find(cols.begin(), cols.end(), std::string("version_num")) == cols.end()) {
+      LOG(INFO) << "Updating mapd_tables updatePageSize";
+      // No version number
+      // need to update the defaul tpagesize to old correct value
+      sqliteConnector_.query("UPDATE mapd_tables SET frag_page_size = 2097152 ");
+      // need to add new version info
+      string queryString("ALTER TABLE mapd_tables ADD version_num BIGINT DEFAULT " +
+                         std::to_string(DEFAULT_INITIAL_VERSION));
+      sqliteConnector_.query(queryString);
+    }
+  } catch (std::exception& e) {
+    sqliteConnector_.query("ROLLBACK TRANSACTION");
+    throw;
+  }
+  sqliteConnector_.query("END TRANSACTION");
+}
+
 // introduce DB version into the dictionary tables
 // if the DB does not have a version rename all dictionary tables
 
@@ -1163,6 +1197,7 @@ void Catalog::CheckAndExecuteMigrations() {
   updateDictionaryNames();
   updateLogicalToPhysicalTableLinkSchema();
   updateDictionarySchema();
+  updatePageSize();
 }
 
 void Catalog::buildRoleMap() {
