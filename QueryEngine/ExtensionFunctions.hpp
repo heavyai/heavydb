@@ -301,3 +301,344 @@ double approx_distance_in_meters(const float fromlon, const float fromlat, const
   return distance_in_meters__(fromlon, fromlat, tolon, tolat);
 #endif
 }
+
+EXTENSION_NOINLINE
+float rect_pixel_bin(const float val,
+                     const float min,
+                     const float max,
+                     const int32_t numbins,
+                     const int32_t dimensionsize) {
+  /** deprecated **/
+  float numbinsf = float(numbins);
+  return float(int32_t((val - min) / (max - min) * numbinsf)) * float(dimensionsize) / numbinsf;
+}
+
+EXTENSION_NOINLINE
+float rect_pixel_bin_x(const float valx,
+                       const float minx,
+                       const float maxx,
+                       const float rectwidth,
+                       const float offsetx,
+                       const int32_t imgwidth) {
+  const float imgwidthf = float(imgwidth);
+  float min = minx;
+  float offset = offsetx;
+  if (offset != 0) {
+    offset = fmodf(offset, rectwidth);
+    if (offset > 0) {
+      offset -= rectwidth;
+    }
+    min += offset * (maxx - minx) / imgwidthf;
+  }
+  return float(int32_t((valx - min) / (maxx - min) * (imgwidthf - offset) / rectwidth)) * rectwidth + offset +
+         rectwidth / 2.0f;
+}
+
+EXTENSION_NOINLINE
+float rect_pixel_bin_y(const float valy,
+                       const float miny,
+                       const float maxy,
+                       const float rectheight,
+                       const float offsety,
+                       const int32_t imgheight) {
+  const float imgheightf = float(imgheight);
+  float min = miny;
+  float offset = offsety;
+  if (offset != 0) {
+    offset = fmodf(offset, rectheight);
+    if (offset > 0) {
+      offset -= rectheight;
+    }
+    min += offset * (maxy - miny) / imgheightf;
+  }
+  return float(int32_t((valy - min) / (maxy - min) * (imgheightf - offset) / rectheight)) * rectheight + offset +
+         rectheight / 2.0f;
+}
+
+EXTENSION_NOINLINE
+float reg_hex_horiz_pixel_bin_x(const float valx,
+                                const float minx,
+                                const float maxx,
+                                const float valy,
+                                const float miny,
+                                const float maxy,
+                                const float hexwidth,
+                                const float hexheight,
+                                const float offsetx,
+                                const float offsety,
+                                const int32_t imgwidth,
+                                const int32_t imgheight) {
+  const float sqrt3 = 1.7320508075688772;
+  const float imgwidthf = float(imgwidth);
+  const float imgheightf = float(imgheight);
+
+  // expand the bounds of the data according
+  // to the input offsets. This is done because
+  // we also expand the image size according to the
+  // offsets because this algorithm layers the hexagon
+  // bins starting at the bottom left corner
+  float xmin = minx;
+  float xoffset = offsetx;
+  if (xoffset != 0) {
+    xoffset = fmodf(xoffset, hexwidth);
+    if (xoffset > 0) {
+      xoffset -= hexwidth;
+    }
+    xmin += xoffset * (maxx - xmin) / imgwidthf;
+  }
+
+  float ymin = miny;
+  float yoffset = offsety;
+  if (yoffset != 0) {
+    yoffset = fmodf(yoffset, 1.5f * hexheight);
+    if (yoffset > 0) {
+      yoffset -= 1.5f * hexheight;
+    }
+    ymin += yoffset * (maxy - ymin) / imgheightf;
+  }
+
+  // get the pixel position of the point
+  // assumes a linear scale here
+  // Rounds to the nearest pixel.
+  const float pix_x = roundf((imgwidthf - xoffset) * (valx - xmin) / (maxx - xmin));
+  const float pix_y = roundf((imgheightf - yoffset) * (valy - ymin) / (maxy - ymin));
+
+  // Now convert the pixel position into a
+  // cube-coordinate system representation
+  const float hexsize = hexheight / 2.0f;
+  const float cube_x = ((pix_x / sqrt3) - (pix_y / 3.0)) / hexsize;
+  const float cube_z = (pix_y * 2.0f / 3.0f) / hexsize;
+  const float cube_y = -cube_x - cube_z;
+
+  // need to round the cube coordinates above
+  float rx = round(cube_x);
+  float ry = round(cube_y);
+  float rz = round(cube_z);
+  const float x_diff = fabs(rx - cube_x);
+  const float y_diff = fabs(ry - cube_y);
+  const float z_diff = fabs(rz - cube_z);
+  if (x_diff > y_diff && x_diff > z_diff) {
+    rx = -ry - rz;
+  } else if (y_diff > z_diff) {
+    ry = -rx - rz;
+  } else {
+    rz = -rx - ry;
+  }
+
+  // now convert the cube/hex coord to a pixel location
+  return hexsize * sqrt3 * (rx + rz / 2.0f) + xoffset;
+}
+
+EXTENSION_NOINLINE
+float reg_hex_horiz_pixel_bin_y(const float valx,
+                                const float minx,
+                                const float maxx,
+                                const float valy,
+                                const float miny,
+                                const float maxy,
+                                const float hexwidth,
+                                const float hexheight,
+                                const float offsetx,
+                                const float offsety,
+                                const int32_t imgwidth,
+                                const int32_t imgheight) {
+  const float sqrt3 = 1.7320508075688772;
+  const float imgwidthf = float(imgwidth);
+  const float imgheightf = float(imgheight);
+
+  // expand the bounds of the data according
+  // to the input offsets. This is done because
+  // we also expand the image size according to the
+  // offsets because this algorithm layers the hexagon
+  // bins starting at the bottom left corner
+  float xmin = minx;
+  float xoffset = offsetx;
+  if (xoffset != 0) {
+    xoffset = fmodf(xoffset, hexwidth);
+    if (xoffset > 0) {
+      xoffset -= hexwidth;
+    }
+    xmin += xoffset * (maxx - xmin) / imgwidthf;
+  }
+
+  float ymin = miny;
+  float yoffset = offsety;
+  if (yoffset != 0) {
+    yoffset = fmodf(yoffset, 1.5f * hexheight);
+    if (yoffset > 0) {
+      yoffset -= 1.5f * hexheight;
+    }
+    ymin += yoffset * (maxy - ymin) / imgheightf;
+  }
+
+  // get the pixel position of the point
+  // assumes a linear scale here
+  // Rounds to the nearest pixel.
+  const float pix_x = roundf((imgwidthf - xoffset) * (valx - xmin) / (maxx - xmin));
+  const float pix_y = roundf((imgheightf - yoffset) * (valy - ymin) / (maxy - ymin));
+
+  // Now convert the pixel position into a
+  // cube-coordinate system representation
+  const float hexsize = hexheight / 2.0f;
+  const float cube_x = ((pix_x / sqrt3) - (pix_y / 3.0f)) / hexsize;
+  const float cube_z = (pix_y * 2.0f / 3.0f) / hexsize;
+  const float cube_y = -cube_x - cube_z;
+
+  // need to round the cube coordinates above
+  float rx = round(cube_x);
+  float ry = round(cube_y);
+  float rz = round(cube_z);
+  const float x_diff = fabs(rx - cube_x);
+  const float y_diff = fabs(ry - cube_y);
+  const float z_diff = fabs(rz - cube_z);
+  if ((x_diff <= y_diff || x_diff <= z_diff) && y_diff <= z_diff) {
+    rz = -rx - ry;
+  }
+
+  // now convert the cube/hex coord to a pixel location
+  return hexsize * 3.0f / 2.0f * rz + yoffset;
+}
+
+EXTENSION_NOINLINE
+float reg_hex_vert_pixel_bin_x(const float valx,
+                               const float minx,
+                               const float maxx,
+                               const float valy,
+                               const float miny,
+                               const float maxy,
+                               const float hexwidth,
+                               const float hexheight,
+                               const float offsetx,
+                               const float offsety,
+                               const int32_t imgwidth,
+                               const int32_t imgheight) {
+  const float sqrt3 = 1.7320508075688772;
+  const float imgwidthf = float(imgwidth);
+  const float imgheightf = float(imgheight);
+
+  // expand the bounds of the data according
+  // to the input offsets. This is done because
+  // we also expand the image size according to the
+  // offsets because this algorithm layers the hexagon
+  // bins starting at the bottom left corner
+  float xmin = minx;
+  float xoffset = offsetx;
+  if (xoffset != 0) {
+    xoffset = fmodf(xoffset, 1.5f * hexwidth);
+    if (xoffset > 0) {
+      xoffset -= 1.5f * hexwidth;
+    }
+    xmin += xoffset * (maxx - xmin) / imgwidthf;
+  }
+
+  float ymin = miny;
+  float yoffset = offsety;
+  if (yoffset != 0) {
+    yoffset = fmodf(yoffset, hexheight);
+    if (yoffset > 0) {
+      yoffset -= hexheight;
+    }
+    ymin += yoffset * (maxy - ymin) / imgheightf;
+  }
+
+  // get the pixel position of the point
+  // assumes a linear scale here
+  // Rounds to the nearest pixel.
+  const float pix_x = roundf((imgwidthf - xoffset) * (valx - xmin) / (maxx - xmin));
+  const float pix_y = roundf((imgheightf - yoffset) * (valy - ymin) / (maxy - ymin));
+
+  // Now convert the pixel position into a
+  // cube-coordinate system representation
+  const float hexsize = hexwidth / 2.0f;
+  const float cube_x = (pix_x * 2.0f / 3.0f) / hexsize;
+  const float cube_z = ((pix_y / sqrt3) - (pix_x / 3.0f)) / hexsize;
+  const float cube_y = -cube_x - cube_z;
+
+  // need to round the cube coordinates above
+  float rx = round(cube_x);
+  float ry = round(cube_y);
+  float rz = round(cube_z);
+  const float x_diff = fabs(rx - cube_x);
+  const float y_diff = fabs(ry - cube_y);
+  const float z_diff = fabs(rz - cube_z);
+  if (x_diff > y_diff && x_diff > z_diff) {
+    rx = -ry - rz;
+  }
+
+  // now convert the cube/hex coord to a pixel location
+  return hexsize * 3.0f / 2.0f * rx + xoffset;
+}
+
+EXTENSION_NOINLINE
+float reg_hex_vert_pixel_bin_y(const float valx,
+                               const float minx,
+                               const float maxx,
+                               const float valy,
+                               const float miny,
+                               const float maxy,
+                               const float hexwidth,
+                               const float hexheight,
+                               const float offsetx,
+                               const float offsety,
+                               const int32_t imgwidth,
+                               const int32_t imgheight) {
+  const float sqrt3 = 1.7320508075688772;
+  const float imgwidthf = float(imgwidth);
+  const float imgheightf = float(imgheight);
+
+  // expand the bounds of the data according
+  // to the input offsets. This is done because
+  // we also expand the image size according to the
+  // offsets because this algorithm layers the hexagon
+  // bins starting at the bottom left corner
+  float xmin = minx;
+  float xoffset = offsetx;
+  if (xoffset != 0) {
+    xoffset = fmodf(xoffset, 1.5f * hexwidth);
+    if (xoffset > 0) {
+      xoffset -= 1.5f * hexwidth;
+    }
+    xmin += xoffset * (maxx - xmin) / imgwidthf;
+  }
+
+  float ymin = miny;
+  float yoffset = offsety;
+  if (yoffset != 0) {
+    yoffset = fmodf(yoffset, hexheight);
+    if (yoffset > 0) {
+      yoffset -= hexheight;
+    }
+    ymin += yoffset * (maxy - ymin) / imgheightf;
+  }
+
+  // get the pixel position of the point
+  // assumes a linear scale here
+  // Rounds to the nearest pixel.
+  const float pix_x = roundf((imgwidthf - xoffset) * (valx - xmin) / (maxx - xmin));
+  const float pix_y = roundf((imgheightf - yoffset) * (valy - ymin) / (maxy - ymin));
+
+  // Now convert the pixel position into a
+  // cube-coordinate system representation
+  const float hexsize = hexwidth / 2.0f;
+  const float cube_x = (pix_x * 2.0f / 3.0f) / hexsize;
+  const float cube_z = ((pix_y / sqrt3) - (pix_x / 3.0f)) / hexsize;
+  const float cube_y = -cube_x - cube_z;
+
+  // need to round the cube coordinates above
+  float rx = round(cube_x);
+  float ry = round(cube_y);
+  float rz = round(cube_z);
+  const float x_diff = fabs(rx - cube_x);
+  const float y_diff = fabs(ry - cube_y);
+  const float z_diff = fabs(rz - cube_z);
+  if (x_diff > y_diff && x_diff > z_diff) {
+    rx = -ry - rz;
+  } else if (y_diff > z_diff) {
+    ry = -rx - rz;
+  } else {
+    rz = -rx - ry;
+  }
+
+  // now convert the cube/hex coord to a pixel location
+  return hexsize * sqrt3 * (rz + rx / 2.0f) + yoffset;
+}

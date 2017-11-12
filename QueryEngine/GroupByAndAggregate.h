@@ -38,6 +38,8 @@
 #include <stack>
 #include <vector>
 
+class RenderInfo;
+
 class ReductionRanOutOfSlots : public std::runtime_error {
  public:
   ReductionRanOutOfSlots() : std::runtime_error("ReductionRanOutOfSlots") {}
@@ -297,7 +299,7 @@ class GroupByAndAggregate {
   GroupByAndAggregate(Executor* executor,
                       const ExecutorDeviceType device_type,
                       const RelAlgExecutionUnit& ra_exe_unit,
-                      const bool render_output,
+                      RenderInfo* render_info,
                       const std::vector<InputTableInfo>& query_infos,
                       std::shared_ptr<RowSetMemoryOwner>,
                       const size_t max_groups_buffer_entry_count,
@@ -359,7 +361,7 @@ class GroupByAndAggregate {
                                  const size_t small_groups_buffer_entry_count,
                                  const int8_t crt_min_byte_width,
                                  const bool sort_on_gpu_hint,
-                                 const bool render_output,
+                                 RenderInfo* render_info,
                                  const bool must_use_baseline_sort);
 
   int64_t getShardedTopBucket(const ColRangeInfo& col_range_info, const size_t shard_count) const;

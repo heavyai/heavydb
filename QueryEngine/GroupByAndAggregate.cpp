@@ -1713,7 +1713,7 @@ bool is_int_and_no_bigger_than(const SQLTypeInfo& ti, const size_t byte_width) {
 GroupByAndAggregate::GroupByAndAggregate(Executor* executor,
                                          const ExecutorDeviceType device_type,
                                          const RelAlgExecutionUnit& ra_exe_unit,
-                                         const bool render_output,
+                                         RenderInfo* render_info,
                                          const std::vector<InputTableInfo>& query_infos,
                                          std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                                          const size_t max_groups_buffer_entry_count,
@@ -1754,7 +1754,7 @@ GroupByAndAggregate::GroupByAndAggregate(Executor* executor,
                               small_groups_buffer_entry_count,
                               crt_min_byte_width,
                               sort_on_gpu_hint,
-                              render_output,
+                              render_info,
                               must_use_baseline_sort);
     if (device_type != ExecutorDeviceType::GPU) {
       // TODO(miyu): remove w/ interleaving
@@ -1940,7 +1940,7 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
                                                     const size_t small_groups_buffer_entry_count,
                                                     const int8_t crt_min_byte_width,
                                                     const bool sort_on_gpu_hint,
-                                                    const bool render_output,
+                                                    RenderInfo* render_info,
                                                     const bool must_use_baseline_sort) {
   addTransientStringLiterals();
 
@@ -1956,7 +1956,7 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
   const bool is_group_by{!group_col_widths.empty()};
   if (!is_group_by) {
     CHECK(!must_use_baseline_sort);
-    CHECK(!render_output);
+    CHECK(!render_info || !render_info->isPotentialInSituRender());
     query_mem_desc_ = {executor_,
                        allow_multifrag,
                        ra_exe_unit_.estimator ? GroupByColRangeType::Estimator : GroupByColRangeType::Scan,
@@ -2008,7 +2008,7 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
 
   switch (col_range_info.hash_type_) {
     case GroupByColRangeType::OneColKnownRange: {
-      CHECK(!render_output);
+      CHECK(!render_info || !render_info->isPotentialInSituRender());
       const auto redirected_targets = redirect_exprs(ra_exe_unit_.target_exprs, ra_exe_unit_.input_col_descs);
       const auto keyless_info = getKeylessInfo(get_exprs_not_owned(redirected_targets), is_group_by);
       bool keyless =
@@ -2058,38 +2058,40 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
     }
     case GroupByColRangeType::OneColGuessedRange: {
       CHECK(!must_use_baseline_sort);
-      query_mem_desc_ = {executor_,
-                         allow_multifrag,
-                         col_range_info.hash_type_,
-                         false,
-                         false,
-                         -1,
-                         0,
-                         group_col_widths,
+      auto doRender = render_info && render_info->isPotentialInSituRender();
+      query_mem_desc_ = {
+          executor_,
+          allow_multifrag,
+          col_range_info.hash_type_,
+          false,
+          false,
+          -1,
+          0,
+          group_col_widths,
 #ifdef ENABLE_KEY_COMPACTION
-                         0,
+          0,
 #endif
-                         agg_col_widths,
-                         {},
-                         max_groups_buffer_entry_count,
-                         small_groups_buffer_entry_count,
-                         col_range_info.min,
-                         col_range_info.max,
-                         0,
-                         col_range_info.has_nulls,
-                         GroupByMemSharing::Shared,
-                         count_distinct_descriptors,
-                         false,
-                         false,
-                         false,
-                         render_output,
-                         {},
-                         {},
-                         false};
+          agg_col_widths,
+          {},
+          max_groups_buffer_entry_count,
+          doRender ? render_info->render_small_groups_buffer_entry_count : small_groups_buffer_entry_count,
+          col_range_info.min,
+          col_range_info.max,
+          0,
+          col_range_info.has_nulls,
+          GroupByMemSharing::Shared,
+          count_distinct_descriptors,
+          false,
+          false,
+          false,
+          doRender,
+          {},
+          {},
+          false};
       return;
     }
     case GroupByColRangeType::MultiCol: {
-      CHECK(!render_output);
+      CHECK(!render_info || !render_info->isPotentialInSituRender());
       const auto target_group_by_indices =
           target_expr_group_by_indices(ra_exe_unit_.groupby_exprs, ra_exe_unit_.target_exprs);
       agg_col_widths.clear();
@@ -2158,7 +2160,7 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
                          false,
                          false,
                          false,
-                         render_output,
+                         render_info && render_info->isPotentialInSituRender(),
                          {},
                          {},
                          false};
@@ -2170,7 +2172,7 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
       return;
     }
     case GroupByColRangeType::MultiColPerfectHash: {
-      CHECK(!render_output);
+      CHECK(!render_info || !render_info->isPotentialInSituRender());
       query_mem_desc_ = {executor_,
                          allow_multifrag,
                          col_range_info.hash_type_,
