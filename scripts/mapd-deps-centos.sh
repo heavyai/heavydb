@@ -195,19 +195,29 @@ make install
 popd
 
 # backend rendering
-# https://downloads.sourceforge.net/project/glew/glew/1.13.0/glew-1.13.0.tgz
-download https://internal-dependencies.mapd.com/thirdparty/glew-1.13.0.tgz
-extract glew-1.13.0.tgz
-pushd glew-1.13.0
-patch -p1 < ../mapd-deps-glew-egl.patch
-make extensions
-make DESTDIR=$PREFIX GLEW_DEST=""
-make DESTDIR=$PREFIX GLEW_DEST="" install
-make DESTDIR=$PREFIX GLEW_DEST="" install.mx
-popd
-
 # http://download.sourceforge.net/libpng/libpng-1.6.21.tar.xz
 download_make_install https://internal-dependencies.mapd.com/thirdparty/libpng-1.6.21.tar.xz
+
+VERS=2.1.4_egl
+download https://github.com/vastcharade/glbinding/archive/v$VERS.tar.gz
+extract v$VERS.tar.gz
+BDIR="glbinding-$VERS/build"
+mkdir -p $BDIR
+pushd $BDIR
+cmake \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DOPTION_BUILD_DOCS=OFF \
+    -DOPTION_BUILD_EXAMPLES=OFF \
+    -DOPTION_BUILD_GPU_TESTS=OFF \
+    -DOPTION_BUILD_TESTS=OFF \
+    -DOPTION_BUILD_TOOLS=OFF \
+    -DOPTION_BUILD_WITH_BOOST_THREAD=OFF \
+    -DBUILD_SHARED_LIBS=OFF \
+    -DCMAKE_INSTALL_PREFIX=$PREFIX \
+    ..
+makej
+make install
+popd
 
 # c-blosc
 VERS=1.11.3

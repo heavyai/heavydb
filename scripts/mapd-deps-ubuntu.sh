@@ -48,7 +48,6 @@ sudo apt install -y \
     libiberty-dev \
     libjemalloc-dev \
     libglu1-mesa-dev \
-    libglewmx-dev \
     liblz4-dev \
     liblzma-dev \
     libsnappy-dev \
@@ -117,6 +116,25 @@ popd
 # Apache Arrow (see common-functions.sh)
 ARROW_BOOST_USE_SHARED="ON"
 install_arrow
+
+VERS=2.1.4_egl
+wget --continue https://github.com/vastcharade/glbinding/archive/v$VERS.tar.gz
+tar xvf v$VERS.tar.gz
+mkdir -p glbinding-$VERS/build
+pushd glbinding-$VERS/build
+cmake \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_INSTALL_PREFIX=$PREFIX \
+    -DOPTION_BUILD_DOCS=OFF \
+    -DOPTION_BUILD_EXAMPLES=OFF \
+    -DOPTION_BUILD_GPU_TESTS=OFF \
+    -DOPTION_BUILD_TESTS=OFF \
+    -DOPTION_BUILD_TOOLS=OFF \
+    -DOPTION_BUILD_WITH_BOOST_THREAD=OFF \
+    ..
+make -j $(nproc)
+make install
+popd
 
 cat >> $PREFIX/mapd-deps.sh <<EOF
 PREFIX=$PREFIX

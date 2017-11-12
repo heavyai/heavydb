@@ -10,7 +10,7 @@ CUDA | [NVIDIA EULA](<http://docs.nvidia.com/cuda/eula/index.html#redistribution
 double-conversion | [BSD-like](<https://github.com/google/double-conversion/blob/master/COPYING>) | Folly |
 EGL, KHR | [MIT]() | Rendering Support |
 Folly | [Apache](https://github.com/facebook/folly/blob/master/LICENSE) | Multiple |
-GLEW | [Modified BSD](<http://glew.sourceforge.net/glew.txt>) | OpenGL management |
+glbinding | [MIT](<https://github.com/cginternals/glbinding/blob/master/LICENSE>) | OpenGL management |
 gflags | [BSD-like](<https://github.com/gflags/gflags/blob/master/COPYING.txt>) | Folly |
 glog | [BSD-like](<https://github.com/google/glog/blob/master/COPYING>) | C++ logging |
 libcurl | [MIT](<https://curl.haxx.se/docs/copyright.html>) | AWS metadata download |
