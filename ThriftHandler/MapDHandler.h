@@ -155,6 +155,10 @@ class MapDHandler : public MapDIf {
                    const std::string& nonce,
                    const int32_t first_n,
                    const int32_t at_most_n);
+  void get_completion_hints(std::vector<TCompletionHint>& hints,
+                            const TSessionId& session,
+                            const std::string& sql,
+                            const int cursor);
   // TODO(miyu): merge the following two data frame APIs.
   void sql_execute_df(TDataFrame& _return,
                       const TSessionId& session,

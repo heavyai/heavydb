@@ -1,5 +1,7 @@
 namespace java com.mapd.thrift.server
 
+include "completion_hints.thrift"
+
 enum TDatumType {
   SMALLINT,
   INT,
@@ -394,6 +396,7 @@ service MapD {
   TDataFrame sql_execute_gdf(1: TSessionId session, 2: string query 3: i32 device_id = 0, 4: i32 first_n = -1) throws (1: TMapDException e)
   void interrupt(1: TSessionId session) throws (1: TMapDException e)
   TTableDescriptor sql_validate(1: TSessionId session, 2: string query) throws (1: TMapDException e)
+  list<completion_hints.TCompletionHint> get_completion_hints(1: TSessionId session, 2:string sql, 3:i32 cursor) throws (1: TMapDException e)
   void set_execution_mode(1: TSessionId session, 2: TExecuteMode mode) throws (1: TMapDException e)
   TRenderResult render_vega(1: TSessionId session, 2: i64 widget_id, 3: string vega_json, 4: i32 compression_level, 5: string nonce) throws (1: TMapDException e)
   TPixelTableRowResult get_result_row_for_pixel(1: TSessionId session, 2: i64 widget_id, 3: TPixel pixel, 4: map<string, list<string>> table_col_names, 5: bool column_format, 6: i32 pixelRadius, 7: string nonce) throws (1: TMapDException e)

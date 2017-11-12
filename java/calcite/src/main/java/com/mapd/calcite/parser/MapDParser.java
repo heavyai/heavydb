@@ -113,6 +113,10 @@ public final class MapDParser {
     return res;
   }
 
+  public MapDPlanner.CompletionResult getCompletionHints(String sql, int cursor) {
+    return ((MapDPlanner) getPlanner()).getCompletionHints(sql, cursor);
+  }
+
   RelRoot queryToSqlNode(final String sql, final boolean legacy_syntax) throws SqlParseException, ValidationException, RelConversionException {
     Planner planner = getPlanner();
 
