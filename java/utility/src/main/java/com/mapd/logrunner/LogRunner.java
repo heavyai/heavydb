@@ -23,27 +23,33 @@ import com.mapd.thrift.server.TDBInfo;
 import com.mapd.thrift.server.TDatum;
 import com.mapd.thrift.server.TExecuteMode;
 import com.mapd.thrift.server.TMapDException;
+import com.mapd.thrift.server.TPixel;
 import com.mapd.thrift.server.TQueryResult;
+import com.mapd.thrift.server.TRenderResult;
 import com.mapd.thrift.server.TRow;
 import com.mapd.thrift.server.TRowSet;
 import com.mapd.thrift.server.TTableDetails;
-import com.mapd.thrift.server.TTypeInfo;
 import java.io.BufferedReader;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 
 import org.apache.thrift.TException;
-import org.apache.thrift.protocol.TBinaryProtocol;
 import org.apache.thrift.protocol.TJSONProtocol;
 import org.apache.thrift.protocol.TProtocol;
 import org.apache.thrift.transport.THttpClient;
-import org.apache.thrift.transport.TSocket;
 import org.apache.thrift.transport.TTransport;
 import org.apache.thrift.transport.TTransportException;
 import org.slf4j.Logger;
@@ -68,8 +74,7 @@ public class LogRunner {
     LogRunner x = new LogRunner();
     try {
       x.doWork(args);
-    }
-    catch (TTransportException ex) {
+    } catch (TTransportException ex) {
       logger.error(ex.toString());
       ex.printStackTrace();
     }
@@ -82,25 +87,38 @@ public class LogRunner {
   }
 
   void doWork(String[] args) throws TTransportException, TException {
-    logger.info("In doWork");
+    logger.info("In doWork here");
 
+    int numberThreads = 3;
+//    Runnable[] worker = new Runnable[numberThreads];
+//
+//    for (int i = 0; i < numberThreads; i++){
+//
     MapD.Client client = getClient(args[0], Integer.valueOf(args[1]));
     String session = getSession(client);
+//      worker[i] = new myThread(client, session);
+//    }
 
+    logger.info("got session");
     try {
+      //ExecutorService executor = Executors.newFixedThreadPool(6);
+      ExecutorService executor = new ThreadPoolExecutor(numberThreads, numberThreads, 0L, TimeUnit.MILLISECONDS, new ArrayBlockingQueue<Runnable>(15), new ThreadPoolExecutor.CallerRunsPolicy());
       while (true) {
         //BufferedReader in = new BufferedReader(new FileReader("/data/logfiles/log1"));
         BufferedReader in = new BufferedReader(new FileReader(args[2]));
         String str;
+        int current = 0;
         while ((str = in.readLine()) != null) {
-          process(str, client, session);
+          Runnable worker = new myThread(str, client, session);
+          //executor.execute(worker);
+          worker.run();
         }
-
         in.close();
+        logger.info("############loop complete");
       }
-    }
-    catch (IOException e) {
-      logger.error("IOException " + e.getMessage() );
+      //executor.shutdown();
+    } catch (IOException e) {
+      logger.error("IOException " + e.getMessage());
     }
 
   }
@@ -222,83 +240,155 @@ public class LogRunner {
       }
       count++;
     }
-
   }
 
-  private void process(String str, MapD.Client client, String session) throws TMapDException, TException {
-    int logStart = str.indexOf(']');
-    if (logStart != -1) {
+  public class myThread implements Runnable {
 
-      String det = str.substring(logStart + 1).trim();
-      String header = str.substring(0, logStart).trim();
+    private String str;
+    private MapD.Client client;
+    private String session;
 
-      String[] headDet = header.split(" .");
-      //logger.info("header "+ header + " count " + headDet.length +  " detail " + det );
-      if (headDet.length != 4 || headDet[0].equals("Log")) {
-        return;
-      }
-      Integer pid = Integer.valueOf(headDet[2]);
-      //logger.info("pid "+ pid);
+    myThread(String str1, MapD.Client client1, String session1) {
+      str = str1;
+      client = client1;
+      session = session1;
+    }
 
-      if (header.contains("Calcite.cpp:176")) {
-        sqlquery.put(pid, det.substring(det.indexOf('\'') + 1, det.length() - 1));
-        logger.info("SQL = " + sqlquery.get(pid));
-        return;
-      }
+    @Override
+    public void run() {
+      int logStart = str.indexOf(']');
+      if (logStart != -1) {
 
-      if (header.contains("MapDServer.cpp:1728")) {
-        originalSql.put(pid, det);
-        logger.info("originalSQL = " + originalSql.get(pid));
-        return;
-      }
+        String det = str.substring(logStart + 1).trim();
+        String header = str.substring(0, logStart).trim();
 
-      if (header.contains("QueryRenderer.cpp:191")) {
-        json.put(pid, det.substring(det.indexOf("json:") + 5, det.length()));
-        logger.info("JSON = " + json.get(pid));
-        return;
-      }
-
-      if (det.contains("User mapd sets CPU mode")) {
-        logger.info("Set cpu mode");
-        cpuMode = true;
-        gpuMode = false;
-        client.set_execution_mode(session, TExecuteMode.CPU);
-        return;
-      }
-
-      if (det.contains("User mapd sets GPU mode")) {
-        logger.info("Set gpu mode");
-        gpuMode = true;
-        cpuMode = false;
-        client.set_execution_mode(session, TExecuteMode.GPU);
-        return;
-      }
-
-      if (header.contains("MapDServer.cpp:1813")) {
-        logger.info("run query " + originalSql.get(pid));
-        try {
-        client.sql_execute(session, originalSql.get(pid), true, null, -1, -1);
-        } catch  (TMapDException ex1) {
-               logger.error("Failed to execute " + originalSql.get(pid) + " exception " + ex1.toString());
-        }
-        return;
-      }
-
-      if (det.contains(", Render: ")) {
-        logger.info("run render");
-        //logger.info("run render :" + json.replaceAll("\"", "\\\\\"") );
-        if (json.get(pid) == null) {
-          // fake a render as nothing allocated on this thread
-          logger.info("#### not json to run ####");
+        String[] headDet = header.split(" .");
+        //logger.info("header "+ header + " count " + headDet.length +  " detail " + det );
+        if (headDet.length != 4 || headDet[0].equals("Log")) {
           return;
-        } else {
-          if (cpuMode){
+        }
+        Integer pid = Integer.valueOf(headDet[2]);
+
+        if (det.contains("sql_execute :")) {
+          logger.info("det " + det);
+          String sl[] = det.split(":query_str:");
+          logger.info("run query " + sl[1]);
+          try {
+            client.sql_execute(session, sl[1], true, null, -1, -1);
+          } catch (TMapDException ex1) {
+            logger.error("Failed to execute " + sl[1] + " exception " + ex1.toString());
+          } catch (TException ex) {
+            logger.error("Failed to execute " + sl[1] + " exception " + ex.toString());
+          }
+          return;
+        }
+
+        //get_result_row_for_pixel :5pFFQUCKs17GLHOqI7ykK09U8mX7GnLF:widget_id:3:pixel.x:396:pixel.y:53:column_format:1
+        //:PixelRadius:2:table_col_names::points,dest,conv_4326_900913_x(dest_lon) as x,conv_4326_900913_y(dest_lat) as y,arrdelay as size
+        if (det.contains("get_result_row_for_pixel :")) {
+          logger.info("det " + det);
+          String ss[] = det.split(":");
+          String sl[] = det.split(":table_col_names:");
+          logger.info("run get_result_for_pixel " + sl[1]);
+          Map<String, List<String>> tcn = new HashMap<String, List<String>>();
+
+          String tn[] = sl[1].split(":");
+          for (int i = 0; i < tn.length; i++) {
+            String name[] = tn[i].split(",");
+            List<String> col = new ArrayList<String>();
+            for (int j = 1; j < name.length; j++) {
+              col.add(name[j]);
+            }
+            tcn.put(name[0], col);
+          }
+          try {
+
+            client.get_result_row_for_pixel(session,
+                    Integer.parseInt(ss[3]),
+                    new TPixel(Integer.parseInt(ss[5]), Integer.parseInt(ss[7])),
+                    tcn,
+                    Boolean.TRUE,
+                    Integer.parseInt(ss[11]),
+                    null);
+          } catch (TMapDException ex1) {
+            logger.error("Failed to execute get_result_row_for_pixel exception " + ex1.toString());
+          } catch (TException ex) {
+            logger.error("Failed to execute get_result_row_for_pixel exception " + ex.toString());
+          }
+          return;
+        }
+
+        if (det.contains("render_vega :")) {
+          logger.info("det " + det);
+          String ss[] = det.split(":");
+          String sl[] = det.split(":vega_json:");
+          json.put(pid, det.substring(det.indexOf("render_vega :") + 13, det.length()));
+          logger.info("JSON = " + sl[1]);
+          logger.info("widget = " + Integer.parseInt(ss[3]));
+          logger.info("compressionLevel = " + Integer.parseInt(ss[5]));
+          logger.info("run render_vega");
+          if (cpuMode) {
             logger.info("In render: setting gpu mode as we were in CPU mode");
             gpuMode = true;
             cpuMode = false;
-            client.set_execution_mode(session, TExecuteMode.GPU);
+            try {
+              client.set_execution_mode(session, TExecuteMode.GPU);
+            } catch (TException ex) {
+              logger.error("Failed to set_execution_mode exception " + ex.toString());
+            }
           }
-          client.render(session, sqlquery.get(pid), json.get(pid), null);
+          try {
+            TRenderResult fred = client.render_vega(session,
+                    Integer.parseInt(ss[3]),
+                    sl[1],
+                    Integer.parseInt(ss[5]),
+                    null);
+            if (false) {
+              try {
+                FileOutputStream fos;
+
+                fos = new FileOutputStream("/tmp/png.png");
+
+                fred.image.position(0);
+                byte[] tgxImageDataByte = new byte[fred.image.limit()];
+                fred.image.get(tgxImageDataByte);
+                fos.write(tgxImageDataByte);
+                fos.close();
+              } catch (FileNotFoundException ex) {
+                logger.error("Failed to create file exception " + ex.toString());
+              } catch (IOException ex) {
+                logger.error("Failed to create file exception " + ex.toString());
+              }
+            }
+
+          } catch (TException ex) {
+            logger.error("Failed to execute render_vega exception " + ex.toString());
+          }
+          return;
+        }
+
+        if (det.contains("User mapd sets CPU mode")) {
+          logger.info("Set cpu mode");
+          cpuMode = true;
+          gpuMode = false;
+          try {
+            client.set_execution_mode(session, TExecuteMode.CPU);
+          } catch (TException ex) {
+            logger.error("Failed to set_execution_mode exception " + ex.toString());
+          }
+          return;
+        }
+
+        if (det.contains("User mapd sets GPU mode")) {
+          logger.info("Set gpu mode");
+          gpuMode = true;
+          cpuMode = false;
+          try {
+            client.set_execution_mode(session, TExecuteMode.GPU);
+          } catch (TException ex) {
+            logger.error("Failed to execute set_execution_mode exception " + ex.toString());
+          }
+          return;
         }
       }
     }
