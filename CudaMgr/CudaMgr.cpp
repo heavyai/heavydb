@@ -153,8 +153,8 @@ DeviceProperties* CudaMgr::getDeviceProperties(const size_t deviceNum) {
   if (deviceNum < deviceProperties.size()) {
     return &deviceProperties[deviceNum];
   }
-  return nullptr;
 #endif
+  return nullptr;
 }
 
 // deviceNum is the device number relative to startGpu (realDeviceNum - startGpu_)
