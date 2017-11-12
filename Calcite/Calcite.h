@@ -42,6 +42,9 @@ class Calcite {
                       const std::string sql_string,
                       const bool legacy_syntax,
                       const bool is_explain);
+  std::vector<TCompletionHint> getCompletionHints(const Catalog_Namespace::SessionInfo& session_info,
+                                                  const std::string sql_string,
+                                                  const int cursor);
   std::string getExtensionFunctionWhitelist();
   void updateMetadata(std::string catalog, std::string table);
   virtual ~Calcite();

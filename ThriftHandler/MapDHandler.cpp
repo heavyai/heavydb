@@ -689,6 +689,21 @@ void MapDHandler::sql_validate(TTableDescriptor& _return, const TSessionId& sess
   MapDHandler::validate_rel_alg(_return, query_str, session_info);
 }
 
+void MapDHandler::get_completion_hints(std::vector<TCompletionHint>& hints,
+                                       const TSessionId& session,
+                                       const std::string& sql,
+                                       const int cursor) {
+  const auto session_info = get_session(session);
+  try {
+    hints = calcite_->getCompletionHints(session_info, sql, cursor);
+  } catch (const std::exception& e) {
+    TMapDException ex;
+    ex.error_msg = "Exception: " + std::string(e.what());
+    LOG(ERROR) << ex.error_msg;
+    throw ex;
+  }
+}
+
 void MapDHandler::validate_rel_alg(TTableDescriptor& _return,
                                    const std::string& query_str,
                                    const Catalog_Namespace::SessionInfo& session_info) {

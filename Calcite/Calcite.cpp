@@ -221,6 +221,19 @@ string Calcite::process(const Catalog_Namespace::SessionInfo& session_info,
   return ra;
 }
 
+std::vector<TCompletionHint> Calcite::getCompletionHints(const Catalog_Namespace::SessionInfo& session_info,
+                                                         const std::string sql_string,
+                                                         const int cursor) {
+  std::vector<TCompletionHint> hints;
+  auto& cat = session_info.get_catalog();
+  const auto user = session_info.get_currentUser().userName;
+  const auto session = session_info.get_session_id();
+  const auto catalog = cat.get_currentDB().dbName;
+  auto client = get_client(remote_calcite_port_);
+  client.first->getCompletionHints(hints, user, session, catalog, sql_string, cursor);
+  return hints;
+}
+
 std::vector<string> Calcite::get_db_objects(const std::string ra) {
   std::vector<string> v_db_obj;
   Document document;

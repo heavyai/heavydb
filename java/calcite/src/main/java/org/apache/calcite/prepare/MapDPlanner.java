@@ -39,10 +39,13 @@ import org.apache.calcite.rex.RexExecutor;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.sql.SqlNode;
 import org.apache.calcite.sql.SqlOperatorTable;
+import org.apache.calcite.sql.advise.SqlAdvisorValidator;
+import org.apache.calcite.sql.advise.SqlAdvisor;
 import org.apache.calcite.sql.parser.SqlParseException;
 import org.apache.calcite.sql.parser.SqlParser;
 import org.apache.calcite.sql.validate.SqlConformance;
 import org.apache.calcite.sql.validate.SqlConformanceEnum;
+import org.apache.calcite.sql.validate.SqlMoniker;
 import org.apache.calcite.sql.validate.SqlValidator;
 import org.apache.calcite.sql2rel.RelDecorrelator;
 import org.apache.calcite.sql2rel.SqlRexConvertletTable;
@@ -167,6 +170,31 @@ public class MapDPlanner implements Planner {
         planner.addRelTraitDef(def);
       }
     }
+  }
+
+  public static class CompletionResult {
+    public List<SqlMoniker> hints;
+    public String replaced;
+
+    CompletionResult(final List<SqlMoniker> hints, final String replaced) {
+      this.hints = hints;
+      this.replaced = replaced;
+    }
+  }
+
+  public CompletionResult getCompletionHints(final String sql, final int cursor) {
+    switch (state) {
+    case STATE_0_CLOSED:
+    case STATE_1_RESET:
+      ready();
+    }
+    SqlAdvisorValidator advisor_validator = new SqlAdvisorValidator(
+      config.getOperatorTable(), createCatalogReader(), getTypeFactory(), SqlConformanceEnum.LENIENT);
+    SqlAdvisor advisor = new SqlAdvisor(advisor_validator);
+    String[] replaced = new String[1];
+    int adjusted_cursor = cursor < 0 ? sql.length() : cursor;
+    java.util.List<SqlMoniker> hints = advisor.getCompletionHints(sql, adjusted_cursor, replaced);
+    return new CompletionResult(hints, replaced[0]);
   }
 
   public SqlNode parse(final String sql) throws SqlParseException {

@@ -18,12 +18,19 @@ package com.mapd.parser.server;
 import com.mapd.calcite.parser.MapDParser;
 import com.mapd.calcite.parser.MapDUser;
 import com.mapd.thrift.calciteserver.InvalidParseRequest;
+import com.mapd.thrift.calciteserver.TCompletionHint;
+import com.mapd.thrift.calciteserver.TCompletionHintType;
 import com.mapd.thrift.calciteserver.TPlanResult;
 import com.mapd.thrift.calciteserver.CalciteServer;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
+import org.apache.calcite.prepare.MapDPlanner;
 import org.apache.calcite.runtime.CalciteContextException;
 import org.apache.calcite.sql.parser.SqlParseException;
+import org.apache.calcite.sql.validate.SqlMonikerType;
+import org.apache.calcite.sql.validate.SqlMoniker;
 import org.apache.commons.pool.PoolableObjectFactory;
 import org.apache.commons.pool.impl.GenericObjectPool;
 import org.apache.thrift.TException;
@@ -162,6 +169,74 @@ class CalciteServerHandler implements CalciteServer.Iface {
         String msg = "Could not return parse object: " + ex.getMessage();
         MAPDLOGGER.error(msg);
       }
+    }
+  }
+
+  @Override
+  public List<TCompletionHint> getCompletionHints(String user, String session,
+      String catalog, String sql, int cursor) throws TException {
+    callCount++;
+    MapDParser parser;
+    try {
+      parser = (MapDParser) parserPool.borrowObject();
+    } catch (Exception ex) {
+      String msg = "Could not get Parse Item from pool: " + ex.getMessage();
+      MAPDLOGGER.error(msg);
+      throw new TException(msg);
+    }
+    MapDUser mapDUser = new MapDUser(user, session, catalog, mapdPort);
+    MAPDLOGGER.debug("getCompletionHints was called User: " + user + " Catalog: " + catalog + " sql: " + sql);
+    parser.setUser(mapDUser);
+
+    // remove last character if it is a ;
+    if (sql.charAt(sql.length() - 1) == ';') {
+      sql = sql.substring(0, sql.length() - 1);
+    }
+    MapDPlanner.CompletionResult completion_result;
+    try {
+      completion_result = parser.getCompletionHints(sql, cursor);
+    } catch (Exception ex) {
+      String msg = "Could not retrieve completion hints: " + ex.getMessage();
+      MAPDLOGGER.error(msg);
+      return new ArrayList<>();
+    } finally {
+      try {
+        // put parser object back in pool for others to use
+        parserPool.returnObject(parser);
+      } catch (Exception ex) {
+        String msg = "Could not return parse object: " + ex.getMessage();
+        MAPDLOGGER.error(msg);
+        throw new InvalidParseRequest(-4, msg);
+      }
+    }
+    List<TCompletionHint> result = new ArrayList<>();
+    for (final SqlMoniker hint : completion_result.hints) {
+      result.add(new TCompletionHint(hintTypeToThrift(hint.getType()),
+        hint.getFullyQualifiedNames(), completion_result.replaced));
+    }
+    return result;
+  }
+
+  private static TCompletionHintType hintTypeToThrift(final SqlMonikerType type) {
+    switch (type) {
+    case COLUMN:
+      return TCompletionHintType.COLUMN;
+    case TABLE:
+      return TCompletionHintType.TABLE;
+    case VIEW:
+      return TCompletionHintType.VIEW;
+    case SCHEMA:
+      return TCompletionHintType.SCHEMA;
+    case CATALOG:
+      return TCompletionHintType.CATALOG;
+    case REPOSITORY:
+      return TCompletionHintType.REPOSITORY;
+    case FUNCTION:
+      return TCompletionHintType.FUNCTION;
+    case KEYWORD:
+      return TCompletionHintType.KEYWORD;
+    default:
+      return null;
     }
   }
 }
