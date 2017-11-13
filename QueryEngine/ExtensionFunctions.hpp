@@ -707,6 +707,41 @@ double distance_line_line(double* l1, double* l2) {
   return fmin(dist12, dist21);
 }
 
+DEVICE
+bool contains_polygon_point(double* poly, int64_t num, double* p) {
+  // Shoot a line from P to the right, register intersections with polygon edges.
+  // Each intersection means we're entered/exited the polygon.
+  // Odd number of intersections means the polygon does contain P.
+  bool result = false;
+  int64_t i, j;
+  for (i = 0, j = num - 2; i < num; j = i, i += 2) {
+    double xray = fmax(poly[i], poly[j]);
+    if (xray < p[0])
+      continue;  // No intersection - edge is on the left, we're casting the ray to the right
+    double ray[4] = {p[0], p[1], xray + 1.0, p[1]};
+    double polygon_edge[4] = {poly[j], poly[j + 1], poly[i], poly[i + 1]};
+    if (intersects_line_line(ray, polygon_edge)) {
+      result = !result;
+      if (distance_point_line(poly[i], poly[i + 1], ray) == 0.0) {
+        // if ray goes through the edge's second vertex, flip the result again -
+        // that vertex will be crossed again when we look at the next edge
+        result = !result;
+      }
+    }
+  }
+  return result;
+}
+
+DEVICE
+bool contains_polygon_linestring(double* poly, int64_t num, double* l, int64_t lnum) {
+  // Check if each of the linestring vertices are inside the polygon.
+  for (auto i = 0; i < lnum; i += 2) {
+    if (!contains_polygon_point(poly, num, l + i))
+      return false;
+  }
+  return true;
+}
+
 EXTENSION_NOINLINE
 double ST_Distance_Point_Point(double* p1, int64_t p1num, double* p2, int64_t p2num) {
   return distance_point_point(p1[0], p1[1], p2[0], p2[1]);
@@ -724,6 +759,36 @@ double ST_Distance_Point_LineString(double* p, int64_t pnum, double* l, int64_t 
       dist = ldist;
   }
   return dist;
+}
+
+EXTENSION_NOINLINE
+double ST_Distance_Point_Polygon(double* p,
+                                 int64_t pnum,
+                                 double* poly_coords,
+                                 int64_t poly_num_coords,
+                                 int32_t* poly_ring_sizes,
+                                 int64_t poly_num_rings) {
+  int64_t exterior_ring_num_coords = poly_num_coords;
+  if (poly_num_rings > 0)
+    exterior_ring_num_coords = poly_ring_sizes[0] * 2;
+
+  auto poly = poly_coords;
+  if (!contains_polygon_point(poly, exterior_ring_num_coords, p)) {
+    // Outside the exterior ring
+    return ST_Distance_Point_LineString(p, pnum, poly, exterior_ring_num_coords);
+  }
+  // Inside exterior ring
+  poly += exterior_ring_num_coords;
+  // Check if one of the polygon's holes contains that point
+  for (auto r = 1; r < poly_num_rings; r++) {
+    int64_t interior_ring_num_coords = poly_ring_sizes[r] * 2;
+    if (contains_polygon_point(poly, interior_ring_num_coords, p)) {
+      // Inside an interior ring
+      return ST_Distance_Point_LineString(p, pnum, poly, interior_ring_num_coords);
+    }
+    poly += interior_ring_num_coords;
+  }
+  return 0.0;
 }
 
 EXTENSION_INLINE
@@ -751,6 +816,90 @@ double ST_Distance_LineString_LineString(double* l1, int64_t l1num, double* l2, 
 }
 
 EXTENSION_NOINLINE
+double ST_Distance_LineString_Polygon(double* l,
+                                      int64_t lnum,
+                                      double* poly_coords,
+                                      int64_t poly_num_coords,
+                                      int32_t* poly_ring_sizes,
+                                      int64_t poly_num_rings) {
+  int64_t exterior_ring_num_coords = poly_num_coords;
+  if (poly_num_rings > 0)
+    exterior_ring_num_coords = poly_ring_sizes[0] * 2;
+
+  auto poly = poly_coords;
+  if (!contains_polygon_linestring(poly, exterior_ring_num_coords, l, lnum)) {
+    // Outside the exterior ring
+    return ST_Distance_LineString_LineString(poly, exterior_ring_num_coords, l, lnum);
+  }
+  // Inside exterior ring
+  poly += exterior_ring_num_coords;
+  // Check if one of the polygon's holes contains that linestring
+  for (auto r = 1; r < poly_num_rings; r++) {
+    int64_t interior_ring_num_coords = poly_ring_sizes[r] * 2;
+    if (contains_polygon_linestring(poly, interior_ring_num_coords, l, lnum)) {
+      // Inside an interior ring
+      return ST_Distance_LineString_LineString(poly, interior_ring_num_coords, l, lnum);
+    }
+    poly += interior_ring_num_coords;
+  }
+  return 0.0;
+}
+
+EXTENSION_INLINE
+double ST_Distance_Polygon_Point(double* poly_coords,
+                                 int64_t poly_num_coords,
+                                 int32_t* poly_ring_sizes,
+                                 int64_t poly_num_rings,
+                                 double* p,
+                                 int64_t pnum) {
+  return ST_Distance_Point_Polygon(p, pnum, poly_coords, poly_num_coords, poly_ring_sizes, poly_num_rings);
+}
+
+EXTENSION_INLINE
+double ST_Distance_Polygon_LineString(double* poly_coords,
+                                      int64_t poly_num_coords,
+                                      int32_t* poly_ring_sizes,
+                                      int64_t poly_num_rings,
+                                      double* l,
+                                      int64_t lnum) {
+  return ST_Distance_LineString_Polygon(l, lnum, poly_coords, poly_num_coords, poly_ring_sizes, poly_num_rings);
+}
+
+EXTENSION_NOINLINE
+double ST_Distance_Polygon_Polygon(double* poly1_coords,
+                                   int64_t poly1_num_coords,
+                                   int32_t* poly1_ring_sizes,
+                                   int64_t poly1_num_rings,
+                                   double* poly2_coords,
+                                   int64_t poly2_num_coords,
+                                   int32_t* poly2_ring_sizes,
+                                   int64_t poly2_num_rings) {
+  int64_t poly1_exterior_ring_num_coords = poly1_num_coords;
+  if (poly1_num_rings > 0)
+    poly1_exterior_ring_num_coords = poly1_ring_sizes[0] * 2;
+
+  int64_t poly2_exterior_ring_num_coords = poly2_num_coords;
+  if (poly2_num_rings > 0)
+    poly2_exterior_ring_num_coords = poly2_ring_sizes[0] * 2;
+
+  auto ext_dist12 = ST_Distance_LineString_Polygon(
+      poly1_coords, poly1_exterior_ring_num_coords, poly2_coords, poly2_num_coords, poly2_ring_sizes, poly2_num_rings);
+  if (ext_dist12 > 0.0) {
+    // poly1 is either outside of poly2's exterior or is inside one of poly2's holes
+    return ext_dist12;
+  }
+
+  auto ext_dist21 = ST_Distance_LineString_Polygon(
+      poly2_coords, poly2_exterior_ring_num_coords, poly1_coords, poly1_num_coords, poly1_ring_sizes, poly1_num_rings);
+  if (ext_dist21 > 0.0) {
+    // poly2 is either outside of poly1's exterior or is inside one of poly1's holes
+    return ext_dist21;
+  }
+
+  return 0.0;
+}
+
+EXTENSION_NOINLINE
 bool ST_Contains_Point_Point(double* p1, int64_t p1num, double* p2, int64_t p2num) {
   return (p1[0] == p2[0]) && (p1[1] == p2[1]);  // TBD: sensitivity
 }
@@ -765,6 +914,20 @@ bool ST_Contains_Point_LineString(double* p, int64_t pnum, double* l, int64_t ln
   return true;
 }
 
+EXTENSION_NOINLINE
+bool ST_Contains_Point_Polygon(double* p,
+                               int64_t pnum,
+                               double* poly_coords,
+                               int64_t poly_num_coords,
+                               int32_t* poly_ring_sizes,
+                               int64_t poly_num_rings) {
+  int64_t exterior_ring_num_coords = poly_num_coords;
+  if (poly_num_rings > 0)
+    exterior_ring_num_coords = poly_ring_sizes[0] * 2;
+
+  return ST_Contains_Point_LineString(p, pnum, poly_coords, exterior_ring_num_coords);
+}
+
 EXTENSION_INLINE
 bool ST_Contains_LineString_Point(double* l, int64_t lnum, double* p, int64_t pnum) {
   return (ST_Distance_Point_LineString(p, pnum, l, lnum) == 0.0);  // TBD: sensitivity
@@ -772,33 +935,17 @@ bool ST_Contains_LineString_Point(double* l, int64_t lnum, double* p, int64_t pn
 
 EXTENSION_NOINLINE
 bool ST_Contains_LineString_LineString(double* l1, int64_t l1num, double* l2, int64_t l2num) {
-  // TBD
   return false;
 }
 
-DEVICE
-bool contains_polygon_point(double* poly, int64_t num, double* p) {
-  // Shoot a line from P to the right, register intersections with polygon edges.
-  // Each intersection means we're entered/exited the polygon.
-  // Odd number of intersections means the polygon does contain P.
-  bool result = false;
-  int64_t i, j;
-  for (i = 0, j = num - 2; i < num; j = i, i += 2) {
-    double xray = fmax(poly[i], poly[j]);
-    if (xray < p[0])
-      continue;  // No intersection - edge is on the left, we're casting the ray to the right
-    double ray[4] = {p[0], p[1], xray + 1.0, p[1]};
-    double polygon_edge[4] = {poly[j], poly[j + 1], poly[i], poly[i + 1]};
-    if (intersects_line_line(ray, polygon_edge)) {
-      result = !result;
-      if (distance_point_line(poly[i], poly[i + 1], ray) == 0.0) {
-        // if ray goes through the edge's second vertex, flip the result again -
-        // that vertex will be crossed again when we look at the next edge
-        result = !result;
-      }
-    }
-  }
-  return result;
+EXTENSION_NOINLINE
+bool ST_Contains_LineString_Polygon(double* l,
+                                    int64_t lnum,
+                                    double* poly_coords,
+                                    int64_t poly_num_coords,
+                                    int32_t* poly_ring_sizes,
+                                    int64_t poly_num_rings) {
+  return false;
 }
 
 EXTENSION_NOINLINE

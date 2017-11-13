@@ -3972,6 +3972,42 @@ TEST(Select, GeoSpatial) {
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test "
                                         "WHERE ST_Distance(p, 'LINESTRING(-1 0, 0 1)') < 2.5;",
                                         dt)));
+    ASSERT_NEAR(static_cast<double>(3.0),
+                v<double>(run_simple_agg("SELECT ST_Distance(ST_GeomFromText('POINT(5 -1)'),"
+                                         "ST_GeomFromText('POLYGON((2 2, -2 2, -2 -2, 2 -2, 2 2))')) "
+                                         "from geospatial_test limit 1;",
+                                         dt)),
+                static_cast<double>(0.01));
+    ASSERT_NEAR(static_cast<double>(0.0),
+                v<double>(run_simple_agg("SELECT ST_Distance(ST_GeomFromText("
+                                         "'POLYGON((2 2, -2 2, -2 -2, 2 -2, 2 2))'), "
+                                         "ST_GeomFromText('POINT(0.5 0.5)')) "
+                                         "from geospatial_test limit 1;",
+                                         dt)),
+                static_cast<double>(0.01));
+    ASSERT_NEAR(static_cast<double>(0.5),
+                v<double>(run_simple_agg("SELECT ST_Distance(ST_GeomFromText("
+                                         "'POLYGON((2 2, -2 2, -2 -2, 2 -2, 2 2), (1 1, -1 1, -1 -1, 1 -1, 1 1))'), "
+                                         "ST_GeomFromText('POINT(0.5 0.5)')) "
+                                         "from geospatial_test limit 1;",
+                                         dt)),
+                static_cast<double>(0.01));
+    ASSERT_NEAR(
+        static_cast<double>(0.0),
+        v<double>(run_simple_agg("SELECT ST_Distance(ST_GeomFromText("
+                                 "'POLYGON((2 2, -2 2, -2 -2, 2 -2, 2 2))'), "
+                                 "ST_GeomFromText('LINESTRING(0.5 0.5, 0.7 0.75, -0.3 -0.3, -0.82 0.12, 0.3 0.64)')) "
+                                 "from geospatial_test limit 1;",
+                                 dt)),
+        static_cast<double>(0.01));
+    ASSERT_NEAR(
+        static_cast<double>(0.18),
+        v<double>(run_simple_agg("SELECT ST_Distance(ST_GeomFromText("
+                                 "'POLYGON((2 2, -2 2, -2 -2, 2 -2, 2 2), (1 1, -1 1, -1 -1, 1 -1, 1 1))'), "
+                                 "ST_GeomFromText('LINESTRING(0.5 0.5, 0.7 0.75, -0.3 -0.3, -0.82 0.12, 0.3 0.64)')) "
+                                 "from geospatial_test limit 1;",
+                                 dt)),
+        static_cast<double>(0.01));
 
     ASSERT_EQ(static_cast<int64_t>(g_num_rows),
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE ST_Contains(p,p);", dt)));
