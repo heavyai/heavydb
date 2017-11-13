@@ -375,11 +375,13 @@ void SysCatalog::updatePasswordsToHashes() {
     sqliteConnector_->query("DROP TABLE mapd_users");
     sqliteConnector_->query("ALTER TABLE mapd_users_tmp RENAME TO mapd_users");
   } catch (const std::exception&) {
+    LOG(ERROR) << "Failed to hash passwords";
     sqliteConnector_->query("ROLLBACK TRANSACTION");
     throw;
   }
   sqliteConnector_->query("END TRANSACTION");
   sqliteConnector_->query("VACUUM");  // physically delete plain text passwords
+  LOG(INFO) << "Passwords were successfully hashed";
 }
 
 // migration will be done as two step process this release
@@ -1569,9 +1571,7 @@ void Catalog::recordOwnershipOfObjectsInObjectPermissions() {
         objects.push_back(obj);
       }
     }
-
     SysCatalog::instance().populateRoleDbObjects(objects);
-
   } catch (const std::exception& e) {
     sqliteConnector_.query("ROLLBACK TRANSACTION");
     throw;
