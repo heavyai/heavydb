@@ -3972,6 +3972,23 @@ TEST(Select, GeoSpatial) {
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test "
                                         "WHERE ST_Distance(p, 'LINESTRING(-1 0, 0 1)') < 2.5;",
                                         dt)));
+    ASSERT_NEAR(static_cast<double>(2.0),
+                v<double>(run_simple_agg("SELECT ST_Distance('LINESTRING(-2 2, 2 2)', 'LINESTRING(4 2, 4 3)') "
+                                         "from geospatial_test limit 1;",
+                                         dt)),
+                static_cast<double>(0.01));
+    ASSERT_NEAR(
+        static_cast<double>(0.0),
+        v<double>(run_simple_agg("SELECT ST_Distance('LINESTRING(-2 2, 2 2, 2 0)', 'LINESTRING(4 0, 0 -4, -4 0, 0 4)') "
+                                 "from geospatial_test limit 1;",
+                                 dt)),
+        static_cast<double>(0.01));
+    ASSERT_NEAR(
+        static_cast<double>(0.31),
+        v<double>(run_simple_agg("SELECT ST_Distance('LINESTRING(-2 2, 2 2, 2 0)', 'LINESTRING(4 0, 0 -4, -4 0, 0 5)') "
+                                 "from geospatial_test limit 1;",
+                                 dt)),
+        static_cast<double>(0.01));
     ASSERT_NEAR(static_cast<double>(3.0),
                 v<double>(run_simple_agg("SELECT ST_Distance(ST_GeomFromText('POINT(5 -1)'),"
                                          "ST_GeomFromText('POLYGON((2 2, -2 2, -2 -2, 2 -2, 2 2))')) "

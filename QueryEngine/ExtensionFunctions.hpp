@@ -682,20 +682,55 @@ double distance_point_line(double px, double py, double* l) {
   return distance_point_point(px, py, projx, projy);
 }
 
+// Given three colinear points p, q, r, the function checks if
+// point q lies on line segment 'pr'
+DEVICE ALWAYS_INLINE bool on_segment(double* p, double* q, double* r) {
+  return (q[0] <= fmax(p[0], r[0]) && q[0] >= fmin(p[0], r[0]) && q[1] <= fmax(p[1], r[1]) && q[1] >= fmin(p[1], r[1]));
+}
+
+DEVICE ALWAYS_INLINE int16_t orientation(double* p, double* q, double* r) {
+  auto val = ((q[1] - p[1]) * (r[0] - q[0]) - (q[0] - p[0]) * (r[1] - q[1]));
+  if (val == 0.0)
+    return 0;  // Points p, q and r are colinear
+  if (val > 0.0)
+    return 1;  // Clockwise point orientation
+  return 2;    // Counterclockwise point orientation
+}
+
 DEVICE
 bool intersects_line_line(double* l1, double* l2) {
-  // Check if line segment AB intersects line segment CD
-  double ex = l1[2] - l1[0];  // E = B - A
-  double ey = l1[3] - l1[1];
-  double fx = l2[2] - l2[0];  // F = D - C
-  double fy = l2[3] - l2[1];
-  double px = -ey;  // P = ( -Ey, Ex )
-  double py = ex;
-  double fp = fx * px + fy * py;  // F * P
-  if (fp == 0.0)
-    return false;                                                 // lines are parallel
-  double h = ((l1[0] - l2[0]) * px + (l1[1] - l2[1]) * py) / fp;  // H = ( (A-C) * P ) / (F * P)
-  return (h >= 0.0 && h <= 1.0);                                  // exact point of intersection: C + F*H
+  double* p1 = l1;
+  double* q1 = l1 + 2;
+  double* p2 = l2;
+  double* q2 = l2 + 2;
+
+  auto o1 = orientation(p1, q1, p2);
+  auto o2 = orientation(p1, q1, q2);
+  auto o3 = orientation(p2, q2, p1);
+  auto o4 = orientation(p2, q2, q1);
+
+  // General case
+  if (o1 != o2 && o3 != o4)
+    return true;
+
+  // Special Cases
+  // p1, q1 and p2 are colinear and p2 lies on segment p1q1
+  if (o1 == 0 && on_segment(p1, p2, q1))
+    return true;
+
+  // p1, q1 and p2 are colinear and q2 lies on segment p1q1
+  if (o2 == 0 && on_segment(p1, q2, q1))
+    return true;
+
+  // p2, q2 and p1 are colinear and p1 lies on segment p2q2
+  if (o3 == 0 && on_segment(p2, p1, q2))
+    return true;
+
+  // p2, q2 and q1 are colinear and q1 lies on segment p2q2
+  if (o4 == 0 && on_segment(p2, q1, q2))
+    return true;
+
+  return false;
 }
 
 DEVICE
