@@ -917,21 +917,46 @@ double ST_Distance_Polygon_Polygon(double* poly1_coords,
   if (poly2_num_rings > 0)
     poly2_exterior_ring_num_coords = poly2_ring_sizes[0] * 2;
 
-  auto ext_dist12 = ST_Distance_LineString_Polygon(
-      poly1_coords, poly1_exterior_ring_num_coords, poly2_coords, poly2_num_coords, poly2_ring_sizes, poly2_num_rings);
-  if (ext_dist12 > 0.0) {
-    // poly1 is either outside of poly2's exterior or is inside one of poly2's holes
-    return ext_dist12;
+  auto poly1 = poly1_coords;
+  if (contains_polygon_linestring(
+          poly1, poly1_exterior_ring_num_coords, poly2_coords, poly2_exterior_ring_num_coords)) {
+    // poly1 exterior ring contains poly2 exterior ring
+    poly1 += poly1_exterior_ring_num_coords;
+    // Check if one of the polygon's holes contains that point
+    for (auto r = 1; r < poly1_num_rings; r++) {
+      int64_t poly1_interior_ring_num_coords = poly1_ring_sizes[r] * 2;
+      if (contains_polygon_linestring(
+              poly1, poly1_interior_ring_num_coords, poly2_coords, poly2_exterior_ring_num_coords)) {
+        // Inside an interior ring
+        return ST_Distance_LineString_LineString(
+            poly1, poly1_interior_ring_num_coords, poly2_coords, poly2_exterior_ring_num_coords);
+      }
+      poly1 += poly1_interior_ring_num_coords;
+    }
+    return 0.0;
   }
 
-  auto ext_dist21 = ST_Distance_LineString_Polygon(
-      poly2_coords, poly2_exterior_ring_num_coords, poly1_coords, poly1_num_coords, poly1_ring_sizes, poly1_num_rings);
-  if (ext_dist21 > 0.0) {
-    // poly2 is either outside of poly1's exterior or is inside one of poly1's holes
-    return ext_dist21;
+  auto poly2 = poly2_coords;
+  if (contains_polygon_linestring(
+          poly2, poly2_exterior_ring_num_coords, poly1_coords, poly1_exterior_ring_num_coords)) {
+    // poly2 exterior ring contains poly1 exterior ring
+    poly2 += poly2_exterior_ring_num_coords;
+    // Check if one of the polygon's holes contains that point
+    for (auto r = 1; r < poly2_num_rings; r++) {
+      int64_t poly2_interior_ring_num_coords = poly2_ring_sizes[r] * 2;
+      if (contains_polygon_linestring(
+              poly2, poly2_interior_ring_num_coords, poly1_coords, poly1_exterior_ring_num_coords)) {
+        // Inside an interior ring
+        return ST_Distance_LineString_LineString(
+            poly2, poly2_interior_ring_num_coords, poly1_coords, poly1_exterior_ring_num_coords);
+      }
+      poly2 += poly2_interior_ring_num_coords;
+    }
+    return 0.0;
   }
 
-  return 0.0;
+  return ST_Distance_LineString_LineString(
+      poly1_coords, poly1_exterior_ring_num_coords, poly2_coords, poly2_num_coords);
 }
 
 EXTENSION_NOINLINE

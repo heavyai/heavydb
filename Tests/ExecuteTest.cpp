@@ -4025,6 +4025,27 @@ TEST(Select, GeoSpatial) {
                                  "from geospatial_test limit 1;",
                                  dt)),
         static_cast<double>(0.01));
+    ASSERT_NEAR(static_cast<double>(0.0),
+                v<double>(run_simple_agg("SELECT ST_Distance("
+                                         "'POLYGON((2 2, -2 2, -2 -2, 2 -2, 2 2))', "
+                                         "'POLYGON((0.5 0.5, -0.5 0.5, -0.5 -0.5, 0.5 -0.5, 0.5 0.5))') "
+                                         "from geospatial_test limit 1;",
+                                         dt)),
+                static_cast<double>(0.01));
+    ASSERT_NEAR(static_cast<double>(0.5),
+                v<double>(run_simple_agg("SELECT ST_Distance("
+                                         "'POLYGON((2 2, -2 2, -2 -2, 2 -2, 2 2), (1 1, -1 1, -1 -1, 1 -1, 1 1))', "
+                                         "'POLYGON((0.5 0.5, -0.5 0.5, -0.5 -0.5, 0.5 -0.5, 0.5 0.5))') "
+                                         "from geospatial_test limit 1;",
+                                         dt)),
+                static_cast<double>(0.01));
+    ASSERT_NEAR(static_cast<double>(2.0),
+                v<double>(run_simple_agg("SELECT ST_Distance("
+                                         "'POLYGON((2 2, -2 2, -2 -2, 2 -2, 2 2), (1 1, -1 1, -1 -1, 1 -1, 1 1))', "
+                                         "'POLYGON((4 2, 5 2, 5 3, 4 3, 4 2))') "
+                                         "from geospatial_test limit 1;",
+                                         dt)),
+                static_cast<double>(0.01));
 
     ASSERT_EQ(static_cast<int64_t>(g_num_rows),
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE ST_Contains(p,p);", dt)));
