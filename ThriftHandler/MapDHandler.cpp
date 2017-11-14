@@ -283,13 +283,18 @@ void MapDHandler::connectImpl(TSessionId& session,
   if (!sys_cat_->getMetadataForDB(dbname, db_meta)) {
     THROW_MAPD_EXCEPTION(std::string("Database ") + dbname + " does not exist.");
   }
-  // insert privilege is being treated as access allowed for now
-  Privileges privs;
-  privs.insert_ = true;
-  privs.select_ = false;
-  // use old style check for DB object level privs code only to check user access to the database
-  if (!sys_cat_->checkPrivileges(user_meta, db_meta, privs)) {
-    THROW_MAPD_EXCEPTION(std::string("User ") + user + " is not authorized to access database " + dbname);
+  if (!sys_cat_->isAccessPrivCheckEnabled()) {
+    // insert privilege is being treated as access allowed for now
+    Privileges privs;
+    privs.insert_ = true;
+    privs.select_ = false;
+    // use old style check for DB object level privs code only to check user access to the database
+    if (!sys_cat_->checkPrivileges(user_meta, db_meta, privs)) {
+      TMapDException ex;
+      ex.error_msg = std::string("User ") + user + " is not authorized to access database " + dbname;
+      LOG(ERROR) << ex.error_msg;
+      throw ex;
+    }
   }
   session = INVALID_SESSION_ID;
   while (true) {
