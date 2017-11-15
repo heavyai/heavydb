@@ -368,6 +368,35 @@ void c_arrow(const std::string& query_string, const ExecutorDeviceType device_ty
     continue;                                                \
   }
 
+bool validate_statement_syntax(const std::string& stmt) {
+  SQLParser parser;
+  list<std::unique_ptr<Parser::Stmt>> parse_trees;
+  std::string last_parsed;
+  return parser.parse(stmt, parse_trees, last_parsed) == 0;
+}
+
+TEST(Create, PageSize) {
+  std::vector<std::string> page_sizes = {"2097152", "4194304", "10485760"};
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    for (const auto& page_size : page_sizes) {
+      run_ddl_statement("DROP TABLE IF EXISTS test1;");
+      EXPECT_NO_THROW(run_ddl_statement("CREATE TABLE test1 (t1 TEXT) WITH (page_size=" + page_size + ");"));
+      EXPECT_NO_THROW(run_multiple_agg("INSERT INTO test1 VALUES('hello, MapD');", dt));
+      EXPECT_NO_THROW(run_multiple_agg("SELECT * FROM test1;", dt));
+    }
+  }
+}
+// Code is commented out while we resolve the leak in parser
+//TEST(Create, PageSize_NegativeCase) {
+//  run_ddl_statement("DROP TABLE IF EXISTS test1;");
+//  ASSERT_EQ(validate_statement_syntax("CREATE TABLE test1 (t1 TEXT) WITH (page_size=null);"), false);
+//  ASSERT_EQ(validate_statement_syntax("CREATE TABLE test1 (t1 TEXT) WITH (page_size=);"), false);
+//  EXPECT_THROW(run_ddl_statement("CREATE TABLE test1 (t1 TEXT) WITH (page_size=-1);"), std::runtime_error);
+//  EXPECT_THROW(run_ddl_statement("CREATE TABLE test1 (t1 TEXT) WITH (page_size=0);"), std::runtime_error);
+//  EXPECT_THROW(run_ddl_statement("CREATE TABLE test1 (t1 TEXT) WITH (page_size=2147483648);"), std::runtime_error);
+//}
+
 TEST(Select, FilterAndSimpleAggregation) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
