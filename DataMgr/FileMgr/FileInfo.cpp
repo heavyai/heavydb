@@ -90,11 +90,12 @@ void FileInfo::openExistingFile(std::vector<HeaderInfo>& headerVec, const int fi
       fread((int8_t*)(&versionEpoch), sizeof(int), 1, f);
       if (chunkKey != oldChunkKey || oldPageId != pageId - (1 + skipped)) {
         if (skipped > 0) {
-          VLOG(1) << "\tChunk key: " << showChunk(oldChunkKey) << " Page id from : " << oldPageId
-                  << " to : " << oldPageId + skipped << " Epoch: " << oldVersionEpoch;
-        } else if (oldPageId != -99) {
-          VLOG(1) << "\tChunk key: " << showChunk(oldChunkKey) << " Page id: " << oldPageId
+          VLOG(1) << "FId.PSz: " << fileId << "." << pageSize << " Chunk key: " << showChunk(oldChunkKey)
+                  << " Page id from : " << oldPageId << " to : " << oldPageId + skipped
                   << " Epoch: " << oldVersionEpoch;
+        } else if (oldPageId != -99) {
+          VLOG(1) << "FId.PSz: " << fileId << "." << pageSize << " Chunk key: " << showChunk(oldChunkKey)
+                  << " Page id: " << oldPageId << " Epoch: " << oldVersionEpoch;
         }
         oldPageId = pageId;
         oldVersionEpoch = versionEpoch;
@@ -136,11 +137,11 @@ void FileInfo::openExistingFile(std::vector<HeaderInfo>& headerVec, const int fi
   // printlast
   if (oldPageId != -99) {
     if (skipped > 0) {
-      VLOG(1) << "\tChunk key: " << showChunk(oldChunkKey) << " Page id from : " << oldPageId
-              << " to : " << oldPageId + skipped << " Epoch: " << oldVersionEpoch;
+      VLOG(1) << "FId.PSz: " << fileId << "." << pageSize << " Chunk key: " << showChunk(oldChunkKey)
+              << " Page id from : " << oldPageId << " to : " << oldPageId + skipped << " Epoch: " << oldVersionEpoch;
     } else {
-      VLOG(1) << "\tChunk key: " << showChunk(oldChunkKey) << " Page id: " << oldPageId
-              << " Epoch: " << oldVersionEpoch;
+      VLOG(1) << "FId.PSz: " << fileId << "." << pageSize << " Chunk key: " << showChunk(oldChunkKey)
+              << " Page id: " << oldPageId << " Epoch: " << oldVersionEpoch;
     }
   }
 }
