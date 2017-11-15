@@ -1247,19 +1247,18 @@ bool importGeoFromWkt(std::string& wkt,
         coords.push_back(point.getX());
         coords.push_back(point.getY());
       }
-      if (polygon->getNumInteriorRings() > 0) {
-        // First add exterior ring size
-        ring_sizes.push_back(exteriorRing->getNumPoints());
-        // Add sizes and coords of the interior rings
-        for (int r = 0; r < polygon->getNumInteriorRings(); r++) {
-          OGRLinearRing* interiorRing = polygon->getInteriorRing(r);
-          ring_sizes.push_back(interiorRing->getNumPoints());
-          for (int i = 0; i < interiorRing->getNumPoints(); i++) {
-            OGRPoint point;
-            interiorRing->getPoint(i, &point);
-            coords.push_back(point.getX());
-            coords.push_back(point.getY());
-          }
+      // First add exterior ring size.
+      // TBD(d): might skip if polygon has no interior rings.
+      ring_sizes.push_back(exteriorRing->getNumPoints());
+      // Add sizes and coords of the interior rings
+      for (int r = 0; r < polygon->getNumInteriorRings(); r++) {
+        OGRLinearRing* interiorRing = polygon->getInteriorRing(r);
+        ring_sizes.push_back(interiorRing->getNumPoints());
+        for (int i = 0; i < interiorRing->getNumPoints(); i++) {
+          OGRPoint point;
+          interiorRing->getPoint(i, &point);
+          coords.push_back(point.getX());
+          coords.push_back(point.getY());
         }
       }
       break;
