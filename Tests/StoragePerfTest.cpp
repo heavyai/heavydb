@@ -46,7 +46,7 @@ using namespace Fragmenter_Namespace;
 #endif
 
 // doesnt need real calcite server
-#define CALCITEPORT 9093
+#define CALCITEPORT 39093
 
 namespace {
 std::unique_ptr<SessionInfo> gsession;

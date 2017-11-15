@@ -21,12 +21,6 @@
 #include <boost/filesystem.hpp>
 #include "Catalog/Catalog.h"
 
-#ifdef STANDALONE_CALCITE
-#define CALCITEPORT 9093
-#else
-#define CALCITEPORT -1
-#endif
-
 int main(int argc, char* argv[]) {
   std::string base_path;
   bool force = false;

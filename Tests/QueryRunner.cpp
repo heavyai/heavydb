@@ -26,7 +26,7 @@
 
 #include <boost/filesystem/operations.hpp>
 
-#define CALCITEPORT 9093
+#define CALCITEPORT 39093
 
 Catalog_Namespace::SessionInfo* get_session(const char* db_path) {
   std::string db_name{MAPD_SYSTEM_DB};
