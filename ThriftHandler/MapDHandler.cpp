@@ -1096,13 +1096,24 @@ void MapDHandler::load_table_binary_columnar(const TSessionId& session,
   size_t col_idx = 0;
   try {
     for (auto cd : loader->get_column_descs()) {
-      numRows = import_buffers[col_idx]->add_values(cd, cols[col_idx]);
+      size_t colRows = import_buffers[col_idx]->add_values(cd, cols[col_idx]);
+      if (col_idx == 0) {
+        numRows = colRows;
+      } else {
+        if (colRows != numRows) {
+          std::ostringstream oss;
+          oss << "load_table_binary_columnar: Inconsistent number of rows in request,  was " << numRows << " column "
+              << col_idx << " has " << colRows;
+          THROW_MAPD_EXCEPTION(oss.str());
+        }
+      }
       col_idx++;
     }
   } catch (const std::exception& e) {
-    LOG(ERROR) << "Input exception thrown: " << e.what() << ". Issue at column : " << (col_idx + 1)
-               << ". Import aborted";
-    // TODO(tmostak): Go row-wise on binary columnar import to be consistent with our other import paths
+    std::ostringstream oss;
+    oss << "load_table_binary_columnar: Input exception thrown: " << e.what() << ". Issue at column : " << (col_idx + 1)
+        << ". Import aborted";
+    THROW_MAPD_EXCEPTION(oss.str());
   }
   loader->load(import_buffers, numRows);
 }

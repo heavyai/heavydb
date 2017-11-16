@@ -25,7 +25,9 @@ import com.mapd.thrift.server.TMapDException;
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
+import static java.lang.Math.pow;
 import static java.lang.System.exit;
+import java.math.BigDecimal;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
@@ -239,7 +241,7 @@ public class SQLImporter {
       // read data from old DB
       while (rs.next()) {
         for (int i = 1; i <= md.getColumnCount(); i++) {
-          setColValue(rs, cols.get(i - 1), md.getColumnType(i), i);
+          setColValue(rs, cols.get(i - 1), md.getColumnType(i), i, md.getScale(i));
         }
         resultCount++;
         bufferCount++;
@@ -538,14 +540,14 @@ public class SQLImporter {
       case java.sql.Types.BIT:  // deal with postgress treating boolean as bit... this will bite me
       case java.sql.Types.BOOLEAN:
       case java.sql.Types.DATE:
+      case java.sql.Types.DECIMAL:
+      case java.sql.Types.NUMERIC:
         col.data.int_col = new ArrayList<Long>(bufferSize);
         break;
 
       case java.sql.Types.FLOAT:
-      case java.sql.Types.DECIMAL:
       case java.sql.Types.DOUBLE:
       case java.sql.Types.REAL:
-      case java.sql.Types.NUMERIC:
         col.data.real_col = new ArrayList<Double>(bufferSize);
         break;
 
@@ -564,28 +566,44 @@ public class SQLImporter {
     return col;
   }
 
-  private void setColValue(ResultSet rs, TColumn col, int columnType, int colNum) throws SQLException {
+  private void setColValue(ResultSet rs, TColumn col, int columnType, int colNum, int scale) throws SQLException {
 
     switch (columnType) {
       case java.sql.Types.BIT:  // deal with postgress treating boolean as bit... this will bite me
       case java.sql.Types.BOOLEAN:
         Boolean b = rs.getBoolean(colNum);
-        col.data.int_col.add(b ? 1L : 0L);
         if (rs.wasNull()) {
           col.nulls.add(Boolean.TRUE);
+          col.data.int_col.add(0L);
         } else {
           col.nulls.add(Boolean.FALSE);
+          col.data.int_col.add(b ? 1L : 0L);
         }
         break;
+
+      case java.sql.Types.DECIMAL:
+      case java.sql.Types.NUMERIC:
+        BigDecimal bd = rs.getBigDecimal(colNum);
+        if (rs.wasNull()) {
+          col.nulls.add(Boolean.TRUE);
+          col.data.int_col.add(0L);
+        } else {
+          col.nulls.add(Boolean.FALSE);
+          col.data.int_col.add(bd.multiply(new BigDecimal(pow(10L, scale))).longValue());
+        }
+        break;
+
       case java.sql.Types.TINYINT:
       case java.sql.Types.SMALLINT:
       case java.sql.Types.INTEGER:
       case java.sql.Types.BIGINT:
-        col.data.int_col.add(rs.getLong(colNum));
+        Long l = rs.getLong(colNum);
         if (rs.wasNull()) {
           col.nulls.add(Boolean.TRUE);
+          col.data.int_col.add(new Long(0));
         } else {
           col.nulls.add(Boolean.FALSE);
+          col.data.int_col.add(l);
         }
         break;
 
@@ -625,16 +643,16 @@ public class SQLImporter {
         }
         break;
       case java.sql.Types.FLOAT:
-      case java.sql.Types.DECIMAL:
       case java.sql.Types.DOUBLE:
       case java.sql.Types.REAL:
-      case java.sql.Types.NUMERIC:
-        col.data.real_col.add(rs.getDouble(colNum));
+        Double db = rs.getDouble(colNum);
         if (rs.wasNull()) {
           col.nulls.add(Boolean.TRUE);
+          col.data.real_col.add(new Double(0));
 
         } else {
           col.nulls.add(Boolean.FALSE);
+          col.data.real_col.add(db);
         }
         break;
 
@@ -674,14 +692,14 @@ public class SQLImporter {
       case java.sql.Types.BIT:  // deal with postgress treating boolean as bit... this will bite me
       case java.sql.Types.BOOLEAN:
       case java.sql.Types.DATE:
+      case java.sql.Types.DECIMAL:
+      case java.sql.Types.NUMERIC:
         col.data.int_col.clear();
         break;
 
       case java.sql.Types.FLOAT:
-      case java.sql.Types.DECIMAL:
       case java.sql.Types.DOUBLE:
       case java.sql.Types.REAL:
-      case java.sql.Types.NUMERIC:
         col.data.real_col.clear();
         break;
 
