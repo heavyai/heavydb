@@ -130,6 +130,7 @@ class MapDHandler : public MapDIf {
   void get_status(std::vector<TServerStatus>& _return, const TSessionId& session);
   void get_hardware_info(TClusterHardwareInfo& _return, const TSessionId& session);
 
+  bool hasTableAccessPrivileges(const TableDescriptor* td, const TSessionId& session);
   void get_tables(std::vector<std::string>& _return, const TSessionId& session);
   void get_table_details(TTableDetails& _return, const TSessionId& session, const std::string& table_name);
   void get_internal_table_details(TTableDetails& _return, const TSessionId& session, const std::string& table_name);

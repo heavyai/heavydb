@@ -915,9 +915,16 @@ void MapDHandler::get_table_details_impl(TTableDetails& _return,
       THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
     }
   } else {
-    const auto col_descriptors = cat.getAllColumnMetadataForTable(td->tableId, get_system, true);
-    for (const auto cd : col_descriptors) {
-      _return.row_desc.push_back(populateThriftColumnType(&cat, cd));
+    if (!cat.isAccessPrivCheckEnabled() || (cat.isAccessPrivCheckEnabled() && hasTableAccessPrivileges(td, session))) {
+      const auto col_descriptors = cat.getAllColumnMetadataForTable(td->tableId, get_system, true);
+      for (const auto cd : col_descriptors) {
+        _return.row_desc.push_back(populateThriftColumnType(&cat, cd));
+      }
+    } else {
+      TMapDException ex;
+      ex.error_msg = "User has no access privileges to table " + table_name;
+      LOG(ERROR) << ex.error_msg;
+      throw ex;
     }
   }
   _return.fragment_size = td->maxFragRows;
@@ -963,6 +970,49 @@ void MapDHandler::get_link_view(TFrontendView& _return, const TSessionId& sessio
   _return.view_metadata = ld->viewMetadata;
 }
 
+bool MapDHandler::hasTableAccessPrivileges(const TableDescriptor* td, const TSessionId& session) {
+  bool hasAccessPrivs = false;
+  const auto session_info = get_session(session);
+  auto& cat = session_info.get_catalog();
+  auto user_metadata = session_info.get_currentUser();
+  auto& sys_cat = *session_info.getSysCatalog();
+  DBObject dbObject(td->tableName, TableDBObjectType);
+  sys_cat.populateDBObjectKey(dbObject, cat);
+  std::vector<DBObject> privObjects;
+  dbObject.setPrivileges({true, false, false, false});
+  privObjects.push_back(dbObject);
+  for (size_t i = 0; i < 4; i++) {
+    if (sys_cat.checkPrivileges(user_metadata, privObjects)) {
+      hasAccessPrivs = true;
+      break;
+    }
+    switch (i) {
+      case (0): {
+        dbObject.resetPrivileges();
+        dbObject.setPrivileges({false, true, false, false});
+        break;
+      }
+      case (1): {
+        dbObject.resetPrivileges();
+        dbObject.setPrivileges({false, false, true, false});
+        break;
+      }
+      case (2): {
+        dbObject.resetPrivileges();
+        dbObject.setPrivileges({false, false, false, true});
+        break;
+      }
+      case (3): {
+        break;
+      }
+      default: { CHECK(false); }
+    }
+    privObjects.pop_back();
+    privObjects.push_back(dbObject);
+  }
+  return hasAccessPrivs;
+}
+
 void MapDHandler::get_tables(std::vector<std::string>& table_names, const TSessionId& session) {
   const auto session_info = get_session(session);
   auto& cat = session_info.get_catalog();
@@ -970,6 +1020,10 @@ void MapDHandler::get_tables(std::vector<std::string>& table_names, const TSessi
   for (const auto td : tables) {
     if (td->shard >= 0) {
       // skip shards, they're not standalone tables
+      continue;
+    }
+    if (cat.isAccessPrivCheckEnabled() && !hasTableAccessPrivileges(td, session)) {
+      // skip table, as there are no privileges to access it
       continue;
     }
     table_names.push_back(td->tableName);
