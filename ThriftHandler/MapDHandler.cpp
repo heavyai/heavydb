@@ -60,6 +60,8 @@
 #include "Shared/scope.h"
 #include "Shared/StringTransform.h"
 #include "Shared/MapDParameters.h"
+#include "MapDRenderHandler.h"
+#include "MapDDistributedHandler.h"
 
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/replace.hpp>
@@ -94,6 +96,14 @@
 #include "QueryEngine/ArrowUtil.h"
 
 #define INVALID_SESSION_ID ""
+#define MAPD_USER_EXISTS_YES "USER_EXISTS_YES"
+#define MAPD_USER_EXISTS_NOT "USER_EXISTS_NOT"
+
+#define THROW_MAPD_EXCEPTION(errstr) \
+  TMapDException ex;                 \
+  ex.error_msg = errstr;             \
+  LOG(ERROR) << ex.error_msg;        \
+  throw ex;
 
 MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
                          const std::vector<LeafHostInfo>& string_leaves,
@@ -125,7 +135,6 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
       read_only_(read_only),
       allow_loop_joins_(allow_loop_joins),
       mapd_parameters_(mapd_parameters),
-      enable_rendering_(enable_rendering),
       legacy_syntax_(legacy_syntax),
       super_user_rights_(false),
       access_priv_check_(access_priv_check) {
@@ -149,7 +158,7 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
   const auto data_path = boost::filesystem::path(base_data_path_) / "mapd_data";
   // calculate the total amount of memory we need to reserve from each gpu that the Buffer manage cannot ask for
   size_t total_reserved = reserved_gpu_mem;
-  if (enable_rendering_) {
+  if (enable_rendering) {
     total_reserved += render_mem_bytes;
   }
   data_mgr_.reset(new Data_Namespace::DataMgr(data_path.string(),
@@ -187,6 +196,28 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
       new Catalog_Namespace::SysCatalog(base_data_path_, data_mgr_, ldapMetadata, calcite_, false, access_priv_check_));
   import_path_ = boost::filesystem::path(base_data_path_) / "mapd_import";
   start_time_ = std::time(nullptr);
+
+  if (enable_rendering) {
+    try {
+      render_handler_.reset(new MapDRenderHandler(this, render_mem_bytes, num_gpus, start_gpu));
+    } catch (const std::exception& e) {
+      LOG(ERROR) << "Backend rendering disabled: " << e.what();
+    }
+  }
+
+  if (leaf_aggregator_.leafCount() > 0) {
+    try {
+      agg_handler_.reset(new MapDAggHandler(this));
+    } catch (const std::exception& e) {
+      LOG(ERROR) << "Distributed aggregator support disabled: " << e.what();
+    }
+  } else if (g_cluster) {
+    try {
+      leaf_handler_.reset(new MapDLeafHandler(this));
+    } catch (const std::exception& e) {
+      LOG(ERROR) << "Distributed leaf support disabled: " << e.what();
+    }
+  }
 }
 
 MapDHandler::~MapDHandler() {
@@ -195,10 +226,7 @@ MapDHandler::~MapDHandler() {
 
 void MapDHandler::check_read_only(const std::string& str) {
   if (MapDHandler::read_only_) {
-    TMapDException ex;
-    ex.error_msg = str + " disabled: server running in read-only mode.";
-    LOG(ERROR) << ex.error_msg;
-    throw ex;
+    THROW_MAPD_EXCEPTION(str + " disabled: server running in read-only mode.");
   }
 }
 
@@ -224,10 +252,7 @@ void MapDHandler::internal_connect(TSessionId& session, const std::string& user,
   mapd_lock_guard<mapd_shared_mutex> write_lock(sessions_mutex_);
   Catalog_Namespace::UserMetadata user_meta;
   if (!sys_cat_->getMetadataForUser(user, user_meta)) {
-    TMapDException ex;
-    ex.error_msg = std::string("User ") + user + " does not exist.";
-    LOG(ERROR) << ex.error_msg;
-    throw ex;
+    THROW_MAPD_EXCEPTION(std::string("User ") + user + " does not exist.");
   }
   connectImpl(session, user, std::string(""), dbname, user_meta);
 }
@@ -239,17 +264,11 @@ void MapDHandler::connect(TSessionId& session,
   mapd_lock_guard<mapd_shared_mutex> write_lock(sessions_mutex_);
   Catalog_Namespace::UserMetadata user_meta;
   if (!sys_cat_->getMetadataForUser(user, user_meta)) {
-    TMapDException ex;
-    ex.error_msg = std::string("User ") + user + " does not exist.";
-    LOG(ERROR) << ex.error_msg;
-    throw ex;
+    THROW_MAPD_EXCEPTION(std::string("User ") + user + " does not exist.");
   }
   if (!super_user_rights_) {
     if (!sys_cat_->checkPasswordForUser(passwd, user_meta)) {
-      TMapDException ex;
-      ex.error_msg = std::string("Password for User ") + user + " is incorrect.";
-      LOG(ERROR) << ex.error_msg;
-      throw ex;
+      THROW_MAPD_EXCEPTION(std::string("Password for User ") + user + " is incorrect.");
     }
   }
   connectImpl(session, user, passwd, dbname, user_meta);
@@ -262,10 +281,7 @@ void MapDHandler::connectImpl(TSessionId& session,
                               Catalog_Namespace::UserMetadata& user_meta) {
   Catalog_Namespace::DBMetadata db_meta;
   if (!sys_cat_->getMetadataForDB(dbname, db_meta)) {
-    TMapDException ex;
-    ex.error_msg = std::string("Database ") + dbname + " does not exist.";
-    LOG(ERROR) << ex.error_msg;
-    throw ex;
+    THROW_MAPD_EXCEPTION(std::string("Database ") + dbname + " does not exist.");
   }
   // insert privilege is being treated as access allowed for now
   Privileges privs;
@@ -273,10 +289,7 @@ void MapDHandler::connectImpl(TSessionId& session,
   privs.select_ = false;
   // use old style check for DB object level privs code only to check user access to the database
   if (!sys_cat_->checkPrivileges(user_meta, db_meta, privs)) {
-    TMapDException ex;
-    ex.error_msg = std::string("User ") + user + " is not authorized to access database " + dbname;
-    LOG(ERROR) << ex.error_msg;
-    throw ex;
+    THROW_MAPD_EXCEPTION(std::string("User ") + user + " is not authorized to access database " + dbname);
   }
   session = INVALID_SESSION_ID;
   while (true) {
@@ -351,7 +364,7 @@ void MapDHandler::interrupt(const TSessionId& session) {
 void MapDHandler::get_server_status(TServerStatus& _return, const TSessionId& session) {
   _return.read_only = read_only_;
   _return.version = MAPD_RELEASE;
-  _return.rendering_enabled = enable_rendering_;
+  _return.rendering_enabled = bool(render_handler_);
   _return.start_time = start_time_;
   _return.edition = MAPD_EDITION;
   _return.host_name = "aggregator";
@@ -361,7 +374,7 @@ void MapDHandler::get_status(std::vector<TServerStatus>& _return, const TSession
   TServerStatus ret;
   ret.read_only = read_only_;
   ret.version = MAPD_RELEASE;
-  ret.rendering_enabled = enable_rendering_;
+  ret.rendering_enabled = bool(render_handler_);
   ret.start_time = start_time_;
   ret.edition = MAPD_EDITION;
   ret.host_name = "aggregator";
@@ -557,22 +570,37 @@ void MapDHandler::sql_execute(TQueryResult& _return,
                               const int32_t first_n,
                               const int32_t at_most_n) {
   if (first_n >= 0 && at_most_n >= 0) {
-    TMapDException ex;
-    ex.error_msg = std::string("At most one of first_n and at_most_n can be set");
-    LOG(ERROR) << ex.error_msg;
-    throw ex;
+    THROW_MAPD_EXCEPTION(std::string("At most one of first_n and at_most_n can be set"));
   }
   const auto session_info = MapDHandler::get_session(session);
+  LOG(INFO) << "sql_execute :" << session << ":query_str:" << query_str;
   if (leaf_aggregator_.leafCount() > 0) {
+    if (!agg_handler_) {
+      THROW_MAPD_EXCEPTION("Distributed support is disabled.");
+    }
+    _return.total_time_ms = measure<>::execution([&]() {
+      try {
+        agg_handler_->cluster_execute(_return, session_info, query_str, column_format, nonce, first_n, at_most_n);
+      } catch (std::exception& e) {
+        const auto mapd_exception = dynamic_cast<const TMapDException*>(&e);
+        THROW_MAPD_EXCEPTION(mapd_exception ? mapd_exception->error_msg : (std::string("Exception: ") + e.what()));
+      }
+      _return.nonce = nonce;
+    });
+    LOG(INFO) << "sql_execute-COMPLETED Distributed Execute Time: " << _return.total_time_ms << " (ms)";
   } else {
-    MapDHandler::sql_execute_impl(_return,
-                                  session_info,
-                                  query_str,
-                                  column_format,
-                                  nonce,
-                                  session_info.get_executor_device_type(),
-                                  first_n,
-                                  at_most_n);
+    _return.total_time_ms = measure<>::execution([&]() {
+      MapDHandler::sql_execute_impl(_return,
+                                    session_info,
+                                    query_str,
+                                    column_format,
+                                    nonce,
+                                    session_info.get_executor_device_type(),
+                                    first_n,
+                                    at_most_n);
+    });
+    LOG(INFO) << "sql_execute-COMPLETED Total: " << _return.total_time_ms
+              << " (ms), Execution: " << _return.execution_time_ms << " (ms)";
   }
 }
 
@@ -587,22 +615,13 @@ void MapDHandler::sql_execute_df(TDataFrame& _return,
   if (device_type == TDeviceType::GPU) {
     const auto executor_device_type = session_info.get_executor_device_type();
     if (executor_device_type != ExecutorDeviceType::GPU) {
-      TMapDException ex;
-      ex.error_msg = std::string("Exception: GPU mode is not allowed in this session");
-      LOG(ERROR) << ex.error_msg;
-      throw ex;
+      THROW_MAPD_EXCEPTION(std::string("Exception: GPU mode is not allowed in this session"));
     }
     if (!data_mgr_->gpusPresent()) {
-      TMapDException ex;
-      ex.error_msg = std::string("Exception: no GPU is available in this server");
-      LOG(ERROR) << ex.error_msg;
-      throw ex;
+      THROW_MAPD_EXCEPTION(std::string("Exception: no GPU is available in this server"));
     }
     if (device_id < 0 || device_id >= data_mgr_->cudaMgr_->getDeviceCount()) {
-      TMapDException ex;
-      ex.error_msg = std::string("Exception: invalid device_id or unavailable GPU with this ID");
-      LOG(ERROR) << ex.error_msg;
-      throw ex;
+      THROW_MAPD_EXCEPTION(std::string("Exception: invalid device_id or unavailable GPU with this ID"));
     }
   }
   LOG(INFO) << query_str;
@@ -631,15 +650,9 @@ void MapDHandler::sql_execute_df(TDataFrame& _return,
       }
       LOG(INFO) << "passing query to legacy processor";
     } catch (std::exception& e) {
-      TMapDException ex;
-      ex.error_msg = std::string("Exception: ") + e.what();
-      LOG(ERROR) << ex.error_msg;
-      throw ex;
+      THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
     }
-    TMapDException ex;
-    ex.error_msg = std::string("Exception: DDL or update DML are not unsupported by current thrift API");
-    LOG(ERROR) << ex.error_msg;
-    throw ex;
+    THROW_MAPD_EXCEPTION("Exception: DDL or update DML are not unsupported by current thrift API");
   });
   LOG(INFO) << "Total: " << total_time_ms << " (ms), Execution: " << execution_time_ms << " (ms)";
 }
@@ -652,9 +665,7 @@ void MapDHandler::sql_execute_gdf(TDataFrame& _return,
   sql_execute_df(_return, session, query_str, TDeviceType::GPU, device_id, first_n);
 }
 
-namespace {
-
-std::string apply_copy_to_shim(const std::string& query_str) {
+std::string MapDHandler::apply_copy_to_shim(const std::string& query_str) {
   auto result = query_str;
   {
     // boost::regex copy_to{R"(COPY\s\((.*)\)\sTO\s(.*))", boost::regex::extended | boost::regex::icase};
@@ -666,17 +677,12 @@ std::string apply_copy_to_shim(const std::string& query_str) {
   return result;
 }
 
-}  // namespace
-
 void MapDHandler::sql_validate(TTableDescriptor& _return, const TSessionId& session, const std::string& query_str) {
   std::unique_ptr<const Planner::RootPlan> root_plan;
   const auto session_info = get_session(session);
   ParserWrapper pw{query_str};
   if (pw.is_select_explain || pw.is_other_explain || pw.is_ddl || pw.is_update_dml) {
-    TMapDException ex;
-    ex.error_msg = "Can only validate SELECT statements.";
-    LOG(ERROR) << ex.error_msg;
-    throw ex;
+    THROW_MAPD_EXCEPTION("Can only validate SELECT statements.");
   }
   MapDHandler::validate_rel_alg(_return, query_str, session_info);
 }
@@ -694,36 +700,19 @@ void MapDHandler::validate_rel_alg(TTableDescriptor& _return,
       CHECK(it_ok.second);
     }
   } catch (std::exception& e) {
-    TMapDException ex;
-    ex.error_msg = std::string("Exception: ") + e.what();
-    LOG(ERROR) << ex.error_msg;
-    throw ex;
+    THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
   }
 }
 
-// DEPRECATED - use get_row_for_pixel()
-void MapDHandler::get_rows_for_pixels(TPixelResult& _return,
-                                      const TSessionId& session,
-                                      const int64_t widget_id,
-                                      const std::vector<TPixel>& pixels,
-                                      const std::string& table_name,
-                                      const std::vector<std::string>& col_names,
-                                      const bool column_format,
-                                      const std::string& nonce) {
-  LOG(ERROR) << "get_rows_for_pixels is deprecated, please fix application";
-}
-
-// DEPRECATED - use get_result_row_for_pixel()
-void MapDHandler::get_row_for_pixel(TPixelRowResult& _return,
-                                    const TSessionId& session,
-                                    const int64_t widget_id,
-                                    const TPixel& pixel,
-                                    const std::string& table_name,
-                                    const std::vector<std::string>& col_names,
-                                    const bool column_format,
-                                    const int32_t pixelRadius,
-                                    const std::string& nonce) {
-  LOG(ERROR) << "get_rows_for_pixel is deprecated, please fix application";
+std::string dump_table_col_names(const std::map<std::string, std::vector<std::string>>& table_col_names) {
+  std::ostringstream oss;
+  for (const auto table_col : table_col_names) {
+    oss << ":" << table_col.first;
+    for (const auto col : table_col.second) {
+      oss << "," << col;
+    }
+  }
+  return oss.str();
 }
 
 void MapDHandler::get_result_row_for_pixel(TPixelTableRowResult& _return,
@@ -732,15 +721,27 @@ void MapDHandler::get_result_row_for_pixel(TPixelTableRowResult& _return,
                                            const TPixel& pixel,
                                            const std::map<std::string, std::vector<std::string>>& table_col_names,
                                            const bool column_format,
-                                           const int32_t pixelRadius,
+                                           const int32_t pixel_radius,
                                            const std::string& nonce) {
-  _return.nonce = nonce;
-  if (!enable_rendering_) {
-    TMapDException ex;
-    ex.error_msg = "Backend rendering is disabled.";
-    LOG(ERROR) << ex.error_msg;
-    throw ex;
+  if (!render_handler_) {
+    THROW_MAPD_EXCEPTION("Backend rendering is disabled.");
   }
+
+  const auto session_info = MapDHandler::get_session(session);
+  LOG(INFO) << "get_result_row_for_pixel :" << session << ":widget_id:" << widget_id << ":pixel.x:" << pixel.x
+            << ":pixel.y:" << pixel.y << ":column_format:" << column_format << ":pixel_radius:" << pixel_radius
+            << ":table_col_names" << dump_table_col_names(table_col_names) << ":nonce:" << nonce;
+
+  auto time_ms = measure<>::execution([&]() {
+    try {
+      render_handler_->get_result_row_for_pixel(
+          _return, session_info, widget_id, pixel, table_col_names, column_format, pixel_radius, nonce);
+    } catch (std::exception& e) {
+      THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
+    }
+  });
+
+  LOG(INFO) << "get_result_row_for_pixel-COMPLETED nonce: " << nonce << ", Execute Time: " << time_ms << " (ms)";
 }
 
 TColumnType MapDHandler::populateThriftColumnType(const Catalog_Namespace::Catalog* cat, const ColumnDescriptor* cd) {
@@ -763,10 +764,7 @@ TColumnType MapDHandler::populateThriftColumnType(const Catalog_Namespace::Catal
     }
     auto dd = cat->getMetadataForDict(dict_id, false);
     if (!dd) {
-      TMapDException ex;
-      ex.error_msg = "Dictionary doesn't exist";
-      LOG(ERROR) << ex.error_msg;
-      throw ex;
+      THROW_MAPD_EXCEPTION("Dictionary doesn't exist");
     }
     col_type.col_type.comp_param = dd->dictNBits;
   } else {
@@ -800,10 +798,7 @@ void MapDHandler::get_table_details_impl(TTableDetails& _return,
   auto& cat = session_info.get_catalog();
   auto td = cat.getMetadataForTable(table_name);
   if (!td) {
-    TMapDException ex;
-    ex.error_msg = "Table " + table_name + " doesn't exist";
-    LOG(ERROR) << ex.error_msg;
-    throw ex;
+    THROW_MAPD_EXCEPTION("Table " + table_name + " doesn't exist");
   }
   if (td->isView) {
     try {
@@ -812,10 +807,7 @@ void MapDHandler::get_table_details_impl(TTableDetails& _return,
       execute_rel_alg(result, query_ra, true, session_info, ExecutorDeviceType::CPU, -1, -1, false, true);
       _return.row_desc = fixup_row_descriptor(result.row_set.row_desc, cat);
     } catch (std::exception& e) {
-      TMapDException ex;
-      ex.error_msg = std::string("Exception: ") + e.what();
-      LOG(ERROR) << ex.error_msg;
-      throw ex;
+      THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
     }
   } else {
     const auto col_descriptors = cat.getAllColumnMetadataForTable(td->tableId, get_system, true);
@@ -844,10 +836,7 @@ void MapDHandler::get_frontend_view(TFrontendView& _return, const TSessionId& se
   auto& cat = session_info.get_catalog();
   auto vd = cat.getMetadataForFrontendView(std::to_string(session_info.get_currentUser().userId), view_name);
   if (!vd) {
-    TMapDException ex;
-    ex.error_msg = "View " + view_name + " doesn't exist";
-    LOG(ERROR) << ex.error_msg;
-    throw ex;
+    THROW_MAPD_EXCEPTION("View " + view_name + " doesn't exist");
   }
   _return.view_name = view_name;
   _return.view_state = vd->viewState;
@@ -861,10 +850,7 @@ void MapDHandler::get_link_view(TFrontendView& _return, const TSessionId& sessio
   auto& cat = session_info.get_catalog();
   auto ld = cat.getMetadataForLink(std::to_string(cat.get_currentDB().dbId) + link);
   if (!ld) {
-    TMapDException ex;
-    ex.error_msg = "Link " + link + " is not valid.";
-    LOG(ERROR) << ex.error_msg;
-    throw ex;
+    THROW_MAPD_EXCEPTION("Link " + link + " is not valid.");
   }
   _return.view_state = ld->viewState;
   _return.view_name = ld->link;
@@ -1025,10 +1011,7 @@ void MapDHandler::load_table_binary(const TSessionId& session,
   }
   const TableDescriptor* td = cat.getMetadataForTable(table_name);
   if (td == nullptr) {
-    TMapDException ex;
-    ex.error_msg = "Table " + table_name + " does not exist.";
-    LOG(ERROR) << ex.error_msg;
-    throw ex;
+    THROW_MAPD_EXCEPTION("Table " + table_name + " does not exist.");
   }
   check_table_load_privileges(session, table_name);
   std::unique_ptr<Importer_NS::Loader> loader;
@@ -1040,10 +1023,7 @@ void MapDHandler::load_table_binary(const TSessionId& session,
   // TODO(andrew): nColumns should be number of non-virtual/non-system columns.
   //               Subtracting 1 (rowid) until TableDescriptor is updated.
   if (rows.front().cols.size() != static_cast<size_t>(td->nColumns) - 1) {
-    TMapDException ex;
-    ex.error_msg = "Wrong number of columns to load into Table " + table_name;
-    LOG(ERROR) << ex.error_msg;
-    throw ex;
+    THROW_MAPD_EXCEPTION("Wrong number of columns to load into Table " + table_name);
   }
   auto col_descs = loader->get_column_descs();
   std::vector<std::unique_ptr<Importer_NS::TypedImportBuffer>> import_buffers;
@@ -1083,10 +1063,7 @@ void MapDHandler::prepare_columnar_loader(
   }
   const TableDescriptor* td = cat.getMetadataForTable(table_name);
   if (td == nullptr) {
-    TMapDException ex;
-    ex.error_msg = "Table " + table_name + " does not exist.";
-    LOG(ERROR) << ex.error_msg;
-    throw ex;
+    THROW_MAPD_EXCEPTION("Table " + table_name + " does not exist.");
   }
   check_table_load_privileges(session, table_name);
   if (leaf_aggregator_.leafCount() > 0) {
@@ -1097,10 +1074,7 @@ void MapDHandler::prepare_columnar_loader(
   // TODO(andrew): nColumns should be number of non-virtual/non-system columns.
   //               Subtracting 1 (rowid) until TableDescriptor is updated.
   if (num_cols != static_cast<size_t>(td->nColumns) - 1 || num_cols < 1) {
-    TMapDException ex;
-    ex.error_msg = "Wrong number of columns to load into Table " + table_name;
-    LOG(ERROR) << ex.error_msg;
-    throw ex;
+    THROW_MAPD_EXCEPTION("Wrong number of columns to load into Table " + table_name);
   }
   auto col_descs = (*loader)->get_column_descs();
   for (auto cd : col_descs) {
@@ -1185,11 +1159,7 @@ void MapDHandler::load_table_binary_arrow(const TSessionId& session,
 
   // Assuming have one batch for now
   if (batches.size() != 1) {
-    std::string msg = "Expected a single Arrow record batch. Import aborted";
-    LOG(ERROR) << msg;
-    TMapDException ex;
-    ex.error_msg = msg;
-    throw ex;
+    THROW_MAPD_EXCEPTION("Expected a single Arrow record batch. Import aborted");
   }
 
   std::shared_ptr<arrow::RecordBatch> batch = batches[0];
@@ -1208,11 +1178,8 @@ void MapDHandler::load_table_binary_arrow(const TSessionId& session,
   } catch (const std::exception& e) {
     LOG(ERROR) << "Input exception thrown: " << e.what() << ". Issue at column : " << (col_idx + 1)
                << ". Import aborted";
-    TMapDException ex;
-    ex.error_msg = std::string("Exception: ") + e.what();
-    throw ex;
-    // TODO(tmostak): Go row-wise on binary columnar import to be consistent
-    // with our other import paths
+    // TODO(tmostak): Go row-wise on binary columnar import to be consistent with our other import paths
+    THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
   }
   loader->load(import_buffers, numRows);
 }
@@ -1229,10 +1196,7 @@ void MapDHandler::load_table(const TSessionId& session,
   }
   const TableDescriptor* td = cat.getMetadataForTable(table_name);
   if (td == nullptr) {
-    TMapDException ex;
-    ex.error_msg = "Table " + table_name + " does not exist.";
-    LOG(ERROR) << ex.error_msg;
-    throw ex;
+    THROW_MAPD_EXCEPTION("Table " + table_name + " does not exist.");
   }
   check_table_load_privileges(session, table_name);
   std::unique_ptr<Importer_NS::Loader> loader;
@@ -1245,11 +1209,8 @@ void MapDHandler::load_table(const TSessionId& session,
   // TODO(andrew): nColumns should be number of non-virtual/non-system columns.
   //               Subtracting 1 (rowid) until TableDescriptor is updated.
   if (rows.front().cols.size() != static_cast<size_t>(td->nColumns) - 1) {
-    TMapDException ex;
-    ex.error_msg = "Wrong number of columns to load into Table " + table_name + " (" +
-                   std::to_string(rows.front().cols.size()) + " vs " + std::to_string(td->nColumns - 1) + ")";
-    LOG(ERROR) << ex.error_msg;
-    throw ex;
+    THROW_MAPD_EXCEPTION("Wrong number of columns to load into Table " + table_name + " (" +
+                         std::to_string(rows.front().cols.size()) + " vs " + std::to_string(td->nColumns - 1) + ")");
   }
   auto col_descs = loader->get_column_descs();
   std::vector<std::unique_ptr<Importer_NS::TypedImportBuffer>> import_buffers;
@@ -1370,10 +1331,7 @@ void MapDHandler::detect_column_types(TDetectResult& _return,
   }
 
   if (!boost::filesystem::exists(file_path)) {
-    TMapDException ex;
-    ex.error_msg = "File does not exist: " + file_path.string();
-    LOG(ERROR) << ex.error_msg;
-    throw ex;
+    THROW_MAPD_EXCEPTION("File does not exist: " + file_path.string());
   }
 
   Importer_NS::CopyParams copy_params = thrift_to_copyparams(cp);
@@ -1437,10 +1395,7 @@ void MapDHandler::detect_column_types(TDetectResult& _return,
       }
     }
   } catch (const std::exception& e) {
-    TMapDException ex;
-    ex.error_msg = "detect_column_types error: " + std::string(e.what());
-    LOG(ERROR) << ex.error_msg;
-    throw ex;
+    THROW_MAPD_EXCEPTION("detect_column_types error: " + std::string(e.what()));
   }
 }
 
@@ -1456,30 +1411,18 @@ Planner::RootPlan* MapDHandler::parse_to_plan_legacy(const std::string& query_st
   try {
     num_parse_errors = parser.parse(query_str, parse_trees, last_parsed);
   } catch (std::exception& e) {
-    TMapDException ex;
-    ex.error_msg = std::string("Exception: ") + e.what();
-    LOG(ERROR) << ex.error_msg;
-    throw ex;
+    THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
   }
   if (num_parse_errors > 0) {
-    TMapDException ex;
-    ex.error_msg = "Syntax error at: " + last_parsed;
-    LOG(ERROR) << ex.error_msg;
-    throw ex;
+    THROW_MAPD_EXCEPTION("Syntax error at: " + last_parsed);
   }
   if (parse_trees.size() != 1) {
-    TMapDException ex;
-    ex.error_msg = "Can only " + action + " a single query at a time.";
-    LOG(ERROR) << ex.error_msg;
-    throw ex;
+    THROW_MAPD_EXCEPTION("Can only " + action + " a single query at a time.");
   }
   Parser::Stmt* stmt = parse_trees.front().get();
   Parser::DDLStmt* ddl = dynamic_cast<Parser::DDLStmt*>(stmt);
   if (ddl != nullptr) {
-    TMapDException ex;
-    ex.error_msg = "Can only " + action + " SELECT statements.";
-    LOG(ERROR) << ex.error_msg;
-    throw ex;
+    THROW_MAPD_EXCEPTION("Can only " + action + " SELECT statements.");
   }
   auto dml = static_cast<Parser::DMLStmt*>(stmt);
   Analyzer::Query query;
@@ -1488,42 +1431,29 @@ Planner::RootPlan* MapDHandler::parse_to_plan_legacy(const std::string& query_st
   return optimizer.optimize();
 }
 
-void MapDHandler::render(TRenderResult& _return,
-                         const TSessionId& session,
-                         const std::string& query_str_in,
-                         const std::string& render_type,
-                         const std::string& nonce) {
-  LOG(ERROR) << "render is deprecated, please fix application";
-}
-
 void MapDHandler::render_vega(TRenderResult& _return,
                               const TSessionId& session,
                               const int64_t widget_id,
                               const std::string& vega_json,
-                              const int compressionLevel,
+                              const int compression_level,
                               const std::string& nonce) {
+  if (!render_handler_) {
+    THROW_MAPD_EXCEPTION("Backend rendering is disabled.");
+  }
+
+  const auto session_info = MapDHandler::get_session(session);
+  LOG(INFO) << "render_vega :" << session << ":widget_id:" << widget_id << ":compression_level:" << compression_level
+            << ":vega_json:" << vega_json << ":nonce:" << nonce;
+
   _return.total_time_ms = measure<>::execution([&]() {
-    _return.execution_time_ms = 0;
-    _return.render_time_ms = 0;
-    _return.nonce = nonce;
-    if (!enable_rendering_) {
-      TMapDException ex;
-      ex.error_msg = "Backend rendering is disabled.";
-      LOG(ERROR) << ex.error_msg;
-      throw ex;
+    try {
+      render_handler_->render_vega(_return, session_info, widget_id, vega_json, compression_level, nonce);
+    } catch (std::exception& e) {
+      THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
     }
-
-    std::lock_guard<std::mutex> render_lock(render_mutex_);
-    mapd_shared_lock<mapd_shared_mutex> read_lock(sessions_mutex_);
-    auto session_it = get_session_it(session);
-    auto session_info_ptr = session_it->second.get();
-
-    const auto& cat = session_info_ptr->get_catalog();
-    auto executor = Executor::getExecutor(
-        cat.get_currentDB().dbId, jit_debug_ ? "/tmp" : "", jit_debug_ ? "mapdquery" : "", mapd_parameters_, nullptr);
-
   });
-  LOG(INFO) << "Total: " << _return.total_time_ms << " (ms), Total Execution: " << _return.execution_time_ms
+  LOG(INFO) << "render_vega-COMPLETED nonce: " << nonce << " Total: " << _return.total_time_ms
+            << " (ms), Total Execution: " << _return.execution_time_ms
             << " (ms), Total Render: " << _return.render_time_ms << " (ms)";
 }
 
@@ -1545,10 +1475,7 @@ void MapDHandler::create_frontend_view(const TSessionId& session,
   try {
     cat.createFrontendView(vd);
   } catch (const std::exception& e) {
-    TMapDException ex;
-    ex.error_msg = std::string("Exception: ") + e.what();
-    LOG(ERROR) << ex.error_msg;
-    throw ex;
+    THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
   }
 }
 
@@ -1558,18 +1485,12 @@ void MapDHandler::delete_frontend_view(const TSessionId& session, const std::str
   auto& cat = session_info.get_catalog();
   auto vd = cat.getMetadataForFrontendView(std::to_string(session_info.get_currentUser().userId), view_name);
   if (!vd) {
-    TMapDException ex;
-    ex.error_msg = "View " + view_name + " doesn't exist";
-    LOG(ERROR) << ex.error_msg;
-    throw ex;
+    THROW_MAPD_EXCEPTION("View " + view_name + " doesn't exist");
   }
   try {
     cat.deleteMetadataForFrontendView(std::to_string(session_info.get_currentUser().userId), view_name);
   } catch (const std::exception& e) {
-    TMapDException ex;
-    ex.error_msg = std::string("Exception: ") + e.what();
-    LOG(ERROR) << ex.error_msg;
-    throw ex;
+    THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
   }
 }
 
@@ -1589,10 +1510,7 @@ void MapDHandler::create_link(std::string& _return,
   try {
     _return = cat.createLink(ld, 6);
   } catch (const std::exception& e) {
-    TMapDException ex;
-    ex.error_msg = std::string("Exception: ") + e.what();
-    LOG(ERROR) << ex.error_msg;
-    throw ex;
+    THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
   }
 }
 
@@ -1635,10 +1553,7 @@ void MapDHandler::create_table(const TSessionId& session,
   check_read_only("create_table");
 
   if (table_name != sanitize_name(table_name)) {
-    TMapDException ex;
-    ex.error_msg = "Invalid characters in table name: " + table_name;
-    LOG(ERROR) << ex.error_msg;
-    throw ex;
+    THROW_MAPD_EXCEPTION("Invalid characters in table name: " + table_name);
   }
 
   auto rds = rd;
@@ -1655,16 +1570,10 @@ void MapDHandler::create_table(const TSessionId& session,
 
   for (auto col : rds) {
     if (col.col_name != sanitize_name(col.col_name)) {
-      TMapDException ex;
-      ex.error_msg = "Invalid characters in column name: " + col.col_name;
-      LOG(ERROR) << ex.error_msg;
-      throw ex;
+      THROW_MAPD_EXCEPTION("Invalid characters in column name: " + col.col_name);
     }
     if (col.col_type.type == TDatumType::INTERVAL_DAY_TIME || col.col_type.type == TDatumType::INTERVAL_YEAR_MONTH) {
-      TMapDException ex;
-      ex.error_msg = "Unsupported type: " + thrift_to_name(col.col_type) + " for column: " + col.col_name;
-      LOG(ERROR) << ex.error_msg;
-      throw ex;
+      THROW_MAPD_EXCEPTION("Unsupported type: " + thrift_to_name(col.col_type) + " for column: " + col.col_name);
     }
     // if no precision or scale passed in set to default 14,7
     if (col.col_type.precision == 0 && col.col_type.precision == 0) {
@@ -1706,19 +1615,13 @@ void MapDHandler::import_table(const TSessionId& session,
 
   const TableDescriptor* td = cat.getMetadataForTable(table_name);
   if (td == nullptr) {
-    TMapDException ex;
-    ex.error_msg = "Table " + table_name + " does not exist.";
-    LOG(ERROR) << ex.error_msg;
-    throw ex;
+    THROW_MAPD_EXCEPTION("Table " + table_name + " does not exist.");
   }
   check_table_load_privileges(session, table_name);
 
   auto file_path = import_path_ / session / boost::filesystem::path(file_name).filename();
   if (!boost::filesystem::exists(file_path)) {
-    TMapDException ex;
-    ex.error_msg = "File does not exist: " + file_path.filename().string();
-    LOG(ERROR) << ex.error_msg << " at " << file_path.string();
-    throw ex;
+    THROW_MAPD_EXCEPTION("File does not exist: " + file_path.filename().string());
   }
 
   Importer_NS::CopyParams copy_params = thrift_to_copyparams(cp);
@@ -1742,10 +1645,7 @@ void MapDHandler::import_table(const TSessionId& session,
     auto ms = measure<>::execution([&]() { importer->import(); });
     std::cout << "Total Import Time: " << (double)ms / 1000.0 << " Seconds." << std::endl;
   } catch (const std::exception& e) {
-    TMapDException ex;
-    ex.error_msg = "Exception: " + std::string(e.what());
-    LOG(ERROR) << ex.error_msg;
-    throw ex;
+    THROW_MAPD_EXCEPTION("Exception: " + std::string(e.what()));
   }
 }
 
@@ -1769,18 +1669,12 @@ void MapDHandler::import_geo_table(const TSessionId& session,
 
   auto file_path = boost::filesystem::path(file_name);
   if (!boost::filesystem::exists(file_path)) {
-    TMapDException ex;
-    ex.error_msg = "File does not exist: " + file_path.filename().string();
-    LOG(ERROR) << ex.error_msg << " at " << file_path.string();
-    throw ex;
+    THROW_MAPD_EXCEPTION("File does not exist: " + file_path.filename().string());
   }
   try {
     check_geospatial_files(file_path);
   } catch (const std::exception& e) {
-    TMapDException ex;
-    ex.error_msg = "import_geo_table error: " + std::string(e.what());
-    LOG(ERROR) << ex.error_msg;
-    throw ex;
+    THROW_MAPD_EXCEPTION("import_geo_table error: " + std::string(e.what()));
   }
 
   TRowDescriptor rd;
@@ -1794,11 +1688,8 @@ void MapDHandler::import_geo_table(const TSessionId& session,
   } else if (row_desc.size() > 0) {
     rd = row_desc;
   } else {
-    TMapDException ex;
-    ex.error_msg =
-        "Could not append file " + file_path.filename().string() + " to " + table_name + ": not currently supported.";
-    LOG(ERROR) << ex.error_msg;
-    throw ex;
+    THROW_MAPD_EXCEPTION("Could not append file " + file_path.filename().string() + " to " + table_name +
+                         ": not currently supported.");
   }
 
   std::map<std::string, std::string> colname_to_src;
@@ -1808,10 +1699,7 @@ void MapDHandler::import_geo_table(const TSessionId& session,
 
   const TableDescriptor* td = cat.getMetadataForTable(table_name);
   if (td == nullptr) {
-    TMapDException ex;
-    ex.error_msg = "Table " + table_name + " does not exist.";
-    LOG(ERROR) << ex.error_msg;
-    throw ex;
+    THROW_MAPD_EXCEPTION("Table " + table_name + " does not exist.");
   }
   check_table_load_privileges(session, table_name);
 
@@ -1828,10 +1716,7 @@ void MapDHandler::import_geo_table(const TSessionId& session,
     auto ms = measure<>::execution([&]() { importer->importGDAL(colname_to_src); });
     std::cout << "Total Import Time: " << (double)ms / 1000.0 << " Seconds." << std::endl;
   } catch (const std::exception& e) {
-    TMapDException ex;
-    ex.error_msg = std::string("import_geo_table failed: ") + e.what();
-    LOG(ERROR) << ex.error_msg;
-    throw ex;
+    THROW_MAPD_EXCEPTION(std::string("import_geo_table failed: ") + e.what());
   }
 }
 
@@ -1848,11 +1733,11 @@ void MapDHandler::start_heap_profile(const TSessionId& session) {
   const auto session_info = get_session(session);
 #ifdef HAVE_PROFILER
   if (IsHeapProfilerRunning()) {
-    throw_profile_exception("Profiler already started");
+    THROW_MAPD_EXCEPTION("Profiler already started");
   }
   HeapProfilerStart("mapd");
 #else
-  throw_profile_exception("Profiler not enabled");
+  THROW_MAPD_EXCEPTION("Profiler not enabled");
 #endif  // HAVE_PROFILER
 }
 
@@ -1860,11 +1745,11 @@ void MapDHandler::stop_heap_profile(const TSessionId& session) {
   const auto session_info = get_session(session);
 #ifdef HAVE_PROFILER
   if (!IsHeapProfilerRunning()) {
-    throw_profile_exception("Profiler not running");
+    THROW_MAPD_EXCEPTION("Profiler not running");
   }
   HeapProfilerStop();
 #else
-  throw_profile_exception("Profiler not enabled");
+  THROW_MAPD_EXCEPTION("Profiler not enabled");
 #endif  // HAVE_PROFILER
 }
 
@@ -1872,23 +1757,20 @@ void MapDHandler::get_heap_profile(std::string& profile, const TSessionId& sessi
   const auto session_info = get_session(session);
 #ifdef HAVE_PROFILER
   if (!IsHeapProfilerRunning()) {
-    throw_profile_exception("Profiler not running");
+    THROW_MAPD_EXCEPTION("Profiler not running");
   }
   auto profile_buff = GetHeapProfile();
   profile = profile_buff;
   free(profile_buff);
 #else
-  throw_profile_exception("Profiler not enabled");
+  THROW_MAPD_EXCEPTION("Profiler not enabled");
 #endif  // HAVE_PROFILER
 }
 
 SessionMap::iterator MapDHandler::get_session_it(const TSessionId& session) {
   auto session_it = sessions_.find(session);
   if (session_it == sessions_.end()) {
-    TMapDException ex;
-    ex.error_msg = "Session not valid.";
-    LOG(ERROR) << ex.error_msg;
-    throw ex;
+    THROW_MAPD_EXCEPTION("Session not valid.");
   }
   session_it->second->update_time();
   return session_it;
@@ -1911,11 +1793,8 @@ void MapDHandler::check_table_load_privileges(const TSessionId& session, const s
   std::vector<DBObject> privObjects;
   privObjects.push_back(dbObject);
   if (cat.isAccessPrivCheckEnabled() && !sys_cat.checkPrivileges(user_metadata, privObjects)) {
-    TMapDException ex;
-    ex.error_msg = "Violation of access privileges: user " + user_metadata.userName +
-                   " has no insert privileges for table " + table_name + ".";
-    LOG(ERROR) << ex.error_msg;
-    throw ex;
+    THROW_MAPD_EXCEPTION("Violation of access privileges: user " + user_metadata.userName +
+                         " has no insert privileges for table " + table_name + ".");
   }
 }
 
@@ -2025,7 +1904,7 @@ void MapDHandler::execute_root_plan(TQueryResult& _return,
                                         jit_debug_ ? "/tmp" : "",
                                         jit_debug_ ? "mapdquery" : "",
                                         mapd_parameters_,
-                                        nullptr);
+                                        render_handler_ ? render_handler_->get_render_manager() : nullptr);
   std::shared_ptr<ResultSet> results;
   _return.execution_time_ms += measure<>::execution([&]() {
     results = executor->execute(root_plan,
@@ -2120,10 +1999,7 @@ void MapDHandler::convert_rows(TQueryResult& _return,
       }
       ++fetched;
       if (at_most_n >= 0 && fetched > at_most_n) {
-        TMapDException ex;
-        ex.error_msg = "The result contains more rows than the specified cap of " + std::to_string(at_most_n);
-        LOG(ERROR) << ex.error_msg;
-        throw ex;
+        THROW_MAPD_EXCEPTION("The result contains more rows than the specified cap of " + std::to_string(at_most_n));
       }
       for (size_t i = 0; i < results.colCount(); ++i) {
         const auto agg_result = crt_row[i];
@@ -2142,10 +2018,7 @@ void MapDHandler::convert_rows(TQueryResult& _return,
       }
       ++fetched;
       if (at_most_n >= 0 && fetched > at_most_n) {
-        TMapDException ex;
-        ex.error_msg = "The result contains more rows than the specified cap of " + std::to_string(at_most_n);
-        LOG(ERROR) << ex.error_msg;
-        throw ex;
+        THROW_MAPD_EXCEPTION("The result contains more rows than the specified cap of " + std::to_string(at_most_n));
       }
       TRow trow;
       trow.cols.reserve(results.colCount());
@@ -2238,115 +2111,104 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
                                    const ExecutorDeviceType executor_device_type,
                                    const int32_t first_n,
                                    const int32_t at_most_n) {
+  if (leaf_handler_) {
+    leaf_handler_->flush_queue();
+  }
+
   _return.nonce = nonce;
   _return.execution_time_ms = 0;
   auto& cat = session_info.get_catalog();
-  LOG(INFO) << query_str;
-  _return.total_time_ms = measure<>::execution([&]() {
-    SQLParser parser;
-    std::list<std::unique_ptr<Parser::Stmt>> parse_trees;
-    std::string last_parsed;
-    int num_parse_errors = 0;
-    Planner::RootPlan* root_plan{nullptr};
-    try {
-      ParserWrapper pw{query_str};
-      if (!pw.is_ddl && !pw.is_update_dml && !pw.is_other_explain) {
-        std::string query_ra;
-        _return.execution_time_ms += measure<>::execution([&]() { query_ra = parse_to_ra(query_str, session_info); });
-        if (pw.is_select_calcite_explain) {
-          // return the ra as the result
-          convert_explain(_return, ResultSet(query_ra), true);
-          return;
-        }
-        execute_rel_alg(_return,
-                        query_ra,
-                        column_format,
-                        session_info,
-                        executor_device_type,
-                        first_n,
-                        at_most_n,
-                        pw.is_select_explain,
-                        false);
+
+  SQLParser parser;
+  std::list<std::unique_ptr<Parser::Stmt>> parse_trees;
+  std::string last_parsed;
+  int num_parse_errors = 0;
+  Planner::RootPlan* root_plan{nullptr};
+  try {
+    ParserWrapper pw{query_str};
+    if (!pw.is_ddl && !pw.is_update_dml && !pw.is_other_explain) {
+      std::string query_ra;
+      _return.execution_time_ms += measure<>::execution([&]() { query_ra = parse_to_ra(query_str, session_info); });
+      if (pw.is_select_calcite_explain) {
+        // return the ra as the result
+        convert_explain(_return, ResultSet(query_ra), true);
         return;
       }
-      LOG(INFO) << "passing query to legacy processor";
-    } catch (std::exception& e) {
-      TMapDException ex;
-      ex.error_msg = std::string("Exception: ") + e.what();
-      LOG(ERROR) << ex.error_msg;
-      throw ex;
+      execute_rel_alg(_return,
+                      query_ra,
+                      column_format,
+                      session_info,
+                      executor_device_type,
+                      first_n,
+                      at_most_n,
+                      pw.is_select_explain,
+                      false);
+      return;
     }
+    LOG(INFO) << "passing query to legacy processor";
+  } catch (std::exception& e) {
+    THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
+  }
+  try {
+    // check for COPY TO stmt replace as required parser expects #~# markers
+    const auto result = apply_copy_to_shim(query_str);
+    num_parse_errors = parser.parse(result, parse_trees, last_parsed);
+  } catch (std::exception& e) {
+    THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
+  }
+  if (num_parse_errors > 0) {
+    THROW_MAPD_EXCEPTION("Syntax error at: " + last_parsed);
+  }
+  for (const auto& stmt : parse_trees) {
     try {
-      // check for COPY TO stmt replace as required parser expects #~# markers
-      const auto result = apply_copy_to_shim(query_str);
-      num_parse_errors = parser.parse(result, parse_trees, last_parsed);
-    } catch (std::exception& e) {
-      TMapDException ex;
-      ex.error_msg = std::string("Exception: ") + e.what();
-      LOG(ERROR) << ex.error_msg;
-      throw ex;
-    }
-    if (num_parse_errors > 0) {
-      TMapDException ex;
-      ex.error_msg = "Syntax error at: " + last_parsed;
-      LOG(ERROR) << ex.error_msg;
-      throw ex;
-    }
-    for (const auto& stmt : parse_trees) {
-      try {
-        auto select_stmt = dynamic_cast<Parser::SelectStmt*>(stmt.get());
-        if (!select_stmt) {
-          check_read_only("Non-SELECT statements");
-        }
-        Parser::DDLStmt* ddl = dynamic_cast<Parser::DDLStmt*>(stmt.get());
-        Parser::ExplainStmt* explain_stmt = nullptr;
-        if (ddl != nullptr)
-          explain_stmt = dynamic_cast<Parser::ExplainStmt*>(ddl);
-        if (ddl != nullptr && explain_stmt == nullptr) {
-          const auto copy_stmt = dynamic_cast<Parser::CopyTableStmt*>(ddl);
-          if (g_cluster && copy_stmt && !leaf_aggregator_.leafCount()) {
-            // Sharded table rows need to be routed to the leaf by an aggregator.
-            check_table_not_sharded(cat, copy_stmt->get_table());
-          }
-          if (copy_stmt && leaf_aggregator_.leafCount() > 0) {
-            _return.execution_time_ms +=
-                measure<>::execution([&]() { execute_distributed_copy_statement(copy_stmt, session_info); });
-          } else {
-            _return.execution_time_ms += measure<>::execution([&]() { ddl->execute(session_info); });
-          }
-          // check if it was a copy statement gather response message
-          if (copy_stmt) {
-            convert_result(_return, ResultSet(*copy_stmt->return_message.get()), true);
-          }
-        } else {
-          const Parser::DMLStmt* dml;
-          if (explain_stmt != nullptr)
-            dml = explain_stmt->get_stmt();
-          else
-            dml = dynamic_cast<Parser::DMLStmt*>(stmt.get());
-          Analyzer::Query query;
-          dml->analyze(cat, query);
-          Planner::Optimizer optimizer(query, cat);
-          root_plan = optimizer.optimize();
-          CHECK(root_plan);
-          std::unique_ptr<Planner::RootPlan> plan_ptr(root_plan);  // make sure it's deleted
-          if (g_cluster && plan_ptr->get_stmt_type() == kINSERT) {
-            check_table_not_sharded(session_info.get_catalog(), plan_ptr->get_result_table_id());
-          }
-          if (explain_stmt != nullptr) {
-            root_plan->set_plan_dest(Planner::RootPlan::Dest::kEXPLAIN);
-          }
-          execute_root_plan(_return, root_plan, column_format, session_info, executor_device_type, first_n);
-        }
-      } catch (std::exception& e) {
-        TMapDException ex;
-        ex.error_msg = std::string("Exception: ") + e.what();
-        LOG(ERROR) << ex.error_msg;
-        throw ex;
+      auto select_stmt = dynamic_cast<Parser::SelectStmt*>(stmt.get());
+      if (!select_stmt) {
+        check_read_only("Non-SELECT statements");
       }
+      Parser::DDLStmt* ddl = dynamic_cast<Parser::DDLStmt*>(stmt.get());
+      Parser::ExplainStmt* explain_stmt = nullptr;
+      if (ddl != nullptr)
+        explain_stmt = dynamic_cast<Parser::ExplainStmt*>(ddl);
+      if (ddl != nullptr && explain_stmt == nullptr) {
+        const auto copy_stmt = dynamic_cast<Parser::CopyTableStmt*>(ddl);
+        if (g_cluster && copy_stmt && !leaf_aggregator_.leafCount()) {
+          // Sharded table rows need to be routed to the leaf by an aggregator.
+          check_table_not_sharded(cat, copy_stmt->get_table());
+        }
+        if (copy_stmt && leaf_aggregator_.leafCount() > 0) {
+          _return.execution_time_ms +=
+              measure<>::execution([&]() { execute_distributed_copy_statement(copy_stmt, session_info); });
+        } else {
+          _return.execution_time_ms += measure<>::execution([&]() { ddl->execute(session_info); });
+        }
+        // check if it was a copy statement gather response message
+        if (copy_stmt) {
+          convert_result(_return, ResultSet(*copy_stmt->return_message.get()), true);
+        }
+      } else {
+        const Parser::DMLStmt* dml;
+        if (explain_stmt != nullptr)
+          dml = explain_stmt->get_stmt();
+        else
+          dml = dynamic_cast<Parser::DMLStmt*>(stmt.get());
+        Analyzer::Query query;
+        dml->analyze(cat, query);
+        Planner::Optimizer optimizer(query, cat);
+        root_plan = optimizer.optimize();
+        CHECK(root_plan);
+        std::unique_ptr<Planner::RootPlan> plan_ptr(root_plan);  // make sure it's deleted
+        if (g_cluster && plan_ptr->get_stmt_type() == kINSERT) {
+          check_table_not_sharded(session_info.get_catalog(), plan_ptr->get_result_table_id());
+        }
+        if (explain_stmt != nullptr) {
+          root_plan->set_plan_dest(Planner::RootPlan::Dest::kEXPLAIN);
+        }
+        execute_root_plan(_return, root_plan, column_format, session_info, executor_device_type, first_n);
+      }
+    } catch (std::exception& e) {
+      THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
     }
-  });
-  LOG(INFO) << "Total: " << _return.total_time_ms << " (ms), Execution: " << _return.execution_time_ms << " (ms)";
+  }
 }
 
 void MapDHandler::execute_distributed_copy_statement(Parser::CopyTableStmt* copy_stmt,
@@ -2394,63 +2256,55 @@ std::string MapDHandler::parse_to_ra(const std::string& query_str, const Catalog
   return "";
 }
 
-std::vector<TColumnRange> MapDHandler::column_ranges_to_thrift(const AggregatedColRange& column_ranges) {
-  std::vector<TColumnRange> thrift_column_ranges;
-  const auto& column_ranges_map = column_ranges.asMap();
-  for (const auto& kv : column_ranges_map) {
-    TColumnRange thrift_column_range;
-    thrift_column_range.col_id = kv.first.col_id;
-    thrift_column_range.table_id = kv.first.table_id;
-    const auto& expr_range = kv.second;
-    switch (expr_range.getType()) {
-      case ExpressionRangeType::Integer:
-        thrift_column_range.type = TExpressionRangeType::INTEGER;
-        thrift_column_range.int_min = expr_range.getIntMin();
-        thrift_column_range.int_max = expr_range.getIntMax();
-        thrift_column_range.bucket = expr_range.getBucket();
-        thrift_column_range.has_nulls = expr_range.hasNulls();
-        break;
-      case ExpressionRangeType::Float:
-      case ExpressionRangeType::Double:
-        thrift_column_range.type = expr_range.getType() == ExpressionRangeType::Float ? TExpressionRangeType::FLOAT
-                                                                                      : TExpressionRangeType::DOUBLE;
-        thrift_column_range.fp_min = expr_range.getFpMin();
-        thrift_column_range.fp_max = expr_range.getFpMax();
-        thrift_column_range.has_nulls = expr_range.hasNulls();
-        break;
-      case ExpressionRangeType::Invalid:
-        thrift_column_range.type = TExpressionRangeType::INVALID;
-        break;
-      default:
-        CHECK(false);
+void MapDHandler::execute_first_step(TStepResult& _return, const TPendingQuery& pending_query) {
+  if (!leaf_handler_) {
+    THROW_MAPD_EXCEPTION("Distributed support is disabled.");
+  }
+  LOG(INFO) << "execute_first_step :  id:" << pending_query.id;
+  auto time_ms = measure<>::execution([&]() {
+    try {
+      leaf_handler_->execute_first_step(_return, pending_query);
+    } catch (std::exception& e) {
+      THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
     }
-    thrift_column_ranges.push_back(thrift_column_range);
-  }
-  return thrift_column_ranges;
+  });
+  LOG(INFO) << "execute_first_step-COMPLETED " << time_ms << "ms";
 }
 
-std::vector<TDictionaryGeneration> MapDHandler::string_dictionary_generations_to_thrift(
-    const StringDictionaryGenerations& dictionary_generations) {
-  std::vector<TDictionaryGeneration> thrift_dictionary_generations;
-  for (const auto& kv : dictionary_generations.asMap()) {
-    TDictionaryGeneration thrift_dictionary_generation;
-    thrift_dictionary_generation.dict_id = kv.first;
-    thrift_dictionary_generation.entry_count = kv.second;
-    thrift_dictionary_generations.push_back(thrift_dictionary_generation);
+void MapDHandler::start_query(TPendingQuery& _return,
+                              const TSessionId& session,
+                              const std::string& query_ra,
+                              const bool just_explain) {
+  if (!leaf_handler_) {
+    THROW_MAPD_EXCEPTION("Distributed support is disabled.");
   }
-  return thrift_dictionary_generations;
+  LOG(INFO) << "start_query :" << session << ":" << just_explain;
+  auto time_ms = measure<>::execution([&]() {
+    try {
+      leaf_handler_->start_query(_return, session, query_ra, just_explain);
+    } catch (std::exception& e) {
+      THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
+    }
+  });
+  LOG(INFO) << "start_query-COMPLETED " << time_ms << "ms "
+            << "id is " << _return.id;
 }
 
-std::vector<TTableGeneration> MapDHandler::table_generations_to_thrift(const TableGenerations& table_generations) {
-  std::vector<TTableGeneration> thrift_table_generations;
-  for (const auto& kv : table_generations.asMap()) {
-    TTableGeneration table_generation;
-    table_generation.table_id = kv.first;
-    table_generation.start_rowid = kv.second.start_rowid;
-    table_generation.tuple_count = kv.second.tuple_count;
-    thrift_table_generations.push_back(table_generation);
+void MapDHandler::broadcast_serialized_rows(const std::string& serialized_rows,
+                                            const TRowDescriptor& row_desc,
+                                            const TQueryId query_id) {
+  if (!leaf_handler_) {
+    THROW_MAPD_EXCEPTION("Distributed support is disabled.");
   }
-  return thrift_table_generations;
+  LOG(INFO) << "BROADCAST-SERIALIZED-ROWS  id:" << query_id;
+  auto time_ms = measure<>::execution([&]() {
+    try {
+      leaf_handler_->broadcast_serialized_rows(serialized_rows, row_desc, query_id);
+    } catch (std::exception& e) {
+      THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
+    }
+  });
+  LOG(INFO) << "BROADCAST-SERIALIZED-ROWS COMPLETED " << time_ms << "ms";
 }
 
 void MapDHandler::insert_data(const TSessionId& session, const TInsertData& thrift_insert_data) {
@@ -2509,72 +2363,43 @@ void MapDHandler::insert_data(const TSessionId& session, const TInsertData& thri
   insert_data.numRows = thrift_insert_data.num_rows;
   const auto td = cat.getMetadataForTable(insert_data.tableId);
   try {
-    td->fragmenter->insertData(insert_data);
+    td->fragmenter->insertDataNoCheckpoint(insert_data);
   } catch (const std::exception& e) {
-    TMapDException ex;
-    ex.error_msg = std::string("Exception: ") + e.what();
-    LOG(ERROR) << ex.error_msg;
-    throw ex;
+    THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
   }
 }
 
-/*
- * There's a lot of code duplication between this endpoint and render_vega,
- * we need to do something about it ASAP. A helper to create the QueryExecCB
- * lambda looks like an option, but there might be better ones.
- */
 void MapDHandler::render_vega_raw_pixels(TRawPixelDataResult& _return,
                                          const TSessionId& session,
                                          const int64_t widget_id,
                                          const int16_t node_idx,
-                                         const std::string& vega_json) {
-  CHECK_EQ(size_t(0), leaf_aggregator_.leafCount());
+                                         const std::string& vega_json,
+                                         const std::string& nonce) {
+  if (!render_handler_) {
+    THROW_MAPD_EXCEPTION("Backend rendering is disabled.");
+  }
+
+  const auto session_info = MapDHandler::get_session(session);
+  LOG(INFO) << "RENDER_VEGA_RAW_PIXELS :" << session << ":widget_id:" << widget_id << ":node_idx:" << node_idx
+            << ":vega_json:" << vega_json << ":nonce:" << nonce;
+
   _return.total_time_ms = measure<>::execution([&]() {
-    _return.execution_time_ms = 0;
-    _return.render_time_ms = 0;
-    if (!enable_rendering_) {
-      TMapDException ex;
-      ex.error_msg = "Backend rendering is disabled.";
-      LOG(ERROR) << ex.error_msg;
-      throw ex;
+    try {
+      render_handler_->render_vega_raw_pixels(_return, session_info, widget_id, node_idx, vega_json);
+    } catch (std::exception& e) {
+      THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
     }
-
-    std::lock_guard<std::mutex> render_lock(render_mutex_);
-    mapd_shared_lock<mapd_shared_mutex> read_lock(sessions_mutex_);
-    auto session_it = get_session_it(session);
-    auto session_info_ptr = session_it->second.get();
-
-    const auto& cat = session_info_ptr->get_catalog();
-    auto executor = Executor::getExecutor(
-        cat.get_currentDB().dbId, jit_debug_ ? "/tmp" : "", jit_debug_ ? "mapdquery" : "", mapd_parameters_, nullptr);
-
   });
-  LOG(INFO) << "Total: " << _return.total_time_ms << " (ms), Total Execution: " << _return.execution_time_ms
+
+  LOG(INFO) << "RENDER_VEGA_RAW_PIXELS COMPLETED nonce: " << nonce << " Total: " << _return.total_time_ms
+            << " (ms), Total Execution: " << _return.execution_time_ms
             << " (ms), Total Render: " << _return.render_time_ms << " (ms)";
 }
 
-void MapDHandler::throw_profile_exception(const std::string& error_msg) {
-  TMapDException ex;
-  ex.error_msg = error_msg;
-  LOG(ERROR) << ex.error_msg;
-  throw ex;
-}
-
-void MapDHandler::execute_first_step(TStepResult& _return, const TPendingQuery& pending_query) {
-  CHECK(false);
-}
-
-void MapDHandler::start_query(TPendingQuery& _return,
-                              const TSessionId& session,
-                              const std::string& query_ra,
-                              const bool just_explain) {
-  CHECK(false);
-}
-
-void MapDHandler::broadcast_serialized_rows(const std::string& serialized_rows,
-                                            const TRowDescriptor& row_desc,
-                                            const TQueryId query_id) {
-  CHECK(false);
+void MapDHandler::checkpoint(const TSessionId& session, const int32_t db_id, const int32_t table_id) {
+  const auto session_info = get_session(session);
+  auto& cat = session_info.get_catalog();
+  cat.get_dataMgr().checkpoint(db_id, table_id);
 }
 
 // check and reset epoch if a request has been made
@@ -2584,11 +2409,19 @@ void MapDHandler::set_table_epoch(const TSessionId& session, const int db_id, co
     throw std::runtime_error("Only superuser can set_table_epoch");
   }
   auto& cat = session_info.get_catalog();
+
+  if (leaf_aggregator_.leafCount() > 0) {
+    return leaf_aggregator_.set_table_epochLeaf(session_info, db_id, table_id, new_epoch);
+  }
   cat.setTableEpoch(db_id, table_id, new_epoch);
 }
 
 int32_t MapDHandler::get_table_epoch(const TSessionId& session, const int32_t db_id, const int32_t table_id) {
   const auto session_info = get_session(session);
   auto& cat = session_info.get_catalog();
+
+  if (leaf_aggregator_.leafCount() > 0) {
+    return leaf_aggregator_.get_table_epochLeaf(session_info, db_id, table_id);
+  }
   return cat.getTableEpoch(db_id, table_id);
 }

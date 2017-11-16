@@ -17,7 +17,7 @@
 #ifndef STRINGDICTIONARY_STRINGDICTIONARY_H
 #define STRINGDICTIONARY_STRINGDICTIONARY_H
 
-#include "../LeafHostInfo.h"
+#include "LeafHostInfo.h"
 #include "../Shared/mapd_shared_mutex.h"
 
 #include <sys/mman.h>

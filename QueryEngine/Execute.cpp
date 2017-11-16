@@ -706,10 +706,9 @@ std::unordered_set<int> get_available_gpus(const Catalog_Namespace::Catalog& cat
 }
 
 size_t get_context_count(const ExecutorDeviceType device_type, const size_t cpu_count, const size_t gpu_count) {
-  return device_type == ExecutorDeviceType::GPU
-             ? gpu_count
-             : device_type == ExecutorDeviceType::Hybrid ? std::max(static_cast<size_t>(cpu_count), gpu_count)
-                                                         : static_cast<size_t>(cpu_count);
+  return device_type == ExecutorDeviceType::GPU ? gpu_count : device_type == ExecutorDeviceType::Hybrid
+                                                                  ? std::max(static_cast<size_t>(cpu_count), gpu_count)
+                                                                  : static_cast<size_t>(cpu_count);
 }
 
 std::string get_table_name(const InputDescriptor& input_desc, const Catalog_Namespace::Catalog& cat) {

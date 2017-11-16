@@ -24,7 +24,7 @@
 #include "SpeculativeTopN.h"
 #include "StreamingTopN.h"
 #include "../Shared/scope.h"
-#include "../LeafAggregator.h"
+#include "Distributed/AggregatedResult.h"
 
 #include <ctime>
 

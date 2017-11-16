@@ -224,6 +224,12 @@ add_subdirectory(ThirdParty/linenoise)
 include_directories(ThirdParty/sqlite3)
 add_subdirectory(ThirdParty/sqlite3)
 
+if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
+#rdkafka
+  include_directories(ThirdParty/librdkafka/src-cpp)
+  add_subdirectory(ThirdParty/librdkafka)
+endif()
+
 add_custom_command(
     DEPENDS ${CMAKE_SOURCE_DIR}/mapd.thrift
     OUTPUT
@@ -241,6 +247,31 @@ add_library(mapd_thrift
     ${CMAKE_BINARY_DIR}/gen-cpp/mapd_constants.cpp
     ${CMAKE_BINARY_DIR}/gen-cpp/mapd_types.cpp)
 target_link_libraries(mapd_thrift ${Thrift_LIBRARIES})
+
+if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
+  include_directories(Distributed/ee)
+else()
+  include_directories(Distributed/os)
+endif()
+
+if(NOT "${MAPD_EDITION_LOWER}" STREQUAL "os")
+  option(ENABLE_RENDERING "Build backend renderer" OFF)
+  if(ENABLE_RENDERING)
+    add_definitions("-DHAVE_RENDERING")
+    add_subdirectory(Rendering)
+    add_subdirectory(QueryRenderer)
+
+    include_directories(${RENDERING_INCLUDE_DIRS})
+    set(MAPD_RENDERING_LIBRARIES QueryRenderer Rendering)
+
+    set(MAPD_PACKAGE_FLAGS "${MAPD_PACKAGE_FLAGS}-render")
+    if(${RENDERER_CONTEXT_TYPE} STREQUAL "GLX")
+      set(MAPD_PACKAGE_FLAGS "${MAPD_PACKAGE_FLAGS}-glx")
+    endif()
+  endif()
+else()
+  set(ENABLE_RENDERING OFF CACHE BOOL "Build backend renderer" FORCE)
+endif()
 
 option(ENABLE_JOIN_EXEC "Enable RA vm to execute join node" ON)
 if(ENABLE_JOIN_EXEC)
@@ -281,6 +312,8 @@ endif()
 
 add_subdirectory(SqliteConnector)
 
+add_subdirectory(Distributed)
+
 add_subdirectory(StringDictionary)
 add_subdirectory(Catalog)
 add_subdirectory(Parser)
@@ -307,6 +340,10 @@ add_subdirectory(Calcite)
 set(MAPD_LIBRARIES Shared Catalog SqliteConnector Parser Analyzer Planner
   QueryEngine DataMgr Fragmenter Chunk)
 
+if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
+  list(APPEND MAPD_LIBRARIES Distributed)
+endif()
+
 if(ENABLE_FOLLY)
   list(APPEND MAPD_LIBRARIES ${Folly_LIBRARIES})
 endif()
@@ -314,6 +351,14 @@ endif()
 list(APPEND MAPD_LIBRARIES Calcite)
 
 list(APPEND MAPD_LIBRARIES ${Arrow_LIBRARIES})
+
+if(ENABLE_RENDERING)
+  list(APPEND MAPD_LIBRARIES "${MAPD_RENDERING_LIBRARIES}")
+endif()
+
+if(ENABLE_LICENSING_AWS)
+  list(APPEND MAPD_LIBRARIES AWSMarketplace)
+endif()
 
 option(ENABLE_TESTS "Build unit tests" ON)
 if (ENABLE_TESTS)
@@ -473,10 +518,12 @@ endif()
 
 # systemd
 if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
-  install(FILES systemd/mapd_sd_server.service.in systemd/mapd_sd_server@.service.in DESTINATION systemd)
+  if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
+    install(FILES systemd/mapd_sd_server.service.in systemd/mapd_sd_server@.service.in DESTINATION systemd)
+    install(FILES systemd/mapd-sds.conf.in DESTINATION systemd)
+  endif()
   install(FILES systemd/mapd_web_server.service.in systemd/mapd_web_server@.service.in DESTINATION systemd)
   install(FILES systemd/mapd.conf.in DESTINATION systemd)
-  install(FILES systemd/mapd-sds.conf.in DESTINATION systemd)
   install(PROGRAMS systemd/install_mapd_systemd.sh DESTINATION systemd)
 
   if(NOT ENABLE_RENDERING OR "${RENDERER_CONTEXT_TYPE}" STREQUAL "EGL")

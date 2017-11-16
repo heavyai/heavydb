@@ -17,7 +17,7 @@
 #ifndef STRINGDICTIONARY_STRINGDICTIONARYCLIENT_H
 #define STRINGDICTIONARY_STRINGDICTIONARYCLIENT_H
 
-#include "../LeafHostInfo.h"
+#include "LeafHostInfo.h"
 
 #include <memory>
 #include <mutex>

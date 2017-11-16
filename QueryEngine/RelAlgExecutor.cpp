@@ -1396,8 +1396,8 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(const RelAlgExecutor::WorkUnit& 
     if (!render_info->render_allocator_map_ptr) {
       // for backwards compatibility, can be removed when MapDHandler::render(...)
       // in MapDServer.cpp is removed
-      render_info->render_allocator_map_ptr.reset(new RenderAllocatorMap(
-          cat_.get_dataMgr().cudaMgr_, executor_->render_manager_, executor_->blockSize(), executor_->gridSize()));
+      render_info->render_allocator_map_ptr.reset(
+          new RenderAllocatorMap(executor_->render_manager_, executor_->blockSize(), executor_->gridSize()));
     }
   }
 
@@ -1452,6 +1452,18 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(const RelAlgExecutor::WorkUnit& 
   }
 
   result.setQueueTime(queue_time_ms);
+  if (render_info) {
+    CHECK_GE(target_exprs_owned_.size(), targets_meta.size());
+    render_info->targets.clear();
+    const auto target_start_idx = target_exprs_owned_.size() - targets_meta.size();
+    for (size_t i = 0; i < targets_meta.size(); ++i) {
+      render_info->targets.emplace_back(
+          new Analyzer::TargetEntry(targets_meta[i].get_resname(), target_exprs_owned_[target_start_idx + i], false));
+    }
+    if (render_info->isPotentialInSituRender()) {
+      return renderWorkUnit(work_unit, targets_meta, render_info, error_code, queue_time_ms);
+    }
+  }
   if (!error_code) {
     return result;
   }

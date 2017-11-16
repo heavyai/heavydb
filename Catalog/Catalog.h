@@ -47,7 +47,7 @@
 #include "Role.h"
 
 #include "../DataMgr/DataMgr.h"
-#include "../LeafHostInfo.h"
+#include "LeafHostInfo.h"
 #include "../QueryEngine/CompilationOptions.h"
 #include "../SqliteConnector/SqliteConnector.h"
 

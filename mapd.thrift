@@ -203,13 +203,6 @@ struct TPixel {
   2: i64 y
 }
 
-struct TPixelRowResult {
-  1: TPixel pixel
-  2: i64 row_id
-  3: TRowSet row_set
-  4: string nonce
-}
-
 struct TPixelTableRowResult {
   1: TPixel pixel
   2: string vega_table_name
@@ -217,16 +210,6 @@ struct TPixelTableRowResult {
   4: i64 row_id
   5: TRowSet row_set
   6: string nonce
-}
-
-struct TPixelRows {
-  1: TPixel pixel
-  2: TRowSet row_set
-}
-
-struct TPixelResult {
-  1: list<TPixelRows> pixel_rows
-  2: string nonce
 }
 
 struct TRenderResult {
@@ -349,6 +332,7 @@ struct TRawRenderPassDataResult {
   3: binary row_ids_A
   4: binary row_ids_B
   5: binary table_ids
+  6: binary accum_data
 }
 
 typedef map<i32, TRawRenderPassDataResult> TRenderPassMap
@@ -382,8 +366,8 @@ service MapD {
   void clear_cpu_memory(1: TSessionId session) throws (1: TMapDException e)
   void clear_gpu_memory(1: TSessionId session) throws (1: TMapDException e)
   void set_table_epoch (1: TSessionId session 2: i32 db_id 3: i32 table_id 4: i32 new_epoch) throws (1: TMapDException e)
-  i32 get_table_epoch (1: TSessionId session 2: i32 db_id 3: i32 table_id)
-# query, render
+  i32 get_table_epoch (1: TSessionId session 2: i32 db_id 3: i32 table_id);
+  # query, render
   TQueryResult sql_execute(1: TSessionId session, 2: string query 3: bool column_format, 4: string nonce, 5: i32 first_n = -1, 6: i32 at_most_n = -1) throws (1: TMapDException e)
   TDataFrame sql_execute_df(1: TSessionId session, 2: string query 3: TDeviceType device_type 4: i32 device_id = 0 5: i32 first_n = -1) throws (1: TMapDException e)
   TDataFrame sql_execute_gdf(1: TSessionId session, 2: string query 3: i32 device_id = 0, 4: i32 first_n = -1) throws (1: TMapDException e)
@@ -413,12 +397,10 @@ service MapD {
   TPendingQuery start_query(1: TSessionId session, 2: string query_ra, 3: bool just_explain) throws (1: TMapDException e)
   TStepResult execute_first_step(1: TPendingQuery pending_query) throws (1: TMapDException e)
   void broadcast_serialized_rows(1: string serialized_rows, 2: TRowDescriptor row_desc, 3: TQueryId query_id) throws (1: TMapDException e)
-  TRawPixelDataResult render_vega_raw_pixels(1: TSessionId session, 2: i64 widget_id, 3: i16 node_idx 4: string vega_json) throws (1: TMapDException e)
+  TRawPixelDataResult render_vega_raw_pixels(1: TSessionId session, 2: i64 widget_id, 3: i16 node_idx 4: string vega_json 5: string nonce) throws (1: TMapDException e)
   void insert_data(1: TSessionId session, 2: TInsertData insert_data) throws (1: TMapDException e)
+  void checkpoint(1: TSessionId session, 2: i32 db_id, 3: i32 table_id) throws (1: TMapDException e)
   # deprecated
   TTableDescriptor get_table_descriptor(1: TSessionId session, 2: string table_name) throws (1: TMapDException e)
   TRowDescriptor get_row_descriptor(1: TSessionId session, 2: string table_name) throws (1: TMapDException e)
-  TRenderResult render(1: TSessionId session, 2: string query, 3: string render_type, 4: string nonce) throws (1: TMapDException e)
-  TPixelResult get_rows_for_pixels(1: TSessionId session, 2: i64 widget_id, 3: list<TPixel> pixels, 4: string table_name, 5: list<string> col_names, 6: bool column_format, 7: string nonce) throws (1: TMapDException e)
-  TPixelRowResult get_row_for_pixel(1: TSessionId session, 2: i64 widget_id, 3: TPixel pixel, 4: string table_name, 5: list<string> col_names, 6: bool column_format, 7: i32 pixelRadius, 8: string nonce) throws (1: TMapDException e)
 }

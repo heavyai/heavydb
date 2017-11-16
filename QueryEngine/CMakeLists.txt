@@ -57,7 +57,6 @@ set(query_engine_source_files
     RelAlgExecutor.cpp
     RelAlgTranslator.cpp
     RelAlgOptimizer.cpp
-    RenderInterface.cpp
     ResultRows.cpp
     ResultSet.cpp
     ResultSetIteration.cpp
@@ -80,6 +79,20 @@ set(query_engine_source_files
     Execute.h
     NvidiaKernel.h
     QueryTemplateGenerator.h)
+
+if(NOT "${MAPD_EDITION_LOWER}" STREQUAL "os")
+  list(APPEND query_engine_source_files
+    ${CMAKE_CURRENT_SOURCE_DIR}/Rendering/ee/ExecuteRenderInterface.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Rendering/ee/RelAlgExecutorRenderInterface.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Rendering/ee/RenderAllocator.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Rendering/ee/RenderInfo.cpp)
+else()
+  list(APPEND query_engine_source_files
+    ${CMAKE_CURRENT_SOURCE_DIR}/Rendering/os/ExecuteRenderInterface.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Rendering/os/RelAlgExecutorRenderInterface.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Rendering/os/RenderAllocator.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Rendering/os/RenderInfo.cpp)
+endif()
 
 set(group_by_hash_test_files
     GroupByHashTest.cpp

@@ -17,6 +17,7 @@
 #ifndef LEAFAGGREGATOR_H
 #define LEAFAGGREGATOR_H
 
+#include "../AggregatedResult.h"
 #include "LeafHostInfo.h"
 #include "gen-cpp/MapD.h"
 #include "DataMgr/MemoryLevel.h"
@@ -31,11 +32,6 @@ class SessionInfo;
 
 class ResultSet;
 
-struct AggregatedResult {
-  std::shared_ptr<ResultSet> rs;
-  const std::vector<TargetMetaInfo> targets_meta;
-};
-
 class LeafAggregator {
  public:
   LeafAggregator(const std::vector<LeafHostInfo>& leaves) { CHECK(leaves.empty()); }
@@ -45,6 +41,45 @@ class LeafAggregator {
                            const ExecutionOptions& eo) {
     CHECK(false);
     return {nullptr, {}};
+  }
+
+  std::vector<TQueryResult> forwardQueryToLeaves(const Catalog_Namespace::SessionInfo& parent_session_info,
+                                                 const std::string& query_str) {
+    CHECK(false);
+    return {};
+  }
+
+  TQueryResult forwardQueryToLeaf(const Catalog_Namespace::SessionInfo& parent_session_info,
+                                  const std::string& query_str,
+                                  const size_t leaf_idx) {
+    CHECK(false);
+    return {};
+  }
+
+  void insertDataToLeaf(const Catalog_Namespace::SessionInfo& parent_session_info,
+                        const size_t leaf_idx,
+                        const TInsertData& thrift_insert_data) {
+    CHECK(false);
+  }
+
+  void checkpointLeaf(const Catalog_Namespace::SessionInfo& parent_session_info,
+                      const int32_t db_id,
+                      const int32_t table_id) {
+    CHECK(false);
+  }
+
+  int32_t get_table_epochLeaf(const Catalog_Namespace::SessionInfo& parent_session_info,
+                              const int32_t db_id,
+                              const int32_t table_id) {
+    CHECK(false);
+    return 0;
+  }
+
+  void set_table_epochLeaf(const Catalog_Namespace::SessionInfo& parent_session_info,
+                           const int32_t db_id,
+                           const int32_t table_id,
+                           const int32_t new_epoch) {
+    CHECK(false);
   }
 
   void connect(const Catalog_Namespace::SessionInfo& parent_session_info,
@@ -57,6 +92,10 @@ class LeafAggregator {
   void disconnect(const TSessionId session) { CHECK(false); }
 
   void interrupt(const TSessionId session) { CHECK(false); }
+
+  void set_execution_mode(const TSessionId session, const TExecuteMode::type mode) { CHECK(false); }
+
+  size_t leafCount() const { return 0; }
 
   std::vector<TServerStatus> getLeafStatus(TSessionId session) {
     CHECK(false);
@@ -72,10 +111,6 @@ class LeafAggregator {
     CHECK(false);
     return {};
   }
-
-  size_t leafCount() const { return 0; }
-
-  void set_execution_mode(const TSessionId session, const TExecuteMode::type mode) { CHECK(false); }
 };
 
 #endif  // LEAFAGGREGATOR_H

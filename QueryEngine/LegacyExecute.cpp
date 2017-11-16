@@ -583,8 +583,7 @@ std::shared_ptr<ResultSet> Executor::execute(const Planner::RootPlan* root_plan,
         if (!render_info->render_allocator_map_ptr) {
           // make backwards compatible, can be removed when MapDHandler::render(...)
           // in MapDServer.cpp is removed
-          render_info->render_allocator_map_ptr.reset(
-              new RenderAllocatorMap(catalog_->get_dataMgr().cudaMgr_, render_manager_, blockSize(), gridSize()));
+          render_info->render_allocator_map_ptr.reset(new RenderAllocatorMap(render_manager_, blockSize(), gridSize()));
         }
       }
       auto rows = executeSelectPlan(root_plan->get_plan(),
@@ -601,6 +600,26 @@ std::shared_ptr<ResultSet> Executor::execute(const Planner::RootPlan* root_plan,
                                     root_plan->get_plan_dest() == Planner::RootPlan::kEXPLAIN,
                                     allow_loop_joins,
                                     render_info);
+      if (error_code == ERR_OUT_OF_RENDER_MEM) {
+        CHECK_EQ(Planner::RootPlan::kRENDER, root_plan->get_plan_dest());
+        throw std::runtime_error("Not enough OpenGL memory to render the query results");
+      }
+
+      if (render_info && render_info->hasInSituData() && render_info->render_allocator_map_ptr) {
+        if (error_code == ERR_OUT_OF_GPU_MEM) {
+          throw std::runtime_error("Not enough GPU memory to execute the query");
+        }
+        if (error_code && !root_plan->get_limit()) {
+          CHECK_LT(error_code, 0);
+          throw std::runtime_error("Ran out of slots in the output buffer");
+        }
+        auto clock_begin = timer_start();
+        render_info->targets = root_plan->get_plan()->get_targetlist();
+        auto rrows = renderRows(render_info);
+        int64_t render_time_ms = timer_stop(clock_begin);
+        return std::make_shared<ResultSet>(rrows, queue_time_ms, render_time_ms, row_set_mem_owner_);
+      }
+
       if (error_code == ERR_OVERFLOW_OR_UNDERFLOW) {
         throw std::runtime_error("Overflow or underflow");
       }

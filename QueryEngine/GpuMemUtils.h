@@ -19,17 +19,7 @@
 
 #include "CompilationOptions.h"
 #include "ThrustAllocator.h"
-
-namespace QueryRenderer {
-typedef void QueryRenderManager;
-typedef void QueryDataLayout;
-}  // namespace QueryRenderer
-
-#ifdef HAVE_CUDA
-#include <cuda.h>
-#else
-#include "../Shared/nocuda.h"
-#endif  // HAVE_CUDA
+#include "Rendering/RenderAllocator.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -49,66 +39,6 @@ class AbstractBuffer;
 class DataMgr;
 
 }  // Data_Namespace
-
-class OutOfRenderMemory : public std::runtime_error {
- public:
-  OutOfRenderMemory() : std::runtime_error("OutOfMemory") {}
-};
-
-class RenderAllocator {
- public:
-  RenderAllocator(int8_t* preallocated_ptr,
-                  const size_t preallocated_size,
-                  const unsigned block_size_x,
-                  const unsigned grid_size_x);
-
-  CUdeviceptr alloc(const size_t bytes) {
-    auto ptr = preallocated_ptr_ + crt_allocated_bytes_;
-    crt_allocated_bytes_ += bytes;
-    if (crt_allocated_bytes_ <= preallocated_size_) {
-      return reinterpret_cast<CUdeviceptr>(ptr);
-    }
-
-    // reset the current allocated bytes for a proper
-    // error resolution
-    crt_allocated_bytes_ = 0;
-    throw OutOfRenderMemory();
-  }
-
-  void markChunkComplete() { crt_chunk_offset_bytes_ = crt_allocated_bytes_; }
-
-  size_t getCurrentChunkOffset() const { return crt_chunk_offset_bytes_; }
-  size_t getCurrentChunkSize() const { return crt_allocated_bytes_ - crt_chunk_offset_bytes_; }
-  size_t getAllocatedSize() const { return crt_allocated_bytes_; }
-
-  int8_t* getBasePtr() const { return preallocated_ptr_; }
-
- private:
-  int8_t* preallocated_ptr_;
-  const size_t preallocated_size_;
-  size_t crt_chunk_offset_bytes_;
-  size_t crt_allocated_bytes_;
-};
-
-class RenderAllocatorMap {
- public:
-  RenderAllocatorMap(::CudaMgr_Namespace::CudaMgr* cuda_mgr,
-                     ::QueryRenderer::QueryRenderManager* render_manager,
-                     const unsigned block_size_x,
-                     const unsigned grid_size_x);
-  ~RenderAllocatorMap();
-
-  RenderAllocator* getRenderAllocator(size_t device_id);
-  RenderAllocator* operator[](size_t device_id);
-
-  void setDataLayout(const std::shared_ptr<::QueryRenderer::QueryDataLayout>& query_data_layout);
-  void prepForRendering(const std::shared_ptr<::QueryRenderer::QueryDataLayout>& query_data_layout);
-
- private:
-  ::CudaMgr_Namespace::CudaMgr* cuda_mgr_;
-  ::QueryRenderer::QueryRenderManager* render_manager_;
-  std::vector<RenderAllocator> render_allocator_map_;
-};
 
 CUdeviceptr alloc_gpu_mem(Data_Namespace::DataMgr* data_mgr,
                           const size_t num_bytes,

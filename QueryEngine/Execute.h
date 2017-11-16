@@ -75,78 +75,6 @@ extern bool g_bigint_count;
 
 class ExecutionResult;
 
-class RenderInfo {
- public:
-  std::unique_ptr<RenderAllocatorMap> render_allocator_map_ptr;
-  const std::string session_id;
-  const int render_widget_id;
-  const std::string render_vega;
-  const size_t render_small_groups_buffer_entry_count{2 * 1024 * 1024};
-  std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner;
-
-  RenderInfo(const std::string& session_id,
-             const int render_widget_id,
-             const std::string& render_vega = "",
-             const bool force_non_in_situ_data = false)
-      : session_id(session_id),
-        render_widget_id(render_widget_id),
-        render_vega(render_vega),
-        in_situ_data(force_non_in_situ_data ? InSituState::IS_NOT_IN_SITU : InSituState::UNSET) {}
-
-  bool hasInSituData() const { return in_situ_data == InSituState::IS_IN_SITU; }
-  bool isInSituDataFlagUnset() const { return in_situ_data == InSituState::UNSET; }
-  bool isPotentialInSituRender() const { return in_situ_data != InSituState::IS_NOT_IN_SITU; }
-  bool hasVega() const { return render_vega.length() > 0 && render_vega != "NONE"; }
-
-  std::shared_ptr<QueryRenderer::QueryDataLayout> getQueryVboLayout() const { return query_vbo_layout; }
-  void setQueryVboLayout(const std::shared_ptr<QueryRenderer::QueryDataLayout>& vbo_layout) {
-    CHECK(!query_vbo_layout);
-    query_vbo_layout = vbo_layout;
-  }
-  std::shared_ptr<QueryRenderer::QueryDataLayout> getQueryUboLayout() const { return query_ubo_layout; }
-  void setQueryUboLayout(const std::shared_ptr<QueryRenderer::QueryDataLayout>& ubo_layout) {
-    CHECK(!query_ubo_layout);
-    query_ubo_layout = ubo_layout;
-  }
-
-  std::vector<std::shared_ptr<Analyzer::TargetEntry>> targets;  // Info for all the column targets retrieved in
-                                                                // in a query. Used to extract column/table info
-                                                                // when rendering.
-
-  std::vector<std::string> table_names;  // the names of all the tables used in a query in hierarchical order.
-                                         // For example, for join queries, the outer join table will be the
-                                         // first item in this list
-
-  bool setInSituDataIfUnset(const bool is_in_situ_data) {
-    if (in_situ_data == InSituState::UNSET || !is_in_situ_data) {
-      in_situ_data = (is_in_situ_data ? InSituState::IS_IN_SITU : InSituState::IS_NOT_IN_SITU);
-      return true;
-    }
-    return false;
-  }
-
-  void reset() {
-    in_situ_data = InSituState::UNSET;
-    query_vbo_layout = nullptr;
-    query_ubo_layout = nullptr;
-    targets.clear();
-    table_names.clear();
-    row_set_mem_owner = nullptr;
-  }
-
- private:
-  enum class InSituState { UNSET, IS_IN_SITU, IS_NOT_IN_SITU };
-  InSituState in_situ_data;  // Should be set to true if query results are written directly
-                             // to CUDA-mapped opengl buffers for rendering. Should be set
-                             // to false otherwise, meaning results are written to CPU first,
-                             // and buffered back to GPU for rendering.
-                             // Can also be set to false to force non-in-situ rendering
-                             // Can only be set once for the lifetime of the object.
-
-  std::shared_ptr<QueryRenderer::QueryDataLayout> query_vbo_layout;
-  std::shared_ptr<QueryRenderer::QueryDataLayout> query_ubo_layout;
-};
-
 class WatchdogException : public std::runtime_error {
  public:
   WatchdogException(const std::string& cause) : std::runtime_error(cause) {}
@@ -382,6 +310,13 @@ class Executor {
                                          const rapidjson::Value& data_desc,
                                          RenderInfo* render_query_data,
                                          const bool is_projection_query = true);
+
+  std::vector<int32_t> getStringIds(const std::string& col_name,
+                                    const std::vector<std::string>& col_vals,
+                                    const ::QueryRenderer::QueryDataLayout*,
+                                    const ResultSet* results,
+                                    const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+                                    const bool warn = false) const;
 
   StringDictionaryProxy* getStringDictionaryProxy(const int dictId,
                                                   const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,

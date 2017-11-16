@@ -24,6 +24,7 @@
 #include "IteratorTable.h"
 #include "ColumnarResults.h"
 #include "RuntimeFunctions.h"
+#include "Rendering/RenderInfo.h"
 
 #include "../Planner/Planner.h"
 #include "../Shared/sqltypes.h"
@@ -37,8 +38,6 @@
 
 #include <stack>
 #include <vector>
-
-class RenderInfo;
 
 class ReductionRanOutOfSlots : public std::runtime_error {
  public:

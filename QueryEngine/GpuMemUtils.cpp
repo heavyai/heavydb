@@ -23,52 +23,6 @@
 
 #include <glog/logging.h>
 
-RenderAllocator::RenderAllocator(int8_t* preallocated_ptr,
-                                 const size_t preallocated_size,
-                                 const unsigned block_size_x,
-                                 const unsigned grid_size_x)
-    : preallocated_ptr_(preallocated_ptr),
-      preallocated_size_(preallocated_size),
-      crt_chunk_offset_bytes_(0),
-      crt_allocated_bytes_(0) {
-#ifdef HAVE_CUDA
-  init_render_buffer_on_device(
-      reinterpret_cast<int64_t*>(preallocated_ptr_), preallocated_size_ / 8, block_size_x, grid_size_x);
-#else
-  CHECK(false);
-#endif
-}
-
-RenderAllocatorMap::RenderAllocatorMap(::CudaMgr_Namespace::CudaMgr* cuda_mgr,
-                                       ::QueryRenderer::QueryRenderManager* render_manager,
-                                       const unsigned block_size_x,
-                                       const unsigned grid_size_x)
-    : cuda_mgr_(cuda_mgr), render_manager_(render_manager) {
-  CHECK(cuda_mgr_ && render_manager_);
-
-}
-
-RenderAllocatorMap::~RenderAllocatorMap() {
-}
-
-RenderAllocator* RenderAllocatorMap::getRenderAllocator(size_t device_id) {
-  return (*this)[device_id];
-}
-
-RenderAllocator* RenderAllocatorMap::operator[](size_t device_id) {
-  CHECK(device_id < render_allocator_map_.size())
-      << "Device id " << device_id << " not found in RenderAllocatorMap. Only " << render_allocator_map_.size()
-      << " devices available.";
-
-  return &render_allocator_map_[device_id];
-}
-
-void RenderAllocatorMap::setDataLayout(const std::shared_ptr<::QueryRenderer::QueryDataLayout>& query_data_layout) {
-}
-
-void RenderAllocatorMap::prepForRendering(const std::shared_ptr<::QueryRenderer::QueryDataLayout>& query_data_layout) {
-}
-
 CUdeviceptr alloc_gpu_mem(Data_Namespace::DataMgr* data_mgr,
                           const size_t num_bytes,
                           const int device_id,
