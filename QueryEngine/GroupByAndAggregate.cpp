@@ -20,21 +20,22 @@
 #include "CardinalityEstimator.h"
 #include "ExpressionRange.h"
 #include "ExpressionRewrite.h"
-#include "InPlaceSort.h"
 #include "GpuInitGroups.h"
+#include "InPlaceSort.h"
 #include "MaxwellCodegenPatch.h"
 #include "OutputBufferInitialization.h"
 
+#include "../CudaMgr/CudaMgr.h"
+#include "../Shared/checked_alloc.h"
+#include "../Utils/ChunkIter.h"
+#include "DataMgr/BufferMgr/BufferMgr.h"
 #include "Execute.h"
 #include "QueryTemplateGenerator.h"
 #include "ResultRows.h"
 #include "RuntimeFunctions.h"
 #include "SpeculativeTopN.h"
 #include "StreamingTopN.h"
-#include "../CudaMgr/CudaMgr.h"
-#include "../Shared/checked_alloc.h"
-#include "../Utils/ChunkIter.h"
-#include "DataMgr/BufferMgr/BufferMgr.h"
+#include "TopKSort.h"
 
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
 #ifdef ENABLE_COMPACTION
@@ -142,6 +143,8 @@ QueryExecutionContext::QueryExecutionContext(const RelAlgExecutionUnit& ra_exe_u
           group_by_buffer_template.get(), &init_agg_vals[0], query_mem_desc_.entry_count, query_mem_desc_.keyless_hash);
     } else {
       auto rows_ptr = group_by_buffer_template.get();
+      auto actual_entry_count = query_mem_desc_.entry_count;
+      auto warp_size = query_mem_desc_.interleavedBins(device_type_) ? executor_->warpSize() : 1;
       if (use_streaming_top_n(ra_exe_unit, query_mem_desc)) {
         const auto node_count_size = thread_count * sizeof(int64_t);
         memset(rows_ptr, 0, node_count_size);
@@ -149,13 +152,10 @@ QueryExecutionContext::QueryExecutionContext(const RelAlgExecutionUnit& ra_exe_u
         const auto rows_offset = streaming_top_n::get_rows_offset_of_heaps(n, thread_count);
         memset(rows_ptr + thread_count, -1, rows_offset - node_count_size);
         rows_ptr += rows_offset / sizeof(int64_t);
-        CHECK_EQ(query_mem_desc_.entry_count, n * thread_count);
+        actual_entry_count = n * thread_count;
+        warp_size = 1;
       }
-      initGroups(rows_ptr,
-                 &init_agg_vals[0],
-                 query_mem_desc_.entry_count,
-                 query_mem_desc_.keyless_hash,
-                 query_mem_desc_.interleavedBins(device_type_) ? executor_->warpSize() : 1);
+      initGroups(rows_ptr, &init_agg_vals[0], actual_entry_count, query_mem_desc_.keyless_hash, warp_size);
     }
   }
 
@@ -956,26 +956,30 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const RelAlgExecution
     }
 
     if (!render_allocator) {
-      if (use_speculative_top_n(ra_exe_unit, query_mem_desc_)) {
-        ResultRows::inplaceSortGpuImpl(
-            ra_exe_unit.sort_info.order_entries, query_mem_desc_, gpu_query_mem, data_mgr, device_id);
-      }
-      copy_group_by_buffers_from_gpu(data_mgr,
-                                     this,
-                                     gpu_query_mem,
-                                     ra_exe_unit,
-                                     block_size_x,
-                                     grid_size_x,
-                                     device_id,
-                                     can_sort_on_gpu && query_mem_desc_.keyless_hash);
       if (use_streaming_top_n(ra_exe_unit, query_mem_desc_)) {
         CHECK_EQ(group_by_buffers_.size(), num_buffers_);
-        const auto rows_copy = streaming_top_n::get_rows_copy_from_heaps(
-            group_by_buffers_[0],
-            query_mem_desc_.getBufferSizeBytes(ra_exe_unit, total_thread_count, ExecutorDeviceType::GPU),
-            ra_exe_unit.sort_info.offset + ra_exe_unit.sort_info.limit,
-            total_thread_count);
+        const auto rows_copy =
+            pick_top_n_rows_from_dev_heaps(data_mgr,
+                                           reinterpret_cast<int64_t*>(gpu_query_mem.group_by_buffers.second),
+                                           ra_exe_unit,
+                                           query_mem_desc_,
+                                           total_thread_count,
+                                           device_id);
+        CHECK_EQ(rows_copy.size(), static_cast<size_t>(query_mem_desc_.entry_count * query_mem_desc_.getRowSize()));
         memcpy(group_by_buffers_[0], &rows_copy[0], rows_copy.size());
+      } else {
+        if (use_speculative_top_n(ra_exe_unit, query_mem_desc_)) {
+          ResultRows::inplaceSortGpuImpl(
+              ra_exe_unit.sort_info.order_entries, query_mem_desc_, gpu_query_mem, data_mgr, device_id);
+        }
+        copy_group_by_buffers_from_gpu(data_mgr,
+                                       this,
+                                       gpu_query_mem,
+                                       ra_exe_unit,
+                                       block_size_x,
+                                       grid_size_x,
+                                       device_id,
+                                       can_sort_on_gpu && query_mem_desc_.keyless_hash);
       }
     }
   } else {
@@ -1264,6 +1268,7 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(const RelAlgExecution
         query_mem_desc_.getBufferSizeBytes(ra_exe_unit, 1, ExecutorDeviceType::CPU),
         ra_exe_unit.sort_info.offset + ra_exe_unit.sort_info.limit,
         1);
+    CHECK_EQ(rows_copy.size(), query_mem_desc_.entry_count * query_mem_desc_.getRowSize());
     memcpy(group_by_buffers_[0], &rows_copy[0], rows_copy.size());
   }
 
@@ -2165,10 +2170,9 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const bool allow_multifrag,
                          {},
                          false};
       if (use_streaming_top_n(ra_exe_unit_, query_mem_desc_)) {
-        const auto n = ra_exe_unit_.sort_info.offset + ra_exe_unit_.sort_info.limit;
-        query_mem_desc_.entry_count =
-            n * (device_type_ == ExecutorDeviceType::GPU ? executor_->blockSize() * executor_->gridSize() : 1);
+        query_mem_desc_.entry_count = ra_exe_unit_.sort_info.offset + ra_exe_unit_.sort_info.limit;
       }
+
       return;
     }
     case GroupByColRangeType::MultiColPerfectHash: {

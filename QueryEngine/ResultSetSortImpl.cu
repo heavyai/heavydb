@@ -3,34 +3,18 @@
 #include "GpuMemUtils.h"
 #include "GpuRtConstants.h"
 #include "ResultSetBufferAccessors.h"
-#include "ThrustAllocator.h"
+#include "SortUtils.cuh"
 
 #include <thrust/copy.h>
-#include <thrust/device_vector.h>
 #include <thrust/execution_policy.h>
 #include <thrust/host_vector.h>
 #include <thrust/sort.h>
 
+#define FORCE_CPU_VERSION
+#include "BufferEntryUtils.h"
+#undef FORCE_CPU_VERSION
+
 namespace {
-
-template <class K>
-bool is_empty_entry(const size_t entry_idx, const int8_t* groupby_buffer, const GroupByBufferLayoutInfo& layout);
-
-template <>
-bool is_empty_entry<int32_t>(const size_t entry_idx,
-                             const int8_t* groupby_buffer,
-                             const GroupByBufferLayoutInfo& layout) {
-  const auto key_ptr = groupby_buffer + entry_idx * layout.row_bytes;
-  return (*reinterpret_cast<const int32_t*>(key_ptr) == EMPTY_KEY_32);
-}
-
-template <>
-bool is_empty_entry<int64_t>(const size_t entry_idx,
-                             const int8_t* groupby_buffer,
-                             const GroupByBufferLayoutInfo& layout) {
-  const auto key_ptr = groupby_buffer + entry_idx * layout.row_bytes;
-  return (*reinterpret_cast<const int64_t*>(key_ptr) == EMPTY_KEY_64);
-}
 
 template <class K, class V, class I>
 std::vector<uint32_t> do_radix_sort(const ExecutorDeviceType device_type,
@@ -75,7 +59,7 @@ std::vector<uint32_t> do_radix_sort(const ExecutorDeviceType device_type,
   // in row iteration will take care of skipping the empty rows.
   for (size_t i = 0; i < host_vector_result.size(); ++i) {
     const auto entry_idx = host_vector_result[i];
-    if (is_empty_entry<K>(entry_idx, groupby_buffer, layout)) {
+    if (is_empty_entry<K>(entry_idx, groupby_buffer, layout.row_bytes)) {
       host_vector_result = thrust::host_vector<uint32_t>(dev_idx_buff_begin, dev_idx_buff_begin + dev_idx_buff_size);
       break;
     }
@@ -84,7 +68,7 @@ std::vector<uint32_t> do_radix_sort(const ExecutorDeviceType device_type,
   result.reserve(std::min(top_n, host_vector_result.size()));
   for (size_t i = 0; i < host_vector_result.size(); ++i) {
     const auto entry_idx = host_vector_result[i];
-    if (!is_empty_entry<K>(entry_idx, groupby_buffer, layout)) {
+    if (!is_empty_entry<K>(entry_idx, groupby_buffer, layout.row_bytes)) {
       result.push_back(entry_idx);
       if (result.size() >= top_n) {
         break;
@@ -149,7 +133,7 @@ std::vector<uint32_t> baseline_sort_fp(const ExecutorDeviceType device_type,
   : [](const int64_t v) -> bool { return v < 0; };
 
   for (size_t i = start; i < layout.entry_count; i += step, ++oe_col_buffer_idx) {
-    if (!is_empty_entry<K>(i, groupby_buffer, layout) &&
+    if (!is_empty_entry<K>(i, groupby_buffer, layout.row_bytes) &&
         oe_col_buffer[oe_col_buffer_idx] == null_val_bit_pattern(col_ti, float_argument_input)) {
       null_idx_buff.push_back(i);
       continue;
@@ -249,7 +233,7 @@ std::vector<uint32_t> baseline_sort_int(const ExecutorDeviceType device_type,
   notnull_oe_col_buffer.reserve(slice_entry_count);
   size_t oe_col_buffer_idx = 0;
   for (size_t i = start; i < layout.entry_count; i += step, ++oe_col_buffer_idx) {
-    if (!is_empty_entry<K>(i, groupby_buffer, layout) &&
+    if (!is_empty_entry<K>(i, groupby_buffer, layout.row_bytes) &&
         oe_col_buffer[oe_col_buffer_idx] == null_val_bit_pattern(entry_ti, false)) {
       null_idx_buff.push_back(i);
     } else {
@@ -319,14 +303,6 @@ thrust::host_vector<int64_t> collect_order_entry_column(const int8_t* groupby_bu
     }
   }
   return oe_col_buffer;
-}
-
-template <typename T>
-thrust::device_ptr<T> get_device_ptr(const size_t host_vec_size, ThrustAllocator& thrust_allocator) {
-  CHECK_GT(host_vec_size, size_t(0));
-  const auto host_vec_bytes = host_vec_size * sizeof(T);
-  T* dev_ptr = reinterpret_cast<T*>(thrust_allocator.allocateScopedBuffer(align_to_int64(host_vec_bytes)));
-  return thrust::device_ptr<T>(dev_ptr);
 }
 
 }  // namespace
