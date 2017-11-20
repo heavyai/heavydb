@@ -88,6 +88,8 @@ class CalciteServerHandler implements CalciteServer.Iface {
     MAPDLOGGER.debug("process was called User: " + user + " Catalog: " + catalog + " sql: " + sqlText);
     parser.setUser(mapDUser);
 
+    // need to trim the sql string as it seems it is not trimed prior to here
+    sqlText = sqlText.trim();
     // remove last charcter if it is a ;
     if (sqlText.charAt(sqlText.length() - 1) == ';') {
       sqlText = sqlText.substring(0, sqlText.length() - 1);
