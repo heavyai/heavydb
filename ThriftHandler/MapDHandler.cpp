@@ -342,9 +342,6 @@ void MapDHandler::disconnect(const TSessionId& session) {
 }
 
 void MapDHandler::interrupt(const TSessionId& session) {
-  if (!isUserAuthorized(get_session(session), std::string("interrupt"))) {
-    return;
-  }
   if (g_enable_dynamic_watchdog) {
     mapd_lock_guard<mapd_shared_mutex> read_lock(sessions_mutex_);
     if (leaf_aggregator_.leafCount() > 0) {
@@ -379,9 +376,6 @@ void MapDHandler::get_server_status(TServerStatus& _return, const TSessionId& se
 }
 
 void MapDHandler::get_status(std::vector<TServerStatus>& _return, const TSessionId& session) {
-  if (!isUserAuthorized(get_session(session), std::string("get_status"))) {
-    return;
-  }
   TServerStatus ret;
   ret.read_only = read_only_;
   ret.version = MAPD_RELEASE;
@@ -398,9 +392,6 @@ void MapDHandler::get_status(std::vector<TServerStatus>& _return, const TSession
 
 void MapDHandler::get_hardware_info(TClusterHardwareInfo& _return, const TSessionId& session) {
   THardwareInfo ret;
-  if (!isUserAuthorized(get_session(session), std::string("get_hardware_info"))) {
-    return;
-  }
   CudaMgr_Namespace::CudaMgr* cuda_mgr = data_mgr_->cudaMgr_;
   if (cuda_mgr) {
     ret.num_gpu_hw = cuda_mgr->getDeviceCount();
@@ -954,9 +945,6 @@ void MapDHandler::get_row_descriptor(TRowDescriptor& _return,
 
 void MapDHandler::get_frontend_view(TFrontendView& _return, const TSessionId& session, const std::string& view_name) {
   const auto session_info = get_session(session);
-  if (!isUserAuthorized(session_info, std::string("get_frontend_view"))) {
-    return;
-  }
   auto& cat = session_info.get_catalog();
   auto vd = cat.getMetadataForFrontendView(std::to_string(session_info.get_currentUser().userId), view_name);
   if (!vd) {
@@ -1072,18 +1060,12 @@ void MapDHandler::get_version(std::string& version) {
 // TODO This need to be corrected for distributed they are only hitting aggr
 void MapDHandler::clear_gpu_memory(const TSessionId& session) {
   const auto session_info = get_session(session);
-  if (!isUserAuthorized(session_info, std::string("clear_gpu_memory"))) {
-    return;
-  }
   sys_cat_->get_dataMgr().clearMemory(MemoryLevel::GPU_LEVEL);
 }
 
 // TODO This need to be corrected for distributed they are only hitting aggr
 void MapDHandler::clear_cpu_memory(const TSessionId& session) {
   const auto session_info = get_session(session);
-  if (!isUserAuthorized(get_session(session), std::string("clear_cpu_memory"))) {
-    return;
-  }
   sys_cat_->get_dataMgr().clearMemory(MemoryLevel::CPU_LEVEL);
 }
 
@@ -1095,9 +1077,6 @@ void MapDHandler::get_memory(std::vector<TNodeMemoryInfo>& _return,
                              const TSessionId& session,
                              const std::string& memory_level) {
   const auto session_info = get_session(session);
-  if (!isUserAuthorized(session_info, std::string("get_memory"))) {
-    return;
-  }
   std::vector<Data_Namespace::MemoryInfo> internal_memory;
   Data_Namespace::MemoryLevel mem_level;
   if (!memory_level.compare("gpu")) {
@@ -1172,9 +1151,6 @@ void MapDHandler::get_frontend_views(std::vector<TFrontendView>& view_names, con
 }
 
 void MapDHandler::set_execution_mode(const TSessionId& session, const TExecuteMode::type mode) {
-  if (!isUserAuthorized(get_session(session), std::string("set_execution_mode"))) {
-    return;
-  }
   mapd_lock_guard<mapd_shared_mutex> write_lock(sessions_mutex_);
   auto session_it = get_session_it(session);
   if (leaf_aggregator_.leafCount() > 0) {
@@ -1674,9 +1650,6 @@ void MapDHandler::create_frontend_view(const TSessionId& session,
                                        const std::string& view_state,
                                        const std::string& image_hash,
                                        const std::string& view_metadata) {
-  if (!isUserAuthorized(get_session(session), std::string("create_frontend_view"))) {
-    return;
-  }
   check_read_only("create_frontend_view");
   const auto session_info = get_session(session);
   auto& cat = session_info.get_catalog();
@@ -1871,9 +1844,6 @@ void MapDHandler::import_geo_table(const TSessionId& session,
                                    const TRowDescriptor& row_desc) {
   check_read_only("import_table");
   const auto session_info = get_session(session);
-  if (!isUserAuthorized(session_info, std::string("import_geo_table"))) {
-    return;
-  }
   auto& cat = session_info.get_catalog();
 
   // Assume relative paths are relative to data_path / mapd_import / <session>
@@ -2623,9 +2593,6 @@ void MapDHandler::checkpoint(const TSessionId& session, const int32_t db_id, con
 // check and reset epoch if a request has been made
 void MapDHandler::set_table_epoch(const TSessionId& session, const int db_id, const int table_id, const int new_epoch) {
   const auto session_info = get_session(session);
-  if (!isUserAuthorized(session_info, std::string("set_table_epoch"))) {
-    return;
-  }
   if (!session_info.get_currentUser().isSuper) {
     throw std::runtime_error("Only superuser can set_table_epoch");
   }
@@ -2639,9 +2606,6 @@ void MapDHandler::set_table_epoch(const TSessionId& session, const int db_id, co
 
 int32_t MapDHandler::get_table_epoch(const TSessionId& session, const int32_t db_id, const int32_t table_id) {
   const auto session_info = get_session(session);
-  if (!isUserAuthorized(session_info, std::string("get_table_epoch"))) {
-    return -1;
-  }
   auto& cat = session_info.get_catalog();
 
   if (leaf_aggregator_.leafCount() > 0) {
