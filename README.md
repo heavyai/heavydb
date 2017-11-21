@@ -65,7 +65,7 @@ The `sanity_tests` target runs the most common tests. If using Makefiles to buil
 
 ## AddressSanitizer
 
-[AddressSanitizer](https://github.com/google/sanitizers/wiki/AddressSanitizer) can be activated by setting the `ENABLE_ASAN` CMake flag in a fresh build directory. At this time CUDA must also be disabled, and Calcite must be run in standalone/server mode. In an empty build directory run CMake and compile:
+[AddressSanitizer](https://github.com/google/sanitizers/wiki/AddressSanitizer) can be activated by setting the `ENABLE_ASAN` CMake flag in a fresh build directory. At this time CUDA must also be disabled and SQL Parser [Calcite](http://calcite.apache.org/) must be run in standalone/server mode. In an empty build directory run CMake and compile:
 
     mkdir build && cd build
     cmake -DENABLE_ASAN=on -DENABLE_CUDA=off ..
