@@ -65,15 +65,11 @@ The `sanity_tests` target runs the most common tests. If using Makefiles to buil
 
 ## AddressSanitizer
 
-[AddressSanitizer](https://github.com/google/sanitizers/wiki/AddressSanitizer) can be activated by setting the `ENABLE_ASAN` CMake flag in a fresh build directory. At this time CUDA must also be disabled, and Calcite must be run in standalone/server mode. In an empty build directory run CMake and compile:
+[AddressSanitizer](https://github.com/google/sanitizers/wiki/AddressSanitizer) can be activated by setting the `ENABLE_ASAN` CMake flag in a fresh build directory. At this time CUDA must also be disabled. In an empty build directory run CMake and compile:
 
     mkdir build && cd build
     cmake -DENABLE_ASAN=on -DENABLE_CUDA=off ..
     make -j 4
-
-In a separate terminal start Calcite in standalone mode from the build directory:
-
-    java -jar bin/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar --data=Tests/tmp
 
 Finally run the tests:
 
@@ -82,15 +78,11 @@ Finally run the tests:
 
 ## ThreadSanitizer
 
-[ThreadSanitizer](https://github.com/google/sanitizers/wiki/ThreadSanitizerCppManual) can be activated by setting the `ENABLE_TSAN` CMake flag in a fresh build directory. At this time CUDA must also be disabled, and Calcite must be run in standalone/server mode. In an empty build directory run CMake and compile:
+[ThreadSanitizer](https://github.com/google/sanitizers/wiki/ThreadSanitizerCppManual) can be activated by setting the `ENABLE_TSAN` CMake flag in a fresh build directory. At this time CUDA must also be disabled. In an empty build directory run CMake and compile:
 
     mkdir build && cd build
     cmake -DENABLE_TSAN=on -DENABLE_CUDA=off ..
     make -j 4
-
-In a separate terminal start Calcite in standalone mode from the build directory:
-
-    java -jar bin/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar --data=Tests/tmp
 
 Finally run the tests:
 
