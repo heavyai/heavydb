@@ -131,7 +131,7 @@ where `HyperInteractive` is the default password. The default user `mapd` is ass
 
 You can also interact with the database using the web-based MapD Immerse frontend by visiting the web server's default port of `9092`:
 
-    http://localhost:9092
+[http://localhost:9092](http://localhost:9092)
 
 Note: usage of MapD Immerse is governed by a separate license agreement, provided under `EULA-CE.txt`. The version bundled with this project may only be used for non-commercial purposes.
 
