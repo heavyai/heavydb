@@ -565,9 +565,12 @@ void SysCatalog::revokeDBObjectPrivilegesFromAllRoles(const TableDescriptor* td)
   std::vector<bool> privs{true, true, false, true};
   dbObject.setPrivileges(privs);
   populateDBObjectKey(dbObject, catalog);
-  for (RoleMap::iterator roleIt = roleMap_.begin(); roleIt != roleMap_.end(); ++roleIt) {
-    if (roleIt->second->findDbObject(dbObject.getObjectKey())) {
-      revokeDBObjectPrivileges(roleIt->first, dbObject, catalog);
+  std::vector<std::string> roles = getAllRoles(true);
+  for (size_t i = 0; i < roles.size(); i++) {
+    Role* rl = mapd_sys_cat->getMetadataForRole(roles[i]);
+    assert(rl);
+    if (rl->findDbObject(dbObject.getObjectKey())) {
+      revokeDBObjectPrivileges(roles[i], dbObject, catalog);
     }
   }
 }
