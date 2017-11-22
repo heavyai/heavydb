@@ -22,7 +22,7 @@ MapD Core is an in-memory, column store, SQL relational database that was design
 - [Community Forum](https://community.mapd.com)
 - [MapD Homepage](https://www.mapd.com)
 - [MapD Blog](https://www.mapd.com/blog/)
-- [MapD Downloads] (https://www.mapd.com/platform/downloads/)
+- [MapD Downloads](https://www.mapd.com/platform/downloads/)
 
 # License
 
