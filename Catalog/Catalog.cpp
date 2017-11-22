@@ -559,6 +559,19 @@ void SysCatalog::revokeDBObjectPrivileges(const std::string& roleName,
   sqliteConnector_.query("END TRANSACTION");
 }
 
+void SysCatalog::revokeDBObjectPrivilegesFromAllRoles(const TableDescriptor* td) {
+  auto& catalog = static_cast<Catalog_Namespace::Catalog&>(*this);
+  DBObject dbObject(td->tableName, TableDBObjectType);
+  std::vector<bool> privs{true, true, false, true};
+  dbObject.setPrivileges(privs);
+  populateDBObjectKey(dbObject, catalog);
+  for (RoleMap::iterator roleIt = roleMap_.begin(); roleIt != roleMap_.end(); ++roleIt) {
+    if (roleIt->second->findDbObject(dbObject.getObjectKey())) {
+      revokeDBObjectPrivileges(roleIt->first, dbObject, catalog);
+    }
+  }
+}
+
 bool SysCatalog::verifyDBObjectOwnership(const UserMetadata& user,
                                          DBObject object,
                                          const Catalog_Namespace::Catalog& catalog) {
@@ -2205,6 +2218,7 @@ void Catalog::doDropTable(const TableDescriptor* td) {
   }
   sqliteConnector_.query("END TRANSACTION");
   calciteMgr_->updateMetadata(currentDB_.dbName, td->tableName);
+  static_cast<Catalog_Namespace::SysCatalog&>(*this).revokeDBObjectPrivilegesFromAllRoles(td);
 }
 
 void Catalog::renamePhysicalTable(const TableDescriptor* td, const string& newTableName) {

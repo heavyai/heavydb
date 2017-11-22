@@ -421,6 +421,7 @@ class SysCatalog : public Catalog {
   void revokeDBObjectPrivileges(const std::string& roleName,
                                 DBObject& object,
                                 const Catalog_Namespace::Catalog& catalog);
+  void revokeDBObjectPrivilegesFromAllRoles(const TableDescriptor* td);
   void getDBObjectPrivileges(const std::string& roleName, DBObject& object, const Catalog_Namespace::Catalog& catalog);
   bool verifyDBObjectOwnership(const UserMetadata& user, DBObject object, const Catalog_Namespace::Catalog& catalog);
   void createRole(const std::string& roleName, const bool& userPrivateRole = false);

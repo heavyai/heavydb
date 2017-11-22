@@ -290,10 +290,7 @@ void MapDHandler::connectImpl(TSessionId& session,
     privs.select_ = false;
     // use old style check for DB object level privs code only to check user access to the database
     if (!sys_cat_->checkPrivileges(user_meta, db_meta, privs)) {
-      TMapDException ex;
-      ex.error_msg = std::string("User ") + user + " is not authorized to access database " + dbname;
-      LOG(ERROR) << ex.error_msg;
-      throw ex;
+      THROW_MAPD_EXCEPTION(std::string("User ") + user + " is not authorized to access database " + dbname);
     }
   }
   session = INVALID_SESSION_ID;
@@ -921,10 +918,7 @@ void MapDHandler::get_table_details_impl(TTableDetails& _return,
         _return.row_desc.push_back(populateThriftColumnType(&cat, cd));
       }
     } else {
-      TMapDException ex;
-      ex.error_msg = "User has no access privileges to table " + table_name;
-      LOG(ERROR) << ex.error_msg;
-      throw ex;
+      THROW_MAPD_EXCEPTION("User has no access privileges to table " + table_name);
     }
   }
   _return.fragment_size = td->maxFragRows;
