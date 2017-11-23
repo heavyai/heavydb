@@ -38,7 +38,7 @@ add_executable(ResultSetBaselineRadixSortTest ResultSetBaselineRadixSortTest.cpp
 add_executable(UtilTest UtilTest.cpp)
 add_executable(StorageTest StorageTest.cpp PopulateTableRandom.cpp ScanTable.cpp)
 add_executable(StoragePerfTest StoragePerfTest.cpp PopulateTableRandom.cpp ScanTable.cpp)
-add_executable(ImportTest ImportTest.cpp)
+add_executable(ImportTest ImportTest.cpp QueryRunner.cpp)
 
 target_link_libraries(PlanTest gtest ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${Glog_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${LLVM_LINKER_FLAGS} ${CURSES_LIBRARIES})
 target_link_libraries(ProfileTest gtest ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${Glog_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${PROF_LIBRARIES} ${LLVM_LINKER_FLAGS} ${CURSES_LIBRARIES})
@@ -52,10 +52,11 @@ target_link_libraries(ResultSetTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(ResultSetBaselineRadixSortTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(RunQueryLoop ${EXECUTE_TEST_LIBS})
 target_link_libraries(StringDictionaryTest StringDictionary gtest ${Boost_LIBRARIES})
-target_link_libraries(ImportTest gtest ${MAPD_LIBRARIES})
+target_link_libraries(ImportTest gtest ${EXECUTE_TEST_LIBS})
 
 set(TEST_ARGS "--gtest_output=xml:../")
 add_test(PlanTest PlanTest ${TEST_ARGS})
+add_test(ImportTest ImportTest ${TEST_ARGS})
 add_test(UtilTest UtilTest ${TEST_ARGS})
 add_test(ExecuteTest ExecuteTest ${TEST_ARGS})
 add_test(ResultSetTest ResultSetTest ${TEST_ARGS})
@@ -64,7 +65,6 @@ add_test(RunQueryLoop RunQueryLoop ${TEST_ARGS})
 add_test(StringDictionaryTest StringDictionaryTest ${TEST_ARGS})
 add_test(StorageTest StorageTest ${TEST_ARGS})
 add_test(StoragePerfTest StoragePerfTest ${TEST_ARGS})
-add_test(ImportTest ImportTest ${TEST_ARGS})
 
 add_custom_target(sanity_tests
     COMMAND mkdir -p ${TEST_BASE_PATH}

@@ -33,6 +33,10 @@
 #      target_link_libraries(<YourTarget> ${LibArchive_LIBRARIES})
 #    endif()
 
+
+execute_process(COMMAND brew --prefix libarchive OUTPUT_VARIABLE PREFIX_LIBARCHIVE)
+string(STRIP "${PREFIX_LIBARCHIVE}" PREFIX_LIBARCHIVE)
+
 if(LibArchive_USE_STATIC_LIBS)
   set(_CMAKE_FIND_LIBRARY_SUFFIXES ${CMAKE_FIND_LIBRARY_SUFFIXES})
   set(CMAKE_FIND_LIBRARY_SUFFIXES .lib .a ${CMAKE_FIND_LIBRARY_SUFFIXES})
@@ -53,6 +57,7 @@ find_library(LibArchive_LIBRARY
   HINTS ENV LD_LIBRARY_PATH
   HINTS ENV DYLD_LIBRARY_PATH
   HINTS /usr/local/opt/libarchive/lib
+  HINTS ${PREFIX_LIBARCHIVE}/lib
   PATHS
   /usr/lib
   /usr/local/lib
@@ -72,6 +77,7 @@ find_library(LZMA_LIBRARY
 find_path(LibArchive_INCLUDE_DIR
   NAMES archive.h
   HINTS ${LibArchive_LIBRARY}/../include
+  HINTS ${PREFIX_LIBARCHIVE}/include
   PATHS
   /usr/include
   /usr/local/include
