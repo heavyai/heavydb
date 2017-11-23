@@ -71,6 +71,7 @@ struct CopyParams {
   int threads;
   size_t max_reject;  // maximum number of records that can be rejected before copy is failed
   TableType table_type;
+  bool plain_text = false;
 
   CopyParams()
       : delimiter(','),
@@ -553,13 +554,16 @@ struct ImportStatus {
   size_t rows_rejected;
   std::chrono::duration<size_t, std::milli> elapsed;
   bool load_truncated;
+  int thread_id;        // to recall thread_id after thread exit
+  int popen_exit_code;  // get popen exit code
   ImportStatus()
       : start(std::chrono::steady_clock::now()),
         rows_completed(0),
         rows_estimated(0),
         rows_rejected(0),
         elapsed(0),
-        load_truncated(0) {}
+        load_truncated(0),
+        popen_exit_code(0) {}
 
   ImportStatus& operator+=(const ImportStatus& is) {
     rows_completed += is.rows_completed;
@@ -679,7 +683,7 @@ class Importer {
   Importer(Loader* providedLoader, const std::string& f, const CopyParams& p);
   ~Importer();
   ImportStatus import();
-  ImportStatus importDelimited();
+  ImportStatus importDelimited(const std::string& file_path, const bool decompressed);
   ImportStatus importShapefile();
   ImportStatus importGDAL(std::map<std::string, std::string> colname_to_src);
   const CopyParams& get_copy_params() const { return copy_params; }

@@ -344,6 +344,8 @@ void DataMgr::deleteChunksWithPrefix(const ChunkKey& keyPrefix) {
 
 // only deletes the chunks at the given memory level
 void DataMgr::deleteChunksWithPrefix(const ChunkKey& keyPrefix, const MemoryLevel memLevel) {
+  if (bufferMgrs_.size() <= memLevel)
+    return;
   for (int device = 0; device < levelSizes_[memLevel]; ++device) {
     bufferMgrs_[memLevel][device]->deleteBuffersWithPrefix(keyPrefix);
   }
