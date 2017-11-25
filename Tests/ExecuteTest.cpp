@@ -3239,6 +3239,7 @@ TEST(Select, Joins_ImplicitJoins) {
       "OR (test.x = test_inner.x AND test.y = 43 AND test_inner.str = 'foo');",
       dt);
     c("SELECT COUNT(*) FROM test, test_inner WHERE test.x = test_inner.x OR test.x = test_inner.x;", dt);
+    c("SELECT bar.str FROM test, bar WHERE test.str = bar.str;", dt);
     ASSERT_EQ(
         int64_t(3),
         v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test, join_test WHERE test.rowid = join_test.rowid;", dt)));
@@ -3816,6 +3817,23 @@ int create_and_populate_tables() {
     g_sqlite_comparator.query(insert_query);
   }
   try {
+    const std::string drop_old_bar{"DROP TABLE IF EXISTS bar;"};
+    run_ddl_statement(drop_old_bar);
+    g_sqlite_comparator.query(drop_old_bar);
+    std::string columns_definition{"str text encoding dict"};
+    const auto create_bar = build_create_table_statement(columns_definition, "bar", {"", 0}, {}, 2);
+    run_ddl_statement(create_bar);
+    g_sqlite_comparator.query("CREATE TABLE bar(str text);");
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'bar'";
+    return -EEXIST;
+  }
+  {
+    const std::string insert_query{"INSERT INTO bar VALUES('bar');"};
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query);
+  }
+  try {
     const std::string drop_old_test{"DROP TABLE IF EXISTS test;"};
     run_ddl_statement(drop_old_test);
     g_sqlite_comparator.query(drop_old_test);
@@ -4152,6 +4170,9 @@ void drop_tables() {
   const std::string drop_test_inner_x{"DROP TABLE test_inner_x;"};
   run_ddl_statement(drop_test_inner_x);
   g_sqlite_comparator.query(drop_test_inner_x);
+  const std::string drop_bar{"DROP TABLE bar;"};
+  run_ddl_statement(drop_bar);
+  g_sqlite_comparator.query(drop_bar);
   const std::string drop_test_x{"DROP TABLE test_x;"};
   run_ddl_statement(drop_test_x);
   g_sqlite_comparator.query(drop_test_x);

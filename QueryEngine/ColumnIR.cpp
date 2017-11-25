@@ -124,7 +124,10 @@ std::vector<llvm::Value*> Executor::codegenColVar(const Analyzer::ColumnVar* col
     return {it->second};
   }
   const auto hash_join_lhs = hashJoinLhs(col_var);
-  if (hash_join_lhs && hash_join_lhs->get_rte_idx() == 0) {
+  // Use the already fetched left-hand side of an equi-join if the types are identical.
+  // Currently, types can only be different because of different underlying dictionaries.
+  if (hash_join_lhs && hash_join_lhs->get_rte_idx() == 0 &&
+      hash_join_lhs->get_type_info() == col_var->get_type_info()) {
     if (plan_state_->isLazyFetchColumn(col_var)) {
       plan_state_->columns_to_fetch_.insert(std::make_pair(col_var->get_table_id(), col_var->get_column_id()));
     }
