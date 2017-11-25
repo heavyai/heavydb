@@ -188,10 +188,6 @@ class CalciteServerHandler implements CalciteServer.Iface {
     MAPDLOGGER.debug("getCompletionHints was called User: " + user + " Catalog: " + catalog + " sql: " + sql);
     parser.setUser(mapDUser);
 
-    // remove last character if it is a ;
-    if (sql.charAt(sql.length() - 1) == ';') {
-      sql = sql.substring(0, sql.length() - 1);
-    }
     MapDPlanner.CompletionResult completion_result;
     try {
       completion_result = parser.getCompletionHints(sql, cursor);
