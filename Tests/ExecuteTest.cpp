@@ -3399,8 +3399,8 @@ TEST(Select, Joins_LeftOuterJoin) {
     c("SELECT a.x, COUNT(b.y) FROM test a LEFT JOIN test_inner b ON b.x = a.x AND b.str NOT LIKE 'box' GROUP BY a.x "
       "ORDER BY a.x;",
       dt);
-    c("SELECT a.x FROM test a LEFT OUTER JOIN test_inner b ON TRUE;",
-      "SELECT a.x FROM test a LEFT OUTER JOIN test_inner b ON 1;",
+    c("SELECT a.x FROM test a LEFT OUTER JOIN test_inner b ON TRUE ORDER BY a.x ASC;",
+      "SELECT a.x FROM test a LEFT OUTER JOIN test_inner b ON 1 ORDER BY a.x ASC;",
       dt);
   }
 }
