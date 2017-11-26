@@ -20,6 +20,7 @@
  * @brief Functions for Importer class
  */
 
+#include <csignal>
 #include <iostream>
 #include <fstream>
 #include <iomanip>
