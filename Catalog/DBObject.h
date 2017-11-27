@@ -29,8 +29,6 @@
 #ifndef DBOBJECT_H
 #define DBOBJECT_H
 
-#include "../Shared/types.h"
-
 #include <unordered_set>
 #include <string>
 #include <glog/logging.h>
@@ -44,48 +42,70 @@ enum DBObjectType {
   DashboardDBObjectType
 };
 
+struct DBObjectKey {
+  int32_t dbObjectType = -1;
+  int32_t dbId = -1;
+  int32_t tableId = -1;
+  int32_t columnId = -1;
+
+  static const size_t N_COLUMNS = 4;
+
+  bool operator<(const DBObjectKey& key) const {
+    int32_t ids_a[N_COLUMNS] = {dbObjectType, dbId, tableId, columnId};
+    int32_t ids_b[N_COLUMNS] = {key.dbObjectType, key.dbId, key.tableId, key.columnId};
+    return memcmp(ids_a, ids_b, N_COLUMNS * sizeof(int32_t)) < 0;
+  }
+};
+
 // Access privileges currently supported
-class AccessPrivileges {
- public:
-  bool select_;
-  bool insert_;
-  bool create_;
-  bool truncate_;
-  /* following privileges may be added on as needed basis
-  bool update_;
-  bool delete_;
-  bool trancate_;
-  bool references_;
-  bool trigger_;
-  bool connect_;
-  bool temporary_;
-  bool execute_;
-  bool usage_;
-  */
+struct AccessPrivileges {
+  bool select = false;
+  bool insert = false;
+  bool create = false;
+  bool truncate = false;
+
+  AccessPrivileges() { }
+
+  AccessPrivileges(bool select, bool insert, bool create, bool truncate) :
+    select(select),
+    insert(insert),
+    create(create),
+    truncate(truncate) { }
+
+  void reset() { select = insert = create = truncate = false; }
+  bool hasAny() const { return select || insert || create || truncate; }
+
+  static const AccessPrivileges ALL;
+  static const AccessPrivileges ALL_NO_DB;
+  static const AccessPrivileges SELECT;
+  static const AccessPrivileges INSERT;
+  static const AccessPrivileges CREATE;
+  static const AccessPrivileges TRUNCATE;
 };
 
 class DBObject {
  public:
   DBObject(const std::string& name, const DBObjectType& type);
   DBObject(const DBObject& object);
-  ~DBObject();
+  ~DBObject() {}
 
-  std::string getName() const;
-  DBObjectType getType() const;
-  DBObjectKey getObjectKey() const;
-  void setObjectKey(const DBObjectKey& objectKey);
-  std::vector<bool> getPrivileges() const;
-  void setPrivileges(const std::vector<bool> priv);
-  void resetPrivileges();
+  std::string getName() const { return objectName_; }
+  DBObjectType getType() const { return objectType_; }
+  DBObjectKey getObjectKey() const { return objectKey_; }
+  void setObjectKey(const DBObjectKey& objectKey) { objectKey_ = objectKey; }
+  const AccessPrivileges& getPrivileges() const { return objectPrivs_; }
+  void setPrivileges(const AccessPrivileges& privs) { objectPrivs_ = privs; }
+  void resetPrivileges() { objectPrivs_.reset(); }
   void copyPrivileges(const DBObject& object);
   void updatePrivileges(const DBObject& object);
-  void grantPrivileges(const DBObject& object);
+  void grantPrivileges(const DBObject& object) { updatePrivileges(object); }
   void revokePrivileges(const DBObject& object);
-  bool isUserPrivateObject() const;
-  bool hasActivePrivs() const;
-  void setUserPrivateObject();
-  int32_t getOwningUserId() const;
-  void setOwningUserId(int32_t userId);
+  bool isUserPrivateObject() const { return userPrivateObject_; }
+  void setUserPrivateObject() { userPrivateObject_ = true; }
+  int32_t getOwningUserId() const { return owningUserId_; }
+  void setOwningUserId(int32_t userId) { owningUserId_ = userId; }
+  bool privsValid() const { return privsValid_; }
+  void unvalidate() { privsValid_ = false; }
 
  private:
   std::string objectName_;
@@ -95,8 +115,6 @@ class DBObject {
   bool privsValid_;
   bool userPrivateObject_;  // false if not use private
   int32_t owningUserId_;    // 0 - if not owned by user
-
-  friend class UserRole;
 };
 
 #endif /* DBOBJECT_H */

@@ -92,38 +92,43 @@ size_t UserRole::getMembershipSize() const {
   return groupRole_.size();
 }
 
-bool UserRole::checkPrivileges(const DBObject& objectRequested) const {
-  // dbObjectRequested describes DBObject and privileges requested for that DBObject
-
-  bool rc =
-      false;  // returns false if requested privileges are not granted or no privileges granted at all to this DBObject
-  DBObjectKey objectKey = objectRequested.objectKey_;
-  while (objectKey.size() > 1) {
-    if (objectKey.size() == 2) {
-      objectKey[0] = static_cast<int32_t>(DatabaseDBObjectType);
+static bool hasEnoughPrivs(const DBObject* real, const DBObject* requested) {
+  if (real) {
+    if (!real->privsValid()) {
+      CHECK(false);
     }
-    auto dbObject = findDbObject(objectKey);
-    if (dbObject) {  // if object not found return false, i.e. no privileges for this object granted at all
-      // User has access privileges to the object decsribed by dbObjectRequested objectId and type. Check to make sure
-      // they are not violated.
-      if (!dbObject->privsValid_) {
-        CHECK(false);
-      }
-      rc = true;
-      if ((objectRequested.objectPrivs_.select_ && !dbObject->objectPrivs_.select_) ||
-          (objectRequested.objectPrivs_.insert_ && !dbObject->objectPrivs_.insert_) ||
-          (objectRequested.objectPrivs_.create_ && !dbObject->objectPrivs_.create_) ||
-          (objectRequested.objectPrivs_.truncate_ && !dbObject->objectPrivs_.truncate_)) {
-        rc = false;
-      }
+    if ((requested->getPrivileges().select && !real->getPrivileges().select) ||
+        (requested->getPrivileges().insert && !real->getPrivileges().insert) ||
+        (requested->getPrivileges().create && !real->getPrivileges().create) ||
+        (requested->getPrivileges().truncate && !real->getPrivileges().truncate)) {
+      return false;
+    } else {
+      return true;
     }
-    if (rc) {
-      break;
-    }
-    objectKey.pop_back();  // check if privileges set for higher level DBObject (ex. DB for Table)
+  } else {
+    return false;
   }
+}
 
-  return rc;
+bool UserRole::checkPrivileges(const DBObject& objectRequested) const {
+  DBObjectKey objectKey = objectRequested.getObjectKey();
+  if (hasEnoughPrivs(findDbObject(objectKey), &objectRequested)) {
+    return true;
+  }
+  objectKey.columnId = -1;
+  if (hasEnoughPrivs(findDbObject(objectKey), &objectRequested)) {
+    return true;
+  }
+  objectKey.tableId = -1;
+  objectKey.dbObjectType = static_cast<int32_t>(DBObjectType::DatabaseDBObjectType);
+  if (hasEnoughPrivs(findDbObject(objectKey), &objectRequested)) {
+    return true;
+  }
+  objectKey.dbId = -1;
+  if (hasEnoughPrivs(findDbObject(objectKey), &objectRequested)) {
+    return true;
+  }
+  return false;
 }
 
 void UserRole::grantPrivileges(const DBObject& object) {
@@ -171,7 +176,7 @@ void UserRole::updatePrivileges(Role* role) {
   for (auto dbObjectIt = role->getDbObject()->begin(); dbObjectIt != role->getDbObject()->end(); ++dbObjectIt) {
     auto dbObject = findDbObject(dbObjectIt->first);
     if (dbObject) {  // found
-      if (dbObject->privsValid_) {
+      if (dbObject->privsValid()) {
         dbObject->updatePrivileges(*(dbObjectIt->second));
       } else {
         dbObject->copyPrivileges(*(dbObjectIt->second));
@@ -184,7 +189,7 @@ void UserRole::updatePrivileges(Role* role) {
 
 void UserRole::updatePrivileges() {
   for (auto dbObjectIt = dbObjectMap_.begin(); dbObjectIt != dbObjectMap_.end(); ++dbObjectIt) {
-    dbObjectIt->second->privsValid_ = false;
+    dbObjectIt->second->unvalidate();
   }
   for (auto roleIt = groupRole_.begin(); roleIt != groupRole_.end(); ++roleIt) {
     if ((*roleIt)->getDbObject()->size() > 0) {
@@ -192,7 +197,7 @@ void UserRole::updatePrivileges() {
     }
   }
   for (auto dbObjectIt = dbObjectMap_.begin(); dbObjectIt != dbObjectMap_.end(); ++dbObjectIt) {
-    if (dbObjectIt->second->privsValid_ == false) {
+    if (dbObjectIt->second->privsValid() == false) {
       dbObjectMap_.erase(dbObjectIt);
     }
   }
@@ -312,7 +317,7 @@ void GroupRole::grantPrivileges(const DBObject& object) {
 
 void GroupRole::revokePrivileges(const DBObject& object) {
   auto dbObject = findDbObject(object.getObjectKey());
-  if (!dbObject) {
+  if (!dbObject || !dbObject->getPrivileges().hasAny()) {  // not found or has none of privileges set
     throw runtime_error("Can not revoke privileges because " + roleName() + " has no privileges to " +
                         object.getName());
   }

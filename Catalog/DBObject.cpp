@@ -7,11 +7,14 @@
 
 #include "DBObject.h"
 
+const AccessPrivileges AccessPrivileges::ALL = AccessPrivileges(true, true, true, true);
+const AccessPrivileges AccessPrivileges::ALL_NO_DB = AccessPrivileges(true, true, false, true);
+const AccessPrivileges AccessPrivileges::SELECT = AccessPrivileges(true, false, false, false);
+const AccessPrivileges AccessPrivileges::INSERT = AccessPrivileges(false, true, false, false);
+const AccessPrivileges AccessPrivileges::CREATE = AccessPrivileges(false, false, true, false);
+const AccessPrivileges AccessPrivileges::TRUNCATE = AccessPrivileges(false, false, false, true);
+
 DBObject::DBObject(const std::string& name, const DBObjectType& type) : objectName_(name), objectType_(type) {
-  objectPrivs_.select_ = false;
-  objectPrivs_.insert_ = false;
-  objectPrivs_.create_ = false;
-  objectPrivs_.truncate_ = false;
   privsValid_ = false;
   userPrivateObject_ = false;
   owningUserId_ = 0;
@@ -27,119 +30,23 @@ DBObject::DBObject(const DBObject& object)
   copyPrivileges(object);
 }
 
-DBObject::~DBObject() {}
-
-std::string DBObject::getName() const {
-  return objectName_;
-}
-
-DBObjectType DBObject::getType() const {
-  return objectType_;
-}
-
-DBObjectKey DBObject::getObjectKey() const {
-  return objectKey_;
-}
-
-void DBObject::setObjectKey(const DBObjectKey& objectKey) {
-  objectKey_ = objectKey;
-}
-
-std::vector<bool> DBObject::getPrivileges() const {
-  std::vector<bool> privs;
-  privs.push_back(objectPrivs_.select_);
-  privs.push_back(objectPrivs_.insert_);
-  privs.push_back(objectPrivs_.create_);
-  privs.push_back(objectPrivs_.truncate_);
-  return privs;
-}
-
-void DBObject::setPrivileges(std::vector<bool> priv) {
-  for (size_t i = 0; i < priv.size(); i++) {
-    if (priv[i]) {
-      switch (i) {
-        case (0): {
-          objectPrivs_.select_ = true;
-          break;
-        }
-        case (1): {
-          objectPrivs_.insert_ = true;
-          break;
-        }
-        case (2): {
-          objectPrivs_.create_ = true;
-          break;
-        }
-        case (3): {
-          objectPrivs_.truncate_ = true;
-          break;
-        }
-        default: { CHECK(false); }
-      }
-    }
-  }
-}
-
-void DBObject::resetPrivileges() {
-  objectPrivs_.select_ = objectPrivs_.insert_ = objectPrivs_.create_ = objectPrivs_.truncate_ = false;
-}
 void DBObject::copyPrivileges(const DBObject& object) {
-  // objectPrivs_ = object.objectPrivs_;
-  objectPrivs_.select_ = object.objectPrivs_.select_;
-  objectPrivs_.insert_ = object.objectPrivs_.insert_;
-  objectPrivs_.create_ = object.objectPrivs_.create_;
-  objectPrivs_.truncate_ = object.objectPrivs_.truncate_;
+  objectPrivs_ = object.objectPrivs_;
   privsValid_ = true;
 }
 
 void DBObject::updatePrivileges(const DBObject& object) {
-  objectPrivs_.select_ |= object.objectPrivs_.select_;
-  objectPrivs_.insert_ |= object.objectPrivs_.insert_;
-  objectPrivs_.create_ |= object.objectPrivs_.create_;
-  objectPrivs_.truncate_ |= object.objectPrivs_.truncate_;
+  objectPrivs_.select |= object.objectPrivs_.select;
+  objectPrivs_.insert |= object.objectPrivs_.insert;
+  objectPrivs_.create |= object.objectPrivs_.create;
+  objectPrivs_.truncate |= object.objectPrivs_.truncate;
   privsValid_ = true;
-}
-
-void DBObject::grantPrivileges(const DBObject& object) {
-  updatePrivileges(object);
 }
 
 void DBObject::revokePrivileges(const DBObject& object) {
-  if (object.objectPrivs_.select_) {
-    objectPrivs_.select_ = false;
-  }
-  if (object.objectPrivs_.insert_) {
-    objectPrivs_.insert_ = false;
-  }
-  if (object.objectPrivs_.create_) {
-    objectPrivs_.create_ = false;
-  }
-  if (object.objectPrivs_.truncate_) {
-    objectPrivs_.truncate_ = false;
-  }
+  objectPrivs_.select &= !object.objectPrivs_.select;
+  objectPrivs_.insert &= !object.objectPrivs_.insert;
+  objectPrivs_.create &= !object.objectPrivs_.create;
+  objectPrivs_.truncate &= !object.objectPrivs_.truncate;
   privsValid_ = true;
-}
-
-bool DBObject::isUserPrivateObject() const {
-  return userPrivateObject_;
-}
-
-bool DBObject::hasActivePrivs() const {
-  bool active = false;
-  if (objectPrivs_.select_ || objectPrivs_.insert_ || objectPrivs_.create_ || objectPrivs_.truncate_) {
-    active = true;
-  }
-  return active;
-}
-
-void DBObject::setUserPrivateObject() {
-  userPrivateObject_ = true;
-}
-
-int32_t DBObject::getOwningUserId() const {
-  return owningUserId_;
-}
-
-void DBObject::setOwningUserId(int32_t userId) {
-  owningUserId_ = userId;
 }

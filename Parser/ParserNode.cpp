@@ -1651,7 +1651,7 @@ std::string serialize_key_metainfo(const ShardKeyDef* shard_key_def,
 void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.get_catalog();
   // check access privileges
-  if (!session.checkDBAccessPrivileges({false, false, true})) {  // CREATE
+  if (!session.checkDBAccessPrivileges(AccessPrivileges::CREATE)) {
     throw std::runtime_error("Table " + *table + " will not be created. User has no create privileges.");
   }
 
@@ -2001,7 +2001,7 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
   auto& catalog = session.get_catalog();
 
   // check access privileges
-  if (!session.checkDBAccessPrivileges({false, false, true})) {  // CREATE
+  if (!session.checkDBAccessPrivileges(AccessPrivileges::CREATE)) {
     throw std::runtime_error("CTAS failed. Table " + table_name_ +
                              " will not be created. User has no create privileges.");
   }
@@ -2107,7 +2107,7 @@ void DropTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.get_catalog();
 
   // check access privileges
-  if (!session.checkDBAccessPrivileges({false, false, true})) {  // CREATE, which is being used for DROP as well
+  if (!session.checkDBAccessPrivileges(AccessPrivileges::CREATE)) {
     throw std::runtime_error("Table " + *table + " will not be dropped. User has no proper privileges.");
   }
 
@@ -2134,8 +2134,7 @@ void TruncateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     std::vector<DBObject> privObjects;
     DBObject dbObject(*table, TableDBObjectType);
     static_cast<Catalog_Namespace::SysCatalog&>(catalog).populateDBObjectKey(dbObject, catalog);
-    std::vector<bool> privs{false, false, false, true};  // TRUNCATE
-    dbObject.setPrivileges(privs);
+    dbObject.setPrivileges(AccessPrivileges::TRUNCATE);
     privObjects.push_back(dbObject);
     if (!(static_cast<Catalog_Namespace::SysCatalog&>(catalog))
              .checkPrivileges(session.get_currentUser(), privObjects)) {
@@ -2212,8 +2211,7 @@ void CopyTableStmt::execute(
     std::vector<DBObject> privObjects;
     DBObject dbObject(*table, TableDBObjectType);
     static_cast<Catalog_Namespace::SysCatalog&>(catalog).populateDBObjectKey(dbObject, catalog);
-    std::vector<bool> privs{false, true, false, false};  // INSERT
-    dbObject.setPrivileges(privs);
+    dbObject.setPrivileges(AccessPrivileges::INSERT);
     privObjects.push_back(dbObject);
     if (!(static_cast<Catalog_Namespace::SysCatalog&>(catalog))
              .checkPrivileges(session.get_currentUser(), privObjects)) {
@@ -2474,34 +2472,21 @@ void GrantPrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session)
   }
 
   /* set proper values of privileges & grant them to the object */
-  std::vector<bool> privs;
+  AccessPrivileges privs;
   const auto priv = boost::to_upper_copy<std::string>(get_priv());
   if (priv.compare("ALL") == 0) {
-    if (objectType == DatabaseDBObjectType) {
-      privs = {true, true, true, true};
-    } else {  // TableDBObjectType
-      privs = {true, true, false, true};
-    }
+    privs = objectType == DatabaseDBObjectType ? AccessPrivileges::ALL : AccessPrivileges::ALL_NO_DB;
+  } else if (priv.compare("SELECT") == 0) {
+    privs.select = true;
+  } else if (priv.compare("INSERT") == 0) {
+    privs.insert = true;
+  } else if ((priv.compare("CREATE") == 0) && (objectType == DatabaseDBObjectType)) {
+    privs.create = true;
+  } else if (priv.compare("TRUNCATE") == 0) {
+    privs.truncate = true;
   } else {
-    if (priv.compare("SELECT") == 0) {
-      privs = {true, false, false, false};
-    } else {
-      if (priv.compare("INSERT") == 0) {
-        privs = {false, true, false, false};
-      } else {
-        if ((priv.compare("CREATE") == 0) &&
-            (objectType == DatabaseDBObjectType)) {  // CREATE privs allowed only on DB level
-          privs = {false, false, true, false};
-        } else {
-          if (priv.compare("TRUNCATE") == 0) {
-            privs = {false, false, false, true};
-          } else {
-            throw std::runtime_error("Privileges " + get_priv() + " being granted to DB object " + get_object() +
-                                     " are not correct.");
-          }
-        }
-      }
-    }
+    throw std::runtime_error("Privileges " + get_priv() + " being granted to DB object " + get_object() +
+                             " are not correct.");
   }
   dbObject.setPrivileges(privs);
   syscat.grantDBObjectPrivileges(get_role(), dbObject, catalog);
@@ -2539,34 +2524,21 @@ void RevokePrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session
   }
 
   /* set proper values of privileges & revoke them from the object */
-  std::vector<bool> privs;
+  AccessPrivileges privs;
   const auto priv = boost::to_upper_copy<std::string>(get_priv());
   if (priv.compare("ALL") == 0) {
-    if (objectType == DatabaseDBObjectType) {
-      privs = {true, true, true, true};
-    } else {  // TableDBObjectType
-      privs = {true, true, false, true};
-    }
+    privs = objectType == DatabaseDBObjectType ? AccessPrivileges::ALL : AccessPrivileges::ALL_NO_DB;
+  } else if (priv.compare("SELECT") == 0) {
+    privs.select = true;
+  } else if (priv.compare("INSERT") == 0) {
+    privs.insert = true;
+  } else if ((priv.compare("CREATE") == 0) && (objectType == DatabaseDBObjectType)) {
+    privs.create = true;
+  } else if (priv.compare("TRUNCATE") == 0) {
+    privs.truncate = true;
   } else {
-    if (priv.compare("SELECT") == 0) {
-      privs = {true, false, false, false};
-    } else {
-      if (priv.compare("INSERT") == 0) {
-        privs = {false, true, false, false};
-      } else {
-        if ((priv.compare("CREATE") == 0) &&
-            (objectType == DatabaseDBObjectType)) {  // CREATE privs allowed only on DB level
-          privs = {false, false, true, false};
-        } else {
-          if (priv.compare("TRUNCATE") == 0) {
-            privs = {false, false, false, true};
-          } else {
-            throw std::runtime_error("Privileges " + get_priv() + " being revoked from DB object " + get_object() +
-                                     " are not correct.");
-          }
-        }
-      }
-    }
+    throw std::runtime_error("Privileges " + get_priv() + " being granted to DB object " + get_object() +
+                             " are not correct.");
   }
   dbObject.setPrivileges(privs);
   syscat.revokeDBObjectPrivileges(get_role(), dbObject, catalog);
@@ -2605,32 +2577,19 @@ void ShowPrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session) 
 
   /* get values of privileges for the object and report them */
   syscat.getDBObjectPrivileges(get_role(), dbObject, catalog);
-  std::vector<bool> privs = dbObject.getPrivileges();
+  AccessPrivileges privs = dbObject.getPrivileges();
   printf("\nPRIVILEGES ON %s FOR %s ARE SET AS FOLLOWING: ", get_object().c_str(), get_role().c_str());
-  size_t i = 0;
-  while (i < privs.size()) {
-    if (privs[i]) {
-      switch (i) {
-        case 0: {
-          printf(" SELECT");
-          break;
-        }
-        case 1: {
-          printf(" INSERT");
-          break;
-        }
-        case 2: {
-          printf(" CREATE");
-          break;
-        }
-        case 3: {
-          printf(" TRUNCATE");
-          break;
-        }
-        default: { CHECK(false); }
-      }
-    }
-    i++;
+  if (privs.select) {
+    printf(" SELECT");
+  }
+  if (privs.insert) {
+    printf(" INSERT");
+  }
+  if (privs.create) {
+    printf(" CREATE");
+  }
+  if (privs.truncate) {
+    printf(" TRUNCATE");
   }
   printf(".\n");
 }

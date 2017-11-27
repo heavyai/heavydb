@@ -41,14 +41,4 @@ inline std::string showChunk(const ChunkKey& key) {
   return tss.str();
 }
 
-typedef std::vector<int32_t> DBObjectKey;
-
-inline std::string showDBObjectKey(const DBObjectKey& key) {
-  std::ostringstream tss;
-  for (auto vecIt = key.begin(); vecIt != key.end(); ++vecIt) {
-    tss << *vecIt << ",";
-  }
-  return tss.str();
-}
-
 #endif /* _TYPES_H */

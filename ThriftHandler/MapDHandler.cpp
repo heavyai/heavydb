@@ -806,7 +806,8 @@ void MapDHandler::get_db_objects_for_role(std::vector<TDBObject>& TDBObjectsForR
         }
         default: { CHECK(false); }
       }
-      tdbObject.privs = dbObjectIt->second->getPrivileges();
+      auto privs = dbObjectIt->second->getPrivileges();
+      tdbObject.privs = {privs.select, privs.insert, privs.create, privs.truncate};
       TDBObjectsForRole.push_back(tdbObject);
     }
   } else {
@@ -1048,7 +1049,7 @@ bool MapDHandler::hasTableAccessPrivileges(const TableDescriptor* td, const TSes
   DBObject dbObject(td->tableName, TableDBObjectType);
   sys_cat.populateDBObjectKey(dbObject, cat);
   std::vector<DBObject> privObjects;
-  dbObject.setPrivileges({true, false, false, false});
+  dbObject.setPrivileges(AccessPrivileges::SELECT);
   privObjects.push_back(dbObject);
   for (size_t i = 0; i < 4; i++) {
     if (sys_cat.checkPrivileges(user_metadata, privObjects)) {
@@ -1056,25 +1057,19 @@ bool MapDHandler::hasTableAccessPrivileges(const TableDescriptor* td, const TSes
       break;
     }
     switch (i) {
-      case (0): {
-        dbObject.resetPrivileges();
-        dbObject.setPrivileges({false, true, false, false});
+      case (0):
+        dbObject.setPrivileges(AccessPrivileges::INSERT);
         break;
-      }
-      case (1): {
-        dbObject.resetPrivileges();
-        dbObject.setPrivileges({false, false, true, false});
+      case (1):
+        dbObject.setPrivileges(AccessPrivileges::CREATE);
         break;
-      }
-      case (2): {
-        dbObject.resetPrivileges();
-        dbObject.setPrivileges({false, false, false, true});
+      case (2):
+        dbObject.setPrivileges(AccessPrivileges::TRUNCATE);
         break;
-      }
-      case (3): {
+      case (3):
         break;
-      }
-      default: { CHECK(false); }
+      default:
+        CHECK(false);
     }
     privObjects.pop_back();
     privObjects.push_back(dbObject);
@@ -2032,9 +2027,8 @@ void MapDHandler::check_table_load_privileges(const TSessionId& session, const s
   auto& cat = session_info.get_catalog();
   auto& sys_cat = static_cast<Catalog_Namespace::SysCatalog&>(cat);
   DBObject dbObject(table_name, TableDBObjectType);
-  std::vector<bool> privs{false, true, false, false};  // INSERT
   sys_cat.populateDBObjectKey(dbObject, cat);
-  dbObject.setPrivileges(privs);
+  dbObject.setPrivileges(AccessPrivileges::INSERT);
   std::vector<DBObject> privObjects;
   privObjects.push_back(dbObject);
   if (cat.isAccessPrivCheckEnabled() && !sys_cat.checkPrivileges(user_metadata, privObjects)) {

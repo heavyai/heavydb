@@ -410,7 +410,7 @@ class SysCatalog : public Catalog {
   void createDefaultMapdRoles();
   void grantDefaultPrivilegesToRole(const std::string& name, bool issuper);
   std::vector<std::string> convertObjectKeyToString(const DBObject& object);
-  std::vector<int32_t> convertObjectKeyFromString(const std::vector<std::string>& key, const DBObjectType& type);
+  DBObjectKey convertObjectKeyFromString(const std::vector<std::string>& key, const DBObjectType& type);
   void populateDBObjectKey(DBObject& object, const Catalog_Namespace::Catalog& catalog);
   void createDBObject(const UserMetadata& user,
                       const std::string& objectName,
@@ -442,14 +442,14 @@ class SysCatalog : public Catalog {
                                        const int32_t userId);  // result is empty if no roles exist
   std::vector<DBObject*> getDBObjectPrivilegesForRole(
       const std::string& roleName) const;  // result is empty if no privs granted to role
-  std::vector<bool> getDBObjectPrivilegesForRole(
+  AccessPrivileges getDBObjectPrivilegesForRole(
       const std::string& roleName,  // result is empty if no privs granted to object
       const DBObjectType& objectType,
       const std::string& objectName);
   std::vector<std::string> getAllRolesForUser(const int32_t userId);  // result is empty if no roles exist
   std::vector<DBObject*> getDBObjectPrivilegesForUser(
       const std::string& userName) const;  // result is empty if no privs granted to user
-  std::vector<bool> getDBObjectPrivilegesForUser(
+  AccessPrivileges getDBObjectPrivilegesForUser(
       const std::string& userName,  // result is empty if no privs granted to object
       const DBObjectType& objectType,
       const std::string& objectName);
@@ -478,7 +478,7 @@ class SessionInfo {
   std::string get_session_id() const { return session_id; }
   time_t get_last_used_time() const { return last_used_time; }
   void update_time() { last_used_time = time(0); }
-  bool checkDBAccessPrivileges(std::vector<bool> privs) const;
+  bool checkDBAccessPrivileges(const AccessPrivileges& privs) const;
   void setSysCatalog(Catalog_Namespace::SysCatalog* sys_cat);
   Catalog_Namespace::SysCatalog* getSysCatalog() const;
   void setDatabaseCatalog(const std::string& dbName, Catalog* cat);
