@@ -730,7 +730,11 @@ void MapDHandler::get_role(std::vector<std::string>& roles,
   auto& cat = session_info_ptr->get_catalog();
   auto& sys_cat = static_cast<Catalog_Namespace::SysCatalog&>(cat);
   if (sys_cat.getRole(roleName, userPrivateRole)) {
-    roles.push_back(roleName);
+    if ((session_info_ptr->get_currentUser().isSuper) ||
+        (!session_info_ptr->get_currentUser().isSuper &&
+         sys_cat.isRoleGrantedToUser(session_info_ptr->get_currentUser().userId, roleName))) {
+      roles.push_back(roleName);
+    }
   }
   return;
 }

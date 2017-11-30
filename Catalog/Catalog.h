@@ -433,7 +433,7 @@ class SysCatalog : public Catalog {
   bool checkPrivileges(const std::string& userName, std::vector<DBObject>& privObjects);
   Role* getMetadataForRole(const std::string& roleName) const;
   Role* getMetadataForUserRole(int32_t userId) const;
-
+  bool isRoleGrantedToUser(const int32_t userId, const std::string& roleName) const;
   bool getRole(const std::string& roleName, bool userPrivateRole) const;  // true - role exists, false - otherwise
   std::vector<std::string> getAllRoles(bool userPrivateRole);             // result is empty if no roles exist
   std::vector<DBObject*> getDBObjectPrivilegesForRole(

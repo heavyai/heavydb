@@ -818,6 +818,18 @@ Role* SysCatalog::getMetadataForUserRole(int32_t userId) const {
   return userRoleIt->second;  // returns pointer to role
 }
 
+bool SysCatalog::isRoleGrantedToUser(const int32_t userId, const std::string& roleName) const {
+  bool rc = false;
+  auto user_rl = mapd_sys_cat->getMetadataForUserRole(userId);
+  if (user_rl) {
+    auto rl = mapd_sys_cat->getMetadataForRole(roleName);
+    if (rl && user_rl->hasRole(rl)) {
+      rc = true;
+    }
+  }
+  return rc;
+}
+
 bool SysCatalog::getRole(const std::string& roleName, bool userPrivateRole) const {
   bool rc = false;
   Role* rl = mapd_sys_cat->getMetadataForRole(roleName);
