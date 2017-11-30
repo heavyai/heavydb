@@ -744,7 +744,8 @@ void MapDHandler::get_all_roles(std::vector<std::string>& roles, const TSessionI
   auto session_info_ptr = session_it->second.get();
   auto& cat = session_info_ptr->get_catalog();
   auto& sys_cat = static_cast<Catalog_Namespace::SysCatalog&>(cat);
-  roles = sys_cat.getAllRoles(userPrivateRole);
+  roles = sys_cat.getAllRoles(
+      userPrivateRole, session_info_ptr->get_currentUser().isSuper, session_info_ptr->get_currentUser().userId);
 }
 
 void MapDHandler::get_db_object_privileges_for_role(std::vector<TAccessPrivileges>& TDBObjectPrivsForRole,

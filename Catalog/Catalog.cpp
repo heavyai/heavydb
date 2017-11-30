@@ -564,7 +564,7 @@ void SysCatalog::revokeDBObjectPrivilegesFromAllRoles(const TableDescriptor* td)
   DBObject dbObject(td->tableName, TableDBObjectType);
   std::vector<bool> privs{true, true, false, true};
   populateDBObjectKey(dbObject, catalog);
-  std::vector<std::string> roles = getAllRoles(true);
+  std::vector<std::string> roles = getAllRoles(true, true, 0);
   for (size_t i = 0; i < roles.size(); i++) {
     Role* rl = mapd_sys_cat->getMetadataForRole(roles[i]);
     assert(rl);
@@ -845,13 +845,15 @@ bool SysCatalog::getRole(const std::string& roleName, bool userPrivateRole) cons
   return rc;
 }
 
-std::vector<std::string> SysCatalog::getAllRoles(bool userPrivateRole) {
+std::vector<std::string> SysCatalog::getAllRoles(bool userPrivateRole, bool isSuper, const int32_t userId) {
   std::vector<std::string> roles(0);
-  std::lock_guard<std::mutex> lock(cat_mutex_);
   for (RoleMap::iterator roleIt = roleMap_.begin(); roleIt != roleMap_.end(); ++roleIt) {
     if ((!userPrivateRole && static_cast<GroupRole*>(roleIt->second)->isUserPrivateRole()) ||
         !static_cast<GroupRole*>(roleIt->second)->roleName().compare(to_upper(MAPD_DEFAULT_ROOT_USER_ROLE)) ||
         !static_cast<GroupRole*>(roleIt->second)->roleName().compare(to_upper(MAPD_DEFAULT_USER_ROLE))) {
+      continue;
+    }
+    if (!isSuper && !isRoleGrantedToUser(userId, static_cast<GroupRole*>(roleIt->second)->roleName())) {
       continue;
     }
     roles.push_back(roleIt->first);
