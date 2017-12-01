@@ -113,7 +113,7 @@ class QueryExecutionContext : boost::noncopyable {
                         std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                         const bool output_columnar,
                         const bool sort_on_gpu,
-                        RenderAllocatorMap*);
+                        RenderInfo*);
 
   ResultPtr getResult(const RelAlgExecutionUnit& ra_exe_unit,
                       const std::vector<size_t>& outer_tab_frag_ids,

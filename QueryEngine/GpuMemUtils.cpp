@@ -28,7 +28,7 @@ CUdeviceptr alloc_gpu_mem(Data_Namespace::DataMgr* data_mgr,
                           const int device_id,
                           RenderAllocator* render_allocator) {
   if (render_allocator) {
-    return render_allocator->alloc(num_bytes);
+    return reinterpret_cast<CUdeviceptr>(render_allocator->alloc(num_bytes));
   }
   auto ab = alloc_gpu_abstract_buffer(data_mgr, num_bytes, device_id);
   return reinterpret_cast<CUdeviceptr>(ab->getMemoryPtr());

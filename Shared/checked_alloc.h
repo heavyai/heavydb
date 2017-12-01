@@ -19,6 +19,7 @@
 
 #include <cstdlib>
 #include <string>
+#include <stdexcept>
 
 class OutOfHostMemory : public std::runtime_error {
  public:

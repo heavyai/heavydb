@@ -253,24 +253,23 @@ void Executor::ExecutionDispatch::runImpl(const ExecutorDeviceType chosen_device
       chosen_device_type == ExecutorDeviceType::GPU ? compilation_result_gpu_ : compilation_result_cpu_;
   CHECK(!compilation_result.query_mem_desc.usesCachedContext() || !ra_exe_unit_.scan_limit);
   std::unique_ptr<QueryExecutionContext> query_exe_context_owned;
-
   const bool do_render = render_info_ && render_info_->isPotentialInSituRender();
   try {
-    query_exe_context_owned = compilation_result.query_mem_desc.usesCachedContext()
-                                  ? nullptr
-                                  : compilation_result.query_mem_desc.getQueryExecutionContext(
-                                        ra_exe_unit_,
-                                        executor_->plan_state_->init_agg_vals_,
-                                        executor_,
-                                        chosen_device_type,
-                                        chosen_device_id,
-                                        fetch_result.col_buffers,
-                                        fetch_result.iter_buffers,
-                                        fetch_result.frag_offsets,
-                                        row_set_mem_owner_,
-                                        compilation_result.output_columnar,
-                                        compilation_result.query_mem_desc.sortOnGpu(),
-                                        do_render ? render_info_->render_allocator_map_ptr.get() : nullptr);
+    query_exe_context_owned =
+        compilation_result.query_mem_desc.usesCachedContext()
+            ? nullptr
+            : compilation_result.query_mem_desc.getQueryExecutionContext(ra_exe_unit_,
+                                                                         executor_->plan_state_->init_agg_vals_,
+                                                                         executor_,
+                                                                         chosen_device_type,
+                                                                         chosen_device_id,
+                                                                         fetch_result.col_buffers,
+                                                                         fetch_result.iter_buffers,
+                                                                         fetch_result.frag_offsets,
+                                                                         row_set_mem_owner_,
+                                                                         compilation_result.output_columnar,
+                                                                         compilation_result.query_mem_desc.sortOnGpu(),
+                                                                         do_render ? render_info_ : nullptr);
   } catch (const OutOfHostMemory& e) {
     std::lock_guard<std::mutex> lock(reduce_mutex_);
     LOG(ERROR) << e.what();
@@ -283,19 +282,19 @@ void Executor::ExecutionDispatch::runImpl(const ExecutorDeviceType chosen_device
     query_ctx_lock.reset(new std::lock_guard<std::mutex>(query_context_mutexes_[ctx_idx]));
     if (!query_contexts_[ctx_idx]) {
       try {
-        query_contexts_[ctx_idx] = compilation_result.query_mem_desc.getQueryExecutionContext(
-            ra_exe_unit_,
-            executor_->plan_state_->init_agg_vals_,
-            executor_,
-            chosen_device_type,
-            chosen_device_id,
-            fetch_result.col_buffers,
-            fetch_result.iter_buffers,
-            fetch_result.frag_offsets,
-            row_set_mem_owner_,
-            compilation_result.output_columnar,
-            compilation_result.query_mem_desc.sortOnGpu(),
-            do_render ? render_info_->render_allocator_map_ptr.get() : nullptr);
+        query_contexts_[ctx_idx] =
+            compilation_result.query_mem_desc.getQueryExecutionContext(ra_exe_unit_,
+                                                                       executor_->plan_state_->init_agg_vals_,
+                                                                       executor_,
+                                                                       chosen_device_type,
+                                                                       chosen_device_id,
+                                                                       fetch_result.col_buffers,
+                                                                       fetch_result.iter_buffers,
+                                                                       fetch_result.frag_offsets,
+                                                                       row_set_mem_owner_,
+                                                                       compilation_result.output_columnar,
+                                                                       compilation_result.query_mem_desc.sortOnGpu(),
+                                                                       do_render ? render_info_ : nullptr);
       } catch (const OutOfHostMemory& e) {
         std::lock_guard<std::mutex> lock(reduce_mutex_);
         LOG(ERROR) << e.what();
@@ -332,7 +331,7 @@ void Executor::ExecutionDispatch::runImpl(const ExecutorDeviceType chosen_device
                                                chosen_device_id,
                                                start_rowid,
                                                ra_exe_unit_.input_descs.size(),
-                                               do_render ? render_info_->render_allocator_map_ptr.get() : nullptr);
+                                               do_render ? render_info_ : nullptr);
   } else {
     err = executor_->executePlanWithGroupBy(ra_exe_unit_,
                                             compilation_result,
@@ -351,7 +350,7 @@ void Executor::ExecutionDispatch::runImpl(const ExecutorDeviceType chosen_device
                                             co_.device_type_ == ExecutorDeviceType::Hybrid,
                                             start_rowid,
                                             ra_exe_unit_.input_descs.size(),
-                                            do_render ? render_info_->render_allocator_map_ptr.get() : nullptr);
+                                            do_render ? render_info_ : nullptr);
   }
   if (auto rows_pp = boost::get<RowSetPtr>(&device_results)) {
     if (auto& rows_ptr = *rows_pp) {
@@ -410,23 +409,22 @@ int8_t Executor::ExecutionDispatch::compile(const Executor::JoinInfo& join_info,
     const CompilationOptions co_cpu{
         ExecutorDeviceType::CPU, co_.hoist_literals_, co_.opt_level_, co_.with_dynamic_watchdog_};
 
-    CHECK(!render_info_ || !render_info_->isPotentialInSituRender());
-
     try {
-      compilation_result_cpu_ = executor_->compileWorkUnit(query_infos_,
-                                                           ra_exe_unit_,
-                                                           co_cpu,
-                                                           options,
-                                                           cat_.get_dataMgr().cudaMgr_,
-                                                           true,
-                                                           row_set_mem_owner_,
-                                                           max_groups_buffer_entry_guess,
-                                                           executor_->small_groups_buffer_entry_count_,
-                                                           crt_min_byte_width,
-                                                           join_info,
-                                                           has_cardinality_estimation,
-                                                           columnarized_table_cache_,
-                                                           render_info_);
+      compilation_result_cpu_ =
+          executor_->compileWorkUnit(query_infos_,
+                                     ra_exe_unit_,
+                                     co_cpu,
+                                     options,
+                                     cat_.get_dataMgr().cudaMgr_,
+                                     render_info_ && render_info_->isPotentialInSituRender() ? false : true,
+                                     row_set_mem_owner_,
+                                     max_groups_buffer_entry_guess,
+                                     executor_->small_groups_buffer_entry_count_,
+                                     crt_min_byte_width,
+                                     join_info,
+                                     has_cardinality_estimation,
+                                     columnarized_table_cache_,
+                                     render_info_);
     } catch (const CompilationRetryNoLazyFetch&) {
       compilation_result_cpu_ = executor_->compileWorkUnit(query_infos_,
                                                            ra_exe_unit_,
@@ -513,6 +511,10 @@ void Executor::ExecutionDispatch::run(const ExecutorDeviceType chosen_device_typ
     std::lock_guard<std::mutex> lock(reduce_mutex_);
     LOG(ERROR) << e.what();
     *error_code_ = ERR_OUT_OF_CPU_MEM;
+  } catch (const OutOfRenderMemory& e) {
+    std::lock_guard<std::mutex> lock(reduce_mutex_);
+    LOG(ERROR) << e.what();
+    *error_code_ = ERR_OUT_OF_RENDER_MEM;
   } catch (const OutOfMemory& e) {
     std::lock_guard<std::mutex> lock(reduce_mutex_);
     LOG(ERROR) << e.what();

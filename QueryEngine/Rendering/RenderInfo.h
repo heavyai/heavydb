@@ -45,6 +45,8 @@ class RenderInfo {
   bool hasInSituData() const;
   bool isInSituDataFlagUnset() const;
   bool isPotentialInSituRender() const;
+  bool useCudaBuffers() const;
+  void disableCudaBuffers();
   bool hasVega() const;
 
   std::shared_ptr<QueryRenderer::QueryDataLayout> getQueryVboLayout() const;
@@ -66,6 +68,10 @@ class RenderInfo {
                              // a non-projection query.
                              // Can only be set once for the lifetime of the object.
   bool force_non_in_situ_data;
+
+  enum class RendererBufferMode { CUDA, GL };
+  RendererBufferMode
+      buffer_mode_;  // The Renderer buffer mode determines how query results are bused to the Rendering engine.
 
   std::shared_ptr<QueryRenderer::QueryDataLayout> query_vbo_layout;
   std::shared_ptr<QueryRenderer::QueryDataLayout> query_ssbo_layout;

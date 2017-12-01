@@ -902,7 +902,7 @@ class Executor {
                                  const bool was_auto_device,
                                  const uint32_t start_rowid,
                                  const uint32_t num_tables,
-                                 RenderAllocatorMap* render_allocator_map);
+                                 RenderInfo* render_info);
   int32_t executePlanWithoutGroupBy(const RelAlgExecutionUnit& ra_exe_unit,
                                     const CompilationResult&,
                                     const bool hoist_literals,
@@ -918,7 +918,7 @@ class Executor {
                                     const int device_id,
                                     const uint32_t start_rowid,
                                     const uint32_t num_tables,
-                                    RenderAllocatorMap* render_allocator_map);
+                                    RenderInfo* render_info);
   std::pair<int64_t, int32_t> reduceResults(const SQLAgg agg,
                                             const SQLTypeInfo& ti,
                                             const int64_t agg_init_val,

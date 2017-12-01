@@ -487,6 +487,11 @@ size_t ResultSet::entryCount() const {
   return permutation_.empty() ? (query_mem_desc_.entry_count + query_mem_desc_.entry_count_small) : permutation_.size();
 }
 
+size_t ResultSet::getBufferSizeBytes(const ExecutorDeviceType device_type) const {
+  CHECK(storage_);
+  return storage_->query_mem_desc_.getBufferSizeBytes(device_type);
+}
+
 int64_t lazy_decode(const ColumnLazyFetchInfo& col_lazy_fetch, const int8_t* byte_stream, const int64_t pos) {
   CHECK(col_lazy_fetch.is_lazily_fetched);
   const auto& type_info = col_lazy_fetch.type;

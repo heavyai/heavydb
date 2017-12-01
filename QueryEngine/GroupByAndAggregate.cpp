@@ -81,6 +81,18 @@ void check_total_bitmap_memory(const CountDistinctDescriptors& count_distinct_de
 
 }  // namespace
 
+int64_t* alloc_group_by_buffer(const size_t numBytes, RenderAllocatorMap* render_allocator_map) {
+  if (render_allocator_map) {
+    // NOTE(adb): If we got here, we are performing an in-situ rendering query and are not using CUDA buffers.
+    // Therefore we need to allocate result set storage using CPU memory.
+    const auto gpu_idx = 0;  // Only 1 GPU supported in CUDA-disabled rendering mode
+    auto render_allocator_ptr = render_allocator_map->getRenderAllocator(gpu_idx);
+    return reinterpret_cast<int64_t*>(render_allocator_ptr->alloc(numBytes));
+  } else {
+    return reinterpret_cast<int64_t*>(checked_malloc(numBytes));
+  }
+}
+
 QueryExecutionContext::QueryExecutionContext(const RelAlgExecutionUnit& ra_exe_unit,
                                              const QueryMemoryDescriptor& query_mem_desc,
                                              const std::vector<int64_t>& init_agg_vals,
@@ -93,7 +105,7 @@ QueryExecutionContext::QueryExecutionContext(const RelAlgExecutionUnit& ra_exe_u
                                              std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                                              const bool output_columnar,
                                              const bool sort_on_gpu,
-                                             RenderAllocatorMap* render_allocator_map)
+                                             RenderInfo* render_info)
     : query_mem_desc_(query_mem_desc),
       init_agg_vals_(executor->plan_state_->init_agg_vals_),
       executor_(executor),
@@ -122,9 +134,12 @@ QueryExecutionContext::QueryExecutionContext(const RelAlgExecutionUnit& ra_exe_u
   if (device_type_ == ExecutorDeviceType::GPU) {
     allocateCountDistinctGpuMem();
   }
+
+  auto render_allocator_map =
+      render_info && render_info->isPotentialInSituRender() ? render_info->render_allocator_map_ptr.get() : nullptr;
   if (render_allocator_map || query_mem_desc_.group_col_widths.empty()) {
     allocateCountDistinctBuffers(false);
-    if (render_allocator_map) {
+    if (render_info && render_info->useCudaBuffers()) {
       return;
     }
   }
@@ -186,11 +201,15 @@ QueryExecutionContext::QueryExecutionContext(const RelAlgExecutionUnit& ra_exe_u
   const auto actual_small_buffer_size = query_mem_desc_.getSmallBufferSizeBytes();
   const auto group_buffers_count = query_mem_desc_.group_col_widths.empty() ? 1 : num_buffers_;
   for (size_t i = 0; i < group_buffers_count; i += step) {
-    auto group_by_buffer = static_cast<int64_t*>(checked_malloc(actual_group_buffer_size + actual_small_buffer_size));
+    auto group_by_buffer =
+        alloc_group_by_buffer(actual_group_buffer_size + actual_small_buffer_size, render_allocator_map);
+
     if (!query_mem_desc_.lazyInitGroups(device_type)) {
       memcpy(group_by_buffer + index_buffer_qw, group_by_buffer_template.get(), group_buffer_size);
     }
-    row_set_mem_owner_->addGroupByBuffer(group_by_buffer);
+    if (!render_allocator_map) {
+      row_set_mem_owner_->addGroupByBuffer(group_by_buffer);
+    }
     group_by_buffers_.push_back(group_by_buffer);
     for (size_t j = 1; j < step; ++j) {
       group_by_buffers_.push_back(nullptr);
@@ -1287,7 +1306,7 @@ std::unique_ptr<QueryExecutionContext> QueryMemoryDescriptor::getQueryExecutionC
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
     const bool output_columnar,
     const bool sort_on_gpu,
-    RenderAllocatorMap* render_allocator_map) const {
+    RenderInfo* render_info) const {
   return std::unique_ptr<QueryExecutionContext>(new QueryExecutionContext(ra_exe_unit,
                                                                           *this,
                                                                           init_agg_vals,
@@ -1300,7 +1319,7 @@ std::unique_ptr<QueryExecutionContext> QueryMemoryDescriptor::getQueryExecutionC
                                                                           row_set_mem_owner,
                                                                           output_columnar,
                                                                           sort_on_gpu,
-                                                                          render_allocator_map));
+                                                                          render_info));
 }
 
 size_t QueryMemoryDescriptor::getColsSize() const {

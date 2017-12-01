@@ -21,12 +21,13 @@
 RenderAllocator::RenderAllocator(int8_t* preallocated_ptr,
                                  const size_t preallocated_size,
                                  const unsigned block_size_x,
-                                 const unsigned grid_size_x)
+                                 const unsigned grid_size_x,
+                                 const RAExecutionPolicy execution_policy)
     : preallocated_size_(preallocated_size) {
   CHECK(false);
 }
 
-CUdeviceptr RenderAllocator::alloc(const size_t bytes) {
+int8_t* RenderAllocator::alloc(const size_t bytes) {
   CHECK(false);
   return 0;
 }
@@ -55,6 +56,11 @@ int8_t* RenderAllocator::getBasePtr() const {
   return nullptr;
 }
 
+RAExecutionPolicy RenderAllocator::getExecutionPolicy() const {
+  CHECK(false);
+  return RAExecutionPolicy::Host;
+}
+
 RenderAllocatorMap::RenderAllocatorMap(::QueryRenderer::QueryRenderManager* render_manager,
                                        const unsigned block_size_x,
                                        const unsigned grid_size_x) {
@@ -71,6 +77,10 @@ RenderAllocator* RenderAllocatorMap::getRenderAllocator(size_t device_id) {
 RenderAllocator* RenderAllocatorMap::operator[](size_t device_id) {
   CHECK(false);
   return nullptr;
+}
+
+void RenderAllocatorMap::bufferData(int8_t* data, const size_t num_data_bytes, const size_t device_id) {
+  CHECK(false);
 }
 
 void RenderAllocatorMap::setDataLayout(const std::shared_ptr<::QueryRenderer::QueryDataLayout>& query_data_layout) {

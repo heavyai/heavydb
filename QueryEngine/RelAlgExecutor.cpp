@@ -153,7 +153,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const std::string& que
     // set whether the render will be done in-situ (in_situ_data = true) or
     // set whether the query results will be transferred to the host and then
     // back to the device for rendering (in_situ_data = false)
-    if (co.device_type_ != ExecutorDeviceType::GPU || ed_list.size() != 1) {
+    if (ed_list.size() != 1) {
       render_info->setInSituDataIfUnset(false);
     }
     scanForTablesAndAggsInRelAlgSeqForRender(ed_list, render_info);
@@ -1395,19 +1395,6 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(const RelAlgExecutor::WorkUnit& 
     return result;
   }
   int32_t error_code{0};
-
-  if (render_info) {
-    if (!executor_->render_manager_) {
-      throw std::runtime_error("This build doesn't support backend rendering");
-    }
-
-    if (!render_info->render_allocator_map_ptr) {
-      // for backwards compatibility, can be removed when MapDHandler::render(...)
-      // in MapDServer.cpp is removed
-      render_info->render_allocator_map_ptr.reset(
-          new RenderAllocatorMap(executor_->render_manager_, executor_->blockSize(), executor_->gridSize()));
-    }
-  }
 
   const auto table_infos = get_table_infos(work_unit.exe_unit, executor_);
 

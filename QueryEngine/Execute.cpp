@@ -894,9 +894,6 @@ ResultPtr Executor::executeWorkUnit(int32_t* error_code,
       }
     }
     const QueryMemoryDescriptor& query_mem_desc = execution_dispatch.getQueryMemoryDescriptor();
-    if (render_info && co.device_type_ == ExecutorDeviceType::CPU) {
-      CHECK(!render_info->isPotentialInSituRender());
-    }
     if (!options.just_validate) {
       dispatchFragments(dispatch,
                         execution_dispatch,
@@ -1691,10 +1688,19 @@ int32_t Executor::executePlanWithoutGroupBy(const RelAlgExecutionUnit& ra_exe_un
                                             const int device_id,
                                             const uint32_t start_rowid,
                                             const uint32_t num_tables,
-                                            RenderAllocatorMap* render_allocator_map) {
+                                            RenderInfo* render_info) {
   results = RowSetPtr(nullptr);
   if (col_buffers.empty()) {
     return 0;
+  }
+
+  RenderAllocatorMap* render_allocator_map_ptr = nullptr;
+  if (render_info) {
+    // TODO(adb): make sure that we either never get here in the CPU case, or if we do get here, we are in non-insitu
+    // mode.
+    CHECK(render_info->useCudaBuffers() || !render_info->isPotentialInSituRender())
+        << "CUDA disabled rendering in the executePlanWithoutGroupBy query path is currently unsupported.";
+    render_allocator_map_ptr = render_info->render_allocator_map_ptr.get();
   }
 
   int32_t error_code = device_type == ExecutorDeviceType::GPU ? 0 : start_rowid;
@@ -1739,7 +1745,7 @@ int32_t Executor::executePlanWithoutGroupBy(const RelAlgExecutionUnit& ra_exe_un
                                                  &error_code,
                                                  num_tables,
                                                  join_hash_table_ptrs,
-                                                 render_allocator_map);
+                                                 render_allocator_map_ptr);
       output_memory_scope.reset(new OutVecOwner(out_vec));
     } catch (const OutOfMemory&) {
       return ERR_OUT_OF_GPU_MEM;
@@ -1853,7 +1859,7 @@ int32_t Executor::executePlanWithGroupBy(const RelAlgExecutionUnit& ra_exe_unit,
                                          const bool was_auto_device,
                                          const uint32_t start_rowid,
                                          const uint32_t num_tables,
-                                         RenderAllocatorMap* render_allocator_map) {
+                                         RenderInfo* render_info) {
   if (contains_iter_expr(ra_exe_unit.target_exprs)) {
     results = IterTabPtr(nullptr);
   } else {
@@ -1873,6 +1879,12 @@ int32_t Executor::executePlanWithGroupBy(const RelAlgExecutionUnit& ra_exe_unit,
   if (g_enable_dynamic_watchdog && interrupted_) {
     return ERR_INTERRUPTED;
   }
+
+  RenderAllocatorMap* render_allocator_map_ptr = nullptr;
+  if (render_info && render_info->useCudaBuffers()) {
+    render_allocator_map_ptr = render_info->render_allocator_map_ptr.get();
+  }
+
   if (device_type == ExecutorDeviceType::CPU) {
     query_exe_context->launchCpuCode(ra_exe_unit,
                                      compilation_result.native_functions,
@@ -1906,7 +1918,7 @@ int32_t Executor::executePlanWithGroupBy(const RelAlgExecutionUnit& ra_exe_unit,
                                        &error_code,
                                        num_tables,
                                        join_hash_table_ptrs,
-                                       render_allocator_map);
+                                       render_allocator_map_ptr);
     } catch (const OutOfMemory&) {
       return ERR_OUT_OF_GPU_MEM;
     } catch (const OutOfRenderMemory&) {
@@ -1924,14 +1936,14 @@ int32_t Executor::executePlanWithGroupBy(const RelAlgExecutionUnit& ra_exe_unit,
   }
 
   if (error_code != Executor::ERR_OVERFLOW_OR_UNDERFLOW && error_code != Executor::ERR_DIV_BY_ZERO &&
-      !query_exe_context->query_mem_desc_.usesCachedContext() && !render_allocator_map) {
+      !query_exe_context->query_mem_desc_.usesCachedContext() && !render_allocator_map_ptr) {
     CHECK(!query_exe_context->query_mem_desc_.sortOnGpu());
     results = query_exe_context->getResult(ra_exe_unit, outer_tab_frag_ids, was_auto_device);
     if (auto rows = boost::get<RowSetPtr>(&results)) {
       (*rows)->holdLiterals(hoist_buf);
     }
   }
-  if (error_code && (render_allocator_map || (!scan_limit || check_rows_less_than_needed(results, scan_limit)))) {
+  if (error_code && (render_allocator_map_ptr || (!scan_limit || check_rows_less_than_needed(results, scan_limit)))) {
     return error_code;  // unlucky, not enough results and we ran out of slots
   }
 

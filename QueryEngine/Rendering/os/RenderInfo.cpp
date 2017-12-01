@@ -48,6 +48,15 @@ bool RenderInfo::isPotentialInSituRender() const {
   return false;
 }
 
+bool RenderInfo::useCudaBuffers() const {
+  CHECK(false);
+  return false;
+}
+
+void RenderInfo::disableCudaBuffers() {
+  CHECK(false);
+}
+
 bool RenderInfo::hasVega() const {
   CHECK(false);
   return false;

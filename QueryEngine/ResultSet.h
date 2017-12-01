@@ -296,6 +296,8 @@ class ResultSet {
 
   size_t entryCount() const;
 
+  size_t getBufferSizeBytes(const ExecutorDeviceType device_type) const;
+
   bool definitelyHasNoRows() const;
 
   const QueryMemoryDescriptor& getQueryMemDesc() const;

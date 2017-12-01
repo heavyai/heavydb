@@ -41,7 +41,7 @@ extern bool g_use_result_set;
 
 class Executor;
 class QueryExecutionContext;
-class RenderAllocatorMap;
+class RenderInfo;
 class RowSetMemoryOwner;
 
 enum class GroupByColRangeType {
@@ -115,7 +115,7 @@ struct QueryMemoryDescriptor {
       std::shared_ptr<RowSetMemoryOwner>,
       const bool output_columnar,
       const bool sort_on_gpu,
-      RenderAllocatorMap*) const;
+      RenderInfo*) const;
 
   size_t getBufferSizeQuad(const ExecutorDeviceType device_type) const;
   size_t getSmallBufferSizeQuad() const;

@@ -23,8 +23,10 @@
 #include "../Shared/nocuda.h"
 #endif  // HAVE_CUDA
 
+#include <cstdlib>
 #include <stdexcept>
 #include <memory>
+#include <mutex>
 #include <vector>
 
 namespace QueryRenderer {
@@ -37,14 +39,17 @@ class OutOfRenderMemory : public std::runtime_error {
   OutOfRenderMemory() : std::runtime_error("OutOfMemory") {}
 };
 
+enum class RAExecutionPolicy { Host, Device };
+
 class RenderAllocator {
  public:
   RenderAllocator(int8_t* preallocated_ptr,
                   const size_t preallocated_size,
                   const unsigned block_size_x,
-                  const unsigned grid_size_x);
+                  const unsigned grid_size_x,
+                  const RAExecutionPolicy execution_policy = RAExecutionPolicy::Device);
 
-  CUdeviceptr alloc(const size_t bytes);
+  int8_t* alloc(const size_t bytes);
 
   void markChunkComplete();
 
@@ -54,11 +59,17 @@ class RenderAllocator {
 
   int8_t* getBasePtr() const;
 
+  RAExecutionPolicy getExecutionPolicy() const;
+
  private:
   int8_t* preallocated_ptr_;
   const size_t preallocated_size_;
   size_t crt_chunk_offset_bytes_;
   size_t crt_allocated_bytes_;
+
+  std::unique_ptr<std::mutex> alloc_mtx_ptr_;
+
+  RAExecutionPolicy execution_policy_;
 };
 
 class RenderAllocatorMap {
@@ -71,11 +82,20 @@ class RenderAllocatorMap {
   RenderAllocator* getRenderAllocator(size_t device_id);
   RenderAllocator* operator[](size_t device_id);
 
+  void bufferData(int8_t* data, const size_t num_data_bytes, const size_t device_id);
   void setDataLayout(const std::shared_ptr<::QueryRenderer::QueryDataLayout>& query_data_layout);
   void prepForRendering(const std::shared_ptr<::QueryRenderer::QueryDataLayout>& query_data_layout);
 
  private:
   ::QueryRenderer::QueryRenderManager* render_manager_;
   std::vector<RenderAllocator> render_allocator_map_;
+
+  // NOTE(adb): Duplicating the CheckedAllocDeleter here since this header is included in multiple Cuda files. Including
+  // the checked_alloc header is currently problematic for nvcc.
+  struct HostBufferDeleter {
+    void operator()(void* p) { free(p); }
+  };
+  using HostBufPtrType = std::unique_ptr<int8_t, HostBufferDeleter>;
+  HostBufPtrType host_render_buffer_;
 };
 #endif  // QUERYENGINE_RENDERALLOCATOR_H
