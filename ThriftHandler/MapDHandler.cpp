@@ -27,14 +27,14 @@
 #ifdef HAVE_PROFILER
 #include <gperftools/heap-profiler.h>
 #endif  // HAVE_PROFILER
-#include <thrift/concurrency/ThreadManager.h>
 #include <thrift/concurrency/PlatformThreadFactory.h>
+#include <thrift/concurrency/ThreadManager.h>
 #include <thrift/protocol/TBinaryProtocol.h>
 #include <thrift/protocol/TJSONProtocol.h>
 #include <thrift/server/TThreadedServer.h>
+#include <thrift/transport/TBufferTransports.h>
 #include <thrift/transport/THttpServer.h>
 #include <thrift/transport/TServerSocket.h>
-#include <thrift/transport/TBufferTransports.h>
 
 #include "MapDRelease.h"
 
@@ -45,14 +45,14 @@
 #include "Catalog/Catalog.h"
 #include "Fragmenter/InsertOrderFragmenter.h"
 #include "Import/Importer.h"
-#include "Parser/parser.h"
 #include "Parser/ParserWrapper.h"
 #include "Parser/ReservedKeywords.h"
+#include "Parser/parser.h"
 #include "Planner/Planner.h"
 #include "QueryEngine/CalciteAdapter.h"
 #include "QueryEngine/Execute.h"
-#include "QueryEngine/GpuMemUtils.h"
 #include "QueryEngine/ExtensionFunctionsWhitelist.h"
+#include "QueryEngine/GpuMemUtils.h"
 #include "QueryEngine/JsonAccessors.h"
 #include "Shared/geosupport.h"
 #include "Shared/mapd_shared_mutex.h"
@@ -63,6 +63,13 @@
 #include "MapDRenderHandler.h"
 #include "MapDDistributedHandler.h"
 
+#include <fcntl.h>
+#include <glog/logging.h>
+#include <signal.h>
+#include <sys/time.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/replace.hpp>
 #include <boost/algorithm/string/trim.hpp>
@@ -71,23 +78,16 @@
 #include <boost/program_options.hpp>
 #include <boost/regex.hpp>
 #include <boost/tokenizer.hpp>
-#include <future>
-#include <memory>
-#include <string>
-#include <fstream>
-#include <sys/time.h>
-#include <sys/types.h>
-#include <sys/wait.h>
-#include <random>
-#include <map>
 #include <cmath>
-#include <typeinfo>
-#include <thread>
-#include <glog/logging.h>
-#include <signal.h>
-#include <unistd.h>
-#include <fcntl.h>
+#include <fstream>
+#include <future>
+#include <map>
+#include <memory>
+#include <random>
 #include <regex>
+#include <string>
+#include <thread>
+#include <typeinfo>
 
 #include <arrow/api.h>
 #include <arrow/io/api.h>
@@ -663,6 +663,29 @@ void MapDHandler::sql_execute_gdf(TDataFrame& _return,
                                   const int32_t device_id,
                                   const int32_t first_n) {
   sql_execute_df(_return, session, query_str, TDeviceType::GPU, device_id, first_n);
+}
+
+// For now we have only one user of a data frame in all cases.
+void MapDHandler::deallocate_df(const TDataFrame& df, const TDeviceType::type device_type, const int32_t device_id) {
+  int8_t* dev_ptr{0};
+  if (device_type == TDeviceType::GPU) {
+    std::lock_guard<std::mutex> map_lock(handle_to_dev_ptr_mutex_);
+    if (ipc_handle_to_dev_ptr_.count(df.df_handle) != size_t(1)) {
+      TMapDException ex;
+      ex.error_msg = std::string("Exception: current data frame handle is not bookkept or been inserted twice");
+      LOG(ERROR) << ex.error_msg;
+      throw ex;
+    }
+    dev_ptr = ipc_handle_to_dev_ptr_[df.df_handle];
+    ipc_handle_to_dev_ptr_.erase(df.df_handle);
+  }
+  std::vector<char> sm_handle(df.sm_handle.begin(), df.sm_handle.end());
+  std::vector<char> df_handle(df.df_handle.begin(), df.df_handle.end());
+  ArrowResult result{sm_handle, df.sm_size, df_handle, df.df_size, dev_ptr};
+  deallocate_arrow_result(result,
+                          device_type == TDeviceType::CPU ? ExecutorDeviceType::CPU : ExecutorDeviceType::GPU,
+                          device_id,
+                          data_mgr_.get());
 }
 
 std::string MapDHandler::apply_copy_to_shim(const std::string& query_str) {
@@ -2108,6 +2131,11 @@ void MapDHandler::execute_rel_alg_df(TDataFrame& _return,
   _return.sm_handle = std::string(copy.sm_handle.begin(), copy.sm_handle.end());
   _return.sm_size = copy.sm_size;
   _return.df_handle = std::string(copy.df_handle.begin(), copy.df_handle.end());
+  if (device_type == ExecutorDeviceType::GPU) {
+    std::lock_guard<std::mutex> map_lock(handle_to_dev_ptr_mutex_);
+    CHECK(!ipc_handle_to_dev_ptr_.count(_return.df_handle));
+    ipc_handle_to_dev_ptr_.insert(std::make_pair(_return.df_handle, copy.df_dev_ptr));
+  }
   _return.df_size = copy.df_size;
 }
 

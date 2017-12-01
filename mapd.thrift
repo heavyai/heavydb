@@ -394,6 +394,7 @@ service MapD {
   TQueryResult sql_execute(1: TSessionId session, 2: string query 3: bool column_format, 4: string nonce, 5: i32 first_n = -1, 6: i32 at_most_n = -1) throws (1: TMapDException e)
   TDataFrame sql_execute_df(1: TSessionId session, 2: string query 3: TDeviceType device_type 4: i32 device_id = 0 5: i32 first_n = -1) throws (1: TMapDException e)
   TDataFrame sql_execute_gdf(1: TSessionId session, 2: string query 3: i32 device_id = 0, 4: i32 first_n = -1) throws (1: TMapDException e)
+  void deallocate_df(1: TDataFrame df, 2: TDeviceType device_type, 3: i32 device_id = 0) throws (1: TMapDException e)
   void interrupt(1: TSessionId session) throws (1: TMapDException e)
   TTableDescriptor sql_validate(1: TSessionId session, 2: string query) throws (1: TMapDException e)
   list<completion_hints.TCompletionHint> get_completion_hints(1: TSessionId session, 2:string sql, 3:i32 cursor) throws (1: TMapDException e)

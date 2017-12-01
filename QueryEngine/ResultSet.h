@@ -25,10 +25,10 @@
 #ifndef QUERYENGINE_RESULTSET_H
 #define QUERYENGINE_RESULTSET_H
 
+#include "../Chunk/Chunk.h"
 #include "CardinalityEstimator.h"
 #include "ResultSetBufferAccessors.h"
 #include "TargetValue.h"
-#include "../Chunk/Chunk.h"
 
 #include "arrow/api.h"
 #include "arrow/ipc/api.h"
@@ -183,7 +183,7 @@ class Expr;
 class NDVEstimator;
 struct OrderEntry;
 
-}  // Analyzer
+}  // namespace Analyzer
 
 class Executor;
 
@@ -203,7 +203,13 @@ struct ArrowResult {
   int64_t sm_size;
   std::vector<char> df_handle;
   int64_t df_size;
+  int8_t* df_dev_ptr;  // Only for device memory deallocation
 };
+
+void deallocate_arrow_result(const ArrowResult& result,
+                             const ExecutorDeviceType device_type,
+                             const size_t device_id,
+                             Data_Namespace::DataMgr* data_mgr);
 
 class TSerializedRows;
 

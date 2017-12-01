@@ -28,14 +28,14 @@
 #ifdef HAVE_PROFILER
 #include <gperftools/heap-profiler.h>
 #endif  // HAVE_PROFILER
-#include <thrift/concurrency/ThreadManager.h>
 #include <thrift/concurrency/PlatformThreadFactory.h>
+#include <thrift/concurrency/ThreadManager.h>
 #include <thrift/protocol/TBinaryProtocol.h>
 #include <thrift/protocol/TJSONProtocol.h>
 #include <thrift/server/TThreadedServer.h>
+#include <thrift/transport/TBufferTransports.h>
 #include <thrift/transport/THttpServer.h>
 #include <thrift/transport/TServerSocket.h>
-#include <thrift/transport/TBufferTransports.h>
 
 #include "MapDRelease.h"
 
@@ -44,23 +44,30 @@
 #include "Catalog/Catalog.h"
 #include "Fragmenter/InsertOrderFragmenter.h"
 #include "Import/Importer.h"
-#include "Parser/parser.h"
 #include "Parser/ParserWrapper.h"
 #include "Parser/ReservedKeywords.h"
+#include "Parser/parser.h"
 #include "Planner/Planner.h"
 #include "QueryEngine/CalciteAdapter.h"
 #include "QueryEngine/Execute.h"
-#include "QueryEngine/GpuMemUtils.h"
 #include "QueryEngine/ExtensionFunctionsWhitelist.h"
+#include "QueryEngine/GpuMemUtils.h"
 #include "QueryEngine/JsonAccessors.h"
 #include "QueryEngine/TableGenerations.h"
+#include "Shared/MapDParameters.h"
+#include "Shared/StringTransform.h"
 #include "Shared/geosupport.h"
 #include "Shared/mapd_shared_mutex.h"
 #include "Shared/measure.h"
 #include "Shared/scope.h"
-#include "Shared/StringTransform.h"
-#include "Shared/MapDParameters.h"
 
+#include <fcntl.h>
+#include <glog/logging.h>
+#include <signal.h>
+#include <sys/time.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/replace.hpp>
 #include <boost/algorithm/string/trim.hpp>
@@ -69,22 +76,17 @@
 #include <boost/program_options.hpp>
 #include <boost/regex.hpp>
 #include <boost/tokenizer.hpp>
-#include <memory>
-#include <string>
-#include <fstream>
-#include <sys/time.h>
-#include <sys/types.h>
-#include <sys/wait.h>
-#include <random>
-#include <map>
 #include <cmath>
-#include <typeinfo>
-#include <thread>
-#include <glog/logging.h>
-#include <signal.h>
-#include <unistd.h>
-#include <fcntl.h>
+#include <fstream>
+#include <map>
+#include <memory>
+#include <mutex>
+#include <random>
 #include <regex>
+#include <string>
+#include <thread>
+#include <typeinfo>
+#include <unordered_map>
 #include "gen-cpp/MapD.h"
 
 class MapDRenderHandler;
@@ -171,6 +173,7 @@ class MapDHandler : public MapDIf {
                        const std::string& query,
                        const int32_t device_id,
                        const int32_t first_n);
+  void deallocate_df(const TDataFrame& df, const TDeviceType::type device_type, const int32_t device_id);
   void interrupt(const TSessionId& session);
   void sql_validate(TTableDescriptor& _return, const TSessionId& session, const std::string& query);
   void set_execution_mode(const TSessionId& session, const TExecuteMode::type mode);
@@ -418,6 +421,11 @@ class MapDHandler : public MapDIf {
 
   bool super_user_rights_;  // default is "false"; setting to "true" ignores passwd checks in "connect(..)" method
   const bool access_priv_check_;
+
+  // Only for IPC device memory deallocation
+  mutable std::mutex handle_to_dev_ptr_mutex_;
+  mutable std::unordered_map<std::string, int8_t*> ipc_handle_to_dev_ptr_;
+
   friend void run_warmup_queries(boost::shared_ptr<MapDHandler> handler,
                                  std::string base_path,
                                  std::string query_file_path);

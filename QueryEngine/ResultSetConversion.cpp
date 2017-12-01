@@ -14,15 +14,15 @@
  * limitations under the License.
  */
 
-#include "ResultSet.h"
 #include "Execute.h"
+#include "ResultSet.h"
 
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/types.h>
 #include <sys/ipc.h>
 #include <sys/shm.h>
-#include <errno.h>
+#include <sys/types.h>
 #include <string>
 
 #include "arrow/api.h"
@@ -508,7 +508,7 @@ ArrowResult ResultSet::getArrowCopyOnCpu(const std::vector<std::string>& col_nam
   std::vector<char> record_handle_buffer(sizeof(key_t), 0);
   memcpy(&record_handle_buffer[0], reinterpret_cast<const unsigned char*>(&record_key), sizeof(key_t));
 
-  return {schema_handle_buffer, serialized_schema->size(), record_handle_buffer, serialized_records->size()};
+  return {schema_handle_buffer, serialized_schema->size(), record_handle_buffer, serialized_records->size(), nullptr};
 }
 
 // WARN(miyu): users are responsible to free all device copies, e.g.,
@@ -546,10 +546,14 @@ ArrowResult ResultSet::getArrowCopyOnGpu(Data_Namespace::DataMgr* data_mgr,
     std::vector<char> record_handle_buffer(sizeof(record_handle), 0);
     memcpy(&record_handle_buffer[0], reinterpret_cast<unsigned char*>(&record_handle), sizeof(CUipcMemHandle));
 
-    return {schema_handle_buffer, serialized_schema->size(), record_handle_buffer, serialized_records->size()};
+    return {schema_handle_buffer,
+            serialized_schema->size(),
+            record_handle_buffer,
+            serialized_records->size(),
+            reinterpret_cast<int8_t*>(dev_ptr)};
   }
 #endif
-  return {schema_handle_buffer, serialized_schema->size(), {}, 0};
+  return {schema_handle_buffer, serialized_schema->size(), {}, 0, nullptr};
 }
 
 ArrowResult ResultSet::getArrowCopy(Data_Namespace::DataMgr* data_mgr,
@@ -562,4 +566,42 @@ ArrowResult ResultSet::getArrowCopy(Data_Namespace::DataMgr* data_mgr,
 
   CHECK(device_type == ExecutorDeviceType::GPU);
   return getArrowCopyOnGpu(data_mgr, device_id, col_names);
+}
+
+void deallocate_arrow_result(const ArrowResult& result,
+                             const ExecutorDeviceType device_type,
+                             const size_t device_id,
+                             Data_Namespace::DataMgr* data_mgr) {
+  // Remove shared memory on sysmem
+  CHECK_EQ(sizeof(key_t), result.sm_handle.size());
+  key_t schema_key;
+  memcpy(&schema_key, &result.sm_handle[0], sizeof(key_t));
+  auto shm_id = shmget(schema_key, result.sm_size, 0666);
+  if (shm_id < 0) {
+    throw std::runtime_error("failed to get an valid shm ID w/ given shm key of the schema");
+  }
+  if (-1 == shmctl(shm_id, IPC_RMID, 0)) {
+    throw std::runtime_error("failed to deallocate Arrow schema on errorno(" + std::to_string(errno) + ")");
+  }
+
+  if (device_type == ExecutorDeviceType::CPU) {
+    CHECK_EQ(sizeof(key_t), result.df_handle.size());
+    key_t df_key;
+    memcpy(&df_key, &result.df_handle[0], sizeof(key_t));
+    auto shm_id = shmget(df_key, result.df_size, 0666);
+    if (shm_id < 0) {
+      throw std::runtime_error("failed to get an valid shm ID w/ given shm key of the data");
+    }
+    if (-1 == shmctl(shm_id, IPC_RMID, 0)) {
+      throw std::runtime_error("failed to deallocate Arrow data frame");
+    }
+    return;
+  }
+
+  CHECK(device_type == ExecutorDeviceType::GPU);
+  if (!result.df_dev_ptr) {
+    throw std::runtime_error("null pointer to data frame on device");
+  }
+
+  data_mgr->cudaMgr_->freeDeviceMem(result.df_dev_ptr);
 }
