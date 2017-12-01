@@ -77,7 +77,6 @@ void completion(const char* buf, linenoiseCompletions* lc) {
 #define INVALID_SESSION_ID ""
 #define MAPD_ROOT_USER "mapd"
 #define MAPD_DEFAULT_ROOT_USER_ROLE "mapd_default_suser_role"
-#define MAPD_USER_EXISTS_YES "USER_EXISTS_YES"
 
 // code from https://stackoverflow.com/questions/7053538/how-do-i-encode-a-string-to-base64-using-only-boost
 
@@ -1438,20 +1437,13 @@ void get_db_object_privs(ClientContext context) {
 void get_all_roles_for_user(ClientContext context) {
   context.role_names.clear();
   if (thrift_with_retry(kGET_ROLES_FOR_USER, context, context.privs_user_name.c_str())) {
-    if ((context.role_names.size() > 0) &&
-        (!context.role_names[context.role_names.size() - 1].compare(MAPD_USER_EXISTS_YES))) {
-      if (context.role_names.size() == 1) {
-        std::cout << "No roles are granted to user " << context.privs_user_name.c_str() << std::endl;
-      } else {
-        for (size_t i = 0; i < context.role_names.size() - 1; i++) {
-          std::cout << context.role_names[i].c_str() << std::endl;
-        }
-      }
+    if (context.role_names.size() == 0) {
+      std::cout << "No roles are granted to user " << context.privs_user_name.c_str() << std::endl;
     } else {
-      std::cout << "User " << context.privs_user_name.c_str() << " does not exist." << std::endl;
+      for (size_t i = 0; i < context.role_names.size(); i++) {
+        std::cout << context.role_names[i].c_str() << std::endl;
+      }
     }
-  } else {
-    std::cout << "Cannot connect to MapD Server." << std::endl;
   }
 }
 }  // namespace

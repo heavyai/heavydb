@@ -96,8 +96,6 @@
 #include "QueryEngine/ArrowUtil.h"
 
 #define INVALID_SESSION_ID ""
-#define MAPD_USER_EXISTS_YES "USER_EXISTS_YES"
-#define MAPD_USER_EXISTS_NOT "USER_EXISTS_NOT"
 
 #define THROW_MAPD_EXCEPTION(errstr) \
   TMapDException ex;                 \
@@ -803,10 +801,27 @@ void MapDHandler::get_all_roles_for_user(std::vector<std::string>& roles,
   auto& sys_cat = static_cast<Catalog_Namespace::SysCatalog&>(cat);
   Catalog_Namespace::UserMetadata user_meta;
   if (sys_cat.getMetadataForUser(userName, user_meta)) {
-    roles = sys_cat.getAllRolesForUser(user_meta.userId);
-    roles.push_back(MAPD_USER_EXISTS_YES);
+    bool get_roles = false;
+    if (session_info_ptr->get_currentUser().isSuper) {
+      get_roles = true;
+    } else {
+      if (session_info_ptr->get_currentUser().userId == user_meta.userId) {
+        get_roles = true;
+      } else {
+        TMapDException ex;
+        ex.error_msg = "Only superuser is authorized to request list of roles granted to another user.";
+        LOG(ERROR) << ex.error_msg;
+        throw ex;
+      }
+    }
+    if (get_roles) {
+      roles = sys_cat.getAllRolesForUser(user_meta.userId);
+    }
   } else {
-    roles.push_back(MAPD_USER_EXISTS_NOT);
+    TMapDException ex;
+    ex.error_msg = "User " + userName + " does not exist.";
+    LOG(ERROR) << ex.error_msg;
+    throw ex;
   }
 }
 
