@@ -34,19 +34,40 @@ class Archive {
     if (0 == (ar = archive_read_new()))
       throw std::runtime_error(std::string("archive_read_new failed!"));
 
-#define LIBARCHIVE_ENABLE_ALL
+//!! LIBARCHIVE_ENABLE_ALL may trigger exception "detect_column_types error: libarchive error: Missing type keyword in
+//! mtree specification"
+//!! on ridiculously simple raw data
+//#define LIBARCHIVE_ENABLE_ALL
 #ifdef LIBARCHIVE_ENABLE_ALL
     // this increases ~800kb code size
     archive_read_support_format_all(ar);
     archive_read_support_filter_all(ar);
     archive_read_support_format_raw(ar);
 #else
-    // list supported formats
-    archive_read_support_filter_bzip2(ar);
-    archive_read_support_filter_gzip(ar);
-    archive_read_support_format_zip(ar);
+    // list supported formats to bypass the mtree exception
+    archive_read_support_format_ar(ar);
+    archive_read_support_format_cpio(ar);
+    archive_read_support_format_empty(ar);
+    archive_read_support_format_lha(ar);
     archive_read_support_format_tar(ar);
+    archive_read_support_format_xar(ar);
     archive_read_support_format_7zip(ar);
+    archive_read_support_format_cab(ar);
+    archive_read_support_format_rar(ar);
+    archive_read_support_format_iso9660(ar);
+    archive_read_support_format_zip(ar);
+
+    archive_read_support_filter_bzip2(ar);
+    archive_read_support_filter_compress(ar);
+    archive_read_support_filter_gzip(ar);
+    archive_read_support_filter_lzip(ar);
+    archive_read_support_filter_lzma(ar);
+    archive_read_support_filter_xz(ar);
+    archive_read_support_filter_uu(ar);
+    archive_read_support_filter_rpm(ar);
+    archive_read_support_filter_lrzip(ar);
+    archive_read_support_filter_lzop(ar);
+    archive_read_support_filter_grzip(ar);
 #endif
     // libarchive assumes archive formats, so without this bzip2 and gzip won't work!
     // see related issue at https://github.com/libarchive/libarchive/issues/586

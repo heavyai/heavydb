@@ -503,15 +503,59 @@ class Loader {
                    bool checkpoint);
 };
 
-class Detector {
+struct ImportStatus {
+  std::chrono::steady_clock::time_point start;
+  std::chrono::steady_clock::time_point end;
+  size_t rows_completed;
+  size_t rows_estimated;
+  size_t rows_rejected;
+  std::chrono::duration<size_t, std::milli> elapsed;
+  bool load_truncated;
+  int thread_id;  // to recall thread_id after thread exit
+  ImportStatus()
+      : start(std::chrono::steady_clock::now()),
+        rows_completed(0),
+        rows_estimated(0),
+        rows_rejected(0),
+        elapsed(0),
+        load_truncated(0),
+        thread_id(0) {}
+
+  ImportStatus& operator+=(const ImportStatus& is) {
+    rows_completed += is.rows_completed;
+    rows_rejected += is.rows_rejected;
+
+    return *this;
+  }
+};
+
+class DataStreamSink {
  public:
-  Detector(const boost::filesystem::path& fp, CopyParams& cp) : file_path(fp), copy_params(cp) {
+  DataStreamSink() {}
+  DataStreamSink(const CopyParams& copy_params, const std::string file_path)
+      : copy_params(copy_params), file_path(file_path) {}
+  virtual ~DataStreamSink() {}
+  virtual ImportStatus importDelimited(const std::string& file_path, const bool decompressed) = 0;
+  const CopyParams& get_copy_params() const { return copy_params; }
+
+ protected:
+  ImportStatus archivePlumber();
+
+  CopyParams copy_params;
+  const std::string file_path;
+  FILE* p_file = nullptr;
+  ImportStatus import_status;
+  bool load_failed = false;
+};
+
+class Detector : public DataStreamSink {
+ public:
+  Detector(const boost::filesystem::path& fp, CopyParams& cp) : DataStreamSink(cp, fp.string()), file_path(fp) {
     read_file();
     init();
   };
   static SQLTypes detect_sqltype(const std::string& str);
   std::vector<std::string> get_headers();
-  const CopyParams& get_copy_params() const { return copy_params; }
   std::vector<std::vector<std::string>> raw_rows;
   std::vector<std::vector<std::string>> get_sample_rows(size_t n);
   std::vector<SQLTypes> best_sqltypes;
@@ -540,37 +584,10 @@ class Detector {
   bool detect_headers(const std::vector<std::vector<std::string>>& raw_rows);
   bool detect_headers(const std::vector<SQLTypes>& first_types, const std::vector<SQLTypes>& rest_types);
   void find_best_sqltypes_and_headers();
+  ImportStatus importDelimited(const std::string& file_path, const bool decompressed);
   std::string raw_data;
   boost::filesystem::path file_path;
   std::chrono::duration<double> timeout{1};
-  CopyParams copy_params;
-};
-
-struct ImportStatus {
-  std::chrono::steady_clock::time_point start;
-  std::chrono::steady_clock::time_point end;
-  size_t rows_completed;
-  size_t rows_estimated;
-  size_t rows_rejected;
-  std::chrono::duration<size_t, std::milli> elapsed;
-  bool load_truncated;
-  int thread_id;        // to recall thread_id after thread exit
-  int popen_exit_code;  // get popen exit code
-  ImportStatus()
-      : start(std::chrono::steady_clock::now()),
-        rows_completed(0),
-        rows_estimated(0),
-        rows_rejected(0),
-        elapsed(0),
-        load_truncated(0),
-        popen_exit_code(0) {}
-
-  ImportStatus& operator+=(const ImportStatus& is) {
-    rows_completed += is.rows_completed;
-    rows_rejected += is.rows_rejected;
-
-    return *this;
-  }
 };
 
 struct PolyData2d {
@@ -677,7 +694,7 @@ struct PolyData2d {
   }
 };
 
-class Importer {
+class Importer : public DataStreamSink {
  public:
   Importer(Catalog_Namespace::Catalog& c, const TableDescriptor* t, const std::string& f, const CopyParams& p);
   Importer(Loader* providedLoader, const std::string& f, const CopyParams& p);
@@ -705,19 +722,13 @@ class Importer {
                             std::pair<std::map<std::string, size_t>, std::vector<std::vector<std::string>>>& metadata);
   void readVerticesFromGDALGeometryZ(const std::string& fileName, OGRPolygon* poPolygon, PolyData2d& poly, bool hasZ);
   void initGDAL();
-  const std::string& file_path;
   std::string import_id;
-  const CopyParams& copy_params;
   size_t file_size;
   int max_threads;
-  FILE* p_file;
   char* buffer[2];
-  int which_buf;
   std::vector<std::vector<std::unique_ptr<TypedImportBuffer>>> import_buffers_vec;
   std::unique_ptr<Loader> loader;
-  bool load_failed;
   std::unique_ptr<bool[]> is_array_a;
-  ImportStatus import_status;
 };
 };
 #endif  // _IMPORTER_H_

@@ -70,7 +70,7 @@ Importer::Importer(Catalog_Namespace::Catalog& c, const TableDescriptor* t, cons
     : Importer(new Loader(c, t), f, p) {}
 
 Importer::Importer(Loader* providedLoader, const std::string& f, const CopyParams& p)
-    : file_path(f), copy_params(p), loader(providedLoader), load_failed(false) {
+    : DataStreamSink(p, f), loader(providedLoader) {
   import_id = boost::filesystem::path(file_path).filename().string();
   file_size = 0;
   max_threads = 0;
@@ -1529,17 +1529,24 @@ void Detector::init() {
   find_best_sqltypes_and_headers();
 }
 
-void Detector::read_file() {
-  if (!boost::filesystem::exists(file_path)) {
-    LOG(ERROR) << "File does not exist: " << file_path;
-    return;
-  }
-  std::ifstream infile(file_path.string());
-  std::string line;
+ImportStatus Detector::importDelimited(const std::string& file_path, const bool decompressed) {
+  if (!p_file)
+    p_file = fopen(file_path.c_str(), "rb");
+  if (!p_file)
+    throw std::runtime_error("failed to open file '" + file_path + "': " + strerror(errno));
+
+  // somehow clang does not support ext/stdio_filebuf.h, so
+  // need to diy readline with customized copy_params.line_delim...
+  char line[1 << 20];
   auto end_time = std::chrono::steady_clock::now() + timeout;
   try {
-    while (std::getline(infile, line, copy_params.line_delim)) {
-      raw_data += line;
+    while (!feof(p_file)) {
+      int c, n = 0;
+      while (EOF != (c = fgetc(p_file)) && copy_params.line_delim != c)
+        line[n++] = c;
+      if (0 == n)
+        break;
+      raw_data += std::string(line, n);
       raw_data += copy_params.line_delim;
       if (std::chrono::steady_clock::now() > end_time) {
         break;
@@ -1547,7 +1554,15 @@ void Detector::read_file() {
     }
   } catch (std::exception& e) {
   }
-  infile.close();
+
+  fclose(p_file);
+  p_file = nullptr;
+  return import_status;
+}
+
+void Detector::read_file() {
+  // this becomes analogous to Importer::import()
+  (void)DataStreamSink::archivePlumber();
 }
 
 void Detector::detect_row_delimiter() {
@@ -1806,7 +1821,7 @@ void Importer::load(const std::vector<std::unique_ptr<TypedImportBuffer>>& impor
     load_failed = true;
 }
 
-ImportStatus Importer::import() {
+ImportStatus DataStreamSink::archivePlumber() {
   // in generalized importing scheme, reaching here file_path may
   // contain a file path, a url or a wildcard of file paths.
   // see CopyTableStmt::execute.
@@ -1903,7 +1918,9 @@ ImportStatus Importer::import() {
                   stop = true;
                   continue;
                 }
-                throw std::runtime_error(std::string("failed or interrupted write to pipe:") + strerror(errno));
+                // not to overwrite original error
+                if (!load_failed)
+                  throw std::runtime_error(std::string("failed or interrupted write to pipe: ") + strerror(errno));
               }
           }
       } catch (...) {
@@ -1922,6 +1939,10 @@ ImportStatus Importer::import() {
     std::rethrow_exception(teptr);
 
   return ret;
+}
+
+ImportStatus Importer::import() {
+  return DataStreamSink::archivePlumber();
 }
 
 #define IMPORT_FILE_BUFFER_SIZE (1 << 23)  // not too big (need much memory) but not too small (many thread forks)
@@ -2046,6 +2067,11 @@ ImportStatus Importer::importDelimited(const std::string& file_path, const bool 
       if (import_status.rows_rejected > copy_params.max_reject) {
         load_truncated = true;
         load_failed = true;
+        LOG(ERROR) << "Maximum rows rejected exceeded. Halting load";
+        break;
+      }
+      if (load_failed) {
+        load_truncated = true;
         LOG(ERROR) << "A call to the Loader::load failed, Please review the logs for more details";
         break;
       }
