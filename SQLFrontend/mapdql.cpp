@@ -685,14 +685,13 @@ void process_backslash_commands(char* command, ClientContext& context) {
         }
         std::string encoding;
         if (p.col_type.type == TDatumType::STR) {
-          encoding = (p.col_type.encoding == 0 ? " ENCODING NONE"
-                                               : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
-                                                     std::to_string(p.col_type.comp_param) + ")");
+          encoding =
+              (p.col_type.encoding == 0 ? " ENCODING NONE" : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
+                                                                 std::to_string(p.col_type.comp_param) + ")");
 
         } else {
-          encoding = (p.col_type.encoding == 0 ? ""
-                                               : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
-                                                     std::to_string(p.col_type.comp_param) + ")");
+          encoding = (p.col_type.encoding == 0 ? "" : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
+                                                          std::to_string(p.col_type.comp_param) + ")");
         }
         std::cout << comma_or_blank << p.col_name << " " << thrift_to_name(p.col_type)
                   << (p.col_type.nullable ? "" : " NOT NULL") << encoding;
@@ -1588,7 +1587,9 @@ int main(int argc, char** argv) {
         std::cerr << "Not connected to any MapD databases." << std::endl;
         continue;
       }
-      current_line.append(" ").append(std::string(line));
+      std::string trimmed_line = std::string(line);
+      boost::algorithm::trim(trimmed_line);
+      current_line.append(" ").append(trimmed_line);
       boost::algorithm::trim(current_line);
       if (current_line.back() == ';') {
         linenoiseHistoryAdd(current_line.c_str());  /* Add to the history. */
@@ -1650,6 +1651,8 @@ int main(int argc, char** argv) {
         // change the prommpt
         prompt.assign("..> ");
       }
+      free(line);
+      continue;
     } else if (!strncmp(line, "\\interrupt", 10)) {
       (void)thrift_with_retry(kINTERRUPT, context, nullptr);
     } else if (!strncmp(line, "\\cpu", 4)) {
