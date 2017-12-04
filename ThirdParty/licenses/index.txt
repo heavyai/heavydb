@@ -61,3 +61,10 @@
   libarchive             [BSD](https://raw.githubusercontent.com/libarchive/libarchive/master/COPYING)      Compression support
   liblzma                [Public Domain](https://git.tukaani.org/?p=xz.git;a=blob;f=COPYING)                Compression support
   libbz2                 [BSD](http://bzip.org/1.0.5/bzip2-manual-1.0.5.html)                               Compression support
+  ---                    ---                                                                                ---
+  librdkafka             [BSD](https://github.com/edenhill/librdkafka/blob/master/LICENSE)                  HA, Kafka support
+  pycrc                  [MIT](https://github.com/tpircher/pycrc/blob/master/COPYING)                       HA, Kafka support
+  queue.h                [BSD](https://github.com/edenhill/librdkafka/blob/master/LICENSE.queue)            HA, Kafka support
+  regexp                 [Public domain](https://github.com/ccxvii/minilibs/blob/master/README.md)          HA, Kafka support
+  tinycthread            [zlib](https://github.com/tinycthread/tinycthread/blob/master/README.txt)          HA, Kafka support
+  wingetopt              [BSD](https://github.com/alex85k/wingetopt/blob/master/LICENSE)                    HA, Kafka support
