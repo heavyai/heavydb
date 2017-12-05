@@ -440,6 +440,15 @@ void SysCatalog::populateDBObjectKey(DBObject& object, const Catalog_Namespace::
 void SysCatalog::createDBObject(const UserMetadata& user,
                                 const std::string& objectName,
                                 const Catalog_Namespace::Catalog& catalog) {
+  DBObject* object = new DBObject(objectName, TableDBObjectType);
+  populateDBObjectKey(*object, catalog);
+  object->setPrivileges(
+      {true, true, false, true});  // as an owner/creator of this object, the user will have all access rights
+  object->setUserPrivateObject();
+  object->setOwningUserId(user.userId);
+  if (user.userName.compare(MAPD_ROOT_USER)) {  // no need to grant to suser, has all privs by default
+    grantDBObjectPrivileges(user.userName, *object, static_cast<Catalog_Namespace::Catalog&>(*this));
+  }
   Role* user_rl = mapd_sys_cat->getMetadataForUserRole(user.userId);
   if (!user_rl) {
     if (!mapd_sys_cat->getMetadataForRole(MAPD_DEFAULT_ROOT_USER_ROLE)) {
@@ -452,12 +461,6 @@ void SysCatalog::createDBObject(const UserMetadata& user,
     }
     user_rl = mapd_sys_cat->getMetadataForUserRole(user.userId);
   }
-  DBObject* object = new DBObject(objectName, TableDBObjectType);
-  populateDBObjectKey(*object, catalog);
-  object->setPrivileges(
-      {true, true, false, true});  // as an owner/creator of this object, the user will have all access rights
-  object->setUserPrivateObject();
-  object->setOwningUserId(user.userId);
   user_rl->grantPrivileges(*object);
 }
 

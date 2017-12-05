@@ -1801,9 +1801,11 @@ int main(int argc, char** argv) {
         context.privs_role_name.clear();
         context.privs_role_name = strtok(line + 12, " ");
         if (!context.privs_role_name.compare(MAPD_ROOT_USER)) {
-          context.privs_role_name = boost::to_upper_copy<std::string>(MAPD_DEFAULT_ROOT_USER_ROLE);
+          std::cout << "Command privileges failed because " << MAPD_ROOT_USER
+                    << " root user has all privileges by default." << std::endl;
+        } else {
+          get_db_objects_for_role(context);
         }
-        get_db_objects_for_role(context);
       } else {
         std::cout << "Command privileges failed because parameter role name or user name is missing." << std::endl;
       }
