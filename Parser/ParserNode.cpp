@@ -2988,6 +2988,9 @@ void DropDBStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   if (catalog.get_currentDB().dbName != MAPD_SYSTEM_DB)
     throw std::runtime_error("Must be in the system database ('" + std::string(MAPD_SYSTEM_DB) +
                              "') to drop databases.");
+  if (catalog.isAccessPrivCheckEnabled() && !session.get_currentUser().isSuper) {
+    throw std::runtime_error("DROP DATABASE command can only be executed by super user.");
+  }
   Catalog_Namespace::SysCatalog& syscat = static_cast<Catalog_Namespace::SysCatalog&>(catalog);
   Catalog_Namespace::DBMetadata db;
   if (!syscat.getMetadataForDB(*db_name, db))
