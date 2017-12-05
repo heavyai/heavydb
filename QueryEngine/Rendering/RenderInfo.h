@@ -47,8 +47,8 @@ class RenderInfo {
 
   std::shared_ptr<QueryRenderer::QueryDataLayout> getQueryVboLayout() const;
   void setQueryVboLayout(const std::shared_ptr<QueryRenderer::QueryDataLayout>& vbo_layout);
-  std::shared_ptr<QueryRenderer::QueryDataLayout> getQueryUboLayout() const;
-  void setQueryUboLayout(const std::shared_ptr<QueryRenderer::QueryDataLayout>& ubo_layout);
+  std::shared_ptr<QueryRenderer::QueryDataLayout> getQuerySsboLayout() const;
+  void setQuerySsboLayout(const std::shared_ptr<QueryRenderer::QueryDataLayout>& ssbo_layout);
 
   bool setInSituDataIfUnset(const bool is_in_situ_data);
 
@@ -64,7 +64,7 @@ class RenderInfo {
                              // Can only be set once for the lifetime of the object.
 
   std::shared_ptr<QueryRenderer::QueryDataLayout> query_vbo_layout;
-  std::shared_ptr<QueryRenderer::QueryDataLayout> query_ubo_layout;
+  std::shared_ptr<QueryRenderer::QueryDataLayout> query_ssbo_layout;
 };
 
 #endif  // QUERYENGINE_RENDERINFO_H

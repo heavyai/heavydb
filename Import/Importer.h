@@ -598,15 +598,20 @@ struct PolyData2d {
   std::vector<Rendering::GL::Resources::IndirectDrawIndexData> polyDrawInfo;
 
   PolyData2d(unsigned int startVert = 0, unsigned int startIdx = 0)
-      : _ended(true), _startVert(startVert), _startIdx(startIdx), _startTriIdx(0) {}
+      : _ended(true), _startVert(startVert), _startIdx(startIdx), _startLineIdx(0) {}
   ~PolyData2d() {}
 
-  size_t numVerts() const { return coords.size() / 2; }
-  size_t numLineLoops() const { return lineDrawInfo.size(); }
-  size_t numTris() const {
-    CHECK(triangulation_indices.size() % 3 == 0);
-    return triangulation_indices.size() / 3;
+  size_t numVerts() const {
+      size_t s = coords.size();
+      CHECK(s % 2 == 0);
+      return s / 2;
   }
+  size_t numTris() const {
+      size_t s = triangulation_indices.size();
+      CHECK(s % 3 == 0);
+      return s / 3;
+  }
+  size_t numLineLoops() const { return lineDrawInfo.size(); }
   size_t numIndices() const { return triangulation_indices.size(); }
 
   unsigned int startVert() const { return _startVert; }
@@ -615,7 +620,6 @@ struct PolyData2d {
   void beginPoly() {
     assert(_ended);
     _ended = false;
-    _startTriIdx = numVerts() - lineDrawInfo.back().count;
 
     if (!polyDrawInfo.size()) {
       // polyDrawInfo.emplace_back(0, _startIdx + triangulation_indices.size(), lineDrawInfo.back().firstIndex);
@@ -632,7 +636,18 @@ struct PolyData2d {
     assert(_ended);
     _ended = false;
 
-    lineDrawInfo.emplace_back(0, _startVert + numVerts());
+    if (!lineDrawInfo.size()) {
+      // first line creates this
+      lineDrawInfo.emplace_back(0, _startVert + numVerts());
+    } else {
+      // second and subsequent line, first
+      // add an empty coord as a separator
+      coords.push_back(-FLT_MAX);
+      coords.push_back(-FLT_MAX);
+      lineDrawInfo.back().count++;
+    }
+
+    _startLineIdx = numVerts();
   }
 
   void addLinePoint(const std::shared_ptr<p2t::Point>& vertPtr) {
@@ -640,46 +655,25 @@ struct PolyData2d {
     lineDrawInfo.back().count++;
   }
 
-  bool endLine() {
-    bool rtn = false;
-    auto& lineDrawItem = lineDrawInfo.back();
-    size_t idx0 = (lineDrawItem.firstIndex - _startVert) * 2;
-    size_t idx1 = idx0 + (lineDrawItem.count - 1) * 2;
-    if (coords[idx0] == coords[idx1] && coords[idx0 + 1] == coords[idx1 + 1]) {
-      coords.pop_back();
-      coords.pop_back();
-      lineDrawItem.count--;
-      rtn = true;
-    }
-
+  void endLine() {
     // repeat the first 3 vertices to fully create the "loop"
     // since it will be drawn using the GL_LINE_STRIP_ADJACENCY
     // primitive type
-    int num = lineDrawItem.count;
+    int numPointsThisLine = numVerts() - _startLineIdx;
     for (int i = 0; i < 3; ++i) {
-      int idx = (idx0 + ((i % num) * 2));
+      int idx = (_startLineIdx + (i % numPointsThisLine)) * 2;
       coords.push_back(coords[idx]);
       coords.push_back(coords[idx + 1]);
     }
-    lineDrawItem.count += 3;
-
-    // add an empty coord as a separator
-    // coords.push_back(-10000000.0);
-    // coords.push_back(-10000000.0);
+    lineDrawInfo.back().count += 3;
 
     _ended = true;
-    return rtn;
   }
 
   void addTriangle(unsigned int idx0, unsigned int idx1, unsigned int idx2) {
-    // triangulation_indices.push_back(idx0);
-    // triangulation_indices.push_back(idx1);
-    // triangulation_indices.push_back(idx2);
-
-    triangulation_indices.push_back(_startTriIdx + idx0);
-    triangulation_indices.push_back(_startTriIdx + idx1);
-    triangulation_indices.push_back(_startTriIdx + idx2);
-
+    triangulation_indices.push_back(_startLineIdx + idx0);
+    triangulation_indices.push_back(_startLineIdx + idx1);
+    triangulation_indices.push_back(_startLineIdx + idx2);
     polyDrawInfo.back().count += 3;
   }
 
@@ -687,7 +681,7 @@ struct PolyData2d {
   bool _ended;
   unsigned int _startVert;
   unsigned int _startIdx;
-  unsigned int _startTriIdx;
+  unsigned int _startLineIdx;
 
   void _addPoint(double x, double y) {
     coords.push_back(x);
