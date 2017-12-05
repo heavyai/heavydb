@@ -2961,6 +2961,9 @@ void CreateDBStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   if (catalog.get_currentDB().dbName != MAPD_SYSTEM_DB)
     throw std::runtime_error("Must be in the system database ('" + std::string(MAPD_SYSTEM_DB) +
                              "') to create databases.");
+  if (catalog.isAccessPrivCheckEnabled() && !session.get_currentUser().isSuper) {
+    throw std::runtime_error("CREATE DATABASE command can only be executed by super user.");
+  }
   Catalog_Namespace::SysCatalog& syscat = static_cast<Catalog_Namespace::SysCatalog&>(catalog);
   int ownerId = session.get_currentUser().userId;
   if (!name_value_list.empty()) {
