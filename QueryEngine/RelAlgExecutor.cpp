@@ -442,7 +442,7 @@ void RelAlgExecutor::executeRelAlgStep(const size_t i,
                                       eo.with_dynamic_watchdog,
                                       eo.dynamic_watchdog_time_limit};
 
-  if (render_info && !render_info->table_names.size() && leaf_results_.find(body->getId()) != leaf_results_.end()) {
+  if (render_info && !render_info->table_names.size() && leaf_results_.size()) {
     // Save the table names for render queries for distributed aggregation queries.
     // Doing this here as the aggregator calls executeRelAlgSeq() directly rather
     // than going thru the executeRelAlg() path.
