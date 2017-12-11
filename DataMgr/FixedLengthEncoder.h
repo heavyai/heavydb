@@ -36,8 +36,6 @@ class FixedLengthEncoder : public Encoder {
     T* unencodedData = reinterpret_cast<T*>(srcData);
     auto encodedData = std::unique_ptr<V[]>(new V[numAppendElems]);
     for (size_t i = 0; i < numAppendElems; ++i) {
-      // std::cout << "Unencoded: " << unencodedData[i] << std::endl;
-      // std::cout << "Min: " << dataMin << " Max: " <<  dataMax << std::endl;
       encodedData.get()[i] = static_cast<V>(unencodedData[i]);
       if (unencodedData[i] != encodedData.get()[i]) {
         LOG(ERROR) << "Fixed encoding failed, Unencoded: " + std::to_string(unencodedData[i]) + " encoded: " +

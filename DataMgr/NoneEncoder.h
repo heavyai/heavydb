@@ -31,7 +31,7 @@ class NoneEncoder : public Encoder {
   NoneEncoder(Data_Namespace::AbstractBuffer* buffer)
       : Encoder(buffer),
         dataMin(std::numeric_limits<T>::max()),
-        dataMax(std::numeric_limits<T>::min()),
+        dataMax(std::numeric_limits<T>::lowest()),
         has_nulls(false) {}
 
   ChunkMetadata appendData(int8_t*& srcData, const size_t numAppendElems) {
