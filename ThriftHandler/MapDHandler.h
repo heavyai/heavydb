@@ -173,7 +173,10 @@ class MapDHandler : public MapDIf {
                        const std::string& query,
                        const int32_t device_id,
                        const int32_t first_n);
-  void deallocate_df(const TDataFrame& df, const TDeviceType::type device_type, const int32_t device_id);
+  void deallocate_df(const TSessionId& session,
+                     const TDataFrame& df,
+                     const TDeviceType::type device_type,
+                     const int32_t device_id);
   void interrupt(const TSessionId& session);
   void sql_validate(TTableDescriptor& _return, const TSessionId& session, const std::string& query);
   void set_execution_mode(const TSessionId& session, const TExecuteMode::type mode);

@@ -667,7 +667,11 @@ void MapDHandler::sql_execute_gdf(TDataFrame& _return,
 }
 
 // For now we have only one user of a data frame in all cases.
-void MapDHandler::deallocate_df(const TDataFrame& df, const TDeviceType::type device_type, const int32_t device_id) {
+void MapDHandler::deallocate_df(const TSessionId& session,
+                                const TDataFrame& df,
+                                const TDeviceType::type device_type,
+                                const int32_t device_id) {
+  const auto session_info = get_session(session);
   int8_t* dev_ptr{0};
   if (device_type == TDeviceType::GPU) {
     std::lock_guard<std::mutex> map_lock(handle_to_dev_ptr_mutex_);
