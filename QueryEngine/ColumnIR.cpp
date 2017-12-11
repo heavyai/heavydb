@@ -83,7 +83,9 @@ int adjusted_range_table_index(const Analyzer::ColumnVar* col_var) {
 std::vector<llvm::Value*> Executor::codegen(const Analyzer::ColumnVar* col_var,
                                             const bool fetch_column,
                                             const CompilationOptions& co) {
-  if (!cgen_state_->outer_join_cond_lv_ || col_var->get_rte_idx() == 0) {
+  if (col_var->get_rte_idx() <= 0 ||
+      (!cgen_state_->outer_join_cond_lv_ &&
+       (cgen_state_->outer_join_match_found_per_level_.empty() || !foundOuterJoinMatch(col_var->get_rte_idx())))) {
     return codegenColVar(col_var, fetch_column, co);
   }
   return codegenOuterJoinNullPlaceholder(col_var, fetch_column, co);
@@ -292,6 +294,16 @@ llvm::Value* Executor::codgenAdjustFixedEncNull(llvm::Value* val, const SQLTypeI
                                {adjusted, inlineIntNull(col_phys_ti), inlineIntNull(col_ti)});
 }
 
+llvm::Value* Executor::foundOuterJoinMatch(const ssize_t nesting_level) const {
+  CHECK_GE(nesting_level, size_t(0));
+  CHECK_LE(nesting_level, cgen_state_->outer_join_match_found_per_level_.size());
+  // The JoinLoop-based outer joins supersede the legacy version which checks `outer_join_cond_lv_`.
+  // They cannot coexist within the same execution unit.
+  CHECK(!cgen_state_->outer_join_cond_lv_ || !cgen_state_->outer_join_match_found_per_level_[nesting_level - 1]);
+  return cgen_state_->outer_join_cond_lv_ ? cgen_state_->outer_join_cond_lv_
+                                          : cgen_state_->outer_join_match_found_per_level_[nesting_level - 1];
+}
+
 std::vector<llvm::Value*> Executor::codegenOuterJoinNullPlaceholder(const Analyzer::ColumnVar* col_var,
                                                                     const bool fetch_column,
                                                                     const CompilationOptions& co) {
@@ -306,7 +318,8 @@ std::vector<llvm::Value*> Executor::codegenOuterJoinNullPlaceholder(const Analyz
       llvm::BasicBlock::Create(cgen_state_->context_, "outer_join_nulls", cgen_state_->row_func_);
   const auto phi_bb = llvm::BasicBlock::Create(cgen_state_->context_, "outer_join_phi", cgen_state_->row_func_);
   cgen_state_->ir_builder_.SetInsertPoint(bb);
-  cgen_state_->ir_builder_.CreateCondBr(cgen_state_->outer_join_cond_lv_, outer_join_args_bb, outer_join_nulls_bb);
+  const auto outer_join_match_lv = foundOuterJoinMatch(col_var->get_rte_idx());
+  cgen_state_->ir_builder_.CreateCondBr(outer_join_match_lv, outer_join_args_bb, outer_join_nulls_bb);
   const auto back_from_outer_join_bb =
       llvm::BasicBlock::Create(cgen_state_->context_, "back_from_outer_join", cgen_state_->row_func_);
   cgen_state_->ir_builder_.SetInsertPoint(outer_join_args_bb);

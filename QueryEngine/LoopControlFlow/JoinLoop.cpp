@@ -21,9 +21,17 @@
 #include <stack>
 
 JoinLoop::JoinLoop(const JoinLoopKind kind,
+                   const JoinType type,
                    const std::function<JoinLoopDomain(const std::vector<llvm::Value*>&)>& iteration_domain_codegen,
+                   const std::function<llvm::Value*(const std::vector<llvm::Value*>&)>& outer_condition_match,
                    const std::string& name)
-    : kind_(kind), iteration_domain_codegen_(iteration_domain_codegen), name_(name) {}
+    : kind_(kind),
+      type_(type),
+      iteration_domain_codegen_(iteration_domain_codegen),
+      outer_condition_match_(outer_condition_match),
+      name_(name) {
+  CHECK(outer_condition_match == nullptr || type == JoinType::LEFT);
+}
 
 llvm::BasicBlock* JoinLoop::codegen(
     const std::vector<JoinLoop>& join_loops,
@@ -96,8 +104,20 @@ llvm::BasicBlock* JoinLoop::codegen(
         const auto iteration_domain = join_loop.iteration_domain_codegen_(iterators);
         CHECK(!iteration_domain.values_buffer);
         iterators.push_back(iteration_domain.slot_lookup_result);
-        prev_comparison_result =
-            builder.CreateICmpSGE(iteration_domain.slot_lookup_result, ll_int<int64_t>(0, context));
+        switch (join_loop.type_) {
+          case JoinType::INNER: {
+            prev_comparison_result =
+                builder.CreateICmpSGE(iteration_domain.slot_lookup_result, ll_int<int64_t>(0, context));
+            break;
+          }
+          case JoinType::LEFT: {
+            // For outer joins, do the iteration regardless of the result of the match.
+            prev_comparison_result = llvm::ConstantInt::get(get_int_type(1, context), true);
+            break;
+          }
+          default:
+            CHECK(false);
+        }
         if (!prev_iter_advance_bb) {
           prev_iter_advance_bb = prev_exit_bb;
         }

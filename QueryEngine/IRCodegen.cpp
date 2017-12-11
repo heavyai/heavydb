@@ -303,47 +303,31 @@ std::vector<JoinLoop> Executor::buildJoinLoops(RelAlgExecutionUnit& ra_exe_unit,
   std::vector<JoinLoop> join_loops;
   for (size_t level_idx = 0, current_hash_table_idx = 0; level_idx < ra_exe_unit.inner_joins.size(); ++level_idx) {
     const auto& current_level_join_conditions = ra_exe_unit.inner_joins[level_idx];
-    std::shared_ptr<JoinHashTableInterface> current_level_hash_table;
     std::vector<std::string> fail_reasons;
-    for (const auto& join_qual : current_level_join_conditions) {
-      auto qual_bin_oper = std::dynamic_pointer_cast<Analyzer::BinOper>(join_qual);
-      if (!qual_bin_oper || !IS_EQUIVALENCE(qual_bin_oper->get_optype())) {
-        fail_reasons.push_back("No equijoin expression found");
-        add_qualifier_to_execution_unit(ra_exe_unit, join_qual);
-        continue;
-      }
-      JoinHashTableOrError hash_table_or_error;
-      if (!current_level_hash_table) {
-        hash_table_or_error = buildHashTableForQualifier(
-            qual_bin_oper,
-            query_infos,
-            ra_exe_unit,
-            co.device_type_ == ExecutorDeviceType::GPU ? MemoryLevel::GPU_LEVEL : MemoryLevel::CPU_LEVEL,
-            std::unordered_set<int>{},
-            column_cache);
-        current_level_hash_table = hash_table_or_error.hash_table;
-      }
-      if (hash_table_or_error.hash_table) {
-        plan_state_->join_info_.join_hash_tables_.push_back(hash_table_or_error.hash_table);
-        plan_state_->join_info_.equi_join_tautologies_.push_back(qual_bin_oper);
-      } else {
-        fail_reasons.push_back(hash_table_or_error.fail_reason);
-        add_qualifier_to_execution_unit(ra_exe_unit, qual_bin_oper);
-      }
-    }
+    const auto current_level_hash_table = buildCurrentLevelHashTable(
+        current_level_join_conditions, ra_exe_unit, co, query_infos, column_cache, fail_reasons);
     if (current_level_hash_table) {
       if (current_level_hash_table->getHashType() == JoinHashTable::HashType::OneToOne) {
-        join_loops.emplace_back(JoinLoopKind::Singleton,
-                                [this, current_hash_table_idx, level_idx, current_level_hash_table, &co](
-                                    const std::vector<llvm::Value*>& prev_iters) {
-                                  addJoinLoopIterator(prev_iters, level_idx);
-                                  JoinLoopDomain domain{0};
-                                  domain.slot_lookup_result =
-                                      current_level_hash_table->codegenSlot(co, current_hash_table_idx);
-                                  return domain;
-                                });
+        join_loops.emplace_back(
+            JoinLoopKind::Singleton,
+            current_level_join_conditions.type,
+            [this, current_hash_table_idx, level_idx, current_level_hash_table, &current_level_join_conditions, &co](
+                const std::vector<llvm::Value*>& prev_iters) {
+              addJoinLoopIterator(prev_iters, level_idx);
+              JoinLoopDomain domain{0};
+              domain.slot_lookup_result = current_level_hash_table->codegenSlot(co, current_hash_table_idx);
+              if (current_level_join_conditions.type == JoinType::LEFT) {
+                CHECK_LT(level_idx, cgen_state_->outer_join_match_found_per_level_.size());
+                CHECK(!cgen_state_->outer_join_match_found_per_level_[level_idx]);
+                cgen_state_->outer_join_match_found_per_level_[level_idx] =
+                    cgen_state_->ir_builder_.CreateICmpSGE(domain.slot_lookup_result, ll_int(int64_t(0)));
+              }
+              return domain;
+            },
+            nullptr);
       } else {
         join_loops.emplace_back(JoinLoopKind::Set,
+                                current_level_join_conditions.type,
                                 [this, current_hash_table_idx, level_idx, current_level_hash_table, &co](
                                     const std::vector<llvm::Value*>& prev_iters) {
                                   addJoinLoopIterator(prev_iters, level_idx);
@@ -353,24 +337,87 @@ std::vector<JoinLoop> Executor::buildJoinLoops(RelAlgExecutionUnit& ra_exe_unit,
                                   domain.values_buffer = matching_set.elements;
                                   domain.element_count = matching_set.count;
                                   return domain;
-                                });
+                                },
+                                nullptr);
       }
       ++current_hash_table_idx;
     } else {
-      const auto fail_reasons_str = current_level_join_conditions.empty() ? "No equijoin expression found"
-                                                                          : boost::algorithm::join(fail_reasons, " | ");
+      const auto fail_reasons_str = current_level_join_conditions.quals.empty()
+                                        ? "No equijoin expression found"
+                                        : boost::algorithm::join(fail_reasons, " | ");
       check_if_loop_join_is_allowed(ra_exe_unit, eo, query_infos, level_idx, fail_reasons_str);
-      join_loops.emplace_back(JoinLoopKind::UpperBound, [this, level_idx](const std::vector<llvm::Value*>& prev_iters) {
-        addJoinLoopIterator(prev_iters, level_idx);
-        JoinLoopDomain domain{0};
-        const auto rows_per_scan_ptr = cgen_state_->ir_builder_.CreateGEP(
-            get_arg_by_name(cgen_state_->row_func_, "num_rows_per_scan"), ll_int(int32_t(level_idx + 1)));
-        domain.upper_bound = cgen_state_->ir_builder_.CreateLoad(rows_per_scan_ptr, "num_rows_per_scan");
-        return domain;
-      });
+      // Callback provided to the `JoinLoop` framework to evaluate the (outer) join condition.
+      const auto outer_join_condition_cb =
+          [this, &co, &current_level_join_conditions](const std::vector<llvm::Value*>& prev_iters) {
+            llvm::Value* left_join_cond = llvm::ConstantInt::get(get_int_type(1, cgen_state_->context_), true);
+            for (auto expr : current_level_join_conditions.quals) {
+              left_join_cond =
+                  cgen_state_->ir_builder_.CreateAnd(left_join_cond, toBool(codegen(expr.get(), true, co).front()));
+            }
+            return left_join_cond;
+          };
+      join_loops.emplace_back(
+          JoinLoopKind::UpperBound,
+          current_level_join_conditions.type,
+          [this, level_idx, &co](const std::vector<llvm::Value*>& prev_iters) {
+            addJoinLoopIterator(prev_iters, level_idx);
+            JoinLoopDomain domain{0};
+            const auto rows_per_scan_ptr = cgen_state_->ir_builder_.CreateGEP(
+                get_arg_by_name(cgen_state_->row_func_, "num_rows_per_scan"), ll_int(int32_t(level_idx + 1)));
+            domain.upper_bound = cgen_state_->ir_builder_.CreateLoad(rows_per_scan_ptr, "num_rows_per_scan");
+            return domain;
+          },
+          current_level_join_conditions.type == JoinType::LEFT
+              ? std::function<llvm::Value*(const std::vector<llvm::Value*>&)>(outer_join_condition_cb)
+              : nullptr);
     }
   }
   return join_loops;
+}
+
+std::shared_ptr<JoinHashTableInterface> Executor::buildCurrentLevelHashTable(
+    const JoinCondition& current_level_join_conditions,
+    RelAlgExecutionUnit& ra_exe_unit,
+    const CompilationOptions& co,
+    const std::vector<InputTableInfo>& query_infos,
+    ColumnCacheMap& column_cache,
+    std::vector<std::string>& fail_reasons) {
+  if (current_level_join_conditions.type != JoinType::INNER && current_level_join_conditions.quals.size() > 1) {
+    fail_reasons.push_back("No equijoin expression found for outer join");
+    return nullptr;
+  }
+  std::shared_ptr<JoinHashTableInterface> current_level_hash_table;
+  for (const auto& join_qual : current_level_join_conditions.quals) {
+    auto qual_bin_oper = std::dynamic_pointer_cast<Analyzer::BinOper>(join_qual);
+    if (!qual_bin_oper || !IS_EQUIVALENCE(qual_bin_oper->get_optype())) {
+      fail_reasons.push_back("No equijoin expression found");
+      if (current_level_join_conditions.type == JoinType::INNER) {
+        add_qualifier_to_execution_unit(ra_exe_unit, join_qual);
+      }
+      continue;
+    }
+    JoinHashTableOrError hash_table_or_error;
+    if (!current_level_hash_table) {
+      hash_table_or_error = buildHashTableForQualifier(
+          qual_bin_oper,
+          query_infos,
+          ra_exe_unit,
+          co.device_type_ == ExecutorDeviceType::GPU ? MemoryLevel::GPU_LEVEL : MemoryLevel::CPU_LEVEL,
+          std::unordered_set<int>{},
+          column_cache);
+      current_level_hash_table = hash_table_or_error.hash_table;
+    }
+    if (hash_table_or_error.hash_table) {
+      plan_state_->join_info_.join_hash_tables_.push_back(hash_table_or_error.hash_table);
+      plan_state_->join_info_.equi_join_tautologies_.push_back(qual_bin_oper);
+    } else {
+      fail_reasons.push_back(hash_table_or_error.fail_reason);
+      if (current_level_join_conditions.type == JoinType::INNER) {
+        add_qualifier_to_execution_unit(ra_exe_unit, qual_bin_oper);
+      }
+    }
+  }
+  return current_level_hash_table;
 }
 
 void Executor::addJoinLoopIterator(const std::vector<llvm::Value*>& prev_iters, const size_t level_idx) {
