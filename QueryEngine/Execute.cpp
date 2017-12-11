@@ -69,7 +69,7 @@ Executor::Executor(const int db_id,
                    const std::string& debug_dir,
                    const std::string& debug_file,
                    ::QueryRenderer::QueryRenderManager* render_manager)
-    : cgen_state_(new CgenState({}, false)),
+    : cgen_state_(new CgenState({}, false, false)),
       is_nested_(false),
       gpu_active_modules_device_mask_(0x0),
       interrupted_(false),
@@ -2159,9 +2159,15 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
 void Executor::nukeOldState(const bool allow_lazy_fetch,
                             const JoinInfo& join_info,
                             const std::vector<InputTableInfo>& query_infos,
-                            const std::list<std::shared_ptr<Analyzer::Expr>>& outer_join_quals) {
-  cgen_state_.reset(new CgenState(query_infos, !outer_join_quals.empty()));
-  plan_state_.reset(new PlanState(allow_lazy_fetch && outer_join_quals.empty(), join_info, this));
+                            const RelAlgExecutionUnit& ra_exe_unit) {
+  const bool contains_left_deep_outer_join =
+      std::find_if(
+          ra_exe_unit.inner_joins.begin(), ra_exe_unit.inner_joins.end(), [](const JoinCondition& join_condition) {
+            return join_condition.type == JoinType::LEFT;
+          }) != ra_exe_unit.inner_joins.end();
+  const bool has_outer_joins = !ra_exe_unit.outer_join_quals.empty() || contains_left_deep_outer_join;
+  cgen_state_.reset(new CgenState(query_infos, !ra_exe_unit.outer_join_quals.empty(), contains_left_deep_outer_join));
+  plan_state_.reset(new PlanState(allow_lazy_fetch && !has_outer_joins, join_info, this));
 }
 
 void Executor::preloadFragOffsets(const std::vector<InputDescriptor>& input_descs,

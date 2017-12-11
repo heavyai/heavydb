@@ -983,7 +983,7 @@ Executor::CompilationResult Executor::compileWorkUnit(const std::vector<InputTab
                                                       const bool has_cardinality_estimation,
                                                       ColumnCacheMap& column_cache,
                                                       RenderInfo* render_info) {
-  nukeOldState(allow_lazy_fetch, join_info, query_infos, ra_exe_unit.outer_join_quals);
+  nukeOldState(allow_lazy_fetch, join_info, query_infos, ra_exe_unit);
 
   GroupByAndAggregate group_by_and_aggregate(this,
                                              co.device_type_,

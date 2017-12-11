@@ -1426,16 +1426,20 @@ class RelAlgAbstractInterpreter {
     sink_projected_boolean_expr_to_join(nodes_);
     eliminate_identical_copy(nodes_);
     fold_filters(nodes_);
+    std::vector<const RelAlgNode*> filtered_left_deep_joins;
     std::vector<const RelAlgNode*> left_deep_joins;
     for (const auto& node : nodes_) {
       const auto left_deep_join_root = get_left_deep_join_root(node);
       // The filter which starts a left-deep join pattern must not be coalesced
       // since it contains (part of) the join condition.
-      if (left_deep_join_root && std::dynamic_pointer_cast<const RelFilter>(left_deep_join_root)) {
+      if (left_deep_join_root) {
         left_deep_joins.push_back(left_deep_join_root.get());
+        if (std::dynamic_pointer_cast<const RelFilter>(left_deep_join_root)) {
+          filtered_left_deep_joins.push_back(left_deep_join_root.get());
+        }
       }
     }
-    if (left_deep_joins.empty()) {
+    if (filtered_left_deep_joins.empty()) {
       hoist_filter_cond_to_cross_join(nodes_);
     }
     eliminate_dead_columns(nodes_);

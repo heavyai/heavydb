@@ -686,9 +686,17 @@ std::unordered_set<const RexInput*> get_join_source_used_inputs(const RelAlgNode
 
   if (auto left_deep_join = dynamic_cast<const RelLeftDeepInnerJoin*>(data_sink_node)) {
     CHECK_GE(left_deep_join->inputCount(), 2);
-    const auto condition = left_deep_join->getCondition();
+    const auto condition = left_deep_join->getInnerCondition();
     RexUsedInputsVisitor visitor;
-    return visitor.visit(condition);
+    auto result = visitor.visit(condition);
+    for (size_t i = 0; i < left_deep_join->inputCount() - 1; ++i) {
+      const auto outer_condition = left_deep_join->getOuterCondition(i);
+      if (outer_condition) {
+        const auto outer_result = visitor.visit(outer_condition);
+        result.insert(outer_result.begin(), outer_result.end());
+      }
+    }
+    return result;
   }
 
   CHECK_EQ(ra_node->inputCount(), 1);
@@ -2104,16 +2112,13 @@ std::shared_ptr<Analyzer::Expr> reverse_logical_distribution(const std::shared_p
 
 }  // namespace
 
-// Translate left deep join filter and separate the conjunctive form qualifiers
-// per nesting level. The code generated for hash table lookups on each level
-// must dominate its uses in deeper nesting levels.
-JoinQualsPerNestingLevel RelAlgExecutor::translateLeftDeepJoinFilter(
-    const RelLeftDeepInnerJoin* join,
-    const std::vector<InputDescriptor>& input_descs,
+std::list<std::shared_ptr<Analyzer::Expr>> RelAlgExecutor::makeJoinQuals(
+    const RexScalar* join_condition,
+    const JoinType join_type,
     const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
-    const bool just_explain) {
-  RelAlgTranslator translator(cat_, executor_, input_to_nest_level, JoinType::INNER, now_, just_explain);
-  const auto rex_condition_cf = rex_to_conjunctive_form(join->getCondition());
+    const bool just_explain) const {
+  RelAlgTranslator translator(cat_, executor_, input_to_nest_level, join_type, now_, just_explain);
+  const auto rex_condition_cf = rex_to_conjunctive_form(join_condition);
   std::list<std::shared_ptr<Analyzer::Expr>> join_condition_quals;
   for (const auto rex_condition_component : rex_condition_cf) {
     const auto bw_equals = get_bitwise_equals_conjunction(rex_condition_component);
@@ -2125,11 +2130,29 @@ JoinQualsPerNestingLevel RelAlgExecutor::translateLeftDeepJoinFilter(
     join_condition_quals.insert(
         join_condition_quals.end(), join_condition_cf.simple_quals.begin(), join_condition_cf.simple_quals.end());
   }
-  join_condition_quals = combine_equi_join_conditions(join_condition_quals);
+  return combine_equi_join_conditions(join_condition_quals);
+}
+
+// Translate left deep join filter and separate the conjunctive form qualifiers
+// per nesting level. The code generated for hash table lookups on each level
+// must dominate its uses in deeper nesting levels.
+JoinQualsPerNestingLevel RelAlgExecutor::translateLeftDeepJoinFilter(
+    const RelLeftDeepInnerJoin* join,
+    const std::vector<InputDescriptor>& input_descs,
+    const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
+    const bool just_explain) {
+  const auto join_condition_quals =
+      makeJoinQuals(join->getInnerCondition(), JoinType::INNER, input_to_nest_level, just_explain);
   MaxRangeTableIndexVisitor rte_idx_visitor;
   JoinQualsPerNestingLevel result(input_descs.size() - 1);
   std::unordered_set<std::shared_ptr<Analyzer::Expr>> visited_quals;
   for (size_t rte_idx = 1; rte_idx < input_descs.size(); ++rte_idx) {
+    const auto outer_condition = join->getOuterCondition(rte_idx - 1);
+    if (outer_condition) {
+      result[rte_idx - 1].quals = makeJoinQuals(outer_condition, JoinType::LEFT, input_to_nest_level, just_explain);
+      result[rte_idx - 1].type = JoinType::LEFT;
+      continue;
+    }
     for (const auto qual : join_condition_quals) {
       if (visited_quals.count(qual)) {
         continue;
@@ -2138,9 +2161,10 @@ JoinQualsPerNestingLevel RelAlgExecutor::translateLeftDeepJoinFilter(
       if (static_cast<size_t>(qual_rte_idx) <= rte_idx) {
         const auto it_ok = visited_quals.emplace(qual);
         CHECK(it_ok.second);
-        result[rte_idx - 1].push_back(qual);
+        result[rte_idx - 1].quals.push_back(qual);
       }
     }
+    result[rte_idx - 1].type = JoinType::INNER;
   }
   return result;
 }

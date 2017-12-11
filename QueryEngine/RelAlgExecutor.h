@@ -219,6 +219,14 @@ class RelAlgExecutor {
       const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
       const bool just_explain);
 
+  // Transform the provided `join_condition` to conjunctive form, find composite
+  // key opportunities and finally translate it to an Analyzer expression.
+  std::list<std::shared_ptr<Analyzer::Expr>> makeJoinQuals(
+      const RexScalar* join_condition,
+      const JoinType join_type,
+      const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
+      const bool just_explain) const;
+
   Executor* executor_;
   const Catalog_Namespace::Catalog& cat_;
   TemporaryTables temporary_tables_;

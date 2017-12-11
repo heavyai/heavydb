@@ -801,7 +801,9 @@ class RelLeftDeepInnerJoin : public RelAlgNode {
                        std::vector<std::shared_ptr<const RelAlgNode>> inputs,
                        std::vector<std::shared_ptr<const RelJoin>>& original_joins);
 
-  const RexScalar* getCondition() const;
+  const RexScalar* getInnerCondition() const;
+
+  const RexScalar* getOuterCondition(const size_t nesting_level) const;
 
   std::string toString() const override;
 
@@ -813,6 +815,7 @@ class RelLeftDeepInnerJoin : public RelAlgNode {
 
  private:
   std::unique_ptr<const RexScalar> condition_;
+  std::vector<std::unique_ptr<const RexScalar>> outer_conditions_per_level_;
   const std::shared_ptr<RelFilter> original_filter_;
   const std::vector<std::shared_ptr<const RelJoin>> original_joins_;
 };

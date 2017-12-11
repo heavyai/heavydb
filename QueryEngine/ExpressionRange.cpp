@@ -543,7 +543,7 @@ ExpressionRange getExpressionRange(const Analyzer::ColumnVar* col_expr,
   const int rte_idx = col_expr->get_rte_idx();
   CHECK_GE(rte_idx, 0);
   CHECK_LT(static_cast<size_t>(rte_idx), query_infos.size());
-  bool is_outer_join_proj = rte_idx > 0 && executor->isOuterJoin();
+  bool is_outer_join_proj = rte_idx > 0 && (executor->isOuterJoin() || executor->containsLeftDeepOuterJoin());
   if (col_expr->get_table_id() > 0) {
     auto col_range = executor->getColRange(PhysicalInput{col_expr->get_column_id(), col_expr->get_table_id()});
     if (is_outer_join_proj) {
