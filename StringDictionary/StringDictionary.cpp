@@ -418,7 +418,7 @@ StringDictionary::compare_cache_value_t* StringDictionary::binary_search_cache(c
   auto start_str = getStringFromStorage(sorted_cache[start]);
   cmp = StringCompare(std::get<0>(start_str), std::get<1>(start_str), pattern.c_str(), pattern.size());
   // please pardon my bad code here
-  if (mid > 0 && cmp > 0) {
+  if (start > 0 && cmp > 0) {
     auto lhs_str = getStringFromStorage(sorted_cache[start - 1]);
     auto l_cmp = StringCompare(std::get<0>(lhs_str), std::get<1>(lhs_str), pattern.c_str(), pattern.size());
     if (l_cmp < 0) {
