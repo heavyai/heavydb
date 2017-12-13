@@ -300,9 +300,9 @@ void parseStringArray(const std::string& s, const CopyParams& copy_params, std::
   }
   if (s.size() - 1 > last) {  // if not empty string - disallow empty strings for now
     if (s.substr(last, s.size() - 1 - last).length() > StringDictionary::MAX_STRLEN)
-      throw std::runtime_error("Array String too long : " +
-                               std::to_string(s.substr(last, s.size() - 1 - last).length()) + " max is " +
-                               std::to_string(StringDictionary::MAX_STRLEN));
+      throw std::runtime_error(
+          "Array String too long : " + std::to_string(s.substr(last, s.size() - 1 - last).length()) + " max is " +
+          std::to_string(StringDictionary::MAX_STRLEN));
 
     string_vec.push_back(s.substr(last, s.size() - 1 - last));
   }
@@ -2177,8 +2177,11 @@ void Importer::readVerticesFromGDALGeometryZ(const std::string& fileName,
   poly.endLine();
 
   p2t::CDT triangulator(vertexPtrs);
-
-  triangulator.Triangulate();
+  try {
+    triangulator.Triangulate();
+  } catch (std::exception& err) {
+    throw std::runtime_error("failed to triangulate polygon. " + std::string(err.what()));
+  }
 
   int idx0, idx1, idx2;
 

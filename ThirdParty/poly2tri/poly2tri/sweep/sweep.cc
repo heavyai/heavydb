@@ -29,9 +29,9 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #include <stdexcept>
-#include "sweep.h"
 #include "sweep_context.h"
 #include "advancing_front.h"
+#include "sweep.h"
 #include "../common/utils.h"
 
 namespace p2t {
@@ -121,8 +121,7 @@ void Sweep::EdgeEvent(SweepContext& tcx, Point& ep, Point& eq, Triangle* triangl
       triangle = &triangle->NeighborAcross(point);
       EdgeEvent( tcx, ep, *p1, triangle, *p1 );
     } else {
-      std::runtime_error("EdgeEvent - collinear points not supported");
-      assert(0);
+      throw std::runtime_error("EdgeEvent - collinear points not supported");
     }
     return;
   }
@@ -138,8 +137,7 @@ void Sweep::EdgeEvent(SweepContext& tcx, Point& ep, Point& eq, Triangle* triangl
       triangle = &triangle->NeighborAcross(point);
       EdgeEvent( tcx, ep, *p2, triangle, *p2 );
     } else {
-      std::runtime_error("EdgeEvent - collinear points not supported");
-      assert(0);
+      throw std::runtime_error("EdgeEvent - collinear points not supported");
     }
     return;
   }
@@ -149,8 +147,11 @@ void Sweep::EdgeEvent(SweepContext& tcx, Point& ep, Point& eq, Triangle* triangl
     // that will cross edge
     if (o1 == CW) {
       triangle = triangle->NeighborCCW(point);
-    }       else{
+    } else {
       triangle = triangle->NeighborCW(point);
+    }
+    if (!triangle) {
+      throw std::runtime_error("EdgeEvent - invalid triangle neighbor");
     }
     EdgeEvent(tcx, ep, eq, triangle, point);
   } else {
