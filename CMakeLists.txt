@@ -588,6 +588,7 @@ install(FILES ${CMAKE_BINARY_DIR}/MAPD_GIT_HASH.txt DESTINATION ".")
 if(ENABLE_CUDA)
   install(FILES ${CMAKE_BINARY_DIR}/QueryEngine/cuda_mapd_rt.a DESTINATION QueryEngine)
 endif()
+install(FILES completion_hints.thrift DESTINATION ".")
 install(FILES mapd.thrift DESTINATION ".")
 
 if(NOT PREFER_STATIC_LIBS)
